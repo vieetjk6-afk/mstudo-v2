@@ -1,8 +1,8 @@
 {
-  "name": "mstudo",
-  "version": "1.0.0",
+  "name": "mstudo-v2",
+  "version": "2.0.0",
   "private": true,
-  "description": "mstudo - minimalist dark photo selection platform",
+  "description": "mstudo 2.0 - phan mem quan ly studio anh (ban lam moi giao dien)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

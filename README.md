@@ -1,5 +1,14 @@
 # Vieetjk — Photo collection for customers
 
+> ### 🎨 Đây là repo **mstudo 2.0** — bản làm lại giao diện
+>
+> Tách riêng khỏi repo đang chạy production, dùng **Supabase và Vercel riêng**,
+> nên sửa thoải mái mà không ảnh hưởng khách đang dùng. Logic là bản sao đầy đủ
+> nên chạy được ngay từ ngày đầu.
+>
+> **Dựng môi trường lần đầu → [`docs/thiet-lap-moi.md`](docs/thiet-lap-moi.md)**
+> (Supabase mới · Vercel mới · biến môi trường · chỗ bắt đầu sửa giao diện)
+
 > Minimalist, dark-themed photo selection platform. Photographers create albums
 > from Google Drive links; customers browse (watermarked), pick photos within a
 > limit, export/copy the list, and download a ZIP.
