@@ -37,8 +37,112 @@ const ORDER = [
   ["migrations/website_leads.sql", "Lead & hội thoại từ chatbox"],
 ];
 
+/**
+ * Tách một chuỗi SQL thành từng câu lệnh. Không thể cắt bừa theo dấu ';' vì
+ * dấu đó còn nằm trong thân hàm $$…$$, trong chuỗi nháy đơn và trong ghi chú.
+ * Ghi chú/khoảng trắng đứng trước được gắn LIỀN vào câu lệnh phía sau để khi
+ * xếp lại thứ tự thì lời giải thích vẫn đi theo đúng câu lệnh của nó.
+ */
+function splitStatements(sql) {
+  const out = [];
+  let buf = "";
+  let i = 0;
+  while (i < sql.length) {
+    const ch = sql[i];
+    const rest = sql.slice(i);
+
+    if (ch === "-" && sql[i + 1] === "-") {
+      const end = sql.indexOf("\n", i);
+      const stop = end === -1 ? sql.length : end + 1;
+      buf += sql.slice(i, stop);
+      i = stop;
+      continue;
+    }
+    if (ch === "/" && sql[i + 1] === "*") {
+      const end = sql.indexOf("*/", i + 2);
+      const stop = end === -1 ? sql.length : end + 2;
+      buf += sql.slice(i, stop);
+      i = stop;
+      continue;
+    }
+    if (ch === "'") {
+      let j = i + 1;
+      while (j < sql.length) {
+        if (sql[j] === "'" && sql[j + 1] === "'") j += 2;
+        else if (sql[j] === "'") { j++; break; }
+        else j++;
+      }
+      buf += sql.slice(i, j);
+      i = j;
+      continue;
+    }
+    const dollar = /^\$([A-Za-z_][A-Za-z0-9_]*)?\$/.exec(rest);
+    if (dollar) {
+      const tag = dollar[0];
+      const end = sql.indexOf(tag, i + tag.length);
+      const stop = end === -1 ? sql.length : end + tag.length;
+      buf += sql.slice(i, stop);
+      i = stop;
+      continue;
+    }
+    if (ch === ";") {
+      buf += ";";
+      out.push(buf);
+      buf = "";
+      i++;
+      continue;
+    }
+    buf += ch;
+    i++;
+  }
+  if (buf.trim()) out.push(buf);
+  return out;
+}
+
+/** Bỏ ghi chú + khoảng trắng đầu câu để nhận dạng loại câu lệnh. */
+function head(stmt) {
+  return stmt
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .split("\n")
+    .filter((l) => !l.trim().startsWith("--"))
+    .join(" ")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Câu lệnh TẠO BẢNG — phải chạy TRƯỚC mọi câu vá cột / chỉ mục / seed.
+ *
+ * Vì sao cần tách: các file SQL lớn dần theo thời gian — bảng mới nối vào cuối
+ * file, còn `alter table … add column` của nó lại nằm ở đoạn giữa (viết khi
+ * bảng đã tồn tại sẵn trên database đang chạy). Trên project TRẮNG thứ tự đó sai.
+ */
+function isTableCreate(stmt) {
+  const h = head(stmt);
+  return /^create\s+(schema|extension|type|sequence)\b/.test(h) || /^create\s+table\b/.test(h);
+}
+
+/**
+ * Câu lệnh PHÂN QUYỀN — phải chạy SAU khi mọi bảng/cột đã tồn tại.
+ *
+ * Cùng nguyên nhân: phần RLS nằm gần đầu schema.sql nhưng liệt kê cả những cột
+ * mãi cuối file mới thêm → trên database trắng sẽ lỗi kiểu
+ * `column "monthly_revenue_target" ... does not exist`. Supabase SQL Editor chạy
+ * cả file trong MỘT transaction nên chỉ một lỗi là rollback sạch toàn bộ.
+ */
+function isGrantLike(stmt) {
+  const h = head(stmt);
+  return (
+    /^(create|drop)\s+policy\b/.test(h) ||
+    /^(grant|revoke)\b/.test(h) ||
+    /^alter\s+table\s+[^ ]+\s+(enable|disable|force|no force)\s+row\s+level\s+security\b/.test(h) ||
+    /^alter\s+publication\b/.test(h)
+  );
+}
+
 const line = "-- " + "═".repeat(74);
-const parts = [
+const header = [
   line,
   "-- mstudo — CÀI ĐẶT MỘT LẦN CHO PROJECT SUPABASE MỚI",
   "--",
@@ -47,15 +151,57 @@ const parts = [
   "--",
   "-- Cách dùng: mở Supabase → SQL Editor → dán toàn bộ file này → Run.",
   "-- Mọi câu lệnh đều idempotent nên chạy lại nhiều lần vô hại.",
+  "--",
+  "-- Bố cục: PHẦN 1 tạo bảng, PHẦN 2 vá cột/chỉ mục/hàm/seed, PHẦN 3 cấp quyền.",
+  "-- Bộ sinh tự xếp lại theo 3 nhịp đó (giữ nguyên thứ tự tương đối trong mỗi",
+  "-- nhịp) vì trong file gốc nhiều policy/grant và `alter table add column` đứng",
+  "-- TRƯỚC bảng mà chúng tham chiếu — chạy trên database trắng sẽ lỗi.",
   line,
   "",
 ];
 
+const tables = [];
+const setup = [];
+const grants = [];
+let nStmt = 0;
+
 for (const [rel, desc] of ORDER) {
-  const sql = readFileSync(join(HERE, rel), "utf8").trimEnd();
-  parts.push("", line, `-- ▶ ${rel} — ${desc}`, line, "", sql, "");
+  const sql = readFileSync(join(HERE, rel), "utf8");
+  const banner = ["", line, `-- ▶ ${rel} — ${desc}`, line].join("\n");
+  const mine = { tables: [], setup: [], grants: [] };
+  for (const stmt of splitStatements(sql)) {
+    if (!stmt.trim()) continue;
+    nStmt++;
+    const bucket = isGrantLike(stmt) ? "grants" : isTableCreate(stmt) ? "tables" : "setup";
+    mine[bucket].push(stmt.trim());
+  }
+  for (const k of ["tables", "setup", "grants"]) {
+    const target = k === "tables" ? tables : k === "setup" ? setup : grants;
+    if (mine[k].length) target.push(banner, "", mine[k].join("\n\n"), "");
+  }
 }
 
+const body = [
+  ...header,
+  line,
+  "-- PHẦN 1 — TẠO BẢNG",
+  line,
+  ...tables,
+  "",
+  line,
+  "-- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH",
+  line,
+  ...setup,
+  "",
+  line,
+  "-- PHẦN 3 — PHÂN QUYỀN, RLS & POLICY (chạy sau khi mọi bảng/cột đã có)",
+  line,
+  ...grants,
+];
+
 const out = join(HERE, "setup-all.sql");
-writeFileSync(out, parts.join("\n") + "\n");
-console.log(`Đã ghi ${out} — ${ORDER.length} file, ${parts.join("\n").split("\n").length} dòng.`);
+writeFileSync(out, body.join("\n").replace(/\n{4,}/g, "\n\n\n") + "\n");
+console.log(
+  `Đã ghi ${out} — ${ORDER.length} file, ${nStmt} câu lệnh, ` +
+    `${body.join("\n").split("\n").length} dòng.`
+);
