@@ -23,8 +23,9 @@ Tính từ lúc bắt đầu, mất khoảng 20–30 phút.
 3. Kiểm tra nhanh **Table Editor**: phải thấy `profiles`, `albums`, `contracts`,
    `studio_*`… và **Storage** phải có sẵn 3 bucket `payment-proofs`,
    `wedding-photos`, `logos` (SQL tự tạo).
-4. **Authentication → Providers → Google**: bật, dán Client ID / Secret. Thêm
-   `https://<domain-moi>/auth/callback` vào **Redirect URLs**.
+4. **Authentication → Providers → Google** *(tuỳ chọn, làm sau cũng được)*: bật,
+   dán Client ID / Secret, thêm `https://<domain-moi>/auth/callback` vào
+   **Redirect URLs**. Không bật thì vẫn đăng nhập được bằng email + mật khẩu.
 5. Lấy 3 khoá ở **Project Settings → API**: `Project URL`, `anon public`,
    `service_role` (khoá này là **bí mật**, chỉ đặt ở server).
 
@@ -78,14 +79,25 @@ Thêm khi cần từng mảng tính năng:
 
 ## 4. Tạo admin đầu tiên
 
-Đăng ký một tài khoản qua giao diện `/login`, rồi chạy trong Supabase SQL Editor:
+**App KHÔNG có trang đăng ký** — `/login` chỉ để đăng nhập. Tài khoản đầu tiên
+phải tạo tay trong Supabase:
+
+1. **Authentication → Users → Add user → Create new user**.
+2. Điền email + mật khẩu, **bật `Auto Confirm User`** (không bật thì Supabase
+   chờ xác nhận email và bạn không đăng nhập được).
+3. Trigger `on_auth_user_created` trong schema tự tạo dòng `profiles` tương ứng
+   với vai trò `photographer`. Nâng lên admin bằng SQL Editor:
 
 ```sql
-insert into public.profiles (id, email, role, is_active, full_name)
-select id, email, 'admin', true, 'Admin'
-from auth.users where email = 'email-cua-ban@example.com'
-on conflict (id) do update set role = 'admin', is_active = true;
+update public.profiles
+set role = 'admin', is_active = true
+where email = 'email-cua-ban@example.com';
 ```
+
+4. Đăng nhập ở `/login` bằng chính email + mật khẩu vừa tạo.
+
+*(Nếu đã bật Google provider ở mục 1 thì bấm "Đăng nhập bằng Google" cũng được —
+Supabase tự tạo user, trigger tự tạo profile, rồi chạy câu SQL trên để nâng quyền.)*
 
 ## 5. Làm giao diện 2.0
 
