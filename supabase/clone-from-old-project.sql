@@ -61,6 +61,10 @@ import foreign schema auth limit to (users, identities)
 --     không cần biết trước cây phụ thuộc.
 --   • Lệch cột: nếu project cũ thừa/thiếu cột so với bản 2.0, hàm chỉ chép
 --     những cột CÓ Ở CẢ HAI thay vì gãy toàn bộ.
+--   • Cột GENERATED: `auth.users.confirmed_at` và `auth.identities.email` do
+--     Postgres tự tính, cấm insert giá trị vào (lỗi "cannot insert a non-DEFAULT
+--     value into column"). Hàm loại chúng khỏi danh sách cột; giá trị vẫn đúng
+--     vì được tính lại từ các cột nguồn đã chép sang.
 --   • Trigger on_auth_user_created tự tạo hồ sơ mỗi khi thêm tài khoản → phải
 --     dọn bảng public SAU khi chép auth thì hồ sơ thật mới không bị hồ sơ rỗng
 --     do trigger sinh ra chen mất.
@@ -88,6 +92,8 @@ begin
       into cols
       from information_schema.columns c
      where c.table_schema = 'auth' and c.table_name = tbl
+       and c.is_generated = 'NEVER'                            -- xem ghi chú ở hàm
+       and coalesce(c.identity_generation, '') <> 'ALWAYS'
        and exists (select 1 from information_schema.columns o
                     where o.table_schema = 'old_auth' and o.table_name = tbl
                       and o.column_name = c.column_name);
@@ -125,6 +131,8 @@ begin
           into cols
           from information_schema.columns c
          where c.table_schema = 'public' and c.table_name = tbl
+           and c.is_generated = 'NEVER'
+           and coalesce(c.identity_generation, '') <> 'ALWAYS'
            and exists (select 1 from information_schema.columns o
                         where o.table_schema = 'old_public' and o.table_name = tbl
                           and o.column_name = c.column_name);
