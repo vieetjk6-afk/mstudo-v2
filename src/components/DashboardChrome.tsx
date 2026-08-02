@@ -52,6 +52,12 @@ export default function DashboardChrome({
       pathname.startsWith("/dashboard/site") ||
       pathname.startsWith("/dashboard/upgrade") ||
       pathname.startsWith("/dashboard/settings") ||
+      // Nhóm "Tài khoản" của sidebar mới trỏ sang các trang này — nếu không
+      // nhận là màn studio thì bấm một mục trong sidebar lại rơi ra header cũ.
+      pathname.startsWith("/dashboard/account") ||
+      pathname.startsWith("/dashboard/affiliate") ||
+      pathname.startsWith("/dashboard/connections") ||
+      pathname.startsWith("/dashboard/admin") ||
       // Bộ công cụ ảnh chạy ngay trong shell studio (không chuyển hướng ra ngoài)
       pathname === "/dashboard" ||
       pathname.startsWith("/dashboard/albums") ||

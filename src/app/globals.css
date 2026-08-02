@@ -302,6 +302,46 @@ body {
   color: var(--brand) !important;
 }
 
+/* ── Ô lệnh ⌘K ─────────────────────────────────────────────────── */
+.studio-shell .ck-key {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: inherit;
+  color: var(--tx3);
+  line-height: 1.5;
+}
+.studio-shell .ck-bar:hover {
+  border-color: var(--ac);
+}
+.studio-shell .ck-row:hover {
+  background: var(--acS) !important;
+}
+/* Ô nhập của bảng lệnh không cần vòng focus: cả bảng vừa mở ra là đã rõ con
+   trỏ đang ở đâu, thêm vòng viền chỉ làm rối. */
+.studio-shell .ck-panel input:focus,
+.studio-shell .ck-panel input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+@keyframes ckFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes ckPop {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: none; }
+}
+.studio-shell .ck-overlay {
+  animation: ckFade 0.13s ease both;
+}
+.studio-shell .ck-panel {
+  animation: ckPop 0.17s ease both;
+}
+
 /* ── Studio shell — input focus ring (màu nhấn thương hiệu) ────── */
 .studio-shell .input:focus {
   border-color: var(--ac);
@@ -803,6 +843,10 @@ body {
   --sh-modal: 0 24px 70px rgba(20, 15, 25, 0.28);
   --sh-toast: 0 12px 34px rgba(20, 15, 25, 0.3);
 
+  /* Nền topbar: mờ đục để nội dung cuộn qua vẫn đọc được nhãn phía trên.
+     Không dùng var(--sf) + opacity vì cần alpha riêng, không phải cả thẻ mờ. */
+  --topbar: rgba(255, 255, 255, 0.86);
+
   /* ── Tên cũ trong repo → trỏ vào bộ token mới ── */
   --surface: var(--sf);
   --surface2: var(--sf2);
@@ -858,6 +902,7 @@ body {
   --nuS: #2b2934;
   --pu: #d98be4;
   --puS: #33203a;
+  --topbar: rgba(29, 27, 35, 0.86);
 }
 
 /* Số tiền / ngày giờ luôn dùng chữ số đều cột. */
