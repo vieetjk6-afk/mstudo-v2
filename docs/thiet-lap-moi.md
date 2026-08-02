@@ -109,6 +109,13 @@ Mỗi lần bấm Run ở phần 3 làm việc khoảng 40 giây rồi tự dừ
 đang dở** (tới từng lô 2000 dòng), nên bảng vài trăm nghìn dòng vẫn qua được.
 Kết quả hiện dạng bảng: tên bảng · số dòng đã chép · trạng thái.
 
+Trong lúc chép, script **tắt tạm các trigger nghiệp vụ** (hạn mức album, ghi
+log, `updated_at`) — dữ liệu cũ có thể vi phạm luật hiện tại, ví dụ album gallery
+của tài khoản sau này bị thu quyền, và trigger sẽ chặn không cho chép sang.
+Trigger được **bật lại tự động** ngay khi hiện `✅ XONG TẤT CẢ`; phần 4 bật lại
+lần nữa cho chắc. Nếu bạn bỏ dở giữa chừng thì trigger còn tắt — chạy
+`select public.mig_bat_lai_trigger();` để bật lại.
+
 Ba điều cần biết:
 
 - **Dữ liệu đang có trong project mới sẽ bị xoá sạch rồi chép đè.** Đúng ý đồ

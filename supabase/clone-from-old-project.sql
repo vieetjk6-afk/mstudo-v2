@@ -147,6 +147,31 @@ begin
   viec := 'dọn bảng public'; ket_qua := 'xong';
   return next;
 
+  -- 2b) TẮT trigger nghiệp vụ trong lúc chép.
+  --     Bắt buộc, không phải cho nhanh: `albums` có trigger enforce_album_quota
+  --     chặn tạo album vượt hạn mức / chưa được cấp quyền gallery — nó bắn lỗi
+  --     "Tài khoản chưa được cấp quyền tạo gallery" ngay khi chép album cũ sang.
+  --     albums hỏng thì studio_contracts (có khoá ngoại trỏ tới albums) hỏng
+  --     theo, rồi toàn bộ contract_* hỏng tiếp — sập dây chuyền từ một gốc.
+  --     Trigger albums_log_creation cũng sẽ đẻ thêm dòng rác vào album_creations.
+  --     Dữ liệu chép sang là dữ liệu ĐÃ HỢP LỆ ở project cũ, không cần kiểm lại.
+  --     mig_step() tự BẬT LẠI khi chép xong hết (và PHẦN 4 bật lại lần nữa).
+  n := 0;
+  for tbl in
+    select table_name from information_schema.tables
+     where table_schema = 'public' and table_type = 'BASE TABLE'
+       and table_name <> 'mig_progress'
+  loop
+    begin
+      execute format('alter table public.%I disable trigger user', tbl);
+      n := n + 1;
+    exception when others then
+      null;  -- bảng không có trigger hoặc không đủ quyền → bỏ qua
+    end;
+  end loop;
+  viec := 'tắt trigger nghiệp vụ'; ket_qua := n || ' bảng (sẽ tự bật lại khi xong)';
+  return next;
+
   -- 3) Lập kế hoạch: xếp bảng theo độ sâu phụ thuộc khoá ngoại (cha trước con).
   delete from public.mig_progress;
 
@@ -195,6 +220,28 @@ begin
 
   viec := 'lập kế hoạch'; ket_qua := (select count(*) from public.mig_progress) || ' bảng cần chép';
   return next;
+end
+$mig$;
+
+-- Bật lại toàn bộ trigger nghiệp vụ. Chạy được nhiều lần, vô hại.
+-- QUAN TRỌNG: app dựa vào các trigger này (hạn mức album, updated_at, ghi log)
+-- nên nếu để tắt thì phần mềm sẽ chạy sai một cách âm thầm.
+create or replace function public.mig_bat_lai_trigger()
+returns text language plpgsql as $mig$
+declare tbl text; n int := 0;
+begin
+  for tbl in
+    select table_name from information_schema.tables
+     where table_schema = 'public' and table_type = 'BASE TABLE'
+       and table_name <> 'mig_progress'
+  loop
+    begin
+      execute format('alter table public.%I enable trigger user', tbl);
+      n := n + 1;
+    exception when others then null;
+    end;
+  end loop;
+  return 'đã bật lại trigger trên ' || n || ' bảng';
 end
 $mig$;
 
@@ -281,9 +328,15 @@ begin
      order by (p.ghi_chu like 'LỖI%') desc, p.xong, p.thu_tu;
 
   if not exists (select 1 from public.mig_progress where not xong) then
+    -- Xong hết → bật lại trigger nghiệp vụ ngay, đừng chờ người dùng nhớ.
     bang := '✅ XONG TẤT CẢ';
     da_chep := (select sum(so_dong) from public.mig_progress);
-    trang_thai := 'chạy tiếp PHẦN 4 để dọn dẹp';
+    trang_thai := public.mig_bat_lai_trigger() || ' · chạy tiếp PHẦN 4 để dọn dẹp';
+    return next;
+  else
+    bang := '⏳ CHƯA XONG';
+    da_chep := (select count(*) from public.mig_progress where not xong);
+    trang_thai := 'bảng còn lại — bấm Run lại (trigger nghiệp vụ đang TẮT cho tới khi xong)';
     return next;
   end if;
 end
@@ -304,12 +357,15 @@ select * from public.mig_prepare();
 -- ╔══════════════════════════════════════════════════════════════════════════╗
 -- ║ PHẦN 4 · DỌN DẸP  (chạy sau khi đã thấy "XONG TẤT CẢ")                   ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
--- Gỡ kết nối tới project cũ để mật khẩu không nằm lại trong database mới.
+-- Bật lại trigger nghiệp vụ (mig_step đã tự bật khi xong, chạy lại cho chắc)
+-- rồi gỡ kết nối tới project cũ để mật khẩu không nằm lại trong database mới.
 --
+--   select public.mig_bat_lai_trigger();
 --   drop schema if exists old_public cascade;
 --   drop schema if exists old_auth cascade;
 --   drop server if exists old_project cascade;
 --   drop function if exists public.mig_step(int, int);
+--   drop function if exists public.mig_bat_lai_trigger();
 --   drop function if exists public.mig_prepare();
 --   drop function if exists public.mig_cols(text, text, text);
 --   drop table if exists public.mig_progress;
