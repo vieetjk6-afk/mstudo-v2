@@ -1,0 +1,78 @@
+name: Deploy production (Vercel)
+
+# Deploy bản production lên Vercel bằng Vercel CLI.
+#  - Tự chạy mỗi khi có commit mới trên nhánh main.
+#  - Chạy tay: tab Actions → "Deploy production (Vercel)" → Run workflow.
+#
+# Dùng đường này khi Vercel GitHub App CHƯA được cài cho org — không có app thì
+# GitHub không gửi sự kiện push cho Vercel, push main bao nhiêu lần cũng không
+# tự build. Workflow này gọi thẳng Vercel CLI nên không cần app.
+#
+# Cần 3 secret trong repo (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN       vercel.com/account/tokens → Create Token
+#   VERCEL_ORG_ID      Vercel → Settings (của account/team) → ID  (dạng team_… hoặc user id)
+#   VERCEL_PROJECT_ID  Vercel → project mstudo-v2 → Settings → General → Project ID (prj_…)
+# Chưa thêm secret thì workflow tự bỏ qua (báo warning, không đỏ).
+#
+# Biến môi trường của build (Supabase, Drive, Zalo…) KHÔNG lấy từ đây — `vercel
+# pull` tải nguyên bộ Environment Variables của project trên Vercel về, đúng như
+# khi Vercel tự build.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Nhiều commit đẩy liên tiếp thì chỉ deploy commit mới nhất.
+concurrency:
+  group: vercel-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Kiểm tra secret
+        id: check
+        env:
+          TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Chưa đủ secret (VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID) — bỏ qua deploy."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.check.outputs.skip != 'true'
+
+      - name: Cài Node.js
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Cài Vercel CLI
+        if: steps.check.outputs.skip != 'true'
+        run: npm install --global vercel@latest
+
+      - name: Tải cấu hình + biến môi trường production
+        if: steps.check.outputs.skip != 'true'
+        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Build
+        if: steps.check.outputs.skip != 'true'
+        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+
+      - name: Deploy (gán vào domain production)
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          url=$(vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}")
+          echo "$url"
+          echo "### Đã deploy production" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: \`${GITHUB_SHA::7}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $url" >> "$GITHUB_STEP_SUMMARY"
