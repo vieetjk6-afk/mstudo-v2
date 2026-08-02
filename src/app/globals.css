@@ -302,10 +302,10 @@ body {
   color: var(--brand) !important;
 }
 
-/* ── Studio shell — input focus ring (brand green) ─────────────── */
+/* ── Studio shell — input focus ring (màu nhấn thương hiệu) ────── */
 .studio-shell .input:focus {
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px var(--brandSoft);
+  border-color: var(--ac);
+  box-shadow: 0 0 0 3px var(--acM);
 }
 
 /* ── Page entry animation (applied on main) ─────────────────────── */
@@ -733,72 +733,189 @@ body {
   content: "–";
 }
 
-/* ── Studio app shell — mstudo green theme (ported from mstudo-app mockup) ──
-   Scoped tokens so the studio workspace gets its own green-accent look with a
-   light/dark toggle, independent of the dark-only album shell. Every studio
-   sub-page re-themes automatically because it reads the same --surface/--text/…
-   tokens; only their values change inside .studio-shell. */
+/* ════════════════════════════════════════════════════════════════════════════
+   KHU QUẢN LÝ STUDIO — DESIGN TOKEN (bản thiết kế "Nâng cấp giao diện quản lý
+   studio", bước 1). Xem README.md ở gốc repo, mục "Design token".
+
+   Token đặt TRONG .studio-shell chứ không phải :root, vì :root còn phục vụ
+   trang chủ / landing / album khách — những thứ KHÔNG thuộc phạm vi bản thiết
+   kế này. Mọi trang trong shell tự đổi theo, vì chúng đọc cùng bộ biến.
+
+   Đặt tên: bộ token mới dùng tên ngắn của bản thiết kế (--ac, --sf, --tx, --bd,
+   --gn…). Tên cũ đang có trong repo (--surface, --text, --brand, --s-green…)
+   được giữ nguyên và TRỎ vào token mới bằng var(), nên ~200 chỗ đang dùng tên
+   cũ đổi màu theo mà không phải sửa gì. Code mới viết theo tên ngắn.
+   Sáng là bản gốc; tối chỉ ghi đè 19 biến màu, GIỮ NGUYÊN màu nhấn.
+   ════════════════════════════════════════════════════════════════════════════ */
 .studio-shell {
-  /* dark (default) */
-  --bg: #0a0c10;
-  --bg2: #0f1217;
-  --surface: #14171d;
-  --surface2: #1b1f26;
-  --border: #242a32;
-  --border2: #2f3640;
-  --text: #eef1f4;
-  --text2: #9aa1ab;
-  --text3: rgba(154, 161, 171, 0.62);
-  --accent: #eef1f4;
-  --accentInk: #06120c;
-  --gold: #3fb98a; /* the app's accent slot → brand green (footers, links) */
-  --brand: #3fb98a;
-  --brandFg: #06120c;
-  --brandSoft: rgba(63, 185, 138, 0.14);
-  --s-green: #3fb98a;
-  --s-greenS: rgba(63, 185, 138, 0.16);
-  --s-amber: #d6a44a;
-  --s-amberS: rgba(214, 164, 74, 0.16);
-  --s-red: #e0746f;
-  --s-redS: rgba(224, 116, 111, 0.16);
-  --s-blue: #6fa0ec;
-  --s-blueS: rgba(111, 160, 236, 0.16);
-  font-family: var(--font-manrope), system-ui, sans-serif;
-}
-.studio-shell[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f6f8;
-  --bg2: #eef0f3;
-  --surface: #ffffff;
-  --surface2: #eef0f3;
-  --border: #e6e8ec;
-  --border2: #d8dce2;
-  --text: #14171c;
-  --text2: #5b616b;
-  --text3: rgba(91, 97, 107, 0.78);
-  --accent: #14171c;
-  --accentInk: #ffffff;
-  --gold: #1f9d63;
-  --brand: #1f9d63;
+
+  /* ── Màu nhấn thương hiệu ── */
+  --ac: #af2bb8;
+  --acS: color-mix(in srgb, var(--ac) 10%, #ffffff); /* nền nhạt của màu nhấn */
+  --acM: color-mix(in srgb, var(--ac) 18%, #ffffff); /* viền focus */
+  --acD: color-mix(in srgb, var(--ac) 84%, #000000); /* hover nút chính */
+
+  /* ── Nền, bề mặt, viền, chữ ── */
+  --bg: #f3f1ee;
+  --bg2: #edeae6; /* nền chìm hơn bg (khối phụ, vùng kéo-thả) */
+  --sf: #ffffff; /* nền thẻ / bảng */
+  --sf2: #f7f5f2; /* nền phụ, ô nhập */
+  --bd: #e7e3de; /* viền chính */
+  --bd2: #efece7; /* viền phân cách hàng — NHẠT hơn --bd */
+  --bdS: color-mix(in srgb, var(--bd) 72%, var(--tx3)); /* viền đậm (nút ghost) */
+  --tx: #1a1a1c;
+  --tx2: #5c5b60;
+  --tx3: #8b8a90;
+
+  /* ── Màu trạng thái ── */
+  --gn: #14855c;
+  --gnS: #e4f4ec; /* thành công, đã thu */
+  --am: #a9740a;
+  --amS: #fbf0da; /* cảnh báo, chờ xử lý */
+  --bl: #2062c4;
+  --blS: #e7effc; /* thông tin */
+  --rd: #c13c3c;
+  --rdS: #fbeaea; /* lỗi, quá hạn */
+  --nu: #6b6a70;
+  --nuS: #f0eeeb; /* trung tính — hợp đồng nháp */
+  --pu: #8e2da8;
+  --puS: #f8e9fa; /* tím — hợp đồng đang thực hiện */
+
+  /* ── Màu avatar: băm tên → chọn 1 trong 8 ──
+     Nền = color-mix(in srgb, <màu> 14%, #fff), chữ = màu gốc. */
+  --av1: #8e2da8;
+  --av2: #2f5fd0;
+  --av3: #bc5b5b;
+  --av4: #a9791f;
+  --av5: #177a5b;
+  --av6: #5b4bc4;
+  --av7: #c0642b;
+  --av8: #2f8f8a;
+
+  /* ── Bo góc ── */
+  --r-card: 14px;
+  --r-sm: 11px; /* thẻ nhỏ, ô nhập */
+  --r-btn: 10px;
+  --r-pill: 20px;
+
+  /* ── Đổ bóng — thẻ KHÔNG có bóng, chỉ dùng viền ── */
+  --sh-modal: 0 24px 70px rgba(20, 15, 25, 0.28);
+  --sh-toast: 0 12px 34px rgba(20, 15, 25, 0.3);
+
+  /* ── Tên cũ trong repo → trỏ vào bộ token mới ── */
+  --surface: var(--sf);
+  --surface2: var(--sf2);
+  --border: var(--bd);
+  --border2: var(--bdS);
+  --text: var(--tx);
+  --text2: var(--tx2);
+  --text3: var(--tx3);
+  --accent: var(--tx); /* "accent" của repo cũ = chữ tương phản cao */
+  --accentInk: var(--sf);
+  --gold: var(--ac);
+  --brand: var(--ac);
   --brandFg: #ffffff;
-  --brandSoft: rgba(31, 157, 99, 0.1);
-  --s-green: #1f9d63;
-  --s-greenS: rgba(31, 157, 99, 0.12);
-  --s-amber: #c08a1e;
-  --s-amberS: rgba(192, 138, 30, 0.14);
-  --s-red: #cc4b4b;
-  --s-redS: rgba(204, 75, 75, 0.13);
-  --s-blue: #2f6fd0;
-  --s-blueS: rgba(47, 111, 208, 0.13);
+  --brandSoft: var(--acS);
+  --danger: var(--rd);
+  --success: var(--gn);
+  --s-green: var(--gn);
+  --s-greenS: var(--gnS);
+  --s-amber: var(--am);
+  --s-amberS: var(--amS);
+  --s-red: var(--rd);
+  --s-redS: var(--rdS);
+  --s-blue: var(--bl);
+  --s-blueS: var(--blS);
+
+  font-family: var(--font-be-vietnam), var(--font-manrope), system-ui, sans-serif;
 }
-/* Primary actions inside the studio shell are brand-green, not silver. */
+
+/* Nền tối — chỉ ghi đè 19 biến màu; các bí danh ở trên tự đọc giá trị mới. */
+.studio-shell[data-theme="dark"] {
+  color-scheme: dark;
+  --acS: color-mix(in srgb, var(--ac) 22%, #1d1b23);
+  --acM: color-mix(in srgb, var(--ac) 36%, #1d1b23);
+  --acD: color-mix(in srgb, var(--ac) 76%, #ffffff);
+  --bg: #15141a;
+  --bg2: #100f14;
+  --sf: #1d1b23;
+  --sf2: #24222b;
+  --bd: #332f3c;
+  --bd2: #2b2934;
+  --tx: #f1eff4;
+  --tx2: #b4b0be;
+  --tx3: #847f8f;
+  --gn: #4ed8a0;
+  --gnS: #17352a;
+  --am: #e5b65e;
+  --amS: #3b3019;
+  --bl: #7eadf6;
+  --blS: #1d2b45;
+  --rd: #f18787;
+  --rdS: #3e2023;
+  --nu: #a19da9;
+  --nuS: #2b2934;
+  --pu: #d98be4;
+  --puS: #33203a;
+}
+
+/* Số tiền / ngày giờ luôn dùng chữ số đều cột. */
+.studio-shell .tnum,
+.studio-shell table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Nút, thẻ, ô nhập trong shell theo hình khối của bản thiết kế ──
+   Nút không còn viên thuốc tròn; thẻ không đổ bóng, chỉ có viền. */
+/* Liệt kê từng biến thể chứ không chỉ .btn: các nút được viết
+   `@apply btn` nên phần tử thật chỉ mang class biến thể, không có class .btn. */
+.studio-shell .btn,
+.studio-shell .btn-primary,
+.studio-shell .btn-ghost,
+.studio-shell .btn-danger {
+  border-radius: var(--r-btn);
+}
 .studio-shell .btn-primary {
-  background: var(--brand);
+  background: var(--ac);
   color: var(--brandFg);
+}
+.studio-shell .btn-primary:hover:not(:disabled) {
+  background: var(--acD);
+  filter: none;
+}
+.studio-shell .card {
+  border-radius: var(--r-card);
+  box-shadow: none;
+}
+/* Thẻ bấm được: đổi viền + nền, không nhấc lên và không đổ bóng. */
+.studio-shell .card-interactive {
+  transition: background-color 0.14s ease, border-color 0.14s ease;
+}
+.studio-shell .card-interactive:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--acM);
+  background: var(--sf2);
+}
+.studio-shell .input {
+  border-radius: var(--r-sm);
 }
 .studio-shell,
 .studio-shell * {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* Thanh cuộn trong shell — mảnh, bo tròn, chìm vào nền. */
+.studio-shell ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.studio-shell ::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--tx3) 42%, transparent);
+  border-radius: 8px;
+  border: 3px solid transparent;
+  background-clip: content-box;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
