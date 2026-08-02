@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
-import { Hanken_Grotesk, Cormorant_Garamond, Manrope, Dancing_Script, Great_Vibes } from "next/font/google";
+import { Hanken_Grotesk, Cormorant_Garamond, Manrope, Dancing_Script, Great_Vibes, Be_Vietnam_Pro } from "next/font/google";
 import "./globals.css";
 import { LangProvider } from "@/lib/i18n";
 import { ThemeProvider, THEME_BOOT_SCRIPT } from "@/lib/theme";
@@ -36,6 +36,16 @@ const manrope = Manrope({
   subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-manrope",
+  display: "swap",
+  preload: false,
+});
+
+// Font của khu QUẢN LÝ STUDIO (bản thiết kế 2.0) — chỉ .studio-shell dùng tới
+// nên preload:false: các trang khách/landing khỏi phải tải thêm 5 file woff2.
+const beVietnam = Be_Vietnam_Pro({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-be-vietnam",
   display: "swap",
   preload: false,
 });
@@ -127,7 +137,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" data-theme="light" className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${dancing.variable} ${greatVibes.variable}`}>
+    <html lang="vi" data-theme="light" className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${beVietnam.variable} ${dancing.variable} ${greatVibes.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
