@@ -77,7 +77,42 @@ Thêm khi cần từng mảng tính năng:
 > [`docs/supabase-usage.md`](./supabase-usage.md). Để trống thì `/api/img` vẫn
 > chạy, chỉ là không cache lâu dài.
 
+## 3b. (Tuỳ chọn) Chép dữ liệu từ project Supabase cũ sang
+
+Nếu muốn project mới có sẵn dữ liệu thật thay vì trắng tinh: chạy
+[`supabase/clone-from-old-project.sql`](../supabase/clone-from-old-project.sql)
+trong **SQL Editor của project MỚI**. Toàn bộ làm trong trình duyệt, không cần
+`pg_dump`: script bật `postgres_fdw` để database mới tự kết nối sang database cũ
+và hút dữ liệu về (tài khoản đăng nhập + toàn bộ bảng nghiệp vụ).
+
+Chuẩn bị 3 giá trị, lấy ở **project CŨ → Project Settings → Database →
+Connection string → tab "Session pooler"**:
+
+| Cần | Dạng | Ghi chú |
+|---|---|---|
+| host | `aws-0-<vùng>.pooler.supabase.com` | **Đừng** dùng `db.xxx.supabase.co` — host đó chỉ có IPv6, FDW không tới được |
+| user | `postgres.<mã-project-cũ>` | |
+| password | mật khẩu database cũ | Lưu lúc tạo project; quên thì reset ở cùng trang |
+
+Sửa 3 chỗ đánh dấu ⬅️ ở đầu file rồi chạy cả file. Kết quả hiện ra dạng bảng:
+mỗi dòng một bảng kèm số dòng đã chép. Xong thì chạy nốt 4 câu `drop` ở phần 4
+để mật khẩu không nằm lại trong database.
+
+Ba điều cần biết:
+
+- **Dữ liệu đang có trong project mới sẽ bị xoá sạch rồi chép đè.** Đúng ý đồ
+  khi dựng mới, nhưng đừng chạy trên project đã có dữ liệu thật.
+- **Chép xong thì BỎ QUA mục 4** — admin cũ sang theo, đăng nhập bằng đúng email
+  và mật khẩu cũ.
+- **File trong Storage không đi theo** (dump database chỉ có dữ liệu, không có
+  file). Vào Storage của project cũ tải về rồi tải lên project mới, 3 bucket:
+  `logos`, `wedding-photos`, `payment-proofs` — tổng khoảng 36 MB. **Đừng chép
+  `drive-cache`**: đó là 13 GB cache ảnh và là thứ làm vượt hạn mức Free; nó tự
+  sinh lại khi cần.
+
 ## 4. Tạo admin đầu tiên
+
+*(Bỏ qua mục này nếu đã chép dữ liệu ở mục 3b — tài khoản cũ đã sang theo.)*
 
 **App KHÔNG có trang đăng ký** — `/login` chỉ để đăng nhập. Tài khoản đầu tiên
 phải tạo tay trong Supabase:
