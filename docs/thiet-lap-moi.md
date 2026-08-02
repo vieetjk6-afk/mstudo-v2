@@ -94,9 +94,20 @@ Connection string → tab "Session pooler"**:
 | user | `postgres.<mã-project-cũ>` | |
 | password | mật khẩu database cũ | Lưu lúc tạo project; quên thì reset ở cùng trang |
 
-Sửa 3 chỗ đánh dấu ⬅️ ở đầu file rồi chạy cả file. Kết quả hiện ra dạng bảng:
-mỗi dòng một bảng kèm số dòng đã chép. Xong thì chạy nốt 4 câu `drop` ở phần 4
-để mật khẩu không nằm lại trong database.
+**Chạy làm 4 lần, đừng dán một phát cả file** — SQL Editor có giới hạn thời gian
+mỗi lệnh ("upstream timeout"), dữ liệu thật kéo qua mạng không thể xong trong
+một lệnh:
+
+| Lần | Chạy phần | Số lần bấm Run |
+|---|---|---|
+| 1 | PHẦN 1 — kết nối (sửa 3 chỗ ⬅️ trước) | 1 |
+| 2 | PHẦN 2 — cài bộ máy chép | 1 |
+| 3 | `select * from public.mig_step();` | **bấm lại nhiều lần** tới khi hiện `✅ XONG TẤT CẢ` |
+| 4 | PHẦN 4 — dọn dẹp | 1 |
+
+Mỗi lần bấm Run ở phần 3 làm việc khoảng 40 giây rồi tự dừng và **ghi nhớ chỗ
+đang dở** (tới từng lô 2000 dòng), nên bảng vài trăm nghìn dòng vẫn qua được.
+Kết quả hiện dạng bảng: tên bảng · số dòng đã chép · trạng thái.
 
 Ba điều cần biết:
 
