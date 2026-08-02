@@ -1,296 +1,303 @@
-# Vieetjk — Photo collection for customers
+# Handoff: Nâng cấp giao diện quản lý studio (mstudo)
 
-> ### 🎨 Đây là repo **mstudo 2.0** — bản làm lại giao diện
->
-> Tách riêng khỏi repo đang chạy production, dùng **Supabase và Vercel riêng**,
-> nên sửa thoải mái mà không ảnh hưởng khách đang dùng. Logic là bản sao đầy đủ
-> nên chạy được ngay từ ngày đầu.
->
-> **Dựng môi trường lần đầu → [`docs/thiet-lap-moi.md`](docs/thiet-lap-moi.md)**
-> (Supabase mới · Vercel mới · biến môi trường · chỗ bắt đầu sửa giao diện)
+> **Đọc file này trước.** Nó tự đủ — một dev chưa từng tham gia cuộc trao đổi vẫn làm được.
 
-> Minimalist, dark-themed photo selection platform. Photographers create albums
-> from Google Drive links; customers browse (watermarked), pick photos within a
-> limit, export/copy the list, and download a ZIP.
->
-> Nền tảng chọn ảnh tối giản, tone tối. Photographer tạo album từ link Google
-> Drive; khách hàng xem (có watermark), chọn ảnh theo giới hạn, xuất/copy danh
-> sách và tải ZIP.
+## Tóm tắt
 
-Built with **Next.js 14 (App Router) · TypeScript · Tailwind CSS · Supabase**.
+Thiết kế lại toàn bộ khu **quản lý studio** của repo `vieetjk01/Studio` (branch `claude/stoic-fermi-gf0pg4`): 46 màn desktop + 11 màn mobile, gộp nav từ ~40 mục rời rạc xuống 24 mục / 7 nhóm, thêm 14 tính năng mới. Trang chủ / landing **không** thuộc phạm vi này.
 
-The UI follows the **Vieetjk Gallery “Obsidian”** design: deep-ink palette
-(`#0a0a0c`), champagne-gold accent (`#E8C57C`), the TJK wordmark logo, and an
-editorial type pairing — **Cormorant Garamond** (headings) + **Hanken Grotesk**
-(UI). The customer selection page mirrors that design: editorial album title,
-guest banner, a sticky toolbar (filter selected / export / copy / ZIP / send),
-a masonry gallery with selection rings, and a lightbox with a per-photo note
-panel.
+## Về file thiết kế trong gói
 
-> Delivery galleries (`/album`) reuse the albums/sources/photos tables via
-> `is_gallery = true`; the view password is the client's phone (pinned galleries
-> are open). Re-run `supabase/schema.sql` to add the gallery columns + the
-> `feedback` table.
->
-> Already have a database from an earlier version? Re-run `supabase/schema.sql`
-> (it is idempotent) — it adds `selections.client_note`, the album showcase
-> flags (`is_showcase`, `is_pinned`, `kind`), and the `site_settings` and
-> `bookings` tables used by the homepage and settings.
+`Quản lý Studio.dc.html` là **bản thiết kế tham chiếu viết bằng HTML**, không phải code để chép thẳng. Nhiệm vụ là **dựng lại các màn này trong môi trường sẵn có của repo** — Next.js App Router + React + TypeScript + Tailwind — theo đúng quy ước đang dùng ở đó, chứ không phải nhúng file HTML vào.
+
+File chạy được: mở trực tiếp trong trình duyệt, bấm qua lại được mọi màn, có modal / filter / tab / ⌘K / dark mode chạy thật. Dùng nó làm nguồn tra cứu trực quan trong lúc code.
+
+## Độ hoàn thiện: **Hi-fi**
+
+Màu, chữ, khoảng cách, bo góc, trạng thái hover đều là giá trị cuối. Dựng lại **đúng pixel**, dùng thư viện và pattern sẵn có của repo. Dữ liệu trong file là dữ liệu mẫu — thay bằng dữ liệu thật từ Prisma/API.
 
 ---
 
-## ✨ Features / Tính năng
+## Thứ tự triển khai đề xuất
 
-- **Albums from Google Drive** — add multiple sources per album (individual file
-  links *or* folder links). Folders are auto-listed via the Drive API and can be
-  re-synced to update the photo count. *(Tạo album từ nhiều link Drive — file lẻ
-  hoặc folder; đồng bộ lại số lượng ảnh.)*
-- **Group or merge** — each source is a named group; customers can view all
-  photos together or filter by group.
-- **Selection limit** — cap how many photos a customer may select.
-- **Album password** — optional bcrypt-hashed password gate per album.
-- **Watermark** — tiled diagonal watermark on previews *and* on ZIP downloads.
-- **Export / copy** — export the selection as a `.txt`, or copy the list with
-  file extensions stripped.
-- **Download ZIP** — client-side zip of selected images (watermarked if enabled).
-- **Customer notes** — clients can leave a note on each photo (in the lightbox);
-  notes are sent to the studio with the selection.
-- **Photographer tools** — edit album, change cover, re-sync Drive, view customer
-  selections (with the client's notes) and add their own notes per chosen photo.
-- **Admin** — manage photographers: roles, activation, album limit, ZIP
-  permission, and create new accounts.
-- **Profile homepage** — public studio portfolio: cover, avatar, bio, live
-  stats, featured photos, view-only **reference albums**, a **booking form**
-  (4 service types → stored as leads) and a contact block.
-- **Reference (showcase) albums** — flag any published album as "show on
-  homepage"; it renders view-only (no selection/download) at `/showcase/[slug]`.
-- **2-step create flow** — `/dashboard/create`: paste Drive links + options,
-  then get a shareable client link **with a real QR code**.
-- **Studio settings & bookings** — admins edit the homepage profile/contact and
-  review booking leads at `/dashboard/settings`.
-- **Contract → Drive sync** — tính năng riêng ở **Khách hàng → Đồng bộ Drive**.
-  Studio kết nối Drive của mình, đặt tên thư mục gốc (tự kéo đi đâu trong Drive
-  cũng được), và chọn thư mục gốc trên máy. Khi hợp đồng đã ký, máy chủ tạo ngay
-  cây thư mục Drive + album, còn MStudo Desktop tạo thư mục trên máy — tất cả trong
-  1 thư mục gốc lấy tên hợp đồng (`Photo/JPG Goc · Raw · File ChinhSua`, và
-  `Video/…` nếu chọn có quay), rồi **tự tải lên Drive** (1 chiều).
-  *JPG Goc* → album chọn ảnh, *File ChinhSua* → gallery giao khách; loại trừ được
-  thư mục không cần đồng bộ. Cây thư mục tự chia theo cấu trúc **Thư mục gốc /
-  Loại dịch vụ / Thang{tháng ngày thực hiện} / Tên hợp đồng** — giống hệt trên
-  Drive lẫn trên máy; thư mục *loại dịch vụ* và *tháng* chỉ tạo một lần rồi các
-  hợp đồng sau lưu đúng vào đó. Env `GOOGLE_STUDIO_DRIVE_REDIRECT_URI`, migration
-  `supabase/migrations/studio_drive_sync.sql`.
-- **Giao khách (client handoff)** — khi hợp đồng chuyển giai đoạn giao khách (đã
-  có album hoàn thiện), album chọn ảnh không còn hiện cho khách (cổng hợp đồng ẩn
-  thẻ chọn ảnh, link `/a/[slug]` tự chuyển sang album hoàn thiện). Trong album hoàn
-  thiện có thêm nút **File gốc (ảnh chọn)** trỏ tới thư mục Drive *JPG Goc* của giai
-  đoạn chọn ảnh để khách lấy file gốc khi cần.
-  Với album **không gắn hợp đồng** (sửa trực tiếp trong thư viện album): khi chuyển
-  sang giai đoạn Giao khách, thư mục ảnh gốc (giai đoạn chọn) tự thành nút *File gốc*;
-  studio dán **link thư mục ảnh đã chỉnh sửa** ngay trong trình sửa album rồi
-  **Lưu & đồng bộ** — ảnh đã chỉnh sửa hiện ở album giao cho khách.
-- **Bilingual UI** — Vietnamese / English toggle.
+Làm theo đúng thứ tự này, mỗi bước là một PR:
+
+1. **Design token** → `src/app/globals.css`. Một lần, ảnh hưởng toàn bộ.
+2. **Khung app** → `src/components/StudioShell.tsx` (sidebar + topbar + ⌘K + dark mode). Sau bước này cả 46 màn cũ đã trông mới.
+3. **Tổng quan** → `src/app/dashboard/studio/page.tsx`.
+4. **Hợp đồng + Chi tiết hợp đồng** → nhóm màn dùng nhiều nhất.
+5. **Lịch, Khách hàng, Tài chính, Đối soát**.
+6. Phần còn lại theo bảng ánh xạ.
 
 ---
 
-## 🚀 Setup
+## Design token
 
-### 1. Supabase
+Đặt trong `:root` của `globals.css`. Bản dark ghi đè bằng `[data-theme="dark"]`.
 
-1. Create a project at [supabase.com](https://supabase.com).
-2. Open **SQL Editor** and run [`supabase/schema.sql`](supabase/schema.sql).
-3. From **Project Settings → API**, copy the *Project URL*, *anon key* and
-   *service_role key*.
+### Màu
 
-### 2. Google Drive API key
+| Biến | Sáng | Tối | Dùng cho |
+| --- | --- | --- | --- |
+| `--ac` | `#AF2BB8` | giữ nguyên | Màu nhấn thương hiệu |
+| `--acS` | `color-mix(in srgb, var(--ac) 10%, #fff)` | `color-mix(in srgb, var(--ac) 22%, #1D1B23)` | Nền nhạt của màu nhấn |
+| `--acM` | `color-mix(in srgb, var(--ac) 18%, #fff)` | `color-mix(in srgb, var(--ac) 36%, #1D1B23)` | Viền focus |
+| `--acD` | `color-mix(in srgb, var(--ac) 84%, #000)` | `color-mix(in srgb, var(--ac) 76%, #fff)` | Hover nút chính |
+| `--bg` | `#F3F1EE` | `#15141A` | Nền trang |
+| `--sf` | `#FFFFFF` | `#1D1B23` | Nền thẻ / bảng |
+| `--sf2` | `#F7F5F2` | `#24222B` | Nền phụ, ô input |
+| `--bd` | `#E7E3DE` | `#332F3C` | Viền chính |
+| `--bd2` | `#EFECE7` | `#2B2934` | Viền phân cách hàng |
+| `--tx` | `#1A1A1C` | `#F1EFF4` | Chữ chính |
+| `--tx2` | `#5C5B60` | `#B4B0BE` | Chữ phụ |
+| `--tx3` | `#8B8A90` | `#847F8F` | Chữ mờ, nhãn |
+| `--gn` / `--gnS` | `#14855C` / `#E4F4EC` | `#4ED8A0` / `#17352A` | Thành công, đã thu |
+| `--am` / `--amS` | `#A9740A` / `#FBF0DA` | `#E5B65E` / `#3B3019` | Cảnh báo, chờ xử lý |
+| `--bl` / `--blS` | `#2062C4` / `#E7EFFC` | `#7EADF6` / `#1D2B45` | Thông tin |
+| `--rd` / `--rdS` | `#C13C3C` / `#FBEAEA` | `#F18787` / `#3E2023` | Lỗi, quá hạn |
 
-1. In [Google Cloud Console](https://console.cloud.google.com), enable the
-   **Google Drive API**.
-2. Create an **API key**. Restrict it to the Drive API (and ideally to your
-   site's referrer / IP).
-3. Drive sources must be shared as **“Anyone with the link”** for the key to
-   read them. *(Folder/ảnh phải được chia sẻ ở chế độ “Anyone with the link”.)*
+Màu avatar (hash tên → chọn 1 trong 8): `#8E2DA8 #2F5FD0 #BC5B5B #A9791F #177A5B #5B4BC4 #C0642B #2F8F8A`. Nền avatar = `color-mix(in srgb, <màu> 14%, #fff)`, chữ = màu gốc.
 
-### 2b. Google sign-in (OAuth) — for photographers
+### Chữ
 
-The app subdomain's home (`/start`) lets a photographer create albums and signs
-them in **with Google** on demand. To enable it:
+Font: **Be Vietnam Pro** (400/500/600/700/800) + **Material Symbols Rounded** (weight 300, FILL 0).
 
-1. In **Supabase → Authentication → Providers → Google**, enable it and paste a
-   Google OAuth **Client ID / Secret** (create them in Google Cloud → APIs &
-   Services → Credentials → OAuth client, type *Web application*).
-2. In that Google OAuth client, add the **Authorized redirect URI** that
-   Supabase shows you (`https://<project>.supabase.co/auth/v1/callback`).
-3. In **Supabase → Authentication → URL Configuration**, add your site URLs to
-   **Redirect URLs**, e.g. `https://album.vieetjk.com/auth/callback` (and your
-   `*.vercel.app` / `http://localhost:3000/auth/callback` for testing).
+| Vai trò | Cỡ | Đậm | Ghi chú |
+| --- | --- | --- | --- |
+| Tiêu đề trang lớn | 24px | 750 | `letter-spacing:-.6px` |
+| Tiêu đề màn | 19–21px | 750 | `letter-spacing:-.4px` |
+| Tiêu đề topbar | 16.5px | 750 | `letter-spacing:-.3px` |
+| Tiêu đề thẻ | 14px | 700 | |
+| Số liệu KPI | 22–25px | 750 | `letter-spacing:-.7px`, `tabular-nums` |
+| Nội dung hàng | 13.5px | 650 | |
+| Nội dung phụ | 12.5px | 550–600 | màu `--tx2` |
+| Chú thích | 11.5px | 400–600 | màu `--tx3` |
+| Nhãn viết hoa | 10.5–11px | 700–800 | `letter-spacing:.5–.7px`, `uppercase` |
+| Pill trạng thái | 11–11.5px | 650 | |
 
-New sign-ups become active photographers automatically and can create albums
-right away. By default a new account is on a **free tier**: up to **5 albums per
-month**, customer **download (ZIP) disabled**, and customer **notes disabled**.
-An admin can raise the monthly limit and toggle download/notes per account in
-**Dashboard → Admin** (admins themselves are unlimited and always allow
-download/notes). The monthly quota is enforced by a database trigger.
+Mọi con số tiền/ngày dùng `font-variant-numeric: tabular-nums`.
 
-### 3. Environment variables
+### Khoảng cách & hình khối
 
-Copy `.env.example` to `.env.local` and fill in:
+- Bo góc: thẻ `14px`, thẻ nhỏ/ô nhập `10–11px`, nút `9–10px`, pill `20px`, avatar `50%`
+- Padding thẻ: `15–18px 16–20px`; hàng bảng: `12–13px 18px`
+- Gap lưới: `12px` (thẻ), `14px` (khối lớn)
+- Đổ bóng: thẻ **không có bóng**, chỉ dùng viền. Modal `0 24px 70px rgba(20,15,25,.28)`. Toast `0 12px 34px rgba(20,15,25,.3)`.
+- Chuyển động: `transition: background .14s`; modal `pop .2s ease`; nội dung trang `fadeUp .3s ease`
 
-```bash
-NEXT_PUBLIC_SUPABASE_URL=...
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-SUPABASE_SERVICE_ROLE_KEY=...     # server only — keep secret
-GOOGLE_API_KEY=...                # server only — keep secret
+### Ngưỡng responsive (đã kiểm chứng, đừng đổi tuỳ tiện)
+
+| Ngưỡng | Xảy ra gì |
+| --- | --- |
+| `< 1240px` | Bảng Hợp đồng (min-width 1120px) và Khách hàng (940px) cuộn ngang. **Thẻ bao phải `overflow-x:auto`, không được `overflow:hidden`.** |
+| `< 1180px` | Bố cục 2 cột có rail phải → 1 cột; rail bỏ `position:sticky`; lịch nhân sự cuộn ngang |
+| `< 1120px` | Ẩn thanh chuyển vai trò trên topbar |
+| `< 1100px` | Lưới thẻ 3 cột → 2 cột; ẩn dòng tên job trong ô lịch nhân sự |
+| `< 1000px` | Ẩn tên người dùng cạnh avatar |
+
+**Bài học đã trả giá:** mọi cột grid phải là `minmax(<px tối thiểu>, <fr>)`, không bao giờ để `fr` trần. Pill trạng thái, ngày giờ, số tiền, badge, nút icon phải có `flex:none` + `white-space:nowrap` — nếu không chúng sẽ là thứ duy nhất co lại và vỡ chữ.
+
+---
+
+## Bảng ánh xạ màn ↔ file repo
+
+| # | Màn | Route | File nguồn trong repo |
+| --- | --- | --- | --- |
+| 1 | Khung app (sidebar, topbar, ⌘K) | — | `src/components/StudioShell.tsx` |
+| 2 | Tổng quan | `dashboard` | `src/app/dashboard/studio/page.tsx` |
+| 3 | Báo giá | `quotes` | `studio/quotes/QuotesListView.tsx` |
+| 4 | Chi tiết báo giá | `quote` | `studio/quotes/[id]/` |
+| 5 | Tạo báo giá | `newq` | `studio/quotes/new/` |
+| 6 | Hợp đồng & lịch hẹn | `contracts` | `studio/contracts/ContractsListView.tsx`, `src/lib/contract-filter.ts` |
+| 7 | Chi tiết hợp đồng | `detail` | `studio/contracts/[id]/`, `src/lib/contract-status.ts` |
+| 8 | Tạo hợp đồng (5 bước) | `newc` | `studio/contracts/new/` |
+| 9 | Hợp đồng gửi khách | `share` | `studio/contracts/[id]/share/`, trang công khai `app/hd/[code]/` |
+| 10 | Bảng công việc (kanban) | `board` | `studio/board/BoardView.tsx` |
+| 11 | Đặt lịch khách | `bookings` | `studio/bookings/BookingsView.tsx` |
+| 12 | Chi tiết đặt lịch | `booking` | `studio/bookings/[id]/` |
+| 13 | Yêu cầu mới | `leads` | `studio/leads/LeadsView.tsx` |
+| 14 | Lịch làm việc (4 chế độ) | `calendar` | `studio/calendar/CalendarView.tsx`, `team/TeamCalendar.tsx` |
+| 15 | Chế độ ngày chụp | `field` | **mới** — `studio/field/` |
+| 16 | Xử lý hình ảnh | `production` | `studio/production/ProductionView.tsx` |
+| 17 | Thư viện album | `albums` | `dashboard/AlbumList.tsx` |
+| 18 | Album chọn ảnh (chi tiết) | `album` | `dashboard/albums/[id]/AlbumEditor.tsx` |
+| 19 | Phòng váy | `rental` | `studio/rental/RentalManager.tsx` |
+| 20 | Chi tiết trang phục | `rentalitem` | `studio/rental/[id]/` |
+| 21 | Thiết bị | `equipment` | `studio/equipment/EquipmentManager.tsx` |
+| 22 | Chi tiết thiết bị | `equipitem` | `studio/equipment/[id]/` |
+| 23 | Khách hàng | `clients` | `studio/clients/ClientsView.tsx` |
+| 24 | Hồ sơ khách | `client` | `studio/clients/[id]/` |
+| 25 | Thiệp · Story · Slide | `digital` | `studio/thiep/`, `studio/story/`, `studio/slide/` |
+| 26 | Tạo thiệp cưới | `cardmaker` | `studio/thiep/new/` |
+| 27 | Tạo Love Story | `storymaker` | `studio/story/new/` |
+| 28 | Tạo Slide cưới | `slidemaker` | `studio/slide/new/` |
+| 29 | Thiết kế album | `designer` | `studio/album-designer/` |
+| 30 | Dàn trang album | `spread` | `studio/album-designer/[id]/` |
+| 31 | Thu chi & công nợ | `finance` | `studio/reports/ReportsView.tsx` |
+| 32 | Thêm khoản chi | `expense` | `studio/expenses/new/` |
+| 33 | Đối soát tiền công | `payroll` | `studio/payroll/PayrollView.tsx` |
+| 34 | Báo cáo | `reports` | `studio/reports/ReportsView.tsx` |
+| 35 | Đội ngũ | `crew` | `studio/crew/CrewManager.tsx`, `staff/StaffManager.tsx` |
+| 36 | Hồ sơ nhân sự | `member` | `studio/crew/[id]/` |
+| 37 | Xếp hạng | `ranking` | `studio/ranking/page.tsx` |
+| 38 | Mẫu tin nhắn | `messages` | `studio/messages/MessagesManager.tsx` |
+| 39 | Sửa mẫu tin nhắn | `msgedit` | `studio/messages/[id]/` |
+| 40 | Gói & bảng giá | `packages` | `studio/packages/PackagesManager.tsx`, `pricing/PricingManager.tsx` |
+| 41 | Sửa gói dịch vụ | `pkgedit` | `studio/packages/[id]/` |
+| 42 | Dịch vụ & điều khoản | `services` | `studio/services/ServicesManager.tsx`, `src/lib/contract-clauses.ts` |
+| 43 | Website & chatbox | `web` | `studio/chatbox/ChatboxConfig.tsx`, `dashboard/site/` |
+| 44 | Giao diện website | `sitebuild` | `dashboard/site/SiteRenderer.tsx` |
+| 45 | Công cụ ảnh | `tools` | `dashboard/filter/`, `dashboard/compress/`, `studio/drive-sync/` |
+| 46 | Lọc ảnh khách chọn | `toolfilter` | `dashboard/filter/` |
+| 47 | Nén ảnh & watermark | `toolcompress` | `dashboard/compress/` |
+| 48 | Cài đặt studio | `settings` | `dashboard/settings/SettingsPanel.tsx` |
+| 49 | Cài đặt chi tiết (6 mục) | `setdetail` | `dashboard/settings/[section]/` |
+| 50 | Thông báo | `notifications` | `studio/notifications/NotificationsList.tsx` |
+| 51 | Tài khoản & bảo mật | `account` | `dashboard/account/AccountPanel.tsx` |
+| 52 | Gói phần mềm | `upgrade` | `dashboard/upgrade/page.tsx`, `src/lib/plans.ts` |
+| 53 | Affiliate | `affiliate` | `dashboard/affiliate/page.tsx` |
+| 54 | Ứng dụng máy tính | `desktop` | `studio/desktop/DesktopPanel.tsx` |
+| 55 | Quản trị hệ thống | `admin` | `dashboard/admin/AdminPanel.tsx` |
+
+Trong file thiết kế, mỗi màn nằm trong một `<sc-if value="{{ isXxx }}">` — tìm theo tên route ở bảng trên.
+
+---
+
+## Cấu trúc điều hướng
+
+Sidebar 250px, cố định, 7 nhóm. Nhãn nhóm 10px/800/uppercase màu `--tx3`. Mục đang mở: nền `--acS`, chữ `--ac`, đậm 700.
+
+```
+(không nhãn)  Tổng quan
+Bán hàng      Báo giá(2) · Hợp đồng & lịch hẹn · Bảng công việc · Đặt lịch khách(3) · Yêu cầu mới(3)
+Vận hành      Lịch làm việc · Xử lý hình ảnh(4) · Thư viện album · Phòng váy · Thiết bị
+Khách hàng    Khách hàng · Thiệp·Story·Slide · Thiết kế album(2)
+Tài chính     Thu chi & công nợ · Đối soát tiền công(2) · Báo cáo
+Nhân sự       Đội ngũ · Xếp hạng · Mẫu tin nhắn
+Thiết lập     Gói & bảng giá · Dịch vụ & điều khoản · Website & chatbox · Công cụ ảnh · Cài đặt studio
+Tài khoản     Thông báo(5) · Tài khoản & bảo mật · Gói phần mềm · Affiliate · Ứng dụng máy tính · Quản trị hệ thống
 ```
 
-### 4. Run locally
+Số trong ngoặc là badge đếm. Chân sidebar: thẻ trạng thái đồng bộ Drive + số phiên bản.
 
-```bash
-npm install
-npm run dev
+**Topbar** (sticky, nền `rgba(255,255,255,.86)` + `backdrop-filter:blur(12px)`): tiêu đề + phụ đề trang · ô ⌘K · nút dark mode · chuông thông báo · chuyển vai trò · avatar (bấm → Tài khoản).
+
+### Phân quyền
+
+Ba vai trò lọc danh sách route hiển thị:
+
+- **Chủ studio** — thấy tất cả
+- **Quản lý** — mọi thứ trừ Tài chính, Đối soát, Báo cáo, Gói phần mềm, Affiliate, Quản trị hệ thống
+- **Nhân sự** — chỉ: Tổng quan, Hợp đồng, Chi tiết HĐ, Lịch, Xử lý hình ảnh, Album, Thông báo, Tài khoản
+
+Trong bản HTML đây là mảng `allowed` trong `renderVals()`. Ở repo thật nên chuyển thành middleware + kiểm tra ở server component.
+
+---
+
+## Trạng thái hợp đồng
+
+Đổi **nhãn hiển thị** sang tiếng Việt dễ hiểu, **giữ nguyên giá trị enum** trong DB. Cập nhật `CONTRACT_STATUS_LABEL` ở `src/lib/types.ts`:
+
+| enum | Nhãn mới | Màu chữ | Nền |
+| --- | --- | --- | --- |
+| `draft` | Nháp | `#6B6A70` | `#F0EEEB` |
+| `sent` | Chờ khách duyệt | `#A9740A` | `#FBF0DA` |
+| `approved` | Khách đã duyệt | `#2062C4` | `#E7EFFC` |
+| `in_progress` | Đang thực hiện | `#8E2DA8` | `#F8E9FA` |
+| `completed` | Hoàn thành | `#14855C` | `#E4F4EC` |
+| `cancelled` | Đã huỷ | `#C13C3C` | `#FBEAEA` |
+
+Pill trạng thái = chấm tròn 6px cùng màu chữ + nhãn, `padding:5px 11px`, `border-radius:20px`, `white-space:nowrap`.
+
+**Stepper vòng đời 7 bước** (thay dropdown trạng thái ở màn chi tiết):
+`Báo giá → Ký hợp đồng → Phân công → Nhận cọc → Chụp → Hậu kỳ → Giao album`
+Bước xong: nền `--gn` + icon `check`. Bước hiện tại: nền `--ac`. Bước chưa tới: nền `--sf2`, viền `--bd`.
+
+---
+
+## 14 tính năng mới (không có trong bản cũ)
+
+| # | Tính năng | Mô tả | Nằm ở |
+| --- | --- | --- | --- |
+| 1 | Hàng đợi "Cần xử lý ngay" | 6 việc gấp, mỗi dòng có nút hành động tại chỗ | Tổng quan |
+| 2 | Ô lệnh ⌘K | Tìm không dấu across hành động + hợp đồng + khách + nhân sự | Toàn app |
+| 3 | Cảnh báo lãi mỏng | Biên < 45% → khối cảnh báo đỏ trước khi gửi khách ký | Bước 5 tạo HĐ |
+| 4 | Lịch theo nhân sự | Mỗi người 1 hàng × 7 ngày, cột tải tuần đổi màu | Lịch, tab 4 |
+| 5 | Cam kết giao ảnh | Đếm ngược theo điều khoản (gốc 7 ngày, chỉnh 21 ngày) | Tổng quan |
+| 6 | Cảnh báo dồn lịch | 1 ngày ≥3 buổi, hoặc 1 người ≥4 ngày/tuần | Tổng quan |
+| 7 | Chốt đối soát theo job | Job xong là chốt tiền ngay, không đợi cuối tháng | Đối soát, tab 2 |
+| 8 | Xem như khách trên điện thoại | Preview 376px có status bar + address bar | Hợp đồng gửi khách |
+| 9 | Hoàn tác trong toast | Nút "Hoàn tác" sống 5 giây sau hành động khó gỡ | Toàn app |
+| 10 | Trạng thái trống có hướng dẫn | Icon + câu giải thích + nút hành động | 4 màn danh sách |
+| 11 | Nhân bản hợp đồng | "Tạo giống HĐ này" → nhảy vào bước 2 đã điền sẵn | Chi tiết HĐ |
+| 12 | Chế độ ngày chụp | Chữ 16–28px, nút 56px, lịch trình + checklist ảnh theo loại buổi | Route riêng |
+| 13 | Ghi chú nội bộ @nhắc tên | Luồng trao đổi trong hợp đồng, @tên được highlight | Chi tiết HĐ, tab 5 |
+| 14 | Dark mode | Ghi đè 19 biến màu, giữ nguyên màu nhấn | Toàn app |
+
+### Chi tiết một số tính năng
+
+**⌘K** — bắt `metaKey/ctrlKey + k` ở `window`, `Escape` để đóng. So khớp bằng chuỗi đã bỏ dấu: `s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toLowerCase()`. Nhóm kết quả theo loại, mỗi loại có pill màu riêng. Kết quả đầu tiên highlight nền `--sf2`.
+
+**Chế độ ngày chụp** — lịch trình phải sinh ra từ `t1`/`t2` của chính hợp đồng (bước đầu = `t1 − 30 phút`, các bước sau chia đều tới `t2`). Checklist ảnh chọn theo loại buổi, nhận diện bằng regex trên `svc + title`: cưới / sơ sinh / kỷ yếu / doanh nghiệp / chân dung.
+
+**Cảnh báo lãi mỏng** — `biên = (tổng HĐ − tiền công nhân sự − chi phí sản xuất) / tổng HĐ`. Dưới 45% đỏ, 45–60% vàng, trên 60% xanh.
+
+---
+
+## Bản mobile
+
+Khung điện thoại 392×812, tab bar 5 mục ở đáy, hit target tối thiểu 44px. 11 màn:
+
+- **Trang chủ** — 4 thẻ KPI 2×2, "Cần xử lý ngay", lịch hôm nay
+- **Lịch** — dải ngày cuộn ngang + danh sách thẻ, viền trái theo màu trạng thái
+- **Hợp đồng** — ô tìm + chip lọc cuộn ngang + thẻ 2 dòng
+- **Chi tiết** — stepper cuộn ngang, thanh hành động cố định đáy
+- **Tiền** — thu/chi/lợi nhuận + danh sách công nợ
+- **Thêm** → Báo giá · Khách hàng · Album · Đội ngũ · Đối soát · Thông báo
+
+Bảng trên desktop → thẻ trên mobile. Không thu nhỏ bảng.
+
+---
+
+## Ghi chú kỹ thuật khi dựng lại
+
+**Nguồn số liệu duy nhất.** Lỗi lặp lại nhiều nhất trong quá trình thiết kế: một màn chi tiết lưu `id` được bấm nhưng nội dung lại là hằng số cứng, nên mọi hàng mở ra cùng một bản ghi. Với mỗi màn chi tiết, **luôn** derive từ `find(x => x.id === selectedId)`. Tương tự, tổng tiền phải cộng từ mảng hạng mục, không viết tay số tổng.
+
+**Icon** — Material Symbols Rounded. Tên icon dùng trong thiết kế: `space_dashboard, request_quote, description, view_kanban, event_note, inbox, calendar_month, auto_fix_high, photo_library, checkroom, photo_camera, groups, auto_awesome, auto_stories, account_balance_wallet, payments, monitoring, diversity_3, trophy, forum, inventory_2, gavel, language, tune, settings, notifications, account_circle, workspace_premium, redeem, desktop_windows, shield_person`.
+
+**Ảnh** — mọi chỗ có ảnh đang là placeholder sọc. Trong repo thật nối vào Google Drive / CDN sẵn có.
+
+**Định dạng tiền** — `(n).toLocaleString("vi-VN") + " đ"`. Rút gọn: `≥1e9 → "x,x tỷ"`, `≥1e6 → "xtr"`, còn lại `"xk"`.
+
+**Ngày** — hiển thị `T2/T3/.../CN · dd/mm`. Không dùng tên thứ đầy đủ trong bảng.
+
+---
+
+## Danh sách file trong gói
+
+| File | Nội dung |
+| --- | --- |
+| `README.md` | Tài liệu này |
+| `Quản lý Studio.dc.html` | Bản thiết kế đầy đủ, mở trực tiếp bằng trình duyệt |
+| `support.js` | Runtime cần cho file trên chạy được (không dùng trong repo thật) |
+| `image-slot.js` | Component ô thả ảnh (không dùng trong repo thật) |
+| `github.md` | Ghi nhận repo nguồn + bảng ánh xạ màn ↔ file |
+
+---
+
+## Câu lệnh gợi ý cho Claude Code
+
 ```
+Đọc README.md trong thư mục design_handoff_studio_admin.
+Mở Quản lý Studio.dc.html trong trình duyệt để xem thiết kế trực quan.
 
-### 5. Create the first admin
+Bắt đầu từ bước 1 trong mục "Thứ tự triển khai đề xuất":
+áp bộ design token vào src/app/globals.css, giữ nguyên tên biến
+đang có nếu trùng chức năng, thêm biến mới nếu chưa có.
+Sau đó dựng lại src/components/StudioShell.tsx theo mục
+"Cấu trúc điều hướng".
 
-1. Sign up once is disabled by default; instead, create a user in the Supabase
-   dashboard (**Authentication → Users → Add user**, with a password).
-2. In **SQL Editor**, promote that user:
-   ```sql
-   update public.profiles set role = 'admin', is_active = true
-   where email = 'you@example.com';
-   ```
-3. Sign in at `/login`. From **Admin**, create photographer accounts.
-
-### 6. Deploy to Vercel
-
-Push to GitHub, import the repo in Vercel, and add the four environment
-variables above in **Project Settings → Environment Variables**. Deploy.
-
-### 7. (Optional) Split across two domains
-
-Serve the public site and the app on separate hosts from the **same** Vercel
-project:
-
-1. In **Settings → Domains**, add `vieetjk.com`, `album.vieetjk.com` and
-   `img.vieetjk.com`.
-2. Add the env vars and redeploy:
-   - `NEXT_PUBLIC_MAIN_HOST=vieetjk.com`
-   - `NEXT_PUBLIC_APP_HOST=album.vieetjk.com`
-   - `NEXT_PUBLIC_IMG_HOST=img.vieetjk.com`
-
-Middleware then routes by host:
-
-- **vieetjk.com** → profile homepage, showcase albums, booking, contact, social.
-  App routes are redirected to the app host.
-- **album.vieetjk.com** → login, dashboard, album management, and the customer
-  selection pages (`/a/[slug]`). `/` redirects to `/dashboard`. The compress
-  tool is redirected to the image host.
-- **img.vieetjk.com** → the image-compress tool (`Nén ảnh`). `/` opens the tool;
-  it requires login, and every other path is sent to the app host. Add this
-  host to the Supabase **Redirect URLs** too (`https://img.vieetjk.com/auth/callback`).
-
-When the host vars are unset (local dev, `*.vercel.app`), the full app runs on a
-single host and the compress tool stays at `/dashboard/compress`.
-
-> **Image tool tabs + quotas.** The tool has three tabs: **Nén ảnh** (compress),
-> **Gắn watermark** (standalone text/image watermark) and **Đổi định dạng**
-> (convert between JPEG/PNG/WebP). Each tab has a **preview**. Free-account limits
-> (admins always unlimited):
-> - **Compress** from local files / public Drive link: **2/day**
->   (`profiles.compress_daily_limit`, counted per Vietnam-day).
-> - **Compress via the Google Picker** (writes back to Drive): **1 lifetime trial**
->   (`profiles.compress_picker_limit`).
-> - **Watermark** and **Convert**: unlimited (download only, no Drive write-back).
->
-> Usage is logged in `compress_usages` (`kind` = `basic` | `picker`). Admins set
-> per-account limits in **Dashboard → Admin** (“Nén/ngày”, “Nén Drive”). For the
-> Picker compress, the overwrite/new-copy choice is made **before** running and
-> the compress+write runs automatically. Re-run `supabase/schema.sql` to add the
-> columns + `kind`.
-
-> **Compress on a user's own Drive (Google Picker).** In the compress tool the
-> **“Chọn từ Google Drive”** button lets **any signed-in Google user** pick
-> images/folders from **their own Drive** (private folders included), compress
-> them, then **overwrite the originals in place** (same file ID & link —
-> irreversible) or **save new `_nen` copies** in the same folder. It uses the
-> **non-sensitive `drive.file` scope** via Google Identity Services + the Picker,
-> so **no Google verification and no “unverified app” screen** — works for
-> unlimited users. All Drive calls run in the browser with the user's own access
-> token; nothing touches our server.
->
-> Setup (Google Cloud Console, same project as Drive): **enable the “Google
-> Picker API”**, create an **OAuth Web client** (add your site origins —
-> `https://img.vieetjk.com`, etc. — under *Authorized JavaScript origins*) and a
-> **browser API key**, set the **OAuth consent screen to “In production”** (only
-> the non-sensitive `drive.file` + sign-in scopes → no review needed). Then set
-> `NEXT_PUBLIC_GOOGLE_CLIENT_ID`, `NEXT_PUBLIC_GOOGLE_API_KEY` and
-> `NEXT_PUBLIC_GOOGLE_APP_ID` (the project number). Leave them unset to hide the
-> picker and keep only the public-link (download-only) mode.
-
----
-
-## 🗺 Routes
-
-| Route | Who | Purpose |
-|---|---|---|
-| `/` | public | Studio homepage (portfolio, pinned galleries, videos, feedback, booking) |
-| `/album` | public | Client gallery directory — search by name/phone, grouped by month |
-| `/album/[slug]` | public | Delivery gallery — password = client phone (pinned = open); download, feedback |
-| `/dashboard/galleries` | auth | Manage delivery galleries (create/edit/pin/delete) |
-| `/showcase/[slug]` | public | Reference album — view-only gallery + lightbox |
-| `/login` | public | Photographer / admin sign-in |
-| `/dashboard` | auth | Album list |
-| `/dashboard/create` | auth | 2-step create flow (Drive links → share link + QR) |
-| `/dashboard/albums/[id]` | owner/admin | Edit album, sources, photos, settings |
-| `/dashboard/albums/[id]/selections` | owner/admin | Customer selections + notes |
-| `/dashboard/compress` | auth | Compress images (Drive link or local files) + optional text/image watermark |
-| `/dashboard/admin` | admin | Manage photographers |
-| `/dashboard/settings` | admin | Studio profile/contact + booking leads |
-| `/a/[slug]` | public | Customer album (password → select → export/zip) |
-
----
-
-## 🔀 Giao diện 2.0 (webapp v2)
-
-Webapp có sẵn cơ chế **chuyển phiên bản giao diện 1.0 ↔ 2.0**. Bản 2.0 đang được
-thiết kế nên mặc định **chưa chạy**: người dùng chỉ thấy một nút thông báo
-(hình ✨ trên thanh trên) cho biết "giao diện 2.0 sắp ra mắt".
-
-Bật/tắt tại **Cài đặt hệ thống → Tính năng → Giao diện 2.0** (cờ
-`site_settings.feature_flags.webapp_v2`):
-
-| Giá trị cờ | Ai chuyển được | Hiển thị |
-|---|---|---|
-| *(không có)* / `coming_soon` | Không ai | Nút thông báo + "Sắp ra mắt · đang kiểm thử" |
-| `beta` | Chỉ admin | Nút chuyển hoạt động (kiểm thử nội bộ) |
-| `live` | Mọi studio | Nút chuyển hoạt động, vẫn quay lại 1.0 được |
-
-Cách hoạt động:
-
-- Lựa chọn của người dùng lưu ở cookie `mstudo_ui` (`POST /api/webapp-version`);
-  quyền được **kiểm tra lại ở server**, nút chỉ là lớp hiển thị.
-- Hạ cờ về `coming_soon` là mọi phiên đang ở 2.0 **tự trở lại 1.0** ở lần tải
-  trang sau — không cần xoá cookie của ai.
-- Dashboard được bọc `data-webapp="v1" | "v2"`. Giao diện 2.0 viết CSS **bên
-  trong** `[data-webapp="v2"]` (xem khối khung chờ ở cuối `src/app/globals.css`),
-  kèm hai lớp `.v1-only` / `.v2-only` để dựng song song hai bố cục.
-- Logic cờ/cookie: `src/lib/webapp-version.ts` — kiểm thử: `npm run test:webapp-version`.
-
----
-
-## 🔐 Security notes
-
-- The Google API key and Supabase service-role key are **server-only**; Drive
-  listing and customer-selection writes go through API routes, never the browser.
-- Album passwords are stored as **bcrypt hashes** and verified server-side.
-- Row Level Security restricts photographers to their own albums; admins see all.
-- **Rotate any key that was ever shared in plain text.**
-- This project pins **Next.js 14.2.x** (latest patched 14 line). `npm audit`
-  flags advisories whose only fix is the Next 16 major release; deploying on
-  Vercel (managed, not self-hosted) mitigates the self-hosted image-optimizer
-  and middleware advisories. Upgrade to Next 16 when you're ready to adapt to
-  its async `params`/`cookies()` API.
-
----
-
-© Vieetjk — photo collection for customers.
+Làm từng bước một, mỗi bước một commit. Không đổi schema Prisma.
+Không đổi giá trị enum trạng thái hợp đồng — chỉ đổi nhãn hiển thị
+trong CONTRACT_STATUS_LABEL.
+```
