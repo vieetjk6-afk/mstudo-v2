@@ -1,157 +1,169 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, CalendarDays, Clock, Users, Wallet, FileText, FileEdit,
-  Package, Film, UserCog, Star, MessageSquare, Wrench, Image as ImageIcon,
-  Plus, Receipt, ClipboardList, Sun, Moon, LogOut, Kanban, CalendarRange,
-  Menu, X as XIcon, ShieldCheck, Settings, SlidersHorizontal, Archive, Globe, Gift, Link2,
-  UserCircle, ChevronDown, Heart, Clapperboard, BookImage, Video, Server, Shirt, HardDrive,
+  Sun, Moon, LogOut, Menu, X as XIcon, Gift, Link2, UserCircle,
+  MessageSquare, Bell,
 } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import NotificationBell from "@/components/NotificationBell";
-import StudioSearch from "@/components/StudioSearch";
+import StudioCommandK from "@/components/StudioCommandK";
 import StudioFooterNav from "@/components/StudioFooterNav";
-import MobileSearch from "@/components/MobileSearch";
+import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
 import SyncControlButton from "@/components/SyncControlButton";
 import WebappVersionButton from "@/components/WebappVersionButton";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/lib/theme";
 import { APP_VERSION } from "@/lib/version";
+import {
+  isNavActive, visibleGroups,
+  type NavAccess, type NavBadges, type NavGroup, type NavItem, type StudioTier,
+} from "@/lib/studio-nav";
 import type { WebappUi, WebappV2Stage } from "@/lib/webapp-version";
 import type { Profile } from "@/lib/types";
-
-type StudioTier = "none" | "booking" | "plus" | "full";
-const TIER_RANK: Record<StudioTier, number> = { none: 0, booking: 1, plus: 2, full: 3 };
 
 // Zalo support group for studios using the app.
 const ZALO_SUPPORT_URL = "https://zalo.me/g/rycw0pqcgss14ib6u2xj";
 
-type Item = {
-  href: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-  minTier: StudioTier;
-  roles?: string[] | null;
-  external?: boolean; // opens in new tab / uses <a> instead of Link
-};
-type Group = { label: string; items: Item[] };
-
-// Grouped navigation mirroring the mstudo-app mockup, mapped onto the real
-// studio routes. Booking-tier (Photographer) accounts only see booking items.
-const GROUPS: Group[] = [
-  {
-    label: "Tổng quan",
-    items: [{ href: "/dashboard/studio", label: "Tổng quan", icon: LayoutDashboard, minTier: "booking" }],
-  },
-  {
-    label: "Lịch & Đặt chỗ",
-    items: [
-      { href: "/dashboard/studio/bookings", label: "Đặt lịch KH", icon: Clock, minTier: "booking" },
-      { href: "/dashboard/studio/calendar", label: "Lịch chụp", icon: CalendarDays, minTier: "booking" },
-      { href: "/dashboard/studio/team", label: "Lịch đội", icon: CalendarRange, minTier: "full" },
-    ],
-  },
-  {
-    label: "Bán hàng",
-    items: [
-      { href: "/dashboard/studio/pricing", label: "Bảng giá", icon: Package, minTier: "booking" },
-      { href: "/dashboard/studio/services", label: "Dịch vụ & mẫu HĐ", icon: ClipboardList, minTier: "booking" },
-      { href: "/dashboard/studio/contracts/new", label: "Tạo hợp đồng", icon: Plus, minTier: "plus" },
-      { href: "/dashboard/studio/contracts", label: "Quản lý HĐ", icon: FileText, minTier: "plus" },
-      { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full" },
-      { href: "/dashboard/studio/production", label: "Xử lý hình ảnh", icon: Film, minTier: "full" },
-    ],
-  },
-  {
-    label: "Khách hàng",
-    items: [
-      { href: "/dashboard/studio/clients", label: "Khách hàng", icon: Users, minTier: "booking" },
-      { href: "/dashboard/studio/leads", label: "Lead website", icon: MessageSquare, minTier: "booking" },
-      { href: "/dashboard/studio/chatbox", label: "Cấu hình chatbox", icon: MessageSquare, minTier: "booking" },
-      { href: "/dashboard/studio/drive-sync", label: "Đồng bộ Drive", icon: HardDrive, minTier: "full", roles: ["owner", "admin"] },
-      { href: "/dashboard/albums", label: "Thư viện album", icon: ImageIcon, minTier: "booking" },
-      { href: "/dashboard/studio/thiep", label: "Thiệp cưới", icon: Heart, minTier: "full" },
-      { href: "/dashboard/studio/story", label: "Love Story", icon: Clapperboard, minTier: "full" },
-      { href: "/dashboard/studio/album-designer", label: "Thiết kế Album", icon: BookImage, minTier: "full" },
-      { href: "/dashboard/studio/slide", label: "Slide cưới", icon: Video, minTier: "full" },
-      { href: "/dashboard/studio/board", label: "Bảng", icon: Kanban, minTier: "full" },
-    ],
-  },
-  {
-    label: "Tài chính",
-    items: [
-      { href: "/dashboard/studio/reports", label: "Thu chi", icon: Wallet, minTier: "full", roles: ["owner", "admin", "manager", "accountant"] },
-      { href: "/dashboard/studio/payroll", label: "Bảng lương", icon: Receipt, minTier: "full", roles: ["owner", "admin", "manager", "accountant"] },
-      { href: "/dashboard/studio/equipment", label: "Thiết bị", icon: Wrench, minTier: "full" },
-    ],
-  },
-  {
-    label: "Nhân sự",
-    items: [
-      { href: "/dashboard/studio/crew", label: "Sổ thợ", icon: UserCog, minTier: "full" },
-      { href: "/dashboard/studio/staff", label: "Nhân viên", icon: Users, minTier: "full", roles: ["owner", "admin", "manager"] },
-      { href: "/dashboard/studio/ranking", label: "Xếp hạng", icon: Star, minTier: "full" },
-      { href: "/dashboard/studio/messages", label: "Mẫu tin", icon: MessageSquare, minTier: "full" },
-    ],
-  },
-  {
-    label: "Công cụ",
-    items: [
-      { href: "/dashboard/filter", label: "Lọc ảnh", icon: SlidersHorizontal, minTier: "booking" },
-      { href: "/dashboard/compress", label: "Nén ảnh", icon: Archive, minTier: "booking" },
-      { href: "/dashboard/site", label: "Website riêng", icon: Globe, minTier: "booking" },
-    ],
-  },
-];
-
-// Page titles + subtitles keyed by route prefix (longest match wins).
+/** Tiêu đề + phụ đề topbar theo tiền tố route (khớp dài nhất thắng). */
 const TITLES: [string, string, string][] = [
-  ["/dashboard/studio/bookings", "Đặt lịch khách hàng", "Yêu cầu đặt lịch khách gửi"],
-  ["/dashboard/studio/calendar", "Lịch chụp", "Lịch chụp theo tuần"],
-  ["/dashboard/studio/team", "Lịch đội", "Lịch làm việc của đội ngũ"],
-  ["/dashboard/studio/pricing", "Bảng giá", "Bảng giá dịch vụ"],
-  ["/dashboard/studio/services", "Dịch vụ & mẫu hợp đồng", "Điều khoản dịch vụ & mẫu hợp đồng"],
-  ["/dashboard/studio/quotes", "Báo giá", "Danh sách báo giá"],
-  ["/dashboard/studio/contracts/new", "Tạo hợp đồng", "Thông tin hợp đồng"],
-  ["/dashboard/studio/contracts", "Quản lý hợp đồng", "Danh sách hợp đồng"],
+  ["/dashboard/studio/quotes/new", "Tạo báo giá", "Ghép gói và hạng mục, xem trước bản khách nhận"],
+  ["/dashboard/studio/quotes", "Báo giá", "Gửi khách · theo dõi · chốt thành hợp đồng"],
+  ["/dashboard/studio/contracts/new", "Tạo hợp đồng", "Lưu nháp tự động sau mỗi bước"],
+  ["/dashboard/studio/contracts", "Hợp đồng & lịch hẹn", "Toàn bộ buổi chụp và tiến độ"],
   ["/dashboard/studio/templates", "Mẫu hợp đồng", "Mẫu hợp đồng & điều khoản"],
-  ["/dashboard/studio/production", "Xử lý hình ảnh", "Tiến độ sản xuất"],
-  ["/dashboard/studio/clients", "Khách hàng", "Danh bạ khách hàng"],
-  ["/dashboard/studio/leads", "Lead website", "Khách nhắn qua chatbox trên website"],
-  ["/dashboard/studio/chatbox", "Cấu hình chatbox", "Dạy trợ lý trả lời theo ý bạn"],
+  ["/dashboard/studio/board", "Bảng công việc", "Kéo thẻ sang cột khác để đổi trạng thái"],
+  ["/dashboard/studio/bookings", "Đặt lịch khách", "Yêu cầu đặt lịch gửi từ website và trang giá"],
+  ["/dashboard/studio/leads", "Yêu cầu mới", "Khách đặt lịch từ website & chatbox"],
+  ["/dashboard/studio/calendar", "Lịch làm việc", "Lịch chụp và lịch của đội ngũ"],
+  ["/dashboard/studio/team", "Lịch đội ngũ", "Lịch làm việc của từng nhân sự"],
+  ["/dashboard/studio/production", "Xử lý hình ảnh", "Ảnh, video, in ấn của mọi hợp đồng"],
+  ["/dashboard/studio/rental", "Phòng váy", "Kho trang phục và đơn cho thuê"],
+  ["/dashboard/studio/equipment", "Thiết bị", "Máy móc, ống kính, đèn và lịch mượn"],
+  ["/dashboard/studio/clients", "Khách hàng", "Danh bạ và lịch sử giao dịch"],
+  ["/dashboard/studio/thiep", "Thiệp cưới", "Chọn mẫu, điền nội dung, gửi link cho khách"],
+  ["/dashboard/studio/story", "Love Story", "Dòng thời gian chuyện tình của cặp đôi"],
+  ["/dashboard/studio/slide", "Slide cưới", "Dựng video chiếu tiệc từ ảnh đã chọn"],
+  ["/dashboard/studio/album-designer", "Thiết kế album", "Dàn trang album in cho từng hợp đồng"],
+  ["/dashboard/studio/album-categories", "Danh mục album", "Nhóm album theo thể loại"],
+  ["/dashboard/studio/reports", "Thu chi & công nợ", "Dòng tiền thực tế của studio"],
+  ["/dashboard/studio/payroll", "Đối soát tiền công", "Tiền công theo từng nhân sự"],
+  ["/dashboard/studio/crew", "Đội ngũ", "Đội ngũ, vai trò và tiền công"],
+  ["/dashboard/studio/staff", "Nhân viên & phân quyền", "Tài khoản nhân viên của studio"],
+  ["/dashboard/studio/ranking", "Xếp hạng đội ngũ", "Theo số buổi nhận và thu nhập từ studio"],
+  ["/dashboard/studio/messages", "Mẫu tin nhắn", "Tin soạn sẵn gửi khách qua Zalo / SMS"],
+  ["/dashboard/studio/pricing", "Gói & bảng giá", "Bảng giá và nội dung từng gói"],
+  ["/dashboard/studio/packages", "Gói dịch vụ", "Nội dung, giá và cách hiện trên website"],
+  ["/dashboard/studio/services", "Dịch vụ & điều khoản", "Bộ điều khoản áp dụng tự động cho từng loại dịch vụ"],
+  ["/dashboard/studio/chatbox", "Website & chatbox", "Dạy trợ lý trả lời theo ý bạn"],
   ["/dashboard/studio/drive-sync", "Đồng bộ Drive", "Kết nối Google Drive & tự đồng bộ ảnh/video hợp đồng"],
-  ["/dashboard/studio/album-designer", "Thiết kế Album", "Chọn khổ → chọn mẫu → chỉnh sửa → xuất file"],
-  ["/dashboard/studio/slide", "Slide cưới", "Tự tạo video slide ảnh cưới"],
-  ["/dashboard/studio/desktop", "MStudo Desktop", "Ứng dụng máy tính: tự lưu hợp đồng & sao lưu dữ liệu"],
-  ["/dashboard/studio/board", "Bảng công việc", "Theo dõi công việc"],
-  ["/dashboard/studio/reports", "Thu chi", "Báo cáo tài chính"],
-  ["/dashboard/studio/payroll", "Bảng lương", "Bảng lương nhân viên"],
-  ["/dashboard/studio/equipment", "Thiết bị", "Quản lý thiết bị"],
-  ["/dashboard/studio/rental", "Phòng váy", "Kho trang phục & đơn cho thuê"],
-  ["/dashboard/studio/crew", "Sổ thợ", "Đội ngũ nhiếp ảnh"],
-  ["/dashboard/studio/staff", "Nhân viên", "Danh sách nhân viên"],
-  ["/dashboard/studio/ranking", "Xếp hạng", "Xếp hạng đội ngũ"],
-  ["/dashboard/studio/messages", "Mẫu tin", "Mẫu tin nhắn"],
-  ["/dashboard/studio", "Tổng quan", "Tổng quan hoạt động studio"],
-  ["/dashboard/albums", "Thư viện album", "Tất cả album của bạn"],
+  ["/dashboard/studio/notifications", "Thông báo", "Mọi hoạt động của studio theo thời gian"],
+  ["/dashboard/studio/desktop", "Ứng dụng máy tính", "Tự lưu hợp đồng và sao lưu dữ liệu ngoại tuyến"],
+  ["/dashboard/studio", "Tổng quan", "Toàn cảnh studio hôm nay"],
+  ["/dashboard/albums", "Thư viện album", "Album chọn ảnh và album giao khách"],
   ["/dashboard/create", "Tạo album", "Tạo album giao khách mới"],
-  ["/dashboard/filter", "Lọc ảnh", "Lọc & đối chiếu ảnh chọn"],
-  ["/dashboard/compress", "Nén ảnh", "Nén ảnh & đóng dấu watermark"],
-  ["/dashboard/site", "Website riêng", "Trang web portfolio cá nhân"],
-  ["/dashboard/upgrade", "Nâng cấp gói", "Gói dịch vụ & bảng giá"],
+  ["/dashboard/filter", "Công cụ ảnh", "Lọc ảnh khách chọn và nén ảnh hàng loạt"],
+  ["/dashboard/compress", "Nén ảnh & watermark", "Xử lý hàng loạt trước khi giao khách"],
+  ["/dashboard/site", "Website & chatbox", "Trang portfolio và trợ lý trả lời khách"],
+  ["/dashboard/upgrade", "Gói phần mềm", "Gói đang dùng và hạn mức của studio"],
   ["/dashboard/connections", "Kết nối", "Tích hợp dịch vụ bên ngoài"],
-  ["/dashboard/affiliate", "Affiliate", "Giới thiệu & hoa hồng"],
-  ["/dashboard/admin/system", "Bảng điều khiển hệ thống", "Thông báo & sao lưu toàn hệ thống"],
+  ["/dashboard/affiliate", "Affiliate", "Giới thiệu studio khác và nhận hoa hồng"],
+  ["/dashboard/admin/system", "Quản trị hệ thống", "Thông báo & sao lưu toàn hệ thống"],
   ["/dashboard/admin/affiliate", "Quản lý Affiliate", "Danh sách hoa hồng"],
-  ["/dashboard/settings", "Cài đặt", "Cài đặt hệ thống"],
-  ["/dashboard/account", "Tài khoản", "Thông tin & bảo mật tài khoản"],
-  // Most-general last so specific routes above always match first.
+  ["/dashboard/admin", "Quản trị hệ thống", "Người dùng, sao lưu, nhật ký"],
+  ["/dashboard/settings", "Cài đặt studio", "Thông tin, quyền và tích hợp"],
+  ["/dashboard/account", "Tài khoản & bảo mật", "Thông tin đăng nhập, mật khẩu, thiết bị"],
+  // Tổng quát nhất nằm cuối để mọi route ở trên khớp trước.
   ["/dashboard", "Thư viện album", "Tất cả album của bạn"],
 ];
+
+const ROLE_LABEL: Record<string, string> = {
+  owner: "Chủ studio", admin: "Quản trị viên", manager: "Quản lý",
+  staff: "Nhân sự", accountant: "Kế toán",
+};
+
+/** Xem-như: chủ studio thử giao diện của vai trò khác (chỉ LỌC bớt, không cấp quyền). */
+const VIEW_ROLES: [string, string][] = [["owner", "Chủ"], ["manager", "Quản lý"], ["staff", "Nhân sự"]];
+
+type NavProps = {
+  groups: NavGroup[];
+  pathname: string;
+  badges: NavBadges;
+  comingSoon: string[];
+  isAdmin: boolean;
+};
+
+const SOON_CHIP = (
+  <span className="ml-auto flex-none rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--ac)", background: "var(--acS)" }}>
+    Sắp ra mắt
+  </span>
+);
+
+/**
+ * Một mục nav. `dense` = sidebar desktop (bản thiết kế: 8px 10px, chữ 13.5px);
+ * ngược lại là ngăn kéo điện thoại (hit target ≥44px).
+ */
+function NavRow({ it, dense, pathname, badges, comingSoon, isAdmin }: NavProps & { it: NavItem; dense: boolean }) {
+  const active = isNavActive(it, pathname);
+  const flagged = comingSoon.includes(it.href);
+  const locked = flagged && !isAdmin;
+  const count = it.badge ? badges[it.badge] ?? 0 : 0;
+
+  const cls = `nav-item mb-px flex w-full items-center rounded-[9px] ${
+    dense ? "gap-2.5 px-2.5 py-2 text-[13.5px]" : "gap-3 px-3 py-2.5 text-[14.5px]"
+  }${active ? " nav-active" : ""}`;
+  const style: React.CSSProperties = {
+    color: active ? "var(--ac)" : "var(--tx2)",
+    fontWeight: active ? 700 : 550,
+  };
+
+  const inner = (
+    <>
+      <it.icon size={dense ? 19 : 20} style={{ flex: "none" }} />
+      <span className="min-w-0 flex-1 truncate">{it.label}</span>
+      {flagged ? SOON_CHIP : count > 0 ? (
+        <span
+          className="flex-none whitespace-nowrap rounded-[20px] px-[5px] py-[1.5px] text-center text-[10.5px] font-bold"
+          style={{
+            minWidth: 18,
+            background: active ? "var(--ac)" : "var(--amS)",
+            color: active ? "#fff" : "var(--am)",
+          }}
+        >
+          {count > 99 ? "99+" : count}
+        </span>
+      ) : null}
+    </>
+  );
+
+  if (locked) {
+    return <div className={cls} style={{ ...style, opacity: 0.55, cursor: "not-allowed" }} title="Tính năng sắp ra mắt">{inner}</div>;
+  }
+  return (
+    <Link href={it.href} className={cls} style={style} aria-current={active ? "page" : undefined}>
+      {inner}
+    </Link>
+  );
+}
+
+function NavGroups({ dense, ...nav }: NavProps & { dense: boolean }) {
+  return (
+    <>
+      {nav.groups.map((g) => (
+        <div key={g.label || "root"} className={dense ? "mb-3.5" : "mb-4"}>
+          {g.label && (
+            <p className="mb-[5px] px-2.5 text-[10px] font-extrabold uppercase" style={{ letterSpacing: ".8px", color: "var(--tx3)" }}>
+              {g.label}
+            </p>
+          )}
+          {g.items.map((it) => <NavRow key={it.href} it={it} dense={dense} {...nav} />)}
+        </div>
+      ))}
+    </>
+  );
+}
 
 export default function StudioShell({
   profile,
@@ -180,9 +192,40 @@ export default function StudioShell({
   const { theme, toggle: toggleTheme } = useTheme();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
+  const [badges, setBadges] = useState<NavBadges>({});
+  // null = đang xem bằng đúng vai trò thật của mình.
+  const [viewAs, setViewAs] = useState<string | null>(null);
 
   // Close drawer + avatar menu on route change
   useEffect(() => { setDrawerOpen(false); setAvatarOpen(false); }, [pathname]);
+
+  // Chỉ chủ studio / admin mới xem-như được, và chỉ để THU HẸP những gì mình
+  // thấy — quyền thật vẫn do server quyết định (xem README, mục "Phân quyền").
+  const canViewAs = role === "owner" || role === "admin";
+  const effectiveRole = canViewAs && viewAs && viewAs !== "owner" ? viewAs : role;
+
+  const access = useMemo<NavAccess>(
+    () => ({ tier, role: effectiveRole, comingSoon, hiddenNav }),
+    // comingSoon/hiddenNav là mảng mới mỗi lần render ở phía cha → so bằng nội dung.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tier, effectiveRole, comingSoon.join("|"), hiddenNav.join("|")],
+  );
+  const groups = useMemo(() => visibleGroups(access), [access]);
+
+  // Badge = số việc CHƯA xử lý. Lấy sau khi shell đã vẽ để không chặn trang, và
+  // làm mới khi đổi route (đã xử lý xong thì con số phải tụt ngay) — nhưng
+  // không dày hơn 15s/lần để bấm qua lại nhanh không thành spam.
+  const lastFetch = useRef(0);
+  const loadBadges = useCallback((force = false) => {
+    const now = Date.now();
+    if (!force && now - lastFetch.current < 15_000) return;
+    lastFetch.current = now;
+    fetch("/api/studio/nav-badges")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j) setBadges(j as NavBadges); })
+      .catch(() => {});
+  }, []);
+  useEffect(() => { loadBadges(); }, [pathname, loadBadges]);
 
   async function signOut() {
     const supabase = createClient();
@@ -191,269 +234,151 @@ export default function StudioShell({
     router.refresh();
   }
 
-  // Filter nav by tier + studio role (matches DashboardHeader/footer rules).
-  const visibleGroups = GROUPS.map((g) => ({
-    ...g,
-    items: g.items.filter((it) => {
-      if (hiddenNav.includes(it.href) && role !== "admin") return false;
-      if (TIER_RANK[tier] < TIER_RANK[it.minTier]) return false;
-      if (role === "accountant") return it.href === "/dashboard/studio" || it.href.startsWith("/dashboard/studio/reports") || it.href.startsWith("/dashboard/studio/payroll");
-      if (it.roles && !it.roles.includes(role)) return false;
-      if (role === "staff" && (it.href.includes("/reports") || it.href.includes("/payroll"))) return false;
-      return true;
-    }),
-  })).filter((g) => g.items.length > 0);
-
-  const isActive = (href: string) =>
-    href === "/dashboard/studio" || href === "/dashboard"
-      ? pathname === href
-      : pathname === href || pathname.startsWith(href + "/");
-
   const [title, sub] =
-    TITLES.find(([p]) => pathname === p || pathname.startsWith(p + "/") || pathname.startsWith(p))?.slice(1) ??
-    ["Studio", ""];
+    TITLES.find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.slice(1) ?? ["Studio", ""];
 
   const initials = (profile.full_name || profile.email || "?")
     .split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
-  // "Sắp ra mắt" chip + lock for flagged features (admin still gets through to build them).
-  const soonChip = (
-    <span className="ml-auto rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--brand)", background: "var(--brandSoft)" }}>Sắp ra mắt</span>
+  const navProps = { groups, pathname, badges, comingSoon, isAdmin: role === "admin" };
+
+  const brandChip = (
+    <span className="ml-auto flex-none rounded-[5px] px-1.5 py-[3px] text-[9.5px] font-extrabold" style={{ letterSpacing: ".6px", color: "var(--ac)", background: "var(--acS)" }}>
+      {tier === "full" ? "STUDIO" : "PRO"}
+    </span>
   );
-  const renderNavItem = (it: Item, cls: string, style: React.CSSProperties, active: boolean) => {
-    const flagged = comingSoon.includes(it.href);
-    const locked = flagged && role !== "admin";
-    const inner = <><it.icon size={18} style={{ flex: "none" }} />{it.label}{flagged && soonChip}</>;
-    if (locked) return <div key={it.href} className={cls} style={{ ...style, opacity: 0.55, cursor: "not-allowed" }} title="Tính năng sắp ra mắt">{inner}</div>;
-    if (it.external) return <a key={it.href} href={it.href} className={cls} style={style}>{inner}</a>;
-    return <Link key={it.href} href={it.href} className={cls} style={style} aria-current={active ? "page" : undefined}>{inner}</Link>;
-  };
+
+  const accountMenu = (
+    <>
+      <div className="mb-1 px-3 py-2" style={{ borderBottom: "1px solid var(--bd2)" }}>
+        <p className="truncate text-[13px] font-semibold">{profile.full_name || "Tài khoản"}</p>
+        <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{profile.email}</p>
+        <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "var(--ac)" }}>{ROLE_LABEL[role] ?? role}</p>
+      </div>
+      <Link href="/dashboard/account" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
+        <UserCircle size={15} style={{ color: "var(--ac)" }} /> Tài khoản & bảo mật
+      </Link>
+      <Link href="/dashboard/connections" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
+        <Link2 size={15} style={{ color: "var(--ac)" }} /> Kết nối Calendar
+      </Link>
+      <Link href="/dashboard/upgrade" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
+        <Gift size={15} style={{ color: "var(--am)" }} /> Gói phần mềm
+      </Link>
+      <a href={ZALO_SUPPORT_URL} target="_blank" rel="noreferrer" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
+        <MessageSquare size={15} style={{ color: "var(--ac)" }} /> Nhóm Zalo hỗ trợ
+      </a>
+      {/* Đổi ngôn ngữ nằm trong menu tài khoản: topbar của bản thiết kế chỉ có
+          6 phần tử, nhét thêm một cụm nút nữa là vỡ bố cục ở màn hẹp. */}
+      <div className="flex items-center justify-between gap-2 px-3 py-2 text-[13px] font-medium">
+        <span style={{ color: "var(--tx2)" }}>Ngôn ngữ</span>
+        <LanguageSwitcher />
+      </div>
+      <div className="my-1" style={{ borderTop: "1px solid var(--bd2)" }} />
+      <button onClick={signOut} className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--rd)" }}>
+        <LogOut size={15} /> Đăng xuất
+      </button>
+      <p className="px-3 pt-1.5 text-[11px]" style={{ color: "var(--tx3)" }}>Phiên bản {APP_VERSION}</p>
+    </>
+  );
 
   return (
-    <div className="studio-shell" data-theme={theme} data-webapp={ui} style={{ background: "var(--bg)", color: "var(--text)" }}>
-      <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
+    <div className="studio-shell" data-theme={theme} data-webapp={ui} style={{ background: "var(--bg)", color: "var(--tx)" }}>
+      <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
 
         {/* ── Mobile drawer overlay ──────────────────────────────── */}
         {drawerOpen && (
-          <div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden"
-            onClick={() => setDrawerOpen(false)}
-          />
+          <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm lg:hidden" onClick={() => setDrawerOpen(false)} />
         )}
 
         {/* ── Mobile slide-in drawer ─────────────────────────────── */}
         <div
           className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col overflow-y-auto px-3 pb-8 pt-4 transition-transform duration-300 lg:hidden"
           style={{
-            background: "var(--surface)",
-            borderRight: "1px solid var(--border)",
+            background: "var(--sf)",
+            borderRight: "1px solid var(--bd)",
             transform: drawerOpen ? "translateX(0)" : "translateX(-100%)",
           }}
         >
-          {/* Drawer header */}
           <div className="mb-4 flex items-center gap-2.5 px-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"} alt="mstudo" className="h-8 w-auto" />
-            <span
-              className="rounded-md px-1.5 py-0.5 text-[10px] font-bold"
-              style={{ color: "var(--brand)", background: "var(--brandSoft)" }}
-            >
-              {tier === "full" ? "STUDIO" : "PRO"}
-            </span>
+            {brandChip}
             <button
               onClick={() => setDrawerOpen(false)}
-              className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg"
-              style={{ background: "var(--surface2)", color: "var(--text2)" }}
+              className="flex h-8 w-8 flex-none items-center justify-center rounded-[10px]"
+              style={{ background: "var(--sf2)", color: "var(--tx2)" }}
+              aria-label="Đóng menu"
             >
               <XIcon size={16} />
             </button>
           </div>
 
-          {/* User info strip */}
-          <div
-            className="mb-4 flex items-center gap-3 rounded-xl px-3 py-3"
-            style={{ background: "var(--surface2)" }}
-          >
-            <span
-              className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-sm font-bold"
-              style={{ background: "var(--brandSoft)", color: "var(--brand)" }}
-            >
+          <div className="mb-4 flex items-center gap-3 rounded-[12px] px-3 py-3" style={{ background: "var(--sf2)" }}>
+            <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-sm font-extrabold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
               {initials}
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{profile.full_name || profile.email}</p>
-              <p className="truncate text-[11px]" style={{ color: "var(--text3)" }}>{profile.email}</p>
+              <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{ROLE_LABEL[role] ?? role}</p>
             </div>
           </div>
 
-          {/* Nav groups */}
-          {visibleGroups.map((g) => (
-            <div key={g.label} className="mt-2">
-              <p className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text3)" }}>
-                {g.label}
-              </p>
-              {g.items.map((it) => {
-                const active = isActive(it.href);
-                const cls = `nav-item mb-0.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold${active ? " nav-active" : ""}`;
-                const style = { color: active ? "var(--brand)" : "var(--text)" };
-                return renderNavItem(it, cls, style, active);
-              })}
-            </div>
-          ))}
+          <NavGroups dense={false} {...navProps} />
 
-          {role === "admin" && (
-            <div className="mt-2">
-              <p className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text3)" }}>
-                Hệ thống
-              </p>
-              {[
-                { href: "/dashboard/admin", label: "Quản trị", icon: ShieldCheck },
-                { href: "/dashboard/admin/system", label: "Hệ thống", icon: Server },
-                { href: "/dashboard/admin/affiliate", label: "Affiliate", icon: Gift },
-                { href: "/dashboard/settings", label: "Cài đặt", icon: Settings },
-              ].map((it) => {
-                const active = isActive(it.href);
-                return (
-                  <Link
-                    key={it.href}
-                    href={it.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`nav-item mb-0.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold${active ? " nav-active" : ""}`}
-                    style={{ color: active ? "var(--brand)" : "var(--text)" }}
-                  >
-                    <it.icon size={18} style={{ flex: "none" }} />
-                    {it.label}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Drawer footer actions */}
-          <div className="mt-auto pt-6 flex flex-col gap-2">
-            {/* Thông báo giao diện 2.0 (kèm nút chuyển khi đã mở) */}
+          <div className="mt-auto flex flex-col gap-2 pt-6">
             <WebappVersionButton stage={v2Stage} ui={ui} canSwitch={canSwitchV2} variant="row" />
-            <Link
-              href="/dashboard/affiliate"
-              onClick={() => setDrawerOpen(false)}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors"
-              style={{ background: "var(--brandSoft)", color: "var(--brand)" }}
-            >
-              <Gift size={18} />
-              Affiliate · Hoa hồng
-            </Link>
             <a
               href={ZALO_SUPPORT_URL}
               target="_blank"
               rel="noreferrer"
               onClick={() => setDrawerOpen(false)}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors"
-              style={{ background: "var(--surface2)", color: "var(--text)" }}
+              className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold"
+              style={{ background: "var(--sf2)", color: "var(--tx)" }}
             >
-              <MessageSquare size={18} style={{ color: "var(--brand)" }} />
+              <MessageSquare size={18} style={{ color: "var(--ac)" }} />
               Nhóm Zalo hỗ trợ
             </a>
             <DownloadAppButton tier={tier} />
             <SyncControlButton />
             <button
               onClick={toggleTheme}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors"
-              style={{ background: "var(--surface2)", color: "var(--text2)" }}
+              className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold"
+              style={{ background: "var(--sf2)", color: "var(--tx2)" }}
             >
               {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               {theme === "dark" ? "Giao diện sáng" : "Giao diện tối"}
             </button>
             <button
               onClick={signOut}
-              className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors"
-              style={{ background: "var(--s-redS)", color: "var(--s-red)" }}
+              className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold"
+              style={{ background: "var(--rdS)", color: "var(--rd)" }}
             >
               <LogOut size={18} />
               Đăng xuất
             </button>
-            <p className="px-1 pt-1 text-[11px]" style={{ color: "var(--text3)" }}>Phiên bản {APP_VERSION}</p>
+            <p className="px-1 pt-1 text-[11px]" style={{ color: "var(--tx3)" }}>Phiên bản {APP_VERSION}</p>
           </div>
         </div>
 
-        {/* ── Sidebar (desktop) ─────────────────────────────────── */}
+        {/* ── Sidebar (desktop) — 250px, cố định ─────────────────── */}
         <aside
-          className="sticky top-0 hidden h-screen flex-col gap-1 overflow-y-auto px-3 pb-24 pt-4 lg:flex"
-          style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}
+          className="sticky top-0 hidden h-screen flex-col px-3 pb-3 pt-3.5 lg:flex"
+          style={{ background: "var(--sf)", borderRight: "1px solid var(--bd)" }}
         >
-          <Link href="/dashboard/studio" className="mb-3 flex items-center gap-2.5 px-2 py-1">
+          <Link href="/dashboard/studio" className="mb-3.5 flex items-center gap-2.5 px-2 pb-0.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"} alt="mstudo" className="h-8 w-auto" />
-            <span
-              className="ml-auto rounded-md px-1.5 py-0.5 text-[10px] font-bold"
-              style={{ color: "var(--brand)", background: "var(--brandSoft)" }}
-            >
-              {tier === "full" ? "STUDIO" : "PRO"}
-            </span>
+            <img src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"} alt="mstudo" className="h-[26px] w-auto" />
+            {brandChip}
           </Link>
 
-          {visibleGroups.map((g) => (
-            <div key={g.label} className="mt-2.5">
-              <p className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text3)" }}>
-                {g.label}
-              </p>
-              {g.items.map((it) => {
-                const active = isActive(it.href);
-                const cls = `nav-item mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold${active ? " nav-active" : ""}`;
-                const style = { color: active ? "var(--brand)" : "var(--text)" };
-                return renderNavItem(it, cls, style, active);
-              })}
-            </div>
-          ))}
+          <nav className="min-h-0 flex-1 overflow-y-auto pb-2">
+            <NavGroups dense {...navProps} />
+          </nav>
 
-          {role === "admin" && (
-            <div className="mt-2.5">
-              <p className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: "var(--text3)" }}>
-                Hệ thống
-              </p>
-              {[
-                { href: "/dashboard/admin", label: "Quản trị", icon: ShieldCheck },
-                { href: "/dashboard/admin/system", label: "Hệ thống", icon: Server },
-                { href: "/dashboard/admin/affiliate", label: "Affiliate", icon: Gift },
-                { href: "/dashboard/settings", label: "Cài đặt", icon: Settings },
-              ].map((it) => {
-                const active = isActive(it.href);
-                return (
-                  <Link
-                    key={it.href}
-                    href={it.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`nav-item mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-semibold${active ? " nav-active" : ""}`}
-                    style={{ color: active ? "var(--brand)" : "var(--text)" }}
-                  >
-                    <it.icon size={18} style={{ flex: "none" }} />
-                    {it.label}
-                  </Link>
-                );
-              })}
-            </div>
-          )}
-          {/* Sidebar footer */}
-          <div className="mt-auto pt-4 flex flex-col gap-2">
-            <Link
-              href="/dashboard/affiliate"
-              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors"
-              style={{ background: "var(--brandSoft)", color: "var(--brand)" }}
-            >
-              <Gift size={16} />
-              Affiliate
-            </Link>
-            <a
-              href={ZALO_SUPPORT_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors"
-              style={{ background: "var(--surface2)", color: "var(--text)" }}
-            >
-              <MessageSquare size={16} style={{ color: "var(--brand)" }} />
-              Nhóm Zalo hỗ trợ
-            </a>
-            <DownloadAppButton tier={tier} />
+          <div className="flex flex-col gap-2 pt-2.5" style={{ borderTop: "1px solid var(--bd2)" }}>
+            <SidebarDriveStatus />
             <SyncControlButton />
+            <p className="px-2 text-[10.5px]" style={{ color: "var(--tx3)" }}>Phiên bản {APP_VERSION}</p>
           </div>
         </aside>
 
@@ -461,160 +386,116 @@ export default function StudioShell({
         <div className="flex min-w-0 flex-col">
           {/* Topbar */}
           <header
-            className="sticky top-0 z-30 flex items-center gap-3 px-4 py-3 backdrop-blur sm:px-5"
-            style={{ background: "color-mix(in srgb, var(--surface) 88%, transparent)", borderBottom: "1px solid var(--border)" }}
+            className="sticky top-0 z-30 flex items-center gap-3 px-4 py-[11px] sm:px-6"
+            style={{
+              background: "var(--topbar)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
+              borderBottom: "1px solid var(--bd)",
+            }}
           >
             {/* Mobile: hamburger */}
             <button
               onClick={() => setDrawerOpen(true)}
-              className="flex h-9 w-9 flex-none items-center justify-center rounded-lg lg:hidden"
-              style={{ background: "var(--surface2)", color: "var(--text)" }}
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-[9px] lg:hidden"
+              style={{ background: "var(--sf2)", color: "var(--tx)" }}
               aria-label="Mở menu"
             >
               <Menu size={18} />
             </button>
 
-            {/* Mobile: avatar dropdown */}
-            <div className="relative lg:hidden">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <h1 className="truncate text-[16.5px] font-bold" style={{ letterSpacing: "-.3px" }}>{title}</h1>
+              {sub ? <p className="mt-px hidden truncate text-[11.5px] sm:block" style={{ color: "var(--tx3)" }}>{sub}</p> : null}
+            </div>
+
+            {/* Ô lệnh ⌘K — thay ô tìm kiếm cũ, tìm cả màn, hợp đồng, khách, nhân sự. */}
+            <StudioCommandK access={access} />
+
+            {/* Nền sáng / nền tối */}
+            <button
+              onClick={toggleTheme}
+              className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]"
+              style={{ border: "1px solid var(--bd)", background: "var(--sf)", color: "var(--tx2)" }}
+              title={theme === "dark" ? "Chuyển sang nền sáng" : "Chuyển sang nền tối"}
+              aria-label="Đổi nền sáng/tối"
+            >
+              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+            </button>
+
+            {/* Chuông thông báo — chấm đỏ khi còn thông báo chưa đọc. */}
+            <Link
+              href="/dashboard/studio/notifications"
+              className="relative flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]"
+              style={{ border: "1px solid var(--bd)", background: "var(--sf)", color: "var(--tx2)" }}
+              aria-label="Thông báo"
+            >
+              <Bell size={17} />
+              {(badges.notifications ?? 0) > 0 && (
+                <span
+                  className="absolute right-1.5 top-1.5 h-[7px] w-[7px] rounded-full"
+                  style={{ background: "var(--rd)", border: "1.5px solid var(--sf)" }}
+                />
+              )}
+            </Link>
+
+            <WebappVersionButton stage={v2Stage} ui={ui} canSwitch={canSwitchV2} />
+
+            {/* Xem-như vai trò khác — ẩn dưới 1120px (bản thiết kế). */}
+            {canViewAs && (
+              <div
+                className="hidden flex-none items-center gap-0.5 rounded-[9px] p-[3px] min-[1120px]:flex"
+                style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}
+                title="Xem giao diện theo quyền"
+              >
+                {VIEW_ROLES.map(([key, label]) => {
+                  const on = (viewAs ?? "owner") === key;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setViewAs(key === "owner" ? null : key)}
+                      className="whitespace-nowrap rounded-[7px] px-[9px] py-1 text-[11px] font-semibold"
+                      style={{
+                        color: on ? "var(--tx)" : "var(--tx3)",
+                        background: on ? "var(--sf)" : "transparent",
+                        boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Avatar → menu tài khoản */}
+            <div className="relative flex-none">
               <button
                 onClick={() => setAvatarOpen((v) => !v)}
-                className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[11px] font-bold"
-                style={{ background: "var(--brandSoft)", color: "var(--brand)", border: avatarOpen ? "2px solid var(--brand)" : "2px solid transparent" }}
+                className="nav-item flex items-center gap-2 rounded-[10px] py-1 pl-3 pr-2 text-left"
+                style={{ borderLeft: "1px solid var(--bd)" }}
                 aria-label="Tài khoản"
               >
-                {initials}
+                <span className="flex h-[31px] w-[31px] flex-none items-center justify-center rounded-full text-[11.5px] font-extrabold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
+                  {initials}
+                </span>
+                <span className="hidden leading-[1.25] min-[1000px]:block">
+                  <span className="block max-w-[120px] truncate text-[12.5px] font-semibold">{profile.full_name || "Tài khoản"}</span>
+                  <span className="block text-[10.5px]" style={{ color: "var(--tx3)" }}>{ROLE_LABEL[role] ?? role}</span>
+                </span>
               </button>
+
               {avatarOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setAvatarOpen(false)} />
                   <div
-                    className="absolute left-0 top-full z-50 mt-2 w-56 rounded-2xl p-1.5 shadow-lg"
-                    style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                    className="absolute right-0 top-full z-50 mt-2 w-60 rounded-[14px] p-1.5"
+                    style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "0 18px 44px rgba(20,15,25,.16)" }}
                   >
-                    <div className="px-3 py-2 mb-1" style={{ borderBottom: "1px solid var(--border)" }}>
-                      <p className="truncate text-sm font-semibold">{profile.full_name || "Tài khoản"}</p>
-                      <p className="truncate text-[11px]" style={{ color: "var(--text3)" }}>{profile.email}</p>
-                    </div>
-                    <Link href="/dashboard/account" className="nav-item flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium" style={{ color: "var(--text)" }}>
-                      <UserCircle size={15} style={{ color: "var(--brand)" }} /> Cài đặt tài khoản
-                    </Link>
-                    <Link href="/dashboard/connections" className="nav-item flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium" style={{ color: "var(--text)" }}>
-                      <Link2 size={15} style={{ color: "var(--brand)" }} /> Kết nối Calendar
-                    </Link>
-                    <Link href="/dashboard/upgrade" className="nav-item flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium" style={{ color: "var(--text)" }}>
-                      <Gift size={15} style={{ color: "var(--s-amber)" }} /> Nâng cấp gói
-                    </Link>
-                    <a href={ZALO_SUPPORT_URL} target="_blank" rel="noreferrer" className="nav-item flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium" style={{ color: "var(--text)" }}>
-                      <MessageSquare size={15} style={{ color: "var(--brand)" }} /> Nhóm Zalo hỗ trợ
-                    </a>
-                    <div className="my-1" style={{ borderTop: "1px solid var(--border)" }} />
-                    <button onClick={signOut} className="nav-item flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium" style={{ color: "var(--s-red)" }}>
-                      <LogOut size={15} /> Đăng xuất
-                    </button>
-                    <p className="px-3 pt-1.5 text-[11px]" style={{ color: "var(--text3)" }}>Phiên bản {APP_VERSION}</p>
+                    {accountMenu}
                   </div>
                 </>
               )}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <h1 className="truncate text-[17px] font-extrabold tracking-tight sm:text-[18px]">{title}</h1>
-              {sub ? <p className="hidden truncate text-[12px] sm:block" style={{ color: "var(--text3)" }}>{sub}</p> : null}
-            </div>
-
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              {/* Search: full overlay on mobile, inline on tablet+ */}
-              <MobileSearch />
-              <div className="hidden sm:block">
-                <StudioSearch />
-              </div>
-              <NotificationBell />
-              {/* Thông báo "giao diện 2.0 sắp ra mắt" — hiện ở mọi khổ máy vì đây
-                  là thông báo phát hành; khi cờ webapp_v2 mở thì chính nút này
-                  là nút chuyển phiên bản. */}
-              <WebappVersionButton stage={v2Stage} ui={ui} canSwitch={canSwitchV2} />
-              {/* Language + theme: desktop only */}
-              <div className="hidden lg:flex lg:items-center lg:gap-1.5">
-                <LanguageSwitcher />
-                <button
-                  onClick={toggleTheme}
-                  aria-label="theme"
-                  className="flex h-9 w-9 items-center justify-center rounded-lg"
-                  style={{ border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)" }}
-                >
-                  {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
-                </button>
-
-                {/* Avatar dropdown */}
-                <div className="relative">
-                  <button
-                    onClick={() => setAvatarOpen((v) => !v)}
-                    className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 transition-colors"
-                    style={{ background: avatarOpen ? "var(--surface2)" : "transparent", border: "1px solid var(--border)" }}
-                    aria-label="Tài khoản"
-                  >
-                    <span
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold"
-                      style={{ background: "var(--brandSoft)", color: "var(--brand)" }}
-                    >
-                      {initials}
-                    </span>
-                    <ChevronDown size={13} style={{ color: "var(--text3)", transform: avatarOpen ? "rotate(180deg)" : "none", transition: "transform .2s" }} />
-                  </button>
-
-                  {avatarOpen && (
-                    <>
-                      {/* Backdrop */}
-                      <div className="fixed inset-0 z-40" onClick={() => setAvatarOpen(false)} />
-                      {/* Dropdown */}
-                      <div
-                        className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl p-1.5 shadow-lg"
-                        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-                      >
-                        {/* User info */}
-                        <div className="px-3 py-2 mb-1" style={{ borderBottom: "1px solid var(--border)" }}>
-                          <p className="truncate text-sm font-semibold">{profile.full_name || "Tài khoản"}</p>
-                          <p className="truncate text-[11px]" style={{ color: "var(--text3)" }}>{profile.email}</p>
-                        </div>
-
-                        <Link href="/dashboard/account"
-                          className="nav-item flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium"
-                          style={{ color: "var(--text)" }}
-                        >
-                          <UserCircle size={15} style={{ color: "var(--brand)" }} />
-                          Cài đặt tài khoản
-                        </Link>
-                        <Link href="/dashboard/connections"
-                          className="nav-item flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium"
-                          style={{ color: "var(--text)" }}
-                        >
-                          <Link2 size={15} style={{ color: "var(--brand)" }} />
-                          Kết nối Calendar
-                        </Link>
-                        <Link href="/dashboard/upgrade"
-                          className="nav-item flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium"
-                          style={{ color: "var(--text)" }}
-                        >
-                          <Gift size={15} style={{ color: "var(--s-amber)" }} />
-                          Nâng cấp gói
-                        </Link>
-
-                        <div className="my-1" style={{ borderTop: "1px solid var(--border)" }} />
-
-                        <button
-                          onClick={signOut}
-                          className="nav-item flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium"
-                          style={{ color: "var(--s-red)" }}
-                        >
-                          <LogOut size={15} />
-                          Đăng xuất
-                        </button>
-                        <p className="px-3 pt-1.5 text-[11px]" style={{ color: "var(--text3)" }}>Phiên bản {APP_VERSION}</p>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
             </div>
           </header>
 
@@ -625,7 +506,7 @@ export default function StudioShell({
               bên trong (topbar, thanh hành động) vẫn dính theo viewport, và
               trục dọc vẫn `visible`. Nội dung rộng thật (bảng, khối code) phải
               tự bọc `overflow-x-auto` để còn cuộn xem được. */}
-          <main className="page-in min-w-0 overflow-x-clip px-4 pb-28 pt-5 sm:px-6 lg:pb-10">{children}</main>
+          <main className="page-in min-w-0 overflow-x-clip px-4 pb-28 pt-[22px] sm:px-6 lg:pb-14">{children}</main>
         </div>
       </div>
 
