@@ -7,6 +7,7 @@ import { useLang } from "@/lib/i18n";
 import { thumbnailUrl } from "@/lib/drive";
 import { createClient } from "@/lib/supabase/client";
 import PlanUsage from "@/components/PlanUsage";
+import { Panel, EmptyState } from "@/components/studio/ui";
 import StudioTrialButton from "@/components/StudioTrialButton";
 
 export interface AlbumRow {
@@ -114,8 +115,8 @@ function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; 
             className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors"
             style={
               tab === key
-                ? { background: "var(--gold)", color: "var(--accentInk)" }
-                : { background: "var(--surface2)", color: "var(--text2)" }
+                ? { background: "var(--ac)", color: "#fff" }
+                : { background: "var(--sf2)", color: "var(--tx2)", border: "1px solid var(--bd)" }
             }
           >
             <Icon size={13} /> {label} ({count})
@@ -124,11 +125,15 @@ function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; 
       </div>
 
       {rows.length === 0 ? (
-        <div className="card py-16 text-center text-sm" style={{ color: "var(--text3)" }}>
-          {tab === "delivery"
-            ? "Chưa có album giao khách nào. Chuyển một album sang giai đoạn Giao khách, hoặc tạo album hoàn thiện."
-            : "Chưa có album chọn ảnh nào — tất cả đang ở nhóm Giao khách."}
-        </div>
+        <Panel>
+          <EmptyState
+            icon={ImageIcon}
+            title={tab === "delivery" ? "Chưa có album giao khách nào" : "Chưa có album chọn ảnh nào"}
+            hint={tab === "delivery"
+              ? "Chuyển một album sang giai đoạn Giao khách, hoặc tạo album hoàn thiện."
+              : "Tất cả album đang ở nhóm Giao khách — tạo album chọn ảnh mới khi có buổi chụp xong."}
+          />
+        </Panel>
       ) : (
         grid(rows)
       )}

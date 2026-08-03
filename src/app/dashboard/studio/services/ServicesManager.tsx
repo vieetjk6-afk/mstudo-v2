@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2, Check, FileText, Wand2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Panel, EmptyState } from "@/components/studio/ui";
 import { fullClauseText } from "@/lib/contract-clauses";
 import type { StudioService } from "@/lib/types";
 
@@ -76,27 +77,41 @@ export default function ServicesManager({
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       {msg && (
-        <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-sm" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>{msg}</div>
+        <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-[12px] px-4 py-2 text-[13px] font-semibold" style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}>{msg}</div>
       )}
 
-      <div className="mb-1 flex items-center gap-3">
-        <h1 className="font-serif text-2xl font-medium">Dịch vụ &amp; điều khoản</h1>
-        <button onClick={createService} disabled={busy} className="btn-primary ml-auto"><Plus size={16} /> Thêm dịch vụ</button>
+      <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+          Mỗi loại dịch vụ có bộ điều khoản riêng — tạo hợp đồng / báo giá chọn dịch vụ nào thì áp điều khoản của dịch vụ đó.
+        </p>
+        <button
+          onClick={createService}
+          disabled={busy}
+          className="ml-auto flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
+          style={{ background: "var(--ac)", color: "#fff", opacity: busy ? 0.6 : 1 }}
+        >
+          <Plus size={16} /> Thêm dịch vụ
+        </button>
       </div>
-      <p className="mb-6 text-[13px]" style={{ color: "var(--text3)" }}>
-        Mỗi loại dịch vụ có bộ điều khoản riêng. Khi tạo hợp đồng / báo giá và chọn dịch vụ, điều khoản của dịch vụ đó được áp dụng tự động.
-      </p>
 
       {services.length === 0 ? (
-        <div className="card p-8 text-center">
-          <FileText size={28} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm" style={{ color: "var(--text2)" }}>Chưa có dịch vụ nào.</p>
-          <button onClick={createService} disabled={busy} className="btn-primary mt-4"><Plus size={16} /> Tạo dịch vụ đầu tiên</button>
-        </div>
+        <Panel>
+          <EmptyState icon={FileText} title="Chưa có dịch vụ nào" hint="Tạo dịch vụ đầu tiên (chụp cưới, kỷ yếu, doanh nghiệp…) và soạn bộ điều khoản riêng cho nó." />
+          <div className="pb-8 text-center">
+            <button
+              onClick={createService}
+              disabled={busy}
+              className="inline-flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
+              style={{ background: "var(--ac)", color: "#fff" }}
+            >
+              <Plus size={16} /> Tạo dịch vụ đầu tiên
+            </button>
+          </div>
+        </Panel>
       ) : (
-        <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+        <div className="grid gap-3.5 lg:grid-cols-[260px_1fr]">
           {/* List */}
           <div className="space-y-1.5">
             {services.map((s) => (
@@ -105,9 +120,10 @@ export default function ServicesManager({
                 onClick={() => select(s)}
                 className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-left text-sm transition-colors"
                 style={{
-                  background: selId === s.id ? "var(--brandSoft)" : "var(--surface2)",
-                  color: selId === s.id ? "var(--brand)" : "var(--text)",
-                  border: "1px solid var(--border)",
+                  background: selId === s.id ? "var(--acS)" : "var(--sf)",
+                  color: selId === s.id ? "var(--ac)" : "var(--tx2)",
+                  fontWeight: selId === s.id ? 700 : 550,
+                  border: `1px solid ${selId === s.id ? "var(--acM)" : "var(--bd)"}`,
                 }}
               >
                 <FileText size={15} className="shrink-0" />

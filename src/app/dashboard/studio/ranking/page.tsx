@@ -1,5 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import { Trophy } from "lucide-react";
+import { Panel, EmptyState } from "@/components/studio/ui";
+import { avatarColor, initials } from "@/lib/avatar";
 import { vnd, CREW_ROLE_LABEL, type CrewRole } from "@/lib/types";
 
 
@@ -43,34 +46,46 @@ export default async function RankingPage() {
   }
   const ranked = Array.from(map.values()).sort((x, y) => y.accepted - x.accepted || y.earned - x.earned);
 
-  const medal = ["#e0b85c", "#c0c0c8", "#cd7f44"];
+  const medal = ["#C9A227", "#8E9099", "#B4703A"];
+
+  const topEarn = Math.max(1, ...ranked.map((r) => r.earned));
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4">
-        <h1 className="font-serif text-2xl font-medium">Xếp hạng photographer</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Theo số buổi đã nhận &amp; thu nhập từ studio.</p>
-      </div>
+    <div className="page-in max-w-[820px]">
+      <p className="mb-3.5 text-[13px]" style={{ color: "var(--tx2)" }}>
+        Xếp theo số buổi đã nhận và thu nhập từ studio — tính trên toàn bộ hợp đồng.
+      </p>
 
       {ranked.length === 0 ? (
-        <div className="card py-16 text-center text-sm" style={{ color: "var(--text3)" }}>Chưa có dữ liệu.</div>
+        <Panel>
+          <EmptyState icon={Trophy} title="Chưa có dữ liệu xếp hạng" hint="Phân công nhân sự cho hợp đồng, bảng xếp hạng sẽ tự hiện." />
+        </Panel>
       ) : (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {ranked.map((r, i) => (
-            <div key={r.key} className="card flex items-center justify-between p-4">
-              <div className="flex items-center gap-3">
-                <span className="flex h-8 w-8 items-center justify-center rounded-full font-serif font-medium" style={{ background: "var(--surface2)", color: i < 3 ? medal[i] : "var(--text3)" }}>
-                  {i + 1}
-                </span>
-                <div>
-                  <p className="font-medium">{r.name}</p>
-                  <p className="text-xs" style={{ color: "var(--text3)" }}>
-                    {CREW_ROLE_LABEL[r.role] ?? r.role} · {r.accepted}/{r.jobs} buổi nhận
-                  </p>
+            <Panel key={r.key} className="flex items-center gap-3 px-4 py-3.5">
+              <span
+                className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[13px] font-extrabold"
+                style={i < 3
+                  ? { background: `color-mix(in srgb, ${medal[i]} 18%, #fff)`, color: medal[i] }
+                  : { background: "var(--sf2)", color: "var(--tx3)" }}
+              >
+                {i + 1}
+              </span>
+              <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: avatarColor(r.name) }}>
+                {initials(r.name)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13.5px] font-semibold">{r.name}</p>
+                <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  {CREW_ROLE_LABEL[r.role] ?? r.role} · nhận {r.accepted}/{r.jobs} buổi
+                </p>
+                <div className="mt-1.5 h-[3px] overflow-hidden rounded-[3px]" style={{ background: "var(--bd2)" }}>
+                  <div className="h-full rounded-[3px]" style={{ width: `${(r.earned / topEarn) * 100}%`, background: "var(--ac)" }} />
                 </div>
               </div>
-              <p className="font-serif text-lg font-medium">{vnd(r.earned)}</p>
-            </div>
+              <p className="tnum flex-none text-[15px] font-bold">{vnd(r.earned)}</p>
+            </Panel>
           ))}
         </div>
       )}

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PenLine, MessageSquare, UserCheck, UserX, Star, Wallet, Bell, FileCheck, CheckCheck, Megaphone, UserPlus, ArrowUpCircle, Mail } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PushToggle from "@/components/PushToggle";
+import { Panel, EmptyState } from "@/components/studio/ui";
 import type { StudioNotification, NotificationKind } from "@/lib/types";
 
 const ICON: Record<NotificationKind, typeof Bell> = {
@@ -22,18 +23,18 @@ const ICON: Record<NotificationKind, typeof Bell> = {
   info: Bell,
 };
 const TONE: Record<NotificationKind, string> = {
-  signed: "var(--s-green)",
-  edit_request: "var(--s-amber)",
-  crew_accepted: "var(--s-green)",
-  crew_declined: "var(--s-red)",
-  review: "var(--s-amber)",
-  payment: "var(--s-blue)",
-  quote_accepted: "var(--s-green)",
-  announcement: "#c78bd1",
-  new_user: "var(--s-blue)",
-  upgrade_request: "var(--s-amber)",
-  contact: "var(--s-green)",
-  info: "var(--text3)",
+  signed: "var(--gn)",
+  edit_request: "var(--am)",
+  crew_accepted: "var(--gn)",
+  crew_declined: "var(--rd)",
+  review: "var(--am)",
+  payment: "var(--bl)",
+  quote_accepted: "var(--gn)",
+  announcement: "var(--tl)",
+  new_user: "var(--bl)",
+  upgrade_request: "var(--am)",
+  contact: "var(--gn)",
+  info: "var(--tx3)",
 };
 
 /** Where a notification points to (its "content"). */
@@ -66,32 +67,35 @@ export default function NotificationsList({ initial }: { initial: StudioNotifica
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4 flex items-center gap-3">
-        <h1 className="font-serif text-2xl font-medium">Thông báo</h1>
+    <div className="page-in max-w-[860px]">
+      <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>Mọi hoạt động của studio theo thời gian.</p>
         {unreadCount > 0 && (
-          <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: "var(--s-red, #e0746f)", color: "#fff" }}>
-            {unreadCount} mới
+          <span className="flex-none rounded-[20px] px-2.5 py-1 text-[11px] font-bold" style={{ background: "var(--rdS)", color: "var(--rd)" }}>
+            {unreadCount} chưa đọc
           </span>
         )}
         {unreadCount > 0 && (
           <button
             onClick={() => markRead(items.filter((n) => !n.read).map((n) => n.id))}
-            className="btn-ghost ml-auto px-3 py-1.5 text-xs gap-1.5"
+            className="ml-auto flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
           >
-            <CheckCheck size={14} /> Đánh dấu tất cả đã đọc
+            <CheckCheck size={16} /> Đánh dấu tất cả đã đọc
           </button>
         )}
       </div>
 
-      <div className="mb-5">
+      <div className="mb-3.5">
         <PushToggle />
       </div>
 
       {items.length === 0 ? (
-        <div className="card py-16 text-center text-sm" style={{ color: "var(--text3)" }}>Chưa có thông báo nào.</div>
+        <Panel>
+          <EmptyState icon={Bell} title="Chưa có thông báo nào" hint="Khách ký hợp đồng, chuyển cọc hay thợ nhận job đều báo về đây." />
+        </Panel>
       ) : (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {items.map((n) => {
             const Icon = ICON[n.kind] ?? Bell;
             const href = targetHref(n);
@@ -103,25 +107,27 @@ export default function NotificationsList({ initial }: { initial: StudioNotifica
                 role={clickable ? "button" : undefined}
                 tabIndex={clickable ? 0 : undefined}
                 onKeyDown={(e) => { if (clickable && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openNotification(n); } }}
-                className="card flex items-start gap-3 p-4 transition-colors"
+                className="flex items-start gap-3 rounded-[14px] px-4 py-3.5"
                 style={{
                   cursor: clickable ? "pointer" : "default",
-                  // Unread: tinted background + accent left border + full opacity.
-                  // Read: muted, no highlight.
-                  background: n.read ? "var(--surface)" : "color-mix(in srgb, var(--brand, var(--accent)) 7%, var(--surface))",
-                  borderLeft: n.read ? "3px solid transparent" : "3px solid var(--brand, var(--accent))",
-                  opacity: n.read ? 0.72 : 1,
+                  // Chưa đọc: nền pha màu nhấn + viền trái màu nhấn. Đã đọc: chìm hẳn.
+                  background: n.read ? "var(--sf)" : "var(--acS)",
+                  border: "1px solid var(--bd)",
+                  borderLeft: n.read ? "3px solid var(--bd)" : "3px solid var(--ac)",
+                  opacity: n.read ? 0.78 : 1,
                 }}
               >
-                <Icon size={18} style={{ color: TONE[n.kind] ?? "var(--text3)" }} className="mt-0.5 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm" style={{ fontWeight: n.read ? 400 : 600 }}>{n.message}</p>
-                  <p className="mt-0.5 text-[11px]" style={{ color: "var(--text3)" }}>
+                <span className="mt-0.5 flex-none rounded-[9px] p-1.5" style={{ background: "var(--sf2)", lineHeight: 0 }}>
+                  <Icon size={17} style={{ color: TONE[n.kind] ?? "var(--tx3)" }} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px]" style={{ fontWeight: n.read ? 500 : 700, textWrap: "pretty" }}>{n.message}</p>
+                  <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                     {new Date(n.created_at).toLocaleString("vi-VN")}
-                    {href && <span style={{ color: "var(--brand, var(--accent))" }}> · Xem chi tiết →</span>}
+                    {href && <span style={{ color: "var(--ac)", fontWeight: 600 }}> · Xem chi tiết →</span>}
                   </p>
                 </div>
-                {!n.read && <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: "var(--brand, var(--accent))" }} />}
+                {!n.read && <span className="mt-1.5 h-2 w-2 flex-none rounded-full" style={{ background: "var(--ac)" }} />}
               </div>
             );
           })}

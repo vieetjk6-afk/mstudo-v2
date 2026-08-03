@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Plus, Trash2, Phone } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { mainUrl } from "@/lib/hosts";
+import { Panel, EmptyState } from "@/components/studio/ui";
+import { avatarColor, initials } from "@/lib/avatar";
 import { CREW_ROLE_LABEL, type StudioCrew, type CrewRole } from "@/lib/types";
 
 export default function CrewManager({
@@ -77,10 +79,9 @@ export default function CrewManager({
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4">
-        <h1 className="font-serif text-2xl font-medium">Sổ thợ</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>
+    <div className="page-in">
+      <div className="mb-3.5">
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
           Lưu photographer / cameramen theo số điện thoại để gán nhanh vào hợp đồng.
           Thợ vào <span style={{ color: "var(--text)" }}>{mainUrl("/crew")}</span> để xem việc và
           tự báo lịch đã nhận — mỗi thợ chỉ thấy lịch của mình.
@@ -134,10 +135,10 @@ export default function CrewManager({
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-3.5 lg:grid-cols-3">
         {/* Add form */}
-        <div className="card h-fit p-6">
-          <h2 className="mb-4 font-serif text-lg font-medium">Thêm thợ</h2>
+        <Panel className="h-fit p-[18px]">
+          <h2 className="mb-3.5 text-[14px] font-bold">Thêm thợ vào sổ</h2>
           <div className="space-y-3">
             <div className="field">
               <label className="label">Tên</label>
@@ -160,25 +161,38 @@ export default function CrewManager({
               <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
             </div>
             {err && <p className="text-sm" style={{ color: "var(--danger)" }}>{err}</p>}
-            <button onClick={add} disabled={busy} className="btn-primary w-full">
-              <Plus size={15} /> {busy ? "Đang thêm…" : "Thêm vào sổ"}
+            <button
+              onClick={add}
+              disabled={busy}
+              className="flex w-full items-center justify-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
+              style={{ background: "var(--ac)", color: "#fff", opacity: busy ? 0.6 : 1 }}
+            >
+              <Plus size={16} /> {busy ? "Đang thêm…" : "Thêm vào sổ"}
             </button>
           </div>
-        </div>
+        </Panel>
 
         {/* List */}
         <div className="lg:col-span-2">
           {list.length === 0 ? (
-            <div className="card flex items-center justify-center py-16 text-sm" style={{ color: "var(--text3)" }}>
-              Chưa có thợ nào trong sổ.
-            </div>
+            <Panel>
+              <EmptyState
+                icon={Phone}
+                title="Chưa có thợ nào trong sổ"
+                hint="Thêm thợ ở khối bên trái, hoặc gửi link đăng ký để thợ tự khai thông tin."
+              />
+            </Panel>
           ) : (
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               {list.map((c) => (
-                <div key={c.id} className="card flex items-center justify-between p-4">
-                  <div>
-                    <p className="font-medium">{c.name || "(chưa đặt tên)"}</p>
-                    <p className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text3)" }}>
+                <Panel key={c.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: avatarColor(c.name || c.phone) }}>
+                      {initials(c.name || c.phone)}
+                    </span>
+                    <div className="min-w-0">
+                    <p className="text-[13.5px] font-semibold">{c.name || "(chưa đặt tên)"}</p>
+                    <p className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                       <Phone size={12} /> {c.phone} · {CREW_ROLE_LABEL[c.role] ?? c.role}
                       {c.note ? ` · ${c.note}` : ""}
                     </p>
@@ -187,17 +201,23 @@ export default function CrewManager({
                       if (!s || s.total === 0) return null;
                       const rate = Math.round((s.accepted / s.total) * 100);
                       return (
-                        <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                          <span style={{ color: "var(--s-green)" }}>{s.accepted} buổi đã nhận</span> · {s.total} lời mời · nhận {rate}%
+                        <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                          <span style={{ color: "var(--gn)", fontWeight: 700 }}>{s.accepted} buổi đã nhận</span> · {s.total} lời mời · nhận {rate}%
                           {s.declined ? ` · từ chối ${s.declined}` : ""}
                         </p>
                       );
                     })()}
+                    </div>
                   </div>
-                  <button onClick={() => remove(c.id)} aria-label="Xoá thợ" className="btn-ghost px-2.5 py-1.5 text-xs">
+                  <button
+                    onClick={() => remove(c.id)}
+                    aria-label="Xoá thợ"
+                    className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
+                    style={{ border: "1px solid var(--bd)", color: "var(--tx3)" }}
+                  >
                     <Trash2 size={14} />
                   </button>
-                </div>
+                </Panel>
               ))}
             </div>
           )}
