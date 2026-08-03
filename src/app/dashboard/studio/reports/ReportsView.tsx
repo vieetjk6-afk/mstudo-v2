@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from "react";
 import DateInput from "@/components/DateInput";
-import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download, Receipt, Target, PieChart } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/MoneyInput";
-import { vnd, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, type StudioExpense, type PaymentKind } from "@/lib/types";
-import { fmtDate, todayVN } from "@/lib/date";
+import { Panel, PanelHead, EmptyState, StatCard } from "@/components/studio/ui";
+import { vnd, vndShort, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, type StudioExpense, type PaymentKind } from "@/lib/types";
+import { fmtDayMonth, todayVN } from "@/lib/date";
 
 export type PaymentRow = {
   id: string;
@@ -26,6 +27,12 @@ export type SalaryRow = {
 export type SourceStat = { source: string; label: string; count: number; value: number; collected: number };
 
 const MONTHS = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
+
+const TABS: [string, string][] = [
+  ["in", "Tiền vào"],
+  ["out", "Tiền ra"],
+  ["chart", "Biểu đồ & mục tiêu"],
+];
 
 export default function ReportsView({
   ownerId,
@@ -49,6 +56,8 @@ export default function ReportsView({
   const [target, setTarget] = useState(initialTarget);
   const [targetEdit, setTargetEdit] = useState(false);
   const [targetInput, setTargetInput] = useState(initialTarget || 0);
+  const [tab, setTab] = useState<string>("in");
+  const [showAdd, setShowAdd] = useState(false);
 
   const [exp, setExp] = useState({ title: "", amount: 0, category: "equipment", spent_at: todayVN(), note: "" });
   const [busy, setBusy] = useState(false);
@@ -64,6 +73,7 @@ export default function ReportsView({
   const otherOut = monthExpenses.reduce((s, p) => s + (p.amount || 0), 0);
   const profit = income - salaryOut - otherOut;
   const targetPct = target > 0 ? Math.min(100, Math.round((income / target) * 100)) : 0;
+  const margin = income > 0 ? Math.round((profit / income) * 100) : null;
 
   async function saveTarget() {
     const v = Math.max(0, Math.round(Number(targetInput) || 0));
@@ -72,17 +82,17 @@ export default function ReportsView({
     setTargetEdit(false);
   }
 
-  // 12-month series (ending at the current real month) for the chart.
+  // Chuỗi 12 tháng (kết thúc ở tháng hiện tại) cho biểu đồ.
   const series = useMemo(() => {
     const out: { ym: string; label: string; income: number; expense: number; profit: number }[] = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const inc = payments.filter((p) => (p.paid_at || "").startsWith(key)).reduce((s, p) => s + (p.amount || 0), 0);
-      const exp =
+      const ex =
         salaries.filter((s2) => (s2.paid_at || "").startsWith(key)).reduce((s, p) => s + (p.salary || 0), 0) +
         expenses.filter((e) => (e.spent_at || "").startsWith(key)).reduce((s, p) => s + (p.amount || 0), 0);
-      out.push({ ym: key, label: `${d.getMonth() + 1}`, income: inc, expense: exp, profit: inc - exp });
+      out.push({ ym: key, label: `T${d.getMonth() + 1}`, income: inc, expense: ex, profit: inc - ex });
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -143,182 +153,237 @@ export default function ReportsView({
     setExpenses((p) => p.filter((e) => e.id !== id));
   }
 
+  const btn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
+  const btnStyle = { border: "1px solid var(--bd)", background: "var(--sf)" };
+
+  // Gộp chi lương + chi khác thành một dòng thời gian cho tab "Tiền ra".
+  const outRows = [
+    ...monthSalaries.map((s) => ({
+      id: `s-${s.id}`, date: s.paid_at || "", title: `Tiền công · ${s.name}`,
+      sub: s.contract?.title || "Không gắn hợp đồng", amount: s.salary, canDelete: false as const,
+    })),
+    ...monthExpenses.map((e) => ({
+      id: `e-${e.id}`, date: e.spent_at, title: e.title,
+      sub: EXPENSE_CATEGORY_LABEL[e.category || "other"] || e.category || "Chi phí khác",
+      amount: e.amount, canDelete: true as const, rawId: e.id,
+    })),
+  ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="font-serif text-2xl font-medium mr-auto">Thu chi &amp; doanh thu</h1>
-        <div className="flex items-center gap-2">
-          <button onClick={exportCsv} className="btn-ghost px-3 py-2 text-xs"><Download size={14} /> CSV</button>
-          <button onClick={() => move(-1)} aria-label="Tháng trước" className="btn-ghost p-2"><ChevronLeft size={16} /></button>
-          <span className="min-w-[120px] text-center font-medium">{MONTHS[cursor.month]} {cursor.year}</span>
-          <button onClick={() => move(1)} aria-label="Tháng sau" className="btn-ghost p-2"><ChevronRight size={16} /></button>
+    <div className="page-in flex flex-col gap-3.5">
+      {/* ── 4 thẻ số liệu tháng ───────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">
+        <StatCard icon={TrendingUp} tone="green" label="Doanh thu (đã thu)" value={vndShort(income)} sub={`${monthPayments.length} lần thu trong tháng`} />
+        <StatCard icon={TrendingDown} tone="amber" label="Chi tiền công" value={vndShort(salaryOut)} sub={`${monthSalaries.length} khoản đã trả`} />
+        <StatCard icon={Receipt} tone="red" label="Chi phí khác" value={vndShort(otherOut)} sub={`${monthExpenses.length} khoản chi`} />
+        <StatCard
+          icon={Wallet}
+          tone={profit >= 0 ? "brand" : "red"}
+          label="Lợi nhuận"
+          value={vndShort(profit)}
+          sub={margin != null ? `biên ${margin}%` : "chưa có doanh thu"}
+          delta={margin != null ? `${margin}%` : undefined}
+          deltaTone={margin == null ? "gray" : margin >= 60 ? "green" : margin >= 45 ? "amber" : "red"}
+        />
+      </div>
+
+      {/* ── Tab + tháng + hành động ───────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div role="tablist" aria-label="Nhóm số liệu" className="flex flex-wrap gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+          {TABS.map(([key, label]) => {
+            const on = tab === key;
+            return (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setTab(key)}
+                className="whitespace-nowrap rounded-[8px] px-[15px] py-[6.5px] text-[12.5px] font-semibold"
+                style={{ color: on ? "var(--ac)" : "var(--tx2)", background: on ? "var(--sf)" : "transparent", boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none" }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <button onClick={() => move(-1)} aria-label="Tháng trước" className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]" style={btnStyle}><ChevronLeft size={16} /></button>
+          <span className="min-w-[118px] text-center text-[12.5px] font-semibold">{MONTHS[cursor.month]} {cursor.year}</span>
+          <button onClick={() => move(1)} aria-label="Tháng sau" className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]" style={btnStyle}><ChevronRight size={16} /></button>
+        </div>
+
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button onClick={exportCsv} className={btn} style={btnStyle}><Download size={16} /> Xuất CSV</button>
+          <button
+            onClick={() => { setShowAdd((v) => !v); setTab("out"); }}
+            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff" }}
+          >
+            <Plus size={16} /> Thêm khoản chi
+          </button>
         </div>
       </div>
 
-      {/* Summary cards */}
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="card p-5">
-          <TrendingUp size={18} style={{ color: "var(--s-green)" }} />
-          <p className="mt-3 font-serif text-2xl font-medium" style={{ color: "var(--s-green)" }}>{vnd(income)}</p>
-          <p className="mt-1 text-xs" style={{ color: "var(--text2)" }}>Doanh thu (đã thu)</p>
-        </div>
-        <div className="card p-5">
-          <TrendingDown size={18} style={{ color: "var(--s-red)" }} />
-          <p className="mt-3 font-serif text-2xl font-medium">{vnd(salaryOut)}</p>
-          <p className="mt-1 text-xs" style={{ color: "var(--text2)" }}>Chi lương nhân sự</p>
-        </div>
-        <div className="card p-5">
-          <TrendingDown size={18} style={{ color: "var(--s-red)" }} />
-          <p className="mt-3 font-serif text-2xl font-medium">{vnd(otherOut)}</p>
-          <p className="mt-1 text-xs" style={{ color: "var(--text2)" }}>Chi phí khác</p>
-        </div>
-        <div className="card p-5" style={{ borderColor: profit >= 0 ? "var(--s-greenS)" : "var(--s-redS)" }}>
-          <Wallet size={18} style={{ color: profit >= 0 ? "var(--s-green)" : "var(--s-red)" }} />
-          <p className="mt-3 font-serif text-2xl font-medium" style={{ color: profit >= 0 ? "var(--s-green)" : "var(--s-red)" }}>{vnd(profit)}</p>
-          <p className="mt-1 text-xs" style={{ color: "var(--text2)" }}>Lợi nhuận</p>
-        </div>
-      </div>
-
-      {/* Revenue target */}
-      <div className="card mb-6 p-6">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="font-serif text-lg font-medium">Mục tiêu doanh thu tháng</h2>
-          {targetEdit ? (
-            <div className="flex items-center gap-2">
-              <MoneyInput className="input w-36" placeholder="Số tiền" value={targetInput} onChange={setTargetInput} />
-              <button onClick={saveTarget} className="btn-primary px-3 py-1.5 text-xs">Lưu</button>
-            </div>
-          ) : (
-            <button onClick={() => { setTargetInput(target || 0); setTargetEdit(true); }} className="btn-ghost px-3 py-1.5 text-xs">
-              {target > 0 ? "Sửa mục tiêu" : "Đặt mục tiêu"}
-            </button>
-          )}
-        </div>
-        {target > 0 ? (
-          <>
-            <div className="h-3 overflow-hidden rounded-full" style={{ background: "var(--surface2)" }}>
-              <div className="h-full rounded-full" style={{ width: `${targetPct}%`, background: targetPct >= 100 ? "var(--s-green)" : "var(--s-amber)" }} />
-            </div>
-            <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>
-              {vnd(income)} / {vnd(target)} · <b style={{ color: targetPct >= 100 ? "var(--s-green)" : "var(--text)" }}>{targetPct}%</b>
-              {targetPct >= 100 ? " 🎉 đạt mục tiêu!" : ` · còn ${vnd(Math.max(0, target - income))}`}
-            </p>
-          </>
-        ) : (
-          <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa đặt mục tiêu doanh thu cho tháng.</p>
-        )}
-      </div>
-
-      {/* 12-month chart */}
-      <div className="card mb-6 p-6">
-        <h2 className="mb-4 font-serif text-lg font-medium">Doanh thu 12 tháng</h2>
-        <div className="flex items-end gap-1.5" style={{ height: 160 }}>
-          {series.map((s) => (
-            <div key={s.ym} className="flex flex-1 flex-col items-center justify-end gap-1" title={`Tháng ${s.label}: thu ${vnd(s.income)} · chi ${vnd(s.expense)}`}>
-              <div className="flex w-full items-end justify-center gap-0.5" style={{ height: 130 }}>
-                <div style={{ width: "42%", height: `${(s.income / chartMax) * 100}%`, background: "var(--s-green)", borderRadius: "3px 3px 0 0", minHeight: s.income ? 2 : 0 }} />
-                <div style={{ width: "42%", height: `${(s.expense / chartMax) * 100}%`, background: "var(--s-red)", borderRadius: "3px 3px 0 0", minHeight: s.expense ? 2 : 0 }} />
-              </div>
-              <span className="text-[10px]" style={{ color: s.ym === ym ? "var(--accent)" : "var(--text3)" }}>{s.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex gap-4 text-[11px]" style={{ color: "var(--text3)" }}>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "var(--s-green)" }} /> Thu</span>
-          <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "var(--s-red)" }} /> Chi</span>
-        </div>
-      </div>
-
-      {/* Lead-source analytics (all-time) */}
-      {sourceStats.length > 0 && (() => {
-        const maxVal = Math.max(1, ...sourceStats.map((s) => s.value));
-        const totalVal = sourceStats.reduce((s, x) => s + x.value, 0);
-        return (
-          <div className="card mb-6 p-6">
-            <h2 className="mb-1 font-serif text-lg font-medium">Nguồn khách (toàn thời gian)</h2>
-            <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>Giá trị hợp đồng theo kênh khách đến — biết kênh nào ra tiền nhất.</p>
-            <ul className="space-y-3">
-              {sourceStats.map((s) => (
-                <li key={s.source}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="font-medium">{s.label} <span className="text-[11px]" style={{ color: "var(--text3)" }}>· {s.count} HĐ</span></span>
-                    <span>{vnd(s.value)} <span className="text-[11px]" style={{ color: "var(--text3)" }}>· {totalVal > 0 ? Math.round((s.value / totalVal) * 100) : 0}%</span></span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--surface2)" }}>
-                    <div className="h-full rounded-full" style={{ width: `${(s.value / maxVal) * 100}%`, background: "var(--accent)" }} />
-                  </div>
-                  <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Đã thu {vnd(s.collected)}</p>
-                </li>
+      {/* ── Form thêm chi phí ─────────────────────────────────────────── */}
+      {showAdd && (
+        <Panel className="p-4">
+          <div className="grid gap-2 sm:grid-cols-12">
+            <input className="input sm:col-span-4" placeholder="Nội dung chi" value={exp.title} onChange={(e) => setExp((p) => ({ ...p, title: e.target.value }))} />
+            <MoneyInput className="input sm:col-span-2" placeholder="Số tiền" value={exp.amount} onChange={(n) => setExp((p) => ({ ...p, amount: n }))} />
+            <select className="input sm:col-span-3" value={exp.category} onChange={(e) => setExp((p) => ({ ...p, category: e.target.value }))}>
+              {Object.keys(EXPENSE_CATEGORY_LABEL).map((k) => (
+                <option key={k} value={k}>{EXPENSE_CATEGORY_LABEL[k]}</option>
               ))}
-            </ul>
+            </select>
+            <DateInput wrapperClassName="sm:col-span-3" value={exp.spent_at} onChange={(v) => setExp((p) => ({ ...p, spent_at: v }))} allowPast />
           </div>
-        );
-      })()}
+          <button
+            onClick={addExpense}
+            disabled={busy}
+            className="mt-3 flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff", opacity: busy ? 0.6 : 1 }}
+          >
+            <Plus size={16} /> {busy ? "Đang thêm…" : "Thêm chi phí"}
+          </button>
+        </Panel>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Income detail */}
-        <div className="card p-6">
-          <h2 className="mb-4 font-serif text-lg font-medium" style={{ color: "var(--s-green)" }}>Khoản thu</h2>
+      {/* ── Tiền vào ──────────────────────────────────────────────────── */}
+      {tab === "in" && (
+        <Panel>
+          <PanelHead icon={TrendingUp} tone="green" title="Tiền vào" count={vnd(income)} note="Tiền thực nhận về studio trong tháng" />
           {monthPayments.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có khoản thu trong tháng.</p>
+            <EmptyState icon={TrendingUp} title="Chưa có khoản thu nào trong tháng" hint="Ghi nhận thanh toán ở màn chi tiết hợp đồng, số liệu sẽ chạy về đây." />
           ) : (
-            <ul className="space-y-2 text-sm">
-              {monthPayments.map((p) => (
-                <li key={p.id} className="flex justify-between">
-                  <span>{p.contract?.title || "Hợp đồng"} <span style={{ color: "var(--text3)" }}>· {fmtDate(p.paid_at)}</span></span>
-                  <span className="font-medium">{vnd(p.amount)}</span>
-                </li>
-              ))}
-            </ul>
+            monthPayments.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-[18px] py-[13px]" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                <span className="tnum w-11 flex-none text-[12px]" style={{ color: "var(--tx3)" }}>{fmtDayMonth(p.paid_at)}</span>
+                <div className="min-w-[160px] flex-1">
+                  <p className="truncate text-[13.5px] font-semibold">{p.contract?.title || "Hợp đồng"}</p>
+                  <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{PAYMENT_KIND_LABEL[p.kind]}</p>
+                </div>
+                <span className="flex-none whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-semibold" style={{ background: "var(--gnS)", color: "var(--gn)" }}>
+                  {PAYMENT_KIND_LABEL[p.kind]}
+                </span>
+                <span className="tnum min-w-[120px] flex-none text-right text-[14px] font-bold" style={{ color: "var(--gn)" }}>{vnd(p.amount)}</span>
+              </div>
+            ))
           )}
-        </div>
+        </Panel>
+      )}
 
-        {/* Expense detail + salaries */}
-        <div className="card p-6">
-          <h2 className="mb-4 font-serif text-lg font-medium" style={{ color: "var(--s-red)" }}>Khoản chi</h2>
-          {monthSalaries.length === 0 && monthExpenses.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có khoản chi trong tháng.</p>
+      {/* ── Tiền ra ───────────────────────────────────────────────────── */}
+      {tab === "out" && (
+        <Panel>
+          <PanelHead icon={TrendingDown} tone="red" title="Tiền ra" count={vnd(salaryOut + otherOut)} note="Tiền công nhân sự + chi phí vận hành" />
+          {outRows.length === 0 ? (
+            <EmptyState icon={Receipt} title="Chưa có khoản chi nào trong tháng" hint='Bấm "Thêm khoản chi" để ghi nhận chi phí thiết bị, đi lại, in ấn…' />
           ) : (
-            <ul className="space-y-2 text-sm">
-              {monthSalaries.map((s) => (
-                <li key={s.id} className="flex justify-between">
-                  <span>Lương · {s.name} <span style={{ color: "var(--text3)" }}>· {s.contract?.title || ""}</span></span>
-                  <span className="font-medium">{vnd(s.salary)}</span>
-                </li>
-              ))}
-              {monthExpenses.map((e) => (
-                <li key={e.id} className="flex items-center justify-between">
-                  <span>
-                    {e.title} <span style={{ color: "var(--text3)" }}>· {EXPENSE_CATEGORY_LABEL[e.category || "other"] || e.category} · {fmtDate(e.spent_at)}</span>
-                  </span>
-                  <span className="flex items-center gap-2">
-                    <span className="font-medium">{vnd(e.amount)}</span>
-                    <button onClick={() => delExpense(e.id)} aria-label="Xoá chi phí" title="Xoá" className="p-1" style={{ color: "var(--text3)" }}><Trash2 size={13} /></button>
-                  </span>
-                </li>
-              ))}
-            </ul>
+            outRows.map((r) => (
+              <div key={r.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-[18px] py-[13px]" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                <span className="tnum w-11 flex-none text-[12px]" style={{ color: "var(--tx3)" }}>{fmtDayMonth(r.date)}</span>
+                <div className="min-w-[160px] flex-1">
+                  <p className="truncate text-[13.5px] font-semibold">{r.title}</p>
+                  <p className="mt-px truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>{r.sub}</p>
+                </div>
+                <span className="tnum min-w-[120px] flex-none text-right text-[14px] font-bold" style={{ color: "var(--rd)" }}>{vnd(r.amount)}</span>
+                {r.canDelete ? (
+                  <button onClick={() => delExpense(r.rawId)} aria-label="Xoá chi phí" title="Xoá" className="flex-none p-1" style={{ color: "var(--tx3)" }}>
+                    <Trash2 size={14} />
+                  </button>
+                ) : (
+                  <span className="w-[22px] flex-none" />
+                )}
+              </div>
+            ))
           )}
-        </div>
-      </div>
+        </Panel>
+      )}
 
-      {/* Add expense */}
-      <div className="card mt-6 p-6">
-        <h2 className="mb-4 font-serif text-lg font-medium">Thêm chi phí</h2>
-        <div className="grid gap-2 sm:grid-cols-12">
-          <input className="input sm:col-span-4" placeholder="Nội dung chi" value={exp.title} onChange={(e) => setExp((p) => ({ ...p, title: e.target.value }))} />
-          <MoneyInput className="input sm:col-span-2" placeholder="Số tiền" value={exp.amount} onChange={(n) => setExp((p) => ({ ...p, amount: n }))} />
-          <select className="input sm:col-span-3" value={exp.category} onChange={(e) => setExp((p) => ({ ...p, category: e.target.value }))}>
-            {Object.keys(EXPENSE_CATEGORY_LABEL).map((k) => (
-              <option key={k} value={k}>{EXPENSE_CATEGORY_LABEL[k]}</option>
-            ))}
-          </select>
-          <DateInput wrapperClassName="sm:col-span-3" value={exp.spent_at} onChange={(v) => setExp((p) => ({ ...p, spent_at: v }))} allowPast />
-        </div>
-        <button onClick={addExpense} disabled={busy} className="btn-primary mt-3">
-          <Plus size={15} /> {busy ? "Đang thêm…" : "Thêm chi phí"}
-        </button>
-      </div>
+      {/* ── Biểu đồ & mục tiêu ────────────────────────────────────────── */}
+      {tab === "chart" && (
+        <>
+          <Panel className="p-[18px]">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <Target size={18} style={{ color: "var(--ac)" }} />
+              <h2 className="text-[14px] font-bold">Mục tiêu doanh thu tháng</h2>
+              <div className="ml-auto">
+                {targetEdit ? (
+                  <div className="flex items-center gap-2">
+                    <MoneyInput className="input w-36" placeholder="Số tiền" value={targetInput} onChange={setTargetInput} />
+                    <button onClick={saveTarget} className="rounded-[9px] px-3 py-1.5 text-[12px] font-semibold" style={{ background: "var(--ac)", color: "#fff" }}>Lưu</button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setTargetInput(target || 0); setTargetEdit(true); }} className={btn} style={btnStyle}>
+                    {target > 0 ? "Sửa mục tiêu" : "Đặt mục tiêu"}
+                  </button>
+                )}
+              </div>
+            </div>
+            {target > 0 ? (
+              <>
+                <div className="h-2.5 overflow-hidden rounded-full" style={{ background: "var(--sf2)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${targetPct}%`, background: targetPct >= 100 ? "var(--gn)" : "var(--ac)" }} />
+                </div>
+                <p className="mt-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                  {vnd(income)} / {vnd(target)} · <b style={{ color: targetPct >= 100 ? "var(--gn)" : "var(--tx)" }}>{targetPct}%</b>
+                  {targetPct >= 100 ? " 🎉 đạt mục tiêu!" : ` · còn ${vnd(Math.max(0, target - income))}`}
+                </p>
+              </>
+            ) : (
+              <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Chưa đặt mục tiêu doanh thu cho tháng.</p>
+            )}
+          </Panel>
+
+          <Panel className="p-[18px]">
+            <h2 className="mb-3 text-[14px] font-bold">Thu · chi 12 tháng</h2>
+            <div className="flex items-end gap-1.5" style={{ height: 160 }}>
+              {series.map((s) => (
+                <div key={s.ym} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${s.label}: thu ${vnd(s.income)} · chi ${vnd(s.expense)}`}>
+                  <div className="flex w-full items-end justify-center gap-0.5" style={{ height: 130 }}>
+                    <div style={{ width: "42%", height: `${(s.income / chartMax) * 100}%`, background: "var(--ac)", borderRadius: "3px 3px 0 0", minHeight: s.income ? 2 : 0 }} />
+                    <div style={{ width: "42%", height: `${(s.expense / chartMax) * 100}%`, background: "var(--rd)", borderRadius: "3px 3px 0 0", minHeight: s.expense ? 2 : 0 }} />
+                  </div>
+                  <span className="text-[10px] font-semibold" style={{ color: s.ym === ym ? "var(--ac)" : "var(--tx3)" }}>{s.label}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-3 flex gap-4 text-[11px]" style={{ color: "var(--tx3)" }}>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "var(--ac)" }} /> Thu</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "var(--rd)" }} /> Chi</span>
+            </div>
+          </Panel>
+
+          {sourceStats.length > 0 && (() => {
+            const maxVal = Math.max(1, ...sourceStats.map((s) => s.value));
+            const totalVal = sourceStats.reduce((s, x) => s + x.value, 0);
+            return (
+              <Panel className="p-[18px]">
+                <div className="mb-1 flex items-center gap-2">
+                  <PieChart size={18} style={{ color: "var(--bl)" }} />
+                  <h2 className="text-[14px] font-bold">Nguồn khách (toàn thời gian)</h2>
+                </div>
+                <p className="mb-4 text-[11.5px]" style={{ color: "var(--tx3)" }}>Giá trị hợp đồng theo kênh khách đến — biết kênh nào ra tiền nhất.</p>
+                <ul className="flex flex-col gap-3">
+                  {sourceStats.map((s) => (
+                    <li key={s.source}>
+                      <div className="mb-1 flex items-center justify-between text-[12.5px]">
+                        <span className="font-semibold">{s.label} <span className="text-[11px] font-normal" style={{ color: "var(--tx3)" }}>· {s.count} HĐ</span></span>
+                        <span className="tnum">{vnd(s.value)} <span className="text-[11px]" style={{ color: "var(--tx3)" }}>· {totalVal > 0 ? Math.round((s.value / totalVal) * 100) : 0}%</span></span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--sf2)" }}>
+                        <div className="h-full rounded-full" style={{ width: `${(s.value / maxVal) * 100}%`, background: "var(--ac)" }} />
+                      </div>
+                      <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>Đã thu {vnd(s.collected)}</p>
+                    </li>
+                  ))}
+                </ul>
+              </Panel>
+            );
+          })()}
+        </>
+      )}
     </div>
   );
 }

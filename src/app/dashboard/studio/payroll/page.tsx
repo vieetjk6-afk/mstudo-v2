@@ -31,7 +31,7 @@ export default async function PayrollPage() {
   const { data } = await supabase
     .from("contract_crew")
     .select(
-      "id, name, phone, role, salary, status, paid, contract:studio_contracts!inner(id, owner_id, title, event_date)"
+      "id, name, phone, role, salary, status, paid, contract:studio_contracts!inner(id, owner_id, title, code, event_date)"
     )
     .eq("contract.owner_id", profile.id)
     .order("created_at", { ascending: false });
