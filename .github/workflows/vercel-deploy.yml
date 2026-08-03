@@ -61,8 +61,28 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Tải cấu hình + biến môi trường production
+        id: pull
         if: steps.check.outputs.skip != 'true'
         run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+
+      # `vercel pull` hỏng gần như luôn là do BỘ BA token / ORG_ID / PROJECT_ID
+      # không khớp nhau (hay gặp nhất: token tạo ở tài khoản cá nhân nhưng
+      # project nằm trong team). Liệt kê những gì token NHÌN THẤY để biết phải
+      # sửa ID nào — tên team/project không phải bí mật, ID vẫn được che.
+      - name: Chẩn đoán khi không tải được cấu hình
+        if: failure() && steps.pull.outcome == 'failure'
+        run: |
+          echo "── Token này thuộc tài khoản: ─────────────────────────────"
+          vercel whoami --token="${{ secrets.VERCEL_TOKEN }}" || true
+          echo "── Các team token nhìn thấy: ──────────────────────────────"
+          vercel teams ls --token="${{ secrets.VERCEL_TOKEN }}" || true
+          echo "── Các project token nhìn thấy (trong scope hiện tại): ────"
+          vercel project ls --token="${{ secrets.VERCEL_TOKEN }}" || true
+          echo ""
+          echo "Nếu project cần deploy KHÔNG có trong danh sách trên thì token"
+          echo "sai scope: tạo lại token và chọn đúng team chứa project, hoặc"
+          echo "sửa VERCEL_ORG_ID / VERCEL_PROJECT_ID cho khớp (Vercel →"
+          echo "project → Settings → General → Project ID / Team ID)."
 
       - name: Build
         if: steps.check.outputs.skip != 'true'
