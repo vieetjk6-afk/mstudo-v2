@@ -6,6 +6,7 @@ import {
   CheckCircle, XCircle, Pencil, Trash2, X, Save, ExternalLink,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Panel, EmptyState } from "@/components/studio/ui";
 import { studioUrl } from "@/lib/hosts";
 import { nextContractCode, DEFAULT_TASKS } from "@/lib/contract-code";
 import { fullClauseText } from "@/lib/contract-clauses";
@@ -155,7 +156,7 @@ export default function BookingsView({
   }, {});
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
 
       {/* Share link */}
       <div className="card mb-5 flex flex-wrap items-center gap-3 p-4">
@@ -190,7 +191,7 @@ export default function BookingsView({
 
       {/* Filter tabs */}
       {list.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-2">
+        <div role="tablist" aria-label="Lọc yêu cầu đặt lịch" className="mb-3.5 flex flex-wrap gap-[3px] self-start rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)", width: "fit-content" }}>
           {[
             { key: "all", label: "Tất cả", count: list.length },
             { key: "new", label: "Mới", count: counts.new ?? 0 },
@@ -198,38 +199,41 @@ export default function BookingsView({
             { key: "declined", label: "Từ chối", count: counts.declined ?? 0 },
             { key: "handled", label: "Đã xử lý", count: counts.handled ?? 0 },
             { key: "archived", label: "Lưu trữ", count: counts.archived ?? 0 },
-          ].map((f) => (
-            <button
-              key={f.key}
-              onClick={() => setFilterStatus(f.key)}
-              className="rounded-full px-3 py-1 text-xs font-semibold transition-colors"
-              style={{
-                background: filterStatus === f.key ? "var(--brand)" : "var(--surface2)",
-                color: filterStatus === f.key ? "var(--brandFg)" : "var(--text2)",
-              }}
-            >
-              {f.label} {f.count > 0 ? `(${f.count})` : ""}
-            </button>
-          ))}
+          ].map((f) => {
+            const on = filterStatus === f.key;
+            return (
+              <button
+                key={f.key}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setFilterStatus(f.key)}
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+                style={{ color: on ? "var(--ac)" : "var(--tx2)", background: on ? "var(--sf)" : "transparent", boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none" }}
+              >
+                {f.label}
+                {f.count > 0 && <span className="text-[11px] font-bold opacity-75">{f.count}</span>}
+              </button>
+            );
+          })}
         </div>
       )}
 
       {/* Booking list */}
       {filtered.length === 0 ? (
-        <div className="card py-16 text-center" style={{ color: "var(--text3)" }}>
-          <MessageCircle size={32} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm">
-            {list.length === 0 ? "Chưa có yêu cầu đặt lịch nào." : "Không có yêu cầu nào phù hợp."}
-          </p>
-          {list.length === 0 && <p className="mt-1 text-[12px]">Chia sẻ link trên để khách hàng gửi yêu cầu.</p>}
-        </div>
+        <Panel>
+          <EmptyState
+            icon={MessageCircle}
+            title={list.length === 0 ? "Chưa có yêu cầu đặt lịch nào" : "Không có yêu cầu nào ở nhóm này"}
+            hint={list.length === 0 ? "Chia sẻ link đặt lịch ở trên để khách gửi yêu cầu thẳng vào đây." : "Chuyển sang nhóm khác hoặc bỏ bộ lọc."}
+          />
+        </Panel>
       ) : (
         <div className="space-y-2">
           {filtered.map((b) => (
             <div
               key={b.id}
               className="card p-4 transition-colors"
-              style={{ borderLeft: b.status === "new" ? "3px solid var(--s-blue)" : b.status === "accepted" ? "3px solid var(--s-green)" : b.status === "declined" ? "3px solid var(--s-red)" : undefined }}
+              style={{ borderLeft: b.status === "new" ? "3px solid var(--am)" : b.status === "accepted" ? "3px solid var(--gn)" : b.status === "declined" ? "3px solid var(--rd)" : undefined }}
             >
               <div className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Package, Clock } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Panel, EmptyState } from "@/components/studio/ui";
 import { PRODUCT_STATUS_LABEL, type ProductStatus } from "@/lib/types";
 import { fmtDate, todayVN } from "@/lib/date";
 
@@ -21,7 +22,12 @@ export type ProductRow = {
 type Staff = { id: string; full_name: string | null; email: string };
 
 const ORDER: ProductStatus[] = ["ordered", "in_progress", "done"];
-const TONE: Record<ProductStatus, string> = { ordered: "var(--s-amber)", in_progress: "var(--s-blue)", done: "var(--s-green)" };
+/** Màu pill hạng mục sản xuất — cùng bộ màu trạng thái của bản thiết kế. */
+const TONE: Record<ProductStatus, { fg: string; bg: string }> = {
+  ordered: { fg: "var(--am)", bg: "var(--amS)" },
+  in_progress: { fg: "var(--tl)", bg: "var(--tlS)" },
+  done: { fg: "var(--gn)", bg: "var(--gnS)" },
+};
 
 export default function ProductionView({ initial, staff }: { initial: ProductRow[]; staff: Staff[] }) {
   const supabase = createClient();
@@ -64,65 +70,80 @@ export default function ProductionView({ initial, staff }: { initial: ProductRow
   ];
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4">
-        <h1 className="font-serif text-2xl font-medium">Xử lý hình ảnh</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Xử lý ảnh, video, in ấn… của mọi hợp đồng — giao việc cho nhân viên &amp; theo dõi tiến độ.</p>
-      </div>
+    <div className="page-in flex flex-col gap-3.5">
+      <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+        Ảnh, video, in ấn… của mọi hợp đồng — giao việc cho nhân viên và theo dõi tiến độ.
+      </p>
 
-      {/* Overall progress */}
+      {/* Tiến độ chung */}
       {rows.length > 0 && (
-        <div className="card mb-5 p-5">
-          <div className="mb-2 flex items-center justify-between text-sm">
-            <span style={{ color: "var(--text2)" }}>Tiến độ chung</span>
-            <span className="font-medium">{doneCount}/{rows.length} xong · {pct}%</span>
+        <Panel className="px-[18px] py-4">
+          <div className="mb-2 flex items-center justify-between text-[12.5px]">
+            <span style={{ color: "var(--tx2)" }}>Tiến độ chung</span>
+            <span className="tnum font-bold">{doneCount}/{rows.length} xong · {pct}%</span>
           </div>
-          <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--surface2)" }}>
-            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--s-green)" }} />
+          <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--sf2)" }}>
+            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--ac)" }} />
           </div>
-        </div>
+        </Panel>
       )}
 
-      <div className="mb-5 flex flex-wrap gap-2">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setFilter(t.key)}
-            className="rounded-full px-4 py-2 text-sm font-medium"
-            style={{ background: filter === t.key ? "var(--surface2)" : "transparent", border: "1px solid var(--border2)", color: filter === t.key ? "var(--accent)" : "var(--text2)" }}
-          >
-            {t.label} ({t.key === "all" ? (counts.ordered || 0) + (counts.in_progress || 0) : counts[t.key] || 0})
-          </button>
-        ))}
+      <div role="tablist" aria-label="Lọc theo trạng thái" className="flex flex-wrap gap-[3px] self-start rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+        {tabs.map((t) => {
+          const on = filter === t.key;
+          return (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setFilter(t.key)}
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+              style={{ color: on ? "var(--ac)" : "var(--tx2)", background: on ? "var(--sf)" : "transparent", boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none" }}
+            >
+              {t.label}
+              <span className="text-[11px] font-bold opacity-75">
+                {t.key === "all" ? (counts.ordered || 0) + (counts.in_progress || 0) : counts[t.key] || 0}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       {visible.length === 0 ? (
-        <div className="card py-16 text-center text-sm" style={{ color: "var(--text3)" }}>Không có nội dung xử lý nào.</div>
+        <Panel>
+          <EmptyState
+            icon={Package}
+            title="Không có hạng mục nào ở nhóm này"
+            hint="Thêm hạng mục sản xuất trong hợp đồng (ảnh, video, in ấn) để theo dõi tiến độ ở đây."
+          />
+        </Panel>
       ) : (
-        <div className="space-y-2">
+        <div className="flex flex-col gap-2">
           {visible.map((r) => {
             const overdue = r.status !== "done" && r.contract?.delivery_due && r.contract.delivery_due < today;
             return (
-              <div key={r.id} className="card flex flex-col gap-3 p-4 lg:flex-row lg:items-center lg:justify-between">
+              <Panel key={r.id} className="flex flex-col gap-3 px-4 py-3.5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 font-medium">
-                    <Package size={15} style={{ color: "var(--text3)" }} />
+                  <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-semibold">
+                    <Package size={15} style={{ color: "var(--tx3)" }} />
                     {r.name}{r.qty > 1 ? ` ×${r.qty}` : ""}
-                    <span className="rounded-full px-2 py-0.5 text-[10px]" style={{ background: "var(--surface2)", color: TONE[r.status] }}>{PRODUCT_STATUS_LABEL[r.status]}</span>
+                    <span className="rounded-[20px] px-2.5 py-0.5 text-[10.5px] font-bold" style={{ background: TONE[r.status].bg, color: TONE[r.status].fg }}>
+                      {PRODUCT_STATUS_LABEL[r.status]}
+                    </span>
                   </p>
-                  <p className="mt-0.5 text-xs" style={{ color: "var(--text3)" }}>
+                  <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                     {r.contract ? (
                       <Link href={`/dashboard/studio/contracts/${r.contract.id}`} className="hover:underline">{r.contract.title}</Link>
                     ) : "—"}
                     {r.contract?.client_name ? ` · ${r.contract.client_name}` : ""}
                     {r.contract?.delivery_due ? (
-                      <span style={{ color: overdue ? "var(--s-red)" : "var(--text3)" }}> · <Clock size={11} className="inline" /> giao {fmtDate(r.contract.delivery_due)}{overdue ? " · trễ" : ""}</span>
+                      <span style={{ color: overdue ? "var(--rd)" : "var(--tx3)", fontWeight: overdue ? 700 : 400 }}> · <Clock size={11} className="inline" /> giao {fmtDate(r.contract.delivery_due)}{overdue ? " · trễ" : ""}</span>
                     ) : ""}
                     {r.assigned_to ? ` · 👤 ${staffName(r.assigned_to)}` : ""}
                     {r.note ? ` · ${r.note}` : ""}
                   </p>
                 </div>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 flex-wrap gap-2">
                   <select
                     className="input w-auto py-1.5 text-xs"
                     value={r.assigned_to ?? ""}
@@ -144,7 +165,7 @@ export default function ProductionView({ initial, staff }: { initial: ProductRow
                     ))}
                   </select>
                 </div>
-              </div>
+              </Panel>
             );
           })}
         </div>

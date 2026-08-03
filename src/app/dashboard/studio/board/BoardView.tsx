@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { contractTotal, vnd, CONTRACT_STATUS_LABEL, type ContractStatus } from "@/lib/types";
+import { contractTotal, vnd, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, type ContractStatus } from "@/lib/types";
+import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDate, todayVN } from "@/lib/date";
 
 export type BoardCard = {
@@ -17,15 +18,6 @@ export type BoardCard = {
 };
 
 const COLUMNS: ContractStatus[] = ["draft", "sent", "approved", "in_progress", "completed", "cancelled"];
-const TONE: Record<ContractStatus, string> = {
-  draft: "var(--text3)",
-  sent: "var(--s-amber)",
-  approved: "var(--s-green)",
-  in_progress: "var(--s-blue)",
-  completed: "var(--s-green)",
-  cancelled: "var(--s-red)",
-};
-
 export default function BoardView({ initial }: { initial: BoardCard[] }) {
   const [cards, setCards] = useState<BoardCard[]>(initial);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -51,11 +43,8 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4">
-        <h1 className="font-serif text-2xl font-medium">Bảng công việc</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Kéo thẻ hợp đồng sang cột khác để đổi trạng thái.</p>
-      </div>
+    <div className="page-in">
+      <p className="mb-3 text-[13px]" style={{ color: "var(--tx2)" }}>Kéo thẻ hợp đồng sang cột khác để đổi trạng thái.</p>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {COLUMNS.map((col) => {
@@ -66,12 +55,17 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
               onDragOver={(e) => { e.preventDefault(); setOver(col); }}
               onDragLeave={() => setOver((o) => (o === col ? null : o))}
               onDrop={() => { if (dragId) moveTo(dragId, col); setDragId(null); setOver(null); }}
-              className="w-64 shrink-0 rounded-2xl p-3"
-              style={{ background: over === col ? "var(--surface2)" : "var(--surface)", border: "1px solid var(--border)" }}
+              className="w-[270px] shrink-0 rounded-[14px] p-3"
+              style={{ background: over === col ? "var(--sf2)" : "var(--sf)", border: `1px solid ${over === col ? "var(--acM)" : "var(--bd)"}` }}
             >
-              <div className="mb-3 flex items-center justify-between px-1">
-                <span className="text-sm font-medium" style={{ color: TONE[col] }}>{CONTRACT_STATUS_LABEL[col]}</span>
-                <span className="text-xs" style={{ color: "var(--text3)" }}>{colCards.length}</span>
+              <div className="mb-3 flex items-center gap-2 px-1">
+                <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: CONTRACT_STATUS_TONE[col].fg }} />
+                <span className="text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>
+                  {CONTRACT_STATUS_LABEL[col]}
+                </span>
+                <span className="ml-auto rounded-[20px] px-2 py-0.5 text-[10.5px] font-bold" style={{ background: CONTRACT_STATUS_TONE[col].bg, color: CONTRACT_STATUS_TONE[col].fg }}>
+                  {colCards.length}
+                </span>
               </div>
               <div className="space-y-2">
                 {colCards.map((c) => {
@@ -85,18 +79,25 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
                       draggable
                       onDragStart={() => setDragId(c.id)}
                       onDragEnd={() => { setDragId(null); setOver(null); }}
-                      className="cursor-grab rounded-xl p-3 active:cursor-grabbing"
-                      style={{ background: "var(--surface2)", border: "1px solid var(--border)", opacity: dragId === c.id ? 0.5 : 1 }}
+                      className="cursor-grab rounded-[11px] p-3 active:cursor-grabbing"
+                      style={{ background: "var(--sf2)", border: "1px solid var(--bd)", opacity: dragId === c.id ? 0.5 : 1 }}
                     >
                       <Link href={`/dashboard/studio/contracts/${c.id}`} className="block">
-                        <p className="text-sm font-medium leading-snug">{c.title}</p>
-                        <p className="mt-0.5 text-[11px]" style={{ color: "var(--text3)" }}>{c.client_name || "—"}</p>
-                        <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: "var(--text3)" }}>
-                          <span>{vnd(total)}</span>
+                        <div className="flex items-start gap-2">
+                          <span className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full text-[9.5px] font-bold" style={avatarStyle(c.client_name || c.title)}>
+                            {initials(c.client_name || c.title)}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold leading-snug">{c.title}</p>
+                            <p className="mt-px truncate text-[11px]" style={{ color: "var(--tx3)" }}>{c.client_name || "—"}</p>
+                          </div>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-[11px]" style={{ color: "var(--tx3)" }}>
+                          <span className="tnum font-semibold" style={{ color: "var(--tx2)" }}>{vnd(total)}</span>
                           {tasks.length > 0 && <span>{doneN}/{tasks.length} việc</span>}
                         </div>
                         {(c.event_date || late) && (
-                          <p className="mt-1 text-[11px]" style={{ color: late ? "var(--s-red)" : "var(--text3)" }}>
+                          <p className="mt-1 text-[11px] font-semibold" style={{ color: late ? "var(--rd)" : "var(--tx3)" }}>
                             {late ? `Trễ giao · hạn ${fmtDate(c.delivery_due)}` : `Chụp ${fmtDate(c.event_date)}`}
                           </p>
                         )}
@@ -104,7 +105,9 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
                     </div>
                   );
                 })}
-                {colCards.length === 0 && <p className="px-1 py-4 text-center text-[11px]" style={{ color: "var(--text3)" }}>—</p>}
+                {colCards.length === 0 && (
+                  <p className="px-1 py-5 text-center text-[11px]" style={{ color: "var(--tx3)" }}>Kéo thẻ vào đây</p>
+                )}
               </div>
             </div>
           );

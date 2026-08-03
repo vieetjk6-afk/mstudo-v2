@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Phone, MessageCircle, ChevronDown, Check, RotateCcw, Inbox } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { Panel, EmptyState } from "@/components/studio/ui";
 
 export interface Lead {
   id: string;
@@ -42,34 +43,29 @@ export default function LeadsView({ leads }: { leads: Lead[] }) {
 
   if (rows.length === 0) {
     return (
-      <div className="mx-auto max-w-lg text-center">
-        <div className="card p-10">
-          <Inbox size={34} className="mx-auto mb-3" style={{ color: "var(--text3)" }} />
-          <h2 className="font-serif text-xl font-medium">Chưa có lead nào</h2>
-          <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>
-            Khi khách để lại số điện thoại qua chatbox trên website, thông tin sẽ hiện ở đây và
-            bạn được báo qua Zalo.
-          </p>
-        </div>
+      <div className="page-in max-w-[760px]">
+        <Panel>
+          <EmptyState
+            icon={Inbox}
+            title="Chưa có yêu cầu nào"
+            hint="Khách để lại số điện thoại qua chatbox trên website sẽ hiện ở đây, kèm báo Zalo cho bạn."
+          />
+        </Panel>
       </div>
     );
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-6">
-        <p className="eyebrow mb-1.5">Website</p>
-        <h1 className="font-serif text-[clamp(26px,4vw,40px)] font-medium leading-none">
-          Lead từ chatbox
-          {newCount > 0 && (
-            <span className="ml-3 rounded-full px-2.5 py-1 align-middle text-sm" style={{ background: "color-mix(in srgb, var(--gold) 18%, transparent)", color: "var(--gold)" }}>
-              {newCount} mới
-            </span>
-          )}
-        </h1>
-        <p className="mt-3 text-[15px]" style={{ color: "var(--text2)" }}>
-          Khách để lại số điện thoại khi chat trên website. Gọi hoặc nhắn Zalo lại, rồi đánh dấu đã liên hệ.
+    <div className="page-in max-w-[760px]">
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+          Khách nhắn từ website và chatbox. Gọi hoặc nhắn Zalo lại rồi đánh dấu đã liên hệ.
         </p>
+        {newCount > 0 && (
+          <span className="flex-none rounded-[20px] px-2.5 py-1 text-[11px] font-bold" style={{ background: "var(--amS)", color: "var(--am)" }}>
+            {newCount} yêu cầu mới
+          </span>
+        )}
       </div>
 
       <div className="grid gap-3">
@@ -83,10 +79,10 @@ export default function LeadsView({ leads }: { leads: Lead[] }) {
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{r.name || "Khách (chưa cho tên)"}</span>
                     {r.status === "new" && (
-                      <span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: "color-mix(in srgb, var(--gold) 18%, transparent)", color: "var(--gold)" }}>mới</span>
+                      <span className="rounded-[20px] px-2.5 py-0.5 text-[11px] font-bold" style={{ background: "var(--amS)", color: "var(--am)" }}>mới</span>
                     )}
                     {r.status === "contacted" && (
-                      <span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: "color-mix(in srgb, var(--accent) 16%, transparent)", color: "var(--accent)" }}>đã liên hệ</span>
+                      <span className="rounded-[20px] px-2.5 py-0.5 text-[11px] font-bold" style={{ background: "var(--gnS)", color: "var(--gn)" }}>đã liên hệ</span>
                     )}
                   </div>
                   <div className="mt-0.5 text-[13px]" style={{ color: "var(--text3)" }}>
@@ -133,7 +129,7 @@ export default function LeadsView({ leads }: { leads: Lead[] }) {
                             className="max-w-[80%] rounded-xl px-3 py-1.5 text-[13px] leading-relaxed"
                             style={
                               m.role === "user"
-                                ? { background: "var(--accent)", color: "var(--accentInk)" }
+                                ? { background: "var(--ac)", color: "#fff" }
                                 : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }
                             }
                           >
