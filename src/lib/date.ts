@@ -32,6 +32,36 @@ export function fmtDate(v: string | number | Date | null | undefined): string {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+/** dd/mm — dạng ngắn dùng trong bảng, thẻ, lịch. "" nếu rỗng/không hợp lệ. */
+export function fmtDayMonth(v: string | number | Date | null | undefined): string {
+  const d = toDate(v);
+  if (!d) return "";
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+}
+
+const DOW = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
+
+/** Thứ dạng ngắn: T2 … CN. Bản thiết kế không dùng tên thứ đầy đủ trong bảng. */
+export function fmtDow(v: string | number | Date | null | undefined): string {
+  const d = toDate(v);
+  return d ? DOW[d.getDay()] : "";
+}
+
+/** "T6 · 19/06" — nhãn ngày chuẩn của bản thiết kế. */
+export function fmtDowDayMonth(v: string | number | Date | null | undefined): string {
+  const d = toDate(v);
+  if (!d) return "";
+  return `${fmtDow(d)} · ${fmtDayMonth(d)}`;
+}
+
+/** Số ngày từ hôm nay tới `v` (âm = đã qua). null nếu không đọc được ngày. */
+export function daysFromToday(v: string | number | Date | null | undefined): number | null {
+  const d = toDate(v);
+  if (!d) return null;
+  const t = toDate(todayVN())!;
+  return Math.round((d.getTime() - t.getTime()) / 86400000);
+}
+
 /** Lunar (âm lịch) date: "dd/mm/yyyy" (+ " nhuận" for a leap month). "" if invalid. */
 export function fmtLunar(v: string | number | Date | null | undefined): string {
   const d = toDate(v);

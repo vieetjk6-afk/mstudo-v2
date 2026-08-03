@@ -684,13 +684,30 @@ export const SHOOT_TYPES: ShootType[] = [
   "other",
 ];
 
+/**
+ * Nhãn hiển thị tiếng Việt của trạng thái hợp đồng (bản thiết kế, mục "Trạng
+ * thái hợp đồng"). GIÁ TRỊ ENUM TRONG DB KHÔNG ĐỔI — chỉ đổi chữ hiện ra.
+ */
 export const CONTRACT_STATUS_LABEL: Record<ContractStatus, string> = {
   draft: "Nháp",
-  sent: "Đã gửi khách",
-  approved: "Khách duyệt",
+  sent: "Chờ khách duyệt",
+  approved: "Khách đã duyệt",
   in_progress: "Đang thực hiện",
   completed: "Hoàn thành",
   cancelled: "Đã huỷ",
+};
+
+/**
+ * Màu pill trạng thái hợp đồng — một bảng dùng chung cho mọi màn, để hợp đồng
+ * "Đang thực hiện" ở Tổng quan, danh sách và chi tiết luôn cùng một màu.
+ */
+export const CONTRACT_STATUS_TONE: Record<ContractStatus, { fg: string; bg: string }> = {
+  draft: { fg: "var(--nu)", bg: "var(--nuS)" },
+  sent: { fg: "var(--am)", bg: "var(--amS)" },
+  approved: { fg: "var(--bl)", bg: "var(--blS)" },
+  in_progress: { fg: "var(--pu)", bg: "var(--puS)" },
+  completed: { fg: "var(--gn)", bg: "var(--gnS)" },
+  cancelled: { fg: "var(--rd)", bg: "var(--rdS)" },
 };
 
 export const CREW_ROLE_LABEL: Record<CrewRole, string> = {
@@ -961,6 +978,23 @@ export function contractTotal(items: { qty: number; unit_price: number }[]): num
 export function vnd(n: number | null | undefined): string {
   const v = Math.round(n || 0);
   return v.toLocaleString("vi-VN") + "đ";
+}
+
+/**
+ * Tiền rút gọn cho ô KPI / biểu đồ: ≥1 tỷ → "1,2 tỷ", ≥1 triệu → "28,5tr",
+ * còn lại → "850k" (theo mục "Định dạng tiền" của bản thiết kế). Chỗ nào là
+ * con số phải đối chiếu (hoá đơn, bảng thanh toán) thì dùng vnd() đầy đủ.
+ */
+export function vndShort(n: number | null | undefined): string {
+  const v = Math.round(n || 0);
+  const a = Math.abs(v);
+  const sign = v < 0 ? "-" : "";
+  const num = (x: number, d: number) =>
+    x.toLocaleString("vi-VN", { minimumFractionDigits: 0, maximumFractionDigits: d });
+  if (a >= 1e9) return `${sign}${num(a / 1e9, 1)} tỷ`;
+  if (a >= 1e6) return `${sign}${num(a / 1e6, 1)}tr`;
+  if (a >= 1e3) return `${sign}${num(a / 1e3, 0)}k`;
+  return `${sign}${a}`;
 }
 
 

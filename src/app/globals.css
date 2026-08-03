@@ -905,6 +905,17 @@ body {
   --topbar: rgba(29, 27, 35, 0.86);
 }
 
+/* Tiêu đề trong khu quản lý: bản thiết kế dùng ĐÚNG MỘT font (Be Vietnam Pro)
+   với nét đậm 750, không dùng serif. Repo có ~175 chỗ đang đặt class
+   `font-serif` (Cormorant) từ giao diện cũ — ghi đè một chỗ ở đây để mọi màn
+   đổi theo, thay vì sửa 84 file. Ngoài shell (trang chủ, album khách, thiệp)
+   serif vẫn giữ nguyên. */
+.studio-shell .font-serif {
+  font-family: inherit;
+  font-weight: 750;
+  letter-spacing: -0.4px;
+}
+
 /* Số tiền / ngày giờ luôn dùng chữ số đều cột. */
 .studio-shell .tnum,
 .studio-shell table {

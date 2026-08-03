@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus, FileText, CalendarDays, Users, AlertCircle, Wallet, UserCheck, Clock, TrendingUp, Globe, Images } from "lucide-react";
+import {
+  Plus, FileText, CalendarDays, Users, AlertCircle, Wallet, Clock, Globe, Images,
+  Bolt, UserPlus, Banknote, ImagePlus, ReceiptText, PenLine, CalendarClock,
+  TrendingUp, CircleAlert, CalendarRange, Hourglass, Landmark, CalendarCheck,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import StudioTrialButton from "@/components/StudioTrialButton";
@@ -10,12 +14,14 @@ import AutoEmailToggle from "@/components/AutoEmailToggle";
 import WebappV2BannerSlot from "@/components/WebappV2BannerSlot";
 import { shootReminderMessage } from "@/lib/zalo";
 import { crewPortalUrl } from "@/lib/crew-show";
+import { avatarStyle, initials } from "@/lib/avatar";
+import { TONE, Pill, Panel, PanelHead, StatCard, EmptyState, RevenueChart, type ToneKey } from "@/components/studio/ui";
 import {
   contractTotal,
   sumAmounts,
   vnd,
-  CONTRACT_STATUS_LABEL,
-  QUOTE_STATUS_LABEL,
+  vndShort,
+  CONTRACT_STATUS_TONE,
   SHOOT_TYPE_LABEL,
   CREW_ROLE_LABEL,
   quoteSelectedTotal,
@@ -23,109 +29,7 @@ import {
   type QuoteStatus,
   type CrewRole,
 } from "@/lib/types";
-import { fmtDate, todayVN } from "@/lib/date";
-
-/* ── Design tokens (ported from the mstudo app mockup) ─────────────────────
-   Status tones with a soft background, matching the green-accent mstudo look.
-   These work on the dark app shell; the accent is the brand green. */
-const TONE = {
-  green: { fg: "var(--s-green)", soft: "var(--s-greenS)" },
-  amber: { fg: "var(--s-amber)", soft: "var(--s-amberS)" },
-  red: { fg: "var(--s-red)", soft: "var(--s-redS)" },
-  blue: { fg: "var(--s-blue)", soft: "var(--s-blueS)" },
-  gray: { fg: "var(--text2)", soft: "var(--surface2)" },
-} as const;
-type ToneKey = keyof typeof TONE;
-const ACCENT = TONE.green.fg;
-const ACCENT_SOFT = TONE.green.soft;
-
-function badgeStyle(tone: ToneKey): React.CSSProperties {
-  return {
-    display: "inline-block",
-    fontSize: 12,
-    fontWeight: 700,
-    padding: "3px 10px",
-    borderRadius: 999,
-    color: TONE[tone].fg,
-    background: TONE[tone].soft,
-    whiteSpace: "nowrap",
-  };
-}
-
-const STATUS_TONE: Record<ContractStatus, ToneKey> = {
-  draft: "gray",
-  sent: "blue",
-  approved: "green",
-  in_progress: "amber",
-  completed: "green",
-  cancelled: "red",
-};
-
-/* ── Shared UI bits ──────────────────────────────────────────────────────── */
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  delta,
-  deltaTone = "gray",
-}: {
-  icon: typeof FileText;
-  label: string;
-  value: string;
-  delta?: string;
-  deltaTone?: ToneKey;
-}) {
-  return (
-    <div className="card p-5">
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-medium" style={{ color: "var(--text2)" }}>{label}</span>
-        <span
-          className="flex h-8 w-8 items-center justify-center rounded-lg"
-          style={{ background: ACCENT_SOFT, color: ACCENT }}
-        >
-          <Icon size={16} />
-        </span>
-      </div>
-      <p className="mt-3 font-serif text-[26px] font-medium leading-none">{value}</p>
-      {delta ? (
-        <p className="mt-2 text-xs font-semibold" style={{ color: TONE[deltaTone].fg }}>{delta}</p>
-      ) : null}
-    </div>
-  );
-}
-
-/** Mini 6-month revenue bar chart, sharing the overview's card look. */
-function RevenueChart({ bars }: { bars: { label: string; value: number }[] }) {
-  const max = Math.max(1, ...bars.map((b) => b.value));
-  return (
-    <div className="card p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 font-serif text-lg font-medium">
-          <TrendingUp size={18} style={{ color: ACCENT }} /> Doanh thu
-        </h2>
-        <span className="text-xs" style={{ color: "var(--text3)" }}>6 tháng gần nhất</span>
-      </div>
-      <div className="flex h-[170px] items-end gap-3 pt-2">
-        {bars.map((b) => (
-          <div key={b.label} className="flex h-full flex-1 flex-col items-center justify-end gap-2">
-            <span className="text-[10px] font-semibold" style={{ color: "var(--text3)" }}>
-              {b.value > 0 ? vnd(b.value).replace("₫", "").trim() : ""}
-            </span>
-            <div
-              className="w-full max-w-[42px] rounded-t-md"
-              style={{
-                height: `${Math.max(4, (b.value / max) * 100)}%`,
-                minHeight: 6,
-                background: b.value > 0 ? ACCENT : "var(--surface2)",
-              }}
-            />
-            <span className="text-[11px] font-semibold" style={{ color: "var(--text2)" }}>{b.label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import { fmtDate, fmtDayMonth, fmtDow, todayVN, daysFromToday } from "@/lib/date";
 
 /** Photographer-plan overview: bookings + upcoming shoots, no contracts/finance. */
 async function BookingOverview({ ownerId }: { ownerId: string }) {
@@ -203,7 +107,7 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {quickLinks.map((q) => (
           <Link key={q.href} href={q.href} className="card card-interactive p-5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: ACCENT_SOFT, color: ACCENT }}>
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: "var(--acS)", color: "var(--ac)" }}>
               <q.icon size={16} />
             </span>
             <p className="mt-3 font-medium">{q.label}</p>
@@ -228,7 +132,7 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
 
       <div className="card p-6">
         <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium">
-          <CalendarDays size={18} style={{ color: ACCENT }} /> Lịch chụp sắp tới
+          <CalendarDays size={18} style={{ color: "var(--ac)" }} /> Lịch chụp sắp tới
         </h2>
         <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>
           {upcoming.length > 0 ? `${upcoming.length} buổi chụp đã có ngày` : "Chưa có lịch chụp nào sắp tới"}
@@ -244,7 +148,7 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm" style={{ color: ACCENT }}>{fmtDate(b.preferred_date)}</p>
+                  <p className="text-sm" style={{ color: "var(--ac)" }}>{fmtDate(b.preferred_date)}</p>
                   {b.package_price ? <p className="text-[11px]" style={{ color: "var(--text3)" }}>{vnd(b.package_price)}</p> : null}
                 </div>
               </li>
@@ -293,7 +197,7 @@ export default async function StudioOverview() {
   let cq = supabase
     .from("studio_contracts")
     .select(
-      "id, code, title, client_name, client_phone, client_messenger, location, event_date, event_time, delivery_due, status, shoot_type, client_signed_at, updated_at, contract_items(qty, unit_price), contract_edit_requests(status), contract_payments(amount), contract_crew(id, name, phone, role, status)"
+      "id, code, title, client_name, client_phone, client_messenger, location, event_date, event_time, delivery_due, status, shoot_type, client_signed_at, selection_album_id, updated_at, contract_items(qty, unit_price), contract_edit_requests(status), contract_payments(amount), contract_crew(id, name, phone, role, status)"
     )
     .eq("owner_id", profile.id)
     .neq("status", "cancelled");
@@ -304,10 +208,7 @@ export default async function StudioOverview() {
     { data: planRows },
     { data: payMonth },
     { data: paySixMonths },
-    { count: newBookings },
-    { count: bookingsAll },
     { data: recentQuotes },
-    { count: selectingAlbums },
   ] = await Promise.all([
     cq.order("event_date", { ascending: true, nullsFirst: false }),
     supabase
@@ -328,22 +229,12 @@ export default async function StudioOverview() {
       .select("amount, paid_at, contract:studio_contracts!inner(owner_id)")
       .eq("contract.owner_id", profile.id)
       .gte("paid_at", chartStart),
-    supabase.from("studio_bookings").select("id", { count: "exact", head: true }).eq("owner_id", profile.id).eq("status", "new"),
-    supabase.from("studio_bookings").select("id", { count: "exact", head: true }).eq("owner_id", profile.id),
     supabase
       .from("studio_quotes")
       .select("id, code, title, client_name, client_phone, status, created_at, quote_items(qty, unit_price, selected, is_optional, is_discount)")
       .eq("owner_id", profile.id)
       .order("created_at", { ascending: false })
-      .limit(5),
-    // Published albums in the selection phase = clients are picking their photos.
-    supabase
-      .from("albums")
-      .select("id", { count: "exact", head: true })
-      .eq("owner_id", profile.id)
-      .eq("phase", "selection")
-      .eq("status", "published")
-      .eq("is_gallery", false),
+      .limit(8),
   ]);
 
   type CrewLite = { id: string; name: string; phone: string | null; role: CrewRole; status: string };
@@ -361,6 +252,7 @@ export default async function StudioOverview() {
     status: ContractStatus;
     shoot_type: keyof typeof SHOOT_TYPE_LABEL;
     client_signed_at: string | null;
+    selection_album_id: string | null;
     updated_at: string;
     contract_items: { qty: number; unit_price: number }[];
     contract_edit_requests: { status: string }[];
@@ -368,22 +260,13 @@ export default async function StudioOverview() {
     contract_crew: CrewLite[];
   }>;
 
-  const active = list.filter((c) => c.status !== "cancelled" && c.status !== "completed");
   const upcoming = list
     // Lịch chụp sắp tới chỉ tính hợp đồng đã xác nhận/ký (bỏ nháp & mới gửi).
     .filter((c) => c.event_date && c.event_date >= today && ["approved", "in_progress", "completed"].includes(c.status))
     .slice(0, 6);
-  // Hợp đồng đang chờ xử lý: nháp / đã gửi nhưng khách chưa ký xác nhận.
-  const pending = list
-    .filter((c) => c.status === "draft" || c.status === "sent")
-    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
-    .slice(0, 6);
-  const totalValue = list
-    .filter((c) => c.status !== "cancelled")
-    .reduce((s, c) => s + contractTotal(c.contract_items || []), 0);
-  const openRequests = list.reduce(
-    (s, c) => s + (c.contract_edit_requests || []).filter((r) => r.status === "open").length,
-    0
+  // Yêu cầu sửa khách gửi mà chưa xử lý xong.
+  const openEdits = list.flatMap((c) =>
+    (c.contract_edit_requests || []).filter((r) => r.status === "open").map(() => c)
   );
 
   // Outstanding debts: active contracts where collected < total.
@@ -416,17 +299,18 @@ export default async function StudioOverview() {
     contract: { id: string; title: string } | null;
   }>);
 
-  // ── KPIs ──────────────────────────────────────────────────────
+  // ── Số liệu KPI ───────────────────────────────────────────────
   const revenueMonth = sumAmounts((payMonth ?? []) as unknown as { amount: number }[]);
   const notCancelled = list.filter((c) => c.status !== "cancelled");
-  const avgValue = notCancelled.length ? Math.round(totalValue / notCancelled.length) : 0;
-  const uniqueClients = new Set(
-    notCancelled.map((c) => (c.client_phone || "").replace(/\D/g, "") || (c.client_name || "").trim().toLowerCase()).filter(Boolean)
-  ).size;
-  // Rough close rate: contracts vs total booking requests received.
-  const closeRate = bookingsAll ? Math.min(100, Math.round((notCancelled.length / bookingsAll) * 100)) : null;
 
-  // ── 6-month revenue chart: bucket payments by YYYY-MM ─────────────
+  const yesterday = new Date(new Date(today).getTime() - 86400000).toISOString().slice(0, 10);
+  const todayJobs = notCancelled
+    .filter((c) => c.event_date === today)
+    .sort((a, b) => (a.event_time || "").localeCompare(b.event_time || ""));
+  const yesterdayJobs = notCancelled.filter((c) => c.event_date === yesterday).length;
+  const jobsDelta = todayJobs.length - yesterdayJobs;
+
+  // 6 tháng doanh thu — gom tiền đã thu theo YYYY-MM.
   const sixMonthPays = (paySixMonths ?? []) as unknown as { amount: number; paid_at: string }[];
   const revBars = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
@@ -434,359 +318,371 @@ export default async function StudioOverview() {
     const value = sixMonthPays
       .filter((p) => (p.paid_at || "").slice(0, 7) === key)
       .reduce((s, p) => s + (p.amount || 0), 0);
-    return { label: String(d.getMonth() + 1).padStart(2, "0"), value };
+    return { label: `T${d.getMonth() + 1}`, value };
   });
-  // Month-over-month revenue delta for the headline stat.
   const prevMonthRev = revBars.length >= 2 ? revBars[revBars.length - 2].value : 0;
   const revDeltaPct = prevMonthRev > 0 ? Math.round(((revenueMonth - prevMonthRev) / prevMonthRev) * 100) : null;
 
-  const stats: { icon: typeof FileText; label: string; value: string; delta?: string; deltaTone?: ToneKey }[] = [
+  const overdueDebts = debts.filter((d) => d.c.event_date && d.c.event_date < today);
+
+  // ── Hàng đợi "Cần xử lý ngay" (tính năng mới số 1) ────────────────────
+  // Mỗi dòng là một việc CÓ THẬT đang treo, kèm nút hành động tại chỗ. Làm xong
+  // là dòng tự biến mất vì nó sinh ra từ chính dữ liệu, không phải danh sách tay.
+  type Urgent = {
+    key: string; icon: typeof FileText; tone: ToneKey;
+    title: string; sub: string; tag: string; cta: string; href: string;
+    action?: React.ReactNode;
+  };
+  const urgent: Urgent[] = [];
+
+  // 1. Buổi chụp trong 3 ngày tới chưa có ai nhận.
+  for (const c of notCancelled) {
+    if (!c.event_date || c.event_date < today) continue;
+    const left = daysFromToday(c.event_date);
+    if (left == null || left > 3) continue;
+    if ((c.contract_crew || []).length > 0) continue;
+    if (c.status === "draft") continue;
+    urgent.push({
+      key: `crew-${c.id}`, icon: UserPlus, tone: "red",
+      title: `${c.title} chưa có nhân sự`,
+      sub: `${fmtDow(c.event_date)} ${fmtDate(c.event_date)}${c.event_time ? ` · ${c.event_time}` : ""} · ${c.client_name || "khách chưa đặt tên"}`,
+      tag: "Phân công", cta: "Phân công", href: `/dashboard/studio/contracts/${c.id}`,
+    });
+  }
+
+  // 2. Đợt thu đã quá hạn.
+  for (const d of duePlan.filter((x) => x.due_date < today)) {
+    urgent.push({
+      key: `plan-${d.id}`, icon: Banknote, tone: "red",
+      title: `Quá hạn thu: ${d.contract?.title || "hợp đồng"}`,
+      sub: `${d.label} · ${vnd(d.amount)} · hạn ${fmtDate(d.due_date)}`,
+      tag: "Công nợ", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${d.contract?.id ?? ""}`,
+      action: <VietQRButton bank={bank} amount={d.amount} addInfo={(d.contract?.title || "").slice(0, 25)} label="QR" />,
+    });
+  }
+
+  // 3. Trễ cam kết giao ảnh.
+  for (const c of lateDeliveries) {
+    const late = Math.abs(daysFromToday(c.delivery_due) ?? 0);
+    urgent.push({
+      key: `late-${c.id}`, icon: Clock, tone: "red",
+      title: `Trễ cam kết giao ảnh: ${c.title}`,
+      sub: `${c.client_name || "—"} · hạn ${fmtDate(c.delivery_due)} · quá ${late} ngày`,
+      tag: "Cam kết", cta: "Giao ngay", href: `/dashboard/studio/contracts/${c.id}`,
+    });
+  }
+
+  // 4. Đã chụp xong nhưng chưa tạo album chọn ảnh.
+  for (const c of notCancelled) {
+    if (!c.event_date || c.event_date >= today) continue;
+    if (c.status !== "approved" && c.status !== "in_progress") continue;
+    if (c.selection_album_id) continue;
+    urgent.push({
+      key: `album-${c.id}`, icon: ImagePlus, tone: "blue",
+      title: `${c.title} đã chụp xong — chưa có album chọn ảnh`,
+      sub: `${c.client_name || "—"} · chụp ${fmtDate(c.event_date)}${c.delivery_due ? ` · hạn giao ${fmtDate(c.delivery_due)}` : ""}`,
+      tag: "Album", cta: "Tạo album", href: `/dashboard/studio/contracts/${c.id}`,
+    });
+  }
+
+  // 5. Hợp đồng đã gửi, khách chưa ký.
+  for (const { c, days } of unsigned.filter((u) => u.days >= 1)) {
+    urgent.push({
+      key: `sign-${c.id}`, icon: PenLine, tone: "amber",
+      title: `${c.title} chưa được ký`,
+      sub: `${c.client_name || "—"} · đã gửi ${days} ngày trước`,
+      tag: "Hợp đồng", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${c.id}`,
+      action: (
+        <MessengerButton
+          link={c.client_messenger}
+          label="Nhắc khách"
+          message={`Xin chào ${c.client_name || "anh/chị"}, studio gửi lại hợp đồng "${c.title}" để anh/chị xem & ký xác nhận giúp em nhé. Cảm ơn ạ!`}
+        />
+      ),
+    });
+  }
+
+  // 6. Báo giá khách chưa phản hồi quá 2 ngày.
+  const quoteRows = (recentQuotes ?? []) as Array<{
+    id: string; code: string | null; title: string | null; client_name: string | null;
+    client_phone: string | null; status: QuoteStatus; created_at: string;
+    quote_items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount?: boolean }[];
+  }>;
+  for (const q of quoteRows) {
+    if (q.status !== "sent" && q.status !== "viewed" && q.status !== "adjust_requested") continue;
+    const days = Math.floor((Date.now() - new Date(q.created_at).getTime()) / 86400000);
+    if (days < 2) continue;
+    urgent.push({
+      key: `quote-${q.id}`, icon: ReceiptText, tone: "amber",
+      title: `Báo giá "${q.title || q.code || "chưa đặt tên"}" khách chưa chốt`,
+      sub: `${q.client_name || "—"} · ${vnd(quoteSelectedTotal(q.quote_items || []))} · gửi ${days} ngày trước`,
+      tag: "Báo giá", cta: "Mở báo giá", href: `/dashboard/studio/quotes/${q.id}`,
+    });
+  }
+
+  // 7. Khách gửi yêu cầu sửa chưa xử lý.
+  for (const c of openEdits) {
+    urgent.push({
+      key: `edit-${c.id}`, icon: CircleAlert, tone: "amber",
+      title: `Khách yêu cầu sửa: ${c.title}`,
+      sub: `${c.client_name || "—"} · yêu cầu đang mở`,
+      tag: "Yêu cầu sửa", cta: "Xem yêu cầu", href: `/dashboard/studio/contracts/${c.id}`,
+    });
+  }
+
+  // 8. Thợ chưa nhận job.
+  for (const { c, cr } of pendingCrew) {
+    urgent.push({
+      key: `pcrew-${cr.id}`, icon: Users, tone: "blue",
+      title: `${cr.name || cr.phone || "Thợ"} chưa phản hồi lời mời`,
+      sub: `${CREW_ROLE_LABEL[cr.role]} · ${c.title}${c.event_date ? ` · ${fmtDate(c.event_date)}` : ""}`,
+      tag: "Nhân sự", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${c.id}`,
+      action: (
+        <MessengerButton
+          label="Nhắc thợ"
+          message={shootReminderMessage({ name: cr.name, title: c.title, date: c.event_date, time: c.event_time, location: c.location, role: CREW_ROLE_LABEL[cr.role], link: crewPortal })}
+        />
+      ),
+    });
+  }
+
+  const SEVERITY: Record<string, number> = { red: 0, amber: 1, blue: 2, purple: 3, brand: 4, green: 5, gray: 6 };
+  urgent.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
+  const urgentTop = urgent.slice(0, 6);
+
+  // ── Cảnh báo dồn lịch (tính năng mới số 6) ────────────────────────────
+  // Một ngày ≥3 buổi, hoặc một người nhận ≥4 ngày trong 7 ngày tới.
+  const warns: { key: string; icon: typeof FileText; tone: ToneKey; title: string; sub: string }[] = [];
+  const byDay = new Map<string, number>();
+  for (const c of notCancelled) {
+    if (!c.event_date || c.event_date < today) continue;
+    const left = daysFromToday(c.event_date);
+    if (left == null || left > 14) continue;
+    byDay.set(c.event_date, (byDay.get(c.event_date) ?? 0) + 1);
+  }
+  for (const [date, n] of [...byDay.entries()].sort()) {
+    if (n < 3) continue;
+    warns.push({
+      key: `day-${date}`, icon: CalendarRange, tone: "amber",
+      title: `${fmtDow(date)} ${fmtDate(date)} có ${n} buổi chụp`,
+      sub: "Kiểm tra nhân sự và thiết bị trước khi nhận thêm job vào ngày này.",
+    });
+  }
+  const byPerson = new Map<string, { name: string; days: Set<string> }>();
+  for (const c of notCancelled) {
+    if (!c.event_date || c.event_date < today) continue;
+    const left = daysFromToday(c.event_date);
+    if (left == null || left > 7) continue;
+    for (const cr of c.contract_crew || []) {
+      if (cr.status === "declined") continue;
+      const k = (cr.phone || cr.name || cr.id).trim();
+      const cur = byPerson.get(k) ?? { name: cr.name || cr.phone || "Nhân sự", days: new Set<string>() };
+      cur.days.add(c.event_date);
+      byPerson.set(k, cur);
+    }
+  }
+  for (const { name, days } of byPerson.values()) {
+    if (days.size < 4) continue;
+    warns.push({
+      key: `person-${name}`, icon: CircleAlert, tone: "red",
+      title: `${name} nhận ${days.size} ngày trong tuần này`,
+      sub: "Quá tải dễ trễ hậu kỳ — cân nhắc chia bớt cho người khác.",
+    });
+  }
+  const warnTop = warns.slice(0, 3);
+
+  // ── Cam kết giao ảnh (tính năng mới số 5) ─────────────────────────────
+  const slaRows = notCancelled
+    .filter((c) => c.delivery_due && c.status !== "completed")
+    .map((c) => ({ c, left: daysFromToday(c.delivery_due) ?? 0 }))
+    .sort((a, b) => a.left - b.left)
+    .slice(0, 6);
+  const slaLate = slaRows.filter((r) => r.left < 0).length;
+
+  const stats: { icon: typeof FileText; tone: ToneKey; label: string; value: string; sub?: string; delta?: string; deltaTone?: ToneKey }[] = [
     {
-      icon: Wallet,
-      label: "Doanh thu tháng này",
-      value: vnd(revenueMonth),
-      delta: revDeltaPct != null ? `${revDeltaPct >= 0 ? "+" : ""}${revDeltaPct}% so với tháng trước` : undefined,
+      icon: CalendarCheck, tone: "brand", label: "Buổi chụp hôm nay",
+      value: String(todayJobs.length), sub: "so với hôm qua",
+      delta: jobsDelta === 0 ? "= hôm qua" : `${jobsDelta > 0 ? "▲" : "▼"} ${Math.abs(jobsDelta)}`,
+      deltaTone: jobsDelta >= 0 ? "green" : "red",
+    },
+    {
+      icon: TrendingUp, tone: "green", label: `Doanh thu tháng ${new Date(today).getMonth() + 1}`,
+      value: vndShort(revenueMonth), sub: `${notCancelled.length} hợp đồng đang có`,
+      delta: revDeltaPct != null ? `${revDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(revDeltaPct)}%` : undefined,
       deltaTone: (revDeltaPct ?? 0) >= 0 ? "green" : "red",
     },
-    { icon: FileText, label: "Hợp đồng đang hoạt động", value: String(active.length), delta: `${notCancelled.length} tổng hợp đồng`, deltaTone: "gray" },
-    { icon: Images, label: "Album đang được khách chọn", value: String(selectingAlbums ?? 0), delta: (selectingAlbums ?? 0) > 0 ? "khách đang chọn ảnh" : undefined, deltaTone: "amber" },
-    { icon: CalendarDays, label: "Lịch sắp tới", value: String(upcoming.length), delta: `${uniqueClients} khách hàng`, deltaTone: "gray" },
     {
-      icon: AlertCircle,
-      label: "Yêu cầu sửa đang chờ",
-      value: String(openRequests),
-      delta: openRequests > 0 ? "cần xử lý" : "không có",
-      deltaTone: openRequests > 0 ? "amber" : "gray",
+      icon: Hourglass, tone: "amber", label: "Việc đang chờ bạn",
+      value: String(urgent.length), sub: "báo giá, cọc, phân công, giao ảnh",
+      delta: urgent.length > 0 ? "cần xử lý" : "sạch việc", deltaTone: urgent.length > 0 ? "amber" : "green",
+    },
+    {
+      icon: Landmark, tone: "red", label: "Công nợ khách",
+      value: vndShort(totalDue), sub: `trên ${debts.length} hợp đồng`,
+      delta: overdueDebts.length > 0 ? `${overdueDebts.length} quá hạn` : undefined, deltaTone: "red",
     },
   ];
 
-  const kpis = [
-    { label: "Giá trị HĐ trung bình", value: vnd(avgValue) },
-    { label: "Công nợ cần thu", value: vnd(totalDue) },
-    closeRate != null
-      ? { label: "Tỉ lệ chốt (HĐ/đặt lịch)", value: `${closeRate}%` }
-      : { label: "Đặt lịch mới", value: String(newBookings ?? 0) },
-  ];
+  const hour = Number(new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(11, 13));
+  const greeting = hour < 11 ? "Chào buổi sáng" : hour < 14 ? "Chào buổi trưa" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+  const firstName = (profile.full_name || "").trim().split(/\s+/).pop() || "bạn";
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-1 flex items-center gap-3">
-        <h1 className="font-serif text-2xl font-medium">Tổng quan</h1>
-        <Link href="/dashboard/site" className="btn-ghost ml-auto hidden sm:inline-flex">
-          <Globe size={16} /> Website riêng
-        </Link>
-        <Link href="/dashboard/studio/contracts/new" className="btn-primary hidden sm:inline-flex">
-          <Plus size={16} /> Hợp đồng mới
-        </Link>
+    <div className="page-in flex flex-col gap-3.5">
+      {/* ── Lời chào + hành động chính ───────────────────────────────── */}
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="min-w-[260px] flex-1">
+          <h1 className="text-[24px] font-bold" style={{ letterSpacing: "-.6px" }}>{greeting}, {firstName}</h1>
+          <p className="mt-1 text-[13px]" style={{ color: "var(--tx2)" }}>
+            Hôm nay {fmtDow(today)} · {fmtDate(today)} — studio có {todayJobs.length} buổi chụp, {urgent.length} việc cần xử lý.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/dashboard/studio/quotes/new"
+            className="flex items-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-semibold"
+            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+          >
+            <ReceiptText size={17} /> Báo giá mới
+          </Link>
+          <Link
+            href="/dashboard/studio/contracts/new"
+            className="flex items-center gap-1.5 rounded-[10px] px-[15px] py-2.5 text-[13px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff", boxShadow: "0 2px 8px color-mix(in srgb, var(--ac) 30%, transparent)" }}
+          >
+            <Plus size={17} /> Hợp đồng mới
+          </Link>
+        </div>
       </div>
-      <p className="mb-4 text-[13px]" style={{ color: "var(--text3)" }}>Tổng quan hoạt động studio</p>
 
-      {/* Thông báo giao diện 2.0 — điểm nhấn: toàn bộ giao diện được làm mới */}
       <WebappV2BannerSlot />
 
-      {/* Mobile quick actions — prominent tappable shortcuts */}
-      <div className="mb-5 grid grid-cols-3 gap-3 sm:hidden">
-        <Link
-          href="/dashboard/studio/contracts/new"
-          className="flex flex-col items-center gap-2 rounded-2xl py-4 text-center text-xs font-bold"
-          style={{ background: "var(--brand)", color: "var(--brandFg)" }}
-        >
-          <Plus size={22} />
-          Tạo HĐ
-        </Link>
-        <Link
-          href="/dashboard/studio/bookings"
-          className="flex flex-col items-center gap-2 rounded-2xl py-4 text-center text-xs font-bold"
-          style={{ background: "var(--surface2)", color: "var(--text)" }}
-        >
-          <Clock size={22} />
-          Đặt lịch
-        </Link>
-        <Link
-          href="/dashboard/studio/calendar"
-          className="flex flex-col items-center gap-2 rounded-2xl py-4 text-center text-xs font-bold"
-          style={{ background: "var(--surface2)", color: "var(--text)" }}
-        >
-          <CalendarDays size={22} />
-          Lịch chụp
-        </Link>
+      {/* ── 4 thẻ KPI ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">
+        {stats.map((s) => <StatCard key={s.label} {...s} />)}
       </div>
 
-      {/* Stat cards — 1 col on mobile, 2 on sm, 4 on lg */}
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s) => (
-          <StatCard key={s.label} {...s} />
-        ))}
-      </div>
-
-      {/* Secondary KPIs — horizontal scroll on mobile */}
-      <div className="mb-6 flex gap-3 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
-        {kpis.map((k) => (
-          <div key={k.label} className="card shrink-0 basis-44 p-4 sm:basis-auto sm:p-5">
-            <p className="font-serif text-xl font-medium">{k.value}</p>
-            <p className="mt-1 text-xs" style={{ color: "var(--text2)" }}>{k.label}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Revenue chart + upcoming shoots */}
-      <div className="mb-6 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-        <RevenueChart bars={revBars} />
-        <div className="card p-6">
-          <h2 className="mb-4 flex items-center gap-2 font-serif text-lg font-medium">
-            <CalendarDays size={18} style={{ color: ACCENT }} /> Lịch chụp sắp tới
-          </h2>
-          {upcoming.length === 0 ? (
-            <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có lịch sắp tới.</p>
-          ) : (
-            <ul className="space-y-3">
-              {upcoming.map((c) => {
-                const d = c.event_date ? new Date(c.event_date) : null;
-                return (
-                  <li key={c.id}>
-                    <Link href={`/dashboard/studio/contracts/${c.id}`} className="flex items-center gap-3">
-                      <div
-                        className="flex h-11 w-11 flex-none flex-col items-center justify-center rounded-xl"
-                        style={{ background: "var(--surface2)" }}
-                      >
-                        <span className="text-[15px] font-bold leading-none">{d ? d.getDate() : "—"}</span>
-                        <span className="text-[10px] font-semibold" style={{ color: "var(--text3)" }}>
-                          {d ? `TH${d.getMonth() + 1}` : ""}
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[13px] font-bold">{c.title}</p>
-                        <p className="text-xs" style={{ color: "var(--text3)" }}>
-                          {(c.event_time || "—")} · {c.client_name || SHOOT_TYPE_LABEL[c.shoot_type]}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <Link href="/dashboard/studio/calendar" className="mt-4 inline-block text-xs hover:underline" style={{ color: ACCENT }}>
-            Xem lịch đầy đủ →
-          </Link>
-        </div>
-      </div>
-
-      {/* Contracts pending action (draft / sent, client not signed yet) */}
-      <div className="card mb-6 p-6">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-serif text-lg font-medium">Hợp đồng đang chờ xử lý</h2>
-          <Link href="/dashboard/studio/contracts" className="text-xs hover:underline" style={{ color: ACCENT }}>
-            Tất cả →
-          </Link>
-        </div>
-        {pending.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--text3)" }}>
-            Không có hợp đồng nào đang chờ xử lý.
-          </p>
+      {/* ── Cần xử lý ngay ────────────────────────────────────────────── */}
+      <Panel>
+        <PanelHead
+          icon={Bolt} tone="amber" title="Cần xử lý ngay"
+          count={urgent.length ? String(urgent.length) : undefined}
+          note="Xử lý xong sẽ tự biến mất khỏi danh sách"
+        />
+        {urgentTop.length === 0 ? (
+          <EmptyState icon={CalendarCheck} title="Không còn việc nào đang treo" hint="Mọi hợp đồng, cọc và lịch giao ảnh đều đang đúng hạn." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13.5px]">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>
-                  <th className="px-2 py-2.5 font-bold">Tên hợp đồng</th>
-                  <th className="px-2 py-2.5 font-bold">Khách hàng</th>
-                  <th className="px-2 py-2.5 font-bold">Loại</th>
-                  <th className="px-2 py-2.5 font-bold">Giá trị</th>
-                  <th className="px-2 py-2.5 font-bold">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pending.map((c) => (
-                  <tr key={c.id} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td className="px-2 py-3 font-bold">
-                      <Link href={`/dashboard/studio/contracts/${c.id}`} className="hover:underline">
-                        {c.title || "(chưa đặt tên)"}
-                      </Link>
-                    </td>
-                    <td className="px-2 py-3">{c.client_name || "—"}</td>
-                    <td className="px-2 py-3" style={{ color: "var(--text2)" }}>{SHOOT_TYPE_LABEL[c.shoot_type]}</td>
-                    <td className="px-2 py-3 font-bold">{vnd(contractTotal(c.contract_items || []))}</td>
-                    <td className="px-2 py-3">
-                      <span style={badgeStyle(STATUS_TONE[c.status])}>{CONTRACT_STATUS_LABEL[c.status]}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          urgentTop.map((u) => (
+            <div key={u.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
+              <span className="flex-none rounded-[10px] p-2" style={{ background: TONE[u.tone].soft, color: TONE[u.tone].fg, lineHeight: 0 }}>
+                <u.icon size={18} />
+              </span>
+              <div className="min-w-[200px] flex-1">
+                <p className="text-[13.5px] font-semibold" style={{ textWrap: "pretty" }}>{u.title}</p>
+                <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{u.sub}</p>
+              </div>
+              <Pill tone={u.tone}>{u.tag}</Pill>
+              {u.action}
+              <Link
+                href={u.href}
+                className="flex-none whitespace-nowrap rounded-[9px] px-[13px] py-[7px] text-[12px] font-semibold"
+                style={{ background: "var(--tx)", color: "var(--sf)" }}
+              >
+                {u.cta}
+              </Link>
+            </div>
+          ))
         )}
+        {urgent.length > urgentTop.length && (
+          <Link href="/dashboard/studio/contracts" className="block px-4 py-2.5 text-[12px] font-semibold" style={{ color: "var(--ac)" }}>
+            Còn {urgent.length - urgentTop.length} việc nữa →
+          </Link>
+        )}
+      </Panel>
+
+      {/* ── Cảnh báo dồn lịch ─────────────────────────────────────────── */}
+      {warnTop.length > 0 && (
+        <div className="grid gap-3 min-[1100px]:grid-cols-3">
+          {warnTop.map((w) => (
+            <div key={w.key} className="flex gap-2.5 rounded-[13px] px-[15px] py-[13px]" style={{ background: TONE[w.tone].soft, border: "1px solid var(--bd)" }}>
+              <w.icon size={18} style={{ flex: "none", marginTop: 1, color: TONE[w.tone].fg }} />
+              <div className="min-w-0">
+                <p className="text-[13px] font-bold" style={{ color: TONE[w.tone].fg }}>{w.title}</p>
+                <p className="mt-0.5 text-[11.5px] leading-[1.5]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>{w.sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Cam kết giao ảnh ──────────────────────────────────────────── */}
+      <Panel>
+        <PanelHead
+          icon={CalendarClock} tone="blue" title="Cam kết giao ảnh"
+          count={slaRows.length ? `${slaRows.length} mốc${slaLate ? ` · ${slaLate} trễ` : ""}` : undefined}
+          note="Đếm ngược theo hạn giao ghi trong từng hợp đồng"
+        />
+        {slaRows.length === 0 ? (
+          <EmptyState icon={CalendarClock} title="Chưa có mốc giao ảnh nào" hint="Đặt hạn giao trong hợp đồng để theo dõi đếm ngược ở đây." />
+        ) : (
+          slaRows.map(({ c, left }) => {
+            const tone: ToneKey = left < 0 ? "red" : left <= 3 ? "amber" : "gray";
+            const label = left < 0 ? `Trễ ${Math.abs(left)} ngày` : left === 0 ? "Hạn hôm nay" : `Còn ${left} ngày`;
+            return (
+              <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-[11px]" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                <span className="w-[104px] flex-none text-[12px] font-semibold" style={{ color: "var(--tx2)" }}>
+                  {SHOOT_TYPE_LABEL[c.shoot_type]}
+                </span>
+                <div className="min-w-[180px] flex-1">
+                  <p className="truncate text-[13px] font-semibold">{c.title}</p>
+                  <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{c.client_name || "—"}</p>
+                </div>
+                <span className="tnum flex-none text-[11.5px]" style={{ color: "var(--tx3)" }}>Hạn {fmtDate(c.delivery_due)}</span>
+                <Pill tone={tone}>{label}</Pill>
+              </Link>
+            );
+          })
+        )}
+      </Panel>
+
+      {/* ── Doanh thu + Lịch hôm nay ──────────────────────────────────── */}
+      <div className="grid gap-3.5 min-[1100px]:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+        <RevenueChart
+          bars={revBars}
+          headline={vnd(revenueMonth)}
+          delta={revDeltaPct != null ? `${revDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(revDeltaPct)}% so với tháng trước` : null}
+        />
+
+        <Panel className="flex flex-col">
+          <div className="flex items-center px-4 pb-2.5 pt-3.5">
+            <div>
+              <h2 className="text-[14px] font-bold">Lịch hôm nay</h2>
+              <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                {todayJobs.length} buổi · {upcoming.length} buổi sắp tới
+              </p>
+            </div>
+            <Link href="/dashboard/studio/calendar" className="ml-auto text-[12px] font-semibold" style={{ color: "var(--ac)" }}>Xem lịch</Link>
+          </div>
+          <div className="px-2 pb-2">
+            {(todayJobs.length ? todayJobs : upcoming).slice(0, 6).map((c) => (
+              <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-2 py-[9px] text-left">
+                <span className="tnum w-[38px] flex-none text-[11.5px] font-bold" style={{ color: "var(--tx3)" }}>
+                  {todayJobs.length ? (c.event_time || "—") : fmtDayMonth(c.event_date)}
+                </span>
+                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10.5px] font-bold" style={avatarStyle(c.client_name)}>
+                  {initials(c.client_name || c.title)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{c.title}</span>
+                <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: CONTRACT_STATUS_TONE[c.status].fg }} />
+              </Link>
+            ))}
+            {todayJobs.length === 0 && upcoming.length === 0 && (
+              <EmptyState icon={CalendarDays} title="Hôm nay không có buổi chụp" hint="Tạo hợp đồng hoặc nhận đặt lịch để lấp lịch tuần này." />
+            )}
+          </div>
+        </Panel>
       </div>
-
-      {/* Recent quotes */}
-      {recentQuotes && recentQuotes.length > 0 && (
-        <div className="card mb-6 p-6">
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="font-serif text-lg font-medium">Báo giá gần đây</h2>
-            <Link href="/dashboard/studio/quotes" className="text-xs hover:underline" style={{ color: ACCENT }}>
-              Tất cả →
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-[13.5px]">
-              <thead>
-                <tr className="text-left text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>
-                  <th className="px-2 py-2.5 font-bold">Tên báo giá</th>
-                  <th className="px-2 py-2.5 font-bold">Khách hàng</th>
-                  <th className="px-2 py-2.5 font-bold">Tổng</th>
-                  <th className="px-2 py-2.5 font-bold">Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(recentQuotes as Array<{ id: string; code: string | null; title: string | null; client_name: string | null; client_phone: string | null; status: QuoteStatus; created_at: string; quote_items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount?: boolean }[] }>).map((q) => {
-                  const total = quoteSelectedTotal(q.quote_items || []);
-                  const QUOTE_TONE: Record<string, ToneKey> = {
-                    draft: "gray", sent: "blue", viewed: "blue",
-                    adjust_requested: "amber", accepted: "green",
-                    converted: "green", expired: "gray", cancelled: "red",
-                  };
-                  return (
-                    <tr key={q.id} style={{ borderTop: "1px solid var(--border)" }}>
-                      <td className="px-2 py-3 font-bold">
-                        <Link href={`/dashboard/studio/quotes/${q.id}`} className="hover:underline">
-                          {q.title || "(chưa đặt tên)"}
-                        </Link>
-                      </td>
-                      <td className="px-2 py-3">{q.client_name || "—"}</td>
-                      <td className="px-2 py-3 font-bold">{vnd(total)}</td>
-                      <td className="px-2 py-3">
-                        <span style={badgeStyle(QUOTE_TONE[q.status] ?? "gray")}>
-                          {QUOTE_STATUS_LABEL[q.status] || q.status}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* Reminders: unsigned + debts + crew awaiting response + late deliveries + due installments */}
-      {(unsigned.length > 0 || debts.length > 0 || pendingCrew.length > 0 || lateDeliveries.length > 0 || duePlan.length > 0) && (
-        <div className="mb-8 grid gap-6 lg:grid-cols-2">
-          {unsigned.length > 0 && (
-            <div className="card p-6" style={{ borderColor: "var(--s-blueS)" }}>
-              <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: TONE.blue.fg }}>
-                <FileText size={18} /> Hợp đồng chờ khách ký
-              </h2>
-              <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>{unsigned.length} hợp đồng đã gửi nhưng chưa ký</p>
-              <ul className="space-y-2">
-                {unsigned.slice(0, 6).map(({ c, days }) => (
-                  <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                    <Link href={`/dashboard/studio/contracts/${c.id}`} className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{c.title}</p>
-                      <p className="text-[11px]" style={{ color: days >= 3 ? TONE.amber.fg : "var(--text3)" }}>
-                        {c.client_name || "—"} · đã gửi {days > 0 ? `${days} ngày trước` : "hôm nay"}
-                      </p>
-                    </Link>
-                    <MessengerButton
-                      link={c.client_messenger}
-                      label="Gửi cho khách"
-                      message={`Xin chào ${c.client_name || "anh/chị"}, studio gửi lại hợp đồng "${c.title}" để anh/chị xem & ký xác nhận giúp em nhé. Cảm ơn ạ!`}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {duePlan.length > 0 && (
-            <div className="card p-6" style={{ borderColor: "var(--s-amberS)" }}>
-              <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: TONE.amber.fg }}>
-                <Wallet size={18} /> Sắp đến hạn thu
-              </h2>
-              <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>{duePlan.length} đợt thu trong 7 ngày tới / quá hạn</p>
-              <ul className="space-y-2">
-                {duePlan.slice(0, 6).map((d) => (
-                  <li key={d.id}>
-                    <Link href={`/dashboard/studio/contracts/${d.contract?.id}`} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{d.contract?.title || "Hợp đồng"} · {d.label}</p>
-                        <p className="text-[11px]" style={{ color: d.due_date < today ? TONE.red.fg : "var(--text3)" }}>
-                          {vnd(d.amount)} · hạn {fmtDate(d.due_date)}{d.due_date < today ? " · quá hạn" : ""}
-                        </p>
-                      </div>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {lateDeliveries.length > 0 && (
-            <div className="card p-6" style={{ borderColor: "var(--s-redS)" }}>
-              <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: TONE.red.fg }}>
-                <Clock size={18} /> Trễ hạn giao ảnh
-              </h2>
-              <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>{lateDeliveries.length} hợp đồng quá hạn giao</p>
-              <ul className="space-y-2">
-                {lateDeliveries.slice(0, 6).map((c) => (
-                  <li key={c.id}>
-                    <Link href={`/dashboard/studio/contracts/${c.id}`} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                      <p className="truncate text-sm font-medium">{c.title}</p>
-                      <span className="shrink-0 text-[11px]" style={{ color: TONE.red.fg }}>hạn {fmtDate(c.delivery_due)}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {debts.length > 0 && (
-            <div className="card p-6" style={{ borderColor: "var(--s-amberS)" }}>
-              <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: TONE.amber.fg }}>
-                <Wallet size={18} /> Công nợ cần thu
-              </h2>
-              <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>Tổng còn phải thu: <b style={{ color: "var(--text)" }}>{vnd(totalDue)}</b></p>
-              <ul className="space-y-2">
-                {debts.slice(0, 6).map(({ c, due }) => (
-                  <li key={c.id} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                    <Link href={`/dashboard/studio/contracts/${c.id}`} className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{c.title}</p>
-                      <p className="text-[11px]" style={{ color: "var(--text3)" }}>{c.client_name || "—"} · còn {vnd(due)}</p>
-                    </Link>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <VietQRButton bank={bank} amount={due} addInfo={(c.code || c.title || "").slice(0, 25)} label="QR" />
-                      <MessengerButton
-                        link={c.client_messenger}
-                        label="Gửi cho khách"
-                        message={`Xin chào ${c.client_name || "anh/chị"}, studio xin nhắc khoản còn lại của hợp đồng "${c.title}" là ${vnd(due)}. Anh/chị thanh toán giúp em nhé. Cảm ơn ạ!`}
-                      />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {pendingCrew.length > 0 && (
-            <div className="card p-6" style={{ borderColor: "var(--s-blueS)" }}>
-              <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: TONE.blue.fg }}>
-                <UserCheck size={18} /> Thợ chưa phản hồi
-              </h2>
-              <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>{pendingCrew.length} lời mời đang chờ nhận/từ chối</p>
-              <ul className="space-y-2">
-                {pendingCrew.slice(0, 6).map(({ c, cr }) => (
-                  <li key={cr.id} className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                    <Link href={`/dashboard/studio/contracts/${c.id}`} className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{cr.name || cr.phone || "—"}</p>
-                      <p className="text-[11px]" style={{ color: "var(--text3)" }}>{CREW_ROLE_LABEL[cr.role]} · {c.title}</p>
-                    </Link>
-                    <MessengerButton
-                      label="Gửi cho thợ"
-                      message={shootReminderMessage({ name: cr.name, title: c.title, date: c.event_date, time: c.event_time, location: c.location, role: CREW_ROLE_LABEL[cr.role], link: crewPortal })}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
 
       {profile.actingRole !== "staff" && (
         <AutoEmailToggle ownerId={profile.id} initial={!!profile.auto_client_emails} />
