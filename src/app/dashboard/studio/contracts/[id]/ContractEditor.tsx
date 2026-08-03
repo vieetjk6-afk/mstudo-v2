@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import DateInput from "@/components/DateInput";
-import { fmtDate, fmtDateLunar } from "@/lib/date";
+import { fmtDate, fmtDateLunar, todayVN } from "@/lib/date";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -29,6 +29,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { mainUrl, studioUrl } from "@/lib/hosts";
 import MessengerButton from "@/components/MessengerButton";
+import ContractStepper, { type ContractLifecycle } from "@/components/studio/ContractStepper";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
@@ -951,6 +952,21 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
 
   const openRequests = requests.filter((r) => r.status === "open");
 
+  // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
+  const lifecycle: ContractLifecycle = {
+    hasItems: items.length > 0,
+    signed: !!contract.client_signed_at,
+    hasCrew: crew.length > 0,
+    hasDeposit: collected > 0,
+    shot:
+      f.status === "in_progress" || f.status === "completed" ||
+      (!!f.event_date && f.event_date < todayVN()),
+    postDone:
+      f.status === "completed" ||
+      (products.length > 0 && products.every((x) => x.status === "done")),
+    delivered: f.status === "completed" || !!f.gallery_album_id,
+  };
+
   return (
     <div className="animate-[vkFade_.5s_ease_both]">
       {msg && (
@@ -969,20 +985,6 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
           <h1 className="font-serif text-3xl font-medium">{f.title || "Hợp đồng"}</h1>
         </div>
         <div className="flex flex-wrap items-start gap-2">
-          <label className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text3)" }}>
-            Trạng thái
-            <select
-              className="input py-2 text-xs"
-              style={{ width: "auto" }}
-              value={f.status}
-              onChange={(e) => changeStatus(e.target.value as ContractStatus)}
-              data-testid="contract-status-select"
-            >
-              {(Object.keys(CONTRACT_STATUS_LABEL) as ContractStatus[]).map((k) => (
-                <option key={k} value={k}>{CONTRACT_STATUS_LABEL[k]}</option>
-              ))}
-            </select>
-          </label>
           <div className="flex flex-col items-end">
             <span className="flex items-center gap-1 px-3 py-2 text-xs" style={{ color: contractSaved === "saved" ? "var(--s-green)" : "var(--text3)" }}>
               {contractSaved === "saving" ? "Đang lưu…" : contractSaved === "saved" ? <><Check size={13} /> Đã lưu</> : "Tự động lưu"}
@@ -1001,6 +1003,30 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
             </button>
           )}
         </div>
+      </div>
+
+      {/* Vòng đời hợp đồng — thay ô chọn trạng thái ở đầu màn (bản thiết kế).
+          Ô chọn vẫn nằm ngay đây để đổi trạng thái enum khi cần. */}
+      <div className="mb-6">
+        <ContractStepper
+          state={lifecycle}
+          right={
+            <label className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              Trạng thái
+              <select
+                className="input py-1.5 text-[12px]"
+                style={{ width: "auto" }}
+                value={f.status}
+                onChange={(e) => changeStatus(e.target.value as ContractStatus)}
+                data-testid="contract-status-select"
+              >
+                {(Object.keys(CONTRACT_STATUS_LABEL) as ContractStatus[]).map((k) => (
+                  <option key={k} value={k}>{CONTRACT_STATUS_LABEL[k]}</option>
+                ))}
+              </select>
+            </label>
+          }
+        />
       </div>
 
       {/* Same-day scheduling warning */}

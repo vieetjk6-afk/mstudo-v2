@@ -2,19 +2,22 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Download, SlidersHorizontal, X } from "lucide-react";
+import { Plus, Search, Download, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText } from "lucide-react";
 import { useCachedJson } from "@/lib/client-cache";
+import { Panel, EmptyState } from "@/components/studio/ui";
+import { avatarColor, avatarStyle, initials } from "@/lib/avatar";
 import {
   contractTotal,
   sumAmounts,
   vnd,
   CONTRACT_STATUS_LABEL,
+  CONTRACT_STATUS_TONE,
   SHOOT_TYPE_LABEL,
   type ContractStatus,
   type ShootType,
 } from "@/lib/types";
-import { fmtDate } from "@/lib/date";
-import { filterContracts, sortContracts, splitContracts, type ContractSort } from "@/lib/contract-filter";
+import { fmtDate, fmtDow } from "@/lib/date";
+import { filterContracts, sortContracts, type ContractSort } from "@/lib/contract-filter";
 
 export type ContractRow = {
   id: string;
@@ -23,19 +26,12 @@ export type ContractRow = {
   client_name: string | null;
   client_phone: string | null;
   event_date: string | null;
+  event_time: string | null;
   status: ContractStatus;
   shoot_type: ShootType;
-  contract_items: { qty: number; unit_price: number }[];
+  contract_items: { qty: number; unit_price: number; name?: string | null }[];
   contract_payments: { amount: number }[];
-};
-
-const STATUS_TONE: Record<ContractStatus, string> = {
-  draft: "var(--text3)",
-  sent: "var(--s-amber)",
-  approved: "var(--s-green)",
-  in_progress: "var(--s-blue)",
-  completed: "var(--s-green)",
-  cancelled: "var(--s-red)",
+  contract_crew: { id: string; name: string | null; role: string; status: string }[];
 };
 
 /** Nhãn sắp xếp — nói rõ chiều để không phải đoán "gần nhất" là trước hay sau. */
@@ -47,14 +43,22 @@ const SORT_OPTIONS: [ContractSort, string][] = [
   ["code_desc", "Mã HĐ: Z → A"],
 ];
 
-/** Trạng thái chọn được ở tab "Đang thực hiện" — completed đã có tab riêng. */
-const ACTIVE_STATUSES = (Object.keys(CONTRACT_STATUS_LABEL) as ContractStatus[]).filter(
-  (k) => k !== "completed"
-);
+/** 5 tab theo bản thiết kế — lọc thẳng theo trạng thái, không gộp nhóm. */
+const TABS: [string, string][] = [
+  ["all", "Tất cả"],
+  ["sent", "Chờ duyệt"],
+  ["approved", "Đã duyệt"],
+  ["in_progress", "Đang chụp"],
+  ["completed", "Hoàn thành"],
+];
+
+/** Lưới cột của bảng — mọi cột là minmax(px, fr) nên không cột nào co vỡ chữ. */
+const COLS = "minmax(240px,2.5fr) minmax(130px,1.25fr) minmax(96px,.95fr) minmax(112px,1.05fr) minmax(136px,1.25fr) minmax(140px,1.15fr)";
+const HEADS = ["Khách / Tên job", "Dịch vụ", "Nhân sự", "Lịch chụp", "Thanh toán", "Trạng thái"];
 
 export default function ContractsListView() {
   const [q, setQ] = useState("");
-  const [status, setStatus] = useState<"all" | ContractStatus>("all");
+  const [tab, setTab] = useState<string>("all");
   const [code, setCode] = useState("");
   // Khoảng NGÀY THỰC HIỆN (event_date). Cột kiểu date → "YYYY-MM-DD", so sánh
   // chuỗi là đúng thứ tự nên không cần parse ra Date.
@@ -62,277 +66,283 @@ export default function ContractsListView() {
   const [to, setTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [sort, setSort] = useState<ContractSort>("default");
-  // HĐ đã hoàn thành tách hẳn sang tab riêng để danh sách việc đang chạy gọn lại.
-  const [tab, setTab] = useState<"active" | "completed">("active");
-  const [updating, setUpdating] = useState<string | null>(null);
 
   // Tải danh sách + cache trên máy: hiện tức thì bản đã lưu, làm mới ngầm.
-  const { data, loading, fromCache, setData } = useCachedJson<{ list: ContractRow[] }>(
+  const { data, loading, fromCache } = useCachedJson<{ list: ContractRow[] }>(
     "contracts-list",
     "/api/studio/contracts-list",
     { list: [] }
   );
   const rows = data.list;
-  const setRows = (fn: (prev: ContractRow[]) => ContractRow[]) => setData((d) => ({ list: fn(d.list) }));
   // Lần đầu chưa có cache và đang tải → hiện trạng thái tải thay vì "chưa có HĐ".
   const initialLoading = loading && !fromCache && rows.length === 0;
 
-  // Lọc chung (tìm kiếm + mã + khoảng ngày) TRƯỚC khi tách tab, để số đếm trên
-  // hai tab phản ánh đúng bộ lọc đang bật. Logic ở @/lib/contract-filter.
+  // Lọc chung (tìm kiếm + mã + khoảng ngày) TRƯỚC khi chia tab, để số đếm trên
+  // từng tab phản ánh đúng bộ lọc đang bật. Logic ở @/lib/contract-filter.
   const matched = useMemo(() => filterContracts(rows, { q, code, from, to }), [rows, q, code, from, to]);
-
-  const completedCount = useMemo(() => matched.filter((c) => c.status === "completed").length, [matched]);
-  const activeCount = matched.length - completedCount;
+  const countOf = (key: string) => (key === "all" ? matched.length : matched.filter((c) => c.status === key).length);
 
   const filtered = useMemo(
-    () => sortContracts(splitContracts(matched, tab, status), sort),
-    [matched, tab, status, sort]
+    () => sortContracts(tab === "all" ? matched : matched.filter((c) => c.status === tab), sort),
+    [matched, tab, sort]
   );
 
-  const filterCount = (code.trim() ? 1 : 0) + (from ? 1 : 0) + (to ? 1 : 0) + (status !== "all" ? 1 : 0);
+  const filterCount = (q.trim() ? 1 : 0) + (code.trim() ? 1 : 0) + (from ? 1 : 0) + (to ? 1 : 0);
 
   function clearFilters() {
+    setQ("");
     setCode("");
     setFrom("");
     setTo("");
-    setStatus("all");
-  }
-
-  async function changeStatus(id: string, next: ContractStatus, e: React.ChangeEvent<HTMLSelectElement>) {
-    e.stopPropagation();
-    setUpdating(id);
-    const prev = rows.find((r) => r.id === id)?.status;
-    // Cập nhật lạc quan ngay (ghi cả cache) → phản hồi tức thì, rồi lưu lên server.
-    setRows((p) => p.map((r) => r.id === id ? { ...r, status: next } : r));
-    // Route server tập trung: đóng dấu completed_at + tạo album giao khi hoàn thành.
-    try {
-      const res = await fetch("/api/studio/contract-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contractId: id, status: next }),
-      });
-      if (!res.ok && prev) setRows((p) => p.map((r) => r.id === id ? { ...r, status: prev } : r));
-    } catch {
-      if (prev) setRows((p) => p.map((r) => r.id === id ? { ...r, status: prev } : r));
-    }
-    setUpdating(null);
   }
 
   function exportCsv() {
-    const rows2: string[][] = [["Mã", "Tên HĐ", "Khách", "SĐT", "Trạng thái", "Ngày", "Giá trị", "Đã thu", "Còn lại"]];
+    const out: string[][] = [["Mã", "Tên HĐ", "Khách", "SĐT", "Trạng thái", "Ngày", "Giá trị", "Đã thu", "Còn lại"]];
     for (const c of filtered) {
       const total = contractTotal(c.contract_items || []);
       const collected = sumAmounts(c.contract_payments || []);
-      rows2.push([
+      out.push([
         c.code || "", c.title, c.client_name || "", c.client_phone || "",
         CONTRACT_STATUS_LABEL[c.status], c.event_date || "",
         String(total), String(collected), String(total - collected),
       ]);
     }
-    const csv = "﻿" + rows2.map((r) => r.map((x) => `"${(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = "﻿" + out.map((r) => r.map((x) => `"${(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
     const a = document.createElement("a");
     a.href = url;
     // Xuất đúng danh sách đang thấy (tab + bộ lọc), tên file theo tab để hai
     // lần xuất không ghi đè nhau.
-    a.download = tab === "completed" ? "hop-dong-hoan-thanh.csv" : "hop-dong-dang-thuc-hien.csv";
+    a.download = `hop-dong-${tab}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
 
+  const btn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
+  const btnStyle = { border: "1px solid var(--bd)", background: "var(--sf)" };
+
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <h1 className="font-serif text-2xl font-medium mr-auto">Hợp đồng</h1>
-        <Link href="/dashboard/studio/contracts/new" className="btn-primary shrink-0">
-          <Plus size={16} /> Hợp đồng mới
-        </Link>
+    <div className="page-in">
+      {/* ── Tab trạng thái + hành động ─────────────────────────────────── */}
+      <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+        <div role="tablist" aria-label="Lọc theo trạng thái" className="flex flex-wrap gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+          {TABS.map(([key, label]) => {
+            const on = tab === key;
+            return (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setTab(key)}
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+                style={{
+                  color: on ? "var(--ac)" : "var(--tx2)",
+                  background: on ? "var(--sf)" : "transparent",
+                  boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+                }}
+              >
+                {label}
+                <span className="text-[11px] font-bold opacity-75">{countOf(key)}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="ml-auto flex flex-wrap gap-2">
+          <button onClick={() => setShowFilters((v) => !v)} className={btn} style={btnStyle} aria-expanded={showFilters}>
+            <SlidersHorizontal size={16} /> Bộ lọc
+            {filterCount > 0 && (
+              <span className="rounded-full px-1.5 text-[10px] font-bold" style={{ background: "var(--acS)", color: "var(--ac)" }}>{filterCount}</span>
+            )}
+          </button>
+          <button onClick={exportCsv} className={btn} style={btnStyle}><Download size={16} /> Xuất CSV</button>
+          <Link
+            href="/dashboard/studio/contracts/new"
+            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff" }}
+          >
+            <Plus size={16} /> Hợp đồng mới
+          </Link>
+        </div>
       </div>
 
-      {rows.length > 0 && (
-        <div className="mb-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[180px] flex-1">
-              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text3)" }} />
+      {/* ── Bộ lọc ─────────────────────────────────────────────────────── */}
+      {showFilters && (
+        <Panel className="mb-3.5 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="sm:col-span-2">
+            <label className="label" htmlFor="f-q">Tìm kiếm</label>
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--tx3)" }} />
               <input
+                id="f-q"
                 className="input pl-9"
-                placeholder="Tìm tên HĐ, khách, ngày thực hiện, mã, SĐT…"
-                aria-label="Tìm hợp đồng"
+                placeholder="Tên HĐ, khách, ngày thực hiện, mã, SĐT…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
               />
             </div>
-            <select
-              className="input w-auto shrink-0 py-2 text-xs"
-              aria-label="Sắp xếp hợp đồng"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as ContractSort)}
-            >
-              {SORT_OPTIONS.map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
+          </div>
+          <div>
+            <label className="label" htmlFor="f-code">Mã hợp đồng</label>
+            <input id="f-code" className="input" placeholder="Nhập mã…" value={code} onChange={(e) => setCode(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="f-sort">Sắp xếp</label>
+            <select id="f-sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as ContractSort)}>
+              {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-            <button
-              onClick={() => setShowFilters((v) => !v)}
-              className="btn-ghost shrink-0 px-3 py-2 text-xs"
-              aria-expanded={showFilters}
-            >
-              <SlidersHorizontal size={14} /> Bộ lọc
-              {filterCount > 0 && (
-                <span
-                  className="ml-0.5 rounded-full px-1.5 text-[10px] font-semibold"
-                  style={{ background: "var(--brandSoft)", color: "var(--brand)" }}
-                >
-                  {filterCount}
-                </span>
-              )}
+          </div>
+          <div>
+            <label className="label" htmlFor="f-from">Ngày thực hiện từ</label>
+            <input id="f-from" type="date" className="input" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </div>
+          <div>
+            <label className="label" htmlFor="f-to">Đến ngày</label>
+            <input id="f-to" type="date" className="input" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          {filterCount > 0 && (
+            <button onClick={clearFilters} className={`${btn} justify-self-start`} style={btnStyle}>
+              <X size={14} /> Xoá bộ lọc
             </button>
-            <button onClick={exportCsv} className="btn-ghost shrink-0 px-3 py-2 text-xs"><Download size={14} /> CSV</button>
-          </div>
-
-          {showFilters && (
-            <div className="card grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div>
-                <label className="label" htmlFor="f-code">Mã hợp đồng</label>
-                <input
-                  id="f-code"
-                  className="input"
-                  placeholder="Nhập mã…"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="label" htmlFor="f-status">Trạng thái</label>
-                <select
-                  id="f-status"
-                  className="input"
-                  value={tab === "completed" ? "completed" : status}
-                  disabled={tab === "completed"}
-                  onChange={(e) => setStatus(e.target.value as "all" | ContractStatus)}
-                >
-                  {tab === "completed" ? (
-                    <option value="completed">{CONTRACT_STATUS_LABEL.completed}</option>
-                  ) : (
-                    <>
-                      <option value="all">Tất cả</option>
-                      {ACTIVE_STATUSES.map((k) => (
-                        <option key={k} value={k}>{CONTRACT_STATUS_LABEL[k]}</option>
-                      ))}
-                    </>
-                  )}
-                </select>
-              </div>
-              <div>
-                <label className="label" htmlFor="f-from">Ngày thực hiện từ</label>
-                <input id="f-from" type="date" className="input" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
-              </div>
-              <div>
-                <label className="label" htmlFor="f-to">Đến ngày</label>
-                <input id="f-to" type="date" className="input" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
-              </div>
-              {filterCount > 0 && (
-                <button onClick={clearFilters} className="btn-ghost justify-self-start px-3 py-2 text-xs sm:col-span-2 lg:col-span-4">
-                  <X size={14} /> Xoá bộ lọc
-                </button>
-              )}
-            </div>
           )}
-
-          {/* Tách HĐ đã hoàn thành sang tab riêng. Số đếm theo bộ lọc đang bật. */}
-          <div role="tablist" aria-label="Nhóm hợp đồng" className="flex flex-wrap gap-2">
-            {([
-              ["active", "Đang thực hiện", activeCount],
-              ["completed", "Đã hoàn thành", completedCount],
-            ] as const).map(([key, label, count]) => (
-              <button
-                key={key}
-                role="tab"
-                aria-selected={tab === key}
-                onClick={() => { setTab(key); setStatus("all"); }}
-                className="rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors"
-                style={
-                  tab === key
-                    ? { background: "var(--brand)", color: "var(--brandFg, #fff)" }
-                    : { background: "var(--surface2)", color: "var(--text2)" }
-                }
-              >
-                {label} ({count})
-              </button>
-            ))}
-          </div>
-        </div>
+        </Panel>
       )}
 
-      {initialLoading ? (
-        <div className="card py-16 text-center text-sm" style={{ color: "var(--text3)" }}>Đang tải hợp đồng…</div>
-      ) : rows.length === 0 ? (
-        <div className="card flex flex-col items-center justify-center py-20 text-center">
-          <p style={{ color: "var(--text2)" }}>Chưa có hợp đồng nào.</p>
-          <Link href="/dashboard/studio/contracts/new" className="btn-ghost mt-4">
-            <Plus size={16} /> Tạo hợp đồng
-          </Link>
+      {/* ── Bảng hợp đồng ──────────────────────────────────────────────
+          Thẻ bao PHẢI overflow-x:auto: bảng rộng tối thiểu 1120px, dưới
+          1240px là cuộn ngang chứ không được cắt mất cột. */}
+      <Panel className="overflow-x-auto">
+        <div
+          className="grid gap-3.5 px-[18px] py-2.5"
+          style={{ gridTemplateColumns: COLS, minWidth: 1120, background: "var(--sf2)", borderBottom: "1px solid var(--bd)" }}
+        >
+          {HEADS.map((h) => (
+            <span key={h} className="text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>{h}</span>
+          ))}
         </div>
-      ) : filtered.length === 0 ? (
-        <div className="card py-16 text-center text-sm" style={{ color: "var(--text3)" }}>
-          {/* Nói rõ trống vì chưa có HĐ trong nhóm hay vì bộ lọc — không thì
-              studio tưởng mất dữ liệu. */}
-          {q.trim() || filterCount > 0
-            ? "Không tìm thấy hợp đồng phù hợp với tìm kiếm / bộ lọc."
-            : tab === "completed"
-              ? "Chưa có hợp đồng nào hoàn thành."
-              : "Tất cả hợp đồng đã hoàn thành — xem ở tab “Đã hoàn thành”."}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filtered.map((c) => {
+
+        {initialLoading ? (
+          <div className="px-5 py-14 text-center text-[13px]" style={{ color: "var(--tx3)" }}>Đang tải hợp đồng…</div>
+        ) : filtered.length === 0 ? (
+          rows.length === 0 ? (
+            <EmptyState icon={FileText} title="Chưa có hợp đồng nào" hint="Tạo hợp đồng đầu tiên để theo dõi lịch chụp, nhân sự và thanh toán." />
+          ) : (
+            <EmptyState icon={Search} title="Không có hợp đồng nào khớp" hint="Thử bỏ bớt bộ lọc hoặc chuyển sang tab khác." />
+          )
+        ) : (
+          filtered.map((c) => {
             const total = contractTotal(c.contract_items || []);
             const collected = sumAmounts(c.contract_payments || []);
+            const pct = total > 0 ? Math.min(100, Math.round((collected / total) * 100)) : 0;
+            const payTone = collected >= total && total > 0 ? "var(--gn)" : collected > 0 ? "var(--ac)" : "var(--am)";
+            const payLabel = total > 0 && collected >= total ? "Đã thanh toán đủ" : collected > 0 ? `Đã trả ${vnd(collected)}` : "Chưa thanh toán";
+            const crew = (c.contract_crew || []).filter((x) => x.status !== "declined");
+            const svc = c.contract_items?.[0]?.name?.trim();
+            const st = CONTRACT_STATUS_TONE[c.status];
             return (
-              <div key={c.id} className="card p-4 transition-colors hover:bg-[var(--surface2)]">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Link href={`/dashboard/studio/contracts/${c.id}`} className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      {c.code && <span className="text-[11px]" style={{ color: "var(--text3)" }}>{c.code}</span>}
-                    </div>
-                    <p className="mt-0.5 truncate font-serif text-lg font-medium">{c.title}</p>
-                    <p className="text-xs" style={{ color: "var(--text3)" }}>
-                      {c.client_name || "Chưa có khách"} · {SHOOT_TYPE_LABEL[c.shoot_type]}
-                      {c.event_date ? ` · ${fmtDate(c.event_date)}` : ""}
+              <Link
+                key={c.id}
+                href={`/dashboard/studio/contracts/${c.id}`}
+                className="nav-item grid items-center gap-3.5 px-[18px] py-[13px]"
+                style={{ gridTemplateColumns: COLS, minWidth: 1120, borderBottom: "1px solid var(--bd2)" }}
+              >
+                {/* Khách / tên job */}
+                <div className="flex min-w-0 items-center gap-[11px]">
+                  <span className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full text-[11px] font-bold" style={avatarStyle(c.client_name || c.title)}>
+                    {initials(c.client_name || c.title)}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[13.5px] font-semibold">{c.title}</p>
+                    <p className="mt-px truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                      {[c.code, c.client_name, c.client_phone].filter(Boolean).join(" · ") || "—"}
                     </p>
-                  </Link>
-                  <div className="flex flex-col items-end gap-2">
-                    <div className="text-right">
-                      <p className="font-serif text-base font-medium">{vnd(total)}</p>
-                      <p className="text-xs" style={{ color: "var(--text3)" }}>
-                        Đã thu {vnd(collected)} · Còn {vnd(total - collected)}
-                      </p>
-                    </div>
-                    <select
-                      className="input py-1.5 text-xs"
-                      aria-label="Đổi trạng thái hợp đồng"
-                      style={{
-                        width: "auto",
-                        color: STATUS_TONE[c.status],
-                        opacity: updating === c.id ? 0.5 : 1,
-                      }}
-                      value={c.status}
-                      disabled={updating === c.id}
-                      onClick={(e) => e.stopPropagation()}
-                      onChange={(e) => changeStatus(c.id, e.target.value as ContractStatus, e)}
-                    >
-                      {(Object.keys(CONTRACT_STATUS_LABEL) as ContractStatus[]).map((k) => (
-                        <option key={k} value={k}>{CONTRACT_STATUS_LABEL[k]}</option>
-                      ))}
-                    </select>
                   </div>
                 </div>
-              </div>
+
+                {/* Dịch vụ */}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-[7px]">
+                    <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: svc ? "var(--ac)" : "var(--bl)" }} />
+                    <span className="truncate text-[12.5px] font-medium">{svc || SHOOT_TYPE_LABEL[c.shoot_type]}</span>
+                  </div>
+                  <p className="ml-[13px] mt-px text-[11px]" style={{ color: "var(--tx3)" }}>
+                    {svc ? SHOOT_TYPE_LABEL[c.shoot_type] : "Chưa có hạng mục"}
+                  </p>
+                </div>
+
+                {/* Nhân sự — chồng avatar, chưa ai thì nút "Phân công" viền đứt */}
+                <div>
+                  {crew.length > 0 ? (
+                    <div className="flex">
+                      {crew.slice(0, 3).map((p) => (
+                        <span
+                          key={p.id}
+                          title={p.name || ""}
+                          className="-ml-[7px] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[9.5px] font-bold text-white first:ml-0"
+                          style={{ background: avatarColor(p.name), border: "2px solid var(--sf)" }}
+                        >
+                          {initials(p.name)}
+                        </span>
+                      ))}
+                      {crew.length > 3 && (
+                        <span className="-ml-[7px] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[9.5px] font-bold" style={{ background: "var(--sf2)", color: "var(--tx2)", border: "2px solid var(--sf)" }}>
+                          +{crew.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <span
+                      className="inline-flex items-center gap-1 whitespace-nowrap rounded-[20px] px-[9px] py-1 text-[11px] font-semibold"
+                      style={{ border: "1px dashed var(--am)", color: "var(--am)", background: "var(--amS)" }}
+                    >
+                      <UserPlus size={13} /> Phân công
+                    </span>
+                  )}
+                </div>
+
+                {/* Lịch chụp */}
+                <div>
+                  <div className="flex items-center gap-1.5 whitespace-nowrap text-[12.5px] font-semibold">
+                    <CalendarDays size={14} style={{ flex: "none", color: "var(--tx3)" }} />
+                    {c.event_date ? `${fmtDow(c.event_date)} · ${fmtDate(c.event_date)}` : "Chưa có ngày"}
+                  </div>
+                  <div className="mt-0.5 flex items-center gap-1.5 whitespace-nowrap text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                    <Clock size={13} style={{ flex: "none" }} />
+                    {c.event_time || "Chưa có giờ"}
+                  </div>
+                </div>
+
+                {/* Thanh toán */}
+                <div>
+                  <p className="tnum whitespace-nowrap text-[13.5px] font-bold" style={{ letterSpacing: "-.2px" }}>{vnd(total)}</p>
+                  <div className="my-[5px] h-[3px] overflow-hidden rounded-[3px]" style={{ background: "var(--bd2)" }}>
+                    <div className="h-full rounded-[3px]" style={{ width: `${pct}%`, background: payTone }} />
+                  </div>
+                  <p className="text-[11px] font-semibold" style={{ color: payTone }}>{payLabel}</p>
+                </div>
+
+                {/* Trạng thái */}
+                <div>
+                  <span
+                    className="inline-flex flex-none items-center gap-1.5 whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-[11.5px] font-semibold"
+                    style={{ background: st.bg, color: st.fg }}
+                  >
+                    <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: st.fg }} />
+                    {CONTRACT_STATUS_LABEL[c.status]}
+                  </span>
+                </div>
+              </Link>
             );
-          })}
-        </div>
+          })
+        )}
+      </Panel>
+
+      {filtered.length > 0 && (
+        <p className="mt-2.5 px-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+          {filtered.length} hợp đồng · tổng {vnd(filtered.reduce((s, c) => s + contractTotal(c.contract_items || []), 0))}
+          {" · "}đã thu {vnd(filtered.reduce((s, c) => s + sumAmounts(c.contract_payments || []), 0))}
+        </p>
       )}
     </div>
   );
 }
-
