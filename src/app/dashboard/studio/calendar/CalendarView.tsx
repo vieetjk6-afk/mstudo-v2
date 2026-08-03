@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { fmtDate, todayVN } from "@/lib/date";
+import { fmtDate, fmtDow, fmtDayMonth, todayVN } from "@/lib/date";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Bell, BellOff, Camera, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, Bell, BellOff, Camera, CalendarDays, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import MessengerButton from "@/components/MessengerButton";
 import { shootReminderMessage } from "@/lib/zalo";
-import { SHOOT_TYPE_LABEL, type StudioEvent, type ShootType } from "@/lib/types";
+import { Panel, EmptyState } from "@/components/studio/ui";
+import { avatarColor, initials } from "@/lib/avatar";
+import { SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, type StudioEvent, type ShootType, type ContractStatus } from "@/lib/types";
 import { lunarCellLabel, lunarFull } from "@/lib/lunar";
 
 export type ContractMarker = {
@@ -22,7 +24,7 @@ export type ContractMarker = {
   shoot_type: ShootType;
   calendar_color: string | null;
   contract_items: { name: string; qty: number }[];
-  contract_crew: { id: string }[];
+  contract_crew: { id: string; name: string | null; role: string; status: string }[];
 };
 
 /** Mốc thời gian (studio_events) kèm thông tin HỢP ĐỒNG CHÍNH (nếu có). */
@@ -99,7 +101,9 @@ export default function CalendarView({
   const [events, setEvents] = useState<EventRow[]>(initialEvents);
   const [contractList, setContractList] = useState<ContractMarker[]>(contracts);
   const [selected, setSelected] = useState<string | null>(null);
-  const [view, setView] = useState<"month" | "week">("month");
+  const [view, setView] = useState<"day" | "week" | "month" | "people">("month");
+  // Ngày đang xem ở chế độ "Ngày" (mặc định hôm nay).
+  const [dayAnchor, setDayAnchor] = useState(todayStr);
   const [weekAnchor, setWeekAnchor] = useState(todayStr); // any date inside the displayed week
 
   // Trên điện thoại, lịch tháng chật → mặc định mở chế độ Tuần (dễ đọc/chạm hơn).
@@ -152,6 +156,41 @@ export default function CalendarView({
   }
   function contractsOn(dateStr: string) {
     return contractList.filter((c) => c.event_date === dateStr);
+  }
+
+  /**
+   * Lịch theo nhân sự (tính năng mới số 4): mỗi người MỘT HÀNG × 7 ngày của
+   * tuần đang xem, kèm cột "tải tuần" đổi màu. Người nào nhận ≥4 ngày/tuần là
+   * đang quá tải — đúng ngưỡng cảnh báo dồn lịch ở màn Tổng quan.
+   */
+  const peopleRows = useMemo(() => {
+    const map = new Map<string, { key: string; name: string; days: Map<string, ContractMarker[]> }>();
+    for (const c of contractList) {
+      if (!weekDays.includes(c.event_date)) continue;
+      for (const cr of c.contract_crew || []) {
+        if (cr.status === "declined") continue;
+        const name = (cr.name || "").trim() || "Chưa đặt tên";
+        const cur = map.get(name) ?? { key: name, name, days: new Map<string, ContractMarker[]>() };
+        const list = cur.days.get(c.event_date) ?? [];
+        list.push(c);
+        cur.days.set(c.event_date, list);
+        map.set(name, cur);
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.days.size - a.days.size || a.name.localeCompare(b.name));
+  }, [contractList, weekDays]);
+
+  /** Buổi chụp + mốc lịch của ngày đang xem ở chế độ "Ngày". */
+  const dayContracts = useMemo(
+    () => contractList.filter((c) => c.event_date === dayAnchor).sort((a, b) => (a.event_time || "").localeCompare(b.event_time || "")),
+    [contractList, dayAnchor]
+  );
+
+  function moveDay(delta: number) {
+    const [dy, dm, dd] = dayAnchor.split("-").map(Number);
+    const dt = new Date(dy, dm - 1, dd);
+    dt.setDate(dt.getDate() + delta);
+    setDayAnchor(ymd(dt.getFullYear(), dt.getMonth(), dt.getDate()));
   }
 
   // Assign a distinct colour to a shoot so several on the same day stand apart.
@@ -232,23 +271,44 @@ export default function CalendarView({
   }, [events, todayStr]);
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h1 className="font-serif text-2xl font-medium">Lịch chụp &amp; ghi chú</h1>
-        <div className="flex rounded-lg p-0.5" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-          {(["month", "week"] as const).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className="rounded-md px-3 py-1.5 text-xs font-semibold transition-colors"
-              style={{
-                background: view === v ? "var(--brand, var(--accent))" : "transparent",
-                color: view === v ? "var(--brandFg, #06120c)" : "var(--text2)",
-              }}
-            >
-              {v === "month" ? "Tháng" : "Tuần"}
-            </button>
-          ))}
+    <div className="page-in">
+      {/* ── Thanh điều khiển: hôm nay · dải ngày · 4 chế độ xem ─────────── */}
+      <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <button
+          onClick={() => { setDayAnchor(todayStr); setWeekAnchor(todayStr); setCursor({ year: y, month: mIdx - 1 }); }}
+          className="flex-none rounded-[9px] px-3.5 py-[7px] text-[12.5px] font-semibold"
+          style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+        >
+          Hôm nay
+        </button>
+        <h1 className="text-[15px] font-bold">
+          {view === "day" ? fmtDate(dayAnchor) : view === "month" ? `Tháng ${cursor.month + 1}/${cursor.year}` : `Tuần ${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`}
+        </h1>
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <div className="hidden gap-3 min-[900px]:flex">
+            {[["var(--am)", "Chờ khách duyệt"], ["var(--bl)", "Khách đã duyệt"], ["var(--pu)", "Đang thực hiện"], ["var(--gn)", "Hoàn thành"]].map(([c, l]) => (
+              <span key={l} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx2)" }}>
+                <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: c }} /> {l}
+              </span>
+            ))}
+          </div>
+          <div role="tablist" aria-label="Chế độ xem lịch" className="flex gap-[3px] rounded-[10px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+            {([["day", "Ngày"], ["week", "Tuần"], ["month", "Tháng"], ["people", "Nhân sự"]] as const).map(([v, label]) => {
+              const on = view === v;
+              return (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setView(v)}
+                  className="whitespace-nowrap rounded-[7px] px-[15px] py-1.5 text-[12.5px] font-semibold"
+                  style={{ color: on ? "var(--ac)" : "var(--tx2)", background: on ? "var(--sf)" : "transparent", boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none" }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -305,7 +365,16 @@ export default function CalendarView({
         </div>
       )}
 
-      {view === "week" ? (
+      {view === "day" ? (
+        <DayView
+          date={dayAnchor}
+          contracts={dayContracts}
+          events={eventsOn(dayAnchor)}
+          onMove={moveDay}
+        />
+      ) : view === "people" ? (
+        <PeopleWeek rows={peopleRows} weekDays={weekDays} todayStr={todayStr} onMove={moveWeek} />
+      ) : view === "week" ? (
         <WeekView
           weekDays={weekDays}
           todayStr={todayStr}
@@ -612,6 +681,158 @@ function WeekView({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/* ── Chế độ NGÀY ───────────────────────────────────────────────────────────
+   Danh sách buổi chụp trong một ngày: giờ bắt đầu to, tên job, khách, địa
+   điểm và ê-kíp. Đây cũng là màn hay mở nhất trên điện thoại. */
+function DayView({
+  date, contracts, events, onMove,
+}: {
+  date: string;
+  contracts: ContractMarker[];
+  events: EventRow[];
+  onMove: (d: number) => void;
+}) {
+  return (
+    <div className="flex max-w-[840px] flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <button onClick={() => onMove(-1)} aria-label="Ngày trước" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
+          <ChevronLeft size={17} />
+        </button>
+        <span className="text-[12.5px] font-semibold" style={{ color: "var(--tx2)" }}>{fmtDow(date)} · {fmtDate(date)}</span>
+        <button onClick={() => onMove(1)} aria-label="Ngày sau" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
+          <ChevronRight size={17} />
+        </button>
+      </div>
+
+      {contracts.length === 0 && events.length === 0 ? (
+        <Panel><EmptyState icon={CalendarDays} title="Ngày này chưa có lịch" hint="Không có buổi chụp hay mốc lịch nào — ngày trống để nhận job mới." /></Panel>
+      ) : (
+        <>
+          {contracts.map((c) => {
+            const crew = (c.contract_crew || []).filter((x) => x.status !== "declined");
+            const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
+            return (
+              <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="flex gap-3.5 rounded-[14px] px-[17px] py-[15px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)", borderLeft: `3px solid ${tone.fg}` }}>
+                <div className="flex-none pr-3.5 text-center" style={{ borderRight: "1px solid var(--bd2)" }}>
+                  <p className="tnum text-[15px] font-bold">{c.event_time || "--:--"}</p>
+                  <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{SHOOT_TYPE_LABEL[c.shoot_type]}</p>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14.5px] font-bold">{c.title}</p>
+                  <p className="mt-0.5 truncate text-[12px]" style={{ color: "var(--tx3)" }}>
+                    {[c.client_name, c.location].filter(Boolean).join(" · ") || "Chưa có thông tin khách"}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex">
+                      {crew.map((p) => (
+                        <span key={p.id} title={p.name || ""} className="-ml-1.5 flex h-[25px] w-[25px] items-center justify-center rounded-full text-[9.5px] font-bold text-white first:ml-0" style={{ background: avatarColor(p.name), border: "2px solid var(--sf)" }}>
+                          {initials(p.name)}
+                        </span>
+                      ))}
+                    </div>
+                    {crew.length === 0 && (
+                      <span className="rounded-[20px] px-[9px] py-1 text-[11px] font-semibold" style={{ border: "1px dashed var(--am)", color: "var(--am)", background: "var(--amS)" }}>
+                        Chưa phân công
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="flex-none self-start whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-[11.5px] font-semibold" style={{ background: tone.bg, color: tone.fg }}>
+                  {CONTRACT_STATUS_LABEL[(c.status as ContractStatus)] ?? c.status}
+                </span>
+              </Link>
+            );
+          })}
+          {events.map((e) => (
+            <div key={e.id} className="flex items-center gap-3 rounded-[14px] px-[17px] py-3.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+              <Bell size={16} style={{ flex: "none", color: "var(--bl)" }} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[13.5px] font-semibold">{eventLabel(e)}</p>
+                {e.note && <p className="mt-px truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>{e.note}</p>}
+              </div>
+              {e.event_time && <span className="tnum flex-none text-[12px]" style={{ color: "var(--tx3)" }}>{e.event_time}</span>}
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Chế độ NHÂN SỰ (tính năng mới số 4) ───────────────────────────────────
+   Mỗi người một hàng × 7 ngày; cột cuối là tải tuần đổi màu. Dưới 1100px ẩn
+   dòng tên job trong ô, chỉ còn chấm — đúng ngưỡng responsive của bản thiết kế. */
+function PeopleWeek({
+  rows, weekDays, todayStr, onMove,
+}: {
+  rows: { key: string; name: string; days: Map<string, ContractMarker[]> }[];
+  weekDays: string[];
+  todayStr: string;
+  onMove: (d: number) => void;
+}) {
+  const COLS = "minmax(140px,1.2fr) repeat(7, minmax(72px,1fr)) minmax(96px,.9fr)";
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        <button onClick={() => onMove(-1)} aria-label="Tuần trước" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
+          <ChevronLeft size={17} />
+        </button>
+        <span className="text-[12.5px] font-semibold" style={{ color: "var(--tx2)" }}>{fmtDate(weekDays[0])} – {fmtDate(weekDays[6])}</span>
+        <button onClick={() => onMove(1)} aria-label="Tuần sau" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
+          <ChevronRight size={17} />
+        </button>
+      </div>
+
+      <Panel className="overflow-x-auto">
+        <div className="grid gap-2 px-4 py-2.5" style={{ gridTemplateColumns: COLS, minWidth: 860, background: "var(--sf2)", borderBottom: "1px solid var(--bd)" }}>
+          <span className="text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Nhân sự</span>
+          {weekDays.map((d) => (
+            <span key={d} className="text-center text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".5px", color: d === todayStr ? "var(--ac)" : "var(--tx3)" }}>
+              {fmtDow(d)} {fmtDayMonth(d)}
+            </span>
+          ))}
+          <span className="text-right text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Tải tuần</span>
+        </div>
+
+        {rows.length === 0 ? (
+          <EmptyState icon={Users} title="Tuần này chưa phân công ai" hint="Phân công nhân sự trong hợp đồng để thấy lịch của từng người ở đây." />
+        ) : (
+          rows.map((r) => {
+            const load = r.days.size;
+            const tone = load >= 4 ? { fg: "var(--rd)", bg: "var(--rdS)" } : load >= 3 ? { fg: "var(--am)", bg: "var(--amS)" } : { fg: "var(--gn)", bg: "var(--gnS)" };
+            return (
+              <div key={r.key} className="grid items-center gap-2 px-4 py-2.5" style={{ gridTemplateColumns: COLS, minWidth: 860, borderBottom: "1px solid var(--bd2)" }}>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: avatarColor(r.name) }}>
+                    {initials(r.name)}
+                  </span>
+                  <span className="truncate text-[12.5px] font-semibold">{r.name}</span>
+                </div>
+                {weekDays.map((d) => {
+                  const jobs = r.days.get(d) ?? [];
+                  return (
+                    <div key={d} className="min-h-[38px] rounded-[8px] px-1.5 py-1" style={{ background: jobs.length ? "var(--acS)" : d === todayStr ? "var(--sf2)" : "transparent", border: jobs.length ? "1px solid var(--acM)" : "1px solid transparent" }}>
+                      {jobs.map((j) => (
+                        <Link key={j.id} href={`/dashboard/studio/contracts/${j.id}`} className="block">
+                          <span className="tnum block text-center text-[10.5px] font-bold" style={{ color: "var(--ac)" }}>{j.event_time || "cả ngày"}</span>
+                          <span className="hidden truncate text-center text-[10px] min-[1100px]:block" style={{ color: "var(--tx2)" }}>{j.title}</span>
+                        </Link>
+                      ))}
+                    </div>
+                  );
+                })}
+                <span className="justify-self-end whitespace-nowrap rounded-[20px] px-[10px] py-1 text-[11px] font-bold" style={{ background: tone.bg, color: tone.fg }}>
+                  {load} ngày
+                </span>
+              </div>
+            );
+          })
+        )}
+      </Panel>
     </div>
   );
 }
