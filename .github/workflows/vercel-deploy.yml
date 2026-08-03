@@ -86,6 +86,12 @@ jobs:
 
       - name: Build
         if: steps.check.outputs.skip != 'true'
+        env:
+          # Next chạy bước "checking validity of types" trong worker riêng, và
+          # Node chỉ cấp ~2GB heap theo mặc định. Repo này đủ lớn để vượt mức đó
+          # → build chết "JavaScript heap out of memory" ngay sau khi compile
+          # xong. Máy chạy của GitHub có 16GB nên cấp 6GB là thoải mái.
+          NODE_OPTIONS: --max-old-space-size=6144
         run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
 
       - name: Deploy (gán vào domain production)
