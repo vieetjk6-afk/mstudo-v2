@@ -446,7 +446,7 @@ export default async function StudioOverview() {
     });
   }
 
-  const SEVERITY: Record<string, number> = { red: 0, amber: 1, blue: 2, purple: 3, brand: 4, green: 5, gray: 6 };
+  const SEVERITY: Record<string, number> = { red: 0, amber: 1, blue: 2, teal: 3, brand: 4, green: 5, gray: 6 };
   urgent.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
   const urgentTop = urgent.slice(0, 6);
 

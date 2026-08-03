@@ -790,8 +790,11 @@ body {
 .studio-shell {
   color-scheme: light;
 
-  /* ── Màu nhấn thương hiệu ── */
-  --ac: #af2bb8;
+  /* ── Màu nhấn thương hiệu ──
+     Xanh mstudo của bản cũ (#3fb98a) hạ sáng cho đậm và dễ đọc hơn: chữ trắng
+     trên nút chính từ 2,3:1 lên 3,4:1. Bản thiết kế vẽ bằng tím #AF2BB8 —
+     studio chọn giữ xanh thương hiệu, mọi thứ khác của thiết kế giữ nguyên. */
+  --ac: #1e9e72;
   --acS: color-mix(in srgb, var(--ac) 10%, #ffffff); /* nền nhạt của màu nhấn */
   --acM: color-mix(in srgb, var(--ac) 18%, #ffffff); /* viền focus */
   --acD: color-mix(in srgb, var(--ac) 84%, #000000); /* hover nút chính */
@@ -819,17 +822,17 @@ body {
   --rdS: #fbeaea; /* lỗi, quá hạn */
   --nu: #6b6a70;
   --nuS: #f0eeeb; /* trung tính — hợp đồng nháp */
-  --pu: #8e2da8;
-  --puS: #f8e9fa; /* tím — hợp đồng đang thực hiện */
+  --tl: #0f8a8a;
+  --tlS: #e2f4f4; /* xanh mòng két — hợp đồng đang thực hiện */
 
   /* ── Màu avatar: băm tên → chọn 1 trong 8 ──
      Nền = color-mix(in srgb, <màu> 14%, #fff), chữ = màu gốc. */
-  --av1: #8e2da8;
+  --av1: #0e7c86;
   --av2: #2f5fd0;
   --av3: #bc5b5b;
   --av4: #a9791f;
   --av5: #177a5b;
-  --av6: #5b4bc4;
+  --av6: #4a6fa5;
   --av7: #c0642b;
   --av8: #2f8f8a;
 
@@ -900,8 +903,8 @@ body {
   --rdS: #3e2023;
   --nu: #a19da9;
   --nuS: #2b2934;
-  --pu: #d98be4;
-  --puS: #33203a;
+  --tl: #5fd3d3;
+  --tlS: #12333a;
   --topbar: rgba(29, 27, 35, 0.86);
 }
 

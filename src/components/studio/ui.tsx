@@ -14,7 +14,7 @@ export const TONE = {
   amber: { fg: "var(--am)", soft: "var(--amS)" },
   red: { fg: "var(--rd)", soft: "var(--rdS)" },
   blue: { fg: "var(--bl)", soft: "var(--blS)" },
-  purple: { fg: "var(--pu)", soft: "var(--puS)" },
+  teal: { fg: "var(--tl)", soft: "var(--tlS)" },
   brand: { fg: "var(--ac)", soft: "var(--acS)" },
   gray: { fg: "var(--tx2)", soft: "var(--sf2)" },
 } as const;

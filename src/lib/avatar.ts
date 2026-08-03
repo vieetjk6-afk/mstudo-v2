@@ -3,8 +3,8 @@
  * là màu đó pha 14% với trắng. Cùng một khách luôn ra cùng màu ở mọi màn.
  */
 const AVATAR_COLORS = [
-  "#8E2DA8", "#2F5FD0", "#BC5B5B", "#A9791F",
-  "#177A5B", "#5B4BC4", "#C0642B", "#2F8F8A",
+  "#0E7C86", "#2F5FD0", "#BC5B5B", "#A9791F",
+  "#177A5B", "#4A6FA5", "#C0642B", "#2F8F8A",
 ] as const;
 
 /** Màu chữ của avatar (một trong 8 màu bản thiết kế). */

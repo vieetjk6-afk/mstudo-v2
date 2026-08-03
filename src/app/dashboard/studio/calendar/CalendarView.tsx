@@ -286,7 +286,7 @@ export default function CalendarView({
         </h1>
         <div className="ml-auto flex flex-wrap items-center gap-3">
           <div className="hidden gap-3 min-[900px]:flex">
-            {[["var(--am)", "Chờ khách duyệt"], ["var(--bl)", "Khách đã duyệt"], ["var(--pu)", "Đang thực hiện"], ["var(--gn)", "Hoàn thành"]].map(([c, l]) => (
+            {[["var(--am)", "Chờ khách duyệt"], ["var(--bl)", "Khách đã duyệt"], ["var(--tl)", "Đang thực hiện"], ["var(--gn)", "Hoàn thành"]].map(([c, l]) => (
               <span key={l} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx2)" }}>
                 <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: c }} /> {l}
               </span>

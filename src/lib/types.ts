@@ -705,7 +705,7 @@ export const CONTRACT_STATUS_TONE: Record<ContractStatus, { fg: string; bg: stri
   draft: { fg: "var(--nu)", bg: "var(--nuS)" },
   sent: { fg: "var(--am)", bg: "var(--amS)" },
   approved: { fg: "var(--bl)", bg: "var(--blS)" },
-  in_progress: { fg: "var(--pu)", bg: "var(--puS)" },
+  in_progress: { fg: "var(--tl)", bg: "var(--tlS)" },
   completed: { fg: "var(--gn)", bg: "var(--gnS)" },
   cancelled: { fg: "var(--rd)", bg: "var(--rdS)" },
 };
