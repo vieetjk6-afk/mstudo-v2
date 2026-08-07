@@ -211,7 +211,7 @@ export default function ContractsListView() {
       {/* ── Bảng hợp đồng ──────────────────────────────────────────────
           Thẻ bao PHẢI overflow-x:auto: bảng rộng tối thiểu 1120px, dưới
           1240px là cuộn ngang chứ không được cắt mất cột. */}
-      <Panel className="overflow-x-auto">
+      <Panel className="hidden overflow-x-auto min-[900px]:block">
         <div
           className="grid gap-3.5 px-[18px] py-2.5"
           style={{ gridTemplateColumns: COLS, minWidth: 1120, background: "var(--sf2)", borderBottom: "1px solid var(--bd)" }}
@@ -336,6 +336,88 @@ export default function ContractsListView() {
           })
         )}
       </Panel>
+
+      {/* Điện thoại: bảng → THẺ (bản thiết kế: "không thu nhỏ bảng"). */}
+      <div className="flex flex-col gap-2 min-[900px]:hidden">
+        {initialLoading ? (
+          <Panel><div className="px-5 py-10 text-center text-[13px]" style={{ color: "var(--tx3)" }}>Đang tải hợp đồng…</div></Panel>
+        ) : filtered.length === 0 ? (
+          <Panel>
+            {rows.length === 0 ? (
+              <EmptyState icon={FileText} title="Chưa có hợp đồng nào" hint="Tạo hợp đồng đầu tiên để theo dõi lịch chụp, nhân sự và thanh toán." />
+            ) : (
+              <EmptyState icon={Search} title="Không có hợp đồng nào khớp" hint="Thử bỏ bớt bộ lọc hoặc chuyển sang tab khác." />
+            )}
+          </Panel>
+        ) : (
+          filtered.map((c) => {
+            const total = contractTotal(c.contract_items || []);
+            const collected = sumAmounts(c.contract_payments || []);
+            const pct = total > 0 ? Math.min(100, Math.round((collected / total) * 100)) : 0;
+            const payTone = collected >= total && total > 0 ? "var(--gn)" : collected > 0 ? "var(--ac)" : "var(--am)";
+            const crew = (c.contract_crew || []).filter((x) => x.status !== "declined");
+            const st = CONTRACT_STATUS_TONE[c.status];
+            return (
+              <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="block">
+                <Panel className="flex flex-col gap-2.5 px-4 py-3.5" >
+                  <div className="flex items-start gap-2.5">
+                    <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[11px] font-bold" style={avatarStyle(c.client_name || c.title)}>
+                      {initials(c.client_name || c.title)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-bold">{c.title}</p>
+                      <p className="mt-px truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                        {[c.code, c.client_name].filter(Boolean).join(" · ") || "—"}
+                      </p>
+                    </div>
+                    <span
+                      className="flex-none whitespace-nowrap rounded-[20px] px-2.5 py-1 text-[11px] font-bold"
+                      style={{ background: st.bg, color: st.fg }}
+                    >
+                      {CONTRACT_STATUS_LABEL[c.status]}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px]" style={{ color: "var(--tx2)" }}>
+                    <span className="flex items-center gap-1.5 whitespace-nowrap font-semibold">
+                      <CalendarDays size={13} style={{ color: "var(--tx3)" }} />
+                      {c.event_date ? `${fmtDow(c.event_date)} · ${fmtDate(c.event_date)}` : "Chưa có ngày"}
+                    </span>
+                    {c.event_time && (
+                      <span className="flex items-center gap-1.5 whitespace-nowrap"><Clock size={13} style={{ color: "var(--tx3)" }} />{c.event_time}</span>
+                    )}
+                    {crew.length === 0 ? (
+                      <span className="whitespace-nowrap rounded-[20px] px-2 py-0.5 text-[10.5px] font-semibold" style={{ border: "1px dashed var(--am)", color: "var(--am)" }}>
+                        Chưa phân công
+                      </span>
+                    ) : (
+                      <span className="flex">
+                        {crew.slice(0, 3).map((p) => (
+                          <span key={p.id} className="-ml-1.5 flex h-[22px] w-[22px] items-center justify-center rounded-full text-[9px] font-bold text-white first:ml-0" style={{ background: avatarColor(p.name), border: "2px solid var(--sf)" }}>
+                            {initials(p.name)}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="tnum text-[14px] font-bold">{vnd(total)}</span>
+                      <span className="text-[11px] font-semibold" style={{ color: payTone }}>
+                        {total > 0 && collected >= total ? "Đã thanh toán đủ" : collected > 0 ? `Đã trả ${vnd(collected)}` : "Chưa thanh toán"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-[3px] overflow-hidden rounded-[3px]" style={{ background: "var(--bd2)" }}>
+                      <div className="h-full rounded-[3px]" style={{ width: `${pct}%`, background: payTone }} />
+                    </div>
+                  </div>
+                </Panel>
+              </Link>
+            );
+          })
+        )}
+      </div>
 
       {filtered.length > 0 && (
         <p className="mt-2.5 px-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
