@@ -162,12 +162,14 @@ export default function StudioDriveCard() {
     );
 
   return (
-    <div className="card p-6">
-      <div className="flex items-center gap-2">
-        <HardDrive size={18} style={{ color: "var(--brand)" }} />
-        <h2 className="font-serif text-xl font-medium">Đồng bộ ảnh/video lên Google Drive</h2>
+    <div className="card p-[18px]">
+      <div className="flex items-center gap-2.5">
+        <span className="flex-none rounded-[10px] p-[9px]" style={{ background: "var(--acS)", color: "var(--ac)", lineHeight: 0 }}>
+          <HardDrive size={20} />
+        </span>
+        <h2 className="text-[14px] font-bold">Đồng bộ ảnh/video lên Google Drive</h2>
       </div>
-      <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>
+      <p className="mt-2.5 text-[12.5px] leading-[1.6]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
         Kết nối Drive của studio một lần. Khi hợp đồng đã ký, MStudo Desktop tạo cây thư mục theo cấu trúc{" "}
         <b>Thư mục gốc / Loại dịch vụ / Thang(ngày thực hiện) / Tên hợp đồng</b> — giống hệt trên Drive và trên máy.
         Thư mục <b>loại dịch vụ</b> và <b>tháng</b> chỉ tạo một lần rồi các hợp đồng sau lưu đúng vào đó.
@@ -177,7 +179,7 @@ export default function StudioDriveCard() {
 
       {/* Không chạy desktop thì trước đây KHÔNG hợp đồng nào có thư mục, và cũng
           không có chỗ nào báo. Nút này tạo thẳng từ web. */}
-      <div className="mt-3 rounded-lg p-3" style={{ background: "var(--surface2)" }}>
+      <div className="mt-3 rounded-[11px] p-3.5" style={{ background: "var(--sf2)" }}>
         <p className="text-[13px] font-medium">Tạo thư mục cho hợp đồng ngay trên web</p>
         <p className="mb-2 text-[11px]" style={{ color: "var(--text3)" }}>
           Dành cho lúc không mở MStudo Desktop. Chạy cho mọi hợp đồng đã chốt mà chưa có thư mục;

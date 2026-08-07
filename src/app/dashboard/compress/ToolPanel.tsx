@@ -519,7 +519,7 @@ export default function ToolPanel({
         resetOutputs();
       }}
       className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]"
-      style={source === key ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
+      style={source === key ? { background: "var(--acS)", color: "var(--ac)", border: "1px solid var(--acM)" } : { background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--tx2)" }}
     >
       <Icon size={14} /> {label}
     </button>
@@ -528,8 +528,8 @@ export default function ToolPanel({
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       {/* Source */}
-      <div className="card p-6">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
+      <div className="card p-[18px]">
+        <h2 className="mb-3 flex items-center gap-2 text-[10.5px] font-extrabold uppercase tracking-[.7px]" style={{ color: "var(--tx3)" }}>
           <FolderInput size={15} /> Nguồn ảnh
         </h2>
         <div className="mb-3 flex flex-wrap gap-2">
@@ -587,8 +587,8 @@ export default function ToolPanel({
       </div>
 
       {/* Options */}
-      <div className="card p-6">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
+      <div className="card p-[18px]">
+        <h2 className="mb-3 flex items-center gap-2 text-[10.5px] font-extrabold uppercase tracking-[.7px]" style={{ color: "var(--tx3)" }}>
           <Minimize2 size={15} /> Tuỳ chọn
         </h2>
 
@@ -598,7 +598,7 @@ export default function ToolPanel({
               Chất lượng: <b style={{ color: "var(--text)" }}>{quality}</b>
               <span style={{ color: "var(--text3)" }}> (cao = nét hơn, nặng hơn)</span>
             </label>
-            <input type="range" min={40} max={100} value={quality} onChange={(e) => setQuality(+e.target.value)} className="w-full accent-[var(--gold)]" />
+            <input type="range" min={40} max={100} value={quality} onChange={(e) => setQuality(+e.target.value)} className="w-full accent-[var(--ac)]" />
             <div className="mt-4 grid grid-cols-2 gap-3">
               <div>
                 <label className="mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>Kích thước tối đa</label>
@@ -624,12 +624,12 @@ export default function ToolPanel({
               <div className="mt-4 rounded-lg p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
                 <p className="mb-2 text-[13px] font-medium" style={{ color: "var(--text2)" }}>Sau khi nén, ghi lên Drive:</p>
                 <label className="flex items-center gap-2 text-[13px]" style={{ color: "var(--text)" }}>
-                  <input type="radio" name="wm" checked={writeMode === "new"} onChange={() => setWriteMode("new")} className="accent-[var(--gold)]" />
+                  <input type="radio" name="wm" checked={writeMode === "new"} onChange={() => setWriteMode("new")} className="accent-[var(--ac)]" />
                   Lưu bản nén mới (đuôi <code>_nen</code>, giữ ảnh gốc)
                 </label>
                 <label className="mt-1.5 flex items-center gap-2 text-[13px]" style={{ color: "var(--text)" }}>
-                  <input type="radio" name="wm" checked={writeMode === "overwrite"} onChange={() => setWriteMode("overwrite")} className="accent-[var(--gold)]" />
-                  <span style={{ color: "var(--gold)" }}>Ghi đè bản gốc</span> (không hoàn tác)
+                  <input type="radio" name="wm" checked={writeMode === "overwrite"} onChange={() => setWriteMode("overwrite")} className="accent-[var(--ac)]" />
+                  <span style={{ color: "var(--rd)" }}>Ghi đè bản gốc</span> (không hoàn tác)
                 </label>
               </div>
             )}
@@ -653,7 +653,7 @@ export default function ToolPanel({
         {tool === "watermark" && (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-2">
-              <button onClick={() => setWmType("text")} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]" style={effectiveWmType === "text" ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+              <button onClick={() => setWmType("text")} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]" style={effectiveWmType === "text" ? { background: "var(--acS)", color: "var(--ac)", border: "1px solid var(--acM)" } : { background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--tx2)" }}>
                 <Type size={14} /> Chữ
               </button>
               <button
@@ -661,7 +661,7 @@ export default function ToolPanel({
                 disabled={!pro}
                 title={pro ? "" : "Tính năng dành cho tài khoản nâng cấp"}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] disabled:cursor-not-allowed disabled:opacity-50"
-                style={effectiveWmType === "image" ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
+                style={effectiveWmType === "image" ? { background: "var(--acS)", color: "var(--ac)", border: "1px solid var(--acM)" } : { background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--tx2)" }}
               >
                 <ImageIcon size={14} /> Ảnh / Logo {!pro && "🔒"}
               </button>
@@ -678,7 +678,7 @@ export default function ToolPanel({
                   </select>
                 </div>
                 <label className="mt-3 block text-[13px]" style={{ color: "var(--text2)" }}>Cỡ chữ: <b style={{ color: "var(--text)" }}>{wmTextScale}%</b></label>
-                <input type="range" min={2} max={12} value={wmTextScale} onChange={(e) => setWmTextScale(+e.target.value)} className="w-full accent-[var(--gold)]" />
+                <input type="range" min={2} max={12} value={wmTextScale} onChange={(e) => setWmTextScale(+e.target.value)} className="w-full accent-[var(--ac)]" />
               </>
             ) : (
               <>
@@ -688,7 +688,7 @@ export default function ToolPanel({
                 <input ref={wmFileInput} type="file" accept="image/*" hidden onChange={pickWatermarkImage} />
                 {wmImgName && <p className="mt-2 text-[12.5px]" style={{ color: "var(--text2)" }}>Logo: <b>{wmImgName}</b></p>}
                 <label className="mt-3 block text-[13px]" style={{ color: "var(--text2)" }}>Kích cỡ logo: <b style={{ color: "var(--text)" }}>{wmImageScale}%</b></label>
-                <input type="range" min={5} max={60} value={wmImageScale} onChange={(e) => setWmImageScale(+e.target.value)} className="w-full accent-[var(--gold)]" />
+                <input type="range" min={5} max={60} value={wmImageScale} onChange={(e) => setWmImageScale(+e.target.value)} className="w-full accent-[var(--ac)]" />
               </>
             )}
             <div className="mt-3 grid grid-cols-2 gap-3">
@@ -708,7 +708,7 @@ export default function ToolPanel({
               </div>
             </div>
             <label className="mt-3 block text-[13px]" style={{ color: "var(--text2)" }}>Độ mờ: <b style={{ color: "var(--text)" }}>{wmOpacity}%</b></label>
-            <input type="range" min={5} max={100} value={wmOpacity} onChange={(e) => setWmOpacity(+e.target.value)} className="w-full accent-[var(--gold)]" />
+            <input type="range" min={5} max={100} value={wmOpacity} onChange={(e) => setWmOpacity(+e.target.value)} className="w-full accent-[var(--ac)]" />
 
             <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--border)" }}>
               {pro ? (
@@ -716,7 +716,7 @@ export default function ToolPanel({
                   <label className="mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>
                     Nén kèm — chất lượng: <b style={{ color: "var(--text)" }}>{quality}</b>
                   </label>
-                  <input type="range" min={40} max={100} value={quality} onChange={(e) => setQuality(+e.target.value)} className="w-full accent-[var(--gold)]" />
+                  <input type="range" min={40} max={100} value={quality} onChange={(e) => setQuality(+e.target.value)} className="w-full accent-[var(--ac)]" />
                   <label className="mt-2 block text-[13px]" style={{ color: "var(--text2)" }}>Kích thước tối đa</label>
                   <select value={maxDim} onChange={(e) => setMaxDim(+e.target.value)} className="input">
                     <option value={0}>Giữ nguyên</option>
@@ -737,7 +737,7 @@ export default function ToolPanel({
         )}
 
         {activeQuota && (
-          <p className="mt-4 text-[12px]" style={{ color: outOfQuota ? "var(--gold)" : "var(--text3)" }}>
+          <p className="mt-4 text-[12px]" style={{ color: outOfQuota ? "var(--am)" : "var(--tx3)" }}>
             {activeQuota.unlimited
               ? "Không giới hạn"
               : isPicker
@@ -749,9 +749,9 @@ export default function ToolPanel({
 
       {/* Live preview panel (first image) — compare original vs processed */}
       {preview && previewSrc && (
-        <div className="card p-6 lg:col-span-2">
+        <div className="card p-[18px] lg:col-span-2">
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <h3 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
+            <h3 className="flex items-center gap-2 text-[10.5px] font-extrabold uppercase tracking-[.7px]" style={{ color: "var(--tx3)" }}>
               <Eye size={15} /> Xem trước — {preview.label}
             </h3>
             {/* Gốc ⇄ Đã xử lý */}
@@ -759,14 +759,14 @@ export default function ToolPanel({
               <button
                 onClick={() => setShowOriginal(true)}
                 className="px-3 py-1.5 text-[13px]"
-                style={showOriginal ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", color: "var(--text2)" }}
+                style={showOriginal ? { background: "var(--acS)", color: "var(--ac)", border: "1px solid var(--acM)" } : { background: "var(--sf2)", color: "var(--tx2)" }}
               >
                 Gốc
               </button>
               <button
                 onClick={() => setShowOriginal(false)}
                 className="px-3 py-1.5 text-[13px]"
-                style={!showOriginal ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", color: "var(--text2)" }}
+                style={!showOriginal ? { background: "var(--acS)", color: "var(--ac)", border: "1px solid var(--acM)" } : { background: "var(--sf2)", color: "var(--tx2)" }}
               >
                 {tool === "convert" ? "Đã đổi" : "Đã nén"}
               </button>
@@ -807,7 +807,7 @@ export default function ToolPanel({
             <span>Gốc: {formatBytes(preview.origSize)}</span>
             <span>Sau xử lý: <b style={{ color: "var(--text)" }}>{formatBytes(preview.newSize)}</b> {tool === "convert" && `(.${formatExt(outputFormat)})`}</span>
             {tool !== "convert" && preview.origSize > 0 && preview.newSize < preview.origSize && (
-              <span style={{ color: "var(--gold)" }}>Giảm {Math.round((1 - preview.newSize / preview.origSize) * 100)}%</span>
+              <span style={{ color: "var(--gn)" }}>Giảm {Math.round((1 - preview.newSize / preview.origSize) * 100)}%</span>
             )}
             <span style={{ color: "var(--text3)" }}>Bấm <b>Gốc</b>/<b>Đã nén</b> để so sánh; phóng to để thấy rõ. (Ctrl + lăn chuột để zoom)</span>
           </div>
@@ -815,7 +815,7 @@ export default function ToolPanel({
       )}
 
       {/* Action + results */}
-      <div className="card p-6 lg:col-span-2">
+      <div className="card p-[18px] lg:col-span-2">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <button onClick={run} disabled={items.length === 0 || busy || outOfQuota} className="btn-primary disabled:opacity-40">
             <Minimize2 size={15} />
@@ -834,24 +834,24 @@ export default function ToolPanel({
             </>
           )}
           {results.length > 0 && tool !== "convert" && (
-            <span className="ml-auto rounded-full px-3 py-1 text-[12.5px]" style={{ background: "color-mix(in srgb, var(--gold) 16%, transparent)", color: "var(--gold)" }}>
+            <span className="ml-auto rounded-full px-3 py-1 text-[12.5px]" style={{ background: "var(--amS)", color: "var(--am)" }}>
               {formatBytes(totalOriginal)} → {formatBytes(totalNew)} · {savedPct >= 0 ? `giảm ${savedPct}%` : `+${-savedPct}%`}
             </span>
           )}
         </div>
 
         {quotaMsg && (
-          <p className="mb-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: "color-mix(in srgb, var(--gold) 14%, transparent)", color: "var(--gold)" }}>{quotaMsg}</p>
+          <p className="mb-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: "var(--amS)", color: "var(--am)" }}>{quotaMsg}</p>
         )}
-        {writeMsg && <p className="mb-3 text-[13px]" style={{ color: "var(--gold)" }}>{writeMsg}</p>}
-        {savingMsg && <p className="mb-3 text-[13px]" style={{ color: "var(--gold)" }}>{savingMsg}</p>}
+        {writeMsg && <p className="mb-3 text-[12.5px] font-semibold" style={{ color: "var(--ac)" }}>{writeMsg}</p>}
+        {savingMsg && <p className="mb-3 text-[12.5px] font-semibold" style={{ color: "var(--ac)" }}>{savingMsg}</p>}
 
         {results.length === 0 ? (
           <p className="py-10 text-center text-sm" style={{ color: "var(--text3)" }}>
             {items.length === 0 ? "Chọn nguồn ảnh để bắt đầu." : busy ? "Đang xử lý…" : `Sẵn sàng xử lý ${items.length} ảnh.`}
           </p>
         ) : (
-          <div className="overflow-hidden rounded-xl" style={{ border: "1px solid var(--border)" }}>
+          <div className="overflow-hidden rounded-[11px]" style={{ border: "1px solid var(--bd)" }}>
             {results.map((r, i) => {
               const pct = r.originalSize > 0 ? Math.round((1 - r.newSize / r.originalSize) * 100) : 0;
               return (
@@ -859,7 +859,7 @@ export default function ToolPanel({
                   <span className="min-w-0 flex-1 truncate" title={r.name} style={{ color: "var(--text)" }}>{stripExtension(r.name)}</span>
                   <span className="whitespace-nowrap" style={{ color: "var(--text3)" }}>{formatBytes(r.originalSize)} → {formatBytes(r.newSize)}</span>
                   {tool !== "convert" && (
-                    <span className="w-14 whitespace-nowrap text-right" style={{ color: pct > 0 ? "var(--gold)" : "var(--text3)" }}>{pct > 0 ? `−${pct}%` : "—"}</span>
+                    <span className="w-14 whitespace-nowrap text-right" style={{ color: pct > 0 ? "var(--gn)" : "var(--tx3)" }}>{pct > 0 ? `−${pct}%` : "—"}</span>
                   )}
                   {!(tool === "compress" && isPicker) && (
                     <button onClick={() => triggerDownload(r.blob, r.out)} className="rounded-md p-1.5" style={{ color: "var(--text2)" }} title="Tải ảnh này" aria-label="Tải ảnh này">

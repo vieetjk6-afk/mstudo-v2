@@ -5,19 +5,17 @@ import { Minimize2, Stamp, FileImage } from "lucide-react";
 import { pickerConfigured, preloadGoogle, requestDriveToken } from "@/lib/google-picker";
 import ToolPanel, { type Tool, type QuotaState } from "./ToolPanel";
 
+/** Ô hạn mức: pill 20px, tô màu cảnh báo khi hết lượt, chìm khi không liên quan. */
 function QuotaChip({ label, text, warn, active }: { label: string; text: string; warn: boolean; active: boolean }) {
-  const color = warn ? "var(--gold)" : active ? "var(--accent)" : "var(--text2)";
   return (
     <span
-      className="rounded-full px-3 py-1"
+      className="flex-none whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-[11.5px] font-semibold"
       style={{
-        background: warn ? "color-mix(in srgb, var(--gold) 16%, transparent)" : active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--surface2)",
-        border: `1px solid ${active && !warn ? "var(--accent)" : "var(--border)"}`,
-        color,
-        opacity: active ? 1 : 0.7,
+        background: warn ? "var(--amS)" : active ? "var(--acS)" : "var(--sf2)",
+        color: warn ? "var(--am)" : active ? "var(--ac)" : "var(--tx3)",
       }}
     >
-      {label}: <b style={{ color: warn ? "var(--gold)" : "var(--text)" }}>{text}</b>
+      {label}: <b className="tnum">{text}</b>
     </span>
   );
 }
@@ -72,17 +70,13 @@ export default function CompressPage() {
 
   return (
     <div className="page-in">
-      <div className="mb-6">
-        <p className="eyebrow mb-1.5">Công cụ ảnh</p>
-        <h1 className="font-serif text-[clamp(28px,4vw,44px)] font-medium leading-none">Xử lý ảnh</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed" style={{ color: "var(--text2)" }}>
-          Nén ảnh, gắn watermark, đổi định dạng — từ máy tính hoặc Google Drive. Xử lý ngay trên
-          trình duyệt, ảnh không tải lên máy chủ.
-        </p>
-      </div>
+      <p className="mb-3.5 max-w-3xl text-[13px] leading-[1.6]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+        Nén ảnh, gắn watermark, đổi định dạng — từ máy tính hoặc Google Drive.
+        Xử lý ngay trên trình duyệt, ảnh không tải lên máy chủ.
+      </p>
 
       {quota && (
-        <div className="mb-5 flex flex-wrap gap-2 text-[12.5px]">
+        <div className="mb-3 flex flex-wrap gap-2">
           <QuotaChip
             label="Nén (máy tính / link Drive)"
             text={quota.basic.unlimited ? "không giới hạn" : `${quota.basic.used}/${quota.basic.limit} tháng này`}
@@ -104,19 +98,16 @@ export default function CompressPage() {
         </div>
       )}
 
-      <div className="mb-6 flex flex-wrap gap-2">
+      {/* Chọn công cụ — segmented control trong ô nền phụ, đúng bản thiết kế. */}
+      <div className="mb-3.5 flex w-fit gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
         {tabs.map(({ key, label, Icon }) => (
           <button
             key={key}
             onClick={() => setTool(key)}
-            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium"
-            style={
-              tool === key
-                ? { background: "var(--accent)", color: "var(--accentInk)" }
-                : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }
-            }
+            className="flex flex-none items-center gap-1.5 rounded-[8px] px-[15px] py-[6.5px] text-[12.5px] font-semibold"
+            style={tool === key ? { background: "var(--sf)", color: "var(--tx)", boxShadow: "0 1px 2px rgba(20,15,25,.08)" } : { color: "var(--tx2)" }}
           >
-            <Icon size={16} /> {label}
+            <Icon size={15} /> {label}
           </button>
         ))}
       </div>

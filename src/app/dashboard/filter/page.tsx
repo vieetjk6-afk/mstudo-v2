@@ -19,6 +19,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { buildZip, triggerDownload } from "@/lib/download";
+import { Panel, PanelHead, Pill, EmptyState } from "@/components/studio/ui";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -297,8 +298,8 @@ export default function FilterPage() {
   const srcTab = (key: "drive" | "local", label: string, Icon: typeof Link2) => (
     <button
       onClick={() => setPhotoSource(key)}
-      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]"
-      style={photoSource === key ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
+      className="flex flex-none items-center gap-1.5 rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+      style={photoSource === key ? { background: "var(--sf)", color: "var(--tx)", boxShadow: "0 1px 2px rgba(20,15,25,.08)" } : { color: "var(--tx2)" }}
     >
       <Icon size={14} /> {label}
     </button>
@@ -306,112 +307,124 @@ export default function FilterPage() {
 
   return (
     <div className="page-in">
-      <div className="mb-8">
-        <p className="eyebrow mb-1.5">Công cụ</p>
-        <h1 className="font-serif text-[clamp(28px,4vw,44px)] font-medium leading-none">Lọc ảnh</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed" style={{ color: "var(--text2)" }}>
-          Đối chiếu thư mục ảnh (Google Drive hoặc ngay trên máy tính) với danh sách ảnh khách chọn / tự nhập. Với máy tính, có thể <b>copy thẳng từ thư mục nguồn sang thư mục đích</b>.
-        </p>
-      </div>
+      <p className="mb-3.5 max-w-3xl text-[13px] leading-[1.6]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+        Đối chiếu thư mục ảnh (Google Drive hoặc ngay trên máy) với danh sách ảnh khách chọn / tự nhập.
+        Với thư mục trên máy còn <b>copy thẳng từ thư mục nguồn sang thư mục đích</b>.
+      </p>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        {/* Photo source */}
-        <div className="card p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-            <FolderOpen size={15} /> Nguồn ảnh
-          </h2>
-          <div className="mb-3 flex gap-2">
+      <div className="grid gap-3.5 lg:grid-cols-2">
+        {/* Nguồn ảnh */}
+        <Panel>
+          <PanelHead icon={FolderOpen} tone="brand" title="Nguồn ảnh" />
+          <div className="p-4">
+          <div className="mb-3 flex w-fit gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
             {srcTab("drive", "Google Drive", Link2)}
             {srcTab("local", "Máy tính", HardDrive)}
           </div>
 
           {photoSource === "drive" ? (
             <>
-              <div className="flex gap-2.5">
-                <input value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="input" />
-                <button onClick={loadDrive} disabled={loadingDrive || !driveUrl.trim()} className="btn-primary whitespace-nowrap">
+              <div className="flex gap-2">
+                <input value={driveUrl} onChange={(e) => setDriveUrl(e.target.value)} placeholder="https://drive.google.com/drive/folders/..." className="input flex-1" />
+                <button
+                  onClick={loadDrive}
+                  disabled={loadingDrive || !driveUrl.trim()}
+                  className="flex flex-none items-center gap-1.5 whitespace-nowrap rounded-[10px] px-3.5 text-[12.5px] font-semibold disabled:opacity-50"
+                  style={{ background: "var(--ac)", color: "#fff" }}
+                >
                   <Search size={15} /> {loadingDrive ? "Đang tải…" : "Tải ảnh"}
                 </button>
               </div>
-              {driveError && <p className="mt-3 text-sm" style={{ color: "var(--danger)" }}>{driveError}</p>}
+              {driveError && <p className="mt-2 text-[12.5px] font-semibold" style={{ color: "var(--rd)" }}>{driveError}</p>}
               {driveFiles.length > 0 && (
-                <p className="mt-3 text-[13px]" style={{ color: "var(--text2)" }}>Đã tải <b>{driveFiles.length}</b> ảnh từ Drive.</p>
+                <p className="mt-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>Đã tải <b>{driveFiles.length}</b> ảnh từ Drive.</p>
               )}
             </>
           ) : (
             <>
               <button
                 onClick={() => (fsSupported ? pickSourceFS() : fileInput.current?.click())}
-                className="btn-ghost w-full py-3"
+                className="flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[12.5px] font-semibold"
+                style={{ border: "1.5px dashed var(--bd)", color: "var(--tx2)" }}
               >
                 <FolderInput size={16} /> Chọn thư mục nguồn
               </button>
               <input ref={fileInput} type="file" multiple hidden onChange={pickSourceInput} />
               {srcDirName && (
-                <p className="mt-2 text-[13px]" style={{ color: "var(--text2)" }}>
-                  Nguồn: <b>{srcDirName}</b> · {localFiles.length} ảnh (không upload — xử lý cục bộ).
+                <p className="mt-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                  Nguồn: <b>{srcDirName}</b> · {localFiles.length} ảnh (không upload — xử lý ngay trên máy).
                 </p>
               )}
 
               {fsSupported ? (
                 <>
-                  <button onClick={pickDest} className="btn-ghost mt-3 w-full py-3">
+                  <button
+                    onClick={pickDest}
+                    className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[12.5px] font-semibold"
+                    style={{ border: "1.5px dashed var(--bd)", color: "var(--tx2)" }}
+                  >
                     <FolderOutput size={16} /> Chọn thư mục đích {destName && `· ${destName}`}
                   </button>
                   <button
                     onClick={copyToDest}
                     disabled={!destDir || shown.length === 0 || copying}
-                    className="btn-primary mt-3 w-full py-3 disabled:opacity-40"
+                    className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[12.5px] font-semibold disabled:opacity-40"
+                    style={{ background: "var(--ac)", color: "#fff" }}
                   >
                     <CopyCheck size={16} /> {copying ? "Đang copy…" : `Copy ${shown.length} ảnh sang thư mục đích`}
                   </button>
-                  {copyMsg && <p className="mt-2 text-[13px]" style={{ color: "var(--gold)" }}>{copyMsg}</p>}
+                  {copyMsg && <p className="mt-2 text-[12.5px] font-semibold" style={{ color: "var(--gn)" }}>{copyMsg}</p>}
                 </>
               ) : (
-                <p className="mt-3 text-[12.5px]" style={{ color: "var(--text3)" }}>
-                  Trình duyệt này không hỗ trợ copy trực tiếp ra thư mục. Hãy dùng <b>Chrome/Edge trên máy tính</b> để copy nguồn→đích, hoặc dùng nút “Tải ZIP” bên dưới.
+                <p className="mt-2.5 rounded-[10px] px-3 py-2.5 text-[11.5px] leading-[1.55]" style={{ background: "var(--sf2)", color: "var(--tx2)", textWrap: "pretty" }}>
+                  Trình duyệt này không copy thẳng ra thư mục được. Dùng <b>Chrome/Edge trên máy tính</b> để copy nguồn→đích, hoặc bấm “Tải ZIP” bên dưới.
                 </p>
               )}
             </>
           )}
-        </div>
+          </div>
+        </Panel>
 
-        {/* Name list source */}
-        <div className="card p-6">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-            <ListChecks size={15} /> Danh sách cần lọc
-          </h2>
-          <div className="mb-3 flex gap-2">
-            <button onClick={() => setMode("paste")} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]" style={mode === "paste" ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
-              <ClipboardPaste size={14} /> Tự nhập
-            </button>
-            <button onClick={() => setMode("album")} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]" style={mode === "album" ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
-              <ListChecks size={14} /> Từ lựa chọn khách
-            </button>
+        {/* Danh sách cần lọc */}
+        <Panel>
+          <PanelHead icon={ListChecks} tone="blue" title="Danh sách cần lọc" />
+          <div className="p-4">
+          <div className="mb-3 flex w-fit gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+            {([["paste", "Tự nhập", ClipboardPaste], ["album", "Từ lựa chọn khách", ListChecks]] as const).map(([k, label, Icon]) => (
+              <button
+                key={k}
+                onClick={() => setMode(k)}
+                className="flex flex-none items-center gap-1.5 rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+                style={mode === k ? { background: "var(--sf)", color: "var(--tx)", boxShadow: "0 1px 2px rgba(20,15,25,.08)" } : { color: "var(--tx2)" }}
+              >
+                <Icon size={14} /> {label}
+              </button>
+            ))}
           </div>
 
           {mode === "paste" ? (
-            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={"Mỗi dòng một tên ảnh, ví dụ:\nIMG_001\nIMG_045\n(không cần đuôi .jpg)"} className="input min-h-[160px] resize-y" />
+            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={"Mỗi dòng một tên ảnh, ví dụ:\nIMG_001\nIMG_045\n(không cần đuôi .jpg)"} className="input min-h-[160px] w-full resize-y" />
           ) : (
             <>
-              <select className="input" value={albumId} onChange={(e) => loadAlbum(e.target.value)}>
+              <select className="input w-full" value={albumId} onChange={(e) => loadAlbum(e.target.value)}>
                 <option value="">— Chọn album —</option>
                 {albums.map((a) => (<option key={a.id} value={a.id}>{a.title}</option>))}
               </select>
-              <p className="mt-3 text-[13px]" style={{ color: "var(--text2)" }}>
+              <p className="mt-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>
                 {albumId ? `Khách đã chọn ${albumNames.length} ảnh.` : "Chọn album để lấy danh sách ảnh khách đã chọn."}
               </p>
             </>
           )}
-        </div>
+          </div>
+        </Panel>
       </div>
 
       {/* Results */}
-      <div className="mt-6 card p-6">
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <h2 className="font-serif text-2xl font-medium">Kết quả lọc: {shown.length} ảnh</h2>
-          {/* Format filter */}
-          <select value={fmt} onChange={(e) => setFmt(e.target.value)} className="input w-auto px-2 py-1 text-xs">
+      <div className="mt-3.5 rounded-[14px] p-4" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+        <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+          <h2 className="text-[14px] font-bold">Kết quả lọc: <span className="tnum">{shown.length}</span> ảnh</h2>
+          {/* Lọc theo định dạng */}
+          <select value={fmt} onChange={(e) => setFmt(e.target.value)} className="input !h-8 !w-auto !py-0 text-[11.5px]">
             <option value="all">Mọi định dạng</option>
             <option value="image">Ảnh thường (JPG/PNG…)</option>
             <option value="raw">RAW máy ảnh</option>
@@ -419,44 +432,42 @@ export default function FilterPage() {
               <option key={x} value={x}>.{x.toUpperCase()}</option>
             ))}
           </select>
-          {notFound.length > 0 && (
-            <span className="rounded-full px-2.5 py-1 text-[12px]" style={{ background: "color-mix(in srgb, var(--gold) 16%, transparent)", color: "var(--gold)" }}>
-              {notFound.length} tên không tìm thấy
-            </span>
-          )}
+          {notFound.length > 0 && <Pill tone="amber">{notFound.length} tên không tìm thấy</Pill>}
           <div className="ml-auto flex flex-wrap gap-2">
-            <button onClick={copyMatched} disabled={shown.length === 0} className="btn-ghost text-[13px] disabled:opacity-40">
+            <button onClick={copyMatched} disabled={shown.length === 0} className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold disabled:opacity-40" style={{ border: "1px solid var(--bd)" }}>
               {copied ? <Check size={14} /> : <Copy size={14} />} Copy (không đuôi)
             </button>
-            <button onClick={exportMatched} disabled={shown.length === 0} className="btn-ghost text-[13px] disabled:opacity-40">
+            <button onClick={exportMatched} disabled={shown.length === 0} className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold disabled:opacity-40" style={{ border: "1px solid var(--bd)" }}>
               <FileText size={14} /> Xuất .txt
             </button>
-            <button onClick={zipMatched} disabled={shown.length === 0 || zipProgress !== null} className="btn-primary text-[13px] disabled:opacity-40">
+            <button onClick={zipMatched} disabled={shown.length === 0 || zipProgress !== null} className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold disabled:opacity-40" style={{ background: "var(--ac)", color: "#fff" }}>
               <Download size={14} /> {zipProgress !== null ? `${zipProgress}%` : "Tải ZIP"}
             </button>
           </div>
         </div>
 
         {filterQuota && !filterQuota.unlimited && (
-          <p className="mb-3 text-[12.5px]" style={{ color: (filterQuota.remaining ?? 0) <= 0 ? "var(--gold)" : "var(--text3)" }}>
-            Lọc ảnh tháng này: <b style={{ color: "var(--text)" }}>{filterQuota.used}/{filterQuota.limit}</b> lần
+          <p className="tnum mb-3 text-[11.5px]" style={{ color: (filterQuota.remaining ?? 0) <= 0 ? "var(--am)" : "var(--tx3)" }}>
+            Lọc ảnh tháng này: <b style={{ color: "var(--tx)" }}>{filterQuota.used}/{filterQuota.limit}</b> lần
           </p>
         )}
         {filterMsg && (
-          <p className="mb-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: "color-mix(in srgb, var(--gold) 14%, transparent)", color: "var(--gold)" }}>
+          <p className="mb-3 rounded-[10px] px-3 py-2.5 text-[12.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
             {filterMsg}
           </p>
         )}
 
         {shown.length === 0 ? (
-          <p className="py-10 text-center text-sm" style={{ color: "var(--text3)" }}>
-            {sourceFiles.length === 0 ? "Chọn nguồn ảnh và nhập danh sách để bắt đầu lọc." : matched.length === 0 ? "Chưa có ảnh nào khớp danh sách." : "Không có file đúng định dạng đã chọn."}
-          </p>
+          <EmptyState
+            icon={Search}
+            title={sourceFiles.length === 0 ? "Chưa có gì để lọc" : matched.length === 0 ? "Không ảnh nào khớp danh sách" : "Không có file đúng định dạng"}
+            hint={sourceFiles.length === 0 ? "Chọn nguồn ảnh ở khối bên trái và nhập danh sách tên ở khối bên phải." : matched.length === 0 ? "Kiểm tra lại tên ảnh — bảng lọc bỏ qua đuôi file và không phân biệt hoa thường." : "Đổi bộ lọc định dạng phía trên để xem các file khác."}
+          />
         ) : (
           <div className="grid items-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(130px,1fr))]">
             {shown.map((f) => (
-              <div key={f.key} className="overflow-hidden rounded-lg" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-                <div className="flex aspect-square items-center justify-center" style={{ color: "var(--text3)" }}>
+              <div key={f.key} className="overflow-hidden rounded-[10px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+                <div className="flex aspect-square items-center justify-center" style={{ color: "var(--tx3)" }}>
                   {f.driveId || thumbs[f.key] ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={f.driveId ? thumbnailUrl(f.driveId, 400) : thumbs[f.key]} alt={f.name} loading="lazy" className="h-full w-full object-cover" />
@@ -464,16 +475,16 @@ export default function FilterPage() {
                     <FileText size={28} />
                   )}
                 </div>
-                <p className="truncate px-2 py-1.5 text-[11px]" style={{ color: "var(--text2)" }} title={f.name}>{stripExtension(f.name)}</p>
+                <p className="truncate px-2 py-1.5 text-[11px] font-semibold" style={{ color: "var(--tx2)" }} title={f.name}>{stripExtension(f.name)}</p>
               </div>
             ))}
           </div>
         )}
 
         {notFound.length > 0 && (
-          <div className="mt-5 rounded-xl p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-            <p className="mb-2 text-[13px] font-medium" style={{ color: "var(--gold)" }}>Không tìm thấy trong nguồn ảnh ({notFound.length}):</p>
-            <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--text2)" }}>{notFound.join(", ")}</p>
+          <div className="mt-4 rounded-[11px] p-3.5" style={{ background: "var(--amS)" }}>
+            <p className="mb-1.5 text-[12px] font-bold" style={{ color: "var(--am)" }}>Không tìm thấy trong nguồn ảnh ({notFound.length}):</p>
+            <p className="text-[11.5px] leading-[1.6]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>{notFound.join(", ")}</p>
           </div>
         )}
       </div>
