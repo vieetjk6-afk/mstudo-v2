@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { todayVN } from "@/lib/date";
+import { avatarColor, initials } from "@/lib/avatar";
+import { Panel, Pill, StatCard, EmptyState } from "@/components/studio/ui";
 import {
   RENTAL_CATEGORIES,
   RENTAL_CATEGORY_LABEL,
@@ -77,6 +79,9 @@ export default function RentalManager({
 }) {
   const supabase = createClient();
   const [tab, setTab] = useState<Tab>("inventory");
+  /* Bản thiết kế chỉ có MỘT nút "Thêm" trên hàng công cụ; form nhập bung ra khi
+     bấm, thay vì chiếm cứng một cột bên trái như bản cũ. */
+  const [adding, setAdding] = useState(false);
   const [items, setItems] = useState<RentalItem[]>(initialItems);
   const [orders, setOrders] = useState<RentalOrderWithItems[]>(initialOrders);
 
@@ -103,67 +108,49 @@ export default function RentalManager({
   }, [orders, items, unitsOut]);
 
   return (
-    <div className="page-in">
-      <p className="mb-3.5 text-[13px]" style={{ color: "var(--tx2)" }}>
-        Kho trang phục (váy cưới, vest, áo dài, phụ kiện) và đơn cho thuê.
-      </p>
-
-      {/* Summary stats */}
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard icon={<Boxes size={16} />} label="Tổng kho" value={`${stats.totalItems} món`} />
-        <StatCard icon={<PackageOpen size={16} />} label="Đang cho thuê" value={`${stats.rentedUnits} món`} />
-        <StatCard icon={<Wallet size={16} />} label="Cọc đang giữ" value={vnd(stats.depositsHeld)} />
+    <div className="page-in flex flex-col gap-3.5">
+      {/* KPI — bốn con số của kho, dùng chung khối StatCard của bản thiết kế. */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3">
+        <StatCard icon={Boxes} tone="brand" label="Tổng kho" value={`${stats.totalItems} món`} sub="Tính cả món đang cho thuê" />
+        <StatCard icon={PackageOpen} tone="blue" label="Đang cho thuê" value={`${stats.rentedUnits} món`} sub="Chưa nhận lại" />
+        <StatCard icon={Wallet} tone="amber" label="Cọc đang giữ" value={vnd(stats.depositsHeld)} sub="Phải trả khách khi nhận đồ" />
         <StatCard
-          icon={stats.overdue > 0 ? <AlertTriangle size={16} /> : <TrendingUp size={16} />}
-          label={stats.overdue > 0 ? "Quá hạn" : "Doanh thu tháng"}
+          icon={stats.overdue > 0 ? AlertTriangle : TrendingUp}
+          tone={stats.overdue > 0 ? "red" : "green"}
+          label={stats.overdue > 0 ? "Quá hạn trả" : "Doanh thu tháng"}
           value={stats.overdue > 0 ? `${stats.overdue} đơn` : vnd(stats.revenueMonth)}
-          alert={stats.overdue > 0}
+          sub={stats.overdue > 0 ? "Cần gọi khách ngay" : "Tiền thuê đã chốt"}
         />
       </div>
 
-      <div className="mb-5 inline-flex rounded-xl p-1" style={{ background: "var(--surface2, var(--bg2))" }}>
+      {/* Thanh chuyển tab + nút thêm — đúng hàng công cụ của bản thiết kế. */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex flex-none gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+          {([["inventory", "Kho trang phục", Boxes], ["orders", "Đơn thuê", ClipboardList]] as const).map(([key, label, Icon]) => (
+            <button
+              key={key}
+              onClick={() => { setTab(key); setAdding(false); }}
+              className="flex items-center gap-1.5 rounded-[8px] px-[15px] py-[6.5px] text-[12.5px] font-semibold"
+              style={tab === key ? { background: "var(--sf)", color: "var(--tx)", boxShadow: "0 1px 2px rgba(20,15,25,.08)" } : { color: "var(--tx2)" }}
+            >
+              <Icon size={15} /> {label}
+            </button>
+          ))}
+        </div>
         <button
-          onClick={() => setTab("inventory")}
-          className="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition"
-          style={tab === "inventory" ? { background: "var(--card, #fff)", boxShadow: "0 1px 2px rgba(0,0,0,.08)" } : { color: "var(--text2)" }}
+          onClick={() => setAdding((v) => !v)}
+          className="ml-auto flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
+          style={adding ? { border: "1px solid var(--bd)" } : { background: "var(--ac)", color: "#fff" }}
         >
-          <Boxes size={15} /> Kho trang phục
-        </button>
-        <button
-          onClick={() => setTab("orders")}
-          className="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition"
-          style={tab === "orders" ? { background: "var(--card, #fff)", boxShadow: "0 1px 2px rgba(0,0,0,.08)" } : { color: "var(--text2)" }}
-        >
-          <ClipboardList size={15} /> Đơn thuê
+          <Plus size={17} /> {adding ? "Đóng" : tab === "inventory" ? "Thêm trang phục" : "Tạo đơn thuê"}
         </button>
       </div>
 
       {tab === "inventory" ? (
-        <Inventory supabase={supabase} ownerId={ownerId} items={items} setItems={setItems} unitsOut={unitsOut} />
+        <Inventory supabase={supabase} ownerId={ownerId} items={items} setItems={setItems} unitsOut={unitsOut} adding={adding} setAdding={setAdding} />
       ) : (
-        <Orders supabase={supabase} ownerId={ownerId} items={items} orders={orders} setOrders={setOrders} unitsOut={unitsOut} />
+        <Orders supabase={supabase} ownerId={ownerId} items={items} orders={orders} setOrders={setOrders} unitsOut={unitsOut} adding={adding} setAdding={setAdding} />
       )}
-    </div>
-  );
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  alert,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  alert?: boolean;
-}) {
-  return (
-    <div className="card p-4" style={alert ? { borderColor: "#d0687a" } : undefined}>
-      <div className="flex items-center gap-1.5 text-xs" style={{ color: alert ? "#d0687a" : "var(--text3)" }}>
-        {icon} {label}
-      </div>
-      <p className="mt-1 text-lg font-semibold" style={alert ? { color: "#d0687a" } : undefined}>{value}</p>
     </div>
   );
 }
@@ -176,12 +163,16 @@ function Inventory({
   items,
   setItems,
   unitsOut,
+  adding,
+  setAdding,
 }: {
   supabase: ReturnType<typeof createClient>;
   ownerId: string;
   items: RentalItem[];
   setItems: React.Dispatch<React.SetStateAction<RentalItem[]>>;
   unitsOut: Map<string, number>;
+  adding: boolean;
+  setAdding: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const emptyForm = {
     name: "",
@@ -243,6 +234,7 @@ function Inventory({
     if (!error && data) {
       setItems((p) => [...p, data as RentalItem]);
       setF(emptyForm);
+      setAdding(false);
     }
   }
 
@@ -261,119 +253,117 @@ function Inventory({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="card h-fit p-6">
-        <h2 className="mb-4 font-serif text-lg font-medium">Thêm trang phục</h2>
-        <div className="space-y-3">
-          <div className="field"><label className="label">Tên</label><input className="input" placeholder="VD: Váy cưới đuôi cá trắng" value={f.name} onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))} /></div>
-          <div className="field">
-            <label className="label">Loại</label>
-            <select className="input" value={f.category} onChange={(e) => setF((p) => ({ ...p, category: e.target.value as RentalCategory }))}>
-              {RENTAL_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{RENTAL_CATEGORY_LABEL[c]}</option>
-              ))}
-            </select>
+    <div className="flex flex-col gap-3.5">
+      {adding && (
+        <Panel className="p-4">
+          <p className="mb-3 text-[13.5px] font-bold">Thêm trang phục vào kho</p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="sm:col-span-2"><label className="label mb-1 block uppercase">Tên</label><input className="input w-full" placeholder="VD: Váy cưới đuôi cá trắng" value={f.name} onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))} /></div>
+            <div>
+              <label className="label mb-1 block uppercase">Loại</label>
+              <select className="input w-full" value={f.category} onChange={(e) => setF((p) => ({ ...p, category: e.target.value as RentalCategory }))}>
+                {RENTAL_CATEGORIES.map((c) => <option key={c} value={c}>{RENTAL_CATEGORY_LABEL[c]}</option>)}
+              </select>
+            </div>
+            <div><label className="label mb-1 block uppercase">Mã</label><input className="input w-full" placeholder="SKU" value={f.code} onChange={(e) => setF((p) => ({ ...p, code: e.target.value }))} /></div>
+            <div><label className="label mb-1 block uppercase">Số lượng</label><input className="input w-full" type="number" min={1} value={f.quantity} onChange={(e) => setF((p) => ({ ...p, quantity: e.target.value }))} /></div>
+            <div><label className="label mb-1 block uppercase">Size</label><input className="input w-full" value={f.size} onChange={(e) => setF((p) => ({ ...p, size: e.target.value }))} /></div>
+            <div><label className="label mb-1 block uppercase">Màu</label><input className="input w-full" value={f.color} onChange={(e) => setF((p) => ({ ...p, color: e.target.value }))} /></div>
+            <div><label className="label mb-1 block uppercase">Giá thuê</label><input className="input w-full" type="number" min={0} placeholder="0" value={f.rental_price} onChange={(e) => setF((p) => ({ ...p, rental_price: e.target.value }))} /></div>
+            <div><label className="label mb-1 block uppercase">Tiền cọc</label><input className="input w-full" type="number" min={0} placeholder="0" value={f.deposit} onChange={(e) => setF((p) => ({ ...p, deposit: e.target.value }))} /></div>
+            <div className="sm:col-span-2 lg:col-span-3"><label className="label mb-1 block uppercase">Ghi chú</label><input className="input w-full" placeholder="Tuỳ chọn" value={f.note} onChange={(e) => setF((p) => ({ ...p, note: e.target.value }))} /></div>
+            <div className="flex items-end">
+              <button
+                onClick={add}
+                disabled={busy || !f.name.trim()}
+                className="flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[13px] font-semibold disabled:opacity-50"
+                style={{ background: "var(--ac)", color: "#fff" }}
+              >
+                <Plus size={16} /> {busy ? "Đang thêm…" : "Thêm vào kho"}
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="field"><label className="label">Mã</label><input className="input" placeholder="SKU" value={f.code} onChange={(e) => setF((p) => ({ ...p, code: e.target.value }))} /></div>
-            <div className="field"><label className="label">Số lượng</label><input className="input" type="number" min={1} value={f.quantity} onChange={(e) => setF((p) => ({ ...p, quantity: e.target.value }))} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="field"><label className="label">Size</label><input className="input" value={f.size} onChange={(e) => setF((p) => ({ ...p, size: e.target.value }))} /></div>
-            <div className="field"><label className="label">Màu</label><input className="input" value={f.color} onChange={(e) => setF((p) => ({ ...p, color: e.target.value }))} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="field"><label className="label">Giá thuê</label><input className="input" type="number" min={0} placeholder="0" value={f.rental_price} onChange={(e) => setF((p) => ({ ...p, rental_price: e.target.value }))} /></div>
-            <div className="field"><label className="label">Tiền cọc</label><input className="input" type="number" min={0} placeholder="0" value={f.deposit} onChange={(e) => setF((p) => ({ ...p, deposit: e.target.value }))} /></div>
-          </div>
-          <div className="field"><label className="label">Ghi chú</label><input className="input" placeholder="Tuỳ chọn" value={f.note} onChange={(e) => setF((p) => ({ ...p, note: e.target.value }))} /></div>
-          <button onClick={add} disabled={busy} className="btn-primary w-full"><Plus size={15} /> {busy ? "Đang thêm…" : "Thêm vào kho"}</button>
+        </Panel>
+      )}
+
+      {/* Tìm kiếm + lọc loại */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-[180px] flex-1">
+          <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--tx3)" }} />
+          <input className="input !pl-9 w-full" placeholder="Tìm theo tên, mã, màu…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
+        <select className="input !w-auto flex-none" value={filterCat} onChange={(e) => setFilterCat(e.target.value as RentalCategory | "all")}>
+          <option value="all">Tất cả loại</option>
+          {RENTAL_CATEGORIES.map((c) => <option key={c} value={c}>{RENTAL_CATEGORY_LABEL[c]}</option>)}
+        </select>
       </div>
 
-      <div className="lg:col-span-2">
-        {/* Search + category filter */}
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[180px]">
-            <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text3)" }} />
-            <input
-              className="input !pl-9"
-              placeholder="Tìm theo tên, mã, màu…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-          </div>
-          <select className="input !w-auto" value={filterCat} onChange={(e) => setFilterCat(e.target.value as RentalCategory | "all")}>
-            <option value="all">Tất cả loại</option>
-            {RENTAL_CATEGORIES.map((c) => (
-              <option key={c} value={c}>{RENTAL_CATEGORY_LABEL[c]}</option>
-            ))}
-          </select>
-        </div>
+      {filtered.length === 0 ? (
+        <Panel>
+          <EmptyState
+            icon={Shirt}
+            title={items.length === 0 ? "Kho trang phục còn trống" : "Không tìm thấy món phù hợp"}
+            hint={items.length === 0 ? "Bấm “Thêm trang phục” để nhập món đầu tiên — váy cưới, vest, áo dài hay phụ kiện." : "Thử xoá bớt từ khoá hoặc chọn lại loại."}
+          />
+        </Panel>
+      ) : (
+        RENTAL_CATEGORIES.filter((c) => grouped.has(c)).map((c) => (
+          <div key={c}>
+            <p className="mb-2 flex items-center gap-2 text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>
+              <Shirt size={13} /> {RENTAL_CATEGORY_LABEL[c]} · {grouped.get(c)!.length}
+            </p>
+            {/* Thẻ ngang: ảnh 94px bên trái, thông tin bên phải — dáng thiết kế. */}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
+              {grouped.get(c)!.map((e) => {
+                const out = unitsOut.get(e.id) ?? 0;
+                const avail = Math.max(0, (e.quantity || 0) - out);
+                return (
+                  <Panel key={e.id} className="flex overflow-hidden">
+                    <div className="flex w-[94px] flex-none items-center justify-center" style={{ background: "var(--sf2)" }}>
+                      {e.cover_url
+                        // eslint-disable-next-line @next/next/no-img-element
+                        ? <img src={e.cover_url} alt="" className="h-full w-full object-cover" />
+                        : <Shirt size={24} style={{ color: "var(--tx3)" }} />}
+                    </div>
+                    <div className="min-w-0 flex-1 px-3.5 py-[13px]">
+                      <p className="text-[13.5px] font-bold leading-[1.3]" style={{ textWrap: "pretty" }}>{e.name}</p>
+                      <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                        {[e.code && `#${e.code}`, e.size && `Size ${e.size}`, e.color].filter(Boolean).join(" · ") || "Chưa ghi mã"}
+                      </p>
+                      <p className="tnum mt-2 text-[14px] font-bold">{e.rental_price ? vnd(e.rental_price) : "Chưa đặt giá"}</p>
+                      {e.deposit ? <p className="tnum text-[11px]" style={{ color: "var(--tx3)" }}>Cọc {vnd(e.deposit)}</p> : null}
+                      {e.note ? <p className="mt-1 truncate text-[11px] italic" style={{ color: "var(--tx3)" }}>{e.note}</p> : null}
 
-        {filtered.length === 0 ? (
-          <div className="card flex items-center justify-center py-16 text-sm" style={{ color: "var(--text3)" }}>
-            {items.length === 0 ? "Chưa có trang phục nào." : "Không tìm thấy món phù hợp."}
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {RENTAL_CATEGORIES.filter((c) => grouped.has(c)).map((c) => (
-              <div key={c}>
-                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text2)" }}>
-                  <Shirt size={15} /> {RENTAL_CATEGORY_LABEL[c]}
-                  <span className="text-xs font-normal" style={{ color: "var(--text3)" }}>({grouped.get(c)!.length})</span>
-                </h3>
-                <div className="space-y-2">
-                  {grouped.get(c)!.map((e) => {
-                    const out = unitsOut.get(e.id) ?? 0;
-                    const avail = Math.max(0, (e.quantity || 0) - out);
-                    return (
-                      <div key={e.id} className="card flex items-center justify-between gap-3 p-4">
-                        <div className="min-w-0">
-                          <p className="truncate font-medium">
-                            {e.name}
-                            {e.code ? <span className="ml-2 text-xs font-normal" style={{ color: "var(--text3)" }}>#{e.code}</span> : null}
-                          </p>
-                          <p className="text-xs" style={{ color: "var(--text3)" }}>
-                            {[e.size && `Size ${e.size}`, e.color].filter(Boolean).join(" · ")}
-                            {e.rental_price ? ` · Thuê ${vnd(e.rental_price)}` : ""}
-                            {e.deposit ? ` · Cọc ${vnd(e.deposit)}` : ""}
-                          </p>
-                          {e.note ? <p className="mt-0.5 truncate text-xs italic" style={{ color: "var(--text3)" }}>{e.note}</p> : null}
-                          <p className="mt-1 text-xs">
-                            <span
-                              className="rounded-md px-1.5 py-0.5 font-medium"
-                              style={{
-                                background: avail > 0 ? "var(--s-greenS)" : "rgba(208,104,122,.12)",
-                                color: avail > 0 ? "var(--s-green)" : "#d0687a",
-                              }}
-                            >
-                              Còn {avail}/{e.quantity}
-                            </span>
-                            {out > 0 ? <span className="ml-2" style={{ color: "var(--text3)" }}>Đang thuê {out}</span> : null}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          <select
-                            className="input !h-8 !py-0 text-xs"
-                            value={e.status}
-                            onChange={(ev) => setStatus(e.id, ev.target.value as RentalItemStatus)}
-                          >
-                            {ITEM_STATUSES.map((s) => (
-                              <option key={s} value={s}>{RENTAL_ITEM_STATUS_LABEL[s]}</option>
-                            ))}
-                          </select>
-                          <button onClick={() => remove(e.id)} aria-label="Xoá trang phục" className="btn-ghost px-2.5 py-1.5 text-xs"><Trash2 size={14} /></button>
-                        </div>
+                      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                        <Pill tone={avail > 0 ? "green" : "red"}>Còn {avail}/{e.quantity}</Pill>
+                        {out > 0 ? <Pill tone="blue">Đang thuê {out}</Pill> : null}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+
+                      <div className="mt-2.5 flex items-center gap-1.5">
+                        <select
+                          className="input !h-8 !py-0 flex-1 text-[11.5px]"
+                          value={e.status}
+                          onChange={(ev) => setStatus(e.id, ev.target.value as RentalItemStatus)}
+                        >
+                          {ITEM_STATUSES.map((s) => <option key={s} value={s}>{RENTAL_ITEM_STATUS_LABEL[s]}</option>)}
+                        </select>
+                        <button
+                          onClick={() => remove(e.id)}
+                          aria-label="Xoá trang phục"
+                          className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px]"
+                          style={{ color: "var(--tx3)" }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  </Panel>
+                );
+              })}
+            </div>
           </div>
-        )}
-      </div>
+        ))
+      )}
     </div>
   );
 }
@@ -389,6 +379,8 @@ function Orders({
   orders,
   setOrders,
   unitsOut,
+  adding,
+  setAdding,
 }: {
   supabase: ReturnType<typeof createClient>;
   ownerId: string;
@@ -396,6 +388,8 @@ function Orders({
   orders: RentalOrderWithItems[];
   setOrders: React.Dispatch<React.SetStateAction<RentalOrderWithItems[]>>;
   unitsOut: Map<string, number>;
+  adding: boolean;
+  setAdding: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const emptyForm = {
     client_name: "",
@@ -489,6 +483,7 @@ function Orders({
     setOrders((p) => [{ ...(order as RentalOrderWithItems), items: lineRows ?? [] }, ...p]);
     setF(emptyForm);
     setLines([]);
+    setAdding(false);
   }
 
   async function setStatus(id: string, status: RentalOrderStatus) {
@@ -511,127 +506,157 @@ function Orders({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="card h-fit p-6">
-        <h2 className="mb-4 font-serif text-lg font-medium">Tạo đơn thuê</h2>
-        <div className="space-y-3">
-          <div className="field"><label className="label">Tên khách</label><input className="input" value={f.client_name} onChange={(e) => setF((p) => ({ ...p, client_name: e.target.value }))} /></div>
-          <div className="field"><label className="label">SĐT</label><input className="input" value={f.client_phone} onChange={(e) => setF((p) => ({ ...p, client_phone: e.target.value }))} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="field"><label className="label">Ngày nhận</label><input className="input" type="date" value={f.pickup_date} onChange={(e) => setF((p) => ({ ...p, pickup_date: e.target.value }))} /></div>
-            <div className="field"><label className="label">Ngày trả</label><input className="input" type="date" value={f.return_date} onChange={(e) => setF((p) => ({ ...p, return_date: e.target.value }))} /></div>
-          </div>
-
-          <div className="field">
-            <label className="label">Chọn trang phục</label>
-            <select className="input" value="" onChange={(e) => { if (e.target.value) addLine(e.target.value); }}>
-              <option value="">+ Thêm món…</option>
-              {selectableItems.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {RENTAL_CATEGORY_LABEL[i.category]} · {i.name} ({vnd(i.rental_price)}) · còn {availById.get(i.id)}
-                </option>
-              ))}
-            </select>
-            {selectableItems.length === 0 && (
-              <p className="mt-1 text-xs" style={{ color: "var(--text3)" }}>Không còn món nào sẵn sàng để thuê.</p>
-            )}
-          </div>
-
-          {lines.length > 0 && (
-            <div className="space-y-2 rounded-xl p-3" style={{ background: "var(--surface2, var(--bg2))" }}>
-              {lines.map((l) => (
-                <div key={l.item_id} className="flex items-center justify-between gap-2 text-sm">
-                  <span className="min-w-0 flex-1 truncate">{l.name}</span>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {l.max > 1 && (
-                      <input
-                        type="number"
-                        min={1}
-                        max={l.max}
-                        value={l.qty}
-                        onChange={(e) => setLineQty(l.item_id, Number(e.target.value))}
-                        className="input !h-7 !w-14 !py-0 text-center text-xs"
-                        title={`Tối đa ${l.max}`}
-                      />
-                    )}
-                    <span style={{ color: "var(--text3)" }}>{vnd(l.price * l.qty)}</span>
-                    <button onClick={() => removeLine(l.item_id)} aria-label="Xoá món khỏi đơn" className="text-xs" style={{ color: "var(--text3)" }}><Trash2 size={13} /></button>
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center justify-between border-t pt-2 text-sm font-semibold" style={{ borderColor: "var(--border)" }}>
-                <span>Tổng</span><span>{vnd(total)}</span>
-              </div>
+    <div className="flex flex-col gap-3.5">
+      {adding && (
+        <Panel className="p-4">
+          <p className="mb-3 text-[13.5px] font-bold">Tạo đơn thuê</p>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div><label className="label mb-1 block uppercase">Tên khách</label><input className="input w-full" value={f.client_name} onChange={(e) => setF((p) => ({ ...p, client_name: e.target.value }))} /></div>
+              <div><label className="label mb-1 block uppercase">SĐT</label><input className="input w-full" value={f.client_phone} onChange={(e) => setF((p) => ({ ...p, client_phone: e.target.value }))} /></div>
+              <div><label className="label mb-1 block uppercase">Ngày nhận</label><input className="input w-full" type="date" value={f.pickup_date} onChange={(e) => setF((p) => ({ ...p, pickup_date: e.target.value }))} /></div>
+              <div><label className="label mb-1 block uppercase">Ngày trả</label><input className="input w-full" type="date" value={f.return_date} onChange={(e) => setF((p) => ({ ...p, return_date: e.target.value }))} /></div>
+              <div><label className="label mb-1 block uppercase">Cọc đã thu</label><input className="input w-full" type="number" min={0} placeholder="0" value={f.deposit_paid} onChange={(e) => setF((p) => ({ ...p, deposit_paid: e.target.value }))} /></div>
+              <div><label className="label mb-1 block uppercase">Ghi chú</label><input className="input w-full" placeholder="Tuỳ chọn" value={f.note} onChange={(e) => setF((p) => ({ ...p, note: e.target.value }))} /></div>
             </div>
-          )}
 
-          <div className="field"><label className="label">Cọc đã thu</label><input className="input" type="number" min={0} placeholder="0" value={f.deposit_paid} onChange={(e) => setF((p) => ({ ...p, deposit_paid: e.target.value }))} /></div>
-          <div className="field"><label className="label">Ghi chú</label><input className="input" placeholder="Tuỳ chọn" value={f.note} onChange={(e) => setF((p) => ({ ...p, note: e.target.value }))} /></div>
-          <button onClick={create} disabled={busy || !f.client_name.trim() || lines.length === 0} className="btn-primary w-full"><Plus size={15} /> {busy ? "Đang tạo…" : "Tạo đơn"}</button>
-        </div>
-      </div>
+            <div>
+              <label className="label mb-1 block uppercase">Trang phục trong đơn</label>
+              <select className="input w-full" value="" onChange={(e) => { if (e.target.value) addLine(e.target.value); }}>
+                <option value="">+ Thêm món…</option>
+                {selectableItems.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {RENTAL_CATEGORY_LABEL[i.category]} · {i.name} ({vnd(i.rental_price)}) · còn {availById.get(i.id)}
+                  </option>
+                ))}
+              </select>
+              {selectableItems.length === 0 && (
+                <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>Không còn món nào sẵn sàng để thuê.</p>
+              )}
 
-      <div className="lg:col-span-2">
-        {/* Status filter */}
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>Tất cả</FilterChip>
-          {ORDER_STATUSES.map((s) => (
-            <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>{RENTAL_ORDER_STATUS_LABEL[s]}</FilterChip>
-          ))}
-        </div>
-
-        {shownOrders.length === 0 ? (
-          <div className="card flex items-center justify-center py-16 text-sm" style={{ color: "var(--text3)" }}>
-            {orders.length === 0 ? "Chưa có đơn thuê nào." : "Không có đơn ở trạng thái này."}
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {shownOrders.map((o) => {
-              const overdue = isOverdue(o);
-              return (
-                <div key={o.id} className="card p-4" style={overdue ? { borderColor: "#d0687a" } : undefined}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-2 font-medium">
-                        <PackageOpen size={15} style={{ color: "var(--text3)" }} />
-                        {o.client_name}
-                        {o.client_phone ? <span className="text-xs font-normal" style={{ color: "var(--text3)" }}>· {o.client_phone}</span> : null}
-                        {overdue && o.status !== "overdue" ? (
-                          <span className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium" style={{ background: "rgba(208,104,122,.12)", color: "#d0687a" }}>
-                            <AlertTriangle size={12} /> Quá hạn trả
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="mt-0.5 text-xs" style={{ color: "var(--text3)" }}>
-                        {o.items.map((l) => `${l.name}${l.qty > 1 ? ` ×${l.qty}` : ""}`).join(", ") || "—"}
-                      </p>
-                      <p className="mt-0.5 text-xs" style={{ color: "var(--text3)" }}>
-                        {[o.pickup_date && `Nhận ${o.pickup_date}`, o.return_date && `Trả ${o.return_date}`].filter(Boolean).join(" · ")}
-                        {` · Tổng ${vnd(o.total_price)}`}
-                        {o.deposit_paid ? ` · Cọc ${vnd(o.deposit_paid)}` : ""}
-                        {o.returned_at ? ` · Đã trả ${o.returned_at}` : ""}
-                      </p>
-                      {o.note ? <p className="mt-0.5 truncate text-xs italic" style={{ color: "var(--text3)" }}>{o.note}</p> : null}
+              {lines.length > 0 && (
+                <div className="mt-2.5 space-y-2 rounded-[11px] p-3" style={{ background: "var(--sf2)" }}>
+                  {lines.map((l) => (
+                    <div key={l.item_id} className="flex items-center gap-2 text-[12.5px]">
+                      <span className="min-w-0 flex-1 truncate font-semibold">{l.name}</span>
+                      {l.max > 1 && (
+                        <input
+                          type="number"
+                          min={1}
+                          max={l.max}
+                          value={l.qty}
+                          onChange={(e) => setLineQty(l.item_id, Number(e.target.value))}
+                          className="input !h-7 !w-14 !py-0 flex-none text-center text-[11.5px]"
+                          title={`Tối đa ${l.max}`}
+                        />
+                      )}
+                      <span className="tnum flex-none" style={{ color: "var(--tx3)" }}>{vnd(l.price * l.qty)}</span>
+                      <button onClick={() => removeLine(l.item_id)} aria-label="Xoá món khỏi đơn" className="flex-none" style={{ color: "var(--tx3)" }}><Trash2 size={13} /></button>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <select
-                        className="input !h-8 !py-0 text-xs"
-                        value={o.status}
-                        onChange={(e) => setStatus(o.id, e.target.value as RentalOrderStatus)}
-                      >
-                        {ORDER_STATUSES.map((s) => (
-                          <option key={s} value={s}>{RENTAL_ORDER_STATUS_LABEL[s]}</option>
-                        ))}
-                      </select>
-                      <button onClick={() => remove(o.id)} aria-label="Xoá đơn thuê" className="btn-ghost px-2.5 py-1.5 text-xs"><Trash2 size={14} /></button>
-                    </div>
+                  ))}
+                  <div className="flex items-center justify-between pt-2 text-[13px] font-bold" style={{ borderTop: "1px solid var(--bd)" }}>
+                    <span>Tổng</span><span className="tnum">{vnd(total)}</span>
                   </div>
                 </div>
-              );
-            })}
+              )}
+
+              <button
+                onClick={create}
+                disabled={busy || !f.client_name.trim() || lines.length === 0}
+                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[13px] font-semibold disabled:opacity-50"
+                style={{ background: "var(--ac)", color: "#fff" }}
+              >
+                <Plus size={16} /> {busy ? "Đang tạo…" : "Tạo đơn"}
+              </button>
+            </div>
           </div>
-        )}
+        </Panel>
+      )}
+
+      {/* Lọc theo trạng thái */}
+      <div className="flex flex-wrap gap-1.5">
+        <FilterChip active={filter === "all"} onClick={() => setFilter("all")}>Tất cả</FilterChip>
+        {ORDER_STATUSES.map((s) => (
+          <FilterChip key={s} active={filter === s} onClick={() => setFilter(s)}>{RENTAL_ORDER_STATUS_LABEL[s]}</FilterChip>
+        ))}
       </div>
+
+      {shownOrders.length === 0 ? (
+        <Panel>
+          <EmptyState
+            icon={PackageOpen}
+            title={orders.length === 0 ? "Chưa có đơn thuê nào" : "Không có đơn ở trạng thái này"}
+            hint={orders.length === 0 ? "Bấm “Tạo đơn thuê” để ghi đơn đầu tiên — chọn khách, ngày lấy / trả và các món trong kho." : "Chọn lại bộ lọc phía trên để xem các đơn khác."}
+          />
+        </Panel>
+      ) : (
+        /* Dòng đơn thuê theo bản thiết kế: avatar chữ cái, LẤY ĐỒ / TRẢ ĐỒ có
+           nhãn viết hoa riêng, tiền căn phải, pill trạng thái không xuống dòng. */
+        <Panel>
+          {shownOrders.map((o) => {
+            const overdue = isOverdue(o);
+            return (
+              <div
+                key={o.id}
+                className="flex flex-wrap items-center gap-x-3.5 gap-y-2 px-[18px] py-3.5"
+                style={{ borderTop: "1px solid var(--bd2)" }}
+              >
+                <span
+                  className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[11.5px] font-bold text-white"
+                  style={{ background: avatarColor(o.client_name) }}
+                >
+                  {initials(o.client_name)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13.5px] font-bold">
+                    {o.client_name}
+                    {o.client_phone ? <span className="ml-1.5 text-[11.5px] font-medium" style={{ color: "var(--tx3)" }}>· {o.client_phone}</span> : null}
+                  </p>
+                  <p className="mt-px truncate text-[12px]" style={{ color: "var(--tx2)" }}>
+                    {o.items.map((l) => `${l.name}${l.qty > 1 ? ` ×${l.qty}` : ""}`).join(", ") || "—"}
+                  </p>
+                  {o.note ? <p className="truncate text-[11px] italic" style={{ color: "var(--tx3)" }}>{o.note}</p> : null}
+                </div>
+
+                <div className="flex-none text-center">
+                  <p className="text-[10.5px] font-semibold" style={{ color: "var(--tx3)" }}>LẤY ĐỒ</p>
+                  <p className="tnum mt-px text-[12.5px] font-semibold">{o.pickup_date || "—"}</p>
+                </div>
+                <div className="flex-none text-center">
+                  <p className="text-[10.5px] font-semibold" style={{ color: overdue ? "var(--rd)" : "var(--tx3)" }}>TRẢ ĐỒ</p>
+                  <p className="tnum mt-px text-[12.5px] font-semibold" style={overdue ? { color: "var(--rd)" } : undefined}>
+                    {o.returned_at || o.return_date || "—"}
+                  </p>
+                </div>
+                <div className="w-[120px] flex-none text-right">
+                  <p className="tnum text-[14px] font-bold">{vnd(o.total_price)}</p>
+                  <p className="tnum text-[11px]" style={{ color: "var(--tx3)" }}>{o.deposit_paid ? `Cọc ${vnd(o.deposit_paid)}` : "Chưa cọc"}</p>
+                </div>
+
+                {overdue && o.status !== "overdue" ? (
+                  <Pill tone="red"><AlertTriangle size={12} /> Quá hạn trả</Pill>
+                ) : null}
+
+                <select
+                  className="input !h-8 !w-auto !py-0 flex-none text-[11.5px]"
+                  value={o.status}
+                  onChange={(e) => setStatus(o.id, e.target.value as RentalOrderStatus)}
+                >
+                  {ORDER_STATUSES.map((s) => <option key={s} value={s}>{RENTAL_ORDER_STATUS_LABEL[s]}</option>)}
+                </select>
+                <button
+                  onClick={() => remove(o.id)}
+                  aria-label="Xoá đơn thuê"
+                  className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px]"
+                  style={{ color: "var(--tx3)" }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })}
+        </Panel>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { fmtDate } from "@/lib/date";
 import { BANKS } from "@/lib/banks";
 import { VietQR } from "@/components/VietQR";
 import { vnd, type PricelistItem } from "@/lib/types";
+import { Pill } from "@/components/studio/ui";
 
 type Contact = { pl_phone: string; pl_facebook: string; pl_bank_holder: string; pl_bank_account: string; pl_bank_name: string; pl_bank_bin: string };
 type Appearance = { pl_bg: string; pl_text: string; pl_accent: string; pl_logo_url: string };
@@ -637,8 +638,8 @@ export default function PricingManager({
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="card h-fit p-6">
-          <h2 className="mb-4 font-serif text-lg font-medium">Thêm mục</h2>
+        <div className="card h-fit p-[18px]">
+          <p className="mb-3.5 text-[13.5px] font-bold">Thêm mục vào bảng giá</p>
           <div className="space-y-3">
             <div className="field"><label className="label">Tên dịch vụ</label><input className="input" value={f.name} onChange={(e) => setF((p) => ({ ...p, name: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-3">
@@ -672,9 +673,9 @@ export default function PricingManager({
           ) : (
             <>
               <div className="space-y-2">
-                <h2 className="font-serif text-lg font-medium">Các gói dịch vụ</h2>
-                {pkgs.length > 1 && <p className="text-xs" style={{ color: "var(--text3)" }}>Kéo thả <GripVertical size={12} className="inline" /> để đổi vị trí các gói.</p>}
-                {pkgs.length === 0 && <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có gói nào.</p>}
+                <p className="text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Các gói dịch vụ</p>
+                {pkgs.length > 1 && <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>Kéo thả <GripVertical size={12} className="inline" /> để đổi vị trí các gói.</p>}
+                {pkgs.length === 0 && <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Chưa có gói nào.</p>}
                 {pkgs.map((it) =>
                   editId === it.id ? (
                     <div key={it.id} className="card space-y-2 p-4">
@@ -693,6 +694,8 @@ export default function PricingManager({
                       </div>
                     </div>
                   ) : (
+                    /* Dòng gói theo bản thiết kế: tên + nhóm bên trái, nội dung
+                       gói ở giữa, giá căn phải, pill hiện/ẩn, rồi nút thao tác. */
                     <div
                       key={it.id}
                       draggable
@@ -700,27 +703,42 @@ export default function PricingManager({
                       onDragOver={(e) => e.preventDefault()}
                       onDrop={() => reorderPkg(it.id)}
                       onDragEnd={() => setDragId(null)}
-                      className="card flex items-start gap-3 p-4"
-                      style={{ opacity: dragId === it.id ? 0.4 : it.active ? 1 : 0.5, cursor: "grab" }}
+                      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[14px] px-[18px] py-3.5"
+                      style={{
+                        background: "var(--sf)",
+                        border: "1px solid var(--bd)",
+                        opacity: dragId === it.id ? 0.4 : it.active ? 1 : 0.55,
+                        cursor: "grab",
+                      }}
                     >
-                      <GripVertical size={16} className="mt-0.5 shrink-0" style={{ color: "var(--text3)" }} />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium">
-                          {it.name} {it.category && <span className="text-[11px]" style={{ color: "var(--text3)" }}>· {it.category}</span>}
+                      <GripVertical size={16} className="flex-none" style={{ color: "var(--tx3)" }} />
+                      <div className="w-[210px] min-w-0 flex-none">
+                        <p className="truncate text-[14px] font-bold">{it.name}</p>
+                        <p className="mt-px truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                          {it.category || "Chưa xếp nhóm"}
                         </p>
-                        <p className="font-serif text-lg font-medium" style={{ color: "var(--accent)" }}>{vnd(it.price)}<span className="text-xs" style={{ color: "var(--text3)" }}>{it.unit ? ` ${it.unit}` : ""}</span></p>
-                        {it.description && <p className="whitespace-pre-line text-xs" style={{ color: "var(--text3)" }}>{it.description}</p>}
-                        {!it.show_on_home && <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Ẩn ở trang chủ</p>}
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button onClick={() => toggleHome(it)} className="btn-ghost px-2.5 py-1.5 text-xs" title={it.show_on_home ? "Đang hiện ở trang chủ — bấm để ẩn" : "Đang ẩn ở trang chủ — bấm để hiện"} style={{ color: it.show_on_home ? "var(--accent)" : "var(--text3)" }}>
-                          <Home size={14} />
-                        </button>
-                        <button onClick={() => startEdit(it)} className="btn-ghost px-2.5 py-1.5 text-xs" title="Sửa"><Pencil size={14} /></button>
-                        <button onClick={() => toggleActive(it)} className="btn-ghost px-2.5 py-1.5 text-xs" title={it.active ? "Đang hiện" : "Đang ẩn"}>
-                          {it.active ? <Eye size={14} /> : <EyeOff size={14} />}
-                        </button>
-                        <button onClick={() => remove(it.id)} className="btn-ghost px-2.5 py-1.5 text-xs"><Trash2 size={14} /></button>
+                      {it.description ? (
+                        <p className="min-w-[160px] flex-1 whitespace-pre-line text-[12.5px]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+                          {it.description}
+                        </p>
+                      ) : (
+                        <span className="min-w-[160px] flex-1" />
+                      )}
+                      <div className="w-[130px] flex-none text-right">
+                        <p className="tnum text-[15px] font-bold">{vnd(it.price)}</p>
+                        {it.unit ? <p className="text-[11px]" style={{ color: "var(--tx3)" }}>{it.unit}</p> : null}
+                      </div>
+                      <Pill tone={it.show_on_home ? "green" : "gray"}>
+                        {it.show_on_home ? "Hiện ở trang chủ" : "Ẩn ở trang chủ"}
+                      </Pill>
+                      <div className="flex flex-none items-center gap-1">
+                        <RowBtn onClick={() => toggleHome(it)} title={it.show_on_home ? "Đang hiện ở trang chủ — bấm để ẩn" : "Đang ẩn ở trang chủ — bấm để hiện"} on={it.show_on_home}><Home size={15} /></RowBtn>
+                        <RowBtn onClick={() => startEdit(it)} title="Sửa"><Pencil size={15} /></RowBtn>
+                        <RowBtn onClick={() => toggleActive(it)} title={it.active ? "Đang hiện trên bảng giá" : "Đang ẩn khỏi bảng giá"}>
+                          {it.active ? <Eye size={15} /> : <EyeOff size={15} />}
+                        </RowBtn>
+                        <RowBtn onClick={() => remove(it.id)} title="Xoá"><Trash2 size={15} /></RowBtn>
                       </div>
                     </div>
                   )
@@ -728,8 +746,8 @@ export default function PricingManager({
               </div>
 
               <div className="space-y-2">
-                <h2 className="font-serif text-lg font-medium">Chi phí phát sinh &amp; lưu ý</h2>
-                <p className="text-xs" style={{ color: "var(--text3)" }}>Các mục ghi chú riêng, hiển thị tách khỏi gói ở cuối bảng giá.</p>
+                <p className="text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Chi phí phát sinh &amp; lưu ý</p>
+                <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>Các mục ghi chú riêng, hiển thị tách khỏi gói ở cuối bảng giá.</p>
                 {notes.map((it) =>
                   editId === it.id ? (
                     <div key={it.id} className="card space-y-2 p-4">
@@ -767,5 +785,20 @@ export default function PricingManager({
         </div>
       </div>
     </div>
+  );
+}
+
+/** Nút icon trên dòng bảng giá: 30×30, bo 8px, nền hiện khi rê chuột. */
+function RowBtn({ onClick, title, on, children }: { onClick: () => void; title: string; on?: boolean; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px]"
+      style={{ color: on ? "var(--ac)" : "var(--tx3)", background: on ? "var(--acS)" : "transparent" }}
+    >
+      {children}
+    </button>
   );
 }

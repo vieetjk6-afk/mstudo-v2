@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 import { vndShort } from "@/lib/types";
 
@@ -126,6 +127,42 @@ export function RevenueChart({ bars, headline, delta }: { bars: { label: string;
         ))}
       </div>
     </Panel>
+  );
+}
+
+/**
+ * Thanh tab của nhóm "Thiệp · Story · Slide" (màn `digital` trong bản thiết kế):
+ * tab nằm trên một đường kẻ ngang, tab đang mở in đậm + gạch chân 2px màu nhấn,
+ * nút hành động đẩy sang phải. Ba màn dùng chung để chuyển qua lại được.
+ */
+const DIGITAL_TABS: { key: string; label: string; href: string }[] = [
+  { key: "thiep", label: "Thiệp cưới", href: "/dashboard/studio/thiep" },
+  { key: "story", label: "Love Story", href: "/dashboard/studio/story" },
+  { key: "slide", label: "Slide cưới", href: "/dashboard/studio/slide" },
+];
+
+export function DigitalTabs({ active, children }: { active: string; children?: React.ReactNode }) {
+  return (
+    <div className="mb-4 flex items-center gap-0.5" style={{ borderBottom: "1px solid var(--bd)" }}>
+      {DIGITAL_TABS.map((t) => {
+        const on = t.key === active;
+        return (
+          <Link
+            key={t.key}
+            href={t.href}
+            className="px-3.5 pb-[9px] pt-[11px] text-[13px]"
+            style={{
+              fontWeight: on ? 700 : 550,
+              color: on ? "var(--tx)" : "var(--tx3)",
+              borderBottom: `2px solid ${on ? "var(--ac)" : "transparent"}`,
+            }}
+          >
+            {t.label}
+          </Link>
+        );
+      })}
+      {children ? <div className="mb-1.5 ml-auto flex items-center gap-2">{children}</div> : null}
+    </div>
   );
 }
 

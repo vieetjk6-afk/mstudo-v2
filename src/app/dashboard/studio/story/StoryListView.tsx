@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Heart, ExternalLink, Pencil, Copy, Check, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
+import { Heart, ExternalLink, Pencil, Copy, Check, Users, FileText, Plus, Loader2, QrCode, Printer, Download, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { studioUrl } from "@/lib/hosts";
+import { Panel, Pill, EmptyState, DigitalTabs } from "@/components/studio/ui";
 import type { StoryConfig } from "@/lib/types";
 
 export type StoryRow = {
@@ -52,68 +52,129 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
   }
 
   return (
-    <div>
-      <header className="mb-6 flex flex-wrap items-center gap-3">
-        <Heart style={{ color: "#d0687a" }} />
-        <div className="min-w-0 flex-1">
-          <h1 className="font-serif text-2xl font-medium">Trang Love Story</h1>
-          <p className="text-sm" style={{ color: "var(--text2)" }}>Trang chia sẻ khoảnh khắc (ảnh/video từ Google Drive của khách) + sổ lời chúc.</p>
-        </div>
-        <button onClick={createNew} disabled={creating} className="btn-primary px-4 py-2 text-sm disabled:opacity-50">
-          {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Tạo Love Story mới
+    <div className="page-in">
+      <DigitalTabs active="story">
+        <button
+          onClick={createNew}
+          disabled={creating}
+          className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold disabled:opacity-50"
+          style={{ background: "var(--ac)", color: "#fff" }}
+        >
+          {creating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={17} />} Tạo Love Story
         </button>
-      </header>
-      {err && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+      </DigitalTabs>
+
+      {err && (
+        <p className="mb-3 rounded-[10px] px-3 py-2.5 text-[12.5px] font-semibold" style={{ background: "var(--rdS)", color: "var(--rd)" }}>{err}</p>
+      )}
 
       {rows.length === 0 ? (
-        <div className="card p-8 text-center">
-          <Heart className="mx-auto mb-3" style={{ color: "var(--text3)" }} />
-          <p className="text-sm" style={{ color: "var(--text2)" }}>Chưa có trang nào. Bấm <b>“Tạo Love Story mới”</b> để bắt đầu.</p>
-        </div>
+        <Panel>
+          <EmptyState
+            icon={Heart}
+            title="Chưa có trang Love Story nào"
+            hint="Bấm “Tạo Love Story” — trang chia sẻ khoảnh khắc từ Drive của khách kèm sổ lời chúc."
+          />
+        </Panel>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3">
           {rows.map((r) => {
             const couple = [r.config.groom_name, r.config.bride_name].filter(Boolean).join(" & ") || "(chưa đặt tên)";
             const editUrl = studioUrl(studioHost, `/story/sua/${r.edit_token}`);
             const viewUrl = studioUrl(studioHost, `/story/${r.slug}`);
+            const cover = (r.config as { cover_url?: string | null }).cover_url;
             return (
-              <div key={r.id} className="card p-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium">{couple}</p>
-                    <p className="text-xs" style={{ color: "var(--text3)" }}>
-                      <span style={{ color: r.published ? "var(--s-green)" : "var(--text3)" }}>{r.published ? "Đang hiển thị" : "Nháp"}</span>
-                    </p>
+              <Panel key={r.id} className="overflow-hidden">
+                <div className="flex h-[132px] items-center justify-center" style={{ background: "var(--sf2)" }}>
+                  {cover
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img src={cover} alt="" className="h-full w-full object-cover" />
+                    : <Heart size={28} style={{ color: "var(--tx3)" }} />}
+                </div>
+
+                <div className="px-[15px] py-3.5">
+                  <div className="flex items-start gap-2">
+                    <p className="min-w-0 flex-1 truncate text-[14px] font-bold">{couple}</p>
+                    <Pill tone={r.published ? "green" : "gray"}>{r.published ? "Đang hiển thị" : "Nháp"}</Pill>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700"><Users size={13} /> {r.wish_count} lời chúc</span>
+
+                  <p className="mt-[11px] flex items-center gap-1.5 pt-2.5 text-[12px]" style={{ borderTop: "1px solid var(--bd2)", color: "var(--tx2)" }}>
+                    <Users size={14} style={{ color: "var(--tx3)" }} /> {r.wish_count} lời chúc
+                  </p>
+
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    <MiniBtn href={viewUrl} icon={ExternalLink}>Xem</MiniBtn>
+                    <MiniBtn href={editUrl} icon={Pencil}>Sửa</MiniBtn>
+                    <MiniBtn onClick={() => copy(editUrl, `e-${r.id}`)} icon={copied === `e-${r.id}` ? Check : Copy}>
+                      {copied === `e-${r.id}` ? "Đã chép" : "Link sửa"}
+                    </MiniBtn>
+                    <MiniBtn onClick={() => openQr(couple, viewUrl)} icon={QrCode}>QR</MiniBtn>
+                    {r.contract_id && <MiniBtn href={`/dashboard/studio/contracts/${r.contract_id}`} sameTab icon={FileText}>Hợp đồng</MiniBtn>}
+                  </div>
                 </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
-                  <a href={viewUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><ExternalLink size={13} /> Xem</a>
-                  <a href={editUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><Pencil size={13} /> Mở trình sửa</a>
-                  <button onClick={() => copy(editUrl, `e-${r.id}`)} className="btn-ghost px-2.5 py-1.5 text-xs">{copied === `e-${r.id}` ? <Check size={13} /> : <Copy size={13} />} Chép link sửa</button>
-                  <button onClick={() => openQr(couple, viewUrl)} className="btn-ghost px-2.5 py-1.5 text-xs"><QrCode size={13} /> Mã QR / In</button>
-                  {r.contract_id && <Link href={`/dashboard/studio/contracts/${r.contract_id}`} className="btn-ghost px-2.5 py-1.5 text-xs"><FileText size={13} /> Hợp đồng</Link>}
-                </div>
-              </div>
+              </Panel>
             );
           })}
         </div>
       )}
 
       {qr && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setQr(null)}>
-          <div className="w-full max-w-xs rounded-2xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between"><p className="font-medium">{qr.couple}</p><button onClick={() => setQr(null)} className="text-stone-400 hover:text-stone-700"><X size={18} /></button></div>
+        <div className="fixed inset-0 z-50 grid place-items-center p-4" style={{ background: "rgba(20,15,25,.5)" }} onClick={() => setQr(null)}>
+          <div
+            className="w-full max-w-xs rounded-[14px] p-5 text-center"
+            style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-modal)", animation: "vkPop .2s ease" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="text-[14px] font-bold">{qr.couple}</p>
+              <button onClick={() => setQr(null)} aria-label="Đóng" style={{ color: "var(--tx3)" }}><X size={18} /></button>
+            </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qr.img} alt="QR" className="mx-auto my-3 h-56 w-56" />
-            <p className="mb-4 break-all text-[11px] text-stone-400">{qr.url}</p>
+            <img src={qr.img} alt="QR" className="mx-auto my-3.5 h-56 w-56 rounded-[10px]" />
+            <p className="mb-3.5 break-all text-[11px]" style={{ color: "var(--tx3)" }}>{qr.url}</p>
             <div className="flex justify-center gap-2">
-              <a href={qr.img} download={`qr-${qr.couple}.png`} className="btn-ghost px-3 py-2 text-xs">Tải ảnh</a>
-              <button onClick={printQr} className="btn-primary px-3 py-2 text-xs"><Printer size={14} /> In mã QR</button>
+              <a
+                href={qr.img}
+                download={`qr-${qr.couple}.png`}
+                className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                style={{ border: "1px solid var(--bd)" }}
+              >
+                <Download size={14} /> Tải ảnh
+              </a>
+              <button
+                onClick={printQr}
+                className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                style={{ background: "var(--ac)", color: "#fff" }}
+              >
+                <Printer size={14} /> In mã QR
+              </button>
             </div>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+/** Nút phụ nhỏ trên thẻ — cùng dáng với màn Thiệp cưới. */
+function MiniBtn({
+  href, sameTab, onClick, icon: Icon, children,
+}: {
+  href?: string; sameTab?: boolean; onClick?: () => void;
+  icon: React.ElementType; children: React.ReactNode;
+}) {
+  const cls = "flex flex-none items-center gap-1 whitespace-nowrap rounded-[8px] px-2.5 py-[6px] text-[11.5px] font-semibold";
+  const style = { border: "1px solid var(--bd)", color: "var(--tx2)" };
+  if (href) {
+    return (
+      <a href={href} className={cls} style={style} {...(sameTab ? {} : { target: "_blank", rel: "noreferrer" })}>
+        <Icon size={13} /> {children}
+      </a>
+    );
+  }
+  return (
+    <button onClick={onClick} className={cls} style={style}>
+      <Icon size={13} /> {children}
+    </button>
   );
 }
