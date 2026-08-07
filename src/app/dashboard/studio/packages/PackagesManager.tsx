@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/MoneyInput";
 import { vnd, type StudioPackage } from "@/lib/types";
 import { Panel, Pill, EmptyState } from "@/components/studio/ui";
+import { useUndoToast } from "@/components/studio/UndoToast";
 
 export default function PackagesManager({
   ownerId,
@@ -15,6 +16,7 @@ export default function PackagesManager({
   initial: StudioPackage[];
 }) {
   const supabase = createClient();
+  const { run, view } = useUndoToast();
   const [list, setList] = useState<StudioPackage[]>(initial);
   const [f, setF] = useState({ client_name: "", client_phone: "", name: "Thẻ buổi", total_sessions: 1, price: 0 });
   const [busy, setBusy] = useState(false);
@@ -56,14 +58,22 @@ export default function PackagesManager({
     setList((l) => l.map((x) => (x.id === p.id ? { ...x, paid: !x.paid } : x)));
   }
 
-  async function remove(id: string) {
-    if (!confirm("Xoá thẻ buổi này?")) return;
-    await supabase.from("studio_packages").delete().eq("id", id);
+  /** Xoá có hoàn tác — thay hộp confirm: bấm nhầm thì bấm "Hoàn tác". */
+  function remove(id: string) {
+    const idx = list.findIndex((x) => x.id === id);
+    const row = list[idx];
+    if (!row) return;
     setList((l) => l.filter((x) => x.id !== id));
+    run({
+      label: `Đã xoá thẻ buổi của ${row.client_name}`,
+      commit: async () => { await supabase.from("studio_packages").delete().eq("id", id); },
+      undo: () => setList((l) => { const n = [...l]; n.splice(idx, 0, row); return n; }),
+    });
   }
 
   return (
     <div className="page-in flex flex-col gap-3.5">
+      {view}
       <div className="flex flex-wrap items-center gap-2.5">
         <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
           Khách mua gói nhiều buổi trả trước — trừ dần mỗi lần chụp.

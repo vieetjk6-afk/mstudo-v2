@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mainUrl } from "@/lib/hosts";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
+import { useUndoToast } from "@/components/studio/UndoToast";
 import { CREW_ROLE_LABEL, type StudioCrew, type CrewRole } from "@/lib/types";
 
 export default function CrewManager({
@@ -24,6 +25,7 @@ export default function CrewManager({
   registerError?: string | null;
 }) {
   const supabase = createClient();
+  const { run, view } = useUndoToast();
   const statFor = (phone: string) => stats[(phone || "").replace(/\D/g, "")] || null;
   const [list, setList] = useState<StudioCrew[]>(initial);
   const [name, setName] = useState("");
@@ -73,13 +75,26 @@ export default function CrewManager({
     setList((p) => p.map((c) => (c.id === id ? { ...c, status: "active" } : c)));
   }
 
-  async function remove(id: string) {
-    await supabase.from("studio_crew").delete().eq("id", id);
+  /**
+   * Xoá có hoàn tác: hàng biến mất ngay, 5 giây sau mới xoá thật.
+   * Dùng chung cho cả nút "Xoá" ở sổ thợ và nút "Từ chối" ở danh sách xin vào
+   * sổ — cùng một thao tác xoá dòng, chỉ khác chữ hiện trên toast.
+   */
+  function remove(id: string, verb = "Đã xoá") {
+    const idx = list.findIndex((c) => c.id === id);
+    const row = list[idx];
+    if (!row) return;
     setList((p) => p.filter((c) => c.id !== id));
+    run({
+      label: `${verb} ${row.name || row.phone || "thợ"}`,
+      commit: async () => { await supabase.from("studio_crew").delete().eq("id", id); },
+      undo: () => setList((p) => { const n = [...p]; n.splice(idx, 0, row); return n; }),
+    });
   }
 
   return (
     <div className="page-in">
+      {view}
       <div className="mb-3.5">
         <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
           Lưu photographer / cameramen theo số điện thoại để gán nhanh vào hợp đồng.
@@ -127,7 +142,7 @@ export default function CrewManager({
                 </span>
                 <span className="flex shrink-0 gap-2">
                   <button onClick={() => approve(c.id)} className="btn-primary px-3 py-1.5 text-xs">Nhận</button>
-                  <button onClick={() => remove(c.id)} className="btn-ghost px-3 py-1.5 text-xs">Từ chối</button>
+                  <button onClick={() => remove(c.id, "Đã từ chối")} className="btn-ghost px-3 py-1.5 text-xs">Từ chối</button>
                 </span>
               </li>
             ))}
