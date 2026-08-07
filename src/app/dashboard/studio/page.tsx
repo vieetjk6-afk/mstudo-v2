@@ -82,7 +82,7 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
   ];
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-1 flex items-center gap-3">
         <h1 className="font-serif text-2xl font-medium">Tổng quan</h1>
         <Link href="/dashboard/site" className="btn-ghost ml-auto">

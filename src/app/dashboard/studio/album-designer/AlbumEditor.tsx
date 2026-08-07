@@ -699,7 +699,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
   const nbW = spreadPxW * 0.52, nbH = spreadPxH * 0.52; // spread hàng xóm (chế độ Nhiều Spread)
 
   return (
-    <div className="animate-[vkFade_.4s_ease_both]">
+    <div className="page-in">
       {/* ── Thanh công cụ trên ── */}
       <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-2xl p-2" style={panel}>
         <button onClick={onBack} className={`btn-ghost ${bar} gap-1`} title="Đổi khổ / mở album khác"><ArrowLeft size={15} /></button>

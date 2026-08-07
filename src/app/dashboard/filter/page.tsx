@@ -305,7 +305,7 @@ export default function FilterPage() {
   );
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-8">
         <p className="eyebrow mb-1.5">Công cụ</p>
         <h1 className="font-serif text-[clamp(28px,4vw,44px)] font-medium leading-none">Lọc ảnh</h1>

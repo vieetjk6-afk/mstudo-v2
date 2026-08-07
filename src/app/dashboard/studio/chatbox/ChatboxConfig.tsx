@@ -55,10 +55,10 @@ export default function ChatboxConfig({
   }
 
   return (
-    <div className="mx-auto max-w-3xl animate-[vkFade_.5s_ease_both]">
+    <div className="mx-auto max-w-3xl page-in">
       <div className="mb-6">
         <p className="eyebrow mb-1.5 flex items-center gap-1.5"><MessageSquare size={13} /> Website</p>
-        <h1 className="font-serif text-[clamp(26px,4vw,40px)] font-medium leading-none">Cấu hình chatbox</h1>
+        <h1 className="text-[19px] font-bold" style={{ letterSpacing: "-.4px" }}>Cấu hình chatbox</h1>
         <p className="mt-3 text-[15px]" style={{ color: "var(--text2)" }}>
           Dạy trợ lý trả lời theo ý bạn. Bot luôn biết dịch vụ &amp; bảng giá studio; ở đây bạn bổ
           sung lời chào, chính sách, câu trả lời mẫu và giọng văn. Lưu là áp dụng ngay.

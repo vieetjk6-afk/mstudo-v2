@@ -105,7 +105,7 @@ export default function AlbumDesigner() {
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both] pb-16">
+    <div className="page-in pb-16">
       {/* ── TRANG CHÍNH — album đã lưu ── */}
       {step === "home" && (
         <div className="mx-auto max-w-5xl">

@@ -7,7 +7,7 @@ import CreateAlbumFlow, { CreateHero } from "@/components/CreateAlbumFlow";
 function CreateInner() {
   const mode = useSearchParams().get("phase") === "delivery" ? "delivery" : "selection";
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <CreateHero mode={mode} />
       <CreateAlbumFlow mode={mode} />
     </div>

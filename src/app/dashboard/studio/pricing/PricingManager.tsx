@@ -384,11 +384,10 @@ export default function PricingManager({
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4">
-        <h1 className="font-serif text-2xl font-medium">Bảng giá</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Mỗi loại có 1 bảng giá &amp; link riêng để gửi khách.</p>
-      </div>
+    <div className="page-in">
+      <p className="mb-3.5 text-[13px]" style={{ color: "var(--tx2)" }}>
+        Mỗi loại dịch vụ có một bảng giá và link riêng để gửi khách.
+      </p>
 
       {/* List tabs */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -413,8 +412,13 @@ export default function PricingManager({
                 <>
                   <button
                     onClick={() => setActiveList(l.key)}
-                    className="rounded-full px-4 py-2 text-sm font-medium"
-                    style={{ background: activeList === l.key ? "var(--surface2)" : "transparent", border: "1px solid var(--border2)", color: activeList === l.key ? "var(--accent)" : "var(--text2)", paddingRight: 48 }}
+                    className="rounded-[9px] px-4 py-2 text-[12.5px] font-semibold"
+                    style={{
+                      background: activeList === l.key ? "var(--acS)" : "var(--sf)",
+                      border: `1px solid ${activeList === l.key ? "var(--acM)" : "var(--bd)"}`,
+                      color: activeList === l.key ? "var(--ac)" : "var(--tx2)",
+                      paddingRight: 48,
+                    }}
                   >
                     Bảng giá {displayLabel}
                   </button>

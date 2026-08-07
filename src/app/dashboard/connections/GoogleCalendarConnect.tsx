@@ -21,7 +21,7 @@ export default function GoogleCalendarConnect({ connected: initialConnected, gca
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-8">
         <p className="eyebrow mb-1.5">Tích hợp</p>
         <h1 className="font-serif text-[clamp(28px,4vw,44px)] font-medium leading-none">Kết nối Google Calendar</h1>

@@ -61,7 +61,7 @@ export default function StaffManager({ initial }: { initial: StaffRow[] }) {
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-4">
         <h1 className="font-serif text-2xl font-medium">Nhân viên</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>

@@ -195,7 +195,7 @@ export default function NewContractForm({
   }
 
   return (
-    <div className="mx-auto max-w-xl animate-[vkFade_.5s_ease_both]">
+    <div className="mx-auto max-w-xl page-in">
       <Link href="/dashboard/studio/contracts" className="mb-6 inline-flex items-center gap-1.5 text-sm" style={{ color: "var(--text3)" }}>
         <ArrowLeft size={15} /> Hợp đồng
       </Link>

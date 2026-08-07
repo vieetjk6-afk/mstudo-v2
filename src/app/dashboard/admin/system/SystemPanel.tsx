@@ -178,7 +178,7 @@ export default function SystemPanel() {
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-6 flex items-center gap-3">
         <ShieldCheck size={22} style={{ color: "var(--brand)" }} />
         <h1 className="font-serif text-2xl font-medium">Bảng điều khiển hệ thống</h1>

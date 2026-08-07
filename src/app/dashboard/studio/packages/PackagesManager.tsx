@@ -59,9 +59,8 @@ export default function PackagesManager({
   }
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-4">
-        <h1 className="font-serif text-2xl font-medium">Thẻ buổi / Gói combo</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Khách mua gói nhiều buổi trả trước — trừ dần mỗi lần chụp.</p>
       </div>
 

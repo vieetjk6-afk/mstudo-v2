@@ -277,7 +277,7 @@ export default function UpgradePage() {
 
   return (
     <div
-      className="animate-[vkFade_.5s_ease_both]"
+      className="page-in"
       style={{
         // Sync the upgrade page with the brand-green identity used across the
         // studio workspace & landing (instead of the album shell's gold/silver).

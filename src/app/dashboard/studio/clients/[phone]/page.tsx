@@ -59,7 +59,7 @@ export default async function ClientDetail({ params }: { params: { phone: string
   const collected = mine.reduce((s, r) => s + sumAmounts(r.contract_payments || []), 0);
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <Link href="/dashboard/studio/clients" className="mb-5 inline-flex items-center gap-1.5 text-sm" style={{ color: "var(--text3)" }}>
         <ArrowLeft size={15} /> Khách hàng
       </Link>

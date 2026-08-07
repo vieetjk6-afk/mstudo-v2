@@ -192,7 +192,7 @@ export default function TeamCalendar({
   const selShifts = shiftsOn(selected);
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-4">
         <h1 className="font-serif text-2xl font-medium">Lịch đội ngũ</h1>
         <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>

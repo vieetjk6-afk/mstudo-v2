@@ -110,7 +110,7 @@ export default function TemplatesManager({
   const total = contractTotal(items);
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       {msg && (
         <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-sm" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
           {msg}

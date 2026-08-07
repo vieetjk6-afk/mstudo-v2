@@ -74,7 +74,7 @@ export default function AdminAffiliatePage() {
   const totalPaid = commissions.filter((c) => c.status === "paid").reduce((s, c) => s + c.commission_amount, 0);
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
+    <div className="page-in">
       <div className="mb-8">
         <p className="eyebrow mb-1.5">Quản trị</p>
         <h1 className="font-serif text-[clamp(24px,3vw,36px)] font-medium leading-none">Quản lý Affiliate</h1>

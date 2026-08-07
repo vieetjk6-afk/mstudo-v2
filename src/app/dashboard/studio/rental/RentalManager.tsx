@@ -103,13 +103,10 @@ export default function RentalManager({
   }, [orders, items, unitsOut]);
 
   return (
-    <div className="animate-[vkFade_.5s_ease_both]">
-      <div className="mb-4">
-        <h1 className="font-serif text-2xl font-medium">Phòng váy</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>
-          Quản lý kho trang phục (váy cưới, vest, áo dài, phụ kiện) &amp; đơn cho thuê.
-        </p>
-      </div>
+    <div className="page-in">
+      <p className="mb-3.5 text-[13px]" style={{ color: "var(--tx2)" }}>
+        Kho trang phục (váy cưới, vest, áo dài, phụ kiện) và đơn cho thuê.
+      </p>
 
       {/* Summary stats */}
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -651,11 +648,11 @@ function FilterChip({
   return (
     <button
       onClick={onClick}
-      className="rounded-full px-3 py-1 text-xs font-medium transition"
+      className="whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
       style={
         active
-          ? { background: "var(--text, #111)", color: "var(--card, #fff)" }
-          : { background: "var(--surface2, var(--bg2))", color: "var(--text2)" }
+          ? { background: "var(--acS)", color: "var(--ac)", border: "1px solid var(--acM)" }
+          : { background: "var(--sf)", color: "var(--tx2)", border: "1px solid var(--bd)" }
       }
     >
       {children}

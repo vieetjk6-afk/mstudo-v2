@@ -186,7 +186,7 @@ export default function AccountPanel({
   const pwStrength = newPw.length === 0 ? null : newPw.length < 8 ? "weak" : newPw.length < 12 ? "fair" : "strong";
 
   return (
-    <div className="mx-auto max-w-xl space-y-5 animate-[vkFade_.4s_ease_both]">
+    <div className="page-in mx-auto max-w-xl space-y-5">
       <div className="mb-2">
         <h1 className="font-serif text-2xl font-medium">Tài khoản</h1>
         <p className="mt-0.5 text-sm" style={{ color: "var(--text3)" }}>Quản lý thông tin đăng nhập và bảo mật</p>
