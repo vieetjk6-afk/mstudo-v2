@@ -301,16 +301,23 @@ export default function QuoteEditor({
     (quote.bulk_discount_amount ?? 0) > 0;
 
   return (
-    <div className="space-y-6" data-testid="quote-edit-page">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/studio/quotes" aria-label="Quay lại danh sách báo giá" className="btn-ghost px-2 py-1.5"><ArrowLeft size={14} /></Link>
-          <div>
-            <h1 className="font-serif text-2xl font-medium">{quote.title}</h1>
-            <p className="text-xs" style={{ color: "var(--text3)" }}>
-              {quote.code || "—"} • <span className="text-accent">{QUOTE_STATUS_LABEL[quote.status]}</span>
+    <div className="page-in flex flex-col gap-3.5" data-testid="quote-edit-page">
+      <header className="flex flex-wrap items-center justify-between gap-2.5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <Link
+            href="/dashboard/studio/quotes"
+            aria-label="Quay lại danh sách báo giá"
+            className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px]"
+            style={{ border: "1px solid var(--bd)", color: "var(--tx2)" }}
+          >
+            <ArrowLeft size={15} />
+          </Link>
+          <div className="min-w-0">
+            <h1 className="truncate text-[19px] font-bold" style={{ letterSpacing: "-.4px" }}>{quote.title}</h1>
+            <p className="mt-px flex flex-wrap items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              <span className="tnum">{quote.code || "—"}</span> · <span style={{ color: "var(--ac)", fontWeight: 650 }}>{QUOTE_STATUS_LABEL[quote.status]}</span>
               {dirty && !locked && (
-                <span className="ml-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px]" style={{ background: "var(--s-amberS)", color: "var(--s-amber)" }}>
+                <span className="inline-flex items-center gap-1 rounded-[20px] px-2 py-0.5 text-[10.5px] font-bold" style={{ background: "var(--amS)", color: "var(--am)" }}>
                   <CloudOff size={10} /> Chưa lưu
                 </span>
               )}
@@ -318,11 +325,10 @@ export default function QuoteEditor({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text3)" }}>
+          <label className="flex items-center gap-1.5 text-[11.5px] font-semibold" style={{ color: "var(--tx3)" }}>
             Trạng thái
             <select
-              className="input py-1.5 text-xs"
-              style={{ width: "auto" }}
+              className="input !h-8 !w-auto !py-0 text-[11.5px]"
               value={quote.status === "converted" ? "converted" : quote.status}
               onChange={(e) => changeStatus(e.target.value as QuoteStatus)}
               data-testid="quote-status-select"
@@ -359,7 +365,7 @@ export default function QuoteEditor({
             </button>
           )}
           {quote.status === "accepted" && !quote.contract_id && !canConvert && (
-            <span className="rounded-md px-2 py-1.5 text-xs" style={{ background: "var(--surface2)", color: "var(--text3)" }} data-testid="quote-convert-upsell">
+            <span className="rounded-[9px] px-3 py-[7px] text-[11.5px] font-semibold" style={{ background: "var(--sf2)", color: "var(--tx3)" }} data-testid="quote-convert-upsell">
               Khách đã đồng ý — nâng cấp gói Studio để tạo hợp đồng
             </span>
           )}
@@ -380,7 +386,7 @@ export default function QuoteEditor({
       {err && <p className="rounded-md px-3 py-2 text-xs" style={{ background: "color-mix(in srgb, var(--danger) 14%, transparent)", color: "var(--danger)" }}>{err}</p>}
 
       {adjustments.length > 0 && (
-        <section className="card p-5" data-testid="quote-adjustments">
+        <section className="card p-[18px]" data-testid="quote-adjustments">
           <h2 className="text-sm font-medium" style={{ color: pendingAdj.length > 0 ? "var(--s-amber)" : "var(--text2)" }}>
             Trao đổi với khách {pendingAdj.length > 0 && <span className="ml-1 rounded-full px-2 py-0.5 text-[10px]" style={{ background: "var(--s-amberS)", color: "var(--s-amber)" }}>{pendingAdj.length} chưa xử lý</span>}
           </h2>
@@ -392,7 +398,7 @@ export default function QuoteEditor({
                   key={a.id}
                   className="rounded-md p-3"
                   style={{
-                    background: isPending ? "var(--s-amberS)" : "var(--surface2)",
+                    background: isPending ? "var(--amS)" : "var(--sf2)",
                     border: isPending ? "1px solid var(--s-amberS)" : "1px solid transparent",
                     opacity: a.resolved ? 0.55 : 1,
                   }}
@@ -426,10 +432,10 @@ export default function QuoteEditor({
         </section>
       )}
 
-      <section className="card p-5">
-        <h2 className="text-sm font-medium" style={{ color: "var(--text2)" }}>Thông tin chung</h2>
-        <p className="mt-1 text-xs" style={{ color: "var(--text3)" }}>
-          {locked ? "Báo giá đã chốt — không thể chỉnh sửa." : "Bạn có thể chỉnh sửa thoải mái khi khách chưa đồng ý. Nhớ bấm Lưu sau khi sửa."}
+      <section className="card p-[18px]">
+        <h2 className="text-[14px] font-bold">Thông tin chung</h2>
+        <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+          {locked ? "Báo giá đã chốt — không sửa được nữa." : "Sửa thoải mái khi khách chưa đồng ý. Nhớ bấm Lưu sau khi sửa."}
         </p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <Field label="Tiêu đề báo giá">
@@ -457,7 +463,7 @@ export default function QuoteEditor({
         <Field label="Lời chào / Giới thiệu" className="mt-3">
           <textarea className="input" rows={3} value={quote.intro || ""} disabled={locked} onChange={(e) => patchLocal({ intro: e.target.value })} />
         </Field>
-        <div className="mt-4 rounded-lg p-3" style={{ background: "var(--surface2)" }}>
+        <div className="mt-4 rounded-[11px] p-3.5" style={{ background: "var(--sf2)" }}>
           <p className="mb-2 text-xs font-medium" style={{ color: "var(--text2)" }}>Giảm giá theo gói chỉ định (tuỳ chọn)</p>
           <p className="mb-3 text-xs" style={{ color: "var(--text3)" }}>
             Nếu khách chọn đúng gói bạn chỉ định bên dưới, tự động giảm thêm số tiền tương ứng. Đặt nhóm gói cho từng hạng mục ở phần Hạng mục.
@@ -492,16 +498,16 @@ export default function QuoteEditor({
         </div>
       </section>
 
-      <section className="card p-5">
+      <section className="card p-[18px]">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium" style={{ color: "var(--text2)" }}>Hạng mục</h2>
+          <h2 className="text-[14px] font-bold">Hạng mục</h2>
           {!locked && (
             <div className="flex items-center gap-1.5">
-              <button onClick={() => addItem(false)} className="btn-ghost px-2.5 py-1.5 text-xs">
-                <Plus size={12} /> Thêm hạng mục
+              <button onClick={() => addItem(false)} className="flex items-center gap-1 rounded-[9px] px-3 py-[7px] text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }}>
+                <Plus size={13} /> Thêm hạng mục
               </button>
-              <button onClick={() => addItem(true)} className="btn-ghost px-2.5 py-1.5 text-xs" style={{ color: "var(--s-amber)" }} data-testid="quote-add-discount">
-                <Tag size={12} /> Thêm giảm giá
+              <button onClick={() => addItem(true)} className="flex items-center gap-1 rounded-[9px] px-3 py-[7px] text-[12px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }} data-testid="quote-add-discount">
+                <Tag size={13} /> Thêm giảm giá
               </button>
             </div>
           )}

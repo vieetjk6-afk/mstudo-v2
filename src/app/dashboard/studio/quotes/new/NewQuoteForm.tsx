@@ -126,21 +126,35 @@ export default function NewQuoteForm({ ownerId, services = [], pricelist = [] }:
   }
 
   return (
-    <div className="space-y-6" data-testid="quote-new-page">
-      <header className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <button onClick={() => router.back()} className="btn-ghost px-2 py-1.5"><ArrowLeft size={14} /></button>
-          <h1 className="font-serif text-2xl font-medium">Tạo báo giá mới</h1>
-        </div>
-        <button onClick={save} disabled={saving} className="btn-primary" data-testid="quote-save-btn">
+    <div className="page-in flex flex-col gap-3.5" data-testid="quote-new-page">
+      {/* Hàng công cụ: quay lại + dòng dẫn + nút lưu — topbar đã có tên màn. */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button
+          onClick={() => router.back()}
+          aria-label="Quay lại"
+          className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-[8px]"
+          style={{ border: "1px solid var(--bd)", color: "var(--tx2)" }}
+        >
+          <ArrowLeft size={15} />
+        </button>
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+          Khách bấm link báo giá là tự chọn hạng mục và chốt — không cần gọi lại để xác nhận.
+        </p>
+        <button
+          onClick={save}
+          disabled={saving}
+          className="ml-auto flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold disabled:opacity-60"
+          style={{ background: "var(--ac)", color: "#fff" }}
+          data-testid="quote-save-btn"
+        >
           {saving ? "Đang lưu…" : "Lưu báo giá"}
         </button>
-      </header>
+      </div>
 
-      <section className="card p-5">
-        <h2 className="text-sm font-medium" style={{ color: "var(--text2)" }}>Thông tin chung</h2>
-        <p className="mt-1 text-xs" style={{ color: "var(--text3)" }}>
-          Bạn có thể để trống các ô khách hàng — khách sẽ tự điền khi xác nhận báo giá.
+      <section className="card p-[18px]">
+        <h2 className="text-[14px] font-bold">Thông tin chung</h2>
+        <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+          Để trống các ô khách hàng cũng được — khách tự điền khi xác nhận báo giá.
         </p>
         <div className="mt-3 grid gap-3 md:grid-cols-2">
           <Field label="Tiêu đề báo giá">
@@ -184,9 +198,9 @@ export default function NewQuoteForm({ ownerId, services = [], pricelist = [] }:
         <Field label="Lời chào / Giới thiệu" className="mt-3">
           <textarea className="input" rows={3} value={intro} onChange={(e) => setIntro(e.target.value)} />
         </Field>
-        <div className="mt-4 rounded-lg p-3" style={{ background: "var(--surface2)" }}>
-          <p className="mb-1 text-xs font-medium" style={{ color: "var(--text2)" }}>Giảm giá theo gói chỉ định (tuỳ chọn)</p>
-          <p className="mb-3 text-xs" style={{ color: "var(--text3)" }}>
+        <div className="mt-4 rounded-[11px] p-3.5" style={{ background: "var(--sf2)" }}>
+          <p className="mb-1 text-[12.5px] font-bold">Giảm giá theo gói chỉ định (tuỳ chọn)</p>
+          <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
             Đặt “Nhóm gói” cho các hạng mục tuỳ chọn bên dưới để tạo gói (khách chỉ chọn 1 gói). Nếu khách chọn đúng gói chỉ định thì tự động giảm thêm.
           </p>
           <div className="grid gap-2 md:grid-cols-2">
@@ -203,30 +217,30 @@ export default function NewQuoteForm({ ownerId, services = [], pricelist = [] }:
             </Field>
           </div>
           {packageGroups.length === 0 && (
-            <p className="mt-2 text-xs" style={{ color: "var(--text3)" }}>Chưa có gói nào — thêm “Nhóm gói” cho hạng mục tuỳ chọn để tạo gói.</p>
+            <p className="mt-2 text-[11.5px]" style={{ color: "var(--tx3)" }}>Chưa có gói nào — thêm “Nhóm gói” cho hạng mục tuỳ chọn để tạo gói.</p>
           )}
         </div>
       </section>
 
-      <section className="card p-5">
+      <section className="card p-[18px]">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium" style={{ color: "var(--text2)" }}>Hạng mục báo giá</h2>
+          <h2 className="text-[14px] font-bold">Hạng mục báo giá</h2>
           <div className="flex items-center gap-1.5">
-            <button onClick={() => add(false)} className="btn-ghost px-2.5 py-1.5 text-xs" data-testid="quote-item-add"><Plus size={12} /> Thêm hạng mục</button>
-            <button onClick={() => add(true)} className="btn-ghost px-2.5 py-1.5 text-xs" style={{ color: "var(--s-amber)" }} data-testid="quote-add-discount"><Tag size={12} /> Thêm giảm giá</button>
+            <button onClick={() => add(false)} className="flex items-center gap-1 rounded-[9px] px-3 py-[7px] text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }} data-testid="quote-item-add"><Plus size={13} /> Thêm hạng mục</button>
+            <button onClick={() => add(true)} className="flex items-center gap-1 rounded-[9px] px-3 py-[7px] text-[12px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }} data-testid="quote-add-discount"><Tag size={13} /> Thêm giảm giá</button>
           </div>
         </div>
-        <p className="mt-1 text-xs" style={{ color: "var(--text3)" }}>
+        <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
           Bấm <Lock size={10} className="inline" /> để khoá hạng mục bắt buộc (khách không bỏ chọn được), <LockOpen size={10} className="inline" /> cho hạng mục tuỳ chọn.
         </p>
 
         {pricelist.length > 0 && (
-          <div className="mt-3 rounded-lg p-3" style={{ background: "var(--surface2)" }}>
-            <p className="mb-1.5 text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>Thêm nhanh từ bảng giá</p>
+          <div className="mt-3 rounded-[11px] p-3.5" style={{ background: "var(--sf2)" }}>
+            <p className="mb-2 text-[10.5px] font-extrabold uppercase tracking-[.7px]" style={{ color: "var(--tx3)" }}>Thêm nhanh từ bảng giá</p>
             {priceGroups.map((g) => (
               <div key={g} className="mb-2 last:mb-0">
                 {priceGroups.length > 1 && (
-                  <p className="mb-1 text-[11px] font-medium" style={{ color: "var(--text2)" }}>{g}</p>
+                  <p className="mb-1 text-[11px] font-semibold" style={{ color: "var(--tx2)" }}>{g}</p>
                 )}
                 <div className="flex flex-wrap gap-1.5">
                   {pricelist.filter((p) => (p.list_key || "cuoi") === g).map((p, i) => (
