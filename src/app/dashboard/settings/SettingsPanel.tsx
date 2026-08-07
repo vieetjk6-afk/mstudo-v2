@@ -19,22 +19,34 @@ export interface Feedback {
   created_at: string;
 }
 
-/* ── Section toggle helper ──────────────────────────────────────────────────── */
-function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
+/* ── Một nhóm cài đặt ────────────────────────────────────────────────────────
+   Bản thiết kế (màn `settings`) bày cài đặt thành DÒNG bấm được: icon nền màu
+   nhấn bo 10px, tiêu đề 14px/650, một dòng phụ giải thích, chevron bên phải.
+   Ở đây dòng đó bung ra tại chỗ thay vì mở màn con — nội dung nằm ngay dưới. */
+function Section({
+  title, sub, icon: Icon, defaultOpen = false, children,
+}: { title: string; sub?: string; icon: React.ElementType; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="card overflow-hidden">
+    <div className="overflow-hidden rounded-[13px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 p-5 text-left"
-        style={{ borderBottom: open ? "1px solid var(--border)" : "none" }}
+        className="flex w-full items-center gap-3.5 px-[17px] py-[15px] text-left"
+        style={{ borderBottom: open ? "1px solid var(--bd2)" : "none" }}
       >
-        <Icon size={16} style={{ color: "var(--brand, var(--gold))" }} />
-        <span className="flex-1 text-sm font-semibold">{title}</span>
-        {open ? <ChevronDown size={16} style={{ color: "var(--text3)" }} /> : <ChevronRight size={16} style={{ color: "var(--text3)" }} />}
+        <span className="flex-none rounded-[10px] p-[9px]" style={{ background: "var(--acS)", color: "var(--ac)", lineHeight: 0 }}>
+          <Icon size={20} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-semibold">{title}</span>
+          {sub ? <span className="mt-px block text-[12px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>{sub}</span> : null}
+        </span>
+        {open
+          ? <ChevronDown size={19} className="flex-none" style={{ color: "var(--tx3)" }} />
+          : <ChevronRight size={19} className="flex-none" style={{ color: "var(--tx3)" }} />}
       </button>
-      {open && <div className="p-5 space-y-4">{children}</div>}
+      {open && <div className="space-y-4 p-[17px]">{children}</div>}
     </div>
   );
 }
@@ -154,27 +166,29 @@ export default function SettingsPanel({
   }
 
   const SaveBtn = ({ label = "Lưu thay đổi" }: { label?: string }) => (
-    <button onClick={save} disabled={saving} className="btn-primary gap-2">
-      <Save size={14} /> {saving ? "Đang lưu…" : label}
+    <button
+      onClick={save}
+      disabled={saving}
+      className="flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[12.5px] font-semibold disabled:opacity-60"
+      style={{ background: "var(--ac)", color: "#fff" }}
+    >
+      <Save size={15} /> {saving ? "Đang lưu…" : label}
     </button>
   );
 
   return (
-    <div className="page-in space-y-6 pb-16">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight">Cài đặt hệ thống</h1>
-          <p className="mt-0.5 text-sm" style={{ color: "var(--text2)" }}>Quản lý nội dung trang mstudo.com và cấu hình hệ thống</p>
+    <div className="page-in flex max-w-[760px] flex-col gap-2.5 pb-16">
+      {msg && (
+        <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-[12px] px-4 py-2 text-[13px] font-semibold" style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}>
+          {msg}
         </div>
-        {msg && (
-          <span className="rounded-full px-4 py-1.5 text-sm font-medium" style={{ background: "color-mix(in srgb, var(--success) 14%, transparent)", color: "var(--success)" }}>
-            {msg}
-          </span>
-        )}
-      </div>
+      )}
+      <p className="mb-1 text-[13px]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+        Nội dung trang mstudo.com và cấu hình hệ thống — mở từng nhóm để sửa, mỗi nhóm có nút lưu riêng.
+      </p>
 
       {/* ── 1. Trang chủ mstudo.com ─────────────────────────────────────── */}
-      <Section title="Nội dung trang chủ mstudo.com" icon={Globe}>
+      <Section title="Nội dung trang chủ mstudo.com" sub="Khẩu hiệu, mô tả và nhãn hiển thị trên trang marketing." icon={Globe} defaultOpen>
         <p className="text-[12px]" style={{ color: "var(--text3)" }}>Nội dung hiển thị trực tiếp trên trang marketing <strong>mstudo.com</strong>.</p>
         <div className="grid gap-4 lg:grid-cols-2">
           <Field label="Khẩu hiệu chính (Hero title)">
@@ -194,7 +208,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 2. SEO & Browser ────────────────────────────────────────────── */}
-      <Section title="Trình duyệt & SEO" icon={Settings2}>
+      <Section title="Trình duyệt &amp; SEO" sub="Tiêu đề tab, mô tả tìm kiếm, favicon và ảnh chia sẻ." icon={Settings2}>
         <div className="grid gap-4 lg:grid-cols-2">
           <Field label="Tiêu đề tab trình duyệt">
             <Input value={str("site_title")} onChange={(v) => set("site_title", v)} placeholder="mstudo — Phần mềm quản lý studio ảnh" />
@@ -214,7 +228,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 2b. Tính năng ───────────────────────────────────────────────── */}
-      <Section title="Tính năng" icon={Settings2}>
+      <Section title="Tính năng" sub="Bật / tắt từng tính năng cho toàn hệ thống." icon={Settings2}>
         <p className="text-sm" style={{ color: "var(--text2)" }}>
           Bật/tắt hiển thị các tính năng cho studio. Khi để “Sắp ra mắt”, mục sẽ hiện nhãn và tạm khoá với studio (admin vẫn vào được để hoàn thiện).
         </p>
@@ -321,7 +335,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 3. Gói & giá ────────────────────────────────────────────────── */}
-      <Section title="Gói & giá (VND)" icon={BadgeDollarSign}>
+      <Section title="Gói &amp; giá (VND)" sub="Giá niêm yết và phần trăm khuyến mãi của từng gói." icon={BadgeDollarSign}>
         {/* Mỗi gói 1 cột: giá tháng, giá năm, giảm giá tháng, giảm giá năm. */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {([
@@ -345,7 +359,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 3b. Nội dung trang nâng cấp ──────────────────────────────────── */}
-      <Section title="Nội dung trang nâng cấp" icon={Rocket}>
+      <Section title="Nội dung trang nâng cấp" sub="Tiêu đề, tính năng từng gói và bảng so sánh." icon={Rocket}>
         <p className="text-[12px]" style={{ color: "var(--text3)" }}>
           Tiêu đề, tên &amp; điểm nổi bật của gói, bảng so sánh tính năng và mục “Sắp ra mắt” hiển thị tại <strong>/dashboard/upgrade</strong>. (Giá &amp; % giảm chỉnh ở mục “Gói &amp; giá” phía trên.)
         </p>
@@ -353,7 +367,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 4. Mã giảm giá ──────────────────────────────────────────────── */}
-      <Section title="Mã giảm giá" icon={Tag}>
+      <Section title="Mã giảm giá" sub="Tạo mã giảm giá hoặc mã dùng thử, xem lượt đã dùng." icon={Tag}>
         <div className="flex flex-wrap items-end gap-2">
           <Field label="Mã">
             <div className="flex gap-1.5">
@@ -418,7 +432,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 5. Góp ý / Liên hệ ─────────────────────────────────────────── */}
-      <Section title={`Góp ý & liên hệ (${feedbacks.length})`} icon={MessageSquare}>
+      <Section title={`Góp ý & liên hệ (${feedbacks.length})`} sub="Tin nhắn khách gửi từ trang chủ — đánh dấu đã xử lý tại đây." icon={MessageSquare}>
         {feedbacks.length === 0 ? (
           <p className="py-8 text-center text-sm" style={{ color: "var(--text3)" }}>Chưa có tin nhắn nào.</p>
         ) : (
@@ -449,7 +463,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 6. Yêu cầu nâng cấp ────────────────────────────────────────── */}
-      <Section title={`Yêu cầu nâng cấp (${upgradeRows.length})`} icon={Crown}>
+      <Section title={`Yêu cầu nâng cấp (${upgradeRows.length})`} sub="Studio bấm đăng ký gói — liên hệ rồi kích hoạt thủ công." icon={Crown}>
         {upgradeRows.length === 0 ? (
           <p className="py-8 text-center text-sm" style={{ color: "var(--text3)" }}>Chưa có yêu cầu nào.</p>
         ) : (
@@ -484,7 +498,7 @@ export default function SettingsPanel({
       </Section>
 
       {/* ── 7. Quản lý người dùng (link nhanh) ─────────────────────────── */}
-      <Section title="Quản lý nhanh" icon={LayoutTemplate}>
+      <Section title="Quản lý nhanh" sub="Lối tắt sang các trang quản trị khác." icon={LayoutTemplate}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { href: "/dashboard/admin", label: "Quản trị người dùng", desc: "Xem, cấp quyền, kích hoạt/khóa tài khoản" },

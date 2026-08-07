@@ -10,14 +10,18 @@ export default async function ChatboxConfigPage() {
   const profile = await requireStudio("booking");
   if (!profile) {
     return (
-      <div className="mx-auto max-w-lg text-center">
-        <div className="card p-8">
-          <h1 className="font-serif text-2xl font-medium">Cần gói Photographer trở lên</h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>
-            Tính năng này dành cho tài khoản có trang web &amp; chatbox tư vấn.
-          </p>
-          <a href="/dashboard/upgrade" className="btn-primary mt-5">Nâng cấp gói</a>
-        </div>
+      <div className="mx-auto max-w-lg rounded-[14px] px-6 py-9 text-center" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+        <p className="text-[16px] font-bold" style={{ letterSpacing: "-.3px" }}>Cần gói Photographer trở lên</p>
+        <p className="mx-auto mt-1.5 max-w-sm text-[12.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+          Trang web &amp; chatbox tư vấn nằm trong gói Photographer — nâng gói là dùng được ngay, cấu hình cũ giữ nguyên.
+        </p>
+        <a
+          href="/dashboard/upgrade"
+          className="mt-4 inline-flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
+          style={{ background: "var(--ac)", color: "#fff" }}
+        >
+          Nâng cấp gói
+        </a>
       </div>
     );
   }

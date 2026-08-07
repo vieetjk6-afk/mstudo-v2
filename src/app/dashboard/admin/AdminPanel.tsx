@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { fmtDate } from "@/lib/date";
-import { UserPlus, Trash2 } from "lucide-react";
+import { UserPlus, Trash2, Users, UserCheck, CreditCard, Sparkles, ChevronDown, type LucideIcon } from "lucide-react";
 import { useLang } from "@/lib/i18n";
-import { planExpiry, planProfilePatch, type Plan } from "@/lib/plans";
+import { planExpiry, planProfilePatch, PLAN_LABEL, type Plan } from "@/lib/plans";
+import { avatarColor, initials } from "@/lib/avatar";
+import { Panel, PanelHead, Pill, TONE, type ToneKey } from "@/components/studio/ui";
 import type { Profile } from "@/lib/types";
 
 export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
@@ -13,6 +15,9 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", full_name: "" });
+  /* Bảng 10 cột của bản cũ vỡ trên mọi màn dưới 1400px — bản thiết kế dùng danh
+     sách dòng, quyền chi tiết nằm trong phần bung ra của dòng đang chọn. */
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   function flash(m: string) {
     setMsg(m);
@@ -109,182 +114,208 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
     flash(t("saved"));
   }
 
-  return (
-    <div className="animate-fade-in">
-      <h1 className="mb-8 text-2xl font-light text-accent">{t("photographers")}</h1>
+  /* ── KPI: bốn con số của bản thiết kế, tính ngay từ danh sách ────────── */
+  const paid = rows.filter((p) => p.plan !== "free" && p.plan_cycle !== "trial").length;
+  const trial = rows.filter((p) => p.plan_cycle === "trial").length;
+  const kpis: { icon: LucideIcon; tone: ToneKey; v: string; l: string }[] = [
+    { icon: Users, tone: "brand", v: String(rows.length), l: "Tài khoản" },
+    { icon: UserCheck, tone: "green", v: String(rows.filter((p) => p.is_active).length), l: "Đang hoạt động" },
+    { icon: CreditCard, tone: "blue", v: String(paid), l: "Gói trả phí" },
+    { icon: Sparkles, tone: "amber", v: String(trial), l: "Đang dùng thử" },
+  ];
 
+  /* Quyền chi tiết — bày trong phần bung ra của từng dòng, không phải 10 cột. */
+  const PERMS: [keyof Profile, string][] = [
+    ["can_zip", t("canZip")],
+    ["can_notes", t("canNotes")],
+    ["can_galleries", t("gallery")],
+    ["can_watermark_pro", "WM Pro"],
+  ];
+
+  return (
+    <div className="page-in flex flex-col gap-3.5">
       {msg && (
-        <div className="mb-6 rounded-md border border-accent-gold/30 bg-accent-gold/10 px-4 py-2 text-sm text-accent-gold">
+        <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-[12px] px-4 py-2 text-[13px] font-semibold" style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}>
           {msg}
         </div>
       )}
 
-      {/* Create */}
-      <form
-        onSubmit={createUser}
-        className="card mb-8 grid grid-cols-1 gap-3 p-5 sm:grid-cols-[1fr_1fr_1fr_auto]"
-      >
-        <input
-          required
-          type="email"
-          className="input"
-          placeholder={t("email")}
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-        />
-        <input
-          required
-          type="text"
-          className="input"
-          placeholder={t("fullName")}
-          value={form.full_name}
-          onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-        />
-        <input
-          required
-          type="password"
-          minLength={6}
-          className="input"
-          placeholder={t("password")}
-          value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })}
-        />
-        <button disabled={creating} className="btn-primary whitespace-nowrap">
-          <UserPlus size={15} /> {t("createUser")}
-        </button>
-      </form>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
+        {kpis.map((k) => (
+          <Panel key={k.l} className="px-4 py-[15px]">
+            <span className="inline-block rounded-[9px] p-[7px]" style={{ background: TONE[k.tone].soft, color: TONE[k.tone].fg, lineHeight: 0 }}>
+              <k.icon size={19} />
+            </span>
+            <p className="tnum mt-[11px] text-[22px] font-bold" style={{ letterSpacing: "-.6px" }}>{k.v}</p>
+            <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--tx2)" }}>{k.l}</p>
+          </Panel>
+        ))}
+      </div>
 
-      {/* Table */}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-ink-800 text-left text-xs uppercase tracking-wide text-accent-muted">
-              <th className="px-4 py-3">{t("email")}</th>
-              <th className="px-4 py-3">{t("plan")}</th>
-              <th className="px-4 py-3">{t("role")}</th>
-              <th className="px-4 py-3">{t("active")}</th>
-              <th className="px-4 py-3">{t("monthlyLimit")}</th>
-              <th className="px-4 py-3">{t("canZip")}</th>
-              <th className="px-4 py-3">{t("canNotes")}</th>
-              <th className="px-4 py-3">{t("gallery")}</th>
-              <th className="px-4 py-3">WM Pro</th>
-              <th className="px-4 py-3"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.id} className="border-b border-ink-850/60">
-                <td className="px-4 py-3">
-                  <div className="text-accent">{p.full_name}</div>
-                  <div className="text-xs text-accent-muted">{p.email}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <select
-                    className="input px-2 py-1 text-xs"
-                    value={p.plan === "free" ? "free" : p.plan_cycle === "trial" ? `trial-${p.plan}` : `${p.plan}-${p.plan_cycle ?? "month"}`}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "free") setPlan(p, "free", "month");
-                      else if (v.startsWith("trial-")) setTrialPlan(p, v.slice(6) as Plan);
-                      else {
-                        const [pl, cy] = v.split("-");
-                        setPlan(p, pl as Plan, cy as "month" | "year");
-                      }
-                    }}
+      <div className="grid items-start gap-3.5 xl:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+        {/* ══ Tài khoản & phân quyền ══════════════════════════════════════ */}
+        <Panel>
+          <PanelHead icon={Users} tone="brand" title={t("photographers")} count={`${rows.length}`} note="Bấm một dòng để mở quyền chi tiết" />
+
+          {rows.map((p) => {
+            const open = expanded === p.id;
+            const isTrial = p.plan_cycle === "trial";
+            return (
+              <div key={p.id} style={{ borderTop: "1px solid var(--bd2)" }}>
+                <button
+                  onClick={() => setExpanded(open ? null : p.id)}
+                  className="flex w-full items-center gap-3 px-[18px] py-3 text-left"
+                  style={{ background: open ? "var(--sf2)" : "transparent" }}
+                >
+                  <span
+                    className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-full text-[11px] font-bold text-white"
+                    style={{ background: avatarColor(p.full_name || p.email) }}
                   >
-                    <option value="free">{t("planFree")}</option>
-                    <option value="basic-month">Basic · {t("cycleMonth")}</option>
-                    <option value="basic-year">Basic · {t("cycleYear")}</option>
-                    <option value="photographer-month">Photographer · {t("cycleMonth")}</option>
-                    <option value="photographer-year">Photographer · {t("cycleYear")}</option>
-                    <option value="photographer_plus-month">Photographer Plus · {t("cycleMonth")}</option>
-                    <option value="photographer_plus-year">Photographer Plus · {t("cycleYear")}</option>
-                    <option value="studio-month">Studio · {t("cycleMonth")}</option>
-                    <option value="studio-year">Studio · {t("cycleYear")}</option>
-                    <optgroup label="Dùng thử (miễn phí)">
-                      <option value="trial-basic">Basic · thử 30 ngày</option>
-                      <option value="trial-photographer">Photographer · thử 30 ngày</option>
-                      <option value="trial-photographer_plus">Photographer Plus · thử 30 ngày</option>
-                      <option value="trial-studio">Studio · thử 7 ngày</option>
-                    </optgroup>
-                  </select>
-                  {p.plan !== "free" && p.plan_expires_at && (
-                    <div className="mt-1 text-[10px]" style={{ color: "var(--text3)" }}>
-                      {p.plan_cycle === "trial" ? "Dùng thử" : t("expiresShort")}: {fmtDate(p.plan_expires_at)}
+                    {initials(p.full_name || p.email)}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-semibold">{p.full_name || p.email}</p>
+                    <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{p.email}</p>
+                  </div>
+                  <Pill tone={p.plan === "free" ? "gray" : isTrial ? "amber" : "blue"}>
+                    {p.plan === "free" ? t("planFree") : `${PLAN_LABEL[p.plan as Plan] ?? p.plan}${isTrial ? " · thử" : ""}`}
+                  </Pill>
+                  <Pill tone={p.role === "admin" ? "brand" : "gray"}>{p.role}</Pill>
+                  <Pill tone={p.is_active ? "green" : "red"} dot>{p.is_active ? t("active") : "Khoá"}</Pill>
+                  <ChevronDown
+                    size={17}
+                    className="flex-none"
+                    style={{ color: "var(--tx3)", transform: open ? "rotate(180deg)" : "none", transition: "transform .14s" }}
+                  />
+                </button>
+
+                {open && (
+                  <div className="grid gap-3 px-[18px] pb-4 pt-1 sm:grid-cols-2" style={{ background: "var(--sf2)" }}>
+                    <div>
+                      <label className="label mb-1 block uppercase">{t("plan")}</label>
+                      <select
+                        className="input w-full text-[12.5px]"
+                        value={p.plan === "free" ? "free" : isTrial ? `trial-${p.plan}` : `${p.plan}-${p.plan_cycle ?? "month"}`}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v === "free") setPlan(p, "free", "month");
+                          else if (v.startsWith("trial-")) setTrialPlan(p, v.slice(6) as Plan);
+                          else {
+                            const [pl, cy] = v.split("-");
+                            setPlan(p, pl as Plan, cy as "month" | "year");
+                          }
+                        }}
+                      >
+                        <option value="free">{t("planFree")}</option>
+                        <option value="basic-month">Basic · {t("cycleMonth")}</option>
+                        <option value="basic-year">Basic · {t("cycleYear")}</option>
+                        <option value="photographer-month">Photographer · {t("cycleMonth")}</option>
+                        <option value="photographer-year">Photographer · {t("cycleYear")}</option>
+                        <option value="photographer_plus-month">Photographer Plus · {t("cycleMonth")}</option>
+                        <option value="photographer_plus-year">Photographer Plus · {t("cycleYear")}</option>
+                        <option value="studio-month">Studio · {t("cycleMonth")}</option>
+                        <option value="studio-year">Studio · {t("cycleYear")}</option>
+                        <optgroup label="Dùng thử (miễn phí)">
+                          <option value="trial-basic">Basic · thử 30 ngày</option>
+                          <option value="trial-photographer">Photographer · thử 30 ngày</option>
+                          <option value="trial-photographer_plus">Photographer Plus · thử 30 ngày</option>
+                          <option value="trial-studio">Studio · thử 7 ngày</option>
+                        </optgroup>
+                      </select>
+                      {p.plan !== "free" && p.plan_expires_at && (
+                        <p className="tnum mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                          {isTrial ? "Dùng thử" : t("expiresShort")}: {fmtDate(p.plan_expires_at)}
+                        </p>
+                      )}
                     </div>
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  <select
-                    className="input px-2 py-1 text-xs"
-                    value={p.role}
-                    onChange={(e) =>
-                      update(p, { role: e.target.value as Profile["role"] })
-                    }
-                  >
-                    <option value="photographer">photographer</option>
-                    <option value="admin">admin</option>
-                  </select>
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={p.is_active}
-                    onChange={(e) => update(p, { is_active: e.target.checked })}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="number"
-                    min={0}
-                    className="input w-20 px-2 py-1 text-xs"
-                    placeholder="∞"
-                    value={p.monthly_album_limit ?? ""}
-                    onChange={(e) =>
-                      update(p, {
-                        monthly_album_limit:
-                          e.target.value === "" ? null : Number(e.target.value),
-                      })
-                    }
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={p.can_zip}
-                    onChange={(e) => update(p, { can_zip: e.target.checked })}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={p.can_notes}
-                    onChange={(e) => update(p, { can_notes: e.target.checked })}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={p.can_galleries}
-                    onChange={(e) => update(p, { can_galleries: e.target.checked })}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={p.can_watermark_pro}
-                    onChange={(e) => update(p, { can_watermark_pro: e.target.checked })}
-                  />
-                </td>
-                <td className="px-4 py-3">
-                  <button onClick={() => removeUser(p)} className="rounded-md p-1.5 hover:bg-red-500/10" style={{ color: "var(--danger)" }} title={t("deleteAccount")} aria-label={t("deleteAccount")}>
-                    <Trash2 size={15} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+                    <div>
+                      <label className="label mb-1 block uppercase">{t("role")}</label>
+                      <select
+                        className="input w-full text-[12.5px]"
+                        value={p.role}
+                        onChange={(e) => update(p, { role: e.target.value as Profile["role"] })}
+                      >
+                        <option value="photographer">photographer</option>
+                        <option value="admin">admin</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="label mb-1 block uppercase">{t("monthlyLimit")}</label>
+                      <input
+                        type="number"
+                        min={0}
+                        className="input w-full text-[12.5px]"
+                        placeholder="∞ (không giới hạn)"
+                        value={p.monthly_album_limit ?? ""}
+                        onChange={(e) => update(p, { monthly_album_limit: e.target.value === "" ? null : Number(e.target.value) })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="label mb-1 block uppercase">Quyền</label>
+                      <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+                        <label className="flex items-center gap-1.5 text-[12.5px] font-semibold">
+                          <input type="checkbox" className="h-4 w-4" checked={p.is_active} onChange={(e) => update(p, { is_active: e.target.checked })} />
+                          {t("active")}
+                        </label>
+                        {PERMS.map(([key, label]) => (
+                          <label key={key} className="flex items-center gap-1.5 text-[12.5px] font-semibold">
+                            <input
+                              type="checkbox"
+                              className="h-4 w-4"
+                              checked={Boolean(p[key])}
+                              onChange={(e) => update(p, { [key]: e.target.checked } as Partial<Profile>)}
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => removeUser(p)}
+                      className="flex w-fit items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                      style={{ background: "var(--rdS)", color: "var(--rd)" }}
+                    >
+                      <Trash2 size={14} /> {t("deleteAccount")}
+                    </button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </Panel>
+
+        {/* ══ Mời thành viên ══════════════════════════════════════════════ */}
+        <Panel>
+          <PanelHead icon={UserPlus} tone="green" title={t("createUser")} />
+          <form onSubmit={createUser} className="flex flex-col gap-2.5 p-4">
+            <p className="text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+              Tài khoản tạo ở đây vào thẳng gói Miễn phí, 5 album/tháng — nâng gói ở danh sách bên cạnh.
+            </p>
+            <div>
+              <label className="label mb-1 block uppercase">{t("email")}</label>
+              <input required type="email" className="input w-full" placeholder="ten@email.com" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </div>
+            <div>
+              <label className="label mb-1 block uppercase">{t("fullName")}</label>
+              <input required type="text" className="input w-full" placeholder="Họ và tên" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
+            </div>
+            <div>
+              <label className="label mb-1 block uppercase">{t("password")}</label>
+              <input required type="password" minLength={6} className="input w-full" placeholder="Tối thiểu 6 ký tự" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+            </div>
+            <button
+              disabled={creating}
+              className="mt-1 flex items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[13px] font-bold disabled:opacity-60"
+              style={{ background: "var(--ac)", color: "#fff" }}
+            >
+              <UserPlus size={16} /> {creating ? "Đang tạo…" : t("createUser")}
+            </button>
+          </form>
+        </Panel>
       </div>
     </div>
   );

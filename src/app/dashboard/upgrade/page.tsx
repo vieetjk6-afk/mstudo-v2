@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Check, X, Crown, Sparkles, Send, Zap, Tag, Camera } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PlanUsage from "@/components/PlanUsage";
+import { Panel } from "@/components/studio/ui";
 import { PLAN_PRICING, PLAN_LABEL, formatVnd, trialDaysFor, type Plan } from "@/lib/plans";
 import { mergeUpgradeContent, UPGRADE_DEFAULTS, type UpgradeContent } from "@/lib/upgrade-content";
 
@@ -247,15 +248,19 @@ export default function UpgradePage() {
     const perMonth = Math.round(now / 12);
     return (
       <>
-      <div className="flex items-baseline gap-2">
-        {disc > 0 && <span className="text-[15px] line-through" style={{ color: "var(--text3)" }}>{formatVnd(full)}</span>}
-        <span className="font-serif text-2xl font-medium">{formatVnd(now)}</span>
-        <span className="text-[13px]" style={{ color: "var(--text2)" }}>/{cycle === "month" ? "tháng" : "năm"}</span>
-        {disc > 0 && <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "var(--gold)", color: "#1a1205" }}>-{disc}%</span>}
-      </div>
-      {cycle === "year" && (
-        <div className="mt-1 text-[12px]" style={{ color: "var(--text3)" }}>≈ {formatVnd(perMonth)}/tháng</div>
-      )}
+        {disc > 0 && (
+          <p className="tnum text-[13px] line-through" style={{ color: "var(--tx3)" }}>{formatVnd(full)}</p>
+        )}
+        <p className="tnum text-[26px] font-bold" style={{ letterSpacing: "-.8px" }}>
+          {formatVnd(now)}
+          <span className="text-[13px] font-medium" style={{ color: "var(--tx3)" }}>/{cycle === "month" ? "tháng" : "năm"}</span>
+          {disc > 0 && (
+            <span className="ml-2 whitespace-nowrap rounded-[20px] px-[9px] py-[3px] align-middle text-[10.5px] font-bold" style={{ background: "var(--ac)", color: "#fff" }}>-{disc}%</span>
+          )}
+        </p>
+        {cycle === "year" && (
+          <p className="tnum mt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>≈ {formatVnd(perMonth)}/tháng</p>
+        )}
       </>
     );
   }
@@ -270,149 +275,187 @@ export default function UpgradePage() {
 
   // Cell convention: "✓" -> check, "✗"/"" -> cross, anything else -> text.
   const cellOf = (v: string) =>
-    v === "✓" ? <Check size={16} style={{ color: "var(--gold)" }} />
-    : (v === "✗" || v.trim() === "") ? <X size={15} style={{ color: "var(--text3)" }} />
-    : <span style={{ color: "var(--text)" }}>{v}</span>;
+    v === "✓" ? <Check size={16} style={{ color: "var(--gn)" }} />
+    : (v === "✗" || v.trim() === "") ? <X size={15} style={{ color: "var(--tx3)" }} />
+    : <span style={{ color: "var(--tx)" }}>{v}</span>;
   const planLabel = (p: Plan) => content.plans[p].label;
 
   return (
-    <div
-      className="page-in"
-      style={{
-        // Sync the upgrade page with the brand-green identity used across the
-        // studio workspace & landing (instead of the album shell's gold/silver).
-        ["--gold" as string]: "var(--brand, #3fb98a)",
-        ["--accent" as string]: "var(--brand, #3fb98a)",
-        ["--accentInk" as string]: "var(--brandFg, #06120c)",
-      } as React.CSSProperties}
-    >
-      <div className="mb-8">
-        <p className="eyebrow mb-1.5">Gói dịch vụ</p>
-        <h1 className="font-serif text-[clamp(28px,4vw,44px)] font-medium leading-none">{content.headline}</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed" style={{ color: "var(--text2)" }}>
+    <div className="page-in flex flex-col gap-3.5">
+      {/* Dòng dẫn — topbar đã hiện tên màn nên không lặp lại tiêu đề lớn. */}
+      <div>
+        <p className="text-[15px] font-bold" style={{ letterSpacing: "-.3px" }}>{content.headline}</p>
+        <p className="mt-1 max-w-2xl text-[13px] leading-[1.6]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
           {content.subheadline}
         </p>
       </div>
 
       {/* Sau khi nâng cấp / kích hoạt dùng thử: cảm ơn + link nhóm Zalo hỗ trợ */}
       {(sentPlan || trialOk) && (
-        <div className="mb-6 flex flex-col gap-3 rounded-2xl p-4 sm:flex-row sm:items-center sm:justify-between" style={{ background: "color-mix(in srgb, var(--brand) 12%, transparent)", border: "1px solid color-mix(in srgb, var(--brand) 40%, transparent)" }}>
-          <div className="flex items-start gap-2.5">
-            <Sparkles size={18} style={{ color: "var(--brand)", marginTop: 2 }} />
-            <div>
-              <p className="text-[14px] font-semibold">{trialOk ? "Đã kích hoạt dùng thử! 🎉" : "Đã ghi nhận yêu cầu nâng cấp! 🎉"}</p>
-              <p className="text-[13px]" style={{ color: "var(--text2)" }}>Tham gia nhóm Zalo hỗ trợ để được hướng dẫn cài đặt &amp; kích hoạt nhanh nhất.</p>
-            </div>
+        <Panel className="flex flex-col gap-3 px-[18px] py-4 sm:flex-row sm:items-center" >
+          <span className="flex-none rounded-[10px] p-[9px]" style={{ background: "var(--gnS)", color: "var(--gn)", lineHeight: 0 }}>
+            <Sparkles size={19} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[14px] font-bold">{trialOk ? "Đã kích hoạt dùng thử 🎉" : "Đã ghi nhận yêu cầu nâng cấp 🎉"}</p>
+            <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+              Vào nhóm Zalo hỗ trợ để được hướng dẫn cài đặt &amp; kích hoạt nhanh nhất.
+            </p>
           </div>
-          <a href="https://zalo.me/g/rycw0pqcgss14ib6u2xj" target="_blank" rel="noreferrer" className="btn-primary whitespace-nowrap">Vào nhóm Zalo hỗ trợ →</a>
-        </div>
+          <a
+            href="https://zalo.me/g/rycw0pqcgss14ib6u2xj"
+            target="_blank"
+            rel="noreferrer"
+            className="flex-none whitespace-nowrap rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff" }}
+          >
+            Vào nhóm Zalo hỗ trợ →
+          </a>
+        </Panel>
       )}
 
-      <PlanUsage showUpgrade={false} />
+      <PlanUsage showUpgrade={false} variant="panel" />
 
-      {/* Billing cycle */}
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <div className="inline-flex overflow-hidden rounded-xl" style={{ border: "1px solid var(--border)" }}>
+      {/* Chu kỳ thanh toán + mã giảm giá + mã dùng thử — một hàng công cụ. */}
+      <Panel className="flex flex-wrap items-center gap-2.5 px-[18px] py-3.5">
+        <div className="flex flex-none gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
           {(["month", "year"] as Cycle[]).map((c) => (
-            <button key={c} onClick={() => setCycle(c)} className="px-4 py-2 text-[13px] font-medium" style={cycle === c ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", color: "var(--text2)" }}>
+            <button
+              key={c}
+              onClick={() => setCycle(c)}
+              className="rounded-[8px] px-[15px] py-[6.5px] text-[12.5px] font-semibold"
+              style={cycle === c ? { background: "var(--sf)", color: "var(--tx)", boxShadow: "0 1px 2px rgba(20,15,25,.08)" } : { color: "var(--tx2)" }}
+            >
               {c === "month" ? "Theo tháng" : "Theo năm"}
             </button>
           ))}
         </div>
-        <span className="rounded-full px-2.5 py-1 text-[12px] font-semibold" style={{ background: "color-mix(in srgb, var(--gold) 18%, transparent)", color: "var(--gold)" }}>
+        <span className="flex-none whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-[11.5px] font-semibold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
           🎁 Mua theo năm tặng thêm 30 ngày
         </span>
-        {/* Discount code */}
-        <div className="flex items-end gap-2">
-          <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} placeholder="Mã giảm giá" className="input w-40" />
-          <button onClick={applyCode} className="btn-ghost"><Tag size={14} /> Áp dụng</button>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} placeholder="Mã giảm giá" className="input w-36" />
+          <button onClick={applyCode} className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold" style={{ border: "1px solid var(--bd)" }}>
+            <Tag size={14} /> Áp dụng
+          </button>
+          <input value={trialCode} onChange={(e) => setTrialCode(e.target.value.toUpperCase())} placeholder="Mã dùng thử" className="input w-36" />
+          <button
+            onClick={redeemTrial}
+            disabled={trialBusy}
+            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold disabled:opacity-60"
+            style={{ background: "var(--acS)", color: "var(--ac)" }}
+          >
+            <Zap size={14} /> {trialBusy ? "Đang kích hoạt…" : "Kích hoạt"}
+          </button>
         </div>
-      </div>
-      {codeMsg && <p className="mb-4 text-[13px]" style={{ color: appliedCode ? "var(--gold)" : "var(--danger)" }}>{codeMsg}</p>}
+        {codeMsg && (
+          <p className="w-full text-[12px] font-semibold" style={{ color: appliedCode ? "var(--gn)" : "var(--rd)" }}>{codeMsg}</p>
+        )}
+        {trialMsg && (
+          <p className="w-full text-[12px] font-semibold" style={{ color: trialOk ? "var(--gn)" : "var(--rd)" }}>{trialMsg}</p>
+        )}
+      </Panel>
 
-      {/* Trial code — instant activation */}
-      <div className="card mb-6 p-5">
-        <h3 className="mb-1 flex items-center gap-2 text-sm font-medium"><Sparkles size={15} style={{ color: "var(--gold)" }} /> Dùng thử</h3>
-        <p className="mb-3 text-[13px]" style={{ color: "var(--text2)" }}>Có mã dùng thử? Nhập để kích hoạt gói ngay, không cần thanh toán.</p>
-        <div className="flex flex-wrap items-end gap-2">
-          <input value={trialCode} onChange={(e) => setTrialCode(e.target.value.toUpperCase())} placeholder="Mã dùng thử" className="input w-44" />
-          <button onClick={redeemTrial} disabled={trialBusy} className="btn-primary"><Zap size={14} /> {trialBusy ? "Đang kích hoạt…" : "Kích hoạt dùng thử"}</button>
-        </div>
-        {trialMsg && <p className="mt-2 text-[13px]" style={{ color: trialOk ? "#5fd29a" : "var(--danger)" }}>{trialMsg}</p>}
-      </div>
-
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-        {cards.map(({ plan, icon: Icon, accent }) => (
-          <div key={plan} className="card flex flex-col p-4" style={accent ? { borderColor: "var(--gold)" } : undefined}>
-            <div className="mb-4 flex items-center gap-2.5">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: accent ? "var(--gold)" : "var(--surface2)", color: accent ? "#1a1205" : "var(--text2)" }}>
-                <Icon size={18} />
-              </span>
-              <div>
-                <h2 className="font-serif text-lg font-medium leading-tight">{planLabel(plan)}</h2>
-                {currentPlan === plan && <p className="text-[12px]" style={{ color: "var(--gold)" }}>Gói hiện tại</p>}
+      {/* Thẻ gói — viền 1.5px, gói đang dùng nổi bằng viền màu nhấn + nền nhạt. */}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(216px,1fr))] gap-3">
+        {cards.map(({ plan, icon: Icon, accent }) => {
+          const isCurrent = currentPlan === plan;
+          return (
+            <div
+              key={plan}
+              className="flex flex-col rounded-[14px] p-[18px]"
+              style={{
+                background: isCurrent ? "var(--acS)" : "var(--sf)",
+                border: `1.5px solid ${isCurrent ? "var(--ac)" : "var(--bd)"}`,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Icon size={17} style={{ flex: "none", color: accent ? "var(--ac)" : "var(--tx3)" }} />
+                <p className="text-[15px] font-bold" style={{ letterSpacing: "-.3px" }}>{planLabel(plan)}</p>
+                {isCurrent && (
+                  <span className="flex-none whitespace-nowrap rounded-[20px] px-[9px] py-[3px] text-[10.5px] font-bold" style={{ background: "var(--ac)", color: "#fff" }}>
+                    Đang dùng
+                  </span>
+                )}
               </div>
-            </div>
 
-            <div className="mb-4">{plan === "free" ? <span className="font-serif text-2xl font-medium">Miễn phí</span> : priceBlock(plan)}</div>
+              <div className="mt-3.5">
+                {plan === "free"
+                  ? <p className="text-[26px] font-bold" style={{ letterSpacing: "-.8px" }}>Miễn phí</p>
+                  : priceBlock(plan)}
+              </div>
 
-            <ul className="mb-5 space-y-2.5">
-              {content.plans[plan].features.map((f) => (
-                <li key={f} className="flex items-start gap-2.5 text-[13.5px]" style={{ color: "var(--text2)" }}>
-                  <Check size={16} className="mt-0.5 flex-shrink-0" style={{ color: accent ? "var(--gold)" : "var(--text3)" }} />
-                  {f}
-                </li>
-              ))}
-            </ul>
+              <div className="my-4 flex flex-1 flex-col gap-2">
+                {content.plans[plan].features.map((f) => (
+                  <div key={f} className="flex items-start gap-2">
+                    <Check size={16} className="mt-px flex-none" style={{ color: "var(--gn)" }} />
+                    <span className="text-[12.5px] leading-[1.45]" style={{ color: "var(--tx2)" }}>{f}</span>
+                  </div>
+                ))}
+              </div>
 
-            {content.plans[plan].promo && <p className="mb-4 rounded-lg px-3 py-2 text-[12.5px]" style={{ background: "color-mix(in srgb, var(--gold) 14%, transparent)", color: "var(--gold)" }}>{content.plans[plan].promo}</p>}
+              {content.plans[plan].promo && (
+                <p className="mb-3 rounded-[10px] px-3 py-2 text-[11.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
+                  {content.plans[plan].promo}
+                </p>
+              )}
 
-            <div className="mt-auto">
               {plan === "free" ? (
-                <p className="text-center text-[13px]" style={{ color: "var(--text3)" }}>{currentPlan === "free" ? "Bạn đang dùng gói này" : "Gói cơ bản"}</p>
+                <p className="text-center text-[12px]" style={{ color: "var(--tx3)" }}>
+                  {isCurrent ? "Bạn đang dùng gói này" : "Gói cơ bản"}
+                </p>
               ) : sentPlan === plan ? (
-                <div className="flex items-center gap-2.5 rounded-xl px-4 py-3" style={{ background: "color-mix(in srgb,#3fbf7f 14%,transparent)", border: "1px solid color-mix(in srgb,#3fbf7f 40%,transparent)" }}>
-                  <Check size={17} style={{ color: "#5fd29a" }} />
-                  <span className="text-[13px]">{activated ? "Đã kích hoạt gói! 🎉" : "Đã gửi yêu cầu! Quản trị viên sẽ liên hệ sớm."}</span>
+                <div className="flex items-center gap-2 rounded-[10px] px-3 py-2.5" style={{ background: "var(--gnS)", color: "var(--gn)" }}>
+                  <Check size={16} className="flex-none" />
+                  <span className="text-[12px] font-semibold">{activated ? "Đã kích hoạt gói 🎉" : "Đã gửi yêu cầu, quản trị viên sẽ liên hệ."}</span>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <button onClick={() => { setError(null); setModalPlan(plan); }} className="btn-primary w-full rounded-xl py-3 text-[14px]">
-                    <Send size={15} /> {`Đăng ký ${planLabel(plan)}`}
+                  <button
+                    onClick={() => { setError(null); setModalPlan(plan); }}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[13px] font-bold"
+                    style={{ background: "var(--ac)", color: "#fff" }}
+                  >
+                    <Send size={15} /> Đăng ký
                   </button>
                   {!trialUsed && currentPlan === "free" && (
-                    <button onClick={() => startTrial(plan)} disabled={startingTrial !== null} className="btn-ghost w-full rounded-xl py-2.5 text-[13px] disabled:opacity-60">
-                      <Sparkles size={14} /> {startingTrial === plan ? "Đang kích hoạt…" : `Dùng thử ${trialDaysFor(plan)} ngày miễn phí`}
+                    <button
+                      onClick={() => startTrial(plan)}
+                      disabled={startingTrial !== null}
+                      className="flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[12.5px] font-semibold disabled:opacity-60"
+                      style={{ background: "var(--acS)", color: "var(--ac)" }}
+                    >
+                      <Sparkles size={14} /> {startingTrial === plan ? "Đang kích hoạt…" : `Dùng thử ${trialDaysFor(plan)} ngày`}
                     </button>
                   )}
                 </div>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {/* Feature comparison */}
-      <div className="mt-8 card overflow-x-auto p-0">
-        <table className="w-full text-[13px]">
+      {/* So sánh tính năng — đầu bảng và ô kẻ theo quy tắc chung của shell. */}
+      <Panel className="overflow-x-auto">
+        <table className="w-full border-collapse text-[13px]">
           <thead>
-            <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              <th className="px-4 py-3 text-left font-medium" style={{ color: "var(--text2)", minWidth: 200 }}>So sánh tính năng</th>
-              <th className="px-3 py-3 text-center font-medium" style={{ minWidth: 84 }}>Miễn phí</th>
-              <th className="px-3 py-3 text-center font-medium" style={{ minWidth: 84 }}>Basic</th>
-              <th className="px-3 py-3 text-center font-medium" style={{ minWidth: 110 }}>Photographer</th>
-              <th className="px-3 py-3 text-center font-medium" style={{ color: "var(--gold)", minWidth: 84 }}>Studio</th>
+            <tr>
+              <th style={{ minWidth: 200 }}>So sánh tính năng</th>
+              <th style={{ minWidth: 84, textAlign: "center" }}>Miễn phí</th>
+              <th style={{ minWidth: 84, textAlign: "center" }}>Basic</th>
+              <th style={{ minWidth: 110, textAlign: "center" }}>Photographer</th>
+              <th style={{ minWidth: 84, textAlign: "center", color: "var(--ac)" }}>Studio</th>
             </tr>
           </thead>
           <tbody>
-            {content.compare.map((row, i) => {
+            {content.compare.map((row) => {
               if ("section" in row) {
                 return (
                   <tr key={row.section}>
                     <td
                       colSpan={5}
-                      className="px-4 pb-1.5 pt-4 text-[11px] font-bold uppercase tracking-wider"
-                      style={{ color: "var(--gold)", borderTop: i === 0 ? "none" : "1px solid var(--border)", background: "color-mix(in srgb, var(--gold) 6%, transparent)" }}
+                      className="text-[10.5px] font-extrabold uppercase"
+                      style={{ letterSpacing: ".7px", color: "var(--ac)", background: "var(--acS)" }}
                     >
                       {row.section}
                     </td>
@@ -420,59 +463,61 @@ export default function UpgradePage() {
                 );
               }
               return (
-                <tr key={row.label} style={{ borderTop: "1px solid var(--border)" }}>
-                  <td className="px-4 py-2" style={{ color: "var(--text2)" }}>{row.label}</td>
-                  <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.free)}</div></td>
-                  <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.basic)}</div></td>
-                  <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.photographer)}</div></td>
-                  <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.studio)}</div></td>
+                <tr key={row.label}>
+                  <td style={{ color: "var(--tx2)" }}>{row.label}</td>
+                  <td><div className="flex justify-center">{cellOf(row.free)}</div></td>
+                  <td><div className="flex justify-center">{cellOf(row.basic)}</div></td>
+                  <td><div className="flex justify-center">{cellOf(row.photographer)}</div></td>
+                  <td><div className="flex justify-center">{cellOf(row.studio)}</div></td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
+      </Panel>
 
-      {/* Coming soon */}
-      <div className="mt-8 card p-6">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-          <Sparkles size={15} /> Tính năng sắp ra mắt
-        </h3>
+      {/* Sắp ra mắt */}
+      <Panel className="px-[18px] py-4">
+        <p className="mb-3 flex items-center gap-2 text-[13.5px] font-bold">
+          <Sparkles size={16} style={{ color: "var(--ac)" }} /> Tính năng sắp ra mắt
+        </p>
         <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
           {content.comingSoon.map((f) => (
-            <div key={f} className="flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text2)" }}>
-              <span className="rounded-full px-2 py-0.5 text-[10px] uppercase" style={{ background: "var(--surface2)", color: "var(--text3)" }}>Sắp có</span>
+            <div key={f} className="flex items-center gap-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+              <span className="flex-none rounded-[20px] px-2 py-0.5 text-[10px] font-bold uppercase" style={{ background: "var(--sf2)", color: "var(--tx3)" }}>Sắp có</span>
               {f}
             </div>
           ))}
         </div>
-      </div>
+      </Panel>
 
-      <p className="mt-6 text-center text-[12.5px]" style={{ color: "var(--text3)" }}>
-        Thanh toán & kích hoạt gói hiện được xử lý thủ công — gửi yêu cầu rồi quản trị viên sẽ liên hệ. Mã giảm giá 100% sẽ kích hoạt gói ngay.
+      <p className="text-center text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+        Thanh toán &amp; kích hoạt gói hiện xử lý thủ công — gửi yêu cầu rồi quản trị viên liên hệ. Mã giảm giá 100% kích hoạt gói ngay.
       </p>
 
-      {/* Confirm modal — enter phone before sending */}
+      {/* Hộp xác nhận — nhập số điện thoại trước khi gửi */}
       {modalPlan && modalPlan !== "free" && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,.6)" }}
+          style={{ background: "rgba(20,15,25,.5)" }}
           onClick={() => sending === null && setModalPlan(null)}
         >
-          <div className="card w-full max-w-md p-6" onClick={(e) => e.stopPropagation()}>
-            <h3 className="font-serif text-2xl font-medium">Đăng ký gói {planLabel(modalPlan)}</h3>
-            <p className="mt-1 text-[13px]" style={{ color: "var(--text2)" }}>
+          <div
+            className="w-full max-w-md rounded-[14px] p-5"
+            style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-modal)", animation: "vkPop .2s ease" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[16px] font-bold" style={{ letterSpacing: "-.3px" }}>Đăng ký gói {planLabel(modalPlan)}</p>
+            <p className="mt-1 text-[12.5px]" style={{ color: "var(--tx2)" }}>
               {cycle === "month" ? "Theo tháng" : "Theo năm"} ·{" "}
-              <b style={{ color: "var(--gold)" }}>
-                {formatVnd(finalPriceOf(modalPlan as "basic" | "photographer" | "studio"))}
+              <b className="tnum" style={{ color: "var(--ac)" }}>
+                {formatVnd(finalPriceOf(modalPlan as PaidPlan))}
               </b>
               {discountFor(modalPlan) > 0 && ` (-${discountFor(modalPlan)}%)`}
               {appliedCode && (!appliedCode.plan || appliedCode.plan === modalPlan) && (!appliedCode.cycle || appliedCode.cycle === cycle) && ` · mã ${appliedCode.code}`}
             </p>
 
-            <label className="mt-4 mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>
-              Số điện thoại liên hệ <span style={{ color: "var(--gold)" }}>*</span>
-            </label>
+            <label className="label mb-1 mt-4 block uppercase">Số điện thoại liên hệ *</label>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -481,16 +526,26 @@ export default function UpgradePage() {
               autoFocus
               className="input"
             />
-            <label className="mt-3 mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>Lời nhắn (tuỳ chọn)</label>
+            <label className="label mb-1 mt-3 block uppercase">Lời nhắn (tuỳ chọn)</label>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Nhu cầu của bạn, số lượng album dự kiến…" className="input min-h-[70px] resize-y" />
 
-            {error && <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>{error}</p>}
+            {error && <p className="mt-2 text-[12.5px] font-semibold" style={{ color: "var(--rd)" }}>{error}</p>}
 
             <div className="mt-4 flex gap-2.5">
-              <button onClick={() => setModalPlan(null)} disabled={sending !== null} className="btn-ghost flex-1 py-2.5">
+              <button
+                onClick={() => setModalPlan(null)}
+                disabled={sending !== null}
+                className="flex-1 rounded-[10px] py-2.5 text-[13px] font-semibold"
+                style={{ border: "1px solid var(--bd)" }}
+              >
                 Huỷ
               </button>
-              <button onClick={() => request(modalPlan)} disabled={sending !== null} className="btn-primary flex-1 py-2.5">
+              <button
+                onClick={() => request(modalPlan)}
+                disabled={sending !== null}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[13px] font-bold"
+                style={{ background: "var(--ac)", color: "#fff" }}
+              >
                 <Send size={15} /> {sending === modalPlan ? "Đang gửi…" : "Xác nhận gửi"}
               </button>
             </div>
