@@ -991,9 +991,11 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
             </span>
             {!studioSigned && <span className="mt-1 text-[10px]" style={{ color: "var(--s-red)" }}>Chưa có chữ ký studio</span>}
           </div>
-          <a href={shareUrl} target="_blank" rel="noreferrer" className="btn-ghost px-3 py-2 text-xs">
+          {/* Mở màn "Hợp đồng gửi khách": xem trước trong khung điện thoại 376px
+              kèm link và mã QR, thay vì bắn thẳng sang tab mới. */}
+          <Link href={`/dashboard/studio/contracts/${contract.id}/share`} className="btn-ghost px-3 py-2 text-xs">
             Xem như khách
-          </a>
+          </Link>
           <button onClick={duplicateContract} disabled={busy === "dup"} className="btn-ghost px-3 py-2 text-xs">
             <Copy size={14} /> {busy === "dup" ? "Đang sao…" : "Nhân bản"}
           </button>

@@ -111,7 +111,7 @@ Mọi con số tiền/ngày dùng `font-variant-numeric: tabular-nums`.
 | 6 | Hợp đồng & lịch hẹn | `contracts` | `studio/contracts/ContractsListView.tsx`, `src/lib/contract-filter.ts` |
 | 7 | Chi tiết hợp đồng | `detail` | `studio/contracts/[id]/`, `src/lib/contract-status.ts` |
 | 8 | Tạo hợp đồng (5 bước) | `newc` | `studio/contracts/new/` |
-| 9 | Hợp đồng gửi khách | `share` | `studio/contracts/[id]/share/`, trang công khai `app/hd/[code]/` |
+| 9 | Hợp đồng gửi khách | `share` | `studio/contracts/[id]/share/`, trang công khai `app/c/[token]/` |
 | 10 | Bảng công việc (kanban) | `board` | `studio/board/BoardView.tsx` |
 | 11 | Đặt lịch khách | `bookings` | `studio/bookings/BookingsView.tsx` |
 | 12 | Chi tiết đặt lịch | `booking` | `studio/bookings/[id]/` |
@@ -248,6 +248,10 @@ Bước xong: nền `--gn` + icon `check`. Bước hiện tại: nền `--ac`. B
 - Nút **"Xong buổi chụp"** đưa hợp đồng sang `in_progress` (bước "Chụp" trong vòng đời 7 bước suy ra từ trạng thái này, không có cột riêng), rồi ở lại màn này để thợ chuyển sang buổi kế trong ngày.
 
 **Cảnh báo lãi mỏng** — `biên = (tổng HĐ − tiền công nhân sự − chi phí sản xuất) / tổng HĐ`. Dưới 45% đỏ, 45–60% vàng, trên 60% xanh.
+
+**Xem như khách trên điện thoại** — khung xem trước nhúng THẲNG trang khách thật `/c/<token>` bằng iframe, không vẽ lại nội dung hợp đồng (vẽ lại thì mỗi lần trang khách đổi, bản xem trước lại nói dối). Một chỗ dễ sập: app đặt `X-Frame-Options: SAMEORIGIN` + `frame-ancestors 'self'`, nên studio có tên miền riêng mà nhúng link branded sẽ bị trình duyệt chặn, khung trắng trơn. Vì `/c/<token>` chạy trên cả host chính lẫn host studio và ra cùng nội dung, iframe dùng đường dẫn **cùng gốc**, còn link hiện / nút chép / mã QR vẫn là bản branded.
+
+**Hoàn tác trong toast** — `useUndoToast()` ở `src/components/studio/UndoToast.tsx`. Hoãn việc xoá 5 giây rồi mới gọi xuống máy chủ, chứ không xoá-rồi-thêm-lại (thêm lại không bao giờ khôi phục đúng nguyên trạng: id mới, mất bản ghi con, sai thứ tự). Ba chỗ dễ hụt đã xử lý: xoá liên tiếp thì việc đang chờ được chốt ngay chứ không bị nuốt; rời trang thì chạy nốt qua `pagehide`; hoàn tác trả dòng về đúng vị trí cũ.
 
 ---
 
