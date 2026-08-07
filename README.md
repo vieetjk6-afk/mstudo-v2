@@ -117,7 +117,7 @@ Mọi con số tiền/ngày dùng `font-variant-numeric: tabular-nums`.
 | 12 | Chi tiết đặt lịch | `booking` | `studio/bookings/[id]/` |
 | 13 | Yêu cầu mới | `leads` | `studio/leads/LeadsView.tsx` |
 | 14 | Lịch làm việc (4 chế độ) | `calendar` | `studio/calendar/CalendarView.tsx`, `team/TeamCalendar.tsx` |
-| 15 | Chế độ ngày chụp | `field` | **mới** — `studio/field/` |
+| 15 | Chế độ ngày chụp | `field` | `studio/field/`, `src/lib/field-mode.ts` |
 | 16 | Xử lý hình ảnh | `production` | `studio/production/ProductionView.tsx` |
 | 17 | Thư viện album | `albums` | `dashboard/AlbumList.tsx` |
 | 18 | Album chọn ảnh (chi tiết) | `album` | `dashboard/albums/[id]/AlbumEditor.tsx` |
@@ -239,6 +239,13 @@ Bước xong: nền `--gn` + icon `check`. Bước hiện tại: nền `--ac`. B
 **⌘K** — bắt `metaKey/ctrlKey + k` ở `window`, `Escape` để đóng. So khớp bằng chuỗi đã bỏ dấu: `s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toLowerCase()`. Nhóm kết quả theo loại, mỗi loại có pill màu riêng. Kết quả đầu tiên highlight nền `--sf2`.
 
 **Chế độ ngày chụp** — lịch trình phải sinh ra từ `t1`/`t2` của chính hợp đồng (bước đầu = `t1 − 30 phút`, các bước sau chia đều tới `t2`). Checklist ảnh chọn theo loại buổi, nhận diện bằng regex trên `svc + title`: cưới / sơ sinh / kỷ yếu / doanh nghiệp / chân dung.
+
+Đã dựng ở `src/lib/field-mode.ts` (tính thuần, không React) + `studio/field/`. Vài điểm khi ghép vào dữ liệu thật của repo:
+
+- `studio_contracts` chỉ có MỘT cột giờ (`event_time`), không có giờ kết thúc. Nên `t1` = sớm nhất trong (giờ phân công `contract_crew.start_time` → `event_time` → `intake.start_time`), `t2` = muộn nhất của `contract_crew.end_time`. Không có giờ phân công thì `t2` = `t1` + độ dài mặc định theo loại buổi (cưới 10h, kỷ yếu 5h, doanh nghiệp 6h, sơ sinh/chân dung 3h).
+- Tiệc tan **01:00** nghĩa là rạng sáng hôm sau, không phải dữ liệu hỏng: `t2 < t1` được cộng 24h, và mốc trong lịch trình giữ cả số phút chưa quay vòng (`RunStep.atMin`) để so thứ tự cho đúng.
+- Chặng đang chạy bám theo đồng hồ; thợ bấm vào một chặng để tự ghim, bấm lại để thả. Ô tick checklist ảnh và chặng đã ghim lưu ở `localStorage` theo id hợp đồng — ngoài hiện trường sóng chập chờn, mà đây cũng chỉ là ghi chú thao tác của thợ.
+- Nút **"Xong buổi chụp"** đưa hợp đồng sang `in_progress` (bước "Chụp" trong vòng đời 7 bước suy ra từ trạng thái này, không có cột riêng), rồi ở lại màn này để thợ chuyển sang buổi kế trong ngày.
 
 **Cảnh báo lãi mỏng** — `biên = (tổng HĐ − tiền công nhân sự − chi phí sản xuất) / tổng HĐ`. Dưới 45% đỏ, 45–60% vàng, trên 60% xanh.
 
