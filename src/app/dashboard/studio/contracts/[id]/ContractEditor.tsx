@@ -996,7 +996,8 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
   };
 
   return (
-    <div className="page-in">
+    // pb thêm trên điện thoại: chừa chỗ cho thanh hành động cố định đáy.
+    <div className="page-in pb-[72px] lg:pb-0">
       {msg && (
         <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-sm" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
           {msg}
@@ -1541,7 +1542,7 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
           </div>
 
           {/* Payments — unified schedule + collection */}
-          <div className="card p-6">
+          <div id="thanh-toan" className="card scroll-mt-24 p-6">
             <div className="mb-1 flex items-center justify-between">
               <h2 className="font-serif text-lg font-medium">Thanh toán</h2>
               <p className="text-xs" style={{ color: "var(--text2)" }}>
@@ -2066,6 +2067,30 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
 
           {/* Ghi chú nội bộ — trao đổi trong studio, khách không thấy. */}
           <ContractNotes contractId={contract.id} initial={initialNotes} people={mentionable} me={me} />
+        </div>
+
+        {/* ── Thanh hành động cố định đáy (bản mobile của thiết kế) ───────
+            Trên điện thoại hai việc hay làm nhất — ghi nhận tiền và gửi khách —
+            nằm tít trên đầu màn, phải cuộn ngược lên mới thấy. Thanh này ghim ở
+            đáy, NGAY TRÊN thanh tab 5 mục, và chỉ hiện dưới lg. */}
+        <div
+          className="fixed inset-x-0 z-30 flex gap-2.5 border-t px-4 py-2.5 lg:hidden"
+          style={{ bottom: "calc(52px + env(safe-area-inset-bottom, 0px))", background: "var(--topbar)", backdropFilter: "blur(10px)", borderColor: "var(--bd)" }}
+        >
+          <a
+            href="#thanh-toan"
+            className="flex min-h-[46px] flex-1 items-center justify-center rounded-[12px] text-[13.5px] font-semibold"
+            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+          >
+            Ghi nhận thu
+          </a>
+          <Link
+            href={`/dashboard/studio/contracts/${contract.id}/share`}
+            className="flex min-h-[46px] flex-1 items-center justify-center rounded-[12px] text-[13.5px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff" }}
+          >
+            Gửi khách
+          </Link>
         </div>
 
         {/* Right: finance summary */}

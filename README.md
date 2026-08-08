@@ -274,6 +274,11 @@ Khung điện thoại 392×812, tab bar 5 mục ở đáy, hit target tối thi�
 
 Bảng trên desktop → thẻ trên mobile. Không thu nhỏ bảng.
 
+Không dựng route riêng cho mobile — cùng một màn, đổi bố cục theo bề ngang:
+
+- **Lịch**: dưới 640px mở thẳng chế độ **Ngày** (lưới tuần ở khổ hẹp vẫn là 7 cột bé xíu, chạm rất khó). Dải ngày lùi 3 / tiến 10 ngày, mỗi ô hiện số buổi. Thẻ đồng bộ Google là việc cài một lần nên đẩy xuống cuối ở khổ hẹp (`order-last lg:order-none`), không chiếm đầu màn.
+- **Chi tiết HĐ**: stepper 7 bước chuyển từ xuống dòng sang **cuộn ngang** dưới 900px — xuống dòng thì nó cao thành một khối đẩy hết nội dung xuống dưới nếp gấp. Thanh hành động (Ghi nhận thu · Gửi khách) ghim đáy, ngay TRÊN thanh tab 52px, chỉ hiện dưới `lg`.
+
 ---
 
 ## Ghi chú kỹ thuật khi dựng lại

@@ -39,12 +39,15 @@ export default function ContractStepper({ state, right }: { state: ContractLifec
   return (
     <div className="rounded-[14px] px-4 py-3.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-3">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-2.5">
+        {/* Trên điện thoại 7 bước xuống dòng thành một khối cao ngất, đẩy hết nội
+            dung hợp đồng xuống dưới màn hình. Bản thiết kế cho CUỘN NGANG ở khổ
+            hẹp; từ 900px trở lên mới xuống dòng như cũ. */}
+        <div className="ck-steps flex min-w-0 flex-1 flex-nowrap items-center gap-x-1.5 gap-y-2.5 overflow-x-auto min-[900px]:flex-wrap min-[900px]:overflow-x-visible">
           {STEPS.map((s, i) => {
             const done = state[s.key];
             const current = i === currentIndex;
             return (
-              <div key={s.key} className="flex items-center gap-1.5">
+              <div key={s.key} className="flex flex-none items-center gap-1.5">
                 <span
                   className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full text-[11.5px] font-bold"
                   style={

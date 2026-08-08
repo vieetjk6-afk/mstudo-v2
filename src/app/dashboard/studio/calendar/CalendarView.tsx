@@ -106,9 +106,11 @@ export default function CalendarView({
   const [dayAnchor, setDayAnchor] = useState(todayStr);
   const [weekAnchor, setWeekAnchor] = useState(todayStr); // any date inside the displayed week
 
-  // Trên điện thoại, lịch tháng chật → mặc định mở chế độ Tuần (dễ đọc/chạm hơn).
+  // Trên điện thoại mở thẳng chế độ NGÀY: bản mobile của thiết kế là dải ngày
+  // cuộn ngang + danh sách thẻ, chứ không phải lưới tuần (lưới tuần ở khổ hẹp
+  // vẫn là 7 cột bé xíu, chạm rất khó).
   useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth < 640) setView("week");
+    if (typeof window !== "undefined" && window.innerWidth < 640) setView("day");
   }, []);
 
   // add-note form
@@ -185,6 +187,24 @@ export default function CalendarView({
     () => contractList.filter((c) => c.event_date === dayAnchor).sort((a, b) => (a.event_time || "").localeCompare(b.event_time || "")),
     [contractList, dayAnchor]
   );
+
+  /** Dải ngày quanh ngày đang xem: lùi 3, tiến 10 — đủ để lướt một tuần rưỡi. */
+  const dayStrip = useMemo(() => {
+    const [ay, am, ad] = dayAnchor.split("-").map(Number);
+    const out: { date: string; dow: string; num: string; jobs: number; today: boolean }[] = [];
+    for (let i = -3; i <= 10; i++) {
+      const dt = new Date(ay, am - 1, ad + i);
+      const iso = ymd(dt.getFullYear(), dt.getMonth(), dt.getDate());
+      out.push({
+        date: iso,
+        dow: fmtDow(iso),
+        num: String(dt.getDate()).padStart(2, "0"),
+        jobs: contractList.filter((c) => c.event_date === iso).length,
+        today: iso === todayStr,
+      });
+    }
+    return out;
+  }, [dayAnchor, contractList, todayStr]);
 
   function moveDay(delta: number) {
     const [dy, dm, dd] = dayAnchor.split("-").map(Number);
@@ -271,7 +291,7 @@ export default function CalendarView({
   }, [events, todayStr]);
 
   return (
-    <div className="page-in">
+    <div className="page-in flex flex-col">
       {/* ── Thanh điều khiển: hôm nay · dải ngày · 4 chế độ xem ─────────── */}
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
         <button
@@ -344,8 +364,11 @@ export default function CalendarView({
         </div>
       )}
 
+      {/* Đồng bộ Google là việc cài MỘT LẦN. Trên điện thoại nó chiếm nguyên
+          đầu màn, đẩy lịch — thứ người ta mở app để xem — xuống dưới nếp gấp;
+          nên đẩy xuống cuối ở khổ hẹp, giữ nguyên vị trí từ lg trở lên. */}
       {feedUrl && (
-        <div className="card mb-6 flex flex-wrap items-center gap-3 p-4">
+        <div className="card order-last mb-6 mt-6 flex flex-wrap items-center gap-3 p-4 lg:order-none lg:mt-0">
           <CalendarDays size={16} style={{ color: "var(--text3)" }} />
           <div className="min-w-0 flex-1">
             <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>
@@ -371,6 +394,8 @@ export default function CalendarView({
           contracts={dayContracts}
           events={eventsOn(dayAnchor)}
           onMove={moveDay}
+          strip={dayStrip}
+          onPick={setDayAnchor}
         />
       ) : view === "people" ? (
         <PeopleWeek rows={peopleRows} weekDays={weekDays} todayStr={todayStr} onMove={moveWeek} />
@@ -689,12 +714,14 @@ function WeekView({
    Danh sách buổi chụp trong một ngày: giờ bắt đầu to, tên job, khách, địa
    điểm và ê-kíp. Đây cũng là màn hay mở nhất trên điện thoại. */
 function DayView({
-  date, contracts, events, onMove,
+  date, contracts, events, onMove, strip, onPick,
 }: {
   date: string;
   contracts: ContractMarker[];
   events: EventRow[];
   onMove: (d: number) => void;
+  strip: { date: string; dow: string; num: string; jobs: number; today: boolean }[];
+  onPick: (d: string) => void;
 }) {
   return (
     <div className="flex max-w-[840px] flex-col gap-2.5">
@@ -706,6 +733,32 @@ function DayView({
         <button onClick={() => onMove(1)} aria-label="Ngày sau" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
           <ChevronRight size={17} />
         </button>
+      </div>
+
+      {/* Dải ngày cuộn ngang (bản mobile của thiết kế): chạm để nhảy ngày, khỏi
+          phải bấm mũi tên từng ngày một. Ô có việc hiện chấm đếm bên dưới. */}
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+        {strip.map((d) => {
+          const on = d.date === date;
+          return (
+            <button
+              key={d.date}
+              onClick={() => onPick(d.date)}
+              aria-current={on ? "date" : undefined}
+              className="w-[46px] flex-none rounded-[14px] py-[9px] text-center"
+              style={{
+                background: on ? "var(--ac)" : "var(--sf)",
+                border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`,
+              }}
+            >
+              <p className="text-[10.5px] font-semibold" style={{ color: on ? "rgba(255,255,255,.75)" : "var(--tx3)" }}>{d.dow}</p>
+              <p className="tnum mt-0.5 text-[16px] font-bold" style={{ color: on ? "#fff" : d.today ? "var(--ac)" : "var(--tx)" }}>{d.num}</p>
+              <p className="mt-0.5 text-[9.5px]" style={{ color: on ? "rgba(255,255,255,.75)" : "var(--tx3)" }}>
+                {d.jobs > 0 ? `${d.jobs} buổi` : "—"}
+              </p>
+            </button>
+          );
+        })}
       </div>
 
       {contracts.length === 0 && events.length === 0 ? (
