@@ -9,11 +9,12 @@ import MessengerButton from "@/components/MessengerButton";
 import { shootReminderMessage } from "@/lib/zalo";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
-import { SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, type StudioEvent, type ShootType, type ContractStatus } from "@/lib/types";
+import { SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, CREW_ROLE_LABEL, contractTotal, sumAmounts, vndShort, type StudioEvent, type ShootType, type ContractStatus, type CrewRole } from "@/lib/types";
 import { lunarCellLabel, lunarFull } from "@/lib/lunar";
 
 export type ContractMarker = {
   id: string;
+  code: string | null;
   title: string;
   client_name: string | null;
   client_phone: string | null;
@@ -23,8 +24,9 @@ export type ContractMarker = {
   status: string;
   shoot_type: ShootType;
   calendar_color: string | null;
-  contract_items: { name: string; qty: number }[];
+  contract_items: { name: string; qty: number; unit_price: number }[];
   contract_crew: { id: string; name: string | null; role: string; status: string }[];
+  contract_payments: { amount: number }[];
 };
 
 /** Mốc thời gian (studio_events) kèm thông tin HỢP ĐỒNG CHÍNH (nếu có). */
@@ -39,6 +41,11 @@ function eventLabel(e: EventRow): string {
 }
 
 const WD = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
+
+/** Ê-kíp còn nhận việc (bỏ người đã từ chối) — dùng ở cả bốn chế độ xem. */
+function crewOf(c: ContractMarker) {
+  return (c.contract_crew || []).filter((x) => x.status !== "declined");
+}
 
 // Default marker colour + the swatch palette the user can pick from per shoot.
 const DEFAULT_MARK = "#c7a76b";
@@ -164,13 +171,14 @@ export default function CalendarView({
    * đang quá tải — đúng ngưỡng cảnh báo dồn lịch ở màn Tổng quan.
    */
   const peopleRows = useMemo(() => {
-    const map = new Map<string, { key: string; name: string; days: Map<string, ContractMarker[]> }>();
+    const map = new Map<string, { key: string; name: string; role: string; days: Map<string, ContractMarker[]> }>();
     for (const c of contractList) {
       if (!weekDays.includes(c.event_date)) continue;
       for (const cr of c.contract_crew || []) {
         if (cr.status === "declined") continue;
         const name = (cr.name || "").trim() || "Chưa đặt tên";
-        const cur = map.get(name) ?? { key: name, name, days: new Map<string, ContractMarker[]>() };
+        const role = CREW_ROLE_LABEL[cr.role as CrewRole] ?? "";
+        const cur = map.get(name) ?? { key: name, name, role, days: new Map<string, ContractMarker[]>() };
         const list = cur.days.get(c.event_date) ?? [];
         list.push(c);
         cur.days.set(c.event_date, list);
@@ -287,6 +295,35 @@ export default function CalendarView({
       : view === "month" ? `${MONTHS[cursor.month]} ${cursor.year}`
       : `${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`;
 
+
+  /* ── Tóm tắt khoảng đang xem ──────────────────────────────────────────────
+     Nhìn lịch mà không biết "tháng này bao nhiêu buổi, còn ai chưa phân công,
+     thu về bao nhiêu" thì vẫn phải bấm vào từng ô. Dải này trả lời ngay. */
+  const rangeDays = useMemo(() => {
+    if (view === "day") return [dayAnchor];
+    if (view === "month") {
+      return grid.filter((d): d is number => d !== null).map((d) => ymd(cursor.year, cursor.month, d));
+    }
+    return weekDays;
+  }, [view, dayAnchor, grid, cursor, weekDays]);
+
+  const summary = useMemo(() => {
+    const set = new Set(rangeDays);
+    const cons = contractList.filter((c) => set.has(c.event_date));
+    const notes = events.filter((e) => set.has(e.event_date));
+    const noCrew = cons.filter((c) => (c.contract_crew || []).filter((x) => x.status !== "declined").length === 0).length;
+    const value = cons.reduce((sum, c) => sum + contractTotal(c.contract_items || []), 0);
+    const due = cons.reduce(
+      (sum, c) => sum + Math.max(0, contractTotal(c.contract_items || []) - sumAmounts(c.contract_payments || [])),
+      0
+    );
+    // Ngày dồn lịch: từ 3 buổi trở lên trong một ngày (ngưỡng cảnh báo ở Tổng quan).
+    const perDay = new Map<string, number>();
+    for (const c of cons) perDay.set(c.event_date, (perDay.get(c.event_date) ?? 0) + 1);
+    const busyDays = Array.from(perDay.values()).filter((n) => n >= 3).length;
+    return { shoots: cons.length, notes: notes.length, noCrew, value, due, busyDays };
+  }, [rangeDays, contractList, events]);
+
   const navBtn = "flex h-8 w-8 flex-none items-center justify-center rounded-[9px]";
   const navStyle = { border: "1px solid var(--bd)", background: "var(--sf)" } as const;
 
@@ -333,6 +370,35 @@ export default function CalendarView({
             })}
           </div>
         </div>
+      </div>
+
+      {/* ── Dải tóm tắt khoảng đang xem ───────────────────────────────── */}
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-[12px] px-4 py-2.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+        <span className="flex items-center gap-1.5 text-[12.5px] font-semibold">
+          <Camera size={15} style={{ color: "var(--ac)" }} />
+          {summary.shoots} buổi chụp
+        </span>
+        {summary.notes > 0 && (
+          <span className="flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+            <Bell size={14} style={{ color: "var(--bl)" }} /> {summary.notes} mốc lịch
+          </span>
+        )}
+        {summary.noCrew > 0 && (
+          <span className="flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11.5px] font-bold" style={{ background: "var(--amS)", color: "var(--am)" }}>
+            <Users size={13} /> {summary.noCrew} buổi chưa phân công
+          </span>
+        )}
+        {summary.busyDays > 0 && (
+          <span className="flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11.5px] font-bold" style={{ background: "var(--rdS)", color: "var(--rd)" }}>
+            <CalendarDays size={13} /> {summary.busyDays} ngày dồn ≥3 buổi
+          </span>
+        )}
+        {summary.shoots > 0 && (
+          <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]" style={{ color: "var(--tx2)" }}>
+            <span>Giá trị <b className="tnum" style={{ color: "var(--tx)" }}>{vndShort(summary.value)}</b></span>
+            <span>Còn phải thu <b className="tnum" style={{ color: summary.due > 0 ? "var(--am)" : "var(--gn)" }}>{vndShort(summary.due)}</b></span>
+          </span>
+        )}
       </div>
 
       {/* Kết nối Google Lịch — gập lại để không đẩy lịch xuống dưới màn hình. */}
@@ -480,6 +546,14 @@ export default function CalendarView({
                       {cons.length + evs.length > 3 && (
                         <span className="px-1 text-[10.5px] font-semibold" style={{ color: "var(--tx3)" }}>
                           +{cons.length + evs.length - 3} nữa
+                        </span>
+                      )}
+                      {cons.length > 0 && (
+                        <span className="mt-0.5 flex items-center gap-1 px-1 text-[10px] font-semibold" style={{ color: cons.some((c) => crewOf(c).length === 0) ? "var(--am)" : "var(--tx3)" }}>
+                          <Users size={11} />
+                          {cons.some((c) => crewOf(c).length === 0)
+                            ? `${cons.filter((c) => crewOf(c).length === 0).length} buổi chưa có người`
+                            : `${cons.reduce((n, c) => n + crewOf(c).length, 0)} người đi`}
                         </span>
                       )}
                     </div>
@@ -732,7 +806,13 @@ function WeekGrid({
                     title={`${c.event_time} · ${c.title}${c.client_name ? ` · ${c.client_name}` : ""}`}
                   >
                     <p className="truncate text-[11.5px] font-semibold leading-tight" style={{ color: tone.fg }}>{c.client_name || c.title}</p>
-                    <p className="tnum mt-0.5 truncate text-[10.5px]" style={{ color: tone.fg, opacity: 0.75 }}>{c.event_time} · {SHOOT_TYPE_LABEL[c.shoot_type]}</p>
+                    <p className="tnum mt-0.5 truncate text-[10.5px]" style={{ color: tone.fg, opacity: 0.8 }}>{c.event_time} · {SHOOT_TYPE_LABEL[c.shoot_type]}</p>
+                    {c.location && (
+                      <p className="mt-px truncate text-[10px]" style={{ color: tone.fg, opacity: 0.7 }}>{c.location}</p>
+                    )}
+                    <p className="mt-px truncate text-[10px] font-semibold" style={{ color: crewOf(c).length ? tone.fg : "var(--am)", opacity: crewOf(c).length ? 0.7 : 1 }}>
+                      {crewOf(c).length ? `${crewOf(c).length} người: ${crewOf(c).map((p) => p.name || "?").join(", ")}` : "Chưa phân công"}
+                    </p>
                   </Link>
                 );
               })}
@@ -783,10 +863,20 @@ function DayView({
                   <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{SHOOT_TYPE_LABEL[c.shoot_type]}</p>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14.5px] font-bold">{c.title}</p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    <p className="truncate text-[14.5px] font-bold">{c.title}</p>
+                    {c.code && (
+                      <span className="flex-none text-[11px] font-bold" style={{ color: "var(--tx3)", fontFamily: "ui-monospace, monospace" }}>{c.code}</span>
+                    )}
+                  </div>
                   <p className="mt-0.5 truncate text-[12px]" style={{ color: "var(--tx3)" }}>
-                    {[c.client_name, c.location].filter(Boolean).join(" · ") || "Chưa có thông tin khách"}
+                    {[c.client_name, c.client_phone, c.location].filter(Boolean).join(" · ") || "Chưa có thông tin khách"}
                   </p>
+                  {c.contract_items.length > 0 && (
+                    <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--tx2)" }}>
+                      {c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` ×${it.qty}` : ""}`).join(" · ")}
+                    </p>
+                  )}
                   <div className="mt-2 flex items-center gap-2">
                     <div className="flex">
                       {crew.map((p) => (
@@ -800,6 +890,17 @@ function DayView({
                         Chưa phân công
                       </span>
                     )}
+                    {(() => {
+                      const total = contractTotal(c.contract_items || []);
+                      const left = Math.max(0, total - sumAmounts(c.contract_payments || []));
+                      if (total <= 0) return null;
+                      return (
+                        <span className="tnum ml-auto whitespace-nowrap text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                          {vndShort(total)}
+                          {left > 0 ? <> · còn <b style={{ color: "var(--am)" }}>{vndShort(left)}</b></> : <> · <b style={{ color: "var(--gn)" }}>đã thu đủ</b></>}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
                 <span className="flex-none self-start whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-[11.5px] font-semibold" style={{ background: tone.bg, color: tone.fg }}>
@@ -831,7 +932,7 @@ function DayView({
 function PeopleWeek({
   rows, weekDays, todayStr,
 }: {
-  rows: { key: string; name: string; days: Map<string, ContractMarker[]> }[];
+  rows: { key: string; name: string; role: string; days: Map<string, ContractMarker[]> }[];
   weekDays: string[];
   todayStr: string;
 }) {
@@ -860,7 +961,10 @@ function PeopleWeek({
                 <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ background: avatarColor(r.name) }}>
                   {initials(r.name)}
                 </span>
-                <span className="truncate text-[13px] font-semibold">{r.name}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-semibold">{r.name}</span>
+                  {r.role && <span className="block truncate text-[10.5px]" style={{ color: "var(--tx3)" }}>{r.role}</span>}
+                </span>
               </div>
               {weekDays.map((d) => {
                 const jobs = r.days.get(d) ?? [];
@@ -870,9 +974,12 @@ function PeopleWeek({
                       <span className="text-center text-[10px]" style={{ color: "var(--tx3)" }}>trống</span>
                     ) : (
                       jobs.map((j) => (
-                        <Link key={j.id} href={`/dashboard/studio/contracts/${j.id}`} className="block">
+                        <Link key={j.id} href={`/dashboard/studio/contracts/${j.id}`} className="block" title={`${j.title}${j.location ? ` · ${j.location}` : ""}`}>
                           <span className="tnum block text-center text-[10px] font-bold" style={{ color: "var(--ac)" }}>{j.event_time || "cả ngày"}</span>
                           <span className="hidden truncate text-center text-[10px] min-[1100px]:block" style={{ color: "var(--tx2)" }}>{j.title}</span>
+                          {j.location && (
+                            <span className="hidden truncate text-center text-[9.5px] min-[1280px]:block" style={{ color: "var(--tx3)" }}>{j.location}</span>
+                          )}
                         </Link>
                       ))
                     )}
