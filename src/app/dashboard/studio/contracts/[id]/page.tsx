@@ -24,7 +24,13 @@ import ContractEditor from "./ContractEditor";
 import StudioDenied from "@/components/StudioDenied";
 
 
-export default async function ContractPage({ params }: { params: { id: string } }) {
+export default async function ContractPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams?: { tab?: string };
+}) {
   const profile = await requireStudio("plus");
   if (profile?.actingRole === "accountant") return <StudioDenied message="Kế toán chỉ truy cập mục Thu chi & Bảng lương." />;
   if (!profile) {
@@ -174,6 +180,7 @@ export default async function ContractPage({ params }: { params: { id: string } 
       staffList={(staffList ?? []) as { id: string; full_name: string | null; email: string }[]}
       canAssign={canAssign}
       initialClientProofs={(clientProofs ?? []) as { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[]}
+      initialTab={searchParams?.tab}
     />
   );
 }

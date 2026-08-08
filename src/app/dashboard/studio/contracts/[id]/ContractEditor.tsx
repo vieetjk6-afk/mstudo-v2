@@ -198,6 +198,7 @@ export default function ContractEditor({
   initialClientProofs,
   services = [],
   storyComingSoon = false,
+  initialTab = "info",
 }: {
   contract: StudioContract;
   studioHost?: string | null;
@@ -226,6 +227,8 @@ export default function ContractEditor({
   pricelist: { name: string; price: number; unit: string | null }[];
   initialClientProofs: { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[];
   services?: { id: string; name: string; clauses: string }[];
+  /** Tab mở sẵn (?tab=…) — màn tạo hợp đồng nhảy thẳng vào "send" sau khi tạo. */
+  initialTab?: string;
 }) {
   const conflictFor = (phone: string) => conflictByPhone[(phone || "").replace(/\D/g, "")] || null;
   const router = useRouter();
@@ -256,7 +259,9 @@ export default function ContractEditor({
 
   // Tab của cột trái (bản thiết kế màn "Chi tiết hợp đồng"). Cả trang trước đây
   // là một cột dài ~10 thẻ; gom vào tab để mỗi lần chỉ thấy đúng việc đang làm.
-  const [tab, setTab] = useState<DetailTab>("info");
+  const [tab, setTab] = useState<DetailTab>(
+    DETAIL_TABS.some(([k]) => k === initialTab) ? (initialTab as DetailTab) : "info"
+  );
 
   async function autosaveContract(data: typeof f) {
     setContractSaved("saving");
