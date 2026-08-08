@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
   RefreshCw,
+  Copy,
+  FileText,
+  MessageSquareText,
+  ImageOff,
+  Check,
   Trash2,
   Plus,
   Star,
@@ -23,7 +28,7 @@ import { createClient } from "@/lib/supabase/client";
 import { studioUrl } from "@/lib/hosts";
 import ShareButton from "@/components/ShareButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
-import { thumbnailUrl, isFolderLink } from "@/lib/drive";
+import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
 import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } from "@/lib/types";
@@ -34,11 +39,24 @@ import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } f
    đang làm, thứ tự đi theo cách studio dùng thật. */
 const ALBUM_TABS = [
   ["photos", "Ảnh"],
+  ["picked", "Lượt chọn"],
   ["sources", "Nguồn ảnh"],
   ["settings", "Cài đặt"],
   ["deliver", "Giao khách"],
 ] as const;
 type AlbumTab = (typeof ALBUM_TABS)[number][0];
+
+/** Một dòng khách bấm chọn (bảng selections) — đủ để dựng tab "Lượt chọn". */
+export type AlbumPick = {
+  id: string;
+  photo_id: string;
+  photo_name: string;
+  session_id: string;
+  client_name: string | null;
+  client_note: string | null;
+  photographer_note: string | null;
+  created_at: string;
+};
 
 export default function AlbumEditor({
   album,
@@ -53,7 +71,7 @@ export default function AlbumEditor({
   contractId = null,
   clientPhone = null,
   clientName = null,
-  picked = 0,
+  selections = [],
 }: {
   album: Album;
   initialSources: AlbumSource[];
@@ -67,14 +85,18 @@ export default function AlbumEditor({
   contractId?: string | null;
   clientPhone?: string | null;
   clientName?: string | null;
-  /** Số lượt khách bấm chọn ảnh trong album (bảng selections). */
-  picked?: number;
+  /** Ảnh khách đã bấm chọn (bảng selections), gộp theo mã chọn ở ngay màn này. */
+  selections?: AlbumPick[];
 }) {
   const { t } = useLang();
   const supabase = createClient();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
   const [tab, setTab] = useState<AlbumTab>("photos");
+  // Tab "Lượt chọn": lọc theo mã chọn (session) và theo "chỉ ảnh có ghi chú".
+  const [pickSession, setPickSession] = useState<string>("all");
+  const [notesOnly, setNotesOnly] = useState(false);
+  const [copiedList, setCopiedList] = useState(false);
 
   async function deleteAlbum() {
     if (!confirm("Xóa album này? Thao tác không thể hoàn tác. (Số album đã tạo trong tháng vẫn được tính.)")) return;
@@ -139,6 +161,77 @@ export default function AlbumEditor({
   // Delivery folder sources can be opened straight on Drive (0 Fast Origin Transfer,
   // true originals — Google serves the download, not us).
   const deliveryFolders = sources.filter((s) => s.stage === "delivery" && s.kind === "folder");
+
+  /* ── Lượt khách chọn ──────────────────────────────────────────────────────
+     Gộp theo MÃ CHỌN (session_id): mỗi lần một người mở link khách rồi bấm tim
+     là một mã riêng — cô dâu chọn một mã, mẹ cô dâu chọn mã khác. Studio xem
+     ngay tại màn này thay vì nhảy sang trang khác. */
+  const photoById = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
+
+  const pickSessions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string | null; count: number; at: string }>();
+    for (const s of selections) {
+      const cur = map.get(s.session_id);
+      if (cur) {
+        cur.count += 1;
+        if (s.created_at > cur.at) cur.at = s.created_at;
+        if (!cur.name && s.client_name) cur.name = s.client_name;
+      } else {
+        map.set(s.session_id, { id: s.session_id, name: s.client_name, count: 1, at: s.created_at });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => b.at.localeCompare(a.at));
+  }, [selections]);
+
+  /** Ảnh hiện trong tab: chỉ ảnh ĐÃ CHỌN, lọc thêm theo mã và theo ghi chú. */
+  const visiblePicks = useMemo(() => {
+    let rows = selections;
+    if (pickSession !== "all") rows = rows.filter((s) => s.session_id === pickSession);
+    if (notesOnly) rows = rows.filter((s) => (s.client_note || s.photographer_note || "").trim());
+    // Cùng một ảnh có thể được nhiều mã chọn — khi xem "Tất cả" thì gộp làm một
+    // và giữ lại mọi ghi chú để không mất ý khách.
+    if (pickSession !== "all") return rows;
+    const byPhoto = new Map<string, AlbumPick>();
+    for (const s of rows) {
+      const cur = byPhoto.get(s.photo_id);
+      if (!cur) { byPhoto.set(s.photo_id, { ...s }); continue; }
+      const note = [cur.client_note, s.client_note].filter(Boolean).join(" · ");
+      cur.client_note = note || null;
+    }
+    return Array.from(byPhoto.values());
+  }, [selections, pickSession, notesOnly]);
+
+  /** Id ảnh khách đã chọn — tab "Ảnh" viền đậm + gắn dấu tích cho những ảnh này. */
+  const pickedIds = useMemo(() => new Set(selections.map((s) => s.photo_id)), [selections]);
+
+  const notedCount = useMemo(
+    () => selections.filter((s) => (s.client_note || s.photographer_note || "").trim()).length,
+    [selections]
+  );
+
+  /** Chép danh sách tên file (bỏ đuôi) đúng thứ đang hiện — đem đi lọc ảnh. */
+  function copyPickList() {
+    const text = visiblePicks.map((s) => stripExtension(s.photo_name)).join("\n");
+    navigator.clipboard?.writeText(text);
+    setCopiedList(true);
+    setTimeout(() => setCopiedList(false), 1800);
+  }
+
+  /** Tải .txt kèm ghi chú — file này studio hay gửi cho thợ chỉnh ảnh. */
+  function exportPickList() {
+    const text = visiblePicks
+      .map((s) => {
+        const note = (s.client_note || s.photographer_note || "").trim();
+        return stripExtension(s.photo_name) + (note ? ` — ${note}` : "");
+      })
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${album.slug}-anh-khach-chon.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
 
   async function saveSettings() {
@@ -365,16 +458,24 @@ export default function AlbumEditor({
           nguồn ảnh và trạng thái công bố — nhìn là biết album đang tới đâu. */}
       <div className="mb-3.5 grid grid-cols-2 gap-3 min-[900px]:grid-cols-4">
         {([
-          [String(photos.length), "Ảnh trong album"],
-          [deliveryCount > 0 ? `${selectionCount}/${deliveryCount}` : String(picked), deliveryCount > 0 ? "Ảnh chọn / ảnh giao" : "Lượt khách chọn"],
-          [String(sources.length), "Nguồn ảnh Drive"],
-          [form.status === "published" ? "Đã xuất bản" : "Nháp", phase === "delivery" ? "Giai đoạn giao khách" : "Giai đoạn chọn ảnh"],
-        ] as [string, string][]).map(([v, l]) => (
-          <div key={l} className="rounded-[14px] px-4 py-3.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
-            <p className="tnum text-[22px] font-bold" style={{ letterSpacing: "-.6px" }}>{v}</p>
-            <p className="mt-0.5 text-[12px]" style={{ color: "var(--tx2)" }}>{l}</p>
-          </div>
-        ))}
+          [String(photos.length), "Ảnh trong album", "photos"],
+          [String(selections.length), pickSessions.length > 1 ? `Lượt khách chọn · ${pickSessions.length} mã` : "Lượt khách chọn", "picked"],
+          [String(sources.length), "Nguồn ảnh Drive", "sources"],
+          [form.status === "published" ? "Đã xuất bản" : "Nháp", phase === "delivery" ? "Giai đoạn giao khách" : "Giai đoạn chọn ảnh", "settings"],
+        ] as [string, string, AlbumTab][]).map(([v, l, go]) => {
+          const on = tab === go;
+          return (
+            <button
+              key={l}
+              onClick={() => setTab(go)}
+              className="rounded-[14px] px-4 py-3.5 text-left"
+              style={{ background: on ? "var(--acS)" : "var(--sf)", border: `1px solid ${on ? "var(--acM)" : "var(--bd)"}` }}
+            >
+              <p className="tnum text-[22px] font-bold" style={{ letterSpacing: "-.6px", color: on ? "var(--ac)" : "var(--tx)" }}>{v}</p>
+              <p className="mt-0.5 text-[12px]" style={{ color: "var(--tx2)" }}>{l}</p>
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Thẻ nội dung có tab ───────────────────────────────────────────── */}
@@ -382,7 +483,7 @@ export default function AlbumEditor({
         <div role="tablist" aria-label="Nội dung album" className="flex gap-0.5 overflow-x-auto rounded-[14px] px-3" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
           {ALBUM_TABS.map(([key, label]) => {
             const on = tab === key;
-            const badge = key === "photos" ? photos.length : key === "sources" ? sources.length : 0;
+            const badge = key === "photos" ? photos.length : key === "picked" ? selections.length : key === "sources" ? sources.length : 0;
             return (
               <button
                 key={key}
@@ -423,13 +524,23 @@ export default function AlbumEditor({
                   </span>
                 )}
               </h2>
+              {pickedIds.size > 0 && (
+                <p className="mb-3 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                  Ảnh viền đậm kèm dấu tích là ảnh khách đã chọn ({pickedIds.size}/{photos.length}).{" "}
+                  <button onClick={() => setTab("picked")} className="font-semibold underline" style={{ color: "var(--ac)" }}>
+                    Xem riêng ảnh khách chọn
+                  </button>
+                </p>
+              )}
               {/* Lưới ảnh 6 cột như bản thiết kế, tỉ lệ 3:2, khe 10px. */}
               <div className="grid grid-cols-3 gap-2.5 min-[700px]:grid-cols-4 min-[1000px]:grid-cols-5 min-[1280px]:grid-cols-6">
-                {photos.map((p) => (
+                {photos.map((p) => {
+                  const isPicked = pickedIds.has(p.id);
+                  return (
                   <div
                     key={p.id}
                     className="group relative aspect-[3/2] overflow-hidden rounded-[9px]"
-                    style={{ background: "var(--sf2)" }}
+                    style={{ background: "var(--sf2)", border: isPicked ? "2px solid var(--ac)" : "1px solid var(--bd2)" }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -456,18 +567,167 @@ export default function AlbumEditor({
                         <Trash2 size={14} />
                       </button>
                     </div>
+                    {isPicked && (
+                      <span
+                        className="absolute right-1 top-1 flex h-[19px] w-[19px] items-center justify-center rounded-full"
+                        style={{ background: "var(--ac)", color: "#fff" }}
+                        title="Khách đã chọn ảnh này"
+                      >
+                        <Check size={13} />
+                      </span>
+                    )}
                     {form.cover_url === thumbnailUrl(p.drive_file_id, 800) && (
-                      <span className="absolute left-1.5 top-1.5 rounded bg-accent-gold px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-950">
+                      <span className="absolute left-1.5 top-1.5 rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold uppercase" style={{ background: "var(--ac)", color: "#fff" }}>
                         {t("cover")}
                       </span>
                     )}
+                    <span
+                      className="pointer-events-none absolute bottom-1 left-1.5 max-w-[85%] truncate text-[9px]"
+                      style={{ color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,.75)", fontFamily: "ui-monospace, monospace" }}
+                    >
+                      {stripExtension(p.name)}
+                    </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {photos.length === 0 && (
                 <p className="text-sm text-accent-muted">
                   {t("addSource")} → {t("syncDrive")}
                 </p>
+              )}
+            </div>
+            </>
+          )}
+
+          {/* Lượt chọn: chỉ ảnh khách ĐÃ chọn, lọc theo mã chọn và theo ghi chú */}
+          {tab === "picked" && (
+            <>
+            <div className="card p-5">
+              {selections.length === 0 ? (
+                <div className="px-4 py-10 text-center">
+                  <span className="mx-auto flex h-[54px] w-[54px] items-center justify-center rounded-[15px]" style={{ background: "var(--sf2)", color: "var(--tx3)" }}>
+                    <ImageOff size={26} />
+                  </span>
+                  <p className="mt-3 text-[14px] font-bold">Khách chưa chọn ảnh nào</p>
+                  <p className="mx-auto mt-1 max-w-[360px] text-[12px] leading-relaxed" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+                    Gửi link album cho khách; mỗi lần một người mở link và bấm tim là một <b>mã chọn</b> riêng, hiện ngay ở đây.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  {/* Mã chọn: mỗi phiên khách bấm chọn là một mã */}
+                  <p className="eyebrow mb-2">Mã chọn ({pickSessions.length})</p>
+                  <div className="mb-3.5 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setPickSession("all")}
+                      className="flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-3 py-[6px] text-[12px] font-semibold"
+                      style={pickSession === "all"
+                        ? { background: "var(--ac)", color: "#fff" }
+                        : { background: "var(--sf2)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
+                    >
+                      Tất cả
+                      <span className="text-[11px] font-bold opacity-75">{selections.length}</span>
+                    </button>
+                    {pickSessions.map((g) => {
+                      const on = pickSession === g.id;
+                      return (
+                        <button
+                          key={g.id}
+                          onClick={() => setPickSession(g.id)}
+                          title={`Mã ${g.id}`}
+                          className="flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-3 py-[6px] text-[12px] font-semibold"
+                          style={on
+                            ? { background: "var(--ac)", color: "#fff" }
+                            : { background: "var(--sf2)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
+                        >
+                          <span style={{ fontFamily: "ui-monospace, monospace" }}>{g.id.slice(0, 6).toUpperCase()}</span>
+                          {g.name ? <span className="font-normal opacity-80">· {g.name}</span> : null}
+                          <span className="text-[11px] font-bold opacity-75">{g.count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Thanh hành động: lọc ghi chú · chép danh sách · tải .txt */}
+                  <div className="mb-3.5 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => setNotesOnly((v) => !v)}
+                      aria-pressed={notesOnly}
+                      className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+                      style={notesOnly
+                        ? { background: "var(--acS)", color: "var(--ac)", border: "1px solid var(--acM)" }
+                        : { background: "var(--sf)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
+                    >
+                      <MessageSquareText size={15} /> Chỉ ảnh có ghi chú
+                      <span className="text-[11px] font-bold opacity-75">{notedCount}</span>
+                    </button>
+                    <span className="text-[12px]" style={{ color: "var(--tx3)" }}>
+                      Đang hiện {visiblePicks.length} ảnh · ảnh khách không chọn được ẩn đi
+                    </span>
+                    <div className="ml-auto flex flex-wrap gap-2">
+                      <button
+                        onClick={copyPickList}
+                        className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+                        style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+                      >
+                        {copiedList ? <Check size={15} /> : <Copy size={15} />} {copiedList ? "Đã chép" : "Chép danh sách"}
+                      </button>
+                      <button
+                        onClick={exportPickList}
+                        className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+                        style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+                      >
+                        <FileText size={15} /> Tải .txt
+                      </button>
+                      <Link
+                        href={`/dashboard/albums/${album.id}/selections`}
+                        className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+                        style={{ background: "var(--acS)", color: "var(--ac)" }}
+                      >
+                        <HardDriveDownload size={15} /> Tải ảnh gốc
+                      </Link>
+                    </div>
+                  </div>
+
+                  {visiblePicks.length === 0 ? (
+                    <p className="rounded-[10px] px-3.5 py-8 text-center text-[12.5px]" style={{ background: "var(--sf2)", color: "var(--tx3)" }}>
+                      {notesOnly ? "Không có ảnh nào kèm ghi chú trong bộ lọc này." : "Mã chọn này chưa có ảnh nào."}
+                    </p>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-2.5 min-[700px]:grid-cols-4 min-[1000px]:grid-cols-5 min-[1280px]:grid-cols-6">
+                      {visiblePicks.map((s) => {
+                        const p = photoById.get(s.photo_id);
+                        const note = (s.client_note || s.photographer_note || "").trim();
+                        return (
+                          <div key={s.id} className="overflow-hidden rounded-[9px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd2)" }}>
+                            <div className="relative aspect-[3/2]">
+                              {p ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={thumbnailUrl(p.drive_file_id, 400)} alt={s.photo_name} loading="lazy" className="h-full w-full object-cover" />
+                              ) : (
+                                <span className="flex h-full items-center justify-center text-[10.5px]" style={{ color: "var(--tx3)" }}>Ảnh đã bị gỡ</span>
+                              )}
+                              {note && (
+                                <span
+                                  className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full"
+                                  style={{ background: "var(--ac)", color: "#fff" }}
+                                  title={note}
+                                >
+                                  <MessageSquareText size={13} />
+                                </span>
+                              )}
+                            </div>
+                            <p className="truncate px-2 pt-1.5 text-[11px] font-semibold">{stripExtension(s.photo_name)}</p>
+                            <p className="line-clamp-2 px-2 pb-2 pt-px text-[10.5px] leading-snug" style={{ color: note ? "var(--tx2)" : "var(--tx3)" }}>
+                              {note || "—"}
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
             </div>
             </>

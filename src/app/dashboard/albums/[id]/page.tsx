@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchAllPhotos } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
 import { effectivePlan, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
-import AlbumEditor from "./AlbumEditor";
+import AlbumEditor, { type AlbumPick } from "./AlbumEditor";
 import { categoryLabel } from "@/lib/category";
 import type { Album, AlbumSource, Photo } from "@/lib/types";
 
@@ -26,13 +26,18 @@ export default async function AlbumEditPage({
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const [{ data: album }, { data: sources }, photos, { data: profile }, { count: pickedCount }] = await Promise.all([
+  const [{ data: album }, { data: sources }, photos, { data: profile }, { data: picks }] = await Promise.all([
     supabase.from("albums").select("*").eq("id", params.id).single(),
     supabase.from("album_sources").select("*").eq("album_id", params.id).order("position"),
     fetchAllPhotos(supabase, params.id, "*"),
     user ? supabase.from("profiles").select("plan, plan_expires_at, role, full_name").eq("id", user.id).maybeSingle() : Promise.resolve({ data: null }),
-    // Chỉ cần CON SỐ lượt chọn cho thẻ số liệu — head:true nên không kéo hàng nào về.
-    supabase.from("selections").select("id", { count: "exact", head: true }).eq("album_id", params.id),
+    // Lượt khách chọn: cần cả danh sách (tab "Lượt chọn" hiện ngay tại màn này)
+    // nên lấy hàng thật, count suy ra từ độ dài mảng.
+    supabase
+      .from("selections")
+      .select("id, photo_id, photo_name, session_id, client_name, client_note, photographer_note, created_at")
+      .eq("album_id", params.id)
+      .order("created_at", { ascending: true }),
   ]);
 
   if (!album) notFound();
@@ -80,7 +85,7 @@ export default async function AlbumEditPage({
       contractId={linkedContract?.id ?? null}
       clientPhone={linkedContract?.client_phone ?? null}
       clientName={linkedContract?.client_name ?? null}
-      picked={pickedCount ?? 0}
+      selections={(picks ?? []) as AlbumPick[]}
     />
   );
 }
