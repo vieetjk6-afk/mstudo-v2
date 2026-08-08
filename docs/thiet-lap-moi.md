@@ -127,6 +127,11 @@ Ba điều cần biết:
   `logos`, `wedding-photos`, `payment-proofs` — tổng khoảng 36 MB. **Đừng chép
   `drive-cache`**: đó là 13 GB cache ảnh và là thứ làm vượt hạn mức Free; nó tự
   sinh lại khi cần.
+- **URL ảnh trong database vẫn trỏ về project CŨ.** App lưu ảnh bằng
+  `getPublicUrl()` nên trong DB là URL đầy đủ `https://<ma-project>.supabase.co/…`.
+  Chép xong phải chạy [`supabase/rewrite-storage-urls.sql`](../supabase/rewrite-storage-urls.sql)
+  trên project mới để đổi mã project. Bỏ qua bước này thì ảnh vẫn hiện *chừng nào
+  project cũ còn sống* — tới lúc xoá project cũ là chết hàng loạt.
 
 ## 4. Tạo admin đầu tiên
 
