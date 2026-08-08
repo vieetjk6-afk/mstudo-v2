@@ -29,7 +29,7 @@ export default async function NewQuotePage() {
       .order("position", { ascending: true }),
     supabase
       .from("studio_pricelist")
-      .select("name, price, unit, description, category, list_key")
+      .select("id, name, price, unit, description, category, list_key")
       .eq("owner_id", profile.id)
       .eq("active", true)
       .gt("price", 0)
@@ -41,7 +41,7 @@ export default async function NewQuotePage() {
     <NewQuoteForm
       ownerId={profile.id}
       services={(services ?? []) as { id: string; name: string }[]}
-      pricelist={(pricelist ?? []) as { name: string; price: number; unit: string | null; description: string | null; category: string | null; list_key: string | null }[]}
+      pricelist={(pricelist ?? []) as { id: string; name: string; price: number; unit: string | null; description: string | null; category: string | null; list_key: string | null }[]}
     />
   );
 }
