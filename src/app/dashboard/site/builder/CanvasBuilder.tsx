@@ -136,7 +136,7 @@ export default function CanvasBuilder({
   const [savedSub, setSavedSub] = useState(site.subdomain ?? "");
   const [savingDomain, setSavingDomain] = useState(false);
   const [selId, setSelId] = useState<string | null>(null);
-  const [leftTab, setLeftTab] = useState<"blocks" | "presets" | "templates">("blocks");
+  const [leftTab, setLeftTab] = useState<"page" | "blocks" | "presets" | "templates">("page");
   const [device, setDevice] = useState<Device>("desktop");
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -428,16 +428,16 @@ export default function CanvasBuilder({
   const fontHead = theme.font === "sans" ? "var(--font-hanken), system-ui, sans-serif" : "var(--font-cormorant), Georgia, serif";
 
   const ui = (
-    <div className="studio-shell" data-theme={uiTheme} style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", flexDirection: "column", background: "var(--bg)", color: "var(--text)", fontFamily: "var(--font-manrope), system-ui, sans-serif" }}>
+    <div className="studio-shell" data-theme={uiTheme} style={{ position: "fixed", inset: 0, zIndex: 60, display: "flex", flexDirection: "column", background: "var(--bg)", color: "var(--text)" }}>
       {/* TOP BAR */}
       <header style={{ height: 58, flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "0 14px", background: "var(--surface)", borderBottom: "1px solid var(--border)" }}>
-        <a href="/dashboard/studio" title="Quay lại bảng điều khiển" style={chipBtn(false)}><ArrowLeft size={16} /></a>
+        <a href="/dashboard/site" title="Quay lại Website & chatbox" style={chipBtn(false)}><ArrowLeft size={16} /></a>
         <span style={{ fontWeight: 800, letterSpacing: "-.02em", fontSize: 15 }}>Trình tạo website</span>
 
         {!preview && (
           <>
             <span style={{ width: 1, height: 26, background: "var(--border)", margin: "0 4px" }} />
-            <div style={{ display: "flex", borderRadius: 999, overflow: "hidden", border: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", borderRadius: 9, overflow: "hidden", border: "1px solid var(--border)" }}>
               <button onClick={() => setDevice("desktop")} title="Máy tính" style={segBtn(device === "desktop")}><Monitor size={15} /></button>
               <button onClick={() => setDevice("mobile")} title="Điện thoại" style={segBtn(device === "mobile")}><Smartphone size={15} /></button>
             </div>
@@ -447,7 +447,7 @@ export default function CanvasBuilder({
         )}
 
         {!preview && (
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--border)", borderRadius: 999, padding: "3px 4px 3px 12px", background: "var(--surface2)" }}>
+          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 0, border: "1px solid var(--border)", borderRadius: 10, padding: "3px 4px 3px 12px", background: "var(--surface2)" }}>
             <input
               value={subdomain}
               onChange={(e) => setSubdomain(e.target.value.toLowerCase())}
@@ -479,15 +479,84 @@ export default function CanvasBuilder({
       <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
         {/* LEFT PANEL */}
         {!preview && (
-          <aside style={{ width: 284, flexShrink: 0, background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-            <div style={{ display: "flex", padding: 10, gap: 6, borderBottom: "1px solid var(--border)" }}>
+          <aside style={{ width: 300, flexShrink: 0, background: "var(--surface)", borderRight: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", padding: 10, gap: 4, borderBottom: "1px solid var(--border)" }}>
+              <button onClick={() => setLeftTab("page")} style={tabBtn(leftTab === "page")}><Layers size={14} /> Trang</button>
               <button onClick={() => setLeftTab("blocks")} style={tabBtn(leftTab === "blocks")}><Blocks size={14} /> Khối</button>
-              <button onClick={() => setLeftTab("presets")} style={tabBtn(leftTab === "presets")}><Layers size={14} /> Cụm</button>
+              <button onClick={() => setLeftTab("presets")} style={tabBtn(leftTab === "presets")}><Plus size={14} /> Cụm</button>
               <button onClick={() => setLeftTab("templates")} style={tabBtn(leftTab === "templates")}><LayoutTemplate size={14} /> Mẫu</button>
             </div>
 
             <div style={{ flex: 1, overflowY: "auto", padding: 12 }}>
-              {leftTab === "blocks" ? (
+              {leftTab === "page" ? (
+                <>
+                  {/* Danh sách khối đang có trên trang — đúng cột trái của màn
+                      "Giao diện website" trong bản thiết kế: tay kéo, icon, tên
+                      khối, nhãn Đang hiện/Đang ẩn và nút mở phần chỉnh. */}
+                  <p style={{ fontSize: 12, color: "var(--text3)", marginBottom: 10 }}>Kéo để đổi thứ tự trên trang. Bấm một khối để chỉnh nội dung.</p>
+                  {blocks.length === 0 ? (
+                    <p style={{ fontSize: 12.5, color: "var(--text3)", padding: "14px 12px", border: "1px dashed var(--border)", borderRadius: 11, textAlign: "center" }}>
+                      Trang chưa có khối nào. Mở tab <b>Mẫu</b> để dựng nhanh, hoặc tab <b>Khối</b> để thêm từng phần.
+                    </p>
+                  ) : (
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {blocks.map((b, i) => {
+                        const on = selId === b.id;
+                        return (
+                          <div
+                            key={b.id}
+                            draggable
+                            onDragStart={() => { setDragId(b.id); setDragType(null); }}
+                            onDragEnd={() => { setDragId(null); setDropIndex(null); }}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => { e.preventDefault(); reorderTo(i); }}
+                            onClick={() => setSelId(b.id)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 8, padding: "10px 11px", borderRadius: 12,
+                              border: `1px solid ${on ? "var(--brand)" : "var(--border)"}`,
+                              background: on ? "var(--brandSoft)" : "var(--surface)",
+                              opacity: b.visible ? 1 : 0.55, cursor: "pointer",
+                            }}
+                          >
+                            <GripVertical size={16} style={{ flexShrink: 0, color: "var(--text3)", cursor: "grab" }} />
+                            <span style={{ flex: 1, minWidth: 0 }}>
+                              <span style={{ display: "block", fontSize: 12.5, fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {SITE_BLOCK_LABEL[b.type]}
+                              </span>
+                              <span style={{ display: "block", fontSize: 10.5, fontWeight: 650, color: b.visible ? "var(--s-green)" : "var(--text3)" }}>
+                                {b.visible ? "Đang hiện" : "Đang ẩn"}
+                              </span>
+                            </span>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); toggleVisible(b.id); }}
+                              title={b.visible ? "Ẩn khối" : "Hiện khối"}
+                              style={{ ...toolBtn, color: "var(--text3)" }}
+                            >
+                              {b.visible ? <Eye size={15} /> : <EyeOff size={15} />}
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); moveDir(b.id, -1); }}
+                              disabled={i === 0}
+                              title="Lên trên"
+                              style={{ ...toolBtn, color: "var(--text3)", opacity: i === 0 ? 0.3 : 1 }}
+                            >
+                              <ChevronUp size={15} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); moveDir(b.id, 1); }}
+                              disabled={i === blocks.length - 1}
+                              title="Xuống dưới"
+                              style={{ ...toolBtn, color: "var(--text3)", opacity: i === blocks.length - 1 ? 0.3 : 1 }}
+                            >
+                              <ChevronDown size={15} />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              ) : leftTab === "blocks" ? (
                 <>
                   <p style={{ fontSize: 12, color: "var(--text3)", marginBottom: 10 }}>Kéo khối thả vào trang, hoặc bấm để thêm vào cuối.</p>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -1949,14 +2018,14 @@ const editHint: React.CSSProperties = { marginTop: 12, fontSize: 11.5, opacity: 
 const toolBtn: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 7, border: 0, background: "transparent", color: "#fff", cursor: "pointer" };
 
 function chipBtn(active: boolean, disabled = false): React.CSSProperties {
-  return { display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 12px", borderRadius: 999, border: "1px solid var(--border)", background: active ? "var(--brand)" : "var(--surface)", color: active ? "var(--brandFg)" : "var(--text)", fontSize: 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, textDecoration: "none" };
+  return { display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 12px", borderRadius: 9, border: "1px solid var(--border)", background: active ? "var(--brand)" : "var(--surface)", color: active ? "var(--brandFg)" : "var(--text)", fontSize: 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, textDecoration: "none" };
 }
 function segBtn(active: boolean): React.CSSProperties {
   return { display: "flex", alignItems: "center", justifyContent: "center", width: 38, height: 32, border: 0, background: active ? "var(--brand)" : "var(--surface)", color: active ? "var(--brandFg)" : "var(--text3)", cursor: "pointer" };
 }
-const primaryBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 999, border: 0, background: "var(--brand)", color: "var(--brandFg)", fontSize: 13, fontWeight: 700, cursor: "pointer" };
+const primaryBtn: React.CSSProperties = { display: "inline-flex", alignItems: "center", gap: 6, height: 34, padding: "0 16px", borderRadius: 10, border: 0, background: "var(--brand)", color: "var(--brandFg)", fontSize: 13, fontWeight: 700, cursor: "pointer" };
 function tabBtn(active: boolean): React.CSSProperties {
-  return { flex: 1, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, height: 34, borderRadius: 9, border: 0, background: active ? "var(--brand)" : "var(--surface2)", color: active ? "var(--brandFg)" : "var(--text3)", fontSize: 12.5, fontWeight: 700, cursor: "pointer" };
+  return { flex: 1, minWidth: 0, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 4, height: 34, padding: "0 6px", borderRadius: 9, border: 0, background: active ? "var(--brand)" : "var(--surface2)", color: active ? "var(--brandFg)" : "var(--text3)", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap", cursor: "pointer" };
 }
 const paletteCard: React.CSSProperties = { display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 6, padding: "10px 11px", borderRadius: 11, border: "1px solid var(--border)", background: "var(--surface2)", color: "var(--text)", cursor: "grab", textAlign: "left" };
 const tplCard: React.CSSProperties = { display: "block", width: "100%", textAlign: "left", padding: 0, borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text)", cursor: "pointer" };
