@@ -114,7 +114,9 @@ function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; 
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
 
   const grid = (rows: AlbumRow[]) => (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 min-[1100px]:grid-cols-3">
+    // 5 thẻ một hàng trên màn rộng: ba thẻ trải hết 1100px làm mỗi thẻ dài ngoẵng
+    // và lệch tỉ lệ so với ảnh bìa. Bậc thang xuống 4 · 3 · 2 · 1 theo bề ngang.
+    <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 min-[820px]:grid-cols-3 min-[1060px]:grid-cols-4 min-[1320px]:grid-cols-5">
       {rows.map((a) => (
         <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} />
       ))}
@@ -217,8 +219,9 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
       className="relative overflow-hidden rounded-[14px]"
       style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}
     >
-      {/* Ảnh bìa 104px — pill giai đoạn góc trái, trạng thái xuất bản góc phải */}
-      <Link href={`/dashboard/albums/${a.id}`} className="relative block h-[104px]" style={{ background: "var(--sf2)" }}>
+      {/* Ảnh bìa theo tỉ lệ 4:3 — thẻ hẹp hơn nên bìa cao hơn con số 104px cứng
+          của bản thiết kế, giữ đúng tỉ lệ ở mọi bậc lưới. */}
+      <Link href={`/dashboard/albums/${a.id}`} className="relative block aspect-[4/3]" style={{ background: "var(--sf2)" }}>
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={cover} alt={a.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />

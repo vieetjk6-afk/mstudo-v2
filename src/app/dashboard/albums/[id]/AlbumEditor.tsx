@@ -28,6 +28,18 @@ import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
 import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } from "@/lib/types";
 
+/* ── Tab của màn cài đặt album (bản thiết kế, màn "Album chọn ảnh") ──────────
+   Trước đây mọi thứ nằm trong một lưới 3 cột: cột trái cài đặt dài dằng dặc,
+   cột phải nguồn ảnh + lưới ảnh. Gom vào tab để mỗi lần chỉ thấy đúng việc
+   đang làm, thứ tự đi theo cách studio dùng thật. */
+const ALBUM_TABS = [
+  ["photos", "Ảnh"],
+  ["sources", "Nguồn ảnh"],
+  ["settings", "Cài đặt"],
+  ["deliver", "Giao khách"],
+] as const;
+type AlbumTab = (typeof ALBUM_TABS)[number][0];
+
 export default function AlbumEditor({
   album,
   initialSources,
@@ -41,6 +53,7 @@ export default function AlbumEditor({
   contractId = null,
   clientPhone = null,
   clientName = null,
+  picked = 0,
 }: {
   album: Album;
   initialSources: AlbumSource[];
@@ -54,11 +67,14 @@ export default function AlbumEditor({
   contractId?: string | null;
   clientPhone?: string | null;
   clientName?: string | null;
+  /** Số lượt khách bấm chọn ảnh trong album (bảng selections). */
+  picked?: number;
 }) {
   const { t } = useLang();
   const supabase = createClient();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
+  const [tab, setTab] = useState<AlbumTab>("photos");
 
   async function deleteAlbum() {
     if (!confirm("Xóa album này? Thao tác không thể hoàn tác. (Số album đã tạo trong tháng vẫn được tính.)")) return;
@@ -271,32 +287,51 @@ export default function AlbumEditor({
     setPhotos(photos.filter((p) => p.id !== id));
   }
 
+  const clientLink = studioUrl(studioHost, `/a/${form.slug}`);
+
   return (
-    <div className="animate-fade-in pb-20">
-      {/* Header */}
-      <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
+    <div className="page-in pb-16">
+      {/* ── Đầu màn: quay lại · tên album + dòng phụ · hành động ────────────
+          Đúng hàng đầu của bản thiết kế; nút phụ dồn phải, nút chính là link
+          gửi khách. Vẫn wrap được vì trên điện thoại hàng này dài hơn màn. */}
+      <div className="mb-3.5 flex flex-wrap items-center gap-3">
+        <Link
+          href="/dashboard/albums"
+          aria-label="Về thư viện album"
+          className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]"
+          style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+        >
+          <ArrowLeft size={18} />
+        </Link>
         <div className="min-w-0">
-          <Link
-            href="/dashboard"
-            className="mb-2 inline-flex items-center gap-1 text-sm text-accent-muted hover:text-accent"
-          >
-            <ArrowLeft size={15} /> {t("back")}
-          </Link>
-          <h1 className="break-words text-2xl font-light text-accent">{form.title}</h1>
+          <h1 className="truncate text-[19px] font-bold" style={{ letterSpacing: "-.4px" }}>{form.title}</h1>
+          <p className="mt-px truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+            {[
+              phase === "delivery" ? "Album giao khách" : "Album chọn ảnh",
+              `${photos.length} ảnh`,
+              form.status === "published" ? "đã xuất bản" : "đang là nháp",
+            ].join(" · ")}
+          </p>
         </div>
-        {/* Bọc phải wrap: 5 nút + ô SĐT Zalo rộng hơn màn hình điện thoại, không
-            wrap thì cả trang bị nới ngang và mọi thứ lệch sang trái. */}
-        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
           <Link
             href={`/dashboard/albums/${album.id}/selections`}
-            className="btn-ghost"
+            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
           >
-            <Users size={15} /> {t("customerSelections")}
+            <Users size={16} /> {t("customerSelections")}
           </Link>
-          <a href={studioUrl(studioHost, `/a/${form.slug}`)} target="_blank" rel="noreferrer" className="btn-ghost">
-            <ExternalLink size={15} /> {t("view")}
+          <a
+            href={clientLink}
+            target="_blank"
+            rel="noreferrer"
+            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+          >
+            <ExternalLink size={16} /> Mở link khách
           </a>
-          <ShareButton path={studioUrl(studioHost, `/a/${form.slug}`)} title={form.title} />
+          <ShareButton path={clientLink} title={form.title} />
           <ZaloSendButton
             phone={clientPhone || album.client_phone}
             name={clientName || album.client_name}
@@ -304,489 +339,566 @@ export default function AlbumEditor({
             audience="client"
             kind="album_share"
             askPhone
-            message={`Chào ${clientName || album.client_name || "anh/chị"}, mời anh/chị xem album ảnh tại: ${studioUrl(studioHost, `/a/${form.slug}`)}`}
+            message={`Chào ${clientName || album.client_name || "anh/chị"}, mời anh/chị xem album ảnh tại: ${clientLink}`}
           />
-          <button onClick={deleteAlbum} disabled={deleting} className="btn-danger">
+          <button
+            onClick={() => setTab("sources")}
+            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff" }}
+          >
+            <Plus size={16} /> Tải thêm ảnh
+          </button>
+          <button onClick={deleteAlbum} disabled={deleting} className="btn-danger px-3 py-2 text-xs">
             <Trash2 size={15} /> {deleting ? "Đang xóa…" : t("delete")}
           </button>
         </div>
       </div>
 
       {msg && (
-        <div className="mb-6 rounded-md border border-accent-gold/30 bg-accent-gold/10 px-4 py-2 text-sm text-accent-gold">
+        <div className="mb-3.5 rounded-[10px] px-3.5 py-2.5 text-[12.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
           {msg}
         </div>
       )}
 
-      {/* Project phase: which set of photos the client link currently shows. */}
-      <div className="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span
-            className="flex h-9 w-9 items-center justify-center rounded-full"
-            style={phase === "delivery"
-              ? { background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }
-              : { background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}
-          >
-            {phase === "delivery" ? <PackageCheck size={18} /> : <Images size={18} />}
-          </span>
-          <div>
-            <p className="text-sm font-medium text-accent">
-              Giai đoạn hiện tại: {phase === "delivery" ? "Giao khách (ảnh hoàn thiện)" : "Chọn ảnh (ảnh gốc)"}
-            </p>
-            <p className="text-xs" style={{ color: "var(--text3)" }}>
-              {phase === "delivery"
-                ? "Khách đang xem & tải ảnh hoàn thiện qua link dự án."
-                : "Khách đang chọn ảnh gốc qua link dự án."}
-            </p>
+      {/* ── Bốn thẻ số liệu ───────────────────────────────────────────────
+          Bản thiết kế đặt ngay dưới đầu màn: ảnh trong album, ảnh khách chọn,
+          nguồn ảnh và trạng thái công bố — nhìn là biết album đang tới đâu. */}
+      <div className="mb-3.5 grid grid-cols-2 gap-3 min-[900px]:grid-cols-4">
+        {([
+          [String(photos.length), "Ảnh trong album"],
+          [deliveryCount > 0 ? `${selectionCount}/${deliveryCount}` : String(picked), deliveryCount > 0 ? "Ảnh chọn / ảnh giao" : "Lượt khách chọn"],
+          [String(sources.length), "Nguồn ảnh Drive"],
+          [form.status === "published" ? "Đã xuất bản" : "Nháp", phase === "delivery" ? "Giai đoạn giao khách" : "Giai đoạn chọn ảnh"],
+        ] as [string, string][]).map(([v, l]) => (
+          <div key={l} className="rounded-[14px] px-4 py-3.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+            <p className="tnum text-[22px] font-bold" style={{ letterSpacing: "-.6px" }}>{v}</p>
+            <p className="mt-0.5 text-[12px]" style={{ color: "var(--tx2)" }}>{l}</p>
           </div>
-        </div>
-        {canDelivery ? (
-          <button
-            onClick={() => switchPhase(phase === "delivery" ? "selection" : "delivery")}
-            disabled={phaseBusy}
-            className="btn-ghost whitespace-nowrap"
-          >
-            {phase === "delivery" ? (
-              <><ArrowLeft size={15} /> Về giai đoạn Chọn ảnh</>
-            ) : (
-              <>Chuyển sang Giao khách <ArrowRight size={15} /></>
-            )}
-          </button>
-        ) : phase === "delivery" ? (
-          // Stuck in delivery on a plan that no longer allows it — let them out.
-          <button onClick={() => switchPhase("selection")} disabled={phaseBusy} className="btn-ghost whitespace-nowrap">
-            <ArrowLeft size={15} /> Về giai đoạn Chọn ảnh
-          </button>
-        ) : (
-          <Link href="/dashboard/upgrade" className="btn-ghost whitespace-nowrap" title="Nâng cấp để dùng giao khách">
-            🔒 Giao khách (nâng cấp gói)
-          </Link>
-        )}
+        ))}
       </div>
 
-      {/* Delivery phase: studio pastes the EDITED-photos folder link. Those photos
-          are what the client sees in the delivery gallery; the originals the client
-          picked earlier auto-surface as the "File gốc" button (see getOriginalFolders). */}
-      {phase === "delivery" && (
-        <div className="card mb-6 p-5">
-          <label className="label">Link ảnh đã chỉnh sửa (hiện cho khách ở album giao)</label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              className="input flex-1"
-              placeholder="Dán link thư mục Google Drive ảnh đã chỉnh sửa…"
-              value={editedUrl}
-              onChange={(e) => setEditedUrl(e.target.value)}
-            />
-            <button
-              onClick={saveDeliveryLink}
-              disabled={deliveryBusy || syncing || !editedUrl.trim()}
-              className="btn-primary whitespace-nowrap"
-            >
-              {deliveryBusy ? "Đang lưu…" : "Lưu & đồng bộ"}
-            </button>
-          </div>
-          <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>
-            Ảnh trong thư mục này sẽ hiện ở album giao khách. Ảnh gốc khách đã chọn ở
-            giai đoạn trước tự thành nút <b>“Ảnh gốc”</b> để khách xem/tải trên
-            Drive. Thư mục cần chia sẻ ở chế độ “ai có link xem được”.
-          </p>
-
-          {/* Nói thẳng nút "Tải file chỉnh sửa" bên album khách đã hiện chưa và
-              còn thiếu gì — ba điều kiện nằm ở ba màn hình khác nhau, không nói
-              ra thì studio không có cách nào đoán. */}
-          {(() => {
-            const missing: string[] = [];
-            if (!sources.some((x) => x.stage === "delivery" && x.drive_url)) missing.push("chưa lưu link Drive giao khách ở trên");
-            if (!form.download_enabled) missing.push("đang tắt “Cho phép khách tải ảnh xuống”");
-            if (form.status !== "published") missing.push("album chưa xuất bản");
+      {/* ── Thẻ nội dung có tab ───────────────────────────────────────────── */}
+      <div>
+        <div role="tablist" aria-label="Nội dung album" className="flex gap-0.5 overflow-x-auto rounded-[14px] px-3" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+          {ALBUM_TABS.map(([key, label]) => {
+            const on = tab === key;
+            const badge = key === "photos" ? photos.length : key === "sources" ? sources.length : 0;
             return (
-              <p
-                className="mt-2 rounded-lg px-2.5 py-1.5 text-[11px]"
-                style={
-                  missing.length
-                    ? { background: "color-mix(in srgb, var(--s-amber) 12%, transparent)", color: "var(--s-amber)" }
-                    : { background: "color-mix(in srgb, var(--s-green) 12%, transparent)", color: "var(--s-green)" }
-                }
+              <button
+                key={key}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setTab(key)}
+                className="flex flex-none items-center gap-1.5 whitespace-nowrap px-3 pb-2.5 pt-3 text-[13px]"
+                style={{
+                  color: on ? "var(--ac)" : "var(--tx2)",
+                  fontWeight: on ? 700 : 550,
+                  borderBottom: `2px solid ${on ? "var(--ac)" : "transparent"}`,
+                }}
               >
-                {missing.length
-                  ? `Nút “Tải file chỉnh sửa” CHƯA hiện với khách — ${missing.join("; ")}.`
-                  : "Nút “Tải file chỉnh sửa” đang hiện ở đầu album giao khách."}
-              </p>
+                {label}
+                {badge > 0 && (
+                  <span className="rounded-[20px] px-1.5 text-[10.5px] font-bold" style={{ background: on ? "var(--acS)" : "var(--sf2)", color: on ? "var(--ac)" : "var(--tx3)" }}>
+                    {badge}
+                  </span>
+                )}
+              </button>
             );
-          })()}
+          })}
         </div>
-      )}
 
-      {/* Delivery phase: download the finished album at ORIGINAL quality from Drive. */}
-      {phase === "delivery" && deliveryFolders.length > 0 && (
-        <div className="card mb-6 p-5">
-          <div className="flex items-start gap-3">
-            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }}>
-              <HardDriveDownload size={18} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-accent">Tải album gốc từ Drive</p>
-              <p className="mb-3 text-xs" style={{ color: "var(--text3)" }}>
-                Tải toàn bộ ảnh giao khách ở chất lượng gốc (không nén, không watermark) trực tiếp
-                từ Google Drive — Google tự nén và phục vụ, không tốn băng thông máy chủ.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {deliveryFolders.map((s) => (
-                  <a
-                    key={s.id}
-                    href={s.drive_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn-ghost"
-                    title="Mở thư mục trên Google Drive để tải trực tiếp (không tốn băng thông máy chủ)"
+        <div className="mt-3.5 space-y-3.5">
+
+          {/* Ảnh: lưới ảnh đã đồng bộ về album */}
+          {tab === "photos" && (
+            <>
+            {/* Photos */}
+            <div className="card p-6">
+              <h2 className="mb-4 flex flex-wrap items-center gap-2 text-sm font-medium uppercase tracking-wide text-accent-muted">
+                {photos.length} {t("photos")}
+                {deliveryCount > 0 && (
+                  <span className="flex gap-1.5 normal-case">
+                    <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}>{selectionCount} chọn</span>
+                    <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }}>{deliveryCount} giao</span>
+                  </span>
+                )}
+              </h2>
+              {/* Lưới ảnh 6 cột như bản thiết kế, tỉ lệ 3:2, khe 10px. */}
+              <div className="grid grid-cols-3 gap-2.5 min-[700px]:grid-cols-4 min-[1000px]:grid-cols-5 min-[1280px]:grid-cols-6">
+                {photos.map((p) => (
+                  <div
+                    key={p.id}
+                    className="group relative aspect-[3/2] overflow-hidden rounded-[9px]"
+                    style={{ background: "var(--sf2)" }}
                   >
-                    <FolderOpen size={15} /> Mở thư mục Drive{deliveryFolders.length > 1 ? ` · ${s.name}` : ""}
-                  </a>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={thumbnailUrl(p.drive_file_id, 400)}
+                      alt={p.name}
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+                      <button
+                        onClick={() => setCover(p.drive_file_id)}
+                        title={t("setCover")}
+                        aria-label={t("setCover")}
+                        className="rounded bg-ink-900/80 p-1.5 text-accent-gold hover:bg-ink-800"
+                      >
+                        <Star size={14} />
+                      </button>
+                      <button
+                        onClick={() => removePhoto(p.id)}
+                        aria-label={t("delete")}
+                        className="rounded bg-ink-900/80 p-1.5 hover:bg-ink-800"
+                        style={{ color: "var(--danger)" }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    {form.cover_url === thumbnailUrl(p.drive_file_id, 800) && (
+                      <span className="absolute left-1.5 top-1.5 rounded bg-accent-gold px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-950">
+                        {t("cover")}
+                      </span>
+                    )}
+                  </div>
                 ))}
               </div>
-              {deliveryFolders.length > 0 && (
-                <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>
-                  Mẹo: “Mở thư mục Drive” cho phép tải cả album trực tiếp từ Google (nhanh & không tốn băng thông máy chủ).
+              {photos.length === 0 && (
+                <p className="text-sm text-accent-muted">
+                  {t("addSource")} → {t("syncDrive")}
                 </p>
               )}
             </div>
-          </div>
-        </div>
-      )}
+            </>
+          )}
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Settings */}
-        <div className="card space-y-4 p-6 lg:col-span-1">
-          <h2 className="text-sm font-medium uppercase tracking-wide text-accent-muted">
-            {t("settings")}
-          </h2>
+          {/* Nguồn ảnh: các thư mục / link Drive nạp vào album */}
+          {tab === "sources" && (
+            <>
+            {/* Sources */}
+            <div className="card p-6">
+              <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-accent-muted">
+                {t("sources")}
+              </h2>
 
-          <div>
-            <label className="label">{t("albumTitle")}</label>
-            <input
-              className="input"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">{t("description")}</label>
-            <textarea
-              className="input min-h-[70px]"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">{t("slug")}</label>
-            <input
-              className="input"
-              value={form.slug}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  slug: e.target.value.replace(/[^a-z0-9-]/gi, "-").toLowerCase(),
-                })
-              }
-            />
-          </div>
-          <div>
-            <label className="label">{t("selectionLimit")}</label>
-            <input
-              type="number"
-              min={0}
-              className="input"
-              placeholder={t("unlimited")}
-              value={form.selection_limit}
-              onChange={(e) =>
-                setForm({ ...form, selection_limit: e.target.value })
-              }
-            />
-          </div>
+              <ul className="mb-4 space-y-2">
+                {sources.map((s) => (
+                  <li
+                    key={s.id}
+                    className="flex items-center justify-between rounded-md border border-ink-800 px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 text-sm text-accent">
+                        <span className="rounded bg-ink-700 px-1.5 py-0.5 text-[10px] uppercase text-accent-muted">
+                          {s.kind}
+                        </span>
+                        <span
+                          className="rounded px-1.5 py-0.5 text-[10px] uppercase"
+                          style={s.stage === "delivery"
+                            ? { background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }
+                            : { background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}
+                        >
+                          {s.stage === "delivery" ? "Giao" : "Chọn"}
+                        </span>
+                        {s.name}
+                      </div>
+                      <div className="truncate text-xs text-ink-600">{s.drive_url}</div>
+                    </div>
+                    <button
+                      onClick={() => removeSource(s.id)}
+                      className="text-accent-muted hover:text-red-400"
+                      aria-label={t("delete")}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </li>
+                ))}
+                {sources.length === 0 && (
+                  <li className="text-sm text-accent-muted">—</li>
+                )}
+              </ul>
 
-          {canWatermark ? (
-            <div className="rounded-md border border-ink-800 p-3">
-              <label className="flex items-center gap-2 text-sm text-accent">
+              <form onSubmit={addSource} className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_2fr_auto]">
+                <select
+                  className="input"
+                  value={newSource.stage}
+                  onChange={(e) =>
+                    setNewSource({ ...newSource, stage: e.target.value as SourceStage })
+                  }
+                >
+                  <option value="selection">Ảnh chọn</option>
+                  {canDelivery && <option value="delivery">Ảnh giao</option>}
+                </select>
+                <input
+                  className="input"
+                  placeholder={t("sourceName")}
+                  value={newSource.name}
+                  onChange={(e) =>
+                    setNewSource({ ...newSource, name: e.target.value })
+                  }
+                />
+                <input
+                  className="input"
+                  placeholder={t("driveLink")}
+                  value={newSource.url}
+                  onChange={(e) =>
+                    setNewSource({ ...newSource, url: e.target.value })
+                  }
+                />
+                <button className="btn-ghost whitespace-nowrap">
+                  <Plus size={15} /> {t("addSource")}
+                </button>
+              </form>
+
+              <button
+                onClick={sync}
+                disabled={syncing || sources.length === 0}
+                className="btn-primary mt-4"
+              >
+                <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
+                {syncing ? t("syncing") : t("syncDrive")}
+              </button>
+            </div>
+
+            </>
+          )}
+
+          {/* Cài đặt: tên, đường dẫn, giới hạn chọn, watermark, mật khẩu */}
+          {tab === "settings" && (
+            <>
+            {/* Settings */}
+            <div className="card space-y-4 p-6 lg:col-span-1">
+              <h2 className="text-sm font-medium uppercase tracking-wide text-accent-muted">
+                {t("settings")}
+              </h2>
+
+              <div>
+                <label className="label">{t("albumTitle")}</label>
+                <input
+                  className="input"
+                  value={form.title}
+                  onChange={(e) => setForm({ ...form, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">{t("description")}</label>
+                <textarea
+                  className="input min-h-[70px]"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label">{t("slug")}</label>
+                <input
+                  className="input"
+                  value={form.slug}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      slug: e.target.value.replace(/[^a-z0-9-]/gi, "-").toLowerCase(),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <label className="label">{t("selectionLimit")}</label>
+                <input
+                  type="number"
+                  min={0}
+                  className="input"
+                  placeholder={t("unlimited")}
+                  value={form.selection_limit}
+                  onChange={(e) =>
+                    setForm({ ...form, selection_limit: e.target.value })
+                  }
+                />
+              </div>
+
+              {canWatermark ? (
+                <div className="rounded-md border border-ink-800 p-3">
+                  <label className="flex items-center gap-2 text-sm text-accent">
+                    <input
+                      type="checkbox"
+                      checked={form.watermark_enabled}
+                      onChange={(e) =>
+                        setForm({ ...form, watermark_enabled: e.target.checked })
+                      }
+                    />
+                    {t("enableWatermark")}
+                  </label>
+                  {form.watermark_enabled && (
+                    <input
+                      className="input mt-3"
+                      placeholder={t("watermarkText")}
+                      value={form.watermark_text}
+                      onChange={(e) =>
+                        setForm({ ...form, watermark_text: e.target.value })
+                      }
+                    />
+                  )}
+                  <p className="mt-2 text-xs" style={{ color: "var(--text3)" }}>
+                    Bật watermark để chữ tự gắn lên ảnh khi khách xem (kể cả ảnh phóng to) — chống chụp màn hình.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-md border border-ink-800 p-3">
+                  <p className="text-sm text-accent">{t("enableWatermark")}</p>
+                  <p className="mt-2 text-xs" style={{ color: "var(--text3)" }}>
+                    Watermark có ở gói <strong>Photographer Plus</strong> và <strong>Studio</strong>.
+                    Ảnh không watermark được tải thẳng từ Google Drive nên nhanh hơn và
+                    không giới hạn lượt tải.
+                  </p>
+                </div>
+              )}
+
+              <label className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm text-accent">
                 <input
                   type="checkbox"
-                  checked={form.watermark_enabled}
-                  onChange={(e) =>
-                    setForm({ ...form, watermark_enabled: e.target.checked })
-                  }
+                  checked={form.download_enabled}
+                  onChange={(e) => setForm({ ...form, download_enabled: e.target.checked })}
                 />
-                {t("enableWatermark")}
+                Cho phép khách tải ảnh xuống
               </label>
-              {form.watermark_enabled && (
-                <input
-                  className="input mt-3"
-                  placeholder={t("watermarkText")}
-                  value={form.watermark_text}
-                  onChange={(e) =>
-                    setForm({ ...form, watermark_text: e.target.value })
-                  }
-                />
-              )}
-              <p className="mt-2 text-xs" style={{ color: "var(--text3)" }}>
-                Bật watermark để chữ tự gắn lên ảnh khi khách xem (kể cả ảnh phóng to) — chống chụp màn hình.
-              </p>
-            </div>
-          ) : (
-            <div className="rounded-md border border-ink-800 p-3">
-              <p className="text-sm text-accent">{t("enableWatermark")}</p>
-              <p className="mt-2 text-xs" style={{ color: "var(--text3)" }}>
-                Watermark có ở gói <strong>Photographer Plus</strong> và <strong>Studio</strong>.
-                Ảnh không watermark được tải thẳng từ Google Drive nên nhanh hơn và
-                không giới hạn lượt tải.
-              </p>
-            </div>
-          )}
 
-          <label className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm text-accent">
-            <input
-              type="checkbox"
-              checked={form.download_enabled}
-              onChange={(e) => setForm({ ...form, download_enabled: e.target.checked })}
-            />
-            Cho phép khách tải ảnh xuống
-          </label>
-
-          {canDelivery && canWatermark && (
-            <label className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm text-accent">
-              <input
-                type="checkbox"
-                checked={form.watermark_delivery}
-                onChange={(e) => setForm({ ...form, watermark_delivery: e.target.checked })}
-              />
-              Watermark cả ở giai đoạn Giao khách
-            </label>
-          )}
-
-          {/* "Show on homepage" only applies to the delivery phase. */}
-          {phase === "delivery" && canPinHome && (
-            <label className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm text-accent">
-              <input
-                type="checkbox"
-                checked={form.gallery_pinned}
-                onChange={(e) => setForm({ ...form, gallery_pinned: e.target.checked })}
-              />
-              Hiện ở trang chủ công khai (khách xem không cần mật khẩu)
-            </label>
-          )}
-          {phase === "delivery" && canDelivery && !canPinHome && (
-            <Link href="/dashboard/upgrade" className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm" style={{ color: "var(--text3)" }}>
-              🔒 Hiện ở trang chủ công khai — nâng cấp gói Photographer/Studio
-            </Link>
-          )}
-
-          <div>
-            <label className="label">Loại album (phân loại)</label>
-            <input
-              className="input"
-              list="album-category-presets"
-              placeholder="VD: Cưới, Sự kiện, Doanh nghiệp…"
-              value={form.category_label}
-              onChange={(e) => {
-                const label = e.target.value;
-                setForm({ ...form, category_label: label, category: slugifyVi(label) });
-              }}
-            />
-            <datalist id="album-category-presets">
-              {/* Loại của CHÍNH studio đã dùng (ưu tiên), rồi tới gợi ý mẫu. */}
-              {studioCats.map((c) => (
-                <option key={`s-${c.slug}`} value={c.label} />
-              ))}
-              {CATEGORY_PRESETS.filter((p) => !studioCats.some((c) => c.slug === p.slug)).map((c) => (
-                <option key={`p-${c.slug}`} value={c.label} />
-              ))}
-            </datalist>
-            <p className="mt-1 text-xs text-accent-muted">
-              Tự đặt loại theo ý bạn — loại mới sẽ tự lưu để chọn cho album khác.{" "}
-              <Link href="/dashboard/studio/album-categories" className="underline">Quản lý loại album</Link>
-            </p>
-          </div>
-
-          <div>
-            <label className="label">{t("status")}</label>
-            <select
-              className="input"
-              value={form.status}
-              onChange={(e) =>
-                setForm({ ...form, status: e.target.value as Album["status"] })
-              }
-            >
-              <option value="draft">{t("draft")}</option>
-              <option value="published">{t("published")}</option>
-            </select>
-          </div>
-
-          <button
-            onClick={saveSettings}
-            disabled={saving}
-            className="btn-primary w-full"
-          >
-            <Save size={15} /> {saving ? t("saving") : t("save")}
-          </button>
-
-          {/* Password */}
-          <div className="rounded-md border border-ink-800 p-3">
-            <label className="label">{t("albumPassword")}</label>
-            <p className="mb-2 text-xs text-accent-muted">{t("passwordHint")}</p>
-            <input
-              type="text"
-              className="input"
-              placeholder={hasPassword ? "•••••• (đã đặt)" : ""}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
-            <button onClick={savePassword} className="btn-ghost mt-3 w-full text-xs">
-              {hasPassword && !newPassword ? t("remove") : t("save")}
-            </button>
-          </div>
-        </div>
-
-        {/* Sources + Photos */}
-        <div className="space-y-6 lg:col-span-2">
-          {/* Sources */}
-          <div className="card p-6">
-            <h2 className="mb-4 text-sm font-medium uppercase tracking-wide text-accent-muted">
-              {t("sources")}
-            </h2>
-
-            <ul className="mb-4 space-y-2">
-              {sources.map((s) => (
-                <li
-                  key={s.id}
-                  className="flex items-center justify-between rounded-md border border-ink-800 px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 text-sm text-accent">
-                      <span className="rounded bg-ink-700 px-1.5 py-0.5 text-[10px] uppercase text-accent-muted">
-                        {s.kind}
-                      </span>
-                      <span
-                        className="rounded px-1.5 py-0.5 text-[10px] uppercase"
-                        style={s.stage === "delivery"
-                          ? { background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }
-                          : { background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}
-                      >
-                        {s.stage === "delivery" ? "Giao" : "Chọn"}
-                      </span>
-                      {s.name}
-                    </div>
-                    <div className="truncate text-xs text-ink-600">{s.drive_url}</div>
-                  </div>
-                  <button
-                    onClick={() => removeSource(s.id)}
-                    className="text-accent-muted hover:text-red-400"
-                    aria-label={t("delete")}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                </li>
-              ))}
-              {sources.length === 0 && (
-                <li className="text-sm text-accent-muted">—</li>
-              )}
-            </ul>
-
-            <form onSubmit={addSource} className="grid grid-cols-1 gap-2 sm:grid-cols-[auto_1fr_2fr_auto]">
-              <select
-                className="input"
-                value={newSource.stage}
-                onChange={(e) =>
-                  setNewSource({ ...newSource, stage: e.target.value as SourceStage })
-                }
-              >
-                <option value="selection">Ảnh chọn</option>
-                {canDelivery && <option value="delivery">Ảnh giao</option>}
-              </select>
-              <input
-                className="input"
-                placeholder={t("sourceName")}
-                value={newSource.name}
-                onChange={(e) =>
-                  setNewSource({ ...newSource, name: e.target.value })
-                }
-              />
-              <input
-                className="input"
-                placeholder={t("driveLink")}
-                value={newSource.url}
-                onChange={(e) =>
-                  setNewSource({ ...newSource, url: e.target.value })
-                }
-              />
-              <button className="btn-ghost whitespace-nowrap">
-                <Plus size={15} /> {t("addSource")}
-              </button>
-            </form>
-
-            <button
-              onClick={sync}
-              disabled={syncing || sources.length === 0}
-              className="btn-primary mt-4"
-            >
-              <RefreshCw size={15} className={syncing ? "animate-spin" : ""} />
-              {syncing ? t("syncing") : t("syncDrive")}
-            </button>
-          </div>
-
-          {/* Photos */}
-          <div className="card p-6">
-            <h2 className="mb-4 flex flex-wrap items-center gap-2 text-sm font-medium uppercase tracking-wide text-accent-muted">
-              {photos.length} {t("photos")}
-              {deliveryCount > 0 && (
-                <span className="flex gap-1.5 normal-case">
-                  <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}>{selectionCount} chọn</span>
-                  <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }}>{deliveryCount} giao</span>
-                </span>
-              )}
-            </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-              {photos.map((p) => (
-                <div
-                  key={p.id}
-                  className="group relative aspect-square overflow-hidden rounded-md bg-ink-850"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={thumbnailUrl(p.drive_file_id, 400)}
-                    alt={p.name}
-                    loading="lazy"
-                    className="h-full w-full object-cover"
+              {canDelivery && canWatermark && (
+                <label className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm text-accent">
+                  <input
+                    type="checkbox"
+                    checked={form.watermark_delivery}
+                    onChange={(e) => setForm({ ...form, watermark_delivery: e.target.checked })}
                   />
-                  <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
-                    <button
-                      onClick={() => setCover(p.drive_file_id)}
-                      title={t("setCover")}
-                      aria-label={t("setCover")}
-                      className="rounded bg-ink-900/80 p-1.5 text-accent-gold hover:bg-ink-800"
-                    >
-                      <Star size={14} />
-                    </button>
-                    <button
-                      onClick={() => removePhoto(p.id)}
-                      aria-label={t("delete")}
-                      className="rounded bg-ink-900/80 p-1.5 hover:bg-ink-800"
-                      style={{ color: "var(--danger)" }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                  {form.cover_url === thumbnailUrl(p.drive_file_id, 800) && (
-                    <span className="absolute left-1.5 top-1.5 rounded bg-accent-gold px-1.5 py-0.5 text-[9px] font-medium uppercase text-ink-950">
-                      {t("cover")}
-                    </span>
-                  )}
-                </div>
-              ))}
+                  Watermark cả ở giai đoạn Giao khách
+                </label>
+              )}
+
+              {/* "Show on homepage" only applies to the delivery phase. */}
+              {phase === "delivery" && canPinHome && (
+                <label className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm text-accent">
+                  <input
+                    type="checkbox"
+                    checked={form.gallery_pinned}
+                    onChange={(e) => setForm({ ...form, gallery_pinned: e.target.checked })}
+                  />
+                  Hiện ở trang chủ công khai (khách xem không cần mật khẩu)
+                </label>
+              )}
+              {phase === "delivery" && canDelivery && !canPinHome && (
+                <Link href="/dashboard/upgrade" className="flex items-center gap-2 rounded-md border border-ink-800 p-3 text-sm" style={{ color: "var(--text3)" }}>
+                  🔒 Hiện ở trang chủ công khai — nâng cấp gói Photographer/Studio
+                </Link>
+              )}
+
+              <div>
+                <label className="label">Loại album (phân loại)</label>
+                <input
+                  className="input"
+                  list="album-category-presets"
+                  placeholder="VD: Cưới, Sự kiện, Doanh nghiệp…"
+                  value={form.category_label}
+                  onChange={(e) => {
+                    const label = e.target.value;
+                    setForm({ ...form, category_label: label, category: slugifyVi(label) });
+                  }}
+                />
+                <datalist id="album-category-presets">
+                  {/* Loại của CHÍNH studio đã dùng (ưu tiên), rồi tới gợi ý mẫu. */}
+                  {studioCats.map((c) => (
+                    <option key={`s-${c.slug}`} value={c.label} />
+                  ))}
+                  {CATEGORY_PRESETS.filter((p) => !studioCats.some((c) => c.slug === p.slug)).map((c) => (
+                    <option key={`p-${c.slug}`} value={c.label} />
+                  ))}
+                </datalist>
+                <p className="mt-1 text-xs text-accent-muted">
+                  Tự đặt loại theo ý bạn — loại mới sẽ tự lưu để chọn cho album khác.{" "}
+                  <Link href="/dashboard/studio/album-categories" className="underline">Quản lý loại album</Link>
+                </p>
+              </div>
+
+              <div>
+                <label className="label">{t("status")}</label>
+                <select
+                  className="input"
+                  value={form.status}
+                  onChange={(e) =>
+                    setForm({ ...form, status: e.target.value as Album["status"] })
+                  }
+                >
+                  <option value="draft">{t("draft")}</option>
+                  <option value="published">{t("published")}</option>
+                </select>
+              </div>
+
+              <button
+                onClick={saveSettings}
+                disabled={saving}
+                className="btn-primary w-full"
+              >
+                <Save size={15} /> {saving ? t("saving") : t("save")}
+              </button>
+
+              {/* Password */}
+              <div className="rounded-md border border-ink-800 p-3">
+                <label className="label">{t("albumPassword")}</label>
+                <p className="mb-2 text-xs text-accent-muted">{t("passwordHint")}</p>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder={hasPassword ? "•••••• (đã đặt)" : ""}
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+                <button onClick={savePassword} className="btn-ghost mt-3 w-full text-xs">
+                  {hasPassword && !newPassword ? t("remove") : t("save")}
+                </button>
+              </div>
             </div>
-            {photos.length === 0 && (
-              <p className="text-sm text-accent-muted">
-                {t("addSource")} → {t("syncDrive")}
-              </p>
+            </>
+          )}
+
+          {/* Giao khách: đổi giai đoạn, link ảnh đã chỉnh, tải bản gốc */}
+          {tab === "deliver" && (
+            <>
+            {/* Project phase: which set of photos the client link currently shows. */}
+            <div className="card flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <span
+                  className="flex h-9 w-9 items-center justify-center rounded-full"
+                  style={phase === "delivery"
+                    ? { background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }
+                    : { background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}
+                >
+                  {phase === "delivery" ? <PackageCheck size={18} /> : <Images size={18} />}
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-accent">
+                    Giai đoạn hiện tại: {phase === "delivery" ? "Giao khách (ảnh hoàn thiện)" : "Chọn ảnh (ảnh gốc)"}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--text3)" }}>
+                    {phase === "delivery"
+                      ? "Khách đang xem & tải ảnh hoàn thiện qua link dự án."
+                      : "Khách đang chọn ảnh gốc qua link dự án."}
+                  </p>
+                </div>
+              </div>
+              {canDelivery ? (
+                <button
+                  onClick={() => switchPhase(phase === "delivery" ? "selection" : "delivery")}
+                  disabled={phaseBusy}
+                  className="btn-ghost whitespace-nowrap"
+                >
+                  {phase === "delivery" ? (
+                    <><ArrowLeft size={15} /> Về giai đoạn Chọn ảnh</>
+                  ) : (
+                    <>Chuyển sang Giao khách <ArrowRight size={15} /></>
+                  )}
+                </button>
+              ) : phase === "delivery" ? (
+                // Stuck in delivery on a plan that no longer allows it — let them out.
+                <button onClick={() => switchPhase("selection")} disabled={phaseBusy} className="btn-ghost whitespace-nowrap">
+                  <ArrowLeft size={15} /> Về giai đoạn Chọn ảnh
+                </button>
+              ) : (
+                <Link href="/dashboard/upgrade" className="btn-ghost whitespace-nowrap" title="Nâng cấp để dùng giao khách">
+                  🔒 Giao khách (nâng cấp gói)
+                </Link>
+              )}
+            </div>
+            {/* Delivery phase: studio pastes the EDITED-photos folder link. Those photos
+                are what the client sees in the delivery gallery; the originals the client
+                picked earlier auto-surface as the "File gốc" button (see getOriginalFolders). */}
+            {phase === "delivery" && (
+              <div className="card p-5">
+                <label className="label">Link ảnh đã chỉnh sửa (hiện cho khách ở album giao)</label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    className="input flex-1"
+                    placeholder="Dán link thư mục Google Drive ảnh đã chỉnh sửa…"
+                    value={editedUrl}
+                    onChange={(e) => setEditedUrl(e.target.value)}
+                  />
+                  <button
+                    onClick={saveDeliveryLink}
+                    disabled={deliveryBusy || syncing || !editedUrl.trim()}
+                    className="btn-primary whitespace-nowrap"
+                  >
+                    {deliveryBusy ? "Đang lưu…" : "Lưu & đồng bộ"}
+                  </button>
+                </div>
+                <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>
+                  Ảnh trong thư mục này sẽ hiện ở album giao khách. Ảnh gốc khách đã chọn ở
+                  giai đoạn trước tự thành nút <b>“Ảnh gốc”</b> để khách xem/tải trên
+                  Drive. Thư mục cần chia sẻ ở chế độ “ai có link xem được”.
+                </p>
+
+                {/* Nói thẳng nút "Tải file chỉnh sửa" bên album khách đã hiện chưa và
+                    còn thiếu gì — ba điều kiện nằm ở ba màn hình khác nhau, không nói
+                    ra thì studio không có cách nào đoán. */}
+                {(() => {
+                  const missing: string[] = [];
+                  if (!sources.some((x) => x.stage === "delivery" && x.drive_url)) missing.push("chưa lưu link Drive giao khách ở trên");
+                  if (!form.download_enabled) missing.push("đang tắt “Cho phép khách tải ảnh xuống”");
+                  if (form.status !== "published") missing.push("album chưa xuất bản");
+                  return (
+                    <p
+                      className="mt-2 rounded-lg px-2.5 py-1.5 text-[11px]"
+                      style={
+                        missing.length
+                          ? { background: "color-mix(in srgb, var(--s-amber) 12%, transparent)", color: "var(--s-amber)" }
+                          : { background: "color-mix(in srgb, var(--s-green) 12%, transparent)", color: "var(--s-green)" }
+                      }
+                    >
+                      {missing.length
+                        ? `Nút “Tải file chỉnh sửa” CHƯA hiện với khách — ${missing.join("; ")}.`
+                        : "Nút “Tải file chỉnh sửa” đang hiện ở đầu album giao khách."}
+                    </p>
+                  );
+                })()}
+              </div>
             )}
-          </div>
+
+            {/* Delivery phase: download the finished album at ORIGINAL quality from Drive. */}
+            {phase === "delivery" && deliveryFolders.length > 0 && (
+              <div className="card p-5">
+                <div className="flex items-start gap-3">
+                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full" style={{ background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }}>
+                    <HardDriveDownload size={18} />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-accent">Tải album gốc từ Drive</p>
+                    <p className="mb-3 text-xs" style={{ color: "var(--text3)" }}>
+                      Tải toàn bộ ảnh giao khách ở chất lượng gốc (không nén, không watermark) trực tiếp
+                      từ Google Drive — Google tự nén và phục vụ, không tốn băng thông máy chủ.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {deliveryFolders.map((s) => (
+                        <a
+                          key={s.id}
+                          href={s.drive_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-ghost"
+                          title="Mở thư mục trên Google Drive để tải trực tiếp (không tốn băng thông máy chủ)"
+                        >
+                          <FolderOpen size={15} /> Mở thư mục Drive{deliveryFolders.length > 1 ? ` · ${s.name}` : ""}
+                        </a>
+                      ))}
+                    </div>
+                    {deliveryFolders.length > 0 && (
+                      <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>
+                        Mẹo: “Mở thư mục Drive” cho phép tải cả album trực tiếp từ Google (nhanh & không tốn băng thông máy chủ).
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            </>
+          )}
+
         </div>
       </div>
     </div>

@@ -637,15 +637,17 @@ export default function CustomerAlbum({
                     </span>
                   </h2>
                 )}
-                <div className="grid items-start gap-3.5 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
+                {/* Lưới ảnh: khe hẹp để mắt đọc cả trang như một dải ảnh liền,
+                    và ô to hơn trên máy tính (240px) so với điện thoại (150px). */}
+                <div className="grid items-start gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] md:gap-2 md:[grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
             {items.map(({ p, idx }) => {
               const isSel = selected.has(p.id);
               const note = notes[p.id];
               return (
                 <div
                   key={p.id}
-                  className="overflow-hidden rounded-xl animate-[vkPop_.45s_ease_both]"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+                  className="overflow-hidden rounded-[10px] animate-[vkPop_.45s_ease_both]"
+                  style={{ background: "var(--surface)" }}
                 >
                   <div className="relative aspect-square">
                     <div
@@ -693,14 +695,14 @@ export default function CustomerAlbum({
                           toggle(p.id);
                         }}
                         title={t("selectThis")}
-                        className="absolute right-2 top-2 z-[4] flex h-11 w-11 items-center justify-center rounded-full transition-transform active:scale-90"
+                        className="absolute right-1.5 top-1.5 z-[4] flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-90"
                         style={
                           isSel
-                            ? { background: "var(--gold)", color: "#1a1205", border: "2px solid var(--gold)" }
-                            : { background: "rgba(10,10,12,.5)", color: "#fff", border: "2px solid rgba(255,255,255,.75)" }
+                            ? { background: "var(--gold)", color: "#1a1205", border: "1.5px solid var(--gold)" }
+                            : { background: "rgba(10,10,12,.45)", color: "#fff", border: "1.5px solid rgba(255,255,255,.7)" }
                         }
                       >
-                        <Heart size={20} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2} />
+                        <Heart size={15} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
                       </button>
                     )}
                   </div>

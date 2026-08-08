@@ -26,11 +26,13 @@ export default async function AlbumEditPage({
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const [{ data: album }, { data: sources }, photos, { data: profile }] = await Promise.all([
+  const [{ data: album }, { data: sources }, photos, { data: profile }, { count: pickedCount }] = await Promise.all([
     supabase.from("albums").select("*").eq("id", params.id).single(),
     supabase.from("album_sources").select("*").eq("album_id", params.id).order("position"),
     fetchAllPhotos(supabase, params.id, "*"),
     user ? supabase.from("profiles").select("plan, plan_expires_at, role, full_name").eq("id", user.id).maybeSingle() : Promise.resolve({ data: null }),
+    // Chỉ cần CON SỐ lượt chọn cho thẻ số liệu — head:true nên không kéo hàng nào về.
+    supabase.from("selections").select("id", { count: "exact", head: true }).eq("album_id", params.id),
   ]);
 
   if (!album) notFound();
@@ -78,6 +80,7 @@ export default async function AlbumEditPage({
       contractId={linkedContract?.id ?? null}
       clientPhone={linkedContract?.client_phone ?? null}
       clientName={linkedContract?.client_name ?? null}
+      picked={pickedCount ?? 0}
     />
   );
 }
