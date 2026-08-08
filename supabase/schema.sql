@@ -1124,6 +1124,8 @@ create table if not exists public.studio_notifications (
 create index if not exists studio_notifications_owner_idx on public.studio_notifications (owner_id, read, created_at);
 -- Thông báo hệ thống quan trọng: hiện popup nổi bắt buộc xác nhận (do admin bật).
 alter table public.studio_notifications add column if not exists important boolean not null default false;
+-- Album liên quan (vd khách chọn ảnh xong) → bấm thông báo mở thẳng album đó.
+alter table public.studio_notifications add column if not exists album_id uuid references public.albums (id) on delete cascade;
 alter table public.studio_notifications enable row level security;
 drop policy if exists studio_notifications_owner_all on public.studio_notifications;
 create policy studio_notifications_owner_all on public.studio_notifications
@@ -1856,6 +1858,10 @@ create table if not exists public.studio_drive (
   connected_at     timestamptz,
   updated_at       timestamptz not null default now()
 );
+-- Kết nối Drive TOÀN QUYỀN (scope drive) cho công cụ Lọc ảnh: chép ảnh vào bất
+-- kỳ link studio có quyền sửa, tự động không cần đăng nhập lại. Tách riêng khỏi
+-- refresh_token (drive.file) của luồng đồng bộ hợp đồng.
+alter table public.studio_drive add column if not exists filter_refresh_token text;
 revoke all on public.studio_drive from anon, authenticated;
 alter table public.studio_drive enable row level security;
 

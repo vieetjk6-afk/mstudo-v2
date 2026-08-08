@@ -1832,6 +1832,9 @@ create index if not exists studio_notifications_owner_idx on public.studio_notif
 -- Thông báo hệ thống quan trọng: hiện popup nổi bắt buộc xác nhận (do admin bật).
 alter table public.studio_notifications add column if not exists important boolean not null default false;
 
+-- Album liên quan (vd khách chọn ảnh xong) → bấm thông báo mở thẳng album đó.
+alter table public.studio_notifications add column if not exists album_id uuid references public.albums (id) on delete cascade;
+
 create index if not exists contract_tasks_contract_idx on public.contract_tasks (contract_id);
 
 create index if not exists contract_templates_owner_idx on public.contract_templates (owner_id);
@@ -2062,6 +2065,11 @@ alter table public.story_pages add column if not exists drive_upload_folder text
 create index if not exists story_uploads_story_idx on public.story_uploads (story_id, approved, created_at);
 
 create index if not exists desktop_devices_owner_idx on public.desktop_devices (owner_id);
+
+-- Kết nối Drive TOÀN QUYỀN (scope drive) cho công cụ Lọc ảnh: chép ảnh vào bất
+-- kỳ link studio có quyền sửa, tự động không cần đăng nhập lại. Tách riêng khỏi
+-- refresh_token (drive.file) của luồng đồng bộ hợp đồng.
+alter table public.studio_drive add column if not exists filter_refresh_token text;
 
 -- Mỗi hợp đồng: thư mục Drive đã tạo + sơ đồ cây (local ↔ Drive) + mốc đồng bộ.
 -- drive_tree = [{ path, id, role: 'selection'|'delivery'|null, excluded }]

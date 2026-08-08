@@ -71,6 +71,8 @@ export default function StudioDriveCard() {
     // Thông báo sau khi quay lại từ Google.
     const q = new URLSearchParams(window.location.search).get("drive");
     if (q === "connected") setFlash("Đã kết nối Google Drive!");
+    else if (q === "forbidden") setFlash("Chỉ CHỦ studio (gói Studio) mới kết nối được Drive đồng bộ hợp đồng.");
+    else if (q === "notconfigured") setFlash("Máy chủ chưa bật kết nối Google Drive. Hãy liên hệ quản trị.");
     else if (q === "error") setFlash("Kết nối Drive không thành công — thử lại.");
   }, []);
 

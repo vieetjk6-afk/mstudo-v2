@@ -10,7 +10,10 @@ export async function GET(req: NextRequest) {
   const state = searchParams.get("state");
   const error = searchParams.get("error");
   const ownerId = ownerFromState(state);
-  const back = (q: string) => NextResponse.redirect(new URL(`/dashboard/studio/desktop?${q}`, req.url));
+  // Quay về ĐÚNG trang có thẻ kết nối Drive (trang này đọc ?drive=… để hiện
+  // thông báo). Trước đây trả về /dashboard/studio/desktop — trang đó không đọc
+  // tham số nên kết nối xong không thấy báo gì.
+  const back = (q: string) => NextResponse.redirect(new URL(`/dashboard/studio/drive-sync?${q}`, req.url));
 
   if (error || !code || !ownerId) return back("drive=error");
   try {

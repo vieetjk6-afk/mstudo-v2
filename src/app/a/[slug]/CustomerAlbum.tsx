@@ -15,6 +15,7 @@ import {
   ZoomIn,
   ZoomOut,
   Share2,
+  Send,
 } from "lucide-react";
 import StudioBrand from "@/components/StudioBrand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -95,6 +96,8 @@ export default function CustomerAlbum({
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [notifyingDone, setNotifyingDone] = useState(false);
+  const [doneSent, setDoneSent] = useState(false);
 
   const wm = album.watermark_enabled ? album.watermark_text || studioName : null;
 
@@ -193,6 +196,34 @@ export default function CustomerAlbum({
       /* ignore */
     }
   }, [album.slug]);
+
+  // Khách bấm "đã chọn xong" → lưu nốt lựa chọn rồi báo studio (chuông + push +
+  // Zalo). Giữ cờ doneSent để đổi nhãn nút; vẫn cho báo lại nếu khách đổi ý.
+  async function notifyDone() {
+    if (notifyingDone) return;
+    setNotifyingDone(true);
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    await saveNow();
+    try {
+      const res = await fetch(`/api/a/${album.slug}/done`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (res.ok) {
+        setDoneSent(true);
+        flashToast("Đã báo studio bạn chọn xong ✓");
+      } else {
+        flashToast("Không gửi được thông báo, thử lại sau.");
+      }
+    } catch {
+      flashToast("Mất kết nối khi báo studio.");
+    }
+    setNotifyingDone(false);
+  }
 
   const limit = album.selection_limit;
   const atLimit = limit != null && selected.size >= limit;
@@ -609,6 +640,22 @@ export default function CustomerAlbum({
               <Share2 size={14} />
               {shareBusy ? "Đang tạo link…" : "Chia sẻ ảnh đã chọn"}
             </ToolButton>
+          )}
+          {/* Báo studio đã chọn xong — CTA nổi bật, chỉ hiện khi đã chọn ảnh. */}
+          {!shareMode && selected.size > 0 && (
+            <button
+              onClick={notifyDone}
+              disabled={notifyingDone}
+              className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors disabled:opacity-50"
+              style={
+                doneSent
+                  ? { background: "var(--success)", color: "#04150d", border: "1px solid var(--success)" }
+                  : { background: "var(--accent)", color: "var(--accentInk)", border: "1px solid var(--accent)" }
+              }
+            >
+              {doneSent ? <Check size={14} /> : <Send size={14} />}
+              {notifyingDone ? "Đang gửi…" : doneSent ? "Đã báo studio — báo lại" : "Đã chọn xong · Báo studio"}
+            </button>
           )}
         </div>
 

@@ -7,6 +7,7 @@ import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { buildZip, triggerDownload } from "@/lib/download";
+import FilterPhotosButton from "@/components/FilterPhotosButton";
 import type { Album, Photo, Selection } from "@/lib/types";
 
 interface Group {
@@ -159,6 +160,9 @@ export default function SelectionsView({
             <Wifi size={12} /> Trực tiếp
           </span>
         )}
+        {/* Mở POPUP công cụ Lọc ảnh với sẵn danh sách khách chọn + nguồn Drive
+            của album — chọn lọc trên Drive hoặc trên máy tính ngay tại chỗ. */}
+        <FilterPhotosButton albumId={album.id} albumTitle={album.title} className="btn-primary ml-auto" />
       </div>
 
       {groups.length === 0 ? (

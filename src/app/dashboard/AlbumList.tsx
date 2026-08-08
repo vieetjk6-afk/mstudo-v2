@@ -11,6 +11,7 @@ import {
   Globe,
   Tag,
   Droplets,
+  Filter,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl } from "@/lib/drive";
@@ -18,6 +19,7 @@ import { createClient } from "@/lib/supabase/client";
 import PlanUsage from "@/components/PlanUsage";
 import { Panel } from "@/components/studio/ui";
 import StudioTrialButton from "@/components/StudioTrialButton";
+import FilterDialog from "@/components/FilterDialog";
 
 export interface AlbumRow {
   id: string;
@@ -191,6 +193,7 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
   const [watermark, setWatermark] = useState(a.watermark_enabled);
   const [download, setDownload] = useState(a.download_enabled);
   const [phase, setPhase] = useState<"selection" | "delivery">(a.phase ?? "selection");
+  const [filterOpen, setFilterOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Đóng menu bật/tắt nhanh khi nhấp RA NGOÀI card (card khác hoặc vùng trang) —
@@ -314,6 +317,19 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
               <Toggle label="Watermark" on={watermark} onChange={(v) => { setWatermark(v); patch({ watermark_enabled: v }); }} />
             )}
             <Toggle label="Cho tải xuống" on={download} onChange={(v) => { setDownload(v); patch({ download_enabled: v }); }} />
+            {/* Mở POPUP công cụ lọc ảnh ngay trong quản lý album. Popup render Ở
+                NGOÀI khối menu này: nhấp vào popup nằm ngoài card nên menu tự
+                đóng, nếu popup nằm trong menu thì nó bị gỡ theo. */}
+            {phase !== "delivery" && (
+              <button
+                type="button"
+                onClick={() => setFilterOpen(true)}
+                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[9px] py-2 text-[12px] font-semibold"
+                style={{ border: "1px solid var(--bd)" }}
+              >
+                <Filter size={13} /> Lọc ảnh (Drive / máy tính)
+              </button>
+            )}
             <div className="mt-2 flex gap-2">
               <Link href={`/dashboard/albums/${a.id}`} className="flex-1 rounded-[9px] py-2 text-center text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }}>
                 Chỉnh sửa đầy đủ
@@ -324,6 +340,10 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
             </div>
           </div>
         </>
+      )}
+
+      {filterOpen && (
+        <FilterDialog albumId={a.id} albumTitle={a.title} onClose={() => setFilterOpen(false)} />
       )}
     </div>
   );

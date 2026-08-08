@@ -28,6 +28,7 @@ import { createClient } from "@/lib/supabase/client";
 import { studioUrl } from "@/lib/hosts";
 import ShareButton from "@/components/ShareButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
+import FilterPhotosButton from "@/components/FilterPhotosButton";
 import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
@@ -415,6 +416,10 @@ export default function AlbumEditor({
           >
             <Users size={16} /> {t("customerSelections")}
           </Link>
+          {/* Lọc ảnh NGAY từ cài đặt album — mở popup công cụ lọc tại chỗ (nguồn
+              Drive hoặc máy tính). Chỉ hiện ở album chọn ảnh; giai đoạn giao
+              khách không cần lọc. */}
+          {phase !== "delivery" && <FilterPhotosButton albumId={album.id} albumTitle={form.title} />}
           <a
             href={clientLink}
             target="_blank"

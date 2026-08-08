@@ -330,12 +330,14 @@ export type NotificationKind =
   | "new_user"
   | "upgrade_request"
   | "contact"
+  | "selection"
   | "info";
 
 export interface StudioNotification {
   id: string;
   owner_id: string;
   contract_id: string | null;
+  album_id?: string | null;
   kind: NotificationKind;
   message: string;
   read: boolean;
