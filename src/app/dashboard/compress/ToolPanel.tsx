@@ -526,11 +526,11 @@ export default function ToolPanel({
   );
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-3.5 lg:grid-cols-2">
       {/* Source */}
-      <div className="card p-6">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-          <FolderInput size={15} /> Nguồn ảnh
+      <div className="card p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-bold">
+          <FolderInput size={16} style={{ color: "var(--ac)" }} /> Nguồn ảnh
         </h2>
         <div className="mb-3 flex flex-wrap gap-2">
           {srcTab("local", "Máy tính", HardDrive)}
@@ -587,9 +587,9 @@ export default function ToolPanel({
       </div>
 
       {/* Options */}
-      <div className="card p-6">
-        <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-          <Minimize2 size={15} /> Tuỳ chọn
+      <div className="card p-5">
+        <h2 className="mb-3 flex items-center gap-2 text-[15px] font-bold">
+          <Minimize2 size={16} style={{ color: "var(--ac)" }} /> {tool === "watermark" ? "Watermark" : tool === "convert" ? "Đổi định dạng" : "Thiết lập nén"}
         </h2>
 
         {tool === "compress" && (
@@ -749,10 +749,10 @@ export default function ToolPanel({
 
       {/* Live preview panel (first image) — compare original vs processed */}
       {preview && previewSrc && (
-        <div className="card p-6 lg:col-span-2">
+        <div className="card p-5 lg:col-span-2">
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <h3 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-              <Eye size={15} /> Xem trước — {preview.label}
+            <h3 className="flex items-center gap-2 text-[15px] font-bold">
+              <Eye size={16} style={{ color: "var(--ac)" }} /> Xem thử — {preview.label}
             </h3>
             {/* Gốc ⇄ Đã xử lý */}
             <div className="flex overflow-hidden rounded-lg" style={{ border: "1px solid var(--border)" }}>
@@ -815,7 +815,7 @@ export default function ToolPanel({
       )}
 
       {/* Action + results */}
-      <div className="card p-6 lg:col-span-2">
+      <div className="card p-5 lg:col-span-2">
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <button onClick={run} disabled={items.length === 0 || busy || outOfQuota} className="btn-primary disabled:opacity-40">
             <Minimize2 size={15} />
@@ -834,14 +834,29 @@ export default function ToolPanel({
             </>
           )}
           {results.length > 0 && tool !== "convert" && (
-            <span className="ml-auto rounded-full px-3 py-1 text-[12.5px]" style={{ background: "color-mix(in srgb, var(--gold) 16%, transparent)", color: "var(--gold)" }}>
+            <span className="ml-auto whitespace-nowrap rounded-[20px] px-[11px] py-[5px] text-[12px] font-semibold" style={{ background: "var(--gnS)", color: "var(--gn)" }}>
               {formatBytes(totalOriginal)} → {formatBytes(totalNew)} · {savedPct >= 0 ? `giảm ${savedPct}%` : `+${-savedPct}%`}
             </span>
           )}
         </div>
 
+        {/* Hàng đợi xử lý — thanh tiến độ như bản thiết kế, thay vì chỉ đổi chữ trên nút. */}
+        {busy && progress && (
+          <div className="mb-3">
+            <div className="h-[5px] overflow-hidden rounded-[4px]" style={{ background: "var(--bd2)" }}>
+              <div
+                className="h-full rounded-[4px] transition-[width]"
+                style={{ width: `${progress.total ? Math.round((progress.done / progress.total) * 100) : 0}%`, background: "var(--ac)" }}
+              />
+            </div>
+            <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              Đang xử lý {progress.done}/{progress.total} ảnh — giữ nguyên tab này cho tới khi xong.
+            </p>
+          </div>
+        )}
+
         {quotaMsg && (
-          <p className="mb-3 rounded-lg px-3 py-2 text-[13px]" style={{ background: "color-mix(in srgb, var(--gold) 14%, transparent)", color: "var(--gold)" }}>{quotaMsg}</p>
+          <p className="mb-3 rounded-[10px] px-3 py-2 text-[12.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>{quotaMsg}</p>
         )}
         {writeMsg && <p className="mb-3 text-[13px]" style={{ color: "var(--gold)" }}>{writeMsg}</p>}
         {savingMsg && <p className="mb-3 text-[13px]" style={{ color: "var(--gold)" }}>{savingMsg}</p>}
