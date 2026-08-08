@@ -64,6 +64,34 @@
   --success: #5fd29a;
 }
 
+/* ── Bí danh token ngắn cho MỌI trang ────────────────────────────────────────
+   Một vài màn chạy trong CẢ HAI khung: thư viện album mở trong shell studio khi
+   có gói trả phí, nhưng mở trong header thường khi gói free. Trong shell các
+   biến ngắn (--ac, --sf, --tx…) đã có giá trị của bản thiết kế và ghi đè xuống;
+   khối này chỉ đỡ cho phần NGOÀI shell để những màn đó không mất màu.
+   Cố ý KHÔNG khai báo --bg (đã có sẵn ở :root với đúng ý nghĩa đó). */
+:root {
+  --ac: var(--gold);
+  --acS: color-mix(in srgb, var(--gold) 12%, var(--surface));
+  --acM: color-mix(in srgb, var(--gold) 24%, var(--surface));
+  --acD: color-mix(in srgb, var(--gold) 84%, #000);
+  --sf: var(--surface);
+  --sf2: var(--surface2);
+  --bd: var(--border);
+  --bd2: var(--border);
+  --tx: var(--text);
+  --tx2: var(--text2);
+  --tx3: var(--text3);
+  --gn: var(--success);
+  --gnS: color-mix(in srgb, var(--success) 14%, var(--surface));
+  --am: var(--gold);
+  --amS: color-mix(in srgb, var(--gold) 14%, var(--surface));
+  --rd: var(--danger);
+  --rdS: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  --bl: #2062c4;
+  --blS: color-mix(in srgb, #2062c4 14%, var(--surface));
+}
+
 html,
 body {
   margin: 0;

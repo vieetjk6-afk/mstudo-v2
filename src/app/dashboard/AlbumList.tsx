@@ -2,12 +2,21 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
-import { Plus, Image as ImageIcon, CheckSquare, ExternalLink, Settings2, Globe, Tag } from "lucide-react";
+import {
+  Plus,
+  Image as ImageIcon,
+  CheckSquare,
+  ExternalLink,
+  MoreHorizontal,
+  Globe,
+  Tag,
+  Droplets,
+} from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl } from "@/lib/drive";
 import { createClient } from "@/lib/supabase/client";
 import PlanUsage from "@/components/PlanUsage";
-import { Panel, EmptyState } from "@/components/studio/ui";
+import { Panel } from "@/components/studio/ui";
 import StudioTrialButton from "@/components/StudioTrialButton";
 
 export interface AlbumRow {
@@ -26,25 +35,29 @@ export interface AlbumRow {
 }
 
 export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean }) {
-  const { t } = useLang();
-
   return (
-    <div className="animate-fade-in">
+    <div className="page-in">
       <PlanUsage />
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-light text-accent">{t("myAlbums")}</h1>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link href="/dashboard/studio/album-categories" className="btn-ghost">
+
+      {/* ── Dòng mô tả + hành động ──────────────────────────────────────────
+          Bản thiết kế không lặp lại tiêu đề màn ở đây (topbar đã có), chỉ một
+          câu nói rõ màn này là gì rồi tới nút tạo album. */}
+      <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+          Album chọn ảnh và album giao khách — đồng bộ thẳng từ Google Drive của studio.
+        </p>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <Link href="/dashboard/studio/album-categories" className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
             <Tag size={16} /> Loại album
           </Link>
-          <Link href="/dashboard/site" className="btn-ghost">
+          <Link href="/dashboard/site" className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
             <Globe size={16} /> Website riêng
           </Link>
-          <Link href="/dashboard/create" className="btn-primary">
+          <Link href="/dashboard/create" className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold" style={{ background: "var(--ac)", color: "#fff" }}>
             <Plus size={16} /> Tạo album chọn ảnh
           </Link>
           {canDelivery && (
-            <Link href="/dashboard/create?phase=delivery" className="btn-primary">
+            <Link href="/dashboard/create?phase=delivery" className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
               <Plus size={16} /> Tạo album hoàn thiện
             </Link>
           )}
@@ -52,24 +65,24 @@ export default function AlbumList({ albums, showTrial = false, trialUsed = false
       </div>
 
       {showTrial && (
-        <div className="mb-6 card p-4 flex flex-col sm:flex-row sm:items-center gap-3" style={{ borderColor: "rgba(184,137,58,.4)", background: "rgba(184,137,58,.07)" }}>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold" style={{ color: "var(--gold)" }}>Trải nghiệm gói Studio miễn phí 1 ngày</p>
-            <p className="mt-0.5 text-xs" style={{ color: "var(--text2)" }}>Hợp đồng, lịch chụp, quản lý khách hàng và toàn bộ tính năng Studio trong 24 giờ.</p>
+        <Panel className="mb-3.5 flex flex-col gap-3 px-4 py-3.5 sm:flex-row sm:items-center" >
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-bold" style={{ color: "var(--ac)" }}>Trải nghiệm gói Studio miễn phí 1 ngày</p>
+            <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx2)" }}>Hợp đồng, lịch chụp, quản lý khách hàng và toàn bộ tính năng Studio trong 24 giờ.</p>
           </div>
-          <div className="shrink-0">
+          <div className="flex-none">
             <StudioTrialButton used={trialUsed} />
           </div>
-        </div>
+        </Panel>
       )}
 
       {albums.length === 0 ? (
-        <div className="card flex flex-col items-center justify-center py-20 text-center">
-          <p className="text-accent-muted">{t("noAlbums")}</p>
-          <Link href="/dashboard/create" className="btn-ghost mt-4">
-            <Plus size={16} /> Tạo album chọn ảnh
-          </Link>
-        </div>
+        <AlbumEmpty
+          title="Chưa có album nào"
+          hint="Tạo album đầu tiên để khách chọn ảnh ngay trên điện thoại — ảnh lấy thẳng từ thư mục Google Drive của studio."
+          cta="Tạo album chọn ảnh"
+          href="/dashboard/create"
+        />
       ) : (
         <AlbumTabs albums={albums} canDelivery={canDelivery} canWatermark={canWatermark} />
       )}
@@ -77,17 +90,31 @@ export default function AlbumList({ albums, showTrial = false, trialUsed = false
   );
 }
 
+/** Trạng thái trống có hướng dẫn (tính năng mới số 10 của bản thiết kế). */
+function AlbumEmpty({ title, hint, cta, href }: { title: string; hint: string; cta: string; href: string }) {
+  return (
+    <Panel className="px-5 py-14 text-center">
+      <span className="mx-auto flex h-[62px] w-[62px] items-center justify-center rounded-[16px]" style={{ background: "var(--acS)", color: "var(--ac)" }}>
+        <ImageIcon size={30} />
+      </span>
+      <p className="mt-3.5 text-[15px] font-bold">{title}</p>
+      <p className="mx-auto mt-1 max-w-[340px] text-[12.5px] leading-relaxed" style={{ color: "var(--tx3)", textWrap: "pretty" }}>{hint}</p>
+      <Link href={href} className="mt-4 inline-flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-bold" style={{ background: "var(--ac)", color: "#fff" }}>
+        <Plus size={18} /> {cta}
+      </Link>
+    </Panel>
+  );
+}
+
 // Tách thư viện thành 2 TAB theo giai đoạn: ALBUM CHỌN ẢNH (phase 'selection') và
 // ALBUM GIAO KHÁCH (phase 'delivery') — cùng kiểu tab với trang Hợp đồng.
-// Dùng --gold/--accentInk chứ không phải --brand: trang này chạy trong CẢ hai
-// chrome (StudioShell và header thường), mà --brand chỉ có trong .studio-shell.
 function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean }) {
   const deliveryAlbums = albums.filter((a) => (a.phase ?? "selection") === "delivery");
   const selectionAlbums = albums.filter((a) => (a.phase ?? "selection") !== "delivery");
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
 
   const grid = (rows: AlbumRow[]) => (
-    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 min-[1100px]:grid-cols-3">
       {rows.map((a) => (
         <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} />
       ))}
@@ -102,38 +129,46 @@ function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; 
 
   return (
     <div>
-      <div role="tablist" aria-label="Nhóm album" className="mb-4 flex flex-wrap gap-2">
+      <div
+        role="tablist"
+        aria-label="Nhóm album"
+        className="mb-3.5 inline-flex flex-wrap gap-[3px] rounded-[11px] p-[3px]"
+        style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}
+      >
         {([
-          ["selection", "Album chọn ảnh", selectionAlbums.length, ImageIcon],
-          ["delivery", "Album giao khách", deliveryAlbums.length, CheckSquare],
-        ] as const).map(([key, label, count, Icon]) => (
-          <button
-            key={key}
-            role="tab"
-            aria-selected={tab === key}
-            onClick={() => setTab(key)}
-            className="flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors"
-            style={
-              tab === key
-                ? { background: "var(--ac)", color: "#fff" }
-                : { background: "var(--sf2)", color: "var(--tx2)", border: "1px solid var(--bd)" }
-            }
-          >
-            <Icon size={13} /> {label} ({count})
-          </button>
-        ))}
+          ["selection", "Album chọn ảnh", selectionAlbums.length],
+          ["delivery", "Album giao khách", deliveryAlbums.length],
+        ] as const).map(([key, label, count]) => {
+          const on = tab === key;
+          return (
+            <button
+              key={key}
+              role="tab"
+              aria-selected={on}
+              onClick={() => setTab(key)}
+              className="flex items-center gap-1.5 whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+              style={{
+                color: on ? "var(--ac)" : "var(--tx2)",
+                background: on ? "var(--sf)" : "transparent",
+                boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+              }}
+            >
+              {label}
+              <span className="text-[11px] font-bold opacity-75">{count}</span>
+            </button>
+          );
+        })}
       </div>
 
       {rows.length === 0 ? (
-        <Panel>
-          <EmptyState
-            icon={ImageIcon}
-            title={tab === "delivery" ? "Chưa có album giao khách nào" : "Chưa có album chọn ảnh nào"}
-            hint={tab === "delivery"
-              ? "Chuyển một album sang giai đoạn Giao khách, hoặc tạo album hoàn thiện."
-              : "Tất cả album đang ở nhóm Giao khách — tạo album chọn ảnh mới khi có buổi chụp xong."}
-          />
-        </Panel>
+        <AlbumEmpty
+          title={tab === "delivery" ? "Chưa có album giao khách nào" : "Chưa có album chọn ảnh nào"}
+          hint={tab === "delivery"
+            ? "Chuyển một album sang giai đoạn Giao khách, hoặc tạo album hoàn thiện để gửi ảnh đã chỉnh cho khách."
+            : "Tất cả album đang ở nhóm Giao khách — tạo album chọn ảnh mới khi có buổi chụp xong."}
+          cta={tab === "delivery" ? "Tạo album hoàn thiện" : "Tạo album chọn ảnh"}
+          href={tab === "delivery" ? "/dashboard/create?phase=delivery" : "/dashboard/create"}
+        />
       ) : (
         grid(rows)
       )}
@@ -141,6 +176,11 @@ function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; 
   );
 }
 
+/**
+ * Thẻ album của bản thiết kế: ảnh bìa 104px có pill giai đoạn, tên album, dòng
+ * phụ (ảnh · đã chọn), thanh tiến độ chọn ảnh, rồi chân thẻ ghi trạng thái
+ * watermark / xuất bản và nút ba chấm mở bảng bật-tắt nhanh.
+ */
 function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean }) {
   const { t } = useLang();
   const supabase = createClient();
@@ -162,94 +202,124 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
     return () => document.removeEventListener("pointerdown", onDown);
   }, [menu]);
 
-  const cover =
-    a.cover_url || (a.coverFallback ? thumbnailUrl(a.coverFallback, 800) : null);
+  const cover = a.cover_url || (a.coverFallback ? thumbnailUrl(a.coverFallback, 800) : null);
+  const picked = a.selections?.[0]?.count ?? 0;
+  const photos = a.photoCount ?? 0;
+  const pct = photos > 0 ? Math.min(100, Math.round((picked / photos) * 100)) : 0;
 
   async function patch(fields: Record<string, unknown>) {
     await supabase.from("albums").update(fields).eq("id", a.id);
   }
 
   return (
-    <div ref={cardRef} className="card group relative overflow-hidden">
-      {/* Cover → editor */}
-      <Link href={`/dashboard/albums/${a.id}`} className="relative block aspect-[4/3] bg-ink-850">
+    <div
+      ref={cardRef}
+      className="relative overflow-hidden rounded-[14px]"
+      style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}
+    >
+      {/* Ảnh bìa 104px — pill giai đoạn góc trái, trạng thái xuất bản góc phải */}
+      <Link href={`/dashboard/albums/${a.id}`} className="relative block h-[104px]" style={{ background: "var(--sf2)" }}>
         {cover ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={cover} alt={a.title} loading="lazy" decoding="async" className="h-full w-full object-cover opacity-90 transition group-hover:opacity-100" />
+          <img src={cover} alt={a.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
-          <div className="flex h-full items-center justify-center text-ink-600">
-            <ImageIcon size={32} />
-          </div>
+          <span className="flex h-full items-center justify-center" style={{ color: "var(--tx3)" }}>
+            <ImageIcon size={26} />
+          </span>
         )}
-        <span
-          className="absolute left-3 top-3 rounded px-2 py-0.5 text-[10px] uppercase tracking-wide"
-          style={status === "published"
-            ? { background: "var(--success)", color: "#04150d" }
-            : { background: "var(--surface2)", color: "var(--text2)" }}
-        >
-          {status === "published" ? t("published") : t("draft")}
-        </span>
         {canDelivery && (
           <span
-            className="absolute right-3 top-3 rounded px-2 py-0.5 text-[10px] uppercase tracking-wide"
+            className="absolute left-2.5 top-2.5 rounded-[20px] px-[9px] py-[3px] text-[10.5px] font-bold"
             style={phase === "delivery"
-              ? { background: "var(--success)", color: "#04150d" }
-              : { background: "var(--gold)", color: "#1a1205" }}
+              ? { background: "var(--gnS)", color: "var(--gn)" }
+              : { background: "var(--acS)", color: "var(--ac)" }}
           >
             {phase === "delivery" ? "Giao khách" : "Chọn ảnh"}
           </span>
         )}
       </Link>
 
-      <div className="p-4">
-        <h3 className="truncate font-medium text-accent">{a.title}</h3>
-        <div className="mt-2 flex items-center gap-4 text-xs text-accent-muted">
-          <span className="flex items-center gap-1">
-            <ImageIcon size={13} /> {a.photoCount ?? 0} {t("photos")}
-          </span>
-          <span className="flex items-center gap-1">
-            <CheckSquare size={13} /> {a.selections?.[0]?.count ?? 0} {t("selections")}
-          </span>
+      <div className="px-[15px] pb-[15px] pt-[13px]">
+        <p className="text-[13.5px] font-bold leading-snug" style={{ textWrap: "pretty" }}>{a.title}</p>
+        <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+          {photos} ảnh · {picked} lượt chọn
+        </p>
+
+        <div className="mb-[5px] mt-2.5 h-[5px] overflow-hidden rounded-[4px]" style={{ background: "var(--bd2)" }}>
+          <div className="h-full rounded-[4px]" style={{ width: `${pct}%`, background: "var(--ac)" }} />
         </div>
-        <div className="mt-4 flex items-center gap-2">
-          <Link href={`/dashboard/albums/${a.id}/selections`} className="btn-primary flex-1 min-h-[44px] py-2.5 text-xs">
-            <CheckSquare size={13} /> {t("customerSelections")}
+        <p className="text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>
+          {photos === 0 ? "Chưa nạp ảnh vào album" : picked === 0 ? "Khách chưa chọn ảnh nào" : `Khách đã chọn ${picked}/${photos} ảnh`}
+        </p>
+
+        <div className="mt-[11px] flex items-center gap-2 pt-2.5" style={{ borderTop: "1px solid var(--bd2)" }}>
+          <span className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: watermark ? "var(--ac)" : "var(--tx3)" }}>
+            <Droplets size={13} /> {watermark ? "Có watermark" : "Không watermark"}
+          </span>
+          <span className="ml-auto text-[11px] font-semibold" style={{ color: status === "published" ? "var(--gn)" : "var(--tx3)" }}>
+            {status === "published" ? "Đã xuất bản" : "Nháp"}
+          </span>
+          <Link
+            href={`/a/${a.slug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Mở trang album (tab mới)"
+            title="Mở trang album"
+            className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-[7px]"
+            style={{ color: "var(--tx3)" }}
+          >
+            <ExternalLink size={15} />
           </Link>
-          <button onClick={() => setMenu((v) => !v)} className="btn-ghost min-h-[44px] py-2.5 text-xs" title="Bật/tắt nhanh">
-            <Settings2 size={13} /> {t("edit")}
+          <button
+            onClick={() => setMenu((v) => !v)}
+            aria-label="Bật/tắt nhanh"
+            title="Bật/tắt nhanh"
+            className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-[7px]"
+            style={{ color: "var(--tx3)" }}
+          >
+            <MoreHorizontal size={17} />
           </button>
-          <Link href={`/a/${a.slug}`} target="_blank" rel="noopener noreferrer" aria-label="Mở trang album (tab mới)" title="Mở trang album" className="btn-ghost min-h-[44px] py-2.5 text-xs">
-            <ExternalLink size={13} />
-          </Link>
         </div>
+
+        <Link
+          href={`/dashboard/albums/${a.id}/selections`}
+          className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[12.5px] font-bold"
+          style={{ background: "var(--acS)", color: "var(--ac)" }}
+        >
+          <CheckSquare size={14} /> {t("customerSelections")}
+        </Link>
       </div>
 
-      {/* Quick toggles */}
+      {/* Bảng bật/tắt nhanh */}
       {menu && (
         <>
-        {/* Backdrop: chạm/nhấp ra ngoài để đóng popover (trước đây chỉ đóng bằng nút "Đóng"). */}
-        <button
-          type="button"
-          aria-label="Đóng bảng cài đặt nhanh"
-          onClick={() => setMenu(false)}
-          className="absolute inset-0 z-10 cursor-default"
-        />
-        <div className="absolute inset-x-3 bottom-3 z-20 rounded-xl p-3 shadow-xl" style={{ background: "var(--bg2)", border: "1px solid var(--border2)" }}>
-          <Toggle label="Đã xuất bản" on={status === "published"} onChange={(v) => { setStatus(v ? "published" : "draft"); patch({ status: v ? "published" : "draft" }); }} />
-          {canDelivery && (
-            <Toggle label="Giao khách (ảnh hoàn thiện)" on={phase === "delivery"} onChange={(v) => { const next = v ? "delivery" : "selection"; setPhase(next); patch({ phase: next }); }} />
-          )}
-          {/* Watermark: chỉ Photographer Plus & Studio — ảnh có watermark buộc phải
-              đi qua proxy khi khách tải, ảnh thường tải thẳng từ Drive. */}
-          {canWatermark && (
-            <Toggle label="Watermark" on={watermark} onChange={(v) => { setWatermark(v); patch({ watermark_enabled: v }); }} />
-          )}
-          <Toggle label="Cho tải xuống" on={download} onChange={(v) => { setDownload(v); patch({ download_enabled: v }); }} />
-          <div className="mt-2 flex gap-2">
-            <Link href={`/dashboard/albums/${a.id}`} className="btn-ghost flex-1 py-1.5 text-xs">Chỉnh sửa đầy đủ</Link>
-            <button onClick={() => setMenu(false)} className="btn-ghost py-1.5 text-xs">Đóng</button>
+          {/* Backdrop: chạm/nhấp ra ngoài để đóng popover. */}
+          <button
+            type="button"
+            aria-label="Đóng bảng cài đặt nhanh"
+            onClick={() => setMenu(false)}
+            className="absolute inset-0 z-10 cursor-default"
+          />
+          <div className="absolute inset-x-3 bottom-3 z-20 rounded-[12px] p-3" style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "0 12px 34px rgba(20,15,25,.22)" }}>
+            <Toggle label="Đã xuất bản" on={status === "published"} onChange={(v) => { setStatus(v ? "published" : "draft"); patch({ status: v ? "published" : "draft" }); }} />
+            {canDelivery && (
+              <Toggle label="Giao khách (ảnh hoàn thiện)" on={phase === "delivery"} onChange={(v) => { const next = v ? "delivery" : "selection"; setPhase(next); patch({ phase: next }); }} />
+            )}
+            {/* Watermark: chỉ Photographer Plus & Studio — ảnh có watermark buộc phải
+                đi qua proxy khi khách tải, ảnh thường tải thẳng từ Drive. */}
+            {canWatermark && (
+              <Toggle label="Watermark" on={watermark} onChange={(v) => { setWatermark(v); patch({ watermark_enabled: v }); }} />
+            )}
+            <Toggle label="Cho tải xuống" on={download} onChange={(v) => { setDownload(v); patch({ download_enabled: v }); }} />
+            <div className="mt-2 flex gap-2">
+              <Link href={`/dashboard/albums/${a.id}`} className="flex-1 rounded-[9px] py-2 text-center text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }}>
+                Chỉnh sửa đầy đủ
+              </Link>
+              <button onClick={() => setMenu(false)} className="rounded-[9px] px-3 py-2 text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }}>
+                Đóng
+              </button>
+            </div>
           </div>
-        </div>
         </>
       )}
     </div>
@@ -258,10 +328,10 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
 
 function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
   return (
-    <button onClick={() => onChange(!on)} role="switch" aria-checked={on} className="flex w-full items-center justify-between py-1.5 text-sm text-accent">
-      <span>{label}</span>
-      <span className="relative h-[22px] w-[40px] flex-shrink-0 rounded-full transition-all" style={on ? { background: "var(--gold)" } : { background: "var(--surface)", border: "1px solid var(--border2)" }}>
-        <span className="absolute top-[3px] h-4 w-4 rounded-full transition-all" style={on ? { left: "20px", background: "var(--accentInk)" } : { left: "3px", background: "var(--text2)" }} />
+    <button onClick={() => onChange(!on)} role="switch" aria-checked={on} className="flex w-full items-center justify-between gap-3 py-1.5 text-[12.5px] font-medium">
+      <span className="min-w-0 text-left">{label}</span>
+      <span className="relative h-[22px] w-[40px] flex-none rounded-full transition-all" style={on ? { background: "var(--ac)" } : { background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+        <span className="absolute top-[3px] h-4 w-4 rounded-full transition-all" style={on ? { left: "20px", background: "#fff" } : { left: "3px", background: "var(--tx3)" }} />
       </span>
     </button>
   );
