@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmtDate, fmtDow, fmtDayMonth, todayVN } from "@/lib/date";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Plus, Trash2, Bell, BellOff, Camera, CalendarDays, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, Bell, BellOff, Camera, CalendarDays, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import MessengerButton from "@/components/MessengerButton";
 import { shootReminderMessage } from "@/lib/zalo";
@@ -270,25 +270,48 @@ export default function CalendarView({
       .slice(0, 8);
   }, [events, todayStr]);
 
+  /** Điều hướng chung cho thanh trên: ‹ / › đổi đơn vị theo chế độ đang mở. */
+  function step(delta: number) {
+    if (view === "day") moveDay(delta);
+    else if (view === "month") move(delta);
+    else moveWeek(delta);
+  }
+  function goToday() {
+    setDayAnchor(todayStr);
+    setWeekAnchor(todayStr);
+    setCursor({ year: y, month: mIdx - 1 });
+    setSelected(null);
+  }
+  const rangeLabel =
+    view === "day" ? `${fmtDow(dayAnchor)} · ${fmtDate(dayAnchor)}`
+      : view === "month" ? `${MONTHS[cursor.month]} ${cursor.year}`
+      : `${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`;
+
+  const navBtn = "flex h-8 w-8 flex-none items-center justify-center rounded-[9px]";
+  const navStyle = { border: "1px solid var(--bd)", background: "var(--sf)" } as const;
+
   return (
     <div className="page-in">
-      {/* ── Thanh điều khiển: hôm nay · dải ngày · 4 chế độ xem ─────────── */}
+      {/* ── Thanh điều khiển: ‹ Hôm nay › · khoảng đang xem · chú giải · chế độ ──
+          Một bộ điều hướng duy nhất cho cả bốn chế độ (bản thiết kế), thay vì
+          mỗi chế độ tự mọc một cặp mũi tên riêng. */}
       <div className="mb-3 flex flex-wrap items-center gap-2.5">
+        <button onClick={() => step(-1)} aria-label="Lùi" className={navBtn} style={navStyle}><ChevronLeft size={17} /></button>
         <button
-          onClick={() => { setDayAnchor(todayStr); setWeekAnchor(todayStr); setCursor({ year: y, month: mIdx - 1 }); }}
+          onClick={goToday}
           className="flex-none rounded-[9px] px-3.5 py-[7px] text-[12.5px] font-semibold"
-          style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+          style={navStyle}
         >
           Hôm nay
         </button>
-        <h1 className="text-[15px] font-bold">
-          {view === "day" ? fmtDate(dayAnchor) : view === "month" ? `Tháng ${cursor.month + 1}/${cursor.year}` : `Tuần ${fmtDate(weekDays[0])} – ${fmtDate(weekDays[6])}`}
-        </h1>
-        <div className="ml-auto flex flex-wrap items-center gap-3">
-          <div className="hidden gap-3 min-[900px]:flex">
+        <button onClick={() => step(1)} aria-label="Tiến" className={navBtn} style={navStyle}><ChevronRight size={17} /></button>
+        <h1 className="ml-1.5 text-[15px] font-bold">{rangeLabel}</h1>
+
+        <div className="ml-auto flex flex-wrap items-center gap-3.5">
+          <div className="hidden gap-3 min-[1100px]:flex">
             {[["var(--am)", "Chờ khách duyệt"], ["var(--bl)", "Khách đã duyệt"], ["var(--tl)", "Đang thực hiện"], ["var(--gn)", "Hoàn thành"]].map(([c, l]) => (
-              <span key={l} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx2)" }}>
-                <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: c }} /> {l}
+              <span key={l} className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px]" style={{ color: "var(--tx2)" }}>
+                <span className="h-[9px] w-[9px] flex-none rounded-[3px]" style={{ background: c }} /> {l}
               </span>
             ))}
           </div>
@@ -312,376 +335,425 @@ export default function CalendarView({
         </div>
       </div>
 
-      {/* Trạng thái Google Lịch: nói rõ đang nối được hay không, và lỗi gì.
-          Trước đây mọi lượt đồng bộ đều fire-and-forget nên hỏng cũng im. */}
-      {gcal && (
-        <div className="card mb-4 p-4">
-          {!gcal.connected ? (
-            <p className="text-[13px]" style={{ color: "var(--text2)" }}>
-              Chưa kết nối Google Lịch.{" "}
-              <a href="/dashboard/connections" style={{ color: "var(--gold)" }}>Kết nối ngay</a> để lịch chụp tự lên Google.
-            </p>
-          ) : gcal.ok ? (
-            <p className="text-[13px]" style={{ color: "var(--s-green)" }}>
-              Google Lịch: đã kết nối và hoạt động. Chỉ hợp đồng ĐÃ XÁC NHẬN/KÝ và có ngày chụp mới được đẩy lên.
-              Lịch tạo TRƯỚC khi kết nối không tự lên — dùng nút bên dưới.
-            </p>
-          ) : (
-            <div className="text-[13px]" style={{ color: "var(--s-amber)" }}>
-              Google Lịch: có token nhưng gọi API KHÔNG được — lịch đang không lên Google.
-              <div className="mt-1 font-mono text-[11px]" style={{ color: "var(--text3)" }}>{gcal.error}</div>
-              <a href="/dashboard/connections" className="mt-1 inline-block" style={{ color: "var(--gold)" }}>Ngắt rồi kết nối lại</a>
-            </div>
-          )}
-          {gcal.ok && (
-            <button onClick={backfillGcal} disabled={backfilling} className="btn-ghost mt-2 px-3 py-1.5 text-xs">
-              {backfilling ? "Đang đẩy…" : "Đồng bộ toàn bộ lịch cũ lên Google"}
-            </button>
-          )}
-          {gcalMsg && (
-            <p className="mt-2 rounded-lg px-2.5 py-1.5 font-mono text-[11px]" style={{ background: "var(--surface2)", color: "var(--s-amber)" }}>{gcalMsg}</p>
-          )}
-        </div>
-      )}
-
-      {feedUrl && (
-        <div className="card mb-6 flex flex-wrap items-center gap-3 p-4">
-          <CalendarDays size={16} style={{ color: "var(--text3)" }} />
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>
-              Đồng bộ Google Calendar (link đăng ký — tự cập nhật buổi chụp &amp; mốc lịch)
-            </p>
-            <p className="truncate text-sm" style={{ color: "var(--text2)" }}>{feedUrl}</p>
-            <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-              Google Calendar → Cài đặt → Thêm lịch → <b>Từ URL</b> → dán link trên.
-            </p>
-          </div>
-          <button
-            onClick={() => { navigator.clipboard?.writeText(feedUrl); setFeedCopied(true); setTimeout(() => setFeedCopied(false), 1500); }}
-            className="btn-ghost px-3 py-2 text-xs"
+      {/* Kết nối Google Lịch — gập lại để không đẩy lịch xuống dưới màn hình. */}
+      {(gcal || feedUrl) && (
+        <details className="mb-3">
+          <summary
+            className="flex cursor-pointer list-none items-center gap-2.5 rounded-[12px] px-4 py-2.5 text-[12.5px] font-semibold"
+            style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}
           >
-            {feedCopied ? "Đã chép" : "Chép link"}
-          </button>
-        </div>
+            <CalendarDays size={16} style={{ color: gcal?.ok ? "var(--gn)" : "var(--tx3)" }} />
+            Google Lịch
+            <span className="font-normal" style={{ color: gcal?.ok ? "var(--gn)" : gcal?.connected ? "var(--am)" : "var(--tx3)" }}>
+              {gcal?.ok ? "đã kết nối" : gcal?.connected ? "có token nhưng gọi API lỗi" : "chưa kết nối"}
+            </span>
+            <ChevronDown size={16} className="ml-auto" style={{ color: "var(--tx3)" }} />
+          </summary>
+
+          <div className="mt-2 flex flex-col gap-2.5">
+            {gcal && (
+              <div className="rounded-[12px] px-4 py-3.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+                {!gcal.connected ? (
+                  <p className="text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                    Chưa kết nối Google Lịch.{" "}
+                    <a href="/dashboard/connections" className="font-semibold underline" style={{ color: "var(--ac)" }}>Kết nối ngay</a> để lịch chụp tự lên Google.
+                  </p>
+                ) : gcal.ok ? (
+                  <p className="text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                    Đã kết nối và hoạt động. Chỉ hợp đồng ĐÃ XÁC NHẬN/KÝ và có ngày chụp mới được đẩy lên.
+                    Lịch tạo TRƯỚC khi kết nối không tự lên — dùng nút bên dưới.
+                  </p>
+                ) : (
+                  <div className="text-[12.5px]" style={{ color: "var(--am)" }}>
+                    Có token nhưng gọi API KHÔNG được — lịch đang không lên Google.
+                    <div className="mt-1 font-mono text-[11px]" style={{ color: "var(--tx3)" }}>{gcal.error}</div>
+                    <a href="/dashboard/connections" className="mt-1 inline-block font-semibold underline" style={{ color: "var(--ac)" }}>Ngắt rồi kết nối lại</a>
+                  </div>
+                )}
+                {gcal.ok && (
+                  <button
+                    onClick={backfillGcal}
+                    disabled={backfilling}
+                    className="mt-2.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                    style={{ border: "1px solid var(--bd)" }}
+                  >
+                    {backfilling ? "Đang đẩy…" : "Đồng bộ toàn bộ lịch cũ lên Google"}
+                  </button>
+                )}
+                {gcalMsg && (
+                  <p className="mt-2 rounded-[9px] px-2.5 py-1.5 font-mono text-[11px]" style={{ background: "var(--sf2)", color: "var(--am)" }}>{gcalMsg}</p>
+                )}
+              </div>
+            )}
+
+            {feedUrl && (
+              <div className="flex flex-wrap items-center gap-3 rounded-[12px] px-4 py-3.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+                <div className="min-w-0 flex-1">
+                  <p className="eyebrow">Link đăng ký lịch (tự cập nhật)</p>
+                  <p className="mt-0.5 truncate text-[12.5px]" style={{ color: "var(--tx2)" }}>{feedUrl}</p>
+                  <p className="text-[11px]" style={{ color: "var(--tx3)" }}>
+                    Google Calendar → Cài đặt → Thêm lịch → <b>Từ URL</b> → dán link trên.
+                  </p>
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(feedUrl); setFeedCopied(true); setTimeout(() => setFeedCopied(false), 1500); }}
+                  className="flex-none rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                  style={{ border: "1px solid var(--bd)" }}
+                >
+                  {feedCopied ? "Đã chép" : "Chép link"}
+                </button>
+              </div>
+            )}
+          </div>
+        </details>
       )}
 
       {view === "day" ? (
-        <DayView
-          date={dayAnchor}
-          contracts={dayContracts}
-          events={eventsOn(dayAnchor)}
-          onMove={moveDay}
-        />
+        <DayView date={dayAnchor} contracts={dayContracts} events={eventsOn(dayAnchor)} />
       ) : view === "people" ? (
-        <PeopleWeek rows={peopleRows} weekDays={weekDays} todayStr={todayStr} onMove={moveWeek} />
+        <PeopleWeek rows={peopleRows} weekDays={weekDays} todayStr={todayStr} />
       ) : view === "week" ? (
-        <WeekView
-          weekDays={weekDays}
-          todayStr={todayStr}
-          eventsOn={eventsOn}
-          contractsOn={contractsOn}
-          moveWeek={moveWeek}
-          onDelEvent={delEvent}
-        />
+        <WeekGrid weekDays={weekDays} todayStr={todayStr} eventsOn={eventsOn} contractsOn={contractsOn} />
       ) : (
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Calendar */}
-        <div className="card p-5 lg:col-span-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-serif text-lg font-medium">
-              {MONTHS[cursor.month]} {cursor.year}
-            </h2>
-            <div className="flex gap-2">
-              <button onClick={() => move(-1)} aria-label="Tháng trước" className="btn-ghost p-2"><ChevronLeft size={16} /></button>
-              <button onClick={() => move(1)} aria-label="Tháng sau" className="btn-ghost p-2"><ChevronRight size={16} /></button>
+        <div className="flex flex-col gap-3.5">
+          {/* ── Lịch tháng ────────────────────────────────────────────────
+              Đầu bảng T2…CN nền phụ, ô cao tối thiểu 96px, số ngày trong
+              vòng tròn, mỗi buổi/ghi chú một chip — đúng bản thiết kế. */}
+          <Panel className="overflow-hidden">
+            <div className="grid grid-cols-7" style={{ background: "var(--sf2)", borderBottom: "1px solid var(--bd)" }}>
+              {WD.map((w) => (
+                <span key={w} className="px-3 py-2.5 text-[11px] font-extrabold uppercase" style={{ letterSpacing: ".6px", color: "var(--tx3)" }}>{w}</span>
+              ))}
             </div>
-          </div>
-          <div className="grid grid-cols-7 gap-1">
-            {WD.map((w) => (
-              <div key={w} className="py-1 text-center text-[11px] font-medium" style={{ color: "var(--text3)" }}>{w}</div>
-            ))}
-            {grid.map((d, i) => {
-              if (d === null) return <div key={i} />;
-              const dateStr = ymd(cursor.year, cursor.month, d);
-              const evs = eventsOn(dateStr);
-              const cons = contractsOn(dateStr);
-              const isToday = dateStr === todayStr;
-              const isSel = dateStr === selected;
-              const has = evs.length + cons.length > 0;
-              return (
-                <div
-                  key={i}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelected(dateStr)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelected(dateStr); }}
-                  className="flex min-h-[72px] cursor-pointer flex-col items-stretch rounded-lg p-1.5 text-sm transition-colors"
-                  style={{
-                    background: isSel ? "var(--surface2)" : "transparent",
-                    border: isToday ? "1px solid var(--border2)" : "1px solid transparent",
-                  }}
-                >
-                  <div className="flex items-baseline justify-between gap-1">
-                    <span style={{ color: isToday ? "var(--accent)" : "var(--text)" }}>{d}</span>
-                    <span className="text-[9px] leading-none" style={{ color: "var(--text3)" }}>{lunarCellLabel(dateStr)}</span>
-                  </div>
-                  <div className="mt-1 flex flex-col gap-0.5 text-left">
-                    {cons.map((c) => {
-                      const mc = c.calendar_color || DEFAULT_MARK;
-                      return (
-                        <Link
-                          key={c.id}
-                          href={`/dashboard/studio/contracts/${c.id}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="block truncate rounded px-1 py-0.5 text-[9px] leading-tight"
-                          style={{ background: `color-mix(in srgb,${mc} 22%,transparent)`, borderLeft: `2px solid ${mc}`, color: "var(--text2)" }}
-                          title={`Mở hợp đồng: ${c.title}`}
-                        >
-                          {c.event_time ? `${c.event_time} ` : ""}{c.client_name || c.title}
-                        </Link>
-                      );
-                    })}
-                    {evs.map((e) => (
-                      <span key={e.id} className="truncate rounded px-1 py-0.5 text-[9px] leading-tight" style={{ background: "color-mix(in srgb,var(--s-blue) 18%,transparent)", color: "var(--text2)" }} title={eventLabel(e)}>
-                        {eventLabel(e)}
-                      </span>
-                    ))}
-                  </div>
-                  {has && <span className="sr-only">có lịch</span>}
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-3 flex gap-4 text-[11px]" style={{ color: "var(--text3)" }}>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: DEFAULT_MARK }} /> Hợp đồng</span>
-            <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "var(--s-blue)" }} /> Ghi chú</span>
-            <span style={{ color: "var(--text3)" }}>· Chọn ngày để đổi màu từng hợp đồng</span>
-          </div>
-        </div>
-
-        {/* Side panel */}
-        <div className="space-y-6">
-          {selected ? (
-            <div className="card p-5">
-              <h2 className="font-serif text-lg font-medium">{fmtDate(selected)}</h2>
-              <p className="mb-3 text-xs" style={{ color: "var(--text3)" }}>{lunarFull(selected)}</p>
-
-              {selContracts.map((c) => {
-                const mc = c.calendar_color || DEFAULT_MARK;
+            <div className="grid grid-cols-7">
+              {grid.map((d, i) => {
+                if (d === null) return <div key={i} style={{ borderRight: "1px solid var(--bd2)", borderBottom: "1px solid var(--bd2)", background: "var(--sf2)" }} />;
+                const dateStr = ymd(cursor.year, cursor.month, d);
+                const evs = eventsOn(dateStr);
+                const cons = contractsOn(dateStr);
+                const isToday = dateStr === todayStr;
+                const isSel = dateStr === selected;
                 return (
-                <div key={c.id} className="mb-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)", borderLeft: `3px solid ${mc}` }}>
-                  <Link href={`/dashboard/studio/contracts/${c.id}`} className="flex items-center gap-2">
-                    <Camera size={15} style={{ color: mc }} />
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{c.title}</p>
-                      <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-                        {c.client_name || "—"}{c.event_time ? ` · ${c.event_time}` : ""}
-                      </p>
-                    </div>
-                  </Link>
-
-                  {/* Per-contract colour picker — tell apart multiple shoots on the same day */}
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px]" style={{ color: "var(--text3)" }}>Màu:</span>
-                    {MARK_COLORS.map((col) => (
-                      <button
-                        key={col}
-                        onClick={() => setContractColor(c.id, col)}
-                        title={col}
-                        aria-label={`Đổi màu ${col}`}
-                        className="flex h-7 w-7 items-center justify-center rounded-full transition-transform hover:scale-110"
+                  <div
+                    key={i}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelected(dateStr)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelected(dateStr); }}
+                    className="min-h-[96px] cursor-pointer px-2.5 py-2"
+                    style={{
+                      borderRight: "1px solid var(--bd2)",
+                      borderBottom: "1px solid var(--bd2)",
+                      background: isSel ? "var(--acS)" : "transparent",
+                    }}
+                  >
+                    <div className="flex items-baseline justify-between gap-1">
+                      <span
+                        className="inline-flex h-[23px] min-w-[23px] items-center justify-center rounded-full px-1 text-[12.5px] font-semibold"
+                        style={isToday ? { background: "var(--ac)", color: "#fff" } : { color: "var(--tx)" }}
                       >
-                        <span
-                          className="block h-4 w-4 rounded-full"
-                          style={{ background: col, border: mc.toLowerCase() === col.toLowerCase() ? "2px solid var(--text)" : "1px solid var(--border)" }}
-                        />
-                      </button>
-                    ))}
-                  </div>
-                  <dl className="mt-2 space-y-0.5 text-[11px]" style={{ color: "var(--text2)" }}>
-                    <div><span style={{ color: "var(--text3)" }}>Dịch vụ: </span>{SHOOT_TYPE_LABEL[c.shoot_type] || c.shoot_type}</div>
-                    {c.contract_items.length > 0 && (
-                      <div><span style={{ color: "var(--text3)" }}>Hạng mục: </span>{c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` x${it.qty}` : ""}`).join(", ")}</div>
-                    )}
-                    <div><span style={{ color: "var(--text3)" }}>Nhân sự: </span>{c.contract_crew.length} người</div>
-                    {c.location && <div><span style={{ color: "var(--text3)" }}>Địa điểm: </span>{c.location}</div>}
-                  </dl>
-                  {c.client_phone && (
-                    <div className="mt-2">
-                      <MessengerButton
-                        label="Gửi cho khách"
-                        message={shootReminderMessage({
-                          name: c.client_name,
-                          title: c.title,
-                          date: c.event_date,
-                          time: c.event_time,
-                          location: c.location,
-                        })}
-                      />
+                        {d}
+                      </span>
+                      <span className="text-[9px] leading-none" style={{ color: "var(--tx3)" }}>{lunarCellLabel(dateStr)}</span>
                     </div>
-                  )}
-                </div>
+                    <div className="mt-1.5 flex flex-col gap-1">
+                      {cons.slice(0, 3).map((c) => {
+                        const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
+                        return (
+                          <Link
+                            key={c.id}
+                            href={`/dashboard/studio/contracts/${c.id}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="block truncate rounded-[6px] px-1.5 py-[3px] text-[11px] font-semibold"
+                            style={{ background: tone.bg, color: tone.fg }}
+                            title={`${c.title}${c.client_name ? ` · ${c.client_name}` : ""}`}
+                          >
+                            {c.event_time ? `${c.event_time} ` : ""}{c.client_name || c.title}
+                          </Link>
+                        );
+                      })}
+                      {evs.slice(0, 3 - Math.min(3, cons.length)).map((e) => (
+                        <span key={e.id} className="truncate rounded-[6px] px-1.5 py-[3px] text-[11px] font-semibold" style={{ background: "var(--blS)", color: "var(--bl)" }} title={eventLabel(e)}>
+                          {eventLabel(e)}
+                        </span>
+                      ))}
+                      {cons.length + evs.length > 3 && (
+                        <span className="px-1 text-[10.5px] font-semibold" style={{ color: "var(--tx3)" }}>
+                          +{cons.length + evs.length - 3} nữa
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 );
               })}
+            </div>
+          </Panel>
 
-              {selEvents.map((e) => (
-                <div key={e.id} className="mb-2 flex items-start justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                  <div className="min-w-0">
-                    <p className="flex items-center gap-1.5 text-sm font-medium">
-                      {e.remind ? <Bell size={12} style={{ color: "var(--s-blue)" }} /> : <BellOff size={12} style={{ color: "var(--text3)" }} />}
-                      {eventLabel(e)}{e.event_time ? ` · ${e.event_time}` : ""}
-                    </p>
-                    {e.note && <p className="text-[11px]" style={{ color: "var(--text3)" }}>{e.note}</p>}
+          {/* ── Ngày đang chọn + nhắc lịch ────────────────────────────── */}
+          <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            {selected ? (
+              <Panel className="px-5 py-4">
+                <h2 className="text-[14px] font-bold">{fmtDow(selected)} · {fmtDate(selected)}</h2>
+                <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>{lunarFull(selected)}</p>
+
+                {selContracts.map((c) => {
+                  const mc = c.calendar_color || DEFAULT_MARK;
+                  return (
+                    <div key={c.id} className="mb-2 rounded-[12px] px-3.5 py-3" style={{ background: "var(--sf2)", borderLeft: `3px solid ${mc}` }}>
+                      <Link href={`/dashboard/studio/contracts/${c.id}`} className="flex items-center gap-2.5">
+                        <Camera size={16} style={{ flex: "none", color: mc }} />
+                        <div className="min-w-0">
+                          <p className="truncate text-[13.5px] font-semibold">{c.title}</p>
+                          <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                            {c.client_name || "—"}{c.event_time ? ` · ${c.event_time}` : ""}
+                          </p>
+                        </div>
+                      </Link>
+
+                      {/* Đổi màu từng hợp đồng — nhiều buổi cùng ngày thì nhìn màu là phân biệt được. */}
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px]" style={{ color: "var(--tx3)" }}>Màu:</span>
+                        {MARK_COLORS.map((col) => (
+                          <button
+                            key={col}
+                            onClick={() => setContractColor(c.id, col)}
+                            title={col}
+                            aria-label={`Đổi màu ${col}`}
+                            className="flex h-6 w-6 items-center justify-center rounded-full"
+                          >
+                            <span
+                              className="block h-4 w-4 rounded-full"
+                              style={{ background: col, border: mc.toLowerCase() === col.toLowerCase() ? "2px solid var(--tx)" : "1px solid var(--bd)" }}
+                            />
+                          </button>
+                        ))}
+                      </div>
+                      <div className="mt-2 space-y-0.5 text-[11.5px]" style={{ color: "var(--tx2)" }}>
+                        <div><span style={{ color: "var(--tx3)" }}>Dịch vụ: </span>{SHOOT_TYPE_LABEL[c.shoot_type] || c.shoot_type}</div>
+                        {c.contract_items.length > 0 && (
+                          <div><span style={{ color: "var(--tx3)" }}>Hạng mục: </span>{c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` x${it.qty}` : ""}`).join(", ")}</div>
+                        )}
+                        <div><span style={{ color: "var(--tx3)" }}>Nhân sự: </span>{c.contract_crew.length} người</div>
+                        {c.location && <div><span style={{ color: "var(--tx3)" }}>Địa điểm: </span>{c.location}</div>}
+                      </div>
+                      {c.client_phone && (
+                        <div className="mt-2">
+                          <MessengerButton
+                            label="Gửi cho khách"
+                            message={shootReminderMessage({
+                              name: c.client_name,
+                              title: c.title,
+                              date: c.event_date,
+                              time: c.event_time,
+                              location: c.location,
+                            })}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                {selEvents.map((e) => (
+                  <div key={e.id} className="mb-2 flex items-start justify-between gap-2 rounded-[12px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 text-[13px] font-semibold">
+                        {e.remind ? <Bell size={13} style={{ color: "var(--bl)" }} /> : <BellOff size={13} style={{ color: "var(--tx3)" }} />}
+                        {eventLabel(e)}{e.event_time ? ` · ${e.event_time}` : ""}
+                      </p>
+                      {e.note && <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{e.note}</p>}
+                    </div>
+                    <button onClick={() => delEvent(e.id)} aria-label="Xoá ghi chú" title="Xoá" className="p-1" style={{ color: "var(--tx3)" }}><Trash2 size={14} /></button>
                   </div>
-                  <button onClick={() => delEvent(e.id)} aria-label="Xoá ghi chú" title="Xoá" className="p-1" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
-                </div>
-              ))}
+                ))}
 
-              {/* Add note */}
-              <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
-                <input className="input" placeholder="Tiêu đề ghi chú" value={title} onChange={(e) => setTitle(e.target.value)} />
-                <div className="flex gap-2">
-                  <input className="input" placeholder="Giờ (08:00)" value={time} onChange={(e) => setTime(e.target.value)} />
+                {/* Thêm ghi chú */}
+                <div className="mt-3 space-y-2 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
+                  <input className="input" placeholder="Tiêu đề ghi chú" value={title} onChange={(e) => setTitle(e.target.value)} />
+                  <div className="flex gap-2">
+                    <input className="input" placeholder="Giờ (08:00)" value={time} onChange={(e) => setTime(e.target.value)} />
+                    <button
+                      onClick={() => setRemind((r) => !r)}
+                      className="flex flex-none items-center justify-center rounded-[10px] px-3"
+                      style={{ border: "1px solid var(--bd)", color: remind ? "var(--bl)" : "var(--tx3)" }}
+                      title={remind ? "Có nhắc" : "Không nhắc"}
+                    >
+                      {remind ? <Bell size={15} /> : <BellOff size={15} />}
+                    </button>
+                  </div>
+                  <textarea className="input min-h-[60px]" placeholder="Nội dung…" value={note} onChange={(e) => setNote(e.target.value)} />
                   <button
-                    onClick={() => setRemind((r) => !r)}
-                    className="btn-ghost shrink-0 px-3"
-                    title={remind ? "Có nhắc" : "Không nhắc"}
+                    onClick={addNote}
+                    disabled={busy}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2.5 text-[13px] font-bold disabled:opacity-50"
+                    style={{ background: "var(--ac)", color: "#fff" }}
                   >
-                    {remind ? <Bell size={15} /> : <BellOff size={15} />}
+                    <Plus size={15} /> {busy ? "Đang thêm…" : "Thêm ghi chú"}
                   </button>
                 </div>
-                <textarea className="input min-h-[60px]" placeholder="Nội dung…" value={note} onChange={(e) => setNote(e.target.value)} />
-                <button onClick={addNote} disabled={busy} className="btn-primary w-full">
-                  <Plus size={15} /> {busy ? "Đang thêm…" : "Thêm ghi chú"}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="card p-5 text-sm" style={{ color: "var(--text3)" }}>
-              Chọn một ngày để xem lịch &amp; thêm ghi chú.
-            </div>
-          )}
-
-          {/* Reminders */}
-          <div className="card p-5">
-            <h2 className="mb-3 flex items-center gap-2 font-serif text-lg font-medium">
-              <Bell size={16} style={{ color: "var(--s-blue)" }} /> Nhắc lịch 30 ngày tới
-            </h2>
-            {upcoming.length === 0 ? (
-              <p className="text-sm" style={{ color: "var(--text3)" }}>Không có nhắc nào.</p>
+              </Panel>
             ) : (
-              <ul className="space-y-2">
-                {upcoming.map((e) => (
-                  <li key={e.id} className="flex justify-between text-sm">
-                    <span>{eventLabel(e)}</span>
-                    <span style={{ color: "var(--text3)" }}>{fmtDate(e.event_date)}</span>
-                  </li>
-                ))}
-              </ul>
+              <Panel>
+                <EmptyState icon={CalendarDays} title="Chọn một ngày" hint="Bấm vào ô ngày trên lịch để xem buổi chụp và thêm ghi chú." />
+              </Panel>
             )}
+
+            <Panel className="px-5 py-4">
+              <h2 className="mb-3 flex items-center gap-2 text-[14px] font-bold">
+                <Bell size={16} style={{ color: "var(--bl)" }} /> Nhắc lịch 30 ngày tới
+              </h2>
+              {upcoming.length === 0 ? (
+                <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Không có nhắc nào.</p>
+              ) : (
+                upcoming.map((e) => (
+                  <div key={e.id} className="flex justify-between gap-3 py-2 text-[12.5px]" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                    <span className="min-w-0 truncate">{eventLabel(e)}</span>
+                    <span className="flex-none" style={{ color: "var(--tx3)" }}>{fmtDate(e.event_date)}</span>
+                  </div>
+                ))
+              )}
+            </Panel>
           </div>
         </div>
-      </div>
       )}
     </div>
   );
 }
 
-function WeekView({
-  weekDays,
-  todayStr,
-  eventsOn,
-  contractsOn,
-  moveWeek,
-  onDelEvent,
+/* ── Chế độ TUẦN — lưới giờ ────────────────────────────────────────────────
+   Bản thiết kế: cột giờ 58px + 7 cột ngày, mỗi giờ một hàng, buổi chụp là khối
+   đặt đúng vị trí theo giờ bắt đầu. Khoảng giờ hiển thị co theo dữ liệu thật
+   của tuần (mặc định 6h–20h) nên không phải cuộn qua những giờ trống. */
+const HOUR_H = 46;
+const DEFAULT_FROM = 6;
+const DEFAULT_TO = 20;
+/** "08:30" → 8.5; không đọc được thì null (buổi "cả ngày"). */
+function hourOf(t: string | null | undefined): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec((t || "").trim());
+  if (!m) return null;
+  const h = Number(m[1]) + Number(m[2]) / 60;
+  return h >= 0 && h < 24 ? h : null;
+}
+
+function WeekGrid({
+  weekDays, todayStr, eventsOn, contractsOn,
 }: {
   weekDays: string[];
   todayStr: string;
-  eventsOn: (d: string) => StudioEvent[];
+  eventsOn: (d: string) => EventRow[];
   contractsOn: (d: string) => ContractMarker[];
-  moveWeek: (delta: number) => void;
-  onDelEvent: (id: string) => void;
 }) {
-  const first = weekDays[0];
-  const last = weekDays[6];
+  const timed = weekDays.flatMap((d) => [
+    ...contractsOn(d).map((c) => hourOf(c.event_time)),
+    ...eventsOn(d).map((e) => hourOf(e.event_time)),
+  ]).filter((h): h is number => h !== null);
+
+  const from = Math.max(0, Math.min(DEFAULT_FROM, ...timed.map((h) => Math.floor(h))));
+  // +2 giờ đuôi để khối cuối cùng không bị cắt mất nửa dưới.
+  const to = Math.min(24, Math.max(DEFAULT_TO, ...timed.map((h) => Math.ceil(h) + 2)));
+  const hours = Array.from({ length: to - from }, (_, i) => from + i);
+  const COLS = "58px repeat(7, minmax(0,1fr))";
+
   return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-serif text-lg font-medium">
-          {first.slice(8)}/{first.slice(5, 7)} – {last.slice(8)}/{last.slice(5, 7)}/{last.slice(0, 4)}
-        </h2>
-        <div className="flex gap-2">
-          <button onClick={() => moveWeek(-1)} aria-label="Tuần trước" className="btn-ghost p-2"><ChevronLeft size={16} /></button>
-          <button onClick={() => moveWeek(1)} aria-label="Tuần sau" className="btn-ghost p-2"><ChevronRight size={16} /></button>
-        </div>
-      </div>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-7">
-        {weekDays.map((dateStr, i) => {
-          const evs = eventsOn(dateStr);
-          const cons = contractsOn(dateStr);
-          const isToday = dateStr === todayStr;
+    <Panel className="overflow-hidden">
+      {/* Đầu bảng: thứ + số ngày, hôm nay tô tròn màu nhấn */}
+      <div className="grid" style={{ gridTemplateColumns: COLS, borderBottom: "1px solid var(--bd)" }}>
+        <div />
+        {weekDays.map((d, i) => {
+          const isToday = d === todayStr;
           return (
-            <div
-              key={dateStr}
-              className="flex flex-col rounded-xl p-2.5"
-              style={{
-                background: isToday ? "var(--surface2)" : "transparent",
-                border: isToday ? "1px solid var(--brand, var(--accent))" : "1px solid var(--border)",
-                minHeight: 120,
-              }}
-            >
-              <div className="mb-2 flex items-baseline justify-between">
-                <span className="text-[11px] font-semibold" style={{ color: "var(--text3)" }}>{WD[i]}</span>
-                <span className="text-sm font-medium" style={{ color: isToday ? "var(--accent)" : "var(--text)" }}>{dateStr.slice(8)}/{dateStr.slice(5, 7)}</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                {cons.map((c) => {
-                  const mc = c.calendar_color || DEFAULT_MARK;
-                  return (
-                  <Link
-                    key={c.id}
-                    href={`/dashboard/studio/contracts/${c.id}`}
-                    className="rounded-lg px-2 py-1.5 text-[11px] leading-snug"
-                    style={{ background: `color-mix(in srgb,${mc} 16%,transparent)`, borderLeft: `2px solid ${mc}` }}
-                  >
-                    <p className="flex items-center gap-1 font-medium">
-                      <Camera size={11} style={{ color: mc, flex: "none" }} />
-                      <span className="truncate">{c.event_time ? `${c.event_time} · ` : ""}{c.title}</span>
-                    </p>
-                    {c.client_name && <p style={{ color: "var(--text3)" }}>{c.client_name}</p>}
-                    <p style={{ color: "var(--text3)" }}>{SHOOT_TYPE_LABEL[c.shoot_type] || c.shoot_type}</p>
-                    {c.contract_items.length > 0 && (
-                      <p style={{ color: "var(--text2)" }}>📦 {c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` x${it.qty}` : ""}`).join(", ")}</p>
-                    )}
-                    {c.location && <p className="truncate" style={{ color: "var(--text3)" }}>📍 {c.location}</p>}
-                  </Link>
-                  );
-                })}
-                {evs.map((e) => (
-                  <div
-                    key={e.id}
-                    className="group flex items-start justify-between gap-1 rounded-lg px-2 py-1.5 text-[11px] leading-snug"
-                    style={{ background: "color-mix(in srgb,var(--s-blue) 16%,transparent)", borderLeft: "2px solid var(--s-blue)" }}
-                  >
-                    <div className="min-w-0">
-                      <p className="flex items-center gap-1 font-medium">
-                        {e.remind ? <Bell size={10} style={{ color: "var(--s-blue)", flex: "none" }} /> : <BellOff size={10} style={{ color: "var(--text3)", flex: "none" }} />}
-                        <span className="truncate">{e.event_time ? `${e.event_time} · ` : ""}{eventLabel(e)}</span>
-                      </p>
-                      {e.note && <p style={{ color: "var(--text3)" }}>{e.note}</p>}
-                    </div>
-                    <button onClick={() => onDelEvent(e.id)} aria-label="Xoá ghi chú" title="Xoá" className="shrink-0 p-1" style={{ color: "var(--text3)" }}><Trash2 size={12} /></button>
-                  </div>
-                ))}
-                {evs.length + cons.length === 0 && (
-                  <span className="text-[11px]" style={{ color: "var(--text3)" }}>—</span>
-                )}
-              </div>
+            <div key={d} className="py-2 text-center" style={{ borderLeft: "1px solid var(--bd2)", background: isToday ? "var(--acS)" : "transparent" }}>
+              <p className="text-[11px] font-bold" style={{ letterSpacing: ".5px", color: "var(--tx3)" }}>{WD[i]}</p>
+              <p
+                className="mx-auto mt-[3px] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[13.5px] font-bold"
+                style={isToday ? { background: "var(--ac)", color: "#fff" } : undefined}
+              >
+                {d.slice(8)}
+              </p>
             </div>
           );
         })}
       </div>
-    </div>
+
+      {/* Hàng "cả ngày": buổi/ghi chú không có giờ — không đặt được vào lưới. */}
+      {weekDays.some((d) => contractsOn(d).some((c) => hourOf(c.event_time) === null) || eventsOn(d).some((e) => hourOf(e.event_time) === null)) && (
+        <div className="grid" style={{ gridTemplateColumns: COLS, borderBottom: "1px solid var(--bd)" }}>
+          <span className="px-2 py-2 text-right text-[10.5px]" style={{ color: "var(--tx3)" }}>cả ngày</span>
+          {weekDays.map((d) => (
+            <div key={d} className="flex flex-col gap-1 p-1" style={{ borderLeft: "1px solid var(--bd2)" }}>
+              {contractsOn(d).filter((c) => hourOf(c.event_time) === null).map((c) => {
+                const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
+                return (
+                  <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="truncate rounded-[7px] px-1.5 py-1 text-[11px] font-semibold" style={{ background: tone.bg, color: tone.fg, borderLeft: `3px solid ${tone.fg}` }} title={c.title}>
+                    {c.client_name || c.title}
+                  </Link>
+                );
+              })}
+              {eventsOn(d).filter((e) => hourOf(e.event_time) === null).map((e) => (
+                <span key={e.id} className="truncate rounded-[7px] px-1.5 py-1 text-[11px] font-semibold" style={{ background: "var(--blS)", color: "var(--bl)", borderLeft: "3px solid var(--bl)" }} title={eventLabel(e)}>
+                  {eventLabel(e)}
+                </span>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Lưới giờ */}
+      <div className="grid max-h-[620px] overflow-y-auto" style={{ gridTemplateColumns: COLS }}>
+        <div>
+          {hours.map((h) => (
+            <div key={h} className="px-2 pt-[3px] text-right" style={{ height: HOUR_H, borderBottom: "1px solid var(--bd2)" }}>
+              <span className="tnum text-[10.5px]" style={{ color: "var(--tx3)" }}>{String(h).padStart(2, "0")}:00</span>
+            </div>
+          ))}
+        </div>
+        {weekDays.map((d) => {
+          const isToday = d === todayStr;
+          const cons = contractsOn(d).filter((c) => hourOf(c.event_time) !== null);
+          const evs = eventsOn(d).filter((e) => hourOf(e.event_time) !== null);
+          return (
+            <div key={d} className="relative" style={{ borderLeft: "1px solid var(--bd2)", background: isToday ? "color-mix(in srgb, var(--acS) 55%, transparent)" : "transparent", height: hours.length * HOUR_H }}>
+              {hours.map((h) => (
+                <div key={h} style={{ height: HOUR_H, borderBottom: "1px solid var(--bd2)" }} />
+              ))}
+              {cons.map((c) => {
+                const h = hourOf(c.event_time)!;
+                const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
+                // Không có giờ kết thúc trong dữ liệu → khối 2 giờ, đủ đọc tên.
+                const top = (h - from) * HOUR_H;
+                const height = 2 * HOUR_H - 4;
+                return (
+                  <Link
+                    key={c.id}
+                    href={`/dashboard/studio/contracts/${c.id}`}
+                    className="absolute overflow-hidden rounded-[7px] px-[7px] py-[5px]"
+                    style={{ left: 3, right: 3, top, height, background: tone.bg, borderLeft: `3px solid ${tone.fg}` }}
+                    title={`${c.event_time} · ${c.title}${c.client_name ? ` · ${c.client_name}` : ""}`}
+                  >
+                    <p className="truncate text-[11.5px] font-semibold leading-tight" style={{ color: tone.fg }}>{c.client_name || c.title}</p>
+                    <p className="tnum mt-0.5 truncate text-[10.5px]" style={{ color: tone.fg, opacity: 0.75 }}>{c.event_time} · {SHOOT_TYPE_LABEL[c.shoot_type]}</p>
+                  </Link>
+                );
+              })}
+              {evs.map((e) => {
+                const h = hourOf(e.event_time)!;
+                return (
+                  <div
+                    key={e.id}
+                    className="absolute overflow-hidden rounded-[7px] px-[7px] py-[5px]"
+                    style={{ left: 3, right: 3, top: (h - from) * HOUR_H, height: HOUR_H - 4, background: "var(--blS)", borderLeft: "3px solid var(--bl)" }}
+                    title={eventLabel(e)}
+                  >
+                    <p className="truncate text-[11.5px] font-semibold leading-tight" style={{ color: "var(--bl)" }}>{eventLabel(e)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
   );
 }
 
@@ -689,25 +761,14 @@ function WeekView({
    Danh sách buổi chụp trong một ngày: giờ bắt đầu to, tên job, khách, địa
    điểm và ê-kíp. Đây cũng là màn hay mở nhất trên điện thoại. */
 function DayView({
-  date, contracts, events, onMove,
+  date, contracts, events,
 }: {
   date: string;
   contracts: ContractMarker[];
   events: EventRow[];
-  onMove: (d: number) => void;
 }) {
   return (
     <div className="flex max-w-[840px] flex-col gap-2.5">
-      <div className="flex items-center gap-2">
-        <button onClick={() => onMove(-1)} aria-label="Ngày trước" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
-          <ChevronLeft size={17} />
-        </button>
-        <span className="text-[12.5px] font-semibold" style={{ color: "var(--tx2)" }}>{fmtDow(date)} · {fmtDate(date)}</span>
-        <button onClick={() => onMove(1)} aria-label="Ngày sau" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
-          <ChevronRight size={17} />
-        </button>
-      </div>
-
       {contracts.length === 0 && events.length === 0 ? (
         <Panel><EmptyState icon={CalendarDays} title="Ngày này chưa có lịch" hint="Không có buổi chụp hay mốc lịch nào — ngày trống để nhận job mới." /></Panel>
       ) : (
@@ -757,6 +818,7 @@ function DayView({
               {e.event_time && <span className="tnum flex-none text-[12px]" style={{ color: "var(--tx3)" }}>{e.event_time}</span>}
             </div>
           ))}
+          <p className="px-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>{fmtDow(date)} · {fmtDate(date)}</p>
         </>
       )}
     </div>
@@ -765,74 +827,68 @@ function DayView({
 
 /* ── Chế độ NHÂN SỰ (tính năng mới số 4) ───────────────────────────────────
    Mỗi người một hàng × 7 ngày; cột cuối là tải tuần đổi màu. Dưới 1100px ẩn
-   dòng tên job trong ô, chỉ còn chấm — đúng ngưỡng responsive của bản thiết kế. */
+   dòng tên job trong ô, chỉ còn giờ — đúng ngưỡng responsive của bản thiết kế. */
 function PeopleWeek({
-  rows, weekDays, todayStr, onMove,
+  rows, weekDays, todayStr,
 }: {
   rows: { key: string; name: string; days: Map<string, ContractMarker[]> }[];
   weekDays: string[];
   todayStr: string;
-  onMove: (d: number) => void;
 }) {
   const COLS = "minmax(140px,1.2fr) repeat(7, minmax(72px,1fr)) minmax(96px,.9fr)";
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="flex items-center gap-2">
-        <button onClick={() => onMove(-1)} aria-label="Tuần trước" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
-          <ChevronLeft size={17} />
-        </button>
-        <span className="text-[12.5px] font-semibold" style={{ color: "var(--tx2)" }}>{fmtDate(weekDays[0])} – {fmtDate(weekDays[6])}</span>
-        <button onClick={() => onMove(1)} aria-label="Tuần sau" className="flex h-8 w-8 items-center justify-center rounded-[9px]" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>
-          <ChevronRight size={17} />
-        </button>
+    <Panel className="overflow-x-auto">
+      <div className="grid gap-2 px-4 py-2.5" style={{ gridTemplateColumns: COLS, minWidth: 860, background: "var(--sf2)", borderBottom: "1px solid var(--bd)" }}>
+        <span className="text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Nhân sự</span>
+        {weekDays.map((d) => (
+          <span key={d} className="text-center text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".5px", color: d === todayStr ? "var(--ac)" : "var(--tx3)" }}>
+            {fmtDow(d)} {fmtDayMonth(d)}
+          </span>
+        ))}
+        <span className="text-right text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Tải tuần</span>
       </div>
 
-      <Panel className="overflow-x-auto">
-        <div className="grid gap-2 px-4 py-2.5" style={{ gridTemplateColumns: COLS, minWidth: 860, background: "var(--sf2)", borderBottom: "1px solid var(--bd)" }}>
-          <span className="text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Nhân sự</span>
-          {weekDays.map((d) => (
-            <span key={d} className="text-center text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".5px", color: d === todayStr ? "var(--ac)" : "var(--tx3)" }}>
-              {fmtDow(d)} {fmtDayMonth(d)}
-            </span>
-          ))}
-          <span className="text-right text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".7px", color: "var(--tx3)" }}>Tải tuần</span>
-        </div>
-
-        {rows.length === 0 ? (
-          <EmptyState icon={Users} title="Tuần này chưa phân công ai" hint="Phân công nhân sự trong hợp đồng để thấy lịch của từng người ở đây." />
-        ) : (
-          rows.map((r) => {
-            const load = r.days.size;
-            const tone = load >= 4 ? { fg: "var(--rd)", bg: "var(--rdS)" } : load >= 3 ? { fg: "var(--am)", bg: "var(--amS)" } : { fg: "var(--gn)", bg: "var(--gnS)" };
-            return (
-              <div key={r.key} className="grid items-center gap-2 px-4 py-2.5" style={{ gridTemplateColumns: COLS, minWidth: 860, borderBottom: "1px solid var(--bd2)" }}>
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: avatarColor(r.name) }}>
-                    {initials(r.name)}
-                  </span>
-                  <span className="truncate text-[12.5px] font-semibold">{r.name}</span>
-                </div>
-                {weekDays.map((d) => {
-                  const jobs = r.days.get(d) ?? [];
-                  return (
-                    <div key={d} className="min-h-[38px] rounded-[8px] px-1.5 py-1" style={{ background: jobs.length ? "var(--acS)" : d === todayStr ? "var(--sf2)" : "transparent", border: jobs.length ? "1px solid var(--acM)" : "1px solid transparent" }}>
-                      {jobs.map((j) => (
+      {rows.length === 0 ? (
+        <EmptyState icon={Users} title="Tuần này chưa phân công ai" hint="Phân công nhân sự trong hợp đồng để thấy lịch của từng người ở đây." />
+      ) : (
+        rows.map((r) => {
+          const load = r.days.size;
+          const tone = load >= 4 ? { fg: "var(--rd)", bg: "var(--rdS)" } : load >= 3 ? { fg: "var(--am)", bg: "var(--amS)" } : { fg: "var(--gn)", bg: "var(--gnS)" };
+          return (
+            <div key={r.key} className="grid items-center gap-2 px-4 py-2.5" style={{ gridTemplateColumns: COLS, minWidth: 860, borderBottom: "1px solid var(--bd2)" }}>
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[11px] font-bold text-white" style={{ background: avatarColor(r.name) }}>
+                  {initials(r.name)}
+                </span>
+                <span className="truncate text-[13px] font-semibold">{r.name}</span>
+              </div>
+              {weekDays.map((d) => {
+                const jobs = r.days.get(d) ?? [];
+                return (
+                  <div key={d} className="flex min-h-[40px] flex-col justify-center rounded-[7px] px-1.5 py-1" style={{ background: jobs.length ? "var(--acS)" : "transparent", border: jobs.length ? "1px solid var(--acM)" : `1px dashed ${d === todayStr ? "var(--acM)" : "var(--bd2)"}` }}>
+                    {jobs.length === 0 ? (
+                      <span className="text-center text-[10px]" style={{ color: "var(--tx3)" }}>trống</span>
+                    ) : (
+                      jobs.map((j) => (
                         <Link key={j.id} href={`/dashboard/studio/contracts/${j.id}`} className="block">
-                          <span className="tnum block text-center text-[10.5px] font-bold" style={{ color: "var(--ac)" }}>{j.event_time || "cả ngày"}</span>
+                          <span className="tnum block text-center text-[10px] font-bold" style={{ color: "var(--ac)" }}>{j.event_time || "cả ngày"}</span>
                           <span className="hidden truncate text-center text-[10px] min-[1100px]:block" style={{ color: "var(--tx2)" }}>{j.title}</span>
                         </Link>
-                      ))}
-                    </div>
-                  );
-                })}
-                <span className="justify-self-end whitespace-nowrap rounded-[20px] px-[10px] py-1 text-[11px] font-bold" style={{ background: tone.bg, color: tone.fg }}>
-                  {load} ngày
-                </span>
+                      ))
+                    )}
+                  </div>
+                );
+              })}
+              <div className="flex flex-col items-end gap-1">
+                <span className="whitespace-nowrap text-[11px] font-bold" style={{ color: tone.fg }}>{load}/7 ngày</span>
+                <div className="h-1 w-full overflow-hidden rounded-[3px]" style={{ background: "var(--bd2)" }}>
+                  <div className="h-full rounded-[3px]" style={{ width: `${(load / 7) * 100}%`, background: tone.fg }} />
+                </div>
               </div>
-            );
-          })
-        )}
-      </Panel>
-    </div>
+            </div>
+          );
+        })
+      )}
+    </Panel>
   );
 }
