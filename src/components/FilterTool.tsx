@@ -11,7 +11,6 @@ import {
   Check,
   Search,
   HardDrive,
-  FolderOpen,
   FolderInput,
   FolderOutput,
   FolderPlus,
@@ -417,8 +416,8 @@ export default function FilterTool({
     <button
       type="button"
       onClick={() => setPhotoSource(key)}
-      className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]"
-      style={photoSource === key ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
+      className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
+      style={photoSource === key ? { background: "var(--ac)", color: "#fff" } : { background: "var(--sf2)", border: "1px solid var(--bd)", color: "var(--tx2)" }}
     >
       <Icon size={14} /> {label}
     </button>
@@ -426,12 +425,10 @@ export default function FilterTool({
 
   return (
     <div>
-      <div className={`grid gap-5 ${compact ? "md:grid-cols-2" : "lg:grid-cols-2"}`}>
-        {/* Photo source */}
-        <div className={`card ${pad}`}>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-            <FolderOpen size={15} /> Nguồn ảnh
-          </h2>
+      {/* Ba bước của bản thiết kế: nguồn ảnh → danh sách cần lọc → nơi lưu.
+          Kết quả tự cập nhật theo từng bước nên không cần nút "chạy". */}
+      <div className="flex flex-col gap-3">
+        <Step no={1} title="Nguồn ảnh" desc="Thư mục chứa TOÀN BỘ ảnh của buổi chụp — trên Google Drive hoặc ngay trên máy tính.">
           <div className="mb-3 flex gap-2">
             {srcTab("drive", "Google Drive", Link2)}
             {srcTab("local", "Máy tính", HardDrive)}
@@ -450,54 +447,6 @@ export default function FilterTool({
                 <p className="mt-3 text-[13px]" style={{ color: "var(--text2)" }}>Đã tải <b>{driveFiles.length}</b> ảnh từ Drive.</p>
               )}
 
-              {/* Copy ảnh đã lọc sang Drive — máy chủ tự tạo thư mục trong link
-                  ảnh gốc bằng KẾT NỐI đã lưu (kết nối 1 lần, không đăng nhập lại). */}
-              {driveFiles.length > 0 && driveConn?.configured && (
-                <div className="mt-4 rounded-xl p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-                  <p className="mb-2 flex items-center gap-1.5 text-[13px] font-medium" style={{ color: "var(--text2)" }}>
-                    <FolderPlus size={14} /> Copy ảnh đã lọc sang Drive (không tải về máy)
-                  </p>
-
-                  {driveConn.connected ? (
-                    <>
-                      <label className="mb-1 block text-[12px]" style={{ color: "var(--text3)" }}>Tên thư mục ảnh chọn</label>
-                      <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Anh Chon" className="input" />
-                      <button
-                        type="button"
-                        onClick={copyToDrive}
-                        disabled={driveCopying || shown.length === 0}
-                        className="btn-primary mt-2 w-full py-2.5 disabled:opacity-40"
-                      >
-                        <CopyCheck size={15} /> {driveCopying ? "Đang copy…" : `Copy ${shown.length} ảnh sang Drive`}
-                      </button>
-                      <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
-                        Máy chủ <b>tự tạo thư mục “{newFolderName.trim() || "Anh Chon"}” ngay trong link ảnh gốc</b> và chép ảnh đã lọc vào — không cần đăng nhập lại. Cần link ảnh gốc mà tài khoản Drive đã kết nối có <b>quyền chỉnh sửa</b>.{" "}
-                        <a href="/api/filter/drive/connect" className="underline" style={{ color: "var(--text3)" }}>Kết nối lại tài khoản khác</a>
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <a href="/api/filter/drive/connect" className="btn-primary w-full py-2.5">
-                        <FolderPlus size={15} /> Kết nối Google Drive (1 lần)
-                      </a>
-                      <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
-                        Kết nối Google Drive <b>một lần duy nhất</b> — sau đó bấm Copy là chép tự động, <b>không cần đăng nhập lại lần nào</b>. Hãy kết nối bằng tài khoản Google có <b>quyền chỉnh sửa</b> link ảnh gốc. Lần kết nối đầu Google hiện cảnh báo “app chưa được xác minh” → bấm <b>Nâng cao → Tiếp tục</b>.
-                      </p>
-                    </>
-                  )}
-
-                  {driveCopyMsg && (
-                    <p className="mt-2 text-[12.5px]" style={{ color: "var(--gold)" }}>
-                      {driveCopyMsg}{" "}
-                      {driveCopyLink && (
-                        <a href={driveCopyLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline" style={{ color: "var(--accent)" }}>
-                          <ExternalLink size={12} /> Mở thư mục ảnh chọn
-                        </a>
-                      )}
-                    </p>
-                  )}
-                </div>
-              )}
             </>
           ) : (
             <>
@@ -515,40 +464,16 @@ export default function FilterTool({
                 </p>
               )}
 
-              {fsSupported ? (
-                <>
-                  <button type="button" onClick={pickDest} className="btn-ghost mt-3 w-full py-3">
-                    <FolderOutput size={16} /> Chọn thư mục đích {destName && `· ${destName}`}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={copyToDest}
-                    disabled={!destDir || shown.length === 0 || copying}
-                    className="btn-primary mt-3 w-full py-3 disabled:opacity-40"
-                  >
-                    <CopyCheck size={16} /> {copying ? "Đang copy…" : `Copy ${shown.length} ảnh sang thư mục đích`}
-                  </button>
-                  {copyMsg && <p className="mt-2 text-[13px]" style={{ color: "var(--gold)" }}>{copyMsg}</p>}
-                </>
-              ) : (
-                <p className="mt-3 text-[12.5px]" style={{ color: "var(--text3)" }}>
-                  Trình duyệt này không hỗ trợ copy trực tiếp ra thư mục. Hãy dùng <b>Chrome/Edge trên máy tính</b> để copy nguồn→đích, hoặc dùng nút “Tải ZIP” bên dưới.
-                </p>
-              )}
             </>
           )}
-        </div>
+        </Step>
 
-        {/* Name list source */}
-        <div className={`card ${pad}`}>
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-            <ListChecks size={15} /> Danh sách cần lọc
-          </h2>
+        <Step no={2} title="Danh sách cần lọc" desc="Tên ảnh khách gửi — dán tay, hoặc lấy thẳng từ lượt chọn của một album.">
           <div className="mb-3 flex gap-2">
-            <button type="button" onClick={() => setMode("paste")} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]" style={mode === "paste" ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+            <button type="button" onClick={() => setMode("paste")} className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold" style={mode === "paste" ? { background: "var(--ac)", color: "#fff" } : { background: "var(--sf2)", border: "1px solid var(--bd)", color: "var(--tx2)" }}>
               <ClipboardPaste size={14} /> Tự nhập
             </button>
-            <button type="button" onClick={() => setMode("album")} className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px]" style={mode === "album" ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+            <button type="button" onClick={() => setMode("album")} className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold" style={mode === "album" ? { background: "var(--ac)", color: "#fff" } : { background: "var(--sf2)", border: "1px solid var(--bd)", color: "var(--tx2)" }}>
               <ListChecks size={14} /> Từ lựa chọn khách
             </button>
           </div>
@@ -566,13 +491,95 @@ export default function FilterTool({
               </p>
             </>
           )}
-        </div>
+        </Step>
+
+        <Step
+          no={3}
+          title="Nơi lưu ảnh đã lọc"
+          desc={photoSource === "drive"
+            ? "Chép thẳng sang Drive vào thư mục con của chính link ảnh gốc — không phải tải về máy."
+            : "Chọn thư mục đích rồi copy thẳng sang; ảnh không rời khỏi máy bạn."}
+        >
+          {photoSource === "drive" ? (
+            driveFiles.length > 0 && driveConn?.configured ? (
+      <div className="mt-4 rounded-xl p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+                        <p className="mb-2 flex items-center gap-1.5 text-[13px] font-medium" style={{ color: "var(--text2)" }}>
+                          <FolderPlus size={14} /> Copy ảnh đã lọc sang Drive (không tải về máy)
+                        </p>
+
+                        {driveConn.connected ? (
+                          <>
+                            <label className="mb-1 block text-[12px]" style={{ color: "var(--text3)" }}>Tên thư mục ảnh chọn</label>
+                            <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Anh Chon" className="input" />
+                            <button
+                              type="button"
+                              onClick={copyToDrive}
+                              disabled={driveCopying || shown.length === 0}
+                              className="btn-primary mt-2 w-full py-2.5 disabled:opacity-40"
+                            >
+                              <CopyCheck size={15} /> {driveCopying ? "Đang copy…" : `Copy ${shown.length} ảnh sang Drive`}
+                            </button>
+                            <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
+                              Máy chủ <b>tự tạo thư mục “{newFolderName.trim() || "Anh Chon"}” ngay trong link ảnh gốc</b> và chép ảnh đã lọc vào — không cần đăng nhập lại. Cần link ảnh gốc mà tài khoản Drive đã kết nối có <b>quyền chỉnh sửa</b>.{" "}
+                              <a href="/api/filter/drive/connect" className="underline" style={{ color: "var(--text3)" }}>Kết nối lại tài khoản khác</a>
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <a href="/api/filter/drive/connect" className="btn-primary w-full py-2.5">
+                              <FolderPlus size={15} /> Kết nối Google Drive (1 lần)
+                            </a>
+                            <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
+                              Kết nối Google Drive <b>một lần duy nhất</b> — sau đó bấm Copy là chép tự động, <b>không cần đăng nhập lại lần nào</b>. Hãy kết nối bằng tài khoản Google có <b>quyền chỉnh sửa</b> link ảnh gốc. Lần kết nối đầu Google hiện cảnh báo “app chưa được xác minh” → bấm <b>Nâng cao → Tiếp tục</b>.
+                            </p>
+                          </>
+                        )}
+
+                        {driveCopyMsg && (
+                          <p className="mt-2 text-[12.5px]" style={{ color: "var(--gold)" }}>
+                            {driveCopyMsg}{" "}
+                            {driveCopyLink && (
+                              <a href={driveCopyLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline" style={{ color: "var(--accent)" }}>
+                                <ExternalLink size={12} /> Mở thư mục ảnh chọn
+                              </a>
+                            )}
+                          </p>
+                        )}
+                      </div>
+            ) : (
+              <p className="rounded-[10px] px-3.5 py-3 text-[12.5px] leading-relaxed" style={{ background: "var(--sf2)", color: "var(--tx2)" }}>
+                {driveFiles.length === 0
+                  ? "Tải ảnh từ link Drive ở bước 1 trước, rồi chọn nơi lưu tại đây."
+                  : "Chưa bật copy sang Drive trên máy chủ — dùng nút “Tải ZIP” ở phần kết quả bên dưới."}
+              </p>
+            )
+          ) : fsSupported ? (
+                  <>
+                    <button type="button" onClick={pickDest} className="btn-ghost mt-3 w-full py-3">
+                      <FolderOutput size={16} /> Chọn thư mục đích {destName && `· ${destName}`}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={copyToDest}
+                      disabled={!destDir || shown.length === 0 || copying}
+                      className="btn-primary mt-3 w-full py-3 disabled:opacity-40"
+                    >
+                      <CopyCheck size={16} /> {copying ? "Đang copy…" : `Copy ${shown.length} ảnh sang thư mục đích`}
+                    </button>
+                    {copyMsg && <p className="mt-2 text-[13px]" style={{ color: "var(--gold)" }}>{copyMsg}</p>}
+                  </>
+                ) : (
+                  <p className="mt-3 text-[12.5px]" style={{ color: "var(--text3)" }}>
+                    Trình duyệt này không hỗ trợ copy trực tiếp ra thư mục. Hãy dùng <b>Chrome/Edge trên máy tính</b> để copy nguồn→đích, hoặc dùng nút “Tải ZIP” bên dưới.
+                  </p>
+                )}
+        </Step>
       </div>
 
-      {/* Results */}
-      <div className={`mt-6 card ${pad}`}>
+      {/* Kết quả */}
+      <div className={`mt-3.5 card ${pad}`}>
         <div className="mb-4 flex flex-wrap items-center gap-3">
-          <h2 className={`font-serif font-medium ${compact ? "text-xl" : "text-2xl"}`}>Kết quả lọc: {shown.length} ảnh</h2>
+          <h2 className="text-[14px] font-bold">Kết quả lọc · {shown.length} ảnh</h2>
           {/* Format filter */}
           <select value={fmt} onChange={(e) => setFmt(e.target.value)} className="input w-auto px-2 py-1 text-xs">
             <option value="all">Mọi định dạng</option>
@@ -640,6 +647,28 @@ export default function FilterTool({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** Một bước trong công cụ lọc — vòng tròn số + tên bước + mô tả, rồi phần điều
+ *  khiển. Đúng khối bước của bản thiết kế, xếp dọc cho dễ đi theo thứ tự. */
+function Step({ no, title, desc, children }: { no: number; title: string; desc: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[14px] px-[18px] py-4" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+      <div className="mb-3 flex items-center gap-3.5">
+        <span
+          className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full text-[13px] font-extrabold"
+          style={{ background: "var(--acS)", color: "var(--ac)" }}
+        >
+          {no}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-semibold">{title}</p>
+          <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>{desc}</p>
+        </div>
+      </div>
+      {children}
     </div>
   );
 }
