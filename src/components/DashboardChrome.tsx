@@ -62,6 +62,7 @@ export default function DashboardChrome({
       pathname === "/dashboard" ||
       pathname.startsWith("/dashboard/albums") ||
       pathname.startsWith("/dashboard/create") ||
+      pathname.startsWith("/dashboard/tools") ||
       pathname.startsWith("/dashboard/filter") ||
       pathname.startsWith("/dashboard/compress")
     ));

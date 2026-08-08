@@ -4,7 +4,7 @@ import {
   Wallet, Banknote, UsersRound, Trophy, MessagesSquare, Package, Gavel,
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
-  MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush,
+  MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -112,7 +112,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/dashboard/studio/pricing", label: "Gói & bảng giá", icon: Package, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/packages"], keywords: "goi dich vu bang gia" },
       { href: "/dashboard/studio/services", label: "Dịch vụ & điều khoản", icon: Gavel, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/templates"], keywords: "dieu khoan mau hop dong" },
       { href: "/dashboard/site", label: "Website & chatbox", icon: Globe, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/chatbox"], keywords: "trang web portfolio tro ly" },
-      { href: "/dashboard/filter", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/compress"], keywords: "loc anh nen anh watermark" },
+      { href: "/dashboard/tools", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/filter", "/dashboard/compress"], keywords: "loc anh nen anh watermark" },
       { href: "/dashboard/settings", label: "Cài đặt studio", icon: Settings, minTier: "booking", roles: OWNER_OK },
     ],
   },
@@ -146,7 +146,8 @@ export const EXTRA_COMMANDS: readonly NavItem[] = [
   { href: "/dashboard/studio/drive-sync", label: "Đồng bộ Google Drive", icon: HardDrive, minTier: "full", roles: OWNER_OK, keywords: "drive dong bo anh", sub: "Kết nối và cấu hình đồng bộ" },
   { href: "/dashboard/studio/album-categories", label: "Danh mục album", icon: FolderTree, minTier: "full", roles: MANAGER_OK, keywords: "the loai album", sub: "Đã gộp vào Thư viện album" },
   { href: "/dashboard/site/builder", label: "Giao diện website", icon: Paintbrush, minTier: "booking", roles: MANAGER_OK, keywords: "dung trang web khoi noi dung", sub: "Sắp xếp khối nội dung trang studio" },
-  { href: "/dashboard/compress", label: "Nén ảnh & watermark", icon: Archive, minTier: "booking", roles: STAFF_OK, keywords: "nen anh dong dau", sub: "Đã gộp vào Công cụ ảnh" },
+  { href: "/dashboard/compress", label: "Nén ảnh & watermark", icon: Archive, minTier: "booking", roles: STAFF_OK, keywords: "nen anh dong dau watermark", sub: "Trong Công cụ ảnh" },
+  { href: "/dashboard/filter", label: "Lọc ảnh khách chọn", icon: CopyCheck, minTier: "booking", roles: STAFF_OK, keywords: "loc anh khach chon tach anh", sub: "Trong Công cụ ảnh" },
   { href: "/dashboard/connections", label: "Kết nối Calendar", icon: Link2, minTier: "booking", roles: MANAGER_OK, keywords: "google calendar tich hop", sub: "Google Calendar và tích hợp khác" },
 ];
 

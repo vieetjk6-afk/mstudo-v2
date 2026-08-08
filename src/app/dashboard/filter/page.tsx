@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowLeft,
   Link2,
   ListChecks,
   ClipboardPaste,
@@ -16,6 +17,7 @@ import {
   FolderOutput,
   CopyCheck,
 } from "lucide-react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { buildZip, triggerDownload } from "@/lib/download";
@@ -306,12 +308,17 @@ export default function FilterPage() {
 
   return (
     <div className="page-in">
-      <div className="mb-8">
-        <p className="eyebrow mb-1.5">Công cụ</p>
-        <h1 className="font-serif text-[clamp(28px,4vw,44px)] font-medium leading-none">Lọc ảnh</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed" style={{ color: "var(--text2)" }}>
-          Đối chiếu thư mục ảnh (Google Drive hoặc ngay trên máy tính) với danh sách ảnh khách chọn / tự nhập. Với máy tính, có thể <b>copy thẳng từ thư mục nguồn sang thư mục đích</b>.
-        </p>
+      {/* Quay lại màn Công cụ ảnh — công cụ này là một trong ba thẻ ở đó. */}
+      <div className="mb-3.5 flex items-center gap-2.5">
+        <Link
+          href="/dashboard/tools"
+          aria-label="Về Công cụ ảnh"
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
+          style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+        >
+          <ArrowLeft size={17} />
+        </Link>
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>Khách gửi danh sách tên file — công cụ tự tách những ảnh đó ra thư mục riêng.</p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">

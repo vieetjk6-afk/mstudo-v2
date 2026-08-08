@@ -1,23 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Minimize2, Stamp, FileImage } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, Minimize2, Stamp, FileImage } from "lucide-react";
 import { pickerConfigured, preloadGoogle, requestDriveToken } from "@/lib/google-picker";
 import ToolPanel, { type Tool, type QuotaState } from "./ToolPanel";
 
+/** Pill hạn mức — bo 20px, cặp màu trạng thái của bản thiết kế. */
 function QuotaChip({ label, text, warn, active }: { label: string; text: string; warn: boolean; active: boolean }) {
-  const color = warn ? "var(--gold)" : active ? "var(--accent)" : "var(--text2)";
+  const fg = warn ? "var(--am)" : active ? "var(--ac)" : "var(--tx3)";
+  const bg = warn ? "var(--amS)" : active ? "var(--acS)" : "var(--sf2)";
   return (
-    <span
-      className="rounded-full px-3 py-1"
-      style={{
-        background: warn ? "color-mix(in srgb, var(--gold) 16%, transparent)" : active ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--surface2)",
-        border: `1px solid ${active && !warn ? "var(--accent)" : "var(--border)"}`,
-        color,
-        opacity: active ? 1 : 0.7,
-      }}
-    >
-      {label}: <b style={{ color: warn ? "var(--gold)" : "var(--text)" }}>{text}</b>
+    <span className="whitespace-nowrap rounded-[20px] px-[11px] py-[5px] font-semibold" style={{ background: bg, color: fg }}>
+      {label}: <b>{text}</b>
     </span>
   );
 }
@@ -72,13 +67,17 @@ export default function CompressPage() {
 
   return (
     <div className="page-in">
-      <div className="mb-6">
-        <p className="eyebrow mb-1.5">Công cụ ảnh</p>
-        <h1 className="font-serif text-[clamp(28px,4vw,44px)] font-medium leading-none">Xử lý ảnh</h1>
-        <p className="mt-3 max-w-2xl text-[15px] leading-relaxed" style={{ color: "var(--text2)" }}>
-          Nén ảnh, gắn watermark, đổi định dạng — từ máy tính hoặc Google Drive. Xử lý ngay trên
-          trình duyệt, ảnh không tải lên máy chủ.
-        </p>
+      {/* Quay lại màn Công cụ ảnh — công cụ này là một trong ba thẻ ở đó. */}
+      <div className="mb-3.5 flex items-center gap-2.5">
+        <Link
+          href="/dashboard/tools"
+          aria-label="Về Công cụ ảnh"
+          className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
+          style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+        >
+          <ArrowLeft size={17} />
+        </Link>
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>Nén ảnh, gắn watermark, đổi định dạng — chạy ngay trên trình duyệt, ảnh không tải lên máy chủ.</p>
       </div>
 
       {quota && (
@@ -109,11 +108,11 @@ export default function CompressPage() {
           <button
             key={key}
             onClick={() => setTool(key)}
-            className="flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium"
+            className="flex items-center gap-2 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
             style={
               tool === key
-                ? { background: "var(--accent)", color: "var(--accentInk)" }
-                : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }
+                ? { background: "var(--ac)", color: "#fff" }
+                : { background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--tx2)" }
             }
           >
             <Icon size={16} /> {label}
