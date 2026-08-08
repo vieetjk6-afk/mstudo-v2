@@ -1151,6 +1151,23 @@ create policy contract_tasks_owner_all on public.contract_tasks
             where c.id = contract_id and (c.owner_id = auth.uid() or public.is_admin()))
   );
 
+-- Ghi chú nội bộ trong hợp đồng (tính năng "Ghi chú nội bộ @nhắc tên").
+-- Luồng trao đổi giữa người trong studio về một hợp đồng. Khách KHÔNG thấy:
+-- trang /c/<token> chạy service-role và chỉ đọc đúng các bảng nó cần.
+create table if not exists public.contract_notes (
+  id          uuid primary key default gen_random_uuid(),
+  contract_id uuid not null references public.studio_contracts (id) on delete cascade,
+  -- Nhân viên nghỉ việc → hồ sơ xoá → author_id về null, nên tên được CHỤP LẠI
+  -- lúc viết để dòng ghi chú cũ không mất danh tính.
+  author_id   uuid references public.profiles (id) on delete set null,
+  author_name text not null default '',
+  body        text not null default '',
+  mentions    text[] not null default '{}',   -- các tên đã @nhắc, đã bỏ dấu @
+  created_at  timestamptz not null default now()
+);
+create index if not exists contract_notes_contract_idx on public.contract_notes (contract_id, created_at);
+alter table public.contract_notes enable row level security;
+
 -- Reusable contract templates (mẫu hợp đồng): a named set of line items + terms.
 create table if not exists public.contract_templates (
   id         uuid primary key default gen_random_uuid(),
@@ -1396,7 +1413,7 @@ alter table public.studio_quotes    add column if not exists service_id uuid ref
 do $$
 declare t text;
 begin
-  foreach t in array array['contract_items','contract_crew','contract_edit_requests','contract_payments','contract_payment_plan','contract_tasks','contract_equipment','contract_products','contract_quote_options']
+  foreach t in array array['contract_items','contract_crew','contract_edit_requests','contract_payments','contract_payment_plan','contract_tasks','contract_equipment','contract_products','contract_quote_options','contract_notes']
   loop
     execute format('drop policy if exists %1$s_owner_all on public.%1$s', t);
     execute format($f$create policy %1$s_owner_all on public.%1$s for all using (exists (select 1 from public.studio_contracts c where c.id = contract_id and public.is_studio_member(c.owner_id))) with check (exists (select 1 from public.studio_contracts c where c.id = contract_id and public.is_studio_member(c.owner_id)))$f$, t);

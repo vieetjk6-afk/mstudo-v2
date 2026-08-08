@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mainUrl, studioUrl } from "@/lib/hosts";
 import MessengerButton from "@/components/MessengerButton";
 import ContractStepper, { type ContractLifecycle } from "@/components/studio/ContractStepper";
+import ContractNotes, { type NoteRow, type Mentionable } from "./ContractNotes";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
@@ -174,6 +175,8 @@ export default function ContractEditor({
   sameDayContracts,
   pricelist,
   initialClientProofs,
+  initialNotes,
+  me,
   services = [],
   storyComingSoon = false,
 }: {
@@ -204,6 +207,8 @@ export default function ContractEditor({
   pricelist: { name: string; price: number; unit: string | null }[];
   initialClientProofs: { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[];
   services?: { id: string; name: string; clauses: string }[];
+  initialNotes: NoteRow[];
+  me: { id: string; name: string };
 }) {
   const conflictFor = (phone: string) => conflictByPhone[(phone || "").replace(/\D/g, "")] || null;
   const router = useRouter();
@@ -951,6 +956,29 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
   }
 
   const openRequests = requests.filter((r) => r.status === "open");
+
+  /**
+   * Người có thể @nhắc: ê-kíp của chính hợp đồng này trước (họ đang làm job),
+   * rồi tới tài khoản nhân viên studio. Lọc trùng theo tên vì một người có thể
+   * vừa nằm trong ê-kíp vừa có tài khoản.
+   */
+  const mentionable: Mentionable[] = (() => {
+    const seen = new Set<string>();
+    const out: Mentionable[] = [];
+    for (const c of crew) {
+      const name = (c.name || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ id: `crew-${c.id}`, name });
+    }
+    for (const st of staffList) {
+      const name = (st.full_name || st.email || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ id: `staff-${st.id}`, name });
+    }
+    return out;
+  })();
 
   // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
   const lifecycle: ContractLifecycle = {
@@ -2035,6 +2063,9 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
               <PenLine size={15} /> {busy === "sign" ? "Đang lưu…" : "Lưu chữ ký Bên A"}
             </button>
           </div>
+
+          {/* Ghi chú nội bộ — trao đổi trong studio, khách không thấy. */}
+          <ContractNotes contractId={contract.id} initial={initialNotes} people={mentionable} me={me} />
         </div>
 
         {/* Right: finance summary */}

@@ -26,6 +26,7 @@ const ORDER = [
   ["migrations/atomic_redemptions.sql", "Chống race condition khi dùng mã giảm giá / bản dùng thử"],
   ["migrations/album_designs.sql", "Thiết kế Album"],
   ["migrations/contract_intake.sql", "Form điền thông tin trước buổi chụp"],
+  ["migrations/contract_notes.sql", "Ghi chú nội bộ trong hợp đồng (@nhắc tên)"],
   ["migrations/crew_schedule.sql", "Lịch thợ (phải chạy TRƯỚC crew_profile_show)"],
   ["migrations/crew_profile_show.sql", "Hồ sơ thợ & thông tin show"],
   ["migrations/photographer_plus_pricing.sql", "Cột giá còn thiếu của gói Photographer Plus"],

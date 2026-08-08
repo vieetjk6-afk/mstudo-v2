@@ -251,6 +251,12 @@ Bước xong: nền `--gn` + icon `check`. Bước hiện tại: nền `--ac`. B
 
 **Xem như khách trên điện thoại** — khung xem trước nhúng THẲNG trang khách thật `/c/<token>` bằng iframe, không vẽ lại nội dung hợp đồng (vẽ lại thì mỗi lần trang khách đổi, bản xem trước lại nói dối). Một chỗ dễ sập: app đặt `X-Frame-Options: SAMEORIGIN` + `frame-ancestors 'self'`, nên studio có tên miền riêng mà nhúng link branded sẽ bị trình duyệt chặn, khung trắng trơn. Vì `/c/<token>` chạy trên cả host chính lẫn host studio và ra cùng nội dung, iframe dùng đường dẫn **cùng gốc**, còn link hiện / nút chép / mã QR vẫn là bản branded.
 
+**Ghi chú nội bộ @nhắc tên** — bảng MỚI `contract_notes` (chạy `supabase/migrations/contract_notes.sql` trước khi dùng). RLS cùng luật với các bảng con khác của hợp đồng: mọi thành viên studio đọc/ghi được, studio khác không thấy gì. Khách không bao giờ thấy — trang `/c/<token>` không đọc bảng này.
+
+Bộ tách @nhắc-tên nằm ở `src/lib/mentions.ts` (thuần, tách khỏi component để kiểm được). Ba luật: chỉ khớp tên CÓ THẬT trong ê-kíp/nhân viên (nên `a@b.com` không bị tô); tên dài thử trước tên ngắn (có cả "Thảo" lẫn "Thảo Huỳnh" thì `@Thảo Huỳnh` khớp trọn họ tên); gõ không dấu vẫn khớp, và cột `mentions` lưu **tên chuẩn** chứ không lưu bản người dùng gõ — nếu không thì sau này lọc theo tên hay gửi thông báo đều trượt.
+
+Mốc thời gian dùng `fmtWhen()` ở `src/lib/date.ts`, luôn quy về giờ Việt Nam. Dùng `getHours()` cục bộ thì máy chủ (UTC trên Vercel) và máy khách (UTC+7) dựng ra hai chuỗi khác nhau → React báo lỗi hydration và vẽ lại cả cây.
+
 **Hoàn tác trong toast** — `useUndoToast()` ở `src/components/studio/UndoToast.tsx`. Hoãn việc xoá 5 giây rồi mới gọi xuống máy chủ, chứ không xoá-rồi-thêm-lại (thêm lại không bao giờ khôi phục đúng nguyên trạng: id mới, mất bản ghi con, sai thứ tự). Ba chỗ dễ hụt đã xử lý: xoá liên tiếp thì việc đang chờ được chốt ngay chứ không bị nuốt; rời trang thì chạy nốt qua `pagehide`; hoàn tác trả dòng về đúng vị trí cũ.
 
 ---
