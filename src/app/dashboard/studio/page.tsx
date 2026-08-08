@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import {
   Plus, FileText, CalendarDays, Users, AlertCircle, Wallet, Clock, Globe, Images,
   Bolt, UserPlus, Banknote, ImagePlus, ReceiptText, PenLine, CalendarClock,
-  TrendingUp, CircleAlert, CalendarRange, Hourglass, Landmark, CalendarCheck,
+  TrendingUp, CircleAlert, CalendarRange, Hourglass, Landmark, CalendarCheck, Camera,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
@@ -539,6 +539,17 @@ export default async function StudioOverview() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {/* Chỉ hiện khi hôm nay thật sự có buổi chụp — ngày trống thì nút này
+              chỉ dẫn tới một màn rỗng. */}
+          {todayJobs.length > 0 && (
+            <Link
+              href="/dashboard/studio/field"
+              className="flex items-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-semibold"
+              style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+            >
+              <Camera size={17} /> Chế độ ngày chụp
+            </Link>
+          )}
           <Link
             href="/dashboard/studio/quotes/new"
             className="flex items-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-semibold"

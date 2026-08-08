@@ -25,6 +25,28 @@ export function todayVN(): string {
   return new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
+/**
+ * Nhãn thời gian cho luồng ghi chú: "Hôm nay 20:15" / "Hôm qua 08:03" /
+ * "06/08/2026 08:03".
+ *
+ * Luôn quy về GIỜ VIỆT NAM ở cả máy chủ lẫn trình duyệt. Dùng `getHours()` cục
+ * bộ thì máy chủ (UTC trên Vercel) và máy khách (UTC+7) dựng ra hai chuỗi khác
+ * nhau, React báo lỗi hydration và vẽ lại toàn bộ cây — đúng lỗi đã gặp khi
+ * dựng ghi chú nội bộ.
+ */
+export function fmtWhen(v: string | number | Date | null | undefined): string {
+  const d = toDate(v);
+  if (!d) return "";
+  const vn = new Date(d.getTime() + 7 * 3600 * 1000).toISOString();
+  const day = vn.slice(0, 10);
+  const hhmm = vn.slice(11, 16);
+  const today = todayVN();
+  const yesterday = new Date(Date.now() + 7 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+  if (day === today) return `Hôm nay ${hhmm}`;
+  if (day === yesterday) return `Hôm qua ${hhmm}`;
+  return `${day.slice(8, 10)}/${day.slice(5, 7)}/${day.slice(0, 4)} ${hhmm}`;
+}
+
 /** dd/mm/yyyy. Returns "" for empty/invalid input. */
 export function fmtDate(v: string | number | Date | null | undefined): string {
   const d = toDate(v);

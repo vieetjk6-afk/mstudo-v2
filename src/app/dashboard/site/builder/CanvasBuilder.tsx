@@ -790,7 +790,7 @@ export default function CanvasBuilder({
       </div>
 
       {toast && (
-        <div style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", zIndex: 80, background: "#23201B", color: "#fff", padding: "10px 18px", borderRadius: 999, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(0,0,0,.25)" }}>
+        <div style={{ position: "fixed", bottom: 22, left: "50%", transform: "translateX(-50%)", zIndex: 80, background: "var(--tx)", color: "var(--sf)", padding: "10px 18px", borderRadius: 999, fontSize: 13, fontWeight: 600, boxShadow: "0 8px 24px rgba(0,0,0,.25)" }}>
           {toast}
         </div>
       )}
@@ -872,7 +872,7 @@ function BlockShell({
             {hidden ? <EyeOff size={15} /> : <Eye size={15} />}
           </button>
           <button onClick={(e) => { e.stopPropagation(); onDup(); }} title="Nhân bản" style={toolBtn}><Copy size={14} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onDel(); }} title="Xoá" style={{ ...toolBtn, color: "#f0a39e" }}><Trash2 size={14} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDel(); }} title="Xoá" style={{ ...toolBtn, color: "var(--rd)" }}><Trash2 size={14} /></button>
         </div>
       )}
       {showTools && (
@@ -1593,7 +1593,7 @@ function SeoPanel({ site, supabase, onFlash }: {
         onChange={(e) => setSeo({ ...seo, title: e.target.value })}
         onBlur={(e) => save({ ...seo, title: e.target.value.trim() })}
       />
-      <p style={{ margin: "3px 0 8px", fontSize: 10.5, color: titleLen > 60 ? "#c0603d" : "var(--text3)" }}>
+      <p style={{ margin: "3px 0 8px", fontSize: 10.5, color: titleLen > 60 ? "var(--am)" : "var(--text3)" }}>
         {titleLen}/60 ký tự{titleLen > 60 ? " — Google sẽ cắt bớt" : ""}
       </p>
 
@@ -1604,7 +1604,7 @@ function SeoPanel({ site, supabase, onFlash }: {
         onChange={(e) => setSeo({ ...seo, description: e.target.value })}
         onBlur={(e) => save({ ...seo, description: e.target.value.trim() })}
       />
-      <p style={{ margin: "3px 0 8px", fontSize: 10.5, color: descLen > 160 ? "#c0603d" : "var(--text3)" }}>
+      <p style={{ margin: "3px 0 8px", fontSize: 10.5, color: descLen > 160 ? "var(--am)" : "var(--text3)" }}>
         {descLen}/160 ký tự{descLen > 160 ? " — Google sẽ cắt bớt" : ""}
       </p>
 
@@ -1701,7 +1701,7 @@ function AlbumPicker({ block, albums, onEdit, onBeforeEdit }: {
               : `Đang chọn ${ids.length} album, hiện theo thứ tự bạn bấm.`}
           </p>
           {notPinned.length > 0 && (
-            <p style={{ marginTop: 6, fontSize: 11, color: "var(--warn, #b4690e)", lineHeight: 1.55 }}>
+            <p style={{ marginTop: 6, fontSize: 11, color: "var(--am)", lineHeight: 1.55 }}>
               ⚠ {notPinned.length} album sẽ KHÔNG lên trang công khai vì chưa ở giai đoạn giao khách hoặc chưa tích “Hiện ở trang chủ”. Sửa trong trang Album.
             </p>
           )}

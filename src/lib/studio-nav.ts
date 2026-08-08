@@ -138,6 +138,7 @@ export const EXTRA_COMMANDS: readonly NavItem[] = [
   { href: "/dashboard/studio/contracts/new", label: "Tạo hợp đồng mới", icon: Plus, minTier: "plus", roles: MANAGER_OK, keywords: "them hop dong moi", sub: "Luồng 5 bước" },
   { href: "/dashboard/studio/quotes/new", label: "Tạo báo giá", icon: FilePlus2, minTier: "plus", roles: MANAGER_OK, keywords: "them bao gia moi gui khach", sub: "Ghép gói và gửi khách" },
   { href: "/dashboard/albums/new", label: "Tạo album giao khách", icon: Images, minTier: "booking", roles: STAFF_OK, keywords: "them album moi", sub: "Album giao khách mới" },
+  { href: "/dashboard/studio/field", label: "Chế độ ngày chụp", icon: Camera, minTier: "booking", roles: STAFF_OK, keywords: "hien truong chay show lich trinh checklist anh", sub: "Màn rút gọn dùng khi đang cầm máy" },
   { href: "/dashboard/studio/team", label: "Lịch đội ngũ", icon: CalendarRange, minTier: "full", roles: MANAGER_OK, keywords: "lich nhan su theo nguoi", sub: "Đã gộp vào Lịch làm việc" },
   { href: "/dashboard/studio/staff", label: "Nhân viên & phân quyền", icon: UserCog, minTier: "full", roles: MANAGER_OK, keywords: "tai khoan nhan vien quyen", sub: "Đã gộp vào Đội ngũ" },
   { href: "/dashboard/studio/templates", label: "Mẫu hợp đồng", icon: FileSignature, minTier: "full", roles: MANAGER_OK, keywords: "mau hop dong dieu khoan", sub: "Đã gộp vào Dịch vụ & điều khoản" },

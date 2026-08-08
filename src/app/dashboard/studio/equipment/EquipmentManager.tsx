@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2, Camera } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
+import { useUndoToast } from "@/components/studio/UndoToast";
 import type { StudioEquipment } from "@/lib/types";
 
 export default function EquipmentManager({
@@ -14,6 +15,7 @@ export default function EquipmentManager({
   initial: StudioEquipment[];
 }) {
   const supabase = createClient();
+  const { run, view } = useUndoToast();
   const [list, setList] = useState<StudioEquipment[]>(initial);
   const [f, setF] = useState({ name: "", category: "", note: "" });
   const [busy, setBusy] = useState(false);
@@ -33,13 +35,22 @@ export default function EquipmentManager({
     }
   }
 
-  async function remove(id: string) {
-    await supabase.from("studio_equipment").delete().eq("id", id);
+  /** Xoá có hoàn tác: hàng biến mất ngay, 5 giây sau mới xoá thật. */
+  function remove(id: string) {
+    const idx = list.findIndex((e) => e.id === id);
+    const row = list[idx];
+    if (!row) return;
     setList((p) => p.filter((e) => e.id !== id));
+    run({
+      label: `Đã xoá ${row.name || "thiết bị"}`,
+      commit: async () => { await supabase.from("studio_equipment").delete().eq("id", id); },
+      undo: () => setList((p) => { const n = [...p]; n.splice(idx, 0, row); return n; }),
+    });
   }
 
   return (
     <div className="page-in">
+      {view}
       <p className="mb-3.5 text-[13px]" style={{ color: "var(--tx2)" }}>Máy, ống kính, đèn… gán nhanh vào hợp đồng và tránh trùng buổi.</p>
 
       <div className="grid gap-3.5 lg:grid-cols-3">

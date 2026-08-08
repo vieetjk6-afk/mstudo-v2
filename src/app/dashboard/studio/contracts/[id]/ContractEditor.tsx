@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mainUrl, studioUrl } from "@/lib/hosts";
 import MessengerButton from "@/components/MessengerButton";
 import ContractStepper, { type ContractLifecycle } from "@/components/studio/ContractStepper";
+import ContractNotes, { type NoteRow, type Mentionable } from "./ContractNotes";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
@@ -174,6 +175,8 @@ export default function ContractEditor({
   sameDayContracts,
   pricelist,
   initialClientProofs,
+  initialNotes,
+  me,
   services = [],
   storyComingSoon = false,
 }: {
@@ -204,6 +207,8 @@ export default function ContractEditor({
   pricelist: { name: string; price: number; unit: string | null }[];
   initialClientProofs: { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[];
   services?: { id: string; name: string; clauses: string }[];
+  initialNotes: NoteRow[];
+  me: { id: string; name: string };
 }) {
   const conflictFor = (phone: string) => conflictByPhone[(phone || "").replace(/\D/g, "")] || null;
   const router = useRouter();
@@ -952,6 +957,29 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
 
   const openRequests = requests.filter((r) => r.status === "open");
 
+  /**
+   * Người có thể @nhắc: ê-kíp của chính hợp đồng này trước (họ đang làm job),
+   * rồi tới tài khoản nhân viên studio. Lọc trùng theo tên vì một người có thể
+   * vừa nằm trong ê-kíp vừa có tài khoản.
+   */
+  const mentionable: Mentionable[] = (() => {
+    const seen = new Set<string>();
+    const out: Mentionable[] = [];
+    for (const c of crew) {
+      const name = (c.name || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ id: `crew-${c.id}`, name });
+    }
+    for (const st of staffList) {
+      const name = (st.full_name || st.email || "").trim();
+      if (!name || seen.has(name.toLowerCase())) continue;
+      seen.add(name.toLowerCase());
+      out.push({ id: `staff-${st.id}`, name });
+    }
+    return out;
+  })();
+
   // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
   const lifecycle: ContractLifecycle = {
     hasItems: items.length > 0,
@@ -968,7 +996,8 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
   };
 
   return (
-    <div className="page-in">
+    // pb thêm trên điện thoại: chừa chỗ cho thanh hành động cố định đáy.
+    <div className="page-in pb-[72px] lg:pb-0">
       {msg && (
         <div className="fixed left-1/2 top-6 z-50 -translate-x-1/2 rounded-full px-4 py-2 text-sm" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
           {msg}
@@ -991,9 +1020,11 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
             </span>
             {!studioSigned && <span className="mt-1 text-[10px]" style={{ color: "var(--s-red)" }}>Chưa có chữ ký studio</span>}
           </div>
-          <a href={shareUrl} target="_blank" rel="noreferrer" className="btn-ghost px-3 py-2 text-xs">
+          {/* Mở màn "Hợp đồng gửi khách": xem trước trong khung điện thoại 376px
+              kèm link và mã QR, thay vì bắn thẳng sang tab mới. */}
+          <Link href={`/dashboard/studio/contracts/${contract.id}/share`} className="btn-ghost px-3 py-2 text-xs">
             Xem như khách
-          </a>
+          </Link>
           <button onClick={duplicateContract} disabled={busy === "dup"} className="btn-ghost px-3 py-2 text-xs">
             <Copy size={14} /> {busy === "dup" ? "Đang sao…" : "Nhân bản"}
           </button>
@@ -1511,7 +1542,7 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
           </div>
 
           {/* Payments — unified schedule + collection */}
-          <div className="card p-6">
+          <div id="thanh-toan" className="card scroll-mt-24 p-6">
             <div className="mb-1 flex items-center justify-between">
               <h2 className="font-serif text-lg font-medium">Thanh toán</h2>
               <p className="text-xs" style={{ color: "var(--text2)" }}>
@@ -2033,6 +2064,33 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
               <PenLine size={15} /> {busy === "sign" ? "Đang lưu…" : "Lưu chữ ký Bên A"}
             </button>
           </div>
+
+          {/* Ghi chú nội bộ — trao đổi trong studio, khách không thấy. */}
+          <ContractNotes contractId={contract.id} initial={initialNotes} people={mentionable} me={me} />
+        </div>
+
+        {/* ── Thanh hành động cố định đáy (bản mobile của thiết kế) ───────
+            Trên điện thoại hai việc hay làm nhất — ghi nhận tiền và gửi khách —
+            nằm tít trên đầu màn, phải cuộn ngược lên mới thấy. Thanh này ghim ở
+            đáy, NGAY TRÊN thanh tab 5 mục, và chỉ hiện dưới lg. */}
+        <div
+          className="fixed inset-x-0 z-30 flex gap-2.5 border-t px-4 py-2.5 lg:hidden"
+          style={{ bottom: "calc(52px + env(safe-area-inset-bottom, 0px))", background: "var(--topbar)", backdropFilter: "blur(10px)", borderColor: "var(--bd)" }}
+        >
+          <a
+            href="#thanh-toan"
+            className="flex min-h-[46px] flex-1 items-center justify-center rounded-[12px] text-[13.5px] font-semibold"
+            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+          >
+            Ghi nhận thu
+          </a>
+          <Link
+            href={`/dashboard/studio/contracts/${contract.id}/share`}
+            className="flex min-h-[46px] flex-1 items-center justify-center rounded-[12px] text-[13.5px] font-semibold"
+            style={{ background: "var(--ac)", color: "#fff" }}
+          >
+            Gửi khách
+          </Link>
         </div>
 
         {/* Right: finance summary */}

@@ -688,7 +688,10 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
   }
 
   /* ── Render ─────────────────────────────────────────────────────────── */
-  const panel: React.CSSProperties = { background: "var(--panel)", border: "1px solid var(--border)" };
+  // Nền thẻ dùng token của khu quản lý. Trước đây là `var(--panel)` —
+// một token KHÔNG hề được định nghĩa, nên mọi panel và cả hai hộp thoại
+// đều nền trong suốt, nhìn xuyên xuống nội dung phía dưới.
+  const panel: React.CSSProperties = { background: "var(--sf)", border: "1px solid var(--bd)" };
   const scenesUsed = usedIds.size;
   const bar = "flex items-center justify-center rounded-lg px-2 h-8 text-sm";
   // Bố cục hiển thị trên dải ngang theo nguồn đang chọn.
@@ -701,7 +704,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
   return (
     <div className="page-in">
       {/* ── Thanh công cụ trên ── */}
-      <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-2xl p-2" style={panel}>
+      <div className="mb-2 flex flex-wrap items-center gap-1.5 rounded-[14px] p-2" style={panel}>
         <button onClick={onBack} className={`btn-ghost ${bar} gap-1`} title="Đổi khổ / mở album khác"><ArrowLeft size={15} /></button>
         <input value={name} onChange={(e) => { setName(e.target.value); dirty.current = true; }} className="input h-8 w-40 text-sm font-semibold" placeholder="Tên album" />
         <span className="mx-0.5 h-5 w-px" style={{ background: "var(--border)" }} />
@@ -728,7 +731,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
       </div>
 
       {/* ── Dải bố cục ngang ── */}
-      <div className="mb-2 rounded-2xl p-2" style={panel}>
+      <div className="mb-2 rounded-[14px] p-2" style={panel}>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={() => setRailOpen((o) => !o)} className={`btn-ghost ${bar} gap-1 font-semibold`}><LayoutGrid size={14} /> Bố cục</button>
           {railOpen && (<>
@@ -770,7 +773,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
       <div className="flex items-start gap-3">
         {/* Thư viện ảnh (thu gọn được) */}
         {showLib && (
-          <div className="w-[200px] flex-none rounded-2xl p-3" style={panel}>
+          <div className="w-[200px] flex-none rounded-[14px] p-3" style={panel}>
             <p className="text-sm font-extrabold">Thư viện ảnh</p>
             <p className="mb-2 text-[11.5px]" style={{ color: "var(--text2)" }}>{lib.length} ảnh · {scenesUsed} đã dùng</p>
             <div className="mb-2 flex gap-1">
@@ -794,7 +797,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
 
         {/* Canvas + thanh trạng thái */}
         <div className="min-w-0 flex-1">
-          <div ref={stageRef} className="flex items-center justify-center gap-4 overflow-hidden rounded-2xl p-4" style={{ ...panel, minHeight: 440 }}>
+          <div ref={stageRef} className="flex items-center justify-center gap-4 overflow-hidden rounded-[14px] p-4" style={{ ...panel, minHeight: 440 }}>
             {/* Spread trước (ngữ cảnh) */}
             {multi && cur > 0 && (
               <button onClick={() => { setCur(cur - 1); setSel(null); }} className="flex-none opacity-60 transition-opacity hover:opacity-90" title="Spread trước">
@@ -825,7 +828,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
                       )}
                     </div>
                     {c.locked && <span style={{ position: "absolute", right: 3, top: 3, background: "var(--brand)", color: "#fff", borderRadius: 4, padding: "1px 3px", fontSize: 9 }}>🔒</span>}
-                    {dpi != null && dpi < 230 && <span style={{ position: "absolute", left: 4, bottom: 4, fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 4, color: "#fff", background: dpi < 150 ? "#cc4b4b" : "#c08a1e" }}>{dpi < 150 ? "⚠ " : ""}{dpi} DPI</span>}
+                    {dpi != null && dpi < 230 && <span style={{ position: "absolute", left: 4, bottom: 4, fontSize: 9, fontWeight: 700, padding: "1px 4px", borderRadius: 4, color: "#fff", background: dpi < 150 ? "var(--rd)" : "#c08a1e" }}>{dpi < 150 ? "⚠ " : ""}{dpi} DPI</span>}
                     {selected && !c.locked && (["nw", "ne", "sw", "se"] as const).map((m) => (
                       <span key={m} onPointerDown={(e) => onCellDown(e, c, m)} style={{ position: "absolute", width: 12, height: 12, background: "var(--brand)", borderRadius: 2, cursor: `${m}-resize`, left: m.includes("w") ? -6 : undefined, right: m.includes("e") ? -6 : undefined, top: m.includes("n") ? -6 : undefined, bottom: m.includes("s") ? -6 : undefined }} />
                     ))}
@@ -854,7 +857,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
           </div>
 
           {/* ── Dải trang (kéo-thả để sắp xếp) ── */}
-          <div className="mt-2 flex items-center gap-2 overflow-x-auto rounded-2xl p-2" style={panel}>
+          <div className="mt-2 flex items-center gap-2 overflow-x-auto rounded-[14px] p-2" style={panel}>
             {spreads.map((s, i) => (
               <button key={s.id} onClick={() => { setCur(i); setSel(null); }}
                 draggable onDragStart={() => { dragPage.current = i; }}
@@ -870,12 +873,12 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
         </div>
 
         {/* Panel thuộc tính (theo ngữ cảnh) */}
-        <div className="w-[280px] flex-none rounded-2xl p-3" style={panel}>
+        <div className="w-[280px] flex-none rounded-[14px] p-3" style={panel}>
           {/* Công cụ trang — luôn hiển thị */}
           <p className="mb-2 text-sm font-extrabold">{cur === 0 ? "Bìa" : `Trang ${cur + 1}`} <span className="text-[11px] font-normal" style={{ color: "var(--text3)" }}>· {size.name}</span></p>
           <div className="mb-2 grid grid-cols-2 gap-1.5">
             <button onClick={dupSpread} className="btn-ghost gap-1 text-xs"><Copy size={13} /> Nhân đôi</button>
-            <button onClick={delSpread} className="btn-ghost gap-1 text-xs" style={{ color: "#cc4b4b" }}><Trash2 size={13} /> Xoá trang</button>
+            <button onClick={delSpread} className="btn-ghost gap-1 text-xs" style={{ color: "var(--rd)" }}><Trash2 size={13} /> Xoá trang</button>
             <button onClick={() => moveSpread(-1)} disabled={cur === 0} className="btn-ghost gap-1 text-xs disabled:opacity-40"><ChevronLeft size={13} /> Trước</button>
             <button onClick={() => moveSpread(1)} disabled={cur === spreads.length - 1} className="btn-ghost gap-1 text-xs disabled:opacity-40">Sau <ChevronRight size={13} /></button>
             <button onClick={shuffle} className="btn-ghost col-span-2 gap-1 text-xs"><Shuffle size={13} /> Đổi vị trí ảnh trong trang</button>
@@ -944,7 +947,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
               </div>
             </div>
             {!!selCell.tint && <Slider label="Độ đậm phủ màu" min={5} max={90} step={5} value={selCell.tintA ?? 35} onChange={(v) => patchCell(selCell.uid, { tintA: v })} />}
-            {(() => { const dpi = cellDpi(selCell); return dpi != null ? <p className="text-[11.5px]" style={{ color: dpi < 150 ? "#cc4b4b" : dpi < 230 ? "#c08a1e" : "var(--text2)" }}>~{dpi} DPI · {dpi < 150 ? "quá thấp để in" : dpi < 230 ? "hơi thấp" : "tốt để in"}</p> : null; })()}
+            {(() => { const dpi = cellDpi(selCell); return dpi != null ? <p className="text-[11.5px]" style={{ color: dpi < 150 ? "var(--rd)" : dpi < 230 ? "#c08a1e" : "var(--text2)" }}>~{dpi} DPI · {dpi < 150 ? "quá thấp để in" : dpi < 230 ? "hơi thấp" : "tốt để in"}</p> : null; })()}
             <button onClick={() => clearPhoto(selCell.uid)} className="btn-ghost w-full text-sm">Bỏ ảnh khỏi ô</button>
           </div>)}
 
@@ -964,7 +967,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
             <div className="flex gap-1">
               {(["left", "center", "right"] as const).map((a) => <button key={a} onClick={() => patchCell(selCell.uid, { align: a })} className="flex-1 rounded-md py-1.5 text-xs" style={{ background: selCell.align === a ? "var(--brandSoft)" : "var(--surface)", color: selCell.align === a ? "var(--brand)" : "var(--text2)" }}>{a === "left" ? "Trái" : a === "center" ? "Giữa" : "Phải"}</button>)}
             </div>
-            <button onClick={() => delCell(selCell.uid)} className="btn-ghost w-full text-sm" style={{ color: "#cc4b4b" }}>Xoá dòng chữ</button>
+            <button onClick={() => delCell(selCell.uid)} className="btn-ghost w-full text-sm" style={{ color: "var(--rd)" }}>Xoá dòng chữ</button>
           </div>)}
 
           {/* Không chọn gì → trang trí */}
@@ -981,7 +984,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
       {/* Export modal — chọn trang để xuất */}
       {showExport && (
         <div onClick={() => setShowExport(false)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-2xl p-5" style={{ background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.4)" }}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-[14px] p-5" style={{ background: "var(--sf)", boxShadow: "0 24px 70px rgba(0,0,0,.4)" }}>
             <div className="mb-1 flex items-center justify-between">
               <h3 className="text-base font-extrabold">Xuất album</h3>
               <button onClick={() => setShowExport(false)} className="text-xl" style={{ color: "var(--text3)" }}>×</button>
@@ -1026,7 +1029,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
       {/* Auto Design — xem trước phương án trước khi áp dụng */}
       {showAuto && (
         <div onClick={() => setShowAuto(false)} style={{ position: "fixed", inset: 0, zIndex: 80, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-2xl p-5" style={{ background: "var(--panel)", boxShadow: "0 24px 70px rgba(0,0,0,.4)", maxHeight: "88vh", overflowY: "auto" }}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl rounded-[14px] p-5" style={{ background: "var(--sf)", boxShadow: "0 24px 70px rgba(0,0,0,.4)", maxHeight: "88vh", overflowY: "auto" }}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-base font-extrabold">Tự động thiết kế Album</h3>
               <button onClick={() => setShowAuto(false)} className="text-xl" style={{ color: "var(--text3)" }}>×</button>
@@ -1047,7 +1050,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
                 <p className="mb-2 text-xs font-semibold" style={{ color: "var(--text2)" }}>Xem trước phương án ({autoPlan.length} spread)</p>
                 <div className="max-h-[46vh] space-y-1.5 overflow-y-auto rounded-lg p-1" style={{ background: "var(--surface2)" }}>
                   {autoPlan.map((p, i) => (
-                    <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ background: "var(--panel)" }}>
+                    <div key={i} className="flex items-center gap-2 rounded-md px-2 py-1.5" style={{ background: "var(--sf)" }}>
                       <span style={{ width: 54, flexShrink: 0, display: "block" }}><LayoutMini rects={p.rects} aspect={aspect} /></span>
                       <span className="text-xs font-semibold">Spread {i + 1}</span>
                       <span className="ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: "var(--brandSoft)", color: "var(--brand)" }}>{p.count} ảnh</span>

@@ -927,14 +927,20 @@ body {
 /* Tiêu đề trong VÙNG NỘI DUNG về đúng cỡ "tiêu đề màn" của bản thiết kế
    (19–21px / 750). Topbar đặt cỡ bằng style inline nên không bị ảnh hưởng.
    Các màn cũ đang để h1 24–40px, đọc như hai tiêu đề chồng nhau vì topbar
-   cũng đã hiện tên màn. */
-.studio-shell main h1 {
+   cũng đã hiện tên màn.
+
+   Bọc trong :where() để độ ưu tiên = 0 — đây là GIÁ TRỊ MẶC ĐỊNH, không phải
+   lệnh đè. Viết thẳng `.studio-shell main h1` thì độ ưu tiên (0,1,2) thắng cả
+   class Tailwind (0,1,0): mọi màn đã dựng lại mà đặt cỡ riêng đều bị kéo ngược
+   về 19/14px mà không ai thấy — lời chào 24px ở Tổng quan, tiêu đề 15px ở Đối
+   soát và Lịch, nhãn khối 10.5px ở Nén ảnh đều đã dính lỗi này. */
+:where(.studio-shell main) :where(h1) {
   font-size: 19px;
   font-weight: 750;
   letter-spacing: -0.4px;
   line-height: 1.3;
 }
-.studio-shell main h2 {
+:where(.studio-shell main) :where(h2) {
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0;

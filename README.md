@@ -111,13 +111,13 @@ Mọi con số tiền/ngày dùng `font-variant-numeric: tabular-nums`.
 | 6 | Hợp đồng & lịch hẹn | `contracts` | `studio/contracts/ContractsListView.tsx`, `src/lib/contract-filter.ts` |
 | 7 | Chi tiết hợp đồng | `detail` | `studio/contracts/[id]/`, `src/lib/contract-status.ts` |
 | 8 | Tạo hợp đồng (5 bước) | `newc` | `studio/contracts/new/` |
-| 9 | Hợp đồng gửi khách | `share` | `studio/contracts/[id]/share/`, trang công khai `app/hd/[code]/` |
+| 9 | Hợp đồng gửi khách | `share` | `studio/contracts/[id]/share/`, trang công khai `app/c/[token]/` |
 | 10 | Bảng công việc (kanban) | `board` | `studio/board/BoardView.tsx` |
 | 11 | Đặt lịch khách | `bookings` | `studio/bookings/BookingsView.tsx` |
 | 12 | Chi tiết đặt lịch | `booking` | `studio/bookings/[id]/` |
 | 13 | Yêu cầu mới | `leads` | `studio/leads/LeadsView.tsx` |
 | 14 | Lịch làm việc (4 chế độ) | `calendar` | `studio/calendar/CalendarView.tsx`, `team/TeamCalendar.tsx` |
-| 15 | Chế độ ngày chụp | `field` | **mới** — `studio/field/` |
+| 15 | Chế độ ngày chụp | `field` | `studio/field/`, `src/lib/field-mode.ts` |
 | 16 | Xử lý hình ảnh | `production` | `studio/production/ProductionView.tsx` |
 | 17 | Thư viện album | `albums` | `dashboard/AlbumList.tsx` |
 | 18 | Album chọn ảnh (chi tiết) | `album` | `dashboard/albums/[id]/AlbumEditor.tsx` |
@@ -240,7 +240,24 @@ Bước xong: nền `--gn` + icon `check`. Bước hiện tại: nền `--ac`. B
 
 **Chế độ ngày chụp** — lịch trình phải sinh ra từ `t1`/`t2` của chính hợp đồng (bước đầu = `t1 − 30 phút`, các bước sau chia đều tới `t2`). Checklist ảnh chọn theo loại buổi, nhận diện bằng regex trên `svc + title`: cưới / sơ sinh / kỷ yếu / doanh nghiệp / chân dung.
 
+Đã dựng ở `src/lib/field-mode.ts` (tính thuần, không React) + `studio/field/`. Vài điểm khi ghép vào dữ liệu thật của repo:
+
+- `studio_contracts` chỉ có MỘT cột giờ (`event_time`), không có giờ kết thúc. Nên `t1` = sớm nhất trong (giờ phân công `contract_crew.start_time` → `event_time` → `intake.start_time`), `t2` = muộn nhất của `contract_crew.end_time`. Không có giờ phân công thì `t2` = `t1` + độ dài mặc định theo loại buổi (cưới 10h, kỷ yếu 5h, doanh nghiệp 6h, sơ sinh/chân dung 3h).
+- Tiệc tan **01:00** nghĩa là rạng sáng hôm sau, không phải dữ liệu hỏng: `t2 < t1` được cộng 24h, và mốc trong lịch trình giữ cả số phút chưa quay vòng (`RunStep.atMin`) để so thứ tự cho đúng.
+- Chặng đang chạy bám theo đồng hồ; thợ bấm vào một chặng để tự ghim, bấm lại để thả. Ô tick checklist ảnh và chặng đã ghim lưu ở `localStorage` theo id hợp đồng — ngoài hiện trường sóng chập chờn, mà đây cũng chỉ là ghi chú thao tác của thợ.
+- Nút **"Xong buổi chụp"** đưa hợp đồng sang `in_progress` (bước "Chụp" trong vòng đời 7 bước suy ra từ trạng thái này, không có cột riêng), rồi ở lại màn này để thợ chuyển sang buổi kế trong ngày.
+
 **Cảnh báo lãi mỏng** — `biên = (tổng HĐ − tiền công nhân sự − chi phí sản xuất) / tổng HĐ`. Dưới 45% đỏ, 45–60% vàng, trên 60% xanh.
+
+**Xem như khách trên điện thoại** — khung xem trước nhúng THẲNG trang khách thật `/c/<token>` bằng iframe, không vẽ lại nội dung hợp đồng (vẽ lại thì mỗi lần trang khách đổi, bản xem trước lại nói dối). Một chỗ dễ sập: app đặt `X-Frame-Options: SAMEORIGIN` + `frame-ancestors 'self'`, nên studio có tên miền riêng mà nhúng link branded sẽ bị trình duyệt chặn, khung trắng trơn. Vì `/c/<token>` chạy trên cả host chính lẫn host studio và ra cùng nội dung, iframe dùng đường dẫn **cùng gốc**, còn link hiện / nút chép / mã QR vẫn là bản branded.
+
+**Ghi chú nội bộ @nhắc tên** — bảng MỚI `contract_notes` (chạy `supabase/migrations/contract_notes.sql` trước khi dùng). RLS cùng luật với các bảng con khác của hợp đồng: mọi thành viên studio đọc/ghi được, studio khác không thấy gì. Khách không bao giờ thấy — trang `/c/<token>` không đọc bảng này.
+
+Bộ tách @nhắc-tên nằm ở `src/lib/mentions.ts` (thuần, tách khỏi component để kiểm được). Ba luật: chỉ khớp tên CÓ THẬT trong ê-kíp/nhân viên (nên `a@b.com` không bị tô); tên dài thử trước tên ngắn (có cả "Thảo" lẫn "Thảo Huỳnh" thì `@Thảo Huỳnh` khớp trọn họ tên); gõ không dấu vẫn khớp, và cột `mentions` lưu **tên chuẩn** chứ không lưu bản người dùng gõ — nếu không thì sau này lọc theo tên hay gửi thông báo đều trượt.
+
+Mốc thời gian dùng `fmtWhen()` ở `src/lib/date.ts`, luôn quy về giờ Việt Nam. Dùng `getHours()` cục bộ thì máy chủ (UTC trên Vercel) và máy khách (UTC+7) dựng ra hai chuỗi khác nhau → React báo lỗi hydration và vẽ lại cả cây.
+
+**Hoàn tác trong toast** — `useUndoToast()` ở `src/components/studio/UndoToast.tsx`. Hoãn việc xoá 5 giây rồi mới gọi xuống máy chủ, chứ không xoá-rồi-thêm-lại (thêm lại không bao giờ khôi phục đúng nguyên trạng: id mới, mất bản ghi con, sai thứ tự). Ba chỗ dễ hụt đã xử lý: xoá liên tiếp thì việc đang chờ được chốt ngay chứ không bị nuốt; rời trang thì chạy nốt qua `pagehide`; hoàn tác trả dòng về đúng vị trí cũ.
 
 ---
 
@@ -257,6 +274,11 @@ Khung điện thoại 392×812, tab bar 5 mục ở đáy, hit target tối thi�
 
 Bảng trên desktop → thẻ trên mobile. Không thu nhỏ bảng.
 
+Không dựng route riêng cho mobile — cùng một màn, đổi bố cục theo bề ngang:
+
+- **Lịch**: dưới 640px mở thẳng chế độ **Ngày** (lưới tuần ở khổ hẹp vẫn là 7 cột bé xíu, chạm rất khó). Dải ngày lùi 3 / tiến 10 ngày, mỗi ô hiện số buổi. Thẻ đồng bộ Google là việc cài một lần nên đẩy xuống cuối ở khổ hẹp (`order-last lg:order-none`), không chiếm đầu màn.
+- **Chi tiết HĐ**: stepper 7 bước chuyển từ xuống dòng sang **cuộn ngang** dưới 900px — xuống dòng thì nó cao thành một khối đẩy hết nội dung xuống dưới nếp gấp. Thanh hành động (Ghi nhận thu · Gửi khách) ghim đáy, ngay TRÊN thanh tab 52px, chỉ hiện dưới `lg`.
+
 ---
 
 ## Ghi chú kỹ thuật khi dựng lại
@@ -264,6 +286,8 @@ Bảng trên desktop → thẻ trên mobile. Không thu nhỏ bảng.
 **Nguồn số liệu duy nhất.** Lỗi lặp lại nhiều nhất trong quá trình thiết kế: một màn chi tiết lưu `id` được bấm nhưng nội dung lại là hằng số cứng, nên mọi hàng mở ra cùng một bản ghi. Với mỗi màn chi tiết, **luôn** derive từ `find(x => x.id === selectedId)`. Tương tự, tổng tiền phải cộng từ mảng hạng mục, không viết tay số tổng.
 
 **Icon** — Material Symbols Rounded. Tên icon dùng trong thiết kế: `space_dashboard, request_quote, description, view_kanban, event_note, inbox, calendar_month, auto_fix_high, photo_library, checkroom, photo_camera, groups, auto_awesome, auto_stories, account_balance_wallet, payments, monitoring, diversity_3, trophy, forum, inventory_2, gavel, language, tune, settings, notifications, account_circle, workspace_premium, redeem, desktop_windows, shield_person`.
+
+**Trình soạn thảo** — Video slide, Dàn trang album và Trình dựng website đều có bảng màu riêng cứng trong code, không theo bộ token; đã chuyển sang token nên chúng đổi theo nền tối và theo màu nhấn thương hiệu. Ba thứ CỐ Ý giữ mã màu cứng vì đó là **nội dung xuất ra**, không phải giao diện: `THEMES` của video slide, bảng màu trang album, và `ACCENTS` của website studio. Sân khấu xem trước giữ nền tối cố định ở cả hai chế độ — bản thiết kế cũng vẽ vậy (`#1E1C21` trong thẻ trắng).
 
 **Ảnh** — mọi chỗ có ảnh đang là placeholder sọc. Trong repo thật nối vào Google Drive / CDN sẵn có.
 

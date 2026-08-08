@@ -94,10 +94,12 @@ export default function AlbumDesigner() {
   function chooseSize(s: Size) { setEdSize({ name: s.name, w: s.w, h: s.h }); setStep("template"); }
   function chooseTpl(t: Tpl) { setEdTpl({ id: t.id, name: t.name, page: t.page, ink: t.ink, font: t.font }); setStep("editor"); }
 
-  const eyebrow = "text-[11px] font-bold uppercase tracking-[0.05em]";
-  const h2 = "text-[26px] font-extrabold tracking-tight sm:text-[28px]";
-  const card = "rounded-2xl p-4 transition-all";
-  const cardStyle: React.CSSProperties = { background: "var(--panel)", border: "1px solid var(--border)", boxShadow: "0 1px 2px rgba(20,24,33,.05), 0 8px 24px rgba(20,24,33,.05)" };
+  /* Bản thiết kế: thẻ bo 14px, CHỈ có viền — không đổ bóng, không nhấc lên khi
+     rê chuột. Tiêu đề bước là 19px/750 chứ không phải 26–28px kiểu landing. */
+  const eyebrow = "text-[10.5px] font-extrabold uppercase tracking-[.7px]";
+  const h2 = "text-[19px] font-bold tracking-[-.4px]";
+  const card = "rounded-[14px] p-4";
+  const cardStyle: React.CSSProperties = { background: "var(--sf)", border: "1px solid var(--bd)" };
 
   // ── Editor ────────────────────────────────────────────────────────────────
   if (step === "editor" && edSize && edTpl) {
@@ -109,22 +111,26 @@ export default function AlbumDesigner() {
       {/* ── TRANG CHÍNH — album đã lưu ── */}
       {step === "home" && (
         <div className="mx-auto max-w-5xl">
-          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <span className={eyebrow} style={{ color: "var(--brand)" }}>Thiết kế Album</span>
-              <h1 className={`${h2} mt-1`}>Album của bạn</h1>
-              <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Mở album đang làm dở, hoặc tạo album mới để in.</p>
-            </div>
-            <button onClick={startNew} className="btn-primary gap-1.5"><Plus size={16} /> Tạo album mới</button>
+          <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
+            <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+              Mở album đang làm dở, hoặc tạo album mới để in — ảnh lấy thẳng từ album khách đã chọn.
+            </p>
+            <button
+              onClick={startNew}
+              className="ml-auto flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
+              style={{ background: "var(--ac)", color: "#fff" }}
+            >
+              <Plus size={17} /> Album mới
+            </button>
           </div>
 
           {loadingSaved ? (
             <div className="flex justify-center py-16"><Loader2 className="animate-spin" style={{ color: "var(--brand)" }} /></div>
           ) : saved.length === 0 ? (
-            <button onClick={startNew} className={`${card} flex w-full flex-col items-center py-16 text-center`} style={{ ...cardStyle, borderStyle: "dashed" }}>
-              <BookImage size={30} style={{ color: "var(--brand)" }} />
-              <p className="mt-3 font-semibold">Chưa có album nào</p>
-              <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Nhấn để tạo album đầu tiên — chọn khổ, rồi AI tự rải ảnh & dàn trang.</p>
+            <button onClick={startNew} className={`${card} flex w-full flex-col items-center py-9 text-center`} style={{ ...cardStyle, borderStyle: "dashed" }}>
+              <BookImage size={26} style={{ color: "var(--tx3)" }} />
+              <p className="mt-2 text-[13px] font-semibold">Chưa có album nào</p>
+              <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>Bấm để tạo album đầu tiên — chọn khổ, rồi hệ thống tự rải ảnh &amp; dàn trang.</p>
             </button>
           ) : (
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
@@ -137,9 +143,9 @@ export default function AlbumDesigner() {
                         {opening === s.id ? <Loader2 className="animate-spin" /> : <div style={{ width: ar >= 1 ? 84 : 84 * ar, height: ar >= 1 ? 84 / ar : 84, border: `2px solid ${s.tpl?.ink || "var(--brand)"}`, opacity: 0.5, borderRadius: 4 }} />}
                       </div>
                       <p className="mt-2 truncate text-[14px] font-bold">{s.name}</p>
-                      <p className="flex items-center gap-1 text-[11px]" style={{ color: "var(--text3)" }}><Clock size={11} /> {new Date(s.updated_at).toLocaleDateString("vi-VN")} · {s.size?.name}</p>
+                      <p className="tnum flex items-center gap-1 text-[11.5px]" style={{ color: "var(--tx3)" }}><Clock size={11} /> {new Date(s.updated_at).toLocaleDateString("vi-VN")} · {s.size?.name}</p>
                     </button>
-                    <button onClick={() => del(s.id)} className="mt-2 flex items-center gap-1 text-[11px] font-semibold" style={{ color: "#cc4b4b" }}><Trash2 size={12} /> Xoá</button>
+                    <button onClick={() => del(s.id)} className="mt-2 flex items-center gap-1 text-[11px] font-semibold" style={{ color: "var(--rd)" }}><Trash2 size={12} /> Xoá</button>
                   </div>
                 );
               })}
@@ -155,13 +161,13 @@ export default function AlbumDesigner() {
             const active = step === k;
             const done = (k === "size" && step === "template");
             return (
-              <button key={k} onClick={() => setStep(k)} className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold" style={{ background: active ? "var(--brandSoft)" : "transparent", color: active ? "var(--brand)" : "var(--text2)" }}>
-                <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold" style={{ background: done || active ? "var(--brand)" : "var(--surface2)", color: done || active ? "#fff" : "var(--text3)" }}>{done ? <Check size={13} /> : i + 1}</span>
+              <button key={k} onClick={() => setStep(k)} className="flex items-center gap-2 rounded-[20px] px-3 py-1.5 text-[12.5px] font-semibold" style={{ background: active ? "var(--acS)" : "transparent", color: active ? "var(--ac)" : "var(--tx2)" }}>
+                <span className="flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: done || active ? "var(--ac)" : "var(--sf2)", color: done || active ? "#fff" : "var(--tx3)" }}>{done ? <Check size={13} /> : i + 1}</span>
                 {l}
               </button>
             );
           })}
-          <button onClick={() => setStep("home")} className="ml-auto text-xs font-semibold" style={{ color: "var(--text3)" }}>← Về album của tôi</button>
+          <button onClick={() => setStep("home")} className="ml-auto text-[12px] font-semibold" style={{ color: "var(--ac)" }}>← Về album của tôi</button>
         </div>
       )}
 
@@ -169,34 +175,40 @@ export default function AlbumDesigner() {
       {step === "size" && (
         <div className="mx-auto max-w-5xl">
           <div className="mb-6 text-center">
-            <span className={eyebrow} style={{ color: "var(--brand)" }}>Bước 1 / 2</span>
+            <span className={eyebrow} style={{ color: "var(--tx3)" }}>Bước 1 / 2</span>
             <h1 className={`${h2} mt-1`}>Chọn khổ album</h1>
-            <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Chọn khổ in cố định trước khi thiết kế.</p>
+            <p className="mt-1 text-[13px]" style={{ color: "var(--tx2)" }}>Chọn khổ in cố định trước khi thiết kế.</p>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {SIZES.map((s) => {
               const ar = s.w / s.h, maxPx = 98;
               const pw = ar >= 1 ? maxPx : maxPx * ar, ph = ar >= 1 ? maxPx / ar : maxPx;
               return (
-                <button key={s.id} onClick={() => chooseSize(s)} className={`${card} text-left hover:-translate-y-0.5`} style={cardStyle}>
+                <button key={s.id} onClick={() => chooseSize(s)} className={`${card} card-interactive text-left`} style={cardStyle}>
                   <div className="flex h-[120px] items-center justify-center">
-                    <div style={{ width: pw, height: ph, border: "2px solid var(--brand)", borderRadius: 6, background: "linear-gradient(135deg, var(--brandSoft), var(--surface2))" }} />
+                    <div style={{ width: pw, height: ph, border: "2px solid var(--ac)", borderRadius: 6, background: "var(--acS)" }} />
                   </div>
-                  <p className="text-[15px] font-extrabold">{s.name}</p>
-                  <p className="text-[12.5px]" style={{ color: "var(--text2)" }}>{s.dim}</p>
-                  <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "var(--text3)" }}>{s.tag}</p>
+                  <p className="text-[14px] font-bold">{s.name}</p>
+                  <p className="tnum text-[12px]" style={{ color: "var(--tx2)" }}>{s.dim}</p>
+                  <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>{s.tag}</p>
                 </button>
               );
             })}
           </div>
           <div className={`${card} mt-4 flex flex-wrap items-end gap-3`} style={cardStyle}>
             <div className="flex-1">
-              <p className="text-[15px] font-extrabold">Khổ tùy chỉnh</p>
-              <p className="text-[12.5px]" style={{ color: "var(--text2)" }}>Nhập kích thước riêng (cm).</p>
+              <p className="text-[14px] font-bold">Khổ tùy chỉnh</p>
+              <p className="text-[12px]" style={{ color: "var(--tx3)" }}>Nhập kích thước riêng (cm).</p>
             </div>
-            <label className="text-xs" style={{ color: "var(--text2)" }}>Rộng<input value={customW} onChange={(e) => setCustomW(e.target.value)} inputMode="decimal" className="input ml-2 w-[74px]" /></label>
-            <label className="text-xs" style={{ color: "var(--text2)" }}>Cao<input value={customH} onChange={(e) => setCustomH(e.target.value)} inputMode="decimal" className="input ml-2 w-[74px]" /></label>
-            <button onClick={() => { const w = parseFloat(customW) || 30, h = parseFloat(customH) || 30; chooseSize({ id: "custom", name: `Tùy chỉnh ${w}×${h}`, dim: `${w} × ${h} cm`, w, h, tag: "Tùy chỉnh" }); }} className="btn-primary gap-1.5">Tiếp tục <ArrowRight size={15} /></button>
+            <label className="text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>Rộng<input value={customW} onChange={(e) => setCustomW(e.target.value)} inputMode="decimal" className="input ml-2 w-[74px]" /></label>
+            <label className="text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>Cao<input value={customH} onChange={(e) => setCustomH(e.target.value)} inputMode="decimal" className="input ml-2 w-[74px]" /></label>
+            <button
+              onClick={() => { const w = parseFloat(customW) || 30, h = parseFloat(customH) || 30; chooseSize({ id: "custom", name: `Tùy chỉnh ${w}×${h}`, dim: `${w} × ${h} cm`, w, h, tag: "Tùy chỉnh" }); }}
+              className="flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
+              style={{ background: "var(--ac)", color: "#fff" }}
+            >
+              Tiếp tục <ArrowRight size={15} />
+            </button>
           </div>
         </div>
       )}
@@ -205,27 +217,27 @@ export default function AlbumDesigner() {
       {step === "template" && (
         <div className="mx-auto max-w-6xl">
           <div className="mb-6 text-center">
-            <span className={eyebrow} style={{ color: "var(--brand)" }}>Bước 2 / 2</span>
+            <span className={eyebrow} style={{ color: "var(--tx3)" }}>Bước 2 / 2</span>
             <h1 className={`${h2} mt-1`}>Chọn bộ mẫu</h1>
-            <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>Phông chữ + màu trang + phong cách dàn trang.</p>
+            <p className="mt-1 text-[13px]" style={{ color: "var(--tx2)" }}>Phông chữ + màu trang + phong cách dàn trang.</p>
           </div>
           <div className="mb-6 flex flex-wrap justify-center gap-2">
             {CATS.map((c) => (
-              <button key={c} onClick={() => setCat(c)} className="rounded-full px-3.5 py-1.5 text-sm font-semibold" style={{ background: cat === c ? "var(--brand)" : "var(--surface)", color: cat === c ? "#fff" : "var(--text2)", border: "1px solid var(--border)" }}>{c}</button>
+              <button key={c} onClick={() => setCat(c)} className="rounded-[20px] px-3.5 py-1.5 text-[12.5px] font-semibold" style={{ background: cat === c ? "var(--acS)" : "var(--sf)", color: cat === c ? "var(--ac)" : "var(--tx2)", border: `1px solid ${cat === c ? "var(--acM)" : "var(--bd)"}` }}>{c}</button>
             ))}
           </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {TEMPLATES.filter((t) => cat === "Tất cả" || t.cat === cat).map((t) => (
-              <button key={t.id} onClick={() => chooseTpl(t)} className={`${card} text-left hover:-translate-y-[3px]`} style={cardStyle}>
+              <button key={t.id} onClick={() => chooseTpl(t)} className={`${card} card-interactive text-left`} style={cardStyle}>
                 <div className="flex h-[150px] items-center justify-center gap-[5px] overflow-hidden rounded-[11px] p-3.5" style={{ background: t.page }}>
                   <span style={{ fontFamily: t.font, color: t.ink, fontSize: 26, textTransform: t.upper ? "uppercase" : "none", letterSpacing: t.upper ? ".08em" : undefined }}>{t.sample}</span>
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <div>
-                    <p className="text-[15px] font-extrabold">{t.name}</p>
-                    <p className="text-[12px]" style={{ color: "var(--text2)" }}>{t.cat}</p>
+                    <p className="text-[14px] font-bold">{t.name}</p>
+                    <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{t.cat}</p>
                   </div>
-                  <span className="rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: "var(--brand)", background: "var(--brandSoft)" }}>Dùng mẫu</span>
+                  <span className="flex-none rounded-[20px] px-2.5 py-1 text-[11px] font-bold" style={{ color: "var(--ac)", background: "var(--acS)" }}>Dùng mẫu</span>
                 </div>
               </button>
             ))}

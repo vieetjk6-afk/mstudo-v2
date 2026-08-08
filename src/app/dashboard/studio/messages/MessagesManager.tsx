@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2, Copy, Check, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
+import { useUndoToast } from "@/components/studio/UndoToast";
 import type { MessageTemplate } from "@/lib/types";
 
 const SAMPLE_TEMPLATES: { title: string; body: string }[] = [
@@ -25,6 +26,7 @@ export default function MessagesManager({
   initial: MessageTemplate[];
 }) {
   const supabase = createClient();
+  const { run, view } = useUndoToast();
   const [list, setList] = useState<MessageTemplate[]>(initial);
   const [f, setF] = useState({ title: "", body: "" });
   const [busy, setBusy] = useState(false);
@@ -55,9 +57,17 @@ export default function MessagesManager({
     if (!error && data) setList((p) => [...(data as MessageTemplate[]), ...p]);
   }
 
-  async function remove(id: string) {
-    await supabase.from("message_templates").delete().eq("id", id);
+  /** Xoá có hoàn tác: hàng biến mất ngay, 5 giây sau mới xoá thật. */
+  function remove(id: string) {
+    const idx = list.findIndex((m) => m.id === id);
+    const row = list[idx];
+    if (!row) return;
     setList((p) => p.filter((m) => m.id !== id));
+    run({
+      label: `Đã xoá mẫu “${row.title || "chưa đặt tên"}”`,
+      commit: async () => { await supabase.from("message_templates").delete().eq("id", id); },
+      undo: () => setList((p) => { const n = [...p]; n.splice(idx, 0, row); return n; }),
+    });
   }
 
   function copy(m: MessageTemplate) {
@@ -68,6 +78,7 @@ export default function MessagesManager({
 
   return (
     <div className="page-in">
+      {view}
       <p className="mb-3.5 text-[13px]" style={{ color: "var(--tx2)" }}>
         Tin soạn sẵn (nhắc lịch, xin đánh giá, nhắc công nợ…) để chép nhanh gửi Zalo / Messenger / email.
       </p>

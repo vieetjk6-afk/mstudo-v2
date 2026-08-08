@@ -21,6 +21,7 @@ import type {
 } from "@/lib/types";
 import { crewPortalUrl as buildCrewPortalUrl } from "@/lib/crew-show";
 import ContractEditor from "./ContractEditor";
+import type { NoteRow } from "./ContractNotes";
 import StudioDenied from "@/components/StudioDenied";
 
 
@@ -89,6 +90,7 @@ export default async function ContractPage({ params }: { params: { id: string } 
     { data: services },
     { data: pricelistRows },
     { data: clientProofs },
+    { data: notes },
     { data: conflictBookings },
     { data: conflictUnavail },
     { data: sameDay },
@@ -110,6 +112,10 @@ export default async function ContractPage({ params }: { params: { id: string } 
     supabase.from("studio_services").select("id, name, clauses").eq("owner_id", profile.id).eq("active", true).order("position", { ascending: true }),
     supabase.from("studio_pricelist").select("name, price, unit").eq("owner_id", profile.id).eq("active", true).gt("price", 0).order("position"),
     supabase.from("contract_client_proofs").select("id, url, note, uploaded_at, plan_id").eq("contract_id", params.id).order("uploaded_at", { ascending: false }),
+    // Bảng ghi chú nội bộ là bảng MỚI — studio chưa chạy migration thì truy
+    // vấn lỗi. `.then` nuốt lỗi để cả màn hợp đồng không sập vì một mục phụ;
+    // ô soạn ghi chú sẽ tự báo cần chạy migration khi bấm Gửi.
+    supabase.from("contract_notes").select("id, author_id, author_name, body, mentions, created_at").eq("contract_id", params.id).order("created_at").then((r) => (r.error ? { data: [] } : r)),
     ed ? supabase.from("contract_crew").select("phone, contract:studio_contracts!inner(id, owner_id, event_date, title)").eq("contract.owner_id", profile.id).eq("contract.event_date", ed).not("phone", "is", null) : empty,
     // Chỉ mốc thuộc studio này — xem ghi chú cách ly ở team/page.tsx.
     ed ? supabase.from("crew_unavailable").select("*").eq("date", ed).eq("owner_id", profile.id) : empty,
@@ -174,6 +180,8 @@ export default async function ContractPage({ params }: { params: { id: string } 
       staffList={(staffList ?? []) as { id: string; full_name: string | null; email: string }[]}
       canAssign={canAssign}
       initialClientProofs={(clientProofs ?? []) as { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[]}
+      initialNotes={(notes ?? []) as NoteRow[]}
+      me={{ id: profile.actingUserId ?? profile.id, name: profile.full_name || profile.email || "Tôi" }}
     />
   );
 }

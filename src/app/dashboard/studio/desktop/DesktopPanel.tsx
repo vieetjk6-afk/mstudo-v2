@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Monitor, Download, ShieldAlert, FileSpreadsheet, FileJson, Laptop, Trash2, RefreshCw, Plus, Copy, Check } from "lucide-react";
+import { Monitor, Download, ShieldAlert, FileSpreadsheet, FileJson, FileText, Laptop, Trash2, RefreshCw, Plus, Copy, Check } from "lucide-react";
 import RestorePanel from "./RestorePanel";
+import { Panel, PanelHead, Pill, EmptyState } from "@/components/studio/ui";
 
 /**
  * Trang MStudo Desktop: tải bản cài Windows, quản lý thiết bị (tối đa 2 máy),
@@ -126,139 +127,197 @@ export default function DesktopPanel() {
 
   const active = devices.filter((d) => !d.revoked_at);
 
-  return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Tải app */}
-      <div className="card p-6">
-        <div className="flex items-start gap-4">
-          <div className="flex h-12 w-12 flex-none items-center justify-center rounded-xl" style={{ background: "var(--brandSoft)" }}>
-            <Monitor size={24} style={{ color: "var(--brand)" }} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="font-serif text-xl font-medium">MStudo Desktop cho Windows</h2>
-            <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>
-              Ứng dụng chạy trên máy tính: tự động lưu hợp đồng (PDF + Word) về thư mục bạn chọn ngay khi khách ký,
-              và tự xuất Excel toàn bộ dữ liệu hằng ngày để chống mất dữ liệu.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <a href={downloadUrl} target="_blank" rel="noopener noreferrer" download className="btn-primary inline-flex items-center gap-2"><Download size={16} /> Tải bản cài đặt{dl.ver ? ` (${dl.ver})` : ""}</a>
-              <span className="text-xs" style={{ color: "var(--text2)" }}>Windows 10/11 · 64-bit · file <code>-setup.exe</code></span>
-            </div>
-          </div>
-        </div>
-        <div className="mt-5 flex items-start gap-3 rounded-xl p-4 text-sm" style={{ background: "var(--surface2)" }}>
-          <ShieldAlert size={18} className="mt-0.5 flex-none" style={{ color: "var(--brand)" }} />
-          <div style={{ color: "var(--text2)" }}>
-            <b style={{ color: "var(--text)" }}>Khi cài đặt, Windows có thể hiện cảnh báo SmartScreen</b> vì ứng dụng chưa mua chứng chỉ ký số.
-            Bấm <b>“More info” → “Run anyway”</b> (Thông tin thêm → Vẫn chạy) để tiếp tục — file cài chỉ tải từ trang này là an toàn.
-            {" "}Nếu file bị “khoá”: chuột phải file <code>-setup.exe</code> → <b>Properties</b> → tick <b>Unblock</b> → OK rồi mở lại.
-            <br />
-            <span className="mt-1 inline-block">
-              Máy hiện <b style={{ color: "var(--text)" }}>“Smart App Control blocked an app…”</b> (chỉ có trên Windows 11 cài mới): vào
-              {" "}<b>Settings → Privacy &amp; security → Windows Security → App &amp; browser control → Smart App Control → Off</b> rồi cài lại.
-              {" "}<i>(Tắt Smart App Control là một chiều — chỉ nên làm trên máy của bạn.)</i>
-            </span>
-          </div>
-        </div>
-      </div>
+  /* Bốn việc app làm — bản thiết kế bày thành lưới 2 cột thẻ viền nhỏ. */
+  const FEATURES: [typeof FileSpreadsheet, string, string][] = [
+    [FileText, "Lưu hợp đồng tự động", "Khách vừa ký là có PDF + Word trong thư mục bạn chọn."],
+    [FileSpreadsheet, "Xuất Excel hằng ngày", "Toàn bộ khách, báo giá, thu chi, lương — tự chạy nền."],
+    [FileJson, "Sao lưu đầy đủ", "Một file .json khôi phục lại được cả studio khi cần."],
+    [RefreshCw, "Đồng bộ hai chiều", "Sửa trên web hay trên máy đều về cùng một chỗ."],
+  ];
 
-      {/* Thiết bị */}
-      <div className="card p-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-serif text-xl font-medium">Thiết bị của bạn</h2>
-          <div className="flex items-center gap-2">
-            <button onClick={pair} disabled={pairing} className="btn-primary inline-flex items-center gap-2 text-sm"><Plus size={14} /> Kết nối thiết bị mới</button>
-            <button onClick={load} className="btn-ghost inline-flex items-center gap-2 text-sm"><RefreshCw size={14} /> Làm mới</button>
-          </div>
-        </div>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>
-          Tối đa {limit} máy hoạt động cho mỗi tài khoản. Bấm “Kết nối thiết bị mới” để lấy mã, rồi dán vào ứng dụng MStudo Desktop trên máy tính.
-        </p>
-        {acct && (
-          <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>
-            Thiết bị đăng ký ở đây sẽ đồng bộ dữ liệu của tài khoản{" "}
-            <b style={{ color: "var(--text)" }}>{acct.name || acct.email}</b>
-            {acct.name && acct.email ? ` (${acct.email})` : ""}.
-          </p>
-        )}
-        {pairErr && <p className="mt-3 rounded-lg p-3 text-sm" style={{ background: "#fbeaea", color: "#8f3d3d" }}>{pairErr}</p>}
-        {pairToken && (
-          <div className="mt-3 rounded-xl p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
-            <p className="text-sm font-medium">
-              Mã kết nối cho tài khoản <b>{acct?.name || acct?.email || "này"}</b> — chỉ hiện MỘT lần, hãy dán ngay vào app:
-            </p>
-            <div className="mt-2 flex items-center gap-2">
-              <code className="min-w-0 flex-1 truncate rounded-lg px-3 py-2 text-xs" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>{pairToken}</code>
-              <button onClick={() => copyText(pairToken, "token")} className="btn-ghost inline-flex flex-none items-center gap-1.5 text-sm">
-                {copied === "token" ? <Check size={14} /> : <Copy size={14} />} {copied === "token" ? "Đã chép" : "Chép mã"}
-              </button>
+  return (
+    <div className="page-in grid max-w-[1020px] items-start gap-3.5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+      {/* ══ Cột trái — ứng dụng và thiết bị ═════════════════════════════ */}
+      <div className="flex flex-col gap-3.5">
+        <Panel className="px-5 py-[18px]">
+          <div className="flex items-center gap-3.5">
+            <span className="flex-none rounded-[12px] p-[11px]" style={{ background: "var(--acS)", color: "var(--ac)", lineHeight: 0 }}>
+              <Monitor size={22} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[16px] font-bold" style={{ letterSpacing: "-.3px" }}>mstudo Desktop{dl.ver ? ` ${dl.ver}` : ""}</p>
+              <p className="mt-px text-[12px]" style={{ color: "var(--tx3)" }}>Windows 10/11 · 64-bit · file <code>-setup.exe</code></p>
             </div>
-            <div className="mt-2 flex items-center gap-2">
-              <span className="text-xs" style={{ color: "var(--text2)" }}>Địa chỉ máy chủ:</span>
-              <code className="rounded px-2 py-1 text-xs" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>{serverUrl}</code>
-              <button onClick={() => copyText(serverUrl, "server")} className="btn-ghost inline-flex items-center gap-1.5 text-xs">
-                {copied === "server" ? <Check size={12} /> : <Copy size={12} />} {copied === "server" ? "Đã chép" : "Chép"}
-              </button>
-            </div>
+            <Pill tone={active.length > 0 ? "green" : "gray"}>
+              {active.length > 0 ? `${active.length}/${limit} máy đang kết nối` : "Chưa kết nối máy nào"}
+            </Pill>
           </div>
-        )}
-        {!migrated && (
-          <p className="mt-3 rounded-lg p-3 text-sm" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
-            Cơ sở dữ liệu chưa có bảng thiết bị — chạy <code>supabase/schema.sql</code> mới nhất trong Supabase SQL Editor.
-          </p>
-        )}
-        <div className="mt-4 space-y-2">
-          {loading && <p className="text-sm" style={{ color: "var(--text2)" }}>Đang tải…</p>}
-          {!loading && active.length === 0 && (
-            <p className="rounded-xl p-4 text-sm" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
-              Chưa có thiết bị nào. Cài MStudo Desktop rồi đăng nhập để đăng ký máy đầu tiên.
-            </p>
-          )}
-          {active.map((d) => (
-            <div key={d.id} className="flex items-center gap-3 rounded-xl p-4" style={{ background: "var(--surface2)" }}>
-              <Laptop size={20} className="flex-none" style={{ color: "var(--brand)" }} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{d.name || "Máy tính Windows"}</div>
-                <div className="text-xs" style={{ color: "var(--text2)" }}>
-                  {d.app_version ? `v${d.app_version} · ` : ""}Đồng bộ cuối: {fmtTime(d.last_sync_at)}
+
+          <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
+            {FEATURES.map(([Icon, t, s]) => (
+              <div key={t} className="flex gap-2.5 rounded-[11px] p-3" style={{ border: "1px solid var(--bd)" }}>
+                <Icon size={18} className="mt-px flex-none" style={{ color: "var(--tx2)" }} />
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold">{t}</p>
+                  <p className="mt-0.5 text-[11.5px] leading-[1.5]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>{s}</p>
                 </div>
               </div>
-              <button onClick={() => revoke(d.id)} title="Thu hồi thiết bị" className="btn-ghost inline-flex items-center gap-1.5 text-sm" style={{ color: "#c05050" }}>
-                <Trash2 size={14} /> Thu hồi
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+            ))}
+          </div>
 
-      {/* Xuất dữ liệu ngay */}
-      <div className="card p-6">
-        <h2 className="font-serif text-xl font-medium">Xuất dữ liệu ngay</h2>
-        <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>
-          Không cần chờ client — tải Excel từng mảng hoặc bản sao lưu đầy đủ ngay tại đây (cùng dữ liệu client sẽ tự lưu).
-        </p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {EXPORTS.map(([type, label, desc]) => (
-            <a key={type} href={`/api/desktop/export?type=${type}`} className="flex items-center gap-3 rounded-xl p-4 transition-opacity hover:opacity-80" style={{ background: "var(--surface2)" }}>
-              <FileSpreadsheet size={20} className="flex-none" style={{ color: "#1f9d63" }} />
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">{label} (.xlsx)</span>
-                <span className="block truncate text-xs" style={{ color: "var(--text2)" }}>{desc}</span>
-              </span>
+          <div className="mt-4 flex flex-wrap gap-2.5">
+            <a
+              href={downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
+              style={{ background: "var(--ac)", color: "#fff" }}
+            >
+              <Download size={18} /> Tải cho Windows
             </a>
-          ))}
-          <a href="/api/desktop/export?type=backup" className="flex items-center gap-3 rounded-xl p-4 transition-opacity hover:opacity-80 sm:col-span-2" style={{ background: "var(--surface2)" }}>
-            <FileJson size={20} className="flex-none" style={{ color: "var(--brand)" }} />
-            <span className="min-w-0">
-              <span className="block text-sm font-medium">Bản sao lưu đầy đủ (.json)</span>
-              <span className="block text-xs" style={{ color: "var(--text2)" }}>Toàn bộ hợp đồng, báo giá, chi tiêu, lương, lịch… — dùng để khôi phục dữ liệu khi cần</span>
-            </span>
-          </a>
-        </div>
+            <button
+              onClick={pair}
+              disabled={pairing}
+              className="flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold disabled:opacity-60"
+              style={{ border: "1px solid var(--bd)" }}
+            >
+              <Plus size={17} /> Kết nối thiết bị mới
+            </button>
+          </div>
+
+          {/* Cảnh báo SmartScreen — khối chú thích nền phụ, không phải hộp đỏ. */}
+          <div className="mt-4 flex gap-2.5 rounded-[10px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
+            <ShieldAlert size={17} className="mt-px flex-none" style={{ color: "var(--am)" }} />
+            <p className="text-[11.5px] leading-[1.55]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+              Windows có thể chặn bằng <b>SmartScreen</b> vì bản cài chưa mua chứng chỉ ký số — bấm <b>More info → Run anyway</b>.
+              File bị “khoá”: chuột phải <code>-setup.exe</code> → <b>Properties</b> → tick <b>Unblock</b>.
+              Nếu báo <b>Smart App Control blocked an app</b> (chỉ Windows 11 cài mới): <b>Settings → Privacy &amp; security → Windows Security → App &amp; browser control → Smart App Control → Off</b> rồi cài lại.
+            </p>
+          </div>
+        </Panel>
+
+        {/* ── Thiết bị đã kết nối ─────────────────────────────────────── */}
+        <Panel>
+          <PanelHead icon={Laptop} tone="brand" title="Thiết bị của bạn" count={`${active.length}/${limit}`} note="Dán mã kết nối vào app trên máy tính" />
+
+          <div className="px-4 pt-3">
+            {acct && (
+              <p className="text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+                Máy đăng ký ở đây đồng bộ dữ liệu của tài khoản <b style={{ color: "var(--tx2)" }}>{acct.name || acct.email}</b>
+                {acct.name && acct.email ? ` (${acct.email})` : ""}.
+              </p>
+            )}
+            {pairErr && (
+              <p className="mt-2 rounded-[10px] px-3 py-2.5 text-[12.5px] font-semibold" style={{ background: "var(--rdS)", color: "var(--rd)" }}>{pairErr}</p>
+            )}
+            {!migrated && (
+              <p className="mt-2 rounded-[10px] px-3 py-2.5 text-[11.5px]" style={{ background: "var(--sf2)", color: "var(--tx2)" }}>
+                Cơ sở dữ liệu chưa có bảng thiết bị — chạy <code>supabase/schema.sql</code> mới nhất trong Supabase SQL Editor.
+              </p>
+            )}
+            {pairToken && (
+              <div className="mt-2.5 rounded-[11px] p-3.5" style={{ background: "var(--acS)", border: "1px solid var(--acM)" }}>
+                <p className="text-[12.5px] font-semibold">
+                  Mã kết nối cho <b>{acct?.name || acct?.email || "tài khoản này"}</b> — chỉ hiện MỘT lần, dán ngay vào app:
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="min-w-0 flex-1 truncate rounded-[9px] px-3 py-2 text-[11.5px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>{pairToken}</code>
+                  <button
+                    onClick={() => copyText(pairToken, "token")}
+                    className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12px] font-semibold"
+                    style={{ background: "var(--ac)", color: "#fff" }}
+                  >
+                    {copied === "token" ? <Check size={14} /> : <Copy size={14} />} {copied === "token" ? "Đã chép" : "Chép mã"}
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px]" style={{ color: "var(--tx3)" }}>Địa chỉ máy chủ:</span>
+                  <code className="rounded-[7px] px-2 py-1 text-[11px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>{serverUrl}</code>
+                  <button onClick={() => copyText(serverUrl, "server")} className="flex items-center gap-1 text-[11.5px] font-semibold" style={{ color: "var(--ac)" }}>
+                    {copied === "server" ? <Check size={12} /> : <Copy size={12} />} {copied === "server" ? "Đã chép" : "Chép"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-3">
+            {loading && <p className="px-4 pb-4 text-[12.5px]" style={{ color: "var(--tx3)" }}>Đang tải…</p>}
+            {!loading && active.length === 0 && (
+              <EmptyState icon={Laptop} title="Chưa có thiết bị nào" hint="Tải bản cài, mở app rồi dán mã kết nối để đăng ký máy đầu tiên." />
+            )}
+            {active.map((d) => (
+              <div key={d.id} className="flex items-center gap-3 px-4 py-[13px]" style={{ borderTop: "1px solid var(--bd2)" }}>
+                <span className="flex-none rounded-[10px] p-2" style={{ background: "var(--sf2)", color: "var(--tx2)", lineHeight: 0 }}>
+                  <Laptop size={19} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13.5px] font-semibold">{d.name || "Máy tính Windows"}</p>
+                  <p className="tnum mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                    {d.app_version ? `v${d.app_version} · ` : ""}Đồng bộ cuối: {fmtTime(d.last_sync_at)}
+                  </p>
+                </div>
+                <button
+                  onClick={() => revoke(d.id)}
+                  className="flex flex-none items-center gap-1.5 whitespace-nowrap rounded-[9px] px-3 py-[7px] text-[12px] font-semibold"
+                  style={{ background: "var(--rdS)", color: "var(--rd)" }}
+                >
+                  <Trash2 size={14} /> Thu hồi
+                </button>
+              </div>
+            ))}
+            <button
+              onClick={load}
+              className="flex w-full items-center justify-center gap-1.5 py-3 text-[12.5px] font-semibold"
+              style={{ borderTop: "1px solid var(--bd2)", color: "var(--ac)" }}
+            >
+              <RefreshCw size={14} /> Làm mới danh sách
+            </button>
+          </div>
+        </Panel>
       </div>
 
-      {/* Khôi phục ngược từ bản sao lưu */}
-      <RestorePanel />
+      {/* ══ Cột phải — xuất dữ liệu và khôi phục ═════════════════════════ */}
+      <div className="flex flex-col gap-3.5">
+        <Panel>
+          <PanelHead icon={FileSpreadsheet} tone="green" title="Xuất dữ liệu ngay" note="Cùng dữ liệu app tự lưu" />
+          <p className="px-4 pt-3 text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+            Không cần chờ app trên máy — tải Excel từng mảng hoặc bản sao lưu đầy đủ ngay tại đây.
+          </p>
+          <div className="mt-2.5">
+            {EXPORTS.map(([type, label, desc]) => (
+              <a
+                key={type}
+                href={`/api/desktop/export?type=${type}`}
+                className="flex items-center gap-3 px-4 py-[11px]"
+                style={{ borderTop: "1px solid var(--bd2)" }}
+              >
+                <FileSpreadsheet size={18} className="flex-none" style={{ color: "var(--gn)" }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[13px] font-semibold">{label} <span style={{ color: "var(--tx3)", fontWeight: 500 }}>.xlsx</span></span>
+                  <span className="block truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>{desc}</span>
+                </span>
+                <Download size={15} className="flex-none" style={{ color: "var(--tx3)" }} />
+              </a>
+            ))}
+            <a href="/api/desktop/export?type=backup" className="flex items-center gap-3 px-4 py-[11px]" style={{ borderTop: "1px solid var(--bd2)", background: "var(--sf2)" }}>
+              <FileJson size={18} className="flex-none" style={{ color: "var(--ac)" }} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-semibold">Bản sao lưu đầy đủ <span style={{ color: "var(--tx3)", fontWeight: 500 }}>.json</span></span>
+                <span className="block text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>Toàn bộ hợp đồng, báo giá, thu chi, lương, lịch — dùng để khôi phục khi cần.</span>
+              </span>
+              <Download size={15} className="flex-none" style={{ color: "var(--tx3)" }} />
+            </a>
+          </div>
+          <p className="m-4 rounded-[10px] px-3.5 py-3 text-[11.5px] leading-[1.55]" style={{ background: "var(--sf2)", color: "var(--tx2)", textWrap: "pretty" }}>
+            Bản sao lưu tải về chỉ nằm trên máy của bạn. Nên giữ thêm một bản trên ổ ngoài hoặc Drive để phòng hỏng ổ cứng.
+          </p>
+        </Panel>
+
+        {/* Khôi phục ngược từ bản sao lưu */}
+        <RestorePanel />
+      </div>
     </div>
   );
 }
