@@ -316,16 +316,6 @@ export default function NewContractForm({
             .from("contract_tasks")
             .insert(DEFAULT_TASKS.map((label, position) => ({ contract_id: data.id, label, position })))
         : null,
-      endTime && eventDate
-        ? supabase.from("studio_events").insert({
-            owner_id: ownerId,
-            contract_id: data.id,
-            title: `Kết thúc — ${title.trim() || autoTitle}`,
-            event_date: eventDate,
-            event_time: endTime,
-            remind: false,
-          })
-        : null,
     ]);
 
     // Đồng bộ Google Calendar nếu có ngày (fire-and-forget).
@@ -618,6 +608,9 @@ export default function NewContractForm({
                 <TimeInput value={endTime} onChange={setEndTime} ariaLabel="Giờ kết thúc" placeholder="18:00" />
               </div>
             </div>
+            <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              Giờ bắt đầu là giờ của hợp đồng; giờ kết thúc lưu thành ca của từng người được phân công bên dưới.
+            </p>
             <div className="mb-4">
               <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-loc">Địa điểm</label>
               <input id="nc-loc" className={inputCls} style={inputStyle} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Nhà hàng, studio, ngoại cảnh…" />
