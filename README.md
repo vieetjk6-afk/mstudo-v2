@@ -287,6 +287,8 @@ Không dựng route riêng cho mobile — cùng một màn, đổi bố cục th
 
 **Icon** — Material Symbols Rounded. Tên icon dùng trong thiết kế: `space_dashboard, request_quote, description, view_kanban, event_note, inbox, calendar_month, auto_fix_high, photo_library, checkroom, photo_camera, groups, auto_awesome, auto_stories, account_balance_wallet, payments, monitoring, diversity_3, trophy, forum, inventory_2, gavel, language, tune, settings, notifications, account_circle, workspace_premium, redeem, desktop_windows, shield_person`.
 
+**Trình soạn thảo** — Video slide, Dàn trang album và Trình dựng website đều có bảng màu riêng cứng trong code, không theo bộ token; đã chuyển sang token nên chúng đổi theo nền tối và theo màu nhấn thương hiệu. Ba thứ CỐ Ý giữ mã màu cứng vì đó là **nội dung xuất ra**, không phải giao diện: `THEMES` của video slide, bảng màu trang album, và `ACCENTS` của website studio. Sân khấu xem trước giữ nền tối cố định ở cả hai chế độ — bản thiết kế cũng vẽ vậy (`#1E1C21` trong thẻ trắng).
+
 **Ảnh** — mọi chỗ có ảnh đang là placeholder sọc. Trong repo thật nối vào Google Drive / CDN sẵn có.
 
 **Định dạng tiền** — `(n).toLocaleString("vi-VN") + " đ"`. Rút gọn: `≥1e9 → "x,x tỷ"`, `≥1e6 → "xtr"`, còn lại `"xk"`.
