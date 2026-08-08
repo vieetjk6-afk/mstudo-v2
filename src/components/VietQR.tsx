@@ -11,7 +11,7 @@ export type BankInfo = {
   name: string | null;
 };
 
-function qrUrl(bank: BankInfo, amount: number, addInfo: string): string | null {
+export function qrUrl(bank: BankInfo, amount: number, addInfo: string): string | null {
   if (!bank.bin || !bank.account) return null;
   const acc = (bank.account || "").replace(/\s/g, "");
   const params = new URLSearchParams();

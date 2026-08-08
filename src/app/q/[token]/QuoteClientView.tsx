@@ -323,17 +323,8 @@ export default function QuoteClientView({
           </div>
         )}
 
-        {/* ── Thanh thương hiệu studio ────────────────────────────────────── */}
-        <div className="flex items-center gap-3">
-          {studioLogo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={studioLogo} alt={studioName} className="h-9 w-auto flex-none object-contain" />
-          ) : (
-            <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[15px] font-extrabold text-white" style={{ background: "var(--ac)" }}>
-              {studioName.trim().charAt(0).toUpperCase() || "S"}
-            </span>
-          )}
-          <span className="min-w-0 flex-1 truncate text-[16px] font-extrabold" style={{ letterSpacing: "-.4px" }}>{studioName}</span>
+        {/* Điều khiển phụ — không thuộc văn bản nên đứng ngoài, canh phải. */}
+        <div className="flex items-center justify-end">
           <button
             onClick={() => { const nx: Lang = lang === "vi" ? "en" : "vi"; setLangState(nx); localStorage.setItem("vk_lang", nx); }}
             className="flex-none text-[11.5px] font-bold"
@@ -346,9 +337,21 @@ export default function QuoteClientView({
         {/* ══ Thẻ báo giá ═════════════════════════════════════════════════ */}
         <div className={sectionCls} style={sectionStyle}>
 
-          {/* Đầu văn bản */}
+          {/* Đầu văn bản — thương hiệu studio canh giữa ngay trên nhãn văn bản,
+              đúng đầu trang của bản thiết kế. */}
           <div className="px-5 py-7 text-center sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
-            <p className="text-[11px] font-bold uppercase" style={{ letterSpacing: "1px", color: "var(--tx3)" }}>
+            <div className="flex items-center justify-center gap-2">
+              {studioLogo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={studioLogo} alt={studioName} className="h-8 w-auto object-contain" />
+              ) : (
+                <span className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[13px] font-extrabold text-white" style={{ background: "var(--ac)" }}>
+                  {studioName.trim().charAt(0).toUpperCase() || "S"}
+                </span>
+              )}
+              <span className="text-[16px] font-extrabold" style={{ letterSpacing: "-.4px" }}>{studioName}</span>
+            </div>
+            <p className="mt-4 text-[11px] font-bold uppercase" style={{ letterSpacing: "1px", color: "var(--tx3)" }}>
               {lang === "vi" ? "Báo giá dịch vụ chụp ảnh" : "Photography service quote"}
             </p>
             <h1 className="mt-1.5 text-[24px] font-bold sm:text-[27px]" style={{ letterSpacing: "-.6px", textWrap: "pretty" }}>{quote.title}</h1>

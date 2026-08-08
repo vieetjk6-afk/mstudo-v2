@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import DateInput from "@/components/DateInput";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Copy, ExternalLink, Plus, Trash2, Lock, LockOpen, Send, FileSignature, X, Check, Save, Tag, CloudOff } from "lucide-react";
+import { ArrowLeft, Copy, ExternalLink, Plus, Trash2, Lock, LockOpen, Send, FileSignature, X, Check, Save, Tag, CloudOff, Printer } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { studioUrl } from "@/lib/hosts";
 import {
@@ -81,6 +81,67 @@ export default function QuoteEditor({
   const deposit = computeRoundedDeposit(total);
   const depositPct = depositRatio(total, deposit);
   const locked = quote.status === "accepted" || quote.status === "converted";
+
+  /**
+   * Xuất PDF báo giá từ phía studio — mở một cửa sổ chứa bản A4 rồi gọi in;
+   * hộp in của trình duyệt có sẵn "Lưu thành PDF". Dữ liệu lấy từ state đang
+   * mở nên bản in luôn khớp thứ đang thấy trên màn hình.
+   */
+  function printQuote() {
+    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] || c));
+    const rows = items
+      .map((it) => {
+        const line = (it.qty || 0) * (it.unit_price || 0);
+        const tag = it.is_discount ? "Giảm giá" : it.is_optional ? "Tuỳ chọn" : "Bắt buộc";
+        return `<tr><td>${esc(it.name || "")}${it.description ? `<div style="font-size:11px;color:#555">${esc(it.description)}</div>` : ""}</td>
+<td class="c">${tag}</td><td class="c">${it.is_discount ? "" : it.qty}</td>
+<td class="r">${it.is_discount ? "− " : ""}${vnd(line)}</td></tr>`;
+      })
+      .join("");
+    const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${esc(quote.title || "Báo giá")}</title>
+<style>
+@page{size:A4;margin:16mm}
+body{font-family:'Times New Roman',Times,'DejaVu Serif',serif;color:#111;max-width:720px;margin:0 auto;padding:8px 0;font-size:13px;line-height:1.5}
+h1{text-align:center;font-size:22px;font-weight:700;margin:0}
+h2{font-size:15px;margin:18px 0 8px}
+.sub{text-align:center;font-size:13px;margin:4px 0 22px;color:#333}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;border-bottom:1px solid #333;padding:5px 0;font-size:12px}
+td{padding:5px 0;border-bottom:1px solid #ddd;vertical-align:top}
+.c{text-align:center;width:80px}.r{text-align:right;width:130px}
+.meta td{border:none;padding:3px 0}
+.tot td{border:none;padding:2px 0;text-align:right}
+.tot .v{width:150px;font-weight:700}
+.note{white-space:pre-wrap;margin:0}
+</style></head>
+<body onload="window.print()">
+<h1>BÁO GIÁ DỊCH VỤ</h1>
+<p class="sub">${esc(quote.title || "")}${quote.code ? ` · ${esc(quote.code)}` : ""}</p>
+<table class="meta"><tbody>
+<tr><td style="width:150px">Khách hàng:</td><td><b>${esc(quote.client_name || "—")}</b>${quote.client_phone ? ` · ĐT: ${esc(quote.client_phone)}` : ""}${quote.client_email ? ` · ${esc(quote.client_email)}` : ""}</td></tr>
+<tr><td>Ngày sự kiện:</td><td>${quote.event_date ? esc(quote.event_date) : "—"}</td></tr>
+<tr><td>Địa điểm:</td><td>${esc(quote.location || "—")}</td></tr>
+</tbody></table>
+${quote.intro ? `<p class="note" style="margin-top:14px">${esc(quote.intro)}</p>` : ""}
+<h2>Hạng mục báo giá</h2>
+<table><thead><tr><th>Hạng mục</th><th class="c">Loại</th><th class="c">SL</th><th class="r">Thành tiền</th></tr></thead>
+<tbody>${rows || `<tr><td colspan="4">Chưa có hạng mục.</td></tr>`}</tbody></table>
+<table class="tot"><tbody>
+<tr><td>Tổng hạng mục:</td><td class="v">${vnd(grossTotal)}</td></tr>
+${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discountTotal)}</td></tr>` : ""}
+<tr><td>Tổng báo giá:</td><td class="v">${vnd(total)}</td></tr>
+<tr><td>Cọc đề xuất (~${depositPct.toFixed(0)}%):</td><td class="v">${vnd(deposit)}</td></tr>
+</tbody></table>
+<p style="margin-top:24px;font-size:12px;color:#555">Báo giá chỉ mang tính tham khảo và có thể thay đổi theo thoả thuận. Hạng mục "Tuỳ chọn" khách tự chọn trên trang báo giá trực tuyến.</p>
+</body></html>`;
+    const w = window.open("", "_blank", "width=860,height=900");
+    if (!w) {
+      setErr("Trình duyệt chặn cửa sổ in — cho phép pop-up rồi bấm lại.");
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+  }
 
   // Dirty = any editable field differs from its last-saved snapshot, or any
   // item field differs from the matching saved item.
@@ -342,6 +403,9 @@ export default function QuoteEditor({
               <Save size={12} /> {saving ? "Đang lưu…" : dirty ? "Lưu thay đổi" : "Đã lưu"}
             </button>
           )}
+          <button onClick={printQuote} className="btn-ghost px-3 py-2 text-xs">
+            <Printer size={12} /> Xuất PDF
+          </button>
           <button onClick={copyLink} className="btn-ghost px-3 py-2 text-xs" data-testid="quote-copy-link">
             <Copy size={12} /> Copy link khách
           </button>

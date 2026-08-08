@@ -5,7 +5,7 @@ import { fmtDate, fmtDateLunar } from "@/lib/date";
 import { Lock, MapPin, Calendar, Send, Check, Printer, PenLine, Images, ImagePlus, Star, ListChecks, Package, Upload, Heart } from "lucide-react";
 import SignaturePad from "@/components/SignaturePad";
 import CalendarButtons from "@/components/CalendarButtons";
-import VietQRButton, { VietQR, type BankInfo } from "@/components/VietQR";
+import VietQRButton, { VietQR, qrUrl, type BankInfo } from "@/components/VietQR";
 import { thiepUrl } from "@/lib/hosts";
 import { compressImage, checkImageFile } from "@/lib/image";
 import {
@@ -126,6 +126,7 @@ export default function ContractView({ token }: { token: string }) {
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUrls, setProofUrls] = useState<string[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [qrOpen, setQrOpen] = useState(false);
   const [qr, setQr] = useState("");
   const [lang, setLang] = useState<Lang>("vi");
   const t = (k: keyof typeof TR.vi) => TR[lang][k];
@@ -392,6 +393,7 @@ export default function ContractView({ token }: { token: string }) {
   const nextDue = plan.find((p) => !p.paid) ?? null;
   const dueAmount = nextDue ? nextDue.amount : balance;
   const duePct = total > 0 ? Math.round((dueAmount / total) * 100) : 0;
+  const dueQr = qrUrl(bank, dueAmount, (contract.code || contract.title || "").slice(0, 25));
   const unpaidPlan = plan.filter((p) => !p.paid);
   // Điều khoản: mỗi dòng một ý, để hiện thành danh sách có dấu tích như thiết kế.
   const termLines = (contract.note || "")
@@ -405,24 +407,15 @@ export default function ContractView({ token }: { token: string }) {
       <div className="client-doc no-print min-h-screen">
         <div className="mx-auto flex max-w-[720px] flex-col gap-3.5 px-4 py-6 sm:px-5 sm:py-9">
 
-          {/* ── Thanh thương hiệu studio ─────────────────────────────────── */}
-          <div className="flex items-center gap-3">
-            {studioLogo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={studioLogo} alt={studioName} className="h-9 w-auto flex-none object-contain" />
-            ) : (
-              <span className="flex h-8 w-8 flex-none items-center justify-center rounded-[8px] text-[15px] font-extrabold text-white" style={{ background: "var(--ac)" }}>
-                {studioName.trim().charAt(0).toUpperCase() || "S"}
-              </span>
-            )}
-            <span className="min-w-0 flex-1 truncate text-[16px] font-extrabold" style={{ letterSpacing: "-.4px" }}>{studioName}</span>
+          {/* Điều khiển phụ — không thuộc văn bản nên đứng ngoài, canh phải. */}
+          <div className="flex items-center justify-end gap-2">
             <button onClick={() => setLang(lang === "vi" ? "en" : "vi")} className="flex-none text-[11.5px] font-bold" style={{ color: "var(--tx3)" }}>
               {lang === "vi" ? "EN" : "VI"}
             </button>
             <button
               onClick={() => window.print()}
               className="flex flex-none items-center gap-1.5 rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-semibold"
-              style={{ border: "1px solid var(--bd)" }}
+              style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
             >
               <Printer size={14} /> {t("pdf")}
             </button>
@@ -431,9 +424,21 @@ export default function ContractView({ token }: { token: string }) {
           {/* ══ Thẻ hợp đồng ═══════════════════════════════════════════════ */}
           <div className={sectionCls} style={sectionStyle}>
 
-            {/* Đầu văn bản */}
+            {/* Đầu văn bản — thương hiệu studio canh giữa ngay trên nhãn văn
+                bản, đúng đầu trang của bản thiết kế. */}
             <div className="px-5 py-7 text-center sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
-              <p className="text-[11px] font-bold uppercase" style={{ letterSpacing: "1px", color: "var(--tx3)" }}>
+              <div className="flex items-center justify-center gap-2">
+                {studioLogo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={studioLogo} alt={studioName} className="h-8 w-auto object-contain" />
+                ) : (
+                  <span className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[13px] font-extrabold text-white" style={{ background: "var(--ac)" }}>
+                    {studioName.trim().charAt(0).toUpperCase() || "S"}
+                  </span>
+                )}
+                <span className="text-[16px] font-extrabold" style={{ letterSpacing: "-.4px" }}>{studioName}</span>
+              </div>
+              <p className="mt-4 text-[11px] font-bold uppercase" style={{ letterSpacing: "1px", color: "var(--tx3)" }}>
                 {lang === "vi" ? "Hợp đồng dịch vụ chụp ảnh" : "Photography service contract"}
               </p>
               <h1 className="mt-1.5 text-[24px] font-bold sm:text-[27px]" style={{ letterSpacing: "-.6px", textWrap: "pretty" }}>{contract.title}</h1>
@@ -551,16 +556,29 @@ export default function ContractView({ token }: { token: string }) {
             {/* Cọc / chuyển khoản */}
             {balance > 0 && (
               <div className="px-5 py-5 sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                  <div className="flex-none self-center sm:self-start">
-                    {bank.bin && bank.account ? (
-                      <VietQR bank={bank} amount={dueAmount} addInfo={(contract.code || contract.title || "").slice(0, 25)} />
+                {/* Mã QR 96px bên trái, số tiền và hướng dẫn bên phải — đúng
+                    khối "Cọc giữ lịch" của bản thiết kế. Bấm vào mã để phóng to
+                    kèm nút chép số tài khoản / nội dung chuyển khoản. */}
+                <div className="flex items-center gap-4 sm:gap-[18px]">
+                  <div className="flex-none">
+                    {dueQr ? (
+                      <button onClick={() => setQrOpen(true)} aria-label={lang === "vi" ? "Phóng to mã QR" : "Enlarge QR"}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={dueQr}
+                          alt="VietQR"
+                          width={96}
+                          height={96}
+                          className="h-24 w-24 rounded-[10px] bg-white object-contain"
+                          style={{ border: "1px solid var(--bd)" }}
+                        />
+                      </button>
                     ) : (
                       <div
-                        className="flex h-[120px] w-[120px] items-center justify-center rounded-[12px] text-center text-[11px]"
+                        className="flex h-24 w-24 items-center justify-center rounded-[10px] p-2 text-center text-[10.5px] leading-tight"
                         style={{ border: "1px dashed var(--bd)", color: "var(--tx3)" }}
                       >
-                        {lang === "vi" ? "Liên hệ studio để nhận số tài khoản" : "Ask the studio for transfer details"}
+                        {lang === "vi" ? "Liên hệ studio để nhận số tài khoản" : "Ask the studio for details"}
                       </div>
                     )}
                   </div>
@@ -587,6 +605,28 @@ export default function ContractView({ token }: { token: string }) {
                     )}
                   </div>
                 </div>
+
+                {/* Phóng to mã QR — chỗ duy nhất cần nút chép số tài khoản. */}
+                {qrOpen && (
+                  <div
+                    className="fixed inset-0 z-[80] flex items-center justify-center p-4"
+                    style={{ background: "rgba(0,0,0,.55)" }}
+                    role="dialog"
+                    aria-modal="true"
+                    onClick={(e) => e.target === e.currentTarget && setQrOpen(false)}
+                  >
+                    <div className="w-full max-w-[320px] rounded-[16px] p-6" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+                      <VietQR bank={bank} amount={dueAmount} addInfo={(contract.code || contract.title || "").slice(0, 25)} />
+                      <button
+                        onClick={() => setQrOpen(false)}
+                        className="mt-4 w-full rounded-[10px] py-2.5 text-[12.5px] font-semibold"
+                        style={{ border: "1px solid var(--bd)" }}
+                      >
+                        {lang === "vi" ? "Đóng" : "Close"}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Kế hoạch thanh toán */}
                 {plan.length > 0 && (

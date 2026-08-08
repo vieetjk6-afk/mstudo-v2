@@ -31,6 +31,7 @@ import {
   Wallet,
   Send,
   UserPlus,
+  Printer,
 } from "lucide-react";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { createClient } from "@/lib/supabase/client";
@@ -619,6 +620,102 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
     }
   }
 
+  /**
+   * Xuất PDF hợp đồng từ phía studio — mở một cửa sổ chứa bản văn bản A4 rồi
+   * gọi in; hộp in của trình duyệt có sẵn "Lưu thành PDF".
+   *
+   * Không dùng cổng khách để in: cổng đó khoá bằng SĐT khách, còn studio nhiều
+   * lúc cần bản in trước khi khách mở link. Dữ liệu lấy từ chính state đang mở
+   * nên bản in luôn khớp thứ đang thấy trên màn hình.
+   */
+  function printContract() {
+    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] || c));
+    const dmy = (s?: string | null) => (s ? fmtDate(s) : "—");
+    const itemRows = items
+      .map((it) => {
+        const line = (it.is_discount ? -1 : 1) * Math.abs(it.unit_price || 0) * (it.is_discount ? 1 : it.qty || 0);
+        return `<tr><td>${esc(it.name || "")}</td><td class="c">${it.is_discount ? "" : it.qty}</td>
+<td class="r">${it.is_discount ? "" : vnd(Math.abs(it.unit_price))}</td><td class="r">${line < 0 ? "− " : ""}${vnd(Math.abs(line))}</td></tr>`;
+      })
+      .join("");
+    const planRows = plan
+      .map((p) => `<tr><td>${esc(p.label)}</td><td class="c">${p.due_date ? dmy(p.due_date) : "—"}</td>
+<td class="c">${p.paid ? "Đã thu" : "Chưa thu"}</td><td class="r">${vnd(p.amount)}</td></tr>`)
+      .join("");
+    const milestoneRows = milestones
+      .map((m) => `<tr><td>${esc(m.title)}</td><td class="r">${dmy(m.event_date)}${m.event_time ? ` · ${esc(m.event_time)}` : ""}</td></tr>`)
+      .join("");
+    const sig = (img: string | null | undefined) =>
+      img ? `<img src="${img}" alt="" style="height:62px" />` : "";
+
+    const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${esc(f.title || "Hợp đồng")}</title>
+<style>
+@page{size:A4;margin:16mm}
+body{font-family:'Times New Roman',Times,'DejaVu Serif',serif;color:#111;max-width:720px;margin:0 auto;padding:8px 0;font-size:13px;line-height:1.5}
+h1{text-align:center;font-size:22px;font-weight:700;margin:0}
+h2{font-size:15px;margin:18px 0 8px}
+.sub{text-align:center;font-size:13px;margin:4px 0 22px;color:#333}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;border-bottom:1px solid #333;padding:5px 0;font-size:12px}
+td{padding:5px 0;border-bottom:1px solid #ddd;vertical-align:top}
+.c{text-align:center;width:70px}.r{text-align:right;width:120px}
+.meta td{border:none;padding:3px 0}
+.tot td{border:none;padding:2px 0;text-align:right}
+.tot .k{width:auto}.tot .v{width:140px;font-weight:700}
+.note{white-space:pre-wrap;margin:0}
+.signs{width:100%;margin-top:42px;text-align:center;font-size:13px;border:none}
+.signs td{border:none;width:50%}
+.box{height:70px;display:flex;align-items:center;justify-content:center}
+</style></head>
+<body onload="window.print()">
+<h1>HỢP ĐỒNG DỊCH VỤ</h1>
+<p class="sub">${esc(f.title || "")}${f.code ? ` · ${esc(f.code)}` : ""}</p>
+
+<table class="meta"><tbody>
+<tr><td style="width:150px">Bên A (Studio):</td><td><b>${esc(studioName)}</b></td></tr>
+<tr><td>Bên B (Khách hàng):</td><td><b>${esc(f.client_name || "—")}</b>${f.client_phone ? ` · ĐT: ${esc(f.client_phone)}` : ""}${f.client_email ? ` · ${esc(f.client_email)}` : ""}</td></tr>
+<tr><td>Dịch vụ:</td><td>${esc(services.find((s) => s.id === f.service_id)?.name || SHOOT_TYPE_LABEL[f.shoot_type])}</td></tr>
+<tr><td>Ngày thực hiện:</td><td>${dmy(f.event_date)}${f.event_time ? ` · ${esc(f.event_time)}` : ""}</td></tr>
+<tr><td>Địa điểm:</td><td>${esc(f.location || "—")}</td></tr>
+</tbody></table>
+
+<h2>1. Hạng mục dịch vụ</h2>
+<table><thead><tr><th>Hạng mục</th><th class="c">SL</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr></thead>
+<tbody>${itemRows || `<tr><td colspan="4">Chưa có hạng mục.</td></tr>`}</tbody></table>
+<table class="tot"><tbody>
+<tr><td class="k">Tổng giá trị hợp đồng:</td><td class="v">${vnd(total)}</td></tr>
+<tr><td class="k">Đã thanh toán:</td><td class="v">${vnd(collected)}</td></tr>
+<tr><td class="k">Còn lại:</td><td class="v">${vnd(balance)}</td></tr>
+</tbody></table>
+
+${planRows ? `<h2>2. Kế hoạch thanh toán</h2>
+<table><thead><tr><th>Đợt</th><th class="c">Hạn</th><th class="c">Tình trạng</th><th class="r">Số tiền</th></tr></thead>
+<tbody>${planRows}</tbody></table>` : ""}
+
+${milestoneRows ? `<h2>${planRows ? 3 : 2}. Lịch trình</h2>
+<table><tbody>${milestoneRows}</tbody></table>` : ""}
+
+${f.note ? `<h2>${(planRows ? 1 : 0) + (milestoneRows ? 1 : 0) + 2}. Điều khoản / Ghi chú</h2><p class="note">${esc(f.note)}</p>` : ""}
+
+<table class="signs"><tbody><tr>
+<td><b>BÊN A (STUDIO)</b><div class="box">${sig(contract.studio_signature)}</div>
+<div>${esc(contract.studio_signed_name || studioName)}</div>
+${contract.studio_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày ${dmy(contract.studio_signed_at)}</div>` : ""}</td>
+<td><b>BÊN B (KHÁCH HÀNG)</b><div class="box">${sig(contract.client_signature)}</div>
+<div>${esc(contract.client_signed_name || f.client_name || "")}</div>
+${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày ${dmy(contract.client_signed_at)}</div>` : ""}</td>
+</tr></tbody></table>
+</body></html>`;
+
+    const w = window.open("", "_blank", "width=860,height=900");
+    if (!w) {
+      toast("Trình duyệt chặn cửa sổ in — cho phép pop-up rồi bấm lại.");
+      return;
+    }
+    w.document.write(html);
+    w.document.close();
+  }
+
   // ── Milestones (shared with the studio calendar via studio_events) ─────
   async function addMilestone() {
     if (!ms.event_date) {
@@ -1059,6 +1156,9 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
         <div className="ml-auto flex flex-wrap gap-2">
           <button onClick={duplicateContract} disabled={busy === "dup"} className={hdrBtn} style={hdrBtnStyle}>
             <Copy size={16} /> {busy === "dup" ? "Đang sao…" : "Tạo giống HĐ này"}
+          </button>
+          <button onClick={printContract} className={hdrBtn} style={hdrBtnStyle}>
+            <Printer size={16} /> Xuất PDF
           </button>
           <a href={shareUrl} target="_blank" rel="noreferrer" className={hdrBtn} style={hdrBtnStyle}>
             <FileText size={16} /> Xem như khách
