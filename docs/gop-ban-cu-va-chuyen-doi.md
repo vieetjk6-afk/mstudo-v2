@@ -1,9 +1,15 @@
 # Gộp bản đang chạy vào 2.0 rồi chuyển sang GitHub · Supabase · Vercel mới
 
 Tình huống: `mstudo.com` đang chạy repo cũ (`vieetjk01/Studio`, nhánh
-`claude/stoic-fermi-gf0pg4`) trên **Vercel cũ + Supabase cũ**. Giao diện mới
-nằm ở repo này (`mstudo-v2`) và sẽ chạy trên **GitHub mới + Supabase mới +
-Vercel mới**. Tuần vừa rồi bản cũ có thêm dữ liệu thật và thêm tính năng.
+`claude/stoic-fermi-gf0pg4`) trên **Vercel cũ + Supabase cũ**. Bản 2.0 đã dựng
+xong và **đang chạy** ở repo này (`mstudo-v2`, nhánh `main`) trên **GitHub mới +
+Supabase mới + Vercel mới**. Việc còn lại: đưa dữ liệu thật từ bản cũ sang môi
+trường mới rồi cắt tên miền.
+
+> ⚠️ **Đích ĐANG ĐƯỢC DÙNG.** `clone-from-old-project.sql` xoá sạch project đích
+> (`delete from auth.users` + `truncate` mọi bảng `public`) rồi mới chép. Chạy
+> [`supabase/kiem-tra-truoc-khi-chep.sql`](../supabase/kiem-tra-truoc-khi-chep.sql)
+> **trước** để biết đang có gì sắp mất — xem mục 2.4.
 
 Có **hai thứ** phải gộp, đừng lẫn vào nhau:
 
@@ -77,19 +83,47 @@ Tin tốt: mọi token trong dữ liệu (`client_token` của hợp đồng/bá
 `intake_token`, `calendar_token`, `crew_token`, `slug` album) đi theo nguyên
 vẹn → **link đã gửi cho khách vẫn chạy** sau khi chuyển, miễn tên miền không đổi.
 
+### 2.4 Đích đang được dùng — phải xử lý trước
+
+`clone-from-old-project.sql` được viết cho project **trắng**. Bước đầu của nó là:
+
+```sql
+delete from auth.users;                     -- mất mọi tài khoản ở project mới
+truncate table <mọi bảng public> cascade;   -- mất mọi dữ liệu nghiệp vụ
+```
+
+Không hỏi lại, không hoàn tác được. Vì 2.0 đã chạy một thời gian nên phải biết
+đích đang có gì: chạy
+[`supabase/kiem-tra-truoc-khi-chep.sql`](../supabase/kiem-tra-truoc-khi-chep.sql)
+ở SQL Editor project MỚI (chỉ đếm, không sửa gì).
+
+**Nếu in ra `TRỐNG` hoặc chỉ có dữ liệu xem thử** (vài tài khoản của bạn, hợp
+đồng nháp tự tạo để soi giao diện) → bỏ đi được, chạy clone như mục 3.
+
+**Nếu đích đã có dữ liệu THẬT** (hợp đồng của khách, ảnh khách đã chọn, khoản đã
+thu) thì **đừng chạy clone** — nó xoá mất. Ba lối đi, theo thứ tự nên chọn:
+
+| Cách | Khi nào hợp | Việc phải làm |
+|---|---|---|
+| **Nhập lại tay** | Đích chỉ có vài bản ghi | Chép ra giấy/ảnh màn hình, chạy clone, nhập lại sau |
+| **Đổi vai trò hai project** | Đích có nhiều dữ liệu thật hơn nguồn | Giữ Supabase mới làm chính, chép NGƯỢC phần thiếu từ project cũ sang bằng câu `insert … select` cho từng bảng |
+| **Gộp hai chiều** | Cả hai bên đều nhiều | Việc lớn: phải xử lý trùng khoá chính, trùng email tài khoản, trùng `client_token`. Nói trước để làm riêng, đừng làm vội trong cửa sổ cắt |
+
 ---
 
 ## 3. Thứ tự việc
 
 ### Giai đoạn A — chuẩn bị trước, KHÔNG ảnh hưởng bản đang chạy
 
-1. **Đẩy repo này lên GitHub mới**, nối Vercel mới vào repo đó
-   ([`docs/thiet-lap-moi.md`](./thiet-lap-moi.md) mục 2).
-2. **Supabase mới**: chạy lại toàn bộ
+1. **Đưa nhánh giao diện vào `main`.** Nhánh làm việc hiện tại đi trước `main`
+   và không thiếu commit nào của `main` → gộp là fast-forward sạch, không xung
+   đột. Deploy `main` lên Vercel mới rồi soi lại một lượt.
+2. **Kiểm tra đích trước khi tính chuyện chép** — mục 2.4.
+3. **Supabase mới**: chạy lại toàn bộ
    [`supabase/setup-all.sql`](../supabase/setup-all.sql). *Phải chạy lại kể cả
    khi đã chạy trước đây* — file vừa được sinh lại kèm 2 cột mới của tuần qua
    (`studio_notifications.album_id`, `studio_drive.filter_refresh_token`).
-3. **Biến môi trường** cho Vercel mới: chép từ Vercel cũ rồi sửa những biến
+4. **Biến môi trường** cho Vercel mới: chép từ Vercel cũ rồi sửa những biến
    bắt buộc đổi ([`docs/chuyen-vercel.md`](./chuyen-vercel.md) mục 2). Nhớ:
    - 3 khoá Supabase → của project **mới**
    - `VERCEL_PROJECT_ID` / `VERCEL_TEAM_ID` → project **mới** (quên thì studio
@@ -98,13 +132,13 @@ vẹn → **link đã gửi cho khách vẫn chạy** sau khi chuyển, miễn t
    - **mới:** `GOOGLE_FILTER_DRIVE_REDIRECT_URI` =
      `https://<miền>/api/filter/drive/callback`
    - `DRIVE_IMG_CACHE_BUCKET` → **để trống**
-4. **Khai callback ở bên thứ ba** ([`docs/chuyen-vercel.md`](./chuyen-vercel.md)
+5. **Khai callback ở bên thứ ba** ([`docs/chuyen-vercel.md`](./chuyen-vercel.md)
    mục 4): Google Cloud (thêm cả URI `filter/drive/callback` mới), **Supabase
    Auth của project MỚI**, Zalo, Turnstile. Giữ nguyên URI cũ, cắt xong mới xoá.
-5. **Chạy thử `clone-from-old-project.sql` một lần** vào lúc rảnh, để biết mất
+6. **Chạy thử `clone-from-old-project.sql` một lần** vào lúc rảnh, để biết mất
    bao nhiêu phút và bấm Run bao nhiêu lần. Dữ liệu thật lúc cắt sẽ chép đè lần
    nữa nên lần chạy thử này bỏ đi được.
-6. **Deploy và đi hết checklist** ở [`docs/chuyen-vercel.md`](./chuyen-vercel.md)
+7. **Deploy và đi hết checklist** ở [`docs/chuyen-vercel.md`](./chuyen-vercel.md)
    mục 5 trên `*.vercel.app`.
 
 ### Giai đoạn B — cửa sổ đóng băng (~1–2 tiếng)
@@ -112,10 +146,11 @@ vẹn → **link đã gửi cho khách vẫn chạy** sau khi chuyển, miễn t
 Từ bước 2 tới bước 6, **dữ liệu khách nhập vào sẽ mất** — nên phải dừng nhập
 liệu thật. Chọn giờ vắng (khuya).
 
-1. Báo studio dừng nhập liệu.
+1. Báo studio dừng nhập liệu **ở CẢ HAI bản** (bản cũ và bản 2.0 đang chạy).
 2. **Pause project Vercel cũ** (Settings → Pause Project) — dừng cả traffic lẫn
    cron, không ai ghi thêm được.
-3. **Chép dữ liệu**: `supabase/clone-from-old-project.sql` trên project MỚI,
+3. **Chép dữ liệu** (chỉ khi mục 2.4 đã cho phép):
+   `supabase/clone-from-old-project.sql` trên project MỚI,
    4 lần Run theo [`docs/thiet-lap-moi.md`](./thiet-lap-moi.md) mục 3b; phần 3
    bấm lại tới khi hiện `✅ XONG TẤT CẢ`.
 4. **Chép 3 bucket Storage** (`logos`, `wedding-photos`, `payment-proofs`).
