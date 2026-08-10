@@ -11,6 +11,10 @@ trường mới rồi cắt tên miền.
 > [`supabase/kiem-tra-truoc-khi-chep.sql`](../supabase/kiem-tra-truoc-khi-chep.sql)
 > **trước** để biết đang có gì sắp mất — xem mục 2.4.
 
+> 📋 File này là **kế hoạch** — giải thích vì sao làm từng thứ. Khi bắt tay vào
+> làm thật, mở [`runbook-chuyen-doi.md`](./runbook-chuyen-doi.md): từng cú bấm,
+> từng ô điền, theo thứ tự, có bước kiểm tra sau mỗi phần.
+
 Có **hai thứ** phải gộp, đừng lẫn vào nhau:
 
 | | Gộp thế nào | Trạng thái |
