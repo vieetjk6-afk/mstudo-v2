@@ -239,6 +239,7 @@ Supabase; CLI cần mở trình duyệt để bạn đăng nhập Vercel.
 cài ở [nodejs.org](https://nodejs.org) rồi mở lại cửa sổ terminal.
 
 ```bash
+cd ~
 mkdir vc-old
 cd vc-old
 npx vercel login                                    # mở trình duyệt để đăng nhập
@@ -249,6 +250,16 @@ npx vercel env pull .env.old --environment=production
 `vc-old` chỉ là thư mục trống để `vercel link` bám vào — không cần source code
 trong đó. Xong, file `.env.old` nằm ngay trong thư mục ấy, mở bằng
 Notepad/TextEdit là đọc được.
+
+> ⚠️ **Windows: đừng mở PowerShell bằng "Run as Administrator".** Khi đó cửa sổ
+> đứng ở `C:\Windows\System32`, Windows chặn ghi vào đấy và `vercel link` chết
+> với `EPERM: operation not permitted, mkdir '.vercel'`; lệnh `env pull` ngay sau
+> đó báo *"Your codebase isn't linked to a project"*. Dòng `cd ~` ở đầu khối trên
+> đưa bạn về `C:\Users\<tên>` nên tránh được — nhưng cứ mở PowerShell bình thường
+> cho chắc.
+
+`vercel link` hỏi ba câu: *Set up …?* → **Y**; *Link to existing project?* →
+**Y**; *name of your existing project?* → tên project CŨ.
 
 > 🔒 `.env.old` chứa toàn bộ khoá bí mật. **Không commit, không gửi cho ai, xoá
 > ngay sau khi nạp xong sang Vercel mới.**
