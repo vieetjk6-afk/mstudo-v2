@@ -222,16 +222,36 @@ buộc phải sửa — copy nhầm thì bản mới vẫn ghi vào Supabase cũ
 
 ### Kéo biến từ Vercel CŨ
 
-Vercel CŨ → project → Settings → Environment Variables → xem từng biến, hoặc
-dùng CLI:
+Có hai cách. Cách nào cũng được, chọn theo việc bạn có muốn cài Node.js không.
+
+#### Cách 1 — không cần cài gì
+
+Vercel CŨ → project → Settings → Environment Variables. Bấm vào từng biến để
+hiện giá trị rồi copy. 36 biến nên hơi lâu, nhưng không phải cài phần mềm nào.
+
+#### Cách 2 — CLI, lấy cả gói một lần
+
+**Chạy ở đâu:** trên **máy tính của bạn** — Mac mở **Terminal**, Windows mở
+**PowerShell**. Không chạy được trong trình duyệt hay trong SQL Editor của
+Supabase; CLI cần mở trình duyệt để bạn đăng nhập Vercel.
+
+**Cần có Node.js.** Gõ `node -v`; ra số phiên bản là được, báo *not found* thì
+cài ở [nodejs.org](https://nodejs.org) rồi mở lại cửa sổ terminal.
 
 ```bash
-npx vercel login
-npx vercel link          # chọn project CŨ
-npx vercel env pull .env.old
+mkdir vc-old
+cd vc-old
+npx vercel login                                    # mở trình duyệt để đăng nhập
+npx vercel link                                     # Link to existing project → chọn project CŨ
+npx vercel env pull .env.old --environment=production
 ```
 
-`.env.old` chứa khoá bí mật: **không commit, xoá sau khi dùng.**
+`vc-old` chỉ là thư mục trống để `vercel link` bám vào — không cần source code
+trong đó. Xong, file `.env.old` nằm ngay trong thư mục ấy, mở bằng
+Notepad/TextEdit là đọc được.
+
+> 🔒 `.env.old` chứa toàn bộ khoá bí mật. **Không commit, không gửi cho ai, xoá
+> ngay sau khi nạp xong sang Vercel mới.**
 
 ### Nạp vào Vercel MỚI
 
