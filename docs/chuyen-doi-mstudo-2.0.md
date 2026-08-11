@@ -327,21 +327,51 @@ trả 500 toàn site.
 
 ### Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Web client
 
-Thêm vào **Authorized redirect URIs** (giữ luôn URI cũ cho tới khi cắt xong):
+Vì tên miền **không đổi**, phần lớn khai báo cũ dùng lại được nguyên. Chỉ có
+đúng một dòng bắt buộc phải thêm.
 
-- URI của `GOOGLE_ADMIN_DRIVE_REDIRECT_URI`
-- URI của `GOOGLE_FILTER_DRIVE_REDIRECT_URI`
-- URI của `GOOGLE_STORY_REDIRECT_URI`
-- URI của `GOOGLE_STUDIO_DRIVE_REDIRECT_URI`
+**Dùng lại, không đụng gì:**
 
-Thêm vào **Authorized JavaScript origins**: `https://mstudo.com` và URL
-`*.vercel.app` của bản mới (để test trước khi cắt).
+- 4 URI Drive/Story (`GOOGLE_ADMIN_DRIVE_REDIRECT_URI`,
+  `GOOGLE_FILTER_DRIVE_REDIRECT_URI`, `GOOGLE_STORY_REDIRECT_URI`,
+  `GOOGLE_STUDIO_DRIVE_REDIRECT_URI`) — cùng `mstudo.com`, cùng đường dẫn.
+- **Authorized JavaScript origins**: `https://mstudo.com` giữ nguyên.
+- **Client ID / Client Secret**: phải là **đúng cặp cũ**. Dùng cặp khác thì
+  Supabase coi người đăng nhập là người lạ và tạo tài khoản mới.
+
+**Bắt buộc thêm mới — Authorized redirect URIs:**
+
+```
+https://<mã-project-MỚI>.supabase.co/auth/v1/callback
+```
+
+Đăng nhập Google đi qua `supabase.auth.signInWithOAuth`, nên Google chuyển hướng
+về **Supabase** chứ không về `mstudo.com` — mà mã project Supabase thì đổi. Lấy
+nguyên văn ở Supabase MỚI → Authentication → Providers → Google (ô **Callback
+URL**), copy dán chứ đừng gõ tay.
+
+Thiếu dòng này là đăng nhập Google báo `redirect_uri_mismatch`, **không ai vào
+được app**. Giữ nguyên dòng callback của Supabase **cũ** cho tới khi cắt xong.
+
+**Kiểm tra thêm:** `GOOGLE_FILTER_DRIVE_REDIRECT_URI`
+(`/api/filter/drive/callback`) là tính năng mới của đợt gộp code. Bản cũ đã chạy
+tính năng đó thì URI có sẵn rồi; chưa có thì thêm vào.
+
+**Nếu muốn test trên `*.vercel.app` trước khi cắt:** thêm
+`https://<tên>.vercel.app` vào **Authorized JavaScript origins** — chỉ cần cho
+Google Picker ở công cụ nén ảnh. Việc đăng nhập thì không cần, vì Google chỉ
+nhìn thấy callback của Supabase.
 
 ### Supabase MỚI → Authentication → URL Configuration
 
 - **Site URL**: `https://mstudo.com`
-- **Redirect URLs**: thêm `https://mstudo.com/**` và URL `*.vercel.app` của bản
-  mới.
+- **Redirect URLs**: thêm `https://mstudo.com/**` và, nếu còn đang test,
+  `https://<tên>.vercel.app/**`.
+
+Đây mới là nơi kiểm soát tham số `redirectTo` mà app gửi lên
+(`window.location.origin/auth/callback`) — không phải bên Google. Đang test trên
+`*.vercel.app` mà quên thêm ở đây thì đăng nhập xong bị Supabase chặn ở bước
+quay về.
 
 ### Supabase MỚI → Authentication → Providers → Google
 
