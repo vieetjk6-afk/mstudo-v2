@@ -43,13 +43,37 @@ Chuẩn bị một file nháp (đừng commit) và điền đủ trước khi b�
 
 Dù đã biết chỉ là dữ liệu thử, vẫn chạy để chắc chắn — script chỉ đếm, không sửa.
 
+> ⚠️ **Trước khi bấm Run, kiểm tra đang mở đúng project.** Hai project trông y
+> hệt nhau trong SQL Editor, chỉ khác mã trên thanh địa chỉ:
+> `supabase.com/dashboard/project/`**`<mã-project>`**. Mã đó phải khớp Project
+> URL của Supabase **MỚI** (Settings → API).
+>
+> Đây là lỗi dễ mắc nhất ở bước này, và **đã từng chép dữ liệu sang project mới
+> một lần thì càng dễ nhầm**: cả hai project đều chứa cùng những cái tên khách
+> như nhau, nhìn dữ liệu không phân biệt được. Thanh địa chỉ là cách chắc chắn
+> duy nhất.
+
 1. Supabase **MỚI** → SQL Editor → New query.
 2. Dán toàn bộ [`supabase/kiem-tra-truoc-khi-chep.sql`](../supabase/kiem-tra-truoc-khi-chep.sql) → Run.
-3. Đọc tab **Messages** (không phải Results):
+3. Đọc tab **Messages** (không phải Results), từ trên xuống:
+   - Danh sách `public.<bảng> — dòng mới nhất: …` rồi tới
+     `DỮ LIỆU MỚI NHẤT Ở PROJECT NÀY`. Bản cũ vẫn đang phục vụ khách nên luôn có
+     dòng của hôm nay / vài ngày qua; **bản chép thì đứng yên từ ngày chép**.
+     Mốc này là hôm nay → bạn đang ở project CŨ, đóng tab lại.
+   - Quan trọng hơn: soi từng bảng xem **có bảng nào mới hơn ngày chép** không.
+     Có nghĩa là đã có việc thật làm trên bản 2.0 sau lần chép đó — chỗ đó sẽ
+     mất khi clone, xử lý trước rồi mới chạy tiếp.
+   - `URL ảnh đang trỏ về project: …` — chỉ để biết bước **B7b** đã chạy chưa.
+     Sau khi chép mà chưa chạy B7b thì mã ở đây vẫn là mã project **cũ**; đó là
+     bình thường, **không** phải dấu hiệu đứng nhầm project.
    - `TRỐNG — chép được` hoặc `CÓ DỮ LIỆU: N dòng` kèm danh sách bảng.
-4. Nhìn bảng kết quả bên dưới: nếu cột `chi_tiet` của dòng "hợp đồng" toàn tên
-   nháp kiểu "test", "abc" thì yên tâm. Nếu thấy tên khách thật → **dừng lại**,
-   xem mục 2.4 của [`docs/gop-ban-cu-va-chuyen-doi.md`](./gop-ban-cu-va-chuyen-doi.md).
+4. Nhìn bảng kết quả cuối cùng: thấy tên khách thật cũng đừng vội hoảng — nếu
+   đây là bản bạn chép sang lúc dựng v2 thì bỏ đi được, clone sẽ chép lại bản
+   mới nhất. Chỉ **dừng lại** khi ở bước 3 có bảng mang dữ liệu tạo sau ngày
+   chép; khi đó xem mục 2.4 của
+   [`docs/gop-ban-cu-va-chuyen-doi.md`](./gop-ban-cu-va-chuyen-doi.md).
+5. Bảng bucket (`bucket` / `so_file`) — chụp lại, bước **B7a** cần biết mỗi
+   bucket có bao nhiêu file để đối chiếu sau khi chép.
 
 ## A2. Cập nhật schema Supabase MỚI
 
