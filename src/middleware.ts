@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { cookieDomainForHost } from "@/lib/hosts";
 
@@ -207,9 +208,24 @@ export async function middleware(request: NextRequest) {
   }
 
   let response = NextResponse.next({ request });
+
+  // Middleware chạy trên MỌI request, nên một exception ở đây không chỉ hỏng
+  // trang đang mở mà trả 500 (MIDDLEWARE_INVOCATION_FAILED) cho toàn bộ site —
+  // kể cả landing. Phần dưới chỉ là refresh phiên cho nhanh; hàng rào thật nằm
+  // ở dashboard/layout.tsx (getSessionUser + redirect /login). Vì vậy mọi lỗi ở
+  // đây đều cho đi tiếp thay vì ném.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // Thiếu biến môi trường (quên khai ở Vercel, hoặc khai nhầm Environment).
+    // createServerClient sẽ ném "Your project's URL and Key are required" →
+    // sập cả site. Bỏ qua bước refresh; layout dashboard vẫn chặn người lạ.
+    return response;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       ...((() => { const d = cookieDomainForHost(host); return d ? { cookieOptions: { domain: d } } : {}; })()),
       cookies: {
@@ -225,7 +241,17 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // Supabase lỗi mạng / cookie phiên hỏng (ví dụ cookie còn sót của project
+  // Supabase cũ sau khi đổi khoá) đều làm getUser() ném. Coi như "chưa xác
+  // định" và cho đi tiếp: layout dashboard sẽ tự kiểm tra lại. Không redirect
+  // về /login ở đây, vì như thế một cú chớp mạng của Supabase sẽ đá văng tất cả
+  // người đang đăng nhập.
+  let user: User | null = null;
+  try {
+    ({ data: { user } } = await supabase.auth.getUser());
+  } catch {
+    return response;
+  }
 
   // Affiliate ref tracking: set a 30-day cookie when ?ref=CODE is present.
   const refParam = request.nextUrl.searchParams.get("ref");
