@@ -31,12 +31,17 @@ thiếu vài biến bản cũ đang chạy).
 ## ⚠️ Nếu file `.env.old` ghi `[SENSITIVE]`
 
 Vercel cho phép đánh dấu một biến là **Sensitive** — loại đó **chỉ ghi được,
-không đọc lại được**, nên `vercel env pull` trả về đúng chữ `[SENSITIVE]` thay vì
-giá trị thật.
+không đọc lại được**. `vercel env pull` trả về đúng chữ `[SENSITIVE]`, và giao
+diện web cũng không hiện giá trị. Không có cách nào bắt Vercel nhả ra.
 
-Gặp trường hợp đó thì **không lấy được giá trị từ Vercel cũ**, phải lấy lại từ
-nguồn gốc. Cột **"Lấy ở đâu"** trong các bảng dưới đây chính là để dùng cho
-tình huống này — mọi giá trị đều lấy lại được, không mất gì.
+**Nhưng gần như mọi giá trị đều lấy lại được từ chỗ khác.** Xem chương
+[**mục 7 — Lấy lại giá trị bị ẩn**](#7-lấy-lại-giá-trị-bị-ẩn) ở cuối file — có cách cho
+từng biến một, kể cả mẹo đọc thẳng từ chính trang mstudo.com đang chạy.
+
+Trước khi làm gì: **thử xem trong giao diện web đã**. Vercel CŨ → Settings →
+Environment Variables → bấm vào biến. Biến thường có nút con mắt để hiện giá
+trị; chỉ biến Sensitive mới thật sự không xem được. Có khi file `.env.old` ghi
+`[SENSITIVE]` nhưng trên web vẫn xem được bình thường.
 
 ---
 
@@ -203,7 +208,168 @@ Bản cũ **không có** những biến này, tức các tính năng tương ứ
 
 ---
 
-# 7. Kiểm tra sau khi nạp xong
+# 7. Lấy lại giá trị bị ẩn
+
+Dành cho những biến `.env.old` ghi `[SENSITIVE]`. Xếp theo độ khó, làm từ trên
+xuống.
+
+## 7.1. Mức dễ — bạn tự biết giá trị
+
+Không cần lấy ở đâu cả, đây là địa chỉ và bạn đã biết chúng:
+
+| Biến | Giá trị |
+|---|---|
+| `NEXT_PUBLIC_MAIN_HOST` | `mstudo.com` |
+| `NEXT_PUBLIC_IMG_HOST` | `img.mstudo.com` |
+| `NEXT_PUBLIC_ADMIN_HOST` | `admin.mstudo.com` |
+| `NEXT_PUBLIC_THIEP_HOST` | `thiep.mstudo.com` |
+| `NEXT_PUBLIC_STUDIO_HOST` | thường là `mstudo.com` |
+| `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/admin/drive/callback` |
+| `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/filter/drive/callback` |
+| `GOOGLE_STORY_REDIRECT_URI` | `https://mstudo.com/api/story/drive/callback` |
+| `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/studio/drive/callback` |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | `https://mstudo.com/api/gcal/callback` |
+| `GOOGLE_API_REFERER` | `https://mstudo.com` |
+| `IMG_CDN_REDIRECT` | để trống (chỉ đặt `0` khi muốn tắt tối ưu ảnh) |
+
+**Cách đối chiếu cho chắc** với 5 URI Google: Google Cloud Console → Credentials
+→ OAuth 2.0 Web client → khung **Authorized redirect URIs** liệt kê đúng những
+URI bản cũ đang dùng. Copy từ đó là chính xác tuyệt đối.
+
+## 7.2. Mức dễ — đọc thẳng từ trang mstudo.com đang chạy
+
+Mọi biến tên bắt đầu bằng `NEXT_PUBLIC_` đều được **nhúng thẳng vào JavaScript**
+gửi xuống trình duyệt. Trang cũ vẫn đang chạy, nên giá trị vẫn nằm ở đó:
+
+| Biến | Nhúng trong |
+|---|---|
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | nút bật thông báo đẩy |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | công cụ nén ảnh |
+| `NEXT_PUBLIC_GOOGLE_API_KEY` | công cụ nén ảnh |
+| `NEXT_PUBLIC_GOOGLE_APP_ID` | công cụ nén ảnh |
+| `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | trang app desktop |
+
+**Cách làm** (Chrome/Edge):
+
+1. Mở `https://mstudo.com`, đăng nhập, vào **Công cụ ảnh → Nén ảnh** (để trình
+   duyệt tải đúng đoạn JavaScript chứa mấy biến này).
+2. Nhấn **F12** → tab **Sources**.
+3. Nhấn **Ctrl + Shift + F** (tìm trong mọi file).
+4. Gõ từ khoá rồi Enter:
+   - `apps.googleusercontent.com` → ra `NEXT_PUBLIC_GOOGLE_CLIENT_ID`
+   - `AIza` → ra `NEXT_PUBLIC_GOOGLE_API_KEY` (khoá Google luôn bắt đầu bằng `AIza`)
+5. Với khoá VAPID: vào trang có nút bật thông báo rồi tìm `BM` hoặc `BN` — khoá
+   VAPID công khai là chuỗi ~87 ký tự bắt đầu bằng `B`.
+
+Cách nhanh hơn cho khoá VAPID: mở Console (F12 → **Console**) trên trang cũ và
+chạy:
+
+```js
+[...document.querySelectorAll('script[src]')].map(s => s.src)
+```
+
+rồi mở từng file `.js`, dùng Ctrl+F tìm `"B`. Nhưng cách Ctrl+Shift+F ở trên
+thường nhanh hơn.
+
+## 7.3. Mức trung bình — lấy lại ở Google Cloud Console
+
+| Biến | Đường đi |
+|---|---|
+| `GOOGLE_API_KEY` | GCC → APIs & Services → **Credentials** → mục **API Keys** → bấm vào khoá → **SHOW KEY** |
+| `NEXT_PUBLIC_GOOGLE_API_KEY` | như trên (khoá riêng, thường có giới hạn theo domain) |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | GCC → Credentials → **OAuth 2.0 Client IDs** → bấm vào client → **Client ID** hiện rõ |
+| `NEXT_PUBLIC_GOOGLE_APP_ID` | GCC → trang chủ project → **Project number** (là dãy số, không phải Project ID chữ) |
+| `GEMINI_API_KEY` | [aistudio.google.com](https://aistudio.google.com) → **Get API key** → tạo khoá mới (khoá cũ vẫn chạy song song) |
+
+### ⚠️ `GOOGLE_CLIENT_SECRET` — cẩn thận, đây là chỗ dễ làm sập bản cũ
+
+Google Cloud Console → Credentials → OAuth 2.0 Client → bấm vào client:
+
+- **Có thấy secret** (hoặc nút tải file JSON) → copy, xong.
+- **Không thấy** → có nút **Reset secret**. **Đừng bấm vội.**
+
+Reset là secret cũ **chết ngay lập tức**, mà bản cũ đang phục vụ khách vẫn đang
+dùng secret đó. Bấm nhầm là mọi kết nối Google Drive ở bản cũ hỏng giữa ban ngày.
+
+Nếu buộc phải reset thì làm theo đúng thứ tự này:
+
+1. Bấm **Reset secret**, copy giá trị mới.
+2. Dán vào `GOOGLE_CLIENT_SECRET` ở Vercel **MỚI**.
+3. **Ngay lập tức** dán cùng giá trị đó vào Vercel **CŨ** và deploy lại bản cũ.
+
+Hoặc gọn hơn: **để dành việc này tới đêm cắt** (Phần B), lúc bản cũ đã pause thì
+reset thoải mái, không ảnh hưởng ai.
+
+## 7.4. Mức dễ — tạo mới, không cần giá trị cũ
+
+Mấy biến này chỉ cần "một chuỗi bí mật nào đó", không phải khớp với bên thứ ba:
+
+| Biến | Tạo mới thế nào | Mất gì khi đổi |
+|---|---|---|
+| `CRON_SECRET` | chuỗi ngẫu nhiên bất kỳ | không mất gì (bản cũ vốn chưa có) |
+| `OAUTH_STATE_SECRET` | chuỗi ngẫu nhiên bất kỳ | không mất gì — chỉ làm hỏng những lượt nối Drive/Zalo đang dở, tính bằng giây |
+| `VERCEL_TOKEN` | vercel.com/account/tokens → **Create Token** | không mất gì, token cũ vẫn sống |
+| `ZALO_SESSION_SECRET` | chuỗi ngẫu nhiên bất kỳ | phiên Zalo đang mở phải nối lại |
+
+Tạo chuỗi ngẫu nhiên trong PowerShell:
+
+```powershell
+-join ((48..57) + (97..122) | Get-Random -Count 48 | % {[char]$_})
+```
+
+## 7.5. Mức khó — cặp khoá VAPID
+
+`NEXT_PUBLIC_VAPID_PUBLIC_KEY` lấy lại được từ trình duyệt (mục 7.2), nhưng
+`VAPID_PRIVATE_KEY` thì **không có ở đâu ngoài Vercel** — không nhúng vào trang,
+không lấy từ dịch vụ nào.
+
+Hai khoá phải là **một cặp toán học**. Ghép khoá công khai cũ với khoá riêng mới
+là không chạy.
+
+- **Lấy được cả cặp** (từ ghi chú, máy cũ, người từng cấu hình) → dùng lại,
+  không ai bị ảnh hưởng.
+- **Mất khoá riêng** → phải tạo cặp mới:
+
+```powershell
+npx web-push generate-vapid-keys
+```
+
+Nó in ra Public Key và Private Key — dán vào `NEXT_PUBLIC_VAPID_PUBLIC_KEY` và
+`VAPID_PRIVATE_KEY`.
+
+**Cái mất:** mọi thiết bị đã bật thông báo đẩy phải **vào bật lại**. Dữ liệu
+không mất gì, chỉ là các đăng ký cũ ngừng nhận thông báo cho tới khi người dùng
+bật lại. Nếu ít người dùng tính năng này thì cứ tạo mới, đừng mất thời gian tìm.
+
+Không muốn phiền ai thì cứ **để trống cả hai** — thông báo đẩy tắt, app vẫn chạy
+bình thường, chuông thông báo trong app vẫn hoạt động.
+
+## 7.6. Mức khó — `CHAT_PROVIDERS`
+
+Đây là JSON cấu hình nhà cung cấp AI cho chatbox, dạng:
+
+```json
+[{"type":"gemini","key":"AIza…","model":"gemini-flash-latest","label":"gemini"}]
+```
+
+Mất thì **không cần khôi phục nguyên văn**. Code có đường lui: bỏ trống
+`CHAT_PROVIDERS`, chỉ cần khai `GEMINI_API_KEY` là chatbox tự chạy bằng Gemini
+với model mặc định (`src/lib/vieetjk/providers.ts`).
+
+Vậy nên: **để trống `CHAT_PROVIDERS`, khai `GEMINI_API_KEY` là xong.**
+
+## 7.7. Không cần khôi phục
+
+| Biến | Vì sao |
+|---|---|
+| 3 khoá Supabase | lấy từ Supabase **MỚI**, giá trị cũ vô dụng |
+| `VERCEL_PROJECT_ID` | lấy ID của project **MỚI** |
+| `DESKTOP_LATEST_VERSION` | đặt số phiên bản desktop hiện tại; sai thì chỉ hiện nhầm số |
+| 4 biến ở mục 5a | code không dùng |
+
+---
+
+# 8. Kiểm tra sau khi nạp xong
 
 ```powershell
 cd ~\vc-old
