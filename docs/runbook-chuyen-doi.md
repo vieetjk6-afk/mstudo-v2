@@ -1,5 +1,10 @@
 # Runbook: chuyển mstudo từ bản cũ sang bản 2.0
 
+> ⛔ **File này đã được thay thế.** Bản đang dùng là
+> [`chuyen-doi-mstudo-2.0.md`](./chuyen-doi-mstudo-2.0.md) — viết lại từ đầu, có
+> phần đưa tên miền về Cloudflare và đã bỏ nút chuyển giao diện 1.0. Giữ file này
+> chỉ để tham khảo.
+
 Hướng dẫn bấm-từng-nút để dời `mstudo.com` từ **Vercel cũ + Supabase cũ** (repo
 `vieetjk01/Studio`) sang **Vercel mới + Supabase mới + GitHub mới** (repo này,
 nhánh `main`).
