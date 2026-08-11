@@ -1214,28 +1214,6 @@ body {
   background-clip: content-box;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   GIAO DIỆN 2.0 (webapp v2) — KHUNG CHỜ THIẾT KẾ
-   Dashboard được bọc bằng [data-webapp="v1" | "v2"] (xem src/app/dashboard/
-   layout.tsx + StudioShell). Mặc định MỌI phiên là v1 và khối dưới đây KHÔNG
-   đổi gì cả — vì bản 2.0 còn đang thiết kế.
-
-   Khi dựng giao diện 2.0, viết token & override BÊN TRONG [data-webapp="v2"]
-   để 1.0 tuyệt đối không bị ảnh hưởng, ví dụ:
-     [data-webapp="v2"] .studio-shell { --brand: #…; --surface: #…; }
-     [data-webapp="v2"] .studio-shell .nav-item { border-radius: 999px; }
-   Dùng .v1-only / .v2-only để dựng song song hai bố cục trong cùng một trang.
-   ────────────────────────────────────────────────────────────────────────── */
-[data-webapp="v2"] {
-  --ui-version: "2.0";
-}
-[data-webapp="v1"] .v2-only {
-  display: none !important;
-}
-[data-webapp="v2"] .v1-only {
-  display: none !important;
-}
-
 /* Print: only the contract document (.print-doc) shows, on white A4. */
 @media print {
   body {

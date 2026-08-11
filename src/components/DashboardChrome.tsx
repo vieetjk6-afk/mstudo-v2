@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import DashboardHeader from "@/components/DashboardHeader";
 import StudioFooterNav from "@/components/StudioFooterNav";
 import StudioShell from "@/components/StudioShell";
-import type { WebappUi, WebappV2Stage } from "@/lib/webapp-version";
 import type { Profile } from "@/lib/types";
 
 type StudioTier = "none" | "booking" | "plus" | "full";
@@ -23,9 +22,6 @@ export default function DashboardChrome({
   showFooter,
   comingSoon = [],
   hiddenNav = [],
-  v2Stage = "coming_soon",
-  ui = "v1",
-  canSwitchV2 = false,
   children,
 }: {
   profile: Profile;
@@ -35,10 +31,6 @@ export default function DashboardChrome({
   showFooter: boolean;
   comingSoon?: string[];
   hiddenNav?: string[];
-  /** Giao diện 2.0: trạng thái phát hành + phiên bản đang dùng (xem lib/webapp-version). */
-  v2Stage?: WebappV2Stage;
-  ui?: WebappUi;
-  canSwitchV2?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -75,9 +67,6 @@ export default function DashboardChrome({
         role={role}
         comingSoon={comingSoon}
         hiddenNav={hiddenNav}
-        v2Stage={v2Stage}
-        ui={ui}
-        canSwitchV2={canSwitchV2}
       >
         {children}
       </StudioShell>
@@ -86,7 +75,7 @@ export default function DashboardChrome({
 
   return (
     <>
-      <DashboardHeader profile={profile} kind={kind} v2Stage={v2Stage} ui={ui} canSwitchV2={canSwitchV2} />
+      <DashboardHeader profile={profile} kind={kind} />
       {/* overflow-x-clip: xem ghi chú ở StudioShell — chặn tràn ngang làm lệch
           cả trang, dùng `clip` để không phá sticky bên trong. */}
       <main className={`mx-auto max-w-6xl overflow-x-clip px-6 py-8 md:px-10${showFooter ? " pb-24" : ""}`}>

@@ -9,13 +9,11 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotificationBell from "@/components/NotificationBell";
 import StudioSearch from "@/components/StudioSearch";
-import WebappVersionButton from "@/components/WebappVersionButton";
 import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { appUrl, mainUrl } from "@/lib/hosts";
 import { effectivePlan, studioTier, STUDIO_TIER_RANK, type StudioTier } from "@/lib/plans";
 import { APP_VERSION } from "@/lib/version";
-import type { WebappUi, WebappV2Stage } from "@/lib/webapp-version";
 import type { Profile } from "@/lib/types";
 
 interface NavLink {
@@ -34,16 +32,9 @@ const isGroup = (x: NavLink | NavGroup): x is NavGroup => "children" in x;
 export default function DashboardHeader({
   profile,
   kind = "app",
-  v2Stage = "coming_soon",
-  ui = "v1",
-  canSwitchV2 = false,
 }: {
   profile: Profile;
   kind?: "app" | "img" | "admin";
-  /** Giao diện 2.0 — mặc định chỉ hiện nút thông báo (xem lib/webapp-version). */
-  v2Stage?: WebappV2Stage;
-  ui?: WebappUi;
-  canSwitchV2?: boolean;
 }) {
   const { t } = useLang();
   const router = useRouter();
@@ -297,7 +288,6 @@ export default function DashboardHeader({
             )}
           </span>
           {/* Thông báo "giao diện 2.0 sắp ra mắt" (và là nút chuyển khi đã mở) */}
-          <WebappVersionButton stage={v2Stage} ui={ui} canSwitch={canSwitchV2} />
           <LanguageSwitcher />
           <ThemeToggle />
 

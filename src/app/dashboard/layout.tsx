@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser, getProfileById } from "@/lib/auth-guards";
@@ -11,12 +11,6 @@ import AnnouncementPopup from "@/components/AnnouncementPopup";
 import ProductTour from "@/components/ProductTour";
 import { effectivePlan, planProfilePatch, studioTier } from "@/lib/plans";
 import { getFeatureFlags, comingSoonNav, desktopHidden } from "@/lib/feature-flags";
-import {
-  WEBAPP_UI_COOKIE,
-  canSwitchWebappV2,
-  resolveWebappUi,
-  webappV2Stage,
-} from "@/lib/webapp-version";
 import type { Profile } from "@/lib/types";
 
 export default async function DashboardLayout({
@@ -113,15 +107,8 @@ on conflict (id) do update set role='admin', is_active=true;`}
   // Chưa xuất bản (ẩn hoàn toàn với non-admin, không hiện cả nhãn "Sắp ra mắt").
   const hiddenNav = desktopHidden(flags) ? ["/dashboard/studio/desktop"] : [];
 
-  // Giao diện 2.0: mặc định "coming_soon" → chỉ hiện nút thông báo, chưa ai
-  // chuyển được. `ui` là phiên bản THỰC SỰ đang dựng (data-webapp) — cookie chỉ
-  // có tác dụng khi cờ còn cho phép, nên hạ cờ là mọi phiên tự về 1.0.
-  const v2Stage = webappV2Stage(flags);
-  const canSwitchV2 = canSwitchWebappV2(v2Stage, profile.role);
-  const ui = resolveWebappUi(cookies().get(WEBAPP_UI_COOKIE)?.value, v2Stage, profile.role);
-
   return (
-    <div className="min-h-screen" data-webapp={ui}>
+    <div className="min-h-screen">
       <Suspense fallback={null}>
         <NavProgress />
       </Suspense>
@@ -134,9 +121,6 @@ on conflict (id) do update set role='admin', is_active=true;`}
         showFooter={showFooter}
         comingSoon={comingSoon}
         hiddenNav={hiddenNav}
-        v2Stage={v2Stage}
-        ui={ui}
-        canSwitchV2={canSwitchV2}
       >
         {children}
       </DashboardChrome>

@@ -11,7 +11,6 @@ import StudioTrialButton from "@/components/StudioTrialButton";
 import MessengerButton from "@/components/MessengerButton";
 import VietQRButton from "@/components/VietQR";
 import AutoEmailToggle from "@/components/AutoEmailToggle";
-import WebappV2BannerSlot from "@/components/WebappV2BannerSlot";
 import { shootReminderMessage } from "@/lib/zalo";
 import { crewPortalUrl } from "@/lib/crew-show";
 import { avatarStyle, initials } from "@/lib/avatar";
@@ -96,7 +95,6 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
       <p className="mb-4 text-[13px]" style={{ color: "var(--text3)" }}>Quản lý lịch chụp & yêu cầu đặt lịch của khách</p>
 
       {/* Thông báo giao diện 2.0 — điểm nhấn: toàn bộ giao diện được làm mới */}
-      <WebappV2BannerSlot />
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         {stats.map((s) => (
@@ -556,7 +554,6 @@ export default async function StudioOverview() {
         </div>
       </div>
 
-      <WebappV2BannerSlot />
 
       {/* ── 4 thẻ KPI ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">

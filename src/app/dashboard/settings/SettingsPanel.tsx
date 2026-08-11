@@ -294,29 +294,6 @@ export default function SettingsPanel({
           </span>
         </label>
 
-        {/* Giao diện 2.0 — 3 mức phát hành, xem src/lib/webapp-version.ts */}
-        <div className="rounded-xl p-3" style={{ background: "var(--surface2)" }}>
-          <p className="text-sm">
-            <b>Giao diện 2.0 (webapp v2)</b> — nút chuyển phiên bản trên thanh trên
-          </p>
-          <select
-            className="input mt-2"
-            value={((form.feature_flags as Record<string, string> | null | undefined)?.webapp_v2) ?? "coming_soon"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              if (e.target.value === "coming_soon") delete cur.webapp_v2;
-              else cur.webapp_v2 = e.target.value;
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
-          >
-            <option value="coming_soon">Sắp ra mắt — chỉ hiện nút thông báo, chưa ai chuyển được</option>
-            <option value="beta">Thử nghiệm — chỉ admin chuyển được để kiểm thử</option>
-            <option value="live">Phát hành — mọi studio tự chuyển được (vẫn quay lại 1.0 được)</option>
-          </select>
-          <p className="mt-1.5 text-[11px]" style={{ color: "var(--text3)" }}>
-            Hạ lại về “Sắp ra mắt” là mọi phiên đang ở 2.0 tự trở về giao diện 1.0 ngay lần tải trang sau.
-          </p>
-        </div>
         <SaveBtn label="Lưu tính năng" />
       </Section>
 

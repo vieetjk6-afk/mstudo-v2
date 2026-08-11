@@ -13,7 +13,6 @@ import StudioFooterNav from "@/components/StudioFooterNav";
 import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
 import SyncControlButton from "@/components/SyncControlButton";
-import WebappVersionButton from "@/components/WebappVersionButton";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/lib/theme";
 import { APP_VERSION } from "@/lib/version";
@@ -21,7 +20,6 @@ import {
   isNavActive, visibleGroups,
   type NavAccess, type NavBadges, type NavGroup, type NavItem, type StudioTier,
 } from "@/lib/studio-nav";
-import type { WebappUi, WebappV2Stage } from "@/lib/webapp-version";
 import type { Profile } from "@/lib/types";
 
 // Zalo support group for studios using the app.
@@ -171,9 +169,6 @@ export default function StudioShell({
   role,
   comingSoon = [],
   hiddenNav = [],
-  v2Stage = "coming_soon",
-  ui = "v1",
-  canSwitchV2 = false,
   children,
 }: {
   profile: Profile;
@@ -181,10 +176,6 @@ export default function StudioShell({
   role: string;
   comingSoon?: string[];
   hiddenNav?: string[]; // mục ẨN HOÀN TOÀN với non-admin (chưa xuất bản)
-  /** Giao diện 2.0 — mặc định chỉ hiện nút thông báo (xem lib/webapp-version). */
-  v2Stage?: WebappV2Stage;
-  ui?: WebappUi;
-  canSwitchV2?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -282,7 +273,7 @@ export default function StudioShell({
   );
 
   return (
-    <div className="studio-shell" data-theme={theme} data-webapp={ui} style={{ background: "var(--bg)", color: "var(--tx)" }}>
+    <div className="studio-shell" data-theme={theme} style={{ background: "var(--bg)", color: "var(--tx)" }}>
       <div className="min-h-screen lg:grid lg:grid-cols-[250px_minmax(0,1fr)]">
 
         {/* ── Mobile drawer overlay ──────────────────────────────── */}
@@ -326,7 +317,6 @@ export default function StudioShell({
           <NavGroups dense={false} {...navProps} />
 
           <div className="mt-auto flex flex-col gap-2 pt-6">
-            <WebappVersionButton stage={v2Stage} ui={ui} canSwitch={canSwitchV2} variant="row" />
             <a
               href={ZALO_SUPPORT_URL}
               target="_blank"
@@ -439,7 +429,6 @@ export default function StudioShell({
               )}
             </Link>
 
-            <WebappVersionButton stage={v2Stage} ui={ui} canSwitch={canSwitchV2} />
 
             {/* Xem-như vai trò khác — ẩn dưới 1120px (bản thiết kế). */}
             {canViewAs && (
