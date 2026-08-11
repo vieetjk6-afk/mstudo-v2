@@ -217,8 +217,13 @@ Cả hai phải ra `1`.
 
 ## A3. Biến môi trường cho Vercel MỚI
 
-App có **36 biến**. Phần lớn copy nguyên từ Vercel cũ, nhưng có một nhóm bắt
-buộc phải sửa — copy nhầm thì bản mới vẫn ghi vào Supabase cũ, hỏng âm thầm.
+> 📖 **Bảng tra từng biến** — công dụng, cách lấy giá trị, thêm ở đâu, biến nào
+> phải bỏ: [`bien-moi-truong.md`](./bien-moi-truong.md). Mục dưới đây chỉ tóm
+> tắt; khi ngồi làm thật thì mở file kia.
+
+Phần lớn copy nguyên từ Vercel cũ, nhưng có một nhóm bắt buộc phải sửa — copy
+nhầm thì bản mới vẫn ghi vào Supabase cũ, hỏng âm thầm. Ngoài ra có nhóm **phải
+bỏ đi** (Vercel tự tiêm) và nhóm **phải tạo mới** (`CRON_SECRET`).
 
 ### Kéo biến từ Vercel CŨ
 
