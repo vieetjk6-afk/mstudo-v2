@@ -309,6 +309,18 @@ lại thì app vẫn chạy với giá trị cũ. Vercel → Deployments → dep
 Đây là lỗi đã xảy ra một lần rồi: thiếu 2 biến Supabase làm `mstudo-v2.vercel.app`
 trả 500 toàn site.
 
+> ⚠️ Bấm Redeploy mà Vercel báo *"Prebuilt deployments cannot be redeployed"*:
+> bản đang chạy được tạo bằng `vercel deploy --prebuilt`, tức build sẵn ở nơi
+> khác rồi tải lên dạng thành phẩm — biến cũ đã nằm sẵn trong đó nên Vercel từ
+> chối dùng lại. Phải tạo bản deploy **mới**, build trên máy chủ Vercel:
+>
+> - **Project nối GitHub** (Settings → Git có hiện repo): đẩy một commit lên
+>   `main`, Vercel tự build. Cách này sạch nhất — về sau chỉ cần push.
+> - **Từ giao diện**: Deployments → chọn bản có biểu tượng nhánh Git (không phải
+>   bản CLI) → `⋯` → Redeploy.
+> - **Từ máy bạn**: `npx vercel --prod` trong một bản clone của repo — **không
+>   kèm** `--prebuilt`, có cờ đó là lặp lại đúng vấn đề.
+
 ## A4. Khai lại callback ở bên thứ ba
 
 Đăng nhập Google và các kết nối Drive sẽ **không chạy** nếu thiếu bước này.
