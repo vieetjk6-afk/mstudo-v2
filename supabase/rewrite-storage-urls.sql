@@ -29,6 +29,7 @@ declare
   r       record;
   n       bigint;
   tong    bigint := 0;
+  tbl     text;
 begin
   if ma_cu = ma_moi then
     raise exception 'Mã project cũ và mới giống nhau — sửa lại 2 biến ở đầu khối.';
@@ -39,7 +40,24 @@ begin
 
   -- Trigger nghiệp vụ (hạn mức album, ghi log, updated_at) không nên chạy vì
   -- đây là thao tác sửa kỹ thuật, không phải người dùng đổi dữ liệu.
-  perform set_config('session_replication_role', 'replica', true);
+  --
+  -- KHÔNG dùng session_replication_role: đó là tham số chỉ superuser đặt được,
+  -- mà role `postgres` của Supabase không phải superuser → lỗi 42501
+  -- "permission denied to set parameter". Tắt theo từng bảng như script chép
+  -- dữ liệu vẫn làm — chủ bảng có quyền này.
+  --
+  -- An toàn khi lỗi: cả khối DO này nằm trong MỘT transaction, và ALTER TABLE
+  -- trong Postgres cũng có transaction. Nửa đường mà raise thì trigger tự trở
+  -- về trạng thái bật, không có chuyện tắt lửng lơ.
+  for tbl in
+    select table_name from information_schema.tables
+     where table_schema = 'public' and table_type = 'BASE TABLE'
+  loop
+    begin
+      execute format('alter table public.%I disable trigger user', tbl);
+    exception when others then null;   -- bảng không đổi được thì cứ chạy tiếp
+    end;
+  end loop;
 
   for r in
     select c.table_name, c.column_name, c.data_type
@@ -72,7 +90,18 @@ begin
     end if;
   end loop;
 
-  perform set_config('session_replication_role', 'origin', true);
+  -- Bật lại trigger nghiệp vụ. App dựa vào chúng (hạn mức album, updated_at,
+  -- ghi log) nên để tắt là phần mềm chạy sai một cách âm thầm.
+  for tbl in
+    select table_name from information_schema.tables
+     where table_schema = 'public' and table_type = 'BASE TABLE'
+  loop
+    begin
+      execute format('alter table public.%I enable trigger user', tbl);
+    exception when others then null;
+    end;
+  end loop;
+
   raise notice '── Xong: đã đổi % dòng từ % sang %', tong, cu, moi;
 end $$;
 
