@@ -166,6 +166,21 @@ export default function CalendarView({
   }
 
   /**
+   * Buổi chụp gần nhất SAU tuần đang xem — dùng khi tuần trống.
+   *
+   * Studio thường có lịch rải rác vài tháng tới, nên mở lịch tuần vào một tuần
+   * trống là chuyện thường; để trắng thì màn hình không nói được gì. Ba buổi kế
+   * tiếp cho biết ngay "sắp tới có gì" mà không phải bấm sang từng tuần.
+   */
+  const upcomingAfterWeek = useMemo(() => {
+    const last = weekDays[weekDays.length - 1];
+    return contractList
+      .filter((c) => c.event_date && c.event_date > last)
+      .sort((a, b) => (a.event_date || "").localeCompare(b.event_date || ""))
+      .slice(0, 3);
+  }, [contractList, weekDays]);
+
+  /**
    * Lịch theo nhân sự (tính năng mới số 4): mỗi người MỘT HÀNG × 7 ngày của
    * tuần đang xem, kèm cột "tải tuần" đổi màu. Người nào nhận ≥4 ngày/tuần là
    * đang quá tải — đúng ngưỡng cảnh báo dồn lịch ở màn Tổng quan.
@@ -479,9 +494,23 @@ export default function CalendarView({
       ) : view === "people" ? (
         <PeopleWeek rows={peopleRows} weekDays={weekDays} todayStr={todayStr} />
       ) : view === "week" ? (
+        // Trên điện thoại chi tiết đi TRƯỚC lưới giờ: lưới cao tới 620px và tự
+        // cuộn bên trong, nên phần chi tiết nằm dưới nó thực tế không ai cuộn tới.
+        // Từ 900px trở lên trả về thứ tự cũ — ở đó lưới nhìn được cả tuần một lần.
         <div className="flex flex-col gap-3.5">
-          <WeekGrid weekDays={weekDays} todayStr={todayStr} eventsOn={eventsOn} contractsOn={contractsOn} />
-          <WeekAgenda weekDays={weekDays} todayStr={todayStr} contractsOn={contractsOn} eventsOn={eventsOn} onColor={setContractColor} />
+          <div className="order-2 min-[900px]:order-1">
+            <WeekGrid weekDays={weekDays} todayStr={todayStr} eventsOn={eventsOn} contractsOn={contractsOn} />
+          </div>
+          <div className="order-1 min-[900px]:order-2">
+            <WeekAgenda
+              weekDays={weekDays}
+              todayStr={todayStr}
+              contractsOn={contractsOn}
+              eventsOn={eventsOn}
+              onColor={setContractColor}
+              upcoming={upcomingAfterWeek}
+            />
+          </div>
         </div>
       ) : (
         <div className="flex flex-col gap-3.5">
@@ -732,28 +761,52 @@ function ContractDetailCard({
    buổi trong tuần, xếp theo ngày, nên theo dõi cả tuần không cần mở gì. Ngày
    trống bị bỏ qua để danh sách không loãng. */
 function WeekAgenda({
-  weekDays, todayStr, contractsOn, eventsOn, onColor,
+  weekDays, todayStr, contractsOn, eventsOn, onColor, upcoming,
 }: {
   weekDays: string[];
   todayStr: string;
   contractsOn: (d: string) => ContractMarker[];
   eventsOn: (d: string) => EventRow[];
   onColor: (id: string, color: string) => void;
+  /** Buổi chụp sau tuần này — chỉ dùng khi tuần đang xem không có gì. */
+  upcoming: ContractMarker[];
 }) {
   const days = weekDays
     .map((d) => ({ d, cons: contractsOn(d), evs: eventsOn(d) }))
     .filter((x) => x.cons.length > 0 || x.evs.length > 0);
+  const soBuoi = days.reduce((n, x) => n + x.cons.length, 0);
 
   if (days.length === 0) {
     return (
-      <Panel>
-        <EmptyState icon={CalendarDays} title="Tuần này chưa có lịch" hint="Không có buổi chụp hay mốc lịch nào trong tuần — tuần trống để nhận job mới." />
-      </Panel>
+      <div className="flex max-w-[840px] flex-col gap-2.5">
+        <Panel>
+          <EmptyState icon={CalendarDays} title="Tuần này chưa có lịch" hint="Không có buổi chụp hay mốc lịch nào trong tuần — tuần trống để nhận job mới." />
+        </Panel>
+        {upcoming.length > 0 && (
+          <Panel className="min-w-0 px-5 py-4">
+            <h2 className="mb-1 text-[14px] font-bold">Buổi chụp sắp tới</h2>
+            <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              Không nằm trong tuần này — {upcoming.length === 1 ? "buổi kế tiếp" : `${upcoming.length} buổi kế tiếp`}.
+            </p>
+            {upcoming.map((c) => (
+              <div key={c.id}>
+                <p className="mb-1 text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>
+                  {fmtDow(c.event_date)} · {fmtDate(c.event_date)}
+                </p>
+                <ContractDetailCard c={c} onColor={onColor} />
+              </div>
+            ))}
+          </Panel>
+        )}
+      </div>
     );
   }
 
   return (
     <div className="flex max-w-[840px] flex-col gap-2.5">
+      <p className="px-1 text-[11.5px] font-semibold uppercase" style={{ letterSpacing: ".5px", color: "var(--tx3)" }}>
+        Chi tiết trong tuần · {soBuoi} buổi chụp
+      </p>
       {days.map(({ d, cons, evs }) => (
         <Panel key={d} className="min-w-0 px-5 py-4">
           <h2 className="text-[14px] font-bold">

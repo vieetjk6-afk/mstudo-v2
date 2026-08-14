@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, FileText, CalendarDays, Wallet, MoreHorizontal, X,
   ReceiptText, Users, Images, UsersRound, Banknote, Bell, Clock, Wand2,
+  SlidersHorizontal,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,11 +34,12 @@ type Item = { href: string; icon: LucideIcon; label: string; minTier: string };
  */
 const MAIN: Item[] = [
   { href: "/dashboard/studio", icon: LayoutDashboard, label: "Trang chủ", minTier: "booking" },
+  { href: "/dashboard/studio/quotes", icon: ReceiptText, label: "Báo giá", minTier: "plus" },
   { href: "/dashboard/studio/calendar", icon: CalendarDays, label: "Lịch", minTier: "booking" },
   { href: "/dashboard/studio/contracts", icon: FileText, label: "Hợp đồng", minTier: "plus" },
-  { href: "/dashboard/studio/reports", icon: Wallet, label: "Tiền", minTier: "full" },
-  { href: "/dashboard/studio/quotes", icon: ReceiptText, label: "Báo giá", minTier: "plus" },
   { href: "/dashboard/albums", icon: Images, label: "Album", minTier: "booking" },
+  { href: "/dashboard/tools", icon: SlidersHorizontal, label: "Công cụ ảnh", minTier: "booking" },
+  { href: "/dashboard/studio/reports", icon: Wallet, label: "Tiền", minTier: "full" },
   { href: "/dashboard/studio/clients", icon: Users, label: "Khách hàng", minTier: "booking" },
   { href: "/dashboard/studio/bookings", icon: Clock, label: "Đặt lịch", minTier: "booking" },
 ];

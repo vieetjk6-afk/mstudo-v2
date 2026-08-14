@@ -428,6 +428,9 @@ body {
   color: var(--tx);
 }
 .act-btn:disabled { opacity: 0.55; }
+/* Cho nút nằm TRONG một hàng (cạnh ô nhập, cạnh nút khác) co theo nội dung thay
+   vì chiếm cả hàng — dùng cho cụm gửi Zalo và nút "Gọi". */
+.act-btn-auto { width: auto; }
 .act-btn-primary { border-color: transparent; background: var(--ac); color: #fff; }
 .act-btn-danger {
   background: transparent;
