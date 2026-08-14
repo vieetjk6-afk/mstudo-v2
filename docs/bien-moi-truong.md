@@ -56,7 +56,7 @@ Cột **Xử lý** đọc thế này:
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 🟢 | |
 | `NEXT_PUBLIC_IMG_HOST` | 🟢 | `img.mstudo.com` |
 | `NEXT_PUBLIC_MAIN_HOST` | 🟢 | `mstudo.com` |
-| `NEXT_PUBLIC_STUDIO_HOST` | 🟢 | thường là `mstudo.com` |
+| `NEXT_PUBLIC_STUDIO_HOST` | 🟢 | `mstudo.com` — **để trống cũng chạy**, xem 4b |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 🔴 | của Supabase **MỚI** |
 | `NEXT_PUBLIC_SUPABASE_URL` | 🔴 | của Supabase **MỚI** |
 | `NEXT_PUBLIC_THIEP_HOST` | 🟢 | `thiep.mstudo.com` |
@@ -282,7 +282,7 @@ Muốn biết có cần khai không:
 | `NEXT_PUBLIC_IMG_HOST` | `img.mstudo.com` |
 | `NEXT_PUBLIC_ADMIN_HOST` | `admin.mstudo.com` |
 | `NEXT_PUBLIC_THIEP_HOST` | `thiep.mstudo.com` |
-| `NEXT_PUBLIC_STUDIO_HOST` | host studio dùng cho link hợp đồng/báo giá gửi khách |
+| `NEXT_PUBLIC_STUDIO_HOST` | `mstudo.com` — chỉ dùng dựng link trong email báo cho **chủ studio**; bỏ trống thì email vẫn gửi, chỉ thiếu nút bấm |
 
 Giữ **đúng như bản cũ**. Tên miền không đổi nên không có gì phải sửa.
 
@@ -381,7 +381,7 @@ Không cần lấy ở đâu cả, đây là địa chỉ và bạn đã biết 
 | `NEXT_PUBLIC_IMG_HOST` | `img.mstudo.com` |
 | `NEXT_PUBLIC_ADMIN_HOST` | `admin.mstudo.com` |
 | `NEXT_PUBLIC_THIEP_HOST` | `thiep.mstudo.com` |
-| `NEXT_PUBLIC_STUDIO_HOST` | thường là `mstudo.com` |
+| `NEXT_PUBLIC_STUDIO_HOST` | `mstudo.com` (để trống cũng được) |
 | `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/admin/drive/callback` |
 | `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/filter/drive/callback` |
 | `GOOGLE_STORY_REDIRECT_URI` | `https://mstudo.com/api/story/drive/callback` |
