@@ -627,7 +627,9 @@ dừng. Lặp tới khi kết quả báo xong hết.
 Xem tiến độ bất cứ lúc nào:
 
 ```sql
-select thu_tu, tbl, xong from public.mig_progress order by thu_tu;
+select bang, so_dong, xong, so_lan_loi, ghi_chu
+from public.mig_progress
+order by xong, thu_tu;
 ```
 
 ## B7. Chép file Storage và sửa URL ảnh
