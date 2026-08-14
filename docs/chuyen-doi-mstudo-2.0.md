@@ -178,32 +178,66 @@ Làm bước này **mỗi lần** trước khi đi tiếp, và lần cuối ngay
 nào bản cũ còn phục vụ khách thì anh còn có thể sửa thêm ở đó, và mỗi lần sửa là
 một lần bản 2.0 tụt lại phía sau.
 
-Chạy trong bản clone của repo này, trên máy anh:
+> ⚠️ **Windows: mở PowerShell bình thường, ĐỪNG "Run as Administrator".** Chế độ
+> quản trị thả bạn vào `C:\WINDOWS\system32` — không phải thư mục repo — nên mọi
+> lệnh `git` bên dưới sẽ chết với `fatal: not a git repository`.
+>
+> **Dán từng dòng một**, chạy xong dòng này mới dán dòng kế. Dán cả khối thì
+> PowerShell hiện dấu `>>` và ngồi đợi chứ không chạy gì cả.
 
-```bash
-git remote add old https://github.com/vieetjk01/studio   # chỉ cần một lần
-git fetch old
-git log --oneline HEAD..old/claude/stoic-fermi-gf0pg4
+Lần đầu — lấy bản chép của repo về máy (repo riêng tư nên `git clone` sẽ mở
+trình duyệt hỏi đăng nhập GitHub):
+
+```powershell
+cd ~
+git clone https://github.com/vieetjk6-afk/mstudo-v2
+cd mstudo-v2
+git remote add old https://github.com/vieetjk01/studio
 ```
 
-- **Không in ra dòng nào** → không còn gì phải gộp, đi tiếp.
-- **Có dòng** → đó là những commit bản cũ có mà bản 2.0 chưa có:
+Những lần sau chỉ cần `cd ~\mstudo-v2` rồi chạy tiếp từ đây:
 
-```bash
+```powershell
+git fetch old
+git rev-list --count HEAD..old/claude/stoic-fermi-gf0pg4
+```
+
+- Ra **`0`** → không còn gì phải gộp, đi tiếp.
+- Ra **số khác 0** → còn bấy nhiêu commit chưa gộp. Xem chúng là gì:
+
+```powershell
+git log --oneline HEAD..old/claude/stoic-fermi-gf0pg4
 git merge old/claude/stoic-fermi-gf0pg4
 ```
+
+> 💡 Dùng `rev-list --count` thay cho `log` ở bước kiểm tra vì `log` **không in
+> gì cả** khi sạch — nhìn màn hình trống rất dễ tưởng lệnh chạy hỏng, trong khi
+> đó mới là kết quả tốt. `rev-list --count` luôn in ra một con số.
 
 Xung đột hầu như luôn rơi vào các file giao diện mà bản 2.0 đã viết lại. Nguyên
 tắc xử lý: **giữ giao diện 2.0, ghép phần logic mới vào** — đừng lấy nguyên khối
 của bản cũ, làm thế là mất công dựng lại giao diện.
 
-Gộp xong, chạy đủ 3 thứ trước khi commit:
+Gộp xong, kiểm tra trước khi commit. Chỉ cần làm khi **thật sự có gộp gì đó** —
+`Already up to date.` thì bỏ qua cả mục này.
 
-```bash
-npx tsc --noEmit && npm run build
-npm run test:overview && npm run test:contract-filter
-npm run test:album-buttons && npm run test:album-dislike
+```powershell
+npm ci
+npx tsc --noEmit
+npm run build
+npm run test:overview
+npm run test:contract-filter
+npm run test:album-buttons
+npm run test:album-dislike
+npm run test:album-drive-links
 ```
+
+> ⚠️ **Đừng nối lệnh bằng `&&`.** Windows PowerShell 5.1 (bản có sẵn trong
+> Windows) không hiểu `&&` và báo *"The token '&&' is not a valid statement
+> separator in this version"*. Chạy từng dòng.
+>
+> `npm ci` chỉ cần lần đầu sau khi clone — nó tạo thư mục `node_modules`. Thiếu
+> bước này thì `tsc` và `npm run build` chết ngay vì chưa có thư viện.
 
 > ⚠️ Commit của repo cũ có thể kèm **file SQL mới** trong `supabase/migrations/`.
 > Có file mới thì phải thêm tên nó vào `ORDER` trong
