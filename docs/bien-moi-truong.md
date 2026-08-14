@@ -39,14 +39,14 @@ Cột **Xử lý** đọc thế này:
 | `EMAIL_FROM` | ⚪ | đi cặp với `RESEND_API_KEY` |
 | `GEMINI_API_KEY` | 🟢 | 🔒 |
 | `GEMINI_MODEL` | ⚪ | thiếu thì dùng model mặc định trong code |
-| `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | 🟢 | tên miền không đổi → giữ nguyên |
+| `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được**, không cần đọc bản cũ — mục 3 |
 | `GOOGLE_API_KEY` | 🟢 | 🔒 |
 | `GOOGLE_API_REFERER` | 🟢 | |
-| `GOOGLE_CALENDAR_REDIRECT_URI` | 🟢 | giữ nguyên |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `GOOGLE_CLIENT_SECRET` | 🟢 | 🔒 đừng Reset khi bản cũ còn chạy — xem 7.3 |
-| `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | 🟢 | giữ nguyên |
-| `GOOGLE_STORY_REDIRECT_URI` | 🟢 | giữ nguyên |
-| `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | 🟢 | giữ nguyên |
+| `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
+| `GOOGLE_STORY_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
+| `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `IMG_CDN_REDIRECT` | 🟢 | |
 | `NEXT_PUBLIC_ADMIN_HOST` | 🟢 | `admin.mstudo.com` |
 | `NEXT_PUBLIC_APP_HOST` | ⚪ | đã ngừng dùng |
@@ -196,21 +196,47 @@ Vercel tự gắn `Authorization: Bearer $CRON_SECRET` khi chạy cron theo
 
 ---
 
-# 3. Phải sửa giá trị — copy nguyên là sai
+# 3. Năm địa chỉ callback — tự gõ được, không cần đọc bản cũ
 
-Năm biến này là địa chỉ Google/Zalo gọi ngược về app. Tên miền không đổi nên
-**phần lớn giữ nguyên được**; chỉ sửa nếu giá trị cũ trỏ về host khác.
+Năm biến này là **địa chỉ Google gọi ngược về app**. Chúng **không phải bí mật**
+— chỉ là URL, và bạn đang cầm sẵn giá trị đúng ngay dưới đây. Không xem được giá
+trị ở Vercel cũ thì **không sao cả**: cứ gõ y hệt bảng này.
 
-| Biến | Giá trị | Lấy ở đâu |
-|---|---|---|
-| `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/admin/drive/callback` | giữ nguyên bản cũ |
-| `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/filter/drive/callback` | giữ nguyên bản cũ |
-| `GOOGLE_STORY_REDIRECT_URI` | `https://mstudo.com/api/story/drive/callback` | giữ nguyên bản cũ |
-| `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/studio/drive/callback` | giữ nguyên bản cũ |
-| `GOOGLE_CALENDAR_REDIRECT_URI` | callback đồng bộ Google Calendar | giữ nguyên bản cũ |
+| Biến | Giá trị — gõ nguyên văn |
+|---|---|
+| `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/admin/drive/callback` |
+| `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/filter/drive/callback` |
+| `GOOGLE_STORY_REDIRECT_URI` | `https://mstudo.com/api/story/drive/callback` |
+| `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/studio/drive/callback` |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | `https://mstudo.com/api/gcal/callback` |
 
-Mỗi giá trị phải **trùng tuyệt đối** với một dòng trong Authorized redirect URIs
-ở Google Cloud Console. Lệch một dấu `/` là Google từ chối.
+Phần đường dẫn (`/api/…/callback`) là **cố định trong code**, không đổi được —
+đó là đúng những route đang tồn tại trong repo. Phần host là `mstudo.com` vì tên
+miền không đổi.
+
+## Chỗ tra cho chắc — không phải Vercel cũ
+
+Nguồn có thẩm quyền là **Google Cloud Console**, và chỗ này **xem được thoải mái**:
+
+> GCC → **APIs & Services** → **Credentials** → bấm vào **OAuth 2.0 Client ID**
+> (loại Web application) → khung **Authorized redirect URIs**.
+
+Khung đó liệt kê **đúng những URI mà bản cũ đang dùng**. Copy từ đó sang là chính
+xác tuyệt đối — không cần Vercel cũ nhả ra gì hết.
+
+Đối chiếu với bảng trên:
+
+- **Khớp** → xong, gõ vào Vercel mới.
+- **Lệch host** (ví dụ bản cũ dùng `www.mstudo.com` hay một địa chỉ `.vercel.app`)
+  → **lấy theo Google Cloud Console**, đừng lấy theo bảng này. Giá trị phải trùng
+  tuyệt đối với một dòng trong khung đó, lệch một dấu `/` hay thừa `www` là Google
+  từ chối với `redirect_uri_mismatch`.
+- **Google Cloud Console thiếu dòng nào** → thêm dòng đó vào (bấm **ADD URI**),
+  dùng đúng giá trị ở bảng trên. Hay gặp nhất là
+  `GOOGLE_FILTER_DRIVE_REDIRECT_URI` — tính năng Lọc ảnh mới có gần đây.
+
+> ⚠️ Cả 5 biến này **không có giá trị mặc định trong code**. Bỏ trống thì tính
+> năng tương ứng báo "chưa cấu hình" chứ không tự đoán ra địa chỉ.
 
 ---
 
