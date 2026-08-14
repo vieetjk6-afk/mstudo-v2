@@ -1224,9 +1224,22 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
             thay vì hai chỗ giống nhau ở đầu và giữa trang. Khối dưới vẫn giữ cho
             desktop, nơi thẻ tóm tắt này không hiện. */}
         <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
-          <p className="mb-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--tx3)" }}>
-            Gửi cổng khách {contract.client_viewed_at ? "· khách đã xem" : "· khách chưa mở"}
-          </p>
+          <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--tx3)" }}>Gửi cổng khách</p>
+            {/* Trạng thái khách xem để ngay đây, không phải mở tab "Gửi khách &
+                ký" mới biết khách đã mở link chưa. */}
+            <span
+              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-bold"
+              style={contract.client_viewed_at
+                ? { background: "var(--gnS)", color: "var(--gn)" }
+                : { background: "var(--sf2)", color: "var(--tx3)" }}
+            >
+              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: contract.client_viewed_at ? "var(--gn)" : "var(--tx3)" }} />
+              {contract.client_viewed_at
+                ? `Khách đã xem · ${new Date(contract.client_viewed_at).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`
+                : "Khách chưa mở link"}
+            </span>
+          </div>
           <div className="grid grid-cols-2 gap-2">
             <MessengerButton link={f.client_messenger} label="Gửi cho khách" message={clientPortalMsg} className="act-btn" />
             <button
@@ -2171,13 +2184,15 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
               {/* Share link */}
               <div className="card p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                  {/* Không in nguyên link ra nữa: một chuỗi 60 ký tự chiếm hết
+                      chiều ngang mà không ai đọc hay copy bằng mắt — đã có nút
+                      "Chép link" và các nút gửi. Giữ lại nhãn và trạng thái xem. */}
                   <div className="flex min-w-0 flex-1 items-start gap-3">
                     <LinkIcon size={16} className="mt-0.5 shrink-0" style={{ color: "var(--text3)" }} />
                     <div className="min-w-0 flex-1">
                       <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>
                         Cổng khách: xem HĐ · lịch · ảnh · thanh toán (mật khẩu = SĐT khách)
                       </p>
-                      <p className="truncate text-sm" style={{ color: "var(--text2)" }}>{shareUrl}</p>
                       <p className="text-[11px]" style={{ color: contract.client_viewed_at ? "var(--s-green)" : "var(--text3)" }}>
                         {contract.client_viewed_at
                           ? `Khách đã xem · ${new Date(contract.client_viewed_at).toLocaleString("vi-VN")}`

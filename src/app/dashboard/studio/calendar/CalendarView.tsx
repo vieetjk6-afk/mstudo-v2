@@ -494,14 +494,25 @@ export default function CalendarView({
       ) : view === "people" ? (
         <PeopleWeek rows={peopleRows} weekDays={weekDays} todayStr={todayStr} />
       ) : view === "week" ? (
-        // Trên điện thoại chi tiết đi TRƯỚC lưới giờ: lưới cao tới 620px và tự
-        // cuộn bên trong, nên phần chi tiết nằm dưới nó thực tế không ai cuộn tới.
-        // Từ 900px trở lên trả về thứ tự cũ — ở đó lưới nhìn được cả tuần một lần.
-        <div className="flex flex-col gap-3.5">
-          <div className="order-2 min-[900px]:order-1">
-            <WeekGrid weekDays={weekDays} todayStr={todayStr} eventsOn={eventsOn} contractsOn={contractsOn} />
+        // Hai cách xem tuần khác nhau hẳn, theo bề ngang màn hình:
+        //   • Dưới 900px — lướt ngang từng ngày, mỗi ngày một tấm gần cả màn hình
+        //     nên in được đủ thông tin buổi chụp. Lưới 7 cột ở khổ này mỗi ngày
+        //     chỉ còn ~47px, đọc không nổi.
+        //   • Từ 900px — lưới giờ như cũ (nhìn cả tuần một lần) + danh sách chi
+        //     tiết bên dưới.
+        <>
+          <div className="min-[900px]:hidden">
+            <WeekSwipe
+              weekDays={weekDays}
+              todayStr={todayStr}
+              contractsOn={contractsOn}
+              eventsOn={eventsOn}
+              onColor={setContractColor}
+              upcoming={upcomingAfterWeek}
+            />
           </div>
-          <div className="order-1 min-[900px]:order-2">
+          <div className="hidden flex-col gap-3.5 min-[900px]:flex">
+            <WeekGrid weekDays={weekDays} todayStr={todayStr} eventsOn={eventsOn} contractsOn={contractsOn} />
             <WeekAgenda
               weekDays={weekDays}
               todayStr={todayStr}
@@ -511,7 +522,7 @@ export default function CalendarView({
               upcoming={upcomingAfterWeek}
             />
           </div>
-        </div>
+        </>
       ) : (
         <div className="flex flex-col gap-3.5">
           {/* ── Lịch tháng ────────────────────────────────────────────────
@@ -751,6 +762,96 @@ function ContractDetailCard({
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Lịch tuần trên điện thoại: lướt ngang từng NGÀY ────────────────────────
+   Lưới 7 cột × 24 giờ là cách xem của màn hình rộng. Nhét nó vào 390px thì mỗi
+   ngày còn ~47px: không đọc được tên khách, không thấy dịch vụ, và phần lớn ô
+   trống trơn — nhìn nhiều mà không biết gì.
+
+   Ở đây mỗi ngày là một tấm chiếm gần cả bề ngang màn hình, lướt ngang để sang
+   ngày khác (có scroll-snap nên dừng đúng từng tấm). Nhờ đó mỗi buổi chụp có đủ
+   chỗ in màu, dịch vụ, hạng mục, nhân sự, địa điểm và nút gửi khách — cùng một
+   thẻ với chế độ Tháng. Tuần trống thì tấm cuối chỉ ra buổi gần nhất sắp tới. */
+function WeekSwipe({
+  weekDays, todayStr, contractsOn, eventsOn, onColor, upcoming,
+}: {
+  weekDays: string[];
+  todayStr: string;
+  contractsOn: (d: string) => ContractMarker[];
+  eventsOn: (d: string) => EventRow[];
+  onColor: (id: string, color: string) => void;
+  upcoming: ContractMarker[];
+}) {
+  const soBuoi = weekDays.reduce((n, d) => n + contractsOn(d).length, 0);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="px-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+        {soBuoi > 0 ? `${soBuoi} buổi chụp trong tuần` : "Tuần này chưa có buổi chụp"} · lướt ngang để xem từng ngày
+      </p>
+      <div className="hscroll snap-x snap-mandatory gap-3 pb-1">
+        {weekDays.map((d, i) => {
+          const cons = contractsOn(d);
+          const evs = eventsOn(d);
+          const isToday = d === todayStr;
+          return (
+            <div key={d} className="w-[86%] max-w-[420px] snap-start">
+              <Panel className="min-w-0 px-4 py-3.5" >
+                <div className="flex items-baseline gap-2">
+                  <h2 className="text-[14px] font-bold">{WD[i]} · {fmtDate(d)}</h2>
+                  {isToday && (
+                    <span className="rounded-[20px] px-2 py-0.5 text-[10.5px] font-bold" style={{ background: "var(--acS)", color: "var(--ac)" }}>hôm nay</span>
+                  )}
+                  <span className="ml-auto text-[11px]" style={{ color: "var(--tx3)" }}>
+                    {cons.length > 0 ? `${cons.length} buổi` : "trống"}
+                  </span>
+                </div>
+                <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>{lunarFull(d)}</p>
+
+                {cons.map((c) => (
+                  <ContractDetailCard key={c.id} c={c} onColor={onColor} />
+                ))}
+
+                {evs.map((e) => (
+                  <div key={e.id} className="mb-2 flex items-start gap-2 rounded-[12px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
+                    {e.remind ? <Bell size={13} style={{ flex: "none", marginTop: 3, color: "var(--bl)" }} /> : <BellOff size={13} style={{ flex: "none", marginTop: 3, color: "var(--tx3)" }} />}
+                    <div className="min-w-0">
+                      <p className="break-words text-[13px] font-semibold">{eventLabel(e)}{e.event_time ? ` · ${e.event_time}` : ""}</p>
+                      {e.note && <p className="break-words text-[11.5px]" style={{ color: "var(--tx3)" }}>{e.note}</p>}
+                    </div>
+                  </div>
+                ))}
+
+                {cons.length === 0 && evs.length === 0 && (
+                  <p className="py-6 text-center text-[12px]" style={{ color: "var(--tx3)" }}>
+                    Ngày trống — nhận thêm job được.
+                  </p>
+                )}
+              </Panel>
+            </div>
+          );
+        })}
+
+        {soBuoi === 0 && upcoming.length > 0 && (
+          <div className="w-[86%] max-w-[420px] snap-start">
+            <Panel className="min-w-0 px-4 py-3.5">
+              <h2 className="mb-1 text-[14px] font-bold">Buổi chụp sắp tới</h2>
+              <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>Không nằm trong tuần này.</p>
+              {upcoming.map((c) => (
+                <div key={c.id}>
+                  <p className="mb-1 text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>
+                    {fmtDow(c.event_date)} · {fmtDate(c.event_date)}
+                  </p>
+                  <ContractDetailCard c={c} onColor={onColor} />
+                </div>
+              ))}
+            </Panel>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

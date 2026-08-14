@@ -130,37 +130,36 @@ export default function QuotesListView({ list: initialList, studioHost = null }:
                   </p>
                 )}
 
-                <div className="flex flex-wrap items-end gap-3">
-                  <div className="min-w-[120px] flex-1">
-                    <p className="tnum text-[19px] font-bold" style={{ letterSpacing: "-.5px" }}>{vnd(total)}</p>
-                    <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                      {(q.quote_items || []).length} hạng mục · tạo {fmtDate(q.created_at)}
-                    </p>
-                  </div>
+                <div>
+                  <p className="tnum text-[19px] font-bold" style={{ letterSpacing: "-.5px" }}>{vnd(total)}</p>
+                  <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                    {(q.quote_items || []).length} hạng mục · tạo {fmtDate(q.created_at)}
+                  </p>
+                </div>
+
+                {/* Hai nút + ô trạng thái xếp lưới 2 cột đều nhau trên điện thoại
+                    (trước đây ba cỡ khác nhau tự wrap thành các hàng lệch), từ
+                    560px về một hàng ngang. Ô trạng thái nằm cùng lưới để nó
+                    không còn là một dòng riêng lẻ dưới đáy thẻ. */}
+                <div className="grid grid-cols-2 gap-2 min-[560px]:flex min-[560px]:flex-wrap min-[560px]:items-center">
                   <a
                     href={studioUrl(studioHost, `/q/${q.client_token}`)}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-[7px] text-[12px] font-semibold"
-                    style={{ border: "1px solid var(--bd)" }}
+                    className="act-btn"
                     data-testid={`quote-view-public-${q.id}`}
                   >
                     <Eye size={14} /> Trang khách <ExternalLink size={11} />
                   </a>
                   <Link
                     href={`/dashboard/studio/quotes/${q.id}`}
-                    className="flex flex-none items-center gap-1.5 rounded-[9px] px-[13px] py-[7px] text-[12px] font-semibold"
-                    style={{ background: "var(--ac)", color: "#fff" }}
+                    className="act-btn act-btn-primary"
                     data-testid={`quote-edit-${q.id}`}
                   >
                     <Pencil size={13} /> Mở báo giá
                   </Link>
-                </div>
-
-                <label className="flex items-center gap-2 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                  Trạng thái
                   <select
-                    className="input w-auto py-1.5 text-[12px]"
+                    className="act-btn col-span-2 min-[560px]:col-auto min-[560px]:ml-auto"
                     aria-label="Đổi trạng thái báo giá"
                     style={{ color: st.fg, opacity: updating === q.id ? 0.5 : 1 }}
                     value={q.status}
@@ -171,7 +170,7 @@ export default function QuotesListView({ list: initialList, studioHost = null }:
                       <option key={k} value={k} disabled={k === "converted"}>{QUOTE_STATUS_LABEL[k]}</option>
                     ))}
                   </select>
-                </label>
+                </div>
               </Panel>
             );
           })}
