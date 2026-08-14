@@ -27,9 +27,9 @@ Cột **Xử lý** đọc thế này:
 
 | Biến | Xử lý | Ghi chú |
 |---|---|---|
-| `CHAT_PROVIDERS` | 🟢 | mất cũng được — xem 7.6 |
+| `CHAT_PROVIDERS` | 🟢 | **để trống** — code tự dùng `GEMINI_API_KEY`, xem 7.6 |
 | `CRON_SECRET` | 🆕 | mục 2 |
-| `DESKTOP_LATEST_VERSION` | 🟢 | |
+| `DESKTOP_LATEST_VERSION` | 🟢 | để trống → app tưởng bản mới nhất là `0.1.0` |
 | `DESKTOP_UPDATE_NOTE` | ⚪ | mô tả ngắn bản desktop mới, tuỳ chọn |
 | `DRIVE_IMG_CACHE_BUCKET` | ⚪ | **nên để trống** — bucket này làm vượt hạn mức Supabase cũ |
 | `DRIVE_IMG_CACHE_MAX_AGE_DAYS` | ⚪ | như trên |
@@ -37,7 +37,7 @@ Cột **Xử lý** đọc thế này:
 | `DRIVE_IMG_CACHE_MAX_WIDTH` | ⚪ | như trên |
 | `DRIVE_IMG_CACHE_ORIGINALS` | ⚪ | như trên |
 | `EMAIL_FROM` | ⚪ | đi cặp với `RESEND_API_KEY` |
-| `GEMINI_API_KEY` | 🟢 | 🔒 |
+| `GEMINI_API_KEY` | 🟢 | 🔒 **tạo khoá mới** ở aistudio.google.com, đừng tìm khoá cũ |
 | `GEMINI_MODEL` | ⚪ | thiếu thì dùng model mặc định trong code |
 | `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được**, không cần đọc bản cũ — mục 3 |
 | `GOOGLE_API_KEY` | 🟢 | 🔒 |
@@ -47,10 +47,10 @@ Cột **Xử lý** đọc thế này:
 | `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `GOOGLE_STORY_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
-| `IMG_CDN_REDIRECT` | 🟢 | |
+| `IMG_CDN_REDIRECT` | 🟢 | **để trống** — bản cũ đặt `0` thì ĐỪNG chép, xem 4d |
 | `NEXT_PUBLIC_ADMIN_HOST` | 🟢 | `admin.mstudo.com` |
 | `NEXT_PUBLIC_APP_HOST` | ⚪ | đã ngừng dùng |
-| `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | 🟢 | |
+| `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | 🟢 | để trống → nút tải rơi về trang GitHub Releases |
 | `NEXT_PUBLIC_GOOGLE_API_KEY` | 🟢 | |
 | `NEXT_PUBLIC_GOOGLE_APP_ID` | 🟢 | |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 🟢 | |
@@ -62,7 +62,7 @@ Cột **Xử lý** đọc thế này:
 | `NEXT_PUBLIC_THIEP_HOST` | 🟢 | `thiep.mstudo.com` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | ⚪ | không có captcha ở form công khai |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 🟢 | đi **theo cặp** với khoá riêng; để trống cả cặp cũng chạy — 7.5 |
-| `OAUTH_STATE_SECRET` | 🟢 | 🔒 mất thì tự đặt chuỗi mới, không sao |
+| `OAUTH_STATE_SECRET` | 🟢 | 🔒 **để trống được** — code tự dùng `SUPABASE_SERVICE_ROLE_KEY` |
 | `RESEND_API_KEY` | ⚪ | không khai thì không gửi được email |
 | `SUPABASE_SERVICE_ROLE_KEY` | 🔴 | 🔒 của Supabase **MỚI** |
 | `TURNSTILE_SECRET_KEY` | ⚪ | |
@@ -71,8 +71,8 @@ Cột **Xử lý** đọc thế này:
 | `VAPID_PRIVATE_KEY` | 🟢 | 🔒 **chỉ có ở Vercel cũ**, mất là mất hẳn — xem 7.5 |
 | `VAPID_SUBJECT` | 🟢 | để trống → `mailto:hello@mstudo.com` |
 | `VERCEL_PROJECT_ID` | 🔴 | ID của project **MỚI** *(giữ project cũ thì 🟢)* |
-| `VERCEL_TEAM_ID` | 🟢 | để trống nếu là tài khoản cá nhân |
-| `VERCEL_TOKEN` | 🟢 | 🔒 tạo token mới cũng được |
+| `VERCEL_TEAM_ID` | 🟢 | **để trống** nếu là tài khoản cá nhân |
+| `VERCEL_TOKEN` | 🟢 | 🔒 tạo token mới cũng được; để trống chỉ mất tự đăng ký domain — 4d |
 | `ZALO_OA_APP_ID` | ⚪ | kênh Zalo OA tắt (kênh cá nhân vẫn chạy) |
 | `ZALO_OA_APP_SECRET` | ⚪ | 🔒 |
 | `ZALO_OA_REDIRECT_URI` | ⚪ | |
@@ -304,20 +304,41 @@ thông báo phải đăng ký lại**. Cố lấy đúng cặp cũ; mất hẳn 
 
 ## 4d. Còn lại
 
-| Biến | Là gì | Ghi chú |
-|---|---|---|
-| `OAUTH_STATE_SECRET` | ký tham số `state` khi nối Zalo/Drive 🔒 | mất thì tự đặt chuỗi ngẫu nhiên mới; code tự dùng `SUPABASE_SERVICE_ROLE_KEY` nếu bỏ trống |
-| `GEMINI_API_KEY` | chatbox AI 🔒 | aistudio.google.com → API keys |
-| `CHAT_PROVIDERS` | cấu hình nhà cung cấp chat (JSON) | giữ nguyên bản cũ |
-| `IMG_CDN_REDIRECT` | `0` = tắt tối ưu ảnh | để nguyên như bản cũ |
-| `DESKTOP_LATEST_VERSION` | số phiên bản app desktop | giữ nguyên |
-| `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | link tải app desktop | giữ nguyên |
-| `VERCEL_PROJECT_ID` | **phải đổi** → project MỚI | Vercel MỚI → Settings → General → Project ID |
-| `VERCEL_TOKEN` | token để app tự thêm domain cho studio 🔒 | vercel.com/account/tokens → tạo token mới |
-| `VERCEL_TEAM_ID` | team chứa project mới | Vercel → Settings → General; **để trống** nếu tài khoản cá nhân |
+**Bảy trong chín biến này bỏ trống được** — code có mặc định. Cột giữa cho biết
+điều gì xảy ra khi để trống, để bạn khỏi đi tìm giá trị cũ vô ích.
 
-`VERCEL_PROJECT_ID` sai thì tính năng "studio gắn tên miền riêng" sẽ đăng ký
-domain nhầm vào **project cũ** — hỏng âm thầm, rất khó lần ra.
+| Biến | Bỏ trống thì sao | Nên làm |
+|---|---|---|
+| `OAUTH_STATE_SECRET` 🔒 | code tự dùng `SUPABASE_SERVICE_ROLE_KEY` | **để trống được**; muốn chắc thì đặt chuỗi ngẫu nhiên mới |
+| `GEMINI_API_KEY` 🔒 | chatbox AI trên website studio không trả lời được | **tạo khoá mới** ở [aistudio.google.com](https://aistudio.google.com) → *Get API key* (có gói miễn phí). Đừng đi tìm khoá cũ |
+| `CHAT_PROVIDERS` | code tự dùng `GEMINI_API_KEY` làm nhà cung cấp duy nhất | **để trống** — xem 7.6 |
+| `IMG_CDN_REDIRECT` | **tối ưu băng thông BẬT** (mặc định) | **để trống** ⚠️ xem cảnh báo dưới |
+| `DESKTOP_LATEST_VERSION` | app desktop tưởng bản mới nhất là `0.1.0` → không nhắc cập nhật | điền số phiên bản hiện tại, hoặc để trống |
+| `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | nút tải rơi về trang GitHub Releases | để trống được |
+| `VERCEL_PROJECT_ID` | tính năng "studio gắn tên miền riêng" chỉ **lưu domain + chỉ dẫn DNS thủ công**, không tự đăng ký | project MỚI → Settings → General → Project ID *(giữ project cũ thì giữ nguyên)* |
+| `VERCEL_TOKEN` 🔒 | như trên | vercel.com/account/tokens → tạo token mới (token cũ vẫn sống) |
+| `VERCEL_TEAM_ID` | như trên | **để trống** nếu là tài khoản cá nhân |
+
+### ⚠️ `IMG_CDN_REDIRECT` — biến duy nhất ở mục này mà copy bản cũ có thể hại
+
+Đọc ngược với tên gọi: **bỏ trống = tối ưu BẬT**. Code chỉ tắt khi giá trị đúng
+bằng `"0"` (`src/app/api/img/route.ts:164`).
+
+Bật thì mọi ảnh hiển thị được **302 thẳng sang CDN của Google** — Vercel phục vụ
+gần **0 byte ảnh**. Đây là thứ cắt băng thông mạnh nhất của cả hệ thống, vì một
+album tải hàng trăm thumbnail.
+
+Nên: **để trống**. Nếu Vercel cũ đang đặt `IMG_CDN_REDIRECT=0` thì **đừng chép
+sang** — chép là Vercel mới gánh toàn bộ byte ảnh.
+
+### Ba biến `VERCEL_*` — chỉ phục vụ một tính năng
+
+Cả ba chỉ được đọc ở `src/app/api/site/domain/route.ts`, tức tính năng **studio
+gắn tên miền riêng** (gói Plus trở lên). Thiếu chúng thì app vẫn lưu domain và
+hiện chỉ dẫn DNS cho studio tự trỏ — chỉ mất phần **tự đăng ký domain lên Vercel**.
+
+Nhưng nếu khai thì phải khai **đúng project**: `VERCEL_PROJECT_ID` sai làm domain
+của khách bị đăng ký nhầm vào **project cũ** — hỏng âm thầm, rất khó lần ra.
 
 ---
 
