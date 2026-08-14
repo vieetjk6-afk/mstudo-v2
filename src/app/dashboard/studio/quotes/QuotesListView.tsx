@@ -100,7 +100,15 @@ export default function QuotesListView({ list: initialList, studioHost = null }:
             const pendingAdj = (q.quote_adjustments || []).filter((a) => !a.resolved).length;
             const st = STATUS_TONE[q.status];
             return (
-              <Panel key={q.id} className="flex flex-col gap-3 px-4 py-[15px]" data-testid={`quote-row-${q.id}`}>
+              // min-w-0: thẻ là grid item, mà grid item mặc định có
+              // min-width:auto → cột nở theo min-content của nó. Tiêu đề và dòng
+              // "mã · tên khách · số điện thoại" dùng `truncate`, tức
+              // white-space:nowrap, nên min-content của thẻ bằng cả chuỗi không
+              // cắt (đo được 460px ở khung 390px) → trên điện thoại thẻ tràn ra
+              // ngoài màn hình, mất nút "Mở báo giá" và nhãn trạng thái ở lề
+              // phải. min-w-0 cho cột co lại đúng bề ngang màn hình, chữ mới
+              // chịu cắt như thiết kế.
+              <Panel key={q.id} className="min-w-0 flex flex-col gap-3 px-4 py-[15px]" data-testid={`quote-row-${q.id}`}>
                 <div className="flex items-start gap-[11px]">
                   <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[11.5px] font-bold" style={avatarStyle(q.client_name || q.title)}>
                     {initials(q.client_name || q.title)}
