@@ -445,6 +445,9 @@ export default function ContractEditor({
   // Client portal runs on the studio's own subdomain once its site is published,
   // otherwise on the main host.
   const shareUrl = studioUrl(studioHost, `/c/${contract.client_token}`);
+  // Một nội dung tin duy nhất cho cả thẻ tóm tắt (điện thoại) và khối "Gửi khách
+  // & ký" (desktop) — hai chỗ gửi cùng một link thì không được lệch câu chữ.
+  const clientPortalMsg = `Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`;
 
   // Required fields — flagged red until valid. Phone must be 10 digits.
   const phoneOk = /^\d{10}$/.test(f.client_phone.replace(/\D/g, ""));
@@ -1210,27 +1213,53 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
             </p>
           </div>
           {clientDigits.length >= 9 && (
-            <>
-              <a href={`tel:${clientDigits}`} className="act-btn" style={{ width: "auto" }}>
-                <Phone size={15} /> Gọi
-              </a>
+            <a href={`tel:${clientDigits}`} className="act-btn act-btn-auto">
+              <Phone size={15} /> Gọi
+            </a>
+          )}
+        </div>
+
+        {/* Gửi cổng khách — GỘP từ khối "Gửi khách & ký" phía dưới, cùng nội dung
+            tin và cùng link, để trên điện thoại chỉ còn MỘT chỗ gửi cho khách
+            thay vì hai chỗ giống nhau ở đầu và giữa trang. Khối dưới vẫn giữ cho
+            desktop, nơi thẻ tóm tắt này không hiện. */}
+        <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
+          <p className="mb-2 text-[11px] uppercase tracking-wide" style={{ color: "var(--tx3)" }}>
+            Gửi cổng khách {contract.client_viewed_at ? "· khách đã xem" : "· khách chưa mở"}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <MessengerButton link={f.client_messenger} label="Gửi cho khách" message={clientPortalMsg} className="act-btn" />
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(shareUrl);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              }}
+              className="act-btn"
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Đã chép" : "Chép link"}
+            </button>
+            <div className="col-span-2">
               <ZaloSendButton
                 phone={f.client_phone}
                 name={f.client_name}
                 audience="client"
                 contractId={contract.id}
-                kind="manual"
-                className="act-btn"
-                message={shootReminderMessage({
-                  name: f.client_name,
-                  title: f.title,
-                  date: f.event_date,
-                  time: f.event_time,
-                  location: f.location,
-                })}
+                kind="contract_share"
+                className="act-btn act-btn-auto flex-1"
+                message={clientPortalMsg}
               />
-            </>
-          )}
+            </div>
+            <div className="col-span-2">
+              <EmailButton
+                to={f.client_email}
+                label="Gửi email"
+                subject={`Hợp đồng dịch vụ — ${f.title}`}
+                message={`Xin chào ${f.client_name || "anh/chị"},\n\nĐây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại:\n${shareUrl}\n(Mật khẩu mở là số điện thoại của anh/chị.)\n\nCảm ơn ạ!\n— ${studioName}`}
+                className="act-btn"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2156,11 +2185,13 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                       </p>
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                  {/* Chỉ từ 1100px trở lên: dưới ngưỡng đó thẻ tóm tắt đầu trang
+                      đã có đúng cụm này, hiện cả hai là trùng. */}
+                  <div className="hidden flex-wrap items-center gap-2 min-[1100px]:flex">
                     <MessengerButton
                       link={f.client_messenger}
                       label="Gửi cho khách"
-                      message={`Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`}
+                      message={clientPortalMsg}
                     />
                     <ZaloSendButton
                       phone={f.client_phone}
@@ -2168,7 +2199,7 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                       audience="client"
                       contractId={contract.id}
                       kind="contract_share"
-                      message={`Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`}
+                      message={clientPortalMsg}
                     />
                     <EmailButton
                       to={f.client_email}

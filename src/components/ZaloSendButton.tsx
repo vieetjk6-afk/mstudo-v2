@@ -39,6 +39,7 @@ export default function ZaloSendButton({
   kind = "manual",
   askPhone = false,
   className = "btn-ghost px-2.5 py-1.5 text-xs",
+  friendsBtnClass,
 }: {
   phone?: string | null;
   name?: string | null;
@@ -49,6 +50,9 @@ export default function ZaloSendButton({
   kind?: string;
   askPhone?: boolean;
   className?: string;
+  /** Lớp cho nút "chọn bạn Zalo". Mặc định theo `className` để hai nút cùng
+   *  hình khối; truyền riêng khi nút gửi dùng lớp giãn hết chiều ngang. */
+  friendsBtnClass?: string;
 }) {
   const [state, setState] = useState<null | "sending" | "ok" | "fail">(null);
   const [err, setErr] = useState("");
@@ -86,6 +90,12 @@ export default function ZaloSendButton({
 
   const fixed = (phone || "").trim();
   const inputMode = !fixed && askPhone;
+  // Nút chọn bạn mặc định mang cùng lớp với nút gửi để hai cái cao bằng nhau.
+  // Với lớp .act-btn (giãn 100% trên điện thoại) thì phải kèm .act-btn-auto,
+  // không thì nút icon cũng chiếm cả hàng.
+  const friendsClass =
+    friendsBtnClass ??
+    (className.includes("act-btn") ? "act-btn act-btn-auto" : className);
 
   async function doSend(payload: { toPhone?: string; toUid?: string; toName?: string | null }) {
     setState("sending");
@@ -157,16 +167,20 @@ export default function ZaloSendButton({
     : friends;
 
   return (
-    <span ref={wrapRef} className="relative inline-flex flex-col items-start gap-0.5">
-      <span className="inline-flex flex-wrap items-center gap-1.5">
+    // w-full + flex-wrap ở hàng trong: cụm này gồm tới 3 phần (ô số điện thoại,
+    // nút gửi, nút chọn bạn Zalo). Trước đây ô nhập cứng 120px và nút chọn bạn
+    // dùng cỡ khác hẳn hai cái kia, nên trên điện thoại cụm vỡ thành 3 dòng lệch
+    // nhau — mỗi dòng một chiều rộng. Giờ ô nhập giãn theo chỗ còn lại, hai nút
+    // đứng cạnh nhau và cao bằng nhau.
+    <span ref={wrapRef} className="relative inline-flex w-full flex-col items-stretch gap-0.5">
+      <span className="flex w-full flex-wrap items-center gap-1.5">
         {inputMode && (
           <input
             value={manualPhone}
             onChange={(e) => setManualPhone(e.target.value)}
             placeholder="SĐT khách"
             inputMode="tel"
-            className="input px-2 py-1 text-xs"
-            style={{ width: 120 }}
+            className="input min-w-[110px] flex-1 px-2 py-1.5 text-xs"
           />
         )}
         <button
@@ -182,7 +196,7 @@ export default function ZaloSendButton({
         <button
           type="button"
           onClick={togglePicker}
-          className="btn-ghost px-2 py-1.5 text-xs"
+          className={friendsClass}
           title="Chọn từ danh sách bạn Zalo (gửi được dù người nhận tắt tìm-bằng-SĐT)"
           style={{ color: "#0068FF" }}
         >

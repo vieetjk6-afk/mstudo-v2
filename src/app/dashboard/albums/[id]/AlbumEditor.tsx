@@ -434,7 +434,7 @@ export default function AlbumEditor({
               audience="client"
               kind="album_share"
               askPhone
-              className="act-btn"
+              className="act-btn act-btn-auto flex-1"
               message={`Chào ${clientName || album.client_name || "anh/chị"}, mời anh/chị xem album ảnh tại: ${clientLink}`}
             />
           </div>
