@@ -24,6 +24,21 @@ const file = process.argv[2] || ".vercel/.env.production.local";
 const REQUIRED = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
 /** Biến phải parse được thành URL http(s). */
 const MUST_BE_HTTP_URL = ["NEXT_PUBLIC_SUPABASE_URL"];
+/**
+ * Biến phải là hostname TRẦN — không scheme, không dấu / ở cuối, không cổng.
+ * Middleware so sánh chúng với header Host bằng dấu bằng, nên "https://mstudo.com"
+ * hay "mstudo.com/" là không bao giờ khớp. Nặng nhất là NEXT_PUBLIC_MAIN_HOST đặt
+ * thành "www.mstudo.com": lúc đó apex mstudo.com bị coi là domain riêng của một
+ * studio khách → rewrite sang /site/mstudo.com → trang chủ TRẮNG, còn /login và
+ * /dashboard thì bị đá sang www. Cả hai đều không có dòng lỗi nào ở đâu.
+ */
+const MUST_BE_BARE_HOST = [
+  "NEXT_PUBLIC_MAIN_HOST",
+  "NEXT_PUBLIC_APP_HOST",
+  "NEXT_PUBLIC_IMG_HOST",
+  "NEXT_PUBLIC_ADMIN_HOST",
+  "NEXT_PUBLIC_THIEP_HOST",
+];
 
 function parseEnvFile(text) {
   const out = new Map();
@@ -91,6 +106,32 @@ for (const key of MUST_BE_HTTP_URL) {
       `${key} = ${JSON.stringify(value)} dùng protocol "${u.protocol}" chứ không phải https. Đây KHÔNG phải chuỗi kết nối database (postgresql://…pooler.supabase.com) — chỗ này cần Project URL của API: https://<mã-project>.supabase.co`
     );
   }
+}
+
+for (const key of MUST_BE_BARE_HOST) {
+  const value = env.get(key);
+  if (value === undefined || value === "") continue; // để trống là hợp lệ: chạy một host duy nhất
+  console.log(`   ${key}: ${JSON.stringify(value)}`);
+  if (value !== value.trim()) {
+    loi.push(`${key} có khoảng trắng ở đầu/cuối — middleware so sánh với header Host bằng dấu bằng nên sẽ không bao giờ khớp.`);
+    continue;
+  }
+  if (/^[a-z]+:\/\//i.test(value)) {
+    loi.push(`${key} = ${JSON.stringify(value)} có scheme. Chỗ này cần hostname trần, ví dụ "mstudo.com".`);
+  } else if (value.includes("/")) {
+    loi.push(`${key} = ${JSON.stringify(value)} có dấu "/". Chỗ này cần hostname trần, ví dụ "mstudo.com".`);
+  } else if (value.includes(":")) {
+    loi.push(`${key} = ${JSON.stringify(value)} có cổng. Chỗ này cần hostname trần, ví dụ "mstudo.com".`);
+  }
+}
+
+// MAIN_HOST là tên miền GỐC (apex). Đặt thành www.* làm apex bị coi là domain
+// riêng của studio khách → trang chủ trắng, /login bị đá sang www.
+const mainHost = env.get("NEXT_PUBLIC_MAIN_HOST")?.trim();
+if (mainHost?.startsWith("www.")) {
+  loi.push(
+    `NEXT_PUBLIC_MAIN_HOST = ${JSON.stringify(mainHost)} bắt đầu bằng "www.". Phải là tên miền gốc (${JSON.stringify(mainHost.slice(4))}) — middleware tự chuyển www về gốc. Để "www." ở đây làm trang chủ trắng và /login bị đá sang www.`
+  );
 }
 
 if (loi.length) {
