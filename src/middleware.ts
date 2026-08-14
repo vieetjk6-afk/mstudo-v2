@@ -33,6 +33,15 @@ const ADMIN_PATH = "/dashboard/admin";
 /** File SEO phục vụ theo từng host (route handler tự đọc Host header). */
 const SEO_FILES = new Set(["/robots.txt", "/sitemap.xml"]);
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "https:" || u.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 function hostForPath(path: string): string | undefined {
   // Auth pages are shared — never redirect.
   if (path.startsWith("/login") || path.startsWith("/auth")) return undefined;
@@ -56,7 +65,23 @@ function hostForPath(path: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Middleware chạy trên MỌI request, nên một exception ở đây không hỏng một
+ * trang mà trả 500 (`MIDDLEWARE_INVOCATION_FAILED`) cho TOÀN BỘ site — kể cả
+ * landing. Không có việc gì trong này quan trọng hơn việc site còn sống: ghi
+ * log rồi cho request đi tiếp. Hàng rào auth thật nằm ở dashboard/layout.tsx
+ * (getSessionUser + redirect /login), không nằm ở đây.
+ */
 export async function middleware(request: NextRequest) {
+  try {
+    return await route(request);
+  } catch (err) {
+    console.error("[middleware] cho request đi tiếp sau lỗi:", err);
+    return NextResponse.next();
+  }
+}
+
+async function route(request: NextRequest) {
   const host = request.headers.get("host")?.split(":")[0] ?? "";
   const { pathname, search } = request.nextUrl;
 
@@ -214,12 +239,23 @@ export async function middleware(request: NextRequest) {
   // kể cả landing. Phần dưới chỉ là refresh phiên cho nhanh; hàng rào thật nằm
   // ở dashboard/layout.tsx (getSessionUser + redirect /login). Vì vậy mọi lỗi ở
   // đây đều cho đi tiếp thay vì ném.
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  // .trim() vì giá trị dán vào ô Environment Variables của Vercel rất dễ mang
+  // theo khoảng trắng / xuống dòng ở cuối.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!supabaseUrl || !supabaseAnonKey) {
     // Thiếu biến môi trường (quên khai ở Vercel, hoặc khai nhầm Environment).
     // createServerClient sẽ ném "Your project's URL and Key are required" →
     // sập cả site. Bỏ qua bước refresh; layout dashboard vẫn chặn người lạ.
+    return response;
+  }
+  // Biến CÓ nhưng sai dạng (dán kèm dấu nháy, thiếu https://, dán Project ID
+  // thay vì URL) cũng làm createServerClient ném "Invalid URL". Báo rõ trong
+  // log rồi bỏ qua, đừng để một biến gõ sai kéo sập cả site.
+  if (!isHttpUrl(supabaseUrl)) {
+    console.error(
+      `[middleware] NEXT_PUBLIC_SUPABASE_URL sai dạng (${JSON.stringify(supabaseUrl)}) — bỏ qua refresh phiên. Phải là https://<mã-project>.supabase.co`
+    );
     return response;
   }
 
