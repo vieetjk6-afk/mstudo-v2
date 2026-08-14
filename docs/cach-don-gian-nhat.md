@@ -54,8 +54,10 @@ Ngoài ba trường hợp đó, Phương án 1 luôn nhẹ hơn.
 
 ### Bước 1 — chuẩn bị (không gián đoạn, làm trước lúc nào cũng được)
 
-Làm y hệt hướng dẫn chính, **chỉ 3 mục**:
+Làm y hệt hướng dẫn chính, **chỉ 4 mục**:
 
+- **A0** — kiểm tra repo cũ còn commit nào chưa gộp không (làm lại lần cuối ngay
+  trước đêm cắt).
 - **A1** — soi Supabase MỚI đang có gì.
 - **A2** — chạy `supabase/setup-all.sql` trên Supabase MỚI.
 - **A5** — chạy thử PHẦN 1 của script chép để chắc chắn kết nối được.

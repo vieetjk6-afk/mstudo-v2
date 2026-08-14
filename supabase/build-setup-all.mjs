@@ -35,6 +35,9 @@ const ORDER = [
   ["migrations/studio_zalo.sql", "Tự động nhắn Zalo theo từng studio"],
   ["migrations/website_chat_config.sql", "Cấu hình chatbox website"],
   ["migrations/website_leads.sql", "Lead & hội thoại từ chatbox"],
+  ["migrations/album_dislikes.sql", "Ảnh khách 'không thích' trong album chọn ảnh"],
+  // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
+  ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];
 
 /**

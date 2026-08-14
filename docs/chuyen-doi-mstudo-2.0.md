@@ -16,8 +16,13 @@ nhánh `main`), đồng thời chuyển tên miền về **Cloudflare** quản l
 
 ## Những gì đã chốt
 
-- Code bản cũ (12 commit ngày 07/08) **đã gộp xong** vào `main`. Không còn gì
-  phải gộp nữa.
+- Code bản cũ **đã gộp xong**: 12 commit ngày 07/08, cộng 10 commit ngày
+  11–12/08 (ảnh "không thích" trong album chọn ảnh · 3 bản vá đăng nhập Google ·
+  chế độ bảo trì khu quản trị). Gộp tới hết nhánh `claude/stoic-fermi-gf0pg4`
+  của repo cũ.
+
+  > Nếu sau ngày 12/08 anh còn sửa thêm ở repo cũ thì phải gộp tiếp — đừng cho
+  > là đã xong. Cách kiểm tra ở mục [A0](#a0-repo-cũ-còn-gì-chưa-gộp-không).
 - Supabase mới đang chứa **một bản chép cũ** của dữ liệu thật, tạo lúc dựng giao
   diện 2.0. Bản chép đó bỏ được — sẽ chép đè bằng dữ liệu mới nhất.
 - Tên miền giữ nguyên `mstudo.com`, nên **mọi link đã gửi khách vẫn chạy**.
@@ -167,6 +172,46 @@ sẽ đá nhau vô hạn và trang chết. Để phần chuyển hướng cho ap
 
 Bản cũ vẫn chạy bình thường suốt phần này.
 
+## A0. Repo cũ còn gì chưa gộp không?
+
+Làm bước này **mỗi lần** trước khi đi tiếp, và lần cuối ngay trước đêm cắt. Chừng
+nào bản cũ còn phục vụ khách thì anh còn có thể sửa thêm ở đó, và mỗi lần sửa là
+một lần bản 2.0 tụt lại phía sau.
+
+Chạy trong bản clone của repo này, trên máy anh:
+
+```bash
+git remote add old https://github.com/vieetjk01/studio   # chỉ cần một lần
+git fetch old
+git log --oneline HEAD..old/claude/stoic-fermi-gf0pg4
+```
+
+- **Không in ra dòng nào** → không còn gì phải gộp, đi tiếp.
+- **Có dòng** → đó là những commit bản cũ có mà bản 2.0 chưa có:
+
+```bash
+git merge old/claude/stoic-fermi-gf0pg4
+```
+
+Xung đột hầu như luôn rơi vào các file giao diện mà bản 2.0 đã viết lại. Nguyên
+tắc xử lý: **giữ giao diện 2.0, ghép phần logic mới vào** — đừng lấy nguyên khối
+của bản cũ, làm thế là mất công dựng lại giao diện.
+
+Gộp xong, chạy đủ 3 thứ trước khi commit:
+
+```bash
+npx tsc --noEmit && npm run build
+npm run test:overview && npm run test:contract-filter
+npm run test:album-buttons && npm run test:album-dislike
+```
+
+> ⚠️ Commit của repo cũ có thể kèm **file SQL mới** trong `supabase/migrations/`.
+> Có file mới thì phải thêm tên nó vào `ORDER` trong
+> `supabase/build-setup-all.mjs` rồi chạy `node supabase/build-setup-all.mjs` —
+> nếu không, `setup-all.sql` thiếu bảng đó và bước A2 dựng ra một database
+> khuyết. Kiểm tra nhanh: `ls supabase/migrations/` đối chiếu với danh sách
+> `ORDER`.
+
 ## A1. Xem Supabase MỚI đang có gì
 
 > ⚠️ **Kiểm tra đang mở đúng project trước khi bấm Run.** Hai project trông y
@@ -200,22 +245,29 @@ thì bỏ được. Chỉ dừng lại khi có bảng mang dữ liệu tạo **s
 
 ## A2. Cập nhật schema Supabase MỚI
 
-**Phải làm kể cả khi đã chạy trước đây.** Tuần cuối bản cũ thêm 2 cột; thiếu
-chúng thì bước chép sẽ bỏ qua đúng 2 cột đó, mất dữ liệu mà không báo lỗi.
+**Phải làm kể cả khi đã chạy trước đây, và chạy lại sau mỗi lần gộp ở A0.**
+Những tuần cuối bản cũ thêm 2 cột và 1 bảng; thiếu chúng thì bước chép bỏ qua
+đúng phần đó, mất dữ liệu mà không báo lỗi.
 
 1. Supabase MỚI → SQL Editor → dán toàn bộ
    [`supabase/setup-all.sql`](../supabase/setup-all.sql) → Run.
-2. Xác nhận 2 cột đã có:
+2. Xác nhận đủ 3 thứ:
 
 ```sql
 select
   (select count(*) from information_schema.columns
     where table_schema='public' and table_name='studio_notifications' and column_name='album_id') as album_id,
   (select count(*) from information_schema.columns
-    where table_schema='public' and table_name='studio_drive' and column_name='filter_refresh_token') as filter_token;
+    where table_schema='public' and table_name='studio_drive' and column_name='filter_refresh_token') as filter_token,
+  (select count(*) from information_schema.tables
+    where table_schema='public' and table_name='dislikes') as bang_dislikes;
 ```
 
-Cả hai phải ra `1`.
+Cả ba phải ra `1`.
+
+> `dislikes` là bảng của tính năng "ảnh khách không thích" (gộp về ngày 12/08).
+> Thiếu bảng này thì thư viện album **vẫn mở được** — code có đường lui — nhưng
+> khách bấm × sẽ không lưu được.
 
 > An toàn khi chạy lại: `setup-all.sql` không có `drop table`, `truncate` hay
 > `delete` nào. Nó chỉ drop rồi tạo lại trigger/policy, và dòng
@@ -476,6 +528,17 @@ cũ trong lúc bạn đang chép.
 
 Bỏ qua bước này là rước rủi ro: một studio lưu hợp đồng lúc 1h sáng, sau khi
 bạn đã chép xong bảng đó — dữ liệu đó biến mất và không ai biết.
+
+> 💡 **Cách lịch sự hơn Pause:** code đã có sẵn chế độ bảo trì cho khu quản trị
+> (`src/lib/maintenance.ts`, gộp về ngày 11/08). Đặt `MAINTENANCE_UNTIL` bằng
+> mốc kết thúc rồi deploy: studio thấy trang thông báo có đếm ngược thay vì
+> trang lỗi, còn album khách · thiệp · website studio · báo giá **vẫn chạy bình
+> thường**. Tài khoản `role=admin` vẫn vào được để anh làm việc. Hết mốc là tự
+> mở lại, không cần deploy lần nữa.
+>
+> Chế độ này chỉ chặn `/dashboard`, **không** chặn API — nên nó không thay thế
+> hoàn toàn Pause nếu anh muốn chắc chắn tuyệt đối không ai ghi thêm. Chặt nhất:
+> bật bảo trì trước vài tiếng để báo trước, rồi Pause đúng lúc bắt đầu chép.
 
 ## B4. Nối Supabase MỚI sang CŨ (PHẦN 1 của script chép)
 

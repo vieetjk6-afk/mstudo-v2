@@ -114,6 +114,24 @@ create table if not exists public.selections (
 );
 
 -- ============================================================================
+-- dislikes: photos the customer explicitly does NOT want (selection albums).
+-- Bấm "không thích" → ảnh ẩn khỏi lưới chọn, chuyển sang tab riêng; studio dùng
+-- danh sách này để xoá file trên link Drive gốc nếu khách yêu cầu.
+-- Bảng riêng để danh sách "khách chọn" (Lọc ảnh, ZIP, thông báo) không lẫn ảnh
+-- bị loại. Xem supabase/migrations/album_dislikes.sql.
+-- ============================================================================
+create table if not exists public.dislikes (
+  id           uuid primary key default gen_random_uuid(),
+  album_id     uuid not null references public.albums (id) on delete cascade,
+  photo_id     uuid not null references public.photos (id) on delete cascade,
+  photo_name   text not null default '',
+  session_id   text not null,
+  client_note  text,
+  created_at   timestamptz not null default now(),
+  unique (album_id, photo_id, session_id)
+);
+
+-- ============================================================================
 -- album_shares: short-token links to a hand-picked subset of an album's photos.
 -- Lets "share N selected photos" produce a short URL (?s=token) instead of
 -- cramming every photo id into the query string.
@@ -1237,6 +1255,32 @@ create table if not exists public.website_leads (
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/album_dislikes.sql — Ảnh khách 'không thích' trong album chọn ảnh
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- Ảnh khách KHÔNG THÍCH trong album chọn ảnh.
+-- Khách bấm "không thích" → ảnh bị ẩn khỏi lưới chọn và chuyển sang tab riêng;
+-- studio xem danh sách đó rồi xoá thẳng các file trên link Drive gốc nếu khách
+-- yêu cầu.
+--
+-- Bảng RIÊNG (không gộp vào public.selections) để danh sách "khách chọn" dùng ở
+-- công cụ Lọc ảnh / ZIP / thông báo không bao giờ lẫn ảnh bị loại.
+-- Chạy trên Supabase SQL Editor. An toàn khi chạy lại (idempotent).
+-- ============================================================================
+create table if not exists public.dislikes (
+  id           uuid primary key default gen_random_uuid(),
+  album_id     uuid not null references public.albums (id) on delete cascade,
+  photo_id     uuid not null references public.photos (id) on delete cascade,
+  photo_name   text not null default '',
+  session_id   text not null,
+  client_note  text,           -- lý do khách không thích (tuỳ chọn)
+  created_at   timestamptz not null default now(),
+  unique (album_id, photo_id, session_id)
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -1281,6 +1325,22 @@ begin
   end if;
 end $$;
 
+create index if not exists dislikes_album_idx on public.dislikes (album_id);
+
+create index if not exists dislikes_session_idx on public.dislikes (album_id, session_id);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'dislikes'
+  ) then
+    alter publication supabase_realtime add table public.dislikes;
+  end if;
+end $$;
+
 create index if not exists album_shares_album_idx on public.album_shares (album_id);
 
 -- ============================================================================
@@ -1303,19 +1363,34 @@ create trigger albums_set_updated_at
 -- ============================================================================
 -- New auth user -> profile (default photographer, inactive until admin enables)
 -- ============================================================================
+-- Trigger này chạy TRONG cùng transaction với insert vào auth.users: nếu nó
+-- lỗi thì tài khoản mới KHÔNG được lưu và Supabase trả về
+-- "Database error saving new user" → màn hình đăng nhập báo server_error.
+-- Vì vậy mọi lỗi tạo hồ sơ chỉ ghi cảnh báo, không chặn việc đăng ký/đăng nhập.
+-- Xem thêm supabase/migrations/fix_google_signup_trigger.sql (kèm backfill).
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
   insert into public.profiles (id, email, full_name, role, is_active)
   values (
     new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data ->> 'full_name', new.raw_user_meta_data ->> 'name', new.email),
+    -- profiles.email là NOT NULL, còn auth.users.email có thể null.
+    coalesce(new.email, new.raw_user_meta_data ->> 'email', new.id::text),
+    coalesce(
+      new.raw_user_meta_data ->> 'full_name',
+      new.raw_user_meta_data ->> 'name',
+      new.email,
+      ''
+    ),
     'photographer',
     true   -- self-serve: new sign-ups (incl. Google) can create albums right away
   )
   on conflict (id) do nothing;
   return new;
+exception
+  when others then
+    raise warning 'handle_new_user failed for % : % (%)', new.id, sqlerrm, sqlstate;
+    return new;
 end;
 $$;
 
@@ -2658,6 +2733,114 @@ create index if not exists website_leads_owner_idx
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/album_dislikes.sql — Ảnh khách 'không thích' trong album chọn ảnh
+-- ══════════════════════════════════════════════════════════════════════════
+
+create index if not exists dislikes_album_idx on public.dislikes (album_id);
+
+create index if not exists dislikes_session_idx on public.dislikes (album_id, session_id);
+
+-- Realtime cho dashboard studio (giống selections) — chỉ thêm nếu chưa publish.
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'dislikes'
+  ) then
+    alter publication supabase_realtime add table public.dislikes;
+  end if;
+end $$;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/fix_google_signup_trigger.sql — Vá đăng nhập Google báo server_error
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- VÁ — Đăng nhập Google báo "server_error"
+-- Chạy MỘT LẦN trên Supabase (SQL Editor). An toàn khi chạy lại (idempotent).
+--
+-- Vì sao cần: khi Google trả người dùng về, Supabase INSERT một dòng vào
+-- auth.users; trigger on_auth_user_created chạy NGAY TRONG cùng transaction đó
+-- để tạo hồ sơ ở public.profiles. Nếu insert hồ sơ lỗi (thiếu cột sau khi đổi
+-- schema, ràng buộc check/unique, email null…) thì CẢ transaction bị rollback:
+-- tài khoản không được lưu, và Supabase trả về
+--     ?error=server_error&error_code=unexpected_failure
+--      &error_description=Database+error+saving+new+user
+-- — đúng chữ "server_error" mà người dùng nhìn thấy ở màn hình đăng nhập.
+--
+-- Bản vá này làm hai việc:
+--   1. Không để email null làm vỡ ràng buộc NOT NULL (tài khoản Google hiếm khi
+--      thiếu email, nhưng vẫn có thể).
+--   2. Bọc exception: nếu tạo hồ sơ hỏng thì GHI CẢNH BÁO rồi cho đăng nhập đi
+--      tiếp, thay vì huỷ luôn việc tạo tài khoản. Hồ sơ thiếu có thể vá sau
+--      (xem phần backfill ở cuối file) — mất hồ sơ vẫn hơn mất tài khoản.
+-- ============================================================================
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, email, full_name, role, is_active)
+  values (
+    new.id,
+    -- profiles.email là NOT NULL; auth.users.email có thể null với một số
+    -- provider, nên luôn có giá trị dự phòng.
+    coalesce(new.email, new.raw_user_meta_data ->> 'email', new.id::text),
+    coalesce(
+      new.raw_user_meta_data ->> 'full_name',
+      new.raw_user_meta_data ->> 'name',
+      new.email,
+      ''
+    ),
+    'photographer',
+    true   -- self-serve: new sign-ups (incl. Google) can create albums right away
+  )
+  on conflict (id) do nothing;
+  return new;
+exception
+  when others then
+    -- KHÔNG raise lại: raise sẽ rollback cả việc tạo auth.users và biến thành
+    -- "Database error saving new user" → server_error ở màn hình đăng nhập.
+    raise warning 'handle_new_user failed for % : % (%)', new.id, sqlerrm, sqlstate;
+    return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ── Backfill: tạo hồ sơ cho các tài khoản đã đăng ký nhưng chưa có profile ────
+-- (gồm cả những tài khoản từng bị lỗi trigger trước khi chạy bản vá này)
+insert into public.profiles (id, email, full_name, role, is_active)
+select
+  u.id,
+  coalesce(u.email, u.raw_user_meta_data ->> 'email', u.id::text),
+  coalesce(
+    u.raw_user_meta_data ->> 'full_name',
+    u.raw_user_meta_data ->> 'name',
+    u.email,
+    ''
+  ),
+  'photographer',
+  true
+from auth.users u
+left join public.profiles p on p.id = u.id
+where p.id is null
+on conflict (id) do nothing;
+
+-- ── Kiểm tra sau khi chạy: phải trả về 0 dòng ────────────────────────────────
+-- select u.id, u.email
+-- from auth.users u
+-- left join public.profiles p on p.id = u.id
+-- where p.id is null;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 3 — PHÂN QUYỀN, RLS & POLICY (chạy sau khi mọi bảng/cột đã có)
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -2686,6 +2869,8 @@ alter table public.album_sources  enable row level security;
 alter table public.photos         enable row level security;
 
 alter table public.selections     enable row level security;
+
+alter table public.dislikes       enable row level security;
 
 -- profiles -------------------------------------------------------------------
 drop policy if exists profiles_self_read on public.profiles;
@@ -2763,6 +2948,20 @@ create policy photos_owner_all on public.photos
 drop policy if exists selections_owner_rw on public.selections;
 
 create policy selections_owner_rw on public.selections
+  for all using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  )
+  with check (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  );
+
+-- dislikes: same shape as selections — owners read/delete, customer writes go
+-- through the service role in the public API route.
+drop policy if exists dislikes_owner_rw on public.dislikes;
+
+create policy dislikes_owner_rw on public.dislikes
   for all using (
     exists (select 1 from public.albums a
             where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
@@ -3664,4 +3863,24 @@ create policy website_leads_owner_update on public.website_leads
 
 -- GHI (insert) chỉ qua service-role: không cấp quyền insert cho anon/authenticated.
 revoke insert on public.website_leads from anon, authenticated;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/album_dislikes.sql — Ảnh khách 'không thích' trong album chọn ảnh
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- RLS: chủ album (và admin) đọc/ghi; khách ghi qua service role trong API route.
+alter table public.dislikes enable row level security;
+
+drop policy if exists dislikes_owner_rw on public.dislikes;
+
+create policy dislikes_owner_rw on public.dislikes
+  for all using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  )
+  with check (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  );
 
