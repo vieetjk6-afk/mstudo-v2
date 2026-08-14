@@ -84,6 +84,14 @@ jobs:
           echo "sửa VERCEL_ORG_ID / VERCEL_PROJECT_ID cho khớp (Vercel →"
           echo "project → Settings → General → Project ID / Team ID)."
 
+      # Biến NEXT_PUBLIC_* bị nướng cứng vào bundle lúc build, nên một giá trị
+      # gõ sai vẫn build thành công rồi mới nổ ở trình duyệt ("Invalid
+      # supabaseUrl…") mà log build không hé một chữ. Soi trước, in nguyên văn
+      # giá trị công khai, và dừng luôn nếu sai — đỡ deploy ra một site hỏng.
+      - name: Soi biến môi trường trước khi build
+        if: steps.check.outputs.skip != 'true'
+        run: node scripts/kiem-tra-bien.mjs
+
       - name: Build
         if: steps.check.outputs.skip != 'true'
         env:

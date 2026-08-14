@@ -1,0 +1,109 @@
+#!/usr/bin/env node
+/**
+ * Soi bộ biến môi trường mà `vercel pull` vừa tải về, TRƯỚC khi build.
+ *
+ * Vì sao cần: các biến NEXT_PUBLIC_* bị nướng cứng vào bundle lúc build. Một
+ * giá trị gõ sai (dán kèm dấu nháy, thiếu https://, dán chuỗi kết nối Postgres
+ * thay vì Project URL) vẫn build thành công rồi mới nổ lúc chạy, với câu lỗi
+ * "Invalid supabaseUrl: Must be a valid HTTP or HTTPS URL." ở phía trình duyệt —
+ * không có gì trong log build chỉ ra biến nào sai. Bước này biến chuyện mò mẫm
+ * thành một dòng log.
+ *
+ * Chạy: node scripts/kiem-tra-bien.mjs [đường-dẫn-file-env]
+ * Mặc định đọc .vercel/.env.production.local (do `vercel pull` sinh ra).
+ *
+ * In giá trị ĐẦY ĐỦ cho các biến NEXT_PUBLIC_* — chúng vốn công khai, mọi khách
+ * vào web đều tải được chúng trong JS. Biến bí mật chỉ in "có/không + độ dài".
+ */
+
+import { readFileSync } from "node:fs";
+
+const file = process.argv[2] || ".vercel/.env.production.local";
+
+/** Biến bắt buộc, thiếu là site không chạy. */
+const REQUIRED = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY", "SUPABASE_SERVICE_ROLE_KEY"];
+/** Biến phải parse được thành URL http(s). */
+const MUST_BE_HTTP_URL = ["NEXT_PUBLIC_SUPABASE_URL"];
+
+function parseEnvFile(text) {
+  const out = new Map();
+  for (const raw of text.split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq < 1) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1);
+    // `vercel pull` bọc giá trị trong dấu nháy kép của định dạng dotenv. Bóc
+    // MỘT lớp đó ra; dấu nháy nào còn lại là do người dán vào Vercel, và chính
+    // nó là thứ ta đang đi tìm.
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1).replace(/\\"/g, '"').replace(/\\n/g, "\n");
+    }
+    out.set(key, value);
+  }
+  return out;
+}
+
+let env;
+try {
+  env = parseEnvFile(readFileSync(file, "utf8"));
+} catch {
+  console.log(`⚠️  Không đọc được ${file} — bỏ qua bước kiểm tra biến.`);
+  process.exit(0);
+}
+
+const loi = [];
+
+console.log(`── Biến môi trường build lấy từ ${file} (${env.size} biến) ──`);
+
+for (const key of REQUIRED) {
+  const value = env.get(key);
+  if (value === undefined || value === "") {
+    console.log(`❌ ${key}: KHÔNG CÓ`);
+    loi.push(`${key} chưa được khai cho môi trường Production trên Vercel (hoặc đang bật Sensitive nên "vercel pull" không đọc được).`);
+    continue;
+  }
+  const trimmed = value.trim();
+  const laCongKhai = key.startsWith("NEXT_PUBLIC_");
+  // JSON.stringify để dấu nháy dư, khoảng trắng và \n hiện ra thay vì vô hình.
+  const hienThi = laCongKhai ? JSON.stringify(value) : `(${value.length} ký tự)`;
+  console.log(`✅ ${key}: ${hienThi}`);
+  if (value !== trimmed) {
+    loi.push(`${key} có khoảng trắng hoặc dấu xuống dòng ở đầu/cuối — sửa lại trên Vercel, đừng để dấu cách nào.`);
+  }
+}
+
+for (const key of MUST_BE_HTTP_URL) {
+  const value = env.get(key)?.trim();
+  if (!value) continue; // đã báo ở trên
+  let u;
+  try {
+    u = new URL(value);
+  } catch {
+    loi.push(
+      `${key} = ${JSON.stringify(value)} không phải URL. Phải là https://<mã-project>.supabase.co (Supabase → Project Settings → Data API → Project URL). Hay gặp: dán kèm dấu nháy, hoặc dán Project ID.`
+    );
+    continue;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") {
+    loi.push(
+      `${key} = ${JSON.stringify(value)} dùng protocol "${u.protocol}" chứ không phải https. Đây KHÔNG phải chuỗi kết nối database (postgresql://…pooler.supabase.com) — chỗ này cần Project URL của API: https://<mã-project>.supabase.co`
+    );
+  }
+}
+
+if (loi.length) {
+  console.log("");
+  console.log("╔══════════════════════════════════════════════════════════════╗");
+  console.log("║ DỪNG BUILD — biến môi trường sai, build tiếp cũng ra site hỏng ║");
+  console.log("╚══════════════════════════════════════════════════════════════╝");
+  for (const m of loi) console.log(`  • ${m}`);
+  console.log("");
+  console.log("Sửa ở Vercel → project → Settings → Environment Variables (nhớ tick");
+  console.log("Production), rồi chạy lại workflow này. Đừng bấm Redeploy: bản");
+  console.log("deploy là --prebuilt nên Redeploy dùng lại biến cũ.");
+  process.exit(1);
+}
+
+console.log("── Biến bắt buộc: đủ và đúng dạng. ──");
