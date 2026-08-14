@@ -61,15 +61,15 @@ Cột **Xử lý** đọc thế này:
 | `NEXT_PUBLIC_SUPABASE_URL` | 🔴 | của Supabase **MỚI** |
 | `NEXT_PUBLIC_THIEP_HOST` | 🟢 | `thiep.mstudo.com` |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | ⚪ | không có captcha ở form công khai |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 🟢 | đi **theo cặp** với khoá riêng — xem 7.5 |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 🟢 | đi **theo cặp** với khoá riêng; để trống cả cặp cũng chạy — 7.5 |
 | `OAUTH_STATE_SECRET` | 🟢 | 🔒 mất thì tự đặt chuỗi mới, không sao |
 | `RESEND_API_KEY` | ⚪ | không khai thì không gửi được email |
 | `SUPABASE_SERVICE_ROLE_KEY` | 🔴 | 🔒 của Supabase **MỚI** |
 | `TURNSTILE_SECRET_KEY` | ⚪ | |
 | `UPSTASH_REDIS_REST_TOKEN` | ⚪ | không giới hạn tần suất gọi |
 | `UPSTASH_REDIS_REST_URL` | ⚪ | như trên |
-| `VAPID_PRIVATE_KEY` | 🟢 | 🔒 không lấy lại được từ đâu — xem 7.5 |
-| `VAPID_SUBJECT` | 🟢 | dạng `mailto:…` |
+| `VAPID_PRIVATE_KEY` | 🟢 | 🔒 **chỉ có ở Vercel cũ**, mất là mất hẳn — xem 7.5 |
+| `VAPID_SUBJECT` | 🟢 | để trống → `mailto:hello@mstudo.com` |
 | `VERCEL_PROJECT_ID` | 🔴 | ID của project **MỚI** *(giữ project cũ thì 🟢)* |
 | `VERCEL_TEAM_ID` | 🟢 | để trống nếu là tài khoản cá nhân |
 | `VERCEL_TOKEN` | 🟢 | 🔒 tạo token mới cũng được |
@@ -495,12 +495,39 @@ npx web-push generate-vapid-keys
 Nó in ra Public Key và Private Key — dán vào `NEXT_PUBLIC_VAPID_PUBLIC_KEY` và
 `VAPID_PRIVATE_KEY`.
 
-**Cái mất:** mọi thiết bị đã bật thông báo đẩy phải **vào bật lại**. Dữ liệu
-không mất gì, chỉ là các đăng ký cũ ngừng nhận thông báo cho tới khi người dùng
-bật lại. Nếu ít người dùng tính năng này thì cứ tạo mới, đừng mất thời gian tìm.
+### ⚠️ Đổi cặp khoá thì hỏng ÂM THẦM — phải dọn bảng đăng ký
 
-Không muốn phiền ai thì cứ **để trống cả hai** — thông báo đẩy tắt, app vẫn chạy
-bình thường, chuông thông báo trong app vẫn hoạt động.
+Không chỉ là "bật lại". Vấn đề là **không bên nào tự nhận ra khoá đã đổi**:
+
+- **Trình duyệt khách** chỉ hỏi "máy này có đăng ký nào không", **không so khoá**
+  (`src/components/PushToggle.tsx`). Máy cũ vẫn hiện **"đang bật"** dù không còn
+  nhận được gì.
+- **Máy chủ** chỉ dọn đăng ký chết khi dịch vụ đẩy trả **404/410**
+  (`src/lib/push.ts`). Lệch khoá VAPID thường trả **403**, nên dòng chết **nằm
+  lại mãi** trong `push_subscriptions` và cứ gửi cứ trượt.
+
+Kết quả: thông báo biến mất, nút vẫn báo "đang bật", không có triệu chứng nào để
+lần ra. Nên khi tạo cặp mới, làm thêm **hai** việc:
+
+**1. Xoá sạch bảng đăng ký** (Supabase MỚI → SQL Editor), chạy **sau** bước chép
+dữ liệu B6 — vì bản chép sẽ mang các dòng cũ từ Supabase cũ sang:
+
+```sql
+delete from public.push_subscriptions;
+```
+
+Xoá xong nút của khách trở về "tắt", họ bấm bật lại là đăng ký đúng cặp mới.
+
+**2. Nhắn các studio** vào bật lại chuông thông báo đẩy.
+
+**Cái mất:** dữ liệu không mất gì, chỉ là mọi thiết bị phải bật lại. Ít người
+dùng tính năng này thì cứ tạo mới, đừng mất thời gian đi tìm.
+
+### Không có cặp nào cũng được
+
+Cứ **để trống cả hai** — `sendPushToOwner()` tự thoát êm khi thiếu khoá, không
+lỗi, không sập. Chỉ mất thông báo đẩy về màn hình điện thoại; **chuông thông báo
+trong app vẫn chạy bình thường**.
 
 ## 7.6. Mức khó — `CHAT_PROVIDERS`
 
