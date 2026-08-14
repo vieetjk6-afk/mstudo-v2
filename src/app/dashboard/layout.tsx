@@ -9,6 +9,13 @@ import NavProgress from "@/components/NavProgress";
 import TrialExpiredBanner from "@/components/TrialExpiredBanner";
 import AnnouncementPopup from "@/components/AnnouncementPopup";
 import ProductTour from "@/components/ProductTour";
+import MaintenanceScreen from "@/components/MaintenanceScreen";
+import {
+  MAINTENANCE_REASON,
+  MAINTENANCE_UNTIL,
+  MAINTENANCE_UNTIL_LABEL,
+  maintenanceActive,
+} from "@/lib/maintenance";
 import { effectivePlan, planProfilePatch, studioTier } from "@/lib/plans";
 import { getFeatureFlags, comingSoonNav, desktopHidden } from "@/lib/feature-flags";
 import type { Profile } from "@/lib/types";
@@ -78,6 +85,19 @@ on conflict (id) do update set role='admin', is_active=true;`}
           </p>
         </div>
       </div>
+    );
+  }
+
+  // Bảo trì khu quản trị: chặn toàn bộ /dashboard tới mốc trong @/lib/maintenance.
+  // Admin vẫn vào được để xử lý. Trang chủ và mọi trang khách (site studio,
+  // album, thiệp, form, báo giá…) nằm ngoài layout này nên không bị ảnh hưởng.
+  if (MAINTENANCE_UNTIL && maintenanceActive() && profile.role !== "admin") {
+    return (
+      <MaintenanceScreen
+        untilIso={MAINTENANCE_UNTIL}
+        untilLabel={MAINTENANCE_UNTIL_LABEL}
+        reason={MAINTENANCE_REASON}
+      />
     );
   }
 

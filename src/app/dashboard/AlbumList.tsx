@@ -12,6 +12,7 @@ import {
   Tag,
   Droplets,
   Filter,
+  HeartOff,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl } from "@/lib/drive";
@@ -34,6 +35,8 @@ export interface AlbumRow {
   photoCount: number;
   coverFallback: string | null;
   selections: { count: number }[];
+  // Ảnh khách đánh dấu "không thích" — studio cần xoá khỏi Drive gốc.
+  dislikes?: { count: number }[];
 }
 
 export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean }) {
@@ -211,6 +214,7 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
   const picked = a.selections?.[0]?.count ?? 0;
   const photos = a.photoCount ?? 0;
   const pct = photos > 0 ? Math.min(100, Math.round((picked / photos) * 100)) : 0;
+  const dislikes = a.dislikes?.[0]?.count ?? 0;
 
   async function patch(fields: Record<string, unknown>) {
     await supabase.from("albums").update(fields).eq("id", a.id);
@@ -249,6 +253,13 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
         <p className="text-[13.5px] font-bold leading-snug" style={{ textWrap: "pretty" }}>{a.title}</p>
         <p className="mt-0.5 truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
           {photos} ảnh · {picked} lượt chọn
+          {/* Có ảnh khách không thích ⇒ nhắc ngay ở thẻ album (bấm vào trang
+              Lựa chọn khách để xoá trên Drive gốc). */}
+          {dislikes > 0 && (
+            <span className="ml-1.5 inline-flex items-center gap-1 font-semibold" style={{ color: "var(--danger)" }}>
+              <HeartOff size={12} /> {dislikes} không thích
+            </span>
+          )}
         </p>
 
         <div className="mb-[5px] mt-2.5 h-[5px] overflow-hidden rounded-[4px]" style={{ background: "var(--bd2)" }}>

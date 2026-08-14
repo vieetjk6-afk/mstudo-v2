@@ -51,18 +51,21 @@ export async function POST(
     .eq("album_id", album.id)
     .order("position");
 
-  const { data: sel } = await admin
-    .from("selections")
-    .select("photo_id, client_note")
-    .eq("album_id", album.id);
+  const [{ data: sel }, { data: dis }] = await Promise.all([
+    admin.from("selections").select("photo_id, client_note").eq("album_id", album.id),
+    admin.from("dislikes").select("photo_id, client_note").eq("album_id", album.id),
+  ]);
   const selected = (sel ?? []).map((s) => s.photo_id);
+  const disliked = (dis ?? []).map((d) => d.photo_id);
   const notes: Record<string, string> = {};
   for (const s of sel ?? []) if (s.client_note) notes[s.photo_id] = s.client_note;
+  for (const d of dis ?? []) if (d.client_note) notes[d.photo_id] = d.client_note;
 
   return NextResponse.json({
     photos: photos ?? [],
     sources: sources ?? [],
     selected,
+    disliked,
     notes,
   });
 }

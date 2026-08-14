@@ -1,10 +1,32 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { COOKIE_DOMAIN } from "@/lib/hosts";
+import { cookieDomainForHost } from "@/lib/hosts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmins } from "@/lib/notify-admin";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Redirect back to /login carrying the REAL reason.
+ *
+ * Supabase trả lỗi OAuth dưới dạng ba tham số: `error` (mã chung, hay gặp nhất
+ * là `server_error`), `error_code` (mã cụ thể, vd `unexpected_failure`) và
+ * `error_description` (câu mô tả, vd "Database error saving new user"). Trước
+ * đây ta chỉ chuyển tiếp `error`, nên người dùng chỉ thấy "server_error" —
+ * không đủ để biết hỏng ở đâu. Giữ đủ ba tham số + log lại phía server.
+ */
+function loginError(
+  origin: string,
+  code: string,
+  errorCode?: string | null,
+  description?: string | null
+) {
+  const url = new URL("/login", origin);
+  url.searchParams.set("error", code);
+  if (errorCode) url.searchParams.set("error_code", errorCode);
+  if (description) url.searchParams.set("error_description", description);
+  return NextResponse.redirect(url.toString());
+}
 
 /**
  * OAuth (Google) callback — exchange the code for a session, then continue.
@@ -24,14 +46,22 @@ export async function GET(request: NextRequest) {
   // C-1: Prevent open redirect — only allow relative paths (not //evil.com or https://...)
   const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard/studio";
   const oauthError = searchParams.get("error");
+  const oauthErrorCode = searchParams.get("error_code");
+  const oauthErrorDescription = searchParams.get("error_description");
 
-  // Provider-side error (e.g. user cancelled the Google consent screen).
+  // Provider-side error: người dùng bấm Huỷ trên màn hình Google (access_denied),
+  // hoặc Supabase/Google hỏng phía trong (server_error + unexpected_failure).
   if (oauthError) {
-    return NextResponse.redirect(`${origin}/login?error=${encodeURIComponent(oauthError)}`);
+    console.error("[auth/callback] OAuth provider error", {
+      error: oauthError,
+      error_code: oauthErrorCode,
+      error_description: oauthErrorDescription,
+    });
+    return loginError(origin, oauthError, oauthErrorCode, oauthErrorDescription);
   }
 
   if (!code) {
-    return NextResponse.redirect(`${origin}/login?error=missing_code`);
+    return loginError(origin, "missing_code");
   }
 
   // 1) Build the redirect response we'll return on success.
@@ -44,8 +74,20 @@ export async function GET(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      // Share the session cookie across mstudo.com subdomains (album/img/studio).
-      ...(COOKIE_DOMAIN ? { cookieOptions: { domain: COOKIE_DOMAIN } } : {}),
+      // Share the session cookie across MAIN_HOST subdomains (album/img/studio)
+      // — nhưng CHỈ khi request thực sự đến trên host đó.
+      //
+      // Trước đây chỗ này dùng COOKIE_DOMAIN cố định (suy ra từ
+      // NEXT_PUBLIC_MAIN_HOST) thay vì xét host của request, khác với
+      // middleware.ts và lib/supabase/client.ts. Hậu quả: nếu app được phục vụ
+      // trên một host khác MAIN_HOST (vừa đổi domain mà chưa sửa env, domain
+      // riêng, bản preview *.vercel.app), trình duyệt ÂM THẦM TỪ CHỐI cookie có
+      // Domain không khớp trang → phiên không bao giờ được lưu → đăng nhập
+      // Google xong lại bị đá về /login.
+      ...((() => {
+        const domain = cookieDomainForHost(request.headers.get("host"));
+        return domain ? { cookieOptions: { domain } } : {};
+      })()),
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -73,9 +115,12 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
-    return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(error.message || "oauth")}`
-    );
+    console.error("[auth/callback] exchangeCodeForSession failed", {
+      message: error.message,
+      status: error.status,
+      code: error.code,
+    });
+    return loginError(origin, error.code || "oauth", null, error.message);
   }
 
   // 4) Save affiliate referral code if present and user has no referrer yet.

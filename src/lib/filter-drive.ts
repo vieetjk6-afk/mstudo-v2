@@ -165,3 +165,58 @@ export async function copyFilesToFilterDrive(
     failed,
   };
 }
+
+export type FilterDeleteOutcome =
+  | {
+      ok: true;
+      deleted: number;
+      /** fileId các ảnh đã xoá được — để gọi bên xoá luôn khỏi album. */
+      deletedIds: string[];
+      failed: { name: string; error: string }[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Xoá các file ảnh trên Drive gốc bằng kết nối đã lưu — dùng cho danh sách ảnh
+ * khách KHÔNG THÍCH. Mặc định chuyển vào Thùng rác của Drive (`trashed = true`)
+ * để studio còn 30 ngày phục hồi nếu bấm nhầm; `permanent` mới xoá hẳn.
+ *
+ * Tài khoản Drive đã kết nối phải là CHỦ file (Google chỉ cho chủ sở hữu xoá /
+ * bỏ vào thùng rác) — file của người khác trả về lỗi cho từng ảnh, không làm
+ * hỏng cả lượt xoá.
+ */
+export async function deleteFilesFromFilterDrive(
+  ownerId: string,
+  files: { id: string; name: string }[],
+  opts?: { permanent?: boolean }
+): Promise<FilterDeleteOutcome> {
+  const db = createAdminClient();
+  const { data } = await db.from("studio_drive").select("filter_refresh_token").eq("owner_id", ownerId).maybeSingle();
+  const refreshToken = (data as { filter_refresh_token?: string | null } | null)?.filter_refresh_token;
+  if (!refreshToken) return { ok: false, error: "not_connected" };
+  if (!files.length) return { ok: false, error: "no_files" };
+
+  const o = oauth();
+  o.setCredentials({ refresh_token: refreshToken });
+  const drive = google.drive({ version: "v3", auth: o });
+
+  const failed: { name: string; error: string }[] = [];
+  const deletedIds: string[] = [];
+  const CONC = 4;
+  for (let i = 0; i < files.length; i += CONC) {
+    const batch = files.slice(i, i + CONC);
+    await Promise.all(
+      batch.map(async (f) => {
+        try {
+          if (opts?.permanent) await drive.files.delete({ fileId: f.id });
+          else await drive.files.update({ fileId: f.id, requestBody: { trashed: true } });
+          deletedIds.push(f.id);
+        } catch (e) {
+          failed.push({ name: f.name, error: e instanceof Error ? e.message.slice(0, 160) : "delete_failed" });
+        }
+      })
+    );
+  }
+
+  return { ok: true, deleted: deletedIds.length, deletedIds, failed };
+}

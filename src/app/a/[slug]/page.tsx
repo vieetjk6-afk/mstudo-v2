@@ -143,9 +143,10 @@ export default async function PublicAlbumPage({
   let photos = null;
   let sources = null;
   let selected: string[] = [];
+  let disliked: string[] = [];
   let notes: Record<string, string> = {};
   if (!hasPassword) {
-    const [p, { data: s }, { data: sel }] = await Promise.all([
+    const [p, { data: s }, { data: sel }, { data: dis }] = await Promise.all([
       fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position"),
       admin
         .from("album_sources")
@@ -154,6 +155,10 @@ export default async function PublicAlbumPage({
         .order("position"),
       admin
         .from("selections")
+        .select("photo_id, client_note")
+        .eq("album_id", album.id),
+      admin
+        .from("dislikes")
         .select("photo_id, client_note")
         .eq("album_id", album.id),
     ]);
@@ -168,7 +173,9 @@ export default async function PublicAlbumPage({
     photos = filtered.length > 0 ? filtered : (p ?? []);
     sources = (filtered.length > 0 ? selSources : (s ?? [])).map(({ id, name, position }) => ({ id, name, position }));
     selected = (sel ?? []).map((r) => r.photo_id);
+    disliked = (dis ?? []).map((r) => r.photo_id);
     for (const r of sel ?? []) if (r.client_note) notes[r.photo_id] = r.client_note;
+    for (const r of dis ?? []) if (r.client_note) notes[r.photo_id] = r.client_note;
   }
 
   return (
@@ -188,6 +195,7 @@ export default async function PublicAlbumPage({
       initialPhotos={photos}
       initialSources={sources}
       initialSelected={selected}
+      initialDisliked={disliked}
       initialNotes={notes}
       shareIds={shareIds}
       studioName={studioName}

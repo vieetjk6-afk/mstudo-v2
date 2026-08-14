@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Copy, Download, Check, Wifi, HardDriveDownload } from "lucide-react";
+import {
+  ArrowLeft,
+  Copy,
+  Download,
+  Check,
+  Wifi,
+  HardDriveDownload,
+  HeartOff,
+  Trash2,
+  AlertTriangle,
+  ExternalLink,
+} from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { buildZip, triggerDownload } from "@/lib/download";
 import FilterPhotosButton from "@/components/FilterPhotosButton";
-import type { Album, Photo, Selection } from "@/lib/types";
+import type { Album, Dislike, Photo, Selection } from "@/lib/types";
 
 interface Group {
   sessionId: string;
@@ -20,10 +31,12 @@ interface Group {
 export default function SelectionsView({
   album,
   selections,
+  dislikes,
   photos,
 }: {
   album: Album;
   selections: Selection[];
+  dislikes: Dislike[];
   photos: Photo[];
 }) {
   const { t } = useLang();
@@ -34,6 +47,7 @@ export default function SelectionsView({
   );
 
   const [rows, setRows] = useState<Selection[]>(selections);
+  const [disRows, setDisRows] = useState<Dislike[]>(dislikes);
   const [copied, setCopied] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [zipping, setZipping] = useState<string | null>(null);
@@ -42,13 +56,25 @@ export default function SelectionsView({
   // Live updates: refetch whenever the customer's selection changes.
   useEffect(() => {
     async function refetch() {
-      const { data } = await supabase
-        .from("selections")
-        .select("*")
-        .eq("album_id", album.id)
-        .order("created_at", { ascending: true });
+      const [{ data }, { data: dis }] = await Promise.all([
+        supabase
+          .from("selections")
+          .select("*")
+          .eq("album_id", album.id)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("dislikes")
+          .select("*")
+          .eq("album_id", album.id)
+          .order("created_at", { ascending: true }),
+      ]);
       if (data) setRows(data as Selection[]);
+      if (dis) setDisRows(dis as Dislike[]);
     }
+    // HAI channel riêng, không gộp binding: một channel chỉ join được khi MỌI
+    // binding hợp lệ. DB chưa chạy migration album_dislikes.sql thì binding
+    // `dislikes` làm hỏng cả channel — mất luôn cập nhật trực tiếp của
+    // selections (tính năng đã có từ trước). Tách ra thì phần nào lỗi phần đó.
     const channel = supabase
       .channel(`selections-${album.id}`)
       .on(
@@ -57,8 +83,17 @@ export default function SelectionsView({
         () => refetch()
       )
       .subscribe((status) => setLive(status === "SUBSCRIBED"));
+    const disChannel = supabase
+      .channel(`dislikes-${album.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dislikes", filter: `album_id=eq.${album.id}` },
+        () => refetch()
+      )
+      .subscribe();
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(disChannel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [album.id]);
@@ -78,6 +113,96 @@ export default function SelectionsView({
     }
     return [...map.values()];
   }, [rows]);
+
+  // ── Ảnh khách không thích ────────────────────────────────────────
+  // Studio tick những ảnh muốn bỏ rồi xoá thẳng trên link Drive gốc (mặc định
+  // vào Thùng rác Drive để còn phục hồi được).
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
+  const [permanent, setPermanent] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [delMsg, setDelMsg] = useState<string | null>(null);
+  const [delFailed, setDelFailed] = useState<{ name: string; error: string }[]>([]);
+  const [driveConn, setDriveConn] = useState<{ configured: boolean; connected: boolean } | null>(null);
+
+  // Mọi ảnh không thích được tick sẵn — trường hợp thường gặp là xoá cả danh sách.
+  useEffect(() => {
+    setPicked(new Set(disRows.map((d) => d.photo_id)));
+  }, [disRows]);
+
+  useEffect(() => {
+    if (disRows.length === 0) return;
+    fetch("/api/filter/drive/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setDriveConn({ configured: !!d.configured, connected: !!d.connected }))
+      .catch(() => {});
+  }, [disRows.length]);
+
+  const dislikeItems = useMemo(
+    () => disRows.map((d) => ({ ...d, fileId: fileIdByPhoto.get(d.photo_id) })),
+    [disRows, fileIdByPhoto]
+  );
+  const pickedItems = useMemo(() => dislikeItems.filter((d) => picked.has(d.photo_id)), [dislikeItems, picked]);
+
+  function togglePick(photoId: string) {
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(photoId)) next.delete(photoId);
+      else next.add(photoId);
+      return next;
+    });
+  }
+
+  function copyDislikeList() {
+    navigator.clipboard.writeText(dislikeItems.map((d) => stripExtension(d.photo_name)).join("\n"));
+    setCopied("dislikes");
+    setTimeout(() => setCopied(null), 2000);
+  }
+
+  function exportDislikeList() {
+    const text = dislikeItems
+      .map((d) => stripExtension(d.photo_name) + (d.client_note ? ` — ${d.client_note}` : ""))
+      .join("\n");
+    triggerDownload(
+      new Blob([text], { type: "text/plain;charset=utf-8" }),
+      `${album.slug}-anh-khong-thich.txt`
+    );
+  }
+
+  const deleteDisliked = useCallback(async () => {
+    if (pickedItems.length === 0 || deleting) return;
+    setDeleting(true);
+    setDelMsg(null);
+    setDelFailed([]);
+    try {
+      const res = await fetch("/api/filter/delete-from-drive", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          albumId: album.id,
+          photoIds: pickedItems.map((d) => d.photo_id),
+          permanent,
+        }),
+      });
+      const d = await res.json().catch(() => null);
+      if (!res.ok || d?.error) {
+        setDelMsg(d?.error || "Không xoá được trên Drive.");
+      } else {
+        const removed: string[] = d.removedPhotoIds ?? [];
+        setDisRows((prev) => prev.filter((r) => !removed.includes(r.photo_id)));
+        setRows((prev) => prev.filter((r) => !removed.includes(r.photo_id)));
+        setDelFailed(Array.isArray(d.failed) ? d.failed : []);
+        setDelMsg(
+          `Đã ${d.permanent ? "xoá hẳn" : "chuyển vào Thùng rác Drive"} ${d.deleted}/${pickedItems.length} ảnh` +
+            `${d.failed?.length ? ` · ${d.failed.length} ảnh không xoá được` : ""}.`
+        );
+        setConfirming(false);
+      }
+    } catch {
+      setDelMsg("Mất kết nối khi xoá trên Drive.");
+    }
+    setDeleting(false);
+  }, [album.id, deleting, permanent, pickedItems]);
 
   async function saveNote(id: string, note: string) {
     setRows((r) =>
@@ -164,6 +289,184 @@ export default function SelectionsView({
             của album — chọn lọc trên Drive hoặc trên máy tính ngay tại chỗ. */}
         <FilterPhotosButton albumId={album.id} albumTitle={album.title} className="btn-primary ml-auto" />
       </div>
+
+      {/* ── Ảnh khách không thích ──────────────────────────────────────
+          Khách bấm "không thích" trong album → ảnh vào đây. Studio xoá thẳng
+          các file này trên link Drive gốc nếu khách yêu cầu. */}
+      {dislikeItems.length > 0 && (
+        <div
+          className="card mb-8 p-6"
+          style={{ borderColor: "color-mix(in srgb, var(--danger) 45%, transparent)" }}
+        >
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="flex items-center gap-2 font-medium" style={{ color: "var(--danger)" }}>
+                <HeartOff size={16} /> Ảnh khách không thích
+              </h3>
+              <p className="text-xs text-accent-muted">
+                {dislikeItems.length} ảnh · khách yêu cầu bỏ khỏi album · đã chọn {pickedItems.length} ảnh để xoá
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={copyDislikeList} className="btn-ghost text-xs">
+                {copied === "dislikes" ? (
+                  <>
+                    <Check size={13} /> {t("copied")}
+                  </>
+                ) : (
+                  <>
+                    <Copy size={13} /> {t("copyList")}
+                  </>
+                )}
+              </button>
+              <button onClick={exportDislikeList} className="btn-ghost text-xs">
+                <Download size={13} /> {t("exportList")}
+              </button>
+              <button
+                onClick={() => setPicked(new Set(picked.size === dislikeItems.length ? [] : dislikeItems.map((d) => d.photo_id)))}
+                className="btn-ghost text-xs"
+              >
+                <Check size={13} /> {picked.size === dislikeItems.length ? "Bỏ chọn tất cả" : "Chọn tất cả"}
+              </button>
+              <button
+                onClick={() => setConfirming((v) => !v)}
+                disabled={pickedItems.length === 0}
+                className="btn-ghost text-xs disabled:opacity-40"
+                style={{ color: "var(--danger)", borderColor: "color-mix(in srgb, var(--danger) 45%, transparent)" }}
+                title="Xoá các ảnh này trên link Drive gốc"
+              >
+                <Trash2 size={13} /> Xoá {pickedItems.length} ảnh trên Drive
+              </button>
+            </div>
+          </div>
+
+          {/* Xác nhận — xoá trên Drive không phải việc hoàn tác được bằng một cú
+              bấm, nên luôn hỏi lại và mặc định chỉ chuyển vào Thùng rác. */}
+          {confirming && (
+            <div
+              className="mb-4 rounded-xl p-4"
+              style={{ background: "color-mix(in srgb, var(--danger) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--danger) 40%, transparent)" }}
+            >
+              <p className="mb-2 flex items-center gap-2 text-[13px] font-medium" style={{ color: "var(--danger)" }}>
+                <AlertTriangle size={14} /> Xoá {pickedItems.length} ảnh khỏi link Drive gốc của album?
+              </p>
+              <p className="mb-3 text-[12.5px] text-accent-muted">
+                Ảnh cũng bị bỏ khỏi album nên khách không còn thấy nữa. Tài khoản Google đã kết nối phải là{" "}
+                <b>chủ sở hữu</b> các file đó — file của người khác sẽ báo lỗi và được giữ nguyên.
+              </p>
+              <label className="mb-3 flex items-center gap-2 text-[12.5px] text-accent-muted">
+                <input type="checkbox" checked={permanent} onChange={(e) => setPermanent(e.target.checked)} />
+                Xoá hẳn, không đưa vào Thùng rác{" "}
+                <span style={{ color: "var(--danger)" }}>(không phục hồi được)</span>
+              </label>
+
+              {driveConn && !driveConn.connected ? (
+                <>
+                  <a href="/api/filter/drive/connect" className="btn-primary">
+                    Kết nối Google Drive (1 lần)
+                  </a>
+                  <p className="mt-1.5 text-[11.5px] text-accent-muted">
+                    Kết nối <b>một lần duy nhất</b> bằng tài khoản Google sở hữu link ảnh gốc — sau đó xoá/copy đều tự động, không cần đăng nhập lại.
+                  </p>
+                </>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={deleteDisliked}
+                    disabled={deleting || pickedItems.length === 0}
+                    className="btn-primary text-xs disabled:opacity-40"
+                    style={{ background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }}
+                  >
+                    <Trash2 size={13} />{" "}
+                    {deleting
+                      ? "Đang xoá…"
+                      : permanent
+                        ? `Xoá hẳn ${pickedItems.length} ảnh`
+                        : `Chuyển ${pickedItems.length} ảnh vào Thùng rác Drive`}
+                  </button>
+                  <button onClick={() => setConfirming(false)} className="btn-ghost text-xs">
+                    Huỷ
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {delMsg && (
+            <p className="mb-3 rounded-lg px-3 py-2 text-[12.5px]" style={{ background: "var(--surface2)", color: "var(--gold)" }}>
+              {delMsg}{" "}
+              {!permanent && (
+                <a
+                  href="https://drive.google.com/drive/trash"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 underline"
+                  style={{ color: "var(--accent)" }}
+                >
+                  <ExternalLink size={12} /> Mở Thùng rác Drive
+                </a>
+              )}
+            </p>
+          )}
+          {delFailed.length > 0 && (
+            <div className="mb-3 rounded-lg p-3 text-[12px]" style={{ background: "var(--surface2)" }}>
+              <p className="mb-1 font-medium" style={{ color: "var(--danger)" }}>
+                Không xoá được ({delFailed.length}):
+              </p>
+              <ul className="space-y-0.5 text-accent-muted">
+                {delFailed.slice(0, 12).map((f) => (
+                  <li key={f.name}>
+                    {stripExtension(f.name)} — {f.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {dislikeItems.map((item) => (
+              <label
+                key={item.id}
+                className="flex cursor-pointer gap-3 rounded-md border border-ink-800 p-2"
+                style={
+                  picked.has(item.photo_id)
+                    ? { borderColor: "color-mix(in srgb, var(--danger) 55%, transparent)" }
+                    : undefined
+                }
+              >
+                <input
+                  type="checkbox"
+                  checked={picked.has(item.photo_id)}
+                  onChange={() => togglePick(item.photo_id)}
+                  className="mt-1 self-start"
+                />
+                <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded bg-ink-850">
+                  {item.fileId && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={thumbnailUrl(item.fileId, 160)}
+                      alt={item.photo_name}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-xs text-accent">{item.photo_name}</p>
+                  {item.client_note && (
+                    <p
+                      className="mt-1 rounded px-2 py-1 text-[11px] leading-snug"
+                      style={{ background: "color-mix(in srgb, var(--danger) 12%, transparent)", color: "var(--danger)" }}
+                      title={item.client_note}
+                    >
+                      “{item.client_note}”
+                    </p>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       {groups.length === 0 ? (
         <div className="card py-16 text-center text-accent-muted">

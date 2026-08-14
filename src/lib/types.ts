@@ -194,6 +194,18 @@ export interface Selection {
   created_at: string;
 }
 
+// Ảnh khách bấm "không thích" trong album chọn ảnh — ẩn khỏi lưới chọn, hiện ở
+// tab riêng, và là danh sách studio dùng để xoá file trên link Drive gốc.
+export interface Dislike {
+  id: string;
+  album_id: string;
+  photo_id: string;
+  photo_name: string;
+  session_id: string;
+  client_note: string | null;
+  created_at: string;
+}
+
 // ── Studio module (studio.mstudo.com) ──────────────────────────────────────
 
 export type ShootType =

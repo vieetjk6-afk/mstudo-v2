@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Heart,
+  HeartOff,
   Check,
   Copy,
   Download,
@@ -16,12 +17,14 @@ import {
   ZoomOut,
   Share2,
   Send,
+  Undo2,
 } from "lucide-react";
 import StudioBrand from "@/components/StudioBrand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ShareDialog from "@/components/ShareDialog";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
+import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { triggerDownload, downloadImage } from "@/lib/download";
 
 interface PublicPhoto {
@@ -58,6 +61,7 @@ export default function CustomerAlbum({
   initialPhotos,
   initialSources,
   initialSelected,
+  initialDisliked,
   initialNotes,
   shareIds,
   studioName = "Studio",
@@ -67,6 +71,7 @@ export default function CustomerAlbum({
   initialPhotos: PublicPhoto[] | null;
   initialSources: PublicSource[] | null;
   initialSelected?: string[];
+  initialDisliked?: string[];
   initialNotes?: Record<string, string>;
   shareIds?: string[] | null;
   studioName?: string;
@@ -83,8 +88,14 @@ export default function CustomerAlbum({
   const [pwLoading, setPwLoading] = useState(false);
 
   const [selected, setSelected] = useState<Set<string>>(new Set(initialSelected ?? []));
+  // Ảnh khách KHÔNG THÍCH: ẩn khỏi lưới chọn, chỉ hiện ở tab riêng để khách xem
+  // lại / bỏ đánh dấu. Studio dùng danh sách này để xoá file trên Drive gốc.
+  const [disliked, setDisliked] = useState<Set<string>>(new Set(initialDisliked ?? []));
   const [notes, setNotes] = useState<Record<string, string>>(initialNotes ?? {});
-  const [selectedOnly, setSelectedOnly] = useState(false);
+  // Ba chế độ xem: tất cả (đã ẩn ảnh không thích) · chỉ ảnh đã chọn · ảnh không thích.
+  const [view, setView] = useState<AlbumView>("all");
+  const selectedOnly = view === "selected";
+  const dislikedOnly = view === "disliked";
   const [activeTab, setActiveTab] = useState<string>("all");
 
   const [lbIdx, setLbIdx] = useState<number | null>(null);
@@ -131,6 +142,7 @@ export default function CustomerAlbum({
 
   // Refs hold the latest selection so the debounced save uses fresh data.
   const selectedRef = useRef(selected);
+  const dislikedRef = useRef(disliked);
   const notesRef = useRef(notes);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Window during which polling must not overwrite the local selection
@@ -141,13 +153,14 @@ export default function CustomerAlbum({
     saveTimer.current = null;
     setSaveStatus("saving");
     const sel = [...selectedRef.current];
+    const dis = [...dislikedRef.current];
     const noteMap: Record<string, string> = {};
-    for (const id of sel) if (notesRef.current[id]?.trim()) noteMap[id] = notesRef.current[id];
+    for (const id of [...sel, ...dis]) if (notesRef.current[id]?.trim()) noteMap[id] = notesRef.current[id];
     try {
       const res = await fetch(`/api/a/${album.slug}/select`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: SHARED, photoIds: sel, notes: noteMap }),
+        body: JSON.stringify({ sessionId: SHARED, photoIds: sel, dislikedIds: dis, notes: noteMap }),
         keepalive: true,
       });
       if (!res.ok) {
@@ -188,9 +201,12 @@ export default function CustomerAlbum({
       if (!res.ok) return;
       const data = await res.json();
       const sel = new Set<string>(data.selected ?? []);
+      const dis = new Set<string>(data.disliked ?? []);
       selectedRef.current = sel;
+      dislikedRef.current = dis;
       notesRef.current = { ...notesRef.current, ...(data.notes ?? {}) };
       setSelected(sel);
+      setDisliked(dis);
       setNotes((prev) => ({ ...prev, ...(data.notes ?? {}) }));
     } catch {
       /* ignore */
@@ -237,10 +253,37 @@ export default function CustomerAlbum({
         return;
       }
       next.add(id);
+      // Thích lại một ảnh đã đánh dấu không thích ⇒ bỏ khỏi danh sách không thích.
+      if (dislikedRef.current.has(id)) {
+        const d = new Set(dislikedRef.current);
+        d.delete(id);
+        dislikedRef.current = d;
+        setDisliked(d);
+      }
     }
     selectedRef.current = next;
     setSelected(next);
     scheduleSave();
+  }
+
+  // Không thích / bỏ không thích. Khi đánh dấu không thích: ảnh rời khỏi lựa chọn
+  // (hai trạng thái loại trừ nhau) và bị ẩn khỏi lưới, chuyển sang tab riêng.
+  function toggleDislike(id: string) {
+    const next = new Set(dislikedRef.current);
+    const adding = !next.has(id);
+    if (adding) next.add(id);
+    else next.delete(id);
+    dislikedRef.current = next;
+    setDisliked(next);
+
+    if (adding && selectedRef.current.has(id)) {
+      const s = new Set(selectedRef.current);
+      s.delete(id);
+      selectedRef.current = s;
+      setSelected(s);
+    }
+    scheduleSave();
+    flashToast(adding ? t("dislikedMoved") : t("undislikedBack"));
   }
 
   function setNote(id: string, text: string) {
@@ -273,19 +316,22 @@ export default function CustomerAlbum({
     setPhotos(data.photos ?? []);
     setSources(data.sources ?? []);
     const sel = new Set<string>(data.selected ?? []);
+    const dis = new Set<string>(data.disliked ?? []);
     selectedRef.current = sel;
+    dislikedRef.current = dis;
     notesRef.current = data.notes ?? {};
     setSelected(sel);
+    setDisliked(dis);
     setNotes(data.notes ?? {});
     setUnlocked(true);
   }
 
   const visiblePhotos = useMemo(() => {
-    let base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
-    if (shareSet) base = base.filter((p) => shareSet.has(p.id));
-    else if (selectedOnly) base = base.filter((p) => selected.has(p.id));
-    return base;
-  }, [photos, activeTab, selectedOnly, selected, shareSet]);
+    const base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
+    // Luật lọc (kể cả "ảnh không thích biến khỏi lưới") nằm ở lib dùng chung với
+    // route lưu lựa chọn — xem src/lib/album-dislike.ts.
+    return filterByView(base, { view, selected, disliked, shareSet });
+  }, [photos, activeTab, view, selected, disliked, shareSet]);
   const selectedPhotos = useMemo(() => photos.filter((p) => selected.has(p.id)), [photos, selected]);
 
   // Only sources that actually contain photos become tabs/sections (a parent
@@ -299,7 +345,7 @@ export default function CustomerAlbum({
   // keeping each photo's index within visiblePhotos for lightbox navigation.
   const sections = useMemo(() => {
     const indexed = visiblePhotos.map((p, idx) => ({ p, idx }));
-    if (activeTab !== "all" || selectedOnly || tabSources.length <= 1) {
+    if (activeTab !== "all" || selectedOnly || dislikedOnly || tabSources.length <= 1) {
       return [{ id: "all", name: "", items: indexed }];
     }
     const byId = new Map<string, { p: PublicPhoto; idx: number }[]>();
@@ -317,14 +363,14 @@ export default function CustomerAlbum({
     }
     for (const [sid, items] of byId) ordered.push({ id: sid, name: sid === "none" ? "Khác" : "", items });
     return ordered;
-  }, [visiblePhotos, sources, selectedOnly, activeTab, tabSources.length]);
+  }, [visiblePhotos, sources, selectedOnly, dislikedOnly, activeTab, tabSources.length]);
 
   // Tải lũy tiến: chỉ dựng một "cửa sổ" ảnh và tăng dần khi cuộn tới đáy (album
   // chọn ảnh có thể vài nghìn tấm). Chỉ số `idx` vẫn theo visiblePhotos nên
   // lightbox/chọn ảnh không đổi.
   const RENDER_BATCH = 250;
   const [renderLimit, setRenderLimit] = useState(RENDER_BATCH);
-  useEffect(() => { setRenderLimit(RENDER_BATCH); }, [activeTab, selectedOnly, shareSet, photos]);
+  useEffect(() => { setRenderLimit(RENDER_BATCH); }, [activeTab, view, shareSet, photos]);
   // Callback ref: quan sát lại sentinel mỗi khi nó mount lại (kể cả khi đổi sang
   // tab CÙNG SỐ ẢNH sau khi renderLimit reset — effect theo visible.length sẽ bỏ sót).
   const ioRef = useRef<IntersectionObserver | null>(null);
@@ -379,6 +425,14 @@ export default function CustomerAlbum({
     setZoom(1);
     setPan({ x: 0, y: 0 });
   }, [lbIdx]);
+
+  // Đánh dấu "không thích" ngay trong lightbox làm ảnh rời khỏi danh sách đang
+  // xem. Kẹp lại chỉ số để lightbox trôi sang ảnh kế tiếp, chỉ đóng khi hết ảnh.
+  useEffect(() => {
+    if (lbIdx === null) return;
+    if (visiblePhotos.length === 0) setLbIdx(null);
+    else if (lbIdx > visiblePhotos.length - 1) setLbIdx(visiblePhotos.length - 1);
+  }, [lbIdx, visiblePhotos.length]);
 
   // Preload neighbouring full images so prev/next switches feel instant
   // (otherwise each step fetches a fresh 1600px image from Drive and lags).
@@ -541,11 +595,21 @@ export default function CustomerAlbum({
                 {album.description ? ` · ${album.description}` : ""}
               </p>
             </div>
-            <div
-              className="flex items-center gap-2 rounded-full px-4 py-2 text-[13px]"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}
-            >
-              <Heart size={14} /> Nhấn vào trái tim để chọn ảnh bạn thích
+            <div className="flex flex-wrap items-center gap-2">
+              <div
+                className="flex items-center gap-2 rounded-full px-4 py-2 text-[13px]"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}
+              >
+                <Heart size={14} /> Nhấn vào trái tim để chọn ảnh bạn thích
+              </div>
+              {!shareMode && (
+                <div
+                  className="flex items-center gap-2 rounded-full px-4 py-2 text-[13px]"
+                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}
+                >
+                  <HeartOff size={14} /> Nhấn dấu × để đánh dấu ảnh không thích
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -561,7 +625,11 @@ export default function CustomerAlbum({
               Tất cả
             </button>
             {tabSources.map((s) => {
-              const n = photos.filter((p) => p.source_id === s.id).length;
+              // Số hiển thị đúng bằng số ảnh tab đó đang cho xem: chế độ thường ẩn
+              // ảnh không thích, tab "Không thích" chỉ đếm ảnh bị loại.
+              const n = photos.filter(
+                (p) => p.source_id === s.id && (dislikedOnly ? disliked.has(p.id) : !disliked.has(p.id))
+              ).length;
               return (
                 <button
                   key={s.id}
@@ -593,7 +661,7 @@ export default function CustomerAlbum({
           ) : (
             <>
               <button
-                onClick={() => setSelectedOnly((v) => !v)}
+                onClick={() => setView((v) => (v === "selected" ? "all" : "selected"))}
                 className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors"
                 style={
                   selectedOnly
@@ -604,10 +672,27 @@ export default function CustomerAlbum({
                 <Heart size={14} fill={selectedOnly ? "currentColor" : "none"} />
                 {selectedOnly ? t("viewingSelected") : `${t("selectedCount")}${selected.size ? ` · ${selected.size}` : ""}`}
               </button>
+              {/* Tab riêng cho ảnh không thích — chỉ hiện khi khách đã loại ảnh nào. */}
+              {(disliked.size > 0 || dislikedOnly) && (
+                <button
+                  onClick={() => setView((v) => (v === "disliked" ? "all" : "disliked"))}
+                  className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors"
+                  style={
+                    dislikedOnly
+                      ? { background: "var(--danger)", color: "#fff", border: "1px solid var(--danger)" }
+                      : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
+                  }
+                >
+                  <HeartOff size={14} />
+                  {t("dislikedCount")} · {disliked.size}
+                </button>
+              )}
               <span className="text-[13px]" style={{ color: "var(--text3)" }}>
-                {selected.size > 0
-                  ? `${selected.size}${limit != null ? ` / ${limit}` : ""} ${t("selected")}`
-                  : `${t("noneSelected")} · ${photos.length} ${t("photos")}`}
+                {dislikedOnly
+                  ? `${disliked.size} ảnh bạn không thích — studio sẽ xoá nếu bạn yêu cầu`
+                  : selected.size > 0
+                    ? `${selected.size}${limit != null ? ` / ${limit}` : ""} ${t("selected")}`
+                    : `${t("noneSelected")} · ${photos.length - disliked.size} ${t("photos")}`}
               </span>
             </>
           )}
@@ -641,8 +726,10 @@ export default function CustomerAlbum({
               {shareBusy ? "Đang tạo link…" : "Chia sẻ ảnh đã chọn"}
             </ToolButton>
           )}
-          {/* Báo studio đã chọn xong — CTA nổi bật, chỉ hiện khi đã chọn ảnh. */}
-          {!shareMode && selected.size > 0 && (
+          {/* Báo studio đã chọn xong — CTA nổi bật. Cũng hiện khi khách chỉ đánh
+              dấu ảnh không thích mà chưa chọn tấm nào: đó vẫn là yêu cầu cần
+              studio xử lý. */}
+          {!shareMode && (selected.size > 0 || disliked.size > 0) && (
             <button
               onClick={notifyDone}
               disabled={notifyingDone}
@@ -663,9 +750,18 @@ export default function CustomerAlbum({
         {visiblePhotos.length === 0 ? (
           <div className="py-20 text-center animate-[vkFade_.4s_ease_both]" style={{ color: "var(--text3)" }}>
             <p className="mb-1.5 font-serif text-2xl" style={{ color: "var(--text2)" }}>
-              {selectedOnly ? t("noSelectedPhotos") : photos.length === 0 ? "Album chưa có ảnh nào" : t("loading")}
+              {dislikedOnly
+                ? t("noDislikedPhotos")
+                : selectedOnly
+                  ? t("noSelectedPhotos")
+                  : photos.length === 0
+                    ? "Album chưa có ảnh nào"
+                    : disliked.size > 0
+                      ? "Mọi ảnh ở đây đã được đánh dấu không thích"
+                      : t("loading")}
             </p>
             {selectedOnly && <p className="text-[13.5px]">{t("heartHint")}</p>}
+            {dislikedOnly && <p className="text-[13.5px]">{t("dislikeHint")}</p>}
           </div>
         ) : (
           // Sections — each Drive source shown separately, left-to-right
@@ -689,6 +785,7 @@ export default function CustomerAlbum({
                 <div className="grid items-start gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] md:gap-2 md:[grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
             {items.map(({ p, idx }) => {
               const isSel = selected.has(p.id);
+              const isDis = disliked.has(p.id);
               const note = notes[p.id];
               return (
                 <div
@@ -699,7 +796,13 @@ export default function CustomerAlbum({
                   <div className="relative aspect-square">
                     <div
                       className="pointer-events-none absolute inset-0 z-[3]"
-                      style={isSel ? { boxShadow: "inset 0 0 0 3px var(--gold)" } : undefined}
+                      style={
+                        isDis
+                          ? { boxShadow: "inset 0 0 0 3px var(--danger)" }
+                          : isSel
+                            ? { boxShadow: "inset 0 0 0 3px var(--gold)" }
+                            : undefined
+                      }
                     />
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -730,12 +833,15 @@ export default function CustomerAlbum({
                         ))}
                       </div>
                     )}
+                    {/* Vệt tối chỉ cần cao vừa đủ đỡ hai nút 32px — trước là 64px,
+                        che mất một dải ảnh không cần thiết. */}
                     <div
-                      className="pointer-events-none absolute inset-x-0 top-0 h-16"
-                      style={{ background: "linear-gradient(to bottom, rgba(0,0,0,.5), transparent)" }}
+                      className="pointer-events-none absolute inset-x-0 top-0 h-11"
+                      style={{ background: "linear-gradient(to bottom, rgba(0,0,0,.45), transparent)" }}
                     />
-                    {/* heart select — large tap target for mobile */}
-                    {!shareMode && (
+                    {/* heart select — large tap target for mobile. Ảnh đang ở mục
+                        không thích thì chỉ còn nút hoàn tác, không cho thích luôn. */}
+                    {!shareMode && !isDis && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -750,6 +856,26 @@ export default function CustomerAlbum({
                         }
                       >
                         <Heart size={15} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
+                      </button>
+                    )}
+                    {/* Không thích (góc trái) — bấm là ảnh ẩn khỏi lưới, sang tab
+                        riêng. Ở tab "Không thích" nút này thành hoàn tác. */}
+                    {!shareMode && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleDislike(p.id);
+                        }}
+                        title={isDis ? t("undislike") : t("dislikeThis")}
+                        aria-label={isDis ? t("undislike") : t("dislikeThis")}
+                        className="absolute left-1.5 top-1.5 z-[4] flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-90"
+                        style={
+                          isDis
+                            ? { background: "var(--danger)", color: "#fff", border: "1.5px solid var(--danger)" }
+                            : { background: "rgba(10,10,12,.5)", color: "#fff", border: "1.5px solid rgba(255,255,255,.75)" }
+                        }
+                      >
+                        {isDis ? <Undo2 size={15} /> : <X size={16} strokeWidth={2.6} />}
                       </button>
                     )}
                   </div>
@@ -798,7 +924,7 @@ export default function CustomerAlbum({
               {lbIdx + 1} / {visiblePhotos.length}
             </span>
             <div className="flex-1" />
-            {!shareMode && (
+            {!shareMode && !disliked.has(lbPhoto.id) && (
               <button
                 onClick={() => toggle(lbPhoto.id)}
                 className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13.5px] font-semibold transition-all"
@@ -810,6 +936,20 @@ export default function CustomerAlbum({
               >
                 <Heart size={15} fill={selected.has(lbPhoto.id) ? "currentColor" : "none"} strokeWidth={selected.has(lbPhoto.id) ? 0 : 2} />
                 {selected.has(lbPhoto.id) ? "Đã thích" : "Thích ảnh này"}
+              </button>
+            )}
+            {!shareMode && (
+              <button
+                onClick={() => toggleDislike(lbPhoto.id)}
+                className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13.5px] font-semibold transition-all"
+                style={
+                  disliked.has(lbPhoto.id)
+                    ? { background: "var(--danger)", color: "#fff", border: "1px solid var(--danger)" }
+                    : { background: "var(--surface)", color: "var(--text2)", border: "1px solid var(--border)" }
+                }
+              >
+                {disliked.has(lbPhoto.id) ? <Undo2 size={15} /> : <HeartOff size={15} />}
+                {disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
               </button>
             )}
             {album.allowDownload && (
@@ -917,7 +1057,9 @@ export default function CustomerAlbum({
                 <div>
                   <h3 className="font-serif text-2xl font-medium">{t("note")}</h3>
                   <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--text3)" }}>
-                    Để lại ghi chú để studio biết bạn muốn chỉnh sửa gì cho ảnh này.
+                    {disliked.has(lbPhoto.id)
+                      ? "Cho studio biết vì sao bạn không thích ảnh này (tuỳ chọn)."
+                      : "Để lại ghi chú để studio biết bạn muốn chỉnh sửa gì cho ảnh này."}
                   </p>
                 </div>
                 <textarea
@@ -929,8 +1071,21 @@ export default function CustomerAlbum({
                 />
                 <div className="mt-auto border-t pt-4" style={{ borderColor: "var(--border)" }}>
                   <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "var(--text2)" }}>
-                    <span className="h-2 w-2 rounded-full" style={{ background: selected.has(lbPhoto.id) ? "#3fbf7f" : "var(--text3)" }} />
-                    {selected.has(lbPhoto.id) ? "Ảnh này đã được chọn" : "Ảnh chưa được chọn"}
+                    <span
+                      className="h-2 w-2 rounded-full"
+                      style={{
+                        background: disliked.has(lbPhoto.id)
+                          ? "var(--danger)"
+                          : selected.has(lbPhoto.id)
+                            ? "#3fbf7f"
+                            : "var(--text3)",
+                      }}
+                    />
+                    {disliked.has(lbPhoto.id)
+                      ? "Ảnh này đã chuyển sang mục Không thích"
+                      : selected.has(lbPhoto.id)
+                        ? "Ảnh này đã được chọn"
+                        : "Ảnh chưa được chọn"}
                   </div>
                 </div>
               </aside>

@@ -108,6 +108,24 @@ export const dict: Dict = {
   savedForStudio: { vi: "Đã lưu cho studio", en: "Saved for studio" },
   noSelectedPhotos: { vi: "Chưa có ảnh nào được chọn", en: "No photos selected yet" },
   heartHint: { vi: "Nhấn vào trái tim ở góc mỗi ảnh để chọn.", en: "Tap the heart on any photo to select it." },
+  // ảnh không thích (customer)
+  dislikeThis: { vi: "Không thích ảnh này", en: "I don't like this photo" },
+  disliked: { vi: "Không thích", en: "Disliked" },
+  dislikedCount: { vi: "Ảnh không thích", en: "Disliked photos" },
+  undislike: { vi: "Bỏ khỏi mục không thích", en: "Remove from disliked" },
+  undislikedBack: {
+    vi: "Đã bỏ ảnh khỏi mục “Không thích”.",
+    en: "Photo removed from “Disliked”.",
+  },
+  dislikedMoved: {
+    vi: "Đã chuyển ảnh sang mục “Không thích” — studio sẽ xoá nếu bạn yêu cầu.",
+    en: "Moved to “Disliked” — the studio can delete it at your request.",
+  },
+  noDislikedPhotos: { vi: "Chưa có ảnh nào bị đánh dấu không thích", en: "No disliked photos yet" },
+  dislikeHint: {
+    vi: "Nhấn dấu × ở góc trái mỗi ảnh để đánh dấu không thích — ảnh sẽ được ẩn khỏi lưới chọn.",
+    en: "Tap the × on any photo to mark it as disliked — it will be hidden from the grid.",
+  },
   // selections view (photographer)
   customerSelections: { vi: "Lượt chọn của khách", en: "Customer selections" },
   note: { vi: "Ghi chú", en: "Note" },

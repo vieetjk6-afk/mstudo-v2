@@ -11,8 +11,40 @@ import { createClient } from "@/lib/supabase/client";
 import { APP_VERSION } from "@/lib/version";
 
 // Friendly Vietnamese label for the ?error=... codes we set in /auth/callback.
-function describeOAuthError(code: string | null): string | null {
+//
+// `code` là mã chung (`server_error`, `access_denied`…), `errorCode` là mã cụ
+// thể của Supabase (`unexpected_failure`, `validation_failed`…) và `description`
+// là câu mô tả gốc — thứ duy nhất nói được HỎNG Ở ĐÂU. Ưu tiên đọc description.
+function describeOAuthError(
+  code: string | null,
+  errorCode?: string | null,
+  description?: string | null
+): string | null {
   if (!code) return null;
+  const detail = description ? decodeURIComponent(description).replace(/\+/g, " ") : "";
+  const lower = detail.toLowerCase();
+
+  // Lỗi hay gặp nhất của server_error: trigger tạo hồ sơ (profiles) trong CSDL
+  // thất bại nên Supabase không lưu được tài khoản mới.
+  if (lower.includes("database error")) {
+    return "Không tạo được hồ sơ cho tài khoản mới nên đăng nhập bị hủy. Vui lòng báo quản trị viên chạy migration supabase/migrations/fix_google_signup_trigger.sql.";
+  }
+  if (lower.includes("user profile from external provider")) {
+    return "Không lấy được thông tin tài khoản từ Google. Kiểm tra Client ID / Client Secret của Google trong Supabase.";
+  }
+  // Google đã cấp mã (4/0A…) nhưng từ chối đổi mã đó lấy token. Bước /authorize
+  // trước đó đã chạy được, tức Client ID và redirect URI đều hợp lệ — nên biến
+  // duy nhất còn lại của lần đổi mã này là CLIENT SECRET.
+  if (lower.includes("unable to exchange external code")) {
+    return "Google từ chối đổi mã đăng nhập. Gần như chắc chắn Client Secret trong Supabase không khớp với OAuth Client trên Google Cloud — vào Supabase → Authentication → Providers → Google và dán lại Client ID + Client Secret.";
+  }
+  if (lower.includes("already registered") || errorCode === "identity_already_exists") {
+    return "Email này đã đăng ký bằng mật khẩu. Hãy đăng nhập bằng email + mật khẩu, hoặc liên kết Google trong phần Tài khoản.";
+  }
+  if (lower.includes("redirect") || lower.includes("not allowed")) {
+    return "Địa chỉ chuyển hướng chưa được cho phép. Thêm URL của trang này vào Supabase → Authentication → URL Configuration.";
+  }
+
   switch (code) {
     case "oauth":
       return "Đăng nhập Google thất bại. Vui lòng thử lại.";
@@ -20,8 +52,11 @@ function describeOAuthError(code: string | null): string | null {
       return "Không nhận được mã từ Google. Vui lòng thử lại.";
     case "access_denied":
       return "Bạn đã hủy cho phép trên Google.";
+    case "server_error":
+    case "unexpected_failure":
+      return `Đăng nhập Google thất bại do lỗi phía máy chủ xác thực${detail ? `: ${detail}` : " (server_error). Vui lòng thử lại sau ít phút hoặc liên hệ hỗ trợ."}`;
     default:
-      return `Đăng nhập Google thất bại: ${decodeURIComponent(code)}`;
+      return `Đăng nhập Google thất bại: ${decodeURIComponent(code)}${detail ? ` — ${detail}` : ""}`;
   }
 }
 
@@ -43,7 +78,20 @@ function LoginForm() {
   // Surface OAuth callback errors (?error=...) so the user isn't left wondering
   // why Google sign-in bounced them back here.
   useEffect(() => {
-    const msg = describeOAuthError(params.get("error"));
+    // Supabase đôi khi trả lỗi trong FRAGMENT (#error=...) thay vì query string.
+    // Route /auth/callback chạy trên server nên không đọc được fragment (nó chỉ
+    // thấy "thiếu code"), nhưng fragment vẫn còn nguyên sau khi trình duyệt đi
+    // theo redirect — nên đọc nốt ở đây để không mất lý do lỗi thật.
+    const hash =
+      typeof window !== "undefined" && window.location.hash.startsWith("#")
+        ? new URLSearchParams(window.location.hash.slice(1))
+        : null;
+
+    const msg = describeOAuthError(
+      hash?.get("error") || params.get("error"),
+      hash?.get("error_code") || params.get("error_code"),
+      hash?.get("error_description") || params.get("error_description")
+    );
     if (msg) setError(msg);
   }, [params]);
 

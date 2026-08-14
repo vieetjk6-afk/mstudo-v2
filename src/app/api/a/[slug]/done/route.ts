@@ -30,15 +30,19 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  // Đếm tổng số ảnh khách đã chọn cho album (dùng trong nội dung thông báo).
-  const { count } = await admin
-    .from("selections")
-    .select("id", { count: "exact", head: true })
-    .eq("album_id", album.id);
+  // Đếm số ảnh khách đã chọn + số ảnh khách không thích (dùng trong nội dung
+  // thông báo — studio biết ngay là có danh sách ảnh cần xoá hay không).
+  const [{ count }, { count: disCount }] = await Promise.all([
+    admin.from("selections").select("id", { count: "exact", head: true }).eq("album_id", album.id),
+    admin.from("dislikes").select("id", { count: "exact", head: true }).eq("album_id", album.id),
+  ]);
   const n = count ?? 0;
+  const nDis = disCount ?? 0;
 
   const who = body.clientName?.trim().slice(0, 120) || "Khách";
-  const message = `${who} đã chọn xong ${n} ảnh cho album “${album.title}”`;
+  const message =
+    `${who} đã chọn xong ${n} ảnh cho album “${album.title}”` +
+    (nDis > 0 ? ` · ${nDis} ảnh không thích cần xoá` : "");
 
   // 1) Chuông trong dashboard (bấm vào → mở thẳng album chọn ảnh). Thử kèm
   //    album_id; nếu DB chưa có cột (chưa chạy lại schema.sql) thì chèn không kèm
@@ -80,5 +84,5 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     /* chưa kết nối Zalo / lỗi tạm → bỏ qua */
   }
 
-  return NextResponse.json({ ok: true, count: n });
+  return NextResponse.json({ ok: true, count: n, disliked: nDis });
 }
