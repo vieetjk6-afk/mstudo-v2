@@ -420,17 +420,30 @@ lại thì app vẫn chạy với giá trị cũ. Vercel → Deployments → dep
 Đây là lỗi đã xảy ra một lần rồi: thiếu 2 biến Supabase làm `mstudo-v2.vercel.app`
 trả 500 toàn site.
 
-> ⚠️ Bấm Redeploy mà Vercel báo *"Prebuilt deployments cannot be redeployed"*:
-> bản đang chạy được tạo bằng `vercel deploy --prebuilt`, tức build sẵn ở nơi
-> khác rồi tải lên dạng thành phẩm — biến cũ đã nằm sẵn trong đó nên Vercel từ
-> chối dùng lại. Phải tạo bản deploy **mới**, build trên máy chủ Vercel:
->
-> - **Project nối GitHub** (Settings → Git có hiện repo): đẩy một commit lên
->   `main`, Vercel tự build. Cách này sạch nhất — về sau chỉ cần push.
-> - **Từ giao diện**: Deployments → chọn bản có biểu tượng nhánh Git (không phải
->   bản CLI) → `⋯` → Redeploy.
-> - **Từ máy bạn**: `npx vercel --prod` trong một bản clone của repo — **không
->   kèm** `--prebuilt`, có cờ đó là lặp lại đúng vấn đề.
+### ⚠️ "Prebuilt deployments cannot be redeployed"
+
+**Đây không phải sự cố — nút Redeploy của Vercel sẽ LUÔN báo lỗi này với repo
+mstudo-v2.** Repo deploy bằng workflow `.github/workflows/vercel-deploy.yml`:
+nó chạy `vercel build` trên máy GitHub rồi `vercel deploy --prebuilt`, tức nộp
+lên Vercel một bản **đã đóng gói sẵn**. Biến môi trường lúc build đã nằm cứng
+trong gói đó, nên Vercel từ chối dùng lại — đúng như thông báo nói.
+
+**Đừng bấm Redeploy. Cách "redeploy" của repo này là chạy lại workflow:**
+
+> GitHub → tab **Actions** → workflow **"Deploy production (Vercel)"** → nút
+> **Run workflow** → chọn nhánh `main` → **Run workflow**.
+
+Workflow chạy `vercel pull` mỗi lần trước khi build, nên nó **luôn lấy bộ biến
+môi trường mới nhất** — chính là điều mà nút Redeploy không làm được. Đẩy một
+commit lên `main` cũng có tác dụng y hệt (workflow tự chạy).
+
+> 💡 Trên trang Deployments của Vercel sẽ **không có bản nào mang biểu tượng
+> nhánh Git** để mà Redeploy, vì repo này không dùng Vercel GitHub App — mọi
+> bản đều do CLI đẩy lên. Đừng đi tìm.
+
+**Cách cuối, chạy từ máy bạn** (khi GitHub Actions hỏng): `npx vercel --prod`
+trong một bản clone của repo — **không kèm** `--prebuilt`, có cờ đó là lặp lại
+đúng vấn đề.
 
 ## A4. Khai lại callback ở bên thứ ba
 
