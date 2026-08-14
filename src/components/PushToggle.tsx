@@ -2,18 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { Bell, BellOff, BellRing } from "lucide-react";
+import { matchesVapidKey, urlBase64ToUint8Array } from "@/lib/vapid-key";
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
-
-// Convert the base64url VAPID public key to the Uint8Array the Push API needs.
-function urlBase64ToUint8Array(base64String: string) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  const out = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
-  return out;
-}
 
 type State = "unsupported" | "default" | "denied" | "subscribed" | "loading" | "ios-install";
 
@@ -41,6 +32,48 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
     p,
     new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`Hết thời gian: ${label}`)), ms)),
   ]);
+}
+
+/** Đăng ký này có dùng đúng khoá VAPID hiện tại của máy chủ không? Xem
+ * `@/lib/vapid-key` — `null` nghĩa là không kết luận được, cứ để nguyên. */
+function usesCurrentVapidKey(sub: PushSubscription): boolean | null {
+  return matchesVapidKey(sub.options?.applicationServerKey, VAPID_PUBLIC);
+}
+
+/**
+ * Đăng ký nhận thông báo trên máy này rồi lưu lên máy chủ.
+ *
+ * Huỷ đăng ký cũ trước là BẮT BUỘC, không phải dọn dẹp cho sạch: gọi
+ * `subscribe()` với `applicationServerKey` khác trong khi vẫn còn đăng ký cũ sẽ
+ * ném `InvalidStateError`. Xoá luôn dòng cũ ở máy chủ để bảng đăng ký không
+ * đọng lại endpoint đã chết.
+ */
+async function subscribeAndSave(reg: ServiceWorkerRegistration): Promise<void> {
+  const old = await reg.pushManager.getSubscription();
+  if (old) {
+    await fetch("/api/push/subscribe", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ endpoint: old.endpoint }),
+    }).catch(() => {});
+    await old.unsubscribe().catch(() => {});
+  }
+
+  const sub = await withTimeout(
+    reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
+    }),
+    15000,
+    "đăng ký nhận thông báo"
+  );
+
+  const res = await fetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ subscription: sub }),
+  });
+  if (!res.ok) throw new Error("Lưu đăng ký thất bại");
 }
 
 export default function PushToggle() {
@@ -73,7 +106,23 @@ export default function PushToggle() {
       .then(async (reg) => {
         if (!reg) { done("default"); return; }
         const sub = await reg.pushManager.getSubscription();
-        done(sub ? "subscribed" : "default");
+        if (!sub) { done("default"); return; }
+
+        // Máy chủ đã đổi cặp khoá VAPID ⇒ đăng ký này đã chết. Tự đăng ký lại
+        // ngay, không phiền người dùng: quyền thông báo đã được cấp từ trước nên
+        // subscribe() không cần thao tác bấm nào. Thất bại thì lùi về "chưa bật"
+        // để họ tự bấm, chứ không để nút báo "đang bật" dối.
+        if (usesCurrentVapidKey(sub) === false) {
+          try {
+            await subscribeAndSave(reg);
+            done("subscribed");
+          } catch {
+            done("default");
+          }
+          return;
+        }
+
+        done("subscribed");
       })
       .catch(() => done("default"));
 
@@ -93,21 +142,7 @@ export default function PushToggle() {
       const reg = await withTimeout(navigator.serviceWorker.register("/sw.js"), 10000, "đăng ký service worker");
       await withTimeout(navigator.serviceWorker.ready, 10000, "kích hoạt service worker");
 
-      const sub = await withTimeout(
-        reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC),
-        }),
-        15000,
-        "đăng ký nhận thông báo"
-      );
-
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscription: sub }),
-      });
-      if (!res.ok) throw new Error("Lưu đăng ký thất bại");
+      await subscribeAndSave(reg);
 
       setState("subscribed");
     } catch (e) {

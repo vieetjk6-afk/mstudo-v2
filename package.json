@@ -12,7 +12,8 @@
     "test:contract-filter": "node --experimental-strip-types desktop/test/contract-filter.mjs",
     "test:album-buttons": "node --experimental-strip-types desktop/test/album-buttons.mjs",
     "test:album-dislike": "node --experimental-strip-types desktop/test/album-dislike.mjs",
-    "test:album-drive-links": "node --experimental-strip-types desktop/test/album-drive-links.mjs"
+    "test:album-drive-links": "node --experimental-strip-types desktop/test/album-drive-links.mjs",
+    "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

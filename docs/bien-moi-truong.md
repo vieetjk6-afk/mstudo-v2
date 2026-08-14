@@ -518,33 +518,30 @@ npx web-push generate-vapid-keys
 Nó in ra Public Key và Private Key — dán vào `NEXT_PUBLIC_VAPID_PUBLIC_KEY` và
 `VAPID_PRIVATE_KEY`.
 
-### ⚠️ Đổi cặp khoá thì hỏng ÂM THẦM — phải dọn bảng đăng ký
+### Đổi cặp khoá — nay tự lành, không phải nhắn ai
 
-Không chỉ là "bật lại". Vấn đề là **không bên nào tự nhận ra khoá đã đổi**:
+Trước đây đổi cặp khoá là hỏng **âm thầm**: trình duyệt chỉ hỏi "máy này có đăng
+ký nào không" nên nút vẫn hiện **"đang bật"** dù đăng ký đã chết, còn máy chủ chỉ
+dọn đăng ký chết khi gặp lỗi **404/410** — mà lệch khoá VAPID thường trả **403**,
+nên dòng chết nằm lại mãi trong `push_subscriptions`.
 
-- **Trình duyệt khách** chỉ hỏi "máy này có đăng ký nào không", **không so khoá**
-  (`src/components/PushToggle.tsx`). Máy cũ vẫn hiện **"đang bật"** dù không còn
-  nhận được gì.
-- **Máy chủ** chỉ dọn đăng ký chết khi dịch vụ đẩy trả **404/410**
-  (`src/lib/push.ts`). Lệch khoá VAPID thường trả **403**, nên dòng chết **nằm
-  lại mãi** trong `push_subscriptions` và cứ gửi cứ trượt.
+**Đã sửa** (`src/lib/vapid-key.ts` + `src/components/PushToggle.tsx`): khi mở
+trang Thông báo, nếu đăng ký của máy dùng khoá khác khoá hiện tại thì nó **tự huỷ
+và đăng ký lại ngay**, xoá luôn dòng cũ ở máy chủ. Quyền thông báo đã cấp từ
+trước nên không cần bấm gì. Nghĩa là:
 
-Kết quả: thông báo biến mất, nút vẫn báo "đang bật", không có triệu chứng nào để
-lần ra. Nên khi tạo cặp mới, làm thêm **hai** việc:
+- **Không phải nhắn studio** bật lại — họ chỉ cần mở trang Thông báo một lần.
+- **Không bắt buộc** phải xoá bảng `push_subscriptions`.
 
-**1. Xoá sạch bảng đăng ký** (Supabase MỚI → SQL Editor), chạy **sau** bước chép
-dữ liệu B6 — vì bản chép sẽ mang các dòng cũ từ Supabase cũ sang:
+Vẫn có thể dọn cho sạch nếu muốn (Supabase MỚI → SQL Editor), chạy **sau** bước
+chép dữ liệu B6:
 
 ```sql
 delete from public.push_subscriptions;
 ```
 
-Xoá xong nút của khách trở về "tắt", họ bấm bật lại là đăng ký đúng cặp mới.
-
-**2. Nhắn các studio** vào bật lại chuông thông báo đẩy.
-
-**Cái mất:** dữ liệu không mất gì, chỉ là mọi thiết bị phải bật lại. Ít người
-dùng tính năng này thì cứ tạo mới, đừng mất thời gian đi tìm.
+**Cái mất:** dữ liệu không mất gì. Máy nào không mở trang Thông báo thì im lặng
+cho tới khi mở.
 
 ### Không có cặp nào cũng được
 
