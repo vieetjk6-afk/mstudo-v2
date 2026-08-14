@@ -100,8 +100,10 @@ export default function ProductTour() {
         onClick={replay}
         aria-label="Hướng dẫn sử dụng"
         title="Hướng dẫn sử dụng"
+        // Vị trí nằm ở lớp .help-fab để có media query nhấc nút lên khỏi thanh
+        // tab đáy trên điện thoại — style inline không viết được media query.
+        className="help-fab"
         style={{
-          position: "fixed", right: 18, bottom: 18, zIndex: 90,
           width: 46, height: 46, borderRadius: 999, border: "1px solid var(--border)",
           background: "var(--surface)", color: "var(--accent)", display: "grid", placeItems: "center",
           boxShadow: "0 10px 30px -12px rgba(0,0,0,.5)", cursor: "pointer",

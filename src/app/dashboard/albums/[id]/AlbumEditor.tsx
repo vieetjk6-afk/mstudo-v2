@@ -408,45 +408,40 @@ export default function AlbumEditor({
           </p>
         </div>
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Link
-            href={`/dashboard/albums/${album.id}/selections`}
-            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
-            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
-          >
+        {/* Trên điện thoại: lưới 2 cột, mọi nút bằng nhau và bằng chiều cao —
+            trước đây 7 nút với 3 cỡ chữ khác nhau tự wrap thành các hàng so le.
+            Từ 820px trở lên trở về dải ngang dồn phải như bản thiết kế.
+            Thứ tự cũng xếp lại theo việc: xem → chia sẻ → thêm ảnh → xoá. */}
+        <div className="ml-auto grid w-full grid-cols-2 items-center gap-2 min-[820px]:flex min-[820px]:w-auto min-[820px]:flex-wrap">
+          <Link href={`/dashboard/albums/${album.id}/selections`} className="act-btn">
             <Users size={16} /> {t("customerSelections")}
           </Link>
           {/* Lọc ảnh NGAY từ cài đặt album — mở popup công cụ lọc tại chỗ (nguồn
               Drive hoặc máy tính). Chỉ hiện ở album chọn ảnh; giai đoạn giao
               khách không cần lọc. */}
-          {phase !== "delivery" && <FilterPhotosButton albumId={album.id} albumTitle={form.title} />}
-          <a
-            href={clientLink}
-            target="_blank"
-            rel="noreferrer"
-            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold"
-            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
-          >
+          {phase !== "delivery" && <FilterPhotosButton albumId={album.id} albumTitle={form.title} className="act-btn" />}
+          <a href={clientLink} target="_blank" rel="noreferrer" className="act-btn">
             <ExternalLink size={16} /> Mở link khách
           </a>
-          <ShareButton path={clientLink} title={form.title} />
-          <ZaloSendButton
-            phone={clientPhone || album.client_phone}
-            name={clientName || album.client_name}
-            contractId={contractId}
-            audience="client"
-            kind="album_share"
-            askPhone
-            message={`Chào ${clientName || album.client_name || "anh/chị"}, mời anh/chị xem album ảnh tại: ${clientLink}`}
-          />
-          <button
-            onClick={() => setTab("sources")}
-            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
-            style={{ background: "var(--ac)", color: "#fff" }}
-          >
+          <ShareButton path={clientLink} title={form.title} className="act-btn" />
+          {/* Ô nhập số điện thoại + nút gửi nên chiếm cả hàng trên điện thoại,
+              nhồi vào nửa hàng thì ô nhập chỉ còn vài chục pixel. */}
+          <div className="col-span-2 min-[820px]:col-auto">
+            <ZaloSendButton
+              phone={clientPhone || album.client_phone}
+              name={clientName || album.client_name}
+              contractId={contractId}
+              audience="client"
+              kind="album_share"
+              askPhone
+              className="act-btn"
+              message={`Chào ${clientName || album.client_name || "anh/chị"}, mời anh/chị xem album ảnh tại: ${clientLink}`}
+            />
+          </div>
+          <button onClick={() => setTab("sources")} className="act-btn act-btn-primary">
             <Plus size={16} /> Tải thêm ảnh
           </button>
-          <button onClick={deleteAlbum} disabled={deleting} className="btn-danger px-3 py-2 text-xs">
+          <button onClick={deleteAlbum} disabled={deleting} className="act-btn act-btn-danger">
             <Trash2 size={15} /> {deleting ? "Đang xóa…" : t("delete")}
           </button>
         </div>

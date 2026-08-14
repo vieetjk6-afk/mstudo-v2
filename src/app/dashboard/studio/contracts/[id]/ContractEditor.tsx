@@ -1097,8 +1097,6 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
 
   const statusTone = CONTRACT_STATUS_TONE[f.status];
   // Nút phụ ở đầu màn: 12.5px/600, bo 9px, viền + nền thẻ — không đổ bóng.
-  const hdrBtn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
-  const hdrBtnStyle = { border: "1px solid var(--bd)", background: "var(--sf)" } as const;
   // Nhân sự chưa từ chối — dùng cho rail phải và cho badge đếm trên tab.
   const activeCrew = crew.filter((c) => (c.status || "pending") !== "declined");
   const pct = total > 0 ? Math.min(100, Math.round((collected / total) * 100)) : 0;
@@ -1153,30 +1151,85 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           <h1 className="mt-0.5 truncate text-[21px] font-bold" style={{ letterSpacing: "-.5px" }}>{f.title || "Hợp đồng"}</h1>
         </div>
 
-        <div className="ml-auto flex flex-wrap gap-2">
-          <button onClick={duplicateContract} disabled={busy === "dup"} className={hdrBtn} style={hdrBtnStyle}>
+        {/* Trên điện thoại: lưới 2 cột, nút bằng nhau. 5–6 nút với 3 cỡ khác
+            nhau tự wrap thành các hàng so le, nút chính lẫn giữa đám nút phụ. */}
+        <div className="ml-auto grid w-full grid-cols-2 gap-2 min-[820px]:flex min-[820px]:w-auto min-[820px]:flex-wrap">
+          <button onClick={duplicateContract} disabled={busy === "dup"} className="act-btn">
             <Copy size={16} /> {busy === "dup" ? "Đang sao…" : "Tạo giống HĐ này"}
           </button>
-          <button onClick={printContract} className={hdrBtn} style={hdrBtnStyle}>
+          <button onClick={printContract} className="act-btn">
             <Printer size={16} /> Xuất PDF
           </button>
-          <a href={shareUrl} target="_blank" rel="noreferrer" className={hdrBtn} style={hdrBtnStyle}>
+          <a href={shareUrl} target="_blank" rel="noreferrer" className="act-btn">
             <FileText size={16} /> Xem như khách
           </a>
-          <button onClick={() => setTab("pay")} className={hdrBtn} style={hdrBtnStyle}>
+          <button onClick={() => setTab("pay")} className="act-btn">
             <Wallet size={16} /> Ghi nhận thanh toán
           </button>
-          <button
-            onClick={() => setTab("send")}
-            className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
-            style={{ background: "var(--ac)", color: "#fff" }}
-          >
+          <button onClick={() => setTab("send")} className="act-btn act-btn-primary col-span-2 min-[820px]:col-auto">
             <Send size={16} /> Gửi khách
           </button>
           {f.status === "cancelled" && (
-            <button onClick={deleteContract} disabled={busy === "delete"} className="btn-danger px-3 py-2 text-xs">
+            <button onClick={deleteContract} disabled={busy === "delete"} className="act-btn act-btn-danger col-span-2 min-[820px]:col-auto">
               <Trash2 size={14} /> Xoá
             </button>
+          )}
+        </div>
+      </div>
+
+      {/* ── Tóm tắt tiền + liên hệ khách, CHỈ trên điện thoại ─────────────────
+          Hai thông tin hay cần nhất khi mở một hợp đồng là "còn phải thu bao
+          nhiêu" và "số điện thoại khách". Cả hai vốn nằm ở rail phải, mà rail
+          chỉ hiện từ 1100px — dưới ngưỡng đó nó bị đẩy xuống tận cuối trang, phải
+          cuộn qua toàn bộ form mới thấy. Khối này đưa chúng lên đầu, và ẩn đi ở
+          desktop để không lặp với rail. */}
+      <div className="mb-3.5 rounded-[14px] p-3.5 min-[1100px]:hidden" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-[12px]" style={{ color: "var(--tx2)" }}>Tổng hợp đồng</span>
+          <span className="tnum text-[18px] font-bold" style={{ letterSpacing: "-.4px" }}>{vnd(total)}</span>
+        </div>
+        <div className="mt-2 h-1.5 overflow-hidden rounded-[4px]" style={{ background: "var(--bd2)" }}>
+          <div className="h-full rounded-[4px]" style={{ width: `${pct}%`, background: "var(--gn)" }} />
+        </div>
+        <div className="mt-2 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-[12px]">
+          <span style={{ color: "var(--tx2)" }}>
+            Đã thu <b className="tnum" style={{ color: "var(--gn)" }}>{vnd(collected)}</b>
+          </span>
+          <span style={{ color: "var(--tx2)" }}>
+            {balance > 0
+              ? <>Còn phải thu <b className="tnum" style={{ color: "var(--am)" }}>{vnd(balance)}</b></>
+              : <b style={{ color: "var(--gn)" }}>Đã thu đủ</b>}
+          </span>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-semibold">{f.client_name || "Chưa có tên khách"}</p>
+            <p className="truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              {f.client_phone || "chưa có số điện thoại"}
+            </p>
+          </div>
+          {clientDigits.length >= 9 && (
+            <>
+              <a href={`tel:${clientDigits}`} className="act-btn" style={{ width: "auto" }}>
+                <Phone size={15} /> Gọi
+              </a>
+              <ZaloSendButton
+                phone={f.client_phone}
+                name={f.client_name}
+                audience="client"
+                contractId={contract.id}
+                kind="manual"
+                className="act-btn"
+                message={shootReminderMessage({
+                  name: f.client_name,
+                  title: f.title,
+                  date: f.event_date,
+                  time: f.event_time,
+                  location: f.location,
+                })}
+              />
+            </>
           )}
         </div>
       </div>

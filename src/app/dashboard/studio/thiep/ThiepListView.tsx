@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, ExternalLink, Pencil, Copy, Check, Download, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import ThiepTabs from "@/components/studio/ThiepTabs";
 import { thiepUrl } from "@/lib/hosts";
 import type { WeddingConfig, WeddingRsvp } from "@/lib/types";
 
@@ -122,6 +123,7 @@ export default function ThiepListView({ rows, ownerId }: { rows: InvitationRow[]
 
   return (
     <div>
+      <ThiepTabs />
       <header className="mb-6 flex flex-wrap items-center gap-3">
         <Heart style={{ color: "#d96e8f" }} />
         <div className="min-w-0 flex-1">
