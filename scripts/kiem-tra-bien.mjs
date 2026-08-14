@@ -72,6 +72,38 @@ const loi = [];
 
 console.log(`── Biến môi trường build lấy từ ${file} (${env.size} biến) ──`);
 
+/**
+ * Bẫy nặng nhất và khó thấy nhất: biến bật cờ **Sensitive** trên Vercel.
+ *
+ * Vercel không cho đọc lại biến Sensitive, kể cả `vercel pull` — CLI ghi vào
+ * .env.production.local đúng chuỗi ký tự "[SENSITIVE]". Build coi đó là giá trị
+ * thật và nướng cứng vào bundle. Không có lỗi nào lúc build; hậu quả rải rác ra
+ * khắp app và mỗi chỗ lộ ra một câu lỗi khác nhau, không câu nào nhắc tới
+ * nguyên nhân:
+ *   NEXT_PUBLIC_MAIN_HOST        → trang chủ trắng, link khách thành
+ *                                  https://[SENSITIVE]/c/<token>
+ *   NEXT_PUBLIC_SUPABASE_URL     → "Invalid supabaseUrl"
+ *   NEXT_PUBLIC_VAPID_PUBLIC_KEY → "The string contains invalid characters"
+ *   NEXT_PUBLIC_GOOGLE_API_KEY   → Drive 403 "Requests from referer … blocked"
+ *   NEXT_PUBLIC_TURNSTILE_SITE_KEY → mọi form khách báo lỗi chung
+ *
+ * Biến CHỈ dùng ở máy chủ thì bật Sensitive vẫn chạy (runtime đọc trực tiếp từ
+ * Vercel). Nhưng NEXT_PUBLIC_* thì bắt buộc phải đọc được LÚC BUILD.
+ */
+const SENSITIVE_PLACEHOLDER = "[SENSITIVE]";
+const biBoiDen = [...env.entries()]
+  .filter(([, v]) => v.trim() === SENSITIVE_PLACEHOLDER)
+  .map(([k]) => k);
+if (biBoiDen.length) {
+  const congKhai = biBoiDen.filter((k) => k.startsWith("NEXT_PUBLIC_"));
+  for (const k of biBoiDen) console.log(`🚫 ${k}: "[SENSITIVE]" — Vercel không cho build đọc giá trị`);
+  if (congKhai.length) {
+    loi.push(
+      `${congKhai.join(", ")} đang bật cờ Sensitive trên Vercel nên build chỉ nhận được chuỗi "[SENSITIVE]" thay cho giá trị thật. Vào Vercel → Settings → Environment Variables, XOÁ từng biến rồi tạo lại với Sensitive TẮT. Cờ này vô nghĩa với NEXT_PUBLIC_* vì giá trị vốn được gửi tới mọi trình duyệt.`
+    );
+  }
+}
+
 for (const key of REQUIRED) {
   const value = env.get(key);
   if (value === undefined || value === "") {
