@@ -41,7 +41,7 @@ Cột **Xử lý** đọc thế này:
 | `GEMINI_MODEL` | ⚪ | thiếu thì dùng model mặc định trong code |
 | `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được**, không cần đọc bản cũ — mục 3 |
 | `GOOGLE_API_KEY` | 🟢 | 🔒 |
-| `GOOGLE_API_REFERER` | 🟢 | |
+| `GOOGLE_API_REFERER` | 🟢 | **để trống cũng chạy** — mặc định `https://mstudo.com/` |
 | `GOOGLE_CALENDAR_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `GOOGLE_CLIENT_SECRET` | 🟢 | 🔒 đừng Reset khi bản cũ còn chạy — xem 7.3 |
 | `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
@@ -251,7 +251,28 @@ xác tuyệt đối — không cần Vercel cũ nhả ra gì hết.
 | `GOOGLE_API_KEY` | khoá server gọi Drive API 🔒 | GCC → Credentials → API keys |
 | `NEXT_PUBLIC_GOOGLE_API_KEY` | khoá trình duyệt cho Google Picker | GCC → Credentials → API keys (khoá riêng, có giới hạn domain) |
 | `NEXT_PUBLIC_GOOGLE_APP_ID` | **số** project Google Cloud | GCC → Dashboard → Project number |
-| `GOOGLE_API_REFERER` | referer khai kèm khi gọi Drive API | giữ nguyên bản cũ |
+| `GOOGLE_API_REFERER` | referer khai kèm khi gọi Drive API | **bỏ trống được** — xem khung ngay dưới |
+
+### `GOOGLE_API_REFERER` — bỏ trống là xong trong hầu hết trường hợp
+
+Không phải bí mật, chỉ là chuỗi máy chủ khai kèm khi gọi Drive API. **Bỏ trống
+thì code tự dùng `https://<NEXT_PUBLIC_MAIN_HOST>/`, tức `https://mstudo.com/`**
+(`src/lib/drive-server.ts`). Không cần moi giá trị cũ ra làm gì.
+
+Nó tồn tại để cứu một trường hợp: khi `GOOGLE_API_KEY` bị **giới hạn theo HTTP
+referrer**, Google chặn request từ máy chủ với lỗi *"Requests from referer
+&lt;empty&gt; are blocked"* — vì fetch từ server không mang header `Referer`.
+Biến này điền vào chỗ trống đó thay vì phải gỡ giới hạn của khoá.
+
+Muốn biết có cần khai không:
+
+> GCC → **Credentials** → bấm vào **API key** dùng cho server (`GOOGLE_API_KEY`)
+> → mục **Application restrictions**
+
+- **None** (hoặc giới hạn theo IP) → biến này **không có tác dụng gì**, để trống.
+- **HTTP referrers** → khung bên dưới liệt kê referrer được phép. Trong đó đã có
+  `https://mstudo.com/*` → vẫn để trống, mặc định khớp sẵn. Là địa chỉ khác →
+  điền địa chỉ đó vào biến.
 
 ## 4b. Tên miền
 
@@ -366,7 +387,7 @@ Không cần lấy ở đâu cả, đây là địa chỉ và bạn đã biết 
 | `GOOGLE_STORY_REDIRECT_URI` | `https://mstudo.com/api/story/drive/callback` |
 | `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | `https://mstudo.com/api/studio/drive/callback` |
 | `GOOGLE_CALENDAR_REDIRECT_URI` | `https://mstudo.com/api/gcal/callback` |
-| `GOOGLE_API_REFERER` | `https://mstudo.com` |
+| `GOOGLE_API_REFERER` | để trống (mặc định thành `https://mstudo.com/`) |
 | `IMG_CDN_REDIRECT` | để trống (chỉ đặt `0` khi muốn tắt tối ưu ảnh) |
 
 **Cách đối chiếu cho chắc** với 5 URI Google: Google Cloud Console → Credentials
