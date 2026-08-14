@@ -21,26 +21,31 @@ const TIER_RANK: Record<string, number> = { none: 0, booking: 1, plus: 2, full: 
 type Item = { href: string; icon: LucideIcon; label: string; minTier: string };
 
 /**
- * Thanh tab đáy 5 mục theo bản mobile của bản thiết kế:
- *   Trang chủ · Lịch · Hợp đồng · Tiền · Thêm
- * Mục thứ 5 mở bảng "Thêm" gồm những màn còn lại — trước đây cả 9 mục nhét
- * vào một dải cuộn ngang, mục cuối luôn bị khuất và không ai biết là cuộn được.
+ * Thanh tab đáy: một hàng lướt ngang được, cộng nút "Thêm" ghim cứng ở lề phải.
+ *
+ * Bản trước chỉ có 4 mục cố định + "Thêm", nên những màn dùng hằng ngày (báo
+ * giá, album, khách hàng, đặt lịch) đều phải mở bảng "Thêm" mới tới được. Bản
+ * trước nữa thì nhét cả 9 mục vào một dải cuộn và **không ghim** "Thêm", nên mục
+ * cuối luôn bị khuất — người dùng không biết là cuộn được.
+ *
+ * Cách này lấy cả hai mặt tốt: 8 mục hay dùng nằm ngay trên thanh, lướt ngang là
+ * tới; còn "Thêm" thì luôn thấy vì nó không nằm trong vùng cuộn.
  */
 const MAIN: Item[] = [
   { href: "/dashboard/studio", icon: LayoutDashboard, label: "Trang chủ", minTier: "booking" },
   { href: "/dashboard/studio/calendar", icon: CalendarDays, label: "Lịch", minTier: "booking" },
   { href: "/dashboard/studio/contracts", icon: FileText, label: "Hợp đồng", minTier: "plus" },
   { href: "/dashboard/studio/reports", icon: Wallet, label: "Tiền", minTier: "full" },
+  { href: "/dashboard/studio/quotes", icon: ReceiptText, label: "Báo giá", minTier: "plus" },
+  { href: "/dashboard/albums", icon: Images, label: "Album", minTier: "booking" },
+  { href: "/dashboard/studio/clients", icon: Users, label: "Khách hàng", minTier: "booking" },
+  { href: "/dashboard/studio/bookings", icon: Clock, label: "Đặt lịch", minTier: "booking" },
 ];
 
-/** Bảng "Thêm" — phần còn lại, đúng danh sách bản thiết kế liệt kê. */
+/** Bảng "Thêm" — những màn còn lại, mở bằng nút ghim ở lề phải. */
 const MORE: Item[] = [
-  { href: "/dashboard/studio/quotes", icon: ReceiptText, label: "Báo giá", minTier: "plus" },
-  { href: "/dashboard/studio/clients", icon: Users, label: "Khách hàng", minTier: "booking" },
-  { href: "/dashboard/albums", icon: Images, label: "Album", minTier: "booking" },
   { href: "/dashboard/studio/crew", icon: UsersRound, label: "Đội ngũ", minTier: "full" },
   { href: "/dashboard/studio/payroll", icon: Banknote, label: "Đối soát", minTier: "full" },
-  { href: "/dashboard/studio/bookings", icon: Clock, label: "Đặt lịch", minTier: "booking" },
   { href: "/dashboard/studio/production", icon: Wand2, label: "Xử lý ảnh", minTier: "full" },
   { href: "/dashboard/studio/notifications", icon: Bell, label: "Thông báo", minTier: "full" },
 ];
@@ -106,28 +111,38 @@ export default function StudioFooterNav({ tier, role: _role }: Props) {
         className="fixed bottom-0 left-0 right-0 z-40"
         style={{ background: "var(--topbar)", backdropFilter: "blur(12px)", borderTop: "1px solid var(--bd)" }}
       >
-        <div className="flex">
-          {main.map((item) => {
-            const active = isActive(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setPending(item.href)}
-                // Hit target ≥44px theo bản mobile của bản thiết kế.
-                className="flex flex-1 flex-col items-center justify-center gap-1 pb-2 pt-2"
-                style={{ color: active ? "var(--ac)" : "var(--tx3)", minHeight: 52 }}
-              >
-                <item.icon size={21} strokeWidth={active ? 2.2 : 1.8} />
-                <span className="text-[10px] font-bold leading-none">{item.label}</span>
-              </Link>
-            );
-          })}
+        <div className="flex items-stretch">
+          {/* Vùng lướt ngang. min-w-[74px] mỗi mục để chữ không bị nén, và để
+              mục thứ 5 luôn hở một phần ở lề — đó là dấu hiệu cho biết lướt được. */}
+          <div className="hscroll min-w-0 flex-1">
+            {main.map((item) => {
+              const active = isActive(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setPending(item.href)}
+                  // Hit target ≥44px theo bản mobile của bản thiết kế.
+                  className="flex min-w-[74px] flex-col items-center justify-center gap-1 pb-2 pt-2"
+                  style={{ color: active ? "var(--ac)" : "var(--tx3)", minHeight: 52 }}
+                >
+                  <item.icon size={21} strokeWidth={active ? 2.2 : 1.8} />
+                  <span className="text-[10px] font-bold leading-none">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
           {more.length > 0 && (
             <button
               onClick={() => setSheet(true)}
-              className="flex flex-1 flex-col items-center justify-center gap-1 pb-2 pt-2"
-              style={{ color: moreActive || sheet ? "var(--ac)" : "var(--tx3)", minHeight: 52 }}
+              // Ghim ngoài vùng cuộn: luôn thấy, không bao giờ bị lướt mất.
+              className="flex w-[64px] flex-none flex-col items-center justify-center gap-1 pb-2 pt-2"
+              style={{
+                color: moreActive || sheet ? "var(--ac)" : "var(--tx3)",
+                minHeight: 52,
+                borderLeft: "1px solid var(--bd)",
+                background: "var(--topbar)",
+              }}
               aria-expanded={sheet}
             >
               <MoreHorizontal size={21} strokeWidth={moreActive || sheet ? 2.2 : 1.8} />

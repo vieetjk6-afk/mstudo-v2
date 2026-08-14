@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, ExternalLink, Pencil, Copy, Check, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import ThiepTabs from "@/components/studio/ThiepTabs";
 import { studioUrl } from "@/lib/hosts";
 import type { StoryConfig } from "@/lib/types";
 
@@ -53,6 +54,7 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
 
   return (
     <div>
+      <ThiepTabs />
       <header className="mb-6 flex flex-wrap items-center gap-3">
         <Heart style={{ color: "#d0687a" }} />
         <div className="min-w-0 flex-1">

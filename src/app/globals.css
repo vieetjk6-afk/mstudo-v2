@@ -385,6 +385,74 @@ body {
   animation: pageIn 0.35s ease both;
 }
 
+/* ── Dải cuộn ngang một hàng ──────────────────────────────────────
+   Dùng cho dải tab trạng thái và thanh tab đáy. Giữ đúng MỘT hàng: phần vượt
+   bề ngang màn hình thì lướt ngang bằng ngón tay, thay vì xuống dòng và đội
+   thêm một tầng chiều cao — trên điện thoại dải 5 tab trạng thái vỡ thành 2
+   hàng đẩy hết nội dung xuống dưới. Ẩn thanh cuộn vì trên mobile nó vô ích. */
+.hscroll {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hscroll::-webkit-scrollbar { display: none; }
+/* Con trực tiếp không được co lại, nếu không chúng tự nén cho vừa màn hình
+   thay vì tạo ra phần cuộn. */
+.hscroll > * { flex: none; }
+
+/* ── Nút hành động trên dải đầu màn ───────────────────────────────
+   Dải đầu trang album/hợp đồng gom nhiều nút, trong đó vài nút đến từ component
+   dùng chung (chia sẻ, gửi Zalo, lọc ảnh) nên mỗi cái mang một cỡ chữ và một
+   hình khối riêng — xếp cạnh nhau trông so le. Lớp này là hình khối chung: cùng
+   bo góc, cùng cỡ chữ, cùng chiều cao.
+
+   Trên điện thoại nút rộng 100% để nằm trong lưới 2 cột đều nhau; từ 820px trở
+   lên co lại theo nội dung và về đúng dải ngang như bản thiết kế. */
+.act-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  border-radius: 9px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 1px solid var(--bd);
+  background: var(--sf);
+  color: var(--tx);
+}
+.act-btn:disabled { opacity: 0.55; }
+.act-btn-primary { border-color: transparent; background: var(--ac); color: #fff; }
+.act-btn-danger {
+  background: transparent;
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+@media (min-width: 820px) {
+  .act-btn { width: auto; }
+}
+
+/* ── Nút "?" hướng dẫn ────────────────────────────────────────────
+   Nút nổi góc phải dưới. Dưới 1024px có thanh tab đáy nên phải nhấc nó lên
+   khỏi thanh đó, không thì nó nằm đè lên mục "Thêm" và bấm không được. */
+.help-fab {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 90;
+}
+@media (max-width: 1023px) {
+  .help-fab {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 66px);
+  }
+}
+
 /* ── Reduced motion — honour OS accessibility setting ──────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

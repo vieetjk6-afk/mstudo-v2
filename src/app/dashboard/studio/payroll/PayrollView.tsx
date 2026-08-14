@@ -135,16 +135,19 @@ export default function PayrollView({ rows }: { rows: PayrollRow[] }) {
           <button onClick={exportCsv} className={btn} style={btnStyle}><Download size={16} /> Xuất file</button>
         </div>
 
-        {/* ── 3 ô tổng ────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-3 gap-px" style={{ background: "var(--bd2)", borderTop: "1px solid var(--bd2)", borderBottom: "1px solid var(--bd2)" }}>
+        {/* ── 3 ô tổng ──────────────────────────────────────────────────
+            Trên điện thoại chia 3 cột thì mỗi cột còn ~120px, không đủ cho số
+            tiền 8 chữ số ở cỡ 22px → số bị cắt mất phần đuôi, đúng chỗ quan
+            trọng nhất của trang. Dưới 560px xếp 3 ô thành 3 hàng và hạ cỡ số. */}
+        <div className="grid grid-cols-1 gap-px min-[560px]:grid-cols-3" style={{ background: "var(--bd2)", borderTop: "1px solid var(--bd2)", borderBottom: "1px solid var(--bd2)" }}>
           {[
             { l: "Tổng tiền công trong kỳ", v: vnd(grandTotal), c: "var(--ac)" },
             { l: "Đã trả", v: vnd(grandPaid), c: "var(--gn)" },
             { l: "Còn phải trả", v: vnd(grandTotal - grandPaid), c: "var(--am)" },
           ].map((x) => (
-            <div key={x.l} className="px-[18px] py-3.5" style={{ background: "var(--sf2)" }}>
+            <div key={x.l} className="flex items-baseline justify-between gap-3 px-[18px] py-3 min-[560px]:block min-[560px]:py-3.5" style={{ background: "var(--sf2)" }}>
               <p className="text-[11.5px] font-semibold" style={{ color: "var(--tx3)" }}>{x.l}</p>
-              <p className="tnum mt-1 text-[22px] font-bold" style={{ letterSpacing: "-.6px", color: x.c }}>{x.v}</p>
+              <p className="tnum text-[19px] font-bold min-[560px]:mt-1 min-[560px]:text-[22px]" style={{ letterSpacing: "-.6px", color: x.c }}>{x.v}</p>
             </div>
           ))}
         </div>
@@ -196,25 +199,30 @@ export default function PayrollView({ rows }: { rows: PayrollRow[] }) {
                         <span className="block text-[11.5px]" style={{ color: "var(--tx3)" }}>{g.phone || "—"} · {g.rows.length} buổi</span>
                       </span>
                     </button>
-                    <div className="text-right">
-                      <p className="tnum text-[15px] font-bold">{vnd(tot)}</p>
-                      <span
-                        className="mt-0.5 inline-block rounded-[20px] px-[9px] py-0.5 text-[10.5px] font-semibold"
-                        style={paid >= tot ? { background: "var(--gnS)", color: "var(--gn)" } : { background: "var(--amS)", color: "var(--am)" }}
-                      >
-                        {paid >= tot ? "Đã trả đủ" : `Còn ${vnd(tot - paid)}`}
-                      </span>
+                    {/* Tiền + nút gom trong một khối: khi hàng xuống dòng trên
+                        điện thoại thì cả hai cùng xuống và vẫn dính lề phải, thay
+                        vì nút "Trả hết" rơi xuống một mình ở lề trái. */}
+                    <div className="ml-auto flex items-center gap-3">
+                      <div className="text-right">
+                        <p className="tnum text-[15px] font-bold">{vnd(tot)}</p>
+                        <span
+                          className="mt-0.5 inline-block rounded-[20px] px-[9px] py-0.5 text-[10.5px] font-semibold"
+                          style={paid >= tot ? { background: "var(--gnS)", color: "var(--gn)" } : { background: "var(--amS)", color: "var(--am)" }}
+                        >
+                          {paid >= tot ? "Đã trả đủ" : `Còn ${vnd(tot - paid)}`}
+                        </span>
+                      </div>
+                      {unpaidIds.length > 0 && (
+                        <button
+                          onClick={() => setPaid(unpaidIds, true)}
+                          disabled={busy !== null}
+                          className="flex-none rounded-[9px] px-3.5 py-2 text-[12px] font-semibold"
+                          style={{ background: "var(--ac)", color: "#fff", opacity: busy ? 0.6 : 1 }}
+                        >
+                          Trả hết
+                        </button>
+                      )}
                     </div>
-                    {unpaidIds.length > 0 && (
-                      <button
-                        onClick={() => setPaid(unpaidIds, true)}
-                        disabled={busy !== null}
-                        className="flex-none rounded-[9px] px-3.5 py-2 text-[12px] font-semibold"
-                        style={{ background: "var(--ac)", color: "#fff", opacity: busy ? 0.6 : 1 }}
-                      >
-                        Trả hết
-                      </button>
-                    )}
                   </div>
 
                   {isOpen && (
@@ -278,23 +286,28 @@ export default function PayrollView({ rows }: { rows: PayrollRow[] }) {
                       </span>
                     ))}
                   </div>
-                  <span className="tnum min-w-[110px] flex-none text-right text-[14px] font-bold">{vnd(sum)}</span>
-                  <span
-                    className="min-w-[130px] flex-none whitespace-nowrap rounded-[20px] px-[11px] py-1 text-center text-[11px] font-semibold"
-                    style={done ? { background: "var(--gnS)", color: "var(--gn)" } : { background: "var(--amS)", color: "var(--am)" }}
-                  >
-                    {done ? "Đã chốt đủ" : `Còn ${vnd(unpaid.reduce((s, r) => s + r.salary, 0))}`}
-                  </span>
-                  {!done && (
-                    <button
-                      onClick={() => setPaid(unpaid.map((r) => r.id), true)}
-                      disabled={busy !== null}
-                      className="flex-none rounded-[9px] px-3.5 py-2 text-[12px] font-semibold"
-                      style={{ background: "var(--ac)", color: "#fff", opacity: busy ? 0.6 : 1 }}
+                  {/* Cũng gom tiền · trạng thái · nút vào một khối lề phải; ba
+                      min-width rời nhau trước đây làm hàng vỡ thành ba dòng lệch
+                      trên điện thoại. */}
+                  <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
+                    <span className="tnum flex-none text-right text-[14px] font-bold">{vnd(sum)}</span>
+                    <span
+                      className="flex-none whitespace-nowrap rounded-[20px] px-[11px] py-1 text-center text-[11px] font-semibold"
+                      style={done ? { background: "var(--gnS)", color: "var(--gn)" } : { background: "var(--amS)", color: "var(--am)" }}
                     >
-                      Chốt job
-                    </button>
-                  )}
+                      {done ? "Đã chốt đủ" : `Còn ${vnd(unpaid.reduce((s, r) => s + r.salary, 0))}`}
+                    </span>
+                    {!done && (
+                      <button
+                        onClick={() => setPaid(unpaid.map((r) => r.id), true)}
+                        disabled={busy !== null}
+                        className="flex-none rounded-[9px] px-3.5 py-2 text-[12px] font-semibold"
+                        style={{ background: "var(--ac)", color: "#fff", opacity: busy ? 0.6 : 1 }}
+                      >
+                        Chốt job
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })

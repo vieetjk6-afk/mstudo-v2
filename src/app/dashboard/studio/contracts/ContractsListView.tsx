@@ -125,7 +125,9 @@ export default function ContractsListView() {
     <div className="page-in">
       {/* ── Tab trạng thái + hành động ─────────────────────────────────── */}
       <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
-        <div role="tablist" aria-label="Lọc theo trạng thái" className="flex flex-wrap gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+        {/* hscroll: 5 tab không vừa bề ngang điện thoại. Trước đây chúng xuống
+            hàng thứ hai, đội cả trang xuống; giờ giữ một hàng và lướt ngang. */}
+        <div role="tablist" aria-label="Lọc theo trạng thái" className="hscroll min-w-0 max-w-full gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
           {TABS.map(([key, label]) => {
             const on = tab === key;
             return (
