@@ -4,7 +4,7 @@ Dùng cho bước **A3** của [`chuyen-doi-mstudo-2.0.md`](./chuyen-doi-mstudo-
 nạp biến từ Vercel CŨ sang Vercel MỚI.
 
 Bảng dưới đối chiếu **danh sách thật ở Vercel cũ** với **code hiện tại**.
-`.env.example` liệt kê đúng 50 biến này kèm chú thích kỹ thuật, nhưng nó không
+`.env.example` liệt kê đúng 51 biến này kèm chú thích kỹ thuật, nhưng nó không
 nói biến nào **phải đổi** khi chuyển — đó là việc của file này.
 
 > 💡 **Không muốn động vào biến nào cả?** Có cách: giữ nguyên project Vercel cũ,
@@ -14,7 +14,7 @@ nói biến nào **phải đổi** khi chuyển — đó là việc của file n
 
 ---
 
-# 0. Bảng tra 1 phút — cả 50 biến trong một bảng
+# 0. Bảng tra 1 phút — cả 51 biến trong một bảng
 
 Cột **Xử lý** đọc thế này:
 
@@ -51,6 +51,7 @@ Cột **Xử lý** đọc thế này:
 | `NEXT_PUBLIC_ADMIN_HOST` | 🟢 | `admin.mstudo.com` |
 | `NEXT_PUBLIC_APP_HOST` | ⚪ | đã ngừng dùng |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | 🟢 | để trống → nút tải rơi về trang GitHub Releases |
+| `NEXT_PUBLIC_DESKTOP_RELEASES_REPO` | ⚪ | để trống → `vieetjk01/Studio`; **phải là repo công khai** |
 | `NEXT_PUBLIC_GOOGLE_API_KEY` | 🟢 | |
 | `NEXT_PUBLIC_GOOGLE_APP_ID` | 🟢 | |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 🟢 | |
@@ -315,6 +316,7 @@ thông báo phải đăng ký lại**. Cố lấy đúng cặp cũ; mất hẳn 
 | `IMG_CDN_REDIRECT` | **tối ưu băng thông BẬT** (mặc định) | **để trống** ⚠️ xem cảnh báo dưới |
 | `DESKTOP_LATEST_VERSION` | app desktop tưởng bản mới nhất là `0.1.0` → không nhắc cập nhật | điền số phiên bản hiện tại, hoặc để trống |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | nút tải rơi về trang GitHub Releases | để trống được |
+| `NEXT_PUBLIC_DESKTOP_RELEASES_REPO` | dùng `vieetjk01/Studio` (repo cũ, công khai) | **để trống** cho tới khi có repo công khai mới chứa bản cài |
 | `VERCEL_PROJECT_ID` | tính năng "studio gắn tên miền riêng" chỉ **lưu domain + chỉ dẫn DNS thủ công**, không tự đăng ký | project MỚI → Settings → General → Project ID *(giữ project cũ thì giữ nguyên)* |
 | `VERCEL_TOKEN` 🔒 | như trên | vercel.com/account/tokens → tạo token mới (token cũ vẫn sống) |
 | `VERCEL_TEAM_ID` | như trên | **để trống** nếu là tài khoản cá nhân |

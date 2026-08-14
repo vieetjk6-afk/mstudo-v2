@@ -842,8 +842,11 @@ window.printContract = async function (id) {
 // mốc thời gian: cài lỗi vẫn còn phát hiện, cài xong app mới có version khớp nên
 // không lặp.)
 const RELEASE_TAG = "desktop-dev";
-const RELEASE_API = `https://api.github.com/repos/vieetjk01/Studio/releases/tags/${RELEASE_TAG}`;
-const RELEASE_PAGE = `https://github.com/vieetjk01/Studio/releases/tags/${RELEASE_TAG}`;
+// Repo chứa bản cài. Giữ repo CŨ vì nó công khai — GitHub API chỉ đọc được
+// release của repo công khai mà không cần đăng nhập. Đổi ở ĐÚNG một dòng này.
+const RELEASE_REPO = "vieetjk01/Studio";
+const RELEASE_API = `https://api.github.com/repos/${RELEASE_REPO}/releases/tags/${RELEASE_TAG}`;
+const RELEASE_PAGE = `https://github.com/${RELEASE_REPO}/releases/tags/${RELEASE_TAG}`;
 let _updateUrl = "";
 const parseVer = (name) => { const m = /(\d+\.\d+\.\d+)/.exec(name || ""); return m ? m[1] : ""; };
 // So sánh phiên bản kiểu semver: >0 nếu a mới hơn b.

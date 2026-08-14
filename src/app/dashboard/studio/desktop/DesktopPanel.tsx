@@ -26,6 +26,13 @@ const fmtTime = (s: string | null) => {
   return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
 
+// Repo chứa GitHub Releases của bản cài desktop. Mặc định vẫn là repo CŨ vì nó
+// CÔNG KHAI: mstudo-v2 là repo riêng tư, nên cả trang Releases lẫn GitHub API của
+// nó đều trả 404 cho trình duyệt của studio. Khi nào có repo công khai mới cho
+// bản cài thì đặt NEXT_PUBLIC_DESKTOP_RELEASES_REPO, không phải sửa code.
+const RELEASES_REPO = process.env.NEXT_PUBLIC_DESKTOP_RELEASES_REPO || "vieetjk01/Studio";
+const RELEASES_PAGE = `https://github.com/${RELEASES_REPO}/releases`;
+
 export default function DesktopPanel() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [migrated, setMigrated] = useState(true);
@@ -42,7 +49,6 @@ export default function DesktopPanel() {
   // Link tải: mặc định là env cấu hình sẵn, nếu trống thì trang Releases. Sau đó
   // tự lấy file .exe MỚI NHẤT trực tiếp từ GitHub (kênh desktop-dev — cùng nguồn
   // bộ tự cập nhật đọc) để nút luôn ra link .exe đúng bản mới, không phụ thuộc env.
-  const RELEASES_PAGE = "https://github.com/vieetjk01/Studio/releases";
   const [dl, setDl] = useState<{ url: string; ver: string | null }>({
     url: process.env.NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL || RELEASES_PAGE,
     ver: null,
@@ -51,7 +57,7 @@ export default function DesktopPanel() {
     let alive = true;
     (async () => {
       try {
-        const r = await fetch("https://api.github.com/repos/vieetjk01/Studio/releases/tags/desktop-dev", {
+        const r = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/tags/desktop-dev`, {
           headers: { Accept: "application/vnd.github+json" },
         });
         if (!r.ok) return;
