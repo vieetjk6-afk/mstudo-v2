@@ -27,6 +27,21 @@ export function pickOriginalLinks(sources: readonly SourceRow[]): DriveFolderLin
 }
 
 /**
+ * Chỉ những nguồn là THƯ MỤC Drive — dùng cho nút "Tải ảnh từ Drive" ở album
+ * chọn ảnh của khách.
+ *
+ * Khác `pickOriginalLinks` ở chỗ không nhận link file lẻ: `stage` mặc định là
+ * 'selection' cho mọi nguồn, nên nếu nhận cả link file thì một album ghép từ 30
+ * ảnh lẻ sẽ đẻ ra menu 30 dòng — trong khi lời hứa của nút là "mở thư mục, lưu
+ * cả loạt". Không có thư mục nào thì không hiện nút, đúng hơn là hiện nút sai.
+ */
+export function pickFolderLinks(sources: readonly SourceRow[]): DriveFolderLink[] {
+  return sources
+    .filter((x) => !!x.drive_url && x.kind === "folder")
+    .map((x) => ({ name: x.name || "Thư mục ảnh", url: x.drive_url as string }));
+}
+
+/**
  * Link Drive "file gốc" của giai đoạn chọn ảnh (JPG Goc), hiển thị bên trong
  * album giai đoạn hoàn thiện (giao khách) để khách có thể lấy file gốc.
  *

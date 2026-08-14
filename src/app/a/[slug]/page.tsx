@@ -7,6 +7,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import Brand from "@/components/Brand";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { getStudioBrand } from "@/lib/studio-brand";
+import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
@@ -142,6 +143,9 @@ export default async function PublicAlbumPage({
 
   let photos = null;
   let sources = null;
+  // Link thư mục Drive của chính album này — nút "Tải ảnh từ Drive" cho khách.
+  // Google tự nén và tự phục vụ nên không byte nào đi qua Vercel/Supabase.
+  let driveFolders: DriveFolderLink[] = [];
   let selected: string[] = [];
   let disliked: string[] = [];
   let notes: Record<string, string> = {};
@@ -150,7 +154,7 @@ export default async function PublicAlbumPage({
       fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position"),
       admin
         .from("album_sources")
-        .select("id, name, position, stage")
+        .select("id, name, position, stage, drive_url, kind")
         .eq("album_id", album.id)
         .order("position"),
       admin
@@ -171,7 +175,11 @@ export default async function PublicAlbumPage({
     const selSourceIds = new Set(selSources.map((x) => x.id));
     const filtered = (p ?? []).filter((ph) => !ph.source_id || selSourceIds.has(ph.source_id));
     photos = filtered.length > 0 ? filtered : (p ?? []);
-    sources = (filtered.length > 0 ? selSources : (s ?? [])).map(({ id, name, position }) => ({ id, name, position }));
+    const shown = filtered.length > 0 ? selSources : (s ?? []);
+    sources = shown.map(({ id, name, position }) => ({ id, name, position }));
+    // Chỉ khi studio cho phép tải — link thư mục mở ra CẢ album, nên nó phải
+    // theo đúng quyền tải như nút tải từng ảnh.
+    if (allowDownload) driveFolders = pickFolderLinks(shown);
     selected = (sel ?? []).map((r) => r.photo_id);
     disliked = (dis ?? []).map((r) => r.photo_id);
     for (const r of sel ?? []) if (r.client_note) notes[r.photo_id] = r.client_note;
@@ -198,6 +206,7 @@ export default async function PublicAlbumPage({
       initialDisliked={disliked}
       initialNotes={notes}
       shareIds={shareIds}
+      initialDriveFolders={driveFolders}
       studioName={studioName}
       logoUrl={brand.logoUrl}
     />

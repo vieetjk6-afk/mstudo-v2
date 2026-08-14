@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { limitByIpDurable } from "@/lib/rate-limit";
+import { pickFolderLinks } from "@/lib/album-original";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function POST(
 
   const { data: album } = await admin
     .from("albums")
-    .select("id, status, password_hash")
+    .select("id, owner_id, status, password_hash, download_enabled")
     .eq("slug", params.slug)
     .single();
 
@@ -47,9 +48,22 @@ export async function POST(
 
   const { data: sources } = await admin
     .from("album_sources")
-    .select("id, name, position")
+    .select("id, name, position, stage, drive_url, kind")
     .eq("album_id", album.id)
     .order("position");
+
+  // Link thư mục Drive — chỉ trả về khi studio cho phép khách tải, vì link mở ra
+  // CẢ album. Cùng quy tắc quyền với src/app/a/[slug]/page.tsx.
+  const { data: owner } = await admin
+    .from("profiles")
+    .select("role, can_zip")
+    .eq("id", album.owner_id)
+    .maybeSingle();
+  const allowDownload =
+    (owner?.role === "admin" || !!owner?.can_zip) && album.download_enabled !== false;
+  const driveFolders = allowDownload
+    ? pickFolderLinks((sources ?? []).filter((x) => x.stage !== "delivery"))
+    : [];
 
   const [{ data: sel }, { data: dis }] = await Promise.all([
     admin.from("selections").select("photo_id, client_note").eq("album_id", album.id),
@@ -63,7 +77,8 @@ export async function POST(
 
   return NextResponse.json({
     photos: photos ?? [],
-    sources: sources ?? [],
+    sources: (sources ?? []).map(({ id, name, position }) => ({ id, name, position })),
+    driveFolders,
     selected,
     disliked,
     notes,

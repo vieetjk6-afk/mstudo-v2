@@ -96,6 +96,14 @@ export const dict: Dict = {
   copyList: { vi: "Copy danh sách (không đuôi)", en: "Copy list (no extension)" },
   copied: { vi: "Đã copy!", en: "Copied!" },
   downloadPhoto: { vi: "Tải ảnh", en: "Download photo" },
+  driveFolder: { vi: "Tải ảnh từ Drive", en: "Download from Drive" },
+  driveFolderPick: { vi: "Tải ảnh từ Drive", en: "Download from Drive" },
+  // Gợi ý cho khách dùng điện thoại: nhấn giữ ảnh là Safari/Chrome lưu thẳng
+  // vào thư viện Ảnh của máy — không tốn thêm băng thông, vì ảnh đã tải sẵn.
+  saveToPhotosHint: {
+    vi: "Nhấn giữ ảnh → “Thêm vào Ảnh” để lưu về máy",
+    en: "Press and hold the photo → “Add to Photos” to save it",
+  },
   preparingZip: { vi: "Đang nén ảnh…", en: "Preparing ZIP…" },
   yourName: { vi: "Tên của bạn (tuỳ chọn)", en: "Your name (optional)" },
   submitSelection: { vi: "Gửi lựa chọn cho photographer", en: "Send selection to photographer" },

@@ -26,6 +26,7 @@ import { useLang } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { triggerDownload, downloadImage } from "@/lib/download";
+import DriveFolderLinks, { type DriveFolder } from "@/components/DriveFolderLinks";
 
 interface PublicPhoto {
   id: string;
@@ -64,6 +65,7 @@ export default function CustomerAlbum({
   initialDisliked,
   initialNotes,
   shareIds,
+  initialDriveFolders,
   studioName = "Studio",
   logoUrl = null,
 }: {
@@ -74,6 +76,7 @@ export default function CustomerAlbum({
   initialDisliked?: string[];
   initialNotes?: Record<string, string>;
   shareIds?: string[] | null;
+  initialDriveFolders?: DriveFolder[];
   studioName?: string;
   logoUrl?: string | null;
 }) {
@@ -82,6 +85,9 @@ export default function CustomerAlbum({
   const [unlocked, setUnlocked] = useState(!album.hasPassword);
   const [photos, setPhotos] = useState<PublicPhoto[]>(initialPhotos ?? []);
   const [sources, setSources] = useState<PublicSource[]>(initialSources ?? []);
+  // Link thư mục Drive của album. Album có mật khẩu thì server chưa trả về gì
+  // cho tới khi mở khoá, nên nhận thêm ở bước unlock().
+  const [driveFolders, setDriveFolders] = useState<DriveFolder[]>(initialDriveFolders ?? []);
 
   const [password, setPassword] = useState("");
   const [pwError, setPwError] = useState(false);
@@ -315,6 +321,7 @@ export default function CustomerAlbum({
     const data = await res.json();
     setPhotos(data.photos ?? []);
     setSources(data.sources ?? []);
+    setDriveFolders(data.driveFolders ?? []);
     const sel = new Set<string>(data.selected ?? []);
     const dis = new Set<string>(data.disliked ?? []);
     selectedRef.current = sel;
@@ -710,6 +717,16 @@ export default function CustomerAlbum({
             ) : null}
           </span>
 
+          {/* Tải cả album từ Drive. Ẩn ở chế độ chia sẻ chọn lọc: link Drive mở
+              CẢ thư mục nên sẽ lộ toàn album chứ không riêng mấy ảnh được chia sẻ. */}
+          {!shareMode && album.allowDownload && driveFolders.length > 0 && (
+            <DriveFolderLinks
+              folders={driveFolders}
+              label={t("driveFolderPick")}
+              labelOne={t("driveFolder")}
+              className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px] text-[var(--text)] transition-colors"
+            />
+          )}
           {!shareMode && selected.size > 0 && (
             <ToolButton onClick={copyList}>
               {copied ? <Check size={14} /> : <Copy size={14} />} {t("copyList")}
@@ -1038,6 +1055,19 @@ export default function CustomerAlbum({
                   </div>
                 )}
               </div>
+              {/* Điện thoại: nhấn giữ ảnh là Safari/Chrome lưu thẳng vào thư
+                  viện Ảnh của máy — không tốn thêm băng thông vì ảnh đã tải sẵn.
+                  Chỉ hiện trên máy cảm ứng (hover:none) và khi album KHÔNG bật
+                  watermark: watermark là lớp phủ, nhấn giữ sẽ lấy được ảnh sạch
+                  nên thao tác đó đang bị chặn có chủ đích. */}
+              {album.allowDownload && !wm && (
+                <p
+                  className="pointer-events-none absolute inset-x-0 bottom-1 hidden px-4 text-center text-[11.5px] [@media(hover:none)]:block"
+                  style={{ color: "rgba(255,255,255,.55)" }}
+                >
+                  {t("saveToPhotosHint")}
+                </p>
+              )}
               <button
                 onClick={() => setLbIdx(Math.min(visiblePhotos.length - 1, lbIdx + 1))}
                 disabled={lbIdx >= visiblePhotos.length - 1}
