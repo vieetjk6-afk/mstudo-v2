@@ -3,9 +3,120 @@
 Dùng cho bước **A3** của [`chuyen-doi-mstudo-2.0.md`](./chuyen-doi-mstudo-2.0.md):
 nạp biến từ Vercel CŨ sang Vercel MỚI.
 
-Bảng dưới đối chiếu **danh sách thật ở Vercel cũ** với **code hiện tại**, nên nó
-chính xác hơn `.env.example` (file mẫu có vài biến chưa bao giờ được dùng, và
-thiếu vài biến bản cũ đang chạy).
+Bảng dưới đối chiếu **danh sách thật ở Vercel cũ** với **code hiện tại**.
+`.env.example` liệt kê đúng 50 biến này kèm chú thích kỹ thuật, nhưng nó không
+nói biến nào **phải đổi** khi chuyển — đó là việc của file này.
+
+> 💡 **Không muốn động vào biến nào cả?** Có cách: giữ nguyên project Vercel cũ,
+> chỉ đổi repo nguồn của nó. Khi đó bạn chỉ sửa **3 khoá Supabase + thêm
+> `CRON_SECRET`**, 28 biến còn lại nằm yên tại chỗ và **cả chương 7 dưới đây trở
+> nên thừa**. Xem [`cach-don-gian-nhat.md`](./cach-don-gian-nhat.md).
+
+---
+
+# 0. Bảng tra 1 phút — cả 50 biến trong một bảng
+
+Cột **Xử lý** đọc thế này:
+
+| Ký hiệu | Nghĩa |
+|---|---|
+| 🔴 | **phải đổi giá trị** — chép nguyên là hỏng âm thầm |
+| 🆕 | **tạo mới** — bản cũ không có |
+| 🟢 | **chép nguyên si** từ Vercel cũ |
+| ⚪ | **bản cũ không có** — cứ để trống, tính năng đó vốn đã tắt |
+
+| Biến | Xử lý | Ghi chú |
+|---|---|---|
+| `CHAT_PROVIDERS` | 🟢 | mất cũng được — xem 7.6 |
+| `CRON_SECRET` | 🆕 | mục 2 |
+| `DESKTOP_LATEST_VERSION` | 🟢 | |
+| `DESKTOP_UPDATE_NOTE` | ⚪ | mô tả ngắn bản desktop mới, tuỳ chọn |
+| `DRIVE_IMG_CACHE_BUCKET` | ⚪ | **nên để trống** — bucket này làm vượt hạn mức Supabase cũ |
+| `DRIVE_IMG_CACHE_MAX_AGE_DAYS` | ⚪ | như trên |
+| `DRIVE_IMG_CACHE_MAX_BYTES` | ⚪ | như trên |
+| `DRIVE_IMG_CACHE_MAX_WIDTH` | ⚪ | như trên |
+| `DRIVE_IMG_CACHE_ORIGINALS` | ⚪ | như trên |
+| `EMAIL_FROM` | ⚪ | đi cặp với `RESEND_API_KEY` |
+| `GEMINI_API_KEY` | 🟢 | 🔒 |
+| `GEMINI_MODEL` | ⚪ | thiếu thì dùng model mặc định trong code |
+| `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | 🟢 | tên miền không đổi → giữ nguyên |
+| `GOOGLE_API_KEY` | 🟢 | 🔒 |
+| `GOOGLE_API_REFERER` | 🟢 | |
+| `GOOGLE_CALENDAR_REDIRECT_URI` | 🟢 | giữ nguyên |
+| `GOOGLE_CLIENT_SECRET` | 🟢 | 🔒 đừng Reset khi bản cũ còn chạy — xem 7.3 |
+| `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | 🟢 | giữ nguyên |
+| `GOOGLE_STORY_REDIRECT_URI` | 🟢 | giữ nguyên |
+| `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | 🟢 | giữ nguyên |
+| `IMG_CDN_REDIRECT` | 🟢 | |
+| `NEXT_PUBLIC_ADMIN_HOST` | 🟢 | `admin.mstudo.com` |
+| `NEXT_PUBLIC_APP_HOST` | ⚪ | đã ngừng dùng |
+| `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | 🟢 | |
+| `NEXT_PUBLIC_GOOGLE_API_KEY` | 🟢 | |
+| `NEXT_PUBLIC_GOOGLE_APP_ID` | 🟢 | |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 🟢 | |
+| `NEXT_PUBLIC_IMG_HOST` | 🟢 | `img.mstudo.com` |
+| `NEXT_PUBLIC_MAIN_HOST` | 🟢 | `mstudo.com` |
+| `NEXT_PUBLIC_STUDIO_HOST` | 🟢 | thường là `mstudo.com` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 🔴 | của Supabase **MỚI** |
+| `NEXT_PUBLIC_SUPABASE_URL` | 🔴 | của Supabase **MỚI** |
+| `NEXT_PUBLIC_THIEP_HOST` | 🟢 | `thiep.mstudo.com` |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | ⚪ | không có captcha ở form công khai |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 🟢 | đi **theo cặp** với khoá riêng — xem 7.5 |
+| `OAUTH_STATE_SECRET` | 🟢 | 🔒 mất thì tự đặt chuỗi mới, không sao |
+| `RESEND_API_KEY` | ⚪ | không khai thì không gửi được email |
+| `SUPABASE_SERVICE_ROLE_KEY` | 🔴 | 🔒 của Supabase **MỚI** |
+| `TURNSTILE_SECRET_KEY` | ⚪ | |
+| `UPSTASH_REDIS_REST_TOKEN` | ⚪ | không giới hạn tần suất gọi |
+| `UPSTASH_REDIS_REST_URL` | ⚪ | như trên |
+| `VAPID_PRIVATE_KEY` | 🟢 | 🔒 không lấy lại được từ đâu — xem 7.5 |
+| `VAPID_SUBJECT` | 🟢 | dạng `mailto:…` |
+| `VERCEL_PROJECT_ID` | 🔴 | ID của project **MỚI** *(giữ project cũ thì 🟢)* |
+| `VERCEL_TEAM_ID` | 🟢 | để trống nếu là tài khoản cá nhân |
+| `VERCEL_TOKEN` | 🟢 | 🔒 tạo token mới cũng được |
+| `ZALO_OA_APP_ID` | ⚪ | kênh Zalo OA tắt (kênh cá nhân vẫn chạy) |
+| `ZALO_OA_APP_SECRET` | ⚪ | 🔒 |
+| `ZALO_OA_REDIRECT_URI` | ⚪ | |
+| `ZALO_SESSION_SECRET` | ⚪ | |
+
+Đó là **toàn bộ** biến mà code đọc. Danh sách này lấy thẳng từ code
+(`grep process.env.` trên `src/` + `next.config.mjs`), không phải chép tay.
+
+## 0.1. Hai câu hỏi hay gặp nhất
+
+**"Hướng dẫn nhắc biến này mà Vercel cũ không có."**
+
+Bình thường, không phải bạn tìm sót. Mọi biến ⚪ trong bảng trên là **tính năng
+chưa bao giờ được bật** ở bản cũ. Bỏ qua, app chạy đúng như trước giờ. Đúng
+**32 biến** 🟢🔴🆕 là những thứ bản cũ thật sự có.
+
+**"Vercel cũ có biến mà hướng dẫn không nhắc."**
+
+Có 3 nhóm, đều **không cần chép**:
+
+| Thấy tên dạng | Là gì | Làm gì |
+|---|---|---|
+| `VERCEL`, `VERCEL_ENV`, `VERCEL_URL`, `VERCEL_REGION`, `VERCEL_TARGET_ENV`, `VERCEL_OIDC_TOKEN`, `VERCEL_GIT_*` | Vercel tự tiêm mỗi lần build | bỏ qua — Vercel còn từ chối cho bạn khai tay |
+| `TURBO_*`, `NX_*` | hệ thống build tự quản | bỏ qua |
+| `NEXT_PUBLIC_MAIN_URL`, `NEXT_PUBLIC_STUDIO_URL`, `NEXT_PUBLIC_SUPABASE_KEY`, `SUPABASE_SERVICE_KEY` | tên biến đời trước, code hiện tại không đọc | bỏ qua |
+
+Còn thấy tên nào khác **không có trong bảng mục 0**: code không đọc nó. Chép sang
+cũng không sao (biến thừa vô hại), không chép cũng không sao.
+
+> **Nguyên tắc cho đỡ căng thẳng:** chép thừa một biến thì **không hỏng gì**;
+> chép thiếu hoặc chép sai giá trị mới hỏng. Nên khi phân vân — cứ chép.
+
+## 0.2. Cách nhanh nhất: dán cả gói một lượt
+
+Không cần gõ 32 lần. Ô **Value** của Vercel nhận **cả một khối nhiều dòng** dạng
+`KEY=VALUE` và tự tách thành từng biến riêng:
+
+1. Kéo biến cũ về máy thành `.env.old` (xem "Kéo biến từ Vercel CŨ" ở A3).
+2. Mở `.env.old` bằng Notepad. **Xoá** những dòng thuộc 3 nhóm ở mục 0.1 và
+   **xoá dấu nháy kép** ở hai đầu giá trị nếu có.
+3. Sửa 3 dòng Supabase thành giá trị của project MỚI, thêm một dòng `CRON_SECRET=…`.
+4. Copy toàn bộ nội dung còn lại → Vercel MỚI → Settings → Environment Variables
+   → dán vào ô **Value** → tick **Production + Preview + Development** → **Save**.
+5. Kiểm tra lại danh sách vừa tạo, rồi **deploy một bản mới**.
 
 ---
 

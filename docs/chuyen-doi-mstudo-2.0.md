@@ -7,6 +7,13 @@ Việc cần làm: đưa `mstudo.com` từ **Vercel cũ + Supabase cũ** (repo
 `vieetjk01/Studio`) sang **Vercel mới + Supabase mới + GitHub mới** (repo này,
 nhánh `main`), đồng thời chuyển tên miền về **Cloudflare** quản lý DNS.
 
+> 💡 **Có cách ngắn hơn.** Tài liệu này dựng một project Vercel **mới** rồi kéo
+> tên miền sang — nên mới dài. Nếu bạn không cần rời tài khoản Vercel cũ, có thể
+> **giữ nguyên project cũ và chỉ đổi repo nguồn của nó**: khỏi Phần 0, khỏi đổi
+> DNS, khỏi chép 32 biến, khỏi thêm lại domain riêng của khách — chỉ sửa 3 khoá
+> Supabase. Phần chép dữ liệu (B4–B8) thì giống hệt. Xem
+> [`cach-don-gian-nhat.md`](./cach-don-gian-nhat.md) rồi hãy quyết định.
+
 ## Những gì đã chốt
 
 - Code bản cũ (12 commit ngày 07/08) **đã gộp xong** vào `main`. Không còn gì
@@ -217,9 +224,11 @@ Cả hai phải ra `1`.
 
 ## A3. Biến môi trường cho Vercel MỚI
 
-> 📖 **Bảng tra từng biến** — công dụng, cách lấy giá trị, thêm ở đâu, biến nào
-> phải bỏ: [`bien-moi-truong.md`](./bien-moi-truong.md). Mục dưới đây chỉ tóm
-> tắt; khi ngồi làm thật thì mở file kia.
+> 📖 **Bảng tra từng biến** — cả 50 biến trong một bảng, kèm cách xử lý từng cái:
+> [`bien-moi-truong.md` mục 0](./bien-moi-truong.md#0-bảng-tra-1-phút--cả-50-biến-trong-một-bảng).
+> Ở đó cũng trả lời hai câu hay gặp: *"biến này Vercel cũ không có"* và *"Vercel
+> cũ có biến hướng dẫn không nhắc"*. Mục dưới đây chỉ tóm tắt; khi ngồi làm thật
+> thì mở file kia.
 
 Phần lớn copy nguyên từ Vercel cũ, nhưng có một nhóm bắt buộc phải sửa — copy
 nhầm thì bản mới vẫn ghi vào Supabase cũ, hỏng âm thầm. Ngoài ra có nhóm **phải
@@ -232,7 +241,8 @@ Có hai cách. Cách nào cũng được, chọn theo việc bạn có muốn c�
 #### Cách 1 — không cần cài gì
 
 Vercel CŨ → project → Settings → Environment Variables. Bấm vào từng biến để
-hiện giá trị rồi copy. 36 biến nên hơi lâu, nhưng không phải cài phần mềm nào.
+hiện giá trị rồi copy. Khoảng 32 biến nên hơi lâu, nhưng không phải cài phần mềm
+nào.
 
 #### Cách 2 — CLI, lấy cả gói một lần
 
@@ -274,21 +284,31 @@ Notepad/TextEdit là đọc được.
 Vercel MỚI → project → Settings → Environment Variables → thêm từng biến, tick
 đủ **Production + Preview + Development**.
 
+> ⚡ Nhanh hơn: ô **Value** nhận **cả khối nhiều dòng** dạng `KEY=VALUE` — dán
+> nguyên nội dung `.env.old` một lượt, Vercel tự tách thành từng biến. Nhớ xoá
+> dấu nháy kép ở hai đầu giá trị (file `.env.old` ghi `KEY="…"`), và xoá các
+> dòng `VERCEL_*` hệ thống / `TURBO_*` / `NX_*` trước khi dán. Chi tiết ở
+> [`bien-moi-truong.md` mục 0.2](./bien-moi-truong.md#02-cách-nhanh-nhất-dán-cả-gói-một-lượt).
+
 ### Những biến BẮT BUỘC phải sửa
+
+Đúng **bốn** biến. Mọi biến còn lại chép nguyên si.
 
 | Biến | Giá trị mới |
 |---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | Project URL của Supabase **MỚI** |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | khoá `anon public` của Supabase **MỚI** |
 | `SUPABASE_SERVICE_ROLE_KEY` | khoá `service_role` của Supabase **MỚI** |
-| `GOOGLE_ADMIN_DRIVE_REDIRECT_URI` | đổi host sang tên miền/URL bản mới |
-| `GOOGLE_FILTER_DRIVE_REDIRECT_URI` | như trên |
-| `GOOGLE_STORY_REDIRECT_URI` | như trên |
-| `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | như trên |
-| `ZALO_OA_REDIRECT_URI` | như trên |
+| `VERCEL_PROJECT_ID` | Project ID của Vercel **MỚI** (Settings → General) |
 
-Bốn biến `NEXT_PUBLIC_*_HOST` (`MAIN`, `IMG`, `ADMIN`, `THIEP`) giữ nguyên giá
-trị như bản cũ, vì tên miền không đổi. `NEXT_PUBLIC_APP_HOST` đã ngừng dùng.
+`VERCEL_PROJECT_ID` sai thì tính năng "studio gắn tên miền riêng" đăng ký domain
+nhầm vào project cũ — hỏng âm thầm, rất khó lần ra.
+
+**Không** phải sửa 5 URI callback (`GOOGLE_*_REDIRECT_URI`,
+`GOOGLE_CALENDAR_REDIRECT_URI`) hay `ZALO_OA_REDIRECT_URI`: chúng trỏ về
+`https://mstudo.com/…`, mà tên miền thì không đổi. Chỉ sửa nếu giá trị cũ đang
+trỏ về một host khác. Bốn biến `NEXT_PUBLIC_*_HOST` (`MAIN`, `IMG`, `ADMIN`,
+`THIEP`) cũng giữ nguyên. `NEXT_PUBLIC_APP_HOST` đã ngừng dùng.
 
 ### Biến dễ quên nhất: `CRON_SECRET`
 
@@ -552,9 +572,24 @@ Lệch dòng nào thì quay lại B6 chạy tiếp, **đừng cắt tên miền*
 
 ## B9. Cắt tên miền sang Vercel mới
 
+> ⚠️ **Đừng quên domain riêng của studio khách.** Ngoài các miền hệ thống, app
+> tự thêm domain riêng của từng studio vào project Vercel qua API — chúng đang
+> nằm ở **project cũ** và không tự sang. Liệt kê trước bằng SQL (chạy trên
+> Supabase, project nào cũng được vì dữ liệu đã chép xong):
+>
+> ```sql
+> select custom_domain, custom_domain_verified
+> from public.sites
+> where custom_domain is not null
+> order by custom_domain;
+> ```
+>
+> Mỗi dòng phải được gỡ khỏi Vercel CŨ và thêm vào Vercel MỚI, y như
+> `mstudo.com`. Bỏ sót là website của studio đó chết mà không ai báo.
+
 1. **Vercel MỚI** → project → Settings → Domains → **Add** `mstudo.com`. Thêm
-   luôn `www.mstudo.com` và các subdomain đang dùng (`img`, `admin`, `thiep`) và
-   `*.mstudo.com`.
+   luôn `www.mstudo.com`, các subdomain đang dùng (`img`, `admin`, `thiep`),
+   `*.mstudo.com`, **và mọi domain riêng ở câu SQL trên**.
 2. Vercel hiện ra giá trị DNS cần đặt. **Dùng đúng giá trị Vercel hiển thị** —
    đừng chép giá trị từ bài hướng dẫn nào trên mạng, Vercel có đổi theo thời gian.
 3. **Vercel CŨ** → Settings → Domains → **xoá** `mstudo.com` khỏi project cũ.

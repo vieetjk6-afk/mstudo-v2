@@ -1,5 +1,11 @@
 # Chuyển từ Vercel cũ sang Vercel mới
 
+> ⛔ **File này đã cũ.** Bản đang dùng là
+> [`chuyen-doi-mstudo-2.0.md`](./chuyen-doi-mstudo-2.0.md) (có thêm phần
+> Cloudflare và phần chép dữ liệu). Trước đó hãy đọc
+> [`cach-don-gian-nhat.md`](./cach-don-gian-nhat.md) để xem có cần dựng project
+> Vercel mới không. Giữ file này chỉ để tham khảo.
+
 Hướng dẫn dời **toàn bộ** phần đang chạy trên project Vercel cũ (mstudo bản
 production) sang project Vercel mới của repo `mstudo-v2`: biến môi trường, tên
 miền, cron, domain riêng của từng studio, và các nơi khai báo callback.
