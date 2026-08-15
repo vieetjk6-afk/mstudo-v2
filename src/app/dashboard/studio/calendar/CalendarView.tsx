@@ -565,23 +565,37 @@ export default function CalendarView({
                       {/* Ô ngày in TÊN HỢP ĐỒNG rồi tới gói/hạng mục — đó mới là
                           thứ phân biệt hai buổi trong cùng một ngày. Tên khách
                           vẫn còn trong tooltip và trong thẻ chi tiết. */}
+                      {/* Tô theo MÀU ĐÃ CHỌN của từng hợp đồng (calendar_color),
+                          không theo trạng thái: chọn màu ở thẻ chi tiết mà lịch
+                          tháng vẫn một màu thì việc chọn màu vô nghĩa, và nhiều
+                          buổi cùng trạng thái trong tháng nhìn y hệt nhau.
+                          Trạng thái vẫn đọc được qua chấm tròn nhỏ đầu dòng —
+                          đúng bốn màu ở chú giải trên đầu màn. */}
                       {cons.slice(0, 3).map((c) => {
                         const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
+                        const mc = c.calendar_color || DEFAULT_MARK;
                         const goi = c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` x${it.qty}` : ""}`).join(", ");
                         return (
                           <Link
                             key={c.id}
                             href={`/dashboard/studio/contracts/${c.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="block rounded-[6px] px-1.5 py-[3px]"
-                            style={{ background: tone.bg, color: tone.fg }}
-                            title={`${c.title}${c.client_name ? ` · ${c.client_name}` : ""}${goi ? ` · ${goi}` : ""}`}
+                            className="block rounded-[6px] py-[3px] pl-1.5 pr-1.5"
+                            style={{
+                              background: `color-mix(in srgb, ${mc} 20%, transparent)`,
+                              color: mc,
+                              borderLeft: `3px solid ${mc}`,
+                            }}
+                            title={`${c.title}${c.client_name ? ` · ${c.client_name}` : ""}${goi ? ` · ${goi}` : ""} · ${CONTRACT_STATUS_LABEL[(c.status as ContractStatus)] ?? c.status}`}
                           >
-                            <span className="block truncate text-[11px] font-semibold">
-                              {c.event_time ? `${c.event_time} ` : ""}{c.title}
+                            <span className="flex items-center gap-1">
+                              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: tone.fg }} />
+                              <span className="truncate text-[11px] font-semibold">
+                                {c.event_time ? `${c.event_time} ` : ""}{c.title}
+                              </span>
                             </span>
                             {goi && (
-                              <span className="block truncate text-[10px]" style={{ opacity: 0.75 }}>{goi}</span>
+                              <span className="block truncate text-[10px]" style={{ opacity: 0.8 }}>{goi}</span>
                             )}
                           </Link>
                         );
@@ -1018,7 +1032,9 @@ function DayView({
             const crew = (c.contract_crew || []).filter((x) => x.status !== "declined");
             const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
             return (
-              <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="flex gap-3.5 rounded-[14px] px-[17px] py-[15px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)", borderLeft: `3px solid ${tone.fg}` }}>
+              // Vạch bên trái theo MÀU ĐÃ CHỌN của hợp đồng, giống lịch tháng và
+              // lịch tuần. Trạng thái đã có pill chữ ở lề phải nên không mất gì.
+              <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="flex gap-3.5 rounded-[14px] px-[17px] py-[15px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)", borderLeft: `3px solid ${c.calendar_color || DEFAULT_MARK}` }}>
                 <div className="flex-none pr-3.5 text-center" style={{ borderRight: "1px solid var(--bd2)" }}>
                   <p className="tnum text-[15px] font-bold">{c.event_time || "--:--"}</p>
                   <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{SHOOT_TYPE_LABEL[c.shoot_type]}</p>
