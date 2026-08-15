@@ -401,6 +401,7 @@ export default function UpgradePage() {
               <th className="px-3 py-3 text-center font-medium" style={{ minWidth: 84 }}>Miễn phí</th>
               <th className="px-3 py-3 text-center font-medium" style={{ minWidth: 84 }}>Basic</th>
               <th className="px-3 py-3 text-center font-medium" style={{ minWidth: 110 }}>Photographer</th>
+              <th className="px-3 py-3 text-center font-medium" style={{ minWidth: 110 }}>Photographer Plus</th>
               <th className="px-3 py-3 text-center font-medium" style={{ color: "var(--gold)", minWidth: 84 }}>Studio</th>
             </tr>
           </thead>
@@ -410,7 +411,7 @@ export default function UpgradePage() {
                 return (
                   <tr key={row.section}>
                     <td
-                      colSpan={5}
+                      colSpan={6}
                       className="px-4 pb-1.5 pt-4 text-[11px] font-bold uppercase tracking-wider"
                       style={{ color: "var(--gold)", borderTop: i === 0 ? "none" : "1px solid var(--border)", background: "color-mix(in srgb, var(--gold) 6%, transparent)" }}
                     >
@@ -425,6 +426,7 @@ export default function UpgradePage() {
                   <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.free)}</div></td>
                   <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.basic)}</div></td>
                   <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.photographer)}</div></td>
+                  <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.photographer_plus)}</div></td>
                   <td className="px-3 py-2"><div className="flex justify-center">{cellOf(row.studio)}</div></td>
                 </tr>
               );
