@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
-import { buildZip, triggerDownload } from "@/lib/download";
+import { triggerDownload } from "@/lib/download";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -332,22 +332,20 @@ export default function FilterTool({
     if (shown.length === 0) return;
     if (!(await ensureFilterUse())) return;
     setZipProgress(0);
-    if (photoSource === "local") {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-      for (const m of shown) {
-        const file = m.handle ? await m.handle.getFile() : m.file;
-        if (file) zip.file(m.name, file);
-      }
-      const blob = await zip.generateAsync({ type: "blob" }, (meta) => setZipProgress(Math.round(meta.percent)));
-      triggerDownload(blob, "loc-anh.zip");
-    } else {
-      const blob = await buildZip(
-        shown.map((f) => ({ fileId: f.driveId!, name: f.name })),
-        { watermark: null, onProgress: (d, tot) => setZipProgress(Math.round((d / tot) * 100)) }
-      );
-      triggerDownload(blob, "loc-anh.zip");
+    // Chỉ nén được ảnh ĐANG NẰM TRÊN MÁY. Nhánh cũ cho nguồn Drive gọi buildZip,
+    // tức kéo từng ảnh qua /api/img rồi mới nén — ZIP cần byte trong JS mà Drive
+    // không gửi header CORS nên không chuyển hướng thẳng sang Google được, thành
+    // ra mỗi lượt tải ngốn nguyên bộ ảnh của Fast Origin Transfer. Nguồn Drive
+    // giờ dùng "Copy sang Drive" bên dưới: chép thẳng file giữa hai thư mục, tốn
+    // 0 byte và nhanh hơn hẳn.
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    for (const m of shown) {
+      const file = m.handle ? await m.handle.getFile() : m.file;
+      if (file) zip.file(m.name, file);
     }
+    const blob = await zip.generateAsync({ type: "blob" }, (meta) => setZipProgress(Math.round(meta.percent)));
+    triggerDownload(blob, "loc-anh.zip");
     setZipProgress(null);
   }
 
@@ -601,9 +599,14 @@ export default function FilterTool({
             <button type="button" onClick={exportMatched} disabled={shown.length === 0} className="btn-ghost text-[13px] disabled:opacity-40">
               <FileText size={14} /> Xuất .txt
             </button>
-            <button type="button" onClick={zipMatched} disabled={shown.length === 0 || zipProgress !== null} className="btn-primary text-[13px] disabled:opacity-40">
-              <Download size={14} /> {zipProgress !== null ? `${zipProgress}%` : "Tải ZIP"}
-            </button>
+            {/* Chỉ hiện khi ảnh nằm trên MÁY. Nguồn Drive dùng "Copy sang Drive"
+                bên dưới — chép thẳng file giữa hai thư mục, không kéo ảnh về
+                trình duyệt nên tốn 0 byte băng thông và nhanh hơn nhiều. */}
+            {photoSource === "local" && (
+              <button type="button" onClick={zipMatched} disabled={shown.length === 0 || zipProgress !== null} className="btn-primary text-[13px] disabled:opacity-40">
+                <Download size={14} /> {zipProgress !== null ? `${zipProgress}%` : "Tải ZIP"}
+              </button>
+            )}
           </div>
         </div>
 
