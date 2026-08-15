@@ -511,16 +511,10 @@ export default function CalendarView({
               upcoming={upcomingAfterWeek}
             />
           </div>
-          <div className="hidden flex-col gap-3.5 min-[900px]:flex">
-            <WeekGrid weekDays={weekDays} todayStr={todayStr} eventsOn={eventsOn} contractsOn={contractsOn} />
-            <WeekAgenda
-              weekDays={weekDays}
-              todayStr={todayStr}
-              contractsOn={contractsOn}
-              eventsOn={eventsOn}
-              onColor={setContractColor}
-              upcoming={upcomingAfterWeek}
-            />
+          {/* Lưới giờ nay in đủ thông tin ngay trong ô ngày, nên danh sách chi
+              tiết bên dưới chỉ là bản lặp — đã bỏ. */}
+          <div className="hidden min-[900px]:block">
+            <WeekGrid weekDays={weekDays} todayStr={todayStr} eventsOn={eventsOn} contractsOn={contractsOn} onColor={setContractColor} />
           </div>
         </>
       ) : (
@@ -798,7 +792,7 @@ function WeekSwipe({
           const evs = eventsOn(d);
           const isToday = d === todayStr;
           return (
-            <div key={d} className="w-[86%] max-w-[420px] snap-start">
+            <div key={d} className="w-[36%] min-w-[128px] max-w-[300px] snap-start">
               <Panel className="min-w-0 px-4 py-3.5" >
                 <div className="flex items-baseline gap-2">
                   <h2 className="text-[14px] font-bold">{WD[i]} · {fmtDate(d)}</h2>
@@ -836,7 +830,7 @@ function WeekSwipe({
         })}
 
         {soBuoi === 0 && upcoming.length > 0 && (
-          <div className="w-[86%] max-w-[420px] snap-start">
+          <div className="w-[36%] min-w-[128px] max-w-[300px] snap-start">
             <Panel className="min-w-0 px-4 py-3.5">
               <h2 className="mb-1 text-[14px] font-bold">Buổi chụp sắp tới</h2>
               <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>Không nằm trong tuần này.</p>
@@ -856,94 +850,14 @@ function WeekSwipe({
   );
 }
 
-/* ── Chi tiết cả tuần, ngay dưới lưới giờ ───────────────────────────────────
-   Lưới tuần chỉ đủ chỗ cho tên khách trong một ô hẹp, muốn biết dịch vụ hay
-   hạng mục thì phải bấm vào từng buổi. Danh sách này in đủ thông tin của mọi
-   buổi trong tuần, xếp theo ngày, nên theo dõi cả tuần không cần mở gì. Ngày
-   trống bị bỏ qua để danh sách không loãng. */
-function WeekAgenda({
-  weekDays, todayStr, contractsOn, eventsOn, onColor, upcoming,
-}: {
-  weekDays: string[];
-  todayStr: string;
-  contractsOn: (d: string) => ContractMarker[];
-  eventsOn: (d: string) => EventRow[];
-  onColor: (id: string, color: string) => void;
-  /** Buổi chụp sau tuần này — chỉ dùng khi tuần đang xem không có gì. */
-  upcoming: ContractMarker[];
-}) {
-  const days = weekDays
-    .map((d) => ({ d, cons: contractsOn(d), evs: eventsOn(d) }))
-    .filter((x) => x.cons.length > 0 || x.evs.length > 0);
-  const soBuoi = days.reduce((n, x) => n + x.cons.length, 0);
-
-  if (days.length === 0) {
-    return (
-      <div className="flex max-w-[840px] flex-col gap-2.5">
-        <Panel>
-          <EmptyState icon={CalendarDays} title="Tuần này chưa có lịch" hint="Không có buổi chụp hay mốc lịch nào trong tuần — tuần trống để nhận job mới." />
-        </Panel>
-        {upcoming.length > 0 && (
-          <Panel className="min-w-0 px-5 py-4">
-            <h2 className="mb-1 text-[14px] font-bold">Buổi chụp sắp tới</h2>
-            <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-              Không nằm trong tuần này — {upcoming.length === 1 ? "buổi kế tiếp" : `${upcoming.length} buổi kế tiếp`}.
-            </p>
-            {upcoming.map((c) => (
-              <div key={c.id}>
-                <p className="mb-1 text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>
-                  {fmtDow(c.event_date)} · {fmtDate(c.event_date)}
-                </p>
-                <ContractDetailCard c={c} onColor={onColor} />
-              </div>
-            ))}
-          </Panel>
-        )}
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex max-w-[840px] flex-col gap-2.5">
-      <p className="px-1 text-[11.5px] font-semibold uppercase" style={{ letterSpacing: ".5px", color: "var(--tx3)" }}>
-        Chi tiết trong tuần · {soBuoi} buổi chụp
-      </p>
-      {days.map(({ d, cons, evs }) => (
-        <Panel key={d} className="min-w-0 px-5 py-4">
-          <h2 className="text-[14px] font-bold">
-            {fmtDow(d)} · {fmtDate(d)}
-            {d === todayStr && (
-              <span className="ml-2 rounded-[20px] px-2 py-0.5 text-[10.5px] font-bold" style={{ background: "var(--acS)", color: "var(--ac)" }}>hôm nay</span>
-            )}
-          </h2>
-          <p className="mb-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>{lunarFull(d)}</p>
-
-          {cons.map((c) => (
-            <ContractDetailCard key={c.id} c={c} onColor={onColor} />
-          ))}
-
-          {evs.map((e) => (
-            <div key={e.id} className="mb-2 flex items-start gap-2 rounded-[12px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
-              {e.remind ? <Bell size={13} style={{ flex: "none", marginTop: 3, color: "var(--bl)" }} /> : <BellOff size={13} style={{ flex: "none", marginTop: 3, color: "var(--tx3)" }} />}
-              <div className="min-w-0">
-                <p className="break-words text-[13px] font-semibold">{eventLabel(e)}{e.event_time ? ` · ${e.event_time}` : ""}</p>
-                {e.note && <p className="break-words text-[11.5px]" style={{ color: "var(--tx3)" }}>{e.note}</p>}
-              </div>
-            </div>
-          ))}
-        </Panel>
-      ))}
-    </div>
-  );
-}
-
 function WeekGrid({
-  weekDays, todayStr, eventsOn, contractsOn,
+  weekDays, todayStr, eventsOn, contractsOn, onColor,
 }: {
   weekDays: string[];
   todayStr: string;
   eventsOn: (d: string) => EventRow[];
   contractsOn: (d: string) => ContractMarker[];
+  onColor: (id: string, color: string) => void;
 }) {
   const timed = weekDays.flatMap((d) => [
     ...contractsOn(d).map((c) => hourOf(c.event_time)),
@@ -1019,29 +933,19 @@ function WeekGrid({
               {hours.map((h) => (
                 <div key={h} style={{ height: HOUR_H, borderBottom: "1px solid var(--bd2)" }} />
               ))}
+              {/* Khối buổi chụp in ĐỦ thông tin ngay trong ô ngày — cùng thẻ với
+                  chế độ Tháng và chế độ Ngày: màu đổi được, dịch vụ, hạng mục,
+                  nhân sự, địa điểm, nút gửi khách. Trước đây khối chỉ có tên
+                  khách nên muốn biết gì cũng phải bấm vào từng buổi.
+                  Không đặt height cứng nữa: thẻ cao theo nội dung, đặt đúng vị
+                  trí giờ bắt đầu. */}
               {cons.map((c) => {
                 const h = hourOf(c.event_time)!;
-                const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
-                // Không có giờ kết thúc trong dữ liệu → khối 2 giờ, đủ đọc tên.
                 const top = (h - from) * HOUR_H;
-                const height = 2 * HOUR_H - 4;
                 return (
-                  <Link
-                    key={c.id}
-                    href={`/dashboard/studio/contracts/${c.id}`}
-                    className="absolute overflow-hidden rounded-[7px] px-[7px] py-[5px]"
-                    style={{ left: 3, right: 3, top, height, background: tone.bg, borderLeft: `3px solid ${tone.fg}` }}
-                    title={`${c.event_time} · ${c.title}${c.client_name ? ` · ${c.client_name}` : ""}`}
-                  >
-                    <p className="truncate text-[11.5px] font-semibold leading-tight" style={{ color: tone.fg }}>{c.client_name || c.title}</p>
-                    <p className="tnum mt-0.5 truncate text-[10.5px]" style={{ color: tone.fg, opacity: 0.8 }}>{c.event_time} · {SHOOT_TYPE_LABEL[c.shoot_type]}</p>
-                    {c.location && (
-                      <p className="mt-px truncate text-[10px]" style={{ color: tone.fg, opacity: 0.7 }}>{c.location}</p>
-                    )}
-                    <p className="mt-px truncate text-[10px] font-semibold" style={{ color: crewOf(c).length ? tone.fg : "var(--am)", opacity: crewOf(c).length ? 0.7 : 1 }}>
-                      {crewOf(c).length ? `${crewOf(c).length} người: ${crewOf(c).map((p) => p.name || "?").join(", ")}` : "Chưa phân công"}
-                    </p>
-                  </Link>
+                  <div key={c.id} className="absolute" style={{ left: 3, right: 3, top }}>
+                    <ContractDetailCard c={c} onColor={onColor} />
+                  </div>
                 );
               })}
               {evs.map((e) => {
