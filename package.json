@@ -15,7 +15,8 @@
     "test:album-drive-links": "node --experimental-strip-types desktop/test/album-drive-links.mjs",
     "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs",
     "test:lifecycle": "node --experimental-strip-types desktop/test/lifecycle.mjs",
-    "test:referral-deposit": "node --experimental-strip-types desktop/test/referral-deposit.mjs"
+    "test:referral-deposit": "node --experimental-strip-types desktop/test/referral-deposit.mjs",
+    "test:pricelist-label": "node --experimental-strip-types desktop/test/pricelist-label.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

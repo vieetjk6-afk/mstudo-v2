@@ -65,14 +65,15 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Bán hàng",
     items: [
-      // Phòng váy chuyển từ "Vận hành" sang đây: cho thuê trang phục là một
-      // nguồn DOANH THU bán kèm, không phải việc hậu kỳ.
-      { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full", roles: MANAGER_OK, keywords: "trang phuc thue vay" },
       { href: "/dashboard/studio/quotes", label: "Báo giá", icon: ReceiptText, minTier: "plus", roles: MANAGER_OK, badge: "quotes" },
       { href: "/dashboard/studio/contracts", label: "Hợp đồng & lịch hẹn", icon: FileText, minTier: "plus", roles: STAFF_OK, keywords: "hop dong buoi chup" },
       { href: "/dashboard/studio/board", label: "Bảng công việc", icon: Kanban, minTier: "full", roles: MANAGER_OK, keywords: "kanban cong viec" },
       { href: "/dashboard/studio/bookings", label: "Đặt lịch khách", icon: CalendarClock, minTier: "booking", roles: MANAGER_OK, badge: "bookings" },
       { href: "/dashboard/studio/leads", label: "Yêu cầu mới", icon: Inbox, minTier: "booking", roles: MANAGER_OK, badge: "leads", keywords: "lead website chatbox" },
+      // Phòng váy thuộc nhóm Bán hàng (cho thuê trang phục là doanh thu bán kèm,
+      // không phải việc hậu kỳ) nhưng để CUỐI nhóm: nó là việc phụ, còn báo giá
+      // và hợp đồng mới là thứ mở hàng chục lần mỗi ngày.
+      { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full", roles: MANAGER_OK, keywords: "trang phuc thue vay" },
     ],
   },
   {

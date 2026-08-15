@@ -20,6 +20,9 @@ export default async function NewQuotePage() {
   }
 
   const supabase = createClient();
+  // pl_list_labels: nhãn studio tự đặt cho từng bảng giá. Không có nó thì tiêu đề
+  // nhóm rơi về `list_key` thô — hiện ra UUID hoặc slug "dinh-hon" giữa màn hình.
+  const listLabels = ((profile as { pl_list_labels?: Record<string, string> | null }).pl_list_labels ?? {}) as Record<string, string>;
   const [{ data: services }, { data: pricelist }] = await Promise.all([
     supabase
       .from("studio_services")
@@ -42,6 +45,7 @@ export default async function NewQuotePage() {
       ownerId={profile.id}
       services={(services ?? []) as { id: string; name: string }[]}
       pricelist={(pricelist ?? []) as { id: string; name: string; price: number; unit: string | null; description: string | null; category: string | null; list_key: string | null }[]}
+      listLabels={listLabels}
     />
   );
 }

@@ -40,6 +40,7 @@ import { computeRoundedDeposit } from "@/lib/quote-deposit";
 import { fmtDate, fmtDow } from "@/lib/date";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { noAccent } from "@/lib/studio-nav";
+import { makeListLabel } from "@/lib/pricelist-label";
 
 export type TemplateOption = {
   id: string;
@@ -89,6 +90,7 @@ export default function NewContractForm({
   roster = [],
   recentClients = [],
   bank,
+  listLabels = {},
 }: {
   ownerId: string;
   assignTo: string | null;
@@ -98,6 +100,8 @@ export default function NewContractForm({
   roster?: { id: string; name: string; phone: string; role: CrewRole }[];
   recentClients?: RecentClient[];
   bank?: { name: string | null; account: string | null; holder: string | null };
+  /** Nhãn studio tự đặt cho từng bảng giá (profiles.pl_list_labels). */
+  listLabels?: Record<string, string>;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -187,6 +191,8 @@ export default function NewContractForm({
     if (!q) return recentClients;
     return recentClients.filter((c) => noAccent(`${c.name} ${c.phone}`).includes(q));
   }, [recentClients, clientQuery]);
+
+  const listLabel = useMemo(() => makeListLabel(listLabels, services), [listLabels, services]);
 
   /* ── Nhóm bảng giá theo list_key để danh sách gói không thành một mớ ──── */
   const packageGroups = useMemo(() => {
@@ -407,7 +413,10 @@ export default function NewContractForm({
             {recentClients.length > 0 && !manualClient && (
               <>
                 <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Khách gần đây</p>
-                <div className="grid gap-2">
+                {/* min-w-0: lưới không khai báo cột lấy min-content của item làm
+                    sàn track, mà item có `truncate` (nowrap) nên track phình rộng
+                    hơn thẻ và danh sách tràn ra ngoài. Xem NewQuoteForm. */}
+                <div className="grid min-w-0 gap-2">
                   {filteredClients.length === 0 ? (
                     <p className="py-2 text-[12.5px]" style={{ color: "var(--tx3)" }}>
                       Không có khách cũ nào khớp “{clientQuery}”. Nhập tay bên dưới nhé.
@@ -420,7 +429,7 @@ export default function NewContractForm({
                           key={`${c.phone}-${c.name}`}
                           type="button"
                           onClick={() => pickClient(c)}
-                          className="flex items-center gap-3 rounded-[11px] px-3.5 py-3 text-left"
+                          className="flex min-w-0 items-center gap-3 rounded-[11px] px-3.5 py-3 text-left"
                           style={{
                             border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`,
                             background: on ? "var(--acS)" : "var(--sf)",
@@ -529,11 +538,11 @@ export default function NewContractForm({
             ) : (
               <>
                 <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Gói chính</p>
-                <div className="grid gap-2">
+                <div className="grid min-w-0 gap-2">
                   {packageGroups.map(([key, list]) => (
-                    <div key={key} className="grid gap-2">
+                    <div key={key} className="grid min-w-0 gap-2">
                       {packageGroups.length > 1 && (
-                        <p className="mt-1 text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>{key}</p>
+                        <p className="mt-1 truncate text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>{listLabel(key)}</p>
                       )}
                       {list.map((p) => {
                         const on = mainPkgId === p.id;
@@ -542,7 +551,7 @@ export default function NewContractForm({
                             key={p.id}
                             type="button"
                             onClick={() => { setMainPkgId(on ? "" : p.id); setExtraIds((prev) => prev.filter((x) => x !== p.id)); }}
-                            className="flex items-center gap-3 rounded-[11px] px-3.5 py-3 text-left"
+                            className="flex min-w-0 items-center gap-3 rounded-[11px] px-3.5 py-3 text-left"
                             style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
                           >
                             <Package size={19} style={{ flex: "none", color: on ? "var(--ac)" : "var(--tx3)" }} />
