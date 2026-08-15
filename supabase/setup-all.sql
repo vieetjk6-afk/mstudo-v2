@@ -1281,6 +1281,38 @@ create table if not exists public.dislikes (
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/referral_deposit.sql — Khách giới thiệu khách · đặt cọc giữ ngày (chạy sau lifecycle_followup)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── 3) Sổ giới thiệu ───────────────────────────────────────────────────────
+create table if not exists public.studio_referrals (
+  id              uuid primary key default gen_random_uuid(),
+  owner_id        uuid not null references public.profiles (id) on delete cascade,
+  -- Người giới thiệu: khách CŨ của chính studio này. Lưu cả tên đã biết lúc đó
+  -- để sổ vẫn đọc được nếu sau này hợp đồng cũ bị xoá.
+  referrer_phone  text not null default '',
+  referrer_name   text,
+  -- Khách mới.
+  referred_phone  text not null default '',
+  referred_name   text,
+  booking_id      uuid references public.studio_bookings (id) on delete set null,
+  -- Hợp đồng chốt được từ lời giới thiệu này (nếu có). Chốt hợp đồng mới là mốc
+  -- đáng thưởng, chứ không phải chỉ gửi yêu cầu đặt lịch.
+  contract_id     uuid references public.studio_contracts (id) on delete set null,
+  reward_amount   integer not null default 0,
+  -- pending   — chờ khách mới chốt hợp đồng
+  -- earned    — đã chốt, tới lúc tặng thưởng
+  -- granted   — studio đã tặng xong
+  -- cancelled — không thành (khách huỷ, trùng khách cũ…)
+  status          text not null default 'pending'
+                    check (status in ('pending', 'earned', 'granted', 'cancelled')),
+  note            text,
+  created_at      timestamptz not null default now(),
+  granted_at      timestamptz
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -2755,6 +2787,153 @@ end $$;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/lifecycle_followup.sql — Theo đuổi khách chưa chọn ảnh · hạn lưu trữ ảnh gốc · hạn hiệu lực báo giá
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- THEO ĐUỔI & VÒNG ĐỜI — ba chỗ dữ liệu bị bỏ trống khiến việc rơi vào im lặng:
+--
+--   1) Khách nhận link chọn ảnh rồi quên → không có mốc nào để biết đã im bao
+--      lâu, nên không nhắc lại được.
+--   2) Ảnh gốc trên Drive không có hạn lưu trữ → Drive đầy dần, không ai biết
+--      album nào giữ được nữa.
+--   3) Báo giá gửi đi không có hạn hiệu lực thực thi → khách quay lại đòi giá cũ.
+--      (Cột studio_quotes.expires_at ĐÃ có sẵn trong schema nhưng chưa từng được
+--      ghi hay đọc ở đâu — migration này chỉ thêm chính sách mặc định.)
+--
+-- Chạy 1 lần trong Supabase SQL Editor.
+-- ============================================================================
+
+-- ── 1) Vòng đời lưu trữ ảnh gốc ────────────────────────────────────────────
+-- delivered_at: lần ĐẦU album chuyển sang giai đoạn giao khách. Mốc đếm hạn lưu
+-- trữ tính từ đây chứ không phải created_at — album chọn ảnh có thể mở hàng
+-- tháng trước khi giao.
+alter table public.albums add column if not exists delivered_at timestamptz;
+
+-- storage_until: ngày studio dự định dọn ảnh gốc khỏi Drive. null = giữ vô hạn
+-- (studio đặt chính sách 0 tháng). Studio gia hạn được bất cứ lúc nào.
+alter table public.albums add column if not exists storage_until date;
+
+-- storage_notice_at: lần cuối đã nhắc studio về album này. Chống nhắc lặp mỗi
+-- ngày trong suốt cửa sổ cảnh báo.
+alter table public.albums add column if not exists storage_notice_at timestamptz;
+
+-- Cron quét album sắp hết hạn: lọc theo hạn, nên đánh index theo hạn.
+create index if not exists albums_storage_until_idx
+  on public.albums (storage_until)
+  where storage_until is not null;
+
+-- ── 2) Chính sách của studio ───────────────────────────────────────────────
+-- Giữ ảnh gốc bao nhiêu tháng sau khi giao khách. 0 = không đặt hạn (giữ mãi).
+-- Mặc định 6 tháng: đủ dài cho khách in lại, đủ ngắn để Drive không phình vô hạn.
+alter table public.profiles
+  add column if not exists storage_months integer not null default 6;
+
+-- Hạn hiệu lực mặc định của báo giá, tính bằng ngày kể từ lúc gửi khách.
+-- 0 = không đặt hạn. Mặc định 15 ngày — đủ để khách suy nghĩ, đủ ngắn để bảng
+-- giá mùa sau không bị ràng buộc bởi báo giá mùa trước.
+alter table public.profiles
+  add column if not exists quote_valid_days integer not null default 15;
+
+-- ── 3) Theo đuổi khách chưa chọn ảnh ───────────────────────────────────────
+-- Cột select_invited_at trên hợp đồng: lần đầu mời khách chọn ảnh. Cron dựa vào
+-- đây để biết đã im lặng bao nhiêu ngày.
+--
+-- Vì sao không đọc thẳng zalo_messages: studio CHƯA kết nối Zalo vẫn cần thấy
+-- hợp đồng đang tắc trên Tổng quan, mà lúc đó bảng zalo_messages rỗng.
+alter table public.studio_contracts
+  add column if not exists select_invited_at timestamptz;
+
+-- Số lần đã nhắc lại (0–3). Tách khỏi zalo_messages vì lời nhắc có thể đi qua
+-- kênh khác (thông báo trong app) chứ không riêng Zalo.
+alter table public.studio_contracts
+  add column if not exists select_nudges integer not null default 0;
+
+alter table public.studio_contracts
+  add column if not exists select_nudged_at timestamptz;
+
+-- ── 4) Mốc "khách đã xem" cho báo giá đã có sẵn (viewed_at) ────────────────
+-- Chỉ thêm index phục vụ cron tự đóng báo giá quá hạn.
+create index if not exists studio_quotes_expiry_idx
+  on public.studio_quotes (expires_at)
+  where expires_at is not null;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/referral_deposit.sql — Khách giới thiệu khách · đặt cọc giữ ngày (chạy sau lifecycle_followup)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- KHÁCH GIỚI THIỆU KHÁCH + ĐẶT CỌC GIỮ NGÀY
+--
+-- 1) Giới thiệu: đã có affiliate cho studio giới thiệu STUDIO, nhưng không có gì
+--    cho KHÁCH giới thiệu KHÁCH — kênh mạnh nhất của studio ảnh cưới ở VN.
+--    Nhận diện người giới thiệu bằng SĐT chứ không bằng mã sinh sẵn: khách cũ
+--    nào cũng dùng được ngay, không phải phát mã cho từng người.
+--
+-- 2) Đặt cọc giữ ngày: khách đặt lịch xong studio mới liên hệ, mà mùa cưới khách
+--    hỏi 3–4 studio cùng lúc. Cho chuyển cọc ngay lúc đặt thì ngày mới thật sự
+--    được giữ.
+--
+-- Chạy 1 lần trong Supabase SQL Editor. Chạy SAU lifecycle_followup.sql.
+-- ============================================================================
+
+-- ── 1) Chính sách của studio ───────────────────────────────────────────────
+-- Thưởng cho NGƯỜI GIỚI THIỆU khi khách mới chốt hợp đồng (VND). 0 = tắt.
+alter table public.profiles
+  add column if not exists referral_reward integer not null default 0;
+
+-- Ưu đãi cho KHÁCH MỚI được giới thiệu (VND) — hiện ngay trên form đặt lịch để
+-- khách có lý do nhập SĐT người giới thiệu. 0 = không có ưu đãi.
+alter table public.profiles
+  add column if not exists referral_discount integer not null default 0;
+
+-- Cọc giữ ngày (VND). 0 = tắt, form đặt lịch không hiện bước chuyển cọc.
+alter table public.profiles
+  add column if not exists booking_deposit integer not null default 0;
+
+-- ── 2) Cọc giữ ngày trên yêu cầu đặt lịch ──────────────────────────────────
+-- Số tiền cọc CHỐT LẠI lúc khách đặt. Lưu riêng chứ không đọc lại
+-- profiles.booking_deposit khi hiển thị: studio đổi chính sách sau đó không
+-- được phép làm đổi số tiền của một yêu cầu đã gửi đi.
+alter table public.studio_bookings add column if not exists deposit_amount integer;
+
+-- none     — studio tắt cọc, hoặc khách chọn không cọc
+-- awaiting — đã hiện QR, đang chờ khách chuyển
+-- paid     — khách báo đã chuyển (kèm ảnh), CHỜ studio xác nhận
+-- confirmed— studio đã đối chiếu và xác nhận nhận được tiền
+alter table public.studio_bookings add column if not exists deposit_status text not null default 'none'
+  check (deposit_status in ('none', 'awaiting', 'paid', 'confirmed'));
+
+alter table public.studio_bookings add column if not exists deposit_proof_url text;
+
+alter table public.studio_bookings add column if not exists deposit_paid_at timestamptz;
+
+-- Mã nội dung chuyển khoản (vd "COC-7F3A"). Ngắn, không dấu, dễ đọc trên sao kê
+-- ngân hàng — đây là thứ studio dùng để đối chiếu.
+alter table public.studio_bookings add column if not exists deposit_code text;
+
+-- Token riêng để khách quay lại trang cọc mà không phải đặt lịch lại. KHÔNG
+-- dùng id: id lộ ra là đoán được các bản ghi khác.
+alter table public.studio_bookings add column if not exists deposit_token text unique;
+
+create index if not exists studio_bookings_deposit_token_idx
+  on public.studio_bookings (deposit_token) where deposit_token is not null;
+
+-- SĐT người giới thiệu, lưu ngay trên yêu cầu đặt lịch để studio thấy nguồn
+-- khách kể cả khi chưa tạo bản ghi giới thiệu.
+alter table public.studio_bookings add column if not exists referrer_phone text;
+
+create index if not exists studio_referrals_owner_idx
+  on public.studio_referrals (owner_id, status, created_at desc);
+
+-- Một yêu cầu đặt lịch chỉ sinh ĐÚNG MỘT bản ghi giới thiệu, kể cả khi API bị
+-- gọi lặp (khách bấm gửi hai lần, mạng lỗi rồi thử lại).
+create unique index if not exists studio_referrals_booking_uniq
+  on public.studio_referrals (booking_id) where booking_id is not null;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/fix_google_signup_trigger.sql — Vá đăng nhập Google báo server_error
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -3883,4 +4062,35 @@ create policy dislikes_owner_rw on public.dislikes
     exists (select 1 from public.albums a
             where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
   );
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/lifecycle_followup.sql — Theo đuổi khách chưa chọn ảnh · hạn lưu trữ ảnh gốc · hạn hiệu lực báo giá
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- BẮT BUỘC: migrations/c1_profiles_column_grants.sql đã THU HỒI quyền UPDATE
+-- toàn bảng profiles và chỉ cấp lại theo từng cột. Không cấp thêm hai cột này
+-- thì thẻ "Chính sách studio" lưu sẽ im lặng không đổi được gì.
+-- Cả hai đều là cấu hình vô hại (số tháng / số ngày), không phải cột nhạy cảm
+-- như role hay plan.
+grant update (storage_months, quote_valid_days) on public.profiles to authenticated;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/referral_deposit.sql — Khách giới thiệu khách · đặt cọc giữ ngày (chạy sau lifecycle_followup)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- c1_profiles_column_grants.sql đã THU HỒI quyền UPDATE toàn bảng profiles và
+-- chỉ cấp lại theo cột. Không có dòng này thì thẻ chính sách lưu sẽ im lặng
+-- không đổi được gì. Ba cột này đều là số tiền cấu hình, không nhạy cảm.
+grant update (referral_reward, referral_discount, booking_deposit)
+  on public.profiles to authenticated;
+
+alter table public.studio_referrals enable row level security;
+
+drop policy if exists studio_referrals_owner_all on public.studio_referrals;
+
+create policy studio_referrals_owner_all on public.studio_referrals
+  for all using (owner_id = auth.uid() or public.is_admin())
+  with check (owner_id = auth.uid() or public.is_admin());
 

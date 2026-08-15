@@ -13,7 +13,9 @@
     "test:album-buttons": "node --experimental-strip-types desktop/test/album-buttons.mjs",
     "test:album-dislike": "node --experimental-strip-types desktop/test/album-dislike.mjs",
     "test:album-drive-links": "node --experimental-strip-types desktop/test/album-drive-links.mjs",
-    "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs"
+    "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs",
+    "test:lifecycle": "node --experimental-strip-types desktop/test/lifecycle.mjs",
+    "test:referral-deposit": "node --experimental-strip-types desktop/test/referral-deposit.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

@@ -5,6 +5,7 @@ import { effectivePlan, studioTier } from "@/lib/plans";
 import { sendEmail } from "@/lib/email";
 import { sendPushToOwner } from "@/lib/push";
 import { rateLimit } from "@/lib/rate-limit";
+import { isQuoteExpired } from "@/lib/quote-expiry";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
   const db = createAdminClient();
   const { data: quote } = await db
     .from("studio_quotes")
-    .select("id, status, owner_id, title")
+    .select("id, status, owner_id, title, expires_at")
     .eq("client_token", params.token)
     .maybeSingle();
   if (!quote) return NextResponse.json({ error: "Báo giá không tồn tại." }, { status: 404 });
@@ -42,6 +43,16 @@ export async function POST(req: Request, { params }: { params: { token: string }
   }
   if (quote.status === "cancelled" || quote.status === "expired") {
     return NextResponse.json({ error: "Báo giá đã đóng." }, { status: 409 });
+  }
+  // Chốt hạn ngay tại đây chứ không chỉ dựa vào status: cron đóng báo giá quá
+  // hạn chỉ chạy MỘT LẦN mỗi ngày, nên một báo giá hết hạn lúc 23:59 vẫn còn
+  // status 'sent' suốt sáng hôm sau. Chỉ chặn hành động GHI của khách; studio
+  // vẫn gia hạn được từ trang quản lý.
+  if (isQuoteExpired(quote.expires_at)) {
+    return NextResponse.json(
+      { error: "Báo giá đã hết hiệu lực. Liên hệ studio để được báo giá lại." },
+      { status: 409 },
+    );
   }
 
   if (action === "toggle") {

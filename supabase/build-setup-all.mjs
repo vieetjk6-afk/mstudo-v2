@@ -36,6 +36,8 @@ const ORDER = [
   ["migrations/website_chat_config.sql", "Cấu hình chatbox website"],
   ["migrations/website_leads.sql", "Lead & hội thoại từ chatbox"],
   ["migrations/album_dislikes.sql", "Ảnh khách 'không thích' trong album chọn ảnh"],
+  ["migrations/lifecycle_followup.sql", "Theo đuổi khách chưa chọn ảnh · hạn lưu trữ ảnh gốc · hạn hiệu lực báo giá"],
+  ["migrations/referral_deposit.sql", "Khách giới thiệu khách · đặt cọc giữ ngày (chạy sau lifecycle_followup)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];

@@ -39,6 +39,8 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
       initialAdjustments={(adjustments ?? []) as QuoteAdjustment[]}
       canConvert={profile.studioTier === "full"}
       studioHost={studioHost}
+      // ?? chứ không phải ||: studio đặt 0 ngày nghĩa là CỐ Ý không đặt hạn.
+      quoteValidDays={(profile as { quote_valid_days?: number }).quote_valid_days ?? 15}
     />
   );
 }

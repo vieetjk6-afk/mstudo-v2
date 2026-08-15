@@ -23,11 +23,17 @@ export async function generateMetadata({ params }: { params: { token: string } }
   };
 }
 
-export default async function BookingPage({ params, searchParams }: { params: { token: string }; searchParams?: { pkg?: string; list?: string } }) {
+export default async function BookingPage({
+  params,
+  searchParams,
+}: {
+  params: { token: string };
+  searchParams?: { pkg?: string; list?: string; ref?: string };
+}) {
   const db = createAdminClient();
   const { data: owner } = await db
     .from("profiles")
-    .select("id, full_name")
+    .select("id, full_name, referral_discount, booking_deposit, pl_bank_bin, pl_bank_account, pl_bank_holder, pl_bank_name")
     .eq("booking_token", params.token)
     .maybeSingle();
 
@@ -62,12 +68,27 @@ export default async function BookingPage({ params, searchParams }: { params: { 
     price: (p.price as number) || 0,
   }));
 
+  // Tài khoản nhận cọc — chỉ truyền khi studio ĐÃ bật cọc, để form không dựng
+  // bước QR cho một studio không thu cọc.
+  const bank =
+    (owner.booking_deposit ?? 0) > 0
+      ? {
+          bin: (owner.pl_bank_bin as string | null) ?? null,
+          account: (owner.pl_bank_account as string | null) ?? null,
+          holder: (owner.pl_bank_holder as string | null) ?? null,
+          name: (owner.pl_bank_name as string | null) ?? null,
+        }
+      : null;
+
   return (
     <BookingForm
       token={params.token}
       studioName={owner.full_name || "Studio"}
       packages={packages}
       presetPackage={searchParams?.pkg || ""}
+      presetReferrer={searchParams?.ref || ""}
+      referralDiscount={(owner.referral_discount as number | null) ?? 0}
+      bank={bank}
     />
   );
 }

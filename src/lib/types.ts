@@ -53,6 +53,12 @@ export interface Album {
   // separate watermark toggle for the delivery phase.
   phase: AlbumPhase;
   watermark_delivery: boolean;
+  // Vòng đời lưu trữ ảnh gốc trên Drive. delivered_at = lần đầu chuyển sang
+  // giai đoạn giao khách; storage_until = ngày studio dự định dọn ảnh gốc
+  // (null = giữ vô hạn). Xem lib/storage-lifecycle.ts.
+  delivered_at: string | null;
+  storage_until: string | null;
+  storage_notice_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -478,7 +484,34 @@ export interface StudioBooking {
   package_price: number | null;
   facebook: string | null;
   status: "new" | "accepted" | "pending" | "declined" | "handled" | "archived";
+  // Cọc giữ ngày — xem lib/booking-deposit.ts. deposit_amount chốt lúc khách đặt
+  // nên studio đổi chính sách sau đó không làm đổi số tiền của yêu cầu đã gửi.
+  deposit_amount: number | null;
+  deposit_status: "none" | "awaiting" | "paid" | "confirmed";
+  deposit_proof_url: string | null;
+  deposit_paid_at: string | null;
+  deposit_code: string | null;
+  deposit_token: string | null;
+  /** SĐT khách cũ đã giới thiệu khách này (nếu có) — xem lib/referral.ts. */
+  referrer_phone: string | null;
   created_at: string;
+}
+
+/** Một dòng sổ giới thiệu: khách cũ giới thiệu khách mới. */
+export interface StudioReferral {
+  id: string;
+  owner_id: string;
+  referrer_phone: string;
+  referrer_name: string | null;
+  referred_phone: string;
+  referred_name: string | null;
+  booking_id: string | null;
+  contract_id: string | null;
+  reward_amount: number;
+  status: "pending" | "earned" | "granted" | "cancelled";
+  note: string | null;
+  created_at: string;
+  granted_at: string | null;
 }
 
 // ── Rental module (Thuê đồ: váy cưới, vest, áo dài, phụ kiện) ───────────────

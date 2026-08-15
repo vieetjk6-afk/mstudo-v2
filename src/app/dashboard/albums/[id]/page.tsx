@@ -30,7 +30,7 @@ export default async function AlbumEditPage({
     supabase.from("albums").select("*").eq("id", params.id).single(),
     supabase.from("album_sources").select("*").eq("album_id", params.id).order("position"),
     fetchAllPhotos(supabase, params.id, "*"),
-    user ? supabase.from("profiles").select("plan, plan_expires_at, role, full_name").eq("id", user.id).maybeSingle() : Promise.resolve({ data: null }),
+    user ? supabase.from("profiles").select("plan, plan_expires_at, role, full_name, storage_months").eq("id", user.id).maybeSingle() : Promise.resolve({ data: null }),
     // Lượt khách chọn: cần cả danh sách (tab "Lượt chọn" hiện ngay tại màn này)
     // nên lấy hàng thật, count suy ra từ độ dài mảng.
     supabase
@@ -86,6 +86,9 @@ export default async function AlbumEditPage({
       clientPhone={linkedContract?.client_phone ?? null}
       clientName={linkedContract?.client_name ?? null}
       selections={(picks ?? []) as AlbumPick[]}
+      // ?? 6 chứ không phải || 6: studio đặt 0 tháng nghĩa là CỐ Ý giữ ảnh vô
+      // hạn, `||` sẽ nuốt mất lựa chọn đó và ép về 6.
+      storageMonths={(profile as { storage_months?: number } | null)?.storage_months ?? 6}
     />
   );
 }

@@ -3,6 +3,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { STUDIO_TIER_RANK, type StudioTier } from "@/lib/plans";
 import type { StudioService } from "@/lib/types";
 import ServicesTemplatesTabs from "./ServicesTemplatesTabs";
+import StudioPolicyCard from "@/components/studio/StudioPolicyCard";
 import type { TemplateWithItems } from "../templates/TemplatesManager";
 
 export default async function ServicesPage({ searchParams }: { searchParams?: { tab?: string } }) {
@@ -40,12 +41,27 @@ export default async function ServicesPage({ searchParams }: { searchParams?: { 
   const initialTab = searchParams?.tab === "templates" ? "templates" : "services";
 
   return (
-    <ServicesTemplatesTabs
-      ownerId={profile.id}
-      services={(services ?? []) as StudioService[]}
-      templates={(templates ?? []) as unknown as TemplateWithItems[]}
-      canUseTemplates={canUseTemplates}
-      initialTab={initialTab}
-    />
+    <div className="space-y-3.5">
+      <ServicesTemplatesTabs
+        ownerId={profile.id}
+        services={(services ?? []) as StudioService[]}
+        templates={(templates ?? []) as unknown as TemplateWithItems[]}
+        canUseTemplates={canUseTemplates}
+        initialTab={initialTab}
+      />
+      {/* Chính sách chạy ngầm (hạn lưu trữ ảnh gốc, hiệu lực báo giá) đặt cùng
+          trang với điều khoản dịch vụ — đều là "studio này làm việc theo luật
+          nào". Chỉ chủ studio đặt được, nhân viên không thấy. */}
+      {(profile.actingRole === "owner" || profile.actingRole === "admin") && (
+        <StudioPolicyCard
+          ownerId={profile.id}
+          initialStorageMonths={(profile as { storage_months?: number }).storage_months ?? 6}
+          initialQuoteValidDays={(profile as { quote_valid_days?: number }).quote_valid_days ?? 15}
+          initialDeposit={(profile as { booking_deposit?: number }).booking_deposit ?? 0}
+          initialReferralReward={(profile as { referral_reward?: number }).referral_reward ?? 0}
+          initialReferralDiscount={(profile as { referral_discount?: number }).referral_discount ?? 0}
+        />
+      )}
+    </div>
   );
 }

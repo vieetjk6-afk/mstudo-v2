@@ -21,6 +21,7 @@ import {
   PackageCheck,
   ArrowRight,
   FolderOpen,
+  HardDrive,
   HardDriveDownload,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
@@ -32,6 +33,8 @@ import FilterPhotosButton from "@/components/FilterPhotosButton";
 import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
+import { fmtDate } from "@/lib/date";
+import { storageUntil, storageState, storageLabel, STORAGE_EXTEND_CHOICES } from "@/lib/storage-lifecycle";
 import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } from "@/lib/types";
 
 /* ── Tab của màn cài đặt album (bản thiết kế, màn "Album chọn ảnh") ──────────
@@ -73,6 +76,7 @@ export default function AlbumEditor({
   clientPhone = null,
   clientName = null,
   selections = [],
+  storageMonths = 6,
 }: {
   album: Album;
   initialSources: AlbumSource[];
@@ -88,6 +92,8 @@ export default function AlbumEditor({
   clientName?: string | null;
   /** Ảnh khách đã bấm chọn (bảng selections), gộp theo mã chọn ở ngay màn này. */
   selections?: AlbumPick[];
+  /** Chính sách lưu trữ ảnh gốc của studio (tháng). 0 = giữ vô hạn. */
+  storageMonths?: number;
 }) {
   const { t } = useLang();
   const supabase = createClient();
@@ -135,6 +141,9 @@ export default function AlbumEditor({
 
   const [phase, setPhase] = useState<AlbumPhase>(album.phase ?? "selection");
   const [phaseBusy, setPhaseBusy] = useState(false);
+  // Hạn lưu trữ ảnh gốc trên Drive (null = giữ vô hạn).
+  const [storageDate, setStorageDate] = useState<string | null>(album.storage_until ?? null);
+  const [storageBusy, setStorageBusy] = useState(false);
   const [sources, setSources] = useState<AlbumSource[]>(initialSources);
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
 
@@ -332,11 +341,46 @@ export default function AlbumEditor({
   async function switchPhase(next: AlbumPhase) {
     if (!canDelivery && next === "delivery") return;
     setPhaseBusy(true);
-    const { error } = await supabase.from("albums").update({ phase: next }).eq("id", album.id);
+    // Lần ĐẦU sang giai đoạn giao khách là mốc bắt đầu đếm hạn lưu trữ ảnh gốc.
+    // Chỉ đặt một lần: chuyển tới chuyển lui không được đẩy hạn ra xa mãi.
+    const patch: Record<string, unknown> = { phase: next };
+    if (next === "delivery" && !album.delivered_at) {
+      const now = new Date();
+      patch.delivered_at = now.toISOString();
+      patch.storage_until = storageUntil(now, storageMonths);
+    }
+    const { error } = await supabase.from("albums").update(patch).eq("id", album.id);
     setPhaseBusy(false);
     if (error) return flash(error.message);
     setPhase(next);
+    if (patch.storage_until) setStorageDate(patch.storage_until as string);
     flash(next === "delivery" ? "Đã chuyển sang giai đoạn Giao khách" : "Đã chuyển về giai đoạn Chọn ảnh");
+    router.refresh();
+  }
+
+  /** Gia hạn lưu trữ ảnh gốc thêm N tháng kể từ HÔM NAY. */
+  async function extendStorage(months: number) {
+    const next = storageUntil(new Date(), months);
+    setStorageBusy(true);
+    const { error } = await supabase
+      .from("albums")
+      // storage_notice_at về null để lần tới sắp hết hạn vẫn được nhắc lại.
+      .update({ storage_until: next, storage_notice_at: null })
+      .eq("id", album.id);
+    setStorageBusy(false);
+    if (error) return flash(error.message);
+    setStorageDate(next);
+    flash(`Đã gia hạn lưu trữ tới ${next}`);
+  }
+
+  /** Bỏ hạn — giữ ảnh gốc vô thời hạn. */
+  async function clearStorage() {
+    setStorageBusy(true);
+    const { error } = await supabase.from("albums").update({ storage_until: null, storage_notice_at: null }).eq("id", album.id);
+    setStorageBusy(false);
+    if (error) return flash(error.message);
+    setStorageDate(null);
+    flash("Đã bỏ hạn — giữ ảnh gốc vô thời hạn");
   }
 
   async function removeSource(id: string) {
@@ -1066,6 +1110,50 @@ export default function AlbumEditor({
                 </Link>
               )}
             </div>
+
+            {/* Hạn lưu trữ ảnh gốc — chỉ có nghĩa sau khi đã giao khách.
+                Hệ thống KHÔNG tự xoá gì: nó nhắc trước hạn, còn dọn Drive hay
+                gia hạn là quyết định của studio. */}
+            {album.delivered_at && (() => {
+              const st = storageState(storageDate);
+              const tone =
+                st === "expired" ? { fg: "var(--s-red)", bg: "color-mix(in srgb, var(--s-red) 12%, transparent)" }
+                : st === "warn" ? { fg: "var(--s-amber)", bg: "color-mix(in srgb, var(--s-amber) 12%, transparent)" }
+                : { fg: "var(--text2)", bg: "var(--surface2)" };
+              return (
+                <div className="card p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-2 text-sm font-medium text-accent">
+                        <HardDrive size={16} /> Lưu trữ ảnh gốc trên Drive
+                      </p>
+                      <p className="mt-1 text-xs" style={{ color: "var(--text3)" }}>
+                        Giao khách ngày {fmtDate(album.delivered_at.slice(0, 10))}
+                        {storageDate ? ` · dự kiến dọn ảnh gốc ngày ${fmtDate(storageDate)}` : ""}
+                      </p>
+                    </div>
+                    <span className="flex-none rounded-full px-2.5 py-1 text-[11.5px] font-semibold" style={{ background: tone.bg, color: tone.fg }}>
+                      {storageLabel(storageDate)}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-[11.5px]" style={{ color: "var(--text3)" }}>
+                    mstudo không tự xoá ảnh. Tới hạn bạn sẽ được nhắc để tự dọn thư mục gốc trên Drive, hoặc gia hạn thêm.
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    {STORAGE_EXTEND_CHOICES.map((m) => (
+                      <button key={m} onClick={() => extendStorage(m)} disabled={storageBusy} className="btn-ghost px-3 py-1.5 text-xs">
+                        + {m} tháng
+                      </button>
+                    ))}
+                    {storageDate && (
+                      <button onClick={clearStorage} disabled={storageBusy} className="btn-ghost px-3 py-1.5 text-xs" style={{ color: "var(--text3)" }}>
+                        Giữ vô thời hạn
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             {/* Delivery phase: studio pastes the EDITED-photos folder link. Those photos
                 are what the client sees in the delivery gallery; the originals the client
                 picked earlier auto-surface as the "File gốc" button (see getOriginalFolders). */}

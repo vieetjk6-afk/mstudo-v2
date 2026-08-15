@@ -104,6 +104,56 @@ export function selectReadyMessage(opts: {
   return lines.join("\n") + sign(opts.studio);
 }
 
+/**
+ * Nhắc lại khi khách nhận link chọn ảnh rồi im lặng. Giọng NHẸ dần theo số lần
+ * nhắc: lần đầu chỉ hỏi thăm, lần sau mới nói tới ảnh hưởng lịch hậu kỳ. Nhắc
+ * mà gắt là mất khách, nhưng không nhắc thì hợp đồng nằm im hàng tháng.
+ */
+export function selectNudgeMessage(opts: {
+  name?: string | null;
+  link?: string | null;
+  studio?: string | null;
+  /** Lần nhắc thứ mấy (1, 2, 3…). */
+  round?: number;
+  /** Đã bao nhiêu ngày kể từ lúc mời chọn ảnh. */
+  days?: number;
+}): string {
+  const round = opts.round ?? 1;
+  const lines = [hi(opts.name)];
+  if (round <= 1) {
+    lines.push("Bên em thấy anh/chị chưa chọn ảnh, không biết link có mở được không ạ?");
+  } else if (round === 2) {
+    lines.push(
+      `Album chọn ảnh của anh/chị vẫn đang chờ${opts.days ? ` (đã ${opts.days} ngày)` : ""}. Anh/chị chọn giúp em để bên em vào chỉnh sửa nhé ạ.`,
+    );
+  } else {
+    lines.push(
+      `Em vẫn giữ album chờ anh/chị chọn ảnh${opts.days ? ` (đã ${opts.days} ngày)` : ""}. Anh/chị chọn sớm giúp em để kịp lịch hậu kỳ ạ.`,
+    );
+  }
+  if (opts.link) lines.push(`Chọn ảnh tại: ${opts.link}`);
+  if (round >= 2) lines.push("Nếu anh/chị cần bên em hỗ trợ chọn, nhắn em nhé ạ.");
+  return lines.join("\n") + sign(opts.studio);
+}
+
+/** Nhắc khách trước khi báo giá hết hiệu lực. */
+export function quoteExpiringMessage(opts: {
+  name?: string | null;
+  link?: string | null;
+  studio?: string | null;
+  days?: number;
+}): string {
+  const lines = [hi(opts.name)];
+  lines.push(
+    opts.days && opts.days > 0
+      ? `Báo giá bên em gửi anh/chị còn hiệu lực ${opts.days} ngày nữa ạ.`
+      : "Báo giá bên em gửi anh/chị hết hiệu lực hôm nay ạ.",
+  );
+  if (opts.link) lines.push(`Xem lại báo giá tại: ${opts.link}`);
+  lines.push("Anh/chị cần bên em giữ giá hoặc điều chỉnh hạng mục thì nhắn em nhé ạ.");
+  return lines.join("\n") + sign(opts.studio);
+}
+
 /** Báo đã giao ảnh hoàn thiện. */
 export function deliveryReadyMessage(opts: {
   name?: string | null;

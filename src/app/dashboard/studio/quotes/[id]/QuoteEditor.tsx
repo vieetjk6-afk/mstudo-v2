@@ -17,6 +17,7 @@ import {
   type QuoteStatus,
 } from "@/lib/types";
 import { computeRoundedDeposit, depositRatio } from "@/lib/quote-deposit";
+import { quoteExpiryFrom, quoteExpiryLabel, isQuoteExpired } from "@/lib/quote-expiry";
 
 type EditableQuoteFields = Pick<
   StudioQuote,
@@ -49,12 +50,15 @@ export default function QuoteEditor({
   initialAdjustments,
   canConvert,
   studioHost = null,
+  quoteValidDays = 15,
 }: {
   quote: StudioQuote;
   initialItems: QuoteItem[];
   initialAdjustments: QuoteAdjustment[];
   canConvert: boolean;
   studioHost?: string | null;
+  /** Hạn hiệu lực mặc định của studio (ngày). 0 = không đặt hạn. */
+  quoteValidDays?: number;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -303,9 +307,36 @@ ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discount
 
   async function markSent() {
     setBusy(true);
-    await patchQuoteImmediate({ status: "sent" });
+    // Đặt hạn hiệu lực ngay lúc gửi (nếu studio chưa tự đặt): đây là lúc DUY
+    // NHẤT biết chắc mốc bắt đầu đếm. Đặt lúc tạo nháp thì báo giá soạn dở cả
+    // tuần đã tự hết hạn trước khi khách kịp nhận.
+    const patch: Partial<StudioQuote> = { status: "sent" };
+    if (!quote.expires_at) patch.expires_at = quoteExpiryFrom(quoteValidDays);
+    await patchQuoteImmediate(patch);
     setBusy(false);
-    flash("Đã đánh dấu là 'Đã gửi'.");
+    flash(patch.expires_at ? `Đã đánh dấu 'Đã gửi' · hiệu lực ${quoteValidDays} ngày.` : "Đã đánh dấu là 'Đã gửi'.");
+  }
+
+  /** Gia hạn hiệu lực thêm N ngày kể từ hôm nay (dùng cho báo giá đã hết hạn). */
+  async function extendExpiry(days: number) {
+    setBusy(true);
+    // Hết hạn rồi mà gia hạn thì đưa về lại trạng thái "đã gửi" — để nguyên
+    // 'expired' thì khách bấm đồng ý vẫn bị chặn dù studio đã mở lại.
+    const patch: Partial<StudioQuote> = { expires_at: quoteExpiryFrom(days) };
+    if (quote.status === "expired") patch.status = "sent";
+    await patchQuoteImmediate(patch);
+    setBusy(false);
+    flash(`Đã gia hạn thêm ${days} ngày.`);
+  }
+
+  /** Bỏ hạn — báo giá có hiệu lực tới khi studio tự huỷ. */
+  async function clearExpiry() {
+    setBusy(true);
+    const patch: Partial<StudioQuote> = { expires_at: null };
+    if (quote.status === "expired") patch.status = "sent";
+    await patchQuoteImmediate(patch);
+    setBusy(false);
+    flash("Đã bỏ hạn hiệu lực.");
   }
 
   async function cancel() {
@@ -442,6 +473,43 @@ ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discount
 
       {msg && <p className="rounded-md px-3 py-2 text-xs" style={{ background: "color-mix(in srgb, var(--success) 14%, transparent)", color: "var(--success)" }}>{msg}</p>}
       {err && <p className="rounded-md px-3 py-2 text-xs" style={{ background: "color-mix(in srgb, var(--danger) 14%, transparent)", color: "var(--danger)" }}>{err}</p>}
+
+      {/* Hạn hiệu lực — chỉ có nghĩa khi báo giá đã rời trạng thái nháp. Hết hạn
+          KHÔNG khoá gì phía studio: nó chỉ chặn khách bấm đồng ý trên cổng
+          khách, và là cái cớ để gọi lại khách. */}
+      {quote.status !== "draft" && (() => {
+        const expired = isQuoteExpired(quote.expires_at);
+        const tone = expired
+          ? { fg: "var(--s-red)", bg: "color-mix(in srgb, var(--s-red) 12%, transparent)" }
+          : { fg: "var(--text2)", bg: "var(--surface2)" };
+        return (
+          <section className="card flex flex-wrap items-center gap-x-4 gap-y-2 p-4" data-testid="quote-expiry">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">Hiệu lực báo giá</p>
+              <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
+                {quote.expires_at
+                  ? `Hết hiệu lực ngày ${new Date(quote.expires_at).toLocaleDateString("vi-VN")}${expired ? " — khách không bấm đồng ý được nữa" : ""}`
+                  : "Không đặt hạn — báo giá có hiệu lực tới khi bạn huỷ."}
+              </p>
+            </div>
+            <span className="flex-none rounded-full px-2.5 py-1 text-[11.5px] font-semibold" style={{ background: tone.bg, color: tone.fg }}>
+              {quoteExpiryLabel(quote.expires_at)}
+            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              {[7, 15, 30].map((d) => (
+                <button key={d} onClick={() => extendExpiry(d)} disabled={busy} className="btn-ghost px-3 py-1.5 text-xs">
+                  {quote.expires_at ? `Gia hạn ${d} ngày` : `Đặt hạn ${d} ngày`}
+                </button>
+              ))}
+              {quote.expires_at && (
+                <button onClick={clearExpiry} disabled={busy} className="btn-ghost px-3 py-1.5 text-xs" style={{ color: "var(--text3)" }}>
+                  Bỏ hạn
+                </button>
+              )}
+            </div>
+          </section>
+        );
+      })()}
 
       {adjustments.length > 0 && (
         <section className="card p-5" data-testid="quote-adjustments">
