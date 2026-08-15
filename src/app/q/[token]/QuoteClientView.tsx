@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { isQuoteExpired, quoteDaysLeft } from "@/lib/quote-expiry";
 
 type Lang = "vi" | "en";
 const TR = {
@@ -17,6 +18,8 @@ const TR = {
     lockedExpired: "hết hạn",
     lockedMsg: "và không thể thay đổi.",
     quotePrefix: "Báo giá này đã",
+    expiringToday: "Báo giá này hết hiệu lực hôm nay.",
+    expiringIn: "Báo giá này còn hiệu lực {n} ngày.",
     codeLabel: "Mã:",
     eventTitle: "Sự kiện",
     dateLabel: "Ngày:",
@@ -79,6 +82,8 @@ const TR = {
     lockedExpired: "expired",
     lockedMsg: "and cannot be changed.",
     quotePrefix: "This quote has been",
+    expiringToday: "This quote expires today.",
+    expiringIn: "This quote is valid for {n} more days.",
     codeLabel: "Code:",
     eventTitle: "Event",
     dateLabel: "Date:",
@@ -186,7 +191,13 @@ export default function QuoteClientView({
   const [clientFacebook, setClientFacebook] = useState(quote.client_facebook || "");
   const [autoCreate, setAutoCreate] = useState(studioCanContract);
 
-  const locked = accepted || quote.status === "cancelled" || quote.status === "expired";
+  // Xét cả expires_at chứ không chỉ status: cron đóng báo giá quá hạn chạy một
+  // lần mỗi ngày, nên báo giá hết hạn lúc 23:59 vẫn còn status 'sent' suốt sáng
+  // hôm sau. API cũng chặn y hệt — đây chỉ là để khách không bấm rồi mới báo lỗi.
+  const expiredByDate = isQuoteExpired(quote.expires_at);
+  const locked = accepted || quote.status === "cancelled" || quote.status === "expired" || expiredByDate;
+  // Còn hiệu lực bao nhiêu ngày — chỉ hiện khi sắp hết, để khách biết mà quyết.
+  const daysLeftNum = quoteDaysLeft(quote.expires_at);
 
   // Separate items into package groups and standalone items.
   const packageGroups = new Map<string, QuoteItem[]>();
@@ -320,6 +331,13 @@ export default function QuoteClientView({
         {locked && !accepted && (
           <div className="rounded-[11px] px-4 py-3 text-[12.5px] font-semibold" style={{ background: "var(--blS)", color: "var(--bl)" }}>
             {tr.quotePrefix} {quote.status === "cancelled" ? tr.lockedCancelled : tr.lockedExpired} {tr.lockedMsg}
+          </div>
+        )}
+
+        {/* Sắp hết hiệu lực — nhắc nhẹ để khách biết mà quyết, không doạ. */}
+        {!locked && daysLeftNum !== null && daysLeftNum <= 7 && (
+          <div className="rounded-[11px] px-4 py-3 text-[12.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
+            {daysLeftNum <= 0 ? tr.expiringToday : tr.expiringIn.replace("{n}", String(daysLeftNum))}
           </div>
         )}
 

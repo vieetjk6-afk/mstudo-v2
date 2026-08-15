@@ -4,6 +4,7 @@ import {
   Plus, FileText, CalendarDays, Users, AlertCircle, Wallet, Clock, Globe, Images,
   Bolt, UserPlus, Banknote, ImagePlus, ReceiptText, PenLine, CalendarClock,
   TrendingUp, CircleAlert, CalendarRange, Hourglass, Landmark, CalendarCheck,
+  AlertTriangle,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
@@ -195,7 +196,7 @@ export default async function StudioOverview() {
   let cq = supabase
     .from("studio_contracts")
     .select(
-      "id, code, title, client_name, client_phone, client_messenger, location, event_date, event_time, delivery_due, status, shoot_type, client_signed_at, selection_album_id, updated_at, contract_items(qty, unit_price), contract_edit_requests(status), contract_payments(amount), contract_crew(id, name, phone, role, status)"
+      "id, code, title, client_name, client_phone, client_messenger, location, event_date, event_time, delivery_due, status, shoot_type, client_signed_at, selection_album_id, select_invited_at, updated_at, contract_items(qty, unit_price), contract_edit_requests(status), contract_payments(amount), contract_crew(id, name, phone, role, status)"
     )
     .eq("owner_id", profile.id)
     .neq("status", "cancelled");
@@ -251,6 +252,7 @@ export default async function StudioOverview() {
     shoot_type: keyof typeof SHOOT_TYPE_LABEL;
     client_signed_at: string | null;
     selection_album_id: string | null;
+    select_invited_at: string | null;
     updated_at: string;
     contract_items: { qty: number; unit_price: number }[];
     contract_edit_requests: { status: string }[];
@@ -266,6 +268,49 @@ export default async function StudioOverview() {
   const openEdits = list.flatMap((c) =>
     (c.contract_edit_requests || []).filter((r) => r.status === "open").map(() => c)
   );
+
+  // ── Hợp đồng đang TẮC ─────────────────────────────────────────────────────
+  // Một hợp đồng không tự báo là nó đang đứng im. Ba chỗ dừng lâu nhất trong
+  // thực tế: khách chưa ký, khách chưa chọn ảnh, và ảnh trễ hạn giao. Đo bằng
+  // SỐ NGÀY chứ không phải trạng thái, vì trạng thái vẫn "đang thực hiện" suốt
+  // thời gian nằm im.
+  const STALL_DAYS = 7;
+  const daysSince = (iso: string | null) =>
+    iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : 0;
+
+  // Album chọn ảnh nào đã có khách bấm chọn → hợp đồng đó không còn tắc ở bước này.
+  const albumIds = list.map((c) => c.selection_album_id).filter((x): x is string => !!x);
+  const { data: pickedRows } = albumIds.length
+    ? await supabase.from("selections").select("album_id").in("album_id", albumIds)
+    : { data: [] as { album_id: string }[] };
+  const pickedAlbums = new Set((pickedRows ?? []).map((r) => r.album_id as string));
+
+  type Stall = { c: (typeof list)[number]; reason: string; days: number; tone: ToneKey };
+  const stalled: Stall[] = [];
+  for (const c of list) {
+    if (c.status === "completed" || c.status === "draft") continue;
+
+    // 1) Đã gửi khách nhưng chưa ai ký.
+    if (c.status === "sent" && !c.client_signed_at) {
+      const d = daysSince(c.updated_at);
+      if (d >= STALL_DAYS) stalled.push({ c, reason: "Khách chưa ký hợp đồng", days: d, tone: "amber" });
+      continue;
+    }
+    // 2) Đã mời chọn ảnh nhưng album chưa có lượt chọn nào.
+    if (c.select_invited_at && c.selection_album_id && !pickedAlbums.has(c.selection_album_id)) {
+      const d = daysSince(c.select_invited_at);
+      if (d >= STALL_DAYS) {
+        stalled.push({ c, reason: "Khách chưa chọn ảnh", days: d, tone: "amber" });
+        continue;
+      }
+    }
+    // 3) Quá hạn giao ảnh — đây là lỗi của studio, tô đỏ.
+    if (c.delivery_due && c.delivery_due < today) {
+      const d = Math.floor((new Date(today).getTime() - new Date(c.delivery_due).getTime()) / 86400000);
+      stalled.push({ c, reason: "Trễ hạn giao ảnh", days: d, tone: "red" });
+    }
+  }
+  stalled.sort((a, b) => b.days - a.days);
 
   // Outstanding debts: active contracts where collected < total.
   const debts = list
@@ -680,6 +725,46 @@ export default async function StudioOverview() {
           </div>
         </Panel>
       </div>
+
+      {/* Hợp đồng đang tắc — việc nằm im không tự kêu, nên phải có chỗ kêu hộ.
+          Chỉ hiện khi thực sự có hợp đồng tắc; studio đang chạy trơn thì khối
+          này biến mất thay vì chiếm chỗ với một ô trống. */}
+      {stalled.length > 0 && (
+        <Panel className="mt-3.5">
+          <PanelHead
+            icon={AlertTriangle}
+            tone="amber"
+            title="Hợp đồng đang tắc"
+            count={String(stalled.length)}
+            note={`Đứng im từ ${STALL_DAYS} ngày trở lên`}
+          />
+          <div className="px-2 pb-2">
+            {stalled.slice(0, 6).map(({ c, reason, days, tone }) => (
+              <Link
+                key={`${c.id}-${reason}`}
+                href={`/dashboard/studio/contracts/${c.id}`}
+                className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-2 py-[9px] text-left"
+              >
+                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10.5px] font-bold" style={avatarStyle(c.client_name || c.title)}>
+                  {initials(c.client_name || c.title)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12.5px] font-semibold">{c.title}</span>
+                  <span className="block truncate text-[11px]" style={{ color: "var(--tx3)" }}>
+                    {c.client_name || "Chưa có tên khách"} · {reason}
+                  </span>
+                </span>
+                <Pill tone={tone}>{days} ngày</Pill>
+              </Link>
+            ))}
+            {stalled.length > 6 && (
+              <p className="px-2 pb-1 pt-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                và {stalled.length - 6} hợp đồng khác
+              </p>
+            )}
+          </div>
+        </Panel>
+      )}
 
       {profile.actingRole !== "staff" && (
         <AutoEmailToggle ownerId={profile.id} initial={!!profile.auto_client_emails} />

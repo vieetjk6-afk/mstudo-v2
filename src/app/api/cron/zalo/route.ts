@@ -6,7 +6,10 @@ import {
   shootReminderMessage,
   paymentDueMessage,
   selectReadyMessage,
+  selectNudgeMessage,
+  quoteExpiringMessage,
 } from "@/lib/zalo/messages";
+import { OPEN_QUOTE_STATUSES, QUOTE_NUDGE_DAYS } from "@/lib/quote-expiry";
 import { ensureIntakeToken, intakeUrl } from "@/lib/contract-intake";
 import { listFolderImages } from "@/lib/drive-server";
 import { mainUrl } from "@/lib/hosts";
@@ -174,7 +177,7 @@ export async function GET(req: NextRequest) {
   // ── 3) SELECT READY — mời chọn ảnh (Drive có ảnh, hoặc 1 ngày sau chụp) ───
   const { data: selCands } = await db
     .from("studio_contracts")
-    .select("id, owner_id, title, client_name, client_phone, event_date, selection_album_id, gallery_album_id, drive_tree")
+    .select("id, owner_id, title, client_name, client_phone, event_date, selection_album_id, gallery_album_id, drive_tree, select_invited_at")
     .lte("event_date", today)
     .eq("status", "in_progress")
     .not("selection_album_id", "is", null)
@@ -212,7 +215,123 @@ export async function GET(req: NextRequest) {
       contractId: c.id,
     });
     if (r.ok) selectSent++;
+    // Ghi mốc mời chọn ảnh DÙ gửi Zalo thất bại (hoặc studio chưa bật Zalo):
+    // Tổng quan dựa vào mốc này để biết hợp đồng đang tắc bao lâu, và điều đó
+    // đúng với mọi studio chứ không riêng studio đã kết nối Zalo.
+    if (!c.select_invited_at) {
+      await db.from("studio_contracts").update({ select_invited_at: new Date().toISOString() }).eq("id", c.id);
+    }
   }
 
-  return NextResponse.json({ ok: true, shootSent, dueSent, selectSent });
+  // ── 4) SELECT NUDGE — khách nhận link rồi im lặng ─────────────────────────
+  // Đây là chỗ tắc kinh điển: mời chọn ảnh gửi ĐÚNG MỘT LẦN, khách quên, hậu kỳ
+  // đứng, tiền cuối chưa thu được. Nhắc lại tối đa 3 lần, giãn dần.
+  let nudgeSent = 0;
+  const NUDGE_AFTER_DAYS = [3, 8, 16]; // lần 1 sau 3 ngày, lần 2 sau 8, lần 3 sau 16
+  const { data: silent } = await db
+    .from("studio_contracts")
+    .select("id, owner_id, title, client_name, client_phone, selection_album_id, select_invited_at, select_nudges, select_nudged_at")
+    .eq("status", "in_progress")
+    .not("select_invited_at", "is", null)
+    .not("selection_album_id", "is", null)
+    .is("gallery_album_id", null)
+    .lt("select_nudges", NUDGE_AFTER_DAYS.length);
+
+  for (const c of (silent ?? []) as any[]) {
+    if (!c.client_phone) continue;
+    const invitedDays = Math.floor((Date.now() - new Date(c.select_invited_at).getTime()) / (24 * 3600 * 1000));
+    const round = (c.select_nudges as number) ?? 0;
+    if (invitedDays < NUDGE_AFTER_DAYS[round]) continue;
+    // Giãn cách tối thiểu 3 ngày giữa hai lời nhắc, kể cả khi mốc kế đã tới.
+    if (c.select_nudged_at && Date.now() - new Date(c.select_nudged_at).getTime() < 3 * 24 * 3600 * 1000) continue;
+
+    // Khách đã chọn được tấm nào chưa? Chọn rồi thì thôi, đừng nhắc nữa.
+    const { count } = await db
+      .from("selections")
+      .select("id", { count: "exact", head: true })
+      .eq("album_id", c.selection_album_id);
+    if ((count ?? 0) > 0) {
+      // Đánh dấu hết mức nhắc để vòng sau không quét lại hợp đồng này nữa.
+      await db.from("studio_contracts").update({ select_nudges: NUDGE_AFTER_DAYS.length }).eq("id", c.id);
+      continue;
+    }
+
+    const { data: al } = await db.from("albums").select("slug").eq("id", c.selection_album_id).maybeSingle();
+    if (!al?.slug) continue;
+    const studio = await studioName(c.owner_id);
+    const r = await autoNotify({
+      ownerId: c.owner_id,
+      event: "select_nudge",
+      audience: "client",
+      toPhone: c.client_phone,
+      toName: c.client_name,
+      body: selectNudgeMessage({
+        name: c.client_name,
+        link: mainUrl(`/a/${al.slug}`),
+        studio,
+        round: round + 1,
+        days: invitedDays,
+      }),
+      contractId: c.id,
+    });
+    // Tăng bộ đếm DÙ gửi hỏng: nếu không, một studio chưa bật Zalo sẽ bị quét
+    // lại mỗi ngày mãi mãi, và bộ đếm không bao giờ tới mức dừng.
+    await db
+      .from("studio_contracts")
+      .update({ select_nudges: round + 1, select_nudged_at: new Date().toISOString() })
+      .eq("id", c.id);
+    if (r.ok) nudgeSent++;
+  }
+
+  // ── 5) QUOTE EXPIRING / EXPIRED ──────────────────────────────────────────
+  // Báo giá gửi đi vốn có hiệu lực vĩnh viễn (cột expires_at có sẵn nhưng chưa
+  // ai ghi). Giờ: nhắc khách trước khi hết hạn, rồi tự đóng khi quá hạn.
+  let quoteNudged = 0;
+  let quoteClosed = 0;
+  const nowIso = new Date().toISOString();
+  const nudgeWindow = new Date(Date.now() + QUOTE_NUDGE_DAYS * 24 * 3600 * 1000).toISOString();
+
+  const { data: expiringQuotes } = await db
+    .from("studio_quotes")
+    .select("id, owner_id, title, client_name, client_phone, client_token, status, expires_at")
+    .in("status", OPEN_QUOTE_STATUSES as unknown as string[])
+    .not("expires_at", "is", null)
+    .gt("expires_at", nowIso)
+    .lte("expires_at", nudgeWindow);
+
+  for (const q of (expiringQuotes ?? []) as any[]) {
+    if (!q.client_phone) continue;
+    // zalo_messages gắn theo contract_id, mà báo giá chưa có hợp đồng — dùng
+    // chính id báo giá làm khoá chống trùng (cùng kiểu uuid, không đụng nhau).
+    if (await alreadySent(q.owner_id, q.id, "quote_expiring", QUOTE_NUDGE_DAYS + 1)) continue;
+    const studio = await studioName(q.owner_id);
+    const r = await autoNotify({
+      ownerId: q.owner_id,
+      event: "quote_expiring",
+      audience: "client",
+      toPhone: q.client_phone,
+      toName: q.client_name,
+      body: quoteExpiringMessage({
+        name: q.client_name,
+        link: mainUrl(`/q/${q.client_token}`),
+        studio,
+        days: Math.max(0, Math.ceil((new Date(q.expires_at).getTime() - Date.now()) / (24 * 3600 * 1000))),
+      }),
+      contractId: q.id,
+    });
+    if (r.ok) quoteNudged++;
+  }
+
+  // Tự đóng báo giá đã quá hạn. Chỉ đụng tới trạng thái CÒN MỞ — báo giá đã
+  // chốt/huỷ/đã tạo hợp đồng giữ nguyên.
+  const { data: closed } = await db
+    .from("studio_quotes")
+    .update({ status: "expired" })
+    .in("status", OPEN_QUOTE_STATUSES as unknown as string[])
+    .not("expires_at", "is", null)
+    .lt("expires_at", nowIso)
+    .select("id");
+  quoteClosed = (closed ?? []).length;
+
+  return NextResponse.json({ ok: true, shootSent, dueSent, selectSent, nudgeSent, quoteNudged, quoteClosed });
 }

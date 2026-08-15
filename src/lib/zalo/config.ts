@@ -46,6 +46,8 @@ export const AUTO_EVENTS: { key: string; label: string; audiences: ("client" | "
   { key: "shoot_reminder", label: "Nhắc lịch chụp (trước 1 ngày)", audiences: ["client", "crew"] },
   { key: "payment_due", label: "Nhắc thanh toán tới hạn", audiences: ["client"] },
   { key: "select_ready", label: "Mời khách chọn ảnh", audiences: ["client"] },
+  { key: "select_nudge", label: "Nhắc lại khi khách chưa chọn ảnh", audiences: ["client"] },
+  { key: "quote_expiring", label: "Nhắc báo giá sắp hết hiệu lực", audiences: ["client"] },
   { key: "delivery_ready", label: "Báo đã giao ảnh", audiences: ["client"] },
 ];
 

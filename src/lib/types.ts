@@ -53,6 +53,12 @@ export interface Album {
   // separate watermark toggle for the delivery phase.
   phase: AlbumPhase;
   watermark_delivery: boolean;
+  // Vòng đời lưu trữ ảnh gốc trên Drive. delivered_at = lần đầu chuyển sang
+  // giai đoạn giao khách; storage_until = ngày studio dự định dọn ảnh gốc
+  // (null = giữ vô hạn). Xem lib/storage-lifecycle.ts.
+  delivered_at: string | null;
+  storage_until: string | null;
+  storage_notice_at: string | null;
   created_at: string;
   updated_at: string;
 }
