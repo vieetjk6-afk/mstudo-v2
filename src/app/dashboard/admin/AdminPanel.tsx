@@ -1,11 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { fmtDate } from "@/lib/date";
 import { UserPlus, Trash2 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { planExpiry, planProfilePatch, type Plan } from "@/lib/plans";
+import {
+  activityLevel,
+  lastActiveLabel,
+  ACTIVITY_LABEL,
+  ACTIVITY_TONE,
+  type ActivityLevel,
+} from "@/lib/activity";
 import type { Profile } from "@/lib/types";
+
+/** Thứ tự hiện dải số liệu: nhóm cần gọi điện trước đứng trước. */
+const LEVEL_ORDER: ActivityLevel[] = ["active", "idle", "dormant", "lost", "never"];
 
 export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
   const { t } = useLang();
@@ -13,6 +23,23 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
   const [msg, setMsg] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ email: "", password: "", full_name: "" });
+  /** Lọc theo mức hoạt động — "" = xem tất cả. */
+  const [level, setLevel] = useState<ActivityLevel | "">("");
+
+  // Chỉ đếm CHỦ tài khoản (studio_owner_id = null): nhân viên là tài khoản con
+  // của một studio, đếm cả họ thì số "bao nhiêu studio đang dùng" bị thổi lên.
+  const owners = useMemo(() => rows.filter((p) => !p.studio_owner_id), [rows]);
+
+  const stats = useMemo(() => {
+    const by: Record<ActivityLevel, number> = { never: 0, active: 0, idle: 0, dormant: 0, lost: 0 };
+    for (const p of owners) by[activityLevel(p.last_active_at)]++;
+    return by;
+  }, [owners]);
+
+  const visible = useMemo(
+    () => (level ? rows.filter((p) => !p.studio_owner_id && activityLevel(p.last_active_at) === level) : rows),
+    [rows, level],
+  );
 
   function flash(m: string) {
     setMsg(m);
@@ -102,6 +129,12 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
         studio_owner_id: null,
         studio_role: null,
         is_active: true,
+        // Tài khoản vừa tạo chưa từng mở app — để null/0 để nó rơi đúng vào nhóm
+        // "Chưa từng mở" thay vì trông như đang hoạt động.
+        last_active_at: null,
+        last_active_day: null,
+        active_days: 0,
+        visit_count: 0,
         created_at: new Date().toISOString(),
       },
     ]);
@@ -154,6 +187,48 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
         </button>
       </form>
 
+      {/* ── Dải theo dõi hoạt động ─────────────────────────────────────────
+          Chỉ tính CHỦ tài khoản, vì mỗi studio là một khách hàng. Bấm một ô để
+          lọc bảng bên dưới xuống đúng nhóm đó — nhóm "Ngủ đông"/"Đã bỏ" chính
+          là danh sách cần gọi lại. */}
+      <div className="mb-4">
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <h2 className="text-sm font-semibold">Hoạt động tài khoản</h2>
+          <span className="text-xs" style={{ color: "var(--text3)" }}>
+            {owners.length} studio · đo bằng lần cuối mở khu quản lý
+          </span>
+          {level && (
+            <button onClick={() => setLevel("")} className="ml-auto text-xs font-semibold" style={{ color: "var(--accent)" }}>
+              Bỏ lọc
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+          {LEVEL_ORDER.map((lv) => {
+            const on = level === lv;
+            const tone = ACTIVITY_TONE[lv];
+            return (
+              <button
+                key={lv}
+                onClick={() => setLevel(on ? "" : lv)}
+                className="rounded-[12px] px-3 py-2.5 text-left"
+                style={{
+                  background: on ? tone.bg : "var(--surface2)",
+                  border: `1px solid ${on ? tone.fg : "var(--border)"}`,
+                }}
+              >
+                <span className="tnum block text-[20px] font-bold leading-none" style={{ color: tone.fg }}>
+                  {stats[lv]}
+                </span>
+                <span className="mt-1 block text-[11.5px]" style={{ color: "var(--text2)" }}>
+                  {ACTIVITY_LABEL[lv]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Table */}
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
@@ -161,6 +236,7 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
             <tr className="border-b border-ink-800 text-left text-xs uppercase tracking-wide text-accent-muted">
               <th className="px-4 py-3">{t("email")}</th>
               <th className="px-4 py-3">{t("plan")}</th>
+              <th className="px-4 py-3">Hoạt động</th>
               <th className="px-4 py-3">{t("role")}</th>
               <th className="px-4 py-3">{t("active")}</th>
               <th className="px-4 py-3">{t("monthlyLimit")}</th>
@@ -172,7 +248,7 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((p) => (
+            {visible.map((p) => (
               <tr key={p.id} className="border-b border-ink-850/60">
                 <td className="px-4 py-3">
                   <div className="text-accent">{p.full_name}</div>
@@ -214,6 +290,37 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
                     </div>
                   )}
                 </td>
+
+                {/* Hoạt động: nhãn mức + lần cuối mở + số ngày đã dùng.
+                    Nhân viên không có mức riêng — hoạt động của họ đã dồn vào
+                    mốc thời gian của chủ studio (xem api/activity/ping). */}
+                <td className="px-4 py-3">
+                  {p.studio_owner_id ? (
+                    <span className="text-[11px]" style={{ color: "var(--text3)" }}>
+                      Nhân viên
+                    </span>
+                  ) : (
+                    (() => {
+                      const lv = activityLevel(p.last_active_at);
+                      const tone = ACTIVITY_TONE[lv];
+                      return (
+                        <>
+                          <span
+                            className="inline-block whitespace-nowrap rounded-full px-2 py-0.5 text-[10.5px] font-bold"
+                            style={{ background: tone.bg, color: tone.fg }}
+                          >
+                            {ACTIVITY_LABEL[lv]}
+                          </span>
+                          <div className="mt-1 whitespace-nowrap text-[10px]" style={{ color: "var(--text3)" }}>
+                            {lastActiveLabel(p.last_active_at)}
+                            {p.active_days > 0 ? ` · ${p.active_days} ngày dùng` : ""}
+                          </div>
+                        </>
+                      );
+                    })()
+                  )}
+                </td>
+
                 <td className="px-4 py-3">
                   <select
                     className="input px-2 py-1 text-xs"
