@@ -25,10 +25,12 @@ const TARGET_LABEL: Record<Target, string> = {
   booking: "Chỉ Photographer / Basic",
 };
 
+// Nhãn khớp với nhóm "Quản trị hệ thống" trong sidebar — cùng một màn thì phải
+// cùng một tên, nếu không admin tưởng là hai chỗ khác nhau.
 const SHORTCUTS = [
-  { href: "/dashboard/admin", label: "Quản trị studio", desc: "Tài khoản, gói, quyền, kích hoạt/khóa", icon: Users },
+  { href: "/dashboard/admin", label: "Người dùng & studio", desc: "Tài khoản, gói, quyền, kích hoạt/khóa", icon: Users },
   { href: "/dashboard/admin/affiliate", label: "Quản lý Affiliate", desc: "Hoa hồng, tỉ lệ, thanh toán", icon: Gift },
-  { href: "/dashboard/settings", label: "Cài đặt hệ thống", desc: "Thông tin studio, bảng giá, tính năng", icon: Settings },
+  { href: "/dashboard/settings", label: "Cấu hình mstudo", desc: "Cấu hình nền tảng, phản hồi, yêu cầu nâng cấp, mã giảm giá", icon: Settings },
 ];
 
 export default function SystemPanel() {

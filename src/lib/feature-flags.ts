@@ -33,9 +33,13 @@ export function slideComingSoon(flags: FeatureFlags): boolean {
   return flags?.slide !== "live";
 }
 
-/** Phòng váy (kho trang phục & đơn cho thuê) defaults to "Sắp ra mắt" until set live. */
-export function rentalComingSoon(flags: FeatureFlags): boolean {
-  return flags?.rental !== "live";
+/**
+ * Phòng váy đã PHÁT HÀNH — không còn gắn nhãn "Sắp ra mắt" nữa.
+ * Giữ lại hàm (luôn trả false) thay vì xoá, để admin lỡ còn đặt
+ * feature_flags.rental = "coming_soon" trong DB cũng không khoá lại màn này.
+ */
+export function rentalComingSoon(_flags: FeatureFlags): boolean {
+  return false;
 }
 
 /** Đồng bộ Google Drive (ảnh/video hợp đồng) defaults to "Sắp ra mắt" until set live. */
@@ -58,7 +62,6 @@ export function comingSoonNav(flags: FeatureFlags): string[] {
   if (storyComingSoon(flags)) out.push("/dashboard/studio/story");
   if (albumComingSoon(flags)) out.push("/dashboard/studio/album-designer");
   if (slideComingSoon(flags)) out.push("/dashboard/studio/slide");
-  if (rentalComingSoon(flags)) out.push("/dashboard/studio/rental");
   if (driveSyncComingSoon(flags)) out.push("/dashboard/studio/drive-sync");
   return out;
 
