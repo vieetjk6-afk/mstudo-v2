@@ -20,6 +20,13 @@ export interface Profile {
   studio_owner_id: string | null;
   studio_role: string | null;
   is_active: boolean;
+  // Bộ đếm hoạt động — chỉ máy chủ ghi (xem lib/activity.ts và
+  // api/activity/ping). active_days đếm số NGÀY khác nhau có mở app, không phải
+  // số lượt; visit_count đếm phiên để so sánh với nó.
+  last_active_at: string | null;
+  last_active_day: string | null;
+  active_days: number;
+  visit_count: number;
   created_at: string;
 }
 

@@ -9,6 +9,7 @@ import NavProgress from "@/components/NavProgress";
 import TrialExpiredBanner from "@/components/TrialExpiredBanner";
 import AnnouncementPopup from "@/components/AnnouncementPopup";
 import ProductTour from "@/components/ProductTour";
+import ActivityPing from "@/components/ActivityPing";
 import MaintenanceScreen from "@/components/MaintenanceScreen";
 import {
   MAINTENANCE_REASON,
@@ -146,6 +147,8 @@ on conflict (id) do update set role='admin', is_active=true;`}
       </DashboardChrome>
       <AnnouncementPopup />
       <ProductTour />
+      {/* Ghi nhận "tài khoản này vừa mở app" — không hiện gì trên màn hình. */}
+      <ActivityPing />
     </div>
   );
 }
