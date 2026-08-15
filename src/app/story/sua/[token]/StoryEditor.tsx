@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Heart, Save, Eye, Loader2, Check, ExternalLink, Plus, Trash2, FolderOpen, RefreshCw, Cloud, CloudOff, Video, Users, QrCode, Printer, Download } from "lucide-react";
 import type { StoryConfig, StoryTimelineItem } from "@/lib/types";
+import { escapeHtml } from "@/lib/html-escape";
 
 type Upload = { id: string; drive_file_id: string; guest_name: string; is_video: boolean; approved: boolean; created_at: string };
 type Loaded = { story: { id: string; slug: string; config: StoryConfig; published: boolean }; uploads: Upload[]; drive_connected: boolean };
@@ -92,9 +93,11 @@ export default function StoryEditor({ token }: { token: string }) {
   }
   function printQr() {
     if (!qrImg) return;
-    const couple = [cfg?.groom_name, cfg?.bride_name].filter(Boolean).join(" & ") || "Love Story";
+    // Thoát HTML trước khi ghi vào cửa sổ in: cửa sổ mở bằng window.open("") kế
+    // thừa origin của trang này, nên tên tự nhập không được phép thành thẻ HTML.
+    const couple = escapeHtml([cfg?.groom_name, cfg?.bride_name].filter(Boolean).join(" & ") || "Love Story");
     const w = window.open("", "_blank", "width=520,height=680"); if (!w) return;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${couple}</title><style>body{font-family:Georgia,serif;text-align:center;padding:48px 24px;color:#a9527f}h1{font-size:26px;margin:0 0 4px}p{color:#8c847d;margin:2px 0}img{width:340px;height:340px;margin:22px auto;display:block}.u{font-size:12px;word-break:break-all}</style></head><body><h1>${couple}</h1><p>Quét mã để xem &amp; gửi ảnh Love Story</p><img src="${qrImg}"/><p class="u">${storyUrl(`/story/${slug}`)}</p><script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${couple}</title><style>body{font-family:Georgia,serif;text-align:center;padding:48px 24px;color:#a9527f}h1{font-size:26px;margin:0 0 4px}p{color:#8c847d;margin:2px 0}img{width:340px;height:340px;margin:22px auto;display:block}.u{font-size:12px;word-break:break-all}</style></head><body><h1>${couple}</h1><p>Quét mã để xem &amp; gửi ảnh Love Story</p><img src="${escapeHtml(qrImg)}"/><p class="u">${escapeHtml(storyUrl(`/story/${slug}`))}</p><script>window.onload=()=>window.print()</script></body></html>`);
   }
 
   if (status === "loading") return <div className="grid min-h-screen place-items-center text-stone-400"><Loader2 className="animate-spin" /></div>;

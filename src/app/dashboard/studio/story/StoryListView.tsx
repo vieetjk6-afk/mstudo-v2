@@ -7,6 +7,7 @@ import { Heart, ExternalLink, Pencil, Copy, Check, Users, FileText, Plus, Loader
 import { createClient } from "@/lib/supabase/client";
 import ThiepTabs from "@/components/studio/ThiepTabs";
 import { studioUrl } from "@/lib/hosts";
+import { escapeHtml } from "@/lib/html-escape";
 import type { StoryConfig } from "@/lib/types";
 
 export type StoryRow = {
@@ -48,7 +49,10 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
   function printQr() {
     if (!qr) return;
     const w = window.open("", "_blank", "width=520,height=680"); if (!w) return;
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${qr.couple}</title><style>body{font-family:Georgia,serif;text-align:center;padding:48px 24px;color:#a9527f}h1{font-size:26px;margin:0 0 4px}p{color:#8c847d;margin:2px 0}img{width:340px;height:340px;margin:22px auto;display:block}.u{font-size:12px;word-break:break-all}</style></head><body><h1>${qr.couple}</h1><p>Quét mã để xem Love Story</p><img src="${qr.img}"/><p class="u">${qr.url}</p><script>window.onload=()=>window.print()</script></body></html>`);
+    // Tên cô dâu/chú rể do KHÁCH tự nhập qua link token — phải thoát HTML, nếu
+    // không cửa sổ in (cùng origin với dashboard) sẽ chạy script của khách.
+    const couple = escapeHtml(qr.couple);
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${couple}</title><style>body{font-family:Georgia,serif;text-align:center;padding:48px 24px;color:#a9527f}h1{font-size:26px;margin:0 0 4px}p{color:#8c847d;margin:2px 0}img{width:340px;height:340px;margin:22px auto;display:block}.u{font-size:12px;word-break:break-all}</style></head><body><h1>${couple}</h1><p>Quét mã để xem Love Story</p><img src="${escapeHtml(qr.img)}"/><p class="u">${escapeHtml(qr.url)}</p><script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   }
 
@@ -104,11 +108,12 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
 
       {qr && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setQr(null)}>
-          <div className="w-full max-w-xs rounded-2xl bg-white p-6 text-center" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between"><p className="font-medium">{qr.couple}</p><button onClick={() => setQr(null)} className="text-stone-400 hover:text-stone-700"><X size={18} /></button></div>
+          <div className="w-full max-w-xs rounded-2xl border border-subtle bg-surface p-6 text-center text-fg" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between"><p className="font-medium">{qr.couple}</p><button onClick={() => setQr(null)} aria-label="Đóng" className="text-accent-faint hover:text-fg"><X size={18} /></button></div>
+            {/* Ảnh QR có nền trắng nướng sẵn — giữ khung trắng để quét được ở chế độ tối. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qr.img} alt="QR" className="mx-auto my-3 h-56 w-56" />
-            <p className="mb-4 break-all text-[11px] text-stone-400">{qr.url}</p>
+            <img src={qr.img} alt="QR" className="mx-auto my-3 h-56 w-56 rounded bg-white" />
+            <p className="mb-4 break-all text-[11px] text-accent-faint">{qr.url}</p>
             <div className="flex justify-center gap-2">
               <a href={qr.img} download={`qr-${qr.couple}.png`} className="btn-ghost px-3 py-2 text-xs">Tải ảnh</a>
               <button onClick={printQr} className="btn-primary px-3 py-2 text-xs"><Printer size={14} /> In mã QR</button>

@@ -14,5 +14,5 @@ export async function GET() {
       { status: 200 },
     );
   }
-  return NextResponse.redirect(adminDriveAuthUrl());
+  return NextResponse.redirect(adminDriveAuthUrl(admin.id as string));
 }

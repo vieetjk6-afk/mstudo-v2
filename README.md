@@ -1,33 +1,26 @@
-# Handoff: Nâng cấp giao diện quản lý studio (mstudo)
+# Đặc tả giao diện quản lý studio (mstudo)
 
-> **Đọc file này trước.** Nó tự đủ — một dev chưa từng tham gia cuộc trao đổi vẫn làm được.
+> Tài liệu tham chiếu cho khu **quản lý studio**: design token, cấu trúc điều
+> hướng, phân quyền, trạng thái hợp đồng và bảng ánh xạ màn ↔ file.
+> Sửa giao diện studio thì đọc mục tương ứng ở đây trước.
 
 ## Tóm tắt
 
-Thiết kế lại toàn bộ khu **quản lý studio** của repo `vieetjk01/Studio` (branch `claude/stoic-fermi-gf0pg4`): 46 màn desktop + 11 màn mobile, gộp nav từ ~40 mục rời rạc xuống 24 mục / 7 nhóm, thêm 14 tính năng mới. Trang chủ / landing **không** thuộc phạm vi này.
+Khu **quản lý studio**: 46 màn desktop + 11 màn mobile, nav gom thành 24 mục /
+7 nhóm. Trang chủ / landing **không** thuộc phạm vi tài liệu này.
 
-## Về file thiết kế trong gói
+Giao diện đã được dựng xong trong `src/` (Next.js App Router + React +
+TypeScript + Tailwind). Bản thiết kế HTML tham chiếu dùng khi dựng
+(`Quản lý Studio.dc.html` cùng `support.js`, `image-slot.js`) đã được gỡ khỏi
+repo sau khi hoàn tất — lấy lại từ lịch sử git nếu cần đối chiếu:
 
-`Quản lý Studio.dc.html` là **bản thiết kế tham chiếu viết bằng HTML**, không phải code để chép thẳng. Nhiệm vụ là **dựng lại các màn này trong môi trường sẵn có của repo** — Next.js App Router + React + TypeScript + Tailwind — theo đúng quy ước đang dùng ở đó, chứ không phải nhúng file HTML vào.
+```bash
+git log --all --diff-filter=D -- 'Quản lý Studio.dc.html'
+git show <commit>^:'Quản lý Studio.dc.html' > /tmp/thiet-ke.html
+```
 
-File chạy được: mở trực tiếp trong trình duyệt, bấm qua lại được mọi màn, có modal / filter / tab / ⌘K / dark mode chạy thật. Dùng nó làm nguồn tra cứu trực quan trong lúc code.
-
-## Độ hoàn thiện: **Hi-fi**
-
-Màu, chữ, khoảng cách, bo góc, trạng thái hover đều là giá trị cuối. Dựng lại **đúng pixel**, dùng thư viện và pattern sẵn có của repo. Dữ liệu trong file là dữ liệu mẫu — thay bằng dữ liệu thật từ Prisma/API.
-
----
-
-## Thứ tự triển khai đề xuất
-
-Làm theo đúng thứ tự này, mỗi bước là một PR:
-
-1. **Design token** → `src/app/globals.css`. Một lần, ảnh hưởng toàn bộ.
-2. **Khung app** → `src/components/StudioShell.tsx` (sidebar + topbar + ⌘K + dark mode). Sau bước này cả 46 màn cũ đã trông mới.
-3. **Tổng quan** → `src/app/dashboard/studio/page.tsx`.
-4. **Hợp đồng + Chi tiết hợp đồng** → nhóm màn dùng nhiều nhất.
-5. **Lịch, Khách hàng, Tài chính, Đối soát**.
-6. Phần còn lại theo bảng ánh xạ.
+Các giá trị dưới đây là **giá trị cuối** — màu, chữ, khoảng cách, bo góc,
+trạng thái hover. Đổi thì đổi có chủ đích, đừng đổi tuỳ tiện.
 
 ---
 
@@ -273,31 +266,20 @@ Bảng trên desktop → thẻ trên mobile. Không thu nhỏ bảng.
 
 ---
 
-## Danh sách file trong gói
+## Quy tắc khi sửa giao diện studio
 
-| File | Nội dung |
-| --- | --- |
-| `README.md` | Tài liệu này |
-| `Quản lý Studio.dc.html` | Bản thiết kế đầy đủ, mở trực tiếp bằng trình duyệt |
-| `support.js` | Runtime cần cho file trên chạy được (không dùng trong repo thật) |
-| `image-slot.js` | Component ô thả ảnh (không dùng trong repo thật) |
-| `github.md` | Ghi nhận repo nguồn + bảng ánh xạ màn ↔ file |
+- **Design token** sống ở `:root` của `src/app/globals.css`; bản dark ghi đè
+  bằng `[data-theme="dark"]`. Trong JSX dùng lớp token của Tailwind
+  (`bg-surface`, `text-fg`, `text-accent-muted`, `border-subtle`) —
+  **đừng** viết cứng `bg-white` / `text-stone-*` cho bề mặt dashboard, vì
+  chúng không đổi theo chế độ tối.
+- **Không đổi giá trị enum** trạng thái hợp đồng — chỉ đổi nhãn hiển thị trong
+  `CONTRACT_STATUS_LABEL`.
+- **Ngưỡng responsive** ở mục trên đã kiểm chứng — đừng đổi tuỳ tiện.
+- Dựng HTML bằng tay (`document.write`, `srcDoc`, template in ấn) thì mọi giá
+  trị do người dùng nhập phải qua `escapeHtml()` ở `src/lib/html-escape.ts`.
 
----
+## Tài liệu khác
 
-## Câu lệnh gợi ý cho Claude Code
-
-```
-Đọc README.md trong thư mục design_handoff_studio_admin.
-Mở Quản lý Studio.dc.html trong trình duyệt để xem thiết kế trực quan.
-
-Bắt đầu từ bước 1 trong mục "Thứ tự triển khai đề xuất":
-áp bộ design token vào src/app/globals.css, giữ nguyên tên biến
-đang có nếu trùng chức năng, thêm biến mới nếu chưa có.
-Sau đó dựng lại src/components/StudioShell.tsx theo mục
-"Cấu trúc điều hướng".
-
-Làm từng bước một, mỗi bước một commit. Không đổi schema Prisma.
-Không đổi giá trị enum trạng thái hợp đồng — chỉ đổi nhãn hiển thị
-trong CONTRACT_STATUS_LABEL.
-```
+Xem thư mục [`docs/`](docs/) — thiết lập môi trường, chuyển đổi dữ liệu,
+Supabase, và đặc tả client desktop.

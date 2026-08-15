@@ -2,6 +2,7 @@ import "server-only";
 import { Readable } from "stream";
 import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { signOAuthState, verifyOAuthState } from "@/lib/oauth-state";
 
 // Lưu NỘI DUNG NGƯỜI DÙNG (logo, ảnh…) vào Google Drive của ADMIN mstudo, trong
 // một thư mục riêng — không dùng dung lượng Supabase. Tái dụng OAuth client của
@@ -23,8 +24,24 @@ function oauth() {
 }
 
 /** URL đưa admin sang Google để cấp quyền Drive. */
-export function adminDriveAuthUrl(): string {
-  return oauth().generateAuthUrl({ access_type: "offline", prompt: "consent", scope: [SCOPE], state: "admin" });
+export function adminDriveAuthUrl(adminId: string): string {
+  return oauth().generateAuthUrl({
+    access_type: "offline",
+    prompt: "consent",
+    scope: [SCOPE],
+    // State phải ĐƯỢC KÝ và gắn với chính admin đang bấm kết nối. Trước đây state
+    // là hằng "admin", nên kẻ tấn công tự lấy `code` từ Google rồi dụ admin mở
+    // link callback là gắn được Drive CỦA MÌNH vào ô lưu trữ dùng chung (id=1) —
+    // account-linking CSRF, mọi nội dung người dùng đổ sang Drive của kẻ tấn công.
+    state: signOAuthState(`admindrive:${adminId}`),
+  });
+}
+
+/** Trả về id admin nếu state hợp lệ (đúng chữ ký, chưa hết hạn), ngược lại null. */
+export function verifyAdminDriveState(state: string | null | undefined): string | null {
+  const payload = verifyOAuthState(state);
+  if (!payload?.startsWith("admindrive:")) return null;
+  return payload.slice("admindrive:".length) || null;
 }
 
 // refresh_token là BÍ MẬT → ở bảng riêng admin_drive (chỉ service-role), KHÔNG ở
