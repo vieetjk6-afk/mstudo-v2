@@ -224,64 +224,76 @@ export function formatVnd(n: number): string {
   return `${n}đ`;
 }
 
-/** Human-readable feature bullets per plan (for the upgrade page). */
+/**
+ * Gạch đầu dòng tính năng của từng gói (trang nâng cấp).
+ *
+ * MỌI dòng ở đây phải khớp với quyền THẬT trong file này và với `minTier` của
+ * các mục trong `src/lib/studio-nav.ts` — người mua đọc đúng những dòng này rồi
+ * trả tiền, nên sai một dòng là bán sai hàng. Bảng đối chiếu:
+ *   photographer → tier "booking" · photographer_plus → "plus" · studio → "full"
+ *
+ * KHÔNG nhắc "dùng thử N ngày" ở đây: mỗi thẻ gói đã có sẵn nút dùng thử tự
+ * điền số ngày từ `trialDaysFor()`, viết tay lần nữa là hai chỗ lệch nhau.
+ */
 export const PLAN_FEATURES: Record<Plan, string[]> = {
   free: [
     "5 album / tháng",
     "Khách chọn ảnh & gửi lại studio (QR + link)",
+    "Album giao khách: chưa có",
     "Cho khách tải ảnh: chưa có",
-    "Watermark trên album: chưa có",
     "Ghi chú trên ảnh: chưa có",
-    "Watermark: chỉ chữ (không logo, không nén kèm)",
-    "Lọc ảnh AI: 10 lần / tháng",
+    "Watermark khi nén: chỉ chữ (không logo, không nén kèm)",
+    "Lọc ảnh khách chọn: 10 lần / tháng",
     "Nén ảnh (máy + link Drive): 5 lần / tháng",
     "Nén qua Google Drive (Picker): 1 lần dùng thử",
     "Xem trước trình tạo website (không xuất bản)",
-    "Trải nghiệm Studio miễn phí 1 ngày",
+    "Chưa vào được khu quản lý studio",
   ],
   basic: [
     "15 album / tháng",
+    "Album giao khách",
     "Cho khách tải ảnh — tải thẳng từ Google Drive (bản gốc, không giới hạn)",
-    "Watermark trên album: chưa có",
     "Cho khách ghi chú trên ảnh",
-    "Watermark đầy đủ (logo + nén kèm)",
-    "Lọc ảnh AI: không giới hạn",
+    "Watermark khi nén đầy đủ (logo + nén kèm)",
+    "Lọc ảnh khách chọn: không giới hạn",
     "Nén ảnh (máy + link Drive): không giới hạn",
     "Nén qua Google Drive (Picker): 5 lần / tháng",
     "Xem trước trình tạo website (không xuất bản)",
-    "Trải nghiệm Studio miễn phí 1 ngày",
+    "Chưa vào được khu quản lý studio",
   ],
   photographer: [
-    "50 album / tháng",
+    "50 album / tháng · Picker Drive 15 lần / tháng",
     "Tất cả tính năng gói Basic",
-    "Nén qua Google Drive (Picker): 15 lần / tháng",
-    "Trang quản lý lịch chụp (mstudo.com/dashboard/studio)",
+    "Khu quản lý studio (studio.mstudo.com)",
     "Nhận đặt lịch online — link + QR chia sẻ cho khách",
-    "Bảng giá dịch vụ, danh bạ khách hàng",
-    "Lịch chụp theo tuần + nhắc lịch Zalo",
-    "Website portfolio cá nhân (dùng domain mstudo)",
-    "Trải nghiệm Studio miễn phí 1 ngày",
+    "Yêu cầu mới từ website & chatbox",
+    "Lịch làm việc + nhắc lịch qua Zalo",
+    "Danh bạ khách hàng · gói & bảng giá · dịch vụ và điều khoản",
+    "Gallery công khai trên trang chủ mstudo",
+    "Website portfolio xuất bản được (tên miền mstudo)",
+    "Đồng bộ Google Calendar",
   ],
   photographer_plus: [
     "100 album / tháng · Picker Drive 30 lần / tháng",
     "Tất cả tính năng gói Photographer",
+    "Báo giá hạng mục chi tiết — khách tự chọn hạng mục tuỳ chọn",
+    "Hợp đồng: tạo, gửi khách ký online, nhận yêu cầu chỉnh sửa",
+    "Form thông tin buổi chụp gửi khách tự điền",
     "Watermark bảo vệ ảnh — khi khách xem và khi khách tải",
-    "Báo giá hạng mục chi tiết cho khách",
-    "Quản lý hợp đồng: tạo, gửi khách ký online, yêu cầu chỉnh sửa",
-    "Mẫu hợp đồng tái sử dụng",
     "Website riêng dùng TÊN MIỀN RIÊNG (vd studio.com)",
-    "Trải nghiệm Studio miễn phí 1 ngày",
+    "Ứng dụng máy tính MStudo Desktop",
   ],
   studio: [
     "Album không giới hạn · Picker Drive không giới hạn",
-    "Tất cả tính năng gói Photographer",
-    "Watermark bảo vệ ảnh — khi khách xem và khi khách tải",
-    "Quản lý hợp đồng + báo giá hạng mục chi tiết",
-    "Khách xem & ký hợp đồng online, yêu cầu chỉnh sửa",
-    "Quản lý tài chính — thu chi, công nợ, bảng lương",
-    "Quản lý đội ngũ (photographer, cameraman) theo hợp đồng",
-    "Báo cáo doanh thu theo tháng, tỉ lệ chốt hợp đồng",
-    "Thiết bị & xử lý hình ảnh (tiến độ sản xuất)",
+    "Tất cả tính năng gói Photographer Plus",
+    "Tài chính — thu chi, công nợ, báo cáo doanh thu",
+    "Đối soát tiền công · quản lý đội ngũ & xếp hạng",
+    "Bảng công việc và tiến độ xử lý ảnh / video / in ấn",
+    "Phòng váy — kho trang phục và đơn cho thuê",
+    "Thiết bị & lịch mượn",
+    "Thiệp cưới online · Love Story · Slide chiếu tiệc",
+    "Thiết kế album — dàn trang album in",
+    "Mẫu tin nhắn gửi khách soạn sẵn",
     "Hỗ trợ riêng · nhận miễn phí mọi tính năng nâng cấp sau này",
   ],
 };

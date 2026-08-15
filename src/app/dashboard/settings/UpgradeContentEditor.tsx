@@ -95,11 +95,12 @@ export default function UpgradeContentEditor({ initial }: { initial: unknown }) 
               {isSection(row) ? (
                 <input className={`${inp} font-medium`} value={row.section} onChange={(e) => editRow(i, { section: e.target.value })} placeholder="Tên nhóm (vd: Album & ảnh)" />
               ) : (
-                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[1.6fr_repeat(4,1fr)]">
+                <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-[1.6fr_repeat(5,1fr)]">
                   <input className={inp} value={row.label} onChange={(e) => editRow(i, { label: e.target.value })} placeholder="Tên tính năng" />
                   <input className={cellInp} value={row.free} onChange={(e) => editRow(i, { free: e.target.value })} placeholder="Free" />
                   <input className={cellInp} value={row.basic} onChange={(e) => editRow(i, { basic: e.target.value })} placeholder="Basic" />
                   <input className={cellInp} value={row.photographer} onChange={(e) => editRow(i, { photographer: e.target.value })} placeholder="Photog." />
+                  <input className={cellInp} value={row.photographer_plus} onChange={(e) => editRow(i, { photographer_plus: e.target.value })} placeholder="Photog. Plus" />
                   <input className={cellInp} value={row.studio} onChange={(e) => editRow(i, { studio: e.target.value })} placeholder="Studio" />
                 </div>
               )}
@@ -107,7 +108,7 @@ export default function UpgradeContentEditor({ initial }: { initial: unknown }) 
           ))}
         </div>
         <div className="mt-2 flex gap-2">
-          <button onClick={() => setRows([...uc.compare, { label: "", free: "✗", basic: "✗", photographer: "✗", studio: "✗" }])} className="btn-ghost text-xs"><Plus size={13} /> Thêm dòng</button>
+          <button onClick={() => setRows([...uc.compare, { label: "", free: "✗", basic: "✗", photographer: "✗", photographer_plus: "✗", studio: "✗" }])} className="btn-ghost text-xs"><Plus size={13} /> Thêm dòng</button>
           <button onClick={() => setRows([...uc.compare, { section: "" }])} className="btn-ghost text-xs"><Heading size={13} /> Thêm tiêu đề nhóm</button>
         </div>
       </div>
