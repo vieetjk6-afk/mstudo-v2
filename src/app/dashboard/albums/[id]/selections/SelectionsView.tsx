@@ -8,7 +8,6 @@ import {
   Download,
   Check,
   Wifi,
-  HardDriveDownload,
   HeartOff,
   Trash2,
   AlertTriangle,
@@ -17,7 +16,7 @@ import {
 import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
-import { buildZip, triggerDownload } from "@/lib/download";
+import { triggerDownload } from "@/lib/download";
 import FilterPhotosButton from "@/components/FilterPhotosButton";
 import type { Album, Dislike, Photo, Selection } from "@/lib/types";
 
@@ -50,8 +49,6 @@ export default function SelectionsView({
   const [disRows, setDisRows] = useState<Dislike[]>(dislikes);
   const [copied, setCopied] = useState<string | null>(null);
   const [live, setLive] = useState(false);
-  const [zipping, setZipping] = useState<string | null>(null);
-  const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
 
   // Live updates: refetch whenever the customer's selection changes.
   useEffect(() => {
@@ -242,28 +239,6 @@ export default function SelectionsView({
 
   // Download the customer-selected photos as a ZIP of ORIGINAL files from Drive
   // (full quality, no resize/watermark).
-  async function downloadOriginalsZip(group: Group) {
-    const items = group.items
-      .map((i) => ({ fileId: fileIdByPhoto.get(i.photo_id), name: i.photo_name }))
-      .filter((i): i is { fileId: string; name: string } => Boolean(i.fileId));
-    if (items.length === 0) return;
-
-    setZipping(group.sessionId);
-    setZipProgress({ done: 0, total: items.length });
-    try {
-      const blob = await buildZip(items, {
-        original: true,
-        onProgress: (done, total) => setZipProgress({ done, total }),
-      });
-      const name = group.clientName || group.sessionId.slice(0, 6);
-      triggerDownload(blob, `${album.slug}-${name}-goc.zip`);
-    } catch {
-      // ignore — user can retry
-    } finally {
-      setZipping(null);
-      setZipProgress(null);
-    }
-  }
 
   return (
     <div className="animate-fade-in">
@@ -504,19 +479,15 @@ export default function SelectionsView({
                   <button onClick={() => exportList(g)} className="btn-ghost text-xs">
                     <Download size={13} /> {t("exportList")}
                   </button>
-                  <button
-                    onClick={() => downloadOriginalsZip(g)}
-                    disabled={zipping !== null}
+                  {/* Nút "Tải ZIP ảnh gốc" đã gỡ: nó kéo TỪNG file gốc (~11 MB)
+                      qua /api/img, một album 300 tấm ≈ 3,3 GB băng thông Vercel
+                      mỗi lần bấm. Lọc ảnh chép thẳng file giữa hai thư mục Drive
+                      nên tốn 0 byte và cũng nhanh hơn nhiều. */}
+                  <FilterPhotosButton
+                    albumId={album.id}
+                    albumTitle={album.title}
                     className="btn-ghost text-xs"
-                    title="Tải ZIP các ảnh khách chọn ở chất lượng gốc từ Drive"
-                  >
-                    <HardDriveDownload size={13} />{" "}
-                    {zipping === g.sessionId
-                      ? zipProgress
-                        ? `Đang tải ${zipProgress.done}/${zipProgress.total}…`
-                        : "Đang tải…"
-                      : "Tải ZIP ảnh gốc"}
-                  </button>
+                  />
                 </div>
               </div>
 

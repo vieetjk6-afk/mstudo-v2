@@ -109,18 +109,22 @@ export function planAllowsCustomDomain(plan: Plan, isAdmin = false): boolean {
 
 /**
  * Watermark trên album của khách (chữ đè lên ảnh khi xem, và đóng vào ảnh khi
- * khách tải): chỉ Photographer Plus & Studio.
+ * khách tải): CHỈ gói Studio.
  *
- * Đây là ràng buộc HẠ TẦNG chứ không chỉ là phân gói: ảnh CÓ watermark bắt buộc
+ * Đây là ràng buộc HẠ TẦNG chứ không chỉ là phân gói. Ảnh CÓ watermark bắt buộc
  * phải đi qua proxy của mình — canvas cần đọc pixel, mà Drive không gửi header
  * CORS — nên mỗi lượt tải ngốn băng thông Vercel. Ảnh KHÔNG watermark tải thẳng
- * từ Drive, tốn 0 byte. Vì vậy chi phí đó chỉ mở cho hai gói cao nhất.
+ * từ Drive, tốn 0 byte.
+ *
+ * Sau khi bỏ ZIP kéo ảnh Drive, đây là đường CUỐI CÙNG còn ép ảnh đi vòng qua
+ * máy chủ, nên nó thu về đúng một gói cao nhất — nơi chi phí đó có chỗ bù.
  *
  * KHÁC với `watermarkPro` ở PlanLimits — cái đó là watermark logo trong công cụ
- * NÉN ảnh, không liên quan tới album.
+ * NÉN ảnh, chạy hoàn toàn trên máy người dùng nên không tốn băng thông, và vẫn
+ * mở từ gói Basic.
  */
 export function planAllowsWatermark(plan: Plan, isAdmin = false): boolean {
-  return isAdmin || plan === "photographer_plus" || plan === "studio";
+  return isAdmin || plan === "studio";
 }
 
 export function limitsFor(plan: Plan, isAdmin: boolean): PlanLimits {
@@ -279,13 +283,13 @@ export const PLAN_FEATURES: Record<Plan, string[]> = {
     "Báo giá hạng mục chi tiết — khách tự chọn hạng mục tuỳ chọn",
     "Hợp đồng: tạo, gửi khách ký online, nhận yêu cầu chỉnh sửa",
     "Form thông tin buổi chụp gửi khách tự điền",
-    "Watermark bảo vệ ảnh — khi khách xem và khi khách tải",
     "Website riêng dùng TÊN MIỀN RIÊNG (vd studio.com)",
     "Ứng dụng máy tính MStudo Desktop",
   ],
   studio: [
     "Album không giới hạn · Picker Drive không giới hạn",
     "Tất cả tính năng gói Photographer Plus",
+    "Watermark bảo vệ ảnh trong album — chỉ gói Studio",
     "Tài chính — thu chi, công nợ, báo cáo doanh thu",
     "Đối soát tiền công · quản lý đội ngũ & xếp hạng",
     "Bảng công việc và tiến độ xử lý ảnh / video / in ấn",

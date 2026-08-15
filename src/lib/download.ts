@@ -42,60 +42,20 @@ async function watermarkImage(img: HTMLImageElement, text: string): Promise<Blob
   );
 }
 
-export interface ZipItem {
-  fileId: string;
-  name: string;
-}
+/* ── ĐÃ GỠ: buildZip() ──────────────────────────────────────────────────────
+   Nén ảnh Drive thành ZIP ngay trong trình duyệt bắt MỌI byte ảnh phải đi qua
+   /api/img: ZIP cần byte nằm trong JS, mà Drive không gửi header CORS nên không
+   thể chuyển hướng thẳng sang Google như lượt xem thường. Một lượt tải ZIP ảnh
+   gốc của album cưới 300 tấm ≈ 3,3 GB Fast Origin Transfer trên Vercel — đây là
+   khoản tốn băng thông lớn nhất của cả hệ thống, và tốn lại từ đầu mỗi lần bấm
+   vì không có lớp cache nào (DRIVE_IMG_CACHE_BUCKET cố ý để trống).
 
-/**
- * Build a ZIP of the given Drive images (fetched through our proxy), applying
- * a watermark when requested. Calls onProgress(done, total) as it goes.
- */
-export async function buildZip(
-  items: ZipItem[],
-  opts: {
-    watermark?: string | null;
-    width?: number;
-    /** Fetch full-resolution originals from Drive (?orig=1) instead of a resized proxy. */
-    original?: boolean;
-    onProgress?: (d: number, t: number) => void;
-  }
-): Promise<Blob> {
-  // Nạp JSZip (~95KB gzip) lười — chỉ khi người dùng thật sự bấm tải ZIP,
-  // để nó không nằm trong first-load JS của các trang album công khai.
-  const { default: JSZip } = await import("jszip");
-  const zip = new JSZip();
-  const width = opts.width ?? 2000;
-  let done = 0;
+   Thay bằng hai đường sẵn có, đều tốn 0 byte của Vercel:
+     • Lọc ảnh → "Copy sang Drive": chép thẳng file giữa hai thư mục Drive.
+     • Link thư mục Drive trong gallery: Google tự nén và tự phục vụ.
 
-  for (const item of items) {
-    try {
-      // Originals: pull the untouched file from Drive (no resize, no watermark).
-      // These CANNOT go direct like downloadImage() does — a ZIP needs the bytes
-      // inside JS, and Drive serves no CORS headers, so the fetch would fail.
-      // The zero-bandwidth bulk path is the Drive FOLDER link (DriveDownload in
-      // the gallery), which lets Google zip and serve the whole set itself.
-      const url = opts.original
-        ? `/api/img?id=${encodeURIComponent(item.fileId)}&orig=1`
-        : `/api/img?id=${encodeURIComponent(item.fileId)}&w=${width}`;
-      if (opts.watermark && !opts.original) {
-        const img = await loadImage(url);
-        const blob = await watermarkImage(img, opts.watermark);
-        zip.file(ensureExt(item.name, "jpg"), blob);
-      } else {
-        const res = await fetch(url);
-        const blob = await res.blob();
-        zip.file(ensureExt(item.name, "jpg"), blob);
-      }
-    } catch {
-      // skip files that fail to download
-    }
-    done += 1;
-    opts.onProgress?.(done, items.length);
-  }
-
-  return zip.generateAsync({ type: "blob" });
-}
+   ZIP đóng gói file ĐÃ CÓ SẴN trong trình duyệt (ảnh máy khách, ảnh vừa nén,
+   mã QR, DOCX/XLSX) vẫn giữ nguyên — chúng không kéo byte nào qua Vercel. */
 
 function ensureExt(name: string, fallback: string): string {
   return /\.[a-z0-9]{2,4}$/i.test(name) ? name : `${name}.${fallback}`;
