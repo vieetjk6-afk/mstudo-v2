@@ -33,10 +33,17 @@ export function Pill({ tone, children, dot = false }: { tone: ToneKey; children:
   );
 }
 
-/** Thẻ trắng, viền, bo 14px, KHÔNG đổ bóng — hình khối chuẩn của bản thiết kế. */
-export function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+/** Thẻ trắng, viền, bo 14px, KHÔNG đổ bóng — hình khối chuẩn của bản thiết kế.
+ *  Các thuộc tính còn lại truyền thẳng xuống <div> (data-testid, aria-*, onClick…)
+ *  — trước đây chúng bị nuốt im lặng, nên `data-testid` đặt trên <Panel> không
+ *  bao giờ ra tới DOM. */
+export function Panel({
+  children,
+  className = "",
+  ...rest
+}: { children: React.ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={`rounded-[14px] ${className}`} style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+    <div {...rest} className={`rounded-[14px] ${className}`} style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
       {children}
     </div>
   );

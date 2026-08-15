@@ -36,6 +36,10 @@ export type NavItem = {
   badge?: BadgeKey;
   /** Route con cũng làm mục này sáng (màn đã gộp vào đây). */
   match?: readonly string[];
+  /** Chỉ sáng khi ĐÚNG route này, không tính route con. Cần cho mục cha có mục
+   *  con RIÊNG trong menu (vd /dashboard/admin đứng cạnh /dashboard/admin/system)
+   *  — nếu không cả hai cùng sáng. */
+  exact?: boolean;
   /** Từ khoá không dấu thêm cho ⌘K (nhãn đã tự được tìm). */
   keywords?: string;
   /** Dòng phụ trong ô ⌘K. Mục sidebar tự lấy tên nhóm nếu để trống. */
@@ -61,6 +65,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Bán hàng",
     items: [
+      // Phòng váy chuyển từ "Vận hành" sang đây: cho thuê trang phục là một
+      // nguồn DOANH THU bán kèm, không phải việc hậu kỳ.
+      { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full", roles: MANAGER_OK, keywords: "trang phuc thue vay" },
       { href: "/dashboard/studio/quotes", label: "Báo giá", icon: ReceiptText, minTier: "plus", roles: MANAGER_OK, badge: "quotes" },
       { href: "/dashboard/studio/contracts", label: "Hợp đồng & lịch hẹn", icon: FileText, minTier: "plus", roles: STAFF_OK, keywords: "hop dong buoi chup" },
       { href: "/dashboard/studio/board", label: "Bảng công việc", icon: Kanban, minTier: "full", roles: MANAGER_OK, keywords: "kanban cong viec" },
@@ -75,7 +82,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/dashboard/studio/calendar", label: "Lịch làm việc", icon: CalendarDays, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/studio/team"], keywords: "lich chup doi ngu" },
       { href: "/dashboard/studio/production", label: "Xử lý hình ảnh", icon: Wand2, minTier: "full", roles: STAFF_OK, badge: "production", keywords: "hau ky san xuat in" },
       { href: "/dashboard/albums", label: "Thư viện album", icon: Images, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/create", "/dashboard/studio/album-categories"], keywords: "album chon anh giao khach" },
-      { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full", roles: MANAGER_OK, keywords: "trang phuc thue vay" },
+      // Công cụ ảnh chuyển từ "Thiết lập" sang đây: lọc/nén/đóng dấu là việc làm
+      // hằng ngày trên ảnh, không phải một tuỳ chọn cấu hình.
+      { href: "/dashboard/tools", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/filter", "/dashboard/compress"], keywords: "loc anh nen anh watermark" },
       { href: "/dashboard/studio/equipment", label: "Thiết bị", icon: Camera, minTier: "full", roles: MANAGER_OK, keywords: "may anh ong kinh den" },
     ],
   },
@@ -103,7 +112,6 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { href: "/dashboard/studio/crew", label: "Đội ngũ", icon: UsersRound, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/staff"], keywords: "so tho nhan vien crew" },
       { href: "/dashboard/studio/ranking", label: "Xếp hạng", icon: Trophy, minTier: "full", roles: MANAGER_OK },
-      { href: "/dashboard/studio/messages", label: "Mẫu tin nhắn", icon: MessagesSquare, minTier: "full", roles: MANAGER_OK, keywords: "mau tin zalo sms" },
     ],
   },
   {
@@ -111,9 +119,10 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { href: "/dashboard/studio/pricing", label: "Gói & bảng giá", icon: Package, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/packages"], keywords: "goi dich vu bang gia" },
       { href: "/dashboard/studio/services", label: "Dịch vụ & điều khoản", icon: Gavel, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/templates"], keywords: "dieu khoan mau hop dong" },
+      // Mẫu tin nhắn chuyển từ "Nhân sự" sang đây: đây là nội dung soạn SẴN một
+      // lần rồi dùng lại, cùng loại với bảng giá và bộ điều khoản.
+      { href: "/dashboard/studio/messages", label: "Mẫu tin nhắn", icon: MessagesSquare, minTier: "full", roles: MANAGER_OK, keywords: "mau tin zalo sms" },
       { href: "/dashboard/site", label: "Website & chatbox", icon: Globe, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/chatbox"], keywords: "trang web portfolio tro ly" },
-      { href: "/dashboard/tools", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/filter", "/dashboard/compress"], keywords: "loc anh nen anh watermark" },
-      { href: "/dashboard/settings", label: "Cài đặt studio", icon: Settings, minTier: "booking", roles: OWNER_OK },
     ],
   },
   {
@@ -124,7 +133,23 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/dashboard/upgrade", label: "Gói phần mềm", icon: Crown, minTier: "booking", roles: OWNER_OK, keywords: "nang cap goi plan" },
       { href: "/dashboard/affiliate", label: "Affiliate", icon: Gift, minTier: "booking", roles: OWNER_OK, keywords: "hoa hong gioi thieu" },
       { href: "/dashboard/studio/desktop", label: "Ứng dụng máy tính", icon: Monitor, minTier: "plus", roles: MANAGER_OK, keywords: "desktop app may tinh sao luu" },
-      { href: "/dashboard/admin", label: "Quản trị hệ thống", icon: ShieldCheck, minTier: "booking", roles: ADMIN_ONLY, match: ["/dashboard/admin/system", "/dashboard/admin/affiliate"] },
+    ],
+  },
+  {
+    // Nhóm RIÊNG cho admin mstudo — không phải cấu hình của một studio. Trước
+    // đây ba màn này lẫn trong nhóm "Tài khoản", và "Cài đặt hệ thống"
+    // (/dashboard/admin/system) chỉ là một `match` của /dashboard/admin nên
+    // không có dòng menu nào dẫn tới — phải gõ tay URL mới vào được.
+    label: "Quản trị hệ thống",
+    items: [
+      { href: "/dashboard/admin", label: "Người dùng & studio", icon: ShieldCheck, minTier: "booking", roles: ADMIN_ONLY, exact: true, keywords: "tai khoan studio nguoi dung quan tri" },
+      { href: "/dashboard/admin/system", label: "Cài đặt hệ thống", icon: Settings, minTier: "booking", roles: ADMIN_ONLY, keywords: "sao luu khoi phuc thong bao toan studio drive" },
+      // /dashboard/settings là cấu hình NỀN TẢNG mstudo (site_settings, phản hồi,
+      // yêu cầu nâng cấp, mã giảm giá) và đã chặn non-admin ngay trong page.tsx.
+      // Trước nó nằm ở "Thiết lập" với nhãn "Cài đặt studio" và roles owner+admin,
+      // nên chủ studio thấy dòng menu rồi bấm vào lại bị đá về /dashboard.
+      { href: "/dashboard/settings", label: "Cấu hình mstudo", icon: SlidersHorizontal, minTier: "booking", roles: ADMIN_ONLY, keywords: "site settings phan hoi nang cap ma giam gia" },
+      { href: "/dashboard/admin/affiliate", label: "Quản lý Affiliate", icon: Gift, minTier: "booking", roles: ADMIN_ONLY, keywords: "hoa hong gioi thieu duyet" },
     ],
   },
 ];
@@ -193,5 +218,6 @@ export function noAccent(s: string): string {
 export function isNavActive(it: NavItem, pathname: string): boolean {
   const hit = (p: string) =>
     p === "/dashboard/studio" || p === "/dashboard" ? pathname === p : pathname === p || pathname.startsWith(p + "/");
-  return hit(it.href) || (it.match?.some(hit) ?? false);
+  const self = it.exact ? pathname === it.href : hit(it.href);
+  return self || (it.match?.some(hit) ?? false);
 }

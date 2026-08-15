@@ -40,6 +40,8 @@ export default function ZaloSendButton({
   askPhone = false,
   className = "btn-ghost px-2.5 py-1.5 text-xs",
   friendsBtnClass,
+  show = "both",
+  friendsLabel,
 }: {
   phone?: string | null;
   name?: string | null;
@@ -53,6 +55,12 @@ export default function ZaloSendButton({
   /** Lớp cho nút "chọn bạn Zalo". Mặc định theo `className` để hai nút cùng
    *  hình khối; truyền riêng khi nút gửi dùng lớp giãn hết chiều ngang. */
   friendsBtnClass?: string;
+  /** Hiện nút nào. Mặc định "both" (gửi theo SĐT + nút chọn bạn cạnh nhau).
+   *  Dùng "send" / "friends" khi hai cách gửi phải nằm ở hai dòng riêng —
+   *  ví dụ bảng chọn "Gửi khách" liệt kê từng cách một dòng. */
+  show?: "both" | "send" | "friends";
+  /** Nhãn cạnh icon của nút chọn bạn. Bỏ trống = chỉ hiện icon (mặc định cũ). */
+  friendsLabel?: string;
 }) {
   const [state, setState] = useState<null | "sending" | "ok" | "fail">(null);
   const [err, setErr] = useState("");
@@ -174,7 +182,7 @@ export default function ZaloSendButton({
     // đứng cạnh nhau và cao bằng nhau.
     <span ref={wrapRef} className="relative inline-flex w-full flex-col items-stretch gap-0.5">
       <span className="flex w-full flex-wrap items-center gap-1.5">
-        {inputMode && (
+        {inputMode && show !== "friends" && (
           <input
             value={manualPhone}
             onChange={(e) => setManualPhone(e.target.value)}
@@ -183,25 +191,30 @@ export default function ZaloSendButton({
             className="input min-w-[110px] flex-1 px-2 py-1.5 text-xs"
           />
         )}
-        <button
-          type="button"
-          onClick={sendByPhone}
-          disabled={state === "sending"}
-          className={className}
-          title="Gửi tự động qua Zalo studio"
-          style={{ color: "#0068FF" }}
-        >
-          {icon} {state === "ok" ? "Đã gửi" : label}
-        </button>
-        <button
-          type="button"
-          onClick={togglePicker}
-          className={friendsClass}
-          title="Chọn từ danh sách bạn Zalo (gửi được dù người nhận tắt tìm-bằng-SĐT)"
-          style={{ color: "#0068FF" }}
-        >
-          <Users size={14} className="inline" />
-        </button>
+        {show !== "friends" && (
+          <button
+            type="button"
+            onClick={sendByPhone}
+            disabled={state === "sending"}
+            className={className}
+            title="Gửi tự động qua Zalo studio"
+            style={{ color: "#0068FF" }}
+          >
+            {icon} {state === "ok" ? "Đã gửi" : label}
+          </button>
+        )}
+        {show !== "send" && (
+          <button
+            type="button"
+            onClick={togglePicker}
+            className={show === "friends" ? className : friendsClass}
+            title="Chọn từ danh sách bạn Zalo (gửi được dù người nhận tắt tìm-bằng-SĐT)"
+            style={{ color: "#0068FF" }}
+          >
+            <Users size={14} className="inline" />
+            {friendsLabel ? ` ${friendsLabel}` : ""}
+          </button>
+        )}
       </span>
 
       {pickOpen && (

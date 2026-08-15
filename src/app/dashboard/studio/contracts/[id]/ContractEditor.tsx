@@ -30,6 +30,7 @@ import {
   UserRound,
   Wallet,
   Send,
+  Share2,
   UserPlus,
   Printer,
 } from "lucide-react";
@@ -90,14 +91,14 @@ type ItemRow = { id?: string; name: string; qty: number; unit_price: number; is_
 /* ── Tab của màn chi tiết (bản thiết kế) ────────────────────────────────────
    Bản thiết kế xếp mọi thứ của một hợp đồng vào một thẻ có thanh tab, thay vì
    một cột dài. Thứ tự tab đi theo trình tự làm việc thật: xem thông tin → chốt
-   hạng mục → thu tiền → phân công → giao sản phẩm → gửi khách ký. */
+   hạng mục → thu tiền → phân công → giao sản phẩm → ký và thực hiện. */
 const DETAIL_TABS = [
   ["info", "Thông tin"],
   ["items", "Hạng mục"],
   ["pay", "Thanh toán"],
   ["crew", "Nhân sự"],
-  ["album", "Album & sản phẩm"],
-  ["send", "Gửi khách & ký"],
+  ["album", "Sản phẩm"],
+  ["send", "Ký và thực hiện"],
 ] as const;
 type DetailTab = (typeof DETAIL_TABS)[number][0];
 
@@ -394,6 +395,8 @@ export default function ContractEditor({
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /** Bảng chọn cách gửi cổng khách (mở từ nút "Gửi khách" ở thanh đầu trang). */
+  const [sendOpen, setSendOpen] = useState(false);
 
   function toast(m: string) {
     setMsg(m);
@@ -445,9 +448,42 @@ export default function ContractEditor({
   // Client portal runs on the studio's own subdomain once its site is published,
   // otherwise on the main host.
   const shareUrl = studioUrl(studioHost, `/c/${contract.client_token}`);
-  // Một nội dung tin duy nhất cho cả thẻ tóm tắt (điện thoại) và khối "Gửi khách
-  // & ký" (desktop) — hai chỗ gửi cùng một link thì không được lệch câu chữ.
+  // Một nội dung tin duy nhất cho mọi cách gửi trong bảng "Gửi khách" — cùng một
+  // link thì không được lệch câu chữ giữa Zalo, chia sẻ nhanh và chép link.
   const clientPortalMsg = `Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`;
+  /** "22:42 11-08" — lần cuối khách mở cổng, hoặc null nếu chưa mở lần nào. */
+  const clientViewedAt = contract.client_viewed_at
+    ? new Date(contract.client_viewed_at).toLocaleString("vi-VN", {
+        hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit",
+      })
+    : null;
+
+  /** Chép link cổng khách, hiện "Đã chép" 1,5 giây. */
+  function copyShareUrl() {
+    navigator.clipboard?.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  /**
+   * Chia sẻ nhanh qua bảng chia sẻ của hệ điều hành (Zalo, Messenger, SMS…).
+   * Trình duyệt không hỗ trợ `navigator.share` (phần lớn desktop) thì lùi về
+   * chép link, để nút không bao giờ bấm mà không có gì xảy ra.
+   */
+  async function quickShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Hợp đồng — ${f.title}`, text: clientPortalMsg, url: shareUrl });
+        setSendOpen(false);
+        return;
+      } catch {
+        /* khách bấm huỷ — không lùi về chép link, tránh chép ngoài ý muốn */
+        return;
+      }
+    }
+    copyShareUrl();
+    toast("Trình duyệt không hỗ trợ chia sẻ nhanh — đã chép link.");
+  }
 
   // Required fields — flagged red until valid. Phone must be 10 digits.
   const phoneOk = /^\d{10}$/.test(f.client_phone.replace(/\D/g, ""));
@@ -1169,7 +1205,7 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           <button onClick={() => setTab("pay")} className="act-btn">
             <Wallet size={16} /> Ghi nhận thanh toán
           </button>
-          <button onClick={() => setTab("send")} className="act-btn act-btn-primary col-span-2 min-[820px]:col-auto">
+          <button onClick={() => setSendOpen(true)} className="act-btn act-btn-primary col-span-2 min-[820px]:col-auto">
             <Send size={16} /> Gửi khách
           </button>
           {f.status === "cancelled" && (
@@ -1205,73 +1241,65 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           </span>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-semibold">{f.client_name || "Chưa có tên khách"}</p>
-            <p className="truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
-              {f.client_phone || "chưa có số điện thoại"}
-            </p>
-          </div>
-          {clientDigits.length >= 9 && (
-            <a href={`tel:${clientDigits}`} className="act-btn act-btn-auto">
-              <Phone size={15} /> Gọi
-            </a>
-          )}
-        </div>
-
-        {/* Gửi cổng khách — GỘP từ khối "Gửi khách & ký" phía dưới, cùng nội dung
-            tin và cùng link, để trên điện thoại chỉ còn MỘT chỗ gửi cho khách
-            thay vì hai chỗ giống nhau ở đầu và giữa trang. Khối dưới vẫn giữ cho
-            desktop, nơi thẻ tóm tắt này không hiện. */}
+        {/* Khách hàng — bản gọn của thẻ "Khách hàng" ở rail phải, đưa lên ngay
+            dưới tổng hợp đồng. Rail rơi xuống CUỐI trang dưới 1100px, phải cuộn
+            qua toàn bộ form mới tới; hai thứ hay cần nhất khi mở một hợp đồng là
+            tiền và cách liên hệ khách, nên chúng phải ở đầu.
+            Cụm gửi cổng khách trước đây nằm ở đây đã dồn hết vào bảng "Gửi
+            khách" mở từ thanh đầu trang — một chỗ gửi duy nhất. */}
         <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
-          <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--tx3)" }}>Gửi cổng khách</p>
-            {/* Trạng thái khách xem để ngay đây, không phải mở tab "Gửi khách &
-                ký" mới biết khách đã mở link chưa. */}
+          <div className="flex items-center gap-2.5">
             <span
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-bold"
-              style={contract.client_viewed_at
-                ? { background: "var(--gnS)", color: "var(--gn)" }
-                : { background: "var(--sf2)", color: "var(--tx3)" }}
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[12px] font-bold"
+              style={avatarStyle(f.client_name || f.title)}
             >
-              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: contract.client_viewed_at ? "var(--gn)" : "var(--tx3)" }} />
-              {contract.client_viewed_at
-                ? `Khách đã xem · ${new Date(contract.client_viewed_at).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`
-                : "Khách chưa mở link"}
+              {initials(f.client_name || f.title)}
             </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13.5px] font-bold">{f.client_name || "Chưa có tên khách"}</p>
+              <p className="truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                {f.client_phone || "chưa có số điện thoại"}
+              </p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <MessengerButton link={f.client_messenger} label="Gửi cho khách" message={clientPortalMsg} className="act-btn" />
-            <button
-              onClick={() => {
-                navigator.clipboard?.writeText(shareUrl);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              }}
-              className="act-btn"
+          <p className="mt-1.5 text-[11px]" style={{ color: clientViewedAt ? "var(--gn)" : "var(--tx3)" }}>
+            {clientViewedAt ? `Khách xem lần cuối · ${clientViewedAt}` : "Khách chưa mở link hợp đồng"}
+          </p>
+          <div className="mt-2.5 grid grid-cols-3 gap-2">
+            <a
+              href={clientDigits ? `tel:${clientDigits}` : undefined}
+              aria-disabled={!clientDigits}
+              className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+              style={{ background: "var(--sf2)", opacity: clientDigits ? 1 : 0.5 }}
             >
-              {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Đã chép" : "Chép link"}
-            </button>
-            <div className="col-span-2">
-              <ZaloSendButton
-                phone={f.client_phone}
-                name={f.client_name}
-                audience="client"
-                contractId={contract.id}
-                kind="contract_share"
-                className="act-btn act-btn-auto flex-1"
-                message={clientPortalMsg}
-              />
-            </div>
-            <div className="col-span-2">
-              <EmailButton
-                to={f.client_email}
-                label="Gửi email"
-                subject={`Hợp đồng dịch vụ — ${f.title}`}
-                message={`Xin chào ${f.client_name || "anh/chị"},\n\nĐây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại:\n${shareUrl}\n(Mật khẩu mở là số điện thoại của anh/chị.)\n\nCảm ơn ạ!\n— ${studioName}`}
-                className="act-btn"
-              />
-            </div>
+              <Phone size={17} style={{ color: "var(--ac)" }} /> Gọi
+            </a>
+            <a
+              href={clientDigits ? `https://zalo.me/${clientDigits}` : undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={!clientDigits}
+              className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+              style={{ background: "var(--sf2)", opacity: clientDigits ? 1 : 0.5 }}
+            >
+              <MessageCircle size={17} style={{ color: "var(--ac)" }} /> Zalo
+            </a>
+            {clientDigits ? (
+              <Link
+                href={`/dashboard/studio/clients/${clientDigits}`}
+                className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+                style={{ background: "var(--sf2)" }}
+              >
+                <UserRound size={17} style={{ color: "var(--ac)" }} /> Hồ sơ
+              </Link>
+            ) : (
+              <span
+                className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+                style={{ background: "var(--sf2)", opacity: 0.5 }}
+              >
+                <UserRound size={17} style={{ color: "var(--ac)" }} /> Hồ sơ
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -1403,32 +1431,12 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                     <input className="input" placeholder="m.me/… hoặc facebook.com/…" value={f.client_messenger} onChange={(e) => set("client_messenger", e.target.value)} />
                     <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Khách cũng có thể tự dán link này trong cổng khách.</p>
                   </div>
+                  {/* Ngày · giờ · nguồn khách. Ô "Trạng thái" đã bỏ khỏi đây:
+                      trạng thái đã có ở đầu màn (pill + ô chọn cạnh
+                      ContractStepper), hai chỗ sửa cùng một giá trị chỉ gây
+                      lệch. Loại dịch vụ chuyển sang tab Hạng mục vì nó quyết
+                      định bộ điều khoản nằm ở đó. */}
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <div>
-                      <label className="label">Loại dịch vụ</label>
-                      {services.length > 0 ? (
-                        <select
-                          className="input"
-                          value={f.service_id}
-                          onChange={(e) => {
-                            const svc = services.find((s) => s.id === e.target.value);
-                            // Switching service: link it, force legacy type to "other",
-                            // and refresh the (read-only) clauses from the service.
-                            setF((p) => ({ ...p, service_id: e.target.value, shoot_type: "other", note: svc ? svc.clauses : p.note }));
-                            if (contractSaveTimer.current) clearTimeout(contractSaveTimer.current);
-                            const next = { ...f, service_id: e.target.value, shoot_type: "other" as ShootType, note: svc ? svc.clauses : f.note };
-                            autosaveContract(next);
-                          }}
-                        >
-                          <option value="">Khác</option>
-                          {services.map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input className="input" value="Khác" disabled />
-                      )}
-                    </div>
                     <div>
                       <label className="label">Ngày</label>
                       <DateInput value={f.event_date} onChange={(v) => set("event_date", v)} />
@@ -1436,20 +1444,6 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                     <div>
                       <label className="label">Giờ</label>
                       <input className="input" placeholder="08:00" value={f.event_time} onChange={(e) => set("event_time", e.target.value)} />
-                    </div>
-                  </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <div>
-                      <label className="label">Địa điểm</label>
-                      <input className="input" value={f.location} onChange={(e) => set("location", e.target.value)} />
-                    </div>
-                    <div>
-                      <label className="label">Trạng thái</label>
-                      <select className="input" value={f.status} onChange={(e) => set("status", e.target.value)}>
-                        {(Object.keys(CONTRACT_STATUS_LABEL) as ContractStatus[]).map((k) => (
-                          <option key={k} value={k}>{CONTRACT_STATUS_LABEL[k]}</option>
-                        ))}
-                      </select>
                     </div>
                     <div>
                       <label className="label">Nguồn khách</label>
@@ -1462,157 +1456,12 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                     </div>
                   </div>
                   <div>
-                    <label className="label">Hạn giao ảnh</label>
-                    <DateInput value={f.delivery_due} onChange={(v) => set("delivery_due", v)} />
-                  </div>
-                  {canAssign && staffList.length > 0 && (
-                    <div>
-                      <label className="label">Giao cho nhân viên</label>
-                      <select className="input" value={f.assigned_to} onChange={(e) => set("assigned_to", e.target.value)}>
-                        <option value="">— Chưa giao —</option>
-                        {staffList.map((s) => (
-                          <option key={s.id} value={s.id}>{s.full_name || s.email}</option>
-                        ))}
-                      </select>
-                      <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Nhân viên (vai trò Nhân viên) chỉ thấy hợp đồng được giao cho mình.</p>
-                    </div>
-                  )}
-            
-                  <div>
-                    <label className="label">Album khách hàng (Album chọn ảnh hoặc album hoàn thiện gửi khách hàng)</label>
-                    <select className="input" value={f.selection_album_id} onChange={(e) => set("selection_album_id", e.target.value)}>
-                      <option value="">— Chưa gắn —</option>
-                      {selectionAlbums.map((a) => (
-                        <option key={a.id} value={a.id}>{a.title}</option>
-                      ))}
-                    </select>
-                    {selectionAlbums.length === 0 ? (
-                      <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                        Chưa có album chọn ảnh. Tạo album ở “Tạo album” rồi quay lại gắn.
-                      </p>
-                    ) : (
-                      <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                        Mẹo: nếu dùng Dự án hợp nhất, chỉ cần gắn ô này — link sẽ tự chuyển sang ảnh giao khách khi bạn đổi giai đoạn.
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="label">Điều khoản hợp đồng</label>
-                    <textarea className="input min-h-[120px]" value={f.note} readOnly style={{ opacity: 0.85, cursor: "default" }} />
-                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                      Điều khoản cố định theo dịch vụ — không sửa ở đây.{" "}
-                      <Link href="/dashboard/studio/services" className="hover:underline" style={{ color: "var(--brand, var(--accent))" }}>Sửa trong Dịch vụ &amp; điều khoản</Link>
-                    </p>
+                    <label className="label">Địa điểm</label>
+                    <input className="input" value={f.location} onChange={(e) => set("location", e.target.value)} />
                   </div>
                   <p className="flex items-center gap-1 text-xs" style={{ color: contractSaved === "saved" ? "var(--s-green)" : "var(--text3)" }}>
                     {contractSaved === "saving" ? "Đang lưu…" : contractSaved === "saved" ? <><Check size={13} /> Đã lưu tự động</> : "Thông tin tự động lưu khi nhập"}
                   </p>
-                </div>
-              </div>
-
-              {/* Client brief */}
-              {contract.brief_submitted_at && (
-                <div className="card p-5" style={{ borderColor: "var(--s-blueS)" }}>
-                  <h2 className="mb-2 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: "var(--s-blue)" }}>
-                    <FileText size={18} /> Brief từ khách
-                  </h2>
-                  <dl className="space-y-1.5 text-sm">
-                    {contract.brief_concept && <div><dt className="inline" style={{ color: "var(--text3)" }}>Concept: </dt><dd className="inline">{contract.brief_concept}</dd></div>}
-                    {contract.brief_outfit && <div><dt className="inline" style={{ color: "var(--text3)" }}>Trang phục/người: </dt><dd className="inline">{contract.brief_outfit}</dd></div>}
-                    {contract.brief_refs && <div><dt className="inline" style={{ color: "var(--text3)" }}>Tham khảo: </dt><dd className="inline break-all">{contract.brief_refs}</dd></div>}
-                    {contract.brief_note && <div><dt className="inline" style={{ color: "var(--text3)" }}>Khác: </dt><dd className="inline">{contract.brief_note}</dd></div>}
-                  </dl>
-                  <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>Gửi lúc {new Date(contract.brief_submitted_at).toLocaleString("vi-VN")}</p>
-                </div>
-              )}
-              {/* Milestones / schedule */}
-              <div className="card p-6">
-                <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium">
-                  <CalendarClock size={18} /> Lịch &amp; mốc thời gian
-                </h2>
-                <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>
-                  Thêm các mốc (vd: chụp pre-wedding, ngày cưới, trao ảnh). Mốc cũng hiện trên Lịch &amp; cổng khách.
-                </p>
-                {f.event_date && (
-                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                    <span className="text-sm">Buổi chính · {fmtDateLunar(f.event_date)}{f.event_time ? ` · ${f.event_time}` : ""}</span>
-                    <CalendarButtons compact event={{ date: f.event_date, time: f.event_time, title: f.title, location: f.location }} />
-                  </div>
-                )}
-                {milestones.length === 0 ? (
-                  <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có mốc nào.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {milestones.map((m) => (
-                      <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
-                        <div>
-                          <p className="text-sm font-medium">{m.title}</p>
-                          <p className="text-[11px]" style={{ color: "var(--text3)" }}>{fmtDate(m.event_date)}{m.event_time ? ` · ${m.event_time}` : ""}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: f.location }} />
-                          <button onClick={() => deleteMilestone(m.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-12" style={{ borderColor: "var(--border)" }}>
-                  <input className="input sm:col-span-6" placeholder="Tên mốc (vd: Ngày cưới)" value={ms.title} onChange={(e) => setMs((p) => ({ ...p, title: e.target.value }))} />
-                  <DateInput wrapperClassName="sm:col-span-4" value={ms.event_date} onChange={(v) => setMs((p) => ({ ...p, event_date: v }))} />
-                  <input className="input sm:col-span-2" placeholder="08:00" value={ms.event_time} onChange={(e) => setMs((p) => ({ ...p, event_time: e.target.value }))} />
-                </div>
-                <button onClick={addMilestone} disabled={busy === "milestone"} className="btn-ghost mt-3">
-                  <Plus size={15} /> {busy === "milestone" ? "Đang thêm…" : "Thêm mốc lịch"}
-                </button>
-              </div>
-
-              {/* Checklist */}
-              <div className="card p-6">
-                <div className="mb-4 flex items-center justify-between">
-                  <h2 className="font-serif text-lg font-medium">Checklist công việc</h2>
-                  {tasks.length > 0 && (
-                    <span className="text-xs" style={{ color: tasksDone === tasks.length ? "var(--s-green)" : "var(--text3)" }}>
-                      {tasksDone}/{tasks.length} xong
-                    </span>
-                  )}
-                </div>
-                {tasks.length > 0 && (
-                  <div className="mb-3 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--surface2)" }}>
-                    <div className="h-full rounded-full" style={{ width: `${(tasksDone / tasks.length) * 100}%`, background: "var(--s-green)" }} />
-                  </div>
-                )}
-                {tasks.length === 0 ? (
-                  <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có việc nào. Vd: đặt cọc, chụp, chọn ảnh, retouch, in album, giao.</p>
-                ) : (
-                  <ul className="space-y-1.5">
-                    {tasks.map((t) => (
-                      <li key={t.id} className="flex items-center gap-2.5">
-                        <button onClick={() => toggleTask(t)} className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md" style={{ border: "1px solid var(--border2)", background: t.done ? "var(--s-green)" : "transparent" }}>
-                          {t.done && <Check size={13} color="#0c0c0c" />}
-                        </button>
-                        <span className="flex-1 text-sm" style={{ color: t.done ? "var(--text3)" : "var(--text)", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-                        <button onClick={() => deleteTask(t.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                <div className="mt-3 flex gap-2">
-                  <input
-                    className="input"
-                    placeholder="Thêm việc…"
-                    value={newTask}
-                    onChange={(e) => setNewTask(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
-                  />
-                  <button onClick={addTask} className="btn-ghost shrink-0"><Plus size={15} /></button>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {PRESET_TASKS.filter((label) => !tasks.some((t) => t.label === label)).map((label) => (
-                    <button key={label} type="button" onClick={() => addTaskLabel(label)} className="rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
-                      + {label}
-                    </button>
-                  ))}
                 </div>
               </div>
 
@@ -1698,6 +1547,90 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                 </div>
                 <button onClick={saveItems} disabled={busy === "items"} className="btn-primary mt-4">
                   {busy === "items" ? "Đang lưu…" : "Lưu hạng mục"}
+                </button>
+              </div>
+
+              {/* Dịch vụ & điều khoản — chuyển từ tab Thông tin sang đây: chọn
+                  dịch vụ là NẠP LẠI bộ điều khoản ngay bên dưới, nên hai ô phải
+                  nhìn thấy cùng lúc mới hiểu được nhân quả. */}
+              <div className="card p-6">
+                <h2 className="mb-4 font-serif text-lg font-medium">Dịch vụ &amp; điều khoản</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="label">Loại dịch vụ</label>
+                    {services.length > 0 ? (
+                      <select
+                        className="input"
+                        value={f.service_id}
+                        onChange={(e) => {
+                          const svc = services.find((s) => s.id === e.target.value);
+                          // Switching service: link it, force legacy type to "other",
+                          // and refresh the (read-only) clauses from the service.
+                          setF((p) => ({ ...p, service_id: e.target.value, shoot_type: "other", note: svc ? svc.clauses : p.note }));
+                          if (contractSaveTimer.current) clearTimeout(contractSaveTimer.current);
+                          const next = { ...f, service_id: e.target.value, shoot_type: "other" as ShootType, note: svc ? svc.clauses : f.note };
+                          autosaveContract(next);
+                        }}
+                      >
+                        <option value="">Khác</option>
+                        {services.map((s) => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input className="input" value="Khác" disabled />
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">Điều khoản hợp đồng</label>
+                    <textarea className="input min-h-[120px]" value={f.note} readOnly style={{ opacity: 0.85, cursor: "default" }} />
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                      Điều khoản cố định theo dịch vụ — không sửa ở đây.{" "}
+                      <Link href="/dashboard/studio/services" className="hover:underline" style={{ color: "var(--brand, var(--accent))" }}>Sửa trong Dịch vụ &amp; điều khoản</Link>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Milestones / schedule */}
+              <div className="card p-6">
+                <h2 className="mb-1 flex items-center gap-2 font-serif text-lg font-medium">
+                  <CalendarClock size={18} /> Lịch &amp; mốc thời gian
+                </h2>
+                <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>
+                  Thêm các mốc (vd: chụp pre-wedding, ngày cưới, trao ảnh). Mốc cũng hiện trên Lịch &amp; cổng khách.
+                </p>
+                {f.event_date && (
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
+                    <span className="text-sm">Buổi chính · {fmtDateLunar(f.event_date)}{f.event_time ? ` · ${f.event_time}` : ""}</span>
+                    <CalendarButtons compact event={{ date: f.event_date, time: f.event_time, title: f.title, location: f.location }} />
+                  </div>
+                )}
+                {milestones.length === 0 ? (
+                  <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có mốc nào.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {milestones.map((m) => (
+                      <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
+                        <div>
+                          <p className="text-sm font-medium">{m.title}</p>
+                          <p className="text-[11px]" style={{ color: "var(--text3)" }}>{fmtDate(m.event_date)}{m.event_time ? ` · ${m.event_time}` : ""}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: f.location }} />
+                          <button onClick={() => deleteMilestone(m.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-12" style={{ borderColor: "var(--border)" }}>
+                  <input className="input sm:col-span-6" placeholder="Tên mốc (vd: Ngày cưới)" value={ms.title} onChange={(e) => setMs((p) => ({ ...p, title: e.target.value }))} />
+                  <DateInput wrapperClassName="sm:col-span-4" value={ms.event_date} onChange={(v) => setMs((p) => ({ ...p, event_date: v }))} />
+                  <input className="input sm:col-span-2" placeholder="08:00" value={ms.event_time} onChange={(e) => setMs((p) => ({ ...p, event_time: e.target.value }))} />
+                </div>
+                <button onClick={addMilestone} disabled={busy === "milestone"} className="btn-ghost mt-3">
+                  <Plus size={15} /> {busy === "milestone" ? "Đang thêm…" : "Thêm mốc lịch"}
                 </button>
               </div>
 
@@ -1933,6 +1866,21 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
             {/* Nhân sự: phân công, tiền công và trạng thái nhận việc */}
             {tab === "crew" && (
               <>
+              {/* Giao cho nhân viên — chuyển từ tab Thông tin sang đây, cùng chỗ
+                  với nhân sự thực hiện và checklist: cả ba đều là câu hỏi "ai
+                  làm việc này". */}
+              {canAssign && staffList.length > 0 && (
+                <div className="card p-6">
+                  <h2 className="mb-4 font-serif text-lg font-medium">Giao cho nhân viên</h2>
+                  <select className="input" value={f.assigned_to} onChange={(e) => set("assigned_to", e.target.value)}>
+                    <option value="">— Chưa giao —</option>
+                    {staffList.map((s) => (
+                      <option key={s.id} value={s.id}>{s.full_name || s.email}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Nhân viên (vai trò Nhân viên) chỉ thấy hợp đồng được giao cho mình.</p>
+                </div>
+              )}
               {/* Crew */}
               <div className="card p-6">
                 <div className="mb-4 flex items-center justify-between">
@@ -2077,13 +2025,93 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                 </p>
               </div>
 
+              {/* Checklist */}
+              <div className="card p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="font-serif text-lg font-medium">Checklist công việc</h2>
+                  {tasks.length > 0 && (
+                    <span className="text-xs" style={{ color: tasksDone === tasks.length ? "var(--s-green)" : "var(--text3)" }}>
+                      {tasksDone}/{tasks.length} xong
+                    </span>
+                  )}
+                </div>
+                {tasks.length > 0 && (
+                  <div className="mb-3 h-1.5 overflow-hidden rounded-full" style={{ background: "var(--surface2)" }}>
+                    <div className="h-full rounded-full" style={{ width: `${(tasksDone / tasks.length) * 100}%`, background: "var(--s-green)" }} />
+                  </div>
+                )}
+                {tasks.length === 0 ? (
+                  <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có việc nào. Vd: đặt cọc, chụp, chọn ảnh, retouch, in album, giao.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {tasks.map((t) => (
+                      <li key={t.id} className="flex items-center gap-2.5">
+                        <button onClick={() => toggleTask(t)} className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md" style={{ border: "1px solid var(--border2)", background: t.done ? "var(--s-green)" : "transparent" }}>
+                          {t.done && <Check size={13} color="#0c0c0c" />}
+                        </button>
+                        <span className="flex-1 text-sm" style={{ color: t.done ? "var(--text3)" : "var(--text)", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
+                        <button onClick={() => deleteTask(t.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-3 flex gap-2">
+                  <input
+                    className="input"
+                    placeholder="Thêm việc…"
+                    value={newTask}
+                    onChange={(e) => setNewTask(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
+                  />
+                  <button onClick={addTask} className="btn-ghost shrink-0"><Plus size={15} /></button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {PRESET_TASKS.filter((label) => !tasks.some((t) => t.label === label)).map((label) => (
+                    <button key={label} type="button" onClick={() => addTaskLabel(label)} className="rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
+                      + {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
 
               </>
             )}
 
-            {/* Album & sản phẩm: đơn in ấn và tiện ích tặng khách */}
+            {/* Sản phẩm: album giao khách, hạn giao, đơn in ấn, tiện ích tặng khách */}
             {tab === "album" && (
               <>
+              {/* Album giao khách + hạn giao ảnh — chuyển từ tab Thông tin sang
+                  đây: cả hai đều nói về SẢN PHẨM giao cho khách, không phải
+                  thông tin nhận việc. */}
+              <div className="card p-6">
+                <h2 className="mb-4 font-serif text-lg font-medium">Album khách hàng &amp; hạn giao</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="label">Album khách hàng (Album chọn ảnh hoặc album hoàn thiện gửi khách hàng)</label>
+                    <select className="input" value={f.selection_album_id} onChange={(e) => set("selection_album_id", e.target.value)}>
+                      <option value="">— Chưa gắn —</option>
+                      {selectionAlbums.map((a) => (
+                        <option key={a.id} value={a.id}>{a.title}</option>
+                      ))}
+                    </select>
+                    {selectionAlbums.length === 0 ? (
+                      <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                        Chưa có album chọn ảnh. Tạo album ở “Tạo album” rồi quay lại gắn.
+                      </p>
+                    ) : (
+                      <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                        Mẹo: nếu dùng Dự án hợp nhất, chỉ cần gắn ô này — link sẽ tự chuyển sang ảnh giao khách khi bạn đổi giai đoạn.
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <label className="label">Hạn giao ảnh</label>
+                    <DateInput value={f.delivery_due} onChange={(v) => set("delivery_due", v)} />
+                  </div>
+                </div>
+              </div>
+
               {/* Image processing / print / product orders */}
               <div className="card p-6">
                 <h2 className="mb-1 font-serif text-lg font-medium">Xử lý ảnh / video / in ấn</h2>
@@ -2178,67 +2206,16 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
               </>
             )}
 
-            {/* Gửi khách & ký: link cổng khách, form thông tin, chữ ký hai bên */}
+            {/* Ký và thực hiện: form thông tin buổi chụp, brief khách gửi, chữ ký hai bên */}
             {tab === "send" && (
               <>
-              {/* Share link */}
-              <div className="card p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                  {/* Không in nguyên link ra nữa: một chuỗi 60 ký tự chiếm hết
-                      chiều ngang mà không ai đọc hay copy bằng mắt — đã có nút
-                      "Chép link" và các nút gửi. Giữ lại nhãn và trạng thái xem. */}
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
-                    <LinkIcon size={16} className="mt-0.5 shrink-0" style={{ color: "var(--text3)" }} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>
-                        Cổng khách: xem HĐ · lịch · ảnh · thanh toán (mật khẩu = SĐT khách)
-                      </p>
-                      <p className="text-[11px]" style={{ color: contract.client_viewed_at ? "var(--s-green)" : "var(--text3)" }}>
-                        {contract.client_viewed_at
-                          ? `Khách đã xem · ${new Date(contract.client_viewed_at).toLocaleString("vi-VN")}`
-                          : "Khách chưa mở link"}
-                      </p>
-                    </div>
-                  </div>
-                  {/* Chỉ từ 1100px trở lên: dưới ngưỡng đó thẻ tóm tắt đầu trang
-                      đã có đúng cụm này, hiện cả hai là trùng. */}
-                  <div className="hidden flex-wrap items-center gap-2 min-[1100px]:flex">
-                    <MessengerButton
-                      link={f.client_messenger}
-                      label="Gửi cho khách"
-                      message={clientPortalMsg}
-                    />
-                    <ZaloSendButton
-                      phone={f.client_phone}
-                      name={f.client_name}
-                      audience="client"
-                      contractId={contract.id}
-                      kind="contract_share"
-                      message={clientPortalMsg}
-                    />
-                    <EmailButton
-                      to={f.client_email}
-                      label="Gửi email"
-                      subject={`Hợp đồng dịch vụ — ${f.title}`}
-                      message={`Xin chào ${f.client_name || "anh/chị"},\n\nĐây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại:\n${shareUrl}\n(Mật khẩu mở là số điện thoại của anh/chị.)\n\nCảm ơn ạ!\n— ${studioName}`}
-                    />
-                    <button
-                      onClick={() => {
-                        navigator.clipboard?.writeText(shareUrl);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 1500);
-                      }}
-                      className="btn-ghost px-3 py-2 text-xs"
-                    >
-                      {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Đã chép" : "Chép link"}
-                    </button>
-                  </div>
-                </div>
-              </div>
+              {/* Không còn khối "Cổng khách" ở đây: mọi cách gửi link cho khách
+                  đã dồn vào bảng "Gửi khách" mở từ thanh đầu trang, còn giờ
+                  khách xem lần cuối hiện ngay trong thẻ Khách hàng. */}
               {/* Form điền thông tin buổi chụp — gửi khách qua Zalo (kèm tự động lúc nhắc lịch) */}
               <div className="card p-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                <div className="flex flex-col gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <ClipboardList size={16} className="mt-0.5 shrink-0" style={{ color: "var(--brand)" }} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold">Form thông tin buổi chụp</p>
@@ -2259,13 +2236,16 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                         ? `Chào ${f.client_name || "anh/chị"}, anh/chị kiểm tra & bổ sung/sửa lại giúp studio thông tin buổi chụp tại: ${formUrl} (mở form rồi bấm "Chỉnh sửa / bổ sung").`
                         : `Chào ${f.client_name || "anh/chị"}, anh/chị điền giúp studio một số thông tin cho buổi chụp tại: ${formUrl}`;
                       const btnLabel = submitted ? "Yêu cầu nhập lại / bổ sung" : "Gửi cho khách";
+                      // Lưới 3 cột bằng nhau (1 cột trên điện thoại): trước đây
+                      // ba nút ba cỡ chữ/padding khác nhau tự wrap thành hàng so
+                      // le. act-btn cho cả ba để chiều cao và nét viền khớp nhau.
                       return (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <a href={formUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs">
-                            <LinkIcon size={13} className="inline" /> Mở form
+                        <div className="grid gap-2 sm:grid-cols-3">
+                          <a href={formUrl} target="_blank" rel="noreferrer" className="act-btn">
+                            <LinkIcon size={14} /> Mở form
                           </a>
-                          <MessengerButton link={f.client_messenger} label={btnLabel} message={msg} />
-                          <ZaloSendButton phone={f.client_phone} name={f.client_name} audience="client" contractId={contract.id} kind="intake_form" message={msg} />
+                          <MessengerButton link={f.client_messenger} label={btnLabel} message={msg} className="act-btn" />
+                          <ZaloSendButton phone={f.client_phone} name={f.client_name} audience="client" contractId={contract.id} kind="intake_form" message={msg} className="act-btn" />
                         </div>
                       );
                     })()}
@@ -2308,6 +2288,21 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                   </div>
                 )}
               </div>
+              {/* Client brief */}
+              {contract.brief_submitted_at && (
+                <div className="card p-5" style={{ borderColor: "var(--s-blueS)" }}>
+                  <h2 className="mb-2 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: "var(--s-blue)" }}>
+                    <FileText size={18} /> Brief từ khách
+                  </h2>
+                  <dl className="space-y-1.5 text-sm">
+                    {contract.brief_concept && <div><dt className="inline" style={{ color: "var(--text3)" }}>Concept: </dt><dd className="inline">{contract.brief_concept}</dd></div>}
+                    {contract.brief_outfit && <div><dt className="inline" style={{ color: "var(--text3)" }}>Trang phục/người: </dt><dd className="inline">{contract.brief_outfit}</dd></div>}
+                    {contract.brief_refs && <div><dt className="inline" style={{ color: "var(--text3)" }}>Tham khảo: </dt><dd className="inline break-all">{contract.brief_refs}</dd></div>}
+                    {contract.brief_note && <div><dt className="inline" style={{ color: "var(--text3)" }}>Khác: </dt><dd className="inline">{contract.brief_note}</dd></div>}
+                  </dl>
+                  <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>Gửi lúc {new Date(contract.brief_submitted_at).toLocaleString("vi-VN")}</p>
+                </div>
+              )}
               {/* Signature banner */}
               {contract.client_signed_at && (
                 <div className="card flex flex-wrap items-center gap-4 p-5" style={{ borderColor: "var(--s-greenS)" }}>
@@ -2388,8 +2383,9 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
             bỏ sticky, đúng bảng ngưỡng responsive trong README. */}
         <div className="flex flex-col gap-3.5 min-[1180px]:sticky min-[1180px]:top-[76px] min-[1180px]:self-start">
 
-          {/* Khách hàng */}
-          <div className="rounded-[14px] p-4" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+          {/* Khách hàng — CHỈ từ 1100px: dưới ngưỡng đó rail rơi xuống cuối
+              trang, và thẻ tóm tắt ở đầu trang đã có đúng cụm này rồi. */}
+          <div className="hidden rounded-[14px] p-4 min-[1100px]:block" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
             <p className="eyebrow mb-2.5 uppercase">Khách hàng</p>
             <div className="flex items-center gap-[11px]">
               <span
@@ -2403,6 +2399,11 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                 <p className="mt-px truncate text-[12px]" style={{ color: "var(--tx3)" }}>{f.client_phone || "Chưa có SĐT"}</p>
               </div>
             </div>
+            {/* Lần cuối khách mở cổng hợp đồng — thông tin hay phải tra nhất sau
+                khi gửi link, để ngay trong thẻ khách thay vì một thẻ riêng. */}
+            <p className="mt-2 text-[11.5px]" style={{ color: clientViewedAt ? "var(--gn)" : "var(--tx3)" }}>
+              {clientViewedAt ? `Khách xem lần cuối · ${clientViewedAt}` : "Khách chưa mở link hợp đồng"}
+            </p>
             <div className="mt-3 grid grid-cols-3 gap-[7px]">
               <a
                 href={clientDigits ? `tel:${clientDigits}` : undefined}
@@ -2538,6 +2539,84 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           </div>
         </div>
       </div>
+
+      {/* ── Bảng chọn cách gửi cổng khách ────────────────────────────────────
+          Mở từ nút "Gửi khách" ở thanh đầu trang — đây là CHỖ DUY NHẤT gửi link
+          cho khách, nên bốn cách gửi nằm cùng một bảng thay vì rải ra thẻ tóm
+          tắt và rail phải như trước.
+          Portal ra <body> vì main của studio shell có transform (.page-in) —
+          một lớp phủ `fixed` bên trong sẽ bị neo theo phần tử đó chứ không phủ
+          hết màn hình.
+          Căn giữa ở MỌI khổ (không dán đáy như bottom-sheet) để popover danh
+          sách bạn Zalo — mở xuống dưới dòng của nó — còn chỗ hiển thị. */}
+      {mounted && sendOpen && createPortal(
+        <div
+          onClick={() => setSendOpen(false)}
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,.5)" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Gửi hợp đồng cho khách"
+            className="w-full max-w-[360px] rounded-[16px] p-4"
+            style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}
+          >
+            <div className="mb-3 flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-bold">Gửi khách</p>
+                <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  Cổng khách: xem HĐ · lịch · ảnh · thanh toán. Mật khẩu là SĐT khách.
+                </p>
+              </div>
+              <button
+                onClick={() => setSendOpen(false)}
+                aria-label="Đóng"
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-[9px]"
+                style={{ background: "var(--sf2)", color: "var(--tx3)" }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <ZaloSendButton
+                phone={f.client_phone}
+                name={f.client_name}
+                audience="client"
+                contractId={contract.id}
+                kind="contract_share"
+                label="Gửi Zalo"
+                show="send"
+                className="act-btn"
+                message={clientPortalMsg}
+              />
+              <ZaloSendButton
+                phone={f.client_phone}
+                name={f.client_name}
+                audience="client"
+                contractId={contract.id}
+                kind="contract_share"
+                show="friends"
+                friendsLabel="Chọn từ danh sách bạn Zalo"
+                className="act-btn"
+                message={clientPortalMsg}
+              />
+              <button onClick={quickShare} className="act-btn">
+                <Share2 size={15} /> Gửi nhanh qua chia sẻ
+              </button>
+              <button onClick={copyShareUrl} className="act-btn">
+                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Đã chép link" : "Chép link"}
+              </button>
+            </div>
+
+            <p className="mt-3 text-[11.5px]" style={{ color: clientViewedAt ? "var(--gn)" : "var(--tx3)" }}>
+              {clientViewedAt ? `Khách đã xem lần cuối · ${clientViewedAt}` : "Khách chưa mở link"}
+            </p>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Lightbox: zoom a transfer-proof image in place (no new tab).
           Portalled to <body> so the fixed overlay covers the full viewport and

@@ -739,12 +739,16 @@ export default function NewContractForm({
             )}
 
             <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Hình thức nhận tiền</p>
+            {/* Tài khoản nhận tiền khai ở mục "Thông tin liên hệ" của Gói & bảng
+                giá (các cột pl_bank_*), KHÔNG phải /dashboard/settings — trang đó
+                là cấu hình nền tảng mstudo và chặn non-admin, nên link cũ đá chủ
+                studio về /dashboard. */}
             <div className="flex items-start gap-2.5 rounded-[11px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
               <Landmark size={18} style={{ flex: "none", color: "var(--ac)" }} />
               <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)" }}>
                 {bank?.account
                   ? <>Khách quét mã VietQR hoặc chuyển vào <b>{[bank.name, bank.account, bank.holder].filter(Boolean).join(" · ")}</b>. Mã QR sinh sẵn theo từng đợt trong cổng khách.</>
-                  : <>Chưa khai báo tài khoản nhận tiền — cổng khách sẽ không có mã QR. Khai báo trong <Link href="/dashboard/settings" className="font-semibold underline" style={{ color: "var(--ac)" }}>Cài đặt studio</Link>.</>}
+                  : <>Chưa khai báo tài khoản nhận tiền — cổng khách sẽ không có mã QR. Khai báo trong <Link href="/dashboard/studio/pricing" className="font-semibold underline" style={{ color: "var(--ac)" }}>Gói &amp; bảng giá</Link>.</>}
               </p>
             </div>
           </div>

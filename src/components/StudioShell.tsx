@@ -62,16 +62,20 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/studio", "Tổng quan", "Toàn cảnh studio hôm nay"],
   ["/dashboard/albums", "Thư viện album", "Album chọn ảnh và album giao khách"],
   ["/dashboard/create", "Tạo album", "Tạo album giao khách mới"],
-  ["/dashboard/filter", "Công cụ ảnh", "Lọc ảnh khách chọn và nén ảnh hàng loạt"],
+  // /dashboard/tools là route CHÍNH của mục "Công cụ ảnh" nhưng trước giờ không
+  // có dòng nào ở đây, nên nó rơi xuống mục "/dashboard" cuối bảng và topbar ghi
+  // nhầm thành "Thư viện album".
+  ["/dashboard/tools", "Công cụ ảnh", "Lọc ảnh khách chọn, nén ảnh và đóng dấu"],
+  ["/dashboard/filter", "Lọc ảnh khách chọn", "Tách ảnh khách đã chọn ra thư mục riêng"],
   ["/dashboard/compress", "Nén ảnh & watermark", "Xử lý hàng loạt trước khi giao khách"],
   ["/dashboard/site", "Website & chatbox", "Trang portfolio và trợ lý trả lời khách"],
   ["/dashboard/upgrade", "Gói phần mềm", "Gói đang dùng và hạn mức của studio"],
   ["/dashboard/connections", "Kết nối", "Tích hợp dịch vụ bên ngoài"],
   ["/dashboard/affiliate", "Affiliate", "Giới thiệu studio khác và nhận hoa hồng"],
-  ["/dashboard/admin/system", "Quản trị hệ thống", "Thông báo & sao lưu toàn hệ thống"],
+  ["/dashboard/admin/system", "Cài đặt hệ thống", "Thông báo toàn studio, sao lưu & khôi phục"],
   ["/dashboard/admin/affiliate", "Quản lý Affiliate", "Danh sách hoa hồng"],
-  ["/dashboard/admin", "Quản trị hệ thống", "Người dùng, sao lưu, nhật ký"],
-  ["/dashboard/settings", "Cài đặt studio", "Thông tin, quyền và tích hợp"],
+  ["/dashboard/admin", "Người dùng & studio", "Tài khoản, gói và trạng thái từng studio"],
+  ["/dashboard/settings", "Cấu hình mstudo", "Cấu hình nền tảng, phản hồi, yêu cầu nâng cấp, mã giảm giá"],
   ["/dashboard/account", "Tài khoản & bảo mật", "Thông tin đăng nhập, mật khẩu, thiết bị"],
   // Tổng quát nhất nằm cuối để mọi route ở trên khớp trước.
   ["/dashboard", "Thư viện album", "Tất cả album của bạn"],

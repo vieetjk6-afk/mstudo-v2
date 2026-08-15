@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveVieetjkOwner } from "@/lib/vieetjk/data";
 import { sendZalo } from "@/lib/zalo/send";
 import { MAX_TURNS, type ChatTurn } from "@/lib/vieetjk/assistant";
+import { limitByIpDurable } from "@/lib/rate-limit";
 
 /**
  * Lưu lead từ chatbox website vieetjk.com: khách để lại SĐT (tự nhập hoặc bot
@@ -39,6 +40,13 @@ function sanitizeTranscript(turns: unknown): ChatTurn[] {
 }
 
 export async function POST(req: NextRequest) {
+  // Endpoint CÔNG KHAI ghi bằng service-role VÀ bắn một tin Zalo cho chủ studio
+  // mỗi lần gọi — không giới hạn thì một script có thể vừa bơm rác vào
+  // website_leads vừa spam Zalo của chủ studio. Cùng ngưỡng với các cổng công
+  // khai khác (contact/feedback).
+  const limited = await limitByIpDurable(req, "vieetjk-lead", 5, 60_000);
+  if (limited) return limited;
+
   let body: {
     sessionId?: unknown;
     name?: unknown;

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FilePlus, Eye, Pencil, ExternalLink, ReceiptText } from "lucide-react";
+import { FilePlus, Eye, ExternalLink, ReceiptText } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
@@ -105,11 +105,22 @@ export default function QuotesListView({ list: initialList, studioHost = null }:
               // "mã · tên khách · số điện thoại" dùng `truncate`, tức
               // white-space:nowrap, nên min-content của thẻ bằng cả chuỗi không
               // cắt (đo được 460px ở khung 390px) → trên điện thoại thẻ tràn ra
-              // ngoài màn hình, mất nút "Mở báo giá" và nhãn trạng thái ở lề
+              // ngoài màn hình, mất nút "Trang khách" và nhãn trạng thái ở lề
               // phải. min-w-0 cho cột co lại đúng bề ngang màn hình, chữ mới
               // chịu cắt như thiết kế.
-              <Panel key={q.id} className="min-w-0 flex flex-col gap-3 px-4 py-[15px]" data-testid={`quote-row-${q.id}`}>
-                <div className="flex items-start gap-[11px]">
+              <Panel key={q.id} className="group relative min-w-0 flex flex-col gap-3 px-4 py-[15px] transition-colors hover:border-strong" data-testid={`quote-row-${q.id}`}>
+                {/* Bấm vào BẤT KỲ chỗ nào của thẻ là mở trang sửa báo giá. Dùng
+                    link phủ tuyệt đối thay vì bọc cả thẻ trong <Link>, vì bên
+                    trong còn <a> "Trang khách" và <select> đổi trạng thái —
+                    lồng chúng vào một link là HTML không hợp lệ và bấm sẽ dính
+                    nhau. Các control đó nâng lên z-10 để nằm trên lớp phủ. */}
+                <Link
+                  href={`/dashboard/studio/quotes/${q.id}`}
+                  aria-label={`Mở báo giá ${q.title}`}
+                  className="absolute inset-0 rounded-[14px]"
+                  data-testid={`quote-edit-${q.id}`}
+                />
+                <div className="pointer-events-none flex items-start gap-[11px]">
                   <span className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[11.5px] font-bold" style={avatarStyle(q.client_name || q.title)}>
                     {initials(q.client_name || q.title)}
                   </span>
@@ -125,23 +136,22 @@ export default function QuotesListView({ list: initialList, studioHost = null }:
                 </div>
 
                 {pendingAdj > 0 && (
-                  <p className="rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
+                  <p className="pointer-events-none rounded-[9px] px-2.5 py-1.5 text-[11.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
                     {pendingAdj} yêu cầu chỉnh từ khách chưa xử lý
                   </p>
                 )}
 
-                <div>
+                <div className="pointer-events-none">
                   <p className="tnum text-[19px] font-bold" style={{ letterSpacing: "-.5px" }}>{vnd(total)}</p>
                   <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>
                     {(q.quote_items || []).length} hạng mục · tạo {fmtDate(q.created_at)}
                   </p>
                 </div>
 
-                {/* Hai nút + ô trạng thái xếp lưới 2 cột đều nhau trên điện thoại
-                    (trước đây ba cỡ khác nhau tự wrap thành các hàng lệch), từ
-                    560px về một hàng ngang. Ô trạng thái nằm cùng lưới để nó
-                    không còn là một dòng riêng lẻ dưới đáy thẻ. */}
-                <div className="grid grid-cols-2 gap-2 min-[560px]:flex min-[560px]:flex-wrap min-[560px]:items-center">
+                {/* Nút "Trang khách" + ô trạng thái xếp lưới 2 cột đều nhau trên
+                    điện thoại, từ 560px về một hàng ngang. Nút "Mở báo giá" đã
+                    bỏ — bấm vào thân thẻ là mở luôn trang sửa. */}
+                <div className="relative z-10 grid grid-cols-2 gap-2 min-[560px]:flex min-[560px]:flex-wrap min-[560px]:items-center">
                   <a
                     href={studioUrl(studioHost, `/q/${q.client_token}`)}
                     target="_blank"
@@ -151,15 +161,8 @@ export default function QuotesListView({ list: initialList, studioHost = null }:
                   >
                     <Eye size={14} /> Trang khách <ExternalLink size={11} />
                   </a>
-                  <Link
-                    href={`/dashboard/studio/quotes/${q.id}`}
-                    className="act-btn act-btn-primary"
-                    data-testid={`quote-edit-${q.id}`}
-                  >
-                    <Pencil size={13} /> Mở báo giá
-                  </Link>
                   <select
-                    className="act-btn col-span-2 min-[560px]:col-auto min-[560px]:ml-auto"
+                    className="act-btn col-span-1 min-[560px]:col-auto min-[560px]:ml-auto"
                     aria-label="Đổi trạng thái báo giá"
                     style={{ color: st.fg, opacity: updating === q.id ? 0.5 : 1 }}
                     value={q.status}
