@@ -90,14 +90,14 @@ type ItemRow = { id?: string; name: string; qty: number; unit_price: number; is_
 /* ── Tab của màn chi tiết (bản thiết kế) ────────────────────────────────────
    Bản thiết kế xếp mọi thứ của một hợp đồng vào một thẻ có thanh tab, thay vì
    một cột dài. Thứ tự tab đi theo trình tự làm việc thật: xem thông tin → chốt
-   hạng mục → thu tiền → phân công → giao sản phẩm → gửi khách ký. */
+   hạng mục → thu tiền → phân công → giao sản phẩm → ký và thực hiện. */
 const DETAIL_TABS = [
   ["info", "Thông tin"],
   ["items", "Hạng mục"],
   ["pay", "Thanh toán"],
   ["crew", "Nhân sự"],
   ["album", "Sản phẩm"],
-  ["send", "Gửi khách & ký"],
+  ["send", "Ký và thực hiện"],
 ] as const;
 type DetailTab = (typeof DETAIL_TABS)[number][0];
 
@@ -1219,10 +1219,9 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           )}
         </div>
 
-        {/* Gửi cổng khách — GỘP từ khối "Gửi khách & ký" phía dưới, cùng nội dung
-            tin và cùng link, để trên điện thoại chỉ còn MỘT chỗ gửi cho khách
-            thay vì hai chỗ giống nhau ở đầu và giữa trang. Khối dưới vẫn giữ cho
-            desktop, nơi thẻ tóm tắt này không hiện. */}
+        {/* Gửi cổng khách — cùng nội dung tin và cùng link với thẻ "Cổng khách"
+            ở rail phải. Rail chỉ hiện từ 1100px, còn thẻ tóm tắt này chỉ hiện
+            DƯỚI 1100px, nên ở mọi khổ màn hình chỉ có đúng MỘT chỗ gửi khách. */}
         <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
           <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--tx3)" }}>Gửi cổng khách</p>
@@ -1437,21 +1436,6 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                 </div>
               </div>
 
-              {/* Client brief */}
-              {contract.brief_submitted_at && (
-                <div className="card p-5" style={{ borderColor: "var(--s-blueS)" }}>
-                  <h2 className="mb-2 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: "var(--s-blue)" }}>
-                    <FileText size={18} /> Brief từ khách
-                  </h2>
-                  <dl className="space-y-1.5 text-sm">
-                    {contract.brief_concept && <div><dt className="inline" style={{ color: "var(--text3)" }}>Concept: </dt><dd className="inline">{contract.brief_concept}</dd></div>}
-                    {contract.brief_outfit && <div><dt className="inline" style={{ color: "var(--text3)" }}>Trang phục/người: </dt><dd className="inline">{contract.brief_outfit}</dd></div>}
-                    {contract.brief_refs && <div><dt className="inline" style={{ color: "var(--text3)" }}>Tham khảo: </dt><dd className="inline break-all">{contract.brief_refs}</dd></div>}
-                    {contract.brief_note && <div><dt className="inline" style={{ color: "var(--text3)" }}>Khác: </dt><dd className="inline">{contract.brief_note}</dd></div>}
-                  </dl>
-                  <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>Gửi lúc {new Date(contract.brief_submitted_at).toLocaleString("vi-VN")}</p>
-                </div>
-              )}
               </>
             )}
 
@@ -2193,7 +2177,7 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
               </>
             )}
 
-            {/* Gửi khách & ký: link cổng khách, form thông tin, chữ ký hai bên */}
+            {/* Ký và thực hiện: form thông tin buổi chụp, brief khách gửi, chữ ký hai bên */}
             {tab === "send" && (
               <>
               {/* Khối "Cổng khách" đã chuyển sang rail phải (thẻ Cổng khách,
@@ -2276,6 +2260,21 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                   </div>
                 )}
               </div>
+              {/* Client brief */}
+              {contract.brief_submitted_at && (
+                <div className="card p-5" style={{ borderColor: "var(--s-blueS)" }}>
+                  <h2 className="mb-2 flex items-center gap-2 font-serif text-lg font-medium" style={{ color: "var(--s-blue)" }}>
+                    <FileText size={18} /> Brief từ khách
+                  </h2>
+                  <dl className="space-y-1.5 text-sm">
+                    {contract.brief_concept && <div><dt className="inline" style={{ color: "var(--text3)" }}>Concept: </dt><dd className="inline">{contract.brief_concept}</dd></div>}
+                    {contract.brief_outfit && <div><dt className="inline" style={{ color: "var(--text3)" }}>Trang phục/người: </dt><dd className="inline">{contract.brief_outfit}</dd></div>}
+                    {contract.brief_refs && <div><dt className="inline" style={{ color: "var(--text3)" }}>Tham khảo: </dt><dd className="inline break-all">{contract.brief_refs}</dd></div>}
+                    {contract.brief_note && <div><dt className="inline" style={{ color: "var(--text3)" }}>Khác: </dt><dd className="inline">{contract.brief_note}</dd></div>}
+                  </dl>
+                  <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>Gửi lúc {new Date(contract.brief_submitted_at).toLocaleString("vi-VN")}</p>
+                </div>
+              )}
               {/* Signature banner */}
               {contract.client_signed_at && (
                 <div className="card flex flex-wrap items-center gap-4 p-5" style={{ borderColor: "var(--s-greenS)" }}>
@@ -2409,7 +2408,7 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
             </div>
           </div>
 
-          {/* Cổng khách — chuyển từ tab "Gửi khách & ký" ra rail phải, xếp cùng
+          {/* Cổng khách — chuyển từ tab "Ký và thực hiện" ra rail phải, xếp cùng
               kiểu với thẻ Khách hàng ở trên: nhãn nhỏ, trạng thái, rồi lưới nút
               đều nhau. Ở đây nó luôn nhìn thấy, không phải mở đúng tab mới biết
               khách đã mở link chưa.
