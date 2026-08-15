@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import {
   Link as LinkIcon, Copy, Check, Phone, FilePlus, Archive, MessageCircle,
-  CheckCircle, XCircle, Pencil, Trash2, X, Save, ExternalLink,
+  CheckCircle, XCircle, Pencil, Trash2, X, Save, ExternalLink, Landmark,
 } from "lucide-react";
+import { DEPOSIT_STATUS_LABEL } from "@/lib/booking-deposit";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { studioUrl } from "@/lib/hosts";
@@ -90,6 +91,14 @@ export default function BookingsView({
     setBusy(id);
     await supabase.from("studio_bookings").update({ status }).eq("id", id);
     setList((p) => p.map((b) => b.id === id ? { ...b, status } : b));
+    setBusy(null);
+  }
+
+  /** Studio đã đối chiếu sao kê và xác nhận nhận được cọc. */
+  async function confirmDeposit(id: string) {
+    setBusy(id);
+    await supabase.from("studio_bookings").update({ deposit_status: "confirmed" }).eq("id", id);
+    setList((p) => p.map((b) => (b.id === id ? { ...b, deposit_status: "confirmed" as const } : b)));
     setBusy(null);
   }
 
@@ -257,6 +266,50 @@ export default function BookingsView({
                     </p>
                   )}
                   {b.note && <p className="mt-1.5 text-sm rounded-lg px-3 py-2" style={{ background: "var(--surface2)", color: "var(--text2)" }}>{b.note}</p>}
+
+                  {/* Cọc giữ ngày. "Khách báo đã chuyển" KHÁC "đã nhận" — ảnh
+                      chụp chuyển khoản làm giả được, nên studio phải tự đối
+                      chiếu sao kê rồi bấm xác nhận. */}
+                  {b.deposit_status && b.deposit_status !== "none" && (
+                    <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg px-3 py-2" style={{ background: "var(--surface2)" }}>
+                      <Landmark size={13} style={{ color: "var(--text3)" }} />
+                      <span className="text-xs">
+                        Cọc {b.deposit_amount ? vnd(b.deposit_amount) : ""}
+                        {b.deposit_code ? ` · ${b.deposit_code}` : ""}
+                      </span>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                        style={{
+                          background: b.deposit_status === "confirmed" ? "var(--s-greenS)" : b.deposit_status === "paid" ? "var(--s-blueS)" : "var(--s-amberS)",
+                          color: b.deposit_status === "confirmed" ? "var(--s-green)" : b.deposit_status === "paid" ? "var(--s-blue)" : "var(--s-amber)",
+                        }}
+                      >
+                        {DEPOSIT_STATUS_LABEL[b.deposit_status]}
+                      </span>
+                      {b.deposit_proof_url && (
+                        <a href={b.deposit_proof_url} target="_blank" rel="noreferrer" className="text-[11px] underline" style={{ color: "var(--text2)" }}>
+                          Xem biên lai
+                        </a>
+                      )}
+                      {b.deposit_status === "paid" && (
+                        <button
+                          onClick={() => confirmDeposit(b.id)}
+                          disabled={busy === b.id}
+                          className="ml-auto rounded-lg px-2.5 py-1 text-[11px] font-semibold"
+                          style={{ background: "var(--s-greenS)", color: "var(--s-green)" }}
+                        >
+                          Đã đối chiếu — xác nhận
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {b.referrer_phone && (
+                    <p className="mt-1.5 text-[11px]" style={{ color: "var(--brand, var(--accent))" }}>
+                      Được giới thiệu bởi {b.referrer_phone}
+                    </p>
+                  )}
+
                   <p className="mt-1.5 text-[11px]" style={{ color: "var(--text3)" }}>{new Date(b.created_at).toLocaleString("vi-VN")}</p>
                 </div>
 

@@ -484,7 +484,34 @@ export interface StudioBooking {
   package_price: number | null;
   facebook: string | null;
   status: "new" | "accepted" | "pending" | "declined" | "handled" | "archived";
+  // Cọc giữ ngày — xem lib/booking-deposit.ts. deposit_amount chốt lúc khách đặt
+  // nên studio đổi chính sách sau đó không làm đổi số tiền của yêu cầu đã gửi.
+  deposit_amount: number | null;
+  deposit_status: "none" | "awaiting" | "paid" | "confirmed";
+  deposit_proof_url: string | null;
+  deposit_paid_at: string | null;
+  deposit_code: string | null;
+  deposit_token: string | null;
+  /** SĐT khách cũ đã giới thiệu khách này (nếu có) — xem lib/referral.ts. */
+  referrer_phone: string | null;
   created_at: string;
+}
+
+/** Một dòng sổ giới thiệu: khách cũ giới thiệu khách mới. */
+export interface StudioReferral {
+  id: string;
+  owner_id: string;
+  referrer_phone: string;
+  referrer_name: string | null;
+  referred_phone: string;
+  referred_name: string | null;
+  booking_id: string | null;
+  contract_id: string | null;
+  reward_amount: number;
+  status: "pending" | "earned" | "granted" | "cancelled";
+  note: string | null;
+  created_at: string;
+  granted_at: string | null;
 }
 
 // ── Rental module (Thuê đồ: váy cưới, vest, áo dài, phụ kiện) ───────────────

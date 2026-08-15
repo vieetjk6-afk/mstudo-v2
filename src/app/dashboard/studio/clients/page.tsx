@@ -1,8 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
-import { contractTotal, sumAmounts } from "@/lib/types";
+import { contractTotal, sumAmounts, type StudioReferral } from "@/lib/types";
 import ClientsView, { type ClientAgg } from "./ClientsView";
+import ReferralsPanel from "./ReferralsPanel";
 import StudioDenied from "@/components/StudioDenied";
+import { getStudioHost } from "@/lib/studio-site";
+import { studioUrl } from "@/lib/hosts";
 
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
@@ -58,5 +61,33 @@ export default async function ClientsPage() {
   }
   const clients = Array.from(map.values()).sort((x, y) => (y.last || "").localeCompare(x.last || ""));
 
-  return <ClientsView clients={clients} />;
+  // Sổ giới thiệu — chỉ quản lý trở lên mới thấy: nó có số tiền thưởng, không
+  // phải thứ nhân viên chụp cần nhìn.
+  const canSeeReferrals = profile.actingRole !== "staff";
+  const [{ data: referrals }, { data: me }] = await Promise.all([
+    canSeeReferrals
+      ? supabase
+          .from("studio_referrals")
+          .select("*")
+          .eq("owner_id", profile.id)
+          .order("created_at", { ascending: false })
+          .limit(100)
+      : Promise.resolve({ data: [] }),
+    canSeeReferrals
+      ? supabase.from("profiles").select("booking_token").eq("id", profile.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const studioHost = await getStudioHost(supabase, profile.id);
+  const bookingToken = (me as { booking_token?: string | null } | null)?.booking_token ?? null;
+  const bookingUrl = bookingToken ? studioUrl(studioHost, `/book/${bookingToken}`) : null;
+
+  return (
+    <>
+      <ClientsView clients={clients} />
+      {canSeeReferrals && (
+        <ReferralsPanel rows={(referrals ?? []) as StudioReferral[]} bookingUrl={bookingUrl} />
+      )}
+    </>
+  );
 }
