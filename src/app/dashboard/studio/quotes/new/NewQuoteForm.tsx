@@ -22,6 +22,7 @@ import { nextQuoteCode, newShareToken } from "@/lib/contract-code";
 import { computeRoundedDeposit, depositRatio } from "@/lib/quote-deposit";
 import { fmtDate } from "@/lib/date";
 import { vnd } from "@/lib/types";
+import { makeListLabel } from "@/lib/pricelist-label";
 
 /** `src` nhớ hạng mục này sinh ra từ dòng nào của bảng giá, để tick/bỏ tick
  *  ở hai khối trên cùng một nguồn mà không so khớp theo tên. */
@@ -49,10 +50,13 @@ export default function NewQuoteForm({
   ownerId,
   services = [],
   pricelist = [],
+  listLabels = {},
 }: {
   ownerId: string;
   services?: { id: string; name: string }[];
   pricelist?: PriceItem[];
+  /** Nhãn studio tự đặt cho từng bảng giá (profiles.pl_list_labels). */
+  listLabels?: Record<string, string>;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -84,6 +88,8 @@ export default function NewQuoteForm({
   // Gói chính = hạng mục bắt buộc sinh ra từ bảng giá (mỗi báo giá 1 gói).
   const mainSrc = items.find((i) => i.src && !i.is_optional && !i.is_discount)?.src ?? "";
   const extraSrcs = items.filter((i) => i.src && i.is_optional).map((i) => i.src!);
+
+  const listLabel = useMemo(() => makeListLabel(listLabels, services), [listLabels, services]);
 
   const priceGroups = useMemo(() => {
     const map = new Map<string, PriceItem[]>();
@@ -265,10 +271,20 @@ export default function NewQuoteForm({
               </p>
             </div>
           ) : (
-            <div className="grid gap-2">
+            /* min-w-0 ở CẢ HAI cấp lưới: lưới không khai báo số cột dùng track
+               `auto`, mà sàn của track là min-content của item. Nút bên trong có
+               `truncate` (white-space: nowrap) nên min-content bằng nguyên chuỗi
+               mô tả gói — track phình rộng hơn thẻ và cả danh sách tràn ra ngoài,
+               đè lên rail phải ở desktop và làm trang cuộn ngang trên điện thoại.
+               min-width:0 cho item co lại đúng bề ngang thẻ, chữ mới chịu cắt. */
+            <div className="grid min-w-0 gap-2">
               {priceGroups.map(([key, list]) => (
-                <div key={key} className="grid gap-2">
-                  {priceGroups.length > 1 && <p className="mt-1 text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>{key}</p>}
+                <div key={key} className="grid min-w-0 gap-2">
+                  {priceGroups.length > 1 && (
+                    <p className="mt-1 truncate text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>
+                      {listLabel(key)}
+                    </p>
+                  )}
                   {list.map((p) => {
                     const on = mainSrc === p.id;
                     return (
@@ -276,7 +292,7 @@ export default function NewQuoteForm({
                         key={p.id}
                         type="button"
                         onClick={() => pickMain(p)}
-                        className="flex items-center gap-3 rounded-[11px] px-3.5 py-3 text-left"
+                        className="flex min-w-0 items-center gap-3 rounded-[11px] px-3.5 py-3 text-left"
                         style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
                       >
                         <Package size={19} style={{ flex: "none", color: on ? "var(--ac)" : "var(--tx3)" }} />
@@ -311,7 +327,7 @@ export default function NewQuoteForm({
                     key={p.id}
                     type="button"
                     onClick={() => toggleExtra(p)}
-                    className="flex items-center gap-2.5 rounded-[10px] px-3.5 py-3 text-left"
+                    className="flex min-w-0 items-center gap-2.5 rounded-[10px] px-3.5 py-3 text-left"
                     style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
                   >
                     {on ? <Check size={18} style={{ flex: "none", color: "var(--ac)" }} /> : <Plus size={18} style={{ flex: "none", color: "var(--tx3)" }} />}

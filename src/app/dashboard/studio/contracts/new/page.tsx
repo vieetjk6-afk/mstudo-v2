@@ -97,6 +97,9 @@ export default async function NewContractPage() {
         account: (profile.pl_bank_account as string | null) ?? null,
         holder: (profile.pl_bank_holder as string | null) ?? null,
       }}
+      // Nhãn studio tự đặt cho bảng giá; thiếu nó thì tiêu đề nhóm gói rơi về
+      // `list_key` thô (slug hoặc UUID của dịch vụ).
+      listLabels={((profile as { pl_list_labels?: Record<string, string> | null }).pl_list_labels ?? {}) as Record<string, string>}
     />
   );
 }
