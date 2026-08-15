@@ -543,7 +543,9 @@ export default function CalendarView({
                     tabIndex={0}
                     onClick={() => setSelected(dateStr)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setSelected(dateStr); }}
-                    className="min-h-[96px] cursor-pointer px-2.5 py-2"
+                    // 112px thay vì 96px: mỗi chip nay hai dòng (tên hợp đồng +
+                    // gói), ba chip không còn vừa ô cao 96px.
+                    className="min-h-[112px] cursor-pointer px-2.5 py-2"
                     style={{
                       borderRight: "1px solid var(--bd2)",
                       borderBottom: "1px solid var(--bd2)",
@@ -560,18 +562,27 @@ export default function CalendarView({
                       <span className="text-[9px] leading-none" style={{ color: "var(--tx3)" }}>{lunarCellLabel(dateStr)}</span>
                     </div>
                     <div className="mt-1.5 flex flex-col gap-1">
+                      {/* Ô ngày in TÊN HỢP ĐỒNG rồi tới gói/hạng mục — đó mới là
+                          thứ phân biệt hai buổi trong cùng một ngày. Tên khách
+                          vẫn còn trong tooltip và trong thẻ chi tiết. */}
                       {cons.slice(0, 3).map((c) => {
                         const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
+                        const goi = c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` x${it.qty}` : ""}`).join(", ");
                         return (
                           <Link
                             key={c.id}
                             href={`/dashboard/studio/contracts/${c.id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="block truncate rounded-[6px] px-1.5 py-[3px] text-[11px] font-semibold"
+                            className="block rounded-[6px] px-1.5 py-[3px]"
                             style={{ background: tone.bg, color: tone.fg }}
-                            title={`${c.title}${c.client_name ? ` · ${c.client_name}` : ""}`}
+                            title={`${c.title}${c.client_name ? ` · ${c.client_name}` : ""}${goi ? ` · ${goi}` : ""}`}
                           >
-                            {c.event_time ? `${c.event_time} ` : ""}{c.client_name || c.title}
+                            <span className="block truncate text-[11px] font-semibold">
+                              {c.event_time ? `${c.event_time} ` : ""}{c.title}
+                            </span>
+                            {goi && (
+                              <span className="block truncate text-[10px]" style={{ opacity: 0.75 }}>{goi}</span>
+                            )}
                           </Link>
                         );
                       })}
@@ -714,8 +725,10 @@ function ContractDetailCard({
         </div>
       </Link>
 
-      {/* Đổi màu từng hợp đồng — nhiều buổi cùng ngày thì nhìn màu là phân biệt được. */}
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      {/* Đổi màu từng hợp đồng — nhiều buổi cùng ngày thì nhìn màu là phân biệt
+          được. Ẩn trên điện thoại: 8 chấm màu chiếm gần hết bề ngang một cột
+          ngày, mà đổi màu là việc ngồi máy tính mới làm. */}
+      <div className="mt-2 hidden flex-wrap items-center gap-1.5 min-[900px]:flex">
         <span className="text-[11px]" style={{ color: "var(--tx3)" }}>Màu:</span>
         {MARK_COLORS.map((col) => (
           <button
@@ -732,15 +745,32 @@ function ContractDetailCard({
           </button>
         ))}
       </div>
-      {/* break-words: tên hạng mục do studio tự đặt, có thể là một chuỗi dài
+      {/* Nhãn một dòng, giá trị dòng dưới. Trong cột ngày hẹp, để "Dịch vụ: Chụp
+          ảnh" cùng dòng thì chữ tự ngắt lung tung giữa nhãn và giá trị; tách ra
+          thì mỗi dòng đọc trọn một ý.
+          break-words: tên hạng mục do studio tự đặt, có thể là một chuỗi dài
           không dấu cách — để mặc định thì nó đẩy thẻ rộng ra khỏi màn hình. */}
-      <div className="mt-2 space-y-0.5 break-words text-[11.5px]" style={{ color: "var(--tx2)" }}>
-        <div><span style={{ color: "var(--tx3)" }}>Dịch vụ: </span>{SHOOT_TYPE_LABEL[c.shoot_type] || c.shoot_type}</div>
+      <div className="mt-2 space-y-1.5 break-words text-[11.5px]" style={{ color: "var(--tx2)" }}>
+        <div>
+          <p className="text-[10.5px] uppercase" style={{ letterSpacing: ".3px", color: "var(--tx3)" }}>Dịch vụ</p>
+          <p>{SHOOT_TYPE_LABEL[c.shoot_type] || c.shoot_type}</p>
+        </div>
         {c.contract_items.length > 0 && (
-          <div><span style={{ color: "var(--tx3)" }}>Hạng mục: </span>{c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` x${it.qty}` : ""}`).join(", ")}</div>
+          <div>
+            <p className="text-[10.5px] uppercase" style={{ letterSpacing: ".3px", color: "var(--tx3)" }}>Hạng mục</p>
+            <p>{c.contract_items.map((it) => `${it.name}${it.qty > 1 ? ` x${it.qty}` : ""}`).join(", ")}</p>
+          </div>
         )}
-        <div><span style={{ color: "var(--tx3)" }}>Nhân sự: </span>{c.contract_crew.length} người</div>
-        {c.location && <div><span style={{ color: "var(--tx3)" }}>Địa điểm: </span>{c.location}</div>}
+        <div>
+          <p className="text-[10.5px] uppercase" style={{ letterSpacing: ".3px", color: "var(--tx3)" }}>Nhân sự</p>
+          <p>{c.contract_crew.length} người</p>
+        </div>
+        {c.location && (
+          <div>
+            <p className="text-[10.5px] uppercase" style={{ letterSpacing: ".3px", color: "var(--tx3)" }}>Địa điểm</p>
+            <p>{c.location}</p>
+          </div>
+        )}
       </div>
       {c.client_phone && (
         <div className="mt-2">
@@ -897,14 +927,13 @@ function WeekGrid({
           <span className="px-2 py-2 text-right text-[10.5px]" style={{ color: "var(--tx3)" }}>cả ngày</span>
           {weekDays.map((d) => (
             <div key={d} className="flex flex-col gap-1 p-1" style={{ borderLeft: "1px solid var(--bd2)" }}>
-              {contractsOn(d).filter((c) => hourOf(c.event_time) === null).map((c) => {
-                const tone = CONTRACT_STATUS_TONE[(c.status as ContractStatus)] ?? CONTRACT_STATUS_TONE.draft;
-                return (
-                  <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="truncate rounded-[7px] px-1.5 py-1 text-[11px] font-semibold" style={{ background: tone.bg, color: tone.fg, borderLeft: `3px solid ${tone.fg}` }} title={c.title}>
-                    {c.client_name || c.title}
-                  </Link>
-                );
-              })}
+              {/* Buổi chụp CHƯA ĐẶT GIỜ rơi xuống hàng này vì không xếp được vào
+                  lưới. Nó cũng phải in đủ thông tin như buổi có giờ — trước đây
+                  chỉ có tên khách, nên hợp đồng chưa điền giờ trông như không có
+                  chi tiết gì. */}
+              {contractsOn(d).filter((c) => hourOf(c.event_time) === null).map((c) => (
+                <ContractDetailCard key={c.id} c={c} onColor={onColor} />
+              ))}
               {eventsOn(d).filter((e) => hourOf(e.event_time) === null).map((e) => (
                 <span key={e.id} className="truncate rounded-[7px] px-1.5 py-1 text-[11px] font-semibold" style={{ background: "var(--blS)", color: "var(--bl)", borderLeft: "3px solid var(--bl)" }} title={eventLabel(e)}>
                   {eventLabel(e)}
