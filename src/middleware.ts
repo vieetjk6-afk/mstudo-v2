@@ -85,6 +85,23 @@ async function route(request: NextRequest) {
   const host = request.headers.get("host")?.split(":")[0] ?? "";
   const { pathname, search } = request.nextUrl;
 
+  // ── /auth/* — KHÔNG đụng vào ─────────────────────────────────────────────
+  // Đăng nhập Google đi theo luồng PKCE: trình duyệt lưu `code_verifier` trong
+  // cookie tên `sb-<mã-project>-auth-token-code-verifier`, rồi /auth/callback
+  // đổi code lấy phiên.
+  //
+  // Tên cookie đó KHỚP điều kiện nhận biết cookie phiên ở dưới
+  // (`startsWith("sb-") && includes("-auth-token")`), nên middleware tưởng
+  // request đã có phiên và gọi getUser(). Supabase thấy phiên không hợp lệ và
+  // ghi đè bộ cookie auth; `NextResponse.next({ request })` truyền cookie ĐÃ SỬA
+  // đó xuống route handler, thế là verifier biến mất trước khi
+  // exchangeCodeForSession kịp dùng → "pkce_code_verifier_not_found".
+  //
+  // Chỉ hỏng khi đăng nhập sạch (ẩn danh / vừa xoá cookie): máy đang có phiên
+  // hợp lệ thì getUser() thành công nên không xoá gì — đúng kiểu lỗi lúc được
+  // lúc không. Middleware không có việc gì phải làm ở /auth cả.
+  if (pathname.startsWith("/auth")) return NextResponse.next();
+
   // ── Canonical host: www.mstudo.com → mstudo.com ──────────────────────────
   // The apex (mstudo.com) is the canonical main domain. Send www → apex so we
   // have one source of truth for cookies/sessions. (Make sure Vercel itself
