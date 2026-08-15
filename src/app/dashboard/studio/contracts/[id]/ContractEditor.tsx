@@ -30,6 +30,7 @@ import {
   UserRound,
   Wallet,
   Send,
+  Share2,
   UserPlus,
   Printer,
 } from "lucide-react";
@@ -394,6 +395,8 @@ export default function ContractEditor({
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  /** Bảng chọn cách gửi cổng khách (mở từ nút "Gửi khách" ở thanh đầu trang). */
+  const [sendOpen, setSendOpen] = useState(false);
 
   function toast(m: string) {
     setMsg(m);
@@ -445,9 +448,42 @@ export default function ContractEditor({
   // Client portal runs on the studio's own subdomain once its site is published,
   // otherwise on the main host.
   const shareUrl = studioUrl(studioHost, `/c/${contract.client_token}`);
-  // Một nội dung tin duy nhất cho cả thẻ tóm tắt (điện thoại) và khối "Gửi khách
-  // & ký" (desktop) — hai chỗ gửi cùng một link thì không được lệch câu chữ.
+  // Một nội dung tin duy nhất cho mọi cách gửi trong bảng "Gửi khách" — cùng một
+  // link thì không được lệch câu chữ giữa Zalo, chia sẻ nhanh và chép link.
   const clientPortalMsg = `Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`;
+  /** "22:42 11-08" — lần cuối khách mở cổng, hoặc null nếu chưa mở lần nào. */
+  const clientViewedAt = contract.client_viewed_at
+    ? new Date(contract.client_viewed_at).toLocaleString("vi-VN", {
+        hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit",
+      })
+    : null;
+
+  /** Chép link cổng khách, hiện "Đã chép" 1,5 giây. */
+  function copyShareUrl() {
+    navigator.clipboard?.writeText(shareUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  /**
+   * Chia sẻ nhanh qua bảng chia sẻ của hệ điều hành (Zalo, Messenger, SMS…).
+   * Trình duyệt không hỗ trợ `navigator.share` (phần lớn desktop) thì lùi về
+   * chép link, để nút không bao giờ bấm mà không có gì xảy ra.
+   */
+  async function quickShare() {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Hợp đồng — ${f.title}`, text: clientPortalMsg, url: shareUrl });
+        setSendOpen(false);
+        return;
+      } catch {
+        /* khách bấm huỷ — không lùi về chép link, tránh chép ngoài ý muốn */
+        return;
+      }
+    }
+    copyShareUrl();
+    toast("Trình duyệt không hỗ trợ chia sẻ nhanh — đã chép link.");
+  }
 
   // Required fields — flagged red until valid. Phone must be 10 digits.
   const phoneOk = /^\d{10}$/.test(f.client_phone.replace(/\D/g, ""));
@@ -1169,7 +1205,7 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           <button onClick={() => setTab("pay")} className="act-btn">
             <Wallet size={16} /> Ghi nhận thanh toán
           </button>
-          <button onClick={() => setTab("send")} className="act-btn act-btn-primary col-span-2 min-[820px]:col-auto">
+          <button onClick={() => setSendOpen(true)} className="act-btn act-btn-primary col-span-2 min-[820px]:col-auto">
             <Send size={16} /> Gửi khách
           </button>
           {f.status === "cancelled" && (
@@ -1205,72 +1241,65 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           </span>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[13px] font-semibold">{f.client_name || "Chưa có tên khách"}</p>
-            <p className="truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
-              {f.client_phone || "chưa có số điện thoại"}
-            </p>
-          </div>
-          {clientDigits.length >= 9 && (
-            <a href={`tel:${clientDigits}`} className="act-btn act-btn-auto">
-              <Phone size={15} /> Gọi
-            </a>
-          )}
-        </div>
-
-        {/* Gửi cổng khách — cùng nội dung tin và cùng link với thẻ "Cổng khách"
-            ở rail phải. Rail chỉ hiện từ 1100px, còn thẻ tóm tắt này chỉ hiện
-            DƯỚI 1100px, nên ở mọi khổ màn hình chỉ có đúng MỘT chỗ gửi khách. */}
+        {/* Khách hàng — bản gọn của thẻ "Khách hàng" ở rail phải, đưa lên ngay
+            dưới tổng hợp đồng. Rail rơi xuống CUỐI trang dưới 1100px, phải cuộn
+            qua toàn bộ form mới tới; hai thứ hay cần nhất khi mở một hợp đồng là
+            tiền và cách liên hệ khách, nên chúng phải ở đầu.
+            Cụm gửi cổng khách trước đây nằm ở đây đã dồn hết vào bảng "Gửi
+            khách" mở từ thanh đầu trang — một chỗ gửi duy nhất. */}
         <div className="mt-3 pt-3" style={{ borderTop: "1px solid var(--bd2)" }}>
-          <div className="mb-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--tx3)" }}>Gửi cổng khách</p>
-            {/* Trạng thái khách xem để ngay đây, không phải mở tab "Gửi khách &
-                ký" mới biết khách đã mở link chưa. */}
+          <div className="flex items-center gap-2.5">
             <span
-              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-bold"
-              style={contract.client_viewed_at
-                ? { background: "var(--gnS)", color: "var(--gn)" }
-                : { background: "var(--sf2)", color: "var(--tx3)" }}
+              className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[12px] font-bold"
+              style={avatarStyle(f.client_name || f.title)}
             >
-              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: contract.client_viewed_at ? "var(--gn)" : "var(--tx3)" }} />
-              {contract.client_viewed_at
-                ? `Khách đã xem · ${new Date(contract.client_viewed_at).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`
-                : "Khách chưa mở link"}
+              {initials(f.client_name || f.title)}
             </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[13.5px] font-bold">{f.client_name || "Chưa có tên khách"}</p>
+              <p className="truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                {f.client_phone || "chưa có số điện thoại"}
+              </p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
-            <MessengerButton link={f.client_messenger} label="Gửi cho khách" message={clientPortalMsg} className="act-btn" />
-            <button
-              onClick={() => {
-                navigator.clipboard?.writeText(shareUrl);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              }}
-              className="act-btn"
+          <p className="mt-1.5 text-[11px]" style={{ color: clientViewedAt ? "var(--gn)" : "var(--tx3)" }}>
+            {clientViewedAt ? `Khách xem lần cuối · ${clientViewedAt}` : "Khách chưa mở link hợp đồng"}
+          </p>
+          <div className="mt-2.5 grid grid-cols-3 gap-2">
+            <a
+              href={clientDigits ? `tel:${clientDigits}` : undefined}
+              aria-disabled={!clientDigits}
+              className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+              style={{ background: "var(--sf2)", opacity: clientDigits ? 1 : 0.5 }}
             >
-              {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Đã chép" : "Chép link"}
-            </button>
-            <div className="col-span-2">
-              <ZaloSendButton
-                phone={f.client_phone}
-                name={f.client_name}
-                audience="client"
-                contractId={contract.id}
-                kind="contract_share"
-                className="act-btn act-btn-auto flex-1"
-                message={clientPortalMsg}
-              />
-            </div>
-            <div className="col-span-2">
-              <EmailButton
-                to={f.client_email}
-                label="Gửi email"
-                subject={`Hợp đồng dịch vụ — ${f.title}`}
-                message={`Xin chào ${f.client_name || "anh/chị"},\n\nĐây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại:\n${shareUrl}\n(Mật khẩu mở là số điện thoại của anh/chị.)\n\nCảm ơn ạ!\n— ${studioName}`}
-                className="act-btn"
-              />
-            </div>
+              <Phone size={17} style={{ color: "var(--ac)" }} /> Gọi
+            </a>
+            <a
+              href={clientDigits ? `https://zalo.me/${clientDigits}` : undefined}
+              target="_blank"
+              rel="noreferrer"
+              aria-disabled={!clientDigits}
+              className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+              style={{ background: "var(--sf2)", opacity: clientDigits ? 1 : 0.5 }}
+            >
+              <MessageCircle size={17} style={{ color: "var(--ac)" }} /> Zalo
+            </a>
+            {clientDigits ? (
+              <Link
+                href={`/dashboard/studio/clients/${clientDigits}`}
+                className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+                style={{ background: "var(--sf2)" }}
+              >
+                <UserRound size={17} style={{ color: "var(--ac)" }} /> Hồ sơ
+              </Link>
+            ) : (
+              <span
+                className="flex flex-col items-center gap-[3px] rounded-[10px] py-2.5 text-[11px] font-semibold"
+                style={{ background: "var(--sf2)", opacity: 0.5 }}
+              >
+                <UserRound size={17} style={{ color: "var(--ac)" }} /> Hồ sơ
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -2180,10 +2209,9 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
             {/* Ký và thực hiện: form thông tin buổi chụp, brief khách gửi, chữ ký hai bên */}
             {tab === "send" && (
               <>
-              {/* Khối "Cổng khách" đã chuyển sang rail phải (thẻ Cổng khách,
-                  cạnh thẻ Khách hàng): link cổng là thông tin tra cứu thường
-                  xuyên, để trong tab thì phải mở đúng tab mới thấy khách đã xem
-                  chưa. */}
+              {/* Không còn khối "Cổng khách" ở đây: mọi cách gửi link cho khách
+                  đã dồn vào bảng "Gửi khách" mở từ thanh đầu trang, còn giờ
+                  khách xem lần cuối hiện ngay trong thẻ Khách hàng. */}
               {/* Form điền thông tin buổi chụp — gửi khách qua Zalo (kèm tự động lúc nhắc lịch) */}
               <div className="card p-4">
                 <div className="flex flex-col gap-3">
@@ -2355,8 +2383,9 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
             bỏ sticky, đúng bảng ngưỡng responsive trong README. */}
         <div className="flex flex-col gap-3.5 min-[1180px]:sticky min-[1180px]:top-[76px] min-[1180px]:self-start">
 
-          {/* Khách hàng */}
-          <div className="rounded-[14px] p-4" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+          {/* Khách hàng — CHỈ từ 1100px: dưới ngưỡng đó rail rơi xuống cuối
+              trang, và thẻ tóm tắt ở đầu trang đã có đúng cụm này rồi. */}
+          <div className="hidden rounded-[14px] p-4 min-[1100px]:block" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
             <p className="eyebrow mb-2.5 uppercase">Khách hàng</p>
             <div className="flex items-center gap-[11px]">
               <span
@@ -2370,6 +2399,11 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                 <p className="mt-px truncate text-[12px]" style={{ color: "var(--tx3)" }}>{f.client_phone || "Chưa có SĐT"}</p>
               </div>
             </div>
+            {/* Lần cuối khách mở cổng hợp đồng — thông tin hay phải tra nhất sau
+                khi gửi link, để ngay trong thẻ khách thay vì một thẻ riêng. */}
+            <p className="mt-2 text-[11.5px]" style={{ color: clientViewedAt ? "var(--gn)" : "var(--tx3)" }}>
+              {clientViewedAt ? `Khách xem lần cuối · ${clientViewedAt}` : "Khách chưa mở link hợp đồng"}
+            </p>
             <div className="mt-3 grid grid-cols-3 gap-[7px]">
               <a
                 href={clientDigits ? `tel:${clientDigits}` : undefined}
@@ -2405,59 +2439,6 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
                   <UserRound size={17} style={{ color: "var(--ac)" }} /> Hồ sơ
                 </span>
               )}
-            </div>
-          </div>
-
-          {/* Cổng khách — chuyển từ tab "Ký và thực hiện" ra rail phải, xếp cùng
-              kiểu với thẻ Khách hàng ở trên: nhãn nhỏ, trạng thái, rồi lưới nút
-              đều nhau. Ở đây nó luôn nhìn thấy, không phải mở đúng tab mới biết
-              khách đã mở link chưa.
-              Ẩn dưới 1100px vì thẻ tóm tắt đầu trang (chỉ hiện ở mobile) đã có
-              đúng cụm gửi này — hiện cả hai là trùng. */}
-          <div className="hidden rounded-[14px] p-4 min-[1100px]:block" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
-            <p className="eyebrow mb-2.5 uppercase">Cổng khách</p>
-            <p className="mb-2 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-              Xem HĐ · lịch · ảnh · thanh toán. Mật khẩu mở là SĐT khách.
-            </p>
-            <span
-              className="mb-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-bold"
-              style={contract.client_viewed_at
-                ? { background: "var(--gnS)", color: "var(--gn)" }
-                : { background: "var(--sf2)", color: "var(--tx3)" }}
-            >
-              <span className="h-1.5 w-1.5 flex-none rounded-full" style={{ background: contract.client_viewed_at ? "var(--gn)" : "var(--tx3)" }} />
-              {contract.client_viewed_at
-                ? `Khách đã xem · ${new Date(contract.client_viewed_at).toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit" })}`
-                : "Khách chưa mở link"}
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <MessengerButton link={f.client_messenger} label="Gửi cho khách" message={clientPortalMsg} className="act-btn" />
-              <button
-                onClick={() => {
-                  navigator.clipboard?.writeText(shareUrl);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                }}
-                className="act-btn"
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? "Đã chép" : "Chép link"}
-              </button>
-              <ZaloSendButton
-                phone={f.client_phone}
-                name={f.client_name}
-                audience="client"
-                contractId={contract.id}
-                kind="contract_share"
-                className="act-btn"
-                message={clientPortalMsg}
-              />
-              <EmailButton
-                to={f.client_email}
-                label="Gửi email"
-                subject={`Hợp đồng dịch vụ — ${f.title}`}
-                message={`Xin chào ${f.client_name || "anh/chị"},\n\nĐây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại:\n${shareUrl}\n(Mật khẩu mở là số điện thoại của anh/chị.)\n\nCảm ơn ạ!\n— ${studioName}`}
-                className="act-btn"
-              />
             </div>
           </div>
 
@@ -2558,6 +2539,84 @@ ${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày 
           </div>
         </div>
       </div>
+
+      {/* ── Bảng chọn cách gửi cổng khách ────────────────────────────────────
+          Mở từ nút "Gửi khách" ở thanh đầu trang — đây là CHỖ DUY NHẤT gửi link
+          cho khách, nên bốn cách gửi nằm cùng một bảng thay vì rải ra thẻ tóm
+          tắt và rail phải như trước.
+          Portal ra <body> vì main của studio shell có transform (.page-in) —
+          một lớp phủ `fixed` bên trong sẽ bị neo theo phần tử đó chứ không phủ
+          hết màn hình.
+          Căn giữa ở MỌI khổ (không dán đáy như bottom-sheet) để popover danh
+          sách bạn Zalo — mở xuống dưới dòng của nó — còn chỗ hiển thị. */}
+      {mounted && sendOpen && createPortal(
+        <div
+          onClick={() => setSendOpen(false)}
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,.5)" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Gửi hợp đồng cho khách"
+            className="w-full max-w-[360px] rounded-[16px] p-4"
+            style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}
+          >
+            <div className="mb-3 flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[15px] font-bold">Gửi khách</p>
+                <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  Cổng khách: xem HĐ · lịch · ảnh · thanh toán. Mật khẩu là SĐT khách.
+                </p>
+              </div>
+              <button
+                onClick={() => setSendOpen(false)}
+                aria-label="Đóng"
+                className="flex h-7 w-7 flex-none items-center justify-center rounded-[9px]"
+                style={{ background: "var(--sf2)", color: "var(--tx3)" }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <ZaloSendButton
+                phone={f.client_phone}
+                name={f.client_name}
+                audience="client"
+                contractId={contract.id}
+                kind="contract_share"
+                label="Gửi Zalo"
+                show="send"
+                className="act-btn"
+                message={clientPortalMsg}
+              />
+              <ZaloSendButton
+                phone={f.client_phone}
+                name={f.client_name}
+                audience="client"
+                contractId={contract.id}
+                kind="contract_share"
+                show="friends"
+                friendsLabel="Chọn từ danh sách bạn Zalo"
+                className="act-btn"
+                message={clientPortalMsg}
+              />
+              <button onClick={quickShare} className="act-btn">
+                <Share2 size={15} /> Gửi nhanh qua chia sẻ
+              </button>
+              <button onClick={copyShareUrl} className="act-btn">
+                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Đã chép link" : "Chép link"}
+              </button>
+            </div>
+
+            <p className="mt-3 text-[11.5px]" style={{ color: clientViewedAt ? "var(--gn)" : "var(--tx3)" }}>
+              {clientViewedAt ? `Khách đã xem lần cuối · ${clientViewedAt}` : "Khách chưa mở link"}
+            </p>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* Lightbox: zoom a transfer-proof image in place (no new tab).
           Portalled to <body> so the fixed overlay covers the full viewport and
