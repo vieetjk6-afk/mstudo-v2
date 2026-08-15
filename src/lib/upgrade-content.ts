@@ -58,7 +58,7 @@ export const UPGRADE_DEFAULTS: UpgradeContent = {
     { label: "Cho khách tải ảnh bản gốc", free: N, basic: Y, photographer: Y, photographer_plus: Y, studio: Y },
     { label: "Cho khách ghi chú trên ảnh", free: N, basic: Y, photographer: Y, photographer_plus: Y, studio: Y },
     { label: "Gallery công khai trên trang chủ", free: N, basic: N, photographer: Y, photographer_plus: Y, studio: Y },
-    { label: "Watermark bảo vệ ảnh trong album", free: N, basic: N, photographer: N, photographer_plus: Y, studio: Y },
+    { label: "Watermark bảo vệ ảnh trong album", free: N, basic: N, photographer: N, photographer_plus: N, studio: Y },
 
     { section: "Công cụ ảnh" },
     { label: "Lọc ảnh khách chọn", free: "10 / tháng", basic: "∞", photographer: "∞", photographer_plus: "∞", studio: "∞" },

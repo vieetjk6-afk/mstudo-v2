@@ -17,7 +17,17 @@ import type { Profile } from "@/lib/types";
 /** Thứ tự hiện dải số liệu: nhóm cần gọi điện trước đứng trước. */
 const LEVEL_ORDER: ActivityLevel[] = ["active", "idle", "dormant", "lost", "never"];
 
-export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
+export default function AdminPanel({
+  profiles,
+  albumCounts = {},
+  contractCounts = {},
+}: {
+  profiles: Profile[];
+  /** Số album theo owner_id — đếm sống ở server, xem page.tsx. */
+  albumCounts?: Record<string, number>;
+  /** Số hợp đồng theo owner_id. */
+  contractCounts?: Record<string, number>;
+}) {
   const { t } = useLang();
   const [rows, setRows] = useState<Profile[]>(profiles);
   const [msg, setMsg] = useState<string | null>(null);
@@ -237,6 +247,8 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
               <th className="px-4 py-3">{t("email")}</th>
               <th className="px-4 py-3">{t("plan")}</th>
               <th className="px-4 py-3">Hoạt động</th>
+              <th className="px-4 py-3">Album</th>
+              <th className="px-4 py-3">Hợp đồng</th>
               <th className="px-4 py-3">{t("role")}</th>
               <th className="px-4 py-3">{t("active")}</th>
               <th className="px-4 py-3">{t("monthlyLimit")}</th>
@@ -319,6 +331,15 @@ export default function AdminPanel({ profiles }: { profiles: Profile[] }) {
                       );
                     })()
                   )}
+                </td>
+
+                {/* Album & hợp đồng gắn theo owner_id, nên dòng nhân viên luôn
+                    bằng 0 — hiện "—" để khỏi đọc nhầm là studio đó chưa làm gì. */}
+                <td className="tnum px-4 py-3">
+                  {p.studio_owner_id ? <span style={{ color: "var(--text3)" }}>—</span> : (albumCounts[p.id] ?? 0)}
+                </td>
+                <td className="tnum px-4 py-3">
+                  {p.studio_owner_id ? <span style={{ color: "var(--text3)" }}>—</span> : (contractCounts[p.id] ?? 0)}
                 </td>
 
                 <td className="px-4 py-3">
