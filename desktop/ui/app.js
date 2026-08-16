@@ -8,7 +8,7 @@
 
 const invoke = window.__TAURI__.core.invoke;
 
-const APP_VERSION = "1.0.9"; // giữ khớp với src-tauri/tauri.conf.json
+const APP_VERSION = "1.1.0"; // giữ khớp với src-tauri/tauri.conf.json
 
 // ─── Cấu hình (localStorage) ─────────────────────────────────────────────────
 const cfg = JSON.parse(localStorage.getItem("cfg") || "{}");
@@ -204,6 +204,43 @@ function openStudioBrowser() {
 }
 $("btnOpenApp").onclick = openStudioApp;
 const _obb = $("btnOpenAppBrowser"); if (_obb) _obb.onclick = (e) => { e.preventDefault(); openStudioBrowser(); };
+
+// ─── Kẹt đăng nhập → xóa cookie ──────────────────────────────────────────────
+// Cửa sổ studio là WebView2: KHÔNG có thanh địa chỉ, KHÔNG có menu "Xóa dữ liệu
+// duyệt web". Cookie phiên hỏng hoặc còn phiên tài khoản cũ là người dùng kẹt
+// luôn ở trang đăng nhập mà không có chỗ nào gỡ. Hai mức:
+//   hard = false → mở /auth/reset trên máy chủ: xóa cookie phiên rồi về trang
+//                  đăng nhập. Đây là "đăng xuất" dùng hằng ngày.
+//   hard = true  → xóa SẠCH dữ liệu duyệt web của WebView2 (cookie, cache,
+//                  localStorage, service worker). Dùng khi /auth/reset cũng
+//                  không gỡ được (cache hỏng, cookie của domain khác…).
+async function resetLogin(hard = false) {
+  if (!cfg.server) return;
+  const target = cfg.server + "/auth/reset?next=" + encodeURIComponent("/dashboard/studio");
+  try {
+    if (hard) {
+      await invoke("clear_web_data");
+      // WebView2 dùng CHUNG một hồ sơ cho mọi cửa sổ ⇒ lệnh trên xóa luôn
+      // localStorage của bảng điều khiển này (cấu hình `cfg`, nhật ký). Việc xóa
+      // chạy bất đồng bộ nên chờ một nhịp rồi mới ghi lại cấu hình từ bộ nhớ —
+      // ghi sớm quá thì chính bản ghi mới bị xóa theo.
+      await new Promise((r) => setTimeout(r, 1500));
+      saveCfg();
+      log("Đã xóa cookie & bộ nhớ đệm của cửa sổ studio.");
+    } else {
+      log("Đang xóa cookie đăng nhập…");
+    }
+    await invoke("navigate_app", { url: target });
+  } catch (e) {
+    log("Không xóa được cookie đăng nhập: " + (e.message || e), "err");
+  }
+}
+window.resetLogin = resetLogin; // để menu khay (Rust) gọi được
+$("btnLogout").onclick = () => resetLogin(false);
+$("btnClearWeb").onclick = () => {
+  if (!confirm("Xóa sạch cookie & bộ nhớ đệm của cửa sổ studio?\n\nBạn sẽ phải đăng nhập lại. Kết nối thiết bị, thư mục lưu và file đã tải về máy vẫn giữ nguyên (nhật ký hoạt động sẽ bị xóa).")) return;
+  resetLogin(true);
+};
 
 // ─── Menu trái: điều hướng giữa các mục dữ liệu + Sao lưu & thiết bị ─────────
 const NAV_TITLE = {

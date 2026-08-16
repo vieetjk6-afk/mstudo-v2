@@ -331,17 +331,74 @@ fn hostname() -> String {
 /// cửa sổ chính. Gọi lại thì đưa cửa sổ đã mở lên trước.
 #[tauri::command]
 async fn open_app(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    open_studio_window(&app, url, false)
+}
+
+/// Như `open_app` nhưng ÉP cửa sổ studio đi tới đúng địa chỉ đưa vào, kể cả khi
+/// nó đang mở sẵn. Dùng cho "Đăng xuất / xóa cookie": cửa sổ studio đang kẹt ở
+/// trang đăng nhập (hoặc ở một tài khoản khác) phải được đưa sang /auth/reset,
+/// chứ chỉ hiện nó lên thì chẳng giải quyết được gì.
+#[tauri::command]
+async fn navigate_app(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    open_studio_window(&app, url, true)
+}
+
+/// Xóa dữ liệu duyệt web của cửa sổ studio (cookie, cache, localStorage…).
+///
+/// LÝ DO CÓ HÀM NÀY: cửa sổ studio là WebView2 không thanh địa chỉ, không menu
+/// cài đặt — cookie phiên hỏng (phiên tài khoản cũ, khóa Supabase đã đổi, một
+/// lần đăng nhập Google dở dang) là người dùng kẹt luôn, không có chỗ nào xóa
+/// cookie. Đây là nút bấm cuối cùng khi /auth/reset trên máy chủ cũng không gỡ
+/// được.
+///
+/// CẢNH BÁO cho phía gọi: WebView2 dùng CHUNG một hồ sơ cho mọi cửa sổ của app,
+/// nên lệnh này xóa cả localStorage của BẢNG ĐIỀU KHIỂN (cấu hình `cfg`: địa chỉ
+/// máy chủ, mã kết nối thiết bị, thư mục lưu). app.js phải ghi lại `cfg` sau khi
+/// gọi. Việc xóa chạy bất đồng bộ trong WebView2 nên phía gọi cần chờ một nhịp
+/// trước khi ghi lại và nạp lại trang.
+#[tauri::command]
+fn clear_web_data(app: tauri::AppHandle) -> Result<(), String> {
     use tauri::Manager;
+    let studio = app.get_webview_window("studioapp");
+    // Rời trang trước khi xóa: trang cũ còn chạy thì script của nó có thể ghi
+    // lại ngay cookie/localStorage vừa bị xóa.
+    if let Some(w) = &studio {
+        if let Ok(blank) = tauri::Url::parse("about:blank") {
+            let _ = w.navigate(blank);
+        }
+    }
+    let target = studio.or_else(|| app.get_webview_window("main"));
+    match target {
+        Some(w) => w.clear_all_browsing_data().map_err(|e| e.to_string()),
+        None => Err("no_webview".to_string()),
+    }
+}
+
+/// Mở (hoặc điều hướng) cửa sổ studio. `force_navigate` = đi tới địa chỉ mới
+/// ngay cả khi cửa sổ đã tồn tại.
+fn open_studio_window(app: &tauri::AppHandle, url: String, force_navigate: bool) -> Result<(), String> {
+    use tauri::Manager;
+    // Chỉ mở/điều hướng tới địa chỉ web thật — chặn file://, javascript:… lọt vào
+    // cửa sổ studio nếu JS của bảng điều khiển bị lợi dụng.
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("bad_url".to_string());
+    }
+    if has_control_chars(&url) {
+        return Err("bad_url".to_string());
+    }
+    let parsed = tauri::Url::parse(&url).map_err(|e| e.to_string())?;
     if let Some(w) = app.get_webview_window("studioapp") {
         // Đã mở (kể cả đang ẩn xuống khay) → hiện lại + đưa lên trước.
         let _ = w.show();
         let _ = w.unminimize();
         let _ = w.set_focus();
+        if force_navigate {
+            w.navigate(parsed).map_err(|e| e.to_string())?;
+        }
         return Ok(());
     }
-    let parsed = tauri::Url::parse(&url).map_err(|e| e.to_string())?;
     let app_nav = app.clone();
-    tauri::WebviewWindowBuilder::new(&app, "studioapp", tauri::WebviewUrl::External(parsed))
+    tauri::WebviewWindowBuilder::new(app, "studioapp", tauri::WebviewUrl::External(parsed))
         .title("MStudo — Quản lý studio")
         .inner_size(1360.0, 900.0)
         .maximized(true)
@@ -746,8 +803,12 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     let studio_i = MenuItem::with_id(app, "studio", "Mở giao diện studio", true, None::<&str>)?;
     let show_i = MenuItem::with_id(app, "show", "Bảng điều khiển & đồng bộ", true, None::<&str>)?;
     let sync_i = MenuItem::with_id(app, "sync", "Đồng bộ ngay", true, None::<&str>)?;
+    // Cửa sổ studio không có menu trình duyệt, nên khay hệ thống là chỗ DUY NHẤT
+    // gỡ được khi kẹt đăng nhập (cookie phiên cũ/hỏng) — kể cả lúc cửa sổ studio
+    // đang chiếm hết màn hình và bảng điều khiển đã ẩn xuống khay.
+    let logout_i = MenuItem::with_id(app, "logout", "Đăng xuất / xóa cookie đăng nhập", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&studio_i, &show_i, &sync_i, &quit_i])?;
+    let menu = Menu::with_items(app, &[&studio_i, &show_i, &sync_i, &logout_i, &quit_i])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .tooltip("MStudo Desktop — đang chạy ngầm")
@@ -761,6 +822,13 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
                     // Gọi engine đồng bộ ở frontend (hàm toàn cục trong app.js).
                     let _ = w.eval("window.runDriveSync && window.runDriveSync(true)");
+                }
+            }
+            "logout" => {
+                // Xóa cookie phiên rồi mở lại trang đăng nhập (hàm toàn cục
+                // trong app.js — chạy được cả khi bảng điều khiển đang ẩn).
+                if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
+                    let _ = w.eval("window.resetLogin && window.resetLogin(false)");
                 }
             }
             "quit" => app.exit(0),
@@ -855,6 +923,8 @@ fn main() {
             open_file,
             open_url,
             open_app,
+            navigate_app,
+            clear_web_data,
             hide_main,
             download_and_run,
             create_dir,
