@@ -12,7 +12,6 @@ import {
   Check,
   Search,
   User,
-  UserPlus,
   Package,
   CalendarDays,
   Wallet,
@@ -110,10 +109,12 @@ export default function NewContractForm({
   const [clientQuery, setClientQuery] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
-  const [manualClient, setManualClient] = useState(false);
 
   // ── Bước 2 — gói & hạng mục ─────────────────────────────────────────────
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  // Bảng giá lọc theo loại dịch vụ đang chọn. Bật cờ này để xem lại TẤT CẢ —
+  // lối thoát khi bảng giá không đặt theo dịch vụ nên lọc ra ít hơn mong đợi.
+  const [showAllLists, setShowAllLists] = useState(false);
   const [shootType, setShootType] = useState<ShootType>("photo");
   const [templateId, setTemplateId] = useState("");
   const [mainPkgId, setMainPkgId] = useState("");
@@ -194,21 +195,60 @@ export default function NewContractForm({
 
   const listLabel = useMemo(() => makeListLabel(listLabels, services), [listLabels, services]);
 
+  /* ── Bảng giá của ĐÚNG loại dịch vụ đang chọn ────────────────────────────
+     Studio bán nhiều loại (cưới, đính hôn, kỷ yếu…) và mỗi loại một bảng giá.
+     Đổ hết mọi bảng giá ra màn chọn gói thì phải dò giữa vài chục dòng, rất dễ
+     chọn nhầm gói của dịch vụ khác.
+
+     `studio_pricelist.list_key` là khoá KỸ THUẬT: có thể là id của dịch vụ (khi
+     studio tạo bảng giá riêng cho dịch vụ đó), hoặc slug dựng sẵn/tự đặt
+     ("cuoi", "dinh-hon"). Nên dò theo ba đường: trùng id → trùng slug hoá từ
+     tên dịch vụ → trùng nhãn hiển thị. Không đường nào khớp thì trả null và
+     giữ nguyên toàn bộ bảng giá — thà hiện thừa còn hơn hiện ra màn trống. */
+  const serviceListKeys = useMemo(() => {
+    if (!selectedService) return null;
+    const name = noAccent(selectedService.name.trim());
+    const slug = name.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+    const keys = new Set<string>();
+    for (const p of packages) {
+      const key = p.list_key || "khac";
+      if (key === selectedService.id || (slug && key === slug) || noAccent(listLabel(key)) === name) {
+        keys.add(key);
+      }
+    }
+    return keys.size ? keys : null;
+  }, [packages, selectedService, listLabel]);
+
+  const filteringLists = !!serviceListKeys && !showAllLists;
+  const visiblePackages = useMemo(
+    () => (filteringLists ? packages.filter((p) => serviceListKeys!.has(p.list_key || "khac")) : packages),
+    [packages, serviceListKeys, filteringLists]
+  );
+
   /* ── Nhóm bảng giá theo list_key để danh sách gói không thành một mớ ──── */
   const packageGroups = useMemo(() => {
     const map = new Map<string, PackageOption[]>();
-    for (const p of packages) {
+    for (const p of visiblePackages) {
       const key = p.list_key || "khac";
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(p);
     }
     return Array.from(map.entries());
-  }, [packages]);
+  }, [visiblePackages]);
+
+  /** Đổi loại dịch vụ ⇒ bỏ gói đã chọn: giá của dịch vụ cũ không còn nhìn thấy
+      nữa, để lại trong tổng tiền là một khoản vô hình không ai gỡ được. */
+  function changeService(id: string) {
+    if (id === serviceId) return;
+    setServiceId(id);
+    setMainPkgId("");
+    setExtraIds([]);
+    setShowAllLists(false);
+  }
 
   function pickClient(c: RecentClient) {
     setClientName(c.name);
     setClientPhone(c.phone);
-    setManualClient(false);
   }
   function toggleExtra(id: string) {
     setExtraIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -223,8 +263,19 @@ export default function NewContractForm({
   function setCrewSalary(id: string, salary: number) {
     setPicked((prev) => prev.map((x) => (x.id === id ? { ...x, salary } : x)));
   }
+  /* Sửa MỘT đợt thì đợt CUỐI gánh phần còn lại, để tổng luôn khớp giá trị hợp
+     đồng. Studio gõ tiền cọc là chính, và trước đây phải tự trừ nhẩm rồi gõ nốt
+     số còn lại — sai một lần là hợp đồng lệch tiền, chỉ hiện ra ở dòng cảnh báo
+     nhỏ bên dưới. Sửa thẳng đợt cuối thì để nguyên (đó là số người dùng đang tự
+     đặt), và không đụng gì khi chưa có tổng tiền. */
   function patchInstalment(i: number, patch: Partial<Instalment>) {
-    setPlan((instalments).map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+    const next = instalments.map((x, idx) => (idx === i ? { ...x, ...patch } : x));
+    const last = next.length - 1;
+    if (patch.amount !== undefined && total > 0 && i < last) {
+      const others = next.reduce((s, x, idx) => (idx === last ? s : s + (x.amount || 0)), 0);
+      next[last] = { ...next[last], amount: Math.max(0, total - others) };
+    }
+    setPlan(next);
   }
   function addInstalment() {
     setPlan([...instalments, { label: "Đợt thanh toán", amount: Math.max(0, total - planTotal), due: "" }]);
@@ -348,47 +399,122 @@ export default function NewContractForm({
   const inputCls = "w-full rounded-[10px] px-3 py-2.5 text-[13px]";
   const inputStyle = { border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" } as const;
 
+  /* ── Thanh hành động ──────────────────────────────────────────────────────
+     Dựng MỘT LẦN rồi đặt vào hai chỗ tuỳ khổ màn (React tái dùng element vô
+     tư): máy tính ghim ngay dưới thanh 5 bước ở ĐẦU trang; điện thoại ghim ĐÁY
+     màn, ngay trên thanh điều hướng — ngón cái với tới được mà không phải cuộn
+     hết một bước dài. Trước đây thanh này nằm cuối trang nên mỗi lần sang bước
+     mới đều phải cuộn xuống đáy tìm nút. */
+  const actionBar = (
+    <div className="flex flex-wrap items-center gap-2">
+      <Link
+        href="/dashboard/studio/contracts"
+        className="rounded-[10px] px-3 py-2.5 text-[12.5px] font-semibold sm:text-[13px]"
+        style={{ color: "var(--tx3)" }}
+      >
+        Huỷ
+      </Link>
+      <button
+        type="button"
+        onClick={() => create("draft")}
+        disabled={!!saving || !phoneOk}
+        className="rounded-[10px] px-3 py-2.5 text-[12.5px] font-semibold disabled:opacity-50 sm:text-[13px]"
+        style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+      >
+        {saving === "draft" ? "Đang lưu…" : "Lưu nháp"}
+      </button>
+
+      {step > 0 && (
+        <button
+          type="button"
+          onClick={() => setStep((s) => s - 1)}
+          className="ml-auto flex items-center gap-1.5 rounded-[10px] px-3 py-2.5 text-[12.5px] font-semibold sm:px-4 sm:text-[13px]"
+          style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+        >
+          {/* Trên điện thoại chỉ còn mũi tên — bốn nút chữ đầy đủ là tràn hàng. */}
+          <ArrowLeft size={16} /> <span className="hidden sm:inline">Quay lại</span>
+        </button>
+      )}
+
+      {step < STEPS.length - 1 ? (
+        <button
+          type="button"
+          onClick={() => setStep((s) => s + 1)}
+          disabled={!canNext}
+          className={`flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[12.5px] font-bold disabled:opacity-50 sm:px-5 sm:text-[13px] ${step === 0 ? "ml-auto" : ""}`}
+          style={{ background: "var(--ac)", color: "#fff" }}
+        >
+          {step === 0 ? "Chọn gói" : step === 1 ? "Đặt lịch" : step === 2 ? "Chia tiền" : "Xem lại"}
+          <ArrowRight size={16} />
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => create("send")}
+          disabled={!!saving}
+          className="flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[12.5px] font-bold disabled:opacity-50 sm:px-5 sm:text-[13px]"
+          style={{ background: "var(--ac)", color: "#fff", boxShadow: "0 2px 8px color-mix(in srgb, var(--ac) 30%, transparent)" }}
+        >
+          <Send size={17} /> {saving === "send" ? "Đang tạo…" : "Tạo & gửi khách ký"}
+        </button>
+      )}
+    </div>
+  );
+
   return (
     <div className="page-in mx-auto flex max-w-[900px] flex-col gap-3.5">
-      {/* ── Thanh 5 bước ───────────────────────────────────────────────────
-          Bấm được vào bước đã qua để quay lại sửa; bước chưa tới thì không. */}
-      <div className={`${panel} flex items-start px-4 py-4`} style={panelStyle}>
-        {STEPS.map((s, i) => {
-          const done = i < step;
-          const current = i === step;
-          const Icon = s.icon;
-          const lineC = i <= step ? "var(--ac)" : "var(--bd)";
-          return (
-            <div key={s.label} className="flex flex-1 flex-col items-center gap-[7px]">
-              <div className="flex w-full items-center">
-                <span className="h-0.5 flex-1" style={{ background: i === 0 ? "transparent" : lineC }} />
-                <button
-                  type="button"
-                  onClick={() => i <= step && setStep(i)}
-                  disabled={i > step}
-                  aria-current={current ? "step" : undefined}
-                  className="flex h-8 w-8 flex-none items-center justify-center rounded-full"
-                  style={
-                    done
-                      ? { background: "var(--gn)", color: "#fff", border: "1.5px solid var(--gn)" }
-                      : current
-                        ? { background: "var(--ac)", color: "#fff", border: "1.5px solid var(--ac)" }
-                        : { background: "var(--sf2)", color: "var(--tx3)", border: "1.5px solid var(--bd)" }
-                  }
+      {/* ── Đầu trang GHIM: 5 bước + (máy tính) thanh hành động ─────────────
+          Neo dưới topbar của StudioShell bằng --topbar-h. Cuộn nội dung dài
+          không làm mất chỗ đứng: luôn thấy đang ở bước nào và bấm đi tiếp được
+          ngay. */}
+      <div
+        className="sticky z-20 flex flex-col gap-2.5 pb-2.5 pt-1"
+        style={{ top: "var(--topbar-h)", background: "var(--bg)" }}
+      >
+        {/* ── Thanh 5 bước ───────────────────────────────────────────────────
+            Bấm được vào bước đã qua để quay lại sửa; bước chưa tới thì không. */}
+        <div className={`${panel} flex items-start px-3 py-3 sm:px-4 sm:py-4`} style={panelStyle}>
+          {STEPS.map((s, i) => {
+            const done = i < step;
+            const current = i === step;
+            const Icon = s.icon;
+            const lineC = i <= step ? "var(--ac)" : "var(--bd)";
+            return (
+              <div key={s.label} className="flex flex-1 flex-col items-center gap-[7px]">
+                <div className="flex w-full items-center">
+                  <span className="h-0.5 flex-1" style={{ background: i === 0 ? "transparent" : lineC }} />
+                  <button
+                    type="button"
+                    onClick={() => i <= step && setStep(i)}
+                    disabled={i > step}
+                    aria-current={current ? "step" : undefined}
+                    className="flex h-8 w-8 flex-none items-center justify-center rounded-full"
+                    style={
+                      done
+                        ? { background: "var(--gn)", color: "#fff", border: "1.5px solid var(--gn)" }
+                        : current
+                          ? { background: "var(--ac)", color: "#fff", border: "1.5px solid var(--ac)" }
+                          : { background: "var(--sf2)", color: "var(--tx3)", border: "1.5px solid var(--bd)" }
+                    }
+                  >
+                    {done ? <Check size={17} /> : <Icon size={17} />}
+                  </button>
+                  <span className="h-0.5 flex-1" style={{ background: i === STEPS.length - 1 ? "transparent" : (i < step ? "var(--ac)" : "var(--bd)") }} />
+                </div>
+                <span
+                  className="text-center text-[11.5px]"
+                  style={{ color: current ? "var(--ac)" : done ? "var(--tx2)" : "var(--tx3)", fontWeight: current ? 700 : 550 }}
                 >
-                  {done ? <Check size={17} /> : <Icon size={17} />}
-                </button>
-                <span className="h-0.5 flex-1" style={{ background: i === STEPS.length - 1 ? "transparent" : (i < step ? "var(--ac)" : "var(--bd)") }} />
+                  {s.label}
+                </span>
               </div>
-              <span
-                className="text-center text-[11.5px]"
-                style={{ color: current ? "var(--ac)" : done ? "var(--tx2)" : "var(--tx3)", fontWeight: current ? 700 : 550 }}
-              >
-                {s.label}
-              </span>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
+
+        {/* Máy tính: nút thao tác nằm ngay dưới 5 bước. Điện thoại dùng bản ghim
+            đáy màn ở cuối file này. */}
+        <div className={`${panel} hidden px-3 py-2.5 sm:block`} style={panelStyle}>{actionBar}</div>
       </div>
 
       {/* ── Nội dung bước ──────────────────────────────────────────────────── */}
@@ -399,27 +525,56 @@ export default function NewContractForm({
         {/* ── Bước 1 · Khách hàng ─────────────────────────────────────────── */}
         {step === 0 && (
           <div>
-            <div className="relative mb-4">
-              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--tx3)" }} />
-              <input
-                className={`${inputCls} pl-10`}
-                style={inputStyle}
-                placeholder="Tên hoặc số điện thoại khách…"
-                value={clientQuery}
-                onChange={(e) => setClientQuery(e.target.value)}
-              />
+            {/* NHẬP TAY ĐẶT TRÊN ĐẦU: phần lớn hợp đồng là khách mới, mà trước
+                đây hai ô này nằm cuối bước, sau cả danh sách khách cũ và một nút
+                "khách mới" phải bấm mới hiện ra. Giờ gõ được ngay; chọn khách cũ
+                bên dưới thì hai ô này tự điền. */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-name">Tên khách hàng</label>
+                <input id="nc-name" className={inputCls} style={inputStyle} placeholder="Nguyễn Văn A" value={clientName} onChange={(e) => setClientName(e.target.value)} />
+              </div>
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-phone">Số điện thoại</label>
+                <input
+                  id="nc-phone"
+                  className={inputCls}
+                  style={{ ...inputStyle, borderColor: clientPhone && !phoneOk ? "var(--rd)" : "var(--bd)" }}
+                  inputMode="numeric"
+                  maxLength={15}
+                  placeholder="0901234567"
+                  value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                />
+              </div>
             </div>
 
-            {recentClients.length > 0 && !manualClient && (
+            {clientPhone && !phoneOk && (
+              <p className="mt-2 text-[12px] font-semibold" style={{ color: "var(--rd)" }}>
+                SĐT phải đủ 10 số — khách dùng chính số này làm mật khẩu mở cổng hợp đồng.
+              </p>
+            )}
+
+            {recentClients.length > 0 && (
               <>
-                <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Khách gần đây</p>
+                <p className={`mb-2 mt-[18px] ${eyebrow}`} style={eyebrowStyle}>Hoặc chọn khách cũ</p>
+                <div className="relative mb-2.5">
+                  <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--tx3)" }} />
+                  <input
+                    className={`${inputCls} pl-10`}
+                    style={inputStyle}
+                    placeholder="Tìm theo tên hoặc số điện thoại…"
+                    value={clientQuery}
+                    onChange={(e) => setClientQuery(e.target.value)}
+                  />
+                </div>
                 {/* min-w-0: lưới không khai báo cột lấy min-content của item làm
                     sàn track, mà item có `truncate` (nowrap) nên track phình rộng
                     hơn thẻ và danh sách tràn ra ngoài. Xem NewQuoteForm. */}
                 <div className="grid min-w-0 gap-2">
                   {filteredClients.length === 0 ? (
                     <p className="py-2 text-[12.5px]" style={{ color: "var(--tx3)" }}>
-                      Không có khách cũ nào khớp “{clientQuery}”. Nhập tay bên dưới nhé.
+                      Không có khách cũ nào khớp “{clientQuery}” — cứ gõ thẳng vào hai ô trên.
                     </p>
                   ) : (
                     filteredClients.map((c) => {
@@ -455,42 +610,6 @@ export default function NewContractForm({
               </>
             )}
 
-            {manualClient || recentClients.length === 0 ? (
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div>
-                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-name">Tên khách hàng</label>
-                  <input id="nc-name" className={inputCls} style={inputStyle} value={clientName} onChange={(e) => setClientName(e.target.value)} />
-                </div>
-                <div>
-                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-phone">Số điện thoại</label>
-                  <input
-                    id="nc-phone"
-                    className={inputCls}
-                    style={{ ...inputStyle, borderColor: clientPhone && !phoneOk ? "var(--rd)" : "var(--bd)" }}
-                    inputMode="numeric"
-                    maxLength={15}
-                    placeholder="0901234567"
-                    value={clientPhone}
-                    onChange={(e) => setClientPhone(e.target.value)}
-                  />
-                </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => { setManualClient(true); setClientName(""); setClientPhone(""); }}
-                className="mt-2.5 flex w-full items-center justify-center gap-1.5 rounded-[11px] py-3 text-[12.5px] font-semibold"
-                style={{ border: "1.5px dashed var(--bd)", color: "var(--tx2)" }}
-              >
-                <UserPlus size={16} /> Khách mới — nhập thông tin thủ công
-              </button>
-            )}
-
-            {clientPhone && !phoneOk && (
-              <p className="mt-2 text-[12px] font-semibold" style={{ color: "var(--rd)" }}>
-                SĐT phải đủ 10 số — khách dùng chính số này làm mật khẩu mở cổng hợp đồng.
-              </p>
-            )}
           </div>
         )}
 
@@ -501,7 +620,7 @@ export default function NewContractForm({
               {services.length > 0 ? (
                 <div>
                   <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-svc">Loại dịch vụ (điều khoản)</label>
-                  <select id="nc-svc" className={inputCls} style={inputStyle} value={serviceId} onChange={(e) => setServiceId(e.target.value)}>
+                  <select id="nc-svc" className={inputCls} style={inputStyle} value={serviceId} onChange={(e) => changeService(e.target.value)}>
                     {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
@@ -537,7 +656,23 @@ export default function NewContractForm({
               </div>
             ) : (
               <>
-                <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Gói chính</p>
+                <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <p className={eyebrow} style={eyebrowStyle}>Gói chính</p>
+                  {/* Đang lọc theo dịch vụ thì nói rõ, và luôn để sẵn đường xem
+                      lại toàn bộ — bảng giá không đặt theo dịch vụ vẫn dùng được. */}
+                  {serviceListKeys && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllLists((v) => !v)}
+                      className="text-[11.5px] font-semibold underline"
+                      style={{ color: "var(--ac)" }}
+                    >
+                      {filteringLists
+                        ? `Đang hiện bảng giá ${selectedService?.name ?? ""} — xem tất cả`
+                        : "Chỉ hiện bảng giá của dịch vụ này"}
+                    </button>
+                  )}
+                </div>
                 <div className="grid min-w-0 gap-2">
                   {packageGroups.map(([key, list]) => (
                     <div key={key} className="grid min-w-0 gap-2">
@@ -571,7 +706,7 @@ export default function NewContractForm({
 
                 <p className={`mb-2 mt-[18px] ${eyebrow}`} style={eyebrowStyle}>Hạng mục thêm</p>
                 <div className="grid gap-2 sm:grid-cols-2">
-                  {packages.filter((p) => p.id !== mainPkgId).map((x) => {
+                  {visiblePackages.filter((p) => p.id !== mainPkgId).map((x) => {
                     const on = extraIds.includes(x.id);
                     return (
                       <button
@@ -734,6 +869,11 @@ export default function NewContractForm({
               >
                 <Plus size={16} /> Thêm đợt thanh toán
               </button>
+              {instalments.length > 1 && total > 0 && (
+                <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}.
+                </p>
+              )}
             </div>
 
             {planTotal !== total && (
@@ -882,55 +1022,29 @@ export default function NewContractForm({
         )}
       </div>
 
-      {/* ── Thanh hành động ────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center gap-2.5">
-        <Link href="/dashboard/studio/contracts" className="rounded-[10px] px-3.5 py-2.5 text-[13px] font-semibold" style={{ color: "var(--tx3)" }}>
-          Huỷ
-        </Link>
-        <button
-          type="button"
-          onClick={() => create("draft")}
-          disabled={!!saving || !phoneOk}
-          className="rounded-[10px] px-3.5 py-2.5 text-[13px] font-semibold disabled:opacity-50"
-          style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
+      {/* ── Điện thoại: thanh hành động GHIM ĐÁY ────────────────────────────
+          Ngồi ngay TRÊN thanh điều hướng đáy của StudioShell (cao 52px + vùng an
+          toàn của máy).
+
+          Dùng `sticky` chứ KHÔNG `fixed`: thẻ <main> bao ngoài có
+          `overflow-x: clip`, và hiệu ứng vào trang `page-in` chạy transform —
+          hai thứ này đều có thể biến một phần tử `fixed` thành neo theo thẻ cha
+          thay vì theo màn hình. `sticky` neo theo vùng cuộn nên không dính.
+          Phần tử vẫn chiếm chỗ ở CUỐI luồng nên không che mất nội dung nào, và
+          khoảng đệm ngay sau nó cho nó chỗ bám tới tận đáy trang (phần tử dính
+          chỉ chạy trong hộp NỘI DUNG của thẻ cha, padding không tính). */}
+      <div
+        className="sticky z-30 sm:hidden"
+        style={{ bottom: "calc(52px + env(safe-area-inset-bottom, 0px))" }}
+      >
+        <div
+          className={`${panel} px-3 py-2.5`}
+          style={{ ...panelStyle, boxShadow: "0 -6px 20px rgba(20, 15, 25, .12)" }}
         >
-          {saving === "draft" ? "Đang lưu…" : "Lưu nháp"}
-        </button>
-
-        {step > 0 && (
-          <button
-            type="button"
-            onClick={() => setStep((s) => s - 1)}
-            className="ml-auto flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[13px] font-semibold"
-            style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
-          >
-            <ArrowLeft size={16} /> Quay lại
-          </button>
-        )}
-
-        {step < STEPS.length - 1 ? (
-          <button
-            type="button"
-            onClick={() => setStep((s) => s + 1)}
-            disabled={!canNext}
-            className={`flex items-center gap-1.5 rounded-[10px] px-5 py-2.5 text-[13px] font-bold disabled:opacity-50 ${step === 0 ? "ml-auto" : ""}`}
-            style={{ background: "var(--ac)", color: "#fff" }}
-          >
-            {step === 0 ? "Chọn gói" : step === 1 ? "Đặt lịch" : step === 2 ? "Chia tiền" : "Xem lại"}
-            <ArrowRight size={16} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => create("send")}
-            disabled={!!saving}
-            className="flex items-center gap-1.5 rounded-[10px] px-5 py-2.5 text-[13px] font-bold disabled:opacity-50"
-            style={{ background: "var(--ac)", color: "#fff", boxShadow: "0 2px 8px color-mix(in srgb, var(--ac) 30%, transparent)" }}
-          >
-            <Send size={17} /> {saving === "send" ? "Đang tạo…" : "Tạo & gửi khách ký"}
-          </button>
-        )}
+          {actionBar}
+        </div>
       </div>
+      <div className="h-12 sm:hidden" />
     </div>
   );
 }

@@ -941,6 +941,11 @@ body {
   --r-btn: 10px;
   --r-pill: 20px;
 
+  /* Chiều cao topbar dính của StudioShell: nút cao 36px + padding 11px hai đầu.
+     Thanh nào muốn ghim NGAY DƯỚI topbar (vd thanh 5 bước ở màn tạo hợp đồng)
+     thì neo `top` vào biến này, đừng gõ số rời rạc mỗi nơi một kiểu. */
+  --topbar-h: 58px;
+
   /* ── Đổ bóng — thẻ KHÔNG có bóng, chỉ dùng viền ── */
   --sh-modal: 0 24px 70px rgba(20, 15, 25, 0.28);
   --sh-toast: 0 12px 34px rgba(20, 15, 25, 0.3);
