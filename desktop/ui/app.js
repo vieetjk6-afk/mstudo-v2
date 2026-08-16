@@ -205,6 +205,49 @@ function openStudioBrowser() {
 $("btnOpenApp").onclick = openStudioApp;
 const _obb = $("btnOpenAppBrowser"); if (_obb) _obb.onclick = (e) => { e.preventDefault(); openStudioBrowser(); };
 
+// ─── Đăng nhập tự động bằng mã thiết bị ──────────────────────────────────────
+// Máy này ĐÃ được chủ studio xác thực một lần bằng mã kết nối `msd_...`. Bắt
+// đăng nhập lại lần nữa bằng form web bên trong WebView2 chính là chỗ hay hỏng
+// nhất: Google chặn thẳng đăng nhập trong webview nhúng, captcha lắm lúc không
+// chạy, cookie hỏng thì không có menu trình duyệt nào để xóa. Nên: xin máy chủ
+// một mã đăng nhập dùng một lần rồi mở thẳng — không phải gõ gì.
+let autoLoginTried = false;   // chỉ thử TỰ ĐỘNG một lần mỗi lần chạy app
+let loginBusy = false;
+async function deviceLogin(manual = false) {
+  if (!cfg.server || !cfg.token || loginBusy) return;
+  loginBusy = true;
+  try {
+    const r = await invoke("http_post", { url: cfg.server + "/api/desktop/session", token: cfg.token, bodyJson: "{}" });
+    if (r.status >= 400) {
+      let detail = "";
+      try { detail = JSON.parse(b64ToText(r.body_b64)).error || ""; } catch { /* body không phải JSON */ }
+      throw new Error("HTTP " + r.status + (detail ? " · " + detail : ""));
+    }
+    const j = JSON.parse(b64ToText(r.body_b64));
+    if (!j.url) throw new Error("thiếu đường đăng nhập");
+    await invoke("navigate_app", { url: j.url });
+    log("Đã đăng nhập giao diện studio bằng mã thiết bị" + (j.email ? ` (${j.email})` : "") + ".");
+  } catch (e) {
+    const msg = "Không đăng nhập tự động được: " + (e.message || e);
+    log(msg, "err");
+    // Bấm tay mà hỏng thì phải nói ra — im lặng là lại đúng cái bệnh cũ.
+    if (manual) alert(msg + "\n\nHãy đăng nhập bằng email + mật khẩu trong cửa sổ studio.");
+  } finally {
+    loginBusy = false;
+  }
+}
+// Rust gọi khi cửa sổ studio bị đá về trang đăng nhập. Chỉ thử MỘT lần mỗi lần
+// chạy app: nếu mã hỏng, /auth/desktop lại đá về /login → thử tiếp là vòng lặp
+// vô tận. Người dùng vừa bấm "Đăng xuất" cũng chặn luôn, không thì vừa đăng
+// xuất đã bị đăng nhập lại ngay.
+function autoDeviceLogin() {
+  if (autoLoginTried || !cfg.token) return;
+  autoLoginTried = true;
+  deviceLogin(false);
+}
+window.autoDeviceLogin = autoDeviceLogin;
+window.deviceLogin = deviceLogin;
+
 // ─── Kẹt đăng nhập → xóa cookie ──────────────────────────────────────────────
 // Cửa sổ studio là WebView2: KHÔNG có thanh địa chỉ, KHÔNG có menu "Xóa dữ liệu
 // duyệt web". Cookie phiên hỏng hoặc còn phiên tài khoản cũ là người dùng kẹt
@@ -216,6 +259,9 @@ const _obb = $("btnOpenAppBrowser"); if (_obb) _obb.onclick = (e) => { e.prevent
 //                  không gỡ được (cache hỏng, cookie của domain khác…).
 async function resetLogin(hard = false) {
   if (!cfg.server) return;
+  // Vừa đăng xuất mà đăng nhập tự động nhảy vào ngay thì coi như không đăng
+  // xuất được. Khóa nó tới lần chạy app sau.
+  autoLoginTried = true;
   const target = cfg.server + "/auth/reset?next=" + encodeURIComponent("/dashboard/studio");
   try {
     if (hard) {
@@ -236,6 +282,7 @@ async function resetLogin(hard = false) {
   }
 }
 window.resetLogin = resetLogin; // để menu khay (Rust) gọi được
+$("btnDeviceLogin").onclick = () => deviceLogin(true);
 $("btnLogout").onclick = () => resetLogin(false);
 $("btnClearWeb").onclick = () => {
   if (!confirm("Xóa sạch cookie & bộ nhớ đệm của cửa sổ studio?\n\nBạn sẽ phải đăng nhập lại. Kết nối thiết bị, thư mục lưu và file đã tải về máy vẫn giữ nguyên (nhật ký hoạt động sẽ bị xóa).")) return;

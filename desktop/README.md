@@ -132,7 +132,32 @@ lại cửa sổ; **chuột phải** có menu **Mở giao diện studio / Bảng
 đồng bộ / Đồng bộ ngay / Đăng xuất · xóa cookie đăng nhập / Thoát** (Thoát mới
 đóng hẳn app).
 
-## Kẹt đăng nhập trong cửa sổ studio → xóa cookie ở đâu
+## Đăng nhập trong cửa sổ studio
+
+### Đăng nhập tự động bằng mã thiết bị (mặc định)
+
+Máy đã kết nối thì **không cần đăng nhập lại bằng form web**. App gọi
+`POST /api/desktop/session` kèm mã thiết bị `msd_...`, máy chủ sinh mã đăng nhập
+**dùng một lần** (magic link của Supabase) cho đúng chủ máy đó và trả về đường
+`/auth/desktop?token_hash=…`; app mở đường này trong cửa sổ studio để đổi lấy
+phiên (route `auth/desktop` gọi `verifyOtp` rồi ghi cookie phiên lên chính
+response chuyển hướng).
+
+Chạy khi: bấm **Đăng nhập tự động** trong *Đồng bộ & sao lưu*, chọn mục cùng tên
+ở menu khay, **hoặc tự động** khi cửa sổ studio bị đá về `/login`.
+
+Vì sao làm vậy: đăng nhập bằng form web bên trong WebView2 là chỗ hỏng nhiều
+nhất — Google **chặn thẳng** đăng nhập trong webview nhúng, captcha Turnstile
+lắm lúc không chạy, cookie phiên hỏng thì không có menu trình duyệt nào để xóa.
+Máy này vốn đã được chủ studio xác thực một lần bằng mã kết nối rồi.
+
+Quyền **không** rộng thêm: mã thiết bị vốn đã đọc/ghi được toàn bộ dữ liệu studio
+qua `/api/desktop/*`. Endpoint chỉ nhận mã thiết bị (`via === "device"`), giới hạn
+5 lần / 5 phút mỗi máy, và app chỉ thử tự động **một lần mỗi lần chạy** (mã hỏng
+mà thử lại là vòng lặp vô tận). Vừa bấm *Đăng xuất* thì tự động cũng bị khóa tới
+lần chạy sau, không thì vừa đăng xuất đã bị đăng nhập lại ngay.
+
+### Kẹt đăng nhập → xóa cookie ở đâu
 
 Cửa sổ studio là WebView2 **không có thanh địa chỉ, không có menu trình duyệt**,
 nên khi cookie phiên hỏng (còn phiên tài khoản cũ, khóa Supabase đã đổi, một lần

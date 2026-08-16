@@ -24,6 +24,14 @@ function describeOAuthError(
   const detail = description ? decodeURIComponent(description).replace(/\+/g, " ") : "";
   const lower = detail.toLowerCase();
 
+  // Đăng nhập tự động của app desktop (/auth/desktop) — KHÔNG dính gì tới
+  // Google, đừng để rơi xuống các câu "Đăng nhập Google thất bại" bên dưới.
+  if (code.startsWith("desktop_") || lower.includes("otp") || code === "otp_expired") {
+    return code === "desktop_no_config"
+      ? "Máy chủ thiếu cấu hình Supabase nên không đăng nhập tự động được. Báo quản trị viên kiểm tra biến môi trường trên Vercel."
+      : "Mã đăng nhập tự động của app desktop đã hết hạn hoặc đã dùng rồi. Bấm lại “Đăng nhập tự động” trong bảng điều khiển, hoặc đăng nhập bằng email + mật khẩu ngay tại đây.";
+  }
+
   // Lỗi hay gặp nhất của server_error: trigger tạo hồ sơ (profiles) trong CSDL
   // thất bại nên Supabase không lưu được tài khoản mới.
   if (lower.includes("database error")) {
