@@ -74,6 +74,8 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaWarn, setCaptchaWarn] = useState(false);
+  const didReset = params.get("reset") === "1";
 
   // Surface OAuth callback errors (?error=...) so the user isn't left wondering
   // why Google sign-in bounced them back here.
@@ -203,11 +205,26 @@ function LoginForm() {
           />
 
           <Turnstile
-            onVerify={setCaptchaToken}
+            onVerify={(tk) => { setCaptchaToken(tk); setCaptchaWarn(false); }}
             onExpire={() => setCaptchaToken(null)}
-            onError={() => setCaptchaToken(null)}
+            onError={() => { setCaptchaToken(null); setCaptchaWarn(true); }}
             className="mb-4"
           />
+
+          {/* Nút Đăng nhập bị khóa khi chưa có mã xác minh. Nói ra lý do, đừng để
+              người dùng ngồi nhìn nút xám không hiểu vì sao (Turnstile hay trục
+              trặc trong webview nhúng của app desktop). */}
+          {captchaWarn && !captchaToken && (
+            <p className="mb-4 text-sm text-accent-muted">
+              Xác minh chống robot đang trục trặc — chờ vài giây, nút Đăng nhập sẽ tự bật lại.
+            </p>
+          )}
+
+          {didReset && !error && (
+            <p className="mb-4 text-sm text-accent-muted">
+              Đã xóa cookie đăng nhập trên máy này. Mời bạn đăng nhập lại.
+            </p>
+          )}
 
           {error && (
             <p className="mb-4 text-sm" style={{ color: "var(--danger)" }}>{error}</p>
@@ -236,7 +253,20 @@ function LoginForm() {
             </svg>
             Đăng nhập với Google
           </button>
-          <p className="mt-5 text-center text-[11px]" style={{ color: "var(--text3)" }}>
+
+          {/* Lối thoát khi cookie phiên hỏng: kẹt vòng lặp /login ↔ /dashboard,
+              còn phiên tài khoản cũ, hoặc đăng nhập Google dở dang để lại
+              code-verifier mồ côi. Trong app desktop (WebView2) đây là CHỖ DUY
+              NHẤT xóa được cookie vì cửa sổ không có menu trình duyệt. */}
+          <a
+            href={`/auth/reset?next=${encodeURIComponent(next)}`}
+            className="mt-5 block text-center text-xs underline"
+            style={{ color: "var(--text3)" }}
+          >
+            Không đăng nhập được? Xóa cookie đăng nhập rồi thử lại
+          </a>
+
+          <p className="mt-3 text-center text-[11px]" style={{ color: "var(--text3)" }}>
             Phiên bản {APP_VERSION}
           </p>
         </form>

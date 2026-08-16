@@ -1,6 +1,6 @@
 [package]
 name = "mstudo-desktop"
-version = "0.6.0"
+version = "1.1.0"
 description = "MStudo Desktop — tự động lưu hợp đồng & sao lưu dữ liệu studio"
 edition = "2021"
 

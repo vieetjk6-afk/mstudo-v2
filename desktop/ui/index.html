@@ -147,6 +147,18 @@
               <p class="muted" id="appVer"></p>
               <p class="muted">Bấm dấu <b>×</b> để thu nhỏ xuống <b>khay hệ thống</b> — app vẫn chạy ngầm và tiếp tục đồng bộ. Chuột phải vào biểu tượng khay để <b>Mở</b>, <b>Đồng bộ ngay</b> hoặc <b>Thoát</b> hẳn.</p>
             </div>
+            <!-- Kẹt đăng nhập trong cửa sổ studio: cửa sổ đó là WebView2 không có
+                 thanh địa chỉ lẫn menu cài đặt, nên đây (và menu khay) là chỗ duy
+                 nhất xóa được cookie. -->
+            <div class="card">
+              <div class="row-between"><h2>Đăng nhập giao diện studio</h2>
+                <div class="row-gap">
+                  <button id="btnLogout" class="btn small">Đăng xuất / xóa cookie</button>
+                  <button id="btnClearWeb" class="btn danger small">Xóa sạch cookie &amp; bộ nhớ đệm</button>
+                </div>
+              </div>
+              <p class="muted">Không đăng nhập được (kẹt ở trang đăng nhập, quay vòng, hoặc còn phiên của tài khoản cũ)? Bấm <b>Đăng xuất / xóa cookie</b> — máy chủ xóa cookie phiên rồi mở lại trang đăng nhập. Vẫn không được thì bấm <b>Xóa sạch cookie &amp; bộ nhớ đệm</b> để xóa toàn bộ dữ liệu duyệt web của cửa sổ studio. Kết nối thiết bị và file đã lưu trên máy vẫn giữ nguyên.</p>
+            </div>
             <div class="card">
               <h2>Thiết bị</h2>
               <p class="muted" id="deviceInfo"></p>

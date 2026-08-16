@@ -128,5 +128,27 @@ và chạy migration `supabase/migrations/studio_drive_sync.sql`.
 
 Bấm dấu **×** ở cửa sổ chính sẽ **thu nhỏ xuống khay hệ thống** thay vì thoát —
 engine đồng bộ hợp đồng/ảnh vẫn chạy ngầm. Biểu tượng khay: **bấm trái** để mở
-lại cửa sổ; **chuột phải** có menu **Mở / Đồng bộ ngay / Thoát** (Thoát mới đóng
-hẳn app).
+lại cửa sổ; **chuột phải** có menu **Mở giao diện studio / Bảng điều khiển &
+đồng bộ / Đồng bộ ngay / Đăng xuất · xóa cookie đăng nhập / Thoát** (Thoát mới
+đóng hẳn app).
+
+## Kẹt đăng nhập trong cửa sổ studio → xóa cookie ở đâu
+
+Cửa sổ studio là WebView2 **không có thanh địa chỉ, không có menu trình duyệt**,
+nên khi cookie phiên hỏng (còn phiên tài khoản cũ, khóa Supabase đã đổi, một lần
+đăng nhập Google dở dang để lại `code-verifier` mồ côi) thì trước đây không có
+chỗ nào xóa cookie — người dùng kẹt luôn ở trang đăng nhập. Ba lối thoát, theo
+thứ tự nhẹ → nặng:
+
+1. **Ngay trên trang đăng nhập**: link *“Không đăng nhập được? Xóa cookie đăng
+   nhập rồi thử lại”* → gọi `/auth/reset` trên máy chủ (xóa mọi cookie `sb-*`
+   rồi quay lại `/login`). Dùng được cả trên trình duyệt web thường.
+2. **Menu khay hệ thống → “Đăng xuất / xóa cookie đăng nhập”**, hoặc nút *Đăng
+   xuất / xóa cookie* trong **Đồng bộ & sao lưu**. Cùng đường `/auth/reset`
+   nhưng bấm được kể cả khi cửa sổ studio đang chiếm hết màn hình.
+3. **Nút *Xóa sạch cookie & bộ nhớ đệm*** (lệnh Rust `clear_web_data`): xóa
+   toàn bộ dữ liệu duyệt web của WebView2 khi cách 1–2 vẫn không gỡ được.
+   ⚠️ WebView2 dùng **chung một hồ sơ** cho mọi cửa sổ của app, nên lệnh này xóa
+   luôn `localStorage` của bảng điều khiển — `app.js` ghi lại cấu hình (`cfg`:
+   máy chủ, mã kết nối, thư mục lưu) ngay sau đó, chỉ mất nhật ký hoạt động.
+   Kết nối thiết bị và file đã lưu trên máy **không** bị đụng tới.

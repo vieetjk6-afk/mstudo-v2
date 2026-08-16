@@ -41,12 +41,41 @@ export default function Turnstile({ onVerify, onExpire, onError, appearance = "n
 
   useEffect(() => {
     let cancelled = false;
+    let verified = false;
+    let retried = false;
+    let recovery: ReturnType<typeof setTimeout> | null = null;
+
+    const pass = (token: string) => {
+      verified = true;
+      cbs.current.onVerify(token);
+    };
+
     // Fallback timer: if the Cloudflare script is blocked (ad-blockers, network
     // policy) the widget can never verify and login would be impossible. After
     // a grace period, auto-pass so the user is not locked out.
     const fallback = setTimeout(() => {
-      if (!cancelled && !widgetId.current) cbs.current.onVerify("turnstile-unavailable");
+      if (!cancelled && !widgetId.current) pass("turnstile-unavailable");
     }, 6000);
+
+    // Widget ĐÃ hiện rồi mới lỗi (error-callback) là ngõ cụt tệ nhất: fallback ở
+    // trên đã bị clearTimeout, người dùng chỉ thấy nút Đăng nhập xám vĩnh viễn
+    // mà không có lời giải thích nào. Hay gặp trong webview nhúng (MStudo
+    // Desktop / WebView2), mạng công ty chặn challenges.cloudflare.com, hoặc
+    // đồng hồ máy sai giờ. Thử reset widget MỘT lần; vẫn không có token thì
+    // chuyển sang mã "không dùng được" — máy chủ đã coi mã này là hợp lệ
+    // (verifyTurnstile) đúng cho tình huống này. Captcha là lớp chống spam bổ
+    // sung, không phải cổng duy nhất — khoá người dùng thật ra ngoài mới là hỏng.
+    const recoverFromError = () => {
+      if (cancelled || verified) return;
+      if (!retried && widgetId.current && window.turnstile) {
+        retried = true;
+        cbs.current.onError?.();
+        try { window.turnstile.reset(widgetId.current); } catch { /* ignore */ }
+        recovery = setTimeout(() => { if (!cancelled && !verified) pass("turnstile-unavailable"); }, 8000);
+        return;
+      }
+      pass("turnstile-unavailable");
+    };
 
     const renderWidget = () => {
       if (cancelled || rendered.current || !ref.current || !window.turnstile) return;
@@ -57,16 +86,27 @@ export default function Turnstile({ onVerify, onExpire, onError, appearance = "n
           sitekey: SITE_KEY,
           appearance,
           theme: "auto",
-          callback: (token: string) => cbs.current.onVerify(token),
-          "expired-callback": () => cbs.current.onExpire?.(),
+          callback: (token: string) => {
+            if (recovery) { clearTimeout(recovery); recovery = null; }
+            pass(token);
+          },
+          "expired-callback": () => {
+            verified = false;
+            cbs.current.onExpire?.();
+            // Tự lấy mã mới thay vì chờ người dùng bấm lại — hết hạn mà đứng im
+            // cũng khoá nút gửi y như lỗi.
+            if (widgetId.current && window.turnstile) {
+              try { window.turnstile.reset(widgetId.current); } catch { /* ignore */ }
+            }
+          },
           "error-callback": () => {
             // On a hard error with the test key, don't lock the user out.
-            if (IS_TEST_KEY) cbs.current.onVerify("turnstile-unavailable");
-            else cbs.current.onError?.();
+            if (IS_TEST_KEY) pass("turnstile-unavailable");
+            else recoverFromError();
           },
         });
       } catch {
-        cbs.current.onVerify("turnstile-unavailable");
+        pass("turnstile-unavailable");
       }
     };
 
@@ -88,6 +128,7 @@ export default function Turnstile({ onVerify, onExpire, onError, appearance = "n
     return () => {
       cancelled = true;
       clearTimeout(fallback);
+      if (recovery) clearTimeout(recovery);
       if (widgetId.current && window.turnstile) {
         try { window.turnstile.remove(widgetId.current); } catch { /* ignore */ }
         widgetId.current = null;
