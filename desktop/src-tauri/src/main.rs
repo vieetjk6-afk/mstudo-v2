@@ -413,6 +413,19 @@ fn open_studio_window(app: &tauri::AppHandle, url: String, force_navigate: bool)
                 show_main(&app_nav);
                 return false; // huỷ điều hướng, chỉ mở bảng điều khiển
             }
+            // Bị đá về TRANG ĐĂNG NHẬP ⇒ thử đăng nhập bằng mã kết nối của máy
+            // này. Đây là chỗ mọi kiểu hỏng đổ về: Google chặn đăng nhập trong
+            // webview nhúng, captcha không chạy, cookie phiên hết hạn. Máy đã
+            // được chủ studio xác thực rồi nên không việc gì phải gõ lại.
+            //
+            // Bỏ qua khi vừa bấm "Đăng xuất" (/login?reset=1) — không thì vừa
+            // đăng xuất đã bị đăng nhập lại ngay. app.js còn tự khóa để chỉ thử
+            // đúng một lần mỗi lần chạy app (tránh vòng lặp khi mã hỏng).
+            if u.path().starts_with("/login") && !u.query().unwrap_or("").contains("reset=1") {
+                if let Some(w) = app_nav.get_webview_window("main") {
+                    let _ = w.eval("window.autoDeviceLogin && window.autoDeviceLogin()");
+                }
+            }
             true
         })
         .build()
@@ -807,8 +820,9 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
     // gỡ được khi kẹt đăng nhập (cookie phiên cũ/hỏng) — kể cả lúc cửa sổ studio
     // đang chiếm hết màn hình và bảng điều khiển đã ẩn xuống khay.
     let logout_i = MenuItem::with_id(app, "logout", "Đăng xuất / xóa cookie đăng nhập", true, None::<&str>)?;
+    let login_i = MenuItem::with_id(app, "login", "Đăng nhập tự động (mã thiết bị)", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "quit", "Thoát", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&studio_i, &show_i, &sync_i, &logout_i, &quit_i])?;
+    let menu = Menu::with_items(app, &[&studio_i, &show_i, &sync_i, &login_i, &logout_i, &quit_i])?;
 
     let mut builder = TrayIconBuilder::with_id("main-tray")
         .tooltip("MStudo Desktop — đang chạy ngầm")
@@ -822,6 +836,13 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
                     // Gọi engine đồng bộ ở frontend (hàm toàn cục trong app.js).
                     let _ = w.eval("window.runDriveSync && window.runDriveSync(true)");
+                }
+            }
+            "login" => {
+                // Xin mã đăng nhập một lần bằng mã thiết bị rồi mở thẳng giao
+                // diện studio — không phải gõ mật khẩu, không qua captcha.
+                if let Some(w) = tauri::Manager::get_webview_window(app, "main") {
+                    let _ = w.eval("window.deviceLogin && window.deviceLogin(true)");
                 }
             }
             "logout" => {
