@@ -1,4 +1,5 @@
 import JSZip from "jszip";
+import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
 
 /**
  * Sinh file hợp đồng cho MStudo Desktop:
@@ -11,6 +12,8 @@ import JSZip from "jszip";
 export type ContractDocData = {
   studio: {
     name: string;
+    /** Logo studio in trên đầu bản HTML/PDF. */
+    logo?: string | null;
     phone?: string | null;
     email?: string | null;
     bankHolder?: string | null;
@@ -90,96 +93,75 @@ function computeTotals(d: ContractDocData) {
 
 // ─── HTML (client in ra PDF) ──────────────────────────────────────────────────
 
+/**
+ * Bản in A4 dùng CHUNG với nút "Xuất PDF" của studio và cổng khách — xem
+ * src/lib/contract-print.ts. Desktop chỉ việc mở file HTML này rồi in ra PDF.
+ */
 export function buildContractHtml(d: ContractDocData): string {
   const c = d.contract;
   const { total, paid, remain } = computeTotals(d);
-  const itemsRows = d.items
-    .map((it, i) => `<tr><td class="c">${i + 1}</td><td>${esc(it.name || "")}</td><td class="c">${it.qty}</td><td class="r">${vnd(it.unit_price)}</td><td class="r">${vnd((it.qty || 0) * (it.unit_price || 0))}</td></tr>`)
-    .join("");
-  const payRows = d.payments
-    .map((p) => `<tr><td>${dmy(p.paid_at)}</td><td>${esc(PAY_KINDS[p.kind || ""] || p.kind || "")}</td><td class="r">${vnd(p.amount)}</td><td>${esc(p.note || "")}</td></tr>`)
-    .join("");
-  const sig = (img?: string | null, name?: string | null, at?: string | null, label = "") => `
-    <div class="sig">
-      <div class="sig-label">${esc(label)}</div>
-      ${img && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/.test(img) ? `<img src="${esc(img)}" alt="chữ ký" />` : `<div class="sig-space"></div>`}
-      <div class="sig-name">${esc(name || "")}</div>
-      ${at ? `<div class="sig-at">Đã ký ngày ${dmy(at)}</div>` : ""}
-    </div>`;
-
-  return `<!doctype html>
-<html lang="vi"><head><meta charset="utf-8" />
-<title>${esc(contractBaseName(c))}</title>
-<style>
-  @page { size: A4; margin: 18mm 16mm; }
-  * { box-sizing: border-box; }
-  body { font-family: "Times New Roman", Times, serif; color: #111; font-size: 13pt; line-height: 1.55; margin: 0; }
-  .nat { text-align: center; font-weight: bold; }
-  .nat small { display: block; font-weight: bold; }
-  .rule { width: 180px; border-bottom: 1.5px solid #111; margin: 4px auto 18px; }
-  h1 { text-align: center; font-size: 17pt; margin: 18px 0 2px; text-transform: uppercase; }
-  .code { text-align: center; margin: 0 0 18px; font-style: italic; }
-  h2 { font-size: 13.5pt; margin: 18px 0 6px; }
-  table { width: 100%; border-collapse: collapse; margin: 6px 0 10px; }
-  th, td { border: 1px solid #555; padding: 5px 8px; font-size: 12pt; vertical-align: top; }
-  th { background: #f0f0f0; text-align: center; }
-  td.c { text-align: center; } td.r { text-align: right; white-space: nowrap; }
-  .totals { margin: 4px 0 0; width: auto; margin-left: auto; }
-  .totals td { border: none; padding: 2px 8px; }
-  .totals .lbl { text-align: right; } .totals .val { text-align: right; min-width: 130px; font-weight: bold; }
-  .sigs { display: flex; justify-content: space-between; margin-top: 34px; page-break-inside: avoid; }
-  .sig { width: 46%; text-align: center; }
-  .sig-label { font-weight: bold; }
-  .sig img { max-height: 90px; max-width: 100%; margin: 8px auto 2px; display: block; }
-  .sig-space { height: 90px; }
-  .sig-name { font-weight: bold; margin-top: 2px; }
-  .sig-at { font-size: 11pt; font-style: italic; }
-  .meta { font-size: 10.5pt; color: #666; text-align: right; margin-top: 26px; }
-  p { margin: 3px 0; }
-</style></head><body>
-  <div class="nat">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM<small>Độc lập – Tự do – Hạnh phúc</small></div>
-  <div class="rule"></div>
-  <h1>${esc(c.title || "Hợp đồng dịch vụ")}</h1>
-  <p class="code">Số: ${esc(c.code || "")}${c.created_at ? ` · Ngày lập: ${dmy(c.created_at)}` : ""}</p>
-
-  <h2>Bên A (Bên cung cấp dịch vụ)</h2>
-  <p><b>${esc(d.studio.name)}</b></p>
-  ${d.studio.phone ? `<p>Điện thoại: ${esc(d.studio.phone)}</p>` : ""}
-  ${d.studio.email ? `<p>Email: ${esc(d.studio.email)}</p>` : ""}
-  ${d.studio.bankAccount ? `<p>Tài khoản: ${esc(d.studio.bankAccount)}${d.studio.bankName ? ` · ${esc(d.studio.bankName)}` : ""}${d.studio.bankHolder ? ` · ${esc(d.studio.bankHolder)}` : ""}</p>` : ""}
-
-  <h2>Bên B (Khách hàng)</h2>
-  <p><b>${esc(c.client_name || "")}</b></p>
-  ${c.client_phone ? `<p>Điện thoại: ${esc(c.client_phone)}</p>` : ""}
-  ${c.client_email ? `<p>Email: ${esc(c.client_email)}</p>` : ""}
-
-  <h2>Nội dung dịch vụ</h2>
-  <p>Loại dịch vụ: <b>${esc(SHOOT_TYPES[c.shoot_type || ""] || c.shoot_type || "")}</b></p>
-  ${c.event_date ? `<p>Thời gian: <b>${dmy(c.event_date)}${c.event_time ? ` · ${esc(c.event_time)}` : ""}</b></p>` : ""}
-  ${c.location ? `<p>Địa điểm: ${esc(c.location)}</p>` : ""}
-
-  ${d.items.length ? `<h2>Hạng mục &amp; chi phí</h2>
-  <table><thead><tr><th style="width:36px">STT</th><th>Hạng mục</th><th style="width:52px">SL</th><th style="width:110px">Đơn giá</th><th style="width:120px">Thành tiền</th></tr></thead>
-  <tbody>${itemsRows}</tbody></table>` : ""}
-  <table class="totals">
-    <tr><td class="lbl">Tổng giá trị hợp đồng:</td><td class="val">${vnd(total)}</td></tr>
-    ${c.deposit ? `<tr><td class="lbl">Tiền cọc:</td><td class="val">${vnd(c.deposit)}</td></tr>` : ""}
-    <tr><td class="lbl">Đã thanh toán:</td><td class="val">${vnd(paid)}</td></tr>
-    <tr><td class="lbl">Còn lại:</td><td class="val">${vnd(remain)}</td></tr>
-  </table>
-
-  ${d.payments.length ? `<h2>Các khoản đã thanh toán</h2>
-  <table><thead><tr><th style="width:110px">Ngày</th><th style="width:140px">Loại</th><th style="width:130px">Số tiền</th><th>Ghi chú</th></tr></thead>
-  <tbody>${payRows}</tbody></table>` : ""}
-
-  ${c.note ? `<h2>Ghi chú</h2><p>${esc(c.note).replace(/\n/g, "<br/>")}</p>` : ""}
-
-  <div class="sigs">
-    ${sig(c.studio_signature, c.studio_signed_name || d.studio.name, c.studio_signed_at, "ĐẠI DIỆN BÊN A")}
-    ${sig(c.client_signature, c.client_signed_name || c.client_name, c.client_signed_at, "ĐẠI DIỆN BÊN B")}
-  </div>
-  <div class="meta">Xuất từ mstudo ngày ${dmy(new Date().toISOString())}</div>
-</body></html>`;
+  const data: ContractPrintData = {
+    docTitle: contractBaseName(c),
+    // Bản desktop giữ quốc hiệu – tiêu ngữ như nếp cũ (studio hay in ra ký tay
+    // rồi lưu hồ sơ giấy); bản in trên web để gọn nên không có.
+    nationalHeading: true,
+    title: c.title,
+    code: c.code,
+    issuedAt: dmy(c.created_at),
+    studio: {
+      name: d.studio.name,
+      logo: d.studio.logo,
+      phone: d.studio.phone,
+      email: d.studio.email,
+      bankHolder: d.studio.bankHolder,
+      bankAccount: d.studio.bankAccount,
+      bankName: d.studio.bankName,
+    },
+    client: { name: c.client_name, phone: c.client_phone, email: c.client_email },
+    facts: [
+      { label: "Dịch vụ", value: SHOOT_TYPES[c.shoot_type || ""] || c.shoot_type },
+      { label: "Thời gian", value: [dmy(c.event_date), c.event_time].filter(Boolean).join(" · ") },
+      { label: "Địa điểm", value: c.location, wide: true },
+    ],
+    items: d.items.map((it) => ({
+      name: it.name,
+      qty: it.qty,
+      unitPrice: it.unit_price,
+      amount: (Number(it.qty) || 0) * (Number(it.unit_price) || 0),
+    })),
+    totals: [
+      { label: "Tổng giá trị hợp đồng", amount: total, strong: true },
+      ...(c.deposit ? [{ label: "Tiền cọc", amount: Number(c.deposit) || 0 }] : []),
+      { label: "Đã thanh toán", amount: paid, minus: true },
+      { label: "Còn lại", amount: remain, bold: true },
+    ],
+    amountInWords: total,
+    payments: d.payments.map((p) => ({
+      date: dmy(p.paid_at),
+      kind: PAY_KINDS[p.kind || ""] || p.kind,
+      amount: p.amount,
+      note: p.note,
+    })),
+    terms: c.note,
+    signs: [
+      {
+        label: "Đại diện bên A",
+        name: c.studio_signed_name || d.studio.name,
+        image: c.studio_signature,
+        signedAt: dmy(c.studio_signed_at),
+      },
+      {
+        label: "Đại diện bên B",
+        name: c.client_signed_name || c.client_name,
+        image: c.client_signature,
+        signedAt: dmy(c.client_signed_at),
+      },
+    ],
+    footer: `Xuất từ mstudo ngày ${dmy(new Date().toISOString())}`,
+  };
+  // Không tự gọi in: desktop tải file về lưu vào thư mục hợp đồng, người dùng
+  // mở lúc nào thì in lúc đó.
+  return contractPrintDocument(data, { autoPrint: false });
 }
 
 // ─── DOCX (Word — bản soạn thảo) ─────────────────────────────────────────────

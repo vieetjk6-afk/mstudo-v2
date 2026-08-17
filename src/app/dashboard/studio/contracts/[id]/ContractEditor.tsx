@@ -48,6 +48,7 @@ import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
 import VietQRButton, { type BankInfo } from "@/components/VietQR";
 import { PRESET_ITEMS, PRESET_TASKS, nextContractCode } from "@/lib/contract-code";
+import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
 import { shootReminderMessage } from "@/lib/zalo";
 import { compressImage, checkImageFile } from "@/lib/image";
 import {
@@ -186,6 +187,9 @@ export default function ContractEditor({
   selectionAlbums,
   initialMilestones,
   studioName,
+  studioLogo = null,
+  studioPhone = null,
+  studioEmail = null,
   conflictByPhone,
   initialTasks,
   initialExpenses,
@@ -216,6 +220,10 @@ export default function ContractEditor({
   selectionAlbums: { id: string; title: string; slug: string }[];
   initialMilestones: StudioEvent[];
   studioName: string;
+  /** Thương hiệu studio in trên đầu bản PDF hợp đồng. */
+  studioLogo?: string | null;
+  studioPhone?: string | null;
+  studioEmail?: string | null;
   conflictByPhone: Record<string, string>;
   initialTasks: ContractTask[];
   initialExpenses: StudioExpense[];
@@ -660,98 +668,100 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
   }
 
   /**
+   * Dữ liệu cho bản in hợp đồng (dùng chung với cổng khách & MStudo Desktop —
+   * xem src/lib/contract-print.ts). Lấy từ chính state đang mở nên bản in luôn
+   * khớp thứ studio đang thấy trên màn hình.
+   */
+  function buildPrintData(qr: string): ContractPrintData {
+    const dmy = (s?: string | null) => (s ? fmtDate(s) : "");
+    return {
+      docTitle: `Hợp đồng ${f.code || ""} ${f.client_name || ""}`.trim(),
+      title: f.title,
+      code: f.code,
+      issuedAt: dmy(contract.created_at),
+      statusLabel: CONTRACT_STATUS_LABEL[f.status],
+      studio: {
+        name: studioName,
+        logo: studioLogo,
+        phone: studioPhone,
+        email: studioEmail,
+        bankHolder: bank.holder,
+        bankAccount: bank.account,
+        bankName: bank.name,
+      },
+      client: { name: f.client_name, phone: f.client_phone, email: f.client_email },
+      facts: [
+        { label: "Dịch vụ", value: services.find((s) => s.id === f.service_id)?.name || SHOOT_TYPE_LABEL[f.shoot_type] },
+        { label: "Ngày chụp", value: [dmy(f.event_date), f.event_time].filter(Boolean).join(" · ") },
+        { label: "Hạn giao sản phẩm", value: dmy(f.delivery_due) },
+        { label: "Địa điểm", value: f.location, wide: true },
+      ],
+      items: items.map((it) => ({
+        name: it.name,
+        qty: it.is_discount ? null : it.qty,
+        unitPrice: it.is_discount ? null : Math.abs(it.unit_price || 0),
+        amount: (it.is_discount ? -1 : 1) * Math.abs(it.unit_price || 0) * (it.is_discount ? 1 : it.qty || 0),
+      })),
+      totals: [
+        { label: "Tổng giá trị hợp đồng", amount: total, strong: true },
+        { label: "Đã thanh toán", amount: collected, minus: true },
+        { label: "Còn lại", amount: balance, bold: true },
+      ],
+      amountInWords: total,
+      plan: plan.map((p) => ({ label: p.label, due: dmy(p.due_date), paid: p.paid, amount: p.amount })),
+      schedule: milestones.map((m) => ({
+        title: m.title,
+        when: [dmy(m.event_date), m.event_time].filter(Boolean).join(" · "),
+      })),
+      payments: payments.map((p) => ({
+        date: dmy(p.paid_at),
+        kind: PAYMENT_KIND_LABEL[p.kind],
+        amount: p.amount,
+        note: [p.method, p.note].filter(Boolean).join(" · "),
+      })),
+      terms: f.note,
+      signs: [
+        {
+          label: "Bên A · Studio",
+          name: contract.studio_signed_name || studioName,
+          image: contract.studio_signature,
+          signedAt: dmy(contract.studio_signed_at),
+        },
+        {
+          label: "Bên B · Khách hàng",
+          name: contract.client_signed_name || f.client_name,
+          image: contract.client_signature,
+          signedAt: dmy(contract.client_signed_at),
+        },
+      ],
+      qr,
+      footer: `Quét mã QR ở đầu trang để mở bản hợp đồng điện tử · Xuất ngày ${fmtDate(todayVN())}`,
+    };
+  }
+
+  /**
    * Xuất PDF hợp đồng từ phía studio — mở một cửa sổ chứa bản văn bản A4 rồi
    * gọi in; hộp in của trình duyệt có sẵn "Lưu thành PDF".
    *
    * Không dùng cổng khách để in: cổng đó khoá bằng SĐT khách, còn studio nhiều
-   * lúc cần bản in trước khi khách mở link. Dữ liệu lấy từ chính state đang mở
-   * nên bản in luôn khớp thứ đang thấy trên màn hình.
+   * lúc cần bản in trước khi khách mở link.
    */
-  function printContract() {
-    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] || c));
-    const dmy = (s?: string | null) => (s ? fmtDate(s) : "—");
-    const itemRows = items
-      .map((it) => {
-        const line = (it.is_discount ? -1 : 1) * Math.abs(it.unit_price || 0) * (it.is_discount ? 1 : it.qty || 0);
-        return `<tr><td>${esc(it.name || "")}</td><td class="c">${it.is_discount ? "" : it.qty}</td>
-<td class="r">${it.is_discount ? "" : vnd(Math.abs(it.unit_price))}</td><td class="r">${line < 0 ? "− " : ""}${vnd(Math.abs(line))}</td></tr>`;
-      })
-      .join("");
-    const planRows = plan
-      .map((p) => `<tr><td>${esc(p.label)}</td><td class="c">${p.due_date ? dmy(p.due_date) : "—"}</td>
-<td class="c">${p.paid ? "Đã thu" : "Chưa thu"}</td><td class="r">${vnd(p.amount)}</td></tr>`)
-      .join("");
-    const milestoneRows = milestones
-      .map((m) => `<tr><td>${esc(m.title)}</td><td class="r">${dmy(m.event_date)}${m.event_time ? ` · ${esc(m.event_time)}` : ""}</td></tr>`)
-      .join("");
-    const sig = (img: string | null | undefined) =>
-      img ? `<img src="${img}" alt="" style="height:62px" />` : "";
-
-    const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${esc(f.title || "Hợp đồng")}</title>
-<style>
-@page{size:A4;margin:16mm}
-body{font-family:'Times New Roman',Times,'DejaVu Serif',serif;color:#111;max-width:720px;margin:0 auto;padding:8px 0;font-size:13px;line-height:1.5}
-h1{text-align:center;font-size:22px;font-weight:700;margin:0}
-h2{font-size:15px;margin:18px 0 8px}
-.sub{text-align:center;font-size:13px;margin:4px 0 22px;color:#333}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;border-bottom:1px solid #333;padding:5px 0;font-size:12px}
-td{padding:5px 0;border-bottom:1px solid #ddd;vertical-align:top}
-.c{text-align:center;width:70px}.r{text-align:right;width:120px}
-.meta td{border:none;padding:3px 0}
-.tot td{border:none;padding:2px 0;text-align:right}
-.tot .k{width:auto}.tot .v{width:140px;font-weight:700}
-.note{white-space:pre-wrap;margin:0}
-.signs{width:100%;margin-top:42px;text-align:center;font-size:13px;border:none}
-.signs td{border:none;width:50%}
-.box{height:70px;display:flex;align-items:center;justify-content:center}
-</style></head>
-<body onload="window.print()">
-<h1>HỢP ĐỒNG DỊCH VỤ</h1>
-<p class="sub">${esc(f.title || "")}${f.code ? ` · ${esc(f.code)}` : ""}</p>
-
-<table class="meta"><tbody>
-<tr><td style="width:150px">Bên A (Studio):</td><td><b>${esc(studioName)}</b></td></tr>
-<tr><td>Bên B (Khách hàng):</td><td><b>${esc(f.client_name || "—")}</b>${f.client_phone ? ` · ĐT: ${esc(f.client_phone)}` : ""}${f.client_email ? ` · ${esc(f.client_email)}` : ""}</td></tr>
-<tr><td>Dịch vụ:</td><td>${esc(services.find((s) => s.id === f.service_id)?.name || SHOOT_TYPE_LABEL[f.shoot_type])}</td></tr>
-<tr><td>Ngày thực hiện:</td><td>${dmy(f.event_date)}${f.event_time ? ` · ${esc(f.event_time)}` : ""}</td></tr>
-<tr><td>Địa điểm:</td><td>${esc(f.location || "—")}</td></tr>
-</tbody></table>
-
-<h2>1. Hạng mục dịch vụ</h2>
-<table><thead><tr><th>Hạng mục</th><th class="c">SL</th><th class="r">Đơn giá</th><th class="r">Thành tiền</th></tr></thead>
-<tbody>${itemRows || `<tr><td colspan="4">Chưa có hạng mục.</td></tr>`}</tbody></table>
-<table class="tot"><tbody>
-<tr><td class="k">Tổng giá trị hợp đồng:</td><td class="v">${vnd(total)}</td></tr>
-<tr><td class="k">Đã thanh toán:</td><td class="v">${vnd(collected)}</td></tr>
-<tr><td class="k">Còn lại:</td><td class="v">${vnd(balance)}</td></tr>
-</tbody></table>
-
-${planRows ? `<h2>2. Kế hoạch thanh toán</h2>
-<table><thead><tr><th>Đợt</th><th class="c">Hạn</th><th class="c">Tình trạng</th><th class="r">Số tiền</th></tr></thead>
-<tbody>${planRows}</tbody></table>` : ""}
-
-${milestoneRows ? `<h2>${planRows ? 3 : 2}. Lịch trình</h2>
-<table><tbody>${milestoneRows}</tbody></table>` : ""}
-
-${f.note ? `<h2>${(planRows ? 1 : 0) + (milestoneRows ? 1 : 0) + 2}. Điều khoản / Ghi chú</h2><p class="note">${esc(f.note)}</p>` : ""}
-
-<table class="signs"><tbody><tr>
-<td><b>BÊN A (STUDIO)</b><div class="box">${sig(contract.studio_signature)}</div>
-<div>${esc(contract.studio_signed_name || studioName)}</div>
-${contract.studio_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày ${dmy(contract.studio_signed_at)}</div>` : ""}</td>
-<td><b>BÊN B (KHÁCH HÀNG)</b><div class="box">${sig(contract.client_signature)}</div>
-<div>${esc(contract.client_signed_name || f.client_name || "")}</div>
-${contract.client_signed_at ? `<div style="font-size:11px;color:#555">Ký ngày ${dmy(contract.client_signed_at)}</div>` : ""}</td>
-</tr></tbody></table>
-</body></html>`;
-
-    const w = window.open("", "_blank", "width=860,height=900");
+  async function printContract() {
+    // Mở cửa sổ TRƯỚC khi await: mở sau một tác vụ bất đồng bộ là trình duyệt
+    // coi như pop-up tự động và chặn.
+    const w = window.open("", "_blank", "width=880,height=920");
     if (!w) {
       toast("Trình duyệt chặn cửa sổ in — cho phép pop-up rồi bấm lại.");
       return;
     }
-    w.document.write(html);
+    let qr = "";
+    try {
+      const QRCode = (await import("qrcode")).default;
+      qr = await QRCode.toDataURL(shareUrl, { margin: 1, width: 240, color: { dark: "#111111", light: "#ffffff" } });
+    } catch {
+      /* QR chỉ là tiện ích — thiếu vẫn in được */
+    }
+    w.document.write(contractPrintDocument(buildPrintData(qr)));
     w.document.close();
   }
 

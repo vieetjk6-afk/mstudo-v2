@@ -5,6 +5,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { getStudioHost } from "@/lib/studio-site";
 import { getFeatureFlags, storyComingSoon } from "@/lib/feature-flags";
 import { ensureIntakeToken } from "@/lib/contract-intake";
+import { brandFrom } from "@/lib/studio-brand";
 import type {
   StudioContract,
   ContractItem,
@@ -144,6 +145,9 @@ export default async function ContractPage({
   // Link cổng thợ riêng của studio — đính vào mọi tin Zalo gửi cho thợ.
   const crewPortalUrl = buildCrewPortalUrl(profile.crew_token as string | null);
 
+  // Tên + logo khách nhìn thấy (studio_brand_name/studio_logo_url, lùi về
+  // full_name/pl_logo_url) — bản PDF hợp đồng in đúng thương hiệu này.
+  const brand = brandFrom(profile);
   const studioHost = await getStudioHost(supabase, profile.id);
   const storyLocked = storyComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin";
 
@@ -170,7 +174,10 @@ export default async function ContractPage({
       galleries={(galleries ?? []) as { id: string; title: string; slug: string }[]}
       selectionAlbums={(selectionAlbums ?? []) as { id: string; title: string; slug: string }[]}
       initialMilestones={(milestones ?? []) as StudioEvent[]}
-      studioName={profile.full_name || "Studio"}
+      studioName={brand.name}
+      studioLogo={brand.logoUrl}
+      studioPhone={(profile.pl_phone as string | null) ?? null}
+      studioEmail={(profile.email as string | null) ?? null}
       conflictByPhone={conflictByPhone}
       initialTasks={(tasks ?? []) as ContractTask[]}
       initialExpenses={(expenses ?? []) as StudioExpense[]}

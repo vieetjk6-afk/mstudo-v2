@@ -49,6 +49,7 @@ async function handle(req: Request, params: { id: string }, ownerId: string) {
   const data: ContractDocData = {
     studio: {
       name: brand.name || ownerObj?.full_name || "Studio",
+      logo: brand.logoUrl,
       phone: ownerObj?.pl_phone,
       email: ownerObj?.email,
       bankHolder: ownerObj?.pl_bank_holder,

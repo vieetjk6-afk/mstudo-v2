@@ -7,6 +7,7 @@ import SignaturePad from "@/components/SignaturePad";
 import CalendarButtons from "@/components/CalendarButtons";
 import VietQRButton, { VietQR, qrUrl, type BankInfo } from "@/components/VietQR";
 import { thiepUrl } from "@/lib/hosts";
+import { contractPrintBody, contractPrintCss, type ContractPrintData } from "@/lib/contract-print";
 import { compressImage, checkImageFile } from "@/lib/image";
 import {
   contractTotal,
@@ -16,6 +17,7 @@ import {
   CONTRACT_STATUS_LABEL,
   CONTRACT_STATUS_TONE,
   PRODUCT_STATUS_LABEL,
+  PAYMENT_KIND_LABEL,
   type ShootType,
   type ContractStatus,
   type PaymentKind,
@@ -1149,8 +1151,13 @@ export default function ContractView({ token }: { token: string }) {
       <PrintDoc
         contract={contract}
         studioName={studioName}
+        studioLogo={studioLogo}
         studioPhone={studioPhone}
+        bank={bank}
         items={items}
+        products={products}
+        payments={payments}
+        plan={plan}
         milestones={milestones}
         itemsTotal={itemsTotal}
         surcharge={surcharge}
@@ -1164,11 +1171,24 @@ export default function ContractView({ token }: { token: string }) {
   );
 }
 
+/**
+ * Bản in chính thức (đen trắng, khổ A4) — ẩn trên màn hình, chỉ hiện khi in.
+ * Dựng bằng bộ dựng dùng chung src/lib/contract-print.ts nên bản khách in ra
+ * giống hệt bản studio xuất từ màn quản trị.
+ *
+ * Vẫn in trong CHÍNH trang này (không mở cửa sổ mới): khách hay bấm từ điện
+ * thoại, mà Safari iOS chặn/nuốt cửa sổ pop-up.
+ */
 function PrintDoc({
   contract,
   studioName,
+  studioLogo,
   studioPhone,
+  bank,
   items,
+  products,
+  payments,
+  plan,
   milestones,
   itemsTotal,
   surcharge,
@@ -1180,8 +1200,13 @@ function PrintDoc({
 }: {
   contract: Contract;
   studioName: string;
+  studioLogo: string | null;
   studioPhone: string | null;
+  bank: BankInfo;
   items: Item[];
+  products: ProductRow[];
+  payments: Payment[];
+  plan: PlanRow[];
   milestones: Milestone[];
   itemsTotal: number;
   surcharge: number;
@@ -1191,115 +1216,86 @@ function PrintDoc({
   balance: number;
   qr: string;
 }) {
+  // Có phụ phí / in ấn thì mới tách dòng "giá trị dịch vụ"; hợp đồng thường
+  // chỉ cần đúng ba dòng tổng — cộng, đã trả, còn lại.
+  const extra = surcharge > 0 || printing > 0;
+  const data: ContractPrintData = {
+    title: contract.title,
+    code: contract.code,
+    statusLabel: CONTRACT_STATUS_LABEL[contract.status],
+    studio: {
+      name: studioName,
+      logo: studioLogo,
+      phone: studioPhone,
+      bankHolder: bank.holder,
+      bankAccount: bank.account,
+      bankName: bank.name,
+    },
+    client: { name: contract.client_name, phone: contract.client_phone, email: contract.client_email },
+    facts: [
+      { label: "Gói dịch vụ", value: SHOOT_TYPE_LABEL[contract.shoot_type] },
+      { label: "Ngày chụp", value: [fmtDateLunar(contract.event_date), contract.event_time].filter(Boolean).join(" · ") },
+      { label: "Địa điểm", value: contract.location, wide: true },
+    ],
+    items: items.map((it) => ({
+      name: it.name,
+      qty: it.qty,
+      unitPrice: it.unit_price,
+      amount: it.qty * it.unit_price,
+    })),
+    products: products.map((p) => ({
+      name: [p.name, PRODUCT_STATUS_LABEL[p.status as keyof typeof PRODUCT_STATUS_LABEL]].filter(Boolean).join(" · "),
+      qty: p.qty || 1,
+      unitPrice: p.cost,
+      amount: (Number(p.cost) || 0) * (Number(p.qty) || 1),
+    })),
+    totals: [
+      ...(extra ? [{ label: "Giá trị dịch vụ", amount: itemsTotal }] : []),
+      ...(surcharge > 0 ? [{ label: "Chi phí phát sinh", amount: surcharge }] : []),
+      ...(printing > 0 ? [{ label: "Chi phí in ấn", amount: printing }] : []),
+      { label: "Tổng giá trị hợp đồng", amount: total, strong: true },
+      { label: "Đã thanh toán / cọc", amount: collected, minus: true },
+      { label: "Còn lại", amount: balance, bold: true },
+    ],
+    amountInWords: total,
+    plan: plan.map((p) => ({
+      label: p.label,
+      due: p.due_date ? fmtDate(p.due_date) : "",
+      paid: p.paid,
+      amount: p.amount,
+    })),
+    schedule: milestones.map((m) => ({
+      title: m.title,
+      when: [fmtDateLunar(m.event_date), m.event_time].filter(Boolean).join(" · "),
+    })),
+    payments: payments.map((p) => ({
+      date: fmtDate(p.paid_at),
+      kind: PAYMENT_KIND_LABEL[p.kind],
+      amount: p.amount,
+    })),
+    terms: contract.note,
+    signs: [
+      {
+        label: "Bên A · Studio",
+        name: contract.studio_signed_name || studioName,
+        image: contract.studio_signature,
+        signedAt: contract.studio_signed_at ? fmtDate(contract.studio_signed_at) : "",
+      },
+      {
+        label: "Bên B · Khách hàng",
+        name: contract.client_signed_name || contract.client_name,
+        image: contract.client_signature,
+        signedAt: contract.client_signed_at ? fmtDate(contract.client_signed_at) : "",
+      },
+    ],
+    qr,
+    footer: "Quét mã QR ở đầu trang để mở bản hợp đồng điện tử.",
+  };
+
   return (
-    <div className="print-doc" style={{ display: "none", padding: "32px", maxWidth: 720, margin: "0 auto", fontFamily: '"Times New Roman", Times, serif', color: "#111" }}>
-      <h1 style={{ textAlign: "center", fontSize: 22, fontWeight: 700, margin: 0 }}>HỢP ĐỒNG DỊCH VỤ</h1>
-      <p style={{ textAlign: "center", fontSize: 13, margin: "4px 0 24px" }}>
-        {contract.title}{contract.code ? ` · ${contract.code}` : ""}
-      </p>
-      {qr && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={qr} alt="Mã QR mở trang hợp đồng" style={{ position: "absolute", top: 24, right: 24, width: 92, height: 92 }} />
-      )}
-
-      <table style={{ width: "100%", fontSize: 13, marginBottom: 16, borderCollapse: "collapse" }}>
-        <tbody>
-          <tr><td style={{ padding: "3px 0", width: 130 }}>Bên A (Studio):</td><td><b>{studioName}</b>{studioPhone ? ` · ĐT: ${studioPhone}` : ""}</td></tr>
-          <tr><td style={{ padding: "3px 0" }}>Bên B (Khách hàng):</td><td><b>{contract.client_name || "—"}</b>{contract.client_phone ? ` · ĐT: ${contract.client_phone}` : ""}{contract.client_email ? ` · ${contract.client_email}` : ""}</td></tr>
-          <tr><td style={{ padding: "3px 0" }}>Gói dịch vụ:</td><td>{SHOOT_TYPE_LABEL[contract.shoot_type]}</td></tr>
-          <tr><td style={{ padding: "3px 0" }}>Ngày chính:</td><td>{fmtDateLunar(contract.event_date) || "—"}{contract.event_time ? ` · ${contract.event_time}` : ""}</td></tr>
-          <tr><td style={{ padding: "3px 0" }}>Địa điểm:</td><td>{contract.location || "—"}</td></tr>
-        </tbody>
-      </table>
-
-      {milestones.length > 0 && (
-        <>
-          <h2 style={{ fontSize: 15, margin: "16px 0 8px" }}>Lịch trình (các buổi phụ)</h2>
-          <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse", marginBottom: 8 }}>
-            <tbody>
-              {milestones.map((m) => (
-                <tr key={m.id} style={{ borderBottom: "1px solid #eee" }}>
-                  <td style={{ padding: "4px 0" }}>{m.title}</td>
-                  <td style={{ padding: "4px 0", textAlign: "right", width: 180 }}>{fmtDateLunar(m.event_date)}{m.event_time ? ` · ${m.event_time}` : ""}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-
-      <h2 style={{ fontSize: 15, margin: "16px 0 8px" }}>1. Hạng mục dịch vụ</h2>
-      <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
-        <thead>
-          <tr style={{ borderBottom: "1px solid #333" }}>
-            <th style={{ textAlign: "left", padding: "5px 0" }}>Hạng mục</th>
-            <th style={{ textAlign: "center", padding: "5px 0", width: 50 }}>SL</th>
-            <th style={{ textAlign: "right", padding: "5px 0", width: 110 }}>Đơn giá</th>
-            <th style={{ textAlign: "right", padding: "5px 0", width: 120 }}>Thành tiền</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((it) => (
-            <tr key={it.id} style={{ borderBottom: "1px solid #ddd" }}>
-              <td style={{ padding: "5px 0" }}>{it.name}</td>
-              <td style={{ textAlign: "center" }}>{it.qty}</td>
-              <td style={{ textAlign: "right" }}>{vnd(it.unit_price)}</td>
-              <td style={{ textAlign: "right" }}>{vnd(it.qty * it.unit_price)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <table style={{ width: "100%", fontSize: 13, marginTop: 12 }}>
-        <tbody>
-          <tr><td style={{ textAlign: "right", padding: "2px 0" }}>Giá trị dịch vụ:</td><td style={{ textAlign: "right", width: 140 }}>{vnd(itemsTotal)}</td></tr>
-          {surcharge > 0 && <tr><td style={{ textAlign: "right", padding: "2px 0" }}>Chi phí phát sinh:</td><td style={{ textAlign: "right" }}>{vnd(surcharge)}</td></tr>}
-          {printing > 0 && <tr><td style={{ textAlign: "right", padding: "2px 0" }}>Chi phí in ấn:</td><td style={{ textAlign: "right" }}>{vnd(printing)}</td></tr>}
-          <tr><td style={{ textAlign: "right", padding: "4px 0", borderTop: "1px solid #333" }}>Tổng giá trị hợp đồng:</td><td style={{ textAlign: "right", fontWeight: 700, borderTop: "1px solid #333" }}>{vnd(total)}</td></tr>
-          <tr><td style={{ textAlign: "right", padding: "2px 0" }}>Đã thanh toán / cọc:</td><td style={{ textAlign: "right" }}>− {vnd(collected)}</td></tr>
-          <tr><td style={{ textAlign: "right", padding: "2px 0" }}>Còn lại:</td><td style={{ textAlign: "right", fontWeight: 700 }}>{vnd(balance)}</td></tr>
-        </tbody>
-      </table>
-
-      {contract.note && (
-        <>
-          <h2 style={{ fontSize: 15, margin: "16px 0 8px" }}>2. Điều khoản / Ghi chú</h2>
-          <p style={{ fontSize: 13, whiteSpace: "pre-wrap", margin: 0 }}>{contract.note}</p>
-        </>
-      )}
-
-      <table style={{ width: "100%", marginTop: 48, fontSize: 13, textAlign: "center" }}>
-        <tbody>
-          <tr>
-            <td style={{ width: "50%" }}>
-              <b>BÊN A (STUDIO)</b>
-              <div style={{ height: 70, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {contract.studio_signature && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={contract.studio_signature} alt="Chữ ký của studio" style={{ height: 64 }} />
-                )}
-              </div>
-              <div>{contract.studio_signed_name || studioName}</div>
-              {contract.studio_signed_at && (
-                <div style={{ fontSize: 11, color: "#555" }}>Ký ngày {fmtDate(contract.studio_signed_at)}</div>
-              )}
-            </td>
-            <td style={{ width: "50%" }}>
-              <b>BÊN B (KHÁCH HÀNG)</b>
-              <div style={{ height: 70, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                {contract.client_signature && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={contract.client_signature} alt="Chữ ký của khách hàng" style={{ height: 64 }} />
-                )}
-              </div>
-              <div>{contract.client_signed_name || contract.client_name || ""}</div>
-              {contract.client_signed_at && (
-                <div style={{ fontSize: 11, color: "#555" }}>Ký ngày {fmtDate(contract.client_signed_at)}</div>
-              )}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <div className="print-doc" style={{ display: "none" }}>
+      <style dangerouslySetInnerHTML={{ __html: contractPrintCss(".print-doc") }} />
+      <div dangerouslySetInnerHTML={{ __html: contractPrintBody(data) }} />
     </div>
   );
 }
