@@ -1357,7 +1357,12 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
         </div>
       )}
 
-      <div className="grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+      {/* grid-cols-1: dưới lg lưới rơi về một cột tự suy ra, dùng track `auto`
+          có sàn là min-content của thẻ con — thẻ nào không đặt min-width:0 sẽ
+          không chịu co và kéo cả lưới rộng hơn màn hình (rồi bị
+          `overflow-x-clip` của khung studio cắt). minmax(0,1fr) cho cả hai cột
+          đều co được, giống hệt bố cục hai cột từ lg trở lên. */}
+      <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
         <div className="min-w-0">
           {/* Thanh tab — đầu thẻ nội dung của bản thiết kế: 13px, tab đang mở
               đậm 700 màu nhấn và có gạch chân 2px. Cuộn ngang trên màn hẹp

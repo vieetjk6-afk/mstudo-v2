@@ -626,7 +626,11 @@ export default function CalendarView({
           </Panel>
 
           {/* ── Ngày đang chọn + nhắc lịch ────────────────────────────── */}
-          <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+          {/* grid-cols-1: dưới lg lưới rơi về một cột tự suy ra, dùng track
+              `auto` có sàn là min-content của thẻ con — thẻ nào không đặt
+              min-width:0 sẽ không chịu co và kéo cả lưới rộng hơn màn hình.
+              minmax(0,1fr) giữ cho cột luôn co được như bố cục hai cột. */}
+          <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
             {selected ? (
               <Panel className="px-5 py-4">
                 <h2 className="text-[14px] font-bold">{fmtDow(selected)} · {fmtDate(selected)}</h2>

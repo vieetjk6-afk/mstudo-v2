@@ -111,7 +111,13 @@ export default function ServicesManager({
           </div>
         </Panel>
       ) : (
-        <div className="grid gap-3.5 lg:grid-cols-[260px_1fr]">
+        /* grid-cols-1 (= repeat(1, minmax(0,1fr))): dưới lg lưới rơi về một
+           cột, mà cột tự suy ra dùng track `auto` — sàn của nó là min-content
+           của thẻ con. Tên dịch vụ trong danh sách dùng `truncate`
+           (white-space: nowrap) nên min-content bằng nguyên tên; tên dài kéo cả
+           lưới rộng gấp đôi màn điện thoại rồi bị `overflow-x-clip` cắt. Có
+           minmax(0,…) thì cột chịu co, chữ mới cắt đúng bằng `truncate`. */
+        <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-[260px_1fr]">
           {/* List */}
           <div className="space-y-1.5">
             {services.map((s) => (
