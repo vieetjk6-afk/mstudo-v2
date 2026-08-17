@@ -409,7 +409,19 @@ async function createAlbumFromFolder(
       client_phone: opts.clientPhone ?? null,
       event_date: opts.eventDate ?? null,
       download_enabled: opts.phase === "delivery",
-      watermark_enabled: opts.phase === "selection",
+      // Đóng dấu chìm là TỰ CHỌN — studio tự bật trong cài đặt album.
+      //
+      // Trước đây album chọn ảnh tự bật watermark. Hệ quả về băng thông rất
+      // lớn: ảnh CÓ dấu bắt buộc phải chảy qua máy chủ (canvas cần đọc pixel,
+      // mà Google Drive không gửi header CORS nên không chuyển hướng thẳng
+      // sang Google được), còn ảnh KHÔNG dấu thì 302 sang Drive — máy chủ tốn
+      // đúng 0 byte. Vercel báo Fast Origin Transfer 11,54 GB / 10 GB.
+      //
+      // Hàm này chạy TỰ ĐỘNG mỗi ngày: cron /api/cron/reminders →
+      // autoAdvanceContracts() → hợp đồng sang "đang thực hiện" → tạo album
+      // chọn ảnh. Nên chỉ đổi default trong DB là KHÔNG đủ — dòng này ghi đè
+      // lên default. Xem supabase/migrations/watermark_opt_in.sql.
+      watermark_enabled: false,
     })
     .select("id")
     .single();
