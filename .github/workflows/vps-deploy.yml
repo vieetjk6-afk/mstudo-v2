@@ -1,0 +1,142 @@
+name: Deploy to VPS
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Build trên GitHub Actions rồi đẩy bản build sang VPS.
+#
+# VÌ SAO BUILD Ở ĐÂY MÀ KHÔNG BUILD TRÊN VPS:
+# `next build` cho dự án này (480 file) cần khoảng 2–4GB RAM. VPS 2GB sẽ bị
+# kernel giết giữa chừng (OOM), và nếu app đang chạy thì nó bị giết luôn — tức
+# là mỗi lần deploy có nguy cơ sập trang. Máy ảo của GitHub Actions có 16GB và
+# miễn phí, nên để nó build rồi chỉ gửi kết quả (~150MB) sang VPS. VPS chỉ việc
+# đổi symlink và reload: nhẹ, nhanh, không bao giờ OOM.
+#
+# CẦN KHAI BÁO TRƯỚC (Settings → Secrets and variables → Actions):
+#
+#   Secrets (bí mật, không hiện lại được):
+#     VPS_HOST                     IP hoặc tên miền VPS
+#     VPS_SSH_KEY                  khoá riêng SSH (nội dung file id_ed25519)
+#     NEXT_PUBLIC_SUPABASE_ANON_KEY
+#
+#   Variables (không bí mật, xem lại được — tab "Variables"):
+#     VPS_USER                     mặc định "mstudo" nếu bỏ trống
+#     NEXT_PUBLIC_SUPABASE_URL
+#     NEXT_PUBLIC_MAIN_HOST        vd mstudo.com
+#     NEXT_PUBLIC_IMG_HOST         vd img.mstudo.com
+#     NEXT_PUBLIC_ADMIN_HOST       vd admin.mstudo.com
+#     NEXT_PUBLIC_THIEP_HOST       vd thiep.mstudo.com
+#     NEXT_PUBLIC_APP_HOST         vd album.mstudo.com
+#     NEXT_PUBLIC_STUDIO_HOST
+#     NEXT_PUBLIC_GOOGLE_CLIENT_ID
+#     NEXT_PUBLIC_GOOGLE_API_KEY
+#     NEXT_PUBLIC_GOOGLE_APP_ID
+#     NEXT_PUBLIC_TURNSTILE_SITE_KEY
+#     NEXT_PUBLIC_VAPID_PUBLIC_KEY
+#     NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL
+#     NEXT_PUBLIC_DESKTOP_RELEASES_REPO
+#
+# ⚠️ Chỉ các biến NEXT_PUBLIC_* mới cần ở đây. Chúng bị "nướng" thẳng vào file
+#    JavaScript gửi xuống trình duyệt lúc build, nên phải có mặt tại thời điểm
+#    build. Mọi biến bí mật khác (SUPABASE_SERVICE_ROLE_KEY, GOOGLE_CLIENT_SECRET,
+#    CRON_SECRET, RESEND_API_KEY…) CHỈ nằm trong /var/www/mstudo/shared/.env
+#    trên VPS — tuyệt đối không đưa vào GitHub, không cần cho lúc build.
+# ─────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Đẩy nhiều commit liên tiếp thì chỉ deploy commit mới nhất. Không huỷ giữa
+# chừng job đang chạy — huỷ lúc đang rsync sẽ để lại release dở dang trên VPS.
+concurrency:
+  group: vps-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cài phụ thuộc
+        run: npm ci
+
+      - name: Build (standalone)
+        env:
+          BUILD_STANDALONE: "1"
+          NODE_OPTIONS: --max-old-space-size=6144
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_MAIN_HOST: ${{ vars.NEXT_PUBLIC_MAIN_HOST }}
+          NEXT_PUBLIC_APP_HOST: ${{ vars.NEXT_PUBLIC_APP_HOST }}
+          NEXT_PUBLIC_IMG_HOST: ${{ vars.NEXT_PUBLIC_IMG_HOST }}
+          NEXT_PUBLIC_ADMIN_HOST: ${{ vars.NEXT_PUBLIC_ADMIN_HOST }}
+          NEXT_PUBLIC_THIEP_HOST: ${{ vars.NEXT_PUBLIC_THIEP_HOST }}
+          NEXT_PUBLIC_STUDIO_HOST: ${{ vars.NEXT_PUBLIC_STUDIO_HOST }}
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ vars.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+          NEXT_PUBLIC_GOOGLE_API_KEY: ${{ vars.NEXT_PUBLIC_GOOGLE_API_KEY }}
+          NEXT_PUBLIC_GOOGLE_APP_ID: ${{ vars.NEXT_PUBLIC_GOOGLE_APP_ID }}
+          NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${{ vars.NEXT_PUBLIC_TURNSTILE_SITE_KEY }}
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${{ vars.NEXT_PUBLIC_VAPID_PUBLIC_KEY }}
+          NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL: ${{ vars.NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL }}
+          NEXT_PUBLIC_DESKTOP_RELEASES_REPO: ${{ vars.NEXT_PUBLIC_DESKTOP_RELEASES_REPO }}
+        run: npm run build
+
+      - name: Gói bản build
+        # Next chỉ đặt server.js + node_modules tối thiểu vào .next/standalone.
+        # Ảnh tĩnh (.next/static) và thư mục public/ phải chép tay vào — đây là
+        # bước hay bị quên nhất, quên là trang mất sạch CSS và ảnh.
+        run: |
+          set -e
+          cp -r public .next/standalone/public
+          cp -r .next/static .next/standalone/.next/static
+          cp -r deploy .next/standalone/deploy
+          chmod +x .next/standalone/deploy/*.sh
+          echo "Kích thước gói: $(du -sh .next/standalone | cut -f1)"
+          test -f .next/standalone/server.js
+
+      - name: Chuẩn bị SSH
+        env:
+          KEY: ${{ secrets.VPS_SSH_KEY }}
+          HOST: ${{ secrets.VPS_HOST }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          # Ghim khoá máy chủ để tránh bị chen ngang (man-in-the-middle).
+          ssh-keyscan -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Đẩy lên VPS và kích hoạt
+        env:
+          HOST: ${{ secrets.VPS_HOST }}
+          USER: ${{ vars.VPS_USER || 'mstudo' }}
+        run: |
+          set -e
+          RELEASE="$(date -u +%Y%m%d-%H%M%S)-${GITHUB_SHA::7}"
+          echo "Release: $RELEASE"
+
+          SSH="ssh -i ~/.ssh/id_deploy -o BatchMode=yes"
+
+          # Gửi vào thư mục release mới. --delete để release sạch hoàn toàn,
+          # không lẫn file thừa của lần trước.
+          rsync -az --delete \
+            -e "$SSH" \
+            .next/standalone/ \
+            "$USER@$HOST:/var/www/mstudo/releases/$RELEASE/"
+
+          # Đổi symlink, reload, kiểm tra sức khoẻ, tự quay lui nếu hỏng.
+          $SSH "$USER@$HOST" \
+            "/var/www/mstudo/releases/$RELEASE/deploy/activate.sh $RELEASE"
+
+      - name: Xoá khoá SSH
+        if: always()
+        run: rm -f ~/.ssh/id_deploy

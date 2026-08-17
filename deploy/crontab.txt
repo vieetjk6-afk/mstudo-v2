@@ -1,0 +1,60 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Cron cho mstudo trên VPS — thay cho mục "crons" trong vercel.json.
+#
+# Cài đặt (chạy trên VPS, bằng user mstudo):
+#     crontab /var/www/mstudo/current/deploy/crontab.txt
+# Xem lại đã cài chưa:
+#     crontab -l
+#
+# ⚠️ SAU KHI CHUYỂN SANG VPS, PHẢI XOÁ vercel.json HOẶC TẮT PROJECT VERCEL.
+#    Nếu cả hai cùng chạy, khách nhận HAI email nhắc và HAI tin Zalo mỗi ngày,
+#    và job dọn ảnh chạy hai lần. Đây là lỗi hay gặp nhất khi chuyển nhà.
+#
+# ⚠️ GIỜ Ở ĐÂY LÀ GIỜ VIỆT NAM (setup-vps.sh đã đặt múi giờ Asia/Ho_Chi_Minh),
+#    còn vercel.json ghi theo giờ UTC. Các mốc dưới đây đã quy đổi sẵn (+7).
+# ─────────────────────────────────────────────────────────────────────────────
+
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# cron-run.sh tự đọc CRON_SECRET từ /var/www/mstudo/shared/.env, nên ở đây
+# không cần khai báo biến môi trường nào.
+
+# ── Các job của ứng dụng ─────────────────────────────────────────────────────
+# Cột giờ: phút giờ ngày tháng thứ
+
+# 07:00 hằng ngày — email tổng hợp cho chủ studio: buổi chụp ngày mai, đợt thanh
+# toán tới hạn/quá hạn, giao hàng trễ, album sắp tới hạn dọn ảnh gốc.
+# (vercel.json: 0 0 * * * UTC)
+0 7 * * * /var/www/mstudo/current/deploy/cron-run.sh reminders
+
+# 08:30 hằng ngày — xoá ảnh chứng từ chuyển khoản đã quá hạn lưu.
+# (vercel.json: 30 1 * * * UTC)
+30 8 * * * /var/www/mstudo/current/deploy/cron-run.sh cleanup-proofs
+
+# 10:00 hằng ngày — dọn cache ảnh Drive quá hạn / vượt dung lượng.
+# (vercel.json: 0 3 * * * UTC)
+0 10 * * * /var/www/mstudo/current/deploy/cron-run.sh cleanup-drive-cache
+
+# 11:00 hằng ngày — gửi tin nhắn Zalo theo lịch.
+# (vercel.json: 0 4 * * * UTC)
+0 11 * * * /var/www/mstudo/current/deploy/cron-run.sh zalo
+
+# 09:00 Chủ nhật hằng tuần — xoá ảnh cưới đã hết hạn lưu trữ.
+# (vercel.json: 0 2 * * 0 UTC)
+0 9 * * 0 /var/www/mstudo/current/deploy/cron-run.sh cleanup-wedding-photos
+
+# ── Việc bảo trì máy chủ ─────────────────────────────────────────────────────
+
+# 03:00 hằng ngày — cắt bớt log pm2 để không đầy ổ (VPS ổ nhỏ rất dễ đầy log).
+0 3 * * * /usr/bin/pm2 flush >/dev/null 2>&1
+
+# 04:00 Chủ nhật — dọn gói apt cũ.
+0 4 * * 0 /usr/bin/apt-get clean >/dev/null 2>&1
+
+# ── Sao lưu cơ sở dữ liệu ────────────────────────────────────────────────────
+# CHỈ dùng khi đã tự dựng Supabase trên VPS (giai đoạn 2).
+# Còn dùng Supabase cloud thì họ tự sao lưu, bỏ qua dòng này.
+# Bỏ dấu # ở đầu để bật:
+#
+# 30 2 * * * /var/www/mstudo/current/deploy/backup-db.sh >> /home/mstudo/logs/backup.log 2>&1

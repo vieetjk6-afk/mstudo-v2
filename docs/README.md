@@ -1,7 +1,12 @@
 # Mở file nào?
 
-Trong thư mục này có 9 file, nhưng **lúc chuyển đổi bạn chỉ cần 3 file**. Bảng
-này để bạn khỏi phải đoán.
+Bảng này để bạn khỏi phải đoán nên mở file nào.
+
+## Đang chuyển từ Vercel sang VPS
+
+Chỉ cần **một** file: [`chuyen-sang-vps.md`](./chuyen-sang-vps.md) — hướng dẫn
+từng bước cho người chưa từng dùng VPS. Các file cấu hình đi kèm nằm ở
+[`../deploy/`](../deploy/README.md).
 
 ## Đang chuyển mstudo sang bản 2.0
 
@@ -19,6 +24,7 @@ Ba file trên là đủ. Không cần mở file nào khác.
 
 | File | Nội dung |
 |---|---|
+| [`chuyen-sang-vps.md`](./chuyen-sang-vps.md) | Rời Vercel, tự chạy trên VPS: dựng máy, HTTPS, cron, deploy tự động, sao lưu |
 | [`thiet-lap-moi.md`](./thiet-lap-moi.md) | Dựng Supabase + Vercel từ số 0 (khi làm bản thử mới, không phải lúc chuyển đổi) |
 | [`supabase-usage.md`](./supabase-usage.md) | Vì sao vượt hạn mức Supabase và cách kéo xuống |
 | [`desktop-client-spec.md`](./desktop-client-spec.md) | Đặc tả app desktop cho gói Studio |

@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // Bản build "standalone" gói sẵn một server.js tối giản cùng ĐÚNG những gói
+  // node_modules thực sự dùng tới (~150MB thay vì ~800MB). Dùng khi tự chạy
+  // trên VPS: build ở GitHub Actions rồi rsync sang máy chủ, không cần cài
+  // node_modules trên VPS — quan trọng với VPS RAM thấp vì `npm ci` + `next
+  // build` là hai thứ ngốn RAM nhất.
+  //
+  // Chỉ bật khi BUILD_STANDALONE=1 để build trên Vercel không đổi hành vi
+  // (giữ nguyên đường lùi nếu cần quay lại Vercel).
+  ...(process.env.BUILD_STANDALONE === "1" ? { output: "standalone" } : {}),
   experimental: {
     // Tree-shake per-icon imports so navigating studio pages ships less JS.
     optimizePackageImports: ["lucide-react"],

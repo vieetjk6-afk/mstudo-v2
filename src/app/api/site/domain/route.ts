@@ -1,12 +1,46 @@
 import { NextResponse } from "next/server";
+import { resolve4, resolveCname } from "node:dns/promises";
 import { requireStudio } from "@/lib/auth-guards";
 import { createClient } from "@/lib/supabase/server";
+import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const TOKEN = process.env.VERCEL_TOKEN;
 const PROJECT = process.env.VERCEL_PROJECT_ID;
 const TEAM = process.env.VERCEL_TEAM_ID;
+
+// ── Chế độ VPS ──────────────────────────────────────────────────────────────
+// Trên Vercel, tên miền riêng của studio được đăng ký qua Vercel API và Vercel
+// lo chứng chỉ. Trên VPS không có API đó: studio trỏ bản ghi A về IP máy chủ,
+// còn Caddy tự xin chứng chỉ (on-demand TLS, xem deploy/Caddyfile).
+// Việc "verify" vì thế đổi từ "hỏi Vercel" sang "tra DNS xem đã trỏ đúng chưa".
+//
+// Bật bằng cách đặt SERVER_IP=<IP công khai của VPS> trong .env.
+const SERVER_IP = process.env.SERVER_IP?.trim();
+const IS_VPS = !!SERVER_IP;
+
+/**
+ * Tên miền đã trỏ về VPS này chưa? Chấp nhận cả hai kiểu khai báo DNS:
+ *   - bản ghi A trỏ thẳng vào IP máy chủ (cách khuyến nghị)
+ *   - bản ghi CNAME trỏ về host chính (mstudo.com), rồi host đó về IP máy chủ
+ */
+async function pointsHere(domain: string): Promise<boolean> {
+  try {
+    const ips = await resolve4(domain);
+    if (ips.includes(SERVER_IP!)) return true;
+  } catch {
+    /* không có bản ghi A — thử CNAME bên dưới */
+  }
+  if (!MAIN_HOST) return false;
+  try {
+    const cnames = await resolveCname(domain);
+    return cnames.some((c) => c.replace(/\.$/, "").toLowerCase() === MAIN_HOST.toLowerCase());
+  } catch {
+    return false;
+  }
+}
 
 function vercelUrl(path: string) {
   const q = TEAM ? `${path.includes("?") ? "&" : "?"}teamId=${TEAM}` : "";
@@ -41,23 +75,50 @@ export async function POST(req: Request) {
   const { data: site } = await db.from("sites").select("id, custom_domain").eq("owner_id", profile.id).maybeSingle();
   if (!site) return NextResponse.json({ error: "no_site", hint: "Hãy tạo website trước." }, { status: 400 });
 
-  const configured = !!(TOKEN && PROJECT);
-  // Generic DNS guidance (Vercel's standard targets) shown to the studio.
-  const dns = [
-    { type: "A", name: "@ (tên miền gốc)", value: "76.76.21.21" },
-    { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
-  ];
+  // Trên VPS coi như luôn "configured": ta tự kiểm tra được bằng DNS, không
+  // cần API bên thứ ba nào.
+  const configured = IS_VPS || !!(TOKEN && PROJECT);
+  // Hướng dẫn DNS hiển thị cho studio — khác nhau giữa VPS và Vercel.
+  const dns = IS_VPS
+    ? [
+        { type: "A", name: "@ (tên miền gốc)", value: SERVER_IP! },
+        { type: "A", name: "www", value: SERVER_IP! },
+      ]
+    : [
+        { type: "A", name: "@ (tên miền gốc)", value: "76.76.21.21" },
+        { type: "CNAME", name: "www", value: "cname.vercel-dns.com" },
+      ];
 
   if (body.action === "remove") {
     const prev = site.custom_domain as string | null;
     await db.from("sites").update({ custom_domain: null, custom_domain_verified: false }).eq("id", site.id);
-    if (configured && prev) await vercel(`/v9/projects/${PROJECT}/domains/${prev}`, { method: "DELETE" }).catch(() => {});
+    // Trên VPS không phải gỡ gì cả — Caddy sẽ tự thôi phục vụ tên miền này ngay
+    // lần sau /api/tls/allow được hỏi (không còn trong DB → từ chối).
+    if (!IS_VPS && TOKEN && PROJECT && prev) {
+      await vercel(`/v9/projects/${PROJECT}/domains/${prev}`, { method: "DELETE" }).catch(() => {});
+    }
     return NextResponse.json({ ok: true, custom_domain: null, custom_domain_verified: false });
   }
 
   if (body.action === "verify") {
     const domain = site.custom_domain as string | null;
     if (!domain) return NextResponse.json({ error: "no_domain" }, { status: 400 });
+
+    if (IS_VPS) {
+      // Trỏ DNS đúng là đủ: Caddy tự xin chứng chỉ ở lần truy cập đầu tiên.
+      const verified = await pointsHere(domain);
+      if (verified) await db.from("sites").update({ custom_domain_verified: true }).eq("id", site.id);
+      return NextResponse.json({
+        verified,
+        configured: true,
+        verification: [],
+        dns,
+        hint: verified
+          ? "Tên miền đã trỏ đúng. Chứng chỉ HTTPS được cấp tự động ở lần truy cập đầu tiên (có thể chậm vài giây)."
+          : "DNS chưa trỏ về máy chủ. Thêm bản ghi A như bảng bên dưới rồi chờ 5–30 phút và bấm kiểm tra lại.",
+      });
+    }
+
     if (!configured) {
       return NextResponse.json({ verified: false, configured: false, dns, hint: "Máy chủ chưa cấu hình Vercel API — thêm domain thủ công trong Vercel rồi trang sẽ tự chạy." });
     }
@@ -76,7 +137,12 @@ export async function POST(req: Request) {
 
   let verified = false;
   let verification: unknown[] = [];
-  if (configured) {
+  if (IS_VPS) {
+    // Không phải đăng ký ở đâu cả: lưu vào DB là Caddy đã chấp nhận cấp chứng
+    // chỉ cho tên miền này (xem /api/tls/allow). Chỉ cần đợi DNS trỏ đúng.
+    verified = await pointsHere(domain);
+    if (verified) await db.from("sites").update({ custom_domain_verified: true }).eq("id", site.id);
+  } else if (TOKEN && PROJECT) {
     const add = await vercel(`/v10/projects/${PROJECT}/domains`, { method: "POST", body: JSON.stringify({ name: domain }) });
     // Already added / just added — read verification state.
     verified = !!add.data?.verified;

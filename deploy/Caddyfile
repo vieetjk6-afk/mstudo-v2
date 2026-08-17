@@ -1,0 +1,120 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Caddy — máy chủ web đứng trước Next.js trên VPS.
+#
+# Vì sao Caddy mà không phải Nginx: Caddy TỰ xin và TỰ gia hạn chứng chỉ HTTPS
+# cho mọi tên miền, kể cả tên miền riêng của khách mà ta không biết trước
+# (on-demand TLS). Với Nginx phải chạy certbot tay cho từng tên miền — trong
+# khi mstudo cho phép mỗi studio gắn domain riêng thì việc đó là bất khả thi.
+#
+# Chép file này lên VPS tại /etc/caddy/Caddyfile rồi:
+#     sudo caddy validate --config /etc/caddy/Caddyfile
+#     sudo systemctl reload caddy
+#
+# Trước khi dùng, sửa 2 chỗ:
+#   1. email bên dưới  → email thật của bạn (Let's Encrypt gửi cảnh báo hết hạn)
+#   2. mstudo.com      → tên miền thật, nếu khác
+# ─────────────────────────────────────────────────────────────────────────────
+
+{
+	# Let's Encrypt gửi email khi chứng chỉ sắp hết hạn mà gia hạn thất bại.
+	email doi-email-cua-ban@mstudo.com
+
+	# ── On-demand TLS ────────────────────────────────────────────────────────
+	# Cho phép Caddy xin chứng chỉ NGAY LÚC có người truy cập một tên miền lạ.
+	# Dùng cho: subdomain của studio (abc.mstudo.com) và tên miền riêng của
+	# studio (studio-cua-khach.com) — hai loại này nằm trong DB, không thể liệt
+	# kê sẵn ở đây.
+	#
+	# `ask` là chốt chặn BẮT BUỘC: trước khi xin chứng chỉ, Caddy hỏi ứng dụng
+	# "tên miền này có thật trong DB không?". Không có `ask` thì bất kỳ ai trỏ
+	# domain rác về IP của bạn cũng làm Caddy xin chứng chỉ, và Let's Encrypt sẽ
+	# khoá rate-limit toàn bộ máy chủ trong 1 tuần.
+	#
+	# Nếu bạn đặt TLS_ASK_SECRET trong .env thì phải thêm ?token=<chuỗi đó> vào
+	# URL dưới đây (Caddy tự nối thêm &domain=...). Không đặt thì để nguyên.
+	on_demand_tls {
+		ask http://127.0.0.1:3000/api/tls/allow
+		# Tối đa 10 chứng chỉ mới mỗi phút, 200 mỗi ngày — thấp hơn hạn mức
+		# Let's Encrypt (50 domain mới/tuần cho cùng registered domain).
+		interval 1m
+		burst 10
+	}
+
+	# Log gọn, xoay vòng tự động.
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 20mb
+			roll_keep 5
+		}
+		format json
+		level ERROR
+	}
+}
+
+# ── Snippet dùng chung ───────────────────────────────────────────────────────
+# Mọi host đều chuyển tiếp về cùng một tiến trình Next.js ở cổng 3000.
+# middleware.ts của app tự phân luồng dựa trên header Host.
+(app) {
+	encode zstd gzip
+
+	reverse_proxy 127.0.0.1:3000 {
+		# Next.js cần biết host và IP THẬT của khách:
+		#   - middleware.ts đọc Host để phân luồng subdomain
+		#   - cookieDomainForHost() đọc Host để đặt đúng cookie domain
+		#   - clientIp() đọc X-Forwarded-For để rate-limit
+		# Caddy tự đặt X-Forwarded-For / -Proto / -Host, khai báo lại cho rõ ý.
+		header_up Host {host}
+		header_up X-Real-IP {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# Upload ảnh cưới / xuất file có thể chạy lâu. Vercel chặn ở 4.5MB và
+		# 60s; trên VPS ta nới hẳn ra — đây là một trong những cái LỢI của VPS.
+		transport http {
+			read_timeout 900s
+			write_timeout 900s
+			dial_timeout 10s
+		}
+	}
+
+	# Không giới hạn cỡ body ở tầng Caddy (mặc định Caddy đã không giới hạn).
+	# Giới hạn thật nằm trong code route upload.
+
+	# Trang lỗi khi Next.js chết hẳn (đang deploy, hoặc bị OOM kill).
+	handle_errors {
+		@down expression {err.status_code} in [502, 503, 504]
+		respond @down "May chu dang khoi dong lai, vui long thu lai sau 30 giay." 503
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. CÁC HOST HỆ THỐNG — biết trước, Caddy xin chứng chỉ ngay lúc khởi động.
+#    Khớp với các biến NEXT_PUBLIC_*_HOST trong .env.
+# ─────────────────────────────────────────────────────────────────────────────
+mstudo.com,
+www.mstudo.com,
+img.mstudo.com,
+admin.mstudo.com,
+thiep.mstudo.com,
+album.mstudo.com {
+	import app
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. MỌI TÊN MIỀN KHÁC — subdomain của studio (abc.mstudo.com) và tên miền
+#    riêng của studio (studio-cua-khach.com).
+#
+#    Caddy chỉ xin chứng chỉ sau khi /api/tls/allow trả về 200. Endpoint đó tra
+#    bảng `sites` trong DB, nên domain rác bị từ chối và không tốn hạn mức.
+# ─────────────────────────────────────────────────────────────────────────────
+:443 {
+	tls {
+		on_demand
+	}
+	import app
+}
+
+# HTTP → HTTPS cho mọi tên miền chưa khớp ở trên. Caddy tự làm việc này cho các
+# host đã khai báo; block này lo nốt phần on-demand.
+:80 {
+	redir https://{host}{uri} permanent
+}
