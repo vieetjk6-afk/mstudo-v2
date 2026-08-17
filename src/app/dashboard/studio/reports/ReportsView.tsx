@@ -2,12 +2,20 @@
 
 import { useMemo, useState } from "react";
 import DateInput from "@/components/DateInput";
-import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download, Receipt, Target, PieChart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download, FileSpreadsheet, Receipt, Target, PieChart } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/MoneyInput";
 import { Panel, PanelHead, EmptyState, StatCard } from "@/components/studio/ui";
 import { vnd, vndShort, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, type StudioExpense, type PaymentKind } from "@/lib/types";
 import { fmtDayMonth, todayVN } from "@/lib/date";
+import {
+  exportFinance,
+  downloadCsv,
+  financeCsvRows,
+  type ExportStudio,
+  type FinanceExport,
+  type MoneyRow,
+} from "@/lib/studio-export";
 
 export type PaymentRow = {
   id: string;
@@ -36,6 +44,7 @@ const TABS: [string, string][] = [
 
 export default function ReportsView({
   ownerId,
+  studio,
   payments,
   salaries,
   initialExpenses,
@@ -43,6 +52,8 @@ export default function ReportsView({
   sourceStats,
 }: {
   ownerId: string;
+  /** Thông tin studio in ở đầu file Excel/CSV xuất ra. */
+  studio: ExportStudio;
   payments: PaymentRow[];
   salaries: SalaryRow[];
   initialExpenses: StudioExpense[];
@@ -58,11 +69,21 @@ export default function ReportsView({
   const [targetInput, setTargetInput] = useState(initialTarget || 0);
   const [tab, setTab] = useState<string>("in");
   const [showAdd, setShowAdd] = useState(false);
+  // Tổng kết theo THÁNG hay theo NĂM. Mọi con số trên trang (4 thẻ, hai danh
+  // sách, file xuất ra) đều đọc từ một tiền tố ngày duy nhất bên dưới, nên
+  // chuyển nút là cả trang đổi theo — không có chỗ nào còn tính riêng.
+  const [period, setPeriod] = useState<"month" | "year">("month");
 
   const [exp, setExp] = useState({ title: "", amount: 0, category: "equipment", spent_at: todayVN(), note: "" });
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  const ym = `${cursor.year}-${String(cursor.month + 1).padStart(2, "0")}`;
+  const mm = String(cursor.month + 1).padStart(2, "0");
+  // Ngày trong DB là "YYYY-MM-DD" nên so tiền tố chuỗi là đủ: "2026" lọc cả
+  // năm, "2026-08" lọc một tháng.
+  const ym = period === "year" ? `${cursor.year}` : `${cursor.year}-${mm}`;
+  const periodLabel = period === "year" ? `Năm ${cursor.year}` : `${MONTHS[cursor.month]} ${cursor.year}`;
+  const periodWord = period === "year" ? "năm" : "tháng";
 
   const monthPayments = useMemo(() => payments.filter((p) => (p.paid_at || "").startsWith(ym)), [payments, ym]);
   const monthSalaries = useMemo(() => salaries.filter((s) => (s.paid_at || "").startsWith(ym)), [salaries, ym]);
@@ -72,7 +93,10 @@ export default function ReportsView({
   const salaryOut = monthSalaries.reduce((s, p) => s + (p.salary || 0), 0);
   const otherOut = monthExpenses.reduce((s, p) => s + (p.amount || 0), 0);
   const profit = income - salaryOut - otherOut;
-  const targetPct = target > 0 ? Math.min(100, Math.round((income / target) * 100)) : 0;
+  // Mục tiêu được ĐẶT THEO THÁNG. Khi tổng kết cả năm phải nhân 12, nếu không
+  // doanh thu 12 tháng đem so mục tiêu 1 tháng là lúc nào cũng "vượt mục tiêu".
+  const periodTarget = period === "year" ? target * 12 : target;
+  const targetPct = periodTarget > 0 ? Math.min(100, Math.round((income / periodTarget) * 100)) : 0;
   const margin = income > 0 ? Math.round((profit / income) * 100) : null;
 
   async function saveTarget() {
@@ -82,11 +106,16 @@ export default function ReportsView({
     setTargetEdit(false);
   }
 
-  // Chuỗi 12 tháng (kết thúc ở tháng hiện tại) cho biểu đồ.
+  // Chuỗi 12 tháng cho biểu đồ: xem theo NĂM thì đúng 12 tháng của năm đó, xem
+  // theo THÁNG thì 12 tháng tính ngược từ tháng đang xem (không phải từ tháng
+  // hiện tại — lùi về tháng 3 mà biểu đồ vẫn dừng ở hôm nay là đọc sai kỳ).
   const series = useMemo(() => {
     const out: { ym: string; label: string; income: number; expense: number; profit: number }[] = [];
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const months =
+      period === "year"
+        ? Array.from({ length: 12 }, (_, m) => new Date(cursor.year, m, 1))
+        : Array.from({ length: 12 }, (_, i) => new Date(cursor.year, cursor.month - 11 + i, 1));
+    for (const d of months) {
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       const inc = payments.filter((p) => (p.paid_at || "").startsWith(key)).reduce((s, p) => s + (p.amount || 0), 0);
       const ex =
@@ -95,31 +124,71 @@ export default function ReportsView({
       out.push({ ym: key, label: `T${d.getMonth() + 1}`, income: inc, expense: ex, profit: inc - ex });
     }
     return out;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [payments, salaries, expenses]);
+  }, [payments, salaries, expenses, cursor, period]);
   const chartMax = Math.max(1, ...series.map((s) => Math.max(s.income, s.expense)));
+  const seriesTitle = period === "year" ? `Thu · chi 12 tháng năm ${cursor.year}` : "Thu · chi 12 tháng gần nhất";
 
-  function exportCsv() {
-    const rows: string[][] = [["Loại", "Ngày", "Nội dung", "Số tiền (VND)"]];
-    for (const p of monthPayments) rows.push(["Thu", p.paid_at, `${PAYMENT_KIND_LABEL[p.kind]} · ${p.contract?.title || ""}`, String(p.amount)]);
-    for (const s of monthSalaries) rows.push(["Chi lương", s.paid_at || "", `${s.name} · ${s.contract?.title || ""}`, String(s.salary)]);
-    for (const e of monthExpenses) rows.push(["Chi khác", e.spent_at, `${e.title} · ${EXPENSE_CATEGORY_LABEL[e.category || "other"] || e.category || ""}`, String(e.amount)]);
-    rows.push([]);
-    rows.push(["", "", "Doanh thu", String(income)]);
-    rows.push(["", "", "Tổng chi", String(salaryOut + otherOut)]);
-    rows.push(["", "", "Lợi nhuận", String(profit)]);
-    const csv = "﻿" + rows.map((r) => r.map((c) => `"${(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `thu-chi-${ym}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  /** Dữ liệu chung cho cả bản Excel lẫn bản CSV — hai file luôn khớp nhau. */
+  function financeData(): FinanceExport {
+    const income: MoneyRow[] = monthPayments
+      .map((p) => ({
+        date: p.paid_at,
+        kind: PAYMENT_KIND_LABEL[p.kind],
+        title: `${PAYMENT_KIND_LABEL[p.kind]} · ${p.contract?.title || "Hợp đồng"}`,
+        ref: p.contract?.title || "",
+        amount: p.amount || 0,
+      }))
+      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    const outflow: MoneyRow[] = [
+      ...monthSalaries.map((s) => ({
+        date: s.paid_at || "",
+        kind: "Tiền công",
+        title: s.name,
+        ref: s.contract?.title || "Không gắn hợp đồng",
+        amount: s.salary || 0,
+      })),
+      ...monthExpenses.map((e) => ({
+        date: e.spent_at,
+        kind: "Chi phí khác",
+        title: e.title,
+        ref: EXPENSE_CATEGORY_LABEL[e.category || "other"] || e.category || "Khác",
+        amount: e.amount || 0,
+      })),
+    ].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+
+    return {
+      periodLabel,
+      income,
+      outflow,
+      salaryTotal: salaryOut,
+      expenseTotal: otherOut,
+      series: series.map((m) => ({ label: m.label, income: m.income, expense: m.expense })),
+      seriesTitle,
+      sources: sourceStats.map((s) => ({ label: s.label, count: s.count, value: s.value, collected: s.collected })),
+      // Mục tiêu theo đúng kỳ đang xem (năm = mục tiêu tháng × 12).
+      target: periodTarget,
+    };
   }
 
+  const fileBase = `thu-chi-${ym}`;
+
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      await exportFinance(studio, financeData(), fileBase);
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  function exportCsv() {
+    downloadCsv(financeCsvRows(studio, financeData()), fileBase);
+  }
+
+  /** Lùi/tiến một tháng, hoặc một năm khi đang tổng kết theo năm. */
   function move(d: number) {
     setCursor((c) => {
+      if (period === "year") return { ...c, year: c.year + d };
       const m = c.month + d;
       return { year: c.year + Math.floor(m / 12), month: ((m % 12) + 12) % 12 };
     });
@@ -173,7 +242,7 @@ export default function ReportsView({
     <div className="page-in flex flex-col gap-3.5">
       {/* ── 4 thẻ số liệu tháng ───────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">
-        <StatCard icon={TrendingUp} tone="green" label="Doanh thu (đã thu)" value={vndShort(income)} sub={`${monthPayments.length} lần thu trong tháng`} />
+        <StatCard icon={TrendingUp} tone="green" label="Doanh thu (đã thu)" value={vndShort(income)} sub={`${monthPayments.length} lần thu trong ${periodWord}`} />
         <StatCard icon={TrendingDown} tone="amber" label="Chi tiền công" value={vndShort(salaryOut)} sub={`${monthSalaries.length} khoản đã trả`} />
         <StatCard icon={Receipt} tone="red" label="Chi phí khác" value={vndShort(otherOut)} sub={`${monthExpenses.length} khoản chi`} />
         <StatCard
@@ -207,14 +276,35 @@ export default function ReportsView({
           })}
         </div>
 
+        {/* Chọn kỳ tổng kết: theo tháng hay cả năm. */}
+        <div role="group" aria-label="Kỳ tổng kết" className="flex gap-[3px] rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+          {([["month", "Theo tháng"], ["year", "Theo năm"]] as const).map(([key, label]) => {
+            const on = period === key;
+            return (
+              <button
+                key={key}
+                aria-pressed={on}
+                onClick={() => setPeriod(key)}
+                className="whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+                style={{ color: on ? "var(--ac)" : "var(--tx2)", background: on ? "var(--sf)" : "transparent", boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none" }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+
         <div className="flex items-center gap-1">
-          <button onClick={() => move(-1)} aria-label="Tháng trước" className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]" style={btnStyle}><ChevronLeft size={16} /></button>
-          <span className="min-w-[118px] text-center text-[12.5px] font-semibold">{MONTHS[cursor.month]} {cursor.year}</span>
-          <button onClick={() => move(1)} aria-label="Tháng sau" className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]" style={btnStyle}><ChevronRight size={16} /></button>
+          <button onClick={() => move(-1)} aria-label={period === "year" ? "Năm trước" : "Tháng trước"} className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]" style={btnStyle}><ChevronLeft size={16} /></button>
+          <span className="min-w-[118px] text-center text-[12.5px] font-semibold">{periodLabel}</span>
+          <button onClick={() => move(1)} aria-label={period === "year" ? "Năm sau" : "Tháng sau"} className="flex h-[34px] w-[34px] items-center justify-center rounded-[9px]" style={btnStyle}><ChevronRight size={16} /></button>
         </div>
 
         <div className="ml-auto flex flex-wrap gap-2">
-          <button onClick={exportCsv} className={btn} style={btnStyle}><Download size={16} /> Xuất CSV</button>
+          <button onClick={exportExcel} disabled={exporting} className={btn} style={{ ...btnStyle, opacity: exporting ? 0.6 : 1 }}>
+            <FileSpreadsheet size={16} /> {exporting ? "Đang tạo…" : "Xuất Excel"}
+          </button>
+          <button onClick={exportCsv} className={btn} style={btnStyle} title="Bản CSV cho công cụ khác"><Download size={16} /> CSV</button>
           <button
             onClick={() => { setShowAdd((v) => !v); setTab("out"); }}
             className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
@@ -252,9 +342,9 @@ export default function ReportsView({
       {/* ── Tiền vào ──────────────────────────────────────────────────── */}
       {tab === "in" && (
         <Panel>
-          <PanelHead icon={TrendingUp} tone="green" title="Tiền vào" count={vnd(income)} note="Tiền thực nhận về studio trong tháng" />
+          <PanelHead icon={TrendingUp} tone="green" title="Tiền vào" count={vnd(income)} note={`Tiền thực nhận về studio trong ${periodWord}`} />
           {monthPayments.length === 0 ? (
-            <EmptyState icon={TrendingUp} title="Chưa có khoản thu nào trong tháng" hint="Ghi nhận thanh toán ở màn chi tiết hợp đồng, số liệu sẽ chạy về đây." />
+            <EmptyState icon={TrendingUp} title={`Chưa có khoản thu nào trong ${periodWord}`} hint="Ghi nhận thanh toán ở màn chi tiết hợp đồng, số liệu sẽ chạy về đây." />
           ) : (
             monthPayments.map((p) => (
               <div key={p.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-[18px] py-[13px]" style={{ borderBottom: "1px solid var(--bd2)" }}>
@@ -278,7 +368,7 @@ export default function ReportsView({
         <Panel>
           <PanelHead icon={TrendingDown} tone="red" title="Tiền ra" count={vnd(salaryOut + otherOut)} note="Tiền công nhân sự + chi phí vận hành" />
           {outRows.length === 0 ? (
-            <EmptyState icon={Receipt} title="Chưa có khoản chi nào trong tháng" hint='Bấm "Thêm khoản chi" để ghi nhận chi phí thiết bị, đi lại, in ấn…' />
+            <EmptyState icon={Receipt} title={`Chưa có khoản chi nào trong ${periodWord}`} hint='Bấm "Thêm khoản chi" để ghi nhận chi phí thiết bị, đi lại, in ấn…' />
           ) : (
             outRows.map((r) => (
               <div key={r.id} className="flex flex-wrap items-center gap-x-3.5 gap-y-1 px-[18px] py-[13px]" style={{ borderBottom: "1px solid var(--bd2)" }}>
@@ -307,7 +397,9 @@ export default function ReportsView({
           <Panel className="p-[18px]">
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Target size={18} style={{ color: "var(--ac)" }} />
-              <h2 className="text-[14px] font-bold">Mục tiêu doanh thu tháng</h2>
+              <h2 className="text-[14px] font-bold">
+                {period === "year" ? "Mục tiêu doanh thu năm (mục tiêu tháng × 12)" : "Mục tiêu doanh thu tháng"}
+              </h2>
               <div className="ml-auto">
                 {targetEdit ? (
                   <div className="flex items-center gap-2">
@@ -321,14 +413,14 @@ export default function ReportsView({
                 )}
               </div>
             </div>
-            {target > 0 ? (
+            {periodTarget > 0 ? (
               <>
                 <div className="h-2.5 overflow-hidden rounded-full" style={{ background: "var(--sf2)" }}>
                   <div className="h-full rounded-full" style={{ width: `${targetPct}%`, background: targetPct >= 100 ? "var(--gn)" : "var(--ac)" }} />
                 </div>
                 <p className="mt-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>
-                  {vnd(income)} / {vnd(target)} · <b style={{ color: targetPct >= 100 ? "var(--gn)" : "var(--tx)" }}>{targetPct}%</b>
-                  {targetPct >= 100 ? " 🎉 đạt mục tiêu!" : ` · còn ${vnd(Math.max(0, target - income))}`}
+                  {vnd(income)} / {vnd(periodTarget)} · <b style={{ color: targetPct >= 100 ? "var(--gn)" : "var(--tx)" }}>{targetPct}%</b>
+                  {targetPct >= 100 ? " 🎉 đạt mục tiêu!" : ` · còn ${vnd(Math.max(0, periodTarget - income))}`}
                 </p>
               </>
             ) : (
@@ -337,7 +429,7 @@ export default function ReportsView({
           </Panel>
 
           <Panel className="p-[18px]">
-            <h2 className="mb-3 text-[14px] font-bold">Thu · chi 12 tháng</h2>
+            <h2 className="mb-3 text-[14px] font-bold">{seriesTitle}</h2>
             <div className="flex items-end gap-1.5" style={{ height: 160 }}>
               {series.map((s) => (
                 <div key={s.ym} className="flex flex-1 flex-col items-center justify-end gap-1" title={`${s.label}: thu ${vnd(s.income)} · chi ${vnd(s.expense)}`}>
@@ -345,7 +437,7 @@ export default function ReportsView({
                     <div style={{ width: "42%", height: `${(s.income / chartMax) * 100}%`, background: "var(--ac)", borderRadius: "3px 3px 0 0", minHeight: s.income ? 2 : 0 }} />
                     <div style={{ width: "42%", height: `${(s.expense / chartMax) * 100}%`, background: "var(--rd)", borderRadius: "3px 3px 0 0", minHeight: s.expense ? 2 : 0 }} />
                   </div>
-                  <span className="text-[10px] font-semibold" style={{ color: s.ym === ym ? "var(--ac)" : "var(--tx3)" }}>{s.label}</span>
+                  <span className="text-[10px] font-semibold" style={{ color: s.ym.startsWith(ym) ? "var(--ac)" : "var(--tx3)" }}>{s.label}</span>
                 </div>
               ))}
             </div>

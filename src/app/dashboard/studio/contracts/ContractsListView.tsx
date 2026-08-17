@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Download, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText } from "lucide-react";
+import { Plus, Search, Download, FileSpreadsheet, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText } from "lucide-react";
 import { useCachedJson } from "@/lib/client-cache";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, avatarStyle, initials } from "@/lib/avatar";
@@ -18,6 +18,14 @@ import {
 } from "@/lib/types";
 import { fmtDate, fmtDow } from "@/lib/date";
 import { filterContracts, sortContracts, type ContractSort } from "@/lib/contract-filter";
+import {
+  exportContracts,
+  contractsCsvRows,
+  downloadCsv,
+  stamp,
+  type ContractExportRow,
+  type ExportStudio,
+} from "@/lib/studio-export";
 
 export type ContractRow = {
   id: string;
@@ -56,7 +64,7 @@ const TABS: [string, string][] = [
 const COLS = "minmax(240px,2.5fr) minmax(130px,1.25fr) minmax(96px,.95fr) minmax(112px,1.05fr) minmax(136px,1.25fr) minmax(140px,1.15fr)";
 const HEADS = ["Khách / Tên job", "Dịch vụ", "Nhân sự", "Lịch chụp", "Thanh toán", "Trạng thái"];
 
-export default function ContractsListView() {
+export default function ContractsListView({ studio }: { studio: ExportStudio }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<string>("all");
   const [code, setCode] = useState("");
@@ -66,6 +74,7 @@ export default function ContractsListView() {
   const [to, setTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [sort, setSort] = useState<ContractSort>("default");
+  const [exporting, setExporting] = useState(false);
 
   // Tải danh sách + cache trên máy: hiện tức thì bản đã lưu, làm mới ngầm.
   const { data, loading, fromCache } = useCachedJson<{ list: ContractRow[] }>(
@@ -96,26 +105,57 @@ export default function ContractsListView() {
     setTo("");
   }
 
-  function exportCsv() {
-    const out: string[][] = [["Mã", "Tên HĐ", "Khách", "SĐT", "Trạng thái", "Ngày", "Giá trị", "Đã thu", "Còn lại"]];
-    for (const c of filtered) {
+  /**
+   * Dòng dữ liệu cho file xuất ra — đúng danh sách ĐANG THẤY (tab + bộ lọc +
+   * thứ tự sắp xếp), để file khớp với màn hình chứ không phải toàn bộ hợp đồng.
+   */
+  function exportRows(): ContractExportRow[] {
+    return filtered.map((c) => {
       const total = contractTotal(c.contract_items || []);
       const collected = sumAmounts(c.contract_payments || []);
-      out.push([
-        c.code || "", c.title, c.client_name || "", c.client_phone || "",
-        CONTRACT_STATUS_LABEL[c.status], c.event_date || "",
-        String(total), String(collected), String(total - collected),
-      ]);
+      return {
+        code: c.code || "",
+        title: c.title,
+        client: c.client_name || "",
+        phone: c.client_phone || "",
+        service: SHOOT_TYPE_LABEL[c.shoot_type],
+        eventDate: c.event_date,
+        eventTime: c.event_time,
+        status: CONTRACT_STATUS_LABEL[c.status],
+        crew: (c.contract_crew || []).map((m) => m.name).filter(Boolean).join(", "),
+        total,
+        collected,
+        balance: total - collected,
+      };
+    });
+  }
+
+  /** Mô tả bộ lọc đang bật — in ở đầu file để biết file này là của kỳ/lát cắt nào. */
+  function exportMeta(): string[] {
+    const tabLabel = TABS.find(([k]) => k === tab)?.[1] || "Tất cả";
+    const bits = [
+      q.trim() && `từ khoá "${q.trim()}"`,
+      code.trim() && `mã "${code.trim()}"`,
+      from && `từ ngày ${from}`,
+      to && `đến ngày ${to}`,
+    ].filter(Boolean);
+    return [
+      `Danh sách: ${tabLabel} · ${filtered.length} hợp đồng${bits.length ? ` · lọc theo ${bits.join(", ")}` : ""}`,
+      `Ngày xuất: ${stamp()}`,
+    ];
+  }
+
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      await exportContracts(studio, exportRows(), exportMeta(), `hop-dong-${tab}`);
+    } finally {
+      setExporting(false);
     }
-    const csv = "﻿" + out.map((r) => r.map((x) => `"${(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-    const a = document.createElement("a");
-    a.href = url;
-    // Xuất đúng danh sách đang thấy (tab + bộ lọc), tên file theo tab để hai
-    // lần xuất không ghi đè nhau.
-    a.download = `hop-dong-${tab}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    downloadCsv(contractsCsvRows(studio, exportRows(), exportMeta()), `hop-dong-${tab}`);
   }
 
   const btn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
@@ -157,7 +197,10 @@ export default function ContractsListView() {
               <span className="rounded-full px-1.5 text-[10px] font-bold" style={{ background: "var(--acS)", color: "var(--ac)" }}>{filterCount}</span>
             )}
           </button>
-          <button onClick={exportCsv} className={btn} style={btnStyle}><Download size={16} /> Xuất CSV</button>
+          <button onClick={exportExcel} disabled={exporting} className={btn} style={{ ...btnStyle, opacity: exporting ? 0.6 : 1 }}>
+            <FileSpreadsheet size={16} /> {exporting ? "Đang tạo…" : "Xuất Excel"}
+          </button>
+          <button onClick={exportCsv} className={btn} style={btnStyle} title="Bản CSV cho công cụ khác"><Download size={16} /> CSV</button>
           <Link
             href="/dashboard/studio/contracts/new"
             className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
