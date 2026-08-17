@@ -42,6 +42,33 @@ function isHttpUrl(value: string): boolean {
   }
 }
 
+/**
+ * Cookie này có phải PHIÊN ĐĂNG NHẬP thật không?
+ *
+ * Supabase đặt hai loại cookie tên gần giống nhau:
+ *   sb-<mã-project>-auth-token[.0/.1]        ← phiên thật
+ *   sb-<mã-project>-auth-token-code-verifier ← mã tạm của luồng PKCE
+ *
+ * Cái thứ hai KHÔNG phải phiên: nó chỉ sống từ lúc bấm "Đăng nhập với Google"
+ * tới lúc /auth/callback đổi code lấy phiên. Trước đây điều kiện nhận biết chỉ
+ * là `startsWith("sb-") && includes("-auth-token")` nên nó khớp CẢ verifier →
+ * middleware tưởng request đã có phiên và gọi getUser(); Supabase thấy phiên
+ * không hợp lệ liền ghi đè/xoá cả bộ cookie auth, kéo verifier đi theo. Bước
+ * /auth/callback sau đó không còn verifier → "pkce_code_verifier_not_found".
+ *
+ * Chỉ hỏng khi ĐĂNG NHẬP SẠCH (ẩn danh, hoặc vừa xoá cookie): máy đang có phiên
+ * hợp lệ thì getUser() thành công nên chẳng xoá gì. Đúng kiểu lỗi lúc được lúc
+ * không — và luôn hỏng với người vừa xoá cookie để chữa một lỗi khác.
+ *
+ * Route /auth/* đã được bỏ qua từ trước, nhưng như thế chỉ cứu được đúng request
+ * callback: mọi request KHÁC đi qua middleware trong lúc luồng PKCE đang bay
+ * (mở tab mới, tải lại /login, /manifest.webmanifest, một cú điều hướng của app
+ * desktop…) vẫn xoá được verifier. Chặn từ gốc ở đây mới hết.
+ */
+function isSessionCookie(name: string): boolean {
+  return name.startsWith("sb-") && name.includes("-auth-token") && !name.includes("code-verifier");
+}
+
 function hostForPath(path: string): string | undefined {
   // Auth pages are shared — never redirect.
   if (path.startsWith("/login") || path.startsWith("/auth")) return undefined;
@@ -219,9 +246,7 @@ async function route(request: NextRequest) {
   if (request.headers.get("next-router-prefetch") === "1" || request.headers.get("purpose") === "prefetch") {
     // Prefetch: skip full auth round-trip, just check cookie presence for dashboard.
     if (pathname.startsWith("/dashboard")) {
-      const hasSession = request.cookies.getAll().some(
-        (c) => c.name.includes("sb-") && c.name.includes("-auth-token")
-      );
+      const hasSession = request.cookies.getAll().some((c) => isSessionCookie(c.name));
       if (!hasSession) return NextResponse.redirect(new URL(`/login?next=${pathname}`, request.url));
     }
     return NextResponse.next();
@@ -231,9 +256,7 @@ async function route(request: NextRequest) {
   // refresh — bỏ qua round-trip auth (tiết kiệm 1 network call tới Supabase trên
   // mọi trang public: landing, album, story, thiệp…). Dashboard vẫn an toàn:
   // không cookie → chắc chắn chưa đăng nhập → redirect /login ngay.
-  const hasAuthCookie = request.cookies
-    .getAll()
-    .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
+  const hasAuthCookie = request.cookies.getAll().some((c) => isSessionCookie(c.name));
   if (!hasAuthCookie) {
     const response = NextResponse.next({ request });
     const refAnon = request.nextUrl.searchParams.get("ref");

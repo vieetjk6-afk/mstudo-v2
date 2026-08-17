@@ -32,6 +32,21 @@ function describeOAuthError(
       : "Mã đăng nhập tự động của app desktop đã hết hạn hoặc đã dùng rồi. Bấm lại “Đăng nhập tự động” trong bảng điều khiển, hoặc đăng nhập bằng email + mật khẩu ngay tại đây.";
   }
 
+  // Mất `code_verifier` của luồng PKCE. Trình duyệt ghi mã tạm này vào cookie
+  // lúc bấm "Đăng nhập với Google", rồi /auth/callback cần đọc lại để đổi code
+  // lấy phiên. Mất nó chỉ có ba lý do, và cả ba đều nói được thành việc cụ thể.
+  if (code === "pkce_code_verifier_not_found" || lower.includes("code verifier")) {
+    // /auth/callback đã so địa chỉ mở luồng với địa chỉ nhận về; khớp thì nó
+    // gửi kèm câu chỉ đúng chỗ phải sửa — dùng luôn, đừng nói chung chung nữa.
+    if (detail && !lower.startsWith("pkce code verifier not found")) return detail;
+    return (
+      "Trình duyệt không giữ được mã tạm của lần đăng nhập này, nên bước cuối bị hủy. " +
+      "Thường do: (1) mở đăng nhập ở một địa chỉ nhưng Google trả về địa chỉ khác — thêm địa chỉ đang dùng vào Supabase → Authentication → URL Configuration → Redirect URLs; " +
+      "(2) trình duyệt/cửa sổ đang chặn cookie; (3) bấm đăng nhập ở cửa sổ này rồi hoàn tất ở cửa sổ khác. " +
+      "Cách chắc ăn nhất: đăng nhập bằng email + mật khẩu ngay tại đây."
+    );
+  }
+
   // Lỗi hay gặp nhất của server_error: trigger tạo hồ sơ (profiles) trong CSDL
   // thất bại nên Supabase không lưu được tài khoản mới.
   if (lower.includes("database error")) {
@@ -84,6 +99,11 @@ function LoginForm() {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaWarn, setCaptchaWarn] = useState(false);
   const didReset = params.get("reset") === "1";
+  // Đang chạy TRONG cửa sổ của MStudo Desktop (cờ do app tiêm vào webview).
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    setIsDesktop(!!(window as unknown as { __MSTUDO_DESKTOP__?: boolean }).__MSTUDO_DESKTOP__);
+  }, []);
 
   // Surface OAuth callback errors (?error=...) so the user isn't left wondering
   // why Google sign-in bounced them back here.
@@ -148,6 +168,22 @@ function LoginForm() {
         setLoading(false);
         return;
       }
+
+      // Đăng nhập ĐÚNG nhưng cookie không lưu được thì trang sau lại đá về
+      // /login — nhìn từ ngoài y hệt "bấm nút chẳng thấy gì". Cửa sổ nhúng của
+      // app desktop và trình duyệt chặn cookie hay rơi vào đúng cảnh này. Soát
+      // lại phiên trước khi chuyển trang để nói thẳng ra, thay vì đá vòng vòng.
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setError(
+          "Đăng nhập đúng nhưng cửa sổ này không lưu được cookie phiên nên vẫn coi như chưa đăng nhập. " +
+          "Nếu đang dùng MStudo Desktop: mở menu ở khay hệ thống → “Đăng nhập tự động (mã thiết bị)”. " +
+          "Nếu đang dùng trình duyệt: bật lại cookie cho trang này rồi thử lại."
+        );
+        setLoading(false);
+        return;
+      }
+
       // Full reload (not router.push) so the middleware on the next request
       // definitely sees the freshly set auth cookies. router.push() can race
       // with the browser persisting the session cookies, which is the classic
@@ -169,7 +205,14 @@ function LoginForm() {
     await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        // `from` = địa chỉ ĐÃ MỞ luồng đăng nhập. Cookie mã tạm (code_verifier)
+        // thuộc về địa chỉ này; nếu Supabase trả về một địa chỉ khác (redirectTo
+        // chưa nằm trong Redirect URLs nên bị thay bằng Site URL) thì callback
+        // đọc không ra và báo "pkce_code_verifier_not_found" — không kèm manh
+        // mối nào. Có `from` là chỉ được đích danh chỗ sai.
+        redirectTo:
+          `${window.location.origin}/auth/callback` +
+          `?next=${encodeURIComponent(next)}&from=${encodeURIComponent(window.location.origin)}`,
       },
     });
   }
@@ -261,6 +304,17 @@ function LoginForm() {
             </svg>
             Đăng nhập với Google
           </button>
+
+          {/* Trong cửa sổ nhúng của app desktop, Google hay từ chối thẳng
+              ("browser may not be secure") và luồng PKCE cũng dễ đứt vì cookie.
+              Chỉ đường sang cách đăng nhập không cần cả hai. */}
+          {isDesktop && (
+            <p className="mt-3 rounded-[10px] px-3 py-2.5 text-[12px] leading-relaxed" style={{ background: "var(--sf2)", color: "var(--tx2)" }}>
+              Đang mở trong <b>MStudo Desktop</b>. Google thường chặn đăng nhập trong cửa sổ nhúng —
+              cách chắc ăn: chuột phải biểu tượng MStudo ở <b>khay hệ thống</b> → <b>Đăng nhập tự động (mã thiết bị)</b>.
+              Máy này đã được xác thực bằng mã kết nối nên không cần gõ gì thêm.
+            </p>
+          )}
 
           {/* Lối thoát khi cookie phiên hỏng: kẹt vòng lặp /login ↔ /dashboard,
               còn phiên tài khoản cũ, hoặc đăng nhập Google dở dang để lại
