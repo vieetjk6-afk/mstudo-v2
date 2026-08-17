@@ -120,6 +120,22 @@ export async function GET(request: NextRequest) {
       status: error.status,
       code: error.code,
     });
+
+    // Mất `code_verifier`: cookie mã tạm thuộc về ĐỊA CHỈ đã mở luồng đăng
+    // nhập. Lý do hay gặp nhất là Google/Supabase trả về một địa chỉ khác chỗ
+    // bấm nút — xảy ra khi redirectTo chưa nằm trong Redirect URLs nên Supabase
+    // thay bằng Site URL. Trang đăng nhập gửi kèm `from` chính là để so ở đây
+    // và nói thẳng ra, thay vì để người dùng đoán giữa ba bốn nguyên nhân.
+    const verifierLost = error.code === "pkce_code_verifier_not_found" || /code verifier/i.test(error.message || "");
+    if (verifierLost) {
+      const from = searchParams.get("from");
+      const detail =
+        from && from !== origin
+          ? `Bấm đăng nhập ở ${from} nhưng Google trả về ${origin}. Thêm ${from}/auth/callback vào Supabase → Authentication → URL Configuration → Redirect URLs.`
+          : error.message;
+      return loginError(origin, "pkce_code_verifier_not_found", null, detail);
+    }
+
     return loginError(origin, error.code || "oauth", null, error.message);
   }
 
