@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 /** Root landing for the thiệp host (thiep.<domain>). A bare visit lands here. */
 export default function ThiepLanding() {
   return (
-    <main className="grid min-h-screen place-items-center px-6 text-center" style={{ background: "#fbf7f2", color: "#3a3530", fontFamily: "var(--font-cormorant)" }}>
+    <main className="grid min-h-screen place-items-center px-6 text-center" style={{ background: "#fbf7f2", color: "#3a3530", fontFamily: "var(--font-cormorant, 'Cormorant Garamond'), Georgia, serif" }}>
       <div className="max-w-md">
         <Heart className="mx-auto mb-4" style={{ color: "#b08968" }} />
         <h1 className="font-serif text-4xl">Thiệp cưới online</h1>

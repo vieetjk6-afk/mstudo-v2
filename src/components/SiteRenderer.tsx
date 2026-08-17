@@ -34,7 +34,7 @@ export default function SiteRenderer({ data, demo = false }: { data: SiteData; d
   const { site, blocks, owner } = data;
   const t = site.theme || {};
   const name = owner?.full_name || site.subdomain || "Studio";
-  const fontVar = t.font === "sans" ? "var(--font-hanken)" : "var(--font-cormorant)";
+  const fontVar = t.font === "sans" ? "var(--font-hanken, 'Hanken Grotesk'), system-ui, sans-serif" : "var(--font-cormorant, 'Cormorant Garamond'), Georgia, serif";
 
   const dark = (t.mode ?? (isLightHex(t.bg) ? "light" : "dark")) === "dark";
   const wrap = {

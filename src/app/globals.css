@@ -469,7 +469,7 @@ body {
 }
 
 .font-serif {
-  font-family: var(--font-cormorant), Georgia, serif;
+  font-family: var(--font-cormorant, "Cormorant Garamond"), Georgia, serif;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
@@ -777,7 +777,7 @@ body {
   /* Darker accent for small text/badges on light backgrounds (AA contrast). */
   --accent-strong: #147a49;
   --shadow: 0 1px 2px rgba(20, 24, 33, 0.05), 0 10px 30px rgba(20, 24, 33, 0.06);
-  font-family: var(--font-manrope), system-ui, sans-serif;
+  font-family: var(--font-manrope, Manrope), system-ui, sans-serif;
   background: var(--bg);
   color: var(--fg);
   transition: background 0.25s ease, color 0.25s ease;
@@ -979,7 +979,7 @@ body {
   --s-blue: var(--bl);
   --s-blueS: var(--blS);
 
-  font-family: var(--font-be-vietnam), var(--font-manrope), system-ui, sans-serif;
+  font-family: var(--font-be-vietnam, "Be Vietnam Pro"), var(--font-manrope, Manrope), system-ui, sans-serif;
 }
 
 /* Nền tối — chỉ ghi đè 19 biến màu; các bí danh ở trên tự đọc giá trị mới. */
@@ -1075,7 +1075,7 @@ body {
 
   background: var(--bg);
   color: var(--tx);
-  font-family: var(--font-be-vietnam), var(--font-hanken), system-ui, sans-serif;
+  font-family: var(--font-be-vietnam, "Be Vietnam Pro"), var(--font-hanken, "Hanken Grotesk"), system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
