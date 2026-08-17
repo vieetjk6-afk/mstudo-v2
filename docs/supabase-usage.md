@@ -128,3 +128,68 @@ trước và không hề đụng Supabase. Chỉ ZIP/watermark chuyển sang ch�
 - Egress trên gói Free tính cả byte phục vụ qua CDN, nên tăng `cacheControl` không
   làm giảm hoá đơn egress. Cách duy nhất để giảm là **đừng để byte đi ra từ Supabase**
   — tức đẩy chúng sang CDN Google, đúng như những gì các thay đổi trên làm.
+
+---
+
+## Cập nhật 08/2026 — đóng dấu chìm chuyển sang phía máy chủ
+
+Bối cảnh: Vercel báo **Fast Origin Transfer 10,74 GB / 10 GB** (vượt hạn mức),
+trong khi Fluid Active CPU mới dùng 2h22m/4h.
+
+### Đường rò đã tìm ra
+
+Sau khi đã 302 lượt xem sang CDN Google và gỡ `buildZip()`, byte còn chảy qua
+máy chủ nhiều nhất là **tải ảnh có đóng dấu**:
+
+`lib/download.ts` nạp `/api/img?id=…&w=2560` bằng `<img crossOrigin="anonymous">`
+để canvas đọc pixel. Đường này tránh được cả ba lớp tiết kiệm:
+
+| Lớp | Vì sao không áp dụng |
+|---|---|
+| 302 sang CDN Google | request là `Sec-Fetch-Mode: cors`, chuyển hướng sang Google thì canvas bị "tainted" |
+| Cache Supabase | `w=2560` vượt `DRIVE_IMG_CACHE_MAX_WIDTH` (1024) |
+| 302 cho `<img>` thường | không áp dụng cho request CORS |
+
+Đường rò thứ hai: **xuất file in của trình thiết kế album** kéo ảnh gốc
+(`orig=1`, trung bình 10,8 MB) cho từng ảnh trên từng trang đôi. Một lần xuất
+album 30 trang đôi ≈ 648 MB.
+
+### Đã sửa gì
+
+Đóng dấu chuyển sang máy chủ: `/api/img/watermark` + `lib/watermark.ts`
+(sharp, chữ dựng bằng SVG). `lib/download.ts` chỉ còn tạo thẻ `<a>` — không
+byte ảnh nào vào JavaScript của trình duyệt nữa.
+
+Số đo trên ảnh 2560px chi tiết cao:
+
+| | Kích thước | Thời gian |
+|---|---|---|
+| Ảnh nguồn Google trả về | 1,41 MB | — |
+| mozjpeg q90 (mặc định) | **1,17 MB (−17%)** | 510–1100 ms |
+| không mozjpeg q90 (≈ trình duyệt) | 1,42 MB (+1%) | 180 ms |
+
+Đổi CPU lấy băng thông — đúng hướng khi transfer là thứ khan hiếm. Tắt bằng
+`WATERMARK_MOZJPEG=0` nếu CPU thành nút thắt.
+
+**Nói thẳng: cách này KHÔNG đưa dự án về dưới hạn mức.** Byte vẫn phải rời khỏi
+máy chủ; chỉ nhỏ đi 17%. Muốn hết hẳn thì byte phải được phục vụ từ nơi khác —
+tức là chuyển sang VPS (băng thông 1–2 TB/tháng) hoặc đẩy cache sang R2.
+
+Lợi ích phụ, không liên quan băng thông: máy yếu không còn dựng canvas 2560px
+(trước đây tải album lớn hay hết bộ nhớ rồi im lặng thất bại), và tên file tải
+về đặt đúng được cả tên tiếng Việt.
+
+### Một kiểu hỏng phải canh chừng
+
+Thiếu font hệ thống thì sharp vẫn dựng ảnh bình thường, chỉ có chữ watermark
+render ra **rỗng** — khách nhận ảnh không có dấu bảo vệ, log sạch bong, không
+ai biết. `deploy/setup-vps.sh` cài sẵn `fonts-dejavu-core`, và
+`deploy/activate.sh` dựng thử một ảnh chữ rồi đếm điểm ảnh mực, dưới ngưỡng thì
+**chặn deploy**.
+
+### Chưa làm
+
+Xuất file in của trình thiết kế album vẫn chạy ở trình duyệt. Chuyển sang máy
+chủ sẽ cắt được nhiều byte nhất (N ảnh gốc vào → 1 file ra), nhưng canvas
+300 DPI cần ~100 MB bộ nhớ mỗi trang đôi nên **sẽ hết bộ nhớ trên hàm Vercel**
+(1 GB). Làm sau khi đã chuyển sang VPS.

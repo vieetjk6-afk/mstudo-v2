@@ -1,47 +1,5 @@
 "use client";
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
-
-/** Draw a tiled, diagonal watermark over an image and return a JPEG blob. */
-async function watermarkImage(img: HTMLImageElement, text: string): Promise<Blob> {
-  const canvas = document.createElement("canvas");
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  const ctx = canvas.getContext("2d")!;
-  ctx.drawImage(img, 0, 0);
-
-  const fontSize = Math.max(18, Math.round(canvas.width / 28));
-  ctx.font = `600 ${fontSize}px sans-serif`;
-  ctx.fillStyle = "rgba(255,255,255,0.28)";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  const stepX = fontSize * 12;
-  const stepY = fontSize * 6;
-  ctx.save();
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate((-30 * Math.PI) / 180);
-  ctx.translate(-canvas.width / 2, -canvas.height / 2);
-  for (let y = -canvas.height; y < canvas.height * 2; y += stepY) {
-    for (let x = -canvas.width; x < canvas.width * 2; x += stepX) {
-      ctx.fillText(text, x, y);
-    }
-  }
-  ctx.restore();
-
-  return new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.9)
-  );
-}
-
 /* ── ĐÃ GỠ: buildZip() ──────────────────────────────────────────────────────
    Nén ảnh Drive thành ZIP ngay trong trình duyệt bắt MỌI byte ảnh phải đi qua
    /api/img: ZIP cần byte nằm trong JS, mà Drive không gửi header CORS nên không
@@ -62,24 +20,35 @@ function ensureExt(name: string, fallback: string): string {
 }
 
 /**
- * Tải một ảnh Drive lẻ. Nếu có `watermark` → đóng watermark bằng canvas (ảnh
- * ~2560px) để ảnh tải về vẫn được bảo vệ; nếu không → tải THẲNG từ Drive.
+ * Tải một ảnh Drive lẻ.
+ *
+ * Cả hai nhánh đều KHÔNG kéo byte ảnh vào JavaScript của trình duyệt:
+ *   • có watermark → /api/img/watermark đóng dấu ở máy chủ rồi trả file kèm
+ *     Content-Disposition, trình duyệt tải thẳng.
+ *   • không watermark → 302 sang Drive, Google tự phục vụ (0 byte qua máy chủ).
+ *
+ * Bản cũ dựng canvas 2560px trong trình duyệt để đóng dấu. Cách đó khiến máy
+ * yếu hết bộ nhớ khi tải nhiều ảnh, và bắt ảnh phải đi qua proxy dưới dạng
+ * fetch CORS nên không tận dụng được cache của trình duyệt cho lượt tải lại.
  */
-export async function downloadImage(fileId: string, name: string, watermark?: string | null): Promise<void> {
+export function downloadImage(fileId: string, name: string, watermark?: string | null): void {
+  const q = new URLSearchParams({ id: fileId });
+  let href: string;
   if (watermark) {
-    const img = await loadImage(`/api/img?id=${encodeURIComponent(fileId)}&w=2560`);
-    const blob = await watermarkImage(img, watermark);
-    triggerDownload(blob, ensureExt(name, "jpg"));
-    return;
+    q.set("t", watermark);
+    q.set("w", "2560");
+    q.set("name", ensureExt(name, "jpg"));
+    href = `/api/img/watermark?${q}`;
+  } else {
+    // Khách nhận đúng file gốc ⇒ để Google phục vụ luôn. Ảnh gốc trung bình
+    // ~11 MB nên đây là khác biệt lớn nhất về băng thông.
+    // Đánh đổi: tên file là tên trên Drive, vì thuộc tính `download` không có
+    // hiệu lực sau khi chuyển hướng sang miền khác.
+    q.set("dl", "1");
+    href = `/api/img?${q}`;
   }
-  // Không watermark ⇒ khách nhận đúng file gốc, nên để Google phục vụ luôn.
-  // /api/img?dl=1 chỉ 302 sang Drive: không byte nào đi qua Vercel/Supabase
-  // (ảnh gốc trung bình ~11 MB — tải thẳng là khác biệt lớn nhất về băng thông).
-  // Drive trả Content-Disposition: attachment nên trình duyệt tải xuống mà
-  // không rời trang. Đánh đổi: tên file là tên trên Drive, vì thuộc tính
-  // `download` không có hiệu lực sau khi chuyển hướng sang miền khác.
   const a = document.createElement("a");
-  a.href = `/api/img?id=${encodeURIComponent(fileId)}&dl=1`;
+  a.href = href;
   a.rel = "noopener";
   a.click();
 }

@@ -81,6 +81,48 @@ done <"$SHARED_ENV"
 
 ok "Bản build hợp lệ, .env đúng định dạng systemd"
 
+# ── Thư viện ảnh native ──────────────────────────────────────────────────────
+# sharp (đóng dấu chìm) đi kèm binary biên dịch sẵn cho ĐÚNG kiến trúc của máy
+# đã build — GitHub Actions dùng linux-x64. VPS chạy ARM (Ampere, Graviton, một
+# số gói giá rẻ) sẽ không nạp được, và lỗi chỉ lộ ra lúc khách bấm tải ảnh chứ
+# không lộ lúc khởi động. Kiểm tra ngay tại đây.
+if ! (cd "$NEW" && node -e "require('sharp')" 2>/dev/null); then
+	err "Không nạp được thư viện 'sharp' trên máy này."
+	err "Kiến trúc máy chủ: $(uname -m) — bản build đến từ GitHub Actions (x86_64)."
+	err "Máy ARM thì phải build trên runner ARM, hoặc chạy 'npm install --os=linux --cpu=arm64 sharp'."
+	exit 1
+fi
+ok "Thư viện ảnh sharp nạp được ($(uname -m))"
+
+# ── Font cho watermark ───────────────────────────────────────────────────────
+# Đây là kiểu hỏng NGUY HIỂM NHẤT trong cả hệ thống: thiếu font hệ thống thì
+# sharp vẫn dựng ảnh bình thường, chỉ có điều chữ watermark render ra RỖNG. Máy
+# chủ không báo lỗi, log sạch bong, và khách nhận ảnh KHÔNG CÓ DẤU BẢO VỆ.
+# Chỉ phát hiện được khi có người mở ảnh ra nhìn.
+# Nên: dựng thử ảnh chữ "Ảnh Cưới" cỡ 48px và đếm điểm ảnh mực.
+#
+# Ngưỡng 1000 chọn theo số đo thật, KHÔNG phải đoán. Thiếu font thì librsvg vẫn
+# vẽ ra các ô vuông "tofu" — vẫn có mực, nên ngưỡng thấp sẽ không bắt được:
+#     DejaVu Sans      2199 điểm      Liberation Sans  2082 điểm
+#     Times New Roman  1703 điểm      THIẾU FONT (tofu)  288 điểm
+# 1000 nằm giữa hai nhóm, cách xa cả hai đầu.
+WM_CHECK=$(cd "$NEW" && node -e '
+const sharp = require("sharp");
+const svg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="300" height="100">`
+  + `<text x="10" y="60" font-family="sans-serif" font-size="48" fill="white">Ảnh Cưới</text></svg>`);
+sharp(svg).flatten({background:"#000"}).greyscale().raw().toBuffer()
+  .then(d => { let ink = 0; for (const v of d) if (v > 100) ink++; console.log(ink); })
+  .catch(() => console.log(0));
+' 2>/dev/null || echo 0)
+if [[ "${WM_CHECK:-0}" -lt 1000 ]]; then
+	err "Chữ watermark KHÔNG render được (số điểm ảnh mực: ${WM_CHECK:-0})."
+	err "Máy chủ thiếu font. Cài rồi deploy lại:"
+	err "    sudo apt-get install -y fontconfig fonts-dejavu-core && sudo fc-cache -f"
+	err "Chặn deploy: nếu cho qua, khách sẽ nhận ảnh KHÔNG có dấu bảo vệ mà không ai biết."
+	exit 1
+fi
+ok "Font watermark hoạt động (${WM_CHECK} điểm ảnh mực)"
+
 # Cảnh báo (không chặn) nếu unit file trong repo đã khác bản đang cài.
 if ! cmp -s "$NEW/deploy/mstudo.service" "/etc/systemd/system/$UNIT.service" 2>/dev/null; then
 	printf '\033[0;33m  ! deploy/mstudo.service khác bản đang cài. Muốn áp dụng thì chạy bằng root:\033[0m\n'

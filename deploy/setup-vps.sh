@@ -42,7 +42,12 @@ log "1/10 Cập nhật hệ thống + múi giờ Việt Nam"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get upgrade -y -qq
-apt-get install -y -qq curl ca-certificates gnupg rsync git ufw fail2ban htop unattended-upgrades
+apt-get install -y -qq curl ca-certificates gnupg rsync git ufw fail2ban htop unattended-upgrades \
+	fontconfig fonts-dejavu-core
+# fontconfig + font: BẮT BUỘC cho việc đóng dấu chìm lên ảnh (sharp dựng chữ qua
+# SVG). Ubuntu bản tối giản KHÔNG có font nào — thiếu font thì chữ watermark
+# render ra RỖNG, tức là khách nhận ảnh KHÔNG có dấu mà không ai phát hiện.
+# DejaVu có đủ dấu tiếng Việt.
 timedatectl set-timezone Asia/Ho_Chi_Minh
 ok "Múi giờ: $(timedatectl show -p Timezone --value)"
 
