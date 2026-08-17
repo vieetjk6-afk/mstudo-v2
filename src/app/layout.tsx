@@ -14,6 +14,7 @@ const hanken = Hanken_Grotesk({
   subsets: ["latin", "vietnamese"],
   weight: ["300", "400", "500", "600", "700"],
   variable: "--font-hanken",
+  fallback: ["system-ui", "Segoe UI", "Roboto", "Arial", "sans-serif"],
   display: "swap",
 });
 
@@ -25,6 +26,7 @@ const cormorant = Cormorant_Garamond({
   weight: ["400", "500", "600"],
   style: ["normal", "italic"],
   variable: "--font-cormorant",
+  fallback: ["Georgia", "Times New Roman", "serif"],
   display: "swap",
   preload: false,
 });
@@ -36,6 +38,7 @@ const manrope = Manrope({
   subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-manrope",
+  fallback: ["system-ui", "Segoe UI", "Roboto", "Arial", "sans-serif"],
   display: "swap",
   preload: false,
 });
@@ -46,6 +49,7 @@ const beVietnam = Be_Vietnam_Pro({
   subsets: ["latin", "vietnamese"],
   weight: ["400", "500", "600", "700", "800"],
   variable: "--font-be-vietnam",
+  fallback: ["system-ui", "Segoe UI", "Roboto", "Arial", "sans-serif"],
   display: "swap",
   preload: false,
 });
@@ -55,6 +59,7 @@ const dancing = Dancing_Script({
   subsets: ["latin", "vietnamese"],
   weight: ["500", "600", "700"],
   variable: "--font-script",
+  fallback: ["Georgia", "cursive"],
   display: "swap",
   preload: false,
 });
@@ -64,6 +69,7 @@ const greatVibes = Great_Vibes({
   subsets: ["latin", "vietnamese"],
   weight: ["400"],
   variable: "--font-hand",
+  fallback: ["Georgia", "cursive"],
   display: "swap",
   preload: false,
 });

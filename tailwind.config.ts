@@ -35,8 +35,8 @@ const config: Config = {
         strong: "var(--border2)",
       },
       fontFamily: {
-        sans: ["var(--font-manrope)", "var(--font-hanken)", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-        serif: ["var(--font-cormorant)", "Georgia", "serif"],
+        sans: ["var(--font-manrope, Manrope)", "var(--font-hanken, 'Hanken Grotesk')", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        serif: ["var(--font-cormorant, 'Cormorant Garamond')", "Georgia", "serif"],
       },
       animation: {
         "vk-fade": "vkFade .6s ease both",

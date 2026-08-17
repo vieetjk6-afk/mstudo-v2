@@ -3,12 +3,20 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Heart, ExternalLink, Pencil, Copy, Check, Download, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
+import { Heart, ExternalLink, Pencil, Copy, Check, Download, FileSpreadsheet, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ThiepTabs from "@/components/studio/ThiepTabs";
 import { thiepUrl } from "@/lib/hosts";
 import { escapeHtml } from "@/lib/html-escape";
 import type { WeddingConfig, WeddingRsvp } from "@/lib/types";
+import {
+  exportRsvps,
+  rsvpCsvRows,
+  downloadCsv,
+  stamp,
+  type ExportStudio,
+  type RsvpExportRow,
+} from "@/lib/studio-export";
 
 function slugify(s: string): string {
   const base = s
@@ -33,12 +41,7 @@ export type InvitationRow = {
 
 const SIDE_LABEL: Record<string, string> = { groom: "Chú rể", bride: "Cô dâu", both: "Chung" };
 
-function csvCell(v: string | number): string {
-  const s = String(v ?? "");
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-export default function ThiepListView({ rows, ownerId }: { rows: InvitationRow[]; ownerId: string }) {
+export default function ThiepListView({ rows, ownerId, studio }: { rows: InvitationRow[]; ownerId: string; studio: ExportStudio }) {
   const supabase = createClient();
   const router = useRouter();
   const [copied, setCopied] = useState<string | null>(null);
@@ -95,34 +98,37 @@ export default function ThiepListView({ rows, ownerId }: { rows: InvitationRow[]
     setTimeout(() => setCopied(null), 1500);
   }
 
-  async function exportCsv(row: InvitationRow) {
+  /**
+   * Danh sách khách mời (RSVP) của một thiệp. `kind` chọn định dạng: Excel có
+   * tiêu đề, cột rộng và dòng tổng (bao nhiêu người nhận lời, tổng bao nhiêu
+   * suất) — thứ mà nhà hàng hỏi khi chốt bàn; CSV giữ cho công cụ khác.
+   */
+  async function exportGuests(row: InvitationRow, kind: "xlsx" | "csv") {
     setExporting(row.id);
-    const { data } = await supabase
-      .from("wedding_rsvps")
-      .select("guest_name, side, attending, num_guests, wish, created_at")
-      .eq("invitation_id", row.id)
-      .order("created_at", { ascending: false });
-    setExporting(null);
-    const rsvps = (data ?? []) as Pick<WeddingRsvp, "guest_name" | "side" | "attending" | "num_guests" | "wish" | "created_at">[];
-
-    const header = ["Tên khách", "Bên", "Tham dự", "Số người", "Lời chúc", "Thời gian"];
-    const lines = rsvps.map((r) => [
-      r.guest_name,
-      SIDE_LABEL[r.side] ?? r.side,
-      r.attending ? "Có" : "Không",
-      r.num_guests,
-      r.wish ?? "",
-      new Date(r.created_at).toLocaleString("vi-VN"),
-    ].map(csvCell).join(","));
-    // UTF-8 BOM so Excel reads Vietnamese correctly.
-    const csv = "﻿" + [header.join(","), ...lines].join("\n");
-    const couple = [row.config.groom_name, row.config.bride_name].filter(Boolean).join("-") || row.slug;
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `khach-moi-${couple}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    try {
+      const { data } = await supabase
+        .from("wedding_rsvps")
+        .select("guest_name, side, attending, num_guests, wish, created_at")
+        .eq("invitation_id", row.id)
+        .order("created_at", { ascending: false });
+      const rsvps = (data ?? []) as Pick<WeddingRsvp, "guest_name" | "side" | "attending" | "num_guests" | "wish" | "created_at">[];
+      const list: RsvpExportRow[] = rsvps.map((r) => ({
+        name: r.guest_name,
+        side: SIDE_LABEL[r.side] ?? r.side,
+        attending: !!r.attending,
+        guests: r.num_guests || 1,
+        wish: r.wish ?? "",
+        at: new Date(r.created_at).toLocaleString("vi-VN"),
+      }));
+      const couple = [row.config.groom_name, row.config.bride_name].filter(Boolean).join(" & ") || row.slug;
+      const title = `DANH SÁCH KHÁCH MỜI — ${couple.toUpperCase()}`;
+      const meta = [`Thiệp: ${couple}`, `Ngày xuất: ${stamp()}`];
+      const file = `khach-moi-${[row.config.groom_name, row.config.bride_name].filter(Boolean).join("-") || row.slug}`;
+      if (kind === "xlsx") await exportRsvps(studio, list, title, meta, file);
+      else downloadCsv(rsvpCsvRows(studio, list, title, meta), file);
+    } finally {
+      setExporting(null);
+    }
   }
 
   return (
@@ -178,8 +184,11 @@ export default function ThiepListView({ rows, ownerId }: { rows: InvitationRow[]
                   <button onClick={() => openQr(couple, viewUrl)} className="btn-ghost px-2.5 py-1.5 text-xs">
                     <QrCode size={13} /> Mã QR / In
                   </button>
-                  <button onClick={() => exportCsv(r)} disabled={exporting === r.id} className="btn-ghost px-2.5 py-1.5 text-xs disabled:opacity-50">
-                    <Download size={13} /> {exporting === r.id ? "Đang xuất…" : "Xuất DS khách (CSV)"}
+                  <button onClick={() => exportGuests(r, "xlsx")} disabled={exporting === r.id} className="btn-ghost px-2.5 py-1.5 text-xs disabled:opacity-50">
+                    <FileSpreadsheet size={13} /> {exporting === r.id ? "Đang xuất…" : "Xuất DS khách (Excel)"}
+                  </button>
+                  <button onClick={() => exportGuests(r, "csv")} disabled={exporting === r.id} className="btn-ghost px-2.5 py-1.5 text-xs disabled:opacity-50" title="Bản CSV cho công cụ khác">
+                    <Download size={13} /> CSV
                   </button>
                   {r.contract_id && (
                     <Link href={`/dashboard/studio/contracts/${r.contract_id}`} className="btn-ghost px-2.5 py-1.5 text-xs"><FileText size={13} /> Hợp đồng</Link>

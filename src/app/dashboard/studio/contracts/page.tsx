@@ -1,5 +1,6 @@
 import { requireStudio } from "@/lib/auth-guards";
 import StudioDenied from "@/components/StudioDenied";
+import { brandFrom } from "@/lib/studio-brand";
 import ContractsListView from "./ContractsListView";
 
 // Trang chỉ gác quyền; danh sách hợp đồng được tải client-side + cache trên máy
@@ -21,5 +22,14 @@ export default async function ContractsList() {
       </div>
     );
   }
-  return <ContractsListView />;
+  // Thương hiệu studio in ở đầu file Excel/CSV xuất ra từ màn này.
+  return (
+    <ContractsListView
+      studio={{
+        name: brandFrom(profile).name,
+        phone: (profile.pl_phone as string | null) ?? null,
+        email: (profile.email as string | null) ?? null,
+      }}
+    />
+  );
 }

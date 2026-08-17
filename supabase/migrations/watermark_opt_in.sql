@@ -18,6 +18,10 @@
 -- Cột `watermark_delivery` (gallery giao hàng) vốn đã `default false` — đúng
 -- rồi, không đụng tới.
 --
+-- TÌNH TRẠNG: đã chạy trên production ngày 17/08/2026 — cả phần đổi mặc định
+-- lẫn phần tắt cho album cũ (92 album selection đều về false). File giữ lại để
+-- bản cài mới và môi trường thử có cùng trạng thái.
+--
 -- Chạy trên Supabase SQL Editor. An toàn khi chạy lại (idempotent).
 -- ============================================================================
 

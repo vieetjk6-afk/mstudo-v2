@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { LEAD_SOURCE_LABEL, contractTotal, sumAmounts, type StudioExpense } from "@/lib/types";
+import { brandFrom } from "@/lib/studio-brand";
 import ReportsView, { type PaymentRow, type SalaryRow, type SourceStat } from "./ReportsView";
 
 
@@ -69,6 +70,11 @@ export default async function ReportsPage() {
   return (
     <ReportsView
       ownerId={profile.id}
+      studio={{
+        name: brandFrom(profile).name,
+        phone: (profile.pl_phone as string | null) ?? null,
+        email: (profile.email as string | null) ?? null,
+      }}
       payments={(payments ?? []) as unknown as PaymentRow[]}
       salaries={(salaries ?? []) as unknown as SalaryRow[]}
       initialExpenses={(expenses ?? []) as StudioExpense[]}

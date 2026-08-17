@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import { brandFrom } from "@/lib/studio-brand";
 import ThiepListView, { type InvitationRow } from "./ThiepListView";
 
 export default async function ThiepManagePage() {
@@ -37,5 +38,15 @@ export default async function ThiepManagePage() {
     rsvp_count: Array.isArray(r.wedding_rsvps) && r.wedding_rsvps[0] ? (r.wedding_rsvps[0] as { count: number }).count : 0,
   }));
 
-  return <ThiepListView rows={rows} ownerId={profile.id} />;
+  return (
+    <ThiepListView
+      rows={rows}
+      ownerId={profile.id}
+      studio={{
+        name: brandFrom(profile).name,
+        phone: (profile.pl_phone as string | null) ?? null,
+        email: (profile.email as string | null) ?? null,
+      }}
+    />
+  );
 }
