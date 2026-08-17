@@ -193,3 +193,33 @@ Xuất file in của trình thiết kế album vẫn chạy ở trình duyệt. 
 chủ sẽ cắt được nhiều byte nhất (N ảnh gốc vào → 1 file ra), nhưng canvas
 300 DPI cần ~100 MB bộ nhớ mỗi trang đôi nên **sẽ hết bộ nhớ trên hàm Vercel**
 (1 GB). Làm sau khi đã chuyển sang VPS.
+
+### Cập nhật tiếp — đóng dấu chuyển thành tự chọn
+
+Số liệu Vercel rõ hơn: **11,54 GB / 10 GB**, và biểu đồ cho thấy gần như toàn
+bộ dồn vào **4 ngày** (một ngày 4,42 GB đi ra, chiều Incoming chỉ 333 MB). Tức
+là không phải tải đều — mà là vài đợt khách tải album hàng loạt.
+
+Nguyên nhân gốc: `albums.watermark_enabled` để **`default true`**, nên mọi
+album chọn ảnh đều bật đóng dấu kể cả khi studio không hề chạm vào cài đặt.
+Khác biệt băng thông giữa hai trạng thái là tuyệt đối:
+
+| | Khách bấm tải ảnh | Máy chủ tốn |
+|---|---|---|
+| **Có** watermark | ảnh 2560px phải chảy qua máy chủ | ~1,2 MB / ảnh |
+| **Không** watermark | 302 thẳng sang Google Drive | **0 byte** |
+
+Không phải giảm 17% — mà là **về 0** cho những album không cần đóng dấu.
+
+Đã sửa:
+
+- `supabase/migrations/watermark_opt_in.sql` — đổi mặc định cột sang `false`,
+  kèm khối SQL **tuỳ chọn** (đang chú thích) để tắt cho album đang có
+- `schema.sql` + `setup-all.sql` — mặc định `false` cho bản cài mới
+- `lib/studio-drive.ts` — album đồng bộ từ Drive không còn tự bật watermark
+
+`watermark_delivery` (gallery giao hàng) vốn đã `default false`, không đụng tới.
+`CreateAlbumFlow` vốn đã chỉ bật khi studio gõ chữ watermark, giữ nguyên.
+
+Việc đóng dấu phía máy chủ ở mục trên **vẫn giữ** — nó phục vụ những studio
+thật sự bật watermark, và với họ thì vẫn nhỏ hơn 17% so với cách cũ.

@@ -61,7 +61,7 @@ create table if not exists public.albums (
   password_hash   text,
   -- max photos a customer may select (null = unlimited)
   selection_limit integer,
-  watermark_enabled boolean not null default true,
+  watermark_enabled boolean not null default false,   -- tự chọn: studio tự bật (xem migrations/watermark_opt_in.sql)
   watermark_text  text,   -- null → app falls back to the studio's own name
   status          text not null default 'draft'
                     check (status in ('draft', 'published')),

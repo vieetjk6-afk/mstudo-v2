@@ -409,7 +409,13 @@ async function createAlbumFromFolder(
       client_phone: opts.clientPhone ?? null,
       event_date: opts.eventDate ?? null,
       download_enabled: opts.phase === "delivery",
-      watermark_enabled: opts.phase === "selection",
+      // Đóng dấu chìm là TỰ CHỌN — studio tự bật trong cài đặt album.
+      // Trước đây album chọn ảnh tự bật watermark, và vì ảnh có dấu bắt buộc
+      // phải chảy qua máy chủ (Drive không gửi header CORS nên không chuyển
+      // hướng thẳng sang Google được), mỗi lượt khách tải là một lần tốn băng
+      // thông — trong khi album không dấu thì 302 sang Drive, tốn 0 byte.
+      // Xem supabase/migrations/watermark_opt_in.sql.
+      watermark_enabled: false,
     })
     .select("id")
     .single();
