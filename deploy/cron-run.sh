@@ -53,5 +53,5 @@ for attempt in 1 2; do
 	[[ $attempt -eq 1 ]] && sleep 20
 done
 
-say "THẤT BẠI sau 2 lần thử. Kiểm tra: pm2 logs mstudo"
+say "THẤT BẠI sau 2 lần thử. Kiểm tra: journalctl -u mstudo -n 50"
 exit 1

@@ -67,6 +67,17 @@
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-Proto {scheme}
 
+		# ── Deploy không gián đoạn ────────────────────────────────────────────
+		# Lúc deploy, systemd tắt tiến trình cũ rồi bật tiến trình mới. Trong
+		# khoảnh khắc đó cổng 3000 không ai nghe. Thay vì trả lỗi 502 cho khách,
+		# Caddy GIỮ request và thử lại trong tối đa 15 giây.
+		# Next.js standalone boot ~76ms, nên thực tế khách không thấy gì.
+		lb_try_duration 15s
+		lb_try_interval 250ms
+		# Không đánh dấu upstream là "hỏng" — chỉ có một upstream duy nhất, đánh
+		# dấu hỏng thì Caddy hết chỗ để chuyển và trả 502 ngay.
+		fail_duration 0
+
 		# Upload ảnh cưới / xuất file có thể chạy lâu. Vercel chặn ở 4.5MB và
 		# 60s; trên VPS ta nới hẳn ra — đây là một trong những cái LỢI của VPS.
 		transport http {

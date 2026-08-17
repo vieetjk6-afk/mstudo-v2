@@ -45,12 +45,13 @@ PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 0 9 * * 0 /var/www/mstudo/current/deploy/cron-run.sh cleanup-wedding-photos
 
 # ── Việc bảo trì máy chủ ─────────────────────────────────────────────────────
+# Log của app do journald quản lý — tự xoay vòng, không cần cron dọn.
 
-# 03:00 hằng ngày — cắt bớt log pm2 để không đầy ổ (VPS ổ nhỏ rất dễ đầy log).
-0 3 * * * /usr/bin/pm2 flush >/dev/null 2>&1
+# 03:00 hằng ngày — giữ log cron của chính ta dưới 5MB.
+0 3 * * * f=/home/mstudo/logs/cron.log; [ -f "$f" ] && [ $(stat -c%s "$f") -gt 5242880 ] && tail -c 1048576 "$f" > "$f.tmp" && mv "$f.tmp" "$f"
 
-# 04:00 Chủ nhật — dọn gói apt cũ.
-0 4 * * 0 /usr/bin/apt-get clean >/dev/null 2>&1
+# 04:00 Chủ nhật — dọn gói apt cũ và giới hạn journal ở 200MB.
+0 4 * * 0 /usr/bin/apt-get clean >/dev/null 2>&1; /usr/bin/journalctl --vacuum-size=200M >/dev/null 2>&1
 
 # ── Sao lưu cơ sở dữ liệu ────────────────────────────────────────────────────
 # CHỈ dùng khi đã tự dựng Supabase trên VPS (giai đoạn 2).

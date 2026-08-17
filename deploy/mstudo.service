@@ -1,0 +1,101 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# systemd unit — giữ cho mstudo luôn chạy.
+#
+# Cài đặt (trên VPS, quyền root):
+#     cp /var/www/mstudo/current/deploy/mstudo.service /etc/systemd/system/
+#     systemctl daemon-reload
+#     systemctl enable --now mstudo
+#
+# VÌ SAO systemd MÀ KHÔNG PHẢI pm2:
+#   1. pm2 chạy thêm một daemon riêng tốn 67MB RAM (số đo thật). systemd đã
+#      chạy sẵn trên máy, tốn 0 byte.
+#   2. Bớt một thứ có thể hỏng: pm2 daemon chết thì không ai trông app nữa.
+#   3. MemoryMax bên dưới cho phép hệ thống giết RIÊNG app khi nó phình bất
+#      thường, thay vì để kernel OOM-killer chọn bừa — mà nó hay chọn sshd,
+#      khiến bạn mất luôn đường SSH vào máy đúng lúc cần cứu.
+#   4. Log tự vào journald, tự xoay vòng, không cần cron dọn.
+#
+# Khởi động lại có làm đứt trang không: KHÔNG. Next.js standalone boot trong
+# ~76ms, và Caddy được cấu hình giữ request tới 15 giây trong lúc đó
+# (lb_try_duration ở deploy/Caddyfile). Khách không thấy gì.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=mstudo — phần mềm quản lý studio ảnh
+Documentation=https://github.com/vieetjk6-afk/mstudo-v2
+# Chờ mạng có địa chỉ thật rồi mới chạy, nếu không app có thể lỗi DNS lúc boot.
+After=network-online.target
+Wants=network-online.target
+
+# Chết quá 5 lần trong 60 giây thì dừng hẳn — tránh vòng lặp khởi động vô tận
+# đốt CPU khi bản build hỏng. activate.sh phát hiện và tự quay lui.
+# ⚠️ Hai khoá này phải nằm ở [Unit], KHÔNG phải [Service]: đặt nhầm chỗ thì
+#    systemd lặng lẽ bỏ qua và giới hạn mất tác dụng (systemd-analyze verify
+#    báo "Unknown key name").
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+User=mstudo
+Group=mstudo
+
+# Symlink — activate.sh trỏ nó sang bản mới rồi restart.
+WorkingDirectory=/var/www/mstudo/current
+
+# ── Biến môi trường ──────────────────────────────────────────────────────────
+# systemd tự bỏ cặp nháy bao ngoài, nên viết EMAIL_FROM='mstudo <a@b.com>' là
+# đúng. KHÔNG có phép nội suy biến ($KHAC) — đó là chủ ý, an toàn hơn.
+EnvironmentFile=/var/www/mstudo/shared/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Chỉ nghe nội bộ. Caddy là cửa duy nhất ra Internet — app không hở ra ngoài
+# ngay cả khi tường lửa cấu hình sai.
+Environment=HOSTNAME=127.0.0.1
+# Trần heap V8. Đặt thấp hơn RAM thật để V8 chủ động dọn rác thay vì phình dần.
+#   VPS 2GB → 768    VPS 4GB → 1536    VPS 1GB → 384
+Environment=NODE_OPTIONS=--max-old-space-size=768
+
+# Đường dẫn node của gói NodeSource trên Ubuntu (setup-vps.sh cài bản này).
+# Cài Node bằng cách khác (nvm, snap) thì sửa lại cho đúng — kiểm tra bằng
+# `which node`. Systemd KHÔNG tra $PATH nên bắt buộc ghi đường dẫn tuyệt đối.
+ExecStart=/usr/bin/node server.js
+
+# ── Tự hồi phục ──────────────────────────────────────────────────────────────
+Restart=always
+RestartSec=2
+
+# Cho request đang chạy (upload ảnh lớn) 30 giây để xong trước khi cắt.
+TimeoutStopSec=30
+KillSignal=SIGTERM
+
+# ── Trần bộ nhớ ──────────────────────────────────────────────────────────────
+# MemoryHigh: chạm mức này thì hệ thống ép app nhả bớt (chậm lại, chưa chết).
+# MemoryMax:  chạm mức này thì giết RIÊNG app và systemd khởi động lại ngay.
+# Nhờ vậy sự cố tràn RAM chỉ làm app chớp một nhịp, thay vì kéo sập cả máy chủ.
+#   VPS 2GB → 900M/1200M    VPS 4GB → 1800M/2400M    VPS 1GB → 450M/600M
+MemoryHigh=900M
+MemoryMax=1200M
+
+# ── Siết quyền ───────────────────────────────────────────────────────────────
+# Nếu app có lỗ hổng, những dòng này giới hạn thiệt hại. App không ghi file nào
+# xuống đĩa (đã kiểm tra: không có writeFile, không dùng /tmp) nên siết được chặt.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+# Chỉ được ghi vào đúng thư mục của mình (cần cho việc đổi release).
+ReadWritePaths=/var/www/mstudo
+
+# ── Log ──────────────────────────────────────────────────────────────────────
+# Vào journald: tự xoay vòng, xem bằng `journalctl -u mstudo -f`.
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=mstudo
+
+[Install]
+WantedBy=multi-user.target

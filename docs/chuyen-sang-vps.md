@@ -1,88 +1,167 @@
-# Chuyển mstudo từ Vercel sang VPS
+# Chuyển mstudo từ Vercel sang VPS — hướng dẫn đầy đủ
 
-> Dành cho người **chưa từng dùng VPS**. Mỗi bước ghi rõ gõ gì, ở đâu, và làm
-> sao biết là đã đúng. Không bước nào yêu cầu hiểu Linux từ trước.
+> Viết cho người **chưa từng dùng VPS**. Mỗi bước ghi rõ gõ gì, ở đâu, và làm
+> sao biết là đã đúng. Không bước nào cần biết Linux từ trước.
 >
-> Kết quả: `mstudo.com` chạy trên VPS của bạn, không còn Vercel. Supabase vẫn
-> giữ nguyên (mục 9 nói về việc chuyển nốt Supabase sau này).
+> Kết quả: `mstudo.com` chạy trên máy chủ của bạn, không còn Vercel. Supabase
+> giữ nguyên.
+
+**Mục lục**
+
+1. [Phương án đã chọn và vì sao](#1-phương-án-đã-chọn-và-vì-sao)
+2. [Chọn VPS: nhà cung cấp, cấu hình, hệ điều hành](#2-chọn-vps-nhà-cung-cấp-cấu-hình-hệ-điều-hành)
+3. [Chuẩn bị trước khi động vào gì](#3-chuẩn-bị-trước-khi-động-vào-gì)
+4. [Dựng máy chủ](#4-dựng-máy-chủ)
+5. [Đặt biến môi trường](#5-đặt-biến-môi-trường)
+6. [Cấu hình Caddy](#6-cấu-hình-caddy)
+7. [Deploy lần đầu](#7-deploy-lần-đầu)
+8. [Cài cron](#8-cài-cron)
+9. [Kiểm thử trước khi cắt](#9-kiểm-thử-trước-khi-cắt)
+10. [Đổi DNS](#10-đổi-dns)
+11. [Tên miền riêng của studio](#11-tên-miền-riêng-của-studio)
+12. [Vận hành hằng ngày](#12-vận-hành-hằng-ngày)
+13. [Xử lý sự cố](#13-xử-lý-sự-cố)
+14. [Việc nên làm tiếp](#14-việc-nên-làm-tiếp)
+15. [Danh sách kiểm tra](#15-danh-sách-kiểm-tra)
 
 ---
 
-## 0. Tóm tắt trước khi bắt đầu
+## 1. Phương án đã chọn và vì sao
+
+**VPS 2GB · Ubuntu 24.04 LTS · Caddy · systemd · build trên GitHub Actions ·
+Supabase giữ nguyên**
+
+| Thành phần | Chọn gì | Vì sao |
+|---|---|---|
+| Hệ điều hành | Ubuntu 24.04 LTS | Được hỗ trợ tới 2029, nhiều tài liệu nhất, có sẵn gói Node và Caddy |
+| Máy chủ web | **Caddy** | Tự xin và tự gia hạn HTTPS cho **mọi** tên miền, kể cả tên miền riêng của khách mà ta không biết trước. Nginx phải chạy certbot tay cho từng tên miền — bất khả thi với mstudo |
+| Giữ app sống | **systemd** | Đã có sẵn, tốn 0 RAM. pm2 tốn 67MB (đo thật) và là thêm một daemon có thể chết |
+| Build | **GitHub Actions** | `next build` cần 2–4GB. Build trên VPS sẽ hết RAM và kéo sập app đang chạy |
+| Database | Supabase (giữ nguyên) | 208 chính sách RLS + 238 chỗ gọi `auth.uid()` là hàng rào ngăn studio này đọc dữ liệu studio kia. Viết lại là rủi ro rò rỉ dữ liệu |
+
+**Vì sao không dùng những thứ khác:**
+
+- **Dokploy / Coolify** — cần tối thiểu 2GB *chỉ cho bản thân nó*, và không xử
+  lý được tên miền riêng tự phục vụ (phải thêm tay từng domain).
+- **Cloudflare Workers** — rẻ hơn, nhưng `googleapis` và `web-push` (Drive,
+  Calendar, thông báo đẩy) chưa chắc chạy, và mất tính năng Zalo cá nhân.
+- **Docker** — thêm một tầng phức tạp cho **một** ứng dụng, tốn thêm RAM.
+
+### Con số đo thật
+
+Tôi đã build bản standalone và chạy thật, nạp 660 request với 30 luồng đồng thời:
 
 | | |
 |---|---|
-| **Thời gian** | 3–4 giờ làm lần đầu, phần lớn là ngồi chờ |
-| **Gián đoạn thật sự** | 5–15 phút (lúc đổi DNS ở mục 7) |
-| **Cần có** | VPS Ubuntu 22.04/24.04, quyền truy cập DNS tên miền, tài khoản GitHub |
-| **Quay lui được không** | Được. Trỏ DNS về Vercel là trang chạy lại như cũ |
+| Gói build gửi sang VPS | **54 MB** |
+| RAM lúc vừa khởi động | **79 MB** |
+| RAM đỉnh khi tải nặng | **155 MB** |
+| Thời gian khởi động | **76 ms** |
 
-**Cách làm an toàn:** dựng VPS chạy song song với Vercel, kiểm thử trên
-`beta.mstudo.com` cho chắc, rồi mới đổi DNS. Vercel vẫn sống nguyên cho đến khi
-bạn chủ động tắt.
-
-### VPS 2GB — điều phải biết trước
-
-RAM 2GB đủ **chạy** mstudo nhưng **không đủ build**. `next build` cần 2–4GB;
-build ngay trên VPS sẽ bị hệ thống giết giữa chừng, và nếu app đang chạy thì nó
-bị giết luôn — nghĩa là mỗi lần deploy đều có nguy cơ sập trang.
-
-Cách xử lý trong bộ cấu hình này: **GitHub Actions build hộ** (máy 16GB, miễn
-phí) rồi gửi kết quả ~150MB sang VPS. VPS chỉ đổi symlink và khởi động lại —
-nhẹ, nhanh, không bao giờ hết RAM. Bạn không phải làm gì thêm, chỉ cần biết vì
-sao lại thế.
-
-Ngoài ra `setup-vps.sh` tạo **swap 4GB** làm lưới an toàn cho lúc cao điểm.
+Khởi động 76ms cộng với việc Caddy giữ request tới 15 giây nghĩa là **deploy
+không làm gián đoạn** — khách không thấy gì.
 
 ---
 
-## 1. Những gì đã có sẵn trong repo
+## 2. Chọn VPS: nhà cung cấp, cấu hình, hệ điều hành
 
-Tất cả nằm trong thư mục `deploy/`, không cần tự viết:
+### 2.1 Cấu hình cần
+
+| | Tối thiểu | **Nên chọn** | Khi nào cần hơn |
+|---|---|---|---|
+| RAM | 1 GB | **2 GB** | 4GB nếu sau này tự dựng Supabase (cần 8GB) |
+| CPU | 1 nhân | **2 nhân** | |
+| Ổ đĩa | 20 GB | **30–40 GB** SSD/NVMe | Ảnh nằm trên Supabase, không chiếm ổ VPS |
+| Băng thông | 1 TB/tháng | 2 TB | |
+
+**Vì sao 2GB chứ không phải 1GB:** 1GB *chạy được* — tôi đã tính: hệ điều hành
+~180MB + Caddy 30MB + app 300MB = còn trống ~500MB. Nhưng đó là toàn bộ vùng đệm
+cho mọi tình huống bất thường. Mỗi upload đang chạy chiếm tới 10MB RAM, nên
+khoảng 40 studio cùng đổ ảnh là chạm trần. Chênh lệch giá 1GB → 2GB thường chỉ
+vài chục nghìn mỗi tháng, đổi lại bạn có quyền sai sót.
+
+### 2.2 Chọn nhà cung cấp
+
+Khách của bạn ở Việt Nam, nên **vị trí máy chủ quan trọng hơn thương hiệu**.
+
+| Vị trí | Độ trễ tới VN | Ghi chú |
+|---|---|---|
+| Việt Nam | 5–20 ms | Nhanh nhất. Nhưng cáp quang biển đứt thì kết nối quốc tế (Supabase, Google Drive) chậm theo |
+| **Singapore** | 30–50 ms | **Cân bằng tốt nhất** — gần VN, lại là điểm trung chuyển quốc tế tốt |
+| Nhật / Hong Kong | 50–80 ms | Tốt |
+| Mỹ / Châu Âu | 200–300 ms | Chậm rõ rệt, tránh |
+
+Điểm quan trọng: app của bạn gọi Supabase và Google Drive **ở mỗi request**. Nếu
+Supabase của bạn đặt ở Singapore thì VPS ở Singapore sẽ cho tổng thời gian phản
+hồi thấp nhất — kể cả khi khách ở Việt Nam. Kiểm tra vùng Supabase tại
+Dashboard → Settings → General → Region.
+
+Gợi ý nhà cung cấp có Singapore, giá quanh 2GB:
+
+- **Vultr**, **DigitalOcean**, **Linode/Akamai** — quốc tế, giao diện tốt, trả bằng thẻ quốc tế
+- **Hetzner** — rẻ nhất nhưng chỉ có Châu Âu/Mỹ, **không hợp** với khách VN
+- **VNG Cloud, Viettel IDC, BizFly, Vinahost** — đặt tại VN, thanh toán nội địa
+
+> Đây là gợi ý chung, không phải khuyến nghị cụ thể — bạn nên tự so giá và điều
+> khoản tại thời điểm mua.
+
+### 2.3 Chọn hệ điều hành khi tạo VPS
+
+Trong trang tạo máy, chọn:
+
+> **Ubuntu 24.04 LTS x64**
+
+Đừng chọn: bản không-LTS (hết hỗ trợ sau 9 tháng), CentOS (đã ngừng), hay các
+image "có sẵn cPanel/Plesk" (cài đầy thứ bạn không dùng và ăn RAM).
+
+Nếu nhà cung cấp hỏi thêm:
+- **Enable IPv6** — bật, không hại gì
+- **Enable backups** — bật nếu rẻ (thường ~20% giá máy). Đây là lưới an toàn cấp máy chủ
+- **SSH keys** — nếu có ô dán khoá công khai, làm mục 3.2 trước rồi dán vào đây
+- **Cloud-init / User data** — bỏ trống
+
+### 2.4 Ghi lại thông tin
+
+Sau khi tạo xong, nhà cung cấp cho bạn:
+
+```
+IP        : 203.0.113.10      ← thay bằng IP thật ở MỌI chỗ trong tài liệu này
+User      : root
+Mật khẩu  : (gửi qua email hoặc hiện trên giao diện)
+```
+
+---
+
+## 3. Chuẩn bị trước khi động vào gì
+
+Toàn bộ mục này **không ảnh hưởng** đến trang đang chạy trên Vercel.
+
+### 3.1 Những gì đã có sẵn trong repo
 
 | File | Việc |
 |---|---|
-| `setup-vps.sh` | Dựng VPS từ số 0: swap, user, tường lửa, Node, pm2, Caddy |
-| `Caddyfile` | Máy chủ web + HTTPS tự động cho mọi tên miền |
-| `ecosystem.config.cjs` | Cấu hình pm2 giữ app luôn sống |
-| `activate.sh` | Kích hoạt bản mới, tự quay lui nếu hỏng |
-| `crontab.txt` | 5 job cron thay cho `vercel.json` |
-| `cron-run.sh` | Chạy một job cron và ghi log |
-| `backup-db.sh` | Sao lưu DB (dùng ở giai đoạn 2) |
-| `env.vps.example` | Mẫu file biến môi trường cho VPS |
-| `.github/workflows/vps-deploy.yml` | Build + đẩy lên VPS mỗi khi push `main` |
+| `deploy/setup-vps.sh` | Dựng máy: swap, user, tường lửa, fail2ban, siết SSH, Node, Caddy, systemd |
+| `deploy/Caddyfile` | Web server + HTTPS tự động |
+| `deploy/mstudo.service` | Cấu hình systemd |
+| `deploy/activate.sh` | Kích hoạt bản mới, kiểm tra, tự quay lui |
+| `deploy/crontab.txt` | 5 job thay cho `vercel.json` |
+| `deploy/cron-run.sh` | Chạy job + ghi log |
+| `deploy/backup-db.sh` | Sao lưu DB (dùng sau) |
+| `deploy/env.vps.example` | Mẫu biến môi trường |
+| `.github/workflows/vps-deploy.yml` | Build + đẩy sang VPS |
 
-Và 3 thay đổi nhỏ trong code:
+### 3.2 Tạo khoá SSH (làm trên máy tính của bạn)
 
-| Thay đổi | Vì sao |
-|---|---|
-| `next.config.mjs` — thêm `output: standalone` (chỉ khi `BUILD_STANDALONE=1`) | Gói build gọn còn ~150MB, hợp VPS RAM thấp. Không đặt biến thì build y như cũ, Vercel không ảnh hưởng |
-| `/api/health` (mới) | Để `activate.sh` biết bản mới đã sống chưa |
-| `/api/tls/allow` (mới) | Chốt chặn để Caddy chỉ cấp HTTPS cho tên miền có thật trong DB |
-| `/api/site/domain` — thêm chế độ VPS | Xem mục 8 |
-
----
-
-## 2. Chuẩn bị (chưa động gì đến trang đang chạy)
-
-### 2.1 Lấy thông tin VPS
-
-Nhà cung cấp gửi cho bạn: **IP**, **user** (thường là `root`), **mật khẩu**.
-Bài này giả định IP là `203.0.113.10` — thay bằng IP thật của bạn ở mọi chỗ.
-
-### 2.2 Tạo khoá SSH (làm trên máy tính của bạn)
-
-Khoá SSH giống chìa khoá nhà: an toàn hơn mật khẩu rất nhiều, và GitHub Actions
-bắt buộc phải dùng nó để tự deploy.
+Khoá SSH giống chìa khoá nhà — an toàn hơn mật khẩu rất nhiều, và GitHub Actions
+bắt buộc phải dùng nó.
 
 ```bash
 ssh-keygen -t ed25519 -C "mstudo-deploy" -f ~/.ssh/mstudo_deploy
 ```
 
-Bấm Enter hai lần khi nó hỏi passphrase (để trống — GitHub Actions không gõ
-passphrase được).
+Bấm Enter hai lần khi hỏi passphrase (để trống — GitHub Actions không gõ được).
 
-Có hai file:
+Được hai file:
 - `~/.ssh/mstudo_deploy` — **khoá riêng**, giữ kín, lát nữa dán vào GitHub Secret
 - `~/.ssh/mstudo_deploy.pub` — khoá công khai, đem lên VPS
 
@@ -92,67 +171,28 @@ Có hai file:
 ssh-copy-id -i ~/.ssh/mstudo_deploy.pub root@203.0.113.10
 ```
 
-Thử đăng nhập không cần mật khẩu:
+Thử vào không cần mật khẩu:
 
 ```bash
 ssh -i ~/.ssh/mstudo_deploy root@203.0.113.10
 ```
 
-Vào được thẳng, không hỏi mật khẩu → xong bước này.
+Vào thẳng, không hỏi mật khẩu → xong bước này. **Chưa được thì đừng đi tiếp** —
+mục 4 sẽ tắt đăng nhập bằng mật khẩu, và bạn sẽ bị khoá ngoài máy chủ.
 
-### 2.3 Chuẩn bị tên miền thử
+### 3.3 Thêm tên miền thử
 
-Trong trang quản lý DNS (Cloudflare hoặc nơi bạn mua tên miền), thêm:
+Trong trang quản lý DNS (Cloudflare hoặc nơi mua tên miền):
 
 | Loại | Tên | Giá trị | Proxy |
 |---|---|---|---|
 | A | `beta` | `203.0.113.10` | **TẮT** (đám mây xám) |
 
-> **Cloudflare — quan trọng:** bật proxy (đám mây cam) sẽ chặn Caddy xin chứng
-> chỉ và làm hỏng bước xác minh tên miền. Trong suốt bài này để **DNS only**.
-> Muốn dùng proxy thì bật sau, khi mọi thứ đã chạy.
+> **Cloudflare — rất quan trọng:** bật proxy (đám mây cam) sẽ chặn Caddy xin
+> chứng chỉ. Trong suốt bài này để **DNS only**. Muốn dùng proxy thì bật sau,
+> khi mọi thứ đã chạy.
 
----
-
-## 3. Dựng VPS
-
-SSH vào VPS rồi chạy:
-
-```bash
-ssh -i ~/.ssh/mstudo_deploy root@203.0.113.10
-
-# Tải script dựng máy từ repo
-curl -fsSL https://raw.githubusercontent.com/vieetjk6-afk/mstudo-v2/main/deploy/setup-vps.sh -o setup-vps.sh
-less setup-vps.sh          # đọc lướt xem nó làm gì, q để thoát
-bash setup-vps.sh
-```
-
-Chạy khoảng 3–5 phút. Script tự bỏ qua những bước đã làm, nên chạy lại nhiều
-lần cũng không sao.
-
-**Kiểm tra đã đúng chưa:**
-
-```bash
-free -h              # phải thấy dòng Swap: 4.0Gi
-node -v              # v22.x
-pm2 -v               # có số phiên bản
-caddy version        # có số phiên bản
-ufw status           # Status: active, mở 22/80/443
-id mstudo            # có user mstudo
-```
-
----
-
-## 4. Đặt biến môi trường lên VPS
-
-Đây là bước dài nhất và cũng là bước dễ sai nhất. Cứ từ từ.
-
-### 4.1 Lấy biến từ Vercel
-
-Mở Vercel → project `mstudo-v2` → Settings → Environment Variables. Bấm hiện giá
-trị từng biến và chép ra một file nháp trên máy bạn.
-
-Nhanh hơn thì dùng Vercel CLI:
+### 3.4 Lấy biến môi trường từ Vercel
 
 ```bash
 npx vercel login
@@ -160,109 +200,191 @@ npx vercel link          # chọn project mstudo-v2
 npx vercel env pull .env.tu-vercel
 ```
 
-File `.env.tu-vercel` có sẵn toàn bộ giá trị. **Đừng commit file này.**
+File `.env.tu-vercel` có toàn bộ giá trị thật. **Đừng commit file này.**
 
-### 4.2 Tạo file .env trên VPS
-
-```bash
-ssh -i ~/.ssh/mstudo_deploy root@203.0.113.10
-sudo -u mstudo nano /var/www/mstudo/shared/.env
-```
-
-Chép nội dung `deploy/env.vps.example` vào, điền giá trị thật từ bước 4.1.
-
-Ba biến cần chú ý:
-
-| Biến | Ghi chú |
-|---|---|
-| `SERVER_IP` | **Mới.** IP công khai của VPS. Thiếu biến này thì tính năng tên miền riêng của studio sẽ hỏng |
-| `CRON_SECRET` | Giữ nguyên giá trị đang dùng trên Vercel |
-| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | **Giữ nguyên tuyệt đối.** Đổi là mọi thiết bị đã bật thông báo bị mất kết nối, phải đăng ký lại |
-
-**Cách viết giá trị:** file này được shell đọc bằng `source`, nên giá trị có dấu
-cách hoặc ký tự `#`, `$`, `"`, `'` phải bọc trong nháy đơn:
-
-```bash
-EMAIL_FROM='mstudo <no-reply@mstudo.com>'
-GOOGLE_CLIENT_SECRET='abc#def$ghi'
-```
-
-Lưu (Ctrl+O, Enter, Ctrl+X) rồi khoá quyền đọc:
-
-```bash
-sudo chmod 600 /var/www/mstudo/shared/.env
-sudo chown mstudo:mstudo /var/www/mstudo/shared/.env
-```
-
-### 4.3 Không cần đưa lên VPS
-
-`VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` — chỉ dùng để đăng ký tên
-miền lên Vercel, trên VPS đã có `SERVER_IP` + Caddy thay thế.
-
-`UPSTASH_REDIS_REST_*` — có trong `.env.example` nhưng code **không dùng**.
+Không dùng CLI thì vào Vercel → Settings → Environment Variables, bấm hiện giá
+trị từng biến và chép ra file nháp.
 
 ---
 
-## 5. Cấu hình Caddy (máy chủ web + HTTPS)
+## 4. Dựng máy chủ
 
-### 5.1 Sửa file cho khớp tên miền của bạn
+SSH vào VPS và chạy script dựng máy:
 
-Trên **máy tính của bạn**, mở `deploy/Caddyfile` và sửa 2 chỗ:
-1. `doi-email-cua-ban@mstudo.com` → email thật (Let's Encrypt báo khi chứng chỉ
-   sắp hết hạn mà gia hạn hỏng)
+```bash
+ssh -i ~/.ssh/mstudo_deploy root@203.0.113.10
+
+curl -fsSL https://raw.githubusercontent.com/vieetjk6-afk/mstudo-v2/main/deploy/setup-vps.sh -o setup-vps.sh
+less setup-vps.sh        # đọc lướt xem nó làm gì — q để thoát
+bash setup-vps.sh
+```
+
+Mất 3–5 phút. Chạy lại nhiều lần cũng được, bước nào xong rồi thì tự bỏ qua.
+
+Script làm 10 việc:
+
+| # | Việc | Vì sao |
+|---|---|---|
+| 1 | Cập nhật hệ thống, múi giờ VN | Cron chạy theo giờ Việt Nam |
+| 2 | Swap = 2× RAM (tối đa 4GB) | Lưới an toàn khi RAM cạn — chậm còn hơn chết |
+| 3 | User `mstudo` | Không bao giờ chạy app web bằng root |
+| 4 | Tường lửa: chỉ 22/80/443 | Đóng mọi thứ không cần |
+| 5 | fail2ban | Chặn IP dò mật khẩu SSH |
+| 6 | Tắt đăng nhập bằng mật khẩu | Mật khẩu dù mạnh cũng bị dò cả ngày |
+| 7 | Node.js 22 | |
+| 8 | Caddy | |
+| 9 | Thư mục app + systemd + quyền sudo tối thiểu | |
+| 10 | Cập nhật bảo mật tự động | Bản vá tự cài, không cần nhớ |
+
+### ⚠️ Ngay sau khi script chạy xong
+
+Script đã **tắt đăng nhập bằng mật khẩu**. **Đừng đóng cửa sổ SSH hiện tại.**
+Mở một cửa sổ terminal **mới** và thử:
+
+```bash
+ssh -i ~/.ssh/mstudo_deploy mstudo@203.0.113.10
+```
+
+Vào được thì mới đóng cửa sổ cũ. Không vào được thì quay lại cửa sổ cũ và chạy:
+
+```bash
+rm /etc/ssh/sshd_config.d/99-mstudo.conf && systemctl reload ssh
+```
+
+### Kiểm tra đã đúng chưa
+
+```bash
+free -h                 # dòng Swap phải khác 0
+node -v                 # v22.x
+caddy version           # có số phiên bản
+ufw status              # Status: active, mở 22/80/443
+id mstudo               # có user mstudo
+systemctl is-enabled mstudo    # enabled
+sudo -n -l -U mstudo | grep systemctl    # thấy dòng cấp quyền restart
+```
+
+---
+
+## 5. Đặt biến môi trường
+
+Đây là bước dài nhất và dễ sai nhất. Cứ từ từ.
+
+```bash
+ssh -i ~/.ssh/mstudo_deploy mstudo@203.0.113.10
+nano /var/www/mstudo/shared/.env
+```
+
+Chép nội dung `deploy/env.vps.example` vào, điền giá trị thật từ mục 3.4.
+
+### Cách viết giá trị
+
+systemd đọc file này, **không phải bash**. Luật đơn giản hơn:
+
+```bash
+# Đúng — dấu cách trong giá trị không cần bọc nháy
+EMAIL_FROM=mstudo <no-reply@mstudo.com>
+VAPID_SUBJECT=mailto:khoa@mstudo.com
+
+# Sai — không được có dấu cách quanh dấu =
+A = 1
+
+# Sai — không dùng export
+export A=1
+```
+
+`$` trong giá trị **không** bị thay thế, nên khoá bí mật chứa `$` an toàn.
+
+> `activate.sh` tự kiểm tra định dạng file này trước mỗi lần deploy và **từ chối
+> deploy** nếu sai. Lý do: systemd không báo lỗi khi gặp dòng sai — nó lặng lẽ
+> bỏ qua dòng đó, và bạn sẽ có một app chạy bình thường nhưng hỏng một tính năng
+> nào đó, không có gì trong log chỉ ra nguyên nhân.
+
+### Ba biến cần chú ý
+
+| Biến | Ghi chú |
+|---|---|
+| `SERVER_IP` | **Mới.** IP của VPS. Thiếu là tính năng tên miền riêng của studio hỏng |
+| `CRON_SECRET` | Giữ nguyên giá trị đang dùng trên Vercel |
+| `VAPID_*` | **Giữ nguyên tuyệt đối.** Đổi là mọi thiết bị đã bật thông báo mất kết nối, phải đăng ký lại |
+
+### Không cần đưa lên VPS
+
+`VERCEL_TOKEN`, `VERCEL_PROJECT_ID`, `VERCEL_TEAM_ID` — trên VPS đã có
+`SERVER_IP` + Caddy thay thế.
+
+`UPSTASH_REDIS_REST_*` — có trong `.env.example` nhưng code **không dùng**.
+
+### Khoá quyền đọc
+
+```bash
+chmod 600 /var/www/mstudo/shared/.env
+ls -l /var/www/mstudo/shared/.env      # phải là -rw------- mstudo mstudo
+```
+
+---
+
+## 6. Cấu hình Caddy
+
+### 6.1 Sửa cho khớp tên miền của bạn
+
+Trên **máy tính của bạn**, mở `deploy/Caddyfile` và sửa:
+
+1. `doi-email-cua-ban@mstudo.com` → email thật (Let's Encrypt báo khi gia hạn hỏng)
 2. Nếu tên miền không phải `mstudo.com` thì thay hết
-
-Ở giai đoạn kiểm thử, thêm `beta.mstudo.com` vào danh sách host hệ thống:
+3. Thêm `beta.mstudo.com` vào danh sách host để kiểm thử:
 
 ```
 mstudo.com,
 www.mstudo.com,
 beta.mstudo.com,
 img.mstudo.com,
-...
+admin.mstudo.com,
+thiep.mstudo.com,
+album.mstudo.com {
+	import app
+}
 ```
 
-### 5.2 Chép lên VPS
+### 6.2 Chép lên VPS
 
 ```bash
 scp -i ~/.ssh/mstudo_deploy deploy/Caddyfile root@203.0.113.10:/etc/caddy/Caddyfile
 
 ssh -i ~/.ssh/mstudo_deploy root@203.0.113.10
-sudo caddy validate --config /etc/caddy/Caddyfile   # phải in "Valid configuration"
-sudo systemctl reload caddy
-sudo systemctl status caddy                          # phải thấy active (running)
+caddy validate --config /etc/caddy/Caddyfile   # phải in "Valid configuration"
+systemctl reload caddy
+systemctl status caddy                          # active (running)
 ```
 
-### 5.3 Caddy làm gì cho bạn
+### 6.3 Caddy làm gì cho bạn
 
-- **HTTPS tự động** cho cả 6 subdomain, tự gia hạn, không phải nhớ gì
-- **HTTPS cho tên miền lạ** (on-demand TLS): studio gắn `studio-cua-khach.com`
-  → Caddy tự xin chứng chỉ ở lần truy cập đầu tiên
+- **HTTPS tự động** cho các subdomain hệ thống, tự gia hạn
+- **HTTPS cho tên miền lạ** (on-demand TLS): studio gắn `studio-cua-khach.com` →
+  Caddy tự xin chứng chỉ ở lần truy cập đầu tiên
 - **Chốt chặn**: trước khi xin chứng chỉ, Caddy hỏi `/api/tls/allow` xem tên
   miền có trong DB không. Không có chốt này, ai trỏ domain rác về IP của bạn
-  cũng làm Caddy đi xin chứng chỉ, và Let's Encrypt sẽ **khoá cả máy chủ một
-  tuần** — kể cả `mstudo.com` cũng không gia hạn được
-- **Bỏ giới hạn của Vercel**: hết chặn body 4.5MB, hết timeout 60s. Upload ảnh
-  cưới và xuất file chạy thoải mái. Đây là cái lợi rõ nhất khi rời serverless
+  cũng làm Caddy đi xin chứng chỉ, và Let's Encrypt **khoá cả máy chủ một tuần**
+  — kể cả `mstudo.com` cũng không gia hạn được
+- **Deploy không gián đoạn**: giữ request tới 15 giây trong lúc app khởi động lại
+- **Bỏ giới hạn của Vercel**: hết chặn body 4.5MB, hết timeout 60s
 
 ---
 
-## 6. Deploy lần đầu
+## 7. Deploy lần đầu
 
-### 6.1 Khai báo secret cho GitHub
+### 7.1 Khai báo secret cho GitHub
 
 GitHub → repo `mstudo-v2` → Settings → Secrets and variables → Actions.
 
-Tab **Secrets** (New repository secret):
+Tab **Secrets**:
 
 | Tên | Giá trị |
 |---|---|
 | `VPS_HOST` | `203.0.113.10` |
-| `VPS_SSH_KEY` | Toàn bộ nội dung `~/.ssh/mstudo_deploy` — chép cả dòng `-----BEGIN…` và `-----END…` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Lấy từ file `.env` |
+| `VPS_SSH_KEY` | Toàn bộ nội dung `~/.ssh/mstudo_deploy`, cả dòng `-----BEGIN…` và `-----END…` |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Lấy từ `.env` |
 
-Tab **Variables** (New repository variable) — đây là các biến `NEXT_PUBLIC_*`
-không bí mật:
+Tab **Variables**:
 
 | Tên | Ví dụ |
 |---|---|
@@ -273,125 +395,159 @@ không bí mật:
 | `NEXT_PUBLIC_ADMIN_HOST` | `admin.mstudo.com` |
 | `NEXT_PUBLIC_THIEP_HOST` | `thiep.mstudo.com` |
 | `NEXT_PUBLIC_APP_HOST` | `album.mstudo.com` |
+| `NEXT_PUBLIC_STUDIO_HOST` | (để trống nếu không dùng) |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | … |
 | `NEXT_PUBLIC_GOOGLE_API_KEY` | … |
 | `NEXT_PUBLIC_GOOGLE_APP_ID` | … |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | … |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | … |
-| `NEXT_PUBLIC_STUDIO_HOST` | (để trống nếu không dùng) |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | … |
 | `NEXT_PUBLIC_DESKTOP_RELEASES_REPO` | … |
 
-> **Vì sao `NEXT_PUBLIC_*` phải khai ở GitHub mà các biến khác thì không?**
-> Biến `NEXT_PUBLIC_*` bị nướng thẳng vào file JavaScript gửi xuống trình duyệt
-> **lúc build**, nên phải có mặt trên máy build. Các biến bí mật thật
-> (`SUPABASE_SERVICE_ROLE_KEY`, `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`…) chỉ
-> chạy phía máy chủ, đọc lúc chạy, nên chỉ cần nằm trong `.env` trên VPS.
-> Đừng bao giờ đưa chúng vào GitHub.
+> **Vì sao `NEXT_PUBLIC_*` phải khai ở GitHub mà biến khác thì không?**
+> Chúng bị nướng thẳng vào JavaScript gửi xuống trình duyệt **lúc build**, nên
+> phải có mặt trên máy build. Biến bí mật thật (`SUPABASE_SERVICE_ROLE_KEY`,
+> `GOOGLE_CLIENT_SECRET`, `RESEND_API_KEY`…) chỉ chạy phía máy chủ và đọc lúc
+> chạy, nên chỉ cần nằm trong `.env` trên VPS. **Đừng đưa chúng vào GitHub.**
 
-### 6.2 Chạy deploy
+### 7.2 Chạy
 
-GitHub → tab **Actions** → **Deploy to VPS** → **Run workflow** → chọn nhánh →
-**Run**.
+GitHub → **Actions** → **Deploy to VPS** → **Run workflow**.
 
-Mất khoảng 5–8 phút. Log sẽ hiện lần lượt: cài gói → build → gói bản build →
-đẩy sang VPS → kích hoạt → kiểm tra sức khoẻ.
+Mất 5–8 phút: cài gói → build → gói bản build → đẩy sang VPS → kích hoạt →
+kiểm tra sức khoẻ.
 
-### 6.3 Kiểm tra
+### 7.3 Kiểm tra
 
 ```bash
 ssh -i ~/.ssh/mstudo_deploy mstudo@203.0.113.10
 
-pm2 list                       # mstudo phải ở trạng thái online
-pm2 logs mstudo --lines 30     # xem có lỗi khởi động không
+systemctl status mstudo             # active (running)
+journalctl -u mstudo -n 30          # có lỗi khởi động không
 curl -s localhost:3000/api/health   # {"ok":true,...}
 ```
 
-Rồi mở trình duyệt vào `https://beta.mstudo.com`. Kiểm tra lần lượt:
-
-- [ ] Trang chủ hiện đúng, có CSS và ảnh (mất CSS = quên chép `.next/static`)
-- [ ] Đăng nhập được
-- [ ] Vào dashboard, xem danh sách hợp đồng
-- [ ] Mở Google Picker chọn ảnh từ Drive
-- [ ] Upload một ảnh
-- [ ] Xem một album công khai
-- [ ] Chuông thông báo (kiểm tra realtime còn chạy)
-- [ ] Xuất một hợp đồng ra file
-
 ---
 
-## 7. Đổi DNS sang VPS
-
-Chỉ làm khi mục 6 đã kiểm tra xong hết.
-
-### 7.1 Hạ TTL trước 1 ngày
-
-Vào DNS, đổi TTL của các bản ghi `mstudo.com`, `www`, `img`, `admin`, `thiep`,
-`album` xuống **300 giây (5 phút)**. Làm trước một ngày.
-
-Việc này để nếu có sự cố, đổi ngược về Vercel chỉ mất 5 phút thay vì vài tiếng.
-
-### 7.2 Bỏ cron trên Vercel trước
-
-**Đây là bước hay bị quên nhất.** Nếu Vercel và VPS cùng chạy cron, khách sẽ
-nhận **hai** email nhắc và **hai** tin Zalo mỗi ngày, và job dọn ảnh chạy hai
-lần.
-
-Trên Vercel: Settings → Cron Jobs → tắt cả 5 job. (Hoặc xoá `vercel.json` và
-deploy lại, nhưng tắt bằng tay thì nhanh và chắc hơn.)
-
-### 7.3 Đổi bản ghi DNS
-
-| Loại | Tên | Giá trị cũ | Giá trị mới |
-|---|---|---|---|
-| A | `@` | `76.76.21.21` | `203.0.113.10` |
-| A hoặc CNAME | `www` | `cname.vercel-dns.com` | `203.0.113.10` |
-| A hoặc CNAME | `img` | `cname.vercel-dns.com` | `203.0.113.10` |
-| A hoặc CNAME | `admin` | `cname.vercel-dns.com` | `203.0.113.10` |
-| A hoặc CNAME | `thiep` | `cname.vercel-dns.com` | `203.0.113.10` |
-| A hoặc CNAME | `album` | `cname.vercel-dns.com` | `203.0.113.10` |
-| A | `*` (nếu có) | | `203.0.113.10` |
-
-Bản ghi `*` phục vụ subdomain của studio (`abc.mstudo.com`).
-
-### 7.4 Theo dõi 30 phút đầu
+## 8. Cài cron
 
 ```bash
-pm2 logs mstudo                                # log ứng dụng
-sudo journalctl -u caddy -f                    # log Caddy (xem việc cấp chứng chỉ)
-watch -n5 'free -h; pm2 jlist | head -c 200'   # RAM
+crontab /var/www/mstudo/current/deploy/crontab.txt
+crontab -l                          # xem lại
 ```
 
-Kiểm tra bên ngoài: mở `https://mstudo.com` ở chế độ ẩn danh, đăng nhập, upload
-thử một ảnh.
+Chạy thử một job ngay để chắc chắn nó hoạt động:
 
-### 7.5 Nếu có sự cố
+```bash
+/var/www/mstudo/current/deploy/cron-run.sh reminders
+tail -5 ~/logs/cron.log             # phải thấy dòng "OK — ..."
+```
 
-Đổi các bản ghi DNS về giá trị Vercel cũ. TTL 300s nên 5 phút là trang trở lại
-bình thường. Vercel vẫn còn nguyên, chưa xoá gì.
+Thấy `LỖI: CRON_SECRET rỗng` hoặc `HTTP 401` → xem lại `CRON_SECRET` trong `.env`.
+
+### 5 job và giờ chạy
+
+| Giờ VN | Job | Việc |
+|---|---|---|
+| 07:00 hằng ngày | `reminders` | Email tổng hợp cho chủ studio |
+| 08:30 hằng ngày | `cleanup-proofs` | Xoá ảnh chứng từ quá hạn |
+| 10:00 hằng ngày | `cleanup-drive-cache` | Dọn cache ảnh Drive |
+| 11:00 hằng ngày | `zalo` | Gửi tin Zalo theo lịch |
+| 09:00 Chủ nhật | `cleanup-wedding-photos` | Xoá ảnh cưới hết hạn |
+
+`vercel.json` ghi theo giờ UTC, bảng trên đã quy đổi sang giờ Việt Nam.
 
 ---
 
-## 8. Tên miền riêng của studio — điểm khác biệt lớn nhất
+## 9. Kiểm thử trước khi cắt
 
-Trên Vercel, khi một studio gắn `studio-cua-khach.com`, app gọi Vercel API để
-đăng ký tên miền và Vercel lo chứng chỉ. **Trên VPS không có API đó.**
+Mở `https://beta.mstudo.com` và kiểm tra từng mục:
 
-Repo đã có sẵn cách thay thế, kích hoạt bằng biến `SERVER_IP`:
+- [ ] Trang chủ hiện đúng, **có CSS và ảnh** (mất CSS = thiếu `.next/static`)
+- [ ] Đăng nhập được, refresh trang vẫn còn đăng nhập
+- [ ] Dashboard, danh sách hợp đồng hiện đủ
+- [ ] Mở Google Picker chọn ảnh từ Drive
+- [ ] Upload một ảnh
+- [ ] Xem một album công khai (mở ẩn danh)
+- [ ] Chuông thông báo có số (kiểm tra realtime)
+- [ ] Xuất một hợp đồng ra file
+- [ ] Trang thiệp cưới
+- [ ] Công cụ nén ảnh
+
+Thử luôn khả năng deploy không gián đoạn: mở trang, rồi trong lúc đó chạy
+`sudo systemctl restart mstudo` từ SSH. Trang phải vẫn tải bình thường.
+
+---
+
+## 10. Đổi DNS
+
+Chỉ làm khi mục 9 đã xong hết.
+
+### 10.1 Hạ TTL — làm trước 1 ngày
+
+Đổi TTL của các bản ghi `mstudo.com`, `www`, `img`, `admin`, `thiep`, `album`
+xuống **300 giây**. Để nếu có sự cố, quay về Vercel chỉ mất 5 phút thay vì vài
+tiếng.
+
+### 10.2 Tắt cron trên Vercel — làm TRƯỚC khi đổi DNS
+
+**Đây là bước hay bị quên nhất.** Vercel và VPS cùng chạy cron thì khách nhận
+**hai** email và **hai** tin Zalo mỗi ngày, job dọn ảnh chạy hai lần.
+
+Vercel → Settings → Cron Jobs → tắt cả 5 job.
+
+### 10.3 Đổi bản ghi
+
+| Loại | Tên | Giá trị mới |
+|---|---|---|
+| A | `@` | `203.0.113.10` |
+| A | `www` | `203.0.113.10` |
+| A | `img` | `203.0.113.10` |
+| A | `admin` | `203.0.113.10` |
+| A | `thiep` | `203.0.113.10` |
+| A | `album` | `203.0.113.10` |
+| A | `*` (nếu có) | `203.0.113.10` |
+
+Bản ghi `*` phục vụ subdomain của studio (`abc.mstudo.com`). Nếu đang là CNAME
+trỏ về `cname.vercel-dns.com` thì đổi thành bản ghi A.
+
+### 10.4 Theo dõi 30 phút
+
+```bash
+journalctl -u mstudo -f              # log ứng dụng
+journalctl -u caddy -f               # log Caddy (xem việc cấp chứng chỉ)
+watch -n5 'free -h; systemctl status mstudo --no-pager | head -5'
+```
+
+Kiểm tra bên ngoài: mở `https://mstudo.com` ẩn danh, đăng nhập, upload thử.
+
+### 10.5 Nếu có sự cố
+
+Đổi DNS về giá trị Vercel cũ. TTL 300s nên 5 phút là trang trở lại. Vercel vẫn
+còn nguyên, chưa xoá gì.
+
+---
+
+## 11. Tên miền riêng của studio
+
+### 11.1 Điều gì đã thay đổi
+
+Trên Vercel, khi studio gắn `studio-cua-khach.com`, app gọi Vercel API để đăng
+ký và Vercel lo chứng chỉ. **Trên VPS không có API đó.** Repo đã có cách thay
+thế, bật bằng biến `SERVER_IP`:
 
 | | Trên Vercel | Trên VPS |
 |---|---|---|
-| Đăng ký tên miền | gọi Vercel API | không cần — lưu vào DB là đủ |
-| Cấp chứng chỉ HTTPS | Vercel làm | Caddy tự xin (on-demand TLS) |
-| Xác minh | hỏi Vercel API | app tra DNS xem đã trỏ về `SERVER_IP` chưa |
-| Studio phải khai DNS | A → `76.76.21.21` | A → IP VPS của bạn |
-| Chốt chặn chống lạm dụng | Vercel lo | `/api/tls/allow` tra bảng `sites` |
+| Đăng ký tên miền | gọi Vercel API | không cần — lưu DB là đủ |
+| Cấp HTTPS | Vercel làm | Caddy tự xin |
+| Xác minh | hỏi Vercel API | tra DNS xem đã trỏ về `SERVER_IP` chưa |
+| Studio khai DNS | A → `76.76.21.21` | A → IP VPS của bạn |
 
-**Studio đã gắn tên miền từ trước thì sao?** Họ đang trỏ về `76.76.21.21` (IP
-của Vercel). Sau khi bạn chuyển nhà, các tên miền đó vẫn trỏ về Vercel và sẽ
-hỏng khi bạn tắt project.
+### 11.2 Studio đã gắn tên miền từ trước
 
-Lấy danh sách cần báo bằng SQL này (chạy trong Supabase SQL Editor):
+Họ đang trỏ về `76.76.21.21` (IP Vercel) và sẽ hỏng khi bạn tắt project.
+
+Lấy danh sách cần báo (chạy trong Supabase SQL Editor):
 
 ```sql
 select s.custom_domain, s.subdomain, p.email, p.full_name
@@ -401,176 +557,193 @@ where s.custom_domain is not null
 order by s.custom_domain;
 ```
 
-Với mỗi studio trong danh sách, báo họ đổi bản ghi A của tên miền từ
-`76.76.21.21` sang IP VPS của bạn. Đổi xong, họ vào phần cài đặt website bấm
+Báo mỗi studio đổi bản ghi A sang IP VPS. Xong, họ vào cài đặt website bấm
 "kiểm tra lại" là app tự xác minh và Caddy tự cấp HTTPS.
 
-**Mẹo giảm gián đoạn:** báo trước cho họ đổi DNS **cùng ngày** bạn đổi DNS
-chính. Danh sách này thường chỉ vài studio nên gọi điện là nhanh nhất.
+**Mẹo:** báo họ đổi **cùng ngày** bạn đổi DNS chính. Danh sách thường chỉ vài
+studio nên gọi điện là nhanh nhất.
+
+### 11.3 Khi cần sửa cấu hình systemd
+
+`activate.sh` **cố ý không** tự cập nhật unit file — nếu cho phép, ai đẩy được
+code lên VPS cũng có thể sửa thành `ExecStart=/bin/sh` rồi restart, tức là leo
+thẳng lên quyền root. Sửa unit thì làm tay bằng root:
+
+```bash
+sudo cp /var/www/mstudo/current/deploy/mstudo.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart mstudo
+```
+
+`activate.sh` sẽ nhắc bạn khi phát hiện hai bản khác nhau.
 
 ---
 
-## 9. Giai đoạn 2 — tự dựng Supabase (làm sau, khi đã có VPS mạnh hơn)
-
-### Chưa làm được với VPS 2GB
-
-Bộ self-host Supabase gồm 7 dịch vụ (Postgres, GoTrue, PostgREST, Realtime,
-Storage, Kong, Studio) và cần **tối thiểu 4GB RAM chỉ riêng cho nó**. Cộng thêm
-Next.js nữa thì phải **8GB**. Ép chạy trên 2GB sẽ hỏng theo kiểu tệ nhất: chạy
-được lúc vắng khách rồi chết vào đúng lúc đông.
-
-**Khi nào nên làm:** khi hoá đơn Supabase đủ lớn để bù tiền nâng VPS lên 8GB, và
-bạn đã quen vận hành VPS sau vài tháng chạy giai đoạn 1.
-
-### Vì sao phải self-host chứ không đổi sang Postgres thường
-
-Dự án phụ thuộc rất sâu vào Supabase:
-
-| | Số lượng |
-|---|---|
-| Bảng | 161 |
-| Chính sách RLS | 208 |
-| `auth.uid()` trong SQL | 238 chỗ |
-| File dùng Supabase Auth | 56 |
-| Realtime | 3 màn |
-| Storage bucket | `wedding-photos`, `payment-proofs` |
-
-208 chính sách RLS là **toàn bộ hàng rào ngăn studio A đọc dữ liệu studio B**.
-Bỏ Supabase để dùng Postgres thường nghĩa là phải viết lại từng ấy quy tắc thành
-code, và mỗi chỗ sót là một lần rò rỉ dữ liệu khách hàng.
-
-Self-host Supabase giữ **nguyên vẹn** tất cả: code ứng dụng chỉ đổi
-`NEXT_PUBLIC_SUPABASE_URL` và hai khoá.
-
-### Phác thảo các bước (khi đã nâng VPS)
-
-1. Nâng VPS lên **8GB RAM / 4 vCPU / 100GB+ SSD**. Ước lượng ổ đĩa trước bằng
-   cách xem dung lượng Storage hiện tại trên Supabase Dashboard → Settings →
-   Usage — bucket `wedding-photos` có thể rất lớn.
-2. Cài Docker + Docker Compose.
-3. Tải bộ self-host chính thức
-   (`github.com/supabase/supabase` → `docker/`), sinh khoá mới bằng công cụ của
-   họ, viết `.env` cho compose.
-4. Thêm `db.mstudo.com` (trỏ về VPS) vào Caddyfile, reverse proxy về cổng Kong
-   (8000).
-5. Chuyển dữ liệu: `pg_dump` từ Supabase cloud → `psql` vào Postgres mới. Nhớ
-   dump **cả** schema `auth` (bảng người dùng), không chỉ `public` — thiếu là
-   mọi người mất tài khoản.
-6. Chuyển file Storage: tải toàn bộ 2 bucket xuống rồi đẩy lên bằng
-   Storage API của bản self-host.
-7. Đổi `NEXT_PUBLIC_SUPABASE_URL` + 2 khoá trong `.env` trên VPS và trong
-   GitHub Variables/Secrets, rồi deploy lại.
-8. Cập nhật URL callback đăng nhập Google trong Google Cloud Console (host của
-   Supabase đổi → callback đổi).
-9. **Bật ngay** `deploy/backup-db.sh` trong crontab và cấu hình `BACKUP_REMOTE`
-   để đẩy sao lưu ra nơi khác.
-
-> Việc lớn nhất và rủi ro nhất là bước 5 và 6. Làm thử trên một VPS tạm trước,
-> đừng làm thẳng trên production.
-
----
-
-## 10. Vận hành hằng ngày
+## 12. Vận hành hằng ngày
 
 ### Lệnh hay dùng
 
 ```bash
 ssh -i ~/.ssh/mstudo_deploy mstudo@203.0.113.10
 
-pm2 list                     # app còn sống không
-pm2 logs mstudo              # log trực tiếp
-pm2 logs mstudo --lines 200  # 200 dòng gần nhất
-pm2 monit                    # xem RAM/CPU theo thời gian thực
-pm2 reload mstudo            # khởi động lại không đứt kết nối
+systemctl status mstudo          # còn sống không
+journalctl -u mstudo -f          # log trực tiếp (Ctrl+C để thoát)
+journalctl -u mstudo -n 200      # 200 dòng gần nhất
+journalctl -u mstudo --since "1 hour ago"
+sudo systemctl restart mstudo    # khởi động lại
 
-free -h                      # RAM + swap
-df -h /                      # ổ đĩa
-tail -50 ~/logs/cron.log     # cron chạy có lỗi không
+free -h                          # RAM + swap
+df -h /                          # ổ đĩa
+systemctl show mstudo -p MemoryCurrent   # app đang ăn bao nhiêu RAM
+tail -50 ~/logs/cron.log         # cron có lỗi không
 
-sudo journalctl -u caddy -n 50    # log Caddy
+sudo systemctl reload caddy
+journalctl -u caddy -n 50
+curl -s localhost:3000/api/health
 ```
 
 ### Deploy bản mới
 
-Push lên `main` là GitHub Actions tự làm. Muốn deploy tay: Actions → Deploy to
-VPS → Run workflow.
+Push lên `main` → GitHub Actions tự làm. Deploy tay: Actions → Deploy to VPS →
+Run workflow.
 
-### Quay lui bản cũ
+### Quay lui
 
-`activate.sh` tự quay lui khi bản mới không phản hồi. Muốn quay lui thủ công:
+`activate.sh` tự quay lui khi bản mới không phản hồi trong 60 giây. Thủ công:
 
 ```bash
-ls -1t /var/www/mstudo/releases      # 3 bản gần nhất
-/var/www/mstudo/releases/<tên-bản-cũ>/deploy/activate.sh <tên-bản-cũ>
+ls -1t /var/www/mstudo/releases          # 3 bản gần nhất
+/var/www/mstudo/releases/<bản-cũ>/deploy/activate.sh <bản-cũ>
 ```
 
-### Việc phải nhớ
+### Đổi biến môi trường
+
+```bash
+nano /var/www/mstudo/shared/.env
+sudo systemctl restart mstudo    # không có bước này thì app vẫn giá trị cũ
+```
+
+### Lịch bảo trì
 
 | Việc | Khi nào |
 |---|---|
-| `sudo apt update && sudo apt upgrade -y` | Mỗi tháng |
+| `sudo apt update && sudo apt upgrade -y` | Mỗi tháng (bản vá bảo mật đã tự cài) |
 | Kiểm tra `df -h` còn chỗ trống | Mỗi tháng |
-| Xem `~/logs/cron.log` có job nào hỏng | Mỗi tuần |
-| Thử khôi phục một bản sao lưu | Mỗi quý (giai đoạn 2) |
+| Xem `~/logs/cron.log` có job hỏng | Mỗi tuần |
+| `sudo reboot` sau khi cập nhật kernel | Khi có thông báo |
 
-### Nên gắn thêm giám sát
+### Gắn giám sát
 
 VPS chết thì không ai báo bạn. Đăng ký một dịch vụ miễn phí (UptimeRobot,
 BetterStack) trỏ vào `https://mstudo.com/api/health`, 5 phút kiểm tra một lần,
-gửi email khi sập.
+gửi email khi sập. **Đừng bỏ qua bước này** — đây là khác biệt lớn nhất giữa
+Vercel (họ trông hộ) và VPS (bạn tự trông).
 
 ---
 
-## 11. Xử lý sự cố
+## 13. Xử lý sự cố
 
 | Triệu chứng | Nguyên nhân hay gặp | Cách xử lý |
 |---|---|---|
-| Trang trắng, mất hết CSS | Quên chép `.next/static` hoặc `public/` | Chạy lại workflow deploy |
-| 502 Bad Gateway | Next.js không chạy | `pm2 list`, `pm2 logs mstudo` |
-| Đăng nhập xong bị đá về `/login` | `NEXT_PUBLIC_MAIN_HOST` sai → cookie domain sai | Sửa `.env`, `pm2 reload mstudo --update-env` |
-| Không cấp được HTTPS | Cloudflare đang bật proxy, hoặc DNS chưa trỏ | Tắt proxy (đám mây xám), chờ DNS |
-| Tên miền riêng của studio không lên HTTPS | Chưa lưu trong DB, hoặc DNS chưa trỏ về VPS | `curl "localhost:3000/api/tls/allow?domain=studio.com"` — không trả `ok` thì xem lại bảng `sites` |
+| Trang trắng, mất CSS | Thiếu `.next/static` hoặc `public/` | Chạy lại workflow deploy |
+| 502 Bad Gateway | App không chạy | `systemctl status mstudo`, `journalctl -u mstudo -n 50` |
+| Đăng nhập xong bị đá về `/login` | `NEXT_PUBLIC_MAIN_HOST` sai → cookie domain sai | Sửa `.env`, `sudo systemctl restart mstudo` |
+| Không cấp được HTTPS | Cloudflare bật proxy, hoặc DNS chưa trỏ | Tắt proxy (đám mây xám), chờ DNS |
+| Tên miền studio không lên HTTPS | Chưa lưu DB, hoặc DNS chưa trỏ | `curl "localhost:3000/api/tls/allow?domain=studio.com"` — không trả `ok` thì xem bảng `sites` |
 | Cron không chạy | Chưa cài crontab, hoặc `CRON_SECRET` lệch | `crontab -l`, xem `~/logs/cron.log` |
-| Khách nhận 2 email / 2 tin Zalo | Cron còn bật cả trên Vercel | Tắt Cron Jobs trên Vercel |
-| App tự khởi động lại liên tục | Hết RAM | `free -h`; kiểm tra swap; cân nhắc nâng RAM |
-| Upload file lớn bị lỗi | Timeout Caddy | Nâng `read_timeout` trong Caddyfile |
-| Deploy hỏng, trang vẫn chạy bản cũ | `activate.sh` đã tự quay lui | Xem log Actions và `pm2 logs mstudo` |
+| Khách nhận 2 email / 2 tin Zalo | Cron còn bật trên Vercel | Tắt Cron Jobs trên Vercel |
+| App khởi động lại liên tục | Hết RAM, hoặc lỗi khởi động | `journalctl -u mstudo -n 100`; `free -h` |
+| `Start request repeated too quickly` | Chết 5 lần trong 60s, systemd dừng hẳn | Sửa lỗi rồi `sudo systemctl reset-failed mstudo && sudo systemctl start mstudo` |
+| Deploy báo lỗi `.env` | File sai định dạng systemd | Đọc thông báo lỗi, sửa dòng được chỉ ra |
+| Deploy hỏng, trang vẫn chạy bản cũ | `activate.sh` đã tự quay lui | Xem log Actions và `journalctl -u mstudo` |
+| Upload file lớn lỗi | Timeout Caddy | Nâng `read_timeout` trong Caddyfile |
 
-### Trang sập, chưa biết vì sao — làm theo thứ tự này
+### Trang sập, chưa biết vì sao — theo thứ tự này
 
 ```bash
 ssh -i ~/.ssh/mstudo_deploy mstudo@203.0.113.10
-pm2 list                        # 1. app còn chạy không?
-pm2 logs mstudo --lines 100     # 2. lỗi gì?
-free -h                         # 3. hết RAM không?
-df -h /                         # 4. đầy ổ không?
-sudo systemctl status caddy     # 5. Caddy còn chạy không?
-curl -s localhost:3000/api/health   # 6. Next.js có phản hồi không?
+systemctl status mstudo             # 1. app còn chạy không?
+journalctl -u mstudo -n 100         # 2. lỗi gì?
+free -h                             # 3. hết RAM không?
+df -h /                             # 4. đầy ổ không?
+systemctl status caddy              # 5. Caddy còn chạy không?
+curl -s localhost:3000/api/health   # 6. app có phản hồi không?
 ```
 
-Bước 6 trả về `{"ok":true}` mà ngoài Internet vẫn không vào được → lỗi ở Caddy
-hoặc DNS, không phải ở app.
+Bước 6 trả `{"ok":true}` mà ngoài Internet không vào được → lỗi ở Caddy hoặc
+DNS, không phải ở app.
+
+### Mất quyền SSH vào máy
+
+Dùng **Console / VNC** trên trang quản lý của nhà cung cấp — đó là "màn hình
+cắm trực tiếp vào máy", vào được kể cả khi SSH hỏng. Đăng nhập root bằng mật
+khẩu ban đầu rồi:
+
+```bash
+rm /etc/ssh/sshd_config.d/99-mstudo.conf
+systemctl reload ssh
+```
 
 ---
 
-## 12. Danh sách kiểm tra
+## 14. Việc nên làm tiếp
+
+### 14.1 Chuyển bucket cache ảnh sang Cloudflare R2 — **ưu tiên cao nhất**
+
+Chuyển sang VPS cắt được tiền Vercel, nhưng **không** giải quyết vấn đề tài
+nguyên Supabase. Theo `docs/supabase-usage.md`, bucket `drive-cache` chiếm
+**13GB — 99,7% tổng dung lượng**, trong khi hạn mức Free là 1GB. Database chỉ
+dùng 69MB/500MB.
+
+Cloudflare R2 tính **0 đồng egress** và ~$0,015/GB/tháng. 13GB ≈ **$0,20/tháng**,
+so với việc phải lên Supabase Pro $25/tháng chỉ vì cái bucket cache.
+
+Thay đổi rất gọn: 6 điểm gọi trong 3 file (`/api/img`, cron dọn cache,
+`lib/download.ts`), đều đã nằm sau biến `DRIVE_IMG_CACHE_BUCKET`. Mất cache
+không mất dữ liệu — mọi object dựng lại được từ Drive.
+
+### 14.2 Sau khi chạy ổn định 1–2 tuần
+
+- Xoá project trên Vercel
+- Xoá `vercel.json` và `.github/workflows/vercel-deploy.yml` khỏi repo
+- Bật lại Cloudflare proxy nếu muốn (chỉ sau khi HTTPS đã cấp xong)
+
+### 14.3 Tự dựng Supabase — chỉ khi đã nâng VPS lên 8GB
+
+Bộ self-host Supabase cần **tối thiểu 4GB RAM cho riêng nó**, cộng Next.js là
+8GB. Việc rủi ro nhất là chuyển dữ liệu: phải dump **cả** schema `auth` (bảng
+người dùng), không chỉ `public` — thiếu là mọi người mất tài khoản. Làm thử trên
+VPS tạm trước, đừng làm thẳng trên production. Và bật `deploy/backup-db.sh` ngay
+trong ngày đầu.
+
+---
+
+## 15. Danh sách kiểm tra
+
+**Mua máy**
+- [ ] VPS 2GB RAM / 2 nhân / 30GB SSD, vị trí Singapore hoặc VN
+- [ ] Ubuntu 24.04 LTS x64
+- [ ] Ghi lại IP
 
 **Chuẩn bị**
 - [ ] Tạo khoá SSH, vào VPS được không cần mật khẩu
-- [ ] Thêm bản ghi DNS `beta` trỏ về VPS (Cloudflare: tắt proxy)
+- [ ] Thêm bản ghi DNS `beta` (Cloudflare: tắt proxy)
 - [ ] Xuất biến môi trường từ Vercel
 
 **Dựng máy**
-- [ ] Chạy `setup-vps.sh`, kiểm tra swap 4GB
-- [ ] Tạo `/var/www/mstudo/shared/.env`, `chmod 600`
-- [ ] Điền `SERVER_IP`
+- [ ] Chạy `setup-vps.sh`
+- [ ] **Mở cửa sổ mới, thử SSH bằng user `mstudo` trước khi đóng cửa sổ cũ**
+- [ ] Kiểm tra swap, node, caddy, ufw
+- [ ] Điền `/var/www/mstudo/shared/.env`, nhớ `SERVER_IP`
+- [ ] `chmod 600` file `.env`
 - [ ] Chép `Caddyfile`, `caddy validate`, reload
 
 **Deploy**
 - [ ] Khai secret + variable trên GitHub
-- [ ] Chạy workflow, thấy `pm2 list` online
-- [ ] Kiểm tra đủ 8 mục ở 6.3 trên `beta.mstudo.com`
-- [ ] Cài crontab, chạy thử một job bằng tay
+- [ ] Chạy workflow, `systemctl status mstudo` = active
+- [ ] Cài crontab, chạy thử `cron-run.sh reminders`
+- [ ] Kiểm tra đủ 10 mục ở mục 9 trên `beta.mstudo.com`
+- [ ] Thử restart lúc đang mở trang — không được đứt
 
 **Cắt chuyển**
 - [ ] Hạ TTL xuống 300s (trước 1 ngày)
@@ -581,5 +754,5 @@ hoặc DNS, không phải ở app.
 
 **Sau khi ổn**
 - [ ] Gắn giám sát vào `/api/health`
-- [ ] Chạy song song 1–2 tuần rồi mới xoá project Vercel
-- [ ] Xoá `vercel.json` và `.github/workflows/vercel-deploy.yml` khỏi repo
+- [ ] Chuyển bucket cache sang R2 (mục 14.1)
+- [ ] Chạy song song 1–2 tuần rồi mới xoá Vercel
