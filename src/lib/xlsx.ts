@@ -108,21 +108,28 @@ function safeSheetName(s: string, fallback: string): string {
 
 /* ── styles.xml ────────────────────────────────────────────────────────── */
 
+/**
+ * Font của mọi file xuất ra. Times New Roman theo chuẩn văn bản hành chính
+ * Việt Nam và khớp với bản in hợp đồng, nên bộ hồ sơ studio gửi đi trông cùng
+ * một nhà. Có sẵn trên mọi máy Windows/Mac nên không lo máy nhận thay font.
+ */
+const FONT = "Times New Roman";
+
 // numFmtId 164: tiền VND — vẫn là SỐ nên Excel cộng/lọc/vẽ biểu đồ được.
 const MONEY_FMT = '#,##0" đ";[Red]-#,##0" đ"';
 
 function stylesXml(): string {
   const fonts = [
-    `<font><sz val="11"/><name val="Calibri"/></font>`,                                        // 0 default
-    `<font><b/><sz val="16"/><color rgb="FF111111"/><name val="Calibri"/></font>`,             // 1 title
-    `<font><b/><sz val="12"/><color rgb="FF111111"/><name val="Calibri"/></font>`,             // 2 brand
-    `<font><sz val="10"/><color rgb="FF6B7280"/><name val="Calibri"/></font>`,                 // 3 muted
-    `<font><b/><sz val="10"/><color rgb="FF6B7280"/><name val="Calibri"/></font>`,             // 4 label
-    `<font><b/><sz val="12"/><color rgb="FF111111"/><name val="Calibri"/></font>`,             // 5 section
-    `<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/></font>`,             // 6 head
-    `<font><b/><sz val="11"/><color rgb="FF111111"/><name val="Calibri"/></font>`,             // 7 bold
-    `<font><sz val="11"/><color rgb="FF15803D"/><name val="Calibri"/></font>`,                 // 8 green
-    `<font><sz val="11"/><color rgb="FFB91C1C"/><name val="Calibri"/></font>`,                 // 9 red
+    `<font><sz val="11"/><name val="${FONT}"/></font>`,                                        // 0 default
+    `<font><b/><sz val="16"/><color rgb="FF111111"/><name val="${FONT}"/></font>`,             // 1 title
+    `<font><b/><sz val="12"/><color rgb="FF111111"/><name val="${FONT}"/></font>`,             // 2 brand
+    `<font><sz val="10"/><color rgb="FF6B7280"/><name val="${FONT}"/></font>`,                 // 3 muted
+    `<font><b/><sz val="10"/><color rgb="FF6B7280"/><name val="${FONT}"/></font>`,             // 4 label
+    `<font><b/><sz val="12"/><color rgb="FF111111"/><name val="${FONT}"/></font>`,             // 5 section
+    `<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="${FONT}"/></font>`,             // 6 head
+    `<font><b/><sz val="11"/><color rgb="FF111111"/><name val="${FONT}"/></font>`,             // 7 bold
+    `<font><sz val="11"/><color rgb="FF15803D"/><name val="${FONT}"/></font>`,                 // 8 green
+    `<font><sz val="11"/><color rgb="FFB91C1C"/><name val="${FONT}"/></font>`,                 // 9 red
   ].join("");
 
   const fills = [
@@ -262,7 +269,7 @@ function chartXml(ch: XlsxChart): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
 <c:chart>
-<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1200" b="1"/></a:pPr><a:r><a:rPr lang="vi-VN" sz="1200" b="1"/><a:t>${escXml(ch.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
+<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1200" b="1"><a:latin typeface="${FONT}"/></a:defRPr></a:pPr><a:r><a:rPr lang="vi-VN" sz="1200" b="1"><a:latin typeface="${FONT}"/></a:rPr><a:t>${escXml(ch.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title>
 <c:autoTitleDeleted val="0"/>
 <c:plotArea><c:layout/>
 <c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>
@@ -275,6 +282,7 @@ ${series}
 <c:legend><c:legendPos val="b"/><c:overlay val="0"/></c:legend>
 <c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/>
 </c:chart>
+<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="900"><a:latin typeface="${FONT}"/></a:defRPr></a:pPr><a:endParaRPr lang="vi-VN"/></a:p></c:txPr>
 </c:chartSpace>`;
 }
 
