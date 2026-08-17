@@ -64,3 +64,43 @@ alter table public.albums alter column watermark_enabled set default false;
 -- Đảo ngược lúc nào cũng được: studio tự bật lại trong cài đặt album, hoặc
 --     update public.albums set watermark_enabled = true where id = '<id>';
 -- ============================================================================
+
+
+-- ============================================================================
+-- 3. Gallery giao hàng (`watermark_delivery`) — 17/08/2026
+--
+-- Cột này vốn đã `default false`, nhưng vẫn phải rà: gallery giao hàng là nơi
+-- khách tải ảnh NHIỀU NHẤT (download_enabled bật mặc định), nên một album bật
+-- đóng dấu ở đây tốn băng thông hơn hẳn một album chọn ảnh.
+--
+-- Đo được lúc rà: 47 album delivery tắt đóng dấu, 1 album bật.
+-- Chủ dự án quyết định tắt nốt album đó.
+-- ============================================================================
+update public.albums
+   set watermark_delivery = false
+ where phase = 'delivery'
+   and watermark_delivery = true;
+
+-- Kiểm tra lại — cả hai cột phải sạch:
+--
+--     select phase, watermark_enabled, watermark_delivery, count(*)
+--     from public.albums
+--     group by 1, 2, 3
+--     order by 1, 2, 3;
+--
+-- Từ giờ mọi lượt khách bấm tải đều 302 thẳng sang Google Drive → máy chủ tốn
+-- 0 byte. Studio nào cần đóng dấu thì tự bật lại trong cài đặt album.
+
+
+-- ============================================================================
+-- GHI CHÚ: schema `old_public`
+--
+-- Lúc rà phát hiện có HAI bảng tên `albums`: `public.albums` (đang dùng) và
+-- `old_public.albums` (bản sao lưu còn sót từ lần chuyển sang bản 2.0, xem
+-- supabase/clone-from-old-project.sql). App chỉ đọc `public` nên vô hại.
+--
+-- Lưu ý khi viết truy vấn kiểm tra: lọc theo `table_schema`, nếu không
+-- information_schema sẽ trả về cả hai và dễ đọc nhầm kết quả.
+--
+-- Khi chắc chắn không cần bản cũ nữa:  drop schema old_public cascade;
+-- ============================================================================
