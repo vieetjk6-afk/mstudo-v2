@@ -228,8 +228,17 @@ export default function NewQuoteForm({
   const previewLines = items.filter((i) => i.name.trim() || i.unit_price);
 
   return (
+    /* grid-cols-1 (= repeat(1, minmax(0,1fr))) chứ KHÔNG để lưới tự suy ra một
+       cột: cột suy ra dùng track `auto`, mà sàn của track `auto` là min-content
+       của thẻ con — thẻ nào không có min-width:0 sẽ không chịu co, kéo cả lưới
+       rộng hơn màn hình. Đúng lỗi "chọn gói xong giao diện bị kéo ra": rail phải
+       hiện dòng mô tả gói (whitespace-nowrap vì `truncate`) nên min-content của
+       nó bằng nguyên câu mô tả — trên điện thoại lưới phình gấp đôi bề ngang
+       màn, `overflow-x-clip` của khung studio cắt mất phần thừa nên mọi khối
+       trông như bị đẩy lệch ra ngoài. Từ 1180px trở lên lưới hai cột đã dùng
+       minmax(0,…) nên máy tính không dính lỗi này. */
     <div
-      className="page-in mx-auto grid max-w-[1060px] items-start gap-3.5 min-[1180px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]"
+      className="page-in mx-auto grid max-w-[1060px] grid-cols-1 items-start gap-3.5 min-[1180px]:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]"
       data-testid="quote-new-page"
     >
       {/* ══ Cột trái — studio nhập ══════════════════════════════════════════ */}
