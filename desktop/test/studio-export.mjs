@@ -12,8 +12,14 @@ import { xlsxZip, colName, cellRef } from "../../src/lib/xlsx.ts";
 import {
   contractsWorkbook,
   financeWorkbook,
+  payrollWorkbook,
+  clientsWorkbook,
+  rsvpWorkbook,
   contractsCsvRows,
   financeCsvRows,
+  payrollCsvRows,
+  clientsCsvRows,
+  rsvpCsvRows,
   toCsv,
   dmy,
 } from "../../src/lib/studio-export.ts";
@@ -108,6 +114,55 @@ check("nhãn tháng khớp bảng", fw[0].rows[headIdx + 12][0].v, ch.categories
 const outTotalRow = fw[2].rows[fw[2].rows.length - 1];
 check("tổng tiền ra", outTotalRow[outTotalRow.length - 1].v, 4_200_000);
 
+// ── Đối soát tiền công ───────────────────────────────────────────────────
+const payroll = [
+  { name: "Ánh", phone: "0901", role: "Photo", contract: "Cưới A", code: "HD-1", date: "2026-09-01", salary: 1_500_000, paid: true },
+  { name: "Ánh", phone: "0901", role: "Photo", contract: "Kỷ yếu", code: "HD-2", date: "2026-09-05", salary: 1_000_000, paid: false },
+  { name: "Bình", phone: "0902", role: "Video", contract: "Cưới A", code: "HD-1", date: "2026-09-01", salary: 2_000_000, paid: false },
+];
+const pw = payrollWorkbook(studio, payroll, ["Kỳ: Tháng 9/2026"]);
+check("workbook lương có 2 sheet", pw.map((s) => s.name).join("|"), "Chi tiết|Theo nhân sự");
+const pTotal = pw[0].rows[pw[0].rows.length - 1];
+check("tổng tiền công", pTotal[7].v, 4_500_000);
+// Gom theo NGƯỜI, không phải theo lượt job: Ánh 2 job phải thành một dòng.
+const people = pw[1].rows.filter((r) => r.length === 6 && typeof r[2]?.v === "number" && r[0]?.s === "cell");
+check("gom đúng số nhân sự", people.length, 2);
+const anh = people.find((r) => r[0].v === "Ánh");
+check("Ánh: 2 job", anh[2].v, 2);
+check("Ánh: tổng tiền công", anh[3].v, 2_500_000);
+check("Ánh: đã trả", anh[4].v, 1_500_000);
+check("Ánh: còn phải trả", anh[5].v, 1_000_000);
+
+// ── Danh bạ khách hàng ───────────────────────────────────────────────────
+const clients = [
+  { name: "Lan", phone: "091", jobs: 2, value: 30_000_000, collected: 20_000_000, last: "2026-08-01", source: "Facebook" },
+  { name: "Nam", phone: "092", jobs: 1, value: 10_000_000, collected: 10_000_000, last: "2025-01-05", source: "Giới thiệu" },
+];
+const clw = clientsWorkbook(studio, clients, ["Danh sách: tất cả khách"]);
+const clTotal = clw[0].rows[clw[0].rows.length - 1];
+check("khách: tổng giá trị", clTotal[4].v, 40_000_000);
+check("khách: tổng đã thu", clTotal[5].v, 30_000_000);
+check("khách: tổng còn nợ", clTotal[6].v, 10_000_000);
+const clSummary = JSON.stringify(clw[1].rows);
+checkTrue("khách: có nhóm theo nguồn", clSummary.includes("Theo nguồn khách"));
+checkTrue("khách: có tỷ lệ quay lại", clSummary.includes("Tỷ lệ quay lại"));
+// Khách trả dư (đã thu > giá trị) không được thành "nợ âm".
+const overpaid = clientsWorkbook(studio, [{ name: "X", phone: "", jobs: 1, value: 1_000_000, collected: 1_500_000, last: null, source: "" }], []);
+check("đã thu vượt giá trị → còn nợ = 0", overpaid[0].rows[overpaid[0].rows.length - 2][6].v, 0);
+
+// ── Khách mời thiệp cưới ─────────────────────────────────────────────────
+const rsvps = [
+  { name: "Chú Ba", side: "Chú rể", attending: true, guests: 2, wish: "Chúc mừng!", at: "01/09/2026 10:00" },
+  { name: "Cô Tư", side: "Cô dâu", attending: false, guests: 1, wish: "", at: "02/09/2026 09:00" },
+  { name: "Anh Năm", side: "Chung", attending: true, guests: 3, wish: "Trăm năm hạnh phúc", at: "03/09/2026 08:00" },
+];
+const rw = rsvpWorkbook(studio, rsvps, "DANH SÁCH KHÁCH MỜI — MINH & LAN", ["Thiệp: Minh & Lan"]);
+const rTotal = rw[0].rows[rw[0].rows.length - 1];
+check("RSVP: đếm phản hồi", rTotal[1].v, "3 phản hồi");
+check("RSVP: đếm người nhận lời", rTotal[3].v, "2 nhận lời");
+// Tổng SUẤT chỉ tính người nhận lời — chốt bàn với nhà hàng dựa vào số này.
+check("RSVP: tổng số suất của người nhận lời", rTotal[4].v, 5);
+
 // ── Đóng gói .xlsx ───────────────────────────────────────────────────────
 const zip = xlsxZip(fw);
 const files = Object.keys(zip.files).filter((f) => !f.endsWith("/"));
@@ -142,6 +197,16 @@ checkTrue("CSV có hàng tiêu đề cột", csv.includes("STT,Mã HĐ,Tên hợ
 checkTrue("CSV có dòng tổng cộng", csv.includes("TỔNG CỘNG"));
 checkTrue("CSV bọc ngoặc kép ô có dấu phẩy", toCsv([["a,b"]]).includes('"a,b"'));
 checkTrue("CSV nhân đôi dấu ngoặc kép bên trong ô", toCsv([['nói "xin chào"']]).includes('""xin chào""'));
+
+for (const [name, rows] of [
+  ["lương", payrollCsvRows(studio, payroll, ["Kỳ: Tháng 9/2026"])],
+  ["khách hàng", clientsCsvRows(studio, clients, ["Danh sách: tất cả khách"])],
+  ["khách mời", rsvpCsvRows(studio, rsvps, "DANH SÁCH KHÁCH MỜI", ["Thiệp: Minh & Lan"])],
+]) {
+  const text = toCsv(rows);
+  checkTrue(`CSV ${name} có tên studio`, text.includes("Ánh Studio & Co"));
+  checkTrue(`CSV ${name} có dòng tổng cộng`, text.includes("TỔNG CỘNG"));
+}
 
 const fcsv = toCsv(financeCsvRows(studio, fin));
 checkTrue("CSV thu chi có kỳ báo cáo", fcsv.includes("Kỳ báo cáo: Năm 2026"));

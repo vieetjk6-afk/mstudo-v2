@@ -2,12 +2,20 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, Download, HeartHandshake, Users, UserPlus } from "lucide-react";
+import { Search, Download, FileSpreadsheet, HeartHandshake, Users, UserPlus } from "lucide-react";
 import MessengerButton from "@/components/MessengerButton";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { vnd, vndShort, LEAD_SOURCE_LABEL } from "@/lib/types";
 import { fmtDate } from "@/lib/date";
+import {
+  exportClients,
+  clientsCsvRows,
+  downloadCsv,
+  stamp,
+  type ClientExportRow,
+  type ExportStudio,
+} from "@/lib/studio-export";
 
 export type ClientAgg = {
   key: string;
@@ -26,10 +34,11 @@ const digits = (s: string) => (s || "").replace(/\D/g, "");
 const COLS = "minmax(230px,2fr) minmax(96px,1fr) minmax(128px,1.1fr) minmax(120px,1.1fr) minmax(140px,1.2fr)";
 const HEADS = ["Khách hàng", "Số job", "Tổng chi tiêu", "Còn nợ", "Nguồn / gần nhất"];
 
-export default function ClientsView({ clients }: { clients: ClientAgg[] }) {
+export default function ClientsView({ clients, studio }: { clients: ClientAgg[]; studio: ExportStudio }) {
   const [q, setQ] = useState("");
   const [onlyOld, setOnlyOld] = useState(false);
   const [sort, setSort] = useState<"recent" | "value" | "count">("recent");
+  const [exporting, setExporting] = useState(false);
 
   // "Lâu chưa quay lại": lần chụp gần nhất đã quá 6 tháng.
   const cutoff = useMemo(() => {
@@ -65,18 +74,35 @@ export default function ClientsView({ clients }: { clients: ClientAgg[] }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clients, q, onlyOld, cutoff, sort]);
 
-  function exportCsv() {
-    const rows: string[][] = [["Tên", "SĐT", "Số HĐ", "Tổng giá trị", "Đã thu", "Lần gần nhất", "Nguồn"]];
-    for (const c of filtered) {
-      rows.push([c.name, c.phone, String(c.count), String(c.value), String(c.collected), c.last || "", c.source ? LEAD_SOURCE_LABEL[c.source] || c.source : ""]);
+  /** Dòng dữ liệu cho file xuất ra — đúng danh sách đang lọc/sắp xếp. */
+  function exportRows(): ClientExportRow[] {
+    return filtered.map((c) => ({
+      name: c.name,
+      phone: c.phone,
+      jobs: c.count,
+      value: c.value,
+      collected: c.collected,
+      last: c.last,
+      source: c.source ? LEAD_SOURCE_LABEL[c.source] || c.source : "",
+    }));
+  }
+
+  const exportMeta = () => [
+    `Danh sách: ${onlyOld ? "khách lâu chưa quay lại" : "tất cả khách"}${q.trim() ? ` · từ khoá "${q.trim()}"` : ""} · ${filtered.length} khách`,
+    `Ngày xuất: ${stamp()}`,
+  ];
+
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      await exportClients(studio, exportRows(), exportMeta(), "khach-hang");
+    } finally {
+      setExporting(false);
     }
-    const csv = "﻿" + rows.map((r) => r.map((x) => `"${(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "khach-hang.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    downloadCsv(clientsCsvRows(studio, exportRows(), exportMeta()), "khach-hang");
   }
 
   const btn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
@@ -141,7 +167,10 @@ export default function ClientsView({ clients }: { clients: ClientAgg[] }) {
           <HeartHandshake size={15} /> Lâu chưa quay lại
           <span className="text-[11px] font-bold opacity-75">{oldCount}</span>
         </button>
-        <button onClick={exportCsv} className={btn} style={btnStyle}><Download size={16} /> Xuất CSV</button>
+        <button onClick={exportExcel} disabled={exporting} className={btn} style={{ ...btnStyle, opacity: exporting ? 0.6 : 1 }}>
+          <FileSpreadsheet size={16} /> {exporting ? "Đang tạo…" : "Xuất Excel"}
+        </button>
+        <button onClick={exportCsv} className={btn} style={btnStyle} title="Bản CSV cho công cụ khác"><Download size={16} /> CSV</button>
       </div>
 
       {/* ── Bảng khách hàng ───────────────────────────────────────────── */}

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { contractTotal, sumAmounts, type StudioReferral } from "@/lib/types";
+import { brandFrom } from "@/lib/studio-brand";
 import ClientsView, { type ClientAgg } from "./ClientsView";
 import ReferralsPanel from "./ReferralsPanel";
 import StudioDenied from "@/components/StudioDenied";
@@ -84,7 +85,14 @@ export default async function ClientsPage() {
 
   return (
     <>
-      <ClientsView clients={clients} />
+      <ClientsView
+        clients={clients}
+        studio={{
+          name: brandFrom(profile).name,
+          phone: (profile.pl_phone as string | null) ?? null,
+          email: (profile.email as string | null) ?? null,
+        }}
+      />
       {canSeeReferrals && (
         <ReferralsPanel rows={(referrals ?? []) as StudioReferral[]} bookingUrl={bookingUrl} />
       )}

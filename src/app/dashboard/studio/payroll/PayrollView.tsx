@@ -2,12 +2,20 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, Download, ReceiptText, Users } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, FileSpreadsheet, ReceiptText, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
 import { vnd, CREW_ROLE_LABEL, CREW_STATUS_LABEL, type CrewRole, type CrewStatus } from "@/lib/types";
 import { fmtDate } from "@/lib/date";
+import {
+  exportPayroll,
+  payrollCsvRows,
+  downloadCsv,
+  stamp,
+  type ExportStudio,
+  type PayrollExportRow,
+} from "@/lib/studio-export";
 
 export type PayrollRow = {
   id: string;
@@ -31,7 +39,7 @@ function monthOptions(): { value: string; label: string }[] {
   return out;
 }
 
-export default function PayrollView({ rows }: { rows: PayrollRow[] }) {
+export default function PayrollView({ rows, studio }: { rows: PayrollRow[]; studio: ExportStudio }) {
   const supabase = createClient();
   const [month, setMonth] = useState("all");
   const [data, setData] = useState(rows);
@@ -39,6 +47,7 @@ export default function PayrollView({ rows }: { rows: PayrollRow[] }) {
   // "person" = đối soát theo người (cuối kỳ), "job" = chốt ngay từng job.
   const [mode, setMode] = useState<"person" | "job">("person");
   const [busy, setBusy] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   const filtered = useMemo(
     () => (month === "all" ? data : data.filter((r) => (r.contract?.event_date || "").startsWith(month))),
@@ -90,21 +99,36 @@ export default function PayrollView({ rows }: { rows: PayrollRow[] }) {
     setBusy(null);
   }
 
-  function exportCsv() {
-    const out: string[][] = [["Nhân sự", "SĐT", "Vai trò", "Hợp đồng", "Ngày", "Tiền công", "Đã trả"]];
-    for (const r of filtered) {
-      out.push([
-        r.name, r.phone || "", CREW_ROLE_LABEL[r.role], r.contract?.title || "",
-        r.contract?.event_date || "", String(r.salary), r.paid ? "x" : "",
-      ]);
+  /** Dòng dữ liệu cho file xuất ra — đúng kỳ đang lọc trên màn hình. */
+  function exportRows(): PayrollExportRow[] {
+    return filtered.map((r) => ({
+      name: r.name,
+      phone: r.phone || "",
+      role: CREW_ROLE_LABEL[r.role],
+      contract: r.contract?.title || "Không gắn hợp đồng",
+      code: r.contract?.code || "",
+      date: r.contract?.event_date || null,
+      salary: r.salary || 0,
+      paid: r.paid,
+    }));
+  }
+
+  const exportMeta = () => [
+    `Kỳ: ${monthOptions().find((m) => m.value === month)?.label || month} · ${filtered.length} lượt job · ${groups.length} nhân sự`,
+    `Ngày xuất: ${stamp()}`,
+  ];
+
+  async function exportExcel() {
+    setExporting(true);
+    try {
+      await exportPayroll(studio, exportRows(), exportMeta(), `doi-soat-tien-cong-${month}`);
+    } finally {
+      setExporting(false);
     }
-    const csv = "﻿" + out.map((x) => x.map((c) => `"${(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `doi-soat-tien-cong-${month}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  }
+
+  function exportCsv() {
+    downloadCsv(payrollCsvRows(studio, exportRows(), exportMeta()), `doi-soat-tien-cong-${month}`);
   }
 
   const btn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
@@ -132,7 +156,10 @@ export default function PayrollView({ rows }: { rows: PayrollRow[] }) {
           >
             {monthOptions().map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
-          <button onClick={exportCsv} className={btn} style={btnStyle}><Download size={16} /> Xuất file</button>
+          <button onClick={exportExcel} disabled={exporting} className={btn} style={{ ...btnStyle, opacity: exporting ? 0.6 : 1 }}>
+            <FileSpreadsheet size={16} /> {exporting ? "Đang tạo…" : "Xuất Excel"}
+          </button>
+          <button onClick={exportCsv} className={btn} style={btnStyle} title="Bản CSV cho công cụ khác"><Download size={16} /> CSV</button>
         </div>
 
         {/* ── 3 ô tổng ──────────────────────────────────────────────────

@@ -410,6 +410,277 @@ export function financeCsvRows(studio: ExportStudio, d: FinanceExport): string[]
   ];
 }
 
+/* ── Đối soát tiền công ────────────────────────────────────────────────── */
+
+export type PayrollExportRow = {
+  name: string;
+  phone: string;
+  role: string;
+  contract: string;
+  code: string;
+  date: string | null;
+  salary: number;
+  paid: boolean;
+};
+
+const PAYROLL_HEAD = ["STT", "Nhân sự", "SĐT", "Vai trò", "Hợp đồng", "Mã HĐ", "Ngày chụp", "Tiền công", "Tình trạng"];
+const PAYROLL_COLS = [6, 24, 15, 16, 34, 14, 16, 16, 14];
+
+/** Workbook đối soát tiền công: chi tiết từng lượt job + tổng theo nhân sự. */
+export function payrollWorkbook(studio: ExportStudio, list: PayrollExportRow[], meta: string[]): XlsxSheet[] {
+  const { rows: hdr, merges } = headerRows(studio, "ĐỐI SOÁT TIỀN CÔNG", meta, PAYROLL_COLS.length);
+  const total = list.reduce((s, r) => s + r.salary, 0);
+  const paid = list.filter((r) => r.paid).reduce((s, r) => s + r.salary, 0);
+
+  const detail: XlsxRow[] = [
+    ...hdr,
+    head(PAYROLL_HEAD),
+    ...list.map((r, i) => [
+      { v: i + 1, s: "num" as const },
+      { v: r.name, s: "cell" as const },
+      { v: r.phone, s: "cell" as const },
+      { v: r.role, s: "cell" as const },
+      { v: r.contract, s: "cell" as const },
+      { v: r.code, s: "cellMuted" as const },
+      { v: dmy(r.date), s: "cell" as const },
+      { v: r.salary, s: "money" as const },
+      { v: r.paid ? "Đã trả" : "Chưa trả", s: r.paid ? ("cellMuted" as const) : ("cell" as const) },
+    ]),
+    [
+      { v: "TỔNG CỘNG", s: "totalLabel" },
+      { v: `${list.length} lượt job`, s: "totalLabel" },
+      ...Array(5).fill({ v: "", s: "totalLabel" as const }),
+      { v: total, s: "totalMoney" as const },
+      { v: `Đã trả ${Math.round(total ? (paid / total) * 100 : 0)}%`, s: "totalLabel" as const },
+    ],
+  ];
+
+  // Tổng theo người — bảng studio thực sự dùng khi chuyển khoản cuối kỳ.
+  const byPerson = new Map<string, { name: string; phone: string; jobs: number; total: number; paid: number }>();
+  for (const r of list) {
+    const key = r.phone.replace(/\D/g, "") || r.name;
+    const cur = byPerson.get(key) || { name: r.name, phone: r.phone, jobs: 0, total: 0, paid: 0 };
+    cur.jobs += 1;
+    cur.total += r.salary;
+    if (r.paid) cur.paid += r.salary;
+    byPerson.set(key, cur);
+  }
+  const people = [...byPerson.values()].sort((a, b) => b.total - a.total);
+  const ph = headerRows(studio, "TỔNG THEO NHÂN SỰ", meta, 6);
+
+  return [
+    { name: "Chi tiết", cols: PAYROLL_COLS, rows: detail, merges, freezeRows: hdr.length + 1 },
+    {
+      name: "Theo nhân sự",
+      cols: [24, 15, 10, 18, 18, 18],
+      merges: ph.merges,
+      rows: [
+        ...ph.rows,
+        head(["Nhân sự", "SĐT", "Số job", "Tổng tiền công", "Đã trả", "Còn phải trả"]),
+        ...people.map((p) => [
+          { v: p.name, s: "cell" as const },
+          { v: p.phone, s: "cell" as const },
+          { v: p.jobs, s: "num" as const },
+          { v: p.total, s: "money" as const },
+          { v: p.paid, s: "moneyIn" as const },
+          { v: p.total - p.paid, s: "moneyOut" as const },
+        ]),
+        [
+          { v: "TỔNG CỘNG", s: "totalLabel" },
+          { v: "", s: "totalLabel" },
+          { v: list.length, s: "totalLabel" },
+          { v: total, s: "totalMoney" },
+          { v: paid, s: "totalMoney" },
+          { v: total - paid, s: "totalMoney" },
+        ],
+      ],
+    },
+  ];
+}
+
+export function payrollCsvRows(studio: ExportStudio, list: PayrollExportRow[], meta: string[]): string[][] {
+  const total = list.reduce((s, r) => s + r.salary, 0);
+  const paid = list.filter((r) => r.paid).reduce((s, r) => s + r.salary, 0);
+  return [
+    ...csvHeader(studio, "ĐỐI SOÁT TIỀN CÔNG", meta),
+    PAYROLL_HEAD,
+    ...list.map((r, i) => [
+      String(i + 1), r.name, r.phone, r.role, r.contract, r.code, dmy(r.date), String(r.salary), r.paid ? "Đã trả" : "Chưa trả",
+    ]),
+    [],
+    ["TỔNG CỘNG", `${list.length} lượt job`, "", "", "", "", "", String(total), `Đã trả ${paid}`],
+  ];
+}
+
+/* ── Danh bạ khách hàng ────────────────────────────────────────────────── */
+
+export type ClientExportRow = {
+  name: string;
+  phone: string;
+  jobs: number;
+  value: number;
+  collected: number;
+  last: string | null;
+  source: string;
+};
+
+const CLIENT_HEAD = ["STT", "Khách hàng", "SĐT", "Số job", "Tổng giá trị", "Đã thu", "Còn nợ", "Lần chụp gần nhất", "Nguồn khách"];
+const CLIENT_COLS = [6, 26, 15, 10, 18, 18, 18, 20, 18];
+
+export function clientsWorkbook(studio: ExportStudio, list: ClientExportRow[], meta: string[]): XlsxSheet[] {
+  const { rows: hdr, merges } = headerRows(studio, "DANH BẠ KHÁCH HÀNG", meta, CLIENT_COLS.length);
+  const value = list.reduce((s, c) => s + c.value, 0);
+  const collected = list.reduce((s, c) => s + c.collected, 0);
+  const debt = list.reduce((s, c) => s + Math.max(0, c.value - c.collected), 0);
+  const returning = list.filter((c) => c.jobs > 1).length;
+
+  const rows: XlsxRow[] = [
+    ...hdr,
+    head(CLIENT_HEAD),
+    ...list.map((c, i) => [
+      { v: i + 1, s: "num" as const },
+      { v: c.name, s: "cell" as const },
+      { v: c.phone, s: "cell" as const },
+      { v: c.jobs, s: "num" as const },
+      { v: c.value, s: "money" as const },
+      { v: c.collected, s: "moneyIn" as const },
+      { v: Math.max(0, c.value - c.collected), s: "moneyOut" as const },
+      { v: dmy(c.last), s: "cell" as const },
+      { v: c.source, s: "cellMuted" as const },
+    ]),
+    [
+      { v: "TỔNG CỘNG", s: "totalLabel" },
+      { v: `${list.length} khách`, s: "totalLabel" },
+      ...Array(2).fill({ v: "", s: "totalLabel" as const }),
+      { v: value, s: "totalMoney" as const },
+      { v: collected, s: "totalMoney" as const },
+      { v: debt, s: "totalMoney" as const },
+      ...Array(2).fill({ v: "", s: "totalLabel" as const }),
+    ],
+  ];
+
+  const sh = headerRows(studio, "TỔNG HỢP KHÁCH HÀNG", meta, 5);
+  const bySource = new Map<string, { n: number; value: number; collected: number }>();
+  for (const c of list) {
+    const k = c.source || "Không rõ";
+    const cur = bySource.get(k) || { n: 0, value: 0, collected: 0 };
+    cur.n += 1;
+    cur.value += c.value;
+    cur.collected += c.collected;
+    bySource.set(k, cur);
+  }
+
+  return [
+    { name: "Khách hàng", cols: CLIENT_COLS, rows, merges, freezeRows: hdr.length + 1 },
+    {
+      name: "Tổng hợp",
+      cols: [30, 12, 18, 18, 18],
+      merges: sh.merges,
+      rows: [
+        ...sh.rows,
+        [{ v: "Chỉ số chung", s: "section" }],
+        [{ v: "Số khách", s: "cell" }, { v: list.length, s: "num" }],
+        [{ v: "Khách quay lại (≥2 job)", s: "cell" }, { v: returning, s: "num" }],
+        [{ v: "Tỷ lệ quay lại", s: "cell" }, { v: list.length ? returning / list.length : 0, s: "pct" }],
+        [{ v: "Tổng giá trị", s: "cell" }, { v: value, s: "money" }],
+        [{ v: "Đã thu", s: "cell" }, { v: collected, s: "money" }],
+        [{ v: "Đang còn nợ", s: "cell" }, { v: debt, s: "money" }],
+        [{ v: "Giá trị trung bình / khách", s: "cell" }, { v: list.length ? Math.round(value / list.length) : 0, s: "money" }],
+        [],
+        [{ v: "Theo nguồn khách", s: "section" }],
+        head(["Nguồn khách", "Số khách", "Giá trị", "Đã thu", "Còn nợ"]),
+        ...[...bySource.entries()]
+          .sort((a, b) => b[1].value - a[1].value)
+          .map(([k, v]) => [
+            { v: k, s: "cell" as const },
+            { v: v.n, s: "num" as const },
+            { v: v.value, s: "money" as const },
+            { v: v.collected, s: "moneyIn" as const },
+            { v: Math.max(0, v.value - v.collected), s: "moneyOut" as const },
+          ]),
+      ],
+    },
+  ];
+}
+
+export function clientsCsvRows(studio: ExportStudio, list: ClientExportRow[], meta: string[]): string[][] {
+  const value = list.reduce((s, c) => s + c.value, 0);
+  const collected = list.reduce((s, c) => s + c.collected, 0);
+  return [
+    ...csvHeader(studio, "DANH BẠ KHÁCH HÀNG", meta),
+    CLIENT_HEAD,
+    ...list.map((c, i) => [
+      String(i + 1), c.name, c.phone, String(c.jobs), String(c.value), String(c.collected),
+      String(Math.max(0, c.value - c.collected)), dmy(c.last), c.source,
+    ]),
+    [],
+    ["TỔNG CỘNG", `${list.length} khách`, "", "", String(value), String(collected), String(value - collected), "", ""],
+  ];
+}
+
+/* ── Khách mời thiệp cưới (RSVP) ───────────────────────────────────────── */
+
+export type RsvpExportRow = {
+  name: string;
+  side: string;
+  attending: boolean;
+  guests: number;
+  wish: string;
+  at: string;
+};
+
+const RSVP_HEAD = ["STT", "Tên khách", "Bên", "Tham dự", "Số người", "Lời chúc", "Thời gian phản hồi"];
+const RSVP_COLS = [6, 26, 12, 12, 12, 52, 20];
+
+export function rsvpWorkbook(studio: ExportStudio, list: RsvpExportRow[], title: string, meta: string[]): XlsxSheet[] {
+  const { rows: hdr, merges } = headerRows(studio, title, meta, RSVP_COLS.length);
+  const going = list.filter((r) => r.attending);
+  const heads = going.reduce((s, r) => s + (r.guests || 1), 0);
+  return [
+    {
+      name: "Khách mời",
+      cols: RSVP_COLS,
+      merges,
+      freezeRows: hdr.length + 1,
+      rows: [
+        ...hdr,
+        head(RSVP_HEAD),
+        ...list.map((r, i) => [
+          { v: i + 1, s: "num" as const },
+          { v: r.name, s: "cell" as const },
+          { v: r.side, s: "cell" as const },
+          { v: r.attending ? "Có" : "Không", s: "cell" as const },
+          { v: r.guests, s: "num" as const },
+          { v: r.wish, s: "cellMuted" as const },
+          { v: r.at, s: "cell" as const },
+        ]),
+        [
+          { v: "TỔNG CỘNG", s: "totalLabel" },
+          { v: `${list.length} phản hồi`, s: "totalLabel" },
+          { v: "", s: "totalLabel" },
+          { v: `${going.length} nhận lời`, s: "totalLabel" },
+          { v: heads, s: "totalLabel" },
+          { v: "", s: "totalLabel" },
+          { v: "", s: "totalLabel" },
+        ],
+      ],
+    },
+  ];
+}
+
+export function rsvpCsvRows(studio: ExportStudio, list: RsvpExportRow[], title: string, meta: string[]): string[][] {
+  const going = list.filter((r) => r.attending);
+  return [
+    ...csvHeader(studio, title, meta),
+    RSVP_HEAD,
+    ...list.map((r, i) => [
+      String(i + 1), r.name, r.side, r.attending ? "Có" : "Không", String(r.guests), r.wish, r.at,
+    ]),
+    [],
+    ["TỔNG CỘNG", `${list.length} phản hồi`, "", `${going.length} nhận lời`, String(going.reduce((s, r) => s + (r.guests || 1), 0)), "", ""],
+  ];
+}
+
 /* ── Tải xuống ─────────────────────────────────────────────────────────── */
 
 export async function exportContracts(
@@ -423,4 +694,32 @@ export async function exportContracts(
 
 export async function exportFinance(studio: ExportStudio, d: FinanceExport, fileName: string): Promise<void> {
   await downloadXlsx(financeWorkbook(studio, d), fileName);
+}
+
+export async function exportPayroll(
+  studio: ExportStudio,
+  list: PayrollExportRow[],
+  meta: string[],
+  fileName: string
+): Promise<void> {
+  await downloadXlsx(payrollWorkbook(studio, list, meta), fileName);
+}
+
+export async function exportClients(
+  studio: ExportStudio,
+  list: ClientExportRow[],
+  meta: string[],
+  fileName: string
+): Promise<void> {
+  await downloadXlsx(clientsWorkbook(studio, list, meta), fileName);
+}
+
+export async function exportRsvps(
+  studio: ExportStudio,
+  list: RsvpExportRow[],
+  title: string,
+  meta: string[],
+  fileName: string
+): Promise<void> {
+  await downloadXlsx(rsvpWorkbook(studio, list, title, meta), fileName);
 }

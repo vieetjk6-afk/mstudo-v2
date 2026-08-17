@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import { brandFrom } from "@/lib/studio-brand";
 import PayrollView, { type PayrollRow } from "./PayrollView";
 
 
@@ -36,5 +37,14 @@ export default async function PayrollPage() {
     .eq("contract.owner_id", profile.id)
     .order("created_at", { ascending: false });
 
-  return <PayrollView rows={(data ?? []) as unknown as PayrollRow[]} />;
+  return (
+    <PayrollView
+      rows={(data ?? []) as unknown as PayrollRow[]}
+      studio={{
+        name: brandFrom(profile).name,
+        phone: (profile.pl_phone as string | null) ?? null,
+        email: (profile.email as string | null) ?? null,
+      }}
+    />
+  );
 }
