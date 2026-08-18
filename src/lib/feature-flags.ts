@@ -48,6 +48,11 @@ export function driveSyncComingSoon(flags: FeatureFlags): boolean {
 }
 
 
+/** Chi nhánh studio: mặc định "Sắp ra mắt" cho tới khi admin đặt live. */
+export function branchesComingSoon(flags: FeatureFlags): boolean {
+  return flags?.branches !== "live";
+}
+
 /**
  * MStudo Desktop: chưa xuất bản — ẩn HOÀN TOÀN với non-admin (không hiện cả
  * nhãn "Sắp ra mắt") cho tới khi admin bật live.
@@ -63,6 +68,7 @@ export function comingSoonNav(flags: FeatureFlags): string[] {
   if (albumComingSoon(flags)) out.push("/dashboard/studio/album-designer");
   if (slideComingSoon(flags)) out.push("/dashboard/studio/slide");
   if (driveSyncComingSoon(flags)) out.push("/dashboard/studio/drive-sync");
+  if (branchesComingSoon(flags)) out.push("/dashboard/studio/branches");
   return out;
 
 }
