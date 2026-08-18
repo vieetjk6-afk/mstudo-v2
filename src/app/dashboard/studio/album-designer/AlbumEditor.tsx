@@ -622,7 +622,8 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
       }
       if (c.type === "photo" && c.full) {
         try {
-          const im = await loadImg(c.full);
+          // raw=1: ảnh gốc phải về cùng miền để canvas xuất được file in.
+          const im = await loadImg(c.full + (c.full.includes("?") ? "&" : "?") + "raw=1");
           ctx.save(); cellPath(ctx, c, cx, cy, cw, ch, kpx); ctx.clip(); ctx.filter = cellFilter(c, kpx);
           const s0 = Math.max(cw / im.width, ch / im.height) * c.scale, dw = im.width * s0, dh = im.height * s0;
           const dx = cx + (cw - dw) * (c.posX / 100), dy = cy + (ch - dh) * (c.posY / 100);

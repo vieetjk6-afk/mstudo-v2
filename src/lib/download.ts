@@ -67,7 +67,11 @@ function ensureExt(name: string, fallback: string): string {
  */
 export async function downloadImage(fileId: string, name: string, watermark?: string | null): Promise<void> {
   if (watermark) {
-    const img = await loadImage(`/api/img?id=${encodeURIComponent(fileId)}&w=2560`);
+    // raw=1: bắt /api/img trả BYTE cùng miền thay vì 302 sang Google. Trình
+    // duyệt cũ (Safari iOS ≤ 16.3, webview Zalo/Facebook) không gửi
+    // Sec-Fetch-*, thiếu cờ này thì rơi vào nhánh "ảnh hiển thị" → canvas bị
+    // tainted → toBlob() ném lỗi, không đóng được watermark.
+    const img = await loadImage(`/api/img?id=${encodeURIComponent(fileId)}&w=2560&raw=1`);
     const blob = await watermarkImage(img, watermark);
     triggerDownload(blob, ensureExt(name, "jpg"));
     return;

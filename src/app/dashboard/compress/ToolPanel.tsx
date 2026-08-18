@@ -306,7 +306,9 @@ export default function ToolPanel({
         const token = await ensureDriveToken();
         return fetchDriveBytes(token, it.driveId);
       }
-      const res = await fetch(`/api/img?id=${encodeURIComponent(it.driveId)}&w=${fetchW}`);
+      // raw=1: cần chính byte ảnh (nén + watermark bằng canvas) nên phải giữ
+      // cùng miền, không để /api/img 302 sang Google (Drive không gửi CORS).
+      const res = await fetch(`/api/img?id=${encodeURIComponent(it.driveId)}&w=${fetchW}&raw=1`);
       return res.blob();
     }
     throw new Error("no_source");

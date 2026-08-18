@@ -324,7 +324,7 @@ thông báo phải đăng ký lại**. Cố lấy đúng cặp cũ; mất hẳn 
 ### ⚠️ `IMG_CDN_REDIRECT` — biến duy nhất ở mục này mà copy bản cũ có thể hại
 
 Đọc ngược với tên gọi: **bỏ trống = tối ưu BẬT**. Code chỉ tắt khi giá trị đúng
-bằng `"0"` (`src/app/api/img/route.ts:164`).
+bằng `"0"` (`src/app/api/img/route.ts:121`).
 
 Bật thì mọi ảnh hiển thị được **302 thẳng sang CDN của Google** — Vercel phục vụ
 gần **0 byte ảnh**. Đây là thứ cắt băng thông mạnh nhất của cả hệ thống, vì một

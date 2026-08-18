@@ -99,6 +99,27 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "bad_id" }, { status: 400 });
   }
 
+  // ── Lượt xem thường hay lượt ĐỌC BYTE? ───────────────────────────────────
+  // Chỉ ba nhóm dưới đây cần byte đi qua Vercel (cùng miền thì canvas mới
+  // không bị "tainted", fetch mới đọc được):
+  //   • raw=1        — chính app đánh dấu: ZIP, watermark, xuất album.
+  //   • mode = cors  — <img crossOrigin> / fetch có CORS.
+  //   • dest ≠ image — fetch()/XHR (Sec-Fetch-Dest: "empty").
+  // Mọi thứ còn lại là ẢNH HIỂN THỊ → 302 thẳng sang CDN của Google.
+  //
+  // Trước đây điều kiện viết ngược: CHỈ chuyển hướng khi dest === "image", nên
+  // client KHÔNG gửi Sec-Fetch-* (Safari iOS ≤ 16.3, webview trong Zalo /
+  // Facebook, bot đọc link) rơi hết vào đường proxy — mỗi thumbnail ~90 KB đi
+  // qua Vercel. Đảo lại: thiếu header thì coi là lượt xem, còn ba nhóm đọc byte
+  // vẫn nhận đúng byte vì chúng tự nhận diện được (raw=1 là chốt chặn cuối cho
+  // trình duyệt cũ không gửi Sec-Fetch-*).
+  const dest = req.headers.get("sec-fetch-dest");
+  const mode = req.headers.get("sec-fetch-mode");
+  const wantsBytes =
+    searchParams.get("raw") === "1" || mode === "cors" || (dest !== null && dest !== "image");
+  // IMG_CDN_REDIRECT=0 vẫn tắt được tối ưu này (xem docs/bien-moi-truong.md).
+  const canRedirect = process.env.IMG_CDN_REDIRECT !== "0" && !wantsBytes;
+
   // ── Direct-from-Drive download (dl=1) ─────────────────────────────────────
   // Hand the browser straight to Google for "save the original": Drive serves
   // the file, so ZERO bytes cross Vercel or Supabase — originals average ~11 MB
@@ -117,6 +138,15 @@ export async function GET(req: Request) {
   // Original-quality mode (album export, ZIP/download of originals): serve the
   // full-resolution file as-is, no width clamp, no re-encode.
   if (searchParams.get("orig") === "1") {
+    // Ảnh gốc đem HIỂN THỊ (logo, ảnh thiệp, ảnh vừa tải lên) không cần byte
+    // đi qua Vercel — mỗi tấm cỡ chục MB. Chỉ lượt đọc byte (xuất album in)
+    // mới xuống đường proxy bên dưới.
+    if (canRedirect) {
+      return NextResponse.redirect(`https://lh3.googleusercontent.com/d/${id}=s0`, {
+        status: 302,
+        headers: { "Cache-Control": CACHE_OK },
+      });
+    }
     // Durable offload: originals are the HEAVIEST bytes (full-res ZIP/download),
     // and browsers can't fetch them cross-origin from Google (no CORS), so they
     // otherwise stream through Vercel every time. Caching them shifts that load
@@ -146,22 +176,14 @@ export async function GET(req: Request) {
   // 2560 keeps the "download original" path (w=2400) working.
   const width = Math.min(Math.max(Number(searchParams.get("w")) || 500, 16), 2560);
 
-  // ── Display CDN redirect (default ON; opt-out with IMG_CDN_REDIRECT=0) ────
-  // For PLAIN <img> DISPLAY loads, 302-redirect straight to Google's CDN so
-  // Vercel serves ~0 image bytes — the single biggest cut to Fast Origin
-  // Transfer + Active CPU, since a gallery loads hundreds of thumbnails.
-  // Google serves these for free, so this runs even when a Supabase bucket is
-  // configured (display bytes never touch — nor bill — Supabase).
-  //
-  // Guard on Sec-Fetch-Mode ≠ "cors": a crossOrigin <img> used for canvas
-  // watermarking (ZIP / single download) is also Sec-Fetch-Dest "image" but is
-  // mode "cors" — it must NOT go to Google (no CORS there → tainted canvas →
-  // toBlob() throws). Those, plus fetch()/ZIP (Dest ≠ "image"), fall through to
-  // the same-origin proxy / Supabase cache below so byte reads keep working.
-  // The on-screen watermark is a CSS overlay, so the display source is moot.
-  const dest = req.headers.get("sec-fetch-dest");
-  const mode = req.headers.get("sec-fetch-mode");
-  if (process.env.IMG_CDN_REDIRECT !== "0" && dest === "image" && mode !== "cors") {
+  // ── Display CDN redirect (mặc định BẬT; tắt bằng IMG_CDN_REDIRECT=0) ─────
+  // Ảnh chỉ để HIỂN THỊ thì 302 thẳng sang CDN của Google — Vercel phục vụ gần
+  // 0 byte. Đây là khoản cắt băng thông lớn nhất của cả hệ thống vì một album
+  // kéo hàng trăm thumbnail. Google phục vụ miễn phí nên chạy cả khi có bucket
+  // Supabase (byte hiển thị không đụng — và không tính tiền — Supabase).
+  // Lượt đọc byte đã bị loại ở `wantsBytes` phía trên và đi tiếp xuống dưới:
+  // canvas watermark cần cùng miền, chuyển sang Google là tainted canvas.
+  if (canRedirect) {
     const target = width <= 1024
       ? `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`
       : `https://lh3.googleusercontent.com/d/${id}=w${width}`;
