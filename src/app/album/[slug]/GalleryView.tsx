@@ -17,6 +17,8 @@ const TR = {
     driveDownload: "Tải file chỉnh sửa",
     driveDownloadOne: "Tải file chỉnh sửa",
     dlPhoto: "Tải ảnh",
+    download: "Tải ảnh",
+    original: "Ảnh gốc",
     photoCount: "ảnh",
     tabAll: "Tất cả",
     viewAlbum: "Xem album",
@@ -41,6 +43,8 @@ const TR = {
     driveDownload: "Download edited files",
     driveDownloadOne: "Download edited files",
     dlPhoto: "Download",
+    download: "Download photos",
+    original: "Original files",
     photoCount: "photos",
     tabAll: "All",
     viewAlbum: "View album",
@@ -64,6 +68,8 @@ import ShareDialog from "@/components/ShareDialog";
 import { mainUrl } from "@/lib/hosts";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import { downloadImage } from "@/lib/download";
+import { useMasonry } from "@/lib/masonry";
+import { ALBUM_TITLE_FONT, ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
 import type { Feedback } from "@/lib/types";
 
 interface P { id: string; drive_file_id: string; name: string; source_id: string | null; position: number; is_video?: boolean; }
@@ -100,6 +106,8 @@ export default function GalleryView({
   const [pwLoading, setPwLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState("all");
+  // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
+  const masonry = useMasonry(2, 4);
   // Nút "Xem album" ở ảnh bìa cuộn thẳng xuống lưới ảnh.
   const photosRef = useRef<HTMLDivElement | null>(null);
   const scrollToPhotos = useCallback(() => {
@@ -211,6 +219,26 @@ export default function GalleryView({
     setOriginalFolders(data.originalFolders ?? []);
     setUnlocked(true);
   }
+
+  // Danh sách thư mục cho nút "Tải ảnh": file đã chỉnh sửa trước (thứ khách vào
+  // album để lấy), rồi tới ảnh gốc giai đoạn chọn ảnh. Tên từng dòng nói rõ
+  // đang tải gì, vì giờ cả hai nằm chung một menu.
+  const downloadFolders = useMemo(() => {
+    const edited = allowDownload
+      ? driveFolders.map((f) => ({
+          ...f,
+          name: gallery.driveIsEdited
+            ? `${tr.driveDownloadOne}${driveFolders.length > 1 && f.name ? ` · ${f.name}` : ""}`
+            : f.name || tr.driveAlbum,
+        }))
+      : [];
+    const originals = originalFolders.map((f) => ({
+      ...f,
+      name: `${tr.original}${originalFolders.length > 1 && f.name ? ` · ${f.name}` : ""}`,
+    }));
+    return [...edited, ...originals];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driveFolders, originalFolders, allowDownload, gallery.driveIsEdited]);
 
   const tabSources = useMemo(() => sources.filter((s) => photos.some((p) => p.source_id === s.id)), [sources, photos]);
   const visible = useMemo(() => {
@@ -350,43 +378,53 @@ export default function GalleryView({
               Google tự nén và phục vụ nên không tốn byte nào của Vercel/Supabase.
               Ẩn ở chế độ chia sẻ chọn lọc vì link Drive trỏ CẢ thư mục → sẽ lộ
               toàn album chứ không riêng mấy ảnh được chia sẻ. */}
-          {!shareMode && allowDownload && driveFolders.length > 0 && (
-            <DriveDownload
-              folders={driveFolders}
-              label={gallery.driveIsEdited ? tr.driveDownload : tr.driveAlbum}
-              labelOne={gallery.driveIsEdited ? tr.driveDownloadOne : tr.driveAlbum}
-              accent={!!gallery.driveIsEdited}
-            />
-          )}
-          {/* File gốc ở giai đoạn chọn ảnh (JPG gốc) — cho khách muốn lấy file gốc. */}
-          {!shareMode && originalFolders.length > 0 && (
-            <DriveDownload folders={originalFolders} label="Ảnh gốc" labelOne="Ảnh gốc" />
+          {/* MỘT nút "Tải ảnh" duy nhất: bên trong gộp cả file đã chỉnh sửa
+              (thư mục giao khách) lẫn ảnh gốc giai đoạn chọn ảnh. Trước đây là
+              hai nút riêng nằm cạnh nhau, khách phải tự đoán nút nào là nút
+              mình cần. Ẩn thư mục giao khách ở chế độ chia sẻ chọn lọc vì link
+              Drive mở CẢ thư mục → sẽ lộ toàn album. */}
+          {!shareMode && downloadFolders.length > 0 && (
+            <DriveDownload folders={downloadFolders} label={tr.download} labelOne={tr.download} accent />
           )}
           {!shareMode && <ShareButton path={mainUrl(`/album/${gallery.slug}`)} title={gallery.title} className="btn-ghost px-3 py-1.5 text-[13px]" />}
         </div>
       </header>
 
-      {/* Cover hero — ảnh bìa là thứ khách thấy đầu tiên nên để lớn hẳn, kèm nút
-          "Xem album" cuộn thẳng xuống lưới ảnh (khách không phải tự kéo). */}
+      {/* Ảnh bìa CHIẾM TRỌN màn hình (cả máy tính lẫn điện thoại): tên album in
+          trên ảnh, nút "Xem album" nằm dưới cuộn thẳng xuống lưới ảnh.
+          100svh chứ không phải 100vh — trên điện thoại 100vh tính cả thanh
+          địa chỉ nên nút bị đẩy khuất dưới mép màn. */}
       {gallery.cover_url && (
-        <div className="relative h-[clamp(300px,62vh,680px)] overflow-hidden">
+        <div className="relative flex h-[100svh] min-h-[420px] flex-col justify-end overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={gallery.cover_url} alt={gallery.title} className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, var(--bg), rgba(10,10,12,.15) 55%, rgba(10,10,12,.35))" }} />
-          <button
-            onClick={scrollToPhotos}
-            className="absolute bottom-7 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full px-5 py-2.5 text-[13.5px] font-semibold backdrop-blur-md transition-transform active:scale-95"
-            style={{ background: "rgba(10,10,12,.5)", border: "1px solid rgba(255,255,255,.45)", color: "#fff" }}
-          >
-            {tr.viewAlbum} <ChevronDown size={16} />
-          </button>
+          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, var(--bg), rgba(10,10,12,.12) 45%, rgba(10,10,12,.35))" }} />
+          <div className="relative px-6 pb-10 text-center md:px-10 md:pb-14">
+            <h1 className="text-[clamp(44px,9vw,120px)] leading-[1.04]" style={ALBUM_TITLE_ON_COVER}>
+              {gallery.title}
+            </h1>
+            {gallery.event_date && (
+              <p className="mt-2 text-[13px] tracking-[0.18em]" style={{ color: "rgba(255,255,255,.85)", textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>
+                {new Date(gallery.event_date).toLocaleDateString("vi-VN")}
+              </p>
+            )}
+            <button
+              onClick={scrollToPhotos}
+              className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold backdrop-blur-md transition-transform active:scale-95"
+              style={{ background: "rgba(10,10,12,.45)", border: "1px solid rgba(255,255,255,.5)", color: "#fff" }}
+            >
+              {tr.viewAlbum} <ChevronDown size={17} />
+            </button>
+          </div>
         </div>
       )}
 
       <div className="mx-auto max-w-[1500px] px-6 md:px-10" style={{ marginTop: gallery.cover_url ? "-60px" : "28px", position: "relative" }}>
-        <h1 className="font-serif text-[clamp(30px,5vw,52px)] font-medium leading-none">{gallery.title}</h1>
+        {!gallery.cover_url && (
+          <h1 className="text-[clamp(34px,6vw,64px)] leading-[1.06]" style={ALBUM_TITLE_FONT}>{gallery.title}</h1>
+        )}
         <p className="mt-2 flex items-center gap-3 text-[13.5px]" style={{ color: "var(--text2)" }}>
-          {gallery.event_date && (<span className="flex items-center gap-1"><Calendar size={13} /> {new Date(gallery.event_date).toLocaleDateString("vi-VN")}</span>)}
+          {gallery.event_date && !gallery.cover_url && (<span className="flex items-center gap-1"><Calendar size={13} /> {new Date(gallery.event_date).toLocaleDateString("vi-VN")}</span>)}
           <span>{shareMode ? visible.length : (totalPhotos ?? photos.length)} {tr.photoCount}</span>
         </p>
         {shareMode ? (
@@ -404,7 +442,10 @@ export default function GalleryView({
         )}
 
         {/* sections — mỗi thư mục con là một mục riêng, có tiêu đề + số ảnh */}
-        <div ref={photosRef} className="mt-7 space-y-9 scroll-mt-20">
+        <div
+          ref={(el) => { photosRef.current = el; masonry.ref(el); }}
+          className="mt-7 space-y-9 scroll-mt-20"
+        >
           {sections.map((sec) => {
             // Chỉ dựng các ảnh nằm trong cửa sổ hiện tại (i < renderLimit).
             const items = sec.items.filter((it) => it.i < renderLimit);
@@ -419,14 +460,15 @@ export default function GalleryView({
               )}
               {/* Lưới ảnh kiểu collage: 2 cột trên điện thoại, 4 cột trên máy tính,
                   khe gần như bằng 0, KHÔNG bo góc và KHÔNG cắt ảnh — mỗi tấm giữ
-                  đúng tỉ lệ gốc (dùng cột CSS nên chiều cao tự do). */}
-              <div className="columns-2 md:columns-4" style={{ columnGap: "2px" }}>
+                  đúng tỉ lệ gốc, và ảnh được đặt lần lượt TRÁI → PHẢI
+                  (xem src/lib/masonry.ts). */}
+              <div className="grid grid-cols-2 md:grid-cols-4" style={masonry.gridStyle}>
                 {items.map(({ p, i }) => {
                   const isSel = selected.has(p.id);
                   return (
-                  <div key={p.id} className="group relative mb-[2px] block w-full cursor-pointer break-inside-avoid" style={{ background: "var(--surface)" }}>
+                  <div key={p.id} className="group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-auto w-full cursor-zoom-in select-none" />
+                    <img {...masonry.imgProps(p.id)} onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-full w-full cursor-zoom-in select-none object-cover" />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
                         {Array.from({ length: 8 }).map((_, wi) => (
