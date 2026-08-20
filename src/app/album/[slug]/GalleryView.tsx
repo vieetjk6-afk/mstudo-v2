@@ -69,7 +69,8 @@ import { mainUrl } from "@/lib/hosts";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
-import { ALBUM_TITLE_FONT, ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
+import { ALBUM_TITLE_FONT } from "@/lib/album-title";
+import AlbumCover from "@/components/AlbumCover";
 import type { Feedback } from "@/lib/types";
 
 interface P { id: string; drive_file_id: string; name: string; source_id: string | null; position: number; is_video?: boolean; }
@@ -390,36 +391,19 @@ export default function GalleryView({
         </div>
       </header>
 
-      {/* Ảnh bìa CHIẾM TRỌN màn hình (cả máy tính lẫn điện thoại): tên album in
-          trên ảnh, nút "Xem album" nằm dưới cuộn thẳng xuống lưới ảnh.
-          100svh chứ không phải 100vh — trên điện thoại 100vh tính cả thanh
-          địa chỉ nên nút bị đẩy khuất dưới mép màn. */}
+      {/* Ảnh bìa chiếm trọn màn hình, tên album ở giữa, nút "Xem album" ngay
+          dưới — xem src/components/AlbumCover.tsx. */}
       {gallery.cover_url && (
-        <div className="relative flex h-[100svh] min-h-[420px] flex-col justify-end overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={gallery.cover_url} alt={gallery.title} className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, var(--bg), rgba(10,10,12,.12) 45%, rgba(10,10,12,.35))" }} />
-          <div className="relative px-6 pb-10 text-center md:px-10 md:pb-14">
-            <h1 className="text-[clamp(44px,9vw,120px)] leading-[1.04]" style={ALBUM_TITLE_ON_COVER}>
-              {gallery.title}
-            </h1>
-            {gallery.event_date && (
-              <p className="mt-2 text-[13px] tracking-[0.18em]" style={{ color: "rgba(255,255,255,.85)", textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>
-                {new Date(gallery.event_date).toLocaleDateString("vi-VN")}
-              </p>
-            )}
-            <button
-              onClick={scrollToPhotos}
-              className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-3 text-[14px] font-semibold backdrop-blur-md transition-transform active:scale-95"
-              style={{ background: "rgba(10,10,12,.45)", border: "1px solid rgba(255,255,255,.5)", color: "#fff" }}
-            >
-              {tr.viewAlbum} <ChevronDown size={17} />
-            </button>
-          </div>
-        </div>
+        <AlbumCover
+          url={gallery.cover_url}
+          title={gallery.title}
+          note={gallery.event_date ? new Date(gallery.event_date).toLocaleDateString("vi-VN") : null}
+          buttonLabel={tr.viewAlbum}
+          onView={scrollToPhotos}
+        />
       )}
 
-      <div className="mx-auto max-w-[1500px] px-6 md:px-10" style={{ marginTop: gallery.cover_url ? "-60px" : "28px", position: "relative" }}>
+      <div className="mx-auto max-w-[1800px] px-4 md:px-6" style={{ marginTop: gallery.cover_url ? "24px" : "28px", position: "relative" }}>
         {!gallery.cover_url && (
           <h1 className="text-[clamp(34px,6vw,64px)] leading-[1.06]" style={ALBUM_TITLE_FONT}>{gallery.title}</h1>
         )}
