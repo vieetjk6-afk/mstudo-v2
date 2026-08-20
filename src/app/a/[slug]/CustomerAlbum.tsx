@@ -28,7 +28,8 @@ import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
-import { ALBUM_TITLE_FONT, ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
+import { ALBUM_TITLE_FONT } from "@/lib/album-title";
+import AlbumCover from "@/components/AlbumCover";
 import DriveFolderLinks, { type DriveFolder } from "@/components/DriveFolderLinks";
 
 interface PublicPhoto {
@@ -109,6 +110,11 @@ export default function CustomerAlbum({
   const [activeTab, setActiveTab] = useState<string>("all");
   // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
   const masonry = useMasonry(2, 4);
+  // Nút "Xem album" trên ảnh bìa cuộn thẳng xuống phần chọn ảnh.
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const scrollToContent = useCallback(() => {
+    contentRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   const [lbIdx, setLbIdx] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -595,24 +601,19 @@ export default function CustomerAlbum({
         <LanguageSwitcher />
       </header>
 
-      {/* Ảnh bìa studio đã chọn — tên album in ngay trên ảnh. */}
+      {/* Ảnh bìa studio đã chọn — chiếm trọn màn hình, tên album ở giữa,
+          nút "Xem album" ngay dưới (xem src/components/AlbumCover.tsx). */}
       {album.cover_url && (
-        <div className="relative h-[clamp(240px,48vh,480px)] overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={album.cover_url} alt={album.title} className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, var(--bg), rgba(10,10,12,.2) 55%, rgba(10,10,12,.4))" }} />
-          <div className="absolute inset-x-0 bottom-0 px-6 pb-7 text-center md:px-10">
-            <p className="mb-2 text-[11.5px] uppercase tracking-[0.24em]" style={{ color: "rgba(255,255,255,.8)", textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>
-              {studioName} đã chia sẻ với bạn
-            </p>
-            <h1 className="text-[clamp(38px,7vw,84px)] leading-[1.06]" style={ALBUM_TITLE_ON_COVER}>
-              {album.title}
-            </h1>
-          </div>
-        </div>
+        <AlbumCover
+          url={album.cover_url}
+          title={album.title}
+          eyebrow={`${studioName} đã chia sẻ với bạn`}
+          buttonLabel="Xem album"
+          onView={scrollToContent}
+        />
       )}
 
-      <div className="mx-auto max-w-[1500px] px-6 pt-7 md:px-10">
+      <div ref={contentRef} className="mx-auto max-w-[1800px] scroll-mt-16 px-4 pt-7 md:px-6">
         <div className="animate-[vkFade_.5s_ease_both]">
           {!album.cover_url && (
             <>
