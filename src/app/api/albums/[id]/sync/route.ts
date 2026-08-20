@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { resolveSource, listSubFolders } from "@/lib/drive-server";
-import { thumbnailUrl, extractFolderId } from "@/lib/drive";
+import { thumbnailUrl } from "@/lib/drive";
+import { planSubFolderSources } from "@/lib/album-subfolders";
 import { fetchAllPhotos, chunk } from "@/lib/photos";
 import type { AlbumSource } from "@/lib/types";
 
@@ -31,51 +32,41 @@ export async function POST(
     );
   }
 
+  const errors: string[] = [];
+
   const { data: album } = await supabase
     .from("albums")
     .select("cover_url")
     .eq("id", albumId)
     .maybeSingle();
 
-  // ── Auto-expand: any folder source that contains sub-folders gets a separate
-  // source (tab) per sub-folder, so pasting one parent link is enough. ────────
+  // ── Auto-expand: mỗi THƯ MỤC CON thành một nguồn (tab) riêng, để studio chỉ
+  // phải dán một link cha. Luật tách nằm ở src/lib/album-subfolders.ts (có
+  // kiểm thử riêng) — gồm cả thư mục con của thư mục con, và cả những link
+  // thư mục bị lưu nhầm `kind: "file"`. ────────────────────────────────────
   {
     const { data: existing } = await supabase
       .from("album_sources")
       .select("*")
       .eq("album_id", albumId)
       .order("position");
-    const existingUrls = new Set((existing ?? []).map((s) => s.drive_url));
-    let maxPos = Math.max(0, ...(existing ?? []).map((s) => s.position));
-    const newRows: {
-      album_id: string;
-      name: string;
-      drive_url: string;
-      kind: string;
-      stage: string;
-      position: number;
-    }[] = [];
 
-    for (const src of (existing ?? []) as AlbumSource[]) {
-      if (src.kind !== "folder") continue;
-      const folderId = extractFolderId(src.drive_url);
-      if (!folderId) continue;
-      let subs: { id: string; name: string }[] = [];
-      try {
-        subs = await listSubFolders(folderId);
-      } catch {
-        subs = [];
-      }
-      for (const sub of subs) {
-        const url = `https://drive.google.com/drive/folders/${sub.id}`;
-        if (existingUrls.has(url)) continue;
-        existingUrls.add(url);
-        maxPos += 1;
-        newRows.push({ album_id: albumId, name: sub.name, drive_url: url, kind: "folder", stage: src.stage ?? "selection", position: maxPos });
-      }
+    const { rows: newRows, fixKindIds } = await planSubFolderSources(
+      albumId,
+      (existing ?? []) as AlbumSource[],
+      listSubFolders
+    );
+
+    // Link thư mục bị lưu nhầm là "file" → sửa lại, nếu không mọi lần đồng bộ
+    // sau vẫn coi nó là file lẻ.
+    if (fixKindIds.length > 0) {
+      await supabase.from("album_sources").update({ kind: "folder" }).in("id", fixKindIds);
     }
     if (newRows.length > 0) {
-      await supabase.from("album_sources").insert(newRows);
+      // KHÔNG nuốt lỗi: chèn hỏng (thiếu cột stage, RLS…) mà im lặng thì studio
+      // chỉ thấy album trống trơn và không có cách nào đoán ra vì sao.
+      const { error: insErr } = await supabase.from("album_sources").insert(newRows);
+      if (insErr) errors.push(`Không tạo được tab thư mục con: ${insErr.message}`);
     }
   }
 
@@ -91,7 +82,6 @@ export async function POST(
 
   let total = 0;
   let added = 0;
-  const errors: string[] = [];
 
   // Existing photos (all of them, past the 1000-row cap), grouped per source.
   const existingPhotos = await fetchAllPhotos(supabase, albumId, "id, drive_file_id, source_id");
