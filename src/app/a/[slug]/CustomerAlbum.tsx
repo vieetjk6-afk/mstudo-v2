@@ -27,6 +27,8 @@ import { useLang } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { triggerDownload, downloadImage } from "@/lib/download";
+import { useMasonry } from "@/lib/masonry";
+import { ALBUM_TITLE_FONT, ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
 import DriveFolderLinks, { type DriveFolder } from "@/components/DriveFolderLinks";
 
 interface PublicPhoto {
@@ -46,6 +48,7 @@ interface PublicAlbum {
   slug: string;
   title: string;
   description: string | null;
+  cover_url?: string | null;
   selection_limit: number | null;
   watermark_enabled: boolean;
   watermark_text: string | null;
@@ -104,6 +107,8 @@ export default function CustomerAlbum({
   const selectedOnly = view === "selected";
   const dislikedOnly = view === "disliked";
   const [activeTab, setActiveTab] = useState<string>("all");
+  // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
+  const masonry = useMasonry(2, 4);
 
   const [lbIdx, setLbIdx] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -590,20 +595,39 @@ export default function CustomerAlbum({
         <LanguageSwitcher />
       </header>
 
+      {/* Ảnh bìa studio đã chọn — tên album in ngay trên ảnh. */}
+      {album.cover_url && (
+        <div className="relative h-[clamp(240px,48vh,480px)] overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={album.cover_url} alt={album.title} className="absolute inset-0 h-full w-full object-cover" />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, var(--bg), rgba(10,10,12,.2) 55%, rgba(10,10,12,.4))" }} />
+          <div className="absolute inset-x-0 bottom-0 px-6 pb-7 text-center md:px-10">
+            <p className="mb-2 text-[11.5px] uppercase tracking-[0.24em]" style={{ color: "rgba(255,255,255,.8)", textShadow: "0 1px 6px rgba(0,0,0,.7)" }}>
+              {studioName} đã chia sẻ với bạn
+            </p>
+            <h1 className="text-[clamp(38px,7vw,84px)] leading-[1.06]" style={ALBUM_TITLE_ON_COVER}>
+              {album.title}
+            </h1>
+          </div>
+        </div>
+      )}
+
       <div className="mx-auto max-w-[1500px] px-6 pt-7 md:px-10">
         <div className="animate-[vkFade_.5s_ease_both]">
-          <p className="mb-2 text-[12px] uppercase tracking-[0.2em]" style={{ color: "var(--text3)" }}>
-            {studioName} đã chia sẻ với bạn
-          </p>
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="font-serif text-[clamp(32px,5vw,52px)] font-medium leading-none">{album.title}</h1>
-              <p className="mt-2 text-[13.5px]" style={{ color: "var(--text2)" }}>
-                {photos.length} {t("photos")}
-                {album.description ? ` · ${album.description}` : ""}
+          {!album.cover_url && (
+            <>
+              <p className="mb-2 text-[12px] uppercase tracking-[0.2em]" style={{ color: "var(--text3)" }}>
+                {studioName} đã chia sẻ với bạn
               </p>
-            </div>
-          </div>
+              <h1 className="mb-1 text-[clamp(34px,6vw,64px)] leading-[1.06]" style={ALBUM_TITLE_FONT}>
+                {album.title}
+              </h1>
+            </>
+          )}
+          <p className="text-[13.5px]" style={{ color: "var(--text2)" }}>
+            {photos.length} {t("photos")}
+            {album.description ? ` · ${album.description}` : ""}
+          </p>
         </div>
 
         {/* Link tabs — switch between Drive sources */}
@@ -654,59 +678,55 @@ export default function CustomerAlbum({
             <>
               {/* Bộ lọc: CHỈ biểu tượng + số lượng. Tên đầy đủ hiện khi rê chuột
                   (title) để người dùng vẫn biết nút làm gì. */}
-              <button
-                onClick={() => setView((v) => (v === "selected" ? "all" : "selected"))}
-                title={selectedOnly ? t("viewingSelected") : t("selectedCount")}
-                aria-label={selectedOnly ? t("viewingSelected") : t("selectedCount")}
-                aria-pressed={selectedOnly}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors"
-                style={
-                  selectedOnly
-                    ? { background: "var(--accent)", color: "var(--accentInk)", border: "1px solid var(--accent)" }
-                    : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
-                }
-              >
-                <Heart size={15} fill={selectedOnly ? "currentColor" : "none"} />
-                <span className="tabular-nums">{selected.size}</span>
-              </button>
-              {/* Tab riêng cho ảnh không thích — chỉ hiện khi khách đã loại ảnh nào. */}
-              {(disliked.size > 0 || dislikedOnly) && (
-                <button
-                  onClick={() => setView((v) => (v === "disliked" ? "all" : "disliked"))}
-                  title={t("dislikedCount")}
-                  aria-label={t("dislikedCount")}
-                  aria-pressed={dislikedOnly}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors"
-                  style={
-                    dislikedOnly
-                      ? { background: "var(--danger)", color: "#fff", border: "1px solid var(--danger)" }
-                      : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
-                  }
-                >
-                  <HeartOff size={15} />
-                  <span className="tabular-nums">{disliked.size}</span>
-                </button>
-              )}
-              {limit != null && (
-                <span className="text-[13px]" style={{ color: "var(--text3)" }}>
-                  {selected.size} / {limit}
+              <div className="flex flex-col">
+                <div className="flex items-center gap-2.5">
+                  <button
+                    onClick={() => setView((v) => (v === "selected" ? "all" : "selected"))}
+                    title={selectedOnly ? t("viewingSelected") : t("selectedCount")}
+                    aria-label={selectedOnly ? t("viewingSelected") : t("selectedCount")}
+                    aria-pressed={selectedOnly}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors"
+                    style={
+                      selectedOnly
+                        ? { background: "var(--accent)", color: "var(--accentInk)", border: "1px solid var(--accent)" }
+                        : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
+                    }
+                  >
+                    <Heart size={15} fill={selectedOnly ? "currentColor" : "none"} />
+                    <span className="tabular-nums">{selected.size}</span>
+                  </button>
+                  {/* Tab riêng cho ảnh không thích — chỉ hiện khi khách đã loại ảnh nào. */}
+                  {(disliked.size > 0 || dislikedOnly) && (
+                    <button
+                      onClick={() => setView((v) => (v === "disliked" ? "all" : "disliked"))}
+                      title={t("dislikedCount")}
+                      aria-label={t("dislikedCount")}
+                      aria-pressed={dislikedOnly}
+                      className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors"
+                      style={
+                        dislikedOnly
+                          ? { background: "var(--danger)", color: "#fff", border: "1px solid var(--danger)" }
+                          : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
+                      }
+                    >
+                      <HeartOff size={15} />
+                      <span className="tabular-nums">{disliked.size}</span>
+                    </button>
+                  )}
+                </div>
+                {/* Số lượng ảnh nằm ngay dưới cụm biểu tượng, không chen ngang hàng. */}
+                <span className="mt-1 text-[12px]" style={{ color: "var(--text3)" }}>
+                  {dislikedOnly
+                    ? `${disliked.size} ảnh không thích`
+                    : selectedOnly
+                      ? `${selected.size} ảnh đã chọn`
+                      : `${selected.size}${limit != null ? `/${limit}` : ""} đã chọn · ${photos.length - disliked.size} ảnh`}
                 </span>
-              )}
+              </div>
             </>
           )}
 
           <div className="flex-1" />
-
-          {/* Auto-save status */}
-          <span className="flex items-center gap-1.5 text-[12.5px]" style={{ color: saveStatus === "saved" ? "var(--success)" : "var(--text3)" }}>
-            {saveStatus === "saving" ? (
-              <>{t("saving")}</>
-            ) : saveStatus === "saved" ? (
-              <>
-                <Check size={13} /> {t("savedForStudio")}
-              </>
-            ) : null}
-          </span>
 
           {/* Tải cả album từ Drive. Ẩn ở chế độ chia sẻ chọn lọc: link Drive mở
               CẢ thư mục nên sẽ lộ toàn album chứ không riêng mấy ảnh được chia sẻ. */}
@@ -718,8 +738,9 @@ export default function CustomerAlbum({
               className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px] text-[var(--text)] transition-colors"
             />
           )}
-          {/* Mọi thao tác trên danh sách đã chọn gom vào MỘT menu "Tác vụ" cho
-              thanh công cụ gọn: chép danh sách · xuất .txt · chia sẻ · báo studio. */}
+          {/* Thao tác phụ trên danh sách đã chọn gom vào MỘT menu "Tác vụ" cho
+              thanh công cụ gọn: chép danh sách · xuất .txt · chia sẻ. Riêng nút
+              "Báo studio" để hẳn bên ngoài vì đó là việc chính khách cần làm. */}
           {!shareMode && (
             <TaskMenu
               items={[
@@ -744,16 +765,24 @@ export default function CustomerAlbum({
                   onClick: shareSelected,
                   disabled: selected.size === 0 || shareBusy,
                 },
-                {
-                  key: "done",
-                  icon: doneSent ? <Check size={15} /> : <Send size={15} />,
-                  label: notifyingDone ? "Đang gửi…" : doneSent ? "Đã báo studio — báo lại" : "Đã chọn xong · Báo studio",
-                  onClick: notifyDone,
-                  disabled: notifyingDone || (selected.size === 0 && disliked.size === 0),
-                  accent: true,
-                },
               ]}
             />
+          )}
+          {/* Báo studio đã chọn xong — CTA chính, để riêng ngoài menu cho dễ thấy. */}
+          {!shareMode && (selected.size > 0 || disliked.size > 0) && (
+            <button
+              onClick={notifyDone}
+              disabled={notifyingDone}
+              className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors disabled:opacity-50"
+              style={
+                doneSent
+                  ? { background: "var(--success)", color: "#04150d", border: "1px solid var(--success)" }
+                  : { background: "var(--accent)", color: "var(--accentInk)", border: "1px solid var(--accent)" }
+              }
+            >
+              {doneSent ? <Check size={15} /> : <Send size={15} />}
+              {notifyingDone ? "Đang gửi…" : doneSent ? "Báo lại studio" : "Đã chọn xong · Báo studio"}
+            </button>
           )}
         </div>
 
@@ -774,7 +803,7 @@ export default function CustomerAlbum({
           </div>
         ) : (
           // Sections — each Drive source shown separately, left-to-right
-          <div className="space-y-9">
+          <div ref={masonry.ref} className="space-y-9">
             {sections.map((sec) => {
               // Chỉ dựng ảnh trong cửa sổ hiện tại (idx < renderLimit).
               const items = sec.items.filter((it) => it.idx < renderLimit);
@@ -791,8 +820,9 @@ export default function CustomerAlbum({
                 )}
                 {/* Lưới ảnh kiểu collage: 2 cột trên điện thoại, 4 cột trên máy
                     tính, khe gần như bằng 0, KHÔNG bo góc và KHÔNG cắt ảnh —
-                    mỗi tấm giữ đúng tỉ lệ gốc (dùng cột CSS nên cao tự do). */}
-                <div className="columns-2 md:columns-4" style={{ columnGap: "2px" }}>
+                    mỗi tấm giữ đúng tỉ lệ gốc, và ảnh được đặt lần lượt
+                    TRÁI → PHẢI (xem src/lib/masonry.ts). */}
+                <div className="grid grid-cols-2 md:grid-cols-4" style={masonry.gridStyle}>
             {items.map(({ p, idx }) => {
               const isSel = selected.has(p.id);
               const isDis = disliked.has(p.id);
@@ -800,10 +830,10 @@ export default function CustomerAlbum({
               return (
                 <div
                   key={p.id}
-                  className="mb-[2px] block w-full break-inside-avoid animate-[vkPop_.45s_ease_both]"
-                  style={{ background: "var(--surface)" }}
+                  className="overflow-hidden animate-[vkPop_.45s_ease_both]"
+                  style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}
                 >
-                  <div className="relative">
+                  <div className="relative h-full w-full">
                     <div
                       className="pointer-events-none absolute inset-0 z-[3]"
                       style={
@@ -832,7 +862,8 @@ export default function CustomerAlbum({
                         }
                       }}
                       onContextMenu={(e) => wm && e.preventDefault()}
-                      className="block h-auto w-full cursor-zoom-in select-none"
+                      className="block h-full w-full cursor-zoom-in select-none object-cover"
+                      {...masonry.imgProps(p.id)}
                     />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
@@ -1064,19 +1095,28 @@ export default function CustomerAlbum({
                 style={{ borderColor: "var(--border)" }}
               >
                 <div>
-                  <h3 className="font-serif text-2xl font-medium">{t("note")}</h3>
-                  <p className="text-[12.5px] leading-relaxed" style={{ color: "var(--text3)" }}>
+                  <h3 className="flex items-center gap-2 text-[15px] font-semibold">
+                    <FileText size={16} style={{ color: "var(--gold)" }} /> {t("note")}
+                  </h3>
+                  <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--text3)" }}>
                     {disliked.has(lbPhoto.id)
                       ? "Cho studio biết vì sao bạn không thích ảnh này (tuỳ chọn)."
                       : "Để lại ghi chú để studio biết bạn muốn chỉnh sửa gì cho ảnh này."}
                   </p>
                 </div>
+                {/* Ô nhập để lộ hẳn ra: viền vàng khi CHƯA có ghi chú nên khách
+                    nhìn là biết gõ được vào đây, không phải đoán. */}
                 <textarea
                   value={notes[lbPhoto.id] ?? ""}
                   onChange={(e) => setNote(lbPhoto.id, e.target.value)}
                   placeholder="Viết ghi chú cho ảnh này…"
-                  className="min-h-[120px] w-full resize-y rounded-xl px-3.5 py-3 text-sm outline-none"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                  rows={4}
+                  className="min-h-[110px] w-full resize-y rounded-xl px-3.5 py-3 text-sm outline-none"
+                  style={{
+                    background: "var(--surface)",
+                    border: notes[lbPhoto.id]?.trim() ? "1px solid var(--border)" : "1.5px solid var(--gold)",
+                    color: "var(--text)",
+                  }}
                 />
                 <div className="mt-auto border-t pt-4" style={{ borderColor: "var(--border)" }}>
                   <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "var(--text2)" }}>

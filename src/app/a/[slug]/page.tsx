@@ -41,7 +41,7 @@ export default async function PublicAlbumPage({
   const { data: album } = await admin
     .from("albums")
     .select(
-      "id, owner_id, slug, title, description, status, password_hash, selection_limit, watermark_enabled, watermark_text, download_enabled, phase"
+      "id, owner_id, slug, title, description, status, password_hash, selection_limit, watermark_enabled, watermark_text, download_enabled, phase, cover_url"
     )
     .eq("slug", params.slug)
     .single();
@@ -193,6 +193,7 @@ export default async function PublicAlbumPage({
         slug: album.slug,
         title: album.title,
         description: album.description,
+        cover_url: album.cover_url,
         selection_limit: album.selection_limit,
         watermark_enabled: canWatermark && album.watermark_enabled,
         watermark_text: album.watermark_text,
