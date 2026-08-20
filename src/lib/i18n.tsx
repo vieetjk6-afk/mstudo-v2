@@ -93,7 +93,7 @@ export const dict: Dict = {
   },
   yourSelection: { vi: "Ảnh bạn đã chọn", en: "Your selection" },
   exportList: { vi: "Xuất danh sách", en: "Export list" },
-  copyList: { vi: "Copy danh sách (không đuôi)", en: "Copy list (no extension)" },
+  copyList: { vi: "Copy danh sách", en: "Copy list" },
   copied: { vi: "Đã copy!", en: "Copied!" },
   downloadPhoto: { vi: "Tải ảnh", en: "Download photo" },
   driveFolder: { vi: "Tải ảnh từ Drive", en: "Download from Drive" },

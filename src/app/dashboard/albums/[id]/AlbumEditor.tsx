@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -168,6 +168,53 @@ export default function AlbumEditor({
   const deliveryPhotos = photos.filter((p) => stageById.get(p.source_id ?? "") === "delivery");
   const deliveryCount = deliveryPhotos.length;
   const selectionCount = photos.length - deliveryCount;
+
+  /* ── Lưới ảnh tách theo GIAI ĐOẠN rồi tới THƯ MỤC CON ───────────────────────
+     Album đã chuyển sang giao khách thì ảnh giai đoạn giao lên đầu — đó là bộ
+     ảnh studio đang làm việc, và ảnh bìa gần như luôn chọn từ đó. Hai giai đoạn
+     nằm ở hai mục riêng nên đặt bìa cho từng bộ không bị lẫn. Trong mỗi mục,
+     nếu link Drive có thư mục con (sync tự tách thành nhiều nguồn) thì mỗi thư
+     mục con lại là một mục nhỏ có tiêu đề riêng. */
+  const [photoStage, setPhotoStage] = useState<"all" | "delivery" | "selection">("all");
+
+  const photoGroups = useMemo(() => {
+    const stages = new Map(sources.map((s) => [s.id, s.stage]));
+    const del: Photo[] = [];
+    const sel: Photo[] = [];
+    for (const p of photos) {
+      if (stages.get(p.source_id ?? "") === "delivery") del.push(p);
+      else sel.push(p);
+    }
+    const groups = [
+      { key: "delivery" as const, label: "Ảnh giao khách", photos: del },
+      { key: "selection" as const, label: "Ảnh chọn", photos: sel },
+    ];
+    return phase === "delivery" ? groups : [groups[1], groups[0]];
+  }, [photos, sources, phase]);
+
+  /** Tách một nhóm ảnh thành các mục nhỏ theo thư mục (nguồn) Drive. */
+  const splitBySource = useCallback(
+    (list: Photo[]) => {
+      const bySrc = new Map<string, Photo[]>();
+      for (const p of list) {
+        const k = p.source_id ?? "none";
+        if (!bySrc.has(k)) bySrc.set(k, []);
+        bySrc.get(k)!.push(p);
+      }
+      if (bySrc.size <= 1) return [{ id: "one", name: "", photos: list }];
+      const out: { id: string; name: string; photos: Photo[] }[] = [];
+      for (const src of sources) {
+        const got = bySrc.get(src.id);
+        if (got) {
+          out.push({ id: src.id, name: src.name, photos: got });
+          bySrc.delete(src.id);
+        }
+      }
+      for (const [k, items] of bySrc) out.push({ id: k, name: "Khác", photos: items });
+      return out;
+    },
+    [sources]
+  );
   // Delivery folder sources can be opened straight on Drive (0 Fast Origin Transfer,
   // true originals — Google serves the download, not us).
   const deliveryFolders = sources.filter((s) => s.stage === "delivery" && s.kind === "folder");
@@ -312,16 +359,33 @@ export default function AlbumEditor({
 
   // Lưu link ảnh đã chỉnh sửa (giao khách): tạo/cập nhật nguồn stage 'delivery'
   // rồi đồng bộ ảnh. Ảnh trong thư mục này là ảnh hiện cho khách ở album giao.
+  //
+  // Nếu thư mục có THƯ MỤC CON, bước sync sau đó tự tách mỗi thư mục con thành
+  // một nguồn riêng (kế thừa stage 'delivery') — album giao khách vì thế hiện
+  // đúng từng mục nhỏ thay vì trộn chung một đống.
   async function saveDeliveryLink() {
     const url = editedUrl.trim();
     if (!url || deliveryBusy) return;
     setDeliveryBusy(true);
     const kind: SourceKind = isFolderLink(url) ? "folder" : "file";
-    const existing = sources.find((s) => s.stage === "delivery");
+    const delivery = sources.filter((s) => s.stage === "delivery");
+    // Nguồn "gốc" của giai đoạn giao là cái đang giữ đúng link này, nếu không có
+    // thì lấy nguồn giao đầu tiên (những cái còn lại là thư mục con tự tách ra).
+    const existing = delivery.find((s) => s.drive_url === url) ?? delivery[0];
+    let next = sources;
     if (existing) {
       const { error } = await supabase.from("album_sources").update({ drive_url: url, kind }).eq("id", existing.id);
       if (error) { setDeliveryBusy(false); return flash(error.message); }
-      setSources(sources.map((s) => (s.id === existing.id ? { ...s, drive_url: url, kind } : s)));
+      next = sources.map((s) => (s.id === existing.id ? { ...s, drive_url: url, kind } : s));
+      // Đổi sang link khác ⇒ các thư mục con tách ra từ link CŨ không còn đúng
+      // nữa; xoá đi để sync tách lại theo link mới (ảnh xoá theo cascade).
+      const stale = delivery.filter((s) => s.id !== existing.id && s.drive_url !== url).map((s) => s.id);
+      if (existing.drive_url !== url && stale.length > 0) {
+        await supabase.from("album_sources").delete().in("id", stale);
+        next = next.filter((s) => !stale.includes(s.id));
+        setPhotos((prev) => prev.filter((ph) => !stale.includes(ph.source_id ?? "")));
+      }
+      setSources(next);
     } else {
       const { data, error } = await supabase
         .from("album_sources")
@@ -576,65 +640,121 @@ export default function AlbumEditor({
                   </button>
                 </p>
               )}
-              {/* Lưới ảnh 6 cột như bản thiết kế, tỉ lệ 3:2, khe 10px. */}
-              <div className="grid grid-cols-3 gap-2.5 min-[700px]:grid-cols-4 min-[1000px]:grid-cols-5 min-[1280px]:grid-cols-6">
-                {photos.map((p) => {
-                  const isPicked = pickedIds.has(p.id);
-                  return (
-                  <div
-                    key={p.id}
-                    className="group relative aspect-[3/2] overflow-hidden rounded-[9px]"
-                    style={{ background: "var(--sf2)", border: isPicked ? "2px solid var(--ac)" : "1px solid var(--bd2)" }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={thumbnailUrl(p.drive_file_id, 400)}
-                      alt={p.name}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                    <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
-                      <button
-                        onClick={() => setCover(p.drive_file_id)}
-                        title={t("setCover")}
-                        aria-label={t("setCover")}
-                        className="rounded bg-ink-900/80 p-1.5 text-accent-gold hover:bg-ink-800"
-                      >
-                        <Star size={14} />
-                      </button>
-                      <button
-                        onClick={() => removePhoto(p.id)}
-                        aria-label={t("delete")}
-                        className="rounded bg-ink-900/80 p-1.5 hover:bg-ink-800"
-                        style={{ color: "var(--danger)" }}
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                    {isPicked && (
-                      <span
-                        className="absolute right-1 top-1 flex h-[19px] w-[19px] items-center justify-center rounded-full"
-                        style={{ background: "var(--ac)", color: "#fff" }}
-                        title="Khách đã chọn ảnh này"
-                      >
-                        <Check size={13} />
-                      </span>
-                    )}
-                    {form.cover_url === thumbnailUrl(p.drive_file_id, 800) && (
-                      <span className="absolute left-1.5 top-1.5 rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold uppercase" style={{ background: "var(--ac)", color: "#fff" }}>
-                        {t("cover")}
-                      </span>
-                    )}
-                    <span
-                      className="pointer-events-none absolute bottom-1 left-1.5 max-w-[85%] truncate text-[9px]"
-                      style={{ color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,.75)", fontFamily: "ui-monospace, monospace" }}
+              {/* Lọc theo giai đoạn — chỉ có nghĩa khi album có cả hai bộ ảnh. */}
+              {deliveryCount > 0 && selectionCount > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {([
+                    ["all", `Tất cả · ${photos.length}`],
+                    ["delivery", `Ảnh giao khách · ${deliveryCount}`],
+                    ["selection", `Ảnh chọn · ${selectionCount}`],
+                  ] as ["all" | "delivery" | "selection", string][]).map(([key, label]) => (
+                    <button
+                      key={key}
+                      onClick={() => setPhotoStage(key)}
+                      className="rounded-[20px] px-3 py-[6px] text-[12px] font-semibold"
+                      style={photoStage === key
+                        ? { background: "var(--ac)", color: "#fff" }
+                        : { background: "var(--sf2)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
                     >
-                      {stripExtension(p.name)}
-                    </span>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {photoGroups.map((g) => {
+                if (g.photos.length === 0) return null;
+                if (photoStage !== "all" && photoStage !== g.key) return null;
+                const showGroupHead = deliveryCount > 0 && selectionCount > 0;
+                return (
+                  <div key={g.key} className="mb-5 last:mb-0">
+                    {showGroupHead && (
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className="rounded-[6px] px-2 py-0.5 text-[11px] font-bold"
+                          style={g.key === "delivery"
+                            ? { background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }
+                            : { background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}
+                        >
+                          {g.label}
+                        </span>
+                        <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                          {g.photos.length} ảnh · bấm ★ trên ảnh để đặt làm ảnh bìa
+                        </span>
+                      </div>
+                    )}
+                    {splitBySource(g.photos).map((sec) => (
+                      <div key={`${g.key}-${sec.id}`} className="mb-3.5 last:mb-0">
+                        {sec.name && (
+                          <p className="mb-1.5 text-[12px] font-semibold" style={{ color: "var(--tx2)" }}>
+                            {sec.name}
+                            <span className="ml-1.5 font-normal" style={{ color: "var(--tx3)" }}>· {sec.photos.length} ảnh</span>
+                          </p>
+                        )}
+                        {/* Lưới ảnh 6 cột như bản thiết kế, tỉ lệ 3:2, khe 10px. */}
+                        <div className="grid grid-cols-3 gap-2.5 min-[700px]:grid-cols-4 min-[1000px]:grid-cols-5 min-[1280px]:grid-cols-6">
+                          {sec.photos.map((p) => {
+                            const isPicked = pickedIds.has(p.id);
+                            return (
+                            <div
+                              key={p.id}
+                              className="group relative aspect-[3/2] overflow-hidden rounded-[9px]"
+                              style={{ background: "var(--sf2)", border: isPicked ? "2px solid var(--ac)" : "1px solid var(--bd2)" }}
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={thumbnailUrl(p.drive_file_id, 400)}
+                                alt={p.name}
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
+                              <div className="absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/70 to-transparent p-2 opacity-0 transition group-hover:opacity-100">
+                                <button
+                                  onClick={() => setCover(p.drive_file_id)}
+                                  title={t("setCover")}
+                                  aria-label={t("setCover")}
+                                  className="rounded bg-ink-900/80 p-1.5 text-accent-gold hover:bg-ink-800"
+                                >
+                                  <Star size={14} />
+                                </button>
+                                <button
+                                  onClick={() => removePhoto(p.id)}
+                                  aria-label={t("delete")}
+                                  className="rounded bg-ink-900/80 p-1.5 hover:bg-ink-800"
+                                  style={{ color: "var(--danger)" }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                              {isPicked && (
+                                <span
+                                  className="absolute right-1 top-1 flex h-[19px] w-[19px] items-center justify-center rounded-full"
+                                  style={{ background: "var(--ac)", color: "#fff" }}
+                                  title="Khách đã chọn ảnh này"
+                                >
+                                  <Check size={13} />
+                                </span>
+                              )}
+                              {form.cover_url === thumbnailUrl(p.drive_file_id, 800) && (
+                                <span className="absolute left-1.5 top-1.5 rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold uppercase" style={{ background: "var(--ac)", color: "#fff" }}>
+                                  {t("cover")}
+                                </span>
+                              )}
+                              <span
+                                className="pointer-events-none absolute bottom-1 left-1.5 max-w-[85%] truncate text-[9px]"
+                                style={{ color: "#fff", textShadow: "0 1px 3px rgba(0,0,0,.75)", fontFamily: "ui-monospace, monospace" }}
+                              >
+                                {stripExtension(p.name)}
+                              </span>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  );
-                })}
-              </div>
+                );
+              })}
               {photos.length === 0 && (
                 <p className="text-sm text-accent-muted">
                   {t("addSource")} → {t("syncDrive")}
@@ -1178,8 +1298,30 @@ export default function AlbumEditor({
                 <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>
                   Ảnh trong thư mục này sẽ hiện ở album giao khách. Ảnh gốc khách đã chọn ở
                   giai đoạn trước tự thành nút <b>“Ảnh gốc”</b> để khách xem/tải trên
-                  Drive. Thư mục cần chia sẻ ở chế độ “ai có link xem được”.
+                  Drive. Thư mục cần chia sẻ ở chế độ “ai có link xem được”. Nếu thư mục
+                  có <b>thư mục con</b>, mỗi thư mục con tự thành một mục riêng ở album giao khách.
                 </p>
+
+                {/* Thư mục con đã tách được — studio nhìn là biết album giao khách
+                    đang chia thành mấy mục và mỗi mục bao nhiêu ảnh. */}
+                {deliveryFolders.length > 1 && (
+                  <div className="mt-3 rounded-[10px] p-3" style={{ background: "var(--sf2)" }}>
+                    <p className="mb-1.5 text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>
+                      Thư mục giao khách đã tách riêng ({deliveryFolders.length})
+                    </p>
+                    <ul className="space-y-1">
+                      {deliveryFolders.map((f) => (
+                        <li key={f.id} className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                          <FolderOpen size={13} className="flex-none" />
+                          <span className="truncate">{f.name}</span>
+                          <span className="flex-none font-semibold">
+                            · {photos.filter((ph) => ph.source_id === f.id).length} ảnh
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Nói thẳng nút "Tải file chỉnh sửa" bên album khách đã hiện chưa và
                     còn thiếu gì — ba điều kiện nằm ở ba màn hình khác nhau, không nói

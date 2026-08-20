@@ -11,6 +11,7 @@ import {
   Lock,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   X,
   ListChecks,
   ZoomIn,
@@ -602,22 +603,6 @@ export default function CustomerAlbum({
                 {album.description ? ` · ${album.description}` : ""}
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div
-                className="flex items-center gap-2 rounded-full px-4 py-2 text-[13px]"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}
-              >
-                <Heart size={14} /> Nhấn vào trái tim để chọn ảnh bạn thích
-              </div>
-              {!shareMode && (
-                <div
-                  className="flex items-center gap-2 rounded-full px-4 py-2 text-[13px]"
-                  style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}
-                >
-                  <HeartOff size={14} /> Nhấn dấu × để đánh dấu ảnh không thích
-                </div>
-              )}
-            </div>
           </div>
         </div>
 
@@ -667,40 +652,46 @@ export default function CustomerAlbum({
             </span>
           ) : (
             <>
+              {/* Bộ lọc: CHỈ biểu tượng + số lượng. Tên đầy đủ hiện khi rê chuột
+                  (title) để người dùng vẫn biết nút làm gì. */}
               <button
                 onClick={() => setView((v) => (v === "selected" ? "all" : "selected"))}
-                className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors"
+                title={selectedOnly ? t("viewingSelected") : t("selectedCount")}
+                aria-label={selectedOnly ? t("viewingSelected") : t("selectedCount")}
+                aria-pressed={selectedOnly}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors"
                 style={
                   selectedOnly
                     ? { background: "var(--accent)", color: "var(--accentInk)", border: "1px solid var(--accent)" }
                     : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
                 }
               >
-                <Heart size={14} fill={selectedOnly ? "currentColor" : "none"} />
-                {selectedOnly ? t("viewingSelected") : `${t("selectedCount")}${selected.size ? ` · ${selected.size}` : ""}`}
+                <Heart size={15} fill={selectedOnly ? "currentColor" : "none"} />
+                <span className="tabular-nums">{selected.size}</span>
               </button>
               {/* Tab riêng cho ảnh không thích — chỉ hiện khi khách đã loại ảnh nào. */}
               {(disliked.size > 0 || dislikedOnly) && (
                 <button
                   onClick={() => setView((v) => (v === "disliked" ? "all" : "disliked"))}
-                  className="flex items-center gap-2 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors"
+                  title={t("dislikedCount")}
+                  aria-label={t("dislikedCount")}
+                  aria-pressed={dislikedOnly}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-semibold transition-colors"
                   style={
                     dislikedOnly
                       ? { background: "var(--danger)", color: "#fff", border: "1px solid var(--danger)" }
                       : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
                   }
                 >
-                  <HeartOff size={14} />
-                  {t("dislikedCount")} · {disliked.size}
+                  <HeartOff size={15} />
+                  <span className="tabular-nums">{disliked.size}</span>
                 </button>
               )}
-              <span className="text-[13px]" style={{ color: "var(--text3)" }}>
-                {dislikedOnly
-                  ? `${disliked.size} ảnh bạn không thích — studio sẽ xoá nếu bạn yêu cầu`
-                  : selected.size > 0
-                    ? `${selected.size}${limit != null ? ` / ${limit}` : ""} ${t("selected")}`
-                    : `${t("noneSelected")} · ${photos.length - disliked.size} ${t("photos")}`}
-              </span>
+              {limit != null && (
+                <span className="text-[13px]" style={{ color: "var(--text3)" }}>
+                  {selected.size} / {limit}
+                </span>
+              )}
             </>
           )}
 
@@ -727,39 +718,42 @@ export default function CustomerAlbum({
               className="flex items-center gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-[13px] text-[var(--text)] transition-colors"
             />
           )}
-          {!shareMode && selected.size > 0 && (
-            <ToolButton onClick={copyList}>
-              {copied ? <Check size={14} /> : <Copy size={14} />} {t("copyList")}
-            </ToolButton>
-          )}
+          {/* Mọi thao tác trên danh sách đã chọn gom vào MỘT menu "Tác vụ" cho
+              thanh công cụ gọn: chép danh sách · xuất .txt · chia sẻ · báo studio. */}
           {!shareMode && (
-            <ToolButton onClick={exportList} disabled={selected.size === 0}>
-              <FileText size={14} /> {t("exportList")}
-            </ToolButton>
-          )}
-          {!shareMode && (
-            <ToolButton onClick={shareSelected} disabled={selected.size === 0 || shareBusy}>
-              <Share2 size={14} />
-              {shareBusy ? "Đang tạo link…" : "Chia sẻ ảnh đã chọn"}
-            </ToolButton>
-          )}
-          {/* Báo studio đã chọn xong — CTA nổi bật. Cũng hiện khi khách chỉ đánh
-              dấu ảnh không thích mà chưa chọn tấm nào: đó vẫn là yêu cầu cần
-              studio xử lý. */}
-          {!shareMode && (selected.size > 0 || disliked.size > 0) && (
-            <button
-              onClick={notifyDone}
-              disabled={notifyingDone}
-              className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-medium transition-colors disabled:opacity-50"
-              style={
-                doneSent
-                  ? { background: "var(--success)", color: "#04150d", border: "1px solid var(--success)" }
-                  : { background: "var(--accent)", color: "var(--accentInk)", border: "1px solid var(--accent)" }
-              }
-            >
-              {doneSent ? <Check size={14} /> : <Send size={14} />}
-              {notifyingDone ? "Đang gửi…" : doneSent ? "Đã báo studio — báo lại" : "Đã chọn xong · Báo studio"}
-            </button>
+            <TaskMenu
+              items={[
+                {
+                  key: "copy",
+                  icon: copied ? <Check size={15} /> : <Copy size={15} />,
+                  label: copied ? t("copied") : t("copyList"),
+                  onClick: copyList,
+                  disabled: selected.size === 0,
+                },
+                {
+                  key: "export",
+                  icon: <FileText size={15} />,
+                  label: t("exportList"),
+                  onClick: exportList,
+                  disabled: selected.size === 0,
+                },
+                {
+                  key: "share",
+                  icon: <Share2 size={15} />,
+                  label: shareBusy ? "Đang tạo link…" : "Chia sẻ ảnh đã chọn",
+                  onClick: shareSelected,
+                  disabled: selected.size === 0 || shareBusy,
+                },
+                {
+                  key: "done",
+                  icon: doneSent ? <Check size={15} /> : <Send size={15} />,
+                  label: notifyingDone ? "Đang gửi…" : doneSent ? "Đã báo studio — báo lại" : "Đã chọn xong · Báo studio",
+                  onClick: notifyDone,
+                  disabled: notifyingDone || (selected.size === 0 && disliked.size === 0),
+                  accent: true,
+                },
+              ]}
+            />
           )}
         </div>
 
@@ -777,8 +771,6 @@ export default function CustomerAlbum({
                       ? "Mọi ảnh ở đây đã được đánh dấu không thích"
                       : t("loading")}
             </p>
-            {selectedOnly && <p className="text-[13.5px]">{t("heartHint")}</p>}
-            {dislikedOnly && <p className="text-[13.5px]">{t("dislikeHint")}</p>}
           </div>
         ) : (
           // Sections — each Drive source shown separately, left-to-right
@@ -797,9 +789,10 @@ export default function CustomerAlbum({
                     </span>
                   </h2>
                 )}
-                {/* Lưới ảnh: khe hẹp để mắt đọc cả trang như một dải ảnh liền,
-                    và ô to hơn trên máy tính (240px) so với điện thoại (150px). */}
-                <div className="grid items-start gap-1.5 [grid-template-columns:repeat(auto-fill,minmax(150px,1fr))] md:gap-2 md:[grid-template-columns:repeat(auto-fill,minmax(240px,1fr))]">
+                {/* Lưới ảnh kiểu collage: 2 cột trên điện thoại, 4 cột trên máy
+                    tính, khe gần như bằng 0, KHÔNG bo góc và KHÔNG cắt ảnh —
+                    mỗi tấm giữ đúng tỉ lệ gốc (dùng cột CSS nên cao tự do). */}
+                <div className="columns-2 md:columns-4" style={{ columnGap: "2px" }}>
             {items.map(({ p, idx }) => {
               const isSel = selected.has(p.id);
               const isDis = disliked.has(p.id);
@@ -807,17 +800,17 @@ export default function CustomerAlbum({
               return (
                 <div
                   key={p.id}
-                  className="overflow-hidden rounded-[10px] animate-[vkPop_.45s_ease_both]"
+                  className="mb-[2px] block w-full break-inside-avoid animate-[vkPop_.45s_ease_both]"
                   style={{ background: "var(--surface)" }}
                 >
-                  <div className="relative aspect-square">
+                  <div className="relative">
                     <div
                       className="pointer-events-none absolute inset-0 z-[3]"
                       style={
                         isDis
-                          ? { boxShadow: "inset 0 0 0 3px var(--danger)" }
+                          ? { boxShadow: "inset 0 0 0 2px var(--danger)" }
                           : isSel
-                            ? { boxShadow: "inset 0 0 0 3px var(--gold)" }
+                            ? { boxShadow: "inset 0 0 0 2px var(--gold)" }
                             : undefined
                       }
                     />
@@ -839,7 +832,7 @@ export default function CustomerAlbum({
                         }
                       }}
                       onContextMenu={(e) => wm && e.preventDefault()}
-                      className="h-full w-full cursor-zoom-in select-none object-cover"
+                      className="block h-auto w-full cursor-zoom-in select-none"
                     />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
@@ -850,12 +843,6 @@ export default function CustomerAlbum({
                         ))}
                       </div>
                     )}
-                    {/* Vệt tối chỉ cần cao vừa đủ đỡ hai nút 32px — trước là 64px,
-                        che mất một dải ảnh không cần thiết. */}
-                    <div
-                      className="pointer-events-none absolute inset-x-0 top-0 h-11"
-                      style={{ background: "linear-gradient(to bottom, rgba(0,0,0,.45), transparent)" }}
-                    />
                     {/* heart select — large tap target for mobile. Ảnh đang ở mục
                         không thích thì chỉ còn nút hoàn tác, không cho thích luôn. */}
                     {!shareMode && !isDis && (
@@ -864,15 +851,13 @@ export default function CustomerAlbum({
                           e.stopPropagation();
                           toggle(p.id);
                         }}
-                        title={t("selectThis")}
-                        className="absolute right-1.5 top-1.5 z-[4] flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-90"
-                        style={
-                          isSel
-                            ? { background: "var(--gold)", color: "#1a1205", border: "1.5px solid var(--gold)" }
-                            : { background: "rgba(10,10,12,.45)", color: "#fff", border: "1.5px solid rgba(255,255,255,.7)" }
-                        }
+                        title={isSel ? t("deselect") : t("selectThis")}
+                        aria-label={isSel ? t("deselect") : t("selectThis")}
+                        aria-pressed={isSel}
+                        className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
+                        style={{ color: isSel ? "var(--gold)" : "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
                       >
-                        <Heart size={15} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
+                        <Heart size={16} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
                       </button>
                     )}
                     {/* Không thích (góc trái) — bấm là ảnh ẩn khỏi lưới, sang tab
@@ -885,34 +870,31 @@ export default function CustomerAlbum({
                         }}
                         title={isDis ? t("undislike") : t("dislikeThis")}
                         aria-label={isDis ? t("undislike") : t("dislikeThis")}
-                        className="absolute left-1.5 top-1.5 z-[4] flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-90"
-                        style={
-                          isDis
-                            ? { background: "var(--danger)", color: "#fff", border: "1.5px solid var(--danger)" }
-                            : { background: "rgba(10,10,12,.5)", color: "#fff", border: "1.5px solid rgba(255,255,255,.75)" }
-                        }
+                        className="absolute left-1 top-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
+                        style={{ color: isDis ? "var(--danger)" : "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
                       >
-                        {isDis ? <Undo2 size={15} /> : <X size={16} strokeWidth={2.6} />}
+                        {isDis ? <Undo2 size={16} /> : <X size={17} strokeWidth={2.6} />}
+                      </button>
+                    )}
+
+                    {/* Ghi chú: trước là một dải chữ dưới mỗi ảnh làm lưới rời
+                        rạc. Giờ chỉ còn biểu tượng nhỏ ở góc — bấm mở ảnh lớn để
+                        viết; sáng màu vàng khi ảnh đã có ghi chú. */}
+                    {album.allowNotes && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLbIdx(idx);
+                        }}
+                        title={note?.trim() || "Thêm ghi chú"}
+                        aria-label={note?.trim() ? `Ghi chú: ${note.trim()}` : "Thêm ghi chú"}
+                        className="absolute bottom-1 left-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
+                        style={{ color: note?.trim() ? "var(--gold)" : "rgba(255,255,255,.85)", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
+                      >
+                        <FileText size={15} />
                       </button>
                     )}
                   </div>
-
-                  {/* note under the thumbnail */}
-                  {album.allowNotes && (
-                    <button
-                      onClick={() => setLbIdx(idx)}
-                      className="flex w-full items-center gap-1.5 px-2.5 py-2 text-left"
-                      style={{ borderTop: "1px solid var(--border)" }}
-                    >
-                      <FileText size={12} className="flex-shrink-0" style={{ color: note?.trim() ? "var(--gold)" : "var(--text3)" }} />
-                      <span
-                        className="min-w-0 truncate text-[11.5px]"
-                        style={{ color: note?.trim() ? "var(--text)" : "var(--text3)" }}
-                      >
-                        {note?.trim() || "Thêm ghi chú…"}
-                      </span>
-                    </button>
-                  )}
                 </div>
               );
             })}
@@ -941,32 +923,29 @@ export default function CustomerAlbum({
               {lbIdx + 1} / {visiblePhotos.length}
             </span>
             <div className="flex-1" />
+            {/* Chỉ còn biểu tượng — tên đầy đủ hiện khi rê chuột (title). */}
             {!shareMode && !disliked.has(lbPhoto.id) && (
               <button
                 onClick={() => toggle(lbPhoto.id)}
-                className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13.5px] font-semibold transition-all"
-                style={
-                  selected.has(lbPhoto.id)
-                    ? { background: "var(--gold)", color: "#1a1205", border: "1px solid var(--gold)" }
-                    : { background: "var(--surface)", color: "var(--text)", border: "1px solid var(--border)" }
-                }
+                title={selected.has(lbPhoto.id) ? t("deselect") : t("selectThis")}
+                aria-label={selected.has(lbPhoto.id) ? t("deselect") : t("selectThis")}
+                aria-pressed={selected.has(lbPhoto.id)}
+                className="flex h-10 w-10 items-center justify-center rounded-lg transition-all"
+                style={{ background: "transparent", color: selected.has(lbPhoto.id) ? "var(--gold)" : "var(--text2)" }}
               >
-                <Heart size={15} fill={selected.has(lbPhoto.id) ? "currentColor" : "none"} strokeWidth={selected.has(lbPhoto.id) ? 0 : 2} />
-                {selected.has(lbPhoto.id) ? "Đã thích" : "Thích ảnh này"}
+                <Heart size={20} fill={selected.has(lbPhoto.id) ? "currentColor" : "none"} strokeWidth={selected.has(lbPhoto.id) ? 0 : 2} />
               </button>
             )}
             {!shareMode && (
               <button
                 onClick={() => toggleDislike(lbPhoto.id)}
-                className="flex items-center gap-2 rounded-lg px-4 py-2 text-[13.5px] font-semibold transition-all"
-                style={
-                  disliked.has(lbPhoto.id)
-                    ? { background: "var(--danger)", color: "#fff", border: "1px solid var(--danger)" }
-                    : { background: "var(--surface)", color: "var(--text2)", border: "1px solid var(--border)" }
-                }
+                title={disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
+                aria-label={disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
+                aria-pressed={disliked.has(lbPhoto.id)}
+                className="flex h-10 w-10 items-center justify-center rounded-lg transition-all"
+                style={{ background: "transparent", color: disliked.has(lbPhoto.id) ? "var(--danger)" : "var(--text2)" }}
               >
-                {disliked.has(lbPhoto.id) ? <Undo2 size={15} /> : <HeartOff size={15} />}
-                {disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
+                {disliked.has(lbPhoto.id) ? <Undo2 size={20} /> : <X size={22} strokeWidth={2.4} />}
               </button>
             )}
             {album.allowDownload && (
@@ -999,7 +978,7 @@ export default function CustomerAlbum({
 
           <div className="flex min-h-0 flex-1 flex-wrap overflow-y-auto">
             <div
-              className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-3 md:p-10"
+              className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4"
               style={{ flexBasis: "480px" }}
               onWheel={onWheelZoom}
             >
@@ -1007,10 +986,10 @@ export default function CustomerAlbum({
                 onClick={() => setLbIdx(Math.max(0, lbIdx - 1))}
                 disabled={lbIdx === 0}
                 aria-label="Ảnh trước"
-                className="absolute left-3.5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full transition-opacity disabled:pointer-events-none disabled:opacity-25"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                className="absolute left-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:pointer-events-none disabled:opacity-20 md:w-14"
+                style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}
               >
-                <ChevronLeft size={22} />
+                <ChevronLeft size={34} strokeWidth={1.6} />
               </button>
               <div
                 className="relative inline-flex"
@@ -1072,10 +1051,10 @@ export default function CustomerAlbum({
                 onClick={() => setLbIdx(Math.min(visiblePhotos.length - 1, lbIdx + 1))}
                 disabled={lbIdx >= visiblePhotos.length - 1}
                 aria-label="Ảnh sau"
-                className="absolute right-3.5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full transition-opacity disabled:pointer-events-none disabled:opacity-25"
-                style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+                className="absolute right-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:pointer-events-none disabled:opacity-20 md:w-14"
+                style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}
               >
-                <ChevronRight size={22} />
+                <ChevronRight size={34} strokeWidth={1.6} />
               </button>
             </div>
 
@@ -1145,15 +1124,60 @@ export default function CustomerAlbum({
   );
 }
 
-function ToolButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
+/**
+ * Menu "Tác vụ" — gom chép danh sách / xuất danh sách / chia sẻ / báo studio vào
+ * một nút thả xuống. Trước đây bốn nút này nằm rời trên thanh công cụ và tràn
+ * hàng trên điện thoại.
+ */
+type TaskItem = {
+  key: string;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  accent?: boolean;
+};
+
+function TaskMenu({ items }: { items: TaskItem[] }) {
+  const [open, setOpen] = useState(false);
   return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] transition-colors disabled:opacity-40"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
-    >
-      {children}
-    </button>
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="Tác vụ"
+        className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-semibold transition-colors"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
+      >
+        <ListChecks size={15} /> Tác vụ
+        <ChevronDown size={13} className={`transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            className="absolute right-0 top-full z-50 mt-2 min-w-[250px] max-w-[80vw] rounded-xl p-1.5 shadow-xl"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            {items.map((it) => (
+              <button
+                key={it.key}
+                onClick={() => {
+                  setOpen(false);
+                  it.onClick();
+                }}
+                disabled={it.disabled}
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors hover:bg-[var(--surface2)] disabled:opacity-40 disabled:hover:bg-transparent"
+                style={{ color: it.accent ? "var(--accent)" : "var(--text)", fontWeight: it.accent ? 700 : 500 }}
+              >
+                <span className="flex-shrink-0">{it.icon}</span>
+                <span className="truncate">{it.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
   );
 }

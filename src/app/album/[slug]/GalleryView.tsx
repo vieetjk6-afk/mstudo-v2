@@ -19,6 +19,7 @@ const TR = {
     dlPhoto: "Tải ảnh",
     photoCount: "ảnh",
     tabAll: "Tất cả",
+    viewAlbum: "Xem album",
     feedbackTitle: "Cảm nhận của bạn",
     fbThanks: "Cảm ơn bạn đã gửi cảm nhận!",
     fbNamePh: "Tên của bạn",
@@ -42,6 +43,7 @@ const TR = {
     dlPhoto: "Download",
     photoCount: "photos",
     tabAll: "All",
+    viewAlbum: "View album",
     feedbackTitle: "Your feedback",
     fbThanks: "Thank you for your feedback!",
     fbNamePh: "Your name",
@@ -98,6 +100,11 @@ export default function GalleryView({
   const [pwLoading, setPwLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState("all");
+  // Nút "Xem album" ở ảnh bìa cuộn thẳng xuống lưới ảnh.
+  const photosRef = useRef<HTMLDivElement | null>(null);
+  const scrollToPhotos = useCallback(() => {
+    photosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
   const [lbIdx, setLbIdx] = useState<number | null>(null);
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const [swipeDx, setSwipeDx] = useState(0);
@@ -359,12 +366,20 @@ export default function GalleryView({
         </div>
       </header>
 
-      {/* Cover hero */}
+      {/* Cover hero — ảnh bìa là thứ khách thấy đầu tiên nên để lớn hẳn, kèm nút
+          "Xem album" cuộn thẳng xuống lưới ảnh (khách không phải tự kéo). */}
       {gallery.cover_url && (
-        <div className="relative h-[clamp(180px,30vw,360px)] overflow-hidden">
+        <div className="relative h-[clamp(300px,62vh,680px)] overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={gallery.cover_url} alt={gallery.title} className="absolute inset-0 h-full w-full object-cover" />
-          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, var(--bg), rgba(10,10,12,.2) 60%, rgba(10,10,12,.4))" }} />
+          <div className="absolute inset-0" style={{ background: "linear-gradient(to top, var(--bg), rgba(10,10,12,.15) 55%, rgba(10,10,12,.35))" }} />
+          <button
+            onClick={scrollToPhotos}
+            className="absolute bottom-7 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full px-5 py-2.5 text-[13.5px] font-semibold backdrop-blur-md transition-transform active:scale-95"
+            style={{ background: "rgba(10,10,12,.5)", border: "1px solid rgba(255,255,255,.45)", color: "#fff" }}
+          >
+            {tr.viewAlbum} <ChevronDown size={16} />
+          </button>
         </div>
       )}
 
@@ -378,11 +393,7 @@ export default function GalleryView({
           <div className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px]" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--gold)" }}>
             <Share2 size={14} /> {shareIds!.length} ảnh được chia sẻ
           </div>
-        ) : (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[13px]" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}>
-            <Heart size={14} /> Nhấn vào trái tim ở mỗi ảnh để chọn rồi bấm “Chia sẻ ảnh đã chọn”
-          </div>
-        )}
+        ) : null}
 
         {/* tabs */}
         {tabSources.length > 1 && (
@@ -392,22 +403,30 @@ export default function GalleryView({
           </div>
         )}
 
-        {/* sections */}
-        <div className="mt-7 space-y-9">
+        {/* sections — mỗi thư mục con là một mục riêng, có tiêu đề + số ảnh */}
+        <div ref={photosRef} className="mt-7 space-y-9 scroll-mt-20">
           {sections.map((sec) => {
             // Chỉ dựng các ảnh nằm trong cửa sổ hiện tại (i < renderLimit).
             const items = sec.items.filter((it) => it.i < renderLimit);
             if (items.length === 0) return null;
             return (
             <section key={sec.id}>
-              {sec.name && <h2 className="mb-3 font-serif text-xl font-medium">{sec.name}</h2>}
-              <div className="grid items-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(160px,1fr))]">
+              {sec.name && (
+                <h2 className="mb-3 font-serif text-xl font-medium">
+                  {sec.name}
+                  <span className="ml-2 text-[13px] font-normal" style={{ color: "var(--text3)" }}>· {sec.items.length} {tr.photoCount}</span>
+                </h2>
+              )}
+              {/* Lưới ảnh kiểu collage: 2 cột trên điện thoại, 4 cột trên máy tính,
+                  khe gần như bằng 0, KHÔNG bo góc và KHÔNG cắt ảnh — mỗi tấm giữ
+                  đúng tỉ lệ gốc (dùng cột CSS nên chiều cao tự do). */}
+              <div className="columns-2 md:columns-4" style={{ columnGap: "2px" }}>
                 {items.map(({ p, i }) => {
                   const isSel = selected.has(p.id);
                   return (
-                  <div key={p.id} className="group relative aspect-square cursor-pointer overflow-hidden rounded-xl" style={{ background: "var(--surface)" }}>
+                  <div key={p.id} className="group relative mb-[2px] block w-full cursor-pointer break-inside-avoid" style={{ background: "var(--surface)" }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="h-full w-full cursor-zoom-in select-none object-cover transition-transform duration-700 hover:scale-[1.04]" />
+                    <img onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-auto w-full cursor-zoom-in select-none" />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
                         {Array.from({ length: 8 }).map((_, wi) => (
@@ -415,39 +434,27 @@ export default function GalleryView({
                         ))}
                       </div>
                     )}
-                    {isSel && <div className="pointer-events-none absolute inset-0 z-[2]" style={{ boxShadow: "inset 0 0 0 3px var(--gold)" }} />}
+                    {isSel && <div className="pointer-events-none absolute inset-0 z-[2]" style={{ boxShadow: "inset 0 0 0 2px var(--gold)" }} />}
                     {isVideo(p) && (
                       <span onClick={() => setLbIdx(i)} className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full" style={{ background: "rgba(10,10,12,.55)", color: "#fff", backdropFilter: "blur(6px)" }}>
                         <Play size={20} fill="currentColor" strokeWidth={0} />
                       </span>
                     )}
+                    {/* Chỉ còn TRÁI TIM: không nền, không viền tròn, cỡ nhỏ lại. */}
                     {!shareMode && (
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleSelect(p.id); }}
-                        title="Chọn ảnh để chia sẻ"
-                        aria-label="Chọn ảnh để chia sẻ"
+                        title={isSel ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
+                        aria-label={isSel ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
                         aria-pressed={isSel}
-                        className="absolute right-2 top-2 z-[4] flex h-11 w-11 items-center justify-center rounded-full transition-transform active:scale-90"
-                        style={isSel
-                          ? { background: "var(--gold)", color: "#1a1205", border: "2px solid var(--gold)" }
-                          : { background: "rgba(10,10,12,.5)", color: "#fff", border: "2px solid rgba(255,255,255,.75)" }}
+                        className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
+                        style={{ color: isSel ? "var(--gold)" : "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
                       >
-                        <Heart size={18} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2} />
+                        <Heart size={16} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
                       </button>
                     )}
-                    {/* Tải riêng từng ảnh — bản gốc full-size; có watermark nếu album bật watermark. */}
-                    {allowDownload && !isVideo(p) && (
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); downloadImage(p.drive_file_id, p.name, wm); }}
-                        title={tr.dlPhoto}
-                        aria-label={`${tr.dlPhoto}: ${p.name}`}
-                        className="absolute left-2 top-2 z-[4] flex h-9 w-9 items-center justify-center rounded-full opacity-100 transition-opacity focus:opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                        style={{ background: "rgba(10,10,12,.5)", color: "#fff", border: "1px solid rgba(255,255,255,.6)" }}
-                      >
-                        <Download size={15} />
-                      </button>
-                    )}
+                    {/* Nút tải từng ảnh đã bỏ khỏi lưới — chỉ còn trong khung xem
+                        ảnh lớn (bấm vào ảnh), để lưới thật gọn. */}
                   </div>
                   );
                 })}
@@ -519,13 +526,14 @@ export default function GalleryView({
             <button onClick={() => setLbIdx(null)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}><X size={17} /></button>
           </div>
           <div
-            className="relative flex min-h-0 flex-1 items-center justify-center p-3 md:p-10"
+            className="relative flex min-h-0 flex-1 items-center justify-center p-1 md:p-4"
             style={{ touchAction: "pan-y" }}
             onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("button")) onSwipeDown(e); }}
             onPointerMove={onSwipeMove}
             onPointerUp={onSwipeUp}
           >
-            <button onClick={() => setLbIdx(Math.max(0, lbIdx - 1))} disabled={lbIdx === 0} aria-label="Ảnh trước" className="absolute left-3.5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full transition-opacity disabled:opacity-25" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}><ChevronLeft size={22} /></button>
+            {/* Chỉ còn dấu < > chồng lên ảnh: bỏ nền + viền để ảnh chiếm chỗ tối đa. */}
+            <button onClick={() => setLbIdx(Math.max(0, lbIdx - 1))} disabled={lbIdx === 0} aria-label="Ảnh trước" className="absolute left-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:opacity-20 md:w-14" style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}><ChevronLeft size={34} strokeWidth={1.6} /></button>
             {isVideo(lb) ? (
               <iframe
                 src={`https://drive.google.com/file/d/${lb.drive_file_id}/preview`}
@@ -550,7 +558,7 @@ export default function GalleryView({
                 )}
               </div>
             )}
-            <button onClick={() => setLbIdx(Math.min(visible.length - 1, lbIdx + 1))} disabled={lbIdx >= visible.length - 1} aria-label="Ảnh sau" className="absolute right-3.5 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full transition-opacity disabled:opacity-25" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}><ChevronRight size={22} /></button>
+            <button onClick={() => setLbIdx(Math.min(visible.length - 1, lbIdx + 1))} disabled={lbIdx >= visible.length - 1} aria-label="Ảnh sau" className="absolute right-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:opacity-20 md:w-14" style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}><ChevronRight size={34} strokeWidth={1.6} /></button>
           </div>
         </div>
       )}
