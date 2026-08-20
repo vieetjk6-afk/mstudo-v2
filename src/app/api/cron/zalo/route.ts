@@ -12,7 +12,8 @@ import {
 import { OPEN_QUOTE_STATUSES, QUOTE_NUDGE_DAYS } from "@/lib/quote-expiry";
 import { ensureIntakeToken, intakeUrl } from "@/lib/contract-intake";
 import { listFolderImages } from "@/lib/drive-server";
-import { mainUrl } from "@/lib/hosts";
+import { studioUrl } from "@/lib/hosts";
+import { getStudioHost } from "@/lib/studio-site";
 import { crewPortalUrl } from "@/lib/crew-show";
 import { vnd, CREW_ROLE_LABEL } from "@/lib/types";
 
@@ -78,6 +79,16 @@ export async function GET(req: NextRequest) {
   async function crewPortal(ownerId: string): Promise<string> {
     await loadOwner(ownerId);
     return ownerPortals.get(ownerId)!;
+  }
+  // Mọi link GỬI CHO KHÁCH (album, hợp đồng, báo giá) phải mang domain riêng
+  // của studio khi studio đã bật website riêng — không phải mstudo.com. Bảng
+  // điều khiển vốn đã dựng link theo domain studio, nên nếu ở đây vẫn là
+  // mstudo.com thì cùng một hợp đồng gửi ra hai tên miền khác nhau.
+  // Nhớ theo owner: một lượt cron quét nhiều hợp đồng của cùng studio.
+  const ownerHosts = new Map<string, string | null>();
+  async function clientUrl(ownerId: string, path: string): Promise<string> {
+    if (!ownerHosts.has(ownerId)) ownerHosts.set(ownerId, await getStudioHost(db, ownerId));
+    return studioUrl(ownerHosts.get(ownerId) ?? null, path);
   }
 
   let shootSent = 0;
@@ -165,7 +176,7 @@ export async function GET(req: NextRequest) {
         name: c.client_name,
         amount: vnd(Number(d.amount) || 0),
         title: c.title,
-        link: c.client_token ? mainUrl(`/c/${c.client_token}`) : null,
+        link: c.client_token ? await clientUrl(c.owner_id, `/c/${c.client_token}`) : null,
         overdue: d.due_date < today,
         studio,
       }),
@@ -211,7 +222,7 @@ export async function GET(req: NextRequest) {
       audience: "client",
       toPhone: c.client_phone,
       toName: c.client_name,
-      body: selectReadyMessage({ name: c.client_name, link: mainUrl(`/a/${al.slug}`), studio }),
+      body: selectReadyMessage({ name: c.client_name, link: await clientUrl(c.owner_id, `/a/${al.slug}`), studio }),
       contractId: c.id,
     });
     if (r.ok) selectSent++;
@@ -267,7 +278,7 @@ export async function GET(req: NextRequest) {
       toName: c.client_name,
       body: selectNudgeMessage({
         name: c.client_name,
-        link: mainUrl(`/a/${al.slug}`),
+        link: await clientUrl(c.owner_id, `/a/${al.slug}`),
         studio,
         round: round + 1,
         days: invitedDays,
@@ -313,7 +324,7 @@ export async function GET(req: NextRequest) {
       toName: q.client_name,
       body: quoteExpiringMessage({
         name: q.client_name,
-        link: mainUrl(`/q/${q.client_token}`),
+        link: await clientUrl(q.owner_id, `/q/${q.client_token}`),
         studio,
         days: Math.max(0, Math.ceil((new Date(q.expires_at).getTime() - Date.now()) / (24 * 3600 * 1000))),
       }),

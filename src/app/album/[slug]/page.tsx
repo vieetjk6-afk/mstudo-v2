@@ -7,6 +7,7 @@ import { buildAlbumMetadata } from "@/lib/album-meta";
 import { MAIN_HOST } from "@/lib/hosts";
 import { effectivePlan, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { getOriginalFolders } from "@/lib/album-original";
+import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -65,8 +66,11 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
 
   // Chạy song song: brand, ảnh, sources, feedback và gói của chủ studio — gộp
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
-  const [brand, allPhotos, { data: s }, { data: feedback }, { data: owner }] = await Promise.all([
+  const [brand, studioHost, allPhotos, { data: s }, { data: feedback }, { data: owner }] = await Promise.all([
     getStudioBrand(admin, album.owner_id),
+    // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
+    // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
+    getStudioHost(admin, album.owner_id),
     hasPassword
       ? Promise.resolve(null)
       : fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position, is_video"),
@@ -151,6 +155,7 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
       shareIds={shareIds}
       studioName={studioName}
       logoUrl={brand.logoUrl}
+      studioHost={studioHost}
     />
   );
 }

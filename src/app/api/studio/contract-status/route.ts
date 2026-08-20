@@ -4,7 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { autoCreateContractDeliveryOnComplete, autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
 import { autoNotify } from "@/lib/zalo/notify";
 import { deliveryReadyMessage } from "@/lib/zalo/messages";
-import { mainUrl } from "@/lib/hosts";
+import { studioUrl } from "@/lib/hosts";
+import { getStudioHost } from "@/lib/studio-site";
 
 export const dynamic = "force-dynamic";
 
@@ -79,13 +80,15 @@ export async function POST(req: Request) {
         const { data: al } = await db.from("albums").select("slug").eq("id", c2.gallery_album_id).maybeSingle();
         if (al?.slug) {
           const { data: owner } = await db.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
+          // Domain riêng của studio cho link album gửi khách.
+          const link = studioUrl(await getStudioHost(db, user.id), `/album/${al.slug}`);
           await autoNotify({
             ownerId: user.id,
             event: "delivery_ready",
             audience: "client",
             toPhone: c2.client_phone,
             toName: c2.client_name,
-            body: deliveryReadyMessage({ name: c2.client_name, link: mainUrl(`/album/${al.slug}`), studio: owner?.full_name }),
+            body: deliveryReadyMessage({ name: c2.client_name, link, studio: owner?.full_name }),
             contractId,
           });
         }
