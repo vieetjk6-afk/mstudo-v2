@@ -7,6 +7,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import Brand from "@/components/Brand";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { getStudioBrand } from "@/lib/studio-brand";
+import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { MAIN_HOST } from "@/lib/hosts";
 
@@ -119,13 +120,15 @@ export default async function PublicAlbumPage({
   // Brand (logo/name) fetched separately, best-effort — missing columns just
   // fall back to defaults without affecting anything else. Chạy song song với
   // query owner (độc lập nhau) để bớt một round-trip tuần tự.
-  const [{ data: owner }, brand] = await Promise.all([
+  const [{ data: owner }, brand, studioHost] = await Promise.all([
     admin
       .from("profiles")
       .select("role, can_zip, can_notes, full_name, plan, plan_expires_at")
       .eq("id", album.owner_id)
       .maybeSingle(),
     getStudioBrand(admin, album.owner_id),
+    // Domain riêng của studio cho link "chia sẻ ảnh đã chọn".
+    getStudioHost(admin, album.owner_id),
   ]);
   const studioName = brand.name;
   const isAdminOwner = owner?.role === "admin";
@@ -210,6 +213,7 @@ export default async function PublicAlbumPage({
       initialDriveFolders={driveFolders}
       studioName={studioName}
       logoUrl={brand.logoUrl}
+      studioHost={studioHost}
     />
   );
 }

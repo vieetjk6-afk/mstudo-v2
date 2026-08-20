@@ -28,6 +28,7 @@ import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
+import { studioUrl } from "@/lib/hosts";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import AlbumCover from "@/components/AlbumCover";
 import DriveFolderLinks, { type DriveFolder } from "@/components/DriveFolderLinks";
@@ -73,6 +74,7 @@ export default function CustomerAlbum({
   initialDriveFolders,
   studioName = "Studio",
   logoUrl = null,
+  studioHost = null,
 }: {
   album: PublicAlbum;
   initialPhotos: PublicPhoto[] | null;
@@ -84,6 +86,8 @@ export default function CustomerAlbum({
   initialDriveFolders?: DriveFolder[];
   studioName?: string;
   logoUrl?: string | null;
+  /** Domain riêng của studio — link chia sẻ phải mang tên miền đó, không phải mstudo.com. */
+  studioHost?: string | null;
 }) {
   const { t } = useLang();
 
@@ -139,7 +143,11 @@ export default function CustomerAlbum({
   async function shareSelected() {
     if (selected.size === 0 || shareBusy) return;
     setShareBusy(true);
-    const abs = `${window.location.origin}/a/${album.slug}`;
+    // Domain studio (nếu đã bật website riêng) chứ không phải host khách đang
+    // mở — khách có thể vào từ link mstudo.com, link chia sẻ vẫn phải là của studio.
+    const rel = `/a/${album.slug}`;
+    const built = studioUrl(studioHost, rel);
+    const abs = /^https?:\/\//i.test(built) ? built : `${window.location.origin}${rel}`;
     try {
       const res = await fetch(`/api/album/${album.slug}/share`, {
         method: "POST",
@@ -1008,10 +1016,9 @@ export default function CustomerAlbum({
             </button>
           </div>
 
-          <div className="flex min-h-0 flex-1 flex-wrap overflow-y-auto">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
             <div
               className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4"
-              style={{ flexBasis: "480px" }}
               onWheel={onWheelZoom}
             >
               <button
@@ -1045,7 +1052,7 @@ export default function CustomerAlbum({
                   draggable={false}
                   decoding="async"
                   onContextMenu={(e) => wm && e.preventDefault()}
-                  className="max-h-[46vh] max-w-full select-none rounded object-contain md:max-h-[78vh]"
+                  className="max-h-[calc(100dvh-232px)] max-w-full select-none rounded object-contain md:max-h-[80vh]"
                   style={{
                     boxShadow: "0 30px 80px rgba(0,0,0,.6)",
                     // Show the cached grid thumbnail behind while the full image
@@ -1092,14 +1099,14 @@ export default function CustomerAlbum({
 
             {album.allowNotes && (
               <aside
-                className="flex w-full flex-shrink-0 flex-col gap-4 border-t p-5 md:w-[340px] md:flex-none md:overflow-y-auto md:border-l md:border-t-0 md:p-7"
+                className="flex w-full flex-none flex-col gap-2 border-t p-3 md:w-[340px] md:gap-4 md:overflow-y-auto md:border-l md:border-t-0 md:p-7"
                 style={{ borderColor: "var(--border)" }}
               >
                 <div>
                   <h3 className="flex items-center gap-2 text-[15px] font-semibold">
                     <FileText size={16} style={{ color: "var(--gold)" }} /> {t("note")}
                   </h3>
-                  <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--text3)" }}>
+                  <p className="mt-1 hidden text-[12.5px] leading-relaxed md:block" style={{ color: "var(--text3)" }}>
                     {disliked.has(lbPhoto.id)
                       ? "Cho studio biết vì sao bạn không thích ảnh này (tuỳ chọn)."
                       : "Để lại ghi chú để studio biết bạn muốn chỉnh sửa gì cho ảnh này."}
@@ -1111,15 +1118,15 @@ export default function CustomerAlbum({
                   value={notes[lbPhoto.id] ?? ""}
                   onChange={(e) => setNote(lbPhoto.id, e.target.value)}
                   placeholder="Viết ghi chú cho ảnh này…"
-                  rows={4}
-                  className="min-h-[110px] w-full resize-y rounded-xl px-3.5 py-3 text-sm outline-none"
+                  rows={2}
+                  className="min-h-[54px] w-full resize-y rounded-xl px-3.5 py-2.5 text-sm outline-none md:min-h-[110px] md:py-3"
                   style={{
                     background: "var(--surface)",
                     border: notes[lbPhoto.id]?.trim() ? "1px solid var(--border)" : "1.5px solid var(--gold)",
                     color: "var(--text)",
                   }}
                 />
-                <div className="mt-auto border-t pt-4" style={{ borderColor: "var(--border)" }}>
+                <div className="mt-auto hidden border-t pt-4 md:block" style={{ borderColor: "var(--border)" }}>
                   <div className="flex items-center gap-2.5 text-[13px]" style={{ color: "var(--text2)" }}>
                     <span
                       className="h-2 w-2 rounded-full"

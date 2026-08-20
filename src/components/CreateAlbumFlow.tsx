@@ -15,6 +15,7 @@ import {
   FolderTree,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
+import { studioUrl } from "@/lib/hosts";
 import { createClient } from "@/lib/supabase/client";
 import { isFolderLink } from "@/lib/drive";
 import { effectivePlan, planAllowsWatermark, type Plan } from "@/lib/plans";
@@ -35,7 +36,11 @@ function slugify(s: string) {
 
 const PENDING_KEY = "vk_pending_album";
 
-export default function CreateAlbumFlow({ mode = "selection" }: { mode?: "selection" | "delivery" }) {
+export default function CreateAlbumFlow({ mode = "selection", studioHost = null }: {
+  mode?: "selection" | "delivery";
+  /** Domain riêng của studio — link gửi khách phải mang tên miền đó, không phải mstudo.com. */
+  studioHost?: string | null;
+}) {
   const { t } = useLang();
   const supabase = createClient();
   const isDelivery = mode === "delivery";
@@ -87,9 +92,15 @@ export default function CreateAlbumFlow({ mode = "selection" }: { mode?: "select
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareLink = result
-    ? `${typeof window !== "undefined" ? window.location.origin : ""}/a/${result.slug}`
-    : "";
+  // Link gửi khách: ưu tiên domain riêng của studio; chưa bật website riêng thì
+  // mới rơi về host đang mở bảng điều khiển.
+  const albumPath = result ? `/a/${result.slug}` : "";
+  const shareLink = (() => {
+    if (!result) return "";
+    const built = studioUrl(studioHost, albumPath);
+    if (/^https?:\/\//i.test(built)) return built;
+    return `${typeof window !== "undefined" ? window.location.origin : ""}${albumPath}`;
+  })();
 
   // Detect auth + restore a pending form after returning from Google sign-in.
   useEffect(() => {
@@ -227,7 +238,8 @@ export default function CreateAlbumFlow({ mode = "selection" }: { mode?: "select
         }
       }
 
-      const link = `${window.location.origin}/a/${album.slug}`;
+      const built = studioUrl(studioHost, `/a/${album.slug}`);
+      const link = /^https?:\/\//i.test(built) ? built : `${window.location.origin}/a/${album.slug}`;
       const QRCode = (await import("qrcode")).default;
       const dataUrl = await QRCode.toDataURL(link, {
         margin: 1,
@@ -423,7 +435,7 @@ export default function CreateAlbumFlow({ mode = "selection" }: { mode?: "select
 
         {result && (
           <div className="mt-3.5 flex flex-col gap-2.5">
-            <Link href={`/a/${result.slug}`} target="_blank" className="btn-ghost w-full rounded-xl py-3.5 text-sm">
+            <Link href={shareLink || `/a/${result.slug}`} target="_blank" className="btn-ghost w-full rounded-xl py-3.5 text-sm">
               <Eye size={16} /> Xem thử trang khách sẽ thấy
             </Link>
             <Link href={`/dashboard/albums/${result.id}`} className="text-center text-[13px]" style={{ color: "var(--gold)" }}>

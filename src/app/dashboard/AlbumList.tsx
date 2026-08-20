@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { studioUrl } from "@/lib/hosts";
 import {
   Plus,
   Image as ImageIcon,
@@ -39,7 +40,7 @@ export interface AlbumRow {
   dislikes?: { count: number }[];
 }
 
-export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean }) {
+export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true, studioHost = null }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean; /** Domain riêng của studio — link mở album phải mang tên miền đó. */ studioHost?: string | null }) {
   return (
     <div className="page-in">
       <PlanUsage />
@@ -89,7 +90,7 @@ export default function AlbumList({ albums, showTrial = false, trialUsed = false
           href="/dashboard/create"
         />
       ) : (
-        <AlbumTabs albums={albums} canDelivery={canDelivery} canWatermark={canWatermark} />
+        <AlbumTabs albums={albums} canDelivery={canDelivery} canWatermark={canWatermark} studioHost={studioHost} />
       )}
     </div>
   );
@@ -113,7 +114,7 @@ function AlbumEmpty({ title, hint, cta, href }: { title: string; hint: string; c
 
 // Tách thư viện thành 2 TAB theo giai đoạn: ALBUM CHỌN ẢNH (phase 'selection') và
 // ALBUM GIAO KHÁCH (phase 'delivery') — cùng kiểu tab với trang Hợp đồng.
-function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean }) {
+function AlbumTabs({ albums, canDelivery, canWatermark, studioHost }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean; studioHost: string | null }) {
   const deliveryAlbums = albums.filter((a) => (a.phase ?? "selection") === "delivery");
   const selectionAlbums = albums.filter((a) => (a.phase ?? "selection") !== "delivery");
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
@@ -123,7 +124,7 @@ function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; 
     // và lệch tỉ lệ so với ảnh bìa. Bậc thang xuống 4 · 3 · 2 · 1 theo bề ngang.
     <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 min-[820px]:grid-cols-3 min-[1060px]:grid-cols-4 min-[1320px]:grid-cols-5">
       {rows.map((a) => (
-        <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} />
+        <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} studioHost={studioHost} />
       ))}
     </div>
   );
@@ -188,7 +189,7 @@ function AlbumTabs({ albums, canDelivery, canWatermark }: { albums: AlbumRow[]; 
  * phụ (ảnh · đã chọn), thanh tiến độ chọn ảnh, rồi chân thẻ ghi trạng thái
  * watermark / xuất bản và nút ba chấm mở bảng bật-tắt nhanh.
  */
-function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean }) {
+function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = null }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean; studioHost?: string | null }) {
   const { t } = useLang();
   const supabase = createClient();
   const [menu, setMenu] = useState(false);
@@ -277,7 +278,7 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true }: { a: AlbumRow
             {status === "published" ? "Đã xuất bản" : "Nháp"}
           </span>
           <Link
-            href={`/a/${a.slug}`}
+            href={studioUrl(studioHost, `/a/${a.slug}`)}
             target="_blank"
             rel="noopener noreferrer"
             aria-label="Mở trang album (tab mới)"

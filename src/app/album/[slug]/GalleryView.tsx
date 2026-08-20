@@ -65,7 +65,7 @@ import StudioBrand from "@/components/StudioBrand";
 import Turnstile from "@/components/Turnstile";
 import ShareButton from "@/components/ShareButton";
 import ShareDialog from "@/components/ShareDialog";
-import { mainUrl } from "@/lib/hosts";
+import { studioUrl } from "@/lib/hosts";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
@@ -81,7 +81,7 @@ interface DriveFolder { name: string; url: string; }
 interface G { id: string; slug: string; title: string; event_date: string | null; cover_url: string | null; hasPassword: boolean; allowDownload?: boolean; driveIsEdited?: boolean; watermark?: string | null; }
 
 export default function GalleryView({
-  gallery, initialPhotos, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null,
+  gallery, initialPhotos, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
 }: {
   gallery: G;
   initialPhotos: P[] | null;
@@ -93,6 +93,8 @@ export default function GalleryView({
   shareIds?: string[] | null;
   studioName?: string;
   logoUrl?: string | null;
+  /** Domain riêng của studio — link chia sẻ phải mang tên miền đó, không phải mstudo.com. */
+  studioHost?: string | null;
 }) {
   const wm = gallery.watermark || null;
   const [unlocked, setUnlocked] = useState(!gallery.hasPassword);
@@ -169,7 +171,7 @@ export default function GalleryView({
   async function shareSelected() {
     if (selected.size === 0 || shareBusy) return;
     setShareBusy(true);
-    const base = mainUrl(`/album/${gallery.slug}`);
+    const base = studioUrl(studioHost, `/album/${gallery.slug}`);
     const abs = /^https?:\/\//i.test(base) ? base : `${window.location.origin}${base}`;
     try {
       // Store the picks server-side and use a short ?s=token link.
@@ -387,7 +389,7 @@ export default function GalleryView({
           {!shareMode && downloadFolders.length > 0 && (
             <DriveDownload folders={downloadFolders} label={tr.download} labelOne={tr.download} accent />
           )}
-          {!shareMode && <ShareButton path={mainUrl(`/album/${gallery.slug}`)} title={gallery.title} className="btn-ghost px-3 py-1.5 text-[13px]" />}
+          {!shareMode && <ShareButton path={studioUrl(studioHost, `/album/${gallery.slug}`)} title={gallery.title} className="btn-ghost px-3 py-1.5 text-[13px]" />}
         </div>
       </header>
 
