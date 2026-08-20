@@ -1,5 +1,6 @@
 import "server-only";
-import { resolveSource } from "@/lib/drive-server";
+import { resolveSource, listSubFolders } from "@/lib/drive-server";
+import { planSubFolderSources } from "@/lib/album-subfolders";
 import { thumbnailUrl } from "@/lib/drive";
 import { fetchAllPhotos, chunk } from "@/lib/photos";
 
@@ -24,6 +25,26 @@ export async function syncAlbumPhotos(
   }
 
   const { data: album } = await client.from("albums").select("cover_url").eq("id", albumId).maybeSingle();
+
+  // Tách THƯ MỤC CON thành nguồn riêng — cùng luật với route đồng bộ của web
+  // (src/lib/album-subfolders.ts). Thiếu bước này thì một thư mục chỉ chứa thư
+  // mục con đồng bộ từ MStudo Desktop sẽ ra album trống trơn.
+  {
+    const { data: existing } = await client
+      .from("album_sources")
+      .select("*")
+      .eq("album_id", albumId)
+      .order("position");
+    const { rows, fixKindIds } = await planSubFolderSources(albumId, (existing ?? []) as any[], listSubFolders);
+    if (fixKindIds.length > 0) {
+      await client.from("album_sources").update({ kind: "folder" }).in("id", fixKindIds);
+    }
+    if (rows.length > 0) {
+      const { error: insErr } = await client.from("album_sources").insert(rows);
+      if (insErr) errors.push(`Không tạo được tab thư mục con: ${insErr.message}`);
+    }
+  }
+
   const { data: sources, error: srcErr } = await client
     .from("album_sources")
     .select("*")
