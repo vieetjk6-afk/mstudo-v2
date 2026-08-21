@@ -956,7 +956,27 @@ export default function CustomerAlbum({
       {lbPhoto && lbIdx !== null && (
         <div
           className="fixed inset-0 z-[80] flex flex-col animate-[vkOverlay_.3s_ease_both]"
-          style={{ background: "rgba(6,6,8,.93)", backdropFilter: "blur(8px)" }}
+          style={{
+            background: "rgba(6,6,8,.93)",
+            backdropFilter: "blur(8px)",
+            // Khung xem ảnh LUÔN là nền tối, còn giao diện mặc định của app là
+            // chủ đề SÁNG (data-theme="light"): --text2 là xám đậm, --surface
+            // gần trắng. Nút nào không tự đặt màu sẽ thành chữ đậm trên nền đen
+            // — đúng lỗi "bấm vào xem ảnh mất nút chọn / không chọn": nút vẫn ở
+            // đó và vẫn bấm được, chỉ là không nhìn thấy. Ghi đè bộ biến ngay
+            // tại gốc khung xem để MỌI thứ bên trong đọc được, thay vì đi vá
+            // màu từng nút. `color` phải đặt tường minh: thẻ nào thừa kế màu
+            // chữ từ body thì đã nhận giá trị TÍNH TOÁN của chủ đề sáng rồi,
+            // ghi đè biến không cứu được.
+            color: "#f4f3f1",
+            "--text": "#f4f3f1",
+            "--text2": "rgba(244,243,241,.72)",
+            "--text3": "rgba(244,243,241,.55)",
+            "--surface": "rgba(255,255,255,.12)",
+            "--surface2": "rgba(255,255,255,.18)",
+            "--border": "rgba(255,255,255,.22)",
+            "--border2": "rgba(255,255,255,.3)",
+          } as React.CSSProperties}
         >
           <div className="flex flex-shrink-0 items-center gap-3 px-4 py-3.5 md:px-7" style={{ borderBottom: "1px solid var(--border)" }}>
             <span className="text-[13px]" style={{ color: "var(--text2)" }}>
