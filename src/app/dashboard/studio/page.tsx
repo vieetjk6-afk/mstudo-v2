@@ -645,7 +645,10 @@ export default async function StudioOverview() {
 
       {/* ── Cảnh báo dồn lịch ─────────────────────────────────────────── */}
       {warnTop.length > 0 && (
-        <div className="grid gap-3 min-[1100px]:grid-cols-3">
+        /* grid-cols-1: xem ghi chú ở lưới "Doanh thu + Lịch hôm nay" bên dưới —
+           lưới chỉ khai báo cột từ 1100px nên dưới ngưỡng đó phải tự đặt MỘT
+           cột co được, không để track `auto` lấy min-content làm sàn. */
+        <div className="grid grid-cols-1 gap-3 min-[1100px]:grid-cols-3">
           {warnTop.map((w) => (
             <div key={w.key} className="flex gap-2.5 rounded-[13px] px-[15px] py-[13px]" style={{ background: TONE[w.tone].soft, border: "1px solid var(--bd)" }}>
               <w.icon size={18} style={{ flex: "none", marginTop: 1, color: TONE[w.tone].fg }} />
@@ -689,7 +692,15 @@ export default async function StudioOverview() {
       </Panel>
 
       {/* ── Doanh thu + Lịch hôm nay ──────────────────────────────────── */}
-      <div className="grid gap-3.5 min-[1100px]:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
+      {/* grid-cols-1 (= repeat(1, minmax(0,1fr))): lưới này chỉ khai báo hai cột
+          từ 1100px trở lên, nên dưới ngưỡng đó nó tự suy ra MỘT cột dùng track
+          `auto` — sàn của track `auto` là min-content của thẻ con. Tên hợp đồng
+          trong "Lịch hôm nay" dùng `truncate` (white-space: nowrap) nên
+          min-content bằng nguyên tên: đo được cột rộng 584px trên khung 375px,
+          thẻ doanh thu bị kéo rộng theo rồi bị `overflow-x-clip` của khung
+          studio cắt — số doanh thu và cột T7 mất một nửa. minmax(0,…) cho cột
+          chịu co, chữ mới cắt đúng bằng `truncate`. */}
+      <div className="grid grid-cols-1 gap-3.5 min-[1100px]:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
         <RevenueChart
           bars={revBars}
           headline={vnd(revenueMonth)}

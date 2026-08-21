@@ -104,13 +104,17 @@ export function RevenueChart({ bars, headline, delta }: { bars: { label: string;
   const max = Math.max(1, ...bars.map((b) => b.value));
   return (
     <Panel className="px-[18px] pb-2.5 pt-4">
-      <div className="mb-1.5 flex items-start justify-between gap-3">
-        <div>
+      {/* flex-wrap + whitespace-nowrap: trên điện thoại cụm chữ bên trái và số
+          tiền bên phải không đủ chỗ nằm cùng hàng — để chúng chen nhau thì tiêu
+          đề vỡ hai dòng và ký hiệu "₫" bị đẩy xuống một dòng riêng. Cho hàng
+          xuống dòng: số tiền tụt xuống dưới tiêu đề, nguyên khối, không tách. */}
+      <div className="mb-1.5 flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+        <div className="min-w-0">
           <h2 className="text-[14px] font-bold">Doanh thu 6 tháng</h2>
           <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>Tiền thực thu về studio</p>
         </div>
-        <div className="text-right">
-          <p className="tnum text-[21px] font-bold" style={{ letterSpacing: "-.5px", color: "var(--ac)" }}>{headline}</p>
+        <div className="min-[420px]:text-right">
+          <p className="tnum whitespace-nowrap text-[21px] font-bold" style={{ letterSpacing: "-.5px", color: "var(--ac)" }}>{headline}</p>
           {delta ? <p className="mt-px text-[11px] font-semibold" style={{ color: delta.startsWith("▼") ? "var(--rd)" : "var(--gn)" }}>{delta}</p> : null}
         </div>
       </div>
