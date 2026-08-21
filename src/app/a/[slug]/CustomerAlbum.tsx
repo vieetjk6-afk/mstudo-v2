@@ -29,6 +29,7 @@ import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
 import { studioUrl } from "@/lib/hosts";
+import { ICON_HALO } from "@/lib/album-icon";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import AlbumCover from "@/components/AlbumCover";
 import DriveFolderLinks, { type DriveFolder } from "@/components/DriveFolderLinks";
@@ -895,7 +896,7 @@ export default function CustomerAlbum({
                         aria-label={isSel ? t("deselect") : t("selectThis")}
                         aria-pressed={isSel}
                         className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
-                        style={{ color: isSel ? "var(--gold)" : "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
+                        style={{ color: isSel ? "var(--gold)" : "#fff", filter: ICON_HALO }}
                       >
                         <Heart size={16} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
                       </button>
@@ -911,9 +912,9 @@ export default function CustomerAlbum({
                         title={isDis ? t("undislike") : t("dislikeThis")}
                         aria-label={isDis ? t("undislike") : t("dislikeThis")}
                         className="absolute left-1 top-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
-                        style={{ color: isDis ? "var(--danger)" : "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
+                        style={{ color: isDis ? "var(--danger)" : "#fff", filter: ICON_HALO }}
                       >
-                        {isDis ? <Undo2 size={16} /> : <X size={17} strokeWidth={2.6} />}
+                        {isDis ? <Undo2 size={16} /> : <HeartOff size={16} strokeWidth={2.2} />}
                       </button>
                     )}
 
@@ -929,7 +930,7 @@ export default function CustomerAlbum({
                         title={note?.trim() || "Thêm ghi chú"}
                         aria-label={note?.trim() ? `Ghi chú: ${note.trim()}` : "Thêm ghi chú"}
                         className="absolute bottom-1 left-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
-                        style={{ color: note?.trim() ? "var(--gold)" : "rgba(255,255,255,.85)", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
+                        style={{ color: note?.trim() ? "var(--gold)" : "#fff", filter: ICON_HALO }}
                       >
                         <FileText size={15} />
                       </button>
@@ -983,31 +984,6 @@ export default function CustomerAlbum({
               {lbIdx + 1} / {visiblePhotos.length}
             </span>
             <div className="flex-1" />
-            {/* Chỉ còn biểu tượng — tên đầy đủ hiện khi rê chuột (title). */}
-            {!shareMode && !disliked.has(lbPhoto.id) && (
-              <button
-                onClick={() => toggle(lbPhoto.id)}
-                title={selected.has(lbPhoto.id) ? t("deselect") : t("selectThis")}
-                aria-label={selected.has(lbPhoto.id) ? t("deselect") : t("selectThis")}
-                aria-pressed={selected.has(lbPhoto.id)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg transition-all"
-                style={{ background: "transparent", color: selected.has(lbPhoto.id) ? "var(--gold)" : "var(--text2)" }}
-              >
-                <Heart size={20} fill={selected.has(lbPhoto.id) ? "currentColor" : "none"} strokeWidth={selected.has(lbPhoto.id) ? 0 : 2} />
-              </button>
-            )}
-            {!shareMode && (
-              <button
-                onClick={() => toggleDislike(lbPhoto.id)}
-                title={disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
-                aria-label={disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
-                aria-pressed={disliked.has(lbPhoto.id)}
-                className="flex h-10 w-10 items-center justify-center rounded-lg transition-all"
-                style={{ background: "transparent", color: disliked.has(lbPhoto.id) ? "var(--danger)" : "var(--text2)" }}
-              >
-                {disliked.has(lbPhoto.id) ? <Undo2 size={20} /> : <X size={22} strokeWidth={2.4} />}
-              </button>
-            )}
             {album.allowDownload && (
               <button
                 type="button"
@@ -1050,47 +1026,78 @@ export default function CustomerAlbum({
               >
                 <ChevronLeft size={34} strokeWidth={1.6} />
               </button>
-              <div
-                className="relative inline-flex"
-                style={{
-                  transform: `translate(${pan.x + (zoom <= 1 ? swipeDx : 0)}px, ${pan.y}px) scale(${zoom})`,
-                  transformOrigin: "center",
-                  transition: drag.current || swipe.current ? "none" : "transform .18s ease",
-                  cursor: zoom > 1 ? (drag.current ? "grabbing" : "grab") : "zoom-in",
-                  touchAction: "pan-y",
-                }}
-                onPointerDown={onPanDown}
-                onPointerMove={onPanMove}
-                onPointerUp={onPanUp}
-                onDoubleClick={() => (zoom > 1 ? zoomBy(-10) : zoomBy(1.5))}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  key={lbPhoto.id}
-                  src={fullImageUrl(lbPhoto.drive_file_id, 1600)}
-                  alt={lbPhoto.name}
-                  draggable={false}
-                  decoding="async"
-                  onContextMenu={(e) => wm && e.preventDefault()}
-                  className="max-h-[calc(100dvh-232px)] max-w-full select-none rounded object-contain md:max-h-[80vh]"
+              {/* Khung ngoài KHÔNG bị transform, nên kích thước của nó bằng đúng
+                  ảnh ở mức thu phóng 1 — hai nút vì thế dính đúng GÓC ẢNH, và
+                  không phóng to/thu nhỏ theo khi khách zoom ảnh. */}
+              <div className="relative inline-flex">
+                <div
+                  className="relative inline-flex"
                   style={{
-                    boxShadow: "0 30px 80px rgba(0,0,0,.6)",
-                    // Show the cached grid thumbnail behind while the full image
-                    // decodes, so the picture changes immediately on prev/next.
-                    backgroundImage: `url(${thumbnailUrl(lbPhoto.drive_file_id, 400)})`,
-                    backgroundSize: "contain",
-                    backgroundRepeat: "no-repeat",
-                    backgroundPosition: "center",
+                    transform: `translate(${pan.x + (zoom <= 1 ? swipeDx : 0)}px, ${pan.y}px) scale(${zoom})`,
+                    transformOrigin: "center",
+                    transition: drag.current || swipe.current ? "none" : "transform .18s ease",
+                    cursor: zoom > 1 ? (drag.current ? "grabbing" : "grab") : "zoom-in",
+                    touchAction: "pan-y",
                   }}
-                />
-                {wm && (
-                  <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 overflow-hidden opacity-30">
-                    {Array.from({ length: 16 }).map((_, i) => (
-                      <span key={i} className="rotate-[-30deg] whitespace-nowrap text-base font-semibold tracking-widest text-white drop-shadow">
-                        {wm}
-                      </span>
-                    ))}
-                  </div>
+                  onPointerDown={onPanDown}
+                  onPointerMove={onPanMove}
+                  onPointerUp={onPanUp}
+                  onDoubleClick={() => (zoom > 1 ? zoomBy(-10) : zoomBy(1.5))}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    key={lbPhoto.id}
+                    src={fullImageUrl(lbPhoto.drive_file_id, 1600)}
+                    alt={lbPhoto.name}
+                    draggable={false}
+                    decoding="async"
+                    onContextMenu={(e) => wm && e.preventDefault()}
+                    className="max-h-[calc(100dvh-232px)] max-w-full select-none rounded object-contain md:max-h-[80vh]"
+                    style={{
+                      boxShadow: "0 30px 80px rgba(0,0,0,.6)",
+                      // Show the cached grid thumbnail behind while the full image
+                      // decodes, so the picture changes immediately on prev/next.
+                      backgroundImage: `url(${thumbnailUrl(lbPhoto.drive_file_id, 400)})`,
+                      backgroundSize: "contain",
+                      backgroundRepeat: "no-repeat",
+                      backgroundPosition: "center",
+                    }}
+                  />
+                  {wm && (
+                    <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 overflow-hidden opacity-30">
+                      {Array.from({ length: 16 }).map((_, i) => (
+                        <span key={i} className="rotate-[-30deg] whitespace-nowrap text-base font-semibold tracking-widest text-white drop-shadow">
+                          {wm}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Không thích (góc trái) và thích (góc phải) — cùng vị trí với
+                    lưới ảnh bên ngoài để khách chỉ phải học một chỗ. */}
+                {!shareMode && (
+                  <button
+                    onClick={() => toggleDislike(lbPhoto.id)}
+                    title={disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
+                    aria-label={disliked.has(lbPhoto.id) ? t("undislike") : t("dislikeThis")}
+                    aria-pressed={disliked.has(lbPhoto.id)}
+                    className="absolute left-1.5 top-1.5 z-20 flex h-10 w-10 items-center justify-center transition-transform active:scale-90"
+                    style={{ color: disliked.has(lbPhoto.id) ? "var(--danger)" : "#fff", filter: ICON_HALO }}
+                  >
+                    {disliked.has(lbPhoto.id) ? <Undo2 size={24} /> : <HeartOff size={24} strokeWidth={2.2} />}
+                  </button>
+                )}
+                {!shareMode && !disliked.has(lbPhoto.id) && (
+                  <button
+                    onClick={() => toggle(lbPhoto.id)}
+                    title={selected.has(lbPhoto.id) ? t("deselect") : t("selectThis")}
+                    aria-label={selected.has(lbPhoto.id) ? t("deselect") : t("selectThis")}
+                    aria-pressed={selected.has(lbPhoto.id)}
+                    className="absolute right-1.5 top-1.5 z-20 flex h-10 w-10 items-center justify-center transition-transform active:scale-90"
+                    style={{ color: selected.has(lbPhoto.id) ? "var(--gold)" : "#fff", filter: ICON_HALO }}
+                  >
+                    <Heart size={24} fill={selected.has(lbPhoto.id) ? "currentColor" : "none"} strokeWidth={selected.has(lbPhoto.id) ? 0 : 2.4} />
+                  </button>
                 )}
               </div>
               {/* Điện thoại: nhấn giữ ảnh là Safari/Chrome lưu thẳng vào thư

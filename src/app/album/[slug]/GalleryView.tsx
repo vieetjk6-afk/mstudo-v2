@@ -66,6 +66,7 @@ import Turnstile from "@/components/Turnstile";
 import ShareButton from "@/components/ShareButton";
 import ShareDialog from "@/components/ShareDialog";
 import { studioUrl } from "@/lib/hosts";
+import { ICON_HALO } from "@/lib/album-icon";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
@@ -476,7 +477,7 @@ export default function GalleryView({
                         aria-label={isSel ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
                         aria-pressed={isSel}
                         className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
-                        style={{ color: isSel ? "var(--gold)" : "#fff", filter: "drop-shadow(0 1px 3px rgba(0,0,0,.75))" }}
+                        style={{ color: isSel ? "var(--gold)" : "#fff", filter: ICON_HALO }}
                       >
                         <Heart size={16} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
                       </button>
@@ -591,18 +592,36 @@ export default function GalleryView({
                 style={{ border: "none", boxShadow: "0 30px 80px rgba(0,0,0,.6)" }}
               />
             ) : (
-              <div
-                className="relative inline-block"
-                style={{ transform: `translateX(${swipeDx}px)`, transition: swipe.current ? "none" : "transform .18s ease" }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img key={lb.id} src={fullImageUrl(lb.drive_file_id, 1600)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, 400)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
-                {wm && (
-                  <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 opacity-20">
-                    {Array.from({ length: 12 }).map((_, wi) => (
-                      <span key={wi} className="rotate-[-30deg] whitespace-nowrap text-base font-semibold tracking-widest text-white">{wm}</span>
-                    ))}
-                  </div>
+              // Khung ngoài KHÔNG bị transform nên kích thước bằng đúng ảnh —
+              // nút thích vì thế dính đúng góc ảnh.
+              <div className="relative inline-block">
+                <div
+                  className="relative inline-block"
+                  style={{ transform: `translateX(${swipeDx}px)`, transition: swipe.current ? "none" : "transform .18s ease" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img key={lb.id} src={fullImageUrl(lb.drive_file_id, 1600)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, 400)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
+                  {wm && (
+                    <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 opacity-20">
+                      {Array.from({ length: 12 }).map((_, wi) => (
+                        <span key={wi} className="rotate-[-30deg] whitespace-nowrap text-base font-semibold tracking-widest text-white">{wm}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {/* Thích ảnh ngay trong khung xem — cùng góc với lưới ảnh bên
+                    ngoài. Trước đây chỉ chọn được ở lưới. */}
+                {!shareMode && (
+                  <button
+                    onClick={() => toggleSelect(lb.id)}
+                    title={selected.has(lb.id) ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
+                    aria-label={selected.has(lb.id) ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
+                    aria-pressed={selected.has(lb.id)}
+                    className="absolute right-1.5 top-1.5 z-20 flex h-10 w-10 items-center justify-center transition-transform active:scale-90"
+                    style={{ color: selected.has(lb.id) ? "var(--gold)" : "#fff", filter: ICON_HALO }}
+                  >
+                    <Heart size={24} fill={selected.has(lb.id) ? "currentColor" : "none"} strokeWidth={selected.has(lb.id) ? 0 : 2.4} />
+                  </button>
                 )}
               </div>
             )}
