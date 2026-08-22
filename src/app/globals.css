@@ -376,7 +376,17 @@ body {
   box-shadow: 0 0 0 3px var(--acM);
 }
 
-/* ── Page entry animation (applied on main) ─────────────────────── */
+/* ── Page entry animation (applied on main) ───────────────────────
+   CẢNH BÁO cho ai dựng hộp thoại: animation này animate `transform`, và
+   `fill-mode: both` làm nó CÒN HIỆU LỰC MÃI MÃI (không chỉ 0,35s đầu). Vì thế
+   phần tử mang `.page-in` là CONTAINING BLOCK của mọi con `position: fixed` —
+   vĩnh viễn. Một lớp phủ `fixed inset-0` bên trong <main> sẽ neo vào <main>
+   (đo được: cao 2044px, top -394px trên khung nhìn 713px) chứ không neo vào
+   khung nhìn, nên phần đầu hộp thoại trôi ra ngoài màn hình và nút Đóng không
+   bấm được.
+
+   → Mọi hộp thoại / toast / khung xem ảnh phải đi qua <Portal> ra <body>:
+     xem src/components/studio/Modal.tsx (có cả cách giữ lại khối token). */
 @keyframes pageIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }

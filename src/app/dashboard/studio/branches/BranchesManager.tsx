@@ -10,6 +10,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Panel, Pill, ProgressBar, EmptyState } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
+import { Modal } from "@/components/studio/Modal";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { sortBranches, UNASSIGNED_LABEL, type BranchStats } from "@/lib/branch-rules";
 import { vnd, vndShort, type StudioBranch } from "@/lib/types";
@@ -374,14 +375,10 @@ function BranchDialog({
 }) {
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
   return (
-    <div className="fixed inset-0 z-[150] flex items-end justify-center p-0 sm:items-center sm:p-4" style={{ background: "rgba(12,10,14,.5)" }}>
-      <div
-        className="flex max-h-[92vh] w-full max-w-[520px] flex-col overflow-hidden rounded-t-[18px] sm:rounded-[16px]"
-        style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-modal)" }}
-      >
+    <Modal onClose={() => setDraft(null)} maxWidth={520} labelledBy="branch-dialog-title">
         <div className="flex items-center gap-2.5 px-[18px] py-3.5" style={{ borderBottom: "1px solid var(--bd2)" }}>
           <Building2 size={18} style={{ color: "var(--ac)" }} />
-          <h2 className="text-[14.5px] font-bold">{draft.id ? "Sửa chi nhánh" : "Thêm chi nhánh"}</h2>
+          <h2 id="branch-dialog-title" className="text-[14.5px] font-bold">{draft.id ? "Sửa chi nhánh" : "Thêm chi nhánh"}</h2>
           <button onClick={() => setDraft(null)} className="ml-auto flex-none rounded-[9px] p-1.5" style={{ background: "var(--sf2)", color: "var(--tx2)" }} aria-label="Đóng">
             <XIcon size={16} />
           </button>
@@ -451,8 +448,7 @@ function BranchDialog({
             {busy ? "Đang lưu…" : draft.id ? "Lưu thay đổi" : "Thêm chi nhánh"}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { CheckCircle2, Clock, QrCode, Wallet, X as XIcon } from "lucide-react";
 import { VietQR, type BankInfo } from "@/components/VietQR";
 import { ProgressBar } from "@/components/studio/ui";
+import { Modal } from "@/components/studio/Modal";
 import { fmtDate } from "@/lib/date";
 import { PAYMENT_KIND_LABEL, vnd } from "@/lib/types";
 import type { PortalPayment, PortalPlanRow } from "./types";
@@ -125,10 +126,10 @@ export default function PaymentPanel({
 
       {/* ── Hộp thoại QR ────────────────────────────────────────────────── */}
       {qrOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ background: "rgba(12,10,14,.5)" }}>
-          <div className="w-full max-w-[380px] rounded-[16px] px-5 py-5" style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-modal)" }}>
+        <Modal onClose={() => setQrOpen(false)} maxWidth={380} scope="client-doc" labelledBy="qr-dialog-title">
+          <div className="px-5 py-5">
             <div className="mb-3 flex items-center gap-2">
-              <h4 className="text-[14.5px] font-bold">{nextDue?.label ?? "Thanh toán"}</h4>
+              <h4 id="qr-dialog-title" className="text-[14.5px] font-bold">{nextDue?.label ?? "Thanh toán"}</h4>
               <span className="tnum ml-auto text-[14px] font-bold" style={{ color: "var(--ac)" }}>{vnd(qrAmount)}</span>
               <button onClick={() => setQrOpen(false)} className="flex-none rounded-[9px] p-1.5" style={{ background: "var(--sf2)", color: "var(--tx2)" }} aria-label="Đóng">
                 <XIcon size={15} />
@@ -144,7 +145,7 @@ export default function PaymentPanel({
               {reporting ? "Đang gửi…" : "Tôi đã chuyển khoản"}
             </button>
           </div>
-        </div>
+        </Modal>
       )}
     </section>
   );

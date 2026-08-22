@@ -9,6 +9,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Panel, PanelHead, Pill, ProgressBar, EmptyState, KindPill } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
+import { Modal } from "@/components/studio/Modal";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDayMonth } from "@/lib/date";
 import {
@@ -607,14 +608,10 @@ function ApptDialog({
   const badRange = s != null && e != null && e <= s;
 
   return (
-    <div className="fixed inset-0 z-[150] flex items-end justify-center p-0 sm:items-center sm:p-4" style={{ background: "rgba(12,10,14,.5)" }}>
-      <div
-        className="flex max-h-[92vh] w-full max-w-[560px] flex-col overflow-hidden rounded-t-[18px] sm:rounded-[16px]"
-        style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-modal)" }}
-      >
+    <Modal onClose={() => setDraft(null)} labelledBy="appt-dialog-title">
         <div className="flex items-center gap-2.5 px-[18px] py-3.5" style={{ borderBottom: "1px solid var(--bd2)" }}>
           <KindPill icon={Icon} fg={tone.fg} soft={tone.soft}>{label}</KindPill>
-          <h2 className="text-[14.5px] font-bold">{draft.id ? "Sửa lịch hẹn" : "Đặt lịch mới"}</h2>
+          <h2 id="appt-dialog-title" className="text-[14.5px] font-bold">{draft.id ? "Sửa lịch hẹn" : "Đặt lịch mới"}</h2>
           <button onClick={() => setDraft(null)} className="ml-auto flex-none rounded-[9px] p-1.5" style={{ background: "var(--sf2)", color: "var(--tx2)" }} aria-label="Đóng">
             <XIcon size={16} />
           </button>
@@ -803,8 +800,7 @@ function ApptDialog({
             </button>
           </div>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }
 

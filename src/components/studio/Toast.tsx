@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
+import { Portal } from "@/components/studio/Modal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TOAST — xác nhận thao tác, dùng chung cho lịch studio, cổng nhân viên và
@@ -12,6 +13,11 @@ import { CheckCircle2 } from "lucide-react";
    ẩn sau 2600ms. Nền và màu icon để CỐ ĐỊNH chứ không lấy theo token: toast là
    lớp nổi trên mọi nền, kể cả trang album nền tối, nên nó phải tương phản với
    cả hai chế độ sáng/tối.
+
+   Đi qua <Portal> ra <body> vì `.page-in` trên <main> của StudioShell biến
+   <main> thành containing block của mọi con `position: fixed` — xem ghi chú đầy
+   đủ trong components/studio/Modal.tsx. Không portal thì "ghim giữa đáy" hoá ra
+   là ghim vào đáy của <main>, tức tuốt dưới cuối trang, ngoài vùng nhìn thấy.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const HIDE_AFTER = 2600;
@@ -35,6 +41,7 @@ export function useToast() {
 export function Toast({ msg }: { msg: string | null }) {
   if (!msg) return null;
   return (
+    <Portal>
     <div
       role="status"
       aria-live="polite"
@@ -44,5 +51,6 @@ export function Toast({ msg }: { msg: string | null }) {
       <CheckCircle2 size={16} style={{ flex: "none", color: "#8FE3BC" }} />
       <span style={{ textWrap: "pretty" }}>{msg}</span>
     </div>
+    </Portal>
   );
 }

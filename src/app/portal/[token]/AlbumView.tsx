@@ -6,6 +6,7 @@ import {
   Images, Video, Download, Star, Share2, Play, X as XIcon, ChevronLeft, ChevronRight, Check,
 } from "lucide-react";
 import { useToast } from "@/components/studio/Toast";
+import { Portal } from "@/components/studio/Modal";
 import { fullImageUrl, thumbnailUrl } from "@/lib/drive";
 import { fmtDate } from "@/lib/date";
 import type { PortalPayload } from "./types";
@@ -276,6 +277,9 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
 
       {/* ── Lightbox ─────────────────────────────────────────────────────── */}
       {lightbox != null && photos[lightbox] && (
+        // Portal ra <body>: khung xem ảnh phải phủ đúng khung nhìn, không phụ
+        // thuộc phần tử cha nào (xem ghi chú trong components/studio/Modal.tsx).
+        <Portal>
         <div className="fixed inset-0 z-[160] flex items-center justify-center" style={{ background: "rgba(8,6,9,.94)" }} onClick={() => setLightbox(null)}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -316,6 +320,7 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
             {lightbox + 1} / {photos.length}
           </p>
         </div>
+        </Portal>
       )}
 
       {toastNode}
