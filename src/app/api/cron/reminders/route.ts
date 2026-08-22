@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
+import { sendPushToOwner } from "@/lib/push";
 import { mainUrl } from "@/lib/hosts";
 import { vnd } from "@/lib/types";
 import { autoAdvanceContracts } from "@/lib/contract-status";
@@ -148,6 +149,58 @@ export async function GET(req: NextRequest) {
   let sent = 0;
   const results: { owner: string; ok: boolean; error?: string }[] = [];
 
+  /* ── Nhắc lịch NGÀY MAI qua thông báo đẩy ─────────────────────────────────
+     Vì sao tách hẳn khỏi vòng gửi email bên dưới: vòng đó `continue` khi chủ
+     studio không khai email, mà chuyện thiếu email chẳng liên quan gì tới việc
+     điện thoại họ có nhận được thông báo hay không. Gộp chung là im lặng bỏ
+     rơi đúng những người chỉ dùng app.
+
+     Một thông báo GỘP cho cả ngày, không phải mỗi buổi một cái: 5 buổi chụp mà
+     rung 5 lần lúc 7 giờ sáng thì lần sau họ tắt thông báo.
+     `tag` mang ngày mai nên nếu cron chạy lại, hệ điều hành thay thông báo cũ
+     chứ không xếp chồng thêm cái nữa. */
+  const shootLine = (s: Shoot) =>
+    `${s.event_time ? `${s.event_time} · ` : ""}${s.title}${s.client_name ? ` — ${s.client_name}` : ""}`;
+
+  let pushed = 0;
+  for (const [ownerId, b] of byOwner) {
+    const lines = [...b.shoots.map(shootLine), ...b.appts.map(apptLine)];
+    if (lines.length === 0) continue;
+
+    const what = b.shoots.length && b.appts.length
+      ? `${b.shoots.length} buổi chụp · ${b.appts.length} lịch hẹn`
+      : b.shoots.length
+        ? `${b.shoots.length} buổi chụp`
+        : `${b.appts.length} lịch hẹn`;
+
+    try {
+      await sendPushToOwner(ownerId, {
+        title: `Ngày mai có ${what}`,
+        // 3 dòng đầu là vừa đủ cho khung thông báo của điện thoại; phần dư đếm
+        // lại, ai cần chi tiết thì chạm vào để mở màn Lịch làm việc.
+        body: lines.slice(0, 3).join("\n") + (lines.length > 3 ? `\n… và ${lines.length - 3} việc nữa` : ""),
+        url: "/dashboard/studio/calendar",
+        tag: `reminder-${tomorrow}`,
+      });
+      pushed++;
+    } catch {
+      /* push chưa cấu hình VAPID → digest email vẫn phải chạy tiếp */
+    }
+  }
+
+  // Buổi chụp ngày mai cũng vào chuông như lịch hẹn, để lời nhắc còn lại sau khi
+  // thông báo đẩy đã trôi khỏi màn hình khoá.
+  if (shoots.length) {
+    await db.from("studio_notifications").insert(
+      shoots.map((s) => ({
+        owner_id: s.owner_id,
+        contract_id: s.id,
+        kind: "schedule_reminder",
+        message: `Ngày mai: ${shootLine(s)}${s.location ? ` — ${s.location}` : ""}`,
+      }))
+    );
+  }
+
   for (const [ownerId, b] of byOwner) {
     const owner = ownerMap.get(ownerId);
     if (!owner?.email) continue;
@@ -259,5 +312,5 @@ ${link ? `<p><a href="${link}">Mở album ảnh &amp; đánh giá →</a> (mật
   // Tin Zalo tự động (nhắc lịch/thanh toán/chọn ảnh) chạy ở cron riêng
   // /api/cron/zalo lúc 11h trưa — xem src/app/api/cron/zalo/route.ts.
 
-  return NextResponse.json({ ok: true, sent, clientSent, advanced, appointments: appts.length, owners: results.length });
+  return NextResponse.json({ ok: true, sent, pushed, clientSent, advanced, appointments: appts.length, owners: results.length });
 }

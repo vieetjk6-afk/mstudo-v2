@@ -365,6 +365,9 @@ export type NotificationKind =
   | "schedule_reminder"
   | "contract_changed"
   | "assigned"
+  // Hợp đồng mới do NGƯỜI KHÁC trong studio tạo (nhân viên, quản lý, quản lý
+  // chi nhánh) — chủ studio cần biết đơn vừa về từ cơ sở nào.
+  | "contract_created"
   | "info";
 
 export interface StudioNotification {

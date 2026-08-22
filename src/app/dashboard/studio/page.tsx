@@ -12,6 +12,7 @@ import StudioTrialButton from "@/components/StudioTrialButton";
 import MessengerButton from "@/components/MessengerButton";
 import VietQRButton from "@/components/VietQR";
 import AutoEmailToggle from "@/components/AutoEmailToggle";
+import UpcomingSchedule from "@/components/studio/UpcomingSchedule";
 import { shootReminderMessage } from "@/lib/zalo";
 import { crewPortalUrl } from "@/lib/crew-show";
 import { avatarStyle, initials } from "@/lib/avatar";
@@ -353,10 +354,6 @@ export default async function StudioOverview() {
     contract: { id: string; title: string } | null;
   }>);
 
-  // Số dòng lịch vẽ ở Tổng quan. 8 = vừa hết một tuần bận mà chưa phải cuộn;
-  // phần dư ghi "và N buổi nữa" rồi dẫn sang màn Lịch làm việc.
-  const SCHEDULE_ROWS = 8;
-
   // ── Số liệu KPI ───────────────────────────────────────────────
   const revenueMonth = sumAmounts((payMonth ?? []) as unknown as { amount: number }[]);
   const notCancelled = list.filter((c) => c.status !== "cancelled");
@@ -625,65 +622,7 @@ export default async function StudioOverview() {
         {stats.map((s) => <StatCard key={s.label} {...s} />)}
       </div>
 
-      {/* ── Lịch hôm nay & sắp tới ────────────────────────────────────────
-          Đứng NGAY SAU bốn thẻ KPI vì đây là thứ người ta mở Tổng quan để xem
-          đầu tiên: hôm nay chụp gì, mai chụp gì. Trước đây nó nằm dưới biểu đồ
-          doanh thu, phải cuộn qua ba khối mới thấy — mà biểu đồ thì mỗi tháng
-          xem một lần, còn lịch thì mỗi sáng. */}
-      <Panel>
-        <PanelHead
-          icon={CalendarDays} tone="brand" title="Lịch hôm nay & sắp tới"
-          count={`${todayJobs.length} hôm nay · ${upcoming.filter((c) => c.event_date !== today).length} sắp tới`}
-          note="Xếp theo buổi gần nhất"
-        />
-        {schedule.length === 0 ? (
-          <EmptyState icon={CalendarDays} title="Chưa có buổi chụp nào sắp tới" hint="Tạo hợp đồng hoặc nhận đặt lịch để lấp lịch tuần này." />
-        ) : (
-          <>
-            {/* Hai cột trên màn rộng: khối này giờ chiếm hết bề ngang, để một
-                cột thì mỗi dòng dài ngoẵng mà vẫn phải cuộn mới xem hết tuần. */}
-            <div className="grid px-2 py-2 min-[900px]:grid-cols-2">
-              {schedule.slice(0, SCHEDULE_ROWS).map((c) => {
-                const isToday = c.event_date === today;
-                return (
-                  <Link
-                    key={c.id}
-                    href={`/dashboard/studio/contracts/${c.id}`}
-                    className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-2 py-[9px] text-left"
-                  >
-                    {/* Cột ngày/giờ cố định bề ngang để mọi dòng thẳng hàng:
-                        buổi hôm nay chỉ cần giờ, buổi sau cần ngày. */}
-                    <span className="tnum w-[58px] flex-none text-[11.5px] font-bold" style={{ color: isToday ? "var(--ac)" : "var(--tx3)" }}>
-                      {isToday ? c.event_time || "Hôm nay" : fmtDayMonth(c.event_date)}
-                    </span>
-                    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10.5px] font-bold" style={avatarStyle(c.client_name)}>
-                      {initials(c.client_name || c.title)}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[12.5px] font-semibold">{c.title}</span>
-                      <span className="block truncate text-[11px]" style={{ color: "var(--tx3)" }}>
-                        {c.client_name || "Chưa có tên khách"}
-                        {!isToday && c.event_time ? ` · ${c.event_time}` : ""}
-                      </span>
-                    </span>
-                    <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: CONTRACT_STATUS_TONE[c.status].fg }} />
-                  </Link>
-                );
-              })}
-            </div>
-            <div className="flex items-center gap-3 px-4 pb-3 pt-1">
-              {schedule.length > SCHEDULE_ROWS && (
-                <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                  và {schedule.length - SCHEDULE_ROWS} buổi nữa
-                </span>
-              )}
-              <Link href="/dashboard/studio/calendar" className="ml-auto text-[12px] font-semibold" style={{ color: "var(--ac)" }}>
-                Xem lịch làm việc →
-              </Link>
-            </div>
-          </>
-        )}
-      </Panel>
+      <UpcomingSchedule rows={schedule} today={today} />
 
       {/* ── Cần xử lý ngay ────────────────────────────────────────────── */}
       <Panel>
