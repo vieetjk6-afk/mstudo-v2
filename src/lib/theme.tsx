@@ -1,5 +1,6 @@
 "use client";
 
+import { THEME_KEY } from "./theme-boot";
 import {
   createContext,
   useCallback,
@@ -10,8 +11,10 @@ import {
 
 export type Theme = "light" | "dark";
 
-/** Single localStorage key shared by every page so the choice is global. */
-export const THEME_KEY = "mstudo_theme";
+// THEME_KEY và THEME_BOOT_SCRIPT sống ở "@/lib/theme-boot" (module thường) vì
+// layout.tsx là server component — xem ghi chú ở file đó. Xuất lại ở đây để
+// phía client vẫn nhập từ "@/lib/theme" như cũ.
+export { THEME_KEY } from "./theme-boot";
 
 type ThemeCtx = {
   theme: Theme;
@@ -72,6 +75,3 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 }
 
 export const useTheme = () => useContext(Ctx);
-
-/** Inline script string for <head> — sets the theme before first paint. */
-export const THEME_BOOT_SCRIPT = `(function(){try{var t=localStorage.getItem('${THEME_KEY}');document.documentElement.dataset.theme=(t==='dark'?'dark':'light');}catch(e){document.documentElement.dataset.theme='light';}})();`;
