@@ -113,7 +113,7 @@ export default function DashboardHeader({
     {
       label: "Đội ngũ",
       children: [
-        { href: "/dashboard/studio/team", label: "Lịch đội" },
+        { href: "/dashboard/studio/calendar?tab=team", label: "Lịch đội" },
         { href: "/dashboard/studio/staff?tab=crew", label: "Sổ thợ" },
         { href: "/dashboard/studio/ranking", label: "Xếp hạng" },
         { href: "/dashboard/studio/messages", label: "Mẫu tin" },

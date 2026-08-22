@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Sun, Moon, LogOut, Menu, X as XIcon, Gift, Link2, UserCircle,
-  MessageSquare, Bell,
+  MessageSquare, Bell, Crown,
 } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioCommandK from "@/components/StudioCommandK";
@@ -37,9 +37,9 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/studio/board", "Bảng công việc", "Kéo thẻ sang cột khác để đổi trạng thái"],
   ["/dashboard/studio/bookings", "Đặt lịch khách", "Yêu cầu đặt lịch gửi từ website và trang giá"],
   ["/dashboard/studio/leads", "Yêu cầu mới", "Khách đặt lịch từ website & chatbox"],
-  ["/dashboard/studio/calendar", "Lịch làm việc", "Lịch chụp và lịch của đội ngũ"],
-  ["/dashboard/studio/schedule", "Lịch studio", "Trang điểm · Thử đồ · Chụp pre-wedding · Tư vấn"],
-  ["/dashboard/studio/team", "Lịch đội ngũ", "Lịch làm việc của từng nhân sự"],
+  // Ba màn lịch cũ đã gộp thành các tab của /calendar, nên chỉ còn MỘT dòng ở
+  // đây; /schedule và /team giờ là route chuyển hướng, không kịp vẽ topbar.
+  ["/dashboard/studio/calendar", "Lịch làm việc", "Buổi chụp · Lịch studio · Đội ngũ"],
   ["/dashboard/studio/production", "Xử lý hình ảnh", "Ảnh, video, in ấn của mọi hợp đồng"],
   ["/dashboard/studio/rental", "Phòng váy", "Kho trang phục và đơn cho thuê"],
   ["/dashboard/studio/equipment", "Thiết bị", "Máy móc, ống kính, đèn và lịch mượn"],
@@ -210,6 +210,8 @@ export default function StudioShell({
   // Chỉ chủ studio / admin mới xem-như được, và chỉ để THU HẸP những gì mình
   // thấy — quyền thật vẫn do server quyết định (xem README, mục "Phân quyền").
   const canViewAs = role === "owner" || role === "admin";
+  /** Chủ studio: người duy nhất thấy gói phần mềm và affiliate trong menu avatar. */
+  const isOwner = role === "owner" || role === "admin";
   const effectiveRole = canViewAs && viewAs && viewAs !== "owner" ? viewAs : role;
 
   const access = useMemo<NavAccess>(
@@ -256,6 +258,10 @@ export default function StudioShell({
     </span>
   );
 
+  /* Menu avatar = TOÀN BỘ cụm tài khoản. Trước đây những mục này còn có thêm
+     một nhóm "Tài khoản" 6 dòng ở đáy sidebar — thứ mở vài lần một tháng mà
+     chiếm chỗ ngang với việc làm hằng ngày, lại trùng y hệt menu này. Sidebar
+     giờ chỉ giữ việc điều hành studio; hồ sơ, gói, hoa hồng nằm ở đây. */
   const accountMenu = (
     <>
       <div className="mb-1 px-3 py-2" style={{ borderBottom: "1px solid var(--bd2)" }}>
@@ -266,12 +272,30 @@ export default function StudioShell({
       <Link href="/dashboard/account" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
         <UserCircle size={15} style={{ color: "var(--ac)" }} /> Tài khoản & bảo mật
       </Link>
+      <Link href="/dashboard/studio/notifications" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
+        <Bell size={15} style={{ color: "var(--ac)" }} /> Thông báo
+        {(badges.notifications ?? 0) > 0 && (
+          <span className="ml-auto rounded-[20px] px-[6px] py-[1.5px] text-[10.5px] font-bold" style={{ background: "var(--amS)", color: "var(--am)" }}>
+            {(badges.notifications ?? 0) > 99 ? "99+" : badges.notifications}
+          </span>
+        )}
+      </Link>
       <Link href="/dashboard/connections" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
         <Link2 size={15} style={{ color: "var(--ac)" }} /> Kết nối Calendar
       </Link>
-      <Link href="/dashboard/upgrade" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
-        <Gift size={15} style={{ color: "var(--am)" }} /> Gói phần mềm
-      </Link>
+      {/* Gói và hoa hồng chỉ CHỦ studio thấy — đúng `roles: OWNER_OK` của hai
+          mục này trong studio-nav.ts. Trước đây menu avatar hiện "Gói phần mềm"
+          cho cả nhân viên, bấm vào là trang chặn. */}
+      {isOwner && (
+        <>
+          <Link href="/dashboard/upgrade" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
+            <Crown size={15} style={{ color: "var(--am)" }} /> Gói phần mềm
+          </Link>
+          <Link href="/dashboard/affiliate" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
+            <Gift size={15} style={{ color: "var(--am)" }} /> Affiliate
+          </Link>
+        </>
+      )}
       <a href={ZALO_SUPPORT_URL} target="_blank" rel="noreferrer" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
         <MessageSquare size={15} style={{ color: "var(--ac)" }} /> Nhóm Zalo hỗ trợ
       </a>
@@ -334,6 +358,18 @@ export default function StudioShell({
           <NavGroups dense={false} {...navProps} />
 
           <div className="mt-auto flex flex-col gap-2 pt-6">
+            {/* Cụm tài khoản đã rời sidebar sang menu avatar. Trên điện thoại
+                nút avatar vẫn ở topbar, nhưng người mở ngăn kéo thì đang tìm
+                "menu" — nên để lại một lối vào ở đây thay vì bắt họ đóng ngăn
+                kéo rồi mới bấm avatar. */}
+            <Link
+              href="/dashboard/account"
+              className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold"
+              style={{ background: "var(--sf2)", color: "var(--tx)" }}
+            >
+              <UserCircle size={18} style={{ color: "var(--ac)" }} />
+              Tài khoản & bảo mật
+            </Link>
             <a
               href={ZALO_SUPPORT_URL}
               target="_blank"

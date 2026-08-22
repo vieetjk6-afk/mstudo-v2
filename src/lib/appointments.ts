@@ -8,7 +8,7 @@ import {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LỊCH HẸN STUDIO — nhãn, màu, icon dùng chung của ba màn
-     /dashboard/studio/schedule  lịch tuần cấp studio
+     /dashboard/studio/calendar?tab=studio  lịch tuần cấp studio
      /staff                      lịch hôm nay của người được phân công
      /portal/<client_token>      lịch trình khách theo hợp đồng
 

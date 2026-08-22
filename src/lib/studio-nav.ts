@@ -11,9 +11,17 @@ import {
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ĐIỀU HƯỚNG KHU QUẢN LÝ STUDIO — nguồn duy nhất cho sidebar, drawer và ô ⌘K.
-   Theo mục "Cấu trúc điều hướng" của README.md ở gốc repo: 7 nhóm, gộp từ ~40
-   mục rời rạc. Những màn KHÔNG còn trong sidebar (lịch đội, nhân viên, mẫu hợp
-   đồng, chatbox, nén ảnh…) vẫn tới được bằng ⌘K — xem EXTRA_COMMANDS bên dưới.
+   Xem mục "Cấu trúc điều hướng" của README.md ở gốc repo.
+
+   Thứ tự nhóm kể lại QUY TRÌNH của một studio, đọc từ trên xuống: khách hỏi →
+   chốt đơn (Kinh doanh) → chụp và hậu kỳ (Sản xuất) → đồ nghề (Kho) → tiền
+   (Tài chính) → người (Nhân sự) → những thứ khai một lần (Thiết lập). Trong mỗi
+   nhóm, mục mở NHIỀU LẦN MỖI NGÀY đứng trên mục mở vài lần một năm — tần suất
+   quyết định vị trí, không phải "tính năng này quan trọng hơn".
+
+   Những màn KHÔNG còn trong sidebar (lịch studio, lịch đội, mẫu hợp đồng,
+   chatbox, nén ảnh, và cả cụm tài khoản đã chuyển lên menu avatar ở topbar) vẫn
+   tới được bằng ⌘K — xem EXTRA_COMMANDS bên dưới.
 
    Icon: bản thiết kế vẽ bằng Material Symbols Rounded, ở đây dùng lucide-react
    (thư viện sẵn có của repo, đã dùng ở ~50 file) với icon tương đương gần nhất
@@ -51,6 +59,13 @@ export type NavGroup = { label: string; items: NavItem[] };
 const EVERYONE = ["owner", "admin", "manager", "branch_manager", "staff", "accountant"] as const;
 const STAFF_OK = ["owner", "admin", "manager", "branch_manager", "staff"] as const;
 const MANAGER_OK = ["owner", "admin", "manager", "branch_manager"] as const;
+/**
+ * Quản trị CẤU TRÚC studio (chi nhánh). Giống MANAGER_OK nhưng KHÔNG có
+ * `branch_manager`: "Toàn quyền chi nhánh" không được thêm/sửa/xoá chi nhánh
+ * (README, mục "Toàn quyền chi nhánh là hàng rào thật"), nên cũng không nên
+ * thấy dòng menu dẫn tới đó.
+ */
+const BRANCH_ADMIN_OK = ["owner", "admin", "manager"] as const;
 const OWNER_OK = ["owner", "admin"] as const;
 /**
  * Tiền bạc: chủ + kế toán. Quản lý toàn studio KHÔNG xem (README, mục "Phân quyền").
@@ -67,58 +82,71 @@ const ADMIN_ONLY = ["admin"] as const;
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
+    // Hai màn "mở đầu ca": toàn cảnh cho người quản lý, việc-của-tôi cho người
+    // làm. "Trang của tôi" ở ĐẦU menu chứ không phải cuối: với vai trò staff nó
+    // là màn duy nhất họ mở mỗi sáng, để dưới đáy thì phải cuộn hết sidebar.
     label: "",
     items: [
       { href: "/dashboard/studio", label: "Tổng quan", icon: LayoutDashboard, minTier: "booking", roles: EVERYONE, keywords: "trang chu dashboard", sub: "Toàn cảnh studio hôm nay" },
+      { href: "/staff", label: "Trang của tôi", icon: UserRound, minTier: "booking", roles: EVERYONE, keywords: "cong nhan vien lich hom nay viec cua toi anh can sua", sub: "Lịch hôm nay & việc hậu kỳ của bạn" },
     ],
   },
   {
-    label: "Bán hàng",
+    // Đọc từ trên xuống là ĐÚNG THỨ TỰ MỘT ĐƠN ĐI: khách nhắn → hẹn gặp → gửi
+    // giá → ký hợp đồng. Trước đây nhóm này xếp ngược (Báo giá trước, Yêu cầu
+    // mới cuối), nên ba mục có badge việc-chưa-xử-lý nằm rải rác và hai mục lễ
+    // tân mở đầu tiên mỗi sáng lại ở đáy nhóm.
+    label: "Kinh doanh",
     items: [
+      { href: "/dashboard/studio/leads", label: "Yêu cầu mới", icon: Inbox, minTier: "booking", roles: MANAGER_OK, badge: "leads", keywords: "lead website chatbox" },
+      { href: "/dashboard/studio/bookings", label: "Đặt lịch khách", icon: CalendarClock, minTier: "booking", roles: MANAGER_OK, badge: "bookings" },
       { href: "/dashboard/studio/quotes", label: "Báo giá", icon: ReceiptText, minTier: "plus", roles: MANAGER_OK, badge: "quotes" },
       { href: "/dashboard/studio/contracts", label: "Hợp đồng & lịch hẹn", icon: FileText, minTier: "plus", roles: STAFF_OK, keywords: "hop dong buoi chup" },
-      { href: "/dashboard/studio/board", label: "Bảng công việc", icon: Kanban, minTier: "full", roles: MANAGER_OK, keywords: "kanban cong viec" },
-      { href: "/dashboard/studio/bookings", label: "Đặt lịch khách", icon: CalendarClock, minTier: "booking", roles: MANAGER_OK, badge: "bookings" },
-      { href: "/dashboard/studio/leads", label: "Yêu cầu mới", icon: Inbox, minTier: "booking", roles: MANAGER_OK, badge: "leads", keywords: "lead website chatbox" },
-      // Phòng váy thuộc nhóm Bán hàng (cho thuê trang phục là doanh thu bán kèm,
-      // không phải việc hậu kỳ) nhưng để CUỐI nhóm: nó là việc phụ, còn báo giá
-      // và hợp đồng mới là thứ mở hàng chục lần mỗi ngày.
-      { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full", roles: MANAGER_OK, keywords: "trang phuc thue vay" },
+      // Danh bạ khách về đây (trước ở nhóm "Khách hàng" riêng): nó là tài sản
+      // bán hàng — tái ký, giới thiệu, chăm sau cưới — chứ không phải việc hậu kỳ.
+      { href: "/dashboard/studio/clients", label: "Khách hàng", icon: Users, minTier: "booking", roles: MANAGER_OK, keywords: "danh ba khach" },
     ],
   },
   {
-    label: "Vận hành",
+    // TOÀN BỘ chuỗi sau khi ký nằm trong một nhóm: xếp lịch → chia việc → hậu kỳ
+    // → giao ảnh → làm sản phẩm (album in, thiệp, slide). Trước đây chuỗi này bị
+    // chẻ đôi giữa "Vận hành" và "Khách hàng", thợ hậu kỳ làm một hợp đồng phải
+    // nhảy qua lại hai nhóm.
+    label: "Sản xuất",
     items: [
-      // Lịch đội ngũ (/team) sẽ gộp thành tab 4 của màn này ở bước 5.
-      { href: "/dashboard/studio/calendar", label: "Lịch làm việc", icon: CalendarDays, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/studio/team"], keywords: "lich chup doi ngu" },
-      // Lịch studio đứng NGAY SAU Lịch làm việc vì hai màn cùng trả lời "hôm nay
-      // studio làm gì", chỉ khác đơn vị: màn kia là buổi chụp của hợp đồng, màn
-      // này là buổi hẹn dịch vụ (trang điểm / thử đồ / tư vấn) có người phụ
-      // trách và có phòng.
-      { href: "/dashboard/studio/schedule", label: "Lịch studio", icon: CalendarRange, minTier: "booking", roles: STAFF_OK, keywords: "lich trang diem thu do tu van makeup fitting hen" },
+      // MỘT mục lịch duy nhất. /schedule (lịch studio) và /team (lịch đội ngũ)
+      // đã gộp thành tab của màn này — xem calendar/CalendarTabs.tsx. Trước đây
+      // menu có tới bốn dòng chứa chữ "lịch" và không ai đoán được nên mở dòng nào.
+      { href: "/dashboard/studio/calendar", label: "Lịch làm việc", icon: CalendarDays, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/studio/schedule", "/dashboard/studio/team"], keywords: "lich chup doi ngu studio trang diem thu do makeup fitting hen" },
+      // Bảng công việc chuyển từ "Bán hàng" sang đây: thẻ trên bảng là việc PHẢI
+      // LÀM của hợp đồng đã ký, không phải việc chốt đơn.
+      { href: "/dashboard/studio/board", label: "Bảng công việc", icon: Kanban, minTier: "full", roles: MANAGER_OK, keywords: "kanban cong viec" },
       { href: "/dashboard/studio/production", label: "Xử lý hình ảnh", icon: Wand2, minTier: "full", roles: STAFF_OK, badge: "production", keywords: "hau ky san xuat in" },
       { href: "/dashboard/albums", label: "Thư viện album", icon: Images, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/create", "/dashboard/studio/album-categories"], keywords: "album chon anh giao khach" },
-      // Công cụ ảnh chuyển từ "Thiết lập" sang đây: lọc/nén/đóng dấu là việc làm
-      // hằng ngày trên ảnh, không phải một tuỳ chọn cấu hình.
+      { href: "/dashboard/studio/album-designer", label: "Thiết kế album", icon: BookImage, minTier: "full", roles: MANAGER_OK, keywords: "dan trang album in" },
+      { href: "/dashboard/studio/thiep", label: "Thiệp · Story · Slide", icon: Sparkles, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/story", "/dashboard/studio/slide"], keywords: "thiep cuoi love story slide" },
+      // Công cụ lẻ, để CUỐI nhóm: mở khi cần xử lý một mớ ảnh, không nằm trên
+      // đường đi chính của hợp đồng.
       { href: "/dashboard/tools", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/filter", "/dashboard/compress"], keywords: "loc anh nen anh watermark" },
-      { href: "/dashboard/studio/equipment", label: "Thiết bị", icon: Camera, minTier: "full", roles: MANAGER_OK, keywords: "may anh ong kinh den" },
     ],
   },
   {
-    label: "Khách hàng",
+    // Phòng váy và Thiết bị là CÙNG MỘT LOẠI VIỆC — tài sản của studio, cho mượn
+    // hoặc cho thuê theo lịch, phải biết cái nào đang ở đâu. Trước đây một cái ở
+    // "Bán hàng", một cái ở "Vận hành".
+    label: "Kho",
     items: [
-      { href: "/dashboard/studio/clients", label: "Khách hàng", icon: Users, minTier: "booking", roles: MANAGER_OK, keywords: "danh ba khach" },
-      { href: "/dashboard/studio/thiep", label: "Thiệp · Story · Slide", icon: Sparkles, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/story", "/dashboard/studio/slide"], keywords: "thiep cuoi love story slide" },
-      { href: "/dashboard/studio/album-designer", label: "Thiết kế album", icon: BookImage, minTier: "full", roles: MANAGER_OK, keywords: "dan trang album in" },
+      { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full", roles: MANAGER_OK, keywords: "trang phuc thue vay" },
+      { href: "/dashboard/studio/equipment", label: "Thiết bị", icon: Camera, minTier: "full", roles: MANAGER_OK, keywords: "may anh ong kinh den" },
     ],
   },
   {
     label: "Tài chính",
     items: [
       // Bản thiết kế tách "Thu chi & công nợ" và "Báo cáo" thành 2 màn, nhưng
-      // repo đang là MỘT trang /reports. Chỉ để một mục ở đây; khi tách màn ở
-      // bước 5 thì thêm mục "Báo cáo" trỏ vào route mới — không trỏ 2 mục vào
-      // cùng một trang, vì cả hai sẽ cùng sáng và người dùng bấm mãi một chỗ.
+      // repo đang là MỘT trang /reports. Chỉ để một mục ở đây; khi tách màn thì
+      // thêm mục "Báo cáo" trỏ vào route mới — không trỏ 2 mục vào cùng một
+      // trang, vì cả hai sẽ cùng sáng và người dùng bấm mãi một chỗ.
       { href: "/dashboard/studio/reports", label: "Thu chi & công nợ", icon: Wallet, minTier: "full", roles: MONEY_OK, keywords: "bao cao doanh thu chi phi cong no dong tien" },
       { href: "/dashboard/studio/payroll", label: "Đối soát tiền công", icon: Banknote, minTier: "full", roles: MONEY_OK, keywords: "bang luong tien cong nhan su" },
     ],
@@ -131,33 +159,24 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // sổ thợ chỉ sửa khi có người vào/ra.
       { href: "/dashboard/studio/staff", label: "Nhân viên & phân quyền", icon: UserCog, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/crew"], keywords: "tai khoan nhan vien quyen vai tro so tho crew doi ngu" },
       { href: "/dashboard/studio/ranking", label: "Xếp hạng", icon: Trophy, minTier: "full", roles: MANAGER_OK },
-      // Chi nhánh studio ĐÃ PHÁT HÀNH. Nhãn để "Chi nhánh" chứ không phải "Chi
-      // nhánh studio" vì sidebar rộng 250px — tên đầy đủ bị cắt.
-      { href: "/dashboard/studio/branches", label: "Chi nhánh", icon: Building2, minTier: "full", roles: MANAGER_OK, keywords: "chi nhanh studio co so diem chup branch nhieu cua hang" },
     ],
   },
   {
+    // Mọi thứ khai MỘT LẦN rồi dùng lại. Xếp theo tần suất sửa: cấu trúc công ty
+    // và bảng giá sửa vài lần một năm, mẫu tin nhắn và website thỉnh thoảng.
     label: "Thiết lập",
     items: [
+      // Chi nhánh chuyển từ "Nhân sự" sang: đây là CẤU TRÚC công ty (mở/đóng cơ
+      // sở), không phải chỗ để xem đội ngũ. Nhãn để "Chi nhánh" chứ không phải
+      // "Chi nhánh studio" vì sidebar rộng 250px — tên đầy đủ bị cắt.
+      // roles: BRANCH_ADMIN_OK — "Toàn quyền chi nhánh" KHÔNG thấy, vì họ không
+      // được thêm/sửa/xoá chi nhánh (README, mục "Toàn quyền chi nhánh"); trước
+      // đây họ vẫn thấy dòng menu này rồi bấm vào mới biết là không làm được gì.
+      { href: "/dashboard/studio/branches", label: "Chi nhánh", icon: Building2, minTier: "full", roles: BRANCH_ADMIN_OK, keywords: "chi nhanh studio co so diem chup branch nhieu cua hang" },
       { href: "/dashboard/studio/pricing", label: "Gói & bảng giá", icon: Package, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/packages"], keywords: "goi dich vu bang gia" },
       { href: "/dashboard/studio/services", label: "Dịch vụ & điều khoản", icon: Gavel, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/templates"], keywords: "dieu khoan mau hop dong" },
-      // Mẫu tin nhắn chuyển từ "Nhân sự" sang đây: đây là nội dung soạn SẴN một
-      // lần rồi dùng lại, cùng loại với bảng giá và bộ điều khoản.
       { href: "/dashboard/studio/messages", label: "Mẫu tin nhắn", icon: MessagesSquare, minTier: "full", roles: MANAGER_OK, keywords: "mau tin zalo sms" },
       { href: "/dashboard/site", label: "Website & chatbox", icon: Globe, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/chatbox"], keywords: "trang web portfolio tro ly" },
-    ],
-  },
-  {
-    label: "Tài khoản",
-    items: [
-      // Cổng nhân viên nằm NGOÀI shell quản lý (route /staff, tối ưu cho điện
-      // thoại) nhưng vẫn để một dòng menu ở đây: đó là trang người được phân công
-      // mở hằng ngày, không phải một màn phụ chỉ tới được bằng ⌘K.
-      { href: "/staff", label: "Trang của tôi", icon: UserRound, minTier: "booking", roles: EVERYONE, keywords: "cong nhan vien lich hom nay viec cua toi anh can sua", sub: "Lịch hôm nay & việc hậu kỳ của bạn" },
-      { href: "/dashboard/studio/notifications", label: "Thông báo", icon: Bell, minTier: "full", roles: EVERYONE, badge: "notifications" },
-      { href: "/dashboard/account", label: "Tài khoản & bảo mật", icon: UserCircle, minTier: "booking", roles: EVERYONE, keywords: "mat khau bao mat thiet bi" },
-      { href: "/dashboard/upgrade", label: "Gói phần mềm", icon: Crown, minTier: "booking", roles: OWNER_OK, keywords: "nang cap goi plan" },
-      { href: "/dashboard/affiliate", label: "Affiliate", icon: Gift, minTier: "booking", roles: OWNER_OK, keywords: "hoa hong gioi thieu" },
       { href: "/dashboard/studio/desktop", label: "Ứng dụng máy tính", icon: Monitor, minTier: "plus", roles: MANAGER_OK, keywords: "desktop app may tinh sao luu" },
     ],
   },
@@ -182,14 +201,23 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 
 /**
  * Màn KHÔNG nằm trong sidebar (đã gộp nhóm) + các lệnh tạo mới. Chỉ hiện trong
- * ô ⌘K — đây là thứ giữ cho việc gộp nav từ ~40 mục xuống 24 không làm mất
+ * ô ⌘K — đây là thứ giữ cho việc gộp nav xuống 25 mục sidebar không làm mất
  * đường tới bất kỳ màn nào.
  */
 export const EXTRA_COMMANDS: readonly NavItem[] = [
+  // ── Cụm tài khoản: đã rời sidebar sang menu avatar ở topbar (xem
+  //    `accountMenu` trong StudioShell.tsx). Mở vài lần một tháng, không đáng
+  //    chiếm 4 dòng cuối sidebar — nhưng vẫn phải gõ ⌘K ra được.
+  { href: "/dashboard/studio/notifications", label: "Thông báo", icon: Bell, minTier: "full", roles: EVERYONE, badge: "notifications", keywords: "thong bao hoat dong", sub: "Chuông trên topbar" },
+  { href: "/dashboard/account", label: "Tài khoản & bảo mật", icon: UserCircle, minTier: "booking", roles: EVERYONE, keywords: "mat khau bao mat thiet bi", sub: "Menu avatar" },
+  { href: "/dashboard/upgrade", label: "Gói phần mềm", icon: Crown, minTier: "booking", roles: OWNER_OK, keywords: "nang cap goi plan", sub: "Menu avatar" },
+  { href: "/dashboard/affiliate", label: "Affiliate", icon: Gift, minTier: "booking", roles: OWNER_OK, keywords: "hoa hong gioi thieu", sub: "Menu avatar" },
+  // ── Màn đã gộp thành tab / lệnh tạo mới ─────────────────────────────────
   { href: "/dashboard/studio/contracts/new", label: "Tạo hợp đồng mới", icon: Plus, minTier: "plus", roles: MANAGER_OK, keywords: "them hop dong moi", sub: "Luồng 5 bước" },
   { href: "/dashboard/studio/quotes/new", label: "Tạo báo giá", icon: FilePlus2, minTier: "plus", roles: MANAGER_OK, keywords: "them bao gia moi gui khach", sub: "Ghép gói và gửi khách" },
   { href: "/dashboard/albums/new", label: "Tạo album giao khách", icon: Images, minTier: "booking", roles: STAFF_OK, keywords: "them album moi", sub: "Album giao khách mới" },
-  { href: "/dashboard/studio/team", label: "Lịch đội ngũ", icon: CalendarRange, minTier: "full", roles: MANAGER_OK, keywords: "lich nhan su theo nguoi", sub: "Đã gộp vào Lịch làm việc" },
+  { href: "/dashboard/studio/calendar?tab=studio", label: "Lịch studio", icon: CalendarRange, minTier: "booking", roles: STAFF_OK, keywords: "lich trang diem thu do tu van makeup fitting hen phong", sub: "Tab của Lịch làm việc" },
+  { href: "/dashboard/studio/calendar?tab=team", label: "Lịch đội ngũ", icon: UsersRound, minTier: "full", roles: MANAGER_OK, keywords: "lich nhan su theo nguoi", sub: "Tab của Lịch làm việc" },
   { href: "/dashboard/studio/staff?tab=crew", label: "Đội ngũ thợ", icon: UsersRound, minTier: "full", roles: MANAGER_OK, keywords: "so tho crew doi ngu freelancer", sub: "Đã gộp vào Nhân viên & phân quyền" },
   { href: "/dashboard/studio/templates", label: "Mẫu hợp đồng", icon: FileSignature, minTier: "full", roles: MANAGER_OK, keywords: "mau hop dong dieu khoan", sub: "Đã gộp vào Dịch vụ & điều khoản" },
   { href: "/dashboard/studio/packages", label: "Gói dịch vụ", icon: Package, minTier: "full", roles: MANAGER_OK, keywords: "goi combo dich vu", sub: "Đã gộp vào Gói & bảng giá" },

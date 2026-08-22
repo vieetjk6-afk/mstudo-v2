@@ -95,7 +95,7 @@ export default function ContractAppointments({
         <h2 className="flex items-center gap-2 font-serif text-lg font-medium">
           <CalendarRange size={18} /> Lịch hẹn dịch vụ
         </h2>
-        <Link href="/dashboard/studio/schedule" className="ml-auto text-[11.5px] font-bold" style={{ color: "var(--ac)" }}>
+        <Link href="/dashboard/studio/calendar?tab=studio" className="ml-auto text-[11.5px] font-bold" style={{ color: "var(--ac)" }}>
           Mở lịch studio →
         </Link>
       </div>

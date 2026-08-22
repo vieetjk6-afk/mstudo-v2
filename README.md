@@ -158,22 +158,39 @@ Trong file thiết kế, mỗi màn nằm trong một `<sc-if value="{{ isXxx }}
 
 ## Cấu trúc điều hướng
 
-Sidebar 250px, cố định, 7 nhóm. Nhãn nhóm 10px/800/uppercase màu `--tx3`. Mục đang mở: nền `--acS`, chữ `--ac`, đậm 700.
+Sidebar 250px, cố định. Nhãn nhóm 10px/800/uppercase màu `--tx3`. Mục đang mở: nền `--acS`, chữ `--ac`, đậm 700. Nguồn duy nhất: **`src/lib/studio-nav.ts`**.
 
 ```
-(không nhãn)  Tổng quan
-Bán hàng      Báo giá(2) · Hợp đồng & lịch hẹn · Bảng công việc · Đặt lịch khách(3) · Yêu cầu mới(3)
-Vận hành      Lịch làm việc · Lịch studio · Xử lý hình ảnh(4) · Thư viện album · Công cụ ảnh · Thiết bị
-Khách hàng    Khách hàng · Thiệp·Story·Slide · Thiết kế album(2)
-Tài chính     Thu chi & công nợ · Đối soát tiền công(2) · Báo cáo
-Nhân sự       Nhân viên & phân quyền · Xếp hạng · Chi nhánh
-Thiết lập     Gói & bảng giá · Dịch vụ & điều khoản · Website & chatbox · Công cụ ảnh · Cài đặt studio
-Tài khoản     Trang của tôi · Thông báo(5) · Tài khoản & bảo mật · Gói phần mềm · Affiliate · Ứng dụng máy tính · Quản trị hệ thống
+(không nhãn)  Tổng quan · Trang của tôi
+Kinh doanh    Yêu cầu mới(3) · Đặt lịch khách(3) · Báo giá(2) · Hợp đồng & lịch hẹn · Khách hàng
+Sản xuất      Lịch làm việc · Bảng công việc · Xử lý hình ảnh(4) · Thư viện album · Thiết kế album · Thiệp·Story·Slide · Công cụ ảnh
+Kho           Phòng váy · Thiết bị
+Tài chính     Thu chi & công nợ · Đối soát tiền công
+Nhân sự       Nhân viên & phân quyền · Xếp hạng
+Thiết lập     Chi nhánh · Gói & bảng giá · Dịch vụ & điều khoản · Mẫu tin nhắn · Website & chatbox · Ứng dụng máy tính
 ```
 
 Số trong ngoặc là badge đếm. Chân sidebar: thẻ trạng thái đồng bộ Drive + số phiên bản.
+Nhóm **Quản trị hệ thống** (Người dùng & studio · Cài đặt hệ thống · Cấu hình mstudo · Quản lý Affiliate) chỉ hiện với admin mstudo.
 
-**Topbar** (sticky, nền `rgba(255,255,255,.86)` + `backdrop-filter:blur(12px)`): tiêu đề + phụ đề trang · ô ⌘K · nút dark mode · chuông thông báo · chuyển vai trò · avatar (bấm → Tài khoản).
+**Ba quy tắc xếp menu** — sửa `NAV_GROUPS` thì giữ đúng ba điều này:
+
+1. **Thứ tự nhóm kể lại quy trình studio**, đọc từ trên xuống: khách hỏi → chốt đơn → chụp & hậu kỳ → đồ nghề → tiền → người → thứ khai một lần. Nhân viên mới học việc bằng cách nhìn sidebar.
+2. **Tần suất mở quyết định vị trí trong nhóm**, không phải "tính năng nào quan trọng hơn". Bảng giá quan trọng nhưng sửa mỗi quý → xuống Thiết lập; Yêu cầu mới mở 20 lần/ngày → dòng đầu tiên có nhãn.
+3. **Mỗi nhóm trả lời đúng một câu hỏi.** "Đơn này tới đâu rồi?" → Kinh doanh. "Hôm nay ai làm gì?" → Sản xuất. "Tháng này lời bao nhiêu?" → Tài chính.
+
+Cụm tài khoản (Tài khoản & bảo mật · Thông báo · Kết nối Calendar · Gói phần mềm · Affiliate · Ngôn ngữ · Đăng xuất) **không nằm trong sidebar** — nó ở menu avatar trên topbar, và vẫn gõ ⌘K ra được qua `EXTRA_COMMANDS`.
+
+**Topbar** (sticky, nền `rgba(255,255,255,.86)` + `backdrop-filter:blur(12px)`): tiêu đề + phụ đề trang · ô chọn chi nhánh · ô ⌘K · nút dark mode · chuông thông báo · chuyển vai trò · avatar (bấm → menu tài khoản).
+
+**Màn đã gộp thành tab** (route cũ giữ lại, chuyển hướng về tab tương ứng):
+
+| Mục sidebar | Tab | Route cũ |
+| --- | --- | --- |
+| Lịch làm việc | Buổi chụp · Lịch studio · Đội ngũ | `/studio/schedule`, `/studio/team` |
+| Nhân viên & phân quyền | Nhân viên · Sổ thợ | `/studio/crew` |
+| Thiệp · Story · Slide | Thiệp · Story · Slide | — |
+| Dịch vụ & điều khoản | Dịch vụ · Mẫu hợp đồng | `/studio/templates` |
 
 ### Phân quyền
 
