@@ -84,7 +84,9 @@ function hostForPath(path: string): string | undefined {
 
   // album.mstudo.com is retired — the album app (library, public viewer /a/,
   // and the whole dashboard) is served by the main host now.
-  if (path.startsWith("/dashboard") || path.startsWith("/a/") || path === "/start") return MAIN_HOST;
+  // Cổng nhân viên (/staff) là bề mặt NỘI BỘ như /dashboard — luôn ở host chính,
+  // không phải một trang khách chạy trên subdomain của studio.
+  if (path.startsWith("/dashboard") || path.startsWith("/staff") || path.startsWith("/a/") || path === "/start") return MAIN_HOST;
 
   // Wedding invitations belong on the thiệp host (canonical) when configured.
   if (path.startsWith("/thiep")) return THIEP_HOST || undefined;
@@ -163,8 +165,9 @@ async function route(request: NextRequest) {
     if (!systemHosts.has(host)) {
       const sub = host.slice(0, -(`.${MAIN_HOST}`.length));
       if (sub && !sub.includes(".")) {
-        // Studio admin & auth always live on the main host.
-        if (pathname.startsWith("/dashboard") || pathname === "/start" || pathname.startsWith("/login") || pathname.startsWith("/auth")) {
+        // Studio admin & auth always live on the main host — kể cả cổng nhân
+        // viên (/staff), vì đó là màn của người trong studio, không phải của khách.
+        if (pathname.startsWith("/dashboard") || pathname.startsWith("/staff") || pathname === "/start" || pathname.startsWith("/login") || pathname.startsWith("/auth")) {
           return NextResponse.redirect(new URL(pathname + search, `https://${MAIN_HOST}`));
         }
         // robots.txt / sitemap.xml được xử lý bởi route handler đọc Host header
@@ -172,7 +175,10 @@ async function route(request: NextRequest) {
         if (SEO_FILES.has(pathname)) return NextResponse.next();
         // Customer/app routes are SERVED on the studio's own subdomain so every
         // activity a studio shares runs under its personalised URL.
-        const CUSTOMER = ["/a/", "/album", "/c/", "/q/", "/gia/", "/book/", "/crew", "/quote", "/showcase", "/story", "/form/"];
+        // "/portal/" = trang riêng của khách theo hợp đồng (tiến độ, lịch trình,
+        // thanh toán, album). Thiếu nó ở danh sách này thì link studio gửi khách
+        // bị rewrite thành trang portfolio và khách gặp 404.
+        const CUSTOMER = ["/a/", "/album", "/c/", "/portal/", "/q/", "/gia/", "/book/", "/crew", "/quote", "/showcase", "/story", "/form/"];
         if (CUSTOMER.some((p) => pathname.startsWith(p))) {
           return NextResponse.next();
         }
@@ -192,11 +198,11 @@ async function route(request: NextRequest) {
     MAIN_HOST && host && host !== MAIN_HOST && !host.endsWith(`.${MAIN_HOST}`) &&
     host !== "localhost" && !host.startsWith("127.") && !host.endsWith(".vercel.app")
   ) {
-    if (pathname.startsWith("/dashboard") || pathname === "/start" || pathname.startsWith("/login") || pathname.startsWith("/auth")) {
+    if (pathname.startsWith("/dashboard") || pathname.startsWith("/staff") || pathname === "/start" || pathname.startsWith("/login") || pathname.startsWith("/auth")) {
       return NextResponse.redirect(new URL(pathname + search, `https://${MAIN_HOST}`));
     }
     if (SEO_FILES.has(pathname)) return NextResponse.next();
-    const CUSTOMER = ["/a/", "/album", "/c/", "/q/", "/gia/", "/book/", "/crew", "/showcase", "/story", "/form/"];
+    const CUSTOMER = ["/a/", "/album", "/c/", "/portal/", "/q/", "/gia/", "/book/", "/crew", "/showcase", "/story", "/form/"];
     if (CUSTOMER.some((p) => pathname.startsWith(p))) {
       return NextResponse.next();
     }

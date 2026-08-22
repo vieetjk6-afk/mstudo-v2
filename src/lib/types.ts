@@ -356,6 +356,13 @@ export type NotificationKind =
   | "upgrade_request"
   | "contact"
   | "selection"
+  // Ba loại của cổng nhân viên (bản thiết kế "Cổng nhân viên", tab Thông báo):
+  // nhắc lịch sắp tới, hợp đồng vừa bị đổi lịch/đổi hạng mục, và vừa được phân
+  // công một buổi. Cột `kind` trong DB là text không ràng buộc nên không cần
+  // migration — chỉ cần khai báo ở đây để mọi màn dùng chung nhãn/màu.
+  | "schedule_reminder"
+  | "contract_changed"
+  | "assigned"
   | "info";
 
 export interface StudioNotification {
@@ -711,6 +718,101 @@ export interface StudioEvent {
   event_time: string | null;
   note: string | null;
   remind: boolean;
+  created_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LỊCH STUDIO — lịch hẹn trang điểm / thử đồ / chụp / tư vấn
+   (bảng studio_appointments, xem supabase/migrations/studio_appointments.sql)
+
+   Một model dùng cho BA màn: lịch tuần của studio, lịch hôm nay của nhân viên,
+   và lịch trình khách xem ở cổng khách hàng. Nhãn + màu khai báo ở đây để ba
+   màn không mỗi nơi gọi một tên.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export type AppointmentKind = "makeup" | "fitting" | "pre" | "consult" | "shoot" | "delivery" | "other";
+export type AppointmentStatus = "scheduled" | "checked_in" | "done" | "cancelled";
+
+export const APPOINTMENT_KIND_LABEL: Record<AppointmentKind, string> = {
+  makeup: "Trang điểm",
+  fitting: "Thử đồ",
+  pre: "Chụp pre-wedding",
+  consult: "Tư vấn",
+  shoot: "Buổi chụp",
+  delivery: "Giao sản phẩm",
+  other: "Khác",
+};
+
+/** Bốn loại lịch chính của bản thiết kế + hai loại phụ, mỗi loại một cặp màu
+ *  trong bộ token (chữ / nền nhạt). Dùng ở cả lịch tuần, cổng nhân viên và cổng
+ *  khách để cùng một buổi luôn cùng màu ở mọi màn. */
+export const APPOINTMENT_KIND_TONE: Record<AppointmentKind, { fg: string; soft: string }> = {
+  makeup: { fg: "var(--ac)", soft: "var(--acS)" },
+  fitting: { fg: "var(--bl)", soft: "var(--blS)" },
+  pre: { fg: "var(--gn)", soft: "var(--gnS)" },
+  consult: { fg: "var(--am)", soft: "var(--amS)" },
+  shoot: { fg: "var(--tl)", soft: "var(--tlS)" },
+  delivery: { fg: "var(--nu)", soft: "var(--nuS)" },
+  other: { fg: "var(--tx2)", soft: "var(--sf2)" },
+};
+
+/** Thứ tự hiện trong chip lọc và ô chọn loại — 4 loại của bản thiết kế trước. */
+export const APPOINTMENT_KINDS: AppointmentKind[] = ["makeup", "fitting", "pre", "consult", "shoot", "delivery", "other"];
+
+export const APPOINTMENT_STATUS_LABEL: Record<AppointmentStatus, string> = {
+  scheduled: "Đã xếp lịch",
+  checked_in: "Đã check-in",
+  done: "Đã hoàn tất",
+  cancelled: "Đã huỷ",
+};
+
+export interface StudioAppointment {
+  id: string;
+  owner_id: string;
+  contract_id: string | null;
+  kind: AppointmentKind;
+  title: string;
+  appt_date: string;
+  start_time: string | null;
+  end_time: string | null;
+  duration_min: number | null;
+  location: string | null;
+  room: string | null;
+  crew_id: string | null;
+  staff_id: string | null;
+  crew_name: string | null;
+  client_name: string | null;
+  client_phone: string | null;
+  status: AppointmentStatus;
+  checked_in_at: string | null;
+  done_at: string | null;
+  note: string | null;
+  /** Khách có thấy mốc này ở cổng khách hàng không (lịch nội bộ đặt false). */
+  client_visible: boolean;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type RoomKind = "makeup" | "fitting" | "studio" | "meeting" | "other";
+export const ROOM_KIND_LABEL: Record<RoomKind, string> = {
+  makeup: "Phòng trang điểm",
+  fitting: "Phòng váy",
+  studio: "Phim trường",
+  meeting: "Phòng họp",
+  other: "Khác",
+};
+
+export interface StudioRoom {
+  id: string;
+  owner_id: string;
+  name: string;
+  kind: RoomKind;
+  /** Số buổi phòng nhận được trong MỘT tuần — mẫu số của thanh công suất. */
+  capacity_week: number;
+  note: string | null;
+  active: boolean;
+  position: number;
   created_at: string;
 }
 

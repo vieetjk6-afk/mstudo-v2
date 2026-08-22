@@ -45,7 +45,7 @@ export async function GET(req: NextRequest) {
   const warnUntil = ymd(new Date(nowVN.getTime() + STORAGE_WARN_DAYS * 24 * 3600 * 1000));
   const noticeCutoff = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
 
-  const [shootsRes, duesRes, lateRes, doneRes, storageRes] = await Promise.all([
+  const [shootsRes, duesRes, lateRes, doneRes, storageRes, apptRes] = await Promise.all([
     db
       .from("studio_contracts")
       .select("id, owner_id, title, client_name, client_email, client_phone, event_time, location, contract_crew(name, role, phone)")
@@ -75,6 +75,14 @@ export async function GET(req: NextRequest) {
       .not("storage_until", "is", null)
       .lte("storage_until", warnUntil)
       .or(`storage_notice_at.is.null,storage_notice_at.lt.${noticeCutoff}`),
+    // Lịch hẹn dịch vụ NGÀY MAI (trang điểm / thử đồ / chụp / tư vấn). Đây là
+    // nguồn của thông báo "nhắc lịch" ở cổng nhân viên: mỗi buổi ghi một dòng
+    // studio_notifications, nên người phụ trách mở /staff là thấy.
+    db
+      .from("studio_appointments")
+      .select("id, owner_id, contract_id, kind, title, appt_date, start_time, location, room, crew_name, client_name")
+      .eq("appt_date", tomorrow)
+      .neq("status", "cancelled"),
   ]);
 
   type Shoot = { id: string; owner_id: string; title: string; client_name: string | null; client_email: string | null; client_phone: string | null; event_time: string | null; location: string | null; contract_crew: { name: string; role: string; phone: string | null }[] };
@@ -82,28 +90,55 @@ export async function GET(req: NextRequest) {
   type Late = { owner_id: string; title: string; delivery_due: string };
   type Done = { owner_id: string; title: string; client_name: string | null; client_email: string | null; client_token: string };
   type Storage = { id: string; owner_id: string; title: string; slug: string; storage_until: string };
+  type Appt = { id: string; owner_id: string; contract_id: string | null; kind: string; title: string; appt_date: string; start_time: string | null; location: string | null; room: string | null; crew_name: string | null; client_name: string | null };
 
   const shoots = (shootsRes.data ?? []) as unknown as Shoot[];
   const dues = (duesRes.data ?? []) as unknown as Due[];
   const late = (lateRes.data ?? []) as unknown as Late[];
   const done = (doneRes.data ?? []) as unknown as Done[];
   const storage = (storageRes.data ?? []) as unknown as Storage[];
+  // `apptRes.data` là null khi studio chưa chạy migration studio_appointments —
+  // cron vẫn chạy bình thường, chỉ là không có phần nhắc lịch hẹn.
+  const appts = (apptRes.data ?? []) as unknown as Appt[];
+
+  // Ghi thông báo "nhắc lịch" cho từng buổi hẹn ngày mai. Cron chạy mỗi ngày một
+  // lần và chỉ lấy đúng ngày mai, nên mỗi buổi được nhắc đúng một lần.
+  const APPT_LABEL: Record<string, string> = {
+    makeup: "Trang điểm", fitting: "Thử đồ", pre: "Chụp pre-wedding",
+    consult: "Tư vấn", shoot: "Buổi chụp", delivery: "Giao sản phẩm", other: "Lịch hẹn",
+  };
+  const apptLine = (a: Appt) => {
+    const what = a.title?.trim() || [APPT_LABEL[a.kind] ?? "Lịch hẹn", a.client_name?.trim()].filter(Boolean).join(" · ");
+    const where = [a.room, a.location].filter(Boolean).join(" · ");
+    return `${a.start_time ? `${a.start_time} · ` : ""}${what}${where ? ` — ${where}` : ""}${a.crew_name ? ` (${a.crew_name})` : ""}`;
+  };
+  if (appts.length) {
+    await db.from("studio_notifications").insert(
+      appts.map((a) => ({
+        owner_id: a.owner_id,
+        contract_id: a.contract_id,
+        kind: "schedule_reminder",
+        message: `Ngày mai: ${apptLine(a)}`,
+      }))
+    );
+  }
 
   // Group everything by owner.
-  type Bucket = { shoots: Shoot[]; dues: Due[]; late: Late[]; storage: Storage[] };
+  type Bucket = { shoots: Shoot[]; dues: Due[]; late: Late[]; storage: Storage[]; appts: Appt[] };
   const byOwner = new Map<string, Bucket>();
   const bucket = (id: string) => {
     let b = byOwner.get(id);
-    if (!b) { b = { shoots: [], dues: [], late: [], storage: [] }; byOwner.set(id, b); }
+    if (!b) { b = { shoots: [], dues: [], late: [], storage: [], appts: [] }; byOwner.set(id, b); }
     return b;
   };
   for (const s of shoots) bucket(s.owner_id).shoots.push(s);
+  for (const a of appts) bucket(a.owner_id).appts.push(a);
   for (const d of dues) if (d.contract?.owner_id) bucket(d.contract.owner_id).dues.push(d);
   for (const l of late) bucket(l.owner_id).late.push(l);
   for (const a of storage) bucket(a.owner_id).storage.push(a);
 
   const allOwnerIds = [...new Set([...byOwner.keys(), ...shoots.map((s) => s.owner_id), ...done.map((d) => d.owner_id)])];
-  if (allOwnerIds.length === 0) return NextResponse.json({ ok: true, sent: 0, advanced, note: "nothing to remind" });
+  if (allOwnerIds.length === 0) return NextResponse.json({ ok: true, sent: 0, advanced, appointments: appts.length, note: "nothing to remind" });
 
   const { data: owners } = await db.from("profiles").select("id, email, full_name, auto_client_emails").in("id", allOwnerIds);
   type OwnerRow = { id: string; email: string | null; full_name: string | null; auto_client_emails: boolean };
@@ -127,6 +162,13 @@ export async function GET(req: NextRequest) {
               return `<li>${esc(s.title)}${s.client_name ? ` — ${esc(s.client_name)}` : ""}${s.event_time ? ` · ${esc(s.event_time)}` : ""}${s.location ? ` · ${esc(s.location)}` : ""}${crew ? `<br><span style="color:#666">Ê-kíp: ${crew}</span>` : ""}</li>`;
             })
             .join("") +
+          `</ul>`
+      );
+    }
+    if (b.appts.length) {
+      parts.push(
+        `<h3 style="margin:18px 0 6px">🗓 Lịch hẹn ngày mai (${esc(tomorrow)})</h3><ul style="margin:0;padding-left:18px">` +
+          b.appts.map((a) => `<li>${esc(apptLine(a))}</li>`).join("") +
           `</ul>`
       );
     }
@@ -202,11 +244,13 @@ ${parts.join("")}
   for (const c of done) {
     if (!c.client_email || !optedIn(c.owner_id)) continue;
     const studio = ownerMap.get(c.owner_id)?.full_name || "Studio";
-    const link = c.client_token ? mainUrl(`/c/${c.client_token}`) : "";
+    // Hợp đồng đã hoàn thành → /portal là TRANG ALBUM (ảnh, video, tải về, đánh
+    // giá sao), đúng thứ khách cần lúc này. Bản hợp đồng vẫn ở /c/<token>.
+    const link = c.client_token ? mainUrl(`/portal/${c.client_token}`) : "";
     const html = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#222">
 <p>Xin chào ${esc(c.client_name || "anh/chị")},</p>
 <p>Cảm ơn anh/chị đã tin tưởng ${esc(studio)}! Nếu hài lòng, anh/chị dành chút thời gian <b>đánh giá</b> giúp studio nhé.</p>
-${link ? `<p><a href="${link}">Mở cổng &amp; đánh giá →</a> (mục “Đánh giá studio”)</p>` : ""}
+${link ? `<p><a href="${link}">Mở album ảnh &amp; đánh giá →</a> (mật khẩu là số điện thoại của anh/chị)</p>` : ""}
 <p style="color:#888;font-size:12px">Email tự động từ ${esc(studio)}.</p></div>`;
     const r = await sendEmail({ to: c.client_email, subject: `Cảm ơn & xin đánh giá — ${studio}`, html });
     if (r.ok) clientSent++;
@@ -215,5 +259,5 @@ ${link ? `<p><a href="${link}">Mở cổng &amp; đánh giá →</a> (mục “�
   // Tin Zalo tự động (nhắc lịch/thanh toán/chọn ảnh) chạy ở cron riêng
   // /api/cron/zalo lúc 11h trưa — xem src/app/api/cron/zalo/route.ts.
 
-  return NextResponse.json({ ok: true, sent, clientSent, advanced, owners: results.length });
+  return NextResponse.json({ ok: true, sent, clientSent, advanced, appointments: appts.length, owners: results.length });
 }

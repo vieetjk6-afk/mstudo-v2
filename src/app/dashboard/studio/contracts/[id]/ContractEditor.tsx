@@ -15,6 +15,7 @@ import {
   Link as LinkIcon,
   PenLine,
   CalendarClock,
+  CalendarRange,
   Star,
   FileText,
   Upload,
@@ -39,6 +40,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mainUrl, studioUrl } from "@/lib/hosts";
 import MessengerButton from "@/components/MessengerButton";
 import ContractStepper, { type ContractLifecycle } from "@/components/studio/ContractStepper";
+import ContractAppointments from "./ContractAppointments";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
@@ -76,6 +78,7 @@ import {
   PRODUCT_STATUS_LABEL,
   type StudioCrew,
   type StudioEvent,
+  type StudioAppointment,
   type StudioExpense,
   type ShootType,
   type ContractStatus,
@@ -186,6 +189,8 @@ export default function ContractEditor({
   galleries,
   selectionAlbums,
   initialMilestones,
+  initialAppointments,
+  ownerId,
   studioName,
   studioLogo = null,
   studioPhone = null,
@@ -219,6 +224,9 @@ export default function ContractEditor({
   galleries: { id: string; title: string; slug: string }[];
   selectionAlbums: { id: string; title: string; slug: string }[];
   initialMilestones: StudioEvent[];
+  initialAppointments: StudioAppointment[];
+  /** Id chủ studio — cần để ghi dòng studio_appointments (bảng scope theo chủ). */
+  ownerId: string;
   studioName: string;
   /** Thương hiệu studio in trên đầu bản PDF hợp đồng. */
   studioLogo?: string | null;
@@ -456,6 +464,10 @@ export default function ContractEditor({
   // Client portal runs on the studio's own subdomain once its site is published,
   // otherwise on the main host.
   const shareUrl = studioUrl(studioHost, `/c/${contract.client_token}`);
+  // Trang RIÊNG của khách theo hợp đồng: tiến độ, lịch trình, các đợt thanh toán,
+  // sản phẩm — và tự đổi thành trang album khi hợp đồng hoàn thành. Cùng token
+  // với bản hợp đồng ở trên, nên khách chỉ cần một mật khẩu (SĐT) cho cả hai.
+  const portalUrl = studioUrl(studioHost, `/portal/${contract.client_token}`);
   // Một nội dung tin duy nhất cho mọi cách gửi trong bảng "Gửi khách" — cùng một
   // link thì không được lệch câu chữ giữa Zalo, chia sẻ nhanh và chép link.
   const clientPortalMsg = `Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`;
@@ -1212,6 +1224,9 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
           <a href={shareUrl} target="_blank" rel="noreferrer" className="act-btn">
             <FileText size={16} /> Xem như khách
           </a>
+          <a href={portalUrl} target="_blank" rel="noreferrer" className="act-btn">
+            <CalendarRange size={16} /> Trang riêng của khách
+          </a>
           <button onClick={() => setTab("pay")} className="act-btn">
             <Wallet size={16} /> Ghi nhận thanh toán
           </button>
@@ -1648,6 +1663,18 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                   <Plus size={15} /> {busy === "milestone" ? "Đang thêm…" : "Thêm mốc lịch"}
                 </button>
               </div>
+
+              {/* Lịch hẹn dịch vụ — cùng bảng studio_appointments với màn Lịch
+                  studio, cổng nhân viên và cổng khách hàng của hợp đồng này. */}
+              <ContractAppointments
+                ownerId={ownerId}
+                contractId={contract.id}
+                clientName={f.client_name}
+                clientPhone={f.client_phone}
+                initial={initialAppointments}
+                roster={roster}
+                canEdit={canAssign}
+              />
 
               </>
             )}

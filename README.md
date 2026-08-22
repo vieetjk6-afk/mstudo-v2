@@ -163,12 +163,12 @@ Sidebar 250px, cố định, 7 nhóm. Nhãn nhóm 10px/800/uppercase màu `--tx3
 ```
 (không nhãn)  Tổng quan
 Bán hàng      Báo giá(2) · Hợp đồng & lịch hẹn · Bảng công việc · Đặt lịch khách(3) · Yêu cầu mới(3)
-Vận hành      Lịch làm việc · Xử lý hình ảnh(4) · Thư viện album · Phòng váy · Thiết bị
+Vận hành      Lịch làm việc · Lịch studio · Xử lý hình ảnh(4) · Thư viện album · Công cụ ảnh · Thiết bị
 Khách hàng    Khách hàng · Thiệp·Story·Slide · Thiết kế album(2)
 Tài chính     Thu chi & công nợ · Đối soát tiền công(2) · Báo cáo
 Nhân sự       Đội ngũ · Xếp hạng · Mẫu tin nhắn
 Thiết lập     Gói & bảng giá · Dịch vụ & điều khoản · Website & chatbox · Công cụ ảnh · Cài đặt studio
-Tài khoản     Thông báo(5) · Tài khoản & bảo mật · Gói phần mềm · Affiliate · Ứng dụng máy tính · Quản trị hệ thống
+Tài khoản     Trang của tôi · Thông báo(5) · Tài khoản & bảo mật · Gói phần mềm · Affiliate · Ứng dụng máy tính · Quản trị hệ thống
 ```
 
 Số trong ngoặc là badge đếm. Chân sidebar: thẻ trạng thái đồng bộ Drive + số phiên bản.
@@ -265,6 +265,69 @@ Bảng trên desktop → thẻ trên mobile. Không thu nhỏ bảng.
 **Ngày** — hiển thị `T2/T3/.../CN · dd/mm`. Không dùng tên thứ đầy đủ trong bảng.
 
 ---
+
+## Cổng nhân viên, cổng khách hàng & Lịch studio
+
+Gói thiết kế thứ hai (*"Cổng nhân viên & khách hàng"*) thêm **ba bề mặt** dùng
+chung một model dữ liệu mới. Mọi thứ khác — màu, chữ, hình khối, ngưỡng
+responsive — giữ nguyên bộ token ở trên; **màu nhấn vẫn là xanh mstudo
+`#1e9e72`**, không dùng tím `#AF2BB8` của bản vẽ.
+
+| Bề mặt | Route | File nguồn |
+| --- | --- | --- |
+| Lịch studio (lịch tuần các buổi hẹn) | `/dashboard/studio/schedule` | `studio/schedule/SchedulePage.tsx` |
+| Cổng nhân viên (3 tab) | `/staff` | `app/staff/StaffPortal.tsx`, `TodayView.tsx`, `TaskQueue.tsx`, `StaffNotifications.tsx` |
+| Cổng khách hàng theo hợp đồng | `/portal/<client_token>` | `app/portal/[token]/ContractPortalView.tsx`, `PaymentPanel.tsx` |
+| Trang album (khi hợp đồng hoàn thành) | cùng route `/portal/<client_token>` | `app/portal/[token]/AlbumView.tsx` |
+| Lịch hẹn trong màn hợp đồng | `/dashboard/studio/contracts/[id]` | `studio/contracts/[id]/ContractAppointments.tsx` |
+
+### Model dữ liệu
+
+`supabase/migrations/studio_appointments.sql` (đã có trong `setup-all.sql`):
+
+- **`studio_appointments`** — một buổi hẹn: `kind` (`makeup` · `fitting` · `pre`
+  · `consult` · `shoot` · `delivery` · `other`), ngày + giờ, `room`, người phụ
+  trách (`crew_id` cho sổ thợ / `staff_id` cho nhân viên có tài khoản),
+  `status` (`scheduled` → `checked_in` → `done` | `cancelled`) và
+  `client_visible` (lịch nội bộ đặt `false` để cổng khách không thấy).
+  Đây là bảng **mới**, không nhồi vào `studio_events`: mốc ghi chú của hợp đồng
+  không có người phụ trách, không có phòng, không có check-in.
+- **`studio_rooms`** — phòng & nguồn lực, `capacity_week` là mẫu số của thanh
+  công suất. Studio chưa khai phòng nào thì lần mở Lịch studio đầu tiên tạo sẵn
+  4 phòng mặc định.
+- **`studio_notifications.kind`** thêm ba khoá (cột là `text`, không cần
+  migration): `schedule_reminder` · `contract_changed` · `assigned`.
+
+Luật xếp lịch thuần (tuần, giờ, trùng lịch, công suất) nằm ở
+`src/lib/appointment-rules.ts` — **không import gì**, nên chạy trực tiếp trong
+Node: `npm run test:appointments`. Nhãn/màu/icon ở `src/lib/appointments.ts`,
+màu + icon thông báo ở `src/lib/notifications.ts` (dùng chung giữa khu quản lý
+và cổng nhân viên).
+
+### Liên kết với tính năng đang có
+
+- Cổng khách dùng **cùng `client_token` và cùng endpoint `/api/c/[token]`** với
+  trang hợp đồng `/c/<token>` — một link khách đã có mở được cả hai trang, và
+  cổng mới không dựng lại cổng chặn theo số điện thoại.
+- Tab *Ảnh cần sửa* của cổng nhân viên đọc **cùng `contract_products`** với màn
+  *Xử lý hình ảnh*; đổi trạng thái ở một nơi là đổi ở cả hai.
+- Checklist *việc sau buổi chụp* là `contract_tasks` của hợp đồng người đó
+  phụ trách.
+- Cron `/api/cron/reminders` ghi `schedule_reminder` cho buổi hẹn **ngày mai** và
+  thêm mục "Lịch hẹn ngày mai" vào email nhắc việc.
+- Album hoàn thành **không** dựng lại phần tải hàng loạt: nút *Tải toàn bộ* dẫn
+  về `/album/<slug>` — nơi đã có nén ZIP, đóng dấu mờ và luật hạn lưu trữ.
+
+### Chỗ CỐ Ý lệch bản vẽ (và vì sao)
+
+| Bản vẽ | Bản dựng | Lý do |
+| --- | --- | --- |
+| Màu nhấn tím `#AF2BB8` | xanh mstudo `#1e9e72` | studio giữ màu thương hiệu, đã chốt ở gói thiết kế trước |
+| Font *Lora* cho tên khách | *Cormorant Garamond* (`font-serif`) | repo đã có một họ serif dành riêng cho trang khách — không nạp thêm họ phông thứ hai cho một dòng chữ |
+| Icon Material Symbols | `lucide-react` | trộn hai bộ icon lệch hơn là lệch vài nét vẽ |
+| KPI *Thù lao tạm tính* | *Hợp đồng phụ trách* | sổ tiền công (`contract_crew`) khoá theo tên/SĐT thợ, không theo tài khoản đăng nhập → không quy ra tiền của một nhân viên mà không đoán |
+| Hậu kỳ 4 trạng thái + cột "62/80 ảnh" | 3 trạng thái của `contract_products`, thanh tiến độ theo bước | thêm cột *Chờ duyệt* sẽ không ai ghi vào, và số ảnh sẽ là số bịa |
+| Rail *Ekip trang điểm* | *Ê-kíp trong tuần* (ai đang có việc) | sổ thợ không có vai trò "trang điểm" — chỉ `photographer/cameraman/assistant/editor` |
 
 ## Quy tắc khi sửa giao diện studio
 

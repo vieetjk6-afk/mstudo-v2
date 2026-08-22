@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/email";
 import { sendPushToOwner } from "@/lib/push";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { autoCreateContractDriveOnSign } from "@/lib/studio-drive";
+import { fetchAllPhotos } from "@/lib/photos";
 
 export const dynamic = "force-dynamic";
 
@@ -214,7 +215,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
     await db.from("studio_contracts").update({ client_viewed_at: new Date().toISOString() }).eq("id", contract.id);
   }
 
-  const [{ data: items }, { data: payments }, { data: milestones }, { data: quoteOptions }, { data: plan }, { data: expenses }, { data: tasks }, { data: products }] = await Promise.all([
+  const [{ data: items }, { data: payments }, { data: milestones }, { data: quoteOptions }, { data: plan }, { data: expenses }, { data: tasks }, { data: products }, { data: appointments }] = await Promise.all([
     db.from("contract_items").select("id, name, qty, unit_price, position").eq("contract_id", contract.id).order("position"),
     db.from("contract_payments").select("id, amount, kind, paid_at").eq("contract_id", contract.id).order("paid_at", { ascending: false }),
     db.from("studio_events").select("id, title, event_date, event_time, note").eq("contract_id", contract.id).order("event_date"),
@@ -223,6 +224,16 @@ export async function POST(req: Request, { params }: { params: { token: string }
     db.from("studio_expenses").select("id, title, amount, category, spent_at").eq("contract_id", contract.id).eq("client_visible", true).order("spent_at", { ascending: false }),
     db.from("contract_tasks").select("id, label, done, position").eq("contract_id", contract.id).order("position"),
     db.from("contract_products").select("id, name, qty, cost, status, position").eq("contract_id", contract.id).order("position"),
+    // Lịch hẹn của hợp đồng (trang điểm / thử đồ / chụp / tư vấn) — CHỈ những mốc
+    // studio đánh dấu cho khách xem. Cổng khách /portal dựng lịch trình từ đây;
+    // studio chưa chạy migration studio_appointments thì `data` là null và cả
+    // hai cổng chỉ đơn giản không có phần lịch trình, không lỗi gì.
+    db.from("studio_appointments")
+      .select("id, kind, title, appt_date, start_time, end_time, duration_min, location, room, crew_name, status, note")
+      .eq("contract_id", contract.id)
+      .eq("client_visible", true)
+      .neq("status", "cancelled")
+      .order("appt_date"),
   ]);
 
   // Linked delivery gallery (so the portal can deep-link the client's photos).
@@ -277,6 +288,46 @@ export async function POST(req: Request, { params }: { params: { token: string }
     if (s) story = { slug: s.slug, edit_token: s.edit_token, published: s.published };
   }
 
+  /**
+   * Ảnh & video của album giao khách — chỉ nạp khi hợp đồng đã **hoàn thành**.
+   * Cổng khách /portal đổi sang trang album nền tối ở giai đoạn này, và trang
+   * album cần chính danh sách ảnh chứ không chỉ một đường link. Trước mốc đó
+   * không nạp gì: hợp đồng đang chạy thì danh sách ảnh vừa vô nghĩa vừa nặng.
+   */
+  let album: {
+    slug: string;
+    title: string;
+    cover_url: string | null;
+    download_enabled: boolean;
+    photos: { id: string; drive_file_id: string; name: string; is_video: boolean }[];
+  } | null = null;
+  if (contract.status === "completed" && contract.gallery_album_id) {
+    const { data: a } = await db
+      .from("albums")
+      .select("id, slug, title, cover_url, download_enabled, status")
+      .eq("id", contract.gallery_album_id)
+      .maybeSingle();
+    if (a && a.status === "published") {
+      const photos = (await fetchAllPhotos(db, a.id as string, "id, drive_file_id, name, is_video, position")) as {
+        id: string; drive_file_id: string; name: string; is_video: boolean | null;
+      }[];
+      album = {
+        slug: a.slug as string,
+        title: a.title as string,
+        cover_url: (a.cover_url as string | null) ?? null,
+        download_enabled: !!a.download_enabled,
+        // Giới hạn 400 ảnh: trang album vẽ lưới thumbnail, quá số này thì payload
+        // phình mà mắt cũng không xem hết — khách bấm "Mở album đầy đủ" để xem trọn.
+        photos: photos.slice(0, 400).map((ph) => ({
+          id: ph.id,
+          drive_file_id: ph.drive_file_id,
+          name: ph.name,
+          is_video: !!ph.is_video || /\.(mp4|mov|m4v|webm|avi|mkv|wmv|flv|3gp)$/i.test(ph.name || ""),
+        })),
+      };
+    }
+  }
+
   // Never expose internal crew/salary to the client (gallery/selection ids hidden).
   return NextResponse.json({
     contract: { ...contract, owner: undefined, gallery_album_id: undefined, selection_album_id: undefined },
@@ -297,5 +348,7 @@ export async function POST(req: Request, { params }: { params: { token: string }
     selection,
     wedding,
     story,
+    appointments: appointments ?? [],
+    album,
   });
 }

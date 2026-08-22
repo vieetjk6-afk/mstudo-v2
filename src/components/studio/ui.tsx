@@ -136,6 +136,50 @@ export function RevenueChart({ bars, headline, delta }: { bars: { label: string;
   );
 }
 
+/**
+ * Thanh tiến độ mảnh — dùng ở hàng đợi hậu kỳ, tiến độ sản phẩm, công suất
+ * phòng và thanh thanh toán của cổng khách. Trước đây mỗi màn tự vẽ hai <div>
+ * lồng nhau với chiều cao/màu hơi khác nhau; gom về một chỗ để mọi thanh tiến
+ * độ trong app cùng một hình.
+ */
+export function ProgressBar({
+  pct,
+  color = "var(--ac)",
+  height = 4,
+  className = "",
+}: { pct: number; color?: string; height?: number; className?: string }) {
+  const w = Math.max(0, Math.min(100, Math.round(pct)));
+  return (
+    <div
+      className={`w-full overflow-hidden ${className}`}
+      style={{ height, borderRadius: Math.max(2, height / 2 + 1), background: "var(--bd2)" }}
+      role="progressbar"
+      aria-valuenow={w}
+      aria-valuemin={0}
+      aria-valuemax={100}
+    >
+      <div style={{ width: `${w}%`, height: "100%", borderRadius: "inherit", background: color }} />
+    </div>
+  );
+}
+
+/** Nhãn loại lịch: icon + tên, nền nhạt theo loại. Dùng ở cả ba màn mới. */
+export function KindPill({
+  icon: Icon,
+  fg,
+  soft,
+  children,
+}: { icon: LucideIcon; fg: string; soft: string; children: React.ReactNode }) {
+  return (
+    <span
+      className="inline-flex flex-none items-center gap-1 whitespace-nowrap rounded-[20px] px-2.5 py-[4px] text-[11px] font-bold"
+      style={{ background: soft, color: fg }}
+    >
+      <Icon size={13} /> {children}
+    </span>
+  );
+}
+
 /** Trạng thái trống có hướng dẫn (tính năng mới số 10) — không để ô trắng trơn. */
 export function EmptyState({ icon: Icon, title, hint }: { icon: LucideIcon; title: string; hint: string }) {
   return (

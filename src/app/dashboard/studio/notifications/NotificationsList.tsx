@@ -2,55 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PenLine, MessageSquare, UserCheck, UserX, Star, Wallet, Bell, FileCheck, CheckCheck, Megaphone, UserPlus, ArrowUpCircle, Mail, ImageDown } from "lucide-react";
+import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PushToggle from "@/components/PushToggle";
 import { Panel, EmptyState } from "@/components/studio/ui";
-import type { StudioNotification, NotificationKind } from "@/lib/types";
-
-const ICON: Record<NotificationKind, typeof Bell> = {
-  signed: PenLine,
-  edit_request: MessageSquare,
-  crew_accepted: UserCheck,
-  crew_declined: UserX,
-  review: Star,
-  payment: Wallet,
-  quote_accepted: FileCheck,
-  announcement: Megaphone,
-  new_user: UserPlus,
-  upgrade_request: ArrowUpCircle,
-  contact: Mail,
-  selection: ImageDown,
-  info: Bell,
-};
-const TONE: Record<NotificationKind, string> = {
-  signed: "var(--gn)",
-  edit_request: "var(--am)",
-  crew_accepted: "var(--gn)",
-  crew_declined: "var(--rd)",
-  review: "var(--am)",
-  payment: "var(--bl)",
-  quote_accepted: "var(--gn)",
-  announcement: "var(--tl)",
-  new_user: "var(--bl)",
-  upgrade_request: "var(--am)",
-  contact: "var(--gn)",
-  selection: "var(--bl)",
-  info: "var(--tx3)",
-};
-
-/** Where a notification points to (its "content"). */
-function targetHref(n: StudioNotification): string | null {
-  // Khách chọn ảnh xong → mở thẳng album chọn ảnh (có nút Lọc ảnh ngay đó).
-  if (n.album_id) return `/dashboard/albums/${n.album_id}`;
-  if (n.contract_id) return `/dashboard/studio/contracts/${n.contract_id}`;
-  if (n.kind === "quote_accepted") return "/dashboard/studio/quotes";
-  if (n.kind === "review") return "/dashboard/studio/ranking";
-  if (n.kind === "new_user") return "/dashboard/admin";
-  if (n.kind === "upgrade_request") return "/dashboard/settings";
-  if (n.kind === "contact") return "/dashboard/settings";
-  return null;
-}
+import { notificationHref, notificationMeta } from "@/lib/notifications";
+import type { StudioNotification } from "@/lib/types";
 
 export default function NotificationsList({ initial }: { initial: StudioNotification[] }) {
   const router = useRouter();
@@ -66,7 +23,7 @@ export default function NotificationsList({ initial }: { initial: StudioNotifica
 
   function openNotification(n: StudioNotification) {
     if (!n.read) markRead([n.id]); // fire-and-forget; UI updates optimistically
-    const href = targetHref(n);
+    const href = notificationHref(n);
     if (href) router.push(href);
   }
 
@@ -101,8 +58,8 @@ export default function NotificationsList({ initial }: { initial: StudioNotifica
       ) : (
         <div className="flex flex-col gap-2">
           {items.map((n) => {
-            const Icon = ICON[n.kind] ?? Bell;
-            const href = targetHref(n);
+            const { Icon, fg } = notificationMeta(n.kind);
+            const href = notificationHref(n);
             const clickable = !n.read || !!href;
             return (
               <div
@@ -122,7 +79,7 @@ export default function NotificationsList({ initial }: { initial: StudioNotifica
                 }}
               >
                 <span className="mt-0.5 flex-none rounded-[9px] p-1.5" style={{ background: "var(--sf2)", lineHeight: 0 }}>
-                  <Icon size={17} style={{ color: TONE[n.kind] ?? "var(--tx3)" }} />
+                  <Icon size={17} style={{ color: fg }} />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-[13.5px]" style={{ fontWeight: n.read ? 500 : 700, textWrap: "pretty" }}>{n.message}</p>

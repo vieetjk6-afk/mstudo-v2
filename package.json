@@ -20,7 +20,8 @@
     "test:lifecycle": "node --experimental-strip-types desktop/test/lifecycle.mjs",
     "test:referral-deposit": "node --experimental-strip-types desktop/test/referral-deposit.mjs",
     "test:pricelist-label": "node --experimental-strip-types desktop/test/pricelist-label.mjs",
-    "test:activity": "node --experimental-strip-types desktop/test/activity.mjs"
+    "test:activity": "node --experimental-strip-types desktop/test/activity.mjs",
+    "test:appointments": "node --experimental-strip-types desktop/test/appointments.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

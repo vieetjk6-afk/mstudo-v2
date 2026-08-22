@@ -39,6 +39,7 @@ const ORDER = [
   ["migrations/lifecycle_followup.sql", "Theo đuổi khách chưa chọn ảnh · hạn lưu trữ ảnh gốc · hạn hiệu lực báo giá"],
   ["migrations/referral_deposit.sql", "Khách giới thiệu khách · đặt cọc giữ ngày (chạy sau lifecycle_followup)"],
   ["migrations/activity_tracking.sql", "Bộ đếm hoạt động tài khoản (lần cuối mở app, số ngày dùng)"],
+  ["migrations/studio_appointments.sql", "Lịch studio: lịch trang điểm / thử đồ / tư vấn, phòng & nguồn lực"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];

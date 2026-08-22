@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { fmtDate, fmtDateLunar } from "@/lib/date";
 import { Lock, MapPin, Calendar, Send, Check, Printer, PenLine, Images, ImagePlus, Star, ListChecks, Package, Upload, Heart } from "lucide-react";
 import SignaturePad from "@/components/SignaturePad";
@@ -422,6 +423,33 @@ export default function ContractView({ token }: { token: string }) {
               <Printer size={14} /> {t("pdf")}
             </button>
           </div>
+
+          {/* Đường dẫn sang TRANG RIÊNG của khách (cùng token, cùng mật khẩu là
+              SĐT): bản hợp đồng này là văn bản để đọc và ký, còn trang kia là nơi
+              theo dõi lịch trình, các đợt thanh toán và sản phẩm — và biến thành
+              trang album khi hợp đồng hoàn thành. */}
+          <Link
+            href={`/portal/${token}`}
+            className="flex items-center gap-3 rounded-[14px] px-4 py-3.5"
+            style={{ background: "var(--acS)", border: "1px solid var(--acM)" }}
+          >
+            <span className="flex-none rounded-[10px] p-2" style={{ background: "var(--sf)", lineHeight: 0 }}>
+              <ListChecks size={17} style={{ color: "var(--ac)" }} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[13.5px] font-bold">
+                {lang === "vi" ? "Trang theo dõi của bạn" : "Your tracking page"}
+              </span>
+              <span className="block text-[11.5px]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+                {lang === "vi"
+                  ? "Lịch trình hẹn, tiến độ thanh toán, sản phẩm và album ảnh"
+                  : "Appointments, payment progress, products and your photo album"}
+              </span>
+            </span>
+            <span className="flex-none text-[12.5px] font-bold" style={{ color: "var(--ac)" }}>
+              {lang === "vi" ? "Mở →" : "Open →"}
+            </span>
+          </Link>
 
           {/* ══ Thẻ hợp đồng ═══════════════════════════════════════════════ */}
           <div className={sectionCls} style={sectionStyle}>

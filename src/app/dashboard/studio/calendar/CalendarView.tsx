@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fmtDate, fmtDow, fmtDayMonth, todayVN } from "@/lib/date";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, Bell, BellOff, Camera, CalendarDays, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, Bell, BellOff, Camera, CalendarDays, CalendarRange, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import MessengerButton from "@/components/MessengerButton";
 import { shootReminderMessage } from "@/lib/zalo";
@@ -358,6 +358,16 @@ export default function CalendarView({
         </button>
         <button onClick={() => step(1)} aria-label="Tiến" className={navBtn} style={navStyle}><ChevronRight size={17} /></button>
         <h1 className="ml-1.5 text-[15px] font-bold">{rangeLabel}</h1>
+        {/* Lịch này là BUỔI CHỤP của hợp đồng. Lịch trang điểm / thử đồ / tư vấn
+            (có người phụ trách và phòng) nằm ở màn Lịch studio — để một đường dẫn
+            ở đây cho khỏi phải đi vòng qua sidebar. */}
+        <Link
+          href="/dashboard/studio/schedule"
+          className="flex flex-none items-center gap-1.5 rounded-[9px] px-2.5 py-[7px] text-[12px] font-semibold"
+          style={{ border: "1px solid var(--bd)", background: "var(--sf)", color: "var(--tx2)" }}
+        >
+          <CalendarRange size={15} /> Lịch studio
+        </Link>
 
         <div className="ml-auto flex flex-wrap items-center gap-3.5">
           <div className="hidden gap-3 min-[1100px]:flex">

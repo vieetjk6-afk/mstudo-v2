@@ -5,7 +5,7 @@ import {
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
   MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
-  Building2,
+  Building2, UserRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -82,6 +82,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       // Lịch đội ngũ (/team) sẽ gộp thành tab 4 của màn này ở bước 5.
       { href: "/dashboard/studio/calendar", label: "Lịch làm việc", icon: CalendarDays, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/studio/team"], keywords: "lich chup doi ngu" },
+      // Lịch studio đứng NGAY SAU Lịch làm việc vì hai màn cùng trả lời "hôm nay
+      // studio làm gì", chỉ khác đơn vị: màn kia là buổi chụp của hợp đồng, màn
+      // này là buổi hẹn dịch vụ (trang điểm / thử đồ / tư vấn) có người phụ
+      // trách và có phòng.
+      { href: "/dashboard/studio/schedule", label: "Lịch studio", icon: CalendarRange, minTier: "booking", roles: STAFF_OK, keywords: "lich trang diem thu do tu van makeup fitting hen" },
       { href: "/dashboard/studio/production", label: "Xử lý hình ảnh", icon: Wand2, minTier: "full", roles: STAFF_OK, badge: "production", keywords: "hau ky san xuat in" },
       { href: "/dashboard/albums", label: "Thư viện album", icon: Images, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/create", "/dashboard/studio/album-categories"], keywords: "album chon anh giao khach" },
       // Công cụ ảnh chuyển từ "Thiết lập" sang đây: lọc/nén/đóng dấu là việc làm
@@ -133,6 +138,10 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Tài khoản",
     items: [
+      // Cổng nhân viên nằm NGOÀI shell quản lý (route /staff, tối ưu cho điện
+      // thoại) nhưng vẫn để một dòng menu ở đây: đó là trang người được phân công
+      // mở hằng ngày, không phải một màn phụ chỉ tới được bằng ⌘K.
+      { href: "/staff", label: "Trang của tôi", icon: UserRound, minTier: "booking", roles: EVERYONE, keywords: "cong nhan vien lich hom nay viec cua toi anh can sua", sub: "Lịch hôm nay & việc hậu kỳ của bạn" },
       { href: "/dashboard/studio/notifications", label: "Thông báo", icon: Bell, minTier: "full", roles: EVERYONE, badge: "notifications" },
       { href: "/dashboard/account", label: "Tài khoản & bảo mật", icon: UserCircle, minTier: "booking", roles: EVERYONE, keywords: "mat khau bao mat thiet bi" },
       { href: "/dashboard/upgrade", label: "Gói phần mềm", icon: Crown, minTier: "booking", roles: OWNER_OK, keywords: "nang cap goi plan" },

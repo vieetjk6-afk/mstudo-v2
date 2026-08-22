@@ -19,6 +19,7 @@ import type {
   StudioCrew,
   StudioEvent,
   StudioExpense,
+  StudioAppointment,
 } from "@/lib/types";
 import { crewPortalUrl as buildCrewPortalUrl } from "@/lib/crew-show";
 import ContractEditor from "./ContractEditor";
@@ -99,6 +100,7 @@ export default async function ContractPage({
     { data: conflictBookings },
     { data: conflictUnavail },
     { data: sameDay },
+    { data: appointments },
   ] = await Promise.all([
     canAssign ? createAdminClient().from("profiles").select("id, full_name, email").eq("studio_owner_id", profile.id).order("full_name") : empty,
     supabase.from("contract_items").select("*").eq("contract_id", params.id).order("position"),
@@ -121,6 +123,10 @@ export default async function ContractPage({
     // Chỉ mốc thuộc studio này — xem ghi chú cách ly ở team/page.tsx.
     ed ? supabase.from("crew_unavailable").select("*").eq("date", ed).eq("owner_id", profile.id) : empty,
     ed ? supabase.from("studio_contracts").select("id, title, client_name").eq("owner_id", profile.id).eq("event_date", ed).neq("id", params.id).neq("status", "cancelled") : empty,
+    // Lịch hẹn dịch vụ của hợp đồng (trang điểm / thử đồ / tư vấn). Studio chưa
+    // chạy migration studio_appointments thì `data` là null → khối lịch hẹn chỉ
+    // rỗng, phần còn lại của màn hợp đồng không bị ảnh hưởng.
+    supabase.from("studio_appointments").select("*").eq("contract_id", params.id).order("appt_date"),
   ]);
 
   // Scheduling conflicts: crew booked on another contract that day, or busy.
@@ -174,6 +180,8 @@ export default async function ContractPage({
       galleries={(galleries ?? []) as { id: string; title: string; slug: string }[]}
       selectionAlbums={(selectionAlbums ?? []) as { id: string; title: string; slug: string }[]}
       initialMilestones={(milestones ?? []) as StudioEvent[]}
+      initialAppointments={(appointments ?? []) as StudioAppointment[]}
+      ownerId={profile.id as string}
       studioName={brand.name}
       studioLogo={brand.logoUrl}
       studioPhone={(profile.pl_phone as string | null) ?? null}
