@@ -133,9 +133,14 @@ export async function POST(req: Request) {
 
   // Báo cho quản trị viên có yêu cầu nâng cấp mới.
   const planLabel = validPlan ? ` gói ${validPlan}/${validCycle}` : "";
+  // push: true — đây là việc CÓ TIỀN đang chờ duyệt, để nằm im ở chuông thì
+  // admin chỉ thấy khi tình cờ mở dashboard. Ba loại thông báo hệ thống
+  // (tài khoản mới, liên hệ, nâng cấp) thì đây là loại duy nhất mất doanh thu
+  // nếu trả lời chậm.
   await notifyAdmins(
     "upgrade_request",
     `Yêu cầu nâng cấp${planLabel} từ ${user.email}${activated ? " (đã tự kích hoạt bằng mã giảm giá)" : ""}`,
+    { push: true },
   );
 
   return NextResponse.json({ ok: true, activated });

@@ -1,6 +1,7 @@
 import {
   PenLine, MessageSquare, UserCheck, UserX, Star, Wallet, Bell, FileCheck, Megaphone,
   UserPlus, ArrowUpCircle, Mail, ImageDown, AlarmClock, CalendarCog, UserPlus2,
+  FilePlus2,
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationKind, StudioNotification } from "@/lib/types";
@@ -41,6 +42,7 @@ export const NOTIFICATION_KIND_META: Record<NotificationKind, NotificationMeta> 
   // person_add (--bl) — icon lucide tương đương.
   schedule_reminder: { Icon: AlarmClock, fg: "var(--ac)", soft: "var(--acS)", label: "Nhắc lịch" },
   contract_changed: { Icon: CalendarCog, fg: "var(--am)", soft: "var(--amS)", label: "Hợp đồng thay đổi" },
+  contract_created: { Icon: FilePlus2, fg: "var(--gn)", soft: "var(--gnS)", label: "Hợp đồng mới" },
   assigned: { Icon: UserPlus2, fg: "var(--bl)", soft: "var(--blS)", label: "Phân công" },
   info: { Icon: Bell, fg: "var(--tx3)", soft: "var(--sf2)", label: "Thông tin" },
 };
@@ -60,6 +62,7 @@ export function notificationHref(n: Pick<StudioNotification, "kind" | "contract_
   if (n.kind === "review") return "/dashboard/studio/ranking";
   if (n.kind === "new_user") return "/dashboard/admin";
   if (n.kind === "upgrade_request") return "/dashboard/settings";
+  if (n.kind === "contract_created" && n.contract_id) return `/dashboard/studio/contracts/${n.contract_id}`;
   if (n.kind === "contact") return "/dashboard/settings";
   if (n.kind === "schedule_reminder" || n.kind === "assigned") return "/dashboard/studio/calendar?tab=studio";
   return null;

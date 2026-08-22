@@ -344,7 +344,14 @@ export default function NewContractForm({
 
     // Hạng mục · nhân sự · đợt thu · checklist — chạy song song, thất bại ở một
     // bảng phụ không làm mất hợp đồng vừa tạo.
-    await Promise.all([
+    //
+    // NHƯNG PHẢI BÁO RA. Trước đây khối này bỏ qua sạch giá trị trả về, nên khi
+    // RLS chặn ghi hạng mục (đúng cảnh của quản lý chi nhánh trên DB chưa vá
+    // policy — xem migrations/rls_thanh_vien_hop_dong.sql) thì hợp đồng vẫn được
+    // tạo, người dùng vẫn được chuyển sang màn chi tiết, và chỉ phát hiện ra khi
+    // nhìn thấy tổng tiền 0đ mà không hiểu vì sao. Lưu hỏng mà im lặng là kiểu
+    // hỏng tệ nhất: studio tưởng đã có hợp đồng đầy đủ và gửi cho khách.
+    const saved = await Promise.all([
       lines.length
         ? supabase.from("contract_items").insert(
             lines.map((l, position) => ({ contract_id: data.id, name: l.name, qty: l.qty, unit_price: l.unit_price, position }))
@@ -383,6 +390,32 @@ export default function NewContractForm({
             .insert(DEFAULT_TASKS.map((label, position) => ({ contract_id: data.id, label, position })))
         : null,
     ]);
+
+    // Tên bảng theo đúng thứ tự trong Promise.all ở trên.
+    const failed = ["Hạng mục", "Nhân sự", "Đợt thanh toán", "Checklist"]
+      .filter((_, i) => saved[i]?.error);
+    if (failed.length) {
+      const first = saved.find((r) => r?.error)?.error;
+      setSaving(null);
+      setErr(
+        `Hợp đồng đã tạo nhưng KHÔNG lưu được: ${failed.join(", ")}. ` +
+        `Vào màn chi tiết để nhập lại, và báo chủ studio chạy migration phân quyền nếu lỗi lặp lại.` +
+        (first?.message ? ` (${first.message})` : "")
+      );
+      // Vẫn mở màn chi tiết sau một nhịp để họ đọc được thông báo rồi tự đi tiếp
+      // — hợp đồng đã tồn tại, giữ họ lại ở form chỉ khiến họ bấm Lưu lần nữa
+      // và tạo ra hợp đồng trùng.
+      setTimeout(() => router.push(`/dashboard/studio/contracts/${data.id}`), 2500);
+      return;
+    }
+
+    // Báo chủ studio biết hợp đồng vừa được tạo ở chi nhánh nào (fire-and-forget:
+    // thông báo hỏng không được phép chặn luồng tạo hợp đồng).
+    fetch("/api/studio/contract-created", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contractId: data.id }),
+    }).catch(() => {});
 
     // Đồng bộ Google Calendar nếu có ngày (fire-and-forget).
     if (eventDate) {
