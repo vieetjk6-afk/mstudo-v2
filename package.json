@@ -24,7 +24,8 @@
     "test:appointments": "node --experimental-strip-types desktop/test/appointments.mjs",
     "test:branches": "node --experimental-strip-types desktop/test/branches.mjs",
     "test:studio-roles": "node --experimental-strip-types desktop/test/studio-roles.mjs",
-    "test:client-boundary": "node --experimental-strip-types desktop/test/client-boundary.mjs"
+    "test:client-boundary": "node --experimental-strip-types desktop/test/client-boundary.mjs",
+    "test:album-order": "node --experimental-strip-types desktop/test/album-order.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

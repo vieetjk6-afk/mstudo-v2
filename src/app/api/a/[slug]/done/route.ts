@@ -44,6 +44,16 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     `${who} đã chọn xong ${n} ảnh cho album “${album.title}”` +
     (nDis > 0 ? ` · ${nDis} ảnh không thích cần xoá` : "");
 
+  // 0) Ghi mốc chốt lên chính album. Đây là thứ giữ cho Thư viện album biết
+  //    album nào đến lượt studio xử lý — thông báo thì lướt qua rồi trôi mất.
+  //    Bọc riêng: DB chưa chạy migration album_selection_done.sql thì cột chưa
+  //    có, và một lỗi ở đây không được phép nuốt mất cả chuông lẫn push.
+  const { error: doneErr } = await admin
+    .from("albums")
+    .update({ selection_done_at: new Date().toISOString() })
+    .eq("id", album.id);
+  if (doneErr) console.warn("[album-done] không ghi được selection_done_at:", doneErr.message);
+
   // 1) Chuông trong dashboard (bấm vào → mở thẳng album chọn ảnh). Thử kèm
   //    album_id; nếu DB chưa có cột (chưa chạy lại schema.sql) thì chèn không kèm
   //    để thông báo vẫn hiện.

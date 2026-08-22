@@ -14,6 +14,8 @@ export type FilterableContract = {
   client_phone: string | null;
   event_date: string | null;
   status: string;
+  /** Giờ chụp "HH:MM". Chỉ dùng để xếp hai buổi CÙNG NGÀY cho đúng thứ tự. */
+  event_time?: string | null;
 };
 
 export type ContractFilters = {
@@ -111,4 +113,64 @@ export function splitContracts<T extends FilterableContract>(
     if (c.status === "completed") return false;
     return status === "all" || c.status === status;
   });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TAB "SẮP TỚI" — buổi chụp trong 7 ngày tới, gần nhất lên đầu.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/** Số ngày của tab "Sắp tới". Đổi ở đây là đổi cả nhãn tab lẫn phép lọc. */
+export const UPCOMING_DAYS = 7;
+
+/**
+ * Cộng ngày cho chuỗi ISO "YYYY-MM-DD". Tự làm bằng UTC thay vì `new Date(iso)`
+ * giờ địa phương: máy đặt múi giờ âm sẽ lùi mất một ngày, và cả cửa sổ 7 ngày
+ * lệch theo. Trả "" nếu đầu vào không đúng dạng.
+ */
+export function addDaysIso(iso: string, days: number): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Hợp đồng đã HUỶ hoặc đã HOÀN THÀNH không phải "việc sắp tới" — buổi chụp của
+ * chúng có thể vẫn nằm trong tuần nhưng studio không cần chuẩn bị gì nữa.
+ * Hợp đồng NHÁP thì có: ngày đã chốt trong đầu, chỉ là chưa gửi khách ký, và đó
+ * chính là thứ cần nhắc trước khi tới ngày.
+ */
+const UPCOMING_SKIP = new Set(["completed", "cancelled"]);
+
+/**
+ * Buổi chụp rơi vào cửa sổ [hôm nay, hôm nay + days]. Bao gồm CẢ hôm nay: buổi
+ * chiều nay vẫn là việc phải chuẩn bị, bỏ nó ra khỏi tab là bỏ đúng việc gấp
+ * nhất. Cột event_date kiểu date nên so sánh chuỗi là đúng thứ tự.
+ */
+export function isUpcoming<T extends FilterableContract>(c: T, today: string, days = UPCOMING_DAYS): boolean {
+  if (!c.event_date || UPCOMING_SKIP.has(c.status)) return false;
+  const end = addDaysIso(today, days);
+  return c.event_date >= today && (!end || c.event_date <= end);
+}
+
+/**
+ * Danh sách "sắp tới", ĐÃ xếp gần nhất lên đầu: theo ngày, rồi theo giờ trong
+ * cùng một ngày (buổi thiếu giờ xuống cuối ngày hôm đó — không đoán hộ studio
+ * là nó chụp sáng hay chiều), rồi chốt bằng mã HĐ để thứ tự không nhảy giữa các
+ * lần render.
+ */
+export function upcomingContracts<T extends FilterableContract>(
+  rows: readonly T[],
+  today: string,
+  days = UPCOMING_DAYS
+): T[] {
+  return rows
+    .filter((c) => isUpcoming(c, today, days))
+    .sort((a, b) => {
+      if (a.event_date !== b.event_date) return (a.event_date as string) < (b.event_date as string) ? -1 : 1;
+      const ta = a.event_time || "99:99";
+      const tb = b.event_time || "99:99";
+      if (ta !== tb) return ta < tb ? -1 : 1;
+      return cmpCode(a.code || a.title, b.code || b.title);
+    });
 }

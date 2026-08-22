@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, BellOff, BellRing } from "lucide-react";
+import { Bell, BellOff, BellRing, Send } from "lucide-react";
 import { matchesVapidKey, urlBase64ToUint8Array } from "@/lib/vapid-key";
 
 const VAPID_PUBLIC = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || "";
@@ -76,9 +76,20 @@ async function subscribeAndSave(reg: ServiceWorkerRegistration): Promise<void> {
   if (!res.ok) throw new Error("Lưu đăng ký thất bại");
 }
 
+type TestResult = {
+  ok: boolean;
+  reason: string;
+  hint: string;
+  devices: number;
+  sent?: number;
+  results?: { service: string; ok: boolean; statusCode?: number; pruned?: boolean }[];
+};
+
 export default function PushToggle() {
   const [state, setState] = useState<State>("loading");
   const [err, setErr] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [test, setTest] = useState<TestResult | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -148,6 +159,26 @@ export default function PushToggle() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Không bật được thông báo");
       setState("default");
+    }
+  }
+
+  /**
+   * Gửi thử một thông báo thật tới chính máy này.
+   *
+   * Nút này tồn tại vì "không nhận được thông báo" là lời than KHÔNG CHẨN ĐOÁN
+   * ĐƯỢC: máy chủ thiếu khoá, đăng ký hết hạn, hay hệ điều hành chặn — cả ba
+   * đều im lặng như nhau. Bấm một cái là biết mình đang ở trường hợp nào.
+   */
+  async function sendTest() {
+    setTesting(true);
+    setTest(null);
+    try {
+      const res = await fetch("/api/push/test", { method: "POST" });
+      setTest((await res.json()) as TestResult);
+    } catch {
+      setTest({ ok: false, reason: "network", hint: "Không gọi được máy chủ. Kiểm tra kết nối mạng rồi thử lại.", devices: 0 });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -232,11 +263,50 @@ export default function PushToggle() {
         {err && <p className="mt-1 text-xs" style={{ color: "var(--danger)" }}>{err}</p>}
       </div>
       {state === "subscribed" ? (
-        <button onClick={disable} className="btn-ghost shrink-0 px-3 py-2 text-xs">Tắt</button>
+        <>
+          <button onClick={sendTest} disabled={testing} className="btn-ghost flex shrink-0 items-center gap-1.5 px-3 py-2 text-xs">
+            <Send size={13} /> {testing ? "Đang gửi…" : "Gửi thử"}
+          </button>
+          <button onClick={disable} className="btn-ghost shrink-0 px-3 py-2 text-xs">Tắt</button>
+        </>
       ) : (
         <button onClick={enable} disabled={state === "loading"} className="btn-primary shrink-0 px-3 py-2 text-xs">
           {state === "loading" ? "Đang xử lý…" : "Bật thông báo"}
         </button>
+      )}
+
+      {test && (
+        <div
+          className="w-full rounded-[10px] px-3 py-2.5 text-xs"
+          style={{
+            background: test.ok ? "var(--gnS)" : "var(--amS)",
+            color: test.ok ? "var(--gn)" : "var(--am)",
+          }}
+        >
+          <p className="font-semibold">
+            {test.ok
+              ? `Đã gửi tới ${test.sent}/${test.devices} thiết bị`
+              : test.reason === "vapid_missing"
+                ? "Máy chủ chưa cấu hình thông báo đẩy"
+                : test.reason === "no_subscription"
+                  ? "Thiết bị này chưa đăng ký"
+                  : "Gửi không thành công"}
+          </p>
+          <p className="mt-0.5" style={{ color: "var(--text2)" }}>{test.hint}</p>
+          {/* Mã lỗi của từng dịch vụ push — thứ duy nhất phân biệt được "khoá
+              sai" với "máy đã gỡ đăng ký" khi cần hỏi kỹ thuật. */}
+          {test.results && test.results.length > 0 && (
+            <ul className="mt-1.5 space-y-0.5" style={{ color: "var(--text2)" }}>
+              {test.results.map((r, i) => (
+                <li key={i}>
+                  {r.ok ? "✓" : "✗"} {r.service}
+                  {!r.ok && r.statusCode ? ` — lỗi ${r.statusCode}` : ""}
+                  {r.pruned ? " (đăng ký đã hết hạn, vừa gỡ)" : ""}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </div>
   );

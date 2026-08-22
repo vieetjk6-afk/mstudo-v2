@@ -27,30 +27,77 @@ export type PushPayload = {
 
 type SubRow = { id: string; endpoint: string; p256dh: string; auth: string };
 
-/** Gửi payload tới một danh sách subscription, tự dọn subscription đã chết. */
-async function deliver(subs: SubRow[], payload: PushPayload): Promise<number> {
-  if (subs.length === 0) return 0;
+/** Kết quả gửi tới MỘT thiết bị. `service` là tên dịch vụ push, không phải URL
+ *  đầy đủ — endpoint là bí mật của thiết bị đó, đừng ghi ra log hay trả về UI. */
+export type PushResult = {
+  service: string;
+  ok: boolean;
+  /** Mã HTTP của dịch vụ push khi gửi hỏng (403 = sai khoá VAPID, 410 = đã huỷ…). */
+  statusCode?: number;
+  message?: string;
+  /** Đăng ký đã chết và vừa bị xoá khỏi bảng. */
+  pruned?: boolean;
+};
+
+/** VAPID đã cấu hình chưa. Dùng cho màn chẩn đoán — thiếu khoá thì mọi lệnh gửi
+ *  đều lặng lẽ không làm gì, và đó là thứ đầu tiên cần loại trừ. */
+export function pushConfigured(): boolean {
+  return ensureConfigured();
+}
+
+/** Tên dịch vụ push từ endpoint, để hiện cho người dùng mà không lộ endpoint. */
+function serviceOf(endpoint: string): string {
+  try {
+    const h = new URL(endpoint).hostname;
+    if (/googleapis|google/i.test(h)) return "Chrome / Android";
+    if (/mozilla/i.test(h)) return "Firefox";
+    if (/apple/i.test(h)) return "Safari / iPhone";
+    if (/windows/i.test(h)) return "Windows";
+    return h;
+  } catch {
+    return "không rõ";
+  }
+}
+
+/**
+ * Gửi payload tới một danh sách subscription, tự dọn subscription đã chết.
+ *
+ * Trả về CHI TIẾT từng thiết bị chứ không chỉ đếm số: trước đây hàm này nuốt
+ * sạch mọi lỗi trừ 404/410, nên một khoá VAPID sai (403) hay một payload quá to
+ * (413) biểu hiện y hệt "không có thiết bị nào" — studio bảo "không nhận được
+ * thông báo" mà log không có lấy một dòng. Giờ mọi lỗi đều ghi log, và màn
+ * "Gửi thử" ở trang Thông báo đọc được đúng danh sách này.
+ */
+async function deliver(subs: SubRow[], payload: PushPayload): Promise<PushResult[]> {
+  if (subs.length === 0) return [];
   const db = createAdminClient();
   const body = JSON.stringify(payload);
-  let sent = 0;
-  await Promise.all(
-    subs.map(async (s) => {
+  return Promise.all(
+    subs.map(async (s): Promise<PushResult> => {
+      const service = serviceOf(s.endpoint);
       try {
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           body
         );
-        sent++;
+        return { service, ok: true };
       } catch (err: unknown) {
-        const code = (err as { statusCode?: number })?.statusCode;
+        const e = err as { statusCode?: number; body?: string; message?: string };
+        const code = e?.statusCode;
         // 404/410 = subscription expired/unsubscribed → remove it.
-        if (code === 404 || code === 410) {
-          await db.from("push_subscriptions").delete().eq("id", s.id);
-        }
+        const pruned = code === 404 || code === 410;
+        if (pruned) await db.from("push_subscriptions").delete().eq("id", s.id);
+        else console.error(`[push] ${service} trả ${code ?? "?"}: ${e?.body || e?.message || "lỗi không rõ"}`);
+        return { service, ok: false, statusCode: code, message: e?.body || e?.message, pruned };
       }
     })
   );
-  return sent;
+}
+
+/** Gửi tới đúng một danh sách subscription đã biết (dùng cho màn "Gửi thử"). */
+export async function sendPushToSubscriptions(subs: SubRow[], payload: PushPayload): Promise<PushResult[]> {
+  if (!ensureConfigured()) return [];
+  return deliver(subs, payload);
 }
 
 /**
@@ -89,7 +136,7 @@ export async function sendPushToOwners(ownerIds: string[], payload: PushPayload)
       .from("push_subscriptions")
       .select("id, endpoint, p256dh, auth")
       .in("owner_id", ids);
-    total += await deliver((subs ?? []) as SubRow[], payload);
+    total += (await deliver((subs ?? []) as SubRow[], payload)).filter((r) => r.ok).length;
   }
   return total;
 }
