@@ -6,6 +6,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import { getFeatureFlags, storyComingSoon } from "@/lib/feature-flags";
 import { ensureIntakeToken } from "@/lib/contract-intake";
 import { brandFrom } from "@/lib/studio-brand";
+import { getActiveBranches } from "@/lib/branches";
 import type {
   StudioContract,
   ContractItem,
@@ -182,6 +183,7 @@ export default async function ContractPage({
       initialMilestones={(milestones ?? []) as StudioEvent[]}
       initialAppointments={(appointments ?? []) as StudioAppointment[]}
       ownerId={profile.id as string}
+      branches={(await getActiveBranches(profile.id)).map((b) => ({ id: b.id, name: b.name }))}
       studioName={brand.name}
       studioLogo={brand.logoUrl}
       studioPhone={(profile.pl_phone as string | null) ?? null}

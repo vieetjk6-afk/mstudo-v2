@@ -291,6 +291,8 @@ export interface StudioContract {
   intake_token: string | null;
   intake: ContractIntake | null;
   intake_submitted_at: string | null;
+  /** Cơ sở thực hiện hợp đồng. null = chưa gán chi nhánh. */
+  branch_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -508,6 +510,7 @@ export interface StudioBooking {
   deposit_token: string | null;
   /** SĐT khách cũ đã giới thiệu khách này (nếu có) — xem lib/referral.ts. */
   referrer_phone: string | null;
+  branch_id: string | null;
   created_at: string;
 }
 
@@ -625,6 +628,7 @@ export interface StudioEquipment {
   category: string | null;
   note: string | null;
   active: boolean;
+  branch_id: string | null;
   created_at: string;
 }
 
@@ -687,6 +691,7 @@ export interface StudioExpense {
   note: string | null;
   spent_at: string;
   client_visible: boolean; // shown + billed on the client portal vs internal-only
+  branch_id: string | null;
   created_at: string;
 }
 
@@ -706,6 +711,7 @@ export interface StudioCrew {
   phone: string;
   role: CrewRole;
   note: string | null;
+  branch_id: string | null;
   created_at: string;
 }
 
@@ -789,9 +795,38 @@ export interface StudioAppointment {
   note: string | null;
   /** Khách có thấy mốc này ở cổng khách hàng không (lịch nội bộ đặt false). */
   client_visible: boolean;
+  branch_id: string | null;
   position: number;
   created_at: string;
   updated_at: string;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   CHI NHÁNH STUDIO — nhiều cơ sở trong CÙNG một tài khoản
+   (bảng studio_branches, xem supabase/migrations/studio_branches.sql)
+
+   Chi nhánh là một CHIỀU PHÂN LOẠI thêm vào dữ liệu sẵn có, không phải một tài
+   khoản studio thứ hai: hợp đồng / lịch / thu chi / nhân sự mang thêm một
+   `branch_id`, còn bảng giá, điều khoản và thư viện album vẫn dùng chung.
+
+   `branch_id` LUÔN cho phép null = "chưa gán chi nhánh". Studio một cơ sở không
+   khai chi nhánh nào thì mọi màn hoạt động y như trước.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export interface StudioBranch {
+  id: string;
+  owner_id: string;
+  name: string;
+  /** Mã ngắn (Q1, GV, HN…) — hiện trên chip ở chỗ chật. */
+  code: string | null;
+  address: string | null;
+  phone: string | null;
+  /** Tài khoản nhân viên phụ trách cơ sở. */
+  manager_id: string | null;
+  note: string | null;
+  active: boolean;
+  position: number;
+  created_at: string;
 }
 
 export type RoomKind = "makeup" | "fitting" | "studio" | "meeting" | "other";
@@ -810,6 +845,7 @@ export interface StudioRoom {
   kind: RoomKind;
   /** Số buổi phòng nhận được trong MỘT tuần — mẫu số của thanh công suất. */
   capacity_week: number;
+  branch_id: string | null;
   note: string | null;
   active: boolean;
   position: number;

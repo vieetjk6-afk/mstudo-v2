@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
 import { getStudioHost } from "@/lib/studio-site";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 import type { StudioBooking } from "@/lib/types";
 import BookingsView from "./BookingsView";
 
@@ -38,12 +39,12 @@ export default async function BookingsPage() {
     else tokenSaved = false;
   }
 
-  const { data } = await supabase
-    .from("studio_bookings")
-    .select("*")
-    .eq("owner_id", profile.id)
-    .neq("status", "archived")
-    .order("created_at", { ascending: false });
+  // Phạm vi chi nhánh đang chọn trên thanh trên cùng.
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const { data } = await applyBranch(
+    supabase.from("studio_bookings").select("*").eq("owner_id", profile.id).neq("status", "archived"),
+    scope.selected
+  ).order("created_at", { ascending: false });
 
   const studioHost = await getStudioHost(supabase, profile.id);
   return <BookingsView ownerId={profile.id} token={token} tokenSaved={tokenSaved} initial={(data ?? []) as StudioBooking[]} studioHost={studioHost} />;

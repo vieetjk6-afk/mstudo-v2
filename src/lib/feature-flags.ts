@@ -48,9 +48,14 @@ export function driveSyncComingSoon(flags: FeatureFlags): boolean {
 }
 
 
-/** Chi nhánh studio: mặc định "Sắp ra mắt" cho tới khi admin đặt live. */
-export function branchesComingSoon(flags: FeatureFlags): boolean {
-  return flags?.branches !== "live";
+/**
+ * Chi nhánh studio đã PHÁT HÀNH — không còn gắn nhãn "Sắp ra mắt" nữa.
+ * Giữ lại hàm (luôn trả false) thay vì xoá, giống `rentalComingSoon`: admin lỡ
+ * còn để feature_flags.branches = "coming_soon" trong DB cũng không khoá lại màn
+ * này, và mọi chỗ đang gọi hàm vẫn biên dịch được.
+ */
+export function branchesComingSoon(_flags: FeatureFlags): boolean {
+  return false;
 }
 
 /**

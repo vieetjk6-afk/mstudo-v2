@@ -1,6 +1,7 @@
 import { requireStudio } from "@/lib/auth-guards";
 import StudioDenied from "@/components/StudioDenied";
 import { brandFrom } from "@/lib/studio-brand";
+import { getBranchScope } from "@/lib/branches";
 import ContractsListView from "./ContractsListView";
 
 // Trang chỉ gác quyền; danh sách hợp đồng được tải client-side + cache trên máy
@@ -22,6 +23,10 @@ export default async function ContractsList() {
       </div>
     );
   }
+  // Chi nhánh đang xem đi vào KHOÁ CACHE của danh sách (xem ghi chú trong
+  // ContractsListView) — đổi chi nhánh không được hiện lại danh sách cơ sở cũ.
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+
   // Thương hiệu studio in ở đầu file Excel/CSV xuất ra từ màn này.
   return (
     <ContractsListView
@@ -30,6 +35,7 @@ export default async function ContractsList() {
         phone: (profile.pl_phone as string | null) ?? null,
         email: (profile.email as string | null) ?? null,
       }}
+      branchKey={scope.selected ?? "all"}
     />
   );
 }

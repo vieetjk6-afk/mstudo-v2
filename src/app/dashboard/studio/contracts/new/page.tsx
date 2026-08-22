@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import { getBranchScope } from "@/lib/branches";
 import type { StudioService, StudioCrew } from "@/lib/types";
 import NewContractForm, {
   type TemplateOption,
@@ -83,10 +84,16 @@ export default async function NewContractPage() {
   }
 
   const assignTo = profile.actingRole === "staff" ? (profile.actingUserId as string) : null;
+  // Chi nhánh đang xem → hợp đồng mới thuộc luôn cơ sở đó. "Xem gộp" hoặc "chưa
+  // gán" thì để trống, không đoán hộ.
+  const branchScope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const branchId =
+    typeof branchScope.selected === "string" && branchScope.selected !== "none" ? branchScope.selected : null;
   return (
     <NewContractForm
       ownerId={profile.id}
       assignTo={assignTo}
+      branchId={branchId}
       templates={(templates ?? []) as unknown as TemplateOption[]}
       services={((services ?? []) as Pick<StudioService, "id" | "name" | "clauses">[]) as ServiceOption[]}
       packages={(packages ?? []) as unknown as PackageOption[]}

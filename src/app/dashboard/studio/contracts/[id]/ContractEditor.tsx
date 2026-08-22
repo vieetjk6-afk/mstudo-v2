@@ -191,6 +191,7 @@ export default function ContractEditor({
   initialMilestones,
   initialAppointments,
   ownerId,
+  branches,
   studioName,
   studioLogo = null,
   studioPhone = null,
@@ -227,6 +228,8 @@ export default function ContractEditor({
   initialAppointments: StudioAppointment[];
   /** Id chủ studio — cần để ghi dòng studio_appointments (bảng scope theo chủ). */
   ownerId: string;
+  /** Chi nhánh còn hoạt động. Rỗng → không hiện ô chọn chi nhánh. */
+  branches: { id: string; name: string }[];
   studioName: string;
   /** Thương hiệu studio in trên đầu bản PDF hợp đồng. */
   studioLogo?: string | null;
@@ -271,6 +274,7 @@ export default function ContractEditor({
     selection_album_id: contract.selection_album_id ?? "",
     source: contract.source ?? "",
     assigned_to: contract.assigned_to ?? "",
+    branch_id: contract.branch_id ?? "",
   });
   const contractSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [contractSaved, setContractSaved] = useState<"idle" | "saving" | "saved">("idle");
@@ -304,6 +308,7 @@ export default function ContractEditor({
         selection_album_id: data.selection_album_id || null,
         source: data.source || null,
         ...(canAssign ? { assigned_to: data.assigned_to || null } : {}),
+        branch_id: data.branch_id || null,
       })
       .eq("id", contract.id);
     if (error) {
@@ -1921,6 +1926,23 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                     ))}
                   </select>
                   <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Nhân viên (vai trò Nhân viên) chỉ thấy hợp đồng được giao cho mình.</p>
+                </div>
+              )}
+              {/* Chi nhánh thực hiện — cùng thẻ nhóm "ai / ở đâu làm việc này".
+                  Chỉ hiện khi studio đã khai chi nhánh; studio một cơ sở không
+                  phải nhìn thêm một ô chọn luôn để trống. */}
+              {branches.length > 0 && (
+                <div className="card p-6">
+                  <h2 className="mb-4 font-serif text-lg font-medium">Chi nhánh thực hiện</h2>
+                  <select className="input" value={f.branch_id} onChange={(e) => set("branch_id", e.target.value)}>
+                    <option value="">— Chưa gán chi nhánh —</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>{b.name}</option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                    Quyết định hợp đồng này được tính vào doanh thu và lịch của cơ sở nào.
+                  </p>
                 </div>
               )}
               {/* Crew */}

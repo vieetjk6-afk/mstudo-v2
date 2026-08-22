@@ -166,7 +166,7 @@ Bán hàng      Báo giá(2) · Hợp đồng & lịch hẹn · Bảng công vi�
 Vận hành      Lịch làm việc · Lịch studio · Xử lý hình ảnh(4) · Thư viện album · Công cụ ảnh · Thiết bị
 Khách hàng    Khách hàng · Thiệp·Story·Slide · Thiết kế album(2)
 Tài chính     Thu chi & công nợ · Đối soát tiền công(2) · Báo cáo
-Nhân sự       Đội ngũ · Xếp hạng · Mẫu tin nhắn
+Nhân sự       Đội ngũ · Xếp hạng · Chi nhánh
 Thiết lập     Gói & bảng giá · Dịch vụ & điều khoản · Website & chatbox · Công cụ ảnh · Cài đặt studio
 Tài khoản     Trang của tôi · Thông báo(5) · Tài khoản & bảo mật · Gói phần mềm · Affiliate · Ứng dụng máy tính · Quản trị hệ thống
 ```
@@ -328,6 +328,79 @@ và cổng nhân viên).
 | KPI *Thù lao tạm tính* | *Hợp đồng phụ trách* | sổ tiền công (`contract_crew`) khoá theo tên/SĐT thợ, không theo tài khoản đăng nhập → không quy ra tiền của một nhân viên mà không đoán |
 | Hậu kỳ 4 trạng thái + cột "62/80 ảnh" | 3 trạng thái của `contract_products`, thanh tiến độ theo bước | thêm cột *Chờ duyệt* sẽ không ai ghi vào, và số ảnh sẽ là số bịa |
 | Rail *Ekip trang điểm* | *Ê-kíp trong tuần* (ai đang có việc) | sổ thợ không có vai trò "trang điểm" — chỉ `photographer/cameraman/assistant/editor` |
+
+## Chi nhánh studio
+
+Nhiều cơ sở trong CÙNG một tài khoản: mỗi chi nhánh có đội ngũ, lịch và sổ thu
+chi riêng, chủ studio **xem gộp hoặc tách**. Đã phát hành — không còn nhãn
+"Sắp ra mắt".
+
+| Bề mặt | Route | File nguồn |
+| --- | --- | --- |
+| Quản lý chi nhánh + đối chiếu cơ sở | `/dashboard/studio/branches` | `studio/branches/BranchesManager.tsx` |
+| Ô chọn chi nhánh trên thanh trên cùng | mọi màn trong shell | `components/BranchSwitcher.tsx` |
+
+### Nguyên tắc thiết kế
+
+1. **Chi nhánh là một CHIỀU PHÂN LOẠI, không phải tài khoản thứ hai.** Không
+   nhân bản bảng nào — chỉ thêm cột `branch_id`. Bảng giá, điều khoản và thư
+   viện album vẫn dùng chung toàn studio.
+2. **`branch_id` LUÔN cho phép null = "chưa gán".** Studio một cơ sở (đa số)
+   không khai chi nhánh nào thì mọi dòng đều null và mọi màn hoạt động y như
+   trước. Tính năng này không được phép buộc studio đang chạy đi gán lại dữ liệu cũ.
+3. **Mọi khoá ngoại `on delete set null`.** Xoá một chi nhánh KHÔNG xoá theo hợp
+   đồng, lịch hay khoản thu chi của nó — dữ liệu chỉ quay về "chưa gán". Hộp
+   thoại xác nhận nói đúng điều đó.
+4. **Chưa khai chi nhánh → không hiện gì thêm.** Ô chọn trên topbar, ô chọn
+   trong form hợp đồng / lịch / nhân sự đều tự ẩn khi `branches` rỗng.
+
+### Model dữ liệu
+
+`supabase/migrations/studio_branches.sql` (đã có trong `setup-all.sql`, chạy SAU
+`studio_appointments.sql`):
+
+- **`studio_branches`** — tên, mã ngắn (Q1, GV…), địa chỉ, SĐT, `manager_id`
+  (một tài khoản nhân viên), `active` (tạm ẩn cơ sở đã đóng mà vẫn tra được số cũ).
+- **`branch_id`** thêm vào: `studio_contracts`, `studio_bookings`,
+  `studio_appointments`, `studio_rooms`, `studio_expenses`, `studio_equipment`,
+  `rental_items`, `studio_crew`.
+  CỐ Ý **không** thêm vào `albums`/`photos`, `studio_pricelist`,
+  `studio_packages`, `studio_services`, `contract_*` (đã thuộc hợp đồng),
+  `studio_notifications`.
+- **`profiles.studio_branch_id`** — nhân viên thuộc cơ sở nào. Cột này CỐ Ý
+  **không** nằm trong danh sách cột `authenticated` được UPDATE (vá C1), vì nếu
+  cấp thì nhân viên tự đổi được chi nhánh của mình. Ghi qua service-role ở
+  `PATCH /api/studio/staff`, giống cách gán vai trò.
+
+Luật thuần (chuẩn hoá lựa chọn, điều kiện truy vấn, gộp số liệu) nằm ở
+`src/lib/branch-rules.ts` — **không import gì**, chạy trực tiếp trong Node:
+`npm run test:branches`. Phần chạm hệ thống (cookie + truy vấn) ở
+`src/lib/branches.ts`.
+
+### "Xem gộp hoặc tách" hoạt động thế nào
+
+Lựa chọn lưu trong **cookie** `mstudo_branch`, không phải query string: chủ
+studio chọn "Quận 1" một lần rồi đi qua Hợp đồng → Lịch → Thu chi và cả ba màn
+cùng nói về Quận 1. Nhét vào URL thì mỗi liên kết trong app phải tự mang tham số
+theo, sót một chỗ là phạm vi âm thầm nhảy về "toàn studio".
+
+`getBranchScope()` đọc cookie ở layout; từng màn áp vào truy vấn bằng
+`applyBranch(query, scope.selected)`. Ba giá trị: `null` = gộp · `"none"` =
+chưa gán (`IS NULL`) · `<uuid>` = một cơ sở. Cookie giữ id của một chi nhánh đã
+xoá thì rơi về "gộp", KHÔNG lọc theo id lạ rồi cho ra màn hình trống.
+
+Đã áp phạm vi: Hợp đồng (`/api/studio/contracts-list`), Đặt lịch khách, Lịch
+studio, Lịch làm việc (chỉ hợp đồng — `studio_events` là mốc ghi chú chung),
+Thu chi & công nợ (thu và tiền công lọc qua `contract.branch_id`).
+
+### Chỗ cần biết trước khi sửa
+
+| Việc | Cách làm đúng |
+| --- | --- |
+| Thêm màn lọc theo chi nhánh | `getBranchScope()` + `applyBranch()`, đừng tự viết `.eq("branch_id", …)` — "chưa gán" phải là `IS NULL`, viết sai thì màn trống |
+| Gán chi nhánh cho nhân viên | `PATCH /api/studio/staff`; gọi supabase trực tiếp sẽ IM LẶNG không ghi được gì (vá C1) |
+| Chi nhánh của nhân viên | là **mặc định hiển thị**, KHÔNG phải hàng rào quyền — họ vẫn chuyển sang "Tất cả chi nhánh" được. Muốn khoá cứng thì phải chặn ở từng truy vấn, và đó là một quyết định về phân quyền |
+| Hợp đồng mới | thừa hưởng chi nhánh đang xem (không hỏi thêm một bước trong luồng 5 bước); đổi lại ở màn chi tiết hợp đồng |
 
 ## Quy tắc khi sửa giao diện studio
 

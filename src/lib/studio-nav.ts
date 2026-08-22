@@ -119,9 +119,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { href: "/dashboard/studio/crew", label: "Đội ngũ", icon: UsersRound, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/staff"], keywords: "so tho nhan vien crew" },
       { href: "/dashboard/studio/ranking", label: "Xếp hạng", icon: Trophy, minTier: "full", roles: MANAGER_OK },
-      // Chi nhánh studio: đang gắn nhãn "Sắp ra mắt" (feature_flags.branches),
-      // nên studio thấy mục nhưng chưa bấm được — admin vào được để dựng tiếp.
-      { href: "/dashboard/studio/branches", label: "Chi nhánh", icon: Building2, minTier: "full", roles: MANAGER_OK, keywords: "chi nhanh studio co so diem chup branch" },
+      // Chi nhánh studio ĐÃ PHÁT HÀNH. Nhãn để "Chi nhánh" chứ không phải "Chi
+      // nhánh studio" vì sidebar rộng 250px — tên đầy đủ bị cắt.
+      { href: "/dashboard/studio/branches", label: "Chi nhánh", icon: Building2, minTier: "full", roles: MANAGER_OK, keywords: "chi nhanh studio co so diem chup branch nhieu cua hang" },
     ],
   },
   {

@@ -83,6 +83,7 @@ const STEPS = [
 export default function NewContractForm({
   ownerId,
   assignTo,
+  branchId = null,
   templates,
   services = [],
   packages = [],
@@ -93,6 +94,13 @@ export default function NewContractForm({
 }: {
   ownerId: string;
   assignTo: string | null;
+  /**
+   * Chi nhánh đang xem trên thanh trên cùng. Hợp đồng mới THỪA HƯỞNG cơ sở đó
+   * thay vì hỏi thêm một bước — luồng tạo hợp đồng đã 5 bước, và người đang xem
+   * "Chi nhánh Quận 1" thì gần như chắc chắn đang tạo hợp đồng cho Quận 1. Đổi
+   * lại được ở màn chi tiết hợp đồng.
+   */
+  branchId?: string | null;
   templates: TemplateOption[];
   services?: ServiceOption[];
   packages?: PackageOption[];
@@ -324,6 +332,7 @@ export default function NewContractForm({
         drive_make_photo: makePhoto,
         drive_make_video: makeVideo,
         ...(assignTo ? { assigned_to: assignTo } : {}),
+        ...(branchId ? { branch_id: branchId } : {}),
       })
       .select("id")
       .single();

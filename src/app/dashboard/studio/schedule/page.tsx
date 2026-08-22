@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
 import { todayVN } from "@/lib/date";
 import { addDays, mondayOf } from "@/lib/appointments";
+import { applyBranch, getActiveBranches, getBranchScope } from "@/lib/branches";
 import type { StudioAppointment, StudioRoom } from "@/lib/types";
 import SchedulePage, { type ContractOption, type CrewOption } from "./SchedulePage";
 
@@ -48,22 +49,37 @@ export default async function StudioSchedulePage() {
   const from = addDays(mondayOf(today), -28);
   const to = addDays(mondayOf(today), 7 * 12);
 
+  // Chi nhánh đang chọn: lịch, phòng và hợp đồng đều lọc theo cùng phạm vi, nếu
+  // không thì lưới tuần hiện lịch của cơ sở này mà thanh công suất lại đếm phòng
+  // của cơ sở khác.
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const branchOptions = await getActiveBranches(profile.id);
+
   const [{ data: appointments }, { data: rooms }, { data: crew }, { data: contracts }] = await Promise.all([
-    supabase
-      .from("studio_appointments")
-      .select("*")
-      .eq("owner_id", profile.id)
-      .gte("appt_date", from)
-      .lte("appt_date", to)
+    applyBranch(
+      supabase
+        .from("studio_appointments")
+        .select("*")
+        .eq("owner_id", profile.id)
+        .gte("appt_date", from)
+        .lte("appt_date", to),
+      scope.selected
+    )
       .order("appt_date")
       .order("start_time"),
-    supabase.from("studio_rooms").select("*").eq("owner_id", profile.id).eq("active", true).order("position"),
+    applyBranch(
+      supabase.from("studio_rooms").select("*").eq("owner_id", profile.id).eq("active", true),
+      scope.selected
+    ).order("position"),
     supabase.from("studio_crew").select("id, name, phone, role").eq("owner_id", profile.id).order("name"),
-    supabase
-      .from("studio_contracts")
-      .select("id, code, title, client_name, client_phone, event_date, status")
-      .eq("owner_id", profile.id)
-      .in("status", ["sent", "approved", "in_progress"])
+    applyBranch(
+      supabase
+        .from("studio_contracts")
+        .select("id, code, title, client_name, client_phone, event_date, status")
+        .eq("owner_id", profile.id)
+        .in("status", ["sent", "approved", "in_progress"]),
+      scope.selected
+    )
       .order("event_date", { ascending: false })
       .limit(200),
   ]);
@@ -115,6 +131,8 @@ export default async function StudioSchedulePage() {
       rooms={roomList}
       assignees={assignees}
       contracts={(contracts ?? []) as ContractOption[]}
+      branches={branchOptions.map((b) => ({ id: b.id, name: b.name }))}
+      defaultBranchId={typeof scope.selected === "string" && scope.selected !== "none" ? scope.selected : null}
     />
   );
 }

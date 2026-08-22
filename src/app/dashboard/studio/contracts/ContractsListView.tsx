@@ -64,7 +64,19 @@ const TABS: [string, string][] = [
 const COLS = "minmax(240px,2.5fr) minmax(130px,1.25fr) minmax(96px,.95fr) minmax(112px,1.05fr) minmax(136px,1.25fr) minmax(140px,1.15fr)";
 const HEADS = ["Khách / Tên job", "Dịch vụ", "Nhân sự", "Lịch chụp", "Thanh toán", "Trạng thái"];
 
-export default function ContractsListView({ studio }: { studio: ExportStudio }) {
+export default function ContractsListView({
+  studio,
+  branchKey = "",
+}: {
+  studio: ExportStudio;
+  /**
+   * Chi nhánh đang xem, đưa vào KHOÁ CACHE. Danh sách này cache trên máy theo
+   * kiểu stale-while-revalidate: nếu khoá không mang chi nhánh thì đổi chi nhánh
+   * sẽ hiện lại danh sách của cơ sở TRƯỚC trong lúc chờ tải ngầm — dữ liệu sai
+   * cơ sở, mà lại trông như đã tải xong.
+   */
+  branchKey?: string;
+}) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<string>("all");
   const [code, setCode] = useState("");
@@ -78,7 +90,7 @@ export default function ContractsListView({ studio }: { studio: ExportStudio }) 
 
   // Tải danh sách + cache trên máy: hiện tức thì bản đã lưu, làm mới ngầm.
   const { data, loading, fromCache } = useCachedJson<{ list: ContractRow[] }>(
-    "contracts-list",
+    branchKey ? `contracts-list:${branchKey}` : "contracts-list",
     "/api/studio/contracts-list",
     { list: [] }
   );

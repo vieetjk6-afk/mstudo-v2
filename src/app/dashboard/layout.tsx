@@ -19,6 +19,7 @@ import {
 } from "@/lib/maintenance";
 import { effectivePlan, planProfilePatch, studioTier } from "@/lib/plans";
 import { getFeatureFlags, comingSoonNav, desktopHidden } from "@/lib/feature-flags";
+import { BRANCH_COOKIE, getBranchScope } from "@/lib/branches";
 import type { Profile } from "@/lib/types";
 
 export default async function DashboardLayout({
@@ -125,6 +126,17 @@ on conflict (id) do update set role='admin', is_active=true;`}
   // Feature flags (admin-controlled): "Sắp ra mắt" chips + locks nav for non-admins.
   const flags = await getFeatureFlags();
   const comingSoon = comingSoonNav(flags);
+
+  // Chi nhánh đang xem: nạp một lần ở layout rồi đưa xuống topbar, để mỗi màn
+  // trong shell không phải tự truy vấn danh sách chi nhánh chỉ để vẽ ô chọn.
+  // Studio chưa khai chi nhánh nào (hoặc chưa chạy migration) → enabled = false
+  // và topbar không hiện gì thêm.
+  const owner = profile.studio_owner_id ?? profile.id;
+  const branchScope = tier === "none"
+    ? { branches: [], selected: null, enabled: false }
+    // Ở layout, `profile` là dòng của CHÍNH người đang đăng nhập (không đi qua
+    // requireStudio), nên chi nhánh của họ nằm ngay ở studio_branch_id.
+    : await getBranchScope(owner as string, profile.studio_branch_id as string | null);
   // Chưa xuất bản (ẩn hoàn toàn với non-admin, không hiện cả nhãn "Sắp ra mắt").
   const hiddenNav = desktopHidden(flags) ? ["/dashboard/studio/desktop"] : [];
 
@@ -142,6 +154,9 @@ on conflict (id) do update set role='admin', is_active=true;`}
         showFooter={showFooter}
         comingSoon={comingSoon}
         hiddenNav={hiddenNav}
+        branches={branchScope.branches.map((b) => ({ id: b.id, name: b.name, code: b.code, active: b.active }))}
+        branchSelected={branchScope.selected}
+        branchCookie={branchScope.enabled ? BRANCH_COOKIE : undefined}
       >
         {children}
       </DashboardChrome>

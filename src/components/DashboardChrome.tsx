@@ -22,6 +22,9 @@ export default function DashboardChrome({
   showFooter,
   comingSoon = [],
   hiddenNav = [],
+  branches = [],
+  branchSelected = null,
+  branchCookie,
   children,
 }: {
   profile: Profile;
@@ -31,6 +34,10 @@ export default function DashboardChrome({
   showFooter: boolean;
   comingSoon?: string[];
   hiddenNav?: string[];
+  /** Chi nhánh studio — chỉ shell studio dùng (topbar có ô chọn chi nhánh). */
+  branches?: { id: string; name: string; code: string | null; active: boolean }[];
+  branchSelected?: string | null;
+  branchCookie?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -67,6 +74,9 @@ export default function DashboardChrome({
         role={role}
         comingSoon={comingSoon}
         hiddenNav={hiddenNav}
+        branches={branches}
+        branchSelected={branchSelected}
+        branchCookie={branchCookie}
       >
         {children}
       </StudioShell>

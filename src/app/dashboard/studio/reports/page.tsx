@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { LEAD_SOURCE_LABEL, contractTotal, sumAmounts, type StudioExpense } from "@/lib/types";
 import { brandFrom } from "@/lib/studio-brand";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 import ReportsView, { type PaymentRow, type SalaryRow, type SourceStat } from "./ReportsView";
 
 
@@ -32,23 +33,38 @@ export default async function ReportsPage() {
   const supabase = createClient();
   // srcContracts độc lập với 3 truy vấn còn lại → gộp chung một Promise.all thay
   // vì await nối tiếp sau đó (bớt một round-trip tuần tự).
+  // Chi nhánh đang chọn. Thu và tiền công lọc qua hợp đồng cha
+  // (`contract.branch_id`) vì bản thân hai bảng đó không mang cột chi nhánh —
+  // khoản thu thuộc cơ sở nào là do hợp đồng của nó quyết định.
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
   const [{ data: payments }, { data: salaries }, { data: expenses }, { data: srcContracts }] = await Promise.all([
-    supabase
-      .from("contract_payments")
-      .select("id, amount, kind, paid_at, contract:studio_contracts!inner(owner_id, title)")
-      .eq("contract.owner_id", profile.id),
-    supabase
-      .from("contract_crew")
-      .select("id, name, salary, paid, paid_at, contract:studio_contracts!inner(owner_id, title)")
-      .eq("contract.owner_id", profile.id)
-      .eq("paid", true),
-    supabase.from("studio_expenses").select("*").eq("owner_id", profile.id),
+    applyBranch(
+      supabase
+        .from("contract_payments")
+        .select("id, amount, kind, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
+        .eq("contract.owner_id", profile.id),
+      scope.selected,
+      "contract.branch_id"
+    ),
+    applyBranch(
+      supabase
+        .from("contract_crew")
+        .select("id, name, salary, paid, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
+        .eq("contract.owner_id", profile.id)
+        .eq("paid", true),
+      scope.selected,
+      "contract.branch_id"
+    ),
+    applyBranch(supabase.from("studio_expenses").select("*").eq("owner_id", profile.id), scope.selected),
     // Lead-source analytics: value & collected per acquisition channel (all-time).
-    supabase
-      .from("studio_contracts")
-      .select("source, contract_items(qty, unit_price), contract_payments(amount)")
-      .eq("owner_id", profile.id)
-      .neq("status", "cancelled"),
+    applyBranch(
+      supabase
+        .from("studio_contracts")
+        .select("source, branch_id, contract_items(qty, unit_price), contract_payments(amount)")
+        .eq("owner_id", profile.id)
+        .neq("status", "cancelled"),
+      scope.selected
+    ),
   ]);
   const srcMap = new Map<string, { count: number; value: number; collected: number }>();
   for (const c of (srcContracts ?? []) as unknown as Array<{

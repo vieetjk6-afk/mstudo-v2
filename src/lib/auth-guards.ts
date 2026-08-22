@@ -53,6 +53,7 @@ export async function requireAdmin() {
  * with extra fields:
  *   actingRole  : 'owner' | 'admin' | 'manager' | 'staff' | 'accountant'
  *   actingUserId: the logged-in user's own id
+ *   actingBranchId: chi nhánh của chính người đang đăng nhập (null = toàn studio)
  *   isStaff     : true when logged in as a staff sub-account
  *   studioTier  : 'booking' | 'full' (the owner's effective access level)
  *
@@ -74,11 +75,29 @@ export async function requireStudio(minTier: "booking" | "plus" | "full" = "full
     if (!owner || !owner.is_active) return null;
     const tier = studioTier(effectivePlan(owner.plan, owner.plan_expires_at), owner.role === "admin");
     if (STUDIO_TIER_RANK[tier] < STUDIO_TIER_RANK[minTier]) return null;
-    return { ...owner, actingRole: me.studio_role || "staff", actingUserId: me.id, isStaff: true, studioTier: tier };
+    return {
+      ...owner,
+      actingRole: me.studio_role || "staff",
+      actingUserId: me.id,
+      // Chi nhánh của CHÍNH người đang đăng nhập. Phải trả riêng vì `...owner`
+      // mang studio_branch_id của CHỦ studio (thường null) — dùng nó làm phạm vi
+      // mặc định thì nhân viên của Quận 1 mở app ra lại thấy toàn studio, trong
+      // khi ô chọn trên topbar vẫn ghi "Quận 1".
+      actingBranchId: (me.studio_branch_id as string | null) ?? null,
+      isStaff: true,
+      studioTier: tier,
+    };
   }
 
   // Studio owner, photographer or admin.
   const tier = studioTier(effectivePlan(me.plan, me.plan_expires_at), me.role === "admin");
   if (STUDIO_TIER_RANK[tier] < STUDIO_TIER_RANK[minTier]) return null;
-  return { ...me, actingRole: me.role === "admin" ? "admin" : "owner", actingUserId: me.id, isStaff: false, studioTier: tier };
+  return {
+    ...me,
+    actingRole: me.role === "admin" ? "admin" : "owner",
+    actingUserId: me.id,
+    actingBranchId: (me.studio_branch_id as string | null) ?? null,
+    isStaff: false,
+    studioTier: tier,
+  };
 }

@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
+import { getActiveBranches } from "@/lib/branches";
 import StaffManager, { type StaffRow } from "./StaffManager";
 
 
@@ -30,11 +31,19 @@ export default async function StaffPage() {
   // chủ studio (không phải admin) sẽ không liệt kê được nhân viên bằng client
   // thường. Truy vấn đã giới hạn theo studio_owner_id = ctx.id nên an toàn.
   const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("profiles")
-    .select("id, email, full_name, studio_role, is_active, created_at")
-    .eq("studio_owner_id", ctx.id)
-    .order("created_at", { ascending: false });
+  const [{ data }, branches] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("id, email, full_name, studio_role, studio_branch_id, is_active, created_at")
+      .eq("studio_owner_id", ctx.id)
+      .order("created_at", { ascending: false }),
+    getActiveBranches(ctx.id as string),
+  ]);
 
-  return <StaffManager initial={(data ?? []) as StaffRow[]} />;
+  return (
+    <StaffManager
+      initial={(data ?? []) as StaffRow[]}
+      branches={branches.map((b) => ({ id: b.id, name: b.name }))}
+    />
+  );
 }

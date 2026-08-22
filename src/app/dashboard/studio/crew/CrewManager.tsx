@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, Phone } from "lucide-react";
+import { Building2, Plus, Trash2, Phone } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { mainUrl } from "@/lib/hosts";
 import { Panel, EmptyState } from "@/components/studio/ui";
@@ -14,6 +14,7 @@ export default function CrewManager({
   stats,
   registerUrl = "",
   registerError = null,
+  branches = [],
 }: {
   ownerId: string;
   initial: StudioCrew[];
@@ -22,6 +23,8 @@ export default function CrewManager({
   registerUrl?: string;
   /** Vì sao chưa cấp được link (thường là DB chưa có cột crew_token). */
   registerError?: string | null;
+  /** Chi nhánh còn hoạt động. Rỗng → không hiện gì về chi nhánh. */
+  branches?: { id: string; name: string }[];
 }) {
   const supabase = createClient();
   const statFor = (phone: string) => stats[(phone || "").replace(/\D/g, "")] || null;
@@ -30,10 +33,23 @@ export default function CrewManager({
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<CrewRole>("photographer");
   const [note, setNote] = useState("");
+  const [branchId, setBranchId] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // Thợ tự đăng ký qua link riêng — chờ studio nhận vào sổ.
   const pending = list.filter((c) => (c as StudioCrew & { status?: string }).status === "pending");
+
+  /** Đổi chi nhánh của một thợ. studio_crew đi qua RLS thường nên ghi trực tiếp. */
+  async function setCrewBranch(id: string, value: string) {
+    const next = value || null;
+    const prev = list.find((c) => c.id === id)?.branch_id ?? null;
+    setList((p) => p.map((c) => (c.id === id ? { ...c, branch_id: next } : c)));
+    const { error } = await supabase.from("studio_crew").update({ branch_id: next }).eq("id", id);
+    if (error) {
+      setList((p) => p.map((c) => (c.id === id ? { ...c, branch_id: prev } : c)));
+      setErr("Không đổi được chi nhánh của thợ này.");
+    }
+  }
 
   async function add() {
     setErr(null);
@@ -50,6 +66,7 @@ export default function CrewManager({
         phone: phone.trim(),
         role,
         note: note.trim() || null,
+        branch_id: branchId || null,
       })
       .select("*")
       .single();
@@ -156,6 +173,17 @@ export default function CrewManager({
                 ))}
               </select>
             </div>
+            {branches.length > 0 && (
+              <div className="field">
+                <label className="label">Chi nhánh</label>
+                <select className="input" value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                  <option value="">Toàn studio (không gán)</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="field">
               <label className="label">Ghi chú</label>
               <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -209,14 +237,33 @@ export default function CrewManager({
                     })()}
                     </div>
                   </div>
-                  <button
-                    onClick={() => remove(c.id)}
-                    aria-label="Xoá thợ"
-                    className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
-                    style={{ border: "1px solid var(--bd)", color: "var(--tx3)" }}
-                  >
-                    <Trash2 size={14} />
-                  </button>
+                  <div className="flex flex-none items-center gap-2">
+                    {branches.length > 0 && (
+                      <label className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--tx3)" }}>
+                        <Building2 size={13} />
+                        <select
+                          className="input !py-1.5 !text-[11.5px]"
+                          style={{ width: "auto", minWidth: 138 }}
+                          value={c.branch_id ?? ""}
+                          onChange={(e) => setCrewBranch(c.id, e.target.value)}
+                          aria-label={`Chi nhánh của ${c.name || c.phone}`}
+                        >
+                          <option value="">Toàn studio</option>
+                          {branches.map((b) => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
+                    <button
+                      onClick={() => remove(c.id)}
+                      aria-label="Xoá thợ"
+                      className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
+                      style={{ border: "1px solid var(--bd)", color: "var(--tx3)" }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </Panel>
               ))}
             </div>

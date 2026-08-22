@@ -68,13 +68,14 @@ type Draft = {
   note: string;
   client_visible: boolean;
   status: AppointmentStatus;
+  branch_id: string;
 };
 
-function emptyDraft(date: string, kind: AppointmentKind = "makeup"): Draft {
+function emptyDraft(date: string, kind: AppointmentKind = "makeup", branchId = ""): Draft {
   return {
     id: null, kind, title: "", appt_date: date, start_time: "", end_time: "",
     location: "", room: "", assignee: "", contract_id: "", client_name: "", client_phone: "",
-    note: "", client_visible: true, status: "scheduled",
+    note: "", client_visible: true, status: "scheduled", branch_id: branchId,
   };
 }
 
@@ -95,11 +96,13 @@ function draftOf(a: StudioAppointment): Draft {
     note: a.note ?? "",
     client_visible: a.client_visible,
     status: a.status,
+    branch_id: a.branch_id ?? "",
   };
 }
 
 export default function SchedulePage({
   ownerId, readOnly, today, initialAppointments, rooms, assignees, contracts,
+  branches = [], defaultBranchId = null,
 }: {
   ownerId: string;
   /** Nhân viên chỉ xem: giữ nguyên mọi thông tin, ẩn nút ghi. */
@@ -109,6 +112,10 @@ export default function SchedulePage({
   rooms: StudioRoom[];
   assignees: CrewOption[];
   contracts: ContractOption[];
+  /** Chi nhánh còn hoạt động — rỗng thì ô chọn chi nhánh không hiện. */
+  branches?: { id: string; name: string }[];
+  /** Chi nhánh đang xem: lịch mới đặt mặc định thuộc cơ sở đó. */
+  defaultBranchId?: string | null;
 }) {
   const supabase = createClient();
   const { toast, toastNode } = useToast();
@@ -207,6 +214,7 @@ export default function SchedulePage({
       note: d.note.trim() || null,
       client_visible: d.client_visible,
       status: d.status,
+      branch_id: d.branch_id || null,
       ...assigneeFields(d.assignee),
     };
 
@@ -278,7 +286,9 @@ export default function SchedulePage({
 
   function openNew(date: string, kind?: AppointmentKind) {
     if (readOnly) return;
-    setDraft(emptyDraft(date, kind ?? firstOnKind()));
+    // Đang xem một cơ sở thì lịch mới thuộc luôn cơ sở đó — nếu không, buổi vừa
+    // đặt sẽ biến mất khỏi lưới ngay sau khi lưu (vì lưới đang lọc theo chi nhánh).
+    setDraft(emptyDraft(date, kind ?? firstOnKind(), defaultBranchId ?? ""));
   }
   function firstOnKind(): AppointmentKind {
     return APPOINTMENT_KINDS.find((k) => kindOn[k]) ?? "makeup";
@@ -553,6 +563,7 @@ export default function SchedulePage({
           rooms={rooms}
           assignees={assignees}
           contracts={contracts}
+          branches={branches}
           busy={busy}
           readOnly={readOnly}
           onSave={save}
@@ -574,13 +585,14 @@ export default function SchedulePage({
    ═══════════════════════════════════════════════════════════════════════════ */
 
 function ApptDialog({
-  draft, setDraft, rooms, assignees, contracts, busy, readOnly, onSave, onDelete, onAdvance,
+  draft, setDraft, rooms, assignees, contracts, branches, busy, readOnly, onSave, onDelete, onAdvance,
 }: {
   draft: Draft;
   setDraft: (d: Draft | null) => void;
   rooms: StudioRoom[];
   assignees: CrewOption[];
   contracts: ContractOption[];
+  branches: { id: string; name: string }[];
   busy: boolean;
   readOnly: boolean;
   onSave: () => void;
@@ -670,6 +682,17 @@ function ApptDialog({
               ))}
             </select>
           </Field>
+
+          {branches.length > 0 && (
+            <Field label="Chi nhánh">
+              <select className="input" value={draft.branch_id} onChange={(ev) => set("branch_id", ev.target.value)} disabled={readOnly}>
+                <option value="">— Chưa gán chi nhánh —</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
+                ))}
+              </select>
+            </Field>
+          )}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Người phụ trách">

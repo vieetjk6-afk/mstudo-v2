@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { mainUrl } from "@/lib/hosts";
 import { gcalHealth } from "@/lib/gcal";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 import CalendarView, { type ContractMarker, type EventRow } from "./CalendarView";
 
 
@@ -22,16 +23,25 @@ export default async function CalendarPage() {
   }
 
   const supabase = createClient();
+  // Chi nhánh đang chọn. Chỉ lọc HỢP ĐỒNG: `studio_events` là mốc ghi chú, phần
+  // lớn gắn với một hợp đồng và không có cột chi nhánh riêng — lọc chúng theo
+  // chi nhánh sẽ làm mất các mốc studio ghi chung (nghỉ lễ, bảo trì thiết bị).
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const CONTRACT_COLS =
+    "id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, branch_id, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)";
   const [{ data: events }, { data: contracts }] = await Promise.all([
     // Kèm tên & ngày của HỢP ĐỒNG CHÍNH để lịch ghi rõ mốc thuộc hợp đồng nào.
     supabase.from("studio_events").select("*, contract:studio_contracts(title, event_date)").eq("owner_id", profile.id).order("event_date"),
-    (profile.actingRole === "staff"
-      ? supabase.from("studio_contracts").select("id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)").eq("owner_id", profile.id).eq("assigned_to", profile.actingUserId)
-      : supabase.from("studio_contracts").select("id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)").eq("owner_id", profile.id)
-    )
-      .not("event_date", "is", null)
-      // Chỉ hiện hợp đồng đã xác nhận/khách đã ký — bỏ nháp & mới gửi.
-      .in("status", ["approved", "in_progress", "completed"]),
+    applyBranch(
+      (profile.actingRole === "staff"
+        ? supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id).eq("assigned_to", profile.actingUserId)
+        : supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id)
+      )
+        .not("event_date", "is", null)
+        // Chỉ hiện hợp đồng đã xác nhận/khách đã ký — bỏ nháp & mới gửi.
+        .in("status", ["approved", "in_progress", "completed"]),
+      scope.selected
+    ),
   ]);
 
   // Read-only calendar feed (owner sets it once; staff just see the URL).

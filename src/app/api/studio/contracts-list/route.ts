@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
 import { autoAdvanceContracts } from "@/lib/contract-status";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +26,16 @@ export async function GET() {
   }
 
   const supabase = createClient();
+  // Chi nhánh đang chọn trên thanh trên cùng — endpoint này chạy trong cùng
+  // request nên đọc được cookie đó, và danh sách hợp đồng khớp với phạm vi mà
+  // người dùng đang thấy ở mọi màn khác.
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
   let q = supabase
     .from("studio_contracts")
-    .select("id, code, title, client_name, client_phone, event_date, event_time, status, shoot_type, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")
+    .select("id, code, title, client_name, client_phone, event_date, event_time, status, shoot_type, branch_id, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")
     .eq("owner_id", profile.id);
   if (profile.actingRole === "staff") q = q.eq("assigned_to", profile.actingUserId);
+  q = applyBranch(q, scope.selected);
   const { data, error } = await q.order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ list: data ?? [] });

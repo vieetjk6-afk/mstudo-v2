@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioCommandK from "@/components/StudioCommandK";
+import BranchSwitcher, { type SwitcherBranch } from "@/components/BranchSwitcher";
 import StudioFooterNav from "@/components/StudioFooterNav";
 import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
@@ -36,6 +37,7 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/studio/bookings", "Đặt lịch khách", "Yêu cầu đặt lịch gửi từ website và trang giá"],
   ["/dashboard/studio/leads", "Yêu cầu mới", "Khách đặt lịch từ website & chatbox"],
   ["/dashboard/studio/calendar", "Lịch làm việc", "Lịch chụp và lịch của đội ngũ"],
+  ["/dashboard/studio/schedule", "Lịch studio", "Trang điểm · Thử đồ · Chụp pre-wedding · Tư vấn"],
   ["/dashboard/studio/team", "Lịch đội ngũ", "Lịch làm việc của từng nhân sự"],
   ["/dashboard/studio/production", "Xử lý hình ảnh", "Ảnh, video, in ấn của mọi hợp đồng"],
   ["/dashboard/studio/rental", "Phòng váy", "Kho trang phục và đơn cho thuê"],
@@ -48,6 +50,7 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/studio/album-categories", "Danh mục album", "Nhóm album theo thể loại"],
   ["/dashboard/studio/reports", "Thu chi & công nợ", "Dòng tiền thực tế của studio"],
   ["/dashboard/studio/payroll", "Đối soát tiền công", "Tiền công theo từng nhân sự"],
+  ["/dashboard/studio/branches", "Chi nhánh", "Nhiều cơ sở trong một tài khoản — đội ngũ, lịch và doanh thu riêng"],
   ["/dashboard/studio/crew", "Đội ngũ", "Đội ngũ, vai trò và tiền công"],
   ["/dashboard/studio/staff", "Nhân viên & phân quyền", "Tài khoản nhân viên của studio"],
   ["/dashboard/studio/ranking", "Xếp hạng đội ngũ", "Theo số buổi nhận và thu nhập từ studio"],
@@ -173,6 +176,9 @@ export default function StudioShell({
   role,
   comingSoon = [],
   hiddenNav = [],
+  branches = [],
+  branchSelected = null,
+  branchCookie,
   children,
 }: {
   profile: Profile;
@@ -180,6 +186,11 @@ export default function StudioShell({
   role: string;
   comingSoon?: string[];
   hiddenNav?: string[]; // mục ẨN HOÀN TOÀN với non-admin (chưa xuất bản)
+  /** Chi nhánh của studio. Rỗng → ô chọn chi nhánh không hiện gì. */
+  branches?: SwitcherBranch[];
+  /** null = xem gộp · "none" = chưa gán · id = một cơ sở. */
+  branchSelected?: string | null;
+  branchCookie?: string;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -402,6 +413,13 @@ export default function StudioShell({
               <h1 className="truncate text-[16.5px] font-bold" style={{ letterSpacing: "-.3px" }}>{title}</h1>
               {sub ? <p className="mt-px hidden truncate text-[11.5px] sm:block" style={{ color: "var(--tx3)" }}>{sub}</p> : null}
             </div>
+
+            {/* Chi nhánh đang xem — chỉ hiện khi studio khai từ 1 cơ sở trở lên.
+                Đứng TRƯỚC ô ⌘K vì nó đổi PHẠM VI của mọi thứ bên dưới, nên phải
+                đọc được trước khi người dùng tìm trong phạm vi đó. */}
+            {branchCookie && (
+              <BranchSwitcher branches={branches} selected={branchSelected} cookieName={branchCookie} />
+            )}
 
             {/* Ô lệnh ⌘K — thay ô tìm kiếm cũ, tìm cả màn, hợp đồng, khách, nhân sự. */}
             <StudioCommandK access={access} />

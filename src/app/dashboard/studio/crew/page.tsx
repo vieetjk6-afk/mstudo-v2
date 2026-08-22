@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { mainUrl } from "@/lib/hosts";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getActiveBranches } from "@/lib/branches";
 import type { StudioCrew } from "@/lib/types";
 import CrewManager from "./CrewManager";
 
@@ -81,6 +82,7 @@ export default async function CrewPage() {
       stats={stats}
       registerUrl={crewToken ? mainUrl(`/crew/${crewToken}`) : ""}
       registerError={crewToken ? null : tokenError}
+      branches={(await getActiveBranches(profile.id)).map((b) => ({ id: b.id, name: b.name }))}
     />
   );
 }
