@@ -14,6 +14,7 @@ import {
   Droplets,
   Filter,
   HeartOff,
+  CheckCircle2,
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl } from "@/lib/drive";
@@ -22,6 +23,7 @@ import PlanUsage from "@/components/PlanUsage";
 import { Panel } from "@/components/studio/ui";
 import StudioTrialButton from "@/components/StudioTrialButton";
 import FilterDialog from "@/components/FilterDialog";
+import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
 
 export interface AlbumRow {
   id: string;
@@ -32,6 +34,8 @@ export interface AlbumRow {
   watermark_enabled: boolean;
   download_enabled: boolean;
   phase?: "selection" | "delivery";
+  /** Lần gần nhất khách bấm "Đã chọn xong" trên trang album. null = chưa chốt. */
+  selection_done_at?: string | null;
   // Đếm ảnh + 1 ảnh bìa dự phòng (thay vì kéo toàn bộ drive_file_id mọi ảnh).
   photoCount: number;
   coverFallback: string | null;
@@ -115,9 +119,10 @@ function AlbumEmpty({ title, hint, cta, href }: { title: string; hint: string; c
 // Tách thư viện thành 2 TAB theo giai đoạn: ALBUM CHỌN ẢNH (phase 'selection') và
 // ALBUM GIAO KHÁCH (phase 'delivery') — cùng kiểu tab với trang Hợp đồng.
 function AlbumTabs({ albums, canDelivery, canWatermark, studioHost }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean; studioHost: string | null }) {
-  const deliveryAlbums = albums.filter((a) => (a.phase ?? "selection") === "delivery");
-  const selectionAlbums = albums.filter((a) => (a.phase ?? "selection") !== "delivery");
+  const deliveryAlbums = sortAlbums(albums.filter((a) => (a.phase ?? "selection") === "delivery"));
+  const selectionAlbums = sortAlbums(albums.filter((a) => (a.phase ?? "selection") !== "delivery"));
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
+  const doneCount = pendingSelectionCount(albums);
 
   const grid = (rows: AlbumRow[]) => (
     // 5 thẻ một hàng trên màn rộng: ba thẻ trải hết 1100px làm mỗi thẻ dài ngoẵng
@@ -131,12 +136,26 @@ function AlbumTabs({ albums, canDelivery, canWatermark, studioHost }: { albums: 
 
   // Gói không dùng giao khách và cũng chưa có album giao khách nào → giữ một lưới
   // gọn như trước, thêm tab rỗng chỉ làm rối.
-  if (!canDelivery && deliveryAlbums.length === 0) return grid(albums);
+  // Băng nhắc việc: thông báo đẩy lướt qua rồi trôi, còn dòng này ở lại cho tới
+  // khi studio xử lý xong. Chỉ hiện khi thực sự có album đang chờ.
+  const banner = doneCount > 0 ? (
+    <div
+      className="mb-3.5 flex flex-wrap items-center gap-2 rounded-[12px] px-[15px] py-[11px] text-[12.5px] font-semibold"
+      style={{ background: "var(--gnS)", color: "var(--gn)", border: "1px solid var(--bd)" }}
+    >
+      <CheckCircle2 size={16} style={{ flex: "none" }} />
+      {doneCount === 1 ? "1 album khách đã chọn xong" : `${doneCount} album khách đã chọn xong`} — đang chờ studio lọc ảnh.
+      <span className="font-medium" style={{ color: "var(--tx2)" }}>Đã đưa lên đầu danh sách.</span>
+    </div>
+  ) : null;
+
+  if (!canDelivery && deliveryAlbums.length === 0) return <>{banner}{grid(sortAlbums(albums))}</>;
 
   const rows = tab === "delivery" ? deliveryAlbums : selectionAlbums;
 
   return (
     <div>
+      {banner}
       <div
         role="tablist"
         aria-label="Nhóm album"
@@ -197,6 +216,7 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
   const [watermark, setWatermark] = useState(a.watermark_enabled);
   const [download, setDownload] = useState(a.download_enabled);
   const [phase, setPhase] = useState<"selection" | "delivery">(a.phase ?? "selection");
+  const [doneAt, setDoneAt] = useState<string | null>(a.selection_done_at ?? null);
   const [filterOpen, setFilterOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
@@ -216,6 +236,9 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
   const photos = a.photoCount ?? 0;
   const pct = photos > 0 ? Math.min(100, Math.round((picked / photos) * 100)) : 0;
   const dislikes = a.dislikes?.[0]?.count ?? 0;
+  // Khách đã bấm "Đã chọn xong" ⇒ tới lượt studio. Chỉ coi là chốt khi album có
+  // ảnh: một album rỗng mang mốc chốt là dữ liệu cũ còn sót, không phải việc.
+  const done = !!doneAt && photos > 0;
 
   async function patch(fields: Record<string, unknown>) {
     await supabase.from("albums").update(fields).eq("id", a.id);
@@ -236,6 +259,14 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
         ) : (
           <span className="flex h-full items-center justify-center" style={{ color: "var(--tx3)" }}>
             <ImageIcon size={26} />
+          </span>
+        )}
+        {done && (
+          <span
+            className="absolute right-2.5 top-2.5 flex items-center gap-1 rounded-[20px] px-[9px] py-[3px] text-[10.5px] font-bold"
+            style={{ background: "var(--gn)", color: "#fff" }}
+          >
+            <CheckCircle2 size={12} /> Đã chọn xong
           </span>
         )}
         {canDelivery && (
@@ -266,8 +297,16 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
         <div className="mb-[5px] mt-2.5 h-[5px] overflow-hidden rounded-[4px]" style={{ background: "var(--bd2)" }}>
           <div className="h-full rounded-[4px]" style={{ width: `${pct}%`, background: "var(--ac)" }} />
         </div>
-        <p className="text-[11.5px] font-semibold" style={{ color: "var(--tx2)" }}>
-          {photos === 0 ? "Chưa nạp ảnh vào album" : picked === 0 ? "Khách chưa chọn ảnh nào" : `Khách đã chọn ${picked}/${photos} ảnh`}
+        <p className="text-[11.5px] font-semibold" style={{ color: done ? "var(--gn)" : "var(--tx2)" }}>
+          {photos === 0
+            ? "Chưa nạp ảnh vào album"
+            : done
+              // Nói rõ VIỆC TIẾP THEO, không chỉ nói con số: đây là album duy
+              // nhất trong thư viện đang chờ studio động tay.
+              ? `Khách đã chốt ${picked}/${photos} ảnh · chờ lọc`
+              : picked === 0
+                ? "Khách chưa chọn ảnh nào"
+                : `Khách đã chọn ${picked}/${photos} ảnh`}
         </p>
 
         <div className="mt-[11px] flex items-center gap-2 pt-2.5" style={{ borderTop: "1px solid var(--bd2)" }}>
@@ -319,9 +358,37 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
             className="absolute inset-0 z-10 cursor-default"
           />
           <div className="absolute inset-x-3 bottom-3 z-20 rounded-[12px] p-3" style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "0 12px 34px rgba(20,15,25,.22)" }}>
+            {/* Album ở lại giai đoạn "Chọn ảnh" sau khi lọc xong thì không có
+                tín hiệu nào gỡ mốc chờ — nên phải có nút gỡ tay, nếu không cái
+                nhãn xanh dính vĩnh viễn và thư viện mất luôn tác dụng xếp việc. */}
+            {done && (
+              <button
+                type="button"
+                onClick={() => { setDoneAt(null); setMenu(false); patch({ selection_done_at: null }); }}
+                className="mb-2 flex w-full items-center justify-center gap-1.5 rounded-[10px] py-2 text-[12px] font-bold"
+                style={{ background: "var(--gnS)", color: "var(--gn)" }}
+              >
+                <CheckCircle2 size={14} /> Đã lọc xong — bỏ đánh dấu
+              </button>
+            )}
             <Toggle label="Đã xuất bản" on={status === "published"} onChange={(v) => { setStatus(v ? "published" : "draft"); patch({ status: v ? "published" : "draft" }); }} />
             {canDelivery && (
-              <Toggle label="Giao khách (ảnh hoàn thiện)" on={phase === "delivery"} onChange={(v) => { const next = v ? "delivery" : "selection"; setPhase(next); patch({ phase: next }); }} />
+              <Toggle
+                label="Giao khách (ảnh hoàn thiện)"
+                on={phase === "delivery"}
+                onChange={(v) => {
+                  const next = v ? "delivery" : "selection";
+                  setPhase(next);
+                  // Chuyển sang GIAO KHÁCH nghĩa là đã lọc xong đợt chọn này —
+                  // gỡ luôn mốc chờ, nếu không album cứ nằm mãi đầu thư viện.
+                  if (v && doneAt) {
+                    setDoneAt(null);
+                    patch({ phase: next, selection_done_at: null });
+                  } else {
+                    patch({ phase: next });
+                  }
+                }}
+              />
             )}
             {/* Watermark: chỉ Photographer Plus & Studio — ảnh có watermark buộc phải
                 đi qua proxy khi khách tải, ảnh thường tải thẳng từ Drive. */}

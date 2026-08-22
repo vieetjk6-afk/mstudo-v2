@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Download, FileSpreadsheet, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText } from "lucide-react";
+import { Plus, Search, Download, FileSpreadsheet, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText, CalendarClock } from "lucide-react";
 import { useCachedJson } from "@/lib/client-cache";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, avatarStyle, initials } from "@/lib/avatar";
@@ -16,8 +16,11 @@ import {
   type ContractStatus,
   type ShootType,
 } from "@/lib/types";
-import { fmtDate, fmtDow } from "@/lib/date";
-import { filterContracts, sortContracts, type ContractSort } from "@/lib/contract-filter";
+import { fmtDate, fmtDow, todayVN } from "@/lib/date";
+import {
+  filterContracts, sortContracts, upcomingContracts, UPCOMING_DAYS,
+  type ContractSort,
+} from "@/lib/contract-filter";
 import {
   exportContracts,
   contractsCsvRows,
@@ -51,9 +54,15 @@ const SORT_OPTIONS: [ContractSort, string][] = [
   ["code_desc", "Mã HĐ: Z → A"],
 ];
 
-/** 5 tab theo bản thiết kế — lọc thẳng theo trạng thái, không gộp nhóm. */
+/**
+ * Tab lọc. Bốn tab sau lọc thẳng theo TRẠNG THÁI; riêng "Sắp tới" lọc theo NGÀY
+ * CHỤP — đó là câu hỏi khác hẳn ("tuần này phải chuẩn bị gì"), và là câu studio
+ * hỏi mỗi sáng, nên nó đứng ngay sau "Tất cả" chứ không nằm cuối hàng.
+ */
+const UPCOMING_TAB = "upcoming";
 const TABS: [string, string][] = [
   ["all", "Tất cả"],
+  [UPCOMING_TAB, `Sắp tới · ${UPCOMING_DAYS} ngày`],
   ["sent", "Chờ duyệt"],
   ["approved", "Đã duyệt"],
   ["in_progress", "Đang chụp"],
@@ -101,12 +110,24 @@ export default function ContractsListView({
   // Lọc chung (tìm kiếm + mã + khoảng ngày) TRƯỚC khi chia tab, để số đếm trên
   // từng tab phản ánh đúng bộ lọc đang bật. Logic ở @/lib/contract-filter.
   const matched = useMemo(() => filterContracts(rows, { q, code, from, to }), [rows, q, code, from, to]);
-  const countOf = (key: string) => (key === "all" ? matched.length : matched.filter((c) => c.status === key).length);
 
-  const filtered = useMemo(
-    () => sortContracts(tab === "all" ? matched : matched.filter((c) => c.status === tab), sort),
-    [matched, tab, sort]
-  );
+  // Hôm nay theo giờ VN, chốt một lần lúc mở màn: nếu tính lại mỗi lần render
+  // thì danh sách "sắp tới" đổi ngay giữa chừng khi qua nửa đêm, mà người dùng
+  // không hiểu vì sao một dòng vừa biến mất.
+  const today = useMemo(() => todayVN(), []);
+  const upcoming = useMemo(() => upcomingContracts(matched, today), [matched, today]);
+
+  const countOf = (key: string) =>
+    key === "all" ? matched.length
+    : key === UPCOMING_TAB ? upcoming.length
+    : matched.filter((c) => c.status === key).length;
+
+  const filtered = useMemo(() => {
+    // Tab "Sắp tới" đã tự xếp gần nhất lên đầu — đó là lý do nó tồn tại. Chỉ khi
+    // người dùng CHỦ ĐỘNG chọn một kiểu sắp xếp khác thì mới xếp lại.
+    if (tab === UPCOMING_TAB) return sort === "default" ? upcoming : sortContracts(upcoming, sort);
+    return sortContracts(tab === "all" ? matched : matched.filter((c) => c.status === tab), sort);
+  }, [matched, upcoming, tab, sort]);
 
   const filterCount = (q.trim() ? 1 : 0) + (code.trim() ? 1 : 0) + (from ? 1 : 0) + (to ? 1 : 0);
 
@@ -246,7 +267,13 @@ export default function ContractsListView({
           <div>
             <label className="label" htmlFor="f-sort">Sắp xếp</label>
             <select id="f-sort" className="input" value={sort} onChange={(e) => setSort(e.target.value as ContractSort)}>
-              {SORT_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {SORT_OPTIONS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {/* Ở tab "Sắp tới", mặc định là XẾP THEO LỊCH chứ không phải
+                      theo ngày tạo — nhãn phải nói đúng thứ đang thấy. */}
+                  {value === "default" && tab === UPCOMING_TAB ? "Lịch gần nhất trước" : label}
+                </option>
+              ))}
             </select>
           </div>
           <div>
@@ -283,6 +310,8 @@ export default function ContractsListView({
         ) : filtered.length === 0 ? (
           rows.length === 0 ? (
             <EmptyState icon={FileText} title="Chưa có hợp đồng nào" hint="Tạo hợp đồng đầu tiên để theo dõi lịch chụp, nhân sự và thanh toán." />
+          ) : tab === UPCOMING_TAB ? (
+            <EmptyState icon={CalendarClock} title={`Không có buổi chụp nào trong ${UPCOMING_DAYS} ngày tới`} hint="Lịch trống — hoặc buổi chụp nằm xa hơn, xem ở tab Tất cả." />
           ) : (
             <EmptyState icon={Search} title="Không có hợp đồng nào khớp" hint="Thử bỏ bớt bộ lọc hoặc chuyển sang tab khác." />
           )
@@ -402,6 +431,8 @@ export default function ContractsListView({
           <Panel>
             {rows.length === 0 ? (
               <EmptyState icon={FileText} title="Chưa có hợp đồng nào" hint="Tạo hợp đồng đầu tiên để theo dõi lịch chụp, nhân sự và thanh toán." />
+            ) : tab === UPCOMING_TAB ? (
+              <EmptyState icon={CalendarClock} title={`Không có buổi chụp nào trong ${UPCOMING_DAYS} ngày tới`} hint="Lịch trống — hoặc buổi chụp nằm xa hơn, xem ở tab Tất cả." />
             ) : (
               <EmptyState icon={Search} title="Không có hợp đồng nào khớp" hint="Thử bỏ bớt bộ lọc hoặc chuyển sang tab khác." />
             )}

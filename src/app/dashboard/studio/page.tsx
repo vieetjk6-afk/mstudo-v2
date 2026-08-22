@@ -260,10 +260,21 @@ export default async function StudioOverview() {
     contract_crew: CrewLite[];
   }>;
 
+  // Lịch chụp sắp tới chỉ tính hợp đồng đã xác nhận/ký (bỏ nháp & mới gửi).
+  //
+  // Hai chỗ từng sai ở đây, cùng làm hỏng đúng một thứ — cái danh sách này:
+  //  • Truy vấn hợp đồng KHÔNG có `order by`, nên bản lọc ra cũng không theo thứ
+  //    tự nào. Phải tự sắp theo ngày (rồi giờ trong cùng ngày) thì "sắp tới" mới
+  //    đúng nghĩa gần-nhất-trước.
+  //  • Cắt `.slice(0, 6)` ngay tại đây khiến thẻ KPI "Lịch sắp tới" không bao giờ
+  //    quá 6, dù studio có 30 buổi. Giữ danh sách đầy đủ để đếm; cắt lúc VẼ.
   const upcoming = list
-    // Lịch chụp sắp tới chỉ tính hợp đồng đã xác nhận/ký (bỏ nháp & mới gửi).
     .filter((c) => c.event_date && c.event_date >= today && ["approved", "in_progress", "completed"].includes(c.status))
-    .slice(0, 6);
+    .sort((a, b) =>
+      (a.event_date as string).localeCompare(b.event_date as string) ||
+      // Buổi chưa ghi giờ xuống cuối ngày hôm đó, không đoán hộ là sáng hay chiều.
+      (a.event_time || "99:99").localeCompare(b.event_time || "99:99")
+    );
   // Yêu cầu sửa khách gửi mà chưa xử lý xong.
   const openEdits = list.flatMap((c) =>
     (c.contract_edit_requests || []).filter((r) => r.status === "open").map(() => c)
@@ -342,6 +353,10 @@ export default async function StudioOverview() {
     contract: { id: string; title: string } | null;
   }>);
 
+  // Số dòng lịch vẽ ở Tổng quan. 8 = vừa hết một tuần bận mà chưa phải cuộn;
+  // phần dư ghi "và N buổi nữa" rồi dẫn sang màn Lịch làm việc.
+  const SCHEDULE_ROWS = 8;
+
   // ── Số liệu KPI ───────────────────────────────────────────────
   const revenueMonth = sumAmounts((payMonth ?? []) as unknown as { amount: number }[]);
   const notCancelled = list.filter((c) => c.status !== "cancelled");
@@ -350,6 +365,11 @@ export default async function StudioOverview() {
   const todayJobs = notCancelled
     .filter((c) => c.event_date === today)
     .sort((a, b) => (a.event_time || "").localeCompare(b.event_time || ""));
+  // Khối "Lịch hôm nay & sắp tới" ở đầu trang. Ghép hai danh sách chứ không
+  // dùng riêng `upcoming`: `todayJobs` nhận MỌI trạng thái (kể cả nháp/chờ ký —
+  // buổi chiều nay chưa ký vẫn phải chuẩn bị), còn `upcoming` chỉ nhận HĐ đã
+  // chốt. Lọc trùng ngày hôm nay ra khỏi vế sau để một buổi không hiện hai lần.
+  const schedule = [...todayJobs, ...upcoming.filter((c) => c.event_date !== today)];
   const yesterdayJobs = notCancelled.filter((c) => c.event_date === yesterday).length;
   const jobsDelta = todayJobs.length - yesterdayJobs;
 
@@ -605,6 +625,66 @@ export default async function StudioOverview() {
         {stats.map((s) => <StatCard key={s.label} {...s} />)}
       </div>
 
+      {/* ── Lịch hôm nay & sắp tới ────────────────────────────────────────
+          Đứng NGAY SAU bốn thẻ KPI vì đây là thứ người ta mở Tổng quan để xem
+          đầu tiên: hôm nay chụp gì, mai chụp gì. Trước đây nó nằm dưới biểu đồ
+          doanh thu, phải cuộn qua ba khối mới thấy — mà biểu đồ thì mỗi tháng
+          xem một lần, còn lịch thì mỗi sáng. */}
+      <Panel>
+        <PanelHead
+          icon={CalendarDays} tone="brand" title="Lịch hôm nay & sắp tới"
+          count={`${todayJobs.length} hôm nay · ${upcoming.filter((c) => c.event_date !== today).length} sắp tới`}
+          note="Xếp theo buổi gần nhất"
+        />
+        {schedule.length === 0 ? (
+          <EmptyState icon={CalendarDays} title="Chưa có buổi chụp nào sắp tới" hint="Tạo hợp đồng hoặc nhận đặt lịch để lấp lịch tuần này." />
+        ) : (
+          <>
+            {/* Hai cột trên màn rộng: khối này giờ chiếm hết bề ngang, để một
+                cột thì mỗi dòng dài ngoẵng mà vẫn phải cuộn mới xem hết tuần. */}
+            <div className="grid px-2 py-2 min-[900px]:grid-cols-2">
+              {schedule.slice(0, SCHEDULE_ROWS).map((c) => {
+                const isToday = c.event_date === today;
+                return (
+                  <Link
+                    key={c.id}
+                    href={`/dashboard/studio/contracts/${c.id}`}
+                    className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-2 py-[9px] text-left"
+                  >
+                    {/* Cột ngày/giờ cố định bề ngang để mọi dòng thẳng hàng:
+                        buổi hôm nay chỉ cần giờ, buổi sau cần ngày. */}
+                    <span className="tnum w-[58px] flex-none text-[11.5px] font-bold" style={{ color: isToday ? "var(--ac)" : "var(--tx3)" }}>
+                      {isToday ? c.event_time || "Hôm nay" : fmtDayMonth(c.event_date)}
+                    </span>
+                    <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10.5px] font-bold" style={avatarStyle(c.client_name)}>
+                      {initials(c.client_name || c.title)}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-semibold">{c.title}</span>
+                      <span className="block truncate text-[11px]" style={{ color: "var(--tx3)" }}>
+                        {c.client_name || "Chưa có tên khách"}
+                        {!isToday && c.event_time ? ` · ${c.event_time}` : ""}
+                      </span>
+                    </span>
+                    <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: CONTRACT_STATUS_TONE[c.status].fg }} />
+                  </Link>
+                );
+              })}
+            </div>
+            <div className="flex items-center gap-3 px-4 pb-3 pt-1">
+              {schedule.length > SCHEDULE_ROWS && (
+                <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  và {schedule.length - SCHEDULE_ROWS} buổi nữa
+                </span>
+              )}
+              <Link href="/dashboard/studio/calendar" className="ml-auto text-[12px] font-semibold" style={{ color: "var(--ac)" }}>
+                Xem lịch làm việc →
+              </Link>
+            </div>
+          </>
+        )}
+      </Panel>
+
       {/* ── Cần xử lý ngay ────────────────────────────────────────────── */}
       <Panel>
         <PanelHead
@@ -688,43 +768,12 @@ export default async function StudioOverview() {
         )}
       </Panel>
 
-      {/* ── Doanh thu + Lịch hôm nay ──────────────────────────────────── */}
-      <div className="grid gap-3.5 min-[1100px]:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
-        <RevenueChart
-          bars={revBars}
-          headline={vnd(revenueMonth)}
-          delta={revDeltaPct != null ? `${revDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(revDeltaPct)}% so với tháng trước` : null}
-        />
-
-        <Panel className="flex flex-col">
-          <div className="flex items-center px-4 pb-2.5 pt-3.5">
-            <div>
-              <h2 className="text-[14px] font-bold">Lịch hôm nay</h2>
-              <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                {todayJobs.length} buổi · {upcoming.length} buổi sắp tới
-              </p>
-            </div>
-            <Link href="/dashboard/studio/calendar" className="ml-auto text-[12px] font-semibold" style={{ color: "var(--ac)" }}>Xem lịch</Link>
-          </div>
-          <div className="px-2 pb-2">
-            {(todayJobs.length ? todayJobs : upcoming).slice(0, 6).map((c) => (
-              <Link key={c.id} href={`/dashboard/studio/contracts/${c.id}`} className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-2 py-[9px] text-left">
-                <span className="tnum w-[38px] flex-none text-[11.5px] font-bold" style={{ color: "var(--tx3)" }}>
-                  {todayJobs.length ? (c.event_time || "—") : fmtDayMonth(c.event_date)}
-                </span>
-                <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10.5px] font-bold" style={avatarStyle(c.client_name)}>
-                  {initials(c.client_name || c.title)}
-                </span>
-                <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{c.title}</span>
-                <span className="h-[7px] w-[7px] flex-none rounded-full" style={{ background: CONTRACT_STATUS_TONE[c.status].fg }} />
-              </Link>
-            ))}
-            {todayJobs.length === 0 && upcoming.length === 0 && (
-              <EmptyState icon={CalendarDays} title="Hôm nay không có buổi chụp" hint="Tạo hợp đồng hoặc nhận đặt lịch để lấp lịch tuần này." />
-            )}
-          </div>
-        </Panel>
-      </div>
+      {/* ── Doanh thu tháng ───────────────────────────────────────────── */}
+      <RevenueChart
+        bars={revBars}
+        headline={vnd(revenueMonth)}
+        delta={revDeltaPct != null ? `${revDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(revDeltaPct)}% so với tháng trước` : null}
+      />
 
       {/* Hợp đồng đang tắc — việc nằm im không tự kêu, nên phải có chỗ kêu hộ.
           Chỉ hiện khi thực sự có hợp đồng tắc; studio đang chạy trơn thì khối

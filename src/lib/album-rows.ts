@@ -13,7 +13,10 @@ export async function fetchAlbumRows(
 ): Promise<AlbumRow[]> {
   if (!ownerId) return [];
 
-  const COLS = "id, slug, title, cover_url, status, watermark_enabled, download_enabled, phase, photos(count), selections(count)";
+  // Cột LÕI — có ở mọi database, kể cả cái chưa chạy migration nào gần đây.
+  const BASE_COLS = "id, slug, title, cover_url, status, watermark_enabled, download_enabled, phase, photos(count), selections(count)";
+  // + mốc khách chốt chọn ảnh (migrations/album_selection_done.sql).
+  const COLS = `${BASE_COLS}, selection_done_at`;
   let listQ = supabase
     .from("albums")
     .select(`${COLS}, dislikes(count)`)
@@ -37,15 +40,26 @@ export async function fetchAlbumRows(
 
   type RawAlbum = Omit<AlbumRow, "photoCount" | "coverFallback"> & { photos: { count: number }[] };
 
-  // DB chưa chạy migration album_dislikes.sql thì cả câu select embed
-  // `dislikes(count)` lỗi và thư viện album trống trơn — thử lại không kèm cột
-  // đó thay vì bỏ trắng cả trang.
+  // Một cột/embed thiếu là hỏng CẢ câu select, và thư viện album trắng trơn —
+  // thà mất một tính năng phụ còn hơn mất cả trang. Nên hạ dần từng nấc, mỗi
+  // nấc bỏ đúng thứ mà một migration chưa chạy có thể gây ra:
+  //   1. đủ cả  →  2. bỏ dislikes(count)   (migrations/album_dislikes.sql)
+  //              →  3. bỏ selection_done_at (migrations/album_selection_done.sql)
+  // Nấc 3 chỉ còn cột lõi nên gần như không thể hỏng.
+  const runList = async (cols: string) => {
+    let q = supabase.from("albums").select(cols).eq("owner_id", ownerId);
+    if (opts.excludeGalleries) q = q.eq("is_gallery", false);
+    return q.order("updated_at", { ascending: false });
+  };
+
   let albums = listRes.data as RawAlbum[] | null;
   if (listRes.error) {
-    let retryQ = supabase.from("albums").select(COLS).eq("owner_id", ownerId);
-    if (opts.excludeGalleries) retryQ = retryQ.eq("is_gallery", false);
-    const { data } = await retryQ.order("updated_at", { ascending: false });
-    albums = data as RawAlbum[] | null;
+    const second = await runList(COLS);
+    albums = second.data as unknown as RawAlbum[] | null;
+    if (second.error) {
+      const third = await runList(BASE_COLS);
+      albums = third.data as unknown as RawAlbum[] | null;
+    }
   }
 
   const coverMap = new Map<string, string>();
@@ -63,6 +77,7 @@ export async function fetchAlbumRows(
     watermark_enabled: a.watermark_enabled,
     download_enabled: a.download_enabled,
     phase: a.phase,
+    selection_done_at: a.selection_done_at ?? null,
     selections: a.selections,
     dislikes: a.dislikes,
     photoCount: a.photos?.[0]?.count ?? 0,
