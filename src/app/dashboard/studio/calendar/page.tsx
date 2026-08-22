@@ -1,5 +1,6 @@
 import { requireStudio } from "@/lib/auth-guards";
-import CalendarTabs, { readTab, type CalendarTab } from "./CalendarTabs";
+import CalendarTabs from "./CalendarTabs";
+import { readTab, type CalendarTab } from "./tabs";
 import ShootTab from "./ShootTab";
 import StudioTab from "./StudioTab";
 import TeamTab from "./TeamTab";

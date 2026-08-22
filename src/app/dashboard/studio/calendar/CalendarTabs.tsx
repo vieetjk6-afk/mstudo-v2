@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Camera, CalendarRange, UsersRound, type LucideIcon } from "lucide-react";
+import { tabHref, type CalendarTab } from "./tabs";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DẢI TAB CỦA MÀN LỊCH — /dashboard/studio/calendar?tab=…
@@ -13,16 +14,10 @@ import { Camera, CalendarRange, UsersRound, type LucideIcon } from "lucide-react
    Điều hướng bằng ?tab= chứ không bằng state: mỗi tab có URL riêng để gửi cho
    nhau được, F5 không mất chỗ đang xem, và dữ liệu của tab nào chỉ truy vấn khi
    mở đúng tab đó (mỗi tab là một server component riêng).
+
+   File này chỉ có phần GIAO DIỆN. Danh sách tab và hàm đọc ?tab= nằm ở
+   ./tabs.ts vì page.tsx chạy phía server cũng cần chúng — xem ghi chú ở đó.
    ═══════════════════════════════════════════════════════════════════════════ */
-
-export const CALENDAR_TABS = ["shoot", "studio", "team"] as const;
-export type CalendarTab = (typeof CALENDAR_TABS)[number];
-
-/** Đọc ?tab= về một giá trị hợp lệ. Sai/thiếu → tab buổi chụp. */
-export function readTab(raw: string | string[] | undefined): CalendarTab {
-  const v = Array.isArray(raw) ? raw[0] : raw;
-  return (CALENDAR_TABS as readonly string[]).includes(v ?? "") ? (v as CalendarTab) : "shoot";
-}
 
 const TABS: { key: CalendarTab; label: string; icon: LucideIcon }[] = [
   { key: "shoot", label: "Buổi chụp", icon: Camera },
@@ -57,7 +52,7 @@ export default function CalendarTabs({
         return (
           <Link
             key={t.key}
-            href={t.key === "shoot" ? "/dashboard/studio/calendar" : `/dashboard/studio/calendar?tab=${t.key}`}
+            href={tabHref(t.key)}
             role="tab"
             aria-selected={on}
             className="flex items-center gap-1.5 whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
