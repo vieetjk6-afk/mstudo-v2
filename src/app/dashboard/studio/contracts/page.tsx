@@ -25,7 +25,7 @@ export default async function ContractsList() {
   }
   // Chi nhánh đang xem đi vào KHOÁ CACHE của danh sách (xem ghi chú trong
   // ContractsListView) — đổi chi nhánh không được hiện lại danh sách cơ sở cũ.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
 
   // Thương hiệu studio in ở đầu file Excel/CSV xuất ra từ màn này.
   return (

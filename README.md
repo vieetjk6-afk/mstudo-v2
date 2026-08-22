@@ -130,7 +130,7 @@ Mọi con số tiền/ngày dùng `font-variant-numeric: tabular-nums`.
 | 32 | Thêm khoản chi | `expense` | `studio/expenses/new/` |
 | 33 | Đối soát tiền công | `payroll` | `studio/payroll/PayrollView.tsx` |
 | 34 | Báo cáo | `reports` | `studio/reports/ReportsView.tsx` |
-| 35 | Đội ngũ | `crew` | `studio/crew/CrewManager.tsx`, `staff/StaffManager.tsx` |
+| 35 | Nhân viên & phân quyền (2 tab: tài khoản + sổ thợ) | `crew` | `studio/staff/StaffAndCrew.tsx`, `staff/StaffManager.tsx`, `crew/CrewManager.tsx` · vai trò ở `src/lib/studio-roles.ts` |
 | 36 | Hồ sơ nhân sự | `member` | `studio/crew/[id]/` |
 | 37 | Xếp hạng | `ranking` | `studio/ranking/page.tsx` |
 | 38 | Mẫu tin nhắn | `messages` | `studio/messages/MessagesManager.tsx` |
@@ -166,7 +166,7 @@ Bán hàng      Báo giá(2) · Hợp đồng & lịch hẹn · Bảng công vi�
 Vận hành      Lịch làm việc · Lịch studio · Xử lý hình ảnh(4) · Thư viện album · Công cụ ảnh · Thiết bị
 Khách hàng    Khách hàng · Thiệp·Story·Slide · Thiết kế album(2)
 Tài chính     Thu chi & công nợ · Đối soát tiền công(2) · Báo cáo
-Nhân sự       Đội ngũ · Xếp hạng · Chi nhánh
+Nhân sự       Nhân viên & phân quyền · Xếp hạng · Chi nhánh
 Thiết lập     Gói & bảng giá · Dịch vụ & điều khoản · Website & chatbox · Công cụ ảnh · Cài đặt studio
 Tài khoản     Trang của tôi · Thông báo(5) · Tài khoản & bảo mật · Gói phần mềm · Affiliate · Ứng dụng máy tính · Quản trị hệ thống
 ```
@@ -177,13 +177,53 @@ Số trong ngoặc là badge đếm. Chân sidebar: thẻ trạng thái đồng 
 
 ### Phân quyền
 
-Ba vai trò lọc danh sách route hiển thị:
+Nguồn duy nhất: **`src/lib/studio-roles.ts`** (nhãn, mô tả, và mọi hàm `can*`).
+Thêm hoặc sửa vai trò thì sửa ở đó, đừng viết lại bảng nhãn trong component.
 
-- **Chủ studio** — thấy tất cả
-- **Quản lý** — mọi thứ trừ Tài chính, Đối soát, Báo cáo, Gói phần mềm, Affiliate, Quản trị hệ thống
-- **Nhân sự** — chỉ: Tổng quan, Hợp đồng, Chi tiết HĐ, Lịch, Xử lý hình ảnh, Album, Thông báo, Tài khoản
+| Vai trò | Thấy gì |
+| --- | --- |
+| **Chủ studio** (`owner` / `admin`) | tất cả. Người DUY NHẤT tạo/xoá tài khoản và đổi vai trò |
+| **Quản lý** (`manager`) | toàn bộ studio, TRỪ mục tài chính (Thu chi, Đối soát) và Gói/Affiliate/Quản trị |
+| **Toàn quyền chi nhánh** (`branch_manager`) | như Quản lý **cộng tài chính**, nhưng phạm vi dữ liệu bị GHIM vào đúng chi nhánh của họ |
+| **Nhân viên** (`staff`) | chỉ hợp đồng được giao cho mình |
+| **Kế toán** (`accountant`) | chỉ Thu chi và Đối soát tiền công |
 
-Trong bản HTML đây là mảng `allowed` trong `renderVals()`. Ở repo thật nên chuyển thành middleware + kiểm tra ở server component.
+Vai trò đổi được **sau khi tạo** (ô chọn trên từng dòng ở màn Nhân viên & phân
+quyền → `PATCH /api/studio/staff`). Ghi qua service-role vì vá C1 đã thu hồi
+quyền UPDATE cột `studio_role` của client.
+
+#### "Toàn quyền chi nhánh" là hàng rào thật, không phải bộ lọc
+
+Khác với việc gán chi nhánh cho các vai trò khác — cái đó chỉ là MẶC ĐỊNH hiển
+thị và đổi được — vai trò này bị ghim ở tầng truy vấn:
+
+- `getBranchScope()` trả `selected` = chi nhánh của họ và `locked: true`, **bỏ
+  qua cookie**. Ô chọn trên topbar hiện thành chip khoá.
+- Chưa được gán chi nhánh → `forcedBranchScope` trả `"none"` (**fail-closed**:
+  chỉ thấy phần chưa gán). Không bao giờ trả `null`, vì `null` nghĩa là "xem gộp
+  toàn studio" — một thiếu sót cấu hình sẽ thành lỗ hổng.
+- Màn chi tiết hợp đồng chặn theo `branch_id`: gõ tay URL `/contracts/<id>` của
+  cơ sở khác ra 404. **Bộ lọc ở danh sách chỉ là hiển thị — hàng rào có lỗ thì
+  không còn là hàng rào.**
+- Không được: tạo/xoá tài khoản, đổi vai trò của ai, gán nhân sự vào chi nhánh
+  (nếu không họ tự kéo người kèm dữ liệu về cơ sở mình), thêm/sửa/xoá chi nhánh.
+- KHÔNG có trong ô "xem-như vai trò khác" của chủ studio: xem-như chỉ lọc menu
+  chứ không ghim dữ liệu, nên sẽ vẽ ra một bức tranh sai.
+
+Các màn đã ghim phạm vi cho vai trò này: Hợp đồng (danh sách + **chi tiết**),
+Báo giá (danh sách + **chi tiết**), Bảng công việc, Đặt lịch khách, Lịch làm việc,
+Lịch studio, Xử lý hình ảnh, Thu chi & công nợ, Đối soát tiền công, Xếp hạng,
+Khách hàng, Thiết bị, Kho trang phục, Nhân sự, Chi nhánh.
+
+**Chỗ CỐ Ý không ghim** (nói ra để không ai tưởng là đã kín):
+
+| Không ghim | Vì sao |
+| --- | --- |
+| `studio_events` (mốc ghi chú trên Lịch làm việc) | phần lớn là mốc chung của studio (nghỉ lễ, bảo trì thiết bị), không có cột chi nhánh |
+| `rental_orders` (đơn thuê) | một đơn có thể lấy đồ ở cơ sở này trả ở cơ sở khác; lọc bừa sẽ làm mất đơn khỏi màn hình. Kho trang phục (`rental_items`) thì ĐÃ ghim |
+| Thư viện album, bảng giá, gói, điều khoản, mẫu tin nhắn | tài nguyên dùng chung toàn studio — đó là thiết kế của tính năng chi nhánh, không phải sơ hở |
+
+Luật này có test: `npm run test:studio-roles`.
 
 ---
 

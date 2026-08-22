@@ -16,6 +16,7 @@ import DownloadAppButton from "@/components/DownloadAppButton";
 import SyncControlButton from "@/components/SyncControlButton";
 import { createClient } from "@/lib/supabase/client";
 import { useTheme } from "@/lib/theme";
+import { roleLabel } from "@/lib/studio-roles";
 import { APP_VERSION } from "@/lib/version";
 import {
   isNavActive, visibleGroups,
@@ -51,8 +52,8 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/studio/reports", "Thu chi & công nợ", "Dòng tiền thực tế của studio"],
   ["/dashboard/studio/payroll", "Đối soát tiền công", "Tiền công theo từng nhân sự"],
   ["/dashboard/studio/branches", "Chi nhánh", "Nhiều cơ sở trong một tài khoản — đội ngũ, lịch và doanh thu riêng"],
-  ["/dashboard/studio/crew", "Đội ngũ", "Đội ngũ, vai trò và tiền công"],
-  ["/dashboard/studio/staff", "Nhân viên & phân quyền", "Tài khoản nhân viên của studio"],
+  ["/dashboard/studio/crew", "Nhân sự", "Đang chuyển sang màn Nhân viên & phân quyền…"],
+  ["/dashboard/studio/staff", "Nhân viên & phân quyền", "Tài khoản, vai trò và sổ thợ của studio"],
   ["/dashboard/studio/ranking", "Xếp hạng đội ngũ", "Theo số buổi nhận và thu nhập từ studio"],
   ["/dashboard/studio/messages", "Mẫu tin nhắn", "Tin soạn sẵn gửi khách qua Zalo / SMS"],
   ["/dashboard/studio/pricing", "Gói & bảng giá", "Bảng giá và nội dung từng gói"],
@@ -84,12 +85,10 @@ const TITLES: [string, string, string][] = [
   ["/dashboard", "Thư viện album", "Tất cả album của bạn"],
 ];
 
-const ROLE_LABEL: Record<string, string> = {
-  owner: "Chủ studio", admin: "Quản trị viên", manager: "Quản lý",
-  staff: "Nhân sự", accountant: "Kế toán",
-};
-
-/** Xem-như: chủ studio thử giao diện của vai trò khác (chỉ LỌC bớt, không cấp quyền). */
+/** Xem-như: chủ studio thử giao diện của vai trò khác (chỉ LỌC bớt, không cấp quyền).
+ *  KHÔNG có "Toàn quyền chi nhánh" ở đây: vai trò đó ghim phạm vi DỮ LIỆU ở phía
+ *  server, nên xem-như chỉ lọc menu sẽ vẽ ra một bức tranh sai — chủ studio tưởng
+ *  mình đang thấy đúng những gì người kia thấy. */
 const VIEW_ROLES: [string, string][] = [["owner", "Chủ"], ["manager", "Quản lý"], ["staff", "Nhân sự"]];
 
 type NavProps = {
@@ -179,6 +178,7 @@ export default function StudioShell({
   branches = [],
   branchSelected = null,
   branchCookie,
+  branchLocked = false,
   children,
 }: {
   profile: Profile;
@@ -191,6 +191,8 @@ export default function StudioShell({
   /** null = xem gộp · "none" = chưa gán · id = một cơ sở. */
   branchSelected?: string | null;
   branchCookie?: string;
+  /** Phạm vi bị vai trò ghim — ô chọn hiện dạng khoá, không bấm ra danh sách. */
+  branchLocked?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -259,7 +261,7 @@ export default function StudioShell({
       <div className="mb-1 px-3 py-2" style={{ borderBottom: "1px solid var(--bd2)" }}>
         <p className="truncate text-[13px] font-semibold">{profile.full_name || "Tài khoản"}</p>
         <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{profile.email}</p>
-        <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "var(--ac)" }}>{ROLE_LABEL[role] ?? role}</p>
+        <p className="mt-0.5 text-[11px] font-semibold" style={{ color: "var(--ac)" }}>{roleLabel(role)}</p>
       </div>
       <Link href="/dashboard/account" className="nav-item flex items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--tx)" }}>
         <UserCircle size={15} style={{ color: "var(--ac)" }} /> Tài khoản & bảo mật
@@ -325,7 +327,7 @@ export default function StudioShell({
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-semibold">{profile.full_name || profile.email}</p>
-              <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{ROLE_LABEL[role] ?? role}</p>
+              <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{roleLabel(role)}</p>
             </div>
           </div>
 
@@ -418,7 +420,7 @@ export default function StudioShell({
                 Đứng TRƯỚC ô ⌘K vì nó đổi PHẠM VI của mọi thứ bên dưới, nên phải
                 đọc được trước khi người dùng tìm trong phạm vi đó. */}
             {branchCookie && (
-              <BranchSwitcher branches={branches} selected={branchSelected} cookieName={branchCookie} />
+              <BranchSwitcher branches={branches} selected={branchSelected} cookieName={branchCookie} locked={branchLocked} />
             )}
 
             {/* Ô lệnh ⌘K — thay ô tìm kiếm cũ, tìm cả màn, hợp đồng, khách, nhân sự. */}
@@ -492,7 +494,7 @@ export default function StudioShell({
                 </span>
                 <span className="hidden leading-[1.25] min-[1000px]:block">
                   <span className="block max-w-[120px] truncate text-[12.5px] font-semibold">{profile.full_name || "Tài khoản"}</span>
-                  <span className="block text-[10.5px]" style={{ color: "var(--tx3)" }}>{ROLE_LABEL[role] ?? role}</span>
+                  <span className="block text-[10.5px]" style={{ color: "var(--tx3)" }}>{roleLabel(role)}</span>
                 </span>
               </button>
 

@@ -22,7 +22,8 @@
     "test:pricelist-label": "node --experimental-strip-types desktop/test/pricelist-label.mjs",
     "test:activity": "node --experimental-strip-types desktop/test/activity.mjs",
     "test:appointments": "node --experimental-strip-types desktop/test/appointments.mjs",
-    "test:branches": "node --experimental-strip-types desktop/test/branches.mjs"
+    "test:branches": "node --experimental-strip-types desktop/test/branches.mjs",
+    "test:studio-roles": "node --experimental-strip-types desktop/test/studio-roles.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

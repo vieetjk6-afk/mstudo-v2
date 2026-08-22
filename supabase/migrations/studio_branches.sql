@@ -57,6 +57,10 @@ alter table public.studio_bookings     add column if not exists branch_id uuid r
 alter table public.studio_expenses     add column if not exists branch_id uuid references public.studio_branches (id) on delete set null;
 alter table public.studio_equipment    add column if not exists branch_id uuid references public.studio_branches (id) on delete set null;
 alter table public.studio_crew         add column if not exists branch_id uuid references public.studio_branches (id) on delete set null;
+-- Báo giá: cần chi nhánh vì vai trò "Toàn quyền chi nhánh" bị ghim phạm vi, mà
+-- báo giá là thông tin thương mại — để chung thì người phụ trách cơ sở A đọc
+-- được giá chào của cơ sở B. `quote-convert` chuyển giá trị này sang hợp đồng.
+alter table public.studio_quotes       add column if not exists branch_id uuid references public.studio_branches (id) on delete set null;
 -- Hai bảng dưới đến từ migration studio_appointments.sql — bọc trong khối điều
 -- kiện để chạy được cả khi migration đó CHƯA chạy (thứ tự hai file không quan
 -- trọng, và studio nào chưa dùng Lịch studio vẫn cài được chi nhánh).
@@ -80,6 +84,7 @@ end $$;
 create index if not exists studio_contracts_branch_idx on public.studio_contracts (branch_id, event_date);
 create index if not exists studio_bookings_branch_idx  on public.studio_bookings (branch_id, created_at);
 create index if not exists studio_expenses_branch_idx  on public.studio_expenses (branch_id, spent_at);
+create index if not exists studio_quotes_branch_idx    on public.studio_quotes (branch_id, created_at);
 
 -- ============================================================================
 -- Nhân viên thuộc chi nhánh nào.

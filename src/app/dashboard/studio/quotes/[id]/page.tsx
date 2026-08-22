@@ -5,6 +5,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import QuoteEditor from "./QuoteEditor";
 import StudioDenied from "@/components/StudioDenied";
 import type { StudioQuote, QuoteItem, QuoteAdjustment } from "@/lib/types";
+import { isBranchScopedRole } from "@/lib/studio-roles";
 
 
 export default async function QuoteDetailPage({ params }: { params: { id: string } }) {
@@ -25,6 +26,13 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
   const supabase = createClient();
   const { data: quote } = await supabase.from("studio_quotes").select("*").eq("id", params.id).eq("owner_id", profile.id).maybeSingle();
   if (!quote) notFound();
+
+  // "Toàn quyền chi nhánh": chỉ mở được báo giá của chính chi nhánh mình. Lọc ở
+  // danh sách là hiển thị; đây mới là chốt (xem ghi chú cùng loại ở contracts/[id]).
+  if (isBranchScopedRole(profile.actingRole as string)) {
+    const mine = (profile.actingBranchId as string | null) ?? null;
+    if (!mine || quote.branch_id !== mine) notFound();
+  }
 
   const [{ data: items }, { data: adjustments }, studioHost] = await Promise.all([
     supabase.from("quote_items").select("*").eq("quote_id", params.id).order("position"),

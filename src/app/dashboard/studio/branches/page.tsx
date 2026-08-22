@@ -5,6 +5,7 @@ import { getBranches } from "@/lib/branches";
 import { todayVN } from "@/lib/date";
 import { addDays, mondayOf } from "@/lib/appointments";
 import { statsByBranch, type BranchStats } from "@/lib/branch-rules";
+import { canAssignBranch, isBranchScopedRole } from "@/lib/studio-roles";
 import type { StudioBranch } from "@/lib/types";
 import BranchesManager, { type BranchStaff } from "./BranchesManager";
 
@@ -39,7 +40,10 @@ export default async function BranchesPage() {
   const weekStart = mondayOf(today);
   const weekEnd = addDays(weekStart, 6);
 
-  const [branches, { data: contracts }, { data: expenses }, { data: crew }, { data: appointments }] = await Promise.all([
+  const role = profile.actingRole as string;
+  const myBranch = (profile.actingBranchId as string | null) ?? null;
+
+  const [allBranches, { data: contracts }, { data: expenses }, { data: crew }, { data: appointments }] = await Promise.all([
     getBranches(profile.id),
     // Hợp đồng TỪ ĐẦU THÁNG: đủ để so hai cơ sở với nhau mà không phải quét cả
     // lịch sử. Kèm hạng mục + khoản thu để tính giá trị và tiền thực thu.
@@ -70,6 +74,10 @@ export default async function BranchesPage() {
 
   const staffRows = (staff ?? []) as BranchStaff[];
 
+  // "Toàn quyền chi nhánh" chỉ thấy THẺ của chi nhánh mình — màn này là nơi đối
+  // chiếu các cơ sở với nhau, mà họ không có quyền nhìn cơ sở khác.
+  const branches = isBranchScopedRole(role) ? allBranches.filter((b) => b.id === myBranch) : allBranches;
+
   const stats = statsByBranch(branches, {
     contracts: (contracts ?? []).map((c) => ({
       branch_id: (c.branch_id as string | null) ?? null,
@@ -88,7 +96,9 @@ export default async function BranchesPage() {
   return (
     <BranchesManager
       ownerId={profile.id}
-      canEdit={profile.actingRole !== "staff"}
+      // Thêm/sửa/xoá chi nhánh là việc ở tầng TRÊN chi nhánh — quản lý một cơ sở
+      // không được đổi cấu trúc cơ sở, kể cả cơ sở của chính mình.
+      canEdit={canAssignBranch(role)}
       initial={branches as StudioBranch[]}
       stats={statList}
       staff={staffRows}

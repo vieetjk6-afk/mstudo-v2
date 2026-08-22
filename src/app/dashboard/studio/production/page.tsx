@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
 import ProductionView, { type ProductRow } from "./ProductionView";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 
 
 export default async function ProductionPage() {
@@ -19,12 +20,16 @@ export default async function ProductionPage() {
   }
 
   const supabase = createClient();
+  // Phạm vi chi nhánh (vai trò "Toàn quyền chi nhánh" bị ghim). Lọc qua hợp đồng
+  // cha vì contract_products không mang cột chi nhánh.
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   let q = supabase
     .from("contract_products")
-    .select("id, name, qty, cost, status, note, assigned_to, contract:studio_contracts!inner(id, owner_id, title, client_name, delivery_due, assigned_to)")
+    .select("id, name, qty, cost, status, note, assigned_to, contract:studio_contracts!inner(id, owner_id, title, client_name, delivery_due, assigned_to, branch_id)")
     .eq("contract.owner_id", profile.id)
     .order("created_at", { ascending: true });
   if (profile.actingRole === "staff") q = q.eq("contract.assigned_to", profile.actingUserId);
+  q = applyBranch(q, scope.selected, "contract.branch_id");
   const { data } = await q;
 
   // RLS bảng profiles chỉ cho đọc dòng của chính mình → dùng service-role để

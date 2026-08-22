@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { brandFrom } from "@/lib/studio-brand";
 import PayrollView, { type PayrollRow } from "./PayrollView";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 
 
 export default async function PayrollPage() {
@@ -29,13 +30,18 @@ export default async function PayrollPage() {
   }
 
   const supabase = createClient();
-  const { data } = await supabase
-    .from("contract_crew")
-    .select(
-      "id, name, phone, role, salary, status, paid, contract:studio_contracts!inner(id, owner_id, title, code, event_date)"
-    )
-    .eq("contract.owner_id", profile.id)
-    .order("created_at", { ascending: false });
+  // Tiền công là dữ liệu nhạy cảm nhất của màn này — phải theo phạm vi chi nhánh.
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
+  const { data } = await applyBranch(
+    supabase
+      .from("contract_crew")
+      .select(
+        "id, name, phone, role, salary, status, paid, contract:studio_contracts!inner(id, owner_id, title, code, event_date, branch_id)"
+      )
+      .eq("contract.owner_id", profile.id),
+    scope.selected,
+    "contract.branch_id"
+  ).order("created_at", { ascending: false });
 
   return (
     <PayrollView

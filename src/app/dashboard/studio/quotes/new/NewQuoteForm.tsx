@@ -48,11 +48,15 @@ type PriceItem = {
 
 export default function NewQuoteForm({
   ownerId,
+  branchId = null,
   services = [],
   pricelist = [],
   listLabels = {},
 }: {
   ownerId: string;
+  /** Chi nhánh đang xem — báo giá mới thuộc luôn cơ sở đó, và hợp đồng chốt từ
+   *  nó cũng thừa hưởng (xem lib/quote-convert.ts). */
+  branchId?: string | null;
   services?: { id: string; name: string }[];
   pricelist?: PriceItem[];
   /** Nhãn studio tự đặt cho từng bảng giá (profiles.pl_list_labels). */
@@ -182,6 +186,7 @@ export default function NewQuoteForm({
           intro: intro.trim() || null,
           ...(serviceId ? { service_id: serviceId } : {}),
           client_token: token,
+          ...(branchId ? { branch_id: branchId } : {}),
           status: "draft",
           bulk_discount_amount: bulkDiscountAmount || 0,
           discount_package_group: discountPackageGroup.trim() || null,

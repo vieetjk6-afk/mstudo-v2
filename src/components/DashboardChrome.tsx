@@ -25,6 +25,7 @@ export default function DashboardChrome({
   branches = [],
   branchSelected = null,
   branchCookie,
+  branchLocked = false,
   children,
 }: {
   profile: Profile;
@@ -38,6 +39,8 @@ export default function DashboardChrome({
   branches?: { id: string; name: string; code: string | null; active: boolean }[];
   branchSelected?: string | null;
   branchCookie?: string;
+  /** Phạm vi bị vai trò ghim — ô chọn hiện dạng khoá. */
+  branchLocked?: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -77,6 +80,7 @@ export default function DashboardChrome({
         branches={branches}
         branchSelected={branchSelected}
         branchCookie={branchCookie}
+        branchLocked={branchLocked}
       >
         {children}
       </StudioShell>

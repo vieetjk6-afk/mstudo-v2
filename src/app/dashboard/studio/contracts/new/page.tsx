@@ -86,7 +86,7 @@ export default async function NewContractPage() {
   const assignTo = profile.actingRole === "staff" ? (profile.actingUserId as string) : null;
   // Chi nhánh đang xem → hợp đồng mới thuộc luôn cơ sở đó. "Xem gộp" hoặc "chưa
   // gán" thì để trống, không đoán hộ.
-  const branchScope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const branchScope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const branchId =
     typeof branchScope.selected === "string" && branchScope.selected !== "none" ? branchScope.selected : null;
   return (

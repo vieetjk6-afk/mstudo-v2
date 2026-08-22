@@ -4,6 +4,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { getFeatureFlags, rentalComingSoon } from "@/lib/feature-flags";
 import type { RentalItem, RentalOrder, RentalOrderItem, RentalOrderWithItems } from "@/lib/types";
 import RentalManager from "./RentalManager";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 
 export default async function RentalPage() {
   const profile = await requireStudio();
@@ -34,11 +35,15 @@ export default async function RentalPage() {
 
   const supabase = createClient();
 
+  // Kho trang phục nằm ở một cơ sở cụ thể nên lọc được theo chi nhánh. ĐƠN THUÊ
+  // thì không: bảng rental_orders chưa có cột chi nhánh, và một đơn có thể lấy đồ
+  // ở cơ sở này trả ở cơ sở khác — lọc bừa sẽ làm mất đơn khỏi màn hình.
+  const branchSel = (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected;
   const [itemsRes, ordersRes] = await Promise.all([
-    supabase
-      .from("rental_items")
-      .select("*")
-      .eq("owner_id", profile.id)
+    applyBranch(
+      supabase.from("rental_items").select("*").eq("owner_id", profile.id),
+      branchSel
+    )
       .order("category")
       .order("name"),
     supabase

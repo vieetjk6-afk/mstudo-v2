@@ -52,7 +52,7 @@ export default async function StudioSchedulePage() {
   // Chi nhánh đang chọn: lịch, phòng và hợp đồng đều lọc theo cùng phạm vi, nếu
   // không thì lưới tuần hiện lịch của cơ sở này mà thanh công suất lại đếm phòng
   // của cơ sở khác.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const branchOptions = await getActiveBranches(profile.id);
 
   const [{ data: appointments }, { data: rooms }, { data: crew }, { data: contracts }] = await Promise.all([

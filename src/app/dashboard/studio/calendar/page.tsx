@@ -26,7 +26,7 @@ export default async function CalendarPage() {
   // Chi nhánh đang chọn. Chỉ lọc HỢP ĐỒNG: `studio_events` là mốc ghi chú, phần
   // lớn gắn với một hợp đồng và không có cột chi nhánh riêng — lọc chúng theo
   // chi nhánh sẽ làm mất các mốc studio ghi chung (nghỉ lễ, bảo trì thiết bị).
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const CONTRACT_COLS =
     "id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, branch_id, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)";
   const [{ data: events }, { data: contracts }] = await Promise.all([

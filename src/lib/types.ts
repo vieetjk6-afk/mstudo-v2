@@ -1238,6 +1238,7 @@ export interface StudioQuote {
   discount_package_group: string | null;
   created_at: string;
   updated_at: string;
+  branch_id: string | null;
 }
 
 export interface QuoteItem {

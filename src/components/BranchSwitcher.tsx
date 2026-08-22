@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Check, ChevronDown } from "lucide-react";
+import { Building2, Check, ChevronDown, Lock } from "lucide-react";
 import { BRANCH_ALL, BRANCH_NONE, UNASSIGNED_LABEL } from "@/lib/branch-rules";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -25,11 +25,18 @@ export default function BranchSwitcher({
   branches,
   selected,
   cookieName,
+  locked = false,
 }: {
   branches: SwitcherBranch[];
   /** null = gộp · "none" = chưa gán · id = một cơ sở. */
   selected: string | null;
   cookieName: string;
+  /**
+   * Phạm vi do VAI TRÒ quyết định (Toàn quyền chi nhánh) — hiện dạng chip khoá,
+   * không mở danh sách. Đây chỉ là phần hiển thị: hàng rào thật nằm ở
+   * `getBranchScope` phía server, nên sửa DOM cũng không đổi được phạm vi.
+   */
+  locked?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -46,7 +53,7 @@ export default function BranchSwitcher({
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
 
-  if (branches.length === 0) return null;
+  if (branches.length === 0 && !locked) return null;
 
   function pick(value: string) {
     // 180 ngày: lựa chọn phạm vi là thói quen làm việc, không phải thao tác một
@@ -72,6 +79,29 @@ export default function BranchSwitcher({
         : branches.find((b) => b.id === selected)?.code?.trim() ||
           branches.find((b) => b.id === selected)?.name ||
           "Tất cả";
+
+  if (locked) {
+    const missing = selected === BRANCH_NONE;
+    return (
+      <span
+        className="flex h-[34px] flex-none items-center gap-1.5 rounded-[9px] px-2.5 text-[12.5px] font-bold"
+        style={{
+          border: `1px solid ${missing ? "var(--rd)" : "var(--acM)"}`,
+          background: missing ? "var(--rdS)" : "var(--acS)",
+          color: missing ? "var(--rd)" : "var(--ac)",
+        }}
+        title={
+          missing
+            ? "Vai trò Toàn quyền chi nhánh nhưng chưa được gán chi nhánh — liên hệ chủ studio."
+            : `Bạn chỉ xem được chi nhánh ${current}`
+        }
+      >
+        <Lock size={14} />
+        <span className="hidden max-w-[130px] truncate min-[900px]:inline">{missing ? "Chưa gán chi nhánh" : current}</span>
+        <span className="max-w-[70px] truncate min-[900px]:hidden">{missing ? "Chưa gán" : shortCurrent}</span>
+      </span>
+    );
+  }
 
   return (
     <div ref={box} className="relative flex-none">

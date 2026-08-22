@@ -3,6 +3,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { getStudioHost } from "@/lib/studio-site";
 import QuotesListView, { type QuoteRow } from "./QuotesListView";
 import StudioDenied from "@/components/StudioDenied";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 
 
 export default async function QuotesList() {
@@ -23,11 +24,15 @@ export default async function QuotesList() {
   }
 
   const supabase = createClient();
-  const { data } = await supabase
-    .from("studio_quotes")
-    .select("id, code, title, client_name, client_phone, client_token, status, quote_items(qty, unit_price, selected, is_optional, is_discount), quote_adjustments(id, resolved)")
-    .eq("owner_id", profile.id)
-    .order("created_at", { ascending: false });
+  // Báo giá là thông tin thương mại: người phụ trách cơ sở A không được đọc giá
+  // chào của cơ sở B.
+  const { data } = await applyBranch(
+    supabase
+      .from("studio_quotes")
+      .select("id, code, title, client_name, client_phone, client_token, status, branch_id, quote_items(qty, unit_price, selected, is_optional, is_discount), quote_adjustments(id, resolved)")
+      .eq("owner_id", profile.id),
+    (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected
+  ).order("created_at", { ascending: false });
 
   const studioHost = await getStudioHost(supabase, profile.id);
   return <QuotesListView list={(data ?? []) as unknown as QuoteRow[]} studioHost={studioHost} />;

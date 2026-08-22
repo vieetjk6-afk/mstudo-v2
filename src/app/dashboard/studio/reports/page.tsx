@@ -36,7 +36,7 @@ export default async function ReportsPage() {
   // Chi nhánh đang chọn. Thu và tiền công lọc qua hợp đồng cha
   // (`contract.branch_id`) vì bản thân hai bảng đó không mang cột chi nhánh —
   // khoản thu thuộc cơ sở nào là do hợp đồng của nó quyết định.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const [{ data: payments }, { data: salaries }, { data: expenses }, { data: srcContracts }] = await Promise.all([
     applyBranch(
       supabase

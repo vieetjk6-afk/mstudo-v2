@@ -29,7 +29,7 @@ export async function GET() {
   // Chi nhánh đang chọn trên thanh trên cùng — endpoint này chạy trong cùng
   // request nên đọc được cookie đó, và danh sách hợp đồng khớp với phạm vi mà
   // người dùng đang thấy ở mọi màn khác.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   let q = supabase
     .from("studio_contracts")
     .select("id, code, title, client_name, client_phone, event_date, event_time, status, shoot_type, branch_id, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")

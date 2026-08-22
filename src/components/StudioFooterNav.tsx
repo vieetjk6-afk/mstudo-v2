@@ -46,7 +46,7 @@ const MAIN: Item[] = [
 
 /** Bảng "Thêm" — những màn còn lại, mở bằng nút ghim ở lề phải. */
 const MORE: Item[] = [
-  { href: "/dashboard/studio/crew", icon: UsersRound, label: "Đội ngũ", minTier: "full" },
+  { href: "/dashboard/studio/staff", icon: UsersRound, label: "Nhân sự", minTier: "full" },
   { href: "/dashboard/studio/payroll", icon: Banknote, label: "Đối soát", minTier: "full" },
   { href: "/dashboard/studio/production", icon: Wand2, label: "Xử lý ảnh", minTier: "full" },
   { href: "/dashboard/studio/notifications", icon: Bell, label: "Thông báo", minTier: "full" },

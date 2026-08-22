@@ -48,12 +48,21 @@ export type NavItem = {
 };
 export type NavGroup = { label: string; items: NavItem[] };
 
-const EVERYONE = ["owner", "admin", "manager", "staff", "accountant"] as const;
-const STAFF_OK = ["owner", "admin", "manager", "staff"] as const;
-const MANAGER_OK = ["owner", "admin", "manager"] as const;
+const EVERYONE = ["owner", "admin", "manager", "branch_manager", "staff", "accountant"] as const;
+const STAFF_OK = ["owner", "admin", "manager", "branch_manager", "staff"] as const;
+const MANAGER_OK = ["owner", "admin", "manager", "branch_manager"] as const;
 const OWNER_OK = ["owner", "admin"] as const;
-/** Tiền bạc: chủ + kế toán. Quản lý KHÔNG xem (README, mục "Phân quyền"). */
-const MONEY_OK = ["owner", "admin", "accountant"] as const;
+/**
+ * Tiền bạc: chủ + kế toán. Quản lý toàn studio KHÔNG xem (README, mục "Phân quyền").
+ *
+ * `branch_manager` ("Toàn quyền chi nhánh") CÓ xem — nhưng chỉ thấy số của đúng
+ * chi nhánh mình, vì phạm vi của họ bị ghim ở tầng truy vấn (xem
+ * `forcedBranchScope` trong studio-roles.ts). Đó là điểm phân biệt với `manager`:
+ * quản lý toàn studio thấy được MỌI con số nên bị chặn hẳn, còn người phụ trách
+ * một cơ sở cần doanh thu của cơ sở đó để chạy việc — đúng lời hứa "mỗi chi nhánh
+ * có doanh thu riêng" của tính năng chi nhánh.
+ */
+const MONEY_OK = ["owner", "admin", "accountant", "branch_manager"] as const;
 const ADMIN_ONLY = ["admin"] as const;
 
 export const NAV_GROUPS: readonly NavGroup[] = [
@@ -117,7 +126,10 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   {
     label: "Nhân sự",
     items: [
-      { href: "/dashboard/studio/crew", label: "Đội ngũ", icon: UsersRound, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/staff"], keywords: "so tho nhan vien crew" },
+      // Sổ thợ (Đội ngũ) đã GỘP thành tab 2 của màn này. Mục sidebar là "Nhân
+      // viên & phân quyền" vì thứ mở thường xuyên hơn là tài khoản + vai trò;
+      // sổ thợ chỉ sửa khi có người vào/ra.
+      { href: "/dashboard/studio/staff", label: "Nhân viên & phân quyền", icon: UserCog, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/crew"], keywords: "tai khoan nhan vien quyen vai tro so tho crew doi ngu" },
       { href: "/dashboard/studio/ranking", label: "Xếp hạng", icon: Trophy, minTier: "full", roles: MANAGER_OK },
       // Chi nhánh studio ĐÃ PHÁT HÀNH. Nhãn để "Chi nhánh" chứ không phải "Chi
       // nhánh studio" vì sidebar rộng 250px — tên đầy đủ bị cắt.
@@ -178,7 +190,7 @@ export const EXTRA_COMMANDS: readonly NavItem[] = [
   { href: "/dashboard/studio/quotes/new", label: "Tạo báo giá", icon: FilePlus2, minTier: "plus", roles: MANAGER_OK, keywords: "them bao gia moi gui khach", sub: "Ghép gói và gửi khách" },
   { href: "/dashboard/albums/new", label: "Tạo album giao khách", icon: Images, minTier: "booking", roles: STAFF_OK, keywords: "them album moi", sub: "Album giao khách mới" },
   { href: "/dashboard/studio/team", label: "Lịch đội ngũ", icon: CalendarRange, minTier: "full", roles: MANAGER_OK, keywords: "lich nhan su theo nguoi", sub: "Đã gộp vào Lịch làm việc" },
-  { href: "/dashboard/studio/staff", label: "Nhân viên & phân quyền", icon: UserCog, minTier: "full", roles: MANAGER_OK, keywords: "tai khoan nhan vien quyen", sub: "Đã gộp vào Đội ngũ" },
+  { href: "/dashboard/studio/staff?tab=crew", label: "Đội ngũ thợ", icon: UsersRound, minTier: "full", roles: MANAGER_OK, keywords: "so tho crew doi ngu freelancer", sub: "Đã gộp vào Nhân viên & phân quyền" },
   { href: "/dashboard/studio/templates", label: "Mẫu hợp đồng", icon: FileSignature, minTier: "full", roles: MANAGER_OK, keywords: "mau hop dong dieu khoan", sub: "Đã gộp vào Dịch vụ & điều khoản" },
   { href: "/dashboard/studio/packages", label: "Gói dịch vụ", icon: Package, minTier: "full", roles: MANAGER_OK, keywords: "goi combo dich vu", sub: "Đã gộp vào Gói & bảng giá" },
   { href: "/dashboard/studio/chatbox", label: "Cấu hình chatbox", icon: MessageSquare, minTier: "booking", roles: MANAGER_OK, keywords: "tro ly tra loi khach", sub: "Đã gộp vào Website & chatbox" },

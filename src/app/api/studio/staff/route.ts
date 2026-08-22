@@ -2,15 +2,14 @@ import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan } from "@/lib/plans";
+import { canAssignBranch, canManageRoles, isAssignableRole } from "@/lib/studio-roles";
 
 export const dynamic = "force-dynamic";
-
-const ROLES = ["manager", "staff", "accountant"];
 
 /** Studio owner creates a staff sub-account. */
 export async function POST(req: Request) {
   const ctx = await requireStudio();
-  if (!ctx || (ctx.actingRole !== "owner" && ctx.actingRole !== "admin")) {
+  if (!ctx || !canManageRoles(ctx.actingRole as string)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const { email, password, full_name, role, branch_id } = (await req.json().catch(() => ({}))) as {
@@ -23,7 +22,7 @@ export async function POST(req: Request) {
   if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || !password || password.length < 6) {
     return NextResponse.json({ error: "bad_input" }, { status: 400 });
   }
-  const studioRole = ROLES.includes(role || "") ? role : "staff";
+  const studioRole = isAssignableRole(role) ? role : "staff";
   const emailNorm = email.trim().toLowerCase();
   const fullName = full_name?.trim() || emailNorm;
 
@@ -32,6 +31,12 @@ export async function POST(req: Request) {
   // Chi nhánh phải THUỘC studio này — nếu không, chủ studio A có thể gán nhân
   // viên của mình vào chi nhánh của studio B bằng cách gửi id lạ.
   const branchId = await validBranchId(db, ctx.id as string, branch_id);
+
+  // "Toàn quyền chi nhánh" mà không có chi nhánh thì phạm vi của họ fail-closed
+  // và họ không thấy gì. Kiểm ở SERVER chứ không tin ô chọn của client.
+  if (studioRole === "branch_manager" && !branchId) {
+    return NextResponse.json({ error: "branch_required" }, { status: 400 });
+  }
 
   // 1) Tạo tài khoản auth. Nếu email đã tồn tại → nhận tài khoản đó làm nhân viên
   //    (nhưng KHÔNG chiếm tài khoản đang trả phí / admin / thuộc studio khác).
@@ -105,10 +110,14 @@ export async function POST(req: Request) {
  */
 export async function PATCH(req: Request) {
   const ctx = await requireStudio();
-  if (!ctx || (ctx.actingRole !== "owner" && ctx.actingRole !== "admin" && ctx.actingRole !== "manager")) {
+  const role = ctx?.actingRole as string | undefined;
+  // Vào được PATCH nếu có ÍT NHẤT một trong hai quyền; từng trường vẫn kiểm
+  // riêng bên dưới. "Toàn quyền chi nhánh" không có quyền nào ở đây nên bị chặn
+  // ngay: cho họ chuyển nhân sự giữa các cơ sở là cho họ tự kéo dữ liệu về mình.
+  if (!ctx || (!canManageRoles(role) && !canAssignBranch(role))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
-  const { id, branch_id, role } = (await req.json().catch(() => ({}))) as {
+  const { id, branch_id, role: newRole } = (await req.json().catch(() => ({}))) as {
     id?: string;
     branch_id?: string | null;
     role?: string;
@@ -124,12 +133,16 @@ export async function PATCH(req: Request) {
   const patch: Record<string, unknown> = {};
   // `branch_id` có mặt trong body (kể cả null) mới sửa — gửi PATCH chỉ để đổi
   // vai trò thì không được âm thầm bỏ chi nhánh của người ta.
-  if (branch_id !== undefined) patch.studio_branch_id = await validBranchId(db, ctx.id as string, branch_id);
-  // Quản lý KHÔNG được đổi vai trò (đó là việc của chủ studio) — tránh một quản
-  // lý tự nâng mình thành owner-equivalent bằng cách sửa vai trò người khác.
-  if (role !== undefined && (ctx.actingRole === "owner" || ctx.actingRole === "admin")) {
-    if (!ROLES.includes(role)) return NextResponse.json({ error: "bad_role" }, { status: 400 });
-    patch.studio_role = role;
+  if (branch_id !== undefined) {
+    if (!canAssignBranch(role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    patch.studio_branch_id = await validBranchId(db, ctx.id as string, branch_id);
+  }
+  // Đổi vai trò: CHỈ chủ studio. Quản lý không được — đó là đường leo thang đặc
+  // quyền ngắn nhất (tự nâng mình, hoặc nâng người khác rồi nhờ nâng lại).
+  if (newRole !== undefined) {
+    if (!canManageRoles(role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    if (!isAssignableRole(newRole)) return NextResponse.json({ error: "bad_role" }, { status: 400 });
+    patch.studio_role = newRole;
   }
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "nothing_to_update" }, { status: 400 });
 
@@ -141,7 +154,7 @@ export async function PATCH(req: Request) {
 /** Remove a staff sub-account (must belong to this studio). */
 export async function DELETE(req: Request) {
   const ctx = await requireStudio();
-  if (!ctx || (ctx.actingRole !== "owner" && ctx.actingRole !== "admin")) {
+  if (!ctx || !canManageRoles(ctx.actingRole as string)) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const id = new URL(req.url).searchParams.get("id");

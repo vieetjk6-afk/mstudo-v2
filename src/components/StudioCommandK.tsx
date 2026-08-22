@@ -43,7 +43,7 @@ export default function StudioCommandK({ access }: { access: NavAccess }) {
   const actions = useMemo(() => commandItems(access), [access]);
   const canSeeContracts = actions.some((a) => a.href === "/dashboard/studio/contracts");
   const canSeeClients = actions.some((a) => a.href === "/dashboard/studio/clients");
-  const canSeeCrew = actions.some((a) => a.href === "/dashboard/studio/crew");
+  const canSeeCrew = actions.some((a) => a.href === "/dashboard/studio/staff");
 
   // ⌘K / Ctrl+K mở, Escape đóng. Bắt ở window để bấm được từ mọi màn.
   useEffect(() => {
@@ -136,7 +136,7 @@ export default function StudioCommandK({ access }: { access: NavAccess }) {
     const crw: Hit[] = !cq ? [] : crew.slice(0, 3).map((c) => ({
       key: `w:${c.id}`, icon: IdCard, title: c.name,
       sub: [c.role, c.phone].filter(Boolean).join(" · ") || "Nhân sự",
-      href: "/dashboard/studio/crew", tag: "Nhân sự", tagC: "var(--am)", tagBg: "var(--amS)",
+      href: "/dashboard/studio/staff?tab=crew", tag: "Nhân sự", tagC: "var(--am)", tagBg: "var(--amS)",
     }));
 
     return [...acts, ...cts, ...kls, ...crw];

@@ -7,6 +7,7 @@ import { getFeatureFlags, storyComingSoon } from "@/lib/feature-flags";
 import { ensureIntakeToken } from "@/lib/contract-intake";
 import { brandFrom } from "@/lib/studio-brand";
 import { getActiveBranches } from "@/lib/branches";
+import { isBranchScopedRole } from "@/lib/studio-roles";
 import type {
   StudioContract,
   ContractItem,
@@ -62,6 +63,15 @@ export default async function ContractPage({
 
   // Staff role: may only open contracts assigned to them.
   if (profile.actingRole === "staff" && contract.assigned_to !== profile.actingUserId) notFound();
+
+  // "Toàn quyền chi nhánh": chỉ mở được hợp đồng của CHÍNH chi nhánh mình.
+  // Bộ lọc chi nhánh ở danh sách chỉ là hiển thị — không có chốt này thì gõ tay
+  // URL /contracts/<id> là xem được hợp đồng của cơ sở khác, và hàng rào quyền
+  // có lỗ thì không còn là hàng rào.
+  if (isBranchScopedRole(profile.actingRole as string)) {
+    const mine = (profile.actingBranchId as string | null) ?? null;
+    if (!mine || contract.branch_id !== mine) notFound();
+  }
 
   // Bảo đảm có link form điền thông tin (tạo token nếu chưa có) để studio gửi khách.
   if (!contract.intake_token) {

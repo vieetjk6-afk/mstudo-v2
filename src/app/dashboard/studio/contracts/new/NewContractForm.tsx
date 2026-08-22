@@ -775,7 +775,7 @@ export default function NewContractForm({
                 <p className="text-[13px] font-semibold">Sổ thợ đang trống</p>
                 <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                   Thêm người vào{" "}
-                  <Link href="/dashboard/studio/crew" className="font-semibold underline" style={{ color: "var(--ac)" }}>Đội ngũ</Link>{" "}
+                  <Link href="/dashboard/studio/staff?tab=crew" className="font-semibold underline" style={{ color: "var(--ac)" }}>Đội ngũ</Link>{" "}
                   để phân công ngay tại đây — hoặc phân công sau ở màn chi tiết.
                 </p>
               </div>

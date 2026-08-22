@@ -14,6 +14,7 @@ import { Modal } from "@/components/studio/Modal";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { sortBranches, UNASSIGNED_LABEL, type BranchStats } from "@/lib/branch-rules";
 import { vnd, vndShort, type StudioBranch } from "@/lib/types";
+import { roleLabel } from "@/lib/studio-roles";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    QUẢN LÝ CHI NHÁNH — khai cơ sở, gán người quản lý, và đối chiếu các cơ sở.
@@ -31,7 +32,7 @@ export type BranchStaff = {
   studio_branch_id: string | null;
 };
 
-const ROLE_LABEL: Record<string, string> = { manager: "Quản lý", staff: "Nhân viên", accountant: "Kế toán" };
+
 
 type Draft = {
   id: string | null;
@@ -271,7 +272,7 @@ export default function BranchesManager({
                         key={p.id}
                         className="flex items-center gap-1.5 rounded-[20px] py-[3px] pl-[3px] pr-2.5 text-[11px] font-semibold"
                         style={{ background: "var(--sf2)" }}
-                        title={ROLE_LABEL[p.studio_role ?? ""] ?? "Nhân viên"}
+                        title={roleLabel(p.studio_role)}
                       >
                         <span
                           className="flex h-[19px] w-[19px] flex-none items-center justify-center rounded-full text-[8px] font-bold"
@@ -325,7 +326,7 @@ export default function BranchesManager({
                 <Link href="/dashboard/studio/staff" className="rounded-[9px] px-2.5 py-1.5" style={{ border: "1px solid var(--bd)" }}>
                   Gán nhân viên →
                 </Link>
-                <Link href="/dashboard/studio/crew" className="rounded-[9px] px-2.5 py-1.5" style={{ border: "1px solid var(--bd)" }}>
+                <Link href="/dashboard/studio/staff?tab=crew" className="rounded-[9px] px-2.5 py-1.5" style={{ border: "1px solid var(--bd)" }}>
                   Gán thợ →
                 </Link>
               </div>
@@ -407,7 +408,7 @@ function BranchDialog({
                 <option value="">— Chưa chọn —</option>
                 {staff.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {(s.full_name || s.email) + (s.studio_role ? ` · ${ROLE_LABEL[s.studio_role] ?? s.studio_role}` : "")}
+                    {(s.full_name || s.email) + (s.studio_role ? ` · ${roleLabel(s.studio_role)}` : "")}
                   </option>
                 ))}
               </select>

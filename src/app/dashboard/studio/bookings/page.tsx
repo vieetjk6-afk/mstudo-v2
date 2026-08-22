@@ -40,7 +40,7 @@ export default async function BookingsPage() {
   }
 
   // Phạm vi chi nhánh đang chọn trên thanh trên cùng.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null);
+  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const { data } = await applyBranch(
     supabase.from("studio_bookings").select("*").eq("owner_id", profile.id).neq("status", "archived"),
     scope.selected

@@ -4,6 +4,7 @@ import { Trophy } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
 import { vnd, CREW_ROLE_LABEL, type CrewRole } from "@/lib/types";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
@@ -24,10 +25,16 @@ export default async function RankingPage() {
   }
 
   const supabase = createClient();
-  const { data } = await supabase
-    .from("contract_crew")
-    .select("name, phone, role, status, salary, contract:studio_contracts!inner(owner_id)")
-    .eq("contract.owner_id", profile.id);
+  // Bảng này hiện THU NHẬP của từng thợ, nên cũng phải theo phạm vi chi nhánh —
+  // nếu không, người phụ trách một cơ sở suy ra được tiền công cơ sở khác đang trả.
+  const { data } = await applyBranch(
+    supabase
+      .from("contract_crew")
+      .select("name, phone, role, status, salary, contract:studio_contracts!inner(owner_id, branch_id)")
+      .eq("contract.owner_id", profile.id),
+    (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected,
+    "contract.branch_id"
+  );
 
   const rows = (data ?? []) as unknown as Row[];
   type Agg = { key: string; name: string; role: CrewRole; jobs: number; accepted: number; earned: number };

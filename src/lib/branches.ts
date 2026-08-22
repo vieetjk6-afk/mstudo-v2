@@ -3,6 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { branchFilter, normalizeBranch, sortBranches, type BranchRow } from "@/lib/branch-rules";
+import { forcedBranchScope, isBranchScopedRole } from "@/lib/studio-roles";
 import type { StudioBranch } from "@/lib/types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -46,6 +47,11 @@ export type BranchScope = {
   selected: string | null;
   /** Studio này có dùng chi nhánh không — false thì đừng hiện gì thêm. */
   enabled: boolean;
+  /**
+   * Phạm vi bị GHIM bởi vai trò (Toàn quyền chi nhánh) — người dùng không đổi
+   * được. Ô chọn trên topbar phải hiện dạng khoá, không phải danh sách bấm được.
+   */
+  locked: boolean;
 };
 
 /**
@@ -58,16 +64,30 @@ export type BranchScope = {
  * cứng thì phải chặn ở từng truy vấn, và đó là một quyết định về phân quyền —
  * không nên lẫn vào một bộ lọc hiển thị.
  */
-export async function getBranchScope(ownerId: string, staffBranchId?: string | null): Promise<BranchScope> {
+export async function getBranchScope(
+  ownerId: string,
+  staffBranchId?: string | null,
+  /** Vai trò của người đang đăng nhập — cần để biết phạm vi có bị GHIM hay không. */
+  actingRole?: string | null
+): Promise<BranchScope> {
   const branches = await getBranches(ownerId);
-  if (branches.length === 0) return { branches, selected: null, enabled: false };
+
+  // Vai trò "Toàn quyền chi nhánh": phạm vi do VAI TRÒ quyết định, không phải
+  // cookie. Kiểm TRƯỚC cả việc studio có chi nhánh nào: nếu chi nhánh vừa bị xoá
+  // hết mà vẫn còn người mang vai trò này, `forcedBranchScope` trả "none" và họ
+  // chỉ thấy phần chưa gán — fail-closed, chứ không mở ra toàn studio.
+  if (isBranchScopedRole(actingRole)) {
+    return { branches, selected: forcedBranchScope(actingRole, staffBranchId), enabled: true, locked: true };
+  }
+
+  if (branches.length === 0) return { branches, selected: null, enabled: false, locked: false };
 
   const raw = cookies().get(BRANCH_COOKIE)?.value ?? null;
   const fromCookie = normalizeBranch(raw, branches as BranchRow[]);
   // Chưa có cookie (hoặc cookie không còn hợp lệ) → lùi về chi nhánh của chính
   // người đang đăng nhập, nếu họ được gán một cơ sở.
   const selected = raw ? fromCookie : normalizeBranch(staffBranchId ?? null, branches as BranchRow[]);
-  return { branches, selected, enabled: true };
+  return { branches, selected, enabled: true, locked: false };
 }
 
 /* ── Áp phạm vi vào truy vấn ──────────────────────────────────────────────── */

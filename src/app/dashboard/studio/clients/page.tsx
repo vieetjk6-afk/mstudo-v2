@@ -7,6 +7,7 @@ import ReferralsPanel from "./ReferralsPanel";
 import StudioDenied from "@/components/StudioDenied";
 import { getStudioHost } from "@/lib/studio-site";
 import { studioUrl } from "@/lib/hosts";
+import { applyBranch, getBranchScope } from "@/lib/branches";
 
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
@@ -39,9 +40,11 @@ export default async function ClientsPage() {
   const supabase = createClient();
   let cq = supabase
     .from("studio_contracts")
-    .select("client_name, client_phone, event_date, source, status, contract_items(qty, unit_price), contract_payments(amount)")
+    .select("client_name, client_phone, event_date, source, status, branch_id, contract_items(qty, unit_price), contract_payments(amount)")
     .eq("owner_id", profile.id);
   if (profile.actingRole === "staff") cq = cq.eq("assigned_to", profile.actingUserId);
+  // Danh bạ khách suy ra từ hợp đồng, nên lọc hợp đồng là lọc luôn danh bạ.
+  cq = applyBranch(cq, (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected);
   const { data } = await cq;
 
   const rows = (data ?? []) as unknown as Row[];

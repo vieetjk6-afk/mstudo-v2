@@ -85,6 +85,9 @@ export async function convertQuoteToContract(
     .from("studio_contracts")
     .insert({
       owner_id: quote.owner_id,
+      // Hợp đồng thừa hưởng chi nhánh của báo giá — nếu không, mọi hợp đồng
+      // chốt từ báo giá đều rơi về "chưa gán" và doanh thu chi nhánh bị hụt.
+      branch_id: (quote as { branch_id?: string | null }).branch_id ?? null,
       code,
       title: contractTitle,
       service_id: quote.service_id ?? null,

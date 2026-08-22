@@ -133,10 +133,10 @@ on conflict (id) do update set role='admin', is_active=true;`}
   // và topbar không hiện gì thêm.
   const owner = profile.studio_owner_id ?? profile.id;
   const branchScope = tier === "none"
-    ? { branches: [], selected: null, enabled: false }
+    ? { branches: [], selected: null, enabled: false, locked: false }
     // Ở layout, `profile` là dòng của CHÍNH người đang đăng nhập (không đi qua
     // requireStudio), nên chi nhánh của họ nằm ngay ở studio_branch_id.
-    : await getBranchScope(owner as string, profile.studio_branch_id as string | null);
+    : await getBranchScope(owner as string, profile.studio_branch_id as string | null, actingRole);
   // Chưa xuất bản (ẩn hoàn toàn với non-admin, không hiện cả nhãn "Sắp ra mắt").
   const hiddenNav = desktopHidden(flags) ? ["/dashboard/studio/desktop"] : [];
 
@@ -157,6 +157,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
         branches={branchScope.branches.map((b) => ({ id: b.id, name: b.name, code: b.code, active: b.active }))}
         branchSelected={branchScope.selected}
         branchCookie={branchScope.enabled ? BRANCH_COOKIE : undefined}
+        branchLocked={branchScope.locked}
       >
         {children}
       </DashboardChrome>

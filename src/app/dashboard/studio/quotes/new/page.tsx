@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import NewQuoteForm from "./NewQuoteForm";
 import StudioDenied from "@/components/StudioDenied";
+import { getBranchScope } from "@/lib/branches";
 
 
 export default async function NewQuotePage() {
@@ -40,9 +41,16 @@ export default async function NewQuotePage() {
       .order("position", { ascending: true }),
   ]);
 
+
+  // Chi nhánh đang xem → báo giá mới thuộc luôn cơ sở đó. "Xem gộp" hoặc "chưa
+  // gán" thì để trống, không đoán hộ.
+  const sel = (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected;
+  const branchId = typeof sel === "string" && sel !== "none" ? sel : null;
+
   return (
     <NewQuoteForm
       ownerId={profile.id}
+      branchId={branchId}
       services={(services ?? []) as { id: string; name: string }[]}
       pricelist={(pricelist ?? []) as { id: string; name: string; price: number; unit: string | null; description: string | null; category: string | null; list_key: string | null }[]}
       listLabels={listLabels}
