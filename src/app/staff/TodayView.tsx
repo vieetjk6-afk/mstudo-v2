@@ -88,7 +88,7 @@ export default function TodayView({
         <Panel className="px-[18px] pb-2 pt-4">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h2 className="text-[14px] font-bold">Lịch hôm nay</h2>
-            <Link href="/dashboard/studio/schedule" className="text-[12px] font-semibold" style={{ color: "var(--ac)" }}>
+            <Link href="/dashboard/studio/calendar?tab=studio" className="text-[12px] font-semibold" style={{ color: "var(--ac)" }}>
               Mở lịch studio →
             </Link>
           </div>
@@ -237,7 +237,7 @@ export default function TodayView({
           )}
           <div className="px-4 py-3" style={{ borderTop: "1px solid var(--bd2)" }}>
             <Link
-              href="/dashboard/studio/schedule"
+              href="/dashboard/studio/calendar?tab=studio"
               className="block rounded-[9px] py-2 text-center text-[12.5px] font-semibold"
               style={{ border: "1px solid var(--bd)", color: "var(--tx)" }}
             >

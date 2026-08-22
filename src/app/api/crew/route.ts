@@ -169,7 +169,7 @@ export async function POST(req: Request) {
         kind: body.status === "accepted" ? "crew_accepted" : "crew_declined",
         message: crewMsg,
       });
-      await sendPushToOwner(ct.owner_id, { title: "Phản hồi từ thợ", body: crewMsg, url: "/dashboard/studio/team", tag: "crew" });
+      await sendPushToOwner(ct.owner_id, { title: "Phản hồi từ thợ", body: crewMsg, url: "/dashboard/studio/calendar?tab=team", tag: "crew" });
     }
     return NextResponse.json({ ok: true });
   }

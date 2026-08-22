@@ -61,6 +61,6 @@ export function notificationHref(n: Pick<StudioNotification, "kind" | "contract_
   if (n.kind === "new_user") return "/dashboard/admin";
   if (n.kind === "upgrade_request") return "/dashboard/settings";
   if (n.kind === "contact") return "/dashboard/settings";
-  if (n.kind === "schedule_reminder" || n.kind === "assigned") return "/dashboard/studio/schedule";
+  if (n.kind === "schedule_reminder" || n.kind === "assigned") return "/dashboard/studio/calendar?tab=studio";
   return null;
 }

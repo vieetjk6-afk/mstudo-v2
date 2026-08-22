@@ -1,6 +1,12 @@
+/** Khung xương dùng chung cho cả ba tab của màn Lịch làm việc. Lưới 7 cột đọc
+ *  được cho cả lịch tháng (tab Buổi chụp, tab Đội ngũ) lẫn lưới tuần (tab Lịch
+ *  studio), nên không cần ba khung xương khác nhau. */
 export default function CalendarLoading() {
   return (
     <div>
+      {/* Dải tab */}
+      <div className="skeleton mb-4 h-[38px] w-[290px] rounded-[11px]" />
+
       {/* Header + view toggles */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="skeleton h-7 w-32" />

@@ -362,7 +362,7 @@ export default function CalendarView({
             (có người phụ trách và phòng) nằm ở màn Lịch studio — để một đường dẫn
             ở đây cho khỏi phải đi vòng qua sidebar. */}
         <Link
-          href="/dashboard/studio/schedule"
+          href="/dashboard/studio/calendar?tab=studio"
           className="flex flex-none items-center gap-1.5 rounded-[9px] px-2.5 py-[7px] text-[12px] font-semibold"
           style={{ border: "1px solid var(--bd)", background: "var(--sf)", color: "var(--tx2)" }}
         >

@@ -102,7 +102,7 @@ export default function CrewManager({
           Lưu photographer / cameramen theo số điện thoại để gán nhanh vào hợp đồng.
           Thợ vào <span style={{ color: "var(--text)" }}>{mainUrl("/crew")}</span> để xem việc và
           tự báo lịch đã nhận — mỗi thợ chỉ thấy lịch của mình.
-          Xem lịch cả đội ở <a href="/dashboard/studio/team" style={{ color: "var(--text)" }}>Lịch đội ngũ</a>.
+          Xem lịch cả đội ở <a href="/dashboard/studio/calendar?tab=team" style={{ color: "var(--text)" }}>Lịch đội ngũ</a>.
         </p>
       </div>
 

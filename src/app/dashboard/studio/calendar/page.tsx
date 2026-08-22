@@ -1,64 +1,50 @@
-import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
-import { mainUrl } from "@/lib/hosts";
-import { gcalHealth } from "@/lib/gcal";
-import { applyBranch, getBranchScope } from "@/lib/branches";
-import CalendarView, { type ContractMarker, type EventRow } from "./CalendarView";
+import CalendarTabs, { readTab, type CalendarTab } from "./CalendarTabs";
+import ShootTab from "./ShootTab";
+import StudioTab from "./StudioTab";
+import TeamTab from "./TeamTab";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LỊCH LÀM VIỆC — /dashboard/studio/calendar
 
-export default async function CalendarPage() {
+   MỘT màn, ba góc nhìn chọn bằng ?tab=:
+     (mặc định)   buổi chụp của hợp đồng      → ShootTab
+     ?tab=studio  buổi hẹn dịch vụ tại studio → StudioTab  (route cũ /schedule)
+     ?tab=team    lịch theo từng người        → TeamTab    (route cũ /team)
+
+   Vì sao gộp: ba màn cùng trả lời một câu hỏi — "ngày mai studio làm gì" — chỉ
+   khác đơn vị đếm (buổi chụp / buổi hẹn / con người). Để rời nhau thì sidebar có
+   bốn dòng chứa chữ "lịch" và không ai đoán được nên mở dòng nào.
+
+   Mỗi tab là một server component RIÊNG và chỉ được gọi khi đúng tab đó mở, nên
+   mở tab "Buổi chụp" không kéo theo truy vấn phòng, ê-kíp hay sổ thợ của hai tab
+   kia. Quyền và gói vẫn do chính từng tab tự kiểm tra (requireStudio) — dải tab
+   dưới đây chỉ ẩn lối vào, không phải hàng rào.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+const MANAGERS = ["owner", "admin", "manager", "branch_manager"];
+
+export default async function CalendarPage({
+  searchParams,
+}: {
+  searchParams?: { tab?: string };
+}) {
+  const tab = readTab(searchParams?.tab);
   const profile = await requireStudio("booking");
-  if (!profile) {
-    return (
-      <div className="mx-auto max-w-lg text-center">
-        <div className="card p-8">
-          <h1 className="font-serif text-2xl font-medium">Cần gói Photographer trở lên</h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>
-            Tính năng này dành cho tài khoản gói Photographer trở lên.
-          </p>
-          <a href="/dashboard/upgrade" className="btn-primary mt-5">Nâng cấp gói</a>
-        </div>
-      </div>
-    );
-  }
 
-  const supabase = createClient();
-  // Chi nhánh đang chọn. Chỉ lọc HỢP ĐỒNG: `studio_events` là mốc ghi chú, phần
-  // lớn gắn với một hợp đồng và không có cột chi nhánh riêng — lọc chúng theo
-  // chi nhánh sẽ làm mất các mốc studio ghi chung (nghỉ lễ, bảo trì thiết bị).
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
-  const CONTRACT_COLS =
-    "id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, branch_id, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)";
-  const [{ data: events }, { data: contracts }] = await Promise.all([
-    // Kèm tên & ngày của HỢP ĐỒNG CHÍNH để lịch ghi rõ mốc thuộc hợp đồng nào.
-    supabase.from("studio_events").select("*, contract:studio_contracts(title, event_date)").eq("owner_id", profile.id).order("event_date"),
-    applyBranch(
-      (profile.actingRole === "staff"
-        ? supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id).eq("assigned_to", profile.actingUserId)
-        : supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id)
-      )
-        .not("event_date", "is", null)
-        // Chỉ hiện hợp đồng đã xác nhận/khách đã ký — bỏ nháp & mới gửi.
-        .in("status", ["approved", "in_progress", "completed"]),
-      scope.selected
-    ),
-  ]);
-
-  // Read-only calendar feed (owner sets it once; staff just see the URL).
-  let calToken = profile.calendar_token as string | null;
-  if (!calToken && profile.actingRole !== "staff") {
-    calToken = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)).replace(/-/g, "");
-    await supabase.from("profiles").update({ calendar_token: calToken }).eq("id", profile.id);
+  // Tab "Đội ngũ" đọc sổ thợ + phân công của cả studio → gói Studio và từ quản
+  // lý trở lên, đúng như mục "Lịch đội ngũ" trong sidebar trước đây.
+  const show: CalendarTab[] = ["shoot", "studio"];
+  if (profile && profile.studioTier === "full" && MANAGERS.includes(profile.actingRole as string)) {
+    show.push("team");
   }
-  const feedUrl = calToken ? mainUrl(`/api/calendar/${calToken}`) : "";
+  // Gõ tay ?tab=team khi không đủ quyền → về tab mặc định, không hiện màn trắng.
+  const active: CalendarTab = show.includes(tab) ? tab : "shoot";
 
   return (
-    <CalendarView
-      ownerId={profile.id}
-      initialEvents={(events ?? []) as unknown as EventRow[]}
-      contracts={(contracts ?? []) as ContractMarker[]}
-      feedUrl={feedUrl}
-      gcal={await gcalHealth(profile.id)}
-    />
+    <div>
+      <CalendarTabs show={show} active={active} />
+      {active === "studio" ? <StudioTab /> : active === "team" ? <TeamTab /> : <ShootTab />}
+    </div>
   );
 }
