@@ -6,6 +6,7 @@ import { sendEmail } from "@/lib/email";
 import { sendPushToOwner } from "@/lib/push";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { autoCreateContractDriveOnSign } from "@/lib/studio-drive";
+import { syncContractCalendar } from "@/lib/gcal-sync";
 import { fetchAllPhotos } from "@/lib/photos";
 
 export const dynamic = "force-dynamic";
@@ -207,6 +208,12 @@ export async function POST(req: Request, { params }: { params: { token: string }
     } catch {
       /* studio chưa nối Drive / lỗi tạm — app desktop sẽ tạo bù khi chạy */
     }
+    // ĐẨY LỊCH LÊN GOOGLE NGAY TẠI ĐÂY. Ký xong là hợp đồng thành "đã duyệt",
+    // tức đủ điều kiện lên lịch — nhưng ở khoảnh khắc này KHÔNG ai đăng nhập
+    // (khách ký ở cổng công khai), nên lối đồng bộ cũ đi từ trình duyệt chủ
+    // studio không thể chạy. Đó là lý do lịch trước đây chỉ lên khi mở hợp đồng
+    // sửa tay một lần nữa. Hàm này tự nuốt lỗi: Google hỏng thì việc ký vẫn xong.
+    await syncContractCalendar(contract.owner_id as string, contract.id as string);
     return NextResponse.json({ ok: true });
   }
 

@@ -318,21 +318,31 @@ export default function ContractEditor({
     }
     setContractSaved("saved");
     setTimeout(() => setContractSaved("idle"), 1500);
-    // Sync to Google Calendar if a shoot date is set (fire-and-forget).
-    if (data.event_date) {
-      // Không còn fire-and-forget: đồng bộ trượt thì phải nói, nếu không studio
-      // đinh ninh lịch đã lên Google trong khi chẳng có gì cả.
-      fetch("/api/gcal/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "contract", id: contract.id, action: "upsert" }),
+    // Đồng bộ Google Lịch sau MỌI lần lưu, kể cả khi vừa XOÁ ngày chụp hay lùi
+    // hợp đồng về nháp: server quyết định tạo, sửa hay gỡ sự kiện. Trước đây chỉ
+    // gọi khi còn `event_date`, nên xoá ngày xong buổi chụp vẫn nằm trên lịch
+    // Google và thợ vẫn tới.
+    syncContractCalendar();
+  }
+
+  /**
+   * Nhờ server đẩy hợp đồng này lên Google Lịch. Không còn fire-and-forget:
+   * đồng bộ trượt thì phải nói, nếu không studio đinh ninh lịch đã lên Google
+   * trong khi chẳng có gì cả. Im lặng khi studio chưa nối Google Lịch — đó là
+   * lựa chọn của họ, không phải lỗi cần nhắc mỗi lần gõ phím.
+   */
+  function syncContractCalendar() {
+    fetch("/api/gcal/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "contract", id: contract.id, action: "upsert" }),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as { synced?: boolean; reason?: string };
+        if (j.reason === "chưa kết nối Google Lịch") return;
+        if (!r.ok || j.synced === false) toast(`Chưa lên Google Lịch: ${j.reason ?? "lỗi không rõ"}`);
       })
-        .then(async (r) => {
-          const j = (await r.json().catch(() => ({}))) as { synced?: boolean; reason?: string };
-          if (!r.ok || j.synced === false) toast(`Chưa lên Google Lịch: ${j.reason ?? "lỗi không rõ"}`);
-        })
-        .catch((e) => toast(`Chưa lên Google Lịch: ${(e as Error)?.message || e}`));
-    }
+      .catch((e) => toast(`Chưa lên Google Lịch: ${(e as Error)?.message || e}`));
   }
 
   const set = (k: keyof typeof f, v: string | number) =>
@@ -809,12 +819,33 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
     if (data) {
       setMilestones((p) => [...p, data as StudioEvent].sort((a, b) => a.event_date.localeCompare(b.event_date)));
       setMs({ title: "", event_date: "", event_time: "" });
+      // Mốc lịch (ngày đãi trước, thử đồ...) cũng là lịch phải chạy — trước đây
+      // chỉ ghi vào DB nên Google Lịch chỉ có mỗi ngày chụp chính.
+      syncMilestone(data.id as string, "upsert");
     }
   }
 
   async function deleteMilestone(id: string) {
+    // PHẢI `await`: server tra `gcal_event_id` từ chính hàng này. Xoá hàng trước
+    // rồi mới gọi thì không còn gì để tra, và sự kiện nằm lại trên lịch Google
+    // vĩnh viễn — mốc đã huỷ mà thợ vẫn thấy trên điện thoại.
+    await syncMilestone(id, "delete");
     await supabase.from("studio_events").delete().eq("id", id);
     setMilestones((p) => p.filter((m) => m.id !== id));
+  }
+
+  function syncMilestone(id: string, action: "upsert" | "delete") {
+    return fetch("/api/gcal/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "event", id, action }),
+    })
+      .then(async (r) => {
+        const j = (await r.json().catch(() => ({}))) as { synced?: boolean; reason?: string };
+        if (action === "delete" || j.reason === "chưa kết nối Google Lịch") return;
+        if (!r.ok || j.synced === false) toast(`Mốc lịch chưa lên Google: ${j.reason ?? "lỗi không rõ"}`);
+      })
+      .catch(() => {/* mốc lịch lên trễ không đáng chặn thao tác */});
   }
 
   // ── Checklist ──────────────────────────────────────────────────
@@ -1087,7 +1118,12 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
       .eq("id", contract.id);
     setBusy(null);
     toast(error ? `Lỗi: ${error.message}` : "Đã lưu chữ ký Bên A.");
-    if (!error) router.refresh();
+    if (!error) {
+      // Ký xong là hợp đồng đã chốt — đẩy luôn lên Google Lịch thay vì đợi lần
+      // sửa ô nào đó kế tiếp mới chạy autosave.
+      syncContractCalendar();
+      router.refresh();
+    }
   }
 
   // ── Edit requests ──────────────────────────────────────────────

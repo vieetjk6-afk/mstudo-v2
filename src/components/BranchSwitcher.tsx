@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Building2, Check, ChevronDown, Lock } from "lucide-react";
 import { BRANCH_ALL, BRANCH_NONE, UNASSIGNED_LABEL } from "@/lib/branch-rules";
+import { useTheme } from "@/lib/theme";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Ô CHỌN CHI NHÁNH trên thanh trên cùng — "xem gộp hoặc tách".
@@ -17,9 +19,33 @@ import { BRANCH_ALL, BRANCH_NONE, UNASSIGNED_LABEL } from "@/lib/branch-rules";
    Component này KHÔNG hiện gì khi studio chưa khai chi nhánh nào (branches
    rỗng): studio một cơ sở — tức đa số — không được thấy thêm một ô điều khiển
    chẳng để làm gì.
+
+   BẢNG CHỌN ĐI QUA PORTAL RA <body>, KHÔNG neo vào nút. Hai lý do, cái nào một
+   mình cũng đủ làm hỏng bảng chọn `absolute` cũ:
+
+     1. Topbar mang `backdrop-filter: blur(12px)`. Phần tử có backdrop-filter TRỞ
+        THÀNH containing block cho mọi con `position: fixed` — nên ngay cả khi
+        đổi sang `fixed` mà vẫn nằm trong <header> thì toạ độ vẫn tính theo
+        header, không theo khung nhìn.
+     2. `absolute right-0` chỉ canh mép phải bảng chọn bằng mép phải NÚT. Trên
+        điện thoại nút nằm giữa topbar, bảng rộng 248px đổ ngược sang trái và
+        chạy lọt ra ngoài mép trái màn hình — đúng lỗi "bấm chọn chi nhánh bị
+        lệch khung, một phần bị khuất".
+
+   Thay vào đó: đo `getBoundingClientRect()` của nút rồi đặt toạ độ `fixed` theo
+   KHUNG NHÌN, kẹp lại trong hai mép với lề 8px, và bề rộng không bao giờ vượt
+   quá `100vw - 16px`. Đo lại khi cuộn/đổi kích thước để bảng không rời khỏi nút.
+
+   Portal ra <body> là ra khỏi khối token `.studio-shell`, nên bảng chọn TỰ MANG
+   lại class phạm vi + `data-theme` — nếu không `var(--ac)` rơi về bí danh nâu ở
+   `:root` và dòng đang chọn đổi màu (xem chú thích dài trong studio/Modal.tsx).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export type SwitcherBranch = { id: string; name: string; code: string | null; active: boolean };
+
+/** Lề tối thiểu giữa bảng chọn và mép màn hình. */
+const EDGE = 8;
+const MENU_W = 248;
 
 export default function BranchSwitcher({
   branches,
@@ -39,19 +65,55 @@ export default function BranchSwitcher({
   locked?: boolean;
 }) {
   const router = useRouter();
+  const { theme } = useTheme();
   const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const btn = useRef<HTMLButtonElement | null>(null);
+  const menu = useRef<HTMLDivElement | null>(null);
+  /** Toạ độ theo KHUNG NHÌN (position: fixed) — null khi chưa đo được. */
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; maxH: number } | null>(null);
+
+  useEffect(() => setMounted(true), []);
+
+  /** Đo nút rồi kẹp bảng chọn vào trong khung nhìn. */
+  const place = useCallback(() => {
+    const b = btn.current;
+    if (!b) return;
+    const r = b.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = document.documentElement.clientHeight;
+    const width = Math.min(MENU_W, vw - EDGE * 2);
+    // Ưu tiên canh mép phải bảng bằng mép phải nút (bảng đổ xuống dưới bên trái
+    // nút, như mọi menu topbar khác), rồi kẹp cả hai đầu — hai phép Math này là
+    // thứ giữ bảng không lọt ra ngoài màn hình dù nút nằm ở đâu.
+    const left = Math.min(Math.max(EDGE, r.right - width), vw - width - EDGE);
+    const top = r.bottom + 6;
+    // Chừa 8px dưới đáy: bảng dài hơn thì tự cuộn trong lòng nó.
+    setPos({ top, left, width, maxH: Math.max(160, vh - top - EDGE) });
+  }, []);
 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      // Bảng chọn nằm ngoài cây DOM của nút (portal), nên phải hỏi cả hai.
+      if (btn.current?.contains(t) || menu.current?.contains(t)) return;
+      setOpen(false);
     };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    // `capture: true` để bắt cả khi trang cuộn bên trong một khối con.
+    const onScroll = () => place();
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
-  }, [open]);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [open, place]);
 
   if (branches.length === 0 && !locked) return null;
 
@@ -104,9 +166,17 @@ export default function BranchSwitcher({
   }
 
   return (
-    <div ref={box} className="relative flex-none">
+    // Không cần `relative`: bảng chọn không còn neo vào khối này nữa.
+    <div className="flex-none">
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={btn}
+        // Đo NGAY trong lượt bấm, trước khi mở: `useLayoutEffect` sẽ kêu cảnh báo
+        // khi render ở server, còn `useEffect` thì mở lần thứ hai bảng dùng lại
+        // toạ độ cũ đúng một khung hình rồi mới nhảy về chỗ mới.
+        onClick={() => {
+          if (!open) place();
+          setOpen((v) => !v);
+        }}
         className="flex h-[34px] items-center gap-1.5 rounded-[9px] px-2.5 text-[12.5px] font-semibold"
         style={{
           border: "1px solid var(--bd)",
@@ -124,32 +194,47 @@ export default function BranchSwitcher({
         <ChevronDown size={14} style={{ opacity: 0.7 }} />
       </button>
 
-      {open && (
-        <div
-          role="listbox"
-          className="absolute right-0 top-[calc(100%+6px)] z-50 max-h-[70vh] w-[248px] overflow-y-auto rounded-[12px] py-1.5"
-          style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-modal)" }}
-        >
-          <Row label="Tất cả chi nhánh" sub="Xem gộp toàn studio" on={selected === null} onClick={() => pick(BRANCH_ALL)} />
-          <div className="my-1" style={{ borderTop: "1px solid var(--bd2)" }} />
-          {branches.map((b) => (
+      {mounted && open && pos &&
+        createPortal(
+          <div
+            ref={menu}
+            role="listbox"
+            // `studio-shell` + data-theme: dựng lại khối token đã mất khi ra <body>.
+            // z-140: trên mọi thứ của shell (topbar z-30, ⌘K z-95), nhưng DƯỚI hộp
+            // thoại z-150 — mở một hộp thoại thì nó phải che bảng chọn này.
+            className="studio-shell fixed z-[140] overflow-y-auto rounded-[12px] py-1.5"
+            data-theme={theme}
+            style={{
+              top: pos.top,
+              left: pos.left,
+              width: pos.width,
+              maxHeight: pos.maxH,
+              background: "var(--sf)",
+              border: "1px solid var(--bd)",
+              boxShadow: "var(--sh-modal)",
+            }}
+          >
+            <Row label="Tất cả chi nhánh" sub="Xem gộp toàn studio" on={selected === null} onClick={() => pick(BRANCH_ALL)} />
+            <div className="my-1" style={{ borderTop: "1px solid var(--bd2)" }} />
+            {branches.map((b) => (
+              <Row
+                key={b.id}
+                label={b.name}
+                sub={[b.code?.trim(), b.active ? null : "tạm ẩn"].filter(Boolean).join(" · ") || undefined}
+                on={selected === b.id}
+                onClick={() => pick(b.id)}
+              />
+            ))}
+            <div className="my-1" style={{ borderTop: "1px solid var(--bd2)" }} />
             <Row
-              key={b.id}
-              label={b.name}
-              sub={[b.code?.trim(), b.active ? null : "tạm ẩn"].filter(Boolean).join(" · ") || undefined}
-              on={selected === b.id}
-              onClick={() => pick(b.id)}
+              label={UNASSIGNED_LABEL}
+              sub="Dữ liệu chưa thuộc cơ sở nào"
+              on={selected === BRANCH_NONE}
+              onClick={() => pick(BRANCH_NONE)}
             />
-          ))}
-          <div className="my-1" style={{ borderTop: "1px solid var(--bd2)" }} />
-          <Row
-            label={UNASSIGNED_LABEL}
-            sub="Dữ liệu chưa thuộc cơ sở nào"
-            on={selected === BRANCH_NONE}
-            onClick={() => pick(BRANCH_NONE)}
-          />
-        </div>
-      )}
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

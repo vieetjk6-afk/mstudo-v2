@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { autoCreateContractDeliveryOnComplete, autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { syncContractCalendar } from "@/lib/gcal-sync";
 import { autoNotify } from "@/lib/zalo/notify";
 import { deliveryReadyMessage } from "@/lib/zalo/messages";
 import { studioUrl } from "@/lib/hosts";
@@ -48,6 +49,17 @@ export async function POST(req: Request) {
 
   const { error } = await db.from("studio_contracts").update(patch).eq("id", contractId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Trạng thái là thứ QUYẾT ĐỊNH hợp đồng có nằm trên Google Lịch hay không
+  // (chỉ approved/in_progress/completed mới lên). Đồng bộ ngay sau khi ghi, cả
+  // hai chiều: sang trạng thái đã chốt thì tạo/cập nhật sự kiện, lùi về nháp
+  // hoặc huỷ thì `syncContractCalendar` tự gỡ sự kiện cũ xuống. Trước đây bảng
+  // công việc kéo thẻ đổi trạng thái mà Google Lịch không hề đổi theo.
+  let gcal: string | null = null;
+  if (contract.status !== status) {
+    const r = await syncContractCalendar(user.id, contractId);
+    gcal = r.contract.synced ? null : r.contract.reason ?? null;
+  }
 
   // Chuyển SANG "đang thực hiện" / "hoàn thành" → giờ mới tạo album CHỌN ẢNH
   // (trước mốc này album được giữ chưa tạo để không hiện trong thư viện). Bao cả
@@ -98,5 +110,5 @@ export async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, deliveryAlbum });
+  return NextResponse.json({ ok: true, deliveryAlbum, gcal });
 }

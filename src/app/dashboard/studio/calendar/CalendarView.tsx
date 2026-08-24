@@ -269,8 +269,10 @@ export default function CalendarView({
   }
 
   async function delEvent(id: string) {
-    // Sync deletion to Google Calendar before removing locally.
-    fetch("/api/gcal/sync", {
+    // Gỡ trên Google TRƯỚC, và PHẢI `await`: server tra `gcal_event_id` từ chính
+    // hàng này, nên xoá hàng trước thì không còn gì để tra và sự kiện nằm lại
+    // trên lịch Google vĩnh viễn. Trước đây gọi rồi bỏ mặc, thắng thua tuỳ mạng.
+    await fetch("/api/gcal/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind: "event", id, action: "delete" }),
