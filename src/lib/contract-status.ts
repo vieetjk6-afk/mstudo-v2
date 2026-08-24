@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { syncContractCalendar } from "@/lib/gcal-sync";
 
 // Trạng thái được phép TỰ chuyển sang 'in_progress' khi tới ngày. Chỉ những HĐ
 // đang hoạt động (đã gửi/đã duyệt) — KHÔNG đụng bản nháp (draft), đã hoàn tất
@@ -76,6 +77,10 @@ export async function autoAdvanceContracts(db: SupabaseClient, ownerId?: string)
     } catch {
       /* studio chưa nối Drive / lỗi tạm — desktop sẽ tạo bù khi đồng bộ */
     }
+    // Hợp đồng vừa tự đổi trạng thái thì sự kiện trên Google Lịch cũng phải theo
+    // — nhánh này chạy trong cron và khi mở danh sách hợp đồng, tức KHÔNG có
+    // thao tác nào của người dùng để kích hoạt lối đồng bộ cũ từ trình duyệt.
+    await syncContractCalendar(oid, id);
   }
   return toAdvance;
 }

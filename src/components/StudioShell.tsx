@@ -429,7 +429,10 @@ export default function StudioShell({
         <div className="flex min-w-0 flex-col">
           {/* Topbar */}
           <header
-            className="sticky top-0 z-30 flex items-center gap-3 px-4 py-[11px] sm:px-6"
+            // gap-2 dưới 640px: trên máy 360px, topbar phải chứa hamburger + ô
+            // chi nhánh + ⌘K + sáng/tối + chuông + avatar; ở gap-3 tổng bề rộng
+            // vượt màn hình vài pixel và nút ngoài cùng bên phải bị đẩy khuất.
+            className="sticky top-0 z-30 flex items-center gap-2 px-4 py-[11px] sm:gap-3 sm:px-6"
             style={{
               background: "var(--topbar)",
               backdropFilter: "blur(12px)",

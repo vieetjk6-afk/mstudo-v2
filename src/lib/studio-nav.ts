@@ -149,6 +149,14 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // trang, vì cả hai sẽ cùng sáng và người dùng bấm mãi một chỗ.
       { href: "/dashboard/studio/reports", label: "Thu chi & công nợ", icon: Wallet, minTier: "full", roles: MONEY_OK, keywords: "bao cao doanh thu chi phi cong no dong tien" },
       { href: "/dashboard/studio/payroll", label: "Đối soát tiền công", icon: Banknote, minTier: "full", roles: MONEY_OK, keywords: "bang luong tien cong nhan su" },
+      // Bảng giá về Tài chính (trước ở "Thiết lập"): giá bán là một quyết định
+      // TIỀN BẠC — người ngồi tính doanh thu cũng là người chỉnh giá gói, nên để
+      // hai việc đó cạnh nhau. Đứng CUỐI nhóm vì sửa vài lần một năm, còn thu chi
+      // và tiền công mở hằng tuần.
+      // roles/minTier giữ nguyên MANAGER_OK + "booking": nhóm chỉ là NHÃN, mỗi
+      // mục vẫn tự lọc theo vai trò — quản lý không xem được tiền vẫn thấy đúng
+      // một dòng "Gói & bảng giá" trong nhóm này, không lộ thêm con số nào.
+      { href: "/dashboard/studio/pricing", label: "Gói & bảng giá", icon: Package, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/packages"], keywords: "goi dich vu bang gia" },
     ],
   },
   {
@@ -159,21 +167,21 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // sổ thợ chỉ sửa khi có người vào/ra.
       { href: "/dashboard/studio/staff", label: "Nhân viên & phân quyền", icon: UserCog, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/crew"], keywords: "tai khoan nhan vien quyen vai tro so tho crew doi ngu" },
       { href: "/dashboard/studio/ranking", label: "Xếp hạng", icon: Trophy, minTier: "full", roles: MANAGER_OK },
-    ],
-  },
-  {
-    // Mọi thứ khai MỘT LẦN rồi dùng lại. Xếp theo tần suất sửa: cấu trúc công ty
-    // và bảng giá sửa vài lần một năm, mẫu tin nhắn và website thỉnh thoảng.
-    label: "Thiết lập",
-    items: [
-      // Chi nhánh chuyển từ "Nhân sự" sang: đây là CẤU TRÚC công ty (mở/đóng cơ
-      // sở), không phải chỗ để xem đội ngũ. Nhãn để "Chi nhánh" chứ không phải
-      // "Chi nhánh studio" vì sidebar rộng 250px — tên đầy đủ bị cắt.
+      // Chi nhánh về lại "Nhân sự": chủ studio đi tìm nó bằng câu hỏi "cơ sở này
+      // ai làm?", tức cùng mạch với nhân viên và phân quyền — chứ không ai mở
+      // "Thiết lập" để mở/đóng một cơ sở. Đứng CUỐI nhóm vì sửa vài lần một năm.
       // roles: BRANCH_ADMIN_OK — "Toàn quyền chi nhánh" KHÔNG thấy, vì họ không
       // được thêm/sửa/xoá chi nhánh (README, mục "Toàn quyền chi nhánh"); trước
       // đây họ vẫn thấy dòng menu này rồi bấm vào mới biết là không làm được gì.
       { href: "/dashboard/studio/branches", label: "Chi nhánh", icon: Building2, minTier: "full", roles: BRANCH_ADMIN_OK, keywords: "chi nhanh studio co so diem chup branch nhieu cua hang" },
-      { href: "/dashboard/studio/pricing", label: "Gói & bảng giá", icon: Package, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/packages"], keywords: "goi dich vu bang gia" },
+    ],
+  },
+  {
+    // Mọi thứ khai MỘT LẦN rồi dùng lại — và KHÔNG thuộc về một nhóm nghiệp vụ
+    // nào rõ hơn. Bảng giá đã về "Tài chính", chi nhánh đã về "Nhân sự"; còn lại
+    // ở đây là điều khoản, mẫu tin nhắn, website và app máy tính.
+    label: "Thiết lập",
+    items: [
       { href: "/dashboard/studio/services", label: "Dịch vụ & điều khoản", icon: Gavel, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/templates"], keywords: "dieu khoan mau hop dong" },
       { href: "/dashboard/studio/messages", label: "Mẫu tin nhắn", icon: MessagesSquare, minTier: "full", roles: MANAGER_OK, keywords: "mau tin zalo sms" },
       { href: "/dashboard/site", label: "Website & chatbox", icon: Globe, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/chatbox"], keywords: "trang web portfolio tro ly" },

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDesktopOwner } from "@/lib/desktop/auth";
 import { autoCreateContractDeliveryOnComplete, autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { syncContractCalendar } from "@/lib/gcal-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -128,6 +129,12 @@ export async function POST(req: Request) {
         } catch {
           /* studio chưa nối Drive / lỗi tạm — lần đồng bộ sau tạo bù */
         }
+      }
+      // App máy tính sửa hợp đồng (ngày, giờ, nơi chụp, trạng thái) thì Google
+      // Lịch phải đổi theo. Máy tính không chạy trong trình duyệt đã đăng nhập
+      // web, nên đây là chỗ DUY NHẤT bắt được thay đổi đó.
+      if (table === "studio_contracts") {
+        await syncContractCalendar(owner, id);
       }
       return NextResponse.json({ ok: true, row: data });
     } else {

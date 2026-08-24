@@ -165,9 +165,9 @@ Sidebar 250px, cố định. Nhãn nhóm 10px/800/uppercase màu `--tx3`. Mục 
 Kinh doanh    Yêu cầu mới(3) · Đặt lịch khách(3) · Báo giá(2) · Hợp đồng & lịch hẹn · Khách hàng
 Sản xuất      Lịch làm việc · Bảng công việc · Xử lý hình ảnh(4) · Thư viện album · Thiết kế album · Thiệp·Story·Slide · Công cụ ảnh
 Kho           Phòng váy · Thiết bị
-Tài chính     Thu chi & công nợ · Đối soát tiền công
-Nhân sự       Nhân viên & phân quyền · Xếp hạng
-Thiết lập     Chi nhánh · Gói & bảng giá · Dịch vụ & điều khoản · Mẫu tin nhắn · Website & chatbox · Ứng dụng máy tính
+Tài chính     Thu chi & công nợ · Đối soát tiền công · Gói & bảng giá
+Nhân sự       Nhân viên & phân quyền · Xếp hạng · Chi nhánh
+Thiết lập     Dịch vụ & điều khoản · Mẫu tin nhắn · Website & chatbox · Ứng dụng máy tính
 ```
 
 Số trong ngoặc là badge đếm. Chân sidebar: thẻ trạng thái đồng bộ Drive + số phiên bản.
@@ -176,8 +176,8 @@ Nhóm **Quản trị hệ thống** (Người dùng & studio · Cài đặt hệ
 **Ba quy tắc xếp menu** — sửa `NAV_GROUPS` thì giữ đúng ba điều này:
 
 1. **Thứ tự nhóm kể lại quy trình studio**, đọc từ trên xuống: khách hỏi → chốt đơn → chụp & hậu kỳ → đồ nghề → tiền → người → thứ khai một lần. Nhân viên mới học việc bằng cách nhìn sidebar.
-2. **Tần suất mở quyết định vị trí trong nhóm**, không phải "tính năng nào quan trọng hơn". Bảng giá quan trọng nhưng sửa mỗi quý → xuống Thiết lập; Yêu cầu mới mở 20 lần/ngày → dòng đầu tiên có nhãn.
-3. **Mỗi nhóm trả lời đúng một câu hỏi.** "Đơn này tới đâu rồi?" → Kinh doanh. "Hôm nay ai làm gì?" → Sản xuất. "Tháng này lời bao nhiêu?" → Tài chính.
+2. **Tần suất mở quyết định vị trí trong nhóm**, không phải "tính năng nào quan trọng hơn". Bảng giá quan trọng nhưng sửa mỗi quý → cuối nhóm Tài chính; Yêu cầu mới mở 20 lần/ngày → dòng đầu tiên có nhãn.
+3. **Mỗi nhóm trả lời đúng một câu hỏi.** "Đơn này tới đâu rồi?" → Kinh doanh. "Hôm nay ai làm gì?" → Sản xuất. "Tháng này lời bao nhiêu?" (kể cả *bán giá nào*) → Tài chính. "Ai làm ở đâu?" (kể cả *mở/đóng cơ sở*) → Nhân sự. Thiết lập chỉ giữ thứ không thuộc nhóm nào ở trên.
 
 Cụm tài khoản (Tài khoản & bảo mật · Thông báo · Kết nối Calendar · Gói phần mềm · Affiliate · Ngôn ngữ · Đăng xuất) **không nằm trong sidebar** — nó ở menu avatar trên topbar, và vẫn gõ ⌘K ra được qua `EXTRA_COMMANDS`.
 
@@ -264,6 +264,34 @@ Pill trạng thái = chấm tròn 6px cùng màu chữ + nhãn, `padding:5px 11p
 Bước xong: nền `--gn` + icon `check`. Bước hiện tại: nền `--ac`. Bước chưa tới: nền `--sf2`, viền `--bd`.
 
 ---
+
+## Đồng bộ Google Lịch
+
+**Luật:** hợp đồng có `event_date` **và** trạng thái ∈ `approved` · `in_progress` ·
+`completed` thì nằm trên Google Lịch; mọi trường hợp khác thì **bị gỡ xuống**.
+Luật viết một chỗ: `src/lib/gcal-plan.ts` (`gcalPlan`) — thuần logic, có kiểm thử
+`npm run test:gcal-sync`.
+
+**Ai đẩy lên:** `src/lib/gcal-sync.ts` chạy bằng service-role và nhận `ownerId`
+tường minh, nên gọi được cả khi **không có ai đăng nhập**. `syncContractCalendar`
+đẩy buổi chụp chính + mọi mốc `studio_events` của hợp đồng và **không bao giờ ném
+lỗi** — Google hỏng thì việc ký vẫn phải xong.
+
+| Chuyện xảy ra | Nơi gọi |
+| --- | --- |
+| Khách bấm **ký** ở cổng `/c/<token>` | `api/c/[token]/route.ts` |
+| Đổi trạng thái (màn hợp đồng, bảng công việc, danh sách) | `api/studio/contract-status/route.ts` |
+| Cron / mở danh sách tự chuyển sang *đang thực hiện* | `lib/contract-status.ts` |
+| App máy tính sửa hợp đồng | `api/desktop/mutate/route.ts` |
+| Autosave hợp đồng, thêm/xoá mốc lịch, ghi chú lịch | `POST /api/gcal/sync` (từ trình duyệt) |
+
+`/api/gcal/sync` giờ chỉ là lớp vỏ kiểm phiên đăng nhập quanh cùng những hàm ấy —
+**đừng viết lại logic lên lịch trong route**. `/api/gcal/backfill` là nút chạy bù
+thủ công cho dữ liệu cũ.
+
+> Lỗi cũ đáng nhớ: mọi lượt đồng bộ đều xuất phát từ `fetch` trong trình duyệt chủ
+> studio, nên đúng khoảnh khắc khách ký — không ai đăng nhập — chẳng có gì chạy.
+> Lịch chỉ lên khi chủ studio mở hợp đồng sửa tay một ô bất kỳ.
 
 ## 14 tính năng mới (không có trong bản cũ)
 
@@ -471,6 +499,15 @@ Thu chi & công nợ (thu và tiền công lọc qua `contract.branch_id`).
 - **Ngưỡng responsive** ở mục trên đã kiểm chứng — đừng đổi tuỳ tiện.
 - Dựng HTML bằng tay (`document.write`, `srcDoc`, template in ấn) thì mọi giá
   trị do người dùng nhập phải qua `escapeHtml()` ở `src/lib/html-escape.ts`.
+- **Menu thả xuống trong topbar phải đi qua portal ra `<body>`**, không dùng
+  `absolute` neo vào nút. Topbar mang `backdrop-filter`, mà phần tử có
+  `backdrop-filter` trở thành *containing block* cho cả con `position: fixed` —
+  nên bảng chọn nằm trong `<header>` không thể tự canh theo khung nhìn. Thêm
+  `absolute right-0` chỉ canh mép phải bảng bằng mép phải nút: trên điện thoại
+  bảng đổ ngược sang trái và lọt ra ngoài màn hình. Mẫu đúng:
+  `src/components/BranchSwitcher.tsx` — đo `getBoundingClientRect()` của nút, đặt
+  toạ độ `fixed`, kẹp trong hai mép, và **mang lại class `studio-shell` +
+  `data-theme`** (ra `<body>` là ra khỏi khối token, `var(--ac)` sẽ rơi về nâu).
 
 ## Tài liệu khác
 

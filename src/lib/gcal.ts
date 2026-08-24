@@ -89,8 +89,12 @@ export function contractToGCal(ct: {
   };
 }
 
-/** Hợp đồng ở trạng thái nào thì được lên lịch Google. */
-export const GCAL_CONTRACT_STATUSES = ["approved", "in_progress", "completed"];
+/**
+ * Hợp đồng ở trạng thái nào thì được lên lịch Google. Luật thật nằm ở
+ * lib/gcal-plan.ts (thuần logic, có kiểm thử); ở đây chỉ xuất lại cho những nơi
+ * đã nhập từ file này.
+ */
+export { GCAL_CONTRACT_STATUSES, gcalPlan } from "@/lib/gcal-plan";
 
 export async function gcalHealth(userId: string): Promise<{ connected: boolean; ok: boolean; error: string | null }> {
   const db = createAdminClient();
