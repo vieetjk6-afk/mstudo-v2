@@ -50,6 +50,12 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
   const [password, setPassword] = useState("");
   const [max, setMax] = useState("");
   const [watermark, setWatermark] = useState("");
+  // Đóng dấu chìm là TỰ CHỌN, mặc định TẮT. Trước đây không có cờ này: ô chữ
+  // watermark được điền sẵn tên studio, mà điều kiện lưu lại là
+  // `!!watermark.trim()`, nên mọi album tạo ở đây đều bật watermark dù studio
+  // không chạm vào. Mặc định của CSDL đã là false (migrations/watermark_opt_in.sql)
+  // nhưng lệnh INSERT ghi đè thẳng nên mặc định đó không có tác dụng ở đường này.
+  const [wmOn, setWmOn] = useState(false);
   const [allowNote, setAllowNote] = useState(true);
   const [allowDownload, setAllowDownload] = useState(true);
   // Plan permissions — free accounts cannot enable download / notes.
@@ -133,6 +139,7 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
           setPassword(f.password ?? "");
           setMax(f.max ?? "");
           if (f.watermark) setWatermark(f.watermark);
+          setWmOn(!!f.wmOn);
           setAllowNote(f.allowNote ?? true);
         } catch {}
         window.sessionStorage.removeItem(PENDING_KEY);
@@ -146,7 +153,9 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
     // Stash the form so it survives the OAuth round-trip.
     window.sessionStorage.setItem(
       PENDING_KEY,
-      JSON.stringify({ name, drives, password, max, watermark, allowNote })
+      // Nhớ cả cờ bật/tắt: studio cố ý bật rồi bị đẩy sang đăng nhập Google mà
+      // quay lại thấy tắt thì tưởng hệ thống nuốt mất lựa chọn.
+      JSON.stringify({ name, drives, password, max, watermark, wmOn, allowNote })
     );
     const next = window.location.pathname;
     await supabase.auth.signInWithOAuth({
@@ -185,7 +194,7 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
           title: name.trim(),
           slug,
           selection_limit: isDelivery ? null : (max ? Number(max) : null),
-          watermark_enabled: canWatermark && !!watermark.trim(),
+          watermark_enabled: canWatermark && wmOn && !!watermark.trim(),
           download_enabled: allowDownload,
           watermark_text: watermark.trim() || null,
           phase: isDelivery ? "delivery" : "selection",
@@ -328,10 +337,36 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
         </div>
 
         {canWatermark && (
-          <>
-            <label className="label mt-4">Watermark</label>
-            <input value={watermark} onChange={(e) => setWatermark(e.target.value)} placeholder="Tên studio" className="input" />
-          </>
+          <div className="mt-4 rounded-xl px-3.5 py-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+            <div className="flex items-center gap-3">
+              <span className="flex-1 text-[13.5px]">
+                Đóng dấu chìm lên ảnh
+                <span className="mt-0.5 block text-[11.5px]" style={{ color: "var(--text3)" }}>
+                  Bật thì ảnh khách tải về phải đi qua máy chủ nên chậm hơn. Tắt thì tải thẳng từ Drive.
+                </span>
+              </span>
+              <button
+                onClick={() => setWmOn((v) => !v)}
+                className="relative h-[26px] w-[46px] flex-shrink-0 rounded-full transition-all"
+                style={wmOn ? { background: "var(--gold)" } : { background: "var(--surface)", border: "1px solid var(--border2)" }}
+                aria-pressed={wmOn}
+                aria-label="Đóng dấu chìm lên ảnh"
+              >
+                <span
+                  className="absolute top-[3px] h-5 w-5 rounded-full transition-all"
+                  style={wmOn ? { left: "23px", background: "#0a0a0c" } : { left: "3px", background: "var(--text2)" }}
+                />
+              </button>
+            </div>
+            {wmOn && (
+              <input
+                value={watermark}
+                onChange={(e) => setWatermark(e.target.value)}
+                placeholder="Tên studio"
+                className="input mt-3"
+              />
+            )}
+          </div>
         )}
 
         {/* Ghi chú trên ảnh chỉ có nghĩa ở album CHỌN ẢNH, không áp dụng khi giao khách. */}
