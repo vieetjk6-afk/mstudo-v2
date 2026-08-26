@@ -29,7 +29,8 @@
     "test:gcal-sync": "node --experimental-strip-types desktop/test/gcal-sync.mjs",
     "test:studio-nav": "node --experimental-strip-types desktop/test/studio-nav.mjs",
     "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs",
-    "test:upgrade-payment": "node --experimental-strip-types desktop/test/upgrade-payment.mjs"
+    "test:upgrade-payment": "node --experimental-strip-types desktop/test/upgrade-payment.mjs",
+    "ui:shot": "node scripts/chup-giao-dien.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
@@ -57,6 +58,7 @@
     "@types/react-dom": "^18.3.0",
     "@types/web-push": "^3.6.4",
     "autoprefixer": "^10.4.20",
+    "playwright": "^1.62.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
     "typescript": "^5.6.2"
