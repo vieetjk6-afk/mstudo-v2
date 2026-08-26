@@ -28,7 +28,8 @@
     "test:album-order": "node --experimental-strip-types desktop/test/album-order.mjs",
     "test:gcal-sync": "node --experimental-strip-types desktop/test/gcal-sync.mjs",
     "test:studio-nav": "node --experimental-strip-types desktop/test/studio-nav.mjs",
-    "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs"
+    "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs",
+    "test:upgrade-payment": "node --experimental-strip-types desktop/test/upgrade-payment.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
