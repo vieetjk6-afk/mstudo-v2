@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { fmtDateTime } from "@/lib/date";
 import { Megaphone, X, BellRing } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -109,7 +110,7 @@ export default function AnnouncementPopup() {
                 <div key={n.id}>
                   <p className="whitespace-pre-wrap text-sm" style={{ color: "var(--text)" }}>{n.message}</p>
                   <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                    {new Date(n.created_at).toLocaleString("vi-VN")}
+                    {fmtDateTime(n.created_at)}
                   </p>
                 </div>
               ))}
@@ -139,7 +140,7 @@ export default function AnnouncementPopup() {
                   <p className="text-[13px] font-semibold" style={{ color: "var(--text)" }}>Thông báo hệ thống</p>
                   <p className="mt-0.5 whitespace-pre-wrap text-[13px]" style={{ color: "var(--text2)" }}>{n.message}</p>
                   <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                    {new Date(n.created_at).toLocaleString("vi-VN")}
+                    {fmtDateTime(n.created_at)}
                   </p>
                 </div>
                 <button

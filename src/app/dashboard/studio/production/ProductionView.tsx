@@ -88,6 +88,10 @@ export default function ProductionView({ initial, staff }: { initial: ProductRow
         </Panel>
       )}
 
+      {/* Chưa có hạng mục nào thì bốn tab đều là số 0 — chẳng lọc được gì, chỉ
+          đứng chắn giữa lời giới thiệu và ô hướng dẫn bắt đầu. Ẩn đi cho tài
+          khoản mới, giống cách màn Đặt lịch làm với bộ lọc của nó. */}
+      {rows.length > 0 && (
       <div role="tablist" aria-label="Lọc theo trạng thái" className="flex flex-wrap gap-[3px] self-start rounded-[11px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
         {tabs.map((t) => {
           const on = filter === t.key;
@@ -108,6 +112,7 @@ export default function ProductionView({ initial, staff }: { initial: ProductRow
           );
         })}
       </div>
+      )}
 
       {visible.length === 0 ? (
         <Panel>

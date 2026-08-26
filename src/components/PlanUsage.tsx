@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fmtDate } from "@/lib/date";
 import Link from "next/link";
 import { Sparkles, Crown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -86,7 +87,7 @@ export default function PlanUsage({ showUpgrade = true }: { showUpgrade?: boolea
             : `Đã tạo ${usage.used}/${usage.limit} album trong tháng này`}
         </span>
         {usage.expiresAt && (
-          <span style={{ color: "var(--text3)" }}> · Hết hạn {new Date(usage.expiresAt).toLocaleDateString("vi-VN")}</span>
+          <span style={{ color: "var(--text3)" }}> · Hết hạn {fmtDate(usage.expiresAt)}</span>
         )}
       </div>
       {showUpgrade && !usage.pro && (

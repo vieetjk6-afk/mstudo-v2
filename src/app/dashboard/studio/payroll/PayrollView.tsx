@@ -49,10 +49,17 @@ export default function PayrollView({ rows, studio }: { rows: PayrollRow[]; stud
   const [busy, setBusy] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
-  const filtered = useMemo(
+  // Thợ ĐÃ TỪ CHỐI buổi chụp thì studio không nợ họ đồng nào — nhưng dòng phân
+  // công vẫn nằm nguyên trong contract_crew, và trang này trước đây cộng hết,
+  // nên "Tổng tiền công trong kỳ" và "Còn phải trả" bị thổi lên bằng tiền của
+  // những người không đi làm. Loại khỏi phần tiền; ai từ chối thì xem ở màn
+  // Lịch làm việc / Sổ thợ, không phải ở bảng đối soát lương.
+  const inMonth = useMemo(
     () => (month === "all" ? data : data.filter((r) => (r.contract?.event_date || "").startsWith(month))),
     [data, month]
   );
+  const declinedCount = useMemo(() => inMonth.filter((r) => r.status === "declined").length, [inMonth]);
+  const filtered = useMemo(() => inMonth.filter((r) => r.status !== "declined"), [inMonth]);
 
   // Gom theo người (số điện thoại nếu có, không thì theo tên).
   const groups = useMemo(() => {
@@ -178,6 +185,11 @@ export default function PayrollView({ rows, studio }: { rows: PayrollRow[]; stud
             </div>
           ))}
         </div>
+        {declinedCount > 0 && (
+          <p className="px-[18px] py-2 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+            Không tính {declinedCount} lượt phân công thợ đã từ chối.
+          </p>
+        )}
 
         {/* ── Chế độ xem ──────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-2.5 px-[18px] py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import DateInput from "@/components/DateInput";
-import { fmtDate, fmtDateLunar, todayVN } from "@/lib/date";
+import { fmtDate, fmtDateLunar, fmtDateTime, todayVN } from "@/lib/date";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -2370,7 +2370,7 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                       <p className="text-sm font-semibold">Form thông tin buổi chụp</p>
                       <p className="text-[12px]" style={{ color: "var(--text3)" }}>
                         {contract.intake_submitted_at
-                          ? `Khách đã điền · ${new Date(contract.intake_submitted_at).toLocaleString("vi-VN")}`
+                          ? `Khách đã điền · ${fmtDateTime(contract.intake_submitted_at)}`
                           : intakeIsWedding(contract.shoot_type, services.find((s) => s.id === f.service_id)?.name)
                           ? "Khách điền tên & SĐT cô dâu/chú rể, mốc giờ trong ngày, vị trí nhà gái/nhà trai & nơi đãi tiệc (có bản đồ)."
                           : "Khách điền tên người làm việc trực tiếp, SĐT, thời gian bắt đầu, vị trí (có bản đồ) & ghi chú."}
@@ -2449,7 +2449,7 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                     {contract.brief_refs && <div><dt className="inline" style={{ color: "var(--text3)" }}>Tham khảo: </dt><dd className="inline break-all">{contract.brief_refs}</dd></div>}
                     {contract.brief_note && <div><dt className="inline" style={{ color: "var(--text3)" }}>Khác: </dt><dd className="inline">{contract.brief_note}</dd></div>}
                   </dl>
-                  <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>Gửi lúc {new Date(contract.brief_submitted_at).toLocaleString("vi-VN")}</p>
+                  <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>Gửi lúc {fmtDateTime(contract.brief_submitted_at)}</p>
                 </div>
               )}
               {/* Signature banner */}
@@ -2461,7 +2461,7 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                       Khách đã ký hợp đồng
                     </p>
                     <p className="text-xs" style={{ color: "var(--text3)" }}>
-                      {contract.client_signed_name || f.client_name} · {new Date(contract.client_signed_at).toLocaleString("vi-VN")}
+                      {contract.client_signed_name || f.client_name} · {fmtDateTime(contract.client_signed_at)}
                     </p>
                   </div>
                   {contract.client_signature && (
@@ -2482,7 +2482,7 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                         <div>
                           <p className="text-sm">{r.message}</p>
                           <p className="mt-0.5 text-[11px]" style={{ color: "var(--text3)" }}>
-                            {new Date(r.created_at).toLocaleString("vi-VN")}
+                            {fmtDateTime(r.created_at)}
                           </p>
                         </div>
                         <button onClick={() => resolveRequest(r.id)} className="btn-ghost shrink-0 px-2.5 py-1.5 text-xs">
@@ -2508,7 +2508,7 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                       <img src={contract.studio_signature} alt="Chữ ký" className="h-14 rounded bg-white p-1" />
                     )}
                     <div className="text-xs" style={{ color: "var(--text3)" }}>
-                      {contract.studio_signed_name} · {new Date(contract.studio_signed_at).toLocaleString("vi-VN")}
+                      {contract.studio_signed_name} · {fmtDateTime(contract.studio_signed_at)}
                     </div>
                   </div>
                 )}

@@ -1,4 +1,5 @@
 import BoardView from "@/app/dashboard/studio/board/BoardView";
+import { ContractsList } from "@/app/dashboard/studio/contracts/ContractsListView";
 import ClientsView from "@/app/dashboard/studio/clients/ClientsView";
 import LeadsView from "@/app/dashboard/studio/leads/LeadsView";
 import PayrollView from "@/app/dashboard/studio/payroll/PayrollView";
@@ -18,9 +19,10 @@ import * as f from "./fixtures";
  * dữ liệu ở đúng trạng thái hiếm) hơn là những màn chỉ cần mở app là thấy.
  */
 export const SCREENS: Record<string, { title: string; render: () => React.ReactNode }> = {
-  // Danh sách hợp đồng KHÔNG nhận dữ liệu qua props — nó tự gọi API và cache
-  // trên máy — nên không dựng được ở đây bằng dữ liệu giả. Muốn xem màn đó phải
-  // mở app thật.
+  "hop-dong": {
+    title: "Hợp đồng — danh sách",
+    render: () => <ContractsList rows={f.contracts} studio={f.studio} />,
+  },
   "bang-viec": {
     title: "Bảng việc (kéo thả theo trạng thái)",
     render: () => <BoardView initial={f.board} />,
@@ -89,6 +91,7 @@ export const SCREENS: Record<string, { title: string; render: () => React.ReactN
     title: "Trạng thái rỗng (tài khoản vừa tạo)",
     render: () => (
       <div className="space-y-10">
+        <ContractsList rows={[]} studio={f.studio} />
         <ClientsView clients={[]} studio={f.studio} />
         <LeadsView leads={[]} />
         <ProductionView initial={[]} staff={[]} />

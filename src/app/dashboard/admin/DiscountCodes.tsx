@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtDate } from "@/lib/date";
 import { Plus, Shuffle, Tag, Trash2 } from "lucide-react";
 import DateInput from "@/components/DateInput";
 import { Section, Field } from "@/components/admin/Section";
@@ -127,7 +128,7 @@ export default function DiscountCodes({ initial }: { initial: DiscountCode[] }) 
               <span style={{ color: "var(--text3)" }}>{c.max_uses == null ? `đã dùng ${c.used_count}` : `${c.used_count}/${c.max_uses}`}</span>
               {c.expires_at && (
                 <span style={{ color: new Date(c.expires_at).getTime() < Date.now() ? "var(--danger)" : "var(--text3)" }}>
-                  HH {new Date(c.expires_at).toLocaleDateString("vi-VN")}
+                  HH {fmtDate(c.expires_at)}
                 </span>
               )}
               <button onClick={() => deleteCode(c.id)} className="ml-auto rounded-md p-1.5" style={{ color: "var(--text2)" }} aria-label="Xoá mã giảm giá"><Trash2 size={14} /></button>

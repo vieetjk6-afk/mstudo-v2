@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fmtDate, fmtDateLunar } from "@/lib/date";
+import { fmtDate, fmtDateLunar, fmtDateTime } from "@/lib/date";
 import { Lock, MapPin, Calendar, Send, Check, Printer, PenLine, Images, ImagePlus, Star, ListChecks, Package, Upload, Heart } from "lucide-react";
 import SignaturePad from "@/components/SignaturePad";
 import CalendarButtons from "@/components/CalendarButtons";
@@ -808,7 +808,7 @@ export default function ContractView({ token }: { token: string }) {
               {signed ? (
                 <div>
                   <p className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--gn)" }}>
-                    <Check size={16} /> {t("signedOn")} {new Date(contract.client_signed_at!).toLocaleString("vi-VN")}
+                    <Check size={16} /> {t("signedOn")} {fmtDateTime(contract.client_signed_at!)}
                   </p>
                   {contract.client_signature && (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -1170,7 +1170,7 @@ export default function ContractView({ token }: { token: string }) {
           </div>
 
           <p className="pb-2 text-center text-[11.5px]" style={{ color: "var(--tx3)" }}>
-            {t("updated")}: {new Date(contract.updated_at).toLocaleString("vi-VN")}
+            {t("updated")}: {fmtDateTime(contract.updated_at)}
           </p>
         </div>
       </div>
