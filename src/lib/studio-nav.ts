@@ -195,13 +195,15 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     // không có dòng menu nào dẫn tới — phải gõ tay URL mới vào được.
     label: "Quản trị hệ thống",
     items: [
-      { href: "/dashboard/admin", label: "Người dùng & studio", icon: ShieldCheck, minTier: "booking", roles: ADMIN_ONLY, exact: true, keywords: "tai khoan studio nguoi dung quan tri" },
+      { href: "/dashboard/admin", label: "Người dùng & studio", icon: ShieldCheck, minTier: "booking", roles: ADMIN_ONLY, exact: true, keywords: "tai khoan studio nguoi dung quan tri nang cap ma giam gia duyet chuyen khoan" },
       { href: "/dashboard/admin/system", label: "Cài đặt hệ thống", icon: Settings, minTier: "booking", roles: ADMIN_ONLY, keywords: "sao luu khoi phuc thong bao toan studio drive" },
-      // /dashboard/settings là cấu hình NỀN TẢNG mstudo (site_settings, phản hồi,
-      // yêu cầu nâng cấp, mã giảm giá) và đã chặn non-admin ngay trong page.tsx.
+      // /dashboard/settings là cấu hình NỀN TẢNG mstudo (site_settings, bảng giá,
+      // phản hồi) và đã chặn non-admin ngay trong page.tsx. Yêu cầu nâng cấp &
+      // mã giảm giá đã dọn sang tab "Người dùng & studio" — chúng là việc làm
+      // TRÊN một tài khoản, không phải cấu hình nền tảng.
       // Trước nó nằm ở "Thiết lập" với nhãn "Cài đặt studio" và roles owner+admin,
       // nên chủ studio thấy dòng menu rồi bấm vào lại bị đá về /dashboard.
-      { href: "/dashboard/settings", label: "Cấu hình mstudo", icon: SlidersHorizontal, minTier: "booking", roles: ADMIN_ONLY, keywords: "site settings phan hoi nang cap ma giam gia" },
+      { href: "/dashboard/settings", label: "Cấu hình mstudo", icon: SlidersHorizontal, minTier: "booking", roles: ADMIN_ONLY, keywords: "site settings phan hoi bang gia tai khoan nhan tien" },
       { href: "/dashboard/admin/affiliate", label: "Quản lý Affiliate", icon: Gift, minTier: "booking", roles: ADMIN_ONLY, keywords: "hoa hong gioi thieu duyet" },
     ],
   },

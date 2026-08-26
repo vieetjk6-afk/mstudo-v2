@@ -22,7 +22,6 @@ export type UpgradeContent = {
   subheadline: string;
   plans: Record<Plan, PlanContent>;
   compare: CompareRow[];
-  comingSoon: string[];
 };
 
 const Y = "✓";
@@ -110,12 +109,6 @@ export const UPGRADE_DEFAULTS: UpgradeContent = {
     { label: "Hỗ trợ riêng qua Zalo / email", free: N, basic: N, photographer: N, photographer_plus: N, studio: Y },
     { label: "Nhận miễn phí tính năng nâng cấp", free: N, basic: N, photographer: N, photographer_plus: N, studio: Y },
   ],
-  comingSoon: [
-    "Cổng thanh toán & hoá đơn tự động",
-    "Upload ảnh trực tiếp lên website portfolio",
-    "App di động cho studio (iOS & Android)",
-    "Đồng bộ Google Drive tự động cho ảnh/video hợp đồng",
-  ],
 };
 
 const PLAN_KEYS: Plan[] = ["free", "basic", "photographer", "photographer_plus", "studio"];
@@ -165,6 +158,5 @@ export function mergeUpgradeContent(raw: unknown): UpgradeContent {
     subheadline: r.subheadline?.trim() || UPGRADE_DEFAULTS.subheadline,
     plans,
     compare: compare.length ? compare : UPGRADE_DEFAULTS.compare,
-    comingSoon: Array.isArray(r.comingSoon) ? r.comingSoon.filter((s) => typeof s === "string") : UPGRADE_DEFAULTS.comingSoon,
   };
 }

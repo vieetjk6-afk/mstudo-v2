@@ -46,20 +46,32 @@ export default function PaymentView({
   // Admin xác nhận ở máy khác, không có gì đẩy về trang này — hỏi lại 20 giây
   // một lần trong lúc studio còn đang chờ, để màn hình tự chuyển sang "đã nâng
   // cấp" thay vì bắt họ tải lại trang xem đã xong chưa. Xong (paid) thì dừng.
+  //
+  // CHỈ hỏi khi tab đang HIỆN, và hỏi ngay lúc người dùng quay lại: một tab bỏ
+  // quên mà cứ gõ cửa 20 giây/lần là hơn 4.000 request mỗi ngày cho màn hình
+  // không ai nhìn — đúng bài học đã ghi ở trang album của khách.
   useEffect(() => {
     if (status !== "awaiting_confirm") return;
-    const t = setInterval(async () => {
+    let stopped = false;
+    const ask = async () => {
+      if (document.visibilityState !== "visible") return;
       try {
         const r = await fetch(`/api/upgrade-payment?id=${encodeURIComponent(id)}`, { cache: "no-store" }).then((x) => x.json());
-        if (r?.ok && r.status && r.status !== status) {
+        if (!stopped && r?.ok && r.status && r.status !== status) {
           setStatus(r.status);
           setNote(r.reviewNote ?? null);
         }
       } catch {
         /* mất mạng một nhịp — lần sau hỏi lại */
       }
-    }, 20_000);
-    return () => clearInterval(t);
+    };
+    const t = setInterval(ask, 20_000);
+    document.addEventListener("visibilitychange", ask);
+    return () => {
+      stopped = true;
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", ask);
+    };
   }, [id, status]);
 
   async function declare() {

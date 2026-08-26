@@ -123,20 +123,23 @@ on conflict (id) do update set role='admin', is_active=true;`}
     ? (profile.studio_role ?? "staff")
     : profile.role === "admin" ? "admin" : "owner";
 
-  // Feature flags (admin-controlled): "Sắp ra mắt" chips + locks nav for non-admins.
-  const flags = await getFeatureFlags();
-  const comingSoon = comingSoonNav(flags);
-
-  // Chi nhánh đang xem: nạp một lần ở layout rồi đưa xuống topbar, để mỗi màn
-  // trong shell không phải tự truy vấn danh sách chi nhánh chỉ để vẽ ô chọn.
-  // Studio chưa khai chi nhánh nào (hoặc chưa chạy migration) → enabled = false
-  // và topbar không hiện gì thêm.
+  // Hai truy vấn này KHÔNG phụ thuộc nhau — chạy song song, vì layout dựng lại ở
+  // MỌI lần chuyển màn trong khu quản lý nên một round-trip thừa là thừa ở khắp
+  // nơi.
+  //   • flags: cờ "Sắp ra mắt" + khoá menu với người thường.
+  //   • branchScope: chi nhánh đang xem, nạp một lần ở layout rồi đưa xuống
+  //     topbar để mỗi màn khỏi tự truy vấn lại chỉ để vẽ ô chọn. Studio chưa
+  //     khai chi nhánh (hoặc chưa chạy migration) → enabled = false.
   const owner = profile.studio_owner_id ?? profile.id;
-  const branchScope = tier === "none"
-    ? { branches: [], selected: null, enabled: false, locked: false }
-    // Ở layout, `profile` là dòng của CHÍNH người đang đăng nhập (không đi qua
-    // requireStudio), nên chi nhánh của họ nằm ngay ở studio_branch_id.
-    : await getBranchScope(owner as string, profile.studio_branch_id as string | null, actingRole);
+  const [flags, branchScope] = await Promise.all([
+    getFeatureFlags(),
+    tier === "none"
+      ? Promise.resolve({ branches: [], selected: null, enabled: false, locked: false })
+      // Ở layout, `profile` là dòng của CHÍNH người đang đăng nhập (không đi qua
+      // requireStudio), nên chi nhánh của họ nằm ngay ở studio_branch_id.
+      : getBranchScope(owner as string, profile.studio_branch_id as string | null, actingRole),
+  ]);
+  const comingSoon = comingSoonNav(flags);
   // Chưa xuất bản (ẩn hoàn toàn với non-admin, không hiện cả nhãn "Sắp ra mắt").
   const hiddenNav = desktopHidden(flags) ? ["/dashboard/studio/desktop"] : [];
 

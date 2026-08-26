@@ -1,10 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { driveImageUrlOrNull } from "@/lib/mstudo-drive";
+import { limitByIpDurable } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+  // Cổng công khai có UPLOAD FILE → giới hạn theo IP, giống hệt lý do ở route
+  // cọc giữ ngày: ai cầm link + SĐT (cả hai đều nằm trong tay khách) vẫn có thể
+  // bơm đầy bucket ảnh bằng một vòng lặp.
+  const limited = await limitByIpDurable(req, "contract-proof", 10, 60_000);
+  if (limited) return limited;
+
   const db = createAdminClient();
 
   // Validate token

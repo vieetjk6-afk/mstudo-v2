@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import AdminPanel from "./AdminPanel";
-import type { Profile } from "@/lib/types";
+import type { DiscountCode, Profile, UpgradeRequest } from "@/lib/types";
 
 
 export default async function AdminPage() {
@@ -30,12 +31,17 @@ export default async function AdminPage() {
   // PostgREST không có GROUP BY, mà bắn một count cho mỗi tài khoản thì hoá ra
   // hàng trăm truy vấn. Đọc một cột uuid vẫn nhẹ ở quy mô hiện tại; nếu về sau
   // số bản ghi lên hàng trăm nghìn thì thay bằng một RPC làm count phía Postgres.
-  const [{ data: profiles }, { data: albumOwners }, { data: contractOwners }] = await Promise.all([
+  // Yêu cầu nâng cấp & mã giảm giá đọc bằng service-role: hai bảng này chỉ admin
+  // đụng tới, và ta vừa kiểm role ngay bên trên.
+  const db = createAdminClient();
+  const [{ data: profiles }, { data: albumOwners }, { data: contractOwners }, { data: upgrades }, { data: codes }] = await Promise.all([
     supabase.from("profiles").select("*").order("created_at", { ascending: true }),
     supabase.from("albums").select("owner_id"),
     // Hợp đồng đã huỷ vẫn là việc studio đã làm, nên vẫn đếm — đây là thước đo
     // mức độ dùng phần mềm, không phải báo cáo doanh thu.
     supabase.from("studio_contracts").select("owner_id"),
+    db.from("upgrade_requests").select("*").order("created_at", { ascending: false }).limit(50),
+    db.from("discount_codes").select("*").order("created_at", { ascending: false }),
   ]);
 
   const tally = (rows: { owner_id: string | null }[] | null) => {
@@ -49,6 +55,8 @@ export default async function AdminPage() {
       profiles={(profiles ?? []) as Profile[]}
       albumCounts={tally(albumOwners as { owner_id: string | null }[] | null)}
       contractCounts={tally(contractOwners as { owner_id: string | null }[] | null)}
+      upgrades={(upgrades ?? []) as UpgradeRequest[]}
+      codes={(codes ?? []) as DiscountCode[]}
     />
   );
 }

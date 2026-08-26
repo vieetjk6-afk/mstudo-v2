@@ -174,15 +174,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // List assignments. Match by exact phone first; fall back to digit-only match.
-  const { data: rows } = await db
+  // Việc được phân cho thợ này. Lọc thẳng trong SQL theo `phone_digits` — cột
+  // sinh tự động chứa SĐT chỉ-số, có chỉ mục (migration crew_phone_digits.sql).
+  //
+  // Trước đây chỗ này TẢI TOÀN BỘ contract_crew của MỌI studio rồi lọc bằng JS,
+  // vì SĐT lưu đúng như người ta gõ ("0912 345 678") nên không .eq() được. Chi
+  // phí một lần mở cổng thợ tăng theo số studio trên nền tảng chứ không theo số
+  // việc của thợ đó.
+  const CREW_COLS =
+    "id, name, role, salary, status, note, phone, responded_at, contract:studio_contracts(title, client_name, shoot_type, event_date, event_time, location, status)";
+  const byDigits = await db
     .from("contract_crew")
-    .select(
-      "id, name, role, salary, status, note, phone, responded_at, contract:studio_contracts(title, client_name, shoot_type, event_date, event_time, location, status)"
-    )
+    .select(CREW_COLS)
+    .eq("phone_digits", phone)
     .order("created_at", { ascending: false });
 
-  const mine = (rows ?? []).filter((r) => digits(r.phone) === phone);
+  // Chưa chạy migration → cột chưa tồn tại. Lùi về lối cũ để cổng thợ vẫn chạy
+  // (chậm nhưng đúng), giống cách crew_unavailable đang làm bên dưới.
+  let mine = byDigits.data ?? [];
+  if (byDigits.error) {
+    const { data: all } = await db.from("contract_crew").select(CREW_COLS).order("created_at", { ascending: false });
+    mine = (all ?? []).filter((r) => digits(r.phone) === phone);
+  }
 
   const [{ data: busy }, { data: shiftPlan }] = await Promise.all([
     // select("*") để cổng thợ vẫn chạy trước khi migration crew_schedule.sql

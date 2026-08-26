@@ -113,12 +113,6 @@ export default function UpgradeContentEditor({ initial }: { initial: unknown }) 
         </div>
       </div>
 
-      {/* Coming soon */}
-      <label className="block">
-        <span className="mb-1 block text-xs font-medium" style={{ color: "var(--text2)" }}>Sắp ra mắt (mỗi dòng một mục)</span>
-        <textarea className={`${inp} min-h-[100px] text-[13px]`} value={uc.comingSoon.join("\n")} onChange={(e) => setUc({ ...uc, comingSoon: e.target.value.split("\n") })} />
-      </label>
-
       <button onClick={save} disabled={saving} className="btn-primary gap-2"><Save size={14} /> {saving ? "Đang lưu…" : "Lưu nội dung trang nâng cấp"}</button>
     </div>
   );
