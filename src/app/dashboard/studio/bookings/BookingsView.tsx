@@ -28,6 +28,14 @@ const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }>
   archived: { label: "Lưu trữ", color: "var(--text3)", bg: "var(--surface2)" },
 };
 
+/** "14:30 25/08/2026" — bỏ giây và theo đúng thứ tự ngày/tháng/năm của app;
+ *  toLocaleString("vi-VN") trần cho ra "03:00:00 25/8/2026". */
+function fmtDateTime(ts: string): string {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
 function StatusBadge({ status }: { status: string }) {
   const s = STATUS_LABEL[status] ?? { label: status, color: "var(--text3)", bg: "var(--surface2)" };
   return (
@@ -168,8 +176,10 @@ export default function BookingsView({
     <div className="page-in">
 
       {/* Share link */}
-      <div className="card mb-5 flex flex-wrap items-center gap-3 p-4">
-        <LinkIcon size={16} style={{ color: "var(--text3)" }} />
+      {/* Điện thoại: nhãn + link một hàng, hai nút xuống hàng dưới. Để cùng
+          hàng thì nhãn dài bị ép vỡ năm dòng cạnh hai nút. */}
+      <div className="card mb-5 flex flex-col items-stretch gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
+        <LinkIcon size={16} className="hidden sm:block" style={{ color: "var(--text3)" }} />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] uppercase tracking-wide font-semibold" style={{ color: "var(--text3)" }}>
             Link đặt lịch — chia sẻ cho khách / gắn lên Facebook
@@ -244,7 +254,10 @@ export default function BookingsView({
               className="card p-4 transition-colors"
               style={{ borderLeft: b.status === "new" ? "3px solid var(--am)" : b.status === "accepted" ? "3px solid var(--gn)" : b.status === "declined" ? "3px solid var(--rd)" : undefined }}
             >
-              <div className="flex items-start gap-3">
+              {/* Trên điện thoại XẾP DỌC: trước đây hàng nút (shrink-0) giữ chỗ
+                  cứng nên cột thông tin bị bóp còn non nửa màn — tên khách vỡ
+                  hai dòng, dòng cọc vỡ giữa mã, mà bên phải thì trống trơn. */}
+              <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <p className="font-semibold text-[15px]">{b.name}</p>
@@ -310,7 +323,7 @@ export default function BookingsView({
                     </p>
                   )}
 
-                  <p className="mt-1.5 text-[11px]" style={{ color: "var(--text3)" }}>{new Date(b.created_at).toLocaleString("vi-VN")}</p>
+                  <p className="mt-1.5 text-[11px]" style={{ color: "var(--text3)" }}>{fmtDateTime(b.created_at)}</p>
                 </div>
 
                 {/* Actions */}

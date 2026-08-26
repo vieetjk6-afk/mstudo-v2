@@ -174,6 +174,13 @@ export default function ClientsView({ clients, studio }: { clients: ClientAgg[];
       </div>
 
       {/* ── Bảng khách hàng ───────────────────────────────────────────── */}
+      {/* Bảng rộng 940px nên trên điện thoại phải cuộn ngang — mà cuộn ngang thì
+          KHÔNG có dấu hiệu gì báo là cuộn được: cột "Tổng chi tiêu", "Còn nợ",
+          "Nguồn" khuất hẳn khỏi mép phải và người dùng tưởng app thiếu dữ liệu.
+          Một dòng nhắc là đủ, và chỉ hiện ở khổ hẹp. */}
+      <p className="mb-1.5 text-[11.5px] sm:hidden" style={{ color: "var(--tx3)" }}>
+        Vuốt ngang bảng để xem chi tiêu, công nợ và nguồn khách.
+      </p>
       <Panel className="overflow-x-auto">
         <div
           className="grid gap-3.5 px-[18px] py-2.5"

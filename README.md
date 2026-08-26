@@ -524,12 +524,22 @@ thì gần như không dựng lại được bằng tay.
 Trang này CHỈ tồn tại ở bản dev (`notFound()` khi `NODE_ENV=production`).
 
 ```bash
-npx next dev -p 3333        # cửa sổ 1
-npm run ui:shot             # cửa sổ 2 → ui-desktop.png, ui-mobile.png
+npx next dev -p 3333                     # cửa sổ 1
+npm run ui:shot                          # cửa sổ 2 → anh-giao-dien/*.png
+node scripts/chup-giao-dien.mjs thu-chi  # chỉ chụp một màn
 ```
+
+Mỗi màn một đường riêng `/uipreview/<khoá>`; script tự đọc danh sách từ trang
+chỉ mục nên thêm màn mới là nó chụp theo, không phải sửa hai chỗ.
 
 Script còn báo hai thứ mắt hay bỏ sót: trang có **tràn ngang** không (lỗi bố
 cục số một trên điện thoại) và có **lỗi JavaScript/console** nào khi dựng
 không. Máy đã có sẵn Chromium của Playwright thì đặt `CHROME_PATH` trỏ tới nó.
 
-Sửa một màn khó mở → thêm component đó vào `src/app/uipreview/page.tsx`.
+Sửa một màn khó mở → thêm một dòng vào `src/app/uipreview/screens.tsx` và dữ
+liệu giả vào `fixtures.ts`. Dữ liệu giả cố ý KHÔNG "đẹp đều": tên rất dài, số
+tiền 8 chữ số, trường để trống, danh sách rỗng, trạng thái lỗi — đó mới là chỗ
+giao diện hỏng.
+
+Không dựng được ở đây: màn nào tự gọi API thay vì nhận dữ liệu qua props (ví dụ
+danh sách hợp đồng) — những màn đó phải mở app thật.
