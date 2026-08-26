@@ -45,7 +45,16 @@ export default function QuotesListView({ list: initialList, studioHost = null }:
 
   const kpis = useMemo(() => {
     const totalOf = (q: QuoteRow) => quoteSelectedTotal(q.quote_items || []);
-    const waiting = rows.filter((r) => r.status === "sent" || r.status === "viewed" || r.status === "adjust_requested");
+    // Quá hạn thì KHÔNG còn là "đang chờ khách": trang của khách đã khoá nút
+    // đồng ý ngay khi qua ngày hết hiệu lực (QuoteClientView tự tính theo ngày),
+    // trong khi trạng thái trong DB chỉ được cron đổi sang "expired" mỗi ngày
+    // một lần. Tính theo ngày ở đây để studio không nhìn thấy một pipeline có
+    // cả những báo giá mà khách không bấm được nữa.
+    const nowMs = Date.now();
+    const stillOpen = (r: QuoteRow) => !r.expires_at || new Date(r.expires_at).getTime() >= nowMs;
+    const waiting = rows.filter(
+      (r) => (r.status === "sent" || r.status === "viewed" || r.status === "adjust_requested") && stillOpen(r),
+    );
     const won = rows.filter((r) => r.status === "accepted" || r.status === "converted");
     const closable = rows.filter((r) => r.status !== "draft");
     return [

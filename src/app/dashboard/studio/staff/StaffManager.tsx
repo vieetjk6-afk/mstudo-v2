@@ -212,15 +212,29 @@ export default function StaffManager({
           ) : (
             <div className="flex flex-col gap-2">
               {list.map((s) => (
-                <Panel key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-3.5">
+                // Tài khoản đã KHOÁ phải NHÌN RA NGAY: đây là câu hỏi an ninh
+                // ("ai còn đăng nhập được?"), mà trước đây hàng bị khoá trông
+                // y hệt hàng đang hoạt động.
+                <Panel key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-3.5" style={s.is_active ? undefined : { opacity: 0.6 }}>
                   <span
                     className="flex h-9 w-9 flex-none items-center justify-center rounded-full text-[12px] font-bold"
                     style={avatarStyle(s.full_name || s.email)}
                   >
                     {initials(s.full_name || s.email)}
                   </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] font-semibold">{s.full_name || s.email}</p>
+                  {/* Điện thoại: tên chiếm CẢ HÀNG rồi các ô chọn xuống dưới.
+                      Để chung hàng thì hai ô chọn giữ chỗ cứng, tên bị cắt còn
+                      "Phạm Thu H…" và nhãn "đã khoá" bị đẩy khuất. */}
+                  <div className="min-w-0 basis-[calc(100%-3rem)] sm:basis-auto sm:flex-1">
+                    <p className="flex items-center gap-2 truncate text-[13.5px] font-semibold">
+                      {/* Chưa đặt tên thì đừng in email hai lần liền nhau. */}
+                      {s.full_name || <span style={{ color: "var(--tx3)" }}>Chưa đặt tên</span>}
+                      {!s.is_active && (
+                        <span className="flex-none rounded-[20px] px-[7px] py-0.5 text-[10px] font-bold" style={{ background: "var(--rdS)", color: "var(--rd)" }}>
+                          đã khoá
+                        </span>
+                      )}
+                    </p>
                     <p className="truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>{s.email}</p>
                   </div>
 

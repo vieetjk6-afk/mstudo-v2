@@ -14,7 +14,10 @@ import type { ProductRow } from "@/app/dashboard/studio/production/ProductionVie
 import type { QuoteRow } from "@/app/dashboard/studio/quotes/QuotesListView";
 import type { PaymentRow, SalaryRow, SourceStat } from "@/app/dashboard/studio/reports/ReportsView";
 import type { ExportStudio } from "@/lib/studio-export";
-import type { DiscountCode, StudioBooking, StudioExpense, UpgradeRequest } from "@/lib/types";
+import type { StaffRow } from "@/app/dashboard/studio/staff/StaffManager";
+import type {
+  DiscountCode, StudioBooking, StudioEquipment, StudioExpense, StudioPackage, UpgradeRequest,
+} from "@/lib/types";
 
 /** Ngày cố định để ảnh chụp hai lần vẫn giống nhau (khỏi so nhầm khác biệt). */
 const D = "2026-09-12";
@@ -161,3 +164,24 @@ export const codes = [
 ] as DiscountCode[];
 
 export const bank = { bin: "970436", account: "0123456789", holder: "NGUYEN VAN A", name: "Vietcombank" };
+
+export const staffRows: StaffRow[] = [
+  { id: "u1", email: "ha@maistudio.vn", full_name: "Phạm Thu Hà", studio_role: "manager", studio_branch_id: "b1", is_active: true, created_at: "2026-03-01T03:00:00Z" },
+  { id: "u2", email: "nam@maistudio.vn", full_name: "Trần Hoài Nam", studio_role: "staff", studio_branch_id: null, is_active: true, created_at: "2026-05-12T03:00:00Z" },
+  // Tài khoản đã KHOÁ và chưa đặt tên — hai ca hay làm hàng bị lệch.
+  { id: "u3", email: "ketoan.rat.dai.dong@maistudio.com.vn", full_name: null, studio_role: "accountant", studio_branch_id: null, is_active: false, created_at: "2026-06-20T03:00:00Z" },
+];
+
+export const branches = [{ id: "b1", name: "Cơ sở Quận 1" }, { id: "b2", name: "Cơ sở Thủ Đức" }];
+
+export const equipment: StudioEquipment[] = [
+  { id: "e1", owner_id: "o", name: "Sony A7 IV + lens 24-70 f2.8 GM", category: "Máy ảnh", note: "Body số 2, có vết xước nhẹ ở LCD", active: true, branch_id: "b1", created_at: "2026-01-01T03:00:00Z" },
+  { id: "e2", owner_id: "o", name: "Đèn Godox AD200", category: null, note: null, active: true, branch_id: null, created_at: "2026-01-01T03:00:00Z" },
+  { id: "e3", owner_id: "o", name: "Chân máy hỏng ốc", category: "Phụ kiện", note: "Chờ sửa", active: false, branch_id: "b2", created_at: "2026-01-01T03:00:00Z" },
+];
+
+export const packages: StudioPackage[] = [
+  { id: "g1", owner_id: "o", client_name: "Nguyễn Thị Lan Phương", client_phone: "0912345678", name: "Gói 10 buổi chụp bé", total_sessions: 10, used_sessions: 7, price: 12_000_000, paid: true, note: null, created_at: "2026-04-01T03:00:00Z" },
+  // Gói đã dùng HẾT và chưa trả tiền — hai ca cần nhìn thấy ngay.
+  { id: "g2", owner_id: "o", client_name: "Trần Văn B", client_phone: null, name: "Gói chụp gia đình", total_sessions: 4, used_sessions: 4, price: 6_000_000, paid: false, note: "Hẹn trả sau buổi cuối", created_at: "2026-02-01T03:00:00Z" },
+];

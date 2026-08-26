@@ -531,12 +531,22 @@ export function ContractsList({
         )}
       </div>
 
-      {filtered.length > 0 && (
-        <p className="mt-2.5 px-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-          {filtered.length} hợp đồng · tổng {vnd(filtered.reduce((s, c) => s + contractTotal(c.contract_items || []), 0))}
-          {" · "}đã thu {vnd(filtered.reduce((s, c) => s + sumAmounts(c.contract_payments || []), 0))}
-        </p>
-      )}
+      {/* Dòng tổng: ĐẾM mọi hợp đồng đang thấy, nhưng TIỀN chỉ cộng hợp đồng còn
+          sống. Hợp đồng đã huỷ không còn giá trị nào với studio — cộng vào là
+          thổi phồng con số, và lệch với màn Khách hàng lẫn Thu chi (cả hai đều
+          đã loại huỷ từ trước). "Đã thu" thì vẫn tính cả đơn huỷ: tiền đã vào
+          tài khoản rồi, dù sau đó hợp đồng có huỷ hay không. */}
+      {filtered.length > 0 && (() => {
+        const live = filtered.filter((c) => c.status !== "cancelled");
+        const cancelled = filtered.length - live.length;
+        return (
+          <p className="mt-2.5 px-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+            {filtered.length} hợp đồng · tổng {vnd(live.reduce((s, c) => s + contractTotal(c.contract_items || []), 0))}
+            {" · "}đã thu {vnd(filtered.reduce((s, c) => s + sumAmounts(c.contract_payments || []), 0))}
+            {cancelled > 0 && ` · không tính ${cancelled} hợp đồng đã huỷ`}
+          </p>
+        );
+      })()}
     </div>
   );
 }

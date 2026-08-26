@@ -10,6 +10,9 @@ import BookingsView from "@/app/dashboard/studio/bookings/BookingsView";
 import UpgradeRequests from "@/app/dashboard/admin/UpgradeRequests";
 import DiscountCodes from "@/app/dashboard/admin/DiscountCodes";
 import PaymentView from "@/app/dashboard/upgrade/thanh-toan/[id]/PaymentView";
+import StaffManager from "@/app/dashboard/studio/staff/StaffManager";
+import EquipmentManager from "@/app/dashboard/studio/equipment/EquipmentManager";
+import PackagesManager from "@/app/dashboard/studio/packages/PackagesManager";
 import * as f from "./fixtures";
 
 /**
@@ -84,6 +87,20 @@ export const SCREENS: Record<string, { title: string; render: () => React.ReactN
         <PaymentView id="d" plan="studio" cycle="month" amount={300_000} code="MS-2AB4" initialStatus="none" initialNote={null} bank={{ bin: null, account: null, holder: null, name: null }} />
       </div>
     ),
+  },
+  "nhan-vien": {
+    title: "Nhân viên & phân quyền",
+    render: () => (
+      <StaffManager initial={f.staffRows} branches={f.branches} canManageRoles canAssignBranch lockedBranchName={null} />
+    ),
+  },
+  "thiet-bi": {
+    title: "Thiết bị",
+    render: () => <EquipmentManager ownerId="o" initial={f.equipment} />,
+  },
+  "goi-buoi": {
+    title: "Gói nhiều buổi",
+    render: () => <PackagesManager ownerId="o" initial={f.packages} />,
   },
   // Danh sách RỖNG là trạng thái người dùng mới gặp đầu tiên, và cũng là chỗ hay
   // quên vẽ nhất — để riêng một màn để không bao giờ bỏ sót.

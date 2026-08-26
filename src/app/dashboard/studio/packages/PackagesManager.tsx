@@ -106,8 +106,18 @@ export default function PackagesManager({
                         <p className="font-serif text-lg font-medium" style={{ color: remaining > 0 ? "var(--text)" : "var(--s-red)" }}>
                           Còn {remaining}/{p.total_sessions} buổi
                         </p>
+                        {/* Màu theo hệ màu của khu quản lý: xanh mstudo khi còn
+                            buổi, đỏ khi đã dùng hết — trước đây viết cứng xanh
+                            DƯƠNG (var(--s-blue)) nên vừa lệch cả app, vừa không
+                            đổi màu lúc thẻ hết buổi dù dòng chữ ngay trên đã đỏ. */}
                         <div className="mt-1 h-1.5 w-40 overflow-hidden rounded-full" style={{ background: "var(--surface2)" }}>
-                          <div className="h-full rounded-full" style={{ width: `${(p.used_sessions / p.total_sessions) * 100}%`, background: "var(--s-blue)" }} />
+                          <div
+                            className="h-full rounded-full"
+                            style={{
+                              width: `${Math.min(100, (p.used_sessions / Math.max(1, p.total_sessions)) * 100)}%`,
+                              background: remaining > 0 ? "var(--accent)" : "var(--s-red)",
+                            }}
+                          />
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
