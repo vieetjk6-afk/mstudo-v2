@@ -33,6 +33,7 @@ export default function ZaloSendButton({
   phone,
   name,
   message,
+  imageUrl,
   label = "Gửi Zalo",
   audience,
   contractId,
@@ -42,10 +43,13 @@ export default function ZaloSendButton({
   friendsBtnClass,
   show = "both",
   friendsLabel,
+  wrapClassName = "w-full",
 }: {
   phone?: string | null;
   name?: string | null;
   message: string;
+  /** Ảnh gửi kèm tin (mã QR thanh toán). Máy chủ chỉ nhận ảnh từ máy chủ VietQR. */
+  imageUrl?: string | null;
   label?: string;
   audience?: "client" | "crew";
   contractId?: string | null;
@@ -61,6 +65,9 @@ export default function ZaloSendButton({
   show?: "both" | "send" | "friends";
   /** Nhãn cạnh icon của nút chọn bạn. Bỏ trống = chỉ hiện icon (mặc định cũ). */
   friendsLabel?: string;
+  /** Lớp cho khung ngoài. Mặc định giãn hết hàng; truyền "w-auto" khi nút phải
+   *  đứng chung hàng với các nút khác (vd hàng thao tác của đợt thanh toán). */
+  wrapClassName?: string;
 }) {
   const [state, setState] = useState<null | "sending" | "ok" | "fail">(null);
   const [err, setErr] = useState("");
@@ -112,7 +119,7 @@ export default function ZaloSendButton({
       const res = await fetch("/api/studio/zalo/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, body: message, audience, contractId, kind }),
+        body: JSON.stringify({ ...payload, body: message, imageUrl: imageUrl ?? null, audience, contractId, kind }),
       }).then((x) => x.json());
       if (res.ok) {
         setState("ok");
@@ -180,8 +187,8 @@ export default function ZaloSendButton({
     // dùng cỡ khác hẳn hai cái kia, nên trên điện thoại cụm vỡ thành 3 dòng lệch
     // nhau — mỗi dòng một chiều rộng. Giờ ô nhập giãn theo chỗ còn lại, hai nút
     // đứng cạnh nhau và cao bằng nhau.
-    <span ref={wrapRef} className="relative inline-flex w-full flex-col items-stretch gap-0.5">
-      <span className="flex w-full flex-wrap items-center gap-1.5">
+    <span ref={wrapRef} className={`relative inline-flex flex-col items-stretch gap-0.5 ${wrapClassName}`}>
+      <span className="flex flex-wrap items-center gap-1.5">
         {inputMode && show !== "friends" && (
           <input
             value={manualPhone}

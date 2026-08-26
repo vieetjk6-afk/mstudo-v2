@@ -1,4 +1,8 @@
 import "server-only";
+import { randomBytes } from "node:crypto";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { PersonalSession } from "./config";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -158,14 +162,53 @@ async function apiFromSession(session: PersonalSession): Promise<any> {
   return { api, ThreadType: mod.ThreadType ?? { User: 0 } };
 }
 
+/** Tối đa 4MB cho ảnh đính kèm — mã QR chỉ vài chục KB, vượt xa là bất thường. */
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+/**
+ * Tải ảnh về thư mục tạm rồi trả đường dẫn tệp — zca-js đính kèm theo ĐƯỜNG DẪN
+ * chứ không nhận URL. Trả null nếu tải hỏng/không phải ảnh/quá nặng: khi đó tin
+ * vẫn gửi dạng văn bản (link ảnh đã nằm sẵn trong nội dung).
+ *
+ * Người gọi phải `rm` thư mục trả kèm sau khi gửi xong.
+ */
+async function downloadImage(
+  url: string
+): Promise<{ path: string; dir: string } | null> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 10_000);
+  try {
+    const res = await fetch(url, { signal: ctl.signal, cache: "no-store" });
+    if (!res.ok) return null;
+    const type = (res.headers.get("content-type") || "").toLowerCase();
+    if (!type.startsWith("image/")) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (!buf.length || buf.length > MAX_IMAGE_BYTES) return null;
+    const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : type.includes("webp") ? "webp" : "png";
+    const dir = await mkdtemp(join(tmpdir(), "zalo-img-"));
+    const path = join(dir, `${randomBytes(6).toString("hex")}.${ext}`);
+    await writeFile(path, buf);
+    return { path, dir };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Gửi tin văn bản tới một người. `target.uid` nếu biết, hoặc `target.phone`
  * (tự tìm uid — chỉ được nếu người đó tìm thấy/đã kết bạn).
+ *
+ * `imageUrl` (tuỳ chọn) được tải về rồi đính kèm vào chính tin đó — dùng cho mã
+ * QR thanh toán. Đính kèm hỏng thì LÙI về gửi văn bản, vì tin nhắc thanh toán
+ * đến được khách vẫn hơn là không gửi gì.
  */
 export async function sendPersonalText(
   session: PersonalSession,
   target: { uid?: string | null; phone?: string | null },
-  text: string
+  text: string,
+  imageUrl?: string | null
 ): Promise<{ ok: boolean; uid?: string; error?: string }> {
   let api: any;
   let ThreadType: any;
@@ -187,6 +230,20 @@ export async function sendPersonalText(
     if (!uid) uid = await findUidInFriends(api, target.phone);
   }
   if (!uid) return { ok: false, error: "recipient_not_found" };
+
+  if (imageUrl) {
+    const file = await downloadImage(imageUrl);
+    if (file) {
+      try {
+        await api.sendMessage({ msg: text, attachments: [file.path] }, uid, ThreadType.User);
+        return { ok: true, uid };
+      } catch {
+        /* đính kèm hỏng → gửi văn bản bên dưới */
+      } finally {
+        await rm(file.dir, { recursive: true, force: true }).catch(() => {});
+      }
+    }
+  }
 
   try {
     await api.sendMessage({ msg: text }, uid, ThreadType.User);

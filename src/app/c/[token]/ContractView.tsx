@@ -6,7 +6,7 @@ import { fmtDate, fmtDateLunar } from "@/lib/date";
 import { Lock, MapPin, Calendar, Send, Check, Printer, PenLine, Images, ImagePlus, Star, ListChecks, Package, Upload, Heart } from "lucide-react";
 import SignaturePad from "@/components/SignaturePad";
 import CalendarButtons from "@/components/CalendarButtons";
-import VietQRButton, { VietQR, qrUrl, type BankInfo } from "@/components/VietQR";
+import VietQRButton, { VietQR, qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { thiepUrl } from "@/lib/hosts";
 import { contractPrintBody, contractPrintCss, type ContractPrintData } from "@/lib/contract-print";
 import { compressImage, checkImageFile } from "@/lib/image";
@@ -679,7 +679,7 @@ export default function ContractView({ token }: { token: string }) {
                         </div>
                         <span className="flex-none whitespace-nowrap text-[13px] font-bold">{vnd(p.amount)}</span>
                         {!p.paid && bank.bin && (
-                          <VietQRButton bank={bank} amount={p.amount} addInfo={(contract.code || contract.title || "").slice(0, 25)} label="QR" />
+                          <VietQRButton bank={bank} amount={p.amount} addInfo={instalmentNote((contract.code || contract.title || "").slice(0, 25), p.label)} label="QR" />
                         )}
                       </div>
                     ))}
