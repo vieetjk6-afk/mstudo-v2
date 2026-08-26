@@ -1,14 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import DateInput from "@/components/DateInput";
 import {
-  Save, Tag, Trash2, Plus, Shuffle, Check, Crown, MessageSquare,
-  Globe, LayoutTemplate, BadgeDollarSign, Settings2, ChevronDown, ChevronRight, Rocket,
-  Landmark, X as XIcon,
+  Save, Trash2, Check, MessageSquare,
+  Globe, LayoutTemplate, BadgeDollarSign, Settings2, Rocket, Landmark,
 } from "lucide-react";
-import type { SiteSettings, UpgradeRequest, DiscountCode } from "@/lib/types";
-import { UPGRADE_PAYMENT_LABEL, type UpgradePaymentStatus } from "@/lib/upgrade-payment";
+import type { SiteSettings } from "@/lib/types";
+import { Section, Field } from "@/components/admin/Section";
 import UpgradeContentEditor from "./UpgradeContentEditor";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -19,37 +17,6 @@ export interface Feedback {
   message: string;
   handled: boolean;
   created_at: string;
-}
-
-/* ── Section toggle helper ──────────────────────────────────────────────────── */
-function Section({ title, icon: Icon, children }: { title: string; icon: React.ElementType; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
-  return (
-    <div className="card overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center gap-2 p-5 text-left"
-        style={{ borderBottom: open ? "1px solid var(--border)" : "none" }}
-      >
-        <Icon size={16} style={{ color: "var(--brand, var(--gold))" }} />
-        <span className="flex-1 text-sm font-semibold">{title}</span>
-        {open ? <ChevronDown size={16} style={{ color: "var(--text3)" }} /> : <ChevronRight size={16} style={{ color: "var(--text3)" }} />}
-      </button>
-      {open && <div className="p-5 space-y-4">{children}</div>}
-    </div>
-  );
-}
-
-/* ── Field helpers ──────────────────────────────────────────────────────────── */
-function Field({ label, note, children }: { label: string; note?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label className="label">{label}</label>
-      {children}
-      {note && <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>{note}</p>}
-    </div>
-  );
 }
 
 function Input({ value, onChange, placeholder, type = "text" }: { value: string | number; onChange: (v: string) => void; placeholder?: string; type?: string }) {
@@ -80,13 +47,9 @@ function Textarea({ value, onChange, placeholder, rows = 3 }: { value: string; o
 export default function SettingsPanel({
   settings,
   feedbacks: initialFeedbacks,
-  upgrades,
-  codes: initialCodes,
 }: {
   settings: SiteSettings | null;
   feedbacks: Feedback[];
-  upgrades: UpgradeRequest[];
-  codes: DiscountCode[];
 }) {
   const [form, setForm] = useState<Partial<SiteSettings>>(settings ?? {});
   const [saving, setSaving] = useState(false);
@@ -98,8 +61,6 @@ export default function SettingsPanel({
 
   // ── Feedback ─────────────────────────────────────────────────────────────
   const [feedbacks, setFeedbacks] = useState<Feedback[]>(initialFeedbacks);
-  const [upgradeRows, setUpgradeRows] = useState<UpgradeRequest[]>(upgrades);
-
   async function handleFeedback(action: "handled" | "delete", id: string, handled?: boolean) {
     setFeedbacks((r) => action === "delete" ? r.filter((x) => x.id !== id) : r.map((x) => x.id === id ? { ...x, handled: !!handled } : x));
     await fetch("/api/admin/requests", {
@@ -108,74 +69,6 @@ export default function SettingsPanel({
       body: JSON.stringify({ kind: "feedback", action, id, handled }),
     });
   }
-  async function handleUpgrade(action: "handled" | "delete", id: string, handled?: boolean) {
-    setUpgradeRows((r) => action === "delete" ? r.filter((x) => x.id !== id) : r.map((x) => x.id === id ? { ...x, handled: !!handled } : x));
-    await fetch("/api/admin/requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "upgrade", action, id, handled }),
-    });
-  }
-
-  // Chốt một yêu cầu ĐÃ CHUYỂN KHOẢN. "confirm" nâng gói ngay và báo về cho
-  // studio; "reject" đánh dấu giao dịch chưa thành công kèm lý do. Không cập
-  // nhật lạc quan như hai nút trên: đây là việc động tới TIỀN và tới gói của
-  // người khác, nên chỉ đổi màn hình sau khi máy chủ trả lời xong.
-  const [payBusy, setPayBusy] = useState<string | null>(null);
-  async function reviewPayment(id: string, action: "confirm" | "reject") {
-    if (action === "confirm" && !confirm("Xác nhận ĐÃ NHẬN được tiền chuyển khoản? Gói của studio sẽ được nâng ngay.")) return;
-    const note = action === "reject" ? (prompt("Lý do gửi cho studio (bỏ trống cũng được):") ?? "") : "";
-    setPayBusy(id);
-    const res = await fetch("/api/admin/upgrade-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action, note }),
-    });
-    const data = await res.json().catch(() => null);
-    setPayBusy(null);
-    if (!res.ok || !data?.ok) {
-      setMsg(data?.error === "already_paid" ? "Đơn này đã xác nhận trước đó." : "Không cập nhật được, thử lại.");
-      return;
-    }
-    setUpgradeRows((r) =>
-      r.map((x) => (x.id === id ? { ...x, payment_status: data.status as UpgradePaymentStatus, handled: data.status === "paid" } : x)),
-    );
-  }
-
-  /** Màu viên trạng thái thanh toán — cùng bảng màu với các nhãn khác của app. */
-  function payTone(st: string | null | undefined): React.CSSProperties {
-    if (st === "paid") return { background: "var(--gnS)", color: "var(--gn)" };
-    if (st === "awaiting_confirm") return { background: "var(--amS)", color: "var(--am)" };
-    if (st === "failed") return { background: "var(--rdS)", color: "var(--rd)" };
-    return { background: "var(--surface)", color: "var(--text3)" };
-  }
-
-  // ── Discount codes ────────────────────────────────────────────────────────
-  const [codes, setCodes] = useState<DiscountCode[]>(initialCodes);
-  const [newCode, setNewCode] = useState({ code: "", percent: 10, plan: "", cycle: "", uses: "many" as "1" | "many", expires: "", trial: 0 });
-
-  function randomCode() {
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let s = "";
-    for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
-    setNewCode((n) => ({ ...n, code: s }));
-  }
-  async function addCode() {
-    const code = newCode.code.trim().toUpperCase();
-    if (!code) return;
-    const res = await fetch("/api/admin/discount-codes", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create", code, percent: newCode.percent, plan: newCode.plan || null, cycle: newCode.cycle || null, max_uses: newCode.uses === "1" ? 1 : null, expires_at: newCode.expires || null, trial_days: newCode.trial || null }),
-    });
-    const data = await res.json();
-    if (res.ok && data.code) { setCodes((c) => [data.code, ...c]); setNewCode({ code: "", percent: 10, plan: "", cycle: "", uses: "many", expires: "", trial: 0 }); }
-    else { setMsg(data.error?.includes("duplicate") ? "Mã đã tồn tại" : "Lỗi"); setTimeout(() => setMsg(null), 2500); }
-  }
-  async function deleteCode(id: string) {
-    setCodes((c) => c.filter((x) => x.id !== id));
-    await fetch("/api/admin/discount-codes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete", id }) });
-  }
-
   // ── Save ──────────────────────────────────────────────────────────────────
   async function save() {
     setSaving(true);
@@ -387,72 +280,7 @@ export default function SettingsPanel({
         <UpgradeContentEditor initial={settings?.upgrade_content ?? null} />
       </Section>
 
-      {/* ── 4. Mã giảm giá ──────────────────────────────────────────────── */}
-      <Section title="Mã giảm giá" icon={Tag}>
-        <div className="flex flex-wrap items-end gap-2">
-          <Field label="Mã">
-            <div className="flex gap-1.5">
-              <input className="input" value={newCode.code} placeholder="VD: TET2026" onChange={(e) => setNewCode({ ...newCode, code: e.target.value.toUpperCase() })} />
-              <button onClick={randomCode} type="button" className="btn-ghost px-2.5" title="Tạo ngẫu nhiên" aria-label="Tạo mã ngẫu nhiên"><Shuffle size={14} /></button>
-            </div>
-          </Field>
-          <Field label="%"><input type="number" min={0} max={100} className="input w-16" value={newCode.percent} onChange={(e) => setNewCode({ ...newCode, percent: Number(e.target.value) })} /></Field>
-          <Field label="Gói">
-            <select className="input w-28" value={newCode.plan} onChange={(e) => setNewCode({ ...newCode, plan: e.target.value })}>
-              <option value="">Mọi gói</option>
-              <option value="basic">Basic</option>
-              <option value="photographer">Photographer</option>
-              <option value="photographer_plus">Photographer Plus</option>
-              <option value="studio">Studio</option>
-            </select>
-          </Field>
-          <Field label="Chu kỳ">
-            <select className="input w-24" value={newCode.cycle} onChange={(e) => setNewCode({ ...newCode, cycle: e.target.value })}>
-              <option value="">Mọi kỳ</option>
-              <option value="month">Tháng</option>
-              <option value="year">Năm</option>
-            </select>
-          </Field>
-          <Field label="Lượt dùng">
-            <select className="input w-28" value={newCode.uses} onChange={(e) => setNewCode({ ...newCode, uses: e.target.value as "1" | "many" })}>
-              <option value="many">Nhiều lần</option>
-              <option value="1">1 lần</option>
-            </select>
-          </Field>
-          <Field label="Dùng thử (ngày)">
-            <input type="number" min={0} className="input w-24" value={newCode.trial} onChange={(e) => setNewCode({ ...newCode, trial: Math.max(0, Number(e.target.value) || 0) })} />
-          </Field>
-          <Field label="Hạn dùng">
-            <DateInput wrapperClassName="w-36" value={newCode.expires} onChange={(v) => setNewCode({ ...newCode, expires: v })} />
-          </Field>
-          <button onClick={addCode} className="btn-primary self-end"><Plus size={14} /> Thêm mã</button>
-        </div>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => { randomCode(); setNewCode((n) => ({ ...n, plan: "studio", trial: 1, percent: 0, uses: "many" })); }}
-            className="text-[12px] underline underline-offset-2" style={{ color: "var(--brand, var(--gold))" }}>
-            Tạo nhanh mã dùng thử Studio 1 ngày
-          </button>
-        </div>
-        {codes.length === 0 ? (
-          <p className="text-[13px]" style={{ color: "var(--text3)" }}>Chưa có mã nào.</p>
-        ) : (
-          <div className="divide-y rounded-xl overflow-hidden" style={{ border: "1px solid var(--border)" }}>
-            {codes.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 px-3 py-2.5 text-[13px]">
-                <span className="font-mono font-semibold" style={{ color: "var(--text)" }}>{c.code}</span>
-                {c.trial_days ? <span style={{ color: "var(--success)" }}>dùng thử {c.trial_days} ngày</span>
-                  : <span style={{ color: "var(--gold)" }}>-{c.percent}%</span>}
-                <span style={{ color: "var(--text3)" }}>{c.plan ?? "mọi gói"}{c.cycle ? ` · ${c.cycle === "year" ? "năm" : "tháng"}` : ""}</span>
-                <span style={{ color: "var(--text3)" }}>{c.max_uses == null ? `đã dùng ${c.used_count}` : `${c.used_count}/${c.max_uses}`}</span>
-                {c.expires_at && <span style={{ color: new Date(c.expires_at).getTime() < Date.now() ? "var(--danger)" : "var(--text3)" }}>HH {new Date(c.expires_at).toLocaleDateString("vi-VN")}</span>}
-                <button onClick={() => deleteCode(c.id)} className="ml-auto rounded-md p-1.5" style={{ color: "var(--text2)" }} aria-label="Xoá mã giảm giá"><Trash2 size={14} /></button>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* ── 5. Góp ý / Liên hệ ─────────────────────────────────────────── */}
+      {/* ── 4. Góp ý / Liên hệ ─────────────────────────────────────────── */}
       <Section title={`Góp ý & liên hệ (${feedbacks.length})`} icon={MessageSquare}>
         {feedbacks.length === 0 ? (
           <p className="py-8 text-center text-sm" style={{ color: "var(--text3)" }}>Chưa có tin nhắn nào.</p>
@@ -483,72 +311,11 @@ export default function SettingsPanel({
         )}
       </Section>
 
-      {/* ── 6. Yêu cầu nâng cấp ────────────────────────────────────────── */}
-      <Section title={`Yêu cầu nâng cấp (${upgradeRows.length})`} icon={Crown}>
-        {upgradeRows.length === 0 ? (
-          <p className="py-8 text-center text-sm" style={{ color: "var(--text3)" }}>Chưa có yêu cầu nào.</p>
-        ) : (
-          <div className="space-y-2">
-            {upgradeRows.map((u) => (
-              <div key={u.id} className="rounded-xl p-4" style={{ background: "var(--surface2)", opacity: u.handled ? 0.55 : 1 }}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2 font-semibold text-sm">
-                      {u.email ?? u.user_id}
-                      {u.phone && <span className="font-normal text-[12px]" style={{ color: "var(--text2)" }}>📞 {u.phone}</span>}
-                      {u.plan && <span className="rounded-full px-2 py-0.5 text-[11px] font-bold uppercase" style={{ background: "color-mix(in srgb, var(--gold) 18%, transparent)", color: "var(--gold)" }}>{u.plan}{u.cycle ? ` · ${u.cycle === "year" ? "năm" : "tháng"}` : ""}</span>}
-                      {(u.payment_amount ?? u.amount) != null && <span className="text-[12px] font-semibold" style={{ color: "var(--gold)" }}>{(u.payment_amount ?? u.amount)!.toLocaleString("vi-VN")}đ</span>}
-                      {u.discount_code && <span className="rounded px-2 py-0.5 font-mono text-[11px]" style={{ background: "var(--surface)", color: "var(--text2)" }}>{u.discount_code}</span>}
-                      {u.payment_code && <span className="rounded px-2 py-0.5 font-mono text-[11px] font-bold" style={{ background: "var(--surface)", color: "var(--text)" }}>{u.payment_code}</span>}
-                      <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={payTone(u.payment_status)}>
-                        {UPGRADE_PAYMENT_LABEL[(u.payment_status ?? "none") as UpgradePaymentStatus] ?? u.payment_status}
-                      </span>
-                    </div>
-                    {u.note && <p className="text-xs mt-0.5" style={{ color: "var(--text2)" }}>{u.note}</p>}
-                    <p className="text-[11px] mt-0.5" style={{ color: "var(--text3)" }}>{new Date(u.created_at).toLocaleString("vi-VN")}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5 shrink-0">
-                    {/* Studio đã báo chuyển khoản → hai lựa chọn dứt khoát: đã
-                        thấy tiền (nâng gói ngay) hay chưa thấy (báo thất bại). */}
-                    {u.payment_status === "awaiting_confirm" && (
-                      <>
-                        <button
-                          onClick={() => reviewPayment(u.id, "confirm")}
-                          disabled={payBusy === u.id}
-                          className="rounded-lg px-2.5 py-2 text-[12px] font-semibold disabled:opacity-60"
-                          style={{ background: "var(--gnS)", color: "var(--gn)" }}
-                        >
-                          <Check size={13} className="mr-1 inline" /> Đã nhận tiền
-                        </button>
-                        <button
-                          onClick={() => reviewPayment(u.id, "reject")}
-                          disabled={payBusy === u.id}
-                          className="rounded-lg px-2.5 py-2 text-[12px] font-semibold disabled:opacity-60"
-                          style={{ background: "var(--rdS)", color: "var(--rd)" }}
-                        >
-                          <XIcon size={13} className="mr-1 inline" /> Chưa nhận được
-                        </button>
-                      </>
-                    )}
-                    <button onClick={() => handleUpgrade("handled", u.id, !u.handled)} className="rounded-lg p-2" style={{ background: "var(--surface)", color: u.handled ? "var(--success)" : "var(--text3)" }} aria-label={u.handled ? "Đánh dấu chưa xử lý" : "Đánh dấu đã xử lý"}>
-                      <Check size={15} />
-                    </button>
-                    <button onClick={() => handleUpgrade("delete", u.id)} className="rounded-lg p-2" style={{ background: "var(--surface)", color: "var(--danger)" }} aria-label="Xoá yêu cầu nâng cấp">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </Section>
-
-      {/* ── 7. Quản lý người dùng (link nhanh) ─────────────────────────── */}
+      {/* ── 5. Quản lý nhanh (link) ────────────────────────────────────── */}
       <Section title="Quản lý nhanh" icon={LayoutTemplate}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            { href: "/dashboard/admin", label: "Quản trị người dùng", desc: "Xem, cấp quyền, kích hoạt/khóa tài khoản" },
+            { href: "/dashboard/admin", label: "Người dùng & studio", desc: "Tài khoản, gói, yêu cầu nâng cấp & mã giảm giá" },
             { href: "/dashboard/upgrade", label: "Trang nâng cấp (preview)", desc: "Xem gói hiển thị với người dùng" },
           ].map((l) => (
             <a key={l.href} href={l.href} className="block rounded-xl p-4 transition-colors hover:opacity-80" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>

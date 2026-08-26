@@ -42,8 +42,8 @@ const DEFAULT_PRICES: Prices = {
   studioDiscMonth: 0, studioDiscYear: 50,
 };
 
-// Feature comparison rows, plan labels/features, headline & coming-soon list are
-// admin-editable — loaded from site_settings.upgrade_content (with code defaults).
+// Feature comparison rows, plan labels/features and headline are admin-editable —
+// loaded from site_settings.upgrade_content (with code defaults).
 
 export default function UpgradePage() {
   const router = useRouter();
@@ -440,21 +440,6 @@ export default function UpgradePage() {
             })}
           </tbody>
         </table>
-      </div>
-
-      {/* Coming soon */}
-      <div className="mt-8 card p-6">
-        <h3 className="mb-3 flex items-center gap-2 text-sm font-medium uppercase tracking-wide" style={{ color: "var(--text2)" }}>
-          <Sparkles size={15} /> Tính năng sắp ra mắt
-        </h3>
-        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-          {content.comingSoon.map((f) => (
-            <div key={f} className="flex items-center gap-2 text-[13.5px]" style={{ color: "var(--text2)" }}>
-              <span className="rounded-full px-2 py-0.5 text-[10px] uppercase" style={{ background: "var(--surface2)", color: "var(--text3)" }}>Sắp có</span>
-              {f}
-            </div>
-          ))}
-        </div>
       </div>
 
       <p className="mt-6 text-center text-[12.5px]" style={{ color: "var(--text3)" }}>

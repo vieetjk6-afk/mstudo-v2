@@ -12,7 +12,9 @@ import {
   ACTIVITY_TONE,
   type ActivityLevel,
 } from "@/lib/activity";
-import type { Profile } from "@/lib/types";
+import type { DiscountCode, Profile, UpgradeRequest } from "@/lib/types";
+import UpgradeRequests from "./UpgradeRequests";
+import DiscountCodes from "./DiscountCodes";
 
 /** Thứ tự hiện dải số liệu: nhóm cần gọi điện trước đứng trước. */
 const LEVEL_ORDER: ActivityLevel[] = ["active", "idle", "dormant", "lost", "never"];
@@ -21,12 +23,17 @@ export default function AdminPanel({
   profiles,
   albumCounts = {},
   contractCounts = {},
+  upgrades = [],
+  codes = [],
 }: {
   profiles: Profile[];
   /** Số album theo owner_id — đếm sống ở server, xem page.tsx. */
   albumCounts?: Record<string, number>;
   /** Số hợp đồng theo owner_id. */
   contractCounts?: Record<string, number>;
+  /** Yêu cầu nâng cấp gói (gồm cả đơn chờ duyệt chuyển khoản). */
+  upgrades?: UpgradeRequest[];
+  codes?: DiscountCode[];
 }) {
   const { t } = useLang();
   const [rows, setRows] = useState<Profile[]>(profiles);
@@ -413,6 +420,14 @@ export default function AdminPanel({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Nâng cấp gói: yêu cầu chờ duyệt & mã giảm giá. Dọn từ "Cấu hình mstudo"
+          sang đây vì cả hai đều là việc làm TRÊN một tài khoản — duyệt xong là
+          xem ngay gói của họ ở bảng trên, không phải nhảy màn. */}
+      <div className="mt-8 space-y-4">
+        <UpgradeRequests initial={upgrades} />
+        <DiscountCodes initial={codes} />
       </div>
     </div>
   );

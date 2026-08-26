@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { limitByIpDurable } from "@/lib/rate-limit";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -22,6 +23,11 @@ function loc(v: any): { lat: number | null; lng: number | null; mapUrl: string }
 
 /** Khách gửi form điền thông tin. Xác thực bằng intake_token (không mật khẩu). */
 export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+  // Không mật khẩu, mà mỗi lần gửi lại đẩy một thông báo vào chuông của studio →
+  // giới hạn theo IP để một vòng lặp không chôn vùi chuông thông báo.
+  const limited = await limitByIpDurable(req, "intake-form", 15, 60_000);
+  if (limited) return limited;
+
   const db = createAdminClient();
   const { data: c } = await db
     .from("studio_contracts")

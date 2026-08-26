@@ -104,8 +104,14 @@ export async function POST(req: Request) {
   }
 
   // ── Mặc định: hồ sơ của tôi ở từng studio đã nhận mình ────────────────
-  const { data: rows } = await db.from("studio_crew").select("*");
-  const mine = (rows ?? []).filter((r) => digits(r.phone as string) === phone);
+  // Lọc trong SQL theo cột sinh `phone_digits` (có chỉ mục) thay vì tải cả sổ
+  // thợ của MỌI studio về rồi lọc bằng JS — xem migration crew_phone_digits.sql.
+  const byDigits = await db.from("studio_crew").select("*").eq("phone_digits", phone);
+  let mine = byDigits.data ?? [];
+  if (byDigits.error) {
+    const { data: all } = await db.from("studio_crew").select("*");
+    mine = (all ?? []).filter((r) => digits(r.phone as string) === phone);
+  }
   const ownerIds = mine.map((r) => r.owner_id as string);
   const { data: studios } = ownerIds.length
     ? await db.from("profiles").select("id, full_name").in("id", ownerIds)
