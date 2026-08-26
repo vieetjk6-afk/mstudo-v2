@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { driveImageUrlOrNull } from "@/lib/mstudo-drive";
 import { limitByIpDurable } from "@/lib/rate-limit";
+import { sendPushToOwner } from "@/lib/push";
+import { vnd } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   // Validate token
   const { data: contract } = await db
     .from("studio_contracts")
-    .select("id, owner_id, client_phone")
+    .select("id, owner_id, client_name, client_phone, title")
     .eq("client_token", params.token)
     .maybeSingle();
   if (!contract) return NextResponse.json({ error: "invalid_token" }, { status: 403 });
@@ -62,14 +64,20 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
   const note = (form.get("note") as string | null) || null;
   let planId = (form.get("plan_id") as string | null) || null;
   // Chỉ chấp nhận plan_id thuộc đúng hợp đồng này (chống gắn plan_id tùy ý).
+  let planLabel: string | null = null;
+  let planAmount: number | null = null;
   if (planId) {
     const { data: plan } = await db
       .from("contract_payment_plan")
-      .select("id")
+      .select("id, label, amount")
       .eq("id", planId)
       .eq("contract_id", contract.id)
       .maybeSingle();
     if (!plan) planId = null;
+    else {
+      planLabel = plan.label ?? null;
+      planAmount = plan.amount ?? null;
+    }
   }
   await db.from("contract_client_proofs").insert({
     contract_id: contract.id,
@@ -78,12 +86,29 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     plan_id: planId,
   });
 
-  // Notify owner
+  // Báo cho studio — CÓ thông báo đẩy.
+  //
+  // Trước đây chỗ này chỉ ghi vào chuông, nên studio chỉ biết khi tình cờ mở
+  // khu quản lý; mà đây là ĐƯỜNG TIỀN của hợp đồng (số lớn hơn cọc giữ ngày
+  // nhiều lần) — route cọc giữ ngày thì đã đẩy từ lâu.
+  //
+  // Nội dung cũng phải nói RÕ AI và BAO NHIÊU: "Khách hàng đã gửi ảnh chuyển
+  // khoản" là câu vô dụng khi studio đang chạy năm hợp đồng cùng lúc.
+  const who = contract.client_name || contract.title || "Khách";
+  const what = planLabel ? ` · ${planLabel}` : "";
+  const much = planAmount ? ` ${vnd(planAmount)}` : "";
+  const msg = `${who} đã gửi ảnh chuyển khoản${what}${much} — vào hợp đồng đối chiếu rồi bấm "Đã thu".`;
   await db.from("studio_notifications").insert({
     owner_id: contract.owner_id,
     contract_id: contract.id,
     kind: "payment",
-    message: "Khách hàng đã gửi ảnh chuyển khoản.",
+    message: msg,
+  });
+  await sendPushToOwner(contract.owner_id, {
+    title: "Khách báo đã chuyển khoản",
+    body: msg,
+    url: `/dashboard/studio/contracts/${contract.id}`,
+    tag: `proof-${contract.id}`,
   });
 
   return NextResponse.json({ url: publicUrl });
