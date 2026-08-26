@@ -5,7 +5,7 @@ import {
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
   MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
-  Building2, UserRound,
+  Building2, UserRound, MessageCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,7 +32,7 @@ export type StudioTier = "none" | "booking" | "plus" | "full";
 export const TIER_RANK: Record<StudioTier, number> = { none: 0, booking: 1, plus: 2, full: 3 };
 
 /** Khoá badge đếm việc chưa xử lý (xem /api/studio/nav-badges). */
-export type BadgeKey = "quotes" | "bookings" | "leads" | "production" | "notifications";
+export type BadgeKey = "quotes" | "bookings" | "leads" | "production" | "notifications" | "inbox";
 export type NavBadges = Partial<Record<BadgeKey, number>>;
 
 export type NavItem = {
@@ -98,6 +98,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     // tân mở đầu tiên mỗi sáng lại ở đáy nhóm.
     label: "Kinh doanh",
     items: [
+      // ĐỨNG ĐẦU nhóm và trên cả "Yêu cầu mới": đây là màn mở liên tục suốt
+      // ngày (khách đang chờ trả lời), còn Yêu cầu mới là sổ ghi lại khách đã
+      // để số. roles STAFF_OK chứ không MANAGER_OK — trực chat là việc của
+      // nhân viên lễ tân, không phải việc của quản lý.
+      { href: "/dashboard/studio/inbox", label: "Hộp thư", icon: MessageCircle, minTier: "booking", roles: STAFF_OK, badge: "inbox", match: ["/dashboard/studio/inbox/ket-noi"], keywords: "chat tin nhan zalo facebook messenger instagram mang xa hoi hop thu chung", sub: "Tin nhắn khách từ mọi mạng xã hội" },
       { href: "/dashboard/studio/leads", label: "Yêu cầu mới", icon: Inbox, minTier: "booking", roles: MANAGER_OK, badge: "leads", keywords: "lead website chatbox" },
       { href: "/dashboard/studio/bookings", label: "Đặt lịch khách", icon: CalendarClock, minTier: "booking", roles: MANAGER_OK, badge: "bookings" },
       { href: "/dashboard/studio/quotes", label: "Báo giá", icon: ReceiptText, minTier: "plus", roles: MANAGER_OK, badge: "quotes" },

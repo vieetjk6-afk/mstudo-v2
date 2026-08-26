@@ -43,6 +43,7 @@ const ORDER = [
   ["migrations/studio_branches.sql", "Chi nhánh studio: nhiều cơ sở trong một tài khoản (chạy SAU studio_appointments)"],
   ["migrations/upgrade_payment.sql", "Thanh toán gói dịch vụ: QR chuyển khoản, studio báo đã chuyển, admin xác nhận"],
   ["migrations/crew_phone_digits.sql", "Tra thợ theo SĐT bằng chỉ mục (bỏ quét toàn bảng ở cổng /crew)"],
+  ["migrations/inbox_unified.sql", "Hộp thư hợp nhất: gom tin Zalo/Facebook/Instagram/website về một chỗ"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];

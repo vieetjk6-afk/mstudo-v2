@@ -70,6 +70,7 @@ const CSS = `
 .vjk-chat-leadsend:disabled{opacity:.45;cursor:default;}
 .vjk-chat-leadcancel{background:var(--paper);color:var(--ink2);border:1px solid var(--line) !important;}
 .vjk-chat-leaddone{font-size:12.5px;color:#22c55e;text-align:center;padding:2px;}
+.vjk-chat-live{align-self:center;font-size:12px;color:#22c55e;padding:2px 0;}
 .vjk-chat-foot{display:flex;gap:8px;padding:12px;border-top:1px solid var(--line);background:var(--paper2);}
 .vjk-chat-input{flex:1;background:var(--paper);border:1px solid var(--line);border-radius:12px;color:var(--ink);
   padding:10px 12px;font-size:14px;font-family:inherit;resize:none;max-height:96px;outline:none;}
@@ -98,6 +99,12 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
   const [leadPhone, setLeadPhone] = useState("");
   const [leadDone, setLeadDone] = useState(false);
   const [leadBusy, setLeadBusy] = useState(false);
+  /**
+   * Nhân viên studio đã tiếp quản phiên này chưa. Khi có, trợ lý tự động ngừng
+   * trả lời và khung chat nói rõ khách đang được người thật tư vấn — chứ không
+   * để khách gõ vào khoảng không rồi tưởng bot chết.
+   */
+  const [takenOver, setTakenOver] = useState(false);
 
   const [sessionId] = useState(() =>
     typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `s-${Date.now()}`
@@ -150,6 +157,41 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
     };
   }, []);
 
+  /* Hỏi máy chủ vài giây một lần xem nhân viên studio có nhắn gì không.
+     Chỉ chạy khi khung chat đang MỞ — khách đóng khung rồi thì không có gì để
+     hiển thị, hỏi tiếp chỉ tốn băng thông của cả hai bên. */
+  const lastStaffAtRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    let stop = false;
+    const tick = async () => {
+      try {
+        const qs = new URLSearchParams({ sessionId });
+        if (lastStaffAtRef.current) qs.set("after", lastStaffAtRef.current);
+        const res = await fetch(`/api/vieetjk/chat/updates?${qs.toString()}`, { cache: "no-store" });
+        if (!res.ok || stop) return;
+        const data = (await res.json()) as {
+          messages: { id: string; body: string; created_at: string }[];
+          takenOver: boolean;
+        };
+        if (stop) return;
+        setTakenOver(!!data.takenOver);
+        if (data.messages?.length) {
+          lastStaffAtRef.current = data.messages[data.messages.length - 1].created_at;
+          setMsgs((cur) => [...cur, ...data.messages.map((m) => ({ role: "assistant" as const, content: m.body }))]);
+        }
+      } catch {
+        /* mất mạng một nhịp → lần sau hỏi lại */
+      }
+    };
+    tick();
+    const id = setInterval(tick, 6000);
+    return () => {
+      stop = true;
+      clearInterval(id);
+    };
+  }, [open, sessionId]);
+
   /** Đóng khung chat + ghi nhớ để không tự bật lại trong phiên này. */
   function closeChat() {
     setOpen(false);
@@ -197,9 +239,18 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lang,
+          sessionId,
           messages: history.map((m) => ({ role: m.role, content: m.content })),
         }),
       });
+      // 202 = nhân viên studio đã tiếp quản phiên này ⇒ trợ lý im, tin của khách
+      // đã vào hộp thư, câu trả lời của người sẽ tới qua vòng hỏi định kỳ.
+      if (res.status === 202) {
+        setTakenOver(true);
+        // Bỏ bong bóng rỗng vừa dựng sẵn cho câu trả lời của bot.
+        setMsgs((cur) => cur.slice(0, -1));
+        return; // `finally` phía dưới lo setBusy(false)
+      }
       if (!res.ok || !res.body) throw new Error("no_stream");
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -312,6 +363,13 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
                 )}
               </div>
             ))}
+            {takenOver && (
+              <div className="vjk-chat-live">
+                {lang === "en"
+                  ? "● A studio team member is chatting with you now."
+                  : "● Nhân viên studio đang trực tiếp trả lời bạn."}
+              </div>
+            )}
           </div>
 
           {/* Bắt lead: nút mở form để lại SĐT, hoặc xác nhận đã gửi. */}

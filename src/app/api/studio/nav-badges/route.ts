@@ -21,7 +21,7 @@ export async function GET() {
   const supabase = createClient();
   const head = { count: "exact" as const, head: true };
 
-  const [quotes, bookings, leads, production, notifications] = await Promise.all([
+  const [quotes, bookings, leads, production, notifications, inbox] = await Promise.all([
     // Báo giá đang chờ khách phản hồi (đã gửi / khách đã xem / khách xin chỉnh).
     supabase.from("studio_quotes").select("id", head).eq("owner_id", ownerId)
       .in("status", ["sent", "viewed", "adjust_requested"]),
@@ -40,6 +40,11 @@ export async function GET() {
     // Thông báo của CHÍNH người đang đăng nhập (không phải của cả studio).
     supabase.from("studio_notifications").select("id", head)
       .eq("owner_id", profile.actingUserId).eq("read", false),
+    // Hộp thư: đếm HỘI THOẠI còn tin chưa đọc, không phải tổng số tin. Khách
+    // nhắn liên tiếp 8 tin vẫn chỉ là MỘT việc phải xử lý; đếm theo tin thì
+    // badge phồng lên vô nghĩa và người ta thôi nhìn nó.
+    supabase.from("inbox_conversations").select("id", head)
+      .eq("owner_id", ownerId).eq("status", "open").gt("unread", 0),
   ]);
 
   return NextResponse.json({
@@ -48,5 +53,6 @@ export async function GET() {
     leads: leads.count ?? 0,
     production: production.count ?? 0,
     notifications: notifications.count ?? 0,
+    inbox: inbox.count ?? 0,
   });
 }

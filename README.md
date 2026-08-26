@@ -162,7 +162,7 @@ Sidebar 250px, cố định. Nhãn nhóm 10px/800/uppercase màu `--tx3`. Mục 
 
 ```
 (không nhãn)  Tổng quan · Trang của tôi
-Kinh doanh    Yêu cầu mới(3) · Đặt lịch khách(3) · Báo giá(2) · Hợp đồng & lịch hẹn · Khách hàng
+Kinh doanh    Hộp thư(5) · Yêu cầu mới(3) · Đặt lịch khách(3) · Báo giá(2) · Hợp đồng & lịch hẹn · Khách hàng
 Sản xuất      Lịch làm việc · Bảng công việc · Xử lý hình ảnh(4) · Thư viện album · Thiết kế album · Thiệp·Story·Slide · Công cụ ảnh
 Kho           Phòng váy · Thiết bị
 Tài chính     Thu chi & công nợ · Đối soát tiền công · Gói & bảng giá
@@ -486,6 +486,72 @@ Thu chi & công nợ (thu và tiền công lọc qua `contract.branch_id`).
 | Gán chi nhánh cho nhân viên | `PATCH /api/studio/staff`; gọi supabase trực tiếp sẽ IM LẶNG không ghi được gì (vá C1) |
 | Chi nhánh của nhân viên | là **mặc định hiển thị**, KHÔNG phải hàng rào quyền — họ vẫn chuyển sang "Tất cả chi nhánh" được. Muốn khoá cứng thì phải chặn ở từng truy vấn, và đó là một quyết định về phân quyền |
 | Hợp đồng mới | thừa hưởng chi nhánh đang xem (không hỏi thêm một bước trong luồng 5 bước); đổi lại ở màn chi tiết hợp đồng |
+
+## Hộp thư hợp nhất (nhiều mạng xã hội, một chỗ trả lời)
+
+Khách nhắn từ **Zalo OA, Zalo cá nhân, Facebook Messenger, Instagram DM hay
+chatbox website** đều đổ về cùng một hộp thư. **AI trả lời trước**; nhân viên
+bấm *Tôi tiếp quản* thì bot im và người trả lời tiếp trong đúng khung chat đó.
+
+| Bề mặt | Route | File nguồn |
+| --- | --- | --- |
+| Hộp thư (danh sách + khung chat realtime) | `/dashboard/studio/inbox` | `studio/inbox/InboxView.tsx` |
+| Nối kênh mạng xã hội | `/dashboard/studio/inbox/ket-noi` | `studio/inbox/ket-noi/ChannelsManager.tsx` |
+| Luật kênh (nhãn, màu, cửa sổ trả lời) | — | `src/lib/inbox/platforms.ts` (thuần, có test) |
+| Ghi/đọc hộp thư | — | `src/lib/inbox/store.ts`, `view.ts` |
+| Gửi tin + AI tự trả lời | — | `src/lib/inbox/send.ts`, `ai.ts` |
+
+### Model dữ liệu
+
+`supabase/migrations/inbox_unified.sql` — bốn bảng, đọc theo thứ tự phễu:
+`inbox_channels` (studio nối kênh nào) → `inbox_contacts` (người nhắn, định
+danh theo *kênh + id trên nền tảng đó*) → `inbox_conversations` (một người trên
+một kênh = một hội thoại chạy dài) → `inbox_messages` (từng tin, cả vào lẫn ra).
+
+Ba bảng sau dùng RLS `is_studio_member(owner_id)` — **cả studio** đọc/ghi được,
+vì trực chat là việc tập thể. Riêng `inbox_channels` khoá hẳn anon/authenticated
+(mỗi dòng chứa Page Access Token) — dashboard xem trạng thái kênh qua API đã lọc
+bí mật, không đọc thẳng bảng.
+
+### Bốn điều dễ làm sai
+
+1. **Cửa sổ trả lời là luật của nền tảng ngoài, không phải của mình.** Facebook
+   và Instagram cho nhắn lại trong 24 giờ kể từ tin của *khách*, Zalo OA 48 giờ;
+   website và Zalo cá nhân không giới hạn. Luật nằm ở `platforms.ts` và giao
+   diện **khoá ô soạn tin kèm giải thích trước**, thay vì để nhân viên gõ xong
+   mới nhận lỗi. Thiếu mốc tin cuối của khách thì fail-**closed**.
+2. **Đã có người vào thì bot không được chen ngang.** `maybeAutoReply()` đòi cả
+   ba cửa cùng mở: kênh ở chế độ tự động, hội thoại chưa bị tiếp quản, hội thoại
+   đang mở. Nhân viên **gửi một tin là tự tiếp quản** — AI tắt, người đó nhận
+   phụ trách.
+3. **Tin gửi hỏng vẫn phải được ghi lại** (`status = 'failed'` + lý do) và hiện
+   viền đỏ trong khung chat. Tin biến mất là loại lỗi không ai phát hiện cho tới
+   lúc cãi nhau với khách.
+4. **Webhook luôn trả 200** (trừ chữ ký sai). Meta và Zalo coi mã lỗi là "chưa
+   nhận được" và sẽ bắn lại, rồi tắt webhook nếu hỏng nhiều lần. Chữ ký thì kiểm
+   bắt buộc — không có nó thì ai cũng bơm được tin giả và đốt hạn mức AI của studio.
+
+### Zalo cá nhân cần một tiến trình chạy ngoài
+
+Zalo cá nhân **không có webhook**: muốn NHẬN tin phải giữ một websocket sống, mà
+app chạy serverless. Phần GỬI thì không cần (khôi phục phiên từ cookie rồi gọi
+API). Nên phần nghe chạy riêng — `npm run inbox:zalo-worker`
+(`scripts/zalo-inbox-worker.mjs`) trên máy studio hoặc một VPS nhỏ, bắt được tin
+nào thì POST vào `/api/inbox/ingest` kèm bí mật `INBOX_INGEST_SECRET`.
+Vẫn giữ cảnh báo cũ: tự động hoá tài khoản Zalo cá nhân vi phạm điều khoản Zalo
+và có thể bị khoá tài khoản.
+
+### Chatbox website: từ một chiều thành hai chiều
+
+Widget cũ chỉ có bot nói rồi thôi. Nay mỗi lượt chat được ghi vào hộp thư; khi
+nhân viên tiếp quản, `/api/vieetjk/chat` trả **202** thay vì gọi AI, và widget
+chuyển sang hỏi `/api/vieetjk/chat/updates` vài giây một lần để nhận câu trả lời
+của người thật. Không dùng realtime Supabase ở đây vì khách là người lạ chưa
+đăng nhập — mở kênh realtime cho họ là mở thêm một cửa vào DB cho mọi khách vãng lai.
+
+Biến môi trường: `META_APP_SECRET`, `META_VERIFY_TOKEN`, `ZALO_OA_WEBHOOK_SECRET`,
+`INBOX_INGEST_SECRET` (xem `.env.example`). AI dùng lại `CHAT_PROVIDERS` sẵn có.
+Kiểm thử luật kênh: `npm run test:inbox`.
 
 ## Quy tắc khi sửa giao diện studio
 

@@ -13,6 +13,8 @@ import PaymentView from "@/app/dashboard/upgrade/thanh-toan/[id]/PaymentView";
 import StaffManager from "@/app/dashboard/studio/staff/StaffManager";
 import EquipmentManager from "@/app/dashboard/studio/equipment/EquipmentManager";
 import PackagesManager from "@/app/dashboard/studio/packages/PackagesManager";
+import InboxView from "@/app/dashboard/studio/inbox/InboxView";
+import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManager";
 import * as f from "./fixtures";
 
 /**
@@ -102,6 +104,23 @@ export const SCREENS: Record<string, { title: string; render: () => React.ReactN
     title: "Gói nhiều buổi",
     render: () => <PackagesManager ownerId="o" initial={f.packages} />,
   },
+  "hop-thu": {
+    title: "Hộp thư hợp nhất (Zalo · Facebook · Instagram · website)",
+    render: () => (
+      <InboxView
+        conversations={f.inboxConversations}
+        firstMessages={f.inboxMessages}
+        staff={{ u1: "Phạm Thu Hà", u2: "Trần Hoài Nam" }}
+        channels={f.inboxChannels}
+        meId="u2"
+        canManageChannels
+      />
+    ),
+  },
+  "noi-kenh": {
+    title: "Nối mạng xã hội vào hộp thư",
+    render: () => <ChannelsManager channels={f.inboxChannels} zaloReady zaloChannel="oa" />,
+  },
   // Danh sách RỖNG là trạng thái người dùng mới gặp đầu tiên, và cũng là chỗ hay
   // quên vẽ nhất — để riêng một màn để không bao giờ bỏ sót.
   rong: {
@@ -112,6 +131,7 @@ export const SCREENS: Record<string, { title: string; render: () => React.ReactN
         <ClientsView clients={[]} studio={f.studio} />
         <LeadsView leads={[]} />
         <ProductionView initial={[]} staff={[]} />
+        <InboxView conversations={[]} firstMessages={[]} staff={{}} channels={[]} meId="u2" canManageChannels />
       </div>
     ),
   },

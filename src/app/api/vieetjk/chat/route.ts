@@ -13,6 +13,7 @@ import {
 } from "@/lib/vieetjk/lookup";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { CONTACT, type Lang } from "@/lib/vieetjk/content";
+import { recordWebsiteAiReply, recordWebsiteIncoming } from "@/lib/inbox/website";
 
 /**
  * Ký tự điều khiển đặt đầu tin "quá tải" để widget nhận biết → tự mở form để lại
@@ -65,7 +66,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "assistant_unavailable" }, { status: 503 });
   }
 
-  let body: { messages?: unknown; lang?: unknown };
+  let body: { messages?: unknown; lang?: unknown; sessionId?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest) {
   if (messages.length === 0) {
     return Response.json({ error: "empty" }, { status: 400 });
   }
+  const sessionId = typeof body.sessionId === "string" ? body.sessionId.slice(0, 64) : "";
 
   // Ghép hướng dẫn/kiến thức riêng chủ studio nhập trong dashboard (nếu có).
   let extra: string | null = null;
@@ -87,6 +89,21 @@ export async function POST(req: NextRequest) {
     if (ownerId) extra = (await loadChatConfig(ownerId)).instructions;
   } catch {
     /* không có cấu hình riêng → dùng mặc định */
+  }
+
+  // Đưa hội thoại website vào HỘP THƯ HỢP NHẤT: ghi tin khách vừa gõ, rồi hỏi
+  // xem nhân viên đã tiếp quản phiên này chưa. Đã tiếp quản thì bot IM — trả
+  // 202 để widget chuyển sang chờ người thật trả lời thay vì chen ngang.
+  let conversationId: string | null = null;
+  if (ownerId && sessionId) {
+    const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const rec = lastUser ? await recordWebsiteIncoming(ownerId, sessionId, lastUser) : null;
+    if (rec) {
+      conversationId = rec.conversationId;
+      if (!rec.aiEnabled) {
+        return Response.json({ takenOver: true }, { status: 202 });
+      }
+    }
   }
 
   // Tra cứu trạng thái hợp đồng/album — CHỈ khi khách hỏi về hợp đồng/album VÀ đã
@@ -135,6 +152,9 @@ export async function POST(req: NextRequest) {
     async start(controller) {
       let done = false;
       const debug: string[] = [];
+      // Gom nguyên câu trả lời để ghi vào hộp thư sau khi phát xong — nhân viên
+      // mở hộp thư phải đọc được bot đã hứa gì với khách.
+      let fullText = "";
 
       for (const p of providers) {
         // 1) Gửi yêu cầu tới provider hiện tại.
@@ -181,6 +201,7 @@ export async function POST(req: NextRequest) {
                 const text = extractDelta(p, json);
                 if (text) {
                   emitted = true;
+                  fullText += text;
                   controller.enqueue(encoder.encode(text));
                 } else {
                   reason = finishReason(p, json) || reason;
@@ -206,8 +227,17 @@ export async function POST(req: NextRequest) {
         // Ghi log server để chẩn đoán (khách KHÔNG thấy debug).
         console.error("[vieetjk/chat] all providers failed:", debug.join(" | "));
         controller.enqueue(encoder.encode(busyMsg));
+        // Ghi cả câu "đang bận" vào hộp thư: nhân viên mở ra phải thấy ĐÚNG
+        // những gì khách đã đọc, nếu không họ sẽ trả lời tiếp như chưa có gì.
+        fullText = busyMsg.split(LEAD_MARKER).join("");
       }
       controller.close();
+
+      // Ghi vào hộp thư SAU khi đã đóng luồng: khách không phải chờ thêm một
+      // vòng ghi DB mới đọc được câu trả lời.
+      if (ownerId && conversationId && fullText.trim()) {
+        await recordWebsiteAiReply(ownerId, conversationId, fullText.trim());
+      }
     },
   });
 

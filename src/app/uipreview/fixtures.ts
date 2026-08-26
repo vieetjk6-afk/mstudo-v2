@@ -15,6 +15,7 @@ import type { QuoteRow } from "@/app/dashboard/studio/quotes/QuotesListView";
 import type { PaymentRow, SalaryRow, SourceStat } from "@/app/dashboard/studio/reports/ReportsView";
 import type { ExportStudio } from "@/lib/studio-export";
 import type { StaffRow } from "@/app/dashboard/studio/staff/StaffManager";
+import type { ChannelPublic, ConversationView, MessageRow } from "@/lib/inbox/types";
 import type {
   DiscountCode, StudioBooking, StudioEquipment, StudioExpense, StudioPackage, UpgradeRequest,
 } from "@/lib/types";
@@ -184,4 +185,88 @@ export const packages: StudioPackage[] = [
   { id: "g1", owner_id: "o", client_name: "Nguyễn Thị Lan Phương", client_phone: "0912345678", name: "Gói 10 buổi chụp bé", total_sessions: 10, used_sessions: 7, price: 12_000_000, paid: true, note: null, created_at: "2026-04-01T03:00:00Z" },
   // Gói đã dùng HẾT và chưa trả tiền — hai ca cần nhìn thấy ngay.
   { id: "g2", owner_id: "o", client_name: "Trần Văn B", client_phone: null, name: "Gói chụp gia đình", total_sessions: 4, used_sessions: 4, price: 6_000_000, paid: false, note: "Hẹn trả sau buổi cuối", created_at: "2026-02-01T03:00:00Z" },
+];
+
+/* ── Hộp thư hợp nhất ───────────────────────────────────────────────────────
+   Cố ý gồm đủ những ca hay làm vỡ khung chat: khách chưa cho tên, tên rất dài,
+   hội thoại đã QUÁ cửa sổ trả lời của Facebook (ô soạn phải bị khoá), tin gửi
+   HỎNG, và một hội thoại nhân viên đã tiếp quản.
+
+   Mốc thời gian của hội thoại ĐANG mở phải tính theo giờ hiện tại: cửa sổ trả
+   lời đo bằng "cách đây bao lâu", nên nếu ghim ngày cứng thì mọi ảnh chụp sau
+   đó đều ra màn khoá ô soạn — và ta không bao giờ nhìn thấy trạng thái thường
+   gặp nhất. */
+const phutTruoc = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+export const inboxConversations: ConversationView[] = [
+  {
+    id: "c1", platform: "facebook", channelName: "Mai Studio - Fanpage",
+    contactName: "Nguyễn Thị Lan Phương", contactAvatar: null, contactPhone: "0912345678",
+    status: "open", aiEnabled: true, assigneeId: null, assigneeName: null,
+    lastMessage: "Dạ chị muốn hỏi gói chụp cưới ngoại cảnh Đà Lạt ạ",
+    lastMessageAt: phutTruoc(8), lastDirection: "in", unread: 3,
+    lastInboundAt: phutTruoc(8),
+  },
+  {
+    id: "c2", platform: "zalo_oa", channelName: "Mai Studio OA",
+    contactName: "Khách chưa cho tên", contactAvatar: null, contactPhone: null,
+    status: "open", aiEnabled: false, assigneeId: "u1", assigneeName: null,
+    // KHÔNG tự thêm "Bạn:" vào đây — giao diện đã tự gắn theo lastDirection.
+    lastMessage: "Dạ em gửi bảng giá qua Zalo cho chị nhé",
+    lastMessageAt: phutTruoc(95), lastDirection: "out", unread: 0,
+    lastInboundAt: phutTruoc(110),
+  },
+  {
+    id: "c3", platform: "instagram", channelName: "@maistudio.vn",
+    contactName: "Trần Nguyễn Hoàng Bảo Ngọc Phương Thảo", contactAvatar: null, contactPhone: null,
+    // Tin cuối của khách đã quá 24 giờ ⇒ ô soạn tin PHẢI khoá kèm giải thích.
+    status: "open", aiEnabled: true, assigneeId: null, assigneeName: null,
+    lastMessage: "chụp kỷ yếu cho lớp 45 bạn thì bao nhiêu ạ",
+    lastMessageAt: "2026-03-08T09:00:00Z", lastDirection: "in", unread: 1,
+    lastInboundAt: "2026-03-08T09:00:00Z",
+  },
+  {
+    id: "c4", platform: "website", channelName: "Chatbox website",
+    contactName: "Khách chưa cho tên", contactAvatar: null, contactPhone: null,
+    status: "closed", aiEnabled: true, assigneeId: null, assigneeName: null,
+    lastMessage: "📎 Tệp đính kèm", lastMessageAt: "2026-03-07T02:00:00Z",
+    lastDirection: "in", unread: 0, lastInboundAt: "2026-03-07T02:00:00Z",
+  },
+];
+
+export const inboxMessages: MessageRow[] = [
+  {
+    id: "m1", conversation_id: "c1", direction: "in", sender: "customer", sender_id: null,
+    sender_name: null, body: "Chào shop, mình muốn hỏi gói chụp cưới ngoại cảnh Đà Lạt",
+    attachments: [], status: "sent", error: null, created_at: phutTruoc(20),
+  },
+  {
+    id: "m2", conversation_id: "c1", direction: "out", sender: "ai", sender_id: null,
+    sender_name: "Trợ lý AI",
+    body: "Dạ chào chị ạ! Gói ngoại cảnh Đà Lạt bên em có 3 mức, tuỳ số ngày và ê-kíp. Chị dự định chụp khoảng tháng mấy để em xem lịch giúp chị ạ?",
+    attachments: [], status: "sent", error: null, created_at: phutTruoc(19),
+  },
+  {
+    id: "m3", conversation_id: "c1", direction: "in", sender: "customer", sender_id: null,
+    sender_name: null, body: "Tháng 6 nha em. Cho chị xin bảng giá chi tiết luôn",
+    attachments: [], status: "sent", error: null, created_at: phutTruoc(10),
+  },
+  {
+    id: "m4", conversation_id: "c1", direction: "out", sender: "staff", sender_id: "u1",
+    sender_name: "Phạm Thu Hà", body: "Dạ em Hà bên Mai Studio ạ, em gửi chị bảng giá tháng 6 ngay đây ạ.",
+    attachments: [], status: "sent", error: null, created_at: phutTruoc(9),
+  },
+  // Tin gửi HỎNG — phải hiện viền đỏ kèm lý do, không được im lặng biến mất.
+  {
+    id: "m5", conversation_id: "c1", direction: "out", sender: "staff", sender_id: "u1",
+    sender_name: "Phạm Thu Hà", body: "Chị cho em xin số điện thoại để em gọi tư vấn nhanh hơn nhé ạ.",
+    attachments: [], status: "failed", error: "Trang chưa cấp quyền nhắn tin",
+    created_at: phutTruoc(8),
+  },
+];
+
+export const inboxChannels: ChannelPublic[] = [
+  { id: "ch1", platform: "facebook", externalId: "10276", name: "Mai Studio - Fanpage", status: "connected", aiMode: "auto", lastError: null, connectedAt: "2026-03-01T03:00:00Z" },
+  { id: "ch2", platform: "zalo_oa", externalId: "555", name: "Mai Studio OA", status: "connected", aiMode: "auto", lastError: null, connectedAt: "2026-03-01T03:00:00Z" },
+  { id: "ch3", platform: "instagram", externalId: "778", name: "@maistudio.vn", status: "connected", aiMode: "off", lastError: null, connectedAt: "2026-03-02T03:00:00Z" },
+  { id: "ch4", platform: "website", externalId: "o", name: "Chatbox website", status: "connected", aiMode: "auto", lastError: null, connectedAt: "2026-01-01T03:00:00Z" },
 ];
