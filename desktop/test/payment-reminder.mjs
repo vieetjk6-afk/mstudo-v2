@@ -15,7 +15,7 @@
  * Nạp thẳng code thật ở src/lib/.
  */
 import { instalmentReminderMessage } from "../../src/lib/zalo/messages.ts";
-import { safeImageUrl } from "../../src/lib/zalo/image.ts";
+import { safeImageUrl, imageDims } from "../../src/lib/zalo/image.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -76,6 +76,26 @@ check("chặn file://", safeImageUrl("file:///etc/passwd"), null);
 check("chặn chuỗi không phải URL", safeImageUrl("img.vietqr.io/x.png"), null);
 check("rỗng → không có ảnh", safeImageUrl(""), null);
 check("null → không có ảnh", safeImageUrl(null), null);
+
+// ── Đọc kích thước ảnh ─────────────────────────────────────────────────────
+// zca-js BẮT BUỘC có width/height mới tải ảnh lên Zalo được — đọc sai là tin
+// rơi về dạng chỉ có link, đúng lỗi đã gặp ở bản đầu. Dựng ảnh thật để đo.
+import QRCode from "qrcode";
+const png = await QRCode.toBuffer("https://img.vietqr.io/x", { margin: 1, width: 320 });
+check("đọc đúng cỡ ảnh PNG thật", imageDims(png), { width: 320, height: 320, ext: "png" });
+
+// JPEG dựng tay: SOI + APP0 + SOF0 (cao 480, rộng 640) — đủ để chắc vòng duyệt
+// đoạn không dừng ở đoạn đầu tiên.
+const jpg = Buffer.from([
+  0xff, 0xd8,
+  0xff, 0xe0, 0x00, 0x04, 0x00, 0x00,
+  0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xe0, 0x02, 0x80, 0x03, 0x01, 0x22, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01,
+]);
+check("đọc đúng cỡ ảnh JPEG", imageDims(jpg), { width: 640, height: 480, ext: "jpg" });
+
+check("không phải ảnh → null (để lùi về gửi văn bản)", imageDims(Buffer.from("<html>không phải ảnh</html>")), null);
+check("buffer rỗng → null", imageDims(Buffer.alloc(0)), null);
+check("PNG cụt đầu → null", imageDims(png.subarray(0, 12)), null);
 
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);
 process.exit(fail === 0 ? 0 : 1);
