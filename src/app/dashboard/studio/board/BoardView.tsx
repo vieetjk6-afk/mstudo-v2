@@ -17,12 +17,27 @@ export type BoardCard = {
   contract_tasks: { done: boolean }[];
 };
 
-const COLUMNS: ContractStatus[] = ["draft", "sent", "approved", "in_progress", "completed", "cancelled"];
+/**
+ * Bốn cột LUÔN hiện — đúng dòng chảy của một hợp đồng đang sống.
+ *
+ * "Nháp" và "Đã huỷ" tách ra vì chúng nằm ngoài dòng chảy đó: nháp là đơn chưa
+ * gửi, huỷ là đơn đã chết. Để cả sáu cột thì trên laptop 1280px cột cuối bị
+ * đẩy khuất khỏi mép phải mà không có dấu hiệu gì báo là cuộn được — thẻ nằm
+ * trong đó coi như biến mất. Bốn cột thì vừa màn, và hai cột kia bật lại bằng
+ * một nút khi cần.
+ */
+const CORE_COLUMNS: ContractStatus[] = ["sent", "approved", "in_progress", "completed"];
+const EXTRA_COLUMNS: ContractStatus[] = ["draft", "cancelled"];
 export default function BoardView({ initial }: { initial: BoardCard[] }) {
   const [cards, setCards] = useState<BoardCard[]>(initial);
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<ContractStatus | null>(null);
+  const [showExtra, setShowExtra] = useState(false);
   const today = todayVN();
+
+  // Vẫn giữ đúng thứ tự vòng đời khi bật thêm: nháp đứng đầu, huỷ đứng cuối.
+  const columns = showExtra ? ["draft", ...CORE_COLUMNS, "cancelled"] as ContractStatus[] : CORE_COLUMNS;
+  const extraCount = cards.filter((c) => EXTRA_COLUMNS.includes(c.status)).length;
 
   async function moveTo(id: string, status: ContractStatus) {
     const card = cards.find((c) => c.id === id);
@@ -44,15 +59,20 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
 
   return (
     <div className="page-in">
-      {/* Sáu cột không vừa màn hình laptop 1280px: cột "Đã huỷ" khuất hẳn khỏi
-          mép phải mà không có dấu hiệu nào báo là cuộn được — thẻ nằm trong đó
-          coi như biến mất. Nói thẳng ra trong dòng hướng dẫn. */}
-      <p className="mb-3 text-[13px]" style={{ color: "var(--tx2)" }}>
-        Kéo thẻ hợp đồng sang cột khác để đổi trạng thái. Cuộn ngang để xem hết {COLUMNS.length} cột.
-      </p>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>Kéo thẻ hợp đồng sang cột khác để đổi trạng thái.</p>
+        <button
+          type="button"
+          onClick={() => setShowExtra((v) => !v)}
+          className="rounded-[9px] px-3 py-1.5 text-[12px] font-semibold"
+          style={{ background: "var(--sf2)", border: "1px solid var(--bd)", color: "var(--tx2)" }}
+        >
+          {showExtra ? "Ẩn nháp & đã huỷ" : `Hiện nháp & đã huỷ${extraCount ? ` (${extraCount})` : ""}`}
+        </button>
+      </div>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
-        {COLUMNS.map((col) => {
+        {columns.map((col) => {
           const colCards = cards.filter((c) => c.status === col);
           return (
             <div

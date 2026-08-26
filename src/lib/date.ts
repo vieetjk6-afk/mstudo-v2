@@ -32,6 +32,21 @@ export function fmtDate(v: string | number | Date | null | undefined): string {
   return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
 }
 
+/**
+ * "14:30 25/08/2026" — ngày kèm giờ, dùng cho mốc thời gian có ý nghĩa theo
+ * phút (khách ký lúc nào, studio báo đã chuyển khoản lúc nào).
+ *
+ * Vì sao phải có hàm riêng: `toLocaleString("vi-VN")` trần cho ra
+ * "03:00:00 25/8/2026" — thừa giây, tháng không đệm 0, và đảo giờ lên trước
+ * ngày. Cả app hiển thị ngày kiểu dd/mm/yyyy, nên mỗi màn tự gọi toLocaleString
+ * là mỗi màn một kiểu.
+ */
+export function fmtDateTime(v: string | number | Date | null | undefined): string {
+  const d = toDate(v);
+  if (!d) return "";
+  return `${pad(d.getHours())}:${pad(d.getMinutes())} ${fmtDate(d)}`;
+}
+
 /** dd/mm — dạng ngắn dùng trong bảng, thẻ, lịch. "" nếu rỗng/không hợp lệ. */
 export function fmtDayMonth(v: string | number | Date | null | undefined): string {
   const d = toDate(v);

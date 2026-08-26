@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fmtDate } from "@/lib/date";
 import { Check, X, Clock, Save, TrendingUp } from "lucide-react";
 import { PLAN_LABEL, formatVnd, type Plan } from "@/lib/plans";
 
@@ -179,8 +180,8 @@ export default function AdminAffiliatePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3" style={{ color: "var(--text3)" }}>
-                      {new Date(c.created_at).toLocaleDateString("vi-VN")}
-                      {c.paid_at && <p className="text-[11px]">Trả: {new Date(c.paid_at).toLocaleDateString("vi-VN")}</p>}
+                      {fmtDate(c.created_at)}
+                      {c.paid_at && <p className="text-[11px]">Trả: {fmtDate(c.paid_at)}</p>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-center gap-1.5">

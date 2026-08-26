@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtDateTime } from "@/lib/date";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Heart, ExternalLink, Pencil, Copy, Check, Download, FileSpreadsheet, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
@@ -118,7 +119,7 @@ export default function ThiepListView({ rows, ownerId, studio }: { rows: Invitat
         attending: !!r.attending,
         guests: r.num_guests || 1,
         wish: r.wish ?? "",
-        at: new Date(r.created_at).toLocaleString("vi-VN"),
+        at: fmtDateTime(r.created_at),
       }));
       const couple = [row.config.groom_name, row.config.bride_name].filter(Boolean).join(" & ") || row.slug;
       const title = `DANH SÁCH KHÁCH MỜI — ${couple.toUpperCase()}`;

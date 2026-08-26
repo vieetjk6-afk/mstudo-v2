@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtDateTime } from "@/lib/date";
 import {
   Save, Trash2, Check, MessageSquare,
   Globe, LayoutTemplate, BadgeDollarSign, Settings2, Rocket, Landmark,
@@ -294,7 +295,7 @@ export default function SettingsPanel({
                       {f.email && <span className="ml-2 font-normal text-[12px]" style={{ color: "var(--text3)" }}>{f.email}</span>}
                     </p>
                     <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>{f.message}</p>
-                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>{new Date(f.created_at).toLocaleString("vi-VN")}</p>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>{fmtDateTime(f.created_at)}</p>
                   </div>
                   <div className="flex gap-1.5 shrink-0">
                     <button onClick={() => handleFeedback("handled", f.id, !f.handled)} className="rounded-lg p-2" style={{ background: "var(--surface)", color: f.handled ? "var(--success)" : "var(--text3)" }} title={f.handled ? "Đánh dấu chưa xử lý" : "Đánh dấu đã đọc"} aria-label={f.handled ? "Đánh dấu chưa xử lý" : "Đánh dấu đã đọc"}>

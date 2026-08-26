@@ -105,6 +105,8 @@ export const payroll: PayrollRow[] = [
   { id: "w1", name: "Anh Tuấn", phone: "0911222333", role: "photographer", salary: 3_000_000, status: "accepted", paid: false, contract: { id: "c1", title: LONG, event_date: D, code: "HD2609" } },
   { id: "w2", name: "Minh", phone: "0911222444", role: "assistant", salary: 800_000, status: "pending", paid: false, contract: { id: "c1", title: LONG, event_date: D, code: "HD2609" } },
   { id: "w3", name: "Anh Tuấn", phone: "0911222333", role: "photographer", salary: 2_500_000, status: "accepted", paid: true, contract: { id: "c2", title: "Chụp kỷ yếu 12A3", event_date: "2026-08-01", code: "HD2610" } },
+  // Thợ TỪ CHỐI: studio không nợ đồng nào, phải bị loại khỏi mọi con số tiền.
+  { id: "w4", name: "Hùng", phone: "0911222555", role: "photographer", salary: 4_000_000, status: "declined", paid: false, contract: { id: "c1", title: LONG, event_date: D, code: "HD2609" } },
 ];
 
 export const leads: Lead[] = [

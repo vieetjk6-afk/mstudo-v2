@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fmtDate } from "@/lib/date";
 import { Check, ArrowRight, Plus, Trash2, Loader2, Clock, BookImage } from "lucide-react";
 import AlbumEditor, { type ADSize, type ADTpl, type SavedDesign } from "./AlbumEditor";
 
@@ -137,7 +138,7 @@ export default function AlbumDesigner() {
                         {opening === s.id ? <Loader2 className="animate-spin" /> : <div style={{ width: ar >= 1 ? 84 : 84 * ar, height: ar >= 1 ? 84 / ar : 84, border: `2px solid ${s.tpl?.ink || "var(--brand)"}`, opacity: 0.5, borderRadius: 4 }} />}
                       </div>
                       <p className="mt-2 truncate text-[14px] font-bold">{s.name}</p>
-                      <p className="flex items-center gap-1 text-[11px]" style={{ color: "var(--text3)" }}><Clock size={11} /> {new Date(s.updated_at).toLocaleDateString("vi-VN")} · {s.size?.name}</p>
+                      <p className="flex items-center gap-1 text-[11px]" style={{ color: "var(--text3)" }}><Clock size={11} /> {fmtDate(s.updated_at)} · {s.size?.name}</p>
                     </button>
                     <button onClick={() => del(s.id)} className="mt-2 flex items-center gap-1 text-[11px] font-semibold" style={{ color: "#cc4b4b" }}><Trash2 size={12} /> Xoá</button>
                   </div>

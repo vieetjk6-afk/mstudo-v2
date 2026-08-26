@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { fmtDateTime, fmtDate } from "@/lib/date";
 import DateInput from "@/components/DateInput";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -488,7 +489,7 @@ ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discount
               <p className="text-sm font-medium">Hiệu lực báo giá</p>
               <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
                 {quote.expires_at
-                  ? `Hết hiệu lực ngày ${new Date(quote.expires_at).toLocaleDateString("vi-VN")}${expired ? " — khách không bấm đồng ý được nữa" : ""}`
+                  ? `Hết hiệu lực ngày ${fmtDate(quote.expires_at)}${expired ? " — khách không bấm đồng ý được nữa" : ""}`
                   : "Không đặt hạn — báo giá có hiệu lực tới khi bạn huỷ."}
               </p>
             </div>
@@ -533,7 +534,7 @@ ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discount
                     <span className="font-medium" style={{ color: a.author === "client" ? "var(--s-amber)" : "var(--text2)" }}>
                       {a.author === "client" ? "Khách" : "Studio"}
                     </span>
-                    <span>{new Date(a.created_at).toLocaleString("vi-VN")}</span>
+                    <span>{fmtDateTime(a.created_at)}</span>
                     {a.resolved && <span className="rounded-full px-1.5 py-0.5 text-[9px]" style={{ background: "rgba(52,211,153,0.15)", color: "var(--success)" }}>Đã xử lý</span>}
                   </div>
                   <p className="text-sm whitespace-pre-wrap">{a.message}</p>

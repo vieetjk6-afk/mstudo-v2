@@ -13,7 +13,7 @@ import { nextContractCode, DEFAULT_TASKS } from "@/lib/contract-code";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { messengerUrl } from "@/components/MessengerButton";
 import { vnd, type StudioBooking } from "@/lib/types";
-import { fmtDate } from "@/lib/date";
+import { fmtDate, fmtDateTime } from "@/lib/date";
 import DateInput from "@/components/DateInput";
 import { useRouter } from "next/navigation";
 
@@ -27,14 +27,6 @@ const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }>
   handled:  { label: "Đã xử lý",color: "var(--s-green)", bg: "var(--s-greenS)" },
   archived: { label: "Lưu trữ", color: "var(--text3)", bg: "var(--surface2)" },
 };
-
-/** "14:30 25/08/2026" — bỏ giây và theo đúng thứ tự ngày/tháng/năm của app;
- *  toLocaleString("vi-VN") trần cho ra "03:00:00 25/8/2026". */
-function fmtDateTime(ts: string): string {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleString("vi-VN", { hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric" });
-}
 
 function StatusBadge({ status }: { status: string }) {
   const s = STATUS_LABEL[status] ?? { label: status, color: "var(--text3)", bg: "var(--surface2)" };

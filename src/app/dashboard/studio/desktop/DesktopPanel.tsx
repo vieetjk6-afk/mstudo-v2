@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fmtDate } from "@/lib/date";
 import { Monitor, Download, ShieldAlert, FileSpreadsheet, FileJson, Laptop, Trash2, RefreshCw, Plus, Copy, Check } from "lucide-react";
 import RestorePanel from "./RestorePanel";
 
@@ -113,7 +114,7 @@ export default function DesktopPanel() {
       const r = await fetch("/api/desktop/devices", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: `Máy đăng ký ${new Date().toLocaleDateString("vi-VN")}` }),
+        body: JSON.stringify({ name: `Máy đăng ký ${fmtDate(new Date())}` }),
       });
       const j = await r.json();
       if (!r.ok) {

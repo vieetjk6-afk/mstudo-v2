@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { fmtDateTime } from "@/lib/date";
 import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -84,7 +85,7 @@ export default function NotificationsList({ initial }: { initial: StudioNotifica
                 <div className="min-w-0 flex-1">
                   <p className="text-[13.5px]" style={{ fontWeight: n.read ? 500 : 700, textWrap: "pretty" }}>{n.message}</p>
                   <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                    {new Date(n.created_at).toLocaleString("vi-VN")}
+                    {fmtDateTime(n.created_at)}
                     {href && <span style={{ color: "var(--ac)", fontWeight: 600 }}> · Xem chi tiết →</span>}
                   </p>
                 </div>

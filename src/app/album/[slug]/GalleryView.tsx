@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { fmtDate } from "@/lib/date";
 
 type Lang = "vi" | "en";
 const TR = {
@@ -400,7 +401,7 @@ export default function GalleryView({
         <AlbumCover
           url={gallery.cover_url}
           title={gallery.title}
-          note={gallery.event_date ? new Date(gallery.event_date).toLocaleDateString("vi-VN") : null}
+          note={gallery.event_date ? fmtDate(gallery.event_date) : null}
           buttonLabel={tr.viewAlbum}
           onView={scrollToPhotos}
         />
@@ -411,7 +412,7 @@ export default function GalleryView({
           <h1 className="text-[clamp(34px,6vw,64px)] leading-[1.06]" style={ALBUM_TITLE_FONT}>{gallery.title}</h1>
         )}
         <p className="mt-2 flex items-center gap-3 text-[13.5px]" style={{ color: "var(--text2)" }}>
-          {gallery.event_date && !gallery.cover_url && (<span className="flex items-center gap-1"><Calendar size={13} /> {new Date(gallery.event_date).toLocaleDateString("vi-VN")}</span>)}
+          {gallery.event_date && !gallery.cover_url && (<span className="flex items-center gap-1"><Calendar size={13} /> {fmtDate(gallery.event_date)}</span>)}
           <span>{shareMode ? visible.length : (totalPhotos ?? photos.length)} {tr.photoCount}</span>
         </p>
         {shareMode ? (

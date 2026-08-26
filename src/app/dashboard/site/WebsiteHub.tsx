@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { fmtDate } from "@/lib/date";
 import { useState } from "react";
 import {
   Globe,
@@ -56,7 +57,7 @@ export default function WebsiteHub({
     if (days <= 0) return "hôm nay";
     if (days === 1) return "hôm qua";
     if (days < 30) return `${days} ngày trước`;
-    return new Date(updatedAt).toLocaleDateString("vi-VN");
+    return fmtDate(updatedAt);
   })();
 
   // Kịch bản chatbox: mỗi dòng gạch đầu dòng trong ô hướng dẫn là một luật.

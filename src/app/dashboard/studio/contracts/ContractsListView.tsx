@@ -73,6 +73,14 @@ const TABS: [string, string][] = [
 const COLS = "minmax(240px,2.5fr) minmax(130px,1.25fr) minmax(96px,.95fr) minmax(112px,1.05fr) minmax(136px,1.25fr) minmax(140px,1.15fr)";
 const HEADS = ["Khách / Tên job", "Dịch vụ", "Nhân sự", "Lịch chụp", "Thanh toán", "Trạng thái"];
 
+/**
+ * Vỏ LẤY DỮ LIỆU: tải danh sách + cache trên máy rồi giao cho phần dựng.
+ *
+ * Vì sao tách đôi: phần dựng trước đây tự gọi API ngay trong thân component,
+ * nên không có cách nào dựng nó bằng dữ liệu cho sẵn — không xem trước được ở
+ * /uipreview, không kiểm được bằng dữ liệu biên (danh sách rỗng, tên dài, hợp
+ * đồng thiếu trường), mà đây lại là màn dùng nhiều nhất của studio.
+ */
 export default function ContractsListView({
   studio,
   branchKey = "",
@@ -86,6 +94,32 @@ export default function ContractsListView({
    */
   branchKey?: string;
 }) {
+  const { data, loading, fromCache } = useCachedJson<{ list: ContractRow[] }>(
+    branchKey ? `contracts-list:${branchKey}` : "contracts-list",
+    "/api/studio/contracts-list",
+    { list: [] }
+  );
+  const rows = data.list;
+  return (
+    <ContractsList
+      rows={rows}
+      // Lần đầu chưa có cache và đang tải → hiện trạng thái tải thay vì "chưa có HĐ".
+      initialLoading={loading && !fromCache && rows.length === 0}
+      studio={studio}
+    />
+  );
+}
+
+/** Phần DỰNG thuần: nhận danh sách đã có, không tự gọi API. */
+export function ContractsList({
+  rows,
+  initialLoading = false,
+  studio,
+}: {
+  rows: ContractRow[];
+  initialLoading?: boolean;
+  studio: ExportStudio;
+}) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<string>("all");
   const [code, setCode] = useState("");
@@ -96,16 +130,6 @@ export default function ContractsListView({
   const [showFilters, setShowFilters] = useState(false);
   const [sort, setSort] = useState<ContractSort>("default");
   const [exporting, setExporting] = useState(false);
-
-  // Tải danh sách + cache trên máy: hiện tức thì bản đã lưu, làm mới ngầm.
-  const { data, loading, fromCache } = useCachedJson<{ list: ContractRow[] }>(
-    branchKey ? `contracts-list:${branchKey}` : "contracts-list",
-    "/api/studio/contracts-list",
-    { list: [] }
-  );
-  const rows = data.list;
-  // Lần đầu chưa có cache và đang tải → hiện trạng thái tải thay vì "chưa có HĐ".
-  const initialLoading = loading && !fromCache && rows.length === 0;
 
   // Lọc chung (tìm kiếm + mã + khoảng ngày) TRƯỚC khi chia tab, để số đếm trên
   // từng tab phản ánh đúng bộ lọc đang bật. Logic ở @/lib/contract-filter.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { fmtDate } from "@/lib/date";
 import { Copy, Check, Share2, TrendingUp, Clock, Wallet, ChevronDown, ChevronUp, Gift } from "lucide-react";
 import { PLAN_LABEL, formatVnd, type Plan } from "@/lib/plans";
 import { mainUrl } from "@/lib/hosts";
@@ -201,7 +202,7 @@ export default function AffiliatePage() {
                       </span>
                     </td>
                     <td className="px-4 py-3" style={{ color: "var(--text3)" }}>
-                      {new Date(c.created_at).toLocaleDateString("vi-VN")}
+                      {fmtDate(c.created_at)}
                     </td>
                   </tr>
                 ))}

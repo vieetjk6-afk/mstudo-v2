@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtDateTime } from "@/lib/date";
 import { Check, Crown, Trash2, X as XIcon } from "lucide-react";
 import { Section } from "@/components/admin/Section";
 import { UPGRADE_PAYMENT_LABEL, type UpgradePaymentStatus } from "@/lib/upgrade-payment";
@@ -96,7 +97,7 @@ export default function UpgradeRequests({ initial }: { initial: UpgradeRequest[]
                     </span>
                   </div>
                   {u.note && <p className="mt-0.5 text-xs" style={{ color: "var(--text2)" }}>{u.note}</p>}
-                  <p className="mt-0.5 text-[11px]" style={{ color: "var(--text3)" }}>{new Date(u.created_at).toLocaleString("vi-VN")}</p>
+                  <p className="mt-0.5 text-[11px]" style={{ color: "var(--text3)" }}>{fmtDateTime(u.created_at)}</p>
                 </div>
                 <div className="flex shrink-0 flex-wrap gap-1.5">
                   {/* Studio đã báo chuyển khoản → hai lựa chọn dứt khoát: đã

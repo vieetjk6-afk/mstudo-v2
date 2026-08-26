@@ -4,7 +4,7 @@ import Reveal from "../Reveal";
 import Countdown from "../Countdown";
 import RsvpForm from "../RsvpForm";
 import MusicPlayer from "../MusicPlayer";
-import { fmtDate, readConfig, GiftCard, GuestBlock, type TemplateProps } from "../shared";
+import { fmtDate, fmtShort, readConfig, GiftCard, GuestBlock, type TemplateProps } from "../shared";
 
 /**
  * "Ngọt ngào" — thiệp cuộn dọc đầy đủ, tông hồng pastel (theo mẫu tham khảo):
@@ -74,7 +74,7 @@ export default function SweetTemplate({ inv, wishes, guest }: TemplateProps) {
           <h1 className="text-5xl leading-tight sm:text-6xl" style={{ fontFamily: "var(--font-cormorant)" }}>{bride}</h1>
           <p className="my-1 text-2xl italic" style={{ color: c.cover_url ? "#fff" : accent }}>&amp;</p>
           <h1 className="text-5xl leading-tight sm:text-6xl" style={{ fontFamily: "var(--font-cormorant)" }}>{groom}</h1>
-          {c.wedding_date && <p className="mt-5 text-xl tracking-[0.2em]">{new Date(c.wedding_date).toLocaleDateString("vi-VN").replace(/\//g, ".")}</p>}
+          {c.wedding_date && <p className="mt-5 text-xl tracking-[0.2em]">{fmtShort(c.wedding_date).replace(/\//g, ".")}</p>}
           <p className="mt-2 text-xs uppercase tracking-[0.3em] opacity-90">{location}</p>
           <a href="#rsvp" className="mt-7 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-medium text-white" style={{ background: accent }}>Gửi lời chúc <Heart size={14} style={{ fill: "#fff" }} /></a>
         </Reveal>

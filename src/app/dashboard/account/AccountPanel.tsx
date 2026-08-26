@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fmtDate } from "@/lib/date";
 import { useRouter } from "next/navigation";
 import {
   User, Mail, Lock, Shield, CreditCard, LogOut,
@@ -181,8 +182,8 @@ export default function AccountPanel({
     router.push("/login");
   }
 
-  const planExpiry = planExpiresAt ? new Date(planExpiresAt).toLocaleDateString("vi-VN") : null;
-  const joinDate = new Date(createdAt).toLocaleDateString("vi-VN");
+  const planExpiry = planExpiresAt ? fmtDate(planExpiresAt) : null;
+  const joinDate = fmtDate(createdAt);
   const pwStrength = newPw.length === 0 ? null : newPw.length < 8 ? "weak" : newPw.length < 12 ? "fair" : "strong";
 
   return (
