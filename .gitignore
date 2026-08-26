@@ -32,5 +32,4 @@ yarn-error.log*
 next-env.d.ts
 
 # ảnh chụp giao diện do scripts/chup-giao-dien.mjs sinh ra
-ui-desktop.png
-ui-mobile.png
+anh-giao-dien/

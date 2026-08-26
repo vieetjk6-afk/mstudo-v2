@@ -44,7 +44,12 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
 
   return (
     <div className="page-in">
-      <p className="mb-3 text-[13px]" style={{ color: "var(--tx2)" }}>Kéo thẻ hợp đồng sang cột khác để đổi trạng thái.</p>
+      {/* Sáu cột không vừa màn hình laptop 1280px: cột "Đã huỷ" khuất hẳn khỏi
+          mép phải mà không có dấu hiệu nào báo là cuộn được — thẻ nằm trong đó
+          coi như biến mất. Nói thẳng ra trong dòng hướng dẫn. */}
+      <p className="mb-3 text-[13px]" style={{ color: "var(--tx2)" }}>
+        Kéo thẻ hợp đồng sang cột khác để đổi trạng thái. Cuộn ngang để xem hết {COLUMNS.length} cột.
+      </p>
 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {COLUMNS.map((col) => {
