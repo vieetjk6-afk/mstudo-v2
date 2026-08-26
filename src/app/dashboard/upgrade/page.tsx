@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, X, Crown, Sparkles, Send, Zap, Tag, Camera } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PlanUsage from "@/components/PlanUsage";
@@ -45,6 +46,7 @@ const DEFAULT_PRICES: Prices = {
 // admin-editable — loaded from site_settings.upgrade_content (with code defaults).
 
 export default function UpgradePage() {
+  const router = useRouter();
   const [currentPlan, setCurrentPlan] = useState<Plan>("free");
   const [content, setContent] = useState<UpgradeContent>(UPGRADE_DEFAULTS);
   const [prices, setPrices] = useState<Prices>(DEFAULT_PRICES);
@@ -219,11 +221,12 @@ export default function UpgradePage() {
       appliedCode && (!appliedCode.plan || appliedCode.plan === plan) && (!appliedCode.cycle || appliedCode.cycle === cycle)
         ? appliedCode.code
         : null;
-    const amount = plan === "free" ? null : finalPriceOf(plan);
+    // Số tiền KHÔNG gửi lên nữa: máy chủ tự chốt từ bảng giá + mức giảm đã xác
+    // thực, rồi in lên mã QR. Con số trên màn hình chỉ để xem trước.
     const res = await fetch("/api/upgrade-request", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ plan, cycle, note, discount_code: usedCode, phone, amount }),
+      body: JSON.stringify({ plan, cycle, note, discount_code: usedCode, phone }),
     });
     const data = await res.json().catch(() => null);
     setSending(null);
@@ -234,7 +237,11 @@ export default function UpgradePage() {
       if (data?.activated) {
         setActivated(true);
         setCurrentPlan(plan);
+        return;
       }
+      // Gói phải trả tiền → sang thẳng trang thanh toán (mã QR đúng số tiền của
+      // gói vừa chọn) thay vì để studio ngồi chờ ai đó gọi lại.
+      if (data?.requestId) router.push(`/dashboard/upgrade/thanh-toan/${data.requestId}`);
     } else {
       setError("Gửi yêu cầu thất bại, thử lại sau.");
     }
@@ -451,7 +458,7 @@ export default function UpgradePage() {
       </div>
 
       <p className="mt-6 text-center text-[12.5px]" style={{ color: "var(--text3)" }}>
-        Thanh toán & kích hoạt gói hiện được xử lý thủ công — gửi yêu cầu rồi quản trị viên sẽ liên hệ. Mã giảm giá 100% sẽ kích hoạt gói ngay.
+        Chọn gói → sang trang thanh toán có sẵn mã QR đúng số tiền → chuyển khoản rồi bấm “Tôi đã chuyển khoản”. Bên mình đối chiếu sao kê và nâng gói cho bạn. Mã giảm giá 100% kích hoạt gói ngay, không cần chuyển khoản.
       </p>
 
       {/* Confirm modal — enter phone before sending */}

@@ -1,3 +1,5 @@
+import type { UpgradePaymentStatus } from "@/lib/upgrade-payment";
+
 export type Role = "admin" | "photographer";
 
 export interface Profile {
@@ -134,6 +136,11 @@ export interface SiteSettings {
   photographer_plus_discount_year_percent: number;
   studio_discount_month_percent: number;
   studio_discount_year_percent: number;
+  // Tài khoản NHẬN tiền của MStudo — nguồn của mã QR trang thanh toán gói.
+  pay_bank_bin: string | null;
+  pay_bank_account: string | null;
+  pay_bank_holder: string | null;
+  pay_bank_name: string | null;
   landing_hero_title: string | null;
   landing_hero_sub: string | null;
   landing_hero_badge: string | null;
@@ -167,6 +174,15 @@ export interface UpgradeRequest {
   discount_code: string | null;
   phone: string | null;
   amount: number | null;
+  /** Số tiền CHỐT phía máy chủ — số in lên mã QR và số admin đối chiếu. */
+  payment_amount: number | null;
+  /** Nội dung chuyển khoản riêng của yêu cầu này ("MS-4K7Q"). */
+  payment_code: string | null;
+  payment_status: UpgradePaymentStatus;
+  declared_at: string | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  review_note: string | null;
   handled: boolean;
   created_at: string;
 }
@@ -368,6 +384,9 @@ export type NotificationKind =
   // Hợp đồng mới do NGƯỜI KHÁC trong studio tạo (nhân viên, quản lý, quản lý
   // chi nhánh) — chủ studio cần biết đơn vừa về từ cơ sở nào.
   | "contract_created"
+  // Kết quả thanh toán gói dịch vụ MStudo (admin xác nhận / từ chối chuyển khoản).
+  | "plan_activated"
+  | "payment_failed"
   | "info";
 
 export interface StudioNotification {

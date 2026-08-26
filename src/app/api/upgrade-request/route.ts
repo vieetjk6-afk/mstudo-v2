@@ -1,49 +1,37 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { planExpiry, planProfilePatch, type Plan } from "@/lib/plans";
+import { PLAN_PRICING, type Plan } from "@/lib/plans";
+import { activatePlan } from "@/lib/upgrade-activate";
+import { newUpgradePaymentCode, upgradeAmount } from "@/lib/upgrade-payment";
 import { notifyAdmins } from "@/lib/notify-admin";
 
 export const dynamic = "force-dynamic";
 
-type Db = ReturnType<typeof createAdminClient>;
+type PaidPlan = "basic" | "photographer" | "photographer_plus" | "studio";
 
-async function creditAffiliateCommission(
-  db: Db,
-  userId: string,
-  userEmail: string,
-  plan: Plan,
-  cycle: string,
-  saleAmount: number,
-) {
-  const { data: profile } = await db.from("profiles").select("referred_by").eq("id", userId).maybeSingle();
-  if (!profile?.referred_by) return;
-
-  const { data: affCode } = await db
-    .from("affiliate_codes")
-    .select("user_id")
-    .eq("code", profile.referred_by)
-    .eq("active", true)
-    .maybeSingle();
-  if (!affCode) return;
-
-  const planKey = `affiliate_commission_${plan}` as const;
-  const { data: settings } = await db.from("site_settings").select(planKey).eq("id", 1).maybeSingle();
-  const pct: number = (settings as Record<string, unknown>)?.[planKey] as number ?? 0;
-  if (pct <= 0) return;
-
-  const commissionAmount = Math.round(saleAmount * pct / 100);
-  await db.from("affiliate_commissions").insert({
-    referrer_id: affCode.user_id,
-    referred_user_id: userId,
-    referred_email: userEmail,
-    plan,
-    cycle,
-    sale_amount: saleAmount,
-    commission_pct: pct,
-    commission_amount: commissionAmount,
-    status: "pending",
-  });
+/**
+ * Giá gốc + % giảm khuyến mãi của một gói, ĐỌC TỪ MÁY CHỦ.
+ *
+ * Trình duyệt cũng tự tính con số này để hiển thị, nhưng số dùng để THU TIỀN
+ * (in lên mã QR) phải do máy chủ chốt — sửa một dòng JSON là mua gói Studio
+ * giá 1.000đ.
+ */
+async function serverPrice(
+  db: ReturnType<typeof createAdminClient>,
+  plan: PaidPlan,
+  cycle: "month" | "year",
+): Promise<{ base: number; promoPct: number }> {
+  const priceKey = `price_${plan}_${cycle}` as const;
+  const discKey = `${plan}_discount_${cycle}_percent` as const;
+  const { data } = await db.from("site_settings").select(`${priceKey}, ${discKey}`).eq("id", 1).maybeSingle();
+  const row = (data ?? {}) as Record<string, unknown>;
+  const base = Number(row[priceKey]);
+  const promo = Number(row[discKey]);
+  return {
+    base: Number.isFinite(base) && base > 0 ? Math.round(base) : PLAN_PRICING[plan][cycle],
+    promoPct: Number.isFinite(promo) ? Math.min(100, Math.max(0, promo)) : 0,
+  };
 }
 
 /** A logged-in photographer requests an account upgrade. */
@@ -54,16 +42,15 @@ export async function POST(req: Request) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const { note, plan, cycle, discount_code, phone, amount } = (await req.json().catch(() => ({}))) as {
+  const { note, plan, cycle, discount_code, phone } = (await req.json().catch(() => ({}))) as {
     note?: string;
     plan?: string;
     cycle?: string;
     discount_code?: string;
     phone?: string;
-    amount?: number;
   };
 
-  const validPlan = plan === "basic" || plan === "photographer" || plan === "photographer_plus" || plan === "studio" ? (plan as Plan) : null;
+  const validPlan = plan === "basic" || plan === "photographer" || plan === "photographer_plus" || plan === "studio" ? (plan as PaidPlan) : null;
   const validCycle = cycle === "year" ? "year" : "month";
   const code = discount_code?.trim().toUpperCase() || null;
   const db = createAdminClient();
@@ -102,23 +89,34 @@ export async function POST(req: Request) {
     }
   }
 
-  // Mã 100% đã chốt được lượt → tự kích hoạt gói ngay.
-  let activated = false;
-  if (claimed && validPlan && dc && dc.percent >= 100) {
-    await db
-      .from("profiles")
-      .update({ ...planProfilePatch(validPlan), plan_cycle: validCycle, plan_expires_at: planExpiry(validCycle) })
-      .eq("id", user.id);
-    activated = true;
-
-    // M-5: Look up canonical plan price server-side — never trust client-submitted amount
-    const planPriceKey = `price_${validPlan}_${validCycle}` as const;
-    const { data: priceSettings } = await db.from("site_settings").select(planPriceKey).eq("id", 1).maybeSingle();
-    const canonicalAmount: number = (priceSettings as Record<string, unknown>)?.[planPriceKey] as number ?? amount ?? 0;
-    await creditAffiliateCommission(db, user.id, user.email ?? "", validPlan, validCycle, canonicalAmount);
+  // Số tiền phải trả — CHỐT Ở ĐÂY và dùng cho cả mã QR lẫn lúc admin đối chiếu.
+  // Lấy mức giảm CAO HƠN giữa khuyến mãi của gói và mã giảm giá đã chốt được,
+  // đúng như trang nâng cấp hiển thị.
+  let payAmount = 0;
+  if (validPlan) {
+    const { base, promoPct } = await serverPrice(db, validPlan, validCycle);
+    const codePct = claimed && dc ? Math.min(100, Math.max(0, dc.percent)) : 0;
+    payAmount = upgradeAmount(base, Math.max(promoPct, codePct));
   }
 
-  const { error } = await db.from("upgrade_requests").insert({
+  // Không phải trả đồng nào (mã 100% đã chốt được lượt, hoặc gói đang khuyến
+  // mãi 100%) → kích hoạt ngay. Nếu không xử ở đây thì studio bị đẩy sang trang
+  // thanh toán với số tiền 0đ và không có đường nào đi tiếp.
+  const freeNow = !!validPlan && payAmount === 0;
+  let activated = false;
+  if (validPlan && (freeNow || (claimed && dc && dc.percent >= 100))) {
+    await activatePlan({
+      db,
+      userId: user.id,
+      userEmail: user.email ?? "",
+      plan: validPlan as Plan,
+      cycle: validCycle,
+      saleAmount: payAmount,
+    });
+    activated = true;
+  }
+
+  const row = {
     user_id: user.id,
     email: user.email,
     note: note?.trim() || null,
@@ -126,10 +124,33 @@ export async function POST(req: Request) {
     cycle: validCycle,
     discount_code: code,
     phone: phone?.trim() || null,
-    amount: amount != null && Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : null,
+    amount: payAmount || null,
+    payment_amount: payAmount || null,
+    payment_status: activated ? "paid" : "none",
     handled: activated, // auto-activated requests are already done
-  });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  };
+
+  // Mã nội dung chuyển khoản chỉ có 4 ký tự cho studio gõ tay được, mà cột lại
+  // UNIQUE — nên đụng mã là chuyện sẽ xảy ra, không phải nếu. Sinh lại vài lần
+  // thay vì để studio nhận lỗi 500 ngay ở bước trả tiền.
+  const needsCode = !activated && !!validPlan && payAmount > 0;
+  let inserted: { id: string } | null = null;
+  let lastError = "";
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error } = await db
+      .from("upgrade_requests")
+      .insert({ ...row, payment_code: needsCode ? newUpgradePaymentCode() : null })
+      .select("id")
+      .single();
+    if (!error) {
+      inserted = data as { id: string };
+      break;
+    }
+    lastError = error.message;
+    // 23505 = unique_violation → chỉ có thể do trùng payment_code.
+    if (error.code !== "23505" || !needsCode) break;
+  }
+  if (!inserted) return NextResponse.json({ error: lastError || "insert_failed" }, { status: 500 });
 
   // Báo cho quản trị viên có yêu cầu nâng cấp mới.
   const planLabel = validPlan ? ` gói ${validPlan}/${validCycle}` : "";
@@ -143,5 +164,5 @@ export async function POST(req: Request) {
     { push: true },
   );
 
-  return NextResponse.json({ ok: true, activated });
+  return NextResponse.json({ ok: true, activated, requestId: inserted.id, amount: payAmount });
 }

@@ -5,8 +5,10 @@ import DateInput from "@/components/DateInput";
 import {
   Save, Tag, Trash2, Plus, Shuffle, Check, Crown, MessageSquare,
   Globe, LayoutTemplate, BadgeDollarSign, Settings2, ChevronDown, ChevronRight, Rocket,
+  Landmark, X as XIcon,
 } from "lucide-react";
 import type { SiteSettings, UpgradeRequest, DiscountCode } from "@/lib/types";
+import { UPGRADE_PAYMENT_LABEL, type UpgradePaymentStatus } from "@/lib/upgrade-payment";
 import UpgradeContentEditor from "./UpgradeContentEditor";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
@@ -113,6 +115,39 @@ export default function SettingsPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ kind: "upgrade", action, id, handled }),
     });
+  }
+
+  // Chốt một yêu cầu ĐÃ CHUYỂN KHOẢN. "confirm" nâng gói ngay và báo về cho
+  // studio; "reject" đánh dấu giao dịch chưa thành công kèm lý do. Không cập
+  // nhật lạc quan như hai nút trên: đây là việc động tới TIỀN và tới gói của
+  // người khác, nên chỉ đổi màn hình sau khi máy chủ trả lời xong.
+  const [payBusy, setPayBusy] = useState<string | null>(null);
+  async function reviewPayment(id: string, action: "confirm" | "reject") {
+    if (action === "confirm" && !confirm("Xác nhận ĐÃ NHẬN được tiền chuyển khoản? Gói của studio sẽ được nâng ngay.")) return;
+    const note = action === "reject" ? (prompt("Lý do gửi cho studio (bỏ trống cũng được):") ?? "") : "";
+    setPayBusy(id);
+    const res = await fetch("/api/admin/upgrade-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action, note }),
+    });
+    const data = await res.json().catch(() => null);
+    setPayBusy(null);
+    if (!res.ok || !data?.ok) {
+      setMsg(data?.error === "already_paid" ? "Đơn này đã xác nhận trước đó." : "Không cập nhật được, thử lại.");
+      return;
+    }
+    setUpgradeRows((r) =>
+      r.map((x) => (x.id === id ? { ...x, payment_status: data.status as UpgradePaymentStatus, handled: data.status === "paid" } : x)),
+    );
+  }
+
+  /** Màu viên trạng thái thanh toán — cùng bảng màu với các nhãn khác của app. */
+  function payTone(st: string | null | undefined): React.CSSProperties {
+    if (st === "paid") return { background: "var(--gnS)", color: "var(--gn)" };
+    if (st === "awaiting_confirm") return { background: "var(--amS)", color: "var(--am)" };
+    if (st === "failed") return { background: "var(--rdS)", color: "var(--rd)" };
+    return { background: "var(--surface)", color: "var(--text3)" };
   }
 
   // ── Discount codes ────────────────────────────────────────────────────────
@@ -321,6 +356,29 @@ export default function SettingsPanel({
         <SaveBtn label="Lưu gói & giá" />
       </Section>
 
+      {/* ── 3a. Tài khoản nhận thanh toán ────────────────────────────────── */}
+      <Section title="Tài khoản nhận thanh toán" icon={Landmark}>
+        <p className="text-[12px]" style={{ color: "var(--text3)" }}>
+          Mã QR trên trang thanh toán gói dịch vụ sinh từ đúng tài khoản này. Bỏ trống là studio
+          không quét được mã và phải nhắn hỏi — nên điền đủ <strong>mã ngân hàng + số tài khoản</strong>.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="Mã ngân hàng (BIN · VietQR)" note="Ví dụ 970436 = Vietcombank, 970422 = MB Bank, 970407 = Techcombank.">
+            <Input value={str("pay_bank_bin")} onChange={(v) => set("pay_bank_bin", v as never)} placeholder="970436" />
+          </Field>
+          <Field label="Số tài khoản">
+            <Input value={str("pay_bank_account")} onChange={(v) => set("pay_bank_account", v as never)} placeholder="0123456789" />
+          </Field>
+          <Field label="Chủ tài khoản" note="Viết KHÔNG dấu, đúng như trên app ngân hàng.">
+            <Input value={str("pay_bank_holder")} onChange={(v) => set("pay_bank_holder", v as never)} placeholder="NGUYEN VAN A" />
+          </Field>
+          <Field label="Tên ngân hàng">
+            <Input value={str("pay_bank_name")} onChange={(v) => set("pay_bank_name", v as never)} placeholder="Vietcombank" />
+          </Field>
+        </div>
+        <SaveBtn label="Lưu tài khoản nhận tiền" />
+      </Section>
+
       {/* ── 3b. Nội dung trang nâng cấp ──────────────────────────────────── */}
       <Section title="Nội dung trang nâng cấp" icon={Rocket}>
         <p className="text-[12px]" style={{ color: "var(--text3)" }}>
@@ -439,13 +497,39 @@ export default function SettingsPanel({
                       {u.email ?? u.user_id}
                       {u.phone && <span className="font-normal text-[12px]" style={{ color: "var(--text2)" }}>📞 {u.phone}</span>}
                       {u.plan && <span className="rounded-full px-2 py-0.5 text-[11px] font-bold uppercase" style={{ background: "color-mix(in srgb, var(--gold) 18%, transparent)", color: "var(--gold)" }}>{u.plan}{u.cycle ? ` · ${u.cycle === "year" ? "năm" : "tháng"}` : ""}</span>}
-                      {u.amount != null && <span className="text-[12px] font-semibold" style={{ color: "var(--gold)" }}>{u.amount.toLocaleString("vi-VN")}đ</span>}
+                      {(u.payment_amount ?? u.amount) != null && <span className="text-[12px] font-semibold" style={{ color: "var(--gold)" }}>{(u.payment_amount ?? u.amount)!.toLocaleString("vi-VN")}đ</span>}
                       {u.discount_code && <span className="rounded px-2 py-0.5 font-mono text-[11px]" style={{ background: "var(--surface)", color: "var(--text2)" }}>{u.discount_code}</span>}
+                      {u.payment_code && <span className="rounded px-2 py-0.5 font-mono text-[11px] font-bold" style={{ background: "var(--surface)", color: "var(--text)" }}>{u.payment_code}</span>}
+                      <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={payTone(u.payment_status)}>
+                        {UPGRADE_PAYMENT_LABEL[(u.payment_status ?? "none") as UpgradePaymentStatus] ?? u.payment_status}
+                      </span>
                     </div>
                     {u.note && <p className="text-xs mt-0.5" style={{ color: "var(--text2)" }}>{u.note}</p>}
                     <p className="text-[11px] mt-0.5" style={{ color: "var(--text3)" }}>{new Date(u.created_at).toLocaleString("vi-VN")}</p>
                   </div>
-                  <div className="flex gap-1.5 shrink-0">
+                  <div className="flex flex-wrap gap-1.5 shrink-0">
+                    {/* Studio đã báo chuyển khoản → hai lựa chọn dứt khoát: đã
+                        thấy tiền (nâng gói ngay) hay chưa thấy (báo thất bại). */}
+                    {u.payment_status === "awaiting_confirm" && (
+                      <>
+                        <button
+                          onClick={() => reviewPayment(u.id, "confirm")}
+                          disabled={payBusy === u.id}
+                          className="rounded-lg px-2.5 py-2 text-[12px] font-semibold disabled:opacity-60"
+                          style={{ background: "var(--gnS)", color: "var(--gn)" }}
+                        >
+                          <Check size={13} className="mr-1 inline" /> Đã nhận tiền
+                        </button>
+                        <button
+                          onClick={() => reviewPayment(u.id, "reject")}
+                          disabled={payBusy === u.id}
+                          className="rounded-lg px-2.5 py-2 text-[12px] font-semibold disabled:opacity-60"
+                          style={{ background: "var(--rdS)", color: "var(--rd)" }}
+                        >
+                          <XIcon size={13} className="mr-1 inline" /> Chưa nhận được
+                        </button>
+                      </>
+                    )}
                     <button onClick={() => handleUpgrade("handled", u.id, !u.handled)} className="rounded-lg p-2" style={{ background: "var(--surface)", color: u.handled ? "var(--success)" : "var(--text3)" }} aria-label={u.handled ? "Đánh dấu chưa xử lý" : "Đánh dấu đã xử lý"}>
                       <Check size={15} />
                     </button>

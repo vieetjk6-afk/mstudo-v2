@@ -28,6 +28,11 @@ const FIELDS = [
   "landing_hero_sub",
   "landing_hero_badge",
   "landing_hero_note",
+  // Tài khoản NHẬN tiền của MStudo — nguồn của mã QR trang thanh toán gói.
+  "pay_bank_bin",
+  "pay_bank_account",
+  "pay_bank_holder",
+  "pay_bank_name",
 ] as const;
 
 /** Update the studio profile / contact settings. Admin only. */

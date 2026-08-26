@@ -13,7 +13,7 @@ import type { NotificationKind } from "@/lib/types";
 export async function notifyAdmins(
   kind: NotificationKind,
   message: string,
-  opts: { push?: boolean } = {},
+  opts: { push?: boolean; url?: string } = {},
 ): Promise<void> {
   try {
     const db = createAdminClient();
@@ -34,7 +34,10 @@ export async function notifyAdmins(
       await sendPushToOwners(ids, {
         title: "MStudo",
         body: message,
-        url: "/dashboard/studio/notifications",
+        // Mặc định về trang thông báo; việc nào có nút bấm ngay (duyệt chuyển
+        // khoản chẳng hạn) thì truyền thẳng trang xử lý — chạm vào thông báo
+        // trên điện thoại mà rơi vào màn chỉ để đọc là phải mò tiếp.
+        url: opts.url ?? "/dashboard/studio/notifications",
         tag: `admin-${kind}`,
       });
     }
