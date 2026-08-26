@@ -71,6 +71,9 @@ export default function ZaloSendButton({
 }) {
   const [state, setState] = useState<null | "sending" | "ok" | "fail">(null);
   const [err, setErr] = useState("");
+  // Tin gửi được nhưng thiếu ảnh đính kèm (mã QR) — im lặng thì studio đinh
+  // ninh khách đã có mã, nên phải nói ra.
+  const [imgWarn, setImgWarn] = useState("");
   const [manualPhone, setManualPhone] = useState("");
   // Picker bạn bè
   const [pickOpen, setPickOpen] = useState(false);
@@ -115,6 +118,7 @@ export default function ZaloSendButton({
   async function doSend(payload: { toPhone?: string; toUid?: string; toName?: string | null }) {
     setState("sending");
     setErr("");
+    setImgWarn("");
     try {
       const res = await fetch("/api/studio/zalo/send", {
         method: "POST",
@@ -123,6 +127,7 @@ export default function ZaloSendButton({
       }).then((x) => x.json());
       if (res.ok) {
         setState("ok");
+        if (res.imageError) setImgWarn("Đã gửi nhưng KHÔNG kèm được ảnh QR — khách bấm link QR trong tin.");
         setTimeout(() => setState(null), 2500);
       } else {
         setState("fail");
@@ -275,6 +280,9 @@ export default function ZaloSendButton({
 
       {state === "fail" && err && (
         <span className="text-[10px]" style={{ color: "var(--s-red)" }}>{err}</span>
+      )}
+      {imgWarn && (
+        <span className="text-[10px]" style={{ color: "var(--s-amber)" }}>{imgWarn}</span>
       )}
     </span>
   );

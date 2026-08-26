@@ -1,8 +1,5 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { imageDims } from "./image";
 import type { PersonalSession } from "./config";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -165,32 +162,47 @@ async function apiFromSession(session: PersonalSession): Promise<any> {
 /** Tối đa 4MB cho ảnh đính kèm — mã QR chỉ vài chục KB, vượt xa là bất thường. */
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
+type ImageAttachment = {
+  data: Buffer;
+  filename: `${string}.${string}`;
+  metadata: { totalSize: number; width: number; height: number };
+};
+
 /**
- * Tải ảnh về thư mục tạm rồi trả đường dẫn tệp — zca-js đính kèm theo ĐƯỜNG DẪN
- * chứ không nhận URL. Trả null nếu tải hỏng/không phải ảnh/quá nặng: khi đó tin
- * vẫn gửi dạng văn bản (link ảnh đã nằm sẵn trong nội dung).
+ * Tải ảnh về BỘ NHỚ rồi đóng gói đúng dạng zca-js cần.
  *
- * Người gọi phải `rm` thư mục trả kèm sau khi gửi xong.
+ * Vì sao là buffer chứ không phải tệp tạm: đưa đường dẫn tệp thì zca-js đòi
+ * `imageMetadataGetter` (thư viện đo kích thước ảnh do người dùng tự cắm) để
+ * lấy width/height, không có là ném lỗi ngay — đó chính là lý do bản đầu chỉ
+ * gửi được link. Tự đo kích thước rồi đưa buffer kèm metadata thì không cần
+ * thư viện nào, cũng không đụng tới đĩa.
+ *
+ * Tải hỏng / quá nặng / không đọc được kích thước thì trả `error` để người gọi
+ * còn nói được vì sao thiếu ảnh; khi đó tin vẫn gửi dạng văn bản (link ảnh đã
+ * nằm sẵn trong nội dung).
  */
-async function downloadImage(
+async function fetchImageAttachment(
   url: string
-): Promise<{ path: string; dir: string } | null> {
+): Promise<{ attachment: ImageAttachment } | { error: string }> {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 10_000);
   try {
     const res = await fetch(url, { signal: ctl.signal, cache: "no-store" });
-    if (!res.ok) return null;
-    const type = (res.headers.get("content-type") || "").toLowerCase();
-    if (!type.startsWith("image/")) return null;
-    const buf = Buffer.from(await res.arrayBuffer());
-    if (!buf.length || buf.length > MAX_IMAGE_BYTES) return null;
-    const ext = type.includes("jpeg") || type.includes("jpg") ? "jpg" : type.includes("webp") ? "webp" : "png";
-    const dir = await mkdtemp(join(tmpdir(), "zalo-img-"));
-    const path = join(dir, `${randomBytes(6).toString("hex")}.${ext}`);
-    await writeFile(path, buf);
-    return { path, dir };
-  } catch {
-    return null;
+    if (!res.ok) return { error: `http_${res.status}` };
+    const data = Buffer.from(await res.arrayBuffer());
+    if (!data.length) return { error: "empty" };
+    if (data.length > MAX_IMAGE_BYTES) return { error: "too_large" };
+    const dims = imageDims(data);
+    if (!dims) return { error: "unreadable_image" };
+    return {
+      attachment: {
+        data,
+        filename: `qr.${dims.ext}`,
+        metadata: { totalSize: data.length, width: dims.width, height: dims.height },
+      },
+    };
+  } catch (e: any) {
+    return { error: e?.name === "AbortError" ? "timeout" : e?.message || "fetch_failed" };
   } finally {
     clearTimeout(timer);
   }
@@ -202,14 +214,15 @@ async function downloadImage(
  *
  * `imageUrl` (tuỳ chọn) được tải về rồi đính kèm vào chính tin đó — dùng cho mã
  * QR thanh toán. Đính kèm hỏng thì LÙI về gửi văn bản, vì tin nhắc thanh toán
- * đến được khách vẫn hơn là không gửi gì.
+ * đến được khách vẫn hơn là không gửi gì — nhưng trả kèm `imageError` để giao
+ * diện nói thẳng "đã gửi, thiếu ảnh QR" thay vì im lặng như không có gì.
  */
 export async function sendPersonalText(
   session: PersonalSession,
   target: { uid?: string | null; phone?: string | null },
   text: string,
   imageUrl?: string | null
-): Promise<{ ok: boolean; uid?: string; error?: string }> {
+): Promise<{ ok: boolean; uid?: string; error?: string; imageError?: string }> {
   let api: any;
   let ThreadType: any;
   try {
@@ -231,24 +244,25 @@ export async function sendPersonalText(
   }
   if (!uid) return { ok: false, error: "recipient_not_found" };
 
+  let imageError: string | undefined;
   if (imageUrl) {
-    const file = await downloadImage(imageUrl);
-    if (file) {
+    const img = await fetchImageAttachment(imageUrl);
+    if ("attachment" in img) {
       try {
-        await api.sendMessage({ msg: text, attachments: [file.path] }, uid, ThreadType.User);
+        await api.sendMessage({ msg: text, attachments: [img.attachment] }, uid, ThreadType.User);
         return { ok: true, uid };
-      } catch {
-        /* đính kèm hỏng → gửi văn bản bên dưới */
-      } finally {
-        await rm(file.dir, { recursive: true, force: true }).catch(() => {});
+      } catch (e: any) {
+        imageError = e?.message || "attach_failed";
       }
+    } else {
+      imageError = img.error;
     }
   }
 
   try {
     await api.sendMessage({ msg: text }, uid, ThreadType.User);
-    return { ok: true, uid };
+    return { ok: true, uid, imageError };
   } catch (e: any) {
-    return { ok: false, error: e?.message || "personal_send_failed" };
+    return { ok: false, error: e?.message || "personal_send_failed", imageError };
   }
 }

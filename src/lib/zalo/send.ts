@@ -28,6 +28,8 @@ export interface SendResult {
   ok: boolean;
   skipped?: boolean;
   error?: string;
+  /** Tin đã gửi nhưng KHÔNG kèm được ảnh (lý do) — giao diện phải nói ra. */
+  imageError?: string;
 }
 
 async function logMessage(input: SendInput, row: ZaloRow | null, res: SendResult, uid?: string | null) {
@@ -45,7 +47,9 @@ async function logMessage(input: SendInput, row: ZaloRow | null, res: SendResult
     kind: input.kind ?? null,
     contract_id: input.contractId ?? null,
     status: res.skipped ? "skipped" : res.ok ? "sent" : "failed",
-    error: res.error ?? null,
+    // Gửi được mà thiếu ảnh vẫn là "sent" — ghi lý do vào error để lịch sử tin
+    // nhắn còn truy được, thay vì mỗi lần lại phải mò trong log máy chủ.
+    error: res.error ?? (res.imageError ? `image:${res.imageError}` : null),
     attempts: res.skipped ? 0 : 1,
     sent_at: res.ok ? new Date().toISOString() : null,
   });
@@ -88,7 +92,7 @@ export async function sendZalo(input: SendInput): Promise<SendResult> {
         safeImageUrl(input.imageUrl)
       );
       uid = r.uid;
-      res = { ok: r.ok, error: r.error };
+      res = { ok: r.ok, error: r.error, imageError: r.imageError };
     }
   }
 
