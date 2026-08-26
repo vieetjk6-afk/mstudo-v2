@@ -40,10 +40,19 @@ export function Pill({ tone, children, dot = false }: { tone: ToneKey; children:
 export function Panel({
   children,
   className = "",
+  style,
   ...rest
 }: { children: React.ReactNode; className?: string } & React.HTMLAttributes<HTMLDivElement>) {
   return (
-    <div {...rest} className={`rounded-[14px] ${className}`} style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+    <div
+      {...rest}
+      className={`rounded-[14px] ${className}`}
+      // GỘP style của người gọi, không ghi đè: kiểu props cho phép truyền
+      // `style` (HTMLAttributes) nên chỗ gọi tưởng là truyền được, mà trước đây
+      // nó bị nuốt im lặng — nền/viền cứng luôn thắng. Người gọi cần đè nền thì
+      // vẫn đè được, còn không thì giữ nguyên mặc định.
+      style={{ background: "var(--sf)", border: "1px solid var(--bd)", ...style }}
+    >
       {children}
     </div>
   );
