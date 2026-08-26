@@ -22,6 +22,16 @@ export function qrUrl(bank: BankInfo, amount: number, addInfo: string): string |
   return `https://img.vietqr.io/image/${bank.bin}-${acc}-compact2.png${qs ? `?${qs}` : ""}`;
 }
 
+/**
+ * Nội dung chuyển khoản của MỘT đợt: mã hợp đồng + tên đợt, cắt cho vừa trường
+ * nội dung của ngân hàng. Trang studio và cổng khách dùng CHUNG hàm này để hai
+ * mã QR của cùng một đợt không lệch nội dung — sao kê về là đối chiếu được ngay
+ * tiền của đợt nào.
+ */
+export function instalmentNote(ref?: string | null, label?: string | null): string {
+  return [(ref || "").trim(), (label || "").trim()].filter(Boolean).join(" ").slice(0, 50);
+}
+
 /** Inline VietQR card — QR image + amount + copyable account/content. */
 export function VietQR({ bank, amount, addInfo }: { bank: BankInfo; amount: number; addInfo: string }) {
   const [copied, setCopied] = useState<string | null>(null);

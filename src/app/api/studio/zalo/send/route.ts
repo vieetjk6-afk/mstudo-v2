@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
     body,
     templateId,
     templateData: b.templateData && typeof b.templateData === "object" ? b.templateData : undefined,
+    imageUrl: typeof b.imageUrl === "string" ? b.imageUrl : null,
     kind: typeof b.kind === "string" ? b.kind : "manual",
     audience: b.audience === "crew" ? "crew" : b.audience === "client" ? "client" : undefined,
     contractId: typeof b.contractId === "string" ? b.contractId : null,

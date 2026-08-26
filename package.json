@@ -27,7 +27,8 @@
     "test:client-boundary": "node --experimental-strip-types desktop/test/client-boundary.mjs",
     "test:album-order": "node --experimental-strip-types desktop/test/album-order.mjs",
     "test:gcal-sync": "node --experimental-strip-types desktop/test/gcal-sync.mjs",
-    "test:studio-nav": "node --experimental-strip-types desktop/test/studio-nav.mjs"
+    "test:studio-nav": "node --experimental-strip-types desktop/test/studio-nav.mjs",
+    "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

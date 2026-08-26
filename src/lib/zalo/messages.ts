@@ -165,3 +165,57 @@ export function deliveryReadyMessage(opts: {
   lines.push("Nếu cần chỉnh thêm anh/chị nhắn em nhé ạ.");
   return lines.join("\n") + sign(opts.studio);
 }
+
+/**
+ * Nhắc MỘT đợt thanh toán cụ thể trong hợp đồng (nút "Nhắc Zalo" ở tab Thanh
+ * toán). Khác `paymentDueMessage` — vốn nói về TỔNG số còn lại — tin này gọi
+ * đúng tên đợt, số tiền của đợt đó và kèm mã QR chuyển khoản đã điền sẵn số
+ * tiền + nội dung, để khách quét là chuyển được ngay.
+ *
+ * Ảnh QR gửi kèm là tệp đính kèm của tin (kênh cá nhân); `qrLink` vẫn đưa vào
+ * nội dung để khách còn mở được khi kênh gửi không đính kèm được ảnh.
+ */
+export function instalmentReminderMessage(opts: {
+  name?: string | null;
+  title?: string | null;
+  /** Tên đợt: "Cọc hợp đồng", "Đợt 2"… */
+  label?: string | null;
+  /** Số tiền của ĐỢT, đã định dạng (vd "5.000.000 ₫"). */
+  amount?: string | null;
+  /** Hạn thu, dạng dd/mm/yyyy. */
+  dueDate?: string | null;
+  overdue?: boolean;
+  /** "Vietcombank · 0123456789 · NGUYEN VAN A" — để khách chuyển tay nếu cần. */
+  bankLine?: string | null;
+  /** Nội dung chuyển khoản (trùng với addInfo trong mã QR). */
+  transferNote?: string | null;
+  /** Ảnh QR (VietQR) — cũng là ảnh đính kèm của tin. */
+  qrLink?: string | null;
+  /** Cổng khách của hợp đồng. */
+  link?: string | null;
+  studio?: string | null;
+}): string {
+  const what = opts.label?.trim() || "đợt thanh toán";
+  const lines = [
+    hi(opts.name),
+    `Studio xin nhắc ${what}${opts.title ? ` của hợp đồng "${opts.title}"` : ""}${
+      opts.amount ? `: ${opts.amount}` : ""
+    }${
+      opts.overdue
+        ? ` (đã quá hạn${opts.dueDate ? ` ${opts.dueDate}` : ""})`
+        : opts.dueDate
+          ? ` (hạn ${opts.dueDate})`
+          : ""
+    }.`,
+  ];
+  // Chưa cấu hình ngân hàng thì KHÔNG có ảnh QR gửi kèm — đừng bảo khách quét
+  // một mã không tồn tại.
+  if (opts.qrLink)
+    lines.push("Anh/chị quét mã QR bên dưới là chuyển đúng số tiền & nội dung, không cần nhập tay ạ.");
+  if (opts.bankLine) lines.push(`Tài khoản: ${opts.bankLine}`);
+  if (opts.transferNote) lines.push(`Nội dung chuyển khoản: ${opts.transferNote}`);
+  if (opts.qrLink) lines.push(`Mã QR: ${opts.qrLink}`);
+  if (opts.link) lines.push(`Xem hợp đồng & các đợt thanh toán: ${opts.link} (mật khẩu là SĐT của anh/chị).`);
+  lines.push("Chuyển xong anh/chị gửi em ảnh chuyển khoản nhé, em cảm ơn ạ!");
+  return lines.join("\n") + sign(opts.studio);
+}

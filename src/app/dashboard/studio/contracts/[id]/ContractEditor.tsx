@@ -48,10 +48,10 @@ import LoveStoryCard from "./LoveStoryCard";
 import CalendarButtons from "@/components/CalendarButtons";
 import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
-import VietQRButton, { type BankInfo } from "@/components/VietQR";
+import VietQRButton, { qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { PRESET_ITEMS, PRESET_TASKS, nextContractCode } from "@/lib/contract-code";
 import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
-import { shootReminderMessage } from "@/lib/zalo";
+import { shootReminderMessage, instalmentReminderMessage } from "@/lib/zalo";
 import { compressImage, checkImageFile } from "@/lib/image";
 import {
   contractTotal,
@@ -486,6 +486,37 @@ export default function ContractEditor({
   // Một nội dung tin duy nhất cho mọi cách gửi trong bảng "Gửi khách" — cùng một
   // link thì không được lệch câu chữ giữa Zalo, chia sẻ nhanh và chép link.
   const clientPortalMsg = `Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`;
+
+  /** "Vietcombank · 0123456789 · NGUYEN VAN A" — dòng STK để khách chuyển tay. */
+  const bankLine = [bank.name, (bank.account || "").replace(/\s/g, ""), bank.holder]
+    .filter(Boolean)
+    .join(" · ");
+
+  /**
+   * Nội dung chuyển khoản RIÊNG cho từng đợt: nhìn sao kê là biết tiền của đợt
+   * nào, thay vì mọi đợt cùng một mã hợp đồng. Đây cũng là `addInfo` của mã QR
+   * đợt đó, nên nút QR và tin nhắc Zalo luôn khớp nhau.
+   */
+  function planNote(it: ContractPaymentPlan): string {
+    return instalmentNote(qrInfo, it.label);
+  }
+
+  /** Tin Zalo nhắc MỘT đợt thanh toán (ảnh QR gửi kèm là QR của chính đợt đó). */
+  function planReminderMsg(it: ContractPaymentPlan): string {
+    return instalmentReminderMessage({
+      name: f.client_name,
+      title: f.title,
+      label: it.label,
+      amount: vnd(it.amount),
+      dueDate: it.due_date ? fmtDate(it.due_date) : null,
+      overdue: !!it.due_date && it.due_date < today(),
+      bankLine: bankLine || null,
+      transferNote: planNote(it),
+      qrLink: qrUrl(bank, it.amount, planNote(it)),
+      link: shareUrl,
+      studio: studioName,
+    });
+  }
   /** "22:42 11-08" — lần cuối khách mở cổng, hoặc null nếu chưa mở lần nào. */
   const clientViewedAt = contract.client_viewed_at
     ? new Date(contract.client_viewed_at).toLocaleString("vi-VN", {
@@ -1779,7 +1810,25 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                               ))}
                             </div>
                           <div className="flex flex-wrap items-center justify-end gap-3">
-                            {!it.paid && it.amount > 0 && <VietQRButton bank={bank} amount={it.amount} addInfo={qrInfo} label="QR" />}
+                            {!it.paid && it.amount > 0 && (
+                              <>
+                                <VietQRButton bank={bank} amount={it.amount} addInfo={planNote(it)} label="QR" />
+                                {/* Nhắc đúng ĐỢT này qua Zalo — tin kèm luôn ảnh QR
+                                    đã điền sẵn số tiền & nội dung của đợt, khách
+                                    quét là chuyển, khỏi phải mở cổng khách tìm mã. */}
+                                <ZaloSendButton
+                                  phone={f.client_phone}
+                                  name={f.client_name}
+                                  audience="client"
+                                  contractId={contract.id}
+                                  kind="payment_reminder"
+                                  label="Nhắc Zalo"
+                                  wrapClassName="w-auto"
+                                  message={planReminderMsg(it)}
+                                  imageUrl={qrUrl(bank, it.amount, planNote(it))}
+                                />
+                              </>
+                            )}
                             {it.paid && linked?.proof_url && (
                               <button type="button" onClick={() => setLightbox(linked.proof_url!)} className="shrink-0 cursor-zoom-in" title="Phóng to ảnh chuyển khoản">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}

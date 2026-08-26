@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadZalo, readPersonalSession, type ZaloRow } from "./config";
+import { safeImageUrl } from "./image";
 import { sendZNS, sendOAText } from "./oa";
 import { sendPersonalText } from "./personal";
 
@@ -17,6 +18,8 @@ export interface SendInput {
   kind?: string;
   audience?: "client" | "crew";
   contractId?: string | null;
+  /** Ảnh đính kèm (kênh cá nhân) — hiện chỉ dùng cho mã QR thanh toán. */
+  imageUrl?: string | null;
   /** Ghi log vào zalo_messages (mặc định true). */
   log?: boolean;
 }
@@ -78,7 +81,12 @@ export async function sendZalo(input: SendInput): Promise<SendResult> {
     } else if (!input.body) {
       res = { ok: false, error: "personal_needs_body" };
     } else {
-      const r = await sendPersonalText(session, { uid: input.toUid, phone: input.toPhone }, input.body);
+      const r = await sendPersonalText(
+        session,
+        { uid: input.toUid, phone: input.toPhone },
+        input.body,
+        safeImageUrl(input.imageUrl)
+      );
       uid = r.uid;
       res = { ok: r.ok, error: r.error };
     }
