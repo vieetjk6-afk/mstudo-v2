@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Check, Copy, Loader2, AlertCircle, Crown, Clock } from "lucide-react";
+import { ArrowLeft, Check, Copy, Loader2, AlertCircle, Crown, Clock, QrCode } from "lucide-react";
 import { VietQR, type BankInfo } from "@/components/VietQR";
 import { PLAN_LABEL, type Plan } from "@/lib/plans";
 import { UPGRADE_PAYMENT_LABEL, type UpgradePaymentStatus } from "@/lib/upgrade-payment";
@@ -104,6 +104,10 @@ export default function PaymentView({
   }
 
   const tone = TONE[status];
+  // Không có tài khoản nhận tiền thì studio KHÔNG có gì để chuyển — để nút bấm
+  // được chỉ tạo ra một đơn "chờ xác nhận" mà chẳng có khoản tiền nào tồn tại,
+  // rồi admin ngồi dò một giao dịch không có thật.
+  const payable = amount > 0 && !!bank.bin && !!bank.account;
 
   return (
     <div className="page-in mx-auto max-w-xl">
@@ -124,10 +128,13 @@ export default function PaymentView({
 
       {/* Trạng thái đơn — luôn hiện, kể cả khi chưa chuyển. */}
       <div className="mb-5 flex items-center gap-2.5 rounded-2xl p-3.5" style={{ background: tone.soft, border: `1px solid ${tone.fg}33` }}>
+        {/* "Chờ chuyển khoản" KHÔNG dùng vòng xoay: đây là trạng thái đang chờ
+            NGƯỜI DÙNG hành động, không phải trang đang tải — một vòng xoay đứng
+            im ở đó chỉ làm studio tưởng máy treo. */}
         {status === "paid" ? <Crown size={18} style={{ color: tone.fg }} />
           : status === "failed" ? <AlertCircle size={18} style={{ color: tone.fg }} />
           : status === "awaiting_confirm" ? <Clock size={18} style={{ color: tone.fg }} />
-          : <Loader2 size={18} style={{ color: tone.fg }} />}
+          : <QrCode size={18} style={{ color: tone.fg }} />}
         <div className="min-w-0">
           <p className="text-[13.5px] font-semibold" style={{ color: tone.fg }}>{UPGRADE_PAYMENT_LABEL[status]}</p>
           {status === "awaiting_confirm" && (
@@ -148,7 +155,7 @@ export default function PaymentView({
 
       {status !== "paid" && (
         <div className="card p-6">
-          {amount > 0 && bank.bin && bank.account ? (
+          {payable ? (
             <>
               <VietQR bank={bank} amount={amount} addInfo={code || ""} />
               {code && (
@@ -171,7 +178,7 @@ export default function PaymentView({
 
           <button
             onClick={declare}
-            disabled={busy || amount <= 0}
+            disabled={busy || !payable}
             className="btn-primary mt-6 w-full rounded-xl py-3 text-[14px] disabled:opacity-60"
           >
             {busy ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}{" "}

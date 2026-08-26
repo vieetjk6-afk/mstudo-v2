@@ -513,3 +513,23 @@ Thu chi & công nợ (thu và tiền công lọc qua `contract.branch_id`).
 
 Xem thư mục [`docs/`](docs/) — thiết lập môi trường, chuyển đổi dữ liệu,
 Supabase, và đặc tả client desktop.
+
+## Xem & chụp giao diện mà không cần đăng nhập
+
+Gần hết màn hình của app nằm sau đăng nhập + Supabase, nên không mở được để
+nhìn nếu chỉ có mã nguồn — và các trạng thái hiếm (lỗi, rỗng, chưa cấu hình)
+thì gần như không dựng lại được bằng tay.
+
+`/uipreview` dựng thẳng các component bằng **dữ liệu giả**, đủ mọi trạng thái.
+Trang này CHỈ tồn tại ở bản dev (`notFound()` khi `NODE_ENV=production`).
+
+```bash
+npx next dev -p 3333        # cửa sổ 1
+npm run ui:shot             # cửa sổ 2 → ui-desktop.png, ui-mobile.png
+```
+
+Script còn báo hai thứ mắt hay bỏ sót: trang có **tràn ngang** không (lỗi bố
+cục số một trên điện thoại) và có **lỗi JavaScript/console** nào khi dựng
+không. Máy đã có sẵn Chromium của Playwright thì đặt `CHROME_PATH` trỏ tới nó.
+
+Sửa một màn khó mở → thêm component đó vào `src/app/uipreview/page.tsx`.
