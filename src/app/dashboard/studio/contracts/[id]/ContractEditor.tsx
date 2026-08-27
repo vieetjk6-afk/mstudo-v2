@@ -193,6 +193,7 @@ export default function ContractEditor({
   ownerId,
   branches,
   studioName,
+  depositPercent = 25,
   studioLogo = null,
   studioPhone = null,
   studioEmail = null,
@@ -231,6 +232,8 @@ export default function ContractEditor({
   /** Chi nhánh còn hoạt động. Rỗng → không hiện ô chọn chi nhánh. */
   branches: { id: string; name: string }[];
   studioName: string;
+  /** % cọc gợi ý của studio ("Chính sách studio"). 0 = không gợi ý. */
+  depositPercent?: number;
   /** Thương hiệu studio in trên đầu bản PDF hợp đồng. */
   studioLogo?: string | null;
   studioPhone?: string | null;
@@ -438,8 +441,12 @@ export default function ContractEditor({
   const collected = sumAmounts(payments);
   const balance = total - collected;
 
-  // Default deposit = 25% of contract total, rounded to nearest 500k (min 500k).
-  const depositOf = (t: number) => (t > 0 ? Math.max(500_000, Math.round((t * 0.25) / 500_000) * 500_000) : 0);
+  // Cọc gợi ý = % studio đặt trong "Chính sách studio" (mặc định 25%), làm tròn
+  // lên bội của 500k, tối thiểu 500k. 0% = studio tắt gợi ý, tự nhập từng đợt.
+  const depositOf = (t: number) =>
+    t > 0 && depositPercent > 0
+      ? Math.max(500_000, Math.round((t * depositPercent) / 100 / 500_000) * 500_000)
+      : 0;
   const depositAmt = depositOf(total);
   const creatingDeposit = useRef(false);
   const prevTotal = useRef(total);

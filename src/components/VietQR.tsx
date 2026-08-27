@@ -4,33 +4,10 @@ import { useState } from "react";
 import { QrCode, X, Copy, Check } from "lucide-react";
 import { vnd } from "@/lib/types";
 
-export type BankInfo = {
-  bin: string | null;
-  account: string | null;
-  holder: string | null;
-  name: string | null;
-};
-
-export function qrUrl(bank: BankInfo, amount: number, addInfo: string): string | null {
-  if (!bank.bin || !bank.account) return null;
-  const acc = (bank.account || "").replace(/\s/g, "");
-  const params = new URLSearchParams();
-  if (amount > 0) params.set("amount", String(Math.round(amount)));
-  if (addInfo) params.set("addInfo", addInfo);
-  if (bank.holder) params.set("accountName", bank.holder);
-  const qs = params.toString();
-  return `https://img.vietqr.io/image/${bank.bin}-${acc}-compact2.png${qs ? `?${qs}` : ""}`;
-}
-
-/**
- * Nội dung chuyển khoản của MỘT đợt: mã hợp đồng + tên đợt, cắt cho vừa trường
- * nội dung của ngân hàng. Trang studio và cổng khách dùng CHUNG hàm này để hai
- * mã QR của cùng một đợt không lệch nội dung — sao kê về là đối chiếu được ngay
- * tiền của đợt nào.
- */
-export function instalmentNote(ref?: string | null, label?: string | null): string {
-  return [(ref || "").trim(), (label || "").trim()].filter(Boolean).join(" ").slice(0, 50);
-}
+// Phần thuần (qrUrl, instalmentNote, BankInfo) nằm ở @/lib/vietqr để server
+// component dùng được; tái xuất ở đây để mọi chỗ đang nhập từ file này vẫn chạy.
+export { qrUrl, instalmentNote, type BankInfo } from "@/lib/vietqr";
+import { qrUrl, type BankInfo } from "@/lib/vietqr";
 
 /** Inline VietQR card — QR image + amount + copyable account/content. */
 export function VietQR({ bank, amount, addInfo }: { bank: BankInfo; amount: number; addInfo: string }) {

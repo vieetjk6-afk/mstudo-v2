@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Save, HardDrive, ReceiptText, Landmark, Gift } from "lucide-react";
+import { Check, Save, HardDrive, ReceiptText, Landmark, Gift, Percent } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -19,6 +19,7 @@ export default function StudioPolicyCard({
   initialStorageMonths,
   initialQuoteValidDays,
   initialDeposit = 0,
+  initialContractDepositPercent = 25,
   initialReferralReward = 0,
   initialReferralDiscount = 0,
 }: {
@@ -27,6 +28,8 @@ export default function StudioPolicyCard({
   initialQuoteValidDays: number;
   /** Cọc giữ ngày khi khách đặt lịch (VND). 0 = tắt. */
   initialDeposit?: number;
+  /** % cọc gợi ý khi lập đợt thanh toán của hợp đồng. 0 = không gợi ý. */
+  initialContractDepositPercent?: number;
   /** Thưởng cho người giới thiệu (VND). 0 = tắt chương trình. */
   initialReferralReward?: number;
   /** Ưu đãi cho khách được giới thiệu (VND). */
@@ -36,6 +39,7 @@ export default function StudioPolicyCard({
   const [months, setMonths] = useState(initialStorageMonths);
   const [days, setDays] = useState(initialQuoteValidDays);
   const [deposit, setDeposit] = useState(initialDeposit);
+  const [depPct, setDepPct] = useState(initialContractDepositPercent);
   const [reward, setReward] = useState(initialReferralReward);
   const [discount, setDiscount] = useState(initialReferralDiscount);
   const [saving, setSaving] = useState(false);
@@ -53,6 +57,7 @@ export default function StudioPolicyCard({
         storage_months: Math.max(0, Math.min(120, Math.round(months) || 0)),
         quote_valid_days: Math.max(0, Math.min(365, Math.round(days) || 0)),
         booking_deposit: money(deposit),
+        contract_deposit_percent: Math.max(0, Math.min(100, Math.round(depPct) || 0)),
         referral_reward: money(reward),
         referral_discount: money(discount),
       })
@@ -70,7 +75,7 @@ export default function StudioPolicyCard({
         Áp dụng cho album và báo giá tạo từ giờ trở đi. Bản ghi cũ giữ nguyên hạn đã đặt.
       </p>
 
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label className="label flex items-center gap-1.5">
             <HardDrive size={14} /> Giữ ảnh gốc sau khi giao
@@ -112,6 +117,27 @@ export default function StudioPolicyCard({
             {days > 0
               ? `Báo giá hết hiệu lực sau ${days} ngày kể từ khi gửi khách. Khách vẫn xem được, chỉ không bấm đồng ý được nữa.`
               : "0 = không đặt hạn, báo giá có hiệu lực tới khi bạn huỷ."}
+          </p>
+        </div>
+        <div>
+          <label className="label flex items-center gap-1.5">
+            <Percent size={14} /> Cọc hợp đồng gợi ý
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              className="input"
+              value={depPct}
+              onChange={(e) => setDepPct(Number(e.target.value))}
+            />
+            <span className="flex-none text-sm" style={{ color: "var(--text3)" }}>% giá trị HĐ</span>
+          </div>
+          <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+            {depPct > 0
+              ? `Đợt cọc đầu tiên của hợp đồng mới tự điền ${depPct}% giá trị (làm tròn lên 500k). Sửa lại từng hợp đồng vẫn được.`
+              : "0 = không gợi ý, bạn tự nhập số tiền từng đợt."}
           </p>
         </div>
       </div>

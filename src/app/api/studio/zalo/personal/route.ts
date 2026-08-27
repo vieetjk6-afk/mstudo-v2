@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
-import { loadZalo, packPersonalSession, saveZalo } from "@/lib/zalo/config";
+import { autoEventsOnConnect, loadZalo, packPersonalSession, saveZalo } from "@/lib/zalo/config";
 import { loginPersonalQR, personalAvailable } from "@/lib/zalo/personal";
 
 export const dynamic = "force-dynamic";
@@ -42,12 +42,15 @@ export async function POST() {
         saveZalo(profile!.id, { personal_self: { phase: "scanned", name: info.display_name } }).catch(() => {});
       }
     );
+    // Kết nối lần đầu thì mồi sẵn ba mốc an toàn — xem DEFAULT_AUTO_EVENTS.
+    const before = await loadZalo(profile!.id);
     await saveZalo(profile!.id, {
       channel: "personal",
       status: "connected",
       display_name: self?.name ?? null,
       personal_session: packPersonalSession(session),
       personal_self: self ? { id: self.id, name: self.name, avatar: self.avatar } : null,
+      auto_events: autoEventsOnConnect(before?.auto_events),
       connected_at: new Date().toISOString(),
       last_error: null,
     });

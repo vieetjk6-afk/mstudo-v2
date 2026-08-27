@@ -23,9 +23,16 @@ export const maxDuration = 60;
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * Cron Zalo — chạy 11h trưa VN (04:00 UTC). Gửi tin tự động theo NGÀY cho các
- * studio đã KẾT NỐI Zalo + BẬT từng mốc (autoNotify tự kiểm tra, tự bỏ qua nếu
- * tắt). Các mốc theo-thao-tác (xác nhận cọc, giao khách) gửi ngay ở chỗ khác.
+ * Cron Zalo — gửi tin tự động theo NGÀY cho các studio đã KẾT NỐI Zalo + BẬT
+ * từng mốc (autoNotify tự kiểm tra, tự bỏ qua nếu tắt). Các mốc theo-thao-tác
+ * (xác nhận cọc, giao khách) gửi ngay ở chỗ khác.
+ *
+ * Chạy HAI nhịp mỗi ngày, xem vercel.json:
+ *   • 08h VN — ?only=money: nhắc đợt tới hạn, nhắc & đóng báo giá hết hạn.
+ *     Sớm để studio có nguyên ngày làm việc xử lý phản hồi, và báo giá không
+ *     nằm quá hạn thêm nửa ngày mới được đóng.
+ *   • 11h VN — ?only=work: nhắc buổi chụp ngày mai, mời & nhắc chọn ảnh.
+ *     Trưa là lúc khách rảnh và còn cả buổi chiều để sắp xếp.
  *
  * Mốc theo ngày ở đây:
  *   • shoot_reminder — nhắc lịch chụp NGÀY MAI cho khách (kèm link form) & thợ.
@@ -39,6 +46,18 @@ export async function GET(req: NextRequest) {
   if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // ?only=money  → chỉ việc TIỀN: nhắc đợt tới hạn, nhắc & đóng báo giá hết hạn.
+  // ?only=work   → chỉ việc LỊCH: nhắc buổi chụp ngày mai, mời/nhắc chọn ảnh.
+  // Không truyền → chạy tất (gọi tay, hoặc dựng lại lịch cron cũ).
+  //
+  // Vì sao tách: hai nhóm này có GIỜ ĐẸP khác nhau. Nhắc lịch chụp ngày mai gửi
+  // trưa là đúng — khách đang rảnh, còn cả buổi chiều để sắp xếp. Nhưng nhắc
+  // tiền và hạn báo giá gửi sớm thì studio có nguyên ngày làm việc để xử lý
+  // phản hồi, và báo giá không nằm quá hạn thêm nửa ngày mới được đóng.
+  const only = req.nextUrl.searchParams.get("only");
+  const doMoney = only !== "work";
+  const doWork = only !== "money";
 
   const db = createAdminClient();
   const nowVN = new Date(Date.now() + 7 * 3600 * 1000);
@@ -94,8 +113,12 @@ export async function GET(req: NextRequest) {
   let shootSent = 0;
   let dueSent = 0;
   let selectSent = 0;
+  let nudgeSent = 0;
+  let quoteNudged = 0;
+  let quoteClosed = 0;
 
   // ── 1) SHOOT REMINDER (khách + thợ) — chụp NGÀY MAI ──────────────────────
+  if (doWork) {
   const { data: shoots } = await db
     .from("studio_contracts")
     .select("id, owner_id, title, client_name, client_phone, event_time, location, intake_token, contract_crew(name, role, phone)")
@@ -152,7 +175,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  }
+
   // ── 2) PAYMENT DUE — đợt tới hạn/quá hạn → nhắc khách + link HĐ ───────────
+  if (doMoney) {
   const { data: dues } = await db
     .from("contract_payment_plan")
     .select("amount, due_date, contract:studio_contracts!inner(id, owner_id, title, client_name, client_phone, client_token, status)")
@@ -185,7 +211,10 @@ export async function GET(req: NextRequest) {
     if (r.ok) dueSent++;
   }
 
+  }
+
   // ── 3) SELECT READY — mời chọn ảnh (Drive có ảnh, hoặc 1 ngày sau chụp) ───
+  if (doWork) {
   const { data: selCands } = await db
     .from("studio_contracts")
     .select("id, owner_id, title, client_name, client_phone, event_date, selection_album_id, gallery_album_id, drive_tree, select_invited_at")
@@ -237,7 +266,6 @@ export async function GET(req: NextRequest) {
   // ── 4) SELECT NUDGE — khách nhận link rồi im lặng ─────────────────────────
   // Đây là chỗ tắc kinh điển: mời chọn ảnh gửi ĐÚNG MỘT LẦN, khách quên, hậu kỳ
   // đứng, tiền cuối chưa thu được. Nhắc lại tối đa 3 lần, giãn dần.
-  let nudgeSent = 0;
   const NUDGE_AFTER_DAYS = [3, 8, 16]; // lần 1 sau 3 ngày, lần 2 sau 8, lần 3 sau 16
   const { data: silent } = await db
     .from("studio_contracts")
@@ -294,11 +322,12 @@ export async function GET(req: NextRequest) {
     if (r.ok) nudgeSent++;
   }
 
+  }
+
   // ── 5) QUOTE EXPIRING / EXPIRED ──────────────────────────────────────────
+  if (doMoney) {
   // Báo giá gửi đi vốn có hiệu lực vĩnh viễn (cột expires_at có sẵn nhưng chưa
   // ai ghi). Giờ: nhắc khách trước khi hết hạn, rồi tự đóng khi quá hạn.
-  let quoteNudged = 0;
-  let quoteClosed = 0;
   const nowIso = new Date().toISOString();
   const nudgeWindow = new Date(Date.now() + QUOTE_NUDGE_DAYS * 24 * 3600 * 1000).toISOString();
 
@@ -344,5 +373,7 @@ export async function GET(req: NextRequest) {
     .select("id");
   quoteClosed = (closed ?? []).length;
 
-  return NextResponse.json({ ok: true, shootSent, dueSent, selectSent, nudgeSent, quoteNudged, quoteClosed });
+  }
+
+  return NextResponse.json({ ok: true, only: only ?? "all", shootSent, dueSent, selectSent, nudgeSent, quoteNudged, quoteClosed });
 }

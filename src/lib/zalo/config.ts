@@ -51,6 +51,32 @@ export const AUTO_EVENTS: { key: string; label: string; audiences: ("client" | "
   { key: "delivery_ready", label: "Báo đã giao ảnh", audiences: ["client"] },
 ];
 
+/**
+ * Ba mốc BẬT SẴN khi studio kết nối Zalo lần đầu.
+ *
+ * Vì sao: chín mốc trước đây đều mặc định TẮT, nên studio kết nối xong tưởng hệ
+ * thống đã tự nhắc khách mà thực tế không tin nào được gửi — thứ hỏng im lặng
+ * và chỉ phát hiện khi khách quên lịch.
+ *
+ * Chỉ ba mốc này, vì chúng là tin studio nào cũng muốn gửi và không đụng tới
+ * tiền: nhắc lịch chụp, mời chọn ảnh, xác nhận đã nhận cọc. Các mốc nhắc TIỀN
+ * (payment_due) và nhắc lại nhiều lần (select_nudge) vẫn để studio tự bật —
+ * giọng đòi tiền là quyết định của họ, không phải mặc định của phần mềm.
+ *
+ * Chỉ áp dụng cho lần kết nối ĐẦU TIÊN (auto_events còn rỗng); studio đã từng
+ * tự tắt một mốc thì kết nối lại không bị bật đè.
+ */
+export const DEFAULT_AUTO_EVENTS: AutoEvents = {
+  shoot_reminder: { client: true, crew: true },
+  select_ready: { client: true },
+  deposit_confirm: { client: true },
+};
+
+/** Bộ mốc để lưu khi kết nối: giữ nguyên cấu hình cũ, chỉ mồi khi còn rỗng. */
+export function autoEventsOnConnect(current: AutoEvents | null | undefined): AutoEvents {
+  return current && Object.keys(current).length > 0 ? current : DEFAULT_AUTO_EVENTS;
+}
+
 export async function loadZalo(ownerId: string): Promise<ZaloRow | null> {
   const db = createAdminClient();
   const { data } = await db.from("studio_zalo").select("*").eq("owner_id", ownerId).maybeSingle();
