@@ -142,7 +142,7 @@ Mọi con số tiền/ngày dùng `font-variant-numeric: tabular-nums`.
 | 44 | Giao diện website | `sitebuild` | `dashboard/site/SiteRenderer.tsx` |
 | 45 | Công cụ ảnh | `tools` | `dashboard/filter/`, `dashboard/compress/`, `studio/drive-sync/` |
 | 46 | Lọc ảnh khách chọn | `toolfilter` | `dashboard/filter/` |
-| 47 | Nén ảnh & watermark | `toolcompress` | `dashboard/compress/` |
+| 47 | Nén ảnh, chuẩn MXH & watermark | `toolcompress` | `dashboard/compress/`, `src/lib/social-presets.ts` |
 | 48 | Cài đặt studio | `settings` | `dashboard/settings/SettingsPanel.tsx` |
 | 49 | Cài đặt chi tiết (6 mục) | `setdetail` | `dashboard/settings/[section]/` |
 | 50 | Thông báo | `notifications` | `studio/notifications/NotificationsList.tsx` |
