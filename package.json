@@ -31,6 +31,7 @@
     "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs",
     "test:upgrade-payment": "node --experimental-strip-types desktop/test/upgrade-payment.mjs",
     "test:inbox": "node --experimental-strip-types desktop/test/inbox.mjs",
+    "test:social-frame": "node --experimental-strip-types desktop/test/social-frame.mjs",
     "inbox:zalo-worker": "node scripts/zalo-inbox-worker.mjs",
     "ui:shot": "node scripts/chup-giao-dien.mjs"
   },

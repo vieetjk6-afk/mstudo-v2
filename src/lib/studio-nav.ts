@@ -132,7 +132,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/dashboard/studio/thiep", label: "Thiệp · Story · Slide", icon: Sparkles, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/story", "/dashboard/studio/slide"], keywords: "thiep cuoi love story slide" },
       // Công cụ lẻ, để CUỐI nhóm: mở khi cần xử lý một mớ ảnh, không nằm trên
       // đường đi chính của hợp đồng.
-      { href: "/dashboard/tools", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/filter", "/dashboard/compress"], keywords: "loc anh nen anh watermark" },
+      { href: "/dashboard/tools", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/filter", "/dashboard/compress"], keywords: "loc anh nen anh watermark chuan mang xa hoi facebook instagram tiktok zalo" },
     ],
   },
   {
@@ -249,7 +249,7 @@ export const EXTRA_COMMANDS: readonly NavItem[] = [
   { href: "/dashboard/studio/drive-sync", label: "Đồng bộ Google Drive", icon: HardDrive, minTier: "full", roles: OWNER_OK, keywords: "drive dong bo anh", sub: "Kết nối và cấu hình đồng bộ" },
   { href: "/dashboard/studio/album-categories", label: "Danh mục album", icon: FolderTree, minTier: "full", roles: MANAGER_OK, keywords: "the loai album", sub: "Đã gộp vào Thư viện album" },
   { href: "/dashboard/site/builder", label: "Giao diện website", icon: Paintbrush, minTier: "booking", roles: MANAGER_OK, keywords: "dung trang web khoi noi dung", sub: "Sắp xếp khối nội dung trang studio" },
-  { href: "/dashboard/compress", label: "Nén ảnh & watermark", icon: Archive, minTier: "booking", roles: STAFF_OK, keywords: "nen anh dong dau watermark", sub: "Trong Công cụ ảnh" },
+  { href: "/dashboard/compress", label: "Nén ảnh, chuẩn MXH & watermark", icon: Archive, minTier: "booking", roles: STAFF_OK, keywords: "nen anh dong dau watermark chuan mang xa hoi facebook instagram tiktok zalo story reels anh vo net", sub: "Trong Công cụ ảnh" },
   { href: "/dashboard/filter", label: "Lọc ảnh khách chọn", icon: CopyCheck, minTier: "booking", roles: STAFF_OK, keywords: "loc anh khach chon tach anh", sub: "Trong Công cụ ảnh" },
   { href: "/dashboard/connections", label: "Kết nối Calendar", icon: Link2, minTier: "booking", roles: MANAGER_OK, keywords: "google calendar tich hop", sub: "Google Calendar và tích hợp khác" },
 ];

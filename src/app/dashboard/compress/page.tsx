@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Minimize2, Stamp, FileImage } from "lucide-react";
+import { ArrowLeft, Minimize2, Stamp, FileImage, Share2 } from "lucide-react";
 import { pickerConfigured, preloadGoogle, requestDriveToken } from "@/lib/google-picker";
 import ToolPanel, { type Tool, type QuotaState } from "./ToolPanel";
 
@@ -18,7 +18,7 @@ function QuotaChip({ label, text, warn, active }: { label: string; text: string;
 }
 
 export default function CompressPage() {
-  const [tool, setTool] = useState<Tool>("compress");
+  const [tool, setTool] = useState<Tool>("social");
   const [driveToken, setDriveToken] = useState<string | null>(null);
   const [quota, setQuota] = useState<QuotaState | null>(null);
   const [pro, setPro] = useState(false);
@@ -60,6 +60,7 @@ export default function CompressPage() {
   }
 
   const tabs: { key: Tool; label: string; Icon: typeof Minimize2 }[] = [
+    { key: "social", label: "Chuẩn mạng xã hội", Icon: Share2 },
     { key: "compress", label: "Nén ảnh", Icon: Minimize2 },
     { key: "watermark", label: "Gắn watermark", Icon: Stamp },
     { key: "convert", label: "Đổi định dạng", Icon: FileImage },
@@ -77,22 +78,22 @@ export default function CompressPage() {
         >
           <ArrowLeft size={17} />
         </Link>
-        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>Nén ảnh, gắn watermark, đổi định dạng — chạy ngay trên trình duyệt, ảnh không tải lên máy chủ.</p>
+        <p className="text-[13px]" style={{ color: "var(--tx2)" }}>Xuất ảnh đúng khổ chuẩn Facebook / Instagram / TikTok / Zalo, nén ảnh, gắn watermark, đổi định dạng — chạy ngay trên trình duyệt, ảnh không tải lên máy chủ.</p>
       </div>
 
       {quota && (
         <div className="mb-5 flex flex-wrap gap-2 text-[12.5px]">
           <QuotaChip
-            label="Nén (máy tính / link Drive)"
+            label="Nén · chuẩn MXH (máy tính / link Drive)"
             text={quota.basic.unlimited ? "không giới hạn" : `${quota.basic.used}/${quota.basic.limit} tháng này`}
             warn={!quota.basic.unlimited && (quota.basic.remaining ?? 0) <= 0}
-            active={tool === "compress"}
+            active={tool === "compress" || tool === "social"}
           />
           <QuotaChip
-            label="Nén lên Google Drive"
+            label="Nén · chuẩn MXH lên Google Drive"
             text={quota.picker.unlimited ? "không giới hạn" : `${quota.picker.used}/${quota.picker.limit}`}
             warn={!quota.picker.unlimited && (quota.picker.remaining ?? 0) <= 0}
-            active={tool === "compress"}
+            active={tool === "compress" || tool === "social"}
           />
           <QuotaChip
             label="Gắn watermark · Đổi định dạng"
