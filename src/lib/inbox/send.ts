@@ -4,6 +4,7 @@ import { canReply, replyBlockedReason } from "./platforms";
 import { appendOutgoing } from "./store";
 import { generateReply } from "./ai";
 import { sendMetaText } from "./adapters/meta";
+import { sendViaBridge } from "./adapters/bridge";
 import { sendZaloOAText, sendZaloPersonal } from "./adapters/zalo";
 import type { ChannelRow, ContactRow, ConversationRow } from "./types";
 
@@ -52,7 +53,8 @@ export async function loadConversationBundle(conversationId: string): Promise<{
 async function dispatch(
   channel: ChannelRow,
   contact: ContactRow,
-  text: string
+  text: string,
+  conversationId: string
 ): Promise<{ ok: boolean; error?: string }> {
   switch (channel.platform) {
     case "website":
@@ -66,6 +68,8 @@ async function dispatch(
       return sendZaloOAText(channel, contact.external_user_id, text);
     case "zalo_personal":
       return sendZaloPersonal(channel, contact.external_user_id, text);
+    case "tiktok":
+      return sendViaBridge(channel, contact, text, conversationId);
     default:
       return { ok: false, error: "unsupported_platform" };
   }
@@ -100,7 +104,7 @@ export async function deliver(input: DeliverInput): Promise<DeliverResult> {
     return { ok: false, error: reason || "reply_window_closed" };
   }
 
-  const res = await dispatch(channel, contact, text);
+  const res = await dispatch(channel, contact, text, conversation.id);
   const messageId = await appendOutgoing({
     ownerId: conversation.owner_id,
     conversationId: conversation.id,

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Bot, Check, Copy, Facebook, MessageCircle, Plug, TriangleAlert, Unplug } from "lucide-react";
+import { Bot, Check, Copy, Facebook, MessageCircle, Music2, Plug, TriangleAlert, Unplug } from "lucide-react";
 import { PLATFORM_INFO, PLATFORMS, platformColor, type Platform } from "@/lib/inbox/platforms";
 import type { ChannelPublic } from "@/lib/inbox/types";
 import { Panel, PanelHead } from "@/components/studio/ui";
@@ -15,6 +15,9 @@ import { Panel, PanelHead } from "@/components/studio/ui";
        webhook bên Meta. Việc khai webhook nằm NGOÀI app nên URL phải hiện sẵn
        kèm nút chép, chứ không bắt người dùng tự ghép.
      • Zalo — dùng lại tài khoản đã kết nối ở màn "Kết nối", bấm một nút.
+     • TikTok — khai URL cầu nối của đối tác nhắn tin, vì TikTok chưa cho nối
+       thẳng như Meta. Màn này phải nói ra điều đó thay vì để người dùng đi tìm
+       một ô "Page Access Token" không tồn tại.
      • Chatbox website — không phải nối gì, tự chạy khi có khách nhắn.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -69,6 +72,7 @@ export default function ChannelsManager({ channels: initial, zaloReady, zaloChan
   useEffect(() => setOrigin(window.location.origin), []);
 
   const [form, setForm] = useState({ platform: "facebook" as Platform, externalId: "", token: "", name: "" });
+  const [tiktok, setTiktok] = useState({ externalId: "", relayUrl: "", relaySecret: "" });
 
   async function call(body: Record<string, unknown>): Promise<boolean> {
     setBusy(true);
@@ -310,6 +314,87 @@ export default function ChannelsManager({ channels: initial, zaloReady, zaloChan
               </button>
               <p className="mt-2 text-[12px]" style={{ color: "var(--tx3)" }}>
                 Token được mã hoá trước khi lưu và không bao giờ hiện lại trên giao diện.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      {/* ── TikTok ───────────────────────────────────────────────────────── */}
+      <Panel className="mt-3">
+        <PanelHead icon={Music2} tone="teal" title="TikTok" note="Nối qua cầu nối (đối tác nhắn tin)" />
+        <div className="p-3">
+          <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+            TikTok có API nhắn tin cho <b>tài khoản doanh nghiệp</b> (khu vực châu Á – Thái Bình Dương, gồm Việt
+            Nam) nhưng còn ở giai đoạn thử nghiệm và thường phải đi qua một <b>đối tác nhắn tin</b> được TikTok
+            công nhận. Nên MStudo nối TikTok bằng một <b>cầu nối</b>: đối tác đẩy tin khách vào đây, và MStudo gửi
+            tin trả lời ngược lại cho họ.
+          </p>
+
+          {origin && (
+            <div className="mt-3 rounded-[12px] p-2.5" style={{ background: "var(--sf2)" }}>
+              <p className="text-[12px]" style={{ color: "var(--tx2)" }}>
+                Đưa địa chỉ này cho đối tác để họ đẩy tin nhắn khách về (kèm header{" "}
+                <code>Authorization: Bearer &lt;INBOX_INGEST_SECRET&gt;</code>):
+              </p>
+              <CopyRow label="Địa chỉ nhận tin" value={`${origin}/api/inbox/ingest`} />
+            </div>
+          )}
+
+          <div className="mt-3 grid gap-2.5">
+            <label className="field">
+              <span className="label">Tài khoản TikTok</span>
+              <input
+                className="input"
+                value={tiktok.externalId}
+                onChange={(e) => setTiktok({ ...tiktok, externalId: e.target.value })}
+                placeholder="vd @maistudio.vn hoặc business id đối tác cấp"
+              />
+            </label>
+            <label className="field">
+              <span className="label">URL cầu nối (gửi tin ra)</span>
+              <input
+                className="input"
+                value={tiktok.relayUrl}
+                onChange={(e) => setTiktok({ ...tiktok, relayUrl: e.target.value })}
+                placeholder="https://…"
+              />
+            </label>
+            <label className="field">
+              <span className="label">Khoá ký</span>
+              <input
+                className="input"
+                type="password"
+                value={tiktok.relaySecret}
+                onChange={(e) => setTiktok({ ...tiktok, relaySecret: e.target.value })}
+                placeholder="chuỗi bí mật dùng chung với đối tác"
+              />
+            </label>
+            <div>
+              <button
+                className="btn-primary"
+                disabled={
+                  busy || !tiktok.externalId.trim() || !tiktok.relayUrl.trim() || !tiktok.relaySecret.trim()
+                }
+                onClick={async () => {
+                  const ok = await call({
+                    platform: "tiktok",
+                    externalId: tiktok.externalId.trim(),
+                    relayUrl: tiktok.relayUrl.trim(),
+                    relaySecret: tiktok.relaySecret.trim(),
+                    name: tiktok.externalId.trim(),
+                  });
+                  if (ok) {
+                    setTiktok({ externalId: "", relayUrl: "", relaySecret: "" });
+                    setNotice("Đã nối TikTok. Nhờ đối tác gửi thử một tin để kiểm tra.");
+                  }
+                }}
+              >
+                <Plug size={15} /> Nối TikTok
+              </button>
+              <p className="mt-2 text-[12px]" style={{ color: "var(--tx3)" }}>
+                MStudo ký mọi tin gửi ra bằng khoá này (header <code>X-Mstudo-Signature</code>) để đối tác biết
+                chắc tin đến từ bạn. URL phải là https và không trỏ vào địa chỉ nội bộ.
               </p>
             </div>
           </div>

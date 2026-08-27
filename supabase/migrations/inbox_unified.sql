@@ -43,7 +43,7 @@ create table if not exists public.inbox_channels (
   id            uuid primary key default gen_random_uuid(),
   owner_id      uuid not null references public.profiles (id) on delete cascade,
   platform      text not null
-                  check (platform in ('website', 'zalo_oa', 'zalo_personal', 'facebook', 'instagram')),
+                  check (platform in ('website', 'zalo_oa', 'zalo_personal', 'facebook', 'instagram', 'tiktok')),
   external_id   text not null default 'default',
   name          text,                         -- tên hiển thị (tên page/OA) cho UI
   status        text not null default 'connected'

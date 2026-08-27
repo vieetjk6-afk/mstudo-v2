@@ -10,6 +10,8 @@ import {
   upsertChannel,
 } from "@/lib/inbox/channels";
 import { packMetaSecret } from "@/lib/inbox/adapters/meta";
+import { packBridgeSecret } from "@/lib/inbox/adapters/bridge";
+import { validRelayUrl } from "@/lib/inbox/bridge-protocol";
 
 export const dynamic = "force-dynamic";
 
@@ -64,32 +66,48 @@ export async function POST(req: Request) {
     return ok ? NextResponse.json({ ok: true }) : NextResponse.json({ error: "failed" }, { status: 400 });
   }
 
-  // connect — Facebook / Instagram: cần page id + page access token.
+  // connect — Facebook / Instagram (page token) và TikTok (URL cầu nối).
   const platform = body.platform;
   if (!isPlatform(platform)) return NextResponse.json({ error: "bad_platform" }, { status: 400 });
-  if (platform !== "facebook" && platform !== "instagram") {
+  if (platform !== "facebook" && platform !== "instagram" && platform !== "tiktok") {
     // Zalo đi đường "link-zalo", website tự sinh khi có khách nhắn.
     return NextResponse.json({ error: "platform_not_manual" }, { status: 400 });
   }
 
   const externalId = typeof body.externalId === "string" ? body.externalId.trim() : "";
-  const token = typeof body.pageAccessToken === "string" ? body.pageAccessToken.trim() : "";
   const name = typeof body.name === "string" ? body.name.trim() : "";
-  if (!externalId || !token) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  if (!externalId) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+
+  let secret: string;
+  if (platform === "tiktok") {
+    const relayUrl = typeof body.relayUrl === "string" ? body.relayUrl.trim() : "";
+    const relaySecret = typeof body.relaySecret === "string" ? body.relaySecret.trim() : "";
+    if (!relayUrl || !relaySecret) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+    // Kiểm URL NGAY LÚC NỐI, không đợi tới lúc gửi tin đầu tiên: người dùng đang
+    // ở đúng màn hình có ô nhập, sửa được ngay. Đây cũng là hàng rào SSRF —
+    // URL do người dùng nhập mà máy chủ sẽ tự gọi.
+    const check = validRelayUrl(relayUrl);
+    if (!check.ok) return NextResponse.json({ error: check.error }, { status: 400 });
+    secret = packBridgeSecret(relayUrl, relaySecret);
+  } else {
+    const token = typeof body.pageAccessToken === "string" ? body.pageAccessToken.trim() : "";
+    if (!token) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+    secret = packMetaSecret(token);
+  }
 
   const res = await upsertChannel({
     ownerId,
     platform,
     externalId,
     name: name || null,
-    secret: packMetaSecret(token),
+    secret,
   });
   if (!res.ok) {
     // "taken" = page này studio khác đã nối. Nói rõ ra, vì người dùng sẽ ngồi
     // dán lại token mãi mà không hiểu vì sao không được.
     const message =
       res.error === "taken"
-        ? "Trang này đã được một tài khoản khác nối. Ngắt ở bên đó trước rồi nối lại."
+        ? "Kênh này đã được một tài khoản khác nối. Ngắt ở bên đó trước rồi nối lại."
         : res.error;
     return NextResponse.json({ error: message }, { status: 400 });
   }

@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { NextRequest } from "next/server";
 import { findChannel, ingestIncoming } from "@/lib/inbox/store";
 import { maybeAutoReply } from "@/lib/inbox/send";
-import { isPlatform } from "@/lib/inbox/platforms";
+import { acceptsIngest, isPlatform } from "@/lib/inbox/platforms";
 import type { Attachment } from "@/lib/inbox/types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -78,8 +78,11 @@ export async function POST(req: NextRequest) {
   if (!channel || channel.status !== "connected") {
     return Response.json({ error: "channel_not_found" }, { status: 404 });
   }
-  // Tiến trình ngoài chỉ được bơm tin vào ĐÚNG loại kênh nó phụ trách.
-  if (channel.platform !== "zalo_personal") {
+  // Cửa này CHỈ mở cho kênh mà tin bắt buộc đi vòng qua tiến trình bên ngoài:
+  // worker Zalo cá nhân của mình, và cầu nối TikTok của đối tác. Kênh có webhook
+  // riêng (Meta, Zalo OA) thì tuyệt đối không — cho vào là bỏ qua bước kiểm chữ
+  // ký của nền tảng, biến xác thực mạnh thành "chỉ cần biết bí mật dùng chung".
+  if (!acceptsIngest(channel.platform)) {
     return Response.json({ error: "platform_not_allowed" }, { status: 400 });
   }
 

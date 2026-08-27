@@ -1,14 +1,14 @@
 # Bật hộp thư hợp nhất — lấy biến môi trường ở đâu
 
-Hộp thư gom tin nhắn khách từ Zalo, Facebook, Instagram và chatbox website về
-một chỗ (Dashboard → Kinh doanh → **Hộp thư**). Code đã lên `main`; tài liệu này
+Hộp thư gom tin nhắn khách từ Zalo, Facebook, Instagram, TikTok và chatbox
+website về một chỗ (Dashboard → Kinh doanh → **Hộp thư**). Code đã lên `main`; tài liệu này
 là phần **phải làm tay** để nó chạy thật.
 
 Bốn biến cần thêm. Hai biến bạn **tự sinh ra**, hai biến phải **đi lấy**:
 
 | Biến | Lấy ở đâu | Bắt buộc khi |
 | --- | --- | --- |
-| `INBOX_INGEST_SECRET` | bạn tự sinh | dùng kênh Zalo cá nhân |
+| `INBOX_INGEST_SECRET` | bạn tự sinh | dùng kênh Zalo cá nhân **hoặc TikTok** |
 | `META_VERIFY_TOKEN` | bạn tự đặt | dùng Facebook / Instagram |
 | `META_APP_SECRET` | Meta App | dùng Facebook / Instagram |
 | `ZALO_OA_WEBHOOK_SECRET` | Zalo App | dùng Zalo OA |
@@ -41,7 +41,8 @@ Meta báo lỗi và bạn sẽ đi tìm nguyên nhân ở nhầm chỗ.
 Supabase → **SQL Editor** → dán trọn nội dung
 `supabase/migrations/inbox_unified.sql` → **Run**.
 
-Chạy lại nhiều lần vô hại (idempotent). Xong sẽ có 4 bảng mới: `inbox_channels`,
+Rồi chạy tiếp `supabase/migrations/inbox_tiktok.sql` (nới danh sách kênh cho
+TikTok). Chạy lại nhiều lần vô hại (idempotent). Xong sẽ có 4 bảng mới: `inbox_channels`,
 `inbox_contacts`, `inbox_conversations`, `inbox_messages`.
 
 ---
@@ -50,22 +51,25 @@ Chạy lại nhiều lần vô hại (idempotent). Xong sẽ có 4 bảng mới:
 
 ### 1. `INBOX_INGEST_SECRET` — bạn tự sinh
 
-Đây là mật khẩu giữa app và tiến trình lắng nghe Zalo cá nhân. Không ai cấp cho
-bạn, bạn tự tạo một chuỗi ngẫu nhiên:
+Đây là mật khẩu của **cửa nhận tin** `/api/inbox/ingest` — dùng chung cho tiến
+trình lắng nghe Zalo cá nhân và cầu nối TikTok. Không ai cấp cho bạn, bạn tự tạo
+một chuỗi ngẫu nhiên:
 
 ```bash
 openssl rand -hex 32
 ```
 
 Chép kết quả. Chuỗi này phải **giống hệt** ở hai nơi: biến môi trường trên
-Vercel, và biến cùng tên trên máy chạy worker.
+Vercel, và phía bên kia của cửa — máy chạy worker Zalo, hoặc đối tác TikTok.
 
 Để trống thì cửa `/api/inbox/ingest` **khoá hẳn** (trả 503) — đó là chủ ý, không
 phải lỗi: một endpoint ghi thẳng vào hộp thư mà không có mật khẩu thì ai cũng
 bơm tin giả vào được.
 
-Chỉ cần biến này nếu bạn dùng **Zalo cá nhân**. Zalo OA và Facebook đi bằng
-webhook có chữ ký riêng, không qua cửa này.
+Cần biến này nếu bạn dùng **Zalo cá nhân** hoặc **TikTok** — hai kênh duy nhất
+đi qua cửa ingest. Zalo OA, Facebook và Instagram đi bằng webhook có chữ ký
+riêng nên cố ý **không** được phép dùng cửa này: mở ra là hạ một xác thực mạnh
+xuống còn "ai biết bí mật dùng chung cũng vào được".
 
 ### 2. `META_VERIFY_TOKEN` — bạn tự đặt
 
@@ -189,7 +193,7 @@ curl "https://<tên-miền>/api/inbox/webhook/meta?hub.mode=subscribe&hub.verify
 
 Đúng thì in ra `12345`. Ra `forbidden` nghĩa là token lệch hoặc chưa redeploy.
 
-**Cửa nhận tin Zalo cá nhân đã khoá đúng chưa:**
+**Cửa nhận tin (Zalo cá nhân / TikTok) đã khoá đúng chưa:**
 
 ```bash
 curl -i -X POST https://<tên-miền>/api/inbox/ingest
@@ -201,6 +205,82 @@ Mong đợi `401` (có `INBOX_INGEST_SECRET`, và bạn gọi mà không có m�
 **Thử thật:** nhắn một tin từ tài khoản khác vào fanpage / OA. Trong vài giây
 hội thoại phải hiện ở Hộp thư và trợ lý AI trả lời. Không thấy gì thì mở
 **Vercel → Deployments → Logs**, lọc `[inbox/` — mọi lỗi đều ghi ở đó kèm lý do.
+
+---
+
+## Riêng TikTok — nối qua cầu nối
+
+TikTok **có** API nhắn tin (Business Messaging API) cho **tài khoản doanh
+nghiệp**, và Việt Nam nằm trong khu vực được hỗ trợ (châu Á – Thái Bình Dương;
+API này *không* mở cho EU, Anh, Thuỵ Sĩ và Mỹ). Nhưng nó còn ở giai đoạn beta và
+trên thực tế phải đi qua một **đối tác nhắn tin** được TikTok công nhận —
+TikTok có hẳn chương trình *Messaging Partner* cho Đông Nam Á.
+
+Vì vậy MStudo **không** nối thẳng TikTok như Meta. Kênh TikTok dùng một **cầu
+nối**: một giao thức nhỏ, ai cũng cắm vào được — đối tác nhắn tin, hay chính
+connector của bạn nếu sau này TikTok cấp quyền API trực tiếp.
+
+```
+Khách nhắn TikTok  →  đối tác  →  POST /api/inbox/ingest       →  Hộp thư
+Nhân viên trả lời  →  MStudo POST tới URL cầu nối của đối tác   →  Khách
+```
+
+**Cách nối:**
+
+1. Chạy `supabase/migrations/inbox_tiktok.sql` (nới danh sách kênh hợp lệ — chạy
+   sau `inbox_unified.sql`; cài mới hoàn toàn thì file nền đã có sẵn TikTok).
+2. Đặt `INBOX_INGEST_SECRET` như mục 1 — TikTok dùng chung cửa nhận tin với
+   Zalo cá nhân.
+3. Vào **Hộp thư → Kênh → TikTok**, khai:
+   - **Tài khoản TikTok** — định danh đối tác dùng để chỉ đúng tài khoản của bạn
+   - **URL cầu nối** — địa chỉ đối tác nhận tin trả lời (bắt buộc `https`)
+   - **Khoá ký** — chuỗi bí mật dùng chung với đối tác
+4. Đưa cho đối tác: địa chỉ `https://<tên-miền>/api/inbox/ingest` và
+   `INBOX_INGEST_SECRET` (họ gửi kèm header `Authorization: Bearer <secret>`).
+
+**Tin vào** — đối tác POST vào `/api/inbox/ingest`:
+
+```json
+{
+  "platform": "tiktok",
+  "channelId": "@maistudio.vn",
+  "messageId": "id-tin-ben-tiktok",
+  "from": { "id": "openid-cua-khach", "name": "linh.pham2004" },
+  "text": "chụp kỷ yếu bao nhiêu ạ",
+  "attachments": [{ "type": "image", "url": "https://..." }]
+}
+```
+
+`messageId` không bắt buộc nhưng **nên có**: nó là thứ chặn ghi trùng khi đối
+tác bắn lại một tin cũ.
+
+**Tin ra** — MStudo POST tới URL cầu nối, kèm header
+`X-Mstudo-Signature: t=<giây>,s=<hex>`. Chữ ký là HMAC-SHA256 của chuỗi
+`<t>.<body>` với khoá ký ở trên (dấu thời gian nằm **trong** phần được ký, nên
+không ai sửa được `t` để phát lại tin cũ). Thân tin:
+
+```json
+{
+  "platform": "tiktok",
+  "channelId": "@maistudio.vn",
+  "conversationId": "…",
+  "to": { "id": "openid-cua-khach", "name": "linh.pham2004" },
+  "text": "Dạ gói kỷ yếu bên em từ 3 triệu ạ"
+}
+```
+
+Cầu nối trả mã khác 2xx thì tin được ghi là **gửi hỏng** kèm nguyên văn lý do và
+hiện viền đỏ trong khung chat — nhân viên biết ngay mà gọi điện.
+
+**Vì sao MStudo không tự chặn cửa sổ trả lời cho TikTok:** luật đó nằm ở phía
+TikTok/đối tác và chưa được công bố rõ. Đặt một con số đoán mò sẽ chặn nhầm
+những tin lẽ ra gửi được. Cầu nối từ chối thì tin thành "gửi hỏng" — đúng đường
+đã có sẵn, không phải im lặng.
+
+> **URL cầu nối phải là `https` và không được trỏ vào địa chỉ nội bộ**
+> (`localhost`, `10.x`, `192.168.x`, `169.254.169.254`…). Máy chủ tự gọi URL đó
+> bằng danh tính của mình, nên đây là hàng rào chống SSRF, không phải khó tính.
+> Hệ thống chặn ngay lúc bạn bấm nối.
 
 ---
 
@@ -241,6 +321,7 @@ không có máy chạy 24/7 thì nên dùng Zalo OA thay vì Zalo cá nhân.
 | Facebook Messenger | `META_APP_SECRET`, `META_VERIFY_TOKEN` + Page Access Token dán trong UI + App Review |
 | Instagram DM | như Facebook, thêm IG doanh nghiệp đã liên kết fanpage |
 | Zalo cá nhân | `INBOX_INGEST_SECRET` + một máy chạy worker liên tục |
+| TikTok | `INBOX_INGEST_SECRET` + một đối tác nhắn tin TikTok (khai URL cầu nối trong UI) |
 
 AI trả lời dùng lại `CHAT_PROVIDERS` bạn đã cấu hình cho chatbox website —
 không phải khai thêm khoá nào.

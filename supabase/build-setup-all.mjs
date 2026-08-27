@@ -45,6 +45,7 @@ const ORDER = [
   ["migrations/crew_phone_digits.sql", "Tra thợ theo SĐT bằng chỉ mục (bỏ quét toàn bảng ở cổng /crew)"],
   ["migrations/contract_deposit_percent.sql", "% cọc hợp đồng do studio tự đặt"],
   ["migrations/inbox_unified.sql", "Hộp thư hợp nhất: gom tin Zalo/Facebook/Instagram/website về một chỗ"],
+  ["migrations/inbox_tiktok.sql", "Hộp thư: thêm kênh TikTok (chạy SAU inbox_unified)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];

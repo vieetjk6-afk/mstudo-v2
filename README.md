@@ -489,8 +489,8 @@ Thu chi & công nợ (thu và tiền công lọc qua `contract.branch_id`).
 
 ## Hộp thư hợp nhất (nhiều mạng xã hội, một chỗ trả lời)
 
-Khách nhắn từ **Zalo OA, Zalo cá nhân, Facebook Messenger, Instagram DM hay
-chatbox website** đều đổ về cùng một hộp thư. **AI trả lời trước**; nhân viên
+Khách nhắn từ **Zalo OA, Zalo cá nhân, Facebook Messenger, Instagram DM, TikTok
+hay chatbox website** đều đổ về cùng một hộp thư. **AI trả lời trước**; nhân viên
 bấm *Tôi tiếp quản* thì bot im và người trả lời tiếp trong đúng khung chat đó.
 
 | Bề mặt | Route | File nguồn |
@@ -500,6 +500,7 @@ bấm *Tôi tiếp quản* thì bot im và người trả lời tiếp trong đ�
 | Luật kênh (nhãn, màu, cửa sổ trả lời) | — | `src/lib/inbox/platforms.ts` (thuần, có test) |
 | Ghi/đọc hộp thư | — | `src/lib/inbox/store.ts`, `view.ts` |
 | Gửi tin + AI tự trả lời | — | `src/lib/inbox/send.ts`, `ai.ts` |
+| Giao thức cầu nối (TikTok) | — | `src/lib/inbox/bridge-protocol.ts` (thuần, có test) + `adapters/bridge.ts` |
 
 ### Model dữ liệu
 
@@ -530,6 +531,27 @@ bí mật, không đọc thẳng bảng.
 4. **Webhook luôn trả 200** (trừ chữ ký sai). Meta và Zalo coi mã lỗi là "chưa
    nhận được" và sẽ bắn lại, rồi tắt webhook nếu hỏng nhiều lần. Chữ ký thì kiểm
    bắt buộc — không có nó thì ai cũng bơm được tin giả và đốt hạn mức AI của studio.
+
+### TikTok đi qua cầu nối, không webhook thẳng
+
+TikTok **có** Business Messaging API cho tài khoản doanh nghiệp và Việt Nam nằm
+trong khu vực được hỗ trợ, nhưng nó còn beta và trên thực tế đi qua các **đối
+tác nhắn tin** được TikTok công nhận. Nên kênh TikTok không có adapter riêng cho
+endpoint của TikTok — nó dùng một giao thức cầu nối nhỏ, ai cũng cắm vào được:
+đối tác đẩy tin vào `/api/inbox/ingest`, MStudo gửi ra bằng cách POST tới
+`relayUrl` của kênh kèm chữ ký `X-Mstudo-Signature` (HMAC-SHA256 trên
+`<timestamp>.<body>`, cùng khuôn Meta/Zalo dùng khi ký tin gửi cho ta).
+
+Hai hàng rào của đường này, cả hai đều có test: `acceptsIngest()` chỉ mở cửa
+ingest cho kênh dạng `worker`/`bridge` — kênh đã có webhook ký chữ ký riêng thì
+tuyệt đối không, vì cho vào là hạ xác thực mạnh xuống còn một bí mật dùng chung;
+và `validRelayUrl()` bắt buộc `https` + chặn địa chỉ nội bộ, vì URL đó do người
+dùng nhập mà máy chủ tự gọi (SSRF).
+
+`replyWindowHours` của TikTok để `null` **không** phải "nhắn thoải mái" mà là
+"MStudo không tự chặn": luật cửa sổ nằm ở phía đối tác và chưa được công bố rõ,
+đặt một con số đoán mò sẽ chặn nhầm tin lẽ ra gửi được. Đối tác từ chối thì tin
+thành "gửi hỏng" kèm nguyên văn lý do — đường đã có sẵn.
 
 ### Zalo cá nhân cần một tiến trình chạy ngoài
 

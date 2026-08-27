@@ -10,7 +10,7 @@
    người dùng biết qua một thông báo lỗi đỏ sau khi đã gõ xong.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type Platform = "website" | "zalo_oa" | "zalo_personal" | "facebook" | "instagram";
+export type Platform = "website" | "zalo_oa" | "zalo_personal" | "facebook" | "instagram" | "tiktok";
 
 export const PLATFORMS: readonly Platform[] = [
   "website",
@@ -18,6 +18,7 @@ export const PLATFORMS: readonly Platform[] = [
   "zalo_personal",
   "facebook",
   "instagram",
+  "tiktok",
 ];
 
 export interface PlatformInfo {
@@ -29,14 +30,24 @@ export interface PlatformInfo {
   color: string;
   /**
    * Cửa sổ được phép nhắn lại tính từ tin CUỐI CÙNG của khách, tính bằng giờ.
-   * `null` = không giới hạn (kênh của chính mình: website, Zalo cá nhân).
+   * `null` = MStudo không tự chặn.
    *
    *   • Facebook / Instagram: 24 giờ theo chính sách Messenger Platform.
    *   • Zalo OA: tin CS gửi trong 48 giờ kể từ tương tác cuối của người dùng.
+   *   • Website, Zalo cá nhân: kênh của chính mình, không có giới hạn nào.
+   *   • TikTok: đi qua CẦU NỐI, luật cửa sổ do nền tảng/đối tác đó áp — xem ghi
+   *     chú ở PLATFORM_INFO.tiktok. Đặt một con số đoán mò ở đây còn tệ hơn để
+   *     null: nó chặn nhầm những tin lẽ ra gửi được.
    */
   replyWindowHours: number | null;
-  /** Kênh này nhận tin về bằng cách nào (hiển thị ở màn kết nối). */
-  ingest: "webhook" | "worker" | "internal";
+  /**
+   * Kênh này nhận tin về bằng cách nào (hiển thị ở màn kết nối).
+   *   webhook  — nền tảng gọi thẳng vào /api/inbox/webhook/*
+   *   worker   — tiến trình của mình chạy ngoài, đẩy vào /api/inbox/ingest
+   *   bridge   — dịch vụ THỨ BA (đối tác nhắn tin) đẩy vào /api/inbox/ingest
+   *   internal — không có nền tảng ngoài (chatbox website)
+   */
+  ingest: "webhook" | "worker" | "bridge" | "internal";
 }
 
 export const PLATFORM_INFO: Record<Platform, PlatformInfo> = {
@@ -80,6 +91,29 @@ export const PLATFORM_INFO: Record<Platform, PlatformInfo> = {
     replyWindowHours: 24,
     ingest: "webhook",
   },
+  /**
+   * TIKTOK — nối qua CẦU NỐI, không phải webhook thẳng.
+   *
+   * TikTok CÓ Business Messaging API (tài khoản doanh nghiệp, khu vực châu Á –
+   * Thái Bình Dương gồm Việt Nam), nhưng còn ở giai đoạn beta và trên thực tế
+   * đi qua các đối tác nhắn tin được TikTok công nhận. Nên thay vì đoán bừa
+   * endpoint của TikTok rồi ra một adapter trông như chạy được mà không chạy,
+   * kênh này nhận tin qua /api/inbox/ingest và gửi ra qua một URL cầu nối do
+   * studio khai — dùng được với đối tác bất kỳ, hoặc với chính connector của
+   * studio khi họ được cấp quyền API trực tiếp.
+   *
+   * `replyWindowHours: null` không có nghĩa "TikTok cho nhắn thoải mái": nghĩa
+   * là MStudo KHÔNG tự chặn, vì luật cửa sổ nằm ở phía cầu nối. Cầu nối từ chối
+   * thì tin được ghi lại là gửi hỏng kèm nguyên văn lý do — đúng đường đã có sẵn.
+   */
+  tiktok: {
+    key: "tiktok",
+    label: "TikTok",
+    hint: "Nối qua cầu nối (đối tác nhắn tin TikTok hoặc connector riêng) — xem docs/hop-thu-hop-nhat.md.",
+    color: "#00f2ea",
+    replyWindowHours: null,
+    ingest: "bridge",
+  },
 };
 
 export function isPlatform(v: unknown): v is Platform {
@@ -92,6 +126,20 @@ export function platformLabel(p: string | null | undefined): string {
 
 export function platformColor(p: string | null | undefined): string {
   return isPlatform(p) ? PLATFORM_INFO[p].color : "#94a3b8";
+}
+
+/**
+ * Kênh này có được phép bơm tin qua /api/inbox/ingest không?
+ *
+ * Cửa ingest chỉ mở cho kênh mà tin PHẢI đi vòng qua một tiến trình bên ngoài
+ * (worker của mình, hoặc cầu nối của đối tác). Kênh có webhook riêng thì tuyệt
+ * đối không: mở ra là bỏ qua bước kiểm chữ ký của Meta/Zalo, biến một endpoint
+ * có xác thực mạnh thành một endpoint chỉ cần biết bí mật dùng chung.
+ */
+export function acceptsIngest(p: string | null | undefined): boolean {
+  if (!isPlatform(p)) return false;
+  const mode = PLATFORM_INFO[p].ingest;
+  return mode === "worker" || mode === "bridge";
 }
 
 /**

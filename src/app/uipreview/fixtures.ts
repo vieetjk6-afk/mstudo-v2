@@ -225,6 +225,14 @@ export const inboxConversations: ConversationView[] = [
     lastInboundAt: "2026-03-08T09:00:00Z",
   },
   {
+    id: "c5", platform: "tiktok", channelName: "@maistudio.vn",
+    contactName: "linh.pham2004", contactAvatar: null, contactPhone: null,
+    status: "open", aiEnabled: true, assigneeId: null, assigneeName: null,
+    lastMessage: "video chụp kỷ niệm 1 năm giá sao ad ơi",
+    lastMessageAt: phutTruoc(240), lastDirection: "in", unread: 1,
+    lastInboundAt: phutTruoc(240),
+  },
+  {
     id: "c4", platform: "website", channelName: "Chatbox website",
     contactName: "Khách chưa cho tên", contactAvatar: null, contactPhone: null,
     status: "closed", aiEnabled: true, assigneeId: null, assigneeName: null,
@@ -269,4 +277,6 @@ export const inboxChannels: ChannelPublic[] = [
   { id: "ch2", platform: "zalo_oa", externalId: "555", name: "Mai Studio OA", status: "connected", aiMode: "auto", lastError: null, connectedAt: "2026-03-01T03:00:00Z" },
   { id: "ch3", platform: "instagram", externalId: "778", name: "@maistudio.vn", status: "connected", aiMode: "off", lastError: null, connectedAt: "2026-03-02T03:00:00Z" },
   { id: "ch4", platform: "website", externalId: "o", name: "Chatbox website", status: "connected", aiMode: "auto", lastError: null, connectedAt: "2026-01-01T03:00:00Z" },
+  // Kênh có LỖI gần nhất — trạng thái phải nhìn thấy được, không nuốt im lặng.
+  { id: "ch5", platform: "tiktok", externalId: "@maistudio.vn", name: "@maistudio.vn", status: "connected", aiMode: "auto", lastError: "cầu nối trả 401", connectedAt: "2026-03-05T03:00:00Z" },
 ];
