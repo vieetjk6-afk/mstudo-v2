@@ -550,8 +550,9 @@ của người thật. Không dùng realtime Supabase ở đây vì khách là n
 đăng nhập — mở kênh realtime cho họ là mở thêm một cửa vào DB cho mọi khách vãng lai.
 
 Biến môi trường: `META_APP_SECRET`, `META_VERIFY_TOKEN`, `ZALO_OA_WEBHOOK_SECRET`,
-`INBOX_INGEST_SECRET` (xem `.env.example`). AI dùng lại `CHAT_PROVIDERS` sẵn có.
-Kiểm thử luật kênh: `npm run test:inbox`.
+`INBOX_INGEST_SECRET` — **lấy ở đâu và khai webhook thế nào:
+[`docs/hop-thu-hop-nhat.md`](docs/hop-thu-hop-nhat.md)**. AI dùng lại
+`CHAT_PROVIDERS` sẵn có. Kiểm thử luật kênh: `npm run test:inbox`.
 
 ## Quy tắc khi sửa giao diện studio
 
