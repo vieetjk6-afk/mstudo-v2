@@ -10,7 +10,9 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import StudioTrialButton from "@/components/StudioTrialButton";
 import MessengerButton from "@/components/MessengerButton";
-import VietQRButton, { instalmentNote } from "@/components/VietQR";
+import VietQRButton from "@/components/VietQR";
+import { instalmentNote } from "@/lib/vietqr";
+import CollectButton from "@/components/studio/CollectButton";
 import AutoEmailToggle from "@/components/AutoEmailToggle";
 import UpcomingSchedule from "@/components/studio/UpcomingSchedule";
 import { shootReminderMessage } from "@/lib/zalo";
@@ -434,7 +436,11 @@ export default async function StudioOverview() {
       key: `proof-${pr.id}`, icon: Banknote, tone: "amber",
       title: `Chờ đối soát: ${pr.contract.client_name || pr.contract.title}`,
       sub: `Khách đã gửi ảnh chuyển khoản${pr.plan ? ` · ${pr.plan.label} · ${vnd(pr.plan.amount)}` : ""} · ${fmtDate(pr.created_at)}`,
-      tag: "Thanh toán", cta: "Đối soát", href: `/dashboard/studio/contracts/${pr.contract.id}?tab=pay`,
+      tag: "Thanh toán", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${pr.contract.id}?tab=pay`,
+      // Chốt NGAY tại thẻ: bốn bước (mở HĐ → tab → tìm đợt → bấm) xuống một.
+      action: pr.plan ? (
+        <CollectButton planId={pr.plan.id} contractId={pr.contract.id} amountLabel={vnd(pr.plan.amount)} />
+      ) : undefined,
     });
   }
 
@@ -448,7 +454,12 @@ export default async function StudioOverview() {
       // CÙNG nội dung chuyển khoản với mã QR trong hợp đồng (mã HĐ + tên đợt).
       // Trước đây chỗ này chỉ lấy tên hợp đồng, nên hai mã của CÙNG một đợt ra
       // hai nội dung khác nhau và sao kê không đối chiếu về đâu được.
-      action: <VietQRButton bank={bank} amount={d.amount} addInfo={instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label)} label="QR" />,
+      action: (
+        <span className="flex flex-wrap items-center gap-2">
+          <VietQRButton bank={bank} amount={d.amount} addInfo={instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label)} label="QR" />
+          {d.contract && <CollectButton planId={d.id} contractId={d.contract.id} amountLabel={vnd(d.amount)} />}
+        </span>
+      ),
     });
   }
 

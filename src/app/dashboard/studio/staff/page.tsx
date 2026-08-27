@@ -9,12 +9,15 @@ import { canAssignBranch, canManageRoles, forcedBranchScope, isBranchScopedRole 
 import type { StudioCrew } from "@/lib/types";
 import StaffAndCrew from "./StaffAndCrew";
 import type { StaffRow } from "./StaffManager";
+import type { RankRow } from "./RankingList";
+import type { CrewRole } from "@/lib/types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NHÂN SỰ — /dashboard/studio/staff
 
-   Hai tab: tài khoản nhân viên + vai trò, và sổ thợ freelancer. Route
-   /dashboard/studio/crew cũ chuyển hướng về đây với ?tab=crew.
+   Ba tab: tài khoản nhân viên + vai trò, sổ thợ freelancer, và xếp hạng thợ.
+   Hai route cũ chuyển hướng về đây: /dashboard/studio/crew → ?tab=crew,
+   /dashboard/studio/ranking → ?tab=ranking.
 
    Quyền vào màn: từ QUẢN LÝ trở lên (sổ thợ là việc của quản lý). Nhưng tab
    "Nhân viên & phân quyền" chỉ CHỦ STUDIO thấy — tạo tài khoản và đổi vai trò là
@@ -60,7 +63,9 @@ export default async function StaffPage() {
     (pinned ? applyPin(supabase.from("studio_crew").select("*").eq("owner_id", ctx.id), pinned) : supabase.from("studio_crew").select("*").eq("owner_id", ctx.id)).order("name"),
     supabase
       .from("contract_crew")
-      .select("phone, status, contract:studio_contracts!inner(owner_id)")
+      // name/role/salary: dùng cho TAB XẾP HẠNG (gộp từ màn /ranking cũ) —
+      // cùng một truy vấn, không thêm vòng gọi DB nào.
+      .select("phone, name, role, status, salary, contract:studio_contracts!inner(owner_id)")
       .eq("contract.owner_id", ctx.id)
       .not("phone", "is", null),
     getActiveBranches(ctx.id),
@@ -88,14 +93,28 @@ export default async function StaffPage() {
   // Độ tin cậy của từng thợ theo SĐT (trên mọi hợp đồng của studio này).
   const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
   const stats: Record<string, { total: number; accepted: number; declined: number }> = {};
-  for (const a of (assignments ?? []) as Array<{ phone: string | null; status: string }>) {
+  type Assign = { phone: string | null; name: string | null; role: CrewRole; status: string; salary: number | null };
+  const assignRows = (assignments ?? []) as unknown as Assign[];
+  const rankMap = new Map<string, RankRow>();
+  for (const a of assignRows) {
     const p = digits(a.phone);
     if (!p) continue;
     if (!stats[p]) stats[p] = { total: 0, accepted: 0, declined: 0 };
     stats[p].total += 1;
     if (a.status === "accepted") stats[p].accepted += 1;
     else if (a.status === "declined") stats[p].declined += 1;
+
+    // Xếp hạng: gom theo SĐT, đếm buổi đã nhận và cộng tiền công của các buổi đó.
+    const r = rankMap.get(p) ?? { key: p, name: a.name || p, role: a.role, jobs: 0, accepted: 0, earned: 0 };
+    r.jobs += 1;
+    if (a.status === "accepted") {
+      r.accepted += 1;
+      r.earned += a.salary || 0;
+    }
+    if (a.name) r.name = a.name;
+    rankMap.set(p, r);
   }
+  const ranked = Array.from(rankMap.values()).sort((x, y) => y.accepted - x.accepted || y.earned - x.earned);
 
   const branchOpts = branches.map((b) => ({ id: b.id, name: b.name }));
 
@@ -117,6 +136,7 @@ export default async function StaffPage() {
         registerError: crewToken ? null : tokenError,
         branches: branchOpts,
       }}
+      ranked={ranked}
     />
   );
 }

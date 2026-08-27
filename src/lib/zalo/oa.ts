@@ -1,6 +1,6 @@
 import "server-only";
 import { signOAuthState, verifyOAuthState } from "@/lib/oauth-state";
-import { saveZalo, type ZaloRow } from "./config";
+import { autoEventsOnConnect, loadZalo, saveZalo, type ZaloRow } from "./config";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -71,8 +71,11 @@ async function persistTokens(ownerId: string, t: TokenResp, oaId?: string | null
 
 /** Đổi `code` (callback) lấy token và lưu; sau đó nạp hồ sơ OA để lấy tên/oa_id. */
 export async function connectOA(ownerId: string, code: string): Promise<void> {
+  const before = await loadZalo(ownerId);
   const t = await tokenRequest({ code, app_id: APP_ID, grant_type: "authorization_code" });
   await persistTokens(ownerId, t);
+  // Kết nối lần đầu thì mồi sẵn ba mốc an toàn — xem DEFAULT_AUTO_EVENTS.
+  await saveZalo(ownerId, { auto_events: autoEventsOnConnect(before?.auto_events) });
   // Lấy thông tin OA để hiển thị (không chặn nếu lỗi).
   try {
     const info = await fetch("https://openapi.zalo.me/v2.0/oa/getoa", {
