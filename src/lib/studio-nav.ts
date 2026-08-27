@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, ReceiptText, FileText, Kanban, CalendarClock, Inbox,
   CalendarDays, Wand2, Images, Shirt, Camera, Users, Sparkles, BookImage,
-  Wallet, Banknote, UsersRound, Trophy, MessagesSquare, Package, Gavel,
+  Wallet, Banknote, UsersRound, MessagesSquare, Package, Gavel,
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
   MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
@@ -170,8 +170,10 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // Sổ thợ (Đội ngũ) đã GỘP thành tab 2 của màn này. Mục sidebar là "Nhân
       // viên & phân quyền" vì thứ mở thường xuyên hơn là tài khoản + vai trò;
       // sổ thợ chỉ sửa khi có người vào/ra.
-      { href: "/dashboard/studio/staff", label: "Nhân viên & phân quyền", icon: UserCog, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/crew"], keywords: "tai khoan nhan vien quyen vai tro so tho crew doi ngu" },
-      { href: "/dashboard/studio/ranking", label: "Xếp hạng", icon: Trophy, minTier: "full", roles: MANAGER_OK },
+      // Ba tab trong MỘT màn: nhân viên & vai trò, sổ thợ, xếp hạng. Cả ba trả
+      // lời cùng câu hỏi "ai làm cho studio này"; xếp hạng chỉ mở vài lần một
+      // tháng nên không đáng một dòng sidebar riêng (tiền lệ: sổ thợ).
+      { href: "/dashboard/studio/staff", label: "Nhân viên & phân quyền", icon: UserCog, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/crew", "/dashboard/studio/ranking"], keywords: "tai khoan nhan vien quyen vai tro so tho crew doi ngu xep hang thu nhap tho" },
       // Chi nhánh về lại "Nhân sự": chủ studio đi tìm nó bằng câu hỏi "cơ sở này
       // ai làm?", tức cùng mạch với nhân viên và phân quyền — chứ không ai mở
       // "Thiết lập" để mở/đóng một cơ sở. Đứng CUỐI nhóm vì sửa vài lần một năm.
@@ -183,14 +185,18 @@ export const NAV_GROUPS: readonly NavGroup[] = [
   },
   {
     // Mọi thứ khai MỘT LẦN rồi dùng lại — và KHÔNG thuộc về một nhóm nghiệp vụ
-    // nào rõ hơn. Bảng giá đã về "Tài chính", chi nhánh đã về "Nhân sự"; còn lại
-    // ở đây là điều khoản, mẫu tin nhắn, website và app máy tính.
+    // nào rõ hơn. Bảng giá đã về "Tài chính", chi nhánh đã về "Nhân sự", app máy
+    // tính đã rời sang menu avatar (cài một lần mỗi máy); còn lại ba mục này.
+    //
+    // KHÔNG gộp tiếp thành một màn nhiều tab: đọc kỹ thì chỉ app máy tính là
+    // "khai một lần" thật. Điều khoản/dịch vụ sửa mỗi khi đổi gói bán, mẫu tin
+    // nhắn là nơi KẾT NỐI Zalo (mở lại mỗi lần phiên hết hạn), website thì
+    // studio chỉnh liên tục. Gộp chúng lại chỉ thêm một lớp tab giữa đường.
     label: "Thiết lập",
     items: [
       { href: "/dashboard/studio/services", label: "Dịch vụ & điều khoản", icon: Gavel, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/templates"], keywords: "dieu khoan mau hop dong" },
       { href: "/dashboard/studio/messages", label: "Mẫu tin nhắn", icon: MessagesSquare, minTier: "full", roles: MANAGER_OK, keywords: "mau tin zalo sms" },
       { href: "/dashboard/site", label: "Website & chatbox", icon: Globe, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/chatbox"], keywords: "trang web portfolio tro ly" },
-      { href: "/dashboard/studio/desktop", label: "Ứng dụng máy tính", icon: Monitor, minTier: "plus", roles: MANAGER_OK, keywords: "desktop app may tinh sao luu" },
     ],
   },
   {
@@ -227,6 +233,9 @@ export const EXTRA_COMMANDS: readonly NavItem[] = [
   { href: "/dashboard/account", label: "Tài khoản & bảo mật", icon: UserCircle, minTier: "booking", roles: EVERYONE, keywords: "mat khau bao mat thiet bi", sub: "Menu avatar" },
   { href: "/dashboard/upgrade", label: "Gói phần mềm", icon: Crown, minTier: "booking", roles: OWNER_OK, keywords: "nang cap goi plan", sub: "Menu avatar" },
   { href: "/dashboard/affiliate", label: "Affiliate", icon: Gift, minTier: "booking", roles: OWNER_OK, keywords: "hoa hong gioi thieu", sub: "Menu avatar" },
+  // Tải app máy tính + đăng ký thiết bị: làm ĐÚNG MỘT LẦN cho mỗi máy, chỉ chủ
+  // studio làm được. Không đáng một dòng sidebar thường trực; vẫn gõ ⌘K ra được.
+  { href: "/dashboard/studio/desktop", label: "Ứng dụng máy tính", icon: Monitor, minTier: "plus", roles: OWNER_OK, keywords: "desktop app may tinh sao luu tai ve cai dat", sub: "Cài một lần mỗi máy" },
   // ── Màn đã gộp thành tab / lệnh tạo mới ─────────────────────────────────
   { href: "/dashboard/studio/contracts/new", label: "Tạo hợp đồng mới", icon: Plus, minTier: "plus", roles: MANAGER_OK, keywords: "them hop dong moi", sub: "Luồng 5 bước" },
   { href: "/dashboard/studio/quotes/new", label: "Tạo báo giá", icon: FilePlus2, minTier: "plus", roles: MANAGER_OK, keywords: "them bao gia moi gui khach", sub: "Ghép gói và gửi khách" },

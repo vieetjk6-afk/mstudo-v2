@@ -11,6 +11,8 @@ import { requireStudio } from "@/lib/auth-guards";
 import StudioTrialButton from "@/components/StudioTrialButton";
 import MessengerButton from "@/components/MessengerButton";
 import VietQRButton from "@/components/VietQR";
+import { instalmentNote } from "@/lib/vietqr";
+import CollectButton from "@/components/studio/CollectButton";
 import AutoEmailToggle from "@/components/AutoEmailToggle";
 import UpcomingSchedule from "@/components/studio/UpcomingSchedule";
 import { shootReminderMessage } from "@/lib/zalo";
@@ -209,11 +211,12 @@ export default async function StudioOverview() {
     { data: payMonth },
     { data: paySixMonths },
     { data: recentQuotes },
+    { data: pendingProofs },
   ] = await Promise.all([
     cq.order("event_date", { ascending: true, nullsFirst: false }),
     supabase
       .from("contract_payment_plan")
-      .select("id, label, amount, due_date, paid, contract:studio_contracts!inner(id, owner_id, title)")
+      .select("id, label, amount, due_date, paid, contract:studio_contracts!inner(id, owner_id, code, title)")
       .eq("contract.owner_id", profile.id)
       .eq("paid", false)
       .not("due_date", "is", null)
@@ -235,6 +238,16 @@ export default async function StudioOverview() {
       .eq("owner_id", profile.id)
       .order("created_at", { ascending: false })
       .limit(8),
+    // Khách đã GỬI ẢNH CHUYỂN KHOẢN cho một đợt mà đợt đó vẫn chưa đánh dấu thu.
+    // Đây là việc gấp nhất trong ngày (tiền đang chờ đối soát) mà trước đây chỉ
+    // nằm trong chuông — mở khu quản lý mới thấy, và chuông thì trôi rất nhanh.
+    supabase
+      .from("contract_client_proofs")
+      .select("id, created_at, plan:contract_payment_plan!inner(id, label, amount, paid), contract:studio_contracts!inner(id, owner_id, title, client_name)")
+      .eq("contract.owner_id", profile.id)
+      .eq("plan.paid", false)
+      .order("created_at", { ascending: false })
+      .limit(20),
   ]);
 
   type CrewLite = { id: string; name: string; phone: string | null; role: CrewRole; status: string };
@@ -351,7 +364,7 @@ export default async function StudioOverview() {
   // Scheduled payment installments due within 7 days (or overdue) & unpaid.
   const duePlan = ((planRows ?? []) as unknown as Array<{
     id: string; label: string; amount: number; due_date: string;
-    contract: { id: string; title: string } | null;
+    contract: { id: string; code: string | null; title: string } | null;
   }>);
 
   // ── Số liệu KPI ───────────────────────────────────────────────
@@ -410,18 +423,47 @@ export default async function StudioOverview() {
     });
   }
 
-  // 2. Đợt thu đã quá hạn.
+  // 2. Khách đã báo chuyển khoản, đang chờ studio đối soát rồi bấm "Đã thu".
+  //    Đứng TRƯỚC công nợ quá hạn: tiền đã nằm trong tài khoản rồi, chỉ thiếu
+  //    một cú xác nhận — làm xong là hết việc, không phải đi đòi ai.
+  for (const pr of ((pendingProofs ?? []) as unknown as Array<{
+    id: string; created_at: string;
+    plan: { id: string; label: string; amount: number } | null;
+    contract: { id: string; title: string; client_name: string | null } | null;
+  }>)) {
+    if (!pr.contract) continue;
+    urgent.push({
+      key: `proof-${pr.id}`, icon: Banknote, tone: "amber",
+      title: `Chờ đối soát: ${pr.contract.client_name || pr.contract.title}`,
+      sub: `Khách đã gửi ảnh chuyển khoản${pr.plan ? ` · ${pr.plan.label} · ${vnd(pr.plan.amount)}` : ""} · ${fmtDate(pr.created_at)}`,
+      tag: "Thanh toán", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${pr.contract.id}?tab=pay`,
+      // Chốt NGAY tại thẻ: bốn bước (mở HĐ → tab → tìm đợt → bấm) xuống một.
+      action: pr.plan ? (
+        <CollectButton planId={pr.plan.id} contractId={pr.contract.id} amountLabel={vnd(pr.plan.amount)} />
+      ) : undefined,
+    });
+  }
+
+  // 3. Đợt thu đã quá hạn.
   for (const d of duePlan.filter((x) => x.due_date < today)) {
     urgent.push({
       key: `plan-${d.id}`, icon: Banknote, tone: "red",
       title: `Quá hạn thu: ${d.contract?.title || "hợp đồng"}`,
       sub: `${d.label} · ${vnd(d.amount)} · hạn ${fmtDate(d.due_date)}`,
       tag: "Công nợ", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${d.contract?.id ?? ""}`,
-      action: <VietQRButton bank={bank} amount={d.amount} addInfo={(d.contract?.title || "").slice(0, 25)} label="QR" />,
+      // CÙNG nội dung chuyển khoản với mã QR trong hợp đồng (mã HĐ + tên đợt).
+      // Trước đây chỗ này chỉ lấy tên hợp đồng, nên hai mã của CÙNG một đợt ra
+      // hai nội dung khác nhau và sao kê không đối chiếu về đâu được.
+      action: (
+        <span className="flex flex-wrap items-center gap-2">
+          <VietQRButton bank={bank} amount={d.amount} addInfo={instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label)} label="QR" />
+          {d.contract && <CollectButton planId={d.id} contractId={d.contract.id} amountLabel={vnd(d.amount)} />}
+        </span>
+      ),
     });
   }
 
-  // 3. Trễ cam kết giao ảnh.
+  // 4. Trễ cam kết giao ảnh.
   for (const c of lateDeliveries) {
     const late = Math.abs(daysFromToday(c.delivery_due) ?? 0);
     urgent.push({
@@ -432,7 +474,7 @@ export default async function StudioOverview() {
     });
   }
 
-  // 4. Đã chụp xong nhưng chưa tạo album chọn ảnh.
+  // 5. Đã chụp xong nhưng chưa tạo album chọn ảnh.
   for (const c of notCancelled) {
     if (!c.event_date || c.event_date >= today) continue;
     if (c.status !== "approved" && c.status !== "in_progress") continue;
@@ -445,7 +487,7 @@ export default async function StudioOverview() {
     });
   }
 
-  // 5. Hợp đồng đã gửi, khách chưa ký.
+  // 6. Hợp đồng đã gửi, khách chưa ký.
   for (const { c, days } of unsigned.filter((u) => u.days >= 1)) {
     urgent.push({
       key: `sign-${c.id}`, icon: PenLine, tone: "amber",
@@ -462,7 +504,7 @@ export default async function StudioOverview() {
     });
   }
 
-  // 6. Báo giá khách chưa phản hồi quá 2 ngày.
+  // 7. Báo giá khách chưa phản hồi quá 2 ngày.
   const quoteRows = (recentQuotes ?? []) as Array<{
     id: string; code: string | null; title: string | null; client_name: string | null;
     client_phone: string | null; status: QuoteStatus; created_at: string;
@@ -480,7 +522,7 @@ export default async function StudioOverview() {
     });
   }
 
-  // 7. Khách gửi yêu cầu sửa chưa xử lý.
+  // 8. Khách gửi yêu cầu sửa chưa xử lý.
   for (const c of openEdits) {
     urgent.push({
       key: `edit-${c.id}`, icon: CircleAlert, tone: "amber",
@@ -490,7 +532,7 @@ export default async function StudioOverview() {
     });
   }
 
-  // 8. Thợ chưa nhận job.
+  // 9. Thợ chưa nhận job.
   for (const { c, cr } of pendingCrew) {
     urgent.push({
       key: `pcrew-${cr.id}`, icon: Users, tone: "blue",

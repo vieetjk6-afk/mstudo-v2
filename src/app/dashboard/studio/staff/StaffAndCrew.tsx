@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { UserCog, UsersRound } from "lucide-react";
+import { Trophy, UserCog, UsersRound } from "lucide-react";
 import StaffManager, { type StaffRow } from "./StaffManager";
+import RankingList, { type RankRow } from "./RankingList";
 import CrewManager from "../crew/CrewManager";
 import type { StudioCrew } from "@/lib/types";
 
@@ -12,6 +13,7 @@ import type { StudioCrew } from "@/lib/types";
 
      Nhân viên & phân quyền  tài khoản đăng nhập của studio + vai trò
      Đội ngũ thợ             sổ thợ freelancer (không có tài khoản)
+     Xếp hạng                ai nhận nhiều buổi nhất, kiếm được bao nhiêu
 
    Trước đây là hai màn riêng, mà sidebar chỉ dẫn tới một cái — cái kia phải gõ
    ⌘K mới tới. Cả hai đều trả lời cùng một câu hỏi "ai làm cho studio này", nên
@@ -22,13 +24,14 @@ import type { StudioCrew } from "@/lib/types";
    lại trang không bị nhảy về tab đầu.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-type Tab = "staff" | "crew";
+type Tab = "staff" | "crew" | "ranking";
 
 export default function StaffAndCrew({
   staffProps,
   crewProps,
   /** Nhân viên/quản lý chi nhánh không quản tài khoản → chỉ mở được tab thợ. */
   canSeeStaffTab,
+  ranked,
 }: {
   staffProps: {
     initial: StaffRow[];
@@ -46,22 +49,26 @@ export default function StaffAndCrew({
     branches: { id: string; name: string }[];
   };
   canSeeStaffTab: boolean;
+  /** Bảng xếp hạng thợ — gộp từ màn /ranking cũ. */
+  ranked: RankRow[];
 }) {
   const router = useRouter();
   const params = useSearchParams();
-  const fromUrl = params.get("tab") === "crew" ? "crew" : "staff";
+  const q = params.get("tab");
+  const fromUrl: Tab = q === "crew" ? "crew" : q === "ranking" ? "ranking" : "staff";
   const [tab, setTab] = useState<Tab>(canSeeStaffTab ? fromUrl : "crew");
 
   function go(next: Tab) {
     setTab(next);
     // replace (không push): bấm qua lại giữa hai tab không nên nhồi lịch sử
     // trình duyệt, nút Back phải đưa về màn TRƯỚC đó.
-    router.replace(next === "crew" ? "/dashboard/studio/staff?tab=crew" : "/dashboard/studio/staff", { scroll: false });
+    router.replace(next === "staff" ? "/dashboard/studio/staff" : `/dashboard/studio/staff?tab=${next}`, { scroll: false });
   }
 
   const TABS: { key: Tab; label: string; icon: typeof UserCog; count: number }[] = [
     { key: "staff", label: "Nhân viên & phân quyền", icon: UserCog, count: staffProps.initial.length },
     { key: "crew", label: "Đội ngũ thợ", icon: UsersRound, count: crewProps.initial.length },
+    { key: "ranking", label: "Xếp hạng", icon: Trophy, count: ranked.length },
   ];
 
   return (
@@ -97,7 +104,13 @@ export default function StaffAndCrew({
       )}
 
       <div key={tab} className="animate-[vkFade_.3s_ease_both]">
-        {tab === "staff" && canSeeStaffTab ? <StaffManager {...staffProps} /> : <CrewManager {...crewProps} />}
+        {tab === "ranking" ? (
+          <RankingList ranked={ranked} />
+        ) : tab === "staff" && canSeeStaffTab ? (
+          <StaffManager {...staffProps} />
+        ) : (
+          <CrewManager {...crewProps} />
+        )}
       </div>
     </div>
   );

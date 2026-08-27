@@ -58,6 +58,7 @@ export default async function ServicesPage({ searchParams }: { searchParams?: { 
           initialStorageMonths={(profile as { storage_months?: number }).storage_months ?? 6}
           initialQuoteValidDays={(profile as { quote_valid_days?: number }).quote_valid_days ?? 15}
           initialDeposit={(profile as { booking_deposit?: number }).booking_deposit ?? 0}
+          initialContractDepositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? 25}
           initialReferralReward={(profile as { referral_reward?: number }).referral_reward ?? 0}
           initialReferralDiscount={(profile as { referral_discount?: number }).referral_discount ?? 0}
         />

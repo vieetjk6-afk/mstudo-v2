@@ -195,6 +195,7 @@ export default async function ContractPage({
       ownerId={profile.id as string}
       branches={(await getActiveBranches(profile.id)).map((b) => ({ id: b.id, name: b.name }))}
       studioName={brand.name}
+      depositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? 25}
       studioLogo={brand.logoUrl}
       studioPhone={(profile.pl_phone as string | null) ?? null}
       studioEmail={(profile.email as string | null) ?? null}
