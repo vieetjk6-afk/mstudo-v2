@@ -46,9 +46,9 @@ export default async function PhotoToolsPage() {
     {
       icon: Minimize2,
       title: "Nén ảnh & watermark",
-      desc: "Nén nhẹ ảnh, đóng watermark tên studio và đổi định dạng — chạy ngay trong trình duyệt, ảnh không tải lên máy chủ.",
+      desc: "Xuất ảnh đúng khổ chuẩn Facebook / Instagram / TikTok / Zalo cho khỏi vỡ ảnh, nén nhẹ, đóng watermark tên studio và đổi định dạng — chạy ngay trong trình duyệt, ảnh không tải lên máy chủ.",
       stat: (compressRuns ?? 0) > 0 ? `${compressRuns} lượt xử lý trong 30 ngày qua` : "Chưa dùng trong 30 ngày qua",
-      cta: "Mở nén ảnh & watermark",
+      cta: "Mở nén ảnh & chuẩn MXH",
       href: "/dashboard/compress",
     },
     {

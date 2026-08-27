@@ -16,6 +16,7 @@ import {
   ZoomIn,
   ZoomOut,
   RotateCcw,
+  Share2,
 } from "lucide-react";
 import { stripExtension } from "@/lib/drive";
 import { triggerDownload } from "@/lib/download";
@@ -34,17 +35,27 @@ import {
 import {
   compressImage,
   loadImageFromBlob,
+  planFrame,
   outName,
   formatExt,
   formatBytes,
   type OutputFormat,
   type WmPosition,
   type WatermarkOptions,
+  type CompressOptions,
+  type FitMode,
 } from "@/lib/compress";
+import {
+  PLATFORMS,
+  presetsFor,
+  findPreset,
+  ratioLabel,
+  type PlatformId,
+} from "@/lib/social-presets";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-export type Tool = "compress" | "watermark" | "convert";
+export type Tool = "compress" | "watermark" | "convert" | "social";
 
 interface Q {
   unlimited: boolean;
@@ -87,6 +98,21 @@ const POS_OPTIONS: { v: WmPosition; label: string }[] = [
   { v: "tile", label: "Lát kín (chéo)" },
 ];
 
+const FIT_OPTIONS: { v: FitMode; label: string; hint: string }[] = [
+  { v: "contain", label: "Giữ nguyên tỉ lệ", hint: "Không cắt ảnh — cạnh dài vừa khung chuẩn." },
+  { v: "cover", label: "Cắt vừa khung", hint: "Cắt giữa cho đúng tỉ lệ chuẩn, ảnh ra đúng khung." },
+  { v: "pad", label: "Thêm viền", hint: "Giữ trọn ảnh, chèn viền cho đủ đúng kích thước khung." },
+];
+
+/** Trần dung lượng chọn được (byte). -1 = theo khuyến nghị của khổ đang chọn. */
+const BUDGETS: { v: number; label: string }[] = [
+  { v: -1, label: "Theo chuẩn nền tảng (khuyên dùng)" },
+  { v: 500 * 1024, label: "≤ 500 KB (mạng chậm)" },
+  { v: 1024 * 1024, label: "≤ 1 MB" },
+  { v: 2 * 1024 * 1024, label: "≤ 2 MB" },
+  { v: 0, label: "Không đặt trần (nét tối đa)" },
+];
+
 export default function ToolPanel({
   tool,
   pro,
@@ -100,7 +126,9 @@ export default function ToolPanel({
   quota: QuotaState | null;
   consumeQuota: (kind: "basic" | "picker") => Promise<{ ok: boolean; status: number; data: any }>;
 }) {
-  const allowPicker = tool === "compress" && pickerConfigured;
+  // Tab "Chuẩn MXH" cũng là một lượt nén: dùng chung hạn mức với tab Nén ảnh.
+  const usesQuota = tool === "compress" || tool === "social";
+  const allowPicker = usesQuota && pickerConfigured;
 
   const [source, setSource] = useState<SourceKind>("local");
   const [items, setItems] = useState<SourceItem[]>([]);
@@ -122,6 +150,17 @@ export default function ToolPanel({
   const [targetFormat, setTargetFormat] = useState<OutputFormat>("image/webp");
   // Picker write mode
   const [writeMode, setWriteMode] = useState<"overwrite" | "new">("new");
+
+  // Chuẩn mạng xã hội
+  const [platform, setPlatform] = useState<PlatformId>("facebook");
+  const [presetId, setPresetId] = useState<string>(presetsFor("facebook")[0].id);
+  const [fit, setFit] = useState<FitMode>(presetsFor("facebook")[0].fit);
+  const [padColor, setPadColor] = useState("#ffffff");
+  const [sharpen, setSharpen] = useState(35);
+  const [budget, setBudget] = useState(-1);
+  const [socialFormat, setSocialFormat] = useState<OutputFormat>("image/jpeg");
+  // Nén thường: làm nét sau khi thu nhỏ (mặc định bật — chống ảnh mờ khi đăng).
+  const [compressSharpen, setCompressSharpen] = useState(true);
 
   // Watermark options
   const [wmType, setWmType] = useState<"text" | "image">("text");
@@ -148,13 +187,22 @@ export default function ToolPanel({
     { key: string; img: HTMLImageElement; origSize: number; label: string; origUrl: string } | null
   >(null);
   const [preview, setPreview] = useState<
-    { url: string; origSize: number; newSize: number; label: string } | null
+    {
+      url: string;
+      origSize: number;
+      newSize: number;
+      label: string;
+      w: number;
+      h: number;
+      quality: number;
+      overBudget: boolean;
+    } | null
   >(null);
   const [zoom, setZoom] = useState(1);
   const [showOriginal, setShowOriginal] = useState(false);
 
   const isPicker = source === "picker";
-  const activeQuota = tool === "compress" ? (isPicker ? quota?.picker : quota?.basic) : null;
+  const activeQuota = usesQuota ? (isPicker ? quota?.picker : quota?.basic) : null;
   const outOfQuota = !!activeQuota && !activeQuota.unlimited && (activeQuota.remaining ?? 0) <= 0;
   const [fsSupported] = useState(
     typeof window !== "undefined" && "showDirectoryPicker" in window
@@ -272,6 +320,49 @@ export default function ToolPanel({
     }
   }
 
+  // ── Chuẩn mạng xã hội ────────────────────────────────────────
+  const preset = findPreset(presetId);
+  const budgetBytes = budget === -1 ? preset.maxBytes : budget;
+
+  function switchPlatform(id: PlatformId) {
+    const first = presetsFor(id)[0];
+    setPlatform(id);
+    setPresetId(first.id);
+    setFit(first.fit);
+    resetOutputs();
+  }
+  function switchPreset(id: string) {
+    setPresetId(id);
+    setFit(findPreset(id).fit);
+    resetOutputs();
+  }
+
+  // Ảnh gốc đủ pixel cho khung chuẩn hay không, và cắt mất bao nhiêu — tính
+  // trước để cảnh báo, vì phóng to ảnh nhỏ chính là nguyên nhân "ảnh bị vỡ".
+  const socialPlan =
+    tool === "social" && previewSrc
+      ? planFrame(
+          previewSrc.img.naturalWidth,
+          previewSrc.img.naturalHeight,
+          { width: preset.w, height: preset.h, fit, padColor },
+          false
+        )
+      : null;
+  const tooSmall =
+    !!socialPlan &&
+    (fit === "cover"
+      ? socialPlan.canvas.w < preset.w
+      : Math.max(socialPlan.dest.w, socialPlan.dest.h) < Math.max(preset.w, preset.h));
+  const cropPct =
+    socialPlan && fit === "cover" && previewSrc
+      ? Math.round(
+          (1 -
+            (socialPlan.src.w * socialPlan.src.h) /
+              (previewSrc.img.naturalWidth * previewSrc.img.naturalHeight)) *
+            100
+        )
+      : 0;
+
   // ── Per-tool processing options ──────────────────────────────
   // Free accounts: image/logo watermark is a pro feature — fall back to text.
   const effectiveWmType: "text" | "image" = pro ? wmType : "text";
@@ -288,8 +379,26 @@ export default function ToolPanel({
       imageScale: wmImageScale / 100,
     };
   }
-  function optionsFor(): { quality: number; maxDim: number; format: OutputFormat; watermark: WatermarkOptions | null } {
-    if (tool === "compress") return { quality: quality / 100, maxDim, format, watermark: null };
+  function optionsFor(): CompressOptions {
+    if (tool === "social")
+      return {
+        quality: preset.quality,
+        maxDim: 0,
+        format: socialFormat,
+        watermark: null,
+        frame: { width: preset.w, height: preset.h, fit, padColor },
+        allowUpscale: false, // thà ra nhỏ hơn khung còn hơn phóng to thành mờ
+        sharpen: sharpen / 100,
+        maxBytes: budgetBytes,
+      };
+    if (tool === "compress")
+      return {
+        quality: quality / 100,
+        maxDim,
+        format,
+        watermark: null,
+        sharpen: compressSharpen ? 0.3 : 0,
+      };
     if (tool === "watermark")
       // Free accounts can't compress in the watermark tab: keep high quality, no resize.
       return pro
@@ -297,7 +406,7 @@ export default function ToolPanel({
         : { quality: 0.92, maxDim: 0, format, watermark: buildWatermark() };
     return { quality: 0.95, maxDim: 0, format: targetFormat, watermark: null }; // convert
   }
-  const outputFormat = tool === "convert" ? targetFormat : format;
+  const outputFormat = tool === "convert" ? targetFormat : tool === "social" ? socialFormat : format;
 
   async function getBlob(it: SourceItem, fetchW: number): Promise<Blob> {
     if (it.file) return it.file;
@@ -357,7 +466,16 @@ export default function ToolPanel({
         const url = URL.createObjectURL(r.blob);
         setPreview((prev) => {
           if (prev) URL.revokeObjectURL(prev.url);
-          return { url, origSize: previewSrc.origSize, newSize: r.blob.size, label: previewSrc.label };
+          return {
+            url,
+            origSize: previewSrc.origSize,
+            newSize: r.blob.size,
+            label: previewSrc.label,
+            w: r.width,
+            h: r.height,
+            quality: r.quality,
+            overBudget: r.overBudget,
+          };
         });
       } catch {
         /* ignore */
@@ -368,16 +486,19 @@ export default function ToolPanel({
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewSrc, quality, maxDim, format, targetFormat, tool, wmType, wmText, wmColor, wmPos, wmOpacity, wmTextScale, wmImageScale, wmImg]);
+  }, [previewSrc, quality, maxDim, format, targetFormat, tool, wmType, wmText, wmColor, wmPos, wmOpacity, wmTextScale, wmImageScale, wmImg, compressSharpen, presetId, fit, padColor, sharpen, budget, socialFormat]);
 
   // ── Main run ─────────────────────────────────────────────────
   async function writeOneToDrive(tok: string, r: DoneItem) {
-    if (writeMode === "overwrite") {
+    // Tab chuẩn MXH luôn lưu bản mới: bản đã cắt/thu nhỏ theo khổ mạng xã hội
+    // không thể thay cho ảnh gốc.
+    if (writeMode === "overwrite" && tool !== "social") {
       await overwriteDriveFile(tok, r.driveId!, r.blob);
     } else {
       const { parentId } = await getDriveParent(tok, r.driveId!);
       if (!parentId) throw new Error("no_parent");
-      await createDriveFile(tok, parentId, `${stripExtension(r.name)}_nen.${formatExt(outputFormat)}`, r.blob);
+      const suffix = tool === "social" ? `_${preset.id}` : "_nen";
+      await createDriveFile(tok, parentId, `${stripExtension(r.name)}${suffix}.${formatExt(outputFormat)}`, r.blob);
     }
   }
 
@@ -390,8 +511,8 @@ export default function ToolPanel({
     setQuotaMsg(null);
     setWriteMsg(null);
 
-    // Quota only applies to the compress tool.
-    if (tool === "compress") {
+    // Quota only applies to the compress-like tools (nén / chuẩn MXH).
+    if (usesQuota) {
       const kind = isPicker ? "picker" : "basic";
       const { ok, status, data } = await consumeQuota(kind);
       if (status === 401) {
@@ -417,7 +538,7 @@ export default function ToolPanel({
     const out: DoneItem[] = [];
     let written = 0;
     let token = "";
-    if (tool === "compress" && isPicker) {
+    if (usesQuota && isPicker) {
       try {
         token = await ensureDriveToken();
       } catch {
@@ -445,7 +566,7 @@ export default function ToolPanel({
         };
         out.push(done);
         // Picker compress: write back to Drive automatically (no extra prompt).
-        if (tool === "compress" && isPicker && it.driveId) {
+        if (usesQuota && isPicker && it.driveId) {
           try {
             await writeOneToDrive(token, done);
             written++;
@@ -466,9 +587,13 @@ export default function ToolPanel({
     setResults(out);
     setProgress(null);
     setBusy(false);
-    if (tool === "compress" && isPicker) {
+    if (usesQuota && isPicker) {
       setWriteMsg(
-        writeMode === "overwrite"
+        tool === "social"
+          ? `Đã xuất & lưu ${written}/${items.length} bản chuẩn ${
+              PLATFORMS.find((p) => p.id === platform)?.label ?? "MXH"
+            } (đuôi _${preset.id}) vào Drive, ảnh gốc giữ nguyên.`
+          : writeMode === "overwrite"
           ? `Đã nén & ghi đè ${written}/${items.length} ảnh lên Drive (giữ nguyên tên & link).`
           : `Đã nén & lưu ${written}/${items.length} bản mới (đuôi _nen) vào Drive.`
       );
@@ -482,7 +607,16 @@ export default function ToolPanel({
     const zip = new JSZip();
     for (const r of results) zip.file(r.out, r.blob);
     const blob = await zip.generateAsync({ type: "blob" });
-    triggerDownload(blob, tool === "convert" ? "anh-doi-dinh-dang.zip" : tool === "watermark" ? "anh-watermark.zip" : "anh-da-nen.zip");
+    triggerDownload(
+      blob,
+      tool === "convert"
+        ? "anh-doi-dinh-dang.zip"
+        : tool === "watermark"
+        ? "anh-watermark.zip"
+        : tool === "social"
+        ? `anh-${platform}-${preset.w}x${preset.h}.zip`
+        : "anh-da-nen.zip"
+    );
   }
   async function saveToFolder() {
     if (results.length === 0) return;
@@ -509,7 +643,17 @@ export default function ToolPanel({
   const savedPct = totalOriginal > 0 ? Math.round((1 - totalNew / totalOriginal) * 100) : 0;
 
   const runLabel =
-    tool === "watermark" ? "Gắn watermark" : tool === "convert" ? "Chuyển đổi" : isPicker ? "Nén & ghi lên Drive" : "Nén ảnh";
+    tool === "watermark"
+      ? "Gắn watermark"
+      : tool === "convert"
+      ? "Chuyển đổi"
+      : tool === "social"
+      ? isPicker
+        ? "Xuất chuẩn MXH & ghi lên Drive"
+        : "Xuất chuẩn MXH"
+      : isPicker
+      ? "Nén & ghi lên Drive"
+      : "Nén ảnh";
 
   // ── Source tab buttons ───────────────────────────────────────
   const srcTab = (key: SourceKind, label: string, Icon: typeof Link2) => (
@@ -591,8 +735,137 @@ export default function ToolPanel({
       {/* Options */}
       <div className="card p-5">
         <h2 className="mb-3 flex items-center gap-2 text-[15px] font-bold">
-          <Minimize2 size={16} style={{ color: "var(--ac)" }} /> {tool === "watermark" ? "Watermark" : tool === "convert" ? "Đổi định dạng" : "Thiết lập nén"}
+          {tool === "social" ? (
+            <Share2 size={16} style={{ color: "var(--ac)" }} />
+          ) : (
+            <Minimize2 size={16} style={{ color: "var(--ac)" }} />
+          )}{" "}
+          {tool === "watermark"
+            ? "Watermark"
+            : tool === "convert"
+            ? "Đổi định dạng"
+            : tool === "social"
+            ? "Khổ chuẩn mạng xã hội"
+            : "Thiết lập nén"}
         </h2>
+
+        {tool === "social" && (
+          <>
+            <div className="mb-3 flex flex-wrap gap-2">
+              {PLATFORMS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => switchPlatform(p.id)}
+                  className="rounded-lg px-3 py-1.5 text-[13px]"
+                  style={
+                    platform === p.id
+                      ? { background: "var(--accent)", color: "var(--accentInk)" }
+                      : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }
+                  }
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            <label className="mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>Khổ đăng</label>
+            <select value={presetId} onChange={(e) => switchPreset(e.target.value)} className="input">
+              {presetsFor(platform).map((p) => (
+                <option key={p.id} value={p.id}>{p.label}</option>
+              ))}
+            </select>
+
+            <div className="mt-2 rounded-lg p-3 text-[12.5px]" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+              <p>
+                Khung xuất: <b style={{ color: "var(--text)" }}>{preset.w}×{preset.h}px</b> · tỉ lệ {ratioLabel(preset.w, preset.h)} ·{" "}
+                {formatExt(preset.format).toUpperCase()} chất lượng {Math.round(preset.quality * 100)}
+                {preset.maxBytes > 0 && <> · dưới {formatBytes(preset.maxBytes)}</>}
+              </p>
+              <p className="mt-1" style={{ color: "var(--text3)" }}>{preset.note}</p>
+            </div>
+
+            <label className="mt-4 mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>Ảnh không đúng tỉ lệ khung thì</label>
+            <div className="flex flex-wrap gap-2">
+              {FIT_OPTIONS.map((o) => (
+                <button
+                  key={o.v}
+                  onClick={() => setFit(o.v)}
+                  title={o.hint}
+                  className="rounded-lg px-3 py-1.5 text-[13px]"
+                  style={
+                    fit === o.v
+                      ? { background: "var(--accent)", color: "var(--accentInk)" }
+                      : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }
+                  }
+                >
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-[12px]" style={{ color: "var(--text3)" }}>
+              {FIT_OPTIONS.find((o) => o.v === fit)?.hint}
+            </p>
+
+            {fit === "pad" && (
+              <div className="mt-3 flex items-center gap-3">
+                <label className="text-[13px]" style={{ color: "var(--text2)" }}>Màu viền</label>
+                <select value={padColor} onChange={(e) => setPadColor(e.target.value)} className="input w-auto px-2 py-1 text-xs">
+                  <option value="#ffffff">Trắng</option>
+                  <option value="#000000">Đen</option>
+                  <option value="#f2f2f2">Xám nhạt</option>
+                </select>
+              </div>
+            )}
+
+            <label className="mt-4 block text-[13px]" style={{ color: "var(--text2)" }}>
+              Làm nét sau khi thu nhỏ: <b style={{ color: "var(--text)" }}>{sharpen}%</b>
+              <span style={{ color: "var(--text3)" }}> (bù phần nét mất khi mạng xã hội nén lại)</span>
+            </label>
+            <input type="range" min={0} max={80} value={sharpen} onChange={(e) => setSharpen(+e.target.value)} className="w-full accent-[var(--gold)]" />
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>Trần dung lượng</label>
+                <select value={budget} onChange={(e) => setBudget(+e.target.value)} className="input">
+                  {BUDGETS.map((b) => (
+                    <option key={b.v} value={b.v}>{b.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>Định dạng</label>
+                <select value={socialFormat} onChange={(e) => setSocialFormat(e.target.value as OutputFormat)} className="input">
+                  <option value="image/jpeg">JPEG (ảnh chụp — khuyên dùng)</option>
+                  <option value="image/png">PNG (ảnh nhiều chữ, đồ hoạ)</option>
+                </select>
+              </div>
+            </div>
+
+            {tooSmall && (
+              <p className="mt-3 rounded-[10px] px-3 py-2 text-[12.5px]" style={{ background: "var(--amS)", color: "var(--am)" }}>
+                Ảnh gốc nhỏ hơn khung chuẩn nên bản xuất chỉ đạt{" "}
+                <b>{socialPlan ? `${socialPlan.canvas.w}×${socialPlan.canvas.h}` : ""}</b> — vẫn đúng tỉ lệ và không bị phóng to
+                thành mờ, nhưng muốn nét tối đa thì nên lấy ảnh gốc lớn hơn.
+              </p>
+            )}
+            {fit === "cover" && cropPct >= 8 && (
+              <p className="mt-2 text-[12.5px]" style={{ color: "var(--text3)" }}>
+                Khổ này sẽ cắt bỏ khoảng <b>{cropPct}%</b> ảnh gốc (cắt giữa). Muốn giữ trọn ảnh thì chọn “Giữ nguyên tỉ lệ” hoặc “Thêm viền”.
+              </p>
+            )}
+            {preview?.overBudget && (
+              <p className="mt-2 text-[12.5px]" style={{ color: "var(--text3)" }}>
+                Ảnh nhiều chi tiết nên vẫn nặng hơn trần {formatBytes(budgetBytes)} dù đã hạ chất lượng hết mức — cứ đăng bình thường, chỉ là nền tảng sẽ nén thêm một chút.
+              </p>
+            )}
+
+            {isPicker && (
+              <p className="mt-3 text-[12.5px]" style={{ color: "var(--text3)" }}>
+                Bản chuẩn MXH luôn được lưu thành <b>file mới</b> (đuôi <code>_{preset.id}</code>) trên Drive — ảnh gốc giữ nguyên.
+              </p>
+            )}
+          </>
+        )}
 
         {tool === "compress" && (
           <>
@@ -622,6 +895,18 @@ export default function ToolPanel({
                 </select>
               </div>
             </div>
+            <label className="mt-4 flex items-start gap-2 text-[13px]" style={{ color: "var(--text2)" }}>
+              <input
+                type="checkbox"
+                checked={compressSharpen}
+                onChange={(e) => setCompressSharpen(e.target.checked)}
+                className="mt-0.5 accent-[var(--gold)]"
+              />
+              <span>
+                Làm nét sau khi thu nhỏ
+                <span style={{ color: "var(--text3)" }}> — chống ảnh mềm nét khi thu nhỏ nhiều. Cần đăng mạng xã hội thì dùng tab <b>Chuẩn mạng xã hội</b> để có đúng khổ.</span>
+              </span>
+            </label>
             {isPicker && (
               <div className="mt-4 rounded-lg p-3" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
                 <p className="mb-2 text-[13px] font-medium" style={{ color: "var(--text2)" }}>Sau khi nén, ghi lên Drive:</p>
@@ -770,7 +1055,7 @@ export default function ToolPanel({
                 className="px-3 py-1.5 text-[13px]"
                 style={!showOriginal ? { background: "var(--accent)", color: "var(--accentInk)" } : { background: "var(--surface2)", color: "var(--text2)" }}
               >
-                {tool === "convert" ? "Đã đổi" : "Đã nén"}
+                {tool === "convert" ? "Đã đổi" : tool === "social" ? "Chuẩn MXH" : "Đã nén"}
               </button>
             </div>
             <div className="ml-auto flex items-center gap-2 text-[13px]" style={{ color: "var(--text2)" }}>
@@ -805,13 +1090,21 @@ export default function ToolPanel({
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px]" style={{ color: "var(--text2)" }}>
-            <span>Đang xem: <b style={{ color: "var(--text)" }}>{showOriginal ? "Ảnh gốc" : tool === "convert" ? "Đã đổi định dạng" : "Đã nén"}</b></span>
-            <span>Gốc: {formatBytes(preview.origSize)}</span>
+            <span>Đang xem: <b style={{ color: "var(--text)" }}>{showOriginal ? "Ảnh gốc" : tool === "convert" ? "Đã đổi định dạng" : tool === "social" ? "Bản chuẩn MXH" : "Đã nén"}</b></span>
+            <span>
+              Gốc: {previewSrc.img.naturalWidth}×{previewSrc.img.naturalHeight} · {formatBytes(preview.origSize)}
+            </span>
+            <span>
+              Xuất ra: <b style={{ color: "var(--text)" }}>{preview.w}×{preview.h}</b>
+              {tool === "social" && <> · {formatExt(outputFormat).toUpperCase()} q{Math.round(preview.quality * 100)}</>}
+            </span>
             <span>Sau xử lý: <b style={{ color: "var(--text)" }}>{formatBytes(preview.newSize)}</b> {tool === "convert" && `(.${formatExt(outputFormat)})`}</span>
             {tool !== "convert" && preview.origSize > 0 && preview.newSize < preview.origSize && (
               <span style={{ color: "var(--gold)" }}>Giảm {Math.round((1 - preview.newSize / preview.origSize) * 100)}%</span>
             )}
-            <span style={{ color: "var(--text3)" }}>Bấm <b>Gốc</b>/<b>Đã nén</b> để so sánh; phóng to để thấy rõ. (Ctrl + lăn chuột để zoom)</span>
+            <span style={{ color: "var(--text3)" }}>
+              Bấm <b>Gốc</b>/<b>{tool === "social" ? "Chuẩn MXH" : "Đã nén"}</b> để so sánh; phóng to để thấy rõ. (Ctrl + lăn chuột để zoom)
+            </span>
           </div>
         </div>
       )}
@@ -823,7 +1116,7 @@ export default function ToolPanel({
             <Minimize2 size={15} />
             {busy && progress ? `Đang xử lý… ${progress.done}/${progress.total}` : `${runLabel} ${items.length || ""} ảnh`}
           </button>
-          {results.length > 0 && !(tool === "compress" && isPicker) && (
+          {results.length > 0 && !(usesQuota && isPicker) && (
             <>
               <button onClick={downloadZip} className="btn-ghost text-[13px]">
                 <Download size={14} /> Tải ZIP ({results.length})
@@ -878,7 +1171,7 @@ export default function ToolPanel({
                   {tool !== "convert" && (
                     <span className="w-14 whitespace-nowrap text-right" style={{ color: pct > 0 ? "var(--gold)" : "var(--text3)" }}>{pct > 0 ? `−${pct}%` : "—"}</span>
                   )}
-                  {!(tool === "compress" && isPicker) && (
+                  {!(usesQuota && isPicker) && (
                     <button onClick={() => triggerDownload(r.blob, r.out)} className="rounded-md p-1.5" style={{ color: "var(--text2)" }} title="Tải ảnh này" aria-label="Tải ảnh này">
                       <Download size={15} />
                     </button>
