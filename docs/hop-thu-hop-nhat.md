@@ -4,21 +4,25 @@ Hộp thư gom tin nhắn khách từ Zalo, Facebook, Instagram, TikTok và chat
 website về một chỗ (Dashboard → Kinh doanh → **Hộp thư**). Code đã lên `main`; tài liệu này
 là phần **phải làm tay** để nó chạy thật.
 
-Bốn biến cần thêm. Hai biến bạn **tự sinh ra**, hai biến phải **đi lấy**:
+Sáu biến cần thêm. Ba biến bạn **tự sinh / tự gõ**, hai biến phải **đi lấy**
+trong console, một biến là địa chỉ callback:
 
 | Biến | Lấy ở đâu | Bắt buộc khi |
 | --- | --- | --- |
 | `INBOX_INGEST_SECRET` | bạn tự sinh | dùng kênh Zalo cá nhân **hoặc TikTok** |
 | `META_VERIFY_TOKEN` | bạn tự đặt | dùng Facebook / Instagram |
+| `META_APP_ID` | Meta App | dùng Facebook / Instagram |
 | `META_APP_SECRET` | Meta App | dùng Facebook / Instagram |
+| `META_REDIRECT_URI` | bạn tự gõ | dùng Facebook / Instagram |
 | `ZALO_OA_WEBHOOK_SECRET` | Zalo App | dùng Zalo OA |
 
 Không dùng kênh nào thì bỏ qua biến của kênh đó — các kênh độc lập nhau. Chatbox
 website chạy sẵn, **không cần biến nào**.
 
-> **Page Access Token của Facebook KHÔNG nằm ở đây.** Nó dán trong giao diện
-> (Hộp thư → Kênh), vì mỗi studio một trang khác nhau và token được mã hoá trước
-> khi lưu. Biến môi trường chỉ giữ những thứ dùng chung cho cả nền tảng.
+> **Page Access Token của Facebook KHÔNG nằm ở đây, và studio cũng không phải
+> tự đi lấy.** Studio bấm "Kết nối Facebook" → đăng nhập → tích chọn Trang; hệ
+> thống tự lấy token, tự đăng ký webhook cho Trang, tự nối luôn Instagram liên
+> kết. Biến môi trường chỉ giữ những thứ dùng chung cho cả nền tảng.
 
 ---
 
@@ -29,7 +33,7 @@ phải có trên máy chủ TRƯỚC khi bạn bấm nút xác minh bên Meta. L
 Meta báo lỗi và bạn sẽ đi tìm nguyên nhân ở nhầm chỗ.
 
 1. Chạy SQL tạo bảng
-2. Lấy / sinh các biến (mục 1–4 dưới đây)
+2. Lấy / sinh các biến (mục 1–4 dưới đây; mục 3 gồm ba biến)
 3. Dán vào Vercel rồi **Redeploy**
 4. Khai webhook bên Meta / Zalo
 5. Kiểm tra
@@ -82,28 +86,42 @@ openssl rand -hex 16
 
 Bạn sẽ dán đúng chuỗi này vào ô **Verify Token** bên Meta ở bước 4.
 
-### 3. `META_APP_SECRET` — lấy trong Meta App
+### 3. `META_APP_ID` + `META_APP_SECRET` + `META_REDIRECT_URI` — trong Meta App
 
-Cần một Meta App. Nếu studio chưa có:
+**Cần MỘT Meta App cho CẢ NỀN TẢNG, không phải mỗi studio một app.** Studio chỉ
+bấm "Kết nối Facebook" trong Hộp thư → Kênh, đăng nhập, tích chọn Trang — hệ
+thống tự lấy Page Access Token, tự đăng ký webhook, tự nối luôn Instagram liên
+kết. Đây là lý do bạn khai ba biến này một lần, còn studio không phải làm gì.
 
-1. Vào **developers.facebook.com** → đăng nhập bằng tài khoản Facebook quản lý
-   fanpage → **My Apps** → **Create App**.
+1. Vào **developers.facebook.com** → đăng nhập bằng tài khoản Facebook của
+   **bạn** (chủ nền tảng, không phải của studio) → **My Apps** → **Create App**.
 2. Chọn loại app cho doanh nghiệp (Meta hay đổi nhãn — chọn cái nói về
    *Business* / nhắn tin với khách hàng, không phải Gaming).
-3. Trong app → **App settings → Basic** → dòng **App Secret** → bấm **Show** →
-   chép chuỗi đó. **Đó là `META_APP_SECRET`.**
+3. Trong app → **App settings → Basic**:
+   - Dòng **App ID** → chép → đó là **`META_APP_ID`**
+   - Dòng **App Secret** → bấm **Show** → chép → đó là **`META_APP_SECRET`**
+4. **Add Product** → thêm **Facebook Login** → **Settings** → ô **Valid OAuth
+   Redirect URIs** → dán `https://<tên-miền>/api/inbox/meta/callback` →
+   **Save changes**. Đúng chuỗi đó cũng là **`META_REDIRECT_URI`** — phải trùng
+   tuyệt đối, lệch một dấu `/` là Facebook từ chối đăng nhập.
+5. **Add Product** → thêm **Messenger**. Dùng cả Instagram DM thì thêm luôn
+   **Instagram**.
 
 App Secret dùng để kiểm chữ ký `X-Hub-Signature-256` của mọi tin webhook gửi
 tới. Thiếu nó thì endpoint từ chối hết (503) — cố ý, vì URL webhook là công
 khai, không kiểm chữ ký thì bất kỳ ai cũng nhét được tin giả vào hộp thư và đốt
 hạn mức AI của bạn.
 
+**App Review chỉ đi MỘT LẦN, và là bạn đi, không phải studio.** Xin quyền
+`pages_messaging` (+ `instagram_manage_messages` nếu dùng IG) cho app này. Duyệt
+xong thì mọi studio bấm nút là nối được ngay.
+
 > App Secret là **bí mật cấp cao nhất** của Meta App — ai có nó thì giả mạo được
 > app của bạn. Chỉ dán vào Vercel, đừng để trong code hay ảnh chụp màn hình.
 
-Trong lúc còn ở đây, thêm luôn sản phẩm cho app: **Messenger** (cho fanpage) và
-**Instagram** (cho IG DM). Instagram doanh nghiệp phải đã liên kết với một
-fanpage thì tin nhắn IG mới đi qua được đường này.
+Instagram doanh nghiệp phải đã liên kết với một Trang Facebook thì tin nhắn IG
+mới đi qua được đường này — và khi đã liên kết thì studio không phải nối riêng,
+hệ thống tự bắt được lúc họ chọn Trang.
 
 ### 4. `ZALO_OA_WEBHOOK_SECRET` — lấy trong Zalo App
 
@@ -133,7 +151,9 @@ môi trường **Production** (và **Preview** nếu bạn có bản thử).
 ```
 INBOX_INGEST_SECRET       = <chuỗi từ mục 1>
 META_VERIFY_TOKEN         = <chuỗi từ mục 2>
+META_APP_ID               = <App ID từ mục 3>
 META_APP_SECRET           = <App Secret từ mục 3>
+META_REDIRECT_URI         = https://<tên-miền>/api/inbox/meta/callback
 ZALO_OA_WEBHOOK_SECRET    = <OA Secret Key từ mục 4>
 ```
 
@@ -162,9 +182,10 @@ https://<tên-miền-của-bạn>/api/inbox/webhook/zalo     ← Zalo OA
 - Bấm **Verify and Save**
 - Đăng ký sự kiện **`messages`** — làm cho **cả hai** sản phẩm Messenger và
   Instagram, vì đó là hai đăng ký riêng dù chung một URL
-- Vào **Messenger → Settings**, liên kết fanpage của studio và bấm **Generate
-  Token** → chép Page Access Token → dán vào **Hộp thư → Kênh** trong MStudo
-  (kèm Page ID), **không** dán vào Vercel
+- **KHÔNG** cần tự sinh Page Access Token nữa: studio bấm "Kết nối Facebook"
+  trong **Hộp thư → Kênh** là hệ thống tự lấy token và tự đăng ký Trang. Ô dán
+  token thủ công vẫn còn, thu sau nút "Nối thủ công", dành cho studio đã có Meta
+  App riêng.
 
 **Bên Zalo** — Zalo App → **Webhook**: dán URL `/zalo`, bật sự kiện *người dùng
 gửi tin nhắn*. Sau đó vào **Hộp thư → Kênh** bấm **Nối Zalo vào hộp thư** (nó
@@ -177,6 +198,9 @@ admin/developer/tester của chính app đó. Khách thật nhắn vào sẽ **k
 Muốn phục vụ khách thật phải qua **App Review** của Meta để xin quyền
 `pages_messaging` (và `instagram_manage_messages` cho IG). Đây là khâu duyệt của
 Meta, mất vài ngày và nằm ngoài tầm code.
+
+Điểm quan trọng: vì cả nền tảng dùng CHUNG một app, **bạn đi duyệt một lần cho
+tất cả studio**. Không studio nào phải nộp hồ sơ riêng.
 
 Vì vậy nên **thử bằng tài khoản Facebook của chính bạn trước** (thêm nó làm
 tester), xác nhận tin chạy về hộp thư, rồi mới nộp duyệt.
@@ -322,6 +346,18 @@ không có máy chạy 24/7 thì nên dùng Zalo OA thay vì Zalo cá nhân.
 | Instagram DM | như Facebook, thêm IG doanh nghiệp đã liên kết fanpage |
 | Zalo cá nhân | `INBOX_INGEST_SECRET` + một máy chạy worker liên tục |
 | TikTok | `INBOX_INGEST_SECRET` + một đối tác nhắn tin TikTok (khai URL cầu nối trong UI) |
+
+## Studio phải làm gì? (phần này gửi cho studio được)
+
+| Kênh | Thao tác của studio |
+| --- | --- |
+| Chatbox website | không làm gì |
+| Facebook + Instagram | bấm **Kết nối Facebook** → đăng nhập → tích chọn Trang. Hết. |
+| Zalo | bấm **Nối Zalo vào hộp thư** (nếu đã kết nối Zalo từ trước) |
+| TikTok | dán 3 ô do đối tác nhắn tin cung cấp |
+
+Mọi thứ còn lại — Meta App, App Secret, webhook, App Review, token — là việc của
+chủ nền tảng, làm một lần.
 
 AI trả lời dùng lại `CHAT_PROVIDERS` bạn đã cấu hình cho chatbox website —
 không phải khai thêm khoá nào.

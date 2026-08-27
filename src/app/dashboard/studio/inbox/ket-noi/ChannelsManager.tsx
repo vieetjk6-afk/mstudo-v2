@@ -11,9 +11,10 @@ import { Panel, PanelHead } from "@/components/studio/ui";
    NỐI KÊNH VÀO HỘP THƯ.
 
    Mỗi nền tảng nối một kiểu, và màn này phải nói thẳng kiểu nào cần gì:
-     • Facebook / Instagram — dán Page ID + Page Access Token, rồi khai URL
-       webhook bên Meta. Việc khai webhook nằm NGOÀI app nên URL phải hiện sẵn
-       kèm nút chép, chứ không bắt người dùng tự ghép.
+     • Facebook / Instagram — MỘT nút "Kết nối Facebook". Studio đăng nhập, tích
+       chọn Trang, xong; hệ thống tự lấy token, tự bật nhận tin, tự nối luôn
+       Instagram liên kết. Đường dán token thủ công vẫn còn nhưng thu sau một
+       nút — nó dành cho studio đã có Meta App riêng, không phải mặc định.
      • Zalo — dùng lại tài khoản đã kết nối ở màn "Kết nối", bấm một nút.
      • TikTok — khai URL cầu nối của đối tác nhắn tin, vì TikTok chưa cho nối
        thẳng như Meta. Màn này phải nói ra điều đó thay vì để người dùng đi tìm
@@ -25,6 +26,41 @@ interface Props {
   channels: ChannelPublic[];
   zaloReady: boolean;
   zaloChannel: "oa" | "personal" | null;
+  /** Nền tảng đã khai Meta App chưa — quyết định có hiện nút một chạm không. */
+  metaOAuthReady: boolean;
+}
+
+/**
+ * Kết quả quay về từ Facebook (?meta=…). Facebook chỉ redirect được kèm tham số
+ * URL, nên phải dịch chúng ra câu tiếng Việt tại đây — nếu không studio quay về
+ * một trang trông y như lúc họ rời đi và không biết mình đã nối được hay chưa.
+ */
+function metaResult(params: URLSearchParams): { tone: "ok" | "warn" | "err"; text: string } | null {
+  const code = params.get("meta");
+  if (!code) return null;
+  const pages = Number(params.get("pages") || 0);
+  const ig = Number(params.get("ig") || 0);
+  switch (code) {
+    case "connected": {
+      const parts = [`Đã nối ${pages} Trang Facebook`];
+      if (ig) parts.push(`${ig} tài khoản Instagram`);
+      const done = `${parts.join(" và ")}. Nhắn thử một tin từ tài khoản khác để kiểm tra.`;
+      return params.get("warn")
+        ? { tone: "warn", text: `${done} Có Trang chưa bật được nhận tin — xem cột trạng thái phía trên.` }
+        : { tone: "ok", text: done };
+    }
+    case "cancelled":
+      return { tone: "warn", text: "Bạn đã huỷ ở màn hình Facebook. Chưa nối Trang nào." };
+    case "no_page":
+      return {
+        tone: "warn",
+        text: "Tài khoản Facebook đó không quản lý Trang nào, hoặc bạn chưa tích chọn Trang. Meta không cho nhắn tin qua trang cá nhân — studio cần một Trang.",
+      };
+    case "not_configured":
+      return { tone: "err", text: "Nền tảng chưa khai Meta App nên chưa dùng được nút kết nối một chạm." };
+    default:
+      return { tone: "err", text: "Nối Facebook không thành công. Thử lại, hoặc dùng cách nối thủ công bên dưới." };
+  }
 }
 
 function CopyRow({ label, value }: { label: string; value: string }) {
@@ -61,7 +97,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default function ChannelsManager({ channels: initial, zaloReady, zaloChannel }: Props) {
+export default function ChannelsManager({ channels: initial, zaloReady, zaloChannel, metaOAuthReady }: Props) {
   const [channels, setChannels] = useState<ChannelPublic[]>(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +109,18 @@ export default function ChannelsManager({ channels: initial, zaloReady, zaloChan
 
   const [form, setForm] = useState({ platform: "facebook" as Platform, externalId: "", token: "", name: "" });
   const [tiktok, setTiktok] = useState({ externalId: "", relayUrl: "", relaySecret: "" });
+  const [manualMeta, setManualMeta] = useState(false);
+  const [fbResult, setFbResult] = useState<{ tone: "ok" | "warn" | "err"; text: string } | null>(null);
+
+  // Đọc kết quả Facebook trả về rồi DỌN tham số khỏi thanh địa chỉ: để nguyên
+  // thì bấm F5 lại hiện "đã nối 2 Trang" trong khi chẳng có gì vừa xảy ra.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const res = metaResult(params);
+    if (!res) return;
+    setFbResult(res);
+    window.history.replaceState({}, "", window.location.pathname);
+  }, []);
 
   async function call(body: Record<string, unknown>): Promise<boolean> {
     setBusy(true);
@@ -118,6 +166,20 @@ export default function ChannelsManager({ channels: initial, zaloReady, zaloChan
       {notice && (
         <p className="mb-3 rounded-[12px] p-2.5 text-[13px]" style={{ background: "var(--gnS)", color: "var(--gn)" }}>
           {notice}
+        </p>
+      )}
+      {fbResult && (
+        <p
+          className="mb-3 rounded-[12px] p-2.5 text-[13px]"
+          style={
+            fbResult.tone === "ok"
+              ? { background: "var(--gnS)", color: "var(--gn)" }
+              : fbResult.tone === "warn"
+              ? { background: "var(--amS)", color: "var(--am)" }
+              : { background: "var(--rdS)", color: "var(--rd)" }
+          }
+        >
+          {fbResult.text}
         </p>
       )}
 
@@ -235,23 +297,60 @@ export default function ChannelsManager({ channels: initial, zaloReady, zaloChan
 
       {/* ── Facebook / Instagram ─────────────────────────────────────────── */}
       <Panel className="mt-3">
-        <PanelHead icon={Facebook} tone="blue" title="Facebook Messenger & Instagram DM" note="Cần một Meta App có quyền nhắn tin cho trang" />
+        <PanelHead icon={Facebook} tone="blue" title="Facebook Messenger & Instagram DM" note="Đăng nhập Facebook và chọn Trang" />
         <div className="p-3">
-          {origin && (
-            <div className="rounded-[12px] p-2.5" style={{ background: "var(--sf2)" }}>
-              <p className="text-[12px]" style={{ color: "var(--tx2)" }}>
-                Trong Meta App → <b>Webhooks</b>, khai URL và token dưới đây cho cả sản phẩm{" "}
-                <b>Messenger</b> lẫn <b>Instagram</b>, rồi đăng ký sự kiện <code>messages</code>.
+          {metaOAuthReady ? (
+            <>
+              <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
+                Bấm nút dưới, đăng nhập bằng tài khoản Facebook <b>đang quản lý Trang</b> của studio, rồi tích chọn
+                Trang. Xong. Hệ thống tự lấy quyền nhắn tin, tự bật nhận tin, và tự nối luôn tài khoản{" "}
+                <b>Instagram</b> nào đang liên kết với Trang đó.
               </p>
-              <CopyRow label="Callback URL" value={`${origin}/api/inbox/webhook/meta`} />
+              <a href="/api/inbox/meta/connect" className="btn-primary mt-2.5">
+                <Facebook size={15} /> Kết nối Facebook
+              </a>
               <p className="mt-2 text-[12px]" style={{ color: "var(--tx3)" }}>
-                Verify Token là giá trị bạn đặt ở biến môi trường <code>META_VERIFY_TOKEN</code>; App Secret đặt ở{" "}
-                <code>META_APP_SECRET</code>.
+                Không cần tạo Meta App, không cần token, không cần khai webhook — MStudo đã lo phần đó. Lưu ý: Meta
+                chỉ hỗ trợ <b>Trang</b>, không nhắn được qua trang cá nhân.
               </p>
-            </div>
+            </>
+          ) : (
+            <p
+              className="rounded-[12px] p-2.5 text-[13px]"
+              style={{ background: "var(--amS)", color: "var(--am)" }}
+            >
+              Nền tảng chưa khai Meta App nên chưa có nút kết nối một chạm. Chủ hệ thống cần đặt{" "}
+              <code>META_APP_ID</code>, <code>META_APP_SECRET</code> và <code>META_REDIRECT_URI</code>. Trong lúc chờ,
+              vẫn nối tay được bằng Page Access Token bên dưới.
+            </p>
           )}
 
+          <button
+            type="button"
+            className="btn-ghost mt-3 px-2.5 py-1.5 text-xs"
+            onClick={() => setManualMeta((v) => !v)}
+          >
+            {manualMeta ? "Ẩn cách nối thủ công" : "Nối thủ công bằng Page Access Token"}
+          </button>
+
+          {/* Đường thủ công GIỮ LẠI chứ không xoá: studio đã có sẵn Meta App
+              riêng, hoặc nền tảng chưa khai app, thì đây là lối duy nhất. Nhưng
+              nó thu vào sau một nút — không còn là thứ đập vào mắt trước tiên. */}
+          {manualMeta && (
           <div className="mt-3 grid gap-2.5">
+            {origin && (
+              <div className="rounded-[12px] p-2.5" style={{ background: "var(--sf2)" }}>
+                <p className="text-[12px]" style={{ color: "var(--tx2)" }}>
+                  Trong Meta App → <b>Webhooks</b>, khai URL dưới đây cho cả sản phẩm <b>Messenger</b> lẫn{" "}
+                  <b>Instagram</b>, rồi đăng ký sự kiện <code>messages</code>.
+                </p>
+                <CopyRow label="Callback URL" value={`${origin}/api/inbox/webhook/meta`} />
+                <p className="mt-2 text-[12px]" style={{ color: "var(--tx3)" }}>
+                  Verify Token là giá trị đặt ở <code>META_VERIFY_TOKEN</code>; App Secret ở{" "}
+                  <code>META_APP_SECRET</code>.
+                </p>
+              </div>
+            )}
             <label className="field">
               <span className="label">Kênh</span>
               <select
@@ -317,6 +416,7 @@ export default function ChannelsManager({ channels: initial, zaloReady, zaloChan
               </p>
             </div>
           </div>
+          )}
         </div>
       </Panel>
 

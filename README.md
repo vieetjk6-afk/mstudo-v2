@@ -497,6 +497,7 @@ bấm *Tôi tiếp quản* thì bot im và người trả lời tiếp trong đ�
 | --- | --- | --- |
 | Hộp thư (danh sách + khung chat realtime) | `/dashboard/studio/inbox` | `studio/inbox/InboxView.tsx` |
 | Nối kênh mạng xã hội | `/dashboard/studio/inbox/ket-noi` | `studio/inbox/ket-noi/ChannelsManager.tsx` |
+| Đăng nhập Facebook lấy Trang | `/api/inbox/meta/connect` → `/callback` | `src/lib/inbox/adapters/meta-oauth.ts` |
 | Luật kênh (nhãn, màu, cửa sổ trả lời) | — | `src/lib/inbox/platforms.ts` (thuần, có test) |
 | Ghi/đọc hộp thư | — | `src/lib/inbox/store.ts`, `view.ts` |
 | Gửi tin + AI tự trả lời | — | `src/lib/inbox/send.ts`, `ai.ts` |
@@ -531,6 +532,36 @@ bí mật, không đọc thẳng bảng.
 4. **Webhook luôn trả 200** (trừ chữ ký sai). Meta và Zalo coi mã lỗi là "chưa
    nhận được" và sẽ bắn lại, rồi tắt webhook nếu hỏng nhiều lần. Chữ ký thì kiểm
    bắt buộc — không có nó thì ai cũng bơm được tin giả và đốt hạn mức AI của studio.
+
+### Facebook nối bằng MỘT nút, không bắt studio dán token
+
+Meta **không** có API cho tin nhắn trang cá nhân — chỉ **Trang (Page)**. Studio
+dùng nick cá nhân bán hàng thì phải có Trang; đó là điều kiện của Meta.
+
+Nhưng thao tác thì đã rút xuống một nút. MStudo sở hữu **một Meta App cho cả nền
+tảng** và đi App Review **một lần**, đúng khuôn Zalo OA đã làm từ trước: studio
+bấm *Kết nối Facebook* → đăng nhập → tích chọn Trang trong màn hình của chính
+Facebook. Không Meta App riêng, không App Secret, không webhook, không token,
+không hồ sơ duyệt.
+
+Ba việc `/api/inbox/meta/callback` tự làm sau khi studio đồng ý:
+
+1. Đổi `code` → token người dùng → **đổi tiếp sang token dài hạn**. Bỏ bước đổi
+   dài hạn thì Page Access Token cũng chỉ sống ~1 giờ và studio thấy kênh tự
+   chết sau bữa trưa.
+2. `POST /{page}/subscribed_apps` — quên bước này thì token có mà webhook vẫn
+   im: kênh "trông như đã nối" nhưng tin khách không bao giờ tới, kiểu hỏng khó
+   đoán nhất. Hỏng thì ghi vào `last_error` của kênh chứ không nuốt.
+3. Nối luôn tài khoản Instagram doanh nghiệp liên kết với Trang — DM Instagram
+   dùng CHÍNH Page Access Token đó, nên không có gì thêm để hỏi studio.
+
+Nối **tất cả** Trang trả về mà không dựng thêm màn chọn Trang: `/me/accounts`
+sau Business Login chỉ liệt kê đúng những Trang studio vừa tích, bắt chọn lại là
+kéo dài đúng cái luồng đang rút ngắn.
+
+Ô dán Page Access Token thủ công vẫn còn, thu sau một nút — dành cho studio đã
+có Meta App riêng, và cho lúc nền tảng chưa khai `META_APP_ID` (khi đó nút một
+chạm tự ẩn thay vì bấm vào ra lỗi).
 
 ### TikTok đi qua cầu nối, không webhook thẳng
 
@@ -571,8 +602,8 @@ chuyển sang hỏi `/api/vieetjk/chat/updates` vài giây một lần để nh�
 của người thật. Không dùng realtime Supabase ở đây vì khách là người lạ chưa
 đăng nhập — mở kênh realtime cho họ là mở thêm một cửa vào DB cho mọi khách vãng lai.
 
-Biến môi trường: `META_APP_SECRET`, `META_VERIFY_TOKEN`, `ZALO_OA_WEBHOOK_SECRET`,
-`INBOX_INGEST_SECRET` — **lấy ở đâu và khai webhook thế nào:
+Biến môi trường: `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`,
+`META_REDIRECT_URI`, `ZALO_OA_WEBHOOK_SECRET`, `INBOX_INGEST_SECRET` — **lấy ở đâu và khai webhook thế nào:
 [`docs/hop-thu-hop-nhat.md`](docs/hop-thu-hop-nhat.md)**. AI dùng lại
 `CHAT_PROVIDERS` sẵn có. Kiểm thử luật kênh: `npm run test:inbox`.
 

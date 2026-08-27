@@ -119,7 +119,7 @@ export const SCREENS: Record<string, { title: string; render: () => React.ReactN
   },
   "noi-kenh": {
     title: "Nối mạng xã hội vào hộp thư",
-    render: () => <ChannelsManager channels={f.inboxChannels} zaloReady zaloChannel="oa" />,
+    render: () => <ChannelsManager channels={f.inboxChannels} zaloReady zaloChannel="oa" metaOAuthReady />,
   },
   // Danh sách RỖNG là trạng thái người dùng mới gặp đầu tiên, và cũng là chỗ hay
   // quên vẽ nhất — để riêng một màn để không bao giờ bỏ sót.

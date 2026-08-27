@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireStudio } from "@/lib/auth-guards";
 import { listChannels, toPublic } from "@/lib/inbox/channels";
 import { loadZalo } from "@/lib/zalo/config";
+import { metaOAuthConfigured } from "@/lib/inbox/adapters/meta-oauth";
 import ChannelsManager from "./ChannelsManager";
 
 /**
@@ -35,6 +36,9 @@ export default async function InboxChannelsPage() {
       channels={channels.map(toPublic)}
       zaloReady={zalo?.status === "connected"}
       zaloChannel={zalo?.channel ?? null}
+      // Nền tảng đã khai Meta App chưa. Chưa thì giấu nút một-chạm đi và chỉ để
+      // đường thủ công — thà không có nút còn hơn có một nút bấm vào ra lỗi.
+      metaOAuthReady={metaOAuthConfigured()}
     />
   );
 }
