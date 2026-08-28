@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { MessageCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { getFeatureFlags, inboxComingSoon } from "@/lib/feature-flags";
 import { requireStudio } from "@/lib/auth-guards";
 import { listConversations, listMessages, staffNames } from "@/lib/inbox/view";
 import { listChannels, toPublic } from "@/lib/inbox/channels";
@@ -25,6 +27,22 @@ export default async function InboxPage() {
           <Link href="/dashboard/upgrade" className="btn-primary mt-5">
             Nâng cấp gói
           </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // "Sắp ra mắt": khoá với studio; admin vẫn vào để hoàn thiện.
+  if (inboxComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin") {
+    return (
+      <div className="mx-auto max-w-lg text-center">
+        <div className="card p-8">
+          <MessageCircle size={28} className="mx-auto mb-3" style={{ color: "var(--brand)" }} />
+          <h1 className="font-serif text-2xl font-medium">Hộp thư hợp nhất · Sắp ra mắt</h1>
+          <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>
+            Khách nhắn từ Zalo, Facebook, Instagram, TikTok hay chatbox website sẽ đổ chung về một chỗ; trợ lý AI
+            trả lời trước, nhân viên bấm một nút là tiếp quản. Bọn mình đang hoàn thiện và sẽ báo khi sẵn sàng.
+          </p>
         </div>
       </div>
     );

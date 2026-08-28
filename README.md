@@ -489,6 +489,11 @@ Thu chi & công nợ (thu và tiền công lọc qua `contract.branch_id`).
 
 ## Hộp thư hợp nhất (nhiều mạng xã hội, một chỗ trả lời)
 
+**Đang phát hành sau cờ tính năng, mặc định TẮT** (`feature_flags.inbox`, xem
+`inboxComingSoon`): studio thấy nhãn "Sắp ra mắt" trên menu, admin vẫn vào để
+hoàn thiện, và chatbox website chạy như cũ không ghi gì vào hộp thư. Bật ở
+Cài đặt hệ thống → Tính năng.
+
 Khách nhắn từ **Zalo OA, Zalo cá nhân, Facebook Messenger, Instagram DM, TikTok
 hay chatbox website** đều đổ về cùng một hộp thư. **AI trả lời trước**; nhân viên
 bấm *Tôi tiếp quản* thì bot im và người trả lời tiếp trong đúng khung chat đó.

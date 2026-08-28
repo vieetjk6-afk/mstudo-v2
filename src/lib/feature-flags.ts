@@ -66,9 +66,24 @@ export function desktopHidden(flags: FeatureFlags): boolean {
   return flags?.desktop !== "live";
 }
 
+/**
+ * Hộp thư hợp nhất — mặc định "Sắp ra mắt" cho tới khi admin đặt live.
+ *
+ * Mặc định KHOÁ (giống album/slide/drive_sync) chứ không mặc định mở: tính năng
+ * vừa dựng xong, còn phải khai Meta App, chạy migration và đi App Review. Bật
+ * nhầm ra cho studio lúc chưa đủ những thứ đó thì họ bấm vào một màn không chạy
+ * — và lần sau họ không bấm nữa.
+ *
+ * Bật khi sẵn sàng: Cài đặt hệ thống → Tính năng → bỏ tích "Hộp thư".
+ */
+export function inboxComingSoon(flags: FeatureFlags): boolean {
+  return flags?.inbox !== "live";
+}
+
 /** Nav hrefs currently flagged "Sắp ra mắt" (used to chip + lock the sidebar). */
 export function comingSoonNav(flags: FeatureFlags): string[] {
   const out: string[] = [];
+  if (inboxComingSoon(flags)) out.push("/dashboard/studio/inbox");
   if (storyComingSoon(flags)) out.push("/dashboard/studio/story");
   if (albumComingSoon(flags)) out.push("/dashboard/studio/album-designer");
   if (slideComingSoon(flags)) out.push("/dashboard/studio/slide");
