@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
-import { verifyTurnstile } from "@/lib/turnstile";
+import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIp } from "@/lib/rate-limit";
 import { depositFor, newDepositCode, newDepositToken } from "@/lib/booking-deposit";
 import { digitsOnly, isUsablePhone, samePhone } from "@/lib/referral";
@@ -26,8 +26,8 @@ export async function POST(req: Request, { params }: { params: { token: string }
     captcha?: string;
   };
 
-  const captchaOk = await verifyTurnstile(body.captcha);
-  if (!captchaOk) return NextResponse.json({ error: "captcha_failed" }, { status: 400 });
+  const captcha = await guardCaptcha(req, `book:${params.token}`, body.captcha);
+  if (captcha) return captcha;
 
   if (!body.name?.trim() || !body.phone?.trim()) {
     return NextResponse.json({ error: "missing" }, { status: 400 });

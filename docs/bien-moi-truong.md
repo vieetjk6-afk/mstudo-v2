@@ -61,12 +61,12 @@ Cột **Xử lý** đọc thế này:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 🔴 | của Supabase **MỚI** |
 | `NEXT_PUBLIC_SUPABASE_URL` | 🔴 | của Supabase **MỚI** |
 | `NEXT_PUBLIC_THIEP_HOST` | 🟢 | `thiep.mstudo.com` |
-| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | ⚪ | không có captcha ở form công khai |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | ⚪ | ô captcha chạy bằng **khoá thử** của Cloudflare (hiện ra nhưng không chặn ai) — xem 4e |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | 🟢 | đi **theo cặp** với khoá riêng; để trống cả cặp cũng chạy — 7.5 |
 | `OAUTH_STATE_SECRET` | 🟢 | 🔒 **để trống được** — code tự dùng `SUPABASE_SERVICE_ROLE_KEY` |
 | `RESEND_API_KEY` | ⚪ | không khai thì không gửi được email |
 | `SUPABASE_SERVICE_ROLE_KEY` | 🔴 | 🔒 của Supabase **MỚI** |
-| `TURNSTILE_SECRET_KEY` | ⚪ | |
+| `TURNSTILE_SECRET_KEY` | ⚪ | 🔒 không khai thì máy chủ **không xác minh được** mã nào — xem 4e |
 | `UPSTASH_REDIS_REST_TOKEN` | ⚪ | không giới hạn tần suất gọi |
 | `UPSTASH_REDIS_REST_URL` | ⚪ | như trên |
 | `VAPID_PRIVATE_KEY` | 🟢 | 🔒 **chỉ có ở Vercel cũ**, mất là mất hẳn — xem 7.5 |
@@ -346,6 +346,33 @@ của khách bị đăng ký nhầm vào **project cũ** — hỏng âm thầm, 
 
 # 5. Bỏ hẳn — không copy
 
+
+## 4e. Captcha Turnstile — khai đủ **cả cặp** thì mới có tác dụng
+
+Hai biến này đi thành một cặp, thiếu một là hỏng cả:
+
+| Khai gì | Chuyện gì xảy ra |
+|---|---|
+| Đủ cả hai | Ô captcha hiện; máy chủ hỏi Cloudflare từng mã. Mã bị bác → chặn (400). |
+| Thiếu `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | Trang chạy bằng **khoá thử** của Cloudflare: ô captcha vẫn hiện, ghi "Testing only", ai bấm cũng qua. Console ghi cảnh báo. |
+| Thiếu `TURNSTILE_SECRET_KEY` | Máy chủ không xác minh được mã nào → mọi lượt gửi bị xếp là "chưa xác minh". |
+
+Lượt gửi **chưa xác minh được** không bị khoá cửa (khách thật gặp trục trặc
+Turnstile vẫn phải gửi được form) nhưng chỉ còn **5 lượt/giờ/IP**. Muốn hạn mức
+này đúng trên nhiều instance của Vercel thì khai thêm `UPSTASH_REDIS_REST_URL`
++ `UPSTASH_REDIS_REST_TOKEN`; không khai thì mỗi instance đếm riêng.
+
+Ba chỗ hay quên sau khi đã khai biến:
+
+1. **Thêm tên miền vào Cloudflare** → Turnstile → widget → *Hostname Management*.
+   Thiếu bước này thì widget báo lỗi ngay trên chính tên miền của mình.
+2. **Redeploy** sau khi thêm `NEXT_PUBLIC_TURNSTILE_SITE_KEY` — biến
+   `NEXT_PUBLIC_*` được nhúng lúc BUILD, sửa xong không deploy lại thì trang vẫn
+   chạy khoá cũ.
+3. **Bật Turnstile ở Supabase** → Authentication → Settings → *Bot and Abuse
+   Protection*, dán `TURNSTILE_SECRET_KEY` vào đó. Trang `/login` có gửi kèm mã
+   captcha, nhưng Supabase chỉ thật sự kiểm khi mục này được bật.
+
 ## 5a. Code không còn dùng
 
 `NEXT_PUBLIC_MAIN_URL` · `NEXT_PUBLIC_STUDIO_URL` · `NEXT_PUBLIC_SUPABASE_KEY` ·
@@ -380,7 +407,7 @@ Bản cũ **không có** những biến này, tức các tính năng tương ứ
 | Nhóm | Biến | Không khai thì sao |
 |---|---|---|
 | Zalo OA | `ZALO_OA_APP_ID`, `ZALO_OA_APP_SECRET`, `ZALO_OA_REDIRECT_URI`, `ZALO_SESSION_SECRET` | kênh Zalo OA tắt (kênh cá nhân vẫn chạy) |
-| Chống bot | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | không có captcha ở form công khai |
+| Chống bot | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | form công khai vẫn gửi được nhưng bị siết còn **5 lượt/giờ/IP** — xem 4e |
 | Cache ảnh | `DRIVE_IMG_CACHE_*` (5 biến) | **nên để trống** — chính bucket này làm vượt hạn mức Supabase bản cũ |
 | Gửi email | `RESEND_API_KEY`, `EMAIL_FROM` | không gửi được email |
 | Giới hạn tần suất | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | không giới hạn tần suất gọi |

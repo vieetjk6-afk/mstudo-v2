@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
-import { verifyTurnstile } from "@/lib/turnstile";
+import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIpDurable } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -62,10 +62,11 @@ export async function POST(req: Request) {
 
   // Require CAPTCHA on initial phone lookup (not on follow-up actions that already have id)
   if (!body.action || body.action === "lookup") {
-    const captchaOk = await verifyTurnstile(body.captcha);
-    if (!captchaOk) {
-      return NextResponse.json({ error: "captcha_failed" }, { status: 400 });
-    }
+    // Tra cứu bằng SĐT trả về LỊCH LÀM VIỆC của thợ — dò hàng loạt là moi được
+    // dữ liệu cá nhân. Khi captcha không xác minh được thì chỉ cho vài lượt mỗi
+    // giờ trên mỗi IP thay vì mở cửa như trước.
+    const captcha = await guardCaptcha(req, "crew-lookup", body.captcha);
+    if (captcha) return captcha;
   }
 
   const db = createAdminClient();

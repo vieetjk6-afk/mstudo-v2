@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
-import { verifyTurnstile } from "@/lib/turnstile";
+import { guardCaptcha } from "@/lib/captcha-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -67,9 +67,8 @@ export async function POST(req: Request) {
 
   // ── Thợ xin vào sổ của một studio (qua link riêng của studio) ─────────
   if (body.action === "register") {
-    if (!(await verifyTurnstile(body.captcha))) {
-      return NextResponse.json({ error: "captcha_failed" }, { status: 400 });
-    }
+    const captcha = await guardCaptcha(req, "crew-register", body.captcha);
+    if (captcha) return captcha;
     const token = (body.crewToken || "").trim();
     if (!token) return NextResponse.json({ error: "no_studio" }, { status: 400 });
     const { data: studio } = await db.from("profiles").select("id").eq("crew_token", token).maybeSingle();
