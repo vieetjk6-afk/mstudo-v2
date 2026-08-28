@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { limitByIpDurable } from "@/lib/rate-limit";
 import type { WeddingConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,13 @@ export const dynamic = "force-dynamic";
  *   GET                       -> the invitation + its RSVP responses
  *   POST { config, published, template } -> save the client's edits
  */
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, { params }: { params: { token: string } }) {
+  // Như /api/story/[token]: edit_token là chìa khoá duy nhất, phải có trần dò.
+  // GET ở đây còn trả về DANH SÁCH KHÁCH MỜI đã phản hồi (tên, số người đi) nên
+  // càng không nên để mở không giới hạn.
+  const limited = await limitByIpDurable(req, "thiep-token", 60, 60_000);
+  if (limited) return limited;
+
   const db = createAdminClient();
   const { data: inv } = await db
     .from("wedding_invitations")
@@ -30,6 +37,9 @@ export async function GET(_req: Request, { params }: { params: { token: string }
 }
 
 export async function POST(req: Request, { params }: { params: { token: string } }) {
+  const limited = await limitByIpDurable(req, "thiep-token", 60, 60_000);
+  if (limited) return limited;
+
   const body = (await req.json().catch(() => ({}))) as {
     config?: WeddingConfig;
     published?: boolean;
@@ -57,6 +67,10 @@ export async function POST(req: Request, { params }: { params: { token: string }
   if (Object.keys(patch).length === 0) return NextResponse.json({ ok: true });
 
   const { error } = await db.from("wedding_invitations").update(patch).eq("id", inv.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Không trả nguyên văn lỗi Postgres ra client — nó lộ tên bảng/cột và ràng buộc.
+  if (error) {
+    console.error("[api/thiep] update lỗi", error.message);
+    return NextResponse.json({ error: "server_error" }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

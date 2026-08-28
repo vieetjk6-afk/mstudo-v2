@@ -8,6 +8,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import Turnstile from "@/components/Turnstile";
 import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
+import { TURNSTILE_UNAVAILABLE } from "@/lib/turnstile";
 import { APP_VERSION } from "@/lib/version";
 
 // Friendly Vietnamese label for the ?error=... codes we set in /auth/callback.
@@ -158,8 +159,21 @@ function LoginForm() {
           15000
         )
       );
+      // Mã captcha phải được GỬI KÈM thì Supabase mới xác minh được. Trước đây
+      // trang này dựng widget Turnstile rồi... không làm gì với mã cả: ô captcha
+      // chỉ khoá nút Đăng nhập ở phía trình duyệt, ai gọi thẳng API Supabase là
+      // qua mặt hoàn toàn. Bật thêm Turnstile ở Supabase → Authentication →
+      // Settings → Bot and Abuse Protection để phía máy chủ thật sự kiểm.
+      //
+      // Chỉ gửi mã THẬT: TURNSTILE_UNAVAILABLE là cờ nội bộ báo widget không
+      // chạy được, đẩy sang Supabase chỉ tổ bị bác và khoá luôn khách thật.
+      const realCaptcha = captchaToken && captchaToken !== TURNSTILE_UNAVAILABLE ? captchaToken : undefined;
       const { error } = (await Promise.race([
-        supabase.auth.signInWithPassword({ email, password }),
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+          ...(realCaptcha ? { options: { captchaToken: realCaptcha } } : {}),
+        }),
         timeout,
       ])) as { error: { message: string } | null };
 
