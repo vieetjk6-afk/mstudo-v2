@@ -104,6 +104,19 @@ const FIT_OPTIONS: { v: FitMode; label: string; hint: string }[] = [
   { v: "pad", label: "Thêm viền", hint: "Giữ trọn ảnh, chèn viền cho đủ đúng kích thước khung." },
 ];
 
+/**
+ * Ba mục tiêu của việc nén, đặt sẵn cho đỡ phải đoán con số.
+ *
+ * "Giữ nét tối đa" là mức dành cho việc CHỈ muốn giảm kích thước (px) mà không
+ * muốn mất nét: ảnh nhỏ lại nhưng từng điểm ảnh vẫn giữ gần hết chi tiết, nên
+ * file không nhỏ đi nhiều — đó là cái giá của độ nét.
+ */
+const GOALS: { v: number; label: string; hint: string }[] = [
+  { v: 96, label: "Giữ nét tối đa", hint: "Chỉ giảm kích thước, gần như không mất nét. File giảm ít." },
+  { v: 88, label: "Cân bằng", hint: "Nét gần như nguyên bản, file nhẹ hơn rõ rệt. Dùng cho hầu hết việc." },
+  { v: 76, label: "Nhẹ nhất", hint: "Ưu tiên dung lượng — chỉ dùng khi cần gửi nhanh qua mạng yếu." },
+];
+
 /** Trần dung lượng chọn được (byte). -1 = theo khuyến nghị của khổ đang chọn. */
 const BUDGETS: { v: number; label: string }[] = [
   { v: -1, label: "Theo chuẩn nền tảng (khuyên dùng)" },
@@ -143,7 +156,7 @@ export default function ToolPanel({
   const [picking, setPicking] = useState(false);
 
   // Compress options
-  const [quality, setQuality] = useState(82);
+  const [quality, setQuality] = useState(92);
   const [maxDim, setMaxDim] = useState(0);
   const [format, setFormat] = useState<OutputFormat>("image/jpeg");
   // Convert option
@@ -159,6 +172,7 @@ export default function ToolPanel({
   const [sharpen, setSharpen] = useState(35);
   const [budget, setBudget] = useState(-1);
   const [socialFormat, setSocialFormat] = useState<OutputFormat>("image/jpeg");
+  const [socialQ, setSocialQ] = useState(Math.round(presetsFor("facebook")[0].quality * 100));
   // Nén thường: làm nét sau khi thu nhỏ (mặc định bật — chống ảnh mờ khi đăng).
   const [compressSharpen, setCompressSharpen] = useState(true);
 
@@ -329,11 +343,21 @@ export default function ToolPanel({
     setPlatform(id);
     setPresetId(first.id);
     setFit(first.fit);
+    setSocialQ(Math.round(first.quality * 100));
     resetOutputs();
   }
   function switchPreset(id: string) {
+    const p = findPreset(id);
     setPresetId(id);
-    setFit(findPreset(id).fit);
+    setFit(p.fit);
+    setSocialQ(Math.round(p.quality * 100));
+    resetOutputs();
+  }
+  /** Nét tối đa: kéo chất lượng lên cao và BỎ trần dung lượng, vì trần dung
+   *  lượng chính là thứ kéo chất lượng tụt xuống lại. */
+  function maxSharpness() {
+    setSocialQ(96);
+    setBudget(0);
     resetOutputs();
   }
 
@@ -382,7 +406,7 @@ export default function ToolPanel({
   function optionsFor(): CompressOptions {
     if (tool === "social")
       return {
-        quality: preset.quality,
+        quality: socialQ / 100,
         maxDim: 0,
         format: socialFormat,
         watermark: null,
@@ -486,7 +510,7 @@ export default function ToolPanel({
       clearTimeout(t);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [previewSrc, quality, maxDim, format, targetFormat, tool, wmType, wmText, wmColor, wmPos, wmOpacity, wmTextScale, wmImageScale, wmImg, compressSharpen, presetId, fit, padColor, sharpen, budget, socialFormat]);
+  }, [previewSrc, quality, maxDim, format, targetFormat, tool, wmType, wmText, wmColor, wmPos, wmOpacity, wmTextScale, wmImageScale, wmImg, compressSharpen, presetId, fit, padColor, sharpen, budget, socialFormat, socialQ]);
 
   // ── Main run ─────────────────────────────────────────────────
   async function writeOneToDrive(tok: string, r: DoneItem) {
@@ -817,6 +841,28 @@ export default function ToolPanel({
               </div>
             )}
 
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+              <label className="text-[13px]" style={{ color: "var(--text2)" }}>
+                Chất lượng: <b style={{ color: "var(--text)" }}>{socialQ}</b>
+                <span style={{ color: "var(--text3)" }}> (mức chuẩn của khổ này: {Math.round(preset.quality * 100)})</span>
+              </label>
+              <button
+                onClick={maxSharpness}
+                className="rounded-lg px-2.5 py-1 text-[12px]"
+                style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
+                title="Chất lượng 96 và bỏ trần dung lượng — nét nhất, file nặng hơn"
+              >
+                Nét tối đa
+              </button>
+            </div>
+            <input type="range" min={70} max={100} value={socialQ} onChange={(e) => setSocialQ(+e.target.value)} className="w-full accent-[var(--gold)]" />
+            {socialQ > Math.round(preset.quality * 100) && budgetBytes > 0 && (
+              <p className="mt-1 text-[12px]" style={{ color: "var(--text3)" }}>
+                Đang kéo chất lượng cao hơn mức chuẩn nhưng vẫn còn trần {formatBytes(budgetBytes)} — công cụ sẽ tự hạ lại cho vừa trần.
+                Muốn giữ đúng mức này thì đặt <b>Trần dung lượng → Không đặt trần</b> (hoặc bấm “Nét tối đa”).
+              </p>
+            )}
+
             <label className="mt-4 block text-[13px]" style={{ color: "var(--text2)" }}>
               Làm nét sau khi thu nhỏ: <b style={{ color: "var(--text)" }}>{sharpen}%</b>
               <span style={{ color: "var(--text3)" }}> (bù phần nét mất khi mạng xã hội nén lại)</span>
@@ -869,6 +915,33 @@ export default function ToolPanel({
 
         {tool === "compress" && (
           <>
+            <label className="mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>Mục tiêu</label>
+            <div className="mb-1 flex flex-wrap gap-2">
+              {GOALS.map((g) => (
+                <button
+                  key={g.v}
+                  onClick={() => {
+                    setQuality(g.v);
+                    setCompressSharpen(true);
+                    resetOutputs();
+                  }}
+                  title={g.hint}
+                  className="rounded-lg px-3 py-1.5 text-[13px]"
+                  style={
+                    quality === g.v
+                      ? { background: "var(--accent)", color: "var(--accentInk)" }
+                      : { background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }
+                  }
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+            <p className="mb-3 text-[12px]" style={{ color: "var(--text3)" }}>
+              {GOALS.find((g) => g.v === quality)?.hint ??
+                "Đang dùng mức tự đặt bên dưới."}{" "}
+              Chỉ muốn <b>giảm kích thước px mà không mất nét</b>: chọn “Giữ nét tối đa” rồi đặt <b>Kích thước tối đa</b> bên dưới — ảnh nhỏ lại nhưng chi tiết giữ gần như nguyên, nên dung lượng cũng giảm ít.
+            </p>
             <label className="mb-1 block text-[13px]" style={{ color: "var(--text2)" }}>
               Chất lượng: <b style={{ color: "var(--text)" }}>{quality}</b>
               <span style={{ color: "var(--text3)" }}> (cao = nét hơn, nặng hơn)</span>
@@ -884,7 +957,9 @@ export default function ToolPanel({
                   <option value={2560}>2560 px</option>
                   <option value={2048}>2048 px</option>
                   <option value={1920}>1920 px</option>
+                  <option value={1600}>1600 px</option>
                   <option value={1280}>1280 px</option>
+                  <option value={1080}>1080 px</option>
                 </select>
               </div>
               <div>
@@ -895,6 +970,21 @@ export default function ToolPanel({
                 </select>
               </div>
             </div>
+            {quality >= 92 && format === "image/jpeg" && (
+              <p className="mt-3 rounded-[10px] px-3 py-2 text-[12.5px]" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+                Muốn nét như mức này mà file <b>nhẹ khoảng một nửa</b>: xuất <b>WebP</b> thay cho JPEG. Facebook, Instagram, Zalo và mọi trình duyệt hiện nay đều nhận WebP.
+                <button
+                  onClick={() => {
+                    setFormat("image/webp");
+                    resetOutputs();
+                  }}
+                  className="ml-2 rounded-md px-2 py-0.5 text-[12px]"
+                  style={{ background: "var(--accent)", color: "var(--accentInk)" }}
+                >
+                  Đổi sang WebP
+                </button>
+              </p>
+            )}
             <label className="mt-4 flex items-start gap-2 text-[13px]" style={{ color: "var(--text2)" }}>
               <input
                 type="checkbox"
@@ -1011,7 +1101,9 @@ export default function ToolPanel({
                     <option value={2560}>2560 px</option>
                     <option value={2048}>2048 px</option>
                     <option value={1920}>1920 px</option>
+                    <option value={1600}>1600 px</option>
                     <option value={1280}>1280 px</option>
+                    <option value={1080}>1080 px</option>
                   </select>
                 </>
               ) : (
