@@ -6,6 +6,7 @@ use base64::Engine as _;
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{LazyLock, Mutex};
 use std::time::{Duration, SystemTime};
 use tauri::Emitter;
@@ -374,6 +375,136 @@ fn clear_web_data(app: tauri::AppHandle) -> Result<(), String> {
     }
 }
 
+/// Địa chỉ gốc (`https://máy-chủ`) của web app đang mở trong cửa sổ studio. Dùng
+/// để phân biệt link NỘI BỘ (trang của chính studio) với link RA NGOÀI (Drive,
+/// Facebook, Zalo…) khi người dùng bấm "mở ở tab mới".
+static STUDIO_ORIGIN: LazyLock<Mutex<String>> = LazyLock::new(|| Mutex::new(String::new()));
+/// Bộ đếm đặt nhãn duy nhất cho mỗi cửa sổ mở thêm từ một cái link.
+static LINK_SEQ: AtomicU32 = AtomicU32::new(0);
+
+/// Script tiêm vào mọi cửa sổ chạy web app studio.
+///
+/// Ngoài cờ báo "đang chạy trong app desktop", nó bắt cú bấm vào link TRỎ RA
+/// NGOÀI mà KHÔNG có `target="_blank"` (vd link Google Drive trong trang chọn
+/// ảnh). Để mặc thì cửa sổ studio — vốn không có thanh địa chỉ, không nút Back —
+/// điều hướng thẳng sang trang ngoài và người dùng kẹt luôn ở đó. Chuyển thành
+/// `window.open` để phần Rust (`handle_new_window`) đưa sang trình duyệt mặc định.
+///
+/// Link `target="_blank"`, `window.open`, `mailto:`, `tel:` KHÔNG đụng tới ở đây:
+/// chúng đã được bắt ở phía Rust (bộ mở cửa sổ mới / bộ lọc điều hướng).
+const STUDIO_INIT_JS: &str = r#"window.__MSTUDO_DESKTOP__ = true;
+(function () {
+  if (window.__mstudoLinkHook) return;
+  window.__mstudoLinkHook = true;
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0) return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    var el = e.target;
+    var a = el && el.closest ? el.closest('a[href]') : null;
+    if (!a) return;
+    var t = (a.getAttribute('target') || '').toLowerCase();
+    if (t === '_blank' || t === '_new') return;
+    var href = a.getAttribute('href') || '';
+    if (!href || href.charAt(0) === '#') return;
+    var u;
+    try { u = new URL(href, location.href); } catch (err) { return; }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return;
+    if (u.origin === location.origin) return;
+    e.preventDefault();
+    try { window.open(u.href, '_blank'); } catch (err) {}
+  }, true);
+})();"#;
+
+/// Địa chỉ này có thuộc chính web app studio đang mở không?
+fn is_studio_url(u: &tauri::Url) -> bool {
+    let origin = STUDIO_ORIGIN.lock().unwrap();
+    !origin.is_empty() && u.origin().ascii_serialization() == *origin
+}
+
+/// Bộ lọc điều hướng dùng chung cho mọi cửa sổ chạy web app studio.
+/// Trả `false` = huỷ điều hướng (đã xử lý theo cách khác).
+fn studio_navigation(app: &tauri::AppHandle, u: &tauri::Url) -> bool {
+    // Đường dẫn nội bộ "/__mstudo_control" (do nút web bấm) → mở BẢNG ĐIỀU KHIỂN
+    // thay vì điều hướng. Không cần Tauri IPC trong trang web ngoài.
+    if u.as_str().contains("__mstudo_control") {
+        show_main(app);
+        return false;
+    }
+    match u.scheme() {
+        "http" | "https" | "about" | "blob" | "data" => true,
+        // mailto:, tel:, sms:… — WebView2 không mở được, để mặc thì bấm số điện
+        // thoại khách hàng trong app không có gì xảy ra. Giao cho Windows.
+        _ => {
+            let _ = open_external(u.as_str());
+            false
+        }
+    }
+}
+
+/// Xử lý yêu cầu MỞ CỬA SỔ MỚI của trang web (link `target="_blank"`, `window.open`).
+///
+/// KHÔNG có bộ xử lý này thì WebView2 nuốt luôn yêu cầu: bấm link "mở tab mới"
+/// trong app desktop chẳng có gì xảy ra (link Drive, Zalo, xem trước album…), và
+/// cửa sổ IN hợp đồng/báo giá — vốn mở bằng `window.open("")` rồi tự ghi nội dung
+/// vào — cũng im lặng không hiện.
+///
+/// - Link ra ngoài → trình duyệt mặc định của máy.
+/// - Trang của chính studio và cửa sổ in (`about:blank`) → cửa sổ mới TRONG app:
+///   dùng chung hồ sơ WebView2 nên vẫn còn phiên đăng nhập, và trang mở nó vẫn
+///   ghi được nội dung vào (điều kiện sống còn của cửa sổ in).
+fn handle_new_window(
+    app: &tauri::AppHandle,
+    url: tauri::Url,
+    features: tauri::webview::NewWindowFeatures,
+) -> tauri::webview::NewWindowResponse<tauri::Wry> {
+    use tauri::webview::NewWindowResponse;
+    let internal = match url.scheme() {
+        "about" => true,
+        "http" | "https" => is_studio_url(&url),
+        _ => false,
+    };
+    if !internal {
+        let _ = open_external(url.as_str());
+        return NewWindowResponse::Deny;
+    }
+    match new_link_window(app, features) {
+        Ok(window) => NewWindowResponse::Create { window },
+        // Không dựng được cửa sổ → ít nhất mở ở trình duyệt (phải đăng nhập lại,
+        // nhưng còn hơn bấm link không có gì xảy ra).
+        Err(_) => {
+            let _ = open_external(url.as_str());
+            NewWindowResponse::Deny
+        }
+    }
+}
+
+/// Dựng cửa sổ trống để WebView2 gắn vào một yêu cầu mở cửa sổ mới. Tạo ở
+/// `about:blank` — chính WebView2 sẽ điều hướng nó tới địa chỉ được yêu cầu.
+fn new_link_window(
+    app: &tauri::AppHandle,
+    features: tauri::webview::NewWindowFeatures,
+) -> Result<tauri::WebviewWindow, String> {
+    let label = format!("mstudolink{}", LINK_SEQ.fetch_add(1, Ordering::Relaxed));
+    let blank = tauri::Url::parse("about:blank").map_err(|e| e.to_string())?;
+    let app_nav = app.clone();
+    let app_new = app.clone();
+    tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::External(blank))
+        .title("MStudo")
+        .inner_size(1200.0, 840.0)
+        .focused(true)
+        // Giữ nguyên kích thước/vị trí trang web yêu cầu (vd cửa sổ in 640×720) và
+        // — bắt buộc trên Windows — dùng CHUNG môi trường WebView2 với cửa sổ mở nó.
+        .window_features(features)
+        .initialization_script(STUDIO_INIT_JS)
+        .on_document_title_changed(|w, title| {
+            let _ = w.set_title(&title);
+        })
+        .on_navigation(move |u| studio_navigation(&app_nav, u))
+        .on_new_window(move |u, f| handle_new_window(&app_new, u, f))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
 /// Mở (hoặc điều hướng) cửa sổ studio. `force_navigate` = đi tới địa chỉ mới
 /// ngay cả khi cửa sổ đã tồn tại.
 fn open_studio_window(app: &tauri::AppHandle, url: String, force_navigate: bool) -> Result<(), String> {
@@ -387,6 +518,8 @@ fn open_studio_window(app: &tauri::AppHandle, url: String, force_navigate: bool)
         return Err("bad_url".to_string());
     }
     let parsed = tauri::Url::parse(&url).map_err(|e| e.to_string())?;
+    // Ghi nhớ máy chủ studio để phân biệt link nội bộ / link ra ngoài về sau.
+    *STUDIO_ORIGIN.lock().unwrap() = parsed.origin().ascii_serialization();
     if let Some(w) = app.get_webview_window("studioapp") {
         // Đã mở (kể cả đang ẩn xuống khay) → hiện lại + đưa lên trước.
         let _ = w.show();
@@ -398,20 +531,20 @@ fn open_studio_window(app: &tauri::AppHandle, url: String, force_navigate: bool)
         return Ok(());
     }
     let app_nav = app.clone();
+    let app_new = app.clone();
     tauri::WebviewWindowBuilder::new(app, "studioapp", tauri::WebviewUrl::External(parsed))
         .title("MStudo — Quản lý studio")
         .inner_size(1360.0, 900.0)
         .maximized(true)
         .focused(true)
         // Cho web app biết nó đang chạy TRONG app desktop (để hiện nút "Điều khiển
-        // đồng bộ" chỉ trên app, không hiện trên trình duyệt web).
-        .initialization_script("window.__MSTUDO_DESKTOP__ = true;")
-        // Bắt đường dẫn nội bộ "/__mstudo_control" (do nút web bấm) → mở BẢNG ĐIỀU
-        // KHIỂN thay vì điều hướng. Không cần Tauri IPC trong trang web ngoài.
+        // đồng bộ" chỉ trên app, không hiện trên trình duyệt web) + bắt link ra ngoài.
+        .initialization_script(STUDIO_INIT_JS)
+        // Link "mở tab mới" và cửa sổ in: WebView2 mặc định bỏ qua → phải tự xử lý.
+        .on_new_window(move |u, f| handle_new_window(&app_new, u, f))
         .on_navigation(move |u| {
-            if u.as_str().contains("__mstudo_control") {
-                show_main(&app_nav);
-                return false; // huỷ điều hướng, chỉ mở bảng điều khiển
+            if !studio_navigation(&app_nav, u) {
+                return false;
             }
             // Bị đá về TRANG ĐĂNG NHẬP ⇒ thử đăng nhập bằng mã kết nối của máy
             // này. Đây là chỗ mọi kiểu hỏng đổ về: Google chặn đăng nhập trong
@@ -486,32 +619,54 @@ fn has_control_chars(s: &str) -> bool {
     s.chars().any(|c| c.is_control())
 }
 
-/// Mở liên kết trong trình duyệt mặc định (nút "Tải bản cập nhật").
+/// Các giao thức được phép giao ra ngoài cho Windows mở. Chỉ những thứ một cái
+/// link trong app studio thực sự cần: web, gửi mail, gọi điện, nhắn tin. KHÔNG
+/// có `file:`, `ms-*:`, `search-ms:`… — những giao thức mở được ứng dụng hệ thống
+/// nếu trang web bị lợi dụng.
+const EXTERNAL_SCHEMES: &[&str] = &["http", "https", "mailto", "tel", "sms", "callto"];
+
+/// Giao một địa chỉ cho Windows mở bằng ứng dụng mặc định (trình duyệt, phần mềm
+/// mail, ứng dụng gọi điện).
 ///
-/// Dùng `explorer` (không qua `cmd`): Rust truyền tham số thẳng cho CreateProcess
-/// nên KHÔNG có shell để chèn lệnh — trước đây `cmd /C start` cho phép chèn lệnh
-/// qua ký tự `&`, `|`, `>`… nếu URL bị thao túng (command injection).
-#[tauri::command]
-fn open_url(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
+/// Dùng `explorer` / `rundll32` (không qua `cmd`): Rust truyền tham số thẳng cho
+/// CreateProcess nên KHÔNG có shell để chèn lệnh — trước đây `cmd /C start` cho
+/// phép chèn lệnh qua ký tự `&`, `|`, `>`… nếu URL bị thao túng.
+fn open_external(url: &str) -> Result<(), String> {
+    if has_control_chars(url) {
         return Err("bad_url".to_string());
     }
-    if has_control_chars(&url) {
+    let parsed = tauri::Url::parse(url).map_err(|_| "bad_url".to_string())?;
+    if !EXTERNAL_SCHEMES.contains(&parsed.scheme()) {
         return Err("bad_url".to_string());
     }
+    let target = parsed.as_str().to_string();
     #[cfg(target_os = "windows")]
     {
-        std::process::Command::new("explorer")
-            .arg(&url)
+        // http/https: `explorer` (cách đã chạy ổn từ đầu). Giao thức khác
+        // (mailto:, tel:…) explorer không nhận → dùng bộ mở URI chuẩn của Windows.
+        if parsed.scheme() == "http" || parsed.scheme() == "https" {
+            if std::process::Command::new("explorer").arg(&target).spawn().is_ok() {
+                return Ok(());
+            }
+        }
+        std::process::Command::new("rundll32.exe")
+            .args(["url.dll,FileProtocolHandler", &target])
             .spawn()
             .map_err(|e| e.to_string())?;
         return Ok(());
     }
     #[allow(unreachable_code)]
     {
-        let _ = url;
+        let _ = target;
         Err("unsupported".to_string())
     }
+}
+
+/// Mở liên kết bằng ứng dụng mặc định của máy (nút "Tải bản cập nhật", "Mở trong
+/// trình duyệt", và mọi link ra ngoài bấm trong cửa sổ studio).
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    open_external(&url)
 }
 
 /// Mở một file bằng ứng dụng mặc định (PDF/HTML để in hợp đồng).
