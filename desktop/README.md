@@ -90,6 +90,10 @@ của Tauri (nhớ ký cả `*-setup.exe` lẫn binary bên trong).
   | `src-tauri/src/main.rs` → `download_and_run` | chỉ cho tải file cài từ đúng repo đó (chặn chạy `.exe` tuỳ ý) |
   | `.github/workflows/desktop-build.yml` → `RELEASE_CHANNEL_REPO` | nơi workflow đẩy file cài lên |
 
+  Repo kênh **phải có ít nhất một commit** — GitHub từ chối tạo release trên repo
+  rỗng (`422 Repository is empty`), và đó là lỗi đã làm hỏng lần phát hành đầu
+  tiên: build xanh, chỉ mỗi bước đẩy đỏ, máy studio không thấy gì.
+
   Workflow tự đẩy bản cài lên kênh này sau mỗi lần build, cần secret
   **`RELEASE_TOKEN`** (token có quyền *Contents: Read and write* trên repo kênh).
   Chưa có secret thì bước đó bỏ qua kèm cảnh báo vàng, build vẫn xanh — và **máy
