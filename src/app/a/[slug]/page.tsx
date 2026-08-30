@@ -9,6 +9,7 @@ import { buildAlbumMetadata } from "@/lib/album-meta";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
+import { isDeliveryPhase } from "@/lib/album-phase";
 import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,10 @@ export default async function PublicAlbumPage({
   // Đồng bộ Drive (2 album riêng): sau khi giao khách, hợp đồng đã có album giao
   // khách hoàn thiện → album chọn ảnh không còn hiện cho khách. Chuyển hướng
   // link chọn ảnh sang album giai đoạn hoàn thiện.
+  //
+  // Chỉ chuyển khi album giao khách THẬT SỰ đang ở giai đoạn giao khách: studio
+  // đưa nó về "Chọn ảnh" thì link này phải quay lại trang chọn ảnh, nếu không
+  // nút đổi giai đoạn coi như vô tác dụng.
   if (album && album.phase !== "delivery") {
     const { data: contract } = await admin
       .from("studio_contracts")
@@ -63,7 +68,7 @@ export default async function PublicAlbumPage({
         .select("slug, status, is_gallery, phase")
         .eq("id", galleryId)
         .maybeSingle();
-      if (g && (g.is_gallery || g.phase === "delivery") && g.status === "published") {
+      if (g && isDeliveryPhase(g) && g.status === "published") {
         redirect(`/album/${g.slug}`);
       }
     }

@@ -213,6 +213,54 @@ async function makePublic(drive: any, fileId: string): Promise<void> {
   await drive.permissions.create({ fileId, requestBody: { role: "reader", type: "anyone" } }).catch(() => {});
 }
 
+const MEDIA_Q = "(mimeType contains 'image/' or mimeType contains 'video/')";
+
+/**
+ * Thư mục Drive của studio đã CÓ ảnh/video chưa (soi thêm một cấp thư mục con).
+ *
+ * Dùng để biết hậu kỳ đã xử lý xong hay chưa: hợp đồng chuyển "hoàn thành" là
+ * chuyện TIỀN (thu đủ, chốt sổ), không có nghĩa File ChinhSua đã có ảnh. Đọc
+ * bằng chính OAuth của studio nên không phụ thuộc GOOGLE_API_KEY hay việc thư
+ * mục đã công khai chưa.
+ *
+ * Lỗi/không kết nối → trả `false` (coi như CHƯA có ảnh): thà chậm một nhịp — cron
+ * hôm sau và nút "Giao khách ngay" vẫn tạo được — còn hơn đẩy khách sang album
+ * giao khách rỗng.
+ */
+export async function driveFolderHasMedia(ownerId: string, folderId: string): Promise<boolean> {
+  const row = await loadStudioDrive(ownerId);
+  if (!row?.refresh_token) return false;
+  const o = oauth();
+  o.setCredentials({ refresh_token: row.refresh_token });
+  const drive = google.drive({ version: "v3", auth: o });
+  const hasMedia = async (parentId: string): Promise<boolean> => {
+    const res = await drive.files.list({
+      q: `'${parentId}' in parents and ${MEDIA_Q} and trashed = false`,
+      fields: "files(id)",
+      pageSize: 1,
+      spaces: "drive",
+    });
+    return (res.data.files?.length ?? 0) > 0;
+  };
+  try {
+    if (await hasMedia(folderId)) return true;
+    // Studio hay đổ ảnh vào thư mục con (theo đợt chỉnh, theo thợ) — soi thêm
+    // một cấp trước khi kết luận thư mục còn trống.
+    const subs = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: "files(id)",
+      pageSize: 25,
+      spaces: "drive",
+    });
+    for (const f of subs.data.files ?? []) {
+      if (f.id && (await hasMedia(f.id))) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export type ContractForDrive = {
   id: string;
   code?: string | null;
@@ -445,13 +493,18 @@ async function createAlbumFromFolder(
  * đồng: LUÔN tạo album chọn ảnh (selection) khi có thư mục; chỉ tạo album giao
  * (delivery) khi hợp đồng đã "completed" — theo đúng quy trình: ký → chọn ảnh,
  * hoàn thành → giao khách. Hàm idempotent (đã có album thì không tạo lại).
+ *
+ * Album GIAO KHÁCH còn một điều kiện nữa: thư mục File ChinhSua phải CÓ ẢNH.
+ * `opts.force` bỏ qua điều kiện đó (studio bấm "Giao khách ngay"). Cờ trả về
+ * `deliveryWaiting` = có thư mục giao khách nhưng còn trống, tức hợp đồng đã
+ * hoàn thành mà hậu kỳ chưa xong — cứ để khách ở giai đoạn chọn ảnh.
  */
 export async function wireContractAlbums(
   ownerId: string,
   contract: ContractForDrive,
   tree: DriveTreeNode[],
-  opts?: { phases?: ("selection" | "delivery")[] }
-): Promise<{ selectionAlbumId: string | null; galleryAlbumId: string | null }> {
+  opts?: { phases?: ("selection" | "delivery")[]; force?: boolean }
+): Promise<{ selectionAlbumId: string | null; galleryAlbumId: string | null; deliveryWaiting: boolean }> {
   const db = createAdminClient();
   // Mặc định theo trạng thái hợp đồng — theo đúng quy trình:
   //   - Album CHỌN ẢNH: chỉ tạo khi HĐ đã sang "đang thực hiện" (in_progress)
@@ -489,22 +542,32 @@ export async function wireContractAlbums(
     if (selectionAlbumId) patch.selection_album_id = selectionAlbumId;
   }
 
+  // Hợp đồng "hoàn thành" = đã thu đủ tiền, KHÔNG có nghĩa ảnh đã chỉnh xong.
+  // Thư mục File ChinhSua còn trống thì chưa có gì để giao: không tạo album giao
+  // khách, để khách ở nguyên giai đoạn chọn ảnh. Ảnh lên Drive lúc nào thì cron
+  // /api/cron/zalo?only=work (hoặc nút "Giao khách ngay") tạo album lúc đó.
+  let deliveryWaiting = false;
   if (del && !galleryAlbumId) {
-    galleryAlbumId = await createAlbumFromFolder(db, ownerId, {
-      title: `Giao khách · ${who}`,
-      folderId: del.id,
-      phase: "delivery",
-      isGallery: true,
-      sourceName: del.path.split("/").pop() || "File ChinhSua",
-      clientName: contract.client_name,
-      clientPhone: contract.client_phone,
-      eventDate: contract.event_date,
-    });
-    if (galleryAlbumId) patch.gallery_album_id = galleryAlbumId;
+    const ready = opts?.force === true || (await driveFolderHasMedia(ownerId, del.id));
+    if (!ready) {
+      deliveryWaiting = true;
+    } else {
+      galleryAlbumId = await createAlbumFromFolder(db, ownerId, {
+        title: `Giao khách · ${who}`,
+        folderId: del.id,
+        phase: "delivery",
+        isGallery: true,
+        sourceName: del.path.split("/").pop() || "File ChinhSua",
+        clientName: contract.client_name,
+        clientPhone: contract.client_phone,
+        eventDate: contract.event_date,
+      });
+      if (galleryAlbumId) patch.gallery_album_id = galleryAlbumId;
+    }
   }
 
   if (Object.keys(patch).length) await db.from("studio_contracts").update(patch).eq("id", contract.id);
-  return { selectionAlbumId, galleryAlbumId };
+  return { selectionAlbumId, galleryAlbumId, deliveryWaiting };
 }
 
 /**
@@ -550,23 +613,40 @@ export async function autoCreateContractSelectionOnProduction(ownerId: string, c
   return !!selectionAlbumId;
 }
 
+/** Kết quả một lần thử chốt giai đoạn giao khách cho hợp đồng. */
+export type DeliveryAlbumResult = {
+  /** Hợp đồng đã có album giao khách (vừa tạo hoặc có sẵn). */
+  album: boolean;
+  /** Album vừa được tạo trong lần gọi này. */
+  created: boolean;
+  /** Thư mục ảnh chỉnh sửa còn trống → hậu kỳ chưa xong, vẫn ở giai đoạn chọn ảnh. */
+  waiting: boolean;
+};
+
 /**
  * Tự tạo album GIAO KHÁCH (phase "delivery") khi hợp đồng chuyển sang trạng thái
- * "hoàn thành". Idempotent (đã có gallery_album_id thì bỏ qua). Studio chưa nối
- * Drive → bỏ qua im lặng (desktop sẽ tạo bù khi đồng bộ). Trả về true nếu vừa
- * tạo hoặc đã có album giao.
+ * "hoàn thành" VÀ thư mục ảnh chỉnh sửa đã có ảnh. Idempotent (đã có
+ * gallery_album_id thì bỏ qua). Studio chưa nối Drive → bỏ qua im lặng (desktop
+ * sẽ tạo bù khi đồng bộ). `opts.force` = studio tự bấm giao khách, không đợi ảnh.
  */
-export async function autoCreateContractDeliveryOnComplete(ownerId: string, contractId: string): Promise<boolean> {
+export async function autoCreateContractDeliveryOnComplete(
+  ownerId: string,
+  contractId: string,
+  opts?: { force?: boolean }
+): Promise<DeliveryAlbumResult> {
   const db = createAdminClient();
   const { data: c } = await db
     .from("studio_contracts")
     .select(CONTRACT_DRIVE_COLS)
     .eq("id", contractId)
     .maybeSingle();
-  if (!c) return false;
-  if ((c as ContractForDrive).gallery_album_id) return true; // đã có album giao
+  if (!c) return { album: false, created: false, waiting: false };
+  if ((c as ContractForDrive).gallery_album_id) return { album: true, created: false, waiting: false };
   const tree = await ensureContractDriveTree(ownerId, c as ContractForDrive);
-  if ("error" in tree) return false; // not_connected → studio chưa nối Drive
-  const { galleryAlbumId } = await wireContractAlbums(ownerId, c as ContractForDrive, tree.tree, { phases: ["delivery"] });
-  return !!galleryAlbumId;
+  if ("error" in tree) return { album: false, created: false, waiting: false }; // chưa nối Drive
+  const { galleryAlbumId, deliveryWaiting } = await wireContractAlbums(ownerId, c as ContractForDrive, tree.tree, {
+    phases: ["delivery"],
+    force: opts?.force,
+  });
+  return { album: !!galleryAlbumId, created: !!galleryAlbumId, waiting: deliveryWaiting };
 }

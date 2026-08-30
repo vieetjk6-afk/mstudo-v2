@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { autoCreateContractDeliveryOnComplete, autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { syncContractCalendar } from "@/lib/gcal-sync";
-import { autoNotify } from "@/lib/zalo/notify";
-import { deliveryReadyMessage } from "@/lib/zalo/messages";
-import { studioUrl } from "@/lib/hosts";
-import { getStudioHost } from "@/lib/studio-site";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +13,9 @@ const VALID = new Set(["draft", "sent", "approved", "in_progress", "completed", 
  * Đổi trạng thái hợp đồng — điểm TẬP TRUNG cho mọi nơi trên web (ContractEditor,
  * bảng công việc, danh sách hợp đồng). Đặt ở server để:
  *   1. Luôn đóng dấu completed_at nhất quán (trước đây board & list bỏ sót).
- *   2. Khi chuyển sang "completed" thì TỰ TẠO album giao khách (phase delivery)
- *      — album chọn ảnh đã được tạo lúc khách ký.
+ *   2. Khi chuyển sang "completed" thì tạo album giao khách (phase delivery) —
+ *      NHƯNG chỉ khi ảnh chỉnh sửa đã lên Drive. Hoàn thành mà hậu kỳ chưa xong
+ *      thì khách vẫn ở giai đoạn chọn ảnh (xem @/lib/contract-delivery).
  * Yêu cầu chủ hợp đồng (RLS-scoped: chỉ owner mới đổi được).
  */
 export async function POST(req: Request) {
@@ -72,43 +70,17 @@ export async function POST(req: Request) {
     }
   }
 
-  // Chuyển SANG "completed" (từ trạng thái khác) → tạo album giao khách.
+  // Chuyển SANG "completed" (từ trạng thái khác) → CHỐT GIAO KHÁCH nếu ảnh đã
+  // xử lý xong. Chưa xong thì hợp đồng vẫn hoàn thành (tiền đã thu đủ) mà album
+  // ở nguyên giai đoạn chọn ảnh — cron ngày hôm sau tạo album giao khách khi ảnh
+  // lên Drive, hoặc studio bấm "Giao khách ngay" ở tab Sản phẩm.
   let deliveryAlbum = false;
+  let deliveryWaiting = false;
   if (status === "completed" && contract.status !== "completed") {
-    try {
-      deliveryAlbum = await autoCreateContractDeliveryOnComplete(user.id, contractId);
-    } catch {
-      // Studio chưa nối Drive / lỗi tạm — desktop sẽ tạo bù khi đồng bộ.
-    }
-    // Zalo: tự báo "đã giao ảnh" cho khách (nếu studio đã bật mốc + kết nối).
-    // Không chặn response nếu lỗi.
-    try {
-      const { data: c2 } = await db
-        .from("studio_contracts")
-        .select("title, client_name, client_phone, gallery_album_id")
-        .eq("id", contractId)
-        .maybeSingle();
-      if (c2?.client_phone && c2.gallery_album_id) {
-        const { data: al } = await db.from("albums").select("slug").eq("id", c2.gallery_album_id).maybeSingle();
-        if (al?.slug) {
-          const { data: owner } = await db.from("profiles").select("full_name").eq("id", user.id).maybeSingle();
-          // Domain riêng của studio cho link album gửi khách.
-          const link = studioUrl(await getStudioHost(db, user.id), `/album/${al.slug}`);
-          await autoNotify({
-            ownerId: user.id,
-            event: "delivery_ready",
-            audience: "client",
-            toPhone: c2.client_phone,
-            toName: c2.client_name,
-            body: deliveryReadyMessage({ name: c2.client_name, link, studio: owner?.full_name }),
-            contractId,
-          });
-        }
-      }
-    } catch {
-      /* bỏ qua — không chặn đổi trạng thái */
-    }
+    const r = await deliverContractIfReady(user.id, contractId, { notifyExisting: true });
+    deliveryAlbum = r.album;
+    deliveryWaiting = r.waiting;
   }
 
-  return NextResponse.json({ ok: true, deliveryAlbum, gcal });
+  return NextResponse.json({ ok: true, deliveryAlbum, deliveryWaiting, gcal });
 }

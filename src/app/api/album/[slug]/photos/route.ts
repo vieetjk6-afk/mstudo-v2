@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
+import { isDeliveryPhase } from "@/lib/album-phase";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ export async function GET(req: Request, { params }: { params: { slug: string } }
     .eq("slug", params.slug)
     .single();
 
-  const isDelivery = album?.is_gallery || album?.phase === "delivery";
+  const isDelivery = isDeliveryPhase(album);
   if (!album || !isDelivery || album.status !== "published") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }

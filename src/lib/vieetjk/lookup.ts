@@ -1,4 +1,5 @@
 import "server-only";
+import { isDeliveryPhase } from "@/lib/album-phase";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mainUrl } from "@/lib/hosts";
 import type { Lang } from "./content";
@@ -158,7 +159,9 @@ export async function lookupClientStatus(ownerId: string, phone: string): Promis
     const gid = c.gallery_album_id ? String(c.gallery_album_id) : null;
     if (gid && albumById.has(gid)) {
       const al = albumById.get(gid)!;
-      if (al.phase === "delivery" || al.is_gallery) {
+      // `phase` thắng cờ cũ `is_gallery`: album đã được đưa về giai đoạn chọn
+      // ảnh thì đừng gửi khách link giao khách nữa (xem @/lib/album-phase).
+      if (isDeliveryPhase(al as { phase?: string | null; is_gallery?: boolean | null })) {
         galleryUrl = mainUrl(`/album/${String(al.slug)}`);
         usedAlbumIds.add(gid);
       }

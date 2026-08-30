@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { getOriginalFolders } from "@/lib/album-original";
+import { isDeliveryPhase } from "@/lib/album-phase";
 import { limitByIpDurable } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -22,8 +23,8 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     .eq("slug", params.slug)
     .single();
 
-  // Accept legacy galleries and unified projects switched to the delivery phase.
-  const isDelivery = album?.is_gallery || album?.phase === "delivery";
+  // Nhận cả gallery kiểu cũ lẫn dự án hợp nhất — `phase` thắng cờ `is_gallery`.
+  const isDelivery = isDeliveryPhase(album);
   if (!album || !isDelivery || album.status !== "published") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }

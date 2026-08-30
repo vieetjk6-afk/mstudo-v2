@@ -1,5 +1,7 @@
+import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
+import { isDeliveryPhase } from "@/lib/album-phase";
 import { getStudioBrand } from "@/lib/studio-brand";
 import Brand from "@/components/Brand";
 import GalleryView from "./GalleryView";
@@ -46,9 +48,12 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
     .eq("slug", params.slug)
     .single();
 
-  // Accept both legacy galleries (is_gallery) and unified projects switched to
-  // the delivery phase.
-  const isDelivery = album?.is_gallery || album?.phase === "delivery";
+  // Giai đoạn quyết định trang này có nội dung hay không — `phase` thắng cờ cũ
+  // `is_gallery` (xem @/lib/album-phase).
+  const isDelivery = isDeliveryPhase(album);
+  // Studio đã đưa album VỀ giai đoạn chọn ảnh: link giao khách cũ không được
+  // chết, đưa khách sang đúng trang chọn ảnh của chính album đó.
+  if (album && !isDelivery && album.status === "published") redirect(`/a/${album.slug}`);
   if (!album || !isDelivery || album.status !== "published") {
     return (
       <main className="flex min-h-screen flex-col">

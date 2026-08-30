@@ -151,6 +151,7 @@ MStudo/                                  ← studio chọn vị trí gốc
 | Cây thư mục | `{Tên hợp đồng}/Photo/{JPG Goc, Raw, File ChinhSua}` + `Video/{Video Goc, Video HoanThien}` (khi chọn có quay) — tất cả trong 1 thư mục gốc lấy tên hợp đồng. Studio đổi tên/thêm/bớt trong *Mẫu thư mục mặc định* (nhóm photo/video). |
 | Loại trừ | Mỗi thư mục có cờ "Đồng bộ Drive"; mặc định **Raw** và **Video Goc** bị loại trừ (chỉ giữ ở máy). |
 | Album tự tạo | **JPG Goc** → album chọn ảnh (`selection`); **File ChinhSua** → gallery giao khách (`delivery`). Gắn vào `studio_contracts.selection_album_id` / `gallery_album_id`. Hai thư mục này được đặt công khai *ai-có-link* để đọc qua `GOOGLE_API_KEY`. |
+| Mốc tạo album | Album **chọn ảnh** tạo khi hợp đồng sang *đang thực hiện* / *hoàn thành*. Album **giao khách** chỉ tạo khi hợp đồng *hoàn thành* **và** thư mục *File ChinhSua* đã có ảnh — hoàn thành là mốc TIỀN, hậu kỳ có thể còn dở, lúc đó khách vẫn ở giai đoạn chọn ảnh. Ảnh lên Drive sau thì `/api/desktop/drive/prepare` (resync) hoặc cron `/api/cron/zalo?only=work` tạo bù, kèm tin Zalo `delivery_ready`. |
 | Upload | Máy chủ cấp **access token tạm** (`/api/desktop/drive/token`); client tải file **thẳng** lên Drive bằng resumable upload theo khối 8MB (video lớn không nạp hết vào RAM). |
 
 **Đồng bộ near-realtime**: app tự đồng bộ hợp đồng mỗi **20 giây** + **ngay khi
