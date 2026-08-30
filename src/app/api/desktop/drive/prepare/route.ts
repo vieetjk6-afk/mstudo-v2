@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDesktopOwner } from "@/lib/desktop/auth";
 import { ensureContractDriveTree, wireContractAlbums, type ContractForDrive } from "@/lib/studio-drive";
 import { syncAlbumPhotos } from "@/lib/album-sync";
+import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { contractBaseName } from "@/lib/desktop/contract-doc";
 
 export const dynamic = "force-dynamic";
@@ -45,6 +46,20 @@ export async function POST(req: Request) {
   if ("error" in tree) return NextResponse.json({ error: tree.error }, { status: 409 });
 
   const albums = await wireContractAlbums(auth.ownerId, contract as ContractForDrive, tree.tree);
+
+  // Hợp đồng đã hoàn thành mà album giao khách chưa có (ảnh chỉnh sửa lúc trước
+  // còn trống): desktop vừa tải ảnh lên xong thì đây là lúc tạo album + báo khách.
+  if (contract.status === "completed" && !albums.galleryAlbumId) {
+    const d = await deliverContractIfReady(auth.ownerId, contract.id);
+    if (d.album) {
+      const { data: fresh } = await db
+        .from("studio_contracts")
+        .select("gallery_album_id")
+        .eq("id", contract.id)
+        .maybeSingle();
+      albums.galleryAlbumId = (fresh?.gallery_album_id as string | null) ?? albums.galleryAlbumId;
+    }
+  }
 
   if (body?.resync) {
     const ids = [albums.selectionAlbumId, albums.galleryAlbumId].filter(Boolean) as string[];

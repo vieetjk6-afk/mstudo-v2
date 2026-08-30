@@ -12,6 +12,7 @@ import {
 import { OPEN_QUOTE_STATUSES, QUOTE_NUDGE_DAYS } from "@/lib/quote-expiry";
 import { ensureIntakeToken, intakeUrl } from "@/lib/contract-intake";
 import { listFolderImages } from "@/lib/drive-server";
+import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { studioUrl } from "@/lib/hosts";
 import { getStudioHost } from "@/lib/studio-site";
 import { crewPortalUrl } from "@/lib/crew-show";
@@ -19,6 +20,9 @@ import { vnd, CREW_ROLE_LABEL } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+/** Hợp đồng hoàn thành trong bao nhiêu ngày qua thì còn ngóng ảnh chỉnh sửa. */
+const DELIVER_WATCH_DAYS = 120;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -39,6 +43,8 @@ export const maxDuration = 60;
  *   • payment_due    — đợt thanh toán tới hạn/quá hạn → nhắc khách + link HĐ.
  *   • select_ready   — mời chọn ảnh: khi thư mục ảnh gốc đã có ảnh (Drive), hoặc
  *                      fallback 1 ngày sau ngày chụp.
+ *   • delivery_ready — hợp đồng đã hoàn thành và thư mục ảnh chỉnh sửa đã có
+ *                      ảnh → tạo album giao khách rồi gửi link cho khách.
  * Chống gửi trùng: kiểm tra zalo_messages đã 'sent' cùng (contract, kind) gần đây.
  */
 export async function GET(req: NextRequest) {
@@ -116,6 +122,7 @@ export async function GET(req: NextRequest) {
   let nudgeSent = 0;
   let quoteNudged = 0;
   let quoteClosed = 0;
+  let delivered = 0;
 
   // ── 1) SHOOT REMINDER (khách + thợ) — chụp NGÀY MAI ──────────────────────
   if (doWork) {
@@ -219,7 +226,9 @@ export async function GET(req: NextRequest) {
     .from("studio_contracts")
     .select("id, owner_id, title, client_name, client_phone, event_date, selection_album_id, gallery_album_id, drive_tree, select_invited_at")
     .lte("event_date", today)
-    .eq("status", "in_progress")
+    // Cả hợp đồng ĐÃ HOÀN THÀNH mà chưa có album giao khách: khách trả đủ tiền
+    // trước khi hậu kỳ xong là chuyện thường, việc chọn ảnh vẫn còn nguyên đó.
+    .in("status", ["in_progress", "completed"])
     .not("selection_album_id", "is", null)
     .is("gallery_album_id", null);
 
@@ -270,7 +279,7 @@ export async function GET(req: NextRequest) {
   const { data: silent } = await db
     .from("studio_contracts")
     .select("id, owner_id, title, client_name, client_phone, selection_album_id, select_invited_at, select_nudges, select_nudged_at")
-    .eq("status", "in_progress")
+    .in("status", ["in_progress", "completed"])
     .not("select_invited_at", "is", null)
     .not("selection_album_id", "is", null)
     .is("gallery_album_id", null)
@@ -324,7 +333,38 @@ export async function GET(req: NextRequest) {
 
   }
 
-  // ── 5) QUOTE EXPIRING / EXPIRED ──────────────────────────────────────────
+  // ── 5) DELIVERY READY — ảnh chỉnh sửa đã lên Drive → tạo album giao khách ─
+  // Hợp đồng "hoàn thành" là mốc TIỀN, không phải mốc hậu kỳ: chốt xong hợp đồng
+  // mà File ChinhSua còn trống thì album vẫn ở giai đoạn chọn ảnh. Mỗi ngày quét
+  // lại, ảnh lên tới đâu thì tạo album giao khách + báo khách tới đó.
+  if (doWork) {
+  // Chỉ soi hợp đồng hoàn thành gần đây: hợp đồng cũ cả năm không có ảnh nữa thì
+  // quét mỗi ngày chỉ tổ nện Drive API.
+  const deliverSince = new Date(Date.now() - DELIVER_WATCH_DAYS * 24 * 3600 * 1000).toISOString();
+  const { data: doneCands } = await db
+    .from("studio_contracts")
+    .select("id, owner_id, completed_at")
+    .eq("status", "completed")
+    .is("gallery_album_id", null)
+    // Đã có cây thư mục Drive mới soi được. Hợp đồng chưa có cây thì lối đổi
+    // trạng thái đã dựng rồi — ở đây không dựng cây cho cả trăm hợp đồng cũ.
+    .not("drive_tree", "is", null)
+    .gte("completed_at", deliverSince)
+    .order("completed_at", { ascending: false })
+    .limit(100);
+
+  // Mỗi hợp đồng tốn vài lượt gọi Drive; cron chỉ có 60s. Hết giờ thì để nhịp
+  // ngày mai chạy tiếp — hợp đồng vẫn nằm nguyên trong diện quét.
+  const deliverUntil = Date.now() + 25_000;
+  for (const c of (doneCands ?? []) as any[]) {
+    if (Date.now() > deliverUntil) break;
+    const r = await deliverContractIfReady(c.owner_id, c.id);
+    if (r.created) delivered++;
+  }
+
+  }
+
+  // ── 6) QUOTE EXPIRING / EXPIRED ──────────────────────────────────────────
   if (doMoney) {
   // Báo giá gửi đi vốn có hiệu lực vĩnh viễn (cột expires_at có sẵn nhưng chưa
   // ai ghi). Giờ: nhắc khách trước khi hết hạn, rồi tự đóng khi quá hạn.
@@ -375,5 +415,5 @@ export async function GET(req: NextRequest) {
 
   }
 
-  return NextResponse.json({ ok: true, only: only ?? "all", shootSent, dueSent, selectSent, nudgeSent, quoteNudged, quoteClosed });
+  return NextResponse.json({ ok: true, only: only ?? "all", shootSent, dueSent, selectSent, nudgeSent, delivered, quoteNudged, quoteClosed });
 }

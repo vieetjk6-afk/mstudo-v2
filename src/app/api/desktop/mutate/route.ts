@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDesktopOwner } from "@/lib/desktop/auth";
-import { autoCreateContractDeliveryOnComplete, autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { syncContractCalendar } from "@/lib/gcal-sync";
 
 export const dynamic = "force-dynamic";
@@ -115,7 +116,9 @@ export async function POST(req: Request) {
       if (!data) return NextResponse.json({ error: "not_found" }, { status: 404 });
       // Hợp đồng chuyển trạng thái từ desktop:
       //  - sang "đang thực hiện"/"hoàn thành" → giờ mới tạo album CHỌN ẢNH.
-      //  - sang "hoàn thành" → tạo thêm album GIAO KHÁCH.
+      //  - sang "hoàn thành" → tạo thêm album GIAO KHÁCH, nhưng chỉ khi thư mục
+      //    ảnh chỉnh sửa đã có ảnh (hoàn thành = thu đủ tiền, không có nghĩa hậu
+      //    kỳ đã xong) — xem @/lib/contract-delivery.
       if (table === "studio_contracts" && (payload.status === "in_progress" || payload.status === "completed")) {
         try {
           await autoCreateContractSelectionOnProduction(owner, id);
@@ -124,11 +127,7 @@ export async function POST(req: Request) {
         }
       }
       if (table === "studio_contracts" && payload.status === "completed") {
-        try {
-          await autoCreateContractDeliveryOnComplete(owner, id);
-        } catch {
-          /* studio chưa nối Drive / lỗi tạm — lần đồng bộ sau tạo bù */
-        }
+        await deliverContractIfReady(owner, id, { notifyExisting: true });
       }
       // App máy tính sửa hợp đồng (ngày, giờ, nơi chụp, trạng thái) thì Google
       // Lịch phải đổi theo. Máy tính không chạy trong trình duyệt đã đăng nhập

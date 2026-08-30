@@ -8,6 +8,7 @@ import { limitByIpDurable } from "@/lib/rate-limit";
 import { autoCreateContractDriveOnSign } from "@/lib/studio-drive";
 import { syncContractCalendar } from "@/lib/gcal-sync";
 import { fetchAllPhotos } from "@/lib/photos";
+import { isDeliveryPhase } from "@/lib/album-phase";
 
 export const dynamic = "force-dynamic";
 
@@ -243,16 +244,21 @@ export async function POST(req: Request, { params }: { params: { token: string }
       .order("appt_date"),
   ]);
 
-  // Linked delivery gallery (so the portal can deep-link the client's photos).
+  // Album giao khách đã gắn (để cổng khách dẫn thẳng tới ảnh). Chỉ tính là ĐÃ
+  // GIAO khi album còn ở giai đoạn giao khách và đã xuất bản: studio đưa album
+  // về "Chọn ảnh" thì cổng khách phải quay lại thẻ chọn ảnh.
   let gallery: { slug: string; title: string } | null = null;
+  let deliveredAlbumId: string | null = null;
   if (contract.gallery_album_id) {
     const { data: g } = await db
       .from("albums")
-      .select("slug, title, status, is_gallery, phase")
+      .select("id, slug, title, status, is_gallery, phase")
       .eq("id", contract.gallery_album_id)
       .maybeSingle();
-    // Accept legacy galleries and unified projects in the delivery phase.
-    if (g && (g.is_gallery || g.phase === "delivery") && g.status === "published") gallery = { slug: g.slug, title: g.title };
+    if (g && isDeliveryPhase(g) && g.status === "published") {
+      gallery = { slug: g.slug, title: g.title };
+      deliveredAlbumId = g.id as string;
+    }
   }
 
   // Linked selection album (client picks their photos at /a/[slug]). For a
@@ -308,11 +314,11 @@ export async function POST(req: Request, { params }: { params: { token: string }
     download_enabled: boolean;
     photos: { id: string; drive_file_id: string; name: string; is_video: boolean }[];
   } | null = null;
-  if (contract.status === "completed" && contract.gallery_album_id) {
+  if (contract.status === "completed" && deliveredAlbumId) {
     const { data: a } = await db
       .from("albums")
       .select("id, slug, title, cover_url, download_enabled, status")
-      .eq("id", contract.gallery_album_id)
+      .eq("id", deliveredAlbumId)
       .maybeSingle();
     if (a && a.status === "published") {
       const photos = (await fetchAllPhotos(db, a.id as string, "id, drive_file_id, name, is_video, position")) as {

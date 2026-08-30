@@ -34,6 +34,7 @@ import {
   Share2,
   UserPlus,
   Printer,
+  PackageCheck,
 } from "lucide-react";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { createClient } from "@/lib/supabase/client";
@@ -281,6 +282,10 @@ export default function ContractEditor({
   });
   const contractSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [contractSaved, setContractSaved] = useState<"idle" | "saving" | "saved">("idle");
+  // Hợp đồng đã có album giao khách hay chưa. Giữ ở state để thẻ "đang ở giai
+  // đoạn Chọn ảnh" biến mất ngay khi vừa giao, không phải tải lại trang.
+  const [deliveryDone, setDeliveryDone] = useState(!!contract.gallery_album_id);
+  const [deliverBusy, setDeliverBusy] = useState(false);
 
   // Tab của cột trái (bản thiết kế màn "Chi tiết hợp đồng"). Cả trang trước đây
   // là một cột dài ~10 thẻ; gom vào tab để mỗi lần chỉ thấy đúng việc đang làm.
@@ -591,14 +596,44 @@ export default function ContractEditor({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { toast(`Lỗi: ${data?.error || res.status}`); return; }
-      toast(
-        status === "completed" && data?.deliveryAlbum
-          ? "Đã hoàn thành · đã tạo album giao khách"
-          : `Trạng thái: ${CONTRACT_STATUS_LABEL[status]}`
-      );
+      if (status === "completed" && data?.deliveryAlbum) {
+        setDeliveryDone(true);
+        toast("Đã hoàn thành · đã tạo album giao khách");
+      } else if (status === "completed" && data?.deliveryWaiting) {
+        // Hoàn thành = thu đủ tiền. Ảnh chỉnh sửa chưa có thì đừng đẩy khách sang
+        // album rỗng — nói rõ album còn ở giai đoạn chọn ảnh để studio khỏi tưởng lỗi.
+        toast("Đã hoàn thành · chưa có ảnh chỉnh sửa nên album vẫn ở giai đoạn Chọn ảnh");
+      } else {
+        toast(`Trạng thái: ${CONTRACT_STATUS_LABEL[status]}`);
+      }
       router.refresh();
     } catch {
       toast("Lỗi mạng, thử lại nhé.");
+    }
+  }
+
+  /**
+   * "Giao khách ngay" — tạo album giao khách mà không đợi ảnh trên Drive. Dùng
+   * khi studio biết chắc đã xử lý xong (ảnh vừa lên, hoặc giao bằng đường khác)
+   * và không muốn chờ nhịp quét hằng ngày.
+   */
+  async function deliverNow() {
+    setDeliverBusy(true);
+    try {
+      const res = await fetch("/api/studio/contract-deliver", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contractId: contract.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast(`Lỗi: ${data?.error || res.status}`); return; }
+      setDeliveryDone(true);
+      toast("Đã chuyển sang giai đoạn Giao khách");
+      router.refresh();
+    } catch {
+      toast("Lỗi mạng, thử lại nhé.");
+    } finally {
+      setDeliverBusy(false);
     }
   }
 
@@ -2265,6 +2300,23 @@ h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex
                     <label className="label">Hạn giao ảnh</label>
                     <DateInput value={f.delivery_due} onChange={(v) => set("delivery_due", v)} />
                   </div>
+
+                  {/* Giai đoạn giao khách. Hợp đồng "hoàn thành" là mốc TIỀN —
+                      thu đủ thì chốt hợp đồng, hậu kỳ có thể còn dở. Nên album
+                      chỉ tự chuyển sang giao khách khi thư mục ảnh chỉnh sửa đã
+                      có ảnh; chưa có thì khách vẫn ở trang chọn ảnh. */}
+                  {f.status === "completed" && !deliveryDone && (
+                    <div className="rounded-xl p-3.5" style={{ background: "var(--surface2)" }}>
+                      <p className="text-[13px] font-semibold">Đang ở giai đoạn Chọn ảnh</p>
+                      <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
+                        Hợp đồng đã hoàn thành nhưng thư mục ảnh chỉnh sửa còn trống, nên khách vẫn ở trang
+                        chọn ảnh. Album giao khách sẽ tự tạo khi ảnh lên Drive — hoặc bấm giao ngay nếu bạn đã xong.
+                      </p>
+                      <button type="button" onClick={deliverNow} disabled={deliverBusy} className="btn-ghost mt-2.5">
+                        <PackageCheck size={15} /> {deliverBusy ? "Đang tạo…" : "Giao khách ngay"}
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
