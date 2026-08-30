@@ -612,6 +612,10 @@ async fn download_and_run(app: tauri::AppHandle, url: String) -> Result<(), Stri
         .map_err(|e| e.to_string())?;
     // Cho trình cài đặt khởi động rồi thoát app (giải phóng file để ghi đè).
     std::thread::sleep(Duration::from_millis(1200));
+    // Nhả khoá single-instance TRƯỚC khi thoát: trình cài đặt mở lại app ngay sau
+    // khi cài xong, mà khoá còn giữ thì bản mới tưởng đã có bản khác chạy rồi tự
+    // thoát — cập nhật xong lại không thấy app đâu.
+    tauri_plugin_single_instance::destroy(&app);
     app.exit(0);
     Ok(())
 }
@@ -964,6 +968,26 @@ fn open_studio(app: &tauri::AppHandle) {
     }
 }
 
+/// Người dùng mở app lần nữa trong khi nó ĐANG chạy ngầm dưới khay.
+///
+/// Không chặn thì Windows mở thêm hẳn một tiến trình: thêm một biểu tượng khay
+/// (mở mấy lần thì khay đầy icon — đúng cái studio nhìn thấy), và tệ hơn, thêm
+/// một engine đồng bộ chạy song song ghi vào cùng thư mục dữ liệu. Nên: bản
+/// đang chạy hiện lên trước, còn bản vừa mở tự thoát (plugin single-instance lo).
+fn focus_running_app(app: &tauri::AppHandle) {
+    use tauri::Manager;
+    if let Some(w) = app.get_webview_window("studioapp") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+        return;
+    }
+    // Chưa mở giao diện studio (hoặc chưa cài đặt xong) → hiện bảng điều khiển
+    // rồi thử mở giao diện studio, y như bấm biểu tượng khay.
+    show_main(app);
+    open_studio(app);
+}
+
 /// Tạo biểu tượng khay hệ thống + menu (Mở / Đồng bộ ngay / Thoát). Để app chạy
 /// ngầm dưới khay: đóng cửa sổ chỉ ẩn đi, engine đồng bộ vẫn tiếp tục.
 fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
@@ -1066,6 +1090,11 @@ fn start_background_tick(app: &tauri::AppHandle) {
 
 fn main() {
     tauri::Builder::default()
+        // PHẢI đăng ký đầu tiên (yêu cầu của plugin): chốt chỉ cho MỘT bản app
+        // chạy mỗi lúc. Lần mở thứ hai chỉ đánh thức bản đang chạy rồi tự thoát.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            focus_running_app(app);
+        }))
         .setup(|app| {
             setup_tray(app.handle())?;
             start_background_tick(app.handle());
