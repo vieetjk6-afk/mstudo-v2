@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyTurnstile } from "@/lib/turnstile";
+import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +18,8 @@ export async function POST(req: Request) {
     captcha?: string;
   };
 
-  const captchaOk = await verifyTurnstile(body.captcha);
-  if (!captchaOk) return NextResponse.json({ error: "captcha_failed" }, { status: 400 });
+  const captcha = await guardCaptcha(req, "feedback", body.captcha);
+  if (captcha) return captcha;
   const content = body.content?.trim();
   if (!body.albumId || !content) {
     return NextResponse.json({ error: "missing_fields" }, { status: 400 });

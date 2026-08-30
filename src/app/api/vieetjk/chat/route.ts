@@ -14,6 +14,7 @@ import {
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { CONTACT, type Lang } from "@/lib/vieetjk/content";
 import { recordWebsiteAiReply, recordWebsiteIncoming } from "@/lib/inbox/website";
+import { getFeatureFlags, inboxComingSoon } from "@/lib/feature-flags";
 
 /**
  * Ký tự điều khiển đặt đầu tin "quá tải" để widget nhận biết → tự mở form để lại
@@ -94,8 +95,13 @@ export async function POST(req: NextRequest) {
   // Đưa hội thoại website vào HỘP THƯ HỢP NHẤT: ghi tin khách vừa gõ, rồi hỏi
   // xem nhân viên đã tiếp quản phiên này chưa. Đã tiếp quản thì bot IM — trả
   // 202 để widget chuyển sang chờ người thật trả lời thay vì chen ngang.
+  //
+  // Khi hộp thư CHƯA BẬT (cờ tính năng), bỏ qua toàn bộ khối này: chatbox chạy
+  // đúng như trước, không sinh một dòng dữ liệu nào. "Chưa bật" phải có nghĩa là
+  // không chạy, chứ không phải chạy ngầm ở chỗ không ai nhìn thấy.
   let conversationId: string | null = null;
-  if (ownerId && sessionId) {
+  const inboxLive = !inboxComingSoon(await getFeatureFlags());
+  if (inboxLive && ownerId && sessionId) {
     const lastUser = [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
     const rec = lastUser ? await recordWebsiteIncoming(ownerId, sessionId, lastUser) : null;
     if (rec) {

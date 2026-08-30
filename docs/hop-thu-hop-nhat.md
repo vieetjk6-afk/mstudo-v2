@@ -4,6 +4,19 @@ Hộp thư gom tin nhắn khách từ Zalo, Facebook, Instagram, TikTok và chat
 website về một chỗ (Dashboard → Kinh doanh → **Hộp thư**). Code đã lên `main`; tài liệu này
 là phần **phải làm tay** để nó chạy thật.
 
+> ## ⏸ Tính năng đang TẮT
+>
+> Hộp thư phát hành sau **cờ tính năng**, mặc định là "Sắp ra mắt". Studio thấy
+> nhãn đó trên menu và không mở được màn; **admin vẫn vào bình thường** để hoàn
+> thiện. Chatbox website chạy y như trước và **không ghi gì** vào hộp thư.
+>
+> **Bật khi sẵn sàng:** đăng nhập admin → **Cài đặt hệ thống → Tính năng** → bỏ
+> tích ô *Hộp thư hợp nhất* → **Lưu**. Tắt lại cũng bằng đúng ô đó, không cần
+> deploy.
+>
+> Nên bật SAU khi đã: chạy 2 file SQL, khai đủ biến, redeploy, và nối thử được
+> ít nhất một kênh.
+
 Sáu biến cần thêm. Ba biến bạn **tự sinh / tự gõ**, hai biến phải **đi lấy**
 trong console, một biến là địa chỉ callback:
 
@@ -36,7 +49,8 @@ Meta báo lỗi và bạn sẽ đi tìm nguyên nhân ở nhầm chỗ.
 2. Lấy / sinh các biến (mục 1–4 dưới đây; mục 3 gồm ba biến)
 3. Dán vào Vercel rồi **Redeploy**
 4. Khai webhook bên Meta / Zalo
-5. Kiểm tra
+5. Kiểm tra — **vẫn đang bật cờ "Sắp ra mắt", chỉ admin thấy màn**
+6. Chạy ngon rồi mới **bật cờ** cho studio (Cài đặt hệ thống → Tính năng)
 
 ---
 

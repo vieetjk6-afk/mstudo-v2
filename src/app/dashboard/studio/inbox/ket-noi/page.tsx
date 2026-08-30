@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { requireStudio } from "@/lib/auth-guards";
+import { getFeatureFlags, inboxComingSoon } from "@/lib/feature-flags";
 import { listChannels, toPublic } from "@/lib/inbox/channels";
 import { loadZalo } from "@/lib/zalo/config";
 import { metaOAuthConfigured } from "@/lib/inbox/adapters/meta-oauth";
@@ -27,6 +29,10 @@ export default async function InboxChannelsPage() {
       </div>
     );
   }
+
+  // Cùng hàng rào với màn Hộp thư: khoá màn này mà để màn nối kênh mở thì studio
+  // vẫn dán được token vào một tính năng chưa bật.
+  if (inboxComingSoon(await getFeatureFlags()) && role !== "admin") notFound();
 
   const ownerId = profile.id as string;
   const [channels, zalo] = await Promise.all([listChannels(ownerId), loadZalo(ownerId)]);

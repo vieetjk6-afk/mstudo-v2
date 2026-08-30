@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { verifyTurnstile } from "@/lib/turnstile";
+import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIp } from "@/lib/rate-limit";
 import { notifyAdmins } from "@/lib/notify-admin";
 
@@ -18,11 +18,11 @@ export async function POST(req: Request) {
     captcha?: string;
   };
 
-  // Verify CAPTCHA before processing
-  const captchaOk = await verifyTurnstile(body.captcha);
-  if (!captchaOk) {
-    return NextResponse.json({ error: "Xác minh captcha thất bại. Vui lòng thử lại." }, { status: 400 });
-  }
+  // Cổng captcha: mã hợp lệ thì đi thẳng; mã bị Cloudflare bác thì 400; không
+  // xác minh được (widget không chạy / chưa cấu hình) thì vẫn cho gửi nhưng chỉ
+  // vài lượt mỗi giờ trên mỗi IP.
+  const captcha = await guardCaptcha(req, "contact", body.captcha);
+  if (captcha) return captcha;
 
   const name = body.name?.trim();
   const message = body.message?.trim().slice(0, 5000);
