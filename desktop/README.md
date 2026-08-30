@@ -132,6 +132,27 @@ lại cửa sổ; **chuột phải** có menu **Mở giao diện studio / Bảng
 đồng bộ / Đồng bộ ngay / Đăng xuất · xóa cookie đăng nhập / Thoát** (Thoát mới
 đóng hẳn app).
 
+## Bấm link trong cửa sổ studio
+
+Cửa sổ studio là WebView2 **không có tab, không thanh địa chỉ**. WebView2 mặc
+định **nuốt** mọi yêu cầu mở cửa sổ mới, nên trước đây bấm link `target="_blank"`
+(Google Drive, Zalo hỗ trợ, xem trước album/thiệp/story) **không có gì xảy ra** —
+im lặng, không báo lỗi; cửa sổ **in hợp đồng / báo giá** (trang tự mở bằng
+`window.open("")` rồi ghi nội dung vào) cũng không hiện. App tự xử lý:
+
+| Bấm vào | Đi đâu |
+| --- | --- |
+| Link ra ngoài (`drive.google.com`, Facebook, Zalo…) | **Trình duyệt mặc định** của máy |
+| Link trang của chính studio mở tab mới | **Cửa sổ mới trong app** — dùng chung hồ sơ WebView2 nên **không phải đăng nhập lại** |
+| Cửa sổ in hợp đồng/báo giá (`window.open("")`) | Cửa sổ mới trong app (mở ở trình duyệt ngoài thì trang không ghi được nội dung in vào) |
+| `mailto:` / `tel:` (gọi khách hàng ở màn *Hôm nay*) | Phần mềm mail / ứng dụng gọi điện của máy |
+| Link ra ngoài **không** có `target="_blank"` | Trình duyệt mặc định — script tiêm vào trang bắt lại, không để cửa sổ studio điều hướng sang trang ngoài rồi kẹt ở đó (không có nút Back) |
+
+Địa chỉ giao cho Windows mở chỉ được thuộc `http, https, mailto, tel, sms,
+callto` và luôn đi qua `explorer`/`rundll32` chứ **không qua `cmd`** — không có
+shell thì không chèn được lệnh nếu URL bị thao túng. Kiểm thử:
+`npm run test:desktop-links`.
+
 ## Đăng nhập trong cửa sổ studio
 
 ### Đăng nhập tự động bằng mã thiết bị (mặc định)
