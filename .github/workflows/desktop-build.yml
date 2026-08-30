@@ -148,6 +148,7 @@ jobs:
       # client chỉ đọc mỗi tag này, phát hành sang tag khác thì máy studio không
       # thấy gì cả.
       - name: Đẩy bản cài lên kênh cập nhật
+        id: push_new
         if: steps.channel.outputs.skip != 'true'
         uses: softprops/action-gh-release@v2
         with:
@@ -165,8 +166,14 @@ jobs:
       # Những máy đó hỏi bản mới ở vieetjk01/studio và chỉ tải file cài từ đúng
       # đó (allowlist trong Rust). Không đẩy vào đây thì chúng KHÔNG BAO GIỜ tự
       # lên được bản mới — phải đi cài tay từng máy. Bỏ bước này khi đã hết máy cũ.
+      #
+      # `!cancelled()` chứ không để mặc: mặc định một bước đỏ là mọi bước sau bị
+      # BỎ QUA, nên kênh mới hỏng (vd repo kênh còn rỗng) sẽ kéo theo máy cũ
+      # không nhận được bản cầu nối — hai đường độc lập nhau, hỏng đường này
+      # không được phép chặn đường kia. Vẫn đòi có file cài (`ver` chạy được).
       - name: Kiểm tra secret kênh cũ
         id: legacy
+        if: ${{ !cancelled() && steps.ver.outcome == 'success' }}
         shell: bash
         env:
           LEGACY_RELEASE_TOKEN: ${{ secrets.LEGACY_RELEASE_TOKEN }}
@@ -177,7 +184,7 @@ jobs:
           fi
 
       - name: Dọn file cài cũ trên kênh cũ
-        if: steps.legacy.outputs.skip != 'true'
+        if: ${{ !cancelled() && steps.legacy.outputs.skip != 'true' && steps.ver.outcome == 'success' }}
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.LEGACY_RELEASE_TOKEN }}
@@ -189,7 +196,8 @@ jobs:
           done
 
       - name: Đẩy bản cầu nối lên kênh cũ
-        if: steps.legacy.outputs.skip != 'true'
+        id: push_legacy
+        if: ${{ !cancelled() && steps.legacy.outputs.skip != 'true' && steps.ver.outcome == 'success' }}
         uses: softprops/action-gh-release@v2
         with:
           repository: ${{ env.LEGACY_CHANNEL_REPO }}
@@ -203,17 +211,21 @@ jobs:
             Cài xong, app chuyển sang kênh cập nhật mới:
             https://github.com/${{ env.RELEASE_CHANNEL_REPO }}/releases/tag/desktop-dev
 
+      # Tổng kết theo KẾT QUẢ THẬT của bước đẩy, không theo "đã có secret chưa":
+      # có secret mà đẩy hỏng (repo kênh còn rỗng, token thiếu quyền) thì bảng
+      # tổng kết vẫn khoe link — đúng kiểu báo cáo sai làm mất cả buổi đi tìm.
       - name: Ghi kết quả
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           echo "### Bản ${{ steps.ver.outputs.v }}" >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.channel.outputs.skip }}" != "true" ]; then
-            echo "- Kênh cập nhật: https://github.com/$RELEASE_CHANNEL_REPO/releases/tag/desktop-dev" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- ⚠️ CHƯA lên kênh cập nhật (thiếu secret RELEASE_TOKEN) — máy studio không thấy bản mới." >> "$GITHUB_STEP_SUMMARY"
-          fi
-          if [ "${{ steps.legacy.outputs.skip }}" != "true" ]; then
-            echo "- Kênh cũ (cầu nối cho máy ≤ 1.1.1): https://github.com/$LEGACY_CHANNEL_REPO/releases/tag/desktop-dev" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- ⚠️ CHƯA lên kênh cũ (thiếu secret LEGACY_RELEASE_TOKEN) — máy đang chạy bản ≤ 1.1.1 phải cài tay một lần." >> "$GITHUB_STEP_SUMMARY"
-          fi
+          case "${{ steps.push_new.outcome }}" in
+            success) echo "- ✅ Kênh cập nhật: https://github.com/$RELEASE_CHANNEL_REPO/releases/tag/desktop-dev" >> "$GITHUB_STEP_SUMMARY" ;;
+            skipped) echo "- ⚠️ CHƯA lên kênh cập nhật (thiếu secret RELEASE_TOKEN) — máy studio không thấy bản mới." >> "$GITHUB_STEP_SUMMARY" ;;
+            *)       echo "- ❌ ĐẨY HỎNG lên $RELEASE_CHANNEL_REPO — xem log bước \"Đẩy bản cài lên kênh cập nhật\". Máy studio KHÔNG thấy bản mới." >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
+          case "${{ steps.push_legacy.outcome }}" in
+            success) echo "- ✅ Kênh cũ (cầu nối cho máy ≤ 1.1.1): https://github.com/$LEGACY_CHANNEL_REPO/releases/tag/desktop-dev" >> "$GITHUB_STEP_SUMMARY" ;;
+            skipped) echo "- ⚠️ CHƯA lên kênh cũ (thiếu secret LEGACY_RELEASE_TOKEN) — máy đang chạy bản ≤ 1.1.1 phải cài tay một lần." >> "$GITHUB_STEP_SUMMARY" ;;
+            *)       echo "- ❌ ĐẨY HỎNG lên $LEGACY_CHANNEL_REPO — xem log bước \"Đẩy bản cầu nối lên kênh cũ\". Máy bản cũ phải cài tay." >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
