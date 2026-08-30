@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
+import { isDeliveryPhase } from "@/lib/album-phase";
 import { studioUrl } from "@/lib/hosts";
 import ShareButton from "@/components/ShareButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
@@ -62,6 +63,19 @@ export type AlbumPick = {
   created_at: string;
 };
 
+/**
+ * Album GIAO KHÁCH của cùng hợp đồng (hợp đồng đồng bộ Drive có hai album). Khi
+ * nó đã sẵn sàng, link khách của album chọn ảnh tự chuyển sang đó.
+ */
+export type DeliveryTwin = {
+  id: string;
+  slug: string;
+  title: string;
+  status: string;
+  phase: string | null;
+  is_gallery: boolean | null;
+};
+
 export default function AlbumEditor({
   album,
   initialSources,
@@ -77,6 +91,7 @@ export default function AlbumEditor({
   clientName = null,
   selections = [],
   storageMonths = 6,
+  deliveryTwin = null,
 }: {
   album: Album;
   initialSources: AlbumSource[];
@@ -94,6 +109,8 @@ export default function AlbumEditor({
   selections?: AlbumPick[];
   /** Chính sách lưu trữ ảnh gốc của studio (tháng). 0 = giữ vô hạn. */
   storageMonths?: number;
+  /** Album giao khách của cùng hợp đồng (nếu album này là album chọn ảnh). */
+  deliveryTwin?: DeliveryTwin | null;
 }) {
   const { t } = useLang();
   const supabase = createClient();
@@ -139,8 +156,18 @@ export default function AlbumEditor({
   const [hasPassword, setHasPassword] = useState(!!album.password_hash);
   const [newPassword, setNewPassword] = useState("");
 
-  const [phase, setPhase] = useState<AlbumPhase>(album.phase ?? "selection");
+  // Cùng luật với trang khách: album đời đầu chỉ có cờ `is_gallery` (phase còn
+  // null) mà màn này ghi "Chọn ảnh" thì studio thấy một đằng, khách thấy một nẻo.
+  const [phase, setPhase] = useState<AlbumPhase>(isDeliveryPhase(album) ? "delivery" : "selection");
   const [phaseBusy, setPhaseBusy] = useState(false);
+  // Link khách của album này có đang bị chuyển sang album giao khách của hợp
+  // đồng không — điều kiện phải khớp Y HỆT src/app/a/[slug]/page.tsx.
+  const [twinPhase, setTwinPhase] = useState<string | null>(
+    deliveryTwin ? deliveryTwin.phase ?? (deliveryTwin.is_gallery ? "delivery" : "selection") : null
+  );
+  const [twinBusy, setTwinBusy] = useState(false);
+  const twinTakesOver =
+    !!deliveryTwin && deliveryTwin.status === "published" && phase !== "delivery" && twinPhase === "delivery";
   // Hạn lưu trữ ảnh gốc trên Drive (null = giữ vô hạn).
   const [storageDate, setStorageDate] = useState<string | null>(album.storage_until ?? null);
   const [storageBusy, setStorageBusy] = useState(false);
@@ -422,6 +449,22 @@ export default function AlbumEditor({
     router.refresh();
   }
 
+  /**
+   * Đưa album GIAO KHÁCH của hợp đồng về giai đoạn chọn ảnh, để link khách quay
+   * lại chính album này. Dùng khi studio bấm hoàn thành sớm (thu đủ tiền) mà
+   * hậu kỳ chưa xong: khách cần tiếp tục chọn ảnh chứ không phải xem ảnh giao.
+   */
+  async function twinBackToSelection() {
+    if (!deliveryTwin) return;
+    setTwinBusy(true);
+    const { error } = await supabase.from("albums").update({ phase: "selection" }).eq("id", deliveryTwin.id);
+    setTwinBusy(false);
+    if (error) return flash(error.message);
+    setTwinPhase("selection");
+    flash("Link khách đã quay lại album chọn ảnh này");
+    router.refresh();
+  }
+
   /** Gia hạn lưu trữ ảnh gốc thêm N tháng kể từ HÔM NAY. */
   async function extendStorage(months: number) {
     const next = storageUntil(new Date(), months);
@@ -558,6 +601,32 @@ export default function AlbumEditor({
       {msg && (
         <div className="mb-3.5 rounded-[10px] px-3.5 py-2.5 text-[12.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
           {msg}
+        </div>
+      )}
+
+      {/* Hợp đồng đồng bộ Drive có HAI album. Khi album giao khách đã sẵn sàng,
+          link khách của album chọn ảnh tự chuyển sang đó — nhìn ở màn này thì
+          album vẫn ghi "Chọn ảnh" mà bấm link lại ra trang giao khách. Nói
+          thẳng ra, kèm nút đưa ngược về. */}
+      {twinTakesOver && deliveryTwin && (
+        <div className="mb-3.5 flex flex-col gap-2.5 rounded-[12px] p-3.5 sm:flex-row sm:items-center" style={{ background: "var(--amS)", border: "1px solid var(--am)" }}>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-bold" style={{ color: "var(--am)" }}>
+              Link khách đang mở album giao khách
+            </p>
+            <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx2)" }}>
+              Hợp đồng đã có album “{deliveryTwin.title}”, nên link khách của album chọn ảnh này tự chuyển sang đó.
+              Hậu kỳ chưa xong thì đưa về để khách chọn ảnh tiếp.
+            </p>
+          </div>
+          <div className="flex flex-none flex-wrap gap-2">
+            <Link href={`/dashboard/albums/${deliveryTwin.id}`} className="act-btn">
+              Mở album giao khách
+            </Link>
+            <button onClick={twinBackToSelection} disabled={twinBusy} className="act-btn act-btn-primary">
+              <ArrowLeft size={15} /> {twinBusy ? "Đang đổi…" : "Về giai đoạn Chọn ảnh"}
+            </button>
+          </div>
         </div>
       )}
 

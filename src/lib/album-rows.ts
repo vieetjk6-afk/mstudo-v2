@@ -14,7 +14,10 @@ export async function fetchAlbumRows(
   if (!ownerId) return [];
 
   // Cột LÕI — có ở mọi database, kể cả cái chưa chạy migration nào gần đây.
-  const BASE_COLS = "id, slug, title, cover_url, status, watermark_enabled, download_enabled, phase, photos(count), selections(count)";
+  // `is_gallery` đi kèm `phase`: cờ cũ vẫn quyết định giai đoạn của album đời
+  // đầu (phase còn null) — thư viện phải đọc CÙNG luật với trang khách, xem
+  // @/lib/album-phase.
+  const BASE_COLS = "id, slug, title, cover_url, status, watermark_enabled, download_enabled, phase, is_gallery, photos(count), selections(count)";
   // + mốc khách chốt chọn ảnh (migrations/album_selection_done.sql).
   const COLS = `${BASE_COLS}, selection_done_at`;
   let listQ = supabase

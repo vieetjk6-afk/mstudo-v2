@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchAllPhotos } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
 import { effectivePlan, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
-import AlbumEditor, { type AlbumPick } from "./AlbumEditor";
+import AlbumEditor, { type AlbumPick, type DeliveryTwin } from "./AlbumEditor";
 import { categoryLabel } from "@/lib/category";
 import type { Album, AlbumSource, Photo } from "@/lib/types";
 
@@ -51,9 +51,24 @@ export default async function AlbumEditPage({
   // thẳng; nếu không (album lẻ) → AlbumEditor sẽ hiện ô nhập SĐT.
   const { data: linkedContract } = await supabase
     .from("studio_contracts")
-    .select("id, client_name, client_phone")
+    .select("id, client_name, client_phone, selection_album_id, gallery_album_id")
     .or(`selection_album_id.eq.${params.id},gallery_album_id.eq.${params.id}`)
     .maybeSingle();
+
+  // Hợp đồng đồng bộ Drive có HAI album: chọn ảnh (JPG Goc) và giao khách
+  // (File ChinhSua). Khi album giao khách đã sẵn sàng, link khách của album
+  // CHỌN ẢNH tự chuyển sang đó (xem src/app/a/[slug]/page.tsx) — nhìn ở màn này
+  // thì album vẫn ghi "Chọn ảnh" mà bấm link lại ra giao khách. Nạp album kia
+  // để nói thẳng điều đó ra và cho studio đưa ngược về.
+  let deliveryTwin: DeliveryTwin | null = null;
+  if (linkedContract?.selection_album_id === params.id && linkedContract?.gallery_album_id) {
+    const { data: twin } = await supabase
+      .from("albums")
+      .select("id, slug, title, status, phase, is_gallery")
+      .eq("id", linkedContract.gallery_album_id)
+      .maybeSingle();
+    if (twin) deliveryTwin = twin as DeliveryTwin;
+  }
 
   // Loại album do CHÍNH studio này đã dùng (mỗi studio có bộ phân loại riêng).
   const { data: catRows } = await supabase
@@ -83,6 +98,7 @@ export default async function AlbumEditPage({
       studioHost={studioHost}
       studioCats={studioCats}
       contractId={linkedContract?.id ?? null}
+      deliveryTwin={deliveryTwin}
       clientPhone={linkedContract?.client_phone ?? null}
       clientName={linkedContract?.client_name ?? null}
       selections={(picks ?? []) as AlbumPick[]}

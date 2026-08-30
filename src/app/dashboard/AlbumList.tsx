@@ -24,6 +24,7 @@ import { Panel } from "@/components/studio/ui";
 import StudioTrialButton from "@/components/StudioTrialButton";
 import FilterDialog from "@/components/FilterDialog";
 import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
+import { isDeliveryPhase } from "@/lib/album-phase";
 
 export interface AlbumRow {
   id: string;
@@ -33,7 +34,9 @@ export interface AlbumRow {
   status: "draft" | "published";
   watermark_enabled: boolean;
   download_enabled: boolean;
-  phase?: "selection" | "delivery";
+  phase?: "selection" | "delivery" | null;
+  /** Cờ CŨ của album giao khách — vẫn quyết định khi `phase` còn null. */
+  is_gallery?: boolean | null;
   /** Lần gần nhất khách bấm "Đã chọn xong" trên trang album. null = chưa chốt. */
   selection_done_at?: string | null;
   // Đếm ảnh + 1 ảnh bìa dự phòng (thay vì kéo toàn bộ drive_file_id mọi ảnh).
@@ -119,8 +122,8 @@ function AlbumEmpty({ title, hint, cta, href }: { title: string; hint: string; c
 // Tách thư viện thành 2 TAB theo giai đoạn: ALBUM CHỌN ẢNH (phase 'selection') và
 // ALBUM GIAO KHÁCH (phase 'delivery') — cùng kiểu tab với trang Hợp đồng.
 function AlbumTabs({ albums, canDelivery, canWatermark, studioHost }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean; studioHost: string | null }) {
-  const deliveryAlbums = sortAlbums(albums.filter((a) => (a.phase ?? "selection") === "delivery"));
-  const selectionAlbums = sortAlbums(albums.filter((a) => (a.phase ?? "selection") !== "delivery"));
+  const deliveryAlbums = sortAlbums(albums.filter((a) => isDeliveryPhase(a)));
+  const selectionAlbums = sortAlbums(albums.filter((a) => !isDeliveryPhase(a)));
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
   const doneCount = pendingSelectionCount(albums);
 
@@ -215,7 +218,10 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
   const [status, setStatus] = useState(a.status);
   const [watermark, setWatermark] = useState(a.watermark_enabled);
   const [download, setDownload] = useState(a.download_enabled);
-  const [phase, setPhase] = useState<"selection" | "delivery">(a.phase ?? "selection");
+  // Đọc giai đoạn CÙNG luật với trang khách: album đời đầu chỉ có cờ is_gallery
+  // (phase null) mà hiện nhãn "Chọn ảnh" thì studio thấy một đằng, khách thấy
+  // một nẻo — đúng cái bẫy đã gây lệch trước đây.
+  const [phase, setPhase] = useState<"selection" | "delivery">(isDeliveryPhase(a) ? "delivery" : "selection");
   const [doneAt, setDoneAt] = useState<string | null>(a.selection_done_at ?? null);
   const [filterOpen, setFilterOpen] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
