@@ -3,6 +3,12 @@ name: Build MStudo Desktop (Windows)
 # Build file cài đặt Windows (.exe) trên máy ảo Windows của GitHub.
 #  - Chạy tay: tab Actions → "Build MStudo Desktop (Windows)" → Run workflow.
 #  - Tự chạy khi đẩy tag desktop-v* (vd desktop-dev) và tạo luôn Release.
+#
+# Build xong, file cài đi tới HAI nơi:
+#  1. Release trong chính repo này — để lưu vết và tải tay.
+#  2. Release "desktop-dev" của repo CÔNG KHAI vieetjk01/studio — đây mới là
+#     KÊNH TỰ CẬP NHẬT mà app trên máy studio thật sự đọc (xem ghi chú ở biến
+#     RELEASE_CHANNEL_REPO). Cần secret RELEASE_TOKEN; chưa có thì tự bỏ qua.
 on:
   workflow_dispatch:
   push:
@@ -15,6 +21,16 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      # KÊNH CẬP NHẬT: repo CÔNG KHAI chứa release mà app đi tìm bản mới.
+      #
+      # Vì sao không dùng luôn release của repo này: repo này RIÊNG TƯ, mà app
+      # hỏi GitHub API KHÔNG kèm đăng nhập nên release ở đây với nó luôn là 404
+      # — build bao nhiêu bản thì máy studio vẫn báo "đang dùng bản mới nhất".
+      # Hai chỗ khác phải khớp với giá trị này: RELEASE_REPO trong
+      # desktop/ui/app.js và bộ kiểm nguồn tải `download_and_run` trong
+      # desktop/src-tauri/src/main.rs (chỉ nhận đường dẫn /vieetjk01/).
+      RELEASE_CHANNEL_REPO: vieetjk01/studio
     defaults:
       run:
         working-directory: desktop
@@ -75,3 +91,67 @@ jobs:
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           files: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
           generate_release_notes: true
+
+      # ── Kênh tự cập nhật (repo công khai) ────────────────────────────────
+      # Cần secret RELEASE_TOKEN: token có quyền Contents = Read and write trên
+      # repo vieetjk01/studio (Settings → Developer settings → Personal access
+      # tokens → Fine-grained token → chọn đúng repo đó). Chưa đặt thì bỏ qua
+      # kèm cảnh báo — build vẫn xanh, chỉ là máy studio chưa nhận được bản mới.
+      - name: Kiểm tra secret kênh cập nhật
+        id: channel
+        shell: bash
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Chưa có secret RELEASE_TOKEN — không đẩy được bản cài lên $RELEASE_CHANNEL_REPO, máy studio sẽ không thấy bản mới."
+          fi
+
+      # Số phiên bản nằm trong tên file cài (MStudo Desktop_1.1.1_x64-setup.exe)
+      # — client so đúng con số này với APP_VERSION đang chạy.
+      - name: Lấy số phiên bản từ tên file cài
+        id: ver
+        if: steps.channel.outputs.skip != 'true'
+        shell: bash
+        run: |
+          f=$(ls src-tauri/target/release/bundle/nsis/*-setup.exe | head -1)
+          echo "v=$(basename "$f" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)" >> "$GITHUB_OUTPUT"
+
+      # Dọn file cài cũ trước khi tải bản mới: client chọn asset có số phiên bản
+      # CAO NHẤT, để lẫn nhiều bản chỉ tổ khó soi khi có máy bị "kẹt".
+      - name: Dọn file cài cũ trên kênh cập nhật
+        if: steps.channel.outputs.skip != 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          names=$(gh release view desktop-dev --repo "$RELEASE_CHANNEL_REPO" --json assets -q '.assets[].name' 2>/dev/null | grep -iE -- '-setup\.exe$' || true)
+          for a in $names; do
+            echo "Xóa asset cũ: $a"
+            gh release delete-asset desktop-dev "$a" -y --repo "$RELEASE_CHANNEL_REPO" || true
+          done
+
+      # Luôn đẩy vào ĐÚNG tag desktop-dev, kể cả khi build từ tag desktop-v*:
+      # client chỉ đọc mỗi tag này, phát hành sang tag khác thì máy studio không
+      # thấy gì cả.
+      - name: Đẩy bản cài lên kênh cập nhật
+        if: steps.channel.outputs.skip != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          repository: ${{ env.RELEASE_CHANNEL_REPO }}
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: desktop-dev
+          name: MStudo Desktop (bản phát triển)
+          prerelease: true
+          files: desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          body: |
+            Bản ${{ steps.ver.outputs.v }} — app trên máy studio tự tải và cài bản này.
+            Nguồn: ${{ github.repository }}@${{ github.sha }}
+
+      - name: Ghi kết quả
+        if: steps.channel.outputs.skip != 'true'
+        shell: bash
+        run: |
+          echo "### Đã đẩy bản ${{ steps.ver.outputs.v }} lên kênh cập nhật" >> "$GITHUB_STEP_SUMMARY"
+          echo "- https://github.com/$RELEASE_CHANNEL_REPO/releases/tag/desktop-dev" >> "$GITHUB_STEP_SUMMARY"
