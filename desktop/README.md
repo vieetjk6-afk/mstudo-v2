@@ -80,7 +80,9 @@ của Tauri (nhớ ký cả `*-setup.exe` lẫn binary bên trong).
   hỏi GitHub API **không kèm đăng nhập**, nên nó chỉ đọc được release của repo
   **CÔNG KHAI**. Repo mã nguồn (`vieetjk6-afk/mstudo-v2`) là repo **riêng tư** →
   release ở đó với app luôn là 404. Kênh thật là release **`desktop-dev` của
-  `vieetjk01/studio`**. Ba chỗ phải khớp nhau, đổi thì đổi cả ba:
+  `vieetjk6-afk/mstudo-desktop`** — repo công khai **chỉ chứa file cài**, không
+  có mã nguồn. Ba chỗ phải khớp nhau, đổi thì đổi cả ba (`npm run
+  test:desktop-update` giữ khớp):
 
   | Chỗ | Giữ gì |
   | --- | --- |
@@ -89,14 +91,21 @@ của Tauri (nhớ ký cả `*-setup.exe` lẫn binary bên trong).
   | `.github/workflows/desktop-build.yml` → `RELEASE_CHANNEL_REPO` | nơi workflow đẩy file cài lên |
 
   Workflow tự đẩy bản cài lên kênh này sau mỗi lần build, cần secret
-  **`RELEASE_TOKEN`** (token có quyền *Contents: Read and write* trên
-  `vieetjk01/studio`). Chưa có secret thì bước đó bỏ qua kèm cảnh báo vàng, build
-  vẫn xanh — và **máy studio sẽ không thấy bản mới**, đúng cái bẫy im lặng này.
+  **`RELEASE_TOKEN`** (token có quyền *Contents: Read and write* trên repo kênh).
+  Chưa có secret thì bước đó bỏ qua kèm cảnh báo vàng, build vẫn xanh — và **máy
+  studio sẽ không thấy bản mới**, đúng cái bẫy im lặng này.
 
   Phát hành bản mới: tăng `version` ở `tauri.conf.json`, `Cargo.toml`,
   `package.json` và `APP_VERSION` trong `ui/app.js` cho khớp (client so số phiên
   bản **trong tên file cài** với `APP_VERSION`), rồi chạy workflow build.
   (Cập nhật ngầm bằng tauri-plugin-updater để sau — cần quản lý khóa ký riêng.)
+- **Kênh CŨ `vieetjk01/studio` — đường chuyển tiếp, sẽ bỏ**: máy còn chạy bản
+  **≤ 1.1.1** đã ghim kênh cũ ngay trong file cài, không biết gì về kênh mới. Nên
+  workflow còn đẩy thêm bản cài lên kênh cũ, chạy sau secret riêng
+  **`LEGACY_RELEASE_TOKEN`**; máy cũ nhận bản cầu nối, cài xong là tự chuyển sang
+  kênh mới. Khi không còn máy nào ở bản cũ: xoá secret đó (hoặc xoá hẳn
+  `LEGACY_CHANNEL_REPO` cùng các bước dùng nó). Không có token cho repo cũ thì
+  mỗi máy cũ phải **cài tay một lần** — không có đường nào khác.
 - Cấu trúc dữ liệu client tạo trong thư mục studio chọn:
 
 ```

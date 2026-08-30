@@ -989,9 +989,12 @@ window.printContract = async function (id) {
 // mốc thời gian: cài lỗi vẫn còn phát hiện, cài xong app mới có version khớp nên
 // không lặp.)
 const RELEASE_TAG = "desktop-dev";
-// Repo chứa bản cài. Giữ repo CŨ vì nó công khai — GitHub API chỉ đọc được
-// release của repo công khai mà không cần đăng nhập. Đổi ở ĐÚNG một dòng này.
-const RELEASE_REPO = "vieetjk01/Studio";
+// Repo chứa bản cài. PHẢI là repo CÔNG KHAI: app hỏi GitHub API không kèm đăng
+// nhập, nên release của repo riêng tư (kể cả repo mã nguồn) với nó là 404 —
+// build bao nhiêu bản mới thì app vẫn báo "đang dùng bản mới nhất". Repo này
+// chỉ chứa file cài, không chứa mã nguồn. Đổi thì đổi cả ba chỗ (xem
+// desktop/README.md, mục "Kênh cập nhật"); npm run test:desktop-update giữ khớp.
+const RELEASE_REPO = "vieetjk6-afk/mstudo-desktop";
 const RELEASE_API = `https://api.github.com/repos/${RELEASE_REPO}/releases/tags/${RELEASE_TAG}`;
 const RELEASE_PAGE = `https://github.com/${RELEASE_REPO}/releases/tags/${RELEASE_TAG}`;
 let _updateUrl = "";

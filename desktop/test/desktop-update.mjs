@@ -48,16 +48,23 @@ check("kênh cập nhật KHÔNG phải repo mã nguồn (repo riêng tư)", lc(
 // Bước đẩy phải thật sự nằm trong workflow (không chỉ có biến).
 check("workflow có bước đẩy bản cài lên kênh cập nhật", /repository:\s*\$\{\{\s*env\.RELEASE_CHANNEL_REPO\s*\}\}/.test(wf), true);
 check("bước đẩy dùng secret RELEASE_TOKEN", /token:\s*\$\{\{\s*secrets\.RELEASE_TOKEN\s*\}\}/.test(wf), true);
+// Kênh CŨ (nếu còn bước chuyển tiếp): phải chạy sau một secret riêng, để tắt
+// được bằng cách xoá secret mà không phải sửa workflow, và để thiếu token thì
+// build chỉ cảnh báo chứ không đỏ.
+if (/LEGACY_CHANNEL_REPO:/.test(wf)) {
+  check("kênh cũ chạy sau secret riêng LEGACY_RELEASE_TOKEN", /token:\s*\$\{\{\s*secrets\.LEGACY_RELEASE_TOKEN\s*\}\}/.test(wf), true);
+  check("kênh cũ KHÔNG phải kênh chính (đã chuyển sang repo mới)", lc(pick(wf, /LEGACY_CHANNEL_REPO:\s*(\S+)/, "LEGACY_CHANNEL_REPO")) === lc(channelRepo), false);
+}
 
 /* ── Rust chỉ cho tải file cài từ đúng kênh đó ────────────────────────────── */
 // download_and_run CHẠY file .exe tải về. Nới cái allowlist này ra là biến nó
 // thành công cụ chạy mã tuỳ ý khi JS bị lợi dụng — nên nó phải hẹp, và phải
 // hẹp ĐÚNG vào repo mà workflow đẩy lên, không thì tải về lại bị chặn.
-const owner = releaseRepo.split("/")[0];
 const allowHost = pick(rs, /parsed\.host_str\(\) != Some\("([^"]+)"\)/, "host cho phép trong download_and_run");
 const allowPath = pick(rs, /!parsed\.path\(\)\.starts_with\("([^"]+)"\)/, "đường dẫn cho phép trong download_and_run");
 check("chỉ tải file cài từ github.com", allowHost, "github.com");
-check("đường dẫn cho phép khớp chủ repo của kênh cập nhật", lc(allowPath), lc(`/${owner}/`));
+// Hẹp tới TÊN REPO, không chỉ tên chủ repo: chủ tài khoản còn nhiều repo khác.
+check("đường dẫn cho phép khớp đúng repo kênh cập nhật", lc(allowPath), lc(`/${releaseRepo}/`));
 check("bắt buộc https", /parsed\.scheme\(\) != "https"/.test(rs), true);
 
 /* ── Bốn chỗ ghi số phiên bản phải bằng nhau ──────────────────────────────── */
