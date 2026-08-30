@@ -570,15 +570,17 @@ fn open_studio_window(app: &tauri::AppHandle, url: String, force_navigate: bool)
 /// để trình cài đặt ghi đè. Không cần khóa ký — dùng chính bản phát hành hiện có.
 #[tauri::command]
 async fn download_and_run(app: tauri::AppHandle, url: String) -> Result<(), String> {
-    // Chỉ cho phép tải bản cài từ đúng repo phát hành chính thức. Nếu không,
+    // Chỉ cho phép tải bản cài từ ĐÚNG repo phát hành chính thức. Nếu không,
     // lệnh này trở thành công cụ chạy .exe tùy ý (RCE) khi JS bị lợi dụng.
     // PHẢI parse URL trước rồi mới so host/path — kiểm tra chuỗi thô có thể bị
-    // qua mặt bằng "../" (vd https://github.com/vieetjk01/../attacker/... sẽ
-    // chuẩn hoá thành host github.com nhưng path /attacker/...).
+    // qua mặt bằng "../" (vd https://github.com/OWNER/../attacker/... sẽ chuẩn
+    // hoá thành host github.com nhưng path /attacker/...).
+    // Hẹp tới TÊN REPO chứ không chỉ tên chủ repo: chủ tài khoản còn nhiều repo
+    // khác, mỗi repo là một chỗ có thể tải file lạ về chạy.
     let parsed = reqwest::Url::parse(&url).map_err(|_| "url không hợp lệ".to_string())?;
     if parsed.scheme() != "https"
         || parsed.host_str() != Some("github.com")
-        || !parsed.path().starts_with("/vieetjk01/")
+        || !parsed.path().starts_with("/vieetjk6-afk/mstudo-desktop/")
     {
         return Err("nguồn cập nhật không hợp lệ".to_string());
     }

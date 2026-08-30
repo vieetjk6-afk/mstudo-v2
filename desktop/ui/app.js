@@ -8,7 +8,7 @@
 
 const invoke = window.__TAURI__.core.invoke;
 
-const APP_VERSION = "1.1.1"; // giữ khớp với src-tauri/tauri.conf.json
+const APP_VERSION = "1.1.2"; // giữ khớp với src-tauri/tauri.conf.json
 
 // ─── Cấu hình (localStorage) ─────────────────────────────────────────────────
 const cfg = JSON.parse(localStorage.getItem("cfg") || "{}");
@@ -61,6 +61,69 @@ const fmtTime = (iso) => {
   const p = (n) => String(n).padStart(2, "0");
   return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
+
+// ─── Hộp thoại của app (thay alert/confirm của webview) ──────────────────────
+// alert()/confirm() sẵn có luôn kèm dòng "tauri.localhost says" — tên máy chủ
+// nội bộ của WebView2. Dòng đó KHÔNG tắt hay đổi được vì hộp thoại là của
+// trình duyệt chứ không phải của app; người dùng đọc chỉ thấy khó hiểu, trông
+// như trang lạ hiện lên. Nên tự dựng hộp thoại bằng HTML, mang đúng tên và
+// giao diện của app.
+//
+// Khác alert(): hàm này KHÔNG chặn luồng — chỗ nào cần biết người dùng chọn gì
+// thì phải `await`.
+function dialog(text, { title = "MStudo Desktop", ok = "OK", cancel = "" } = {}) {
+  return new Promise((resolve) => {
+    const ov = document.createElement("div");
+    ov.className = "dmodal-overlay msgbox";
+    const box = document.createElement("div");
+    box.className = "dmodal";
+    const head = document.createElement("div");
+    head.className = "dmodal-head";
+    const h = document.createElement("div");
+    h.className = "dmodal-title";
+    h.textContent = title;
+    head.appendChild(h);
+    const body = document.createElement("div");
+    body.className = "dmodal-body msgbox-text";
+    // textContent chứ không innerHTML: nội dung hay kèm lỗi từ máy chủ / tên file.
+    body.textContent = text;
+    const foot = document.createElement("div");
+    foot.className = "msgbox-actions";
+    const okBtn = document.createElement("button");
+    okBtn.className = "btn primary";
+    okBtn.textContent = ok;
+    let cancelBtn = null;
+    if (cancel) {
+      cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn";
+      cancelBtn.textContent = cancel;
+      foot.appendChild(cancelBtn);
+    }
+    foot.appendChild(okBtn);
+    box.append(head, body, foot);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    const close = (v) => {
+      document.removeEventListener("keydown", onKey, true);
+      ov.remove();
+      resolve(v);
+    };
+    // Enter = đồng ý, Esc = huỷ — bàn phím vẫn dùng được như hộp thoại thật.
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); close(false); }
+      else if (e.key === "Enter") { e.preventDefault(); close(true); }
+    };
+    document.addEventListener("keydown", onKey, true);
+    okBtn.onclick = () => close(true);
+    if (cancelBtn) cancelBtn.onclick = () => close(false);
+    ov.onclick = (e) => { if (e.target === ov) close(false); };
+    okBtn.focus();
+  });
+}
+/** Báo tin cho người dùng (thay alert). */
+const say = (text, title) => dialog(text, { title });
+/** Hỏi đồng ý (thay confirm) — nhớ `await` để lấy true/false. */
+const ask = (text, title) => dialog(text, { title, cancel: "Huỷ" });
 
 function log(msg, kind = "") {
   const item = { t: new Date().toISOString(), msg, kind };
@@ -231,7 +294,7 @@ async function deviceLogin(manual = false) {
     const msg = "Không đăng nhập tự động được: " + (e.message || e);
     log(msg, "err");
     // Bấm tay mà hỏng thì phải nói ra — im lặng là lại đúng cái bệnh cũ.
-    if (manual) alert(msg + "\n\nHãy đăng nhập bằng email + mật khẩu trong cửa sổ studio.");
+    if (manual) say(msg + "\n\nHãy đăng nhập bằng email + mật khẩu trong cửa sổ studio.");
   } finally {
     loginBusy = false;
   }
@@ -284,8 +347,8 @@ async function resetLogin(hard = false) {
 window.resetLogin = resetLogin; // để menu khay (Rust) gọi được
 $("btnDeviceLogin").onclick = () => deviceLogin(true);
 $("btnLogout").onclick = () => resetLogin(false);
-$("btnClearWeb").onclick = () => {
-  if (!confirm("Xóa sạch cookie & bộ nhớ đệm của cửa sổ studio?\n\nBạn sẽ phải đăng nhập lại. Kết nối thiết bị, thư mục lưu và file đã tải về máy vẫn giữ nguyên (nhật ký hoạt động sẽ bị xóa).")) return;
+$("btnClearWeb").onclick = async () => {
+  if (!(await ask("Xóa sạch cookie & bộ nhớ đệm của cửa sổ studio?\n\nBạn sẽ phải đăng nhập lại. Kết nối thiết bị, thư mục lưu và file đã tải về máy vẫn giữ nguyên (nhật ký hoạt động sẽ bị xóa).", "Xóa cookie đăng nhập"))) return;
   resetLogin(true);
 };
 
@@ -326,7 +389,7 @@ $("btnOpenFolder").onclick = () => invoke("open_folder", { path: cfg.dir }).catc
 $("btnChangeFolder").onclick = async () => {
   const p = await invoke("pick_folder");
   if (!p || p === cfg.dir) return;
-  const move = confirm("Di chuyển toàn bộ dữ liệu đã lưu sang thư mục mới?\n\nOK = di chuyển · Cancel = giữ nguyên dữ liệu cũ, chỉ lưu mới vào vị trí mới");
+  const move = await dialog("Di chuyển toàn bộ dữ liệu đã lưu sang thư mục mới?", { title: "Đổi thư mục lưu", ok: "Di chuyển", cancel: "Giữ nguyên chỗ cũ" });
   // Cho phép thao tác ở cả thư mục cũ + mới trong lúc di chuyển.
   await invoke("set_roots", { paths: [cfg.dir, p, cfg.mediaDir].filter(Boolean) }).catch(() => {});
   if (move) {
@@ -342,8 +405,8 @@ $("btnChangeFolder").onclick = async () => {
   cfg.dir = p; saveCfg(); syncRoots(); refreshStats();
   log("Đổi thư mục lưu thành " + p);
 };
-$("btnDisconnect").onclick = () => {
-  if (!confirm("Ngắt kết nối thiết bị này? Dữ liệu đã lưu trên máy vẫn giữ nguyên.")) return;
+$("btnDisconnect").onclick = async () => {
+  if (!(await ask("Ngắt kết nối thiết bị này? Dữ liệu đã lưu trên máy vẫn giữ nguyên.", "Ngắt kết nối thiết bị"))) return;
   localStorage.removeItem("cfg");
   location.reload();
 };
@@ -900,11 +963,11 @@ async function flushQueue() {
 
 // ─── In hợp đồng PDF (dùng bản in A4 chuẩn từ server: logo, chữ ký, định dạng) ──
 window.printContract = async function (id) {
-  if (!cfg.server || !cfg.token || !cfg.dir) { alert("Cần kết nối máy chủ và chọn thư mục lưu trước."); return; }
+  if (!cfg.server || !cfg.token || !cfg.dir) { say("Cần kết nối máy chủ và chọn thư mục lưu trước.", "Chưa in được"); return; }
   try {
     await flushQueue(); // đảm bảo hợp đồng (kể cả vừa tạo cục bộ) đã lên server
     const r = await invoke("http_get", { url: cfg.server + "/api/desktop/contracts/" + id + "?format=html", token: cfg.token });
-    if (r.status !== 200) { alert("Chưa in được — hợp đồng đang chờ đồng bộ lên máy chủ. Thử lại sau vài giây."); return; }
+    if (r.status !== 200) { say("Hợp đồng đang chờ đồng bộ lên máy chủ. Thử lại sau vài giây.", "Chưa in được"); return; }
     const dir = join(cfg.dir, "HopDong", ".in");
     const htmlPath = join(dir, "hopdong-" + id + ".html");
     const pdfPath = join(dir, "hopdong-" + id + ".pdf");
@@ -917,7 +980,7 @@ window.printContract = async function (id) {
       await invoke("open_file", { path: htmlPath });
       log("Mở bản in (HTML) — bấm Ctrl+P để in ra giấy.", "warn");
     }
-  } catch (e) { alert("Không in được: " + (e.message || e)); }
+  } catch (e) { say("Không in được: " + (e.message || e), "Chưa in được"); }
 };
 
 // ─── Tự cập nhật: phát hiện bản mới trên GitHub Releases (nhãn desktop-dev) ──
@@ -926,9 +989,12 @@ window.printContract = async function (id) {
 // mốc thời gian: cài lỗi vẫn còn phát hiện, cài xong app mới có version khớp nên
 // không lặp.)
 const RELEASE_TAG = "desktop-dev";
-// Repo chứa bản cài. Giữ repo CŨ vì nó công khai — GitHub API chỉ đọc được
-// release của repo công khai mà không cần đăng nhập. Đổi ở ĐÚNG một dòng này.
-const RELEASE_REPO = "vieetjk01/Studio";
+// Repo chứa bản cài. PHẢI là repo CÔNG KHAI: app hỏi GitHub API không kèm đăng
+// nhập, nên release của repo riêng tư (kể cả repo mã nguồn) với nó là 404 —
+// build bao nhiêu bản mới thì app vẫn báo "đang dùng bản mới nhất". Repo này
+// chỉ chứa file cài, không chứa mã nguồn. Đổi thì đổi cả ba chỗ (xem
+// desktop/README.md, mục "Kênh cập nhật"); npm run test:desktop-update giữ khớp.
+const RELEASE_REPO = "vieetjk6-afk/mstudo-desktop";
 const RELEASE_API = `https://api.github.com/repos/${RELEASE_REPO}/releases/tags/${RELEASE_TAG}`;
 const RELEASE_PAGE = `https://github.com/${RELEASE_REPO}/releases/tags/${RELEASE_TAG}`;
 let _updateUrl = "";
@@ -943,12 +1009,12 @@ const cmpVer = (a, b) => {
 async function checkUpdate(manual = false) {
   try {
     const r = await invoke("http_get", { url: RELEASE_API, token: null });
-    if (r.status !== 200) { if (manual) alert("Không kiểm tra được (máy chủ trả lỗi HTTP " + r.status + "). Thử lại sau."); return; }
+    if (r.status !== 200) { if (manual) say("Không kiểm tra được (máy chủ trả lỗi HTTP " + r.status + "). Thử lại sau.", "Cập nhật"); return; }
     const rel = JSON.parse(b64ToText(r.body_b64));
     // Bản phát hành desktop-dev có thể còn nhiều file cài cũ → CHỌN file có SỐ
     // PHIÊN BẢN CAO NHẤT (không lấy đại file đầu tiên, tránh "kẹt"/hạ cấp).
     const setups = (rel.assets || []).filter((a) => /-setup\.exe$/i.test(a.name));
-    if (!setups.length) { if (manual) alert("Chưa tìm thấy file cài trong bản phát hành."); return; }
+    if (!setups.length) { if (manual) say("Chưa tìm thấy file cài trong bản phát hành.", "Cập nhật"); return; }
     const asset = setups.reduce((best, a) => (cmpVer(parseVer(a.name), parseVer(best.name)) > 0 ? a : best), setups[0]);
     _updateUrl = asset.browser_download_url;
     const ver = parseVer(asset.name);
@@ -964,9 +1030,9 @@ async function checkUpdate(manual = false) {
       if (!appBusy()) { log("Đang tự cập nhật MStudo Desktop…"); runSelfUpdate(true); }
       else log("Đã có bản cập nhật — sẽ tự cài khi rảnh (hoặc bấm “Cập nhật ngay”).", "warn");
     } else if (manual) {
-      alert("Bạn đang dùng bản mới nhất (" + APP_VERSION + ").");
+      say("Bạn đang dùng bản mới nhất (" + APP_VERSION + ").", "Cập nhật");
     }
-  } catch (e) { if (manual) alert("Không kiểm tra được cập nhật: " + (e.message || e)); }
+  } catch (e) { if (manual) say("Không kiểm tra được cập nhật: " + (e.message || e), "Cập nhật"); }
 }
 // App có đang bận không (chặn tự cập nhật giữa chừng để không hỏng việc đang chạy).
 function appBusy() {
@@ -974,7 +1040,7 @@ function appBusy() {
 }
 async function runSelfUpdate(auto = false) {
   if (!_updateUrl) return;
-  if (!auto && !confirm("Tải và cài bản cập nhật mới? Ứng dụng sẽ đóng lại để cài đặt, rồi mở lại.")) return;
+  if (!auto && !(await ask("Tải và cài bản cập nhật mới? Ứng dụng sẽ đóng lại để cài đặt, rồi mở lại.", "Cập nhật"))) return;
   $("btnUpdate").textContent = "Đang tải…"; $("btnUpdate").disabled = true;
   try {
     await invoke("download_and_run", { url: _updateUrl }); // tải xong app tự thoát để cài
@@ -983,7 +1049,7 @@ async function runSelfUpdate(auto = false) {
     const msg = "Không tự cài được: " + (e.message || e);
     if (auto) { log(msg, "err"); return; }
     // Dự phòng: mở trang phát hành để tải & cài tay (VD SmartScreen chặn chạy ngầm).
-    if (confirm(msg + "\n\nMở trang tải bản cài để cài thủ công?")) {
+    if (await ask(msg + "\n\nMở trang tải bản cài để cài thủ công?", "Cập nhật")) {
       invoke("open_url", { url: RELEASE_PAGE }).catch(() => {});
     }
   }
