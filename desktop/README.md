@@ -156,7 +156,11 @@ và chạy migration `supabase/migrations/studio_drive_sync.sql`.
 ### Chạy ngầm dưới khay hệ thống
 
 Bấm dấu **×** ở cửa sổ chính sẽ **thu nhỏ xuống khay hệ thống** thay vì thoát —
-engine đồng bộ hợp đồng/ảnh vẫn chạy ngầm. Biểu tượng khay: **bấm trái** để mở
+engine đồng bộ hợp đồng/ảnh vẫn chạy ngầm. Vì app không thoát khi bấm ×, mở lại
+app từ Desktop/Start **không tạo bản thứ hai**: bản đang chạy được đưa lên
+trước, bản vừa mở tự thoát (chốt `tauri-plugin-single-instance`). Không có chốt
+này thì mỗi lần mở là thêm một biểu tượng khay và thêm một engine đồng bộ ghi
+song song vào cùng thư mục dữ liệu. Biểu tượng khay: **bấm trái** để mở
 lại cửa sổ; **chuột phải** có menu **Mở giao diện studio / Bảng điều khiển &
 đồng bộ / Đồng bộ ngay / Đăng xuất · xóa cookie đăng nhập / Thoát** (Thoát mới
 đóng hẳn app).

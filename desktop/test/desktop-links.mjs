@@ -82,6 +82,19 @@ check("script tiêm là JS hợp lệ", (() => {
   try { execFileSync(process.execPath, ["--check", "-"], { input: js }); return true; } catch { return false; }
 })(), true);
 
+/* ── Chỉ MỘT bản app chạy mỗi lúc ─────────────────────────────────────────── */
+// Mở app lần nữa lúc nó đang chạy ngầm dưới khay mà không chặn thì Windows tạo
+// hẳn tiến trình mới: thêm một biểu tượng khay (studio mở mấy lần là khay đầy
+// icon), và thêm một engine đồng bộ ghi song song vào cùng thư mục dữ liệu.
+check("có chốt chỉ một bản app chạy", rs.includes("tauri_plugin_single_instance::init"), true);
+// Plugin yêu cầu đăng ký ĐẦU TIÊN; đăng ký sau plugin khác thì chốt không ăn.
+check("chốt đăng ký trước mọi thứ khác", /Builder::default\(\)\s*(\/\/[^\n]*\n\s*)*\.plugin\(tauri_plugin_single_instance::init/.test(rs), true);
+// Lần mở thứ hai phải ĐÁNH THỨC bản đang chạy, không thì bấm vào app không thấy
+// gì xảy ra — người dùng lại bấm tiếp.
+check("lần mở thứ hai đánh thức bản đang chạy", fnBody("focus_running_app").includes("set_focus()"), true);
+// Trình cài đặt mở lại app ngay sau khi cài; khoá còn giữ thì bản mới tự thoát.
+check("nhả khoá trước khi thoát để cài bản mới", fnBody("download_and_run").includes("tauri_plugin_single_instance::destroy(&app)"), true);
+
 /* ── Có link _blank thật trong web app thì test trên mới có nghĩa ─────────── */
 const chrome = readFileSync(resolve(dir, "../../src/components/StudioShell.tsx"), "utf8");
 check("web app vẫn có link mở tab mới (vd hỗ trợ Zalo)", chrome.includes('target="_blank"'), true);
