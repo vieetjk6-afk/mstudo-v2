@@ -382,7 +382,7 @@ function openContractEdit(id, prefill) {
   ov.onclick = (e) => { if (e.target === ov) close(); };
   document.getElementById("ctAddItem").onclick = () => { syncItems(); _editItems.push({ id: uuid(), name: "", qty: 1, unit_price: 0 }); drawItems(); };
   if (id) document.getElementById("ctDelete").onclick = async () => {
-    if (!confirm("Xóa hợp đồng này và toàn bộ hạng mục?")) return;
+    if (!(await dialog("Xóa hợp đồng này và toàn bộ hạng mục?", { title: "Xóa hợp đồng", ok: "Xóa", cancel: "Huỷ" }))) return;
     for (const it of T("contract_items").filter((i) => i.contract_id === id)) await window.localMutate("contract_items", "delete", { id: it.id, contract_id: id });
     await window.localMutate("studio_contracts", "delete", { id });
     close();
@@ -542,7 +542,7 @@ function openQuoteEdit(id) {
   ov.onclick = (e) => { if (e.target === ov) close(); };
   document.getElementById("qAddItem").onclick = () => { syncItems(); _editItems.push({ id: uuid(), name: "", qty: 1, unit_price: 0 }); drawItems(); };
   if (id) document.getElementById("qDelete").onclick = async () => {
-    if (!confirm("Xóa báo giá này?")) return;
+    if (!(await dialog("Xóa báo giá này?", { title: "Xóa báo giá", ok: "Xóa", cancel: "Huỷ" }))) return;
     for (const it of T("quote_items").filter((i) => i.quote_id === id)) await window.localMutate("quote_items", "delete", { id: it.id, quote_id: id });
     await window.localMutate("studio_quotes", "delete", { id });
     close();
@@ -615,7 +615,7 @@ function openExpense(id) {
     close();
   };
   if (id) document.getElementById("exDelete").onclick = async () => {
-    if (!confirm("Xóa khoản chi này?")) return;
+    if (!(await dialog("Xóa khoản chi này?", { title: "Xóa khoản chi", ok: "Xóa", cancel: "Huỷ" }))) return;
     await window.localMutate("studio_expenses", "delete", { id });
     close();
   };
@@ -745,7 +745,7 @@ function openEvent(id) {
     close();
   };
   if (id) document.getElementById("evDelete").onclick = async () => {
-    if (!confirm("Xóa mục lịch này?")) return;
+    if (!(await dialog("Xóa mục lịch này?", { title: "Xóa mục lịch", ok: "Xóa", cancel: "Huỷ" }))) return;
     await window.localMutate("studio_events", "delete", { id });
     close();
   };
@@ -830,7 +830,7 @@ function openService(id) {
     await window.localMutate("studio_services", id ? "update" : "insert", { id: id || uuid(), name: document.getElementById("svName").value.trim() || "Dịch vụ", clauses: document.getElementById("svClauses").value });
     close();
   };
-  if (id) document.getElementById("svDelete").onclick = async () => { if (confirm("Xóa dịch vụ này?")) { await window.localMutate("studio_services", "delete", { id }); close(); } };
+  if (id) document.getElementById("svDelete").onclick = async () => { if (await dialog("Xóa dịch vụ này?", { title: "Xóa dịch vụ", ok: "Xóa", cancel: "Huỷ" })) { await window.localMutate("studio_services", "delete", { id }); close(); } };
 }
 
 // Form đơn giản dùng chung cho Bảng giá / Thiết bị (các trường text/number + bật/tắt).
@@ -852,5 +852,5 @@ function simpleForm(title, fields, active, onSave, canDelete) {
     await onSave(vals, document.getElementById("sfActive").checked, false);
     close();
   };
-  if (canDelete) document.getElementById("sfDelete").onclick = async () => { if (confirm("Xóa mục này?")) { await onSave({}, false, true); close(); } };
+  if (canDelete) document.getElementById("sfDelete").onclick = async () => { if (await dialog("Xóa mục này?", { title: "Xóa mục", ok: "Xóa", cancel: "Huỷ" })) { await onSave({}, false, true); close(); } };
 }
