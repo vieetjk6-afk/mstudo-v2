@@ -69,6 +69,7 @@ import ShareDialog from "@/components/ShareDialog";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
+import PhotoZoom from "@/components/PhotoZoom";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
@@ -119,8 +120,9 @@ export default function GalleryView({
     photosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
   const [lbIdx, setLbIdx] = useState<number | null>(null);
-  const swipe = useRef<{ x: number; y: number } | null>(null);
-  const [swipeDx, setSwipeDx] = useState(0);
+  // Vùng nền của khung xem ảnh — PhotoZoom bắt cử chỉ trên đây (kể cả dải đen
+  // hai bên ảnh dọc, chỗ ngón cái hay quẹt).
+  const lbStage = useRef<HTMLDivElement | null>(null);
 
   // Client-side photo selection → build a "share only these" link.
   const shareMode = shareIds != null && shareIds.length > 0;
@@ -312,25 +314,6 @@ export default function GalleryView({
   function go(delta: number) {
     setLbIdx((i) => (i === null ? i : Math.max(0, Math.min(visible.length - 1, i + delta))));
   }
-  function onSwipeDown(e: React.PointerEvent) {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    swipe.current = { x: e.clientX, y: e.clientY };
-  }
-  function onSwipeMove(e: React.PointerEvent) {
-    if (!swipe.current) return;
-    const dx = e.clientX - swipe.current.x;
-    const dy = e.clientY - swipe.current.y;
-    if (Math.abs(dx) > Math.abs(dy)) setSwipeDx(dx);
-  }
-  function onSwipeUp() {
-    if (!swipe.current) return;
-    const dx = swipeDx;
-    swipe.current = null;
-    setSwipeDx(0);
-    if (dx <= -50) go(1);
-    else if (dx >= 50) go(-1);
-  }
-
 
   async function sendFeedback() {
     if (!fbContent.trim() || !fbCaptcha) return;
@@ -575,13 +558,7 @@ export default function GalleryView({
             )}
             <button onClick={() => setLbIdx(null)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}><X size={17} /></button>
           </div>
-          <div
-            className="relative flex min-h-0 flex-1 items-center justify-center p-1 md:p-4"
-            style={{ touchAction: "pan-y" }}
-            onPointerDown={(e) => { if (!(e.target as HTMLElement).closest("button")) onSwipeDown(e); }}
-            onPointerMove={onSwipeMove}
-            onPointerUp={onSwipeUp}
-          >
+          <div ref={lbStage} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4">
             {/* Chỉ còn dấu < > chồng lên ảnh: bỏ nền + viền để ảnh chiếm chỗ tối đa. */}
             <button onClick={() => setLbIdx(Math.max(0, lbIdx - 1))} disabled={lbIdx === 0} aria-label="Ảnh trước" className="absolute left-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:opacity-20 md:w-14" style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}><ChevronLeft size={34} strokeWidth={1.6} /></button>
             {isVideo(lb) ? (
@@ -596,10 +573,7 @@ export default function GalleryView({
               // Khung ngoài KHÔNG bị transform nên kích thước bằng đúng ảnh —
               // nút thích vì thế dính đúng góc ảnh.
               <div className="relative inline-block">
-                <div
-                  className="relative inline-block"
-                  style={{ transform: `translateX(${swipeDx}px)`, transition: swipe.current ? "none" : "transform .18s ease" }}
-                >
+                <PhotoZoom key={lb.id} stageRef={lbStage} onSwipe={go} className="relative inline-block">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img key={lb.id} src={fullImageUrl(lb.drive_file_id, 1600)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, 400)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
                   {wm && (
@@ -609,7 +583,7 @@ export default function GalleryView({
                       ))}
                     </div>
                   )}
-                </div>
+                </PhotoZoom>
                 {/* Thích ảnh ngay trong khung xem — cùng góc với lưới ảnh bên
                     ngoài. Trước đây chỉ chọn được ở lưới. */}
                 {!shareMode && (

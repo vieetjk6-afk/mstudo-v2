@@ -25,6 +25,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ShareDialog from "@/components/ShareDialog";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
+import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
@@ -122,11 +123,12 @@ export default function CustomerAlbum({
   }, []);
 
   const [lbIdx, setLbIdx] = useState<number | null>(null);
+  // Mức phóng chỉ để bật/tắt nút "thu nhỏ" — cử chỉ (chụm ngón, kéo, vuốt, lăn
+  // chuột) do PhotoZoom lo và KHÔNG render lại trang, xem @/components/PhotoZoom.
   const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const drag = useRef<{ x: number; y: number; px: number; py: number } | null>(null);
-  const swipe = useRef<{ x: number; y: number } | null>(null);
-  const [swipeDx, setSwipeDx] = useState(0);
+  const zoomRef = useRef<PhotoZoomHandle>(null);
+  // Vùng nền của khung xem ảnh — nơi PhotoZoom bắt cử chỉ.
+  const lbStage = useRef<HTMLDivElement | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -448,10 +450,10 @@ export default function CustomerAlbum({
     return () => window.removeEventListener("keydown", onKey);
   }, [lbIdx, visiblePhotos.length]);
 
-  // Reset zoom whenever the lightbox opens or the photo changes.
+  // Đổi ảnh / mở khung xem → về mức phóng 1. Bản thân khung ảnh tự dựng lại
+  // (key theo id ảnh) nên đã ở mức 1; đây chỉ là đồng bộ nhãn cho nút bấm.
   useEffect(() => {
     setZoom(1);
-    setPan({ x: 0, y: 0 });
   }, [lbIdx]);
 
   // Đánh dấu "không thích" ngay trong lightbox làm ảnh rời khỏi danh sách đang
@@ -475,52 +477,10 @@ export default function CustomerAlbum({
     }
   }, [lbIdx, visiblePhotos]);
 
-  function zoomBy(d: number) {
-    setZoom((z) => {
-      const n = Math.min(5, Math.max(1, +(z + d).toFixed(2)));
-      if (n === 1) setPan({ x: 0, y: 0 });
-      return n;
-    });
-  }
-  function onWheelZoom(e: React.WheelEvent) {
-    zoomBy(e.deltaY < 0 ? 0.3 : -0.3);
-  }
   // Step to the prev/next photo (clamped to the visible list).
   function go(delta: number) {
     setLbIdx((i) => (i === null ? i : Math.max(0, Math.min(visiblePhotos.length - 1, i + delta))));
   }
-  function onPanDown(e: React.PointerEvent) {
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    if (zoom > 1) {
-      drag.current = { x: e.clientX, y: e.clientY, px: pan.x, py: pan.y };
-    } else {
-      // Zoom == 1: start a horizontal swipe to change photo.
-      swipe.current = { x: e.clientX, y: e.clientY };
-    }
-  }
-  function onPanMove(e: React.PointerEvent) {
-    if (drag.current) {
-      setPan({ x: drag.current.px + (e.clientX - drag.current.x), y: drag.current.py + (e.clientY - drag.current.y) });
-      return;
-    }
-    if (swipe.current) {
-      const dx = e.clientX - swipe.current.x;
-      const dy = e.clientY - swipe.current.y;
-      // Only treat as a swipe when the gesture is mostly horizontal.
-      if (Math.abs(dx) > Math.abs(dy)) setSwipeDx(dx);
-    }
-  }
-  function onPanUp() {
-    if (swipe.current) {
-      const dx = swipeDx;
-      swipe.current = null;
-      setSwipeDx(0);
-      if (dx <= -50) go(1);
-      else if (dx >= 50) go(-1);
-    }
-    drag.current = null;
-  }
-
   // Load the current selection immediately on open (don't wait for SSR/poll),
   // keep it in sync, and flush any pending save before the page goes away.
   useEffect(() => {
@@ -996,10 +956,10 @@ export default function CustomerAlbum({
                 <Download size={17} />
               </button>
             )}
-            <button onClick={() => zoomBy(-0.5)} disabled={zoom <= 1} title="Thu nhỏ" className="flex h-10 w-10 items-center justify-center rounded-lg disabled:opacity-40" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+            <button onClick={() => zoomRef.current?.zoomBy(1 / 1.5)} disabled={zoom <= 1} title="Thu nhỏ" className="flex h-10 w-10 items-center justify-center rounded-lg disabled:opacity-40" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}>
               <ZoomOut size={17} />
             </button>
-            <button onClick={() => zoomBy(0.5)} title="Phóng to" className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+            <button onClick={() => zoomRef.current?.zoomBy(1.5)} title="Phóng to" className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }}>
               <ZoomIn size={17} />
             </button>
             <button
@@ -1013,10 +973,7 @@ export default function CustomerAlbum({
           </div>
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
-            <div
-              className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4"
-              onWheel={onWheelZoom}
-            >
+            <div ref={lbStage} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4">
               <button
                 onClick={() => setLbIdx(Math.max(0, lbIdx - 1))}
                 disabled={lbIdx === 0}
@@ -1030,19 +987,13 @@ export default function CustomerAlbum({
                   ảnh ở mức thu phóng 1 — hai nút vì thế dính đúng GÓC ẢNH, và
                   không phóng to/thu nhỏ theo khi khách zoom ảnh. */}
               <div className="relative inline-flex">
-                <div
+                <PhotoZoom
+                  key={lbPhoto.id}
+                  ref={zoomRef}
+                  stageRef={lbStage}
+                  onSwipe={go}
+                  onZoomChange={setZoom}
                   className="relative inline-flex"
-                  style={{
-                    transform: `translate(${pan.x + (zoom <= 1 ? swipeDx : 0)}px, ${pan.y}px) scale(${zoom})`,
-                    transformOrigin: "center",
-                    transition: drag.current || swipe.current ? "none" : "transform .18s ease",
-                    cursor: zoom > 1 ? (drag.current ? "grabbing" : "grab") : "zoom-in",
-                    touchAction: "pan-y",
-                  }}
-                  onPointerDown={onPanDown}
-                  onPointerMove={onPanMove}
-                  onPointerUp={onPanUp}
-                  onDoubleClick={() => (zoom > 1 ? zoomBy(-10) : zoomBy(1.5))}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -1072,7 +1023,7 @@ export default function CustomerAlbum({
                       ))}
                     </div>
                   )}
-                </div>
+                </PhotoZoom>
                 {/* Không thích (góc trái) và thích (góc phải) — cùng vị trí với
                     lưới ảnh bên ngoài để khách chỉ phải học một chỗ. */}
                 {!shareMode && (
