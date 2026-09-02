@@ -6,11 +6,15 @@ export default function MoneyInput({
   onChange,
   placeholder,
   className = "input",
+  style,
+  ariaLabel,
 }: {
   value: number;
   onChange: (n: number) => void;
   placeholder?: string;
   className?: string;
+  style?: React.CSSProperties;
+  ariaLabel?: string;
 }) {
   const display = value > 0 ? value.toLocaleString("vi-VN") : "";
   return (
@@ -18,6 +22,8 @@ export default function MoneyInput({
       type="text"
       inputMode="numeric"
       className={className}
+      style={style}
+      aria-label={ariaLabel}
       placeholder={placeholder}
       value={display}
       onChange={(e) => onChange(Number((e.target.value || "").replace(/\D/g, "")) || 0)}
