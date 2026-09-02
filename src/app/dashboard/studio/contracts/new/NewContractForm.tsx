@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   CircleAlert,
   Landmark,
+  RotateCcw,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -36,6 +37,15 @@ import {
 import { nextContractCode, DEFAULT_TASKS } from "@/lib/contract-code";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { computeRoundedDeposit } from "@/lib/quote-deposit";
+import {
+  buildContractLines,
+  effectivePrice,
+  isCustomLineFilled,
+  isPriceEdited,
+  linesTotal,
+  CUSTOM_LINE_FALLBACK_NAME,
+  type LineCustom,
+} from "@/lib/contract-lines";
 import { fmtDate, fmtDow } from "@/lib/date";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { noAccent } from "@/lib/studio-nav";
@@ -74,7 +84,7 @@ type Instalment = { label: string; amount: number; due: string };
    lại. Không nhồi tất cả vào một form dài như bản cũ. */
 const STEPS = [
   { icon: User, label: "Khách hàng", title: "Hợp đồng này của ai?", hint: "Gõ số điện thoại để tìm khách cũ — hoặc chọn từ danh sách gần đây." },
-  { icon: Package, label: "Gói dịch vụ", title: "Khách chụp gói nào?", hint: "Chọn 1 gói chính, sau đó tick thêm hạng mục phát sinh." },
+  { icon: Package, label: "Gói dịch vụ", title: "Khách chụp gói nào?", hint: "Chọn 1 gói chính, tick thêm hạng mục phát sinh — sửa được giá từng gói, hoặc nhập gói riêng ngoài bảng giá." },
   { icon: CalendarDays, label: "Lịch & nhân sự", title: "Chụp khi nào, ai đi?", hint: "Chọn ngày giờ, địa điểm rồi phân công người đi chụp." },
   { icon: Wallet, label: "Thanh toán", title: "Khách trả tiền thế nào?", hint: "Chia đợt thu — mỗi đợt có hạn riêng để nhắc khách." },
   { icon: ClipboardCheck, label: "Kiểm tra", title: "Kiểm tra lần cuối", hint: "Bấm vào dòng bất kỳ để quay lại sửa." },
@@ -127,6 +137,17 @@ export default function NewContractForm({
   const [templateId, setTemplateId] = useState("");
   const [mainPkgId, setMainPkgId] = useState("");
   const [extraIds, setExtraIds] = useState<string[]>([]);
+  /* Giá đã thương lượng của từng gói, theo id gói — bảng giá chỉ là giá NIÊM
+     YẾT, còn giá thật trên hợp đồng gần như lần nào cũng khác (khách quen bớt
+     một ít, mùa thấp điểm giảm, gói gộp thì thêm). Trước đây studio phải chọn
+     gói rồi vào màn chi tiết sửa lại từng hạng mục, nên số ở bước Thanh toán
+     (cọc, đợt thu) được chia trên giá niêm yết — sai ngay từ lúc tạo. Chỉ ghi
+     id nào đã sửa; gói chưa sửa vẫn ăn theo bảng giá nếu bảng giá đổi. */
+  const [pkgPrice, setPkgPrice] = useState<Record<string, number>>({});
+  /* Gói riêng: hạng mục gõ tay cho đúng hợp đồng này. Không phải mọi thứ khách
+     đặt đều nằm trong bảng giá, và thêm một dòng dùng-một-lần vào bảng giá
+     chung chỉ làm bảng giá rác dần. */
+  const [customLines, setCustomLines] = useState<LineCustom[]>([]);
 
   // ── Bước 3 — lịch & nhân sự ─────────────────────────────────────────────
   const [eventDate, setEventDate] = useState("");
@@ -152,22 +173,25 @@ export default function NewContractForm({
   const mainPkg = packages.find((p) => p.id === mainPkgId) || null;
   const extras = packages.filter((p) => extraIds.includes(p.id));
 
+  const priceOf = (p: PackageOption) => effectivePrice(p, pkgPrice);
+  const priceEdited = (p: PackageOption) => isPriceEdited(p, pkgPrice);
+
   /* ── Tiền ────────────────────────────────────────────────────────────────
      Tổng LUÔN cộng từ mảng hạng mục, không có biến tổng viết tay — đúng ghi
      chú "nguồn số liệu duy nhất" trong README. */
-  const lines = useMemo(() => {
-    const out: { name: string; qty: number; unit_price: number }[] = [];
-    if (template) {
-      [...template.contract_template_items]
-        .sort((a, b) => a.position - b.position)
-        .forEach((i) => out.push({ name: i.name, qty: i.qty, unit_price: i.unit_price }));
-    }
-    if (mainPkg) out.push({ name: mainPkg.name, qty: 1, unit_price: mainPkg.price });
-    for (const x of extras) out.push({ name: x.name, qty: 1, unit_price: x.price });
-    return out;
-  }, [template, mainPkg, extras]);
+  const lines = useMemo(
+    () =>
+      buildContractLines({
+        templateItems: template?.contract_template_items ?? [],
+        mainPkg,
+        extras,
+        pkgPrice,
+        customLines,
+      }),
+    [template, mainPkg, extras, pkgPrice, customLines]
+  );
 
-  const total = lines.reduce((s, l) => s + l.qty * l.unit_price, 0);
+  const total = linesTotal(lines);
   const payroll = picked.reduce((s, c) => s + (c.salary || 0), 0);
   const profit = total - payroll;
   const marginPct = total > 0 ? Math.round((profit / total) * 100) : 0;
@@ -191,6 +215,16 @@ export default function NewContractForm({
   }, [total]);
   const instalments = plan ?? defaultPlan;
   const planTotal = instalments.reduce((s, p) => s + (p.amount || 0), 0);
+
+  /** Gói riêng gọn thành một dòng cho bước soát lại. */
+  const customPreview = useMemo(
+    () =>
+      customLines
+        .filter(isCustomLineFilled)
+        .map((c) => `${c.name.trim() || CUSTOM_LINE_FALLBACK_NAME}${c.qty > 1 ? ` ×${c.qty}` : ""} · ${vnd(c.unit_price)}`)
+        .join(", "),
+    [customLines]
+  );
 
   const phoneOk = /^\d{10}$/.test(clientPhone.replace(/\D/g, ""));
 
@@ -251,15 +285,49 @@ export default function NewContractForm({
     setServiceId(id);
     setMainPkgId("");
     setExtraIds([]);
+    setPkgPrice({});
     setShowAllLists(false);
+    // Gói riêng thì GIỮ: đó là dòng studio tự gõ, không thuộc bảng giá nào, và
+    // vẫn hiện nguyên trên màn — không thành khoản vô hình như gói của dịch vụ cũ.
   }
 
   function pickClient(c: RecentClient) {
     setClientName(c.name);
     setClientPhone(c.phone);
   }
+  /** Chọn/bỏ gói chính. Bỏ chọn thì xoá luôn giá đã sửa của gói đó. */
+  function pickMain(id: string) {
+    const off = mainPkgId === id;
+    setMainPkgId(off ? "" : id);
+    setExtraIds((prev) => prev.filter((x) => x !== id));
+    if (off) clearPkgPrice(id);
+  }
   function toggleExtra(id: string) {
-    setExtraIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    const off = extraIds.includes(id);
+    setExtraIds((prev) => (off ? prev.filter((x) => x !== id) : [...prev, id]));
+    if (off) clearPkgPrice(id);
+  }
+  function setPkgPriceFor(id: string, price: number) {
+    setPkgPrice((prev) => ({ ...prev, [id]: Math.max(0, price) }));
+  }
+  /* Hoàn giá = XOÁ khoá khỏi map, không phải ghi lại giá bảng giá: gói nào chưa
+     sửa thì luôn ăn theo bảng giá, kể cả khi bảng giá đổi giữa lúc đang nhập. */
+  function clearPkgPrice(id: string) {
+    setPkgPrice((prev) => {
+      if (prev[id] === undefined) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  }
+  function addCustomLine() {
+    setCustomLines((prev) => [...prev, { name: "", qty: 1, unit_price: 0 }]);
+  }
+  function patchCustomLine(i: number, patch: Partial<LineCustom>) {
+    setCustomLines((prev) => prev.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+  }
+  function removeCustomLine(i: number) {
+    setCustomLines((prev) => prev.filter((_, idx) => idx !== i));
   }
   function toggleCrew(r: { id: string; name: string; phone: string; role: CrewRole }) {
     setPicked((prev) =>
@@ -693,7 +761,7 @@ export default function NewContractForm({
                 <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                   Thêm gói vào{" "}
                   <Link href="/dashboard/studio/pricing" className="font-semibold underline" style={{ color: "var(--ac)" }}>bảng giá</Link>{" "}
-                  để chọn nhanh ở đây — hoặc dùng mẫu hợp đồng, hoặc thêm hạng mục sau khi tạo.
+                  để chọn nhanh ở đây — hoặc dùng mẫu hợp đồng, hoặc nhập <b>gói riêng</b> ngay bên dưới.
                 </p>
               </div>
             ) : (
@@ -715,6 +783,9 @@ export default function NewContractForm({
                     </button>
                   )}
                 </div>
+                <p className="mb-2 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  Chọn gói rồi <b>sửa thẳng ô giá</b> nếu đã thương lượng khác bảng giá — bảng giá gốc không đổi.
+                </p>
                 <div className="grid min-w-0 gap-2">
                   {packageGroups.map(([key, list]) => (
                     <div key={key} className="grid min-w-0 gap-2">
@@ -723,23 +794,60 @@ export default function NewContractForm({
                       )}
                       {list.map((p) => {
                         const on = mainPkgId === p.id;
+                        const edited = priceEdited(p);
                         return (
-                          <button
+                          /* Không còn là MỘT nút: gói đã chọn phải sửa được giá
+                             ngay tại chỗ, mà <input> không đặt trong <button>
+                             được (bấm vào ô là bấm cả nút). Nên tách: nút chọn
+                             chiếm phần tên, ô giá nằm ngoài nút. */
+                          <div
                             key={p.id}
-                            type="button"
-                            onClick={() => { setMainPkgId(on ? "" : p.id); setExtraIds((prev) => prev.filter((x) => x !== p.id)); }}
-                            className="flex min-w-0 items-center gap-3 rounded-[11px] px-3.5 py-3 text-left"
+                            className="flex min-w-0 items-center gap-2 rounded-[11px] pr-2.5"
                             style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
                           >
-                            <Package size={19} style={{ flex: "none", color: on ? "var(--ac)" : "var(--tx3)" }} />
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate text-[13.5px] font-semibold">{p.name}</span>
-                              <span className="block truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                                {[p.category, p.description, p.unit].filter(Boolean).join(" · ") || "Gói trong bảng giá"}
+                            <button
+                              type="button"
+                              onClick={() => pickMain(p.id)}
+                              className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3.5 text-left"
+                              aria-pressed={on}
+                            >
+                              <Package size={19} style={{ flex: "none", color: on ? "var(--ac)" : "var(--tx3)" }} />
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-[13.5px] font-semibold">{p.name}</span>
+                                <span className="block truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                                  {on && edited
+                                    ? `Giá bảng giá ${vnd(p.price)} — đang dùng giá sửa`
+                                    : [p.category, p.description, p.unit].filter(Boolean).join(" · ") || "Gói trong bảng giá"}
+                                </span>
                               </span>
-                            </span>
-                            <strong className="tnum flex-none whitespace-nowrap text-[13.5px]">{vnd(p.price)}</strong>
-                          </button>
+                            </button>
+                            {on ? (
+                              <span className="flex flex-none items-center gap-1">
+                                <MoneyInput
+                                  value={priceOf(p)}
+                                  onChange={(n) => setPkgPriceFor(p.id, n)}
+                                  placeholder="Giá"
+                                  ariaLabel={`Giá gói ${p.name}`}
+                                  className="tnum w-[112px] rounded-[8px] px-2.5 py-2 text-right text-[13px] font-bold"
+                                  style={{ border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" }}
+                                />
+                                {edited && (
+                                  <button
+                                    type="button"
+                                    onClick={() => clearPkgPrice(p.id)}
+                                    aria-label={`Hoàn giá bảng giá cho ${p.name}`}
+                                    title={`Hoàn về ${vnd(p.price)}`}
+                                    className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
+                                    style={{ color: "var(--tx3)" }}
+                                  >
+                                    <RotateCcw size={15} />
+                                  </button>
+                                )}
+                              </span>
+                            ) : (
+                              <strong className="tnum flex-none whitespace-nowrap text-[13.5px]">{vnd(p.price)}</strong>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
@@ -750,23 +858,121 @@ export default function NewContractForm({
                 <div className="grid gap-2 sm:grid-cols-2">
                   {visiblePackages.filter((p) => p.id !== mainPkgId).map((x) => {
                     const on = extraIds.includes(x.id);
+                    const edited = priceEdited(x);
                     return (
-                      <button
+                      <div
                         key={x.id}
-                        type="button"
-                        onClick={() => toggleExtra(x.id)}
-                        className="flex items-center gap-2.5 rounded-[10px] px-3.5 py-3 text-left"
+                        className="flex min-w-0 items-center gap-2 rounded-[10px] pr-2"
                         style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
                       >
-                        {on ? <Check size={18} style={{ flex: "none", color: "var(--ac)" }} /> : <Plus size={18} style={{ flex: "none", color: "var(--tx3)" }} />}
-                        <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{x.name}</span>
-                        <strong className="tnum flex-none whitespace-nowrap text-[12.5px]">{vnd(x.price)}</strong>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleExtra(x.id)}
+                          className="flex min-w-0 flex-1 items-center gap-2.5 py-3 pl-3.5 text-left"
+                          aria-pressed={on}
+                        >
+                          {on ? <Check size={18} style={{ flex: "none", color: "var(--ac)" }} /> : <Plus size={18} style={{ flex: "none", color: "var(--tx3)" }} />}
+                          <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{x.name}</span>
+                        </button>
+                        {on ? (
+                          <span className="flex flex-none items-center gap-0.5">
+                            <MoneyInput
+                              value={priceOf(x)}
+                              onChange={(n) => setPkgPriceFor(x.id, n)}
+                              placeholder="Giá"
+                              ariaLabel={`Giá hạng mục ${x.name}`}
+                              className="tnum w-[104px] rounded-[8px] px-2 py-1.5 text-right text-[12.5px] font-bold"
+                              style={{ border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" }}
+                            />
+                            {edited && (
+                              <button
+                                type="button"
+                                onClick={() => clearPkgPrice(x.id)}
+                                aria-label={`Hoàn giá bảng giá cho ${x.name}`}
+                                title={`Hoàn về ${vnd(x.price)}`}
+                                className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px]"
+                                style={{ color: "var(--tx3)" }}
+                              >
+                                <RotateCcw size={14} />
+                              </button>
+                            )}
+                          </span>
+                        ) : (
+                          <strong className="tnum flex-none whitespace-nowrap text-[12.5px]">{vnd(x.price)}</strong>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               </>
             )}
+
+            {/* ── Gói riêng ───────────────────────────────────────────────────
+                Gói KHÔNG có trong bảng giá: khách đặt thêm một buổi chụp lạ,
+                gộp combo theo thoả thuận riêng, hay thuê một món thiết bị cho
+                đúng lần này. Trước đây studio phải tạo hợp đồng rồi mở màn chi
+                tiết mới thêm được hạng mục — mà bước Thanh toán ở đây đã chia
+                cọc theo tổng, nên cọc chia thiếu ngay từ lúc tạo. Cũng là đường
+                đi duy nhất khi bảng giá còn trống. */}
+            <div className="mt-[18px]">
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className={eyebrow} style={eyebrowStyle}>Gói riêng (không có trong bảng giá)</p>
+                {customLines.length > 0 && (
+                  <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>Chỉ dùng cho hợp đồng này</span>
+                )}
+              </div>
+              <div className="grid gap-2">
+                {customLines.map((c, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-[11px] px-3 py-2.5" style={{ border: "1px solid var(--bd)" }}>
+                    <input
+                      className="min-w-[150px] flex-1 rounded-[8px] px-2.5 py-2 text-[13px] font-semibold"
+                      style={inputStyle}
+                      value={c.name}
+                      aria-label={`Tên gói riêng ${i + 1}`}
+                      placeholder="VD: Chụp thêm buổi ở Đà Lạt"
+                      onChange={(e) => patchCustomLine(i, { name: e.target.value })}
+                    />
+                    <span className="flex flex-none items-center gap-1.5">
+                      <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>SL</span>
+                      <input
+                        type="number"
+                        min={1}
+                        className="tnum w-[62px] rounded-[8px] px-2 py-2 text-center text-[13px] font-semibold"
+                        style={inputStyle}
+                        value={c.qty}
+                        aria-label={`Số lượng gói riêng ${i + 1}`}
+                        onChange={(e) => patchCustomLine(i, { qty: Number(e.target.value) })}
+                      />
+                    </span>
+                    <MoneyInput
+                      value={c.unit_price}
+                      onChange={(n) => patchCustomLine(i, { unit_price: n })}
+                      placeholder="Đơn giá"
+                      ariaLabel={`Đơn giá gói riêng ${i + 1}`}
+                      className="tnum w-[124px] flex-none rounded-[8px] px-2.5 py-2 text-right text-[13px] font-bold"
+                      style={inputStyle}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCustomLine(i)}
+                      aria-label={`Bỏ gói riêng ${i + 1}`}
+                      className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
+                      style={{ color: "var(--tx3)" }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addCustomLine}
+                  className="flex items-center justify-center gap-1.5 rounded-[11px] py-3 text-[12.5px] font-semibold"
+                  style={{ border: "1.5px dashed var(--bd)", color: "var(--tx2)" }}
+                >
+                  <Plus size={16} /> Nhập gói riêng
+                </button>
+              </div>
+            </div>
 
             {lines.length > 0 && (
               <div className="mt-4 flex items-baseline justify-between rounded-[11px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
@@ -952,8 +1158,12 @@ export default function NewContractForm({
               {([
                 [0, "Khách hàng", [clientName || "Chưa có tên", clientPhone].filter(Boolean).join(" · ")],
                 [1, "Dịch vụ", selectedService?.name || SHOOT_TYPE_LABEL[shootType]],
-                [1, "Gói chính", mainPkg ? `${mainPkg.name} · ${vnd(mainPkg.price)}` : template ? `Mẫu: ${template.name}` : "Chưa chọn"],
-                [1, "Hạng mục thêm", extras.length ? extras.map((x) => x.name).join(", ") : "Không có"],
+                // Giá hiện ở đây là giá ĐÃ SỬA, không phải giá bảng giá — nếu
+                // in giá niêm yết thì bước soát lại sẽ khẳng định một con số
+                // khác với con số thật đang nằm trong hợp đồng.
+                [1, "Gói chính", mainPkg ? `${mainPkg.name} · ${vnd(priceOf(mainPkg))}${priceEdited(mainPkg) ? " (đã sửa giá)" : ""}` : template ? `Mẫu: ${template.name}` : "Chưa chọn"],
+                [1, "Hạng mục thêm", extras.length ? extras.map((x) => `${x.name} · ${vnd(priceOf(x))}`).join(", ") : "Không có"],
+                [1, "Gói riêng", customPreview || "Không có"],
                 [2, "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
                 [2, "Khung giờ", startTime || endTime ? [startTime, endTime].filter(Boolean).join(" – ") : "Chưa đặt giờ"],
                 [2, "Địa điểm", location || "Chưa có"],

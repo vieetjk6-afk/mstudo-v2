@@ -265,6 +265,34 @@ Bước xong: nền `--gn` + icon `check`. Bước hiện tại: nền `--ac`. B
 
 ---
 
+## Giá gói khi tạo hợp đồng
+
+Bảng giá (`studio_pricelist`) là giá **niêm yết**; hợp đồng là giá **đã thương
+lượng** — gần như lần nào cũng khác (khách quen bớt, mùa thấp điểm giảm, gói gộp
+thì thêm). Nên ở bước "Gói dịch vụ" của màn tạo hợp đồng:
+
+- Chọn gói xong thì **sửa thẳng ô giá** ngay trên thẻ gói — cả gói chính và
+  hạng mục thêm. Bảng giá gốc KHÔNG bị đổi.
+- Nút hoàn giá (↺) chỉ hiện khi giá đã lệch bảng giá. "Hoàn giá" = **xoá khoá**
+  khỏi map `pkgPrice`, không phải ghi lại giá cũ — gói chưa sửa thì luôn ăn theo
+  bảng giá, kể cả khi bảng giá đổi giữa lúc đang nhập.
+- Bỏ chọn một gói thì xoá luôn giá đã sửa của gói đó; đổi loại dịch vụ thì xoá
+  cả map (bảng giá cũ không còn hiện trên màn).
+- **Gói riêng**: hạng mục gõ tay (tên · SL · đơn giá) cho đúng hợp đồng này —
+  dùng khi khách đặt thứ không có trong bảng giá, hoặc khi bảng giá còn trống.
+  Không ghi vào bảng giá chung. Dòng trống hoàn toàn bị bỏ, không thành hạng
+  mục "0đ" trong hợp đồng gửi khách.
+
+Vì sao phải sửa được **ngay ở bước tạo** chứ không đợi màn chi tiết: bước
+Thanh toán liền sau đã chia cọc và các đợt thu theo tổng. Chọn giá niêm yết rồi
+sửa sau nghĩa là cọc đã chia trên số sai — mà hợp đồng vẫn hiện một con số trông
+rất hợp lý.
+
+Luật dựng hạng mục nằm ở `src/lib/contract-lines.ts` (tách khỏi form để test
+được), có test: `npm run test:contract-lines`.
+
+---
+
 ## Đồng bộ Google Lịch
 
 **Luật:** hợp đồng có `event_date` **và** trạng thái ∈ `approved` · `in_progress` ·
