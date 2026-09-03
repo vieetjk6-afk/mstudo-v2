@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import ShareButton from "@/components/ShareButton";
-import { Panel, PanelHead, Pill, StatCard, EmptyState } from "@/components/studio/ui";
+import { Panel, PanelHead, Pill, StatCard, EmptyState, type ToneKey } from "@/components/studio/ui";
 import { studioUrl } from "@/lib/hosts";
 import { fmtDate } from "@/lib/date";
 import { reviewScore, type AwaitingReviewAlbum, type ReviewRow } from "@/lib/types";
@@ -20,6 +20,26 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "hidden", label: "Đã ẩn" },
   { key: "all", label: "Tất cả" },
 ];
+
+/** Nhãn & màu của từng trạng thái — dùng chung cho tab và cho viên trên mỗi
+ *  dòng, để hai chỗ không bao giờ nói hai điều khác nhau về cùng một hàng. */
+const BUCKET_LABEL: Record<Exclude<Tab, "all">, string> = {
+  pending: "Chờ duyệt",
+  live: "Đang hiện",
+  hidden: "Đã ẩn",
+};
+const BUCKET_TONE: Record<Exclude<Tab, "all">, ToneKey> = {
+  pending: "amber",
+  live: "green",
+  hidden: "gray",
+};
+
+/** Ba trạng thái nằm trên HAI cột: "chờ duyệt" và "đã ẩn" trong DB đều là
+ *  approved=false, nên `moderated_at` (studio đã quyết chưa) mới là thứ tách
+ *  được. Cố ý KHÔNG dùng ké `replied_at`: studio soạn lời đáp cho một đánh giá
+ *  xấu rồi vẫn chưa quyết cho hiện là chuyện bình thường. */
+const bucketOf = (r: { approved: boolean; moderated_at: string | null }): Exclude<Tab, "all"> =>
+  r.approved ? "live" : r.moderated_at ? "hidden" : "pending";
 
 /** Dải sao. `size` nhỏ cho dòng danh sách, to hơn cho ô điểm trung bình. */
 function Stars({ n, size = 13 }: { n: number | null; size?: number }) {
@@ -59,14 +79,6 @@ export default function ReviewsView({
   const [busy, setBusy] = useState<string | null>(null);
 
   const score = useMemo(() => reviewScore(rows), [rows]);
-
-  // "Đã ẩn" và "Chờ duyệt" cùng là approved=false trong DB, nên `moderated_at`
-  // mới là thứ tách được hai cái: có mốc = studio đã quyết (và quyết là ẩn),
-  // chưa có = còn chờ quyết. Một hàm phân loại DUY NHẤT cho cả bộ đếm lẫn danh
-  // sách — hai chỗ tự viết điều kiện riêng là kiểu gì cũng lệch, rồi tab ghi
-  // (3) mà mở ra 2 dòng.
-  const bucketOf = (r: ReviewRow): Exclude<Tab, "all"> =>
-    r.approved ? "live" : r.moderated_at ? "hidden" : "pending";
 
   const counts = useMemo(() => {
     const c = { pending: 0, live: 0, hidden: 0, all: rows.length };
@@ -185,13 +197,11 @@ export default function ReviewsView({
                   <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                     <span className="font-semibold">{r.client_name?.trim() || "Khách (không để tên)"}</span>
                     <Stars n={r.rating} />
-                    {r.approved ? (
-                      <Pill tone="green" dot>Đang hiện</Pill>
-                    ) : r.replied_at ? (
-                      <Pill tone="gray" dot>Đã ẩn</Pill>
-                    ) : (
-                      <Pill tone="amber" dot>Chờ duyệt</Pill>
-                    )}
+                    {/* Nhãn phải đi qua ĐÚNG hàm phân loại của tab, không tự
+                        viết lại điều kiện: nếu không, một đánh giá đã được trả
+                        lời mà chưa quyết sẽ nằm ở tab "Chờ duyệt" nhưng lại đeo
+                        nhãn "Đã ẩn". */}
+                    <Pill tone={BUCKET_TONE[bucketOf(r)]} dot>{BUCKET_LABEL[bucketOf(r)]}</Pill>
                     <span className="ml-auto text-[11.5px]" style={{ color: "var(--tx3)" }}>
                       {fmtDate(r.created_at)}
                     </span>
