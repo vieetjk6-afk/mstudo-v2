@@ -47,11 +47,23 @@ export default function PaymentPanel({
 
   async function reportPaid() {
     setReporting(true);
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "paid", phone }),
-    });
+    // Bọc try/catch: khách bấm nút này ở quầy ngân hàng, trong thang máy, ở nơi
+    // mạng chập chờn. Không bọc thì `fetch` ném ra ngoài, nút kẹt vĩnh viễn ở
+    // "Đang gửi…" và khách không biết studio đã nhận hay chưa. Báo chuyển khoản
+    // KHÔNG được xếp hàng lại gửi sau: khách phải biết ngay là chưa gửi được để
+    // còn nhắn Zalo cho studio.
+    let res: Response;
+    try {
+      res = await fetch(`/api/c/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "paid", phone }),
+      });
+    } catch {
+      setReporting(false);
+      toast("Đang mất mạng — chưa báo được studio. Vui lòng thử lại khi có mạng.");
+      return;
+    }
     setReporting(false);
     if (res.ok) {
       toast("Đã báo studio — cảm ơn bạn!");

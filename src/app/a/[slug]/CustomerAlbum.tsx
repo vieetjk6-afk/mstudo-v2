@@ -22,11 +22,24 @@ import {
 } from "lucide-react";
 import StudioBrand from "@/components/StudioBrand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
+import InstallPwaButton from "@/components/InstallPwaButton";
 import ShareDialog from "@/components/ShareDialog";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
+import {
+  applyEdit,
+  isPending,
+  markSynced,
+  mergeFromServer,
+  newLedger,
+  syncBadge,
+  type AlbumLedger,
+  type AlbumPicks,
+  type SaveActivity,
+} from "@/lib/album-offline";
+import { loadLedger, saveLedger } from "@/lib/album-store";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
 import { studioUrl } from "@/lib/hosts";
@@ -129,7 +142,13 @@ export default function CustomerAlbum({
   const zoomRef = useRef<PhotoZoomHandle>(null);
   // Vùng nền của khung xem ảnh — nơi PhotoZoom bắt cử chỉ.
   const lbStage = useRef<HTMLDivElement | null>(null);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  // Trạng thái lưu. `ledger` là sổ trên máy (xem @/lib/album-offline): nó — chứ
+  // không phải lượt fetch gần nhất — mới là nguồn sự thật cho "đã lưu hay chưa".
+  const [ledger, setLedger] = useState<AlbumLedger>(() =>
+    newLedger(album.slug, { selected: initialSelected ?? [], disliked: initialDisliked ?? [], notes: initialNotes ?? {} }, Date.now())
+  );
+  const [saveActivity, setSaveActivity] = useState<SaveActivity>("idle");
+  const [online, setOnline] = useState(true);
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [notifyingDone, setNotifyingDone] = useState(false);
@@ -174,73 +193,194 @@ export default function CustomerAlbum({
   const dislikedRef = useRef(disliked);
   const notesRef = useRef(notes);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Window during which polling must not overwrite the local selection
-  // (covers the debounce + server-commit lag so taps never "revert").
-  const dirtyUntil = useRef(0);
+  // Sổ trên máy, bản ref — để lượt lưu đã hẹn giờ và các trình xử lý sự kiện đọc
+  // được bản mới nhất mà không phải phụ thuộc vào vòng render.
+  const ledgerRef = useRef(ledger);
+  const savingRef = useRef(false);
+  // Hẹn giờ THỬ LẠI, tách khỏi `saveTimer` (hẹn giờ gộp lượt bấm): `saveTimer`
+  // có giá trị nghĩa là "khách vừa bấm, chờ 250ms gộp lại", còn thử lại là việc
+  // của mạng — hai thứ này lẫn vào nhau thì vòng đọc lại sẽ bị chặn vĩnh viễn
+  // khi đang mất mạng.
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryDelay = useRef(0);
+  // Máy chủ đã TỪ CHỐI hẳn bản này (quá hạn mức, album đóng): dừng mọi lượt gửi
+  // lại tự động cho tới khi khách thao tác tiếp. Không có cờ này thì khối
+  // `finally` bên dưới lại hẹn giờ gửi tiếp sau 250ms và ta có một vòng lặp vô
+  // hạn nã 4xx vào máy chủ.
+  const rejectedRef = useRef(false);
 
-  const saveNow = useCallback(async () => {
-    saveTimer.current = null;
-    setSaveStatus("saving");
+  /** Ghi sổ vào state + ổ đĩa. Mọi thay đổi sổ đều phải đi qua đây. */
+  const commitLedger = useCallback((next: AlbumLedger) => {
+    ledgerRef.current = next;
+    setLedger(next);
+    void saveLedger(next);
+  }, []);
+
+  /** Bản lựa chọn khách đang thấy trên máy này. */
+  const currentPicks = useCallback((): AlbumPicks => {
     const sel = [...selectedRef.current];
     const dis = [...dislikedRef.current];
     const noteMap: Record<string, string> = {};
     for (const id of [...sel, ...dis]) if (notesRef.current[id]?.trim()) noteMap[id] = notesRef.current[id];
+    return { selected: sel, disliked: dis, notes: noteMap };
+  }, []);
+
+  /** Đưa một bản lựa chọn (đã hoà giải) lên màn hình. */
+  const applyPicks = useCallback((p: AlbumPicks) => {
+    const sel = new Set(p.selected);
+    const dis = new Set(p.disliked);
+    selectedRef.current = sel;
+    dislikedRef.current = dis;
+    notesRef.current = p.notes;
+    setSelected(sel);
+    setDisliked(dis);
+    setNotes(p.notes);
+  }, []);
+
+  const scheduleRetry = useCallback(() => {
+    if (retryTimer.current) return;
+    // Lùi dần 3s → 6s → 12s… tối đa 1 phút. Khách ngồi chọn ảnh trong vùng sóng
+    // yếu cả tiếng: thử lại mỗi 3 giây suốt cả tiếng là đốt pin vô ích.
+    retryDelay.current = Math.min(retryDelay.current ? retryDelay.current * 2 : 3000, 60_000);
+    retryTimer.current = setTimeout(() => {
+      retryTimer.current = null;
+      void saveNowRef.current?.();
+    }, retryDelay.current);
+  }, []);
+
+  const saveNow = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    if (savingRef.current) return; // một lượt đang bay; xong nó sẽ tự gửi tiếp nếu còn chờ
+    const l = ledgerRef.current;
+    if (!isPending(l)) {
+      setSaveActivity("idle");
+      return;
+    }
+    // Chụp lại mốc + bản ĐANG GỬI. Khách bấm thêm giữa chừng thì `editedAt` đã
+    // nhảy lên, và markSynced sẽ chỉ đóng dấu tới đúng mốc này — lượt bấm mới
+    // vẫn còn trong hàng chờ thay vì bị coi là đã lưu.
+    const sentAt = l.editedAt;
+    const sentPicks = l.picks;
+    savingRef.current = true;
+    setSaveActivity("saving");
     try {
       const res = await fetch(`/api/a/${album.slug}/select`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: SHARED, photoIds: sel, dislikedIds: dis, notes: noteMap }),
+        body: JSON.stringify({
+          sessionId: SHARED,
+          photoIds: sentPicks.selected,
+          dislikedIds: sentPicks.disliked,
+          notes: sentPicks.notes,
+        }),
         keepalive: true,
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        setSaveStatus("idle");
-        flashToast(`${t("saveErr")} (${d.error ?? res.status})`);
+        setSaveActivity("failed");
+        // 4xx là máy chủ TỪ CHỐI (quá hạn mức, album đóng…) — thử lại cũng chỉ
+        // bị từ chối tiếp, nên báo cho khách một câu rồi thôi. 429/5xx là trục
+        // trặc tạm thời thì cứ thử lại.
+        if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+          rejectedRef.current = true;
+          flashToast(`${t("saveErr")} (${d.error ?? res.status})`);
+        } else {
+          scheduleRetry();
+        }
         return;
       }
-      dirtyUntil.current = Date.now() + 2500; // grace for read-after-write
-      setSaveStatus("saved");
+      retryDelay.current = 0;
+      rejectedRef.current = false;
+      commitLedger(markSynced(ledgerRef.current, sentAt, sentPicks));
+      setSaveActivity("idle");
     } catch {
-      setSaveStatus("idle");
-      flashToast("Mất kết nối khi lưu lựa chọn");
+      // Mất mạng. KHÔNG báo toast: lựa chọn đã nằm an toàn trên máy, và viên
+      // trạng thái đã nói "chờ mạng" — hiện thêm thông báo lỗi mỗi lần bấm chỉ
+      // làm khách tưởng mình mất công chọn lại.
+      setSaveActivity("failed");
+      scheduleRetry();
+    } finally {
+      savingRef.current = false;
+      // Bấm thêm trong lúc gửi → gửi tiếp ngay bản mới. KHÔNG làm điều này khi
+      // máy chủ vừa từ chối hẳn: gửi lại cũng chỉ bị từ chối tiếp.
+      if (!rejectedRef.current && isPending(ledgerRef.current) && !retryTimer.current && !saveTimer.current) {
+        saveTimer.current = setTimeout(() => void saveNowRef.current?.(), 250);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [album.slug]);
+  }, [album.slug, commitLedger, scheduleRetry]);
 
-  const scheduleSave = useCallback(() => {
-    setSaveStatus("saving");
-    dirtyUntil.current = Date.now() + 4000;
+  // `scheduleRetry` và khối `finally` ở trên cần gọi lại chính `saveNow` — giữ
+  // qua ref để hai callback không phải phụ thuộc lẫn nhau vòng tròn.
+  const saveNowRef = useRef<(() => Promise<void>) | null>(null);
+  saveNowRef.current = saveNow;
+
+  /**
+   * Khách vừa chạm vào lựa chọn: ghi xuống MÁY trước (đồng bộ, không thể hỏng),
+   * rồi mới hẹn giờ gửi lên máy chủ.
+   */
+  const recordEdit = useCallback(() => {
+    commitLedger(applyEdit(ledgerRef.current, currentPicks(), Date.now()));
+    // Khách vừa đổi lựa chọn ⇒ bản mới có thể được máy chủ nhận (ví dụ vừa bỏ
+    // chọn để về dưới hạn mức), nên bỏ cờ từ chối và cho gửi lại.
+    rejectedRef.current = false;
+    if (retryTimer.current) {
+      // Khách vừa thao tác ⇒ thử lại ngay, đừng bắt chờ hết nhịp lùi.
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+      retryDelay.current = 0;
+    }
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(saveNow, 250);
-  }, [saveNow]);
+    saveTimer.current = setTimeout(() => void saveNowRef.current?.(), 250);
+  }, [commitLedger, currentPicks]);
 
   // Flush a pending save immediately (e.g. before the page unloads).
   const flush = useCallback(() => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveNow();
-    }
+    if (saveTimer.current) void saveNow();
   }, [saveNow]);
 
+  /**
+   * Gộp bản của máy chủ vào sổ. `fromDisk` = lần đầu mở trang: đọc sổ đã cất
+   * trên máy ra để hoà giải với bản máy chủ mà server component vừa dựng.
+   */
+  const hydrate = useCallback(
+    async (server: AlbumPicks, fromDisk: boolean) => {
+      const stored = fromDisk ? await loadLedger(album.slug) : ledgerRef.current;
+      const out = mergeFromServer(stored, server, album.slug, Date.now());
+      applyPicks(out.picks);
+      commitLedger(out.ledger);
+      // `rejectedRef`: máy chủ đã từ chối hẳn bản này. Vòng đọc lại chạy mỗi 20
+      // giây, nên nếu vẫn đẩy thì cứ 20 giây khách lại ăn một thông báo lỗi y
+      // như cũ. Chờ khách thao tác tiếp (recordEdit bỏ cờ) rồi hãy gửi.
+      if (out.needsPush && !rejectedRef.current) {
+        if (saveTimer.current) clearTimeout(saveTimer.current);
+        saveTimer.current = setTimeout(() => void saveNowRef.current?.(), 250);
+      }
+    },
+    [album.slug, applyPicks, commitLedger]
+  );
+
   // Keep the shared selection in sync with other people viewing the same link.
+  // Không còn "cửa sổ ân hạn" theo thời gian như trước: sổ biết chính xác thay
+  // đổi nào chưa lên máy chủ, nên hoà giải theo từng ảnh (xem @/lib/album-offline)
+  // thay vì chặn cả lượt đọc.
   const refresh = useCallback(async () => {
-    if (saveTimer.current || Date.now() < dirtyUntil.current) return; // don't clobber a recent local change
+    if (saveTimer.current || savingRef.current) return; // có bản đang chờ gửi — đọc sau
     try {
       const res = await fetch(`/api/a/${album.slug}/select`, { cache: "no-store" });
       if (!res.ok) return;
       const data = await res.json();
-      const sel = new Set<string>(data.selected ?? []);
-      const dis = new Set<string>(data.disliked ?? []);
-      selectedRef.current = sel;
-      dislikedRef.current = dis;
-      notesRef.current = { ...notesRef.current, ...(data.notes ?? {}) };
-      setSelected(sel);
-      setDisliked(dis);
-      setNotes((prev) => ({ ...prev, ...(data.notes ?? {}) }));
+      await hydrate(
+        { selected: data.selected ?? [], disliked: data.disliked ?? [], notes: data.notes ?? {} },
+        false
+      );
     } catch {
-      /* ignore */
+      /* mất mạng — sổ trên máy vẫn nguyên, thử lại ở nhịp sau */
     }
-  }, [album.slug]);
+  }, [album.slug, hydrate]);
 
   // Khách bấm "đã chọn xong" → lưu nốt lựa chọn rồi báo studio (chuông + push +
   // Zalo). Giữ cờ doneSent để đổi nhãn nút; vẫn cho báo lại nếu khách đổi ý.
@@ -252,6 +392,18 @@ export default function CustomerAlbum({
       saveTimer.current = null;
     }
     await saveNow();
+    // CHỐT QUAN TRỌNG: chỉ báo "khách đã chọn xong" khi lựa chọn THẬT SỰ đã lên
+    // máy chủ. Trước đây lượt lưu hỏng vẫn gửi thông báo, nên studio nhận tin
+    // "chọn xong 42 ảnh" rồi mở ra thấy danh sách cũ — tệ hơn cả không báo gì.
+    if (isPending(ledgerRef.current)) {
+      setNotifyingDone(false);
+      flashToast(
+        online
+          ? "Chưa gửi xong lựa chọn lên studio. Đợi viên “Đã lưu” rồi báo lại nhé."
+          : "Đang mất mạng. Lựa chọn đã lưu trên máy — có mạng lại rồi bấm báo studio."
+      );
+      return;
+    }
     try {
       const res = await fetch(`/api/a/${album.slug}/done`, {
         method: "POST",
@@ -292,7 +444,7 @@ export default function CustomerAlbum({
     }
     selectedRef.current = next;
     setSelected(next);
-    scheduleSave();
+    recordEdit();
   }
 
   // Không thích / bỏ không thích. Khi đánh dấu không thích: ảnh rời khỏi lựa chọn
@@ -311,7 +463,7 @@ export default function CustomerAlbum({
       selectedRef.current = s;
       setSelected(s);
     }
-    scheduleSave();
+    recordEdit();
     flashToast(adding ? t("dislikedMoved") : t("undislikedBack"));
   }
 
@@ -319,7 +471,7 @@ export default function CustomerAlbum({
     const next = { ...notesRef.current, [id]: text };
     notesRef.current = next;
     setNotes(next);
-    scheduleSave();
+    recordEdit();
   }
 
   function flashToast(msg: string) {
@@ -345,14 +497,13 @@ export default function CustomerAlbum({
     setPhotos(data.photos ?? []);
     setSources(data.sources ?? []);
     setDriveFolders(data.driveFolders ?? []);
-    const sel = new Set<string>(data.selected ?? []);
-    const dis = new Set<string>(data.disliked ?? []);
-    selectedRef.current = sel;
-    dislikedRef.current = dis;
-    notesRef.current = data.notes ?? {};
-    setSelected(sel);
-    setDisliked(dis);
-    setNotes(data.notes ?? {});
+    // Album có mật khẩu: server component chưa gửi lựa chọn nào, nên bản của máy
+    // chủ đến ở đây. Vẫn phải hoà giải với sổ trên máy — khách nhập mật khẩu lại
+    // sau khi chọn dở lúc mất mạng là đúng tình huống cần cứu.
+    await hydrate(
+      { selected: data.selected ?? [], disliked: data.disliked ?? [], notes: data.notes ?? {} },
+      true
+    );
     setUnlocked(true);
   }
 
@@ -483,6 +634,48 @@ export default function CustomerAlbum({
   }
   // Load the current selection immediately on open (don't wait for SSR/poll),
   // keep it in sync, and flush any pending save before the page goes away.
+  // Sổ trên máy: đọc ra NGAY khi mở trang và hoà giải với bản máy chủ do server
+  // component dựng sẵn. Đây là chỗ lựa chọn của lần trước (bấm khi mất mạng, rồi
+  // đóng tab) được cứu về — và cũng là chỗ nó được gửi nốt lên studio.
+  useEffect(() => {
+    if (!unlocked || album.hasPassword) return; // album có mật khẩu: unlock() đã hoà giải
+    void hydrate(
+      { selected: initialSelected ?? [], disliked: initialDisliked ?? [], notes: initialNotes ?? {} },
+      true
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlocked, album.slug]);
+
+  // Có mạng lại → gửi ngay bản đang chờ, không đợi hết nhịp lùi. Trình duyệt báo
+  // `online` khá sớm (có sóng nhưng chưa ra được internet) nên lượt gửi này vẫn
+  // có thể hỏng — hỏng thì `scheduleRetry` lại lùi tiếp, không mất gì.
+  useEffect(() => {
+    const sync = () => {
+      setOnline(navigator.onLine);
+      // `rejectedRef` cố ý KHÔNG được bỏ ở đây: 4xx là máy chủ từ chối nội dung,
+      // không liên quan gì tới việc có mạng hay không.
+      if (navigator.onLine && !rejectedRef.current && isPending(ledgerRef.current)) {
+        retryDelay.current = 0;
+        void saveNowRef.current?.();
+      }
+    };
+    sync();
+    window.addEventListener("online", sync);
+    window.addEventListener("offline", sync);
+    return () => {
+      window.removeEventListener("online", sync);
+      window.removeEventListener("offline", sync);
+    };
+  }, []);
+
+  // Dọn hẹn giờ khi rời trang, và gửi nốt bản đang chờ.
+  useEffect(() => {
+    return () => {
+      if (retryTimer.current) clearTimeout(retryTimer.current);
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, []);
+
   useEffect(() => {
     if (!unlocked) return;
     refresh(); // fresh load right away — avoids showing stale/empty picks
@@ -567,6 +760,10 @@ export default function CustomerAlbum({
             {shareMode ? `${shareIds!.length} ảnh được chia sẻ` : "Album được chia sẻ · chế độ khách"}
           </span>
         </div>
+        {/* Cài album lên màn hình chính. Tự ẩn khi đã cài hoặc khi trình duyệt
+            không hỗ trợ, nên không có gì để dọn ở trường hợp thường. Không hiện
+            ở chế độ xem link chia sẻ: đó là ảnh của người khác gửi cho xem. */}
+        {!shareMode && <InstallPwaButton variant="pill" label="Lưu album" />}
         <LanguageSwitcher />
       </header>
 
@@ -685,12 +882,13 @@ export default function CustomerAlbum({
                   )}
                 </div>
                 {/* Số lượng ảnh nằm ngay dưới cụm biểu tượng, không chen ngang hàng. */}
-                <span className="mt-1 text-[12px]" style={{ color: "var(--text3)" }}>
+                <span className="mt-1 flex flex-wrap items-center gap-2 text-[12px]" style={{ color: "var(--text3)" }}>
                   {dislikedOnly
                     ? `${disliked.size} ảnh không thích`
                     : selectedOnly
                       ? `${selected.size} ảnh đã chọn`
                       : `${selected.size}${limit != null ? `/${limit}` : ""} đã chọn · ${photos.length - disliked.size} ảnh`}
+                  <SyncPill ledger={ledger} activity={saveActivity} online={online} />
                 </span>
               </div>
             </>
@@ -1163,6 +1361,39 @@ type TaskItem = {
   disabled?: boolean;
   accent?: boolean;
 };
+
+/**
+ * VIÊN TRẠNG THÁI LƯU — thứ khách cần thấy nhất trên trang này.
+ *
+ * Album chọn ảnh được mở trên điện thoại, thường ở nơi mạng kém. Trước đây trang
+ * không nói gì cả: mất mạng thì lượt bấm im lặng bay mất, khách chỉ phát hiện ra
+ * ở lần mở lại. Giờ mọi lượt bấm đã nằm trên máy, nên viên này chỉ còn việc nói
+ * thật về việc studio đã nhận chưa. Chữ và tông do @/lib/album-offline quyết
+ * (kiểm thử ở desktop/test/album-offline.mjs) — ở đây chỉ vẽ.
+ */
+function SyncPill({ ledger, activity, online }: { ledger: AlbumLedger; activity: SaveActivity; online: boolean }) {
+  const badge = syncBadge(ledger, activity, online);
+  const tone =
+    badge.tone === "ok"
+      ? { dot: "var(--success)", fg: "var(--text2)" }
+      : badge.tone === "wait"
+        ? { dot: "var(--gold)", fg: "var(--gold)" }
+        : { dot: "var(--text3)", fg: "var(--text2)" };
+  return (
+    <span
+      title={badge.detail}
+      aria-live="polite"
+      className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold"
+      style={{ background: "var(--surface)", border: "1px solid var(--border)", color: tone.fg }}
+    >
+      <span
+        className={`h-1.5 w-1.5 shrink-0 rounded-full${badge.tone === "busy" ? " animate-pulse" : ""}`}
+        style={{ background: tone.dot }}
+      />
+      {badge.text}
+    </span>
+  );
+}
 
 function TaskMenu({ items }: { items: TaskItem[] }) {
   const [open, setOpen] = useState(false);

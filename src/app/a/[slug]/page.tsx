@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     .eq("slug", params.slug)
     .maybeSingle();
   if (!data?.title) return { title: "mstudo" };
-  return buildAlbumMetadata({
+  const meta = await buildAlbumMetadata({
     title: data.title,
     description: data.description,
     coverUrl: data.cover_url,
@@ -29,6 +29,9 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     path: `/a/${params.slug}`,
     ownerId: data.owner_id,
   });
+  // Manifest RIÊNG của album này → khách cài được trang chọn ảnh lên màn hình
+  // chính, mang tên album và logo studio (xem @/lib/client-manifest).
+  return { ...meta, manifest: `/a/${params.slug}/manifest.webmanifest` };
 }
 
 export default async function PublicAlbumPage({

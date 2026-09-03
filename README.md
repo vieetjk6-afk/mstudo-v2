@@ -321,7 +321,7 @@ thủ công cho dữ liệu cũ.
 > studio, nên đúng khoảnh khắc khách ký — không ai đăng nhập — chẳng có gì chạy.
 > Lịch chỉ lên khi chủ studio mở hợp đồng sửa tay một ô bất kỳ.
 
-## 18 tính năng mới (không có trong bản cũ)
+## 20 tính năng mới (không có trong bản cũ)
 
 | # | Tính năng | Mô tả | Nằm ở |
 | --- | --- | --- | --- |
@@ -343,6 +343,8 @@ thủ công cho dữ liệu cũ.
 | 16 | Nguồn khách tự nhận | Đoán kênh từ `utm_*`/`referrer` lúc khách gửi yêu cầu, giữ nguyên tới hợp đồng | Đặt lịch → HĐ |
 | 17 | Phễu chuyển đổi | Khách hỏi → yêu cầu → hợp đồng → tiền, kèm tỉ lệ từng bậc | Thu chi, tab 3 |
 | 18 | Nhắc kỷ niệm | Khách cũ tới mốc 1·3·5·10 năm, kèm lời chúc soạn sẵn | Tổng quan |
+| 19 | Lọc ảnh bằng AI | Tìm ảnh nhoè, ảnh chụp lỡ, gom chuỗi bấm rồi chỉ ra bản nét nhất — chạy trên máy, không upload | Công cụ ảnh → Lọc ảnh |
+| 20 | Ứng dụng khách (PWA) | Album & cổng hợp đồng cài được lên màn hình chính; chọn ảnh lưu xuống máy trước, mất mạng không mất lựa chọn | Trang khách |
 
 ### Chi tiết một số tính năng
 
@@ -359,6 +361,10 @@ thủ công cho dữ liệu cũ.
 **Cảnh báo lãi mỏng** — `biên = (tổng HĐ − tiền công nhân sự − chi phí sản xuất) / tổng HĐ`. Dưới 45% đỏ, 45–60% vàng, trên 60% xanh.
 
 ---
+
+**Lọc ảnh bằng AI (19)** — điểm nét bằng phương sai Laplacian, phơi sáng bằng histogram, gom ảnh trùng bằng mã nhận dạng khung **hai chiều 128 bit** (dHash một chiều ra mã toàn số 0 với mọi ảnh chuyển sáng đều từ trái sang phải — nền trời, mảng tường — nên hai tấm khác hẳn nhau vẫn bị coi là trùng; xem `hashDetail`). Giải mã bằng `createImageBitmap` + `OffscreenCanvas` ngay trong trình duyệt studio: **không endpoint, không upload**. Ngưỡng cố ý lệch về phía KHÔNG loại — một tấm chỉ bị xếp *nên loại* khi tệ **cả tuyệt đối lẫn tương đối** so với chính lô ảnh đó, nên lô cố ý mềm không bị loại sạch và lô siêu nét không loại oan. Công cụ **không tự xoá gì**: nó nói lý do kèm số đo cho từng tấm, cho bỏ tick, rồi đưa danh sách sang bước 2 của công cụ Lọc ảnh. Chưa làm (cần mô hình học sâu, không phải số học): phát hiện nhắm mắt, gom theo mặt. `src/lib/photo-ai.ts` · `photo-ai-scan.ts` · `AiFilterPanel.tsx` · `npm run test:photo-ai`, `npm run test:photo-ai-browser`.
+
+**Ứng dụng khách (20)** — `manifest` riêng cho từng album/hợp đồng (tên album + logo studio, `id` riêng nên không icon nào ghi đè icon nào). Lựa chọn ảnh ghi vào **sổ trên máy** (IndexedDB, lui về localStorage) trước khi gửi lên, thử lại với nhịp lùi dần, và hoà giải **ba bên theo từng ảnh** khi cả nhà mở cùng một link trên nhiều điện thoại — "bản trên máy luôn thắng" sẽ xoá sạch lựa chọn của máy kia. Viên trạng thái không nói dối theo cả hai chiều, và nút *đã chọn xong* chỉ báo studio khi lựa chọn thật sự đã lên máy chủ. Cổng hợp đồng nhớ số điện thoại 90 ngày (có nút thoát) và đọc được khi mất mạng từ bản chụp, kèm dòng nói rõ bản đó cũ bao lâu — trên đó có số tiền còn nợ. `src/lib/album-offline.ts` · `album-store.ts` · `client-manifest.ts` · `portal-device.ts` · `npm run test:album-offline`, `npm run test:portal-device`.
 
 ## Bản mobile
 
@@ -440,6 +446,10 @@ và cổng nhân viên).
   thêm mục "Lịch hẹn ngày mai" vào email nhắc việc.
 - Album hoàn thành **không** dựng lại phần tải hàng loạt: nút *Tải toàn bộ* dẫn
   về `/album/<slug>` — nơi đã có nén ZIP, đóng dấu mờ và luật hạn lưu trữ.
+- Cổng khách **cài được lên màn hình chính** (`/portal/<token>/manifest.webmanifest`,
+  tên khách + logo studio), **nhớ số điện thoại 90 ngày** trên máy đó, và **đọc
+  được khi mất mạng** từ bản chụp lần trước. Chi tiết + lý do ở
+  [`docs/goi-y-hoan-thien-app.md`](docs/goi-y-hoan-thien-app.md) mục 5 phần "ĐÃ LÀM".
 
 ### Chỗ CỐ Ý lệch bản vẽ (và vì sao)
 
@@ -676,6 +686,9 @@ Biến môi trường: `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`,
 
 Xem thư mục [`docs/`](docs/) — thiết lập môi trường, chuyển đổi dữ liệu,
 Supabase, và đặc tả client desktop.
+[`docs/goi-y-hoan-thien-app.md`](docs/goi-y-hoan-thien-app.md) là danh sách những
+chỗ app còn thiếu để đủ vòng, kèm phần "ĐÃ LÀM" ghi lại **vì sao** mỗi tính năng
+được dựng như vậy — đọc phần đó trước khi sửa lọc ảnh AI hoặc ứng dụng khách.
 
 ## Xem & chụp giao diện mà không cần đăng nhập
 
