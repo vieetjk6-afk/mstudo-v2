@@ -144,7 +144,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" data-theme="light" className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${beVietnam.variable} ${dancing.variable} ${greatVibes.variable}`}>
+    // suppressHydrationWarning: script ở <head> ĐỔI data-theme trước khi React
+    // hydrate (đó là cách duy nhất để không nháy nền sáng rồi mới sang tối), nên
+    // React luôn thấy thuộc tính này lệch với bản dựng ở server. Chỉ tắt cảnh báo
+    // đúng một cấp <html> — con cháu vẫn được kiểm tra bình thường.
+    <html lang="vi" data-theme="light" suppressHydrationWarning className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${beVietnam.variable} ${dancing.variable} ${greatVibes.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>

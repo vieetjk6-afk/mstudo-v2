@@ -696,3 +696,32 @@ giao diện hỏng.
 
 Không dựng được ở đây: màn nào tự gọi API thay vì nhận dữ liệu qua props (ví dụ
 danh sách hợp đồng) — những màn đó phải mở app thật.
+
+### Bảng màu — `/uipreview/bang-mau`
+
+Bộ token của khu quản lý (`--tl`, `--nu`, `--brand`, `--panel`…) khai trong
+`.studio-shell` và `.client-doc`, còn bí danh cho phần NGOÀI shell khai ở
+`:root`. Hụt một token ở một khung là hỏng **im lặng**: `var()` không giải được
+→ khai báo hỏng ở computed-value time, nền tụt về trong suốt và chữ tụt về màu
+kế thừa. Không lỗi, không cảnh báo, chỉ một viên trạng thái mất màu.
+
+`/uipreview/bang-mau` vẽ MỌI cặp màu trong ba khung cạnh nhau — ngoài shell,
+shell sáng, shell tối — nên hụt token ở khung nào là thấy ngay: ô đó trắng trơn.
+Chụp riêng bằng `node scripts/chup-giao-dien.mjs bang-mau`.
+
+### Kiểm tra giao diện trong trình duyệt thật — `npm run ui:test`
+
+Vài thứ không có hàm nào để test bằng Node: chúng chỉ tồn tại khi có DOM,
+localStorage và `prefers-color-scheme` thật.
+
+```bash
+npx next dev -p 3333   # cửa sổ 1
+npm run ui:test        # cửa sổ 2
+```
+
+Đang kiểm: ba chế độ nền (sáng / tối / **theo máy**) giải ra đúng nền nào; mặc
+định vẫn là sáng khi studio chưa từng chọn; đổi cài đặt sáng-tối của máy khi
+đang mở app thì nền đổi theo ngay mà không phải tải lại; và `<html>` không sinh
+cảnh báo hydrate nào (script đặt nền chạy trước khi React hydrate nên `<html>`
+phải mang `suppressHydrationWarning` — cảnh báo này CHỈ hiện ở bản dev, không
+bắt ở đây thì không chỗ nào bắt).

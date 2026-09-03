@@ -13,6 +13,7 @@ import {
   Wallet,
   TrendingUp,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { todayVN } from "@/lib/date";
 import {
@@ -29,6 +30,12 @@ import {
 } from "@/lib/types";
 
 type Tab = "inventory" | "orders";
+
+/** Hai tab của màn Phòng váy — gom thành bảng để hai nút không lệch nhau. */
+const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
+  { key: "inventory", label: "Kho trang phục", icon: Boxes },
+  { key: "orders", label: "Đơn thuê", icon: ClipboardList },
+];
 
 const ITEM_STATUSES: RentalItemStatus[] = ["available", "maintenance", "retired"];
 const ORDER_STATUSES: RentalOrderStatus[] = [
@@ -121,21 +128,29 @@ export default function RentalManager({
         />
       </div>
 
-      <div className="mb-5 inline-flex rounded-xl p-1" style={{ background: "var(--surface2, var(--bg2))" }}>
-        <button
-          onClick={() => setTab("inventory")}
-          className="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition"
-          style={tab === "inventory" ? { background: "var(--card, #fff)", boxShadow: "0 1px 2px rgba(0,0,0,.08)" } : { color: "var(--text2)" }}
-        >
-          <Boxes size={15} /> Kho trang phục
-        </button>
-        <button
-          onClick={() => setTab("orders")}
-          className="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition"
-          style={tab === "orders" ? { background: "var(--card, #fff)", boxShadow: "0 1px 2px rgba(0,0,0,.08)" } : { color: "var(--text2)" }}
-        >
-          <ClipboardList size={15} /> Đơn thuê
-        </button>
+      {/* Dải tab: tab đang chọn nổi lên bằng bề mặt thẻ + viền, KHÔNG bằng #fff
+          cứng — nền tối thì trắng đè lên chữ sáng là không đọc được. Và tab
+          đang chọn phải tự đặt màu chữ, nếu chỉ đổi nền thì nó thừa hưởng màu
+          chữ của khối cha. */}
+      <div className="mb-5 inline-flex rounded-xl p-1" style={{ background: "var(--sf2)" }}>
+        {TABS.map((t) => {
+          const on = tab === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              aria-pressed={on}
+              className="flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition"
+              style={
+                on
+                  ? { background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--tx)", fontWeight: 650 }
+                  : { border: "1px solid transparent", color: "var(--tx2)" }
+              }
+            >
+              <t.icon size={15} /> {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {tab === "inventory" ? (

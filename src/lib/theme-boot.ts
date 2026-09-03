@@ -14,5 +14,17 @@
 /** Một khoá localStorage dùng chung cho mọi trang, để lựa chọn là toàn cục. */
 export const THEME_KEY = "mstudo_theme";
 
-/** Script nội tuyến cho <head> — đặt nền sáng/tối TRƯỚC lần vẽ đầu tiên. */
-export const THEME_BOOT_SCRIPT = `(function(){try{var t=localStorage.getItem('${THEME_KEY}');document.documentElement.dataset.theme=(t==='dark'?'dark':'light');}catch(e){document.documentElement.dataset.theme='light';}})();`;
+/** Script nội tuyến cho <head> — đặt nền sáng/tối TRƯỚC lần vẽ đầu tiên.
+ *
+ *  Khoá lưu LỰA CHỌN của người dùng, ba giá trị: "light" | "dark" | "system".
+ *  `data-theme` trên <html> luôn là kết quả ĐÃ GIẢI ("light" hoặc "dark") để
+ *  mọi selector CSS sẵn có (`:root[data-theme="dark"]`,
+ *  `.studio-shell[data-theme="dark"]`) chạy nguyên như trước. Cố ý CHỈ ghi
+ *  đúng một thuộc tính: <html> ở layout.tsx đã render `data-theme` sẵn, nên
+ *  ghi thêm thuộc tính thứ hai là React báo "Extra attributes from the server"
+ *  lúc hydrate. Lựa chọn gốc đọc lại từ localStorage trong provider.
+ *
+ *  Mặc định vẫn là NỀN SÁNG khi chưa từng chọn, đúng như trước — "theo máy" là
+ *  lựa chọn người dùng bấm vào, không phải mặc định mới, để studio nào đang
+ *  quen nền sáng thì không tự nhiên bị đổi. */
+export const THEME_BOOT_SCRIPT = `(function(){var r=document.documentElement;try{var p=localStorage.getItem('${THEME_KEY}');var t=p==='dark'?'dark':p==='system'?(window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'):'light';r.dataset.theme=t;}catch(e){r.dataset.theme='light';}})();`;

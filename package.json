@@ -38,7 +38,8 @@
     "test:desktop-links": "node --experimental-strip-types desktop/test/desktop-links.mjs",
     "test:desktop-update": "node --experimental-strip-types desktop/test/desktop-update.mjs",
     "inbox:zalo-worker": "node scripts/zalo-inbox-worker.mjs",
-    "ui:shot": "node scripts/chup-giao-dien.mjs"
+    "ui:shot": "node scripts/chup-giao-dien.mjs",
+    "ui:test": "node scripts/kiem-tra-giao-dien.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
