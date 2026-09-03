@@ -9,6 +9,8 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Panel, PanelHead, Pill, ProgressBar, EmptyState, KindPill } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
+import WeatherChip, { WeatherDetail, useShootWeather } from "@/components/studio/WeatherChip";
+import type { DayForecast } from "@/lib/weather";
 import { Modal } from "@/components/studio/Modal";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDayMonth } from "@/lib/date";
@@ -103,7 +105,7 @@ function draftOf(a: StudioAppointment): Draft {
 
 export default function SchedulePage({
   ownerId, readOnly, today, initialAppointments, rooms, assignees, contracts,
-  branches = [], defaultBranchId = null,
+  branches = [], defaultBranchId = null, studioCoords = null,
 }: {
   ownerId: string;
   /** Nhân viên chỉ xem: giữ nguyên mọi thông tin, ẩn nút ghi. */
@@ -117,6 +119,8 @@ export default function SchedulePage({
   branches?: { id: string; name: string }[];
   /** Chi nhánh đang xem: lịch mới đặt mặc định thuộc cơ sở đó. */
   defaultBranchId?: string | null;
+  /** Toạ độ studio — điểm xuất phát để ƯỚC LƯỢNG đường đi tới điểm chụp. */
+  studioCoords?: { lat: number; lng: number } | null;
 }) {
   const supabase = createClient();
   const { toast, toastNode } = useToast();
@@ -142,6 +146,25 @@ export default function SchedulePage({
     [items, weekStart, weekEnd]
   );
   const counts = useMemo(() => countByKind(weekItems), [weekItems]);
+
+  /**
+   * Dự báo thời tiết cho các buổi NGOÀI TRỜI của tuần đang xem. Hook tự lọc
+   * (chỉ lịch ngoài trời, chỉ trong 7 ngày, chỉ khi có địa điểm) và gọi API MỘT
+   * lượt cho cả tuần — xem @/components/studio/WeatherChip.
+   */
+  const weatherPlaces = useMemo(
+    () =>
+      weekItems.map((a) => ({
+        key: a.id,
+        kind: a.kind,
+        date: a.appt_date,
+        location: a.location,
+        lat: a.lat ?? null,
+        lng: a.lng ?? null,
+      })),
+    [weekItems]
+  );
+  const weather = useShootWeather(weatherPlaces, today);
   const shown = useMemo(() => weekItems.filter((a) => kindOn[a.kind]), [weekItems, kindOn]);
 
   const byDay = useMemo(() => {
@@ -432,6 +455,9 @@ export default function SchedulePage({
                             <p className="mt-0.5 line-clamp-2 text-[12px] font-semibold" style={{ textWrap: "pretty" }}>
                               {apptTitle(a)}
                             </p>
+                            {/* Dự báo cho buổi ngoài trời — tự ẩn với lịch trong
+                                nhà và với buổi ngoài tầm 7 ngày. */}
+                            <WeatherChip day={weather.dayOf(a.id)} />
                             <p className="mt-1 flex items-center gap-1 text-[10.5px]" style={{ color: "var(--tx3)" }}>
                               <span
                                 className="flex h-[17px] w-[17px] flex-none items-center justify-center rounded-full text-[8px] font-bold"
@@ -567,6 +593,9 @@ export default function SchedulePage({
           branches={branches}
           busy={busy}
           readOnly={readOnly}
+          weatherDay={draft.id ? weather.dayOf(draft.id) : null}
+          studioCoords={studioCoords}
+          shootCoords={draft.id ? weather.coordsOf(draft.id) : null}
           onSave={save}
           onDelete={remove}
           onAdvance={() => {
@@ -587,6 +616,7 @@ export default function SchedulePage({
 
 function ApptDialog({
   draft, setDraft, rooms, assignees, contracts, branches, busy, readOnly, onSave, onDelete, onAdvance,
+  weatherDay = null, studioCoords = null, shootCoords = null,
 }: {
   draft: Draft;
   setDraft: (d: Draft | null) => void;
@@ -599,6 +629,10 @@ function ApptDialog({
   onSave: () => void;
   onDelete: (id: string) => void;
   onAdvance: () => void;
+  /** Dự báo ĐÚNG ngày của buổi này (null nếu trong nhà / ngoài 7 ngày). */
+  weatherDay?: DayForecast | null;
+  studioCoords?: { lat: number; lng: number } | null;
+  shootCoords?: { lat: number; lng: number } | null;
 }) {
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
   const { label, tone, Icon } = kindMeta(draft.kind);
@@ -726,6 +760,18 @@ function ApptDialog({
 
           <Field label="Địa điểm">
             <input className="input" value={draft.location} onChange={(ev) => set("location", ev.target.value)} placeholder="Đồi chè Cầu Đất, Đà Lạt…" disabled={readOnly} />
+            {/* Dự báo nằm NGAY DƯỚI ô địa điểm: đây là lúc studio đang nghĩ về
+                nơi chụp, nên là chỗ duy nhất con số mưa đổi được quyết định. */}
+            {weatherDay && (
+              <div className="mt-2">
+                <WeatherDetail
+                  day={weatherDay}
+                  startTime={draft.start_time || null}
+                  from={studioCoords}
+                  to={shootCoords}
+                />
+              </div>
+            )}
           </Field>
 
           <Field label="Ghi chú">

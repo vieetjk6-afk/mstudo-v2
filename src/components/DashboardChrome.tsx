@@ -5,6 +5,7 @@ import DashboardHeader from "@/components/DashboardHeader";
 import StudioFooterNav from "@/components/StudioFooterNav";
 import StudioShell from "@/components/StudioShell";
 import type { Profile } from "@/lib/types";
+import { isStudioPath } from "@/lib/studio-shell-paths";
 
 type StudioTier = "none" | "booking" | "plus" | "full";
 
@@ -44,30 +45,10 @@ export default function DashboardChrome({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  // Use the studio shell (green sidebar) for all studio workspace paths.
-  // Also pull in adjacent pages (site builder, upgrade, settings) when the
-  // user has a studio tier so they stay in the same design context.
-  const isStudio =
-    pathname.startsWith("/dashboard/studio") ||
-    pathname.startsWith("/dashboard/albums") ||
-    (tier !== "none" && (
-      pathname.startsWith("/dashboard/site") ||
-      pathname.startsWith("/dashboard/upgrade") ||
-      pathname.startsWith("/dashboard/settings") ||
-      // Nhóm "Tài khoản" của sidebar mới trỏ sang các trang này — nếu không
-      // nhận là màn studio thì bấm một mục trong sidebar lại rơi ra header cũ.
-      pathname.startsWith("/dashboard/account") ||
-      pathname.startsWith("/dashboard/affiliate") ||
-      pathname.startsWith("/dashboard/connections") ||
-      pathname.startsWith("/dashboard/admin") ||
-      // Bộ công cụ ảnh chạy ngay trong shell studio (không chuyển hướng ra ngoài)
-      pathname === "/dashboard" ||
-      pathname.startsWith("/dashboard/albums") ||
-      pathname.startsWith("/dashboard/create") ||
-      pathname.startsWith("/dashboard/tools") ||
-      pathname.startsWith("/dashboard/filter") ||
-      pathname.startsWith("/dashboard/compress")
-    ));
+  // Luật "đường dẫn nào dùng shell studio" nằm ở @/lib/studio-shell-paths, dùng
+  // chung với <NavProgress/> — hai chỗ cùng một câu trả lời thì thanh tiến độ ở
+  // đỉnh trang mới mang đúng màu của khu đang mở.
+  const isStudio = isStudioPath(pathname, tier);
 
   if (isStudio && tier !== "none") {
     return (

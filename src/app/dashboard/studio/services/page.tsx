@@ -4,6 +4,8 @@ import { STUDIO_TIER_RANK, type StudioTier } from "@/lib/plans";
 import type { StudioService } from "@/lib/types";
 import ServicesTemplatesTabs from "./ServicesTemplatesTabs";
 import StudioPolicyCard from "@/components/studio/StudioPolicyCard";
+import AutomationsCard from "@/components/studio/AutomationsCard";
+import type { AutomationConfig } from "@/lib/automations";
 import type { TemplateWithItems } from "../templates/TemplatesManager";
 
 export default async function ServicesPage({ searchParams }: { searchParams?: { tab?: string } }) {
@@ -38,6 +40,24 @@ export default async function ServicesPage({ searchParams }: { searchParams?: { 
       : Promise.resolve({ data: [] }),
   ]);
 
+  // Cấu hình việc tự động. Query RIÊNG và bọc try/catch: project chưa chạy
+  // supabase/migrations/automations.sql thì bảng chưa tồn tại, và cả trang Dịch
+  // vụ & điều khoản KHÔNG được sập chỉ vì thiếu một bảng cấu hình.
+  let automations: Record<string, AutomationConfig | undefined> = {};
+  try {
+    const { data: autoRows } = await supabase
+      .from("studio_automations")
+      .select("rule, enabled, offset_days, message")
+      .eq("owner_id", profile.id);
+    automations = Object.fromEntries(
+      ((autoRows ?? []) as { rule: string; enabled: boolean; offset_days: number | null; message: string | null }[]).map(
+        (r) => [r.rule, { rule: r.rule, enabled: r.enabled, days: r.offset_days, message: r.message }]
+      )
+    );
+  } catch {
+    /* chưa chạy migration → thẻ hiện mặc định, bấm Lưu sẽ báo cần chạy migration */
+  }
+
   const initialTab = searchParams?.tab === "templates" ? "templates" : "services";
 
   return (
@@ -61,7 +81,16 @@ export default async function ServicesPage({ searchParams }: { searchParams?: { 
           initialContractDepositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? 25}
           initialReferralReward={(profile as { referral_reward?: number }).referral_reward ?? 0}
           initialReferralDiscount={(profile as { referral_discount?: number }).referral_discount ?? 0}
+          initialStudioAddress={(profile as { studio_address?: string | null }).studio_address ?? ""}
+          initialStudioLat={(profile as { studio_lat?: number | null }).studio_lat ?? null}
+          initialStudioLng={(profile as { studio_lng?: number | null }).studio_lng ?? null}
         />
+      )}
+      {/* Việc tự động cũng là "studio này làm việc theo luật nào" → cùng trang
+          với điều khoản và chính sách. Chỉ chủ studio bật/tắt được: luật gửi
+          Zalo cho khách là thứ nhân viên không nên tự mở. */}
+      {(profile.actingRole === "owner" || profile.actingRole === "admin") && (
+        <AutomationsCard ownerId={profile.id} initial={automations} />
       )}
     </div>
   );

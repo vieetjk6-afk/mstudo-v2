@@ -95,8 +95,19 @@
   --tx3: var(--text3);
   --gn: var(--success);
   --gnS: color-mix(in srgb, var(--success) 14%, var(--surface));
-  --am: var(--gold);
-  --amS: color-mix(in srgb, var(--gold) 14%, var(--surface));
+  /* MÀU CẢNH BÁO, ngoài shell studio.
+     Trước đây `--am` khai bằng chính `--gold` — tức là TRÙNG HỆT màu nhấn
+     `--ac`. Nên trên landing, trang đăng nhập và dashboard gói free, một viên
+     "cảnh báo" và một viên "thương hiệu" nhìn y như nhau (BookingOverview dùng
+     cả tone="brand" lẫn deltaTone="amber" cạnh nhau). Trong shell studio thì
+     không bị, vì ở đó màu nhấn là xanh #1e9e72 còn cảnh báo là #a9740a.
+
+     Lấy ĐÚNG #a9740a mà `.client-doc` đã dùng (dòng ~982) thay vì bịa một màu
+     mới: nó đã được chọn để đứng cạnh nền ấm của trang khách, đủ khác vàng
+     thương hiệu #b8893a để phân biệt, mà vẫn cùng họ màu. Đổi màu thương hiệu
+     thì sửa ở đây. */
+  --am: #a9740a;
+  --amS: color-mix(in srgb, #a9740a 14%, var(--surface));
   --rd: var(--danger);
   --rdS: color-mix(in srgb, var(--danger) 14%, var(--surface));
   --bl: #2062c4;
@@ -135,7 +146,10 @@
   --acM: color-mix(in srgb, var(--gold) 36%, var(--surface));
   --acD: color-mix(in srgb, var(--gold) 76%, #fff);
   --gnS: color-mix(in srgb, var(--success) 22%, var(--surface));
-  --amS: color-mix(in srgb, var(--gold) 22%, var(--surface));
+  /* Cảnh báo trên nền tối: #a9740a quá trầm, nâng sáng để đọc được — cùng cách
+     .studio-shell[data-theme=dark] làm với màu cảnh báo của nó. */
+  --am: #d99a2b;
+  --amS: color-mix(in srgb, #d99a2b 22%, var(--surface));
   --rdS: color-mix(in srgb, var(--danger) 22%, var(--surface));
   --bl: #7eadf6;
   --blS: color-mix(in srgb, #7eadf6 22%, var(--surface));

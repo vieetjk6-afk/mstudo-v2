@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
+import { navProgressColor, type ShellTier } from "@/lib/studio-shell-paths";
 
 /**
  * Zero-dependency top progress bar for App Router (Next 14, no router events).
@@ -11,9 +12,10 @@ import { usePathname, useSearchParams } from "next/navigation";
  * starts the moment an internal link is clicked — instant feedback — and
  * completes when the pathname/search actually changes (navigation done).
  */
-export default function NavProgress() {
+export default function NavProgress({ tier = "none" }: { tier?: ShellTier } = {}) {
   const pathname = usePathname();
   const search = useSearchParams();
+  const color = navProgressColor(pathname, tier);
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState(false);
   const trickle = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -90,8 +92,12 @@ export default function NavProgress() {
         style={{
           width: `${width}%`,
           opacity: width >= 100 ? 0 : 1,
-          background: "var(--gold)",
-          boxShadow: "0 0 8px var(--gold)",
+          // Màu theo KHU đang mở: xanh studio trong khu quản lý, vàng ngoài đó.
+          // Trước đây luôn là vàng `--gold`, kể cả khi đang ở giữa khu studio —
+          // vì thanh này nằm NGOÀI `.studio-shell` trong cây DOM nên không thừa
+          // hưởng token màu của shell. Xem @/lib/studio-shell-paths.
+          background: color,
+          boxShadow: `0 0 8px ${color}`,
         }}
       />
     </div>

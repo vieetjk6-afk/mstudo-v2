@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import CrewTimeClock, { type OpenEntry } from "./CrewTimeClock";
+import type { TimesheetRow } from "@/lib/timesheet";
 
 import { fmtDate } from "@/lib/date";
 import { Phone, MapPin, Calendar, Check, X, Camera } from "lucide-react";
@@ -54,6 +56,8 @@ const TR = {
 
 type Assignment = {
   id: string;
+  /** Hợp đồng của dòng phân công này — khác `id` (id của chính dòng phân công). */
+  contract_id?: string | null;
   name: string;
   role: CrewRole;
   salary: number;
@@ -91,10 +95,15 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [shiftPlan, setShiftPlan] = useState<ShiftPlan>(null);
   const [calToken, setCalToken] = useState<string | null>(null);
+  const [openEntry, setOpenEntry] = useState<OpenEntry>(null);
+  const [sheet, setSheet] = useState<TimesheetRow[]>([]);
   const [profiles, setProfiles] = useState<CrewProfile[]>([]);
   // Vào bằng link riêng của studio: chưa có trong sổ studio đó thì CHỈ hiện form
   // đăng ký, không hiện lịch — lịch của studio này chưa liên quan gì tới họ.
   const inThisStudio = !studio || profiles.some((p) => p.owner_id === studio.id);
+  /** Studio đã NHẬN thợ vào sổ — chỉ những nơi này mới chấm công được. */
+  const acceptedStudios = profiles.filter((p) => p.status !== "pending");
+  const studioIds = acceptedStudios.map((p) => p.owner_id);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
@@ -114,6 +123,16 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
     setSchedule(j.busy ?? []);
     setShiftPlan(j.shift ?? null);
     setCalToken(j.calendarToken ?? null);
+    setOpenEntry(j.timesheet?.open ?? null);
+    // Đổi tên trường từ snake_case của DB sang hình dữ liệu của @/lib/timesheet.
+    setSheet(
+      ((j.timesheet?.recent ?? []) as {
+        id: string; work_date: string; started_at: string | null; ended_at: string | null; contract_id: string | null; note: string | null;
+      }[]).map((r) => ({
+        id: r.id, phone, workDate: r.work_date, startedAt: r.started_at,
+        endedAt: r.ended_at, contractId: r.contract_id, note: r.note,
+      }))
+    );
     // Phải CHỜ hồ sơ: khi vào bằng link riêng của studio, việc hiện lịch hay
     // hiện form đăng ký phụ thuộc vào thợ đã có trong sổ studio đó chưa. Nạp
     // song song rồi mới vẽ thì tránh chớp nhoáng sai màn hình.
@@ -148,6 +167,14 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
 
   async function setShift(shift: ShiftLetter | "") {
     await post({ action: "shift_set", company: "hoa_phat", shift });
+  }
+
+  async function clockIn(v: { studioId: string; contractId: string }) {
+    await post({ action: "clock_in", studioId: v.studioId, contractId: v.contractId || null });
+  }
+
+  async function clockOut(note: string) {
+    await post({ action: "clock_out", studioId: studioIds[0] ?? "", note });
   }
 
   async function respond(id: string, status: "accepted" | "declined") {
@@ -264,6 +291,24 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
               </div>
             ))
           )}
+
+          {/* Chấm công đứng TRƯỚC hồ sơ và lịch bận: đây là thứ thợ mở cổng
+              này để bấm, còn hai cái kia là việc thỉnh thoảng mới sửa. */}
+          <CrewTimeClock
+            open={openEntry}
+            recent={sheet}
+            studios={acceptedStudios.map((p) => ({ id: p.owner_id, name: p.studio_name }))}
+            jobs={(list ?? [])
+              // `contract_id` chứ KHÔNG phải `a.id`: `a.id` là dòng phân công
+              // (contract_crew), còn crew_timesheet.contract_id trỏ tới hợp
+              // đồng. Nhầm hai cái này thì khoá ngoại chối và giờ làm không lưu.
+              .filter((a) => a.status !== "declined" && a.contract_id)
+              .slice(0, 20)
+              .map((a) => ({ id: a.contract_id as string, label: a.contract?.title || a.name || "Việc" }))}
+            busy={busy === "sched"}
+            onClockIn={clockIn}
+            onClockOut={clockOut}
+          />
 
           <CrewProfileCard profiles={profiles} phone={phone} onSaved={load} />
 

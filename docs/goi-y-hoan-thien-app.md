@@ -4,9 +4,12 @@ File này **không phải hướng dẫn cài đặt**. Nó là danh sách nhữ
 còn thiếu để trở thành một app quản lý studio *đủ vòng*, xếp theo thứ tự nên làm
 trước. Mỗi mục ghi rõ: hiện app có gì, thiếu gì, và làm thì phải chạm vào đâu.
 
-**Năm mục (✅) đã làm xong** — xem mục "Đã làm" ở cuối file: ba mục nhỏ đầu
-tiên, cùng hai mục lớn nhất của danh sách là **lọc ảnh bằng AI** và **ứng dụng
-khách**. Năm mục còn lại vẫn là đề xuất.
+**CẢ MƯỜI MỤC ĐÃ LÀM XONG** — xem phần "ĐÃ LÀM" ở cuối file. Hai việc giao diện
+ở phụ lục cũng đã xử lý (màu cảnh báo và thanh tiến độ), ghi chú ngay tại đó.
+
+Giữ lại phần mô tả từng mục ở trên vì nó nói **vấn đề** — thứ không cũ đi khi
+code đã viết xong. Muốn biết đã dựng ra sao và **vì sao dựng như thế**, đọc phần
+"ĐÃ LÀM".
 
 Cơ sở đối chiếu: 29 mục sidebar trong [`src/lib/studio-nav.ts`](../src/lib/studio-nav.ts)
 và 75 bảng nghiệp vụ trong [`supabase/schema.sql`](../supabase/schema.sql) + các migration.
@@ -21,11 +24,11 @@ Những gì app **đã có** thì không nhắc lại ở đây.
 | 1 | ✅ **Thu đánh giá khách sau giao ảnh** | Bảng `feedback` đã có nhưng studio không có màn nào để xem/duyệt | Nhỏ | `feedback`, `/api/feedback`, website đã hiện review |
 | 2 | ✅ **Nguồn khách & phễu chuyển đổi** | Không biết tiền quảng cáo ra hợp đồng hay không | Nhỏ | `website_leads`, `studio_bookings`, `studio_contracts` |
 | 3 | ✅ **Nhắc kỷ niệm & chụp lại** | Khách cưới là khách quay lại có giá trị cao nhất, hiện không ai nhắc | Nhỏ | `studio_contracts.shoot_date`, `message_templates`, push |
-| 4 | **Việc tự động theo trạng thái** | Mọi nhắc nhở hiện là thủ công | Trung bình | `contract_tasks`, `studio_notifications`, cron Vercel |
-| 5 | **Chấm công & lịch rảnh của thợ** | Có lịch phân công, chưa có "ai thực sự đi làm" | Trung bình | `crew_shift_plan`, `crew_unavailable`, `studio_crew` |
-| 6 | **Nhà cung cấp & đơn in ấn** | Album in / makeup / xe hoa đang nằm ngoài hệ thống | Trung bình | `studio_expenses`, `contract_products` |
-| 7 | **Hoá đơn & xuất kế toán** | Studio có doanh thu thật cần chứng từ | Trung bình | `contract_payments`, `studio_expenses`, `src/lib/xlsx.ts` |
-| 8 | **Thời tiết & đường đi cho buổi chụp ngoại** | Huỷ/đổi lịch vì mưa là rủi ro lớn nhất của studio | Nhỏ | `studio_contracts` (địa điểm), `LocationPicker` |
+| 4 | ✅ **Việc tự động theo trạng thái** | Mọi nhắc nhở hiện là thủ công | Trung bình | `contract_tasks`, `studio_notifications`, cron Vercel |
+| 5 | ✅ **Chấm công & lịch rảnh của thợ** | Có lịch phân công, chưa có "ai thực sự đi làm" | Trung bình | `crew_shift_plan`, `crew_unavailable`, `studio_crew` |
+| 6 | ✅ **Nhà cung cấp & đơn in ấn** | Album in / makeup / xe hoa đang nằm ngoài hệ thống | Trung bình | `studio_expenses`, `contract_products` |
+| 7 | ✅ **Hoá đơn & xuất kế toán** | Studio có doanh thu thật cần chứng từ | Trung bình | `contract_payments`, `studio_expenses`, `src/lib/xlsx.ts` |
+| 8 | ✅ **Thời tiết & đường đi cho buổi chụp ngoại** | Huỷ/đổi lịch vì mưa là rủi ro lớn nhất của studio | Nhỏ | `studio_contracts` (địa điểm), `LocationPicker` |
 | 9 | ✅ **Lọc ảnh bằng AI (chọn nét, gom ảnh trùng)** | Việc tốn nhiều giờ nhất của hậu kỳ | Lớn | `FilterTool`, `photos`, `selections` |
 | 10 | ✅ **Ứng dụng khách (PWA): chọn ảnh & theo dõi hợp đồng** | Khách chọn ảnh chủ yếu trên điện thoại | Trung bình | `manifest.ts`, service worker, `PhotoZoom` |
 
@@ -184,10 +187,11 @@ cả danh sách.
 
 ---
 
-## Phụ lục — hai việc giao diện còn để ngỏ (cần bạn quyết)
+## Phụ lục — hai việc giao diện (✅ đã làm)
 
-Cả hai đều là **quyết định về màu thương hiệu**, nên tôi để nguyên chứ không tự
-sửa. Mở `/uipreview/bang-mau` ở bản dev là thấy cả hai bằng mắt.
+Cả hai từng để ngỏ vì là **quyết định về màu thương hiệu**. Bạn đã bảo làm nốt,
+nên tôi chọn phương án ít phát minh nhất và ghi rõ chỗ đổi lại. Mở
+`/uipreview/bang-mau` ở bản dev là thấy cả hai bằng mắt.
 
 **1. Ngoài shell studio, màu "cảnh báo" trùng y hệt màu nhấn.**
 `:root` đang khai `--am: var(--gold)` và `--ac: var(--gold)` — cùng một màu
@@ -196,8 +200,12 @@ dùng cả `tone="brand"` lẫn `deltaTone="amber"`), một viên *cảnh báo* 
 *thương hiệu* nhìn giống nhau hoàn toàn. Trong shell studio thì không bị, vì ở
 đó màu nhấn là xanh `#1e9e72` còn cảnh báo là `#a9740a`.
 
-Sửa thì phải chọn một màu cảnh báo riêng cho bảng màu vàng ngoài shell — đó là
-màu thương hiệu của bạn nên bạn chọn, không phải tôi.
+**Đã sửa.** `--am` ngoài shell giờ là `#a9740a` (nền tối: `#d99a2b`) thay vì
+`var(--gold)`. Cố ý lấy ĐÚNG màu mà `.client-doc` đã dùng cho trang khách chứ
+không bịa màu mới: nó vốn được chọn để đứng cạnh nền ấm, đủ khác vàng thương
+hiệu `#b8893a` để phân biệt, mà vẫn cùng họ màu. **Muốn đổi thì sửa một dòng**
+`--am` trong `:root` của `src/app/globals.css` (và dòng tương ứng trong
+`:root[data-theme="dark"]`).
 
 **2. Thanh tiến độ điều hướng trên cùng luôn màu vàng, kể cả trong khu studio.**
 `NavProgress` được gắn ở [`dashboard/layout.tsx`](../src/app/dashboard/layout.tsx)
@@ -207,8 +215,14 @@ khu quản lý. Không thể sửa bằng CSS vì thanh này nằm trên shell t
 mà cũng không dồn vào trong được: `<main>` mang `.page-in` (animation
 `transform` + `fill-mode: both`) nên nó là containing block của mọi phần tử
 `position: fixed` bên trong — ghi chú trong `globals.css` đã cảnh báo đúng bẫy
-này. Cách gọn nhất là `DashboardChrome` (nó đã biết `isStudio`) truyền màu
-xuống cho `NavProgress`. Việc nhỏ, nhưng vẫn là chọn màu nên để bạn gật đầu.
+này.
+
+**Đã sửa, nhưng KHÔNG theo cách đề xuất ban đầu.** `DashboardChrome` không
+truyền màu xuống được: hai component là **anh em** trong `dashboard/layout.tsx`
+và `NavProgress` còn đứng *trước*. Nên luật "đường dẫn nào thuộc khu studio" được
+rút ra thành `src/lib/studio-shell-paths.ts`, và **cả hai cùng gọi** — một luật,
+hai nơi dùng, không lệch nhau được. `NavProgress` nhận `tier` từ layout rồi tự
+tính màu: xanh `#1e9e72` trong khu quản lý, vàng ngoài đó.
 
 
 ---
@@ -412,3 +426,163 @@ Sổ ngoại tuyến `src/lib/album-offline.ts` (thuần) · chỗ cất
 Test `npm run test:album-offline` (42 ca, gồm đúng ba tình huống dễ vỡ: poll đè
 mất lựa chọn vừa bấm, hai điện thoại cùng một link, và viên trạng thái nói dối) ·
 `npm run test:portal-device`.
+
+## ✅ 6. Việc tự động theo trạng thái
+
+**Tám luật**, mỗi luật một công tắc, ở *Dịch vụ & điều khoản → Việc tự động*.
+Chạy mỗi ngày lúc 6:30 sáng (`/api/cron/automations`, đặt trước nhịp email nhắc
+việc 7:00 để việc sinh ra kịp vào email đó).
+
+Ký xong → nhắc thu cọc · trước buổi chụp N ngày → chốt ê-kíp · sát buổi chụp →
+gọi khách xác nhận · sát buổi chụp → nhắn khách · quá hạn thanh toán N ngày →
+báo chuông · khách chọn xong ảnh → bắt đầu hậu kỳ · giao ảnh xong → xin đánh giá
+· hoàn thành → cảm ơn & xin giới thiệu.
+
+**Cố ý KHÔNG làm trình dựng luật.** Tập *khi* và tập *thì* đều ĐÓNG và khai
+trong code; bảng DB chỉ giữ cấu hình cho tám luật đó. Studio cần tám việc đúng,
+bật/tắt bằng công tắc — không cần một Zapier.
+
+**Ba luật gửi Zalo cho KHÁCH đều TẮT sẵn.** Một tin nhắn tự động gửi sai lúc là
+thứ khách nhìn thấy, nên studio phải tự đọc lại câu chữ rồi mới bật. Năm luật
+còn lại chỉ sinh việc/chuông trong nhà nên bật sẵn được.
+
+**Điều quan trọng nhất là CHẠY MỘT LẦN**, và nó có hai lớp. Cron chạy mỗi ngày;
+một luật thiếu chống lặp sẽ đẻ ra 30 việc giống nhau trong một tháng — studio sẽ
+tắt cả tính năng, và đúng ra là họ nên tắt. Lớp một: nạp khoá đã chạy rồi truyền
+vào bộ luật. Lớp hai: `studio_automation_log.dedupe_key` là UNIQUE, và cron **ghi
+dấu TRƯỚC khi làm**. Thứ tự đó lệch với trực giác nhưng cố ý: làm trước rồi ghi
+sau, một lỗi giữa hai bước sẽ khiến việc đã làm mà không có dấu → ngày mai làm
+lại; với một tin Zalo gửi khách thì gửi hai lần tệ hơn hẳn không gửi lần nào.
+
+Luật "còn N ngày tới buổi chụp" dùng `≤ N` chứ không `= N`: cron có thể lỡ một
+nhịp (Vercel lỗi, project mới bật), và đòi khớp chính xác là mất hẳn việc đó.
+Khoá chống lặp lo phần "chỉ một lần". Mỗi đợt thanh toán quá hạn là một khoá
+riêng (`ref` = id đợt), nên hợp đồng chia 4 đợt không bị gộp mất ba.
+
+Migration `supabase/migrations/automations.sql` · luật `src/lib/automations.ts` ·
+test `npm run test:automations` (60 ca, phần lớn là "chạy lần hai không sinh gì").
+
+## ✅ 7. Chấm công & lịch rảnh của thợ
+
+Thợ **không có tài khoản đăng nhập** (sổ thợ khoá theo số điện thoại), nên chấm
+công đi qua **cổng thợ công khai** `/crew`: đúng **hai cái nút** — *Đã đến* khi
+tới, *Đã xong* khi rời. Thợ mở nó trên điện thoại, ở phim trường, một tay đang
+cầm máy.
+
+Màn Đối soát tiền công giờ hiện **giờ làm thực tế** ngay cạnh tiền, lọc đúng kỳ
+đang xem, kèm đề xuất *"≈ 640.000₫ theo giờ"* khi studio đã khai đơn giá giờ cho
+thợ đó.
+
+**Đề xuất, KHÔNG tự ghi vào sổ lương.** Tiền trả cho người thật; studio phải nhìn
+số giờ, đối chiếu, rồi tự áp dụng. Một phép nhân tự động ghi thẳng vào
+`contract_crew.salary` là cách nhanh nhất để mất lòng tin của cả thợ lẫn chủ.
+
+**Dòng còn hở không được tính là 0 giờ.** Thợ bấm bắt đầu rồi quên bấm xong thì
+`sessionHours` trả `null`, và bảng lương **đếm riêng** ("2 buổi chưa chốt giờ")
+thay vì cộng 0. Tính 0 nghĩa là bảng báo thợ đi làm cả ngày mà không được đồng
+nào, và không ai phát hiện ra vì con số vẫn "có". Buổi dài quá 16 giờ cũng vào
+nhóm đó — gần như chắc chắn là quên bấm, không phải làm thật.
+
+Chụp tiệc 19:00 → 02:00 hôm sau tính đúng 7 giờ, và nằm trong kỳ của **ngày
+chụp** (cột `work_date` tách khỏi `started_at`) chứ không nhảy sang tháng sau.
+Ràng buộc DB chỉ cho **một dòng đang mở** mỗi thợ, nên bấm hai lần vì mạng chậm
+không làm giờ bị tính đôi.
+
+Thợ cũng tự đăng ký **khoảng rảnh** được (ngược của "báo bận"). Luật ưu tiên:
+**báo bận THẮNG khai rảnh**, và **chưa khai gì = "chưa rõ"**, không phải "rảnh" —
+phần lớn thợ sẽ không bao giờ vào khai, mà coi im lặng là rảnh sẽ khiến màn phân
+công tự tin gán việc cho người đang đi làm chỗ khác.
+
+Migration `supabase/migrations/crew_timesheet.sql` · luật `src/lib/timesheet.ts` ·
+test `npm run test:timesheet`.
+
+## ✅ 8. Nhà cung cấp & đơn đặt ngoài
+
+Màn mới **Kho → Nhà cung cấp**, trả lời đúng câu studio hỏi mỗi ngày: *"đơn album
+của khách A đã in xong chưa?"*. Nên danh sách xếp theo **mức cần chú ý** (quá hẹn
+lên đầu), không theo ngày tạo.
+
+Bốn trạng thái đúng đường đi: đã gửi → đang làm → đã nhận → đã giao khách. **Không
+có "đã huỷ"**: đơn huỷ thì xoá, vì một đơn huỷ còn nằm trong danh sách sẽ tiếp
+tục được cộng tiền và tiếp tục bị đếm là trễ hẹn.
+
+**Tiền không đếm hai lần.** Mỗi đơn sinh ĐÚNG MỘT dòng `studio_expenses` mang
+`vendor_order_id`, và sửa đơn thì **upsert** chính dòng đó — sửa giá ba lần vẫn
+một dòng chi, không phải ba. Cột đó có UNIQUE index làm hàng rào thật, kể cả khi
+hai tab cùng bấm lưu. Xoá đơn thì dòng chi đi theo (`on delete cascade`). Ngày
+chi lấy theo **ngày hẹn xong**, không phải ngày tạo: chi phí thuộc kỳ mà công
+việc được giao.
+
+Đơn **đã giao khách** thì luôn "ok" dù hẹn đã qua từ lâu — để nó đỏ mãi là cách
+chắc chắn để studio ngưng nhìn màu đỏ.
+
+Migration `supabase/migrations/vendors.sql` · luật `src/lib/vendors.ts` ·
+test `npm run test:vendors`.
+
+## ✅ 9. Hoá đơn & xuất kế toán
+
+**Phiếu thu** dùng CHUNG khung in với hợp đồng (`@/lib/contract-print`) — đúng
+như đề xuất nói, không dựng hệ thống in thứ hai.
+
+Hoá ra đã có một bản in phiếu thu tự ghép HTML tay, và nó **sai hai chỗ khách
+cầm giấy về sẽ thấy**:
+
+* *"Số phiếu"* là 8 ký tự đầu của UUID — không phải số, không theo thứ tự, kế
+  toán không dùng được. Giờ số do DB cấp **nguyên tử** theo studio × năm
+  (`PT-2026-0007`, hàm `next_receipt_no`) và **lưu lại**, nên in lại phiếu cũ vẫn
+  ra đúng số cũ. Số chỉ cấp **khi in**, không cấp sẵn: studio ghi rồi xoá một
+  khoản là chuyện thường, mà dãy số phiếu thủng lỗ chỗ thì kế toán không giải
+  thích được.
+* *"Đã thu luỹ kế"* lấy tổng của MỌI lần thu tính tới **hôm nay**. In lại một
+  phiếu của ba tháng trước sẽ hiện số luỹ kế của hôm nay — sai. Giờ cộng đúng
+  những lần thu **tới thời điểm của phiếu đó**.
+
+Thêm dòng **"bằng chữ"** và kẹp *"còn lại"* ở 0 (khách trả dư thì tờ giấy không
+được ghi số âm).
+
+**Xuất kế toán**: một file Excel ba sheet — Thu · Chi · Công nợ — theo khoảng
+ngày tuỳ ý (quý, nửa năm), không bó theo tháng như màn Thu chi. Sheet Công nợ ghi
+rõ *"tại ngày …, không theo kỳ"* để kế toán không đọc nó như số của kỳ.
+
+**Khoá sổ**: đánh một mốc ngày, mọi bút toán trước mốc coi như đã chốt. Báo cáo
+tháng trước đã gửi kế toán rồi ai đó sửa một hợp đồng cũ là con số tháng trước
+đổi mà không ai biết — mốc khoá biến "đừng sửa số cũ" từ lời dặn miệng thành hàng
+rào. Khoá **không xoá gì**, chỉ đánh mốc và cảnh báo.
+
+Migration `supabase/migrations/accounting.sql` · luật `src/lib/accounting.ts` ·
+test `npm run test:accounting`.
+
+## ✅ 10. Thời tiết & đường đi cho buổi chụp ngoại
+
+Một dòng nhỏ trên thẻ lịch tuần (*Lịch làm việc → Lịch studio*): trời, khoảng
+nhiệt, xác suất mưa — và khối đầy đủ trong hộp thoại lịch, ngay dưới ô địa điểm,
+đúng lúc studio đang nghĩ về nơi chụp.
+
+Nguồn: **Open-Meteo** — miễn phí, **không cần khoá API**. Chọn nó chính vì thế:
+studio không phải đăng ký gì, và không có khoá nào để hết hạn giữa mùa cưới.
+
+**Chỉ hiện cho lịch ngoài trời và chỉ trong 7 ngày.** Hiện dự báo mưa cho buổi
+trang điểm trong phòng là nhiễu; hiện cho buổi chụp tháng sau là **bịa** —
+Open-Meteo không có số thật ngoài 7 ngày, và studio sẽ xếp lịch theo con số đó.
+
+**Gió giật tính CÙNG HẠNG với mưa.** Studio ngoại cảnh mất buổi vì gió cũng nhiều
+như vì mưa: váy không giữ nếp, đèn đổ, phông bay. Đó là thứ studio biết mà một
+bảng dự báo thông thường không nói. Dông thì rủi ro cao bất kể xác suất mưa.
+
+Kèm **giờ vàng** (75→15 phút trước lúc lặn, theo giờ địa phương của điểm chụp) và
+nói thẳng buổi này nằm trong hay ngoài giờ vàng.
+
+**Thời gian di chuyển là ƯỚC LƯỢNG, và chữ đó nghiêm túc.** Repo không gọi API
+chỉ đường (Google/Mapbox đều cần khoá và tính tiền theo lượt, mà tính năng này
+chỉ để xếp lịch trong ngày). Đây là đường chim bay × 1,35 chia tốc độ trung bình
+theo quãng đường. Đủ để trả lời *"sáng chụp chỗ này, chiều kịp chỗ kia không"*, và
+**không đủ** để hẹn giờ với khách — nên màn hình luôn hiện kèm dấu `≈` và chữ
+"ước lượng". Đừng bao giờ bỏ hai thứ đó đi.
+
+Toạ độ tìm theo thứ tự rẻ-và-đúng trước: toạ độ đã lưu → toạ độ nằm sẵn trong
+chuỗi địa điểm (link Google Maps studio dán vào) → tra tên địa danh. Vị trí
+studio khai ở *Dịch vụ & điều khoản → Chính sách studio*; bỏ trống thì vẫn có dự
+báo, chỉ không có dòng ước lượng đường đi.
+
+Migration `supabase/migrations/weather.sql` · luật `src/lib/weather.ts` ·
+test `npm run test:weather`.

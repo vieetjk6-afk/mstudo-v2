@@ -321,7 +321,7 @@ thủ công cho dữ liệu cũ.
 > studio, nên đúng khoảnh khắc khách ký — không ai đăng nhập — chẳng có gì chạy.
 > Lịch chỉ lên khi chủ studio mở hợp đồng sửa tay một ô bất kỳ.
 
-## 20 tính năng mới (không có trong bản cũ)
+## 25 tính năng mới (không có trong bản cũ)
 
 | # | Tính năng | Mô tả | Nằm ở |
 | --- | --- | --- | --- |
@@ -345,6 +345,11 @@ thủ công cho dữ liệu cũ.
 | 18 | Nhắc kỷ niệm | Khách cũ tới mốc 1·3·5·10 năm, kèm lời chúc soạn sẵn | Tổng quan |
 | 19 | Lọc ảnh bằng AI | Tìm ảnh nhoè, ảnh chụp lỡ, gom chuỗi bấm rồi chỉ ra bản nét nhất — chạy trên máy, không upload | Công cụ ảnh → Lọc ảnh |
 | 20 | Ứng dụng khách (PWA) | Album & cổng hợp đồng cài được lên màn hình chính; chọn ảnh lưu xuống máy trước, mất mạng không mất lựa chọn | Trang khách |
+| 21 | Việc tự động | 8 luật theo trạng thái hợp đồng, bật/tắt bằng công tắc, chạy đúng MỘT lần cho mỗi hợp đồng | Dịch vụ & điều khoản |
+| 22 | Chấm công thợ | Thợ bấm "Đã đến / Đã xong" ở cổng thợ; Đối soát tiền công hiện giờ thực tế cạnh tiền | Cổng thợ → Đối soát |
+| 23 | Nhà cung cấp & đơn đặt ngoài | Album in, makeup, xe hoa: theo dõi tới khi giao khách; mỗi đơn một dòng chi, không đếm hai lần | Kho |
+| 24 | Xuất kế toán & khoá sổ | Excel 3 sheet (Thu · Chi · Công nợ) theo kỳ tuỳ ý, kèm mốc khoá sổ | Thu chi & công nợ |
+| 25 | Thời tiết buổi chụp ngoại | Mưa · gió · giờ vàng cho lịch ngoài trời trong 7 ngày, kèm ước lượng đường đi | Lịch làm việc |
 
 ### Chi tiết một số tính năng
 
@@ -365,6 +370,16 @@ thủ công cho dữ liệu cũ.
 **Lọc ảnh bằng AI (19)** — điểm nét bằng phương sai Laplacian, phơi sáng bằng histogram, gom ảnh trùng bằng mã nhận dạng khung **hai chiều 128 bit** (dHash một chiều ra mã toàn số 0 với mọi ảnh chuyển sáng đều từ trái sang phải — nền trời, mảng tường — nên hai tấm khác hẳn nhau vẫn bị coi là trùng; xem `hashDetail`). Giải mã bằng `createImageBitmap` + `OffscreenCanvas` ngay trong trình duyệt studio: **không endpoint, không upload**. Ngưỡng cố ý lệch về phía KHÔNG loại — một tấm chỉ bị xếp *nên loại* khi tệ **cả tuyệt đối lẫn tương đối** so với chính lô ảnh đó, nên lô cố ý mềm không bị loại sạch và lô siêu nét không loại oan. Công cụ **không tự xoá gì**: nó nói lý do kèm số đo cho từng tấm, cho bỏ tick, rồi đưa danh sách sang bước 2 của công cụ Lọc ảnh. Chưa làm (cần mô hình học sâu, không phải số học): phát hiện nhắm mắt, gom theo mặt. `src/lib/photo-ai.ts` · `photo-ai-scan.ts` · `AiFilterPanel.tsx` · `npm run test:photo-ai`, `npm run test:photo-ai-browser`.
 
 **Ứng dụng khách (20)** — `manifest` riêng cho từng album/hợp đồng (tên album + logo studio, `id` riêng nên không icon nào ghi đè icon nào). Lựa chọn ảnh ghi vào **sổ trên máy** (IndexedDB, lui về localStorage) trước khi gửi lên, thử lại với nhịp lùi dần, và hoà giải **ba bên theo từng ảnh** khi cả nhà mở cùng một link trên nhiều điện thoại — "bản trên máy luôn thắng" sẽ xoá sạch lựa chọn của máy kia. Viên trạng thái không nói dối theo cả hai chiều, và nút *đã chọn xong* chỉ báo studio khi lựa chọn thật sự đã lên máy chủ. Cổng hợp đồng nhớ số điện thoại 90 ngày (có nút thoát) và đọc được khi mất mạng từ bản chụp, kèm dòng nói rõ bản đó cũ bao lâu — trên đó có số tiền còn nợ. `src/lib/album-offline.ts` · `album-store.ts` · `client-manifest.ts` · `portal-device.ts` · `npm run test:album-offline`, `npm run test:portal-device`.
+
+**Việc tự động (21)** — tập *khi* và tập *thì* đều ĐÓNG, tám luật khai trong code (`src/lib/automations.ts`); bảng DB chỉ giữ cấu hình. Cố ý không làm trình dựng luật: studio cần tám việc đúng, không cần một Zapier. Ba luật gửi Zalo cho KHÁCH tắt sẵn. Chống lặp có **hai lớp** — nạp khoá đã chạy, và `dedupe_key` UNIQUE với cron **ghi dấu trước khi làm** (gửi hai lần tệ hơn không gửi lần nào). Cron `/api/cron/automations` 6:30 sáng. `npm run test:automations`.
+
+**Chấm công thợ (22)** — thợ không có tài khoản nên chấm công qua cổng thợ công khai, đúng hai nút. Dòng còn hở (quên bấm xong) trả `null` và **đếm riêng**, không tính 0 giờ — tính 0 nghĩa là bảng lương báo thợ làm cả ngày không công mà không ai phát hiện. Đối soát **đề xuất** tiền theo giờ × đơn giá, không tự ghi vào sổ lương. `src/lib/timesheet.ts` · `npm run test:timesheet`.
+
+**Nhà cung cấp (23)** — bốn trạng thái tới "đã giao khách", không có "đã huỷ" (đơn huỷ thì xoá, nếu không nó vẫn được cộng tiền và vẫn bị đếm là trễ). Mỗi đơn sinh **đúng một** dòng `studio_expenses` qua `vendor_order_id` (UNIQUE) và sửa đơn là upsert dòng đó — sửa giá ba lần vẫn một dòng chi. `src/lib/vendors.ts` · `npm run test:vendors`.
+
+**Xuất kế toán & khoá sổ (24)** — phiếu thu dùng CHUNG khung in với hợp đồng, số phiếu do DB cấp nguyên tử theo studio × năm và lưu lại (bản cũ dùng 8 ký tự UUID và cộng luỹ kế tới *hôm nay*, nên in lại phiếu cũ ra số sai). Excel ba sheet theo kỳ tuỳ ý. Khoá sổ đánh mốc để số liệu đã gửi kế toán không đổi khi ai đó sửa hợp đồng cũ. `src/lib/accounting.ts` · `npm run test:accounting`.
+
+**Thời tiết buổi chụp (25)** — Open-Meteo, không cần khoá API. Chỉ hiện cho lịch **ngoài trời** trong **7 ngày** (xa hơn là bịa). **Gió giật tính cùng hạng với mưa** — studio ngoại cảnh mất buổi vì gió cũng nhiều như vì mưa. Thời gian di chuyển là **ước lượng** đường chim bay × 1,35, luôn hiện kèm `≈` và chữ "ước lượng"; repo không gọi API chỉ đường. `src/lib/weather.ts` · `npm run test:weather`.
 
 ## Bản mobile
 

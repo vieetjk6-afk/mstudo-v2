@@ -48,6 +48,7 @@ export async function POST(req: Request) {
     company?: string;
     shift?: string;
     studioId?: string;
+    contractId?: string;
     captcha?: string;
   };
   const phone = digits(body.phone);
@@ -70,6 +71,107 @@ export async function POST(req: Request) {
   }
 
   const db = createAdminClient();
+
+  /* ── CHẤM CÔNG ─────────────────────────────────────────────────────────────
+     Thợ bấm "Đã đến" khi tới nơi và "Đã xong" khi rời. Đây là thứ biến màn Đối
+     soát tiền công từ nhập tay thành đối chiếu được — xem src/lib/timesheet.ts.
+
+     Chỉ studio ĐÃ CÓ thợ này trong sổ mới ghi được (cùng hàng rào với busy_add):
+     nếu không, ai cầm một SĐT cũng nhét được giờ làm vào studio bất kỳ. */
+  if (body.action === "clock_in" || body.action === "clock_out") {
+    const studioId = (body.studioId || "").trim();
+    if (!studioId) return NextResponse.json({ error: "no_studio" }, { status: 400 });
+    const { data: roster } = await db
+      .from("studio_crew")
+      .select("id, phone, name")
+      .eq("owner_id", studioId);
+    const me = (roster ?? []).find((r) => digits(r.phone as string) === phone);
+    if (!me) return NextResponse.json({ error: "not_in_roster" }, { status: 403 });
+
+    // Dòng đang mở của thợ này (nếu có). Bảng có unique index trên (phone) khi
+    // ended_at is null, nên nhiều nhất là MỘT.
+    const { data: openRows } = await db
+      .from("crew_timesheet")
+      .select("id, started_at, work_date")
+      .eq("phone", phone)
+      .is("ended_at", null)
+      .limit(1);
+    const open = (openRows ?? [])[0] as { id: string; started_at: string | null; work_date: string } | undefined;
+
+    if (body.action === "clock_in") {
+      // Đã có dòng mở → KHÔNG mở thêm. Thợ bấm hai lần vì mạng chậm là chuyện
+      // thường, và hai dòng mở nghĩa là giờ làm bị tính đôi. Trả về dòng đang mở
+      // để cổng thợ hiện đúng trạng thái "đang làm".
+      if (open) return NextResponse.json({ ok: true, already: true, entry: open });
+      const now = new Date();
+      const { data, error } = await db
+        .from("crew_timesheet")
+        .insert({
+          owner_id: studioId,
+          phone,
+          crew_id: me.id,
+          name: (me.name as string) || null,
+          contract_id: body.contractId || null,
+          // Ngày làm theo giờ Việt Nam, tách khỏi started_at: buổi tiệc bắt đầu
+          // 19:00 và xong 02:00 hôm sau vẫn thuộc kỳ của NGÀY CHỤP.
+          work_date: new Date(now.getTime() + 7 * 3600_000).toISOString().slice(0, 10),
+          started_at: now.toISOString(),
+          source: "crew",
+        })
+        .select("id, started_at, work_date")
+        .maybeSingle();
+      if (error) return NextResponse.json({ error: "server_error", message: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true, entry: data });
+    }
+
+    // clock_out
+    if (!open) return NextResponse.json({ error: "not_clocked_in" }, { status: 409 });
+    const { error } = await db
+      .from("crew_timesheet")
+      .update({ ended_at: new Date().toISOString(), note: body.note?.trim()?.slice(0, 500) || null })
+      .eq("id", open.id);
+    if (error) return NextResponse.json({ error: "server_error", message: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
+
+  /* ── KHOẢNG RẢNH (ngược của "báo bận") ─────────────────────────────────────
+     Thợ tự đăng ký khoảng trống để lúc phân công studio thấy ngay ai rảnh. Luật
+     ưu tiên: BÁO BẬN thắng KHAI RẢNH (xem `availabilityOn`). */
+  if (body.action === "free_add" || body.action === "free_remove") {
+    const studioId = (body.studioId || "").trim();
+    if (!studioId) return NextResponse.json({ error: "no_studio" }, { status: 400 });
+    const { data: roster } = await db.from("studio_crew").select("phone").eq("owner_id", studioId);
+    if (!(roster ?? []).some((r) => digits(r.phone as string) === phone)) {
+      return NextResponse.json({ error: "not_in_roster" }, { status: 403 });
+    }
+
+    if (body.action === "free_remove") {
+      if (!body.id) return NextResponse.json({ error: "no_id" }, { status: 400 });
+      // Lọc theo CẢ id lẫn phone: id là uuid đoán được về lý thuyết, nhưng không
+      // ai xoá được khoảng rảnh của thợ khác nếu SĐT không khớp.
+      const { error } = await db.from("crew_available").delete().eq("id", body.id).eq("phone", phone);
+      if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!DATE_RE.test(body.date ?? "")) return NextResponse.json({ error: "no_date" }, { status: 400 });
+    const start = normTime(body.start);
+    const end = normTime(body.end);
+    if ((start && !end) || (!start && end)) return NextResponse.json({ error: "bad_time" }, { status: 400 });
+    const { error } = await db.from("crew_available").upsert(
+      {
+        phone,
+        date: body.date,
+        start_time: start,
+        end_time: end,
+        note: body.note?.trim()?.slice(0, 300) || null,
+        owner_id: studioId,
+      },
+      { onConflict: "phone,date,start_time" }
+    );
+    if (error) return NextResponse.json({ error: "server_error", message: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
 
   if (body.action === "busy_add") {
     if (!DATE_RE.test(body.date ?? "")) return NextResponse.json({ error: "no_date" }, { status: 400 });
@@ -183,7 +285,7 @@ export async function POST(req: Request) {
   // phí một lần mở cổng thợ tăng theo số studio trên nền tảng chứ không theo số
   // việc của thợ đó.
   const CREW_COLS =
-    "id, name, role, salary, status, note, phone, responded_at, contract:studio_contracts(title, client_name, shoot_type, event_date, event_time, location, status)";
+    "id, contract_id, name, role, salary, status, note, phone, responded_at, contract:studio_contracts(title, client_name, shoot_type, event_date, event_time, location, status)";
   const byDigits = await db
     .from("contract_crew")
     .select(CREW_COLS)
@@ -206,10 +308,37 @@ export async function POST(req: Request) {
   ]);
   const { data: acc } = await db.from("crew_account").select("calendar_token").eq("phone", phone).maybeSingle();
 
+  // Chấm công + khoảng rảnh. Bọc riêng và nuốt lỗi: project chưa chạy
+  // migration crew_timesheet.sql thì hai bảng chưa tồn tại, và cổng thợ KHÔNG
+  // được sập chỉ vì thiếu phần chấm công — cùng cách `phone_digits` đang lùi.
+  let openEntry: unknown = null;
+  let recent: unknown[] = [];
+  let free: unknown[] = [];
+  try {
+    const [{ data: open }, { data: rows }, { data: slots }] = await Promise.all([
+      db.from("crew_timesheet").select("id, started_at, work_date, contract_id").eq("phone", phone).is("ended_at", null).limit(1),
+      db
+        .from("crew_timesheet")
+        .select("id, work_date, started_at, ended_at, contract_id, note")
+        .eq("phone", phone)
+        .not("ended_at", "is", null)
+        .order("work_date", { ascending: false })
+        .limit(20),
+      db.from("crew_available").select("id, date, start_time, end_time, note").eq("phone", phone).order("date"),
+    ]);
+    openEntry = (open ?? [])[0] ?? null;
+    recent = rows ?? [];
+    free = slots ?? [];
+  } catch {
+    /* chưa chạy migration crew_timesheet.sql → cổng thợ vẫn dùng được bình thường */
+  }
+
   return NextResponse.json({
     assignments: mine,
     busy: busy ?? [],
     shift: shiftPlan ?? null,
     calendarToken: acc?.calendar_token ?? null,
+    timesheet: { open: openEntry, recent },
+    free,
   });
 }

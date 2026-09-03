@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Download, FileSpreadsheet, ReceiptText, Users } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { digitsOnly, humanHours, suggestPay, summarizeByPerson, type TimesheetRow } from "@/lib/timesheet";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
 import { vnd, CREW_ROLE_LABEL, CREW_STATUS_LABEL, type CrewRole, type CrewStatus } from "@/lib/types";
@@ -39,7 +40,16 @@ function monthOptions(): { value: string; label: string }[] {
   return out;
 }
 
-export default function PayrollView({ rows, studio }: { rows: PayrollRow[]; studio: ExportStudio }) {
+export default function PayrollView({
+  rows, studio, timesheet = [], rates = {},
+}: {
+  rows: PayrollRow[];
+  studio: ExportStudio;
+  /** Giờ làm THỰC TẾ do thợ tự bấm ở cổng thợ (xem @/lib/timesheet). */
+  timesheet?: TimesheetRow[];
+  /** Đơn giá giờ theo SĐT thợ. Thiếu = studio chưa khai → không đề xuất tiền. */
+  rates?: Record<string, number>;
+}) {
   const supabase = createClient();
   const [month, setMonth] = useState("all");
   const [data, setData] = useState(rows);
@@ -91,6 +101,17 @@ export default function PayrollView({ rows, studio }: { rows: PayrollRow[]; stud
     }
     return Array.from(map.values()).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   }, [filtered]);
+
+  /**
+   * Giờ làm thực tế theo người, LỌC ĐÚNG KỲ đang xem trên màn hình. Không lọc
+   * theo kỳ thì cột "giờ làm" sẽ là tổng của mọi tháng trong khi cột tiền chỉ
+   * của tháng này — hai con số cạnh nhau mà khác kỳ là cách chắc chắn để người
+   * đọc kết luận sai.
+   */
+  const hoursByPhone = useMemo(() => {
+    const inKy = month === "all" ? timesheet : timesheet.filter((r) => r.workDate.startsWith(month));
+    return Object.fromEntries(summarizeByPerson(inKy).map((p) => [p.phone, p]));
+  }, [timesheet, month]);
 
   const grandTotal = filtered.reduce((s, r) => s + (r.salary || 0), 0);
   const grandPaid = filtered.filter((r) => r.paid).reduce((s, r) => s + (r.salary || 0), 0);
@@ -236,6 +257,29 @@ export default function PayrollView({ rows, studio }: { rows: PayrollRow[]; stud
                       <span className="min-w-0">
                         <span className="block truncate text-[14px] font-semibold">{g.name}</span>
                         <span className="block text-[11.5px]" style={{ color: "var(--tx3)" }}>{g.phone || "—"} · {g.rows.length} buổi</span>
+                        {(() => {
+                          // Giờ THỰC TẾ đứng cạnh tiền để studio đối chiếu. Chỉ
+                          // hiện khi CÓ dữ liệu chấm công — studio chưa dùng
+                          // tính năng này thì màn giữ nguyên như cũ.
+                          const t = hoursByPhone[digitsOnly(g.phone ?? "")];
+                          if (!t || (t.hours <= 0 && t.openCount === 0 && t.problemCount === 0)) return null;
+                          const sug = suggestPay(t.hours, rates[t.phone]);
+                          return (
+                            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px]" style={{ color: "var(--tx3)" }}>
+                              {t.hours > 0 && (
+                                <span style={{ color: "var(--ac)" }}>
+                                  chấm công {humanHours(t.hours)} · {t.sessions} buổi
+                                </span>
+                              )}
+                              {sug !== null && <span>≈ {vnd(sug)} theo giờ</span>}
+                              {(t.openCount > 0 || t.problemCount > 0) && (
+                                <span style={{ color: "var(--am)" }}>
+                                  {t.openCount + t.problemCount} buổi chưa chốt giờ
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
                       </span>
                     </button>
                     {/* Tiền + nút gom trong một khối: khi hàng xuống dòng trên

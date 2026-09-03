@@ -52,6 +52,7 @@ import MoneyInput from "@/components/MoneyInput";
 import VietQRButton, { qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { PRESET_ITEMS, PRESET_TASKS, nextContractCode } from "@/lib/contract-code";
 import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
+import { receiptNo, receiptPrintData, yearOf } from "@/lib/accounting";
 import { shootReminderMessage, instalmentReminderMessage } from "@/lib/zalo";
 import { compressImage, checkImageFile } from "@/lib/image";
 import {
@@ -739,28 +740,74 @@ export default function ContractEditor({
     setPayments((p) => p.filter((x) => x.id !== id));
   }
 
-  // Open a printable receipt (phiếu thu) for one payment in a new window.
-  function printReceipt(p: ContractPayment) {
-    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] || c));
-    const collectedNow = sumAmounts(payments);
-    const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>Phiếu thu</title>
-<style>body{font-family:'Times New Roman',Times,serif;color:#111;max-width:560px;margin:24px auto;padding:0 24px}
-h1{text-align:center;font-size:20px;margin:0}.muted{color:#555}.row{display:flex;justify-content:space-between;padding:4px 0;font-size:14px}
-.tot{border-top:1px solid #333;margin-top:8px;padding-top:8px;font-weight:700}.sign{margin-top:48px;text-align:center;font-size:13px}</style></head>
-<body onload="window.print()">
-<h1>PHIẾU THU</h1>
-<p style="text-align:center" class="muted">Số: ${esc(p.id.slice(0, 8).toUpperCase())} · ${p.paid_at}</p>
-<div class="row"><span>Studio (bên thu):</span><b>${esc(studioName)}</b></div>
-<div class="row"><span>Khách hàng:</span><b>${esc(f.client_name || "—")}</b></div>
-<div class="row"><span>Hợp đồng:</span><span>${esc(f.title)}${f.code ? " · " + esc(f.code) : ""}</span></div>
-<div class="row"><span>Nội dung:</span><span>${esc(PAYMENT_KIND_LABEL[p.kind])}${p.method ? " · " + esc(p.method) : ""}</span></div>
-<div class="row tot"><span>Số tiền thu</span><span>${vnd(p.amount)}</span></div>
-<div class="row"><span class="muted">Tổng giá trị HĐ</span><span class="muted">${vnd(total)}</span></div>
-<div class="row"><span class="muted">Đã thu luỹ kế</span><span class="muted">${vnd(collectedNow)}</span></div>
-<div class="row"><span class="muted">Còn lại</span><span class="muted">${vnd(total - collectedNow)}</span></div>
-<div class="sign"><b>NGƯỜI THU</b><div style="height:60px"></div><div>${esc(studioName)}</div></div>
-</body></html>`;
-    const w = window.open("", "_blank", "width=640,height=720");
+  /**
+   * PHIẾU THU cho một lần thu — dùng CHUNG khung in với hợp đồng
+   * (@/lib/contract-print), không dựng hệ thống in thứ hai.
+   *
+   * Bản trước đây tự ghép HTML tay và sai hai chỗ mà khách cầm giấy về sẽ thấy:
+   *   • "Số phiếu" là 8 ký tự đầu của UUID — không phải số, không theo thứ tự,
+   *     và kế toán không dùng được. Giờ số do DB cấp nguyên tử theo studio × năm
+   *     (hàm next_receipt_no, migration accounting.sql) và LƯU LẠI, nên in lại
+   *     phiếu cũ vẫn ra đúng số cũ.
+   *   • "Đã thu luỹ kế" lấy tổng của MỌI lần thu tính tới HÔM NAY. In lại một
+   *     phiếu của ba tháng trước sẽ hiện số luỹ kế của hôm nay — sai. Giờ cộng
+   *     đúng những lần thu TỚI thời điểm của phiếu đó.
+   */
+  async function printReceipt(p: ContractPayment) {
+    // Đã có số thì giữ nguyên; chưa có thì xin DB cấp. Chỉ cấp KHI IN — studio
+    // ghi rồi xoá một khoản là chuyện thường, mà dãy số phiếu thủng lỗ chỗ thì
+    // kế toán không giải thích được.
+    let no = p.receipt_no ?? null;
+    if (!no) {
+      const year = yearOf(p.paid_at, new Date().getFullYear());
+      const { data: seq, error } = await supabase.rpc("next_receipt_no", { p_owner: ownerId, p_year: year });
+      if (error || typeof seq !== "number") {
+        toast(
+          error?.code === "42883" || error?.code === "PGRST202"
+            ? "Cần chạy supabase/migrations/accounting.sql để cấp số phiếu thu."
+            : error?.message ?? "Chưa cấp được số phiếu."
+        );
+        return;
+      }
+      no = receiptNo(seq, year);
+      await supabase
+        .from("contract_payments")
+        .update({ receipt_no: no, receipt_at: new Date().toISOString() })
+        .eq("id", p.id);
+      setPayments((prev) => prev.map((x) => (x.id === p.id ? { ...x, receipt_no: no } : x)));
+    }
+
+    // Đã thu TRƯỚC phiếu này: cộng những lần thu có mốc ≤ mốc của phiếu này.
+    // So thêm bằng `id` để hai lần thu CÙNG NGÀY không cùng được tính là "trước".
+    const paidBefore = payments
+      .filter((x) => x.paid_at < p.paid_at || (x.paid_at === p.paid_at && x.id < p.id))
+      .reduce((sum, x) => sum + (x.amount || 0), 0);
+
+    const html = contractPrintDocument(
+      receiptPrintData({
+        no,
+        paidOn: fmtDate(p.paid_at),
+        amount: p.amount,
+        kindLabel: [PAYMENT_KIND_LABEL[p.kind], p.method].filter(Boolean).join(" · "),
+        note: p.note ?? null,
+        studio: {
+          name: studioName,
+          logo: studioLogo,
+          phone: studioPhone,
+          email: studioEmail,
+          bankHolder: bank.holder,
+          bankAccount: bank.account,
+          bankName: bank.name,
+        },
+        client: { name: f.client_name, phone: f.client_phone, address: null },
+        contract: { title: f.title, code: f.code },
+        contractTotal: total,
+        paidBefore,
+      }),
+      { autoPrint: true }
+    );
+
+    const w = window.open("", "_blank", "width=880,height=920");
     if (w) {
       w.document.write(html);
       w.document.close();
