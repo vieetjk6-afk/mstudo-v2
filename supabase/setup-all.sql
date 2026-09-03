@@ -3607,6 +3607,21 @@ end $$;
 -- Chạy 1 lần trong Supabase SQL Editor.
 -- ============================================================================
 
+-- ── Kiểm tra điều kiện trước ────────────────────────────────────────────────
+-- Migration chỉ VÁ bảng đã có. Thiếu bảng nền thì Postgres chỉ nói
+-- `42P01: relation "..." does not exist` — đúng, nhưng không nói phải làm gì.
+-- Khối này nói thẳng. (Chạy qua setup-all.sql thì khối `do $$` rơi vào PHẦN 2,
+-- tức là SAU khi PHẦN 1 đã tạo hết bảng, nên nó luôn qua.)
+do $$
+declare thieu text[] := '{}';
+begin
+  if to_regclass('public.feedback') is null then thieu := thieu || 'feedback'::text; end if;
+  if array_length(thieu, 1) > 0 then
+    raise exception E'Thiếu bảng: %.\n\nProject chưa có schema nền của bản 2.0 nên migration không vá vào đâu được.\nChạy MỘT file duy nhất: supabase/setup-all.sql — nó gồm cả schema nền lẫn chính migration này,\nvà mọi câu lệnh đều "if not exists" nên không xoá gì của project đang chạy.\n\nMuốn biết project đang thiếu những gì: chạy supabase/kiem-tra-truoc-khi-chay-migration.sql',
+      array_to_string(thieu, ', ');
+  end if;
+end $$;
+
 alter table public.feedback
   add column if not exists reply        text,
   add column if not exists replied_at   timestamptz,
@@ -3666,6 +3681,23 @@ create index if not exists feedback_moderation_idx on public.feedback (approved,
 --
 -- Chạy 1 lần trong Supabase SQL Editor.
 -- ============================================================================
+
+-- ── Kiểm tra điều kiện trước ────────────────────────────────────────────────
+-- Migration chỉ VÁ bảng đã có. Thiếu bảng nền thì Postgres chỉ nói
+-- `42P01: relation "..." does not exist` — đúng, nhưng không nói phải làm gì.
+-- Khối này nói thẳng. (Chạy qua setup-all.sql thì khối `do $$` rơi vào PHẦN 2,
+-- tức là SAU khi PHẦN 1 đã tạo hết bảng, nên nó luôn qua.)
+do $$
+declare thieu text[] := '{}';
+begin
+  if to_regclass('public.studio_bookings') is null then thieu := thieu || 'studio_bookings'::text; end if;
+  if to_regclass('public.website_leads') is null then thieu := thieu || 'website_leads'::text; end if;
+  if to_regclass('public.studio_contracts') is null then thieu := thieu || 'studio_contracts'::text; end if;
+  if array_length(thieu, 1) > 0 then
+    raise exception E'Thiếu bảng: %.\n\nProject chưa có schema nền của bản 2.0 nên migration không vá vào đâu được.\nChạy MỘT file duy nhất: supabase/setup-all.sql — nó gồm cả schema nền lẫn chính migration này,\nvà mọi câu lệnh đều "if not exists" nên không xoá gì của project đang chạy.\n\nMuốn biết project đang thiếu những gì: chạy supabase/kiem-tra-truoc-khi-chay-migration.sql',
+      array_to_string(thieu, ', ');
+  end if;
+end $$;
 
 -- 1. Yêu cầu đặt lịch -------------------------------------------------------
 alter table public.studio_bookings
