@@ -7,6 +7,7 @@ import { vnd } from "@/lib/types";
 import Turnstile from "@/components/Turnstile";
 import { VietQR, type BankInfo } from "@/components/VietQR";
 import { digitsOnly } from "@/lib/referral";
+import { inferSource, readUtm, type Utm } from "@/lib/lead-source";
 
 type Lang = "vi" | "en";
 const TR = {
@@ -125,6 +126,28 @@ export default function BookingForm({
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
 
+  /* Khách này từ đâu tới. ĐỌC MỘT LẦN lúc trang vừa mở, không đọc lúc bấm gửi:
+     khách hay bấm quanh vài trang rồi mới điền, và bước cọc còn thay URL — đọc
+     muộn thì utm của link quảng cáo đã trôi mất. Chỉ nhãn kênh + tham số quảng
+     cáo, không cookie, không id theo dõi. */
+  const [attribution, setAttribution] = useState<{ source: string | null; utm: Utm; landing_path: string }>(
+    { source: null, utm: {}, landing_path: "" },
+  );
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const utm = readUtm(params);
+    setAttribution({
+      source: inferSource({
+        utm,
+        referrer: document.referrer,
+        ref: params.get("ref"),
+        selfHost: window.location.hostname,
+      }),
+      utm,
+      landing_path: window.location.pathname,
+    });
+  }, []);
+
   // Bước cọc giữ ngày — chỉ hiện khi máy chủ trả về thông tin cọc.
   const [deposit, setDeposit] = useState<DepositInfo | null>(null);
   const [proofBusy, setProofBusy] = useState(false);
@@ -162,7 +185,7 @@ export default function BookingForm({
       const res = await fetch(`/api/book/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...f, package_name: packageName, package_price: packagePrice, captcha: captchaToken }),
+        body: JSON.stringify({ ...f, package_name: packageName, package_price: packagePrice, captcha: captchaToken, ...attribution }),
       });
       if (res.ok) {
         const data = (await res.json().catch(() => ({}))) as { deposit?: DepositInfo | null };

@@ -64,7 +64,6 @@ import {
   CREW_ROLE_LABEL,
   CREW_STATUS_LABEL,
   PAYMENT_KIND_LABEL,
-  LEAD_SOURCE_LABEL,
   intakeIsWedding,
   type StudioContract,
   type ContractItem,
@@ -86,6 +85,7 @@ import {
   type CrewRole,
   type CrewStatus,
 } from "@/lib/types";
+import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 import { CREW_TASK_LABEL, CREW_SIDE_LABEL, CREW_TASKS, CREW_SIDES } from "@/lib/crew-show";
 import TimeInput from "@/components/TimeInput";
 

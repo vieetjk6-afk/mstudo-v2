@@ -4,6 +4,9 @@ File này **không phải hướng dẫn cài đặt**. Nó là danh sách nhữ
 còn thiếu để trở thành một app quản lý studio *đủ vòng*, xếp theo thứ tự nên làm
 trước. Mỗi mục ghi rõ: hiện app có gì, thiếu gì, và làm thì phải chạm vào đâu.
 
+**Ba mục đầu (✅) đã làm xong** — xem mục "Đã làm" ở cuối file. Bảy mục còn lại
+vẫn là đề xuất.
+
 Cơ sở đối chiếu: 29 mục sidebar trong [`src/lib/studio-nav.ts`](../src/lib/studio-nav.ts)
 và 75 bảng nghiệp vụ trong [`supabase/schema.sql`](../supabase/schema.sql) + các migration.
 Những gì app **đã có** thì không nhắc lại ở đây.
@@ -14,9 +17,9 @@ Những gì app **đã có** thì không nhắc lại ở đây.
 
 | # | Tính năng | Vì sao cần | Công sức | Đã có nền tảng gì |
 |---|---|---|---|---|
-| 1 | **Thu đánh giá khách sau giao ảnh** | Bảng `feedback` đã có nhưng studio không có màn nào để xem/duyệt | Nhỏ | `feedback`, `/api/feedback`, website đã hiện review |
-| 2 | **Nguồn khách & phễu chuyển đổi** | Không biết tiền quảng cáo ra hợp đồng hay không | Nhỏ | `website_leads`, `studio_bookings`, `studio_contracts` |
-| 3 | **Nhắc kỷ niệm & chụp lại** | Khách cưới là khách quay lại có giá trị cao nhất, hiện không ai nhắc | Nhỏ | `studio_contracts.shoot_date`, `message_templates`, push |
+| 1 | ✅ **Thu đánh giá khách sau giao ảnh** | Bảng `feedback` đã có nhưng studio không có màn nào để xem/duyệt | Nhỏ | `feedback`, `/api/feedback`, website đã hiện review |
+| 2 | ✅ **Nguồn khách & phễu chuyển đổi** | Không biết tiền quảng cáo ra hợp đồng hay không | Nhỏ | `website_leads`, `studio_bookings`, `studio_contracts` |
+| 3 | ✅ **Nhắc kỷ niệm & chụp lại** | Khách cưới là khách quay lại có giá trị cao nhất, hiện không ai nhắc | Nhỏ | `studio_contracts.shoot_date`, `message_templates`, push |
 | 4 | **Việc tự động theo trạng thái** | Mọi nhắc nhở hiện là thủ công | Trung bình | `contract_tasks`, `studio_notifications`, cron Vercel |
 | 5 | **Chấm công & lịch rảnh của thợ** | Có lịch phân công, chưa có "ai thực sự đi làm" | Trung bình | `crew_shift_plan`, `crew_unavailable`, `studio_crew` |
 | 6 | **Nhà cung cấp & đơn in ấn** | Album in / makeup / xe hoa đang nằm ngoài hệ thống | Trung bình | `studio_expenses`, `contract_products` |
@@ -228,3 +231,74 @@ mà cũng không dồn vào trong được: `<main>` mang `.page-in` (animation
 `position: fixed` bên trong — ghi chú trong `globals.css` đã cảnh báo đúng bẫy
 này. Cách gọn nhất là `DashboardChrome` (nó đã biết `isStudio`) truyền màu
 xuống cho `NavProgress`. Việc nhỏ, nhưng vẫn là chọn màu nên để bạn gật đầu.
+
+
+---
+
+# ĐÃ LÀM
+
+## ✅ 1. Đánh giá khách — `/dashboard/studio/reviews`
+
+Khách vẫn viết cảm nhận ở cuối trang album giao khách như trước, nhưng từ giờ:
+
+* **Phải được duyệt mới lên website.** `feedback.approved` đổi mặc định thành
+  `false`. Ba trạng thái (chờ duyệt · đang hiện · đã ẩn) nằm trên hai cột
+  `approved` + `moderated_at` — cần cột riêng vì "chờ duyệt" và "đã ẩn" trong DB
+  đều là `approved=false`, và studio hoàn toàn có thể *trả lời* một đánh giá xấu
+  rồi vẫn chưa quyết cho hiện. Hàng cũ đang hiện được migration đóng
+  `moderated_at` sẵn nên không đổ vào tab Chờ duyệt.
+* **Trả lời được**, và lời trả lời hiện công khai dưới đánh giá — cả trên trang
+  album lẫn khối "Khách hàng nói gì" của website studio.
+* **Đi xin đánh giá**: khối "Album đã giao, chưa ai đánh giá" kèm nút chia sẻ
+  link (mang tên miền riêng của studio nếu có).
+* Badge sidebar + một dòng trong "Cần xử lý ngay" ở Tổng quan, cả hai chỉ đếm
+  bản CHƯA QUYẾT nên tự về 0 khi làm xong.
+
+Sửa kèm: `/api/feedback` đang chặn bằng cờ cũ `is_gallery`, trái với luật
+"`phase` thắng `is_gallery`" ở `@/lib/album-phase` — album studio tự tạo rồi bấm
+"Giao khách" thì khách gửi cảm nhận bị chối, còn album đã kéo ngược về giai đoạn
+chọn ảnh thì vẫn nhận. Giờ dùng `isDeliveryPhase()` + bắt buộc `published`.
+
+Migration `supabase/migrations/danh_gia_khach.sql` · test `npm run test:reviews`
+· xem trước `/uipreview/danh-gia`.
+
+## ✅ 2. Nguồn khách & phễu chuyển đổi
+
+Điều chỉnh so với đề xuất ban đầu: `studio_contracts.source` **đã có sẵn** và màn
+Thu chi **đã** gom doanh thu theo nguồn. Chỗ hỏng thật nằm ở ba mắt xích khác:
+
+* **Không ai điền cột đó.** Lúc lập hợp đồng thì không ai nhớ ba tuần trước khách
+  bấm vào đâu. Giờ nguồn được **đoán ngay lúc khách gửi yêu cầu đặt lịch**, từ
+  `utm_*` / `gclid` / `fbclid` / `document.referrer` mà trình duyệt vốn mang sẵn
+  (`@/lib/lead-source`). Đoán không ra thì để trống — thà trống còn hơn dồn vào
+  "Khác" rồi studio tưởng là số thật.
+* **Bấm "Tạo hợp đồng" từ một yêu cầu là nguồn rơi mất.** Giờ hợp đồng chép lại
+  `source` và giữ `booking_id` trỏ về yêu cầu gốc.
+* **Không có phễu.** Màn Thu chi → tab *Biểu đồ & mục tiêu* có khối mới: khách
+  hỏi → gửi yêu cầu → ký hợp đồng → tiền về, kèm tỉ lệ giữa từng bậc. Mỗi dòng
+  nguồn cũng nói thêm "22 yêu cầu → 5 HĐ (23%)".
+
+Sửa kèm: hợp đồng bỏ trống nguồn trước đây bị gộp vào `other` rồi hiện nhãn
+"Khác" — studio đọc biểu đồ tưởng đã biết nguồn của những khách đó. Giờ tách
+thành nhóm riêng "Không rõ nguồn".
+
+Chỉ lưu nhãn kênh + tham số quảng cáo thô, **không cookie, không id theo dõi**.
+Nguồn do client gửi lên nên server lọc lại theo tập đóng trước khi ghi.
+
+Migration `supabase/migrations/nguon_khach.sql` · test `npm run test:lead-source`.
+
+## ✅ 3. Nhắc kỷ niệm & chụp lại
+
+Khối "Nên liên hệ tháng này" ở Tổng quan: khách cũ tới mốc 1 · 3 · 5 · 10 năm
+(2 và 4 cố ý bỏ — nhắc mọi năm thì thành làm phiền và studio ngưng đọc), kèm lời
+chúc soạn sẵn theo loại buổi chụp (cưới / bé / chung) và nút gửi.
+
+Không thêm bảng nào và **không thêm truy vấn nào**: mốc suy ra từ `event_date` +
+loại dịch vụ trên chính danh sách hợp đồng mà màn Tổng quan đã tải. Bật lên là
+chạy ngay trên dữ liệu cũ.
+
+Cửa sổ là −7 → +45 ngày. Phần lùi về quá khứ là cố ý: studio mở app hai tuần một
+lần, mốc vừa qua hôm kia vẫn kịp một câu chúc muộn.
+
+Test `npm run test:anniversary` (có ca 29/2 — cộng năm ngây thơ sẽ ra 01/3 và
+nhắc sai ngày).

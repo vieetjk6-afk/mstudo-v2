@@ -4,7 +4,7 @@ import {
   Plus, FileText, CalendarDays, Users, AlertCircle, Wallet, Clock, Globe, Images,
   Bolt, UserPlus, Banknote, ImagePlus, ReceiptText, PenLine, CalendarClock,
   TrendingUp, CircleAlert, CalendarRange, Hourglass, Landmark, CalendarCheck,
-  AlertTriangle,
+  AlertTriangle, Star, Gift,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
@@ -18,6 +18,7 @@ import UpcomingSchedule from "@/components/studio/UpcomingSchedule";
 import { shootReminderMessage } from "@/lib/zalo";
 import { crewPortalUrl } from "@/lib/crew-show";
 import { avatarStyle, initials } from "@/lib/avatar";
+import { brandFrom } from "@/lib/studio-brand";
 import { TONE, Pill, Panel, PanelHead, StatCard, EmptyState, RevenueChart, type ToneKey } from "@/components/studio/ui";
 import {
   contractTotal,
@@ -33,6 +34,7 @@ import {
   type CrewRole,
 } from "@/lib/types";
 import { fmtDate, fmtDayMonth, fmtDow, todayVN, daysFromToday } from "@/lib/date";
+import { MILESTONE_LABEL, milestoneMessage, upcomingMilestones } from "@/lib/anniversary";
 
 /** Photographer-plan overview: bookings + upcoming shoots, no contracts/finance. */
 async function BookingOverview({ ownerId }: { ownerId: string }) {
@@ -212,6 +214,7 @@ export default async function StudioOverview() {
     { data: paySixMonths },
     { data: recentQuotes },
     { data: pendingProofs },
+    { count: pendingReviews },
   ] = await Promise.all([
     cq.order("event_date", { ascending: true, nullsFirst: false }),
     supabase
@@ -248,6 +251,15 @@ export default async function StudioOverview() {
       .eq("plan.paid", false)
       .order("created_at", { ascending: false })
       .limit(20),
+    // Đánh giá khách chưa quyết cho hiện hay ẩn. Chỉ cần ĐẾM (head: true) —
+    // hàng đợi bên dưới chỉ hiện một dòng "có N cái chờ bạn duyệt", nội dung
+    // đọc ở màn Đánh giá khách.
+    supabase
+      .from("feedback")
+      .select("id, album:albums!inner(owner_id)", { count: "exact", head: true })
+      .eq("album.owner_id", profile.id)
+      .eq("approved", false)
+      .is("moderated_at", null),
   ]);
 
   type CrewLite = { id: string; name: string; phone: string | null; role: CrewRole; status: string };
@@ -548,6 +560,40 @@ export default async function StudioOverview() {
     });
   }
 
+  // 10. Đánh giá khách đang chờ duyệt. Gộp thành MỘT dòng chứ không một dòng
+  //     mỗi đánh giá: cả cụm xử lý ở cùng một màn trong một lượt, tách ra chỉ
+  //     đẩy chín việc khác ra khỏi top 6.
+  if ((pendingReviews ?? 0) > 0) {
+    urgent.push({
+      key: "reviews-pending", icon: Star, tone: "amber",
+      title: `${pendingReviews} đánh giá khách chờ bạn duyệt`,
+      sub: "Khách đã viết cảm nhận — duyệt thì mới lên website studio",
+      tag: "Đánh giá", cta: "Duyệt ngay", href: "/dashboard/studio/reviews",
+    });
+  }
+
+  // ── Nên liên hệ tháng này (kỷ niệm & chụp lại) ────────────────────────
+  // Tính THẲNG từ `list` đã tải ở trên — không thêm truy vấn nào, vì danh sách
+  // hợp đồng vốn đã không giới hạn theo ngày nên đã chứa cả hợp đồng nhiều năm
+  // trước. Nhân sự không thấy khối này: đây là việc chăm khách của quản lý, mà
+  // `list` của nhân sự còn bị lọc theo phân công nên số sẽ sai.
+  const milestones =
+    profile.actingRole === "staff"
+      ? []
+      : upcomingMilestones(
+          list.map((c) => ({
+            id: c.id,
+            title: c.title,
+            client_name: c.client_name,
+            client_phone: c.client_phone,
+            event_date: c.event_date,
+            shoot_type: c.shoot_type,
+            status: c.status,
+          })),
+          today,
+        );
+  const milestoneTop = milestones.slice(0, 6);
+
   const SEVERITY: Record<string, number> = { red: 0, amber: 1, blue: 2, teal: 3, brand: 4, green: 5, gray: 6 };
   urgent.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
   const urgentTop = urgent.slice(0, 6);
@@ -616,7 +662,7 @@ export default async function StudioOverview() {
     },
     {
       icon: Hourglass, tone: "amber", label: "Việc đang chờ bạn",
-      value: String(urgent.length), sub: "báo giá, cọc, phân công, giao ảnh",
+      value: String(urgent.length), sub: "báo giá, cọc, phân công, giao ảnh, đánh giá",
       delta: urgent.length > 0 ? "cần xử lý" : "sạch việc", deltaTone: urgent.length > 0 ? "amber" : "green",
     },
     {
@@ -629,6 +675,8 @@ export default async function StudioOverview() {
   const hour = Number(new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(11, 13));
   const greeting = hour < 11 ? "Chào buổi sáng" : hour < 14 ? "Chào buổi trưa" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
   const firstName = (profile.full_name || "").trim().split(/\s+/).pop() || "bạn";
+  // Ký tên cuối lời chúc kỷ niệm — tên thương hiệu studio, không phải tên chủ.
+  const studioName = brandFrom(profile).name;
 
   return (
     <div className="page-in flex flex-col gap-3.5">
@@ -748,6 +796,60 @@ export default async function StudioOverview() {
           })
         )}
       </Panel>
+
+      {/* ── Nên liên hệ tháng này ─────────────────────────────────────
+          Khách cũ tới mốc kỷ niệm. Chỉ hiện khi CÓ ai đó tới mốc — studio đang
+          không có khách nào tới hạn thì khối này biến mất thay vì chiếm chỗ
+          bằng một ô trống. */}
+      {milestoneTop.length > 0 && (
+        <Panel>
+          <PanelHead
+            icon={Gift} tone="brand" title="Nên liên hệ tháng này"
+            count={String(milestones.length)}
+            note="Khách cũ tới mốc kỷ niệm — một lời chúc là một cơ hội chụp lại"
+          />
+          {milestoneTop.map((m) => {
+            const late = m.inDays < 0;
+            const when =
+              m.inDays === 0 ? "Hôm nay" : late ? `Qua ${Math.abs(m.inDays)} ngày` : `Còn ${m.inDays} ngày`;
+            return (
+              <div key={`${m.contractId}-${m.years}`} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                <span className="flex h-8 w-8 flex-none items-center justify-center rounded-full text-[11px] font-bold" style={avatarStyle(m.clientName || m.title || "?")}>
+                  {initials(m.clientName || m.title || "?")}
+                </span>
+                <div className="min-w-[190px] flex-1">
+                  <p className="text-[13.5px] font-semibold">{m.clientName || m.title || "Khách cũ"}</p>
+                  <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                    {MILESTONE_LABEL[m.kind](m.years)} · {fmtDate(m.date)}
+                  </p>
+                </div>
+                <Pill tone={m.inDays <= 3 ? "amber" : "gray"}>{when}</Pill>
+                <MessengerButton
+                  label="Gửi lời chúc"
+                  message={milestoneMessage({
+                    clientName: m.clientName,
+                    kind: m.kind,
+                    years: m.years,
+                    studio: studioName,
+                  })}
+                />
+                <Link
+                  href={`/dashboard/studio/contracts/${m.contractId}`}
+                  className="flex-none whitespace-nowrap rounded-[9px] px-[13px] py-[7px] text-[12px] font-semibold"
+                  style={{ background: "var(--tx)", color: "var(--sf)" }}
+                >
+                  Mở hợp đồng
+                </Link>
+              </div>
+            );
+          })}
+          {milestones.length > milestoneTop.length && (
+            <p className="px-4 py-2.5 text-[12px]" style={{ color: "var(--tx3)" }}>
+              Còn {milestones.length - milestoneTop.length} khách nữa tới mốc trong 45 ngày tới.
+            </p>
+          )}
+        </Panel>
+      )}
 
       {/* ── Doanh thu tháng ───────────────────────────────────────────── */}
       <RevenueChart

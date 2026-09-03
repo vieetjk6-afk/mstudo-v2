@@ -5,7 +5,7 @@ import {
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
   MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
-  Building2, UserRound, MessageCircle,
+  Building2, UserRound, MessageCircle, Star,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,7 +32,7 @@ export type StudioTier = "none" | "booking" | "plus" | "full";
 export const TIER_RANK: Record<StudioTier, number> = { none: 0, booking: 1, plus: 2, full: 3 };
 
 /** Khoá badge đếm việc chưa xử lý (xem /api/studio/nav-badges). */
-export type BadgeKey = "quotes" | "bookings" | "leads" | "production" | "notifications" | "inbox";
+export type BadgeKey = "quotes" | "bookings" | "leads" | "production" | "notifications" | "inbox" | "reviews";
 export type NavBadges = Partial<Record<BadgeKey, number>>;
 
 export type NavItem = {
@@ -110,6 +110,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // Danh bạ khách về đây (trước ở nhóm "Khách hàng" riêng): nó là tài sản
       // bán hàng — tái ký, giới thiệu, chăm sau cưới — chứ không phải việc hậu kỳ.
       { href: "/dashboard/studio/clients", label: "Khách hàng", icon: Users, minTier: "booking", roles: MANAGER_OK, keywords: "danh ba khach" },
+      { href: "/dashboard/studio/reviews", label: "Đánh giá khách", icon: Star, minTier: "booking", roles: MANAGER_OK, badge: "reviews", keywords: "danh gia cam nhan review sao testimonial y kien khach duyet", sub: "Duyệt & trả lời cảm nhận khách" },
     ],
   },
   {

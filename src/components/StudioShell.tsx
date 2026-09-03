@@ -48,6 +48,7 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/studio/rental", "Phòng váy", "Kho trang phục và đơn cho thuê"],
   ["/dashboard/studio/equipment", "Thiết bị", "Máy móc, ống kính, đèn và lịch mượn"],
   ["/dashboard/studio/clients", "Khách hàng", "Danh bạ và lịch sử giao dịch"],
+  ["/dashboard/studio/reviews", "Đánh giá khách", "Duyệt, trả lời và đi xin cảm nhận"],
   ["/dashboard/studio/thiep", "Thiệp cưới", "Chọn mẫu, điền nội dung, gửi link cho khách"],
   ["/dashboard/studio/story", "Love Story", "Dòng thời gian chuyện tình của cặp đôi"],
   ["/dashboard/studio/slide", "Slide cưới", "Dựng video chiếu tiệc từ ảnh đã chọn"],

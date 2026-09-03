@@ -21,7 +21,7 @@ export async function GET() {
   const supabase = createClient();
   const head = { count: "exact" as const, head: true };
 
-  const [quotes, bookings, leads, production, notifications, inbox] = await Promise.all([
+  const [quotes, bookings, leads, production, notifications, inbox, reviews] = await Promise.all([
     // Báo giá đang chờ khách phản hồi (đã gửi / khách đã xem / khách xin chỉnh).
     supabase.from("studio_quotes").select("id", head).eq("owner_id", ownerId)
       .in("status", ["sent", "viewed", "adjust_requested"]),
@@ -45,6 +45,15 @@ export async function GET() {
     // badge phồng lên vô nghĩa và người ta thôi nhìn nó.
     supabase.from("inbox_conversations").select("id", head)
       .eq("owner_id", ownerId).eq("status", "open").gt("unread", 0),
+    // Đánh giá khách CHƯA QUYẾT cho hiện hay ẩn. `approved=false` một mình
+    // không đủ: bản studio đã chủ động ẩn cũng là false, mà việc đó xử lý rồi —
+    // đếm nó nữa thì badge không bao giờ về 0. Chủ studio xác định qua ALBUM,
+    // đúng đường RLS đang dùng.
+    supabase.from("feedback")
+      .select("id, album:albums!inner(owner_id)", head)
+      .eq("album.owner_id", ownerId)
+      .eq("approved", false)
+      .is("moderated_at", null),
   ]);
 
   return NextResponse.json({
@@ -54,5 +63,6 @@ export async function GET() {
     production: production.count ?? 0,
     notifications: notifications.count ?? 0,
     inbox: inbox.count ?? 0,
+    reviews: reviews.count ?? 0,
   });
 }

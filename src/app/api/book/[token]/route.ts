@@ -5,6 +5,7 @@ import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIp } from "@/lib/rate-limit";
 import { depositFor, newDepositCode, newDepositToken } from "@/lib/booking-deposit";
 import { digitsOnly, isUsablePhone, samePhone } from "@/lib/referral";
+import { isLeadSource, type Utm } from "@/lib/lead-source";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,10 @@ export async function POST(req: Request, { params }: { params: { token: string }
     facebook?: string;
     referrer_phone?: string;
     captcha?: string;
+    /** Nguồn khách — trình duyệt suy ra rồi gửi kèm (xem @/lib/lead-source). */
+    source?: string;
+    utm?: Utm;
+    landing_path?: string;
   };
 
   const captcha = await guardCaptcha(req, `book:${params.token}`, body.captcha);
@@ -41,6 +46,16 @@ export async function POST(req: Request, { params }: { params: { token: string }
     .maybeSingle();
   if (!owner) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
+  // Nguồn khách do CLIENT gửi lên nên phải lọc lại ở server: chỉ nhận nhãn nằm
+  // trong tập đóng, và chỉ giữ 5 khoá utm đã biết với độ dài có hạn. Không lọc
+  // thì cột này thành chỗ ai cũng nhét được chuỗi tuỳ ý vào DB của studio.
+  const source = isLeadSource(body.source) ? body.source : null;
+  const utm = pickUtm(body.utm);
+  const landingPath =
+    typeof body.landing_path === "string" && body.landing_path.startsWith("/")
+      ? body.landing_path.slice(0, 200)
+      : null;
+
   const pkgName = body.package_name?.trim() || null;
   const pkgPrice =
     body.package_price != null && Number.isFinite(body.package_price) ? Math.max(0, Math.round(body.package_price)) : null;
@@ -51,26 +66,38 @@ export async function POST(req: Request, { params }: { params: { token: string }
   const depositAmount = depositFor(owner.booking_deposit ?? 0, pkgPrice);
   const wantsDeposit = depositAmount > 0;
 
-  const { data: booking, error } = await db
+  const core = {
+    owner_id: owner.id,
+    name: body.name.trim(),
+    phone: body.phone.trim(),
+    service: body.service?.trim() || null,
+    preferred_date: body.preferred_date || null,
+    note: body.note?.trim() || null,
+    package_name: pkgName,
+    package_price: pkgPrice,
+    facebook: body.facebook?.trim() || null,
+    referrer_phone: isUsablePhone(body.referrer_phone) ? digitsOnly(body.referrer_phone) : null,
+    deposit_amount: wantsDeposit ? depositAmount : null,
+    deposit_status: wantsDeposit ? "awaiting" : "none",
+    deposit_code: wantsDeposit ? newDepositCode() : null,
+    deposit_token: wantsDeposit ? newDepositToken() : null,
+  };
+  const cols = "id, deposit_amount, deposit_code, deposit_token";
+
+  // Ghi kèm nguồn khách. Nếu project chưa chạy migration `nguon_khach.sql` thì
+  // ba cột đó chưa tồn tại và Postgres từ chối CẢ câu insert — mà đây là đường
+  // KHÁCH đặt lịch, hỏng nó là studio mất đơn thật chứ không phải mất một biểu
+  // đồ. Nên: thử có nguồn, hỏng thì ghi lại đúng phần cốt lõi. Cùng cách
+  // `getStudioHost` đang đỡ cột `custom_domain_verified` chưa migrate.
+  let { data: booking, error } = await db
     .from("studio_bookings")
-    .insert({
-      owner_id: owner.id,
-      name: body.name.trim(),
-      phone: body.phone.trim(),
-      service: body.service?.trim() || null,
-      preferred_date: body.preferred_date || null,
-      note: body.note?.trim() || null,
-      package_name: pkgName,
-      package_price: pkgPrice,
-      facebook: body.facebook?.trim() || null,
-      referrer_phone: isUsablePhone(body.referrer_phone) ? digitsOnly(body.referrer_phone) : null,
-      deposit_amount: wantsDeposit ? depositAmount : null,
-      deposit_status: wantsDeposit ? "awaiting" : "none",
-      deposit_code: wantsDeposit ? newDepositCode() : null,
-      deposit_token: wantsDeposit ? newDepositToken() : null,
-    })
-    .select("id, deposit_amount, deposit_code, deposit_token")
+    .insert({ ...core, source, utm, landing_path: landingPath })
+    .select(cols)
     .single();
+  if (error) {
+    console.warn("[book] ghi nguồn khách hỏng, thử lại không kèm nguồn:", error.message);
+    ({ data: booking, error } = await db.from("studio_bookings").insert(core).select(cols).single());
+  }
   if (error || !booking) return NextResponse.json({ error: "server_error" }, { status: 500 });
 
   // ── Giới thiệu ────────────────────────────────────────────────────────────
@@ -118,4 +145,17 @@ export async function POST(req: Request, { params }: { params: { token: string }
       ? { amount: booking.deposit_amount, code: booking.deposit_code, token: booking.deposit_token }
       : null,
   });
+}
+
+/** Chỉ giữ 5 khoá utm đã biết, mỗi khoá tối đa 120 ký tự. Trả `null` (không
+ *  phải `{}`) khi rỗng để cột jsonb không đầy những object trống. */
+function pickUtm(raw: unknown): Utm | null {
+  if (!raw || typeof raw !== "object") return null;
+  const src = raw as Record<string, unknown>;
+  const out: Utm = {};
+  for (const k of ["source", "medium", "campaign", "content", "term"] as const) {
+    const v = src[k];
+    if (typeof v === "string" && v.trim()) out[k] = v.trim().slice(0, 120);
+  }
+  return Object.keys(out).length ? out : null;
 }

@@ -6,7 +6,8 @@ import { Search, Download, FileSpreadsheet, HeartHandshake, Users, UserPlus } fr
 import MessengerButton from "@/components/MessengerButton";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
-import { vnd, vndShort, LEAD_SOURCE_LABEL } from "@/lib/types";
+import { vnd, vndShort } from "@/lib/types";
+import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 import { fmtDate } from "@/lib/date";
 import {
   exportClients,

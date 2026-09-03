@@ -15,6 +15,7 @@ import EquipmentManager from "@/app/dashboard/studio/equipment/EquipmentManager"
 import PackagesManager from "@/app/dashboard/studio/packages/PackagesManager";
 import InboxView from "@/app/dashboard/studio/inbox/InboxView";
 import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManager";
+import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
 import * as f from "./fixtures";
 
@@ -77,7 +78,7 @@ export const SCREENS: Record<
         salaries={f.salaries}
         initialExpenses={f.expenses}
         initialTarget={50_000_000}
-        sourceStats={f.sourceStats}
+        sourceStats={f.sourceStats} funnel={f.funnel}
       />
     ),
   },
@@ -145,6 +146,10 @@ export const SCREENS: Record<
         <InboxView conversations={[]} firstMessages={[]} staff={{}} channels={[]} meId="u2" canManageChannels />
       </div>
     ),
+  },
+  "danh-gia": {
+    title: "Đánh giá khách (chờ duyệt · đang hiện · đã ẩn)",
+    render: () => <ReviewsView reviews={f.reviews} awaiting={f.awaitingReviews} studioHost={null} />,
   },
   // Bảng màu: canh đúng loại lỗi "token chỉ có trong shell" — xem ghi chú đầu
   // TokenSwatches.tsx. Tự dựng cả ba khung nên KHÔNG cho route bọc shell.

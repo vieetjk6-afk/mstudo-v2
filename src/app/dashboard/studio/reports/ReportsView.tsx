@@ -2,12 +2,13 @@
 
 import { useMemo, useState } from "react";
 import DateInput from "@/components/DateInput";
-import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download, FileSpreadsheet, Receipt, Target, PieChart } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download, FileSpreadsheet, Receipt, Target, PieChart, Filter } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/MoneyInput";
 import { Panel, PanelHead, EmptyState, StatCard } from "@/components/studio/ui";
 import { vnd, vndShort, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, type StudioExpense, type PaymentKind } from "@/lib/types";
 import { fmtDayMonth, todayVN } from "@/lib/date";
+import type { FunnelStage } from "@/lib/lead-source";
 import {
   exportFinance,
   downloadCsv,
@@ -32,7 +33,7 @@ export type SalaryRow = {
   paid_at: string | null;
   contract: { title: string } | null;
 };
-export type SourceStat = { source: string; label: string; count: number; value: number; collected: number };
+export type SourceStat = { source: string; label: string; count: number; value: number; collected: number; bookings: number };
 
 const MONTHS = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
 
@@ -50,6 +51,7 @@ export default function ReportsView({
   initialExpenses,
   initialTarget,
   sourceStats,
+  funnel,
 }: {
   ownerId: string;
   /** Thông tin studio in ở đầu file Excel/CSV xuất ra. */
@@ -59,6 +61,7 @@ export default function ReportsView({
   initialExpenses: StudioExpense[];
   initialTarget: number;
   sourceStats: SourceStat[];
+  funnel: FunnelStage[];
 }) {
   const supabase = createClient();
   const now = new Date();
@@ -447,6 +450,67 @@ export default function ReportsView({
             </div>
           </Panel>
 
+          {/* ── Phễu chuyển đổi ────────────────────────────────────────────
+              Bốn bậc studio thật sự đi qua. Giá trị của khối này KHÔNG phải bốn
+              con số, mà là hai tỉ lệ ở giữa: bao nhiêu người hỏi thì gửi yêu
+              cầu, và bao nhiêu yêu cầu thì thành hợp đồng. Studio nào rớt ở bậc
+              nào thì biết phải sửa quảng cáo hay sửa cách chốt đơn. */}
+          <Panel className="p-[18px]">
+            <div className="mb-1 flex items-center gap-2">
+              <Filter size={18} style={{ color: "var(--ac)" }} />
+              <h2 className="text-[14px] font-bold">Phễu chuyển đổi (toàn thời gian)</h2>
+            </div>
+            <p className="mb-4 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              Khách hỏi → gửi yêu cầu → ký hợp đồng → tiền về. Tỉ lệ tính trên bậc liền trước.
+            </p>
+            {(() => {
+              const maxCount = Math.max(1, ...funnel.filter((f) => f.key !== "revenue").map((f) => f.value));
+              return (
+                <ul className="flex flex-col gap-3">
+                  {funnel.map((st) => {
+                    const money = st.key === "revenue";
+                    // Bậc tiền không cùng đơn vị với ba bậc đếm người, nên KHÔNG
+                    // vẽ chung một thước — vẽ chung thì cột tiền dài vô nghĩa.
+                    const w = money ? 100 : (st.value / maxCount) * 100;
+                    return (
+                      <li key={st.key}>
+                        <div className="mb-1 flex items-center justify-between text-[12.5px]">
+                          <span className="font-semibold">{st.label}</span>
+                          <span className="tnum">
+                            {money ? vnd(st.value) : st.value}
+                            {st.rate != null && (
+                              <span className="ml-1.5 text-[11px]" style={{ color: st.rate >= 20 ? "var(--gn)" : "var(--am)" }}>
+                                {st.rate}%
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--sf2)" }}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${Math.max(2, w)}%`, background: money ? "var(--gn)" : "var(--ac)" }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+            {funnel[0].key !== "leads" ? (
+              <p className="mt-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                Đang xem một chi nhánh nên bỏ bậc <b>Khách hỏi</b>: hộp thư và lead không gắn cơ sở nào (khách nhắn
+                vào trang chung), lấy số của cả studio chia cho yêu cầu của riêng cơ sở này sẽ ra tỉ lệ sai. Chọn
+                “Tất cả chi nhánh” để xem đủ bốn bậc.
+              </p>
+            ) : funnel[0].value === 0 ? (
+              <p className="mt-3 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                Bậc đầu đếm hội thoại trong Hộp thư (Zalo · Facebook · Instagram · chatbox) cộng lead từ chatbox
+                nền tảng. Chưa nối kênh nào thì bậc này còn 0 — ba bậc dưới vẫn đúng.
+              </p>
+            ) : null}
+          </Panel>
+
           {sourceStats.length > 0 && (() => {
             const maxVal = Math.max(1, ...sourceStats.map((s) => s.value));
             const totalVal = sourceStats.reduce((s, x) => s + x.value, 0);
@@ -467,7 +531,17 @@ export default function ReportsView({
                       <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--sf2)" }}>
                         <div className="h-full rounded-full" style={{ width: `${(s.value / maxVal) * 100}%`, background: "var(--ac)" }} />
                       </div>
-                      <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>Đã thu {vnd(s.collected)}</p>
+                      <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                        Đã thu {vnd(s.collected)}
+                        {s.bookings > 0 && (
+                          <>
+                            {" · "}
+                            {s.bookings} yêu cầu → {s.count} HĐ
+                            {" ("}
+                            {Math.round((s.count / s.bookings) * 100)}%{")"}
+                          </>
+                        )}
+                      </p>
                     </li>
                   ))}
                 </ul>

@@ -10,7 +10,7 @@ export type SiteData = {
   pricelist: { id: string; name: string; price: number; unit: string | null; category: string | null; description: string | null; list_key: string | null }[];
   /** Tên hiển thị của từng loại bảng giá (studio tự đặt ở trang Bảng giá). */
   priceLabels: Record<string, string>;
-  feedback: { id: string; client_name: string | null; rating: number | null; content: string }[];
+  feedback: { id: string; client_name: string | null; rating: number | null; content: string; reply: string | null }[];
 };
 
 /**
@@ -37,14 +37,22 @@ export async function loadSiteBundle(db: SupabaseClient, site: Site, onlyVisible
   const albumList = (albums ?? []) as SiteData["albums"];
   let feedback: SiteData["feedback"] = [];
   if (albumList.length) {
-    const { data: fb } = await db
-      .from("feedback")
-      .select("id, client_name, rating, content")
-      .in("album_id", albumList.map((a) => a.id))
-      .eq("approved", true)
-      .order("created_at", { ascending: false })
-      .limit(12);
-    feedback = (fb ?? []) as SiteData["feedback"];
+    const ids = albumList.map((a) => a.id);
+    const q = (cols: string) =>
+      db
+        .from("feedback")
+        .select(cols)
+        .in("album_id", ids)
+        .eq("approved", true)
+        .order("created_at", { ascending: false })
+        .limit(12);
+    // `reply` (lời studio trả lời) đến từ migration `danh_gia_khach.sql`. Project
+    // chưa chạy migration thì Postgres từ chối CẢ câu select và khối "Khách hàng
+    // nói gì" trên website studio biến mất sạch — mất hẳn một khối bán hàng chỉ
+    // vì một cột phụ. Hỏng thì đọc lại đúng các cột chắc chắn có.
+    const full = await q("id, client_name, rating, content, reply");
+    const rows = full.error ? (await q("id, client_name, rating, content")).data : full.data;
+    feedback = ((rows ?? []) as unknown as SiteData["feedback"]).map((f) => ({ ...f, reply: f.reply ?? null }));
   }
 
   return {
