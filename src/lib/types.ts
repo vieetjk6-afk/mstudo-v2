@@ -89,8 +89,46 @@ export interface Feedback {
   client_name: string | null;
   rating: number | null;
   content: string;
+  /** Chỉ bản đã duyệt mới lên website studio. Đánh giá mới mặc định CHƯA duyệt. */
   approved: boolean;
+  /** Studio trả lời — hiện CÔNG KHAI ngay dưới đánh giá. */
+  reply: string | null;
+  replied_at: string | null;
+  /** Studio đã QUYẾT cho hiện hay ẩn. Cùng với `approved` nó tách ba trạng thái
+   *  mà một cột boolean không tách được: chờ duyệt (chưa quyết) · đang hiện ·
+   *  đã ẩn (đã quyết là không cho hiện). */
+  moderated_at: string | null;
   created_at: string;
+}
+
+/** Một đánh giá kèm album mà nó thuộc về — dạng màn quản lý đọc ra.
+ *  Chủ studio xác định qua `album.owner_id` (đúng đường mà RLS đang dùng), nên
+ *  bảng feedback không cần cột owner_id trùng nghĩa. */
+export interface ReviewRow extends Feedback {
+  album: { id: string; slug: string; title: string | null; client_name: string | null } | null;
+}
+
+/** Album đã giao nhưng khách chưa đánh giá — để studio bấm xin một câu. */
+export interface AwaitingReviewAlbum {
+  id: string;
+  slug: string;
+  title: string | null;
+  client_name: string | null;
+  created_at: string;
+}
+
+/** Điểm trung bình + số đánh giá đã duyệt. Dùng ở màn Tổng quan và màn Đánh giá. */
+export function reviewScore(rows: { rating: number | null; approved: boolean }[]): {
+  avg: number | null;
+  rated: number;
+  pending: number;
+} {
+  // Chỉ tính bản ĐÃ DUYỆT: điểm trung bình là con số studio khoe với khách, mà
+  // khách chỉ thấy bản đã duyệt — hai con số phải khớp nhau.
+  const ratings = rows.filter((r) => r.approved && typeof r.rating === "number").map((r) => r.rating as number);
+  const pending = rows.filter((r) => !r.approved).length;
+  if (ratings.length === 0) return { avg: null, rated: 0, pending };
+  return { avg: ratings.reduce((a, b) => a + b, 0) / ratings.length, rated: ratings.length, pending };
 }
 
 export interface SiteSettings {
@@ -352,14 +390,11 @@ export function intakeIsWedding(shootType?: string | null, serviceName?: string 
   return /psc|cưới|wedding|đón dâu|rước dâu|vu quy|tân hôn|thành hôn|cô dâu|chú rể/.test(hay);
 }
 
-export const LEAD_SOURCE_LABEL: Record<string, string> = {
-  facebook: "Facebook",
-  referral: "Giới thiệu",
-  google: "Google / Tìm kiếm",
-  walk_in: "Khách vãng lai",
-  returning: "Khách cũ",
-  other: "Khác",
-};
+// Nhãn nguồn khách nằm ở @/lib/lead-source (cùng chỗ với logic đoán nguồn).
+// Cố ý KHÔNG xuất lại ở đây: file này phải TỰ ĐỨNG MỘT MÌNH ở runtime vì bộ
+// test nạp thẳng nó bằng `node --experimental-strip-types`, mà cách đó không
+// giải được alias "@/" — `import type` thì bị xoá lúc strip nên vô hại, còn
+// `export … from` là re-export GIÁ TRỊ, phải giải thật và sẽ nổ.
 
 export type NotificationKind =
   | "signed"
@@ -533,6 +568,11 @@ export interface StudioBooking {
   /** SĐT khách cũ đã giới thiệu khách này (nếu có) — xem lib/referral.ts. */
   referrer_phone: string | null;
   branch_id: string | null;
+  /** Khách tới từ đâu — trình duyệt suy ra lúc gửi yêu cầu (@/lib/lead-source).
+   *  Cùng tập nhãn với `studio_contracts.source` để nối được thành phễu. */
+  source: string | null;
+  utm: { source?: string; medium?: string; campaign?: string; content?: string; term?: string } | null;
+  landing_path: string | null;
   created_at: string;
 }
 

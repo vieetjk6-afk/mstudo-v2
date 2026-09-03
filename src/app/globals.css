@@ -13,7 +13,12 @@
   --border2: rgba(0, 0, 0, 0.17);
   --text: #18181a;
   --text2: rgba(24, 24, 26, 0.65);
-  --text3: rgba(24, 24, 26, 0.64);
+  /* Chữ MỜ phải cách chữ PHỤ một bậc thật. Trước đây là 0.64 so với 0.65:
+     hai mức gần như y hệt nhau, nên ngoài shell studio (landing, đăng nhập,
+     album, dashboard gói free) ba tầng chữ của bản thiết kế sập còn hai —
+     nhãn, chú thích và placeholder đọc nặng bằng chữ phụ. 0.52 cho đúng
+     khoảng cách mà shell đang dùng (#5c5b60 → #8b8a90). */
+  --text3: rgba(24, 24, 26, 0.52);
   --accent: #18181a;
   --accentInk: #f4f3f0;
   --gold: #b8893a;
@@ -34,7 +39,12 @@
   --border2: rgba(0, 0, 0, 0.17);
   --text: #18181a;
   --text2: rgba(24, 24, 26, 0.65);
-  --text3: rgba(24, 24, 26, 0.64);
+  /* Chữ MỜ phải cách chữ PHỤ một bậc thật. Trước đây là 0.64 so với 0.65:
+     hai mức gần như y hệt nhau, nên ngoài shell studio (landing, đăng nhập,
+     album, dashboard gói free) ba tầng chữ của bản thiết kế sập còn hai —
+     nhãn, chú thích và placeholder đọc nặng bằng chữ phụ. 0.52 cho đúng
+     khoảng cách mà shell đang dùng (#5c5b60 → #8b8a90). */
+  --text3: rgba(24, 24, 26, 0.52);
   --accent: #18181a;
   --accentInk: #f4f3f0;
   --gold: #b8893a;
@@ -54,7 +64,8 @@
   --border2: rgba(255, 255, 255, 0.18);
   --text: #f4f3f1;
   --text2: rgba(244, 243, 241, 0.6);
-  --text3: rgba(244, 243, 241, 0.60);
+  /* Cùng lỗi như bản sáng, ở đây còn y hệt nhau: 0.60 vs 0.6. */
+  --text3: rgba(244, 243, 241, 0.48);
   --accent: #f4f3f1;
   --accentInk: #0a0a0c;
   --gold: #e8c57c;
@@ -90,6 +101,46 @@
   --rdS: color-mix(in srgb, var(--danger) 14%, var(--surface));
   --bl: #2062c4;
   --blS: color-mix(in srgb, #2062c4 14%, var(--surface));
+  /* Xanh mòng két & trung tính — hai cặp màu trạng thái CÒN LẠI của bộ thiết
+     kế. Trước đây chúng chỉ có trong .studio-shell/.client-doc, nên màn nào
+     chạy ngoài shell mà dùng tone "teal"/"gray" (chuông thông báo với loại
+     "Thông báo chung", nhãn hợp đồng "đang thực hiện", báo giá "nháp") là mất
+     màu: var() không giải được → khai báo hỏng ở computed-value time, nền
+     thành trong suốt và chữ tụt về màu kế thừa. */
+  --tl: #0f8a8a;
+  --tlS: color-mix(in srgb, #0f8a8a 12%, var(--surface));
+  --nu: var(--text2);
+  --nuS: var(--surface2);
+  /* Viền đậm (nút ghost) — cùng công thức với shell. */
+  --bdS: color-mix(in srgb, var(--border) 72%, var(--text3));
+  /* Tên cũ của màu nhấn: MaintenanceScreen, InstallPwaButton, AccountPanel,
+     SystemPanel… gọi var(--brand)/var(--brandSoft) KHÔNG kèm giá trị đỡ, mà cả
+     ba token này chỉ có trong shell. Màn bảo trì nằm hẳn ngoài shell nên trước
+     đây mất sạch màu nhấn. */
+  --brand: var(--ac);
+  --brandSoft: var(--acS);
+  --brandFg: var(--accentInk);
+  /* Nền thẻ/khối — tên cũ dùng ở màn Thiết kế album (kể cả nền hộp thoại) và
+     dải tab của Phòng váy. */
+  --panel: var(--surface);
+  --card: var(--surface);
+  --warn: var(--am);
+}
+
+/* Nền tối NGOÀI shell — nền nhạt trộn 12–14% với bề mặt sáng thì đúng, nhưng
+   trộn với bề mặt tối lại ra gần như vô hình; và xanh #2062c4 trên nền tối thì
+   quá chìm. Ghi đè đúng những cặp cần đổi, đồng bộ với .studio-shell[dark]. */
+:root[data-theme="dark"] {
+  --acS: color-mix(in srgb, var(--gold) 22%, var(--surface));
+  --acM: color-mix(in srgb, var(--gold) 36%, var(--surface));
+  --acD: color-mix(in srgb, var(--gold) 76%, #fff);
+  --gnS: color-mix(in srgb, var(--success) 22%, var(--surface));
+  --amS: color-mix(in srgb, var(--gold) 22%, var(--surface));
+  --rdS: color-mix(in srgb, var(--danger) 22%, var(--surface));
+  --bl: #7eadf6;
+  --blS: color-mix(in srgb, #7eadf6 22%, var(--surface));
+  --tl: #5fd3d3;
+  --tlS: color-mix(in srgb, #5fd3d3 22%, var(--surface));
 }
 
 html,
@@ -306,16 +357,21 @@ body {
 }
 
 /* ── Keyboard focus ring — visible for keyboard nav, invisible for mouse ─── */
+/* Màu vòng focus đọc từ --brand, và --brand giờ có ở CẢ :root (khối bí danh ở
+   đầu file) nên không cần giá trị đỡ nữa. Trước đây giá trị đỡ là xanh
+   #3fb98a của bản cũ: ngoài shell studio nó là màu duy nhất trên màn hình
+   không thuộc bảng màu nào — bấm Tab trên trang đăng nhập/landing ra một vòng
+   xanh lạ. */
 :focus-visible {
-  outline: 2px solid var(--brand, #3fb98a);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
   border-radius: 6px;
 }
 /* Inputs use box-shadow ring instead so outline doesn't clip inside rounded corners */
 .input:focus-visible {
   outline: none;
-  border-color: var(--brand, #3fb98a);
-  box-shadow: 0 0 0 3px var(--brandSoft, rgba(63,185,138,0.16));
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brandSoft);
 }
 
 /* ── Studio shell — nav item hover states (inline styles can't do :hover) ── */
@@ -988,6 +1044,13 @@ body {
   --s-redS: var(--rdS);
   --s-blue: var(--bl);
   --s-blueS: var(--blS);
+  /* --panel / --card cũng phải khai lại Ở ĐÂY, không chỉ ở :root: custom
+     property được thay giá trị ngay tại phần tử KHAI BÁO nó, nên --panel khai
+     ở :root sẽ đóng cứng --sf của :root và con cháu chỉ kế thừa kết quả đó —
+     bên trong shell (và nền tối) sẽ ra sai bề mặt. */
+  --panel: var(--sf);
+  --card: var(--sf);
+  --warn: var(--am);
 
   font-family: var(--font-be-vietnam, "Be Vietnam Pro"), var(--font-manrope, Manrope), system-ui, sans-serif;
 }
@@ -1082,6 +1145,10 @@ body {
   --s-redS: var(--rdS);
   --s-blue: var(--bl);
   --s-blueS: var(--blS);
+  /* Khai lại như trong shell — xem ghi chú ở .studio-shell. */
+  --panel: var(--sf);
+  --card: var(--sf);
+  --warn: var(--am);
 
   background: var(--bg);
   color: var(--tx);

@@ -13,10 +13,12 @@ import type { PayrollRow } from "@/app/dashboard/studio/payroll/PayrollView";
 import type { ProductRow } from "@/app/dashboard/studio/production/ProductionView";
 import type { QuoteRow } from "@/app/dashboard/studio/quotes/QuotesListView";
 import type { PaymentRow, SalaryRow, SourceStat } from "@/app/dashboard/studio/reports/ReportsView";
+import { buildFunnel, type FunnelStage } from "@/lib/lead-source";
 import type { ExportStudio } from "@/lib/studio-export";
 import type { StaffRow } from "@/app/dashboard/studio/staff/StaffManager";
 import type { ChannelPublic, ConversationView, MessageRow } from "@/lib/inbox/types";
 import type {
+  AwaitingReviewAlbum, ReviewRow,
   DiscountCode, StudioBooking, StudioEquipment, StudioExpense, StudioPackage, UpgradeRequest,
 } from "@/lib/types";
 
@@ -120,8 +122,8 @@ export const leads: Lead[] = [
 ];
 
 export const bookings: StudioBooking[] = [
-  { id: "b1", owner_id: "o", name: "Nguyễn Thị Lan Phương", phone: "0912345678", service: "Chụp cưới", preferred_date: D, note: "Muốn chụp buổi sáng sớm", package_name: "Gói trọn gói", package_price: 45_000_000, facebook: null, status: "new", deposit_amount: 3_000_000, deposit_status: "paid", deposit_proof_url: null, deposit_paid_at: "2026-08-25T04:00:00Z", deposit_code: "COC-4K7Q", deposit_token: "tk1", referrer_phone: "0987654321", branch_id: null, created_at: "2026-08-25T03:00:00Z" },
-  { id: "b2", owner_id: "o", name: "Khách chưa để lại tên", phone: "0955666777", service: null, preferred_date: null, note: null, package_name: null, package_price: null, facebook: null, status: "pending", deposit_amount: null, deposit_status: "none", deposit_proof_url: null, deposit_paid_at: null, deposit_code: null, deposit_token: null, referrer_phone: null, branch_id: null, created_at: "2026-08-23T03:00:00Z" },
+  { id: "b1", owner_id: "o", name: "Nguyễn Thị Lan Phương", phone: "0912345678", service: "Chụp cưới", preferred_date: D, note: "Muốn chụp buổi sáng sớm", package_name: "Gói trọn gói", package_price: 45_000_000, facebook: null, status: "new", deposit_amount: 3_000_000, deposit_status: "paid", deposit_proof_url: null, deposit_paid_at: "2026-08-25T04:00:00Z", deposit_code: "COC-4K7Q", deposit_token: "tk1", referrer_phone: "0987654321", branch_id: null, source: "facebook", utm: { source: "fb", medium: "cpc", campaign: "cuoi-thu-2026" }, landing_path: "/book/abc", created_at: "2026-08-25T03:00:00Z" },
+  { id: "b2", owner_id: "o", name: "Khách chưa để lại tên", phone: "0955666777", service: null, preferred_date: null, note: null, package_name: null, package_price: null, facebook: null, status: "pending", deposit_amount: null, deposit_status: "none", deposit_proof_url: null, deposit_paid_at: null, deposit_code: null, deposit_token: null, referrer_phone: null, branch_id: null, source: null, utm: null, landing_path: null, created_at: "2026-08-23T03:00:00Z" },
 ];
 
 export const payments: PaymentRow[] = [
@@ -140,9 +142,21 @@ export const expenses: StudioExpense[] = [
 ];
 
 export const sourceStats: SourceStat[] = [
-  { source: "facebook", label: "Facebook", count: 5, value: 120_000_000, collected: 90_000_000 },
-  { source: "referral", label: "Khách giới thiệu", count: 3, value: 48_000_000, collected: 48_000_000 },
+  { source: "facebook", label: "Facebook", count: 5, value: 120_000_000, collected: 90_000_000, bookings: 22 },
+  { source: "referral", label: "Giới thiệu", count: 3, value: 48_000_000, collected: 48_000_000, bookings: 4 },
+  // Nhóm "chưa rõ nguồn": có hợp đồng nhưng KHÔNG có yêu cầu đặt lịch nào — dòng
+  // này phải không hiện tỉ lệ chốt, thay vì chia cho 0.
+  { source: "__unknown__", label: "Không rõ nguồn", count: 2, value: 18_000_000, collected: 6_000_000, bookings: 0 },
 ];
+
+/* Phễu: cố ý có một bậc rớt mạnh (31 khách hỏi → 26 yêu cầu → 10 hợp đồng) để
+   thấy được hai tỉ lệ hiện đúng màu. */
+export const funnel: FunnelStage[] = buildFunnel({
+  leads: 31,
+  bookings: 26,
+  contracts: 10,
+  revenue: 144_000_000,
+});
 
 const upgrade = (over: Partial<UpgradeRequest>): UpgradeRequest => ({
   id: Math.random().toString(36).slice(2), user_id: "u1", email: "studio.anhcuoi@gmail.com", note: null,
@@ -279,4 +293,46 @@ export const inboxChannels: ChannelPublic[] = [
   { id: "ch4", platform: "website", externalId: "o", name: "Chatbox website", status: "connected", aiMode: "auto", lastError: null, connectedAt: "2026-01-01T03:00:00Z" },
   // Kênh có LỖI gần nhất — trạng thái phải nhìn thấy được, không nuốt im lặng.
   { id: "ch5", platform: "tiktok", externalId: "@maistudio.vn", name: "@maistudio.vn", status: "connected", aiMode: "auto", lastError: "cầu nối trả 401", connectedAt: "2026-03-05T03:00:00Z" },
+];
+
+/* ── Đánh giá khách ───────────────────────────────────────────────────────
+   Đủ cả ba trạng thái (chờ duyệt · đang hiện · đã ẩn) cộng những ca hay làm vỡ
+   bố cục: khách không để tên, đánh giá không chấm sao, một câu rất dài, và một
+   đánh giá 1 sao đã bị ẩn — chính là thứ tính năng duyệt sinh ra để chặn. */
+export const reviews: ReviewRow[] = [
+  {
+    id: "r1", album_id: "al1", client_name: "Nguyễn Thị Lan Phương", rating: 5,
+    content: "Ảnh đẹp hơn cả mong đợi, hai vợ chồng em ưng lắm. Ekip nhiệt tình, chụp từ 5h sáng tới tối mà vẫn vui vẻ. Cảm ơn studio nhiều ạ!",
+    approved: false, reply: null, replied_at: null, moderated_at: null,
+    created_at: "2026-08-30T09:12:00Z",
+    album: { id: "al1", slug: "cuoi-lan-phuong", title: "Cưới Lan Phương & Minh Khôi", client_name: "Nguyễn Thị Lan Phương" },
+  },
+  {
+    id: "r2", album_id: "al2", client_name: null, rating: null,
+    content: "Giao ảnh đúng hẹn.",
+    approved: false, reply: null, replied_at: null, moderated_at: null,
+    created_at: "2026-08-28T02:40:00Z",
+    album: { id: "al2", slug: "ky-yeu-12a3", title: "Kỷ yếu 12A3", client_name: "Trần Văn B" },
+  },
+  {
+    id: "r3", album_id: "al2", client_name: "Trần Văn B", rating: 5,
+    content: "Cả lớp em thích mê, ảnh nét căng.",
+    approved: true, reply: "Cảm ơn em và cả lớp đã tin tưởng studio nhé! Chúc các em thi tốt.",
+    replied_at: "2026-08-20T04:00:00Z", moderated_at: "2026-08-20T03:58:00Z",
+    created_at: "2026-08-19T11:05:00Z",
+    album: { id: "al2", slug: "ky-yeu-12a3", title: "Kỷ yếu 12A3", client_name: "Trần Văn B" },
+  },
+  {
+    id: "r4", album_id: "al3", client_name: "Khách giấu tên", rating: 1,
+    content: "Chụp xong 2 tháng mới có ảnh, gọi thì không ai nghe máy.",
+    approved: false, reply: "Bên em xin lỗi anh chị vì đợt đó ekip quá tải. Anh chị nhắn em số điện thoại để em gọi lại xử lý ạ.",
+    replied_at: "2026-07-02T08:00:00Z", moderated_at: "2026-07-02T08:01:00Z",
+    created_at: "2026-07-01T15:30:00Z",
+    album: { id: "al3", slug: "ky-niem-5-nam", title: null, client_name: null },
+  },
+];
+
+export const awaitingReviews: AwaitingReviewAlbum[] = [
+  { id: "al4", slug: "sinh-nhat-be-an", title: "Sinh nhật bé An 1 tuổi", client_name: "Lê Hoàng Anh Quân", created_at: "2026-08-25T03:00:00Z" },
+  { id: "al5", slug: "ao-dai-tet", title: null, client_name: "Phạm Thu Hà", created_at: "2026-08-11T03:00:00Z" },
 ];

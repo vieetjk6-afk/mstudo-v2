@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Sun, Moon, LogOut, Menu, X as XIcon, Gift, Link2, UserCircle,
+  Sun, Moon, MonitorSmartphone, LogOut, Menu, X as XIcon, Gift, Link2, UserCircle,
   MessageSquare, Bell, Crown,
 } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -15,7 +15,7 @@ import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
 import SyncControlButton from "@/components/SyncControlButton";
 import { createClient } from "@/lib/supabase/client";
-import { useTheme } from "@/lib/theme";
+import { THEME_OPTIONS, nextPref, useTheme } from "@/lib/theme";
 import { roleLabel } from "@/lib/studio-roles";
 import { APP_VERSION } from "@/lib/version";
 import {
@@ -23,6 +23,10 @@ import {
   type NavAccess, type NavBadges, type NavGroup, type NavItem, type StudioTier,
 } from "@/lib/studio-nav";
 import type { Profile } from "@/lib/types";
+
+/** Icon của từng lựa chọn giao diện — vẽ LỰA CHỌN hiện tại, không phải cái
+ *  sắp tới, để nhìn nút là biết đang ở chế độ nào. */
+const THEME_ICON = { light: Sun, dark: Moon, system: MonitorSmartphone } as const;
 
 // Zalo support group for studios using the app.
 const ZALO_SUPPORT_URL = "https://zalo.me/g/rycw0pqcgss14ib6u2xj";
@@ -44,6 +48,7 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/studio/rental", "Phòng váy", "Kho trang phục và đơn cho thuê"],
   ["/dashboard/studio/equipment", "Thiết bị", "Máy móc, ống kính, đèn và lịch mượn"],
   ["/dashboard/studio/clients", "Khách hàng", "Danh bạ và lịch sử giao dịch"],
+  ["/dashboard/studio/reviews", "Đánh giá khách", "Duyệt, trả lời và đi xin cảm nhận"],
   ["/dashboard/studio/thiep", "Thiệp cưới", "Chọn mẫu, điền nội dung, gửi link cho khách"],
   ["/dashboard/studio/story", "Love Story", "Dòng thời gian chuyện tình của cặp đôi"],
   ["/dashboard/studio/slide", "Slide cưới", "Dựng video chiếu tiệc từ ảnh đã chọn"],
@@ -197,7 +202,11 @@ export default function StudioShell({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { theme, toggle: toggleTheme } = useTheme();
+  const { theme, pref: themePref, setTheme } = useTheme();
+  // Nhãn nút giao diện trên topbar: nói cả chế độ đang dùng và chế độ sắp
+  // chuyển sang, vì nút chỉ có một icon nên chữ phải gánh phần giải thích.
+  const ThemeIcon = THEME_ICON[themePref];
+  const themeBtnLabel = `Giao diện: ${THEME_OPTIONS.find((o) => o.pref === themePref)!.label} — bấm để chuyển sang ${THEME_OPTIONS.find((o) => o.pref === nextPref(themePref))!.label.toLowerCase()}`;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
   const [badges, setBadges] = useState<NavBadges>({});
@@ -383,14 +392,36 @@ export default function StudioShell({
             </a>
             <DownloadAppButton tier={tier} />
             <SyncControlButton />
-            <button
-              onClick={toggleTheme}
-              className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold"
-              style={{ background: "var(--sf2)", color: "var(--tx2)" }}
-            >
-              {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-              {theme === "dark" ? "Giao diện sáng" : "Giao diện tối"}
-            </button>
+            {/* Giao diện: ba lựa chọn hiện HẾT thành một dải, không phải một nút
+                xoay vòng — trong ngăn kéo có chỗ, và "theo máy" mà nấp sau
+                nhiều lần bấm thì gần như không ai tìm ra. */}
+            <div>
+              <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--tx3)" }}>
+                Giao diện
+              </p>
+              <div className="flex rounded-[10px] p-1" style={{ background: "var(--sf2)" }}>
+                {THEME_OPTIONS.map((o) => {
+                  const on = themePref === o.pref;
+                  const Icon = THEME_ICON[o.pref];
+                  return (
+                    <button
+                      key={o.pref}
+                      onClick={() => setTheme(o.pref)}
+                      aria-pressed={on}
+                      title={o.title}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-[7px] px-2 py-2 text-[12.5px]"
+                      style={
+                        on
+                          ? { background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--ac)", fontWeight: 700 }
+                          : { border: "1px solid transparent", color: "var(--tx2)", fontWeight: 600 }
+                      }
+                    >
+                      <Icon size={15} /> {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <button
               onClick={signOut}
               className="flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-sm font-semibold"
@@ -467,13 +498,13 @@ export default function StudioShell({
 
             {/* Nền sáng / nền tối */}
             <button
-              onClick={toggleTheme}
+              onClick={() => setTheme(nextPref(themePref))}
               className="flex h-[34px] w-[34px] flex-none items-center justify-center rounded-[9px]"
               style={{ border: "1px solid var(--bd)", background: "var(--sf)", color: "var(--tx2)" }}
-              title={theme === "dark" ? "Chuyển sang nền sáng" : "Chuyển sang nền tối"}
-              aria-label="Đổi nền sáng/tối"
+              title={themeBtnLabel}
+              aria-label={themeBtnLabel}
             >
-              {theme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+              <ThemeIcon size={17} />
             </button>
 
             {/* Chuông thông báo — chấm đỏ khi còn thông báo chưa đọc. */}

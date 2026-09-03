@@ -25,6 +25,8 @@ const TR = {
     viewAlbum: "Xem album",
     feedbackTitle: "Cảm nhận của bạn",
     fbThanks: "Cảm ơn bạn đã gửi cảm nhận!",
+    fbPending: "Studio sẽ xem và đăng lên trang trong thời gian tới.",
+    fbReply: "Studio trả lời",
     fbNamePh: "Tên của bạn",
     fbContentPh: "Chia sẻ cảm nhận của bạn về bộ ảnh…",
     fbSend: "Gửi cảm nhận",
@@ -51,6 +53,8 @@ const TR = {
     viewAlbum: "View album",
     feedbackTitle: "Your feedback",
     fbThanks: "Thank you for your feedback!",
+    fbPending: "The studio will review it and publish it shortly.",
+    fbReply: "Studio replied",
     fbNamePh: "Your name",
     fbContentPh: "Share your thoughts about this photo set…",
     fbSend: "Send feedback",
@@ -323,7 +327,10 @@ export default function GalleryView({
     });
     if (res.ok) {
       setFbSent(true);
-      setFbList([{ id: Math.random().toString(), album_id: gallery.id, client_name: fbName || null, rating: fbRating, content: fbContent, approved: true, created_at: new Date().toISOString() }, ...fbList]);
+      // KHÔNG chèn cảm nhận vừa gửi vào danh sách bên cạnh nữa. Danh sách đó là
+      // những cảm nhận studio ĐÃ DUYỆT cho hiện; cảm nhận mới vào ở trạng thái
+      // chờ duyệt, nên chèn vào là nói với khách một điều không đúng ("đã đăng")
+      // rồi tải lại trang là nó biến mất. Lời cảm ơn nói rõ là còn chờ duyệt.
       setFbContent(""); setFbName("");
     }
   }
@@ -489,7 +496,10 @@ export default function GalleryView({
           <div className="mt-5 grid gap-6 lg:grid-cols-2">
             <div className="card p-5">
               {fbSent ? (
-                <div className="flex items-center gap-2.5 text-sm" style={{ color: "var(--success)" }}><Check size={18} /> {tr.fbThanks}</div>
+                <div>
+                  <div className="flex items-center gap-2.5 text-sm" style={{ color: "var(--success)" }}><Check size={18} /> {tr.fbThanks}</div>
+                  <p className="mt-1.5 text-[12.5px]" style={{ color: "var(--text3)" }}>{tr.fbPending}</p>
+                </div>
               ) : (
                 <>
                   <input value={fbName} onChange={(e) => setFbName(e.target.value)} placeholder={tr.fbNamePh} className="input mb-3" />
@@ -516,6 +526,12 @@ export default function GalleryView({
                     {f.rating ? <span className="flex items-center gap-0.5" style={{ color: "var(--gold)" }}>{Array.from({ length: f.rating }).map((_, i) => <Star key={i} size={12} fill="currentColor" strokeWidth={0} />)}</span> : null}
                   </div>
                   <p className="mt-1 text-[13.5px]" style={{ color: "var(--text2)" }}>{f.content}</p>
+                  {f.reply ? (
+                    <div className="mt-2.5 rounded-lg px-3 py-2" style={{ background: "var(--surface2)" }}>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text3)" }}>{tr.fbReply}</p>
+                      <p className="mt-0.5 whitespace-pre-wrap text-[13px]">{f.reply}</p>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>

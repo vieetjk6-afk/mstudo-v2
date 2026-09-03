@@ -162,7 +162,7 @@ Sidebar 250px, cố định. Nhãn nhóm 10px/800/uppercase màu `--tx3`. Mục 
 
 ```
 (không nhãn)  Tổng quan · Trang của tôi
-Kinh doanh    Hộp thư(5) · Yêu cầu mới(3) · Đặt lịch khách(3) · Báo giá(2) · Hợp đồng & lịch hẹn · Khách hàng
+Kinh doanh    Hộp thư(5) · Yêu cầu mới(3) · Đặt lịch khách(3) · Báo giá(2) · Hợp đồng & lịch hẹn · Khách hàng · Đánh giá khách(2)
 Sản xuất      Lịch làm việc · Bảng công việc · Xử lý hình ảnh(4) · Thư viện album · Thiết kế album · Thiệp·Story·Slide · Công cụ ảnh
 Kho           Phòng váy · Thiết bị
 Tài chính     Thu chi & công nợ · Đối soát tiền công · Gói & bảng giá
@@ -321,7 +321,7 @@ thủ công cho dữ liệu cũ.
 > studio, nên đúng khoảnh khắc khách ký — không ai đăng nhập — chẳng có gì chạy.
 > Lịch chỉ lên khi chủ studio mở hợp đồng sửa tay một ô bất kỳ.
 
-## 14 tính năng mới (không có trong bản cũ)
+## 18 tính năng mới (không có trong bản cũ)
 
 | # | Tính năng | Mô tả | Nằm ở |
 | --- | --- | --- | --- |
@@ -338,9 +338,19 @@ thủ công cho dữ liệu cũ.
 | 11 | Nhân bản hợp đồng | "Tạo giống HĐ này" → nhảy vào bước 2 đã điền sẵn | Chi tiết HĐ |
 | 12 | Chế độ ngày chụp | Chữ 16–28px, nút 56px, lịch trình + checklist ảnh theo loại buổi | Route riêng |
 | 13 | Ghi chú nội bộ @nhắc tên | Luồng trao đổi trong hợp đồng, @tên được highlight | Chi tiết HĐ, tab 5 |
-| 14 | Dark mode | Ghi đè 19 biến màu, giữ nguyên màu nhấn | Toàn app |
+| 14 | Dark mode | Ghi đè 19 biến màu, giữ nguyên màu nhấn (3 chế độ: sáng · tối · **theo máy**) | Toàn app |
+| 15 | Đánh giá khách | Duyệt trước khi lên web, trả lời công khai, đi xin ở album đã giao | Kinh doanh |
+| 16 | Nguồn khách tự nhận | Đoán kênh từ `utm_*`/`referrer` lúc khách gửi yêu cầu, giữ nguyên tới hợp đồng | Đặt lịch → HĐ |
+| 17 | Phễu chuyển đổi | Khách hỏi → yêu cầu → hợp đồng → tiền, kèm tỉ lệ từng bậc | Thu chi, tab 3 |
+| 18 | Nhắc kỷ niệm | Khách cũ tới mốc 1·3·5·10 năm, kèm lời chúc soạn sẵn | Tổng quan |
 
 ### Chi tiết một số tính năng
+
+**Đánh giá khách (15)** — `feedback.approved` mặc định `false`, nên đánh giá phải được duyệt mới lên website. Ba trạng thái nằm trên HAI cột `approved` + `moderated_at`: "chờ duyệt" và "đã ẩn" trong DB đều là `approved=false`, mà studio hoàn toàn có thể *trả lời* một đánh giá xấu rồi vẫn chưa quyết cho hiện — dùng ké `replied_at` thì hàng đó tự nhảy sang "đã ẩn". Badge sidebar chỉ đếm bản chưa quyết nên tự về 0.
+
+**Nguồn khách (16)** — `studio_contracts.source` vốn đã có nhưng phải gõ tay nên gần như luôn rỗng. Giờ `@/lib/lead-source` đoán kênh NGAY LÚC khách gửi yêu cầu (utm → referrer → `?ref=`, không đoán được thì để trống chứ không dồn vào "Khác"), và `booking_id` giữ chuỗi từ yêu cầu sang hợp đồng — trước đây bấm "Tạo hợp đồng" là nguồn rơi mất. Chỉ lưu nhãn kênh + utm thô: không cookie, không id theo dõi. Client gửi lên thì server lọc lại theo tập đóng.
+
+**Nhắc kỷ niệm (18)** — mốc suy ra từ `event_date` + loại buổi chụp ngay trên danh sách hợp đồng mà Tổng quan đã tải, nên KHÔNG thêm bảng và KHÔNG thêm truy vấn nào. Chỉ nhắc mốc tròn (1·3·5·10; bỏ 2 và 4 — nhắc mọi năm thì studio ngưng đọc). Cửa sổ −7 → +45 ngày: phần lùi về quá khứ là cố ý vì studio mở app hai tuần một lần. Cộng năm phải tự viết, `new Date()` đẩy 29/2 sang 01/3 và nhắc sai ngày.
 
 **⌘K** — bắt `metaKey/ctrlKey + k` ở `window`, `Escape` để đóng. So khớp bằng chuỗi đã bỏ dấu: `s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/đ/g,"d").toLowerCase()`. Nhóm kết quả theo loại, mỗi loại có pill màu riêng. Kết quả đầu tiên highlight nền `--sf2`.
 
@@ -696,3 +706,32 @@ giao diện hỏng.
 
 Không dựng được ở đây: màn nào tự gọi API thay vì nhận dữ liệu qua props (ví dụ
 danh sách hợp đồng) — những màn đó phải mở app thật.
+
+### Bảng màu — `/uipreview/bang-mau`
+
+Bộ token của khu quản lý (`--tl`, `--nu`, `--brand`, `--panel`…) khai trong
+`.studio-shell` và `.client-doc`, còn bí danh cho phần NGOÀI shell khai ở
+`:root`. Hụt một token ở một khung là hỏng **im lặng**: `var()` không giải được
+→ khai báo hỏng ở computed-value time, nền tụt về trong suốt và chữ tụt về màu
+kế thừa. Không lỗi, không cảnh báo, chỉ một viên trạng thái mất màu.
+
+`/uipreview/bang-mau` vẽ MỌI cặp màu trong ba khung cạnh nhau — ngoài shell,
+shell sáng, shell tối — nên hụt token ở khung nào là thấy ngay: ô đó trắng trơn.
+Chụp riêng bằng `node scripts/chup-giao-dien.mjs bang-mau`.
+
+### Kiểm tra giao diện trong trình duyệt thật — `npm run ui:test`
+
+Vài thứ không có hàm nào để test bằng Node: chúng chỉ tồn tại khi có DOM,
+localStorage và `prefers-color-scheme` thật.
+
+```bash
+npx next dev -p 3333   # cửa sổ 1
+npm run ui:test        # cửa sổ 2
+```
+
+Đang kiểm: ba chế độ nền (sáng / tối / **theo máy**) giải ra đúng nền nào; mặc
+định vẫn là sáng khi studio chưa từng chọn; đổi cài đặt sáng-tối của máy khi
+đang mở app thì nền đổi theo ngay mà không phải tải lại; và `<html>` không sinh
+cảnh báo hydrate nào (script đặt nền chạy trước khi React hydrate nên `<html>`
+phải mang `suppressHydrationWarning` — cảnh báo này CHỈ hiện ở bản dev, không
+bắt ở đây thì không chỗ nào bắt).

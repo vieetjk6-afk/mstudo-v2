@@ -15,6 +15,8 @@ import EquipmentManager from "@/app/dashboard/studio/equipment/EquipmentManager"
 import PackagesManager from "@/app/dashboard/studio/packages/PackagesManager";
 import InboxView from "@/app/dashboard/studio/inbox/InboxView";
 import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManager";
+import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
+import TokenSwatches from "./TokenSwatches";
 import * as f from "./fixtures";
 
 /**
@@ -23,7 +25,17 @@ import * as f from "./fixtures";
  * Thêm màn mới = thêm một dòng ở đây. Ưu tiên những màn khó mở bằng tay (cần
  * dữ liệu ở đúng trạng thái hiếm) hơn là những màn chỉ cần mở app là thấy.
  */
-export const SCREENS: Record<string, { title: string; render: () => React.ReactNode }> = {
+export const SCREENS: Record<
+  string,
+  {
+    title: string;
+    render: () => React.ReactNode;
+    /** true = ĐỪNG bọc `.studio-shell` quanh màn này. Chỉ dùng cho màn tự
+     *  dựng khung màu của nó (bảng màu so ba khung), vì cái nó cần kiểm tra
+     *  chính là khung NGOÀI shell. */
+    bare?: boolean;
+  }
+> = {
   "hop-dong": {
     title: "Hợp đồng — danh sách",
     render: () => <ContractsList rows={f.contracts} studio={f.studio} />,
@@ -66,7 +78,7 @@ export const SCREENS: Record<string, { title: string; render: () => React.ReactN
         salaries={f.salaries}
         initialExpenses={f.expenses}
         initialTarget={50_000_000}
-        sourceStats={f.sourceStats}
+        sourceStats={f.sourceStats} funnel={f.funnel}
       />
     ),
   },
@@ -134,5 +146,16 @@ export const SCREENS: Record<string, { title: string; render: () => React.ReactN
         <InboxView conversations={[]} firstMessages={[]} staff={{}} channels={[]} meId="u2" canManageChannels />
       </div>
     ),
+  },
+  "danh-gia": {
+    title: "Đánh giá khách (chờ duyệt · đang hiện · đã ẩn)",
+    render: () => <ReviewsView reviews={f.reviews} awaiting={f.awaitingReviews} studioHost={null} />,
+  },
+  // Bảng màu: canh đúng loại lỗi "token chỉ có trong shell" — xem ghi chú đầu
+  // TokenSwatches.tsx. Tự dựng cả ba khung nên KHÔNG cho route bọc shell.
+  "bang-mau": {
+    title: "Bảng màu — ngoài shell / shell sáng / shell tối",
+    render: () => <TokenSwatches />,
+    bare: true,
   },
 };

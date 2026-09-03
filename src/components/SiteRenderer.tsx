@@ -373,6 +373,11 @@ function Block({ block, data, fontVar, demo = false }: { block: SiteBlock; data:
                 {f.rating ? <p style={{ color: "var(--s-accent)", letterSpacing: 2 }}>{"★".repeat(f.rating)}</p> : null}
                 <p style={{ marginTop: 8, fontSize: 14.5, lineHeight: 1.7, opacity: 0.9 }}>{f.content}</p>
                 {f.client_name && <p style={{ marginTop: 10, fontSize: 13, opacity: 0.6 }}>— {f.client_name}</p>}
+                {f.reply ? (
+                  <p style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--s-border)", fontSize: 13.5, lineHeight: 1.65, opacity: 0.75 }}>
+                    <b style={{ opacity: 0.85 }}>Studio:</b> {f.reply}
+                  </p>
+                ) : null}
               </div>
             ))}
           </div>

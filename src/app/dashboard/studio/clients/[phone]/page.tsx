@@ -7,9 +7,9 @@ import {
   sumAmounts,
   vnd,
   CONTRACT_STATUS_LABEL,
-  LEAD_SOURCE_LABEL,
   type ContractStatus,
 } from "@/lib/types";
+import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");

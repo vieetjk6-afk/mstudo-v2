@@ -130,21 +130,32 @@ export default function BookingsView({
     const ct = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/-/g, "");
     const code = await nextContractCode(supabase, ownerId);
     const note = [b.note, fullClauseText()].filter(Boolean).join("\n\n");
-    const { data, error } = await supabase
+    const core = {
+      owner_id: ownerId,
+      code,
+      title: b.service ? `${b.service} — ${b.name}` : `Hợp đồng — ${b.name}`,
+      client_name: b.name,
+      client_phone: b.phone,
+      client_messenger: b.facebook || null,
+      event_date: b.preferred_date,
+      note,
+      client_token: ct,
+    };
+    // Giữ lại chuỗi quy nguồn. Trước đây bấm "Tạo hợp đồng" là nguồn rơi mất:
+    // yêu cầu đặt lịch biết khách từ Facebook hay Google, hợp đồng thì không,
+    // nên biểu đồ doanh thu theo nguồn ở màn Thu chi luôn trống.
+    //
+    // Chưa chạy migration `nguon_khach.sql` thì `booking_id` chưa tồn tại và cả
+    // câu insert bị từ chối — thà mất phần quy nguồn còn hơn không tạo được
+    // hợp đồng.
+    let { data, error } = await supabase
       .from("studio_contracts")
-      .insert({
-        owner_id: ownerId,
-        code,
-        title: b.service ? `${b.service} — ${b.name}` : `Hợp đồng — ${b.name}`,
-        client_name: b.name,
-        client_phone: b.phone,
-        client_messenger: b.facebook || null,
-        event_date: b.preferred_date,
-        note,
-        client_token: ct,
-      })
+      .insert({ ...core, source: b.source ?? null, booking_id: b.id })
       .select("id")
       .single();
+    if (error) {
+      ({ data, error } = await supabase.from("studio_contracts").insert(core).select("id").single());
+    }
     if (error || !data) { setBusy(null); alert("Không tạo được hợp đồng: " + (error?.message || "")); return; }
     if (b.package_name) {
       await supabase.from("contract_items").insert({ contract_id: data.id, name: b.package_name, qty: 1, unit_price: b.package_price || 0, position: 0 });
