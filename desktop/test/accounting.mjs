@@ -24,6 +24,8 @@ import {
   receivables,
   totalReceivable,
   yearOf,
+  blocksWrite,
+  blockedWriteMessage,
 } from "../../src/lib/accounting.ts";
 
 let fail = 0;
@@ -194,6 +196,52 @@ check("chuỗi rác → null", endOfMonth("nãy giờ"), null);
 
 ok("câu báo khoá sổ nói ngày theo kiểu Việt Nam", /31\/08\/2026/.test(lockedMessage("2026-08-31")));
 ok("và chỉ đường mở khoá", /mở khoá/.test(lockedMessage("2026-08-31")));
+
+/* ═══ Hàng rào khoá sổ ═══════════════════════════════════════════════════════
+   Luật này có HAI bản: trigger guard_books_closed() dưới DB (hàng rào thật) và
+   blocksWrite() ở đây (để giao diện nói trước một câu tử tế, và để test được).
+   Hai bản lệch nhau là giao diện nói được mà DB chối — nên phần này canh kỹ. */
+
+const CLOSED = "2026-08-31";
+const blocked = (o) => blocksWrite({ closedUntil: CLOSED, ...o });
+
+check("thêm bút toán vào kỳ ĐÃ KHOÁ → chặn", blocked({ op: "insert", newDate: "2026-08-15" }), true);
+check("thêm vào kỳ CHƯA khoá → cho qua", blocked({ op: "insert", newDate: "2026-09-15" }), false);
+check("thêm đúng ngày mốc → chặn (mốc là ngày cuối ĐÃ chốt)", blocked({ op: "insert", newDate: CLOSED }), true);
+check("xoá bút toán trong kỳ đã khoá → chặn", blocked({ op: "delete", oldDate: "2026-08-15" }), true);
+check("xoá bút toán ngoài kỳ khoá → cho qua", blocked({ op: "delete", oldDate: "2026-09-15" }), false);
+
+check(
+  "sửa TIỀN của bút toán trong kỳ đã khoá → chặn",
+  blocked({ op: "update", oldDate: "2026-08-15", newDate: "2026-08-15", moneyChanged: true }),
+  true
+);
+check(
+  "DỜI bút toán RA KHỎI kỳ đã khoá → vẫn chặn (cũng là làm đổi số của kỳ đó)",
+  blocked({ op: "update", oldDate: "2026-08-15", newDate: "2026-09-15", moneyChanged: true }),
+  true
+);
+check(
+  "dời một bút toán MỚI VÀO kỳ đã khoá → chặn",
+  blocked({ op: "update", oldDate: "2026-09-15", newDate: "2026-08-15", moneyChanged: true }),
+  true
+);
+check(
+  "sửa KHÔNG động tới tiền (đóng số phiếu, đính ảnh, sửa ghi chú) → CHO QUA",
+  blocked({ op: "update", oldDate: "2026-08-15", newDate: "2026-08-15", moneyChanged: false }),
+  false
+);
+ok(
+  "…và đó là điều giữ cho việc IN LẠI phiếu thu cũ không đòi mở khoá sổ",
+  blocked({ op: "update", oldDate: "2026-01-05", newDate: "2026-01-05", moneyChanged: false }) === false
+);
+
+check("chưa khoá kỳ nào → không chặn gì", blocksWrite({ op: "delete", closedUntil: null, oldDate: "2020-01-01" }), false);
+check("mốc khoá rác → không chặn oan", blocksWrite({ op: "delete", closedUntil: "hôm qua", oldDate: "2020-01-01" }), false);
+check("cả hai ngày đều trống → không chặn", blocked({ op: "update", moneyChanged: true }), false);
+
+ok("câu báo nói ngày kiểu Việt Nam và chỉ đường mở khoá",
+  /31\/08\/2026/.test(blockedWriteMessage(CLOSED)) && /mở khoá/.test(blockedWriteMessage(CLOSED)));
 
 console.log(fail ? `\n${fail} kiểm thử KHÔNG đạt` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

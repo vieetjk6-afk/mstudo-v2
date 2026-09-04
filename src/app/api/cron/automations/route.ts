@@ -2,15 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
 import { sendZalo } from "@/lib/zalo/send";
+import { sendEmail } from "@/lib/email";
+import { mainUrl } from "@/lib/hosts";
 import { todayVN } from "@/lib/date";
 import {
   dueActions,
+  deliveryFor,
+  emailSubject,
   type AutomationConfig,
   type ContractSnapshot,
   type PendingAction,
 } from "@/lib/automations";
 
 export const dynamic = "force-dynamic";
+
+/** Thoát HTML cho thân thư — câu chữ do studio gõ, không được lọt thẻ vào. */
+const esc = (s: string) =>
+  String(s ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[m]!);
 
 /**
  * THI HÀNH VIỆC TỰ ĐỘNG — chạy mỗi ngày (vercel.json).
@@ -29,6 +37,13 @@ export const dynamic = "force-dynamic";
  * rồi ghi log sau, một lỗi giữa hai bước sẽ khiến việc đã làm mà không có dấu →
  * ngày mai làm lại. Với một tin Zalo gửi cho khách thì gửi hai lần tệ hơn hẳn
  * không gửi lần nào.
+ *
+ * NGOẠI LỆ DUY NHẤT của thứ tự đó: việc nhắn khách mà KHÔNG CÒN ĐƯỜNG NÀO ra
+ * (studio chưa nối Zalo và khách không có email) thì bỏ qua mà không ghi dấu —
+ * xem `deliveryFor`. Ghi dấu một việc chưa gửi được là cách làm mất hẳn nó, còn
+ * để nguyên thì mai studio nối Zalo hoặc điền email khách là nó đi được. Vì vậy
+ * khả năng gửi phải biết TRƯỚC khi ghi dấu, nên cấu hình Zalo được hỏi một lần
+ * cho cả lượt chạy thay vì để `sendZalo` tự tra rồi báo hỏng lúc đã muộn.
  */
 export async function GET(req: NextRequest) {
   // Fail-closed: thiếu CRON_SECRET thì KHOÁ, không mở. Nếu không, ai cũng gọi
@@ -67,13 +82,14 @@ export async function GET(req: NextRequest) {
   const { data: contracts } = await db
     .from("studio_contracts")
     .select(
-      "id, owner_id, title, client_name, client_phone, status, client_signed_at, event_date, selection_album_id, gallery_album_id"
+      "id, owner_id, title, client_name, client_phone, client_email, client_token, status, client_signed_at, event_date, selection_album_id, gallery_album_id"
     )
     .in("status", ["sent", "approved", "in_progress", "completed"])
     .limit(2000);
 
   const list = (contracts ?? []) as {
     id: string; owner_id: string; title: string; client_name: string | null; client_phone: string | null;
+    client_email: string | null; client_token: string | null;
     status: string; client_signed_at: string | null; event_date: string | null;
     selection_album_id: string | null; gallery_album_id: string | null;
   }[];
@@ -110,6 +126,48 @@ export async function GET(req: NextRequest) {
   );
   const fired = new Set(((log ?? []) as { dedupe_key: string }[]).map((r) => r.dedupe_key));
 
+  // Studio nào GỬI ZALO ĐƯỢC, hỏi MỘT lần cho cả lượt chạy. `sendZalo` tự tra
+  // lại cấu hình mỗi lần gọi, nhưng ta cần biết TRƯỚC khi ghi dấu chống lặp:
+  // một việc không có đường nào tới khách phải để nguyên cho ngày mai, chứ ghi
+  // dấu rồi mới phát hiện là mất hẳn việc đó.
+  const owners = [...new Set(list.map((c) => c.owner_id))];
+  const [{ data: zaloRows }, { data: ownerRows }] = await Promise.all([
+    db.from("studio_zalo").select("owner_id, status").in("owner_id", owners),
+    db.from("profiles").select("id, full_name").in("id", owners),
+  ]);
+  const zaloReady = new Set(
+    ((zaloRows ?? []) as { owner_id: string; status: string }[])
+      .filter((r) => r.status === "connected")
+      .map((r) => r.owner_id)
+  );
+  const studioName = new Map(
+    ((ownerRows ?? []) as { id: string; full_name: string | null }[]).map((r) => [r.id, r.full_name || "Studio"])
+  );
+  // Máy chủ chưa có RESEND_API_KEY thì KHÔNG có kênh email — nói ra ở đây thay
+  // vì để `sendEmail` trả "not_configured" sau khi đã ghi dấu.
+  const mailReady = !!process.env.RESEND_API_KEY;
+  // Thư nhắn khách kèm một đường dẫn về trang của chính họ — cùng chỗ mà nhịp
+  // nhắc việc 7:00 đang dùng (/portal/<token>), không sinh đường dẫn thứ hai.
+  const tokenOf = new Map(list.map((c) => [c.id, c.client_token]));
+
+  /**
+   * Gửi câu chữ của một luật qua email.
+   *
+   * Câu chữ ấy viết cho KHUNG CHAT: một đoạn, không tiêu đề. Nên chỉ bọc đúng
+   * một lớp HTML tối giản chứ không dựng mẫu thư riêng — chữ studio đã đọc và
+   * duyệt ở màn cấu hình phải tới khách y như thế.
+   */
+  const mail = (a: PendingAction & { ownerId: string }) => {
+    const studio = studioName.get(a.ownerId) || "Studio";
+    const tok = tokenOf.get(a.contractId);
+    const link = tok ? mainUrl(`/portal/${tok}`) : "";
+    const html = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#222">
+<p style="white-space:pre-wrap">${esc(a.message)}</p>
+${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
+<p style="color:#888;font-size:12px">Email tự động từ ${esc(studio)}.</p></div>`;
+    return sendEmail({ to: a.toEmail!, subject: emailSubject(a.rule, studio), html });
+  };
+
   // ── Tính việc phải làm ───────────────────────────────────────────────────
   const pending: (PendingAction & { ownerId: string })[] = [];
   for (const c of list) {
@@ -120,6 +178,7 @@ export async function GET(req: NextRequest) {
       title: c.title,
       clientName: c.client_name,
       clientPhone: c.client_phone,
+      clientEmail: c.client_email,
       status: c.status,
       signedAt: c.client_signed_at,
       eventDate: c.event_date,
@@ -137,7 +196,20 @@ export async function GET(req: NextRequest) {
   // ── Thi hành ─────────────────────────────────────────────────────────────
   let done = 0;
   const failed: string[] = [];
+  let unreachable = 0;
   for (const a of pending) {
+    // Kênh nào? Với việc nhắn khách, `deliveryFor` trả null khi không còn đường
+    // nào — bỏ qua mà KHÔNG ghi dấu, để mai studio nối Zalo hoặc điền email
+    // khách là việc này đi được.
+    const via = deliveryFor(a.action, a.fallback, {
+      zalo: zaloReady.has(a.ownerId) && !!a.toPhone,
+      email: mailReady && !!a.toEmail,
+    });
+    if (!via) {
+      unreachable++;
+      continue;
+    }
+
     // LỚP 2: ghi dấu TRƯỚC. Trùng khoá (đã có lượt cron khác làm) → bỏ qua.
     const { error: logErr } = await db.from("studio_automation_log").insert({
       owner_id: a.ownerId,
@@ -148,9 +220,9 @@ export async function GET(req: NextRequest) {
     if (logErr) continue; // 23505 = trùng unique → việc này đã được làm rồi
 
     try {
-      if (a.action === "task") {
+      if (via === "task") {
         await db.from("contract_tasks").insert({ contract_id: a.contractId, label: a.message });
-      } else if (a.action === "notify") {
+      } else if (via === "notify") {
         await db.from("studio_notifications").insert({
           owner_id: a.ownerId,
           contract_id: a.contractId,
@@ -163,13 +235,24 @@ export async function GET(req: NextRequest) {
           url: `/dashboard/studio/contracts/${a.contractId}`,
           tag: `auto-${a.rule}-${a.contractId}`,
         }).catch(() => {});
-      } else if (a.action === "zalo" && a.toPhone) {
-        await sendZalo({
+      } else if (via === "zalo" && a.toPhone) {
+        const z = await sendZalo({
           ownerId: a.ownerId,
           toPhone: a.toPhone,
           body: a.message,
           kind: `auto_${a.rule}`,
         });
+        // Studio ĐÃ nối Zalo mà tin vẫn không đi (token hết hạn, khách chưa
+        // từng nhắn OA nên không có uid) → rơi về email ngay trong lượt này.
+        // Việc đã ghi dấu rồi, để dành cho mai là mất hẳn; và vì kênh chính
+        // hỏng nên khách chỉ nhận MỘT tin, không phải hai.
+        if (!z.ok && a.fallback === "email" && mailReady && a.toEmail) {
+          const r = await mail(a);
+          if (!r.ok) throw new Error(r.error || "email_failed");
+        }
+      } else if (via === "email" && a.toEmail) {
+        const r = await mail(a);
+        if (!r.ok) throw new Error(r.error || "email_failed");
       }
       done++;
     } catch (e) {
@@ -183,6 +266,7 @@ export async function GET(req: NextRequest) {
     ok: true,
     contracts: list.length,
     pending: pending.length,
+    unreachable,
     done,
     ...(failed.length ? { failed } : {}),
   });

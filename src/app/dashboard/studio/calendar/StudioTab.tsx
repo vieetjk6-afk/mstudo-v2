@@ -97,6 +97,26 @@ export default async function StudioTab() {
     roomList = (seeded ?? []) as StudioRoom[];
   }
 
+  // Ai RẢNH / ai BẬN, để ô chọn người phụ trách nói được điều đó ngay lúc phân
+  // công. Hai bảng ngược chiều nhau và luật ưu tiên nằm ở @/lib/timesheet
+  // (availabilityOn): báo bận THẮNG khai rảnh, chưa khai gì = "chưa rõ".
+  // Project chưa chạy migrations/crew_timesheet.sql thì chưa có bảng
+  // crew_available: supabase-js TRẢ VỀ lỗi chứ không ném, nên `?? []` mới là
+  // đường lui thật — try/catch chỉ để chắc thêm. Cả hai cùng cho kết quả: ô
+  // chọn người phụ trách giữ nguyên như trước, không sập màn lịch.
+  let crewFree: { phone: string; date: string }[] = [];
+  let crewBusy: { phone: string; date: string }[] = [];
+  try {
+    const [{ data: fr }, { data: bs }] = await Promise.all([
+      supabase.from("crew_available").select("phone, date").eq("owner_id", profile.id).gte("date", from).lte("date", to),
+      supabase.from("crew_unavailable").select("phone, date").eq("owner_id", profile.id).gte("date", from).lte("date", to),
+    ]);
+    crewFree = (fr ?? []) as { phone: string; date: string }[];
+    crewBusy = (bs ?? []) as { phone: string; date: string }[];
+  } catch {
+    /* giữ hai danh sách rỗng */
+  }
+
   // Toạ độ studio — điểm xuất phát để ƯỚC LƯỢNG đường đi tới điểm chụp. Query
   // RIÊNG và best-effort, giống cách getStudioBrand làm: project chưa chạy
   // migration weather.sql thì cột chưa tồn tại, và một lỗi ở đây KHÔNG được
@@ -131,12 +151,16 @@ export default async function StudioTab() {
       crew_id: c.id,
       staff_id: null,
       name: c.name,
+      phone: c.phone,
       role: c.role,
     })),
     ...((staff ?? []) as { id: string; full_name: string | null; email: string }[]).map((s) => ({
       key: `staff:${s.id}`,
       crew_id: null,
       staff_id: s.id,
+      // Nhân viên có tài khoản không khai rảnh ở cổng thợ (cổng đó khoá theo
+      // SĐT), nên ô chọn sẽ hiện "chưa rõ" cho họ — đúng, không phải thiếu sót.
+      phone: null,
       name: s.full_name || s.email,
       role: "staff",
     })),
@@ -154,6 +178,8 @@ export default async function StudioTab() {
       branches={branchOptions.map((b) => ({ id: b.id, name: b.name }))}
       defaultBranchId={typeof scope.selected === "string" && scope.selected !== "none" ? scope.selected : null}
       studioCoords={studioCoords}
+      crewFree={crewFree}
+      crewBusy={crewBusy}
     />
   );
 }

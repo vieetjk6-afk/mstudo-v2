@@ -735,7 +735,15 @@ export default function ContractEditor({
   // ── Payments ───────────────────────────────────────────────────
   async function deletePayment(id: string) {
     const old = payments.find((x) => x.id === id)?.proof_url;
-    await supabase.from("contract_payments").delete().eq("id", id);
+    const { error } = await supabase.from("contract_payments").delete().eq("id", id);
+    // Trước đây lỗi bị nuốt hoàn toàn: hàng rào KHOÁ SỔ dưới DB chối lệnh xoá,
+    // mà màn hình vẫn bỏ dòng khỏi danh sách — studio tưởng đã xoá, F5 thấy nó
+    // quay lại. Thông báo của trigger đã viết sẵn bằng tiếng Việt (xem
+    // supabase/migrations/accounting.sql), nên hiện thẳng nó ra.
+    if (error) {
+      toast(error.message);
+      return;
+    }
     await removeProofFile(old);
     setPayments((p) => p.filter((x) => x.id !== id));
   }
@@ -1087,15 +1095,21 @@ export default function ContractEditor({
     setBusy(markPaid ? "planPaid" : "plan");
     let payment_id: string | null = null;
     if (markPaid) {
-      const { data: payment } = await supabase
+      const { data: payment, error } = await supabase
         .from("contract_payments")
         .insert({ contract_id: contract.id, amount, kind: "installment", paid_at: today(), note: label, ...(planProof ? { proof_url: planProof } : {}) })
         .select("*")
         .single();
-      if (payment) {
-        setPayments((p) => [payment as ContractPayment, ...p]);
-        payment_id = (payment as ContractPayment).id;
+      // Ghi lần thu HỎNG (thường là hàng rào khoá sổ) thì DỪNG — không ghi tiếp
+      // dòng đợt. Ghi tiếp là đợt hiện "đã thu" mà không có lần thu nào phía
+      // sau: hai bảng lệch nhau, và không màn nào nói ra.
+      if (error || !payment) {
+        setBusy(null);
+        toast(error?.message || "Không ghi được lần thu.");
+        return;
       }
+      setPayments((p) => [payment as ContractPayment, ...p]);
+      payment_id = (payment as ContractPayment).id;
     }
     const { data } = await supabase
       .from("contract_payment_plan")
@@ -1123,7 +1137,13 @@ export default function ContractEditor({
     if (it.paid) {
       if (it.payment_id) {
         const old = payments.find((x) => x.id === it.payment_id)?.proof_url;
-        await supabase.from("contract_payments").delete().eq("id", it.payment_id);
+        const { error } = await supabase.from("contract_payments").delete().eq("id", it.payment_id);
+        // Xoá HỎNG thì dừng: gỡ dấu "đã thu" của đợt trong khi lần thu vẫn nằm
+        // trong sổ là doanh thu bị đếm hai lần.
+        if (error) {
+          toast(error.message);
+          return;
+        }
         await removeProofFile(old);
         setPayments((p) => p.filter((x) => x.id !== it.payment_id));
       }
@@ -1132,13 +1152,17 @@ export default function ContractEditor({
     } else {
       const amount = Math.max(0, Math.round(Number(it.amount) || 0));
       const nowIso = new Date().toISOString();
-      const { data: payment } = await supabase
+      const { data: payment, error } = await supabase
         .from("contract_payments")
         .insert({ contract_id: contract.id, amount, kind: "installment", paid_at: today(), note: it.label })
         .select("*")
         .single();
-      const pid = payment ? (payment as ContractPayment).id : null;
-      if (payment) setPayments((p) => [payment as ContractPayment, ...p]);
+      if (error || !payment) {
+        toast(error?.message || "Không ghi được lần thu.");
+        return;
+      }
+      const pid = (payment as ContractPayment).id;
+      setPayments((p) => [payment as ContractPayment, ...p]);
       await supabase.from("contract_payment_plan").update({ paid: true, paid_at: nowIso, payment_id: pid }).eq("id", it.id);
       setPlan((p) => p.map((x) => (x.id === it.id ? { ...x, paid: true, paid_at: nowIso, payment_id: pid } : x)));
       // Zalo: xác nhận cọc (chỉ với đợt CỌC) — tự gửi cho khách nếu studio đã bật
@@ -1166,7 +1190,12 @@ export default function ContractEditor({
   async function deletePlan(it: ContractPaymentPlan) {
     if (it.payment_id) {
       const old = payments.find((x) => x.id === it.payment_id)?.proof_url;
-      await supabase.from("contract_payments").delete().eq("id", it.payment_id);
+      const { error } = await supabase.from("contract_payments").delete().eq("id", it.payment_id);
+      // Như trên: xoá đợt mà lần thu ở lại là doanh thu đếm hai lần.
+      if (error) {
+        toast(error.message);
+        return;
+      }
       await removeProofFile(old);
       setPayments((p) => p.filter((x) => x.id !== it.payment_id));
     }

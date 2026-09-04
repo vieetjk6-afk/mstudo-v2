@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
-import ProductionView, { type ProductRow } from "./ProductionView";
+import ProductionView, { type ProductRow, type VendorOrderRow } from "./ProductionView";
 import { applyBranch, getBranchScope } from "@/lib/branches";
 
 
@@ -40,8 +40,28 @@ export default async function ProductionPage() {
     .eq("studio_owner_id", profile.id)
     .order("full_name");
 
+  // Đơn đặt ngoài CÒN ĐANG CHẠY của studio — để tiến độ in nằm cùng chỗ với tiến
+  // độ hậu kỳ, đúng như docs/goi-y-hoan-thien-app.md mục 6 yêu cầu: studio hỏi
+  // "album của khách A xong chưa" ở đây chứ không đi mở một màn khác.
+  // Bọc try/catch: project chưa chạy migrations/vendors.sql thì bảng chưa có, và
+  // màn Xử lý hình ảnh KHÔNG được sập vì thiếu phần đó.
+  let orders: VendorOrderRow[] = [];
+  try {
+    const { data: o } = await supabase
+      .from("vendor_orders")
+      .select("id, vendor_name, contract_id, title, amount, status, due_date")
+      .eq("owner_id", profile.id)
+      .neq("status", "delivered")
+      .order("due_date", { ascending: true, nullsFirst: false })
+      .limit(200);
+    orders = (o ?? []) as VendorOrderRow[];
+  } catch {
+    /* chưa chạy migrations/vendors.sql → không có khối đơn đặt ngoài */
+  }
+
   return (
     <ProductionView
+      orders={orders}
       initial={(data ?? []) as unknown as ProductRow[]}
       staff={(staff ?? []) as { id: string; full_name: string | null; email: string }[]}
     />

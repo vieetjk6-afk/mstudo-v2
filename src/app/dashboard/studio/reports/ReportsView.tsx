@@ -9,6 +9,7 @@ import { Panel, PanelHead, EmptyState, StatCard } from "@/components/studio/ui";
 import { vnd, vndShort, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, type StudioExpense, type PaymentKind } from "@/lib/types";
 import { fmtDayMonth, todayVN } from "@/lib/date";
 import type { FunnelStage } from "@/lib/lead-source";
+import { blocksWrite, blockedWriteMessage } from "@/lib/accounting";
 import {
   exportFinance,
   downloadCsv,
@@ -52,6 +53,7 @@ export default function ReportsView({
   initialTarget,
   sourceStats,
   funnel,
+  closedUntil = null,
 }: {
   ownerId: string;
   /** Thông tin studio in ở đầu file Excel/CSV xuất ra. */
@@ -62,6 +64,13 @@ export default function ReportsView({
   initialTarget: number;
   sourceStats: SourceStat[];
   funnel: FunnelStage[];
+  /**
+   * Mốc khoá sổ lúc tải trang. Chỉ để BÁO TRƯỚC — hàng rào thật là trigger dưới
+   * DB (xem supabase/migrations/accounting.sql), và studio có thể đổi mốc ở thẻ
+   * Xuất kế toán ngay bên dưới mà không tải lại trang, nên bản này có lúc cũ.
+   * Vì vậy đường lỗi từ DB vẫn phải hiện ra, không được bỏ.
+   */
+  closedUntil?: string | null;
 }) {
   const supabase = createClient();
   const now = new Date();
@@ -200,6 +209,12 @@ export default function ReportsView({
   async function addExpense() {
     const amount = Math.max(0, Math.round(Number(exp.amount) || 0));
     if (!exp.title.trim() || !amount) return;
+    // Ghi lùi vào kỳ đã chốt: nói ra TRƯỚC khi gọi DB. Không có câu này thì
+    // trigger chối, `error` bị bỏ qua, và form chỉ đứng im không nói gì.
+    if (blocksWrite({ op: "insert", closedUntil, newDate: exp.spent_at })) {
+      alert(blockedWriteMessage(closedUntil!));
+      return;
+    }
     setBusy(true);
     const { data, error } = await supabase
       .from("studio_expenses")
@@ -214,14 +229,29 @@ export default function ReportsView({
       .select("*")
       .single();
     setBusy(false);
-    if (!error && data) {
+    if (error) {
+      alert(error.message);
+      return;
+    }
+    if (data) {
       setExpenses((p) => [...p, data as StudioExpense]);
       setExp({ title: "", amount: 0, category: "equipment", spent_at: todayVN(), note: "" });
     }
   }
 
   async function delExpense(id: string) {
-    await supabase.from("studio_expenses").delete().eq("id", id);
+    const row = expenses.find((e) => e.id === id);
+    if (blocksWrite({ op: "delete", closedUntil, oldDate: row?.spent_at })) {
+      alert(blockedWriteMessage(closedUntil!));
+      return;
+    }
+    const { error } = await supabase.from("studio_expenses").delete().eq("id", id);
+    // Lỗi từng bị nuốt: hàng rào khoá sổ chối lệnh xoá mà dòng vẫn biến mất khỏi
+    // màn hình, F5 lại thấy. Thông báo của trigger đã là tiếng Việt đầy đủ.
+    if (error) {
+      alert(error.message);
+      return;
+    }
     setExpenses((p) => p.filter((e) => e.id !== id));
   }
 

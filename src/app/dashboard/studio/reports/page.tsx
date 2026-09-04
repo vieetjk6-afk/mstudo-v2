@@ -151,6 +151,7 @@ export default async function ReportsPage() {
       initialTarget={Number(profile.monthly_revenue_target) || 0}
       sourceStats={sourceStats}
       funnel={funnel}
+      closedUntil={(profile as { books_closed_until?: string | null }).books_closed_until ?? null}
     />
       {/* Xuất kế toán + khoá sổ để RIÊNG dưới màn Thu chi, không nhồi vào dải
           tab: đây là việc làm vài lần một tháng (gửi kế toán, chốt kỳ), khác

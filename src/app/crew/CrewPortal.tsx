@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import CrewTimeClock, { type OpenEntry } from "./CrewTimeClock";
+import CrewFreeSlots, { type FreeSlot } from "./CrewFreeSlots";
 import type { TimesheetRow } from "@/lib/timesheet";
 
 import { fmtDate } from "@/lib/date";
@@ -97,6 +98,7 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
   const [calToken, setCalToken] = useState<string | null>(null);
   const [openEntry, setOpenEntry] = useState<OpenEntry>(null);
   const [sheet, setSheet] = useState<TimesheetRow[]>([]);
+  const [freeSlots, setFreeSlots] = useState<FreeSlot[]>([]);
   const [profiles, setProfiles] = useState<CrewProfile[]>([]);
   // Vào bằng link riêng của studio: chưa có trong sổ studio đó thì CHỈ hiện form
   // đăng ký, không hiện lịch — lịch của studio này chưa liên quan gì tới họ.
@@ -124,6 +126,11 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
     setShiftPlan(j.shift ?? null);
     setCalToken(j.calendarToken ?? null);
     setOpenEntry(j.timesheet?.open ?? null);
+    setFreeSlots(
+      ((j.free ?? []) as { id: string; date: string; start_time: string | null; end_time: string | null; note: string | null }[]).map(
+        (r) => ({ id: r.id, date: r.date, start: r.start_time, end: r.end_time, note: r.note })
+      )
+    );
     // Đổi tên trường từ snake_case của DB sang hình dữ liệu của @/lib/timesheet.
     setSheet(
       ((j.timesheet?.recent ?? []) as {
@@ -175,6 +182,14 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
 
   async function clockOut(note: string) {
     await post({ action: "clock_out", studioId: studioIds[0] ?? "", note });
+  }
+
+  async function addFree(v: { studioId: string; date: string; start: string; end: string; note: string }) {
+    await post({ action: "free_add", ...v });
+  }
+
+  async function removeFree(id: string) {
+    await post({ action: "free_remove", id, studioId: studioIds[0] ?? "" });
   }
 
   async function respond(id: string, status: "accepted" | "declined") {
@@ -308,6 +323,14 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
             busy={busy === "sched"}
             onClockIn={clockIn}
             onClockOut={clockOut}
+          />
+
+          <CrewFreeSlots
+            slots={freeSlots}
+            studios={acceptedStudios.map((p) => ({ id: p.owner_id, name: p.studio_name }))}
+            busy={busy === "sched"}
+            onAdd={addFree}
+            onRemove={removeFree}
           />
 
           <CrewProfileCard profiles={profiles} phone={phone} onSaved={load} />

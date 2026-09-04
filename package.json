@@ -30,6 +30,7 @@
     "test:timesheet": "node --experimental-strip-types desktop/test/timesheet.mjs",
     "test:vendors": "node --experimental-strip-types desktop/test/vendors.mjs",
     "test:accounting": "node --experimental-strip-types desktop/test/accounting.mjs",
+    "test:setup-all": "node supabase/build-setup-all.mjs --check",
     "test:branches": "node --experimental-strip-types desktop/test/branches.mjs",
     "test:studio-roles": "node --experimental-strip-types desktop/test/studio-roles.mjs",
     "test:client-boundary": "node --experimental-strip-types desktop/test/client-boundary.mjs",

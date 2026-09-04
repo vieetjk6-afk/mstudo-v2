@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Save, Zap, ListChecks, Bell, MessageSquare, RotateCcw } from "lucide-react";
+import { Check, Save, Zap, ListChecks, Bell, MessageSquare, Mail, RotateCcw } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   AUTOMATION_RULES,
@@ -28,6 +28,9 @@ const ACTION_META: Record<ActionKind, { label: string; icon: typeof Bell; tone: 
   task: { label: "Tạo việc", icon: ListChecks, tone: "var(--ac)" },
   notify: { label: "Báo chuông", icon: Bell, tone: "var(--bl, var(--ac))" },
   zalo: { label: "Gửi Zalo cho khách", icon: MessageSquare, tone: "var(--am)" },
+  // Không luật nào lấy email làm kênh chính — nó là kênh dự phòng của ba luật
+  // nhắn khách. Vẫn khai ở đây để nhãn có sẵn nếu về sau có luật dùng nó.
+  email: { label: "Gửi email cho khách", icon: Mail, tone: "var(--am)" },
 };
 
 type Row = { enabled: boolean; days: number; message: string };
@@ -133,6 +136,9 @@ export default function AutomationsCard({
                   </p>
                   <p className="mt-0.5 text-[11.5px] leading-relaxed" style={{ color: "var(--text3)" }}>
                     {r.hint}
+                    {r.fallback === "email" && (
+                      <> Chưa nối Zalo (hoặc khách không có số) thì gửi <b>email</b> — một trong hai, không gửi cả hai.</>
+                    )}
                   </p>
 
                   {row.enabled && (
@@ -157,7 +163,7 @@ export default function AutomationsCard({
                       >
                         {open ? "Ẩn câu chữ" : edited ? "Câu chữ (đã sửa)" : "Sửa câu chữ"}
                       </button>
-                      {r.action === "zalo" && (
+                      {(r.action === "zalo" || r.action === "email") && (
                         <span className="text-[11px] font-semibold" style={{ color: "var(--am)" }}>
                           Tin này gửi thẳng cho khách — đọc lại trước khi lưu.
                         </span>

@@ -47,7 +47,17 @@ export type ActionKind =
   /** Chuông trong dashboard + web-push tới điện thoại chủ studio. */
   | "notify"
   /** Gửi Zalo cho KHÁCH theo câu chữ của luật (best-effort). */
-  | "zalo";
+  | "zalo"
+  /**
+   * Gửi email cho KHÁCH. Không luật nào lấy đây làm kênh CHÍNH — email là kênh
+   * DỰ PHÒNG của ba luật nhắn khách (xem `fallback` bên dưới).
+   *
+   * Vì sao không phải kênh chính: khách Việt đọc Zalo, hộp thư thì nhiều người
+   * không mở hàng tuần. Vì sao vẫn phải có: gửi Zalo đòi studio kết nối OA hoặc
+   * phiên cá nhân, mà phần lớn studio chưa làm — không có kênh dự phòng thì ba
+   * luật nhắn khách bật lên vẫn không tới được ai, và studio tưởng đã nhắn rồi.
+   */
+  | "email";
 
 export type AutomationRule = {
   /** Khoá bền — lưu xuống DB, KHÔNG đổi sau khi phát hành. */
@@ -66,6 +76,12 @@ export type AutomationRule = {
   message: string;
   /** Bật sẵn khi studio chưa cấu hình gì? Chỉ bật những luật KHÔNG gửi gì ra ngoài. */
   onByDefault: boolean;
+  /**
+   * Kênh DỰ PHÒNG khi kênh chính không đi được (studio chưa nối Zalo, hoặc
+   * khách không có số). Gửi MỘT trong hai, không bao giờ cả hai: một lời nhắc
+   * tới khách hai lần trông như studio làm ăn cẩu thả.
+   */
+  fallback?: ActionKind;
 };
 
 /**
@@ -117,6 +133,7 @@ export const AUTOMATION_RULES: readonly AutomationRule[] = [
     message:
       "Chào {khach}, studio nhắc buổi chụp của mình vào {ngay}. Mình chuẩn bị trang phục và tới đúng giờ nhé. Cần đổi gì thì nhắn lại giúp studio ạ!",
     onByDefault: false,
+    fallback: "email",
   },
   {
     key: "payment_overdue",
@@ -148,6 +165,7 @@ export const AUTOMATION_RULES: readonly AutomationRule[] = [
     message:
       "Chào {khach}, studio đã giao album của mình rồi ạ. Nếu mình thấy hài lòng, cho studio xin một dòng cảm nhận ở cuối trang album nhé. Cảm ơn mình nhiều!",
     onByDefault: false,
+    fallback: "email",
   },
   {
     key: "thanks_after_complete",
@@ -159,6 +177,7 @@ export const AUTOMATION_RULES: readonly AutomationRule[] = [
     message:
       "Cảm ơn {khach} đã tin studio cho dịp này! Nếu có bạn bè cần chụp, mình giới thiệu giúp studio nhé — studio có ưu đãi riêng cho khách được giới thiệu ạ.",
     onByDefault: false,
+    fallback: "email",
   },
 ];
 
@@ -223,6 +242,8 @@ export type ContractSnapshot = {
   selectionDoneAt: string | null;
   /** `albums.delivered_at` của album giao khách. */
   deliveredAt: string | null;
+  /** Email khách — kênh dự phòng khi không gửi Zalo được. */
+  clientEmail?: string | null;
   dues: DueRow[];
 };
 
@@ -279,6 +300,10 @@ export type PendingAction = {
   dedupeKey: string;
   /** Số điện thoại nhận Zalo (chỉ cho action `zalo`). */
   toPhone?: string | null;
+  /** Email nhận thư dự phòng (chỉ cho luật có `fallback: "email"`). */
+  toEmail?: string | null;
+  /** Kênh dự phòng của luật, chép sẵn để cron không phải tra lại bảng luật. */
+  fallback?: ActionKind | null;
 };
 
 /** Số ngày giữa hai mốc 'YYYY-MM-DD' (b - a). */
@@ -322,8 +347,10 @@ export function dueActions(
   for (const rule of AUTOMATION_RULES) {
     const cfg = effectiveConfig(rule, configs[rule.key]);
     if (!cfg.enabled) continue;
-    // Luật gửi Zalo mà không có số khách thì bỏ qua — không có ai để gửi.
-    if (rule.action === "zalo" && !c.clientPhone) continue;
+    // Luật nhắn khách mà không có ĐƯỜNG NÀO tới khách thì bỏ qua. Xét cả kênh
+    // dự phòng: khách chỉ để email (khách công ty, khách nước ngoài) vẫn nhắn
+    // được, và trước khi có `fallback` thì những hợp đồng đó im lặng tuột mất.
+    if (rule.action === "zalo" && !c.clientPhone && !(rule.fallback === "email" && c.clientEmail)) continue;
 
     const push = (vars: MessageVars, ref = "") => {
       const key = dedupeKey(rule.key, c.id, ref);
@@ -337,6 +364,8 @@ export function dueActions(
         message,
         dedupeKey: key,
         toPhone: rule.action === "zalo" ? c.clientPhone : null,
+        toEmail: rule.fallback === "email" ? c.clientEmail ?? null : null,
+        fallback: rule.fallback ?? null,
       });
     };
 
@@ -382,4 +411,58 @@ export function dueActions(
   }
 
   return out;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Chọn kênh gửi
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/** Studio này gửi được bằng gì, tại thời điểm cron chạy. */
+export type Reach = {
+  /** Zalo đã nối VÀ có số khách. */
+  zalo: boolean;
+  /** Máy chủ gửi được email VÀ có địa chỉ khách. */
+  email: boolean;
+};
+
+/**
+ * Kênh sẽ dùng cho một việc nhắn khách: kênh chính nếu đi được, nếu không thì
+ * kênh dự phòng, nếu không nữa thì `null`.
+ *
+ * `null` phải được cron hiểu là "CHƯA làm", không phải "đã làm mà hỏng": việc
+ * này chưa được đánh dấu chống lặp, để ngày mai — khi studio đã nối Zalo hoặc
+ * đã điền email khách — nó gửi được. Đánh dấu một việc không có đường nào đi ra
+ * chính là cách làm mất hẳn nó.
+ */
+export function deliveryFor(
+  action: ActionKind,
+  fallback: ActionKind | null | undefined,
+  reach: Reach
+): ActionKind | null {
+  if (action !== "zalo" && action !== "email") return action;
+  const can = (k: ActionKind) => (k === "zalo" ? reach.zalo : k === "email" ? reach.email : false);
+  if (can(action)) return action;
+  if (fallback && fallback !== action && can(fallback)) return fallback;
+  return null;
+}
+
+/**
+ * Tiêu đề thư cho kênh dự phòng.
+ *
+ * Câu chữ của luật là câu NHẮN — viết cho khung chat, không có tiêu đề. Nên
+ * tiêu đề lấy theo luật chứ không cắt từ thân thư: một dòng "Chào chị Lan,
+ * studio nhắc buổi chụp…" làm tiêu đề thì hộp thư nào cũng cắt cụt.
+ */
+export function emailSubject(ruleKey: string, studioName: string): string {
+  const studio = (studioName || "Studio").trim();
+  switch (ruleKey) {
+    case "remind_client_before_shoot":
+      return `Nhắc lịch chụp sắp tới — ${studio}`;
+    case "ask_review_after_deliver":
+      return `Album của bạn đã sẵn sàng — ${studio}`;
+    case "thanks_after_complete":
+      return `Cảm ơn bạn — ${studio}`;
+    default:
+      return studio;
+  }
 }

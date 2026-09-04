@@ -446,6 +446,16 @@ bật/tắt bằng công tắc — không cần một Zapier.
 thứ khách nhìn thấy, nên studio phải tự đọc lại câu chữ rồi mới bật. Năm luật
 còn lại chỉ sinh việc/chuông trong nhà nên bật sẵn được.
 
+**Email là kênh DỰ PHÒNG của ba luật đó — gửi một trong hai, không bao giờ cả
+hai.** Khách Việt đọc Zalo, nên Zalo là kênh chính. Nhưng gửi Zalo đòi studio nối
+OA hoặc phiên cá nhân, mà phần lớn studio chưa làm: không có dự phòng thì ba luật
+bật lên vẫn không tới được ai, còn studio thì tưởng đã nhắn rồi. Nay chưa nối
+Zalo (hoặc khách chỉ để email — khách công ty, khách nước ngoài) thì thư đi thay.
+
+Và khi **không còn đường nào** (chưa nối Zalo, khách không email) thì việc đó
+**không được đánh dấu** đã chạy — để mai studio nối Zalo hoặc điền email khách là
+nó đi được. Đánh dấu một việc chưa có đường ra chính là cách làm mất hẳn nó.
+
 **Điều quan trọng nhất là CHẠY MỘT LẦN**, và nó có hai lớp. Cron chạy mỗi ngày;
 một luật thiếu chống lặp sẽ đẻ ra 30 việc giống nhau trong một tháng — studio sẽ
 tắt cả tính năng, và đúng ra là họ nên tắt. Lớp một: nạp khoá đã chạy rồi truyền
@@ -488,10 +498,20 @@ chụp** (cột `work_date` tách khỏi `started_at`) chứ không nhảy sang 
 Ràng buộc DB chỉ cho **một dòng đang mở** mỗi thợ, nên bấm hai lần vì mạng chậm
 không làm giờ bị tính đôi.
 
-Thợ cũng tự đăng ký **khoảng rảnh** được (ngược của "báo bận"). Luật ưu tiên:
-**báo bận THẮNG khai rảnh**, và **chưa khai gì = "chưa rõ"**, không phải "rảnh" —
-phần lớn thợ sẽ không bao giờ vào khai, mà coi im lặng là rảnh sẽ khiến màn phân
-công tự tin gán việc cho người đang đi làm chỗ khác.
+Thợ cũng tự đăng ký **khoảng rảnh** được (ngược của "báo bận"), bằng một thẻ gọn
+ở cổng thợ — **không** dựng thêm một lịch tháng thứ hai cạnh cái đã có để báo bận.
+
+Luật ưu tiên: **báo bận THẮNG khai rảnh**, và **chưa khai gì = "chưa rõ"**, không
+phải "rảnh" — phần lớn thợ sẽ không bao giờ vào khai, mà coi im lặng là rảnh sẽ
+khiến màn phân công tự tin gán việc cho người đang đi làm chỗ khác.
+
+**Và nửa còn lại của tính năng nằm ở chỗ phân công**, không ở cổng thợ: ô *Người
+phụ trách* trong hộp thoại lịch studio giờ ghi thẳng *"— đã báo bận"* / *"— đang
+rảnh"* vào từng dòng, theo đúng ngày của buổi đó. Một bảng "ai rảnh" để riêng
+bên cạnh thì không ai mở; người xếp lịch quyết định ngay tại ô chọn, và một cảnh
+báo hiện ra sau khi đã chọn thì đã muộn. Người "chưa rõ" để **trơn** — thêm chữ
+cho cả ba trạng thái thì dòng nào cũng có đuôi và mắt không còn bắt được hai
+trạng thái đáng chú ý.
 
 Migration `supabase/migrations/crew_timesheet.sql` · luật `src/lib/timesheet.ts` ·
 test `npm run test:timesheet`.
@@ -515,6 +535,11 @@ việc được giao.
 
 Đơn **đã giao khách** thì luôn "ok" dù hẹn đã qua từ lâu — để nó đỏ mãi là cách
 chắc chắn để studio ngưng nhìn màu đỏ.
+
+**Nối vào màn *Xử lý hình ảnh*** như mục 6 của bản gợi ý đòi: một khối *"Đơn đặt
+ngoài đang chạy"* nằm cùng chỗ với tiến độ hậu kỳ, xếp theo mức cần chú ý, chỉ
+những đơn **chưa giao khách**. Vì một hợp đồng chỉ xong khi cả hậu kỳ lẫn album
+in cùng xong; bắt studio mở hai màn để ghép hai nửa đó là cách bỏ sót nửa thứ hai.
 
 Migration `supabase/migrations/vendors.sql` · luật `src/lib/vendors.ts` ·
 test `npm run test:vendors`.
@@ -546,8 +571,22 @@ rõ *"tại ngày …, không theo kỳ"* để kế toán không đọc nó nh�
 
 **Khoá sổ**: đánh một mốc ngày, mọi bút toán trước mốc coi như đã chốt. Báo cáo
 tháng trước đã gửi kế toán rồi ai đó sửa một hợp đồng cũ là con số tháng trước
-đổi mà không ai biết — mốc khoá biến "đừng sửa số cũ" từ lời dặn miệng thành hàng
-rào. Khoá **không xoá gì**, chỉ đánh mốc và cảnh báo.
+đổi mà không ai biết. Khoá **không xoá gì**, chỉ chặn ghi.
+
+**Hàng rào nằm ở DB, không ở giao diện.** Một mốc ngày mà chỉ có React kiểm thì
+vẫn là lời dặn miệng có màu: RLS cho studio ghi thẳng vào `studio_expenses` và
+`contract_payments` bằng anon key, nên đúng cái tình huống cần chặn vẫn xảy ra y
+như trước. Nay trigger `guard_books_closed()` chặn thêm/sửa/xoá trong kỳ đã chốt,
+và xét **cả hai** mốc ngày cũ lẫn mới — dời một bút toán RA KHỎI kỳ đã khoá cũng
+là làm đổi số của kỳ đó.
+
+Trigger chỉ chặn thay đổi **động tới tiền** (số tiền, ngày, loại, hợp đồng). Đóng
+dấu số phiếu thu, đính ảnh chuyển khoản, sửa ghi chú vẫn làm được trên phiếu cũ:
+chặn cả những thứ đó thì studio sẽ đi mở khoá sổ chỉ để in một tờ phiếu, và cái
+khoá thành vô nghĩa. Luật này được chép lại thành `blocksWrite()` trong
+`src/lib/accounting.ts` để giao diện báo trước bằng tiếng Việt thay vì để khách
+gặp lỗi Postgres — **sửa luật thì phải sửa cả hai nơi**, và test giữ hai bên khớp
+nhau.
 
 Migration `supabase/migrations/accounting.sql` · luật `src/lib/accounting.ts` ·
 test `npm run test:accounting`.
@@ -586,3 +625,33 @@ báo, chỉ không có dòng ước lượng đường đi.
 
 Migration `supabase/migrations/weather.sql` · luật `src/lib/weather.ts` ·
 test `npm run test:weather`.
+
+## ✅ 11. Hai chỗ hở đã vá cùng đợt
+
+
+**`setup-all.sql` thiếu tám migration.** File này là thứ dựng một project Supabase
+MỚI, và nó được gộp từ mảng `ORDER` trong `supabase/build-setup-all.mjs`. Thêm
+file SQL mà quên thêm dòng vào `ORDER` là **lỗi im lặng**: repo có bảng, project
+mới thì không, và app chạy được tới lúc ai đó mở đúng màn dùng bảng ấy.
+
+Tám file đã bị bỏ quên như thế (`album_selection_done`, `watermark_opt_in`,
+`rls_thanh_vien_hop_dong`, `automations`, `crew_timesheet`, `vendors`,
+`accounting`, `weather`). Đã thêm và dựng lại.
+
+Và để nó **không tái diễn**: script giờ tự đối chiếu `ORDER` với thư mục
+`migrations/` rồi DỪNG nếu thiếu file nào, còn `npm run test:setup-all` kiểm
+thêm rằng `setup-all.sql` trên đĩa chưa cũ so với các file SQL.
+
+**Lỗi DB bị nuốt ở các bút toán tiền.** Thêm/xoá một khoản chi và xoá một lần thu
+đều bỏ qua `error` trả về: dòng biến khỏi màn hình (hoặc form đứng im) nhưng DB
+không đổi, và studio chỉ biết khi tải lại trang — hoặc không bao giờ. Hàng rào
+khoá sổ vừa thêm ở mục 9 làm đúng những lệnh đó bị chối, nên chúng **phải** nói
+ra được. Giờ cả hai hiện đúng câu lỗi của DB, và màn Thu chi báo trước bằng
+`blocksWrite()` (bản sao ở tầng code của trigger) thay vì để studio đâm vào lỗi
+Postgres.
+
+Nặng hơn: bốn chỗ ở màn hợp đồng ghi `contract_payments` rồi **ghi tiếp**
+`contract_payment_plan` bất kể vế đầu có thành công hay không. Vế đầu bị chối là
+hai bảng lệch nhau ngay — đợt hiện *"đã thu"* mà không có lần thu nào phía sau,
+hoặc gỡ dấu *"đã thu"* trong khi lần thu vẫn nằm trong sổ (**doanh thu đếm hai
+lần**), và không màn nào nói ra. Giờ vế đầu hỏng là **dừng**, kèm câu lỗi.

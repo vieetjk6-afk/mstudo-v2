@@ -251,3 +251,45 @@ export function endOfMonth(ym: string): string | null {
 export function lockedMessage(closedUntil: string): string {
   return `Sổ đã khoá tới ${closedUntil.split("-").reverse().join("/")}. Muốn sửa số liệu trước mốc này, hãy mở khoá kỳ ở màn Thu chi & công nợ.`;
 }
+
+/**
+ * Bút toán này có bị hàng rào khoá sổ chặn không?
+ *
+ * ĐÂY LÀ BẢN SAO Ở TẦNG CODE của trigger `guard_books_closed()` trong
+ * supabase/migrations/accounting.sql. Hàng rào THẬT nằm ở DB (RLS cho phép
+ * studio ghi thẳng bằng anon key, nên một kiểm tra ở React không chặn được ai);
+ * hàm này để giao diện nói trước một câu tử tế thay vì để người dùng đâm vào lỗi
+ * Postgres, và để luật đó KIỂM THỬ ĐƯỢC.
+ *
+ * Sửa luật thì phải sửa CẢ HAI nơi — hai bản lệch nhau là giao diện nói được mà
+ * DB chối, hoặc tệ hơn: giao diện chối mà DB cho qua.
+ *
+ * Hai điểm tinh:
+ *  - Xét CẢ ngày cũ lẫn ngày mới: dời một bút toán RA KHỎI kỳ đã khoá cũng là
+ *    làm đổi số của kỳ đó, y như sửa tại chỗ.
+ *  - Sửa mà KHÔNG động tới tiền (đóng số phiếu thu, đính ảnh chuyển khoản, sửa
+ *    ghi chú) thì cho qua. Chặn cả những thứ đó thì studio sẽ đi mở khoá sổ chỉ
+ *    để in một tờ phiếu, và cái khoá thành vô nghĩa.
+ */
+export type BookOp = "insert" | "update" | "delete";
+
+export function blocksWrite(o: {
+  op: BookOp;
+  closedUntil: string | null | undefined;
+  /** Ngày của bản ghi TRƯỚC thao tác ('YYYY-MM-DD'). Không có với `insert`. */
+  oldDate?: string | null;
+  /** Ngày của bản ghi SAU thao tác. Không có với `delete`. */
+  newDate?: string | null;
+  /** Chỉ xét với `update`: thao tác có làm đổi tiền/ngày/nhóm/hợp đồng không. */
+  moneyChanged?: boolean;
+}): boolean {
+  const closed = o.closedUntil;
+  if (!closed || !/^\d{4}-\d{2}-\d{2}$/.test(closed)) return false;
+  if (o.op === "update" && o.moneyChanged === false) return false;
+  return isLocked(o.oldDate, closed) || isLocked(o.newDate, closed);
+}
+
+/** Câu báo cho giao diện — cùng ý với thông báo của trigger dưới DB. */
+export function blockedWriteMessage(closedUntil: string): string {
+  return `Sổ đã khoá tới ${closedUntil.split("-").reverse().join("/")}. Bút toán trong kỳ đã chốt không sửa/xoá/thêm được — mở khoá kỳ ở màn Thu chi & công nợ nếu thật sự cần.`;
+}

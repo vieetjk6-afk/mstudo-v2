@@ -17,8 +17,10 @@ import {
   clampDays,
   daysBetween,
   dedupeKey,
+  deliveryFor,
   dueActions,
   effectiveConfig,
+  emailSubject,
   renderMessage,
 } from "../../src/lib/automations.ts";
 
@@ -250,6 +252,52 @@ check(
   // Chạy lại với TẤT CẢ khoá đã ghi → im lặng hoàn toàn.
   const again = dueActions(c, {}, new Set(a.map((x) => x.dedupeKey)), TODAY);
   check("chạy lại toàn bộ → im lặng hoàn toàn", again, []);
+}
+
+/* ═══ Kênh gửi & dự phòng email ══════════════════════════════════════════════ */
+
+{
+  // Việc trong nhà không đi qua bộ chọn kênh — luôn làm được.
+  check("việc trong nhà: 'task' luôn đi được", deliveryFor("task", null, { zalo: false, email: false }), "task");
+  check("việc trong nhà: 'notify' luôn đi được", deliveryFor("notify", null, { zalo: false, email: false }), "notify");
+
+  check("có Zalo → đi Zalo", deliveryFor("zalo", "email", { zalo: true, email: true }), "zalo");
+  check("không Zalo, có email → rơi về email", deliveryFor("zalo", "email", { zalo: false, email: true }), "email");
+  check("không kênh nào → null (ĐỂ NGUYÊN cho ngày mai)", deliveryFor("zalo", "email", { zalo: false, email: false }), null);
+  check("luật không khai dự phòng thì không tự rơi về email",
+    deliveryFor("zalo", null, { zalo: false, email: true }), null);
+
+  // Ba luật nhắn khách phải CÓ dự phòng, các luật trong nhà thì KHÔNG.
+  for (const r of AUTOMATION_RULES) {
+    if (r.action === "zalo") ok(`luật "${r.key}" có kênh dự phòng email`, r.fallback === "email");
+    else ok(`luật trong nhà "${r.key}" không khai dự phòng`, r.fallback === undefined);
+  }
+
+  // Khách CHỈ có email (khách công ty) vẫn nhắn được — trước khi có dự phòng thì
+  // những hợp đồng này im lặng tuột mất.
+  const onlyMail = contract({ clientPhone: null, clientEmail: "lan@congty.vn", deliveredAt: "2026-09-04T09:00:00Z" });
+  const a1 = run(onlyMail, only("ask_review_after_deliver"));
+  check("khách chỉ có email → luật xin đánh giá vẫn sinh việc", a1.length, 1);
+  check("… và mang theo địa chỉ email", a1[0]?.toEmail, "lan@congty.vn");
+  check("… không mang số điện thoại", a1[0]?.toPhone, null);
+  check("… kênh chọn được là email", deliveryFor(a1[0].action, a1[0].fallback, { zalo: false, email: true }), "email");
+
+  // Không số, không email → không sinh việc: không có ai để gửi.
+  const nobody = contract({ clientPhone: null, clientEmail: null, deliveredAt: "2026-09-04T09:00:00Z" });
+  check("không số, không email → không sinh việc nhắn khách", run(nobody, only("ask_review_after_deliver")), []);
+
+  // Có số nhưng chưa nối Zalo: việc VẪN sinh ra (bộ luật không biết chuyện kết
+  // nối), và bộ chọn kênh mới là chỗ nói "chưa đi được".
+  const phoneOnly = contract({ clientEmail: null, deliveredAt: "2026-09-04T09:00:00Z" });
+  const a2 = run(phoneOnly, only("ask_review_after_deliver"));
+  check("có số → vẫn sinh việc", a2.length, 1);
+  check("chưa nối Zalo, khách không email → chưa đi được",
+    deliveryFor(a2[0].action, a2[0].fallback, { zalo: false, email: false }), null);
+
+  // Tiêu đề thư lấy theo LUẬT, không cắt từ thân thư.
+  ok("tiêu đề thư mang tên studio", emailSubject("ask_review_after_deliver", "Ánh Dương").includes("Ánh Dương"));
+  ok("tiêu đề thư không rỗng khi thiếu tên studio", emailSubject("thanks_after_complete", "").length > 0);
+  check("luật lạ → tiêu đề rơi về tên studio", emailSubject("khong_co_luat_nay", "Ánh Dương"), "Ánh Dương");
 }
 
 check("khoá chống lặp không kèm ref", dedupeKey("r", "c"), "r:c");

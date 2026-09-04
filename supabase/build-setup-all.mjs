@@ -8,8 +8,17 @@
  *
  * Thêm file SQL mới → thêm tên vào ORDER bên dưới rồi chạy:
  *   node supabase/build-setup-all.mjs
+ *
+ * QUÊN BƯỚC ĐÓ LÀ LỖI IM LẶNG, và đã xảy ra thật: tám migration nằm trong repo
+ * mà không có trong ORDER, nên `setup-all.sql` dựng ra một database THIẾU BẢNG —
+ * app chạy được tới lúc ai đó mở đúng màn dùng bảng ấy. Nên script này giờ tự
+ * đối chiếu ORDER với thư mục `migrations/` và DỪNG nếu thiếu file nào.
+ *
+ * `node supabase/build-setup-all.mjs --check` kiểm mà KHÔNG ghi: thoát khác 0
+ * nếu thiếu file hoặc nếu setup-all.sql trên đĩa đã cũ so với các file SQL.
+ * Đây là thứ `npm run test:setup-all` gọi.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,6 +57,16 @@ const ORDER = [
   ["migrations/inbox_tiktok.sql", "Hộp thư: thêm kênh TikTok (chạy SAU inbox_unified)"],
   ["migrations/danh_gia_khach.sql", "Đánh giá khách: studio duyệt & trả lời (chạy SAU schema.sql)"],
   ["migrations/nguon_khach.sql", "Nguồn khách & phễu chuyển đổi (chạy SAU website_leads)"],
+  ["migrations/album_selection_done.sql", "Mốc 'khách đã chọn xong ảnh' trên album"],
+  ["migrations/watermark_opt_in.sql", "Watermark phải do studio TỰ BẬT, không mặc định bật"],
+  ["migrations/rls_thanh_vien_hop_dong.sql", "Vá quyền: thành viên studio lưu được hạng mục hợp đồng (chạy SAU studio_branches)"],
+  // Năm mục cuối của docs/goi-y-hoan-thien-app.md. Đều ALTER/thêm bảng trên nền
+  // đã có nên xếp sau; weather + crew_timesheet còn tham chiếu studio_appointments.
+  ["migrations/automations.sql", "Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)"],
+  ["migrations/crew_timesheet.sql", "Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)"],
+  ["migrations/vendors.sql", "Nhà cung cấp & đơn đặt ngoài"],
+  ["migrations/accounting.sql", "Phiếu thu có số & khoá sổ kế toán"],
+  ["migrations/weather.sql", "Toạ độ điểm chụp cho dự báo thời tiết (chạy SAU studio_appointments)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];
@@ -175,6 +194,25 @@ const header = [
   "",
 ];
 
+// ── Hàng rào: ORDER phải phủ HẾT thư mục migrations/ ────────────────────────
+// Chỉ xét `migrations/`: các file nền (schema.sql, push_subscriptions.sql…) nằm
+// ngay trong supabase/ và đã được khai tường minh ở đầu ORDER.
+const listed = new Set(ORDER.map(([rel]) => rel));
+const missing = readdirSync(join(HERE, "migrations"))
+  .filter((f) => f.endsWith(".sql"))
+  .map((f) => `migrations/${f}`)
+  .filter((rel) => !listed.has(rel))
+  .sort();
+if (missing.length) {
+  console.error(
+    `THIẾU ${missing.length} file trong ORDER của supabase/build-setup-all.mjs:\n` +
+      missing.map((m) => `  • ${m}`).join("\n") +
+      "\n\nsetup-all.sql dựng từ ORDER, nên thiếu ở đây là project mới sẽ thiếu bảng.\n" +
+      "Thêm từng dòng vào ORDER (ĐÚNG THỨ TỰ CHẠY, không phải alphabet) rồi chạy lại."
+  );
+  process.exit(1);
+}
+
 const tables = [];
 const setup = [];
 const grants = [];
@@ -215,8 +253,27 @@ const body = [
 ];
 
 const out = join(HERE, "setup-all.sql");
-writeFileSync(out, body.join("\n").replace(/\n{4,}/g, "\n\n\n") + "\n");
-console.log(
-  `Đã ghi ${out} — ${ORDER.length} file, ${nStmt} câu lệnh, ` +
-    `${body.join("\n").split("\n").length} dòng.`
-);
+const text = body.join("\n").replace(/\n{4,}/g, "\n\n\n") + "\n";
+
+if (process.argv.includes("--check")) {
+  let onDisk = "";
+  try {
+    onDisk = readFileSync(out, "utf8");
+  } catch {
+    /* chưa có file → coi như đã cũ */
+  }
+  if (onDisk !== text) {
+    console.error(
+      "supabase/setup-all.sql ĐÃ CŨ so với các file SQL trong repo.\n" +
+        "Chạy: node supabase/build-setup-all.mjs"
+    );
+    process.exit(1);
+  }
+  console.log(`setup-all.sql khớp — ${ORDER.length} file, ${nStmt} câu lệnh.`);
+} else {
+  writeFileSync(out, text);
+  console.log(
+    `Đã ghi ${out} — ${ORDER.length} file, ${nStmt} câu lệnh, ` +
+      `${text.split("\n").length} dòng.`
+  );
+}
