@@ -16,7 +16,8 @@ Tính từ lúc bắt đầu, mất khoảng 20–30 phút.
    Đặt tên gì cũng được (gợi ý `mstudo-v2`), chọn region **Singapore** cho gần VN.
    Lưu mật khẩu database vào chỗ an toàn.
 2. Mở **SQL Editor** → dán **toàn bộ** file [`supabase/setup-all.sql`](../supabase/setup-all.sql) → **Run**.
-   File này gộp sẵn 18 file SQL theo đúng thứ tự phụ thuộc (nền trước, vá sau);
+   *(Đã có database chạy thật rồi, chỉ cần cập nhật? Dùng [`supabase/cap-nhat.sql`](../supabase/cap-nhat.sql) — cũng dán một lần, nhưng chỉ gồm phần mới.)*
+   File này gộp sẵn toàn bộ file SQL của repo theo đúng thứ tự phụ thuộc (nền trước, vá sau);
    mọi câu lệnh đều idempotent nên chạy lại nhiều lần vô hại.
    *Sửa SQL về sau:* sửa file gốc rồi chạy `node supabase/build-setup-all.mjs`
    để sinh lại — đừng sửa tay `setup-all.sql`.

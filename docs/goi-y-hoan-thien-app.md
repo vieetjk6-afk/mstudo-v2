@@ -925,6 +925,34 @@ Và để nó **không tái diễn**: script giờ tự đối chiếu `ORDER` v
 `migrations/` rồi DỪNG nếu thiếu file nào, còn `npm run test:setup-all` kiểm
 thêm rằng `setup-all.sql` trên đĩa chưa cũ so với các file SQL.
 
+**Tài liệu chỉ ghi TÊN các migration cần chạy.** `setup-all.sql` là để dựng
+project TRẮNG; chủ studio đã có database chạy thật thì phải chạy đúng phần mới, và
+chỗ duy nhất nói phần mới gồm những gì là một dòng liệt kê **tên file**. Chuyện
+xảy ra đúng như phải xảy ra: người dùng dán chính dòng tên đó vào SQL Editor và
+nhận `syntax error at or near "accounting"`. Kể cả khi hiểu đúng, mở tám file rồi
+dán tám lượt cũng là tám cơ hội bỏ sót một cái — mà bỏ sót một migration thì lại
+đúng kiểu hỏng âm thầm ở trên.
+
+Nay có [`supabase/cap-nhat.sql`](../supabase/cap-nhat.sql): **một file, dán một
+lần**. Nó sinh ra từ cùng bộ máy với `setup-all.sql` (cùng cách xếp lại ba nhịp
+bảng → vá cột → phân quyền, vì trong file gốc nhiều policy đứng trước bảng chúng
+tham chiếu) và cùng chịu `--check`, nên không thể cũ đi trong im lặng. Danh sách
+nằm ở mảng `MOI`; bộ sinh **từ chối** chạy nếu `MOI` có file không nằm trong
+`ORDER`, hoặc nếu thứ tự trong `MOI` lệch thứ tự chạy của `ORDER` — hàng rào ấy
+bắt được lỗi ngay lần đầu tôi viết mảng đó.
+
+**Và không file SQL nào từng được CHẠY THỬ.** `test:setup-all` chỉ đối chiếu văn
+bản: nó chứng minh file khớp với các migration trong repo, không chứng minh chuỗi
+ấy chạy được. Một lỗi cú pháp, một cột trỏ tới bảng chưa tạo, một thứ tự sai —
+tất cả lọt qua bài đối chiếu và chỉ lộ ra khi chủ studio dán vào SQL Editor, giữa
+chừng, sau khi đã ghi được một nửa. `npm run test:sql-chay-that` dựng một
+PostgreSQL trắng rồi chạy thật cả hai tình huống: project mới tinh nuốt trọn
+`setup-all.sql`, và project đang chạy (dựng bằng `ORDER` trừ `MOI`) nuốt trọn
+`cap-nhat.sql` — hai lần liên tiếp, để chứng minh chạy lại vô hại. Rồi kiểm đúng
+thứ mỗi migration hứa tạo ra: bảng, chỉ mục duy nhất, ràng buộc 128 chiều, policy
+RLS, trigger khoá sổ, và từng cột. Máy không có PostgreSQL thì bài này **bỏ qua**
+chứ không báo hỏng.
+
 **Lỗi DB bị nuốt ở các bút toán tiền.** Thêm/xoá một khoản chi và xoá một lần thu
 đều bỏ qua `error` trả về: dòng biến khỏi màn hình (hoặc form đứng im) nhưng DB
 không đổi, và studio chỉ biết khi tải lại trang — hoặc không bao giờ. Hàng rào
