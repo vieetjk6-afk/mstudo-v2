@@ -19,6 +19,7 @@ import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
 import AiCompareDemo from "./AiCompareDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
+import AiFaceDemo from "./AiFaceDemo";
 import * as f from "./fixtures";
 
 /**
@@ -45,6 +46,10 @@ export const SCREENS: Record<
   "anh-trung-khach": {
     title: "Album khách — khối “Ảnh na ná nhau” (dữ liệu giả)",
     render: () => <AlbumDupDemo />,
+  },
+  "khuon-mat": {
+    title: "Lọc ảnh AI — bộ nhận diện khuôn mặt (mặt vẽ bằng canvas)",
+    render: () => <AiFaceDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",

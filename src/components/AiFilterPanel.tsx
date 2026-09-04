@@ -1,16 +1,19 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { Sparkles, Play, X, Check, Info, AlertTriangle, Copy, Loader2, Maximize2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Sparkles, Play, X, Check, Info, AlertTriangle, Copy, Loader2, Maximize2, ScanFace } from "lucide-react";
 import { thumbnailUrl } from "@/lib/drive";
 import {
   AI_DEFAULTS,
+  countVerdicts,
   judge,
   namesToRemove,
   type JudgeResult,
   type PhotoJudgement,
   type Verdict,
 } from "@/lib/photo-ai";
+import { applyFaces, summarizeFaces, type FaceSummary } from "@/lib/face-ai";
+import { faceScanSupported, scanFaces } from "@/lib/face-detect";
 import {
   isDecodable,
   makePreviews,
@@ -95,6 +98,11 @@ export default function AiFilterPanel({
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [handedOff, setHandedOff] = useState(false);
   const [cardSize, setCardSize] = useState<CardSize>("md");
+  /** Có chạy thêm lượt nhận diện khuôn mặt sau lượt đo nét không. */
+  const [faceOn, setFaceOn] = useState(false);
+  const [faceSummary, setFaceSummary] = useState<FaceSummary | null>(null);
+  /** Lượt quét đang ở bước nào — hai bước có tốc độ khác hẳn nhau. */
+  const [phase, setPhase] = useState<"scan" | "faces" | null>(null);
   /** Khung so sánh đang mở: danh sách tấm để lật + vị trí trong danh sách đó. */
   const [compare, setCompare] = useState<{ keys: string[]; at: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -103,7 +111,15 @@ export default function AiFilterPanel({
   // làm bảng kết quả phải vẽ lại.
   const itemsRef = useRef<ScanItem[]>([]);
 
-  const supported = scanSupported();
+  // Khả năng của trình duyệt phải hỏi TRONG EFFECT, không hỏi lúc dựng.
+  //
+  // `scanSupported()` đọc `window` → máy chủ trả false, trình duyệt trả true.
+  // Với phần CHỮ thì React vẽ lại được, nhưng với THUỘC TÍNH (`disabled` của
+  // nút) thì React 18 chỉ cảnh báo rồi GIỮ NGUYÊN giá trị của máy chủ — nút
+  // "Quét" ở lại trạng thái vô hiệu vĩnh viễn. Chính bài kiểm tra ở
+  // /uipreview/khuon-mat bắt được điều này.
+  const [supported, setSupported] = useState(false);
+  useEffect(() => setSupported(scanSupported()), []);
   const fromDrive = sourceFiles.some((f) => f.driveId) && !sourceFiles.some((f) => f.file || f.handle);
   const undecodable = useMemo(() => sourceFiles.filter((f) => !isDecodable(f.name)).length, [sourceFiles]);
   const scannable = sourceFiles.length - undecodable;
@@ -136,6 +152,8 @@ export default function AiFilterPanel({
     setPreviews({});
     setExcluded(new Set());
     setCompare(null);
+    setFaceSummary(null);
+    setPhase("scan");
     setHandedOff(false);
     setProgress({ done: 0, total: sourceFiles.length, failed: 0, current: "" });
     const ac = new AbortController();
@@ -150,7 +168,26 @@ export default function AiFilterPanel({
         setProgress(null);
         return;
       }
-      const judged = judge(outcome.metrics);
+      let judged = judge(outcome.metrics);
+
+      // ── Lượt hai: khuôn mặt ────────────────────────────────────────────────
+      // Chạy SAU lượt đo nét chứ không thay nó: bộ đo nét đã gom chuỗi và loại
+      // ảnh hỏng rồi, khuôn mặt chỉ sửa đúng hai chỗ bộ đo ấy sai được (bản nên
+      // giữ của chuỗi, và tấm đứng riêng có người nhắm mắt) — xem @/lib/face-ai.
+      if (faceOn && faceScanSupported()) {
+        setPhase("faces");
+        setProgress({ done: 0, total: items.length, failed: 0, current: "" });
+        const fo = await scanFaces(items, setProgress, ac.signal);
+        const merged = applyFaces(judged.judgements, fo.metrics);
+        judged = {
+          judgements: merged.judgements,
+          // Đếm LẠI: kết luận vừa đổi, giữ số cũ là màn hình nói dối.
+          summary: countVerdicts(merged.judgements, judged.summary.groups, judged.summary.medianSharpness),
+        };
+        setFaceSummary(summarizeFaces(merged.faceJudgements, merged.keepersChanged));
+        if (fo.skipped.length) setSkipped((s) => [...s, ...fo.skipped]);
+      }
+
       setResult(judged);
       // Ảnh xem trước chỉ cho những tấm màn hình thật sự vẽ ra.
       const shownKeys = judged.judgements
@@ -163,6 +200,7 @@ export default function AiFilterPanel({
     }
     setBusy(false);
     setProgress(null);
+    setPhase(null);
     abortRef.current = null;
   }
 
@@ -253,8 +291,9 @@ export default function AiFilterPanel({
         <span>
           Đây là <b>gợi ý</b>, không phải quyết định — công cụ đo cạnh và độ sáng, nó không biết ảnh nào
           đẹp. Ảnh cố ý xoá nét (bokeh dày, lia máy) có thể bị chấm điểm nét thấp, nên hãy xem qua danh
-          sách trước khi làm gì. Chưa làm: phát hiện nhắm mắt và gom ảnh theo từng người — hai việc đó cần
-          một mô hình nhận diện mặt.
+          sách trước khi làm gì. Bật <b>Xét cả khuôn mặt</b> bên dưới thì thêm được phần nhắm mắt và lấy
+          nét trượt. Chưa làm: gom ảnh theo từng người (“tất cả ảnh có cô dâu”) — việc đó cần một mô hình
+          nhận dạng danh tính, khác với mô hình tìm khuôn mặt đang dùng ở đây.
           {fromDrive && (
             <>
               {" "}
@@ -301,6 +340,36 @@ export default function AiFilterPanel({
             )}
           </div>
 
+          {/* ── Lượt hai: khuôn mặt ─────────────────────────────────────────
+              TẮT SẴN, và nói thẳng cái giá. Bộ nhận diện nặng ~13 MB tải lần đầu
+              và chạy chậm hơn hẳn lượt đo nét (mô hình chạy tuần tự, xem
+              @/lib/face-detect). Bật nó sau lưng studio rồi để họ ngồi chờ gấp
+              mười lần mà không biết vì sao là cách chắc nhất để họ bỏ công cụ. */}
+          <label
+            className="mt-2.5 flex cursor-pointer items-start gap-2 rounded-[10px] px-3 py-2.5"
+            style={{ background: "var(--sf2, var(--surface2))", border: "1px solid var(--bd, var(--border))" }}
+          >
+            <input
+              type="checkbox"
+              checked={faceOn}
+              onChange={(e) => setFaceOn(e.target.checked)}
+              disabled={busy}
+              className="mt-0.5"
+            />
+            <span className="text-[12.5px] leading-relaxed" style={{ color: "var(--tx2, var(--text2))" }}>
+              <b className="flex items-center gap-1.5">
+                <ScanFace size={14} style={{ color: "var(--ac, var(--accent))" }} /> Xét cả khuôn mặt
+              </b>
+              Tìm ảnh có <b>người nhắm mắt</b> và ảnh <b>lấy nét trượt ra sau lưng</b> (mặt nhoè trong khi nền
+              nét — thứ mà điểm nét cả khung không bao giờ bắt được). Trong mỗi chuỗi bấm, bản nên giữ sẽ
+              chọn theo <b>mắt mở</b> trước, rồi mới tới nét.
+              <span className="mt-1 block" style={{ color: "var(--tx3, var(--text3))" }}>
+                Lần đầu tải bộ nhận diện ~13 MB (sau đó nằm trong bộ nhớ đệm), và lượt quét chậm hơn nhiều
+                lần vì mô hình chạy từng tấm một. Vẫn <b>không ảnh nào rời khỏi máy này</b>.
+              </span>
+            </span>
+          </label>
+
           {progress && (
             <div className="mt-3">
               <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--sf2, var(--surface2))" }}>
@@ -313,6 +382,7 @@ export default function AiFilterPanel({
                 />
               </div>
               <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--tx3, var(--text3))" }}>
+                {phase === "faces" ? "Xét khuôn mặt — " : ""}
                 {progress.done}/{progress.total} · {progress.current}
               </p>
             </div>
@@ -361,6 +431,32 @@ export default function AiFilterPanel({
               ))}
             </span>
           </div>
+
+          {faceSummary && (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-[10px] px-3.5 py-2.5 text-[12.5px]"
+              style={{ background: "var(--sf2, var(--surface2))", color: "var(--tx2, var(--text2))" }}
+            >
+              <span className="flex items-center gap-1.5 font-bold">
+                <ScanFace size={14} style={{ color: "var(--ac, var(--accent))" }} /> Khuôn mặt
+              </span>
+              <span>{faceSummary.withFaces}/{faceSummary.scanned} ảnh có người</span>
+              <span style={{ color: faceSummary.blink ? "var(--am, #a9740a)" : undefined }}>
+                <b>{faceSummary.blink}</b> nhắm mắt
+              </span>
+              <span style={{ color: faceSummary.softFace ? "var(--am, #a9740a)" : undefined }}>
+                <b>{faceSummary.softFace}</b> mặt nhoè
+              </span>
+              <span>{faceSummary.noFace} không có mặt</span>
+              {/* Con số đáng giá nhất của cả lượt quét: bao nhiêu chuỗi mà bộ đo
+                  nét đã chọn nhầm bản nhắm mắt và khuôn mặt vừa sửa lại. */}
+              {faceSummary.keepersChanged > 0 && (
+                <span className="font-bold" style={{ color: "var(--gn, #1e9e72)" }}>
+                  Đã đổi bản nên giữ ở {faceSummary.keepersChanged} tấm
+                </span>
+              )}
+            </div>
+          )}
 
           {skipped.length > 0 && (
             <p className="mt-2.5 text-[11.5px]" style={{ color: "var(--tx3, var(--text3))" }}>

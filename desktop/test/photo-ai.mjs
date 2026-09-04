@@ -20,6 +20,7 @@ import {
   dhash,
   cropRect,
   duplicateGroups,
+  subGray,
   duplicatesToHide,
   groupDuplicates,
   hamming,
@@ -454,6 +455,33 @@ const verdicts = (r) => r.judgements.map((j) => `${j.key}:${j.verdict}`);
   ok("tâm là NaN → rơi về giữa ảnh", bad.sx === 340 && bad.sy === 140);
   ok("mọi số trả về đều là số nguyên hữu hạn",
     [bad.sx, bad.sy, bad.w, bad.h].every((v) => Number.isInteger(v)));
+}
+
+/* ═══ Cắt vùng xám (dùng cho phép đo nét trên khuôn mặt) ═════════════════════ */
+
+{
+  // Ảnh 10×10, giá trị = y*10 + x, để kiểm được cắt ĐÚNG CHỖ chứ không chỉ đúng cỡ.
+  const g = Uint8Array.from({ length: 100 }, (_, i) => i);
+  const mid = subGray(g, 10, 10, 0.2, 0.3, 0.4, 0.4);
+  check("cắt đúng cỡ", [mid.width, mid.height], [4, 4]);
+  check("cắt đúng CHỖ (góc trên-trái = hàng 3, cột 2)", mid.gray[0], 32);
+  check("… và cuối hàng đầu là cột 5", mid.gray[3], 35);
+  check("… hàng thứ hai nhảy đúng một dòng ảnh gốc", mid.gray[4], 42);
+
+  // Vùng tràn ra ngoài phải bị kẹp lại, không đọc lem sang bộ nhớ khác.
+  const over = subGray(g, 10, 10, 0.6, 0.6, 0.9, 0.9);
+  check("vùng tràn mép → kẹp vào trong ảnh", [over.width, over.height], [4, 4]);
+  check("… và lấy đúng góc dưới-phải", [...over.gray.slice(12)], [96, 97, 98, 99]);
+  check("tràn mép tới mức còn dưới 3 điểm ảnh → null",
+    subGray(g, 10, 10, 0.85, 0.85, 0.9, 0.9), null);
+
+  // Không đo được thì phải nói KHÔNG BIẾT, không trả một con số bịa.
+  check("vùng quá nhỏ (dưới 3 điểm ảnh) → null", subGray(g, 10, 10, 0.4, 0.4, 0.1, 0.1), null);
+  check("vùng rỗng → null", subGray(g, 10, 10, 0.5, 0.5, 0, 0), null);
+  check("vùng nằm hoàn toàn ngoài ảnh → null", subGray(g, 10, 10, 2, 2, 0.5, 0.5), null);
+  check("ảnh rỗng → null", subGray(new Uint8Array(0), 0, 0, 0, 0, 1, 1), null);
+  check("mảng ngắn hơn width×height → null", subGray(new Uint8Array(10), 10, 10, 0, 0, 1, 1), null);
+  check("cắt trọn cả ảnh → đúng cỡ gốc", (() => { const a = subGray(g, 10, 10, 0, 0, 1, 1); return [a.width, a.height]; })(), [10, 10]);
 }
 
 console.log(fail ? `\n${fail} kiểm thử KHÔNG đạt` : "\nTất cả kiểm thử đạt");

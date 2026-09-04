@@ -357,6 +357,81 @@ PNG cỡ 1200×800 rồi đi đúng đường giải mã của bộ quét, để
 (đo được: nét 833 · nhoè 7 · khung đen 0). Chính bài này là chỗ lộ ra cả cái bẫy
 `ImageBitmap.close()` xoá `width/height` lẫn chuyện mã hash một chiều bị suy biến.
 
+## ✅ 4c. Lọc theo khuôn mặt
+
+Bộ đo ở mục 4 đo CẢ KHUNG ẢNH. Nó trả lời tốt câu "hai tấm này có phải một chuỗi
+bấm không", nhưng mù trước đúng hai thứ khiến studio vẫn phải xem lại từng tấm
+bằng mắt:
+
+**Ai đó nhắm mắt.** Một tấm nét căng, bố cục đẹp, cô dâu chớp mắt — bộ đo cả
+khung chấm nó điểm cao nhất chuỗi và chọn nó làm *bản nên giữ*. Chớp mắt không
+làm ảnh kém nét một chút nào. Đây là lỗi số một của mọi công cụ lọc ảnh tự động
+và là lý do studio không tin chúng.
+
+**Mặt nhoè trong khi nền nét.** Lấy nét trượt ra sau lưng xảy ra hằng buổi. Điểm
+nét cả khung của tấm đó vẫn **cao** — cạnh lá cây, hoa văn tường, ren váy đều
+sắc — nên bộ đo cũ không những không bắt được mà còn xếp nó **trên** tấm lấy nét
+đúng.
+
+**Nên thứ tự chọn bản nên giữ đổi hẳn: mắt mở trước → mặt nét → mới tới khung
+nét.** Một tấm mắt mở luôn thắng mọi tấm có người nhắm mắt, kém nét bao nhiêu
+cũng thắng: ảnh hơi mềm còn cứu được bằng hậu kỳ, mắt nhắm thì không.
+
+Vài ranh giới cố ý:
+
+* **Mặt nhỏ hơn 0,8% khung bị bỏ qua hoàn toàn.** Khách qua đường phía sau, người
+  bàn tiệc thứ tư — họ nhắm mắt thì cũng không ai loại tấm ảnh vì thế. Xét cả họ
+  là mọi ảnh đám đông đều dính nhãn "có người nhắm mắt", tức nhãn ấy thành vô nghĩa.
+* **Ngưỡng nhắm 0,5, không thấp hơn.** Nhíu mắt khi cười là biểu cảm đẹp, không
+  phải lỗi. Bài kiểm tra trong Chromium đo được mắt mở 0,001 và mắt nhắm 0,640 —
+  ngưỡng nằm giữa với biên rộng, không sát mép.
+* **"Mặt nhoè" phải đạt CẢ HAI: kém hẳn so với nền VÀ thấp tuyệt đối.** Chỉ xét
+  tương đối thì chân dung nền trơn bị báo oan; chỉ xét tuyệt đối thì mọi ảnh
+  thiếu sáng đều dính.
+* **Tấm ĐỨNG RIÊNG nhắm mắt chỉ hạ xuống *xem lại*, không bao giờ *nên loại*.**
+  Đứng riêng nghĩa là không có bản nào khác của khoảnh khắc đó — loại đi là mất
+  hẳn khoảnh khắc.
+* **Không bao giờ NÂNG hạng.** Một khung đen thui vẫn là "nên loại" kể cả khi mô
+  hình tình cờ thấy một khuôn mặt trong đó.
+* **Chuỗi không có mặt nào thì khuôn mặt không được quyền nói.** Ảnh phong cảnh,
+  ảnh chi tiết váy — ép nó nói sẽ ra một thứ tự tuỳ tiện; giữ nguyên kết quả cũ.
+
+**TẮT SẴN, và nói thẳng cái giá.** Bộ nhận diện nặng ~13 MB tải lần đầu, và lượt
+quét chậm hơn nhiều lần vì mô hình chạy **tuần tự** (một `FaceLandmarker` là một
+phiên WASM có trạng thái; gọi chồng nhau cho ra kết quả lẫn giữa các ảnh). Bật nó
+sau lưng studio rồi để họ ngồi chờ gấp mười lần mà không biết vì sao là cách chắc
+nhất để họ bỏ công cụ. Vì cùng lý do đó, tính năng này **chỉ ở công cụ của
+studio**, không đưa vào album khách: 13 MB trên 3G để tìm ảnh chớp mắt là một
+trao đổi tồi.
+
+**Ảnh vẫn không rời khỏi máy.** Mô hình chạy bằng WASM ngay trong trình duyệt
+studio. Thứ duy nhất đi qua mạng là chính mô hình.
+
+Hai quyết định hạ tầng có lý do cụ thể. **WASM tự phục vụ từ `/mediapipe`**, không
+lấy từ jsdelivr như hướng dẫn của MediaPipe: CSP của repo chỉ cho `script-src
+'self'` cộng vài host Google, nạp từ CDN khác sẽ bị chặn **âm thầm** — bộ nhận
+diện đơn giản không bao giờ khởi động. File chép ra ở `postinstall`
+(`scripts/chep-mediapipe.mjs`), không commit vào git vì nặng 18,5 MB. **Mô hình**
+lấy từ storage.googleapis.com — khớp `connect-src https://*.googleapis.com` của
+CSP siết chặt, và đỡ 3,7 MB cho mỗi lần triển khai. Mạng studio chặn Google thì
+thông báo nói đúng điều đó bằng tiếng Việt, kèm câu "bỏ tick là quét bình thường
+vẫn chạy" — chứ không phải một dòng `Failed to fetch`.
+
+Đo nét vùng mặt dùng lại **đúng** `laplacianVariance` của bộ đo cũ, chỉ khác là
+chạy trên ô cắt khuôn mặt (`subGray`). Nhờ vậy "nét mặt" và "nét khung" cùng một
+thang và đặt cạnh nhau so được — đó cũng là hai con số hiện trong lý do.
+
+Bài kiểm tra ở `/uipreview/khuon-mat` vẽ hai khuôn mặt bằng canvas (mắt mở / mắt
+nhắm) rồi cho chạy qua đúng `detectOne()` của code thật. Chính nó bắt được một
+lỗi đang có sẵn trong màn lọc ảnh: `scanSupported()` gọi lúc dựng cho ra `false`
+ở máy chủ và `true` ở trình duyệt — mà **React 18 không sửa lệch THUỘC TÍNH khi
+hydrate**, nó chỉ cảnh báo rồi giữ giá trị của máy chủ, nên nút "Quét" ở lại
+trạng thái vô hiệu vĩnh viễn. Nay hỏi trong effect.
+
+Luật `src/lib/face-ai.ts` (58 ca, `npm run test:face-ai`) · phần trình duyệt
+`src/lib/face-detect.ts` · đầu-cuối `npm run test:face-browser` (11 ca trong
+Chromium thật).
+
 ## ✅ 4b. Xem đủ lớn để CHỌN — khung so sánh ảnh
 
 Bản đầu của bộ lọc AI vẽ kết quả ở ô vuông 128px. Cỡ đó đủ để **biết** hai tấm

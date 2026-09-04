@@ -481,6 +481,46 @@ export function cropRect(
 }
 
 /**
+ * Cắt một hình chữ nhật ra khỏi ảnh xám đã thu nhỏ.
+ *
+ * Dùng cho phép đo nét RIÊNG TRÊN VÙNG MẶT (@/lib/face-detect): đo cả khung
+ * không trả lời được "mặt có nét không" khi nền đầy cạnh — lá cây, gạch tường,
+ * ren váy đều sắc, nên một tấm lấy nét trượt ra sau lưng vẫn được chấm điểm cao.
+ *
+ * Toạ độ vào theo TỈ LỆ 0…1 để người gọi không phải biết ảnh đã thu về cỡ nào.
+ * Hình cắt luôn nằm trọn trong ảnh; xin vùng rỗng hoặc nằm ngoài thì trả về
+ * `null` chứ không trả mảng rỗng — người gọi phải phân biệt được "không đo được"
+ * với "đo ra 0".
+ */
+export function subGray(
+  gray: Uint8Array,
+  width: number,
+  height: number,
+  rx: number,
+  ry: number,
+  rw: number,
+  rh: number
+): { gray: Uint8Array; width: number; height: number } | null {
+  if (width <= 0 || height <= 0 || gray.length < width * height) return null;
+  const clamp = (v: number, hi: number) => Math.min(Math.max(Math.round(v), 0), hi);
+  const x0 = clamp(rx * width, width);
+  const y0 = clamp(ry * height, height);
+  const x1 = clamp((rx + rw) * width, width);
+  const y1 = clamp((ry + rh) * height, height);
+  const w = x1 - x0;
+  const h = y1 - y0;
+  // Dưới 3 điểm ảnh mỗi chiều thì nhân Laplacian 3×3 không chạy được — vùng đó
+  // không đo được, và trả về một con số bịa còn tệ hơn là nói không biết.
+  if (w < 3 || h < 3) return null;
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    const src = (y0 + y) * width + x0;
+    out.set(gray.subarray(src, src + w), y * w);
+  }
+  return { gray: out, width: w, height: h };
+}
+
+/**
  * Chỉ GOM NHÓM TRÙNG, không chấm ảnh nào là xấu.
  *
  * `judge()` trả về cả kết luận "nhoè", "chụp lỡ", "nên loại" — đúng cho studio
@@ -638,18 +678,30 @@ export function judge(metrics: PhotoMetrics[], opts: JudgeOptions = {}): JudgeRe
     };
   });
 
+  return { judgements, summary: countVerdicts(judgements, byGroup.size, med) };
+}
+
+/**
+ * Đếm lại tổng kết từ một bảng kết luận.
+ *
+ * Tách khỏi `judge` vì lượt quét KHUÔN MẶT (@/lib/face-ai, `applyFaces`) đổi
+ * kết luận của một số tấm sau khi `judge` đã chạy xong — và một bảng đã đổi mà
+ * mấy con số tổng kết vẫn là số cũ thì màn hình nói dối.
+ */
+export function countVerdicts(
+  judgements: PhotoJudgement[],
+  groups: number,
+  medianSharpness: number
+): ScanSummary {
   const count = (v: Verdict) => judgements.filter((j) => j.verdict === v).length;
   return {
-    judgements,
-    summary: {
-      total: metrics.length,
-      keep: count("keep"),
-      review: count("review"),
-      duplicate: count("duplicate"),
-      reject: count("reject"),
-      groups: byGroup.size,
-      medianSharpness: med,
-    },
+    total: judgements.length,
+    keep: count("keep"),
+    review: count("review"),
+    duplicate: count("duplicate"),
+    reject: count("reject"),
+    groups,
+    medianSharpness,
   };
 }
 
