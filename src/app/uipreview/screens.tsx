@@ -20,6 +20,7 @@ import TokenSwatches from "./TokenSwatches";
 import AiCompareDemo from "./AiCompareDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
+import FaceGroupDemo from "./FaceGroupDemo";
 import * as f from "./fixtures";
 
 /**
@@ -50,6 +51,10 @@ export const SCREENS: Record<
   "khuon-mat": {
     title: "Lọc ảnh AI — bộ nhận diện khuôn mặt (mặt vẽ bằng canvas)",
     render: () => <AiFaceDemo />,
+  },
+  "gom-theo-nguoi": {
+    title: "Lọc ảnh AI — gom ảnh theo từng người (mặt vẽ bằng canvas)",
+    render: () => <FaceGroupDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",

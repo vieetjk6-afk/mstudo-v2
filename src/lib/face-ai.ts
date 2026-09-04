@@ -95,7 +95,15 @@ export const FACE_DEFAULTS = {
   frameFloor: 60,
 } as const;
 
-export type FaceOptions = Partial<typeof FACE_DEFAULTS>;
+/**
+ * Ngưỡng ghi đè được.
+ *
+ * KHÔNG viết `Partial<typeof FACE_DEFAULTS>`: bảng kia khai `as const` nên mỗi
+ * trường mang KIỂU HẰNG (ví dụ đúng số 3), và người gọi truyền số khác sẽ bị
+ * TypeScript từ chối — một cái bẫy im lặng cho tới lúc ai đó thật sự cần nới
+ * một ngưỡng.
+ */
+export type FaceOptions = { -readonly [K in keyof typeof FACE_DEFAULTS]?: number };
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Kết luận cho MỘT tấm

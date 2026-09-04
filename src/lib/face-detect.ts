@@ -209,12 +209,24 @@ const blinkOf = (cats: { categoryName: string; score: number }[] | undefined) =>
   return worst;
 };
 
-/** Nhận diện MỘT tấm, trả về đúng hình dữ liệu mà @/lib/face-ai cần. */
-export async function detectOne(
+/**
+ * Nhận diện MỘT tấm và trả về TẤT CẢ những gì lượt quét cần.
+ *
+ * Trả kèm `canvas` và `landmarks` vì lượt gom ảnh theo người (@/lib/face-embed)
+ * cần đúng hai thứ đó để căn chỉnh khuôn mặt — và giải mã lại tấm ảnh lần thứ
+ * hai chỉ để lấy chúng là làm đôi phần việc nặng nhất của cả lượt quét.
+ */
+export async function detectFull(
   model: Landmarker,
   item: ScanItem,
   index: number
-): Promise<FaceMetrics> {
+): Promise<{
+  metrics: FaceMetrics;
+  landmarks: { x: number; y: number }[][];
+  canvas: OffscreenCanvas;
+  width: number;
+  height: number;
+}> {
   const { canvas, gray, width, height } = await decode(item);
   const res = model.detect(canvas);
   const frameSharpness = laplacianVariance(gray, width, height);
@@ -232,7 +244,18 @@ export async function detectOne(
       sharpness: sub ? laplacianVariance(sub.gray, sub.width, sub.height) : 0,
     });
   }
-  return { key: item.key, name: item.name, index, faces, frameSharpness };
+  return {
+    metrics: { key: item.key, name: item.name, index, faces, frameSharpness },
+    landmarks: lms,
+    canvas,
+    width,
+    height,
+  };
+}
+
+/** Chỉ phần số đo — đường dùng của lượt quét khuôn mặt thường. */
+export async function detectOne(model: Landmarker, item: ScanItem, index: number): Promise<FaceMetrics> {
+  return (await detectFull(model, item, index)).metrics;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -266,7 +289,7 @@ export async function scanFaces(
     if (signal?.aborted) return { metrics, skipped, aborted: true };
     const item = items[i];
     try {
-      metrics.push(await detectOne(model, item, i));
+      metrics.push((await detectFull(model, item, i)).metrics);
     } catch (e) {
       skipped.push({ name: item.name, reason: e instanceof Error ? e.message : "không đọc được" });
     }

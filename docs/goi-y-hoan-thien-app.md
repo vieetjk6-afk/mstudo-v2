@@ -432,6 +432,56 @@ Luật `src/lib/face-ai.ts` (58 ca, `npm run test:face-ai`) · phần trình duy
 `src/lib/face-detect.ts` · đầu-cuối `npm run test:face-browser` (11 ca trong
 Chromium thật).
 
+## ✅ 4d. Gom ảnh theo từng người
+
+Câu khách hỏi ngay khi mở album 800 tấm là *"ảnh của tôi đâu"*, và câu studio hỏi
+lúc lọc là *"còn tấm nào có mẹ cô dâu không"*. Bộ nhận diện ở mục 4c chỉ biết
+"có một khuôn mặt ở đây", không biết đó là **ai** — việc đó cần một mô hình khác
+hẳn: mạng nhận dạng danh tính, biến mỗi khuôn mặt thành một vector sao cho hai
+tấm cùng một người thì hai vector gần nhau.
+
+**Căn chỉnh là phần dễ sai nhất, và sai thì hỏng âm thầm** — vector vẫn ra 128 số
+trông rất hợp lệ, chỉ là vô nghĩa. Mạng được huấn luyện trên khuôn mặt đã xoay
+cho hai mắt nằm ngang và cắt ở một tỉ lệ cố định; đưa vào một ô cắt thô theo
+khung bao thì cùng một người nghiêng đầu 15° ra hai vector khác hẳn. Nên phép căn
+chỉnh dựng từ hai tâm mắt (dùng **góc mắt**, không dùng tâm mống mắt: mống mắt di
+chuyển theo hướng nhìn).
+
+**Thước đo là khoảng cách Euclid trên vector THÔ, không phải cosine.** Đây là chỗ
+suýt sai. Vector của dòng mô hình này nằm gọn trong một hình nón, nên cosine giữa
+hai vector *bất kỳ* đã là ~0,94. Đo thật ở `/uipreview/gom-theo-nguoi`: cùng
+người 0,996, khác người 0,939 — khe vỏn vẹn **0,017**, và mọi thứ gom vào một
+cụm. Đổi sang Euclid trên vector thô: cùng người 0,106, khác người 0,439, khe
+**0,130** — tách rõ. Bài kiểm chứng ấy chính là thứ bắt được lỗi này trước khi nó
+ra tới studio.
+
+**Gom bằng Chinese Whispers, không phải union-find.** Với ảnh trùng (mục 4) thì
+union-find đúng, vì hai tấm bấm liên tiếp gần như giống hệt. Với khuôn mặt thì đó
+là bẫy dây chuyền kinh điển: A giống B, B giống C, nhưng A và C là hai người —
+nối liên thông gộp cả ba, rồi từ C sang D, và cuối cùng cả đám cưới thành một
+người. Chinese Whispers cho mỗi khuôn mặt nhận nhãn của **nhóm láng giềng mạnh
+nhất**, nên một cây cầu mỏng giữa hai cụm dày không kéo được chúng vào nhau — có
+test dựng đúng tình huống đó. Hạt giống cố định nên chạy lại ra cùng kết quả:
+studio bấm quét lại mà các nhóm nhảy lung tung thì họ sẽ không tin.
+
+**Máy gom sai là chuyện SẼ xảy ra**, nên phải có đường sửa ngay tại chỗ: thanh
+**chặt/rộng** gom lại **tức thì** trên vector đã có trong bộ nhớ (không quét lại
+— bắt quét lại cả nghìn ảnh để nới một ngưỡng là cách chắc chắn để không ai chỉnh
+nó), và nút **gộp** hai nhóm. Ngưỡng mặc định 0,6 là con số nhà làm mô hình công
+bố cho **ảnh chụp thật**; bài kiểm chứng ở đây chạy trên mặt vẽ bằng hình học nên
+**không hiệu chỉnh được** con số đó — nó chỉ chứng minh hai phân bố tách rời và
+thuật toán khôi phục đúng từng người khi ngưỡng nằm trong khe.
+
+Thư viện nạp bằng thẻ `<script>` tự phục vụ từ `/face-model`, **không** `import`:
+bản ESM của nó gọi `require()` theo kiểu webpack không phân tích tĩnh được, kéo
+cả nhánh TensorFlow-cho-Node vào gói trình duyệt và trang chết ngay ở lượt dựng.
+Và phải tự chọn nền tính toán (`webgl` rồi lùi `cpu`) trước khi nạp trọng số —
+bản UMD ưu tiên nền `wasm` mà ta không phục vụ, không chọn tay thì chết với đúng
+một câu khó hiểu.
+
+Luật `src/lib/face-group.ts` (`npm run test:face-group`) · căn chỉnh + mô hình
+`src/lib/face-embed.ts` · kiểm chứng `/uipreview/gom-theo-nguoi`.
+
 ## ✅ 4b. Xem đủ lớn để CHỌN — khung so sánh ảnh
 
 Bản đầu của bộ lọc AI vẽ kết quả ở ô vuông 128px. Cỡ đó đủ để **biết** hai tấm
