@@ -481,18 +481,45 @@ muốn, không phải của phần mềm, và một dòng chữ *"ảnh này nho
 sẽ làm hỏng đúng cái việc đáng ra là vui nhất. Ở đây chỉ có một câu: mấy tấm này
 giống nhau, tấm này nét nhất.
 
-**Ba ràng buộc vì đây là máy của KHÁCH, không phải máy studio.** Không tự chạy —
-quét là việc nặng và tốn 3G, khách phải bấm mới chạy (trần 600 tấm một lượt, nói
-rõ số). Không bao giờ tự chọn hay bỏ chọn một tấm nào; ngoại lệ duy nhất và có
-chủ ý là quét xong thì bật sẵn *chỉ hiện bản nét nhất* — đó chính là thứ khách
-vừa bấm nút để có, nó chỉ **ẩn** khỏi lưới chứ không đụng vào lựa chọn, có công
-tắc tắt ngay cạnh, và **ảnh khách đã chọn thì không bao giờ bị ẩn** (một tấm biến
-mất ngay sau khi vừa bấm chọn là lỗi khó chịu nhất tính năng này có thể gây ra).
-Và quét qua **chính ảnh xem trước của lưới** nên phần lớn tấm đã nằm trong cache
-service worker: gần như không tốn thêm mạng, không ảnh gốc nào rời khỏi máy khách.
+**Ba ràng buộc vì đây là máy của KHÁCH, không phải máy studio.**
 
-Nút *chọn bản nét nhất của mọi nhóm* dừng đúng ở hạn mức chọn ảnh chứ không bỏ cả
-lượt: album giới hạn 100 mà gợi ý 120 tấm thì thêm được 100 vẫn hơn không thêm gì.
+*Không tự chạy* — quét là việc nặng và tốn 3G, khách phải bấm mới chạy (trần 600
+tấm một lượt, nói rõ số).
+
+*Không bao giờ động vào lựa chọn.* Quét xong, máy chỉ **tách riêng** các tấm
+trùng ra khỏi lưới và bày chúng thành từng chuỗi trong khối gợi ý; **không tấm
+nào được thêm vào lựa chọn**. Khách bấm tấm nào thì tấm đó mới vào — và đó là
+đường **duy nhất** một tấm đi vào lựa chọn từ khối này. Cố ý **không** có nút
+*"chọn hết bản đề xuất"*: một cú bấm thêm sáu chục tấm vào danh sách rồi khách
+phải ngồi gỡ ra thì tệ hơn hẳn là tự bấm sáu chục lần có chủ ý. Việc tách riêng
+có công tắc tắt ngay cạnh, và **ảnh khách đã chọn thì không bao giờ bị tách khỏi
+lưới** (một tấm biến mất ngay sau khi vừa bấm chọn là lỗi khó chịu nhất tính năng
+này có thể gây ra). Mỗi chuỗi có một dòng đếm *đã chọn mấy tấm* để cuộn qua hai
+chục chuỗi xong còn nhớ chuỗi nào đã xử lý.
+
+*Không tốn tài nguyên máy chủ.* Toàn bộ phép đo chạy trong trình duyệt khách —
+không có route nào, không hàm serverless nào được gọi để tính. Ảnh dùng để quét
+là **chính ảnh xem trước của lưới** (`/api/img`, cùng file id + cùng chiều rộng),
+mà route đó trả `s-maxage=31536000, immutable` nên CDN của Vercel phục vụ lượt
+lặp **không đánh thức hàm**, và service worker còn giữ sẵn 600 tấm trên máy. Quét
+một album khách đã cuộn qua gần như không phát sinh yêu cầu nào.
+
+### Bỏ chọn tất cả
+
+Trước đây khách chọn nhầm cả trăm tấm thì chỉ có cách bấm bỏ từng tấm. Nay có
+*Tác vụ → Bỏ chọn tất cả*, xoá cả ảnh đã chọn, ảnh không thích lẫn ghi chú.
+
+**Hai bước, và nói rõ số sắp mất** (*"Bỏ hết lựa chọn? Sẽ mất 87 ảnh đã chọn"*)
+chứ không hỏi chung chung *"bạn chắc chứ?"*: xoá một buổi chiều ngồi chọn ảnh
+cưới bằng một cú bấm nhầm là thứ không có đường lùi — sổ trên máy ghi đè ngay, và
+bản trên máy chủ bị đè ở lượt lưu kế tiếp.
+
+Nó đi qua **đúng đường của một lượt sửa bình thường** (`recordEdit`) chứ không
+gọi thẳng máy chủ: nhờ vậy cũng được sổ trên máy ghi lại, cũng thử lại khi mất
+mạng, và cũng hoà giải đúng nếu album đang mở trên một điện thoại khác. Hai tính
+chất đó được ghim bằng test: một vòng đọc lại chạy xen vào **không** kéo lựa chọn
+vừa xoá quay về, và "xoá hết" **không** phải quyền phủ quyết — tấm mà máy kia vừa
+chọn thêm vẫn được giữ.
 
 Sổ ngoại tuyến `src/lib/album-offline.ts` (thuần) · chỗ cất
 `src/lib/album-store.ts` · manifest `src/lib/client-manifest.ts` · cổng khách

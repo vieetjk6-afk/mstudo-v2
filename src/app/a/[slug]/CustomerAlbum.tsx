@@ -19,6 +19,7 @@ import {
   Share2,
   Send,
   Undo2,
+  RotateCcw,
 } from "lucide-react";
 import StudioBrand from "@/components/StudioBrand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -160,6 +161,10 @@ export default function CustomerAlbum({
   // lựa chọn của khách — gửi nó lên máy chủ là gửi một thứ studio không cần.
   const [dupGroups, setDupGroups] = useState<DuplicateGroup[] | null>(null);
   const [hideDupes, setHideDupes] = useState(false);
+  // Nút "bỏ chọn tất cả" đã bấm lần một, đang chờ xác nhận. Xoá một buổi chiều
+  // ngồi chọn ảnh cưới bằng MỘT cú bấm nhầm là thứ không có đường quay lại — sổ
+  // trên máy cũng đã ghi đè, và bản trên máy chủ sẽ bị đè ngay lượt lưu kế tiếp.
+  const [resetArmed, setResetArmed] = useState(false);
 
   const wm = album.watermark_enabled ? album.watermark_text || studioName : null;
 
@@ -475,41 +480,27 @@ export default function CustomerAlbum({
   }
 
   /**
-   * Thêm nhiều ảnh vào lựa chọn một lượt (nút "chọn bản nét nhất của mọi nhóm").
+   * Bỏ TOÀN BỘ lựa chọn: ảnh đã chọn, ảnh không thích, và mọi ghi chú.
    *
-   * Dừng đúng ở hạn mức chứ không bỏ cả lượt: album giới hạn 100 ảnh mà khách
-   * bấm nút gợi ý 120 tấm thì thêm được 100 vẫn hơn là không thêm gì — và câu
-   * báo nói rõ đã dừng vì chạm hạn mức.
+   * Đi qua đúng đường của một lượt sửa bình thường (`recordEdit`) chứ không gọi
+   * thẳng máy chủ: nhờ vậy nó cũng được sổ trên máy ghi lại, cũng thử lại khi
+   * mất mạng, và cũng hoà giải đúng nếu album đang mở trên một điện thoại khác —
+   * "xoá hết" là một thay đổi như mọi thay đổi khác, không phải một lối đi riêng.
    */
-  function selectMany(ids: string[]) {
-    const next = new Set(selectedRef.current);
-    let added = 0;
-    let stopped = false;
-    for (const id of ids) {
-      if (next.has(id)) continue;
-      if (limit != null && next.size >= limit) {
-        stopped = true;
-        break;
-      }
-      next.add(id);
-      added++;
-      // Chọn một ảnh đang bị đánh dấu không thích ⇒ bỏ khỏi danh sách đó, y hệt
-      // luật của `toggle` — hai trạng thái này loại trừ nhau.
-      if (dislikedRef.current.has(id)) {
-        const d = new Set(dislikedRef.current);
-        d.delete(id);
-        dislikedRef.current = d;
-        setDisliked(d);
-      }
-    }
-    if (added === 0) {
-      flashToast(stopped ? t("limitReached") : t("dupPicked"));
-      return;
-    }
-    selectedRef.current = next;
-    setSelected(next);
+  function resetPicks() {
+    setResetArmed(false);
+    if (selectedRef.current.size === 0 && dislikedRef.current.size === 0) return;
+    selectedRef.current = new Set();
+    dislikedRef.current = new Set();
+    notesRef.current = {};
+    setSelected(new Set());
+    setDisliked(new Set());
+    setNotes({});
+    // Về lại lưới đầy đủ: đứng ở tab "ảnh đã chọn" sau khi vừa xoá sạch thì
+    // khách nhìn thấy một trang trắng và tưởng album hỏng.
+    setView("all");
     recordEdit();
-    flashToast(stopped ? t("limitReached") : t("dupPicked"));
+    flashToast(t("resetDone"));
   }
 
   function setNote(id: string, text: string) {
@@ -989,6 +980,14 @@ export default function CustomerAlbum({
                   onClick: shareSelected,
                   disabled: selected.size === 0 || shareBusy,
                 },
+                {
+                  key: "reset",
+                  icon: <RotateCcw size={15} />,
+                  label: t("resetPicks"),
+                  onClick: () => setResetArmed(true),
+                  disabled: selected.size === 0 && disliked.size === 0,
+                  danger: true,
+                },
               ]}
             />
           )}
@@ -1010,6 +1009,38 @@ export default function CustomerAlbum({
           )}
         </div>
 
+        {/* Xác nhận bỏ chọn tất cả. Hai bước chứ không một: xoá cả buổi chiều
+            ngồi chọn ảnh cưới bằng một cú bấm nhầm là thứ không có đường lùi —
+            sổ trên máy ghi đè ngay, và bản trên máy chủ bị đè ở lượt lưu kế tiếp.
+            Nói RÕ SỐ sắp mất, chứ không hỏi chung chung "bạn chắc chứ?". */}
+        {resetArmed && (
+          <div
+            className="mb-4 flex flex-wrap items-center gap-2.5 rounded-[12px] px-4 py-3"
+            style={{ background: "var(--surface)", border: "1px solid var(--danger)" }}
+          >
+            <span className="flex-1 text-[13px]" style={{ color: "var(--text)" }}>
+              {t("resetAsk")} <b>{selected.size}</b> {t("resetAskSelected")}
+              {disliked.size > 0 && (
+                <> · <b>{disliked.size}</b> {t("resetAskDisliked")}</>
+              )}
+            </span>
+            <button
+              onClick={() => setResetArmed(false)}
+              className="rounded-lg px-3 py-2 text-[13px] font-semibold"
+              style={{ background: "var(--surface2)", color: "var(--text2)" }}
+            >
+              {t("cancel")}
+            </button>
+            <button
+              onClick={resetPicks}
+              className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[13px] font-bold"
+              style={{ background: "var(--danger)", color: "#fff" }}
+            >
+              <RotateCcw size={15} /> {t("resetConfirm")}
+            </button>
+          </div>
+        )}
+
         {/* Gợi ý ảnh na ná nhau. Chỉ hiện ở tab "tất cả" và khi album đủ nhiều
             ảnh để có chuyện trùng — album 12 tấm đã là bản studio lọc sẵn, thêm
             một khối công cụ vào đó chỉ làm khách phân tâm. Chế độ xem link chia
@@ -1028,9 +1059,7 @@ export default function CustomerAlbum({
             }}
             hide={hideDupes}
             onHide={setHideDupes}
-            onSelectMany={selectMany}
             onToggle={toggle}
-            atLimit={atLimit}
           />
         )}
 
@@ -1440,6 +1469,8 @@ type TaskItem = {
   onClick: () => void;
   disabled?: boolean;
   accent?: boolean;
+  /** Thao tác XOÁ — vẽ màu cảnh báo để không bấm nhầm giữa các mục lành tính. */
+  danger?: boolean;
 };
 
 /**
@@ -1506,7 +1537,10 @@ function TaskMenu({ items }: { items: TaskItem[] }) {
                 }}
                 disabled={it.disabled}
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors hover:bg-[var(--surface2)] disabled:opacity-40 disabled:hover:bg-transparent"
-                style={{ color: it.accent ? "var(--accent)" : "var(--text)", fontWeight: it.accent ? 700 : 500 }}
+                style={{
+                  color: it.danger ? "var(--danger)" : it.accent ? "var(--accent)" : "var(--text)",
+                  fontWeight: it.accent || it.danger ? 700 : 500,
+                }}
               >
                 <span className="flex-shrink-0">{it.icon}</span>
                 <span className="truncate">{it.label}</span>

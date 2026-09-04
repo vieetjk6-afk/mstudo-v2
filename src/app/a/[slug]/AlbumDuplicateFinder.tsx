@@ -26,12 +26,14 @@ import { scanPhotos, scanSupported, type ScanItem, type ScanProgress } from "@/l
 
     1. KHÔNG TỰ CHẠY. Quét là việc nặng và tốn 3G. Khách phải bấm mới chạy, và
        nút nói rõ nó sẽ làm gì.
-    2. KHÔNG BAO GIỜ TỰ ĐỘNG CHỌN HAY BỎ CHỌN MỘT TẤM NÀO. Máy chỉ nhóm lại và
-       gợi ý; mọi thay đổi lựa chọn đều do khách bấm.
-       Ngoại lệ DUY NHẤT và có chủ ý: quét xong mà tìm được nhóm nào thì bật sẵn
-       "chỉ hiện bản nét nhất" — đó chính là thứ khách vừa bấm nút để có, và nó
-       chỉ ẨN bớt khỏi lưới chứ không đụng vào lựa chọn. Có công tắc tắt ngay
-       cạnh, và ảnh khách ĐÃ CHỌN thì không bao giờ bị ẩn.
+    2. KHÔNG BAO GIỜ ĐỘNG VÀO LỰA CHỌN. Quét xong, máy chỉ TÁCH RIÊNG các tấm
+       trùng ra khỏi lưới và bày chúng thành từng chuỗi ở khối này; không tấm nào
+       được thêm vào lựa chọn của khách. Khách bấm tấm nào thì tấm đó mới vào —
+       và đó là đường DUY NHẤT một tấm đi vào lựa chọn từ khối này. Cố ý KHÔNG có
+       nút "chọn hết bản đề xuất": một cú bấm thêm sáu chục tấm vào danh sách rồi
+       khách phải ngồi gỡ ra thì tệ hơn hẳn là tự bấm sáu chục lần có chủ ý.
+       Việc tách riêng có công tắc tắt ngay cạnh, và ảnh khách ĐÃ CHỌN thì không
+       bao giờ bị tách khỏi lưới.
     3. QUÉT QUA ẢNH XEM TRƯỚC đã có sẵn trên lưới (`/api/img`), nên phần lớn tấm
        đã nằm trong cache trình duyệt: không tải thêm gì đáng kể, và không byte
        ảnh gốc nào rời khỏi máy khách.
@@ -53,9 +55,7 @@ export default function AlbumDuplicateFinder({
   onGroups,
   hide,
   onHide,
-  onSelectMany,
   onToggle,
-  atLimit,
 }: {
   /** Ảnh theo ĐÚNG thứ tự bấm máy — luật gom nhóm dựa vào thứ tự đó. */
   photos: FinderPhoto[];
@@ -64,10 +64,8 @@ export default function AlbumDuplicateFinder({
   onGroups: (g: DuplicateGroup[] | null) => void;
   hide: boolean;
   onHide: (v: boolean) => void;
-  onSelectMany: (ids: string[]) => void;
+  /** Bấm một tấm trong khối này = thêm/bỏ tấm đó khỏi lựa chọn của khách. */
   onToggle: (id: string) => void;
-  /** Đã chạm hạn mức chọn ảnh — nút chọn hàng loạt phải tắt. */
-  atLimit: boolean;
 }) {
   const { t } = useLang();
   // Mở SẴN. Khách vào đây để chọn ảnh, không để đi tìm công cụ — một khối gập
@@ -110,7 +108,6 @@ export default function AlbumDuplicateFinder({
     abortRef.current = null;
   }, [busy, scanList, onGroups]);
 
-  const bestIds = useMemo(() => (groups ?? []).map((g) => g.bestKey), [groups]);
   const dupCount = useMemo(
     () => (groups ?? []).reduce((n, g) => n + g.keys.length - 1, 0),
     [groups]
@@ -205,14 +202,6 @@ export default function AlbumDuplicateFinder({
                   <b>{groups.length}</b> {t("dupFound")}
                 </span>
                 <button
-                  onClick={() => onSelectMany(bestIds)}
-                  disabled={atLimit}
-                  className="flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[12.5px] font-bold disabled:opacity-50"
-                  style={{ background: "var(--gold)", color: "#fff" }}
-                >
-                  <Check size={14} /> {t("dupPickAll")}
-                </button>
-                <button
                   onClick={() => onHide(!hide)}
                   className="flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[12.5px] font-semibold"
                   style={{
@@ -229,63 +218,80 @@ export default function AlbumDuplicateFinder({
                   {t("dupHideOn")}
                 </p>
               )}
+              <p className="mt-2 text-[12px] leading-relaxed" style={{ color: "var(--text2)" }}>
+                {t("dupPickHere")}
+              </p>
 
               {/* Mỗi chuỗi một hàng cuộn ngang: trên điện thoại đó là cách duy
                   nhất đặt bảy tấm cạnh nhau mà tấm nào cũng còn đủ to để nhìn. */}
               <div className="mt-3 flex flex-col gap-2.5">
-                {groups.map((g) => (
-                  <div
-                    key={g.bestKey}
-                    className="flex gap-2 overflow-x-auto rounded-[10px] p-2"
-                    style={{ background: "var(--surface2)" }}
-                  >
-                    {g.keys.map((id) => {
-                      const p = byId.get(id);
-                      if (!p) return null;
-                      const isBest = id === g.bestKey;
-                      const isPicked = selected.has(id);
-                      return (
-                        <button
-                          key={id}
-                          onClick={() => onToggle(id)}
-                          aria-pressed={isPicked}
-                          className="relative h-[104px] w-[104px] flex-none overflow-hidden rounded-[8px]"
-                          style={{
-                            border: isPicked
-                              ? "2.5px solid var(--gold)"
-                              : isBest
-                                ? "2.5px solid var(--success, #1e9e72)"
-                                : "2.5px solid transparent",
-                          }}
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={thumbnailUrl(p.drive_file_id, 320)}
-                            alt={p.name}
-                            loading="lazy"
-                            className="h-full w-full object-cover"
-                          />
-                          {isBest && (
-                            <span
-                              className="absolute left-1 top-1 rounded-[5px] px-1.5 py-0.5 text-[9.5px] font-bold"
-                              style={{ background: "var(--success, #1e9e72)", color: "#fff" }}
-                            >
-                              {t("dupBest")}
-                            </span>
-                          )}
-                          {isPicked && (
-                            <span
-                              className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full"
-                              style={{ background: "var(--gold)", color: "#fff" }}
-                            >
-                              <Check size={12} />
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ))}
+                {groups.map((g) => {
+                  const picked = g.keys.filter((k) => selected.has(k)).length;
+                  return (
+                    <div
+                      key={g.bestKey}
+                      className="rounded-[10px] p-2"
+                      style={{ background: "var(--surface2)" }}
+                    >
+                      {/* Đếm ĐÃ CHỌN của riêng chuỗi này. Không có nó thì cuộn
+                          qua hai chục chuỗi xong khách không nhớ chuỗi nào đã
+                          xử lý rồi. */}
+                      <p
+                        className="mb-1.5 px-0.5 text-[11px]"
+                        style={{ color: picked > 0 ? "var(--gold)" : "var(--text3)" }}
+                      >
+                        {g.keys.length} {t("photos")} · {picked > 0 ? `${picked} ${t("dupInGroup")}` : "—"}
+                      </p>
+                      <div className="flex gap-2 overflow-x-auto">
+                      {g.keys.map((id) => {
+                        const p = byId.get(id);
+                        if (!p) return null;
+                        const isBest = id === g.bestKey;
+                        const isPicked = selected.has(id);
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => onToggle(id)}
+                            aria-pressed={isPicked}
+                            className="relative h-[104px] w-[104px] flex-none overflow-hidden rounded-[8px]"
+                            style={{
+                              border: isPicked
+                                ? "2.5px solid var(--gold)"
+                                : isBest
+                                  ? "2.5px solid var(--success, #1e9e72)"
+                                  : "2.5px solid transparent",
+                            }}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={thumbnailUrl(p.drive_file_id, 320)}
+                              alt={p.name}
+                              loading="lazy"
+                              className="h-full w-full object-cover"
+                            />
+                            {isBest && (
+                              <span
+                                className="absolute left-1 top-1 rounded-[5px] px-1.5 py-0.5 text-[9.5px] font-bold"
+                                style={{ background: "var(--success, #1e9e72)", color: "#fff" }}
+                              >
+                                {t("dupBest")}
+                              </span>
+                            )}
+                            {isPicked && (
+                              <span
+                                className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full"
+                                style={{ background: "var(--gold)", color: "#fff" }}
+                              >
+                                <Check size={12} />
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}

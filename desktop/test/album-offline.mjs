@@ -192,5 +192,45 @@ check("chỉ đổi ghi chú → 1", diffCount(picks(["a"], [], { a: "x" }), pic
   check("chưa có sổ → coi như đã lưu (chưa bấm gì)", syncBadge(null, "idle", true).text, "Đã lưu");
 }
 
+/* ── "Bỏ chọn tất cả" ─────────────────────────────────────────────────────────
+   Nút reset đi qua ĐÚNG đường của một lượt sửa bình thường: ghi sổ rồi gửi lên.
+   Điều dễ vỡ là bước hoà giải sau đó — máy chủ vẫn đang giữ 20 tấm đã chọn, và
+   nếu luật trộn hiểu "bên nào có thì thắng" thì lượt đọc lại kế tiếp sẽ kéo cả
+   20 tấm về và nút reset thành ra không làm gì cả. */
+
+{
+  const before = picks(["a", "b", "c"], ["x"], { a: "cận cảnh" });
+  let led = newLedger(SLUG, before, 1000);
+  led = markSynced(led, led.editedAt, before); // máy chủ đang giữ đúng bản này
+
+  // Khách bấm "bỏ hết".
+  const empty = picks();
+  led = applyEdit(led, empty, 2000);
+  check("xoá sạch → sổ ghi bản rỗng", led.picks, empty);
+  check("xoá sạch VẪN là một thay đổi chờ gửi", isPending(led), true);
+  check("đếm đúng 4 thay đổi (3 chọn + 1 không thích)", pendingCount(led), 4);
+
+  // Vòng đọc lại chạy TRƯỚC khi lượt gửi kịp lên: máy chủ vẫn trả bản cũ.
+  const out = mergeFromServer(led, before, SLUG, 3000);
+  check("lượt đọc lại KHÔNG kéo lựa chọn đã xoá quay về", out.ledger.picks, empty);
+  check("… và vẫn còn thay đổi chờ gửi", isPending(out.ledger), true);
+
+  // Gửi thành công rồi thì mới hết chờ, và bản rỗng là bản chốt.
+  const synced = markSynced(out.ledger, out.ledger.editedAt, empty);
+  check("gửi xong → hết chờ", isPending(synced), false);
+  check("gửi xong → máy chủ và máy khách cùng rỗng", synced.base, empty);
+
+  // Máy KHÁC chọn thêm một tấm trong lúc máy này vừa xoá sạch: tấm đó là thay
+  // đổi của HỌ so với nền chung, nên nó phải được giữ — xoá hết không có nghĩa
+  // là quyền phủ quyết lên máy kia.
+  let led2 = newLedger(SLUG, before, 1000);
+  led2 = markSynced(led2, led2.editedAt, before);
+  led2 = applyEdit(led2, picks(), 2000);
+  const remote = picks(["a", "b", "c", "d"], ["x"], { a: "cận cảnh" });
+  const out2 = mergeFromServer(led2, remote, SLUG, 3000);
+  check("máy kia vừa thêm ảnh 'd' → giữ lại 'd' dù máy này xoá sạch",
+    out2.ledger.picks.selected, ["d"]);
+}
+
 console.log(fail ? `\n${fail} kiểm thử KHÔNG đạt` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

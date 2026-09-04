@@ -134,6 +134,14 @@ export const dict: Dict = {
     vi: "Nhấn dấu × ở góc trái mỗi ảnh để đánh dấu không thích — ảnh sẽ được ẩn khỏi lưới chọn.",
     en: "Tap the × on any photo to mark it as disliked — it will be hidden from the grid.",
   },
+  // bỏ chọn tất cả
+  cancel: { vi: "Huỷ", en: "Cancel" },
+  resetPicks: { vi: "Bỏ chọn tất cả", en: "Clear all picks" },
+  resetAsk: { vi: "Bỏ hết lựa chọn? Sẽ mất", en: "Clear every pick? You will lose" },
+  resetAskSelected: { vi: "ảnh đã chọn", en: "selected photos" },
+  resetAskDisliked: { vi: "ảnh không thích", en: "disliked photos" },
+  resetConfirm: { vi: "Bỏ hết", en: "Clear all" },
+  resetDone: { vi: "Đã bỏ toàn bộ lựa chọn.", en: "All picks cleared." },
   // gợi ý ảnh trùng (bộ lọc chạy ngay trên máy khách)
   dupTitle: { vi: "Ảnh na ná nhau", en: "Near-identical photos" },
   dupIntro: {
@@ -153,16 +161,16 @@ export const dict: Dict = {
   },
   dupFound: { vi: "nhóm ảnh na ná nhau", en: "groups of near-identical photos" },
   dupBest: { vi: "Nét nhất", en: "Sharpest" },
-  dupPickAll: { vi: "Chọn bản nét nhất của mọi nhóm", en: "Pick the sharpest in every group" },
-  dupPicked: {
-    vi: "Đã thêm bản nét nhất vào lựa chọn của bạn.",
-    en: "Added the sharpest frames to your selection.",
-  },
-  dupHide: { vi: "Chỉ hiện bản nét nhất", en: "Show only the sharpest" },
+  dupHide: { vi: "Tách khỏi lưới ảnh", en: "Keep them out of the grid" },
   dupHideOn: {
-    vi: "Đang ẩn các bản trùng. Ảnh bạn đã chọn thì luôn hiện.",
-    en: "Hiding duplicates. Photos you picked always stay visible.",
+    vi: "Các bản trùng đã được tách khỏi lưới — lưới chỉ còn bản nét nhất mỗi nhóm. Ảnh bạn đã chọn thì luôn hiện.",
+    en: "Duplicates are kept out of the grid — it now shows one frame per group. Photos you picked always stay visible.",
   },
+  dupPickHere: {
+    vi: "Đây là những tấm đã tách riêng. Máy KHÔNG chọn hộ tấm nào — bấm tấm bạn muốn thì tấm đó mới vào lựa chọn.",
+    en: "These are the frames set aside. Nothing is picked for you — tap a frame and only then does it join your selection.",
+  },
+  dupInGroup: { vi: "đã chọn", en: "picked" },
   // selections view (photographer)
   customerSelections: { vi: "Lượt chọn của khách", en: "Customer selections" },
   note: { vi: "Ghi chú", en: "Note" },
