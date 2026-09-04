@@ -143,6 +143,13 @@ export const dict: Dict = {
   resetConfirm: { vi: "Bỏ hết", en: "Clear all" },
   resetDone: { vi: "Đã bỏ toàn bộ lựa chọn.", en: "All picks cleared." },
   // gợi ý ảnh trùng (bộ lọc chạy ngay trên máy khách)
+  // Lọc theo người — studio gom & đặt tên sẵn, khách chỉ bấm chip.
+  filterByPerson: { vi: "Xem ảnh của:", en: "Show photos of:" },
+  everyone: { vi: "Cả album", en: "Everyone" },
+  personHint: {
+    vi: "Đang chỉ hiện ảnh có mặt người này. Bấm lại vào chip để xem cả album.",
+    en: "Showing only photos this person appears in. Tap the chip again for the whole album.",
+  },
   dupTitle: { vi: "Ảnh na ná nhau", en: "Near-identical photos" },
   dupIntro: {
     vi: "Máy ảnh bấm liên tiếp nên nhiều tấm gần như giống hệt nhau. Bấm nút dưới đây để nhóm chúng lại và gợi ý bản nét nhất — bạn vẫn là người chọn.",

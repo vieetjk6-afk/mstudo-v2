@@ -16,6 +16,7 @@ import { applyFaces, summarizeFaces, type FaceSummary } from "@/lib/face-ai";
 import { faceScanSupported, loadFaceModel, detectFull } from "@/lib/face-detect";
 import { embedFace, loadRecognizer } from "@/lib/face-embed";
 import { GROUP_DEFAULTS, groupFaces, mergePeople, type FaceVector, type Person } from "@/lib/face-group";
+import AiPeopleSave from "@/components/AiPeopleSave";
 import {
   isDecodable,
   makePreviews,
@@ -82,6 +83,8 @@ export default function AiFilterPanel({
   sourceLabel,
   onUseNames,
   compact = false,
+  albums = [],
+  albumId,
 }: {
   sourceFiles: SourceFile[];
   /** "thư mục trên máy" / "link Drive" — để nói rõ độ chính xác mong đợi. */
@@ -89,6 +92,9 @@ export default function AiFilterPanel({
   /** Đưa danh sách tên file nên loại sang ô danh sách của công cụ Lọc ảnh. */
   onUseNames: (names: string[]) => void;
   compact?: boolean;
+  /** Album của studio — để lưu nhóm người xuống cho khách lọc. */
+  albums?: { id: string; title: string }[];
+  albumId?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
@@ -631,6 +637,21 @@ export default function AiFilterPanel({
                   Không gom được nhóm nào — lô này có thể ít ảnh chụp người, hoặc mỗi người chỉ xuất hiện
                   một hai lần.
                 </p>
+              )}
+
+              {/* Lưu xuống album: đây là điểm khác biệt lớn nhất giữa "hay" và
+                  "dùng được". Gom xong mà chỉ xem trên máy studio thì lần sau
+                  phải quét lại; lưu xuống thì KHÁCH lọc được mà không tải mô hình. */}
+              {people.length > 0 && albums.length > 0 && (
+                <AiPeopleSave
+                  people={people}
+                  vectors={vectorsRef.current}
+                  files={sourceFiles.map((f) => ({ key: f.key, name: f.name }))}
+                  previews={previews}
+                  albums={albums}
+                  albumId={albumId}
+                  tight={tight}
+                />
               )}
             </div>
           )}

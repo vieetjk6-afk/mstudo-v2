@@ -10,6 +10,7 @@ import { getStudioBrand } from "@/lib/studio-brand";
 import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
+import { visibleChips, type PersonChip } from "@/lib/face-people";
 import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
@@ -160,8 +161,10 @@ export default async function PublicAlbumPage({
   let selected: string[] = [];
   let disliked: string[] = [];
   let notes: Record<string, string> = {};
+  let people: PersonChip[] = [];
   if (!hasPassword) {
-    const [p, { data: s }, { data: sel }, { data: dis }] = await Promise.all([
+    const [p, { data: s }, { data: sel }, { data: dis }, { data: ppl }, { data: pplLinks }] =
+      await Promise.all([
       fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position"),
       admin
         .from("album_sources")
@@ -176,6 +179,16 @@ export default async function PublicAlbumPage({
         .from("dislikes")
         .select("photo_id, client_note")
         .eq("album_id", album.id),
+      // Nhóm người studio đã lưu. Chưa chạy migration album_people.sql thì hai
+      // câu này lỗi và `data` là null — album vẫn chạy y như trước, chỉ không có
+      // hàng chip. Cố ý không nổ: một tính năng thêm không được làm sập trang
+      // chọn ảnh của khách.
+      admin
+        .from("album_people")
+        .select("id, name, cover_photo_id, position")
+        .eq("album_id", album.id)
+        .order("position"),
+      admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
     ]);
     // Selection view prefers selection-stage photos. Only apply the filter when
     // there are BOTH selection and delivery sources — otherwise (e.g. every
@@ -195,6 +208,10 @@ export default async function PublicAlbumPage({
     disliked = (dis ?? []).map((r) => r.photo_id);
     for (const r of sel ?? []) if (r.client_note) notes[r.photo_id] = r.client_note;
     for (const r of dis ?? []) if (r.client_note) notes[r.photo_id] = r.client_note;
+    // Chỉ những ảnh THẬT SỰ hiện trong lưới: album giao khách / album chọn ảnh
+    // lọc theo source, nên một chip trỏ vào ảnh không hiện là một chip bấm vào
+    // ra lưới trống.
+    people = visibleChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id)));
   }
 
   return (
@@ -219,6 +236,7 @@ export default async function PublicAlbumPage({
       initialNotes={notes}
       shareIds={shareIds}
       initialDriveFolders={driveFolders}
+      initialPeople={people}
       studioName={studioName}
       logoUrl={brand.logoUrl}
       studioHost={studioHost}

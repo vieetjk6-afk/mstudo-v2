@@ -22,6 +22,7 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import AiFilterPanel from "@/components/AiFilterPanel";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
+import { matchKey } from "@/lib/face-people";
 import { triggerDownload } from "@/lib/download";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -42,7 +43,9 @@ interface SourceFile {
   handle?: any; // FileSystemFileHandle
 }
 
-const norm = (s: string) => stripExtension(s).trim().toLowerCase();
+// Luật ghép tên file dùng CHUNG với phần gom ảnh theo người. Hai luật gần giống
+// nhau đặt ở hai file sẽ lệch nhau lúc nào không biết, nên chỉ có một.
+const norm = matchKey;
 const ext = (n: string) => (n.includes(".") ? n.split(".").pop()!.toLowerCase() : "");
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "tif", "tiff", "bmp", "avif"]);
 const RAW_EXTS = new Set(["cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "raf", "rw2", "orf", "dng", "pef", "srw", "raw", "3fr", "fff", "iiq", "rwl", "mrw", "mef", "mos", "erf", "kdc", "dcr", "x3f"]);
@@ -481,6 +484,8 @@ export default function FilterTool({
               sourceFiles={sourceFiles}
               sourceLabel={photoSource === "drive" ? `${driveFiles.length} ảnh từ link Drive` : `${localFiles.length} ảnh trong thư mục trên máy`}
               compact={compact}
+              albums={albums}
+              albumId={albumId || undefined}
               onUseNames={(names) => {
                 // Đưa thẳng vào ô "Tự nhập" của bước 2: từ đó mọi nút sẵn có
                 // (chép sang thư mục / xoá khỏi Drive) hoạt động y như khi studio

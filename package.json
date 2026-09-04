@@ -50,6 +50,8 @@
     "test:face-ai": "node --experimental-strip-types desktop/test/face-ai.mjs",
     "test:face-browser": "node --experimental-strip-types desktop/test/face-browser.mjs",
     "test:face-group": "node --experimental-strip-types desktop/test/face-group.mjs",
+    "test:face-people": "node --experimental-strip-types desktop/test/face-people.mjs",
+    "test:people-chip": "node --experimental-strip-types desktop/test/people-chip-browser.mjs",
     "test:social-frame": "node --experimental-strip-types desktop/test/social-frame.mjs",
     "test:captcha": "node --experimental-strip-types desktop/test/captcha.mjs",
     "test:desktop-links": "node --experimental-strip-types desktop/test/desktop-links.mjs",

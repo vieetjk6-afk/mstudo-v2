@@ -29,6 +29,7 @@ import { useLang } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
+import { filterByPerson, type PersonChip } from "@/lib/face-people";
 import {
   applyEdit,
   isPending,
@@ -90,6 +91,7 @@ export default function CustomerAlbum({
   initialNotes,
   shareIds,
   initialDriveFolders,
+  initialPeople,
   studioName = "Studio",
   logoUrl = null,
   studioHost = null,
@@ -102,6 +104,11 @@ export default function CustomerAlbum({
   initialNotes?: Record<string, string>;
   shareIds?: string[] | null;
   initialDriveFolders?: DriveFolder[];
+  /**
+   * Người trong album, do studio gom & đặt tên sẵn (studio quét MỘT LẦN trên máy
+   * họ). Khách chỉ nhận danh sách id ảnh — không tải một byte mô hình AI nào.
+   */
+  initialPeople?: PersonChip[];
   studioName?: string;
   logoUrl?: string | null;
   /** Domain riêng của studio — link chia sẻ phải mang tên miền đó, không phải mstudo.com. */
@@ -115,6 +122,11 @@ export default function CustomerAlbum({
   // Link thư mục Drive của album. Album có mật khẩu thì server chưa trả về gì
   // cho tới khi mở khoá, nên nhận thêm ở bước unlock().
   const [driveFolders, setDriveFolders] = useState<DriveFolder[]>(initialDriveFolders ?? []);
+  // Chip lọc theo người. Album có mật khẩu thì server chưa gửi gì cho tới khi mở
+  // khoá, nên cũng nhận thêm ở bước unlock() — giống photos/sources.
+  const [people, setPeople] = useState<PersonChip[]>(initialPeople ?? []);
+  /** Người đang lọc. null = không lọc. */
+  const [personId, setPersonId] = useState<string | null>(null);
 
   const [password, setPassword] = useState("");
   const [pwError, setPwError] = useState(false);
@@ -546,6 +558,7 @@ export default function CustomerAlbum({
     setPhotos(data.photos ?? []);
     setSources(data.sources ?? []);
     setDriveFolders(data.driveFolders ?? []);
+    setPeople(data.people ?? []);
     // Album có mật khẩu: server component chưa gửi lựa chọn nào, nên bản của máy
     // chủ đến ở đây. Vẫn phải hoà giải với sổ trên máy — khách nhập mật khẩu lại
     // sau khi chọn dở lúc mất mạng là đúng tình huống cần cứu.
@@ -564,15 +577,29 @@ export default function CustomerAlbum({
     [hideDupes, dupGroups, selected]
   );
 
+  /** Người đang lọc — giữ ở đây để cả lưới và dòng đếm dùng chung. */
+  const activePerson = useMemo(
+    () => people.find((p) => p.id === personId) ?? null,
+    [people, personId]
+  );
+  /** id ảnh → id file Drive, để ảnh bìa chip không phải quét mảng photos mỗi lần vẽ. */
+  const driveIdOf = useMemo(
+    () => new Map(photos.map((p) => [p.id, p.drive_file_id])),
+    [photos]
+  );
+
   const visiblePhotos = useMemo(() => {
-    const base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
+    const tabbed = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
+    // Lọc theo người TRƯỚC mọi luật khác: nó là câu hỏi "cho tôi xem ảnh của mẹ
+    // tôi", còn "đã chọn / không thích" là cách xem TRONG tập ảnh đó.
+    const base = filterByPerson(tabbed, activePerson);
     // Luật lọc (kể cả "ảnh không thích biến khỏi lưới") nằm ở lib dùng chung với
     // route lưu lựa chọn — xem src/lib/album-dislike.ts.
     const shown = filterByView(base, { view, selected, disliked, shareSet });
     // Ẩn bản trùng CHỈ ở tab "tất cả": vào tab "ảnh đã chọn" mà vẫn bị giấu bớt
     // thì khách đếm lại lựa chọn của mình sẽ ra thiếu.
     return dupHidden && view === "all" ? shown.filter((p) => !dupHidden.has(p.id)) : shown;
-  }, [photos, activeTab, view, selected, disliked, shareSet, dupHidden]);
+  }, [photos, activeTab, activePerson, view, selected, disliked, shareSet, dupHidden]);
   const selectedPhotos = useMemo(() => photos.filter((p) => selected.has(p.id)), [photos, selected]);
 
   /** Dãy ảnh khung xem đang lật qua — xem ghi chú ở `lbGroup`. */
@@ -915,6 +942,69 @@ export default function CustomerAlbum({
           </div>
         )}
 
+        {/* Chip lọc theo NGƯỜI.
+            Studio đã gom & đặt tên sẵn trên máy họ, nên ở đây không có mô hình
+            AI nào tải về, không có gì phải quét: chỉ là một danh sách id ảnh.
+            Đúng câu hỏi mà cả nhà hỏi khi mở album — "ảnh của mẹ đâu?" — mà
+            trước đây phải cuộn tay qua bảy trăm tấm mới trả lời được. */}
+        {people.length > 0 && (
+          <div className="mt-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[12.5px]" style={{ color: "var(--text3)" }}>
+                {t("filterByPerson")}
+              </span>
+              <button
+                onClick={() => setPersonId(null)}
+                className="rounded-full px-3.5 py-1.5 text-[12.5px] transition-colors"
+                style={
+                  personId === null
+                    ? { background: "var(--accent)", color: "var(--accentInk)" }
+                    : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }
+                }
+              >
+                {t("everyone")}
+              </button>
+              {people.map((p) => {
+                const on = personId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setPersonId(on ? null : p.id)}
+                    className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3.5 text-[12.5px] transition-colors"
+                    style={
+                      on
+                        ? { background: "var(--accent)", color: "var(--accentInk)" }
+                        : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }
+                    }
+                  >
+                    <span
+                      className="h-7 w-7 flex-none overflow-hidden rounded-full"
+                      style={{ background: "var(--surface2)" }}
+                    >
+                      {p.coverPhotoId ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={thumbnailUrl(driveIdOf.get(p.coverPhotoId) ?? "", 160)}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </span>
+                    {p.name}
+                    <span className="opacity-60">{p.photoIds.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {activePerson && (
+              <p className="mt-2 text-[12.5px]" style={{ color: "var(--text3)" }}>
+                {t("personHint")}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Sticky toolbar */}
         <div
           className={`sticky top-[64px] z-20 mt-6 mb-7 flex flex-wrap items-center gap-2.5 rounded-2xl p-3 animate-[vkFade_.5s_ease_both]${shareMode ? " justify-between" : ""}`}
@@ -974,7 +1064,15 @@ export default function CustomerAlbum({
                     ? `${disliked.size} ảnh không thích`
                     : selectedOnly
                       ? `${selected.size} ảnh đã chọn`
-                      : `${selected.size}${limit != null ? `/${limit}` : ""} đã chọn · ${photos.length - disliked.size} ảnh`}
+                      : /* Số ảnh phải là số khách ĐANG THẤY. Đang lọc theo một người mà
+                           vẫn báo tổng cả album thì con số đó nói về một lưới khác. Phần
+                           "đã chọn" thì vẫn tính cả album — hạn chọn ảnh áp cho cả album,
+                           không phải cho từng người. */
+                        `${selected.size}${limit != null ? `/${limit}` : ""} đã chọn · ${
+                          activePerson
+                            ? `${activePerson.photoIds.filter((id) => !disliked.has(id)).length} ảnh của ${activePerson.name}`
+                            : `${photos.length - disliked.size} ảnh`
+                        }`}
                   <SyncPill ledger={ledger} activity={saveActivity} online={online} />
                 </span>
               </div>

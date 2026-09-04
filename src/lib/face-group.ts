@@ -201,6 +201,14 @@ export type Person = {
   faces: number;
   /** Ảnh có mặt người này, theo thứ tự thư mục, không trùng. */
   photoKeys: string[];
+  /**
+   * Chỉ số các khuôn mặt của người này TRONG mảng `faces` đã truyền vào.
+   *
+   * Không thể suy ra từ `photoKeys`: một tấm ảnh cưới có cả cô dâu và chú rể,
+   * nên "ảnh này thuộc người này" không cho biết KHUÔN MẶT nào là của ai. Cần
+   * đúng danh sách này để tính tâm cụm lưu xuống DB (xem `centroid`).
+   */
+  faceIdx: number[];
   /** Ảnh đại diện: khuôn mặt to nhất và nét nhất. */
   coverKey: string;
   /** Khuôn mặt thứ mấy trong ảnh đại diện — để cắt đúng mặt làm ảnh thẻ. */
@@ -228,15 +236,19 @@ export function groupFaces(faces: FaceVector[], opts: GroupOptions = {}): GroupR
   if (faces.length === 0) return { people: [], loose: 0 };
 
   const labels = chineseWhispers(faces, o);
-  const bucket = new Map<number, FaceVector[]>();
+  // Gom theo CHỈ SỐ, không theo bản sao khuôn mặt: người nào gồm khuôn mặt thứ
+  // mấy là thông tin phải giữ lại tới lúc lưu xuống DB (xem Person.faceIdx).
+  const bucket = new Map<number, number[]>();
   labels.forEach((lab, i) => {
-    if (!bucket.has(lab)) bucket.set(lab, []);
-    bucket.get(lab)!.push(faces[i]);
+    const arr = bucket.get(lab);
+    if (arr) arr.push(i);
+    else bucket.set(lab, [i]);
   });
 
   const people: Person[] = [];
   let loose = 0;
-  for (const list of bucket.values()) {
+  for (const idxs of bucket.values()) {
+    const list = idxs.map((i) => faces[i]);
     if (list.length < o.minFaces) {
       loose += list.length;
       continue;
@@ -257,6 +269,7 @@ export function groupFaces(faces: FaceVector[], opts: GroupOptions = {}): GroupR
       id: `p${people.length + 1}`,
       faces: list.length,
       photoKeys,
+      faceIdx: idxs,
       coverKey: cover.key,
       coverAt: cover.at,
     });
@@ -291,7 +304,14 @@ export function mergePeople(people: Person[], intoId: string, fromId: string): P
     .filter((p) => p.id !== fromId)
     .map((p) =>
       p.id === intoId
-        ? { ...p, faces: p.faces + from.faces, photoKeys: [...keys].sort() }
+        ? {
+            ...p,
+            faces: p.faces + from.faces,
+            photoKeys: [...keys].sort(),
+            // Hai cụm rời nhau nên không cần lọc trùng. Sắp lại theo số để tâm
+            // cụm tính ra giống nhau bất kể gộp theo chiều nào.
+            faceIdx: [...p.faceIdx, ...from.faceIdx].sort((a, b) => a - b),
+          }
         : p
     );
 }
@@ -302,15 +322,26 @@ export function mergePeople(people: Person[], intoId: string, fromId: string): P
  * Đây là cách sửa lỗi "gom thừa" — một tấm người lạ lọt vào cụm cô dâu. Gỡ tấm
  * cuối cùng thì người đó biến mất luôn: một thẻ lọc không còn ảnh nào chỉ là một
  * ô trống chờ ai đó bấm nhầm.
+ *
+ * Cần cả `faces` (đúng mảng đã truyền cho `groupFaces`) để bỏ luôn những khuôn
+ * mặt nằm trên tấm đó khỏi `faceIdx`. Bỏ tấm mà để lại khuôn mặt của nó thì tâm
+ * cụm lưu xuống DB vẫn mang theo người bị gỡ — sai âm thầm, và chỉ lộ ra ở lần
+ * quét sau khi cụm mới ghép vào đúng người bị gỡ ấy.
  */
-export function dropPhoto(people: Person[], personId: string, photoKey: string): Person[] {
+export function dropPhoto(
+  people: Person[],
+  personId: string,
+  photoKey: string,
+  faces: readonly { key: string }[]
+): Person[] {
   return people
     .map((p) => {
       if (p.id !== personId) return p;
       const photoKeys = p.photoKeys.filter((k) => k !== photoKey);
+      const faceIdx = p.faceIdx.filter((i) => faces[i]?.key !== photoKey);
       const coverKey = p.coverKey === photoKey ? (photoKeys[0] ?? "") : p.coverKey;
       const coverAt = p.coverKey === photoKey ? 0 : p.coverAt;
-      return { ...p, photoKeys, coverKey, coverAt, faces: Math.max(0, p.faces - 1) };
+      return { ...p, photoKeys, faceIdx, coverKey, coverAt, faces: faceIdx.length };
     })
     .filter((p) => p.photoKeys.length > 0);
 }
@@ -323,6 +354,105 @@ export function photoToPeople(people: Person[]): Map<string, string[]> {
       if (!out.has(k)) out.set(k, []);
       out.get(k)!.push(p.id);
     }
+  }
+  return out;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Nhận lại người đã lưu ở lần quét trước
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Tâm cụm: trung bình các vector của một người.
+ *
+ * Đây là thứ lưu xuống DB làm "chứng minh thư" của người đó. Lấy trung bình chứ
+ * không lấy vector của một khuôn mặt đại diện, vì trung bình NẰM GẦN mọi thành
+ * viên hơn là các thành viên gần nhau — nên đo với cùng ngưỡng 0,6 thì vừa ít
+ * nhận nhầm người khác, vừa ít bỏ sót chính người đó.
+ *
+ * Bỏ qua vector sai chiều thay vì để nó kéo lệch tâm cụm. Không còn vector nào
+ * dùng được thì trả `null`: người đó lưu xuống KHÔNG có descriptor, và lần quét
+ * sau đơn giản là không nhận lại được — thà vậy hơn là nhận lại bằng một tâm cụm
+ * rác rồi gán tên "Cô dâu" cho người khác.
+ */
+export function centroid(vectors: readonly (readonly number[])[]): number[] | null {
+  const dim = vectors.find((v) => v.length > 0)?.length ?? 0;
+  if (dim === 0) return null;
+  const sum = new Array<number>(dim).fill(0);
+  let n = 0;
+  for (const v of vectors) {
+    if (v.length !== dim) continue;
+    for (let i = 0; i < dim; i++) sum[i] += v[i];
+    n++;
+  }
+  if (n === 0) return null;
+  return sum.map((s) => s / n);
+}
+
+/** Một người ĐÃ LƯU ở lần quét trước, đọc lên từ DB. */
+export type KnownPerson = {
+  id: string;
+  name: string;
+  /** Tâm cụm đã lưu. Rỗng/sai chiều thì người này không tham gia ghép. */
+  descriptor: readonly number[];
+};
+
+/** Kết quả ghép một cụm mới với người cũ. `knownId` rỗng = người mới. */
+export type PersonMatch = {
+  /** Khoá cụm trong phiên quét này (Person.id). */
+  personId: string;
+  knownId: string | null;
+  /** Tên kế thừa được, rỗng nếu là người mới. */
+  name: string;
+  /** Khoảng cách tới người cũ, `Infinity` nếu không ghép được. */
+  distance: number;
+};
+
+/**
+ * Ghép các cụm của lần quét này với những người studio đã đặt tên lần trước.
+ *
+ * Vì sao cần: studio thật không quét một lần rồi xong. Giao đợt đầu, chụp thêm,
+ * quét đợt hai. Không ghép thì lần hai ra một bộ người hoàn toàn mới, studio
+ * phải đặt lại tên từ đầu, và những chip khách đang dùng trỏ vào người cũ.
+ *
+ * GHÉP MỘT-ĐỐI-MỘT, tham lam theo khoảng cách tăng dần. Hai cụm mới KHÔNG được
+ * cùng nhận một người cũ: khi một người bị tách thành hai cụm (ngưỡng quá chặt,
+ * hoặc ảnh nửa mặt), chỉ cụm gần hơn thừa hưởng cái tên; cụm kia để trống cho
+ * studio tự gộp. Cho cả hai cùng tên thì tạo ra hai "Cô dâu" trong một album —
+ * đúng thứ mà chỉ mục `album_people_name_uk` từ chối, và cũng là dữ liệu sai.
+ *
+ * Thứ tự so sánh có phá hoà (theo chỉ số) nên cùng đầu vào luôn ra cùng kết quả.
+ */
+export function matchKnown(
+  fresh: readonly { id: string; descriptor: readonly number[] | null }[],
+  known: readonly KnownPerson[],
+  opts: GroupOptions = {}
+): PersonMatch[] {
+  const o = { ...GROUP_DEFAULTS, ...opts };
+  const pairs: { fi: number; ki: number; d: number }[] = [];
+  for (let fi = 0; fi < fresh.length; fi++) {
+    const fd = fresh[fi].descriptor;
+    if (!fd || fd.length === 0) continue;
+    for (let ki = 0; ki < known.length; ki++) {
+      const d = euclidean(fd, known[ki].descriptor);
+      if (d <= o.maxDistance) pairs.push({ fi, ki, d });
+    }
+  }
+  pairs.sort((a, b) => a.d - b.d || a.fi - b.fi || a.ki - b.ki);
+
+  const takenFresh = new Set<number>();
+  const takenKnown = new Set<number>();
+  const out: PersonMatch[] = fresh.map((f) => ({
+    personId: f.id,
+    knownId: null,
+    name: "",
+    distance: Infinity,
+  }));
+  for (const { fi, ki, d } of pairs) {
+    if (takenFresh.has(fi) || takenKnown.has(ki)) continue;
+    takenFresh.add(fi);
+    takenKnown.add(ki);
+    out[fi] = { personId: fresh[fi].id, knownId: known[ki].id, name: known[ki].name, distance: d };
   }
   return out;
 }

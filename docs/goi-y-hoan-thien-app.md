@@ -479,8 +479,43 @@ Và phải tự chọn nền tính toán (`webgl` rồi lùi `cpu`) trước khi
 bản UMD ưu tiên nền `wasm` mà ta không phục vụ, không chọn tay thì chết với đúng
 một câu khó hiểu.
 
+**Studio quét một lần, khách không tải gì.** Đây là phần quyết định tính năng này
+có dùng được thật hay chỉ hay trên máy studio. Mô hình nặng 26 MB; bắt mỗi điện
+thoại trong nhà tải 26 MB qua 3G rồi chạy nhận dạng trên 800 tấm là đánh đổi tệ,
+trong khi studio chỉ phải làm một lần. Nên studio đặt tên từng người ("Cô dâu",
+"Mẹ chú rể") và **lưu xuống DB**; khách mở album thấy hàng **chip lọc** và tải
+thêm đúng vài KB JSON — không một byte mô hình nào. Bảng
+`supabase/migrations/album_people.sql`; ghi thẳng bằng anon key + RLS, **không**
+qua API route, nên không tốn một lượt gọi hàm serverless nào.
+
+Ba chỗ dễ hỏng âm thầm ở phần lưu này, và cách chặn:
+
+- **Ghép ảnh với album.** Lúc quét, ảnh là file trên đĩa/Drive; trong DB nó là
+  một hàng `photos` có uuid. Luật ghép duy nhất là **tên file bỏ phần mở rộng** —
+  studio lọc trên RAW mà giao khách JPG là chuyện thường. Đúng luật mà công cụ
+  Lọc ảnh đã dùng, nên nó là **một hàm dùng chung** (`matchKey`) chứ không phải
+  hai luật gần giống nhau ở hai file. Ảnh quét được mà không có trong album thì
+  **hiện số ra**, vì đó cũng là dấu hiệu studio đang quét sai thư mục.
+- **Quét đợt hai.** Studio không quét một lần rồi xong: giao đợt đầu, chụp thêm,
+  quét lại. Không lưu vector thì lượt sau ra một bộ người hoàn toàn mới, studio
+  đặt tên lại từ đầu và chip của khách đứt. Nên mỗi người lưu kèm **tâm cụm**
+  (trung bình các vector — nằm gần mọi thành viên hơn là các thành viên gần nhau,
+  nên cùng ngưỡng 0,6 thì vừa ít nhận nhầm vừa ít bỏ sót), và lượt sau **ghép
+  một-đối-một** với người cũ. Một-đối-một là bắt buộc: khi một người bị tách
+  thành hai cụm, chỉ cụm gần hơn thừa hưởng cái tên — cho cả hai cùng tên thì
+  album có hai "Cô dâu", đúng thứ chỉ mục UNIQUE của DB từ chối.
+- **Chip bấm vào ra lưới trống.** Studio xoá ảnh khỏi album sau khi lưu là chuyện
+  bình thường. Nên chip chỉ dựng từ người **đã đặt tên** và ảnh **còn hiện trong
+  lưới**, và người không còn ảnh nào thì không thành chip.
+
+Người studio đã lưu mà lượt quét sau không thấy thì **giữ nguyên** — quét một thư
+mục nhỏ hơn không nên xoá công đặt tên của lần trước; muốn bỏ thì có nút xoá riêng.
+
 Luật `src/lib/face-group.ts` (`npm run test:face-group`) · căn chỉnh + mô hình
-`src/lib/face-embed.ts` · kiểm chứng `/uipreview/gom-theo-nguoi`.
+`src/lib/face-embed.ts` · phần lưu & chip `src/lib/face-people.ts`
+(`npm run test:face-people`) · kiểm chứng `/uipreview/gom-theo-nguoi` và
+`/uipreview/loc-theo-nguoi` (`npm run test:people-chip`, chạy trong Chromium thật
+— hai lỗi hydrate của repo này đều thuộc loại chỉ lộ ra ở đó).
 
 ## ✅ 4b. Xem đủ lớn để CHỌN — khung so sánh ảnh
 

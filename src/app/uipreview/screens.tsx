@@ -21,6 +21,7 @@ import AiCompareDemo from "./AiCompareDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
 import FaceGroupDemo from "./FaceGroupDemo";
+import PeopleChipDemo from "./PeopleChipDemo";
 import * as f from "./fixtures";
 
 /**
@@ -55,6 +56,10 @@ export const SCREENS: Record<
   "gom-theo-nguoi": {
     title: "Lọc ảnh AI — gom ảnh theo từng người (mặt vẽ bằng canvas)",
     render: () => <FaceGroupDemo />,
+  },
+  "loc-theo-nguoi": {
+    title: "Album khách — chip lọc theo người (dữ liệu giả)",
+    render: () => <PeopleChipDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",

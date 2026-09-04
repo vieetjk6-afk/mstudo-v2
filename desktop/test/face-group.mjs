@@ -171,31 +171,74 @@ const f = (key, x, y, { at = 0, area = 0.05, sharpness = 300 } = {}) => ({
 /* ═══ Sửa lại khi máy gom sai ════════════════════════════════════════════════ */
 
 {
+  // Năm khuôn mặt trên bốn tấm — tấm "c" có HAI mặt, mỗi người một mặt. Đúng
+  // tình huống làm faceIdx không suy ra được từ photoKeys.
+  const faces = [
+    { key: "a", at: 0 }, // 0 → p1
+    { key: "b", at: 0 }, // 1 → p1
+    { key: "c", at: 0 }, // 2 → p1
+    { key: "c", at: 1 }, // 3 → p2
+    { key: "d", at: 0 }, // 4 → p2
+  ];
   const people = [
-    { id: "p1", faces: 3, photoKeys: ["a", "b", "c"], coverKey: "a", coverAt: 0 },
-    { id: "p2", faces: 2, photoKeys: ["c", "d"], coverKey: "d", coverAt: 0 },
+    { id: "p1", faces: 3, photoKeys: ["a", "b", "c"], faceIdx: [0, 1, 2], coverKey: "a", coverAt: 0 },
+    { id: "p2", faces: 2, photoKeys: ["c", "d"], faceIdx: [3, 4], coverKey: "d", coverAt: 0 },
   ];
 
   // Gộp: cùng một người đội mũ và bỏ mũ rất dễ thành hai cụm.
   const merged = mergePeople(people, "p1", "p2");
   check("gộp xong còn một người", merged.length, 1);
   check("… gộp hết ảnh, không trùng", merged[0].photoKeys, ["a", "b", "c", "d"]);
+  check("… gộp cả danh sách khuôn mặt", merged[0].faceIdx, [0, 1, 2, 3, 4]);
   check("… người nhận giữ ảnh đại diện của mình", merged[0].coverKey, "a");
   check("gộp vào chính mình → không đổi gì", mergePeople(people, "p1", "p1"), people);
   check("gộp với người không tồn tại → không đổi gì", mergePeople(people, "p1", "p9"), people);
+  // Gộp theo chiều nào cũng ra CÙNG danh sách khuôn mặt: tâm cụm lưu xuống DB
+  // không được phụ thuộc vào studio bấm gộp từ thẻ nào.
+  check("gộp chiều ngược lại ra cùng danh sách khuôn mặt",
+    mergePeople(people, "p2", "p1")[0].faceIdx, [0, 1, 2, 3, 4]);
 
   // Gỡ một tấm: sửa lỗi "gom thừa", người lạ lọt vào cụm cô dâu.
-  const dropped = dropPhoto(people, "p1", "b");
+  const dropped = dropPhoto(people, "p1", "b", faces);
   check("gỡ đúng tấm khỏi đúng người", dropped[0].photoKeys, ["a", "c"]);
+  check("… và bỏ luôn khuôn mặt của tấm đó", dropped[0].faceIdx, [0, 2]);
+  check("… số khuôn mặt khớp lại", dropped[0].faces, 2);
   check("… không đụng người khác", dropped[1].photoKeys, ["c", "d"]);
 
+  // Tấm "c" có hai mặt, mỗi người một. Gỡ "c" khỏi p1 chỉ được bỏ mặt của p1;
+  // mặt của p2 trên cùng tấm đó phải còn nguyên.
+  const shared = dropPhoto(people, "p1", "c", faces);
+  check("gỡ tấm CHUNG: chỉ bỏ khuôn mặt của người bị gỡ", shared[0].faceIdx, [0, 1]);
+  check("… khuôn mặt người kia trên cùng tấm đó còn nguyên", shared[1].faceIdx, [3, 4]);
+
   // Gỡ đúng ảnh đại diện thì phải chọn ảnh khác, không để trống.
-  const noCover = dropPhoto(people, "p1", "a");
+  const noCover = dropPhoto(people, "p1", "a", faces);
   check("gỡ ảnh đại diện → lấy ảnh khác làm đại diện", noCover[0].coverKey, "b");
 
   // Gỡ tấm cuối cùng thì người đó biến mất: một thẻ lọc rỗng chỉ chờ bấm nhầm.
-  let one = [{ id: "p1", faces: 1, photoKeys: ["a"], coverKey: "a", coverAt: 0 }];
-  check("gỡ tấm cuối → người đó biến mất", dropPhoto(one, "p1", "a"), []);
+  let one = [{ id: "p1", faces: 1, photoKeys: ["a"], faceIdx: [0], coverKey: "a", coverAt: 0 }];
+  check("gỡ tấm cuối → người đó biến mất", dropPhoto(one, "p1", "a", faces), []);
+}
+
+/* ═══ faceIdx: người nào gồm khuôn mặt thứ mấy ═══════════════════════════════
+ * Không suy ra được từ photoKeys — một tấm ảnh cưới có cả cô dâu và chú rể. Sai
+ * chỗ này thì tâm cụm lưu xuống DB trộn hai người, và lần quét sau ghép sai tên.
+ */
+{
+  // Hai cụm dày cách xa nhau, xen kẽ nhau trong mảng đầu vào.
+  const mixed = [
+    f("x1", 0, 0), f("y1", 5, 0), f("x2", 0.1, 0),
+    f("y2", 5.1, 0), f("x3", 0.05, 0.1), f("y3", 5.05, 0.1),
+  ];
+  const g = groupFaces(mixed, { maxDistance: 0.6, minFaces: 3 });
+  check("hai cụm", g.people.length, 2);
+  for (const p of g.people) {
+    ok(`faceIdx của ${p.coverKey} có đúng ${p.faces} khuôn mặt`, p.faceIdx.length === p.faces);
+    ok(`… và trỏ đúng vào ảnh của người đó`,
+      p.faceIdx.every((i) => p.photoKeys.includes(mixed[i].key)));
+  }
+  const all = g.people.flatMap((p) => p.faceIdx);
+  ok("không khuôn mặt nào thuộc hai người", new Set(all).size === all.length);
 }
 
 /* ═══ Dữ liệu rác không được làm nổ ══════════════════════════════════════════ */

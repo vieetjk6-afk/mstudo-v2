@@ -60,23 +60,32 @@ function copy(label, from, to, only) {
     return;
   }
   mkdirSync(to, { recursive: true });
+  // Đếm những file THẬT SỰ chép lần này, không đếm cả thư mục đích: hai lượt chép
+  // dưới đây cùng ghi vào public/face-model, nên đọc thư mục sẽ báo cả file của
+  // lượt trước. Quan trọng hơn: một thư mục đích còn sót từ bản dựng cũ sẽ khiến
+  // hàng rào dưới đây tưởng là chép thành công.
+  const copied = [];
   if (only) {
     for (const f of only) {
-      if (existsSync(join(from, f))) cpSync(join(from, f), join(to, f));
+      if (!existsSync(join(from, f))) continue;
+      cpSync(join(from, f), join(to, f));
+      copied.push(f);
     }
   } else {
     cpSync(from, to, { recursive: true });
+    copied.push(...readdirSync(from));
   }
-  const files = readdirSync(to);
-  // Chép xong mà thư mục đích rỗng nghĩa là `only` không khớp file nào — tên file
-  // trong gói đã đổi ở một bản mới. Cũng phải dừng: đây đúng là kiểu thay đổi
-  // lặng lẽ mà không ai để ý cho tới lúc tính năng chết trên production.
-  if (REQUIRED && files.length === 0) {
-    console.error(`THIẾU ${label}: chép xong nhưng ${to} rỗng — tên file trong gói có thể đã đổi.`);
+  // Không chép được file nào nghĩa là `only` không khớp gì — tên file trong gói
+  // đã đổi ở một bản mới. Cũng phải dừng: đúng kiểu thay đổi lặng lẽ mà không ai
+  // để ý cho tới lúc tính năng chết trên production.
+  if (REQUIRED && copied.length === 0) {
+    console.error(
+      `THIẾU ${label}: có ${from} nhưng không chép được file nào — tên file trong gói có thể đã đổi.`
+    );
     process.exit(1);
   }
-  const mb = files.reduce((n, f) => n + statSync(join(to, f)).size, 0) / 1048576;
-  console.log(`Đã chép ${files.length} file ${label} (${mb.toFixed(1)} MB).`);
+  const mb = copied.reduce((n, f) => n + statSync(join(to, f)).size, 0) / 1048576;
+  console.log(`Đã chép ${copied.length} file ${label} (${mb.toFixed(1)} MB).`);
 }
 
 copy(
