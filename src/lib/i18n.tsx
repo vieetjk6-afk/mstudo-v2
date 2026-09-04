@@ -134,6 +134,35 @@ export const dict: Dict = {
     vi: "Nhấn dấu × ở góc trái mỗi ảnh để đánh dấu không thích — ảnh sẽ được ẩn khỏi lưới chọn.",
     en: "Tap the × on any photo to mark it as disliked — it will be hidden from the grid.",
   },
+  // gợi ý ảnh trùng (bộ lọc chạy ngay trên máy khách)
+  dupTitle: { vi: "Ảnh na ná nhau", en: "Near-identical photos" },
+  dupIntro: {
+    vi: "Máy ảnh bấm liên tiếp nên nhiều tấm gần như giống hệt nhau. Bấm nút dưới đây để nhóm chúng lại và gợi ý bản nét nhất — bạn vẫn là người chọn.",
+    en: "Cameras shoot in bursts, so many frames look almost identical. Group them and see the sharpest one — you still choose.",
+  },
+  dupRun: { vi: "Tìm ảnh na ná nhau", en: "Find near-identical photos" },
+  dupRunning: { vi: "Đang xem ảnh…", en: "Looking through the photos…" },
+  dupStop: { vi: "Dừng", en: "Stop" },
+  dupPrivacy: {
+    vi: "Ảnh được xem ngay trên máy bạn, không gửi đi đâu cả.",
+    en: "Everything happens on your device — no photo is uploaded anywhere.",
+  },
+  dupNone: {
+    vi: "Không có tấm nào na ná nhau — album này đã được chọn lọc rồi.",
+    en: "No near-identical frames — this album is already curated.",
+  },
+  dupFound: { vi: "nhóm ảnh na ná nhau", en: "groups of near-identical photos" },
+  dupBest: { vi: "Nét nhất", en: "Sharpest" },
+  dupPickAll: { vi: "Chọn bản nét nhất của mọi nhóm", en: "Pick the sharpest in every group" },
+  dupPicked: {
+    vi: "Đã thêm bản nét nhất vào lựa chọn của bạn.",
+    en: "Added the sharpest frames to your selection.",
+  },
+  dupHide: { vi: "Chỉ hiện bản nét nhất", en: "Show only the sharpest" },
+  dupHideOn: {
+    vi: "Đang ẩn các bản trùng. Ảnh bạn đã chọn thì luôn hiện.",
+    en: "Hiding duplicates. Photos you picked always stay visible.",
+  },
   // selections view (photographer)
   customerSelections: { vi: "Lượt chọn của khách", en: "Customer selections" },
   note: { vi: "Ghi chú", en: "Note" },

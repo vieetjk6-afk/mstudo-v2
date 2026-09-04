@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Sparkles, Play, X, Check, Info, AlertTriangle, Copy, Loader2 } from "lucide-react";
+import { Sparkles, Play, X, Check, Info, AlertTriangle, Copy, Loader2, Maximize2 } from "lucide-react";
 import { thumbnailUrl } from "@/lib/drive";
 import {
   AI_DEFAULTS,
@@ -19,6 +19,7 @@ import {
   type ScanItem,
   type ScanProgress,
 } from "@/lib/photo-ai-scan";
+import AiCompareView, { type CompareFrame } from "./AiCompareView";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LỌC ẢNH BẰNG AI — màn hình cho studio.
@@ -35,6 +36,11 @@ import {
        sai, chứ không phải tin một cái nhãn.
     3. BỎ TICK ĐƯỢC từng tấm. Máy chấm sai một tấm là chuyện sẽ xảy ra; phải có
        đường sửa ngay tại đây, trước khi danh sách đi tiếp.
+    4. XEM ĐƯỢC ĐỦ LỚN ĐỂ CHỌN. Nguyên tắc 3 là lời hứa suông nếu ảnh chỉ to
+       bằng con tem: bỏ tick một tấm mà không nhìn rõ nó thì cũng là đoán. Nên có
+       ô chỉnh cỡ ảnh cho cả bảng, và bấm vào một tấm là mở khung so sánh
+       (@/components/AiCompareView) — ảnh lớn, hai ảnh cạnh nhau, và cắt 1:1
+       điểm ảnh gốc để soi nét.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 type SourceFile = {
@@ -55,6 +61,16 @@ const VERDICT_META: Record<Verdict, { label: string; color: string; soft: string
 
 /** Trần số tấm vẽ ảnh xem trước — xem @/lib/photo-ai-scan makePreviews. */
 const PREVIEW_CAP = 240;
+
+/**
+ * Cỡ ô ảnh trong bảng kết quả. Ba nấc chứ không phải thanh trượt: studio chọn
+ * một lần cho cả lượt lọc, và ba nấc thì bấm một cái là xong.
+ *
+ * `md` là mặc định — 128px (nấc `sm`, cỡ cũ) đủ để BIẾT hai tấm khác nhau nhưng
+ * không đủ để CHỌN giữa chúng, mà chọn mới là việc studio ngồi đây để làm.
+ */
+const CARD_SIZES = { sm: 128, md: 190, lg: 264 } as const;
+type CardSize = keyof typeof CARD_SIZES;
 
 export default function AiFilterPanel({
   sourceFiles,
@@ -78,7 +94,14 @@ export default function AiFilterPanel({
   /** Tấm studio đã BỎ TICK — không đưa vào danh sách nên loại. */
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const [handedOff, setHandedOff] = useState(false);
+  const [cardSize, setCardSize] = useState<CardSize>("md");
+  /** Khung so sánh đang mở: danh sách tấm để lật + vị trí trong danh sách đó. */
+  const [compare, setCompare] = useState<{ keys: string[]; at: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Nguồn ảnh của lượt quét vừa xong. Khung so sánh giải mã lại ĐÚNG LÚC MỞ nên
+  // nó cần chính những ScanItem này — giữ ở ref chứ không state: đổi nó không
+  // làm bảng kết quả phải vẽ lại.
+  const itemsRef = useRef<ScanItem[]>([]);
 
   const supported = scanSupported();
   const fromDrive = sourceFiles.some((f) => f.driveId) && !sourceFiles.some((f) => f.file || f.handle);
@@ -112,12 +135,14 @@ export default function AiFilterPanel({
     setResult(null);
     setPreviews({});
     setExcluded(new Set());
+    setCompare(null);
     setHandedOff(false);
     setProgress({ done: 0, total: sourceFiles.length, failed: 0, current: "" });
     const ac = new AbortController();
     abortRef.current = ac;
     try {
       const items = await toScanItems();
+      itemsRef.current = items;
       const outcome = await scanPhotos(items, setProgress, ac.signal);
       setSkipped(outcome.skipped);
       if (outcome.aborted && outcome.metrics.length === 0) {
@@ -167,6 +192,43 @@ export default function AiFilterPanel({
     () => (result ? result.judgements.filter((j) => j.group === null && j.verdict !== "keep") : []),
     [result]
   );
+
+  const itemOf = useCallback((key: string) => itemsRef.current.find((i) => i.key === key), []);
+
+  const judgementByKey = useMemo(() => {
+    const m = new Map<string, PhotoJudgement>();
+    for (const j of result?.judgements ?? []) m.set(j.key, j);
+    return m;
+  }, [result]);
+
+  /** Đổi một dãy khoá thành dữ liệu khung so sánh cần. */
+  const compareFrames = useMemo<CompareFrame[]>(() => {
+    if (!compare) return [];
+    const out: CompareFrame[] = [];
+    for (const k of compare.keys) {
+      const j = judgementByKey.get(k);
+      if (!j) continue;
+      const meta = VERDICT_META[j.verdict];
+      out.push({
+        key: j.key,
+        name: j.name,
+        label: meta.label,
+        color: meta.color,
+        soft: meta.soft,
+        reason: j.reason,
+        sharpness: j.sharpness,
+        keeper: j.keeper,
+        inRemoveList: j.verdict === "duplicate" || j.verdict === "reject",
+      });
+    }
+    return out;
+  }, [compare, judgementByKey]);
+
+  /** Mở khung so sánh trên một dãy tấm, dừng ở tấm được bấm. */
+  const openCompare = useCallback((keys: string[], key: string) => {
+    const at = Math.max(0, keys.indexOf(key));
+    setCompare({ keys, at });
+  }, []);
 
   const pad = compact ? "p-4" : "p-6";
 
@@ -280,6 +342,24 @@ export default function AiFilterPanel({
             <span className="rounded-full px-3 py-1 text-[12px] font-semibold" style={{ background: "var(--sf2, var(--surface2))", color: "var(--tx2, var(--text2))" }}>
               {result.summary.groups} chuỗi bấm · trung vị điểm nét {Math.round(result.summary.medianSharpness)}
             </span>
+
+            {/* Cỡ ảnh cho CẢ bảng. Ba nấc, chọn một lần cho cả lượt lọc. */}
+            <span className="ml-auto flex items-center gap-1 text-[11.5px]" style={{ color: "var(--tx3, var(--text3))" }}>
+              Cỡ ảnh
+              {(["sm", "md", "lg"] as CardSize[]).map((sz) => (
+                <button
+                  key={sz}
+                  onClick={() => setCardSize(sz)}
+                  className="rounded-[7px] px-2 py-1 text-[11.5px] font-bold"
+                  style={{
+                    background: cardSize === sz ? "var(--ac, var(--accent))" : "var(--sf2, var(--surface2))",
+                    color: cardSize === sz ? "#fff" : "var(--tx2, var(--text2))",
+                  }}
+                >
+                  {sz === "sm" ? "Nhỏ" : sz === "md" ? "Vừa" : "Lớn"}
+                </button>
+              ))}
+            </span>
           </div>
 
           {skipped.length > 0 && (
@@ -321,7 +401,8 @@ export default function AiFilterPanel({
             <>
               <h4 className="mt-5 text-[13px] font-bold">Chuỗi bấm liên tiếp ({groups.length})</h4>
               <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3, var(--text3))" }}>
-                Viền xanh là bản nét nhất — bản nên giữ.
+                Viền xanh là bản nét nhất — bản nên giữ. <b>Bấm vào một tấm</b> để xem lớn, đặt cạnh bản
+                đề xuất, và soi 1:1 điểm ảnh gốc trước khi quyết.
               </p>
               <div className="mt-2.5 space-y-2.5">
                 {groups.map(([g, items]) => (
@@ -334,6 +415,10 @@ export default function AiFilterPanel({
                           preview={previews[j.key]}
                           excluded={excluded.has(j.key)}
                           onToggle={() => toggleExcluded(j.key, setExcluded)}
+                          size={CARD_SIZES[cardSize]}
+                          // Lật trong khung so sánh đi hết CHUỖI này — đúng phạm
+                          // vi của câu hỏi "giữ tấm nào trong mấy tấm giống nhau".
+                          onOpen={() => openCompare(items.map((x) => x.key), j.key)}
                         />
                       ))}
                     </div>
@@ -355,6 +440,8 @@ export default function AiFilterPanel({
                     preview={previews[j.key]}
                     excluded={excluded.has(j.key)}
                     onToggle={() => toggleExcluded(j.key, setExcluded)}
+                    size={CARD_SIZES[cardSize]}
+                    onOpen={() => openCompare(loners.map((x) => x.key), j.key)}
                   />
                 ))}
               </div>
@@ -374,6 +461,19 @@ export default function AiFilterPanel({
             {AI_DEFAULTS.dupWindow} tấm.
           </p>
         </>
+      )}
+
+      {compare && compareFrames.length > 0 && (
+        <AiCompareView
+          frames={compareFrames}
+          index={Math.min(compare.at, compareFrames.length - 1)}
+          itemOf={itemOf}
+          thumbs={previews}
+          excluded={excluded}
+          onToggle={(k) => toggleExcluded(k, setExcluded)}
+          onIndex={(i) => setCompare((c) => (c ? { ...c, at: i } : c))}
+          onClose={() => setCompare(null)}
+        />
       )}
     </section>
   );
@@ -398,26 +498,42 @@ function PhotoCard({
   preview,
   excluded,
   onToggle,
+  size,
+  onOpen,
 }: {
   j: PhotoJudgement;
   preview?: string;
   excluded: boolean;
   onToggle: () => void;
+  /** Cạnh ô ảnh, px — studio chỉnh cho cả bảng ở đầu phần kết quả. */
+  size: number;
+  /** Mở khung so sánh ở đúng tấm này. */
+  onOpen: () => void;
 }) {
   const meta = VERDICT_META[j.verdict];
   const inRemoveList = j.verdict === "duplicate" || j.verdict === "reject";
   const dimmed = excluded && inRemoveList;
   return (
     <div
-      className="w-[128px] overflow-hidden rounded-[9px]"
+      className="overflow-hidden rounded-[9px]"
       style={{
+        width: size,
         background: "var(--sf, var(--surface))",
         border: `2px solid ${j.keeper ? "var(--gn, #1e9e72)" : "var(--bd, var(--border))"}`,
         opacity: dimmed ? 0.45 : 1,
       }}
       title={j.reason}
     >
-      <div className="relative aspect-square" style={{ background: "var(--sf2, var(--surface2))" }}>
+      {/* Cả ô ảnh là một nút mở khung so sánh: đây là thao tác chính của bảng
+          này (xem tấm cho rõ rồi mới quyết), nên nó phải là chỗ dễ bấm nhất chứ
+          không phải một biểu tượng nhỏ ở góc. */}
+      <button
+        type="button"
+        onClick={onOpen}
+        aria-label={`Xem lớn ${j.name}`}
+        className="group relative block aspect-square w-full cursor-zoom-in"
+        style={{ background: "var(--sf2, var(--surface2))" }}
+      >
         {preview ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt={j.name} className="h-full w-full object-cover" loading="lazy" />
@@ -432,7 +548,13 @@ function PhotoCard({
         >
           {j.keeper ? "Nên giữ" : meta.label}
         </span>
-      </div>
+        <span
+          className="absolute bottom-1 right-1 flex h-6 w-6 items-center justify-center rounded-full opacity-0 transition-opacity group-hover:opacity-100"
+          style={{ background: "rgba(0,0,0,.55)", color: "#fff" }}
+        >
+          <Maximize2 size={12} />
+        </span>
+      </button>
       <div className="px-1.5 py-1.5">
         <p className="truncate text-[10.5px] font-semibold" title={j.name}>{j.name}</p>
         <p className="mt-0.5 text-[9.5px] leading-snug" style={{ color: "var(--tx3, var(--text3))" }}>{j.reason}</p>

@@ -47,6 +47,8 @@ import { ICON_HALO } from "@/lib/album-icon";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import AlbumCover from "@/components/AlbumCover";
 import DriveFolderLinks, { type DriveFolder } from "@/components/DriveFolderLinks";
+import AlbumDuplicateFinder from "./AlbumDuplicateFinder";
+import { duplicatesToHide, type DuplicateGroup } from "@/lib/photo-ai";
 
 interface PublicPhoto {
   id: string;
@@ -153,6 +155,11 @@ export default function CustomerAlbum({
   const [toast, setToast] = useState<string | null>(null);
   const [notifyingDone, setNotifyingDone] = useState(false);
   const [doneSent, setDoneSent] = useState(false);
+  // Các chuỗi ảnh na ná nhau (do khách tự bấm tìm) và có đang ẩn bản trùng không.
+  // Không lưu xuống sổ ngoại tuyến: đây là kết quả của một lượt quét, không phải
+  // lựa chọn của khách — gửi nó lên máy chủ là gửi một thứ studio không cần.
+  const [dupGroups, setDupGroups] = useState<DuplicateGroup[] | null>(null);
+  const [hideDupes, setHideDupes] = useState(false);
 
   const wm = album.watermark_enabled ? album.watermark_text || studioName : null;
 
@@ -467,6 +474,44 @@ export default function CustomerAlbum({
     flashToast(adding ? t("dislikedMoved") : t("undislikedBack"));
   }
 
+  /**
+   * Thêm nhiều ảnh vào lựa chọn một lượt (nút "chọn bản nét nhất của mọi nhóm").
+   *
+   * Dừng đúng ở hạn mức chứ không bỏ cả lượt: album giới hạn 100 ảnh mà khách
+   * bấm nút gợi ý 120 tấm thì thêm được 100 vẫn hơn là không thêm gì — và câu
+   * báo nói rõ đã dừng vì chạm hạn mức.
+   */
+  function selectMany(ids: string[]) {
+    const next = new Set(selectedRef.current);
+    let added = 0;
+    let stopped = false;
+    for (const id of ids) {
+      if (next.has(id)) continue;
+      if (limit != null && next.size >= limit) {
+        stopped = true;
+        break;
+      }
+      next.add(id);
+      added++;
+      // Chọn một ảnh đang bị đánh dấu không thích ⇒ bỏ khỏi danh sách đó, y hệt
+      // luật của `toggle` — hai trạng thái này loại trừ nhau.
+      if (dislikedRef.current.has(id)) {
+        const d = new Set(dislikedRef.current);
+        d.delete(id);
+        dislikedRef.current = d;
+        setDisliked(d);
+      }
+    }
+    if (added === 0) {
+      flashToast(stopped ? t("limitReached") : t("dupPicked"));
+      return;
+    }
+    selectedRef.current = next;
+    setSelected(next);
+    recordEdit();
+    flashToast(stopped ? t("limitReached") : t("dupPicked"));
+  }
+
   function setNote(id: string, text: string) {
     const next = { ...notesRef.current, [id]: text };
     notesRef.current = next;
@@ -507,12 +552,23 @@ export default function CustomerAlbum({
     setUnlocked(true);
   }
 
+  // Các tấm bị ẩn khi khách bật "chỉ hiện bản nét nhất". Ảnh khách ĐÃ CHỌN không
+  // bao giờ nằm trong đây — một tấm biến mất khỏi lưới ngay sau khi vừa bấm chọn
+  // là lỗi khó chịu nhất mà tính năng này có thể gây ra.
+  const dupHidden = useMemo(
+    () => (hideDupes && dupGroups ? duplicatesToHide(dupGroups, selected) : null),
+    [hideDupes, dupGroups, selected]
+  );
+
   const visiblePhotos = useMemo(() => {
     const base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
     // Luật lọc (kể cả "ảnh không thích biến khỏi lưới") nằm ở lib dùng chung với
     // route lưu lựa chọn — xem src/lib/album-dislike.ts.
-    return filterByView(base, { view, selected, disliked, shareSet });
-  }, [photos, activeTab, view, selected, disliked, shareSet]);
+    const shown = filterByView(base, { view, selected, disliked, shareSet });
+    // Ẩn bản trùng CHỈ ở tab "tất cả": vào tab "ảnh đã chọn" mà vẫn bị giấu bớt
+    // thì khách đếm lại lựa chọn của mình sẽ ra thiếu.
+    return dupHidden && view === "all" ? shown.filter((p) => !dupHidden.has(p.id)) : shown;
+  }, [photos, activeTab, view, selected, disliked, shareSet, dupHidden]);
   const selectedPhotos = useMemo(() => photos.filter((p) => selected.has(p.id)), [photos, selected]);
 
   // Only sources that actually contain photos become tabs/sections (a parent
@@ -953,6 +1009,30 @@ export default function CustomerAlbum({
             </button>
           )}
         </div>
+
+        {/* Gợi ý ảnh na ná nhau. Chỉ hiện ở tab "tất cả" và khi album đủ nhiều
+            ảnh để có chuyện trùng — album 12 tấm đã là bản studio lọc sẵn, thêm
+            một khối công cụ vào đó chỉ làm khách phân tâm. Chế độ xem link chia
+            sẻ cũng không cần: đó là một tập ảnh khách đã chọn xong. */}
+        {!shareMode && view === "all" && photos.length >= 24 && (
+          <AlbumDuplicateFinder
+            photos={photos}
+            selected={selected}
+            groups={dupGroups}
+            onGroups={(g) => {
+              setDupGroups(g);
+              // Quét xong và CÓ nhóm → ẩn bớt bản trùng ngay: đó đúng là thứ
+              // khách vừa bấm nút để có. Chỉ ẩn khỏi lưới, không đụng vào lựa
+              // chọn, và có công tắc tắt ngay trong khối gợi ý.
+              setHideDupes(!!g && g.length > 0);
+            }}
+            hide={hideDupes}
+            onHide={setHideDupes}
+            onSelectMany={selectMany}
+            onToggle={toggle}
+            atLimit={atLimit}
+          />
+        )}
 
         {/* Empty filtered state */}
         {visiblePhotos.length === 0 ? (

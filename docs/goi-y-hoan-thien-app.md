@@ -357,6 +357,49 @@ PNG cỡ 1200×800 rồi đi đúng đường giải mã của bộ quét, để
 (đo được: nét 833 · nhoè 7 · khung đen 0). Chính bài này là chỗ lộ ra cả cái bẫy
 `ImageBitmap.close()` xoá `width/height` lẫn chuyện mã hash một chiều bị suy biến.
 
+## ✅ 4b. Xem đủ lớn để CHỌN — khung so sánh ảnh
+
+Bản đầu của bộ lọc AI vẽ kết quả ở ô vuông 128px. Cỡ đó đủ để **biết** hai tấm
+khác nhau, nhưng không đủ để **chọn** giữa chúng — mà chọn mới là việc studio
+ngồi đó để làm. Hai tấm cách nhau 1/8 giây thì ở 128px chúng là một, nên lời hứa
+"bỏ tick được từng tấm" thành ra vô nghĩa: bỏ tick một tấm không nhìn rõ cũng chỉ
+là đoán.
+
+Nay ô ảnh chỉnh được **ba cỡ** cho cả bảng, và **bấm vào một tấm** mở khung so
+sánh có ba nấc — cả ba đều cần:
+
+1. **Một ảnh lớn** — thấy bố cục, biểu cảm, ai nhắm mắt.
+2. **Hai ảnh cạnh nhau** với *bản đề xuất* của chuỗi. Đây là câu hỏi thật:
+   "bản máy chọn có hơn tấm tôi thích không?" Đang xem chính bản đề xuất thì nó
+   đặt cạnh tấm liền trước — so một tấm với chính nó là một ô trống vô nghĩa.
+3. **Cắt 1:1 điểm ảnh gốc** — nấc quyết định. Thu về màn hình thì hai tấm trong
+   một chuỗi trông y hệt; độ nét chỉ hiện ra ở tỉ lệ 100%, đúng cách người ta soi
+   ảnh trong Lightroom. Bấm vào chỗ nào trên ảnh là soi đúng chỗ đó, và ở chế độ
+   hai ảnh thì **cả hai cắt cùng một điểm** — so hai chỗ khác nhau trên hai tấm
+   thì không kết luận được gì.
+
+Phím: `←` `→` đổi tấm · `C` so hai ảnh · `Z` soi 1:1 · `Space` bỏ tấm khỏi danh
+sách loại · `Esc` đóng.
+
+Ảnh lớn và ô cắt **giải mã đúng lúc mở** rồi nhớ lại, chứ không dựng sẵn cho cả
+lô: giữ ảnh 1600px cho 3.000 tấm là vài GB. Mọi object URL được thu hồi khi đóng.
+
+Phép kẹp ô cắt tách thành `cropRect()` ở `src/lib/photo-ai.ts` — số học thuần,
+kiểm thử bằng node — vì kẹp thiếu một đầu thì Chrome trả ô cắt có viền trong
+suốt, mà lỗi đó chỉ lộ ra khi kéo con trỏ ra sát mép ảnh, tức là muộn. Còn hợp
+đồng của trình duyệt (`createImageBitmap(blob, sx, sy, sw, sh)` phải trả **đúng**
+ô điểm ảnh gốc, không thu nhỏ) được kiểm trong Chromium thật ở
+`npm run test:photo-ai-browser`: nếu nó thu nhỏ thì nút "soi 1:1" hiện một tấm mờ
+y hệt ảnh lớn và cả nấc quyết định thành vô nghĩa **mà không có lỗi nào**.
+
+Khung này khó mở bằng tay (phải đăng nhập, mở công cụ, trỏ vào thư mục có chuỗi
+bấm, quét xong mới bấm được), nên có màn xem trước `/uipreview/so-sanh-anh` với
+ảnh mẫu sinh ngay trong trình duyệt — bốn tấm cùng cảnh, khác nhau đúng thứ khung
+này sinh ra để phân biệt: độ nét.
+
+`src/components/AiCompareView.tsx` · `npm run test:photo-ai`,
+`npm run test:photo-ai-browser`.
+
 ## ✅ 5. Ứng dụng khách: chọn ảnh & theo dõi hợp đồng
 
 Ba trang khách — album chọn ảnh `/a/<slug>`, album giao khách `/album/<slug>`, và
@@ -420,9 +463,41 @@ nghìn ảnh mà cứ xem là gọi lại thì đốt hạn mức, đúng cái b
 trước đây đã sa vào. Lựa chọn nhúng trong bản HTML cũ đó có thể cũ — không sao,
 sổ trên máy hoà giải theo từng ảnh nên thay đổi khách chưa gửi lên không bị đè.
 
+### Gợi ý ảnh na ná nhau — cùng bộ lọc AI, nhưng chỉ một nửa của nó
+
+Việc mệt nhất của khách không phải chọn ảnh đẹp. Là cuộn qua bảy tấm giống hệt
+nhau, không thấy chúng khác nhau ở đâu, rồi chọn đại — hoặc chọn cả bảy. Máy ảnh
+bấm liên tiếp nên một album 800 tấm thật ra chỉ có chừng 500 khoảnh khắc.
+
+Nên album chọn ảnh có một khối *"Ảnh na ná nhau"*: nhóm các tấm gần như giống
+hệt nhau lại, chỉ ra **bản nét nhất** của từng nhóm, cho chọn một phát cả loạt,
+và **ẩn bớt bản trùng khỏi lưới**.
+
+**Dùng chung bộ đo với studio nhưng CỐ Ý chỉ lấy một nửa.** `duplicateGroups()`
+gom nhóm và chỉ bản nét nhất — **không** dùng `judge()`. Bộ ấy còn kết luận
+"nhoè", "chụp lỡ", "nên loại": đúng cho studio đang dọn thư mục, nhưng nói câu đó
+với khách là chuyện khác hẳn. Chê ảnh cưới của khách là việc của studio nếu họ
+muốn, không phải của phần mềm, và một dòng chữ *"ảnh này nhoè"* dưới tấm ảnh cưới
+sẽ làm hỏng đúng cái việc đáng ra là vui nhất. Ở đây chỉ có một câu: mấy tấm này
+giống nhau, tấm này nét nhất.
+
+**Ba ràng buộc vì đây là máy của KHÁCH, không phải máy studio.** Không tự chạy —
+quét là việc nặng và tốn 3G, khách phải bấm mới chạy (trần 600 tấm một lượt, nói
+rõ số). Không bao giờ tự chọn hay bỏ chọn một tấm nào; ngoại lệ duy nhất và có
+chủ ý là quét xong thì bật sẵn *chỉ hiện bản nét nhất* — đó chính là thứ khách
+vừa bấm nút để có, nó chỉ **ẩn** khỏi lưới chứ không đụng vào lựa chọn, có công
+tắc tắt ngay cạnh, và **ảnh khách đã chọn thì không bao giờ bị ẩn** (một tấm biến
+mất ngay sau khi vừa bấm chọn là lỗi khó chịu nhất tính năng này có thể gây ra).
+Và quét qua **chính ảnh xem trước của lưới** nên phần lớn tấm đã nằm trong cache
+service worker: gần như không tốn thêm mạng, không ảnh gốc nào rời khỏi máy khách.
+
+Nút *chọn bản nét nhất của mọi nhóm* dừng đúng ở hạn mức chọn ảnh chứ không bỏ cả
+lượt: album giới hạn 100 mà gợi ý 120 tấm thì thêm được 100 vẫn hơn không thêm gì.
+
 Sổ ngoại tuyến `src/lib/album-offline.ts` (thuần) · chỗ cất
 `src/lib/album-store.ts` · manifest `src/lib/client-manifest.ts` · cổng khách
-`src/lib/portal-device.ts`.
+`src/lib/portal-device.ts` · gợi ý ảnh trùng `AlbumDuplicateFinder.tsx` +
+`duplicateGroups()`/`duplicatesToHide()` ở `src/lib/photo-ai.ts`.
 Test `npm run test:album-offline` (42 ca, gồm đúng ba tình huống dễ vỡ: poll đè
 mất lựa chọn vừa bấm, hai điện thoại cùng một link, và viên trạng thái nói dối) ·
 `npm run test:portal-device`.

@@ -19,7 +19,7 @@
  */
 import { chromium } from "playwright";
 import { deflateSync } from "node:zlib";
-import { AI_DEFAULTS, judge, measure, SAMPLE_EDGE } from "../../src/lib/photo-ai.ts";
+import { AI_DEFAULTS, cropRect, judge, measure, SAMPLE_EDGE } from "../../src/lib/photo-ai.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -228,6 +228,71 @@ const decoded = await page.evaluate(
   },
   { files: encoded, edge: SAMPLE_EDGE }
 );
+/* ── Ô cắt 1:1 của khung so sánh ───────────────────────────────────────────
+   `makePixelCrop` dựa vào một hợp đồng của trình duyệt mà không kiểm thử đơn vị
+   nào chạm tới được: `createImageBitmap(blob, sx, sy, sw, sh)` phải trả về ĐÚNG
+   ô điểm ảnh GỐC đó — không thu nhỏ, không lấy lệch. Nếu nó thu nhỏ thì nút
+   "soi 1:1" hiện một tấm mờ y hệt ảnh lớn, và cả nấc quyết định của khung so
+   sánh thành vô nghĩa mà không có lỗi nào.
+
+   Ảnh mẫu: nền 40, một ô 100×100 tô 220 đặt ở toạ độ biết trước. */
+{
+  const MW = 1200;
+  const MH = 800;
+  const BX = 700;
+  const BY = 300;
+  const mark = new Uint8Array(MW * MH).fill(40);
+  for (let y = BY; y < BY + 100; y++) for (let x = BX; x < BX + 100; x++) mark[y * MW + x] = 220;
+  const markB64 = grayPng(mark, MW, MH).toString("base64");
+
+  // Tâm ô soi đặt đúng giữa khối sáng → khối phải nằm giữa ô cắt.
+  const rect = cropRect(MW, MH, (BX + 50) / MW, (BY + 50) / MH, 520);
+
+  const crop = await page.evaluate(
+    async ({ b64, r }) => {
+      const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
+      const bmp = await createImageBitmap(blob, r.sx, r.sy, r.w, r.h);
+      const w = bmp.width;
+      const h = bmp.height;
+      const canvas = new OffscreenCanvas(w, h);
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
+      ctx.drawImage(bmp, 0, 0);
+      const { data } = ctx.getImageData(0, 0, w, h);
+      bmp.close();
+      const at = (x, y) => data[(y * w + x) * 4];
+      const alphaAt = (x, y) => data[(y * w + x) * 4 + 3];
+      return {
+        w, h,
+        centre: at(w >> 1, h >> 1),
+        corner: at(2, 2),
+        minAlpha: Math.min(alphaAt(0, 0), alphaAt(w - 1, 0), alphaAt(0, h - 1), alphaAt(w - 1, h - 1)),
+      };
+    },
+    { b64: markB64, r: rect }
+  );
+
+  check("ô cắt ra ĐÚNG cỡ đã xin, không bị thu nhỏ", [crop.w, crop.h], [rect.w, rect.h]);
+  ok("giữa ô cắt là khối sáng (cắt đúng chỗ, không lệch)", crop.centre > 200, `nhận ${crop.centre}`);
+  ok("góc ô cắt là nền tối (ô cắt không phóng to khối lên toàn khung)", crop.corner < 80, `nhận ${crop.corner}`);
+  ok("ô cắt đặc, không viền trong suốt", crop.minAlpha === 255, `alpha nhỏ nhất ${crop.minAlpha}`);
+}
+
+/* ── Ảnh xem trước cỡ lớn KHÔNG phóng to ảnh vốn nhỏ ───────────────────────── */
+{
+  const small = new Uint8Array(200 * 120).fill(128);
+  const b64 = grayPng(small, 200, 120).toString("base64");
+  const got = await page.evaluate(async ({ b64, edge }) => {
+    const blob = await (await fetch(`data:image/png;base64,${b64}`)).blob();
+    const probe = await createImageBitmap(blob);
+    const scale = edge / Math.max(probe.width, probe.height);
+    const w = scale >= 1 ? probe.width : Math.round(probe.width * scale);
+    const h = scale >= 1 ? probe.height : Math.round(probe.height * scale);
+    probe.close();
+    return [w, h];
+  }, { b64, edge: 1600 });
+  check("ảnh 200×120 xin xem trước 1600px → giữ nguyên, không phóng to", got, [200, 120]);
+}
+
 await browser.close();
 
 check("giải mã đủ cả 6 ảnh", decoded.length, 6);

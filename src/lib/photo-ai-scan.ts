@@ -23,7 +23,7 @@
  *     lượt quét mà không cần tải lại trang.
  */
 
-import { SAMPLE_EDGE, measure, type PhotoMetrics } from "./photo-ai";
+import { SAMPLE_EDGE, cropRect, measure, type PhotoMetrics } from "./photo-ai";
 
 /** Số ảnh giải mã cùng lúc. 4 là mức an toàn cho cả máy yếu. */
 const CONCURRENCY = 4;
@@ -182,13 +182,17 @@ export async function scanPhotos(
  * tấm. Giải mã lại đúng những tấm cần thì vừa nhẹ vừa gọn — mà giải mã ở đây là
  * việc rẻ, ảnh đã nằm trên máy (hoặc trong cache của service worker).
  *
- * `size` là cạnh dài, mặc định 96px: đủ để mắt nhận ra hai tấm trong một chuỗi
- * bấm khác nhau ở đâu, mà mỗi tấm chỉ vài KB.
+ * `size` là cạnh dài. 96px đủ để BIẾT hai tấm khác nhau, nhưng KHÔNG đủ để CHỌN
+ * giữa chúng — mà chọn mới là việc studio ngồi đây để làm. Nên mặc định là 320px:
+ * ô ảnh lớn nhất của bảng kết quả vẫn nét, mỗi tấm ~20 KB.
+ *
+ * Muốn soi kỹ hơn nữa thì có `makeOnePreview` (một tấm, cỡ lớn) và `makePixelCrop`
+ * (cắt 1:1 điểm ảnh gốc) — hai hàm đó giải mã ĐÚNG LÚC MỞ, không giữ sẵn.
  */
 export async function makePreviews(
   items: ScanItem[],
   keys: string[],
-  size = 96
+  size = 320
 ): Promise<Record<string, string>> {
   const want = new Set(keys);
   const out: Record<string, string> = {};
@@ -225,6 +229,85 @@ export async function makePreviews(
   };
   await Promise.all(Array.from({ length: Math.min(CONCURRENCY, Math.max(1, list.length)) }, worker));
   return out;
+}
+
+/**
+ * Một tấm, cỡ LỚN, giải mã đúng lúc mở khung so sánh.
+ *
+ * Trả về object URL chứ không phải data URL: một tấm 1600px là ~250 KB, mà
+ * base64 còn phình thêm một phần ba và nằm lại trong state React. NGƯỜI GỌI PHẢI
+ * `URL.revokeObjectURL` khi đóng khung — không gọi là rò bộ nhớ cho tới lúc tải
+ * lại trang.
+ */
+export async function makeOnePreview(
+  item: ScanItem,
+  size = 1600
+): Promise<{ url: string; width: number; height: number }> {
+  const source: Blob = item.file ?? (await fetchBlob(item.url!));
+  const probe = await createImageBitmap(source);
+  const { w, h } = fitTo(probe.width, probe.height, size);
+  let bmp: ImageBitmap;
+  if (w === probe.width && h === probe.height) {
+    bmp = probe;
+  } else {
+    probe.close();
+    bmp = await createImageBitmap(source, { resizeWidth: w, resizeHeight: h, resizeQuality: "high" });
+  }
+  const url = await drawToUrl(bmp, 0.82);
+  return { url, width: w, height: h };
+}
+
+/**
+ * Cắt một ô vuông ĐIỂM ẢNH GỐC (1:1) quanh một điểm trên ảnh.
+ *
+ * Đây là cách duy nhất thật sự trả lời "tấm nào nét hơn". Ảnh thu về 1600px thì
+ * hai tấm trong một chuỗi bấm trông giống hệt nhau — độ nét chỉ hiện ra ở tỉ lệ
+ * 100%, đúng như cách người ta soi ảnh trong Lightroom.
+ *
+ * `cx`/`cy` là tâm ô cắt theo tỉ lệ 0…1 của ảnh. `edge` là cạnh ô cắt tính bằng
+ * điểm ảnh GỐC — không thu nhỏ, không phóng to. Ảnh nhỏ hơn ô cắt thì lấy trọn.
+ * Trả về object URL, NGƯỜI GỌI phải thu hồi.
+ */
+export async function makePixelCrop(
+  item: ScanItem,
+  cx: number,
+  cy: number,
+  edge = 520
+): Promise<{ url: string; width: number; height: number; native: boolean }> {
+  const source: Blob = item.file ?? (await fetchBlob(item.url!));
+  const probe = await createImageBitmap(source);
+  const iw = probe.width;
+  const ih = probe.height;
+  probe.close();
+  // Phép kẹp nằm ở @/lib/photo-ai (cropRect) — số học thuần, kiểm thử bằng node.
+  const { sx, sy, w, h } = cropRect(iw, ih, cx, cy, edge);
+  const bmp = await createImageBitmap(source, sx, sy, w, h);
+  const url = await drawToUrl(bmp, 0.9);
+  // `native` = ô cắt đúng là điểm ảnh gốc. Sai khi nguồn là ảnh xem trước Drive
+  // (đã bị thu nhỏ từ trước), và màn hình phải nói ra điều đó.
+  return { url, width: w, height: h, native: iw >= edge || ih >= edge };
+}
+
+/** Cạnh dài về `edge`, giữ tỉ lệ, KHÔNG phóng to ảnh vốn đã nhỏ hơn. */
+function fitTo(w: number, h: number, edge: number): { w: number; h: number } {
+  if (w <= 0 || h <= 0) return { w: edge, h: edge };
+  const scale = edge / Math.max(w, h);
+  if (scale >= 1) return { w, h };
+  return { w: Math.max(1, Math.round(w * scale)), h: Math.max(1, Math.round(h * scale)) };
+}
+
+/** Vẽ bitmap ra JPEG và trả object URL. Đóng bitmap dù thành công hay không. */
+async function drawToUrl(bmp: ImageBitmap, quality: number): Promise<string> {
+  try {
+    const canvas = new OffscreenCanvas(bmp.width, bmp.height);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("không mở được canvas");
+    ctx.drawImage(bmp, 0, 0);
+    const blob = await canvas.convertToBlob({ type: "image/jpeg", quality });
+    return URL.createObjectURL(blob);
+  } finally {
+    bmp.close();
+  }
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {

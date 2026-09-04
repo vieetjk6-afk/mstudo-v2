@@ -452,6 +452,97 @@ export function pickKeeper(group: PhotoMetrics[]): PhotoMetrics | null {
   });
 }
 
+/**
+ * Ô vuông ĐIỂM ẢNH GỐC để cắt ra soi 1:1, quanh một điểm trên ảnh.
+ *
+ * Nằm ở đây (chứ không trong `makePixelCrop`) vì đây là số học thuần và là chỗ
+ * dễ sai: kẹp thiếu một đầu thì Chrome trả về ô cắt có viền trong suốt, mà lỗi
+ * đó chỉ lộ ra khi người dùng kéo con trỏ ra sát mép ảnh — tức là muộn.
+ *
+ * `cx`/`cy` là tâm theo tỉ lệ 0…1. Ô cắt luôn NẰM TRỌN trong ảnh: gặp mép thì
+ * trượt vào, không thu nhỏ. Ảnh nhỏ hơn `edge` thì lấy trọn chiều đó.
+ */
+export function cropRect(
+  iw: number,
+  ih: number,
+  cx: number,
+  cy: number,
+  edge: number
+): { sx: number; sy: number; w: number; h: number } {
+  const w = Math.max(1, Math.min(Math.round(edge), Math.max(1, Math.round(iw))));
+  const h = Math.max(1, Math.min(Math.round(edge), Math.max(1, Math.round(ih))));
+  const clamp = (v: number, max: number) => Math.min(Math.max(Math.round(v), 0), Math.max(0, max));
+  return {
+    sx: clamp((Number.isFinite(cx) ? cx : 0.5) * iw - w / 2, iw - w),
+    sy: clamp((Number.isFinite(cy) ? cy : 0.5) * ih - h / 2, ih - h),
+    w,
+    h,
+  };
+}
+
+/**
+ * Chỉ GOM NHÓM TRÙNG, không chấm ảnh nào là xấu.
+ *
+ * `judge()` trả về cả kết luận "nhoè", "chụp lỡ", "nên loại" — đúng cho studio
+ * đang dọn thư mục. Nhưng màn CHỌN ẢNH CỦA KHÁCH thì không được nói câu đó: chê
+ * ảnh của khách xấu là việc của studio nếu họ muốn, không phải của phần mềm, và
+ * một khách nhìn thấy "ảnh này nhoè" bên dưới tấm ảnh cưới của mình sẽ mất vui
+ * ngay giữa việc đáng ra là vui nhất.
+ *
+ * Nên tách riêng phần khách cần: các tấm gần như giống hệt nhau (một lần bấm
+ * liên tiếp), và trong mỗi chuỗi thì tấm nào nét nhất. Không nhãn, không lý do.
+ *
+ * Nhóm trả về đã sắp theo thứ tự bấm, và mỗi nhóm luôn có ít nhất hai tấm.
+ */
+export type DuplicateGroup = {
+  /** Khoá các tấm trong nhóm, theo thứ tự bấm. */
+  keys: string[];
+  /** Tấm nét nhất — bản đề xuất. Luôn nằm trong `keys`. */
+  bestKey: string;
+};
+
+export function duplicateGroups(metrics: PhotoMetrics[], opts: JudgeOptions = {}): DuplicateGroup[] {
+  const groups = groupDuplicates(metrics, opts);
+  const byGroup = new Map<number, PhotoMetrics[]>();
+  metrics.forEach((m, i) => {
+    const g = groups[i];
+    if (g < 0) return;
+    if (!byGroup.has(g)) byGroup.set(g, []);
+    byGroup.get(g)!.push(m);
+  });
+
+  const out: DuplicateGroup[] = [];
+  for (const [, list] of [...byGroup.entries()].sort((a, b) => a[0] - b[0])) {
+    // `groupDuplicates` gán -1 cho tấm đứng một mình, nên tới đây mọi nhóm đều
+    // có ≥ 2 tấm; vẫn chặn lại để hàm này an toàn nếu luật kia đổi.
+    if (list.length < 2) continue;
+    const ordered = [...list].sort((a, b) => a.index - b.index);
+    const keeper = pickKeeper(ordered);
+    if (!keeper) continue;
+    out.push({ keys: ordered.map((m) => m.key), bestKey: keeper.key });
+  }
+  return out;
+}
+
+/**
+ * Những tấm nên ẨN khi khách bật "chỉ hiện bản đẹp nhất": mọi tấm trong nhóm
+ * TRỪ bản đề xuất.
+ *
+ * `keep` là các tấm KHÔNG được ẩn dù có trùng — khách đã tự chọn tấm đó rồi, và
+ * một tấm biến mất khỏi lưới ngay sau khi khách bấm chọn là lỗi khó chịu nhất mà
+ * tính năng này có thể gây ra.
+ */
+export function duplicatesToHide(groups: DuplicateGroup[], keep: ReadonlySet<string> = new Set()): Set<string> {
+  const out = new Set<string>();
+  for (const g of groups) {
+    for (const k of g.keys) {
+      if (k === g.bestKey || keep.has(k)) continue;
+      out.add(k);
+    }
+  }
+  return out;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    Kết luận
    ───────────────────────────────────────────────────────────────────────────── */

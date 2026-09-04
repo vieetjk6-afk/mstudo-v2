@@ -17,6 +17,7 @@ import InboxView from "@/app/dashboard/studio/inbox/InboxView";
 import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManager";
 import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
+import AiCompareDemo from "./AiCompareDemo";
 import * as f from "./fixtures";
 
 /**
@@ -36,6 +37,10 @@ export const SCREENS: Record<
     bare?: boolean;
   }
 > = {
+  "so-sanh-anh": {
+    title: "Lọc ảnh AI — khung so sánh (ảnh mẫu sinh trong trình duyệt)",
+    render: () => <AiCompareDemo />,
+  },
   "hop-dong": {
     title: "Hợp đồng — danh sách",
     render: () => <ContractsList rows={f.contracts} studio={f.studio} />,

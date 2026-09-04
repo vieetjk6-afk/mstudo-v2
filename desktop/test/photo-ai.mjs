@@ -18,6 +18,9 @@
 import {
   AI_DEFAULTS,
   dhash,
+  cropRect,
+  duplicateGroups,
+  duplicatesToHide,
   groupDuplicates,
   hamming,
   hashDetail,
@@ -376,6 +379,81 @@ const verdicts = (r) => r.judgements.map((j) => `${j.key}:${j.verdict}`);
   check("tổng kết đếm khớp từng loại",
     [r.summary.total, r.summary.keep, r.summary.review, r.summary.duplicate, r.summary.reject],
     [5, 2, 1, 1, 1]);
+}
+
+/* ═══ Nhóm trùng cho MÀN KHÁCH (không kèm kết luận xấu/đẹp) ══════════════════ */
+
+{
+  const list = [
+    met("a1", 0, "f0e1c3870f1e3c783c78f0e1c3870f1e", 400),
+    met("a2", 1, "f0e1c3870f1e3c783c78f0e1c3870f1e", 900), // nét nhất của chuỗi
+    met("a3", 2, "f0e1c3870f1e3c783c78f0e1c3870f1e", 550),
+    met("le", 3, "0f1e3c78f0e1c387c3870f1e3c78f0e1", 600), // đứng riêng
+    met("b1", 4, "aa55aa55aa55aa55aa55aa55aa55aa55", 300),
+    met("b2", 5, "aa55aa55aa55aa55aa55aa55aa55aa55", 310),
+  ];
+  const g = duplicateGroups(list);
+  check("hai chuỗi, ảnh lẻ KHÔNG thành nhóm", g.length, 2);
+  check("chuỗi đầu đủ ba tấm, đúng thứ tự bấm", g[0].keys, ["a1", "a2", "a3"]);
+  check("bản đề xuất là tấm nét nhất", g[0].bestKey, "a2");
+  check("bản đề xuất luôn nằm trong nhóm", g.every((x) => x.keys.includes(x.bestKey)), true);
+  ok("mọi nhóm có ít nhất hai tấm", g.every((x) => x.keys.length >= 2));
+
+  // Đây là điểm khác `judge`: KHÔNG có nhãn nào, không tấm nào bị gọi là xấu.
+  ok("nhóm trả về không mang kết luận nào về chất lượng ảnh",
+    Object.keys(g[0]).sort().join(",") === "bestKey,keys");
+
+  const hide = duplicatesToHide(g);
+  check("ẩn mọi tấm trừ bản đề xuất", [...hide].sort(), ["a1", "a3", "b1"]);
+
+  // Ảnh khách ĐÃ CHỌN không bao giờ bị ẩn — dù nó là bản trùng.
+  const hideKeep = duplicatesToHide(g, new Set(["a1"]));
+  ok("ảnh khách đã chọn thì không ẩn", !hideKeep.has("a1"));
+  ok("… nhưng các tấm trùng khác vẫn ẩn", hideKeep.has("a3") && hideKeep.has("b1"));
+
+  check("không nhóm nào → không ẩn gì", duplicatesToHide([]).size, 0);
+}
+
+{
+  // Ảnh có mã hash SUY BIẾN (chuyển sáng đều một chiều) không được gom nhóm —
+  // luật của groupDuplicates, và màn khách thừa hưởng nguyên vẹn.
+  const flat = [
+    met("g1", 0, "00000000000000000000000000000000", 500),
+    met("g2", 1, "00000000000000000000000000000000", 500),
+  ];
+  check("hai ảnh mã hash toàn 0 KHÔNG bị coi là trùng", duplicateGroups(flat), []);
+}
+
+/* ═══ Ô cắt 1:1 để soi nét ═══════════════════════════════════════════════════ */
+
+{
+  // Giữa ảnh: ô cắt nằm đúng giữa.
+  check("tâm giữa ảnh", cropRect(2000, 1000, 0.5, 0.5, 500), { sx: 750, sy: 250, w: 500, h: 500 });
+
+  // Sát mép: ô cắt TRƯỢT VÀO, không thu nhỏ và không đòi điểm ảnh ngoài ảnh —
+  // Chrome sẽ trả viền trong suốt nếu ta đòi.
+  check("tâm sát mép trái/trên → trượt vào 0", cropRect(2000, 1000, 0, 0, 500), { sx: 0, sy: 0, w: 500, h: 500 });
+  check("tâm sát mép phải/dưới → dừng ở mép", cropRect(2000, 1000, 1, 1, 500), { sx: 1500, sy: 500, w: 500, h: 500 });
+  ok("ô cắt luôn nằm trọn trong ảnh", (() => {
+    for (const cx of [-1, 0, 0.13, 0.5, 0.99, 1, 2]) {
+      for (const cy of [-1, 0, 0.4, 1, 5]) {
+        const r = cropRect(1200, 800, cx, cy, 520);
+        if (r.sx < 0 || r.sy < 0 || r.sx + r.w > 1200 || r.sy + r.h > 800) return false;
+      }
+    }
+    return true;
+  })());
+
+  // Ảnh NHỎ hơn ô cắt: lấy trọn chiều đó, không phóng to, không âm.
+  check("ảnh nhỏ hơn ô cắt → lấy trọn", cropRect(300, 200, 0.5, 0.5, 520), { sx: 0, sy: 0, w: 300, h: 200 });
+  check("ảnh hẹp một chiều", cropRect(300, 900, 0.5, 0.5, 520), { sx: 0, sy: 190, w: 300, h: 520 });
+
+  // Đầu vào rác không được sinh ra ô cắt vô nghĩa (NaN lọt xuống createImageBitmap
+  // là một exception, và khung so sánh sẽ chỉ hiện ô trống mãi mãi).
+  const bad = cropRect(1200, 800, NaN, NaN, 520);
+  ok("tâm là NaN → rơi về giữa ảnh", bad.sx === 340 && bad.sy === 140);
+  ok("mọi số trả về đều là số nguyên hữu hạn",
+    [bad.sx, bad.sy, bad.w, bad.h].every((v) => Number.isInteger(v)));
 }
 
 console.log(fail ? `\n${fail} kiểm thử KHÔNG đạt` : "\nTất cả kiểm thử đạt");
