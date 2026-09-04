@@ -5,7 +5,7 @@
   "description": "mstudo 2.0 - phan mem quan ly studio anh (ban lam moi giao dien)",
   "scripts": {
     "dev": "next dev",
-    "prebuild": "node scripts/chep-mediapipe.mjs",
+    "prebuild": "node scripts/chep-mediapipe.mjs --required",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
