@@ -650,6 +650,11 @@ Biến môi trường: `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`,
 [`docs/hop-thu-hop-nhat.md`](docs/hop-thu-hop-nhat.md)**. AI dùng lại
 `CHAT_PROVIDERS` sẵn có. Kiểm thử luật kênh: `npm run test:inbox`.
 
+Riêng phần chatbox website — lấy khoá AI, chạy SQL, dạy bot trả lời, bảng lỗi →
+nguyên nhân — có hướng dẫn riêng đi từ số 0:
+[`docs/chatbox-huong-dan.md`](docs/chatbox-huong-dan.md). Chỉ dùng chatbox hai
+chiều thì **không cần** biến `META_*`/`ZALO_*` nào.
+
 ## Quy tắc khi sửa giao diện studio
 
 - **Design token** sống ở `:root` của `src/app/globals.css`; bản dark ghi đè
@@ -675,7 +680,13 @@ Biến môi trường: `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`,
 ## Tài liệu khác
 
 Xem thư mục [`docs/`](docs/) — thiết lập môi trường, chuyển đổi dữ liệu,
-Supabase, và đặc tả client desktop.
+Supabase, và đặc tả client desktop. Ba file hay cần nhất:
+
+| File | Dùng để |
+| --- | --- |
+| [`docs/con-thieu-gi.md`](docs/con-thieu-gi.md) | Bảng kiểm "còn phải làm gì": migration chưa chạy, cờ tính năng đang khoá, 59 biến môi trường nhóm theo tính năng |
+| [`docs/chatbox-huong-dan.md`](docs/chatbox-huong-dan.md) | Dựng chatbox tư vấn từ số 0 — khoá AI, SQL, dạy bot, bảng lỗi |
+| [`docs/bien-moi-truong.md`](docs/bien-moi-truong.md) | Tra cứu từng biến môi trường |
 
 ## Xem & chụp giao diện mà không cần đăng nhập
 

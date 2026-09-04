@@ -4,7 +4,7 @@ Dùng cho bước **A3** của [`chuyen-doi-mstudo-2.0.md`](./chuyen-doi-mstudo-
 nạp biến từ Vercel CŨ sang Vercel MỚI.
 
 Bảng dưới đối chiếu **danh sách thật ở Vercel cũ** với **code hiện tại**.
-`.env.example` liệt kê đúng 51 biến này kèm chú thích kỹ thuật, nhưng nó không
+`.env.example` liệt kê đúng 59 biến này kèm chú thích kỹ thuật, nhưng nó không
 nói biến nào **phải đổi** khi chuyển — đó là việc của file này.
 
 > 💡 **Không muốn động vào biến nào cả?** Có cách: giữ nguyên project Vercel cũ,
@@ -14,7 +14,7 @@ nói biến nào **phải đổi** khi chuyển — đó là việc của file n
 
 ---
 
-# 0. Bảng tra 1 phút — cả 51 biến trong một bảng
+# 0. Bảng tra 1 phút — cả 59 biến trong một bảng
 
 Cột **Xử lý** đọc thế này:
 
@@ -48,6 +48,13 @@ Cột **Xử lý** đọc thế này:
 | `GOOGLE_STORY_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `IMG_CDN_REDIRECT` | 🟢 | **để trống** — bản cũ đặt `0` thì ĐỪNG chép, xem 4d |
+| `INBOX_INGEST_SECRET` | ⚪ | 🔒 hộp thư — bạn **tự sinh** chuỗi ngẫu nhiên (cầu nối TikTok, worker Zalo cá nhân) |
+| `META_APP_ID` | ⚪ | hộp thư — Meta App → Settings → Basic; bỏ trống thì nút "Kết nối Facebook" tự ẩn |
+| `META_APP_SECRET` | ⚪ | 🔒 hộp thư — cùng trang với `META_APP_ID` |
+| `META_GRAPH_BASE` | ⚪ | để trống → `https://graph.facebook.com/v21.0` |
+| `META_LOGIN_CONFIG_ID` | ⚪ | tuỳ chọn — id cấu hình "Facebook Login for Business" |
+| `META_REDIRECT_URI` | ⚪ | **tự gõ được**: `https://<tên-miền>/api/inbox/meta/callback` |
+| `META_VERIFY_TOKEN` | ⚪ | hộp thư — bạn **tự đặt**, dán lại y hệt bên Meta khi khai webhook |
 | `NEXT_PUBLIC_ADMIN_HOST` | 🟢 | `admin.mstudo.com` |
 | `NEXT_PUBLIC_APP_HOST` | ⚪ | đã ngừng dùng |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | 🟢 | để trống → nút tải rơi về trang GitHub Releases |
@@ -77,10 +84,18 @@ Cột **Xử lý** đọc thế này:
 | `ZALO_OA_APP_ID` | ⚪ | kênh Zalo OA tắt (kênh cá nhân vẫn chạy) |
 | `ZALO_OA_APP_SECRET` | ⚪ | 🔒 |
 | `ZALO_OA_REDIRECT_URI` | ⚪ | |
+| `ZALO_OA_WEBHOOK_SECRET` | ⚪ | 🔒 hộp thư — Zalo App → OA Secret Key; để trống → rơi về `ZALO_OA_APP_SECRET` |
 | `ZALO_SESSION_SECRET` | ⚪ | |
 
 Đó là **toàn bộ** biến mà code đọc. Danh sách này lấy thẳng từ code
 (`grep process.env.` trên `src/` + `next.config.mjs`), không phải chép tay.
+
+> **Tám biến của hộp thư hợp nhất** (`INBOX_INGEST_SECRET`, năm biến `META_*`,
+> `META_VERIFY_TOKEN`, `ZALO_OA_WEBHOOK_SECRET`) ra đời **sau** đợt chuyển đổi
+> nên Vercel cũ chắc chắn không có — tất cả đều ⚪, bỏ qua thì app chạy y như
+> trước. Cần bật kênh nào thì đọc [`hop-thu-hop-nhat.md`](./hop-thu-hop-nhat.md);
+> muốn xem mình còn thiếu gì trên toàn dự án thì đọc
+> [`con-thieu-gi.md`](./con-thieu-gi.md).
 
 ## 0.1. Hai câu hỏi hay gặp nhất
 

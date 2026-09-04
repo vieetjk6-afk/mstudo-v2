@@ -1,11 +1,19 @@
 # Mở file nào?
 
-Trong thư mục này có 9 file, nhưng **lúc chuyển đổi bạn chỉ cần 3 file**. Bảng
-này để bạn khỏi phải đoán.
+Bảng này để bạn khỏi phải đoán.
+
+## Đang chạy rồi, muốn biết còn thiếu gì
+
+| # | File | Dùng để |
+|---|---|---|
+| 1 | [`con-thieu-gi.md`](./con-thieu-gi.md) | **Bảng kiểm toàn bộ**: migration chưa chạy, cờ tính năng đang khoá, 59 biến môi trường nhóm theo tính năng, tính năng chưa viết |
+| 2 | [`chatbox-huong-dan.md`](./chatbox-huong-dan.md) | Dựng chatbox tư vấn từ số 0 — lấy khoá AI, chạy SQL, dạy bot, bảng lỗi |
+| 3 | [`hop-thu-hop-nhat.md`](./hop-thu-hop-nhat.md) | Nối Facebook · Instagram · Zalo · TikTok vào một hộp thư |
+| 4 | [`goi-y-hoan-thien-app.md`](./goi-y-hoan-thien-app.md) | Bảy tính năng còn thiếu, xếp theo thứ tự nên làm |
 
 ## Đang chuyển mstudo sang bản 2.0
 
-Đọc theo đúng thứ tự này:
+Ba file dưới đây, đọc theo đúng thứ tự:
 
 | # | File | Dùng để |
 |---|---|---|
@@ -22,6 +30,8 @@ Ba file trên là đủ. Không cần mở file nào khác.
 | [`thiet-lap-moi.md`](./thiet-lap-moi.md) | Dựng Supabase + Vercel từ số 0 (khi làm bản thử mới, không phải lúc chuyển đổi) |
 | [`supabase-usage.md`](./supabase-usage.md) | Vì sao vượt hạn mức Supabase và cách kéo xuống |
 | [`desktop-client-spec.md`](./desktop-client-spec.md) | Đặc tả app desktop cho gói Studio |
+| [`hop-thu-hop-nhat.md`](./hop-thu-hop-nhat.md) | Bật hộp thư hợp nhất: lấy biến `META_*`, khai webhook, cầu nối TikTok |
+| [`goi-y-hoan-thien-app.md`](./goi-y-hoan-thien-app.md) | Danh sách tính năng còn thiếu để app "đủ vòng" |
 
 ## Đã cũ — giữ lại chỉ để tham khảo
 
