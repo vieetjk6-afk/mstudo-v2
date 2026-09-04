@@ -139,6 +139,19 @@ export default function CustomerAlbum({
   }, []);
 
   const [lbIdx, setLbIdx] = useState<number | null>(null);
+  /**
+   * Khung xem ảnh đang lật qua danh sách nào.
+   *
+   * `null` = lưới ảnh (mặc định). Một mảng id = MỘT CHUỖI ảnh na ná nhau trong
+   * khối gợi ý: những tấm đó đã bị tách khỏi lưới, nên nếu khung xem cứ bám vào
+   * `visiblePhotos` thì khách KHÔNG có đường nào xem lớn chúng — mà xem lớn mới
+   * là lúc khách quyết định có lấy thêm tấm nào không.
+   *
+   * Dùng LẠI đúng khung xem của lưới chứ không dựng khung thứ hai: khách được
+   * phóng to, xem chìm/nổi, thả tim, ghi chú y như mọi tấm khác — một khung xem
+   * riêng cho ảnh trùng sẽ thiếu mất vài thứ trong số đó và không ai nhớ ra.
+   */
+  const [lbGroup, setLbGroup] = useState<string[] | null>(null);
   // Mức phóng chỉ để bật/tắt nút "thu nhỏ" — cử chỉ (chụm ngón, kéo, vuốt, lăn
   // chuột) do PhotoZoom lo và KHÔNG render lại trang, xem @/components/PhotoZoom.
   const [zoom, setZoom] = useState(1);
@@ -562,6 +575,13 @@ export default function CustomerAlbum({
   }, [photos, activeTab, view, selected, disliked, shareSet, dupHidden]);
   const selectedPhotos = useMemo(() => photos.filter((p) => selected.has(p.id)), [photos, selected]);
 
+  /** Dãy ảnh khung xem đang lật qua — xem ghi chú ở `lbGroup`. */
+  const lbPhotos = useMemo(() => {
+    if (!lbGroup) return visiblePhotos;
+    const byId = new Map(photos.map((p) => [p.id, p]));
+    return lbGroup.map((id) => byId.get(id)).filter((p): p is PublicPhoto => !!p);
+  }, [lbGroup, visiblePhotos, photos]);
+
   // Only sources that actually contain photos become tabs/sections (a parent
   // folder with only sub-folders has no direct photos and is skipped).
   const tabSources = useMemo(
@@ -637,16 +657,36 @@ export default function CustomerAlbum({
     );
   }
 
+  /** Đóng khung xem. LUÔN trả danh sách về lưới — mở lại từ lưới mà vẫn còn kẹt
+   *  trong một chuỗi ảnh trùng thì mũi tên chỉ đi được ba tấm rồi hết. */
+  const closeLightbox = useCallback(() => {
+    setLbIdx(null);
+    setLbGroup(null);
+  }, []);
+
+  /** Mở khung xem trên MỘT CHUỖI ảnh na ná nhau, dừng ở tấm được bấm. */
+  const openGroup = useCallback((ids: string[], id: string) => {
+    setLbGroup(ids);
+    setLbIdx(Math.max(0, ids.indexOf(id)));
+  }, []);
+
+  /** Mở khung xem từ LƯỚI. Luôn xoá chuỗi đang giữ trước khi mở: quên bước này
+   *  thì mở một tấm ở lưới ngay sau khi vừa xem một chuỗi sẽ lật nhầm danh sách. */
+  const openFromGrid = useCallback((idx: number) => {
+    setLbGroup(null);
+    setLbIdx(idx);
+  }, []);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (lbIdx === null) return;
-      if (e.key === "ArrowRight") setLbIdx((i) => (i === null ? i : Math.min(visiblePhotos.length - 1, i + 1)));
+      if (e.key === "ArrowRight") setLbIdx((i) => (i === null ? i : Math.min(lbPhotos.length - 1, i + 1)));
       else if (e.key === "ArrowLeft") setLbIdx((i) => (i === null ? i : Math.max(0, i - 1)));
-      else if (e.key === "Escape") setLbIdx(null);
+      else if (e.key === "Escape") closeLightbox();
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lbIdx, visiblePhotos.length]);
+  }, [lbIdx, lbPhotos.length, closeLightbox]);
 
   // Đổi ảnh / mở khung xem → về mức phóng 1. Bản thân khung ảnh tự dựng lại
   // (key theo id ảnh) nên đã ở mức 1; đây chỉ là đồng bộ nhãn cho nút bấm.
@@ -658,26 +698,26 @@ export default function CustomerAlbum({
   // xem. Kẹp lại chỉ số để lightbox trôi sang ảnh kế tiếp, chỉ đóng khi hết ảnh.
   useEffect(() => {
     if (lbIdx === null) return;
-    if (visiblePhotos.length === 0) setLbIdx(null);
-    else if (lbIdx > visiblePhotos.length - 1) setLbIdx(visiblePhotos.length - 1);
-  }, [lbIdx, visiblePhotos.length]);
+    if (lbPhotos.length === 0) closeLightbox();
+    else if (lbIdx > lbPhotos.length - 1) setLbIdx(lbPhotos.length - 1);
+  }, [lbIdx, lbPhotos.length, closeLightbox]);
 
   // Preload neighbouring full images so prev/next switches feel instant
   // (otherwise each step fetches a fresh 1600px image from Drive and lags).
   useEffect(() => {
     if (lbIdx === null) return;
     for (const off of [1, -1, 2, -2]) {
-      const p = visiblePhotos[lbIdx + off];
+      const p = lbPhotos[lbIdx + off];
       if (p) {
         const img = new Image();
         img.src = fullImageUrl(p.drive_file_id, 1600);
       }
     }
-  }, [lbIdx, visiblePhotos]);
+  }, [lbIdx, lbPhotos]);
 
   // Step to the prev/next photo (clamped to the visible list).
   function go(delta: number) {
-    setLbIdx((i) => (i === null ? i : Math.max(0, Math.min(visiblePhotos.length - 1, i + delta))));
+    setLbIdx((i) => (i === null ? i : Math.max(0, Math.min(lbPhotos.length - 1, i + delta))));
   }
   // Load the current selection immediately on open (don't wait for SSR/poll),
   // keep it in sync, and flush any pending save before the page goes away.
@@ -784,7 +824,7 @@ export default function CustomerAlbum({
     );
   }
 
-  const lbPhoto = lbIdx !== null ? visiblePhotos[lbIdx] : null;
+  const lbPhoto = lbIdx !== null ? lbPhotos[lbIdx] : null;
 
   // ── Gallery ────────────────────────────────────────────────────
   return (
@@ -1049,6 +1089,7 @@ export default function CustomerAlbum({
           <AlbumDuplicateFinder
             photos={photos}
             selected={selected}
+            disliked={disliked}
             groups={dupGroups}
             onGroups={(g) => {
               setDupGroups(g);
@@ -1060,6 +1101,7 @@ export default function CustomerAlbum({
             hide={hideDupes}
             onHide={setHideDupes}
             onToggle={toggle}
+            onOpen={openGroup}
           />
         )}
 
@@ -1131,11 +1173,11 @@ export default function CustomerAlbum({
                       role="button"
                       tabIndex={0}
                       aria-label={`Xem ảnh ${stripExtension(p.name)}`}
-                      onClick={() => setLbIdx(idx)}
+                      onClick={() => openFromGrid(idx)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
-                          setLbIdx(idx);
+                          openFromGrid(idx);
                         }
                       }}
                       onContextMenu={(e) => wm && e.preventDefault()}
@@ -1192,7 +1234,7 @@ export default function CustomerAlbum({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setLbIdx(idx);
+                          openFromGrid(idx);
                         }}
                         title={note?.trim() || "Thêm ghi chú"}
                         aria-label={note?.trim() ? `Ghi chú: ${note.trim()}` : "Thêm ghi chú"}
@@ -1248,7 +1290,7 @@ export default function CustomerAlbum({
         >
           <div className="flex flex-shrink-0 items-center gap-3 px-4 py-3.5 md:px-7" style={{ borderBottom: "1px solid var(--border)" }}>
             <span className="text-[13px]" style={{ color: "var(--text2)" }}>
-              {lbIdx + 1} / {visiblePhotos.length}
+              {lbIdx + 1} / {lbPhotos.length}
             </span>
             <div className="flex-1" />
             {album.allowDownload && (
@@ -1270,7 +1312,7 @@ export default function CustomerAlbum({
               <ZoomIn size={17} />
             </button>
             <button
-              onClick={() => setLbIdx(null)}
+              onClick={closeLightbox}
               aria-label="Đóng"
               className="flex h-10 w-10 items-center justify-center rounded-lg"
               style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}
@@ -1372,8 +1414,8 @@ export default function CustomerAlbum({
                 </p>
               )}
               <button
-                onClick={() => setLbIdx(Math.min(visiblePhotos.length - 1, lbIdx + 1))}
-                disabled={lbIdx >= visiblePhotos.length - 1}
+                onClick={() => setLbIdx(Math.min(lbPhotos.length - 1, lbIdx + 1))}
+                disabled={lbIdx >= lbPhotos.length - 1}
                 aria-label="Ảnh sau"
                 className="absolute right-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:pointer-events-none disabled:opacity-20 md:w-14"
                 style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}

@@ -167,8 +167,8 @@ export const dict: Dict = {
     en: "Duplicates are kept out of the grid — it now shows one frame per group. Photos you picked always stay visible.",
   },
   dupPickHere: {
-    vi: "Đây là những tấm đã tách riêng. Máy KHÔNG chọn hộ tấm nào — bấm tấm bạn muốn thì tấm đó mới vào lựa chọn.",
-    en: "These are the frames set aside. Nothing is picked for you — tap a frame and only then does it join your selection.",
+    vi: "Đây là những tấm đã tách riêng. Máy KHÔNG chọn hộ tấm nào — bấm vào một tấm để xem lớn và lật qua cả chuỗi, thấy tấm nào ưng thì thả tim để đưa vào lựa chọn.",
+    en: "These are the frames set aside. Nothing is picked for you — tap a frame to view it large and flip through the burst, then heart the ones you want.",
   },
   dupInGroup: { vi: "đã chọn", en: "picked" },
   // selections view (photographer)

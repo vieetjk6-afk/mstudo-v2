@@ -494,8 +494,29 @@ nào được thêm vào lựa chọn**. Khách bấm tấm nào thì tấm đó
 phải ngồi gỡ ra thì tệ hơn hẳn là tự bấm sáu chục lần có chủ ý. Việc tách riêng
 có công tắc tắt ngay cạnh, và **ảnh khách đã chọn thì không bao giờ bị tách khỏi
 lưới** (một tấm biến mất ngay sau khi vừa bấm chọn là lỗi khó chịu nhất tính năng
-này có thể gây ra). Mỗi chuỗi có một dòng đếm *đã chọn mấy tấm* để cuộn qua hai
-chục chuỗi xong còn nhớ chuỗi nào đã xử lý.
+này có thể gây ra). Ảnh khách đã đánh dấu *không thích* cũng không bày lại ở đây
+— cả album theo một luật.
+
+*Phải XEM ĐƯỢC trước khi chọn.* Không nhìn rõ thì "khách tự chọn" cũng chỉ là bấm
+đại. Nên bấm vào một tấm trong khối này mở **đúng khung xem ảnh của lưới** —
+phóng to, thả tim, ghi chú, đánh dấu không thích — và lật qua **cả chuỗi** bằng
+mũi tên. Dùng lại khung xem sẵn có chứ không dựng khung thứ hai: một khung riêng
+cho ảnh trùng sẽ thiếu mất vài thứ trong số đó mà không ai nhớ ra. Trái tim ở góc
+ô là đường tắt cho tấm đã nhìn đủ; hai thao tác đó nằm chồng lên nhau trong một ô
+128px nên có bài kiểm tra riêng ghim rằng bấm ô ảnh **mở xem**, còn trái tim mới
+**chọn**. Mỗi chuỗi có một dòng đếm *đã chọn mấy tấm* để cuộn qua hai chục chuỗi
+xong còn nhớ chuỗi nào đã xử lý.
+
+Khung xem ảnh vì thế nhận **một danh sách** thay vì luôn bám vào lưới: `null` là
+lưới, một mảng id là một chuỗi. Mở từ lưới luôn xoá chuỗi đang giữ — quên bước đó
+thì mở một tấm ở lưới ngay sau khi vừa xem một chuỗi sẽ lật nhầm danh sách.
+
+Màn xem trước `/uipreview/anh-trung-khach` mở được khối này mà không cần album
+thật (`groups` vốn đã là prop có kiểm soát nên không phải thêm cửa hậu nào vào
+code chạy thật). Chính nó bắt được một lỗi thật: `scanSupported()` đọc `window`
+nên gọi lúc dựng cho ra `false` ở máy chủ và `true` ở lượt hydrate đầu — React
+vứt toàn bộ HTML máy chủ và vẽ lại cả trang album bằng JavaScript, kèm một loạt
+lỗi hydrate trong console. Nay hỏi trong effect.
 
 *Không tốn tài nguyên máy chủ.* Toàn bộ phép đo chạy trong trình duyệt khách —
 không có route nào, không hàm serverless nào được gọi để tính. Ảnh dùng để quét

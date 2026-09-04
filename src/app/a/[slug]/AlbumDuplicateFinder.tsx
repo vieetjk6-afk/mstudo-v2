@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
-import { Sparkles, Play, X, Check, EyeOff, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Sparkles, Play, X, EyeOff, Loader2, Heart, Maximize2 } from "lucide-react";
 import { useLang } from "@/lib/i18n";
 import { thumbnailUrl } from "@/lib/drive";
 import { duplicateGroups, type DuplicateGroup } from "@/lib/photo-ai";
@@ -34,6 +34,10 @@ import { scanPhotos, scanSupported, type ScanItem, type ScanProgress } from "@/l
        khách phải ngồi gỡ ra thì tệ hơn hẳn là tự bấm sáu chục lần có chủ ý.
        Việc tách riêng có công tắc tắt ngay cạnh, và ảnh khách ĐÃ CHỌN thì không
        bao giờ bị tách khỏi lưới.
+       Và phải XEM ĐƯỢC trước khi chọn: bấm vào một tấm ở đây mở ĐÚNG khung xem
+       ảnh của lưới (phóng to, thả tim, ghi chú, đánh dấu không thích) và lật qua
+       cả chuỗi — không nhìn rõ thì "khách tự chọn" cũng chỉ là bấm đại. Thả tim
+       ở góc ô là đường tắt cho tấm đã nhìn đủ.
     3. QUÉT QUA ẢNH XEM TRƯỚC đã có sẵn trên lưới (`/api/img`), nên phần lớn tấm
        đã nằm trong cache trình duyệt: không tải thêm gì đáng kể, và không byte
        ảnh gốc nào rời khỏi máy khách.
@@ -51,21 +55,27 @@ const SCAN_CAP = 600;
 export default function AlbumDuplicateFinder({
   photos,
   selected,
+  disliked,
   groups,
   onGroups,
   hide,
   onHide,
   onToggle,
+  onOpen,
 }: {
   /** Ảnh theo ĐÚNG thứ tự bấm máy — luật gom nhóm dựa vào thứ tự đó. */
   photos: FinderPhoto[];
   selected: ReadonlySet<string>;
+  /** Ảnh khách đã đánh dấu KHÔNG THÍCH — không bày lại ở đây nữa. */
+  disliked: ReadonlySet<string>;
   groups: DuplicateGroup[] | null;
   onGroups: (g: DuplicateGroup[] | null) => void;
   hide: boolean;
   onHide: (v: boolean) => void;
-  /** Bấm một tấm trong khối này = thêm/bỏ tấm đó khỏi lựa chọn của khách. */
+  /** Thả tim một tấm = thêm/bỏ tấm đó khỏi lựa chọn của khách. */
   onToggle: (id: string) => void;
+  /** Mở khung xem ảnh trên CẢ chuỗi, dừng ở tấm được bấm. */
+  onOpen: (ids: string[], id: string) => void;
 }) {
   const { t } = useLang();
   // Mở SẴN. Khách vào đây để chọn ảnh, không để đi tìm công cụ — một khối gập
@@ -76,7 +86,19 @@ export default function AlbumDuplicateFinder({
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const supported = scanSupported();
+  // Trình duyệt có giải mã ảnh trong nền được không — HỎI TRONG EFFECT, không
+  // hỏi lúc dựng.
+  //
+  // `scanSupported()` đọc `window`, nên gọi thẳng khi dựng sẽ ra `false` ở máy
+  // chủ và `true` ở lượt hydrate đầu tiên. Hai bên khác nhau là React vứt bỏ
+  // toàn bộ HTML máy chủ đã dựng và vẽ lại cả trang album bằng JavaScript —
+  // chậm hơn, nháy màn hình, và một loạt lỗi hydrate trong console. Bài kiểm
+  // tra ở /uipreview/anh-trung-khach bắt được đúng lỗi này.
+  //
+  // Đổi lại, lượt vẽ đầu tiên KHÔNG có khối gợi ý và nó hiện ra ngay sau đó.
+  // Đúng như vậy: khối này là phần thêm, không phải thứ khách chờ để đọc.
+  const [supported, setSupported] = useState(false);
+  useEffect(() => setSupported(scanSupported()), []);
   const scanList = useMemo(() => photos.slice(0, SCAN_CAP), [photos]);
 
   const byId = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
@@ -108,9 +130,27 @@ export default function AlbumDuplicateFinder({
     abortRef.current = null;
   }, [busy, scanList, onGroups]);
 
+  /**
+   * Chuỗi để BÀY RA, đã bỏ những tấm khách đánh dấu không thích.
+   *
+   * Cả album theo một luật: ảnh không thích thì biến khỏi chỗ chọn ảnh. Nếu khối
+   * này không theo, khách vừa gạt một tấm đi xong lại thấy nó nằm nguyên đây.
+   * Chuỗi còn dưới hai tấm thì không còn là chuỗi — bỏ luôn.
+   */
+  const shown = useMemo(() => {
+    if (!groups) return null;
+    const out: DuplicateGroup[] = [];
+    for (const g of groups) {
+      const keys = g.keys.filter((k) => !disliked.has(k));
+      if (keys.length < 2) continue;
+      out.push({ keys, bestKey: keys.includes(g.bestKey) ? g.bestKey : keys[0] });
+    }
+    return out;
+  }, [groups, disliked]);
+
   const dupCount = useMemo(
-    () => (groups ?? []).reduce((n, g) => n + g.keys.length - 1, 0),
-    [groups]
+    () => (shown ?? []).reduce((n, g) => n + g.keys.length - 1, 0),
+    [shown]
   );
 
   // Trình duyệt không giải mã ảnh trong nền được (Safari cũ, trình duyệt trong
@@ -129,12 +169,12 @@ export default function AlbumDuplicateFinder({
       >
         <Sparkles size={17} style={{ color: "var(--gold)" }} />
         <span className="flex-1 text-[13.5px] font-semibold">{t("dupTitle")}</span>
-        {groups && groups.length > 0 && (
+        {shown && shown.length > 0 && (
           <span
             className="rounded-full px-2.5 py-0.5 text-[11.5px] font-bold"
             style={{ background: "var(--surface2)", color: "var(--text2)" }}
           >
-            {groups.length}
+            {shown.length}
           </span>
         )}
         <span className="text-[12px]" style={{ color: "var(--text3)" }}>{open ? "▲" : "▼"}</span>
@@ -189,17 +229,17 @@ export default function AlbumDuplicateFinder({
             {photos.length > SCAN_CAP && ` · ${SCAN_CAP}/${photos.length}`}
           </p>
 
-          {groups && groups.length === 0 && !busy && (
+          {shown && shown.length === 0 && !busy && (
             <p className="mt-3 text-[12.5px] font-semibold" style={{ color: "var(--text2)" }}>
               {t("dupNone")}
             </p>
           )}
 
-          {groups && groups.length > 0 && (
+          {shown && shown.length > 0 && (
             <>
               <div className="mt-3.5 flex flex-wrap items-center gap-2">
                 <span className="text-[12.5px]" style={{ color: "var(--text2)" }}>
-                  <b>{groups.length}</b> {t("dupFound")}
+                  <b>{shown.length}</b> {t("dupFound")}
                 </span>
                 <button
                   onClick={() => onHide(!hide)}
@@ -225,7 +265,7 @@ export default function AlbumDuplicateFinder({
               {/* Mỗi chuỗi một hàng cuộn ngang: trên điện thoại đó là cách duy
                   nhất đặt bảy tấm cạnh nhau mà tấm nào cũng còn đủ to để nhìn. */}
               <div className="mt-3 flex flex-col gap-2.5">
-                {groups.map((g) => {
+                {shown.map((g) => {
                   const picked = g.keys.filter((k) => selected.has(k)).length;
                   return (
                     <div
@@ -249,11 +289,9 @@ export default function AlbumDuplicateFinder({
                         const isBest = id === g.bestKey;
                         const isPicked = selected.has(id);
                         return (
-                          <button
+                          <div
                             key={id}
-                            onClick={() => onToggle(id)}
-                            aria-pressed={isPicked}
-                            className="relative h-[104px] w-[104px] flex-none overflow-hidden rounded-[8px]"
+                            className="relative h-[128px] w-[128px] flex-none overflow-hidden rounded-[8px]"
                             style={{
                               border: isPicked
                                 ? "2.5px solid var(--gold)"
@@ -262,30 +300,52 @@ export default function AlbumDuplicateFinder({
                                   : "2.5px solid transparent",
                             }}
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={thumbnailUrl(p.drive_file_id, 320)}
-                              alt={p.name}
-                              loading="lazy"
-                              className="h-full w-full object-cover"
-                            />
+                            {/* Cả ô ảnh là nút XEM LỚN. Thao tác chính ở đây là
+                                nhìn cho rõ rồi mới quyết, nên nó phải là chỗ dễ
+                                bấm nhất — không phải một biểu tượng bé ở góc. */}
+                            <button
+                              type="button"
+                              onClick={() => onOpen(g.keys, id)}
+                              aria-label={p.name}
+                              className="block h-full w-full"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={thumbnailUrl(p.drive_file_id, 320)}
+                                alt={p.name}
+                                loading="lazy"
+                                className="h-full w-full object-cover"
+                              />
+                              <span
+                                className="absolute bottom-1 left-1 flex h-6 w-6 items-center justify-center rounded-full"
+                                style={{ background: "rgba(0,0,0,.5)", color: "#fff" }}
+                              >
+                                <Maximize2 size={12} />
+                              </span>
+                            </button>
                             {isBest && (
                               <span
-                                className="absolute left-1 top-1 rounded-[5px] px-1.5 py-0.5 text-[9.5px] font-bold"
+                                className="pointer-events-none absolute left-1 top-1 rounded-[5px] px-1.5 py-0.5 text-[9.5px] font-bold"
                                 style={{ background: "var(--success, #1e9e72)", color: "#fff" }}
                               >
                                 {t("dupBest")}
                               </span>
                             )}
-                            {isPicked && (
-                              <span
-                                className="absolute bottom-1 right-1 flex h-5 w-5 items-center justify-center rounded-full"
-                                style={{ background: "var(--gold)", color: "#fff" }}
-                              >
-                                <Check size={12} />
-                              </span>
-                            )}
-                          </button>
+                            {/* Thả tim ngay trên ô: đường tắt cho tấm đã nhìn đủ.
+                                CÙNG biểu tượng trái tim với lưới ảnh, để "chọn"
+                                chỉ có một hình dạng duy nhất trong cả trang. */}
+                            <button
+                              type="button"
+                              onClick={() => onToggle(id)}
+                              aria-pressed={isPicked}
+                              aria-label={isPicked ? t("deselect") : t("selectThis")}
+                              title={isPicked ? t("deselect") : t("selectThis")}
+                              className="absolute bottom-1 right-1 flex h-7 w-7 items-center justify-center rounded-full"
+                              style={{ background: isPicked ? "var(--gold)" : "rgba(0,0,0,.5)", color: "#fff" }}
+                            >
+                              <Heart size={13} fill={isPicked ? "currentColor" : "none"} strokeWidth={isPicked ? 0 : 2.4} />
+                            </button>
+                          </div>
                         );
                       })}
                       </div>

@@ -18,6 +18,7 @@ import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManage
 import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
 import AiCompareDemo from "./AiCompareDemo";
+import AlbumDupDemo from "./AlbumDupDemo";
 import * as f from "./fixtures";
 
 /**
@@ -40,6 +41,10 @@ export const SCREENS: Record<
   "so-sanh-anh": {
     title: "Lọc ảnh AI — khung so sánh (ảnh mẫu sinh trong trình duyệt)",
     render: () => <AiCompareDemo />,
+  },
+  "anh-trung-khach": {
+    title: "Album khách — khối “Ảnh na ná nhau” (dữ liệu giả)",
+    render: () => <AlbumDupDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",
