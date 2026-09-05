@@ -42,6 +42,8 @@ const nextConfig = {
       // Route phục vụ nội dung file SQL cho bảng "chưa bật được" — nó đọc file
       // bằng fs lúc chạy, nên file phải đi kèm vào function.
       "/api/setup-sql/[ten]": ["./supabase/*.sql"],
+      // Bản kê bảng/cột cho /api/db-status — đọc bằng fs lúc chạy.
+      "/api/db-status": ["./supabase/kiem-tra.json"],
     },
     // Next 14.2 defaults dynamic route Router-Cache reuse to 0s, so going back
     // to a page just visited refetches the whole thing from the server. Reuse
