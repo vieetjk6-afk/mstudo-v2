@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { fetchThumb, scanJpeg } from "./face-node";
+import { fetchAllPhotos } from "./photos";
 import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, type Person } from "./face-group";
 
 /**
@@ -46,6 +47,8 @@ export type ScanRow = {
 
 export type ScanReport = {
   albumId: string;
+  /** Tổng ảnh của album (đã phân trang qua trần 1000 của PostgREST). */
+  tongAnh: number;
   scanned: number;
   faces: number;
   failed: number;
@@ -72,14 +75,20 @@ export async function scanAlbum(
   opts: { budgetMs: number; maxPhotos: number }
 ): Promise<ScanReport> {
   const t0 = Date.now();
-  const { data: rows, error } = await db
-    .from("photos")
-    .select("id, drive_file_id, name, is_video, faces_scanned_at")
-    .eq("album_id", albumId)
-    .order("position", { ascending: true });
-  if (error) throw new Error(`doc_anh_that_bai: ${error.message}`);
-
-  const todo = pendingRows((rows ?? []) as ScanRow[]);
+  /*
+   * `fetchAllPhotos` chứ KHÔNG phải `.select()` trơn.
+   *
+   * PostgREST trả tối đa 1000 dòng mỗi lượt, im lặng, không báo gì. Album 2000
+   * ảnh thì bộ quét chỉ THẤY 1000 ảnh đầu — quét xong chúng là nó tưởng đã xong
+   * album, và một nửa album không bao giờ có khuôn mặt. Hàm này phân trang qua
+   * trần đó; nó vốn có sẵn trong repo đúng vì lý do này.
+   */
+  const rows = (await fetchAllPhotos(
+    db,
+    albumId,
+    "id, drive_file_id, name, is_video, faces_scanned_at"
+  )) as ScanRow[];
+  const todo = pendingRows(rows);
   let scanned = 0;
   let faces = 0;
   let failed = 0;
@@ -149,6 +158,7 @@ export async function scanAlbum(
   const remaining = todo.length - scanned - failed;
   return {
     albumId,
+    tongAnh: rows.length,
     scanned,
     faces,
     failed,
