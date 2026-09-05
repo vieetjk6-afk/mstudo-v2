@@ -118,7 +118,23 @@ export async function scanAlbum(
     }
   };
 
-  for (const p of todo) {
+  /*
+   * TẢI ẢNH KẾ TIẾP TRONG LÚC ĐANG NHẬN DIỆN ẢNH HIỆN TẠI.
+   *
+   * Đo trên máy chủ thật: tải một thumbnail từ Drive mất ~900 ms, nhận diện mất
+   * ~1.250 ms. Làm tuần tự thì 41% thời gian là CPU ngồi chờ mạng — mà giờ CPU
+   * là thứ tính tiền và là thứ quyết định một lượt cron quét được bao nhiêu ảnh.
+   *
+   * Đường ống sâu ĐÚNG MỘT bậc, không hơn: sâu hơn thì phải giữ nhiều ảnh trong
+   * bộ nhớ cùng lúc, mà lợi thì không thêm — nhận diện vẫn là khâu chậm nhất và
+   * nó chỉ chạy được một ảnh một lúc.
+   */
+  const tai = (p?: ScanRow) => (p ? fetchThumb(p.drive_file_id).catch(() => null) : Promise.resolve(null));
+  let cho: Promise<Uint8Array | null> = tai(todo[0]);
+
+  for (let i = 0; i < todo.length; i++) {
+    const p = todo[i];
+    const bytesCho = cho;
     if (Date.now() - t0 > opts.budgetMs) {
       stoppedBy = "het-gio";
       break;
@@ -127,8 +143,10 @@ export async function scanAlbum(
       stoppedBy = "het-han-muc";
       break;
     }
+    // Khởi động lượt tải kế TRƯỚC khi nhận diện tấm này — đó là toàn bộ mẹo.
+    cho = tai(todo[i + 1]);
     try {
-      const bytes = await fetchThumb(p.drive_file_id);
+      const bytes = await bytesCho;
       if (!bytes) throw new Error("khong_tai_duoc_anh");
       const found = await scanJpeg(bytes);
       found.forEach((f, at) => {
