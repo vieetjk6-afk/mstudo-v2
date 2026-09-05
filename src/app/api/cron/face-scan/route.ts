@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { albumsNeedingCluster, albumsNeedingScan, clusterAlbum, scanAlbum } from "@/lib/face-scan-server";
+import { albumsNeedingCluster, albumsNeedingScan, clusterAlbum, hanQuetMs, scanAlbum } from "@/lib/face-scan-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 /**
- * Trần thời gian của một lượt. Nhận diện khuôn mặt tốn ~0,8 giây một ảnh (đo
- * thật: npm run test:face-may-chu), nên một lượt 300 giây quét được ~300 ảnh —
- * album cưới 800 ảnh xong sau ba lượt cron.
+ * 60 giây, không phải 300.
+ *
+ * 300 là trần của gói Pro; gói Hobby cắt ở 60. Khai 300 trên Hobby thì hàm vẫn
+ * bị giết ở 60 mà code lại tưởng mình còn thời gian — và bị giết giữa chừng thì
+ * mất luôn phần chưa kịp ghi. Khai đúng 60 để cả hai gói cùng chạy được.
  */
-export const maxDuration = 300;
+export const maxDuration = 60;
 
-/** Dừng quét trước hạn đủ để còn kịp gom nhóm và trả JSON. */
-const SCAN_BUDGET_MS = 210_000;
+/** Dừng quét trước hạn đủ để còn kịp gom nhóm và trả JSON. Xem `hanQuetMs`. */
+const SCAN_BUDGET_MS = hanQuetMs();
 /** Trần ảnh mỗi lượt, để một album khổng lồ không chiếm hết mọi lượt cron. */
 const MAX_PHOTOS = 400;
 /** Số album chạm tới trong một lượt. */
