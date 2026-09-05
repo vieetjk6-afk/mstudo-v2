@@ -54,6 +54,7 @@
     "test:face-group": "node --experimental-strip-types desktop/test/face-group.mjs",
     "test:face-people": "node --experimental-strip-types desktop/test/face-people.mjs",
     "test:face-auto": "node --experimental-strip-types desktop/test/face-auto.mjs",
+    "test:bao-thieu-bang": "node desktop/test/bao-thieu-bang.mjs",
     "test:face-finder": "node --experimental-strip-types desktop/test/face-finder-browser.mjs",
     "test:face-upload": "node desktop/test/face-upload-browser.mjs",
     "test:social-frame": "node --experimental-strip-types desktop/test/social-frame.mjs",

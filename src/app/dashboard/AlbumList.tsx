@@ -23,6 +23,7 @@ import PlanUsage from "@/components/PlanUsage";
 import { Panel } from "@/components/studio/ui";
 import StudioTrialButton from "@/components/StudioTrialButton";
 import FilterDialog from "@/components/FilterDialog";
+import FaceSetupNotice from "@/components/FaceSetupNotice";
 import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
 import { isDeliveryPhase } from "@/lib/album-phase";
 
@@ -51,6 +52,11 @@ export default function AlbumList({ albums, showTrial = false, trialUsed = false
   return (
     <div className="page-in">
       <PlanUsage />
+
+      {/* Migration chưa chạy là thứ HOÀN TOÀN VÔ HÌNH trong app này: bảng thiếu
+          thì màn liên quan chỉ trống, hoặc tệ hơn là nói sai. Nói thẳng ra ngay
+          chỗ studio nhìn đầu tiên. Không thiếu gì thì không hiện gì. */}
+      <FaceSetupNotice />
 
       {/* ── Dòng mô tả + hành động ──────────────────────────────────────────
           Bản thiết kế không lặp lại tiêu đề màn ở đây (topbar đã có), chỉ một
@@ -236,9 +242,11 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
       .select("id", { count: "exact", head: true })
       .eq("album_id", a.id)
       .then(({ count, error }) => {
-        // Chưa chạy migration album_people.sql thì coi như chưa gom — đúng về
-        // mặt kết quả, và không làm hỏng menu vì một tính năng thêm.
-        if (alive) setFaceCount(error ? 0 : (count ?? 0));
+        // Thiếu BẢNG khác hẳn "chưa gom": nói nhầm là đẩy studio đi quét một thứ
+        // không thể lưu được. Báo -1 để dòng chữ nói đúng việc phải làm.
+        if (!alive) return;
+        if (error) setFaceCount(/does not exist|schema cache|relation/i.test(error.message) ? -1 : 0);
+        else setFaceCount(count ?? 0);
       });
     return () => {
       alive = false;
@@ -446,9 +454,11 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
             <p className="mt-1.5 text-center text-[11.5px]" style={{ color: "var(--tx3)" }}>
               {faceCount === null
                 ? "Khuôn mặt: đang xem…"
-                : faceCount === 0
-                  ? "Khuôn mặt: chưa gom — khách chưa tìm được theo mặt"
-                  : `Khuôn mặt: đã gom ${faceCount} người`}
+                : faceCount === -1
+                  ? "Khuôn mặt: chưa bật — cần chạy supabase/cap-nhat.sql"
+                  : faceCount === 0
+                    ? "Khuôn mặt: chưa gom — khách chưa tìm được theo mặt"
+                    : `Khuôn mặt: đã gom ${faceCount} người`}
             </p>
             <div className="mt-2 flex gap-2">
               <Link href={`/dashboard/albums/${a.id}`} className="flex-1 rounded-[9px] py-2 text-center text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }}>
