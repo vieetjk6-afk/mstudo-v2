@@ -68,6 +68,7 @@ const ORDER = [
   ["migrations/accounting.sql", "Phiếu thu có số & khoá sổ kế toán"],
   ["migrations/weather.sql", "Toạ độ điểm chụp cho dự báo thời tiết (chạy SAU studio_appointments)"],
   ["migrations/album_people.sql", "Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)"],
+  ["migrations/album_faces.sql", "Kho khuôn mặt đã quét — để lượt quét tự động chạy tiếp được (chạy SAU album_people)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];
@@ -98,6 +99,7 @@ const MOI = [
   "migrations/accounting.sql",
   "migrations/weather.sql",
   "migrations/album_people.sql",
+  "migrations/album_faces.sql",
 ];
 
 /**

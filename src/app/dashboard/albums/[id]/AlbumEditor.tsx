@@ -31,6 +31,7 @@ import { studioUrl } from "@/lib/hosts";
 import ShareButton from "@/components/ShareButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import FilterPhotosButton from "@/components/FilterPhotosButton";
+import AlbumFaceAuto from "@/components/AlbumFaceAuto";
 import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
@@ -569,7 +570,8 @@ export default function AlbumEditor({
           </Link>
           {/* Lọc ảnh NGAY từ cài đặt album — mở popup công cụ lọc tại chỗ (nguồn
               Drive hoặc máy tính). Chỉ hiện ở album chọn ảnh; giai đoạn giao
-              khách không cần lọc. */}
+              khách không lọc theo danh sách khách chọn nữa. Việc gom khuôn mặt
+              thì KHÔNG nằm sau nút này nữa — nó tự chạy, xem <AlbumFaceAuto/>. */}
           {phase !== "delivery" && <FilterPhotosButton albumId={album.id} albumTitle={form.title} className="act-btn" />}
           <a href={clientLink} target="_blank" rel="noreferrer" className="act-btn">
             <ExternalLink size={16} /> Mở link khách
@@ -603,6 +605,15 @@ export default function AlbumEditor({
           {msg}
         </div>
       )}
+
+      {/* GOM KHUÔN MẶT TỰ ĐỘNG.
+          Đặt ngay đầu màn, cho CẢ album chọn ảnh lẫn album giao khách: studio mở
+          album ra là nó chạy, không phải tìm nút nào. Đây là chỗ thay cho việc
+          trước đây bắt studio vào công cụ Lọc ảnh, tick hai ô, bấm Quét rồi bấm
+          Lưu — tám bước cho một việc mà máy tự làm được. */}
+      <div className="mb-3.5">
+        <AlbumFaceAuto albumId={album.id} />
+      </div>
 
       {/* Hợp đồng đồng bộ Drive có HAI album. Khi album giao khách đã sẵn sàng,
           link khách của album chọn ảnh tự chuyển sang đó — nhìn ở màn này thì

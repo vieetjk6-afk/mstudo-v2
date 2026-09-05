@@ -479,6 +479,35 @@ Và phải tự chọn nền tính toán (`webgl` rồi lùi `cpu`) trước khi
 bản UMD ưu tiên nền `wasm` mà ta không phục vụ, không chọn tay thì chết với đúng
 một câu khó hiểu.
 
+**Studio không phải bấm gì cả.** Bản trước bắt họ vào công cụ Lọc ảnh, tick hai
+ô, bấm Quét, rồi bấm Lưu — tám bước cho một việc mà máy tự làm được, và ba vòng
+liên tiếp chủ studio không tìm ra đường vào. Nay mở màn album là app **tự quét
+nền** rồi gom nhóm; khách mở link là tìm được ngay. Cho cả album chọn ảnh lẫn
+album giao khách.
+
+Điều không giấu đi đâu được: **mô hình phải chạy ở đâu đó**, và nó chạy trên máy
+studio, trong tab đang mở. Không có lựa chọn nào vừa miễn phí, vừa không cần máy
+studio, vừa không bắt điện thoại khách tải 26 MB — chạy trên máy chủ thì phải trả
+tiền cho hàng chục phút CPU mỗi album. Nên thay vì giả vờ nó tức thời, lượt quét
+được thiết kế để **chịu được cắt ngang**:
+
+- Mỗi mẻ 12 ảnh ghi ngay xuống `album_faces`. Đóng tab giữa chừng thì mất nhiều
+  nhất một mẻ.
+- `photos.faces_scanned_at` đánh dấu đã quét — **phải là cột riêng**, không suy
+  ra từ kho khuôn mặt được: ảnh không có mặt người nào (cổng hoa, bàn tiệc) không
+  sinh hàng nào, nên lấy "có hàng trong kho" làm dấu là quét lại chúng mãi mãi và
+  lượt quét không bao giờ kết thúc.
+- Trần 400 ảnh mỗi lần mở màn. Không phải giới hạn kỹ thuật mà là phép lịch sự:
+  studio mở album để làm việc khác, không phải để máy chạy nóng hàng giờ.
+- Chỉ **gom nhóm khi đã quét hết**. Gom giữa chừng thì các nhóm nhảy lung tung
+  sau mỗi mẻ, và studio nhìn vào sẽ không tin cái gì cả.
+
+Giữ luôn vector từng khuôn mặt (~700 KB cho album 800 ảnh) đổi lấy ba thứ: chạy
+tiếp được, gom lại theo ngưỡng khác mà không quét lại, và thêm ảnh sau thì chỉ
+quét phần mới.
+
+Đặt tên là **tuỳ chọn**, không phải điều kiện: khách nhận ra bằng mặt.
+
 **Khách tự tìm mặt mình — hai đường, hai cái giá khác hẳn.**
 
 Đây mới là thứ khách thật sự hỏi khi mở album 800 tấm: *"ảnh của tôi đâu"*. Bản
