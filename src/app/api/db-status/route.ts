@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { maDuAn } from "@/lib/supabase-du-an";
+import { phanLoaiLoi } from "@/lib/pg-loi";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,6 +44,11 @@ async function chayTheoLo<T, R>(list: T[], n: number, fn: (x: T) => Promise<R>):
 
 type KetQua = { bang: string; thieuBang: boolean; thieuCot: string[]; loiKhac: string | null };
 
+function moTaLoi(e: { code?: string; message?: string }): string {
+  return `${e.code ?? ""} ${e.message ?? ""}`.trim();
+}
+
+
 export async function GET() {
   const supabase = createClient();
   const {
@@ -78,19 +84,26 @@ export async function GET() {
     const chon = cot.size ? [...cot].join(",") : "*";
     const { error } = await db.from(bang).select(chon).limit(1);
     if (!error) return { bang, thieuBang: false, thieuCot: [], loiKhac: null };
-    const code = (error as { code?: string }).code ?? "";
-    const msg = error.message ?? "";
-    if (code === "42P01" || code === "PGRST205" || /does not exist|schema cache/i.test(msg)) {
-      return { bang, thieuBang: true, thieuCot: [], loiKhac: null };
+
+    const loai = phanLoaiLoi(error);
+    if (loai === "thieu-bang") return { bang, thieuBang: true, thieuCot: [], loiKhac: null };
+    if (loai !== "thieu-cot") {
+      return { bang, thieuBang: false, thieuCot: [], loiKhac: moTaLoi(error) };
     }
-    if (code === "42703" || /column .* does not exist|could not find the '.*' column/i.test(msg)) {
-      // PostgREST nêu đúng tên cột nó không tìm thấy. Chỉ ra được cột ĐẦU TIÊN
-      // thiếu là đủ để kết luận migration đó chưa chạy — không cần dò tiếp.
-      const m = msg.match(/'([^']+)'|column "?([\w.]+)"?/);
-      const ten = (m?.[1] ?? m?.[2] ?? "").split(".").pop() ?? "?";
-      return { bang, thieuBang: false, thieuCot: [ten], loiKhac: null };
+    /*
+     * Hỏi lại TỪNG CỘT một.
+     *
+     * Câu gộp chỉ nêu được cột ĐẦU TIÊN nó vấp phải, nên báo cáo sẽ nói "thiếu
+     * một cột" trong khi thực tế thiếu năm — và studio chạy migration xong vẫn
+     * thấy đỏ, không hiểu tại sao. Chỉ những bảng thật sự có vấn đề mới phải trả
+     * giá thêm mấy lượt gọi này.
+     */
+    const thieu: string[] = [];
+    for (const c of cot) {
+      const { error: e } = await db.from(bang).select(c).limit(1);
+      if (e && phanLoaiLoi(e) === "thieu-cot") thieu.push(c);
     }
-    return { bang, thieuBang: false, thieuCot: [], loiKhac: `${code} ${msg}`.trim() };
+    return { bang, thieuBang: false, thieuCot: thieu, loiKhac: null };
   });
 
   const theoBang = new Map(ketQua.map((r) => [r.bang, r]));
