@@ -104,6 +104,81 @@ ok(
   (await chay([["**/rest/v1/album_faces*", denied], ["**/rest/v1/album_people*", okEmpty]])) === null
 );
 
+/* ── Nút "Chép SQL" phải đưa NỘI DUNG, không phải một cái link ────────────── */
+/*
+ * Đây là chỗ tính năng thật sự tắc, sáu vòng liền: bảng báo đúng, studio đọc
+ * hiểu, nhưng nút chỉ chép một đường dẫn GitHub — họ vẫn phải rời app, tìm nút
+ * raw, bôi đen cả file. Bài này đòi đúng thứ phải nằm trong clipboard.
+ */
+{
+  const page = await browser.newPage();
+  await page.route("**/rest/v1/album_faces*", gone("album_faces"));
+  await page.route("**/rest/v1/album_people*", gone("album_people"));
+  // Máy chủ thật đòi đăng nhập, nên ở màn xem trước ta giả nội dung file.
+  // Phải DÀI thật: `chepSql` coi dưới 100 ký tự là "không lấy được" (một trang
+  // lỗi HTML ngắn cũng trả 200 được). Bản đầu của bài kiểm thử dùng chuỗi 70 ký
+  // tự và đỏ — đúng ra là hàng rào đó đang làm việc.
+  const SQL_GIA =
+    "-- mstudo — khuon-mat.sql (bản giả cho kiểm thử)\n".repeat(3) +
+    "create table if not exists public.album_people (id uuid primary key);\n" +
+    "create table if not exists public.album_faces (photo_id uuid, at int);\n";
+  await page.route("**/api/setup-sql/khuon-mat", (r) =>
+    r.fulfill({ status: 200, contentType: "text/plain; charset=utf-8", body: SQL_GIA })
+  );
+  /*
+   * Thay `navigator.clipboard.writeText` bằng bản ghi lại, thay vì xin quyền
+   * clipboard thật: quyền clipboard trong Chromium không cửa sổ vừa phải xin
+   * vừa hay trả về chuỗi rỗng, nên bài kiểm sẽ đỏ vì trình duyệt chứ không phải
+   * vì code. Cái cần kiểm là NGƯỜI GỌI truyền gì vào — đúng chỗ này ghi lại được.
+   */
+  await page.addInitScript(() => {
+    const w = window;
+    w.__daChep = null;
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (t) => {
+          w.__daChep = t;
+          return Promise.resolve();
+        },
+      },
+    });
+  });
+  await page.goto(PAGE, { waitUntil: "domcontentloaded", timeout: 25_000 });
+  await page.waitForTimeout(9_000);
+  await page.getByRole("button", { name: /Chép SQL/i }).click();
+  await page.waitForTimeout(1_500);
+  const trongClipboard = (await page.evaluate(() => window.__daChep)) ?? "";
+  ok(
+    "bấm 'Chép SQL' thì clipboard chứa NỘI DUNG SQL, không phải đường dẫn",
+    trongClipboard.includes("create table") && !/^https?:/.test(trongClipboard.trim()),
+    `nhận: ${JSON.stringify(trongClipboard.slice(0, 80))}`
+  );
+  await page.close();
+}
+
+/* ── Mắt xích vô hình: thiếu CRON_SECRET ──────────────────────────────────── */
+/*
+ * Bảng đủ, code đúng, mà không album nào được quét — vì app tự trả 401 cho cron
+ * của Vercel. Không có cảnh báo này thì studio lại rơi đúng vào vòng "chạy SQL
+ * rồi mà vẫn không thấy gì", lần này không còn manh mối nào.
+ */
+async function bangCron(faceStatus) {
+  const page = await browser.newPage();
+  await page.route("**/rest/v1/album_faces*", okEmpty);
+  await page.route("**/rest/v1/album_people*", okEmpty);
+  await page.route("**/api/face-status", (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(faceStatus) })
+  );
+  await page.goto(PAGE, { waitUntil: "domcontentloaded", timeout: 25_000 });
+  await page.waitForTimeout(9_000);
+  const co = (await page.innerText("body")).includes("CRON_SECRET");
+  await page.close();
+  return co;
+}
+ok("đủ bảng nhưng thiếu CRON_SECRET → báo đúng mắt xích đó", await bangCron({ ok: true, cronSecret: false }));
+ok("đủ bảng và có CRON_SECRET → im lặng", !(await bangCron({ ok: true, cronSecret: true })));
+
 await browser.close();
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

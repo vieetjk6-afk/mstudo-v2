@@ -580,10 +580,26 @@ phân biệt hai trường hợp: **còn ảnh chưa quét** → hẹn khách qu
 **quét xong mà không thấy mặt nào** → ẩn hẳn.
 
 **Khi khách nói "tôi không thấy gì" thì phải trả lời được bằng SỐ.**
-`GET /api/albums/<id>/face-scan` (chủ album) trả về: đã phát hành chưa, bao nhiêu
-ảnh, còn bao nhiêu chưa quét, tìm được bao nhiêu khuôn mặt, gom thành bao nhiêu
-người, và thiếu bảng nào nếu chưa chạy SQL. `POST` cùng đường dẫn thì quét ngay,
-không đợi cron.
+`GET /api/face-status` — **không tham số** — trả về đủ mọi mắt xích theo đúng thứ
+tự chúng có thể đứt: bảng nào còn thiếu, `CRON_SECRET` có chưa, rồi từng album
+(đã phát hành chưa, bao nhiêu ảnh, còn bao nhiêu chưa quét, bao nhiêu khuôn mặt,
+bao nhiêu người). Không tham số là chủ ý: bản trước bắt dán id album vào URL, và
+đúng chỗ đó đã hỏng trong thực tế — studio dán nguyên chữ `<id>` rồi báo "không
+được". `GET/POST /api/albums/<id>/face-scan` vẫn còn cho một album cụ thể, `POST`
+thì quét ngay không đợi cron.
+
+**Ba mắt xích, và mắt xích thứ hai là thứ vô hình nhất.** (1) Chưa chạy SQL →
+bảng báo cam ngay đầu bảng điều khiển. (2) **Thiếu biến `CRON_SECRET` trên
+Vercel** → chính app trả 401 cho cron, nên không album nào được quét: bảng đủ,
+code đúng, mà vẫn trống trơn và không có lỗi ở đâu cả. Bảng báo giờ kiểm luôn cả
+mắt xích này. (3) Album còn ở trạng thái nháp → cron cố ý bỏ qua.
+
+**Bảng báo đưa thẳng SQL, không đưa link.** Bản trước chỉ có một link GitHub và
+nút "chép link": studio phải rời app, mở GitHub, tìm nút raw, bôi đen cả file —
+và qua sáu vòng trao đổi việc đó vẫn chưa xong lần nào. Nay nút **Chép SQL** nạp
+`/api/setup-sql/khuon-mat` rồi đặt thẳng nội dung vào clipboard; có nút **Kiểm
+tra lại** để thấy banner biến mất ngay tại chỗ, và một đường lùi mở SQL ra tab
+(`text/plain`, không số dòng, không tô màu) khi trình duyệt chặn clipboard.
 
 Máy chủ `src/lib/face-node.ts` + `src/lib/face-scan-server.ts`
 (`npm run test:face-may-chu`, chạy mô hình thật) · luật gom `src/lib/face-group.ts`
