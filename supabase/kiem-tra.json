@@ -1,0 +1,621 @@
+{
+  "sinhBoi": "supabase/build-setup-all.mjs",
+  "capNhat": [
+    "migrations/danh_gia_khach.sql",
+    "migrations/nguon_khach.sql",
+    "migrations/automations.sql",
+    "migrations/crew_timesheet.sql",
+    "migrations/vendors.sql",
+    "migrations/accounting.sql",
+    "migrations/weather.sql",
+    "migrations/album_people.sql",
+    "migrations/album_faces.sql"
+  ],
+  "muc": [
+    {
+      "file": "schema.sql",
+      "mo_ta": "Nền: profiles, albums, hợp đồng, studio, site_settings, storage buckets",
+      "bang": [
+        "admin_drive",
+        "affiliate_codes",
+        "affiliate_commissions",
+        "album_creations",
+        "album_designs",
+        "album_shares",
+        "album_sources",
+        "albums",
+        "bookings",
+        "compress_usages",
+        "contract_client_proofs",
+        "contract_crew",
+        "contract_edit_requests",
+        "contract_equipment",
+        "contract_items",
+        "contract_payment_plan",
+        "contract_payments",
+        "contract_products",
+        "contract_quote_options",
+        "contract_tasks",
+        "contract_template_items",
+        "contract_templates",
+        "crew_shift_plan",
+        "crew_unavailable",
+        "desktop_devices",
+        "discount_codes",
+        "discount_redemptions",
+        "dislikes",
+        "feedback",
+        "filter_usages",
+        "message_templates",
+        "photos",
+        "profiles",
+        "quote_adjustments",
+        "quote_items",
+        "selections",
+        "site_blocks",
+        "site_settings",
+        "sites",
+        "story_pages",
+        "story_uploads",
+        "story_wishes",
+        "studio_bookings",
+        "studio_contracts",
+        "studio_crew",
+        "studio_drive",
+        "studio_equipment",
+        "studio_events",
+        "studio_expenses",
+        "studio_notifications",
+        "studio_packages",
+        "studio_pricelist",
+        "studio_quotes",
+        "studio_services",
+        "studio_zalo",
+        "upgrade_requests",
+        "wedding_invitations",
+        "wedding_rsvps",
+        "zalo_messages"
+      ],
+      "cot": [
+        "album_sources.stage",
+        "albums.category",
+        "albums.category_label",
+        "albums.client_name",
+        "albums.client_phone",
+        "albums.download_enabled",
+        "albums.event_date",
+        "albums.gallery_pinned",
+        "albums.is_gallery",
+        "albums.is_pinned",
+        "albums.is_showcase",
+        "albums.kind",
+        "albums.phase",
+        "albums.watermark_delivery",
+        "compress_usages.kind",
+        "contract_client_proofs.plan_id",
+        "contract_crew.paid",
+        "contract_crew.paid_at",
+        "contract_payment_plan.payment_id",
+        "contract_payments.proof_url",
+        "contract_products.assigned_to",
+        "crew_unavailable.end_time",
+        "crew_unavailable.overnight",
+        "crew_unavailable.owner_id",
+        "crew_unavailable.start_time",
+        "crew_unavailable.title",
+        "discount_codes.cycle",
+        "discount_codes.expires_at",
+        "discount_codes.max_uses",
+        "discount_codes.trial_days",
+        "discount_codes.used_count",
+        "photos.is_video",
+        "profiles.auto_client_emails",
+        "profiles.booking_token",
+        "profiles.calendar_token",
+        "profiles.can_galleries",
+        "profiles.can_notes",
+        "profiles.can_watermark_pro",
+        "profiles.compress_daily_limit",
+        "profiles.compress_picker_limit",
+        "profiles.google_calendar_id",
+        "profiles.google_refresh_token",
+        "profiles.monthly_album_limit",
+        "profiles.monthly_revenue_target",
+        "profiles.pl_accent",
+        "profiles.pl_bank_account",
+        "profiles.pl_bank_bin",
+        "profiles.pl_bank_holder",
+        "profiles.pl_bank_name",
+        "profiles.pl_bg",
+        "profiles.pl_facebook",
+        "profiles.pl_hidden_lists",
+        "profiles.pl_list_labels",
+        "profiles.pl_logo_url",
+        "profiles.pl_phone",
+        "profiles.pl_show_clauses",
+        "profiles.pl_text",
+        "profiles.plan",
+        "profiles.plan_cycle",
+        "profiles.plan_expires_at",
+        "profiles.referred_by",
+        "profiles.studio_brand_name",
+        "profiles.studio_logo_url",
+        "profiles.studio_owner_id",
+        "profiles.studio_role",
+        "profiles.trial_used_at",
+        "quote_items.is_discount",
+        "quote_items.package_group",
+        "selections.client_note",
+        "site_settings.affiliate_commission_basic",
+        "site_settings.affiliate_commission_photographer",
+        "site_settings.affiliate_commission_photographer_plus",
+        "site_settings.affiliate_commission_studio",
+        "site_settings.basic_discount_month_percent",
+        "site_settings.basic_discount_percent",
+        "site_settings.basic_discount_year_percent",
+        "site_settings.contact_facebook",
+        "site_settings.contact_tiktok",
+        "site_settings.contact_youtube",
+        "site_settings.favicon_url",
+        "site_settings.feature_flags",
+        "site_settings.featured_images",
+        "site_settings.photographer_discount_month_percent",
+        "site_settings.photographer_discount_percent",
+        "site_settings.photographer_discount_year_percent",
+        "site_settings.photographer_plus_discount_month_percent",
+        "site_settings.photographer_plus_discount_percent",
+        "site_settings.photographer_plus_discount_year_percent",
+        "site_settings.price_basic_month",
+        "site_settings.price_basic_year",
+        "site_settings.price_photographer_month",
+        "site_settings.price_photographer_plus_month",
+        "site_settings.price_photographer_plus_year",
+        "site_settings.price_photographer_year",
+        "site_settings.price_studio_month",
+        "site_settings.price_studio_year",
+        "site_settings.site_description",
+        "site_settings.site_title",
+        "site_settings.studio_discount_month_percent",
+        "site_settings.studio_discount_percent",
+        "site_settings.studio_discount_year_percent",
+        "site_settings.studio_promo_percent",
+        "site_settings.upgrade_content",
+        "sites.custom_domain_verified",
+        "story_pages.drive_refresh_token",
+        "story_pages.drive_upload_folder",
+        "studio_bookings.facebook",
+        "studio_bookings.package_name",
+        "studio_bookings.package_price",
+        "studio_contracts.assigned_to",
+        "studio_contracts.brief_concept",
+        "studio_contracts.brief_note",
+        "studio_contracts.brief_outfit",
+        "studio_contracts.brief_refs",
+        "studio_contracts.brief_submitted_at",
+        "studio_contracts.calendar_color",
+        "studio_contracts.chosen_quote_at",
+        "studio_contracts.chosen_quote_option_id",
+        "studio_contracts.client_facebook",
+        "studio_contracts.client_messenger",
+        "studio_contracts.client_signature",
+        "studio_contracts.client_signed_at",
+        "studio_contracts.client_signed_name",
+        "studio_contracts.client_viewed_at",
+        "studio_contracts.completed_at",
+        "studio_contracts.delivery_due",
+        "studio_contracts.drive_folder_id",
+        "studio_contracts.drive_make_photo",
+        "studio_contracts.drive_make_video",
+        "studio_contracts.drive_synced_at",
+        "studio_contracts.drive_tree",
+        "studio_contracts.gallery_album_id",
+        "studio_contracts.gcal_event_id",
+        "studio_contracts.intake",
+        "studio_contracts.intake_submitted_at",
+        "studio_contracts.intake_token",
+        "studio_contracts.proofs_purged_at",
+        "studio_contracts.selection_album_id",
+        "studio_contracts.service_id",
+        "studio_contracts.source",
+        "studio_contracts.studio_signature",
+        "studio_contracts.studio_signed_at",
+        "studio_contracts.studio_signed_name",
+        "studio_drive.filter_refresh_token",
+        "studio_events.gcal_event_id",
+        "studio_expenses.client_visible",
+        "studio_expenses.contract_id",
+        "studio_notifications.album_id",
+        "studio_notifications.important",
+        "studio_pricelist.list_key",
+        "studio_pricelist.show_on_home",
+        "studio_quotes.auto_create_contract",
+        "studio_quotes.bulk_discount_amount",
+        "studio_quotes.bulk_discount_min_items",
+        "studio_quotes.client_facebook",
+        "studio_quotes.discount_package_group",
+        "studio_quotes.service_id",
+        "upgrade_requests.amount",
+        "upgrade_requests.cycle",
+        "upgrade_requests.discount_code",
+        "upgrade_requests.phone",
+        "upgrade_requests.plan"
+      ]
+    },
+    {
+      "file": "wedding_invitations.sql",
+      "mo_ta": "Thiệp cưới online",
+      "bang": [
+        "wedding_invitations",
+        "wedding_rsvps"
+      ],
+      "cot": []
+    },
+    {
+      "file": "story_pages.sql",
+      "mo_ta": "Trang Love Story",
+      "bang": [
+        "story_pages",
+        "story_uploads",
+        "story_wishes"
+      ],
+      "cot": [
+        "story_pages.drive_refresh_token",
+        "story_pages.drive_upload_folder"
+      ]
+    },
+    {
+      "file": "migrations/admin_drive.sql",
+      "mo_ta": "Vá bảo mật: tách refresh_token Drive của admin",
+      "bang": [
+        "admin_drive"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/album_designs.sql",
+      "mo_ta": "Thiết kế Album",
+      "bang": [
+        "album_designs"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/contract_intake.sql",
+      "mo_ta": "Form điền thông tin trước buổi chụp",
+      "bang": [],
+      "cot": [
+        "studio_contracts.intake",
+        "studio_contracts.intake_submitted_at",
+        "studio_contracts.intake_token"
+      ]
+    },
+    {
+      "file": "migrations/crew_schedule.sql",
+      "mo_ta": "Lịch thợ (phải chạy TRƯỚC crew_profile_show)",
+      "bang": [
+        "crew_shift_plan"
+      ],
+      "cot": [
+        "crew_unavailable.end_time",
+        "crew_unavailable.overnight",
+        "crew_unavailable.owner_id",
+        "crew_unavailable.start_time",
+        "crew_unavailable.title"
+      ]
+    },
+    {
+      "file": "migrations/crew_profile_show.sql",
+      "mo_ta": "Hồ sơ thợ & thông tin show",
+      "bang": [
+        "crew_account"
+      ],
+      "cot": [
+        "contract_crew.end_time",
+        "contract_crew.side",
+        "contract_crew.start_time",
+        "contract_crew.task",
+        "crew_unavailable.contract_crew_id",
+        "profiles.crew_token",
+        "studio_crew.address",
+        "studio_crew.bank_account",
+        "studio_crew.bank_name",
+        "studio_crew.email",
+        "studio_crew.equipment",
+        "studio_crew.self_filled_at",
+        "studio_crew.skills",
+        "studio_crew.status"
+      ]
+    },
+    {
+      "file": "migrations/photographer_plus_pricing.sql",
+      "mo_ta": "Cột giá còn thiếu của gói Photographer Plus",
+      "bang": [],
+      "cot": [
+        "site_settings.affiliate_commission_photographer_plus",
+        "site_settings.photographer_plus_discount_percent"
+      ]
+    },
+    {
+      "file": "migrations/rental.sql",
+      "mo_ta": "Phòng váy: kho trang phục & đơn thuê",
+      "bang": [
+        "rental_items",
+        "rental_order_items",
+        "rental_orders"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/site_views.sql",
+      "mo_ta": "Đếm lượt xem website studio",
+      "bang": [
+        "site_views"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/studio_drive_sync.sql",
+      "mo_ta": "Đồng bộ Google Drive cho hợp đồng",
+      "bang": [
+        "studio_drive"
+      ],
+      "cot": [
+        "studio_contracts.drive_folder_id",
+        "studio_contracts.drive_make_photo",
+        "studio_contracts.drive_make_video",
+        "studio_contracts.drive_synced_at",
+        "studio_contracts.drive_tree",
+        "studio_drive.root_folder_name"
+      ]
+    },
+    {
+      "file": "migrations/studio_zalo.sql",
+      "mo_ta": "Tự động nhắn Zalo theo từng studio",
+      "bang": [
+        "studio_zalo",
+        "zalo_messages"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/website_chat_config.sql",
+      "mo_ta": "Cấu hình chatbox website",
+      "bang": [
+        "website_chat_config"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/website_leads.sql",
+      "mo_ta": "Lead & hội thoại từ chatbox",
+      "bang": [
+        "website_leads"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/album_dislikes.sql",
+      "mo_ta": "Ảnh khách 'không thích' trong album chọn ảnh",
+      "bang": [
+        "dislikes"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/lifecycle_followup.sql",
+      "mo_ta": "Theo đuổi khách chưa chọn ảnh · hạn lưu trữ ảnh gốc · hạn hiệu lực báo giá",
+      "bang": [],
+      "cot": [
+        "albums.delivered_at",
+        "albums.storage_notice_at",
+        "albums.storage_until",
+        "profiles.quote_valid_days",
+        "profiles.storage_months",
+        "studio_contracts.select_invited_at",
+        "studio_contracts.select_nudged_at",
+        "studio_contracts.select_nudges"
+      ]
+    },
+    {
+      "file": "migrations/referral_deposit.sql",
+      "mo_ta": "Khách giới thiệu khách · đặt cọc giữ ngày (chạy sau lifecycle_followup)",
+      "bang": [
+        "studio_referrals"
+      ],
+      "cot": [
+        "profiles.booking_deposit",
+        "profiles.referral_discount",
+        "profiles.referral_reward",
+        "studio_bookings.deposit_amount",
+        "studio_bookings.deposit_code",
+        "studio_bookings.deposit_paid_at",
+        "studio_bookings.deposit_proof_url",
+        "studio_bookings.deposit_status",
+        "studio_bookings.deposit_token",
+        "studio_bookings.referrer_phone"
+      ]
+    },
+    {
+      "file": "migrations/activity_tracking.sql",
+      "mo_ta": "Bộ đếm hoạt động tài khoản (lần cuối mở app, số ngày dùng)",
+      "bang": [],
+      "cot": [
+        "profiles.active_days",
+        "profiles.last_active_at",
+        "profiles.last_active_day",
+        "profiles.visit_count"
+      ]
+    },
+    {
+      "file": "migrations/studio_appointments.sql",
+      "mo_ta": "Lịch studio: lịch trang điểm / thử đồ / tư vấn, phòng & nguồn lực",
+      "bang": [
+        "studio_appointments",
+        "studio_rooms"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/studio_branches.sql",
+      "mo_ta": "Chi nhánh studio: nhiều cơ sở trong một tài khoản (chạy SAU studio_appointments)",
+      "bang": [
+        "studio_branches"
+      ],
+      "cot": [
+        "profiles.studio_branch_id",
+        "rental_items.branch_id",
+        "studio_appointments.branch_id",
+        "studio_bookings.branch_id",
+        "studio_contracts.branch_id",
+        "studio_crew.branch_id",
+        "studio_equipment.branch_id",
+        "studio_expenses.branch_id",
+        "studio_quotes.branch_id",
+        "studio_rooms.branch_id"
+      ]
+    },
+    {
+      "file": "migrations/upgrade_payment.sql",
+      "mo_ta": "Thanh toán gói dịch vụ: QR chuyển khoản, studio báo đã chuyển, admin xác nhận",
+      "bang": [],
+      "cot": [
+        "site_settings.pay_bank_account",
+        "site_settings.pay_bank_bin",
+        "site_settings.pay_bank_holder",
+        "site_settings.pay_bank_name",
+        "upgrade_requests.declared_at",
+        "upgrade_requests.payment_amount",
+        "upgrade_requests.payment_code",
+        "upgrade_requests.payment_status",
+        "upgrade_requests.review_note",
+        "upgrade_requests.reviewed_at",
+        "upgrade_requests.reviewed_by"
+      ]
+    },
+    {
+      "file": "migrations/crew_phone_digits.sql",
+      "mo_ta": "Tra thợ theo SĐT bằng chỉ mục (bỏ quét toàn bảng ở cổng /crew)",
+      "bang": [],
+      "cot": [
+        "contract_crew.phone_digits",
+        "studio_crew.phone_digits"
+      ]
+    },
+    {
+      "file": "migrations/contract_deposit_percent.sql",
+      "mo_ta": "% cọc hợp đồng do studio tự đặt",
+      "bang": [],
+      "cot": [
+        "profiles.contract_deposit_percent"
+      ]
+    },
+    {
+      "file": "migrations/inbox_unified.sql",
+      "mo_ta": "Hộp thư hợp nhất: gom tin Zalo/Facebook/Instagram/website về một chỗ",
+      "bang": [
+        "inbox_channels",
+        "inbox_contacts",
+        "inbox_conversations",
+        "inbox_messages"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/danh_gia_khach.sql",
+      "mo_ta": "Đánh giá khách: studio duyệt & trả lời (chạy SAU schema.sql)",
+      "bang": [],
+      "cot": [
+        "feedback.reply"
+      ]
+    },
+    {
+      "file": "migrations/nguon_khach.sql",
+      "mo_ta": "Nguồn khách & phễu chuyển đổi (chạy SAU website_leads)",
+      "bang": [],
+      "cot": [
+        "studio_bookings.source",
+        "studio_contracts.booking_id",
+        "website_leads.channel"
+      ]
+    },
+    {
+      "file": "migrations/automations.sql",
+      "mo_ta": "Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)",
+      "bang": [
+        "studio_automation_log",
+        "studio_automations"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/crew_timesheet.sql",
+      "mo_ta": "Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)",
+      "bang": [
+        "crew_available",
+        "crew_timesheet"
+      ],
+      "cot": [
+        "studio_crew.hourly_rate"
+      ]
+    },
+    {
+      "file": "migrations/vendors.sql",
+      "mo_ta": "Nhà cung cấp & đơn đặt ngoài",
+      "bang": [
+        "studio_vendors",
+        "vendor_orders"
+      ],
+      "cot": [
+        "studio_expenses.vendor_order_id"
+      ]
+    },
+    {
+      "file": "migrations/accounting.sql",
+      "mo_ta": "Phiếu thu có số & khoá sổ kế toán",
+      "bang": [
+        "studio_receipt_seq"
+      ],
+      "cot": [
+        "contract_payments.receipt_at",
+        "contract_payments.receipt_no",
+        "profiles.books_closed_until"
+      ]
+    },
+    {
+      "file": "migrations/weather.sql",
+      "mo_ta": "Toạ độ điểm chụp cho dự báo thời tiết (chạy SAU studio_appointments)",
+      "bang": [],
+      "cot": [
+        "profiles.studio_address",
+        "profiles.studio_lat",
+        "profiles.studio_lng",
+        "studio_appointments.lat",
+        "studio_appointments.lng",
+        "studio_contracts.lat",
+        "studio_contracts.lng"
+      ]
+    },
+    {
+      "file": "migrations/album_people.sql",
+      "mo_ta": "Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)",
+      "bang": [
+        "album_people",
+        "album_photo_people"
+      ],
+      "cot": [
+        "album_people.cover_box"
+      ]
+    },
+    {
+      "file": "migrations/album_faces.sql",
+      "mo_ta": "Kho khuôn mặt đã quét — để lượt quét tự động chạy tiếp được (chạy SAU album_people)",
+      "bang": [
+        "album_faces"
+      ],
+      "cot": [
+        "albums.faces_clustered_at",
+        "photos.faces_scanned_at"
+      ]
+    }
+  ]
+}

@@ -345,6 +345,64 @@ function emit(name, files, headLines, footLines = []) {
   }
 }
 
+/*
+ * ─── BẢN KÊ ĐỂ TỰ KIỂM DATABASE ĐANG CHẠY ────────────────────────────────────
+ *
+ * Vì sao cần. Chuyện đã xảy ra thật: suốt một tuần, mọi migration được dán vào
+ * SQL Editor của một project KHÁC với project mà app đang dùng. Supabase báo
+ * Success từng lần, app thì thiếu bảng — và không có cách nào biết database thật
+ * đang thiếu những gì, vì không ai đọc được nó ngoài chính app.
+ *
+ * Nên sinh kèm một bản kê: mỗi file migration khai ra những BẢNG nó tạo và
+ * những CỘT nó thêm. /api/db-status đọc bản kê này rồi hỏi thẳng database đang
+ * chạy từng thứ một, và trả lời bằng danh sách chính xác cái gì còn thiếu.
+ *
+ * Sinh tự động chứ không viết tay: viết tay thì hôm nay đúng, ba migration nữa
+ * là lệch — mà lệch ở đây nghĩa là báo "đủ rồi" trong khi vẫn thiếu, đúng kiểu
+ * hỏng đã ngốn mười vòng.
+ *
+ * Chỉ bắt hai dạng câu lệnh idempotent mà repo này dùng nhất quán:
+ *   create table if not exists public.X
+ *   alter table public.X add column if not exists Y
+ * Dạng khác (index, policy, hàm) cố ý bỏ qua — chúng không kiểm được qua
+ * PostgREST, và thiếu bảng/cột mới là thứ làm app vỡ.
+ */
+function banKe(files) {
+  const out = [];
+  for (const [rel, desc] of files) {
+    const sql = readFileSync(join(HERE, rel), "utf8");
+    const bang = [...sql.matchAll(/create\s+table\s+if\s+not\s+exists\s+public\.(\w+)/gi)].map((m) => m[1]);
+    const cot = [...sql.matchAll(/alter\s+table\s+public\.(\w+)\s+add\s+column\s+if\s+not\s+exists\s+(\w+)/gi)].map(
+      (m) => `${m[1]}.${m[2]}`
+    );
+    if (bang.length || cot.length) {
+      out.push({ file: rel, mo_ta: desc, bang: [...new Set(bang)].sort(), cot: [...new Set(cot)].sort() });
+    }
+  }
+  return out;
+}
+
+{
+  const out = join(HERE, "kiem-tra.json");
+  const text = JSON.stringify({ sinhBoi: "supabase/build-setup-all.mjs", capNhat: MOI, muc: banKe(ORDER) }, null, 2) + "\n";
+  if (process.argv.includes("--check")) {
+    let onDisk = "";
+    try {
+      onDisk = readFileSync(out, "utf8");
+    } catch {
+      /* chưa có → coi như cũ */
+    }
+    if (onDisk !== text) {
+      console.error("supabase/kiem-tra.json ĐÃ CŨ.\nChạy: node supabase/build-setup-all.mjs");
+      process.exit(1);
+    }
+    console.log(`kiem-tra.json khớp — ${banKe(ORDER).length} migration có bảng/cột.`);
+  } else {
+    writeFileSync(out, text);
+    console.log(`Đã ghi ${out} — ${banKe(ORDER).length} migration có bảng/cột.`);
+  }
+}
+
 emit("setup-all.sql", ORDER, header);
 
 const byRel = new Map(ORDER);
