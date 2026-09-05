@@ -125,8 +125,9 @@ export async function scanAlbum(
       if (e1) throw new Error(`ghi_album_faces_that_bai: ${e1.message}`);
       // Có mặt MỚI → album vào lại hàng đợi gom. Đặt ở đây chứ không ở cuối hàm:
       // lượt quét có thể bị cắt vì hết giờ, và lúc đó phần đã ghi vẫn phải được
-      // gom ở lượt sau.
-      await db.from("albums").update({ faces_clustered_at: null }).eq("id", albumId);
+      // gom ở lượt sau. Kiểm lỗi vì lý do y hệt nhánh album rỗng ở clusterAlbum.
+      const { error: e3 } = await db.from("albums").update({ faces_clustered_at: null }).eq("id", albumId);
+      if (e3) throw new Error(`dat_lai_hang_doi_gom_that_bai: ${e3.message}`);
     }
     while (doneIds.length) {
       const part = doneIds.splice(0, WRITE_CHUNK);
@@ -238,10 +239,21 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
       sharpness: f.sharpness ?? 0,
       box: f.box ? { x: f.box[0], y: f.box[1], w: f.box[2], h: f.box[3] } : undefined,
     }));
-  // Không có khuôn mặt nào (album toàn ảnh phong cảnh, hoặc chưa quét tấm nào):
-  // vẫn phải RA KHỎI HÀNG ĐỢI, nếu không lượt cron nào cũng gom lại album này.
+  /*
+   * Không có khuôn mặt nào (album toàn ảnh phong cảnh, hoặc chưa quét tấm nào):
+   * vẫn phải RA KHỎI HÀNG ĐỢI, nếu không lượt cron nào cũng gom lại album này.
+   *
+   * KIỂM LỖI, đừng nuốt. Bản trước bỏ qua `error` ở đúng dòng này, và hậu quả
+   * nhìn thấy được trong log thật: ba album quay lại hàng đợi ở MỌI lượt cron,
+   * lần nào cũng `clustered: 0`, ăn hết phần thời gian dành cho việc gom mà
+   * không ai biết vì sao. Một câu cập nhật hỏng lặng lẽ là một vòng lặp vô hạn.
+   */
   if (vecs.length === 0) {
-    await db.from("albums").update({ faces_clustered_at: new Date().toISOString() }).eq("id", albumId);
+    const { error: e } = await db
+      .from("albums")
+      .update({ faces_clustered_at: new Date().toISOString() })
+      .eq("id", albumId);
+    if (e) throw new Error(`danh_dau_album_rong_that_bai: ${e.message}`);
     return 0;
   }
 
@@ -359,6 +371,9 @@ export async function albumsNeedingCluster(db: any, limit = 5): Promise<string[]
     .select("id")
     .eq("status", "published")
     .is("faces_clustered_at", null)
+    // Mới nhất trước, cùng luật với `albumsNeedingScan`. Không có `order` thì
+    // PostgREST trả về theo thứ tự vật lý — cùng ba album ở mọi lượt.
+    .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw new Error(`tim_album_can_gom_that_bai: ${error.message}`);
   return ((data ?? []) as { id: string }[]).map((a) => a.id);
