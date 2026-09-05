@@ -54,6 +54,8 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
   const [err, setErr] = useState<string | null>(null);
   const [off, setOff] = useState(false);
   const [ready, setReady] = useState(false);
+  /** Đã đọc xong danh sách ảnh lần đầu chưa. */
+  const [loaded, setLoaded] = useState(false);
   const [names, setNames] = useState<Record<string, string>>({});
   const [savingNames, setSavingNames] = useState(false);
   /** Chặn chạy hai lần: StrictMode gắn effect hai lượt ở bản dev. */
@@ -70,6 +72,10 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
   }, [albumId]);
 
   const reload = useCallback(async () => {
+    // try/catch, KHÔNG chỉ đọc `error` của từng câu: mất mạng hay sai địa chỉ thì
+    // supabase-js NÉM, và `Promise.all` ném theo. Không bắt thì `void reload()`
+    // nuốt mất, danh sách ảnh ở nguyên mảng rỗng, và màn hình báo "chưa có ảnh".
+    try {
     const [{ data: ph, error: phErr }, { data: ppl }, { data: links }] = await Promise.all([
       // `select("*")`: `faces_scanned_at` là cột THÊM SAU. Liệt kê tên nó ra thì
       // trên database chưa chạy migration, câu này lỗi và `data` là null — rồi
@@ -80,10 +86,7 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
       supabase.from("album_people").select("*").eq("album_id", albumId).order("position"),
       supabase.from("album_photo_people").select("person_id").eq("album_id", albumId),
     ]);
-    if (phErr) {
-      setErr(`Không đọc được danh sách ảnh: ${phErr.message}`);
-      return;
-    }
+    if (phErr) throw new Error(phErr.message);
     setPhotos((ph ?? []) as ScanPhoto[]);
     const n = new Map<string, number>();
     for (const l of links ?? []) n.set(l.person_id, (n.get(l.person_id) ?? 0) + 1);
@@ -96,6 +99,17 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
         count: n.get(p.id) ?? 0,
       }))
     );
+    setErr(null);
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      setErr(
+        /album_faces|faces_scanned_at|does not exist|schema cache/i.test(m)
+          ? "Chưa có bảng cho tính năng này. Hãy chạy supabase/cap-nhat.sql trong Supabase SQL Editor rồi mở lại màn này."
+          : `Không đọc được dữ liệu album: ${m}`
+      );
+    } finally {
+      setLoaded(true);
+    }
   }, [supabase, albumId]);
 
   useEffect(() => {
@@ -283,6 +297,7 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
     running,
     clustering,
     stoppedForNow: false,
+    loaded,
     error: err,
   });
 
@@ -309,7 +324,9 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
   if (!ready) return null;
 
   const line =
-    st.kind === "empty"
+    st.kind === "loading"
+      ? "Đang xem album…"
+      : st.kind === "empty"
       ? "Chưa có ảnh nào trong album."
       : st.kind === "scanning"
         ? `Đang gom khuôn mặt… ${st.progress.done}/${st.progress.total} ảnh`

@@ -98,6 +98,7 @@ export function shouldCluster(
  * không hiểu chuyện gì đang xảy ra.
  */
 export type AutoState =
+  | { kind: "loading" }
   | { kind: "empty" }
   | { kind: "scanning"; progress: Progress }
   | { kind: "clustering" }
@@ -112,10 +113,22 @@ export function stateOf(args: {
   running: boolean;
   clustering: boolean;
   stoppedForNow: boolean;
+  /** Đã đọc xong danh sách ảnh chưa. Xem ghi chú ngay dưới. */
+  loaded: boolean;
   error?: string | null;
 }): AutoState {
-  const { photos, savedPeople, running, clustering, stoppedForNow, error } = args;
+  const { photos, savedPeople, running, clustering, stoppedForNow, loaded, error } = args;
   if (error) return { kind: "error", message: error };
+  /*
+   * "CHƯA TẢI XONG" phải khác "ĐÃ TẢI, KHÔNG CÓ ẢNH" — và đây không phải chuyện
+   * chỉn chu, đây là lỗi đã tốn năm vòng qua lại.
+   *
+   * Danh sách ảnh khởi tạo bằng mảng rỗng. Nếu câu đọc hỏng (mất mạng, thiếu
+   * bảng, RLS chặn) thì mảng ấy KHÔNG BAO GIỜ được điền, và màn hình báo "Chưa
+   * có ảnh nào trong album" — nói sai về một thứ studio nhìn thấy tận mắt là có,
+   * rồi họ đi tìm nguyên nhân ở hoàn toàn chỗ khác.
+   */
+  if (!loaded) return { kind: "loading" };
   if (photos.length === 0) return { kind: "empty" };
   if (clustering) return { kind: "clustering" };
   const p = progressOf(photos);
