@@ -103,6 +103,35 @@ const MOI = [
 ];
 
 /**
+ * Các gói NHỎ theo TỪNG TÍNH NĂNG.
+ *
+ * Vì sao cần, và đây là bài học phải trả giá bằng nhiều vòng qua lại: Supabase
+ * SQL Editor chạy cả file trong MỘT transaction. `cap-nhat.sql` gộp 9 migration,
+ * mà mấy migration khác có hàng rào `raise exception` khi thiếu bảng nền
+ * (studio_expenses, studio_appointments, contract_tasks…). Chỉ cần MỘT hàng rào
+ * bật là TOÀN BỘ file rollback — kể cả những bảng chẳng liên quan gì tới nó.
+ *
+ * Hậu quả thật: chủ studio chạy file, thấy một dòng lỗi về kế toán, và tính năng
+ * khuôn mặt không được cài — dù nó chỉ cần `albums` và `photos`, hai bảng chắc
+ * chắn đã có.
+ *
+ * Nên mỗi tính năng có một gói riêng, chỉ gồm đúng phần của nó. Không có gì
+ * không liên quan chặn được nó nữa.
+ */
+const NHOM = {
+  "khuon-mat.sql": {
+    tieuDe: "TÌM ẢNH THEO KHUÔN MẶT",
+    ghiChu: [
+      "-- Chỉ gồm hai migration của riêng tính năng này, và chúng chỉ cần `albums`",
+      "-- với `photos` — hai bảng chắc chắn đã có. Cố ý KHÔNG gộp chung với các",
+      "-- migration khác: SQL Editor chạy cả file trong MỘT transaction, nên một",
+      "-- hàng rào của tính năng khác bật lên là cuốn theo cả tính năng này.",
+    ],
+    files: ["migrations/album_people.sql", "migrations/album_faces.sql"],
+  },
+};
+
+/**
  * Tách một chuỗi SQL thành từng câu lệnh. Không thể cắt bừa theo dấu ';' vì
  * dấu đó còn nằm trong thân hàm $$…$$, trong chuỗi nháy đơn và trong ghi chú.
  * Ghi chú/khoảng trắng đứng trước được gắn LIỀN vào câu lệnh phía sau để khi
@@ -317,8 +346,9 @@ function emit(name, files, headLines) {
 
 emit("setup-all.sql", ORDER, header);
 
-// ── Bản cập nhật cho project ĐANG CHẠY ──────────────────────────────────────
 const byRel = new Map(ORDER);
+
+// ── Bản cập nhật cho project ĐANG CHẠY ──────────────────────────────────────
 const moiFiles = MOI.map((rel) => {
   if (!byRel.has(rel)) {
     console.error(
@@ -338,6 +368,30 @@ for (let i = 1; i < MOI.length; i++) {
     );
     process.exit(1);
   }
+}
+
+// ── Gói riêng từng tính năng ────────────────────────────────────────────────
+for (const [name, g] of Object.entries(NHOM)) {
+  const files = g.files.map((rel) => {
+    if (!byRel.has(rel)) {
+      console.error(`NHOM["${name}"] có "${rel}" nhưng ORDER thì không.`);
+      process.exit(1);
+    }
+    return [rel, byRel.get(rel)];
+  });
+  emit(name, files, [
+    line,
+    `-- mstudo — ${g.tieuDe}`,
+    "--",
+    "-- File này do supabase/build-setup-all.mjs sinh ra — ĐỪNG sửa tay.",
+    "--",
+    "-- Cách dùng: Supabase → SQL Editor → dán TOÀN BỘ file này → Run.",
+    "-- Mọi câu lệnh đều idempotent nên chạy lại nhiều lần vô hại.",
+    "--",
+    ...g.ghiChu,
+    line,
+    "",
+  ]);
 }
 
 emit("cap-nhat.sql", moiFiles, [

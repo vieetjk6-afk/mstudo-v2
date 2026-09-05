@@ -115,7 +115,7 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
       const m = e instanceof Error ? e.message : String(e);
       setErr(
         /album_faces|faces_scanned_at|does not exist|schema cache/i.test(m)
-          ? "Chưa có bảng cho tính năng này. Hãy chạy supabase/cap-nhat.sql trong Supabase SQL Editor rồi mở lại màn này."
+          ? "Chưa có bảng cho tính năng này. Hãy chạy supabase/khuon-mat.sql trong Supabase SQL Editor rồi mở lại màn này."
           : `Không đọc được dữ liệu album: ${m}`
       );
     } finally {
@@ -282,7 +282,7 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
       // được với nó.
       setErr(
         /album_faces|faces_scanned_at|does not exist|schema cache/i.test(m)
-          ? "Chưa có bảng cho tính năng này. Hãy chạy supabase/cap-nhat.sql trong Supabase SQL Editor rồi mở lại màn này."
+          ? "Chưa có bảng cho tính năng này. Hãy chạy supabase/khuon-mat.sql trong Supabase SQL Editor rồi mở lại màn này."
           : m
       );
     } finally {
