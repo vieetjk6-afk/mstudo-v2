@@ -70,12 +70,20 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
   }, [albumId]);
 
   const reload = useCallback(async () => {
-    const [{ data: ph }, { data: ppl }, { data: links }] = await Promise.all([
-      supabase.from("photos").select("id, drive_file_id, name, faces_scanned_at").eq("album_id", albumId).order("position"),
-      // `select("*")`: cover_box là cột thêm sau — xem ghi chú ở trang khách.
+    const [{ data: ph, error: phErr }, { data: ppl }, { data: links }] = await Promise.all([
+      // `select("*")`: `faces_scanned_at` là cột THÊM SAU. Liệt kê tên nó ra thì
+      // trên database chưa chạy migration, câu này lỗi và `data` là null — rồi
+      // màn hình báo "Chưa có ảnh nào trong album", tức là NÓI SAI về một thứ
+      // studio nhìn thấy tận mắt là có. Lấy `*` thì cột thiếu chỉ là undefined.
+      supabase.from("photos").select("*").eq("album_id", albumId).order("position"),
+      // Cũng vậy với cover_box — xem ghi chú ở trang khách.
       supabase.from("album_people").select("*").eq("album_id", albumId).order("position"),
       supabase.from("album_photo_people").select("person_id").eq("album_id", albumId),
     ]);
+    if (phErr) {
+      setErr(`Không đọc được danh sách ảnh: ${phErr.message}`);
+      return;
+    }
     setPhotos((ph ?? []) as ScanPhoto[]);
     const n = new Map<string, number>();
     for (const l of links ?? []) n.set(l.person_id, (n.get(l.person_id) ?? 0) + 1);
@@ -239,7 +247,15 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
         }
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Không quét được.");
+      const m = e instanceof Error ? e.message : "Không quét được.";
+      // Thiếu bảng/cột của tính năng này là tình huống có thật và có cách sửa rõ
+      // ràng. Ném một câu lỗi Postgres thô ra màn hình thì studio không làm gì
+      // được với nó.
+      setErr(
+        /album_faces|faces_scanned_at|does not exist|schema cache/i.test(m)
+          ? "Chưa có bảng cho tính năng này. Hãy chạy supabase/cap-nhat.sql trong Supabase SQL Editor rồi mở lại màn này."
+          : m
+      );
     } finally {
       setRunning(false);
       busy.current = false;
