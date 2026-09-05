@@ -21,8 +21,20 @@ import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, ty
  * đó — `photos.faces_scanned_at` là cái mốc.
  */
 
-/** Ghi mốc "đã quét" theo mẻ này để một lượt ghi không quá to. */
-const WRITE_CHUNK = 100;
+/**
+ * GHI XUỐNG DB SAU MỖI BAO NHIÊU ẢNH.
+ *
+ * 20, và con số này KHÔNG phải để tối ưu — nó là điều kiện để bộ quét tiến lên
+ * được. Bản trước đặt 100: ở ~0,75 giây một ảnh thì 100 ảnh mất 75 giây, mà một
+ * hàm serverless có thể bị cắt ở 60 giây (giới hạn gói Hobby của Vercel). Khi
+ * đó lượt quét CHƯA BAO GIỜ tới mốc ghi — quét xong 80 ảnh rồi mất sạch, lượt
+ * sau bắt đầu lại từ 0, và `chuaQuet` không bao giờ nhích. Không có lỗi nào hiện
+ * ra ở đâu cả, vì về mặt code thì chẳng có gì sai.
+ *
+ * 20 ảnh ≈ 15 giây, an toàn dưới mọi hạn thời gian; đổi lại là thêm vài lượt
+ * ghi, thứ rẻ hơn nhiều so với mất cả mẻ.
+ */
+const WRITE_CHUNK = 20;
 
 export type ScanRow = {
   id: string;
@@ -130,7 +142,7 @@ export async function scanAlbum(
       // vẫn thử lại, biết đâu chỉ là Drive nghẽn nhất thời.
       failed++;
     }
-    if (faceRows.length >= 200 || doneIds.length >= WRITE_CHUNK) await flush();
+    if (doneIds.length >= WRITE_CHUNK) await flush();
   }
   await flush();
 
