@@ -53,6 +53,25 @@ export function pending(photos: readonly ScanPhoto[]): ScanPhoto[] {
   return photos.filter((p) => !p.faces_scanned_at);
 }
 
+/**
+ * Mẻ tiếp theo nên quét — BỎ những tấm đã thử và hỏng trong phiên này.
+ *
+ * Không có phần loại trừ đó thì một tấm hỏng vĩnh viễn (file bị xoá trên Drive,
+ * định dạng lạ) sẽ KHÔNG BAO GIỜ được đánh dấu đã quét, nên danh sách còn lại
+ * không bao giờ ngắn đi, nên lượt quét tự khởi động lại mãi mãi — quay vòng
+ * không tiến triển, đốt CPU của studio và gọi Drive không ngừng, mà màn hình thì
+ * vẫn hiện "đang quét" một cách hoàn toàn hợp lý.
+ */
+export function nextBatch(
+  photos: readonly ScanPhoto[],
+  failed: ReadonlySet<string>,
+  perVisit = PER_VISIT
+): ScanPhoto[] {
+  return pending(photos)
+    .filter((p) => !failed.has(p.id))
+    .slice(0, Math.max(0, perVisit));
+}
+
 /** Cắt danh sách thành từng mẻ để ghi dần. */
 export function chunks<T>(list: readonly T[], size = CHUNK): T[][] {
   if (size <= 0) return [list.slice()];
@@ -83,10 +102,12 @@ export function progressOf(photos: readonly ScanPhoto[]): Progress {
 export function shouldCluster(
   photos: readonly ScanPhoto[],
   savedPeople: number,
-  freshFaces: number
+  freshFaces: number,
+  /** Ảnh đã thử và hỏng — chúng sẽ KHÔNG BAO GIỜ xong, nên đừng đợi chúng. */
+  failed = 0
 ): boolean {
   if (photos.length === 0) return false;
-  if (pending(photos).length > 0) return false;
+  if (pending(photos).length > failed) return false;
   return savedPeople === 0 || freshFaces > 0;
 }
 
@@ -99,6 +120,8 @@ export function shouldCluster(
  */
 export type AutoState =
   | { kind: "loading" }
+  /** Còn ảnh chưa quét, nhưng tất cả đều đã thử và hỏng. */
+  | { kind: "stuck"; failed: number; progress: Progress }
   | { kind: "empty" }
   | { kind: "scanning"; progress: Progress }
   | { kind: "clustering" }
@@ -115,9 +138,12 @@ export function stateOf(args: {
   stoppedForNow: boolean;
   /** Đã đọc xong danh sách ảnh chưa. Xem ghi chú ngay dưới. */
   loaded: boolean;
+  /** Số ảnh đã thử quét và hỏng trong phiên này. */
+  failed?: number;
   error?: string | null;
 }): AutoState {
   const { photos, savedPeople, running, clustering, stoppedForNow, loaded, error } = args;
+  const failed = args.failed ?? 0;
   if (error) return { kind: "error", message: error };
   /*
    * "CHƯA TẢI XONG" phải khác "ĐÃ TẢI, KHÔNG CÓ ẢNH" — và đây không phải chuyện
@@ -133,6 +159,11 @@ export function stateOf(args: {
   if (clustering) return { kind: "clustering" };
   const p = progressOf(photos);
   if (running) return { kind: "scanning", progress: p };
+  // Còn ảnh chưa quét mà TẤT CẢ đều đã hỏng: nói ra, đừng để studio ngồi nhìn
+  // một thanh tiến độ không bao giờ đầy.
+  if (p.done < p.total && failed >= p.total - p.done) {
+    return { kind: "stuck", failed, progress: p };
+  }
   if (p.done < p.total) return { kind: "paused", progress: p };
   return savedPeople > 0 ? { kind: "done", people: savedPeople } : { kind: "none" };
 }

@@ -18,8 +18,17 @@ import { createClient } from "@/lib/supabase/client";
  * cả — đây không phải chỗ để nhắc nhở người đã làm xong.
  */
 
-const CAP_NHAT =
-  "https://github.com/vieetjk6-afk/mstudo-v2/blob/main/supabase/cap-nhat.sql";
+/*
+ * Trỏ vào GÓI RIÊNG của tính năng này, KHÔNG phải cap-nhat.sql.
+ *
+ * Lý do đắt giá: SQL Editor chạy cả file trong MỘT transaction. cap-nhat.sql gộp
+ * 9 migration, nên một hàng rào của tính năng khác (thiếu `studio_appointments`
+ * chẳng hạn) bật lên là TOÀN BỘ file rollback — kể cả hai bảng khuôn mặt vốn chỉ
+ * cần `albums` và `photos`. Chuyện đó đã xảy ra thật, và người dùng thì thấy
+ * "đã chạy SQL" mà bảng vẫn không có.
+ */
+const FILE_SQL =
+  "https://github.com/vieetjk6-afk/mstudo-v2/blob/main/supabase/khuon-mat.sql";
 
 export default function FaceSetupNotice() {
   const [missing, setMissing] = useState<string[] | null>(null);
@@ -79,15 +88,15 @@ export default function FaceSetupNotice() {
       </p>
       <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--tx2, #444)" }}>
         Database còn thiếu bảng <b>{missing.join(", ")}</b>. Mở{" "}
-        <a href={CAP_NHAT} target="_blank" rel="noreferrer" style={{ color: "var(--ac, #0a7)", textDecoration: "underline" }}>
-          supabase/cap-nhat.sql
+        <a href={FILE_SQL} target="_blank" rel="noreferrer" style={{ color: "var(--ac, #0a7)", textDecoration: "underline" }}>
+          supabase/khuon-mat.sql
         </a>{" "}
         → copy toàn bộ → dán vào <b>Supabase → SQL Editor</b> → Run. Một lần là xong, chạy lại nhiều lần vô hại.
       </p>
       <button
         type="button"
         onClick={() => {
-          void navigator.clipboard?.writeText(CAP_NHAT).then(() => {
+          void navigator.clipboard?.writeText(FILE_SQL).then(() => {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
           });

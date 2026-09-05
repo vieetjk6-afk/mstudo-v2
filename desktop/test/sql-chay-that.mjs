@@ -255,5 +255,80 @@ if (first) {
   ) >= 4);
 }
 
+/* ── 3. Gói riêng của tính năng khuôn mặt ─────────────────────────────────
+ *
+ * Đây là bài học phải trả giá bằng nhiều vòng: SQL Editor chạy cả file trong MỘT
+ * transaction, nên `cap-nhat.sql` gộp 9 migration có nghĩa là một hàng rào của
+ * tính năng KHÁC bật lên là cuốn theo cả tính năng này. Gói riêng phải cài được
+ * trên một database CHỈ CÓ SCHEMA NỀN — không cần kế toán, không cần lịch hẹn,
+ * không cần gì khác.
+ */
+console.log("\n— Gói riêng: khuon-mat.sql trên database chỉ có schema nền —");
+newDb("nen");
+runFile("nen", join(DIR, "shim.sql"));
+{
+  /*
+   * Dựng nền bằng BỘ SINH, không dùng schema.sql thô.
+   *
+   * Trong file gốc, nhiều policy và `alter table … add column` đứng TRƯỚC bảng
+   * (hoặc cột) mà chúng tham chiếu — chạy thẳng trên database trắng là lỗi. Đó
+   * chính là lý do build-setup-all.mjs tồn tại: nó xếp lại theo ba nhịp. Bài
+   * kiểm thử này đã trượt đúng vào đó một lần.
+   */
+  const g = join(SUPA, ".tmp-nen-test.mjs");
+  const src2 = execSync(`cat ${join(SUPA, "build-setup-all.mjs")}`, { encoding: "utf8" });
+  const cut2 = src2.indexOf("// ── Gói riêng từng tính năng");
+  writeFileSync(
+    g,
+    src2
+      .slice(0, cut2)
+      .replace(
+        'emit("setup-all.sql", ORDER, header);',
+        'emit(".tmp-nen-test.sql", ORDER.filter(([rel]) => rel === "schema.sql"), header);'
+      )
+  );
+  execSync(`node ${g}`, { stdio: "ignore" });
+  rmSync(g);
+  tries("dựng được database CHỈ có schema nền", () => runFile("nen", join(SUPA, ".tmp-nen-test.sql")));
+  rmSync(join(SUPA, ".tmp-nen-test.sql"), { force: true });
+}
+/*
+ * Dựng lại ĐÚNG tình huống thật đã xảy ra: database thiếu MỘT bảng nền mà một
+ * migration KHÁC đòi hỏi. Ở đây bỏ `studio_appointments` (do
+ * migrations/studio_appointments.sql tạo, không nằm trong schema.sql) — đúng
+ * kiểu project chỉ chạy schema nền mà chưa chạy hết migration.
+ */
+ok(
+  "database này KHÔNG có studio_appointments (bảng mà migration khác đòi)",
+  q("nen", "select count(*) from information_schema.tables where table_schema='public' and table_name='studio_appointments'") === "0"
+);
+{
+  // Chính vì thế cap-nhat.sql PHẢI gãy — và vì SQL Editor chạy cả file trong một
+  // transaction nên nó cuốn theo cả tính năng khuôn mặt.
+  let vo = false;
+  try {
+    runFile("nen", join(SUPA, "cap-nhat.sql"));
+  } catch {
+    vo = true;
+  }
+  ok("cap-nhat.sql gãy trên database đó (hàng rào của tính năng KHÁC bật)", vo);
+  ok(
+    "…và cuốn theo cả tính năng khuôn mặt: KHÔNG bảng nào được tạo",
+    q("nen", "select count(*) from information_schema.tables where table_schema='public' and table_name in ('album_people','album_faces')") === "0"
+  );
+}
+tries("nhưng khuon-mat.sql thì CÀI ĐƯỢC trên đúng database đó", () =>
+  runFile("nen", join(SUPA, "khuon-mat.sql"))
+);
+tries("…chạy lại vẫn vô hại", () => runFile("nen", join(SUPA, "khuon-mat.sql")));
+ok(
+  "…và tạo đủ ba bảng của tính năng",
+  q("nen", "select count(*) from information_schema.tables where table_schema='public' and table_name in ('album_people','album_photo_people','album_faces')") === "3"
+);
+ok(
+  "…kèm cột đánh dấu đã quét trên photos",
+  q("nen", "select count(*) from information_schema.columns where table_name='photos' and column_name='faces_scanned_at'") === "1"
+);
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);
