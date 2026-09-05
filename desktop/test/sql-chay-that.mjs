@@ -20,6 +20,12 @@
  * anon/authenticated/service_role, schema storage…). Shim dưới đây dựng đúng
  * phần tối thiểu để các migration chạy được — nó KHÔNG mô phỏng Supabase, chỉ
  * dựng chỗ đứng cho chúng.
+ *
+ * Cố ý KHÔNG dựng phần cấp quyền (grant / default privileges): bài này chạy dưới
+ * superuser nên quyền không ảnh hưởng gì, và thêm vào chỉ làm shim trông như đã
+ * kiểm quyền trong khi không. Bài kiểm quyền thật là desktop/test/rls-luu-nguoi.mjs
+ * — nó chạy dưới role `authenticated` và shim của nó dựng đủ cả grant lẫn quyền
+ * dùng schema auth. Đừng chép shim này sang đó.
  */
 import { execFileSync, execSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";

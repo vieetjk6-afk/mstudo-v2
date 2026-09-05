@@ -33,6 +33,7 @@
     "test:accounting": "node --experimental-strip-types desktop/test/accounting.mjs",
     "test:setup-all": "node supabase/build-setup-all.mjs --check",
     "test:sql-chay-that": "node desktop/test/sql-chay-that.mjs",
+    "test:rls-luu-nguoi": "node desktop/test/rls-luu-nguoi.mjs",
     "test:branches": "node --experimental-strip-types desktop/test/branches.mjs",
     "test:studio-roles": "node --experimental-strip-types desktop/test/studio-roles.mjs",
     "test:client-boundary": "node --experimental-strip-types desktop/test/client-boundary.mjs",
