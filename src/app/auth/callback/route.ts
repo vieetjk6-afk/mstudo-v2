@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { cookieDomainForHost } from "@/lib/hosts";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmins } from "@/lib/notify-admin";
+import { safeNextPath } from "@/lib/safe-next";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +43,8 @@ function loginError(
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const rawNext = searchParams.get("next") || "/dashboard/studio";
-  // C-1: Prevent open redirect — only allow relative paths (not //evil.com or https://...)
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard/studio";
+  // Chặn open redirect — xem @/lib/safe-next (bắt cả biến thể `/\evil.com`).
+  const next = safeNextPath(searchParams.get("next"));
   const oauthError = searchParams.get("error");
   const oauthErrorCode = searchParams.get("error_code");
   const oauthErrorDescription = searchParams.get("error_description");

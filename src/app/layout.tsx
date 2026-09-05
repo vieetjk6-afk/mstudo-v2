@@ -133,7 +133,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#f7f6f3",
+  // Khớp `--bg` của nền SÁNG (globals.css) — mặc định của app khi chưa ai chọn.
+  // Người đã chọn nền tối được ThemeProvider ghi đè thẻ này lúc gắn (xem
+  // `apply()` ở @/lib/theme): màu ở đây không theo `prefers-color-scheme` được,
+  // vì nền của app do lựa chọn của người dùng quyết định chứ không theo máy.
+  themeColor: "#f4f3f0",
   width: "device-width",
   initialScale: 1,
 };

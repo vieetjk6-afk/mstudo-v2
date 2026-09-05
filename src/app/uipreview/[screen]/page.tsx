@@ -44,6 +44,18 @@ export default function UiPreviewScreen({ params }: { params: { screen: string }
   );
 }
 
-export function generateStaticParams() {
-  return Object.keys(SCREENS).map((screen) => ({ screen }));
-}
+/**
+ * Dựng theo từng request, KHÔNG dựng sẵn lúc build.
+ *
+ * Trước đây route này có `generateStaticParams` liệt kê cả 26 màn, nên `next
+ * build` dựng sẵn 26 trang mà trên production trang nào cũng `notFound()` ngay
+ * dòng đầu — 26 trang tĩnh chỉ để trả 404, tốn thời gian build và phình gói
+ * triển khai.
+ *
+ * Bỏ danh sách đó KHÔNG đủ: route vẫn nằm ở chế độ tĩnh, mà layout gốc gọi
+ * `headers()` trong generateMetadata (white-label favicon theo tên miền) → mọi
+ * đường không dựng sẵn nổ `DYNAMIC_SERVER_USAGE` và trả 500 thay vì 404. Ép
+ * động là cách nói đúng ý: đây là màn công cụ của máy dev, không phải trang
+ * tĩnh; production trả 404 gọn gàng, còn `npm run ui:shot` vẫn chụp được.
+ */
+export const dynamic = "force-dynamic";

@@ -59,12 +59,23 @@ function readPref(): ThemePref {
   return "light";
 }
 
+/** Màu thanh trình duyệt theo từng nền — khớp `--bg` khai ở globals.css. */
+const BAR_COLOR: Record<Theme, string> = { light: "#f4f3f0", dark: "#0a0a0c" };
+
 /** Chỉ ghi `data-theme` với giá trị ĐÃ GIẢI — đúng một thuộc tính, giống script
  *  khởi động (xem ghi chú ở theme-boot.ts về lỗi hydrate). Lựa chọn thô nằm ở
- *  localStorage + state của provider, không cần in ra DOM. */
+ *  localStorage + state của provider, không cần in ra DOM.
+ *
+ *  Kèm theo: cập nhật <meta name="theme-color">. Nó KHÔNG tự đi theo được, vì
+ *  nền của app do LỰA CHỌN của người dùng quyết định (mặc định sáng) chứ không
+ *  theo `prefers-color-scheme` — nên biến thể `themeColor` kèm media query của
+ *  Next sẽ đoán sai đúng những người đã tự chọn. Không cập nhật thì trên điện
+ *  thoại, người bật nền tối thấy một vệt sáng chói ở thanh địa chỉ / vùng tai
+ *  thỏ viền quanh trang tối. */
 function apply(t: Theme) {
   if (typeof document === "undefined") return;
   document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", BAR_COLOR[t]);
 }
 
 /**

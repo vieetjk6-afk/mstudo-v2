@@ -34,33 +34,42 @@ function isVieetjkKey(key: string): boolean {
 
 // cache(): generateMetadata VÀ SitePage cùng gọi các hàm này trong một request —
 // dedupe để mỗi trang chỉ query bảng `sites` một lần thay vì 3-4 lần.
-const siteHasVieetjkTemplate = cache(async (key: string): Promise<boolean> => {
+/**
+ * MỘT lượt tra bảng `sites` cho cả trang — dùng chung cho câu hỏi "có phải mẫu
+ * vieetjk không" và cho việc nạp dữ liệu tenant.
+ *
+ * Trước đây hai câu hỏi đó là hai hàm `cache()` riêng, mỗi hàm tự query bảng
+ * `sites`. Vì `siteHasVieetjkTemplate` luôn chạy TRƯỚC `loadTenant` (cả ở
+ * generateMetadata lẫn ở component), một lượt xem trang portfolio phải chờ hai
+ * vòng mạng nối tiếp tới Supabase trước khi bắt đầu nạp nội dung — trong khi cả
+ * hai đọc đúng một dòng. Gộp lại: dòng `sites` lấy một lần, cả hai bên đọc từ
+ * đó, tiết kiệm trọn một vòng chờ trên MỌI lượt xem trang công khai của studio.
+ */
+type SiteMatch = { site: Site; via: "custom_domain" | "subdomain" };
+
+const loadSiteRow = cache(async (key: string): Promise<SiteMatch | null> => {
   const db = createAdminClient();
   const k = key.toLowerCase();
-  const col = k.includes(".") ? "custom_domain" : "subdomain";
-  const { data } = await db.from("sites").select("template").eq(col, k).maybeSingle();
-  return (data?.template as string | undefined) === "vieetjk";
+  if (k.includes(".")) {
+    const { data } = await db.from("sites").select("*").eq("custom_domain", k).maybeSingle();
+    if (data) return { site: data as Site, via: "custom_domain" };
+  }
+  const { data } = await db.from("sites").select("*").eq("subdomain", k).maybeSingle();
+  return data ? { site: data as Site, via: "subdomain" } : null;
 });
 
+const siteHasVieetjkTemplate = async (key: string): Promise<boolean> =>
+  (await loadSiteRow(key))?.site.template === "vieetjk";
+
 const loadTenant = cache(async (key: string): Promise<SiteData | null> => {
-  const db = createAdminClient();
-  const k = key.toLowerCase();
-  let site: Site | null = null;
-  if (k.includes(".")) {
-    const { data } = await db
-      .from("sites")
-      .select("*")
-      .eq("custom_domain", k)
-      .eq("custom_domain_verified", true)
-      .maybeSingle();
-    site = (data as Site) ?? null;
-  }
-  if (!site) {
-    const { data } = await db.from("sites").select("*").eq("subdomain", k).maybeSingle();
-    site = (data as Site) ?? null;
-  }
-  if (!site || !site.published) return null;
-  return loadSiteBundle(db, site, true);
+  const match = await loadSiteRow(key);
+  if (!match) return null;
+  // Tên miền riêng phải ĐÃ XÁC MINH mới được phục vụ site — nếu không, bất kỳ ai
+  // trỏ DNS về mstudo rồi khai bừa domain đó đều dựng được site của studio khác
+  // dưới tên miền của mình.
+  if (match.via === "custom_domain" && !match.site.custom_domain_verified) return null;
+  if (!match.site.published) return null;
+  return loadSiteBundle(createAdminClient(), match.site, true);
 });
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {

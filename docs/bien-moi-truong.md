@@ -48,6 +48,7 @@ Cột **Xử lý** đọc thế này:
 | `GOOGLE_STORY_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `GOOGLE_STUDIO_DRIVE_REDIRECT_URI` | 🟢 | **tự gõ được** — mục 3 |
 | `IMG_CDN_REDIRECT` | 🟢 | **để trống** — bản cũ đặt `0` thì ĐỪNG chép, xem 4d |
+| `CSP_REPORT_ONLY` | ⚪ | **để trống** — chỉ đặt `1` khi đang ngồi test CSP siết chặt ở staging, xem mục 4d |
 | `NEXT_PUBLIC_ADMIN_HOST` | 🟢 | `admin.mstudo.com` |
 | `NEXT_PUBLIC_APP_HOST` | ⚪ | đã ngừng dùng |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | 🟢 | để trống → nút tải rơi về trang GitHub Releases |
@@ -315,12 +316,30 @@ thông báo phải đăng ký lại**. Cố lấy đúng cặp cũ; mất hẳn 
 | `GEMINI_API_KEY` 🔒 | chatbox AI trên website studio không trả lời được | **tạo khoá mới** ở [aistudio.google.com](https://aistudio.google.com) → *Get API key* (có gói miễn phí). Đừng đi tìm khoá cũ |
 | `CHAT_PROVIDERS` | code tự dùng `GEMINI_API_KEY` làm nhà cung cấp duy nhất | **để trống** — xem 7.6 |
 | `IMG_CDN_REDIRECT` | **tối ưu băng thông BẬT** (mặc định) | **để trống** ⚠️ xem cảnh báo dưới |
+| `CSP_REPORT_ONLY` | header CSP-Report-Only **TẮT** (mặc định) | **để trống** — xem ghi chú dưới |
 | `DESKTOP_LATEST_VERSION` | app desktop tưởng bản mới nhất là `0.1.0` → không nhắc cập nhật | điền số phiên bản hiện tại, hoặc để trống |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | nút tải rơi về trang GitHub Releases | để trống được |
 | `NEXT_PUBLIC_DESKTOP_RELEASES_REPO` | dùng `vieetjk01/Studio` (repo cũ, công khai) | **để trống** cho tới khi có repo công khai mới chứa bản cài |
 | `VERCEL_PROJECT_ID` | tính năng "studio gắn tên miền riêng" chỉ **lưu domain + chỉ dẫn DNS thủ công**, không tự đăng ký | project MỚI → Settings → General → Project ID *(giữ project cũ thì giữ nguyên)* |
 | `VERCEL_TOKEN` 🔒 | như trên | vercel.com/account/tokens → tạo token mới (token cũ vẫn sống) |
 | `VERCEL_TEAM_ID` | như trên | **để trống** nếu là tài khoản cá nhân |
+
+### `CSP_REPORT_ONLY` — bật header chạy thử CSP siết chặt
+
+`next.config.mjs` giữ sẵn một chính sách CSP **siết chặt** (`cspStrict`) bên cạnh
+chính sách đang enforce. Nó chỉ được phát ra khi đặt `CSP_REPORT_ONLY=1`.
+
+**Mặc định TẮT, và đó là chủ ý.** Header report-only không chặn gì cả; không có
+`report-uri` thì trình duyệt chỉ ghi vi phạm ra console của từng khách — không ai
+đọc. Đổi lại nó tốn ~1,1 KB header trên **mọi** response. Trả băng thông cho một
+chính sách không chặn gì và không ai xem là khoản lỗ ròng.
+
+**Khi nào bật:** lúc bạn thật sự ngồi trước staging, mở DevTools và bấm qua các
+màn dùng Google Picker / QR / nhạc thiệp / bản đồ để xem `cspStrict` có chặn oan
+thứ gì không. Sạch rồi thì đổi hẳn key `Content-Security-Policy-Report-Only`
+thành `Content-Security-Policy` trong `next.config.mjs` và xoá chính sách cũ.
+
+---
 
 ### ⚠️ `IMG_CDN_REDIRECT` — biến duy nhất ở mục này mà copy bản cũ có thể hại
 

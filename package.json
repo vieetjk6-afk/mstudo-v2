@@ -21,6 +21,7 @@
     "test:album-phase": "node --experimental-strip-types desktop/test/album-phase.mjs",
     "test:album-offline": "node --experimental-strip-types desktop/test/album-offline.mjs",
     "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs",
+    "test:safe-next": "node --experimental-strip-types desktop/test/safe-next.mjs",
     "test:lifecycle": "node --experimental-strip-types desktop/test/lifecycle.mjs",
     "test:referral-deposit": "node --experimental-strip-types desktop/test/referral-deposit.mjs",
     "test:pricelist-label": "node --experimental-strip-types desktop/test/pricelist-label.mjs",

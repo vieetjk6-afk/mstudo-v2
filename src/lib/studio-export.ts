@@ -9,7 +9,21 @@
  */
 // Import tương đối (không qua alias "@/") để chạy được cả trong kiểm thử
 // `node --experimental-strip-types` ở desktop/test.
-import { downloadXlsx, type XlsxRow, type XlsxSheet } from "./xlsx.ts";
+import type { XlsxRow, XlsxSheet } from "./xlsx.ts";
+
+/**
+ * Nạp bộ ghi .xlsx CHỈ khi người dùng thật sự bấm nút xuất file.
+ *
+ * ./xlsx.ts kéo theo JSZip (~95 KB đã nén) để dựng OOXML. Nhập tĩnh thì JSZip
+ * nằm trong bundle của MỌI màn có nút "Xuất Excel" — hợp đồng, khách hàng,
+ * lương, báo cáo, thiệp — và tải về ngay lúc mở trang, dù phần lớn lượt xem
+ * không bấm xuất lần nào. Chỉ mấy hàm export* dưới đây cần tới nó, nên để nó
+ * đi cùng cú bấm chuột thay vì đi cùng trang.
+ *
+ * Các hàm *Workbook / *CsvRows ở trên KHÔNG đụng tới JSZip (chúng chỉ dựng dữ
+ * liệu thuần), nên phần nặng thật sự tách được sạch sẽ ra khỏi đường tải trang.
+ */
+const loadDownloadXlsx = async () => (await import("./xlsx.ts")).downloadXlsx;
 
 export type ExportStudio = {
   name: string;
@@ -689,10 +703,12 @@ export async function exportContracts(
   meta: string[],
   fileName: string
 ): Promise<void> {
+  const downloadXlsx = await loadDownloadXlsx();
   await downloadXlsx(contractsWorkbook(studio, list, meta), fileName);
 }
 
 export async function exportFinance(studio: ExportStudio, d: FinanceExport, fileName: string): Promise<void> {
+  const downloadXlsx = await loadDownloadXlsx();
   await downloadXlsx(financeWorkbook(studio, d), fileName);
 }
 
@@ -702,6 +718,7 @@ export async function exportPayroll(
   meta: string[],
   fileName: string
 ): Promise<void> {
+  const downloadXlsx = await loadDownloadXlsx();
   await downloadXlsx(payrollWorkbook(studio, list, meta), fileName);
 }
 
@@ -711,6 +728,7 @@ export async function exportClients(
   meta: string[],
   fileName: string
 ): Promise<void> {
+  const downloadXlsx = await loadDownloadXlsx();
   await downloadXlsx(clientsWorkbook(studio, list, meta), fileName);
 }
 
@@ -721,5 +739,6 @@ export async function exportRsvps(
   meta: string[],
   fileName: string
 ): Promise<void> {
+  const downloadXlsx = await loadDownloadXlsx();
   await downloadXlsx(rsvpWorkbook(studio, list, title, meta), fileName);
 }

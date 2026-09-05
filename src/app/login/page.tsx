@@ -10,6 +10,7 @@ import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { TURNSTILE_UNAVAILABLE } from "@/lib/turnstile";
 import { APP_VERSION } from "@/lib/version";
+import { safeNextPath } from "@/lib/safe-next";
 
 // Friendly Vietnamese label for the ?error=... codes we set in /auth/callback.
 //
@@ -89,9 +90,8 @@ function LoginForm() {
   const params = useSearchParams();
   // Default landing = studio management. Free/Basic accounts (no studio tier)
   // are redirected on to the album dashboard by the studio page itself.
-  const rawNext = params.get("next") || "/dashboard/studio";
-  // C-1: Prevent open redirect — only allow relative paths
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard/studio";
+  // Chặn open redirect — xem @/lib/safe-next (bắt cả biến thể `/\evil.com`).
+  const next = safeNextPath(params.get("next"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

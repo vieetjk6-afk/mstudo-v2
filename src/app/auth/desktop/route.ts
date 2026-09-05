@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { cookieDomainForHost } from "@/lib/hosts";
+import { safeNextPath } from "@/lib/safe-next";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,8 @@ export const dynamic = "force-dynamic";
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const tokenHash = searchParams.get("token_hash");
-  const rawNext = searchParams.get("next") || "/dashboard/studio";
-  // Chỉ nhận đường dẫn nội bộ — chặn open redirect.
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard/studio";
+  // Chỉ nhận đường dẫn nội bộ — chặn open redirect (xem @/lib/safe-next).
+  const next = safeNextPath(searchParams.get("next"));
 
   const fail = (code: string, detail?: string) => {
     const url = new URL("/login", origin);

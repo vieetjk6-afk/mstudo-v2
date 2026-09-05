@@ -378,6 +378,8 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
           <button
             onClick={() => canNotes && setAllowNote((v) => !v)}
             disabled={!canNotes}
+            aria-pressed={allowNote}
+            aria-label="Cho phép ghi chú trên ảnh"
             className="relative h-[26px] w-[46px] flex-shrink-0 rounded-full transition-all disabled:cursor-not-allowed"
             style={allowNote ? { background: "var(--gold)" } : { background: "var(--surface)", border: "1px solid var(--border2)" }}
           >
@@ -396,6 +398,8 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
           <button
             onClick={() => canZip && setAllowDownload((v) => !v)}
             disabled={!canZip}
+            aria-pressed={allowDownload}
+            aria-label="Cho phép khách tải ảnh xuống"
             className="relative h-[26px] w-[46px] flex-shrink-0 rounded-full transition-all disabled:cursor-not-allowed"
             style={allowDownload ? { background: "var(--gold)" } : { background: "var(--surface)", border: "1px solid var(--border2)" }}
           >

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { FileSpreadsheet, Lock, LockOpen, Loader2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { downloadXlsx, type XlsxSheet } from "@/lib/xlsx";
+import type { XlsxSheet } from "@/lib/xlsx";
 import { vnd } from "@/lib/types";
 import { todayVN } from "@/lib/date";
 import {
@@ -173,6 +173,10 @@ export default function AccountingExportCard({
         },
       ];
 
+      // Nạp trễ: @/lib/xlsx kéo theo JSZip (~95 KB) để dựng OOXML. Nhập tĩnh
+      // thì cả gói đó nằm trong bundle của trang Báo cáo dù người dùng chưa bấm
+      // "Xuất Excel" lần nào. Ở đây mới là lúc thực sự cần tới nó.
+      const { downloadXlsx } = await import("@/lib/xlsx");
       await downloadXlsx(sheets, `so-ke-toan-${from}-${to}.xlsx`);
       setMsg(`Đã xuất: thu ${vnd(sum.income)} · chi ${vnd(sum.expense)} · lãi ${vnd(sum.profit)}.`);
     } catch (e) {

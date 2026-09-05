@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { cookieDomainForHost } from "@/lib/hosts";
+import { safeNextPath } from "@/lib/safe-next";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,8 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
-  const rawNext = searchParams.get("next") || "/dashboard/studio";
-  // Chỉ nhận đường dẫn nội bộ — chặn open redirect (//evil.com, https://…).
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/dashboard/studio";
+  // Chỉ nhận đường dẫn nội bộ — chặn open redirect (xem @/lib/safe-next).
+  const next = safeNextPath(searchParams.get("next"));
 
   const url = new URL("/login", origin);
   url.searchParams.set("next", next);

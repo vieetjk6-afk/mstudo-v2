@@ -92,6 +92,15 @@ const nextConfig = {
     // ra console, KHÔNG chặn gì. Sau khi kiểm thử staging thấy sạch → đổi key
     // "Content-Security-Policy-Report-Only" thành "Content-Security-Policy" và
     // xoá biến `csp` cũ ở trên để enforce bản chặt này.
+    //
+    // MẶC ĐỊNH TẮT trên production — bật bằng CSP_REPORT_ONLY=1 khi thực sự ngồi
+    // đọc console ở staging. Lý do: report-only KHÔNG chặn gì cả, mà không có
+    // `report-uri` thì trình duyệt chỉ ghi ra console của từng khách — không ai
+    // đọc. Đổi lại nó tốn ~1,1 KB header trên MỌI response, kể cả cú 302 rỗng
+    // của /api/img: một gallery 300 ảnh phải cõng thêm ~330 KB header thuần cho
+    // một chính sách không chặn gì. Trả tiền băng thông cho một thứ không ai
+    // xem là khoản lỗ ròng, nên nó phải là lựa chọn có ý thức.
+    const cspReportOnly = process.env.CSP_REPORT_ONLY === "1";
     const cspStrict = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.gstatic.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com",
@@ -124,14 +133,43 @@ const nextConfig = {
         ],
       },
       {
-        source: "/:path*",
+        // ── Hai cửa PHỤC VỤ BYTE, không phải tài liệu ─────────────────────────
+        // /api/img và /api/file trả ảnh, byte thô, hoặc một cú 302 RỖNG sang CDN
+        // của Google. Một trang gallery gọi chúng vài trăm lần cho mỗi lượt xem.
+        //
+        // Các header dưới đây bị BỎ ở đây vì chúng chỉ có nghĩa với TÀI LIỆU
+        // (trình duyệt không áp CSP, X-Frame-Options, Permissions-Policy hay COOP
+        // lên một tấm ảnh — chính sách áp cho ảnh đến từ trang nhúng nó):
+        //   CSP · CSP-Report-Only · X-Frame-Options · COOP · Permissions-Policy ·
+        //   Referrer-Policy · X-DNS-Prefetch-Control
+        //
+        // Đo thực tế trước khi sửa: 2.118 byte header cho một cú 302 không có
+        // thân. Một album 300 ảnh = ~620 KB header thuần, mỗi lượt xem, cho các
+        // chính sách không bảo vệ được gì ở đây. Sau khi bỏ còn ~370 byte.
+        //
+        // GIỮ LẠI hai cái THỰC SỰ có tác dụng trên byte:
+        //   • nosniff — route này chuyển tiếp content-type của Google; đây đúng
+        //     là chỗ cần chặn trình duyệt tự đoán kiểu nội dung.
+        //   • HSTS    — áp cho cả origin, phải có mặt trên mọi response.
+        source: "/api/:path(img|file)",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+        ],
+      },
+      {
+        // Mọi thứ CÒN LẠI — trừ hai cửa phục vụ byte ở trên (Next áp TẤT CẢ luật
+        // khớp, nên phải loại trừ ngay trong mẫu đường dẫn chứ không phải trông
+        // vào thứ tự).
+        source: "/:path((?!api/img$|api/file$).*)",
         headers: [
           // Allow the Google Identity Services / Picker popup to work
           { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },
           // H-4: Security headers
           { key: "Content-Security-Policy", value: csp },
-          // Bản siết chặt chạy thử (không chặn) — xem ghi chú ở trên để enforce.
-          { key: "Content-Security-Policy-Report-Only", value: cspStrict },
+          // Bản siết chặt chạy thử (không chặn) — bật bằng CSP_REPORT_ONLY=1,
+          // xem ghi chú ở trên để enforce.
+          ...(cspReportOnly ? [{ key: "Content-Security-Policy-Report-Only", value: cspStrict }] : []),
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
