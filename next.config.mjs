@@ -41,7 +41,8 @@ const nextConfig = {
       ],
       // Route phục vụ nội dung file SQL cho bảng "chưa bật được" — nó đọc file
       // bằng fs lúc chạy, nên file phải đi kèm vào function.
-      "/api/setup-sql/[ten]": ["./supabase/*.sql"],
+      // "bu-thieu" ghép từ chính các file migration, nên cần cả cây supabase/.
+      "/api/setup-sql/[ten]": ["./supabase/*.sql", "./supabase/migrations/*.sql", "./supabase/kiem-tra.json"],
       // Bản kê bảng/cột cho /api/db-status — đọc bằng fs lúc chạy.
       "/api/db-status": ["./supabase/kiem-tra.json"],
     },

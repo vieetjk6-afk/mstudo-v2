@@ -242,6 +242,14 @@
       ]
     },
     {
+      "file": "push_subscriptions.sql",
+      "mo_ta": "Web Push (thông báo đẩy)",
+      "bang": [
+        "push_subscriptions"
+      ],
+      "cot": []
+    },
+    {
       "file": "wedding_invitations.sql",
       "mo_ta": "Thiệp cưới online",
       "bang": [
@@ -536,6 +544,14 @@
         "studio_bookings.source",
         "studio_contracts.booking_id",
         "website_leads.channel"
+      ]
+    },
+    {
+      "file": "migrations/album_selection_done.sql",
+      "mo_ta": "Mốc 'khách đã chọn xong ảnh' trên album",
+      "bang": [],
+      "cot": [
+        "albums.selection_done_at"
       ]
     },
     {

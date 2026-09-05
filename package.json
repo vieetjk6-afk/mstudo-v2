@@ -53,6 +53,7 @@
     "test:face-browser": "node --experimental-strip-types desktop/test/face-browser.mjs",
     "test:face-group": "node --experimental-strip-types desktop/test/face-group.mjs",
     "test:face-people": "node --experimental-strip-types desktop/test/face-people.mjs",
+    "test:bu-thieu": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/bu-thieu.mjs",
     "test:pg-loi": "node --experimental-strip-types desktop/test/pg-loi.mjs",
     "test:supabase-du-an": "node --experimental-strip-types desktop/test/supabase-du-an.mjs",
     "test:face-may-chu": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/face-may-chu.mjs",

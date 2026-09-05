@@ -3,9 +3,13 @@ import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { docBanKe, dungSqlBuThieu, soiDatabase } from "@/lib/db-thieu";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+// "bu-thieu" phải soi cả trăm bảng trước khi dựng được file.
+export const maxDuration = 60;
 
 /**
  * PHỤC VỤ THẲNG NỘI DUNG FILE SQL, dạng văn bản thuần.
@@ -37,10 +41,28 @@ export async function GET(_req: Request, { params }: { params: { ten: string } }
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  /*
+   * "bu-thieu" KHÔNG phải file có sẵn: nó được dựng ngay lúc gọi, gồm đúng những
+   * migration mà database ĐANG CHẠY còn thiếu, theo đúng thứ tự chạy.
+   *
+   * Vì sao không đưa `cap-nhat.sql` cho xong: gói đó cố định 9 file, mà database
+   * này còn thiếu cả một migration NGOÀI gói — và một file TRONG gói lại có hàng
+   * rào đòi migration ngoài kia phải chạy trước. SQL Editor chạy cả file trong
+   * MỘT transaction, nên hàng rào bật lên là cả gói rollback, không cái nào được
+   * tạo. Đúng cái bẫy đã làm mất mấy vòng đầu.
+   */
+  if (params.ten === "bu-thieu") {
+    const ke = await docBanKe();
+    const sql = await dungSqlBuThieu(await soiDatabase(createAdminClient(), ke));
+    return new NextResponse(sql, {
+      headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" },
+    });
+  }
+
   const file = CHO_PHEP[params.ten];
   if (!file) {
     return NextResponse.json(
-      { error: "khong_co_file", coThe: Object.keys(CHO_PHEP) },
+      { error: "khong_co_file", coThe: [...Object.keys(CHO_PHEP), "bu-thieu"] },
       { status: 404 }
     );
   }
