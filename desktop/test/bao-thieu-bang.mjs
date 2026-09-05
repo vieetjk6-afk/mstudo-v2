@@ -157,6 +157,41 @@ ok(
   await page.close();
 }
 
+/* ── Chạy nhầm PROJECT: bảng phải chỉ đích danh project đúng ──────────────── */
+/*
+ * Kiểu hỏng im lặng nhất sau lần chuyển sang project mới: studio còn mở sẵn tab
+ * project CŨ, chạy SQL ở đó, Supabase báo "Success" đàng hoàng — mà app vẫn
+ * không thấy bảng nào. Không lỗi, không manh mối. Bảng báo phải nêu tên project
+ * đúng VÀ đưa link mở thẳng SQL Editor của chính nó.
+ */
+{
+  const REF = "abcdefghijklmnopqrst";
+  const page = await browser.newPage();
+  await page.route("**/rest/v1/album_faces*", gone("album_faces"));
+  await page.route("**/rest/v1/album_people*", gone("album_people"));
+  await page.route("**/api/face-status", (r) =>
+    r.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        cronSecret: true,
+        duAn: REF,
+        sqlEditor: `https://supabase.com/dashboard/project/${REF}/sql/new`,
+      }),
+    })
+  );
+  await page.goto(PAGE, { waitUntil: "domcontentloaded", timeout: 25_000 });
+  await page.waitForTimeout(9_000);
+  const chu = await page.innerText("body");
+  ok("bảng báo gọi ĐÍCH DANH project mà app đang dùng", chu.includes(REF), chu.slice(0, 200));
+  const href = await page
+    .locator(`a[href="https://supabase.com/dashboard/project/${REF}/sql/new"]`)
+    .count();
+  ok("…và có link mở thẳng SQL Editor của đúng project đó", href > 0);
+  await page.close();
+}
+
 /* ── Mắt xích vô hình: thiếu CRON_SECRET ──────────────────────────────────── */
 /*
  * Bảng đủ, code đúng, mà không album nào được quét — vì app tự trả 401 cho cron

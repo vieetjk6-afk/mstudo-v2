@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { linkSqlEditor, maDuAn } from "@/lib/supabase-du-an";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,16 +61,29 @@ export async function GET() {
     .filter(([, co]) => !co)
     .map(([ten]) => ten);
 
+  const duAn = maDuAn(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const out: Record<string, unknown> = {
     ok: thieu.length === 0,
     bang,
     thieu,
+    /*
+     * Project mà app này ĐANG THẬT SỰ nói chuyện.
+     *
+     * Đây là câu trả lời cho kiểu hỏng khó chịu nhất: chạy SQL trong tab project
+     * CŨ thì Supabase báo "Success" đàng hoàng, mà app vẫn không thấy bảng nào.
+     * Không lộ khoá, chỉ lộ mã project — thứ vốn nằm sẵn trong URL công khai mà
+     * mọi trình duyệt đều thấy.
+     */
+    duAn,
+    sqlEditor: linkSqlEditor(process.env.NEXT_PUBLIC_SUPABASE_URL),
     // Không lộ giá trị, chỉ lộ CÓ hay KHÔNG — biết là đủ để sửa.
     cronSecret: !!process.env.CRON_SECRET,
     quetBiTat: process.env.FACE_SCAN_OFF === "1",
   };
   if (thieu.length > 0) {
-    out.viecPhaiLam = "Chạy supabase/khuon-mat.sql trong Supabase → SQL Editor (mở /api/setup-sql/khuon-mat để lấy nội dung).";
+    out.viecPhaiLam =
+      `Chạy supabase/khuon-mat.sql trong SQL Editor của ĐÚNG project ${duAn ?? "(không đọc được mã)"}` +
+      " — mở /api/setup-sql/khuon-mat để lấy nội dung. Chạy nhầm project thì Supabase vẫn báo Success mà app không thấy bảng nào.";
     return NextResponse.json(out);
   }
   if (!out.cronSecret) {
