@@ -29,9 +29,23 @@ async function ownsAlbum(albumId: string): Promise<boolean> {
   return !!data;
 }
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
   if (!(await ownsAlbum(params.id))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = createAdminClient();
+
+  /*
+   * `?chay=1` — QUÉT NGAY, không đợi cron.
+   *
+   * Cùng việc với POST, nhưng gọi được bằng cách dán URL vào trình duyệt. Đó
+   * không phải chuyện tiện tay: khi cron im lặng không chạy, cách duy nhất để
+   * biết là do LỊCH CRON hay do BỘ QUÉT là chạy tay đúng đường code đó và đọc
+   * câu lỗi. Mà chủ studio thì không POST được từ thanh địa chỉ.
+   *
+   * GET có tác dụng phụ là điều đáng cân nhắc; ở đây nó đáng, vì đường này chỉ
+   * chủ album mở được và thứ nó làm thì idempotent (quét lại ảnh đã quét là
+   * không làm gì).
+   */
+  if (new URL(req.url).searchParams.get("chay") === "1") return POST(req, { params });
 
   const { data: album } = await db.from("albums").select("status, phase").eq("id", params.id).maybeSingle();
   const { data: photos, error: ePhotos } = await db
