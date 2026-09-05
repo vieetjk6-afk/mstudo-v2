@@ -108,6 +108,17 @@ export type PeopleRow = {
   id: string;
   name: string;
   cover_photo_id: string | null;
+  /** [x, y, rộng, cao] chuẩn hoá 0…1 — khung khuôn mặt trên ảnh bìa. */
+  cover_box: number[] | null;
+  /**
+   * Tâm cụm 128 chiều. Gửi xuống máy khách để phép so ảnh khách tự tải lên chạy
+   * NGAY TRÊN MÁY HỌ: ảnh của khách không rời khỏi thiết bị, và không tốn một
+   * lượt gọi hàm serverless nào. Đổi lại, ai có link album cũng nhận được vector
+   * của những người TRONG CHÍNH album đó — mà ảnh của họ thì link ấy vốn đã cho
+   * xem. Đánh đổi đó đáng hơn là bắt khách gửi ảnh mặt mình lên máy chủ.
+   */
+  descriptor: number[] | null;
+  face_count: number;
   position: number;
 };
 /** Hàng `album_photo_people`. */
@@ -115,25 +126,35 @@ export type PeopleLink = { person_id: string; photo_id: string };
 
 export type PersonChip = {
   id: string;
+  /** Rỗng = studio chưa đặt tên. Vẫn hiện, vì khách nhận ra bằng MẶT. */
   name: string;
   coverPhotoId: string | null;
+  coverBox: number[] | null;
+  descriptor: number[] | null;
+  faceCount: number;
   photoIds: string[];
 };
 
 /**
- * Chip lọc để hiện cho khách.
+ * Danh sách KHUÔN MẶT hiện cho khách chọn.
  *
- * Ba luật, cả ba đều để tránh một chip bấm vào ra lưới trống:
+ * Khách nhận ra người bằng MẶT, không bằng tên — nên khác với bản đầu, người
+ * studio chưa kịp đặt tên vẫn hiện. Chính họ mới là phần lớn: studio đặt tên cô
+ * dâu chú rể là cùng, còn mẹ cô dâu, cô bạn thân, đứa cháu thì không ai ngồi đặt
+ * tên hết. Bỏ họ đi là bỏ đúng những người cần chức năng này nhất.
  *
- *  1. Chỉ người ĐÃ ĐẶT TÊN. Cụm "Người 3" không có nghĩa gì với khách.
- *  2. Chỉ ảnh CÒN TRONG album. Studio xoá ảnh khỏi album sau khi lưu là chuyện
- *     bình thường; khoá ngoại `on delete cascade` chỉ dọn khi hàng `photos` bị
- *     xoá thật, còn ảnh bị chuyển sang album khác thì hàng nối vẫn còn.
- *  3. Bỏ người không còn ảnh nào.
+ * Hai luật còn lại giữ nguyên, cả hai để tránh một mặt bấm vào ra lưới trống:
+ *  • Chỉ ảnh CÒN TRONG album. Studio xoá ảnh sau khi lưu là chuyện bình thường;
+ *    `on delete cascade` chỉ dọn khi hàng `photos` bị xoá thật, còn ảnh bị đổi
+ *    sang album khác thì hàng nối vẫn còn.
+ *  • Bỏ người không còn ảnh nào.
  *
- * Thứ tự: `position` studio đặt, rồi tên — để hai lần tải cùng ra một thứ tự.
+ * Thứ tự: người ĐÃ ĐẶT TÊN lên trước (theo `position` studio xếp), rồi tới các
+ * mặt chưa đặt tên xếp theo số ảnh giảm dần. Người studio đã bỏ công đặt tên gần
+ * như luôn là nhân vật chính; còn trong đám còn lại thì ai xuất hiện nhiều nhất
+ * là ai đáng bấm trước.
  */
-export function visibleChips(
+export function faceChips(
   people: readonly PeopleRow[],
   links: readonly PeopleLink[],
   albumPhotoIds: ReadonlySet<string>
@@ -146,16 +167,77 @@ export function visibleChips(
     else byPerson.set(l.person_id, [l.photo_id]);
   }
   return people
-    .filter((p) => p.name.trim() !== "" && (byPerson.get(p.id)?.length ?? 0) > 0)
+    .filter((p) => (byPerson.get(p.id)?.length ?? 0) > 0)
     .slice()
-    .sort((a, b) => a.position - b.position || a.name.trim().localeCompare(b.name.trim(), "vi"))
+    .sort((a, b) => {
+      const na = a.name.trim();
+      const nb = b.name.trim();
+      if (!!na !== !!nb) return na ? -1 : 1;
+      if (na && nb) return a.position - b.position || na.localeCompare(nb, "vi");
+      const ca = byPerson.get(a.id)!.length;
+      const cb = byPerson.get(b.id)!.length;
+      return cb - ca || a.position - b.position;
+    })
     .map((p) => ({
       id: p.id,
       name: p.name.trim(),
       coverPhotoId:
         p.cover_photo_id && albumPhotoIds.has(p.cover_photo_id) ? p.cover_photo_id : null,
+      coverBox: p.cover_box && p.cover_box.length === 4 ? p.cover_box : null,
+      descriptor: p.descriptor && p.descriptor.length > 0 ? p.descriptor : null,
+      faceCount: p.face_count,
       photoIds: byPerson.get(p.id)!,
     }));
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Cắt ảnh mặt
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/** Khung mặt sau khi nới thêm lề, vẫn nằm trong ảnh. */
+export function padBox(
+  box: readonly number[],
+  pad: number
+): { x: number; y: number; w: number; h: number } {
+  const [x, y, w, h] = box;
+  const nw = Math.min(1, w * (1 + 2 * pad));
+  const nh = Math.min(1, h * (1 + 2 * pad));
+  // Giữ nguyên TÂM khi nới, rồi đẩy vào trong nếu tràn mép — cắt cụt một bên
+  // thì mặt lệch hẳn sang một góc ảnh thẻ.
+  const nx = Math.min(Math.max(x + w / 2 - nw / 2, 0), 1 - nw);
+  const ny = Math.min(Math.max(y + h / 2 - nh / 2, 0), 1 - nh);
+  return { x: nx, y: ny, w: nw, h: nh };
+}
+
+/**
+ * Kiểu CSS để cắt đúng một khuôn mặt ra khỏi ảnh, dùng cho ảnh thẻ VUÔNG.
+ *
+ * Đặt lên một `<img>` có `width: 100%`, `height: auto`, nằm trong ô vuông
+ * `overflow: hidden`. Không cần biết tỉ lệ ảnh gốc — và đó là điểm mấu chốt:
+ * trình duyệt chưa tải xong ảnh thì cũng chưa biết tỉ lệ, nên mọi cách tính cần
+ * tới nó đều nhảy khi ảnh về.
+ *
+ * Vì sao đúng: `translate` theo phần trăm ăn theo KÍCH THƯỚC CHÍNH ẢNH, nên
+ * `-x%` dịch đúng `x × chiều rộng ảnh` và `-y%` dịch đúng `y × chiều cao ảnh` —
+ * tức là đưa góc trên-trái của khuôn mặt về gốc toạ độ, bất kể ảnh ngang hay
+ * dọc. Rồi `scale(1/w)` phóng cho bề ngang khuôn mặt vừa đúng bề ngang ô.
+ *
+ * Phóng theo MỘT hệ số cho cả hai chiều nên mặt không bị bóp méo. Chiều cao
+ * khuôn mặt trong ô thì tuỳ tỉ lệ ảnh, nhưng luôn xấp xỉ vuông: khuôn mặt vốn
+ * gần vuông tính bằng ĐIỂM ẢNH, mà `h` chuẩn hoá trên ảnh ngang thì lớn hơn `w`
+ * đúng bằng tỉ lệ ấy.
+ */
+export function faceCrop(
+  box: readonly number[] | null,
+  pad = 0.45
+): { transform: string; transformOrigin: string } | null {
+  if (!box || box.length !== 4 || box.some((n) => !Number.isFinite(n))) return null;
+  const b = padBox(box, pad);
+  if (b.w <= 0 || b.h <= 0) return null;
+  return {
+    transform: `scale(${(1 / b.w).toFixed(4)}) translate(${(-b.x * 100).toFixed(3)}%, ${(-b.y * 100).toFixed(3)}%)`,
+    transformOrigin: "0 0",
+  };
 }
 
 /** Lọc lưới ảnh theo người đang chọn. `null` = không lọc. */

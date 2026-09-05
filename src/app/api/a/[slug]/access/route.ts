@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { pickFolderLinks } from "@/lib/album-original";
-import { visibleChips } from "@/lib/face-people";
+import { faceChips } from "@/lib/face-people";
 
 export const dynamic = "force-dynamic";
 
@@ -74,7 +74,7 @@ export async function POST(
     // album vẫn chạy bình thường, chỉ không có hàng chip.
     admin
       .from("album_people")
-      .select("id, name, cover_photo_id, position")
+      .select("id, name, cover_photo_id, cover_box, descriptor, face_count, position")
       .eq("album_id", album.id)
       .order("position"),
     admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
@@ -92,6 +92,6 @@ export async function POST(
     selected,
     disliked,
     notes,
-    people: visibleChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id))),
+    people: faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id))),
   });
 }

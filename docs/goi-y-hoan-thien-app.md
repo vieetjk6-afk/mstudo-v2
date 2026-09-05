@@ -479,6 +479,42 @@ Và phải tự chọn nền tính toán (`webgl` rồi lùi `cpu`) trước khi
 bản UMD ưu tiên nền `wasm` mà ta không phục vụ, không chọn tay thì chết với đúng
 một câu khó hiểu.
 
+**Khách tự tìm mặt mình — hai đường, hai cái giá khác hẳn.**
+
+Đây mới là thứ khách thật sự hỏi khi mở album 800 tấm: *"ảnh của tôi đâu"*. Bản
+đầu bắt họ chờ studio ĐẶT TÊN rồi chọn theo tên — sai chỗ: studio đặt tên cô dâu
+chú rể là cùng, còn mẹ cô dâu, cô bạn thân, đứa cháu thì không ai ngồi đặt hết,
+mà đó đúng là những người cần chức năng này nhất.
+
+Nên giờ hàng khuôn mặt hiện **cả người chưa đặt tên**, và khách nhận ra bằng
+MẶT. Muốn cắt được ảnh mặt thì phải lưu thêm **khung khuôn mặt** (`cover_box`,
+chuẩn hoá 0…1) — có nó thì cắt bằng CSS ngay trên thumbnail album đã tải sẵn,
+**không thêm một byte nào**. Không có nó thì ảnh thẻ đành lấy cả tấm, mà một tấm
+ảnh cưới có hai ba người nên khách không chỉ được vào mặt mình.
+
+Phép cắt là chỗ dễ sai và khó nhìn ra: `transform: scale(1/w) translate(-x%, -y%)`
+với `transform-origin: 0 0`. Nó đúng nhờ một tính chất của CSS — phần trăm trong
+`translate` ăn theo **kích thước chính thẻ ảnh**, nên `-y%` dịch đúng
+`y × chiều cao ảnh` mà **không cần biết tỉ lệ ảnh**. Điều đó quan trọng vì lúc
+dựng trang thì trình duyệt còn chưa tải xong ảnh: mọi cách tính cần tới tỉ lệ đều
+nhảy một nhịp khi ảnh về. Phóng một hệ số cho cả hai chiều nên mặt không méo. Có
+bài đo lại bằng `getBoundingClientRect()` trong Chromium thật, vì mô phỏng ngữ
+nghĩa CSS chỉ chứng minh tôi hiểu đúng cái tôi tự viết ra.
+
+Đường thứ hai, **khách tải ảnh của mình lên**, bắt buộc phải có mô hình trên máy
+họ (~20 MB) — nên nó chỉ tải khi khách tự bấm, và nói trước dung lượng. Ảnh khách
+chọn **không rời khỏi máy**: nhận diện chạy trong trình duyệt, thứ duy nhất được
+so là vector 128 số, và cũng chỉ so ngay tại chỗ. Đổi lại, tâm cụm của những
+người trong album được gửi xuống máy khách (~3 KB) — mà ảnh của chính họ thì link
+album vốn đã cho xem. Đánh đổi đó đáng hơn là bắt khách gửi ảnh mặt mình lên máy
+chủ, và cũng không tốn một lượt gọi hàm serverless nào.
+
+Ảnh khách tải lên có nhiều người thì lấy **mặt to nhất** — ảnh họ tự chọn để "tìm
+tôi" gần như luôn là ảnh họ đứng gần máy nhất — và màn hình nói thẳng ra là đã
+chọn mặt lớn nhất. Không tìm thấy ai đủ gần thì trả về **không tìm thấy**, chứ
+không đưa người gần nhất kèm lời cảnh báo: đưa nhầm bộ ảnh của người khác là hỏng
+nặng hơn, và khách vẫn còn đường tự chọn mặt.
+
 **Studio quét một lần, khách không tải gì.** Đây là phần quyết định tính năng này
 có dùng được thật hay chỉ hay trên máy studio. Mô hình nặng 26 MB; bắt mỗi điện
 thoại trong nhà tải 26 MB qua 3G rồi chạy nhận dạng trên 800 tấm là đánh đổi tệ,

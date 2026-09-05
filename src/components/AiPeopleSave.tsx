@@ -185,12 +185,16 @@ export default function AiPeopleSave({
         // Ảnh bìa có thể không nằm trong album (studio quét thư mục rộng hơn
         // album) — khi đó để null, cột cho phép.
         const cover = album.photoIndex.get(matchKey(nameOfKey.get(d.person.coverKey) ?? ""));
+        const b = d.person.coverBox;
         const row = {
           album_id: albumId,
           name: d.name.trim().slice(0, NAME_MAX),
           face_count: d.person.faces,
           cover_photo_id: cover ?? null,
           cover_at: d.person.coverAt,
+          // Khung khuôn mặt đại diện — thứ cho phép KHÁCH cắt ra ảnh mặt để bấm
+          // chọn mà không tải mô hình nào. Không có ảnh bìa thì khung vô nghĩa.
+          cover_box: cover && b ? [b.x, b.y, b.w, b.h] : null,
           descriptor: desc,
           position: i,
         };

@@ -30,6 +30,7 @@ import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { filterByPerson, type PersonChip } from "@/lib/face-people";
+import FaceFinder from "./FaceFinder";
 import {
   applyEdit,
   isPending,
@@ -942,67 +943,21 @@ export default function CustomerAlbum({
           </div>
         )}
 
-        {/* Chip lọc theo NGƯỜI.
-            Studio đã gom & đặt tên sẵn trên máy họ, nên ở đây không có mô hình
-            AI nào tải về, không có gì phải quét: chỉ là một danh sách id ảnh.
-            Đúng câu hỏi mà cả nhà hỏi khi mở album — "ảnh của mẹ đâu?" — mà
-            trước đây phải cuộn tay qua bảy trăm tấm mới trả lời được. */}
-        {people.length > 0 && (
-          <div className="mt-4">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[12.5px]" style={{ color: "var(--text3)" }}>
-                {t("filterByPerson")}
-              </span>
-              <button
-                onClick={() => setPersonId(null)}
-                className="rounded-full px-3.5 py-1.5 text-[12.5px] transition-colors"
-                style={
-                  personId === null
-                    ? { background: "var(--accent)", color: "var(--accentInk)" }
-                    : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }
-                }
-              >
-                {t("everyone")}
-              </button>
-              {people.map((p) => {
-                const on = personId === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => setPersonId(on ? null : p.id)}
-                    className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3.5 text-[12.5px] transition-colors"
-                    style={
-                      on
-                        ? { background: "var(--accent)", color: "var(--accentInk)" }
-                        : { background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text2)" }
-                    }
-                  >
-                    <span
-                      className="h-7 w-7 flex-none overflow-hidden rounded-full"
-                      style={{ background: "var(--surface2)" }}
-                    >
-                      {p.coverPhotoId ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={thumbnailUrl(driveIdOf.get(p.coverPhotoId) ?? "", 160)}
-                          alt=""
-                          loading="lazy"
-                          className="h-full w-full object-cover"
-                        />
-                      ) : null}
-                    </span>
-                    {p.name}
-                    <span className="opacity-60">{p.photoIds.length}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {activePerson && (
-              <p className="mt-2 text-[12.5px]" style={{ color: "var(--text3)" }}>
-                {t("personHint")}
-              </p>
-            )}
-          </div>
+        {/* TÌM ẢNH THEO KHUÔN MẶT.
+            Studio đã quét & lưu sẵn, nên bấm một mặt là tra bảng — khách không
+            tải mô hình nào. Riêng đường "tải ảnh của bạn lên" mới cần mô hình,
+            và nó chỉ tải khi khách tự bấm. Đúng câu mà cả nhà hỏi khi mở album —
+            "ảnh của mẹ đâu?" — mà trước đây phải cuộn tay qua bảy trăm tấm. */}
+        <FaceFinder
+          people={people}
+          activeId={personId}
+          onPick={setPersonId}
+          driveIdOf={driveIdOf}
+        />
+        {activePerson && (
+          <p className="mt-2 text-[12.5px]" style={{ color: "var(--text3)" }}>
+            {t("personHint")}
+          </p>
         )}
 
         {/* Sticky toolbar */}
