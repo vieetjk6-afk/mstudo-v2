@@ -59,8 +59,14 @@ jobs:
               echo "::error::App trả 401 — CRON_SECRET ở GitHub khác với trên Vercel."
               exit 1
             fi
-            # Hết việc thì dừng sớm, đừng đốt phút chạy cho mấy lượt rỗng.
-            if grep -q '"reports":\[\]' /tmp/ra.json; then
+            if [ "${ma}" != "200" ]; then
+              echo "::error::App trả ${ma}. Xem thân JSON ở trên để biết lỗi gì."
+              exit 1
+            fi
+            # Dừng sớm CHỈ khi thật sự không còn gì. Bản trước chỉ dò chuỗi
+            # `"reports":[]`, mà một lượt HỎNG cũng trả về đúng chuỗi đó — nên
+            # nó im lặng coi lỗi là "xong việc". Phải xét cả `"ok":true`.
+            if grep -q '"ok":true' /tmp/ra.json && grep -q '"reports":\[\]' /tmp/ra.json; then
               echo "Không còn gì để quét — dừng sớm."
               break
             fi
