@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
   const db = createAdminClient();
   const t0 = Date.now();
   const reports: unknown[] = [];
+  const daNhinThay: Record<string, unknown> = {};
   try {
     /*
      * GOM NHÓM TRƯỚC, QUÉT SAU — và thứ tự này có hai lý do.
@@ -65,12 +66,16 @@ export async function GET(req: NextRequest) {
      *    tới". Đặt trước thì mọi lượt cron thành công đều để lại dấu thời gian,
      *    và /api/face-status trả lời được câu đó bằng số.
      */
-    for (const id of await albumsNeedingCluster(db, MAX_ALBUMS)) {
+    const canGom = await albumsNeedingCluster(db, MAX_ALBUMS);
+    daNhinThay.canGom = canGom;
+    for (const id of canGom) {
       if (Date.now() - t0 > GOM_BUDGET_MS) break;
       reports.push({ albumId: id, clustered: await clusterAlbum(db, id) });
     }
 
     const targets = await albumsNeedingScan(db, MAX_ALBUMS);
+    daNhinThay.canQuet = targets;
+    daNhinThay.conLaiSauKhiGom = SCAN_BUDGET_MS - (Date.now() - t0);
     for (const a of targets) {
       const left = SCAN_BUDGET_MS - (Date.now() - t0);
       // Dưới 12 giây thì không đủ cho cả nạp mô hình lẫn một mẻ có ích — để lượt
@@ -83,6 +88,14 @@ export async function GET(req: NextRequest) {
     // Thiếu bảng là tình huống có thật (studio chưa chạy supabase/khuon-mat.sql)
     // và phải đọc ra được từ log, chứ không phải một chuỗi Postgres thô.
     const thieuBang = /album_faces|album_people|faces_scanned_at|does not exist|schema cache/i.test(msg);
+    /*
+     * 500, KHÔNG phải 200.
+     *
+     * Bản trước trả 200 kèm `ok:false` cho dễ đọc JSON. Cái giá của nó lộ ra
+     * ngay lần đầu dùng thật: bộ hẹn giờ thấy 200 là coi như xong, và một lượt
+     * cron HỎNG trông y hệt một lượt cron KHÔNG CÓ GÌ ĐỂ LÀM. Mã lỗi HTTP tồn
+     * tại đúng để phân biệt hai chuyện đó — thân JSON vẫn giữ nguyên để đọc.
+     */
     return NextResponse.json(
       {
         ok: false,
@@ -90,8 +103,15 @@ export async function GET(req: NextRequest) {
         hint: thieuBang ? "Chạy supabase/khuon-mat.sql trong Supabase SQL Editor." : undefined,
         reports,
       },
-      { status: 200 }
+      { status: 500 }
     );
   }
-  return NextResponse.json({ ok: true, ms: Date.now() - t0, reports });
+  /*
+   * `daNhinThay` để "reports rỗng" thôi mơ hồ.
+   *
+   * Rỗng có thể là "không còn gì để làm" (đúng) hoặc "tìm album cần quét ra số
+   * không trong khi database đầy ảnh chưa quét" (sai, và là thứ vừa xảy ra).
+   * Hai chuyện đó nhìn giống hệt nhau nếu chỉ có `reports: []`.
+   */
+  return NextResponse.json({ ok: true, ms: Date.now() - t0, daNhinThay, reports });
 }
