@@ -302,6 +302,53 @@ insert into public.album_people (album_id, name, face_count, cover_at, position,
 values ('${ALB_A}', 'Vector hỏng', 1, 0, 8, array[1,2,3]::real[]);`);
 ok("vector sai số chiều (3 thay vì 128) bị chối", !r.ok);
 
+/* ── 4b. Kho khuôn mặt của lượt quét tự động ─────────────────────────────── */
+console.log("\n— Kho khuôn mặt (lượt quét tự động) —");
+{
+  const VEC128 = `array[${Array.from({ length: 128 }, (_, i) => (i / 500).toFixed(3)).join(",")}]::real[]`;
+  let r = asStudio(A, `
+insert into public.album_faces (album_id, photo_id, at, box, descriptor, sharpness)
+values ('${ALB_A}', '${PH_A1}', 0, array[0.1,0.1,0.2,0.3]::real[], ${VEC128}, 120);`);
+  ok("studio ghi được khuôn mặt đã quét vào album của mình", r.ok, r.out.slice(0, 400));
+
+  // Đánh dấu "đã quét" là mắt xích sống còn: thiếu quyền này thì lượt quét chạy
+  // mãi không xong mà không báo lỗi gì cho studio.
+  r = asStudio(A, `update public.photos set faces_scanned_at = now() where id = '${PH_A1}';`);
+  ok(
+    "studio đánh dấu được ảnh ĐÃ QUÉT (nếu không, lượt quét lặp vô tận)",
+    asStudio(A, `select count(*) from public.photos where id='${PH_A1}' and faces_scanned_at is not null;`)
+      .out.trim().endsWith("1")
+  );
+
+  r = asStudio(B, `
+insert into public.album_faces (album_id, photo_id, at, box, descriptor, sharpness)
+values ('${ALB_A}', '${PH_A1}', 1, array[0.1,0.1,0.2,0.3]::real[], ${VEC128}, 10);`);
+  ok("studio B KHÔNG ghi được vào kho của A", !r.ok);
+
+  r = asStudio(A, `
+insert into public.album_faces (album_id, photo_id, at, box, descriptor, sharpness)
+values ('${ALB_A}', '${PH_B1}', 0, array[0.1,0.1,0.2,0.3]::real[], ${VEC128}, 10);`);
+  ok("ảnh của album khác không ghi vào kho được (dù cùng chủ)", !r.ok);
+
+  r = asStudio(A, `
+insert into public.album_faces (album_id, photo_id, at, box, descriptor, sharpness)
+values ('${ALB_A}', '${PH_A2}', 0, array[0.1,0.1]::real[], ${VEC128}, 10);`);
+  ok("khung sai độ dài (2 số thay vì 4) bị chối", !r.ok);
+
+  r = asStudio(A, `
+insert into public.album_faces (album_id, photo_id, at, box, descriptor, sharpness)
+values ('${ALB_A}', '${PH_A2}', 0, array[0.1,0.1,0.2,0.3]::real[], array[1,2,3]::real[], 10);`);
+  ok("vector sai số chiều (3 thay vì 128) bị chối", !r.ok);
+
+  // Quét lại cùng một tấm phải GHI ĐÈ, không nổ khoá chính — lượt quét sau khi
+  // studio thêm ảnh sẽ chạm lại những tấm cũ.
+  r = asStudio(A, `
+insert into public.album_faces (album_id, photo_id, at, box, descriptor, sharpness)
+values ('${ALB_A}', '${PH_A1}', 0, array[0.2,0.2,0.3,0.4]::real[], ${VEC128}, 200)
+on conflict (photo_id, at) do update set box = excluded.box, sharpness = excluded.sharpness;`);
+  ok("quét lại cùng một khuôn mặt thì GHI ĐÈ, không nổ khoá chính", r.ok, r.out.slice(0, 300));
+}
+
 /* ── 5. Xoá album phải cuốn theo mọi thứ ────────────────────────────────── */
 console.log("\n— Dọn dẹp theo album —");
 const before = asStudio(A, `select count(*) from public.album_photo_people where album_id='${ALB_A}';`).out.split("\n").pop();
@@ -310,9 +357,10 @@ r = sql(`delete from public.albums where id = '${ALB_A}';`);
 ok("xoá album chạy được", r.ok, r.out.slice(0, 200));
 const left = sql(
   `select (select count(*) from public.album_people where album_id='${ALB_A}')
-        + (select count(*) from public.album_photo_people where album_id='${ALB_A}');`
+        + (select count(*) from public.album_photo_people where album_id='${ALB_A}')
+        + (select count(*) from public.album_faces where album_id='${ALB_A}');`
 ).out.split("\n").pop();
-ok("…và cuốn theo cả người lẫn dòng nối (không để rác)", Number(left) === 0, `còn ${left}`);
+ok("…và cuốn theo cả người, dòng nối lẫn kho khuôn mặt (không để rác)", Number(left) === 0, `còn ${left}`);
 
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);
