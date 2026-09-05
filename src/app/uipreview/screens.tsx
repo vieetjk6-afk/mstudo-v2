@@ -24,6 +24,7 @@ import FaceGroupDemo from "./FaceGroupDemo";
 import FaceFinderDemo from "./FaceFinderDemo";
 import FaceAutoDemo from "./FaceAutoDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
+import GalleryFaceDemo from "./GalleryFaceDemo";
 import * as f from "./fixtures";
 
 /**
@@ -70,6 +71,10 @@ export const SCREENS: Record<
   "bao-chua-chay-sql": {
     title: "Bảng điều khiển — báo chưa bật được tìm theo khuôn mặt",
     render: () => <FaceSetupDemo />,
+  },
+  "giao-khach-tim-mat": {
+    title: "Album GIAO KHÁCH — tìm ảnh theo khuôn mặt (dữ liệu giả)",
+    render: () => <GalleryFaceDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",

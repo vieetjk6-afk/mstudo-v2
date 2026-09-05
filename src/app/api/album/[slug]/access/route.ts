@@ -5,6 +5,7 @@ import { fetchAllPhotos } from "@/lib/photos";
 import { getOriginalFolders } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { limitByIpDurable } from "@/lib/rate-limit";
+import { faceChips } from "@/lib/face-people";
 
 export const dynamic = "force-dynamic";
 
@@ -62,5 +63,13 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
   // Link file gốc giai đoạn chọn ảnh (JPG Goc) — cũng gated sau mật khẩu.
   const originalFolders = await getOriginalFolders(admin, album.id, allSources ?? []);
 
-  return NextResponse.json({ photos, sources, driveFolders, originalFolders });
+  // Khuôn mặt studio đã gom — album có mật khẩu thì trang chưa gửi gì trước khi
+  // mở khoá, nên phải trả về ở đây. `select("*")`: cover_box là cột thêm sau.
+  const [{ data: ppl }, { data: pplLinks }] = await Promise.all([
+    admin.from("album_people").select("*").eq("album_id", album.id).order("position"),
+    admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
+  ]);
+  const people = faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p: { id: string }) => p.id)));
+
+  return NextResponse.json({ photos, sources, driveFolders, originalFolders, people });
 }
