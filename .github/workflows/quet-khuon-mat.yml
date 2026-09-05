@@ -1,0 +1,68 @@
+# BỘ HẸN GIỜ QUÉT KHUÔN MẶT — chạy từ GitHub, không phụ thuộc gói Vercel.
+#
+# Vì sao có file này. Cron của Vercel KHÔNG chạy trên project này: đo suốt 10
+# phút không một con số nào nhúc nhích, kể cả dấu `faces_clustered_at` mà mọi
+# lượt cron thành công đều để lại. Gói Hobby chỉ cho 2 cron và mỗi ngày một
+# lần, trong khi vercel.json khai 8 cái — nhiều khả năng là vậy, nhưng dù lý do
+# là gì thì kết luận không đổi: không thể dựa vào nó.
+#
+# GitHub Actions thì miễn phí, chạy độc lập với gói Vercel, và gọi đúng cái
+# route mà Vercel cron lẽ ra phải gọi. Không thêm một dòng code chạy nào vào
+# app — chỉ là một cái đồng hồ khác bấm chuông.
+#
+# CẦN MỘT LẦN THIẾT LẬP: GitHub → repo → Settings → Secrets and variables →
+# Actions → New repository secret, tên `CRON_SECRET`, giá trị GIỐNG HỆT biến
+# CRON_SECRET đang có trên Vercel. Thiếu nó thì app trả 401 và workflow báo đỏ.
+#
+# Lưu ý về lịch: GitHub chạy cron kiểu "sớm nhất có thể", thường trễ vài phút
+# lúc cao điểm — không sao, đây là việc chạy nền.
+name: Quét khuôn mặt
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  # Bấm chạy tay được ở tab Actions, không phải đợi tới giờ.
+  workflow_dispatch:
+
+# Không để hai lượt chồng nhau: hai tiến trình cùng quét một album là tốn CPU
+# đôi mà không nhanh hơn — chúng giành nhau đúng những tấm ảnh đó.
+concurrency:
+  group: quet-khuon-mat
+  cancel-in-progress: false
+
+jobs:
+  quet:
+    runs-on: ubuntu-latest
+    # Một lượt GitHub gọi app NHIỀU LẦN liên tiếp, vì mỗi lượt gọi chỉ quét được
+    # ~30 ảnh (hạn 45 giây của hàm serverless). Gọi 8 lần ≈ 7 phút, vẫn gọn
+    # trong khoảng 10 phút giữa hai lần hẹn giờ.
+    timeout-minutes: 12
+    steps:
+      - name: Gọi bộ quét nhiều lượt
+        env:
+          SECRET: ${{ secrets.CRON_SECRET }}
+          BASE: ${{ vars.SITE_URL || 'https://mstudo.com' }}
+        run: |
+          set -u
+          if [ -z "${SECRET}" ]; then
+            echo "::error::Thiếu secret CRON_SECRET. Thêm ở Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          for i in $(seq 1 8); do
+            echo "── lượt $i ──"
+            ma=$(curl -sS -o /tmp/ra.json -w '%{http_code}' --max-time 90 \
+                 -H "Authorization: Bearer ${SECRET}" \
+                 "${BASE}/api/cron/face-scan" || echo "000")
+            echo "HTTP ${ma}"
+            cat /tmp/ra.json; echo
+            if [ "${ma}" = "401" ]; then
+              echo "::error::App trả 401 — CRON_SECRET ở GitHub khác với trên Vercel."
+              exit 1
+            fi
+            # Hết việc thì dừng sớm, đừng đốt phút chạy cho mấy lượt rỗng.
+            if grep -q '"reports":\[\]' /tmp/ra.json; then
+              echo "Không còn gì để quét — dừng sớm."
+              break
+            fi
+            sleep 3
+          done
