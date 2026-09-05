@@ -13,8 +13,15 @@ export const runtime = "nodejs";
  */
 export const maxDuration = 60;
 
-/** Dừng quét trước hạn đủ để còn kịp gom nhóm và trả JSON. Xem `hanQuetMs`. */
+/** Dừng quét trước hạn đủ để còn kịp trả JSON. Xem `hanQuetMs`. */
 const SCAN_BUDGET_MS = hanQuetMs();
+/**
+ * Phần đầu lượt dành cho gom nhóm.
+ *
+ * Nhỏ có chủ ý: gom là phép tính trên vector đã có, nhanh; để nó ăn quá nhiều
+ * thì lượt cron này không quét được ảnh nào và album không bao giờ tiến.
+ */
+const GOM_BUDGET_MS = Math.round(SCAN_BUDGET_MS * 0.4);
 /** Trần ảnh mỗi lượt, để một album khổng lồ không chiếm hết mọi lượt cron. */
 const MAX_PHOTOS = 400;
 /** Số album chạm tới trong một lượt. */
@@ -45,23 +52,31 @@ export async function GET(req: NextRequest) {
   const t0 = Date.now();
   const reports: unknown[] = [];
   try {
+    /*
+     * GOM NHÓM TRƯỚC, QUÉT SAU — và thứ tự này có hai lý do.
+     *
+     * 1. ĐÚNG VỀ SẢN PHẨM. Khuôn mặt đã quét mà chưa gom thì khách vẫn không
+     *    thấy gì. Gom trước nghĩa là công của lượt cron TRƯỚC tới tay khách
+     *    ngay, thay vì phải đợi tới lúc quét xong cả album.
+     *
+     * 2. NÓ LÀ NHỊP TIM. Đặt sau, lượt quét ăn hết 45 giây thì bước gom không
+     *    bao giờ tới lượt, và `faces_clustered_at` cứ là null mãi — nên không
+     *    có cách nào phân biệt "cron không chạy" với "cron chạy nhưng chưa gom
+     *    tới". Đặt trước thì mọi lượt cron thành công đều để lại dấu thời gian,
+     *    và /api/face-status trả lời được câu đó bằng số.
+     */
+    for (const id of await albumsNeedingCluster(db, MAX_ALBUMS)) {
+      if (Date.now() - t0 > GOM_BUDGET_MS) break;
+      reports.push({ albumId: id, clustered: await clusterAlbum(db, id) });
+    }
+
     const targets = await albumsNeedingScan(db, MAX_ALBUMS);
     for (const a of targets) {
       const left = SCAN_BUDGET_MS - (Date.now() - t0);
-      // Dưới 20 giây thì không đủ cho cả nạp mô hình lẫn một mẻ có ích — để lượt
+      // Dưới 12 giây thì không đủ cho cả nạp mô hình lẫn một mẻ có ích — để lượt
       // cron sau làm, còn hơn bị cắt giữa chừng.
-      if (left < 20_000) break;
-      const r = await scanAlbum(db, a.id, { budgetMs: left, maxPhotos: MAX_PHOTOS });
-      reports.push(r);
-    }
-
-    // Gom nhóm cho những album đang nằm trong hàng đợi — gồm cả album vừa quét
-    // xong ở trên, album mà lượt cron TRƯỚC hết giờ đúng trước bước gom, và
-    // album cũ vừa được studio thêm ảnh. Một chỗ duy nhất lo cả ba, vì cả ba đều
-    // để lại đúng một dấu: albums.faces_clustered_at = null.
-    for (const id of await albumsNeedingCluster(db, MAX_ALBUMS)) {
-      if (Date.now() - t0 > SCAN_BUDGET_MS) break;
-      reports.push({ albumId: id, clustered: await clusterAlbum(db, id) });
+      if (left < 12_000) break;
+      reports.push(await scanAlbum(db, a.id, { budgetMs: left, maxPhotos: MAX_PHOTOS }));
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
