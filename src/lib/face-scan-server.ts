@@ -37,6 +37,26 @@ import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, ty
  */
 const WRITE_CHUNK = 20;
 
+/**
+ * HẠN CHO MỘT LƯỢT QUÉT, và vì sao nó nhỏ đến thế.
+ *
+ * Đo trên chính máy chủ đó: /api/albums/<id>/face-thu (hạn 25 giây) trả lời
+ * bình thường, còn lượt quét hạn 240 giây thì trình duyệt quay mãi rồi trắng —
+ * hàm bị cắt trước khi kịp trả lời. Trần thật nằm đâu đó giữa hai mốc, và 60
+ * giây là trần của gói Hobby trên Vercel.
+ *
+ * Nên mặc định 45 giây: chắc chắn kịp trả lời trên MỌI gói. Chậm hơn thật —
+ * ~30 ảnh mỗi lượt thay vì ~160 — nhưng một lượt 240 giây bị cắt thì quét được
+ * 0 ảnh, nên chậm mà xong vẫn hơn nhanh mà không bao giờ tới đích.
+ *
+ * Gói Pro (trần 300 giây) thì đặt biến FACE_SCAN_BUDGET_MS=240000 để lấy lại
+ * tốc độ.
+ */
+export function hanQuetMs(): number {
+  const n = Number(process.env.FACE_SCAN_BUDGET_MS);
+  return Number.isFinite(n) && n >= 5_000 && n <= 280_000 ? n : 45_000;
+}
+
 export type ScanRow = {
   id: string;
   drive_file_id: string;

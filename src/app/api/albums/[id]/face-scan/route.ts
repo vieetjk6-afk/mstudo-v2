@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { clusterAlbum, pendingRows, scanAlbum, type ScanRow } from "@/lib/face-scan-server";
+import { clusterAlbum, hanQuetMs, pendingRows, scanAlbum, type ScanRow } from "@/lib/face-scan-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 300;
+// Xem ghi chú ở /api/cron/face-scan: 300 là trần gói Pro, Hobby cắt ở 60.
+export const maxDuration = 60;
 
 /**
  * TÌNH TRẠNG QUÉT KHUÔN MẶT CỦA MỘT ALBUM — và nút chạy ngay.
@@ -89,11 +90,18 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   if (!(await ownsAlbum(params.id))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = createAdminClient();
   try {
-    const r = await scanAlbum(db, params.id, { budgetMs: 240_000, maxPhotos: 400 });
+    const r = await scanAlbum(db, params.id, { budgetMs: hanQuetMs(), maxPhotos: 400 });
     // Gom luôn khi đã quét hết — studio bấm "chạy ngay" là muốn thấy kết quả
     // ngay, không phải đợi thêm một lượt cron nữa.
     if (r.remaining === 0) r.clustered = await clusterAlbum(db, params.id);
-    return NextResponse.json({ ok: true, ...r });
+    // `remaining` là thứ studio cần thấy: còn > 0 thì bấm lại đường dẫn này một
+    // lượt nữa. Mỗi lượt ghi lại tiến độ nên không bao giờ phải làm lại từ đầu.
+    return NextResponse.json({
+      ok: true,
+      ...r,
+      conLai: r.remaining,
+      lamTiep: r.remaining > 0 ? "Còn ảnh chưa quét — mở lại đúng đường dẫn này thêm một lượt." : "Xong album này.",
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     const thieuBang = /album_faces|album_people|faces_scanned_at|does not exist|schema cache/i.test(msg);
