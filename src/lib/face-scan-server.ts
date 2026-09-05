@@ -69,6 +69,9 @@ export type ScanReport = {
   albumId: string;
   /** Tổng ảnh của album (đã phân trang qua trần 1000 của PostgREST). */
   tongAnh: number;
+  /** Số dòng DB XÁC NHẬN đã ghi. Lệch với `scanned` nghĩa là ghi không ăn. */
+  daGhiMoc: number;
+  daGhiMat: number;
   scanned: number;
   faces: number;
   failed: number;
@@ -116,13 +119,29 @@ export async function scanAlbum(
 
   const faceRows: Record<string, unknown>[] = [];
   const doneIds: string[] = [];
+  /** Số dòng DB xác nhận đã ghi — không phải số ta định ghi. */
+  let daGhiMat = 0;
+  let daGhiMoc = 0;
 
   /** Đẩy những gì đang giữ trong tay xuống DB. Gọi sau mỗi mẻ và ở cuối. */
   const flush = async () => {
     if (faceRows.length) {
       const batch = faceRows.splice(0, faceRows.length);
-      const { error: e1 } = await db.from("album_faces").upsert(batch, { onConflict: "photo_id,at" });
+      /*
+       * `.select()` sau khi ghi — ĐỌC LẠI CHÍNH THỨ VỪA GHI.
+       *
+       * Không có nó thì một câu ghi "thành công" mà chạm 0 dòng nhìn y hệt một
+       * câu ghi thành công thật: không lỗi, không cảnh báo. Chuyện đó đã xảy ra
+       * và ngốn ba vòng — lượt cron báo quét 40 ảnh, lượt sau vẫn thấy đủ 343
+       * ảnh chưa quét. Đọc lại là cách duy nhất phân biệt.
+       */
+      const { data: d1, error: e1 } = await db
+        .from("album_faces")
+        .upsert(batch, { onConflict: "photo_id,at" })
+        .select("photo_id");
       if (e1) throw new Error(`ghi_album_faces_that_bai: ${e1.message}`);
+      daGhiMat += (d1 ?? []).length;
+      if ((d1 ?? []).length === 0) throw new Error(`ghi_album_faces_cham_0_dong (gui ${batch.length} dong)`);
       // Có mặt MỚI → album vào lại hàng đợi gom. Đặt ở đây chứ không ở cuối hàm:
       // lượt quét có thể bị cắt vì hết giờ, và lúc đó phần đã ghi vẫn phải được
       // gom ở lượt sau. Kiểm lỗi vì lý do y hệt nhánh album rỗng ở clusterAlbum.
@@ -131,11 +150,16 @@ export async function scanAlbum(
     }
     while (doneIds.length) {
       const part = doneIds.splice(0, WRITE_CHUNK);
-      const { error: e2 } = await db
+      const { data: d2, error: e2 } = await db
         .from("photos")
         .update({ faces_scanned_at: new Date().toISOString() })
-        .in("id", part);
+        .in("id", part)
+        .select("id");
       if (e2) throw new Error(`ghi_moc_quet_that_bai: ${e2.message}`);
+      daGhiMoc += (d2 ?? []).length;
+      // Chạm 0 dòng trong khi vừa gửi một danh sách id có thật = câu ghi bị chặn
+      // ở đâu đó. Nổ ra to còn hơn quét lại đúng những tấm đó tới vô tận.
+      if ((d2 ?? []).length === 0) throw new Error(`ghi_moc_quet_cham_0_dong (gui ${part.length} id)`);
     }
   };
 
@@ -198,6 +222,8 @@ export async function scanAlbum(
   return {
     albumId,
     tongAnh: rows.length,
+    daGhiMoc,
+    daGhiMat,
     scanned,
     faces,
     failed,
@@ -249,11 +275,13 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
    * không ai biết vì sao. Một câu cập nhật hỏng lặng lẽ là một vòng lặp vô hạn.
    */
   if (vecs.length === 0) {
-    const { error: e } = await db
+    const { data: d, error: e } = await db
       .from("albums")
       .update({ faces_clustered_at: new Date().toISOString() })
-      .eq("id", albumId);
+      .eq("id", albumId)
+      .select("id");
     if (e) throw new Error(`danh_dau_album_rong_that_bai: ${e.message}`);
+    if ((d ?? []).length === 0) throw new Error(`danh_dau_album_rong_cham_0_dong: ${albumId}`);
     return 0;
   }
 
