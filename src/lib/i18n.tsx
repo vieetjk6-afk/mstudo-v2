@@ -143,17 +143,18 @@ export const dict: Dict = {
   resetConfirm: { vi: "Bỏ hết", en: "Clear all" },
   resetDone: { vi: "Đã bỏ toàn bộ lựa chọn.", en: "All picks cleared." },
   // gợi ý ảnh trùng (bộ lọc chạy ngay trên máy khách)
-  // Tìm ảnh theo khuôn mặt. Studio quét một lần, khách chỉ bấm — hoặc tải ảnh
-  // mình lên, và khi đó mới tải mô hình.
+  // Tìm ảnh theo khuôn mặt. Máy chủ quét album một lần (cron /api/cron/face-scan),
+  // khách chỉ bấm — hoặc gửi một ảnh của mình lên và máy chủ so hộ. Máy khách
+  // KHÔNG tải mô hình nào cả, kể cả ở đường tải ảnh lên.
   faceFindTitle: { vi: "Tìm ảnh có mặt bạn", en: "Find photos you're in" },
   faceClear: { vi: "Xem cả album", en: "Show all" },
   faceOnePerson: { vi: "Một người trong album", en: "Someone in this album" },
   faceUpload: { vi: "Tải ảnh của bạn lên", en: "Upload a photo of yourself" },
   faceUploadCost: {
-    vi: "Ảnh của bạn không rời khỏi máy này. Lần đầu tải ~20 MB bộ nhận diện.",
-    en: "Your photo never leaves this device. First use downloads ~20 MB.",
+    vi: "Ảnh bạn gửi chỉ dùng để so khuôn mặt rồi bỏ, không được lưu lại.",
+    en: "The photo you send is only used to match a face, then discarded.",
   },
-  faceLoading: { vi: "Đang tải bộ nhận diện…", en: "Loading the recogniser…" },
+  faceLoading: { vi: "Đang chuẩn bị ảnh…", en: "Preparing the photo…" },
   faceSearching: { vi: "Đang tìm…", en: "Searching…" },
   faceFound: { vi: "Đã tìm thấy bạn.", en: "Found you." },
   faceUsedBiggest: {
@@ -169,8 +170,14 @@ export const dict: Dict = {
     en: "Couldn't find you in this album. You can still pick a face above.",
   },
   faceNoSupport: {
-    vi: "Trình duyệt này không chạy được bộ nhận diện. Bạn vẫn chọn được khuôn mặt ở trên.",
-    en: "This browser can't run the recogniser. You can still pick a face above.",
+    vi: "Trình duyệt này không đọc được ảnh bạn chọn. Bạn vẫn chọn được khuôn mặt ở trên.",
+    en: "This browser couldn't read that photo. You can still pick a face above.",
+  },
+  // Album vừa tạo: máy chủ đang quét, khuôn mặt chưa có. Nói ra chứ đừng để
+  // trống — trống thì khách (và studio) tưởng tính năng không tồn tại.
+  facePreparing: {
+    vi: "Đang chuẩn bị tìm ảnh theo khuôn mặt cho album này, vài phút nữa bạn quay lại nhé.",
+    en: "Face search is still being prepared for this album — check back in a few minutes.",
   },
   faceFailed: { vi: "Không tìm được, thử lại giúp tôi.", en: "Search failed, please try again." },
   personHint: {

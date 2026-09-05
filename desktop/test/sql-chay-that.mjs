@@ -329,6 +329,13 @@ ok(
   "…kèm cột đánh dấu đã quét trên photos",
   q("nen", "select count(*) from information_schema.columns where table_name='photos' and column_name='faces_scanned_at'") === "1"
 );
+// Hàng đợi gom nhóm của máy chủ. Thiếu cột này thì bộ quét ghi khuôn mặt xong
+// mà không album nào được gom — khách thấy album trống trơn phần khuôn mặt,
+// không có lỗi nào hiện ra ở đâu cả.
+ok(
+  "…và cột hàng đợi gom nhóm trên albums",
+  q("nen", "select count(*) from information_schema.columns where table_name='albums' and column_name='faces_clustered_at'") === "1"
+);
 
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

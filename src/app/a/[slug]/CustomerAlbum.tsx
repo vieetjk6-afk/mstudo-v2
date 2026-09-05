@@ -93,6 +93,7 @@ export default function CustomerAlbum({
   shareIds,
   initialDriveFolders,
   initialPeople,
+  facePreparing = false,
   studioName = "Studio",
   logoUrl = null,
   studioHost = null,
@@ -110,6 +111,8 @@ export default function CustomerAlbum({
    * họ). Khách chỉ nhận danh sách id ảnh — không tải một byte mô hình AI nào.
    */
   initialPeople?: PersonChip[];
+  /** Máy chủ còn đang quét khuôn mặt album này (xem @/lib/face-pending). */
+  facePreparing?: boolean;
   studioName?: string;
   logoUrl?: string | null;
   /** Domain riêng của studio — link chia sẻ phải mang tên miền đó, không phải mstudo.com. */
@@ -126,6 +129,9 @@ export default function CustomerAlbum({
   // Chip lọc theo người. Album có mật khẩu thì server chưa gửi gì cho tới khi mở
   // khoá, nên cũng nhận thêm ở bước unlock() — giống photos/sources.
   const [people, setPeople] = useState<PersonChip[]>(initialPeople ?? []);
+  // Album có mật khẩu: server component chưa biết gì trước khi mở khoá, nên cờ
+  // này đến cùng lượt trả lời của /access.
+  const [preparing, setPreparing] = useState(facePreparing);
   /** Người đang lọc. null = không lọc. */
   const [personId, setPersonId] = useState<string | null>(null);
 
@@ -560,6 +566,7 @@ export default function CustomerAlbum({
     setSources(data.sources ?? []);
     setDriveFolders(data.driveFolders ?? []);
     setPeople(data.people ?? []);
+    setPreparing(!!data.facePreparing);
     // Album có mật khẩu: server component chưa gửi lựa chọn nào, nên bản của máy
     // chủ đến ở đây. Vẫn phải hoà giải với sổ trên máy — khách nhập mật khẩu lại
     // sau khi chọn dở lúc mất mạng là đúng tình huống cần cứu.
@@ -944,15 +951,18 @@ export default function CustomerAlbum({
         )}
 
         {/* TÌM ẢNH THEO KHUÔN MẶT.
-            Studio đã quét & lưu sẵn, nên bấm một mặt là tra bảng — khách không
-            tải mô hình nào. Riêng đường "tải ảnh của bạn lên" mới cần mô hình,
-            và nó chỉ tải khi khách tự bấm. Đúng câu mà cả nhà hỏi khi mở album —
+            Máy chủ đã quét & gom sẵn (cron /api/cron/face-scan), nên bấm một mặt
+            chỉ là tra bảng. Cả đường "gửi ảnh của bạn" cũng không tải mô hình về
+            máy khách nữa — máy chủ so hộ. Đúng câu mà cả nhà hỏi khi mở album —
             "ảnh của mẹ đâu?" — mà trước đây phải cuộn tay qua bảy trăm tấm. */}
         <FaceFinder
           people={people}
           activeId={personId}
           onPick={setPersonId}
           driveIdOf={driveIdOf}
+          slug={album.slug}
+          password={password}
+          preparing={preparing}
         />
         {activePerson && (
           <p className="mt-2 text-[12.5px]" style={{ color: "var(--text3)" }}>

@@ -31,7 +31,6 @@ import { studioUrl } from "@/lib/hosts";
 import ShareButton from "@/components/ShareButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import FilterPhotosButton from "@/components/FilterPhotosButton";
-import AlbumFaceAuto from "@/components/AlbumFaceAuto";
 import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
@@ -570,8 +569,9 @@ export default function AlbumEditor({
           </Link>
           {/* Lọc ảnh NGAY từ cài đặt album — mở popup công cụ lọc tại chỗ (nguồn
               Drive hoặc máy tính). Chỉ hiện ở album chọn ảnh; giai đoạn giao
-              khách không lọc theo danh sách khách chọn nữa. Việc gom khuôn mặt
-              thì KHÔNG nằm sau nút này nữa — nó tự chạy, xem <AlbumFaceAuto/>. */}
+              khách không lọc theo danh sách khách chọn nữa. Khuôn mặt thì KHÔNG
+              có mặt ở màn này chút nào — máy chủ tự quét, xem
+              @/lib/face-scan-server. */}
           {phase !== "delivery" && <FilterPhotosButton albumId={album.id} albumTitle={form.title} className="act-btn" />}
           <a href={clientLink} target="_blank" rel="noreferrer" className="act-btn">
             <ExternalLink size={16} /> Mở link khách
@@ -606,14 +606,12 @@ export default function AlbumEditor({
         </div>
       )}
 
-      {/* GOM KHUÔN MẶT TỰ ĐỘNG.
-          Đặt ngay đầu màn, cho CẢ album chọn ảnh lẫn album giao khách: studio mở
-          album ra là nó chạy, không phải tìm nút nào. Đây là chỗ thay cho việc
-          trước đây bắt studio vào công cụ Lọc ảnh, tick hai ô, bấm Quét rồi bấm
-          Lưu — tám bước cho một việc mà máy tự làm được. */}
-      <div className="mb-3.5">
-        <AlbumFaceAuto albumId={album.id} />
-      </div>
+      {/* KHÔNG có bảng gom khuôn mặt ở đây, và đó là chủ ý.
+          Bản trước quét khuôn mặt ngay trên màn này: studio mở album ra là trình
+          duyệt chạy ngầm. Studio nói thẳng bước đó thừa — studio không tìm mặt
+          bao giờ, chỉ KHÁCH mới cần. Giờ máy chủ tự quét (cron
+          /api/cron/face-scan). Muốn xem đã quét tới đâu thì gọi
+          GET /api/albums/<id>/face-scan; muốn chạy ngay thì POST cùng đường dẫn. */}
 
       {/* Hợp đồng đồng bộ Drive có HAI album. Khi album giao khách đã sẵn sàng,
           link khách của album chọn ảnh tự chuyển sang đó — nhìn ở màn này thì

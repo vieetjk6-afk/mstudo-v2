@@ -11,6 +11,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { faceChips, type PersonChip } from "@/lib/face-people";
+import { dangQuet } from "@/lib/face-pending";
 import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
@@ -162,6 +163,9 @@ export default async function PublicAlbumPage({
   let disliked: string[] = [];
   let notes: Record<string, string> = {};
   let people: PersonChip[] = [];
+  // Máy chủ còn đang quét → khối tìm theo khuôn mặt nói "đang chuẩn bị" thay
+  // vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
+  let facePreparing = false;
   if (!hasPassword) {
     const [p, { data: s }, { data: sel }, { data: dis }, { data: ppl }, { data: pplLinks }] =
       await Promise.all([
@@ -217,6 +221,7 @@ export default async function PublicAlbumPage({
     // lọc theo source, nên một chip trỏ vào ảnh không hiện là một chip bấm vào
     // ra lưới trống.
     people = faceChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id)));
+    if (people.length === 0) facePreparing = await dangQuet(admin, album.id);
   }
 
   return (
@@ -242,6 +247,7 @@ export default async function PublicAlbumPage({
       shareIds={shareIds}
       initialDriveFolders={driveFolders}
       initialPeople={people}
+      facePreparing={facePreparing}
       studioName={studioName}
       logoUrl={brand.logoUrl}
       studioHost={studioHost}

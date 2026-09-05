@@ -1,14 +1,15 @@
 -- ============================================================================
 -- KHO KHUÔN MẶT ĐÃ QUÉT
 --
--- Studio KHÔNG phải bấm gì: mở màn album là app tự quét nền rồi gom nhóm, khách
--- mở link là tìm được theo khuôn mặt ngay. Bảng này là thứ làm cho việc "tự
--- động" đó chịu được đời thực:
+-- Studio KHÔNG phải mở hay bấm gì: MÁY CHỦ tự quét (cron /api/cron/face-scan),
+-- khách mở link là tìm được theo khuôn mặt ngay. Bảng này là thứ làm cho việc
+-- "tự động" đó chịu được đời thực:
 --
---  • ĐÓNG TAB GIỮA CHỪNG. Album 800 ảnh quét mất nhiều phút. Không lưu lại từng
---    bước thì mỗi lần mở lại là quét lại từ đầu, và sẽ không bao giờ xong.
---  • ĐỔI NGƯỠNG GOM. Gom lại chỉ là phép tính trên vector đã có — không phải
---    quét lại cả nghìn ảnh.
+--  • HẾT GIỜ GIỮA CHỪNG. Một lượt serverless có trần 300 giây, mà album 800 ảnh
+--    tốn ~10 phút CPU. Không lưu lại từng mẻ thì mỗi lượt cron lại quét từ đầu,
+--    và sẽ không bao giờ xong.
+--  • GOM LẠI. Gom lại chỉ là phép tính trên vector đã có — không phải quét lại
+--    cả nghìn ảnh.
 --  • THÊM ẢNH SAU. Studio bổ sung ảnh thì chỉ quét phần mới.
 --
 -- Chỗ chiếm: mỗi khuôn mặt ~600 byte (128 số float4 + khung + khoá). Album 800
@@ -46,6 +47,22 @@ alter table public.photos
   add column if not exists faces_scanned_at timestamptz;
 create index if not exists photos_faces_pending_idx
   on public.photos (album_id) where faces_scanned_at is null;
+
+/*
+ * Dấu "album này đã gom nhóm rồi", và cũng là HÀNG ĐỢI GOM NHÓM.
+ *
+ * Bộ quét đặt lại về null mỗi khi ghi thêm khuôn mặt mới; lượt gom đặt lại
+ * thành now(). Nhờ vậy câu hỏi "album nào cần gom lại?" chỉ là một truy vấn có
+ * chỉ mục, thay vì phải đếm khuôn mặt của từng album mỗi 5 phút.
+ *
+ * Không có nó thì có một lỗ thật: lượt cron quét xong tấm cuối rồi HẾT GIỜ đúng
+ * trước bước gom — lượt sau thấy không còn gì để quét nên bỏ qua album, và album
+ * đó nằm mãi ở trạng thái "đã quét, chưa có người nào".
+ */
+alter table public.albums
+  add column if not exists faces_clustered_at timestamptz;
+create index if not exists albums_faces_pending_idx
+  on public.albums (id) where faces_clustered_at is null;
 
 create table if not exists public.album_faces (
   album_id   uuid not null references public.albums (id) on delete cascade,

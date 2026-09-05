@@ -90,12 +90,14 @@ interface DriveFolder { name: string; url: string; }
 interface G { id: string; slug: string; title: string; event_date: string | null; cover_url: string | null; hasPassword: boolean; allowDownload?: boolean; driveIsEdited?: boolean; watermark?: string | null; }
 
 export default function GalleryView({
-  gallery, initialPhotos, initialPeople, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
+  gallery, initialPhotos, initialPeople, facePreparing = false, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
 }: {
   gallery: G;
   initialPhotos: P[] | null;
-  /** Khuôn mặt studio đã gom sẵn — khách bấm để lọc, không tải mô hình nào. */
+  /** Khuôn mặt máy chủ đã gom sẵn — khách bấm để lọc, không tải mô hình nào. */
   initialPeople?: PersonChip[];
+  /** Máy chủ còn đang quét khuôn mặt album này (xem @/lib/face-pending). */
+  facePreparing?: boolean;
   totalPhotos?: number | null;
   initialSources: S[] | null;
   initialDriveFolders?: DriveFolder[];
@@ -119,6 +121,8 @@ export default function GalleryView({
   const [originalFolders, setOriginalFolders] = useState<DriveFolder[]>(initialOriginalFolders);
   const allowDownload = gallery.allowDownload !== false;
   const [password, setPassword] = useState("");
+  // Album có mật khẩu: cờ "máy chủ đang quét khuôn mặt" đến cùng lượt mở khoá.
+  const [preparing, setPreparing] = useState(facePreparing);
   const [pwError, setPwError] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
 
@@ -236,6 +240,7 @@ export default function GalleryView({
     setDriveFolders(data.driveFolders ?? []);
     setOriginalFolders(data.originalFolders ?? []);
     setPeople(data.people ?? []);
+    setPreparing(!!data.facePreparing);
     setUnlocked(true);
   }
 
@@ -426,9 +431,9 @@ export default function GalleryView({
 
         {/* tabs */}
         {/* TÌM ẢNH THEO KHUÔN MẶT — album giao khách.
-            Cùng khối với album chọn ảnh: studio đã gom sẵn nên bấm một mặt chỉ
+            Cùng khối với album chọn ảnh: máy chủ đã gom sẵn nên bấm một mặt chỉ
             là tra bảng, khách không tải mô hình nào. */}
-        <FaceFinder people={people} activeId={personId} onPick={setPersonId} driveIdOf={driveIdOf} />
+        <FaceFinder people={people} activeId={personId} onPick={setPersonId} driveIdOf={driveIdOf} slug={gallery.slug} password={password} preparing={preparing} />
 
         {tabSources.length > 1 && (
           <div className="mt-6 flex flex-wrap gap-2">

@@ -6,6 +6,7 @@ import { getOriginalFolders } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { faceChips } from "@/lib/face-people";
+import { dangQuet } from "@/lib/face-pending";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,9 @@ export async function POST(req: Request, { params }: { params: { slug: string } 
     admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
   ]);
   const people = faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p: { id: string }) => p.id)));
+  // Chưa có mặt nào: phân biệt "máy chủ đang quét" với "quét rồi, album không có
+  // mặt người". Trang chỉ hiện câu hẹn khách quay lại ở trường hợp đầu.
+  const facePreparing = people.length === 0 ? await dangQuet(admin, album.id) : false;
 
-  return NextResponse.json({ photos, sources, driveFolders, originalFolders, people });
+  return NextResponse.json({ photos, sources, driveFolders, originalFolders, people, facePreparing });
 }

@@ -1,9 +1,12 @@
 /**
- * Chép các gói MÔ HÌNH CHẠY TRONG TRÌNH DUYỆT từ node_modules ra public/.
+ * Chép gói MÔ HÌNH CHẠY TRONG TRÌNH DUYỆT từ node_modules ra public/.
  *
  *   • public/mediapipe/  — WASM của MediaPipe (tìm khuôn mặt, nhắm mắt)
- *   • public/face-model/ — trọng số nhận dạng danh tính của face-api (gom ảnh
- *                          theo từng người)
+ *
+ * KHÔNG còn public/face-model/. Nhận dạng DANH TÍNH (ai là ai) đã chuyển hẳn lên
+ * máy chủ — xem @/lib/face-node — nên 7,8 MB trọng số + thư viện UMD không cần
+ * gửi xuống trình duyệt của ai nữa. Trọng số máy chủ đọc thẳng từ node_modules;
+ * next.config.mjs khai báo chúng trong outputFileTracingIncludes.
  *
  * VÌ SAO PHẢI TỰ PHỤC VỤ, không nạp thẳng từ CDN như hướng dẫn của MediaPipe:
  * CSP của repo (next.config.mjs) chỉ cho `script-src 'self'` cộng vài host của
@@ -60,10 +63,8 @@ function copy(label, from, to, only) {
     return;
   }
   mkdirSync(to, { recursive: true });
-  // Đếm những file THẬT SỰ chép lần này, không đếm cả thư mục đích: hai lượt chép
-  // dưới đây cùng ghi vào public/face-model, nên đọc thư mục sẽ báo cả file của
-  // lượt trước. Quan trọng hơn: một thư mục đích còn sót từ bản dựng cũ sẽ khiến
-  // hàng rào dưới đây tưởng là chép thành công.
+  // Đếm những file THẬT SỰ chép lần này, không đếm cả thư mục đích: một thư mục
+  // đích còn sót từ bản dựng cũ sẽ khiến hàng rào dưới đây tưởng là chép thành công.
   const copied = [];
   if (only) {
     for (const f of only) {
@@ -92,29 +93,4 @@ copy(
   "MediaPipe → public/mediapipe",
   join(ROOT, "node_modules", "@mediapipe", "tasks-vision", "wasm"),
   join(ROOT, "public", "mediapipe")
-);
-
-// CHỈ lấy mô hình nhận dạng danh tính. Gói face-api còn kèm bộ dò mặt và bộ
-// landmark riêng của nó, nhưng hai việc đó MediaPipe đã làm rồi — chép thêm là
-// bắt studio tải hai lần cùng một thứ.
-copy(
-  "mô hình nhận dạng khuôn mặt → public/face-model",
-  join(ROOT, "node_modules", "@vladmandic", "face-api", "model"),
-  join(ROOT, "public", "face-model"),
-  ["face_recognition_model-weights_manifest.json", "face_recognition_model.bin"]
-);
-
-// Và cả THƯ VIỆN, dưới dạng UMD tự phục vụ.
-//
-// Vì sao không `import` gói này như một phụ thuộc bình thường: bản ESM của nó gọi
-// `require()` theo kiểu webpack không phân tích tĩnh được ("Critical dependency"),
-// và kéo theo cả nhánh TensorFlow cho Node vào gói trình duyệt. Bản UMD nạp bằng
-// thẻ <script> từ chính máy chủ của app thì không đụng tới bundler chút nào, vẫn
-// hợp CSP (`script-src 'self'`), và chỉ tải khi studio thật sự bật tính năng.
-// Xem ghi chú ở src/lib/face-embed.ts — ĐỪNG "dọn dẹp" bằng cách import lại.
-copy(
-  "thư viện nhận dạng (UMD) → public/face-model",
-  join(ROOT, "node_modules", "@vladmandic", "face-api", "dist"),
-  join(ROOT, "public", "face-model"),
-  ["face-api.js"]
 );

@@ -5,6 +5,7 @@ import { fetchAllPhotos } from "@/lib/photos";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { pickFolderLinks } from "@/lib/album-original";
 import { faceChips } from "@/lib/face-people";
+import { dangQuet } from "@/lib/face-pending";
 
 export const dynamic = "force-dynamic";
 
@@ -90,6 +91,8 @@ export async function POST(
   for (const s of sel ?? []) if (s.client_note) notes[s.photo_id] = s.client_note;
   for (const d of dis ?? []) if (d.client_note) notes[d.photo_id] = d.client_note;
 
+  const people = faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id)));
+
   return NextResponse.json({
     photos: photos ?? [],
     sources: (sources ?? []).map(({ id, name, position }) => ({ id, name, position })),
@@ -97,6 +100,9 @@ export async function POST(
     selected,
     disliked,
     notes,
-    people: faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id))),
+    people,
+    // Chưa có mặt nào: phân biệt "máy chủ đang quét" với "quét rồi mà album
+    // không có mặt người" — hai câu trả lời rất khác nhau cho khách.
+    facePreparing: people.length === 0 ? await dangQuet(admin, album.id) : false,
   });
 }

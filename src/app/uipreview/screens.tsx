@@ -20,9 +20,7 @@ import TokenSwatches from "./TokenSwatches";
 import AiCompareDemo from "./AiCompareDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
-import FaceGroupDemo from "./FaceGroupDemo";
 import FaceFinderDemo from "./FaceFinderDemo";
-import FaceAutoDemo from "./FaceAutoDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
 import * as f from "./fixtures";
@@ -56,17 +54,9 @@ export const SCREENS: Record<
     title: "Lọc ảnh AI — bộ nhận diện khuôn mặt (mặt vẽ bằng canvas)",
     render: () => <AiFaceDemo />,
   },
-  "gom-theo-nguoi": {
-    title: "Lọc ảnh AI — gom ảnh theo từng người (mặt vẽ bằng canvas)",
-    render: () => <FaceGroupDemo />,
-  },
   "loc-theo-nguoi": {
     title: "Album khách — tìm ảnh theo khuôn mặt (dữ liệu giả)",
     render: () => <FaceFinderDemo />,
-  },
-  "tu-dong-gom-mat": {
-    title: "Màn album studio — bảng tự động gom khuôn mặt (Supabase hỏng có chủ ý)",
-    render: () => <FaceAutoDemo />,
   },
   "bao-chua-chay-sql": {
     title: "Bảng điều khiển — báo chưa bật được tìm theo khuôn mặt",
