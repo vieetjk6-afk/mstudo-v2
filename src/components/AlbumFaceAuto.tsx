@@ -16,8 +16,8 @@ import {
 } from "@/lib/face-group";
 import {
   CHUNK,
-  PER_VISIT,
   chunks,
+  nextBatch,
   pending,
   shouldCluster,
   stateOf,
@@ -61,6 +61,17 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
   /** Chặn chạy hai lần: StrictMode gắn effect hai lượt ở bản dev. */
   const busy = useRef(false);
   const stop = useRef(false);
+  /**
+   * Ảnh đã thử quét và hỏng trong phiên này (Drive lỗi, định dạng lạ).
+   *
+   * Không nhớ lại thì chúng không bao giờ được đánh dấu đã quét, danh sách còn
+   * lại không bao giờ ngắn đi, và lượt quét TỰ KHỞI ĐỘNG LẠI MÃI MÃI — đốt CPU
+   * của studio, gọi Drive không ngừng, mà màn hình vẫn hiện "đang quét" một cách
+   * hoàn toàn hợp lý.
+   */
+  const failed = useRef<Set<string>>(new Set());
+  /** Có quét thêm được khuôn mặt nào trong lần mở này không — để biết cần gom lại. */
+  const freshFaces = useRef(0);
 
   useEffect(() => {
     try {
@@ -197,7 +208,7 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
     stop.current = false;
     setErr(null);
     try {
-      const todo = pending(photos).slice(0, PER_VISIT);
+      const todo = nextBatch(photos, failed.current);
       if (todo.length > 0) {
         setRunning(true);
         const [{ loadFaceModel, detectFull, faceScanSupported }, { loadRecognizer, embedFace, faceEmbedSupported }] =
@@ -238,12 +249,16 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
               // cổng hoa sẽ được quét lại mãi mãi và lượt quét không bao giờ xong.
               doneIds.push(p.id);
             } catch {
-              // Một tấm hỏng (Drive lỗi, định dạng lạ) không được chặn cả album.
-              // KHÔNG đánh dấu đã quét: lần mở sau thử lại.
+              // Một tấm hỏng không được chặn cả album. KHÔNG ghi
+              // `faces_scanned_at`: lần mở SAU vẫn thử lại, biết đâu chỉ là trục
+              // trặc nhất thời. Nhưng phải nhớ trong phiên này — nếu không, vòng
+              // tự chạy quay lại đúng tấm đó ngay lập tức, mãi mãi.
+              failed.current.add(p.id);
             }
             // Nhường luồng cho giao diện — studio còn đang làm việc khác.
             await new Promise((r) => setTimeout(r, 0));
           }
+          freshFaces.current += rows.length;
           if (rows.length) {
             const { error } = await supabase.from("album_faces").upsert(rows, { onConflict: "photo_id,at" });
             if (error) throw error;
@@ -280,11 +295,24 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
   useEffect(() => {
     if (!ready || off || running || clustering || busy.current) return;
     if (photos.length === 0) return;
-    if (pending(photos).length > 0) {
+    // Còn tấm CHƯA THỬ thì quét tiếp. `nextBatch` đã bỏ những tấm hỏng, nên khi
+    // chỉ còn chúng thì vòng này dừng hẳn thay vì quay mãi.
+    if (nextBatch(photos, failed.current).length > 0) {
       void scan();
       return;
     }
-    if (shouldCluster(photos, saved.length, 1) && saved.length === 0) void cluster();
+    /*
+     * Gom nhóm khi đã quét xong phần quét được.
+     *
+     * Điều kiện thật là `freshFaces`, KHÔNG phải `saved.length === 0` như bản
+     * trước: cái đó nghĩa là album đã có người rồi thì THÊM ẢNH MỚI sẽ được quét
+     * nhưng không bao giờ được gom vào ai — ảnh mới biến mất khỏi mọi khuôn mặt,
+     * lặng lẽ.
+     */
+    if (shouldCluster(photos, saved.length, freshFaces.current, failed.current.size)) {
+      freshFaces.current = 0;
+      void cluster();
+    }
   }, [ready, off, photos, saved.length, running, clustering, scan, cluster]);
 
   useEffect(() => () => {
@@ -298,6 +326,7 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
     clustering,
     stoppedForNow: false,
     loaded,
+    failed: failed.current.size,
     error: err,
   });
 
@@ -332,7 +361,9 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
         ? `Đang gom khuôn mặt… ${st.progress.done}/${st.progress.total} ảnh`
         : st.kind === "clustering"
           ? "Đang nhóm các khuôn mặt lại…"
-          : st.kind === "paused"
+          : st.kind === "stuck"
+            ? `Đã gom xong ${st.progress.done}/${st.progress.total} ảnh. ${st.failed} ảnh không đọc được — file có thể đã bị xoá trên Drive hoặc sai định dạng.`
+            : st.kind === "paused"
             ? `Tạm dừng ở ${st.progress.done}/${st.progress.total} ảnh — mở lại màn này là chạy tiếp.`
             : st.kind === "done"
               ? `Xong — ${st.people} người. Khách mở album là tìm được theo khuôn mặt.`
@@ -369,7 +400,7 @@ export default function AlbumFaceAuto({ albumId }: { albumId: string }) {
         {off ? "Đang tắt trên máy này. Bật lại để app tự gom khuôn mặt cho khách tìm." : line}
       </p>
 
-      {(st.kind === "scanning" || st.kind === "paused") && (
+      {(st.kind === "scanning" || st.kind === "paused" || st.kind === "stuck") && (
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--sf2, var(--surface2))" }}>
           <div
             className="h-full rounded-full transition-[width]"

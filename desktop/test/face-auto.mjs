@@ -18,6 +18,7 @@ import {
   CHUNK,
   PER_VISIT,
   chunks,
+  nextBatch,
   pending,
   progressOf,
   shouldCluster,
@@ -36,6 +37,8 @@ const ok = (cond, label) => {
   }
 };
 const eq = (a, b, label) => ok(JSON.stringify(a) === JSON.stringify(b), `${label} — ${JSON.stringify(a)}`);
+
+const base = { savedPeople: 0, running: false, clustering: false, stoppedForNow: false, loaded: true };
 
 const ph = (id, scanned) => ({
   id,
@@ -64,6 +67,40 @@ console.log("\n— Còn phải quét tấm nào —");
     "thiếu hẳn cột faces_scanned_at → coi như chưa quét");
 }
 
+/* ── Ảnh hỏng vĩnh viễn: cái bẫy quay vòng vô tận ─────────────────────────── */
+console.log("\n— Ảnh hỏng vĩnh viễn —");
+/*
+ * Một tấm hỏng vĩnh viễn (file bị xoá trên Drive, định dạng lạ) KHÔNG BAO GIỜ
+ * được đánh dấu đã quét. Nếu không loại nó ra, danh sách còn lại không bao giờ
+ * ngắn đi → lượt quét tự khởi động lại mãi mãi: đốt CPU của studio, gọi Drive
+ * không ngừng, mà màn hình vẫn hiện "đang quét" một cách hoàn toàn hợp lý.
+ */
+{
+  const list = [ph("a", true), ph("hong", false), ph("b", false)];
+  eq(nextBatch(list, new Set()).map((p) => p.id), ["hong", "b"], "chưa hỏng gì thì lấy hết phần chưa quét");
+  eq(nextBatch(list, new Set(["hong"])).map((p) => p.id), ["b"], "bỏ tấm đã thử và hỏng");
+  eq(nextBatch(list, new Set(["hong", "b"])), [], "TẤT CẢ phần còn lại đều hỏng → không còn gì để làm");
+  eq(nextBatch(list, new Set(), 1).map((p) => p.id), ["hong"], "tôn trọng trần mỗi lần mở");
+  eq(nextBatch(list, new Set(), 0), [], "trần 0 → không lấy gì, không nổ");
+}
+{
+  // Và gom nhóm KHÔNG được đợi những tấm sẽ không bao giờ xong.
+  const list = [ph("a", true), ph("hong", false)];
+  ok(!shouldCluster(list, 0, 3, 0), "còn ảnh chưa quét → chưa gom");
+  ok(shouldCluster(list, 0, 3, 1), "…nhưng nếu tấm còn lại đã hỏng thì gom, đừng đợi mãi");
+}
+{
+  const list = [ph("a", true), ph("hong", false)];
+  const st = stateOf({ ...base, photos: list, failed: 1 });
+  eq(st.kind, "stuck", "còn ảnh chưa quét mà tất cả đều hỏng → nói ra, không để thanh tiến độ treo");
+  eq(st.failed, 1, "…và nói rõ bao nhiêu tấm hỏng");
+  eq(
+    stateOf({ ...base, photos: [ph("a", true), ph("b", false), ph("c", false)], failed: 1 }).kind,
+    "paused",
+    "còn tấm chưa thử thì vẫn là tạm dừng, chưa phải bí"
+  );
+}
+
 /* ── Cắt mẻ ───────────────────────────────────────────────────────────────── */
 console.log("\n— Cắt mẻ để ghi dần —");
 eq(chunks([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]], "cắt đều, mẻ cuối ngắn hơn");
@@ -89,7 +126,6 @@ ok(!shouldCluster([], 0, 0), "album rỗng → không gom");
 
 /* ── Dòng trạng thái cho studio ───────────────────────────────────────────── */
 console.log("\n— Trạng thái hiện cho studio —");
-const base = { savedPeople: 0, running: false, clustering: false, stoppedForNow: false, loaded: true };
 eq(stateOf({ ...base, photos: [] }).kind, "empty", "đã tải xong, album thật sự không có ảnh");
 /*
  * Phép quan trọng nhất của cả bộ này. Danh sách ảnh khởi tạo bằng mảng rỗng, nên
