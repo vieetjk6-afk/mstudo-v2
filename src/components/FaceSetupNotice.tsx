@@ -49,6 +49,17 @@ export default function FaceSetupNotice() {
    * không được phép tự nó thành một báo động giả.
    */
   const [thieuCron, setThieuCron] = useState(false);
+  /**
+   * Project Supabase mà app ĐANG THẬT SỰ nói chuyện, cùng link mở thẳng SQL
+   * Editor của nó.
+   *
+   * Đây là hàng rào cho kiểu hỏng đã ngốn tám vòng: trên máy studio thường còn
+   * mở sẵn cả project CŨ. Chạy SQL trong tab đó thì Supabase báo "Success" đàng
+   * hoàng, mà app vẫn không thấy bảng nào — không lỗi, không manh mối, và studio
+   * hoàn toàn có lý khi nói "tôi chạy rồi". Bấm đúng link dưới đây thì không
+   * chạy nhầm project được nữa.
+   */
+  const [duAn, setDuAn] = useState<{ ma: string | null; sqlEditor: string | null }>({ ma: null, sqlEditor: null });
 
   useEffect(() => {
     const supabase = createClient();
@@ -95,16 +106,23 @@ export default function FaceSetupNotice() {
   }, [nhip]);
 
   useEffect(() => {
-    // Chỉ hỏi khi phần bảng đã sạch: còn thiếu bảng thì việc phải làm đã rõ rồi,
-    // thêm một cảnh báo nữa chỉ làm loãng.
-    if (!missing || missing.length > 0) return;
+    if (!missing) return;
     let alive = true;
     void (async () => {
       try {
         const res = await fetch("/api/face-status", { cache: "no-store" });
         if (!res.ok) return;
-        const d = (await res.json()) as { ok?: boolean; cronSecret?: boolean };
-        if (alive && d.ok === true && d.cronSecret === false) setThieuCron(true);
+        const d = (await res.json()) as {
+          ok?: boolean;
+          cronSecret?: boolean;
+          duAn?: string | null;
+          sqlEditor?: string | null;
+        };
+        if (!alive) return;
+        setDuAn({ ma: d.duAn ?? null, sqlEditor: d.sqlEditor ?? null });
+        // Cảnh báo cron chỉ khi phần bảng đã sạch: còn thiếu bảng thì việc phải
+        // làm đã rõ rồi, thêm một cảnh báo nữa chỉ làm loãng.
+        if (d.ok === true && d.cronSecret === false) setThieuCron(true);
       } catch {
         /* im lặng — xem ghi chú ở khai báo state */
       }
@@ -168,7 +186,22 @@ export default function FaceSetupNotice() {
       <ol className="mt-1.5 ml-4 list-decimal text-[12.5px] leading-relaxed" style={{ color: "var(--tx2, #444)" }}>
         <li>Bấm <b>Chép SQL</b> bên dưới — toàn bộ nội dung file vào clipboard luôn.</li>
         <li>
-          Mở <b>Supabase → SQL Editor → New query</b>, dán vào, bấm <b>Run</b>.
+          {duAn.sqlEditor ? (
+            <>
+              Mở{" "}
+              <a
+                href={duAn.sqlEditor}
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "var(--ac, #0a7)", textDecoration: "underline", fontWeight: 700 }}
+              >
+                SQL Editor của project {duAn.ma}
+              </a>{" "}
+              (link này trỏ đúng project app đang dùng), dán vào, bấm <b>Run</b>.
+            </>
+          ) : (
+            <>Mở <b>Supabase → SQL Editor → New query</b>, dán vào, bấm <b>Run</b>.</>
+          )}
         </li>
         <li>Quay lại đây bấm <b>Kiểm tra lại</b>. Bảng này biến mất là xong.</li>
       </ol>
@@ -178,6 +211,14 @@ export default function FaceSetupNotice() {
         Chạy xong là hết việc: máy chủ tự quét khuôn mặt cho mọi album đã phát hành, studio không phải mở
         hay bấm gì thêm. Chạy lại nhiều lần vô hại.
       </p>
+      {duAn.ma && (
+        // Cái bẫy im lặng nhất sau lần chuyển project: chạy SQL trong tab project
+        // CŨ thì Supabase vẫn báo Success, mà app không thấy bảng nào.
+        <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--am, #c2410c)" }}>
+          Phải đúng project <b>{duAn.ma}</b>. Chạy nhầm project khác thì Supabase vẫn báo <i>Success</i> mà
+          bảng này không biến mất.
+        </p>
+      )}
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <button
           type="button"

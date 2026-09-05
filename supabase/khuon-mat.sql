@@ -317,3 +317,22 @@ create policy album_faces_owner_rw on public.album_faces
     )
   );
 
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- KIỂM TRA — bảng kết quả dưới đây là BẰNG CHỨNG đã chạy đúng chỗ.
+-- Cột `co` phải là `t` (true) hết. Có `f` nào nghĩa là chưa xong.
+-- ══════════════════════════════════════════════════════════════════════════
+select 'album_people'   as thu, to_regclass('public.album_people')   is not null as co
+union all
+select 'album_photo_people', to_regclass('public.album_photo_people') is not null
+union all
+select 'album_faces', to_regclass('public.album_faces') is not null
+union all
+select 'photos.faces_scanned_at', exists (
+  select 1 from information_schema.columns
+  where table_schema = 'public' and table_name = 'photos' and column_name = 'faces_scanned_at')
+union all
+select 'albums.faces_clustered_at', exists (
+  select 1 from information_schema.columns
+  where table_schema = 'public' and table_name = 'albums' and column_name = 'faces_clustered_at');
+

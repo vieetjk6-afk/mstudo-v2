@@ -274,7 +274,7 @@ if (missing.length) {
 }
 
 /** Đọc một danh sách file SQL rồi xếp lại theo 3 nhịp: bảng → vá → quyền. */
-function assemble(files, headLines) {
+function assemble(files, headLines, footLines = []) {
   const tables = [];
   const setup = [];
   const grants = [];
@@ -313,13 +313,14 @@ function assemble(files, headLines) {
     line,
     ...grants,
   ];
+  if (footLines.length) body.push("", ...footLines);
   return { text: body.join("\n").replace(/\n{4,}/g, "\n\n\n") + "\n", nStmt };
 }
 
 /** Ghi, hoặc ở chế độ --check thì đối chiếu với bản trên đĩa. */
-function emit(name, files, headLines) {
+function emit(name, files, headLines, footLines = []) {
   const out = join(HERE, name);
-  const { text, nStmt } = assemble(files, headLines);
+  const { text, nStmt } = assemble(files, headLines, footLines);
   if (process.argv.includes("--check")) {
     let onDisk = "";
     try {
@@ -370,6 +371,36 @@ for (let i = 1; i < MOI.length; i++) {
   }
 }
 
+/*
+ * Câu lệnh CUỐI của mỗi gói tính năng: một SELECT liệt kê những gì vừa tạo.
+ *
+ * Vì sao cần. Một file toàn CREATE/ALTER kết thúc bằng "Success. No rows
+ * returned." — với người không đọc SQL thì câu đó đọc y như "chẳng có gì xảy
+ * ra". Tệ hơn: chạy nhầm project CŨ cũng cho ra đúng câu ấy. Một bảng kết quả
+ * hiện ra là bằng chứng nhìn thấy được, chụp màn hình gửi đi được, và nói đúng
+ * project nào vừa nhận thay đổi.
+ */
+const KIEM_TRA_CUOI = [
+  line,
+  "-- KIỂM TRA — bảng kết quả dưới đây là BẰNG CHỨNG đã chạy đúng chỗ.",
+  "-- Cột `co` phải là `t` (true) hết. Có `f` nào nghĩa là chưa xong.",
+  line,
+  "select 'album_people'   as thu, to_regclass('public.album_people')   is not null as co",
+  "union all",
+  "select 'album_photo_people', to_regclass('public.album_photo_people') is not null",
+  "union all",
+  "select 'album_faces', to_regclass('public.album_faces') is not null",
+  "union all",
+  "select 'photos.faces_scanned_at', exists (",
+  "  select 1 from information_schema.columns",
+  "  where table_schema = 'public' and table_name = 'photos' and column_name = 'faces_scanned_at')",
+  "union all",
+  "select 'albums.faces_clustered_at', exists (",
+  "  select 1 from information_schema.columns",
+  "  where table_schema = 'public' and table_name = 'albums' and column_name = 'faces_clustered_at');",
+  "",
+]
+
 // ── Gói riêng từng tính năng ────────────────────────────────────────────────
 for (const [name, g] of Object.entries(NHOM)) {
   const files = g.files.map((rel) => {
@@ -391,7 +422,7 @@ for (const [name, g] of Object.entries(NHOM)) {
     ...g.ghiChu,
     line,
     "",
-  ]);
+  ], KIEM_TRA_CUOI);
 }
 
 emit("cap-nhat.sql", moiFiles, [
