@@ -108,8 +108,14 @@ export type PeopleRow = {
   id: string;
   name: string;
   cover_photo_id: string | null;
-  /** [x, y, rộng, cao] chuẩn hoá 0…1 — khung khuôn mặt trên ảnh bìa. */
-  cover_box: number[] | null;
+  /**
+   * [x, y, rộng, cao] chuẩn hoá 0…1 — khung khuôn mặt trên ảnh bìa.
+   *
+   * Cho phép `undefined` chứ không chỉ `null`: đây là cột THÊM SAU, nên trên một
+   * database chưa chạy lại migration thì hàng đọc lên đơn giản là không có nó.
+   * Khi ấy ảnh thẻ lùi về lấy cả tấm — kém hơn, nhưng vẫn chạy.
+   */
+  cover_box?: number[] | null;
   /**
    * Tâm cụm 128 chiều. Gửi xuống máy khách để phép so ảnh khách tự tải lên chạy
    * NGAY TRÊN MÁY HỌ: ảnh của khách không rời khỏi thiết bị, và không tốn một
@@ -117,8 +123,8 @@ export type PeopleRow = {
    * của những người TRONG CHÍNH album đó — mà ảnh của họ thì link ấy vốn đã cho
    * xem. Đánh đổi đó đáng hơn là bắt khách gửi ảnh mặt mình lên máy chủ.
    */
-  descriptor: number[] | null;
-  face_count: number;
+  descriptor?: number[] | null;
+  face_count?: number;
   position: number;
 };
 /** Hàng `album_photo_people`. */
@@ -185,7 +191,7 @@ export function faceChips(
         p.cover_photo_id && albumPhotoIds.has(p.cover_photo_id) ? p.cover_photo_id : null,
       coverBox: p.cover_box && p.cover_box.length === 4 ? p.cover_box : null,
       descriptor: p.descriptor && p.descriptor.length > 0 ? p.descriptor : null,
-      faceCount: p.face_count,
+      faceCount: p.face_count ?? 0,
       photoIds: byPerson.get(p.id)!,
     }));
 }

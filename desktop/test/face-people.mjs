@@ -299,6 +299,19 @@ eq(chips[0].coverBox, [0.4, 0.2, 0.1, 0.15], "mang theo khung khuôn mặt để
   eq(same.map((c) => c.name), ["Anh Ba", "Bé An"], "cùng position thì xếp theo tên tiếng Việt");
 }
 eq(faceChips([], [], inAlbum), [], "album chưa lưu ai: không có mặt nào");
+{
+  // Database CHƯA chạy lại migration: hàng đọc lên không có `cover_box`, cũng
+  // không có `face_count`. Khối tìm theo khuôn mặt phải vẫn chạy, chỉ mất phần
+  // ảnh mặt cắt sẵn — chứ không biến mất hẳn.
+  const cu = faceChips(
+    [{ id: "P9", name: "Cô dâu", cover_photo_id: "p1", descriptor: null, position: 0 }],
+    [{ person_id: "P9", photo_id: "p1" }],
+    inAlbum
+  );
+  ok(cu.length === 1, "thiếu cột cover_box (migration cũ) vẫn ra khuôn mặt");
+  ok(cu[0].coverBox === null, "…chỉ là không có khung, ảnh thẻ lùi về lấy cả tấm");
+  ok(cu[0].faceCount === 0, "…thiếu face_count thì đếm 0, không phải undefined");
+}
 
 /* ── Cắt ảnh mặt ──────────────────────────────────────────────────────────── */
 console.log("\n— Cắt ảnh mặt bằng CSS —");
