@@ -39,6 +39,9 @@ const nextConfig = {
         "./node_modules/@vladmandic/face-api/model/**",
         "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
       ],
+      // Route phục vụ nội dung file SQL cho bảng "chưa bật được" — nó đọc file
+      // bằng fs lúc chạy, nên file phải đi kèm vào function.
+      "/api/setup-sql/[ten]": ["./supabase/*.sql"],
     },
     // Next 14.2 defaults dynamic route Router-Cache reuse to 0s, so going back
     // to a page just visited refetches the whole thing from the server. Reuse
