@@ -35,6 +35,10 @@ const nextConfig = {
         "./node_modules/@vladmandic/face-api/model/**",
         "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
       ],
+      "/api/albums/[id]/face-thu": [
+        "./node_modules/@vladmandic/face-api/model/**",
+        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+      ],
       "/api/album/[slug]/face-match": [
         "./node_modules/@vladmandic/face-api/model/**",
         "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",

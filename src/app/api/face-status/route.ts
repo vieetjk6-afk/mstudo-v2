@@ -131,19 +131,38 @@ export async function GET() {
     for (const r of rows ?? []) m.set(r.album_id, (m.get(r.album_id) ?? 0) + 1);
     return m;
   };
+  /*
+   * Phân trang bằng tay qua trần 1000 dòng của PostgREST.
+   *
+   * Không có nó thì con số này NÓI DỐI theo kiểu khó bắt nhất: tổng ảnh của mọi
+   * album cộng lại đúng 1000 chẵn, chia ra trông vẫn hợp lý (567 + 433), và
+   * người đọc không có cách nào biết là đã bị cắt. Đã xảy ra thật: bản báo cáo
+   * ghi album có 567 ảnh trong khi route theo album ghi 1000.
+   */
+  const doiTrang = async (bang: string, cot: string) => {
+    const out: Record<string, any>[] = [];
+    const size = 1000;
+    for (let from = 0; ; from += size) {
+      const { data, error } = await db.from(bang).select(cot).in("album_id", ids).range(from, from + size - 1);
+      if (error || !data || data.length === 0) break;
+      out.push(...(data as Record<string, any>[]));
+      if (data.length < size) break;
+    }
+    return out;
+  };
   const [photos, faces, people] = ids.length
     ? await Promise.all([
-        db.from("photos").select("album_id, faces_scanned_at, is_video").in("album_id", ids),
-        db.from("album_faces").select("album_id").in("album_id", ids),
-        db.from("album_people").select("album_id").in("album_id", ids),
+        doiTrang("photos", "album_id, faces_scanned_at, is_video"),
+        doiTrang("album_faces", "album_id"),
+        doiTrang("album_people", "album_id"),
       ])
-    : [{ data: [] }, { data: [] }, { data: [] }];
+    : [[], [], []];
 
-  const anhRows = (photos.data ?? []) as { album_id: string; faces_scanned_at: string | null; is_video: boolean | null }[];
+  const anhRows = photos as unknown as { album_id: string; faces_scanned_at: string | null; is_video: boolean | null }[];
   const tongAnh = dem(anhRows);
   const chuaQuet = dem(anhRows.filter((p) => !p.is_video && !p.faces_scanned_at));
-  const soMat = dem((faces.data ?? []) as { album_id: string }[]);
-  const soNguoi = dem((people.data ?? []) as { album_id: string }[]);
+  const soMat = dem(faces as unknown as { album_id: string }[]);
+  const soNguoi = dem(people as unknown as { album_id: string }[]);
 
   out.albums = ((albums ?? []) as Record<string, string | null>[]).map((a) => ({
     id: a.id,
