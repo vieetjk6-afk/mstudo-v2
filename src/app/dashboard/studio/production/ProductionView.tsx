@@ -2,11 +2,14 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Package, Clock } from "lucide-react";
+import { Package, Clock, Truck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { Panel, EmptyState } from "@/components/studio/ui";
+import { Panel, PanelHead, Pill, EmptyState } from "@/components/studio/ui";
 import { PRODUCT_STATUS_LABEL, type ProductStatus } from "@/lib/types";
 import { fmtDate, todayVN } from "@/lib/date";
+import {
+  ORDER_STATUS_LABEL, ORDER_STATUS_TONE, dueLabel, lateness, sortByUrgency, type OrderStatus,
+} from "@/lib/vendors";
 
 export type ProductRow = {
   id: string;
@@ -21,6 +24,12 @@ export type ProductRow = {
 
 type Staff = { id: string; full_name: string | null; email: string };
 
+/** Đơn đặt ngoài đang chạy — hình dữ liệu đúng phần page.tsx đọc lên. */
+export type VendorOrderRow = {
+  id: string; vendor_name: string | null; contract_id: string | null;
+  title: string; amount: number; status: OrderStatus; due_date: string | null;
+};
+
 const ORDER: ProductStatus[] = ["ordered", "in_progress", "done"];
 /** Màu pill hạng mục sản xuất — cùng bộ màu trạng thái của bản thiết kế. */
 const TONE: Record<ProductStatus, { fg: string; bg: string }> = {
@@ -29,7 +38,14 @@ const TONE: Record<ProductStatus, { fg: string; bg: string }> = {
   done: { fg: "var(--gn)", bg: "var(--gnS)" },
 };
 
-export default function ProductionView({ initial, staff }: { initial: ProductRow[]; staff: Staff[] }) {
+export default function ProductionView({
+  initial, staff, orders = [],
+}: {
+  initial: ProductRow[];
+  staff: Staff[];
+  /** Đơn đặt ngoài chưa giao khách (album in, makeup thuê ngoài, xe hoa…). */
+  orders?: VendorOrderRow[];
+}) {
   const supabase = createClient();
   const [rows, setRows] = useState<ProductRow[]>(initial);
   const [filter, setFilter] = useState<ProductStatus | "all">("all");
@@ -84,6 +100,50 @@ export default function ProductionView({ initial, staff }: { initial: ProductRow
           </div>
           <div className="h-2 overflow-hidden rounded-full" style={{ background: "var(--sf2)" }}>
             <div className="h-full rounded-full" style={{ width: `${pct}%`, background: "var(--ac)" }} />
+          </div>
+        </Panel>
+      )}
+
+      {/* ── Đơn đặt ngoài đang chạy ────────────────────────────────────────
+          Tiến độ IN nằm cùng chỗ với tiến độ HẬU KỲ: studio hỏi "album của khách
+          A xong chưa" ngay ở màn này, không phải mở thêm một màn khác. Chỉ hiện
+          đơn CHƯA giao khách và xếp trễ-hẹn lên đầu (xem @/lib/vendors). */}
+      {orders.length > 0 && (
+        <Panel>
+          <PanelHead icon={Truck} tone="amber" title="Đơn đặt ngoài đang chạy" count={String(orders.length)} />
+          <div className="flex flex-col">
+            {sortByUrgency(
+              orders.map((o) => ({
+                id: o.id, vendorId: null, vendorName: o.vendor_name, contractId: o.contract_id,
+                title: o.title, amount: o.amount, status: o.status, dueDate: o.due_date, note: null,
+              })),
+              today
+            ).map((o) => {
+              const late = lateness(o, today);
+              const job = rows.find((r) => r.contract?.id === o.contractId)?.contract;
+              return (
+                <Link
+                  key={o.id}
+                  href="/dashboard/studio/vendors"
+                  className="flex flex-wrap items-center gap-3 px-[18px] py-[11px]"
+                  style={{ borderTop: "1px solid var(--bd2)" }}
+                >
+                  <span className="min-w-[180px] flex-1">
+                    <span className="block text-[13px] font-semibold">{o.title}</span>
+                    <span className="mt-0.5 block text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                      {[o.vendorName, job?.client_name || job?.title].filter(Boolean).join(" · ") || "—"}
+                    </span>
+                  </span>
+                  <span
+                    className="tnum flex-none text-[11.5px] font-bold"
+                    style={{ color: late.level === "late" ? "var(--rd)" : late.level === "soon" ? "var(--am)" : "var(--tx3)" }}
+                  >
+                    {dueLabel(o, today)}
+                  </span>
+                  <Pill tone={ORDER_STATUS_TONE[o.status]}>{ORDER_STATUS_LABEL[o.status]}</Pill>
+                </Link>
+              );
+            })}
           </div>
         </Panel>
       )}

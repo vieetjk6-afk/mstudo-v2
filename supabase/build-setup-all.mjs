@@ -8,8 +8,17 @@
  *
  * Thêm file SQL mới → thêm tên vào ORDER bên dưới rồi chạy:
  *   node supabase/build-setup-all.mjs
+ *
+ * QUÊN BƯỚC ĐÓ LÀ LỖI IM LẶNG, và đã xảy ra thật: tám migration nằm trong repo
+ * mà không có trong ORDER, nên `setup-all.sql` dựng ra một database THIẾU BẢNG —
+ * app chạy được tới lúc ai đó mở đúng màn dùng bảng ấy. Nên script này giờ tự
+ * đối chiếu ORDER với thư mục `migrations/` và DỪNG nếu thiếu file nào.
+ *
+ * `node supabase/build-setup-all.mjs --check` kiểm mà KHÔNG ghi: thoát khác 0
+ * nếu thiếu file hoặc nếu setup-all.sql trên đĩa đã cũ so với các file SQL.
+ * Đây là thứ `npm run test:setup-all` gọi.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -48,8 +57,47 @@ const ORDER = [
   ["migrations/inbox_tiktok.sql", "Hộp thư: thêm kênh TikTok (chạy SAU inbox_unified)"],
   ["migrations/danh_gia_khach.sql", "Đánh giá khách: studio duyệt & trả lời (chạy SAU schema.sql)"],
   ["migrations/nguon_khach.sql", "Nguồn khách & phễu chuyển đổi (chạy SAU website_leads)"],
+  ["migrations/album_selection_done.sql", "Mốc 'khách đã chọn xong ảnh' trên album"],
+  ["migrations/watermark_opt_in.sql", "Watermark phải do studio TỰ BẬT, không mặc định bật"],
+  ["migrations/rls_thanh_vien_hop_dong.sql", "Vá quyền: thành viên studio lưu được hạng mục hợp đồng (chạy SAU studio_branches)"],
+  // Năm mục cuối của docs/goi-y-hoan-thien-app.md. Đều ALTER/thêm bảng trên nền
+  // đã có nên xếp sau; weather + crew_timesheet còn tham chiếu studio_appointments.
+  ["migrations/automations.sql", "Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)"],
+  ["migrations/crew_timesheet.sql", "Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)"],
+  ["migrations/vendors.sql", "Nhà cung cấp & đơn đặt ngoài"],
+  ["migrations/accounting.sql", "Phiếu thu có số & khoá sổ kế toán"],
+  ["migrations/weather.sql", "Toạ độ điểm chụp cho dự báo thời tiết (chạy SAU studio_appointments)"],
+  ["migrations/album_people.sql", "Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
+];
+
+/**
+ * Migration mà một project ĐANG CHẠY còn thiếu — gộp thành supabase/cap-nhat.sql.
+ *
+ * Vì sao cần file riêng: `setup-all.sql` là để dựng project TRẮNG. Chủ studio đã
+ * có database chạy thật thì phải chạy đúng phần mới. Trước đây tài liệu chỉ ghi
+ * TÊN các file ấy, và người dùng — hợp lý thôi — dán chính cái danh sách tên đó
+ * vào SQL Editor rồi nhận `syntax error at or near "accounting"`. Mở bảy tám file
+ * rồi dán bảy tám lượt cũng là bảy tám cơ hội bỏ sót một cái, mà bỏ sót một
+ * migration thì hỏng âm thầm: app chạy tới lúc ai đó mở đúng màn dùng bảng ấy.
+ *
+ * Nên: MỘT file, dán MỘT lần. Sinh ra từ cùng bộ máy với setup-all.sql (cùng cách
+ * xếp lại 3 nhịp bảng → vá → quyền) và cùng chịu `--check`, nên nó không thể cũ
+ * đi trong im lặng.
+ *
+ * Khi phát hành xong một đợt: xoá các dòng đã ra mắt khỏi đây, thêm dòng mới.
+ * Thứ tự phải khớp thứ tự trong ORDER.
+ */
+const MOI = [
+  "migrations/danh_gia_khach.sql",
+  "migrations/nguon_khach.sql",
+  "migrations/automations.sql",
+  "migrations/crew_timesheet.sql",
+  "migrations/vendors.sql",
+  "migrations/accounting.sql",
+  "migrations/weather.sql",
+  "migrations/album_people.sql",
 ];
 
 /**
@@ -175,48 +223,134 @@ const header = [
   "",
 ];
 
-const tables = [];
-const setup = [];
-const grants = [];
-let nStmt = 0;
+// ── Hàng rào: ORDER phải phủ HẾT thư mục migrations/ ────────────────────────
+// Chỉ xét `migrations/`: các file nền (schema.sql, push_subscriptions.sql…) nằm
+// ngay trong supabase/ và đã được khai tường minh ở đầu ORDER.
+const listed = new Set(ORDER.map(([rel]) => rel));
+const missing = readdirSync(join(HERE, "migrations"))
+  .filter((f) => f.endsWith(".sql"))
+  .map((f) => `migrations/${f}`)
+  .filter((rel) => !listed.has(rel))
+  .sort();
+if (missing.length) {
+  console.error(
+    `THIẾU ${missing.length} file trong ORDER của supabase/build-setup-all.mjs:\n` +
+      missing.map((m) => `  • ${m}`).join("\n") +
+      "\n\nsetup-all.sql dựng từ ORDER, nên thiếu ở đây là project mới sẽ thiếu bảng.\n" +
+      "Thêm từng dòng vào ORDER (ĐÚNG THỨ TỰ CHẠY, không phải alphabet) rồi chạy lại."
+  );
+  process.exit(1);
+}
 
-for (const [rel, desc] of ORDER) {
-  const sql = readFileSync(join(HERE, rel), "utf8");
-  const banner = ["", line, `-- ▶ ${rel} — ${desc}`, line].join("\n");
-  const mine = { tables: [], setup: [], grants: [] };
-  for (const stmt of splitStatements(sql)) {
-    if (!stmt.trim()) continue;
-    nStmt++;
-    const bucket = isGrantLike(stmt) ? "grants" : isTableCreate(stmt) ? "tables" : "setup";
-    mine[bucket].push(stmt.trim());
+/** Đọc một danh sách file SQL rồi xếp lại theo 3 nhịp: bảng → vá → quyền. */
+function assemble(files, headLines) {
+  const tables = [];
+  const setup = [];
+  const grants = [];
+  let nStmt = 0;
+
+  for (const [rel, desc] of files) {
+    const sql = readFileSync(join(HERE, rel), "utf8");
+    const banner = ["", line, `-- ▶ ${rel} — ${desc}`, line].join("\n");
+    const mine = { tables: [], setup: [], grants: [] };
+    for (const stmt of splitStatements(sql)) {
+      if (!stmt.trim()) continue;
+      nStmt++;
+      const bucket = isGrantLike(stmt) ? "grants" : isTableCreate(stmt) ? "tables" : "setup";
+      mine[bucket].push(stmt.trim());
+    }
+    for (const k of ["tables", "setup", "grants"]) {
+      const target = k === "tables" ? tables : k === "setup" ? setup : grants;
+      if (mine[k].length) target.push(banner, "", mine[k].join("\n\n"), "");
+    }
   }
-  for (const k of ["tables", "setup", "grants"]) {
-    const target = k === "tables" ? tables : k === "setup" ? setup : grants;
-    if (mine[k].length) target.push(banner, "", mine[k].join("\n\n"), "");
+
+  const body = [
+    ...headLines,
+    line,
+    "-- PHẦN 1 — TẠO BẢNG",
+    line,
+    ...tables,
+    "",
+    line,
+    "-- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH",
+    line,
+    ...setup,
+    "",
+    line,
+    "-- PHẦN 3 — PHÂN QUYỀN, RLS & POLICY (chạy sau khi mọi bảng/cột đã có)",
+    line,
+    ...grants,
+  ];
+  return { text: body.join("\n").replace(/\n{4,}/g, "\n\n\n") + "\n", nStmt };
+}
+
+/** Ghi, hoặc ở chế độ --check thì đối chiếu với bản trên đĩa. */
+function emit(name, files, headLines) {
+  const out = join(HERE, name);
+  const { text, nStmt } = assemble(files, headLines);
+  if (process.argv.includes("--check")) {
+    let onDisk = "";
+    try {
+      onDisk = readFileSync(out, "utf8");
+    } catch {
+      /* chưa có file → coi như đã cũ */
+    }
+    if (onDisk !== text) {
+      console.error(
+        `supabase/${name} ĐÃ CŨ so với các file SQL trong repo.\n` +
+          "Chạy: node supabase/build-setup-all.mjs"
+      );
+      process.exit(1);
+    }
+    console.log(`${name} khớp — ${files.length} file, ${nStmt} câu lệnh.`);
+  } else {
+    writeFileSync(out, text);
+    console.log(
+      `Đã ghi ${out} — ${files.length} file, ${nStmt} câu lệnh, ` +
+        `${text.split("\n").length} dòng.`
+    );
   }
 }
 
-const body = [
-  ...header,
-  line,
-  "-- PHẦN 1 — TẠO BẢNG",
-  line,
-  ...tables,
-  "",
-  line,
-  "-- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH",
-  line,
-  ...setup,
-  "",
-  line,
-  "-- PHẦN 3 — PHÂN QUYỀN, RLS & POLICY (chạy sau khi mọi bảng/cột đã có)",
-  line,
-  ...grants,
-];
+emit("setup-all.sql", ORDER, header);
 
-const out = join(HERE, "setup-all.sql");
-writeFileSync(out, body.join("\n").replace(/\n{4,}/g, "\n\n\n") + "\n");
-console.log(
-  `Đã ghi ${out} — ${ORDER.length} file, ${nStmt} câu lệnh, ` +
-    `${body.join("\n").split("\n").length} dòng.`
-);
+// ── Bản cập nhật cho project ĐANG CHẠY ──────────────────────────────────────
+const byRel = new Map(ORDER);
+const moiFiles = MOI.map((rel) => {
+  if (!byRel.has(rel)) {
+    console.error(
+      `MOI có "${rel}" nhưng ORDER thì không.\n` +
+        "Mọi file trong MOI phải nằm trong ORDER — nếu không, project mới sẽ thiếu nó."
+    );
+    process.exit(1);
+  }
+  return [rel, byRel.get(rel)];
+});
+// Thứ tự trong MOI phải khớp thứ tự chạy ở ORDER; lệch là chạy sai phụ thuộc.
+const rank = new Map(ORDER.map(([rel], i) => [rel, i]));
+for (let i = 1; i < MOI.length; i++) {
+  if (rank.get(MOI[i]) < rank.get(MOI[i - 1])) {
+    console.error(
+      `MOI xếp sai thứ tự: "${MOI[i]}" phải đứng TRƯỚC "${MOI[i - 1]}" (theo ORDER).`
+    );
+    process.exit(1);
+  }
+}
+
+emit("cap-nhat.sql", moiFiles, [
+  line,
+  "-- mstudo — CẬP NHẬT CHO PROJECT SUPABASE ĐANG CHẠY",
+  "--",
+  "-- File này do supabase/build-setup-all.mjs sinh ra — ĐỪNG sửa tay, sửa file",
+  "-- gốc rồi chạy lại: node supabase/build-setup-all.mjs",
+  "--",
+  "-- Cách dùng: mở Supabase → SQL Editor → dán TOÀN BỘ file này → Run. Một lần.",
+  "-- Mọi câu lệnh đều idempotent nên chạy lại nhiều lần vô hại.",
+  "--",
+  "-- Project MỚI TINH thì đừng dùng file này — dùng supabase/setup-all.sql, nó",
+  "-- gồm cả schema nền. File này CHỈ có phần mới, nó giả định database của bạn",
+  "-- đã có sẵn albums, photos, profiles, studio_contracts…",
+  line,
+  "",
+]);

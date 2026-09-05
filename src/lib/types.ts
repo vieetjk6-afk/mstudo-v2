@@ -505,6 +505,13 @@ export interface ContractPayment {
   note: string | null;
   proof_url: string | null;
   paid_at: string;
+  /**
+   * Số phiếu thu đã cấp cho lần thu này ('PT-2026-0007'). Cấp KHI IN, không cấp
+   * sẵn — xem migration accounting.sql. `undefined` khi project chưa chạy
+   * migration đó, nên mọi chỗ đọc phải chịu được điều này.
+   */
+  receipt_no?: string | null;
+  receipt_at?: string | null;
   created_at: string;
 }
 
@@ -857,6 +864,13 @@ export interface StudioAppointment {
   note: string | null;
   /** Khách có thấy mốc này ở cổng khách hàng không (lịch nội bộ đặt false). */
   client_visible: boolean;
+  /**
+   * Toạ độ điểm chụp — dùng để tra dự báo thời tiết và ước lượng đường đi
+   * (xem @/lib/weather, migration weather.sql). `undefined` khi project chưa
+   * chạy migration đó; mọi chỗ đọc phải chịu được điều này.
+   */
+  lat?: number | null;
+  lng?: number | null;
   branch_id: string | null;
   position: number;
   created_at: string;

@@ -34,6 +34,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
     description: `${studioName} — theo dõi lịch trình, thanh toán và sản phẩm của hợp đồng.`,
     // Trang riêng của một khách: không cho công cụ tìm kiếm lập chỉ mục.
     robots: { index: false, follow: false },
+    // Manifest riêng → khách cài "trang hợp đồng của tôi" lên màn hình chính.
+    manifest: `/portal/${params.token}/manifest.webmanifest`,
     openGraph: { title, type: "website" },
   };
 }

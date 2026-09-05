@@ -17,6 +17,11 @@ import InboxView from "@/app/dashboard/studio/inbox/InboxView";
 import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManager";
 import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
+import AiCompareDemo from "./AiCompareDemo";
+import AlbumDupDemo from "./AlbumDupDemo";
+import AiFaceDemo from "./AiFaceDemo";
+import FaceGroupDemo from "./FaceGroupDemo";
+import PeopleChipDemo from "./PeopleChipDemo";
 import * as f from "./fixtures";
 
 /**
@@ -36,6 +41,26 @@ export const SCREENS: Record<
     bare?: boolean;
   }
 > = {
+  "so-sanh-anh": {
+    title: "Lọc ảnh AI — khung so sánh (ảnh mẫu sinh trong trình duyệt)",
+    render: () => <AiCompareDemo />,
+  },
+  "anh-trung-khach": {
+    title: "Album khách — khối “Ảnh na ná nhau” (dữ liệu giả)",
+    render: () => <AlbumDupDemo />,
+  },
+  "khuon-mat": {
+    title: "Lọc ảnh AI — bộ nhận diện khuôn mặt (mặt vẽ bằng canvas)",
+    render: () => <AiFaceDemo />,
+  },
+  "gom-theo-nguoi": {
+    title: "Lọc ảnh AI — gom ảnh theo từng người (mặt vẽ bằng canvas)",
+    render: () => <FaceGroupDemo />,
+  },
+  "loc-theo-nguoi": {
+    title: "Album khách — chip lọc theo người (dữ liệu giả)",
+    render: () => <PeopleChipDemo />,
+  },
   "hop-dong": {
     title: "Hợp đồng — danh sách",
     render: () => <ContractsList rows={f.contracts} studio={f.studio} />,

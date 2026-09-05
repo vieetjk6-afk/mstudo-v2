@@ -16,9 +16,13 @@ import {
   FolderPlus,
   CopyCheck,
   ExternalLink,
+  Sparkles,
+  ChevronDown,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import AiFilterPanel from "@/components/AiFilterPanel";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
+import { matchKey } from "@/lib/face-people";
 import { triggerDownload } from "@/lib/download";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -39,7 +43,9 @@ interface SourceFile {
   handle?: any; // FileSystemFileHandle
 }
 
-const norm = (s: string) => stripExtension(s).trim().toLowerCase();
+// Luật ghép tên file dùng CHUNG với phần gom ảnh theo người. Hai luật gần giống
+// nhau đặt ở hai file sẽ lệch nhau lúc nào không biết, nên chỉ có một.
+const norm = matchKey;
 const ext = (n: string) => (n.includes(".") ? n.split(".").pop()!.toLowerCase() : "");
 const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "tif", "tiff", "bmp", "avif"]);
 const RAW_EXTS = new Set(["cr2", "cr3", "nef", "nrw", "arw", "sr2", "srf", "raf", "rw2", "orf", "dng", "pef", "srw", "raw", "3fr", "fff", "iiq", "rwl", "mrw", "mef", "mos", "erf", "kdc", "dcr", "x3f"]);
@@ -107,6 +113,8 @@ export default function FilterTool({
     { unlimited: boolean; limit: number | null; used: number; remaining: number | null } | null
   >(null);
   const [filterMsg, setFilterMsg] = useState<string | null>(null);
+  /** Khối "Lọc ảnh bằng AI" đang mở? Gập lại mặc định — xem chỗ dùng bên dưới. */
+  const [aiOpen, setAiOpen] = useState(false);
   const consumedKeyRef = useRef<string>("");
 
   useEffect(() => {
@@ -465,6 +473,49 @@ export default function FilterTool({
             </>
           )}
         </Step>
+
+        {/* LỌC ẢNH BẰNG AI — đứng giữa bước 1 và bước 2 vì nó ĂN nguồn ảnh của
+            bước 1 và ĐẺ RA danh sách của bước 2. Cố ý gập lại mặc định: ba bước
+            của công cụ vẫn là lối đi chính (khách gửi danh sách tên ảnh), đây là
+            lối phụ cho lúc studio muốn máy tự tìm ảnh nhoè & ảnh trùng. */}
+        <div className="rounded-[14px]" style={aiOpen ? undefined : { background: "var(--sf)", border: "1px solid var(--bd)" }}>
+          {aiOpen ? (
+            <AiFilterPanel
+              sourceFiles={sourceFiles}
+              sourceLabel={photoSource === "drive" ? `${driveFiles.length} ảnh từ link Drive` : `${localFiles.length} ảnh trong thư mục trên máy`}
+              compact={compact}
+              albums={albums}
+              albumId={albumId || undefined}
+              onUseNames={(names) => {
+                // Đưa thẳng vào ô "Tự nhập" của bước 2: từ đó mọi nút sẵn có
+                // (chép sang thư mục / xoá khỏi Drive) hoạt động y như khi studio
+                // dán danh sách của khách.
+                setMode("paste");
+                setPasteText(names.join("\n"));
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAiOpen(true)}
+              className="flex w-full items-center gap-2.5 px-[18px] py-3.5 text-left"
+            >
+              <span
+                className="flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full"
+                style={{ background: "var(--acS)", color: "var(--ac)" }}
+              >
+                <Sparkles size={15} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-semibold">Lọc ảnh bằng AI</span>
+                <span className="block text-[11.5px]" style={{ color: "var(--tx3)", textWrap: "pretty" }}>
+                  Để máy tự tìm ảnh nhoè, ảnh chụp lỡ và các chuỗi bấm liên tiếp — chạy trên máy này, không upload.
+                </span>
+              </span>
+              <ChevronDown size={16} style={{ flex: "none", color: "var(--tx3)" }} />
+            </button>
+          )}
+        </div>
 
         <Step no={2} title="Danh sách cần lọc" desc="Tên ảnh khách gửi — dán tay, hoặc lấy thẳng từ lượt chọn của một album.">
           <div className="mb-3 flex gap-2">

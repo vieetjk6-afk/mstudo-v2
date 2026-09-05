@@ -1558,6 +1558,211 @@ create table if not exists public.inbox_messages (
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/automations.sql — Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── Cấu hình từng luật ──────────────────────────────────────────────────────
+create table if not exists public.studio_automations (
+  id         uuid primary key default gen_random_uuid(),
+  owner_id   uuid not null references public.profiles (id) on delete cascade,
+
+  -- Khoá luật, thuộc TẬP ĐÓNG khai ở src/lib/automations.ts (AUTOMATION_RULES).
+  -- KHÔNG đặt check constraint liệt kê tên luật ở đây: thêm luật thứ chín sẽ
+  -- phải sửa cả DB, và một dòng cấu hình của luật đã bỏ thì code chỉ đơn giản
+  -- không đọc tới. Tập đóng được chốt ở tầng code, nơi nó được dùng.
+  rule       text not null,
+
+  enabled    boolean not null default false,
+  -- Số ngày cho luật có mốc ngày (trước buổi chụp N ngày, quá hạn N ngày).
+  -- null = dùng mặc định của luật.
+  offset_days integer,
+  -- Ghi đè câu chữ. null/rỗng = dùng câu mặc định của luật.
+  message    text,
+  updated_at timestamptz not null default now(),
+
+  -- Mỗi studio một dòng cho mỗi luật.
+  unique (owner_id, rule)
+);
+
+-- ── Sổ ĐÃ CHẠY (chống lặp) ──────────────────────────────────────────────────
+create table if not exists public.studio_automation_log (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null references public.profiles (id) on delete cascade,
+  rule        text not null,
+  contract_id uuid references public.studio_contracts (id) on delete cascade,
+
+  -- Khoá chống lặp do src/lib/automations.ts sinh ra: "<luật>:<hợp đồng>" hoặc
+  -- "<luật>:<hợp đồng>:<ref>". `ref` là id ĐỢT THANH TOÁN — hợp đồng chia 4 đợt
+  -- thì mỗi đợt quá hạn là một lần nhắc riêng, không bị gộp mất ba.
+  --
+  -- UNIQUE ở đây là hàng rào THẬT, không chỉ để tra nhanh: hai lượt cron chạy
+  -- chồng nhau (Vercel gọi lại vì timeout) sẽ bị chính DB chặn ở lượt thứ hai,
+  -- chứ không dựa vào việc code kiểm tra trước rồi ghi sau.
+  dedupe_key  text not null unique,
+
+  fired_at    timestamptz not null default now()
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/crew_timesheet.sql — Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── Dòng chấm công ──────────────────────────────────────────────────────────
+create table if not exists public.crew_timesheet (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null references public.profiles (id) on delete cascade,
+
+  -- Định danh thợ. `phone` là khoá thật (thợ không có tài khoản); `crew_id` chỉ
+  -- là tiện tra tên/vai trò khi thợ CÓ trong sổ. Thợ rời sổ thì dòng chấm công
+  -- cũ vẫn còn để đối soát — nên `on delete set null`, không cascade.
+  phone       text not null,
+  crew_id     uuid references public.studio_crew (id) on delete set null,
+  name        text,
+
+  contract_id     uuid references public.studio_contracts (id) on delete set null,
+  appointment_id  uuid references public.studio_appointments (id) on delete set null,
+
+  -- Ngày làm, tách khỏi started_at: buổi chụp tiệc bắt đầu 19:00 và xong 02:00
+  -- hôm sau vẫn phải nằm trong kỳ của NGÀY CHỤP, không nhảy sang tháng sau.
+  work_date   date not null default current_date,
+
+  started_at  timestamptz,
+  -- null = ĐANG LÀM (chưa bấm xong). Số giờ của dòng này là `null`, KHÔNG phải
+  -- 0 — xem `sessionHours`.
+  ended_at    timestamptz,
+
+  note        text,
+  -- 'crew' = thợ tự bấm ở cổng thợ; 'studio' = studio nhập bù.
+  source      text not null default 'crew' check (source in ('crew', 'studio')),
+  created_at  timestamptz not null default now()
+);
+
+-- ── Khoảng RẢNH thợ tự đăng ký ──────────────────────────────────────────────
+-- Ngược của crew_unavailable. Cố ý là bảng RIÊNG chứ không thêm cột `kind` vào
+-- crew_unavailable: bảng kia đã có RLS, index và một cổng ghi riêng, và "bận"
+-- với "rảnh" có luật ưu tiên khác nhau (báo bận THẮNG khai rảnh — xem
+-- `availabilityOn`). Trộn hai nghĩa vào một bảng là cách chắc chắn để một ngày
+-- nào đó đọc sai chiều.
+create table if not exists public.crew_available (
+  id         uuid primary key default gen_random_uuid(),
+  phone      text not null,
+  date       date not null,
+  start_time time,
+  end_time   time,
+  note       text,
+  owner_id   uuid references public.profiles (id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (phone, date, start_time)
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/vendors.sql — Nhà cung cấp & đơn đặt ngoài
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── Sổ nhà cung cấp ─────────────────────────────────────────────────────────
+create table if not exists public.studio_vendors (
+  id         uuid primary key default gen_random_uuid(),
+  owner_id   uuid not null references public.profiles (id) on delete cascade,
+  name       text not null default '',
+  kind       text not null default 'other'
+               check (kind in ('album', 'makeup', 'dress', 'car', 'venue', 'print', 'other')),
+  phone      text,
+  contact    text,
+  note       text,
+  active     boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+-- ── Đơn đặt ngoài ───────────────────────────────────────────────────────────
+create table if not exists public.vendor_orders (
+  id          uuid primary key default gen_random_uuid(),
+  owner_id    uuid not null references public.profiles (id) on delete cascade,
+
+  -- Nhà cung cấp rời sổ thì đơn CŨ vẫn phải đọc được để đối soát → set null,
+  -- không cascade. `vendor_name` giữ lại tên tại thời điểm đặt.
+  vendor_id   uuid references public.studio_vendors (id) on delete set null,
+  vendor_name text,
+
+  -- Đơn có thể không gắn hợp đồng nào (mua phông nền, in card studio).
+  contract_id uuid references public.studio_contracts (id) on delete set null,
+
+  title       text not null default '',
+  amount      integer not null default 0,  -- VND
+  -- đã gửi → đang làm → đã nhận → đã giao khách. KHÔNG có "đã huỷ": đơn huỷ thì
+  -- xoá, vì một đơn huỷ còn nằm đây sẽ tiếp tục được cộng tiền và tiếp tục bị
+  -- đếm là trễ hẹn (xem src/lib/vendors.ts).
+  status      text not null default 'sent'
+                check (status in ('sent', 'doing', 'received', 'delivered')),
+  due_date    date,
+  note        text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/accounting.sql — Phiếu thu có số & khoá sổ kế toán
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── Bộ đếm số phiếu theo studio × năm ───────────────────────────────────────
+-- Cấp số bằng UPDATE ... RETURNING trên một dòng (xem hàm bên dưới) nên hai lần
+-- bấm in cùng lúc KHÔNG thể nhận cùng một số.
+create table if not exists public.studio_receipt_seq (
+  owner_id uuid not null references public.profiles (id) on delete cascade,
+  year     integer not null,
+  last_no  integer not null default 0,
+  primary key (owner_id, year)
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/album_people.sql — Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── Người ───────────────────────────────────────────────────────────────────
+create table if not exists public.album_people (
+  id             uuid primary key default gen_random_uuid(),
+  album_id       uuid not null references public.albums (id) on delete cascade,
+  -- Tên studio đặt. Rỗng = chưa đặt tên → không hiện chip cho khách.
+  name           text not null default '' check (char_length(name) <= 60),
+  -- Số khuôn mặt gom được. Chỉ để studio xếp thứ tự và nhìn ra cụm rác.
+  face_count     int  not null default 0,
+  -- Ảnh đại diện + khuôn mặt thứ mấy trong ảnh đó (một tấm có nhiều người).
+  cover_photo_id uuid references public.photos (id) on delete set null,
+  cover_at       int  not null default 0,
+  /*
+   * Tâm cụm: trung bình các vector 128 chiều của người này.
+   *
+   * Để làm gì: studio thật KHÔNG quét một lần rồi xong. Họ giao đợt đầu, chụp
+   * thêm, rồi quét đợt hai. Không có vector lưu lại thì lần quét sau ra một bộ
+   * người HOÀN TOÀN MỚI, studio phải đặt tên lại từ đầu và chip của khách đứt.
+   * Có nó thì cụm mới ghép được vào người cũ (src/lib/face-people.ts).
+   *
+   * real[] chứ không phải jsonb: 128 số float4 = ~540 byte, jsonb numeric gấp
+   * gần ba. Sai số float4 (~7 chữ số) không đáng kể so với ngưỡng 0,6.
+   *
+   * Ràng buộc độ dài là hàng rào thật: một vector sai chiều vẫn ghi được nhưng
+   * làm mọi phép ghép sai lặng lẽ về sau.
+   */
+  descriptor     real[] check (descriptor is null or array_length(descriptor, 1) = 128),
+  position       int  not null default 0,
+  created_at     timestamptz not null default now()
+);
+
+-- ── Ảnh nào có ai ───────────────────────────────────────────────────────────
+create table if not exists public.album_photo_people (
+  -- album_id là bản sao CÓ CHỦ Ý của album_people.album_id: câu truy vấn duy
+  -- nhất mà khách chạy là "lấy hết theo album", không cần join.
+  album_id  uuid not null references public.albums (id) on delete cascade,
+  person_id uuid not null references public.album_people (id) on delete cascade,
+  photo_id  uuid not null references public.photos (id) on delete cascade,
+  primary key (person_id, photo_id)
+);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -3735,6 +3940,745 @@ create index if not exists studio_contracts_source_idx
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/album_selection_done.sql — Mốc 'khách đã chọn xong ảnh' trên album
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- Mốc "KHÁCH ĐÃ CHỌN XONG" cho album.
+--
+-- VÌ SAO
+-- Khách bấm nút "Đã chọn xong" trên trang album thì studio nhận được chuông +
+-- push + Zalo (xem src/app/api/a/[slug]/done/route.ts) — nhưng CHÍNH ALBUM thì
+-- không ghi lại gì cả. Hệ quả: mở Thư viện album ra, không có cách nào phân
+-- biệt "khách đang chọn dở" với "khách đã chốt, tới lượt mình lọc ảnh". Một
+-- thông báo lướt qua rồi trôi mất là không đủ — thứ studio cần là NHÌN VÀO
+-- THƯ VIỆN là thấy album nào đến lượt mình.
+--
+-- Cột này biến việc đó thành trạng thái bền: có mốc ⇒ album được đẩy lên đầu
+-- thư viện và đeo nhãn "Khách đã chọn xong".
+--
+-- Vì sao là timestamptz chứ không phải boolean: còn dùng để xếp album nào chốt
+-- trước lên trước, và để biết khách chốt lúc nào khi cần đối chiếu.
+--
+-- Khách bấm lại lần nữa (chọn thêm ảnh rồi chốt lại) thì mốc được CẬP NHẬT
+-- sang lần mới nhất — đúng ý "album này vừa mới chốt", chứ không giữ lần đầu.
+--
+-- AN TOÀN KHI CHẠY LẠI: chỉ thêm cột, không sửa dữ liệu cũ. Album đã chốt từ
+-- trước ngày chạy migration sẽ có mốc NULL (không có cách nào truy ngược) —
+-- chúng nằm đúng chỗ cũ trong thư viện cho tới khi khách chốt lần sau.
+-- ============================================================================
+
+alter table albums add column if not exists selection_done_at timestamptz;
+
+-- Thư viện lọc/sắp theo cột này cho từng chủ album.
+create index if not exists albums_selection_done_idx
+  on albums (owner_id, selection_done_at desc nulls last);
+
+comment on column albums.selection_done_at is
+  'Lần gần nhất khách bấm "Đã chọn xong" trên trang album. NULL = chưa chốt.';
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/watermark_opt_in.sql — Watermark phải do studio TỰ BẬT, không mặc định bật
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- Đóng dấu chìm chuyển thành TỰ CHỌN (opt-in) thay vì mặc định bật.
+--
+-- VÌ SAO
+-- Cột `albums.watermark_enabled` trước đây `default true`, nên MỌI album chọn
+-- ảnh đều bật watermark kể cả khi studio không hề chạm vào cài đặt đó. Hệ quả
+-- về băng thông rất lớn:
+--
+--   Có watermark   khách bấm tải → ảnh 2560px phải chảy qua máy chủ (canvas /
+--                  nay là /api/img/watermark cần đọc được pixel, mà Google
+--                  Drive không gửi header CORS nên không chuyển hướng được).
+--   Không watermark khách bấm tải → 302 thẳng sang Google Drive.
+--                  Máy chủ tốn ĐÚNG 0 byte.
+--
+-- Đo trên Vercel: Fast Origin Transfer 11,54 GB / 10 GB, gần như toàn bộ dồn
+-- vào 4 ngày có người tải album hàng loạt (một ngày 4,42 GB đi ra).
+--
+-- Cột `watermark_delivery` (gallery giao hàng) vốn đã `default false` — đúng
+-- rồi, không đụng tới.
+--
+-- TÌNH TRẠNG: đã chạy trên production ngày 17/08/2026 — cả phần đổi mặc định
+-- lẫn phần tắt cho album cũ (92 album selection đều về false). File giữ lại để
+-- bản cài mới và môi trường thử có cùng trạng thái.
+--
+-- Chạy trên Supabase SQL Editor. An toàn khi chạy lại (idempotent).
+-- ============================================================================
+
+-- 1. Album mới từ nay mặc định KHÔNG đóng dấu. Studio muốn thì tự bật trong
+--    phần cài đặt album.
+alter table public.albums alter column watermark_enabled set default false;
+
+-- ============================================================================
+-- 2. (TUỲ CHỌN — ĐỌC KỸ TRƯỚC KHI CHẠY) Tắt watermark cho album ĐANG CÓ.
+--
+-- Phần trên chỉ đổi mặc định cho album TẠO MỚI. Các album đã tạo vẫn giữ
+-- watermark_enabled = true, nên vẫn tiếp tục tốn băng thông.
+--
+-- Vấn đề: không phân biệt được chắc chắn "studio cố ý bật" với "nó tự bật do
+-- mặc định cũ". Cách phỏng đoán hợp lý nhất là nhìn `watermark_text`:
+--   • watermark_text IS NULL  → studio chưa từng gõ chữ riêng, gần như chắc
+--                               chắn chưa bao giờ mở cài đặt này ra
+--   • watermark_text có giá trị → studio đã chủ động cấu hình, ĐỪNG tắt
+--
+-- Xem trước sẽ ảnh hưởng bao nhiêu album:
+--
+--     select count(*) filter (where watermark_text is null)  as se_tat,
+--            count(*) filter (where watermark_text is not null) as giu_nguyen
+--     from public.albums
+--     where watermark_enabled = true and phase = 'selection';
+--
+-- Thấy số hợp lý rồi thì bỏ dấu chú thích ở khối dưới và chạy:
+--
+-- update public.albums
+--    set watermark_enabled = false
+--  where watermark_enabled = true
+--    and phase = 'selection'
+--    and watermark_text is null;
+--
+-- Muốn tắt sạch không chừa album nào (kể cả studio đã cấu hình) thì bỏ dòng
+-- `and watermark_text is null`. Cân nhắc: làm vậy là gỡ lớp bảo vệ ảnh mà một
+-- số studio thật sự cần — nên báo cho họ trước.
+--
+-- Đảo ngược lúc nào cũng được: studio tự bật lại trong cài đặt album, hoặc
+--     update public.albums set watermark_enabled = true where id = '<id>';
+-- ============================================================================
+
+
+-- ============================================================================
+-- 3. Gallery giao hàng (`watermark_delivery`) — 17/08/2026
+--
+-- Cột này vốn đã `default false`, nhưng vẫn phải rà: gallery giao hàng là nơi
+-- khách tải ảnh NHIỀU NHẤT (download_enabled bật mặc định), nên một album bật
+-- đóng dấu ở đây tốn băng thông hơn hẳn một album chọn ảnh.
+--
+-- Đo được lúc rà: 47 album delivery tắt đóng dấu, 1 album bật.
+-- Chủ dự án quyết định tắt nốt album đó.
+-- ============================================================================
+update public.albums
+   set watermark_delivery = false
+ where phase = 'delivery'
+   and watermark_delivery = true;
+
+-- Kiểm tra lại — cả hai cột phải sạch:
+--
+--     select phase, watermark_enabled, watermark_delivery, count(*)
+--     from public.albums
+--     group by 1, 2, 3
+--     order by 1, 2, 3;
+--
+-- Từ giờ mọi lượt khách bấm tải đều 302 thẳng sang Google Drive → máy chủ tốn
+-- 0 byte. Studio nào cần đóng dấu thì tự bật lại trong cài đặt album.
+
+
+-- ============================================================================
+-- GHI CHÚ: schema `old_public`
+--
+-- Lúc rà phát hiện có HAI bảng tên `albums`: `public.albums` (đang dùng) và
+-- `old_public.albums` (bản sao lưu còn sót từ lần chuyển sang bản 2.0, xem
+-- supabase/clone-from-old-project.sql). App chỉ đọc `public` nên vô hại.
+--
+-- Lưu ý khi viết truy vấn kiểm tra: lọc theo `table_schema`, nếu không
+-- information_schema sẽ trả về cả hai và dễ đọc nhầm kết quả.
+--
+-- Khi chắc chắn không cần bản cũ nữa:  drop schema old_public cascade;
+-- ============================================================================
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/rls_thanh_vien_hop_dong.sql — Vá quyền: thành viên studio lưu được hạng mục hợp đồng (chạy SAU studio_branches)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- VÁ QUYỀN ĐỌC/GHI HẠNG MỤC HỢP ĐỒNG CHO THÀNH VIÊN STUDIO
+--
+-- TRIỆU CHỨNG
+--   Quản lý chi nhánh tạo hợp đồng, chọn hạng mục, bấm lưu → hợp đồng có, hạng
+--   mục KHÔNG có, tổng tiền 0đ. Chủ studio sửa hạng mục thì quản lý chi nhánh
+--   vẫn thấy 0đ. Chủ studio thì mọi thứ bình thường.
+--
+-- NGUYÊN NHÂN
+--   schema.sql khai policy cho các bảng con của hợp đồng HAI LẦN:
+--
+--     ~dòng 845  contract_items_owner_all …  using (c.owner_id = auth.uid())
+--                → CHỈ chủ studio. Nhân viên, quản lý, quản lý chi nhánh đều
+--                  không đọc và không ghi được.
+--     ~dòng 1462 khối do $$ … $$ chạy lại policy đó với is_studio_member(c.owner_id)
+--                → đúng: mọi thành viên của studio.
+--
+--   Bản đúng nằm SAU nên khi chạy trọn schema.sql thì nó thắng. Nhưng khối
+--   do $$ … $$ đặt tất cả các bảng con trong MỘT lệnh: chỉ cần một bảng trong
+--   danh sách chưa tồn tại (tính năng thêm sau) là cả khối văng lỗi và MỌI bảng
+--   sau đó giữ nguyên bản chỉ-chủ-studio. Chạy schema.sql theo từng đoạn, hoặc
+--   dừng giữa chừng vì một lỗi khác, cũng cho ra đúng hậu quả đó.
+--
+--   Hạng mục nằm ở bảng con, còn hợp đồng nằm ở bảng cha — nên hợp đồng thì
+--   thấy mà tiền thì không. Đúng như triệu chứng.
+--
+-- CÁCH VÁ
+--   Chạy lại policy cho TỪNG bảng, mỗi bảng một lệnh độc lập và bỏ qua bảng
+--   chưa tồn tại. Một bảng thiếu không còn kéo theo những bảng khác.
+--
+-- AN TOÀN KHI CHẠY LẠI: chỉ thay policy, không đụng dữ liệu. Chạy bao nhiêu lần
+-- cũng ra cùng một kết quả.
+-- ============================================================================
+
+-- Hàm kiểm tra thành viên (khai lại cho chắc — DB cũ có thể chưa có).
+create or replace function public.is_studio_member(target uuid)
+returns boolean language sql security definer stable set search_path = public as $$
+  select
+    target = auth.uid()
+    or exists (select 1 from public.profiles where id = auth.uid() and studio_owner_id = target)
+    or public.is_admin();
+$$;
+
+-- Bảng CHA: hợp đồng và báo giá.
+do $$
+declare t text;
+begin
+  foreach t in array array['studio_contracts', 'studio_quotes'] loop
+    -- to_regclass trả NULL khi bảng chưa có ⇒ bỏ qua, không làm hỏng cả lượt.
+    if to_regclass('public.' || t) is null then
+      raise notice 'bỏ qua %: bảng chưa tồn tại', t;
+      continue;
+    end if;
+    begin
+      execute format('alter table public.%I enable row level security', t);
+      execute format('drop policy if exists %1$s_owner_all on public.%1$s', t);
+      execute format(
+        'create policy %1$s_owner_all on public.%1$s for all '
+        'using (public.is_studio_member(owner_id)) '
+        'with check (public.is_studio_member(owner_id))', t);
+      raise notice 'đã vá %', t;
+    exception when others then
+      -- Một bảng hỏng KHÔNG được kéo theo các bảng còn lại — đó chính là lỗi
+      -- của khối cũ trong schema.sql mà migration này sinh ra để sửa.
+      raise notice 'lỗi khi vá %: %', t, sqlerrm;
+    end;
+  end loop;
+end $$;
+
+-- Bảng CON của hợp đồng: quyền lấy theo chủ của hợp đồng cha.
+do $$
+declare t text;
+begin
+  foreach t in array array[
+    'contract_items', 'contract_crew', 'contract_edit_requests', 'contract_payments',
+    'contract_payment_plan', 'contract_tasks', 'contract_equipment', 'contract_products',
+    'contract_quote_options'
+  ] loop
+    if to_regclass('public.' || t) is null then
+      raise notice 'bỏ qua %: bảng chưa tồn tại', t;
+      continue;
+    end if;
+    begin
+      execute format('alter table public.%I enable row level security', t);
+      execute format('drop policy if exists %1$s_owner_all on public.%1$s', t);
+      execute format(
+        'create policy %1$s_owner_all on public.%1$s for all '
+        'using (exists (select 1 from public.studio_contracts c '
+        '               where c.id = contract_id and public.is_studio_member(c.owner_id))) '
+        'with check (exists (select 1 from public.studio_contracts c '
+        '                    where c.id = contract_id and public.is_studio_member(c.owner_id)))', t);
+      raise notice 'đã vá %', t;
+    exception when others then
+      raise notice 'lỗi khi vá %: %', t, sqlerrm;
+    end;
+  end loop;
+end $$;
+
+-- Hạng mục báo giá: quyền lấy theo chủ của báo giá cha.
+do $$
+begin
+  if to_regclass('public.quote_items') is not null then
+    alter table public.quote_items enable row level security;
+    drop policy if exists quote_items_owner_all on public.quote_items;
+    create policy quote_items_owner_all on public.quote_items for all
+      using (exists (select 1 from public.studio_quotes q
+                     where q.id = quote_id and public.is_studio_member(q.owner_id)))
+      with check (exists (select 1 from public.studio_quotes q
+                          where q.id = quote_id and public.is_studio_member(q.owner_id)));
+  end if;
+end $$;
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- Câu này phải trả về is_studio_member cho MỌI bảng con. Chỗ nào còn
+-- "auth.uid()" trần là chỗ chưa vá được.
+--
+--   select tablename, policyname, qual
+--   from pg_policies
+--   where schemaname = 'public'
+--     and tablename in ('contract_items','contract_crew','contract_payments','studio_contracts')
+--   order by tablename;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/automations.sql — Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- VIỆC TỰ ĐỘNG THEO TRẠNG THÁI HỢP ĐỒNG
+--
+-- Mọi nhắc nhở trong app đang do NGƯỜI nhớ: ký rồi thì ai nhắc thu cọc, giao ảnh
+-- rồi thì ai xin đánh giá, còn ba ngày tới buổi chụp thì ai gọi khách xác nhận.
+--
+-- HAI bảng, và bảng thứ hai mới là bảng quan trọng:
+--
+--   studio_automations      — studio bật/tắt từng luật, đổi số ngày và câu chữ.
+--   studio_automation_log   — ĐÃ CHẠY những gì. Cron chạy MỖI NGÀY, nên không có
+--                             bảng này thì một luật sẽ đẻ ra 30 việc giống nhau
+--                             trong một tháng, hoặc gửi khách 30 tin Zalo y hệt.
+--
+-- CỐ Ý KHÔNG làm bảng luật tự do (điều kiện + hành động tuỳ ý). Tập "khi" và tập
+-- "thì" đều ĐÓNG và khai trong code (src/lib/automations.ts, AUTOMATION_RULES);
+-- bảng này chỉ giữ CẤU HÌNH cho tám luật đó. Studio cần tám việc đúng, bật/tắt
+-- bằng công tắc — không cần một Zapier.
+--
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+do $$
+declare missing text[] := '{}';
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_contracts')
+  then missing := missing || 'studio_contracts'; end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'contract_tasks')
+  then missing := missing || 'contract_tasks'; end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_notifications')
+  then missing := missing || 'studio_notifications'; end if;
+
+  if array_length(missing, 1) > 0 then
+    raise exception
+      'Thiếu bảng nền: %. Hãy chạy supabase/setup-all.sql trước (nó gồm cả schema nền lẫn migration này).',
+      array_to_string(missing, ', ');
+  end if;
+end $$;
+
+create index if not exists studio_automations_owner_idx on public.studio_automations (owner_id);
+
+create index if not exists studio_automation_log_owner_idx
+  on public.studio_automation_log (owner_id, fired_at desc);
+
+create index if not exists studio_automation_log_contract_idx
+  on public.studio_automation_log (contract_id);
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- select rule, enabled, offset_days from public.studio_automations order by rule;
+-- select rule, count(*) from public.studio_automation_log group by rule;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/crew_timesheet.sql — Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- CHẤM CÔNG & KHOẢNG RẢNH CỦA THỢ
+--
+-- App đã có PHÂN CÔNG (contract_crew, crew_shift_plan) nhưng không ghi THỰC TẾ:
+-- thợ có đi không, đến lúc mấy giờ, xong lúc mấy giờ. Nên màn Đối soát tiền công
+-- vẫn phải nhập tay từng dòng và không đối chiếu được với bất cứ gì.
+--
+-- Thợ KHÔNG có tài khoản đăng nhập (xem studio_crew: khoá theo số điện thoại),
+-- nên hai bảng dưới đây cũng khoá theo SĐT — giống crew_unavailable đã làm. Thợ
+-- bấm từ cổng thợ công khai /crew; studio nhập bù được từ khu quản lý.
+--
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+do $$
+declare missing text[] := '{}';
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_crew')
+  then missing := missing || 'studio_crew'; end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_contracts')
+  then missing := missing || 'studio_contracts'; end if;
+
+  if array_length(missing, 1) > 0 then
+    raise exception
+      'Thiếu bảng nền: %. Hãy chạy supabase/setup-all.sql trước (nó gồm cả schema nền lẫn migration này).',
+      array_to_string(missing, ', ');
+  end if;
+end $$;
+
+-- ── Đơn giá giờ của thợ ─────────────────────────────────────────────────────
+-- 0 = chưa khai. Lúc đó màn Đối soát KHÔNG đề xuất tiền công (xem `suggestPay`
+-- trong src/lib/timesheet.ts): đề xuất 0₫ rồi có người bấm áp dụng sẽ xoá mất
+-- số studio đã nhập tay.
+alter table public.studio_crew add column if not exists hourly_rate integer not null default 0;
+
+create index if not exists crew_timesheet_owner_idx  on public.crew_timesheet (owner_id, work_date desc);
+
+create index if not exists crew_timesheet_phone_idx  on public.crew_timesheet (phone, work_date desc);
+
+create index if not exists crew_timesheet_contract_idx on public.crew_timesheet (contract_id);
+
+-- Mỗi thợ chỉ được có MỘT dòng đang mở tại một thời điểm. Không có hàng rào này
+-- thì thợ bấm "đã đến" hai lần (mạng chậm, bấm lại) sẽ đẻ ra hai dòng mở và giờ
+-- làm bị tính đôi.
+create unique index if not exists crew_timesheet_one_open_idx
+  on public.crew_timesheet (phone)
+  where ended_at is null;
+
+create index if not exists crew_available_phone_idx on public.crew_available (phone, date);
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- select phone, work_date, started_at, ended_at from public.crew_timesheet
+-- order by work_date desc limit 20;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/vendors.sql — Nhà cung cấp & đơn đặt ngoài
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- NHÀ CUNG CẤP & ĐƠN ĐẶT NGOÀI
+--
+-- Album in, makeup thuê ngoài, xe hoa, địa điểm — tất cả đang chỉ là MỘT DÒNG
+-- CHI trong studio_expenses. Nên không ai trả lời được câu hỏi hằng ngày của
+-- studio: "đơn album của khách A đã in xong chưa?".
+--
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+do $$
+declare missing text[] := '{}';
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_contracts')
+  then missing := missing || 'studio_contracts'; end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_expenses')
+  then missing := missing || 'studio_expenses'; end if;
+
+  if array_length(missing, 1) > 0 then
+    raise exception
+      'Thiếu bảng nền: %. Hãy chạy supabase/setup-all.sql trước (nó gồm cả schema nền lẫn migration này).',
+      array_to_string(missing, ', ');
+  end if;
+end $$;
+
+create index if not exists studio_vendors_owner_idx on public.studio_vendors (owner_id, active);
+
+create index if not exists vendor_orders_owner_idx    on public.vendor_orders (owner_id, status, due_date);
+
+create index if not exists vendor_orders_contract_idx on public.vendor_orders (contract_id);
+
+-- ── Nối sang sổ chi, KHÔNG đếm tiền hai lần ─────────────────────────────────
+-- Mỗi đơn sinh ĐÚNG MỘT dòng studio_expenses mang vendor_order_id của nó. Mọi
+-- lần sửa đơn CẬP NHẬT chính dòng đó (upsert theo cột unique bên dưới) chứ
+-- không thêm dòng mới — nếu không, sửa giá đơn ba lần là ba dòng chi và báo cáo
+-- lợi nhuận sai gấp ba.
+alter table public.studio_expenses
+  add column if not exists vendor_order_id uuid references public.vendor_orders (id) on delete cascade;
+
+-- UNIQUE (chứ không chỉ index tra nhanh): đây là hàng rào thật chặn dòng chi
+-- trùng, kể cả khi hai tab cùng bấm lưu một đơn.
+create unique index if not exists studio_expenses_vendor_order_uidx
+  on public.studio_expenses (vendor_order_id)
+  where vendor_order_id is not null;
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- select v.name, o.title, o.status, o.due_date, o.amount
+-- from public.vendor_orders o left join public.studio_vendors v on v.id = o.vendor_id
+-- order by o.due_date;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/accounting.sql — Phiếu thu có số & khoá sổ kế toán
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- HOÁ ĐƠN & XUẤT KẾ TOÁN
+--
+-- Studio có doanh thu thật cần hai thứ app chưa có:
+--   1. PHIẾU THU đưa khách cho mỗi lần nhận tiền — cần một SỐ PHIẾU bền, đánh
+--      theo năm, không trùng.
+--   2. KHOÁ SỔ: báo cáo tháng trước đã gửi kế toán, rồi ai đó sửa một hợp đồng
+--      cũ và con số tháng trước đổi mà không ai biết. Mốc khoá sổ biến "đừng sửa
+--      số cũ" từ lời dặn miệng thành hàng rào.
+--
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+do $$
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'contract_payments')
+  then
+    raise exception
+      'Thiếu bảng nền: contract_payments. Hãy chạy supabase/setup-all.sql trước.';
+  end if;
+end $$;
+
+-- ── Số phiếu thu ────────────────────────────────────────────────────────────
+-- Đánh theo NĂM ('PT-2026-0007'), nếp sổ sách Việt Nam, và giữ số ngắn sau
+-- mười năm. Định dạng do src/lib/accounting.ts (receiptNo) lo; ở đây chỉ lưu.
+--
+-- null = chưa in phiếu cho lần thu này. Số chỉ được cấp KHI IN, không cấp sẵn
+-- cho mọi lần thu: studio ghi nhận một khoản rồi sửa/xoá là chuyện thường, mà
+-- một dãy số phiếu thủng lỗ chỗ thì kế toán không giải thích được.
+alter table public.contract_payments add column if not exists receipt_no  text;
+
+alter table public.contract_payments add column if not exists receipt_at  timestamptz;
+
+-- Số phiếu không được trùng TRONG MỘT studio. Ràng buộc phải qua hợp đồng vì
+-- contract_payments không có owner_id — nên dùng bảng đếm riêng bên dưới thay vì
+-- một unique index không biểu diễn được.
+create index if not exists contract_payments_receipt_idx
+  on public.contract_payments (receipt_no)
+  where receipt_no is not null;
+
+/**
+ * Cấp số phiếu thu kế tiếp cho một studio trong một năm.
+ *
+ * `insert ... on conflict do update` là một câu lệnh nguyên tử: hai người cùng
+ * bấm in một lúc thì Postgres tuần tự hoá chúng và mỗi người nhận một số khác
+ * nhau. Đọc-rồi-ghi ở tầng ứng dụng KHÔNG làm được điều đó.
+ */
+create or replace function public.next_receipt_no(p_owner uuid, p_year integer)
+returns integer
+language sql
+security definer
+set search_path = public
+as $$
+  insert into public.studio_receipt_seq (owner_id, year, last_no)
+  values (p_owner, p_year, 1)
+  on conflict (owner_id, year)
+  do update set last_no = public.studio_receipt_seq.last_no + 1
+  returning last_no;
+$$;
+
+-- ── Khoá sổ ─────────────────────────────────────────────────────────────────
+-- Ngày CUỐI CÙNG đã chốt. Mọi bút toán có ngày ≤ mốc này là bất biến (luật ở
+-- src/lib/accounting.ts, isLocked). null = chưa khoá kỳ nào.
+alter table public.profiles add column if not exists books_closed_until date;
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- select owner_id, year, last_no from public.studio_receipt_seq;
+-- select receipt_no, receipt_at, amount from public.contract_payments
+--   where receipt_no is not null order by receipt_at desc limit 10;
+
+-- ── HÀNG RÀO KHOÁ SỔ (trigger) ──────────────────────────────────────────────
+--
+-- Mốc `books_closed_until` ở trên mới chỉ là một CON SỐ. Không có phần dưới đây
+-- thì nó chỉ là lời dặn miệng có màu: giao diện nhắc, còn ai bấm sửa vẫn sửa
+-- được, và đúng cái tình huống cần chặn (sửa một hợp đồng cũ làm đổi số của kỳ
+-- đã gửi kế toán) vẫn xảy ra y như trước.
+--
+-- Chặn ở DB chứ không ở giao diện: RLS cho phép studio ghi thẳng vào hai bảng
+-- này bằng anon key, nên một kiểm tra ở React không phải hàng rào.
+--
+-- CHỈ chặn thay đổi ĐỘNG TỚI TIỀN. Đóng dấu số phiếu thu (`receipt_no`), đính
+-- ảnh chuyển khoản, sửa ghi chú… đều không làm đổi con số nào của kỳ, mà lại là
+-- việc studio hay làm trên phiếu cũ — chặn cả những thứ đó thì studio sẽ đi mở
+-- khoá sổ để in một tờ phiếu, và cái khoá thành vô nghĩa.
+
+create or replace function public.guard_books_closed()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_owner   uuid;
+  v_closed  date;
+  v_old_day date;
+  v_new_day date;
+  v_money_changed boolean := true;
+begin
+  -- Chủ sở hữu + ngày của bút toán, tuỳ bảng.
+  if tg_table_name = 'studio_expenses' then
+    v_owner   := coalesce(new.owner_id, old.owner_id);
+    v_old_day := (case when tg_op <> 'INSERT' then old.spent_at end);
+    v_new_day := (case when tg_op <> 'DELETE' then new.spent_at end);
+    if tg_op = 'UPDATE' then
+      v_money_changed := (new.amount is distinct from old.amount)
+                      or (new.spent_at is distinct from old.spent_at)
+                      or (new.category is distinct from old.category)
+                      or (new.contract_id is distinct from old.contract_id);
+    end if;
+  else -- contract_payments
+    select c.owner_id into v_owner
+    from public.studio_contracts c
+    where c.id = coalesce(new.contract_id, old.contract_id);
+    v_old_day := (case when tg_op <> 'INSERT' then old.paid_at::date end);
+    v_new_day := (case when tg_op <> 'DELETE' then new.paid_at::date end);
+    if tg_op = 'UPDATE' then
+      v_money_changed := (new.amount is distinct from old.amount)
+                      or (new.paid_at is distinct from old.paid_at)
+                      or (new.kind is distinct from old.kind)
+                      or (new.contract_id is distinct from old.contract_id);
+    end if;
+  end if;
+
+  if v_owner is null then
+    return coalesce(new, old);
+  end if;
+
+  select p.books_closed_until into v_closed from public.profiles p where p.id = v_owner;
+  if v_closed is null or not v_money_changed then
+    return coalesce(new, old);
+  end if;
+
+  -- Xét CẢ hai mốc ngày: dời một bút toán RA KHỎI kỳ đã khoá cũng là làm đổi số
+  -- của kỳ đó, y như sửa tại chỗ.
+  if (v_old_day is not null and v_old_day <= v_closed)
+     or (v_new_day is not null and v_new_day <= v_closed) then
+    raise exception
+      'Sổ đã khoá tới %. Bút toán trong kỳ đã chốt không sửa/xoá/thêm được. Mở khoá kỳ ở màn Thu chi & công nợ nếu thật sự cần.',
+      to_char(v_closed, 'DD/MM/YYYY')
+      using errcode = 'check_violation';
+  end if;
+
+  return coalesce(new, old);
+end $$;
+
+drop trigger if exists guard_books_closed_expenses on public.studio_expenses;
+
+create trigger guard_books_closed_expenses
+  before insert or update or delete on public.studio_expenses
+  for each row execute function public.guard_books_closed();
+
+drop trigger if exists guard_books_closed_payments on public.contract_payments;
+
+create trigger guard_books_closed_payments
+  before insert or update or delete on public.contract_payments
+  for each row execute function public.guard_books_closed();
+
+-- ── Kiểm tra hàng rào sau khi chạy ──────────────────────────────────────────
+-- update public.profiles set books_closed_until = current_date where id = auth.uid();
+-- insert into public.studio_expenses (owner_id, title, amount, spent_at)
+--   values (auth.uid(), 'thử', 1000, current_date - 1);   -- PHẢI báo lỗi
+-- update public.profiles set books_closed_until = null where id = auth.uid();
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/weather.sql — Toạ độ điểm chụp cho dự báo thời tiết (chạy SAU studio_appointments)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- THỜI TIẾT & ĐƯỜNG ĐI CHO BUỔI CHỤP NGOẠI CẢNH
+--
+-- Rủi ro lớn nhất của studio ngoại cảnh là mưa, mà app chưa nói gì về nó dù đã
+-- lưu ngày giờ (studio_appointments) và địa điểm (dạng chữ) của từng buổi.
+--
+-- Để tra dự báo cần TOẠ ĐỘ. Hiện toạ độ chỉ nằm rải rác trong
+-- studio_contracts.intake (jsonb do khách điền qua LocationPicker) — không đọc
+-- được nhanh, và không có gì cho những buổi studio tự tạo. Migration này thêm
+-- hai cột toạ độ vào đúng nơi cần, cộng MỘT vị trí studio làm điểm xuất phát để
+-- ước lượng đường đi.
+--
+-- Không thêm bảng nào. Chạy 1 lần trong Supabase SQL Editor; an toàn khi chạy lại.
+-- ============================================================================
+
+-- ── Kiểm tra điều kiện ──────────────────────────────────────────────────────
+-- Cùng cách làm với các migration khác: thiếu bảng nền thì nói rõ phải làm gì,
+-- thay vì để Postgres trả về 42P01 trần trụi.
+do $$
+declare missing text[] := '{}';
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_appointments')
+  then missing := missing || 'studio_appointments'; end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'studio_contracts')
+  then missing := missing || 'studio_contracts'; end if;
+
+  if array_length(missing, 1) > 0 then
+    raise exception
+      'Thiếu bảng nền: %. Hãy chạy supabase/setup-all.sql trước (nó gồm cả schema nền lẫn migration này).',
+      array_to_string(missing, ', ');
+  end if;
+end $$;
+
+-- ── Toạ độ điểm chụp ────────────────────────────────────────────────────────
+-- Kiểu double precision (không phải numeric): đây là toạ độ để tra dự báo và
+-- ước lượng đường đi, độ chính xác dấu phẩy động là quá đủ, và nhẹ hơn.
+--
+-- null = chưa biết. Lúc đó lớp đọc dự báo tự thử hai đường khác: đọc toạ độ nằm
+-- sẵn trong chuỗi địa điểm (link Google Maps studio dán vào), rồi mới tra tên
+-- địa danh — xem `coordsInText` / `placeQuery` trong src/lib/weather.ts.
+alter table public.studio_appointments add column if not exists lat double precision;
+
+alter table public.studio_appointments add column if not exists lng double precision;
+
+alter table public.studio_contracts add column if not exists lat double precision;
+
+alter table public.studio_contracts add column if not exists lng double precision;
+
+-- ── Vị trí studio (điểm xuất phát) ──────────────────────────────────────────
+-- Một studio một địa chỉ: dùng làm điểm bắt đầu để ước lượng thời gian di
+-- chuyển tới điểm chụp. Studio nhiều chi nhánh thì đây là cơ sở chính; ước
+-- lượng đường đi vốn chỉ để xếp lịch trong ngày nên không cần chính xác hơn.
+alter table public.profiles add column if not exists studio_lat double precision;
+
+alter table public.profiles add column if not exists studio_lng double precision;
+
+alter table public.profiles add column if not exists studio_address text;
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- select column_name from information_schema.columns
+-- where table_schema = 'public' and table_name = 'studio_appointments'
+--   and column_name in ('lat', 'lng');
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/album_people.sql — Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- NGƯỜI TRONG ALBUM (gom ảnh theo từng người)
+--
+-- Studio quét MỘT LẦN trên máy mình: mạng nhận dạng 128 chiều chạy trong trình
+-- duyệt, gom khuôn mặt thành từng người, studio đặt tên ("Cô dâu", "Mẹ chú rể")
+-- rồi lưu kết quả xuống đây. Khách chỉ ĐỌC hai bảng này.
+--
+-- Vì sao phải có bảng, thay vì để trình duyệt khách tự gom:
+--   mô hình nặng 26 MB. Bắt mỗi điện thoại trong nhà tải 26 MB qua 3G rồi chạy
+--   nhận dạng trên từng ảnh là đánh đổi tệ — trong khi studio chỉ phải làm một
+--   lần. Lưu xuống DB thì khách tải THÊM 0 byte mô hình: chỉ vài KB JSON.
+--
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+do $$
+declare missing text[] := '{}';
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'albums')
+  then missing := missing || 'albums'; end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'photos')
+  then missing := missing || 'photos'; end if;
+
+  if array_length(missing, 1) > 0 then
+    raise exception
+      'Thiếu bảng nền: %. Hãy chạy supabase/setup-all.sql trước (nó gồm cả schema nền lẫn migration này).',
+      array_to_string(missing, ', ');
+  end if;
+end $$;
+
+create index if not exists album_people_album_idx on public.album_people (album_id, position);
+
+-- Hai người cùng tên trong một album là lỗi nhập, không phải dữ liệu. Cũng chặn
+-- luôn cú lưu lặp khi studio bấm hai lần. Tên rỗng thì không tính (nhiều cụm
+-- chưa đặt tên là chuyện thường).
+create unique index if not exists album_people_name_uk
+  on public.album_people (album_id, lower(name)) where name <> '';
+
+create index if not exists album_photo_people_album_idx on public.album_photo_people (album_id);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/fix_google_signup_trigger.sql — Vá đăng nhập Google báo server_error
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -5003,4 +5947,162 @@ drop policy if exists inbox_messages_member_all on public.inbox_messages;
 create policy inbox_messages_member_all on public.inbox_messages
   for all using (public.is_studio_member(owner_id))
   with check (public.is_studio_member(owner_id));
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/automations.sql — Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.studio_automations    enable row level security;
+
+alter table public.studio_automation_log enable row level security;
+
+drop policy if exists studio_automations_owner_all on public.studio_automations;
+
+create policy studio_automations_owner_all on public.studio_automations
+  for all using (owner_id = auth.uid() or public.is_admin())
+  with check (owner_id = auth.uid() or public.is_admin());
+
+-- Sổ đã chạy: studio ĐỌC được (để màn cấu hình hiện "đã chạy 12 lần"), nhưng
+-- GHI chỉ qua service-role ở cron. Cho client ghi thì một studio có thể tự đánh
+-- dấu "đã chạy" để chặn luật của chính mình một cách khó hiểu.
+drop policy if exists studio_automation_log_read on public.studio_automation_log;
+
+create policy studio_automation_log_read on public.studio_automation_log
+  for select using (owner_id = auth.uid() or public.is_admin());
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/crew_timesheet.sql — Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.crew_timesheet  enable row level security;
+
+alter table public.crew_available  enable row level security;
+
+-- Chấm công: studio đọc/sửa dòng của CHÍNH mình (nhập bù, sửa giờ sai). Thợ ghi
+-- qua service-role ở cổng thợ công khai, nên không cần policy cho anon.
+drop policy if exists crew_timesheet_owner_all on public.crew_timesheet;
+
+create policy crew_timesheet_owner_all on public.crew_timesheet
+  for all using (owner_id = auth.uid() or public.is_admin())
+  with check (owner_id = auth.uid() or public.is_admin());
+
+-- Khoảng rảnh: mọi studio đã đăng nhập ĐỌC được (để phân công thấy ai trống),
+-- giống hệt cách crew_unavailable đang làm — đây là thông tin xếp lịch, không
+-- nhạy cảm. Ghi đi qua service-role từ cổng thợ.
+drop policy if exists crew_available_read on public.crew_available;
+
+create policy crew_available_read on public.crew_available
+  for select using (auth.role() = 'authenticated');
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/vendors.sql — Nhà cung cấp & đơn đặt ngoài
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- Xoá đơn thì dòng chi đi theo (on delete cascade ở trên) — tiền của một đơn
+-- không còn tồn tại thì cũng không được nằm lại trong báo cáo.
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.studio_vendors enable row level security;
+
+alter table public.vendor_orders  enable row level security;
+
+drop policy if exists studio_vendors_owner_all on public.studio_vendors;
+
+create policy studio_vendors_owner_all on public.studio_vendors
+  for all using (owner_id = auth.uid() or public.is_admin())
+  with check (owner_id = auth.uid() or public.is_admin());
+
+drop policy if exists vendor_orders_owner_all on public.vendor_orders;
+
+create policy vendor_orders_owner_all on public.vendor_orders
+  for all using (owner_id = auth.uid() or public.is_admin())
+  with check (owner_id = auth.uid() or public.is_admin());
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/accounting.sql — Phiếu thu có số & khoá sổ kế toán
+-- ══════════════════════════════════════════════════════════════════════════
+
+alter table public.studio_receipt_seq enable row level security;
+
+drop policy if exists studio_receipt_seq_owner_all on public.studio_receipt_seq;
+
+create policy studio_receipt_seq_owner_all on public.studio_receipt_seq
+  for all using (owner_id = auth.uid() or public.is_admin())
+  with check (owner_id = auth.uid() or public.is_admin());
+
+revoke all on function public.next_receipt_no(uuid, integer) from public, anon;
+
+grant execute on function public.next_receipt_no(uuid, integer) to authenticated;
+
+-- BẮT BUỘC: c1_profiles_column_grants.sql đã thu hồi UPDATE toàn bảng profiles.
+-- Không cấp cột này thì nút "Khoá sổ" bấm xong im lặng không đổi gì.
+grant update (books_closed_until) on public.profiles to authenticated;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/weather.sql — Toạ độ điểm chụp cho dự báo thời tiết (chạy SAU studio_appointments)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- BẮT BUỘC: migrations/c1_profiles_column_grants.sql đã THU HỒI quyền UPDATE
+-- toàn bảng profiles và chỉ cấp lại theo từng cột. Không cấp ba cột này thì thẻ
+-- "Vị trí studio" lưu sẽ im lặng không đổi được gì.
+-- Cả ba đều vô hại (toạ độ + địa chỉ), không phải cột nhạy cảm như role/plan.
+grant update (studio_lat, studio_lng, studio_address) on public.profiles to authenticated;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/album_people.sql — Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+-- Chủ album (và admin) đọc/ghi. KHÔNG mở đọc công khai: trang khách
+-- (src/app/a/[slug]/page.tsx) chạy trên máy chủ bằng service role, nên khách
+-- không cần quyền gì trên bảng này.
+alter table public.album_people enable row level security;
+
+drop policy if exists album_people_owner_rw on public.album_people;
+
+create policy album_people_owner_rw on public.album_people
+  for all using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  )
+  with check (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  );
+
+alter table public.album_photo_people enable row level security;
+
+drop policy if exists album_photo_people_owner_rw on public.album_photo_people;
+
+/*
+ * Ngoài quyền sở hữu, policy này còn là HÀNG RÀO TOÀN VẸN cho hai chỗ mà khoá
+ * ngoại không với tới được: người và ảnh phải thuộc ĐÚNG album_id đã ghi. Không
+ * có nó, một lỗi lập trình trộn album A với album B vẫn ghi được, và khách album
+ * A sẽ thấy chip lọc ra ảnh của album B.
+ */
+create policy album_photo_people_owner_rw on public.album_photo_people
+  for all using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  )
+  with check (
+    exists (
+      select 1
+      from public.album_people p
+      join public.albums a on a.id = p.album_id
+      join public.photos ph on ph.id = photo_id
+      where p.id = person_id
+        and p.album_id = album_photo_people.album_id
+        and ph.album_id = album_photo_people.album_id
+        and (a.owner_id = auth.uid() or public.is_admin())
+    )
+  );
 

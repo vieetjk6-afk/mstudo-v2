@@ -321,7 +321,7 @@ thủ công cho dữ liệu cũ.
 > studio, nên đúng khoảnh khắc khách ký — không ai đăng nhập — chẳng có gì chạy.
 > Lịch chỉ lên khi chủ studio mở hợp đồng sửa tay một ô bất kỳ.
 
-## 18 tính năng mới (không có trong bản cũ)
+## 25 tính năng mới (không có trong bản cũ)
 
 | # | Tính năng | Mô tả | Nằm ở |
 | --- | --- | --- | --- |
@@ -343,6 +343,13 @@ thủ công cho dữ liệu cũ.
 | 16 | Nguồn khách tự nhận | Đoán kênh từ `utm_*`/`referrer` lúc khách gửi yêu cầu, giữ nguyên tới hợp đồng | Đặt lịch → HĐ |
 | 17 | Phễu chuyển đổi | Khách hỏi → yêu cầu → hợp đồng → tiền, kèm tỉ lệ từng bậc | Thu chi, tab 3 |
 | 18 | Nhắc kỷ niệm | Khách cũ tới mốc 1·3·5·10 năm, kèm lời chúc soạn sẵn | Tổng quan |
+| 19 | Lọc ảnh bằng AI | Tìm ảnh nhoè, ảnh chụp lỡ, gom chuỗi bấm rồi chỉ ra bản nét nhất — chạy trên máy, không upload | Công cụ ảnh → Lọc ảnh |
+| 20 | Ứng dụng khách (PWA) | Album & cổng hợp đồng cài được lên màn hình chính; chọn ảnh lưu xuống máy trước, mất mạng không mất lựa chọn | Trang khách |
+| 21 | Việc tự động | 8 luật theo trạng thái hợp đồng, bật/tắt bằng công tắc, chạy đúng MỘT lần cho mỗi hợp đồng | Dịch vụ & điều khoản |
+| 22 | Chấm công thợ | Thợ bấm "Đã đến / Đã xong" ở cổng thợ; Đối soát tiền công hiện giờ thực tế cạnh tiền | Cổng thợ → Đối soát |
+| 23 | Nhà cung cấp & đơn đặt ngoài | Album in, makeup, xe hoa: theo dõi tới khi giao khách; mỗi đơn một dòng chi, không đếm hai lần | Kho |
+| 24 | Xuất kế toán & khoá sổ | Excel 3 sheet (Thu · Chi · Công nợ) theo kỳ tuỳ ý, kèm mốc khoá sổ | Thu chi & công nợ |
+| 25 | Thời tiết buổi chụp ngoại | Mưa · gió · giờ vàng cho lịch ngoài trời trong 7 ngày, kèm ước lượng đường đi | Lịch làm việc |
 
 ### Chi tiết một số tính năng
 
@@ -359,6 +366,32 @@ thủ công cho dữ liệu cũ.
 **Cảnh báo lãi mỏng** — `biên = (tổng HĐ − tiền công nhân sự − chi phí sản xuất) / tổng HĐ`. Dưới 45% đỏ, 45–60% vàng, trên 60% xanh.
 
 ---
+
+**Lọc ảnh bằng AI (19)** — điểm nét bằng phương sai Laplacian, phơi sáng bằng histogram, gom ảnh trùng bằng mã nhận dạng khung **hai chiều 128 bit** (dHash một chiều ra mã toàn số 0 với mọi ảnh chuyển sáng đều từ trái sang phải — nền trời, mảng tường — nên hai tấm khác hẳn nhau vẫn bị coi là trùng; xem `hashDetail`). Giải mã bằng `createImageBitmap` + `OffscreenCanvas` ngay trong trình duyệt studio: **không endpoint, không upload**. Ngưỡng cố ý lệch về phía KHÔNG loại — một tấm chỉ bị xếp *nên loại* khi tệ **cả tuyệt đối lẫn tương đối** so với chính lô ảnh đó, nên lô cố ý mềm không bị loại sạch và lô siêu nét không loại oan. Công cụ **không tự xoá gì**: nó nói lý do kèm số đo cho từng tấm, cho bỏ tick, rồi đưa danh sách sang bước 2 của công cụ Lọc ảnh. Chưa làm (cần mô hình học sâu, không phải số học): phát hiện nhắm mắt, gom theo mặt.
+
+**Gom ảnh theo từng người (19d)** — lượt quét thứ ba, nằm trong lượt khuôn mặt và cũng tắt sẵn. Dùng mạng nhận dạng danh tính 128 chiều (dòng dõi dlib) trên khuôn mặt MediaPipe đã tìm ra, đã **căn chỉnh theo hai mắt** — bỏ căn chỉnh thì cùng một người nghiêng đầu 15° ra hai vector khác hẳn, và hỏng âm thầm vì vector vẫn ra 128 số hợp lệ. Thước là **khoảng cách Euclid trên vector THÔ**, không phải cosine: vector của mạng này nằm trong một hình nón nên cosine giữa hai vector bất kỳ đã là ~0,94 (đo thật: cùng người 0,996 / khác người 0,939 — khe 0,017, gom cả đám cưới vào một cụm). Gom bằng **Chinese Whispers** chứ không phải union-find, vì union-find dính bẫy dây chuyền: A giống B, B giống C, A≠C → gộp cả ba rồi lan ra cả album. Có hạt giống cố định nên chạy lại ra cùng kết quả. Thanh **chặt/rộng** gom lại tức thì trên vector đã có (không quét lại), và có nút gộp hai nhóm — máy gom sai là chuyện sẽ xảy ra, không có đường sửa thì studio bỏ dùng. Thư viện nạp bằng thẻ `<script>` tự phục vụ, KHÔNG `import`: bản ESM của nó làm webpack kéo cả nhánh TensorFlow-cho-Node vào gói trình duyệt và trang chết ở lượt dựng. `src/lib/face-group.ts` (luật thuần) · `face-embed.ts` · `npm run test:face-group`, xem thử ở `/uipreview/gom-theo-nguoi`.
+
+**Lọc theo khuôn mặt (19c)** — lượt quét THỨ HAI, tắt sẵn, chỉ ở công cụ của studio. Sửa đúng hai chỗ mà bộ đo cả khung mù: **người nhắm mắt** (một tấm nét căng có cô dâu chớp mắt vẫn được bộ đo cũ chấm điểm cao nhất chuỗi và chọn làm bản nên giữ — lỗi số một của mọi công cụ cull tự động) và **mặt nhoè trong khi nền nét** (lấy nét trượt ra sau lưng; điểm nét cả khung của tấm đó vẫn CAO vì lá cây và gạch tường đều sắc). Thứ tự chọn bản nên giữ đổi thành: **mắt mở trước, rồi mặt nét, rồi mới khung nét**. Tấm ĐỨNG RIÊNG nhắm mắt chỉ hạ xuống *xem lại*, không bao giờ *nên loại* — đứng riêng nghĩa là không còn bản nào khác của khoảnh khắc đó. Mặt nhỏ hơn 0,8% khung bị bỏ qua (khách qua đường nhắm mắt không làm hỏng ảnh ai). MediaPipe FaceLandmarker chạy bằng WASM **trong máy studio**, ảnh vẫn không rời máy; WASM tự phục vụ từ `/mediapipe` vì CSP chặn CDN ngoài (`scripts/chep-mediapipe.mjs`, chạy ở postinstall), mô hình 3,7 MB lấy từ storage.googleapis.com. Chạy TUẦN TỰ nên chậm hơn nhiều — giao diện nói trước. Chưa làm: gom ảnh theo từng người (cần mô hình nhận dạng danh tính, khác với mô hình tìm khuôn mặt). `src/lib/face-ai.ts` (luật thuần) · `face-detect.ts` · `npm run test:face-ai`, `npm run test:face-browser`, xem thử ở `/uipreview/khuon-mat`.
+
+**Khung so sánh ảnh (19b)** — ô ảnh trong bảng kết quả chỉnh được ba cỡ, và bấm vào một tấm mở khung so sánh. Ba nấc vì cả ba đều cần: **một ảnh lớn** (bố cục, biểu cảm), **hai ảnh cạnh nhau** với bản đề xuất của chuỗi, và **cắt 1:1 điểm ảnh gốc** — nấc quyết định, vì thu về màn hình thì hai tấm trong một chuỗi bấm trông y hệt nhau, độ nét chỉ hiện ra ở tỉ lệ 100%. Ở chế độ hai ảnh, **cả hai cắt cùng một điểm** — so hai chỗ khác nhau thì không kết luận được gì. Ảnh lớn và ô cắt giải mã **đúng lúc mở** rồi nhớ lại; giữ sẵn ảnh 1600px cho một lô 3.000 tấm là vài GB. Phép kẹp ô cắt nằm ở `cropRect()` trong lib (số học thuần, test bằng node); hợp đồng `createImageBitmap(blob, sx, sy, sw, sh)` trả đúng điểm ảnh gốc được kiểm trong Chromium thật. Xem thử ở `/uipreview/so-sanh-anh` (ảnh mẫu sinh ngay trong trình duyệt). `src/components/AiCompareView.tsx`.
+
+`src/lib/photo-ai.ts` · `photo-ai-scan.ts` · `AiFilterPanel.tsx` · `npm run test:photo-ai`, `npm run test:photo-ai-browser`.
+
+**Ứng dụng khách (20)** — `manifest` riêng cho từng album/hợp đồng (tên album + logo studio, `id` riêng nên không icon nào ghi đè icon nào). Lựa chọn ảnh ghi vào **sổ trên máy** (IndexedDB, lui về localStorage) trước khi gửi lên, thử lại với nhịp lùi dần, và hoà giải **ba bên theo từng ảnh** khi cả nhà mở cùng một link trên nhiều điện thoại — "bản trên máy luôn thắng" sẽ xoá sạch lựa chọn của máy kia. Viên trạng thái không nói dối theo cả hai chiều, và nút *đã chọn xong* chỉ báo studio khi lựa chọn thật sự đã lên máy chủ. Cổng hợp đồng nhớ số điện thoại 90 ngày (có nút thoát) và đọc được khi mất mạng từ bản chụp, kèm dòng nói rõ bản đó cũ bao lâu — trên đó có số tiền còn nợ. **Gợi ý ảnh na ná nhau trong album khách**: việc mệt nhất của khách không phải chọn ảnh đẹp, là cuộn qua bảy tấm giống hệt nhau rồi chọn đại — hoặc chọn cả bảy. Cùng bộ đo với công cụ của studio nhưng **cố ý chỉ lấy một nửa** (`duplicateGroups`): nhóm lại và chỉ ra bản nét nhất, KHÔNG dùng `judge()` — chê ảnh cưới của khách là việc của studio nếu họ muốn, không phải của phần mềm. Không tự chạy (tốn 3G, máy nóng) và **không bao giờ động vào lựa chọn**: quét xong nó chỉ **tách riêng** các tấm trùng khỏi lưới và bày thành từng chuỗi, khách bấm tấm nào thì tấm đó mới vào lựa chọn — cố ý không có nút *chọn hết bản đề xuất*, vì một cú bấm thêm sáu chục tấm rồi phải ngồi gỡ ra thì tệ hơn tự bấm sáu chục lần có chủ ý. **Ảnh khách đã chọn không bao giờ bị tách khỏi lưới.** Bấm một tấm ở đây mở **đúng khung xem ảnh của lưới** (phóng to, thả tim, ghi chú) và lật qua cả chuỗi — không nhìn rõ thì “khách tự chọn” cũng chỉ là bấm đại; khung xem vì thế nhận một danh sách thay vì luôn bám vào lưới, và mở từ lưới luôn xoá chuỗi đang giữ. Xem thử ở `/uipreview/anh-trung-khach`. **Không tốn tài nguyên máy chủ**: phép đo chạy trong trình duyệt khách, ảnh quét là chính ảnh xem trước của lưới (`/api/img`, `s-maxage` một năm + immutable) nên CDN phục vụ lượt lặp mà không đánh thức hàm, và service worker giữ sẵn 600 tấm. Kèm *Tác vụ → Bỏ chọn tất cả*: hai bước, nói rõ số sắp mất, và đi qua đúng đường của một lượt sửa bình thường nên vòng đọc lại không kéo lựa chọn vừa xoá quay về. `AlbumDuplicateFinder.tsx`.
+
+`src/lib/album-offline.ts` · `album-store.ts` · `client-manifest.ts` · `portal-device.ts` · `npm run test:album-offline`, `npm run test:portal-device`.
+
+**Việc tự động (21)** — tập *khi* và tập *thì* đều ĐÓNG, tám luật khai trong code (`src/lib/automations.ts`); bảng DB chỉ giữ cấu hình. Cố ý không làm trình dựng luật: studio cần tám việc đúng, không cần một Zapier. Ba luật gửi Zalo cho KHÁCH tắt sẵn, và ba luật đó có **email làm kênh dự phòng** — gửi một trong hai, không bao giờ cả hai: gửi Zalo đòi studio nối OA hoặc phiên cá nhân, mà phần lớn studio chưa làm, nên không có dự phòng thì luật bật lên vẫn không tới được ai còn studio thì tưởng đã nhắn. Việc **không có đường nào ra** (chưa nối Zalo, khách không email) thì KHÔNG bị đánh dấu đã chạy, để mai còn đi được. Chống lặp có **hai lớp** — nạp khoá đã chạy, và `dedupe_key` UNIQUE với cron **ghi dấu trước khi làm** (gửi hai lần tệ hơn không gửi lần nào). Cron `/api/cron/automations` 6:30 sáng. `npm run test:automations`.
+
+**Chấm công thợ (22)** — thợ không có tài khoản nên chấm công qua cổng thợ công khai, đúng hai nút. Dòng còn hở (quên bấm xong) trả `null` và **đếm riêng**, không tính 0 giờ — tính 0 nghĩa là bảng lương báo thợ làm cả ngày không công mà không ai phát hiện. Đối soát **đề xuất** tiền theo giờ × đơn giá, không tự ghi vào sổ lương. Thợ tự khai **khoảng rảnh** ở cổng thợ, và nửa còn lại nằm ở chỗ phân công: ô *Người phụ trách* của lịch studio ghi thẳng *“— đã báo bận”* / *“— đang rảnh”* vào từng dòng theo đúng ngày buổi đó. Ba trạng thái chứ không hai — **chưa khai gì là “chưa rõ”**, không phải “rảnh”, vì phần lớn thợ không bao giờ vào khai; và người “chưa rõ” để trơn, thêm chữ cho cả ba thì dòng nào cũng có đuôi và mắt không bắt được hai trạng thái đáng chú ý. `src/lib/timesheet.ts` · `npm run test:timesheet`.
+
+**Nhà cung cấp (23)** — bốn trạng thái tới "đã giao khách", không có "đã huỷ" (đơn huỷ thì xoá, nếu không nó vẫn được cộng tiền và vẫn bị đếm là trễ). Mỗi đơn sinh **đúng một** dòng `studio_expenses` qua `vendor_order_id` (UNIQUE) và sửa đơn là upsert dòng đó — sửa giá ba lần vẫn một dòng chi. Đơn chưa giao khách hiện luôn trong màn **Xử lý hình ảnh**, cùng chỗ với tiến độ hậu kỳ: một hợp đồng chỉ xong khi cả hậu kỳ lẫn album in cùng xong, bắt studio mở hai màn để ghép hai nửa là cách bỏ sót nửa thứ hai. `src/lib/vendors.ts` · `npm run test:vendors`.
+
+**Xuất kế toán & khoá sổ (24)** — phiếu thu dùng CHUNG khung in với hợp đồng, số phiếu do DB cấp nguyên tử theo studio × năm và lưu lại (bản cũ dùng 8 ký tự UUID và cộng luỹ kế tới *hôm nay*, nên in lại phiếu cũ ra số sai). Excel ba sheet theo kỳ tuỳ ý. Khoá sổ đánh mốc để số liệu đã gửi kế toán không đổi khi ai đó sửa hợp đồng cũ, và hàng rào nằm ở **trigger DB** chứ không ở React — RLS cho studio ghi thẳng vào hai bảng đó bằng anon key, nên một kiểm tra ở giao diện không phải hàng rào. Trigger xét **cả hai** mốc ngày cũ lẫn mới (dời bút toán ra khỏi kỳ đã khoá cũng làm đổi số của kỳ) nhưng chỉ chặn thay đổi **động tới tiền**: đóng dấu số phiếu và đính ảnh chuyển khoản vẫn làm được trên phiếu cũ, nếu không studio sẽ mở khoá sổ chỉ để in một tờ phiếu. Luật được chép lại thành `blocksWrite()` để báo trước bằng tiếng Việt — **sửa luật phải sửa cả hai nơi**. `src/lib/accounting.ts` · `npm run test:accounting`.
+
+**Thời tiết buổi chụp (25)** — Open-Meteo, không cần khoá API. Chỉ hiện cho lịch **ngoài trời** trong **7 ngày** (xa hơn là bịa). **Gió giật tính cùng hạng với mưa** — studio ngoại cảnh mất buổi vì gió cũng nhiều như vì mưa. Thời gian di chuyển là **ước lượng** đường chim bay × 1,35, luôn hiện kèm `≈` và chữ "ước lượng"; repo không gọi API chỉ đường. `src/lib/weather.ts` · `npm run test:weather`.
+
+**`setup-all.sql` (26)** — file dựng một project Supabase MỚI, gộp từ mảng `ORDER` trong `supabase/build-setup-all.mjs`. Thêm file SQL mà quên thêm dòng vào `ORDER` là **lỗi im lặng**: repo có bảng, project mới thì không, và app chạy được tới lúc ai đó mở đúng màn dùng bảng ấy — đã xảy ra thật với tám migration. Script giờ tự đối chiếu `ORDER` với thư mục `migrations/` và DỪNG nếu thiếu; `npm run test:setup-all` kiểm thêm rằng `setup-all.sql` trên đĩa chưa cũ so với các file SQL.
 
 ## Bản mobile
 
@@ -440,6 +473,10 @@ và cổng nhân viên).
   thêm mục "Lịch hẹn ngày mai" vào email nhắc việc.
 - Album hoàn thành **không** dựng lại phần tải hàng loạt: nút *Tải toàn bộ* dẫn
   về `/album/<slug>` — nơi đã có nén ZIP, đóng dấu mờ và luật hạn lưu trữ.
+- Cổng khách **cài được lên màn hình chính** (`/portal/<token>/manifest.webmanifest`,
+  tên khách + logo studio), **nhớ số điện thoại 90 ngày** trên máy đó, và **đọc
+  được khi mất mạng** từ bản chụp lần trước. Chi tiết + lý do ở
+  [`docs/goi-y-hoan-thien-app.md`](docs/goi-y-hoan-thien-app.md) mục 5 phần "ĐÃ LÀM".
 
 ### Chỗ CỐ Ý lệch bản vẽ (và vì sao)
 
@@ -676,6 +713,9 @@ Biến môi trường: `META_APP_ID`, `META_APP_SECRET`, `META_VERIFY_TOKEN`,
 
 Xem thư mục [`docs/`](docs/) — thiết lập môi trường, chuyển đổi dữ liệu,
 Supabase, và đặc tả client desktop.
+[`docs/goi-y-hoan-thien-app.md`](docs/goi-y-hoan-thien-app.md) là danh sách những
+chỗ app còn thiếu để đủ vòng, kèm phần "ĐÃ LÀM" ghi lại **vì sao** mỗi tính năng
+được dựng như vậy — đọc phần đó trước khi sửa lọc ảnh AI hoặc ứng dụng khách.
 
 ## Xem & chụp giao diện mà không cần đăng nhập
 

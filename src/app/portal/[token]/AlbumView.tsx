@@ -64,11 +64,20 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
 
   async function sendRating(stars: number) {
     setRating(stars);
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "review", phone, rating: stars, message: "" }),
-    });
+    // Mất mạng → `fetch` ném ra ngoài, sao đã sáng lên mà đánh giá không tới
+    // studio và khách tưởng đã gửi. Nói thật thay vì im lặng.
+    let res: Response;
+    try {
+      res = await fetch(`/api/c/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "review", phone, rating: stars, message: "" }),
+      });
+    } catch {
+      setRating(0);
+      toast("Đang mất mạng — chưa gửi được đánh giá. Thử lại khi có mạng nhé.");
+      return;
+    }
     if (res.ok) {
       setRated(true);
       toast("Cảm ơn bạn đã đánh giá!");

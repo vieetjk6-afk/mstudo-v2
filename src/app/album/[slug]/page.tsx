@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     .eq("slug", params.slug)
     .maybeSingle();
   if (!data?.title) return { title: "mstudo" };
-  return buildAlbumMetadata({
+  const meta = await buildAlbumMetadata({
     title: data.title,
     description: data.description,
     coverUrl: data.cover_url,
@@ -29,6 +29,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
     path: `/album/${params.slug}`,
     ownerId: data.owner_id,
   });
+  return { ...meta, manifest: `/album/${params.slug}/manifest.webmanifest` };
 }
 
 export default async function GalleryPage({ params, searchParams }: { params: { slug: string }; searchParams?: { share?: string; s?: string } }) {

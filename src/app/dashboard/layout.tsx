@@ -146,7 +146,10 @@ on conflict (id) do update set role='admin', is_active=true;`}
   return (
     <div className="min-h-screen">
       <Suspense fallback={null}>
-        <NavProgress />
+        {/* `tier` để thanh tiến độ mang màu của khu đang mở (xanh trong khu
+            studio, vàng ngoài đó) — nó nằm NGOÀI .studio-shell nên không tự
+            thừa hưởng token màu. Xem @/lib/studio-shell-paths. */}
+        <NavProgress tier={tier} />
       </Suspense>
       {expiredTrialPlan && <TrialExpiredBanner expiredPlan={expiredTrialPlan} />}
       <DashboardChrome

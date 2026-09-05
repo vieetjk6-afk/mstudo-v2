@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ChevronLeft, ChevronRight, Plus, CalendarDays, AlertCircle, DoorOpen, UsersRound,
@@ -9,6 +9,9 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { Panel, PanelHead, Pill, ProgressBar, EmptyState, KindPill } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
+import WeatherChip, { WeatherDetail, useShootWeather } from "@/components/studio/WeatherChip";
+import type { DayForecast } from "@/lib/weather";
+import { availabilityOn, digitsOnly } from "@/lib/timesheet";
 import { Modal } from "@/components/studio/Modal";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDayMonth } from "@/lib/date";
@@ -37,6 +40,8 @@ export type CrewOption = {
   crew_id: string | null;
   staff_id: string | null;
   name: string;
+  /** SĐT — khoá để tra khoảng rảnh/mốc bận thợ tự khai (null với nhân viên). */
+  phone: string | null;
   role: string;
 };
 
@@ -103,7 +108,7 @@ function draftOf(a: StudioAppointment): Draft {
 
 export default function SchedulePage({
   ownerId, readOnly, today, initialAppointments, rooms, assignees, contracts,
-  branches = [], defaultBranchId = null,
+  branches = [], defaultBranchId = null, studioCoords = null, crewFree = [], crewBusy = [],
 }: {
   ownerId: string;
   /** Nhân viên chỉ xem: giữ nguyên mọi thông tin, ẩn nút ghi. */
@@ -117,6 +122,11 @@ export default function SchedulePage({
   branches?: { id: string; name: string }[];
   /** Chi nhánh đang xem: lịch mới đặt mặc định thuộc cơ sở đó. */
   defaultBranchId?: string | null;
+  /** Toạ độ studio — điểm xuất phát để ƯỚC LƯỢNG đường đi tới điểm chụp. */
+  studioCoords?: { lat: number; lng: number } | null;
+  /** Thợ TỰ KHAI rảnh (crew_available) và tự báo bận (crew_unavailable). */
+  crewFree?: { phone: string; date: string }[];
+  crewBusy?: { phone: string; date: string }[];
 }) {
   const supabase = createClient();
   const { toast, toastNode } = useToast();
@@ -142,6 +152,44 @@ export default function SchedulePage({
     [items, weekStart, weekEnd]
   );
   const counts = useMemo(() => countByKind(weekItems), [weekItems]);
+
+  /**
+   * Dự báo thời tiết cho các buổi NGOÀI TRỜI của tuần đang xem. Hook tự lọc
+   * (chỉ lịch ngoài trời, chỉ trong 7 ngày, chỉ khi có địa điểm) và gọi API MỘT
+   * lượt cho cả tuần — xem @/components/studio/WeatherChip.
+   */
+  const weatherPlaces = useMemo(
+    () =>
+      weekItems.map((a) => ({
+        key: a.id,
+        kind: a.kind,
+        date: a.appt_date,
+        location: a.location,
+        lat: a.lat ?? null,
+        lng: a.lng ?? null,
+      })),
+    [weekItems]
+  );
+  const weather = useShootWeather(weatherPlaces, today);
+
+  /**
+   * Thợ này RẢNH / BẬN / CHƯA RÕ vào ngày đó. Luật ưu tiên ở @/lib/timesheet:
+   * báo bận thắng khai rảnh, và chưa khai gì là "chưa rõ" chứ không phải "rảnh"
+   * — phần lớn thợ không bao giờ vào khai, coi im lặng là rảnh sẽ khiến màn này
+   * tự tin gán việc cho người đang đi làm chỗ khác.
+   */
+  const availabilityOf = useCallback(
+    (phone: string | null | undefined, date: string) => {
+      const d = digitsOnly(phone);
+      if (!d || !date) return "unknown" as const;
+      return availabilityOn(
+        date,
+        crewFree.filter((x) => digitsOnly(x.phone) === d).map((x) => ({ date: x.date, start: null, end: null })),
+        crewBusy.filter((x) => digitsOnly(x.phone) === d).map((x) => ({ date: x.date, start: null, end: null }))
+      );
+    },
+    [crewFree, crewBusy]
+  );
   const shown = useMemo(() => weekItems.filter((a) => kindOn[a.kind]), [weekItems, kindOn]);
 
   const byDay = useMemo(() => {
@@ -432,6 +480,9 @@ export default function SchedulePage({
                             <p className="mt-0.5 line-clamp-2 text-[12px] font-semibold" style={{ textWrap: "pretty" }}>
                               {apptTitle(a)}
                             </p>
+                            {/* Dự báo cho buổi ngoài trời — tự ẩn với lịch trong
+                                nhà và với buổi ngoài tầm 7 ngày. */}
+                            <WeatherChip day={weather.dayOf(a.id)} />
                             <p className="mt-1 flex items-center gap-1 text-[10.5px]" style={{ color: "var(--tx3)" }}>
                               <span
                                 className="flex h-[17px] w-[17px] flex-none items-center justify-center rounded-full text-[8px] font-bold"
@@ -567,6 +618,10 @@ export default function SchedulePage({
           branches={branches}
           busy={busy}
           readOnly={readOnly}
+          availabilityOf={availabilityOf}
+          weatherDay={draft.id ? weather.dayOf(draft.id) : null}
+          studioCoords={studioCoords}
+          shootCoords={draft.id ? weather.coordsOf(draft.id) : null}
           onSave={save}
           onDelete={remove}
           onAdvance={() => {
@@ -587,6 +642,7 @@ export default function SchedulePage({
 
 function ApptDialog({
   draft, setDraft, rooms, assignees, contracts, branches, busy, readOnly, onSave, onDelete, onAdvance,
+  weatherDay = null, studioCoords = null, shootCoords = null, availabilityOf,
 }: {
   draft: Draft;
   setDraft: (d: Draft | null) => void;
@@ -599,6 +655,12 @@ function ApptDialog({
   onSave: () => void;
   onDelete: (id: string) => void;
   onAdvance: () => void;
+  /** Dự báo ĐÚNG ngày của buổi này (null nếu trong nhà / ngoài 7 ngày). */
+  weatherDay?: DayForecast | null;
+  studioCoords?: { lat: number; lng: number } | null;
+  shootCoords?: { lat: number; lng: number } | null;
+  /** Thợ này rảnh/bận/chưa rõ vào ngày đó — xem ghi chú ở SchedulePage. */
+  availabilityOf?: (phone: string | null | undefined, date: string) => "busy" | "free" | "unknown";
 }) {
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
   const { label, tone, Icon } = kindMeta(draft.kind);
@@ -693,12 +755,35 @@ function ApptDialog({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <Field label="Người phụ trách">
+              {/* Ghi trạng thái RẢNH/BẬN thẳng vào nhãn từng dòng chứ không để
+                  riêng một bảng bên cạnh: người xếp lịch quyết định ngay tại ô
+                  này, và một cảnh báo sau khi đã chọn thì đã muộn. Người "chưa
+                  rõ" để trơn — thêm chữ cho cả ba trạng thái thì dòng nào cũng
+                  có đuôi và mắt không còn bắt được hai trạng thái đáng chú ý. */}
               <select className="input" value={draft.assignee} onChange={(ev) => set("assignee", ev.target.value)} disabled={readOnly}>
                 <option value="">— Chưa phân công —</option>
-                {assignees.map((a) => (
-                  <option key={a.key} value={a.key}>{a.name}</option>
-                ))}
+                {assignees.map((a) => {
+                  const av = availabilityOf?.(a.phone, draft.appt_date) ?? "unknown";
+                  return (
+                    <option key={a.key} value={a.key}>
+                      {a.name}{av === "busy" ? " — đã báo bận" : av === "free" ? " — đang rảnh" : ""}
+                    </option>
+                  );
+                })}
               </select>
+              {(() => {
+                const picked = assignees.find((a) => a.key === draft.assignee);
+                if (!picked) return null;
+                const av = availabilityOf?.(picked.phone, draft.appt_date) ?? "unknown";
+                if (av === "unknown") return null;
+                return (
+                  <p className="mt-1 text-[11.5px]" style={{ color: av === "busy" ? "var(--am)" : "var(--text3)" }}>
+                    {av === "busy"
+                      ? `${picked.name} đã tự báo bận ngày này.`
+                      : `${picked.name} đã khai rảnh ngày này.`}
+                  </p>
+                );
+              })()}
             </Field>
             <Field label="Phòng">
               <input
@@ -726,6 +811,18 @@ function ApptDialog({
 
           <Field label="Địa điểm">
             <input className="input" value={draft.location} onChange={(ev) => set("location", ev.target.value)} placeholder="Đồi chè Cầu Đất, Đà Lạt…" disabled={readOnly} />
+            {/* Dự báo nằm NGAY DƯỚI ô địa điểm: đây là lúc studio đang nghĩ về
+                nơi chụp, nên là chỗ duy nhất con số mưa đổi được quyết định. */}
+            {weatherDay && (
+              <div className="mt-2">
+                <WeatherDetail
+                  day={weatherDay}
+                  startTime={draft.start_time || null}
+                  from={studioCoords}
+                  to={shootCoords}
+                />
+              </div>
+            )}
           </Field>
 
           <Field label="Ghi chú">

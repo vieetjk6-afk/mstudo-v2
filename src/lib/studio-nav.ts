@@ -5,7 +5,7 @@ import {
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
   MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
-  Building2, UserRound, MessageCircle, Star,
+  Building2, UserRound, MessageCircle, Star, Truck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -144,6 +144,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { href: "/dashboard/studio/rental", label: "Phòng váy", icon: Shirt, minTier: "full", roles: MANAGER_OK, keywords: "trang phuc thue vay" },
       { href: "/dashboard/studio/equipment", label: "Thiết bị", icon: Camera, minTier: "full", roles: MANAGER_OK, keywords: "may anh ong kinh den" },
+      // Nhà cung cấp nằm ở "Kho" chứ không ở "Tài chính": studio mở nó để hỏi
+      // "đơn album của khách A đã in xong chưa", tức là một câu hỏi về ĐỒ ĐANG Ở
+      // ĐÂU — cùng mạch với phòng váy và thiết bị. Tiền của đơn tự chảy sang
+      // Thu chi (một dòng cho một đơn), nên không cần thêm một mục ở nhóm tiền.
+      { href: "/dashboard/studio/vendors", label: "Nhà cung cấp", icon: Truck, minTier: "full", roles: MANAGER_OK, keywords: "don dat ngoai xuong album in an makeup thue ngoai xe hoa nha cung cap vendor" },
     ],
   },
   {

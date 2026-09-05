@@ -4,6 +4,7 @@ import { contractTotal, sumAmounts, type StudioExpense } from "@/lib/types";
 import { buildFunnel, sourceLabel } from "@/lib/lead-source";
 import { brandFrom } from "@/lib/studio-brand";
 import { applyBranch, getBranchScope } from "@/lib/branches";
+import AccountingExportCard from "@/components/studio/AccountingExportCard";
 import ReportsView, { type PaymentRow, type SalaryRow, type SourceStat } from "./ReportsView";
 
 
@@ -136,6 +137,7 @@ export default async function ReportsPage() {
   });
 
   return (
+    <div className="space-y-3.5">
     <ReportsView
       ownerId={profile.id}
       studio={{
@@ -149,6 +151,16 @@ export default async function ReportsPage() {
       initialTarget={Number(profile.monthly_revenue_target) || 0}
       sourceStats={sourceStats}
       funnel={funnel}
+      closedUntil={(profile as { books_closed_until?: string | null }).books_closed_until ?? null}
     />
+      {/* Xuất kế toán + khoá sổ để RIÊNG dưới màn Thu chi, không nhồi vào dải
+          tab: đây là việc làm vài lần một tháng (gửi kế toán, chốt kỳ), khác
+          hẳn nhịp của các tab số liệu vốn mở hằng tuần. */}
+      <AccountingExportCard
+        ownerId={profile.id}
+        initialClosedUntil={(profile as { books_closed_until?: string | null }).books_closed_until ?? null}
+        canClose={profile.actingRole === "owner" || profile.actingRole === "admin" || profile.actingRole === "accountant"}
+      />
+    </div>
   );
 }

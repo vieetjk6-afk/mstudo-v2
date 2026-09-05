@@ -33,3 +33,10 @@ next-env.d.ts
 
 # ảnh chụp giao diện do scripts/chup-giao-dien.mjs sinh ra
 anh-giao-dien/
+
+# Bộ WASM MediaPipe — chép từ node_modules ở postinstall (scripts/chep-mediapipe.mjs)
+public/mediapipe/
+
+# Mô hình khuôn mặt tải về khi chạy test (3,7 MB) — không commit
+desktop/test/.cache/
+public/face-model/

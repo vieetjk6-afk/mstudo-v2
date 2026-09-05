@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Save, HardDrive, ReceiptText, Landmark, Gift, Percent } from "lucide-react";
+import { Check, Save, HardDrive, ReceiptText, Landmark, Gift, Percent, MapPin } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { coordsInText } from "@/lib/weather";
 
 /**
  * Hai chính sách chạy NGẦM của studio, đặt một lần rồi thôi:
@@ -22,6 +23,9 @@ export default function StudioPolicyCard({
   initialContractDepositPercent = 25,
   initialReferralReward = 0,
   initialReferralDiscount = 0,
+  initialStudioAddress = "",
+  initialStudioLat = null,
+  initialStudioLng = null,
 }: {
   ownerId: string;
   initialStorageMonths: number;
@@ -34,6 +38,10 @@ export default function StudioPolicyCard({
   initialReferralReward?: number;
   /** Ưu đãi cho khách được giới thiệu (VND). */
   initialReferralDiscount?: number;
+  /** Địa chỉ + toạ độ studio — điểm xuất phát để ước lượng đường đi tới điểm chụp. */
+  initialStudioAddress?: string;
+  initialStudioLat?: number | null;
+  initialStudioLng?: number | null;
 }) {
   const supabase = createClient();
   const [months, setMonths] = useState(initialStorageMonths);
@@ -42,9 +50,21 @@ export default function StudioPolicyCard({
   const [depPct, setDepPct] = useState(initialContractDepositPercent);
   const [reward, setReward] = useState(initialReferralReward);
   const [discount, setDiscount] = useState(initialReferralDiscount);
+  const [addr, setAddr] = useState(initialStudioAddress);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(
+    initialStudioLat != null && initialStudioLng != null ? { lat: initialStudioLat, lng: initialStudioLng } : null
+  );
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [locNote, setLocNote] = useState<string | null>(null);
+
+  /** Dán link Google Maps (hoặc "lat,lng") → tự đọc ra toạ độ. */
+  function onAddr(v: string) {
+    setAddr(v);
+    const c = coordsInText(v);
+    if (c) setCoords(c);
+  }
 
   const money = (n: number) => Math.max(0, Math.min(100_000_000, Math.round(n) || 0));
 
@@ -62,8 +82,34 @@ export default function StudioPolicyCard({
         referral_discount: money(discount),
       })
       .eq("id", ownerId);
+    if (error) {
+      setSaving(false);
+      return setErr(error.message);
+    }
+
+    // Vị trí studio ghi ở lượt RIÊNG, và lỗi ở đây KHÔNG được làm hỏng phần trên.
+    // Project chưa chạy supabase/migrations/weather.sql thì ba cột này chưa tồn
+    // tại; nhồi chung một lượt update là cả thẻ chính sách không lưu được gì.
+    setLocNote(null);
+    const { error: locErr } = await supabase
+      .from("profiles")
+      .update({
+        studio_address: addr.trim().slice(0, 300) || null,
+        studio_lat: coords?.lat ?? null,
+        studio_lng: coords?.lng ?? null,
+      })
+      .eq("id", ownerId);
+    if (locErr) {
+      // 42703 = cột không tồn tại; PGRST204 = schema cache của PostgREST chưa có cột.
+      const missing = locErr.code === "42703" || locErr.code === "PGRST204" || /column .* does not exist/i.test(locErr.message);
+      setLocNote(
+        missing
+          ? "Đã lưu chính sách. Riêng vị trí studio cần chạy supabase/migrations/weather.sql trước."
+          : `Đã lưu chính sách, nhưng chưa lưu được vị trí studio: ${locErr.message}`
+      );
+    }
+
     setSaving(false);
-    if (error) return setErr(error.message);
     setSaved(true);
     setTimeout(() => setSaved(false), 2200);
   }
@@ -179,7 +225,29 @@ export default function StudioPolicyCard({
         </div>
       </div>
 
+      {/* ── Vị trí studio ───────────────────────────────────────────────────
+          Dùng để ƯỚC LƯỢNG thời gian di chuyển tới điểm chụp trên màn Lịch làm
+          việc. Không bắt buộc: bỏ trống thì lịch vẫn hiện dự báo thời tiết, chỉ
+          không có dòng "≈ 18 km · 25 phút từ studio". */}
+      <div className="mt-4 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+        <label className="label flex items-center gap-1.5">
+          <MapPin size={14} /> Vị trí studio
+        </label>
+        <input
+          className="input"
+          value={addr}
+          onChange={(e) => onAddr(e.target.value)}
+          placeholder="Dán link Google Maps của studio, hoặc gõ địa chỉ"
+        />
+        <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+          {coords
+            ? `Đã có toạ độ ${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)} — màn Lịch làm việc sẽ ước lượng đường đi tới điểm chụp.`
+            : "Dán link Google Maps để lấy toạ độ. Bỏ trống vẫn xem được dự báo thời tiết, chỉ không có ước lượng đường đi."}
+        </p>
+      </div>
+
       {err && <p className="mt-3 text-xs" style={{ color: "var(--s-red)" }}>{err}</p>}
+      {locNote && <p className="mt-3 text-xs" style={{ color: "var(--warn)" }}>{locNote}</p>}
 
       <button onClick={save} disabled={saving} className="btn-primary mt-4">
         {saved ? <Check size={15} /> : <Save size={15} />} {saving ? "Đang lưu…" : saved ? "Đã lưu" : "Lưu chính sách"}

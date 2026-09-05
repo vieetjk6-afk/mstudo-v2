@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { pickFolderLinks } from "@/lib/album-original";
+import { visibleChips } from "@/lib/face-people";
 
 export const dynamic = "force-dynamic";
 
@@ -65,9 +66,18 @@ export async function POST(
     ? pickFolderLinks((sources ?? []).filter((x) => x.stage !== "delivery"))
     : [];
 
-  const [{ data: sel }, { data: dis }] = await Promise.all([
+  const [{ data: sel }, { data: dis }, { data: ppl }, { data: pplLinks }] = await Promise.all([
     admin.from("selections").select("photo_id, client_note").eq("album_id", album.id),
     admin.from("dislikes").select("photo_id, client_note").eq("album_id", album.id),
+    // Nhóm người studio đã lưu — cùng dữ liệu mà trang không mật khẩu dựng sẵn
+    // ở src/app/a/[slug]/page.tsx. Chưa chạy migration thì `data` là null và
+    // album vẫn chạy bình thường, chỉ không có hàng chip.
+    admin
+      .from("album_people")
+      .select("id, name, cover_photo_id, position")
+      .eq("album_id", album.id)
+      .order("position"),
+    admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
   ]);
   const selected = (sel ?? []).map((s) => s.photo_id);
   const disliked = (dis ?? []).map((d) => d.photo_id);
@@ -82,5 +92,6 @@ export async function POST(
     selected,
     disliked,
     notes,
+    people: visibleChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id))),
   });
 }
