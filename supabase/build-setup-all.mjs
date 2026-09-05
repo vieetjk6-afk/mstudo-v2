@@ -371,10 +371,14 @@ function banKe(files) {
   const out = [];
   for (const [rel, desc] of files) {
     const sql = readFileSync(join(HERE, rel), "utf8");
-    const bang = [...sql.matchAll(/create\s+table\s+if\s+not\s+exists\s+public\.(\w+)/gi)].map((m) => m[1]);
-    const cot = [...sql.matchAll(/alter\s+table\s+public\.(\w+)\s+add\s+column\s+if\s+not\s+exists\s+(\w+)/gi)].map(
-      (m) => `${m[1]}.${m[2]}`
-    );
+    // `public.` là TUỲ CHỌN trong hai mẫu dưới đây, và đó không phải chuyện nhỏ:
+    // album_selection_done.sql viết `alter table albums add column …` không kèm
+    // schema, nên bản đầu bỏ sót nó — đúng cái cột mà automations.sql đòi phải
+    // có trước. Một điểm mù ở đây nghĩa là báo "đủ rồi" trong khi vẫn thiếu.
+    const bang = [...sql.matchAll(/create\s+table\s+if\s+not\s+exists\s+(?:public\.)?(\w+)/gi)].map((m) => m[1]);
+    const cot = [
+      ...sql.matchAll(/alter\s+table\s+(?:public\.)?(\w+)\s+add\s+column\s+if\s+not\s+exists\s+(\w+)/gi),
+    ].map((m) => `${m[1]}.${m[2]}`);
     if (bang.length || cot.length) {
       out.push({ file: rel, mo_ta: desc, bang: [...new Set(bang)].sort(), cot: [...new Set(cot)].sort() });
     }
