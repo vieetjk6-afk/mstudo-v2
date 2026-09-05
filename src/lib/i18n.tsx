@@ -143,12 +143,39 @@ export const dict: Dict = {
   resetConfirm: { vi: "Bỏ hết", en: "Clear all" },
   resetDone: { vi: "Đã bỏ toàn bộ lựa chọn.", en: "All picks cleared." },
   // gợi ý ảnh trùng (bộ lọc chạy ngay trên máy khách)
-  // Lọc theo người — studio gom & đặt tên sẵn, khách chỉ bấm chip.
-  filterByPerson: { vi: "Xem ảnh của:", en: "Show photos of:" },
-  everyone: { vi: "Cả album", en: "Everyone" },
+  // Tìm ảnh theo khuôn mặt. Studio quét một lần, khách chỉ bấm — hoặc tải ảnh
+  // mình lên, và khi đó mới tải mô hình.
+  faceFindTitle: { vi: "Tìm ảnh có mặt bạn", en: "Find photos you're in" },
+  faceClear: { vi: "Xem cả album", en: "Show all" },
+  faceOnePerson: { vi: "Một người trong album", en: "Someone in this album" },
+  faceUpload: { vi: "Tải ảnh của bạn lên", en: "Upload a photo of yourself" },
+  faceUploadCost: {
+    vi: "Ảnh của bạn không rời khỏi máy này. Lần đầu tải ~20 MB bộ nhận diện.",
+    en: "Your photo never leaves this device. First use downloads ~20 MB.",
+  },
+  faceLoading: { vi: "Đang tải bộ nhận diện…", en: "Loading the recogniser…" },
+  faceSearching: { vi: "Đang tìm…", en: "Searching…" },
+  faceFound: { vi: "Đã tìm thấy bạn.", en: "Found you." },
+  faceUsedBiggest: {
+    vi: "Ảnh có nhiều người nên lấy khuôn mặt lớn nhất.",
+    en: "The photo had several faces, so the largest one was used.",
+  },
+  faceNoneInPhoto: {
+    vi: "Không thấy khuôn mặt nào trong ảnh bạn chọn. Thử một tấm chụp rõ mặt hơn.",
+    en: "No face found in that photo. Try one where the face is clearer.",
+  },
+  faceNoMatch: {
+    vi: "Không tìm thấy bạn trong album này. Bạn vẫn có thể tự chọn một khuôn mặt ở trên.",
+    en: "Couldn't find you in this album. You can still pick a face above.",
+  },
+  faceNoSupport: {
+    vi: "Trình duyệt này không chạy được bộ nhận diện. Bạn vẫn chọn được khuôn mặt ở trên.",
+    en: "This browser can't run the recogniser. You can still pick a face above.",
+  },
+  faceFailed: { vi: "Không tìm được, thử lại giúp tôi.", en: "Search failed, please try again." },
   personHint: {
-    vi: "Đang chỉ hiện ảnh có mặt người này. Bấm lại vào chip để xem cả album.",
-    en: "Showing only photos this person appears in. Tap the chip again for the whole album.",
+    vi: "Đang chỉ hiện ảnh có mặt người này. Bấm lại vào khuôn mặt đó để xem cả album.",
+    en: "Showing only photos this person appears in. Tap that face again for the whole album.",
   },
   dupTitle: { vi: "Ảnh na ná nhau", en: "Near-identical photos" },
   dupIntro: {

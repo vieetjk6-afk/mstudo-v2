@@ -13,15 +13,17 @@
  *
  * Nạp thẳng code thật.
  */
-import { centroid, matchKnown, GROUP_DEFAULTS } from "../../src/lib/face-group.ts";
+import { centroid, matchKnown, nearestPerson, GROUP_DEFAULTS } from "../../src/lib/face-group.ts";
 import {
   NAME_MAX,
+  faceChips,
+  faceCrop,
   filterByPerson,
   indexByKey,
   matchKey,
   nameProblems,
+  padBox,
   resolvePhotoIds,
-  visibleChips,
 } from "../../src/lib/face-people.ts";
 
 let pass = 0;
@@ -224,43 +226,70 @@ const GROOM = [20, 0, 0, 0];
   eq(m.map((x) => x.knownId), [null], "album chưa lưu ai: tất cả là người mới");
 }
 
-/* ── visibleChips ─────────────────────────────────────────────────────────── */
-console.log("\n— Chip lọc hiện cho khách —");
+/* ── faceChips ────────────────────────────────────────────────────────────── */
+console.log("\n— Khuôn mặt hiện cho khách chọn —");
+const P = (id, name, cover, position, face_count = 5) => ({
+  id,
+  name,
+  cover_photo_id: cover,
+  cover_box: [0.4, 0.2, 0.1, 0.15],
+  descriptor: null,
+  face_count,
+  position,
+});
 const people = [
-  { id: "P2", name: "Chú rể", cover_photo_id: "p2", position: 1 },
-  { id: "P1", name: "Cô dâu", cover_photo_id: "p1", position: 0 },
-  { id: "P3", name: "", cover_photo_id: "p3", position: 2 }, // chưa đặt tên
-  { id: "P4", name: "Mẹ cô dâu", cover_photo_id: "p9", position: 3 }, // ảnh đã bị xoá
+  P("P2", "Chú rể", "p2", 1),
+  P("P1", "Cô dâu", "p1", 0),
+  P("P3", "", "p3", 2), // chưa đặt tên — VẪN phải hiện
+  P("P5", "", "p1", 4), // chưa đặt tên, ít ảnh hơn
+  P("P4", "Mẹ cô dâu", "p9", 3), // ảnh đã bị xoá khỏi album
 ];
 const links = [
   { person_id: "P1", photo_id: "p1" },
   { person_id: "P1", photo_id: "p2" },
   { person_id: "P2", photo_id: "p2" },
+  { person_id: "P3", photo_id: "p1" },
+  { person_id: "P3", photo_id: "p2" },
   { person_id: "P3", photo_id: "p3" },
+  { person_id: "P5", photo_id: "p3" },
   { person_id: "P4", photo_id: "p9" }, // p9 không còn trong album
 ];
 const inAlbum = new Set(["p1", "p2", "p3"]);
-const chips = visibleChips(people, links, inAlbum);
+const chips = faceChips(people, links, inAlbum);
 
-eq(chips.map((c) => c.name), ["Cô dâu", "Chú rể"], "xếp theo position studio đặt, không theo thứ tự hàng");
-ok(!chips.some((c) => c.id === "P3"), "người CHƯA ĐẶT TÊN không thành chip");
-ok(!chips.some((c) => c.id === "P4"), "người mà mọi ảnh đã bị xoá khỏi album cũng không thành chip");
-eq(chips[0].photoIds, ["p1", "p2"], "chip mang đúng danh sách ảnh");
+// Đây là thay đổi QUAN TRỌNG so với bản đầu: khách nhận ra người bằng MẶT chứ
+// không bằng tên, nên cụm chưa đặt tên phải hiện. Studio đặt tên cô dâu chú rể
+// là cùng — mẹ cô dâu, cô bạn thân, đứa cháu thì không ai ngồi đặt hết.
+ok("người CHƯA đặt tên VẪN hiện (khách nhận ra bằng mặt)", chips.some((c) => c.id === "P3"));
+eq(
+  chips.map((c) => c.id),
+  ["P1", "P2", "P3", "P5"],
+  "đã đặt tên lên trước theo position, rồi tới mặt chưa tên xếp theo SỐ ẢNH giảm dần"
+);
+ok(!chips.some((c) => c.id === "P4"), "người mà mọi ảnh đã bị xoá khỏi album thì không hiện");
+eq(chips[0].photoIds, ["p1", "p2"], "mang đúng danh sách ảnh");
 ok(chips[0].coverPhotoId === "p1", "ảnh bìa còn trong album thì giữ");
+eq(chips[0].coverBox, [0.4, 0.2, 0.1, 0.15], "mang theo khung khuôn mặt để cắt ảnh thẻ");
 {
-  const c = visibleChips(
-    [{ id: "P9", name: "X", cover_photo_id: "p-mat", position: 0 }],
+  const c = faceChips(
+    [{ ...P("P9", "X", "p-mat", 0), cover_box: null }],
     [{ person_id: "P9", photo_id: "p1" }],
     inAlbum
   );
-  ok(c[0].coverPhotoId === null, "ảnh bìa đã bị xoá → bìa null, chip vẫn còn (còn ảnh khác)");
+  ok(c[0].coverPhotoId === null, "ảnh bìa đã bị xoá → bìa null, mặt vẫn còn (còn ảnh khác)");
+  ok(c[0].coverBox === null, "không có khung thì trả null, không trả mảng rỗng");
 }
 {
-  const same = visibleChips(
-    [
-      { id: "A", name: "Bé An", cover_photo_id: null, position: 0 },
-      { id: "B", name: "Anh Ba", cover_photo_id: null, position: 0 },
-    ],
+  const c = faceChips(
+    [{ ...P("P9", "X", "p1", 0), cover_box: [1, 2, 3] }],
+    [{ person_id: "P9", photo_id: "p1" }],
+    inAlbum
+  );
+  ok(c[0].coverBox === null, "khung sai độ dài (3 số) bị loại, không cắt bừa");
+}
+{
+  const same = faceChips(
+    [P("A", "Bé An", null, 0), P("B", "Anh Ba", null, 0)],
     [
       { person_id: "A", photo_id: "p1" },
       { person_id: "B", photo_id: "p1" },
@@ -269,7 +298,108 @@ ok(chips[0].coverPhotoId === "p1", "ảnh bìa còn trong album thì giữ");
   );
   eq(same.map((c) => c.name), ["Anh Ba", "Bé An"], "cùng position thì xếp theo tên tiếng Việt");
 }
-eq(visibleChips([], [], inAlbum), [], "album chưa lưu ai: không có chip nào");
+eq(faceChips([], [], inAlbum), [], "album chưa lưu ai: không có mặt nào");
+
+/* ── Cắt ảnh mặt ──────────────────────────────────────────────────────────── */
+console.log("\n— Cắt ảnh mặt bằng CSS —");
+{
+  const b = padBox([0.4, 0.4, 0.1, 0.1], 0.5);
+  ok(Math.abs(b.w - 0.2) < 1e-9 && Math.abs(b.h - 0.2) < 1e-9, "nới 50% mỗi bên → to gấp đôi");
+  ok(
+    Math.abs(b.x + b.w / 2 - 0.45) < 1e-9 && Math.abs(b.y + b.h / 2 - 0.45) < 1e-9,
+    "…và giữ nguyên TÂM khuôn mặt"
+  );
+}
+{
+  const b = padBox([0.02, 0.02, 0.1, 0.1], 0.5);
+  ok(b.x === 0 && b.y === 0, "mặt sát mép trên-trái: đẩy vào trong, không âm");
+  ok(Math.abs(b.w - 0.2) < 1e-9, "…và vẫn giữ đủ bề rộng đã nới");
+}
+{
+  const b = padBox([0.9, 0.9, 0.09, 0.09], 0.5);
+  ok(b.x + b.w <= 1 + 1e-9 && b.y + b.h <= 1 + 1e-9, "mặt sát mép dưới-phải: không tràn ra ngoài");
+}
+{
+  const b = padBox([0.1, 0.1, 0.9, 0.9], 1);
+  ok(b.w <= 1 && b.h <= 1 && b.x >= 0 && b.y >= 0, "mặt gần kín ảnh: nới xong vẫn nằm trong ảnh");
+}
+
+ok(faceCrop(null) === null, "không có khung → null (màn hình lấy cả tấm làm ảnh thẻ)");
+ok(faceCrop([0.1, 0.1, 0.2]) === null, "khung thiếu số → null");
+ok(faceCrop([0.1, NaN, 0.2, 0.2]) === null, "khung có NaN → null, không sinh CSS hỏng");
+
+/*
+ * Phép kiểm thật của faceCrop: MÔ PHỎNG lại đúng ngữ nghĩa CSS rồi xem khuôn mặt
+ * có rơi đúng vào ô vuông không. So chuỗi CSS chỉ chứng minh hàm không đổi, chứ
+ * không chứng minh nó ĐÚNG.
+ *
+ * Ngữ nghĩa cần tái hiện: `transform: scale(k) translate(tx%, ty%)` với
+ * `transform-origin: 0 0` áp translate TRƯỚC, và phần trăm của translate ăn theo
+ * kích thước CHÍNH THẺ ẢNH (rộng S, cao S/tỉ-lệ), không phải theo ô chứa.
+ */
+function simulate(box, S, aspect) {
+  const css = faceCrop(box);
+  const k = Number(/scale\(([-0-9.]+)\)/.exec(css.transform)[1]);
+  const m = /translate\(([-0-9.]+)%, ([-0-9.]+)%\)/.exec(css.transform);
+  const txPct = Number(m[1]) / 100;
+  const tyPct = Number(m[2]) / 100;
+  const imgW = S;
+  const imgH = S / aspect;
+  const b = padBox(box, 0.45);
+  // Góc trên-trái của khung mặt trên ảnh khi ảnh vẽ ở cỡ layout:
+  const faceLeft = b.x * imgW;
+  const faceTop = b.y * imgH;
+  // translate rồi scale quanh gốc 0,0:
+  return {
+    left: (faceLeft + txPct * imgW) * k,
+    top: (faceTop + tyPct * imgH) * k,
+    width: b.w * imgW * k,
+    height: b.h * imgH * k,
+  };
+}
+// Ngưỡng tính bằng ĐIỂM ẢNH, không phải 1e-6: chuỗi CSS được làm tròn có chủ ý
+// (scale 4 chữ số, dịch 3 chữ số) nên sai số nằm ở khoảng 5 phần vạn của một
+// điểm ảnh trên ô 64 px — dưới một điểm ảnh thật ngay cả trên màn hình 3×. Đòi
+// khớp tuyệt đối là kiểm nhầm thứ: cái cần đúng là VỊ TRÍ NHÌN THẤY.
+const PX = 0.05;
+for (const [label, aspect] of [["ảnh ngang 3:2", 1.5], ["ảnh dọc 2:3", 2 / 3], ["ảnh vuông", 1]]) {
+  const r = simulate([0.42, 0.18, 0.12, 0.16], 64, aspect);
+  ok(Math.abs(r.left) < PX && Math.abs(r.top) < PX,
+    `${label}: khuôn mặt nằm đúng góc trên-trái ô (left=${r.left.toFixed(4)} top=${r.top.toFixed(4)})`);
+  ok(Math.abs(r.width - 64) < PX,
+    `${label}: bề ngang khuôn mặt vừa đúng bề ngang ô (w=${r.width.toFixed(4)})`);
+}
+{
+  // Không bóp méo: một khuôn mặt VUÔNG tính bằng điểm ảnh phải ra vuông trong ô,
+  // bất kể ảnh ngang hay dọc. Trên ảnh 3:2, mặt vuông có h chuẩn hoá = w × 1,5.
+  const r = simulate([0.4, 0.2, 0.1, 0.15], 64, 1.5);
+  ok(Math.abs(r.height - r.width) < PX,
+    `mặt vuông trên ảnh 3:2 vẫn ra vuông trong ô, không bóp méo (w=${r.width.toFixed(3)} h=${r.height.toFixed(3)})`);
+}
+
+/* ── nearestPerson: khách tải ảnh mình lên ───────────────────────────────── */
+console.log("\n— Khách tải ảnh mình lên để tìm —");
+{
+  const list = [
+    { id: "bride", descriptor: BRIDE },
+    { id: "groom", descriptor: GROOM },
+  ];
+  ok(nearestPerson(near(BRIDE, 0.1), list)?.id === "bride", "tìm đúng người gần nhất");
+  ok(nearestPerson(near(GROOM, 0.2), list)?.id === "groom", "…kể cả khi hỏi người kia");
+  ok(
+    nearestPerson([999, 0, 0, 0], list) === null,
+    "quá ngưỡng thì trả null, KHÔNG trả người gần nhất"
+  );
+  ok(nearestPerson(BRIDE, [{ id: "x", descriptor: null }]) === null, "người chưa có tâm cụm thì bỏ qua");
+  ok(nearestPerson([10, 0], list) === null, "vector khác chiều không khớp");
+  ok(nearestPerson(BRIDE, []) === null, "album chưa lưu ai → null");
+  ok(
+    nearestPerson(near(BRIDE, 0.5), list, { maxDistance: 0.3 }) === null,
+    "kéo ngưỡng chặt hơn thì cùng dữ liệu KHÔNG còn khớp"
+  );
+  const d = nearestPerson(near(BRIDE, 0.1), list).distance;
+  ok(d > 0 && d < 0.6, `có trả về khoảng cách để màn hình nói được mức tự tin (d=${d.toFixed(3)})`);
+}
 
 /* ── filterByPerson ──────────────────────────────────────────────────────── */
 console.log("\n— Lọc lưới theo người —");

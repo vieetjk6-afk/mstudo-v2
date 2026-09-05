@@ -10,7 +10,7 @@ import { getStudioBrand } from "@/lib/studio-brand";
 import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
-import { visibleChips, type PersonChip } from "@/lib/face-people";
+import { faceChips, type PersonChip } from "@/lib/face-people";
 import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
@@ -185,7 +185,7 @@ export default async function PublicAlbumPage({
       // chọn ảnh của khách.
       admin
         .from("album_people")
-        .select("id, name, cover_photo_id, position")
+        .select("id, name, cover_photo_id, cover_box, descriptor, face_count, position")
         .eq("album_id", album.id)
         .order("position"),
       admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
@@ -211,7 +211,7 @@ export default async function PublicAlbumPage({
     // Chỉ những ảnh THẬT SỰ hiện trong lưới: album giao khách / album chọn ảnh
     // lọc theo source, nên một chip trỏ vào ảnh không hiện là một chip bấm vào
     // ra lưới trống.
-    people = visibleChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id)));
+    people = faceChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id)));
   }
 
   return (

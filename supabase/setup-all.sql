@@ -4669,6 +4669,33 @@ end $$;
 
 create index if not exists album_people_album_idx on public.album_people (album_id, position);
 
+/*
+ * Khung của chính khuôn mặt đại diện: [x, y, rộng, cao], chuẩn hoá 0…1 theo
+ * cạnh ảnh.
+ *
+ * Đây là thứ cho phép KHÁCH tìm ảnh theo khuôn mặt mà KHÔNG tải mô hình nào:
+ * có khung thì cắt ra ảnh mặt bằng CSS ngay trên thumbnail album đã có sẵn.
+ * Không có nó, ảnh thẻ đành lấy cả tấm — mà một tấm ảnh cưới thì có hai ba
+ * người, nên khách không chỉ được vào mặt mình.
+ *
+ * Thêm bằng ALTER (không sửa CREATE TABLE ở trên) để những project đã chạy
+ * migration này rồi chỉ cần chạy lại là có cột mới.
+ */
+alter table public.album_people
+  add column if not exists cover_box real[];
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'public.album_people'::regclass and conname = 'album_people_cover_box_len'
+  ) then
+    alter table public.album_people
+      add constraint album_people_cover_box_len
+      check (cover_box is null or array_length(cover_box, 1) = 4);
+  end if;
+end $$;
+
 -- Hai người cùng tên trong một album là lỗi nhập, không phải dữ liệu. Cũng chặn
 -- luôn cú lưu lặp khi studio bấm hai lần. Tên rỗng thì không tính (nhiều cụm
 -- chưa đặt tên là chuyện thường).

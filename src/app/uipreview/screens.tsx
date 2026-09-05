@@ -21,7 +21,7 @@ import AiCompareDemo from "./AiCompareDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
 import FaceGroupDemo from "./FaceGroupDemo";
-import PeopleChipDemo from "./PeopleChipDemo";
+import FaceFinderDemo from "./FaceFinderDemo";
 import * as f from "./fixtures";
 
 /**
@@ -58,8 +58,8 @@ export const SCREENS: Record<
     render: () => <FaceGroupDemo />,
   },
   "loc-theo-nguoi": {
-    title: "Album khách — chip lọc theo người (dữ liệu giả)",
-    render: () => <PeopleChipDemo />,
+    title: "Album khách — tìm ảnh theo khuôn mặt (dữ liệu giả)",
+    render: () => <FaceFinderDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",

@@ -50,6 +50,14 @@ export type FaceVector = {
   v: number[];
   /** Diện tích khung mặt (tỉ lệ khung ảnh) — để chọn ảnh đại diện. */
   area: number;
+  /**
+   * Khung khuôn mặt, đã chuẩn hoá 0…1 theo cạnh ảnh.
+   *
+   * Đi theo tới tận DB vì phía KHÁCH cần cắt ra ảnh mặt để bấm chọn, mà khách
+   * thì không tải mô hình. Có khung này thì cắt bằng CSS ngay trên thumbnail
+   * album đã có sẵn — không thêm một byte tải nào.
+   */
+  box?: { x: number; y: number; w: number; h: number };
   /** Điểm nét vùng mặt — cũng để chọn ảnh đại diện. */
   sharpness: number;
 };
@@ -213,6 +221,8 @@ export type Person = {
   coverKey: string;
   /** Khuôn mặt thứ mấy trong ảnh đại diện — để cắt đúng mặt làm ảnh thẻ. */
   coverAt: number;
+  /** Khung của chính khuôn mặt đại diện đó, chuẩn hoá 0…1. */
+  coverBox?: { x: number; y: number; w: number; h: number };
 };
 
 export type GroupResult = {
@@ -272,6 +282,7 @@ export function groupFaces(faces: FaceVector[], opts: GroupOptions = {}): GroupR
       faceIdx: idxs,
       coverKey: cover.key,
       coverAt: cover.at,
+      coverBox: cover.box,
     });
   }
 
@@ -332,16 +343,27 @@ export function dropPhoto(
   people: Person[],
   personId: string,
   photoKey: string,
-  faces: readonly { key: string }[]
+  faces: readonly Pick<FaceVector, "key" | "at" | "box">[]
 ): Person[] {
   return people
     .map((p) => {
       if (p.id !== personId) return p;
       const photoKeys = p.photoKeys.filter((k) => k !== photoKey);
       const faceIdx = p.faceIdx.filter((i) => faces[i]?.key !== photoKey);
-      const coverKey = p.coverKey === photoKey ? (photoKeys[0] ?? "") : p.coverKey;
-      const coverAt = p.coverKey === photoKey ? 0 : p.coverAt;
-      return { ...p, photoKeys, faceIdx, coverKey, coverAt, faces: faceIdx.length };
+      if (p.coverKey !== photoKey) return { ...p, photoKeys, faceIdx, faces: faceIdx.length };
+      // Gỡ đúng tấm đại diện: phải chọn tấm khác VÀ lấy khung khuôn mặt của
+      // chính khuôn mặt mới. Giữ nguyên khung cũ thì ảnh thẻ cắt ra một chỗ bất
+      // kỳ trên tấm mới — rất có thể là mặt người khác.
+      const next = faceIdx.map((i) => faces[i]).find((f) => f && f.key === photoKeys[0]);
+      return {
+        ...p,
+        photoKeys,
+        faceIdx,
+        faces: faceIdx.length,
+        coverKey: photoKeys[0] ?? "",
+        coverAt: next?.at ?? 0,
+        coverBox: next?.box,
+      };
     })
     .filter((p) => p.photoKeys.length > 0);
 }
@@ -455,4 +477,31 @@ export function matchKnown(
     out[fi] = { personId: fresh[fi].id, knownId: known[ki].id, name: known[ki].name, distance: d };
   }
   return out;
+}
+
+/**
+ * Tìm người GẦN NHẤT với một khuôn mặt lẻ — dùng cho lúc khách tự tải ảnh mình
+ * lên để hỏi "ảnh nào có tôi".
+ *
+ * Khác `matchKnown` ở chỗ đây là MỘT khuôn mặt hỏi NHIỀU người, nên không có
+ * chuyện ghép một-đối-một: chỉ lấy người gần nhất, và chỉ khi đủ gần.
+ *
+ * Quá ngưỡng thì trả `null` chứ KHÔNG trả người gần nhất kèm lời cảnh báo. Đưa
+ * nhầm album của người khác cho khách xem là hỏng nặng hơn nhiều so với việc nói
+ * "không tìm thấy" — và khách vẫn còn đường chọn mặt bằng tay.
+ */
+export function nearestPerson(
+  descriptor: readonly number[],
+  people: readonly { id: string; descriptor: readonly number[] | null }[],
+  opts: GroupOptions = {}
+): { id: string; distance: number } | null {
+  const o = { ...GROUP_DEFAULTS, ...opts };
+  let best: { id: string; distance: number } | null = null;
+  for (const p of people) {
+    if (!p.descriptor || p.descriptor.length === 0) continue;
+    const d = euclidean(descriptor, p.descriptor);
+    // Phá hoà theo thứ tự để cùng đầu vào luôn ra cùng kết quả.
+    if (d <= o.maxDistance && (best === null || d < best.distance)) best = { id: p.id, distance: d };
+  }
+  return best;
 }

@@ -219,7 +219,15 @@ export default function AiFilterPanel({
                 const face = full.metrics.faces[k];
                 if (!face) continue;
                 const v = await embedFace(recog, full.canvas, full.width, full.height, full.landmarks[k]);
-                if (v) vecs.push({ key: items[i].key, at: k, v, area: face.box.w * face.box.h, sharpness: face.sharpness });
+                if (v)
+                  vecs.push({
+                    key: items[i].key,
+                    at: k,
+                    v,
+                    area: face.box.w * face.box.h,
+                    sharpness: face.sharpness,
+                    box: face.box,
+                  });
               }
             }
           } catch (e) {
