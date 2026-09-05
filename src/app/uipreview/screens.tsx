@@ -22,6 +22,7 @@ import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
 import FaceGroupDemo from "./FaceGroupDemo";
 import FaceFinderDemo from "./FaceFinderDemo";
+import FaceAutoDemo from "./FaceAutoDemo";
 import * as f from "./fixtures";
 
 /**
@@ -60,6 +61,10 @@ export const SCREENS: Record<
   "loc-theo-nguoi": {
     title: "Album khách — tìm ảnh theo khuôn mặt (dữ liệu giả)",
     render: () => <FaceFinderDemo />,
+  },
+  "tu-dong-gom-mat": {
+    title: "Màn album studio — bảng tự động gom khuôn mặt (Supabase hỏng có chủ ý)",
+    render: () => <FaceAutoDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",

@@ -89,8 +89,26 @@ ok(!shouldCluster([], 0, 0), "album rỗng → không gom");
 
 /* ── Dòng trạng thái cho studio ───────────────────────────────────────────── */
 console.log("\n— Trạng thái hiện cho studio —");
-const base = { savedPeople: 0, running: false, clustering: false, stoppedForNow: false };
-eq(stateOf({ ...base, photos: [] }).kind, "empty", "chưa có ảnh");
+const base = { savedPeople: 0, running: false, clustering: false, stoppedForNow: false, loaded: true };
+eq(stateOf({ ...base, photos: [] }).kind, "empty", "đã tải xong, album thật sự không có ảnh");
+/*
+ * Phép quan trọng nhất của cả bộ này. Danh sách ảnh khởi tạo bằng mảng rỗng, nên
+ * "chưa đọc xong" và "đọc xong, rỗng" trông y hệt nhau nếu không có cờ riêng —
+ * và màn hình sẽ báo "Chưa có ảnh nào trong album" cho một album đầy ảnh. Đó
+ * đúng là lời nói dối đã tốn năm vòng qua lại: studio đi tìm nguyên nhân ở hoàn
+ * toàn chỗ khác.
+ */
+eq(stateOf({ ...base, photos: [], loaded: false }).kind, "loading", "CHƯA đọc xong ≠ album rỗng");
+eq(
+  stateOf({ ...base, photos: [ph("a", false)], loaded: false }).kind,
+  "loading",
+  "chưa đọc xong thì chưa nói gì về tiến độ"
+);
+eq(
+  stateOf({ ...base, photos: [], loaded: false, error: "mất mạng" }).kind,
+  "error",
+  "…nhưng có lỗi thì báo lỗi ngay, không đợi tải xong"
+);
 eq(stateOf({ ...base, photos: [ph("a", false)], running: true }).kind, "scanning", "đang quét");
 eq(stateOf({ ...base, photos: [ph("a", true)], clustering: true }).kind, "clustering", "đang gom");
 eq(stateOf({ ...base, photos: [ph("a", true)], savedPeople: 3 }).kind, "done", "xong, có người");
