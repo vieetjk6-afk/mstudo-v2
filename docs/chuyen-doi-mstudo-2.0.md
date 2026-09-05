@@ -408,6 +408,7 @@ lỗi nào. Những việc sau sẽ chết âm thầm:
 | `/api/cron/cleanup-proofs` | `30 1 * * *` | dọn ảnh chuyển khoản |
 | `/api/cron/cleanup-drive-cache` | `0 3 * * *` | dọn cache ảnh |
 | `/api/cron/cleanup-wedding-photos` | `0 2 * * 0` | dọn ảnh cưới |
+| `/api/cron/face-scan` | `*/5 * * * *` | quét khuôn mặt cho album đã phát hành |
 
 Đặt một chuỗi ngẫu nhiên dài, giữ bí mật. Có thể dùng lại đúng giá trị bên cũ.
 

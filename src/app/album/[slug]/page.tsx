@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
 import { faceChips, type PersonChip } from "@/lib/face-people";
+import { dangQuet } from "@/lib/face-pending";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { getStudioBrand } from "@/lib/studio-brand";
 import Brand from "@/components/Brand";
@@ -125,6 +126,9 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
   // Link Drive file gốc ở giai đoạn chọn ảnh (JPG Goc) — hiện trong album hoàn thiện.
   let originalFolders: { name: string; url: string }[] = [];
   let people: PersonChip[] = [];
+  // Máy chủ còn đang quét → khối tìm theo khuôn mặt nói "đang chuẩn bị" thay
+  // vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
+  let facePreparing = false;
   if (!hasPassword) {
     const filtered = filterDeliveryPhotos(allPhotos ?? [], s ?? []);
     totalPhotos = filtered.length;
@@ -132,6 +136,7 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
     // trên mỗi khuôn mặt phải đúng ngay từ đầu. Lưới thì tự đầy dần — trang này
     // đã tải nốt phần còn lại trong nền sau khi mở.
     people = faceChips(ppl ?? [], pplLinks ?? [], new Set(filtered.map((ph) => ph.id)));
+    if (people.length === 0) facePreparing = await dangQuet(admin, album.id);
     // Share: cần đủ ảnh để lọc theo shareIds. Ngược lại chỉ gửi lô đầu.
     photos = shareMode ? filtered : filtered.slice(0, INITIAL_PHOTOS);
     sources = shownSources.map(({ id, name, position }) => ({ id, name, position }));
@@ -165,6 +170,7 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
       }}
       initialPhotos={photos}
       initialPeople={people}
+      facePreparing={facePreparing}
       totalPhotos={totalPhotos}
       initialSources={sources}
       initialDriveFolders={driveFolders}

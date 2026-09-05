@@ -8,7 +8,38 @@ const nextConfig = {
     // Đánh dấu external để webpack KHÔNG bundle và @vercel/nft trace đúng gói này vào
     // serverless function (import ở runtime từ node_modules). Là optionalDependency
     // nên build không chết nếu vắng gói.
-    serverComponentsExternalPackages: ["zca-js"],
+    // Ba gói khuôn mặt cũng để external: chúng nạp file .wasm và trọng số bằng
+    // đường dẫn TÍNH LÚC CHẠY (fs), thứ webpack không bundle được. Để external
+    // thì chúng ở lại node_modules và được @vercel/nft trace vào function.
+    serverComponentsExternalPackages: [
+      "zca-js",
+      "@vladmandic/face-api",
+      "@tensorflow/tfjs",
+      "@tensorflow/tfjs-backend-wasm",
+    ],
+    /**
+     * File KHÔNG PHẢI JavaScript mà máy chủ đọc lúc chạy — nft không thấy chúng
+     * vì chẳng có `require` nào trỏ tới, nên phải khai báo tay. Thiếu khai báo
+     * này thì `next build` vẫn xanh và chỉ vỡ trên production, đúng một câu
+     * "model not found" / "failed to load wasm".
+     *
+     *   • model/*  : trọng số 3 mạng (~12 MB) — @/lib/face-node đọc bằng fs.
+     *   • *.wasm   : nền tính toán của TensorFlow trên Node.
+     */
+    outputFileTracingIncludes: {
+      "/api/cron/face-scan": [
+        "./node_modules/@vladmandic/face-api/model/**",
+        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+      ],
+      "/api/albums/[id]/face-scan": [
+        "./node_modules/@vladmandic/face-api/model/**",
+        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+      ],
+      "/api/album/[slug]/face-match": [
+        "./node_modules/@vladmandic/face-api/model/**",
+        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+      ],
+    },
     // Next 14.2 defaults dynamic route Router-Cache reuse to 0s, so going back
     // to a page just visited refetches the whole thing from the server. Reuse
     // dynamic segments for 30s (instant back/forward) and prefetched static

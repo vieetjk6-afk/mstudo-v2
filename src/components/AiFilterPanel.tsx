@@ -14,9 +14,6 @@ import {
 } from "@/lib/photo-ai";
 import { applyFaces, summarizeFaces, type FaceSummary } from "@/lib/face-ai";
 import { faceScanSupported, loadFaceModel, detectFull } from "@/lib/face-detect";
-import { embedFace, loadRecognizer } from "@/lib/face-embed";
-import { GROUP_DEFAULTS, groupFaces, mergePeople, type FaceVector, type Person } from "@/lib/face-group";
-import AiPeopleSave from "@/components/AiPeopleSave";
 import {
   isDecodable,
   makePreviews,
@@ -109,16 +106,22 @@ export default function AiFilterPanel({
   const [faceSummary, setFaceSummary] = useState<FaceSummary | null>(null);
   /** Lượt quét đang ở bước nào — hai bước có tốc độ khác hẳn nhau. */
   const [phase, setPhase] = useState<"scan" | "faces" | null>(null);
-  /** Có gom ảnh theo từng người không (cần thêm mô hình nhận dạng danh tính). */
-  const [groupOn, setGroupOn] = useState(false);
-  const [people, setPeople] = useState<Person[] | null>(null);
-  const [tight, setTight] = useState<number>(GROUP_DEFAULTS.maxDistance);
-  /**
-   * Vector đặc trưng của lượt quét vừa xong, giữ lại để GOM LẠI TỨC THÌ khi
-   * studio kéo thanh "chặt/rộng". Gom lại là phép tính thuần trên vector đã có —
-   * bắt họ quét lại cả nghìn ảnh chỉ để nới một ngưỡng là điều không chấp nhận được.
+  /*
+   * KHÔNG có phần "gom ảnh theo từng người" ở đây nữa, và đó là chủ ý.
+   *
+   * Bản trước cho studio bật thêm một lượt sinh vector danh tính rồi lưu xuống
+   * album_people để khách lọc. Hai lý do bỏ hẳn:
+   *
+   *  1. Studio không cần tìm mặt — chỉ khách mới cần — nên bắt studio quét là
+   *     bắt làm một việc chẳng phục vụ họ.
+   *  2. Từ khi máy chủ tự quét (@/lib/face-scan-server), vector sinh ở trình
+   *     duyệt CĂN MẶT KHÁC vector sinh ở máy chủ. Ghi cả hai vào cùng một bảng
+   *     là hỏng âm thầm: cùng một người ra hai vector xa nhau, khách bấm vào
+   *     khuôn mặt mình thì thiếu nửa số ảnh, mà chẳng có lỗi nào hiện ra.
+   *
+   * Phần XÉT KHUÔN MẶT bên dưới thì Ở LẠI: nó chỉ tìm mắt nhắm và mặt nhoè
+   * (@/lib/face-ai), không dính gì tới danh tính.
    */
-  const vectorsRef = useRef<FaceVector[]>([]);
   /** Khung so sánh đang mở: danh sách tấm để lật + vị trí trong danh sách đó. */
   const [compare, setCompare] = useState<{ keys: string[]; at: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -169,8 +172,6 @@ export default function AiFilterPanel({
     setExcluded(new Set());
     setCompare(null);
     setFaceSummary(null);
-    setPeople(null);
-    vectorsRef.current = [];
     setPhase("scan");
     setHandedOff(false);
     setProgress({ done: 0, total: sourceFiles.length, failed: 0, current: "" });
@@ -179,9 +180,6 @@ export default function AiFilterPanel({
     try {
       const items = await toScanItems();
       itemsRef.current = items;
-      // Ảnh đại diện của các nhóm người — gom lại đây để lượt dựng ảnh xem trước
-      // ở cuối hàm còn biết mà vẽ chúng.
-      let coverKeys: string[] = [];
       const outcome = await scanPhotos(items, setProgress, ac.signal);
       setSkipped(outcome.skipped);
       if (outcome.aborted && outcome.metrics.length === 0) {
@@ -199,35 +197,14 @@ export default function AiFilterPanel({
         setPhase("faces");
         setProgress({ done: 0, total: items.length, failed: 0, current: "" });
 
-        // Một vòng duy nhất cho CẢ hai việc: tìm mặt (nhắm mắt, mặt nhoè) và —
-        // nếu studio bật — sinh vector danh tính. Giải mã ảnh là phần nặng nhất
-        // của lượt quét; chạy hai vòng riêng là làm đôi nó mà không được gì.
         const detector = await loadFaceModel();
-        const recog = groupOn ? await loadRecognizer() : null;
         const fm: Awaited<ReturnType<typeof detectFull>>["metrics"][] = [];
-        const vecs: FaceVector[] = [];
         const failed: { name: string; reason: string }[] = [];
         for (let i = 0; i < items.length; i++) {
           if (ac.signal.aborted) break;
           try {
             const full = await detectFull(detector, items[i], i);
             fm.push(full.metrics);
-            if (recog) {
-              for (let k = 0; k < full.landmarks.length; k++) {
-                const face = full.metrics.faces[k];
-                if (!face) continue;
-                const v = await embedFace(recog, full.canvas, full.width, full.height, full.landmarks[k]);
-                if (v)
-                  vecs.push({
-                    key: items[i].key,
-                    at: k,
-                    v,
-                    area: face.box.w * face.box.h,
-                    sharpness: face.sharpness,
-                    box: face.box,
-                  });
-              }
-            }
           } catch (e) {
             failed.push({ name: items[i].name, reason: e instanceof Error ? e.message : "không đọc được" });
           }
@@ -235,12 +212,6 @@ export default function AiFilterPanel({
           if (i % 3 === 2) await new Promise((r) => setTimeout(r, 0));
         }
         const fo = { metrics: fm, skipped: failed };
-        if (recog) {
-          vectorsRef.current = vecs;
-          const grouped = groupFaces(vecs, { maxDistance: tight }).people;
-          setPeople(grouped);
-          coverKeys = grouped.map((p) => p.coverKey);
-        }
         const merged = applyFaces(judged.judgements, fo.metrics);
         judged = {
           judgements: merged.judgements,
@@ -252,15 +223,11 @@ export default function AiFilterPanel({
       }
 
       setResult(judged);
-      // Ảnh xem trước chỉ cho những tấm màn hình thật sự vẽ ra…
+      // Ảnh xem trước chỉ cho những tấm màn hình thật sự vẽ ra.
       const shownKeys = judged.judgements
         .filter((j) => j.verdict !== "keep" || j.keeper)
         .slice(0, PREVIEW_CAP)
         .map((j) => j.key);
-      // …CỘNG ảnh đại diện của từng người. Ảnh đại diện thường là một tấm chân
-      // dung "giữ" bình thường nên không lọt vào danh sách trên, và thiếu nó thì
-      // mỗi thẻ người là một ô xám — đúng thứ khiến bảng kết quả vô dụng.
-      for (const c of coverKeys) if (!shownKeys.includes(c)) shownKeys.push(c);
       setPreviews(await makePreviews(items, shownKeys));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Quét không thành công.");
@@ -437,35 +404,6 @@ export default function AiFilterPanel({
             </span>
           </label>
 
-          {/* Gom theo người nằm BÊN TRONG lượt xét khuôn mặt, không đứng riêng:
-              nó dùng lại đúng khuôn mặt mà lượt kia đã tìm ra. Tách thành hai nút
-              là mời studio bật cái thứ hai mà quên cái thứ nhất, rồi ngồi chờ một
-              lượt quét không làm gì. */}
-          {faceOn && (
-            <label
-              className="mt-1.5 flex cursor-pointer items-start gap-2 rounded-[10px] px-3 py-2.5"
-              style={{ background: "var(--sf2, var(--surface2))", border: "1px solid var(--bd, var(--border))" }}
-            >
-              <input
-                type="checkbox"
-                checked={groupOn}
-                onChange={(e) => setGroupOn(e.target.checked)}
-                disabled={busy}
-                className="mt-0.5"
-              />
-              <span className="text-[12.5px] leading-relaxed" style={{ color: "var(--tx2, var(--text2))" }}>
-                <b className="flex items-center gap-1.5">
-                  <Users size={14} style={{ color: "var(--ac, var(--accent))" }} /> Gom ảnh theo từng người
-                </b>
-                Nhóm các tấm có cùng một người lại, để lấy nhanh “tất cả ảnh có cô dâu”.
-                <span className="mt-1 block" style={{ color: "var(--tx3, var(--text3))" }}>
-                  Tải thêm ~7,5 MB mô hình nhận dạng và chậm hơn nữa. Máy gom sai là chuyện sẽ xảy ra — có
-                  thanh chỉnh <b>chặt/rộng</b> và nút gộp hai nhóm ngay dưới kết quả.
-                </span>
-              </span>
-            </label>
-          )}
-
           {progress && (
             <div className="mt-3">
               <div className="h-1.5 w-full overflow-hidden rounded-full" style={{ background: "var(--sf2, var(--surface2))" }}>
@@ -550,113 +488,6 @@ export default function AiFilterPanel({
                 <span className="font-bold" style={{ color: "var(--gn, #1e9e72)" }}>
                   Đã đổi bản nên giữ ở {faceSummary.keepersChanged} tấm
                 </span>
-              )}
-            </div>
-          )}
-
-          {people && (
-            <div
-              className="mt-3 rounded-[12px] px-3.5 py-3"
-              style={{ background: "var(--sf2, var(--surface2))", border: "1px solid var(--bd, var(--border))" }}
-            >
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="flex items-center gap-1.5 text-[13px] font-bold">
-                  <Users size={15} style={{ color: "var(--ac, var(--accent))" }} /> {people.length} người
-                </span>
-                {/* Gom lại TỨC THÌ khi kéo: vector đã có sẵn trong bộ nhớ, gom lại
-                    chỉ là phép tính. Bắt quét lại cả nghìn ảnh để nới một ngưỡng
-                    là cách chắc chắn để studio không bao giờ chỉnh nó. */}
-                <label className="flex items-center gap-2 text-[11.5px]" style={{ color: "var(--tx2, var(--text2))" }}>
-                  Gom chặt
-                  <input
-                    type="range"
-                    min={0.35}
-                    max={0.85}
-                    step={0.01}
-                    value={tight}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setTight(v);
-                      setPeople(groupFaces(vectorsRef.current, { maxDistance: v }).people);
-                    }}
-                    className="w-[150px]"
-                  />
-                  rộng
-                  <span className="tnum" style={{ color: "var(--tx3, var(--text3))" }}>{tight.toFixed(2)}</span>
-                </label>
-              </div>
-              <p className="mt-1.5 text-[11.5px] leading-relaxed" style={{ color: "var(--tx3, var(--text3))" }}>
-                Một người bị tách thành hai nhóm thì kéo sang <b>rộng</b>, hoặc bấm <b>Gộp</b>. Hai người bị
-                gom làm một thì kéo sang <b>chặt</b>. Ngưỡng mặc định {GROUP_DEFAULTS.maxDistance} là con số
-                nhà làm mô hình công bố cho ảnh chụp thật — lô ảnh của bạn có thể cần khác.
-              </p>
-
-              <div className="mt-3 flex flex-wrap gap-2.5">
-                {people.map((p) => (
-                  <div
-                    key={p.id}
-                    className="w-[150px] overflow-hidden rounded-[10px]"
-                    style={{ background: "var(--sf, var(--surface))", border: "1px solid var(--bd, var(--border))" }}
-                  >
-                    <div className="aspect-square w-full" style={{ background: "var(--sf2, var(--surface2))" }}>
-                      {previews[p.coverKey] ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={previews[p.coverKey]} alt="" className="h-full w-full object-cover" />
-                      ) : null}
-                    </div>
-                    <div className="px-2 py-1.5">
-                      <p className="text-[12px] font-bold">{p.photoKeys.length} ảnh</p>
-                      <button
-                        onClick={() => {
-                          const names = result.judgements
-                            .filter((j) => p.photoKeys.includes(j.key))
-                            .map((j) => j.name);
-                          onUseNames(names);
-                          setHandedOff(true);
-                        }}
-                        className="mt-1 w-full rounded-[7px] px-2 py-1 text-[11px] font-semibold"
-                        style={{ background: "var(--ac, var(--accent))", color: "#fff" }}
-                      >
-                        Đưa vào danh sách
-                      </button>
-                      {people.length > 1 && (
-                        <select
-                          value=""
-                          onChange={(e) => {
-                            if (e.target.value) setPeople(mergePeople(people, p.id, e.target.value));
-                          }}
-                          className="mt-1 w-full rounded-[7px] px-1.5 py-1 text-[11px]"
-                          style={{ background: "var(--sf2, var(--surface2))", border: "1px solid var(--bd, var(--border))" }}
-                        >
-                          <option value="">Gộp người khác vào đây…</option>
-                          {people.filter((q) => q.id !== p.id).map((q, i) => (
-                            <option key={q.id} value={q.id}>Người #{i + 1} ({q.photoKeys.length} ảnh)</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {people.length === 0 && (
-                <p className="mt-2 text-[12.5px]" style={{ color: "var(--tx3, var(--text3))" }}>
-                  Không gom được nhóm nào — lô này có thể ít ảnh chụp người, hoặc mỗi người chỉ xuất hiện
-                  một hai lần.
-                </p>
-              )}
-
-              {/* Lưu xuống album: đây là điểm khác biệt lớn nhất giữa "hay" và
-                  "dùng được". Gom xong mà chỉ xem trên máy studio thì lần sau
-                  phải quét lại; lưu xuống thì KHÁCH lọc được mà không tải mô hình. */}
-              {people.length > 0 && (
-                <AiPeopleSave
-                  people={people}
-                  vectors={vectorsRef.current}
-                  files={sourceFiles.map((f) => ({ key: f.key, name: f.name }))}
-                  previews={previews}
-                  albumId={albumId}
-                  tight={tight}
-                />
               )}
             </div>
           )}

@@ -93,6 +93,12 @@ export default function FaceSetupNotice() {
         </a>{" "}
         → copy toàn bộ → dán vào <b>Supabase → SQL Editor</b> → Run. Một lần là xong, chạy lại nhiều lần vô hại.
       </p>
+      {/* Nói rõ SAU ĐÓ studio không phải làm gì nữa. Bản trước còn bắt mở từng
+          album cho trình duyệt quét, và đó chính là bước studio thấy thừa. */}
+      <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--tx3, #777)" }}>
+        Chạy xong là hết việc: máy chủ tự quét khuôn mặt cho mọi album đã phát hành, studio không phải mở
+        hay bấm gì thêm.
+      </p>
       <button
         type="button"
         onClick={() => {

@@ -464,49 +464,64 @@ nhất**, nên một cây cầu mỏng giữa hai cụm dày không kéo đượ
 test dựng đúng tình huống đó. Hạt giống cố định nên chạy lại ra cùng kết quả:
 studio bấm quét lại mà các nhóm nhảy lung tung thì họ sẽ không tin.
 
-**Máy gom sai là chuyện SẼ xảy ra**, nên phải có đường sửa ngay tại chỗ: thanh
-**chặt/rộng** gom lại **tức thì** trên vector đã có trong bộ nhớ (không quét lại
-— bắt quét lại cả nghìn ảnh để nới một ngưỡng là cách chắc chắn để không ai chỉnh
-nó), và nút **gộp** hai nhóm. Ngưỡng mặc định 0,6 là con số nhà làm mô hình công
-bố cho **ảnh chụp thật**; bài kiểm chứng ở đây chạy trên mặt vẽ bằng hình học nên
-**không hiệu chỉnh được** con số đó — nó chỉ chứng minh hai phân bố tách rời và
-thuật toán khôi phục đúng từng người khi ngưỡng nằm trong khe.
+Ngưỡng mặc định 0,6 là con số nhà làm mô hình công bố cho **ảnh chụp thật**; bài
+kiểm chứng ở đây chạy trên dữ liệu dựng sẵn nên **không hiệu chỉnh được** con số
+đó — nó chỉ chứng minh hai phân bố tách rời và thuật toán khôi phục đúng từng
+người khi ngưỡng nằm trong khe.
 
-Thư viện nạp bằng thẻ `<script>` tự phục vụ từ `/face-model`, **không** `import`:
-bản ESM của nó gọi `require()` theo kiểu webpack không phân tích tĩnh được, kéo
-cả nhánh TensorFlow-cho-Node vào gói trình duyệt và trang chết ngay ở lượt dựng.
-Và phải tự chọn nền tính toán (`webgl` rồi lùi `cpu`) trước khi nạp trọng số —
-bản UMD ưu tiên nền `wasm` mà ta không phục vụ, không chọn tay thì chết với đúng
-một câu khó hiểu.
+**Việc quét chạy trên MÁY CHỦ, studio không mở gì cả.** Bản trước quét trong tab
+trình duyệt của studio: mở màn album là nó chạy nền. Studio nói thẳng bước đó
+thừa — studio không tìm mặt bao giờ, chỉ **khách** mới cần — và nó còn để lại một
+lỗ thật: album gửi đi rồi mà chưa ai mở màn đó thì khách bấm vào chẳng thấy gì.
 
-**Studio không phải bấm gì cả.** Bản trước bắt họ vào công cụ Lọc ảnh, tick hai
-ô, bấm Quét, rồi bấm Lưu — tám bước cho một việc mà máy tự làm được, và ba vòng
-liên tiếp chủ studio không tìm ra đường vào. Nay mở màn album là app **tự quét
-nền** rồi gom nhóm; khách mở link là tìm được ngay. Cho cả album chọn ảnh lẫn
-album giao khách.
+Nên nay `vercel.json` có cron `/api/cron/face-scan` chạy **5 phút một lượt**, quét
+mọi album đã **phát hành** còn ảnh chưa quét. Trước khi hứa, tốc độ được **đo
+thật** (`npm run test:face-may-chu`, chạy đúng code sẽ lên production):
 
-Điều không giấu đi đâu được: **mô hình phải chạy ở đâu đó**, và nó chạy trên máy
-studio, trong tab đang mở. Không có lựa chọn nào vừa miễn phí, vừa không cần máy
-studio, vừa không bắt điện thoại khách tải 26 MB — chạy trên máy chủ thì phải trả
-tiền cho hàng chục phút CPU mỗi album. Nên thay vì giả vờ nó tức thời, lượt quét
-được thiết kế để **chịu được cắt ngang**:
+| Đo được | Số |
+| --- | --- |
+| Nạp nền WASM + 3 mạng | ~0,5–2,5 giây, một lần cho mỗi tiến trình |
+| Nhận diện một ảnh 800 px | ~0,7–0,8 giây |
+| Album 800 ảnh | ~10 phút CPU máy chủ, **một lần cho mỗi ảnh** |
+| Dung lượng đóng gói vào function | **22 MB** (giới hạn Vercel: 250 MB) |
 
-- Mỗi mẻ 12 ảnh ghi ngay xuống `album_faces`. Đóng tab giữa chừng thì mất nhiều
-  nhất một mẻ.
+Chạy được trên Vercel vì `@vladmandic/face-api` có bản `node-wasm` **thuần WASM**
+— không cần `@tensorflow/tfjs-node` (gói native phải biên dịch). Ảnh lấy từ đúng
+endpoint thumbnail của Drive ở cỡ 800 px (~60 KB/ảnh), nên **không tốn một byte
+egress Supabase nào**.
+
+Vì một lượt serverless có trần cứng 300 giây, lượt quét được thiết kế để **chịu
+được cắt ngang**:
+
+- Ghi xuống `album_faces` theo mẻ, và dừng theo **đồng hồ** (210 giây) chứ không
+  theo số ảnh. Bị cắt giữa chừng thì lượt cron sau chạy tiếp từ đúng chỗ đó.
 - `photos.faces_scanned_at` đánh dấu đã quét — **phải là cột riêng**, không suy
   ra từ kho khuôn mặt được: ảnh không có mặt người nào (cổng hoa, bàn tiệc) không
   sinh hàng nào, nên lấy "có hàng trong kho" làm dấu là quét lại chúng mãi mãi và
   lượt quét không bao giờ kết thúc.
-- Trần 400 ảnh mỗi lần mở màn. Không phải giới hạn kỹ thuật mà là phép lịch sự:
-  studio mở album để làm việc khác, không phải để máy chạy nóng hàng giờ.
-- Chỉ **gom nhóm khi đã quét hết**. Gom giữa chừng thì các nhóm nhảy lung tung
-  sau mỗi mẻ, và studio nhìn vào sẽ không tin cái gì cả.
+- `albums.faces_clustered_at` là **hàng đợi gom nhóm**: bộ quét đặt lại về `null`
+  mỗi khi ghi thêm mặt mới, lượt gom đặt thành `now()`. Không có nó thì có một lỗ
+  thật — lượt cron quét xong tấm cuối rồi hết giờ đúng trước bước gom, lượt sau
+  thấy không còn gì để quét nên bỏ qua, và album nằm mãi ở trạng thái "đã quét,
+  chưa có người nào".
+- Chỉ quét album **`published`**. Bản nháp chưa ai gửi cho khách; quét nó là đốt
+  CPU cho thứ không ai xem.
+- Tắt được bằng `FACE_SCAN_OFF=1`. Đây là việc duy nhất trong app tiêu CPU máy
+  chủ đáng kể, nên nó phải có công tắc.
 
 Giữ luôn vector từng khuôn mặt (~700 KB cho album 800 ảnh) đổi lấy ba thứ: chạy
 tiếp được, gom lại theo ngưỡng khác mà không quét lại, và thêm ảnh sau thì chỉ
 quét phần mới.
 
-Đặt tên là **tuỳ chọn**, không phải điều kiện: khách nhận ra bằng mặt.
+**Máy chủ là nơi DUY NHẤT sinh vector, và đó là ràng buộc chứ không phải sở
+thích.** Bản trình duyệt căn mặt theo góc mắt của MediaPipe (478 điểm); bản máy
+chủ để face-api tự căn theo 68 điểm của nó. Hai cách căn cho ra hai ô ảnh mặt
+khác nhau, nên **cùng một người qua hai đường sẽ ra hai vector xa nhau** — gom
+nhóm tách đôi một người, khách bấm vào mặt mình thì thiếu nửa số ảnh, và không có
+lỗi nào hiện ra ở đâu. Vì thế phần "studio quét rồi đặt tên từng người" trong
+công cụ Lọc ảnh đã **bỏ hẳn**, cùng với `src/lib/face-embed.ts` và 7,8 MB trọng
+số trong `public/face-model/`. Phần **xét khuôn mặt** ở mục 4c thì ở lại: nó chỉ
+tìm mắt nhắm và mặt nhoè, không dính gì tới danh tính.
 
 **Khách tự tìm mặt mình — hai đường, hai cái giá khác hẳn.**
 
@@ -530,13 +545,16 @@ nhảy một nhịp khi ảnh về. Phóng một hệ số cho cả hai chiều 
 bài đo lại bằng `getBoundingClientRect()` trong Chromium thật, vì mô phỏng ngữ
 nghĩa CSS chỉ chứng minh tôi hiểu đúng cái tôi tự viết ra.
 
-Đường thứ hai, **khách tải ảnh của mình lên**, bắt buộc phải có mô hình trên máy
-họ (~20 MB) — nên nó chỉ tải khi khách tự bấm, và nói trước dung lượng. Ảnh khách
-chọn **không rời khỏi máy**: nhận diện chạy trong trình duyệt, thứ duy nhất được
-so là vector 128 số, và cũng chỉ so ngay tại chỗ. Đổi lại, tâm cụm của những
-người trong album được gửi xuống máy khách (~3 KB) — mà ảnh của chính họ thì link
-album vốn đã cho xem. Đánh đổi đó đáng hơn là bắt khách gửi ảnh mặt mình lên máy
-chủ, và cũng không tốn một lượt gọi hàm serverless nào.
+Đường thứ hai, **khách gửi một ảnh của mình**, giờ cũng **không tải mô hình nào**:
+trình duyệt chỉ thu nhỏ ảnh còn 800 px, vẽ lại thành JPEG (tiện thể xử luôn HEIC
+của iPhone và chiều xoay EXIF) rồi gửi lên `/api/album/[slug]/face-match`; máy chủ
+nhận diện và trả về "bạn là người nào trong album". Bản trước tải ~20 MB mô hình
+về máy khách để ảnh không phải rời khỏi máy — nghe hay hơn, nhưng từ khi album
+được quét ở máy chủ thì vector sinh ở trình duyệt **không so được** với vector
+trong album, tức là tính năng đó chỉ chạy chứ không đúng. Ảnh khách gửi lên
+**không được lưu ở đâu**: nó nằm trong bộ nhớ đúng một lượt xử lý, thứ duy nhất
+đi tiếp là một id người. Route đi qua đúng cánh cửa mật khẩu như ảnh trong album,
+và có giới hạn theo IP.
 
 Ảnh khách tải lên có nhiều người thì lấy **mặt to nhất** — ảnh họ tự chọn để "tìm
 tôi" gần như luôn là ảnh họ đứng gần máy nhất — và màn hình nói thẳng ra là đã
@@ -544,43 +562,41 @@ chọn mặt lớn nhất. Không tìm thấy ai đủ gần thì trả về **k
 không đưa người gần nhất kèm lời cảnh báo: đưa nhầm bộ ảnh của người khác là hỏng
 nặng hơn, và khách vẫn còn đường tự chọn mặt.
 
-**Studio quét một lần, khách không tải gì.** Đây là phần quyết định tính năng này
-có dùng được thật hay chỉ hay trên máy studio. Mô hình nặng 26 MB; bắt mỗi điện
-thoại trong nhà tải 26 MB qua 3G rồi chạy nhận dạng trên 800 tấm là đánh đổi tệ,
-trong khi studio chỉ phải làm một lần. Nên studio đặt tên từng người ("Cô dâu",
-"Mẹ chú rể") và **lưu xuống DB**; khách mở album thấy hàng **chip lọc** và tải
-thêm đúng vài KB JSON — không một byte mô hình nào. Bảng
-`supabase/migrations/album_people.sql`; ghi thẳng bằng anon key + RLS, **không**
-qua API route, nên không tốn một lượt gọi hàm serverless nào.
+**Thêm ảnh vào album cũ.** Lượt gom sau không được xoá tên của lượt trước, nên
+mỗi người lưu kèm **tâm cụm** (trung bình các vector — nằm gần mọi thành viên hơn
+là các thành viên gần nhau, nên cùng ngưỡng 0,6 thì vừa ít nhận nhầm vừa ít bỏ
+sót), và lượt sau **ghép một-đối-một** với người cũ. Một-đối-một là bắt buộc: khi
+một người bị tách thành hai cụm, chỉ cụm gần hơn thừa hưởng cái tên — cho cả hai
+cùng tên thì album có hai "Cô dâu", đúng thứ chỉ mục UNIQUE của DB từ chối.
 
-Ba chỗ dễ hỏng âm thầm ở phần lưu này, và cách chặn:
+**Chip bấm vào ra lưới trống.** Studio xoá ảnh khỏi album là chuyện bình thường,
+nên chip chỉ dựng từ ảnh **còn hiện trong lưới**, và người không còn ảnh nào thì
+không thành chip.
 
-- **Ghép ảnh với album.** Lúc quét, ảnh là file trên đĩa/Drive; trong DB nó là
-  một hàng `photos` có uuid. Luật ghép duy nhất là **tên file bỏ phần mở rộng** —
-  studio lọc trên RAW mà giao khách JPG là chuyện thường. Đúng luật mà công cụ
-  Lọc ảnh đã dùng, nên nó là **một hàm dùng chung** (`matchKey`) chứ không phải
-  hai luật gần giống nhau ở hai file. Ảnh quét được mà không có trong album thì
-  **hiện số ra**, vì đó cũng là dấu hiệu studio đang quét sai thư mục.
-- **Quét đợt hai.** Studio không quét một lần rồi xong: giao đợt đầu, chụp thêm,
-  quét lại. Không lưu vector thì lượt sau ra một bộ người hoàn toàn mới, studio
-  đặt tên lại từ đầu và chip của khách đứt. Nên mỗi người lưu kèm **tâm cụm**
-  (trung bình các vector — nằm gần mọi thành viên hơn là các thành viên gần nhau,
-  nên cùng ngưỡng 0,6 thì vừa ít nhận nhầm vừa ít bỏ sót), và lượt sau **ghép
-  một-đối-một** với người cũ. Một-đối-một là bắt buộc: khi một người bị tách
-  thành hai cụm, chỉ cụm gần hơn thừa hưởng cái tên — cho cả hai cùng tên thì
-  album có hai "Cô dâu", đúng thứ chỉ mục UNIQUE của DB từ chối.
-- **Chip bấm vào ra lưới trống.** Studio xoá ảnh khỏi album sau khi lưu là chuyện
-  bình thường. Nên chip chỉ dựng từ người **đã đặt tên** và ảnh **còn hiện trong
-  lưới**, và người không còn ảnh nào thì không thành chip.
+**Chưa có mặt nào thì phải NÓI, đừng để trống.** Album vừa tạo thì máy chủ còn
+đang quét; bản trước trả về `null` nên khối tìm khuôn mặt biến mất, và cả studio
+lẫn khách kết luận "không có tính năng" — đúng thứ đã tốn năm vòng qua lại. Nay
+phân biệt hai trường hợp: **còn ảnh chưa quét** → hẹn khách quay lại sau ít phút;
+**quét xong mà không thấy mặt nào** → ẩn hẳn.
 
-Người studio đã lưu mà lượt quét sau không thấy thì **giữ nguyên** — quét một thư
-mục nhỏ hơn không nên xoá công đặt tên của lần trước; muốn bỏ thì có nút xoá riêng.
+**Khi khách nói "tôi không thấy gì" thì phải trả lời được bằng SỐ.**
+`GET /api/albums/<id>/face-scan` (chủ album) trả về: đã phát hành chưa, bao nhiêu
+ảnh, còn bao nhiêu chưa quét, tìm được bao nhiêu khuôn mặt, gom thành bao nhiêu
+người, và thiếu bảng nào nếu chưa chạy SQL. `POST` cùng đường dẫn thì quét ngay,
+không đợi cron.
 
-Luật `src/lib/face-group.ts` (`npm run test:face-group`) · căn chỉnh + mô hình
-`src/lib/face-embed.ts` · phần lưu & chip `src/lib/face-people.ts`
-(`npm run test:face-people`) · kiểm chứng `/uipreview/gom-theo-nguoi` và
-`/uipreview/loc-theo-nguoi` (`npm run test:people-chip`, chạy trong Chromium thật
-— hai lỗi hydrate của repo này đều thuộc loại chỉ lộ ra ở đó).
+Máy chủ `src/lib/face-node.ts` + `src/lib/face-scan-server.ts`
+(`npm run test:face-may-chu`, chạy mô hình thật) · luật gom `src/lib/face-group.ts`
+(`npm run test:face-group`) · chip `src/lib/face-people.ts`
+(`npm run test:face-people`) · SQL chạy thật `npm run test:sql-chay-that` ·
+kiểm chứng giao diện `/uipreview/loc-theo-nguoi` và `/uipreview/giao-khach-tim-mat`.
+
+**Cái CHƯA kiểm được ở đây, nói thẳng:** hộp cát dựng repo này không tải được ảnh
+người thật về, mà mặt vẽ bằng canvas thì không đại diện cho phân bố mà SSD
+MobileNet được huấn luyện. Nên bài kiểm thử chứng minh đường ống **chạy** (mô
+hình nạp được, vector ra đúng 128 chiều, ảnh nhiễu không sinh mặt giả, tốc độ
+thật), **không** chứng minh nó nhận đúng mặt người trên ảnh cưới thật. Con số đó
+chỉ có trên album thật — và đó chính là lý do có `GET /api/albums/<id>/face-scan`.
 
 ## ✅ 4b. Xem đủ lớn để CHỌN — khung so sánh ảnh
 

@@ -176,7 +176,8 @@ Thiếu 2 biến đầu → **500 toàn site** (`MIDDLEWARE_INVOCATION_FAILED`).
 
 | Biến | Là gì | Lấy ở đâu |
 |---|---|---|
-| `CRON_SECRET` | khoá bảo vệ 5 route `/api/cron/*` 🔒 | **tự đặt** một chuỗi ngẫu nhiên dài |
+| `CRON_SECRET` | khoá bảo vệ mọi route `/api/cron/*` 🔒 | **tự đặt** một chuỗi ngẫu nhiên dài |
+| `FACE_SCAN_OFF` | đặt `1` để TẮT hẳn việc máy chủ quét khuôn mặt | bỏ trống (mặc định BẬT) |
 
 Bản cũ **không có biến này**, nghĩa là 5 cron ở bản cũ đang trả 401 và **không
 chạy** từ trước tới nay: nhắc lịch chụp, gửi Zalo, dọn ảnh chuyển khoản, dọn

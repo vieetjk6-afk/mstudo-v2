@@ -147,13 +147,22 @@ ok(
 );
 ok("…nhãn nhìn thấy là số ảnh", (await page.locator("text=2 ảnh").count()) > 0);
 
+// Lời hứa về ảnh khách gửi lên. Nó ĐÃ ĐỔI: bản trước nhận diện ngay trong trình
+// duyệt nên hứa "ảnh không rời khỏi máy"; nay máy chủ so hộ (một đường ống duy
+// nhất, xem @/lib/face-node) nên lời hứa đúng là "gửi lên rồi bỏ, không lưu".
+// Kiểm cả hai chiều: câu mới phải có, và câu cũ phải KHÔNG còn — một lời hứa
+// riêng tư sai là thứ tệ nhất còn sót lại được trên màn hình.
 ok(
-  "nói rõ ảnh khách tải lên không rời khỏi máy",
-  (await page.locator("text=không rời khỏi máy này").count()) > 0
+  "nói rõ ảnh khách gửi lên không được lưu lại",
+  (await page.locator("text=không được lưu lại").count()) > 0
 );
 ok(
-  "…và nói trước dung lượng phải tải",
-  (await page.locator("text=~20 MB").count()) > 0
+  "…và không còn hứa 'ảnh không rời khỏi máy' nữa",
+  (await page.locator("text=không rời khỏi máy").count()) === 0
+);
+ok(
+  "…cũng không còn doạ khách phải tải 20 MB mô hình",
+  (await page.locator("text=~20 MB").count()) === 0
 );
 
 /* ── 2. Phép cắt ảnh mặt, đo trong trình duyệt THẬT ───────────────────────── */

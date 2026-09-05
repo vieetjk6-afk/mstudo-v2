@@ -4,40 +4,54 @@ import { useMemo, useRef, useState } from "react";
 import { ScanFace, Upload, X } from "lucide-react";
 import { thumbnailUrl } from "@/lib/drive";
 import { faceCrop, type PersonChip } from "@/lib/face-people";
-import { nearestPerson } from "@/lib/face-group";
 import { useLang } from "@/lib/i18n";
 
 /**
  * TÌM ẢNH THEO KHUÔN MẶT — phía khách.
  *
- * Hai đường, và chúng có cái giá rất khác nhau:
+ * Hai đường, và cả hai đều KHÔNG tải mô hình về máy khách:
  *
- *  1. CHỌN MỘT MẶT trong album. Studio đã quét một lần và lưu sẵn cả khuôn mặt
- *     lẫn danh sách ảnh, nên đây chỉ là tra bảng: **không tải một byte mô hình
- *     nào**, chạy được trên mọi điện thoại, bấm là ra ngay. Ảnh mặt cắt bằng CSS
- *     ngay trên thumbnail album đã tải sẵn.
- *  2. TẢI ẢNH CỦA MÌNH LÊN. Cái này bắt buộc phải có mô hình trên máy khách để
- *     biến khuôn mặt trong ảnh họ chọn thành vector — khoảng 20 MB. Nên nó CHỈ
- *     tải khi khách tự bấm, và nói rõ dung lượng trước.
+ *  1. CHỌN MỘT MẶT trong album. Máy chủ đã quét sẵn và lưu cả khuôn mặt lẫn danh
+ *     sách ảnh, nên đây chỉ là tra bảng — bấm là ra ngay. Ảnh mặt cắt bằng CSS
+ *     ngay trên thumbnail album đã tải sẵn, không thêm một byte tải nào.
+ *  2. GỬI MỘT ẢNH CỦA MÌNH. Trình duyệt chỉ thu nhỏ ảnh còn ~800 px rồi gửi lên
+ *     /api/album/[slug]/face-match; máy chủ nhận diện và trả về "bạn là người
+ *     nào trong album".
  *
- * Ảnh khách chọn KHÔNG rời khỏi máy: nhận diện chạy trong trình duyệt, thứ duy
- * nhất được so là vector 128 số, và cũng chỉ so ngay tại chỗ.
+ * VÌ SAO ĐƯỜNG 2 KHÔNG CÒN CHẠY TRONG TRÌNH DUYỆT NHƯ TRƯỚC. Bản trước tải ~20 MB
+ * mô hình về máy khách để ảnh không phải rời khỏi máy. Từ khi việc quét album
+ * chuyển hẳn lên máy chủ, hai bên căn khuôn mặt theo hai cách khác nhau, nên
+ * vector sinh ở trình duyệt không so được với vector trong album — cùng một
+ * người vẫn ra "không tìm thấy". Đổi lại khách được nhiều hơn: không tải gì cả,
+ * chạy được trên điện thoại yếu. Ảnh gửi lên KHÔNG được lưu ở đâu.
  */
 
 /** Số mặt hiện sẵn; còn lại nằm sau nút "xem thêm". */
 const FIRST_ROW = 10;
+
+/** Cạnh dài nhất của ảnh khách gửi lên. Đủ cho bộ dò, mà nhẹ cho mạng 3G. */
+const UPLOAD_EDGE = 800;
 
 export default function FaceFinder({
   people,
   activeId,
   onPick,
   driveIdOf,
+  slug,
+  password = "",
+  preparing = false,
 }: {
   people: PersonChip[];
   activeId: string | null;
   onPick: (id: string | null) => void;
   /** id ảnh → id file Drive, để lấy thumbnail làm ảnh mặt. */
   driveIdOf: Map<string, string>;
+  /** Slug album — để gọi đúng route so khuôn mặt. */
+  slug: string;
+  /** Mật khẩu album (nếu có): route so mặt đi qua đúng cánh cửa như ảnh. */
+  password?: string;
+  /** Máy chủ còn đang quét album này — nói ra thay vì hiện một khoảng trống. */
+  preparing?: boolean;
 }) {
   const { t } = useLang();
   const [expanded, setExpanded] = useState(false);
@@ -51,60 +65,89 @@ export default function FaceFinder({
   );
 
   /**
-   * Khách chọn một ảnh có mặt mình → tìm xem mình là ai trong album.
+   * Thu nhỏ ảnh khách chọn và vẽ lại thành JPEG trước khi gửi.
    *
-   * Nhập mô-đun bằng `import()` động, không nhập tĩnh: hai mô-đun này kéo theo
-   * đường nạp mô hình, và trang chọn ảnh phải nhẹ cho cả những khách không bao
-   * giờ dùng tới chức năng này.
+   * Ba việc trong một bước, và cả ba đều cần: (a) 4 MB ảnh gốc từ điện thoại
+   * xuống còn ~100 KB, (b) HEIC/PNG/WebP đều thành JPEG — máy chủ chỉ đọc JPEG,
+   * (c) xoay đúng chiều, vì trình duyệt đã áp EXIF khi vẽ ảnh ra canvas.
    */
+  async function toJpeg(file: File): Promise<Blob | null> {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement | null>((resolve) => {
+        const el = new Image();
+        el.onload = () => resolve(el);
+        el.onerror = () => resolve(null);
+        el.src = url;
+      });
+      if (!img || !img.naturalWidth) return null;
+      const k = Math.min(1, UPLOAD_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+      const w = Math.max(1, Math.round(img.naturalWidth * k));
+      const h = Math.max(1, Math.round(img.naturalHeight * k));
+      const cv = document.createElement("canvas");
+      cv.width = w;
+      cv.height = h;
+      cv.getContext("2d")!.drawImage(img, 0, 0, w, h);
+      return await new Promise<Blob | null>((resolve) => cv.toBlob(resolve, "image/jpeg", 0.9));
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  /** Khách gửi một ảnh có mặt mình → hỏi máy chủ "tôi là ai trong album này". */
   async function search(file: File) {
     setNote(null);
     try {
       setBusy(t("faceLoading"));
-      const [{ loadFaceModel, detectFull, faceScanSupported }, { loadRecognizer, embedFace, faceEmbedSupported }] =
-        await Promise.all([import("@/lib/face-detect"), import("@/lib/face-embed")]);
-      if (!faceScanSupported() || !faceEmbedSupported()) {
+      const jpg = await toJpeg(file);
+      if (!jpg) {
         setNote(t("faceNoSupport"));
         return;
       }
-      const [detector, recog] = await Promise.all([loadFaceModel(), loadRecognizer()]);
-
       setBusy(t("faceSearching"));
-      const full = await detectFull(detector, { key: "up", name: file.name, file }, 0);
-      if (full.metrics.faces.length === 0) {
-        setNote(t("faceNoneInPhoto"));
+      const body = new FormData();
+      body.append("file", jpg, "toi.jpg");
+      if (password) body.append("password", password);
+      const res = await fetch(`/api/album/${encodeURIComponent(slug)}/face-match`, { method: "POST", body });
+      const data = (await res.json().catch(() => ({}))) as {
+        personId?: string;
+        faces?: number;
+        error?: string;
+      };
+      if (data.personId) {
+        onPick(data.personId);
+        // Nhiều mặt trong ảnh khách gửi thì máy chủ lấy mặt TO NHẤT. Nói ra, vì
+        // nếu nó chọn nhầm người thì khách phải hiểu tại sao mà chọn lại ảnh.
+        const many = (data.faces ?? 1) > 1 ? ` ${t("faceUsedBiggest")}` : "";
+        setNote(`${t("faceFound")}${many}`);
         return;
       }
-      // Nhiều mặt thì lấy mặt TO NHẤT: ảnh khách tự chọn để "tìm tôi" gần như
-      // luôn là ảnh họ đứng gần máy nhất. Đoán khác đi cũng không có căn cứ nào
-      // tốt hơn, nên nói thẳng ra là đã chọn mặt lớn nhất.
-      let at = 0;
-      for (let i = 1; i < full.metrics.faces.length; i++) {
-        const a = full.metrics.faces[i].box;
-        const b = full.metrics.faces[at].box;
-        if (a.w * a.h > b.w * b.h) at = i;
-      }
-      const v = await embedFace(recog, full.canvas, full.width, full.height, full.landmarks[at]);
-      if (!v) {
-        setNote(t("faceNoneInPhoto"));
-        return;
-      }
-      const hit = nearestPerson(v, people.map((p) => ({ id: p.id, descriptor: p.descriptor })));
-      if (!hit) {
-        setNote(t("faceNoMatch"));
-        return;
-      }
-      onPick(hit.id);
-      const many = full.metrics.faces.length > 1 ? ` ${t("faceUsedBiggest")}` : "";
-      setNote(`${t("faceFound")}${many}`);
-    } catch (e) {
-      setNote(e instanceof Error ? e.message : t("faceFailed"));
+      setNote(
+        data.error === "khong_thay_mat"
+          ? t("faceNoneInPhoto")
+          : data.error === "khong_khop"
+            ? t("faceNoMatch")
+            : t("faceFailed")
+      );
+    } catch {
+      setNote(t("faceFailed"));
     } finally {
       setBusy(null);
     }
   }
 
-  if (people.length === 0) return null;
+  // Chưa có khuôn mặt nào. Hai trường hợp rất khác nhau và phải nói khác nhau:
+  // máy chủ CÒN ĐANG QUÉT (album vừa tạo) thì hẹn khách quay lại; quét xong mà
+  // không thấy mặt nào thì thôi, ẩn hẳn. Trả về `null` cho cả hai — như bản
+  // trước — chính là thứ khiến studio nhìn album và kết luận "không có tính năng".
+  if (people.length === 0) {
+    if (!preparing) return null;
+    return (
+      <p className="mt-4 flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--text3)" }}>
+        <ScanFace size={14} style={{ color: "var(--accent)" }} /> {t("facePreparing")}
+      </p>
+    );
+  }
 
   return (
     <div className="mt-4">
