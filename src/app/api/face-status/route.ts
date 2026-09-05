@@ -76,6 +76,31 @@ export async function GET() {
      */
     duAn,
     sqlEditor: linkSqlEditor(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    /*
+     * CÓ CHUỖI KẾT NỐI POSTGRES TRỰC TIẾP KHÔNG?
+     *
+     * Vì sao hỏi: khoá service_role chạy được mọi câu SELECT/INSERT nhưng KHÔNG
+     * chạy được DDL — PostgREST không mở cửa đó. Nên bình thường, tạo bảng bắt
+     * buộc phải vào SQL Editor của Supabase. Nếu chủ studio mất quyền vào chính
+     * project ấy thì họ kẹt hoàn toàn, dù app vẫn đang đọc ghi database đó bình
+     * thường bằng khoá đã có.
+     *
+     * Trường hợp thoát: tích hợp Supabase↔Vercel, nếu từng cài, sẽ tự bơm sẵn
+     * một chuỗi kết nối Postgres vào biến môi trường. Có nó thì app tự chạy được
+     * migration, không cần dashboard.
+     *
+     * CHỈ trả về TÊN biến, tuyệt đối không trả giá trị: chuỗi đó chứa mật khẩu
+     * database.
+     */
+    chuoiKetNoi: [
+      "POSTGRES_URL",
+      "POSTGRES_URL_NON_POOLING",
+      "POSTGRES_PRISMA_URL",
+      "DATABASE_URL",
+      "SUPABASE_DB_URL",
+      "POSTGRES_PASSWORD",
+      "SUPABASE_DB_PASSWORD",
+    ].filter((ten) => !!process.env[ten]),
     // Không lộ giá trị, chỉ lộ CÓ hay KHÔNG — biết là đủ để sửa.
     cronSecret: !!process.env.CRON_SECRET,
     quetBiTat: process.env.FACE_SCAN_OFF === "1",
