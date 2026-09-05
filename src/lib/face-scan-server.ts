@@ -295,38 +295,55 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
 }
 
 /**
- * Những album ĐÃ PHÁT HÀNH còn ảnh chưa quét, album nhiều ảnh chờ nhất lên trước.
+ * Những album ĐÃ PHÁT HÀNH còn ảnh chưa quét — MỚI NHẤT TRƯỚC.
  *
- * Chỉ album `published`: bản nháp chưa ai gửi cho khách, quét nó là đốt CPU cho
- * thứ không ai xem. Ngay khi studio phát hành, lượt cron kế tiếp nhặt nó lên.
+ * Bản trước hỏi ngược: lấy mọi ảnh chưa quét rồi đếm theo album, xếp album nhiều
+ * ảnh chờ nhất lên đầu. Hai chỗ sai, và chúng cộng lại thành hỏng thật:
  *
- * Hai truy vấn chứ không một truy vấn có nhúng (`albums!inner(...)`): nhúng của
- * PostgREST phụ thuộc vào tên quan hệ khoá ngoại, và khi nó hỏng thì hỏng cả
- * lượt cron — đắt hơn nhiều so với một round-trip thứ hai.
+ *  1. PostgREST cắt ở 1000 dòng. App này nhiều studio dùng chung, tổng ảnh chưa
+ *     quét lên hàng chục nghìn — nên nó chỉ nhìn thấy 1000 ảnh ĐẦU TIÊN theo
+ *     một thứ tự không ai định nghĩa, rồi "xếp hạng" trên mẫu đó. Con số
+ *     `pending` in ra vì thế cũng sai: báo 682 trong khi album đó còn 952.
+ *  2. Kể cả nếu đếm đúng, "nhiều ảnh chờ nhất" là luật sai. Album cũ khổng lồ
+ *     của studio khác sẽ chiếm mọi lượt cron, còn album vừa tạo — đúng cái sắp
+ *     gửi cho khách — thì xếp hàng vô tận. Đó chính là điều đã xảy ra.
+ *
+ * Nên hỏi XUÔI: đi từ bảng `albums`, mới nhất trước, và với mỗi album hỏi một
+ * câu đếm rẻ tiền "còn ảnh nào chưa quét không". Dừng ngay khi đủ số album cần.
+ * Không dính trần 1000 dòng, và album vừa tạo được quét trước — đúng thứ tự mà
+ * studio cần.
  */
 export async function albumsNeedingScan(db: any, limit = 5): Promise<{ id: string; pending: number }[]> {
-  const { data, error } = await db
-    .from("photos")
-    .select("album_id")
-    .is("faces_scanned_at", null)
-    .limit(20_000);
-  if (error) throw new Error(`tim_album_can_quet_that_bai: ${error.message}`);
-  const count = new Map<string, number>();
-  for (const r of (data ?? []) as { album_id: string }[]) {
-    count.set(r.album_id, (count.get(r.album_id) ?? 0) + 1);
-  }
-  const xep = [...count.entries()].map(([id, pending]) => ({ id, pending })).sort((a, b) => b.pending - a.pending);
-  if (xep.length === 0) return [];
-  // Lọc "đã phát hành" trên tối đa 60 ứng viên đầu, để URL của `in()` không phình.
-  const top = xep.slice(0, 60);
-  const { data: pub, error: e2 } = await db
+  const { data: albums, error } = await db
     .from("albums")
     .select("id")
     .eq("status", "published")
-    .in("id", top.map((x) => x.id));
-  if (e2) throw new Error(`loc_album_da_phat_hanh_that_bai: ${e2.message}`);
-  const ok = new Set(((pub ?? []) as { id: string }[]).map((a) => a.id));
-  return top.filter((x) => ok.has(x.id)).slice(0, limit);
+    .order("created_at", { ascending: false })
+    .limit(120);
+  if (error) throw new Error(`tim_album_can_quet_that_bai: ${error.message}`);
+
+  const out: { id: string; pending: number }[] = [];
+  const ids = ((albums ?? []) as { id: string }[]).map((a) => a.id);
+  // Hỏi theo lô 8 câu song song: tuần tự thì 120 lượt gọi ăn hết hạn thời gian
+  // trước khi quét được tấm nào.
+  for (let i = 0; i < ids.length && out.length < limit; i += 8) {
+    const lo = ids.slice(i, i + 8);
+    const dem = await Promise.all(
+      lo.map(async (id) => {
+        const { count } = await db
+          .from("photos")
+          .select("id", { count: "exact", head: true })
+          .eq("album_id", id)
+          .is("faces_scanned_at", null)
+          .eq("is_video", false);
+        return { id, pending: count ?? 0 };
+      })
+    );
+    for (const d of dem) {
+      if (d.pending > 0 && out.length < limit) out.push(d);
+    }
+  }
+  return out;
 }
 
 /**
