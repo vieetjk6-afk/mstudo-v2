@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
+import { faceChips, type PersonChip } from "@/lib/face-people";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { getStudioBrand } from "@/lib/studio-brand";
 import Brand from "@/components/Brand";
@@ -72,7 +73,7 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
 
   // Chạy song song: brand, ảnh, sources, feedback và gói của chủ studio — gộp
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
-  const [brand, studioHost, allPhotos, { data: s }, { data: feedback }, { data: owner }] = await Promise.all([
+  const [brand, studioHost, allPhotos, { data: s }, { data: feedback }, { data: owner }, { data: ppl }, { data: pplLinks }] = await Promise.all([
     getStudioBrand(admin, album.owner_id),
     // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
     // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
@@ -90,6 +91,11 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
       .eq("approved", true)
       .order("created_at", { ascending: false }),
     admin.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle(),
+    // Nhóm khuôn mặt studio đã gom. `select("*")` có chủ ý: cover_box là cột
+    // thêm sau, liệt kê tên nó ra thì database chưa chạy migration sẽ lỗi CẢ câu
+    // và khối tìm mặt biến mất hẳn — xem ghi chú ở src/app/a/[slug]/page.tsx.
+    admin.from("album_people").select("*").eq("album_id", album.id).order("position"),
+    admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
   ]);
   const studioName = brand.name;
 
@@ -118,9 +124,14 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
   let driveFolders: { name: string; url: string }[] = [];
   // Link Drive file gốc ở giai đoạn chọn ảnh (JPG Goc) — hiện trong album hoàn thiện.
   let originalFolders: { name: string; url: string }[] = [];
+  let people: PersonChip[] = [];
   if (!hasPassword) {
     const filtered = filterDeliveryPhotos(allPhotos ?? [], s ?? []);
     totalPhotos = filtered.length;
+    // Dựng chip từ TOÀN BỘ ảnh giao khách, không phải lô 300 ảnh đầu: số ảnh
+    // trên mỗi khuôn mặt phải đúng ngay từ đầu. Lưới thì tự đầy dần — trang này
+    // đã tải nốt phần còn lại trong nền sau khi mở.
+    people = faceChips(ppl ?? [], pplLinks ?? [], new Set(filtered.map((ph) => ph.id)));
     // Share: cần đủ ảnh để lọc theo shareIds. Ngược lại chỉ gửi lô đầu.
     photos = shareMode ? filtered : filtered.slice(0, INITIAL_PHOTOS);
     sources = shownSources.map(({ id, name, position }) => ({ id, name, position }));
@@ -153,6 +164,7 @@ export default async function GalleryPage({ params, searchParams }: { params: { 
         watermark: canWatermark && album.watermark_delivery ? (album.watermark_text || studioName) : null,
       }}
       initialPhotos={photos}
+      initialPeople={people}
       totalPhotos={totalPhotos}
       initialSources={sources}
       initialDriveFolders={driveFolders}

@@ -273,6 +273,50 @@ const real = errors.filter(
   (e) => !/Failed to load resource|favicon|manifest|upgrade-insecure-requests/i.test(e)
 );
 ok("không có lỗi JavaScript nào trên trang", real.length === 0, real.join("\n    "));
+
+/* ── ALBUM GIAO KHÁCH ─────────────────────────────────────────────────────────
+ *
+ * Có HAI trang khách, không phải một: /a/[slug] là album chọn ảnh, /album/[slug]
+ * là album giao khách. Bản đầu chỉ gắn khối tìm mặt vào trang thứ nhất, trong
+ * khi yêu cầu nói rõ là cần CẢ HAI — chủ studio mở link giao khách và không thấy
+ * gì, hoàn toàn đúng, vì ở đó chưa có gì cả. Phần này tồn tại để không lặp lại.
+ */
+{
+  const g = await browser.newPage();
+  const gerr = [];
+  g.on("pageerror", (e) => gerr.push(e.message.slice(0, 200)));
+  await g.route("**/api/img**", (r) => r.fulfill({ status: 200, contentType: "image/png", body: PNG }));
+  // Trang này tự tải nốt ảnh trong nền; ở đây không cần thêm gì.
+  await g.route("**/api/album/**", (r) =>
+    r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ photos: [] }) })
+  );
+  let gres;
+  try {
+    gres = await g.goto(`${process.env.UI_BASE || "http://localhost:3333"}/uipreview/giao-khach-tim-mat`, {
+      waitUntil: "networkidle",
+      timeout: 30_000,
+    });
+  } catch {
+    gres = null;
+  }
+  if (!gres || !gres.ok()) {
+    ok("mở được màn album giao khách", false, `trả về ${gres?.status()}`);
+  } else {
+    await g.waitForTimeout(2000);
+    const dem = () => g.locator('[aria-label^="Xem DSC"]').count();
+    ok("album GIAO KHÁCH cũng có khối tìm ảnh theo khuôn mặt", (await g.locator("text=Tìm ảnh có mặt bạn").count()) > 0);
+    const tong = await dem();
+    ok("…lưới đủ 8 ảnh khi chưa lọc", tong === 8, `đếm ${tong}`);
+    await g.getByRole("button", { name: /Cô dâu/ }).first().click();
+    await g.waitForFunction(() => document.querySelectorAll('[aria-label^="Xem DSC"]').length === 4, null, { timeout: 5000 }).catch(() => {});
+    ok("…bấm một khuôn mặt thì lọc đúng 4 ảnh", (await dem()) === 4, `đếm ${await dem()}`);
+    await g.getByRole("button", { name: /Xem cả album/ }).first().click();
+    await g.waitForFunction(() => document.querySelectorAll('[aria-label^="Xem DSC"]').length === 8, null, { timeout: 5000 }).catch(() => {});
+    ok("…bỏ lọc thì về lại cả album", (await dem()) === 8, `đếm ${await dem()}`);
+    ok("…và không có lỗi JavaScript", gerr.length === 0, gerr.join(" | "));
+  }
+  await g.close();
+}
 ok(
   "không có cảnh báo hydrate (React vứt HTML máy chủ)",
   !real.some((e) => /hydrat/i.test(e)),

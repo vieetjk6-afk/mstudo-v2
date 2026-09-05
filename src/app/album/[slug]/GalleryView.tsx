@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { fmtDate } from "@/lib/date";
+import FaceFinder from "@/app/a/[slug]/FaceFinder";
+import { filterByPerson, type PersonChip } from "@/lib/face-people";
 
 type Lang = "vi" | "en";
 const TR = {
@@ -88,10 +90,12 @@ interface DriveFolder { name: string; url: string; }
 interface G { id: string; slug: string; title: string; event_date: string | null; cover_url: string | null; hasPassword: boolean; allowDownload?: boolean; driveIsEdited?: boolean; watermark?: string | null; }
 
 export default function GalleryView({
-  gallery, initialPhotos, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
+  gallery, initialPhotos, initialPeople, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
 }: {
   gallery: G;
   initialPhotos: P[] | null;
+  /** Khuôn mặt studio đã gom sẵn — khách bấm để lọc, không tải mô hình nào. */
+  initialPeople?: PersonChip[];
   totalPhotos?: number | null;
   initialSources: S[] | null;
   initialDriveFolders?: DriveFolder[];
@@ -106,6 +110,9 @@ export default function GalleryView({
   const wm = gallery.watermark || null;
   const [unlocked, setUnlocked] = useState(!gallery.hasPassword);
   const [photos, setPhotos] = useState<P[]>(initialPhotos ?? []);
+  const [people, setPeople] = useState<PersonChip[]>(initialPeople ?? []);
+  /** Khuôn mặt đang lọc. null = xem cả album. */
+  const [personId, setPersonId] = useState<string | null>(null);
   const [sources, setSources] = useState<S[]>(initialSources ?? []);
   const [driveFolders, setDriveFolders] = useState<DriveFolder[]>(initialDriveFolders);
   // Link Drive file gốc ở giai đoạn chọn ảnh (JPG Goc) — hiện trong album hoàn thiện.
@@ -228,6 +235,7 @@ export default function GalleryView({
     setPhotos(data.photos ?? []); setSources(data.sources ?? []);
     setDriveFolders(data.driveFolders ?? []);
     setOriginalFolders(data.originalFolders ?? []);
+    setPeople(data.people ?? []);
     setUnlocked(true);
   }
 
@@ -252,11 +260,16 @@ export default function GalleryView({
   }, [driveFolders, originalFolders, allowDownload, gallery.driveIsEdited]);
 
   const tabSources = useMemo(() => sources.filter((s) => photos.some((p) => p.source_id === s.id)), [sources, photos]);
+  const activePerson = useMemo(() => people.find((p) => p.id === personId) ?? null, [people, personId]);
+  /** id ảnh → id file Drive, để ảnh thẻ khuôn mặt không phải quét mảng mỗi lần vẽ. */
+  const driveIdOf = useMemo(() => new Map(photos.map((p) => [p.id, p.drive_file_id])), [photos]);
   const visible = useMemo(() => {
     let base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
     if (shareSet) base = base.filter((p) => shareSet.has(p.id));
-    return base;
-  }, [photos, activeTab, shareSet]);
+    // Lọc theo khuôn mặt SAU cùng: nó là câu hỏi "cho tôi xem ảnh của mẹ tôi",
+    // còn tab nguồn và chế độ chia sẻ là phạm vi đang xem.
+    return filterByPerson(base, activePerson);
+  }, [photos, activeTab, shareSet, activePerson]);
   const sections = useMemo(() => {
     const idx = visible.map((p, i) => ({ p, i }));
     if (activeTab !== "all" || tabSources.length <= 1) return [{ id: "all", name: "", items: idx }];
@@ -274,7 +287,7 @@ export default function GalleryView({
   // hướng phím KHÔNG đổi — chỉ ít node hơn được render tại một thời điểm.
   const RENDER_BATCH = 250;
   const [renderLimit, setRenderLimit] = useState(RENDER_BATCH);
-  useEffect(() => { setRenderLimit(RENDER_BATCH); }, [activeTab, shareSet, photos]);
+  useEffect(() => { setRenderLimit(RENDER_BATCH); }, [activeTab, shareSet, photos, personId]);
   // Dùng CALLBACK REF (không phải effect theo visible.length): quan sát lại mỗi khi
   // sentinel gắn/mount lại — kể cả khi đổi sang tab CÙNG SỐ ẢNH (renderLimit reset
   // làm sentinel mount lại nhưng visible.length không đổi → effect cũ không chạy lại).
@@ -412,6 +425,11 @@ export default function GalleryView({
         ) : null}
 
         {/* tabs */}
+        {/* TÌM ẢNH THEO KHUÔN MẶT — album giao khách.
+            Cùng khối với album chọn ảnh: studio đã gom sẵn nên bấm một mặt chỉ
+            là tra bảng, khách không tải mô hình nào. */}
+        <FaceFinder people={people} activeId={personId} onPick={setPersonId} driveIdOf={driveIdOf} />
+
         {tabSources.length > 1 && (
           <div className="mt-6 flex flex-wrap gap-2">
             <Tab active={activeTab === "all"} onClick={() => setActiveTab("all")}>{tr.tabAll}</Tab>
