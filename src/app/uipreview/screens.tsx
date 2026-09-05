@@ -23,6 +23,7 @@ import AiFaceDemo from "./AiFaceDemo";
 import FaceGroupDemo from "./FaceGroupDemo";
 import FaceFinderDemo from "./FaceFinderDemo";
 import FaceAutoDemo from "./FaceAutoDemo";
+import FaceSetupDemo from "./FaceSetupDemo";
 import * as f from "./fixtures";
 
 /**
@@ -65,6 +66,10 @@ export const SCREENS: Record<
   "tu-dong-gom-mat": {
     title: "Màn album studio — bảng tự động gom khuôn mặt (Supabase hỏng có chủ ý)",
     render: () => <FaceAutoDemo />,
+  },
+  "bao-chua-chay-sql": {
+    title: "Bảng điều khiển — báo chưa bật được tìm theo khuôn mặt",
+    render: () => <FaceSetupDemo />,
   },
   "hop-dong": {
     title: "Hợp đồng — danh sách",
