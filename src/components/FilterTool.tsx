@@ -484,7 +484,6 @@ export default function FilterTool({
               sourceFiles={sourceFiles}
               sourceLabel={photoSource === "drive" ? `${driveFiles.length} ảnh từ link Drive` : `${localFiles.length} ảnh trong thư mục trên máy`}
               compact={compact}
-              albums={albums}
               albumId={albumId || undefined}
               onUseNames={(names) => {
                 // Đưa thẳng vào ô "Tự nhập" của bước 2: từ đó mọi nút sẵn có

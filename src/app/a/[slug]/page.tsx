@@ -184,8 +184,13 @@ export default async function PublicAlbumPage({
       // hàng chip. Cố ý không nổ: một tính năng thêm không được làm sập trang
       // chọn ảnh của khách.
       admin
+      // `select("*")` CÓ CHỦ Ý, không phải lười liệt kê cột: `cover_box` là cột
+      // THÊM SAU. Liệt kê tên nó ra thì trên một database chưa chạy lại
+      // migration, cả câu này lỗi và khối tìm theo khuôn mặt BIẾN MẤT HẲN — thay
+      // vì chỉ mất phần ảnh mặt cắt sẵn. Lấy `*` thì cột thiếu chỉ là undefined,
+      // và faceChips tự lùi về lấy cả tấm làm ảnh thẻ.
         .from("album_people")
-        .select("id, name, cover_photo_id, cover_box, descriptor, face_count, position")
+        .select("*")
         .eq("album_id", album.id)
         .order("position"),
       admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),

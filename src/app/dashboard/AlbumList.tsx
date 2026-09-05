@@ -224,6 +224,26 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
   const [phase, setPhase] = useState<"selection" | "delivery">(isDeliveryPhase(a) ? "delivery" : "selection");
   const [doneAt, setDoneAt] = useState<string | null>(a.selection_done_at ?? null);
   const [filterOpen, setFilterOpen] = useState(false);
+  /** Số người đã gom cho album này. null = chưa đọc xong. */
+  const [faceCount, setFaceCount] = useState<number | null>(null);
+  // Chỉ đọc KHI MỞ MENU, không đọc cho cả trang: thư viện có thể vài trăm album,
+  // và con số này chỉ cần đúng lúc studio đang nhìn vào một album cụ thể.
+  useEffect(() => {
+    if (!menu || faceCount !== null) return;
+    let alive = true;
+    void supabase
+      .from("album_people")
+      .select("id", { count: "exact", head: true })
+      .eq("album_id", a.id)
+      .then(({ count, error }) => {
+        // Chưa chạy migration album_people.sql thì coi như chưa gom — đúng về
+        // mặt kết quả, và không làm hỏng menu vì một tính năng thêm.
+        if (alive) setFaceCount(error ? 0 : (count ?? 0));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [menu, faceCount, supabase, a.id]);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Đóng menu bật/tắt nhanh khi nhấp RA NGOÀI card (card khác hoặc vùng trang) —
@@ -405,16 +425,31 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
             {/* Mở POPUP công cụ lọc ảnh ngay trong quản lý album. Popup render Ở
                 NGOÀI khối menu này: nhấp vào popup nằm ngoài card nên menu tự
                 đóng, nếu popup nằm trong menu thì nó bị gỡ theo. */}
-            {phase !== "delivery" && (
-              <button
-                type="button"
-                onClick={() => setFilterOpen(true)}
-                className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[9px] py-2 text-[12px] font-semibold"
-                style={{ border: "1px solid var(--bd)" }}
-              >
-                <Filter size={13} /> Lọc ảnh (Drive / máy tính)
-              </button>
-            )}
+            {/* KHÔNG còn chặn theo giai đoạn. Trước đây nút này ẩn với album đã
+                giao khách vì "giao rồi thì hết cần lọc" — đúng với việc lọc ảnh,
+                nhưng chính cửa sổ này cũng là nơi GOM KHUÔN MẶT cho khách tự
+                tìm, mà việc đó có ích cho album giao khách hơn cả. Ẩn nút đi là
+                cắt sạch đường vào, và studio không có cách nào biết vì sao. */}
+            <button
+              type="button"
+              onClick={() => setFilterOpen(true)}
+              className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-[9px] py-2 text-[12px] font-semibold"
+              style={{ border: "1px solid var(--bd)" }}
+            >
+              <Filter size={13} /> Lọc ảnh · gom khuôn mặt
+            </button>
+            {/* Trạng thái GOM KHUÔN MẶT của chính album này.
+                Có nó thì studio nhìn một cái là biết đang đứng ở đâu: chưa gom,
+                hay đã gom mà chưa hiện ra cho khách. Không có nó thì "khách
+                không thấy tìm theo khuôn mặt" là một câu không ai trả lời được
+                mà không mở DB ra xem. */}
+            <p className="mt-1.5 text-center text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              {faceCount === null
+                ? "Khuôn mặt: đang xem…"
+                : faceCount === 0
+                  ? "Khuôn mặt: chưa gom — khách chưa tìm được theo mặt"
+                  : `Khuôn mặt: đã gom ${faceCount} người`}
+            </p>
             <div className="mt-2 flex gap-2">
               <Link href={`/dashboard/albums/${a.id}`} className="flex-1 rounded-[9px] py-2 text-center text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }}>
                 Chỉnh sửa đầy đủ

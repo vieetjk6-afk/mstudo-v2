@@ -83,7 +83,6 @@ export default function AiFilterPanel({
   sourceLabel,
   onUseNames,
   compact = false,
-  albums = [],
   albumId,
 }: {
   sourceFiles: SourceFile[];
@@ -92,8 +91,7 @@ export default function AiFilterPanel({
   /** Đưa danh sách tên file nên loại sang ô danh sách của công cụ Lọc ảnh. */
   onUseNames: (names: string[]) => void;
   compact?: boolean;
-  /** Album của studio — để lưu nhóm người xuống cho khách lọc. */
-  albums?: { id: string; title: string }[];
+  /** Album đang mở (nếu công cụ được mở từ một album) — điền sẵn ô chọn khi lưu. */
   albumId?: string;
 }) {
   const [busy, setBusy] = useState(false);
@@ -650,13 +648,12 @@ export default function AiFilterPanel({
               {/* Lưu xuống album: đây là điểm khác biệt lớn nhất giữa "hay" và
                   "dùng được". Gom xong mà chỉ xem trên máy studio thì lần sau
                   phải quét lại; lưu xuống thì KHÁCH lọc được mà không tải mô hình. */}
-              {people.length > 0 && albums.length > 0 && (
+              {people.length > 0 && (
                 <AiPeopleSave
                   people={people}
                   vectors={vectorsRef.current}
                   files={sourceFiles.map((f) => ({ key: f.key, name: f.name }))}
                   previews={previews}
-                  albums={albums}
                   albumId={albumId}
                   tight={tight}
                 />

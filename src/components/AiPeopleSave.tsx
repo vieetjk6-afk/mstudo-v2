@@ -39,7 +39,6 @@ export default function AiPeopleSave({
   vectors,
   files,
   previews,
-  albums,
   albumId: albumIdProp,
   tight,
 }: {
@@ -48,13 +47,27 @@ export default function AiPeopleSave({
   vectors: FaceVector[];
   files: { key: string; name: string }[];
   previews: Record<string, string>;
-  albums: AlbumOpt[];
   albumId?: string;
   /** Ngưỡng studio đang kéo — dùng luôn cho việc nhận lại người cũ. */
   tight: number;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [albumId, setAlbumId] = useState(albumIdProp ?? "");
+  /**
+   * Danh sách album TỰ NẠP, không mượn danh sách của công cụ Lọc ảnh.
+   *
+   * Danh sách bên đó cố ý chỉ có album đang ở giai đoạn CHỌN ẢNH — hợp lý cho
+   * việc của nó (đối chiếu danh sách ảnh khách đã chọn), nhưng sai cho việc ở
+   * đây: gom khuôn mặt có ích cho CẢ album giao khách, thậm chí còn hơn. Mượn
+   * danh sách ấy gây ra đúng hai lỗi im lặng:
+   *
+   *   • Studio không có album nào ở giai đoạn chọn ảnh → cả bảng lưu này BIẾN
+   *     MẤT. Họ quét xong, thấy các nhóm, và không có chỗ nào để lưu.
+   *   • Mở công cụ TỪ CHÍNH một album giao khách → album đó không nằm trong ô
+   *     chọn, nên không lưu vào được cái album vừa mở ra.
+   */
+  const [albums, setAlbums] = useState<AlbumOpt[]>([]);
+  const [albumsLoaded, setAlbumsLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -135,6 +148,33 @@ export default function AiPeopleSave({
     },
     [supabase]
   );
+
+  // Mọi album của CHÍNH studio đang đăng nhập. `eq owner_id` là bắt buộc: RLS cho
+  // admin đọc mọi album, nên không tự giới hạn thì admin thấy album studio khác.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || !alive) {
+        if (alive) setAlbumsLoaded(true);
+        return;
+      }
+      const { data } = await supabase
+        .from("albums")
+        .select("id, title")
+        .eq("owner_id", user.id)
+        .eq("is_gallery", false)
+        .order("updated_at", { ascending: false });
+      if (!alive) return;
+      setAlbums(data ?? []);
+      setAlbumsLoaded(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [supabase]);
 
   useEffect(() => {
     void load(albumId);
@@ -270,6 +310,13 @@ export default function AiPeopleSave({
         </select>
         {loading && <span className="text-[11.5px]" style={{ color: "var(--tx3, var(--text3))" }}>Đang nạp album…</span>}
       </div>
+
+      {albumsLoaded && albums.length === 0 && (
+        <p className="mt-2 text-[12.5px]" style={{ color: "#c2410c" }}>
+          Không thấy album nào của bạn. Nhóm khuôn mặt vừa gom sẽ mất khi đóng cửa sổ này — hãy tạo
+          album cho khách trước, rồi quét lại.
+        </p>
+      )}
 
       <p className="mt-1.5 text-[11.5px] leading-relaxed" style={{ color: "var(--tx3, var(--text3))" }}>
         Đặt tên rồi bấm lưu — khách chỉ tải vài KB danh sách, <b>không tải mô hình AI</b>. Ảnh được ghép với
