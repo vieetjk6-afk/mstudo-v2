@@ -36,6 +36,11 @@ import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, ty
  * ghi, thứ rẻ hơn nhiều so với mất cả mẻ.
  */
 const WRITE_CHUNK = 20;
+/**
+ * Mẻ ghi đầu tiên của mỗi album — nhỏ, để "mốc quét có nằm lại không" lộ ra sau
+ * vài giây thay vì sau nửa ngân sách. Xem chỗ dùng trong vòng quét.
+ */
+const FIRST_CHUNK = 3;
 
 /**
  * HẠN CHO MỘT LƯỢT QUÉT, và vì sao nó nhỏ đến thế.
@@ -72,13 +77,23 @@ export type ScanReport = {
   /** Số dòng DB XÁC NHẬN đã ghi. Lệch với `scanned` nghĩa là ghi không ăn. */
   daGhiMoc: number;
   daGhiMat: number;
+  /**
+   * Số ảnh ĐỌC LẠI BẰNG MỘT CÂU RIÊNG mà thật sự đã mang mốc.
+   *
+   * Khác `daGhiMoc` ở đúng chỗ quan trọng: `daGhiMoc` đếm dòng do chính câu
+   * UPDATE trả về (RETURNING). Câu đó luôn báo thành công kể cả khi giá trị
+   * KHÔNG được ghi thật — trigger BEFORE UPDATE trả OLD, rule, hay một bản sao
+   * chỉ-đọc đều cho ra đúng cảnh đó: "đã ghi N dòng" mà đọc lại vẫn null.
+   * Chỉ một câu SELECT RIÊNG, sau khi ghi, mới phân biệt được hai chuyện đó.
+   */
+  daXacNhan: number;
   scanned: number;
   faces: number;
   failed: number;
   remaining: number;
   clustered: number | null;
   ms: number;
-  stoppedBy: "xong" | "het-gio" | "het-han-muc";
+  stoppedBy: "xong" | "het-gio" | "het-han-muc" | "ghi-khong-an";
 };
 
 /** Ảnh còn phải quét: bỏ video, bỏ những tấm đã có mốc. */
@@ -95,7 +110,20 @@ export function pendingRows(rows: readonly ScanRow[]): ScanRow[] {
 export async function scanAlbum(
   db: any,
   albumId: string,
-  opts: { budgetMs: number; maxPhotos: number }
+  opts: {
+    budgetMs: number;
+    maxPhotos: number;
+    /**
+     * Cửa thay ĐỒ NGHỀ, chỉ dùng cho kiểm thử (desktop/test/face-ghi-khong-an.mjs).
+     * Production luôn bỏ trống và dùng fetchThumb/scanJpeg thật. Có cửa này thì
+     * mới kiểm được luật ĐIỀU PHỐI (ghi có nằm lại không, có bỏ sớm nhường album
+     * khác không) mà không cần mạng, không cần 12 MB trọng số, không cần database.
+     */
+    _tai?: (driveFileId: string) => Promise<Uint8Array | null>;
+    _quet?: (bytes: Uint8Array) => Promise<
+      { box: { x: number; y: number; w: number; h: number }; descriptor: number[]; sharpness: number }[]
+    >;
+  }
 ): Promise<ScanReport> {
   const t0 = Date.now();
   /*
@@ -122,6 +150,10 @@ export async function scanAlbum(
   /** Số dòng DB xác nhận đã ghi — không phải số ta định ghi. */
   let daGhiMat = 0;
   let daGhiMoc = 0;
+  /** Số ảnh đọc lại BẰNG CÂU RIÊNG mà thật sự đã mang mốc. Xem ScanReport. */
+  let daXacNhan = 0;
+  /** Mốc ghi xong nhưng đọc lại vẫn null → dừng album này, nhường lượt. */
+  let ghiKhongAn = false;
 
   /** Đẩy những gì đang giữ trong tay xuống DB. Gọi sau mỗi mẻ và ở cuối. */
   const flush = async () => {
@@ -160,6 +192,35 @@ export async function scanAlbum(
       // Chạm 0 dòng trong khi vừa gửi một danh sách id có thật = câu ghi bị chặn
       // ở đâu đó. Nổ ra to còn hơn quét lại đúng những tấm đó tới vô tận.
       if ((d2 ?? []).length === 0) throw new Error(`ghi_moc_quet_cham_0_dong (gui ${part.length} id)`);
+
+      /*
+       * ĐỌC LẠI BẰNG MỘT CÂU RIÊNG — không tin RETURNING của chính câu vừa ghi.
+       *
+       * Đây là chỗ bản trước còn mù. RETURNING nói "đã ghi 37 dòng" nhưng nó chỉ
+       * chứng minh câu UPDATE KHỚP 37 dòng, không chứng minh giá trị đã nằm lại
+       * trong bảng. Log production ngày 06/09 cho thấy đúng khoảng cách đó: tám
+       * lượt liên tiếp đều báo daGhiMoc 37–47, mà lượt sau vẫn thấy nguyên 343
+       * ảnh chưa quét — không tiến một tấm nào suốt cả ngày, và vì hàng đợi ưu
+       * tiên album mới nhất nên nó nuốt trọn công suất, mọi album khác không bao
+       * giờ tới lượt.
+       *
+       * Một câu SELECT riêng phân biệt được hai chuyện mà RETURNING gộp làm một:
+       * "ghi thành công" và "ghi rồi bị trả về như cũ" (trigger BEFORE UPDATE trả
+       * OLD, rule, bản sao chỉ-đọc…). Rẻ: đếm head, không kéo dòng nào về.
+       */
+      const { count: thuc } = await db
+        .from("photos")
+        .select("id", { count: "exact", head: true })
+        .in("id", part)
+        .not("faces_scanned_at", "is", null);
+      daXacNhan += thuc ?? 0;
+      if ((thuc ?? 0) === 0) {
+        // Không nổ ra: nổ thì cả lượt cron đỏ và MỌI album khác cũng đứng theo.
+        // Ghi nhận rồi bỏ album này, để phần thời gian còn lại phục vụ album khác.
+        ghiKhongAn = true;
+        doneIds.length = 0;
+        return;
+      }
     }
   };
 
@@ -174,7 +235,9 @@ export async function scanAlbum(
    * bộ nhớ cùng lúc, mà lợi thì không thêm — nhận diện vẫn là khâu chậm nhất và
    * nó chỉ chạy được một ảnh một lúc.
    */
-  const tai = (p?: ScanRow) => (p ? fetchThumb(p.drive_file_id).catch(() => null) : Promise.resolve(null));
+  const taiAnh = opts._tai ?? fetchThumb;
+  const quetAnh = opts._quet ?? scanJpeg;
+  const tai = (p?: ScanRow) => (p ? taiAnh(p.drive_file_id).catch(() => null) : Promise.resolve(null));
   let cho: Promise<Uint8Array | null> = tai(todo[0]);
 
   for (let i = 0; i < todo.length; i++) {
@@ -193,7 +256,7 @@ export async function scanAlbum(
     try {
       const bytes = await bytesCho;
       if (!bytes) throw new Error("khong_tai_duoc_anh");
-      const found = await scanJpeg(bytes);
+      const found = await quetAnh(bytes);
       found.forEach((f, at) => {
         faceRows.push({
           album_id: albumId,
@@ -214,9 +277,25 @@ export async function scanAlbum(
       // vẫn thử lại, biết đâu chỉ là Drive nghẽn nhất thời.
       failed++;
     }
-    if (doneIds.length >= WRITE_CHUNK) await flush();
+    /*
+     * Mẻ ghi ĐẦU TIÊN cố ý nhỏ (FIRST_CHUNK), các mẻ sau mới dùng WRITE_CHUNK.
+     *
+     * Lý do là thời gian: chỉ sau khi ghi rồi đọc lại ta mới biết mốc có nằm lại
+     * hay không. Đợi đủ 20 tấm mới ghi lần đầu nghĩa là một album kẹt vẫn tiêu
+     * mất ~25 giây trong ngân sách 45 giây trước khi lộ ra. Ghi thử vài tấm
+     * trước thì phát hiện trong khoảng 5 giây, phần còn lại của lượt cron vẫn
+     * đủ để phục vụ album khác.
+     */
+    const nguong = daGhiMoc === 0 ? FIRST_CHUNK : WRITE_CHUNK;
+    if (doneIds.length >= nguong) await flush();
+    // Ghi mốc không ăn thì quét tiếp là quét lại đúng những tấm vừa quét — dừng
+    // ngay, để thời gian còn lại của lượt cron dành cho album khác.
+    if (ghiKhongAn) {
+      stoppedBy = "ghi-khong-an";
+      break;
+    }
   }
-  await flush();
+  if (!ghiKhongAn) await flush();
 
   const remaining = todo.length - scanned - failed;
   return {
@@ -224,13 +303,14 @@ export async function scanAlbum(
     tongAnh: rows.length,
     daGhiMoc,
     daGhiMat,
+    daXacNhan,
     scanned,
     faces,
     failed,
     remaining: Math.max(0, remaining),
     clustered: null,
     ms: Date.now() - t0,
-    stoppedBy,
+    stoppedBy: ghiKhongAn ? "ghi-khong-an" : stoppedBy,
   };
 }
 

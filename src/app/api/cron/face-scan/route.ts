@@ -81,6 +81,20 @@ export async function GET(req: NextRequest) {
       // Dưới 12 giây thì không đủ cho cả nạp mô hình lẫn một mẻ có ích — để lượt
       // cron sau làm, còn hơn bị cắt giữa chừng.
       if (left < 12_000) break;
+      /*
+       * Album KHÔNG TIẾN được thì tự bỏ sớm và nhường phần còn lại cho album kế.
+       *
+       * Hàng đợi xếp album mới nhất trước, nên trước đây một album kẹt đứng mãi
+       * ở đầu hàng: mỗi lượt cron nó ăn trọn 45 giây, quét lại đúng những tấm
+       * cũ, ghi mốc, mốc không nằm lại, lượt sau thấy y nguyên. Ba chỗ
+       * MAX_ALBUMS bị chiếm vĩnh viễn và mọi album cũ hơn không bao giờ tới
+       * lượt — đó chính là "album khác không thấy khuôn mặt", trong khi bộ quét
+       * vẫn chạy đều và log vẫn xanh.
+       *
+       * Giờ `scanAlbum` phát hiện mốc không ăn ngay sau mẻ ghi ĐẦU TIÊN và trả
+       * về `stoppedBy: "ghi-khong-an"` sau vài giây, nên vòng lặp này còn thừa
+       * thời gian để phục vụ những album lành phía sau.
+       */
       reports.push(await scanAlbum(db, a.id, { budgetMs: left, maxPhotos: MAX_PHOTOS }));
     }
   } catch (e) {
