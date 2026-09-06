@@ -17,7 +17,11 @@ function buildLists(allItems: PricelistItem[], hidden: string[] = [], labels: Re
   return combined.length ? combined : PRICE_LISTS.slice(0, 1);
 }
 
-export default async function PublicPricelist({ params, searchParams }: { params: { token: string }; searchParams?: { list?: string } }) {
+export default async function PublicPricelist(
+  props: { params: Promise<{ token: string }>; searchParams?: Promise<{ list?: string }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const db = createAdminClient();
   const { data: owner } = await db
     .from("profiles")

@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /** GET — commission history + totals for the calling user */
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

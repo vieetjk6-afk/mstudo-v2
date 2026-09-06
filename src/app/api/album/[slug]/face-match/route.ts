@@ -29,7 +29,8 @@ const MAX_BYTES = 6 * 1024 * 1024;
  * ẢNH KHÁCH GỬI KHÔNG ĐƯỢC LƯU. Nó nằm trong bộ nhớ đúng một lượt xử lý; thứ duy
  * nhất đi tiếp là một id người trong album. Không ghi Storage, không ghi DB.
  */
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const limited = await limitByIpDurable(req, `face-match:${params.slug}`, 20, 60_000, { failClosed: false });
   if (limited) return limited;
 

@@ -19,7 +19,8 @@ async function load(slug: string): Promise<StoryPage | null> {
   return data as StoryPage;
 }
 
-export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const s = await load(params.slug);
   if (!s) return { title: "Không tìm thấy trang" };
   const c = s.config as StoryConfig;
@@ -27,7 +28,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return { title: `Love Story · ${couple}`, description: c.tagline || `Câu chuyện của ${couple}.`, openGraph: { images: c.cover_url ? [c.cover_url] : undefined } };
 }
 
-export default async function StoryPageView({ params }: { params: { slug: string } }) {
+export default async function StoryPageView(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const story = await load(params.slug);
   if (!story) notFound();
   const c = story.config as StoryConfig;

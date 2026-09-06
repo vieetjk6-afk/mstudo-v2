@@ -27,7 +27,7 @@ export const BRANCH_COOKIE = "mstudo_branch";
  * không được phép làm hỏng app của studio chưa chạy migration.
  */
 export const getBranches = cache(async (ownerId: string): Promise<StudioBranch[]> => {
-  const { data } = await createClient()
+  const { data } = await (await createClient())
     .from("studio_branches")
     .select("*")
     .eq("owner_id", ownerId)
@@ -82,7 +82,7 @@ export async function getBranchScope(
 
   if (branches.length === 0) return { branches, selected: null, enabled: false, locked: false };
 
-  const raw = cookies().get(BRANCH_COOKIE)?.value ?? null;
+  const raw = (await cookies()).get(BRANCH_COOKIE)?.value ?? null;
   const fromCookie = normalizeBranch(raw, branches as BranchRow[]);
   // Chưa có cookie (hoặc cookie không còn hợp lệ) → lùi về chi nhánh của chính
   // người đang đăng nhập, nếu họ được gán một cơ sở.

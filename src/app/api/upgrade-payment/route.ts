@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * bắt studio tải lại trang.
  */
 export async function GET(req: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
  * Gói chỉ được nâng khi admin nhìn thấy tiền trong sao kê rồi tự xác nhận.
  */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

@@ -36,7 +36,7 @@ async function serverPrice(
 
 /** A logged-in photographer requests an account upgrade. */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

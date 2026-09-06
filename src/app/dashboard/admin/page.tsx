@@ -6,7 +6,7 @@ import type { DiscountCode, Profile, UpgradeRequest } from "@/lib/types";
 
 
 export default async function AdminPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

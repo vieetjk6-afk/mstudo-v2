@@ -8,8 +8,9 @@ import { categoryLabel } from "@/lib/category";
 import type { Album, AlbumSource, Photo } from "@/lib/types";
 
 
-export async function generateMetadata({ params }: { params: { id: string } }) {
-  const { data } = await createClient()
+export async function generateMetadata(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const { data } = await (await createClient())
     .from("albums")
     .select("title")
     .eq("id", params.id)
@@ -17,12 +18,13 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
   return { title: data?.title ? `${data.title} · mstudo` : "mstudo" };
 }
 
-export default async function AlbumEditPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const supabase = createClient();
+export default async function AlbumEditPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+  const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
 

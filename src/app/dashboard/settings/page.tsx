@@ -5,7 +5,7 @@ import SettingsPanel, { type Feedback } from "./SettingsPanel";
 import type { SiteSettings } from "@/lib/types";
 
 export default async function SettingsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

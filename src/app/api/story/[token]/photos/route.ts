@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
  * Token-gated: list photos from the couple's own Drive folder (the one they set
  * on the story). Returns proxied image URLs so the editor can preview them.
  */
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: story } = await db.from("story_pages").select("config").eq("edit_token", params.token).maybeSingle();
   if (!story) return NextResponse.json({ error: "not_found" }, { status: 404 });

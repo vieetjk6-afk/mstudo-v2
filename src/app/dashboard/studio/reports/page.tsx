@@ -36,7 +36,7 @@ export default async function ReportsPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // srcContracts độc lập với 3 truy vấn còn lại → gộp chung một Promise.all thay
   // vì await nối tiếp sau đó (bớt một round-trip tuần tự).
   // Chi nhánh đang chọn. Thu và tiền công lọc qua hợp đồng cha

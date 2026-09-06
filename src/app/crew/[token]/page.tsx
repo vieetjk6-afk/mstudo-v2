@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
  * khách. Token sai/hết hiệu lực thì rơi về cổng chung, không báo lỗi — thợ vẫn
  * xem được việc của mình.
  */
-export default async function CrewStudioPortalPage({ params }: { params: { token: string } }) {
+export default async function CrewStudioPortalPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: studio } = await db
     .from("profiles")

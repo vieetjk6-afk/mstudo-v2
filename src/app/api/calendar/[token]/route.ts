@@ -36,7 +36,8 @@ function vevent(uid: string, date: string, time: string | null, summary: string,
 }
 
 /** Read-only iCalendar feed of a studio's shoots + schedule notes. */
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: owner } = await db.from("profiles").select("id, full_name").eq("calendar_token", params.token).maybeSingle();
   if (!owner) return new Response("Not found", { status: 404 });

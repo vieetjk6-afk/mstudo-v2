@@ -20,7 +20,7 @@ export const maxDuration = 60;
  * dán vào phải khớp đúng cái báo cáo này nói là thiếu.
  */
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

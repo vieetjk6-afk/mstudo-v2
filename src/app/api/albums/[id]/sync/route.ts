@@ -12,11 +12,9 @@ export const dynamic = "force-dynamic";
  * Re-resolve every Drive source of an album and update the photo list.
  * RLS ensures only the album owner / admin can run this.
  */
-export async function POST(
-  _req: Request,
-  { params }: { params: { id: string } }
-) {
-  const supabase = createClient();
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

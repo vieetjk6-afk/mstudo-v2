@@ -21,7 +21,8 @@ function buildLists(allItems: PricelistItem[], hidden: string[] = []) {
 }
 
 // Public price list for the main studio (admin account) at a clean URL.
-export default async function BangGiaPage({ searchParams }: { searchParams?: { list?: string } }) {
+export default async function BangGiaPage(props: { searchParams?: Promise<{ list?: string }> }) {
+  const searchParams = await props.searchParams;
   const db = createAdminClient();
   const owner = await resolveStudioOwner();
 

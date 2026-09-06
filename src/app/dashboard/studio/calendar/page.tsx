@@ -25,11 +25,12 @@ import TeamTab from "./TeamTab";
 
 const MANAGERS = ["owner", "admin", "manager", "branch_manager"];
 
-export default async function CalendarPage({
-  searchParams,
-}: {
-  searchParams?: { tab?: string };
-}) {
+export default async function CalendarPage(
+  props: {
+    searchParams?: Promise<{ tab?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const tab = readTab(searchParams?.tab);
   const profile = await requireStudio("booking");
 

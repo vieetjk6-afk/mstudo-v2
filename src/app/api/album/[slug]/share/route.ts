@@ -15,7 +15,8 @@ function makeToken(): string {
  * "share N selected photos" link stays short regardless of how many are chosen.
  * Returns { token } — the viewer opens /album/<slug>?s=<token> (or /a/...).
  */
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // Endpoint công khai ghi qua service-role: chặn spam tạo hàng loạt link share
   // (mỗi dòng tối đa 2000 chuỗi) gây phình bảng/chi phí lưu trữ.
   const rl = limitByIp(req, `album-share:${params.slug}`, 20, 60_000);

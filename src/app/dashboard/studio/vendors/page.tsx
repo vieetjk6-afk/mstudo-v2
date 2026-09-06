@@ -30,7 +30,7 @@ export default async function VendorsPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let vendors: VendorRow[] = [];
   let orders: OrderRow[] = [];

@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
  *   GET /api/desktop/contracts/[id]?format=docx   → bản Word soạn thảo lại được
  *   GET /api/desktop/contracts/[id]               → JSON dữ liệu đầy đủ
  */
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const auth = await requireDesktopOwner(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   try {

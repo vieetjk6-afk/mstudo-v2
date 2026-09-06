@@ -18,7 +18,8 @@ export const dynamic = "force-dynamic";
    mới không phải dựng lại cổng chặn theo số điện thoại.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const db = createAdminClient();
   const { data } = await db
     .from("studio_contracts")
@@ -40,6 +41,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
   };
 }
 
-export default function ContractPortalPage({ params }: { params: { token: string } }) {
+export default async function ContractPortalPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   return <ContractPortalView token={params.token} />;
 }

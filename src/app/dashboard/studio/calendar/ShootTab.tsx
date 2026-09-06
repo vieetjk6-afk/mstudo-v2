@@ -30,7 +30,7 @@ export default async function ShootTab() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Chi nhánh đang chọn. Chỉ lọc HỢP ĐỒNG: `studio_events` là mốc ghi chú, phần
   // lớn gắn với một hợp đồng và không có cột chi nhánh riêng — lọc chúng theo
   // chi nhánh sẽ làm mất các mốc studio ghi chung (nghỉ lễ, bảo trì thiết bị).

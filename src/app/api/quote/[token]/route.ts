@@ -21,7 +21,8 @@ export const dynamic = "force-dynamic";
  *              "auto-create contract", which (only if the studio is on the
  *              'full' tier) immediately spawns the contract.
  */
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // M6: chặn spam thao tác/tạo hợp đồng rác theo từng token báo giá.
   if (!rateLimit(`quote:${params.token}`, 20, 60_000)) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });

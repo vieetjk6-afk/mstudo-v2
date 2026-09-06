@@ -34,7 +34,7 @@ export default async function BranchesPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayVN();
   const monthStart = `${today.slice(0, 7)}-01`;
   const weekStart = mondayOf(today);

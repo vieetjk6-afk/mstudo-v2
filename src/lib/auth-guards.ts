@@ -23,7 +23,7 @@ const getProfileByIdAdmin = cache(async (id: string) => {
  * 3× getUser + 2–3× profile queries we used to run on every navigation.
  */
 export const getSessionUser = cache(async () => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -31,7 +31,7 @@ export const getSessionUser = cache(async () => {
 });
 
 export const getProfileById = cache(async (id: string) => {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase.from("profiles").select("*").eq("id", id).single();
   return data;
 });

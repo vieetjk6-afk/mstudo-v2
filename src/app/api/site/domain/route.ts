@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   if (!profile) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = (await req.json().catch(() => ({}))) as { action?: string; domain?: string };
-  const db = createClient();
+  const db = await createClient();
   const { data: site } = await db.from("sites").select("id, custom_domain").eq("owner_id", profile.id).maybeSingle();
   if (!site) return NextResponse.json({ error: "no_site", hint: "Hãy tạo website trước." }, { status: 400 });
 

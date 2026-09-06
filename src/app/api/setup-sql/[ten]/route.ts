@@ -34,8 +34,9 @@ const CHO_PHEP: Record<string, string> = {
   "setup-all": "setup-all.sql",
 };
 
-export async function GET(_req: Request, { params }: { params: { ten: string } }) {
-  const supabase = createClient();
+export async function GET(_req: Request, props: { params: Promise<{ ten: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

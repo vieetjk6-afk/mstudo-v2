@@ -22,7 +22,8 @@ function loc(v: any): { lat: number | null; lng: number | null; mapUrl: string }
 }
 
 /** Khách gửi form điền thông tin. Xác thực bằng intake_token (không mật khẩu). */
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // Không mật khẩu, mà mỗi lần gửi lại đẩy một thông báo vào chuông của studio →
   // giới hạn theo IP để một vòng lặp không chôn vùi chuông thông báo.
   const limited = await limitByIpDurable(req, "intake-form", 15, 60_000);

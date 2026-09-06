@@ -27,7 +27,8 @@ type Row = {
   contract_payments: { amount: number }[];
 };
 
-export default async function ClientDetail({ params }: { params: { phone: string } }) {
+export default async function ClientDetail(props: { params: Promise<{ phone: string }> }) {
+  const params = await props.params;
   const profile = await requireStudio("booking");
   if (!profile) {
     return (
@@ -41,7 +42,7 @@ export default async function ClientDetail({ params }: { params: { phone: string
   }
 
   const key = decodeURIComponent(params.phone);
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("studio_contracts")
     .select("id, title, client_name, client_phone, client_email, event_date, status, source, contract_items(qty, unit_price), contract_payments(amount)")

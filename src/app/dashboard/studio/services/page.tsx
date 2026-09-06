@@ -8,7 +8,8 @@ import AutomationsCard from "@/components/studio/AutomationsCard";
 import type { AutomationConfig } from "@/lib/automations";
 import type { TemplateWithItems } from "../templates/TemplatesManager";
 
-export default async function ServicesPage({ searchParams }: { searchParams?: { tab?: string } }) {
+export default async function ServicesPage(props: { searchParams?: Promise<{ tab?: string }> }) {
+  const searchParams = await props.searchParams;
   const profile = await requireStudio("booking");
   if (!profile) {
     return (
@@ -23,7 +24,7 @@ export default async function ServicesPage({ searchParams }: { searchParams?: { 
 
   const canUseTemplates = STUDIO_TIER_RANK[profile.studioTier as StudioTier] >= STUDIO_TIER_RANK.plus;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: services }, { data: templates }] = await Promise.all([
     supabase
       .from("studio_services")

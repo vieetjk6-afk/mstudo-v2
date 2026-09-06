@@ -22,7 +22,7 @@ export default async function LeadsPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("website_leads")
     .select("id, name, phone, interest, transcript, status, created_at")

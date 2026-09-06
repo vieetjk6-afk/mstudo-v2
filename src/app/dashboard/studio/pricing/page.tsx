@@ -23,7 +23,7 @@ export default async function PricingPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Reuse the public studio token (shared with the booking link).
   let token = profile.booking_token as string | null;

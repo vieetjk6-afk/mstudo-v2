@@ -11,7 +11,8 @@ import { dangQuet } from "@/lib/face-pending";
 export const dynamic = "force-dynamic";
 
 /** Verify a gallery's phone password and return its photos + sources. */
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // H7: mật khẩu gallery thường là SỐ ĐIỆN THOẠI (entropy thấp) — chặn dò mật khẩu.
   const limited = await limitByIpDurable(req, `gallery-pw:${params.slug}`, 10, 60_000, { failClosed: true });
   if (limited) return limited;

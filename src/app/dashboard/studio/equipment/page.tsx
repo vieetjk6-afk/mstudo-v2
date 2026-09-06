@@ -18,7 +18,7 @@ export default async function EquipmentPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await applyBranch(
     supabase.from("studio_equipment").select("*").eq("owner_id", profile.id),
     (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected

@@ -17,7 +17,7 @@ export default async function PackagesPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("studio_packages")
     .select("*")

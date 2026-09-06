@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
  * nằm ở /dashboard/site/builder (bấm "Sửa trang").
  */
 export default async function WebsitePage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

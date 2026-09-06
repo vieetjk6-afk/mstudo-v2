@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** List image files for a Drive folder/file link (photographer filter tool). */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

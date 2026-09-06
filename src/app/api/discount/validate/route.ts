@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /** Validate a discount code for a plan (logged-in users on the upgrade page). */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

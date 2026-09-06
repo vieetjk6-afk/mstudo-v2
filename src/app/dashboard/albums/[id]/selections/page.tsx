@@ -4,12 +4,13 @@ import SelectionsView from "./SelectionsView";
 import type { Album, Dislike, Photo, Selection } from "@/lib/types";
 
 
-export default async function SelectionsPage({
-  params,
-}: {
-  params: { id: string };
-}) {
-  const supabase = createClient();
+export default async function SelectionsPage(
+  props: {
+    params: Promise<{ id: string }>;
+  }
+) {
+  const params = await props.params;
+  const supabase = await createClient();
 
   const { data: album } = await supabase
     .from("albums")

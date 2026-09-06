@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
  * CHỈ khi nhập đúng mật khẩu do cặp đôi đặt (config.guests_password). Mật khẩu
  * được kiểm tra Ở ĐÂY (server) — không bao giờ nằm trong HTML thiệp công khai.
  */
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // Chặn dò mật khẩu (bền giữa các instance nếu có Upstash; nếu không → in-memory).
   const limited = await limitByIpDurable(req, "thiep-guests", 20, 60_000);
   if (limited) return limited;

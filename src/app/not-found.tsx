@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export default async function NotFound() {
   let signedIn = false;
   try {
-    const { data: { user } } = await createClient().auth.getUser();
+    const { data: { user } } = await (await createClient()).auth.getUser();
     signedIn = !!user;
   } catch {
     signedIn = false;

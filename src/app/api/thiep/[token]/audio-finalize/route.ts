@@ -18,7 +18,8 @@ export const maxDuration = 60;
  * Hỏng ở bất kỳ bước nào cũng không sao: file vẫn nằm nguyên trên Supabase và
  * client giữ URL cũ.
  */
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const limited = limitByIp(req, "thiep-audio-finalize", 30, 60_000);
   if (limited) return limited;
 

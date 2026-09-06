@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
  *   GET                       -> the invitation + its RSVP responses
  *   POST { config, published, template } -> save the client's edits
  */
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // Như /api/story/[token]: edit_token là chìa khoá duy nhất, phải có trần dò.
   // GET ở đây còn trả về DANH SÁCH KHÁCH MỜI đã phản hồi (tên, số người đi) nên
   // càng không nên để mở không giới hạn.
@@ -36,7 +37,8 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   return NextResponse.json({ invitation: inv, rsvps: rsvps ?? [] });
 }
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const limited = await limitByIpDurable(req, "thiep-token", 60, 60_000);
   if (limited) return limited;
 

@@ -30,7 +30,7 @@ export default async function PayrollPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Tiền công là dữ liệu nhạy cảm nhất của màn này — phải theo phạm vi chi nhánh.
   const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const { data } = await applyBranch(

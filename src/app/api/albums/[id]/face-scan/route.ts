@@ -21,7 +21,7 @@ export const maxDuration = 60;
  * Sau khi đã qua cửa đó mới dùng khoá dịch vụ để đọc/ghi bảng khuôn mặt.
  */
 async function ownsAlbum(albumId: string): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -30,7 +30,8 @@ async function ownsAlbum(albumId: string): Promise<boolean> {
   return !!data;
 }
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!(await ownsAlbum(params.id))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = createAdminClient();
 
@@ -46,7 +47,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
    * chủ album mở được và thứ nó làm thì idempotent (quét lại ảnh đã quét là
    * không làm gì).
    */
-  if (new URL(req.url).searchParams.get("chay") === "1") return POST(req, { params });
+  // Next 16: `params` là Promise. GET đã await ra giá trị, nên khi chuyển tiếp
+  // sang POST phải gói lại đúng hình dạng mà chữ ký mới đòi.
+  if (new URL(req.url).searchParams.get("chay") === "1") return POST(req, { params: Promise.resolve(params) });
 
   const { data: album } = await db.from("albums").select("status, phase").eq("id", params.id).maybeSingle();
   const { data: photos, error: ePhotos } = await db
@@ -86,7 +89,8 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
 const SQL_HINT = "Chạy supabase/khuon-mat.sql trong Supabase SQL Editor.";
 
 /** Quét ngay, không đợi cron. Dùng khi studio vừa thêm ảnh và muốn có liền. */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   if (!(await ownsAlbum(params.id))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = createAdminClient();
   try {

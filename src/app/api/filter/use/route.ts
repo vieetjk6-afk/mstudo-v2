@@ -14,7 +14,7 @@ function startOfMonthVN(): string {
 }
 
 async function getStatus() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

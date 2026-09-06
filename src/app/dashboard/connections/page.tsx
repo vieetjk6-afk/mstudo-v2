@@ -6,12 +6,13 @@ import GoogleCalendarConnect from "./GoogleCalendarConnect";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConnectionsPage({
-  searchParams,
-}: {
-  searchParams?: { gcal?: string; msg?: string };
-}) {
-  const supabase = createClient();
+export default async function ConnectionsPage(
+  props: {
+    searchParams?: Promise<{ gcal?: string; msg?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

@@ -6,14 +6,15 @@ import { getConversation, listMessages, markRead } from "@/lib/inbox/view";
 export const dynamic = "force-dynamic";
 
 /** Toàn bộ tin của một hội thoại. Mở ra là đánh dấu đã đọc. */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const profile = await requireStudio("booking");
   if (!profile) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (profile.actingRole === "accountant") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const db = createClient();
+  const db = await createClient();
   // RLS lo phần "hội thoại này có thuộc studio mình không" — không thấy thì
   // getConversation trả null và ta trả 404, không lộ ra là nó có tồn tại.
   const conversation = await getConversation(db, params.id);
@@ -30,7 +31,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
  * phụ trách. Ba việc gộp một route vì cùng là "sửa một dòng hội thoại", và
  * giao diện thường làm hai việc cùng lúc (bấm tiếp quản = tắt AI + tự nhận).
  */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const profile = await requireStudio("booking");
   if (!profile) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (profile.actingRole === "accountant") {
@@ -54,7 +56,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "nothing_to_update" }, { status: 400 });
   }
 
-  const db = createClient();
+  const db = await createClient();
   const { data, error } = await db
     .from("inbox_conversations")
     .update(patch)

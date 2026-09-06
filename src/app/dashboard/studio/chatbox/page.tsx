@@ -22,7 +22,7 @@ export default async function ChatboxConfigPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("website_chat_config")
     .select("greeting, instructions")

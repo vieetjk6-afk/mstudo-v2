@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
  * này để xoá file Drive tuỳ ý.
  */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

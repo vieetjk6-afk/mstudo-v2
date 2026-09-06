@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
  * Manifest KHÔNG chứa gì bí mật ngoài chính token vốn đã nằm trong URL, và cổng
  * vẫn hỏi số điện thoại mới mở (xem POST /api/c/[token]). Vẫn đặt `noindex`.
  */
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: c } = await db
     .from("studio_contracts")

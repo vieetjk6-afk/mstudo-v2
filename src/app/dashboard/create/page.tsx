@@ -6,13 +6,14 @@ import CreateAlbumFlow, { CreateHero } from "@/components/CreateAlbumFlow";
 // riêng của studio — getStudioHost chạy server-only — để link gửi khách mang
 // tên miền studio ngay từ lúc tạo album, thay vì mstudo.com. `phase` đọc thẳng
 // từ searchParams nên không cần hook và cũng không cần Suspense.
-export default async function CreatePage({
-  searchParams,
-}: {
-  searchParams?: { phase?: string };
-}) {
+export default async function CreatePage(
+  props: {
+    searchParams?: Promise<{ phase?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const mode = searchParams?.phase === "delivery" ? "delivery" : "selection";
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const studioHost = user ? await getStudioHost(supabase, user.id) : null;
 

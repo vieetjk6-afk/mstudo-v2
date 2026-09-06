@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 /** Trạng thái kết nối Drive toàn quyền của công cụ Lọc ảnh cho studio đang đăng nhập. */
 export async function GET() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

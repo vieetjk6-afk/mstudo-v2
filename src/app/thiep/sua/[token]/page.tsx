@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function EditWeddingPage({ params }: { params: { token: string } }) {
+export default async function EditWeddingPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   return <WeddingEditor token={params.token} />;
 }

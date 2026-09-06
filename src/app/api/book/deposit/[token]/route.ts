@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
  * Xác thực bằng deposit_token nằm trong link: token dài, sinh ngẫu nhiên, chỉ
  * khách vừa đặt lịch mới có. Không dùng id vì id lộ ra là đoán được bản ghi khác.
  */
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // Cổng công khai có ghi + upload file → giới hạn theo IP, nếu không một script
   // có thể bơm đầy bucket ảnh.
   const limited = await limitByIpDurable(req, "booking-deposit", 10, 60_000);

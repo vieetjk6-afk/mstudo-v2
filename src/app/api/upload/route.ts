@@ -15,7 +15,7 @@ const MAX_BYTES = 10 * 1024 * 1024; // 10 MB (giới hạn cứng phía server)
  */
 export async function POST(req: Request) {
   // Chỉ người đã đăng nhập mới được upload.
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

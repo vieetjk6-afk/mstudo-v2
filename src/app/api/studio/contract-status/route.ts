@@ -19,7 +19,7 @@ const VALID = new Set(["draft", "sent", "approved", "in_progress", "completed", 
  * Yêu cầu chủ hợp đồng (RLS-scoped: chỉ owner mới đổi được).
  */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

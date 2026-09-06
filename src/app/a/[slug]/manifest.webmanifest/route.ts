@@ -11,7 +11,8 @@ export const dynamic = "force-dynamic";
  * (chọn 300 ảnh không xong trong một lượt). Cài được lên màn hình chính nghĩa là
  * không phải đi tìm lại link trong tin nhắn Zalo.
  */
-export async function GET(_req: Request, { params }: { params: { slug: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: album } = await db
     .from("albums")

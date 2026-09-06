@@ -5,7 +5,8 @@ import BookingForm, { type PkgOption } from "./BookingForm";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: owner } = await db
     .from("profiles")
@@ -23,13 +24,14 @@ export async function generateMetadata({ params }: { params: { token: string } }
   };
 }
 
-export default async function BookingPage({
-  params,
-  searchParams,
-}: {
-  params: { token: string };
-  searchParams?: { pkg?: string; list?: string; ref?: string };
-}) {
+export default async function BookingPage(
+  props: {
+    params: Promise<{ token: string }>;
+    searchParams?: Promise<{ pkg?: string; list?: string; ref?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const db = createAdminClient();
   const { data: owner } = await db
     .from("profiles")

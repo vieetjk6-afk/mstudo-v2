@@ -14,8 +14,9 @@ export const dynamic = "force-dynamic";
  * Đọc phía MÁY CHỦ và chỉ trả về đơn của chính người đang đăng nhập — số tiền
  * hiện ở đây là số đã chốt lúc tạo yêu cầu, không phải số trình duyệt tự tính.
  */
-export default async function UpgradePaymentPage({ params }: { params: { id: string } }) {
-  const supabase = createClient();
+export default async function UpgradePaymentPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 

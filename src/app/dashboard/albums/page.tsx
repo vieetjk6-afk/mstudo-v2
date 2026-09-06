@@ -8,7 +8,7 @@ import AlbumList from "../AlbumList";
 // doesn't collide with the bare /dashboard → /dashboard/studio redirect (which
 // makes the studio overview the home page on the main host).
 export default async function AlbumsPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   const [rows, { data: profile }, studioHost] = await Promise.all([

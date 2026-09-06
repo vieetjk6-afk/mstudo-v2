@@ -9,10 +9,10 @@ export const revalidate = 0;
 export default async function HomePage() {
   // Ngôn ngữ landing đến từ cookie để server render đúng bản VI/EN (island
   // LandingControls ghi cookie này và đồng bộ với localStorage của app).
-  const lang: Lang = cookies().get("vk_lang")?.value === "en" ? "en" : "vi";
+  const lang: Lang = (await cookies()).get("vk_lang")?.value === "en" ? "en" : "vi";
   let pricing: LandingPricing | undefined;
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data } = await supabase
       .from("site_settings")
       // Giảm giá Photographer Plus đọc từ cột theo chu kỳ

@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // sites/site_blocks với SiteRenderer nên dữ liệu & xuất bản tương thích.
 // Trang /dashboard/site là màn tổng quan Website & chatbox; đây là trình sửa.
 export default async function SiteBuilderPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

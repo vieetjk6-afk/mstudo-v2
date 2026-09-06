@@ -8,7 +8,8 @@ import type { StudioQuote, QuoteItem, QuoteAdjustment } from "@/lib/types";
 import { isBranchScopedRole } from "@/lib/studio-roles";
 
 
-export default async function QuoteDetailPage({ params }: { params: { id: string } }) {
+export default async function QuoteDetailPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const profile = await requireStudio("plus");
   if (profile?.actingRole === "accountant") return <StudioDenied message="Kế toán chỉ truy cập mục Thu chi & Bảng lương." />;
   if (!profile) {
@@ -23,7 +24,7 @@ export default async function QuoteDetailPage({ params }: { params: { id: string
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: quote } = await supabase.from("studio_quotes").select("*").eq("id", params.id).eq("owner_id", profile.id).maybeSingle();
   if (!quote) notFound();
 

@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 // KÝ SẴN, client tải file THẲNG lên Supabase Storage → không vướng trần body.
 const AUDIO_EXT = new Set(["mp3", "m4a", "aac", "wav", "ogg", "oga", "flac", "weba"]);
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const limited = limitByIp(req, "thiep-audio-url", 30, 60_000);
   if (limited) return limited;
 

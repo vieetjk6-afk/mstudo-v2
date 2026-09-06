@@ -6,7 +6,8 @@ import ShowcaseAlbum from "./ShowcaseAlbum";
 // thay vì SSR mọi lượt khách xem (giảm origin transfer, nhanh hơn).
 export const revalidate = 300;
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data } = await db
     .from("albums")
@@ -21,11 +22,12 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return { title: data?.title ? `${data.title} · ${studio}` : studio };
 }
 
-export default async function ShowcasePage({
-  params,
-}: {
-  params: { slug: string };
-}) {
+export default async function ShowcasePage(
+  props: {
+    params: Promise<{ slug: string }>;
+  }
+) {
+  const params = await props.params;
   const db = createAdminClient();
 
   const { data: album } = await db

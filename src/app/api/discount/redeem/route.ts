@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
  * activate its plan (e.g. Studio) for N days — no manual approval.
  */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

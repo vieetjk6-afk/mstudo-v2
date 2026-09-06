@@ -12,7 +12,8 @@ export const dynamic = "force-dynamic";
  * trang ảnh hoàn thiện chứ không phải một icon thứ hai. Đường dẫn `/a/<slug>` tự
  * chuyển sang `/album/<slug>` ở giai đoạn giao khách (xem a/[slug]/page.tsx).
  */
-export async function GET(_req: Request, { params }: { params: { slug: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: album } = await db
     .from("albums")

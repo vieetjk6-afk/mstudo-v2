@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   // Kiểm quyền bằng client THEO PHIÊN (RLS): đọc được dòng này nghĩa là hội
   // thoại thuộc studio của người đang đăng nhập. Việc gửi phía sau đi bằng
   // service-role, nên cửa kiểm quyền duy nhất là ở đây.
-  const db = createClient();
+  const db = await createClient();
   const { data: conv } = await db
     .from("inbox_conversations")
     .select("id, ai_enabled, assignee_id")

@@ -44,7 +44,7 @@ export default async function StudioTab() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayVN();
   // Nạp sẵn một dải rộng quanh hôm nay để bấm ‹ › đổi tuần không phải gọi lại
   // server: 4 tuần trước + 12 tuần sau, tính từ THỨ HAI của tuần này.

@@ -10,7 +10,8 @@ import { isLeadSource, type Utm } from "@/lib/lead-source";
 export const dynamic = "force-dynamic";
 
 /** Public booking request for a studio (resolved by booking_token). */
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const limited = limitByIp(req, "book", 8, 60_000);
   if (limited) return limited;
 

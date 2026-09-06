@@ -45,7 +45,8 @@ function vevent(uid: string, date: string, start: string | null, end: string | n
  *
  * Token nằm trong URL nên URL này là bí mật — ai có link là xem được lịch.
  */
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: acc } = await db
     .from("crew_account")

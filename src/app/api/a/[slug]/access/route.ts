@@ -14,10 +14,8 @@ export const dynamic = "force-dynamic";
  * Public endpoint — uses the service role to read a published album, but only
  * returns photos when the password check passes.
  */
-export async function POST(
-  req: Request,
-  { params }: { params: { slug: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // H7: chặn dò mật khẩu album (giới hạn theo IP + slug).
   const limited = await limitByIpDurable(req, `album-pw:${params.slug}`, 10, 60_000, { failClosed: true });
   if (limited) return limited;

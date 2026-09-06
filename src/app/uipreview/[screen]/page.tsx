@@ -3,7 +3,8 @@ import Link from "next/link";
 import { SCREENS } from "../screens";
 
 /** Một màn xem trước. Chỉ có ở bản dev — xem ghi chú ở ../page.tsx. */
-export default function UiPreviewScreen({ params }: { params: { screen: string } }) {
+export default async function UiPreviewScreen(props: { params: Promise<{ screen: string }> }) {
+  const params = await props.params;
   if (process.env.NODE_ENV === "production") notFound();
   const screen = SCREENS[params.screen];
   if (!screen) notFound();

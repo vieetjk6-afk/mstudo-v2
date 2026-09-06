@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
  *  - newFolderName?         tên thư mục con khi tạo mới (mặc định "Anh Chon").
  */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -15,7 +15,8 @@ const MAX_BYTES = 60 * 1024 * 1024; // 60MB (allows short videos)
  * written to the COUPLE's own Google Drive (their connected account) and shown
  * in the story feed once approved.
  */
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // H5: chặn lạm dụng upload (làm đầy Drive cặp đôi / spam) — giới hạn theo IP.
   const limited = limitByIp(req, "story-contribute", 12, 60_000);
   if (limited) return limited;

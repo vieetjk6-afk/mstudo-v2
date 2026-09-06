@@ -20,7 +20,8 @@ const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
  *   POST { action: "edit_request", phone, message } -> submit an amendment request
  * The client's phone (contract.client_phone) acts as the view password.
  */
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // F5: làm chậm dò SĐT theo từng token (SĐT là "mật khẩu" entropy thấp).
   const rl = await limitByIpDurable(req, `c-portal:${params.token}`, 20, 60_000, { failClosed: true });
   if (rl) return rl;

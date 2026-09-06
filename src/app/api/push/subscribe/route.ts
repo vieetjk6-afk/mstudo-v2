@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 // Save (or refresh) the current user's push subscription.
 export async function POST(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
 
 // Remove a subscription (when the user turns notifications off).
 export async function DELETE(request: NextRequest) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

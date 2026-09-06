@@ -33,7 +33,7 @@ export default async function RentalPage() {
   }
 
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Kho trang phục nằm ở một cơ sở cụ thể nên lọc được theo chi nhánh. ĐƠN THUÊ
   // thì không: bảng rental_orders chưa có cột chi nhánh, và một đơn có thể lấy đồ

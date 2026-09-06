@@ -110,7 +110,7 @@ const getSiteMeta = unstable_cache(
 export async function generateMetadata(): Promise<Metadata> {
   // On a studio's own domain/subdomain, white-label the tab: the studio's logo
   // becomes the favicon and its brand name the title — never the mstudo mark.
-  const brand = await getBrandForHost(headers().get("host"));
+  const brand = await getBrandForHost((await headers()).get("host"));
   if (brand) {
     const icon = brand.logoUrl || "/favicon.svg";
     return {

@@ -37,7 +37,7 @@ export default async function ClientsPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   let cq = supabase
     .from("studio_contracts")
     .select("client_name, client_phone, event_date, source, status, branch_id, contract_items(qty, unit_price), contract_payments(amount)")

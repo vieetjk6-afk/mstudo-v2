@@ -20,7 +20,7 @@ export default async function BookingsPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Ensure the studio has a public booking token. Write + read it back with the
   // service-role client (same client the public /book page uses) so the link we

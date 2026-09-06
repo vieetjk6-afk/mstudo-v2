@@ -7,7 +7,8 @@ import { vnd } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest, { params }: { params: { token: string } }) {
+export async function POST(req: NextRequest, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // Cổng công khai có UPLOAD FILE → giới hạn theo IP, giống hệt lý do ở route
   // cọc giữ ngày: ai cầm link + SĐT (cả hai đều nằm trong tay khách) vẫn có thể
   // bơm đầy bucket ảnh bằng một vòng lặp.

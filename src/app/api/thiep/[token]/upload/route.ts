@@ -16,7 +16,8 @@ const MAX_AUDIO_BYTES = 10 * 1024 * 1024;
  * an already-compressed image as multipart form-data; we store it in the public
  * `wedding-photos` bucket via the service role and return its public URL.
  */
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // Chặn lạm dụng nếu edit_token bị lộ (spam làm đầy bucket ảnh cưới).
   const limited = limitByIp(req, "thiep-upload", 40, 60_000);
   if (limited) return limited;

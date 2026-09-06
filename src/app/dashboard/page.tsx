@@ -5,7 +5,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import AlbumList from "./AlbumList";
 
 export default async function DashboardPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   const [rows, { data: profile }, studioHost] = await Promise.all([

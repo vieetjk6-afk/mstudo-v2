@@ -17,7 +17,7 @@ export default async function NotificationsPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("studio_notifications")
     .select("*")

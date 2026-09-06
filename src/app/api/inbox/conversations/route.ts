@@ -16,7 +16,7 @@ export async function GET() {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  const db = createClient();
+  const db = await createClient();
   const [conversations, staff] = await Promise.all([
     listConversations(db, profile.id as string),
     staffNames(profile.id as string),

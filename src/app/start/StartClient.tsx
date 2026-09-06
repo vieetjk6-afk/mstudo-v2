@@ -28,7 +28,8 @@ export default function StartClient() {
       .then(({ data }) => setLoggedIn(!!data.user));
   }, []);
 
-  const scrollTo = (ref: React.RefObject<HTMLElement>) =>
+  // React 19: useRef<T>(null) cho ra RefObject<T | null>, không còn RefObject<T>.
+  const scrollTo = (ref: React.RefObject<HTMLElement | null>) =>
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (

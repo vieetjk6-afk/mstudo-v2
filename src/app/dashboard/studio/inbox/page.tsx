@@ -49,7 +49,7 @@ export default async function InboxPage() {
   }
 
   const ownerId = profile.id as string;
-  const db = createClient();
+  const db = await createClient();
   const [conversations, staff, channels] = await Promise.all([
     listConversations(db, ownerId),
     staffNames(ownerId),

@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
  *   GET                       -> the story + its guest wishes
  *   POST { config, published } -> save the couple's edits
  */
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   // edit_token là CHÌA KHOÁ duy nhất của trang này (không đăng nhập). Token là
   // UUID nên dò mù gần như bất khả thi, nhưng vẫn phải có trần: không có nó thì
   // một script cứ nã thoải mái, và mỗi lượt trượt vẫn là một truy vấn CSDL.
@@ -39,7 +40,8 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   });
 }
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const limited = await limitByIpDurable(req, "story-token", 60, 60_000);
   if (limited) return limited;
 

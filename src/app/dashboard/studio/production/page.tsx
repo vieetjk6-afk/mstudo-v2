@@ -19,7 +19,7 @@ export default async function ProductionPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Phạm vi chi nhánh (vai trò "Toàn quyền chi nhánh" bị ghim). Lọc qua hợp đồng
   // cha vì contract_products không mang cột chi nhánh.
   const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);

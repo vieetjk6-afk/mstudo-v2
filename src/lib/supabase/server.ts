@@ -7,11 +7,13 @@ import { noStoreFetch } from "@/lib/no-store-fetch";
  * Supabase client bound to the current request's cookies (RLS-aware).
  * Use inside Server Components, Route Handlers and Server Actions.
  */
-export function createClient() {
-  const cookieStore = cookies();
+export async function createClient() {
+  // Next 16: cookies() và headers() là BẤT ĐỒNG BỘ. Vì hai thứ đó nằm ngay đây
+  // nên hàm này buộc phải async, và mọi chỗ gọi phải `await createClient()`.
+  const cookieStore = await cookies();
   // Match the cookie domain to the actual request host (see cookieDomainForHost).
   let domain: string | undefined;
-  try { domain = cookieDomainForHost(headers().get("host")); } catch { domain = undefined; }
+  try { domain = cookieDomainForHost((await headers()).get("host")); } catch { domain = undefined; }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co",

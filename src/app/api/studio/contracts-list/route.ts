@@ -25,7 +25,7 @@ export async function GET() {
     /* best-effort — cron hằng ngày vẫn xử lý */
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Chi nhánh đang chọn trên thanh trên cùng — endpoint này chạy trong cùng
   // request nên đọc được cookie đó, và danh sách hợp đồng khớp với phạm vi mà
   // người dùng đang thấy ở mọi màn khác.

@@ -16,7 +16,8 @@ import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: { slug: string } }) {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const { data } = await createAdminClient()
     .from("albums")
     .select("title, description, cover_url, owner_id")
@@ -36,13 +37,14 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return { ...meta, manifest: `/a/${params.slug}/manifest.webmanifest` };
 }
 
-export default async function PublicAlbumPage({
-  params,
-  searchParams,
-}: {
-  params: { slug: string };
-  searchParams?: { share?: string; s?: string };
-}) {
+export default async function PublicAlbumPage(
+  props: {
+    params: Promise<{ slug: string }>;
+    searchParams?: Promise<{ share?: string; s?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const admin = createAdminClient();
 
   const { data: album } = await admin

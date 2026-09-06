@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** List sub-folders inside a parent Drive folder (for "split into sub-folders"). */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

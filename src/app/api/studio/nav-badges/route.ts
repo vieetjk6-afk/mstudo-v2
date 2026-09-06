@@ -18,7 +18,7 @@ export async function GET() {
   if (!profile) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const ownerId = profile.id; // requireStudio đã đổi sang hồ sơ CHỦ studio cho nhân viên
-  const supabase = createClient();
+  const supabase = await createClient();
   const head = { count: "exact" as const, head: true };
 
   const [quotes, bookings, leads, production, notifications, inbox, reviews] = await Promise.all([

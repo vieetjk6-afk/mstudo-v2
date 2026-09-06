@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import AccountPanel from "./AccountPanel";
 
 export default async function AccountPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

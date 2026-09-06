@@ -32,7 +32,7 @@ export default async function StoryManagePage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data }, studioHost] = await Promise.all([
     supabase.from("story_pages").select("id, slug, edit_token, config, published, contract_id, created_at, story_wishes(count)").eq("owner_id", profile.id).order("created_at", { ascending: false }),
     getStudioHost(supabase, profile.id),

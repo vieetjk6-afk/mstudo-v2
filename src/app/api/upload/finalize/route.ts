@@ -19,7 +19,7 @@ const MAX_BYTES = 25 * 1024 * 1024;
  * bucket và trả về public URL như luồng cũ.
  */
 export async function POST(req: Request) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

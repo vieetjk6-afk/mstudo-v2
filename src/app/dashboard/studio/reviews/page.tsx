@@ -24,7 +24,7 @@ export default async function ReviewsPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Đánh giá thuộc về studio qua ALBUM của nó — đúng đường mà RLS đang dùng, nên
   // không cần cột owner_id trùng nghĩa trên bảng feedback.

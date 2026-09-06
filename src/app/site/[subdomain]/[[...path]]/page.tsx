@@ -17,13 +17,13 @@ export const dynamic = "force-dynamic";
 type Params = { subdomain: string; path?: string[] };
 
 /** Ngôn ngữ hiện tại từ cookie (mặc định tiếng Việt). */
-function currentLang(): Lang {
-  return cookies().get("vjk_lang")?.value === "en" ? "en" : "vi";
+async function currentLang(): Promise<Lang> {
+  return (await cookies()).get("vjk_lang")?.value === "en" ? "en" : "vi";
 }
 
 /** Giao diện hiện tại từ cookie (mặc định tối). */
-function currentTheme(): "dark" | "light" {
-  return cookies().get("vjk_theme")?.value === "light" ? "light" : "dark";
+async function currentTheme(): Promise<"dark" | "light"> {
+  return (await cookies()).get("vjk_theme")?.value === "light" ? "light" : "dark";
 }
 
 /** Đây có phải trang vieetjk (theo domain/subdomain hoặc template)? */
@@ -72,10 +72,11 @@ const loadTenant = cache(async (key: string): Promise<SiteData | null> => {
   return loadSiteBundle(createAdminClient(), match.site, true);
 });
 
-export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<Params> }): Promise<Metadata> {
+  const params = await props.params;
   const key = params.subdomain;
   if (isVieetjkKey(key) || (await siteHasVieetjkTemplate(key))) {
-    const lang = currentLang();
+    const lang = await currentLang();
     const svc = params.path?.length ? getService(params.path[0]) : null;
     const title = svc ? `${tr(lang, svc.title)} · ${BRAND.name}` : `${BRAND.name} — ${tr(lang, BRAND.tagline)}`;
     const description = svc ? tr(lang, svc.intro) : tr(lang, BRAND.heroSub);
@@ -113,15 +114,16 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   };
 }
 
-export default async function SitePage({ params }: { params: Params }) {
+export default async function SitePage(props: { params: Promise<Params> }) {
+  const params = await props.params;
   const key = params.subdomain;
   const path = params.path ?? [];
 
   // ── Trang riêng của vieetjk (thiết kế code tay, không dùng builder) ──────
   const vieetjk = isVieetjkKey(key) || (await siteHasVieetjkTemplate(key));
   if (vieetjk) {
-    const lang = currentLang();
-    const theme = currentTheme();
+    const lang = await currentLang();
+    const theme = await currentTheme();
     const data = await loadVieetjkData();
 
     if (path.length === 0) {

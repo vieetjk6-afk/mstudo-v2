@@ -8,7 +8,8 @@ import type { StudioQuote, QuoteItem, QuoteAdjustment } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const db = createAdminClient();
   const { data } = await db
     .from("studio_quotes")
@@ -30,7 +31,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
   };
 }
 
-export default async function QuoteClientPage({ params }: { params: { token: string } }) {
+export default async function QuoteClientPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: quote } = await db.from("studio_quotes").select("*").eq("client_token", params.token).maybeSingle();
   if (!quote) notFound();

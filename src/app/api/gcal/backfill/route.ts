@@ -20,7 +20,7 @@ const TIME_BUDGET_MS = 260_000;
  * sự kiện đó chứ không tạo trùng.
  */
 export async function POST() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 

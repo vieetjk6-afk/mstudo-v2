@@ -13,10 +13,8 @@ export const dynamic = "force-dynamic";
  * Cùng một lượt ghi cũng lưu danh sách ảnh khách KHÔNG THÍCH (dislikedIds) —
  * bảng riêng public.dislikes, để danh sách "khách chọn" không lẫn ảnh bị loại.
  */
-export async function POST(
-  req: Request,
-  { params }: { params: { slug: string } }
-) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // Chặn spam/flood ghi bảng selections từ 1 IP.
   const limited = limitByIp(req, `album-select:${params.slug}`, 20, 60_000);
   if (limited) return limited;
@@ -128,10 +126,8 @@ export async function POST(
  * Return the album's shared selection so any visitor can see what has already
  * been chosen (and avoid picking the same photos).
  */
-export async function GET(
-  _req: Request,
-  { params }: { params: { slug: string } }
-) {
+export async function GET(_req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const admin = createAdminClient();
   const { data: album } = await admin
     .from("albums")

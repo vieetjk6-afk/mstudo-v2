@@ -17,7 +17,7 @@ export default async function PhotoToolsPage() {
   const profile = await requireStudio("booking");
   if (!profile) return <StudioDenied message="Công cụ ảnh dành cho tài khoản gói Photographer trở lên." />;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const since = new Date(Date.now() - 29 * 86400_000).toISOString();
 
   // Số liệu thật cho từng thẻ — không bịa con số minh hoạ như bản HTML thiết kế.

@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
  *   2. Web-push tới điện thoại chủ studio (giống khi khách ký hợp đồng).
  *   3. Zalo cho chủ studio (best-effort, nếu đã kết nối Zalo + có SĐT).
  */
-export async function POST(req: Request, { params }: { params: { slug: string } }) {
+export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   // Chặn spam nút báo (mỗi IP tối đa 6 lần/phút cho 1 album).
   const limited = limitByIp(req, `album-done:${params.slug}`, 6, 60_000);
   if (limited) return limited;

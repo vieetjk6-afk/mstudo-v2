@@ -23,7 +23,7 @@ export default async function QuotesList() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   // Báo giá là thông tin thương mại: người phụ trách cơ sở A không được đọc giá
   // chào của cơ sở B.
   const { data } = await applyBranch(

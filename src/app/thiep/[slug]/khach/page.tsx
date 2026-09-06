@@ -12,7 +12,8 @@ export const metadata = { title: "Danh sách khách · Thiệp cưới", robots:
  * đúng mật khẩu. Trang này KHÔNG kèm sẵn dữ liệu hay mật khẩu — mọi thứ lấy qua
  * API sau khi xác thực (xem /api/thiep/guests/[slug]).
  */
-export default async function GuestListPage({ params }: { params: { slug: string } }) {
+export default async function GuestListPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data } = await db
     .from("wedding_invitations")

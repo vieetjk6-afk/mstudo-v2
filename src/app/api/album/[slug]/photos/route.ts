@@ -13,7 +13,8 @@ export const runtime = "nodejs";
 // đó trả 403/404). Đủ để hấp thụ lưu lượng dồn, đủ ngắn để hạn chế lộ.
 const CACHE = "public, max-age=0, s-maxage=60, stale-while-revalidate=60";
 
-export async function GET(req: Request, { params }: { params: { slug: string } }) {
+export async function GET(req: Request, props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const { searchParams } = new URL(req.url);
   const offset = Math.max(0, Number(searchParams.get("offset")) || 0);
   const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 500, 1), 2000);

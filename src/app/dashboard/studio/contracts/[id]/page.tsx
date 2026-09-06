@@ -28,13 +28,14 @@ import ContractEditor from "./ContractEditor";
 import StudioDenied from "@/components/StudioDenied";
 
 
-export default async function ContractPage({
-  params,
-  searchParams,
-}: {
-  params: { id: string };
-  searchParams?: { tab?: string };
-}) {
+export default async function ContractPage(
+  props: {
+    params: Promise<{ id: string }>;
+    searchParams?: Promise<{ tab?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const profile = await requireStudio("plus");
   if (profile?.actingRole === "accountant") return <StudioDenied message="Kế toán chỉ truy cập mục Thu chi & Bảng lương." />;
   if (!profile) {
@@ -51,7 +52,7 @@ export default async function ContractPage({
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: contract } = await supabase
     .from("studio_contracts")
     .select("*")

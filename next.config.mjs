@@ -1,9 +1,56 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  /**
+   * Next 15 chuyển ba khoá dưới đây RA KHỎI `experimental`. Đổi tên/đổi chỗ mà
+   * quên thì `next build` VẪN XANH và chỉ vỡ trên production — đúng kiểu hỏng
+   * mà hai ghi chú dài phía dưới đã trả giá để học.
+   */
+  // Trước là experimental.serverComponentsExternalPackages.
+  serverExternalPackages: [
+    "zca-js",
+    "@vladmandic/face-api",
+    "@tensorflow/tfjs",
+    "@tensorflow/tfjs-backend-wasm",
+  ],
+  // Trước là experimental.outputFileTracingIncludes.
+  //
+  // DÙNG `*` CHỨ KHÔNG PHẢI `[id]` / `[slug]` — đo mới biết. Khai theo tên
+  // đoạn động (`/api/album/[slug]/face-match`) thì Next KHÔNG khớp, và manifest
+  // trace của route đó ra 0 file trọng số; đổi sang `*` thì ra đủ 14 file. Kiểm
+  // lại bằng:
+  //   node -e "console.log(require('./.next/server/app/api/album/[slug]/face-match/route.js.nft.json').files.filter(x=>/face-api.model/.test(x)).length)"
+  // Phải ra 14. Ra 0 nghĩa là production sẽ báo "model not found" — mà `next
+  // build` vẫn xanh, nên không có cách nào khác để biết ngoài việc đo.
+  outputFileTracingIncludes: {
+    "/api/cron/face-scan": [
+      "./node_modules/@vladmandic/face-api/model/**",
+      "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+    ],
+    "/api/albums/*/face-scan": [
+      "./node_modules/@vladmandic/face-api/model/**",
+      "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+    ],
+    "/api/albums/*/face-thu": [
+      "./node_modules/@vladmandic/face-api/model/**",
+      "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+    ],
+    "/api/album/*/face-match": [
+      "./node_modules/@vladmandic/face-api/model/**",
+      "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
+    ],
+    // Route phục vụ nội dung file SQL cho bảng "chưa bật được" — nó đọc file
+    // bằng fs lúc chạy, nên file phải đi kèm vào function.
+    // "bu-thieu" ghép từ chính các file migration, nên cần cả cây supabase/.
+    "/api/setup-sql/[ten]": ["./supabase/*.sql", "./supabase/migrations/*.sql", "./supabase/kiem-tra.json"],
+    // Bản kê bảng/cột cho /api/db-status — đọc bằng fs lúc chạy.
+    "/api/db-status": ["./supabase/kiem-tra.json"],
+  },
   reactStrictMode: true,
   experimental: {
     // Tree-shake per-icon imports so navigating studio pages ships less JS.
     optimizePackageImports: ["lucide-react"],
+    // staleTimes: Router Cache phía trình duyệt — vẫn nằm trong experimental ở Next 16.
+    staleTimes: { dynamic: 30, static: 180 },
     // zca-js (kênh Zalo cá nhân) là gói Node-only ESM (tough-cookie, ws, http.Agent…).
     // Đánh dấu external để webpack KHÔNG bundle và @vercel/nft trace đúng gói này vào
     // serverless function (import ở runtime từ node_modules). Là optionalDependency
@@ -11,12 +58,6 @@ const nextConfig = {
     // Ba gói khuôn mặt cũng để external: chúng nạp file .wasm và trọng số bằng
     // đường dẫn TÍNH LÚC CHẠY (fs), thứ webpack không bundle được. Để external
     // thì chúng ở lại node_modules và được @vercel/nft trace vào function.
-    serverComponentsExternalPackages: [
-      "zca-js",
-      "@vladmandic/face-api",
-      "@tensorflow/tfjs",
-      "@tensorflow/tfjs-backend-wasm",
-    ],
     /**
      * File KHÔNG PHẢI JavaScript mà máy chủ đọc lúc chạy — nft không thấy chúng
      * vì chẳng có `require` nào trỏ tới, nên phải khai báo tay. Thiếu khai báo
@@ -26,35 +67,10 @@ const nextConfig = {
      *   • model/*  : trọng số 3 mạng (~12 MB) — @/lib/face-node đọc bằng fs.
      *   • *.wasm   : nền tính toán của TensorFlow trên Node.
      */
-    outputFileTracingIncludes: {
-      "/api/cron/face-scan": [
-        "./node_modules/@vladmandic/face-api/model/**",
-        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
-      ],
-      "/api/albums/[id]/face-scan": [
-        "./node_modules/@vladmandic/face-api/model/**",
-        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
-      ],
-      "/api/albums/[id]/face-thu": [
-        "./node_modules/@vladmandic/face-api/model/**",
-        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
-      ],
-      "/api/album/[slug]/face-match": [
-        "./node_modules/@vladmandic/face-api/model/**",
-        "./node_modules/@tensorflow/tfjs-backend-wasm/dist/*.wasm",
-      ],
-      // Route phục vụ nội dung file SQL cho bảng "chưa bật được" — nó đọc file
-      // bằng fs lúc chạy, nên file phải đi kèm vào function.
-      // "bu-thieu" ghép từ chính các file migration, nên cần cả cây supabase/.
-      "/api/setup-sql/[ten]": ["./supabase/*.sql", "./supabase/migrations/*.sql", "./supabase/kiem-tra.json"],
-      // Bản kê bảng/cột cho /api/db-status — đọc bằng fs lúc chạy.
-      "/api/db-status": ["./supabase/kiem-tra.json"],
-    },
     // Next 14.2 defaults dynamic route Router-Cache reuse to 0s, so going back
     // to a page just visited refetches the whole thing from the server. Reuse
     // dynamic segments for 30s (instant back/forward) and prefetched static
     // shells for 3 min, while still revalidating reasonably often.
-    staleTimes: { dynamic: 30, static: 180 },
   },
   images: {
     remotePatterns: [

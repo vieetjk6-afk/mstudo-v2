@@ -43,7 +43,7 @@ export default async function StaffPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const me = profile.actingUserId as string;
   // `requireStudio` trả về hồ sơ CHỦ studio (mọi truy vấn phải scope theo chủ),
   // nên tên để chào phải đọc riêng hồ sơ của chính người đang đăng nhập —

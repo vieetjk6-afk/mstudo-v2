@@ -27,7 +27,7 @@ export default async function TeamTab() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: crewRows }, { data: roster }] = await Promise.all([
     supabase
       .from("contract_crew")

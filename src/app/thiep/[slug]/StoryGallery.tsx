@@ -11,7 +11,7 @@ export default function StoryGallery({ images }: { images: string[] }) {
   const [paused, setPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const startRef = useRef(0);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
   const n = images.length;
 
   useEffect(() => {

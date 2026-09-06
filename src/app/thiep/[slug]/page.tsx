@@ -25,7 +25,11 @@ function readGuest(sp?: { [k: string]: string | string[] | undefined }): string 
   return (v ?? "").toString().trim().slice(0, 80);
 }
 
-export async function generateMetadata({ params, searchParams }: { params: { slug: string }; searchParams?: { [k: string]: string | string[] | undefined } }): Promise<Metadata> {
+export async function generateMetadata(
+  props: { params: Promise<{ slug: string }>; searchParams?: Promise<{ [k: string]: string | string[] | undefined }> }
+): Promise<Metadata> {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const inv = await load(params.slug);
   if (!inv) return { title: "Không tìm thấy thiệp cưới" };
   const c = inv.config as WeddingConfig;
@@ -43,7 +47,11 @@ export async function generateMetadata({ params, searchParams }: { params: { slu
   };
 }
 
-export default async function WeddingInvitationPage({ params, searchParams }: { params: { slug: string }; searchParams?: { [k: string]: string | string[] | undefined } }) {
+export default async function WeddingInvitationPage(
+  props: { params: Promise<{ slug: string }>; searchParams?: Promise<{ [k: string]: string | string[] | undefined }> }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
   const inv = await load(params.slug);
   if (!inv) notFound();
   const guest = readGuest(searchParams);

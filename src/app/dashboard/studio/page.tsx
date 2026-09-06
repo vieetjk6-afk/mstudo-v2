@@ -37,7 +37,7 @@ import { MILESTONE_LABEL, milestoneMessage, upcomingMilestones } from "@/lib/ann
 
 /** Photographer-plan overview: bookings + upcoming shoots, no contracts/finance. */
 async function BookingOverview({ ownerId }: { ownerId: string }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const today = todayVN();
 
   // 3 query độc lập → chạy song song thay vì tuần tự (giảm TTFB dashboard).
@@ -173,7 +173,7 @@ export default async function StudioOverview() {
   // (not /dashboard, which redirects back here and would loop).
   if (!profile) redirect("/dashboard/albums");
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // Photographer plan (booking tier): a focused overview around shoots &
   // bookings — no contracts/finance, which belong to the full Studio plan.

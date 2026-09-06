@@ -51,7 +51,7 @@ export default async function StaffPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const myBranch = (ctx.actingBranchId as string | null) ?? null;
   // Quản lý chi nhánh bị GHIM vào cơ sở của mình — ở đây nghĩa là chỉ thấy nhân
   // sự và sổ thợ của cơ sở đó. `forcedBranchScope` trả "none" khi vai trò bị ghim

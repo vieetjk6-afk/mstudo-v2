@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 
 // Owner-only live preview (full-bleed). With ?template=<key> it previews that
 // template as a finished page (without saving), for the template picker.
-export default async function SitePreviewPage({ searchParams }: { searchParams?: { template?: string } }) {
-  const supabase = createClient();
+export default async function SitePreviewPage(props: { searchParams?: Promise<{ template?: string }> }) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

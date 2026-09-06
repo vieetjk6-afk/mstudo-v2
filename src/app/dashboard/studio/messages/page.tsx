@@ -18,7 +18,7 @@ export default async function MessagesPage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("message_templates")
     .select("*")

@@ -10,11 +10,12 @@ export const dynamic = "force-dynamic";
  * Anonymous client auto-conversion happens inside the public /api/quote/[token]
  * route when the client ticks "tự động tạo hợp đồng" on accept.
  */
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const profile = await requireStudio("plus");
   if (!profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: quote } = await supabase
     .from("studio_quotes")
     .select("id, status, owner_id")

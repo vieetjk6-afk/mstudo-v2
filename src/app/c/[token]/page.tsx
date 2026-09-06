@@ -4,7 +4,8 @@ import ContractView from "./ContractView";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
+export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const params = await props.params;
   const db = createAdminClient();
   const { data } = await db
     .from("studio_contracts")
@@ -30,6 +31,7 @@ export async function generateMetadata({ params }: { params: { token: string } }
   };
 }
 
-export default function PublicContractPage({ params }: { params: { token: string } }) {
+export default async function PublicContractPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   return <ContractView token={params.token} />;
 }

@@ -37,8 +37,9 @@ const TOI_DA = 10;
 /** Dừng trước hạn hàm đủ xa để còn kịp dựng JSON. */
 const HAN_MS = 25_000;
 
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const supabase = createClient();
+export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

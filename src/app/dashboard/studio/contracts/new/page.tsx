@@ -27,7 +27,7 @@ export default async function NewContractPage() {
       </div>
     );
   }
-  const supabase = createClient();
+  const supabase = await createClient();
   const [{ data: templates }, { data: services }, { data: packages }, { data: roster }, { data: past }] =
     await Promise.all([
       supabase

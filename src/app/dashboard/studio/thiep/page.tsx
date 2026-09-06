@@ -19,7 +19,7 @@ export default async function ThiepManagePage() {
     );
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("wedding_invitations")
     .select("id, slug, edit_token, template, published, config, contract_id, created_at, wedding_rsvps(count)")

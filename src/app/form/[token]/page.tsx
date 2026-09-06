@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
  * Form điền thông tin trước buổi chụp — CÔNG KHAI, mở bằng intake_token (không
  * mật khẩu). Studio gửi link này cho khách qua Zalo kèm tin nhắc lịch.
  */
-export default async function IntakeFormPage({ params }: { params: { token: string } }) {
+export default async function IntakeFormPage(props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: c } = await db
     .from("studio_contracts")

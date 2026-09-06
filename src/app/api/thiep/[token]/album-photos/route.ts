@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
  * contract — so the couple can pull their wedding photos into the invitation
  * without re-uploading. Returns proxied image URLs (/api/img).
  */
-export async function GET(_req: Request, { params }: { params: { token: string } }) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const db = createAdminClient();
   const { data: inv } = await db
     .from("wedding_invitations")
