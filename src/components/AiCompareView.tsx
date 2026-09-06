@@ -106,13 +106,20 @@ export default function AiCompareView({
     // thì MỌI lượt giải mã sau đó đều bị vứt đi và khung so sánh quay vòng tròn
     // mãi mãi. Đúng lỗi này đã xảy ra và chỉ lộ ra khi mở màn thật.
     alive.current = true;
+    // Giữ THAM CHIẾU Map vào biến cục bộ (React yêu cầu, để cleanup không đọc
+    // một `.current` có thể đã trỏ đi chỗ khác). Ở đây tương đương hoàn toàn:
+    // `.current` của ba ref này không bao giờ bị gán lại, chỉ bị thêm/xoá phần
+    // tử — nên biến cục bộ vẫn là ĐÚNG cái Map đang dùng lúc dọn.
+    const big = bigRef.current;
+    const crop = cropRef.current;
+    const hong = failed.current;
     return () => {
       alive.current = false;
-      for (const v of bigRef.current.values()) URL.revokeObjectURL(v.url);
-      for (const v of cropRef.current.values()) URL.revokeObjectURL(v.url);
-      bigRef.current.clear();
-      cropRef.current.clear();
-      failed.current.clear();
+      for (const v of big.values()) URL.revokeObjectURL(v.url);
+      for (const v of crop.values()) URL.revokeObjectURL(v.url);
+      big.clear();
+      crop.clear();
+      hong.clear();
     };
   }, []);
 

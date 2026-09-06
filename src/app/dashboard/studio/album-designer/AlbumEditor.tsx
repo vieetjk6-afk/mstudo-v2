@@ -126,7 +126,7 @@ const LAYOUT_PRESETS: Record<number, Rect[][]> = {
  * điểm (lớn) ở 4 hướng với nhiều cỡ; hai ảnh lớn + phần còn lại; chia 2–3 dải;
  * cùng các preset thủ công. Khử trùng lặp, chỉ ô hợp lệ. (đa dạng hơn nhiều)
  */
-function layoutVariants(n: number, aspect: number): Rect[][] {
+function layoutVariants(n: number, _aspect: number): Rect[][] {
   n = Math.max(1, Math.min(12, Math.round(n)));
   const out: Rect[][] = [];
   const seen = new Set<string>();
@@ -318,11 +318,6 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
     setMine(next); try { localStorage.setItem("ad_mine", JSON.stringify(next)); } catch {}
     showToast("Đã lưu bố cục vào 'Của tôi'.");
   };
-  const delMine = (i: number) => {
-    const next = mine.filter((_, k) => k !== i);
-    setMine(next); try { localStorage.setItem("ad_mine", JSON.stringify(next)); } catch {}
-  };
-
   // Measure canvas width.
   useEffect(() => {
     const el = stageRef.current; if (!el) return;
@@ -404,14 +399,6 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
   const usedIds = useMemo(() => new Set(spreads.flatMap((s) => s.cells.map((c) => c.photo).filter(Boolean))), [spreads]);
 
   /* ── Layout / cells ops ─────────────────────────────────────────────── */
-  function applyLayout(key: string) {
-    snapshot();
-    const placed = spread.cells.filter((c) => c.type === "photo" && c.photo);
-    const fresh = buildSpread(key, spread.id);
-    let pi = 0;
-    fresh.cells.forEach((c) => { if (c.type === "photo" && placed[pi]) { const s = placed[pi++]; c.photo = s.photo; c.full = s.full; c.scale = s.scale; c.posX = s.posX; c.posY = s.posY; c.filter = s.filter; } });
-    setSpreads((sp) => sp.map((s, i) => i === cur ? fresh : s)); setSel(null);
-  }
   // Rebuild the current spread's photo cells from arbitrary rects (auto layout),
   // keeping already-placed photos and any text cells.
   function applyRects(rects: Rect[]) {
@@ -483,17 +470,6 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
   }
   // SmartAlbum-style "tự thiết kế cả album": tạo đủ số trang cho toàn bộ ảnh rồi
   // rải tự động — một chạm ra album hoàn chỉnh.
-  function autoDesignAll() {
-    if (!lib.length) { showToast("Hãy nạp thư viện ảnh trước."); return; }
-    snapshot();
-    const perSpread = 3;
-    const needed = Math.max(spreads.length, Math.ceil(lib.length / perSpread));
-    const next = spreads.slice();
-    while (next.length < needed) next.push(buildSpread(SEED_PLAN[next.length % SEED_PLAN.length], (next.at(-1)?.id ?? 0) + 1));
-    setSpreads(fillEmpty(next));
-    showToast(`Đã tự thiết kế ${needed} trang từ ${lib.length} ảnh.`);
-  }
-
   /* ── Auto Design có XEM TRƯỚC phương án ─────────────────────────────────── */
   const blankPhotoCell = useCallback(([x, y, w, h]: Rect): Cell => ({ uid: UID++, type: "photo", x, y, w, h, photo: null, full: null, scale: 1, posX: 50, posY: 50, filter: "none", text: "", role: "body", align: "center", size: null, color: null, overlay: false, upper: false }), []);
   // Dựng phương án: chia ảnh vào N spread, mỗi spread 1 bố cục theo số ảnh.

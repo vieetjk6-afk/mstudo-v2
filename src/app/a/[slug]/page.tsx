@@ -161,7 +161,7 @@ export default async function PublicAlbumPage({
   let driveFolders: DriveFolderLink[] = [];
   let selected: string[] = [];
   let disliked: string[] = [];
-  let notes: Record<string, string> = {};
+  const notes: Record<string, string> = {};
   let people: PersonChip[] = [];
   // Máy chủ còn đang quét → khối tìm theo khuôn mặt nói "đang chuẩn bị" thay
   // vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.

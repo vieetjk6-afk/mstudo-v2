@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, X, ChevronDown, LayoutDashboard, UserCircle, Settings, Gift, LogOut, ShieldCheck } from "lucide-react";
+import { Menu, X, ChevronDown, LayoutDashboard, Settings, Gift, LogOut, ShieldCheck } from "lucide-react";
 import Brand from "@/components/Brand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -156,16 +156,6 @@ export default function DashboardHeader({
 
   // Album / filter / compress grouped under one "Công cụ" dropdown inside the
   // studio nav (visible when isOnStudio). On the album side the links stay flat.
-  const appToolsGroup: NavGroup = {
-    label: "Công cụ",
-    children: [
-      { href: "/dashboard/albums", label: t("myAlbums") },
-      { href: "/dashboard/create", label: t("newAlbum") },
-      { href: "/dashboard/filter", label: t("filterPhotos") },
-      { href: "/dashboard/compress", label: t("compressPhotos") },
-    ],
-  };
-
   // Build the link set for this host. Cross-host links use absolute URLs.
   // Album page always keeps a flat list — "Quản lý" is a separate button.
   const links: NavLink[] =

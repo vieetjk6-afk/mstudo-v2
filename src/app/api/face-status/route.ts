@@ -140,12 +140,12 @@ export async function GET() {
    * ghi album có 567 ảnh trong khi route theo album ghi 1000.
    */
   const doiTrang = async (bang: string, cot: string) => {
-    const out: Record<string, any>[] = [];
+    const out: Record<string, unknown>[] = [];
     const size = 1000;
     for (let from = 0; ; from += size) {
       const { data, error } = await db.from(bang).select(cot).in("album_id", ids).range(from, from + size - 1);
       if (error || !data || data.length === 0) break;
-      out.push(...(data as Record<string, any>[]));
+      out.push(...(data as unknown as Record<string, unknown>[]));
       if (data.length < size) break;
     }
     return out;

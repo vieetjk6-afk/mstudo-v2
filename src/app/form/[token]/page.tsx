@@ -34,7 +34,9 @@ export default async function IntakeFormPage({ params }: { params: { token: stri
       title={c.title}
       studio={owner?.full_name ?? null}
       submitted={!!c.intake_submitted_at}
-      initial={(c.intake ?? null) as any}
+      // `intake` là cột jsonb: Supabase trả về kiểu rộng, IntakeForm mới là nơi
+      // biết hình dạng thật. Ép qua kiểu prop của chính nó thay vì `any`.
+      initial={(c.intake ?? null) as React.ComponentProps<typeof IntakeForm>["initial"]}
     />
   );
 }

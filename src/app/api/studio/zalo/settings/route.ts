@@ -20,7 +20,11 @@ export async function POST(req: NextRequest) {
 
   if (body.autoEvents && typeof body.autoEvents === "object") {
     const clean: AutoEvents = {};
-    for (const [k, v] of Object.entries(body.autoEvents as Record<string, any>)) {
+    // Hình dạng THẬT của một mục autoEvents do trình duyệt gửi lên. Khai rõ ở
+    // đây thay vì `any`: mọi trường vẫn được kiểm lại từng cái ở dưới, nhưng
+    // giờ trình biên dịch bắt luôn nếu ai đó đọc nhầm tên trường.
+    type AutoEventInput = { client?: unknown; crew?: unknown; templateId?: unknown };
+    for (const [k, v] of Object.entries(body.autoEvents as Record<string, AutoEventInput>)) {
       if (!VALID_KEYS.has(k) || !v || typeof v !== "object") continue;
       clean[k] = {
         client: !!v.client,

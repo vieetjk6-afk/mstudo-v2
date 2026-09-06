@@ -33,7 +33,7 @@ export async function ensureCrewToken(
   current: string | null,
   canWrite: boolean
 ): Promise<{ token: string | null; error: string | null }> {
-  let token = current;
+  const token = current;
   let error: string | null = null;
   if (!canWrite || (token && token.length <= 12)) return { token, error: null };
 

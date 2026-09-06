@@ -42,7 +42,9 @@ function SectionHead({ eyebrow, title }: { eyebrow: string; title: string }) {
   );
 }
 
-function Cta({ service, lang, book }: { service: ServiceContent; lang: Lang; book: string }) {
+// `service` nhận vào nhưng khối CTA dùng chữ chung cho mọi dịch vụ — giữ trong
+// chữ ký để chỗ gọi không phải đổi, đặt tên "_" cho rõ là cố ý bỏ trống.
+function Cta({ service: _service, lang, book }: { service: ServiceContent; lang: Lang; book: string }) {
   return (
     <section className="vjk-section tight">
       <div className="vjk-wrap">

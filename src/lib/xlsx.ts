@@ -241,8 +241,6 @@ ${hasDrawing ? `<drawing r:id="rId1"/>` : ""}
 function chartXml(ch: XlsxChart): string {
   const sheetRef = `'${ch.ref.sheetName.replace(/'/g, "''")}'`;
   const n = ch.categories.length;
-  const catFrom = cellRef(ch.ref.catCol, ch.ref.catRow);
-  const catTo = cellRef(ch.ref.catCol, ch.ref.catRow + n - 1);
   const catCache = ch.categories
     .map((c, i) => `<c:pt idx="${i}"><c:v>${escXml(c)}</c:v></c:pt>`)
     .join("");

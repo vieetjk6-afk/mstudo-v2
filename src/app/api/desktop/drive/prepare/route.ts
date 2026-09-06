@@ -75,7 +75,7 @@ export async function POST(req: Request) {
 
   return NextResponse.json({
     folderId: tree.folderId,
-    folderName: contractBaseName(contract as any),
+    folderName: contractBaseName(contract as Parameters<typeof contractBaseName>[0]),
     // Đường dẫn tương đối [Gốc, Loại dịch vụ, Thang N, Tên hợp đồng] để desktop
     // lồng thư mục local y hệt cấu trúc trên Drive.
     pathSegments: tree.pathSegments,

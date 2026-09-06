@@ -20,7 +20,7 @@ import type { ChecklistRow } from "./StaffPortal";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function TodayView({
-  today, todayAppts, upcoming, openTaskCount, overdueTaskCount, monthCount, contractCount, checklist, toast,
+  today: _today, todayAppts, upcoming, openTaskCount, overdueTaskCount, monthCount, contractCount, checklist, toast,
 }: {
   today: string;
   todayAppts: StudioAppointment[];

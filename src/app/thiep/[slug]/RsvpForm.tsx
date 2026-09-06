@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Heart, Send, Check } from "lucide-react";
+import { Heart, Send } from "lucide-react";
 
 /** Public guest RSVP + well-wishes form. Posts to /api/thiep/rsvp by slug. */
 export default function RsvpForm({ slug, note }: { slug: string; note?: string }) {

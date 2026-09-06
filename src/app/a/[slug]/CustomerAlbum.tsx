@@ -467,7 +467,6 @@ export default function CustomerAlbum({
   }
 
   const limit = album.selection_limit;
-  const atLimit = limit != null && selected.size >= limit;
 
   function toggle(id: string) {
     const next = new Set(selectedRef.current);

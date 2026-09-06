@@ -65,7 +65,7 @@ const TR = {
   },
 } as const;
 import {
-  Lock, ChevronLeft, ChevronRight, ChevronDown, X, Download, Calendar, Star, Send, Check, Play, Heart, Share2, ExternalLink,
+  Lock, ChevronLeft, ChevronRight, X, Download, Calendar, Star, Send, Check, Play, Heart, Share2,
 } from "lucide-react";
 import DriveFolderLinks from "@/components/DriveFolderLinks";
 import StudioBrand from "@/components/StudioBrand";
@@ -221,7 +221,7 @@ export default function GalleryView({
   const [fbName, setFbName] = useState("");
   const [fbRating, setFbRating] = useState(5);
   const [fbContent, setFbContent] = useState("");
-  const [fbList, setFbList] = useState<Feedback[]>(feedback);
+  const [fbList] = useState<Feedback[]>(feedback);
   const [fbSent, setFbSent] = useState(false);
   const [fbCaptcha, setFbCaptcha] = useState<string | null>(null);
   const onFbCaptcha = useCallback((t: string) => setFbCaptcha(t), []);

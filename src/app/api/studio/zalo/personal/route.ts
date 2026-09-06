@@ -7,8 +7,9 @@ export const dynamic = "force-dynamic";
 // Đăng nhập QR cần giữ tiến trình sống trong lúc studio quét mã.
 export const maxDuration = 60;
 
-function guard(profile: any) {
-  return profile && !profile.isStaff && (profile.actingRole === "owner" || profile.actingRole === "admin");
+type StudioCtx = { isStaff?: boolean; actingRole?: string } | null;
+function guard(profile: StudioCtx) {
+  return !!profile && !profile.isStaff && (profile.actingRole === "owner" || profile.actingRole === "admin");
 }
 
 /**
@@ -55,9 +56,10 @@ export async function POST() {
       last_error: null,
     });
     return NextResponse.json({ ok: true, self });
-  } catch (e: any) {
-    await saveZalo(profile!.id, { status: "error", personal_self: null, last_error: e?.message || "login_failed" });
-    return NextResponse.json({ ok: false, error: e?.message || "login_failed" }, { status: 200 });
+  } catch (e) {
+    const msg = (e instanceof Error && e.message) || "login_failed";
+    await saveZalo(profile!.id, { status: "error", personal_self: null, last_error: msg });
+    return NextResponse.json({ ok: false, error: msg }, { status: 200 });
   }
 }
 

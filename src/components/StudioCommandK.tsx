@@ -133,7 +133,10 @@ export default function StudioCommandK({ access }: { access: NavAccess }) {
       return out;
     }, []);
 
-    const crw: Hit[] = !cq ? [] : crew.slice(0, 3).map((c) => ({
+    // Kiểm `canSeeCrew` cho giống hai khối trên. Dữ liệu nhân sự vốn chỉ được
+    // nạp khi có quyền, nên đây là lớp chặn thứ hai — nhưng thiếu nó thì hôm
+    // nào đổi chỗ nạp dữ liệu là rò ngay mà không ai để ý.
+    const crw: Hit[] = !cq || !canSeeCrew ? [] : crew.slice(0, 3).map((c) => ({
       key: `w:${c.id}`, icon: IdCard, title: c.name,
       sub: [c.role, c.phone].filter(Boolean).join(" · ") || "Nhân sự",
       href: "/dashboard/studio/staff?tab=crew", tag: "Nhân sự", tagC: "var(--am)", tagBg: "var(--amS)",

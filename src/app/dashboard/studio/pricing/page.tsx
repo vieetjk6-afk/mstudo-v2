@@ -33,10 +33,13 @@ export default async function PricingPage() {
   }
 
   // Price list + services in parallel (services drive the list categories).
-  let [{ data }, { data: services }] = await Promise.all([
+  // `data` được GÁN LẠI ở dưới (lần đầu vào trang thì tự nạp bảng giá mẫu),
+  // nên phải là `let`. Tách `services` ra `const` cho đúng: nó không đổi.
+  const [pricelistRes, { data: services }] = await Promise.all([
     supabase.from("studio_pricelist").select("*").eq("owner_id", profile.id).order("position"),
     supabase.from("studio_services").select("id, name").eq("owner_id", profile.id).eq("active", true).order("position", { ascending: true }),
   ]);
+  let { data } = pricelistRes;
 
   const hiddenLists = (profile.pl_hidden_lists as string[] | null) ?? [];
   const listLabels = (profile.pl_list_labels as Record<string, string> | null) ?? {};

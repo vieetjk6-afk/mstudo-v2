@@ -71,7 +71,6 @@ export default function LeadsView({ leads }: { leads: Lead[] }) {
       <div className="grid gap-3">
         {rows.map((r) => {
           const open = openId === r.id;
-          const done = r.status !== "new";
           return (
             <div key={r.id} className="card overflow-hidden">
               <div className="flex flex-wrap items-center gap-3 p-4">

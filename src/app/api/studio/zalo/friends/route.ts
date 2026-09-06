@@ -23,7 +23,8 @@ export async function GET() {
     // Sắp theo tên cho dễ tìm.
     friends.sort((a, b) => a.name.localeCompare(b.name, "vi"));
     return NextResponse.json({ ok: true, friends });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "list_failed" }, { status: 200 });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "";
+    return NextResponse.json({ error: msg || "list_failed" }, { status: 200 });
   }
 }

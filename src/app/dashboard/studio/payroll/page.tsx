@@ -48,7 +48,7 @@ export default async function PayrollPage() {
   // chạy supabase/migrations/crew_timesheet.sql thì hai thứ này chưa tồn tại, và
   // màn Đối soát tiền công KHÔNG được sập vì thiếu phần đối chiếu.
   let sheet: TimesheetRow[] = [];
-  let rates: Record<string, number> = {};
+  const rates: Record<string, number> = {};
   try {
     const [{ data: ts }, { data: crew }] = await Promise.all([
       supabase

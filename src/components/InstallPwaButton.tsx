@@ -120,7 +120,7 @@ export default function InstallPwaButton({
             <p className="mb-2 text-sm font-bold">{variant === "pill" ? text : "Cài đặt mstudo"}</p>
             <ol className="space-y-1.5 text-[13px]" style={{ color: "var(--text2)" }}>
               <li>1. Nhấn nút <strong>Chia sẻ</strong> <span style={{ fontSize: 16 }}>⬆</span> ở thanh Safari bên dưới</li>
-              <li>2. Cuộn xuống và chọn <strong>"Thêm vào Màn hình chính"</strong></li>
+              <li>2. Cuộn xuống và chọn <strong>&ldquo;Thêm vào Màn hình chính&rdquo;</strong></li>
               <li>3. Nhấn <strong>Thêm</strong></li>
             </ol>
           </div>

@@ -20,7 +20,7 @@ type Story = { id: string; src: string; isVideo: boolean; label: string; time: s
 const CANVAS = 472;
 
 export default function StoryFeed({
-  slug, groom, bride, dateShort, accent, cover, story, tagline,
+  slug, groom, bride, dateShort, accent, cover, story, tagline: _tagline,
   photos, guestPhotos, wishes: initialWishes, event, guestUploadEnabled, thankYou,
 }: {
   slug: string; groom: string; bride: string; dateShort: string; accent: string;
@@ -134,7 +134,6 @@ export default function StoryFeed({
   const [cam, setCam] = useState<"closed" | "live">("closed");
   const [captured, setCaptured] = useState<string | null>(null);
   const [capturedFile, setCapturedFile] = useState<Blob | null>(null);
-  const [caption, setCaption] = useState("");
   const [camErr, setCamErr] = useState(false);
   const [facing, setFacing] = useState<"user" | "environment">("environment");
   const [flashing, setFlashing] = useState(false);
@@ -159,8 +158,8 @@ export default function StoryFeed({
   const replaceCaptured = useCallback((url: string | null) => {
     setCaptured((prev) => { if (prev) URL.revokeObjectURL(prev); return url; });
   }, []);
-  async function openCamera() { if (!guestUploadEnabled) return; setCam("live"); replaceCaptured(null); setCapturedFile(null); setCaption(""); setCamErr(false); await startStream(); }
-  function closeCamera() { stopStream(); setCam("closed"); replaceCaptured(null); setCapturedFile(null); setCaption(""); setCamErr(false); }
+  async function openCamera() { if (!guestUploadEnabled) return; setCam("live"); replaceCaptured(null); setCapturedFile(null); setCamErr(false); await startStream(); }
+  function closeCamera() { stopStream(); setCam("closed"); replaceCaptured(null); setCapturedFile(null); setCamErr(false); }
   function capture() {
     const vd = videoRef.current;
     if (!vd || !vd.videoWidth) { setCamErr(true); return; }

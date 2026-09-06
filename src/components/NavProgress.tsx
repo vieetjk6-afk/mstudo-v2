@@ -71,6 +71,10 @@ export default function NavProgress({ tier = "none" }: { tier?: ShellTier } = {}
     }
     document.addEventListener("click", onClick, { capture: true });
     return () => document.removeEventListener("click", onClick, { capture: true } as EventListenerOptions);
+    // `start` cố ý KHÔNG nằm trong deps: bộ nghe click phải gắn ĐÚNG MỘT LẦN
+    // cho cả vòng đời, còn `start` chỉ chạm vào ref và setState — hai thứ ổn
+    // định qua mọi lần render, nên bản chụp đầu tiên vẫn đúng.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Pathname/search changed → navigation completed.

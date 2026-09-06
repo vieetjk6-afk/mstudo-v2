@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, Play, X, Check, Info, AlertTriangle, Copy, Loader2, Maximize2, ScanFace, Users } from "lucide-react";
+import { Sparkles, Play, X, Check, Info, AlertTriangle, Copy, Loader2, Maximize2, ScanFace } from "lucide-react";
 import { thumbnailUrl } from "@/lib/drive";
 import {
   AI_DEFAULTS,
@@ -80,7 +80,7 @@ export default function AiFilterPanel({
   sourceLabel,
   onUseNames,
   compact = false,
-  albumId,
+  albumId: _albumId,
 }: {
   sourceFiles: SourceFile[];
   /** "thư mục trên máy" / "link Drive" — để nói rõ độ chính xác mong đợi. */

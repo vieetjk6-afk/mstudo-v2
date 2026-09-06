@@ -2013,7 +2013,6 @@ function LinkRefs({ block, blocks, siteUrl }: { block: SiteBlock; blocks: SiteBl
 /* ── Inline style helpers ─────────────────────────────────────────────── */
 const insLabel: React.CSSProperties = { display: "block", fontSize: 11.5, fontWeight: 700, color: "var(--text3)", marginBottom: 5, letterSpacing: ".01em" };
 const insInput: React.CSSProperties = { width: "100%", border: "1px solid var(--border)", borderRadius: 9, padding: "8px 10px", fontSize: 13, color: "var(--text)", background: "var(--surface)", outline: "none", boxSizing: "border-box", resize: "vertical" };
-const cardBox: React.CSSProperties = { borderRadius: "var(--s-radius)", border: "1px solid var(--s-border)", padding: 20 };
 const editHint: React.CSSProperties = { marginTop: 12, fontSize: 11.5, opacity: 0.5, fontStyle: "italic" };
 const toolBtn: React.CSSProperties = { display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: 7, border: 0, background: "transparent", color: "#fff", cursor: "pointer" };
 

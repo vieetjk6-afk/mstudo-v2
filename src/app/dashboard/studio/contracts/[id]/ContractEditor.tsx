@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import DateInput from "@/components/DateInput";
 import { fmtDate, fmtDateLunar, fmtDateTime, todayVN } from "@/lib/date";
 import { createPortal } from "react-dom";
@@ -188,7 +188,7 @@ export default function ContractEditor({
   initialRequests,
   initialPayments,
   roster,
-  galleries,
+  galleries: _galleries,
   selectionAlbums,
   initialMilestones,
   initialAppointments,
@@ -204,7 +204,7 @@ export default function ContractEditor({
   initialExpenses,
   initialPlan,
   initialProducts,
-  initialQuoteOptions,
+  initialQuoteOptions: _initialQuoteOptions,
   staffList,
   canAssign,
   bank,
@@ -409,7 +409,7 @@ export default function ContractEditor({
       await supabase.from("contract_payment_plan").update(patch).eq("id", id);
     }, 600);
   }
-  const [clientProofs, setClientProofs] = useState(initialClientProofs);
+  const [clientProofs] = useState(initialClientProofs);
   const [planProof, setPlanProof] = useState<string>(""); // proof image for the next instalment
   const [proofBusy, setProofBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null); // zoomed transfer-proof image
@@ -423,8 +423,21 @@ export default function ContractEditor({
   }, [lightbox]);
   const [products, setProducts] = useState<ContractProduct[]>(initialProducts);
   const [prodForm, setProdForm] = useState({ name: "", qty: 1, cost: 0 });
-  const [quoteOptions, setQuoteOptions] = useState<ContractQuoteOption[]>(initialQuoteOptions);
-  const [optForm, setOptForm] = useState({ name: "", price: 0, description: "" });
+  /*
+   * GÓI TUỲ CHỌN CỦA HỢP ĐỒNG — MÀN STUDIO CHƯA CÓ CHỖ QUẢN LÝ.
+   *
+   * Trang khách (/c/[token]) đã làm xong phần của nó: đọc contract_quote_options,
+   * hiện danh sách, và cho khách bấm chọn một gói (POST option_id). Nhưng phía
+   * studio thì không có ô nhập nào — hai hàm addOption/deleteOption từng nằm ở
+   * file này chưa bao giờ được gắn vào nút bấm, nên đã xoá khi bật ESLint.
+   *
+   * Hệ quả: KHÔNG có đường nào trong app tạo ra một dòng contract_quote_options
+   * (đã quét cả repo: không còn insert/upsert nào vào bảng đó). Khách chỉ thấy
+   * danh sách rỗng.
+   *
+   * Giữ nguyên `initialQuoteOptions` chảy từ page xuống đây để lúc dựng ô nhập
+   * chỉ phải nối lại một chỗ, thay vì lần lại cả đường dữ liệu.
+   */
 
   // new milestone form
   const [ms, setMs] = useState({ title: "", event_date: "", event_time: "" });
@@ -449,10 +462,16 @@ export default function ContractEditor({
 
   // Cọc gợi ý = % studio đặt trong "Chính sách studio" (mặc định 25%), làm tròn
   // lên bội của 500k, tối thiểu 500k. 0% = studio tắt gợi ý, tự nhập từng đợt.
-  const depositOf = (t: number) =>
-    t > 0 && depositPercent > 0
-      ? Math.max(500_000, Math.round((t * depositPercent) / 100 / 500_000) * 500_000)
-      : 0;
+  // useCallback: hàm này nằm trong deps của effect đồng bộ tiền cọc bên dưới.
+  // Để nó dựng lại mỗi lần render thì effect chạy lại mỗi lần render — chỉ phụ
+  // thuộc đúng `depositPercent`, nên khoá lại theo đó.
+  const depositOf = useCallback(
+    (t: number) =>
+      t > 0 && depositPercent > 0
+        ? Math.max(500_000, Math.round((t * depositPercent) / 100 / 500_000) * 500_000)
+        : 0,
+    [depositPercent]
+  );
   const depositAmt = depositOf(total);
   const creatingDeposit = useRef(false);
   const prevTotal = useRef(total);
@@ -482,7 +501,7 @@ export default function ContractEditor({
       setPlan((p) => p.map((x) => (x.id === dep.id ? { ...x, amount: depositAmt } : x)));
       supabase.from("contract_payment_plan").update({ amount: depositAmt }).eq("id", dep.id);
     }
-  }, [total, plan, depositAmt, supabase]);
+  }, [total, plan, depositAmt, supabase, depositOf]);
   const payroll = crew.reduce((s, c) => s + (Number(c.salary) || 0), 0);
   const paidPayroll = crew.filter((c) => c.paid).reduce((s, c) => s + (Number(c.salary) || 0), 0);
   const expenseTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);
@@ -1233,23 +1252,6 @@ export default function ContractEditor({
   const PROD_TONE: Record<ProductStatus, string> = { ordered: "var(--text3)", in_progress: "var(--s-blue)", done: "var(--s-green)" };
 
   // ── Quote options ──────────────────────────────────────────────
-  async function addOption() {
-    if (!optForm.name.trim()) return;
-    const { data } = await supabase
-      .from("contract_quote_options")
-      .insert({ contract_id: contract.id, name: optForm.name.trim(), price: Math.max(0, Math.round(Number(optForm.price) || 0)), description: optForm.description.trim() || null, position: quoteOptions.length })
-      .select("*")
-      .single();
-    if (data) {
-      setQuoteOptions((p) => [...p, data as ContractQuoteOption]);
-      setOptForm({ name: "", price: 0, description: "" });
-    }
-  }
-  async function deleteOption(id: string) {
-    await supabase.from("contract_quote_options").delete().eq("id", id);
-    setQuoteOptions((p) => p.filter((o) => o.id !== id));
-  }
-
   // ── Studio counter-signature ───────────────────────────────────
   async function saveStudioSignature() {
     if (!studioSignName.trim()) {

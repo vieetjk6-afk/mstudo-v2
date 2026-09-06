@@ -134,7 +134,6 @@ export async function GET(req: NextRequest) {
 
   for (const s of (shoots ?? []) as any[]) {
     const studio = await studioName(s.owner_id);
-    const when = `${tomorrow}${s.event_time ? ` lúc ${s.event_time}` : ""}${s.location ? ` tại ${s.location}` : ""}`;
 
     if (s.client_phone && !(await alreadySent(s.owner_id, s.id, "shoot_reminder", 1))) {
       const token = await ensureIntakeToken(db, s.id, s.intake_token);

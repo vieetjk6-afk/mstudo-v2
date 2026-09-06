@@ -25,7 +25,6 @@ import {
   sumAmounts,
   vnd,
   vndShort,
-  CONTRACT_STATUS_TONE,
   SHOOT_TYPE_LABEL,
   CREW_ROLE_LABEL,
   quoteSelectedTotal,
@@ -33,7 +32,7 @@ import {
   type QuoteStatus,
   type CrewRole,
 } from "@/lib/types";
-import { fmtDate, fmtDayMonth, fmtDow, todayVN, daysFromToday } from "@/lib/date";
+import { fmtDate, fmtDow, todayVN, daysFromToday } from "@/lib/date";
 import { MILESTONE_LABEL, milestoneMessage, upcomingMilestones } from "@/lib/anniversary";
 
 /** Photographer-plan overview: bookings + upcoming shoots, no contracts/finance. */
