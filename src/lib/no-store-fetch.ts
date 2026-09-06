@@ -7,7 +7,7 @@
  */
 
 /**
- * `fetch` cho mọi client Supabase phía MÁY CHỦ — ép `cache: "no-store"`.
+ * `fetch` cho MỌI lời gọi ra ngoài từ phía MÁY CHỦ — ép `cache: "no-store"`.
  *
  * ĐÂY LÀ CHỖ CHỮA MỘT LỖI ĐÃ NGỐN NHIỀU VÒNG CHẨN ĐOÁN SAI.
  *
@@ -39,6 +39,13 @@
  * câu lệnh mang id/payload khác nhau mỗi lần nên không đụng nhau. Bộ quét là ca
  * bệnh nặng vì nó lặp lại ĐÚNG một câu — và tự nuôi vòng lặp: đọc bị cache trả
  * về cùng danh sách ảnh → câu UPDATE dựng ra cũng y hệt → lại trúng cache.
+ *
+ * KHÔNG CHỈ SUPABASE. Mọi lời gọi ra ngoài đều dính, và nguy nhất là các lời
+ * gọi CÓ TÁC DỤNG PHỤ: gửi mail (Resend), gửi tin nhắn Facebook/Instagram. Hai
+ * lần gửi có cùng URL và cùng thân request thì lần thứ hai KHÔNG rời khỏi máy
+ * chủ — người nhận không bao giờ thấy tin, mà code vẫn nhận về "gửi thành
+ * công" của lần đầu. Dữ liệu chỉ-đọc mà đóng băng (thời tiết, câu trả lời của
+ * chatbot) thì đỡ nguy hơn nhưng vẫn sai.
  *
  * KHÔNG ĐƯỢC bỏ tuỳ chọn này để "tối ưu". Dữ liệu studio là dữ liệu giao dịch:
  * hợp đồng, thanh toán, lịch chụp. Một câu đọc cũ ở đây không nhanh hơn, nó

@@ -1,5 +1,6 @@
 import "server-only";
 import type { ChatTurn } from "./assistant";
+import { noStoreFetch } from "@/lib/no-store-fetch";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -88,7 +89,7 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
     const generationConfig: Record<string, unknown> = { temperature: 0.6, maxOutputTokens: 2048 };
     // Chỉ model 2.5-* chắc chắn nhận thinkingConfig (tắt suy nghĩ, tránh rỗng).
     if (p.model.includes("2.5")) generationConfig.thinkingConfig = { thinkingBudget: 0 };
-    return fetch(`${base}/models/${encodeURIComponent(p.model)}:streamGenerateContent?alt=sse`, {
+    return noStoreFetch(`${base}/models/${encodeURIComponent(p.model)}:streamGenerateContent?alt=sse`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": p.key },
       body: JSON.stringify({
@@ -114,7 +115,7 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
       max_output_tokens: 4096,
       reasoning: { effort: p.effort || "medium" },
     };
-    return fetch(`${base}/responses`, {
+    return noStoreFetch(`${base}/responses`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
       body: JSON.stringify(bodyResp),
@@ -125,7 +126,7 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
   if (p.type === "anthropic") {
     // Claude API trực tiếp (Messages API, streaming SSE).
     const base = p.baseUrl || "https://api.anthropic.com/v1";
-    return fetch(`${base}/messages`, {
+    return noStoreFetch(`${base}/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -145,7 +146,7 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
 
   // OpenAI-compatible Chat Completions.
   const base = p.baseUrl || "https://api.openai.com/v1";
-  return fetch(`${base}/chat/completions`, {
+  return noStoreFetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
     body: JSON.stringify({

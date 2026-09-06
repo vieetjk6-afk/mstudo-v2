@@ -2,6 +2,7 @@ import "server-only";
 import crypto from "crypto";
 import { decryptJSON, encryptJSON } from "@/lib/zalo/crypto";
 import type { Attachment, ChannelRow } from "../types";
+import { noStoreFetch } from "@/lib/no-store-fetch";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -58,7 +59,9 @@ export async function sendMetaText(
   if (!secret?.pageAccessToken) return { ok: false, error: "no_page_token" };
 
   try {
-    const res = await fetch(`${GRAPH}/me/messages?access_token=${encodeURIComponent(secret.pageAccessToken)}`, {
+    // noStoreFetch: cung nguoi nhan + cung noi dung thi lan gui thu hai bi
+    // Data Cache cua Next nuot, khach khong nhan duoc. Xem @/lib/no-store-fetch.
+    const res = await noStoreFetch(`${GRAPH}/me/messages?access_token=${encodeURIComponent(secret.pageAccessToken)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

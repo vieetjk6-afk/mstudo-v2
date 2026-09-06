@@ -7,6 +7,7 @@ import {
   type DayForecast,
   type LatLng,
 } from "@/lib/weather";
+import { noStoreFetch } from "@/lib/no-store-fetch";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,9 @@ async function fetchJson(url: string, ms = 6000): Promise<unknown | null> {
   try {
     const ac = new AbortController();
     const t = setTimeout(() => ac.abort(), ms);
-    const res = await fetch(url, { signal: ac.signal, headers: { accept: "application/json" } });
+    // noStoreFetch: khong co no thi ban tin thoi tiet dong bang o lan goi dau
+    // va khong bao gio doi nua. Xem @/lib/no-store-fetch.
+    const res = await noStoreFetch(url, { signal: ac.signal, headers: { accept: "application/json" } });
     clearTimeout(t);
     if (!res.ok) return null;
     return await res.json();

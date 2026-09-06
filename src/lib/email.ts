@@ -1,4 +1,5 @@
 import "server-only";
+import { noStoreFetch } from "@/lib/no-store-fetch";
 
 /**
  * Minimal transactional email via Resend (https://resend.com).
@@ -19,7 +20,9 @@ export async function sendEmail({
   const from = process.env.EMAIL_FROM || "mstudo <onboarding@resend.dev>";
   if (!key) return { ok: false, error: "not_configured" };
 
-  const res = await fetch("https://api.resend.com/emails", {
+  // noStoreFetch: hai mail giong het nhau thi lan thu hai bi Data Cache cua
+  // Next nuot va KHONG BAO GIO duoc gui. Xem @/lib/no-store-fetch.
+  const res = await noStoreFetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from, to, subject, html }),

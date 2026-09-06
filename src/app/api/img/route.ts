@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { noStoreFetch } from "@/lib/no-store-fetch";
 
 // Not force-dynamic: the response is content-addressed by (id, w) and cacheable.
 // The runtime is still dynamic because we read query params, but dropping
@@ -157,7 +158,7 @@ export async function GET(req: Request) {
       const key = `${id}_orig`;
       const pub = publicUrl(key);
       try {
-        const head = await fetch(pub, { method: "HEAD" });
+        const head = await noStoreFetch(pub, { method: "HEAD" });
         if (head.ok) return new NextResponse(null, { status: 302, headers: { Location: pub, "Cache-Control": CACHE_OK } });
       } catch { /* fall through to proxy + cache */ }
       const res = await fetchOriginal(id);
@@ -200,7 +201,7 @@ export async function GET(req: Request) {
     const pub = publicUrl(key);
     try {
       // HEAD is bodyless → negligible transfer. Cache hit → bounce to the CDN.
-      const head = await fetch(pub, { method: "HEAD" });
+      const head = await noStoreFetch(pub, { method: "HEAD" });
       if (head.ok) {
         return new NextResponse(null, { status: 302, headers: { Location: pub, "Cache-Control": CACHE_OK } });
       }

@@ -20,7 +20,7 @@
  * "dọn dẹp" bỏ tuỳ chọn `global.fetch` đi là bài này đỏ ngay.
  */
 import { readFileSync } from "node:fs";
-import { noStoreFetch } from "../../src/lib/supabase/no-cache-fetch.ts";
+import { noStoreFetch } from "../../src/lib/no-store-fetch.ts";
 
 let fail = 0;
 const ok = (name, cond, note = "") => {
@@ -48,16 +48,42 @@ const ok = (name, cond, note = "") => {
 }
 
 /* ── 2. Hai client Supabase phía máy chủ phải CẮM noStoreFetch vào ────────── */
-const phaiDung = [
+const clientSupabase = [
   ["src/lib/supabase/admin.ts", "khoá dịch vụ — cron, webhook, đồng bộ desktop"],
   ["src/lib/supabase/server.ts", "phiên đăng nhập — dashboard, route handler"],
 ];
-for (const [duong, vaiTro] of phaiDung) {
+for (const [duong, vaiTro] of clientSupabase) {
   const src = readFileSync(new URL(`../../${duong}`, import.meta.url), "utf8");
-  const coNhap = /from ["']\.\/no-cache-fetch["']/.test(src);
-  const coCam = /global:\s*\{\s*fetch:\s*noStoreFetch\s*\}/.test(src);
-  ok(`${duong} nhập noStoreFetch (${vaiTro})`, coNhap);
-  ok(`${duong} truyền vào global.fetch`, coCam);
+  ok(`${duong} nhập noStoreFetch (${vaiTro})`, /from ["']@\/lib\/no-store-fetch["']/.test(src));
+  ok(`${duong} truyền vào global.fetch`, /global:\s*\{\s*fetch:\s*noStoreFetch\s*\}/.test(src));
+}
+
+/* ── 3. Mọi lời gọi RA NGOÀI khác cũng không được dùng `fetch` trần ─────────
+ * Nguy nhất là hai cái đầu: chúng CÓ TÁC DỤNG PHỤ. Hai lần gửi cùng URL và
+ * cùng thân request thì lần thứ hai bị Data Cache nuốt — người nhận không bao
+ * giờ thấy mail/tin nhắn, mà code vẫn nhận về "gửi thành công" của lần đầu.  */
+const goiRaNgoai = [
+  ["src/lib/email.ts", "gửi mail qua Resend (CÓ TÁC DỤNG PHỤ)"],
+  ["src/lib/inbox/adapters/meta.ts", "gửi tin nhắn Facebook/Instagram (CÓ TÁC DỤNG PHỤ)"],
+  ["src/lib/vieetjk/providers.ts", "gọi mô hình AI cho chatbot"],
+  ["src/app/api/studio/weather/route.ts", "bản tin thời tiết"],
+  ["src/app/api/img/route.ts", "thăm dò ảnh đã cache trên Supabase Storage"],
+];
+for (const [duong, vaiTro] of goiRaNgoai) {
+  const src = readFileSync(new URL(`../../${duong}`, import.meta.url), "utf8");
+  // Duyệt TỪNG lời gọi `fetch(` trần (bỏ `noStoreFetch(`, `.fetch(`) rồi soi
+  // 300 ký tự tiếp theo: khai `cache:` ngay tại chỗ cũng được, không bắt buộc
+  // phải qua noStoreFetch. Kiểm theo dòng thì trượt các lời gọi xuống dòng.
+  const con = [];
+  for (const m of src.matchAll(/(?<!noStore)(?<!\.)(?<![A-Za-z])fetch\(/g)) {
+    const truoc = src.slice(0, m.index);
+    const dong = truoc.slice(truoc.lastIndexOf("\n") + 1).trim();
+    if (dong.startsWith("*") || dong.startsWith("//")) continue; // trong ghi chú
+    const sau = src.slice(m.index, m.index + 300);
+    if (/cache:\s*["']no-store["']/.test(sau)) continue;         // đã khai tại chỗ
+    con.push(src.slice(m.index, m.index + 60).replace(/\s+/g, " "));
+  }
+  ok(`${duong} không còn fetch() bỏ ngỏ cache (${vaiTro})`, con.length === 0, con.join(" | ").slice(0, 140));
 }
 
 console.log(fail === 0 ? "\nTất cả OK" : `\n${fail} bài HỎNG`);
