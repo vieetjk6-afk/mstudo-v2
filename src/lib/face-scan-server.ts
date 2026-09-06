@@ -81,10 +81,12 @@ export type ScanReport = {
    * Số ảnh ĐỌC LẠI BẰNG MỘT CÂU RIÊNG mà thật sự đã mang mốc.
    *
    * Khác `daGhiMoc` ở đúng chỗ quan trọng: `daGhiMoc` đếm dòng do chính câu
-   * UPDATE trả về (RETURNING). Câu đó luôn báo thành công kể cả khi giá trị
-   * KHÔNG được ghi thật — trigger BEFORE UPDATE trả OLD, rule, hay một bản sao
-   * chỉ-đọc đều cho ra đúng cảnh đó: "đã ghi N dòng" mà đọc lại vẫn null.
-   * Chỉ một câu SELECT RIÊNG, sau khi ghi, mới phân biệt được hai chuyện đó.
+   * UPDATE trả về (RETURNING). Con số đó có thể là ĐỒ CŨ LẤY TỪ CACHE — đúng
+   * thứ đã xảy ra: Next 14 cache cả câu ghi đi qua fetch, nên câu UPDATE thứ
+   * hai trở đi không rời khỏi máy chủ mà vẫn trả về "đã ghi N dòng" của lần
+   * đầu (xem @/lib/supabase/no-cache-fetch). Nguyên nhân đó đã chữa từ gốc,
+   * nhưng vòng kiểm này ở lại: một câu SELECT RIÊNG sau khi ghi là cách duy
+   * nhất phân biệt "ghi thật" với "được kể lại là đã ghi", và nó rẻ.
    */
   daXacNhan: number;
   scanned: number;
@@ -197,16 +199,14 @@ export async function scanAlbum(
        * ĐỌC LẠI BẰNG MỘT CÂU RIÊNG — không tin RETURNING của chính câu vừa ghi.
        *
        * Đây là chỗ bản trước còn mù. RETURNING nói "đã ghi 37 dòng" nhưng nó chỉ
-       * chứng minh câu UPDATE KHỚP 37 dòng, không chứng minh giá trị đã nằm lại
-       * trong bảng. Log production ngày 06/09 cho thấy đúng khoảng cách đó: tám
-       * lượt liên tiếp đều báo daGhiMoc 37–47, mà lượt sau vẫn thấy nguyên 343
-       * ảnh chưa quét — không tiến một tấm nào suốt cả ngày, và vì hàng đợi ưu
-       * tiên album mới nhất nên nó nuốt trọn công suất, mọi album khác không bao
-       * giờ tới lượt.
+       * chứng minh câu UPDATE KHỚP 37 dòng — mà thậm chí con số ấy cũng có thể
+       * là đồ cũ lấy từ cache. Log production ngày 06/09: tám lượt liên tiếp đều
+       * báo daGhiMoc 37–47, database chỉ nhận đúng MỘT mẻ (51/343 ảnh), và mọi
+       * lượt đọc sau vẫn thấy nguyên 343 ảnh chưa quét.
        *
-       * Một câu SELECT riêng phân biệt được hai chuyện mà RETURNING gộp làm một:
-       * "ghi thành công" và "ghi rồi bị trả về như cũ" (trigger BEFORE UPDATE trả
-       * OLD, rule, bản sao chỉ-đọc…). Rẻ: đếm head, không kéo dòng nào về.
+       * Gốc rễ đã chữa ở @/lib/supabase/no-cache-fetch. Vòng kiểm này ở lại làm
+       * lưới an toàn: một câu SELECT RIÊNG là cách duy nhất phân biệt "ghi thật"
+       * với "được kể lại là đã ghi". Rẻ: đếm head, không kéo dòng nào về.
        */
       const { count: thuc } = await db
         .from("photos")

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 import { cookieDomainForHost } from "@/lib/hosts";
+import { noStoreFetch } from "./no-cache-fetch";
 
 /**
  * Supabase client bound to the current request's cookies (RLS-aware).
@@ -18,6 +19,10 @@ export function createClient() {
     {
       // Share the session cookie across mstudo.com subdomains (album / img).
       ...(domain ? { cookieOptions: { domain } } : {}),
+      // Bắt buộc: Next 14 cache cả câu đọc lẫn câu ghi đi qua fetch. Một trang
+      // dashboard đọc phải dữ liệu của request trước là sai, không phải nhanh.
+      // Xem ./no-cache-fetch.
+      global: { fetch: noStoreFetch },
       cookies: {
         getAll() {
           return cookieStore.getAll();
