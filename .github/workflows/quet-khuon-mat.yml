@@ -53,16 +53,27 @@ jobs:
             ma=$(curl -sS -o /tmp/ra.json -w '%{http_code}' --max-time 90 \
                  -H "Authorization: Bearer ${SECRET}" \
                  "${BASE}/api/cron/face-scan" || echo "000")
-            echo "HTTP ${ma}"
-            cat /tmp/ra.json; echo
             if [ "${ma}" = "401" ]; then
               echo "::error::App trả 401 — CRON_SECRET ở GitHub khác với trên Vercel."
               exit 1
             fi
             if [ "${ma}" != "200" ]; then
-              echo "::error::App trả ${ma}. Xem thân JSON ở trên để biết lỗi gì."
+              # Lỗi thì cần biết vì sao, nhưng chỉ lấy đúng câu lỗi + gợi ý —
+              # không in thân JSON (xem ghi chú "log công khai" ở dưới).
+              ly_do=$(jq -r '[.error, .hint] | map(select(.)) | join(" · ")' /tmp/ra.json 2>/dev/null)
+              echo "::error::App trả ${ma}. ${ly_do:-khong doc duoc than JSON}"
               exit 1
             fi
+            # ── LOG CÔNG KHAI — repo này public, ai cũng đọc được log Actions ──
+            # Nên chỉ in NHỊP ĐỘ (quét bao nhiêu, ghi có ăn không), TUYỆT ĐỐI
+            # không in id album, số ảnh còn tồn hay tổng ảnh mỗi album: đó là số
+            # liệu kinh doanh (studio có bao nhiêu album, mỗi album bao nhiêu
+            # ảnh), không phải thứ cần cho việc chẩn đoán từ xa.
+            #
+            # Số liệu đầy đủ vẫn xem được — sau khi ĐĂNG NHẬP, ở /api/face-status:
+            # từng album, còn bao nhiêu ảnh chưa quét, tìm được bao nhiêu khuôn
+            # mặt, gom thành mấy người.
+            jq -r '"  ok · quét \([.reports[]?.scanned // 0]|add) ảnh · xác nhận \([.reports[]?.daXacNhan // 0]|add) mốc · gom \([.reports[]?.clustered // 0]|add) người\(if ([.reports[]?.stoppedBy]|index("ghi-khong-an")) then "  ⚠ CÓ ALBUM GHI KHÔNG ĂN — xem /api/face-status" else "" end)"' /tmp/ra.json
             # Dừng sớm CHỈ khi thật sự không còn gì. Bản trước chỉ dò chuỗi
             # `"reports":[]`, mà một lượt HỎNG cũng trả về đúng chuỗi đó — nên
             # nó im lặng coi lỗi là "xong việc". Phải xét cả `"ok":true`.
