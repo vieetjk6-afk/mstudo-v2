@@ -1225,7 +1225,6 @@ export default function CustomerAlbum({
                             : undefined
                       }
                     />
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={thumbnailUrl(p.drive_file_id, 400)}
                       alt={p.name}
@@ -1406,7 +1405,6 @@ export default function CustomerAlbum({
                   onZoomChange={setZoom}
                   className="relative inline-flex"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     key={lbPhoto.id}
                     src={fullImageUrl(lbPhoto.drive_file_id, 1600)}

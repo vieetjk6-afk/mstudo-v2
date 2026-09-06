@@ -40,7 +40,6 @@ export default function EditorialTemplate({ inv, wishes, guest }: TemplateProps)
       {/* FULL-BLEED 01 */}
       {c.cover_url && (
         <section style={{ position: "relative", height: 440, overflow: "hidden" }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={c.cover_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 42%", animation: "edzoom 18s ease-in-out infinite alternate" }} />
           <div style={{ position: "absolute", top: 16, left: 16, fontFamily: cm, fontSize: 66, fontWeight: 600, color: "#fff", lineHeight: 1, textShadow: "0 2px 16px rgba(0,0,0,.4)", opacity: 0.9 }}>01</div>
           <div style={{ position: "absolute", bottom: 16, right: 18, color: "#fff", textAlign: "right", textShadow: "0 1px 8px rgba(0,0,0,.5)" }}><div style={{ fontFamily: cm, fontSize: 30, fontStyle: "italic" }}>Ngày chung đôi</div></div>
@@ -51,7 +50,6 @@ export default function EditorialTemplate({ inv, wishes, guest }: TemplateProps)
       <section style={{ padding: "44px 34px", display: "flex", gap: 22, alignItems: "center" }}>
         {(gallery[0] || c.cover_url) && (
           <div style={{ flex: "0 0 auto", width: 120, height: 120, borderRadius: "50%", overflow: "hidden", border: `3px solid ${PAL.panel}`, boxShadow: "0 10px 26px rgba(120,70,60,.2)" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={gallery[0] || c.cover_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", animation: "edzoom 14s ease-in-out infinite alternate" }} />
           </div>
         )}
@@ -128,7 +126,6 @@ export default function EditorialTemplate({ inv, wishes, guest }: TemplateProps)
             {[{ b: c.groom_bank, who: "Chú rể" }, { b: c.bride_bank, who: "Cô dâu" }].filter((x) => x.b?.account).map((x, i) => (
               <div key={i} style={{ flex: 1, background: PAL.panel, border: `1px solid ${PAL.line}`, borderRadius: 14, padding: 16, textAlign: "center" }}>
                 {vietqrUrl(x.b) && (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={vietqrUrl(x.b)!} alt="" width={120} height={120} style={{ width: "100%", maxWidth: 120, height: "auto", borderRadius: 8, background: "#fff", margin: "0 auto 8px" }} />
                 )}
                 <div style={{ ...kicker, fontSize: 10 }}>{x.who}</div>

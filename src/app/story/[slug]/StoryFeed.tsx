@@ -126,7 +126,6 @@ export default function StoryFeed({
       rafRef.current = requestAnimationFrame(step);
     };
     rafRef.current = requestAnimationFrame(step);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stories.length, cancelProg]);
   useEffect(() => () => cancelProg(), [cancelProg]);
 
@@ -450,7 +449,6 @@ export default function StoryFeed({
                 <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: facing === "user" ? "scaleX(-1)" : "none" }} />
               )}
               {captured && (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={captured} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               )}
               {camErr && (

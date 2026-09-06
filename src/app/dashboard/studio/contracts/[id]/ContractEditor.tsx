@@ -1924,7 +1924,6 @@ export default function ContractEditor({
                               {/* Client proofs for this instalment */}
                               {clientProofs.filter((cp) => cp.plan_id === it.id).map((cp) => (
                                 <button key={cp.id} type="button" onClick={() => setLightbox(cp.url)} className="inline-block cursor-zoom-in" title="Phóng to ảnh chuyển khoản">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
                                   <img src={cp.url} alt="CK" className="h-10 w-10 rounded-lg object-cover" style={{ border: "1px solid var(--border)" }} />
                                 </button>
                               ))}
@@ -1951,7 +1950,6 @@ export default function ContractEditor({
                             )}
                             {it.paid && linked?.proof_url && (
                               <button type="button" onClick={() => setLightbox(linked.proof_url!)} className="shrink-0 cursor-zoom-in" title="Phóng to ảnh chuyển khoản">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={linked.proof_url} alt="CK" className="h-7 w-7 rounded object-cover" style={{ border: "1px solid var(--border)" }} />
                               </button>
                             )}
@@ -2013,7 +2011,6 @@ export default function ContractEditor({
                   </label>
                   {planProof && (
                     <button type="button" onClick={() => setLightbox(planProof)} className="flex items-center gap-1 text-xs cursor-zoom-in" style={{ color: "var(--text2)" }} title="Phóng to ảnh">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={planProof} alt="proof" className="h-8 w-8 rounded object-cover" style={{ border: "1px solid var(--border)" }} /> đính kèm khi “đã thu”
                     </button>
                   )}
@@ -2030,7 +2027,6 @@ export default function ContractEditor({
                     <div className="flex flex-wrap gap-2">
                       {clientProofs.filter(cp => !cp.plan_id).map(cp => (
                         <button key={cp.id} type="button" onClick={() => setLightbox(cp.url)} className="cursor-zoom-in" title="Phóng to ảnh chuyển khoản">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={cp.url} alt="CK" className="h-14 w-14 rounded-lg object-cover" style={{ border: "1px solid var(--border)" }} />
                         </button>
                       ))}
@@ -2602,7 +2598,6 @@ export default function ContractEditor({
                     </p>
                   </div>
                   {contract.client_signature && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={contract.client_signature} alt="Chữ ký" className="h-16 rounded bg-white p-1" />
                   )}
                 </div>
@@ -2641,7 +2636,6 @@ export default function ContractEditor({
                 {contract.studio_signed_at && (
                   <div className="mb-4 flex items-center gap-4 rounded-xl p-3" style={{ background: "var(--surface2)" }}>
                     {contract.studio_signature && (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={contract.studio_signature} alt="Chữ ký" className="h-14 rounded bg-white p-1" />
                     )}
                     <div className="text-xs" style={{ color: "var(--text3)" }}>
@@ -2921,7 +2915,6 @@ export default function ContractEditor({
           >
             <X size={20} />
           </button>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={lightbox}
             alt="Ảnh chuyển khoản"

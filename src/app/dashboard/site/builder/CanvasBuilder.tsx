@@ -233,7 +233,6 @@ export default function CanvasBuilder({
     if (rows.length) del = del.not("id", "in", `(${rows.map((r) => r.id).join(",")})`);
     const { error } = await del;
     if (error) flash(`Chưa dọn được khối cũ: ${error.message}`);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [persistTheme, site.id, supabase]);
 
   // ── Block mutations ───────────────────────────────────────────────────
@@ -403,6 +402,10 @@ export default function CanvasBuilder({
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // undo/redo/delBlock cố ý KHÔNG nằm trong deps: bộ nghe phím tắt phải gắn
+    // đúng một lần, mà ba hàm đó chỉ gọi setState — thứ ổn định qua mọi lần
+    // render. Cho chúng vào deps thì mỗi lần gõ một ký tự lại tháo và gắn lại
+    // bộ nghe toàn cục.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selId, blocks, theme]);
 
@@ -598,7 +601,6 @@ export default function CanvasBuilder({
                 <div style={{ display: "grid", gap: 10 }}>
                   {SITE_TEMPLATES.map((tp) => (
                     <button key={tp.key} onClick={() => applyTemplate(tp.key)} style={tplCard}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={tp.thumb} alt={tp.name} style={{ width: "100%", aspectRatio: "3/2", objectFit: "cover", display: "block" }} />
                       <div style={{ padding: "7px 9px" }}>
                         <div style={{ fontSize: 12.5, fontWeight: 700 }}>{tp.name}</div>
@@ -814,7 +816,6 @@ export default function CanvasBuilder({
                 <div style={{ marginBottom: 16 }}>
                   {theme.logo ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={theme.logo} alt="logo" style={{ height: 36, width: "auto", maxWidth: 140, objectFit: "contain", borderRadius: 6, border: "1px solid var(--border)" }} />
                       <button onClick={() => patchTheme({ logo: "" })} style={{ ...segWide(false), flex: "0 0 auto", padding: "0 10px", height: 30 }}>Gỡ</button>
                     </div>
@@ -1065,7 +1066,6 @@ function BlockBody({ block, fontHead, accent, albums, pricelist, priceLabels, pr
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fill,minmax(240px,1fr))" }}>
             {(covers.length ? covers : Array.from({ length: 6 })).map((a, i) => (
               <div key={i} className="s-tile">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={(a as AlbumLite)?.cover_url || `https://picsum.photos/seed/g${i}/600/450`} alt="" />
                 <span className="s-tile-cap">{(a as AlbumLite)?.title || `Album mẫu ${i + 1}`}</span>
               </div>
@@ -1485,7 +1485,6 @@ function Inspector({ block, blocks = [], siteUrl = "", albums, priceLists = [], 
         <Field label="Ảnh">
           {S("image") ? (
             <div style={{ position: "relative", marginBottom: 8 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={S("image")} alt="" style={{ width: "100%", borderRadius: 10, display: "block" }} />
               <button onClick={() => { onBeforeEdit(); onEdit("image", "", true); }} style={{ position: "absolute", top: 6, right: 6, background: "var(--text)", color: "var(--bg)", border: 0, borderRadius: 999, width: 26, height: 26, cursor: "pointer" }}><X size={14} /></button>
             </div>
@@ -1501,7 +1500,6 @@ function Inspector({ block, blocks = [], siteUrl = "", albums, priceLists = [], 
             <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
               {albums.filter((a) => a.cover_url).slice(0, 9).map((a) => (
                 <button key={a.id} onClick={() => { onBeforeEdit(); onEdit("image", a.cover_url, true); }} title={a.title} style={{ width: 44, height: 32, borderRadius: 6, overflow: "hidden", border: S("image") === a.cover_url ? `2px solid ${accent}` : "1px solid var(--border)", padding: 0, cursor: "pointer" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={a.cover_url as string} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 </button>
               ))}
@@ -1679,7 +1677,6 @@ function SeoPanel({ site, supabase, onFlash }: {
 
       {seo.og_image ? (
         <div style={{ position: "relative", marginBottom: 8 }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={seo.og_image} alt="" style={{ width: "100%", aspectRatio: "1200/630", objectFit: "cover", borderRadius: 10, display: "block" }} />
           <button onClick={() => save({ ...seo, og_image: "" })} title="Gỡ ảnh"
             style={{ position: "absolute", top: 6, right: 6, background: "var(--text)", color: "var(--bg)", border: 0, borderRadius: 999, width: 26, height: 26, cursor: "pointer" }}>
@@ -1748,7 +1745,6 @@ function AlbumPicker({ block, albums, onEdit, onBeforeEdit }: {
                   }}
                 >
                   {a.cover_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={a.cover_url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : null}
                   {on && (

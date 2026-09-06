@@ -83,7 +83,6 @@ const escXml = (s: string) =>
     // để nguyên nháy đơn cho vùng tham chiếu 'Tên sheet'!$B$20 đọc được.
     .replace(/"/g, "&quot;")
     // Ký tự điều khiển không hợp lệ trong XML 1.0 → Excel báo file hỏng.
-    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
 
 /** 0 → "A", 25 → "Z", 26 → "AA". */

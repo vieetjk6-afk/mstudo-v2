@@ -236,7 +236,6 @@ export default function AiCompareView({
           onClick={primary ? (peek ? () => setPeek(false) : pickFocus) : undefined}
         >
           {src ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={src}
               alt={f.name}
@@ -384,7 +383,6 @@ export default function AiCompareView({
               }}
             >
               {thumbs[f.key] ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={thumbs[f.key]} alt="" className="h-full w-full object-cover" />
               ) : null}
             </button>

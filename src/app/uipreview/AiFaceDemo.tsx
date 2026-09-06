@@ -188,7 +188,6 @@ export default function AiFaceDemo() {
       <div className="mt-3 flex flex-wrap gap-3">
         {rows.map((r) => (
           <div key={r.label} className="w-[260px]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={r.url} alt={r.label} className="w-full rounded-[9px]" />
             <p className="mt-1 text-[11.5px] font-semibold">{r.label}</p>
             <p className="text-[11px]" data-testid={`face-${r.label === "Mắt mở" ? "open" : "closed"}`} style={{ color: "var(--tx3)" }}>

@@ -309,7 +309,6 @@ export default function AlbumDuplicateFinder({
                               aria-label={p.name}
                               className="block h-full w-full"
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={thumbnailUrl(p.drive_file_id, 320)}
                                 alt={p.name}

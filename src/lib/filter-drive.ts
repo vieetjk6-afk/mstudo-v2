@@ -4,7 +4,6 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { signOAuthState, verifyOAuthState } from "@/lib/oauth-state";
 import { extractFolderId } from "@/lib/drive";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
  * Kết nối Google Drive TOÀN QUYỀN cho công cụ Lọc ảnh (per-owner OAuth offline,

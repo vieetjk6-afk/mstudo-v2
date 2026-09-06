@@ -459,7 +459,6 @@ export default function ContractView({ token }: { token: string }) {
             <div className="px-5 py-7 text-center sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
               <div className="flex items-center justify-center gap-2">
                 {studioLogo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={studioLogo} alt={studioName} className="h-8 w-auto object-contain" />
                 ) : (
                   <span className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[13px] font-extrabold text-white" style={{ background: "var(--ac)" }}>
@@ -593,7 +592,6 @@ export default function ContractView({ token }: { token: string }) {
                   <div className="flex-none">
                     {dueQr ? (
                       <button onClick={() => setQrOpen(true)} aria-label={lang === "vi" ? "Phóng to mã QR" : "Enlarge QR"}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={dueQr}
                           alt="VietQR"
@@ -693,7 +691,6 @@ export default function ContractView({ token }: { token: string }) {
                     <div className="mb-2.5 flex flex-wrap gap-2">
                       {proofUrls.map((u) => (
                         <a key={u} href={u} target="_blank" rel="noreferrer">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={u} alt="proof" className="h-16 w-16 rounded-[10px] object-cover" style={{ border: "1px solid var(--bd)" }} />
                         </a>
                       ))}
@@ -796,7 +793,6 @@ export default function ContractView({ token }: { token: string }) {
               <p className="eyebrow mb-2">{lang === "vi" ? "Bên A · Studio" : "Party A · Studio"}</p>
               <div className="mb-4 flex items-center gap-3">
                 {contract.studio_signature ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={contract.studio_signature} alt="Chữ ký của studio" className="h-12 rounded bg-white p-1" />
                 ) : (
                   <span className="text-[12px]" style={{ color: "var(--tx3)" }}>{lang === "vi" ? "Studio chưa ký" : "Not signed yet"}</span>
@@ -811,7 +807,6 @@ export default function ContractView({ token }: { token: string }) {
                     <Check size={16} /> {t("signedOn")} {fmtDateTime(contract.client_signed_at!)}
                   </p>
                   {contract.client_signature && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={contract.client_signature} alt="Chữ ký" className="mt-2.5 h-16 rounded bg-white p-1" />
                   )}
                 </div>

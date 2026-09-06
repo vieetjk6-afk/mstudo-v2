@@ -779,7 +779,6 @@ export default function AlbumEditor({
                               className="group relative aspect-[3/2] overflow-hidden rounded-[9px]"
                               style={{ background: "var(--sf2)", border: isPicked ? "2px solid var(--ac)" : "1px solid var(--bd2)" }}
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
                               <img
                                 src={thumbnailUrl(p.drive_file_id, 400)}
                                 alt={p.name}
@@ -945,7 +944,6 @@ export default function AlbumEditor({
                           <div key={s.id} className="overflow-hidden rounded-[9px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd2)" }}>
                             <div className="relative aspect-[3/2]">
                               {p ? (
-                                // eslint-disable-next-line @next/next/no-img-element
                                 <img src={thumbnailUrl(p.drive_file_id, 400)} alt={s.photo_name} loading="lazy" className="h-full w-full object-cover" />
                               ) : (
                                 <span className="flex h-full items-center justify-center text-[10.5px]" style={{ color: "var(--tx3)" }}>Ảnh đã bị gỡ</span>

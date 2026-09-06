@@ -127,7 +127,6 @@ export default function RoyalTemplate({ inv, wishes, guest }: TemplateProps) {
               {gallery.map((src, i) => (
                 <Reveal key={i} anim="zoom">
                   <div style={{ position: "relative", aspectRatio: i % 5 === 0 ? "1/1" : "3/4", gridColumn: i % 5 === 0 ? "span 2" : undefined, borderRadius: 14, overflow: "hidden" }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={src} alt="" loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
                   </div>
                 </Reveal>
@@ -154,7 +153,6 @@ export default function RoyalTemplate({ inv, wishes, guest }: TemplateProps) {
               {[{ b: c.groom_bank, who: `Chú rể · ${groom}` }, { b: c.bride_bank, who: `Cô dâu · ${bride}` }].filter((x) => vietqrUrl(x.b) || x.b?.account).map((x, i) => (
                 <Reveal key={i} anim="up"><div style={{ background: PAL.paper, border: `1px solid ${PAL.line}`, borderRadius: 18, padding: "18px 20px", display: "flex", gap: 14, alignItems: "center" }}>
                   {vietqrUrl(x.b) && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={vietqrUrl(x.b)!} alt="" width={78} height={78} style={{ width: 78, height: 78, borderRadius: 12, background: "#fff", flex: "0 0 auto" }} />
                   )}
                   <div style={{ textAlign: "left" }}>

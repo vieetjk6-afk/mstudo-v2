@@ -33,7 +33,6 @@ export default function StoryGallery({ images }: { images: string[] }) {
   return (
     <div className="relative mx-auto aspect-[9/16] w-full max-w-sm overflow-hidden rounded-3xl bg-black shadow-2xl select-none">
       {images.map((src, idx) => (
-        // eslint-disable-next-line @next/next/no-img-element
         <img
           key={idx}
           src={src}

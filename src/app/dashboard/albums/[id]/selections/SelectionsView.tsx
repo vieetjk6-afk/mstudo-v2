@@ -417,7 +417,6 @@ export default function SelectionsView({
                 />
                 <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded bg-ink-850">
                   {item.fileId && (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={thumbnailUrl(item.fileId, 160)}
                       alt={item.photo_name}
@@ -501,7 +500,6 @@ export default function SelectionsView({
                     >
                       <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded bg-ink-850">
                         {fileId && (
-                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={thumbnailUrl(fileId, 160)}
                             alt={item.photo_name}

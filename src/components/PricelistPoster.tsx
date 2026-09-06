@@ -88,7 +88,6 @@ export default function PricelistPoster({
         <div className="flex flex-col gap-6 border-b pb-8 md:flex-row md:items-start md:justify-between" style={{ borderColor: P.line }}>
           <div>
             {logo ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={logo} alt={o.full_name || "Logo"} className="mb-4 h-16 w-auto max-w-[200px] object-contain" />
             ) : null}
             <h1 className="font-serif text-[clamp(28px,5vw,48px)] font-semibold uppercase leading-none tracking-wide" style={{ color: P.greenDeep }}>

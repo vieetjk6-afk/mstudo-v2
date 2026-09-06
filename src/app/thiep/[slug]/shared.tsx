@@ -36,7 +36,6 @@ export function GiftCard({ title, bank, defaultName, pal, round = 16 }: { title:
   return (
     <div className="flex flex-col items-center gap-2 p-5 text-center shadow-sm" style={{ background: pal.surface, border: `1px solid ${pal.border}`, borderRadius: round }}>
       <p className="font-serif text-lg" style={{ color: pal.accent }}>Mừng cưới {title}</p>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={url} alt="" width={190} height={190} style={{ width: 190, height: "auto", borderRadius: 12, background: "#fff" }} />
       {(bank?.holder || defaultName) && <p className="text-sm font-medium">{bank?.holder || defaultName}</p>}
       <p className="text-xs" style={{ color: pal.muted }}>{bank?.account?.replace(/\s/g, "")}{bank?.name ? ` · ${bank.name}` : ""}</p>
@@ -78,7 +77,6 @@ export function ExtraSections({ c, groom, bride, guest, pal, dark }: { c: Weddin
     <div style={{ textAlign: "center" }}>
       <div style={{ margin: "0 auto 18px", width: 176, height: 176, borderRadius: "50%", overflow: "hidden", border: `3px solid ${pal.accent}`, background: dark ? "rgba(255,255,255,.08)" : `${pal.accent}18` }}>
         {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 44, color: pal.accent, fontFamily: "var(--font-hand), cursive" }}>{initialOf(name)}</div>}
       </div>
@@ -132,7 +130,6 @@ export function ThanksBlock({ note, photo, pal, dark }: { note?: string; photo?:
       <p style={{ fontSize: 11.5, letterSpacing: ".3em", textTransform: "uppercase", color: pal.accent }}>Lời cảm ơn</p>
       {photo && (
         <div style={{ margin: "20px auto 0", width: 190, height: 190, borderRadius: "50%", overflow: "hidden", border: `3px solid ${pal.accent}` }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         </div>
       )}

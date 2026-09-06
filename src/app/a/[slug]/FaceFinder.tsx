@@ -193,7 +193,6 @@ export default function FaceFinder({
                 }}
               >
                 {drive ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={thumbnailUrl(drive, 400)}
                     alt={p.name || t("faceOnePerson")}

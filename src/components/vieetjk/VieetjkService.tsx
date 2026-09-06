@@ -19,6 +19,10 @@ function Header({ service, lang, book }: { service: ServiceContent; lang: Lang; 
     <section className={`vjk-shead ${service.variant}`}>
       <div className="vjk-wrap">
         <div className="vjk-crumb">
+          {/* <a> chứ không phải <Link>: trang này được REWRITE từ <studio>.mstudo.com
+              sang /site/<studio>, nên "/" phải là một lượt tải thật để middleware
+              dựng lại đúng ngữ cảnh tenant. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/">{tr(lang, UI.navHome)}</a> &nbsp;/&nbsp; {tr(lang, service.title)}
         </div>
         <span className="vjk-eyebrow" style={{ display: "block", marginTop: 18 }}>{tr(lang, service.tagline)}</span>
@@ -53,6 +57,7 @@ function Cta({ service: _service, lang, book }: { service: ServiceContent; lang:
           <p>{tr(lang, UI.ctaHomeSub)}</p>
           <div className="vjk-btnrow">
             <a href={book} className="vjk-cta">{tr(lang, UI.bookNow)}</a>
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/#lien-he" className="vjk-cta vjk-cta-ghost">{tr(lang, UI.contactInfo)}</a>
           </div>
         </div>

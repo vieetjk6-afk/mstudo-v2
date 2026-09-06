@@ -341,7 +341,6 @@ export default function StudioShell({
           }}
         >
           <div className="mb-4 flex items-center gap-2.5 px-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"} alt="mstudo" className="h-8 w-auto" />
             {brandChip}
             <button
@@ -440,7 +439,6 @@ export default function StudioShell({
           style={{ background: "var(--sf)", borderRight: "1px solid var(--bd)" }}
         >
           <Link href="/dashboard/studio" className="mb-3.5 flex items-center gap-2.5 px-2 pb-0.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"} alt="mstudo" className="h-[26px] w-auto" />
             {brandChip}
           </Link>

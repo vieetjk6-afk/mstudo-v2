@@ -36,7 +36,6 @@ export default function CinematicTemplate({ inv, wishes, guest }: TemplateProps)
       {/* COVER */}
       <section style={{ position: "relative", height: 648, overflow: "hidden" }}>
         {c.cover_url && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={c.cover_url} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "50% 32%", animation: "cnkb 16s ease-in-out infinite alternate" }} />
         )}
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(0deg,rgba(10,6,8,.82) 3%,rgba(10,6,8,.12) 42%,rgba(10,6,8,.4))" }} />
@@ -97,7 +96,6 @@ export default function CinematicTemplate({ inv, wishes, guest }: TemplateProps)
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, padding: "0 12px" }}>
             {gallery.map((src, i) => (
               <div key={i} style={{ position: "relative", aspectRatio: i % 5 === 2 ? "16/10" : "3/4", gridColumn: i % 5 === 2 ? "span 2" : undefined, borderRadius: 10, overflow: "hidden" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" loading="lazy" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
               </div>
             ))}
@@ -124,7 +122,6 @@ export default function CinematicTemplate({ inv, wishes, guest }: TemplateProps)
             {[{ b: c.groom_bank, who: `Chú rể · ${groom}` }, { b: c.bride_bank, who: `Cô dâu · ${bride}` }].filter((x) => vietqrUrl(x.b) || x.b?.account).map((x, i) => (
               <div key={i} style={{ background: PAL.panel, border: `1px solid ${PAL.line}`, borderRadius: 16, padding: "18px 20px", display: "flex", gap: 14, alignItems: "center" }}>
                 {vietqrUrl(x.b) && (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={vietqrUrl(x.b)!} alt="" width={72} height={72} style={{ width: 72, height: 72, borderRadius: 10, background: "#fff", flex: "0 0 auto" }} />
                 )}
                 <div style={{ textAlign: "left" }}>

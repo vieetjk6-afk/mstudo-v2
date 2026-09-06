@@ -40,7 +40,6 @@ export default function VieetjkHome({ data, lang }: { data: VjkData; lang: Lang 
                 <a key={s.slug} href={`/${s.slug}`} className="vjk-scard">
                   <div className="vjk-scard-media">
                     {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={cover} alt={tr(lang, s.title)} loading="lazy" />
                     ) : (
                       <div className="vjk-scard-ph">{lang === "vi" ? "Đang cập nhật" : "Coming soon"}</div>

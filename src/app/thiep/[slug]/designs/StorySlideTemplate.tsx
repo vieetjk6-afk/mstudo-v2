@@ -197,7 +197,6 @@ export default function StorySlideTemplate({ inv, wishes, guest }: TemplateProps
                 {[{ b: c.groom_bank, who: "Chú rể" }, { b: c.bride_bank, who: "Cô dâu" }].filter((x) => x.b?.account).map((x, k) => (
                   <div key={k} style={{ flex: 1, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.12)", borderRadius: 14, padding: 14, fontSize: 12, color: "#f0e6e2", textAlign: "center" }}>
                     {vietqrUrl(x.b) && (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={vietqrUrl(x.b)!} alt="" width={110} height={110} style={{ width: "100%", maxWidth: 110, height: "auto", borderRadius: 8, background: "#fff", margin: "0 auto 6px" }} />
                     )}
                     {x.who} · {x.b?.name}<br /><b style={{ fontSize: 14 }}>{x.b?.account?.replace(/\s/g, "")}</b>
@@ -222,7 +221,6 @@ export default function StorySlideTemplate({ inv, wishes, guest }: TemplateProps
               <div style={{ marginTop: 24, textAlign: "center" }}>
                 {c.thanks_photo && (
                   <div style={{ margin: "0 auto 14px", width: 150, height: 150, borderRadius: "50%", overflow: "hidden", border: `2px solid ${accent}` }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={c.thanks_photo} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   </div>
                 )}

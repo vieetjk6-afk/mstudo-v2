@@ -274,7 +274,6 @@ function Grid({ items, video, dateLocale }: { items: GalleryCard[]; video?: bool
         >
           <div className="relative aspect-[4/5] overflow-hidden">
             {g.cover_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={g.cover_url} alt={g.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
             ) : (
               <div className="absolute inset-0" style={{ background: "var(--surface2)" }} />

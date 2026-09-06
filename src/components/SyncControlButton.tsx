@@ -17,6 +17,9 @@ export default function SyncControlButton() {
   if (!isDesktop) return null;
   return (
     <button
+      // Tải lại TRANG THẬT chứ không điều hướng phía client: /__mstudo_control
+      // là cửa điều khiển đồng bộ, phải đi qua middleware một lượt mới đúng.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       onClick={() => { window.location.href = "/__mstudo_control"; }}
       className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold transition-colors"
       style={{ background: "var(--surface2)", color: "var(--text)" }}

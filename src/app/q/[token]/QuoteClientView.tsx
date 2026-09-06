@@ -360,7 +360,6 @@ export default function QuoteClientView({
           <div className="px-5 py-7 text-center sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
             <div className="flex items-center justify-center gap-2">
               {studioLogo ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={studioLogo} alt={studioName} className="h-8 w-auto object-contain" />
               ) : (
                 <span className="flex h-6 w-6 items-center justify-center rounded-[7px] text-[13px] font-extrabold text-white" style={{ background: "var(--ac)" }}>

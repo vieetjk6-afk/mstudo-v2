@@ -68,7 +68,6 @@ export default function LogoUpload({ value, onChange, bucket = "logos", label = 
         {/* Preview */}
         {value ? (
           <div className="relative shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={value} alt="logo" className="h-10 w-10 rounded-lg object-contain" style={{ border: "1px solid var(--border)", background: "var(--surface2)" }} />
             <button
               type="button"

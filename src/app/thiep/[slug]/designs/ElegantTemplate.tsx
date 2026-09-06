@@ -26,7 +26,6 @@ export default function ElegantTemplate({ inv, wishes, guest }: TemplateProps) {
       {/* Cover */}
       <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-center">
         {c.cover_url && (<>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={c.cover_url} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
           <div className="absolute inset-0" style={{ background: "linear-gradient(180deg,rgba(21,17,13,.55),rgba(21,17,13,.92))" }} />
         </>)}
@@ -85,7 +84,6 @@ export default function ElegantTemplate({ inv, wishes, guest }: TemplateProps) {
             {gallery.map((src, i) => (
               <Reveal key={i} anim="zoom" delay={(i % 3) * 80}>
                 <div className="overflow-hidden" style={{ border: `1px solid ${PAL.border}` }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={src} alt="" className="w-full object-cover transition duration-500 hover:scale-105" loading="lazy" />
                 </div>
               </Reveal>

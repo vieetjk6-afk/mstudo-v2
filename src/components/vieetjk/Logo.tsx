@@ -27,12 +27,10 @@ export default function Logo({
 
   // 1) File logo đúng theo giao diện.
   if (!fail) {
-    // eslint-disable-next-line @next/next/no-img-element
     return <img src={file} alt={BRAND.name} style={imgStyle} onError={() => setFail(true)} />;
   }
   // 2) Dự phòng: logo studio (nếu có) — chỉ hợp khi màu tương phản với nền.
   if (src && !fail2) {
-    // eslint-disable-next-line @next/next/no-img-element
     return <img src={src} alt={BRAND.name} style={imgStyle} onError={() => setFail2(true)} />;
   }
   // 3) Vector dự phòng cuối.

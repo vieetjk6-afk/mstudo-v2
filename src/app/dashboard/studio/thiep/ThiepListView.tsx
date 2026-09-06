@@ -209,7 +209,6 @@ export default function ThiepListView({ rows, ownerId, studio }: { rows: Invitat
               <button onClick={() => setQr(null)} aria-label="Đóng" className="text-accent-faint hover:text-fg"><X size={18} /></button>
             </div>
             {/* Ảnh QR có nền trắng nướng sẵn — giữ khung trắng để quét được ở chế độ tối. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qr.img} alt="QR" className="mx-auto my-3 h-56 w-56 rounded bg-white" />
             <p className="mb-4 break-all text-[11px] text-accent-faint">{qr.url}</p>
             <div className="flex justify-center gap-2">

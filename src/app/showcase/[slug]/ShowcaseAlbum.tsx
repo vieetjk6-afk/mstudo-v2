@@ -74,7 +74,6 @@ export default function ShowcaseAlbum({
               className="aspect-square overflow-hidden rounded-xl animate-[vkPop_.45s_ease_both]"
               style={{ background: "var(--surface)" }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={thumbnailUrl(p.fileId, 600)}
                 alt={p.name}
@@ -111,7 +110,6 @@ export default function ShowcaseAlbum({
             <button onClick={() => setLbIdx(Math.max(0, lbIdx - 1))} disabled={lbIdx === 0} aria-label="Ảnh trước" className="absolute left-3.5 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full transition-opacity disabled:pointer-events-none disabled:opacity-25" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
               <ChevronLeft size={22} />
             </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={fullImageUrl(lb.fileId, 1600)} alt={lb.name} className="max-h-[82vh] max-w-full rounded object-contain animate-[vkPop_.35s_ease_both]" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)" }} />
             <button onClick={() => setLbIdx(Math.min(photos.length - 1, lbIdx + 1))} disabled={lbIdx >= photos.length - 1} aria-label="Ảnh sau" className="absolute right-3.5 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full transition-opacity disabled:pointer-events-none disabled:opacity-25" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}>
               <ChevronRight size={22} />

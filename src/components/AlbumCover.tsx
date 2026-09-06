@@ -35,7 +35,6 @@ export default function AlbumCover({
 }) {
   return (
     <section className="relative h-[100svh] min-h-[460px] w-full overflow-hidden">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={url} alt={title} className="absolute inset-0 h-full w-full object-cover" />
       {/* Hai lớp: dải dọc cho mép trên/dưới, và một vệt tối hình bầu dục ngay
           sau khối chữ. Ảnh bìa cưới hay là nền trắng — váy, tường sáng — nếu

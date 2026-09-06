@@ -757,7 +757,6 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
             <div className="grid max-h-[46vh] grid-cols-2 gap-1.5 overflow-y-auto">
               {lib.map((p) => (
                 <button key={p.id} onClick={() => onThumbClick(p)} draggable onDragStart={() => { dragLib.current = p; }} className="relative aspect-square overflow-hidden rounded-lg" style={{ cursor: "grab" }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={p.thumb} alt="" className="h-full w-full object-cover" loading="lazy" draggable={false} />
                   {usedIds.has(p.thumb) && <span className="absolute right-1 top-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] text-white" style={{ background: "var(--brand)" }}>✓</span>}
                 </button>
@@ -792,7 +791,6 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
                     style={{ position: "absolute", left: `${c.x}%`, top: `${c.y}%`, width: `${c.w}%`, height: `${c.h}%`, outline: selected ? "2.5px solid var(--brand)" : "none", cursor: c.locked ? "default" : "grab", overflow: "visible" }}>
                     <div style={{ position: "absolute", inset: 0, overflow: "hidden", boxSizing: "border-box", borderRadius: c.type === "photo" ? cellRadius(c, scale) : undefined, border: c.type === "photo" && c.borderW ? `${c.borderW * scale}px solid ${c.borderColor || "#ffffff"}` : undefined }}>
                       {c.type === "photo" ? (c.photo ? (<>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={c.photo} alt="" draggable={false} style={{ width: "100%", height: "100%", objectFit: "cover", objectPosition: `${c.posX}% ${c.posY}%`, transform: `scale(${c.scale})`, filter: cellFilter(c, scale) }} />
                         {!!(c.tint && c.tintA) && <div style={{ position: "absolute", inset: 0, background: c.tint!, opacity: (c.tintA ?? 0) / 100, pointerEvents: "none" }} />}
                       </>) : (
@@ -883,7 +881,6 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
                 {FILTERS.map((f) => (
                   <button key={f.k} onClick={() => patchCell(selCell.uid, { filter: f.k })} className="overflow-hidden rounded-md" style={{ border: `1.5px solid ${selCell.filter === f.k ? "var(--brand)" : "var(--border)"}` }}>
                     {selCell.photo && (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={selCell.photo} alt="" className="h-10 w-full object-cover" style={{ filter: f.css }} />
                     )}
                     <span className="block py-0.5 text-center text-[10px]">{f.label}</span>
@@ -1054,7 +1051,6 @@ function SpreadView({ s, w, h, page, ink }: { s: Spread; w: number; h: number; p
       <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "rgba(0,0,0,.06)" }} />
       {s.cells.map((c) => c.type === "photo" ? (
         c.photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img key={c.uid} src={c.photo} alt="" draggable={false} style={{ position: "absolute", left: `${c.x}%`, top: `${c.y}%`, width: `${c.w}%`, height: `${c.h}%`, objectFit: "cover", objectPosition: `${c.posX}% ${c.posY}%`, filter: cellFilter(c, h / 500), borderRadius: cellRadius(c, h / 500), boxSizing: "border-box", border: c.borderW ? `${c.borderW * (h / 500)}px solid ${c.borderColor || "#fff"}` : undefined }} />
         ) : (
           <div key={c.uid} style={{ position: "absolute", left: `${c.x}%`, top: `${c.y}%`, width: `${c.w}%`, height: `${c.h}%`, background: "var(--surface2)", borderRadius: cellRadius(c, h / 500) }} />

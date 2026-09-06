@@ -150,7 +150,6 @@ export default function StoryEditor({ token }: { token: string }) {
           </div>
           {qrImg && (
             <div className="mt-4 flex flex-col items-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qrImg} alt="Mã QR" className="h-52 w-52 rounded-lg border border-stone-200" />
               <p className="mt-2 break-all text-center text-[11px] text-stone-400">{publicUrl}</p>
               <div className="mt-3 flex gap-2">
@@ -183,7 +182,6 @@ export default function StoryEditor({ token }: { token: string }) {
           {photos && photos.length > 0 && (
             <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
               {photos.slice(0, 18).map((p) => (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img key={p.id} src={p.thumb} alt="" className="aspect-square w-full rounded object-cover" loading="lazy" />
               ))}
             </div>
@@ -225,7 +223,6 @@ export default function StoryEditor({ token }: { token: string }) {
                     {u.is_video ? (
                       <div className="grid h-full w-full place-items-center text-stone-400"><Video size={20} /></div>
                     ) : (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={`/api/img?id=${u.drive_file_id}&w=300`} alt="" className="h-full w-full object-cover" loading="lazy" />
                     )}
                     <button onClick={() => deleteUpload(u.id)} title={u.guest_name || "Gỡ"} className="absolute right-0.5 top-0.5 rounded bg-black/50 p-1 text-white opacity-0 transition group-hover:opacity-100"><Trash2 size={12} /></button>

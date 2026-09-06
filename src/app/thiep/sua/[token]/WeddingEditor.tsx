@@ -420,7 +420,6 @@ function ImageUpload({ current, onUpload, onChange }: { current?: string; onUplo
   return (
     <div className="flex items-center gap-3">
       {current && (
-        // eslint-disable-next-line @next/next/no-img-element
         <img src={current} alt="" className="h-16 w-16 rounded-lg object-cover" />
       )}
       <input ref={ref} type="file" accept="image/*" hidden onChange={async (e) => {
@@ -445,7 +444,6 @@ function GalleryEditor({ gallery, onUpload, onChange }: { gallery: string[]; onU
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
         {gallery.map((url, i) => (
           <div key={i} className="group relative">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={url} alt="" className="aspect-square w-full rounded-lg object-cover" />
             <button type="button" onClick={() => onChange(gallery.filter((_, j) => j !== i))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white opacity-0 group-hover:opacity-100">
               <Trash2 size={12} />
@@ -615,7 +613,6 @@ function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: File) =
       {currentUrl && !localErr && (
         <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
           <p className="mb-1 text-xs font-medium text-green-700">Đã có nhạc nền — nghe thử:</p>
-          {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
           <audio src={currentUrl} controls preload="none" className="w-full" />
         </div>
       )}
@@ -666,7 +663,6 @@ function AlbumPicker({ token, existing, onClose, onAdd }: { token: string; exist
                     onClick={() => toggle(p.url)}
                     className={`relative aspect-square overflow-hidden rounded-lg border-2 ${picked ? "border-rose-500" : "border-transparent"} disabled:opacity-40`}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={p.thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
                     {(picked || added) && (
                       <span className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-white"><Check size={12} /></span>

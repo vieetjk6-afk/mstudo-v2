@@ -628,7 +628,6 @@ export default function PricingManager({
           {/* Live preview swatch */}
           <span className="ml-auto flex items-center gap-2 rounded-xl px-4 py-2 text-sm" style={{ background: ap.pl_bg || DEFAULT_APPEARANCE.pl_bg, color: ap.pl_text || DEFAULT_APPEARANCE.pl_text, border: "1px solid var(--border)" }}>
             {ap.pl_logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img src={ap.pl_logo_url} alt="logo" className="h-5 w-5 rounded object-contain" />
             ) : null}
             Xem trước · <b style={{ color: ap.pl_accent || DEFAULT_APPEARANCE.pl_accent }}>10.000.000đ</b>

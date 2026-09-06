@@ -31,7 +31,6 @@ export function VietQR({ bank, amount, addInfo }: { bank: BankInfo; amount: numb
   const acc = (bank.account || "").replace(/\s/g, "");
   return (
     <div className="flex flex-col items-center gap-2 text-center">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={url} alt="VietQR" width={220} height={220} style={{ width: 220, height: "auto", borderRadius: 12, background: "#fff" }} />
       {amount > 0 && <p className="font-serif text-lg font-medium" style={{ color: "var(--accent)" }}>{vnd(amount)}</p>}
       {bank.holder && <p className="text-sm">{bank.holder}</p>}

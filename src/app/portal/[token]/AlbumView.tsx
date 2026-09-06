@@ -116,7 +116,6 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
           style={{ aspectRatio: "21 / 8", minHeight: 260, background: CARD, border: `1px solid ${LINE}` }}
         >
           {cover && (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
           )}
           <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(10,8,11,.86), transparent)" }} />
@@ -183,7 +182,6 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
                       className="overflow-hidden rounded-[13px]"
                       style={{ aspectRatio: "4 / 5", background: CARD, border: `1px solid ${LINE}` }}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={thumbnailUrl(p.drive_file_id, 500)} alt={p.name} loading="lazy" className="h-full w-full object-cover" />
                     </button>
                   ))}
@@ -206,7 +204,6 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
                       style={{ background: CARD, border: `1px solid ${LINE}` }}
                     >
                       <span className="relative block" style={{ aspectRatio: "16 / 9" }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={thumbnailUrl(v.drive_file_id, 640)} alt={v.name} loading="lazy" className="h-full w-full object-cover" />
                         <span
                           className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
@@ -290,7 +287,6 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
         // thuộc phần tử cha nào (xem ghi chú trong components/studio/Modal.tsx).
         <Portal>
         <div className="fixed inset-0 z-[160] flex items-center justify-center" style={{ background: "rgba(8,6,9,.94)" }} onClick={() => setLightbox(null)}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={fullImageUrl(photos[lightbox].drive_file_id, 1600)}
             alt={photos[lightbox].name}

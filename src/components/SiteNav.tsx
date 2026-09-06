@@ -50,7 +50,6 @@ export default function SiteNav({
   }, [items]);
 
   const brand = logo ? (
-    // eslint-disable-next-line @next/next/no-img-element
     <img src={logo} alt={name} />
   ) : (
     <span className="s-brand-name" style={{ fontFamily: fontVar }}>{name}</span>

@@ -26,7 +26,6 @@ export default function ClassicTemplate({ inv, wishes, guest }: TemplateProps) {
       {/* Cover */}
       <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6 text-center">
         {c.cover_url && (<>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={c.cover_url} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ animation: "clKen 14s ease-out forwards" }} />
           <div className="absolute inset-0 bg-black/35" />
         </>)}
@@ -86,7 +85,6 @@ export default function ClassicTemplate({ inv, wishes, guest }: TemplateProps) {
           <div className="mt-9 grid grid-cols-2 gap-3 sm:grid-cols-3">
             {gallery.map((src, i) => (
               <Reveal key={i} anim="zoom" delay={(i % 3) * 90}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" className="aspect-[3/4] w-full rounded-lg object-cover shadow-sm" loading="lazy" />
               </Reveal>
             ))}

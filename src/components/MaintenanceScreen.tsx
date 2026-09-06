@@ -107,6 +107,9 @@ export default function MaintenanceScreen({
           <a href="/dashboard" className="btn-primary">
             {over ? "Vào quản trị" : "Thử lại"}
           </a>
+          {/* <a> chứ không phải <Link>: đang ở màn bảo trì, cần TẢI LẠI thật để
+              máy chủ kiểm lại xem đã hết bảo trì chưa. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/" className="btn-ghost">
             Về trang chủ
           </a>

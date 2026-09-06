@@ -665,7 +665,6 @@ function PhotoCard({
         style={{ background: "var(--sf2, var(--surface2))" }}
       >
         {preview ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={preview} alt={j.name} className="h-full w-full object-cover" loading="lazy" />
         ) : (
           <span className="flex h-full w-full items-center justify-center text-[10px]" style={{ color: "var(--tx3, var(--text3))" }}>

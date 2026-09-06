@@ -6,7 +6,6 @@ import { loadProviders, requestProvider, extractDelta, finishReason } from "@/li
 import { platformLabel } from "./platforms";
 import { recentTurns } from "./store";
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    AI TRẢ LỜI KHÁCH TRONG HỘP THƯ.

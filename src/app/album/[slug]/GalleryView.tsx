@@ -468,7 +468,6 @@ export default function GalleryView({
                   const isSel = selected.has(p.id);
                   return (
                   <div key={p.id} className="group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img {...masonry.imgProps(p.id)} onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-full w-full cursor-zoom-in select-none object-cover" />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
@@ -613,7 +612,6 @@ export default function GalleryView({
               // nút thích vì thế dính đúng góc ảnh.
               <div className="relative inline-block">
                 <PhotoZoom key={lb.id} stageRef={lbStage} onSwipe={go} className="relative inline-block">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img key={lb.id} src={fullImageUrl(lb.drive_file_id, 1600)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, 400)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 opacity-20">

@@ -136,7 +136,6 @@ export default function SettingsPanel({
           <Textarea value={str("site_description")} onChange={(v) => set("site_description", v)} placeholder="mstudo · Phần mềm quản lý studio ảnh: hợp đồng, báo giá, đặt lịch…" />
         </Field>
         {form.favicon_url && (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={form.favicon_url as string} alt="favicon" className="h-10 w-10 rounded" style={{ border: "1px solid var(--border)" }} />
         )}
         <SaveBtn label="Lưu SEO" />

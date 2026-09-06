@@ -288,7 +288,6 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
           của bản thiết kế, giữ đúng tỉ lệ ở mọi bậc lưới. */}
       <Link href={`/dashboard/albums/${a.id}`} className="relative block aspect-[4/3]" style={{ background: "var(--sf2)" }}>
         {cover ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={cover} alt={a.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
         ) : (
           <span className="flex h-full items-center justify-center" style={{ color: "var(--tx3)" }}>

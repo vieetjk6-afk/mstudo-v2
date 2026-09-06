@@ -8,7 +8,7 @@ import next from "eslint-config-next";
  * FlatCompat. Bọc qua FlatCompat sẽ nổ "circular structure" vì nó cố đọc cấu
  * hình flat như cấu hình cũ.
  */
-export default [
+const config = [
   {
     ignores: [
       ".next/**",
@@ -78,3 +78,5 @@ export default [
     },
   },
 ];
+
+export default config;

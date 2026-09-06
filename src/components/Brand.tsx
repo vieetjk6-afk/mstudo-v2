@@ -7,7 +7,6 @@ export default function Brand({ href = "/" }: { href?: string }) {
   const { theme } = useTheme();
   return (
     <Link href={href} className="flex items-center">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"}
         alt="mstudo"

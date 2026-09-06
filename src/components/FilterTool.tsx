@@ -681,7 +681,6 @@ export default function FilterTool({
               <div key={f.key} className="overflow-hidden rounded-lg" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
                 <div className="flex aspect-square items-center justify-center" style={{ color: "var(--text3)" }}>
                   {f.driveId || thumbs[f.key] ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={f.driveId ? thumbnailUrl(f.driveId, 400) : thumbs[f.key]} alt={f.name} loading="lazy" className="h-full w-full object-cover" />
                   ) : (
                     <FileText size={28} />

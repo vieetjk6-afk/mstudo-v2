@@ -61,6 +61,10 @@ export default function VieetjkChrome({
 
       <header className="vjk-header">
         <div className="vjk-wrap vjk-headin">
+          {/* <a> chứ không phải <Link>: trang này được REWRITE từ <studio>.mstudo.com
+              sang /site/<studio>, nên "/" phải là một lượt tải thật để middleware
+              dựng lại đúng ngữ cảnh tenant. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
           <a href="/" aria-label={BRAND.name}>
             <Logo src={logoUrl} theme={theme} />
           </a>
@@ -100,6 +104,10 @@ export default function VieetjkChrome({
         <div className="vjk-wrap">
           <div className="vjk-foot-grid">
             <div>
+              {/* <a> chứ không phải <Link>: trang này được REWRITE từ <studio>.mstudo.com
+                  sang /site/<studio>, nên "/" phải là một lượt tải thật để middleware
+                  dựng lại đúng ngữ cảnh tenant. */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a href="/" aria-label={BRAND.name}><Logo src={logoUrl} theme={theme} height={34} /></a>
               <p style={{ marginTop: 16, maxWidth: "34ch" }}>{tr(lang, BRAND.tagline)}. {tr(lang, BRAND.heroSub)}</p>
               <div className="vjk-foot-social">

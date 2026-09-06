@@ -110,7 +110,6 @@ export default function AiCompareDemo() {
             className="w-[190px] overflow-hidden rounded-[9px]"
             style={{ border: `2px solid ${i === 1 ? "var(--gn)" : "var(--bd)"}` }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={u} alt={FRAMES[i].name} className="aspect-square w-full object-cover" />
             <span className="block px-1.5 py-1 text-left text-[10.5px] font-semibold">{FRAMES[i].name}</span>
           </button>

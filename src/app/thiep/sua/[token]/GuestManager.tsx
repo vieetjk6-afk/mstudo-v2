@@ -166,7 +166,6 @@ export default function GuestManager({
             {guests.map((g, i) => (
               <div key={`${g}-${i}`} className="flex items-center gap-3 rounded-lg border border-stone-200 bg-white p-2.5">
                 {qrMap[g] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={qrMap[g]} alt="" width={56} height={56} className="h-14 w-14 shrink-0 rounded" />
                 ) : (
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded bg-stone-100"><QrCode size={20} className="text-stone-300" /></div>

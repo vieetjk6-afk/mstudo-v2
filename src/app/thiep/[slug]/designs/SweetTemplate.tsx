@@ -42,7 +42,6 @@ export default function SweetTemplate({ inv, wishes, guest }: TemplateProps) {
     <Reveal anim="up" className="text-center">
       <div className="mx-auto mb-5 h-52 w-52 overflow-hidden rounded-full" style={{ border: `3px solid ${accent}`, background: soft }}>
         {photo ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img src={photo} alt="" className="h-full w-full object-cover" />
         ) : <div className="flex h-full w-full items-center justify-center text-5xl" style={{ color: accent }}>{initial(name)}</div>}
       </div>
@@ -65,7 +64,6 @@ export default function SweetTemplate({ inv, wishes, guest }: TemplateProps) {
       {/* Bìa */}
       <section className="relative flex min-h-[92vh] flex-col items-center justify-center overflow-hidden px-6 text-center">
         {c.cover_url && (<>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={c.cover_url} alt="" className="absolute inset-0 h-full w-full object-cover" style={{ animation: "swKen 16s ease-out forwards" }} />
           <div className="absolute inset-0" style={{ background: "linear-gradient(180deg, rgba(0,0,0,.28), rgba(0,0,0,.42))" }} />
         </>)}
@@ -153,7 +151,6 @@ export default function SweetTemplate({ inv, wishes, guest }: TemplateProps) {
           <div className="mx-auto mt-8 grid max-w-3xl grid-cols-2 gap-2 sm:grid-cols-3">
             {gallery.map((g, i) => (
               <Reveal key={i} anim="fade" className="overflow-hidden rounded-xl" style={{ aspectRatio: "3/4" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={g} alt="" className="h-full w-full object-cover" loading="lazy" />
               </Reveal>
             ))}
@@ -207,7 +204,6 @@ export default function SweetTemplate({ inv, wishes, guest }: TemplateProps) {
         {c.wedding_date && <p className="text-sm italic" style={{ color: PAL.muted }}>{fmtDate(c.wedding_date)} • {location}</p>}
         {thanksPhoto && (
           <div className="mx-auto my-7 h-40 w-40 overflow-hidden rounded-full" style={{ border: `3px solid ${accent}` }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={thanksPhoto} alt="" className="h-full w-full object-cover" />
           </div>
         )}

@@ -111,7 +111,6 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
           <div className="w-full max-w-xs rounded-2xl border border-subtle bg-surface p-6 text-center text-fg" onClick={(e) => e.stopPropagation()}>
             <div className="mb-2 flex items-center justify-between"><p className="font-medium">{qr.couple}</p><button onClick={() => setQr(null)} aria-label="Đóng" className="text-accent-faint hover:text-fg"><X size={18} /></button></div>
             {/* Ảnh QR có nền trắng nướng sẵn — giữ khung trắng để quét được ở chế độ tối. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qr.img} alt="QR" className="mx-auto my-3 h-56 w-56 rounded bg-white" />
             <p className="mb-4 break-all text-[11px] text-accent-faint">{qr.url}</p>
             <div className="flex justify-center gap-2">

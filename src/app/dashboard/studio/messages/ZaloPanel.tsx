@@ -160,7 +160,6 @@ export default function ZaloPanel() {
           <>
             <span className="inline-flex items-center gap-2 text-sm">
               {st.self?.avatar ? (
-                // eslint-disable-next-line @next/next/no-img-element
                 <img src={st.self.avatar} alt="" className="h-7 w-7 rounded-full object-cover" />
               ) : null}
               Tài khoản: <b>{st.displayName || st.self?.name || "đã kết nối"}</b>
@@ -200,7 +199,6 @@ export default function ZaloPanel() {
             </>
           ) : qr ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qrSrc(qr)} alt="Zalo QR" className="h-52 w-52 rounded bg-white p-2" />
               <p className="text-center text-xs opacity-70">
                 Mở Zalo trên điện thoại → <b>Cá nhân</b> → biểu tượng quét mã → quét QR này. Giữ trang

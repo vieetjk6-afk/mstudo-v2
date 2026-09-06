@@ -263,7 +263,6 @@ export default function ZaloSendButton({
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs hover:bg-white/5"
                 >
                   {f.avatar ? (
-                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={f.avatar} alt="" className="h-6 w-6 rounded-full object-cover" />
                   ) : (
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/10 text-[10px]">

@@ -14,7 +14,6 @@ export default function StudioBrand({
   height?: number;
 }) {
   const inner = logoUrl ? (
-    // eslint-disable-next-line @next/next/no-img-element
     <img src={logoUrl} alt={name} style={{ height, width: "auto" }} className="object-contain" />
   ) : (
     <span className="font-serif font-medium" style={{ fontSize: 20, letterSpacing: 0.2 }}>{name}</span>

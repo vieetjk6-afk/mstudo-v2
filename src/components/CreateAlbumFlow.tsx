@@ -458,7 +458,6 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
         <div className="mt-[18px] flex aspect-square max-h-[330px] flex-col items-center justify-center gap-4 rounded-2xl p-5" style={{ border: "1px dashed var(--border2)", background: "var(--surface2)" }}>
           {qr ? (
             <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={qr} alt="Mã QR mở album của khách" className="rounded-xl bg-white p-3" width={180} height={180} />
               <span className="text-[12.5px]" style={{ color: "var(--text2)" }}>
                 Quét để mở trang chọn ảnh{result?.count ? ` · ${result.count} ảnh` : ""}

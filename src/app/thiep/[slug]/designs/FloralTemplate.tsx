@@ -36,7 +36,6 @@ export default function FloralTemplate({ inv, wishes, guest }: TemplateProps) {
         <Reveal anim="zoom" className="relative z-10">
           {c.cover_url ? (
             <div className="mx-auto mb-7 h-72 w-56 overflow-hidden shadow-lg sm:h-96 sm:w-72" style={{ borderRadius: "50% 50% 12px 12px / 35% 35% 12px 12px", border: `4px solid ${accent}` }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={c.cover_url} alt="" className="h-full w-full object-cover" />
             </div>
           ) : <Flower2 className="mx-auto mb-4" size={40} style={{ color: accent }} />}
@@ -90,7 +89,6 @@ export default function FloralTemplate({ inv, wishes, guest }: TemplateProps) {
             {gallery.map((src, i) => (
               <Reveal key={i} anim="up" delay={(i % 4) * 70}>
                 <div className="bg-white p-2 pb-6 shadow-md transition-transform hover:rotate-0" style={{ transform: `rotate(${(i % 2 ? 1 : -1) * (2 + (i % 3))}deg)` }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={src} alt="" className="h-44 w-36 object-cover sm:h-52 sm:w-44" loading="lazy" />
                 </div>
               </Reveal>

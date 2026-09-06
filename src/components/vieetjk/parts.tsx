@@ -21,7 +21,6 @@ export function Gallery({ albums, lang, emptyHint }: { albums: VjkAlbum[]; lang:
       {albums.map((a) => (
         <a key={a.id} href={`/album/${a.slug}`} className="vjk-gal-item" title={a.title}>
           {a.cover_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={a.cover_url} alt={a.title} loading="lazy" />
           ) : (
             <div className="vjk-scard-ph" style={{ aspectRatio: "4 / 3" }} />

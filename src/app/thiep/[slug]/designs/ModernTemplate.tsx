@@ -37,7 +37,6 @@ export default function ModernTemplate({ inv, wishes, guest }: TemplateProps) {
         </Reveal>
         <div className="relative min-h-[50vh] md:min-h-screen" style={{ background: PAL.surface }}>
           {c.cover_url && (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={c.cover_url} alt="" className="absolute inset-0 h-full w-full object-cover" />
           )}
         </div>

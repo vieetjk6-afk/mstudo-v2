@@ -90,7 +90,6 @@ export default function SiteRenderer({ data, demo = false }: { data: SiteData; d
   const bookingHref = owner?.booking_token ? `/book/${owner.booking_token}` : null;
 
   const brand = t.logo ? (
-    // eslint-disable-next-line @next/next/no-img-element
     <img src={t.logo} alt={name} style={{ height: 36, width: "auto" }} />
   ) : (
     <span className="s-brand-name" style={{ fontFamily: fontVar }}>{name}</span>

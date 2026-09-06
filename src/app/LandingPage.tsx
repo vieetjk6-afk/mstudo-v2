@@ -213,9 +213,7 @@ const navLink: CSSProperties = { color: "var(--muted)", textDecoration: "none", 
 function ThemedWordmark({ height }: { height: number }) {
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/logo-wordmark.svg" alt="mstudo" className="ms-logo-light" style={{ height, width: "auto" }} />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src="/logo-wordmark-dark.svg" alt="mstudo" className="ms-logo-dark" style={{ height, width: "auto" }} />
     </>
   );

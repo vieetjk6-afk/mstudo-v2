@@ -1167,7 +1167,6 @@ export default function ToolPanel({
               setZoom((z) => Math.min(8, Math.max(1, +(z + (e.deltaY < 0 ? 0.4 : -0.4)).toFixed(2))));
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={showOriginal ? previewSrc.origUrl : preview.url}
               alt="preview"

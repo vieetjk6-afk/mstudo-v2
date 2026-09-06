@@ -20,7 +20,6 @@
 export const DEFAULT_NEXT = "/dashboard/studio";
 
 /** Ký tự điều khiển C0 + khoảng trắng + DEL — trình duyệt lược bỏ trước khi phân giải URL. */
-// eslint-disable-next-line no-control-regex
 const STRIPPED_BY_BROWSER = /[\u0000-\u0020\u007f]/;
 
 export function safeNextPath(raw: string | null | undefined, fallback: string = DEFAULT_NEXT): string {

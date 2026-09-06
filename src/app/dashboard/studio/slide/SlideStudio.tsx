@@ -1063,7 +1063,6 @@ export default function SlideStudio() {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
                   {S.photos.map((ph, i) => (
                     <div key={ph.id} draggable onDragStart={() => { eng._drag = ph.id; }} onDragOver={(e) => e.preventDefault()} onDrop={() => eng.reorderPhotos(eng._drag, ph.id)} style={{ position: "relative", aspectRatio: "1", borderRadius: 10, overflow: "hidden", background: "#eae5dc", cursor: "grab" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={ph.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", pointerEvents: "none" }} />
                       <span style={{ position: "absolute", left: 5, top: 5, minWidth: 18, height: 18, padding: "0 4px", borderRadius: 6, background: "rgba(20,18,15,.72)", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
                       <button onClick={() => eng.removePhoto(ph.id)} style={{ position: "absolute", right: 5, top: 5, width: 20, height: 20, border: "none", borderRadius: 6, background: "rgba(20,18,15,.72)", color: "#fff", fontSize: 13, lineHeight: 1, cursor: "pointer", padding: 0 }}>×</button>
@@ -1198,7 +1197,6 @@ export default function SlideStudio() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {curSlide!.photos.map((ph, i) => (
                       <div key={ph.id + "-" + i} style={{ position: "relative", width: 46, height: 46, borderRadius: 8, overflow: "hidden", background: "#111", border: "1px solid #44444c" }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={ph.url} alt="" onClick={() => setPicker({ mode: "swap", idx: i })} title="Đổi ảnh này" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", cursor: "pointer" }} />
                         {curIsGrid && curSlide!.photos.length > 1 && (
                           <button onClick={() => eng.removeSlidePhoto(i)} title="Xoá ảnh khỏi cảnh" style={{ position: "absolute", right: 2, top: 2, width: 17, height: 17, border: "none", borderRadius: 5, background: "rgba(15,15,18,.8)", color: "#fff", fontSize: 12, lineHeight: 1, cursor: "pointer", padding: 0 }}>×</button>
@@ -1270,7 +1268,6 @@ export default function SlideStudio() {
               <div style={{ flex: 1, overflowY: "auto", padding: 16, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
                 {S.photos.map((ph, i) => (
                   <button key={ph.id} onClick={() => applyPick(ph.id)} style={{ position: "relative", aspectRatio: "1", borderRadius: 10, overflow: "hidden", border: "1px solid #e2dccf", background: "#eae5dc", cursor: "pointer", padding: 0 }}>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={ph.url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
                     <span style={{ position: "absolute", left: 5, top: 5, minWidth: 18, height: 18, padding: "0 4px", borderRadius: 6, background: "rgba(20,18,15,.72)", color: "#fff", fontSize: 11, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{i + 1}</span>
                   </button>
