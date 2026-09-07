@@ -2,14 +2,14 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
 import { faceChips, type PersonChip } from "@/lib/face-people";
-import { dangQuet } from "@/lib/face-pending";
+import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { getStudioBrand } from "@/lib/studio-brand";
 import Brand from "@/components/Brand";
 import GalleryView from "./GalleryView";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { MAIN_HOST } from "@/lib/hosts";
-import { effectivePlan, planAllowsWatermark, type Plan } from "@/lib/plans";
+import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { getOriginalFolders } from "@/lib/album-original";
 import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
@@ -111,6 +111,11 @@ export default async function GalleryPage(
   // vẫn đi vòng qua proxy thay vì tải thẳng từ Drive.
   const ownerPlan = effectivePlan(owner?.plan as Plan, owner?.plan_expires_at);
   const canWatermark = planAllowsWatermark(ownerPlan, owner?.role === "admin");
+  // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Chốt ở ĐÂY, không
+  // chỉ ở bộ quét: album của gói đã hạ hoặc đã hết hạn vẫn còn nguyên khuôn mặt
+  // gom từ trước trong DB, nên nếu chỉ chặn bộ quét thì ô tìm mặt vẫn hiện và
+  // vẫn bấm được — tính năng của gói cao tiếp tục dùng free.
+  const canFaceSearch = planAllowsFaceSearch(ownerPlan, owner?.role === "admin");
 
   // Sources hiển thị (ưu tiên stage 'delivery', fallback tất cả nếu chưa gắn).
   const delSources = (s ?? []).filter((x) => x.stage === "delivery");
@@ -131,17 +136,17 @@ export default async function GalleryPage(
   // Link Drive file gốc ở giai đoạn chọn ảnh (JPG Goc) — hiện trong album hoàn thiện.
   let originalFolders: { name: string; url: string }[] = [];
   let people: PersonChip[] = [];
-  // Máy chủ còn đang quét → khối tìm theo khuôn mặt nói "đang chuẩn bị" thay
-  // vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
-  let facePreparing = false;
+  // Máy chủ còn đang quét → khối tìm theo khuôn mặt nói ĐÃ QUÉT BAO NHIÊU/BAO
+  // NHIÊU thay vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
+  let faceScan: TienDoQuet | null = null;
   if (!hasPassword) {
     const filtered = filterDeliveryPhotos(allPhotos ?? [], s ?? []);
     totalPhotos = filtered.length;
     // Dựng chip từ TOÀN BỘ ảnh giao khách, không phải lô 300 ảnh đầu: số ảnh
     // trên mỗi khuôn mặt phải đúng ngay từ đầu. Lưới thì tự đầy dần — trang này
     // đã tải nốt phần còn lại trong nền sau khi mở.
-    people = faceChips(ppl ?? [], pplLinks ?? [], new Set(filtered.map((ph) => ph.id)));
-    if (people.length === 0) facePreparing = await dangQuet(admin, album.id);
+    people = canFaceSearch ? faceChips(ppl ?? [], pplLinks ?? [], new Set(filtered.map((ph) => ph.id))) : [];
+    if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
     // Share: cần đủ ảnh để lọc theo shareIds. Ngược lại chỉ gửi lô đầu.
     photos = shareMode ? filtered : filtered.slice(0, INITIAL_PHOTOS);
     sources = shownSources.map(({ id, name, position }) => ({ id, name, position }));
@@ -175,7 +180,7 @@ export default async function GalleryPage(
       }}
       initialPhotos={photos}
       initialPeople={people}
-      facePreparing={facePreparing}
+      faceScan={faceScan}
       totalPhotos={totalPhotos}
       initialSources={sources}
       initialDriveFolders={driveFolders}

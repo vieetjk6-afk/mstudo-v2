@@ -131,6 +131,23 @@ export function limitsFor(plan: Plan, isAdmin: boolean): PlanLimits {
   return isAdmin ? ADMIN_LIMITS : PLAN_LIMITS[plan];
 }
 
+/**
+ * TÌM ẢNH THEO KHUÔN MẶT — chỉ Photographer Plus và Studio.
+ *
+ * Đây là tính năng ĐẮT NHẤT của hệ thống, và đắt theo nghĩa tiền thật: mỗi ảnh
+ * phải tải thumbnail từ Drive rồi chạy nhận diện trên CPU máy chủ (~0,75 giây
+ * một tấm). Một album 800 ảnh ngốn khoảng 11 phút CPU, một lần cho mỗi ảnh.
+ * Mở cho gói thấp thì chi phí đó không có chỗ bù — cùng lý do đã giới hạn
+ * `planAllowsWatermark`.
+ *
+ * Chốt này phải kiểm ở CẢ HAI phía và không nơi nào được tin nơi nào:
+ *   • Bộ quét (cron) — đừng tiêu CPU cho album của gói không được dùng.
+ *   • Trang khách — đừng hiện ô tìm mặt của album không đủ gói.
+ */
+export function planAllowsFaceSearch(plan: Plan, isAdmin = false): boolean {
+  return isAdmin || plan === "studio" || plan === "photographer_plus";
+}
+
 /** Album delivery phase (giao khách): every paid plan except free. */
 export function planAllowsDelivery(plan: Plan, isAdmin = false): boolean {
   return isAdmin || plan !== "free";

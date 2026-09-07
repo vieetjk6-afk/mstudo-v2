@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { fmtDate } from "@/lib/date";
 import FaceFinder from "@/app/a/[slug]/FaceFinder";
 import { filterByPerson, type PersonChip } from "@/lib/face-people";
+import type { TienDoQuet } from "@/lib/face-pending";
 
 type Lang = "vi" | "en";
 const TR = {
@@ -90,14 +91,17 @@ interface DriveFolder { name: string; url: string; }
 interface G { id: string; slug: string; title: string; event_date: string | null; cover_url: string | null; hasPassword: boolean; allowDownload?: boolean; driveIsEdited?: boolean; watermark?: string | null; }
 
 export default function GalleryView({
-  gallery, initialPhotos, initialPeople, facePreparing = false, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
+  gallery, initialPhotos, initialPeople, faceScan = null, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
 }: {
   gallery: G;
   initialPhotos: P[] | null;
   /** Khuôn mặt máy chủ đã gom sẵn — khách bấm để lọc, không tải mô hình nào. */
   initialPeople?: PersonChip[];
-  /** Máy chủ còn đang quét khuôn mặt album này (xem @/lib/face-pending). */
-  facePreparing?: boolean;
+  /**
+   * Tiến độ quét khuôn mặt của máy chủ (xem @/lib/face-pending), hoặc null khi
+   * không có gì đang chạy — kể cả khi gói của studio không mở tính năng này.
+   */
+  faceScan?: TienDoQuet | null;
   totalPhotos?: number | null;
   initialSources: S[] | null;
   initialDriveFolders?: DriveFolder[];
@@ -122,7 +126,7 @@ export default function GalleryView({
   const allowDownload = gallery.allowDownload !== false;
   const [password, setPassword] = useState("");
   // Album có mật khẩu: cờ "máy chủ đang quét khuôn mặt" đến cùng lượt mở khoá.
-  const [preparing, setPreparing] = useState(facePreparing);
+  const [scan, setScan] = useState<TienDoQuet | null>(faceScan);
   const [pwError, setPwError] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
 
@@ -240,7 +244,7 @@ export default function GalleryView({
     setDriveFolders(data.driveFolders ?? []);
     setOriginalFolders(data.originalFolders ?? []);
     setPeople(data.people ?? []);
-    setPreparing(!!data.facePreparing);
+    setScan((data.faceScan ?? null) as TienDoQuet | null);
     setUnlocked(true);
   }
 
@@ -433,7 +437,7 @@ export default function GalleryView({
         {/* TÌM ẢNH THEO KHUÔN MẶT — album giao khách.
             Cùng khối với album chọn ảnh: máy chủ đã gom sẵn nên bấm một mặt chỉ
             là tra bảng, khách không tải mô hình nào. */}
-        <FaceFinder people={people} activeId={personId} onPick={setPersonId} driveIdOf={driveIdOf} slug={gallery.slug} password={password} preparing={preparing} />
+        <FaceFinder people={people} activeId={personId} onPick={setPersonId} driveIdOf={driveIdOf} slug={gallery.slug} password={password} scan={scan} />
 
         {tabSources.length > 1 && (
           <div className="mt-6 flex flex-wrap gap-2">

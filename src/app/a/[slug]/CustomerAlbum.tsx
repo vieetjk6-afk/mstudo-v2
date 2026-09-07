@@ -30,6 +30,7 @@ import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
 import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { filterByPerson, type PersonChip } from "@/lib/face-people";
+import type { TienDoQuet } from "@/lib/face-pending";
 import FaceFinder from "./FaceFinder";
 import {
   applyEdit,
@@ -93,7 +94,7 @@ export default function CustomerAlbum({
   shareIds,
   initialDriveFolders,
   initialPeople,
-  facePreparing = false,
+  faceScan = null,
   studioName = "Studio",
   logoUrl = null,
   studioHost = null,
@@ -111,8 +112,11 @@ export default function CustomerAlbum({
    * họ). Khách chỉ nhận danh sách id ảnh — không tải một byte mô hình AI nào.
    */
   initialPeople?: PersonChip[];
-  /** Máy chủ còn đang quét khuôn mặt album này (xem @/lib/face-pending). */
-  facePreparing?: boolean;
+  /**
+   * Tiến độ quét khuôn mặt của máy chủ (xem @/lib/face-pending), hoặc null khi
+   * không có gì đang chạy — kể cả khi gói của studio không mở tính năng này.
+   */
+  faceScan?: TienDoQuet | null;
   studioName?: string;
   logoUrl?: string | null;
   /** Domain riêng của studio — link chia sẻ phải mang tên miền đó, không phải mstudo.com. */
@@ -129,9 +133,9 @@ export default function CustomerAlbum({
   // Chip lọc theo người. Album có mật khẩu thì server chưa gửi gì cho tới khi mở
   // khoá, nên cũng nhận thêm ở bước unlock() — giống photos/sources.
   const [people, setPeople] = useState<PersonChip[]>(initialPeople ?? []);
-  // Album có mật khẩu: server component chưa biết gì trước khi mở khoá, nên cờ
-  // này đến cùng lượt trả lời của /access.
-  const [preparing, setPreparing] = useState(facePreparing);
+  // Album có mật khẩu: server component chưa biết gì trước khi mở khoá, nên tiến
+  // độ này đến cùng lượt trả lời của /access.
+  const [scan, setScan] = useState<TienDoQuet | null>(faceScan);
   /** Người đang lọc. null = không lọc. */
   const [personId, setPersonId] = useState<string | null>(null);
 
@@ -565,7 +569,7 @@ export default function CustomerAlbum({
     setSources(data.sources ?? []);
     setDriveFolders(data.driveFolders ?? []);
     setPeople(data.people ?? []);
-    setPreparing(!!data.facePreparing);
+    setScan((data.faceScan ?? null) as TienDoQuet | null);
     // Album có mật khẩu: server component chưa gửi lựa chọn nào, nên bản của máy
     // chủ đến ở đây. Vẫn phải hoà giải với sổ trên máy — khách nhập mật khẩu lại
     // sau khi chọn dở lúc mất mạng là đúng tình huống cần cứu.
@@ -961,7 +965,7 @@ export default function CustomerAlbum({
           driveIdOf={driveIdOf}
           slug={album.slug}
           password={password}
-          preparing={preparing}
+          scan={scan}
         />
         {activePerson && (
           <p className="mt-2 text-[12.5px]" style={{ color: "var(--text3)" }}>

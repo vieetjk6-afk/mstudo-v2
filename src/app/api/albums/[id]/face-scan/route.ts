@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clusterAlbum, hanQuetMs, pendingRows, scanAlbum, type ScanRow } from "@/lib/face-scan-server";
+import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,7 +52,11 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
   // sang POST phải gói lại đúng hình dạng mà chữ ký mới đòi.
   if (new URL(req.url).searchParams.get("chay") === "1") return POST(req, { params: Promise.resolve(params) });
 
-  const { data: album } = await db.from("albums").select("status, phase").eq("id", params.id).maybeSingle();
+  const { data: album } = await db.from("albums").select("status, phase, owner_id").eq("id", params.id).maybeSingle();
+  // Cổng gói phải có trong CHÍNH câu chẩn đoán này. Route tồn tại để trả lời
+  // "tắc ở đâu"; nếu nó báo `seCronQuet: true` cho một album mà cron cố tình bỏ
+  // qua vì gói không đủ, thì nó đang chỉ sai chỗ tắc — đúng thứ nó phải chống.
+  const goiChoTimMat = await chuAlbumDuocTimMat(db, album?.owner_id);
   const { data: photos, error: ePhotos } = await db
     .from("photos")
     .select("id, drive_file_id, name, is_video, faces_scanned_at")
@@ -76,8 +81,10 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
   return NextResponse.json({
     ok: true,
     status: album?.status ?? null,
-    // Cron chỉ nhặt album đã phát hành — nói thẳng ra để studio không phải đoán.
-    seCronQuet: album?.status === "published",
+    // Cron chỉ nhặt album đã phát hành CỦA GÓI CÓ TÍNH NĂNG — nói thẳng cả hai
+    // điều kiện ra để studio không phải đoán.
+    seCronQuet: album?.status === "published" && goiChoTimMat,
+    goiChoTimMat,
     anh: rows.length,
     chuaQuet: conLai,
     daQuet: rows.filter((p) => !p.is_video && !!p.faces_scanned_at).length,
@@ -93,6 +100,17 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
   const params = await props.params;
   if (!(await ownsAlbum(params.id))) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = createAdminClient();
+  // Nút "quét ngay" đi TRỰC TIẾP vào scanAlbum, không qua albumsNeedingScan —
+  // nên cổng gói của cron không chạm tới đây. Bỏ sót chỗ này là để ngỏ đúng cách
+  // dùng tính năng dễ nhất: dán một URL.
+  const { data: chuAlbum } = await db.from("albums").select("owner_id").eq("id", params.id).maybeSingle();
+  if (!(await chuAlbumDuocTimMat(db, chuAlbum?.owner_id))) {
+    return NextResponse.json({
+      ok: false,
+      error: "goi_khong_co_tinh_nang",
+      hint: "Tìm ảnh theo khuôn mặt chỉ có ở gói Photographer Plus và Studio.",
+    });
+  }
   try {
     const r = await scanAlbum(db, params.id, { budgetMs: hanQuetMs(), maxPhotos: 400 });
     // Gom luôn khi đã quét hết — studio bấm "chạy ngay" là muốn thấy kết quả

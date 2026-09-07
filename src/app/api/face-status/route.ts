@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { linkSqlEditor, maDuAn } from "@/lib/supabase-du-an";
+import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -50,6 +51,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const db = createAdminClient();
+  const goiChoTimMat = await chuAlbumDuocTimMat(db, user.id);
   const [album_people, album_faces, faces_scanned_at, faces_clustered_at] = await Promise.all([
     coBang(db, "album_people"),
     coBang(db, "album_faces"),
@@ -104,6 +106,13 @@ export async function GET() {
     // Không lộ giá trị, chỉ lộ CÓ hay KHÔNG — biết là đủ để sửa.
     cronSecret: !!process.env.CRON_SECRET,
     quetBiTat: process.env.FACE_SCAN_OFF === "1",
+    /*
+     * Gói của CHÍNH studio đang hỏi. Mắt xích này phải nằm trong danh sách vì nó
+     * đứt được y như ba mắt kia, và đứt theo cách khó thấy nhất: bảng đủ, cron
+     * đủ, album đã phát hành, mà cron vẫn cố tình bỏ qua. Không nói ra thì cả
+     * màn chẩn đoán này chỉ xanh lè và chỉ sai chỗ tắc.
+     */
+    goiChoTimMat,
   };
   if (thieu.length > 0) {
     out.viecPhaiLam =
@@ -114,6 +123,12 @@ export async function GET() {
   if (!out.cronSecret) {
     out.viecPhaiLam =
       "Thiếu biến môi trường CRON_SECRET trên Vercel — app tự trả 401 cho cron, nên không album nào được quét. Đặt biến rồi Redeploy.";
+  } else if (!goiChoTimMat) {
+    // Nói TRƯỚC mọi con số bên dưới: chúng sẽ đúng nhưng vô nghĩa, vì cron bỏ
+    // qua album của gói này. Không có câu này thì studio đi sửa hạ tầng cho một
+    // thứ không phải lỗi hạ tầng.
+    out.viecPhaiLam =
+      "Gói hiện tại không có tính năng tìm ảnh theo khuôn mặt — chỉ Photographer Plus và Studio mới được quét. Hạ tầng bên dưới không có gì phải sửa.";
   }
 
   // Album của CHÍNH studio này. Dùng khoá dịch vụ nên phải tự lọc theo chủ sở
@@ -169,8 +184,9 @@ export async function GET() {
     title: a.title,
     slug: a.slug,
     status: a.status,
-    // Cron CHỈ nhặt album đã phát hành. Nói thẳng ra để studio không phải đoán.
-    seDuocQuet: a.status === "published",
+    // Cron CHỈ nhặt album đã phát hành CỦA GÓI CÓ TÍNH NĂNG. Nói thẳng cả hai
+    // điều kiện để studio không phải đoán.
+    seDuocQuet: a.status === "published" && goiChoTimMat,
     anh: tongAnh.get(a.id as string) ?? 0,
     chuaQuet: chuaQuet.get(a.id as string) ?? 0,
     khuonMat: soMat.get(a.id as string) ?? 0,

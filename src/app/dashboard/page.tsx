@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { effectivePlan, planAllowsDelivery, planAllowsWatermark } from "@/lib/plans";
+import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWatermark } from "@/lib/plans";
 import { fetchAlbumRows } from "@/lib/album-rows";
 import { getStudioHost } from "@/lib/studio-site";
 import AlbumList from "./AlbumList";
@@ -22,5 +22,5 @@ export default async function DashboardPage() {
   const showTrial = !isAdmin && (plan === "free" || plan === "basic");
   const trialUsed = !!(profile as { trial_used_at?: string | null } | null)?.trial_used_at;
 
-  return <AlbumList albums={rows} showTrial={showTrial} trialUsed={trialUsed} canDelivery={planAllowsDelivery(plan, isAdmin)} canWatermark={planAllowsWatermark(plan, isAdmin)} studioHost={studioHost} />;
+  return <AlbumList albums={rows} showTrial={showTrial} trialUsed={trialUsed} canDelivery={planAllowsDelivery(plan, isAdmin)} canWatermark={planAllowsWatermark(plan, isAdmin)} canFaceSearch={planAllowsFaceSearch(plan, isAdmin)} studioHost={studioHost} />;
 }

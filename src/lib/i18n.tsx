@@ -175,9 +175,15 @@ export const dict: Dict = {
   },
   // Album vừa tạo: máy chủ đang quét, khuôn mặt chưa có. Nói ra chứ đừng để
   // trống — trống thì khách (và studio) tưởng tính năng không tồn tại.
+  //
+  // {n}/{m} KHÔNG phải trang trí. Câu cũ là "vài phút nữa bạn quay lại nhé", và
+  // với album 400–1.000 ảnh thì đó là NÓI SAI: bộ quét chạy được khoảng 300 ảnh
+  // mỗi lượt cron, tức hàng giờ. Khách quay lại sau năm phút, đọc lại đúng câu
+  // hẹn cũ, và kết luận tính năng hỏng — trong khi nó đang chạy đúng. Một con số
+  // nhìn thấy nhích lên nói thật được điều mà một lời hẹn không giữ nổi.
   facePreparing: {
-    vi: "Đang chuẩn bị tìm ảnh theo khuôn mặt cho album này, vài phút nữa bạn quay lại nhé.",
-    en: "Face search is still being prepared for this album — check back in a few minutes.",
+    vi: "Đang tìm khuôn mặt trong album: đã quét {n}/{m} ảnh. Album nhiều ảnh có thể mất vài chục phút.",
+    en: "Finding faces in this album: {n}/{m} photos scanned. Large albums can take a while.",
   },
   faceFailed: { vi: "Không tìm được, thử lại giúp tôi.", en: "Search failed, please try again." },
   personHint: {

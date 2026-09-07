@@ -48,7 +48,7 @@ export interface AlbumRow {
   dislikes?: { count: number }[];
 }
 
-export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true, studioHost = null }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean; /** Domain riêng của studio — link mở album phải mang tên miền đó. */ studioHost?: string | null }) {
+export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean; /** Gói có mở tìm ảnh theo khuôn mặt không (Photographer Plus & Studio). */ canFaceSearch?: boolean; /** Domain riêng của studio — link mở album phải mang tên miền đó. */ studioHost?: string | null }) {
   return (
     <div className="page-in">
       <PlanUsage />
@@ -103,7 +103,7 @@ export default function AlbumList({ albums, showTrial = false, trialUsed = false
           href="/dashboard/create"
         />
       ) : (
-        <AlbumTabs albums={albums} canDelivery={canDelivery} canWatermark={canWatermark} studioHost={studioHost} />
+        <AlbumTabs albums={albums} canDelivery={canDelivery} canWatermark={canWatermark} canFaceSearch={canFaceSearch} studioHost={studioHost} />
       )}
     </div>
   );
@@ -127,7 +127,7 @@ function AlbumEmpty({ title, hint, cta, href }: { title: string; hint: string; c
 
 // Tách thư viện thành 2 TAB theo giai đoạn: ALBUM CHỌN ẢNH (phase 'selection') và
 // ALBUM GIAO KHÁCH (phase 'delivery') — cùng kiểu tab với trang Hợp đồng.
-function AlbumTabs({ albums, canDelivery, canWatermark, studioHost }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean; studioHost: string | null }) {
+function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHost }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean; canFaceSearch: boolean; studioHost: string | null }) {
   const deliveryAlbums = sortAlbums(albums.filter((a) => isDeliveryPhase(a)));
   const selectionAlbums = sortAlbums(albums.filter((a) => !isDeliveryPhase(a)));
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
@@ -138,7 +138,7 @@ function AlbumTabs({ albums, canDelivery, canWatermark, studioHost }: { albums: 
     // và lệch tỉ lệ so với ảnh bìa. Bậc thang xuống 4 · 3 · 2 · 1 theo bề ngang.
     <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 min-[820px]:grid-cols-3 min-[1060px]:grid-cols-4 min-[1320px]:grid-cols-5">
       {rows.map((a) => (
-        <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} studioHost={studioHost} />
+        <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} canFaceSearch={canFaceSearch} studioHost={studioHost} />
       ))}
     </div>
   );
@@ -217,7 +217,7 @@ function AlbumTabs({ albums, canDelivery, canWatermark, studioHost }: { albums: 
  * phụ (ảnh · đã chọn), thanh tiến độ chọn ảnh, rồi chân thẻ ghi trạng thái
  * watermark / xuất bản và nút ba chấm mở bảng bật-tắt nhanh.
  */
-function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = null }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean; studioHost?: string | null }) {
+function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean; canFaceSearch?: boolean; studioHost?: string | null }) {
   const { t } = useLang();
   const supabase = createClient();
   const [menu, setMenu] = useState(false);
@@ -235,7 +235,7 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
   // Chỉ đọc KHI MỞ MENU, không đọc cho cả trang: thư viện có thể vài trăm album,
   // và con số này chỉ cần đúng lúc studio đang nhìn vào một album cụ thể.
   useEffect(() => {
-    if (!menu || faceCount !== null) return;
+    if (!menu || faceCount !== null || !canFaceSearch) return;
     let alive = true;
     void supabase
       .from("album_people")
@@ -251,7 +251,7 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
     return () => {
       alive = false;
     };
-  }, [menu, faceCount, supabase, a.id]);
+  }, [menu, faceCount, supabase, a.id, canFaceSearch]);
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Đóng menu bật/tắt nhanh khi nhấp RA NGOÀI card (card khác hoặc vùng trang) —
@@ -450,14 +450,20 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, studioHost = nu
                 hay đã gom mà chưa hiện ra cho khách. Không có nó thì "khách
                 không thấy tìm theo khuôn mặt" là một câu không ai trả lời được
                 mà không mở DB ra xem. */}
+            {/* Gói không có tính năng thì phải NÓI RA ở đúng dòng này. Bỏ trống
+                hay để nguyên "chưa gom" là tái lập đúng câu hỏi mà dòng chữ này
+                được dựng để dẹp: studio đi quét, đi chạy SQL, đi chờ cron, mà
+                nguyên nhân thật nằm ở gói và không chỗ nào nói. */}
             <p className="mt-1.5 text-center text-[11.5px]" style={{ color: "var(--tx3)" }}>
-              {faceCount === null
-                ? "Khuôn mặt: đang xem…"
-                : faceCount === -1
-                  ? "Khuôn mặt: chưa bật — cần chạy supabase/cap-nhat.sql"
-                  : faceCount === 0
-                    ? "Khuôn mặt: chưa gom — khách chưa tìm được theo mặt"
-                    : `Khuôn mặt: đã gom ${faceCount} người`}
+              {!canFaceSearch
+                ? "Khuôn mặt: gói Photographer Plus / Studio mới có"
+                : faceCount === null
+                  ? "Khuôn mặt: đang xem…"
+                  : faceCount === -1
+                    ? "Khuôn mặt: chưa bật — cần chạy supabase/cap-nhat.sql"
+                    : faceCount === 0
+                      ? "Khuôn mặt: chưa gom — khách chưa tìm được theo mặt"
+                      : `Khuôn mặt: đã gom ${faceCount} người`}
             </p>
             <div className="mt-2 flex gap-2">
               <Link href={`/dashboard/albums/${a.id}`} className="flex-1 rounded-[9px] py-2 text-center text-[12px] font-semibold" style={{ border: "1px solid var(--bd)" }}>

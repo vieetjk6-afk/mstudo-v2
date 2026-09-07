@@ -5,7 +5,8 @@ import { fetchAllPhotos } from "@/lib/photos";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { pickFolderLinks } from "@/lib/album-original";
 import { faceChips } from "@/lib/face-people";
-import { dangQuet } from "@/lib/face-pending";
+import { tienDoQuet } from "@/lib/face-pending";
+import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -56,11 +57,18 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   // CẢ album. Cùng quy tắc quyền với src/app/a/[slug]/page.tsx.
   const { data: owner } = await admin
     .from("profiles")
-    .select("role, can_zip")
+    .select("role, can_zip, plan, plan_expires_at")
     .eq("id", album.owner_id)
     .maybeSingle();
   const allowDownload =
     (owner?.role === "admin" || !!owner?.can_zip) && album.download_enabled !== false;
+  // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Phải chốt ở ĐÂY nữa,
+  // không chỉ ở trang: album CÓ MẬT KHẨU nhận toàn bộ khuôn mặt qua route này,
+  // nên bỏ sót chỗ này là để ngỏ đúng những album mà trang chưa gửi gì.
+  const canFaceSearch = planAllowsFaceSearch(
+    effectivePlan(owner?.plan as Plan, owner?.plan_expires_at),
+    owner?.role === "admin",
+  );
   const driveFolders = allowDownload
     ? pickFolderLinks((sources ?? []).filter((x) => x.stage !== "delivery"))
     : [];
@@ -89,7 +97,9 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   for (const s of sel ?? []) if (s.client_note) notes[s.photo_id] = s.client_note;
   for (const d of dis ?? []) if (d.client_note) notes[d.photo_id] = d.client_note;
 
-  const people = faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id)));
+  const people = canFaceSearch
+    ? faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id)))
+    : [];
 
   return NextResponse.json({
     photos: photos ?? [],
@@ -99,8 +109,8 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     disliked,
     notes,
     people,
-    // Chưa có mặt nào: phân biệt "máy chủ đang quét" với "quét rồi mà album
-    // không có mặt người" — hai câu trả lời rất khác nhau cho khách.
-    facePreparing: people.length === 0 ? await dangQuet(admin, album.id) : false,
+    // Chưa có mặt nào: phân biệt "máy chủ đang quét tới đâu" với "quét rồi mà
+    // album không có mặt người" — hai câu trả lời rất khác nhau cho khách.
+    faceScan: canFaceSearch && people.length === 0 ? await tienDoQuet(admin, album.id) : null,
   });
 }

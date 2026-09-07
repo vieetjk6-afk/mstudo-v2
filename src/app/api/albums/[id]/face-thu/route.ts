@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { fetchThumb, loadNets, modelDir, scanJpeg, wasmDir } from "@/lib/face-node";
 import { pendingRows, type ScanRow } from "@/lib/face-scan-server";
+import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,7 +45,7 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const { data: own } = await supabase.from("albums").select("id").eq("id", params.id).maybeSingle();
+  const { data: own } = await supabase.from("albums").select("id, owner_id").eq("id", params.id).maybeSingle();
   if (!own) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);
@@ -57,6 +58,20 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     // che mất nguyên nhân thật.
     coTrongSo: !!modelDir(),
     coFileWasm: !!wasmDir(),
+    /*
+     * Cổng gói được BÁO CÁO ở đây, không phải chặn ở đây — có chủ ý.
+     *
+     * Route này không ghi gì và không quét cả album: nó đo xem trọng số có đi
+     * theo gói triển khai, một ảnh mất bao lâu, bộ dò có tìm ra mặt trên ảnh
+     * thật. Ba câu đó nói về BẢN TRIỂN KHAI, không nói về gói của studio. Chặn
+     * theo gói ở đây chỉ đạt một việc: lấy đi đúng công cụ trả lời "tại sao
+     * không thấy gì", ngay lúc cần nó nhất, mà không giữ lại đồng nào — vì
+     * không dòng khuôn mặt nào được ghi và không chip nào hiện ra.
+     *
+     * Nói thẳng ra thì hơn: có gói không, và nếu không thì cron sẽ bỏ qua album
+     * này dù mọi số đo bên dưới đều đẹp.
+     */
+    goiChoTimMat: await chuAlbumDuocTimMat(db, own.owner_id),
   };
   if (!out.coTrongSo || !out.coFileWasm) {
     out.loi = "thieu_file_mo_hinh_tren_may_chu";

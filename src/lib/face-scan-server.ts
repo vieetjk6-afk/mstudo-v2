@@ -3,6 +3,7 @@
 import { fetchThumb, scanJpeg } from "./face-node";
 import { fetchAllPhotos } from "./photos";
 import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, type Person } from "./face-group";
+import { effectivePlan, planAllowsFaceSearch, type Plan } from "./plans";
 
 /**
  * QUÉT KHUÔN MẶT CHO CẢ ALBUM — chạy trên máy chủ, không cần ai mở trình duyệt.
@@ -433,17 +434,47 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
  * Không dính trần 1000 dòng, và album vừa tạo được quét trước — đúng thứ tự mà
  * studio cần.
  */
+
+/**
+ * LỌC THEO GÓI — chỉ giữ album của chủ được dùng tìm ảnh theo khuôn mặt.
+ *
+ * Đặt ở TẦNG CHỌN ALBUM chứ không ở tầng hiển thị, vì đây là chốt tiêu tiền:
+ * quét một album 800 ảnh tốn ~11 phút CPU máy chủ. Chặn ở trang khách thì CPU
+ * đã tiêu xong rồi mới chặn — vô nghĩa.
+ *
+ * Một câu truy vấn cho cả lô chủ sở hữu, không phải mỗi album một câu.
+ */
+async function chuDuocDungTimMat(db: any, ownerIds: string[]): Promise<Set<string>> {
+  const uniq = [...new Set(ownerIds.filter(Boolean))];
+  if (uniq.length === 0) return new Set();
+  const { data, error } = await db
+    .from("profiles")
+    .select("id, plan, plan_expires_at, role")
+    .in("id", uniq);
+  // Hỏng thì trả về TẬP RỖNG, không phải "cho qua hết". Không đo được quyền thì
+  // đừng tiêu CPU — thà chậm một lượt cron còn hơn quét cho gói không được dùng.
+  if (error) throw new Error(`doc_goi_chu_album_that_bai: ${error.message}`);
+  const ok = new Set<string>();
+  for (const r of (data ?? []) as { id: string; plan: Plan | null; plan_expires_at: string | null; role: string | null }[]) {
+    if (planAllowsFaceSearch(effectivePlan(r.plan, r.plan_expires_at), r.role === "admin")) ok.add(r.id);
+  }
+  return ok;
+}
+
 export async function albumsNeedingScan(db: any, limit = 5): Promise<{ id: string; pending: number }[]> {
   const { data: albums, error } = await db
     .from("albums")
-    .select("id")
+    .select("id, owner_id")
     .eq("status", "published")
     .order("created_at", { ascending: false })
     .limit(120);
   if (error) throw new Error(`tim_album_can_quet_that_bai: ${error.message}`);
 
   const out: { id: string; pending: number }[] = [];
-  const ids = ((albums ?? []) as { id: string }[]).map((a) => a.id);
+  const rows = (albums ?? []) as { id: string; owner_id: string }[];
+  // Chỉ giữ album của chủ ĐỦ GÓI — xem chuDuocDungTimMat.
+  const duocDung = await chuDuocDungTimMat(db, rows.map((a) => a.owner_id));
+  const ids = rows.filter((a) => duocDung.has(a.owner_id)).map((a) => a.id);
   // Hỏi theo lô 8 câu song song: tuần tự thì 120 lượt gọi ăn hết hạn thời gian
   // trước khi quét được tấm nào.
   for (let i = 0; i < ids.length && out.length < limit; i += 8) {
@@ -476,13 +507,18 @@ export async function albumsNeedingScan(db: any, limit = 5): Promise<{ id: strin
 export async function albumsNeedingCluster(db: any, limit = 5): Promise<string[]> {
   const { data, error } = await db
     .from("albums")
-    .select("id")
+    .select("id, owner_id")
     .eq("status", "published")
     .is("faces_clustered_at", null)
     // Mới nhất trước, cùng luật với `albumsNeedingScan`. Không có `order` thì
     // PostgREST trả về theo thứ tự vật lý — cùng ba album ở mọi lượt.
     .order("created_at", { ascending: false })
-    .limit(limit);
+    // Lấy dư rồi mới lọc theo gói: lọc sau `limit` thì một lô toàn album của
+    // gói thấp sẽ ra danh sách rỗng, và album đủ gói phía sau không bao giờ
+    // tới lượt gom.
+    .limit(Math.max(limit * 8, 40));
   if (error) throw new Error(`tim_album_can_gom_that_bai: ${error.message}`);
-  return ((data ?? []) as { id: string }[]).map((a) => a.id);
+  const rows = (data ?? []) as { id: string; owner_id: string }[];
+  const duocDung = await chuDuocDungTimMat(db, rows.map((a) => a.owner_id));
+  return rows.filter((a) => duocDung.has(a.owner_id)).slice(0, limit).map((a) => a.id);
 }

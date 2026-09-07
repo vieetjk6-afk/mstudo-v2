@@ -21,6 +21,7 @@ import AiCompareDemo from "./AiCompareDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
 import FaceFinderDemo from "./FaceFinderDemo";
+import FaceScanProgressDemo from "./FaceScanProgressDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
 import * as f from "./fixtures";
@@ -57,6 +58,10 @@ export const SCREENS: Record<
   "loc-theo-nguoi": {
     title: "Album khách — tìm ảnh theo khuôn mặt (dữ liệu giả)",
     render: () => <FaceFinderDemo />,
+  },
+  "dang-quet-mat": {
+    title: "Album khách — đang quét khuôn mặt dở (tiến độ thật)",
+    render: () => <FaceScanProgressDemo />,
   },
   "bao-chua-chay-sql": {
     title: "Bảng điều khiển — báo chưa bật được tìm theo khuôn mặt",

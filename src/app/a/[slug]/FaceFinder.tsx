@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { ScanFace, Upload, X } from "lucide-react";
 import { thumbnailUrl } from "@/lib/drive";
 import { faceCrop, type PersonChip } from "@/lib/face-people";
+import { conDangQuet, type TienDoQuet } from "@/lib/face-pending";
 import { useLang } from "@/lib/i18n";
 
 /**
@@ -39,7 +40,7 @@ export default function FaceFinder({
   driveIdOf,
   slug,
   password = "",
-  preparing = false,
+  scan = null,
 }: {
   people: PersonChip[];
   activeId: string | null;
@@ -50,8 +51,11 @@ export default function FaceFinder({
   slug: string;
   /** Mật khẩu album (nếu có): route so mặt đi qua đúng cánh cửa như ảnh. */
   password?: string;
-  /** Máy chủ còn đang quét album này — nói ra thay vì hiện một khoảng trống. */
-  preparing?: boolean;
+  /**
+   * Tiến độ quét của máy chủ (@/lib/face-pending), hoặc null khi không có gì
+   * đang chạy — kể cả khi gói của studio không mở tính năng này.
+   */
+  scan?: TienDoQuet | null;
 }) {
   const { t } = useLang();
   const [expanded, setExpanded] = useState(false);
@@ -141,10 +145,11 @@ export default function FaceFinder({
   // không thấy mặt nào thì thôi, ẩn hẳn. Trả về `null` cho cả hai — như bản
   // trước — chính là thứ khiến studio nhìn album và kết luận "không có tính năng".
   if (people.length === 0) {
-    if (!preparing) return null;
+    if (!scan || !conDangQuet(scan)) return null;
     return (
       <p className="mt-4 flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--text3)" }}>
-        <ScanFace size={14} style={{ color: "var(--accent)" }} /> {t("facePreparing")}
+        <ScanFace size={14} style={{ color: "var(--accent)" }} />{" "}
+        {t("facePreparing").replace("{n}", String(scan.daQuet)).replace("{m}", String(scan.tong))}
       </p>
     );
   }

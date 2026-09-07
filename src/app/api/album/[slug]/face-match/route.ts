@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { scanJpeg } from "@/lib/face-node";
 import { nearestPerson } from "@/lib/face-group";
 import { limitByIpDurable } from "@/lib/rate-limit";
+import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -37,11 +38,20 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   const admin = createAdminClient();
   const { data: album } = await admin
     .from("albums")
-    .select("id, status, password_hash, gallery_pinned")
+    .select("id, owner_id, status, password_hash, gallery_pinned")
     .eq("slug", params.slug)
     .single();
   if (!album || album.status !== "published") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Chặn TRƯỚC khi đọc
+  // form và trước khi chạm vào bộ nhận diện — đây là đường duy nhất khách làm
+  // máy chủ tiêu CPU của TensorFlow, nên nó cũng là đường duy nhất mà bỏ sót
+  // cổng gói vừa mất tiền vừa mất ý nghĩa của gói. Giao diện đã ẩn hẳn ô này với
+  // gói không đủ, nên tới được đây là gọi trực tiếp.
+  if (!(await chuAlbumDuocTimMat(admin, album.owner_id))) {
+    return NextResponse.json({ error: "goi_khong_co_tinh_nang" }, { status: 403 });
   }
 
   let form: FormData;

@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { effectivePlan, planAllowsDelivery, planAllowsWatermark, type Plan } from "@/lib/plans";
+import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { fetchAllPhotos } from "@/lib/photos";
 import CustomerAlbum from "./CustomerAlbum";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
@@ -11,7 +11,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { faceChips, type PersonChip } from "@/lib/face-people";
-import { dangQuet } from "@/lib/face-pending";
+import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 import { MAIN_HOST } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
@@ -86,13 +86,13 @@ export default async function PublicAlbumPage(
   // owners don't get delivery, so their albums stay on the selection view even
   // if a stale phase value says otherwise.
   if (album && album.phase === "delivery") {
-    const { data: ownerPlan } = await admin
+    const { data: ownerRow } = await admin
       .from("profiles")
       .select("plan, plan_expires_at, role")
       .eq("id", album.owner_id)
       .maybeSingle();
-    const ownerIsAdmin = ownerPlan?.role === "admin";
-    const ownerEffective = ownerPlan ? effectivePlan(ownerPlan.plan, ownerPlan.plan_expires_at) : "free";
+    const ownerIsAdmin = ownerRow?.role === "admin";
+    const ownerEffective = ownerRow ? effectivePlan(ownerRow.plan, ownerRow.plan_expires_at) : "free";
     if (planAllowsDelivery(ownerEffective, ownerIsAdmin)) {
       redirect(`/album/${params.slug}`);
     }
@@ -151,10 +151,13 @@ export default async function PublicAlbumPage(
   // Watermark: chỉ Photographer Plus & Studio. Chốt phía server để album bật từ
   // trước, hoặc của gói đã hết hạn, tự thôi watermark — ảnh không watermark mới
   // tải thẳng từ Drive được.
-  const canWatermark = planAllowsWatermark(
-    effectivePlan(owner?.plan as Plan, owner?.plan_expires_at),
-    isAdminOwner,
-  );
+  const ownerPlan = effectivePlan(owner?.plan as Plan, owner?.plan_expires_at);
+  const canWatermark = planAllowsWatermark(ownerPlan, isAdminOwner);
+  // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Chốt ở ĐÂY, không
+  // chỉ ở bộ quét: album của gói đã hạ hoặc đã hết hạn vẫn còn nguyên khuôn mặt
+  // gom từ trước trong DB, nên nếu chỉ chặn bộ quét thì ô tìm mặt vẫn hiện và
+  // vẫn bấm được — tính năng của gói cao tiếp tục dùng free.
+  const canFaceSearch = planAllowsFaceSearch(ownerPlan, isAdminOwner);
 
   let photos = null;
   let sources = null;
@@ -165,9 +168,9 @@ export default async function PublicAlbumPage(
   let disliked: string[] = [];
   const notes: Record<string, string> = {};
   let people: PersonChip[] = [];
-  // Máy chủ còn đang quét → khối tìm theo khuôn mặt nói "đang chuẩn bị" thay
-  // vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
-  let facePreparing = false;
+  // Máy chủ còn đang quét → khối tìm theo khuôn mặt nói ĐÃ QUÉT BAO NHIÊU/BAO
+  // NHIÊU thay vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
+  let faceScan: TienDoQuet | null = null;
   if (!hasPassword) {
     const [p, { data: s }, { data: sel }, { data: dis }, { data: ppl }, { data: pplLinks }] =
       await Promise.all([
@@ -222,8 +225,8 @@ export default async function PublicAlbumPage(
     // Chỉ những ảnh THẬT SỰ hiện trong lưới: album giao khách / album chọn ảnh
     // lọc theo source, nên một chip trỏ vào ảnh không hiện là một chip bấm vào
     // ra lưới trống.
-    people = faceChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id)));
-    if (people.length === 0) facePreparing = await dangQuet(admin, album.id);
+    people = canFaceSearch ? faceChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id))) : [];
+    if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
   }
 
   return (
@@ -249,7 +252,7 @@ export default async function PublicAlbumPage(
       shareIds={shareIds}
       initialDriveFolders={driveFolders}
       initialPeople={people}
-      facePreparing={facePreparing}
+      faceScan={faceScan}
       studioName={studioName}
       logoUrl={brand.logoUrl}
       studioHost={studioHost}

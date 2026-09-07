@@ -6,7 +6,8 @@ import { getOriginalFolders } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { faceChips } from "@/lib/face-people";
-import { dangQuet } from "@/lib/face-pending";
+import { tienDoQuet } from "@/lib/face-pending";
+import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
 
   const { data: album } = await admin
     .from("albums")
-    .select("id, status, is_gallery, phase, password_hash, gallery_pinned")
+    .select("id, owner_id, status, is_gallery, phase, password_hash, gallery_pinned")
     .eq("slug", params.slug)
     .single();
 
@@ -67,14 +68,24 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
 
   // Khuôn mặt studio đã gom — album có mật khẩu thì trang chưa gửi gì trước khi
   // mở khoá, nên phải trả về ở đây. `select("*")`: cover_box là cột thêm sau.
-  const [{ data: ppl }, { data: pplLinks }] = await Promise.all([
+  const [{ data: ppl }, { data: pplLinks }, { data: owner }] = await Promise.all([
     admin.from("album_people").select("*").eq("album_id", album.id).order("position"),
     admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
+    admin.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle(),
   ]);
-  const people = faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p: { id: string }) => p.id)));
-  // Chưa có mặt nào: phân biệt "máy chủ đang quét" với "quét rồi, album không có
-  // mặt người". Trang chỉ hiện câu hẹn khách quay lại ở trường hợp đầu.
-  const facePreparing = people.length === 0 ? await dangQuet(admin, album.id) : false;
+  // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Phải chốt ở ĐÂY nữa,
+  // không chỉ ở trang: gallery CÓ MẬT KHẨU nhận toàn bộ khuôn mặt qua route này,
+  // nên bỏ sót chỗ này là để ngỏ đúng những album mà trang chưa gửi gì.
+  const canFaceSearch = planAllowsFaceSearch(
+    effectivePlan(owner?.plan as Plan, owner?.plan_expires_at),
+    owner?.role === "admin",
+  );
+  const people = canFaceSearch
+    ? faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p: { id: string }) => p.id)))
+    : [];
+  // Chưa có mặt nào: phân biệt "máy chủ đang quét tới đâu" với "quét rồi, album
+  // không có mặt người". Chỉ trường hợp đầu mới hiện tiến độ cho khách.
+  const faceScan = canFaceSearch && people.length === 0 ? await tienDoQuet(admin, album.id) : null;
 
-  return NextResponse.json({ photos, sources, driveFolders, originalFolders, people, facePreparing });
+  return NextResponse.json({ photos, sources, driveFolders, originalFolders, people, faceScan });
 }
