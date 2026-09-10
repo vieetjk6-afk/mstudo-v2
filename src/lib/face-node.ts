@@ -229,12 +229,36 @@ export async function scanJpeg(bytes: Uint8Array): Promise<ServerFace[]> {
 const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
-export async function fetchThumb(driveId: string, width = SCAN_WIDTH): Promise<Uint8Array | null> {
+/**
+ * Kết quả tải một ảnh — kèm LÝ DO khi không tải được.
+ *
+ * Vì sao không chỉ trả `Uint8Array | null`: `null` gộp NĂM nguyên nhân khác nhau
+ * làm một, và chúng cần năm cách sửa khác nhau:
+ *
+ *   • http-403 / http-404  → file chưa chia sẻ công khai, hoặc đã xoá khỏi Drive
+ *   • http-429             → Google chặn vì gọi quá nhiều, phải giãn nhịp
+ *   • khong-phai-anh       → Drive trả trang HTML (thường là trang xin quyền)
+ *   • anh-giu-cho          → dưới 512 byte, file chưa xử lý xong bên Drive
+ *   • khong-phai-jpeg      → PNG; bỏ qua được, KHÔNG phải lỗi hạ tầng
+ *   • het-gio / mang-loi   → mạng
+ *
+ * Cái giá của việc gộp đã trả bằng tiền thật: log production 18:31 ngày 10/09 in
+ * "lỗi tải 54 · lỗi mẫu: khong_tai_duoc_anh" tám lượt liền, ba album, 100% tấm
+ * hỏng — biết là Drive từ chối, mà không biết Google từ chối bằng câu gì, nên
+ * không biết phải sửa quyền chia sẻ, giãn nhịp gọi, hay chờ Drive xử lý xong.
+ */
+export type KetQuaTai = { bytes: Uint8Array; lyDo: null } | { bytes: null; lyDo: string };
+
+export async function fetchThumbChiTiet(driveId: string, width = SCAN_WIDTH): Promise<KetQuaTai> {
   const sources = [
     `https://drive.google.com/thumbnail?id=${driveId}&sz=w${width}`,
     `https://lh3.googleusercontent.com/d/${driveId}=w${width}`,
   ];
-  for (const url of sources) {
+  // Lý do của nguồn ĐẦU TIÊN: nguồn hai là bản dự phòng, và khi cả hai đều hỏng
+  // thì câu trả lời hữu ích là câu của đường chính.
+  let lyDo = "khong-thu-duoc-nguon-nao";
+  for (const [i, url] of sources.entries()) {
+    let ly: string;
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 12_000);
@@ -245,17 +269,26 @@ export async function fetchThumb(driveId: string, width = SCAN_WIDTH): Promise<U
         signal: ctrl.signal,
       }).finally(() => clearTimeout(timer));
       const ct = res.headers.get("content-type") ?? "";
-      if (!res.ok || !ct.startsWith("image/")) continue;
-      const buf = new Uint8Array(await res.arrayBuffer());
-      // Dưới 512 byte là ảnh giữ chỗ của Drive, không phải ảnh thật.
-      if (buf.length < 512) continue;
-      // jpeg-js CHỈ đọc JPEG. Drive trả PNG cho vài loại file (ảnh trong suốt,
-      // poster video) — bỏ qua thay vì để bộ giải mã ném lỗi khó hiểu.
-      if (!(buf[0] === 0xff && buf[1] === 0xd8)) continue;
-      return buf;
-    } catch {
-      /* thử nguồn kế tiếp */
+      if (!res.ok) ly = `http-${res.status}`;
+      else if (!ct.startsWith("image/")) ly = `khong-phai-anh (${ct.split(";")[0] || "khong co content-type"})`;
+      else {
+        const buf = new Uint8Array(await res.arrayBuffer());
+        // Dưới 512 byte là ảnh giữ chỗ của Drive, không phải ảnh thật.
+        if (buf.length < 512) ly = `anh-giu-cho (${buf.length} byte)`;
+        // jpeg-js CHỈ đọc JPEG. Drive trả PNG cho vài loại file (ảnh trong suốt,
+        // poster video) — bỏ qua thay vì để bộ giải mã ném lỗi khó hiểu.
+        else if (!(buf[0] === 0xff && buf[1] === 0xd8)) ly = "khong-phai-jpeg";
+        else return { bytes: buf, lyDo: null };
+      }
+    } catch (e) {
+      ly = e instanceof Error && e.name === "AbortError" ? "het-gio (12s)" : `mang-loi: ${e instanceof Error ? e.message : String(e)}`;
     }
+    if (i === 0) lyDo = ly;
   }
-  return null;
+  return { bytes: null, lyDo };
+}
+
+/** Bản gọn cho những chỗ chỉ cần "có ảnh hay không". */
+export async function fetchThumb(driveId: string, width = SCAN_WIDTH): Promise<Uint8Array | null> {
+  return (await fetchThumbChiTiet(driveId, width)).bytes;
 }

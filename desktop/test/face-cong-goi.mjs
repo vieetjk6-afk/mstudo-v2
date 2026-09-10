@@ -324,6 +324,78 @@ for (const [ten, chay] of [
   ok("mẫu số không chứa tấm nào vòng quét không chạm tới", td.tong - td.daQuet === pendingRows(lanLon).length);
 }
 
+/* ── 6c. Vì sao Drive từ chối — năm nguyên nhân, năm cách sửa ───────────────
+ * Log production 18:31 ngày 10/09 in "lỗi tải 54 · lỗi mẫu: khong_tai_duoc_anh"
+ * tám lượt liền, ba album, 100% tấm hỏng. Biết là Drive từ chối, mà KHÔNG biết
+ * Google từ chối bằng câu gì — trong khi chính câu đó quyết định phải sửa quyền
+ * chia sẻ Drive, giãn nhịp gọi, hay chờ Drive xử lý xong file.
+ *
+ * `fetchThumbChiTiet` gọi mạng thật nên không kiểm được ở đây; bài này kiểm phần
+ * PHÂN LOẠI — chạy code thật với `fetch` thay thế.
+ */
+{
+  const { fetchThumbChiTiet } = await import("../../src/lib/face-node.ts");
+  const goc = globalThis.fetch;
+
+  const gia = (than) => {
+    globalThis.fetch = async () => than();
+  };
+  const jpegThat = () => {
+    const b = new Uint8Array(600);
+    b[0] = 0xff;
+    b[1] = 0xd8;
+    return b;
+  };
+  const traVe = ({ status = 200, ct = "image/jpeg", body = jpegThat() }) => ({
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (k) => (k.toLowerCase() === "content-type" ? ct : null) },
+    arrayBuffer: async () => body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength),
+  });
+
+  const truong = [
+    ["ảnh JPEG thật → tải được", { }, null],
+    ["file chưa chia sẻ công khai → http-403", { status: 403 }, "http-403"],
+    ["file đã xoá khỏi Drive → http-404", { status: 404 }, "http-404"],
+    ["Google chặn vì gọi quá nhiều → http-429", { status: 429 }, "http-429"],
+    ["Drive trả trang xin quyền → khong-phai-anh", { ct: "text/html" }, "khong-phai-anh (text/html)"],
+    ["ảnh giữ chỗ của Drive → anh-giu-cho", { body: jpegThat().slice(0, 100) }, "anh-giu-cho (100 byte)"],
+    ["PNG (bỏ qua được) → khong-phai-jpeg", { body: new Uint8Array(600) }, "khong-phai-jpeg"],
+  ];
+  for (const [ten, opt, canLyDo] of truong) {
+    gia(() => traVe(opt));
+    const r = await fetchThumbChiTiet("id-gia", 200);
+    if (canLyDo === null) ok(ten, r.bytes !== null && r.lyDo === null, JSON.stringify(r.lyDo));
+    else check(ten, r.lyDo, canLyDo);
+  }
+
+  gia(() => {
+    const e = new Error("The operation was aborted");
+    e.name = "AbortError";
+    throw e;
+  });
+  check("mạng treo 12 giây → het-gio", (await fetchThumbChiTiet("id-gia", 200)).lyDo, "het-gio (12s)");
+
+  gia(() => {
+    throw new Error("getaddrinfo ENOTFOUND");
+  });
+  ok(
+    "mạng lỗi → mang-loi kèm câu của hệ thống",
+    /^mang-loi: getaddrinfo ENOTFOUND/.test((await fetchThumbChiTiet("id-gia", 200)).lyDo)
+  );
+
+  // Năm nguyên nhân phải cho ra năm câu KHÁC nhau — gộp lại là quay về đúng chỗ mù.
+  const lyDos = [];
+  for (const [, opt, canLyDo] of truong) {
+    if (canLyDo === null) continue;
+    gia(() => traVe(opt));
+    lyDos.push((await fetchThumbChiTiet("id-gia", 200)).lyDo);
+  }
+  ok(`mỗi nguyên nhân một câu riêng (${lyDos.length} câu)`, new Set(lyDos).size === lyDos.length, lyDos.join(" | "));
+
+  globalThis.fetch = goc;
+}
+
 /* ── 7. Không đường nào vào tính năng được bỏ sót cổng ──────────────────────
  * Bốn bài trên kiểm code ĐANG CÓ. Bài này kiểm code SẼ VIẾT: quét cây src/app,
  * tìm mọi file chạm vào dữ liệu khuôn mặt, và đòi mỗi file phải nhắc tới cổng

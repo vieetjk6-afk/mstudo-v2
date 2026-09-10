@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { fetchThumb, scanJpeg } from "./face-node";
+import { fetchThumbChiTiet, scanJpeg, type KetQuaTai } from "./face-node";
 import { fetchAllPhotos } from "./photos";
 import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, type Person } from "./face-group";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "./plans";
@@ -250,10 +250,32 @@ export async function scanAlbum(
    * bộ nhớ cùng lúc, mà lợi thì không thêm — nhận diện vẫn là khâu chậm nhất và
    * nó chỉ chạy được một ảnh một lúc.
    */
-  const taiAnh = opts._tai ?? fetchThumb;
   const quetAnh = opts._quet ?? scanJpeg;
-  const tai = (p?: ScanRow) => (p ? taiAnh(p.drive_file_id).catch(() => null) : Promise.resolve(null));
-  let cho: Promise<Uint8Array | null> = tai(todo[0]);
+  /*
+   * Cửa thay đồ nghề của kiểm thử trả `Uint8Array | null` — giữ nguyên chữ ký đó
+   * (đổi là phải sửa cả face-ghi-khong-an.mjs vì một chuyện không liên quan) và
+   * bọc lại thành hình dạng có lý do.
+   */
+  const taiAnh: (id: string) => Promise<KetQuaTai> = opts._tai
+    ? async (id) => {
+        const b = await opts._tai!(id);
+        return b ? { bytes: b, lyDo: null } : { bytes: null, lyDo: "khong-tai-duoc (bản kiểm thử)" };
+      }
+    : fetchThumbChiTiet;
+  /*
+   * `.catch()` KHÔNG được nuốt câu lỗi. Bản trước là `.catch(() => null)`, và đó
+   * là mắt cuối cùng của chuỗi làm mù: log nói "lỗi tải 54" nhưng Google từ chối
+   * bằng câu gì thì mất sạch — mà chính câu đó quyết định phải sửa quyền chia sẻ
+   * Drive, giãn nhịp gọi, hay chờ Drive xử lý xong file.
+   */
+  const tai = (p?: ScanRow): Promise<KetQuaTai> =>
+    p
+      ? taiAnh(p.drive_file_id).catch((e) => ({
+          bytes: null as null,
+          lyDo: `tai-nem-loi: ${e instanceof Error ? e.message : String(e)}`,
+        }))
+      : Promise.resolve({ bytes: null, lyDo: "khong-co-anh" });
+  let cho: Promise<KetQuaTai> = tai(todo[0]);
 
   for (let i = 0; i < todo.length; i++) {
     const p = todo[i];
@@ -269,8 +291,10 @@ export async function scanAlbum(
     // Khởi động lượt tải kế TRƯỚC khi nhận diện tấm này — đó là toàn bộ mẹo.
     cho = tai(todo[i + 1]);
     try {
-      const bytes = await bytesCho;
-      if (!bytes) throw new Error("khong_tai_duoc_anh");
+      const { bytes, lyDo } = await bytesCho;
+      // Câu lỗi mang theo LÝ DO của Drive (http-403, khong-phai-anh, anh-giu-cho…)
+      // chứ không phải một chữ "khong_tai_duoc_anh" chung cho năm nguyên nhân.
+      if (!bytes) throw new Error(`khong_tai_duoc_anh: ${lyDo}`);
       const found = await quetAnh(bytes);
       found.forEach((f, at) => {
         faceRows.push({

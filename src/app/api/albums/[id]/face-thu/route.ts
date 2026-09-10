@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
-import { fetchThumb, loadNets, modelDir, scanJpeg, wasmDir } from "@/lib/face-node";
+import { fetchThumbChiTiet, loadNets, modelDir, scanJpeg, wasmDir } from "@/lib/face-node";
 import { pendingRows, type ScanRow } from "@/lib/face-scan-server";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 
@@ -105,10 +105,13 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     if (Date.now() - t0 > HAN_MS) break;
     const t = Date.now();
     try {
-      const bytes = await fetchThumb(p.drive_file_id);
+      const { bytes, lyDo } = await fetchThumbChiTiet(p.drive_file_id);
       const tTai = Date.now() - t;
       if (!bytes) {
-        anh.push({ ten: p.name, loi: "khong_tai_duoc_anh_tu_drive", taiMs: tTai });
+        // `lyDo` là câu Google trả về (http-403, khong-phai-anh, anh-giu-cho…).
+        // Không có nó thì màn chẩn đoán chỉ nói "không tải được" — đúng nhưng
+        // vô dụng, vì năm nguyên nhân cần năm cách sửa khác nhau.
+        anh.push({ ten: p.name, loi: "khong_tai_duoc_anh_tu_drive", lyDo, taiMs: tTai });
         continue;
       }
       const tQuet = Date.now();
