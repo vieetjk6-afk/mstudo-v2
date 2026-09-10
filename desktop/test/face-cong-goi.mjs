@@ -346,6 +346,12 @@ for (const [ten, chay] of [
     b[1] = 0xd8;
     return b;
   };
+  /** Ảnh 600 byte mang đúng chữ ký của một định dạng. */
+  const anhGia = (chuKy) => {
+    const b = new Uint8Array(600);
+    for (let i = 0; i < chuKy.length; i++) if (chuKy[i] !== "_") b[i] = chuKy.charCodeAt(i);
+    return b;
+  };
   const traVe = ({ status = 200, ct = "image/jpeg", body = jpegThat() }) => ({
     ok: status >= 200 && status < 300,
     status,
@@ -360,7 +366,10 @@ for (const [ten, chay] of [
     ["Google chặn vì gọi quá nhiều → http-429", { status: 429 }, "http-429"],
     ["Drive trả trang xin quyền → khong-phai-anh", { ct: "text/html" }, "khong-phai-anh (text/html)"],
     ["ảnh giữ chỗ của Drive → anh-giu-cho", { body: jpegThat().slice(0, 100) }, "anh-giu-cho (100 byte)"],
-    ["PNG (bỏ qua được) → khong-phai-jpeg", { body: new Uint8Array(600) }, "khong-phai-jpeg"],
+    ["WebP (Google thương lượng) → gọi tên webp", { body: anhGia("RIFF____WEBPVP8 ") }, "khong-phai-jpeg (webp)"],
+    ["PNG → gọi tên png", { body: anhGia("\x89PNG\r\n\x1a\n") }, "khong-phai-jpeg (png)"],
+    ["HEIC (ảnh iPhone) → gọi tên heic", { body: anhGia("____ftypheic") }, "khong-phai-jpeg (heic)"],
+    ["định dạng lạ → in mấy byte đầu", { body: anhGia("\x00\x01\x02\x03") }, "khong-phai-jpeg (khong-ro (00 01 02 03))"],
   ];
   for (const [ten, opt, canLyDo] of truong) {
     gia(() => traVe(opt));
@@ -392,6 +401,21 @@ for (const [ten, chay] of [
     lyDos.push((await fetchThumbChiTiet("id-gia", 200)).lyDo);
   }
   ok(`mỗi nguyên nhân một câu riêng (${lyDos.length} câu)`, new Set(lyDos).size === lyDos.length, lyDos.join(" | "));
+
+  /*
+   * XIN JPEG TƯỜNG MINH — chính dòng sửa được lỗi. Không có `Accept` thì Google
+   * thấy UA Chrome và trả WebP, và bộ quét bỏ 100% tấm trong im lặng.
+   */
+  {
+    let daGui = null;
+    globalThis.fetch = async (_url, init) => {
+      daGui = init?.headers ?? {};
+      return traVe({});
+    };
+    await fetchThumbChiTiet("id-gia", 200);
+    ok("gửi header Accept xin JPEG", /image\/jpeg/.test(String(daGui?.Accept ?? "")), JSON.stringify(daGui));
+    ok("vẫn giữ User-Agent (Google 403 với UA lạ)", /Mozilla/.test(String(daGui?.["User-Agent"] ?? "")));
+  }
 
   globalThis.fetch = goc;
 }

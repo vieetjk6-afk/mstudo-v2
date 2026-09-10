@@ -230,6 +230,36 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 /**
+ * XIN JPEG MỘT CÁCH TƯỜNG MINH — và đây là một dòng đã tốn cả ngày để tìm ra.
+ *
+ * CDN ảnh của Google thương lượng định dạng theo request. UA ở trên khai là
+ * Chrome, và bản trước KHÔNG gửi `Accept` gì cả — nên Google làm đúng thứ nó
+ * làm cho Chrome từ nhiều năm nay: trả WebP. Ảnh hợp lệ, HTTP 200, đúng
+ * `content-type: image/webp`, trên 512 byte. Chỉ có điều `jpeg-js` không đọc
+ * được WebP, nên bộ quét bỏ 100% tấm.
+ *
+ * Vì sao nó ẩn được lâu: /api/img gửi Y HỆT bộ header này nhưng chỉ CHUYỂN
+ * THẲNG bytes cho trình duyệt, mà trình duyệt đọc WebP tốt. Nên album hiện bình
+ * thường, ảnh sắc nét, không lỗi ở đâu — chỉ riêng bộ quét chết lặng, và triệu
+ * chứng duy nhất là "khách không thấy tìm khuôn mặt".
+ *
+ * Bằng chứng từ log production 18:48 ngày 10/09: `lỗi tải 54 · lỗi mẫu:
+ * khong_tai_duoc_anh: khong-phai-jpeg`, tám lượt liền, ba album, 100% tấm.
+ */
+const ACCEPT_JPEG = "image/jpeg,image/*;q=0.5";
+
+/** Đọc định dạng thật từ mấy byte đầu — để câu lỗi gọi được tên nó. */
+function nhanDangAnh(b: Uint8Array): string {
+  const s = (i: number, str: string) => str.split("").every((c, k) => b[i + k] === c.charCodeAt(0));
+  if (b[0] === 0xff && b[1] === 0xd8) return "jpeg";
+  if (s(0, "RIFF") && s(8, "WEBP")) return "webp";
+  if (b[0] === 0x89 && s(1, "PNG")) return "png";
+  if (s(0, "GIF8")) return "gif";
+  if (s(4, "ftyp")) return s(8, "avif") ? "avif" : s(8, "heic") ? "heic" : "mp4-hoac-heif";
+  return `khong-ro (${[...b.slice(0, 4)].map((x) => x.toString(16).padStart(2, "0")).join(" ")})`;
+}
+
+/**
  * Kết quả tải một ảnh — kèm LÝ DO khi không tải được.
  *
  * Vì sao không chỉ trả `Uint8Array | null`: `null` gộp NĂM nguyên nhân khác nhau
@@ -265,7 +295,7 @@ export async function fetchThumbChiTiet(driveId: string, width = SCAN_WIDTH): Pr
       const res = await fetch(url, {
         cache: "no-store",
         redirect: "follow",
-        headers: { "User-Agent": UA },
+        headers: { "User-Agent": UA, Accept: ACCEPT_JPEG },
         signal: ctrl.signal,
       }).finally(() => clearTimeout(timer));
       const ct = res.headers.get("content-type") ?? "";
@@ -275,9 +305,11 @@ export async function fetchThumbChiTiet(driveId: string, width = SCAN_WIDTH): Pr
         const buf = new Uint8Array(await res.arrayBuffer());
         // Dưới 512 byte là ảnh giữ chỗ của Drive, không phải ảnh thật.
         if (buf.length < 512) ly = `anh-giu-cho (${buf.length} byte)`;
-        // jpeg-js CHỈ đọc JPEG. Drive trả PNG cho vài loại file (ảnh trong suốt,
-        // poster video) — bỏ qua thay vì để bộ giải mã ném lỗi khó hiểu.
-        else if (!(buf[0] === 0xff && buf[1] === 0xd8)) ly = "khong-phai-jpeg";
+        // jpeg-js CHỈ đọc JPEG. GỌI TÊN định dạng thật ra: "khong-phai-jpeg"
+        // trơn là câu đã làm mất một ngày — nó đúng, mà không nói được là WebP
+        // (Google thương lượng, sửa bằng header Accept) hay PNG/HEIC (thuộc tính
+        // của chính file, phải bỏ qua). Hai chuyện đó khác nhau hoàn toàn.
+        else if (!(buf[0] === 0xff && buf[1] === 0xd8)) ly = `khong-phai-jpeg (${nhanDangAnh(buf)})`;
         else return { bytes: buf, lyDo: null };
       }
     } catch (e) {
