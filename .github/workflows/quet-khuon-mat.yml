@@ -58,10 +58,22 @@ jobs:
               exit 1
             fi
             if [ "${ma}" != "200" ]; then
-              # Lỗi thì cần biết vì sao, nhưng chỉ lấy đúng câu lỗi + gợi ý —
-              # không in thân JSON (xem ghi chú "log công khai" ở dưới).
-              ly_do=$(jq -r '[.error, .hint] | map(select(.)) | join(" · ")' /tmp/ra.json 2>/dev/null)
-              echo "::error::App trả ${ma}. ${ly_do:-khong doc duoc than JSON}"
+              # `|| true` KHÔNG phải đề phòng suông — thiếu nó là mất đúng câu
+              # chẩn đoán, đúng lúc cần nhất. jq 1.7 thoát mã 5 khi thân không
+              # phải JSON (trang lỗi HTML của Vercel, hoặc rỗng vì curl hết giờ),
+              # và với `bash -e` thì một phép GÁN từ lệnh hỏng kết thúc script
+              # ngay tại dòng này — trước cả dòng ::error:: bên dưới. Đó là cách
+              # lượt 05:12 ngày 10/09 báo đỏ với đúng một chữ "exit code 5" và
+              # không một manh mối nào: chế độ hỏng tệ nhất lại là chế độ duy
+              # nhất không nói được gì.
+              ly_do=$(jq -r '[.error, .hint] | map(select(.)) | join(" · ")' /tmp/ra.json 2>/dev/null || true)
+              echo "::error::App trả ${ma}. ${ly_do:-thân không phải JSON — gần như chắc là trang lỗi của Vercel, không phải của app}"
+              exit 1
+            fi
+            # 200 mà thân không phải JSON thì mọi câu jq bên dưới đều thoát 5 và
+            # giết script không lời giải thích (xem trên). Chốt một lần ở đây.
+            if ! jq -e . /tmp/ra.json >/dev/null 2>&1; then
+              echo "::error::App trả 200 nhưng thân không phải JSON — gần như chắc là trang lỗi/chuyển hướng của Vercel."
               exit 1
             fi
             # ── LOG CÔNG KHAI — repo này public, ai cũng đọc được log Actions ──
@@ -73,11 +85,33 @@ jobs:
             # Số liệu đầy đủ vẫn xem được — sau khi ĐĂNG NHẬP, ở /api/face-status:
             # từng album, còn bao nhiêu ảnh chưa quét, tìm được bao nhiêu khuôn
             # mặt, gom thành mấy người.
-            jq -r '"  ok · quét \([.reports[]?.scanned // 0]|add) ảnh · xác nhận \([.reports[]?.daXacNhan // 0]|add) mốc · gom \([.reports[]?.clustered // 0]|add) người\(if ([.reports[]?.stoppedBy]|index("ghi-khong-an")) then "  ⚠ CÓ ALBUM GHI KHÔNG ĂN — xem /api/face-status" else "" end)"' /tmp/ra.json
-            # Dừng sớm CHỈ khi thật sự không còn gì. Bản trước chỉ dò chuỗi
-            # `"reports":[]`, mà một lượt HỎNG cũng trả về đúng chuỗi đó — nên
-            # nó im lặng coi lỗi là "xong việc". Phải xét cả `"ok":true`.
-            if grep -q '"ok":true' /tmp/ra.json && grep -q '"reports":\[\]' /tmp/ra.json; then
+            #
+            # `hàng đợi N quét / M gom` là SỐ ALBUM trong hàng đợi lượt này, chặn
+            # trên bởi MAX_ALBUMS = 3. Nó qua được hàng rào riêng tư ở trên (không
+            # nói studio có bao nhiêu album, cũng không nói album nào bao nhiêu
+            # ảnh) và nó là thứ duy nhất tách được BA trạng thái mà bản trước in
+            # ra y hệt nhau — cả ba đều là "quét 0 ảnh":
+            #   0 quét / 0 gom  → hết việc thật
+            #   N quét / 0 gom  → tìm ra album cần quét mà không quét nổi tấm nào
+            #   0 quét / M gom  → đang gom mãi những album không có khuôn mặt
+            # Ba chuyện đó cần ba cách sửa khác nhau.
+            jq -r '"  ok · quét \([.reports[]?.scanned // 0]|add // 0) ảnh"
+                 + " · xác nhận \([.reports[]?.daXacNhan // 0]|add // 0) mốc"
+                 + " · gom \([.reports[]?.clustered // 0]|add // 0) người"
+                 + " · hàng đợi \(.daNhinThay.canQuet|length) quét / \(.daNhinThay.canGom|length) gom"
+                 + (if ([.reports[]?.stoppedBy]|index("ghi-khong-an"))
+                    then "  ⚠ CÓ ALBUM GHI KHÔNG ĂN — xem /api/face-status" else "" end)' /tmp/ra.json
+            # Dừng sớm CHỈ khi thật sự không còn gì. Bản trước dò chuỗi
+            # `"reports":[]` bằng grep, và chuỗi đó nói dối ở hai hình dạng thân
+            # KHÔNG có khoá `reports`: lượt hỏng (đã chặn bằng mã HTTP ở trên) và
+            # lượt FACE_SCAN_OFF=1 — cái sau khiến workflow gọi tiếp bảy lượt nữa
+            # vào một bộ quét đang tắt. Hỏi jq đúng câu thì cả hai hết chỗ trốn.
+            trang_thai=$(jq -r 'if .tat then "tat" elif (.reports|length) == 0 then "het" else "con" end' /tmp/ra.json)
+            if [ "${trang_thai}" = "tat" ]; then
+              echo "Bộ quét đang TẮT (FACE_SCAN_OFF=1) — không gọi thêm lượt nào."
+              exit 0
+            fi
+            if [ "${trang_thai}" = "het" ]; then
               echo "Không còn gì để quét — dừng sớm."
               break
             fi
