@@ -62,6 +62,7 @@ function fakeDb({ albums = [], profiles = [], photos = [], loi = {} } = {}) {
 
   const from = (table) => {
     const eqs = {};
+    const neqs = {};
     const isNulls = [];
     const notNulls = [];
     let wantCount = false;
@@ -87,6 +88,7 @@ function fakeDb({ albums = [], profiles = [], photos = [], loi = {} } = {}) {
         if (loi.photos) return { count: null, data: null, error: { message: loi.photos } };
         let rows = photos;
         for (const [c, v] of Object.entries(eqs)) rows = rows.filter((r) => r[c] === v);
+        for (const [c, v] of Object.entries(neqs)) rows = rows.filter((r) => r[c] !== v);
         for (const c of isNulls) rows = rows.filter((r) => (r[c] ?? null) === null);
         for (const c of notNulls) rows = rows.filter((r) => (r[c] ?? null) !== null);
         return wantCount ? { count: rows.length, data: null, error: null } : { data: rows, error: null };
@@ -100,6 +102,7 @@ function fakeDb({ albums = [], profiles = [], photos = [], loi = {} } = {}) {
         return self;
       },
       eq(c, v) { eqs[c] = v; return self; },
+      neq(c, v) { neqs[c] = v; return self; },
       is(c, v) { if (v === null) isNulls.push(c); return self; },
       not(c, _op, v) { if (v === null) notNulls.push(c); return self; },
       in(_c, list) { eqs.__in = list; return self; },
@@ -142,7 +145,13 @@ const profilesChung = [
   { id: "u-pho", plan: "photographer", plan_expires_at: NGAY_MAI, role: "photographer" },
 ];
 const anhChuaQuet = (albumId, n) =>
-  Array.from({ length: n }, (_, i) => ({ id: `${albumId}-${i}`, album_id: albumId, is_video: false, faces_scanned_at: null }));
+  Array.from({ length: n }, (_, i) => ({
+    id: `${albumId}-${i}`,
+    album_id: albumId,
+    is_video: false,
+    faces_scanned_at: null,
+    drive_file_id: `d-${albumId}-${i}`,
+  }));
 
 {
   const db = fakeDb({
@@ -231,13 +240,15 @@ for (const [ten, chay] of [
 {
   const db = fakeDb({
     photos: [
-      ...Array.from({ length: 4 }, (_, i) => ({ id: `s${i}`, album_id: "a", is_video: false, faces_scanned_at: "2026-01-01T00:00:00Z" })),
+      ...Array.from({ length: 4 }, (_, i) => ({
+        id: `s${i}`, album_id: "a", is_video: false, faces_scanned_at: "2026-01-01T00:00:00Z", drive_file_id: `ds${i}`,
+      })),
       ...anhChuaQuet("a", 6),
       // Video KHÔNG được tính vào mẫu số: bộ quét bỏ qua chúng, nên đếm vào là
       // tiến độ mãi không tới 100%.
-      { id: "v", album_id: "a", is_video: true, faces_scanned_at: null },
+      { id: "v", album_id: "a", is_video: true, faces_scanned_at: null, drive_file_id: "dv" },
       // Ảnh album khác không được lẫn vào.
-      { id: "khac", album_id: "b", is_video: false, faces_scanned_at: null },
+      { id: "khac", album_id: "b", is_video: false, faces_scanned_at: null, drive_file_id: "dk" },
     ],
   });
   const td = await tienDoQuet(db, "a");
@@ -253,6 +264,64 @@ for (const [ten, chay] of [
   const td = await tienDoQuet(fakeDb({ loi: { photos: "column does not exist" } }), "a");
   check("thiếu cột faces_scanned_at → hỏng êm, không nói bừa", td, { daQuet: 0, tong: 0 });
   ok("và không hiện câu đang chuẩn bị", conDangQuet(td) === false);
+}
+
+/* ── 6b. BA phía hỏi "còn phải quét không" phải trả lời GIỐNG NHAU ──────────
+ * Đây là hồi quy cho vòng lặp vô hạn im lặng đọc được trong log production
+ * 18:11 ngày 10/09: tám lượt liên tiếp "quét 0 ảnh · hàng đợi 3 quét / 0 gom".
+ *
+ * Hàng đợi đếm `faces_scanned_at is null AND is_video = false`; vòng quét đòi
+ * thêm `drive_file_id` không rỗng. Một dòng `drive_file_id = ''` (cột khai
+ * `not null`, chuỗi rỗng vẫn lọt) rơi đúng khe giữa hai câu đó:
+ *   • hàng đợi ĐẾM nó  → album luôn "còn việc"
+ *   • vòng quét BỎ nó   → scanned = 0, không mốc nào được ghi
+ *   • lượt cron sau thấy y nguyên, chiếm một trong ba chỗ, mãi mãi
+ * Và mẫu số tiến độ của khách đứng ở 209/210 kèm câu "đang tìm khuôn mặt"
+ * không bao giờ tắt.
+ */
+{
+  const { pendingRows } = await import("../../src/lib/face-can-quet.ts");
+
+  // Một album mà MỌI ảnh chưa quét đều thiếu drive_file_id.
+  const anhRong = [
+    { id: "r0", album_id: "a", is_video: false, faces_scanned_at: null, drive_file_id: "" },
+    { id: "r1", album_id: "a", is_video: false, faces_scanned_at: null, drive_file_id: "" },
+    { id: "ok", album_id: "a", is_video: false, faces_scanned_at: "2026-01-01T00:00:00Z", drive_file_id: "d" },
+  ];
+  const db = fakeDb({
+    albums: [{ id: "a", owner_id: "u-studio", status: "published", faces_clustered_at: null }],
+    profiles: profilesChung,
+    photos: anhRong,
+  });
+
+  check("vòng quét bỏ ảnh thiếu drive_file_id", pendingRows(anhRong).map((p) => p.id), []);
+  check("→ nên hàng đợi cũng KHÔNG được nhặt album đó", await albumsNeedingScan(db, 5), []);
+  check("→ và tiến độ của khách phải là 1/1, không phải 1/3", await tienDoQuet(db, "a"), { daQuet: 1, tong: 1 });
+  ok("→ khối tìm mặt biến mất chứ không treo lời hẹn", conDangQuet(await tienDoQuet(db, "a")) === false);
+
+  // Album lẫn cả hai loại: chỉ những tấm quét được mới vào cả ba con số.
+  const lanLon = [
+    ...anhChuaQuet("b", 3),
+    { id: "b-rong", album_id: "b", is_video: false, faces_scanned_at: null, drive_file_id: "" },
+    { id: "b-video", album_id: "b", is_video: true, faces_scanned_at: null, drive_file_id: "dv" },
+    { id: "b-xong", album_id: "b", is_video: false, faces_scanned_at: "2026-01-01T00:00:00Z", drive_file_id: "dx" },
+  ];
+  const db2 = fakeDb({
+    albums: [{ id: "b", owner_id: "u-studio", status: "published", faces_clustered_at: null }],
+    profiles: profilesChung,
+    photos: lanLon,
+  });
+  check("lẫn lộn: vòng quét thấy đúng 3 tấm", pendingRows(lanLon).length, 3);
+  check("lẫn lộn: hàng đợi cũng báo đúng 3", await albumsNeedingScan(db2, 5), [{ id: "b", pending: 3 }]);
+  check("lẫn lộn: tiến độ 1/4 (3 chưa quét + 1 đã quét)", await tienDoQuet(db2, "b"), { daQuet: 1, tong: 4 });
+  ok(
+    "hàng đợi và vòng quét khớp nhau",
+    (await albumsNeedingScan(db2, 5))[0].pending === pendingRows(lanLon).length
+  );
+  // Mẫu số trừ tử số PHẢI bằng số tấm vòng quét sẽ chạm — nếu không, tiến độ có
+  // một phần không bao giờ đi tới đích.
+  const td = await tienDoQuet(db2, "b");
+  ok("mẫu số không chứa tấm nào vòng quét không chạm tới", td.tong - td.daQuet === pendingRows(lanLon).length);
 }
 
 /* ── 7. Không đường nào vào tính năng được bỏ sót cổng ──────────────────────

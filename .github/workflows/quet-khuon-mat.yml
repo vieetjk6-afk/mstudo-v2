@@ -95,12 +95,22 @@ jobs:
             #   N quét / 0 gom  → tìm ra album cần quét mà không quét nổi tấm nào
             #   0 quét / M gom  → đang gom mãi những album không có khuôn mặt
             # Ba chuyện đó cần ba cách sửa khác nhau.
+            # `lỗi tải` và câu lỗi mẫu là thứ tách được BA nguyên nhân của "quét 0
+            # ảnh" mà log cũ in ra y hệt nhau: Drive từ chối tải, trọng số mô hình
+            # không đi theo gói triển khai, hay hàng đợi và vòng quét lệch định
+            # nghĩa "còn phải quét". Câu lỗi là của MÁY CHỦ (không tải được ảnh,
+            # thiếu file mô hình), không phải dữ liệu của studio — nên nó qua được
+            # hàng rào riêng tư ở trên.
             jq -r '"  ok · quét \([.reports[]?.scanned // 0]|add // 0) ảnh"
                  + " · xác nhận \([.reports[]?.daXacNhan // 0]|add // 0) mốc"
                  + " · gom \([.reports[]?.clustered // 0]|add // 0) người"
+                 + " · lỗi tải \([.reports[]?.failed // 0]|add // 0)"
                  + " · hàng đợi \(.daNhinThay.canQuet|length) quét / \(.daNhinThay.canGom|length) gom"
                  + (if ([.reports[]?.stoppedBy]|index("ghi-khong-an"))
-                    then "  ⚠ CÓ ALBUM GHI KHÔNG ĂN — xem /api/face-status" else "" end)' /tmp/ra.json
+                    then "  ⚠ CÓ ALBUM GHI KHÔNG ĂN — xem /api/face-status" else "" end)
+                 + (if ([.reports[]?.stoppedBy]|index("tai-quet-loi"))
+                    then "  ⚠ ALBUM TẮC: quét 0 tấm mà toàn lỗi" else "" end)
+                 + ([.reports[]?.loiMau | select(.)] | if length > 0 then "  · lỗi mẫu: \(.[0])" else "" end)' /tmp/ra.json
             # Dừng sớm CHỈ khi thật sự không còn gì. Bản trước dò chuỗi
             # `"reports":[]` bằng grep, và chuỗi đó nói dối ở hai hình dạng thân
             # KHÔNG có khoá `reports`: lượt hỏng (đã chặn bằng mã HTTP ở trên) và

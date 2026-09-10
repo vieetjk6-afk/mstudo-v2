@@ -4,6 +4,11 @@ import { fetchThumb, scanJpeg } from "./face-node";
 import { fetchAllPhotos } from "./photos";
 import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, type Person } from "./face-group";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "./plans";
+// Luật "ảnh nào còn phải quét" nằm ở @/lib/face-can-quet — MỘT chỗ cho cả ba
+// phía hỏi nó (hàng đợi, vòng quét, tiến độ cho khách). Re-export để những chỗ
+// đang nhập từ đây không phải đổi.
+import { apDungLocConQuet, pendingRows, type ScanRow } from "./face-can-quet";
+export { apDungLocConQuet, pendingRows, type ScanRow } from "./face-can-quet";
 
 /**
  * QUÉT KHUÔN MẶT CHO CẢ ALBUM — chạy trên máy chủ, không cần ai mở trình duyệt.
@@ -63,14 +68,6 @@ export function hanQuetMs(): number {
   return Number.isFinite(n) && n >= 5_000 && n <= 280_000 ? n : 45_000;
 }
 
-export type ScanRow = {
-  id: string;
-  drive_file_id: string;
-  name: string | null;
-  is_video: boolean | null;
-  faces_scanned_at: string | null;
-};
-
 export type ScanReport = {
   albumId: string;
   /** Tổng ảnh của album (đã phân trang qua trần 1000 của PostgREST). */
@@ -94,15 +91,30 @@ export type ScanReport = {
   faces: number;
   failed: number;
   remaining: number;
+  /**
+   * MỘT câu lỗi mẫu của những tấm hỏng, hoặc null nếu không tấm nào hỏng.
+   *
+   * `failed` đếm được số tấm hỏng nhưng KHÔNG nói vì sao, và vòng lặp thì
+   * `catch {}` trơn — nó ném đi đúng thứ duy nhất trả lời được câu hỏi. Cái giá
+   * lộ ra trong log production ngày 10/09: tám lượt liên tiếp in "quét 0 ảnh"
+   * với hàng đợi 3 album, không lỗi, không cảnh báo, và không cách nào biết là
+   * Drive từ chối tải, hay trọng số mô hình không đi theo gói triển khai, hay
+   * `todo` rỗng vì hai định nghĩa "còn phải quét" lệch nhau. Ba nguyên nhân,
+   * ba cách sửa, một dòng log y hệt nhau.
+   *
+   * Giữ ĐÚNG MỘT câu, cắt ngắn: đây là manh mối để chẩn đoán, không phải sổ lỗi.
+   */
+  loiMau: string | null;
   clustered: number | null;
   ms: number;
-  stoppedBy: "xong" | "het-gio" | "het-han-muc" | "ghi-khong-an";
+  /**
+   * `tai-quet-loi` = quét được 0 tấm trong khi CÓ tấm hỏng. Khác `xong` (không
+   * còn gì để quét) ở chỗ nó là một album ĐANG TẮC: mốc không được ghi nên lượt
+   * cron sau thấy y nguyên, và nó chiếm một trong ba chỗ hàng đợi mãi mãi. Cùng
+   * họ với `ghi-khong-an` — một cách khác để vào đúng cái bẫy đó.
+   */
+  stoppedBy: "xong" | "het-gio" | "het-han-muc" | "ghi-khong-an" | "tai-quet-loi";
 };
-
-/** Ảnh còn phải quét: bỏ video, bỏ những tấm đã có mốc. */
-export function pendingRows(rows: readonly ScanRow[]): ScanRow[] {
-  return rows.filter((p) => !p.is_video && !p.faces_scanned_at && !!p.drive_file_id);
-}
 
 /**
  * Quét tới khi hết ảnh, hết giờ, hoặc hết hạn mức.
@@ -146,6 +158,8 @@ export async function scanAlbum(
   let scanned = 0;
   let faces = 0;
   let failed = 0;
+  /** Câu lỗi của tấm hỏng ĐẦU TIÊN — xem ScanReport.loiMau. */
+  let loiMau: string | null = null;
   let stoppedBy: ScanReport["stoppedBy"] = "xong";
 
   const faceRows: Record<string, unknown>[] = [];
@@ -273,10 +287,15 @@ export async function scanAlbum(
       // nhẫn, ảnh thiệp sẽ được quét lại mãi mãi và album không bao giờ "xong".
       doneIds.push(p.id);
       scanned++;
-    } catch {
+    } catch (e) {
       // Một tấm hỏng không được chặn cả album, và KHÔNG đánh mốc — lượt cron sau
       // vẫn thử lại, biết đâu chỉ là Drive nghẽn nhất thời.
+      //
+      // Nhưng GIỮ LẠI câu lỗi đầu tiên. Bản trước `catch {}` trơn, và đó là lý
+      // do một album tắc chỉ hiện ra dưới dạng "quét 0 ảnh" — đếm được cái hỏng
+      // mà không biết nó hỏng vì gì.
       failed++;
+      if (loiMau === null) loiMau = (e instanceof Error ? e.message : String(e)).slice(0, 200);
     }
     /*
      * Mẻ ghi ĐẦU TIÊN cố ý nhỏ (FIRST_CHUNK), các mẻ sau mới dùng WRITE_CHUNK.
@@ -299,6 +318,13 @@ export async function scanAlbum(
   if (!ghiKhongAn) await flush();
 
   const remaining = todo.length - scanned - failed;
+  /*
+   * Quét được 0 tấm mà CÓ tấm hỏng thì không phải "xong" — đó là album đang
+   * TẮC. Phân biệt được điều này là điều kiện để nó hiện ra trong log: `xong`
+   * nghĩa là hết việc, và một album tắc đội lốt "xong" thì lượt cron nào cũng
+   * nhặt lại nó, chiếm một trong ba chỗ hàng đợi, im lặng.
+   */
+  const taiQuetLoi = scanned === 0 && failed > 0;
   return {
     albumId,
     tongAnh: rows.length,
@@ -309,9 +335,10 @@ export async function scanAlbum(
     faces,
     failed,
     remaining: Math.max(0, remaining),
+    loiMau,
     clustered: null,
     ms: Date.now() - t0,
-    stoppedBy: ghiKhongAn ? "ghi-khong-an" : stoppedBy,
+    stoppedBy: ghiKhongAn ? "ghi-khong-an" : taiQuetLoi ? "tai-quet-loi" : stoppedBy,
   };
 }
 
@@ -481,12 +508,9 @@ export async function albumsNeedingScan(db: any, limit = 5): Promise<{ id: strin
     const lo = ids.slice(i, i + 8);
     const dem = await Promise.all(
       lo.map(async (id) => {
-        const { count } = await db
-          .from("photos")
-          .select("id", { count: "exact", head: true })
-          .eq("album_id", id)
-          .is("faces_scanned_at", null)
-          .eq("is_video", false);
+        const { count } = await apDungLocConQuet(
+          db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", id)
+        );
         return { id, pending: count ?? 0 };
       })
     );

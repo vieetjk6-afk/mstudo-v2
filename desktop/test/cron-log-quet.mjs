@@ -110,6 +110,33 @@ const TRANG_HTML = "<!DOCTYPE html><html>An error occurred with this application
   ok("lượt lành thì KHÔNG có cảnh báo ⚠", !/⚠/.test(chay(LANH, 200).out));
 }
 
+/*
+ * BA nguyên nhân của "quét 0 ảnh" — log cũ in cả ba y hệt nhau, và chúng cần ba
+ * cách sửa khác nhau. Đây là lý do dòng log phải mang `lỗi tải` và câu lỗi mẫu.
+ */
+{
+  const DRIVE_TU_CHOI = '{"ok":true,"ms":45,"daNhinThay":{"canGom":[],"canQuet":[{"id":"a","pending":300}]},"reports":[{"albumId":"a","scanned":0,"failed":37,"daXacNhan":0,"loiMau":"khong_tai_duoc_anh","stoppedBy":"tai-quet-loi"}]}';
+  const THIEU_MO_HINH = '{"ok":true,"ms":45,"daNhinThay":{"canGom":[],"canQuet":[{"id":"a","pending":300}]},"reports":[{"albumId":"a","scanned":0,"failed":3,"daXacNhan":0,"loiMau":"ssd_mobilenetv1 model weights not found","stoppedBy":"tai-quet-loi"}]}';
+  const HANG_DOI_LECH = '{"ok":true,"ms":2,"daNhinThay":{"canGom":[],"canQuet":[{"id":"a","pending":300}]},"reports":[{"albumId":"a","scanned":0,"failed":0,"daXacNhan":0,"loiMau":null,"stoppedBy":"xong"}]}';
+
+  const a = chay(DRIVE_TU_CHOI, 200);
+  ok("Drive từ chối tải: in số lỗi tải", /lỗi tải 37/.test(a.out), a.out.trim());
+  ok("Drive từ chối tải: in câu lỗi mẫu", /lỗi mẫu: khong_tai_duoc_anh/.test(a.out), a.out.trim());
+  ok("Drive từ chối tải: cảnh báo album tắc", /⚠ ALBUM TẮC/.test(a.out), a.out.trim());
+
+  const b = chay(THIEU_MO_HINH, 200);
+  ok("thiếu trọng số mô hình: câu lỗi nói ra", /model weights not found/.test(b.out), b.out.trim());
+
+  const c = chay(HANG_DOI_LECH, 200);
+  ok("hàng đợi lệch: lỗi tải 0 và KHÔNG cảnh báo tắc", /lỗi tải 0/.test(c.out) && !/⚠/.test(c.out), c.out.trim());
+  ok(
+    "ba nguyên nhân cho ra ba dòng log KHÁC nhau",
+    new Set([a.out, b.out, c.out].map((x) => x.trim())).size === 3
+  );
+  // `pending: 300` là dữ liệu của studio — không được lọt ra log công khai.
+  ok("không nguyên nhân nào làm lọt số ảnh còn tồn", ![a.out, b.out, c.out].some((o) => /300/.test(o)));
+}
+
 {
   // FACE_SCAN_OFF=1: thân KHÔNG có khoá `reports`. Bản grep chuỗi `"reports":[]`
   // không khớp, nên nó gọi tiếp bảy lượt nữa vào một bộ quét đang tắt.

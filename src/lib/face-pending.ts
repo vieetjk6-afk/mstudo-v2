@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "./plans";
+import { apDungLocCanQuet, apDungLocConQuet } from "./face-can-quet";
 
 /**
  * "Album này quét khuôn mặt tới đâu rồi?"
@@ -45,15 +46,21 @@ export async function tienDoQuet(db: any, albumId: string): Promise<TienDoQuet> 
   try {
     // head: true → PostgREST chỉ trả header Content-Range, không trả dòng nào.
     // Album 1.000 ảnh vẫn là một con số trên đường truyền.
-    const anhCanQuet = () =>
-      db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", albumId).eq("is_video", false);
+    const dem = () =>
+      db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", albumId);
 
-    const [tat, xong] = await Promise.all([
-      anhCanQuet(),
-      anhCanQuet().not("faces_scanned_at", "is", null),
-    ]);
-    if (tat.error || xong.error) return KHONG_BIET;
-    return { daQuet: xong.count ?? 0, tong: tat.count ?? 0 };
+    /*
+     * Mẫu số và tử số đi qua @/lib/face-can-quet, không tự viết điều kiện.
+     *
+     * Tự viết là cách tiến độ đứng mãi ở 209/210: mẫu số đếm cả những tấm mà bộ
+     * quét KHÔNG BAO GIỜ chạm tới (video, hay `drive_file_id` rỗng), nên hiệu số
+     * không bao giờ về 0 và câu "đang tìm khuôn mặt" không bao giờ tắt. Một con
+     * số đứng yên còn tệ hơn câu "vài phút nữa" mà nó vừa thay thế.
+     */
+    const [can, con] = await Promise.all([apDungLocCanQuet(dem()), apDungLocConQuet(dem())]);
+    if (can.error || con.error) return KHONG_BIET;
+    const tong = can.count ?? 0;
+    return { daQuet: Math.max(0, tong - (con.count ?? 0)), tong };
   } catch {
     return KHONG_BIET;
   }
