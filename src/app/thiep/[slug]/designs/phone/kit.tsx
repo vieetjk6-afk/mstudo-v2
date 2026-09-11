@@ -4,8 +4,9 @@ import { mapEmbedSrc, mapOpenHref } from "@/lib/site-map";
 import { vietqrUrl, type Wish } from "../../shared";
 import PhoneCountdown from "./PhoneCountdown";
 import QuickRsvp from "./QuickRsvp";
+import Reveal from "../../Reveal";
 
-export { PhoneCountdown, QuickRsvp };
+export { PhoneCountdown, QuickRsvp, Reveal };
 export type { Wish };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -223,6 +224,8 @@ export function PhoneShell({
           boxShadow: "0 30px 60px -28px rgba(0,0,0,.45)",
         }}
       >
+        {/* Tắt JS thì mọi khối có hiệu ứng cuộn vẫn phải đọc được. */}
+        <noscript><style>{".wed-reveal{opacity:1!important;transform:none!important;filter:none!important;clip-path:none!important}"}</style></noscript>
         {pattern}
         {rail ? (
           <div style={{ position: "relative", display: "flex", alignItems: "stretch" }}>
@@ -239,6 +242,20 @@ export function PhoneShell({
         .wed-swipe { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
         .wed-swipe::-webkit-scrollbar { display: none; }
         .wed-swipe > * { scroll-snap-align: center; flex: none; }
+
+        /* Hiệu ứng ẢNH */
+        @keyframes wedKenBurns { from { transform: scale(1) } to { transform: scale(1.14) } }
+        .wed-kb img { animation: wedKenBurns 18s ease-out forwards; }
+        .wed-zoom img { transition: transform .65s cubic-bezier(.2,.7,.3,1); }
+        .wed-zoom:hover img, .wed-zoom:focus-within img, .wed-zoom:active img { transform: scale(1.07); }
+
+        /* Hiệu ứng CHỮ: tên cô dâu chú rể hiện dần từ mờ sang nét */
+        @keyframes wedInkIn { from { opacity: 0; filter: blur(10px); transform: translateY(14px) } to { opacity: 1; filter: blur(0); transform: none } }
+        .wed-ink { animation: wedInkIn 1.1s cubic-bezier(.16,.8,.3,1) both; }
+        .wed-ink-2 { animation: wedInkIn 1.1s cubic-bezier(.16,.8,.3,1) .22s both; }
+        /* Nét gạch chân tự kéo ra dưới tiêu đề mục */
+        @keyframes wedRule { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+        .wed-rule { transform-origin: center; animation: wedRule 1s cubic-bezier(.16,.8,.3,1) .2s both; }
         @media (prefers-reduced-motion: reduce) {
           .wed-phone-card *, .wed-phone-card *::before, .wed-phone-card *::after {
             animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important;
@@ -256,10 +273,12 @@ export function PhoneShell({
  * cục không sụp — cặp đôi nhìn bản xem trước là biết còn thiếu ảnh nào.
  */
 export function Slot({
-  src, height, width, radius = 0, border, tint = "rgba(128,128,128,.12)", label, style, lazy = true,
+  src, height, width, radius = 0, border, tint = "rgba(128,128,128,.12)", label, style, lazy = true, fx,
 }: {
   src?: string; height: number | string; width?: number | string; radius?: number | string; border?: string;
   tint?: string; label?: string; style?: CSSProperties; lazy?: boolean;
+  /** Hiệu ứng ảnh: "kb" phóng chậm kiểu Ken Burns · "zoom" phóng nhẹ khi chạm/rê. */
+  fx?: "kb" | "zoom";
 }) {
   const box: CSSProperties = {
     height, width, borderRadius: radius, overflow: "hidden", border, background: tint,
@@ -274,7 +293,7 @@ export function Slot({
     );
   }
   return (
-    <div style={box}>
+    <div style={box} className={fx === "kb" ? "wed-kb" : fx === "zoom" ? "wed-zoom" : undefined}>
       <img src={src} alt="" loading={lazy ? "lazy" : undefined} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
     </div>
   );

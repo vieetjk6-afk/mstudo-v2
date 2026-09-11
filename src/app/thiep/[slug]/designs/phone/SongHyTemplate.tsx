@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SONG HỶ — bố cục "thẻ kem lồng trong nền đỏ"
@@ -44,15 +44,16 @@ export default function SongHyTemplate({ inv, wishes, guest }: TemplateProps) {
         </div>
         <div style={{ fontFamily: SERIF, fontSize: 17, letterSpacing: ".42em", color: accent }}>SONG HỶ</div>
         <div>
-          <div style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12 }}>{d.bride}</div>
+          <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12 }}>{d.bride}</div>
           <div style={{ fontFamily: HAND, fontSize: 30, color: accent }}>sánh duyên cùng</div>
-          <div style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12 }}>{d.groom}</div>
+          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12 }}>{d.groom}</div>
         </div>
         {d.dateSub && <div style={{ fontSize: 13, color: SAND }}>{d.dateSub}</div>}
+        {d.reception && <div style={{ fontSize: 13, color: SAND }}>{d.reception}</div>}
       </div>
 
       <div style={{ padding: "0 22px 46px", display: "flex", flexDirection: "column", gap: 22 }}>
-        <Slot src={d.hero} height={280} radius="180px 180px 12px 12px" border={`1px solid ${LINE}`} tint="rgba(255,215,122,.12)" label="Ảnh cưới" lazy={false} />
+        <Slot src={d.hero} height={280} radius="180px 180px 12px 12px" border={`1px solid ${LINE}`} tint="rgba(255,215,122,.12)" label="Ảnh cưới" lazy={false} fx="kb" />
 
         {d.guest && (
           <div style={{ textAlign: "center" }}>
@@ -135,8 +136,17 @@ export default function SongHyTemplate({ inv, wishes, guest }: TemplateProps) {
           )}
         </div>
 
-        {(d.story || d.quote) && (
-          <div style={{ fontSize: 14, lineHeight: 1.8, textAlign: "center", whiteSpace: "pre-line" }}>{d.story || d.quote}</div>
+        {d.quote && (
+          <Reveal anim="blur">
+            <div style={{ fontFamily: HAND, fontSize: 24, lineHeight: 1.5, textAlign: "center", color: accent }}>{d.quote}</div>
+          </Reveal>
+        )}
+
+        {d.story && (
+          <Reveal anim="up">
+            <div style={goldHead}>CHUYỆN TÌNH YÊU</div>
+            <p style={{ margin: "12px 0 0", fontSize: 14, lineHeight: 1.9, textAlign: "center", whiteSpace: "pre-line" }}>{d.story}</p>
+          </Reveal>
         )}
 
         {/* Album: ba ô vuông viền vàng trên nền đỏ */}
@@ -144,7 +154,7 @@ export default function SongHyTemplate({ inv, wishes, guest }: TemplateProps) {
           <>
             <div style={goldHead}>ALBUM</div>
             <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(d.trio.length, 3)},1fr)`, gap: 8 }}>
-              {d.trio.map((src, i) => <Slot key={i} src={src} height={112} border={`1px solid ${LINE}`} tint="rgba(255,215,122,.18)" />)}
+              {d.trio.map((src, i) => <Slot key={i} src={src} height={112} border={`1px solid ${LINE}`} tint="rgba(255,215,122,.18)" fx="zoom" />)}
             </div>
           </>
         )}
@@ -207,11 +217,24 @@ export default function SongHyTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {(d.thanks || d.closing) && (
-          <div style={{ textAlign: "center", fontFamily: HAND, fontSize: 24, color: accent, whiteSpace: "pre-line", lineHeight: 1.5 }}>
-            {d.closing || d.thanks}
-          </div>
+        {(d.thanks || d.thanksPhoto) && (
+          <Reveal anim="zoom">
+            <div style={{ textAlign: "center", border: "1px solid rgba(255,215,122,.4)", borderRadius: 12, padding: 20 }}>
+              <div style={goldHead}>LỜI CẢM ƠN</div>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={140} width={140} radius="50%" tint="rgba(255,215,122,.15)" label="" style={{ margin: "14px auto", border: `2px solid ${accent}` }} />}
+              {d.thanks && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.85, whiteSpace: "pre-line" }}>{d.thanks}</p>}
+            </div>
+          </Reveal>
         )}
+
+        {d.closing && (
+          <div style={{ textAlign: "center", fontFamily: HAND, fontSize: 24, color: accent, whiteSpace: "pre-line", lineHeight: 1.5 }}>{d.closing}</div>
+        )}
+
+        <footer style={{ textAlign: "center", borderTop: "1px solid rgba(255,215,122,.35)", paddingTop: 22 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 30, color: accent }}>{d.bride} &amp; {d.groom}</div>
+          <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: SAND, marginTop: 6 }}>Thiệp cưới online</div>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SƠN MÀI — bố cục "hai cột, dải chữ dọc chạy suốt trang"
@@ -47,11 +47,12 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
         {/* Mở đầu bằng chữ — ảnh để sau */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }}>Thiệp mời dự lễ thành hôn</div>
-          <div style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.bride}</div>
+          <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.bride}</div>
           <div style={{ fontFamily: SERIF, fontSize: 22, color: accent, letterSpacing: ".2em" }}>✦</div>
-          <div style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.groom}</div>
+          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.groom}</div>
           {d.date.valid && <div style={{ marginTop: 8, fontSize: 12, letterSpacing: ".22em", color: accent }}>{d.date.weekday.toUpperCase()} · {d.date.dotted}</div>}
           {d.dateSub && <div style={{ fontSize: 12.5, color: STEEL }}>{d.dateSub}</div>}
+          {d.reception && <div style={{ fontSize: 12.5, color: STEEL }}>{d.reception}</div>}
         </div>
 
         <PhoneCountdown
@@ -64,7 +65,7 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
         />
 
         {/* Ảnh ngang TRÀN mép phải */}
-        <Slot src={d.hero} height={280} tint={TINT} label="Ảnh cưới" lazy={false} style={bleedRight} />
+        <Slot src={d.hero} height={280} tint={TINT} label="Ảnh cưới" lazy={false} fx="kb" style={bleedRight} />
 
         {d.guest && (
           <div>
@@ -120,6 +121,12 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
+        {d.quote && (
+          <Reveal anim="blur">
+            <div style={{ textAlign: "center", fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 17, lineHeight: 1.8, color: BODY }}>“{d.quote}”</div>
+          </Reveal>
+        )}
+
         {d.story && (
           <div style={{ borderLeft: `2px solid ${accent}`, paddingLeft: 16 }}>
             <div style={{ ...lab, marginBottom: 8 }}>Chuyện của chúng mình</div>
@@ -128,7 +135,7 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         {/* Ảnh phụ tràn mép phải, xếp dọc */}
-        {d.pair.map((src, i) => <Slot key={i} src={src} height={200} tint={TINT} style={bleedRight} />)}
+        {d.pair.map((src, i) => <Slot key={i} src={src} height={200} tint={TINT} style={bleedRight} fx="zoom" />)}
 
         {(d.venue.name || d.venue.address || d.mapHref) && (
           <div style={{ border: `1px solid ${LINE}`, padding: 20, display: "flex", flexDirection: "column", gap: 14, color: BODY }}>
@@ -217,11 +224,26 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {(d.thanks || d.closing) && (
-          <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 22, fontFamily: SERIF, fontSize: 19, color: accent, whiteSpace: "pre-line", lineHeight: 1.6 }}>
-            {d.closing || d.thanks}
-          </div>
+        {(d.thanks || d.thanksPhoto) && (
+          <Reveal anim="left">
+            <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 22, display: "flex", gap: 16, alignItems: "center" }}>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={88} width={88} tint={TINT} label="" style={{ flex: "none", border: `1px solid ${LINE}` }} />}
+              <div>
+                <div style={lab}>Lời cảm ơn</div>
+                {d.thanks && <p style={{ margin: "6px 0 0", fontSize: 14, lineHeight: 1.8, color: BODY, whiteSpace: "pre-line" }}>{d.thanks}</p>}
+              </div>
+            </div>
+          </Reveal>
         )}
+
+        {d.closing && (
+          <div style={{ fontFamily: SERIF, fontSize: 19, color: accent, whiteSpace: "pre-line", lineHeight: 1.6 }}>{d.closing}</div>
+        )}
+
+        <footer style={{ borderTop: `1px solid ${LINE}`, paddingTop: 22 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 26, color: accent }}>{d.bride} &amp; {d.groom}</div>
+          <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL, marginTop: 6 }}>Thiệp cưới online</div>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

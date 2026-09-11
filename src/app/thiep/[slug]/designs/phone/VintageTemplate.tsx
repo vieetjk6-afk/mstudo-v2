@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // HOA LÁ VINTAGE — bố cục "khung viền kép, đối xứng tuyệt đối"
@@ -71,11 +71,12 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
 
             <div>
               <div style={lab}>{d.guestLabel}</div>
-              <div style={{ fontFamily: SERIF, fontSize: 50, lineHeight: 1.06, color: DARK, marginTop: 12 }}>{d.bride}</div>
+              <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 50, lineHeight: 1.06, color: DARK, marginTop: 12 }}>{d.bride}</div>
               <div style={{ fontFamily: HAND, fontSize: 28, color: accent, animation: "vtSway 6s ease-in-out infinite" }}>&amp;</div>
-              <div style={{ fontFamily: SERIF, fontSize: 50, lineHeight: 1.06, color: DARK }}>{d.groom}</div>
+              <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 50, lineHeight: 1.06, color: DARK }}>{d.groom}</div>
               {d.date.valid && <div style={{ marginTop: 12, fontSize: 11, letterSpacing: ".3em", color: MUTED }}>{d.date.day} THÁNG {d.date.month} · {d.date.year}</div>}
               {d.dateSub && <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4 }}>{d.dateSub}</div>}
+              {d.reception && <div style={{ fontSize: 12.5, color: MUTED }}>{d.reception}</div>}
             </div>
 
             {d.guest && (
@@ -88,19 +89,27 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
             <Orn big />
 
             {/* Ảnh lớn khung OVAL giữa trang */}
-            <Slot src={d.hero} height={320} radius="50% / 42%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" label="Ảnh cưới" lazy={false} style={{ padding: 0 }} />
+            <Reveal anim="fade">
+              <Slot src={d.hero} height={320} radius="50% / 42%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" label="Ảnh cưới" lazy={false} fx="kb" style={{ padding: 0 }} />
+            </Reveal>
 
-            {(d.quote || d.story) && (
-              <div style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 18, lineHeight: 1.8, color: "#5a4d39", whiteSpace: "pre-line" }}>
-                {d.quote ? `“${d.quote}”` : d.story}
-              </div>
+            {d.quote && (
+              <div style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 18, lineHeight: 1.8, color: "#5a4d39" }}>“{d.quote}”</div>
+            )}
+
+            {d.story && (
+              <>
+                <Orn />
+                <div style={lab}>Chuyện tình yêu</div>
+                <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.9, color: INK, whiteSpace: "pre-line" }}>{d.story}</p>
+              </>
             )}
 
             {/* Hai ảnh nhỏ OVAL đối xứng */}
             {d.pair.length > 0 && (
               <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
                 {d.pair.map((src, i) => (
-                  <Slot key={i} src={src} height={150} width={124} radius="50% / 44%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" />
+                  <Slot key={i} src={src} height={150} width={124} radius="50% / 44%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" fx="zoom" />
                 ))}
               </div>
             )}
@@ -197,7 +206,7 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
                 <Orn big />
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                   {d.trio.map((src, i) => (
-                    <Slot key={i} src={src} height={190} radius="50% / 34%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" />
+                    <Slot key={i} src={src} height={190} radius="50% / 34%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" fx="zoom" />
                   ))}
                 </div>
               </>
@@ -252,12 +261,27 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
               </>
             )}
 
-            {(d.thanks || d.closing) && (
+            {(d.thanks || d.thanksPhoto) && (
               <>
                 <Orn big />
-                <div style={{ fontFamily: HAND, fontSize: 24, color: accent, whiteSpace: "pre-line", lineHeight: 1.5 }}>{d.closing || d.thanks}</div>
+                <div style={lab}>Lời cảm ơn</div>
+                {d.thanksPhoto && <Slot src={d.thanksPhoto} height={168} width={138} radius="50% / 44%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" label="" style={{ margin: "14px auto 0" }} />}
+                {d.thanks && <p style={{ margin: "14px 0 0", fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 15, lineHeight: 1.85, color: "#5a4d39", whiteSpace: "pre-line" }}>{d.thanks}</p>}
               </>
             )}
+
+            {d.closing && (
+              <>
+                <Orn />
+                <div style={{ fontFamily: HAND, fontSize: 24, color: accent, whiteSpace: "pre-line", lineHeight: 1.5 }}>{d.closing}</div>
+              </>
+            )}
+
+            <Orn big />
+            <footer>
+              <div style={{ fontFamily: SERIF, fontSize: 30, color: DARK }}>{d.bride} &amp; {d.groom}</div>
+              <div style={{ ...lab, marginTop: 6 }}>Thiệp cưới online</div>
+            </footer>
           </div>
         </div>
       </div>

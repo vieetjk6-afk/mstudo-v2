@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // AURORA — bố cục "trục thời gian zig-zag"
@@ -47,14 +47,15 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
         <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, color: SOFT }}>the wedding of</div>
 
         <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, color: DEEP }}>{d.bride}</div>
+          <div className="wed-ink" style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, color: DEEP }}>{d.bride}</div>
           <div style={{ fontFamily: HAND, fontSize: 30, color: accent, animation: "auFloat 5s ease-in-out infinite" }}>and</div>
-          <div style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, color: DEEP }}>{d.groom}</div>
+          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, color: DEEP }}>{d.groom}</div>
           {d.date.valid && <div style={{ marginTop: 14, ...lab }}>{d.date.spaced}</div>}
           {d.dateSub && <div style={{ fontSize: 12.5, color: SLATE }}>{d.dateSub}</div>}
+          {d.reception && <div style={{ fontSize: 12.5, color: SLATE }}>{d.reception}</div>}
         </div>
 
-        <Slot src={d.hero} height={330} radius="200px 200px 24px 24px" border="1px solid rgba(255,255,255,.9)" tint="rgba(255,255,255,.5)" label="Ảnh bìa" lazy={false} style={{ boxShadow: "0 20px 40px -20px rgba(90,80,160,.5)" }} />
+        <Slot src={d.hero} height={330} radius="200px 200px 24px 24px" border="1px solid rgba(255,255,255,.9)" tint="rgba(255,255,255,.5)" label="Ảnh bìa" lazy={false} fx="kb" style={{ boxShadow: "0 20px 40px -20px rgba(90,80,160,.5)" }} />
 
         {d.guest && (
           <div style={{ textAlign: "center" }}>
@@ -72,11 +73,19 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
           lab={{ fontSize: 9, letterSpacing: ".2em", textTransform: "uppercase", color: SOFT }}
         />
 
-        {(d.story || d.quote) && (
-          <div style={{ ...GLASS, borderRadius: 28, padding: 24 }}>
-            <div style={{ textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: 22, color: DEEP, marginBottom: 10 }}>Chuyện của tụi mình</div>
-            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-line" }}>{d.story || d.quote}</p>
-          </div>
+        {d.quote && (
+          <Reveal anim="blur">
+            <div style={{ textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: 19, lineHeight: 1.8, color: SLATE }}>“{d.quote}”</div>
+          </Reveal>
+        )}
+
+        {d.story && (
+          <Reveal anim="up">
+            <div style={{ ...GLASS, borderRadius: 28, padding: 24 }}>
+              <div style={{ textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: 22, color: DEEP, marginBottom: 10 }}>Chuyện của tụi mình</div>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-line" }}>{d.story}</p>
+            </div>
+          </Reveal>
         )}
       </div>
 
@@ -100,7 +109,7 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
                 </div>
                 {medal && (
                   <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-                    <Slot src={medal} height={92} width={92} radius="50%" tint="rgba(255,255,255,.5)" label="" style={{ border: "3px solid rgba(255,255,255,.95)", boxShadow: "0 10px 24px -14px rgba(90,80,160,.7)" }} />
+                    <Slot src={medal} height={92} width={92} radius="50%" tint="rgba(255,255,255,.5)" label="" style={{ border: "3px solid rgba(255,255,255,.95)", boxShadow: "0 10px 24px -14px rgba(90,80,160,.7)" }} fx="zoom" />
                   </div>
                 )}
               </div>
@@ -212,11 +221,24 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {(d.thanks || d.closing) && (
-          <div style={{ textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: 20, color: SOFT, whiteSpace: "pre-line", lineHeight: 1.7 }}>
-            {d.closing || d.thanks}
-          </div>
+        {(d.thanks || d.thanksPhoto) && (
+          <Reveal anim="up">
+            <div style={{ ...GLASS, borderRadius: 28, padding: 24, textAlign: "center" }}>
+              <div style={{ ...lab, fontSize: 10 }}>Lời cảm ơn</div>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={140} width={140} radius="50%" tint="rgba(255,255,255,.6)" label="" style={{ margin: "14px auto", border: "3px solid #fff" }} />}
+              {d.thanks && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.85, whiteSpace: "pre-line" }}>{d.thanks}</p>}
+            </div>
+          </Reveal>
         )}
+
+        {d.closing && (
+          <div style={{ textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: 20, color: SOFT, whiteSpace: "pre-line", lineHeight: 1.7 }}>{d.closing}</div>
+        )}
+
+        <footer style={{ textAlign: "center" }}>
+          <div style={{ fontFamily: HAND, fontSize: 34, color: accent }}>{d.bride} &amp; {d.groom}</div>
+          <div style={{ ...lab, fontSize: 10, marginTop: 6 }}>Thiệp cưới online</div>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

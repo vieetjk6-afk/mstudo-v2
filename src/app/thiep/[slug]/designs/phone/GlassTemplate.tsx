@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // 3D GLASS — bố cục "băng thẻ kính vuốt ngang"
@@ -52,7 +52,8 @@ export default function GlassTemplate({ inv, wishes, guest }: TemplateProps) {
   if (d.story || d.quote) {
     panels.push(
       <Panel key="chuyen" title="Chuyện của tụi mình">
-        <div style={{ fontSize: 14, lineHeight: 1.8, color: DIM2, whiteSpace: "pre-line" }}>{d.story || d.quote}</div>
+        {d.quote && <div style={{ fontSize: 15, lineHeight: 1.7, fontStyle: "italic", color: INK }}>“{d.quote}”</div>}
+        {d.story && <div style={{ fontSize: 14, lineHeight: 1.8, color: DIM2, whiteSpace: "pre-line" }}>{d.story}</div>}
       </Panel>,
     );
   }
@@ -118,9 +119,9 @@ export default function GlassTemplate({ inv, wishes, guest }: TemplateProps) {
         <div style={{ ...lab, color: "rgba(255,255,255,.75)" }}>We&apos;re getting married</div>
 
         <div style={{ ...GLASS, borderRadius: 32, padding: "30px 22px", boxShadow: "0 20px 50px -20px rgba(0,0,0,.6)", textAlign: "center", display: "flex", flexDirection: "column", gap: 6 }}>
-          <div style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.06, letterSpacing: "-.02em" }}>{d.bride}</div>
+          <div className="wed-ink" style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.06, letterSpacing: "-.02em" }}>{d.bride}</div>
           <div style={{ fontSize: 16, color: "rgba(255,255,255,.65)", letterSpacing: ".3em" }}>×</div>
-          <div style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.06, letterSpacing: "-.02em" }}>{d.groom}</div>
+          <div className="wed-ink-2" style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.06, letterSpacing: "-.02em" }}>{d.groom}</div>
           {d.date.valid && (
             <div style={{ marginTop: 14, fontSize: 12, letterSpacing: ".26em", color: "rgba(255,255,255,.75)" }}>
               {d.date.weekday.toUpperCase()} · {d.date.dotted}{d.reception ? ` · ${d.reception}` : ""}
@@ -145,7 +146,7 @@ export default function GlassTemplate({ inv, wishes, guest }: TemplateProps) {
           lab={{ fontSize: 9, color: "rgba(255,255,255,.6)", letterSpacing: ".14em" }}
         />
 
-        <Slot src={d.hero} height={260} radius={28} border="1px solid rgba(255,255,255,.3)" tint={TINT} label="Ảnh bìa" lazy={false} />
+        <Slot src={d.hero} height={260} radius={28} border="1px solid rgba(255,255,255,.3)" tint={TINT} label="Ảnh bìa" lazy={false} fx="kb" />
       </div>
 
       {/* ══ BĂNG THẺ KÍNH VUỐT NGANG ═══════════════════════════════════ */}
@@ -177,9 +178,9 @@ export default function GlassTemplate({ inv, wishes, guest }: TemplateProps) {
         {/* Album: lưới so le hai cỡ */}
         {d.trio.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <Slot src={d.trio[0]} height={d.trio.length > 1 ? 230 : 160} radius={22} border="1px solid rgba(255,255,255,.26)" tint={TINT} style={{ gridRow: d.trio.length > 2 ? "span 2" : undefined }} />
-            {d.trio[1] && <Slot src={d.trio[1]} height={d.trio[2] ? 110 : 230} radius={22} border="1px solid rgba(255,255,255,.26)" tint={TINT} />}
-            {d.trio[2] && <Slot src={d.trio[2]} height={110} radius={22} border="1px solid rgba(255,255,255,.26)" tint={TINT} />}
+            <Slot src={d.trio[0]} height={d.trio.length > 1 ? 230 : 160} radius={22} border="1px solid rgba(255,255,255,.26)" tint={TINT} fx="zoom" style={{ gridRow: d.trio.length > 2 ? "span 2" : undefined }} />
+            {d.trio[1] && <Slot src={d.trio[1]} height={d.trio[2] ? 110 : 230} radius={22} border="1px solid rgba(255,255,255,.26)" tint={TINT} fx="zoom" />}
+            {d.trio[2] && <Slot src={d.trio[2]} height={110} radius={22} border="1px solid rgba(255,255,255,.26)" tint={TINT} fx="zoom" />}
           </div>
         )}
 
@@ -226,9 +227,26 @@ export default function GlassTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {(d.thanks || d.closing) && (
-          <div style={{ textAlign: "center", fontSize: 15, lineHeight: 1.75, color: DIM2, whiteSpace: "pre-line" }}>{d.closing || d.thanks}</div>
+        {(d.thanks || d.thanksPhoto) && (
+          <Reveal anim="up">
+            <div style={{ ...GLASS, borderRadius: 28, padding: 22, display: "flex", gap: 16, alignItems: "center" }}>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={92} width={92} radius={22} tint={TINT} label="" style={{ flex: "none" }} />}
+              <div>
+                <div style={lab}>Lời cảm ơn</div>
+                {d.thanks && <p style={{ margin: "6px 0 0", fontSize: 14, lineHeight: 1.8, color: DIM2, whiteSpace: "pre-line" }}>{d.thanks}</p>}
+              </div>
+            </div>
+          </Reveal>
         )}
+
+        {d.closing && (
+          <div style={{ textAlign: "center", fontSize: 15, lineHeight: 1.75, color: DIM2, whiteSpace: "pre-line" }}>{d.closing}</div>
+        )}
+
+        <footer style={{ textAlign: "center", paddingTop: 6 }}>
+          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em" }}>{d.bride} &amp; {d.groom}</div>
+          <div style={{ ...lab, marginTop: 8 }}>Thiệp cưới online</div>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

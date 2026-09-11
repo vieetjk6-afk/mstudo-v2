@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // NEON TICKET — cả tấm thiệp LÀ một chiếc vé
@@ -95,7 +95,7 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        <Slot src={d.hero} height={240} radius={10} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.08)" label="Ảnh bìa" lazy={false} />
+        <Slot src={d.hero} height={240} radius={10} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.08)" label="Ảnh bìa" lazy={false} fx="kb" />
 
         <PhoneCountdown
           date={d.countdownTo}
@@ -123,10 +123,13 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         {(d.story || d.quote) && (
-          <div style={{ border: "1px solid rgba(0,255,213,.45)", borderRadius: 10, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={lab}>Backstage</div>
-            <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-line" }}>{d.story || d.quote}</div>
-          </div>
+          <Reveal anim="clip">
+            <div style={{ border: "1px solid rgba(0,255,213,.45)", borderRadius: 10, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={lab}>Backstage</div>
+              {d.quote && <div style={{ fontSize: 15, lineHeight: 1.7, color: "#fff", fontStyle: "italic" }}>“{d.quote}”</div>}
+              {d.story && <div style={{ fontSize: 14, lineHeight: 1.75, whiteSpace: "pre-line" }}>{d.story}</div>}
+            </div>
+          </Reveal>
         )}
 
         {/* Chân dung kiểu "line-up": ảnh vuông + tên in đậm */}
@@ -168,7 +171,7 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
         {d.trio.length > 0 && (
           <div className="wed-swipe" style={{ gap: 8, marginLeft: -22, marginRight: -22, padding: "0 22px" }}>
             {d.trio.map((src, i) => (
-              <Slot key={i} src={src} height={132} width={132} radius={8} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.12)" />
+              <Slot key={i} src={src} height={132} width={132} radius={8} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.12)" fx="zoom" />
             ))}
           </div>
         )}
@@ -238,10 +241,23 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
               ))}
             </>
           )}
+          {(d.thanks || d.thanksPhoto) && (
+            <div style={{ display: "flex", gap: 14, alignItems: "center", borderTop: "1px dashed rgba(0,255,213,.35)", paddingTop: 14 }}>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={72} width={72} radius={4} tint="rgba(0,255,213,.12)" label="" style={{ flex: "none" }} />}
+              <div>
+                <div style={{ ...lab, color: PINK }}>Lời cảm ơn</div>
+                {d.thanks && <p style={{ margin: "4px 0 0", fontSize: 12.5, lineHeight: 1.7, color: TEXT, whiteSpace: "pre-line" }}>{d.thanks}</p>}
+              </div>
+            </div>
+          )}
           <Barcode seed={d.slug || "wedding"} />
-          <div style={{ textAlign: "center", fontSize: 10, letterSpacing: ".3em", color: MUTED, whiteSpace: "pre-line" }}>
-            {d.closing || d.thanks || "ONE NIGHT ONLY · SEE YOU THERE"}
-          </div>
+          <footer style={{ textAlign: "center" }}>
+            <div style={{ fontWeight: 700, fontSize: 18, color: "#fff" }}>{d.bride} &amp; {d.groom}</div>
+            <div style={{ fontSize: 10, letterSpacing: ".3em", color: MUTED, whiteSpace: "pre-line", marginTop: 6 }}>
+              {d.closing || "ONE NIGHT ONLY · SEE YOU THERE"}
+            </div>
+            <div style={{ fontSize: 9, letterSpacing: ".3em", color: MUTED, marginTop: 8 }}>THIỆP CƯỚI ONLINE</div>
+          </footer>
         </div>
       </div>
 

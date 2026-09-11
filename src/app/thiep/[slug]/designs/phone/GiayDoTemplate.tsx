@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // GIẤY DÓ & MỰC NHO — bố cục "tờ giấy dó, ngày cưới cỡ đại"
@@ -34,9 +34,9 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
           <div style={{ writingMode: "vertical-rl", fontFamily: "var(--font-playfair), serif", fontSize: 19, letterSpacing: ".42em", color: accent, paddingTop: 4 }}>THIỆP HỒNG</div>
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
             <div style={lab}>Trân trọng báo tin</div>
-            <div style={{ fontFamily: SERIF, fontSize: 46, lineHeight: 1.06 }}>{d.bride}</div>
+            <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 46, lineHeight: 1.06 }}>{d.bride}</div>
             <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 24, color: accent }}>kết duyên cùng</div>
-            <div style={{ fontFamily: SERIF, fontSize: 46, lineHeight: 1.06 }}>{d.groom}</div>
+            <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 46, lineHeight: 1.06 }}>{d.groom}</div>
           </div>
         </div>
 
@@ -64,7 +64,7 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         <div style={{ border: `1px solid ${LINE}`, padding: 8, background: PAPER }}>
-          <Slot src={d.hero} height={320} label="Ảnh cưới" tint="rgba(120,105,80,.08)" lazy={false} />
+          <Slot src={d.hero} height={320} label="Ảnh cưới" tint="rgba(120,105,80,.08)" lazy={false} fx="kb" />
         </div>
 
         {d.guest && (
@@ -80,17 +80,24 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
             <div className="wed-swipe" style={{ gap: 10, padding: "0 22px" }}>
               {d.photos.slice(1).map((src, i) => (
                 <div key={i} style={{ border: `1px solid ${LINE}`, padding: 6, background: PAPER }}>
-                  <Slot src={src} height={190} width={148} tint="rgba(120,105,80,.08)" />
+                  <Slot src={src} height={190} width={148} tint="rgba(120,105,80,.08)" fx="zoom" />
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {(d.quote || d.story) && (
-          <div style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 17, lineHeight: 1.8, textAlign: "center", color: "#3c372e", whiteSpace: "pre-line" }}>
-            {d.quote ? `“${d.quote}”` : d.story}
-          </div>
+        {d.quote && (
+          <Reveal anim="blur">
+            <div style={{ fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 17, lineHeight: 1.8, textAlign: "center", color: "#3c372e" }}>“{d.quote}”</div>
+          </Reveal>
+        )}
+
+        {d.story && (
+          <Reveal anim="up">
+            <div style={{ ...lab, marginBottom: 10 }}>Chuyện tình yêu</div>
+            <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.9, whiteSpace: "pre-line" }}>{d.story}</p>
+          </Reveal>
         )}
 
         {/* Hai họ trong dấu ngoặc thư pháp */}
@@ -225,11 +232,24 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {(d.thanks || d.closing) && (
-          <div style={{ textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: 20, color: accent, whiteSpace: "pre-line", lineHeight: 1.7 }}>
-            {d.closing || d.thanks}
-          </div>
+        {(d.thanks || d.thanksPhoto) && (
+          <Reveal anim="blur">
+            <div style={{ textAlign: "center", borderTop: `1px solid ${LINE}`, paddingTop: 24 }}>
+              <div style={lab}>Lời cảm ơn</div>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={150} width={126} tint={PAPER} label="" style={{ margin: "14px auto 0", border: `1px solid ${LINE}`, padding: 6 }} />}
+              {d.thanks && <p style={{ margin: "14px 0 0", fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 15, lineHeight: 1.85, whiteSpace: "pre-line" }}>{d.thanks}</p>}
+            </div>
+          </Reveal>
         )}
+
+        {d.closing && (
+          <div style={{ textAlign: "center", fontFamily: SERIF, fontStyle: "italic", fontSize: 20, color: accent, whiteSpace: "pre-line", lineHeight: 1.7 }}>{d.closing}</div>
+        )}
+
+        <footer style={{ textAlign: "center", borderTop: `2px solid ${INK}`, paddingTop: 20 }}>
+          <div style={{ fontFamily: SERIF, fontSize: 30 }}>{d.bride} &amp; {d.groom}</div>
+          <div style={{ ...lab, marginTop: 6 }}>Thiệp cưới online</div>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

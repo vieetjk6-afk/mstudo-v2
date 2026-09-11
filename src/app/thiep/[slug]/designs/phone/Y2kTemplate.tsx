@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Y2K CHROME — bố cục "màn hình app": thẻ nổi trên nền gradient
@@ -83,7 +83,7 @@ export default function Y2kTemplate({ inv, wishes, guest }: TemplateProps) {
       {d.photos.length > 0 && (
         <div className="wed-swipe" style={{ gap: 12, padding: "0 24px 4px" }}>
           {d.photos.map((src, i) => (
-            <Slot key={i} src={src} height={300} width={236} radius={26} border="1px solid rgba(255,255,255,.3)" tint={TINT} lazy={i > 0} />
+            <Slot key={i} src={src} height={300} width={236} radius={26} border="1px solid rgba(255,255,255,.3)" tint={TINT} lazy={i > 0} fx="zoom" />
           ))}
         </div>
       )}
@@ -229,11 +229,24 @@ export default function Y2kTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {(d.thanks || d.closing) && (
-          <div style={{ textAlign: "center", fontFamily: HAND, fontSize: 24, color: PINK, whiteSpace: "pre-line", lineHeight: 1.5 }}>
-            {d.closing || d.thanks}
-          </div>
+        {(d.thanks || d.thanksPhoto) && (
+          <Reveal anim="zoom">
+            <div style={{ ...GLASS, borderRadius: 28, padding: 22, textAlign: "center" }}>
+              <div style={lab}>Lời cảm ơn</div>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={132} width={132} radius="50%" tint={TINT} label="" style={{ margin: "12px auto", border: `2px solid ${accent}` }} />}
+              {d.thanks && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, color: "rgba(255,255,255,.9)", whiteSpace: "pre-line" }}>{d.thanks}</p>}
+            </div>
+          </Reveal>
         )}
+
+        {d.closing && (
+          <div style={{ textAlign: "center", fontFamily: HAND, fontSize: 24, color: PINK, whiteSpace: "pre-line", lineHeight: 1.5 }}>{d.closing}</div>
+        )}
+
+        <footer style={{ textAlign: "center", paddingTop: 6 }}>
+          <div style={{ ...NAME, fontSize: 26 }}>{d.bride} &amp; {d.groom}</div>
+          <div style={{ ...lab, marginTop: 8 }}>Thiệp cưới online</div>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

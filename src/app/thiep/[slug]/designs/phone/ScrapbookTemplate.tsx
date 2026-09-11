@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SCRAPBOOK — bố cục "trang sổ dán tay"
@@ -74,7 +74,7 @@ export default function ScrapbookTemplate({ inv, wishes, guest }: TemplateProps)
         {/* Polaroid lớn: ảnh bìa + tên viết tay dưới đáy khung */}
         <div style={{ background: PAPER, padding: "14px 14px 52px", boxShadow: "0 10px 24px -12px rgba(70,60,40,.6)", transform: "rotate(-2.2deg)", position: "relative" }}>
           <Tape style={{ top: -12, left: "50%", marginLeft: -46, transform: "rotate(-2deg)", animation: "sbTape 7s ease-in-out infinite" }} />
-          <Slot src={d.hero} height={250} label="Ảnh polaroid" tint="rgba(120,105,80,.1)" lazy={false} />
+          <Slot src={d.hero} height={250} label="Ảnh polaroid" tint="rgba(120,105,80,.1)" lazy={false} fx="kb" />
           <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, textAlign: "center", fontFamily: HAND, fontSize: 27 }}>{d.bride} &amp; {d.groom}</div>
         </div>
 
@@ -100,7 +100,7 @@ export default function ScrapbookTemplate({ inv, wishes, guest }: TemplateProps)
             {d.pair.map((src, i) => (
               <div key={i} style={{ flex: 1, background: PAPER, padding: "10px 10px 34px", boxShadow: SHADOW, transform: `rotate(${i === 0 ? 2.6 : -3}deg)`, position: "relative" }}>
                 <Tape style={{ top: -10, left: "50%", marginLeft: -34, width: 68, height: 20, transform: "rotate(3deg)" }} />
-                <Slot src={src} height={110} tint="rgba(120,105,80,.1)" />
+                <Slot src={src} height={110} tint="rgba(120,105,80,.1)" fx="zoom" />
               </div>
             ))}
           </div>
@@ -218,7 +218,7 @@ export default function ScrapbookTemplate({ inv, wishes, guest }: TemplateProps)
             <div style={{ display: "flex", gap: 10 }}>
               {d.trio.map((src, i) => (
                 <div key={i} style={{ flex: 1, background: PAPER, padding: "8px 8px 26px", boxShadow: SHADOW, animation: `sbSway 9s ease-in-out infinite ${i}s` }}>
-                  <Slot src={src} height={94} tint="rgba(120,105,80,.1)" />
+                  <Slot src={src} height={94} tint="rgba(120,105,80,.1)" fx="zoom" />
                 </div>
               ))}
             </div>
@@ -272,11 +272,25 @@ export default function ScrapbookTemplate({ inv, wishes, guest }: TemplateProps)
           </div>
         )}
 
-        {(d.thanks || d.closing) && (
-          <div style={{ textAlign: "center", fontFamily: HAND, fontSize: 25, color: BROWN, whiteSpace: "pre-line", lineHeight: 1.4, transform: "rotate(-1deg)" }}>
-            {d.closing || d.thanks}
-          </div>
+        {(d.thanks || d.thanksPhoto) && (
+          <Reveal anim="rotate">
+            <div style={{ ...paper(5), alignItems: "center", textAlign: "center" }}>
+              <Tape style={{ top: -11, left: "50%", marginLeft: -46, transform: "rotate(-3deg)" }} />
+              <div style={{ ...title, fontSize: 24 }}>Cảm ơn bạn nhiều</div>
+              {d.thanksPhoto && <Slot src={d.thanksPhoto} height={150} width={150} tint="rgba(120,105,80,.1)" label="" style={{ border: `1px solid ${DASH}`, padding: 6 }} />}
+              {d.thanks && <p style={{ margin: 0, fontFamily: HAND, fontSize: 21, lineHeight: 1.5, whiteSpace: "pre-line" }}>{d.thanks}</p>}
+            </div>
+          </Reveal>
         )}
+
+        {d.closing && (
+          <div style={{ textAlign: "center", fontFamily: HAND, fontSize: 25, color: BROWN, whiteSpace: "pre-line", lineHeight: 1.4, transform: "rotate(-1deg)" }}>{d.closing}</div>
+        )}
+
+        <footer style={{ textAlign: "center", transform: "rotate(0.8deg)" }}>
+          <div style={{ fontFamily: HAND, fontSize: 30 }}>{d.bride} &amp; {d.groom}</div>
+          <div style={{ fontFamily: HAND, fontSize: 17, color: BROWN }}>thiệp cưới online</div>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

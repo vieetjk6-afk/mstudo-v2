@@ -55,6 +55,7 @@ const CONFIG: WeddingConfig = {
   hotline: "0903 221 118 (chị Hạnh)",
   closing_line: "Hân hạnh được đón tiếp",
   thanks_note: "Xin chân thành cảm ơn và hẹn gặp Quý khách trong ngày trọng đại.",
+  thanks_photo: PHOTO(10),
   gift_enabled: true,
   gift_note: "Sự hiện diện của bạn đã là món quà quý nhất với tụi mình.",
   bride_bank: { holder: "DANG PHUONG NHI", account: "0601160127", bin: "970403", name: "Sacombank" },

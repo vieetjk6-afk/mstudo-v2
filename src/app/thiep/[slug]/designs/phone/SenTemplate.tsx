@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SEN & KEM — bố cục "ảnh bìa tràn màn hình"
@@ -25,21 +25,26 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
 
   return (
     <PhoneShell card={BG} page="#ece7dd" ink={INK} font={SANS} radius={18} accent={accent}>
-      <style>{`@keyframes senCue{0%,100%{transform:translateY(0);opacity:.55}50%{transform:translateY(6px);opacity:1}}`}</style>
+      <style>{`
+        @keyframes senCue{0%,100%{transform:translateY(0);opacity:.55}50%{transform:translateY(6px);opacity:1}}
+        @keyframes senKen{from{transform:scale(1.02)}to{transform:scale(1.16)}}
+        .wed-kb-img{animation:senKen 22s ease-out forwards}
+      `}</style>
 
       {/* ── Bìa: ảnh tràn màn hình, tên đè lên ảnh ─────────────────────── */}
       <section style={{ position: "relative", height: "100svh", minHeight: 560, overflow: "hidden" }}>
         {d.hero
-          ? <img src={d.hero} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+          ? <img className="wed-kb-img" src={d.hero} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
           : <div style={{ position: "absolute", inset: 0, background: SOFT }} />}
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(38,30,24,.78) 0%,rgba(38,30,24,.28) 42%,rgba(38,30,24,.06) 70%)" }} />
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "0 28px 40px", textAlign: "center", color: "#fff" }}>
           <div style={{ ...eyebrow, letterSpacing: ".42em", color: "rgba(255,255,255,.82)" }}>Lễ thành hôn</div>
-          <div style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, marginTop: 10, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>{d.bride}</div>
+          <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, marginTop: 10, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>{d.bride}</div>
           <div style={{ fontFamily: HAND, fontSize: 28, color: "#f4c9cf" }}>&amp;</div>
-          <div style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>{d.groom}</div>
+          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>{d.groom}</div>
           {d.date.valid && <div style={{ marginTop: 16, fontSize: 12, letterSpacing: ".3em", color: "rgba(255,255,255,.9)" }}>{d.date.spaced}</div>}
           {d.dateSub && <div style={{ marginTop: 4, fontSize: 12.5, color: "rgba(255,255,255,.72)" }}>{d.dateSub}</div>}
+          {d.reception && <div style={{ marginTop: 2, fontSize: 12.5, color: "rgba(255,255,255,.72)" }}>{d.reception}</div>}
           <div style={{ marginTop: 22, fontSize: 18, color: "rgba(255,255,255,.7)", animation: "senCue 2.4s ease-in-out infinite" }}>↓</div>
         </div>
       </section>
@@ -76,10 +81,20 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {(d.quote || d.story) && (
-          <div style={{ textAlign: "center", fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 17, lineHeight: 1.75, color: "#5a4d42", whiteSpace: "pre-line" }}>
-            {d.quote ? `“${d.quote}”` : d.story}
-          </div>
+        {d.quote && (
+          <Reveal anim="blur">
+            <div style={{ textAlign: "center", fontFamily: "var(--font-lora), serif", fontStyle: "italic", fontSize: 17, lineHeight: 1.75, color: "#5a4d42", whiteSpace: "pre-line" }}>
+              “{d.quote}”
+            </div>
+          </Reveal>
+        )}
+
+        {d.story && (
+          <Reveal anim="up">
+            <div style={{ ...eyebrow, textAlign: "center", marginBottom: 12 }}>Chuyện tình yêu</div>
+            <span className="wed-rule" style={{ display: "block", width: 46, height: 1, background: LINE, margin: "0 auto 16px" }} />
+            <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.85, color: BODY, whiteSpace: "pre-line", textAlign: "center" }}>{d.story}</p>
+          </Reveal>
         )}
 
         {/* Chương trình: mốc thời gian DỌC, đường chỉ mảnh + chấm tròn */}
@@ -153,7 +168,7 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
       {/* Album: dải ảnh xếp DỌC tràn mép, cách nhau đúng một nét */}
       {d.trio.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {d.trio.map((src, i) => <Slot key={i} src={src} height={230} tint={SOFT} />)}
+          {d.trio.map((src, i) => <Slot key={i} src={src} height={230} tint={SOFT} fx="zoom" />)}
         </div>
       )}
 
@@ -221,6 +236,12 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         {d.closing && <div style={{ textAlign: "center", fontFamily: HAND, fontSize: 24, color: accent }}>{d.closing}</div>}
+
+        <footer style={{ textAlign: "center", paddingTop: 10 }}>
+          {rule}
+          <p style={{ fontFamily: SERIF, fontSize: 30, color: accent, margin: "14px 0 4px" }}>{d.bride} &amp; {d.groom}</p>
+          <p style={{ fontSize: 11, letterSpacing: ".24em", textTransform: "uppercase", color: MUTED }}>Thiệp cưới online</p>
+        </footer>
       </div>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}
