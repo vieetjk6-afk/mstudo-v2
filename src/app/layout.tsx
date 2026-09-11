@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
-import { Hanken_Grotesk, Cormorant_Garamond, Manrope, Dancing_Script, Great_Vibes, Be_Vietnam_Pro } from "next/font/google";
+import { Hanken_Grotesk, Cormorant_Garamond, Manrope, Dancing_Script, Great_Vibes, Be_Vietnam_Pro, Playfair_Display, Playpen_Sans, Lora } from "next/font/google";
 import "./globals.css";
 import { LangProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
@@ -71,6 +71,40 @@ const greatVibes = Great_Vibes({
   weight: ["400"],
   variable: "--font-hand",
   fallback: ["Georgia", "cursive"],
+  display: "swap",
+  preload: false,
+});
+
+// Bộ phông của các mẫu "thiệp điện thoại" (sen, sơn mài, giấy dó, song hỷ,
+// vintage, scrapbook…). Chỉ trang thiệp dùng tới → preload:false.
+// Chỉ chọn phông CÓ bộ dấu tiếng Việt để tên cô dâu chú rể không bị vỡ dấu.
+const playfair = Playfair_Display({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-playfair",
+  fallback: ["Georgia", "Times New Roman", "serif"],
+  display: "swap",
+  preload: false,
+});
+
+// Chữ viết tay cho mẫu "scrapbook". Caveat (bản thiết kế gốc) KHÔNG có bộ dấu
+// tiếng Việt → dùng Playpen Sans, cùng chất viết tay thoải mái mà đủ dấu.
+const playpen = Playpen_Sans({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600"],
+  variable: "--font-caveat",
+  fallback: ["Segoe Script", "cursive"],
+  display: "swap",
+  preload: false,
+});
+
+const lora = Lora({
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
+  variable: "--font-lora",
+  fallback: ["Georgia", "serif"],
   display: "swap",
   preload: false,
 });
@@ -152,7 +186,7 @@ export default function RootLayout({
     // hydrate (đó là cách duy nhất để không nháy nền sáng rồi mới sang tối), nên
     // React luôn thấy thuộc tính này lệch với bản dựng ở server. Chỉ tắt cảnh báo
     // đúng một cấp <html> — con cháu vẫn được kiểm tra bình thường.
-    <html lang="vi" data-theme="light" suppressHydrationWarning className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${beVietnam.variable} ${dancing.variable} ${greatVibes.variable}`}>
+    <html lang="vi" data-theme="light" suppressHydrationWarning className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${beVietnam.variable} ${dancing.variable} ${greatVibes.variable} ${playfair.variable} ${playpen.variable} ${lora.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>

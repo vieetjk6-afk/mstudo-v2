@@ -8,6 +8,7 @@ import { Heart, ExternalLink, Pencil, Copy, Check, Download, FileSpreadsheet, Us
 import { createClient } from "@/lib/supabase/client";
 import ThiepTabs from "@/components/studio/ThiepTabs";
 import { thiepUrl } from "@/lib/hosts";
+import { getTemplateMeta } from "../../../thiep/[slug]/templates";
 import { escapeHtml } from "@/lib/html-escape";
 import type { WeddingConfig, WeddingRsvp } from "@/lib/types";
 import {
@@ -167,7 +168,7 @@ export default function ThiepListView({ rows, ownerId, studio }: { rows: Invitat
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{couple}</p>
                     <p className="text-xs" style={{ color: "var(--text3)" }}>
-                      Mẫu: {r.template} ·{" "}
+                      Mẫu: {getTemplateMeta(r.template).label} ·{" "}
                       <span style={{ color: r.published ? "var(--s-green)" : "var(--text3)" }}>{r.published ? "Đang hiển thị" : "Nháp"}</span>
                     </p>
                   </div>

@@ -1159,9 +1159,29 @@ export type WeddingConfig = {
   story_url?: string;          // link Love Story (nếu trống → tự lấy theo hợp đồng)
   accent?: string;           // màu nhấn (#rrggbb) — ghi đè màu của template
   font?: "serif" | "sans";   // ghi đè phông của template
+
+  // ── Nội dung thêm, dùng bởi bộ mẫu "thiệp điện thoại" (sen, sơn mài, y2k…) ──
+  // Mẫu nào không có mục tương ứng thì bỏ qua; để trống là ẩn khối đó.
+  lunar_date?: string;       // ngày âm lịch ("Nhằm ngày 12/11 Âm lịch")
+  reception_time?: string;   // "Đón khách từ 17:30"
+  groom_family?: string;     // nhà trai — mỗi dòng một người ("Ông …\nBà …")
+  bride_family?: string;     // nhà gái
+  venue_name?: string;       // địa điểm chính (để trống → lấy từ sự kiện cuối)
+  venue_address?: string;
+  map_image?: string;        // ảnh chụp bản đồ (thay khung bản đồ nhúng)
+  hashtag?: string;          // "#NhiVeNhaTuan"
+  parking_note?: string;     // "Hầm B2, miễn phí"
+  hotline?: string;          // "0909 121 220 (chị Hạnh)"
+  closing_line?: string;     // câu kết cuối thiệp ("Hân hạnh được đón tiếp")
 };
 
-export const WEDDING_TEMPLATES = ["classic", "elegant", "floral", "modern", "cinematic", "story", "editorial", "royal", "sweet"] as const;
+/** Mẫu "trang dài" — bộ gốc, hợp với cả máy tính lẫn điện thoại. */
+export const WEDDING_TEMPLATES_CLASSIC = ["classic", "elegant", "floral", "modern", "cinematic", "story", "editorial", "royal", "sweet"] as const;
+
+/** Mẫu "thiệp điện thoại" — khổ dọc 390px, cuộn một mạch như một tấm thiệp. */
+export const WEDDING_TEMPLATES_PHONE = ["sen", "sonmai", "giaydo", "y2k", "aurora", "songhy", "vintage", "glass", "neon", "scrapbook"] as const;
+
+export const WEDDING_TEMPLATES = [...WEDDING_TEMPLATES_CLASSIC, ...WEDDING_TEMPLATES_PHONE] as const;
 export type WeddingTemplate = (typeof WEDDING_TEMPLATES)[number];
 
 export interface WeddingInvitation {

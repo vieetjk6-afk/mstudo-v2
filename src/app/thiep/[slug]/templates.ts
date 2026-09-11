@@ -101,8 +101,71 @@ export const WEDDING_SKINS: Record<string, WeddingSkin> = {
   },
 };
 
-export const WEDDING_TEMPLATE_LIST = Object.values(WEDDING_SKINS).map((s) => ({ name: s.name, label: s.label }));
-
 export function getSkin(template?: string): WeddingSkin {
   return WEDDING_SKINS[template ?? "classic"] ?? WEDDING_SKINS.classic;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// DANH MỤC MẪU THIỆP — nguồn dữ liệu duy nhất cho bộ chọn mẫu trong trình
+// chỉnh sửa: tên hiển thị, một dòng mô tả phong cách, và bảng màu để vẽ ảnh
+// minh hoạ nhanh (không phải render cả thiệp) trên thẻ chọn mẫu.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type TemplateGroup = "phone" | "long";
+
+export type WeddingTemplateMeta = {
+  name: string;
+  label: string;      // tên ngắn trên thẻ chọn
+  tagline: string;    // một dòng mô tả phong cách
+  group: TemplateGroup;
+  bg: string;         // nền tấm thiệp (vẽ ảnh minh hoạ)
+  ink: string;        // màu chữ
+  accent: string;     // màu nhấn
+  serif: boolean;     // chữ tên dùng serif hay sans
+  dark: boolean;
+};
+
+/** Mẫu "thiệp điện thoại": khổ dọc, cuộn một mạch như cầm tấm thiệp trên tay. */
+const PHONE_TEMPLATES: WeddingTemplateMeta[] = [
+  { name: "sen", label: "Sen & kem", tagline: "Áo dài tối giản · kem & hồng sen", group: "phone", bg: "#faf6ef", ink: "#3a3129", accent: "#c98a93", serif: true, dark: false },
+  { name: "sonmai", label: "Sơn mài", tagline: "Indigo & vàng lá · chữ dọc song hỷ", group: "phone", bg: "#101a2e", ink: "#f5efe1", accent: "#d6b266", serif: true, dark: true },
+  { name: "giaydo", label: "Giấy dó", tagline: "Vân giấy & mực nho · dấu triện đỏ", group: "phone", bg: "#efe7d6", ink: "#23201b", accent: "#b2342c", serif: true, dark: false },
+  { name: "y2k", label: "Y2K chrome", tagline: "Gradient lỏng · đĩa chrome xoay", group: "phone", bg: "#12052b", ink: "#ffffff", accent: "#ff4fd8", serif: false, dark: true },
+  { name: "aurora", label: "Aurora", tagline: "Pastel mộng mơ · thẻ kính mờ", group: "phone", bg: "#f2f0fd", ink: "#33305a", accent: "#b98fd0", serif: true, dark: false },
+  { name: "songhy", label: "Song Hỷ", tagline: "Truyền thống Việt · đỏ & vàng", group: "phone", bg: "#8e1b1b", ink: "#fff8ec", accent: "#ffd77a", serif: true, dark: true },
+  { name: "vintage", label: "Hoa lá vintage", tagline: "Vẽ tay · cánh hoa rơi · tông đất", group: "phone", bg: "#f7f2e7", ink: "#3b3222", accent: "#b0724f", serif: true, dark: false },
+  { name: "glass", label: "3D glass", tagline: "Quả cầu nổi · kính mờ hiện đại", group: "phone", bg: "#22224a", ink: "#ffffff", accent: "#ff9ad5", serif: false, dark: true },
+  { name: "neon", label: "Neon ticket", tagline: "Cyberpunk · vé concert phát sáng", group: "phone", bg: "#07080f", ink: "#d6f7f2", accent: "#00ffd5", serif: false, dark: true },
+  { name: "scrapbook", label: "Scrapbook", tagline: "Polaroid dán tay · giấy note vàng", group: "phone", bg: "#e9e3d6", ink: "#3a3227", accent: "#a8734f", serif: false, dark: false },
+];
+
+/** Mẫu "trang dài" — bộ gốc, đẹp cả trên máy tính. */
+const LONG_TEMPLATES: WeddingTemplateMeta[] = Object.values(WEDDING_SKINS).map((s) => ({
+  name: s.name,
+  label: s.label.split(" (")[0],
+  tagline: s.label.includes("(") ? s.label.split("(")[1].replace(")", "") : "Thiệp cuộn dọc",
+  group: "long" as const,
+  bg: s.bg,
+  ink: s.text,
+  accent: s.accent,
+  serif: s.font === "serif",
+  dark: s.dark,
+}));
+
+export const WEDDING_TEMPLATE_CATALOG: WeddingTemplateMeta[] = [...PHONE_TEMPLATES, ...LONG_TEMPLATES];
+
+export const TEMPLATE_GROUPS: { key: TemplateGroup; title: string; hint: string }[] = [
+  { key: "phone", title: "Thiệp điện thoại", hint: "Khổ dọc, cuộn một mạch — hợp để gửi qua Zalo/Messenger." },
+  { key: "long", title: "Trang thiệp dài", hint: "Bố cục rộng, đẹp cả khi khách mở trên máy tính." },
+];
+
+export function getTemplateMeta(name?: string): WeddingTemplateMeta {
+  return WEDDING_TEMPLATE_CATALOG.find((t) => t.name === name) ?? WEDDING_TEMPLATE_CATALOG[0];
+}
+
+/** Mẫu này là thiệp khổ điện thoại? (dùng để canh các khối phụ cho vừa khung) */
+export function isPhoneTemplate(name?: string): boolean {
+  return getTemplateMeta(name).group === "phone";
+}
+
+export const WEDDING_TEMPLATE_LIST = WEDDING_TEMPLATE_CATALOG.map((t) => ({ name: t.name, label: t.label }));

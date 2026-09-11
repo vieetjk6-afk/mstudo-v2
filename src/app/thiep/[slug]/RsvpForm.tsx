@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { Heart, Send } from "lucide-react";
+import { usePreview } from "./preview-mode";
 
 /** Public guest RSVP + well-wishes form. Posts to /api/thiep/rsvp by slug. */
-export default function RsvpForm({ slug, note }: { slug: string; note?: string }) {
+export default function RsvpForm({ slug, note, initialAttending = true }: { slug: string; note?: string; initialAttending?: boolean }) {
+  const { preview } = usePreview();
   const [name, setName] = useState("");
 
   // Tự điền tên từ link cá nhân hóa (?guest=…) — đồng bộ với bì thư & lời mời.
@@ -14,7 +16,7 @@ export default function RsvpForm({ slug, note }: { slug: string; note?: string }
     if (g) setName(g.slice(0, 120));
   }, []);
   const [side, setSide] = useState<"groom" | "bride" | "both">("both");
-  const [attending, setAttending] = useState(true);
+  const [attending, setAttending] = useState(initialAttending);
   const [num, setNum] = useState(1);
   const [wish, setWish] = useState("");
   const [state, setState] = useState<"idle" | "saving" | "done" | "error">("idle");
@@ -22,6 +24,8 @@ export default function RsvpForm({ slug, note }: { slug: string; note?: string }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    // Bản xem trước: không ghi dữ liệu thật, chỉ báo cho người đang sửa thiệp.
+    if (preview) { setState("done"); return; }
     setState("saving");
     try {
       const res = await fetch("/api/thiep/rsvp", {
@@ -40,12 +44,17 @@ export default function RsvpForm({ slug, note }: { slug: string; note?: string }
       <div className="mx-auto max-w-md rounded-2xl border p-8 text-center" style={{ borderColor: "var(--wed-accent)" }}>
         <Heart className="mx-auto mb-3" style={{ color: "var(--wed-accent)" }} />
         <p className="font-serif text-xl">Cảm ơn bạn rất nhiều!</p>
-        <p className="mt-2 text-sm opacity-70">Lời chúc và xác nhận của bạn đã được gửi đến cô dâu chú rể.</p>
+        <p className="mt-2 text-sm opacity-70">
+          {preview ? "Đây là bản xem trước — trên thiệp thật, phản hồi của khách sẽ được lưu lại cho bạn." : "Lời chúc và xác nhận của bạn đã được gửi đến cô dâu chú rể."}
+        </p>
+        {preview && <button type="button" onClick={() => setState("idle")} className="mt-3 text-xs underline opacity-70">Thử lại</button>}
       </div>
     );
   }
 
-  const inputCls = "w-full rounded-lg border bg-white/70 px-3 py-2 text-sm outline-none focus:ring-2";
+  // Nền ô nhập luôn trắng nên ép chữ đậm: các mẫu nền tối cho chữ sáng thừa kế
+  // xuống sẽ chìm hẳn vào nền ô.
+  const inputCls = "w-full rounded-lg border bg-white/90 px-3 py-2 text-sm text-stone-800 placeholder:text-stone-400 outline-none focus:ring-2";
 
   return (
     <form onSubmit={submit} className="mx-auto max-w-md space-y-3 text-left">
@@ -78,7 +87,7 @@ export default function RsvpForm({ slug, note }: { slug: string; note?: string }
             type="number"
             min={1}
             max={50}
-            className="w-16 rounded border bg-white/70 px-2 py-1 text-center"
+            className="w-16 rounded border bg-white/90 px-2 py-1 text-center text-stone-800"
             style={{ borderColor: "var(--wed-accent)" }}
             value={num}
             onChange={(e) => setNum(Number(e.target.value))}
