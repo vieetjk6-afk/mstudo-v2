@@ -1,11 +1,22 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { Eyebrow, Families, Gifts, GuestLine, InfoGrid, MapBox, PhoneCountdown, PhoneShell, Portraits, QuickRsvp, Slot, WishList, phoneData } from "./kit";
+import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Slot, phoneData } from "./kit";
 
-// 2b · Sơn mài indigo & vàng lá. Header chia cột với dải chữ DỌC, ảnh ngang,
-// đếm ngược là lưới 4 ô viền vàng mảnh — mọi khối đều vuông vắn, không bo góc.
+// ════════════════════════════════════════════════════════════════════════════
+// SƠN MÀI — bố cục "hai cột, dải chữ dọc chạy suốt trang"
+//
+// Nét riêng so với 9 mẫu còn lại:
+//   · một DẢI DỌC viền vàng bám bên trái SUỐT chiều cao thiệp, chữ xoay dọc
+//   · mở đầu bằng CHỮ, không có ảnh lớn — ảnh ngang xuất hiện sau tên
+//   · lịch trình là SỔ KẺ DÒNG đánh số 01–0n, không phải danh sách giờ
+//   · ảnh TRÀN ra mép phải, phá khung lề của cột chữ
+//   · hai họ xếp DỌC thành hai khối, mỗi khối có nhãn dọc riêng
+//   · dặn dò là danh sách nhãn–giá trị một cột, không phải lưới 2×2
+// ════════════════════════════════════════════════════════════════════════════
+
 const BG = "#101a2e", INK = "#f5efe1", GOLD = "#d6b266", STEEL = "#9fb0cc", BODY = "#e8e2d4";
 const LINE = "rgba(214,178,102,.4)";
+const HAIR = "rgba(214,178,102,.22)";
 const TINT = "rgba(255,255,255,.12)";
 const SERIF = "var(--font-playfair), serif";
 const SANS = "var(--font-be-vietnam), system-ui, sans-serif";
@@ -13,31 +24,35 @@ const SANS = "var(--font-be-vietnam), system-ui, sans-serif";
 export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
   const d = phoneData(inv, guest);
   const accent = d.accent || GOLD;
-  const card = { border: `1px solid ${LINE}`, padding: 20, display: "flex", flexDirection: "column" as const, gap: 14, color: BODY };
+  const lab = { fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase" as const, color: accent };
+  // Ảnh tràn ra mép phải: bù đúng phần padding của cột chữ.
+  const bleedRight = { marginRight: -20 };
+
+  const rail = (
+    <div style={{ height: "100%", borderRight: `1px solid ${LINE}`, background: "rgba(214,178,102,.05)" }}>
+      <div style={{ position: "sticky", top: 0, height: "100svh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ writingMode: "vertical-rl", fontFamily: SERIF, fontSize: 13, letterSpacing: ".5em", color: accent, opacity: 0.9 }}>
+          SONG HỶ LÂM MÔN
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <PhoneShell
-      card={BG} page="#0a1120" ink={INK} font={SANS} radius={14} accent={accent}
+      card={BG} page="#0a1120" ink={INK} font={SANS} radius={14} accent={accent} rail={rail} railWidth={46}
       pattern={<div style={{ position: "absolute", inset: 0, pointerEvents: "none", opacity: 0.3, backgroundImage: "radial-gradient(rgba(214,178,102,.25) 1px,transparent 1px),radial-gradient(rgba(214,178,102,.12) 1px,transparent 1px)", backgroundSize: "22px 22px,11px 11px", backgroundPosition: "0 0,7px 9px" }} />}
     >
-      <div style={{ display: "flex", alignItems: "stretch", borderBottom: `1px solid ${LINE}` }}>
-        <div style={{ width: 56, borderRight: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "center", padding: "22px 0" }}>
-          <div style={{ writingMode: "vertical-rl", fontFamily: SERIF, fontSize: 15, letterSpacing: ".55em", color: accent }}>SONG HỶ LÂM MÔN</div>
-        </div>
-        <div style={{ flex: 1, padding: "30px 20px", display: "flex", flexDirection: "column", gap: 8 }}>
-          <Eyebrow style={{ color: STEEL }}>Thiệp mời dự lễ thành hôn</Eyebrow>
-          <div style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 1.12 }}>{d.bride}</div>
+      <div style={{ padding: "34px 20px 46px", display: "flex", flexDirection: "column", gap: 28 }}>
+        {/* Mở đầu bằng chữ — ảnh để sau */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }}>Thiệp mời dự lễ thành hôn</div>
+          <div style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.bride}</div>
           <div style={{ fontFamily: SERIF, fontSize: 22, color: accent, letterSpacing: ".2em" }}>✦</div>
-          <div style={{ fontFamily: SERIF, fontSize: 38, lineHeight: 1.12 }}>{d.groom}</div>
-          {d.date.valid && <div style={{ marginTop: 10, fontSize: 12, letterSpacing: ".22em", color: accent }}>{d.date.weekday.toUpperCase()} · {d.date.dotted}</div>}
-          {d.dateSub && <div style={{ fontSize: 12, color: STEEL }}>{d.dateSub}</div>}
+          <div style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.groom}</div>
+          {d.date.valid && <div style={{ marginTop: 8, fontSize: 12, letterSpacing: ".22em", color: accent }}>{d.date.weekday.toUpperCase()} · {d.date.dotted}</div>}
+          {d.dateSub && <div style={{ fontSize: 12.5, color: STEEL }}>{d.dateSub}</div>}
         </div>
-      </div>
-
-      <Slot src={d.hero} height={300} label="Ảnh cưới" tint={TINT} lazy={false} style={{ borderBottom: `1px solid ${LINE}` }} />
-
-      <div style={{ padding: "22px 20px 46px", display: "flex", flexDirection: "column", gap: 22 }}>
-        <GuestLine d={d} label={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }} name={{ fontSize: 38, lineHeight: 1.1, color: INK, marginTop: 2 }} />
 
         <PhoneCountdown
           date={d.countdownTo}
@@ -48,49 +63,76 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
           lab={{ fontSize: 9, color: STEEL, letterSpacing: ".14em" }}
         />
 
-        {d.pair.length > 0 && (
-          <div style={{ display: "flex", gap: 12 }}>
-            {d.pair.map((src, i) => <Slot key={i} src={src} height={130} tint={TINT} style={{ flex: 1 }} />)}
+        {/* Ảnh ngang TRÀN mép phải */}
+        <Slot src={d.hero} height={280} tint={TINT} label="Ảnh cưới" lazy={false} style={bleedRight} />
+
+        {d.guest && (
+          <div>
+            <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }}>{d.guestLabel}</div>
+            <div style={{ fontFamily: "var(--font-hand), cursive", fontSize: 40, lineHeight: 1.15, color: INK }}>{d.guest}</div>
           </div>
         )}
 
-        <Portraits
-          d={d}
-          ring={accent}
-          role={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }}
-          name={{ fontFamily: SERIF, fontSize: 24, lineHeight: 1.15, color: INK }}
-          sub={{ fontSize: 12.5, lineHeight: 1.55, color: STEEL, marginTop: 4 }}
-        />
-
-        {(d.families.groom || d.families.bride) && (
-          <div style={card}>
-            <Eyebrow style={{ color: accent }}>Hai họ</Eyebrow>
-            <Families d={d} head={{ color: STEEL, marginBottom: 4 }} divider="rgba(214,178,102,.35)" wrap={{ gap: 14 }} />
+        {/* Hai họ: hai khối XẾP DỌC, nhãn dọc bên trái mỗi khối */}
+        {d.hasFamilies && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {([["Nhà trai", d.families.groom], ["Nhà gái", d.families.bride]] as const).map(([title, body]) => body && (
+              <div key={title} style={{ display: "flex", gap: 14, border: `1px solid ${LINE}`, padding: "16px 18px" }}>
+                <div style={{ writingMode: "vertical-rl", fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: accent, flex: "none" }}>{title}</div>
+                <div style={{ fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-line", color: BODY }}>{body}</div>
+              </div>
+            ))}
           </div>
         )}
 
+        {/* Lịch trình: SỔ KẺ DÒNG đánh số */}
         {d.events.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", color: BODY }}>
-            <Eyebrow style={{ color: accent, marginBottom: 12 }}>Lịch trình</Eyebrow>
-            {d.events.map((e, i) => (
-              <div key={i} style={{ display: "flex", gap: 14, padding: "13px 0", borderTop: "1px solid rgba(214,178,102,.3)", borderBottom: i === d.events.length - 1 ? "1px solid rgba(214,178,102,.3)" : undefined }}>
-                <span style={{ fontFamily: SERIF, color: accent, minWidth: 62 }}>{e.date || e.time || "—"}</span>
-                <span style={{ fontSize: 14, lineHeight: 1.5 }}>{[e.label, e.time && e.date ? e.time : null, e.where].filter(Boolean).join(" · ")}</span>
+          <div>
+            <div style={{ ...lab, marginBottom: 12 }}>Lịch trình</div>
+            <div style={{ borderTop: `1px solid ${LINE}` }}>
+              {d.events.map((e, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "26px 1fr auto", gap: 12, alignItems: "baseline", padding: "14px 0", borderBottom: `1px solid ${HAIR}` }}>
+                  <span style={{ fontFamily: SERIF, fontSize: 13, color: accent, opacity: 0.75 }}>{String(i + 1).padStart(2, "0")}</span>
+                  <span style={{ fontSize: 14.5, lineHeight: 1.5, color: BODY }}>
+                    {e.label}
+                    {e.where && <span style={{ display: "block", fontSize: 12.5, color: STEEL, marginTop: 2 }}>{e.where}</span>}
+                  </span>
+                  <span style={{ fontFamily: SERIF, fontSize: 15, color: accent, whiteSpace: "nowrap" }}>{[e.date, e.time].filter(Boolean).join(" · ")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Chân dung: ảnh trái — chữ phải, xếp thành hai hàng ngang */}
+        {d.portraits.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {d.portraits.map((p) => (
+              <div key={p.role + p.name} style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                <Slot src={p.photo} height={92} width={92} radius={2} tint={TINT} label="" style={{ flex: "none", border: `1px solid ${LINE}` }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }}>{p.role}</div>
+                  <div style={{ fontFamily: SERIF, fontSize: 24, lineHeight: 1.2 }}>{p.name}</div>
+                  {p.sub && <div style={{ fontSize: 12.5, color: STEEL, lineHeight: 1.55, marginTop: 3 }}>{p.sub}</div>}
+                </div>
               </div>
             ))}
           </div>
         )}
 
         {d.story && (
-          <div style={card}>
-            <Eyebrow style={{ color: accent }}>Chuyện của chúng mình</Eyebrow>
-            <p style={{ fontSize: 14, lineHeight: 1.7, whiteSpace: "pre-line", margin: 0 }}>{d.story}</p>
+          <div style={{ borderLeft: `2px solid ${accent}`, paddingLeft: 16 }}>
+            <div style={{ ...lab, marginBottom: 8 }}>Chuyện của chúng mình</div>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, whiteSpace: "pre-line", color: BODY }}>{d.story}</p>
           </div>
         )}
 
+        {/* Ảnh phụ tràn mép phải, xếp dọc */}
+        {d.pair.map((src, i) => <Slot key={i} src={src} height={200} tint={TINT} style={bleedRight} />)}
+
         {(d.venue.name || d.venue.address || d.mapHref) && (
-          <div style={card}>
-            <Eyebrow style={{ color: accent }}>Địa điểm</Eyebrow>
+          <div style={{ border: `1px solid ${LINE}`, padding: 20, display: "flex", flexDirection: "column", gap: 14, color: BODY }}>
+            <div style={lab}>Địa điểm</div>
             <div style={{ fontSize: 15, lineHeight: 1.6 }}>
               {d.venue.name && <strong>{d.venue.name}</strong>}
               {d.venue.name && d.venue.address && <br />}
@@ -103,22 +145,39 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        <InfoGrid
-          d={d}
-          cell={{ border: `1px solid ${LINE}`, padding: 14, textAlign: "center" }}
-          label={{ fontSize: 10, letterSpacing: ".2em", textTransform: "uppercase", color: STEEL }}
-          value={{ fontFamily: SERIF, fontSize: 18, color: accent, marginTop: 4 }}
-        />
+        {/* Dặn dò: danh sách nhãn–giá trị MỘT CỘT, kẻ dòng */}
+        {d.infos.length > 0 && (
+          <div>
+            <div style={{ ...lab, marginBottom: 10 }}>Dặn dò</div>
+            <div style={{ borderTop: `1px solid ${HAIR}` }}>
+              {d.infos.map((i) => (
+                <div key={i.label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 14, padding: "12px 0", borderBottom: `1px solid ${HAIR}` }}>
+                  <span style={{ fontSize: 10, letterSpacing: ".22em", textTransform: "uppercase", color: STEEL, flex: "none" }}>{i.label}</span>
+                  <span style={{ fontSize: 14, color: BODY, textAlign: "right" }}>
+                    {i.value}
+                    {i.swatches && (
+                      <span style={{ display: "inline-flex", gap: 6, marginLeft: 8, verticalAlign: "middle" }}>
+                        {i.swatches.map((s, k) => <span key={k} style={{ width: 16, height: 16, borderRadius: "50%", background: s, border: `1px solid ${LINE}` }} />)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {d.trio.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: `repeat(${Math.min(d.trio.length, 3)},1fr)`, gap: 8 }}>
-            {d.trio.map((src, i) => <Slot key={i} src={src} height={104} tint={TINT} />)}
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 1, ...bleedRight }}>
+            <Slot src={d.trio[0]} height={230} tint={TINT} style={{ gridRow: "span 2" }} />
+            {d.trio[1] && <Slot src={d.trio[1]} height={114.5} tint={TINT} />}
+            {d.trio[2] && <Slot src={d.trio[2]} height={114.5} tint={TINT} />}
           </div>
         )}
 
         {d.rsvpOn && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Eyebrow style={{ color: accent }}>Xác nhận</Eyebrow>
+            <div style={lab}>Xác nhận</div>
             <QuickRsvp
               slug={d.slug}
               note={d.c.rsvp_note}
@@ -131,19 +190,37 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
 
         {d.wishesOn && wishes.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Eyebrow style={{ color: accent }}>Lời chúc</Eyebrow>
-            <WishList
-              wishes={wishes}
-              item={{ borderLeft: `2px solid ${accent}`, padding: "10px 14px", color: BODY, fontSize: 13, lineHeight: 1.55, marginBottom: 8 }}
-              by={{ fontSize: 11, color: STEEL, marginTop: 4 }}
-            />
+            <div style={lab}>Lời chúc</div>
+            {wishes.slice(0, 8).map((w, i) => (
+              <div key={i} style={{ borderLeft: `2px solid ${accent}`, padding: "10px 14px", color: BODY, fontSize: 13, lineHeight: 1.6 }}>
+                {w.wish}
+                <div style={{ fontSize: 11, color: STEEL, marginTop: 4 }}>— {w.guest_name}</div>
+              </div>
+            ))}
           </div>
         )}
 
-        <Gifts d={d} box={{ border: `1px solid ${LINE}`, padding: 16, color: BODY }} qrRadius={0} muted={{ color: accent }} note={{ color: STEEL }} />
+        {d.gifts.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={lab}>Mừng cưới</div>
+            {d.giftNote && <p style={{ margin: 0, fontSize: 13, color: STEEL, lineHeight: 1.6 }}>{d.giftNote}</p>}
+            {d.gifts.map((g) => (
+              <div key={g.title} style={{ display: "flex", gap: 14, alignItems: "center", border: `1px solid ${LINE}`, padding: 16 }}>
+                <img src={g.qr} alt="" width={74} height={74} style={{ width: 74, height: 74, flex: "none", background: "#fff", objectFit: "contain" }} />
+                <div style={{ fontSize: 13, lineHeight: 1.7, color: BODY }}>
+                  {g.bank.holder || g.fallbackName}
+                  <div style={{ color: accent }}>{g.bank.name}</div>
+                  <div style={{ color: accent }}>{g.bank.account?.replace(/\s/g, "")}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {(d.closing || d.thanks) && (
-          <div style={{ textAlign: "center", fontFamily: SERIF, fontSize: 19, color: accent, whiteSpace: "pre-line" }}>{d.closing || d.thanks}</div>
+        {(d.thanks || d.closing) && (
+          <div style={{ borderTop: `1px solid ${LINE}`, paddingTop: 22, fontFamily: SERIF, fontSize: 19, color: accent, whiteSpace: "pre-line", lineHeight: 1.6 }}>
+            {d.closing || d.thanks}
+          </div>
         )}
       </div>
 
