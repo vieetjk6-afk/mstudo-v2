@@ -80,6 +80,9 @@ export default function FilterTool({
   const [driveFiles, setDriveFiles] = useState<SourceFile[]>([]);
   const [loadingDrive, setLoadingDrive] = useState(false);
   const [driveError, setDriveError] = useState<string | null>(null);
+  /** Tóm tắt lần tải gần nhất — LUÔN hiện, kể cả khi tải về 0 ảnh, để bấm
+   *  "Tải ảnh" không bao giờ giống như không có gì xảy ra. */
+  const [driveNote, setDriveNote] = useState<string | null>(null);
 
   const [localFiles, setLocalFiles] = useState<SourceFile[]>([]);
   const [srcDirName, setSrcDirName] = useState("");
@@ -102,7 +105,7 @@ export default function FilterTool({
   // Copy ảnh đã lọc thẳng sang Drive (không tải về máy). Studio KẾT NỐI Drive
   // MỘT LẦN (toàn quyền, offline); sau đó máy chủ tự tạo thư mục + chép, KHÔNG
   // cần đăng nhập lại.
-  const [newFolderName, setNewFolderName] = useState("Anh Chon");
+  const [newFolderName, setNewFolderName] = useState("Ảnh lọc");
   const [driveCopying, setDriveCopying] = useState(false);
   const [driveCopyMsg, setDriveCopyMsg] = useState<string | null>(null);
   const [driveCopyLink, setDriveCopyLink] = useState<string | null>(null);
@@ -191,22 +194,56 @@ export default function FilterTool({
 
   async function loadDrive(url?: string) {
     const u = (url ?? driveUrl).trim();
-    if (!u) return;
-    setLoadingDrive(true);
-    setDriveError(null);
-    const res = await fetch("/api/drive/list", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: u }),
-    });
-    const data = await res.json();
-    setLoadingDrive(false);
-    if (data.error) {
-      setDriveError(data.error);
-      setDriveFiles([]);
+    if (!u) {
+      setDriveError("Chưa nhập link thư mục Drive.");
       return;
     }
-    setDriveFiles((data.files ?? []).map((f: any) => ({ key: f.id, name: f.name, driveId: f.id })));
+    setLoadingDrive(true);
+    setDriveError(null);
+    setDriveNote(null);
+    try {
+      const res = await fetch("/api/drive/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Quét cả thư mục con: ảnh buổi chụp hay được xếp sẵn theo JPG / RAW /
+        // ngày, thư mục gốc không có file nào nên trước đây tải về rỗng.
+        body: JSON.stringify({ url: u, recursive: true }),
+      });
+      // Lỗi máy chủ có thể trả HTML (không phải JSON) — bắt luôn để không nuốt
+      // lỗi và kẹt nút ở trạng thái "Đang tải…".
+      const data = await res.json().catch(() => null);
+      if (!data) {
+        setDriveFiles([]);
+        setDriveError(`Máy chủ trả lời không hợp lệ (mã ${res.status}). Hãy thử lại.`);
+        return;
+      }
+      if (data.error) {
+        setDriveFiles([]);
+        setDriveError(data.error);
+        return;
+      }
+      const files = (data.files ?? []).map((f: any) => ({ key: f.id, name: f.name, driveId: f.id }));
+      setDriveFiles(files);
+      const subs = Number(data.subfolders) || 0;
+      if (files.length === 0) {
+        setDriveNote(
+          subs > 0
+            ? `Không thấy file ảnh nào trong link này (đã quét cả ${subs} thư mục con). Kiểm tra lại link, hoặc dán link đúng thư mục chứa ảnh.`
+            : "Không thấy file ảnh nào trong link này. Kiểm tra link đúng thư mục chứa ảnh, và tài khoản Drive đã kết nối có quyền xem thư mục đó."
+        );
+      } else {
+        setDriveNote(
+          `Đã tải ${files.length} ảnh từ Drive` +
+            (subs > 0 ? ` (gồm cả ${subs} thư mục con)` : "") +
+            (data.truncated ? " — đã đạt giới hạn quét, danh sách có thể chưa đủ." : ".")
+        );
+      }
+    } catch {
+      setDriveFiles([]);
+      setDriveError("Không tải được danh sách ảnh từ Drive. Kiểm tra mạng rồi thử lại.");
+    } finally {
+      setLoadingDrive(false);
+    }
   }
 
   // ── Local source (File System Access API) ──────────────────────
@@ -383,8 +420,8 @@ export default function FilterTool({
   }
 
   // Copy ảnh đã lọc sang Drive — máy chủ dùng KẾT NỐI đã lưu (toàn quyền) để tự
-  // tạo thư mục "Anh Chon" trong link ảnh gốc rồi chép ảnh vào, KHÔNG cần đăng
-  // nhập lại. Bytes không qua máy studio.
+  // tạo thư mục "Ảnh lọc" trong thư mục gốc đang lọc rồi chép ảnh vào, KHÔNG cần
+  // đăng nhập lại. Bytes không qua máy studio.
   async function copyToDrive() {
     const files = shown.filter((f) => f.driveId).map((f) => ({ id: f.driveId as string, name: f.name }));
     if (files.length === 0) return;
@@ -408,8 +445,12 @@ export default function FilterTool({
       } else {
         setDriveCopyLink(d.folderUrl ?? null);
         const failN = Array.isArray(d.failed) ? d.failed.length : 0;
+        const skipN = Number(d.skipped) || 0;
         setDriveCopyMsg(
-          `Đã copy ${d.copied}/${files.length} ảnh sang “${d.folderName || "Anh Chon"}”${failN ? ` · ${failN} ảnh lỗi` : ""}.`
+          `Đã copy ${d.copied}/${files.length} ảnh vào thư mục “${d.folderName || "Ảnh lọc"}”` +
+            `${d.reused ? " (thư mục đã có sẵn trong link gốc)" : " (vừa tạo trong link ảnh gốc)"}` +
+            `${skipN ? ` · ${skipN} ảnh đã có từ trước nên bỏ qua` : ""}` +
+            `${failN ? ` · ${failN} ảnh lỗi` : ""}.`
         );
       }
     } catch {
@@ -449,8 +490,10 @@ export default function FilterTool({
                 </button>
               </div>
               {driveError && <p className="mt-3 text-sm" style={{ color: "var(--danger)" }}>{driveError}</p>}
-              {driveFiles.length > 0 && (
-                <p className="mt-3 text-[13px]" style={{ color: "var(--text2)" }}>Đã tải <b>{driveFiles.length}</b> ảnh từ Drive.</p>
+              {driveNote && (
+                <p className="mt-3 text-[13px]" style={{ color: driveFiles.length ? "var(--text2)" : "var(--gold)" }}>
+                  {driveNote}
+                </p>
               )}
 
             </>
@@ -545,7 +588,7 @@ export default function FilterTool({
           no={3}
           title="Nơi lưu ảnh đã lọc"
           desc={photoSource === "drive"
-            ? "Chép thẳng sang Drive vào thư mục con của chính link ảnh gốc — không phải tải về máy."
+            ? "Máy chủ tự tạo thư mục “Ảnh lọc” ngay trong thư mục gốc đang lọc rồi chép ảnh đã lọc vào — không phải tải về máy."
             : "Chọn thư mục đích rồi copy thẳng sang; ảnh không rời khỏi máy bạn."}
         >
           {photoSource === "drive" ? (
@@ -557,8 +600,8 @@ export default function FilterTool({
 
                         {driveConn.connected ? (
                           <>
-                            <label className="mb-1 block text-[12px]" style={{ color: "var(--text3)" }}>Tên thư mục ảnh chọn</label>
-                            <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Anh Chon" className="input" />
+                            <label className="mb-1 block text-[12px]" style={{ color: "var(--text3)" }}>Tên thư mục ảnh đã lọc</label>
+                            <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Ảnh lọc" className="input" />
                             <button
                               type="button"
                               onClick={copyToDrive}
@@ -568,7 +611,7 @@ export default function FilterTool({
                               <CopyCheck size={15} /> {driveCopying ? "Đang copy…" : `Copy ${shown.length} ảnh sang Drive`}
                             </button>
                             <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
-                              Máy chủ <b>tự tạo thư mục “{newFolderName.trim() || "Anh Chon"}” ngay trong link ảnh gốc</b> và chép ảnh đã lọc vào — không cần đăng nhập lại. Cần link ảnh gốc mà tài khoản Drive đã kết nối có <b>quyền chỉnh sửa</b>.{" "}
+                              Máy chủ <b>tự tạo thư mục “{newFolderName.trim() || "Ảnh lọc"}” ngay trong thư mục gốc đang lọc</b> rồi chép ảnh đã lọc vào — không cần đăng nhập lại. Thư mục cùng tên đã có thì dùng lại và bỏ qua ảnh đã chép lần trước. Cần link ảnh gốc mà tài khoản Drive đã kết nối có <b>quyền chỉnh sửa</b>.{" "}
                               <a href="/api/filter/drive/connect" className="underline" style={{ color: "var(--text3)" }}>Kết nối lại tài khoản khác</a>
                             </p>
                           </>
@@ -598,7 +641,7 @@ export default function FilterTool({
               <p className="rounded-[10px] px-3.5 py-3 text-[12.5px] leading-relaxed" style={{ background: "var(--sf2)", color: "var(--tx2)" }}>
                 {driveFiles.length === 0
                   ? "Tải ảnh từ link Drive ở bước 1 trước, rồi chọn nơi lưu tại đây."
-                  : "Chưa bật copy sang Drive trên máy chủ — dùng nút “Tải ZIP” ở phần kết quả bên dưới."}
+                  : "Máy chủ chưa bật copy sang Drive (thiếu cấu hình Google) — tạm thời dùng nút “Xuất .txt” ở phần kết quả, hoặc chuyển nguồn sang “Máy tính” để copy thẳng ra thư mục."}
               </p>
             )
           ) : fsSupported ? (

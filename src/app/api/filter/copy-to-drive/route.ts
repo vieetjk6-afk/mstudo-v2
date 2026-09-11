@@ -10,9 +10,12 @@ export const dynamic = "force-dynamic";
  *
  * Body:
  *  - files: [{ id, name }]  các file Drive cần chép.
- *  - sourceFolderUrl?       link ảnh gốc → tạo thư mục con "Anh Chon" bên trong.
+ *  - sourceFolderUrl?       link ảnh gốc → tạo thư mục con "Ảnh lọc" bên trong.
  *  - targetFolderUrl?       link thư mục đích có sẵn (studio tự chọn).
- *  - newFolderName?         tên thư mục con khi tạo mới (mặc định "Anh Chon").
+ *  - newFolderName?         tên thư mục con khi tạo mới (mặc định "Ảnh lọc").
+ *
+ * Thư mục con cùng tên đã có thì DÙNG LẠI và bỏ qua ảnh đã chép lần trước, để
+ * bấm copy nhiều lần không đẻ ra thư mục/ảnh trùng.
  */
 export async function POST(req: Request) {
   const supabase = await createClient();

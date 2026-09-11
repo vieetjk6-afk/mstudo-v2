@@ -276,7 +276,7 @@ export default function ToolPanel({
         setItems([]);
       } else {
         setItems((data.files ?? []).map((f: any) => ({ key: f.id, name: f.name, driveId: f.id })));
-        setSrcLabel(`${(data.files ?? []).length} ảnh từ Drive (link công khai)`);
+        setSrcLabel(`${(data.files ?? []).length} ảnh từ Drive`);
         resetOutputs();
       }
     } catch {

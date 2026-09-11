@@ -2,7 +2,8 @@ import "server-only";
 import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { signOAuthState, verifyOAuthState } from "@/lib/oauth-state";
-import { extractFolderId } from "@/lib/drive";
+import { extractFileId, extractFolderId, isFolderLink } from "@/lib/drive";
+import { FOLDER_MIME, isPhotoFile, walkPhotos, type DriveNode, type PhotoWalk } from "@/lib/drive-walk";
 
 
 /**
@@ -76,6 +77,89 @@ export async function disconnectFilterDrive(ownerId: string): Promise<void> {
   await db.from("studio_drive").update({ filter_refresh_token: null, updated_at: new Date().toISOString() }).eq("owner_id", ownerId);
 }
 
+type DriveClient = ReturnType<typeof google.drive>;
+
+/** Drive client dùng refresh token đã lưu — null nếu studio chưa kết nối. */
+async function filterDriveClient(ownerId: string): Promise<DriveClient | null> {
+  const db = createAdminClient();
+  const { data } = await db.from("studio_drive").select("filter_refresh_token").eq("owner_id", ownerId).maybeSingle();
+  const refreshToken = (data as { filter_refresh_token?: string | null } | null)?.filter_refresh_token;
+  if (!refreshToken) return null;
+  const o = oauth();
+  o.setCredentials({ refresh_token: refreshToken });
+  return google.drive({ version: "v3", auth: o });
+}
+
+/** Tên file/thư mục đưa vào query `q` của Drive — nháy đơn phải được thoát. */
+function q(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+}
+
+/** Liệt kê con trực tiếp của một thư mục bằng OAuth (thấy cả thư mục riêng tư). */
+async function oauthChildren(drive: DriveClient, folderId: string): Promise<DriveNode[]> {
+  const out: DriveNode[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${q(folderId)}' in parents and trashed = false`,
+      fields: "nextPageToken, files(id, name, mimeType)",
+      pageSize: 1000,
+      orderBy: "folder,name_natural",
+      pageToken,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+      corpora: "allDrives",
+    });
+    for (const f of res.data.files ?? []) {
+      if (f.id && f.name) out.push({ id: f.id, name: f.name, mimeType: f.mimeType ?? "" });
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return out;
+}
+
+export interface FilterDriveListing extends PhotoWalk<DriveNode> {
+  folderName: string | null;
+}
+
+/**
+ * Liệt kê ảnh của một link Drive bằng KẾT NỐI đã lưu của studio. Khác đường
+ * GOOGLE_API_KEY ở chỗ đọc được cả thư mục RIÊNG TƯ (không chia sẻ công khai) —
+ * đúng thư mục mà studio vẫn dùng để lọc. Trả null khi studio chưa kết nối để
+ * bên gọi lùi về đường khoá API.
+ */
+export async function listFilterDrivePhotos(
+  ownerId: string,
+  url: string,
+  opts: { recursive?: boolean; maxFiles?: number } = {}
+): Promise<FilterDriveListing | null> {
+  const drive = await filterDriveClient(ownerId);
+  if (!drive) return null;
+
+  const id = (isFolderLink(url) ? extractFolderId(url) : extractFileId(url)) || extractFolderId(url);
+  if (!id) throw new Error("Không nhận ra link Drive.");
+
+  let meta: { name?: string | null; mimeType?: string | null } = {};
+  try {
+    const r = await drive.files.get({ fileId: id, fields: "id, name, mimeType", supportsAllDrives: true });
+    meta = r.data;
+  } catch {
+    /* không đọc được metadata → thử coi như thư mục bên dưới */
+  }
+
+  if (meta.mimeType && meta.mimeType !== FOLDER_MIME) {
+    // Link trỏ thẳng vào một file.
+    const file = { id, name: meta.name ?? id, mimeType: meta.mimeType };
+    return { folderName: null, files: isPhotoFile(file) ? [file] : [], subfolders: 0, truncated: false };
+  }
+
+  const walk = await walkPhotos(id, (fid) => oauthChildren(drive, fid), {
+    recursive: opts.recursive,
+    maxFiles: opts.maxFiles,
+  });
+  return { ...walk, folderName: meta.name ?? null };
+}
+
 export type FilterCopyOutcome =
   | {
       ok: true;
@@ -83,14 +167,62 @@ export type FilterCopyOutcome =
       folderUrl: string;
       folderName: string;
       copied: number;
+      /** Ảnh đã có sẵn trong thư mục đích nên bỏ qua (chạy lại lần 2 không nhân đôi). */
+      skipped: number;
+      /** Thư mục đích là thư mục có sẵn cùng tên, không phải vừa tạo mới. */
+      reused: boolean;
       failed: { name: string; error: string }[];
     }
   | { ok: false; error: string };
 
+/** Tên thư mục ảnh đã lọc mặc định — tạo ngay trong thư mục gốc đang lọc. */
+export const DEFAULT_FILTER_FOLDER = "Ảnh lọc";
+
+/** Tìm thư mục con cùng tên có sẵn trong thư mục cha (để không tạo trùng). */
+async function findChildFolder(drive: DriveClient, parentId: string, name: string): Promise<string | null> {
+  try {
+    const res = await drive.files.list({
+      q: `'${q(parentId)}' in parents and name = '${q(name)}' and mimeType = '${FOLDER_MIME}' and trashed = false`,
+      fields: "files(id, name)",
+      pageSize: 10,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    return res.data.files?.[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Tên các file đang có trong thư mục đích — để bỏ qua ảnh đã chép lần trước. */
+async function existingNames(drive: DriveClient, folderId: string): Promise<Set<string>> {
+  const names = new Set<string>();
+  try {
+    let pageToken: string | undefined;
+    do {
+      const res = await drive.files.list({
+        q: `'${q(folderId)}' in parents and trashed = false`,
+        fields: "nextPageToken, files(name)",
+        pageSize: 1000,
+        pageToken,
+        supportsAllDrives: true,
+        includeItemsFromAllDrives: true,
+      });
+      for (const f of res.data.files ?? []) if (f.name) names.add(f.name);
+      pageToken = res.data.nextPageToken ?? undefined;
+    } while (pageToken);
+  } catch {
+    /* đọc không được thì cứ chép, cùng lắm là trùng tên */
+  }
+  return names;
+}
+
 /**
  * Chép các file ảnh (theo fileId) sang một thư mục trên Drive của studio bằng
- * refresh token đã lưu — KHÔNG cần đăng nhập lại. Tạo thư mục con trong link ảnh
- * gốc (mặc định "Anh Chon"), hoặc chép vào thư mục đích có sẵn.
+ * refresh token đã lưu — KHÔNG cần đăng nhập lại. Mặc định tự tạo thư mục
+ * "Ảnh lọc" NGAY TRONG thư mục gốc đang lọc rồi chép ảnh đã lọc vào đó; nếu
+ * thư mục cùng tên đã có thì dùng lại và bỏ qua ảnh đã chép lần trước, nên bấm
+ * copy nhiều lần cũng không đẻ ra một đống thư mục/ảnh trùng.
  */
 export async function copyFilesToFilterDrive(
   ownerId: string,
@@ -101,52 +233,66 @@ export async function copyFilesToFilterDrive(
     newFolderName?: string;
   }
 ): Promise<FilterCopyOutcome> {
-  const db = createAdminClient();
-  const { data } = await db.from("studio_drive").select("filter_refresh_token").eq("owner_id", ownerId).maybeSingle();
-  const refreshToken = (data as { filter_refresh_token?: string | null } | null)?.filter_refresh_token;
-  if (!refreshToken) return { ok: false, error: "not_connected" };
+  const drive = await filterDriveClient(ownerId);
+  if (!drive) return { ok: false, error: "not_connected" };
   if (!opts.files.length) return { ok: false, error: "no_files" };
 
-  const o = oauth();
-  o.setCredentials({ refresh_token: refreshToken });
-  const drive = google.drive({ version: "v3", auth: o });
-
-  // Thư mục đích: dùng thư mục có sẵn, hoặc tạo mới trong link ảnh gốc.
+  // Thư mục đích: dùng thư mục có sẵn, hoặc tạo/dùng lại thư mục con trong link ảnh gốc.
   let folderId = opts.targetFolderUrl ? extractFolderId(opts.targetFolderUrl) || "" : "";
   let folderName = "";
+  let reused = false;
   if (folderId) {
     try {
-      const meta = await drive.files.get({ fileId: folderId, fields: "id, name, mimeType" });
-      if (meta.data.mimeType !== "application/vnd.google-apps.folder") return { ok: false, error: "target_not_folder" };
+      const meta = await drive.files.get({ fileId: folderId, fields: "id, name, mimeType", supportsAllDrives: true });
+      if (meta.data.mimeType !== FOLDER_MIME) return { ok: false, error: "target_not_folder" };
       folderName = meta.data.name ?? "";
+      reused = true;
     } catch {
       return { ok: false, error: "target_unreachable" };
     }
   } else {
     const parentId = opts.sourceFolderUrl ? extractFolderId(opts.sourceFolderUrl) : null;
     if (!parentId) return { ok: false, error: "no_target" };
-    folderName = (opts.newFolderName || "").trim() || "Anh Chon";
-    try {
-      const r = await drive.files.create({
-        requestBody: { name: folderName, mimeType: "application/vnd.google-apps.folder", parents: [parentId] },
-        fields: "id",
-      });
-      folderId = (r.data.id as string) || "";
-      if (!folderId) return { ok: false, error: "create_folder_failed" };
-    } catch {
-      return { ok: false, error: "create_folder_failed" };
+    folderName = (opts.newFolderName || "").trim() || DEFAULT_FILTER_FOLDER;
+
+    const existing = await findChildFolder(drive, parentId, folderName);
+    if (existing) {
+      folderId = existing;
+      reused = true;
+    } else {
+      try {
+        const r = await drive.files.create({
+          requestBody: { name: folderName, mimeType: FOLDER_MIME, parents: [parentId] },
+          fields: "id",
+          supportsAllDrives: true,
+        });
+        folderId = (r.data.id as string) || "";
+        if (!folderId) return { ok: false, error: "create_folder_failed" };
+      } catch {
+        return { ok: false, error: "create_folder_failed" };
+      }
     }
   }
+
+  // Ảnh đã nằm sẵn trong thư mục đích thì bỏ qua — chép lại chỉ tạo bản trùng tên.
+  const already = await existingNames(drive, folderId);
+  const todo = opts.files.filter((f) => !already.has(f.name));
+  const skipped = opts.files.length - todo.length;
 
   const failed: { name: string; error: string }[] = [];
   let copied = 0;
   const CONC = 4;
-  for (let i = 0; i < opts.files.length; i += CONC) {
-    const batch = opts.files.slice(i, i + CONC);
+  for (let i = 0; i < todo.length; i += CONC) {
+    const batch = todo.slice(i, i + CONC);
     await Promise.all(
       batch.map(async (f) => {
         try {
-          await drive.files.copy({ fileId: f.id, requestBody: { name: f.name, parents: [folderId] }, fields: "id" });
+          await drive.files.copy({
+            fileId: f.id,
+            requestBody: { name: f.name, parents: [folderId] },
+            fields: "id",
+            supportsAllDrives: true,
+          });
           copied++;
         } catch (e) {
           failed.push({ name: f.name, error: e instanceof Error ? e.message.slice(0, 120) : "copy_failed" });
@@ -161,6 +307,8 @@ export async function copyFilesToFilterDrive(
     folderUrl: `https://drive.google.com/drive/folders/${folderId}`,
     folderName,
     copied,
+    skipped,
+    reused,
     failed,
   };
 }
@@ -189,15 +337,9 @@ export async function deleteFilesFromFilterDrive(
   files: { id: string; name: string }[],
   opts?: { permanent?: boolean }
 ): Promise<FilterDeleteOutcome> {
-  const db = createAdminClient();
-  const { data } = await db.from("studio_drive").select("filter_refresh_token").eq("owner_id", ownerId).maybeSingle();
-  const refreshToken = (data as { filter_refresh_token?: string | null } | null)?.filter_refresh_token;
-  if (!refreshToken) return { ok: false, error: "not_connected" };
+  const drive = await filterDriveClient(ownerId);
+  if (!drive) return { ok: false, error: "not_connected" };
   if (!files.length) return { ok: false, error: "no_files" };
-
-  const o = oauth();
-  o.setCredentials({ refresh_token: refreshToken });
-  const drive = google.drive({ version: "v3", auth: o });
 
   const failed: { name: string; error: string }[] = [];
   const deletedIds: string[] = [];

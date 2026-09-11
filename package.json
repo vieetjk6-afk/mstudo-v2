@@ -17,6 +17,7 @@
     "test:album-buttons": "node --experimental-strip-types desktop/test/album-buttons.mjs",
     "test:album-dislike": "node --experimental-strip-types desktop/test/album-dislike.mjs",
     "test:album-subfolders": "node --experimental-strip-types desktop/test/album-subfolders.mjs",
+    "test:drive-walk": "node --experimental-strip-types desktop/test/drive-walk.mjs",
     "test:album-drive-links": "node --experimental-strip-types desktop/test/album-drive-links.mjs",
     "test:album-phase": "node --experimental-strip-types desktop/test/album-phase.mjs",
     "test:album-offline": "node --experimental-strip-types desktop/test/album-offline.mjs",
