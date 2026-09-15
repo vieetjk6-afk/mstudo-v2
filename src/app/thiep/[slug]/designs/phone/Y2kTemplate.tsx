@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Y2K CHROME — bố cục "màn hình app": thẻ nổi trên nền gradient
@@ -11,6 +11,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · mọi thông tin "đi đâu, lúc nào" gom trong MỘT THẺ TRẮNG nổi giữa nền tím
 //   · chân dung là hai vòng tròn lớn nằm chung một thẻ kính
 //   · thanh đầu trang DÍNH khi cuộn, kiểu thanh trạng thái của app
+//   · không khí: BONG BÓNG nổi lên sau khối tên
+//   · chân dung: hai vòng tròn LỚN có vành chrome xoay, nghiêng 3D khi chạm
 // ════════════════════════════════════════════════════════════════════════════
 
 const BG = "#12052b", LILAC = "#c9b8ff", PINK = "#ffd6f7";
@@ -54,11 +56,12 @@ export default function Y2kTemplate({ inv, wishes, guest }: TemplateProps) {
       </div>
 
       <div style={{ padding: "18px 24px 46px", display: "flex", flexDirection: "column", gap: 22 }}>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2, textAlign: "center" }}>
-          <div style={{ width: 112, height: 112, borderRadius: "50%", background: "conic-gradient(from 0deg,#fff,#9ad7ff,#ffb3f0,#fff,#cbb3ff,#fff)", animation: "y2kSpin 9s linear infinite", boxShadow: "0 0 40px rgba(255,110,220,.5)" }} />
-          <div style={{ ...NAME, marginTop: 16 }}>{d.bride}</div>
-          <div style={{ fontFamily: HAND, fontSize: 34, color: "#ff9ee8" }}>&amp;</div>
-          <div style={{ ...NAME, animationDelay: ".6s" }}>{d.groom}</div>
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, textAlign: "center", paddingBottom: 6 }}>
+          <Ambient kind="bubble" color="rgba(255,255,255,.4)" color2="rgba(255,170,240,.42)" count={12} opacity={0.9} />
+          <div style={{ position: "relative", width: 112, height: 112, borderRadius: "50%", background: "conic-gradient(from 0deg,#fff,#9ad7ff,#ffb3f0,#fff,#cbb3ff,#fff)", animation: "y2kSpin 9s linear infinite", boxShadow: "0 0 40px rgba(255,110,220,.5)" }} />
+          <div style={{ ...NAME, marginTop: 16, position: "relative" }}><Letters text={d.bride} delay={0.2} step={0.05} /></div>
+          <div className="wed-float" style={{ fontFamily: HAND, fontSize: 34, color: "#ff9ee8", position: "relative" }}>&amp;</div>
+          <div style={{ ...NAME, animationDelay: ".6s", position: "relative" }}><Letters text={d.groom} delay={0.2 + d.bride.length * 0.05} step={0.05} /></div>
           {d.dateSub && <div style={{ marginTop: 10, fontSize: 12.5, color: LILAC }}>{d.dateSub}</div>}
         </div>
 
@@ -143,18 +146,27 @@ export default function Y2kTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         {/* Chân dung: hai vòng tròn lớn chung một thẻ kính */}
-        {d.portraits.length > 0 && (
-          <div style={{ ...GLASS, borderRadius: 28, padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, textAlign: "center" }}>
+        {/* Chân dung: vòng tròn lớn lồng trong VÀNH CHROME tự xoay */}
+        <Reveal anim="zoom">
+          <div style={{ ...GLASS, borderRadius: 28, padding: "22px 18px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, textAlign: "center" }}>
+            <div style={{ gridColumn: "1 / -1", fontSize: 9, letterSpacing: ".3em", textTransform: "uppercase", color: PINK }}>Cô dâu &amp; Chú rể</div>
             {d.portraits.map((p) => (
               <div key={p.role + p.name}>
-                <Slot src={p.photo} height={104} width={104} radius="50%" tint={TINT} label="" style={{ margin: "0 auto 10px", border: `2px solid ${accent}` }} />
+                <div className="wed-tilt" style={{ position: "relative", width: 146, maxWidth: "100%", aspectRatio: "1", margin: "0 auto 12px" }}>
+                  <span style={{ position: "absolute", inset: -5, borderRadius: "50%", background: "conic-gradient(from 0deg,#fff,#9ad7ff,#ffb3f0,#fff,#cbb3ff,#fff)", animation: "y2kSpin 11s linear infinite" }} />
+                  <Slot
+                    src={p.photo} height="100%" width="100%" radius="50%" tint={TINT} fx="zoom"
+                    style={{ position: "relative", border: "3px solid rgba(18,5,43,.9)" }}
+                    fallback={<span style={{ fontSize: 46, fontWeight: 800, color: "#fff" }}>{initial(p.name)}</span>}
+                  />
+                </div>
                 <div style={{ fontSize: 9, letterSpacing: ".26em", textTransform: "uppercase", color: LILAC }}>{p.role}</div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>{p.name}</div>
+                <div style={{ fontSize: 21, fontWeight: 700 }}>{p.name}</div>
                 {p.sub && <div style={{ fontSize: 12, color: LILAC, lineHeight: 1.5, marginTop: 3 }}>{p.sub}</div>}
               </div>
             ))}
           </div>
-        )}
+        </Reveal>
 
         {d.hasFamilies && (
           <div style={{ ...GLASS, borderRadius: 24, padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, fontSize: 13, lineHeight: 1.7 }}>

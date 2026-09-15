@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // AURORA — bố cục "trục thời gian zig-zag"
@@ -11,6 +11,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · chân dung là hai vòng tròn CHỒNG MÉP lên nhau, không phải hai ô rời
 //   · dặn dò là các chip bo tròn xếp tràn dòng, không phải lưới ô vuông
 //   · ảnh bìa khung vòm, tên chữ Cormorant mảnh — mở đầu nhẹ, không ảnh tràn
+//   · không khí: ÁNH LẤP LÁNH quanh khối tên
+//   · chân dung: hai vòng tròn chồng mép, ảnh thở rất chậm
 // ════════════════════════════════════════════════════════════════════════════
 
 const DEEP = "#33305a", SOFT = "#7a6fa8", SLATE = "#6a5f96";
@@ -46,16 +48,21 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
       <div style={{ padding: "44px 26px 30px", display: "flex", flexDirection: "column", gap: 26 }}>
         <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 16, color: SOFT }}>the wedding of</div>
 
-        <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 4 }}>
-          <div className="wed-ink" style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, color: DEEP }}>{d.bride}</div>
-          <div style={{ fontFamily: HAND, fontSize: 30, color: accent, animation: "auFloat 5s ease-in-out infinite" }}>and</div>
-          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, color: DEEP }}>{d.groom}</div>
+        <div style={{ position: "relative", textAlign: "center", display: "flex", flexDirection: "column", gap: 4 }}>
+          <Ambient kind="sparkle" color="rgba(255,255,255,.95)" count={14} opacity={0.9} />
+          <div className="wed-flow" style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, position: "relative", "--wed-t1": DEEP, "--wed-t2": accent, "--wed-t3": "#6fa8d6" } as React.CSSProperties}>
+            <Letters text={d.bride} delay={0.2} step={0.055} />
+          </div>
+          <div style={{ fontFamily: HAND, fontSize: 30, color: accent, animation: "auFloat 5s ease-in-out infinite", position: "relative" }}>and</div>
+          <div className="wed-flow" style={{ fontFamily: SERIF, fontWeight: 300, fontSize: 54, lineHeight: 1.02, position: "relative", "--wed-t1": DEEP, "--wed-t2": accent, "--wed-t3": "#6fa8d6" } as React.CSSProperties}>
+            <Letters text={d.groom} delay={0.2 + d.bride.length * 0.055} step={0.055} />
+          </div>
           {d.date.valid && <div style={{ marginTop: 14, ...lab }}>{d.date.spaced}</div>}
           {d.dateSub && <div style={{ fontSize: 12.5, color: SLATE }}>{d.dateSub}</div>}
           {d.reception && <div style={{ fontSize: 12.5, color: SLATE }}>{d.reception}</div>}
         </div>
 
-        <Slot src={d.hero} height={330} radius="200px 200px 24px 24px" border="1px solid rgba(255,255,255,.9)" tint="rgba(255,255,255,.5)" label="Ảnh bìa" lazy={false} fx="kb" style={{ boxShadow: "0 20px 40px -20px rgba(90,80,160,.5)" }} />
+        <Slot src={d.hero} height={330} radius="200px 200px 24px 24px" border="1px solid rgba(255,255,255,.9)" tint="rgba(255,255,255,.5)" label="Ảnh bìa" lazy={false} fx="kb gloss" style={{ boxShadow: "0 20px 40px -20px rgba(90,80,160,.5)" }} />
 
         {d.guest && (
           <div style={{ textAlign: "center" }}>
@@ -120,14 +127,17 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
 
       <div style={{ padding: "0 26px 48px", display: "flex", flexDirection: "column", gap: 26 }}>
         {/* Chân dung: hai vòng tròn CHỒNG MÉP */}
-        {d.portraits.length > 0 && (
+        <Reveal anim="zoom">
           <div style={{ textAlign: "center" }}>
-            <div style={{ display: "flex", justifyContent: "center", marginBottom: 12 }}>
+            <div style={{ ...lab, fontSize: 10, marginBottom: 14 }}>Cô dâu &amp; Chú rể</div>
+            {/* Hai vòng tròn LỚN chồng mép, thở rất chậm lệch nhịp nhau */}
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
               {d.portraits.map((p, i) => (
                 <Slot
                   key={p.role + p.name}
-                  src={p.photo} height={116} width={116} radius="50%" tint="rgba(255,255,255,.6)" label=""
-                  style={{ border: "3px solid #fff", marginLeft: i ? -22 : 0, boxShadow: "0 12px 26px -16px rgba(90,80,160,.8)" }}
+                  src={p.photo} height={168} width={168} radius="50%" tint="rgba(255,255,255,.6)" fx="breathe zoom"
+                  style={{ border: "4px solid #fff", marginLeft: i ? -34 : 0, boxShadow: "0 16px 32px -18px rgba(90,80,160,.85)" }}
+                  fallback={<span style={{ fontFamily: SERIF, fontSize: 58, color: accent }}>{initial(p.name)}</span>}
                 />
               ))}
             </div>
@@ -141,7 +151,7 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
               ))}
             </div>
           </div>
-        )}
+        </Reveal>
 
         {d.hasFamilies && (
           <div style={{ ...GLASS, borderRadius: 24, padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, fontSize: 13, lineHeight: 1.7, textAlign: "center" }}>

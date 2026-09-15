@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SONG HỶ — bố cục "thẻ kem lồng trong nền đỏ"
@@ -12,6 +12,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //     phải danh sách dọc
 //   · huy hiệu tròn "SONG HỶ" phát sáng làm điểm mở đầu, không dùng ảnh bìa lớn
 //   · album là ba ô VUÔNG viền vàng nằm ngoài thẻ, trên nền đỏ
+//   · không khí: BỤI VÀNG bay lên quanh huy hiệu Song Hỷ
+//   · chân dung: hai ô TRÒN lớn đóng dấu 囍, đặt trong thẻ kem
 // ════════════════════════════════════════════════════════════════════════════
 
 const RED = "#8e1b1b", GOLD = "#ffd77a", CREAM = "#fff8ec", SAND = "#f0c98a", DEEPRED = "#5c1414";
@@ -38,22 +40,27 @@ export default function SongHyTemplate({ inv, wishes, guest }: TemplateProps) {
         {d.date.valid && <span style={{ fontSize: 12, letterSpacing: ".14em", color: SAND }}>{d.date.dotted}</span>}
       </div>
 
-      <div style={{ padding: "36px 26px 26px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
-        <div style={{ width: 92, height: 92, borderRadius: "50%", border: `1px solid ${accent}`, display: "flex", alignItems: "center", justifyContent: "center", animation: "shFloat 6s ease-in-out infinite" }}>
+      <div style={{ position: "relative", padding: "36px 26px 26px", display: "flex", flexDirection: "column", alignItems: "center", gap: 16, textAlign: "center" }}>
+        <Ambient kind="dust" color="rgba(255,215,122,.95)" count={16} opacity={0.85} />
+        <div style={{ position: "relative", width: 92, height: 92, borderRadius: "50%", border: `1px solid ${accent}`, display: "flex", alignItems: "center", justifyContent: "center", animation: "shFloat 6s ease-in-out infinite" }}>
           <div style={{ width: 62, height: 62, borderRadius: "50%", background: "radial-gradient(circle at 35% 30%,#ffe9b0,#e8a84c)", boxShadow: "0 0 30px rgba(255,215,122,.55)" }} />
         </div>
-        <div style={{ fontFamily: SERIF, fontSize: 17, letterSpacing: ".42em", color: accent }}>SONG HỶ</div>
-        <div>
-          <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12 }}>{d.bride}</div>
+        <div style={{ fontFamily: SERIF, fontSize: 17, letterSpacing: ".42em", color: accent, position: "relative" }}>SONG HỶ</div>
+        <div style={{ position: "relative" }}>
+          <div className="wed-sheen" style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12, "--wed-t1": CREAM, "--wed-t2": GOLD } as React.CSSProperties}>
+            <Letters text={d.bride} delay={0.2} step={0.05} />
+          </div>
           <div style={{ fontFamily: HAND, fontSize: 30, color: accent }}>sánh duyên cùng</div>
-          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12 }}>{d.groom}</div>
+          <div className="wed-sheen" style={{ fontFamily: SERIF, fontSize: 42, lineHeight: 1.12, "--wed-t1": CREAM, "--wed-t2": GOLD } as React.CSSProperties}>
+            <Letters text={d.groom} delay={0.2 + d.bride.length * 0.05} step={0.05} />
+          </div>
         </div>
         {d.dateSub && <div style={{ fontSize: 13, color: SAND }}>{d.dateSub}</div>}
         {d.reception && <div style={{ fontSize: 13, color: SAND }}>{d.reception}</div>}
       </div>
 
       <div style={{ padding: "0 22px 46px", display: "flex", flexDirection: "column", gap: 22 }}>
-        <Slot src={d.hero} height={280} radius="180px 180px 12px 12px" border={`1px solid ${LINE}`} tint="rgba(255,215,122,.12)" label="Ảnh cưới" lazy={false} fx="kb" />
+        <Slot src={d.hero} height={280} radius="180px 180px 12px 12px" border={`1px solid ${LINE}`} tint="rgba(255,215,122,.12)" label="Ảnh cưới" lazy={false} fx="kb gloss" />
 
         {d.guest && (
           <div style={{ textAlign: "center" }}>
@@ -86,21 +93,32 @@ export default function SongHyTemplate({ inv, wishes, guest }: TemplateProps) {
             </>
           )}
 
-          {d.portraits.length > 0 && (
-            <>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, textAlign: "center" }}>
-                {d.portraits.map((p) => (
-                  <div key={p.role + p.name}>
-                    <Slot src={p.photo} height={86} width={86} radius="50%" tint="rgba(161,43,43,.1)" label="" style={{ margin: "0 auto 8px", border: "2px solid #e8cfa8" }} />
-                    <div style={{ fontSize: 10, letterSpacing: ".2em", textTransform: "uppercase", color: "#a12b2b" }}>{p.role}</div>
-                    <div style={{ fontFamily: SERIF, fontSize: 20, lineHeight: 1.2 }}>{p.name}</div>
-                    {p.sub && <div style={{ fontSize: 12, lineHeight: 1.5, color: "#8d5b5b" }}>{p.sub}</div>}
+          {/* Chân dung: hai ô TRÒN lớn, mỗi ô đóng một dấu 囍 ở góc */}
+          <>
+            <div style={{ textAlign: "center", fontFamily: SERIF, fontSize: 13, letterSpacing: ".34em", color: "#a12b2b" }}>CÔ DÂU &amp; CHÚ RỂ</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, textAlign: "center" }}>
+              {d.portraits.map((p) => (
+                <div key={p.role + p.name}>
+                  <div style={{ position: "relative", width: 138, maxWidth: "100%", margin: "0 auto 12px" }}>
+                    <Slot
+                      src={p.photo} height={138} width="100%" radius="50%" tint="rgba(161,43,43,.08)" fx="zoom gloss"
+                      style={{ border: "2px solid #e8cfa8", boxShadow: "0 0 0 5px rgba(255,215,122,.22)" }}
+                      fallback={<span style={{ fontFamily: SERIF, fontSize: 48, color: "#a12b2b", opacity: 0.55 }}>{initial(p.name)}</span>}
+                    />
+                    <span style={{
+                      position: "absolute", right: 2, bottom: 2, width: 30, height: 30, borderRadius: "50%",
+                      background: RED, color: GOLD, fontSize: 14, lineHeight: "30px", fontFamily: SERIF,
+                      border: `1px solid ${accent}`,
+                    }}>囍</span>
                   </div>
-                ))}
-              </div>
-              {creamLine}
-            </>
-          )}
+                  <div style={{ fontSize: 10, letterSpacing: ".2em", textTransform: "uppercase", color: "#a12b2b" }}>{p.role}</div>
+                  <div style={{ fontFamily: SERIF, fontSize: 21, lineHeight: 1.2 }}>{p.name}</div>
+                  {p.sub && <div style={{ fontSize: 12, lineHeight: 1.5, color: "#8d5b5b", marginTop: 3 }}>{p.sub}</div>}
+                </div>
+              ))}
+            </div>
+            {creamLine}
+          </>
 
           {/* Nghi lễ: BA CỘT ngang nhau */}
           {d.events.length > 0 && (

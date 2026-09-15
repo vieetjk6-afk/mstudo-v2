@@ -199,6 +199,10 @@ export default function WeddingEditor({ token }: { token: string }) {
     ...(cfg.groom_name && cfg.bride_name ? [] : [{ label: "Tên cô dâu & chú rể", tab: "capdoi" as TabId }]),
     ...(cfg.wedding_date ? [] : [{ label: "Ngày cưới", tab: "ngay" as TabId }]),
     ...(cfg.cover_url ? [] : [{ label: "Ảnh bìa", tab: "anh" as TabId }]),
+    // Mọi mẫu điện thoại đều có khối chân dung cô dâu — chú rể; thiếu ảnh thì
+    // khối đó chỉ còn chữ lồng, nên nhắc ngay ở danh sách việc cần làm.
+    ...(cfg.bride_photo && cfg.groom_photo ? [] : [{ label: "Ảnh chân dung cô dâu & chú rể", tab: "capdoi" as TabId }]),
+    ...((cfg.gallery ?? []).length ? [] : [{ label: "Album ảnh cưới", tab: "anh" as TabId }]),
     ...((cfg.events ?? []).length ? [] : [{ label: "Ít nhất một sự kiện", tab: "ngay" as TabId }]),
   ];
 

@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // HOA LÁ VINTAGE — bố cục "khung viền kép, đối xứng tuyệt đối"
@@ -12,6 +12,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · ảnh đều là KHUNG OVAL: một ảnh lớn giữa trang, hai ảnh nhỏ đối xứng
 //   · đếm ngược là một hàng số ngăn bằng hoa thị, không có ô khung nào
 //   · dặn dò viết thành từng dòng căn giữa, không đóng khung
+//   · không khí: HẠT PHIM + vệt sáng lọt như ảnh chụp phim cũ
+//   · chân dung: khung oval kiểu ảnh thờ xưa, ảnh ngả nâu rồi về màu khi chạm
 // ════════════════════════════════════════════════════════════════════════════
 
 const BG = "#f7f2e7", INK = "#463c2c", DARK = "#3b3222", MUTED = "#8c7c5c", LINE = "#c9bb9a", PAPER = "rgba(255,253,247,.72)";
@@ -35,7 +37,7 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
   const Orn = ({ big = false }: { big?: boolean }) => (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, color: accent }}>
       <span style={{ width: big ? 60 : 34, height: 1, background: LINE }} />
-      <span style={{ fontSize: big ? 15 : 12, opacity: 0.85 }}>❧</span>
+      <span style={{ fontSize: big ? 15 : 12, opacity: 0.85, display: "inline-block", animation: "vtSway 6s ease-in-out infinite" }}>❧</span>
       <span style={{ width: big ? 60 : 34, height: 1, background: LINE }} />
     </div>
   );
@@ -64,13 +66,14 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
       <div style={{ padding: 12 }}>
         <div style={{ border: `1px solid ${LINE}`, padding: 4 }}>
           <div style={{ position: "relative", border: `1px solid ${LINE}`, padding: "34px 20px 40px", display: "flex", flexDirection: "column", gap: 26, textAlign: "center" }}>
+            <Ambient kind="grain" color="rgba(110,92,60,.5)" color2="rgba(255,218,150,.5)" opacity={0.55} />
             {corner({ top: 6, left: 8 })}
             {corner({ top: 6, right: 8 })}
             {corner({ bottom: 6, left: 8 })}
             {corner({ bottom: 6, right: 8 })}
 
-            <div>
-              <div style={lab}>{d.guestLabel}</div>
+            <div style={{ position: "relative" }}>
+              <div style={lab}><span className="wed-type">{d.guestLabel}</span></div>
               <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 50, lineHeight: 1.06, color: DARK, marginTop: 12 }}>{d.bride}</div>
               <div style={{ fontFamily: HAND, fontSize: 28, color: accent, animation: "vtSway 6s ease-in-out infinite" }}>&amp;</div>
               <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 50, lineHeight: 1.06, color: DARK }}>{d.groom}</div>
@@ -90,7 +93,7 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
 
             {/* Ảnh lớn khung OVAL giữa trang */}
             <Reveal anim="fade">
-              <Slot src={d.hero} height={320} radius="50% / 42%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" label="Ảnh cưới" lazy={false} fx="kb" style={{ padding: 0 }} />
+              <Slot src={d.hero} height={320} radius="50% / 42%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" label="Ảnh cưới" lazy={false} fx="kb duo" style={{ padding: 0 }} />
             </Reveal>
 
             {d.quote && (
@@ -109,7 +112,7 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
             {d.pair.length > 0 && (
               <div style={{ display: "flex", justifyContent: "center", gap: 14 }}>
                 {d.pair.map((src, i) => (
-                  <Slot key={i} src={src} height={150} width={124} radius="50% / 44%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" fx="zoom" />
+                  <Slot key={i} src={src} height={150} width={124} radius="50% / 44%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" fx="duo zoom" />
                 ))}
               </div>
             )}
@@ -136,11 +139,18 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
               </>
             )}
 
-            {/* Chân dung: hai khung oval XẾP DỌC, mỗi cái một mục riêng */}
+            {/* Chân dung: khung oval LỒNG HAI VIỀN, xếp dọc, mỗi người một mục */}
+            <div style={{ ...lab, letterSpacing: ".34em" }}>Cô dâu &amp; Chú rể</div>
             {d.portraits.map((p) => (
               <div key={p.role + p.name}>
                 <Orn />
-                <Slot src={p.photo} height={168} width={138} radius="50% / 44%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" label="" style={{ margin: "18px auto 10px" }} />
+                <div style={{ width: 208, maxWidth: "100%", margin: "18px auto 12px", padding: 7, border: `1px solid ${LINE}`, borderRadius: "50% / 44%" }}>
+                  <Slot
+                    src={p.photo} height={240} width="100%" radius="50% / 44%" border={`1px solid ${LINE}`}
+                    tint="rgba(160,140,100,.1)" fx="duo zoom"
+                    fallback={<span style={{ fontFamily: SERIF, fontSize: 64, color: accent, opacity: 0.5 }}>{initial(p.name)}</span>}
+                  />
+                </div>
                 <div style={lab}>{p.role}</div>
                 <div style={{ fontFamily: SERIF, fontSize: 28, lineHeight: 1.2, color: DARK }}>{p.name}</div>
                 {p.sub && <div style={{ fontSize: 13, color: MUTED, lineHeight: 1.65, marginTop: 4 }}>{p.sub}</div>}
@@ -201,13 +211,30 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
               </>
             )}
 
+            {/*
+              * Album: một oval RỘNG rồi tới một hàng hai oval nhỏ, lặp lại —
+              * xếp thẳng hàng cả bốn tấm thì trang dài lê thê mà nhìn đơn điệu.
+              */}
             {d.trio.length > 0 && (
               <>
                 <Orn big />
                 <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  {d.trio.map((src, i) => (
-                    <Slot key={i} src={src} height={190} radius="50% / 34%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" fx="zoom" />
-                  ))}
+                  {Array.from({ length: Math.ceil(d.trio.length / 3) }, (_, g) => {
+                    const wide = d.trio[g * 3];
+                    const duo = d.trio.slice(g * 3 + 1, g * 3 + 3);
+                    return (
+                      <div key={g} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                        <Slot src={wide} height={186} radius="50% / 34%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" fx="zoom duo" />
+                        {duo.length > 0 && (
+                          <div style={{ display: "grid", gridTemplateColumns: duo.length > 1 ? "1fr 1fr" : "1fr", gap: 12 }}>
+                            {duo.map((src, i) => (
+                              <Slot key={i} src={src} height={148} radius="50% / 42%" border={`1px solid ${LINE}`} tint="rgba(160,140,100,.1)" fx="zoom duo" />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </>
             )}

@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // NEON TICKET — cả tấm thiệp LÀ một chiếc vé
@@ -11,6 +11,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · cuống vé ở cuối chứa QR mừng cưới + MÃ VẠCH vẽ bằng CSS + số vé
 //   · lịch trình gọi là SETLIST, đánh số 01–0n kiểu danh sách bài hát
 //   · ba ô DATE / DOORS / SHOW nằm ngay dưới tên như thông tin suất diễn
+//   · không khí: QUẦNG ĐÈN thở phía sau tên, kiểu bảng hiệu nê-ông
+//   · chân dung: hai ô viền hồng phát sáng, ảnh to như poster diễn viên
 // ════════════════════════════════════════════════════════════════════════════
 
 const BG = "#07080f", PAGE = "#03040a", CYAN = "#00ffd5", PINK = "#ff2d95", TEXT = "#d6f7f2", MUTED = "#b39ac4";
@@ -57,20 +59,23 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
     >
       <style>{`
         @keyframes nnScan{from{transform:translateY(-100%)}to{transform:translateY(1500%)}}
+        @keyframes nnEdge{0%,100%{box-shadow:inset 0 0 22px -8px rgba(0,255,213,.75)}50%{box-shadow:inset 0 0 40px -6px rgba(255,45,149,.75)}}
+        .nn-edge{animation:nnEdge 6s ease-in-out infinite}
         @keyframes nnFlicker{0%,100%{opacity:1}47%{opacity:1}49%{opacity:.35}51%{opacity:1}93%{opacity:.5}}
       `}</style>
 
-      <div style={{ padding: "22px 22px 40px", display: "flex", flexDirection: "column", gap: 18 }}>
+      <div className="nn-edge" style={{ padding: "22px 22px 40px", display: "flex", flexDirection: "column", gap: 18 }}>
         <div style={{ ...lab, letterSpacing: ".22em", display: "flex", justifyContent: "space-between" }}>
-          <span>Admit one</span>
-          <span style={{ color: PINK }}>NO. {ticketNo}</span>
+          <span style={{ animation: "nnFlicker 5s infinite" }}>Admit one</span>
+          <span style={{ color: PINK, animation: "nnFlicker 7s infinite 2s" }}>NO. {ticketNo}</span>
         </div>
 
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 11, letterSpacing: ".3em", color: PINK }}>THE WEDDING {d.date.year || "TOUR"}</div>
-          <div style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.05, color: "#fff", textShadow: "0 0 18px rgba(0,255,213,.7)", animation: "nnFlicker 6s infinite", marginTop: 6 }}>{d.bride}</div>
-          <div style={{ fontSize: 20, color: PINK, textShadow: "0 0 14px rgba(255,45,149,.8)" }}>✦ FEAT ✦</div>
-          <div style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.05, color: "#fff", textShadow: "0 0 18px rgba(0,255,213,.7)", animation: "nnFlicker 6s infinite 1.5s" }}>{d.groom}</div>
+        <div style={{ position: "relative", textAlign: "center", padding: "10px 0" }}>
+          <Ambient kind="glow" color="rgba(0,255,213,.22)" opacity={0.9} />
+          <div style={{ fontSize: 11, letterSpacing: ".3em", color: PINK, position: "relative" }}>THE WEDDING {d.date.year || "TOUR"}</div>
+          <div className="wed-neon" style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.05, color: "#fff", marginTop: 6, position: "relative", "--wed-n": "rgba(0,255,213,.75)" } as React.CSSProperties}>{d.bride}</div>
+          <div className="wed-spin" style={{ fontSize: 20, color: PINK, textShadow: "0 0 14px rgba(255,45,149,.8)", width: 22, margin: "0 auto", position: "relative" }}>✦</div>
+          <div className="wed-neon" style={{ fontWeight: 700, fontSize: 40, lineHeight: 1.05, color: "#fff", position: "relative", animationDelay: "1.5s", "--wed-n": "rgba(255,45,149,.75)" } as React.CSSProperties}>{d.groom}</div>
         </div>
 
         {/* Ba ô thông tin suất diễn */}
@@ -95,7 +100,7 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        <Slot src={d.hero} height={240} radius={10} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.08)" label="Ảnh bìa" lazy={false} fx="kb" />
+        <Slot src={d.hero} height={240} radius={10} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.08)" label="Ảnh bìa" lazy={false} fx="kb gloss" />
 
         <PhoneCountdown
           date={d.countdownTo}
@@ -133,18 +138,23 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         {/* Chân dung kiểu "line-up": ảnh vuông + tên in đậm */}
-        {d.portraits.length > 0 && (
+        {/* Chân dung: hai POSTER viền hồng phát sáng, như hai nghệ sĩ trên vé */}
+        <Reveal anim="rotate">
+          <div style={{ fontSize: 9, letterSpacing: ".3em", textTransform: "uppercase", color: PINK, marginBottom: 10 }}>★ Starring ★</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            {d.portraits.map((p) => (
-              <div key={p.role + p.name} style={{ border: "1px solid rgba(255,45,149,.5)", borderRadius: 8, padding: 10 }}>
-                <Slot src={p.photo} height={104} radius={4} tint="rgba(255,45,149,.1)" label={p.role} />
-                <div style={{ fontSize: 9, letterSpacing: ".2em", textTransform: "uppercase", color: PINK, marginTop: 8 }}>{p.role}</div>
+            {d.portraits.map((p, i) => (
+              <div key={p.role + p.name} style={{ border: "1px solid rgba(255,45,149,.5)", borderRadius: 8, padding: 10, boxShadow: `0 0 18px -4px ${i ? "rgba(0,255,213,.45)" : "rgba(255,45,149,.45)"}` }}>
+                <Slot
+                  src={p.photo} height={196} radius={4} tint="rgba(255,45,149,.1)" fx="zoom gloss"
+                  fallback={<span style={{ fontSize: 50, fontWeight: 800, color: i ? CYAN : PINK, textShadow: `0 0 16px ${i ? CYAN : PINK}` }}>{initial(p.name)}</span>}
+                />
+                <div style={{ fontSize: 9, letterSpacing: ".2em", textTransform: "uppercase", color: PINK, marginTop: 10 }}>{p.role}</div>
                 <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", lineHeight: 1.2 }}>{p.name}</div>
                 {p.sub && <div style={{ fontSize: 11.5, color: MUTED, lineHeight: 1.5, marginTop: 3 }}>{p.sub}</div>}
               </div>
             ))}
           </div>
-        )}
+        </Reveal>
 
         {d.hasFamilies && (
           <div style={{ border: "1px solid rgba(0,255,213,.45)", borderRadius: 10, padding: 20, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, fontSize: 13, lineHeight: 1.7 }}>
@@ -171,7 +181,7 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
         {d.trio.length > 0 && (
           <div className="wed-swipe" style={{ gap: 8, marginLeft: -22, marginRight: -22, padding: "0 22px" }}>
             {d.trio.map((src, i) => (
-              <Slot key={i} src={src} height={132} width={132} radius={8} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.12)" fx="zoom" />
+              <Slot key={i} src={src} height={160} width={160} radius={8} border="1px solid rgba(0,255,213,.45)" tint="rgba(0,255,213,.12)" fx={i % 2 === 0 ? "zoom gloss" : "zoom"} />
             ))}
           </div>
         )}

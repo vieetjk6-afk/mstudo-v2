@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SCRAPBOOK — bố cục "trang sổ dán tay"
@@ -12,6 +12,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · dặn dò là các TỜ NOTE nhiều màu dán chồng lệch nhau
 //   · lời chúc là sticky note xoay ngẫu nhiên đều, không phải danh sách thẳng
 //   · các mục ngăn nhau bằng dải BĂNG DÍNH WASHI chứ không phải đường kẻ
+//   · không khí: TRÁI TIM nhỏ bay lên quanh tấm polaroid bìa
+//   · chân dung: hai polaroid dán lệch, tên viết tay chạy ra từng chữ
 // ════════════════════════════════════════════════════════════════════════════
 
 const BG = "#e9e3d6", INK = "#3a3227", BROWN = "#7a6a4e", PAPER = "#fffdf6", NOTE = "#fdf6d8", DASH = "#b6a98c";
@@ -72,10 +74,13 @@ export default function ScrapbookTemplate({ inv, wishes, guest }: TemplateProps)
         <div style={{ fontFamily: HAND, fontSize: 23, color: BROWN }}>our little wedding book</div>
 
         {/* Polaroid lớn: ảnh bìa + tên viết tay dưới đáy khung */}
-        <div style={{ background: PAPER, padding: "14px 14px 52px", boxShadow: "0 10px 24px -12px rgba(70,60,40,.6)", transform: "rotate(-2.2deg)", position: "relative" }}>
+        <div style={{ background: PAPER, padding: "14px 14px 52px", boxShadow: "0 10px 24px -12px rgba(70,60,40,.6)", transform: "rotate(-2.2deg)", position: "relative", overflow: "hidden" }}>
           <Tape style={{ top: -12, left: "50%", marginLeft: -46, transform: "rotate(-2deg)", animation: "sbTape 7s ease-in-out infinite" }} />
-          <Slot src={d.hero} height={250} label="Ảnh polaroid" tint="rgba(120,105,80,.1)" lazy={false} fx="kb" />
-          <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, textAlign: "center", fontFamily: HAND, fontSize: 27 }}>{d.bride} &amp; {d.groom}</div>
+          <Slot src={d.hero} height={250} label="Ảnh polaroid" tint="rgba(120,105,80,.1)" lazy={false} fx="kb gloss" />
+          <Ambient kind="heart" color="rgba(201,138,147,.65)" count={9} opacity={0.9} />
+          <div style={{ position: "absolute", bottom: 12, left: 0, right: 0, textAlign: "center", fontFamily: HAND, fontSize: 27 }}>
+            <Letters text={`${d.bride} & ${d.groom}`} delay={0.3} step={0.04} />
+          </div>
         </div>
 
         {/* Tờ note vàng: ngày cưới */}
@@ -156,19 +161,24 @@ export default function ScrapbookTemplate({ inv, wishes, guest }: TemplateProps)
         )}
 
         {/* Chân dung: hai polaroid có chú thích viết tay */}
-        {d.portraits.length > 0 && (
+        {/* Chân dung: hai POLAROID dán lệch, băng dính đè lên góc */}
+        <Reveal anim="rotate">
+          <div style={{ fontFamily: HAND, fontSize: 23, color: BROWN, marginBottom: 8, transform: "rotate(-1.4deg)" }}>cô dâu &amp; chú rể đây nè</div>
           <div style={{ display: "flex", gap: 12 }}>
             {d.portraits.map((p, i) => (
               <div key={p.role + p.name} style={{ flex: 1, background: PAPER, padding: "10px 10px 12px", boxShadow: SHADOW, transform: `rotate(${i === 0 ? -2.2 : 2.4}deg)`, position: "relative" }}>
                 <Tape style={{ top: -10, right: 10, width: 58, height: 18, transform: "rotate(8deg)" }} />
-                <Slot src={p.photo} height={128} tint="rgba(120,105,80,.1)" label="" />
-                <div style={{ fontFamily: HAND, fontSize: 17, color: BROWN, marginTop: 6 }}>{p.role}</div>
-                <div style={{ fontFamily: HAND, fontSize: 24, lineHeight: 1.1 }}>{p.name}</div>
+                <Slot
+                  src={p.photo} height={196} tint="rgba(120,105,80,.1)" fx="zoom gloss"
+                  fallback={<span style={{ fontFamily: HAND, fontSize: 56, color: BROWN }}>{initial(p.name)}</span>}
+                />
+                <div style={{ fontFamily: HAND, fontSize: 17, color: BROWN, marginTop: 8 }}>{p.role}</div>
+                <div style={{ fontFamily: HAND, fontSize: 25, lineHeight: 1.1 }}>{p.name}</div>
                 {p.sub && <div style={{ fontSize: 12, color: BROWN, lineHeight: 1.5, marginTop: 3 }}>{p.sub}</div>}
               </div>
             ))}
           </div>
-        )}
+        </Reveal>
 
         {d.story && (
           <div style={paper(3)}>

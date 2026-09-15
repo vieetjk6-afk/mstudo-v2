@@ -18,7 +18,7 @@ import { WEDDING_TEMPLATE_CATALOG } from "@/app/thiep/[slug]/templates";
 
 const PHOTO = (seed: number) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${seed * 47},45%,72%)"/><stop offset="1" stop-color="hsl(${seed * 47 + 40},40%,52%)"/></linearGradient></defs><rect width="600" height="800" fill="url(%23g)"/><circle cx="300" cy="330" r="120" fill="rgba(255,255,255,.35)"/><text x="300" y="720" font-family="sans-serif" font-size="44" fill="rgba(255,255,255,.85)" text-anchor="middle">ảnh ${seed}</text></svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="hsl(${seed * 47},45%,72%)"/><stop offset="1" stop-color="hsl(${seed * 47 + 40},40%,52%)"/></linearGradient></defs><rect width="600" height="800" fill="url(#g)"/><circle cx="300" cy="330" r="120" fill="rgba(255,255,255,.35)"/><text x="300" y="720" font-family="sans-serif" font-size="44" fill="rgba(255,255,255,.85)" text-anchor="middle">ảnh ${seed}</text></svg>`,
   )}`;
 
 const CONFIG: WeddingConfig = {

@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SEN & KEM — bố cục "ảnh bìa tràn màn hình"
@@ -10,6 +10,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · chương trình là MỐC THỜI GIAN DỌC có đường chỉ và chấm tròn
 //   · đếm ngược nằm CUỐI thiệp (ngay trên phần xác nhận), không nằm ở đầu
 //   · album là dải ảnh xếp dọc tràn mép, không phải lưới ba ô
+//   · không khí: CÁNH HOA rơi trên bìa
+//   · chân dung: hai ô VÒM CAO (như cửa chùa), chạm vào ảnh phóng nhẹ
 // ════════════════════════════════════════════════════════════════════════════
 
 const BG = "#faf6ef", INK = "#3a3129", SOFT = "#f2ece2", LINE = "#e3d9cc", MUTED = "#9a7d6a", BODY = "#4a4038";
@@ -37,11 +39,16 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
           ? <img className="wed-kb-img" src={d.hero} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
           : <div style={{ position: "absolute", inset: 0, background: SOFT }} />}
         <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top,rgba(38,30,24,.78) 0%,rgba(38,30,24,.28) 42%,rgba(38,30,24,.06) 70%)" }} />
+        <Ambient kind="petal" color="rgba(255,226,230,.9)" color2="rgba(255,244,236,.85)" count={16} />
         <div style={{ position: "absolute", left: 0, right: 0, bottom: 0, padding: "0 28px 40px", textAlign: "center", color: "#fff" }}>
           <div style={{ ...eyebrow, letterSpacing: ".42em", color: "rgba(255,255,255,.82)" }}>Lễ thành hôn</div>
-          <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, marginTop: 10, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>{d.bride}</div>
-          <div style={{ fontFamily: HAND, fontSize: 28, color: "#f4c9cf" }}>&amp;</div>
-          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>{d.groom}</div>
+          <div style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, marginTop: 10, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>
+            <Letters text={d.bride} delay={0.25} step={0.055} />
+          </div>
+          <div className="wed-float" style={{ fontFamily: HAND, fontSize: 28, color: "#f4c9cf" }}>&amp;</div>
+          <div style={{ fontFamily: SERIF, fontSize: 54, lineHeight: 1.04, textShadow: "0 2px 24px rgba(0,0,0,.35)" }}>
+            <Letters text={d.groom} delay={0.25 + d.bride.length * 0.055} step={0.055} />
+          </div>
           {d.date.valid && <div style={{ marginTop: 16, fontSize: 12, letterSpacing: ".3em", color: "rgba(255,255,255,.9)" }}>{d.date.spaced}</div>}
           {d.dateSub && <div style={{ marginTop: 4, fontSize: 12.5, color: "rgba(255,255,255,.72)" }}>{d.dateSub}</div>}
           {d.reception && <div style={{ marginTop: 2, fontSize: 12.5, color: "rgba(255,255,255,.72)" }}>{d.reception}</div>}
@@ -76,8 +83,8 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
 
         {d.pair.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: d.pair.length > 1 ? "1fr 1fr" : "1fr", gap: 12 }}>
-            <Slot src={d.pair[0]} height={168} radius="130px 130px 8px 8px" tint={SOFT} />
-            {d.pair[1] && <Slot src={d.pair[1]} height={168} radius="8px 8px 130px 130px" tint={SOFT} />}
+            <Slot src={d.pair[0]} height={168} radius="130px 130px 8px 8px" tint={SOFT} fx="gloss zoom" />
+            {d.pair[1] && <Slot src={d.pair[1]} height={168} radius="8px 8px 130px 130px" tint={SOFT} fx="gloss zoom" />}
           </div>
         )}
 
@@ -115,19 +122,32 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {/* Chân dung: hai ảnh VUÔNG lớn, chú thích nằm dưới */}
-        {d.portraits.length > 0 && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            {d.portraits.map((p) => (
-              <div key={p.role + p.name}>
-                <Slot src={p.photo} height={150} radius={4} tint={SOFT} label={p.role} />
-                <div style={{ ...eyebrow, marginTop: 10 }}>{p.role}</div>
-                <div style={{ fontFamily: SERIF, fontSize: 24, lineHeight: 1.2, color: INK }}>{p.name}</div>
-                {p.sub && <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.55, marginTop: 3 }}>{p.sub}</div>}
+        {/* Chân dung: hai ô VÒM CAO như khung cửa, lồng trong một vòng chỉ mảnh */}
+        <Reveal anim="up">
+          <div style={{ ...eyebrow, textAlign: "center", marginBottom: 6 }}>Cô dâu &amp; Chú rể</div>
+          <span className="wed-rule" style={{ display: "block", width: 46, height: 1, background: LINE, margin: "0 auto 20px" }} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {d.portraits.map((p, i) => (
+              <div key={p.role + p.name} style={{ textAlign: "center" }}>
+                <div style={{ padding: 5, border: `1px solid ${LINE}`, borderRadius: "999px 999px 10px 10px" }}>
+                  <Slot
+                    src={p.photo}
+                    height={228}
+                    radius="999px 999px 6px 6px"
+                    tint={SOFT}
+                    fx="zoom breathe"
+                    fallback={<span style={{ fontFamily: SERIF, fontSize: 60, color: accent, opacity: 0.5 }}>{initial(p.name)}</span>}
+                  />
+                </div>
+                <div style={{ ...eyebrow, marginTop: 12, letterSpacing: ".24em" }}>{p.role}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 25, lineHeight: 1.2, color: INK, marginTop: 2 }}>
+                  <Letters text={p.name} delay={0.1 + i * 0.14} step={0.04} />
+                </div>
+                {p.sub && <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.55, marginTop: 4 }}>{p.sub}</div>}
               </div>
             ))}
           </div>
-        )}
+        </Reveal>
 
         {(d.venue.name || d.venue.address || d.mapHref) && (
           <div style={{ background: SOFT, borderRadius: 14, padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
@@ -168,7 +188,7 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
       {/* Album: dải ảnh xếp DỌC tràn mép, cách nhau đúng một nét */}
       {d.trio.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-          {d.trio.map((src, i) => <Slot key={i} src={src} height={230} tint={SOFT} fx="zoom" />)}
+          {d.trio.map((src, i) => <Slot key={i} src={src} height={230} tint={SOFT} fx={i % 2 === 0 ? "zoom gloss" : "zoom"} />)}
         </div>
       )}
 
@@ -230,7 +250,7 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
 
         {(d.thanks || d.thanksPhoto) && (
           <div style={{ textAlign: "center" }}>
-            {d.thanksPhoto && <Slot src={d.thanksPhoto} height={170} width={170} radius="50%" tint={SOFT} style={{ margin: "0 auto 14px", border: `2px solid ${accent}` }} />}
+            {d.thanksPhoto && <Slot src={d.thanksPhoto} height={170} width={170} radius="50%" tint={SOFT} fx="breathe" style={{ margin: "0 auto 14px", border: `2px solid ${accent}` }} />}
             {d.thanks && <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.75, color: MUTED, whiteSpace: "pre-line" }}>{d.thanks}</p>}
           </div>
         )}

@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // SƠN MÀI — bố cục "hai cột, dải chữ dọc chạy suốt trang"
@@ -12,6 +12,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · ảnh TRÀN ra mép phải, phá khung lề của cột chữ
 //   · hai họ xếp DỌC thành hai khối, mỗi khối có nhãn dọc riêng
 //   · dặn dò là danh sách nhãn–giá trị một cột, không phải lưới 2×2
+//   · không khí: BỤI VÀNG bay lên trong lòng dải dọc
+//   · chân dung: hai VÒNG TRÒN viền vàng kép, ảnh ngả nâu rồi về màu khi chạm
 // ════════════════════════════════════════════════════════════════════════════
 
 const BG = "#101a2e", INK = "#f5efe1", GOLD = "#d6b266", STEEL = "#9fb0cc", BODY = "#e8e2d4";
@@ -29,7 +31,8 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
   const bleedRight = { marginRight: -20 };
 
   const rail = (
-    <div style={{ height: "100%", borderRight: `1px solid ${LINE}`, background: "rgba(214,178,102,.05)" }}>
+    <div style={{ position: "relative", height: "100%", borderRight: `1px solid ${LINE}`, background: "rgba(214,178,102,.05)", overflow: "hidden" }}>
+      <Ambient kind="dust" color="rgba(214,178,102,.85)" count={10} opacity={0.75} />
       <div style={{ position: "sticky", top: 0, height: "100svh", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ writingMode: "vertical-rl", fontFamily: SERIF, fontSize: 13, letterSpacing: ".5em", color: accent, opacity: 0.9 }}>
           SONG HỶ LÂM MÔN
@@ -47,9 +50,13 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
         {/* Mở đầu bằng chữ — ảnh để sau */}
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }}>Thiệp mời dự lễ thành hôn</div>
-          <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.bride}</div>
-          <div style={{ fontFamily: SERIF, fontSize: 22, color: accent, letterSpacing: ".2em" }}>✦</div>
-          <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1 }}>{d.groom}</div>
+          <div className="wed-sheen" style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1, "--wed-t1": INK, "--wed-t2": GOLD } as React.CSSProperties}>
+            <Letters text={d.bride} delay={0.15} step={0.05} />
+          </div>
+          <div className="wed-spin" style={{ fontFamily: SERIF, fontSize: 22, color: accent, letterSpacing: ".2em", width: 22 }}>✦</div>
+          <div className="wed-sheen" style={{ fontFamily: SERIF, fontSize: 40, lineHeight: 1.1, "--wed-t1": INK, "--wed-t2": GOLD } as React.CSSProperties}>
+            <Letters text={d.groom} delay={0.15 + d.bride.length * 0.05} step={0.05} />
+          </div>
           {d.date.valid && <div style={{ marginTop: 8, fontSize: 12, letterSpacing: ".22em", color: accent }}>{d.date.weekday.toUpperCase()} · {d.date.dotted}</div>}
           {d.dateSub && <div style={{ fontSize: 12.5, color: STEEL }}>{d.dateSub}</div>}
           {d.reception && <div style={{ fontSize: 12.5, color: STEEL }}>{d.reception}</div>}
@@ -65,7 +72,7 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
         />
 
         {/* Ảnh ngang TRÀN mép phải */}
-        <Slot src={d.hero} height={280} tint={TINT} label="Ảnh cưới" lazy={false} fx="kb" style={bleedRight} />
+        <Slot src={d.hero} height={280} tint={TINT} label="Ảnh cưới" lazy={false} fx="kb gloss" style={bleedRight} />
 
         {d.guest && (
           <div>
@@ -105,21 +112,27 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {/* Chân dung: ảnh trái — chữ phải, xếp thành hai hàng ngang */}
-        {d.portraits.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {d.portraits.map((p) => (
-              <div key={p.role + p.name} style={{ display: "flex", gap: 16, alignItems: "center" }}>
-                <Slot src={p.photo} height={92} width={92} radius={2} tint={TINT} label="" style={{ flex: "none", border: `1px solid ${LINE}` }} />
+        {/* Chân dung: ảnh TRÒN trong vòng vàng kép, ảnh trái — chữ phải so le */}
+        <Reveal anim="left">
+          <div style={{ ...lab, marginBottom: 16 }}>Cô dâu &amp; Chú rể</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            {d.portraits.map((p, i) => (
+              <div key={p.role + p.name} style={{ display: "flex", gap: 18, alignItems: "center", flexDirection: i % 2 ? "row-reverse" : "row", textAlign: i % 2 ? "right" : "left" }}>
+                <div style={{ flex: "none", padding: 4, borderRadius: "50%", border: `1px solid ${accent}`, boxShadow: `0 0 0 5px ${BG}, 0 0 0 6px ${HAIR}` }}>
+                  <Slot
+                    src={p.photo} height={132} width={132} radius="50%" tint={TINT} fx="duo zoom"
+                    fallback={<span style={{ fontFamily: SERIF, fontSize: 46, color: accent }}>{initial(p.name)}</span>}
+                  />
+                </div>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL }}>{p.role}</div>
-                  <div style={{ fontFamily: SERIF, fontSize: 24, lineHeight: 1.2 }}>{p.name}</div>
-                  {p.sub && <div style={{ fontSize: 12.5, color: STEEL, lineHeight: 1.55, marginTop: 3 }}>{p.sub}</div>}
+                  <div className="wed-sheen" style={{ fontFamily: SERIF, fontSize: 28, lineHeight: 1.2, "--wed-t1": INK, "--wed-t2": GOLD } as React.CSSProperties}>{p.name}</div>
+                  {p.sub && <div style={{ fontSize: 12.5, color: STEEL, lineHeight: 1.55, marginTop: 4 }}>{p.sub}</div>}
                 </div>
               </div>
             ))}
           </div>
-        )}
+        </Reveal>
 
         {d.quote && (
           <Reveal anim="blur">
@@ -135,7 +148,7 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         {/* Ảnh phụ tràn mép phải, xếp dọc */}
-        {d.pair.map((src, i) => <Slot key={i} src={src} height={200} tint={TINT} style={bleedRight} fx="zoom" />)}
+        {d.pair.map((src, i) => <Slot key={i} src={src} height={200} tint={TINT} style={bleedRight} fx={i === 0 ? "zoom gloss" : "zoom"} />)}
 
         {(d.venue.name || d.venue.address || d.mapHref) && (
           <div style={{ border: `1px solid ${LINE}`, padding: 20, display: "flex", flexDirection: "column", gap: 14, color: BODY }}>
@@ -174,11 +187,16 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
+        {/* Album khảm: một ảnh lớn bên trái, ảnh nhỏ bên phải, ảnh dư xuống hàng dưới */}
         {d.trio.length > 0 && (
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 1, ...bleedRight }}>
-            <Slot src={d.trio[0]} height={230} tint={TINT} style={{ gridRow: "span 2" }} />
-            {d.trio[1] && <Slot src={d.trio[1]} height={114.5} tint={TINT} />}
-            {d.trio[2] && <Slot src={d.trio[2]} height={114.5} tint={TINT} />}
+            <Slot src={d.trio[0]} height={230} tint={TINT} fx="zoom gloss" style={{ gridRow: d.trio.length > 2 ? "span 2" : undefined }} />
+            {d.trio.slice(1, 3).map((src, i) => <Slot key={i} src={src} height={d.trio.length > 2 ? 114.5 : 230} tint={TINT} fx="zoom" />)}
+            {d.trio.length > 3 && (
+              <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: `repeat(${Math.min(d.trio.length - 3, 4)},1fr)`, gap: 1 }}>
+                {d.trio.slice(3).map((src, i) => <Slot key={i} src={src} height={104} tint={TINT} fx="zoom" />)}
+              </div>
+            )}
           </div>
         )}
 

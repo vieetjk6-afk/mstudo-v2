@@ -1,6 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
-import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData } from "./kit";
+import { Ambient, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
 // GIẤY DÓ & MỰC NHO — bố cục "tờ giấy dó, ngày cưới cỡ đại"
@@ -11,6 +11,8 @@ import { MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, phoneData 
 //   · chương trình là BẢNG CÓ DÒNG CHẤM NỐI (tên lễ …… giờ) kiểu mục lục sách
 //   · hai họ đặt trong dấu ngoặc 「 」 kiểu thư pháp
 //   · đếm ngược chỉ là bốn con số trần, cách nhau bằng dấu chấm giữa
+//   · không khí: VỤN GIẤY ĐIỀU rơi sau khối ngày cưới cỡ đại
+//   · chân dung: hai ô giấy dó có DẤU SON góc, chữ "kết duyên" tự gõ ra
 // ════════════════════════════════════════════════════════════════════════════
 
 const BG = "#efe7d6", INK = "#23201b", RED = "#b2342c", MUTED = "#7c7263", LINE = "#c9bda4", PAPER = "#f7f2e5";
@@ -35,7 +37,7 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
           <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 6, minWidth: 0 }}>
             <div style={lab}>Trân trọng báo tin</div>
             <div className="wed-ink" style={{ fontFamily: SERIF, fontSize: 46, lineHeight: 1.06 }}>{d.bride}</div>
-            <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 24, color: accent }}>kết duyên cùng</div>
+            <div style={{ fontFamily: SERIF, fontStyle: "italic", fontSize: 24, color: accent }}><span className="wed-type">kết duyên cùng</span></div>
             <div className="wed-ink-2" style={{ fontFamily: SERIF, fontSize: 46, lineHeight: 1.06 }}>{d.groom}</div>
           </div>
         </div>
@@ -48,7 +50,8 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
 
         {/* ── NGÀY CƯỚI CỠ ĐẠI ─────────────────────────────────────────── */}
         {d.date.valid && (
-          <div style={{ display: "grid", gridTemplateColumns: "auto 1px 1fr", gap: 18, alignItems: "center", borderTop: `2px solid ${INK}`, borderBottom: `1px solid ${LINE}`, padding: "20px 0" }}>
+          <div style={{ position: "relative", display: "grid", gridTemplateColumns: "auto 1px 1fr", gap: 18, alignItems: "center", borderTop: `2px solid ${INK}`, borderBottom: `1px solid ${LINE}`, padding: "20px 0" }}>
+            <Ambient kind="fleck" color="rgba(178,52,44,.5)" color2="rgba(196,160,72,.55)" count={12} opacity={0.8} style={{ zIndex: 0 }} />
             <div style={{ textAlign: "center" }}>
               <div style={{ fontFamily: SERIF, fontSize: 76, lineHeight: 0.86, letterSpacing: "-.02em" }}>{d.date.day}</div>
               <div style={{ fontSize: 11, letterSpacing: ".3em", color: MUTED, marginTop: 8 }}>THÁNG {d.date.month}</div>
@@ -64,7 +67,7 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         <div style={{ border: `1px solid ${LINE}`, padding: 8, background: PAPER }}>
-          <Slot src={d.hero} height={320} label="Ảnh cưới" tint="rgba(120,105,80,.08)" lazy={false} fx="kb" />
+          <Slot src={d.hero} height={320} label="Ảnh cưới" tint="rgba(120,105,80,.08)" lazy={false} fx="kb gloss" />
         </div>
 
         {d.guest && (
@@ -80,7 +83,7 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
             <div className="wed-swipe" style={{ gap: 10, padding: "0 22px" }}>
               {d.photos.slice(1).map((src, i) => (
                 <div key={i} style={{ border: `1px solid ${LINE}`, padding: 6, background: PAPER }}>
-                  <Slot src={src} height={190} width={148} tint="rgba(120,105,80,.08)" fx="zoom" />
+                  <Slot src={src} height={190} width={148} tint="rgba(120,105,80,.08)" fx="zoom gloss" />
                 </div>
               ))}
             </div>
@@ -131,18 +134,35 @@ export default function GiayDoTemplate({ inv, wishes, guest }: TemplateProps) {
           </div>
         )}
 
-        {d.portraits.length > 0 && (
+        {/* Chân dung: hai ô giấy dó lồng khung kép, góc đóng một DẤU SON */}
+        <Reveal anim="clip">
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+            <span className="wed-rule" style={{ flex: 1, height: 1, background: LINE }} />
+            <span style={{ ...lab, letterSpacing: ".34em" }}>Cô dâu &amp; Chú rể</span>
+            <span className="wed-rule" style={{ flex: 1, height: 1, background: LINE }} />
+          </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, textAlign: "center" }}>
             {d.portraits.map((p) => (
               <div key={p.role + p.name}>
-                <Slot src={p.photo} height={140} radius={2} tint={PAPER} label={p.role} style={{ border: `1px solid ${LINE}` }} />
-                <div style={{ ...lab, marginTop: 8 }}>{p.role}</div>
-                <div style={{ fontFamily: SERIF, fontSize: 24, lineHeight: 1.2 }}>{p.name}</div>
-                {p.sub && <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.55 }}>{p.sub}</div>}
+                <div style={{ position: "relative", border: `1px solid ${LINE}`, padding: 6, background: PAPER }}>
+                  <Slot
+                    src={p.photo} height={208} radius={2} tint="rgba(120,105,80,.08)" fx="zoom"
+                    style={{ border: `1px solid ${LINE}` }}
+                    fallback={<span style={{ fontFamily: SERIF, fontSize: 56, color: accent, opacity: 0.55 }}>{initial(p.name)}</span>}
+                  />
+                  <span style={{
+                    position: "absolute", right: -7, bottom: -7, width: 30, height: 30, borderRadius: 3,
+                    background: accent, color: PAPER, fontSize: 15, lineHeight: "30px", fontFamily: "var(--font-playfair), serif",
+                    animation: "gdSeal 8s ease-in-out infinite",
+                  }}>囍</span>
+                </div>
+                <div style={{ ...lab, marginTop: 12 }}>{p.role}</div>
+                <div style={{ fontFamily: SERIF, fontSize: 25, lineHeight: 1.2 }}>{p.name}</div>
+                {p.sub && <div style={{ fontSize: 12.5, color: MUTED, lineHeight: 1.55, marginTop: 3 }}>{p.sub}</div>}
               </div>
             ))}
           </div>
-        )}
+        </Reveal>
 
         {(d.venue.name || d.venue.address || d.mapHref) && (
           <div style={{ border: `1px solid ${LINE}`, padding: 20, display: "flex", flexDirection: "column", gap: 14, background: PAPER }}>
