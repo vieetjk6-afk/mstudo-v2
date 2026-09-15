@@ -24,6 +24,7 @@ import AiFilterPanel from "@/components/AiFilterPanel";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { matchKey } from "@/lib/face-people";
 import { triggerDownload } from "@/lib/download";
+import { MAX_LOCAL_DEPTH, MAX_LOCAL_FILES, dirDepth, splitWebkitPath, walkLocalDir } from "@/lib/local-walk";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -38,9 +39,25 @@ import { triggerDownload } from "@/lib/download";
 interface SourceFile {
   key: string;
   name: string;
+  /** Thư mục con chứa file, tính từ thư mục gốc đã chọn ("" = ngay thư mục gốc). */
+  dir?: string;
   driveId?: string;
   file?: File;
   handle?: any; // FileSystemFileHandle
+}
+
+/** Câu tóm tắt nguồn ảnh trên máy — luôn nói rõ đã quét được những gì. */
+function localNoteText(dirName: string, count: number, subfolders: number, truncated: boolean): string {
+  if (count === 0)
+    return subfolders > 0
+      ? `Không thấy file ảnh nào trong “${dirName}” (đã quét cả ${subfolders} thư mục con).`
+      : `Không thấy file ảnh nào trong “${dirName}”.`;
+  return (
+    `Nguồn: ${dirName} · ${count} ảnh` +
+    (subfolders > 0 ? ` (gồm cả ${subfolders} thư mục con)` : "") +
+    (truncated ? ` — đã đạt trần ${MAX_LOCAL_FILES} ảnh, danh sách có thể chưa đủ` : "") +
+    " — không upload, xử lý ngay trên máy."
+  );
 }
 
 // Luật ghép tên file dùng CHUNG với phần gom ảnh theo người. Hai luật gần giống
@@ -80,14 +97,20 @@ export default function FilterTool({
   const [driveFiles, setDriveFiles] = useState<SourceFile[]>([]);
   const [loadingDrive, setLoadingDrive] = useState(false);
   const [driveError, setDriveError] = useState<string | null>(null);
+  /** Tóm tắt lần tải gần nhất — LUÔN hiện, kể cả khi tải về 0 ảnh, để bấm
+   *  "Tải ảnh" không bao giờ giống như không có gì xảy ra. */
+  const [driveNote, setDriveNote] = useState<string | null>(null);
 
   const [localFiles, setLocalFiles] = useState<SourceFile[]>([]);
-  const [srcDirName, setSrcDirName] = useState("");
+  /** Tóm tắt lần quét thư mục gần nhất (kể cả khi không thấy ảnh nào). */
+  const [localNote, setLocalNote] = useState<string | null>(null);
+  const [scanningLocal, setScanningLocal] = useState(false);
   const [destDir, setDestDir] = useState<any>(null);
   const [destName, setDestName] = useState("");
   const [copying, setCopying] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
 
   const [mode, setMode] = useState<"paste" | "album">("paste");
   const [pasteText, setPasteText] = useState("");
@@ -102,7 +125,7 @@ export default function FilterTool({
   // Copy ảnh đã lọc thẳng sang Drive (không tải về máy). Studio KẾT NỐI Drive
   // MỘT LẦN (toàn quyền, offline); sau đó máy chủ tự tạo thư mục + chép, KHÔNG
   // cần đăng nhập lại.
-  const [newFolderName, setNewFolderName] = useState("Anh Chon");
+  const [newFolderName, setNewFolderName] = useState("Ảnh lọc");
   const [driveCopying, setDriveCopying] = useState(false);
   const [driveCopyMsg, setDriveCopyMsg] = useState<string | null>(null);
   const [driveCopyLink, setDriveCopyLink] = useState<string | null>(null);
@@ -191,45 +214,110 @@ export default function FilterTool({
 
   async function loadDrive(url?: string) {
     const u = (url ?? driveUrl).trim();
-    if (!u) return;
-    setLoadingDrive(true);
-    setDriveError(null);
-    const res = await fetch("/api/drive/list", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: u }),
-    });
-    const data = await res.json();
-    setLoadingDrive(false);
-    if (data.error) {
-      setDriveError(data.error);
-      setDriveFiles([]);
+    if (!u) {
+      setDriveError("Chưa nhập link thư mục Drive.");
       return;
     }
-    setDriveFiles((data.files ?? []).map((f: any) => ({ key: f.id, name: f.name, driveId: f.id })));
+    setLoadingDrive(true);
+    setDriveError(null);
+    setDriveNote(null);
+    try {
+      const res = await fetch("/api/drive/list", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Quét cả thư mục con: ảnh buổi chụp hay được xếp sẵn theo JPG / RAW /
+        // ngày, thư mục gốc không có file nào nên trước đây tải về rỗng.
+        body: JSON.stringify({ url: u, recursive: true }),
+      });
+      // Lỗi máy chủ có thể trả HTML (không phải JSON) — bắt luôn để không nuốt
+      // lỗi và kẹt nút ở trạng thái "Đang tải…".
+      const data = await res.json().catch(() => null);
+      if (!data) {
+        setDriveFiles([]);
+        setDriveError(`Máy chủ trả lời không hợp lệ (mã ${res.status}). Hãy thử lại.`);
+        return;
+      }
+      if (data.error) {
+        setDriveFiles([]);
+        setDriveError(data.error);
+        return;
+      }
+      const files = (data.files ?? []).map((f: any) => ({ key: f.id, name: f.name, driveId: f.id }));
+      setDriveFiles(files);
+      const subs = Number(data.subfolders) || 0;
+      if (files.length === 0) {
+        setDriveNote(
+          subs > 0
+            ? `Không thấy file ảnh nào trong link này (đã quét cả ${subs} thư mục con). Kiểm tra lại link, hoặc dán link đúng thư mục chứa ảnh.`
+            : "Không thấy file ảnh nào trong link này. Kiểm tra link đúng thư mục chứa ảnh, và tài khoản Drive đã kết nối có quyền xem thư mục đó."
+        );
+      } else {
+        setDriveNote(
+          `Đã tải ${files.length} ảnh từ Drive` +
+            (subs > 0 ? ` (gồm cả ${subs} thư mục con)` : "") +
+            (data.truncated ? " — đã đạt giới hạn quét, danh sách có thể chưa đủ." : ".")
+        );
+      }
+    } catch {
+      setDriveFiles([]);
+      setDriveError("Không tải được danh sách ảnh từ Drive. Kiểm tra mạng rồi thử lại.");
+    } finally {
+      setLoadingDrive(false);
+    }
   }
 
   // ── Local source (File System Access API) ──────────────────────
+  /** Chrome/Edge: bộ chọn thư mục thật. Trình duyệt khác: <input webkitdirectory>. */
+  function pickSourceFolder() {
+    if (fsSupported) pickSourceFS();
+    else folderInput.current?.click();
+  }
+
   async function pickSourceFS() {
+    let dir: any;
     try {
-      const dir = await (window as any).showDirectoryPicker({ id: "vk-src" });
-      const files: SourceFile[] = [];
-      for await (const entry of dir.values()) {
-        if (entry.kind === "file" && IMG_RE.test(entry.name)) {
-          files.push({ key: entry.name, name: entry.name, handle: entry });
-        }
-      }
-      setSrcDirName(dir.name);
-      setLocalFiles(files);
-      setCopyMsg(null);
+      dir = await (window as any).showDirectoryPicker({ id: "vk-src" });
     } catch {
-      /* user cancelled */
+      return; /* người dùng bấm huỷ */
+    }
+    setScanningLocal(true);
+    setCopyMsg(null);
+    try {
+      const { files, subfolders, truncated } = await walkLocalDir(dir, (n) => IMG_RE.test(n));
+      setLocalFiles(files);
+      setLocalNote(localNoteText(dir.name, files.length, subfolders, truncated));
+    } catch {
+      setLocalFiles([]);
+      setLocalNote("Không đọc được thư mục này. Hãy chọn lại và cấp quyền cho trình duyệt.");
+    } finally {
+      setScanningLocal(false);
     }
   }
+
+  /** Nhánh <input>: webkitdirectory trả về CẢ file trong thư mục con (kèm webkitRelativePath). */
   function pickSourceInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files ?? []).filter((f) => IMG_RE.test(f.name));
-    setSrcDirName(`${files.length} ảnh đã chọn`);
-    setLocalFiles(files.map((file, i) => ({ key: `${i}-${file.name}`, name: file.name, file })));
+    const picked = Array.from(e.target.files ?? []).filter((f) => IMG_RE.test(f.name));
+    const subs = new Set<string>();
+    const files: SourceFile[] = [];
+    let rootName = "";
+    let truncated = false;
+    for (const [i, file] of picked.entries()) {
+      const rel = ((file as any).webkitRelativePath as string) || "";
+      const { root, dir } = splitWebkitPath(rel);
+      if (root && !rootName) rootName = root;
+      if (dirDepth(dir) >= MAX_LOCAL_DEPTH) continue;
+      if (dir) subs.add(dir);
+      files.push({ key: rel || `${i}-${file.name}`, name: file.name, dir, file });
+      if (files.length >= MAX_LOCAL_FILES) {
+        truncated = true;
+        break;
+      }
+    }
+    const label = rootName || `${files.length} ảnh đã chọn`;
+    setLocalFiles(files);
+    setLocalNote(localNoteText(label, files.length, subs.size, truncated));
+    setCopyMsg(null);
+    e.target.value = ""; // chọn lại đúng thư mục đó vẫn kích hoạt onChange
   }
   async function pickDest() {
     try {
@@ -363,28 +451,61 @@ export default function FilterTool({
     if (!(await ensureFilterUse())) return;
     setCopying(true);
     setCopyMsg(null);
+
+    // Quét cả thư mục con nên HAI ảnh KHÁC NHAU có thể trùng tên (IMG_001.jpg ở
+    // "Ngày 1" và ở "Ngày 2"). Thư mục đích phẳng, ghi thẳng theo tên là tấm sau
+    // đè mất tấm trước mà không ai biết → tấm trùng được thêm hậu tố.
+    const used = new Set<string>();
+    let renamed = 0;
+    const uniqueName = (name: string) => {
+      if (!used.has(name)) {
+        used.add(name);
+        return name;
+      }
+      const dot = name.lastIndexOf(".");
+      const base = dot > 0 ? name.slice(0, dot) : name;
+      const suffix = dot > 0 ? name.slice(dot) : "";
+      for (let i = 2; ; i++) {
+        const candidate = `${base} (${i})${suffix}`;
+        if (!used.has(candidate)) {
+          used.add(candidate);
+          renamed++;
+          return candidate;
+        }
+      }
+    };
+
     let done = 0;
+    let failed = 0;
     for (const m of shown) {
       try {
         const file = m.handle ? await m.handle.getFile() : m.file;
-        if (!file) continue;
-        const fh = await destDir.getFileHandle(m.name, { create: true });
+        if (!file) {
+          failed++;
+          continue;
+        }
+        const fh = await destDir.getFileHandle(uniqueName(m.name), { create: true });
         const w = await fh.createWritable();
         await w.write(file);
         await w.close();
         done++;
         setCopyMsg(`Đang copy… ${done}/${shown.length}`);
       } catch {
-        /* skip this file */
+        failed++;
       }
     }
     setCopying(false);
-    setCopyMsg(`Đã copy ${done}/${shown.length} ảnh sang “${destName}”.`);
+    setCopyMsg(
+      `Đã copy ${done}/${shown.length} ảnh sang “${destName}”` +
+        (renamed ? ` · ${renamed} ảnh trùng tên (khác thư mục con) được đổi tên để không đè nhau` : "") +
+        (failed ? ` · ${failed} ảnh lỗi` : "") +
+        "."
+    );
   }
 
   // Copy ảnh đã lọc sang Drive — máy chủ dùng KẾT NỐI đã lưu (toàn quyền) để tự
-  // tạo thư mục "Anh Chon" trong link ảnh gốc rồi chép ảnh vào, KHÔNG cần đăng
-  // nhập lại. Bytes không qua máy studio.
+  // tạo thư mục "Ảnh lọc" trong thư mục gốc đang lọc rồi chép ảnh vào, KHÔNG cần
+  // đăng nhập lại. Bytes không qua máy studio.
   async function copyToDrive() {
     const files = shown.filter((f) => f.driveId).map((f) => ({ id: f.driveId as string, name: f.name }));
     if (files.length === 0) return;
@@ -408,8 +529,12 @@ export default function FilterTool({
       } else {
         setDriveCopyLink(d.folderUrl ?? null);
         const failN = Array.isArray(d.failed) ? d.failed.length : 0;
+        const skipN = Number(d.skipped) || 0;
         setDriveCopyMsg(
-          `Đã copy ${d.copied}/${files.length} ảnh sang “${d.folderName || "Anh Chon"}”${failN ? ` · ${failN} ảnh lỗi` : ""}.`
+          `Đã copy ${d.copied}/${files.length} ảnh vào thư mục “${d.folderName || "Ảnh lọc"}”` +
+            `${d.reused ? " (thư mục đã có sẵn trong link gốc)" : " (vừa tạo trong link ảnh gốc)"}` +
+            `${skipN ? ` · ${skipN} ảnh đã có từ trước nên bỏ qua` : ""}` +
+            `${failN ? ` · ${failN} ảnh lỗi` : ""}.`
         );
       }
     } catch {
@@ -434,7 +559,7 @@ export default function FilterTool({
       {/* Ba bước của bản thiết kế: nguồn ảnh → danh sách cần lọc → nơi lưu.
           Kết quả tự cập nhật theo từng bước nên không cần nút "chạy". */}
       <div className="flex flex-col gap-3">
-        <Step no={1} title="Nguồn ảnh" desc="Thư mục chứa TOÀN BỘ ảnh của buổi chụp — trên Google Drive hoặc ngay trên máy tính.">
+        <Step no={1} title="Nguồn ảnh" desc="Thư mục chứa TOÀN BỘ ảnh của buổi chụp — trên Google Drive hoặc ngay trên máy tính. Chọn thư mục gốc là quét luôn các thư mục con bên trong.">
           <div className="mb-3 flex gap-2">
             {srcTab("drive", "Google Drive", Link2)}
             {srcTab("local", "Máy tính", HardDrive)}
@@ -449,8 +574,10 @@ export default function FilterTool({
                 </button>
               </div>
               {driveError && <p className="mt-3 text-sm" style={{ color: "var(--danger)" }}>{driveError}</p>}
-              {driveFiles.length > 0 && (
-                <p className="mt-3 text-[13px]" style={{ color: "var(--text2)" }}>Đã tải <b>{driveFiles.length}</b> ảnh từ Drive.</p>
+              {driveNote && (
+                <p className="mt-3 text-[13px]" style={{ color: driveFiles.length ? "var(--text2)" : "var(--gold)" }}>
+                  {driveNote}
+                </p>
               )}
 
             </>
@@ -458,15 +585,33 @@ export default function FilterTool({
             <>
               <button
                 type="button"
-                onClick={() => (fsSupported ? pickSourceFS() : fileInput.current?.click())}
-                className="btn-ghost w-full py-3"
+                onClick={pickSourceFolder}
+                disabled={scanningLocal}
+                className="btn-ghost w-full py-3 disabled:opacity-40"
               >
-                <FolderInput size={16} /> Chọn thư mục nguồn
+                <FolderInput size={16} /> {scanningLocal ? "Đang quét thư mục…" : "Chọn thư mục nguồn"}
               </button>
+              {/* webkitdirectory: chọn thư mục gốc là lấy luôn file trong thư mục con. */}
+              <input
+                ref={folderInput}
+                type="file"
+                multiple
+                hidden
+                onChange={pickSourceInput}
+                {...({ webkitdirectory: "", directory: "", mozdirectory: "" } as any)}
+              />
               <input ref={fileInput} type="file" multiple hidden onChange={pickSourceInput} />
-              {srcDirName && (
-                <p className="mt-2 text-[13px]" style={{ color: "var(--text2)" }}>
-                  Nguồn: <b>{srcDirName}</b> · {localFiles.length} ảnh (không upload — xử lý cục bộ).
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                className="mt-2 text-[12px] underline"
+                style={{ color: "var(--tx3)" }}
+              >
+                hoặc chọn từng ảnh
+              </button>
+              {localNote && (
+                <p className="mt-2 text-[13px]" style={{ color: localFiles.length ? "var(--text2)" : "var(--gold)" }}>
+                  {localNote}
                 </p>
               )}
 
@@ -545,7 +690,7 @@ export default function FilterTool({
           no={3}
           title="Nơi lưu ảnh đã lọc"
           desc={photoSource === "drive"
-            ? "Chép thẳng sang Drive vào thư mục con của chính link ảnh gốc — không phải tải về máy."
+            ? "Máy chủ tự tạo thư mục “Ảnh lọc” ngay trong thư mục gốc đang lọc rồi chép ảnh đã lọc vào — không phải tải về máy."
             : "Chọn thư mục đích rồi copy thẳng sang; ảnh không rời khỏi máy bạn."}
         >
           {photoSource === "drive" ? (
@@ -557,8 +702,8 @@ export default function FilterTool({
 
                         {driveConn.connected ? (
                           <>
-                            <label className="mb-1 block text-[12px]" style={{ color: "var(--text3)" }}>Tên thư mục ảnh chọn</label>
-                            <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Anh Chon" className="input" />
+                            <label className="mb-1 block text-[12px]" style={{ color: "var(--text3)" }}>Tên thư mục ảnh đã lọc</label>
+                            <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} placeholder="Ảnh lọc" className="input" />
                             <button
                               type="button"
                               onClick={copyToDrive}
@@ -568,7 +713,7 @@ export default function FilterTool({
                               <CopyCheck size={15} /> {driveCopying ? "Đang copy…" : `Copy ${shown.length} ảnh sang Drive`}
                             </button>
                             <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
-                              Máy chủ <b>tự tạo thư mục “{newFolderName.trim() || "Anh Chon"}” ngay trong link ảnh gốc</b> và chép ảnh đã lọc vào — không cần đăng nhập lại. Cần link ảnh gốc mà tài khoản Drive đã kết nối có <b>quyền chỉnh sửa</b>.{" "}
+                              Máy chủ <b>tự tạo thư mục “{newFolderName.trim() || "Ảnh lọc"}” ngay trong thư mục gốc đang lọc</b> rồi chép ảnh đã lọc vào — không cần đăng nhập lại. Thư mục cùng tên đã có thì dùng lại và bỏ qua ảnh đã chép lần trước. Cần link ảnh gốc mà tài khoản Drive đã kết nối có <b>quyền chỉnh sửa</b>.{" "}
                               <a href="/api/filter/drive/connect" className="underline" style={{ color: "var(--text3)" }}>Kết nối lại tài khoản khác</a>
                             </p>
                           </>
@@ -598,7 +743,7 @@ export default function FilterTool({
               <p className="rounded-[10px] px-3.5 py-3 text-[12.5px] leading-relaxed" style={{ background: "var(--sf2)", color: "var(--tx2)" }}>
                 {driveFiles.length === 0
                   ? "Tải ảnh từ link Drive ở bước 1 trước, rồi chọn nơi lưu tại đây."
-                  : "Chưa bật copy sang Drive trên máy chủ — dùng nút “Tải ZIP” ở phần kết quả bên dưới."}
+                  : "Máy chủ chưa bật copy sang Drive (thiếu cấu hình Google) — tạm thời dùng nút “Xuất .txt” ở phần kết quả, hoặc chuyển nguồn sang “Máy tính” để copy thẳng ra thư mục."}
               </p>
             )
           ) : fsSupported ? (
@@ -686,7 +831,13 @@ export default function FilterTool({
                     <FileText size={28} />
                   )}
                 </div>
-                <p className="truncate px-2 py-1.5 text-[11px]" style={{ color: "var(--text2)" }} title={f.name}>{stripExtension(f.name)}</p>
+                <p
+                  className="truncate px-2 py-1.5 text-[11px]"
+                  style={{ color: "var(--text2)" }}
+                  title={f.dir ? `${f.dir}/${f.name}` : f.name}
+                >
+                  {stripExtension(f.name)}
+                </p>
               </div>
             ))}
           </div>

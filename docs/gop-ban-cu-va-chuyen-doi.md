@@ -37,7 +37,7 @@ commit đó vào nhánh này (`abd27ff`):
 - **Công cụ lọc ảnh** tách thành `<FilterTool/>` dùng chung — trang đầy đủ và
   popup "Lọc ảnh" trong quản lý album gọi cùng một thành phần.
 - **Copy ảnh đã lọc thẳng sang Drive**: studio nối Drive một lần, máy chủ tự
-  tạo thư mục `Anh Chon` trong đúng link ảnh gốc (4 route `/api/filter/*`).
+  tạo thư mục `Ảnh lọc` trong đúng link ảnh gốc (4 route `/api/filter/*`).
 - **Khách bấm "đã chọn xong"** → báo studio qua chuông + push + Zalo.
 - Sửa lỗi `{"error":"forbidden"}` khi kết nối Google Drive.
 

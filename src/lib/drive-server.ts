@@ -1,5 +1,9 @@
 import "server-only";
 import { extractFileId, extractFolderId } from "@/lib/drive";
+import { FOLDER_MIME, walkPhotos, type PhotoWalk, type WalkOptions } from "./drive-walk";
+
+export { isPhotoFile, walkPhotos, FOLDER_MIME } from "./drive-walk";
+export type { PhotoWalk, WalkOptions, DriveNode } from "./drive-walk";
 
 export interface DriveFile {
   id: string;
@@ -78,7 +82,35 @@ export async function listFolderImages(folderId: string): Promise<DriveFile[]> {
   return out;
 }
 
-const FOLDER_MIME = "application/vnd.google-apps.folder";
+/** Liệt kê MỌI con trực tiếp (file + thư mục con) của một thư mục, có phân trang. */
+export async function listFolderChildren(folderId: string): Promise<DriveFile[]> {
+  const out: DriveFile[] = [];
+  let pageToken: string | undefined;
+  do {
+    const params = new URLSearchParams({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: "nextPageToken, files(id, name, mimeType)",
+      pageSize: "1000",
+      orderBy: "folder,name_natural",
+      key: key(),
+    });
+    if (pageToken) params.set("pageToken", pageToken);
+    const res = await driveFetch(`${API}/files?${params.toString()}`);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(`Drive API error (${res.status}): ${body.slice(0, 200)}`);
+    }
+    const data = (await res.json()) as { files?: DriveFile[]; nextPageToken?: string };
+    if (data.files) out.push(...data.files);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return out;
+}
+
+/** Ảnh trong thư mục CÔNG KHAI, tuỳ chọn quét cả thư mục con (dùng khoá API). */
+export function walkFolderPhotos(folderId: string, opts: WalkOptions = {}): Promise<PhotoWalk<DriveFile>> {
+  return walkPhotos(folderId, listFolderChildren, opts);
+}
 
 export interface ResolvedSource {
   folderName: string | null; // name of the Drive folder, if the source is a folder
