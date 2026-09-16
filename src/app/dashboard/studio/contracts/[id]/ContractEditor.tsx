@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { createClient } from "@/lib/supabase/client";
+import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 import { mainUrl, studioUrl } from "@/lib/hosts";
 import MessengerButton from "@/components/MessengerButton";
 import ContractStepper, { type ContractLifecycle } from "@/components/studio/ContractStepper";
@@ -675,16 +676,30 @@ export default function ContractEditor({
     const clean = serializeItems(items);
     await supabase.from("contract_items").delete().eq("contract_id", contract.id);
     if (clean.length) {
-      await supabase
-        .from("contract_items")
-        .insert(clean.map((i, idx) => ({ ...i, contract_id: contract.id, position: idx })));
+      const rows = clean.map((i, idx) => ({ ...i, contract_id: contract.id, position: idx }));
+      let { error } = await supabase.from("contract_items").insert(rows);
+      // Database chưa chạy migration cột `description` thì ghi lại bản không có
+      // cột đó. Nếu không, hàm này vừa XOÁ hết hạng mục xong lại chèn hỏng —
+      // studio bấm "Lưu" một cái là mất sạch bảng giá.
+      if (error && isMissingColumn(error, "description")) {
+        ({ error } = await supabase.from("contract_items").insert(withoutColumn(rows, "description")));
+      }
+      if (error) {
+        // Báo thật, và giữ nguyên state đang có để studio bấm Lưu lại được —
+        // trước đây lỗi insert bị nuốt, màn hình vẫn hiện "Đã lưu hạng mục."
+        setBusy(null);
+        toast(`Lưu hạng mục KHÔNG thành công: ${error.message}`);
+        return;
+      }
     }
     const { data } = await supabase
       .from("contract_items")
       .select("*")
       .eq("contract_id", contract.id)
       .order("position");
-    setItems((data ?? []).map((i) => ({ id: i.id, name: i.name, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 })));
+    // Map phải ĐỦ TRƯỜNG như lúc nạp trang: thiếu trường nào ở đây thì sau khi
+    // bấm Lưu ô đó trắng ngay trên màn hình, dù trong database vẫn còn.
+    setItems((data ?? []).map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 })));
     setBusy(null);
     toast("Đã lưu hạng mục.");
   }

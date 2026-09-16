@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isMissingColumn } from "@/lib/missing-column";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDesktopOwner } from "@/lib/desktop/auth";
 import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
@@ -43,6 +44,20 @@ const pick = (row: Row, cols: string[]): Row => {
   for (const c of cols) if (c in row) out[c] = row[c];
   return out;
 };
+
+/**
+ * Cột chỉ có sau khi chủ studio chạy migration. Bản desktop mới gửi lên cột
+ * này trong khi database của họ có thể chưa có — bỏ cột đó ra rồi ghi lại,
+ * thay vì để cả lần đồng bộ hỏng. Chạy SQL xong là tự khắc ghi đủ.
+ */
+const NEW_COLS = ["description"];
+function dropNew(payload: Row, err: unknown): Row | null {
+  const gone = NEW_COLS.find((c) => c in payload && isMissingColumn(err, c));
+  if (!gone) return null;
+  const next = { ...payload };
+  delete next[gone];
+  return next;
+}
 
 export async function POST(req: Request) {
   const auth = await requireDesktopOwner(req);
@@ -105,13 +120,17 @@ export async function POST(req: Request) {
 
     if (op === "insert") {
       payload.id = id;
-      const { data, error } = await db.from(table).insert(payload).select("*").single();
+      let { data, error } = await db.from(table).insert(payload).select("*").single();
+      const retry = error ? dropNew(payload, error) : null;
+      if (retry) ({ data, error } = await db.from(table).insert(retry).select("*").single());
       if (error) throw error;
       return NextResponse.json({ ok: true, row: data });
     }
     // update
     if (cfg.owner) {
-      const { data, error } = await db.from(table).update(payload).eq("id", id).eq("owner_id", owner).select("*").maybeSingle();
+      let { data, error } = await db.from(table).update(payload).eq("id", id).eq("owner_id", owner).select("*").maybeSingle();
+      const retry = error ? dropNew(payload, error) : null;
+      if (retry) ({ data, error } = await db.from(table).update(retry).eq("id", id).eq("owner_id", owner).select("*").maybeSingle());
       if (error) throw error;
       if (!data) return NextResponse.json({ error: "not_found" }, { status: 404 });
       // Hợp đồng chuyển trạng thái từ desktop:

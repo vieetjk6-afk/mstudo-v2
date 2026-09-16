@@ -3,6 +3,7 @@ import { nextContractCode, newShareToken } from "@/lib/contract-code";
 import { computeRoundedDeposit } from "@/lib/quote-deposit";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { fmtDate } from "@/lib/date";
+import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 
 export type ConvertResult =
   | { ok: true; contract_id: string; contract_token: string }
@@ -40,7 +41,7 @@ export async function convertQuoteToContract(
 
   const { data: items } = await db
     .from("quote_items")
-    .select("name, description, qty, unit_price, is_optional, is_discount, selected, position")
+    .select("*")
     .eq("quote_id", quote.id)
     .order("position");
 
@@ -118,7 +119,12 @@ export async function convertQuoteToContract(
     unit_price: it.is_discount ? -Math.abs(it.unit_price || 0) : it.unit_price,
     position: idx,
   }));
-  const { error: iErr } = await db.from("contract_items").insert(rows);
+  let { error: iErr } = await db.from("contract_items").insert(rows);
+  // Chưa chạy migration cột `description` thì chèn lại bản không có cột đó,
+  // chứ không bỏ luôn cả hợp đồng vừa tạo.
+  if (iErr && isMissingColumn(iErr, "description")) {
+    ({ error: iErr } = await db.from("contract_items").insert(withoutColumn(rows, "description")));
+  }
   if (iErr) {
     await db.from("studio_contracts").delete().eq("id", contract.id);
     return { ok: false, error: iErr.message };
