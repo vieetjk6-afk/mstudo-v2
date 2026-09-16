@@ -12,7 +12,7 @@ thì trình duyệt báo lỗi khác nhau — nhìn lỗi là biết đang vư�
 | # | Tầng | Ai lo | Sai thì thấy gì |
 |---|---|---|---|
 | 1 | **DNS** — `*.mstudo.com` trỏ về Vercel | Người vận hành, làm **một lần** | Không mở được trang / lỗi tên miền của trình duyệt |
-| 2 | **Vercel** — project nhận host đó | App tự đăng ký từng host (hoặc wildcard, nếu dùng nameserver Vercel) | Trang lỗi của Vercel: *"The deployment could not be found"* |
+| 2 | **Vercel** — project nhận host đó | App tự đăng ký từng host (hoặc wildcard, nếu dùng nameserver Vercel) | Trang đen của Vercel: **"This page doesn't exist"** + mã `404 DEPLOYMENT_NOT_FOUND` |
 | 3 | **App** — có dòng `sites` khớp `subdomain` và đã **xuất bản** | Studio, trong trình tạo website | Trang 404 của mstudo |
 
 Trước đây app chỉ lo tầng 3: lưu `sites.subdomain` vào database là xong, không ai
@@ -132,6 +132,14 @@ select subdomain, published, custom_domain, custom_domain_verified
 from sites
 where subdomain = 'ten-studio';
 ```
+
+**Nhìn trang lỗi là biết vướng tầng nào** — hai trang này khác hẳn nhau:
+
+| Thấy gì | Tầng | Nghĩa là |
+|---|---|---|
+| Trang ĐEN của Vercel, `404 DEPLOYMENT_NOT_FOUND` | 2 | DNS đã tới được Vercel, nhưng host chưa gắn vào project nào. App còn chưa chạy dòng nào. |
+| Trang 404 của mstudo (giao diện của mình) | 3 | Host chạy rồi, nhưng không có dòng `sites` khớp, hoặc trang chưa xuất bản. |
+| Trình duyệt báo không mở được trang | 1 | DNS chưa trỏ — thiếu bản ghi `CNAME *`. |
 
 Rồi đối chiếu ba tầng ở bảng đầu file:
 
