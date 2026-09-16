@@ -72,6 +72,7 @@
     "test:desktop-links": "node --experimental-strip-types desktop/test/desktop-links.mjs",
     "test:desktop-update": "node --experimental-strip-types desktop/test/desktop-update.mjs",
     "test:ten-mien-phu": "node --experimental-strip-types desktop/test/ten-mien-phu.mjs",
+    "test:thong-bao-dich-den": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/thong-bao-dich-den.mjs",
     "inbox:zalo-worker": "node scripts/zalo-inbox-worker.mjs",
     "ui:shot": "node scripts/chup-giao-dien.mjs",
     "ui:test": "node scripts/kiem-tra-giao-dien.mjs",

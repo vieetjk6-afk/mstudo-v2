@@ -58,13 +58,27 @@ export function notificationMeta(kind: string): NotificationMeta {
  * Nơi một thông báo trỏ tới trong KHU QUẢN LÝ. Tách khỏi component để cổng nhân
  * viên dùng lại được (nó cũng cho bấm vào thông báo để mở hợp đồng liên quan).
  */
+/**
+ * Chỗ admin DUYỆT yêu cầu nâng cấp.
+ *
+ * Khai một chỗ vì đường dẫn này từng nằm rải ba nơi (hàm dưới + hai route API
+ * gửi push) và đã lệch nhau: mục "Yêu cầu nâng cấp" được dọn từ trang Cấu hình
+ * sang khu Người dùng & studio, nhưng cả ba chuỗi `/dashboard/settings` thì
+ * không ai sửa theo — admin bấm vào thông báo có tiền đang chờ lại rơi vào
+ * trang cấu hình, không có nút duyệt nào.
+ *
+ * Neo `#yeu-cau-nang-cap` để rơi đúng khối, vì nó nằm dưới cả bảng tài khoản
+ * dài — mở trang ra mà phải cuộn đi tìm thì cũng gần như lạc.
+ */
+export const UPGRADE_REVIEW_HREF = "/dashboard/admin#yeu-cau-nang-cap";
+
 export function notificationHref(n: Pick<StudioNotification, "kind" | "contract_id" | "album_id">): string | null {
   if (n.album_id) return `/dashboard/albums/${n.album_id}`;
   if (n.contract_id) return `/dashboard/studio/contracts/${n.contract_id}`;
   if (n.kind === "quote_accepted") return "/dashboard/studio/quotes";
   if (n.kind === "review") return "/dashboard/studio/ranking";
   if (n.kind === "new_user") return "/dashboard/admin";
-  if (n.kind === "upgrade_request") return "/dashboard/settings";
+  if (n.kind === "upgrade_request") return UPGRADE_REVIEW_HREF;
   if (n.kind === "plan_activated" || n.kind === "payment_failed") return "/dashboard/upgrade";
   if (n.kind === "contract_created" && n.contract_id) return `/dashboard/studio/contracts/${n.contract_id}`;
   if (n.kind === "contact") return "/dashboard/settings";

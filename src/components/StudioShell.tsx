@@ -83,8 +83,8 @@ const TITLES: [string, string, string][] = [
   ["/dashboard/affiliate", "Affiliate", "Giới thiệu studio khác và nhận hoa hồng"],
   ["/dashboard/admin/system", "Cài đặt hệ thống", "Thông báo toàn studio, sao lưu & khôi phục"],
   ["/dashboard/admin/affiliate", "Quản lý Affiliate", "Danh sách hoa hồng"],
-  ["/dashboard/admin", "Người dùng & studio", "Tài khoản, gói và trạng thái từng studio"],
-  ["/dashboard/settings", "Cấu hình mstudo", "Cấu hình nền tảng, phản hồi, yêu cầu nâng cấp, mã giảm giá"],
+  ["/dashboard/admin", "Người dùng & studio", "Tài khoản, gói, DUYỆT yêu cầu nâng cấp & mã giảm giá"],
+  ["/dashboard/settings", "Cấu hình mstudo", "Cấu hình nền tảng, gói & giá, nội dung trang nâng cấp, góp ý"],
   ["/dashboard/account", "Tài khoản & bảo mật", "Thông tin đăng nhập, mật khẩu, thiết bị"],
   // Tổng quát nhất nằm cuối để mọi route ở trên khớp trước.
   ["/dashboard", "Thư viện album", "Tất cả album của bạn"],

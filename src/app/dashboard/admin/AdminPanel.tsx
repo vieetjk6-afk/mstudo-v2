@@ -425,7 +425,9 @@ export default function AdminPanel({
       {/* Nâng cấp gói: yêu cầu chờ duyệt & mã giảm giá. Dọn từ "Cấu hình mstudo"
           sang đây vì cả hai đều là việc làm TRÊN một tài khoản — duyệt xong là
           xem ngay gói của họ ở bảng trên, không phải nhảy màn. */}
-      <div className="mt-8 space-y-4">
+      {/* id: đích của thông báo "có yêu cầu nâng cấp" (UPGRADE_REVIEW_HREF).
+          scroll-mt-24 để khối không bị thanh đầu trang che mất sau khi nhảy neo. */}
+      <div id="yeu-cau-nang-cap" className="mt-8 space-y-4 scroll-mt-24">
         <UpgradeRequests initial={upgrades} />
         <DiscountCodes initial={codes} />
       </div>

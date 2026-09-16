@@ -5,6 +5,7 @@ import { PLAN_PRICING, type Plan } from "@/lib/plans";
 import { activatePlan } from "@/lib/upgrade-activate";
 import { newUpgradePaymentCode, upgradeAmount } from "@/lib/upgrade-payment";
 import { notifyAdmins } from "@/lib/notify-admin";
+import { UPGRADE_REVIEW_HREF } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -161,7 +162,9 @@ export async function POST(req: Request) {
   await notifyAdmins(
     "upgrade_request",
     `Yêu cầu nâng cấp${planLabel} từ ${user.email}${activated ? " (đã tự kích hoạt bằng mã giảm giá)" : ""}`,
-    { push: true },
+    // Trỏ thẳng chỗ duyệt. Bỏ trống thì notifyAdmins mặc định về trang Thông
+    // báo — đúng loại màn "chỉ để đọc" mà chính nó dặn là đừng đẩy người ta vào.
+    { push: true, url: UPGRADE_REVIEW_HREF },
   );
 
   return NextResponse.json({ ok: true, activated, requestId: inserted.id, amount: payAmount });

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmins } from "@/lib/notify-admin";
+import { UPGRADE_REVIEW_HREF } from "@/lib/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
     await notifyAdmins(
       "upgrade_request",
       `${row.email || "Studio"} báo ĐÃ CHUYỂN KHOẢN ${amount} gói ${row.plan}/${row.cycle}${row.payment_code ? ` · ${row.payment_code}` : ""} — chờ xác nhận`,
-      { push: true, url: "/dashboard/settings" },
+      { push: true, url: UPGRADE_REVIEW_HREF },
     );
   }
 
