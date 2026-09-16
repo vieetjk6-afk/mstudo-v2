@@ -45,7 +45,12 @@ function hintFor(blocker: Blocker, host: string): string {
     case "pending":
       return `Đã lưu ${host} và đăng ký trên Vercel. Đang chờ DNS xác minh — thường vài phút, có thể tới vài giờ.`;
     case "conflict":
-      return `${host} đang thuộc một project Vercel khác. Gỡ nó ở project kia rồi bấm “Kiểm tra”.`;
+      // Vercel trả domain_already_in_use cho CẢ HAI trường hợp: host thuộc
+      // project khác, và tên miền gốc đang gắn với một TÀI KHOẢN Vercel khác
+      // (lúc đó mọi subdomain đều đòi xác minh TXT `_vercel.<tên miền gốc>`).
+      // Nói cả hai, vì cách chữa khác nhau và người vận hành không đoán được
+      // từ một chữ "conflict".
+      return `${host} chưa dùng được: Vercel báo tên miền đang gắn với project/tài khoản khác. Vào Vercel → Settings → Domains xem dòng ${host} để làm theo (thường là thêm TXT \`_vercel\`), hoặc gỡ tên miền ở tài khoản kia. Xong bấm “Kiểm tra”.`;
     case "ready":
       return `${host} đã chạy.`;
   }
