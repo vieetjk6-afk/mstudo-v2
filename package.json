@@ -71,6 +71,7 @@
     "test:captcha": "node --experimental-strip-types desktop/test/captcha.mjs",
     "test:desktop-links": "node --experimental-strip-types desktop/test/desktop-links.mjs",
     "test:desktop-update": "node --experimental-strip-types desktop/test/desktop-update.mjs",
+    "test:rls-policy": "node desktop/test/rls-policy.mjs",
     "test:ten-mien-phu": "node --experimental-strip-types desktop/test/ten-mien-phu.mjs",
     "test:thong-bao-dich-den": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/thong-bao-dich-den.mjs",
     "inbox:zalo-worker": "node scripts/zalo-inbox-worker.mjs",

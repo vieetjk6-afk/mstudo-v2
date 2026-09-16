@@ -1249,11 +1249,6 @@ create table if not exists public.crew_unavailable (
 );
 create index if not exists crew_unavailable_phone_idx on public.crew_unavailable (phone, date);
 alter table public.crew_unavailable enable row level security;
--- Authenticated studios may read (for conflict detection); writes go through the
--- service role from the crew portal, so no insert/update/delete policy is needed.
-drop policy if exists crew_unavailable_read on public.crew_unavailable;
-create policy crew_unavailable_read on public.crew_unavailable
-  for select using (auth.role() = 'authenticated');
 
 -- Lịch thợ: mở rộng crew_unavailable từ "ngày bận" thành "mốc lịch có giờ".
 -- Xem supabase/migrations/crew_schedule.sql.
@@ -1263,6 +1258,21 @@ alter table public.crew_unavailable add column if not exists overnight  boolean 
 alter table public.crew_unavailable add column if not exists title      text;
 alter table public.crew_unavailable add column if not exists owner_id   uuid references public.profiles (id) on delete set null;
 alter table public.crew_unavailable drop constraint if exists crew_unavailable_phone_date_key;
+-- Lọc theo owner_id là đường đi CHÍNH của mọi truy vấn từ trình duyệt.
+create index if not exists crew_unavailable_owner_date_idx on public.crew_unavailable (owner_id, date);
+
+-- CHỈ ĐỌC DÒNG CỦA CHÍNH MÌNH. Policy cũ mở cho mọi tài khoản đã đăng nhập, từ
+-- hồi bảng chỉ có (phone, date) = "ngày này thợ bận" — thứ thật sự ít nhạy cảm.
+-- Bảng sau đó được mở rộng thêm `title` (tiêu đề hợp đồng, thường có tên khách)
+-- và `owner_id`, nên cửa mở ấy thành ra để lộ lịch + khách của mọi studio cho
+-- bất kỳ ai có tài khoản. Xem migrations/crew_unavailable_rls_rieng_tu.sql.
+--
+-- Dò trùng lịch LIÊN STUDIO không đi qua đây: nó dùng service role (api/crew,
+-- api/crew-calendar/[token], api/studio/crew-schedule, api/studio/contract-crew).
+-- Ghi cũng vậy, nên không cần policy insert/update/delete.
+drop policy if exists crew_unavailable_read on public.crew_unavailable;
+create policy crew_unavailable_read on public.crew_unavailable
+  for select using (owner_id = auth.uid() or public.is_admin());
 
 -- Ca công ty của thợ freelancer (Hòa Phát A/B/C). Chỉ nhớ thợ thuộc ca nào; các
 -- ca cụ thể được TÍNH lúc hiển thị (src/lib/crew-shift.ts), không sinh sẵn dòng.

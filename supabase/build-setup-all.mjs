@@ -37,6 +37,9 @@ const ORDER = [
   ["migrations/contract_intake.sql", "Form điền thông tin trước buổi chụp"],
   ["migrations/crew_schedule.sql", "Lịch thợ (phải chạy TRƯỚC crew_profile_show)"],
   ["migrations/crew_profile_show.sql", "Hồ sơ thợ & thông tin show"],
+  // Siết policy đọc crew_unavailable — phải chạy SAU crew_schedule.sql vì nó
+  // lọc theo cột owner_id do file đó thêm vào.
+  ["migrations/crew_unavailable_rls_rieng_tu.sql", "Lịch thợ: chỉ đọc dòng của chính mình (SAU crew_schedule)"],
   ["migrations/photographer_plus_pricing.sql", "Cột giá còn thiếu của gói Photographer Plus"],
   ["migrations/rental.sql", "Phòng váy: kho trang phục & đơn thuê"],
   ["migrations/site_views.sql", "Đếm lượt xem website studio"],
