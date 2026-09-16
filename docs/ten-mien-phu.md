@@ -35,14 +35,58 @@ Dùng Cloudflare thì để bản ghi này ở chế độ **DNS only** (mây x�
 (mây cam) cho wildcard cần gói trả phí — không thì chứng chỉ SSL của các tên
 miền phụ sẽ hỏng.
 
-### 2. Vercel
+### 2. Vercel — và bản ghi TXT `_vercel`
 
 Project → **Settings → Domains → Add** → nhập `*.mstudo.com`.
 
-Vercel sẽ đòi thêm một bản ghi **TXT `_vercel`** để xác minh quyền sở hữu — thêm
-đúng giá trị Vercel hiển thị, rồi chờ tới khi domain chuyển sang **Valid
-Configuration**. Chỉ khi wildcard ở trạng thái này thì mọi tên miền phụ mới chạy
-ngay mà không cần đăng ký từng cái.
+Vercel sẽ đòi thêm một bản ghi **TXT `_vercel`**. Đây là chỗ hay gây khựng, nên
+nói rõ:
+
+**Nó là gì.** Một bản ghi DNS dạng TXT — chỉ là một dòng chữ gắn vào tên miền.
+Nó **không dẫn traffic đi đâu cả**. Việc duy nhất của nó là để Vercel hỏi DNS và
+đọc được chuỗi bí mật mà chính Vercel vừa sinh ra → chứng minh người đang thêm
+domain có quyền sửa DNS của `mstudo.com`.
+
+**Vì sao chỉ wildcard mới đòi.** Với một subdomain thường như `img.mstudo.com`,
+bản ghi CNAME của chính nó trỏ về Vercel đã là bằng chứng. Nhưng `*.mstudo.com`
+phủ **mọi** subdomain — Vercel không thể để ai nhận bừa cả tên miền, nên đòi một
+bằng chứng riêng.
+
+**Cần CẢ HAI bản ghi**, hai việc khác hẳn nhau:
+
+| Bản ghi | Làm việc gì | Tần suất |
+|---|---|---|
+| TXT `_vercel` | "mstudo.com là của tôi" — xác minh | một lần |
+| CNAME `*` (bước 1) | "gửi traffic tới Vercel" — dẫn đường | để mãi |
+
+**Làm cụ thể.** Sau khi bấm Add, Vercel hiện ngay bảng kiểu:
+
+```
+Type   Name      Value
+TXT    _vercel   vc-domain-verify=mstudo.com,60e9f2a4b8…
+```
+
+Chuỗi sau dấu `=` là **của riêng project này**, Vercel sinh ra — chép y nguyên
+từ màn hình, đừng chép từ tài liệu nào (kể cả file này).
+
+Sang Cloudflare → chọn `mstudo.com` → **DNS → Records → Add record**:
+
+- **Type**: `TXT`
+- **Name**: `_vercel` — chỉ gõ `_vercel`, Cloudflare tự thêm `.mstudo.com`
+- **Content**: dán nguyên chuỗi Vercel vừa hiện
+- **TTL**: Auto
+- Bản ghi TXT không có nút proxy nên **không phải lo mây cam/xám** ở đây
+
+**Save** → quay lại Vercel bấm **Refresh**. Thường vài giây tới vài phút thì
+`*.mstudo.com` chuyển sang **Valid Configuration**. Chỉ khi wildcard ở trạng
+thái này thì mọi tên miền phụ mới chạy ngay mà không cần đăng ký từng cái.
+
+**Đừng xoá bản ghi TXT sau khi xong** — Vercel kiểm lại định kỳ, xoá đi là
+wildcard mất hiệu lực.
+
+> Ngoại lệ: tên miền dùng thẳng **nameserver của Vercel** thì Vercel tự thêm bản
+> ghi này, không phải làm gì. mstudo.com đang để Cloudflare quản DNS (xem
+> `chuyen-doi-mstudo-2.0.md` phần 0) nên phải thêm tay.
 
 ### 3. Biến môi trường
 
