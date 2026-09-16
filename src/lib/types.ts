@@ -467,6 +467,8 @@ export interface ContractItem {
   id: string;
   contract_id: string;
   name: string;
+  /** Mô tả chi tiết hạng mục (phạm vi công việc, số ảnh, hạn giao…). Để trống thì không hiện. */
+  description?: string | null;
   qty: number;
   unit_price: number;
   position: number;

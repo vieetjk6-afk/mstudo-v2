@@ -225,7 +225,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   }
 
   const [{ data: items }, { data: payments }, { data: milestones }, { data: quoteOptions }, { data: plan }, { data: expenses }, { data: tasks }, { data: products }, { data: appointments }] = await Promise.all([
-    db.from("contract_items").select("id, name, qty, unit_price, position").eq("contract_id", contract.id).order("position"),
+    db.from("contract_items").select("id, name, description, qty, unit_price, position").eq("contract_id", contract.id).order("position"),
     db.from("contract_payments").select("id, amount, kind, paid_at").eq("contract_id", contract.id).order("paid_at", { ascending: false }),
     db.from("studio_events").select("id, title, event_date, event_time, note").eq("contract_id", contract.id).order("event_date"),
     db.from("contract_quote_options").select("id, name, price, description, position").eq("contract_id", contract.id).order("position"),

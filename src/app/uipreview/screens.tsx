@@ -25,6 +25,7 @@ import FaceScanProgressDemo from "./FaceScanProgressDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
+import HopDongHangMucDemo from "./HopDongHangMucDemo";
 import * as f from "./fixtures";
 
 /**
@@ -44,6 +45,10 @@ export const SCREENS: Record<
     bare?: boolean;
   }
 > = {
+  "hop-dong-hang-muc": {
+    title: "Hợp đồng — tab Hạng mục (có ô mô tả từng hạng mục)",
+    render: () => <HopDongHangMucDemo />,
+  },
   "thiep-cuoi": {
     title: "Thiệp cưới — 10 mẫu khổ điện thoại (dữ liệu giả)",
     render: () => <ThiepDemo />,

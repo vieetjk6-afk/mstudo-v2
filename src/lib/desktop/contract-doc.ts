@@ -40,7 +40,7 @@ export type ContractDocData = {
     studio_signed_at?: string | null;
     created_at?: string | null;
   };
-  items: { name: string; qty: number; unit_price: number }[];
+  items: { name: string; description?: string | null; qty: number; unit_price: number }[];
   payments: { amount: number; kind?: string | null; paid_at?: string | null; note?: string | null }[];
 };
 
@@ -125,6 +125,7 @@ export function buildContractHtml(d: ContractDocData): string {
     ],
     items: d.items.map((it) => ({
       name: it.name,
+      description: it.description,
       qty: it.qty,
       unitPrice: it.unit_price,
       amount: (Number(it.qty) || 0) * (Number(it.unit_price) || 0),
@@ -220,7 +221,8 @@ export async function buildContractDocx(d: ContractDocData): Promise<Uint8Array>
     body.push(wPara("HẠNG MỤC & CHI PHÍ", { bold: true }));
     const header = `<w:tr>${wCell("STT", { bold: true, align: "center", width: 700 })}${wCell("Hạng mục", { bold: true, align: "center", width: 4200 })}${wCell("SL", { bold: true, align: "center", width: 700 })}${wCell("Đơn giá", { bold: true, align: "center", width: 1700 })}${wCell("Thành tiền", { bold: true, align: "center", width: 1800 })}</w:tr>`;
     const rows = d.items.map((it, i) =>
-      `<w:tr>${wCell(String(i + 1), { align: "center" })}${wCell(it.name || "")}${wCell(String(it.qty), { align: "center" })}${wCell(vnd(it.unit_price), { align: "right" })}${wCell(vnd((it.qty || 0) * (it.unit_price || 0)), { align: "right" })}</w:tr>`
+      // Word không có ô hai dòng kiểu HTML: mô tả nối sau tên, cách bằng xuống dòng.
+      `<w:tr>${wCell(String(i + 1), { align: "center" })}${wCell([it.name || "", it.description?.trim()].filter(Boolean).join("\n"))}${wCell(String(it.qty), { align: "center" })}${wCell(vnd(it.unit_price), { align: "right" })}${wCell(vnd((it.qty || 0) * (it.unit_price || 0)), { align: "right" })}</w:tr>`
     );
     body.push(wTable([header, ...rows]));
   }

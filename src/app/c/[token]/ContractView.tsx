@@ -50,7 +50,7 @@ type Contract = {
   brief_submitted_at: string | null;
   updated_at: string;
 };
-type Item = { id: string; name: string; qty: number; unit_price: number };
+type Item = { id: string; name: string; description: string | null; qty: number; unit_price: number };
 type Payment = { id: string; amount: number; kind: PaymentKind; paid_at: string };
 type Milestone = { id: string; title: string; event_date: string; event_time: string | null; note: string | null };
 type QuoteOption = { id: string; name: string; price: number; description: string | null };
@@ -536,6 +536,11 @@ export default function ContractView({ token }: { token: string }) {
                     <div key={it.id} className="flex items-start gap-3 py-2.5" style={{ borderBottom: "1px solid var(--bd2)" }}>
                       <div className="min-w-0 flex-1">
                         <p className="text-[13px] font-semibold">{it.name}</p>
+                        {it.description?.trim() && (
+                          <p className="mt-1 whitespace-pre-line text-[12px] leading-relaxed" style={{ color: "var(--tx2)" }}>
+                            {it.description.trim()}
+                          </p>
+                        )}
                         {!isDiscount && it.qty > 1 && (
                           <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>
                             {it.qty} × {vnd(it.unit_price)}

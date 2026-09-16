@@ -40,8 +40,11 @@ export type PrintClient = {
 /** Ô thông số buổi chụp. `wide` chiếm trọn một dòng (địa điểm, ghi chú dài). */
 export type PrintFact = { label: string; value?: string | null; wide?: boolean };
 
-/** Dòng hạng mục. `amount` âm = dòng giảm giá (in dấu trừ). */
-export type PrintItem = { name: string; qty?: number | null; unitPrice?: number | null; amount: number };
+/**
+ * Dòng hạng mục. `amount` âm = dòng giảm giá (in dấu trừ).
+ * `description` in xuống dòng dưới tên, cỡ nhỏ hơn — giữ được xuống dòng.
+ */
+export type PrintItem = { name: string; description?: string | null; qty?: number | null; unitPrice?: number | null; amount: number };
 
 /**
  * Dòng tổng tiền bên phải bảng hạng mục.
@@ -247,6 +250,10 @@ ${s}.cpd-tb td { border: .8pt solid #bbb; padding: 4px 6px; }
 ${s}.cpd-tb .c { text-align: center; }
 ${s}.cpd-tb .r { text-align: right; white-space: nowrap; }
 ${s}.cpd-tb .sub { font-size: 8.8pt; color: #555; }
+/* Mô tả hạng mục: dòng phụ dưới tên, nhỏ và nhạt hơn. Dùng white-space:pre-line
+   để studio xuống dòng trong ô mô tả thì bản in xuống dòng theo — hàm cell()
+   chỉ escape HTML chứ không đổi ký tự xuống dòng thành thẻ br. */
+${s}.cpd-tb .cpd-idesc { font-size: 8.8pt; color: #555; margin-top: 2px; white-space: pre-line; }
 
 /* Khối tổng tiền — nằm sát mép phải cho gọn chiều dọc */
 ${s}.cpd-sum { margin-top: 6px; }
@@ -374,9 +381,10 @@ function itemTable(rows: PrintItem[], head: string, empty?: string): string {
     ? rows
         .map((it, i) => {
           const neg = it.amount < 0;
+          const desc = it.description?.trim();
           return `<tr>
 <td class="c">${i + 1}</td>
-<td>${cell(it.name)}</td>
+<td>${cell(it.name)}${desc ? `<div class="cpd-idesc">${cell(desc)}</div>` : ""}</td>
 <td class="c">${it.qty == null ? "" : escHtml(String(it.qty))}</td>
 <td class="r">${it.unitPrice == null ? "" : printVnd(Math.abs(it.unitPrice))}</td>
 <td class="r">${neg ? "− " : ""}${printVnd(Math.abs(it.amount))}</td>

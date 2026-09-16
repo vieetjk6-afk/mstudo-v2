@@ -40,7 +40,7 @@ export async function convertQuoteToContract(
 
   const { data: items } = await db
     .from("quote_items")
-    .select("name, qty, unit_price, is_optional, is_discount, selected, position")
+    .select("name, description, qty, unit_price, is_optional, is_discount, selected, position")
     .eq("quote_id", quote.id)
     .order("position");
 
@@ -111,6 +111,9 @@ export async function convertQuoteToContract(
   const rows = chosen.map((it, idx) => ({
     contract_id: contract.id,
     name: it.is_discount ? `🏷️ ${it.name}` : it.name,
+    // Mô tả hạng mục đi theo sang hợp đồng. Trước đây bị bỏ rơi ở đây: studio
+    // gõ mô tả trên báo giá, khách đọc thấy, ký xong thì hợp đồng trắng trơn.
+    description: it.description ?? null,
     qty: it.qty,
     unit_price: it.is_discount ? -Math.abs(it.unit_price || 0) : it.unit_price,
     position: idx,

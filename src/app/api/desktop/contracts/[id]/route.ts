@@ -41,7 +41,7 @@ async function handle(req: Request, params: { id: string }, ownerId: string) {
   }
 
   const [{ data: items }, { data: payments }, { data: ownerObj }, brand] = await Promise.all([
-    db.from("contract_items").select("name, qty, unit_price, position").eq("contract_id", contract.id).order("position"),
+    db.from("contract_items").select("name, description, qty, unit_price, position").eq("contract_id", contract.id).order("position"),
     db.from("contract_payments").select("amount, kind, paid_at, note").eq("contract_id", contract.id).order("paid_at"),
     db.from("profiles").select("full_name, email, pl_phone, pl_bank_holder, pl_bank_account, pl_bank_name").eq("id", auth.ownerId).maybeSingle(),
     getStudioBrand(db, auth.ownerId),

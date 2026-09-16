@@ -764,6 +764,7 @@ create table if not exists public.contract_items (
   id          uuid primary key default gen_random_uuid(),
   contract_id uuid not null references public.studio_contracts (id) on delete cascade,
   name        text not null default '',
+  description text,                         -- mô tả chi tiết hạng mục (không bắt buộc)
   qty         integer not null default 1,
   unit_price  integer not null default 0,   -- VND
   position    integer not null default 0,

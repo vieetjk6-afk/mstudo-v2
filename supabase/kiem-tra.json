@@ -9,7 +9,8 @@
     "migrations/accounting.sql",
     "migrations/weather.sql",
     "migrations/album_people.sql",
-    "migrations/album_faces.sql"
+    "migrations/album_faces.sql",
+    "migrations/contract_item_description.sql"
   ],
   "muc": [
     {
@@ -631,6 +632,14 @@
       "cot": [
         "albums.faces_clustered_at",
         "photos.faces_scanned_at"
+      ]
+    },
+    {
+      "file": "migrations/contract_item_description.sql",
+      "mo_ta": "Mô tả chi tiết cho từng hạng mục hợp đồng",
+      "bang": [],
+      "cot": [
+        "contract_items.description"
       ]
     }
   ]

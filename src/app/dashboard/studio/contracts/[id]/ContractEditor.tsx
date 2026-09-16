@@ -92,7 +92,15 @@ import TimeInput from "@/components/TimeInput";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
 // giảm giá — khi lưu sẽ ghi unit_price ÂM để trừ vào tổng (không cần cột DB mới).
-type ItemRow = { id?: string; name: string; qty: number; unit_price: number; is_discount?: boolean };
+/**
+ * Một dòng hạng mục đang sửa.
+ *
+ * `description` là ba trạng thái, không phải hai: `undefined` = chưa bật ô mô tả
+ * (hiện nút "Thêm mô tả"), `""` = đã bật nhưng còn trống, có chữ = đã nhập.
+ * Nhờ vậy không cần giữ thêm state "ô nào đang mở" — thứ sẽ lệch ngay khi
+ * studio xoá một dòng ở giữa danh sách.
+ */
+type ItemRow = { id?: string; name: string; description?: string; qty: number; unit_price: number; is_discount?: boolean };
 
 /* ── Tab của màn chi tiết (bản thiết kế) ────────────────────────────────────
    Bản thiết kế xếp mọi thứ của một hợp đồng vào một thẻ có thanh tab, thay vì
@@ -117,12 +125,15 @@ function signedItems(items: ItemRow[]): { qty: number; unit_price: number }[] {
 }
 
 /** Chuẩn hoá hạng mục để lưu DB: giảm giá lưu unit_price âm, còn lại dương. */
-function serializeItems(items: ItemRow[]): { name: string; qty: number; unit_price: number }[] {
+function serializeItems(items: ItemRow[]): { name: string; description: string | null; qty: number; unit_price: number }[] {
   return items
     .map((i) => {
       const mag = Math.max(0, Math.round(Number(i.unit_price) || 0));
       return {
         name: i.name.trim(),
+        // Ô mô tả bật rồi mà để trống thì lưu null, không lưu chuỗi rỗng —
+        // để bản in và cổng khách chỉ cần kiểm tra một điều kiện.
+        description: i.description?.trim() || null,
         qty: i.is_discount ? 1 : Math.max(0, Math.round(Number(i.qty) || 0)),
         unit_price: i.is_discount ? -mag : mag,
       };
@@ -363,7 +374,7 @@ export default function ContractEditor({
     });
 
   const [items, setItems] = useState<ItemRow[]>(
-    initialItems.map((i) => ({ id: i.id, name: i.name, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 }))
+    initialItems.map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 }))
   );
   // Phải map ĐÚNG BẰNG refetchCrew. Thiếu trường nào ở đây thì sau khi tải lại
   // trang ô đó trắng, và lần lưu kế tiếp ghi đè trắng lên giá trị đã lưu —
@@ -872,6 +883,7 @@ export default function ContractEditor({
       ],
       items: items.map((it) => ({
         name: it.name,
+        description: it.description?.trim() || null,
         qty: it.is_discount ? null : it.qty,
         unitPrice: it.is_discount ? null : Math.abs(it.unit_price || 0),
         amount: (it.is_discount ? -1 : 1) * Math.abs(it.unit_price || 0) * (it.is_discount ? 1 : it.qty || 0),
@@ -1733,34 +1745,73 @@ export default function ContractEditor({
                       <span className="col-span-3 text-right">Đơn giá</span>
                       <span className="col-span-1" />
                     </div>
-                    {items.map((it, idx) =>
-                      it.is_discount ? (
+                    {items.map((it, idx) => {
+                      const setItem = (patch: Partial<ItemRow>) =>
+                        setItems((p) => p.map((x, i) => (i === idx ? { ...x, ...patch } : x)));
+                      /* Ô mô tả: chưa bật thì chỉ là một nút chữ nhỏ, bật rồi thì
+                         là khung nhập nhiều dòng — mỗi dòng xuống dòng thật trên
+                         bản in và ở cổng khách. */
+                      const descBox =
+                        it.description == null ? (
+                          <button
+                            type="button"
+                            onClick={() => setItem({ description: "" })}
+                            className="col-span-12 justify-self-start px-1 text-[11.5px] underline-offset-2 hover:underline"
+                            style={{ color: "var(--text3)" }}
+                          >
+                            + Thêm mô tả
+                          </button>
+                        ) : (
+                          <div className="col-span-12 flex items-start gap-1.5">
+                            <textarea
+                              className="input flex-1 text-[13px]"
+                              rows={2}
+                              autoFocus={it.description === ""}
+                              placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
+                              value={it.description}
+                              onChange={(e) => setItem({ description: e.target.value })}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setItem({ description: undefined })}
+                              className="flex-none px-1 pt-2 text-[11.5px]"
+                              style={{ color: "var(--text3)" }}
+                              aria-label="Bỏ mô tả"
+                            >
+                              Bỏ
+                            </button>
+                          </div>
+                        );
+
+                      return it.is_discount ? (
                         <div key={idx} className="grid grid-cols-12 items-center gap-2 rounded-lg p-1.5" style={{ background: "var(--s-amberS)" }}>
                           <input className="input col-span-12 sm:col-span-6" placeholder="Tên khoản giảm giá" value={it.name}
-                            onChange={(e) => setItems((p) => p.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} />
+                            onChange={(e) => setItem({ name: e.target.value })} />
                           <span className="col-span-3 hidden text-center text-xs sm:col-span-2 sm:inline" style={{ color: "var(--s-amber)" }}>
                             <Tag size={12} className="inline" /> Giảm
                           </span>
                           <MoneyInput className="input col-span-7 text-right sm:col-span-3" value={it.unit_price}
-                            onChange={(n) => setItems((p) => p.map((x, i) => (i === idx ? { ...x, unit_price: n } : x)))} />
+                            onChange={(n) => setItem({ unit_price: n })} />
                           <button onClick={() => setItems((p) => p.filter((_, i) => i !== idx))} className="col-span-2 flex justify-center sm:col-span-1" style={{ color: "var(--text3)" }} aria-label="Xoá">
                             <Trash2 size={15} />
                           </button>
+                          {descBox}
                         </div>
                       ) : (
-                        <div key={idx} className="grid grid-cols-12 items-center gap-2">
+                        <div key={idx} className="grid grid-cols-12 items-center gap-2 border-b pb-2.5" style={{ borderColor: "var(--border)" }}>
                           <input className="input col-span-12 sm:col-span-6" placeholder="VD: Chụp phóng sự cả ngày" value={it.name}
-                            onChange={(e) => setItems((p) => p.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} />
+                            onChange={(e) => setItem({ name: e.target.value })} />
                           <input type="number" className="input col-span-3 text-center sm:col-span-2" value={it.qty}
-                            onChange={(e) => setItems((p) => p.map((x, i) => (i === idx ? { ...x, qty: Number(e.target.value) } : x)))} />
+                            onChange={(e) => setItem({ qty: Number(e.target.value) })} />
                           <MoneyInput className="input col-span-7 text-right sm:col-span-3" value={it.unit_price}
-                            onChange={(n) => setItems((p) => p.map((x, i) => (i === idx ? { ...x, unit_price: n } : x)))} />
+                            onChange={(n) => setItem({ unit_price: n })} />
                           <button onClick={() => setItems((p) => p.filter((_, i) => i !== idx))} className="col-span-2 flex justify-center sm:col-span-1" style={{ color: "var(--text3)" }} aria-label="Xoá">
                             <Trash2 size={15} />
                           </button>
+                          {descBox}
                         </div>
-                      )
-                    )}
+                      );
+                    })}
                   </div>
                 )}
                 <div className="mt-4 flex items-center justify-between border-t pt-4" style={{ borderColor: "var(--border)" }}>
