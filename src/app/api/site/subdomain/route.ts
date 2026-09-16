@@ -37,7 +37,11 @@ function hintFor(blocker: Blocker, host: string): string {
     case "not_published":
       return `Đã lưu ${host}. Bấm “Xuất bản” để trang chạy thật.`;
     case "manual":
-      return `Đã lưu ${host}. Máy chủ chưa nối API Vercel — thêm ${host} (hoặc wildcard *.${MAIN_HOST}) trong Vercel → Settings → Domains.`;
+      // KHÔNG gợi ý wildcard ở đây: Vercel chỉ cho thêm `*.<domain>` khi domain
+      // dùng nameserver của chính Vercel (chứng chỉ wildcard phải xin qua
+      // DNS-01). DNS để ở nơi khác thì wildcard kẹt mãi ở "Verification
+      // Required" — bảo người ta đi thêm nó là đẩy họ vào ngõ cụt.
+      return `Đã lưu ${host}. Máy chủ chưa nối API Vercel — thêm ${host} trong Vercel → Settings → Domains, hoặc khai VERCEL_TOKEN/VERCEL_PROJECT_ID để app tự đăng ký.`;
     case "pending":
       return `Đã lưu ${host} và đăng ký trên Vercel. Đang chờ DNS xác minh — thường vài phút, có thể tới vài giờ.`;
     case "conflict":

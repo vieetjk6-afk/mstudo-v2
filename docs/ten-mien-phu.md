@@ -12,7 +12,7 @@ thì trình duyệt báo lỗi khác nhau — nhìn lỗi là biết đang vư�
 | # | Tầng | Ai lo | Sai thì thấy gì |
 |---|---|---|---|
 | 1 | **DNS** — `*.mstudo.com` trỏ về Vercel | Người vận hành, làm **một lần** | Không mở được trang / lỗi tên miền của trình duyệt |
-| 2 | **Vercel** — project nhận host đó | Wildcard (một lần) hoặc app tự đăng ký | Trang lỗi của Vercel: *"The deployment could not be found"* |
+| 2 | **Vercel** — project nhận host đó | App tự đăng ký từng host (hoặc wildcard, nếu dùng nameserver Vercel) | Trang lỗi của Vercel: *"The deployment could not be found"* |
 | 3 | **App** — có dòng `sites` khớp `subdomain` và đã **xuất bản** | Studio, trong trình tạo website | Trang 404 của mstudo |
 
 Trước đây app chỉ lo tầng 3: lưu `sites.subdomain` vào database là xong, không ai
@@ -21,72 +21,67 @@ tên miền phụ, bấm xuất bản, mở link ra thì gặp trang lỗi của
 chưa kịp chạy dòng nào để giải thích. Giờ `POST /api/site/subdomain` lưu xong sẽ
 tự đăng ký host trên Vercel và trả về tình trạng thật.
 
-## Thiết lập một lần (người vận hành)
+## Wildcard `*.mstudo.com` KHÔNG dùng được với DNS ngoài
 
-### 1. DNS
+Đọc kỹ chỗ này trước khi mất buổi chiều như lần đầu.
 
-Tại nhà cung cấp tên miền, thêm bản ghi wildcard:
+**Vercel bắt buộc domain phải dùng nameserver của chính Vercel thì mới thêm được
+wildcard.** Không có cách nào lách bằng bản ghi TXT. Lý do kỹ thuật: chứng chỉ
+wildcard phải xin qua **DNS-01 challenge**, tức Vercel phải tự tạo và tự xoay
+bản ghi `_acme-challenge` mỗi lần gia hạn — nó chỉ làm được khi cầm luôn zone
+DNS.
 
-| Loại | Tên | Giá trị |
-|---|---|---|
-| CNAME | `*` | `cname.vercel-dns.com` |
+Vì vậy khi DNS đang ở Cloudflare, thêm `*.mstudo.com` vào project sẽ kẹt mãi ở
+**Verification Required**, và khung "DNS configuration" chỉ hiện đúng một dòng
+*"Move this domain to this team to use Vercel nameservers"* — không có bảng TXT
+nào để làm theo.
 
-Dùng Cloudflare thì để bản ghi này ở chế độ **DNS only** (mây xám). Bật proxy
-(mây cam) cho wildcard cần gói trả phí — không thì chứng chỉ SSL của các tên
-miền phụ sẽ hỏng.
+> Bản ghi **TXT `_vercel`** là chuyện khác: nó dùng để xác minh một domain
+> **thường** đang thuộc tài khoản Vercel khác. Đừng nhầm hai việc này.
 
-### 2. Vercel — và bản ghi TXT `_vercel`
+Điều đó KHÔNG có nghĩa là tên miền phụ không chạy được — subdomain đăng ký lẻ
+vẫn chạy bình thường với DNS ngoài. `thiep.mstudo.com`, `admin.mstudo.com`,
+`img.mstudo.com` đang chạy đúng kiểu đó.
 
-Project → **Settings → Domains → Add** → nhập `*.mstudo.com`.
+## Thiết lập một lần (người vận hành) — chọn MỘT đường
 
-Vercel sẽ đòi thêm một bản ghi **TXT `_vercel`**. Đây là chỗ hay gây khựng, nên
-nói rõ:
+### Đường A — giữ DNS ở Cloudflare, app tự đăng ký từng subdomain
 
-**Nó là gì.** Một bản ghi DNS dạng TXT — chỉ là một dòng chữ gắn vào tên miền.
-Nó **không dẫn traffic đi đâu cả**. Việc duy nhất của nó là để Vercel hỏi DNS và
-đọc được chuỗi bí mật mà chính Vercel vừa sinh ra → chứng minh người đang thêm
-domain có quyền sửa DNS của `mstudo.com`.
+Đường đang dùng. Không đụng tới nameserver.
 
-**Vì sao chỉ wildcard mới đòi.** Với một subdomain thường như `img.mstudo.com`,
-bản ghi CNAME của chính nó trỏ về Vercel đã là bằng chứng. Nhưng `*.mstudo.com`
-phủ **mọi** subdomain — Vercel không thể để ai nhận bừa cả tên miền, nên đòi một
-bằng chứng riêng.
+**1. Cloudflare** → DNS → Add record. Một bản ghi này phủ mọi studio:
 
-**Cần CẢ HAI bản ghi**, hai việc khác hẳn nhau:
+| Type | Name | Content | Proxy |
+|---|---|---|---|
+| CNAME | `*` | `cname.vercel-dns.com` | **DNS only** (mây xám) |
 
-| Bản ghi | Làm việc gì | Tần suất |
-|---|---|---|
-| TXT `_vercel` | "mstudo.com là của tôi" — xác minh | một lần |
-| CNAME `*` (bước 1) | "gửi traffic tới Vercel" — dẫn đường | để mãi |
+Phải để mây xám: bật proxy thì Cloudflare chặn giữa, Vercel không xác minh và
+cấp chứng chỉ cho từng host được.
 
-**Làm cụ thể.** Sau khi bấm Add, Vercel hiện ngay bảng kiểu:
+**2. Vercel** → **đừng** thêm `*.mstudo.com` vào project (nó sẽ kẹt vĩnh viễn ở
+Verification Required). Chỉ cần ba biến môi trường ở mục 3 bên dưới.
 
-```
-Type   Name      Value
-TXT    _vercel   vc-domain-verify=mstudo.com,60e9f2a4b8…
-```
+**3.** Xong. Studio lưu tên miền phụ → `/api/site/subdomain` gọi API đăng ký
+đúng host đó với Vercel → Vercel cấp chứng chỉ riêng cho host đó → chạy.
 
-Chuỗi sau dấu `=` là **của riêng project này**, Vercel sinh ra — chép y nguyên
-từ màn hình, đừng chép từ tài liệu nào (kể cả file này).
+Điểm phải để ý: **Vercel giới hạn số domain trên mỗi project.** Vài chục studio
+thì thoải mái; quy mô hàng nghìn thì tính lại đường B.
 
-Sang Cloudflare → chọn `mstudo.com` → **DNS → Records → Add record**:
+### Đường B — chuyển nameserver sang Vercel để dùng wildcard thật
 
-- **Type**: `TXT`
-- **Name**: `_vercel` — chỉ gõ `_vercel`, Cloudflare tự thêm `.mstudo.com`
-- **Content**: dán nguyên chuỗi Vercel vừa hiện
-- **TTL**: Auto
-- Bản ghi TXT không có nút proxy nên **không phải lo mây cam/xám** ở đây
+Đổi lại: mọi tên miền phụ chạy ngay, không phụ thuộc API, không lo giới hạn số
+domain.
 
-**Save** → quay lại Vercel bấm **Refresh**. Thường vài giây tới vài phút thì
-`*.mstudo.com` chuyển sang **Valid Configuration**. Chỉ khi wildcard ở trạng
-thái này thì mọi tên miền phụ mới chạy ngay mà không cần đăng ký từng cái.
+Cái giá: **trước khi đổi nameserver phải chép TOÀN BỘ bản ghi DNS từ Cloudflare
+sang Vercel DNS** — MX, SPF/DKIM, các subdomain đang chạy, mọi TXT xác minh của
+dịch vụ khác. Sót bản ghi MX là mất email. Và mất luôn Cloudflare proxy/WAF.
 
-**Đừng xoá bản ghi TXT sau khi xong** — Vercel kiểm lại định kỳ, xoá đi là
-wildcard mất hiệu lực.
+Các bước: Vercel → Domains → **Move this domain** để đưa `mstudo.com` về team →
+dựng lại bản ghi trong Vercel DNS → đổi nameserver ở nơi mua tên miền sang
+nameserver Vercel → chờ lan truyền → thêm `*.mstudo.com` vào project.
 
-> Ngoại lệ: tên miền dùng thẳng **nameserver của Vercel** thì Vercel tự thêm bản
-> ghi này, không phải làm gì. mstudo.com đang để Cloudflare quản DNS (xem
-> `chuyen-doi-mstudo-2.0.md` phần 0) nên phải thêm tay.
+Ngược với `chuyen-doi-mstudo-2.0.md` phần 0 (chỗ cố ý đưa DNS về Cloudflare), nên
+chỉ đi đường này khi đã quyết bỏ Cloudflare.
 
 ### 3. Biến môi trường
 
@@ -141,6 +136,7 @@ where subdomain = 'ten-studio';
 Rồi đối chiếu ba tầng ở bảng đầu file:
 
 1. `dig +short ten-studio.mstudo.com` — có trả về đích của Vercel không? → tầng DNS.
-2. Vercel → Settings → Domains — có `*.mstudo.com` **Valid Configuration**, hoặc
-   có host riêng của studio không? → tầng Vercel.
+2. Vercel → Settings → Domains — có dòng `ten-studio.mstudo.com` **Valid
+   Configuration** không? → tầng Vercel. (Dòng `*.mstudo.com` kẹt ở
+   *Verification Required* là bình thường khi DNS ở Cloudflare — bỏ qua nó.)
 3. Câu SQL trên — có dòng, `published = true` không? → tầng app.
