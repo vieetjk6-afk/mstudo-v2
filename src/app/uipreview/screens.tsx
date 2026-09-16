@@ -24,7 +24,7 @@ import FaceFinderDemo from "./FaceFinderDemo";
 import FaceScanProgressDemo from "./FaceScanProgressDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
-import ThiepDemo, { ThiepEditorDemo } from "./ThiepDemo";
+import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import * as f from "./fixtures";
 
 /**
@@ -47,6 +47,11 @@ export const SCREENS: Record<
   "thiep-cuoi": {
     title: "Thiệp cưới — 10 mẫu khổ điện thoại (dữ liệu giả)",
     render: () => <ThiepDemo />,
+    bare: true,
+  },
+  "thiep-mo": {
+    title: "Thiệp cưới — hiệu ứng mở thiệp của 10 mẫu",
+    render: () => <ThiepIntroDemo />,
     bare: true,
   },
   "thiep-sua": {

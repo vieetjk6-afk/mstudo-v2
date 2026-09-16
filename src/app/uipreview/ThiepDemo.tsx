@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { WeddingConfig, WeddingInvitation } from "@/lib/types";
 import WeddingRenderer from "@/app/thiep/[slug]/WeddingRenderer";
+import CardIntro from "@/app/thiep/[slug]/CardIntro";
 import PreviewPane from "@/app/thiep/sua/[token]/editor/PreviewPane";
 import TemplateGallery from "@/app/thiep/sua/[token]/editor/TemplateGallery";
 import { WEDDING_TEMPLATE_CATALOG } from "@/app/thiep/[slug]/templates";
@@ -128,6 +129,56 @@ export function ThiepEditorDemo() {
       </div>
       <div style={{ flex: "0 0 42%", borderLeft: "1px solid #e7e5e4", background: "#fff" }}>
         <PreviewPane inv={inv} wishes={WISHES} guest="Chị Ngọc Hân" publicUrl="/thiep/demo" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Xem trước HIỆU ỨNG MỞ THIỆP của cả mười mẫu cạnh nhau.
+ *
+ * Lớp mở là `position: fixed` (trên thiệp thật nó phải phủ kín màn hình), nên
+ * ở đây mỗi mẫu được bọc trong một khung CÓ `transform`: phần tử `fixed` nằm
+ * trong tổ tiên đã transform sẽ bám theo khung đó thay vì bám màn hình — nhờ
+ * vậy mới xếp được mười cái cạnh nhau mà không chồng lên nhau.
+ */
+export function ThiepIntroDemo() {
+  const [guest, setGuest] = useState(true);
+  const [nonce, setNonce] = useState(0);
+  return (
+    <div style={{ background: "#ece7dd", minHeight: "100vh", padding: "20px 16px 80px", fontFamily: "system-ui" }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 18, fontSize: 13 }}>
+        <label style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={guest} onChange={(e) => setGuest(e.target.checked)} /> có tên khách mời (link riêng)
+        </label>
+        <button onClick={() => setNonce((n) => n + 1)} style={{ borderRadius: 999, border: "1px solid #b5ab99", background: "#fff", padding: "4px 14px", fontSize: 13 }}>
+          Dựng lại tất cả
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 24, alignItems: "flex-start" }}>
+        {/* Kèm hai mẫu TRANG DÀI để soát luôn nhánh mặc định (mẫu không có
+            kiểu mở riêng thì rơi về bì thư). */}
+        {WEDDING_TEMPLATE_CATALOG.filter((t) => t.group === "phone" || t.name === "classic" || t.name === "elegant").map((t) => (
+          <div key={`${t.name}-${nonce}`} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ fontSize: 13, color: "#5f594e" }}>
+              <b>{t.label}</b> <code style={{ fontSize: 11, color: "#8a8274" }}>{t.name}</code>
+            </div>
+            {/* transform: translateZ(0) — chính chỗ này giam lớp `fixed` lại trong khung. */}
+            <div style={{
+              position: "relative", width: 330, height: 620, overflow: "hidden", borderRadius: 18,
+              transform: "translateZ(0)", boxShadow: "0 20px 40px -18px rgba(60,50,40,.5)", background: t.bg,
+            }}>
+              <CardIntro
+                name={guest ? "Chị Ngọc Hân" : ""}
+                label={CONFIG.guest_greeting || "Trân trọng kính mời"}
+                couple={`${CONFIG.bride_name} & ${CONFIG.groom_name}`}
+                accent={t.accent}
+                template={t.name}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

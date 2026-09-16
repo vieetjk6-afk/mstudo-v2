@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Heart, Save, Eye, EyeOff, Check, Loader2, ExternalLink, Gift, Users, CalendarDays, Type,
   Music, LayoutTemplate, FolderOpen, Lock, Image as ImageIcon, MessageCircleHeart, AlertCircle,
+  Copy, Send,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { checkImageFile, compressToLimit } from "@/lib/image";
@@ -30,7 +31,7 @@ const TABS = [
   { id: "ngay", label: "Ngày & địa điểm", icon: CalendarDays },
   { id: "anh", label: "Ảnh", icon: ImageIcon },
   { id: "noidung", label: "Nội dung", icon: Type },
-  { id: "khach", label: "Khách mời", icon: Users },
+  { id: "khach", label: "Khách mời & link riêng", icon: Users },
   { id: "qua", label: "Quà & nhạc", icon: Gift },
   { id: "phanhoi", label: "Phản hồi", icon: MessageCircleHeart },
 ] as const;
@@ -293,6 +294,19 @@ export default function WeddingEditor({ token }: { token: string }) {
                 </div>
               )}
             </div>
+
+            {/*
+              * GỬI THIỆP — khối này hiện ở MỌI tab, không nằm trong tab nào.
+              * Trước đây link chung chỉ là dòng chữ xám nhỏ trên thanh đầu và bị
+              * ẩn hẳn trên điện thoại (class sm:flex), còn link riêng từng khách
+              * thì nằm trong tab thứ sáu phải vuốt ngang mới thấy — mở thiệp
+              * xong không biết lấy link ở đâu mà gửi.
+              */}
+            <ShareBox
+              publicUrl={absBase}
+              guestCount={(cfg.guests ?? []).filter(Boolean).length}
+              onOpenGuests={() => setTab("khach")}
+            />
 
             {/* ── MẪU THIỆP ───────────────────────────────────────────── */}
             {tab === "mau" && (
@@ -570,5 +584,56 @@ export default function WeddingEditor({ token }: { token: string }) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Hộp "Gửi thiệp cho khách": link chung để gửi cả nhóm, và lối đi thẳng tới
+ * link riêng của từng khách. Đặt ngoài mọi tab vì đây là việc cặp đôi làm
+ * NHIỀU NHẤT sau khi soạn xong — không nên bắt họ đi tìm.
+ */
+function ShareBox({ publicUrl, guestCount, onOpenGuests }: { publicUrl: string; guestCount: number; onOpenGuests: () => void }) {
+  // publicUrl ở đây là bản TUYỆT ĐỐI (absBase): link dán sang Zalo/Facebook mà
+  // chỉ có "/thiep/..." thì người nhận bấm vào không ra đâu cả.
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch { /* trình duyệt chặn clipboard thì khách vẫn bôi đen chép tay được */ }
+  }
+  return (
+    <section className="rounded-xl border border-rose-200 bg-rose-50/60 p-4">
+      <h2 className="flex items-center gap-2 font-medium text-rose-800"><Send size={16} /> Gửi thiệp cho khách</h2>
+
+      <div className="mt-3 space-y-2">
+        <p className="text-xs font-medium text-stone-500">Link chung — gửi cho cả nhóm, đăng Zalo/Facebook</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            readOnly
+            value={publicUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="min-w-0 flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-700 outline-none"
+          />
+          <button onClick={copy} className="inline-flex flex-none items-center gap-1 rounded-lg bg-rose-600 px-3 py-2 text-sm font-medium text-white">
+            {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Đã chép" : "Chép link"}
+          </button>
+          <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="inline-flex flex-none items-center gap-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-600">
+            <ExternalLink size={15} /> Mở thử
+          </a>
+        </div>
+      </div>
+
+      <div className="mt-4 border-t border-rose-200 pt-3">
+        <p className="text-xs font-medium text-stone-500">Link riêng từng khách — thiệp mở ra ghi đúng tên người nhận</p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button onClick={onOpenGuests} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700">
+            <Users size={15} /> {guestCount > 0 ? `Xem ${guestCount} link riêng` : "Tạo link riêng cho từng khách"}
+          </button>
+          {guestCount === 0 && <span className="text-xs text-stone-500">Nhập tên khách là có ngay link + mã QR riêng cho từng người.</span>}
+        </div>
+      </div>
+    </section>
   );
 }

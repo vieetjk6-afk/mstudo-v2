@@ -1,6 +1,6 @@
 import type { WeddingConfig, WeddingInvitation } from "@/lib/types";
 import type { Wish } from "./shared";
-import EnvelopeIntro from "./EnvelopeIntro";
+import CardIntro from "./CardIntro";
 import ClassicTemplate from "./designs/ClassicTemplate";
 import ElegantTemplate from "./designs/ElegantTemplate";
 import FloralTemplate from "./designs/FloralTemplate";
@@ -65,7 +65,9 @@ export default function WeddingRenderer({ inv, wishes = [], guest = "", storyUrl
 
   const body = (
     <>
-      {guest && !preview && <EnvelopeIntro name={guest} label={label} couple={couple} accent={accent} />}
+      {/* Hiệu ứng mở thiệp: MẪU NÀO CŨNG CÓ, không chỉ khách có link riêng.
+          Bỏ ở khung xem trước của trình chỉnh sửa vì nó che mất nội dung đang sửa. */}
+      {!preview && <CardIntro name={guest} label={label} couple={couple} accent={accent} template={inv.template} />}
       {/* Tên khách mời được đưa VÀO nội dung mỗi mẫu (sau phần "Ngày trọng đại"),
           không còn cố định ở đầu trang. */}
       <Template inv={inv} wishes={wishes} guest={guest} />
