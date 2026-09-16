@@ -52,7 +52,7 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
     // Tên cô dâu/chú rể do KHÁCH tự nhập qua link token — phải thoát HTML, nếu
     // không cửa sổ in (cùng origin với dashboard) sẽ chạy script của khách.
     const couple = escapeHtml(qr.couple);
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${couple}</title><style>body{font-family:Georgia,serif;text-align:center;padding:48px 24px;color:#a9527f}h1{font-size:26px;margin:0 0 4px}p{color:#8c847d;margin:2px 0}img{width:340px;height:340px;margin:22px auto;display:block}.u{font-size:12px;word-break:break-all}</style></head><body><h1>${couple}</h1><p>Quét mã để xem Love Story</p><img src="${escapeHtml(qr.img)}"/><p class="u">${escapeHtml(qr.url)}</p><script>window.onload=()=>window.print()</script></body></html>`);
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${couple}</title><style>body{font-family:Georgia,serif;text-align:center;padding:48px 24px;color:#a9527f}h1{font-size:26px;margin:0 0 4px}p{color:#8c847d;margin:2px 0}img{width:340px;height:340px;margin:22px auto;display:block}.u{font-size:12px;word-break:break-all}</style></head><body><h1>${couple}</h1><p>Quét mã để xem Love Story</p><img alt="Mã QR trang Love Story" src="${escapeHtml(qr.img)}"/><p class="u">${escapeHtml(qr.url)}</p><script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   }
 

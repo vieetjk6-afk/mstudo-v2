@@ -473,7 +473,7 @@ export default function CreateAlbumFlow({ mode = "selection", studioHost = null 
 
         {result && (
           <div className="mt-3.5 flex flex-col gap-2.5">
-            <Link href={shareLink || `/a/${result.slug}`} target="_blank" className="btn-ghost w-full rounded-xl py-3.5 text-sm">
+            <Link href={shareLink || `/a/${result.slug}`} target="_blank" rel="noopener noreferrer" className="btn-ghost w-full rounded-xl py-3.5 text-sm">
               <Eye size={16} /> Xem thử trang khách sẽ thấy
             </Link>
             <Link href={`/dashboard/albums/${result.id}`} className="text-center text-[13px]" style={{ color: "var(--gold)" }}>
