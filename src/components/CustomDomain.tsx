@@ -38,7 +38,9 @@ export default function CustomDomain({ initialDomain, initialVerified }: { initi
     if (!d) return;
     setSaved(d.custom_domain);
     setVerified(!!d.verified);
-    setMsg(d.verified ? "Đã kết nối tên miền!" : "Đã lưu. Trỏ DNS theo hướng dẫn rồi bấm “Kiểm tra”.");
+    // d.hint: lý do cụ thể khi Vercel từ chối (vd domain đang ở project khác) —
+    // nói thẳng thay vì bảo studio đi trỏ DNS trong khi DNS không phải vấn đề.
+    setMsg(d.verified ? "Đã kết nối tên miền!" : (d.hint as string) || "Đã lưu. Trỏ DNS theo hướng dẫn rồi bấm “Kiểm tra”.");
   }
   async function verify() {
     const d = await call("verify");

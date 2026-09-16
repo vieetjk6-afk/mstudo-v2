@@ -74,3 +74,52 @@ export function thiepUrl(path: string): string {
   const clean = isRoutePrefix ? path.slice("/thiep".length) || "/" : path;
   return THIEP_HOST ? `https://${THIEP_HOST}${clean}` : `/thiep${clean === "/" ? "" : clean}`;
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   Tên miền phụ của studio (<sub>.mstudo.com)
+   ─────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * Nhãn KHÔNG được cho studio lấy làm tên miền phụ.
+ *
+ * Hai nhóm:
+ *   • Host của chính nền tảng (www, admin, img, thiep, album…) — middleware coi
+ *     chúng là host hệ thống nên `<sub>.mstudo.com` sẽ KHÔNG BAO GIỜ rẽ vào
+ *     trang của studio, dù có lưu được vào bảng `sites`.
+ *   • Nhãn hạ tầng (mail, ns1, cdn…) — DNS của chúng thường trỏ đi nơi khác
+ *     (máy chủ mail, CDN), không tới Vercel, nên trang cũng không chạy.
+ *
+ * Trước đây trình tạo website chỉ kiểm tra ký tự, nên studio gõ "www" hoặc
+ * "mail" vẫn lưu được — rồi mở link ra thì trắng trang mà không hiểu vì sao.
+ */
+export const RESERVED_SUBDOMAINS = new Set([
+  // Host nền tảng
+  "www", "app", "album", "img", "image", "images", "admin", "thiep", "api",
+  "auth", "login", "dashboard", "staff", "account", "accounts", "billing",
+  "support", "help", "docs", "blog", "status", "beta", "dev", "test",
+  "staging", "preview", "demo", "vercel",
+  // Nhãn hạ tầng / DNS
+  "mail", "email", "smtp", "imap", "pop", "pop3", "webmail", "mx", "ftp",
+  "ns", "ns1", "ns2", "ns3", "cdn", "static", "assets", "files", "cpanel",
+  "autodiscover", "autoconfig", "localhost",
+]);
+
+/**
+ * Lỗi của một tên miền phụ, hoặc null nếu hợp lệ. Dùng CHUNG cho trình tạo
+ * website (kiểm tra ngay khi gõ) và cho API lưu (hàng rào thật) — hai nơi lệch
+ * luật thì trình duyệt cho qua mà máy chủ chặn, hoặc tệ hơn là ngược lại.
+ */
+export function subdomainError(value: string): string | null {
+  const v = value.trim().toLowerCase();
+  if (!v) return "Nhập tên miền phụ.";
+  if (!/^[a-z0-9-]{3,30}$/.test(v)) return "Tên miền phụ chỉ gồm a-z, 0-9, gạch ngang (3–30 ký tự).";
+  if (v.startsWith("-") || v.endsWith("-")) return "Không bắt đầu/kết thúc bằng gạch ngang.";
+  if (v.startsWith("xn--")) return "Không dùng tiền tố xn-- (tên miền mã hoá).";
+  if (RESERVED_SUBDOMAINS.has(v)) return `“${v}” là tên miền phụ hệ thống — chọn tên khác.`;
+  return null;
+}
+
+/** Host đầy đủ của một tên miền phụ, hoặc null khi chưa cấu hình MAIN_HOST. */
+export function subdomainHost(sub: string): string | null {
+  return MAIN_HOST ? `${sub}.${MAIN_HOST}` : null;
+}

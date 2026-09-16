@@ -6,6 +6,7 @@ import {
   Monitor, Smartphone, Undo2, Redo2, Eye, EyeOff, Rocket, ArrowLeft, Plus,
   LayoutTemplate, Blocks, GripVertical, ChevronUp, ChevronDown, Copy,
   Trash2, ImagePlus, X, Type as TypeIcon, Check, ExternalLink, Layers, BarChart3,
+  RefreshCw,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { MAIN_HOST } from "@/lib/hosts";
@@ -39,6 +40,20 @@ import { useTheme } from "@/lib/theme";
    ───────────────────────────────────────────────────────────────────────── */
 
 type Device = "desktop" | "mobile";
+/** Tình trạng phục vụ của `<sub>.mstudo.com` — khớp HostState ở API. */
+type DomainState = "ready" | "pending" | "conflict" | "manual";
+const DOMAIN_STATE_LABEL: Record<DomainState, string> = {
+  ready: "Tên miền đã chạy",
+  pending: "Đang chờ DNS xác minh",
+  conflict: "Tên miền đang thuộc project Vercel khác",
+  manual: "Máy chủ chưa nối API Vercel — cần thêm domain thủ công",
+};
+const DOMAIN_STATE_COLOR: Record<DomainState, string> = {
+  ready: "var(--success, #3E6F63)",
+  pending: "var(--gold, #C9A24B)",
+  conflict: "var(--danger, #E0533D)",
+  manual: "var(--gold, #C9A24B)",
+};
 /** Album của studio + `pinned`: có đủ điều kiện lên trang công khai hay chưa. */
 type AlbumLite = { id: string; slug: string; title: string; cover_url: string | null; pinned?: boolean };
 export type AlbumOption = AlbumLite;
@@ -135,12 +150,15 @@ export default function CanvasBuilder({
   const [subdomain, setSubdomain] = useState(site.subdomain ?? "");
   const [savedSub, setSavedSub] = useState(site.subdomain ?? "");
   const [savingDomain, setSavingDomain] = useState(false);
+  // Host đã phục vụ được chưa (do /api/site/subdomain trả về). null = chưa hỏi.
+  const [domainState, setDomainState] = useState<DomainState | null>(null);
   const [selId, setSelId] = useState<string | null>(null);
   const [leftTab, setLeftTab] = useState<"page" | "blocks" | "presets" | "templates">("page");
   const [device, setDevice] = useState<Device>("desktop");
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // drag state
   const [dragType, setDragType] = useState<SiteBlockType | null>(null);
@@ -154,30 +172,90 @@ export default function CanvasBuilder({
 
   const liveUrl = savedSub && mainHost ? `https://${savedSub}.${mainHost}` : "";
 
-  function validSubdomain(s: string): string | null {
-    const v = s.trim().toLowerCase();
-    if (!v) return null;
-    if (!/^[a-z0-9-]{3,30}$/.test(v)) return "Tên miền phụ chỉ gồm a-z, 0-9, gạch ngang (3–30 ký tự).";
-    if (v.startsWith("-") || v.endsWith("-")) return "Không bắt đầu/kết thúc bằng gạch ngang.";
-    return null;
+  /**
+   * Lưu tên miền phụ QUA API chứ không ghi thẳng bảng `sites` như trước.
+   *
+   * Ghi thẳng thì database có dòng mới nhưng Vercel vẫn chưa biết có host mới,
+   * nên `<sub>.mstudo.com` chỉ chạy khi project tình cờ đã có wildcard
+   * `*.mstudo.com`. Route /api/site/subdomain lưu xong sẽ đăng ký host trên
+   * Vercel và trả về tình trạng thật, nên studio biết ngay trang đã chạy chưa —
+   * và nếu chưa thì vướng ở đâu.
+   *
+   * Trả về { sub, state } của lần lưu này (sub = null khi người dùng xoá trống
+   * ô), hoặc undefined khi lưu hỏng — togglePublish() dựa vào đó để dừng lại.
+   * Trả kèm `state` chứ không bắt nơi gọi đọc biến domainState: setState của
+   * React chưa hiện ra trong cùng một lượt chạy, nên nơi gọi sẽ đọc phải giá
+   * trị cũ ngay đúng lúc cần nó nhất (lần xuất bản đầu tiên).
+   */
+  async function saveSubdomain(value: string): Promise<{ sub: string | null; state: DomainState | null } | undefined> {
+    const v = value.trim().toLowerCase();
+    // Ô để trống = bỏ tên miền phụ (giữ đúng hành vi cũ), không phải lỗi nhập.
+    const body = v ? { action: "set", subdomain: v } : { action: "remove" };
+    setSavingDomain(true);
+    let d: Record<string, unknown> = {};
+    try {
+      const res = await fetch("/api/site/subdomain", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      d = await res.json().catch(() => ({}));
+      if (!res.ok) { flash((d.hint as string) || "Không lưu được tên miền, thử lại."); return undefined; }
+    } catch {
+      flash("Mất kết nối — chưa lưu được tên miền.");
+      return undefined;
+    } finally {
+      setSavingDomain(false);
+    }
+    const saved = (d.subdomain as string | null) ?? null;
+    const state = (d.state as DomainState) ?? null;
+    setSubdomain(saved ?? "");
+    setSavedSub(saved ?? "");
+    setDomainState(state);
+    if (!saved) { flash("Đã bỏ tên miền phụ."); return { sub: null, state }; }
+    // "ready" + đã xuất bản là trường hợp không có gì phải nói thêm; mọi trạng
+    // thái khác đều kèm hint giải thích vì sao trang chưa mở được.
+    flash((d.hint as string) || "Đã lưu tên miền.", d.blocker === "ready" ? 2200 : 6500);
+    return { sub: saved, state };
   }
 
   async function saveDomain() {
-    const v = subdomain.trim().toLowerCase();
-    const err = validSubdomain(v);
-    if (err) { flash(err); return; }
-    setSavingDomain(true);
-    const { error } = await supabase.from("sites").update({ subdomain: v || null, updated_at: new Date().toISOString() }).eq("id", site.id);
-    setSavingDomain(false);
-    if (error) { flash(error.message.includes("duplicate") ? "Tên miền phụ đã có người dùng." : `Lỗi: ${error.message}`); return; }
-    setSubdomain(v);
-    setSavedSub(v);
-    flash("Đã lưu tên miền.");
+    await saveSubdomain(subdomain);
   }
 
-  function flash(m: string) {
+  /**
+   * Hỏi lại Vercel/DNS xem host đã phục vụ được chưa.
+   *
+   * `quiet` = lượt hỏi tự động lúc mở trình tạo: chỉ cập nhật chấm tình trạng,
+   * không bắn toast và không ép Vercel bỏ bộ nhớ tạm.
+   */
+  const checkDomainStatus = useCallback(async (quiet: boolean) => {
+    if (!quiet) setSavingDomain(true);
+    try {
+      const res = await fetch("/api/site/subdomain", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "status", force: !quiet }),
+      });
+      const d = await res.json().catch(() => ({}));
+      setDomainState((d.state as DomainState) ?? null);
+      if (!quiet) flash((d.hint as string) || "Chưa kiểm tra được.", 6500);
+    } catch {
+      if (!quiet) flash("Mất kết nối — chưa kiểm tra được.");
+    } finally {
+      if (!quiet) setSavingDomain(false);
+    }
+  }, []);
+
+  const checkDomain = () => checkDomainStatus(false);
+
+  // Mở trình tạo mà đã có tên miền phụ: hỏi ngay một lượt để chấm tình trạng
+  // nói thật, thay vì phải bấm "Kiểm tra" mới biết trang có chạy hay không.
+  useEffect(() => {
+    if (site.subdomain) checkDomainStatus(true);
+  }, [site.subdomain, checkDomainStatus]);
+
+  function flash(m: string, ms = 2200) {
     setToast(m);
-    setTimeout(() => setToast(null), 2200);
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), ms);
   }
 
   const snapshot = useCallback(() => {
@@ -371,15 +449,15 @@ export default function CanvasBuilder({
 
   async function togglePublish() {
     if (!canPublish) return;
-    // Auto-save the domain typed in the bar before publishing.
+    // Auto-save the domain typed in the bar before publishing. Qua API để host
+    // được đăng ký luôn — xuất bản mà Vercel chưa nhận host thì link vẫn chết.
     let sub = savedSub;
+    let state = domainState;
     if (!published && subdomain.trim().toLowerCase() !== savedSub) {
-      const v = subdomain.trim().toLowerCase();
-      const err = validSubdomain(v);
-      if (err) { flash(err); return; }
-      const { error } = await supabase.from("sites").update({ subdomain: v || null }).eq("id", site.id);
-      if (error) { flash(error.message.includes("duplicate") ? "Tên miền phụ đã có người dùng." : `Lỗi: ${error.message}`); return; }
-      setSavedSub(v); setSubdomain(v); sub = v;
+      const saved = await saveSubdomain(subdomain);
+      if (saved === undefined) return; // lưu hỏng — đã báo lý do, đừng xuất bản tiếp
+      sub = saved.sub ?? "";
+      state = saved.state;
     }
     if (!published && !sub) { flash("Nhập tên miền phụ trước khi xuất bản."); return; }
     setBusy(true);
@@ -387,7 +465,14 @@ export default function CanvasBuilder({
     await supabase.from("sites").update({ published: next, updated_at: new Date().toISOString() }).eq("id", site.id);
     setPublished(next);
     setBusy(false);
-    flash(next ? "Đã xuất bản trang!" : "Đã gỡ xuất bản.");
+    if (!next) { flash("Đã gỡ xuất bản."); return; }
+    // Vừa xuất bản: nếu host chưa sẵn sàng thì nói rõ, đừng để studio bấm vào
+    // link rồi gặp trang lỗi của Vercel mà tưởng app hỏng.
+    if (state && state !== "ready") {
+      flash(`Đã xuất bản. ${sub}.${mainHost || MAIN_HOST} chưa phục vụ được — bấm “Kiểm tra” để xem còn vướng gì.`, 6500);
+    } else {
+      flash("Đã xuất bản trang!");
+    }
   }
 
   // Keyboard: undo/redo, delete selected, escape.
@@ -460,9 +545,21 @@ export default function CanvasBuilder({
               style={{ width: 110, border: 0, background: "transparent", outline: "none", fontSize: 13, fontWeight: 600, color: "var(--text)" }}
             />
             <span style={{ fontSize: 12, color: "var(--text3)", marginRight: 6 }}>.{mainHost || "mstudo.com"}</span>
+            {savedSub && domainState && (
+              <span
+                title={DOMAIN_STATE_LABEL[domainState]}
+                aria-label={DOMAIN_STATE_LABEL[domainState]}
+                style={{ width: 8, height: 8, borderRadius: 999, marginRight: 8, flexShrink: 0, background: DOMAIN_STATE_COLOR[domainState] }}
+              />
+            )}
             <button onClick={saveDomain} disabled={savingDomain || subdomain.trim().toLowerCase() === savedSub} title="Lưu tên miền" style={{ ...chipBtn(false, savingDomain || subdomain.trim().toLowerCase() === savedSub), height: 28, padding: "0 10px" }}>
               <Check size={14} /> Lưu
             </button>
+            {savedSub && (
+              <button onClick={checkDomain} disabled={savingDomain} title="Kiểm tra tên miền đã chạy chưa" style={{ ...chipBtn(false, savingDomain), height: 28, padding: "0 8px", marginLeft: 4 }}>
+                <RefreshCw size={14} />
+              </button>
+            )}
           </div>
         )}
 

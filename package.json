@@ -71,6 +71,7 @@
     "test:captcha": "node --experimental-strip-types desktop/test/captcha.mjs",
     "test:desktop-links": "node --experimental-strip-types desktop/test/desktop-links.mjs",
     "test:desktop-update": "node --experimental-strip-types desktop/test/desktop-update.mjs",
+    "test:ten-mien-phu": "node --experimental-strip-types desktop/test/ten-mien-phu.mjs",
     "inbox:zalo-worker": "node scripts/zalo-inbox-worker.mjs",
     "ui:shot": "node scripts/chup-giao-dien.mjs",
     "ui:test": "node scripts/kiem-tra-giao-dien.mjs",

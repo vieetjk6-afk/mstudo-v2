@@ -1,29 +1,21 @@
 import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createClient } from "@/lib/supabase/server";
+import { MAIN_HOST } from "@/lib/hosts";
+import { addDomain, getDomain, removeDomain, vercelConfigured } from "@/lib/vercel-domains";
 
 export const dynamic = "force-dynamic";
 
-const TOKEN = process.env.VERCEL_TOKEN;
-const PROJECT = process.env.VERCEL_PROJECT_ID;
-const TEAM = process.env.VERCEL_TEAM_ID;
-
-function vercelUrl(path: string) {
-  const q = TEAM ? `${path.includes("?") ? "&" : "?"}teamId=${TEAM}` : "";
-  return `https://api.vercel.com${path}${q}`;
-}
-async function vercel(path: string, init?: RequestInit) {
-  const res = await fetch(vercelUrl(path), {
-    ...init,
-    headers: { Authorization: `Bearer ${TOKEN}`, "Content-Type": "application/json", ...(init?.headers || {}) },
-    cache: "no-store",
-  });
-  const data = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, data } as { ok: boolean; status: number; data: Record<string, unknown> };
-}
-
 const norm = (d: string) => d.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
-const valid = (d: string) => /^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d) && !d.endsWith(".mstudo.com");
+
+/**
+ * Tên miền riêng hợp lệ? Loại luôn tên miền phụ của chính nền tảng: đó là việc
+ * của /api/site/subdomain, và khai ở đây thì studio khác cũng khai được y hệt.
+ * Dùng MAIN_HOST thay vì chuỗi "mstudo.com" cứng — bản chạy trên tên miền khác
+ * (hoặc bản thử) trước đây lọt lưới này.
+ */
+const valid = (d: string) =>
+  /^([a-z0-9-]+\.)+[a-z]{2,}$/.test(d) && (!MAIN_HOST || (d !== MAIN_HOST && !d.endsWith(`.${MAIN_HOST}`)));
 
 /**
  * Studio custom-domain management. Saves the domain on the owner's site and —
@@ -41,7 +33,7 @@ export async function POST(req: Request) {
   const { data: site } = await db.from("sites").select("id, custom_domain").eq("owner_id", profile.id).maybeSingle();
   if (!site) return NextResponse.json({ error: "no_site", hint: "Hãy tạo website trước." }, { status: 400 });
 
-  const configured = !!(TOKEN && PROJECT);
+  const configured = vercelConfigured();
   // Generic DNS guidance (Vercel's standard targets) shown to the studio.
   const dns = [
     { type: "A", name: "@ (tên miền gốc)", value: "76.76.21.21" },
@@ -51,7 +43,7 @@ export async function POST(req: Request) {
   if (body.action === "remove") {
     const prev = site.custom_domain as string | null;
     await db.from("sites").update({ custom_domain: null, custom_domain_verified: false }).eq("id", site.id);
-    if (configured && prev) await vercel(`/v9/projects/${PROJECT}/domains/${prev}`, { method: "DELETE" }).catch(() => {});
+    if (configured && prev) await removeDomain(prev);
     return NextResponse.json({ ok: true, custom_domain: null, custom_domain_verified: false });
   }
 
@@ -61,10 +53,9 @@ export async function POST(req: Request) {
     if (!configured) {
       return NextResponse.json({ verified: false, configured: false, dns, hint: "Máy chủ chưa cấu hình Vercel API — thêm domain thủ công trong Vercel rồi trang sẽ tự chạy." });
     }
-    const r = await vercel(`/v9/projects/${PROJECT}/domains/${domain}`);
-    const verified = !!r.data?.verified;
-    if (verified) await db.from("sites").update({ custom_domain_verified: true }).eq("id", site.id);
-    return NextResponse.json({ verified, configured: true, verification: r.data?.verification ?? [], dns });
+    const info = await getDomain(domain);
+    if (info.verified) await db.from("sites").update({ custom_domain_verified: true }).eq("id", site.id);
+    return NextResponse.json({ verified: info.verified, configured: true, verification: info.verification, dns });
   }
 
   // action === "set"
@@ -76,12 +67,17 @@ export async function POST(req: Request) {
 
   let verified = false;
   let verification: unknown[] = [];
+  let conflict = false;
   if (configured) {
-    const add = await vercel(`/v10/projects/${PROJECT}/domains`, { method: "POST", body: JSON.stringify({ name: domain }) });
     // Already added / just added — read verification state.
-    verified = !!add.data?.verified;
-    verification = (add.data?.verification as unknown[]) ?? [];
+    const info = await addDomain(domain);
+    verified = info.verified;
+    verification = info.verification;
+    conflict = !!info.conflict;
     if (verified) await db.from("sites").update({ custom_domain_verified: true }).eq("id", site.id);
   }
-  return NextResponse.json({ ok: true, custom_domain: domain, verified, configured, verification, dns });
+  return NextResponse.json({
+    ok: true, custom_domain: domain, verified, configured, verification, dns,
+    ...(conflict ? { hint: `${domain} đang thuộc một project Vercel khác — gỡ nó ở project kia rồi bấm “Kiểm tra”.` } : {}),
+  });
 }
