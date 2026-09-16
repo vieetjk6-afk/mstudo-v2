@@ -15,9 +15,14 @@ import "server-only";
  * và người vận hành tự thêm domain trong bảng điều khiển Vercel.
  */
 
-const TOKEN = process.env.VERCEL_TOKEN;
-const PROJECT = process.env.VERCEL_PROJECT_ID;
-const TEAM = process.env.VERCEL_TEAM_ID;
+// .trim() vì giá trị dán vào ô Environment Variables của Vercel rất dễ mang theo
+// khoảng trắng / xuống dòng ở cuối (cùng lý do đã phải trim biến Supabase trong
+// middleware). Một ký tự thừa trong TOKEN là mọi lời gọi API trả 403, còn thừa
+// trong PROJECT_ID thì URL thành `/projects/prj_abc%0A/domains` → 404. Cả hai
+// đều hiện ra dưới dạng "tên miền phụ không chạy" mà chẳng có lỗi nào rõ ràng.
+const TOKEN = process.env.VERCEL_TOKEN?.trim();
+const PROJECT = process.env.VERCEL_PROJECT_ID?.trim();
+const TEAM = process.env.VERCEL_TEAM_ID?.trim();
 
 export function vercelConfigured(): boolean {
   return !!(TOKEN && PROJECT);
