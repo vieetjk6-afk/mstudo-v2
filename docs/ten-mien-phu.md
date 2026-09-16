@@ -94,6 +94,43 @@ Wildcard và token không loại trừ nhau: có wildcard thì app không đụn
 project; chưa có wildcard thì token là phương án dự phòng để tên miền phụ vẫn tự
 chạy.
 
+## Tên miền đang thuộc tài khoản Vercel khác
+
+Triệu chứng: thêm `<sub>.mstudo.com` vào project thì Vercel báo
+
+> *This domain is linked to another Vercel account. To use it with this project,
+> add a TXT record at `_vercel.mstudo.com` to verify ownership.*
+
+và trong app thì chấm tình trạng đỏ. Nghĩa là tên miền gốc `mstudo.com` đang
+được một **tài khoản Vercel khác** giữ, nên team này chưa có quyền dùng bất kỳ
+tên miền phụ nào của nó.
+
+**Cách chữa — thêm bản ghi TXT xác minh quyền sở hữu:**
+
+1. Vercel → Settings → Domains → mở dòng của host đó → **Show DNS
+   configuration**. Vercel hiện hai dòng; **chỉ lấy dòng TXT**.
+2. Bấm nút chép cạnh giá trị — nó bị **cắt bớt** trên màn hình
+   (`vc-domain-verify=…,602352c…`), gõ tay là sai.
+3. Cloudflare → DNS → Add record: Type `TXT`, Name `_vercel`, Content = giá trị
+   vừa chép, TTL Auto.
+4. Về Vercel bấm **Refresh**.
+
+**Bỏ qua dòng CNAME mà Vercel gợi ý.** Nó là bản ghi riêng cho đúng một host;
+bản ghi `CNAME *` ở mục thiết lập đã phủ mọi tên miền phụ rồi. Thêm CNAME cho
+từng studio là tự tay phá bỏ ý nghĩa của wildcard — mỗi studio mới lại phải vào
+Cloudflare một lần.
+
+**Cách gỡ tận gốc** (để không phải xác minh nữa): tìm tài khoản Vercel đang giữ
+`mstudo.com` rồi gỡ nó ở đó. Chú ý Vercel có HAI chỗ tên giống hệt nhau:
+
+| Chỗ | Việc nó làm |
+|---|---|
+| **Project** → Settings → Domains | Gỡ domain khỏi một project — **KHÔNG** nhả quyền sở hữu |
+| **Account/Team** → Settings → Domains | Đây mới là nơi *sở hữu* domain |
+
+Gỡ nhầm ở chỗ đầu thì Vercel vẫn báo y như cũ — đúng kiểu lỗi làm mất cả buổi vì
+tưởng mình đã làm rồi.
+
 ## Studio dùng thế nào
 
 Trình tạo website → ô tên miền ở thanh trên → gõ tên → **Lưu**.
@@ -105,7 +142,7 @@ Cạnh ô có **chấm tình trạng** và nút **kiểm tra lại**:
 | 🟢 xanh | Host đã phục vụ được | Xuất bản là xong |
 | 🟡 vàng | Đã đăng ký, đang chờ DNS xác minh | Chờ vài phút rồi bấm kiểm tra lại |
 | 🟡 vàng (*"chưa nối API Vercel"*) | Máy chủ thiếu `VERCEL_TOKEN`/`VERCEL_PROJECT_ID` | Người vận hành thêm domain thủ công, hoặc khai hai biến trên |
-| 🔴 đỏ | Host đang thuộc một project Vercel khác | Gỡ ở project kia rồi bấm kiểm tra lại |
+| 🔴 đỏ | Vercel từ chối: tên miền đang gắn với project/tài khoản Vercel khác | Xem mục “Tên miền đang thuộc tài khoản Vercel khác” bên dưới |
 
 Lưu tên miền xong **vẫn phải bấm Xuất bản**: trang chưa xuất bản thì
 `loadTenant()` trả null và khách gặp 404. Chấm xanh mà trang vẫn 404 thì gần như
