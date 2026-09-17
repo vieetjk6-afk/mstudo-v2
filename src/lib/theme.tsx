@@ -112,6 +112,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     // Safari cũ (< 14) chỉ có addListener; giữ cả hai đường để không vỡ.
     if (mq.addEventListener) mq.addEventListener("change", onChange);
     else mq.addListener(onChange);
+    // Đọc lại NGAY khi vừa gắn. `pref` được đặt ở effect trên, nên effect này
+    // chạy trễ hơn một nhịp render; máy đổi sáng/tối đúng trong khe đó thì sự
+    // kiện `change` bay mất mà lần đọc đầu đã xong rồi — nền kẹt ở giá trị cũ
+    // tới lúc tải lại trang. Khe rất hẹp và chưa ai gặp; thêm dòng này cho chắc.
+    onChange();
     return () => {
       if (mq.removeEventListener) mq.removeEventListener("change", onChange);
       else mq.removeListener(onChange);

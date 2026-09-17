@@ -78,7 +78,7 @@ export default function DateInput({
       <input
         id={id}
         className={className}
-        style={{ width: "100%", paddingRight: 34 }}
+        style={{ width: "100%", paddingRight: 36 }}
         inputMode="numeric"
         placeholder={placeholder}
         value={text}
@@ -90,7 +90,10 @@ export default function DateInput({
         aria-label="Chọn ngày"
         disabled={disabled}
         onClick={() => { const p = picker.current; if (p?.showPicker) p.showPicker(); else p?.focus(); }}
-        style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "var(--text3)", display: "inline-flex" }}
+        // Vùng bấm 30×30 quanh cái icon 15px. Icon trần thì đầu ngón tay bấm
+        // trượt trên điện thoại; hộp này trong suốt và nằm gọn trong phần đệm
+        // phải của ô nhập nên không đẩy gì cả.
+        style={{ position: "absolute", right: 3, top: "50%", transform: "translateY(-50%)", width: 30, height: 30, color: "var(--text3)", display: "inline-flex", alignItems: "center", justifyContent: "center" }}
       >
         <Calendar size={15} />
       </button>

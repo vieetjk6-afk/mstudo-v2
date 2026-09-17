@@ -20,6 +20,8 @@ import type { ChannelPublic, ConversationView, MessageRow } from "@/lib/inbox/ty
 import type {
   AwaitingReviewAlbum, ReviewRow,
   DiscountCode, StudioBooking, StudioEquipment, StudioExpense, StudioPackage, UpgradeRequest,
+  StudioContract, ContractItem, ContractCrew, ContractPayment, ContractPaymentPlan,
+  ContractTask, ContractProduct, ContractEditRequest, StudioCrew, StudioEvent, StudioAppointment,
 } from "@/lib/types";
 
 /** Ngày cố định để ảnh chụp hai lần vẫn giống nhau (khỏi so nhầm khác biệt). */
@@ -335,4 +337,94 @@ export const reviews: ReviewRow[] = [
 export const awaitingReviews: AwaitingReviewAlbum[] = [
   { id: "al4", slug: "sinh-nhat-be-an", title: "Sinh nhật bé An 1 tuổi", client_name: "Lê Hoàng Anh Quân", created_at: "2026-08-25T03:00:00Z" },
   { id: "al5", slug: "ao-dai-tet", title: null, client_name: "Phạm Thu Hà", created_at: "2026-08-11T03:00:00Z" },
+];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MÀN CHI TIẾT HỢP ĐỒNG — bộ dữ liệu cho ContractEditor
+
+   Đây là màn studio ngồi lâu nhất và cũng là màn bị kêu "rối" nhất, nhưng
+   trước giờ không xem trước được: nó cần đúng một hợp đồng có hạng mục, đợt
+   thu, nhân sự, mốc lịch… ở trạng thái vừa phải. Dựng tay từng thứ trong app
+   mỗi lần muốn nhìn là không ai làm.
+
+   Theo đúng lối của file này: cố ý nhét sẵn những ca hay làm vỡ bố cục —
+   tên hạng mục dài, số tiền 8 chữ số, dòng giảm giá (giá trị ÂM), thợ chưa
+   trả lời, đợt thu quá hạn, ô để trống.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+export const contractFull: StudioContract = {
+  id: "c1", owner_id: "o1", code: "HD2609", title: LONG,
+  client_name: "Nguyễn Thị Lan Phương", client_phone: "0912345678",
+  client_email: "lanphuong.nguyenthi.2026@gmail.com",
+  shoot_type: "wedding", service_id: null, event_date: D, event_time: "07:30",
+  location: "Nhà hàng Riverside, 123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh",
+  status: "in_progress", deposit: 15_000_000, note: "Khách muốn chụp thêm ở hồ sen lúc sáng sớm.",
+  client_token: "tok-khach", client_signed_name: "Nguyễn Thị Lan Phương",
+  client_signature: null, client_signed_at: `${D}T09:12:00Z`,
+  // Studio CHƯA ký — màn phải hiện cảnh báo "Chưa có chữ ký studio".
+  studio_signed_name: null, studio_signature: null, studio_signed_at: null,
+  gallery_album_id: null, client_viewed_at: `${D}T09:00:00Z`, assigned_to: null,
+  delivery_due: "2026-10-20", client_messenger: null, selection_album_id: null,
+  source: "facebook", brief_concept: null, brief_outfit: null, brief_refs: null,
+  brief_note: null, brief_submitted_at: null, chosen_quote_option_id: null,
+  chosen_quote_at: null, intake_token: null, intake: null, intake_submitted_at: null,
+  branch_id: "b1", created_at: `${D}T08:00:00Z`, updated_at: `${D}T09:12:00Z`,
+};
+
+export const contractItems: ContractItem[] = [
+  { id: "i1", contract_id: "c1", name: "Gói phóng sự cưới trọn gói hai ngày (chụp + quay)", qty: 1, unit_price: 45_000_000, position: 0, description: "Bao gồm 2 thợ chụp, 1 thợ quay, 1 trợ lý.", created_at: `${D}T08:00:00Z` },
+  { id: "i2", contract_id: "c1", name: "Album in 30x30 (60 trang)", qty: 2, unit_price: 3_500_000, position: 1, description: null, created_at: `${D}T08:00:00Z` },
+  // Số tiền 8 chữ số + tên dài: hai ca hay làm lệch cột tiền nhất.
+  { id: "i3", contract_id: "c1", name: "Phát sinh: chụp thêm một buổi ở Đà Lạt kèm xe đưa đón cả đoàn", qty: 1, unit_price: 12_000_000, position: 2, description: null, created_at: `${D}T08:00:00Z` },
+];
+
+export const contractCrew: ContractCrew[] = [
+  { id: "cc1", contract_id: "c1", name: "Trần Minh Quân", phone: "0987654321", role: "photographer", salary: 3_000_000, status: "accepted", note: null, responded_at: `${D}T08:30:00Z`, paid: false, paid_at: null, position: 0, created_at: `${D}T08:10:00Z`, task: "Phóng sự", side: "groom", start_time: "07:30", end_time: "18:00" },
+  // CHƯA trả lời — trạng thái studio cần thấy ngay, và tên dài nhất bảng.
+  { id: "cc2", contract_id: "c1", name: "Lê Thị Hồng Nhung Phương Thảo", phone: "0901112223", role: "assistant", salary: 800_000, status: "pending", note: null, responded_at: null, paid: false, paid_at: null, position: 1, created_at: `${D}T08:11:00Z`, task: null, side: "bride", start_time: null, end_time: null },
+];
+
+export const contractPayments: ContractPayment[] = [
+  { id: "p1", contract_id: "c1", amount: 15_000_000, method: "transfer", kind: "deposit", note: "Cọc", proof_url: null, paid_at: D, created_at: `${D}T09:20:00Z` },
+];
+
+export const contractPlan: ContractPaymentPlan[] = [
+  { id: "pl1", contract_id: "c1", label: "Đợt 1 — cọc", amount: 15_000_000, due_date: D, paid: true, paid_at: D, payment_id: "p1", position: 0, created_at: `${D}T08:00:00Z` },
+  // QUÁ HẠN mà chưa thu — trạng thái phải nổi bật.
+  { id: "pl2", contract_id: "c1", label: "Đợt 2 — trước ngày chụp", amount: 25_000_000, due_date: "2026-09-01", paid: false, paid_at: null, payment_id: null, position: 1, created_at: `${D}T08:00:00Z` },
+  { id: "pl3", contract_id: "c1", label: "Đợt cuối — khi giao album", amount: 15_500_000, due_date: "2026-10-20", paid: false, paid_at: null, payment_id: null, position: 2, created_at: `${D}T08:00:00Z` },
+];
+
+export const contractTasks: ContractTask[] = [
+  { id: "t1", contract_id: "c1", label: "Chốt maket album với khách", done: true, position: 0, created_at: `${D}T08:00:00Z` },
+  { id: "t2", contract_id: "c1", label: "Đặt in album 30x30", done: false, position: 1, created_at: `${D}T08:00:00Z` },
+];
+
+export const contractProducts: ContractProduct[] = [
+  { id: "pr1", contract_id: "c1", name: "Album 30x30 da bò 60 trang", qty: 1, cost: 3_500_000, status: "ordered", note: "Chờ duyệt maket", position: 0, created_at: `${D}T08:00:00Z` },
+];
+
+// Một yêu cầu sửa CHƯA xử lý — huy hiệu trên tab "Ký và thực hiện" phải hiện.
+export const contractRequests: ContractEditRequest[] = [
+  { id: "r1", contract_id: "c1", message: "Cho mình dời giờ chụp sang 8h sáng được không ạ?", status: "open", created_at: `${D}T10:00:00Z`, resolved_at: null },
+];
+
+export const roster: StudioCrew[] = [
+  { id: "sc1", owner_id: "o1", name: "Trần Minh Quân", phone: "0987654321", role: "photographer", note: null, branch_id: "b1", created_at: `${D}T00:00:00Z` },
+  { id: "sc2", owner_id: "o1", name: "Lê Thị Hồng Nhung Phương Thảo", phone: "0901112223", role: "assistant", note: null, branch_id: "b1", created_at: `${D}T00:00:00Z` },
+];
+
+export const milestones: StudioEvent[] = [
+  { id: "m1", owner_id: "o1", contract_id: "c1", title: "Chụp chính", event_date: D, event_time: "07:30", note: null, remind: true, created_at: `${D}T00:00:00Z` },
+];
+
+export const contractAppointments: StudioAppointment[] = [];
+
+export const clientProofs = [
+  { id: "cp1", url: "https://example.invalid/bill.jpg", note: "Ảnh chuyển khoản đợt 1", uploaded_at: `${D}T09:18:00Z`, plan_id: "pl1" },
+];
+
+export const pricelistRows = [
+  { name: "Gói phóng sự cưới trọn gói", price: 45_000_000, unit: "gói" },
+  { name: "Album in 30x30", price: 3_500_000, unit: "cuốn" },
 ];

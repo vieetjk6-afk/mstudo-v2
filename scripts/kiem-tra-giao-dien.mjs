@@ -61,6 +61,23 @@ await check("giá trị rác trong localStorage → sáng", { pref: "banana", co
 {
   const ctx = await browser.newContext({ colorScheme: "light" });
   const page = await ctx.newPage();
+  /* Đếm xem app CÓ gắn listener prefers-color-scheme hay không, để phân biệt
+     hai thứ trông giống hệt nhau khi nhìn vào nền trang:
+       • app có nghe mà nền không đổi  → LỖI THẬT.
+       • app không nghe gì cả          → trang chưa hydrate, không phải lỗi nền.
+     Phân biệt này không thừa: máy chủ `next dev` trong môi trường có proxy chặn
+     websocket thì HMR bắt tay hỏng và React KHÔNG hydrate — mọi effect im lặng.
+     Lúc đó phép kiểm này báo đỏ mà chữa nền thì chữa mãi không hết. */
+  await page.addInitScript(() => {
+    window.__ganMedia = 0;
+    const goc = window.matchMedia.bind(window);
+    window.matchMedia = (q) => {
+      const mq = goc(q);
+      const them = mq.addEventListener?.bind(mq);
+      if (them) mq.addEventListener = (t, f, o) => { window.__ganMedia++; return them(t, f, o); };
+      return mq;
+    };
+  });
   await page.goto(PAGE, { waitUntil: "domcontentloaded" });
   await page.evaluate(() => localStorage.setItem("mstudo_theme", "system"));
   await page.reload({ waitUntil: "networkidle" });
@@ -71,7 +88,16 @@ await check("giá trị rác trong localStorage → sáng", { pref: "banana", co
     ok(`máy đổi sang tối khi đang mở: ${before} → dark (không tải lại)`);
   } catch {
     const now = await page.evaluate(() => document.documentElement.dataset.theme);
-    bad(`máy đổi sang tối khi đang mở: vẫn là "${now}"`);
+    const nghe = await page.evaluate(() => window.__ganMedia);
+    if (!nghe) {
+      console.log(
+        `• bỏ qua phép kiểm đổi nền theo máy: trang chưa hydrate (không effect nào chạy).\n` +
+        `  Gần như chắc chắn là máy chủ dev không mở được websocket HMR ở môi trường này,\n` +
+        `  chứ không phải lỗi nền. Đo lại trên bản thật: npx next build && npx next start.`
+      );
+    } else {
+      bad(`máy đổi sang tối khi đang mở: vẫn là "${now}" (app CÓ nghe matchMedia)`);
+    }
   }
   await ctx.close();
 }
@@ -93,6 +119,235 @@ await check("giá trị rác trong localStorage → sáng", { pref: "banana", co
   if (warns.length === 0) ok("không có cảnh báo hydrate từ thuộc tính theme");
   else bad(`cảnh báo hydrate: ${warns.join(" | ")}`);
   await ctx.close();
+}
+
+/* ── Bôi chọn chữ có NHÌN THẤY không ───────────────────────────────────────
+   Studio báo: nền tối bôi đen mà không thấy vùng chọn. Đúng thật — bản cũ tô
+   rgba(255,255,255,.20) lên nền #0a0a0c, ra chừng #3b3b3d, gần như trùng nền.
+   Kiểu lỗi này không lộ ra ở tsc/eslint/build và mắt cũng dễ bỏ qua nếu màn
+   hình sáng, nên đo bằng số: lấy màu ::selection mà trình duyệt THẬT SỰ áp
+   dụng rồi tính tương phản theo WCAG.
+
+   Hai ngưỡng, hai ý nghĩa khác nhau:
+     • vùng chọn ↔ nền trang ≥ 3:1   — để NHẬN RA là đang bôi (thành phần giao diện)
+     • chữ ↔ vùng chọn       ≥ 4.5:1 — để ĐỌC ĐƯỢC chữ đang bôi                  */
+
+/** Đọc màu CSS về [r,g,b,a] — r,g,b theo 0–255, a theo 0–1.
+ *  Chromium trả color-mix() dưới dạng `color(srgb 0–1 …)` chứ không phải
+ *  `rgb(0–255 …)` — quên chỗ này là tính ra số tương phản đẹp giả, đúng cái bẫy
+ *  đã mắc một lần khi dò lỗi này. */
+function docMau(c) {
+  const n = c.match(/-?\d*\.?\d+/g)?.map(Number) ?? [];
+  const a = n.length > 3 ? n[3] : 1;
+  return c.startsWith("color(") ? [...n.slice(0, 3).map((v) => v * 255), a] : [...n.slice(0, 3), a];
+}
+
+/** Trộn màu TRƯỚC lên màu SAU theo độ trong (alpha).
+ *  Bỏ qua bước này là bẫy thứ hai: bản lỗi cũ tô rgba(255,255,255,.20), tính
+ *  như màu đặc thì ra trắng tinh → tương phản cao giả, phép kiểm xanh oan.
+ *  Trộn đúng mới thấy nó chỉ ra chừng #3b3b3d trên nền tối. */
+function tronLen(truoc, sau) {
+  const [r1, g1, b1, a] = docMau(truoc);
+  const [r2, g2, b2] = docMau(sau);
+  return [r1 * a + r2 * (1 - a), g1 * a + g2 * (1 - a), b1 * a + b2 * (1 - a)];
+}
+function doSangRGB([r, g, b]) {
+  const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+const doSang = (c) => doSangRGB(docMau(c).slice(0, 3));
+const tuongPhan = (a, b) => {
+  const [x, y] = [a, b].sort((p, q) => q - p);
+  return +(((x + 0.05) / (y + 0.05)).toFixed(2));
+};
+
+// Tự kiểm bộ đo trước khi tin nó: cùng một màu viết hai kiểu phải ra cùng số.
+{
+  const a = doSang("rgb(162, 121, 51)");
+  const b = doSang("color(srgb 0.635294 0.474510 0.200000)");
+  if (Math.abs(a - b) < 0.002) ok("bộ đo màu đọc được cả rgb() lẫn color(srgb)");
+  else bad(`bộ đo màu LỆCH giữa hai cách viết: ${a} vs ${b}`);
+  // Trắng 20% trên nền gần đen phải ra màu TỐI, không phải trắng.
+  const thu = doSangRGB(tronLen("rgba(255, 255, 255, 0.2)", "rgb(10, 10, 12)"));
+  if (thu < 0.08) ok("bộ đo có tính độ trong (alpha), không coi rgba là màu đặc");
+  else bad(`bộ đo BỎ QUA alpha — trắng 20% trên nền tối ra độ sáng ${thu.toFixed(3)}, đáng lẽ phải rất thấp`);
+}
+
+for (const nen of ["dark", "light"]) {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto(PAGE, { waitUntil: "domcontentloaded" });
+  await page.evaluate((t) => localStorage.setItem("mstudo_theme", t), nen);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const d = await page.evaluate(() => {
+    const cs = getComputedStyle(document.querySelector("h1,h2,p,span,label,body"), "::selection");
+    return { bg: cs.backgroundColor, ink: cs.color, page: getComputedStyle(document.body).backgroundColor };
+  });
+  // Nền vùng chọn có thể trong suốt → trộn lên nền trang rồi mới đo.
+  const vungThat = tronLen(d.bg, d.page);
+  const chuThat = tronLen(d.ink, d.bg);
+  const cVung = tuongPhan(doSangRGB(vungThat), doSang(d.page));
+  const cChu = tuongPhan(doSangRGB(chuThat), doSangRGB(vungThat));
+  if (cVung >= 3) ok(`nền ${nen}: vùng chọn nổi trên nền trang (${cVung}:1)`);
+  else bad(`nền ${nen}: vùng chọn MỜ, chỉ ${cVung}:1 (cần ≥3) — bôi xong không thấy`);
+  if (cChu >= 4.5) ok(`nền ${nen}: chữ đang bôi vẫn đọc được (${cChu}:1)`);
+  else bad(`nền ${nen}: chữ trên vùng chọn khó đọc, chỉ ${cChu}:1 (cần ≥4.5)`);
+  await ctx.close();
+}
+
+/* ── Nút & ô nhập trong CÙNG một hàng phải cao bằng nhau ───────────────────
+   "Nhìn rối / mất cân đối" là cảm giác, nhưng có một phần đo được: các điều
+   khiển nằm cạnh nhau trong cùng một hàng mà cao khác nhau thì mắt thấy ngay.
+   Đã tìm thấy thật ở tab Thanh toán của hợp đồng: ảnh 28px, nút chữ 25px, nút
+   icon 22px — ba cỡ trong một hàng.
+
+   BA LUẬT ĐO, học từ ba lần đo sai trước đó:
+     · Gom theo PHẦN TỬ CHA THẬT, không theo tagName. Gom theo tagName thì nút
+       ở hai khung khác nhau bị nhập làm một hàng → báo lệch oan (đã dính).
+     · Bỏ qua <textarea> và ô nhiều dòng: chúng CỐ Ý cao hơn nút bên cạnh
+       (nút "Bỏ" canh đỉnh ô mô tả là bố cục đúng, không phải lỗi).
+     · Bỏ qua checkbox/radio/file: chúng có cỡ riêng của trình duyệt.
+
+   Chỉ chạy được khi máy chủ là bản DEV, vì /uipreview cố ý không tồn tại trên
+   production. Không mở được thì bỏ qua, đừng báo sai.                        */
+{
+  const thu = await fetch(`${URL_BASE}/uipreview`).then((r) => r.ok).catch(() => false);
+  if (!thu) {
+    console.log("• bỏ qua phép đo cân đối: /uipreview không mở được (không phải bản dev?)");
+  } else {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const html = await (await fetch(`${URL_BASE}/uipreview`)).text();
+    const mans = [...new Set([...html.matchAll(/\/uipreview\/([a-z0-9-]+)/g)].map((m) => m[1]))];
+    const lech = [];
+    const deLen = [];
+    const beNut = [];
+    for (const man of mans) {
+      await page.setViewportSize({ width: 1280, height: 1000 });
+      const r = await page.goto(`${URL_BASE}/uipreview/${man}`, { waitUntil: "domcontentloaded" }).catch(() => null);
+      if (!r || r.status() >= 400) continue;
+      for (const w of [1280, 390]) {
+        // Đổi khổ TẠI CHỖ thay vì tải lại: bố cục tính lại ngay, mà không phải
+        // chờ server dev biên dịch màn đó thêm một lần nữa.
+        await page.setViewportSize({ width: w, height: 1000 });
+        await page.waitForTimeout(180);
+        const xau = await page.evaluate(() => {
+          const ra = [];
+          for (const cha of document.querySelectorAll("div,li,td,th,nav,header,footer,section,form,label")) {
+            const con = [...cha.children].filter(
+              (e) => ["BUTTON", "INPUT", "SELECT"].includes(e.tagName) &&
+                     !["checkbox", "radio", "hidden", "file"].includes(e.type)
+            );
+            if (con.length < 2) continue;
+            const box = con
+              .map((e) => ({ r: e.getBoundingClientRect(), t: (e.textContent || e.placeholder || "").trim().slice(0, 14) }))
+              .filter((x) => x.r.width > 8 && x.r.height > 8);
+            if (box.length < 2) continue;
+            const top = Math.min(...box.map((x) => x.r.top));
+            const hang = box.filter((x) => Math.abs(x.r.top - top) < 6);
+            if (hang.length < 2) continue;
+            const hs = hang.map((x) => Math.round(x.r.height));
+            if (Math.max(...hs) - Math.min(...hs) > 4) {
+              ra.push(`${hs.join("/")}px — ${hang.map((x) => x.t).filter(Boolean).slice(0, 3).join(", ") || "(nút icon)"}`);
+            }
+          }
+          return ra;
+        });
+        for (const x of xau) lech.push(`${man} @${w}px: ${x}`);
+
+        /* CHỒNG LẤN — tiêu chí quan trọng hơn cả lệch chiều cao, và là thứ
+           phép đo đầu tiên KHÔNG có nên đã để lọt một lỗi thật: ở tab Thanh
+           toán, cột nút không có shrink-0 nên khi hẹp nó co nhỏ hơn nội dung,
+           các nút bên trong tràn ra ngoài khung và vì justify-end nên tràn
+           SANG TRÁI, đè lên ô nhập tên đợt — khách nhìn thấy "ThaQRh toán t…".
+
+           Bỏ qua lớp chồng CÓ CHỦ Ý: phần tử (hoặc tổ tiên) định vị
+           absolute/fixed/sticky — vd nút lịch nằm trong ô ngày, huy hiệu góc
+           thẻ, thanh dính. Không bỏ qua thì chúng báo sai liên tục. */
+        const chong = await page.evaluate(() => {
+          const coLop = (e) => {
+            for (let p = e; p && p !== document.body; p = p.parentElement) {
+              const po = getComputedStyle(p).position;
+              if (po === "absolute" || po === "fixed" || po === "sticky") return true;
+            }
+            return false;
+          };
+          const ten = (e) => e.tagName.toLowerCase() + (typeof e.className === "string" && e.className ? "." + e.className.trim().split(/\s+/)[0] : "");
+          /* Phần tử có bị khung cha CẮT HÌNH không.
+             Nội dung rộng hơn một khung `overflow: hidden` thì mắt không thấy
+             phần thừa, nhưng getBoundingClientRect vẫn trả toạ độ chưa cắt —
+             10 mẫu thiệp trong /uipreview nằm trong khung 390px và dính đúng
+             bẫy này, báo chồng lấn oan ở 11 chỗ. (Không dùng elementFromPoint
+             để kiểm: hàm đó chỉ chạy trong khung nhìn, trả null với mọi thứ
+             nằm dưới nếp gấp — tức gần hết nội dung.) */
+          const biCat = (e) => {
+            const r = e.getBoundingClientRect();
+            for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+              const ov = getComputedStyle(p);
+              if (ov.overflowX === "visible" && ov.overflowY === "visible") continue;
+              const pr = p.getBoundingClientRect();
+              if (r.right > pr.right + 1 || r.left < pr.left - 1 ||
+                  r.bottom > pr.bottom + 1 || r.top < pr.top - 1) return true;
+            }
+            return false;
+          };
+          const el = [...document.querySelectorAll("button,input,select,textarea,a,label")]
+            .filter((e) => !coLop(e) && !biCat(e))
+            .map((e) => ({ e, r: e.getBoundingClientRect(), t: (e.textContent || e.placeholder || "").trim().slice(0, 16) }))
+            .filter((x) => x.r.width > 4 && x.r.height > 4);
+          const ra = new Set();
+          for (let i = 0; i < el.length; i++) {
+            for (let j = i + 1; j < el.length; j++) {
+              const a = el[i], c = el[j];
+              if (a.e.contains(c.e) || c.e.contains(a.e)) continue;
+              const ox = Math.min(a.r.right, c.r.right) - Math.max(a.r.left, c.r.left);
+              const oy = Math.min(a.r.bottom, c.r.bottom) - Math.max(a.r.top, c.r.top);
+              if (ox <= 3 || oy <= 3) continue;
+              ra.add(`${ten(a.e)}"${a.t}" ⨯ ${ten(c.e)}"${c.t}" (${Math.round(ox)}×${Math.round(oy)}px)`);
+            }
+          }
+          return [...ra];
+        });
+        for (const x of chong) deLen.push(`${man} @${w}px: ${x}`);
+
+        /* VÙNG BẤM trên điện thoại — chỉ đo ở khổ 390px.
+           Chỉ xét nút CHỈ CÓ ICON: nút có chữ thì chính chữ là vùng bấm, còn
+           icon trần không có gì bao quanh để ngón tay nhắm vào. 24px là mức
+           tối thiểu của WCAG 2.5.8.
+
+           Cố tình KHÔNG xét thẻ <a>: link nằm trong câu văn cao đúng một dòng
+           chữ (~14px) là bình thường, không phải lỗi. Bản đo đầu tiên xét cả
+           <a> nên ra 194 mục, trong đó 180 mục là link chữ — con số to mà rỗng.
+
+           Lỗi thật nó bắt được: nút lịch trong DateInput là icon 15px trần
+           (15×15px, có ở 6 màn), và năm nút xoá trong ContractEditor bị chính
+           lần dọn "cho đều nhau" trước đó gom về h-5 w-5 = 20px. Vùng bấm
+           không nhìn thấy được, nên mắt không bao giờ phát hiện ra. */
+        if (w === 390) {
+          const be = await page.evaluate(() => {
+            const ra = new Set();
+            for (const e of document.querySelectorAll("button")) {
+              const r = e.getBoundingClientRect();
+              if (r.width < 4 || r.height < 4) continue;          // đang ẩn
+              if ((e.textContent || "").trim().length > 2) continue; // có chữ để bấm
+              if (r.width >= 24 && r.height >= 24) continue;
+              const nhan = e.getAttribute("aria-label") || e.getAttribute("title") || "(không nhãn)";
+              ra.add(`${nhan} — ${Math.round(r.width)}×${Math.round(r.height)}px`);
+            }
+            return [...ra];
+          });
+          for (const x of be) beNut.push(`${man}: ${x}`);
+        }
+      }
+    }
+    if (lech.length === 0) ok(`nút & ô nhập cùng hàng đều cao bằng nhau (${mans.length} màn × 2 khổ)`);
+    else bad(`hàng điều khiển lệch chiều cao:\n      ${lech.slice(0, 8).join("\n      ")}`);
+    if (deLen.length === 0) ok(`không điều khiển nào đè lên nhau (${mans.length} màn × 2 khổ)`);
+    else bad(`điều khiển ĐÈ LÊN NHAU — chữ và nút chồng nhau, khách đọc không ra:\n      ${deLen.slice(0, 8).join("\n      ")}`);
+    if (beNut.length === 0) ok(`nút icon đều đủ 24px để bấm trên điện thoại (${mans.length} màn)`);
+    else bad(`nút icon QUÁ NHỎ để bấm trên điện thoại (<24px):\n      ${beNut.slice(0, 8).join("\n      ")}`);
+    await ctx.close();
+  }
 }
 
 await browser.close();

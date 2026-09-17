@@ -175,15 +175,39 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Text selection — theme-aware so it's visible in both light and dark. */
-:root[data-theme="dark"] ::selection,
+/* ── Bôi chọn chữ ────────────────────────────────────────────────────────────
+   Bản cũ tô nền tối bằng rgba(255,255,255,.20): phủ 20% trắng lên nền #0a0a0c
+   chỉ ra chừng #3b3b3d — một sắc xám tối gần như không tách khỏi nền, lại thêm
+   `color: inherit` nên chữ giữ nguyên màu. Kết quả: bôi xong trông y như chưa
+   bôi. Nền sáng cũng mờ tương tự (14% đen trên #f4f3f0).
+
+   Giờ dùng thẳng màu nhấn của hệ, ĐẶC, kèm màu chữ tương phản — giống cách
+   trình duyệt tự tô (nền xanh đặc + chữ trắng), chỉ khác là theo tông của app.
+   Dùng var(--gold) để mọi biến thể theme trong file này tự có màu của nó.
+
+   ::selection và ::-moz-selection phải là HAI rule riêng. Gộp vào một danh sách
+   selector thì engine nào không hiểu cái kia sẽ bỏ luôn CẢ rule — gần như chắc
+   chắn đó là lý do bản cũ có hai dòng `::selection` lặp y hệt nhau: phần
+   `-moz-` rụng mất lúc sửa, để lại dòng thừa. */
 :root[data-theme="dark"] ::selection {
-  background: rgba(255, 255, 255, 0.20);
-  color: inherit;
+  background: var(--gold, #e8c57c);
+  color: #0a0a0c;
+}
+:root[data-theme="dark"] ::-moz-selection {
+  background: var(--gold, #e8c57c);
+  color: #0a0a0c;
 }
 :root:not([data-theme="dark"]) ::selection {
-  background: rgba(24, 24, 26, 0.14);
-  color: inherit;
+  /* Vàng gốc (#b8893a) trên nền sáng chỉ được 2.83:1 — đo trong trình duyệt
+     thật, dưới ngưỡng 3:1 của WCAG cho thành phần giao diện. Làm tối 12% thì
+     vùng chọn đạt 3.57:1 nhưng CHỮ trên nó vẫn 3.57:1 (vì chữ cùng màu nền
+     trang), dưới ngưỡng 4.5:1 cho chữ. 70% mới đủ cả hai: 5.26:1. */
+  background: color-mix(in srgb, var(--gold, #b8893a) 70%, #000);
+  color: #f4f3f0;
+}
+:root:not([data-theme="dark"]) ::-moz-selection {
+  background: color-mix(in srgb, var(--gold, #b8893a) 70%, #000);
+  color: #f4f3f0;
 }
 
 ::-webkit-scrollbar {

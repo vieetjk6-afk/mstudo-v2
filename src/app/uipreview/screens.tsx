@@ -26,6 +26,7 @@ import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
+import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import * as f from "./fixtures";
 
 /**
@@ -96,6 +97,59 @@ export const SCREENS: Record<
     title: "Hợp đồng — danh sách",
     render: () => <ContractsList rows={f.contracts} studio={f.studio} />,
   },
+
+  /* Màn CHI TIẾT hợp đồng — màn studio ngồi lâu nhất và bị kêu rối nhất, mà
+     trước giờ không xem trước được vì nó cần đúng một hợp đồng có hạng mục,
+     đợt thu, nhân sự, mốc lịch ở trạng thái vừa phải.
+     Mỗi tab một khoá riêng: sáu tab là sáu bố cục khác nhau, gộp một màn thì
+     chụp ảnh so sánh không thấy được tab đang đóng. */
+  ...Object.fromEntries(
+    ([
+      ["info", "Thông tin"],
+      ["items", "Hạng mục"],
+      ["pay", "Thanh toán"],
+      ["crew", "Nhân sự"],
+      ["album", "Sản phẩm"],
+      ["send", "Ký và thực hiện"],
+    ] as const).map(([tab, nhan]) => [
+      `hop-dong-${tab}`,
+      {
+        title: `Hợp đồng chi tiết — tab ${nhan}`,
+        render: () => (
+          <ContractEditor
+            contract={f.contractFull}
+            initialItems={f.contractItems}
+            initialCrew={f.contractCrew}
+            initialRequests={f.contractRequests}
+            initialPayments={f.contractPayments}
+            initialPlan={f.contractPlan}
+            initialTasks={f.contractTasks}
+            initialProducts={f.contractProducts}
+            initialExpenses={[]}
+            initialMilestones={f.milestones}
+            initialAppointments={f.contractAppointments}
+            initialQuoteOptions={[]}
+            initialClientProofs={f.clientProofs}
+            roster={f.roster}
+            galleries={[]}
+            selectionAlbums={[]}
+            ownerId="o1"
+            branches={f.branches}
+            studioName={f.studio.name}
+            studioPhone={f.studio.phone}
+            studioEmail={f.studio.email}
+            conflictByPhone={{}}
+            staffList={f.staff}
+            canAssign
+            bank={f.bank}
+            sameDayContracts={[]}
+            pricelist={f.pricelistRows}
+            initialTab={tab}
+          />
+        ),
+      },
+    ])
+  ),
   "bang-viec": {
     title: "Bảng việc (kéo thả theo trạng thái)",
     render: () => <BoardView initial={f.board} />,
