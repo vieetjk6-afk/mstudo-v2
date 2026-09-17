@@ -95,6 +95,80 @@ await check("giá trị rác trong localStorage → sáng", { pref: "banana", co
   await ctx.close();
 }
 
+/* ── Bôi chọn chữ có NHÌN THẤY không ───────────────────────────────────────
+   Studio báo: nền tối bôi đen mà không thấy vùng chọn. Đúng thật — bản cũ tô
+   rgba(255,255,255,.20) lên nền #0a0a0c, ra chừng #3b3b3d, gần như trùng nền.
+   Kiểu lỗi này không lộ ra ở tsc/eslint/build và mắt cũng dễ bỏ qua nếu màn
+   hình sáng, nên đo bằng số: lấy màu ::selection mà trình duyệt THẬT SỰ áp
+   dụng rồi tính tương phản theo WCAG.
+
+   Hai ngưỡng, hai ý nghĩa khác nhau:
+     • vùng chọn ↔ nền trang ≥ 3:1   — để NHẬN RA là đang bôi (thành phần giao diện)
+     • chữ ↔ vùng chọn       ≥ 4.5:1 — để ĐỌC ĐƯỢC chữ đang bôi                  */
+
+/** Đọc màu CSS về [r,g,b,a] — r,g,b theo 0–255, a theo 0–1.
+ *  Chromium trả color-mix() dưới dạng `color(srgb 0–1 …)` chứ không phải
+ *  `rgb(0–255 …)` — quên chỗ này là tính ra số tương phản đẹp giả, đúng cái bẫy
+ *  đã mắc một lần khi dò lỗi này. */
+function docMau(c) {
+  const n = c.match(/-?\d*\.?\d+/g)?.map(Number) ?? [];
+  const a = n.length > 3 ? n[3] : 1;
+  return c.startsWith("color(") ? [...n.slice(0, 3).map((v) => v * 255), a] : [...n.slice(0, 3), a];
+}
+
+/** Trộn màu TRƯỚC lên màu SAU theo độ trong (alpha).
+ *  Bỏ qua bước này là bẫy thứ hai: bản lỗi cũ tô rgba(255,255,255,.20), tính
+ *  như màu đặc thì ra trắng tinh → tương phản cao giả, phép kiểm xanh oan.
+ *  Trộn đúng mới thấy nó chỉ ra chừng #3b3b3d trên nền tối. */
+function tronLen(truoc, sau) {
+  const [r1, g1, b1, a] = docMau(truoc);
+  const [r2, g2, b2] = docMau(sau);
+  return [r1 * a + r2 * (1 - a), g1 * a + g2 * (1 - a), b1 * a + b2 * (1 - a)];
+}
+function doSangRGB([r, g, b]) {
+  const f = (v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+}
+const doSang = (c) => doSangRGB(docMau(c).slice(0, 3));
+const tuongPhan = (a, b) => {
+  const [x, y] = [a, b].sort((p, q) => q - p);
+  return +(((x + 0.05) / (y + 0.05)).toFixed(2));
+};
+
+// Tự kiểm bộ đo trước khi tin nó: cùng một màu viết hai kiểu phải ra cùng số.
+{
+  const a = doSang("rgb(162, 121, 51)");
+  const b = doSang("color(srgb 0.635294 0.474510 0.200000)");
+  if (Math.abs(a - b) < 0.002) ok("bộ đo màu đọc được cả rgb() lẫn color(srgb)");
+  else bad(`bộ đo màu LỆCH giữa hai cách viết: ${a} vs ${b}`);
+  // Trắng 20% trên nền gần đen phải ra màu TỐI, không phải trắng.
+  const thu = doSangRGB(tronLen("rgba(255, 255, 255, 0.2)", "rgb(10, 10, 12)"));
+  if (thu < 0.08) ok("bộ đo có tính độ trong (alpha), không coi rgba là màu đặc");
+  else bad(`bộ đo BỎ QUA alpha — trắng 20% trên nền tối ra độ sáng ${thu.toFixed(3)}, đáng lẽ phải rất thấp`);
+}
+
+for (const nen of ["dark", "light"]) {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto(PAGE, { waitUntil: "domcontentloaded" });
+  await page.evaluate((t) => localStorage.setItem("mstudo_theme", t), nen);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const d = await page.evaluate(() => {
+    const cs = getComputedStyle(document.querySelector("h1,h2,p,span,label,body"), "::selection");
+    return { bg: cs.backgroundColor, ink: cs.color, page: getComputedStyle(document.body).backgroundColor };
+  });
+  // Nền vùng chọn có thể trong suốt → trộn lên nền trang rồi mới đo.
+  const vungThat = tronLen(d.bg, d.page);
+  const chuThat = tronLen(d.ink, d.bg);
+  const cVung = tuongPhan(doSangRGB(vungThat), doSang(d.page));
+  const cChu = tuongPhan(doSangRGB(chuThat), doSangRGB(vungThat));
+  if (cVung >= 3) ok(`nền ${nen}: vùng chọn nổi trên nền trang (${cVung}:1)`);
+  else bad(`nền ${nen}: vùng chọn MỜ, chỉ ${cVung}:1 (cần ≥3) — bôi xong không thấy`);
+  if (cChu >= 4.5) ok(`nền ${nen}: chữ đang bôi vẫn đọc được (${cChu}:1)`);
+  else bad(`nền ${nen}: chữ trên vùng chọn khó đọc, chỉ ${cChu}:1 (cần ≥4.5)`);
+  await ctx.close();
+}
+
 await browser.close();
 if (fails.length) {
   console.log(`\n${fails.length} MỤC SAI`);
