@@ -194,6 +194,7 @@ for (const nen of ["dark", "light"]) {
     const html = await (await fetch(`${URL_BASE}/uipreview`)).text();
     const mans = [...new Set([...html.matchAll(/\/uipreview\/([a-z0-9-]+)/g)].map((m) => m[1]))];
     const lech = [];
+    const deLen = [];
     for (const man of mans) {
       await page.setViewportSize({ width: 1280, height: 1000 });
       const r = await page.goto(`${URL_BASE}/uipreview/${man}`, { waitUntil: "domcontentloaded" }).catch(() => null);
@@ -226,10 +227,67 @@ for (const nen of ["dark", "light"]) {
           return ra;
         });
         for (const x of xau) lech.push(`${man} @${w}px: ${x}`);
+
+        /* CHỒNG LẤN — tiêu chí quan trọng hơn cả lệch chiều cao, và là thứ
+           phép đo đầu tiên KHÔNG có nên đã để lọt một lỗi thật: ở tab Thanh
+           toán, cột nút không có shrink-0 nên khi hẹp nó co nhỏ hơn nội dung,
+           các nút bên trong tràn ra ngoài khung và vì justify-end nên tràn
+           SANG TRÁI, đè lên ô nhập tên đợt — khách nhìn thấy "ThaQRh toán t…".
+
+           Bỏ qua lớp chồng CÓ CHỦ Ý: phần tử (hoặc tổ tiên) định vị
+           absolute/fixed/sticky — vd nút lịch nằm trong ô ngày, huy hiệu góc
+           thẻ, thanh dính. Không bỏ qua thì chúng báo sai liên tục. */
+        const chong = await page.evaluate(() => {
+          const coLop = (e) => {
+            for (let p = e; p && p !== document.body; p = p.parentElement) {
+              const po = getComputedStyle(p).position;
+              if (po === "absolute" || po === "fixed" || po === "sticky") return true;
+            }
+            return false;
+          };
+          const ten = (e) => e.tagName.toLowerCase() + (typeof e.className === "string" && e.className ? "." + e.className.trim().split(/\s+/)[0] : "");
+          /* Phần tử có bị khung cha CẮT HÌNH không.
+             Nội dung rộng hơn một khung `overflow: hidden` thì mắt không thấy
+             phần thừa, nhưng getBoundingClientRect vẫn trả toạ độ chưa cắt —
+             10 mẫu thiệp trong /uipreview nằm trong khung 390px và dính đúng
+             bẫy này, báo chồng lấn oan ở 11 chỗ. (Không dùng elementFromPoint
+             để kiểm: hàm đó chỉ chạy trong khung nhìn, trả null với mọi thứ
+             nằm dưới nếp gấp — tức gần hết nội dung.) */
+          const biCat = (e) => {
+            const r = e.getBoundingClientRect();
+            for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+              const ov = getComputedStyle(p);
+              if (ov.overflowX === "visible" && ov.overflowY === "visible") continue;
+              const pr = p.getBoundingClientRect();
+              if (r.right > pr.right + 1 || r.left < pr.left - 1 ||
+                  r.bottom > pr.bottom + 1 || r.top < pr.top - 1) return true;
+            }
+            return false;
+          };
+          const el = [...document.querySelectorAll("button,input,select,textarea,a,label")]
+            .filter((e) => !coLop(e) && !biCat(e))
+            .map((e) => ({ e, r: e.getBoundingClientRect(), t: (e.textContent || e.placeholder || "").trim().slice(0, 16) }))
+            .filter((x) => x.r.width > 4 && x.r.height > 4);
+          const ra = new Set();
+          for (let i = 0; i < el.length; i++) {
+            for (let j = i + 1; j < el.length; j++) {
+              const a = el[i], c = el[j];
+              if (a.e.contains(c.e) || c.e.contains(a.e)) continue;
+              const ox = Math.min(a.r.right, c.r.right) - Math.max(a.r.left, c.r.left);
+              const oy = Math.min(a.r.bottom, c.r.bottom) - Math.max(a.r.top, c.r.top);
+              if (ox <= 3 || oy <= 3) continue;
+              ra.add(`${ten(a.e)}"${a.t}" ⨯ ${ten(c.e)}"${c.t}" (${Math.round(ox)}×${Math.round(oy)}px)`);
+            }
+          }
+          return [...ra];
+        });
+        for (const x of chong) deLen.push(`${man} @${w}px: ${x}`);
       }
     }
     if (lech.length === 0) ok(`nút & ô nhập cùng hàng đều cao bằng nhau (${mans.length} màn × 2 khổ)`);
     else bad(`hàng điều khiển lệch chiều cao:\n      ${lech.slice(0, 8).join("\n      ")}`);
+    if (deLen.length === 0) ok(`không điều khiển nào đè lên nhau (${mans.length} màn × 2 khổ)`);
+    else bad(`điều khiển ĐÈ LÊN NHAU — chữ và nút chồng nhau, khách đọc không ra:\n      ${deLen.slice(0, 8).join("\n      ")}`);
     await ctx.close();
   }
 }

@@ -1959,7 +1959,13 @@ export default function ContractEditor({
                       const linked = it.payment_id ? payments.find((p) => p.id === it.payment_id) : undefined;
                       return (
                         <li key={it.id} className="rounded-xl px-3 py-2.5 space-y-2" style={{ background: "var(--surface2)" }}>
-                          <div className="flex items-start justify-between gap-2">
+                          {/* Điện thoại: XẾP DỌC. Trước đây luôn là hai cột ngang, mà
+                              cột phải không có shrink-0 nên khi hẹp nó co nhỏ hơn nội
+                              dung; các nút bên trong lại shrink-0 nên tràn ra ngoài
+                              khung, và vì justify-end nên tràn SANG TRÁI — đè lên ô
+                              nhập tên đợt. Trên máy khách thấy "ThaQRh toán t…", chữ
+                              và nút chồng lên nhau. */}
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                             <div className="flex-1 space-y-1.5 min-w-0">
                               {it.paid ? (
                                 <>
@@ -1994,7 +2000,7 @@ export default function ContractEditor({
                                 </button>
                               ))}
                             </div>
-                          <div className="flex flex-wrap items-center justify-end gap-3">
+                          <div className="flex shrink-0 flex-wrap items-center gap-3 sm:justify-end">
                             {!it.paid && it.amount > 0 && (
                               <>
                                 <VietQRButton bank={bank} amount={it.amount} addInfo={planNote(it)} label="QR" />

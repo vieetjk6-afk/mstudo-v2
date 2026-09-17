@@ -83,7 +83,15 @@ export default function ThiepDemo() {
       <style>{`
         /* Khung giả lập điện thoại: thiệp thật cao 100vh, ở đây bó lại 840px. */
         .thiep-demo main { min-height: 0 !important; }
-        .thiep-demo { width: 390px; height: 840px; overflow: hidden auto; border-radius: 18px; box-shadow: 0 20px 40px -18px rgba(60,50,40,.5); background: #fff; scrollbar-width: none; }
+        /* transform: BẮT BUỘC, dù nhìn CSS thì nó có vẻ thừa.
+           Thiệp có vài lớp position:fixed — nút nhạc (MusicPlayer), lớp mở thiệp
+           (CardIntro), lớp trang trí của mẫu hoa. Trên thiệp thật chúng phải bám
+           màn hình. Nhưng màn này dựng 10 mẫu cùng lúc: không có transform thì cả
+           10 nút nhạc cùng bám viewport và đè lên nhau ở một góc, chẳng mẫu nào
+           soi được. Phần tử fixed nằm trong tổ tiên ĐÃ transform sẽ bám khung đó.
+           MusicPlayer.tsx đã ghi đúng cái bẫy này, và màn thiep-mo bên cạnh cũng
+           bọc khung có transform vì cùng lý do. */
+        .thiep-demo { width: 390px; height: 840px; overflow: hidden auto; border-radius: 18px; box-shadow: 0 20px 40px -18px rgba(60,50,40,.5); background: #fff; scrollbar-width: none; transform: translate(0); }
       `}</style>
 
       <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 18, fontSize: 13, fontFamily: "system-ui" }}>
