@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+  --input-h: 46px;
   color-scheme: light;
   /* Light — warm off-white to reduce eye strain (no pure #fff). */
   --bg: #f4f3f0;
@@ -274,8 +275,25 @@ body {
 }
 
 @layer components {
+  /* whitespace-nowrap: chữ trong nút KHÔNG được tự xuống dòng. Cho xuống thì
+     trên điện thoại "Dùng 1 buổi" thành hai dòng, cao 44px, đứng cạnh nút
+     "Hoàn" cao 30px — cụm nút trông so le. Hàng chật thì cho CẢ HÀNG xuống
+     dòng (flex-wrap ở thẻ bọc), chứ không bẻ chữ bên trong từng nút.
+     .act-btn đã có sẵn dòng này từ trước; .btn thì bị sót. */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed;
+    @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  /* Chiều cao của .input ở cỡ mặc định: đệm dọc 12px×2 + dòng chữ 20px + viền
+     1px×2 = 46px (biến --input-h ở :root).
+
+     Dùng cho NÚT đứng cùng hàng với ô nhập — nút mặc định cao 36px nên thanh
+     công cụ nào trộn nút với ô nhập cũng so le. Là lớp chọn dùng, KHÔNG ép
+     chiều cao vào thẳng .input: nhiều chỗ cố ý thu ô nhập lại (h-8, h-[34px],
+     !py-1.5) cho hàng gọn, đặt min-height vào .input là đè chết hết những chỗ
+     đó — đã thử và bộ đo bắt được ngay. Ô nhập nào bị thu nhỏ thì nút cạnh nó
+     cũng phải thu theo, chứ đừng gắn lớp này. */
+  .h-input {
+    height: var(--input-h);
   }
   /* Primary = silver-white pill on dark ink text */
   .btn-primary {

@@ -220,40 +220,149 @@ for (const nen of ["dark", "light"]) {
     const html = await (await fetch(`${URL_BASE}/uipreview`)).text();
     const mans = [...new Set([...html.matchAll(/\/uipreview\/([a-z0-9-]+)/g)].map((m) => m[1]))];
     const lech = [];
+    const lechCum = [];
+    const keoNgang = [];
     const deLen = [];
     const beNut = [];
     for (const man of mans) {
       await page.setViewportSize({ width: 1280, height: 1000 });
       const r = await page.goto(`${URL_BASE}/uipreview/${man}`, { waitUntil: "domcontentloaded" }).catch(() => null);
       if (!r || r.status() >= 400) continue;
-      for (const w of [1280, 390]) {
+      for (const w of [1280, 430, 390, 320]) {
         // Đổi khổ TẠI CHỖ thay vì tải lại: bố cục tính lại ngay, mà không phải
         // chờ server dev biên dịch màn đó thêm một lần nữa.
         await page.setViewportSize({ width: w, height: 1000 });
         await page.waitForTimeout(180);
+        /* LỆCH CHIỀU CAO — gom theo HÀNG NHÌN THẤY ĐƯỢC, không theo thẻ cha.
+           Bản đầu chỉ so các điều khiển là CON TRỰC TIẾP của cùng một thẻ; nút
+           nào bọc thêm một lớp div — kiểu phổ biến nhất — là nó không thấy.
+           Nó cũng bỏ qua thẻ <a>, trong khi app này nhiều nút là link. Vì vậy
+           nó báo sạch trong khi trên điện thoại vẫn có cụm nút so le. */
         const xau = await page.evaluate(() => {
-          const ra = [];
-          for (const cha of document.querySelectorAll("div,li,td,th,nav,header,footer,section,form,label")) {
-            const con = [...cha.children].filter(
-              (e) => ["BUTTON", "INPUT", "SELECT"].includes(e.tagName) &&
-                     !["checkbox", "radio", "hidden", "file"].includes(e.type)
-            );
-            if (con.length < 2) continue;
-            const box = con
-              .map((e) => ({ r: e.getBoundingClientRect(), t: (e.textContent || e.placeholder || "").trim().slice(0, 14) }))
-              .filter((x) => x.r.width > 8 && x.r.height > 8);
-            if (box.length < 2) continue;
-            const top = Math.min(...box.map((x) => x.r.top));
-            const hang = box.filter((x) => Math.abs(x.r.top - top) < 6);
-            if (hang.length < 2) continue;
-            const hs = hang.map((x) => Math.round(x.r.height));
-            if (Math.max(...hs) - Math.min(...hs) > 4) {
-              ra.push(`${hs.join("/")}px — ${hang.map((x) => x.t).filter(Boolean).slice(0, 3).join(", ") || "(nút icon)"}`);
+          const hien = (e) => {
+            const c = getComputedStyle(e);
+            return c.display !== "none" && c.visibility !== "hidden" && +c.opacity !== 0;
+          };
+          // <a>/<label> chỉ tính là điều khiển khi TRÔNG như nút (có nền, viền,
+          // hoặc đệm) — link trong câu văn cao một dòng chữ là chuyện bình thường.
+          const laNut = (e) => {
+            if (!hien(e)) return false;
+            if (e.tagName === "INPUT") return e.type !== "hidden";
+            if (["BUTTON", "SELECT", "TEXTAREA"].includes(e.tagName)) return true;
+            if (e.getAttribute("role") === "button") return true;
+            if (e.tagName === "A" || e.tagName === "LABEL") {
+              const c = getComputedStyle(e);
+              const nen = c.backgroundColor;
+              return (nen && !/rgba\(0, 0, 0, 0\)|transparent/.test(nen)) ||
+                     parseFloat(c.borderTopWidth) > 0 ||
+                     (parseFloat(c.paddingLeft) >= 6 && parseFloat(c.paddingTop) >= 4);
             }
+            return false;
+          };
+          const ten = (e) => {
+            const c = typeof e.className === "string" ? e.className.trim().split(/\s+/)[0] : "";
+            const chu = (e.textContent || e.placeholder || e.getAttribute("aria-label") || "").trim().slice(0, 16);
+            return `${c || e.tagName.toLowerCase()}${chu ? `"${chu}"` : ""}`;
+          };
+          const ds = [...document.querySelectorAll("button,input,select,textarea,a,label,[role=button]")]
+            .filter(laNut)
+            .map((e) => ({ e, r: e.getBoundingClientRect() }))
+            .filter((x) => x.r.width > 6 && x.r.height > 6)
+            .filter((x) => {                       // bỏ thứ bị khung cha cắt hình
+              for (let q = x.e.parentElement; q && q !== document.body; q = q.parentElement) {
+                const ov = getComputedStyle(q);
+                if (ov.overflowX === "visible" && ov.overflowY === "visible") continue;
+                const qr = q.getBoundingClientRect();
+                if (x.r.right > qr.right + 1 || x.r.left < qr.left - 1) return false;
+              }
+              return true;
+            })
+            .filter((x, _i, all) => !all.some((y) => y !== x && x.e.contains(y.e)));
+          ds.sort((a, c) => a.r.top - c.r.top || a.r.left - c.r.left);
+
+          // Cùng hàng = tâm dọc gần nhau, nằm cạnh nhau, khoảng hở đủ nhỏ để
+          // mắt đọc là một cụm.
+          const hang = [];
+          for (const x of ds) {
+            const tim = hang.find((h) => {
+              const cuoi = h[h.length - 1];
+              if (Math.abs((x.r.top + x.r.height / 2) - (cuoi.r.top + cuoi.r.height / 2)) > 8) return false;
+              const ho = x.r.left - cuoi.r.right;
+              return ho >= -2 && ho < 44;
+            });
+            if (tim) tim.push(x); else hang.push([x]);
           }
-          return ra;
+          const ra = [];
+          for (const h of hang) {
+            if (h.length < 2) continue;
+            const hs = h.map((x) => Math.round(x.r.height));
+            if (Math.max(...hs) - Math.min(...hs) > 4) ra.push(`${hs.join("/")}px — ${h.map((x) => ten(x.e)).join("  ")}`);
+          }
+          return [...new Set(ra)];
         });
         for (const x of xau) lech.push(`${man} @${w}px: ${x}`);
+
+        /* CỤM NÚT BỊ XUỐNG DÒNG — thứ phép đo theo hàng KHÔNG bắt được, vì sau
+           khi xuống dòng chúng không còn cùng hàng nữa. Trên điện thoại đây là
+           kiểu so le hay gặp nhất: một dải nút vừa đủ chỗ trên máy tính, xuống
+           điện thoại thì gãy làm hai dòng cao thấp khác nhau.
+           Chỉ xét thẻ bọc flex/grid: thẻ bọc thường chỉ là các nút tình cờ
+           chung cha mà xếp chồng nhau, vd nút phụ cố ý nhỏ hơn nút chính. */
+        const cum = await page.evaluate(() => {
+          const hien = (e) => {
+            const c = getComputedStyle(e);
+            return c.display !== "none" && c.visibility !== "hidden" && +c.opacity !== 0;
+          };
+          const laNutThat = (e) => {
+            if (!hien(e)) return false;
+            if (e.tagName === "BUTTON" || e.getAttribute("role") === "button") return true;
+            if (e.tagName === "A") {
+              const c = getComputedStyle(e);
+              return (c.backgroundColor && !/rgba\(0, 0, 0, 0\)|transparent/.test(c.backgroundColor)) ||
+                     parseFloat(c.borderTopWidth) > 0;
+            }
+            return false;
+          };
+          const ten = (e) => {
+            const c = typeof e.className === "string" ? e.className.trim().split(/\s+/)[0] : "";
+            const chu = (e.textContent || "").trim().slice(0, 16);
+            return `${c || e.tagName.toLowerCase()}${chu ? `"${chu}"` : ""}`;
+          };
+          const ra = [];
+          for (const cha of document.querySelectorAll("div,nav,header,footer,section,form,li,td")) {
+            if (!/flex|grid/.test(getComputedStyle(cha).display)) continue;
+            const nut = [...cha.children].filter(laNutThat)
+              .map((e) => ({ e, r: e.getBoundingClientRect() }))
+              .filter((x) => x.r.width > 6 && x.r.height > 6);
+            if (nut.length < 2) continue;
+            // Nút icon vuông nhỏ cạnh nút chữ là HAI LOẠI khác nhau, không so.
+            if (!nut.every((x) => (x.e.textContent || "").trim().length > 2)) continue;
+            const hs = nut.map((x) => Math.round(x.r.height));
+            if (Math.max(...hs) - Math.min(...hs) <= 4) continue;
+            ra.push(`${hs.join("/")}px — ${nut.map((x) => ten(x.e)).join("  ")}`);
+          }
+          return [...new Set(ra)];
+        });
+        for (const x of cum) lechCum.push(`${man} @${w}px: ${x}`);
+
+        /* TRANG KÉO NGANG ĐƯỢC — trên điện thoại là lỗi thấy ngay: vuốt một cái
+           là cả trang trượt sang, chữ chạy ra khỏi mép.
+           Bỏ qua khi thủ phạm là phần tử có CHIỀU RỘNG CỐ ĐỊNH tính bằng px:
+           đó là khung giả lập điện thoại 390px của chính /uipreview, hẹp hơn
+           390 thì nó lòi ra — lỗi của khung xem trước, không phải của sản phẩm. */
+        if (w < 1000 && man !== "bang-mau") {
+          const tran = await page.evaluate(() => {
+            const de = document.documentElement;
+            const thua = de.scrollWidth - de.clientWidth;
+            if (thua <= 1) return 0;
+            for (const el of document.querySelectorAll("body *")) {
+              const r = el.getBoundingClientRect();
+              if (r.right > de.clientWidth + 1 && /^\d+px$/.test(getComputedStyle(el).width)) return 0;
+            }
+            return thua;
+          });
+          if (tran) keoNgang.push(`${man} @${w}px: thừa ${tran}px`);
+        }
 
         /* CHỒNG LẤN — tiêu chí quan trọng hơn cả lệch chiều cao, và là thứ
            phép đo đầu tiên KHÔNG có nên đã để lọt một lỗi thật: ở tab Thanh
@@ -340,9 +449,13 @@ for (const nen of ["dark", "light"]) {
         }
       }
     }
-    if (lech.length === 0) ok(`nút & ô nhập cùng hàng đều cao bằng nhau (${mans.length} màn × 2 khổ)`);
+    if (lech.length === 0) ok(`nút & ô nhập cùng hàng đều cao bằng nhau (${mans.length} màn × 4 khổ)`);
     else bad(`hàng điều khiển lệch chiều cao:\n      ${lech.slice(0, 8).join("\n      ")}`);
-    if (deLen.length === 0) ok(`không điều khiển nào đè lên nhau (${mans.length} màn × 2 khổ)`);
+    if (lechCum.length === 0) ok(`cụm nút vẫn đều khi bị xuống dòng (${mans.length} màn × 4 khổ)`);
+    else bad(`CỤM NÚT SO LE — dải nút gãy dòng rồi mỗi dòng một chiều cao:\n      ${lechCum.slice(0, 8).join("\n      ")}`);
+    if (keoNgang.length === 0) ok(`không màn nào kéo ngang được trên điện thoại (${mans.length} màn × 3 khổ)`);
+    else bad(`TRANG KÉO NGANG ĐƯỢC trên điện thoại — vuốt là chữ chạy khỏi mép:\n      ${keoNgang.slice(0, 8).join("\n      ")}`);
+    if (deLen.length === 0) ok(`không điều khiển nào đè lên nhau (${mans.length} màn × 4 khổ)`);
     else bad(`điều khiển ĐÈ LÊN NHAU — chữ và nút chồng nhau, khách đọc không ra:\n      ${deLen.slice(0, 8).join("\n      ")}`);
     if (beNut.length === 0) ok(`nút icon đều đủ 24px để bấm trên điện thoại (${mans.length} màn)`);
     else bad(`nút icon QUÁ NHỎ để bấm trên điện thoại (<24px):\n      ${beNut.slice(0, 8).join("\n      ")}`);
