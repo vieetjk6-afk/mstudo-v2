@@ -169,6 +169,71 @@ for (const nen of ["dark", "light"]) {
   await ctx.close();
 }
 
+/* ── Nút & ô nhập trong CÙNG một hàng phải cao bằng nhau ───────────────────
+   "Nhìn rối / mất cân đối" là cảm giác, nhưng có một phần đo được: các điều
+   khiển nằm cạnh nhau trong cùng một hàng mà cao khác nhau thì mắt thấy ngay.
+   Đã tìm thấy thật ở tab Thanh toán của hợp đồng: ảnh 28px, nút chữ 25px, nút
+   icon 22px — ba cỡ trong một hàng.
+
+   BA LUẬT ĐO, học từ ba lần đo sai trước đó:
+     · Gom theo PHẦN TỬ CHA THẬT, không theo tagName. Gom theo tagName thì nút
+       ở hai khung khác nhau bị nhập làm một hàng → báo lệch oan (đã dính).
+     · Bỏ qua <textarea> và ô nhiều dòng: chúng CỐ Ý cao hơn nút bên cạnh
+       (nút "Bỏ" canh đỉnh ô mô tả là bố cục đúng, không phải lỗi).
+     · Bỏ qua checkbox/radio/file: chúng có cỡ riêng của trình duyệt.
+
+   Chỉ chạy được khi máy chủ là bản DEV, vì /uipreview cố ý không tồn tại trên
+   production. Không mở được thì bỏ qua, đừng báo sai.                        */
+{
+  const thu = await fetch(`${URL_BASE}/uipreview`).then((r) => r.ok).catch(() => false);
+  if (!thu) {
+    console.log("• bỏ qua phép đo cân đối: /uipreview không mở được (không phải bản dev?)");
+  } else {
+    const ctx = await browser.newContext();
+    const page = await ctx.newPage();
+    const html = await (await fetch(`${URL_BASE}/uipreview`)).text();
+    const mans = [...new Set([...html.matchAll(/\/uipreview\/([a-z0-9-]+)/g)].map((m) => m[1]))];
+    const lech = [];
+    for (const man of mans) {
+      await page.setViewportSize({ width: 1280, height: 1000 });
+      const r = await page.goto(`${URL_BASE}/uipreview/${man}`, { waitUntil: "domcontentloaded" }).catch(() => null);
+      if (!r || r.status() >= 400) continue;
+      for (const w of [1280, 390]) {
+        // Đổi khổ TẠI CHỖ thay vì tải lại: bố cục tính lại ngay, mà không phải
+        // chờ server dev biên dịch màn đó thêm một lần nữa.
+        await page.setViewportSize({ width: w, height: 1000 });
+        await page.waitForTimeout(180);
+        const xau = await page.evaluate(() => {
+          const ra = [];
+          for (const cha of document.querySelectorAll("div,li,td,th,nav,header,footer,section,form,label")) {
+            const con = [...cha.children].filter(
+              (e) => ["BUTTON", "INPUT", "SELECT"].includes(e.tagName) &&
+                     !["checkbox", "radio", "hidden", "file"].includes(e.type)
+            );
+            if (con.length < 2) continue;
+            const box = con
+              .map((e) => ({ r: e.getBoundingClientRect(), t: (e.textContent || e.placeholder || "").trim().slice(0, 14) }))
+              .filter((x) => x.r.width > 8 && x.r.height > 8);
+            if (box.length < 2) continue;
+            const top = Math.min(...box.map((x) => x.r.top));
+            const hang = box.filter((x) => Math.abs(x.r.top - top) < 6);
+            if (hang.length < 2) continue;
+            const hs = hang.map((x) => Math.round(x.r.height));
+            if (Math.max(...hs) - Math.min(...hs) > 4) {
+              ra.push(`${hs.join("/")}px — ${hang.map((x) => x.t).filter(Boolean).slice(0, 3).join(", ") || "(nút icon)"}`);
+            }
+          }
+          return ra;
+        });
+        for (const x of xau) lech.push(`${man} @${w}px: ${x}`);
+      }
+    }
+    if (lech.length === 0) ok(`nút & ô nhập cùng hàng đều cao bằng nhau (${mans.length} màn × 2 khổ)`);
+    else bad(`hàng điều khiển lệch chiều cao:\n      ${lech.slice(0, 8).join("\n      ")}`);
+    await ctx.close();
+  }
+}
+
 await browser.close();
 if (fails.length) {
   console.log(`\n${fails.length} MỤC SAI`);

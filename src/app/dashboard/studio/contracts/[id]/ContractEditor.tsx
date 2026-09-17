@@ -1906,7 +1906,7 @@ export default function ContractEditor({
                         </div>
                         <div className="flex items-center gap-3">
                           <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: f.location }} />
-                          <button onClick={() => deleteMilestone(m.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                          <button onClick={() => deleteMilestone(m.id)} className="flex h-5 w-5 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                         </div>
                       </li>
                     ))}
@@ -2020,18 +2020,18 @@ export default function ContractEditor({
                               </button>
                             )}
                             {it.paid && linked && (
-                              <label className="flex shrink-0 cursor-pointer items-center p-1 text-[11px]" style={{ color: "var(--text3)" }} title="Tải ảnh đã chuyển khoản" aria-label="Tải ảnh đã chuyển khoản">
+                              <label className="inline-flex h-7 shrink-0 cursor-pointer items-center justify-center p-1 text-[11px]" style={{ color: "var(--text3)" }} title="Tải ảnh đã chuyển khoản" aria-label="Tải ảnh đã chuyển khoản">
                                 <ImageIcon size={14} />
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => attachProof(linked.id, e.target.files?.[0] ?? null)} />
                               </label>
                             )}
                             {it.paid && linked && (
-                              <button onClick={() => printReceipt(linked)} className="shrink-0 p-1 text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
+                              <button onClick={() => printReceipt(linked)} className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
                             )}
-                            <button onClick={() => markPlanPaid(it)} className="shrink-0 p-1 text-[11px]" style={{ color: it.paid ? "var(--s-green)" : "var(--text3)" }}>
+                            <button onClick={() => markPlanPaid(it)} className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]" style={{ color: it.paid ? "var(--s-green)" : "var(--text3)" }}>
                               {it.paid ? "✓ Đã thu" : "Đánh dấu thu"}
                             </button>
-                            <button onClick={() => deletePlan(it)} className="shrink-0 p-1" aria-label="Xoá đợt thanh toán" title="Xoá" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                            <button onClick={() => deletePlan(it)} className="inline-flex h-7 w-7 shrink-0 items-center justify-center" aria-label="Xoá đợt thanh toán" title="Xoá" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                           </div>
                           </div>
                         </li>
@@ -2115,7 +2115,7 @@ export default function ContractEditor({
                           </div>
                           <div className="flex items-center gap-2">
                             <button onClick={() => printReceipt(p)} className="text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
-                            <button onClick={() => deletePayment(p.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                            <button onClick={() => deletePayment(p.id)} className="flex h-5 w-5 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                           </div>
                         </li>
                       ))}
@@ -2152,7 +2152,7 @@ export default function ContractEditor({
                           >
                             {e.client_visible ? "Khách thấy" : "Nội bộ"}
                           </button>
-                          <button onClick={() => deleteExpense(e.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                          <button onClick={() => deleteExpense(e.id)} className="flex h-5 w-5 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                         </div>
                       </li>
                     ))}
@@ -2381,7 +2381,7 @@ export default function ContractEditor({
                           {t.done && <Check size={13} color="#0c0c0c" />}
                         </button>
                         <span className="flex-1 text-sm" style={{ color: t.done ? "var(--text3)" : "var(--text)", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-                        <button onClick={() => deleteTask(t.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                        <button onClick={() => deleteTask(t.id)} className="flex h-5 w-5 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                       </li>
                     ))}
                   </ul>
@@ -2485,7 +2485,7 @@ export default function ContractEditor({
                           <button onClick={() => cycleProduct(it)} className="text-[11px]" style={{ color: PROD_TONE[it.status] }}>
                             {PRODUCT_STATUS_LABEL[it.status]}
                           </button>
-                          <button onClick={() => deleteProduct(it.id)} style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                          <button onClick={() => deleteProduct(it.id)} className="flex h-5 w-5 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                         </div>
                       </li>
                     ))}
