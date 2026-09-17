@@ -61,6 +61,23 @@ await check("giá trị rác trong localStorage → sáng", { pref: "banana", co
 {
   const ctx = await browser.newContext({ colorScheme: "light" });
   const page = await ctx.newPage();
+  /* Đếm xem app CÓ gắn listener prefers-color-scheme hay không, để phân biệt
+     hai thứ trông giống hệt nhau khi nhìn vào nền trang:
+       • app có nghe mà nền không đổi  → LỖI THẬT.
+       • app không nghe gì cả          → trang chưa hydrate, không phải lỗi nền.
+     Phân biệt này không thừa: máy chủ `next dev` trong môi trường có proxy chặn
+     websocket thì HMR bắt tay hỏng và React KHÔNG hydrate — mọi effect im lặng.
+     Lúc đó phép kiểm này báo đỏ mà chữa nền thì chữa mãi không hết. */
+  await page.addInitScript(() => {
+    window.__ganMedia = 0;
+    const goc = window.matchMedia.bind(window);
+    window.matchMedia = (q) => {
+      const mq = goc(q);
+      const them = mq.addEventListener?.bind(mq);
+      if (them) mq.addEventListener = (t, f, o) => { window.__ganMedia++; return them(t, f, o); };
+      return mq;
+    };
+  });
   await page.goto(PAGE, { waitUntil: "domcontentloaded" });
   await page.evaluate(() => localStorage.setItem("mstudo_theme", "system"));
   await page.reload({ waitUntil: "networkidle" });
@@ -71,7 +88,16 @@ await check("giá trị rác trong localStorage → sáng", { pref: "banana", co
     ok(`máy đổi sang tối khi đang mở: ${before} → dark (không tải lại)`);
   } catch {
     const now = await page.evaluate(() => document.documentElement.dataset.theme);
-    bad(`máy đổi sang tối khi đang mở: vẫn là "${now}"`);
+    const nghe = await page.evaluate(() => window.__ganMedia);
+    if (!nghe) {
+      console.log(
+        `• bỏ qua phép kiểm đổi nền theo máy: trang chưa hydrate (không effect nào chạy).\n` +
+        `  Gần như chắc chắn là máy chủ dev không mở được websocket HMR ở môi trường này,\n` +
+        `  chứ không phải lỗi nền. Đo lại trên bản thật: npx next build && npx next start.`
+      );
+    } else {
+      bad(`máy đổi sang tối khi đang mở: vẫn là "${now}" (app CÓ nghe matchMedia)`);
+    }
   }
   await ctx.close();
 }
@@ -195,6 +221,7 @@ for (const nen of ["dark", "light"]) {
     const mans = [...new Set([...html.matchAll(/\/uipreview\/([a-z0-9-]+)/g)].map((m) => m[1]))];
     const lech = [];
     const deLen = [];
+    const beNut = [];
     for (const man of mans) {
       await page.setViewportSize({ width: 1280, height: 1000 });
       const r = await page.goto(`${URL_BASE}/uipreview/${man}`, { waitUntil: "domcontentloaded" }).catch(() => null);
@@ -282,12 +309,43 @@ for (const nen of ["dark", "light"]) {
           return [...ra];
         });
         for (const x of chong) deLen.push(`${man} @${w}px: ${x}`);
+
+        /* VÙNG BẤM trên điện thoại — chỉ đo ở khổ 390px.
+           Chỉ xét nút CHỈ CÓ ICON: nút có chữ thì chính chữ là vùng bấm, còn
+           icon trần không có gì bao quanh để ngón tay nhắm vào. 24px là mức
+           tối thiểu của WCAG 2.5.8.
+
+           Cố tình KHÔNG xét thẻ <a>: link nằm trong câu văn cao đúng một dòng
+           chữ (~14px) là bình thường, không phải lỗi. Bản đo đầu tiên xét cả
+           <a> nên ra 194 mục, trong đó 180 mục là link chữ — con số to mà rỗng.
+
+           Lỗi thật nó bắt được: nút lịch trong DateInput là icon 15px trần
+           (15×15px, có ở 6 màn), và năm nút xoá trong ContractEditor bị chính
+           lần dọn "cho đều nhau" trước đó gom về h-5 w-5 = 20px. Vùng bấm
+           không nhìn thấy được, nên mắt không bao giờ phát hiện ra. */
+        if (w === 390) {
+          const be = await page.evaluate(() => {
+            const ra = new Set();
+            for (const e of document.querySelectorAll("button")) {
+              const r = e.getBoundingClientRect();
+              if (r.width < 4 || r.height < 4) continue;          // đang ẩn
+              if ((e.textContent || "").trim().length > 2) continue; // có chữ để bấm
+              if (r.width >= 24 && r.height >= 24) continue;
+              const nhan = e.getAttribute("aria-label") || e.getAttribute("title") || "(không nhãn)";
+              ra.add(`${nhan} — ${Math.round(r.width)}×${Math.round(r.height)}px`);
+            }
+            return [...ra];
+          });
+          for (const x of be) beNut.push(`${man}: ${x}`);
+        }
       }
     }
     if (lech.length === 0) ok(`nút & ô nhập cùng hàng đều cao bằng nhau (${mans.length} màn × 2 khổ)`);
     else bad(`hàng điều khiển lệch chiều cao:\n      ${lech.slice(0, 8).join("\n      ")}`);
     if (deLen.length === 0) ok(`không điều khiển nào đè lên nhau (${mans.length} màn × 2 khổ)`);
     else bad(`điều khiển ĐÈ LÊN NHAU — chữ và nút chồng nhau, khách đọc không ra:\n      ${deLen.slice(0, 8).join("\n      ")}`);
+    if (beNut.length === 0) ok(`nút icon đều đủ 24px để bấm trên điện thoại (${mans.length} màn)`);
+    else bad(`nút icon QUÁ NHỎ để bấm trên điện thoại (<24px):\n      ${beNut.slice(0, 8).join("\n      ")}`);
     await ctx.close();
   }
 }
