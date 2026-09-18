@@ -143,6 +143,7 @@ export const SCREENS: Record<
             conflictByPhone={{}}
             staffList={f.staff}
             canAssign
+            canRental /* xem trước giả lập gói Studio */
             bank={f.bank}
             sameDayContracts={[]}
             pricelist={f.pricelistRows}
@@ -293,6 +294,7 @@ export const SCREENS: Record<
             conflictByPhone={{}}
             staffList={f.staff}
             canAssign
+            canRental /* xem trước giả lập gói Studio */
             bank={f.bank}
             sameDayContracts={[]}
             pricelist={f.pricelistRows}
@@ -302,6 +304,42 @@ export const SCREENS: Record<
   },
   "hop-dong-makeup": {
     title: "Hợp đồng nhóm Makeup — ẩn tab Sản phẩm, hiện tab Thuê đồ",
+    render: () => (
+          <ContractEditor
+            contract={f.contractMakeup}
+            initialItems={f.contractItems}
+            initialCrew={f.contractCrew}
+            initialRequests={f.contractRequests}
+            initialPayments={f.contractPayments}
+            initialPlan={f.contractPlan}
+            initialTasks={f.contractTasks}
+            initialProducts={f.contractProducts}
+            initialExpenses={[]}
+            initialMilestones={f.milestones}
+            initialAppointments={f.contractAppointments}
+            initialQuoteOptions={[]}
+            initialClientProofs={f.clientProofs}
+            roster={f.roster}
+            galleries={[]}
+            selectionAlbums={[]}
+            ownerId="o1"
+            branches={f.branches}
+            studioName={f.studio.name}
+            studioPhone={f.studio.phone}
+            studioEmail={f.studio.email}
+            conflictByPhone={{}}
+            staffList={f.staff}
+            canAssign
+            canRental /* xem trước giả lập gói Studio */
+            bank={f.bank}
+            sameDayContracts={[]}
+            pricelist={f.pricelistRows}
+            initialTab="info"
+          />
+    ),
+  },
+  "hop-dong-makeup-goi-plus": {
+    title: "Hợp đồng Makeup ở gói Photographer Plus — KHÔNG có tab Thuê đồ",
     render: () => (
           <ContractEditor
             contract={f.contractMakeup}

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
+import { tierAllowsRental } from "@/lib/plans";
 import { getStudioHost } from "@/lib/studio-site";
 import { getFeatureFlags, storyComingSoon } from "@/lib/feature-flags";
 import { ensureIntakeToken } from "@/lib/contract-intake";
@@ -83,6 +84,9 @@ export default async function ContractPage(
     }
   }
   const canAssign = profile.actingRole !== "staff";
+  // Mục "Thuê đồ" chỉ gói Studio — hợp đồng mở từ gói Photographer Plus, mà kho
+  // đồ thì không. Xem planAllowsRental trong lib/plans.
+  const canRental = tierAllowsRental(profile.studioTier);
 
   // Everything below depends only on the contract id / owner (not on the
   // contract row's contents, except the event_date used by the two scheduling
@@ -208,6 +212,7 @@ export default async function ContractPage(
       initialQuoteOptions={(quoteOptions ?? []) as ContractQuoteOption[]}
       staffList={(staffList ?? []) as { id: string; full_name: string | null; email: string }[]}
       canAssign={canAssign}
+      canRental={canRental}
       initialClientProofs={(clientProofs ?? []) as { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[]}
       initialTab={searchParams?.tab}
     />

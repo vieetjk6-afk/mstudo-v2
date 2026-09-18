@@ -148,6 +148,27 @@ export function planAllowsFaceSearch(plan: Plan, isAdmin = false): boolean {
   return isAdmin || plan === "studio" || plan === "photographer_plus";
 }
 
+/**
+ * KHO ĐỒ / PHÒNG VÁY — và mục "Thuê đồ" bên trong hợp đồng: chỉ gói Studio.
+ *
+ * Màn Phòng váy vốn đã là Studio (requireStudio() mặc định minTier "full", và
+ * studio-nav ghi minTier "full"). Nhưng HỢP ĐỒNG mở từ gói Photographer Plus —
+ * nên nếu mục Thuê đồ trong hợp đồng không khoá theo, người gói Plus sẽ thấy
+ * một tab dẫn tới kho đồ mà họ không mở được: vào chỉ thấy kho trống, tạo đơn
+ * xong không có màn nào xem lại.
+ *
+ * Để luật ở đây chứ không viết `tier === "full"` rải rác: đổi gói sau này chỉ
+ * phải sửa một dòng.
+ */
+export function planAllowsRental(plan: Plan, isAdmin = false): boolean {
+  return studioTier(plan, isAdmin) === "full";
+}
+
+/** Như planAllowsRental nhưng nhận sẵn bậc đã tính (từ requireStudio). */
+export function tierAllowsRental(tier: StudioTier): boolean {
+  return tier === "full";
+}
+
 /** Album delivery phase (giao khách): every paid plan except free. */
 export function planAllowsDelivery(plan: Plan, isAdmin = false): boolean {
   return isAdmin || plan !== "free";

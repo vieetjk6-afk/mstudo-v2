@@ -223,6 +223,7 @@ export default function ContractEditor({
   initialQuoteOptions: _initialQuoteOptions,
   staffList,
   canAssign,
+  canRental = false,
   bank,
   sameDayContracts,
   pricelist,
@@ -264,6 +265,8 @@ export default function ContractEditor({
   initialQuoteOptions: ContractQuoteOption[];
   staffList: { id: string; full_name: string | null; email: string }[];
   canAssign: boolean;
+  /** Gói Studio mới có kho đồ — xem planAllowsRental trong lib/plans. */
+  canRental?: boolean;
   bank: BankInfo;
   sameDayContracts: { id: string; title: string; client_name: string | null }[];
   pricelist: { name: string; price: number; unit: string | null }[];
@@ -1396,7 +1399,7 @@ export default function ContractEditor({
          & hạn giao" và "Xử lý ảnh / video / in ấn"; hợp đồng makeup không có
          tấm ảnh nào nên mở ra chỉ thấy hai khối rỗng không dùng được. */
   const tabsHienThi = DETAIL_TABS.filter(([k]) => {
-    if (k === "rental") return kindHasRental(kind);
+    if (k === "rental") return kindHasRental(kind) && canRental;
     if (k === "album") return kindHasPhotoWork(kind);
     return true;
   });
@@ -1407,7 +1410,7 @@ export default function ContractEditor({
     // tabsHienThi dựng lại mỗi lần vẽ nên KHÔNG đưa vào deps: chỉ `kind` mới
     // thật sự làm dải tab đổi.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, kind]);
+  }, [tab, kind, canRental]);
 
   // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
   const lifecycle: ContractLifecycle = {
@@ -2615,7 +2618,7 @@ export default function ContractEditor({
               </>
             )}
 
-            {tab === "rental" && kindHasRental(kind) && (
+            {tab === "rental" && kindHasRental(kind) && canRental && (
               <ContractRentalPanel
                 contractId={contract.id}
                 ownerId={contract.owner_id}
