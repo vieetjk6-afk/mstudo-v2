@@ -51,7 +51,8 @@ import CalendarButtons from "@/components/CalendarButtons";
 import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
 import VietQRButton, { qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
-import { PRESET_ITEMS, PRESET_TASKS, nextContractCode } from "@/lib/contract-code";
+import { nextContractCode } from "@/lib/contract-code";
+import { contractKind, PRESET_ITEMS_BY_KIND, PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
 import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
 import { receiptNo, receiptPrintData, yearOf } from "@/lib/accounting";
 import { shootReminderMessage, instalmentReminderMessage } from "@/lib/zalo";
@@ -1360,6 +1361,11 @@ export default function ContractEditor({
 
   const openRequests = requests.filter((r) => r.status === "open");
 
+  /* Nhóm hợp đồng suy từ gói dịch vụ đang chọn (f.shoot_type), KHÔNG từ bản đã
+     lưu: studio đổi gói từ "Chụp ảnh" sang "Trang điểm" là danh sách gợi ý phải
+     đổi theo ngay, chứ không đợi bấm Lưu rồi tải lại trang. */
+  const kind = contractKind(f.shoot_type);
+
   // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
   const lifecycle: ContractLifecycle = {
     hasItems: items.length > 0,
@@ -1736,7 +1742,7 @@ export default function ContractEditor({
                     </button>
                   </div>
                 </div>
-                {(pricelist.length > 0 || PRESET_ITEMS.length > 0) && (
+                {(pricelist.length > 0 || PRESET_ITEMS_BY_KIND[kind].length > 0) && (
                   <div className="mb-4">
                     <p className="mb-1.5 text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>Thêm nhanh</p>
                     <div className="flex flex-wrap gap-1.5">
@@ -1745,7 +1751,7 @@ export default function ContractEditor({
                           + {p.name} · {vnd(p.price)}
                         </button>
                       ))}
-                      {PRESET_ITEMS.map((name) => (
+                      {PRESET_ITEMS_BY_KIND[kind].map((name) => (
                         <button key={name} type="button" onClick={() => setItems((prev) => [...prev, { name, qty: 1, unit_price: 0 }])} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
                           + {name}
                         </button>
@@ -2406,7 +2412,7 @@ export default function ContractEditor({
                   <button onClick={addTask} className="btn-ghost shrink-0"><Plus size={15} /></button>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  {PRESET_TASKS.filter((label) => !tasks.some((t) => t.label === label)).map((label) => (
+                  {PRESET_TASKS_BY_KIND[kind].filter((label) => !tasks.some((t) => t.label === label)).map((label) => (
                     <button key={label} type="button" onClick={() => addTaskLabel(label)} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
                       + {label}
                     </button>
