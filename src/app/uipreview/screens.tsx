@@ -28,6 +28,7 @@ import GalleryFaceDemo from "./GalleryFaceDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
+import NewContractForm from "@/app/dashboard/studio/contracts/new/NewContractForm";
 import * as f from "./fixtures";
 
 /**
@@ -97,6 +98,27 @@ export const SCREENS: Record<
   "hop-dong": {
     title: "Hợp đồng — danh sách",
     render: () => <ContractsList rows={f.contracts} studio={f.studio} />,
+  },
+
+  /* Màn TẠO hợp đồng — dựng chính component thật, không phải bản vẽ lại.
+     Ngoài việc xem trước, đây còn là sân khấu để
+     `scripts/huong-dan-tao-hop-dong.mjs` bấm qua đủ 5 bước rồi quay video và
+     chụp ảnh hướng dẫn: ảnh hướng dẫn vì thế luôn là giao diện THẬT, sửa form
+     là chạy lại script một lần có bộ ảnh mới. */
+  "tao-hop-dong": {
+    title: "Hợp đồng — màn tạo mới (5 bước, dữ liệu giả)",
+    render: () => (
+      <NewContractForm
+        ownerId="o1"
+        assignTo={null}
+        templates={f.ncTemplates}
+        services={f.ncServices}
+        packages={f.ncPackages}
+        roster={f.ncRoster}
+        recentClients={f.ncRecentClients}
+        bank={f.ncBank}
+      />
+    ),
   },
 
   /* Màn CHI TIẾT hợp đồng — màn studio ngồi lâu nhất và bị kêu rối nhất, mà

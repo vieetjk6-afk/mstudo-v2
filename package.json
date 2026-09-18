@@ -79,6 +79,7 @@
     "test:thong-bao-dich-den": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/thong-bao-dich-den.mjs",
     "inbox:zalo-worker": "node scripts/zalo-inbox-worker.mjs",
     "ui:shot": "node scripts/chup-giao-dien.mjs",
+    "huong-dan:hop-dong": "node --experimental-strip-types scripts/huong-dan-tao-hop-dong.mjs",
     "ui:test": "node scripts/kiem-tra-giao-dien.mjs",
     "postinstall": "node scripts/chep-mediapipe.mjs"
   },

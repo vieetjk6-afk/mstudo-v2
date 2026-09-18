@@ -8,6 +8,9 @@
 import type { BoardCard } from "@/app/dashboard/studio/board/BoardView";
 import type { ClientAgg } from "@/app/dashboard/studio/clients/ClientsView";
 import type { ContractRow } from "@/app/dashboard/studio/contracts/ContractsListView";
+import type {
+  PackageOption, RecentClient, ServiceOption, TemplateOption,
+} from "@/app/dashboard/studio/contracts/new/NewContractForm";
 import type { Lead } from "@/app/dashboard/studio/leads/LeadsView";
 import type { PayrollRow } from "@/app/dashboard/studio/payroll/PayrollView";
 import type { ProductRow } from "@/app/dashboard/studio/production/ProductionView";
@@ -22,6 +25,7 @@ import type {
   DiscountCode, StudioBooking, StudioEquipment, StudioExpense, StudioPackage, UpgradeRequest,
   StudioContract, ContractItem, ContractCrew, ContractPayment, ContractPaymentPlan,
   ContractTask, ContractProduct, ContractEditRequest, StudioCrew, StudioEvent, StudioAppointment,
+  CrewRole,
 } from "@/lib/types";
 
 /** Ngày cố định để ảnh chụp hai lần vẫn giống nhau (khỏi so nhầm khác biệt). */
@@ -513,3 +517,69 @@ export const rentalDons = [
     rental_order_items: [{ id: "ri4", name: "Mấn cô dâu đính ngọc trai", price: 300_000, qty: 1 }],
   },
 ] as const;
+
+/* ── Tạo hợp đồng · 5 bước ───────────────────────────────────────────────────
+   Bộ dữ liệu RIÊNG cho màn tạo hợp đồng, không dùng lại `pricelistRows` hay
+   `contracts` ở trên: màn này cần một bảng giá đủ nhiều dòng để thấy cách NHÓM
+   theo bảng giá và cách LỌC theo dịch vụ, mà vẫn ít hơn bảng giá thật để một
+   ảnh chụp đọc được hết.
+
+   Hai bảng giá ("cuoi" và "dinh-hon") là cố ý: chọn dịch vụ Cưới thì màn chỉ
+   còn gói của bảng "cuoi", và đường "xem tất cả" mới có gì để mở ra. */
+export const ncServices: ServiceOption[] = [
+  {
+    id: "svc-cuoi",
+    name: "Cưới",
+    clauses:
+      "1. Studio giao toàn bộ file gốc trong 7 ngày kể từ ngày chụp.\n" +
+      "2. Khách cọc 20% để giữ lịch; phần còn lại thanh toán khi giao sản phẩm.\n" +
+      "3. Huỷ lịch trước ngày chụp 15 ngày được hoàn 50% tiền cọc.",
+  },
+  {
+    id: "svc-dinh-hon",
+    name: "Đính hôn",
+    clauses: "1. Giao file gốc trong 5 ngày.\n2. Cọc 20% giữ lịch.",
+  },
+];
+
+export const ncPackages: PackageOption[] = [
+  { id: "pk-c1", list_key: "cuoi", name: "Phóng sự x1", price: 3_500_000, unit: "gói", category: "Gói chụp cơ bản", description: "1 thợ nhà gái · 150–200 hình chỉnh sửa" },
+  { id: "pk-c2", list_key: "cuoi", name: "Phóng sự x2", price: 6_000_000, unit: "gói", category: "Gói chụp cơ bản", description: "2 thợ nhà gái + nhà trai · 300–400 hình" },
+  { id: "pk-c3", list_key: "cuoi", name: "Gói combo chụp + quay", price: 13_500_000, unit: "gói", category: "Gói quay PS ngày cưới", description: "2 thợ chụp, 2 thợ quay, 1 flycam · tặng album 150 ảnh" },
+  { id: "pk-c4", list_key: "cuoi", name: "Album in 30x30 — 100 hình", price: 3_500_000, unit: "cuốn", category: "Phát sinh thêm", description: null },
+  { id: "pk-c5", list_key: "cuoi", name: "Thêm thợ chụp", price: 1_500_000, unit: "người", category: "Phát sinh thêm", description: null },
+  { id: "pk-c6", list_key: "cuoi", name: "Đãi trước 1 ngày", price: 1_000_000, unit: "buổi", category: "Phát sinh thêm", description: null },
+  { id: "pk-d1", list_key: "dinh-hon", name: "Phóng sự x1", price: 2_500_000, unit: "gói", category: "Gói chụp cơ bản", description: "1 thợ nhà gái · 100 hình chỉnh sửa" },
+  { id: "pk-d2", list_key: "dinh-hon", name: "Gói quay cơ bản", price: 3_500_000, unit: "gói", category: "Gói quay PS đính hôn", description: "Video 3–5 phút" },
+];
+
+/** Mẫu hợp đồng dựng sẵn — để ô "Tạo từ mẫu hợp đồng" của bước 2 có gì để chọn. */
+export const ncTemplates: TemplateOption[] = [
+  {
+    id: "tpl-1",
+    name: "Cưới trọn gói tiêu chuẩn",
+    shoot_type: "wedding",
+    note: null,
+    contract_template_items: [
+      { name: "Chụp phóng sự ngày cưới", qty: 1, unit_price: 6_000_000, position: 0 },
+      { name: "Quay phim phóng sự", qty: 1, unit_price: 4_000_000, position: 1 },
+    ],
+  },
+];
+
+/** Sổ thợ của bước 3 — đủ bốn vai để phần phân công không chỉ có một dòng. */
+export const ncRoster = [
+  { id: "sc1", name: "Trần Minh Quân", phone: "0987654321", role: "photographer" as CrewRole },
+  { id: "sc2", name: "Lê Thị Hồng Nhung", phone: "0901112223", role: "assistant" as CrewRole },
+  { id: "sc3", name: "Vũ Đức Anh", phone: "0933444555", role: "cameraman" as CrewRole },
+  { id: "sc4", name: "Ngô Bảo Châu", phone: "0966777888", role: "makeup" as CrewRole },
+];
+
+/** Khách cũ gộp sẵn — bước 1 chọn một dòng là tự điền tên + SĐT. */
+export const ncRecentClients: RecentClient[] = [
+  { name: "Nguyễn Thị Lan Phương", phone: "0912345678", last: D, count: 3 },
+  { name: "Trần Văn Bảo", phone: "0987654321", last: "2026-08-01", count: 1 },
+  { name: "Phạm Thu Hà", phone: "0977888999", last: "2026-10-02", count: 2 },
+];
+
+export const ncBank = { name: "Vietcombank", account: "0123456789", holder: "NGUYEN VAN A" };
