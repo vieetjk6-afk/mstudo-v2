@@ -52,7 +52,8 @@ import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
 import VietQRButton, { qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { nextContractCode } from "@/lib/contract-code";
-import { contractKind, PRESET_ITEMS_BY_KIND, PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
+import { contractKind, kindHasRental, PRESET_ITEMS_BY_KIND, PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
+import ContractRentalPanel from "./ContractRentalPanel";
 import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
 import { receiptNo, receiptPrintData, yearOf } from "@/lib/accounting";
 import { shootReminderMessage, instalmentReminderMessage } from "@/lib/zalo";
@@ -114,6 +115,8 @@ const DETAIL_TABS = [
   ["pay", "Thanh toán"],
   ["crew", "Nhân sự"],
   ["album", "Sản phẩm"],
+  // Chỉ hiện với hợp đồng nhóm "Makeup & thuê đồ" / "Trọn gói" — xem tabsHienThi.
+  ["rental", "Thuê đồ"],
   ["send", "Ký và thực hiện"],
 ] as const;
 type DetailTab = (typeof DETAIL_TABS)[number][0];
@@ -672,9 +675,14 @@ export default function ContractEditor({
 
   // ── Save contract fields ───────────────────────────────────────
   // ── Items ──────────────────────────────────────────────────────
-  async function saveItems() {
+  /**
+   * Lưu bảng hạng mục. Nhận THẲNG danh sách cần ghi thay vì đọc state, để chỗ
+   * gọi vừa sửa xong mảng là ghi được ngay — `setItems()` chưa kịp có hiệu lực
+   * ở lần chạy hiện tại (panel Thuê đồ cần đúng việc này).
+   */
+  async function luuHangMuc(list: ItemRow[]) {
     setBusy("items");
-    const clean = serializeItems(items);
+    const clean = serializeItems(list);
     await supabase.from("contract_items").delete().eq("contract_id", contract.id);
     if (clean.length) {
       const rows = clean.map((i, idx) => ({ ...i, contract_id: contract.id, position: idx }));
@@ -703,6 +711,23 @@ export default function ContractEditor({
     setItems((data ?? []).map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 })));
     setBusy(null);
     toast("Đã lưu hạng mục.");
+  }
+
+  /** Vỏ bọc KHÔNG tham số cho nút "Lưu hạng mục" — xem ghi chú ở luuHangMuc. */
+  async function saveItems() {
+    await luuHangMuc(items);
+  }
+
+  /**
+   * Thêm một hạng mục rồi ghi luôn. Panel Thuê đồ dùng hàm này: đơn thuê đã
+   * nằm trong database rồi, nên tiền thuê phải vào bảng hạng mục ngay — để
+   * sang lần Lưu sau thì studio có thể đã đóng trang, và trình sửa XOÁ SẠCH
+   * bảng hạng mục trước khi ghi lại nên dòng chèn từ nơi khác sẽ mất.
+   */
+  async function themHangMucVaLuu(name: string, unit_price: number) {
+    const moi: ItemRow[] = [...items, { name, qty: 1, unit_price } as ItemRow];
+    setItems(moi);
+    await luuHangMuc(moi);
   }
 
   // ── Crew ───────────────────────────────────────────────────────
@@ -1365,6 +1390,12 @@ export default function ContractEditor({
      lưu: studio đổi gói từ "Chụp ảnh" sang "Trang điểm" là danh sách gợi ý phải
      đổi theo ngay, chứ không đợi bấm Lưu rồi tải lại trang. */
   const kind = contractKind(f.shoot_type);
+  const tabsHienThi = DETAIL_TABS.filter(([k]) => k !== "rental" || kindHasRental(kind));
+  // Đang đứng ở tab Thuê đồ mà studio đổi gói sang nhóm chụp thì tab biến mất
+  // khỏi dải — không rơi về tab khác là màn trống trơn, không hiểu vì sao.
+  useEffect(() => {
+    if (tab === "rental" && !kindHasRental(kind)) setTab("info");
+  }, [tab, kind]);
 
   // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
   const lifecycle: ContractLifecycle = {
@@ -1608,7 +1639,7 @@ export default function ContractEditor({
               đậm 700 màu nhấn và có gạch chân 2px. Cuộn ngang trên màn hẹp
               thay vì bẻ dòng, để hàng tab luôn đọc được một mạch. */}
           <div role="tablist" aria-label="Nội dung hợp đồng" className="flex gap-0.5 overflow-x-auto rounded-[14px] px-3" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
-            {DETAIL_TABS.map(([key, label]) => {
+            {tabsHienThi.map(([key, label]) => {
               const on = tab === key;
               const badge =
                 key === "items" ? items.length :
@@ -2567,6 +2598,17 @@ export default function ContractEditor({
                 </div>
               </details>
               </>
+            )}
+
+            {tab === "rental" && kindHasRental(kind) && (
+              <ContractRentalPanel
+                contractId={contract.id}
+                ownerId={contract.owner_id}
+                clientName={f.client_name || ""}
+                clientPhone={f.client_phone || ""}
+                eventDate={f.event_date || null}
+                onThemHangMuc={themHangMucVaLuu}
+              />
             )}
 
             {/* Ký và thực hiện: form thông tin buổi chụp, brief khách gửi, chữ ký hai bên */}
