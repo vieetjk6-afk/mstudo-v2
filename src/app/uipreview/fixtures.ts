@@ -51,6 +51,16 @@ export const contracts: ContractRow[] = [
     event_date: "2026-08-01", event_time: null, status: "completed", shoot_type: "photo",
     contract_items: [{ qty: 40, unit_price: 350_000 }], contract_payments: [{ amount: 14_000_000 }], contract_crew: [],
   },
+  // Hợp đồng nghề MAKEUP — để dải lọc theo nghề ở danh sách hợp đồng có đủ ba
+  // nhóm. Thiếu nó thì dải chỉ ra hai nghề và không ai soi được nhóm thứ ba.
+  {
+    id: "c6", code: "HD2611", title: "Makeup cô dâu + thuê váy — nhà gái", client_name: "Phạm Thu Hà",
+    client_phone: "0977888999", event_date: "2026-10-02", event_time: "05:30",
+    status: "approved", shoot_type: "makeup",
+    contract_items: [{ qty: 1, unit_price: 3_500_000, name: "Makeup cô dâu" }, { qty: 1, unit_price: 4_500_000, name: "Thuê váy cưới" }],
+    contract_payments: [{ amount: 2_000_000 }],
+    contract_crew: [{ id: "k6", name: "Ngọc", role: "makeup", status: "accepted" }],
+  },
   // Đang hậu kỳ: đã chụp xong (ngày chụp ở quá khứ) nhưng chưa giao. Có mặt ở
   // đây để cột kanban mới và viên trạng thái tím thật sự hiện ra trong
   // /uipreview — trạng thái nào không có dữ liệu mẫu thì không ai soi được.

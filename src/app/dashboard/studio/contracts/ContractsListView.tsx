@@ -21,6 +21,7 @@ import {
   filterContracts, sortContracts, upcomingContracts, UPCOMING_DAYS,
   type ContractSort,
 } from "@/lib/contract-filter";
+import { contractKind, CONTRACT_KIND_LABEL, type ContractKind } from "@/lib/contract-kind";
 import {
   exportContracts,
   contractsCsvRows,
@@ -59,6 +60,21 @@ const SORT_OPTIONS: [ContractSort, string][] = [
  * CHỤP — đó là câu hỏi khác hẳn ("tuần này phải chuẩn bị gì"), và là câu studio
  * hỏi mỗi sáng, nên nó đứng ngay sau "Tất cả" chứ không nằm cuối hàng.
  */
+/**
+ * Lọc theo NGHỀ — trục thứ hai, độc lập với tab trạng thái.
+ *
+ * Để riêng một dải chứ không nhồi vào hàng tab trạng thái: hai thứ trả lời hai
+ * câu hỏi khác nhau ("hợp đồng nào đang chờ duyệt" và "xem việc makeup thôi"),
+ * trộn vào một hàng thì thành 10 nút và người dùng không đoán được bấm cái này
+ * có tắt cái kia không.
+ */
+const NGHE: [string, string][] = [
+  ["all", "Mọi nghề"],
+  ["shoot", CONTRACT_KIND_LABEL.shoot],
+  ["makeup", CONTRACT_KIND_LABEL.makeup],
+  ["combo", CONTRACT_KIND_LABEL.combo],
+];
+
 const UPCOMING_TAB = "upcoming";
 const TABS: [string, string][] = [
   ["all", "Tất cả"],
@@ -123,6 +139,7 @@ export function ContractsList({
 }) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<string>("all");
+  const [nghe, setNghe] = useState<string>("all");
   const [code, setCode] = useState("");
   // Khoảng NGÀY THỰC HIỆN (event_date). Cột kiểu date → "YYYY-MM-DD", so sánh
   // chuỗi là đúng thứ tự nên không cần parse ra Date.
@@ -134,13 +151,28 @@ export function ContractsList({
 
   // Lọc chung (tìm kiếm + mã + khoảng ngày) TRƯỚC khi chia tab, để số đếm trên
   // từng tab phản ánh đúng bộ lọc đang bật. Logic ở @/lib/contract-filter.
-  const matched = useMemo(() => filterContracts(rows, { q, code, from, to }), [rows, q, code, from, to]);
+  const loc = useMemo(() => filterContracts(rows, { q, code, from, to }), [rows, q, code, from, to]);
+  // Lọc nghề đứng TRƯỚC tab trạng thái, để số đếm trên từng tab trạng thái là
+  // số trong nghề đang xem — không thì bấm "Makeup" xong thấy tab "Đang chụp"
+  // ghi 12 mà danh sách chỉ có 2 dòng.
+  const matched = useMemo(
+    () => (nghe === "all" ? loc : loc.filter((c) => contractKind(c.shoot_type) === (nghe as ContractKind))),
+    [loc, nghe]
+  );
 
   // Hôm nay theo giờ VN, chốt một lần lúc mở màn: nếu tính lại mỗi lần render
   // thì danh sách "sắp tới" đổi ngay giữa chừng khi qua nửa đêm, mà người dùng
   // không hiểu vì sao một dòng vừa biến mất.
   const today = useMemo(() => todayVN(), []);
   const upcoming = useMemo(() => upcomingContracts(matched, today), [matched, today]);
+
+  /* Studio chỉ chụp ảnh thì dải lọc nghề là một hàng nút vô dụng — bộ lọc có
+     đúng một lựa chọn không phải bộ lọc. Chỉ hiện khi dữ liệu thật sự có từ hai
+     nghề trở lên. */
+  const ngheCoMat = useMemo(() => new Set(rows.map((c) => contractKind(c.shoot_type))), [rows]);
+
+  const demNghe = (key: string) =>
+    key === "all" ? loc.length : loc.filter((c) => contractKind(c.shoot_type) === (key as ContractKind)).length;
 
   const countOf = (key: string) =>
     key === "all" ? matched.length
@@ -191,6 +223,7 @@ export function ContractsList({
   /** Mô tả bộ lọc đang bật — in ở đầu file để biết file này là của kỳ/lát cắt nào. */
   function exportMeta(): string[] {
     const tabLabel = TABS.find(([k]) => k === tab)?.[1] || "Tất cả";
+    const ngheLabel = nghe === "all" ? "" : ` · ${NGHE.find(([k]) => k === nghe)?.[1] ?? ""}`;
     const bits = [
       q.trim() && `từ khoá "${q.trim()}"`,
       code.trim() && `mã "${code.trim()}"`,
@@ -198,7 +231,7 @@ export function ContractsList({
       to && `đến ngày ${to}`,
     ].filter(Boolean);
     return [
-      `Danh sách: ${tabLabel} · ${filtered.length} hợp đồng${bits.length ? ` · lọc theo ${bits.join(", ")}` : ""}`,
+      `Danh sách: ${tabLabel}${ngheLabel} · ${filtered.length} hợp đồng${bits.length ? ` · lọc theo ${bits.join(", ")}` : ""}`,
       `Ngày xuất: ${stamp()}`,
     ];
   }
@@ -221,6 +254,38 @@ export function ContractsList({
 
   return (
     <div className="page-in">
+      {ngheCoMat.size > 1 && (
+        <div
+          role="tablist"
+          aria-label="Lọc theo nghề"
+          // w-fit: co theo nội dung như dải trạng thái ngay dưới. Không có nó thì
+          // dải này kéo hết chiều ngang, thừa một khoảng trống dài bên phải.
+          className="hscroll mb-2.5 w-fit min-w-0 max-w-full gap-[3px] rounded-[11px] p-[3px]"
+          style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}
+        >
+          {NGHE.filter(([k]) => k === "all" || k === nghe || ngheCoMat.has(k as ContractKind)).map(([key, label]) => {
+            const on = nghe === key;
+            return (
+              <button
+                key={key}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setNghe(key)}
+                className="flex items-center gap-1.5 whitespace-nowrap rounded-[8px] px-[13px] py-[6.5px] text-[12.5px] font-semibold"
+                style={{
+                  color: on ? "var(--ac)" : "var(--tx2)",
+                  background: on ? "var(--sf)" : "transparent",
+                  boxShadow: on ? "0 1px 3px rgba(0,0,0,.10)" : "none",
+                }}
+              >
+                {label}
+                <span className="text-[11px] font-bold opacity-75">{demNghe(key)}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── Tab trạng thái + hành động ─────────────────────────────────── */}
       <div className="mb-3.5 flex flex-wrap items-center gap-2.5">
         {/* hscroll: 5 tab không vừa bề ngang điện thoại. Trước đây chúng xuống
