@@ -1454,6 +1454,9 @@ create table if not exists public.studio_services (
   owner_id   uuid not null references public.profiles (id) on delete cascade,
   name       text not null default 'Dịch vụ',
   clauses    text not null default '',
+  -- Loại dịch vụ của gói này. NULL = "mọi loại" (dịch vụ dùng chung).
+  -- Xem migrations/service_shoot_type.sql.
+  shoot_type text,
   position   integer not null default 0,
   active     boolean not null default true,
   created_at timestamptz not null default now()

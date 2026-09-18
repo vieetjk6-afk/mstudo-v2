@@ -75,6 +75,7 @@ const ORDER = [
   ["migrations/contract_item_description.sql", "Mô tả chi tiết cho từng hạng mục hợp đồng"],
   ["migrations/contract_post_production.sql", "Trạng thái hợp đồng \"Đang hậu kỳ\" (chạy SAU schema.sql)"],
   ["migrations/crew_role_makeup.sql", "Vai trò nhân sự Trang điểm / Làm tóc (chạy SAU schema.sql)"],
+  ["migrations/service_shoot_type.sql", "Gắn loại dịch vụ cho từng dịch vụ (chạy SAU schema.sql)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];

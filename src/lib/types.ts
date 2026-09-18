@@ -301,6 +301,8 @@ export interface StudioService {
   owner_id: string;
   name: string;
   clauses: string;
+  /** Loại dịch vụ. null = "mọi loại" — dịch vụ dùng chung, luôn hiện ra. */
+  shoot_type: ShootType | null;
   position: number;
   active: boolean;
   created_at: string;

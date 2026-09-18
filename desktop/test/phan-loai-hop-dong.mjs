@@ -17,7 +17,7 @@
 import {
   contractKind, shootTypesByKind, kindHasRental, kindHasPhotoWork,
   CONTRACT_KIND_LABEL, PRESET_ITEMS_BY_KIND, DEFAULT_TASKS_BY_KIND, PRESET_TASKS_BY_KIND,
-  CREW_ROLES_BY_KIND,
+  CREW_ROLES_BY_KIND, dichVuHopLeVoiLoai, chonDichVuTheoLoai,
 } from "../../src/lib/contract-kind.ts";
 import { SHOOT_TYPES, SHOOT_TYPE_LABEL, CREW_ROLE_LABEL } from "../../src/lib/types.ts";
 
@@ -136,6 +136,44 @@ ok("đọc được ràng buộc vai trò của contract_crew", rang.includes("p
 for (const r of Object.keys(CREW_ROLE_LABEL)) {
   ok(`database chấp nhận vai trò "${r}"`, rang.includes(`'${r}'`), `ràng buộc đang là: ${rang.replace(/\s+/g, " ")}`);
 }
+
+/* ── 6. Chọn điều khoản theo loại dịch vụ ─────────────────────────────────── */
+
+// Ba trạng thái của một dịch vụ: gắn đúng loại, gắn loại khác, chưa gắn (null).
+const DV = [
+  { id: "a", shoot_type: "photo" },
+  { id: "b", shoot_type: "makeup" },
+  { id: "c", shoot_type: null },      // "mọi loại" — dịch vụ có sẵn từ trước
+];
+
+check("loại photo → chọn đúng dịch vụ photo", chonDichVuTheoLoai(DV, "photo"), "a");
+check("loại makeup → chọn đúng dịch vụ makeup", chonDichVuTheoLoai(DV, "makeup"), "b");
+// Không có dịch vụ nào gắn "video" → rơi về dịch vụ "mọi loại".
+check("loại không ai gắn → rơi về dịch vụ mọi loại", chonDichVuTheoLoai(DV, "video"), "c");
+check("không dịch vụ nào hợp → trả rỗng",
+  chonDichVuTheoLoai([{ id: "b", shoot_type: "makeup" }], "photo"), "");
+check("studio chưa có dịch vụ nào → trả rỗng", chonDichVuTheoLoai([], "photo"), "");
+
+// GIỮ lựa chọn của người dùng nếu còn hợp lệ — không thì studio vừa tay đổi
+// sang điều khoản khác lại bị kéo về mặc định, sửa không nổi.
+check("đang chọn dịch vụ mọi loại, vẫn hợp lệ → GIỮ nguyên",
+  chonDichVuTheoLoai(DV, "photo", "c"), "c");
+check("đang chọn dịch vụ của loại khác → đổi sang loại đúng",
+  chonDichVuTheoLoai(DV, "photo", "b"), "a");
+check("đang chọn id không tồn tại → chọn lại",
+  chonDichVuTheoLoai(DV, "photo", "xxx"), "a");
+
+// Dịch vụ chưa gắn loại phải lọt ở MỌI loại — đây là trạng thái của toàn bộ
+// dịch vụ có sẵn trước khi thêm cột shoot_type. Siết lại là studio đang chạy
+// mất sạch điều khoản và bảng giá.
+for (const t of ["photo", "makeup", "wedding", "rental", "other"]) {
+  ok(`dịch vụ "mọi loại" vẫn hiện ở loại ${t}`,
+    dichVuHopLeVoiLoai(DV, t).some((x) => x.id === "c"));
+}
+check("lọc theo photo: chỉ dịch vụ photo và mọi loại",
+  dichVuHopLeVoiLoai(DV, "photo").map((x) => x.id), ["a", "c"]);
+check("lọc theo makeup: chỉ dịch vụ makeup và mọi loại",
+  dichVuHopLeVoiLoai(DV, "makeup").map((x) => x.id), ["b", "c"]);
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

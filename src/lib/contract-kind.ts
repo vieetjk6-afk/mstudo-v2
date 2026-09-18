@@ -138,3 +138,40 @@ export const CREW_ROLES_BY_KIND: Record<ContractKind, CrewRole[]> = {
   makeup: ["makeup", "hair", "assistant", "other"],
   combo: ["photographer", "cameraman", "makeup", "hair", "editor", "assistant", "other"],
 };
+
+/** Dịch vụ của studio, phần cần để chọn theo loại. */
+type DichVuCoLoai = { id: string; shoot_type?: ShootType | null };
+
+/**
+ * Dịch vụ HỢP LỆ với một loại dịch vụ: gắn đúng loại, hoặc chưa gắn loại nào.
+ *
+ * Chưa gắn = "mọi loại". Cố ý cho lọt: mọi dịch vụ có sẵn trước khi thêm cột
+ * `shoot_type` đều đang null, siết lại là studio đang chạy mất sạch điều khoản
+ * và bảng giá mà không hiểu vì sao.
+ */
+export function dichVuHopLeVoiLoai<T extends DichVuCoLoai>(services: T[], shootType: ShootType): T[] {
+  return services.filter((x) => !x.shoot_type || x.shoot_type === shootType);
+}
+
+/**
+ * Chọn điều khoản nào khi studio đổi loại dịch vụ ở màn tạo hợp đồng.
+ *
+ * Thứ tự ưu tiên, dừng ở cái đầu tiên có:
+ *   1. Dịch vụ gắn ĐÚNG loại đó.
+ *   2. Dịch vụ "mọi loại" (chưa gắn) đầu tiên.
+ *   3. Không có gì — trả "" để bước Gói dịch vụ hiện lối tạo bảng giá cho loại này.
+ *
+ * `dangChon` là dịch vụ studio đang chọn: còn hợp lệ thì GIỮ NGUYÊN. Không giữ
+ * thì studio vừa tay đổi sang một điều khoản khác lại bị kéo về mặc định ngay
+ * lập tức — sửa không nổi.
+ */
+export function chonDichVuTheoLoai<T extends DichVuCoLoai>(
+  services: T[],
+  shootType: ShootType,
+  dangChon?: string
+): string {
+  const hopLe = dichVuHopLeVoiLoai(services, shootType);
+  if (dangChon && hopLe.some((x) => x.id === dangChon)) return dangChon;
+  const dung = services.find((x) => x.shoot_type === shootType);
+  return dung?.id ?? hopLe[0]?.id ?? "";
+}

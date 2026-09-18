@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { SHOOT_TYPE_LABEL, SHOOT_TYPES, type ShootType } from "@/lib/types";
+import { contractKind, shootTypesByKind, CONTRACT_KIND_LABEL, type ContractKind } from "@/lib/contract-kind";
 import { Plus, Trash2, Check, FileText, Wand2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
@@ -23,6 +25,9 @@ export default function ServicesManager({
   const sel = services.find((s) => s.id === selId) || null;
   const [name, setName] = useState(sel?.name ?? "");
   const [clauses, setClauses] = useState(sel?.clauses ?? "");
+  // "" = mọi loại (cột shoot_type để null).
+  const [loai, setLoai] = useState<string>(sel?.shoot_type ?? "");
+  const nhomDichVu = shootTypesByKind(SHOOT_TYPES);
 
   function toast(m: string) {
     setMsg(m);
@@ -33,6 +38,7 @@ export default function ServicesManager({
     setSelId(s.id);
     setName(s.name);
     setClauses(s.clauses);
+    setLoai(s.shoot_type ?? "");
   }
 
   async function createService() {
@@ -56,7 +62,8 @@ export default function ServicesManager({
   async function saveService() {
     if (!sel) return;
     setBusy(true);
-    const patch = { name: name.trim() || "Dịch vụ", clauses };
+    // Ép kiểu: ô chọn giữ chuỗi rỗng cho "mọi loại", còn cột là ShootType | null.
+    const patch = { name: name.trim() || "Dịch vụ", clauses, shoot_type: (loai || null) as ShootType | null };
     await supabase.from("studio_services").update(patch).eq("id", sel.id);
     setServices((p) => p.map((s) => (s.id === sel.id ? { ...s, ...patch } : s)));
     setBusy(false);
@@ -73,6 +80,7 @@ export default function ServicesManager({
       setSelId(first?.id ?? null);
       setName(first?.name ?? "");
       setClauses(first?.clauses ?? "");
+      setLoai(first?.shoot_type ?? "");
     }
   }
 
@@ -144,6 +152,26 @@ export default function ServicesManager({
               <div className="field mb-4">
                 <label className="label">Tên dịch vụ</label>
                 <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="VD: Chụp phóng sự cưới" />
+              </div>
+              {/* Loại dịch vụ — sợi dây nối dịch vụ này với màn tạo hợp đồng.
+                  Chọn loại ở bước 1 của trình tạo hợp đồng thì điều khoản này tự
+                  được chọn, và bảng giá của nó hiện lên; loại khác thì ẩn đi.
+                  "Mọi loại" giữ nguyên nếp cũ: luôn hiện dù chọn loại nào. */}
+              <div className="field mb-4">
+                <label className="label">Loại dịch vụ</label>
+                <select className="input" value={loai} onChange={(e) => setLoai(e.target.value)}>
+                  <option value="">Mọi loại (luôn hiện)</option>
+                  {(Object.keys(nhomDichVu) as ContractKind[]).map((k) => (
+                    <optgroup key={k} label={CONTRACT_KIND_LABEL[k]}>
+                      {nhomDichVu[k].map((t) => <option key={t} value={t}>{SHOOT_TYPE_LABEL[t]}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  {loai
+                    ? `Tạo hợp đồng chọn "${SHOOT_TYPE_LABEL[loai as ShootType]}" (nhóm ${CONTRACT_KIND_LABEL[contractKind(loai as ShootType)]}) là tự nhảy vào dịch vụ này.`
+                    : "Chưa gắn loại thì dịch vụ này hiện ra ở mọi loại — gắn vào để bảng giá tự lọc theo loại khách đặt."}
+                </p>
               </div>
               <div className="field">
                 <div className="mb-1 flex items-center justify-between">

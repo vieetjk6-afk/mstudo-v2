@@ -37,7 +37,7 @@ export default async function NewContractPage() {
         .order("created_at", { ascending: false }),
       supabase
         .from("studio_services")
-        .select("id, name, clauses")
+        .select("id, name, clauses, shoot_type")
         .eq("owner_id", profile.id)
         .eq("active", true)
         .order("position", { ascending: true }),

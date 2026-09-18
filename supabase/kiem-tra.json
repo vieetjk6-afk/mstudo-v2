@@ -641,6 +641,14 @@
       "cot": [
         "contract_items.description"
       ]
+    },
+    {
+      "file": "migrations/service_shoot_type.sql",
+      "mo_ta": "Gắn loại dịch vụ cho từng dịch vụ (chạy SAU schema.sql)",
+      "bang": [],
+      "cot": [
+        "studio_services.shoot_type"
+      ]
     }
   ]
 }

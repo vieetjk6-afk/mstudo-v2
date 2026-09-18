@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DateInput from "@/components/DateInput";
 import TimeInput from "@/components/TimeInput";
 import MoneyInput from "@/components/MoneyInput";
@@ -36,7 +36,10 @@ import {
   type ShootType,
 } from "@/lib/types";
 import { nextContractCode } from "@/lib/contract-code";
-import { contractKind, shootTypesByKind, CONTRACT_KIND_LABEL, DEFAULT_TASKS_BY_KIND, type ContractKind } from "@/lib/contract-kind";
+import {
+  contractKind, shootTypesByKind, dichVuHopLeVoiLoai, chonDichVuTheoLoai,
+  CONTRACT_KIND_LABEL, DEFAULT_TASKS_BY_KIND, type ContractKind,
+} from "@/lib/contract-kind";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { computeRoundedDeposit } from "@/lib/quote-deposit";
 import {
@@ -61,7 +64,13 @@ export type TemplateOption = {
   contract_template_items: { name: string; qty: number; unit_price: number; position: number }[];
 };
 
-export type ServiceOption = { id: string; name: string; clauses: string };
+export type ServiceOption = {
+  id: string;
+  name: string;
+  clauses: string;
+  /** Loại dịch vụ gắn ở Cấu hình → Dịch vụ. null = "mọi loại" (luôn hiện). */
+  shoot_type?: ShootType | null;
+};
 
 /** Gói dịch vụ lấy từ bảng giá (studio_pricelist, price > 0). */
 export type PackageOption = {
@@ -89,6 +98,11 @@ type Instalment = { label: string; amount: number; due: string };
    theo dịch vụ đã chọn, còn hạng mục gợi ý và việc gieo sẵn thì theo nhóm
    nghề của nó. Trước đây nó nằm lẫn trong bước Gói dịch vụ — studio chọn gói
    xong mới thấy ô loại dịch vụ ngay bên cạnh, tức là chọn ngược. */
+/** Loại dịch vụ mặc định của hợp đồng mới — khớp với default của cột
+ *  studio_contracts.shoot_type. Hai chỗ dùng (ô chọn loại, và việc chọn sẵn
+ *  điều khoản hợp với nó) phải đọc CÙNG một hằng, không thì lệch nhau âm thầm. */
+const LOAI_MAC_DINH: ShootType = "photo";
+
 const STEPS = [
   { icon: Package, label: "Loại dịch vụ", title: "Khách đặt dịch vụ gì?", hint: "Chọn trước để mọi bước sau bám theo: gói dịch vụ, hạng mục gợi ý và việc cần làm đều đổi theo lựa chọn này." },
   { icon: User, label: "Khách hàng", title: "Hợp đồng này của ai?", hint: "Gõ số điện thoại để tìm khách cũ — hoặc chọn từ danh sách gần đây." },
@@ -109,6 +123,7 @@ export default function NewContractForm({
   recentClients = [],
   bank,
   listLabels = {},
+  initialStep = 0,
 }: {
   ownerId: string;
   assignTo: string | null;
@@ -127,9 +142,12 @@ export default function NewContractForm({
   bank?: { name: string | null; account: string | null; holder: string | null };
   /** Nhãn studio tự đặt cho từng bảng giá (profiles.pl_list_labels). */
   listLabels?: Record<string, string>;
+  /** Mở thẳng vào một bước. Dùng cho /uipreview — cùng khuôn với initialTab của
+   *  màn chi tiết hợp đồng: không có nó thì chỉ soi được bước đầu. */
+  initialStep?: number;
 }) {
   const router = useRouter();
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(initialStep);
 
   // ── Bước 2 — khách hàng ──────────────────────────────────────────────────
   const [clientQuery, setClientQuery] = useState("");
@@ -137,11 +155,14 @@ export default function NewContractForm({
   const [clientPhone, setClientPhone] = useState("");
 
   // ── Bước 3 — gói & hạng mục ─────────────────────────────────────────────
-  const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
+  /* Chọn sẵn điều khoản hợp với loại dịch vụ mặc định NGAY từ lần vẽ đầu.
+     Lấy services[0] rồi để effect sửa lại thì lần vẽ đầu loé lên điều khoản của
+     nghề khác — và nếu vì lý do nào đó effect chưa chạy, nó đứng sai luôn. */
+  const [serviceId, setServiceId] = useState(() => chonDichVuTheoLoai(services, LOAI_MAC_DINH));
   // Bảng giá lọc theo loại dịch vụ đang chọn. Bật cờ này để xem lại TẤT CẢ —
   // lối thoát khi bảng giá không đặt theo dịch vụ nên lọc ra ít hơn mong đợi.
   const [showAllLists, setShowAllLists] = useState(false);
-  const [shootType, setShootType] = useState<ShootType>("photo");
+  const [shootType, setShootType] = useState<ShootType>(LOAI_MAC_DINH);
   const [templateId, setTemplateId] = useState("");
   const [mainPkgId, setMainPkgId] = useState("");
   const [extraIds, setExtraIds] = useState<string[]>([]);
@@ -177,6 +198,27 @@ export default function NewContractForm({
   const [err, setErr] = useState<string | null>(null);
 
   const selectedService = services.find((s) => s.id === serviceId) || null;
+
+  /* Dịch vụ HỢP LỆ với loại đang chọn: gắn đúng loại, hoặc chưa gắn loại nào
+     ("mọi loại"). Dịch vụ chưa gắn vẫn hiện — studio đang chạy không bị mất
+     điều khoản chỉ vì chưa kịp vào Cấu hình gắn loại. */
+  const dichVuHopLe = useMemo(() => dichVuHopLeVoiLoai(services, shootType), [services, shootType]);
+
+  /* Đổi loại dịch vụ → tự nhảy sang điều khoản của loại đó.
+     Ưu tiên dịch vụ gắn ĐÚNG loại; không có thì lấy dịch vụ "mọi loại" đầu
+     tiên; không có nữa thì bỏ trống (bước Gói dịch vụ sẽ hiện lối tạo bảng giá
+     cho loại này). Chỉ đổi khi dịch vụ đang chọn KHÔNG còn hợp lệ — không thì
+     studio vừa tay chọn một điều khoản khác lại bị nhảy về mặc định. */
+  useEffect(() => {
+    const nen = chonDichVuTheoLoai(services, shootType, serviceId);
+    if (nen === serviceId) return;
+    setServiceId(nen);
+    // Đổi điều khoản thì gói đã chọn của điều khoản cũ không còn nghĩa.
+    setMainPkgId("");
+    setExtraIds([]);
+    setPkgPrice({});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shootType, services]);
   const template = templates.find((t) => t.id === templateId) || null;
   const nhomDichVu = shootTypesByKind(SHOOT_TYPES);
   const mainPkg = packages.find((p) => p.id === mainPkgId) || null;
@@ -254,10 +296,21 @@ export default function NewContractForm({
      `studio_pricelist.list_key` là khoá KỸ THUẬT: có thể là id của dịch vụ (khi
      studio tạo bảng giá riêng cho dịch vụ đó), hoặc slug dựng sẵn/tự đặt
      ("cuoi", "dinh-hon"). Nên dò theo ba đường: trùng id → trùng slug hoá từ
-     tên dịch vụ → trùng nhãn hiển thị. Không đường nào khớp thì trả null và
-     giữ nguyên toàn bộ bảng giá — thà hiện thừa còn hơn hiện ra màn trống. */
+     tên dịch vụ → trùng nhãn hiển thị.
+
+     TRẢ VỀ TẬP RỖNG (không phải null) khi có dịch vụ mà không gói nào khớp:
+     chọn "Trang điểm" thì tuyệt đối KHÔNG được đổ ra nguyên bảng giá chụp
+     cưới. Bước Gói dịch vụ bắt tập rỗng này để hiện lối đi khác — gõ gói riêng
+     ở ngay trên, hoặc tạo bảng giá cho loại đó.
+
+     Chỉ trả null khi CHƯA CHỌN dịch vụ nào (studio chưa cấu hình dịch vụ) —
+     lúc đó không có gì để lọc, giữ nguyên cả bảng giá như trước. */
   const serviceListKeys = useMemo(() => {
-    if (!selectedService) return null;
+    /* Studio CÓ cấu hình dịch vụ nhưng không cái nào hợp với loại đang chọn →
+       tập rỗng, tức ẩn hết bảng giá. Trả null ở đây là lỗ hổng: chọn "Trang
+       điểm" mà studio chưa có dịch vụ trang điểm thì lại đổ ra nguyên bảng giá
+       chụp cưới — đúng thứ cần tránh. */
+    if (!selectedService) return services.length > 0 ? new Set<string>() : null;
     const name = noAccent(selectedService.name.trim());
     const slug = name.replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     const keys = new Set<string>();
@@ -267,8 +320,8 @@ export default function NewContractForm({
         keys.add(key);
       }
     }
-    return keys.size ? keys : null;
-  }, [packages, selectedService, listLabel]);
+    return keys;
+  }, [packages, selectedService, services.length, listLabel]);
 
   const filteringLists = !!serviceListKeys && !showAllLists;
   const visiblePackages = useMemo(
@@ -681,7 +734,8 @@ export default function NewContractForm({
                 <div>
                   <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-svc">Điều khoản áp dụng</label>
                   <select id="nc-svc" className={inputCls} style={inputStyle} value={serviceId} onChange={(e) => changeService(e.target.value)}>
-                    {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {dichVuHopLe.length === 0 && <option value="">— Chưa có điều khoản cho loại này —</option>}
+                    {dichVuHopLe.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
                     Quyết định điều khoản in vào hợp đồng, và bảng giá hiện ra ở bước Gói dịch vụ.
@@ -797,14 +851,111 @@ export default function NewContractForm({
         {/* ── Bước 3 · Gói dịch vụ ────────────────────────────────────────── */}
         {step === 2 && (
           <div>
+            {/* GÓI RIÊNG ĐỨNG TRÊN BẢNG GIÁ. Trước đây nó nằm dưới cùng, sau cả
+                danh sách bảng giá dài — studio muốn gõ một gói ngoài bảng giá
+                phải cuộn qua hết mọi gói không liên quan. Và đây là đường đi
+                DUY NHẤT khi bảng giá chưa có gì cho loại dịch vụ đang chọn, nên
+                càng phải thấy ngay. */}
+            {/* ── Gói riêng ───────────────────────────────────────────────────
+                Gói KHÔNG có trong bảng giá: khách đặt thêm một buổi chụp lạ,
+                gộp combo theo thoả thuận riêng, hay thuê một món thiết bị cho
+                đúng lần này. Trước đây studio phải tạo hợp đồng rồi mở màn chi
+                tiết mới thêm được hạng mục — mà bước Thanh toán ở đây đã chia
+                cọc theo tổng, nên cọc chia thiếu ngay từ lúc tạo. Cũng là đường
+                đi duy nhất khi bảng giá còn trống. */}
+            <div>
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className={eyebrow} style={eyebrowStyle}>Gói riêng (không có trong bảng giá)</p>
+                {customLines.length > 0 && (
+                  <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>Chỉ dùng cho hợp đồng này</span>
+                )}
+              </div>
+              <div className="grid gap-2">
+                {customLines.map((c, i) => (
+                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-[11px] px-3 py-2.5" style={{ border: "1px solid var(--bd)" }}>
+                    <input
+                      className="min-w-[150px] flex-1 rounded-[8px] px-2.5 py-2 text-[13px] font-semibold"
+                      style={inputStyle}
+                      value={c.name}
+                      aria-label={`Tên gói riêng ${i + 1}`}
+                      placeholder="VD: Chụp thêm buổi ở Đà Lạt"
+                      onChange={(e) => patchCustomLine(i, { name: e.target.value })}
+                    />
+                    <span className="flex flex-none items-center gap-1.5">
+                      <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>SL</span>
+                      <input
+                        type="number"
+                        min={1}
+                        className="tnum w-[62px] rounded-[8px] px-2 py-2 text-center text-[13px] font-semibold"
+                        style={inputStyle}
+                        value={c.qty}
+                        aria-label={`Số lượng gói riêng ${i + 1}`}
+                        onChange={(e) => patchCustomLine(i, { qty: Number(e.target.value) })}
+                      />
+                    </span>
+                    <MoneyInput
+                      value={c.unit_price}
+                      onChange={(n) => patchCustomLine(i, { unit_price: n })}
+                      placeholder="Đơn giá"
+                      ariaLabel={`Đơn giá gói riêng ${i + 1}`}
+                      className="tnum w-[124px] flex-none rounded-[8px] px-2.5 py-2 text-right text-[13px] font-bold"
+                      style={inputStyle}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeCustomLine(i)}
+                      aria-label={`Bỏ gói riêng ${i + 1}`}
+                      className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
+                      style={{ color: "var(--tx3)" }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addCustomLine}
+                  className="flex items-center justify-center gap-1.5 rounded-[11px] py-3 text-[12.5px] font-semibold"
+                  style={{ border: "1.5px dashed var(--bd)", color: "var(--tx2)" }}
+                >
+                  <Plus size={16} /> Nhập gói riêng
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-[22px] border-t pt-[18px]" style={{ borderColor: "var(--bd)" }} />
+
             {packages.length === 0 ? (
               <div className="rounded-[11px] px-4 py-5 text-center" style={{ border: "1px dashed var(--bd)" }}>
                 <p className="text-[13px] font-semibold">Bảng giá đang trống</p>
                 <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                   Thêm gói vào{" "}
                   <Link href="/dashboard/studio/pricing" className="font-semibold underline" style={{ color: "var(--ac)" }}>bảng giá</Link>{" "}
-                  để chọn nhanh ở đây — hoặc dùng mẫu hợp đồng, hoặc nhập <b>gói riêng</b> ngay bên dưới.
+                  để chọn nhanh ở đây — hoặc dùng mẫu hợp đồng, hoặc nhập <b>gói riêng</b> ngay bên trên.
                 </p>
+              </div>
+            ) : filteringLists && visiblePackages.length === 0 ? (
+              /* Bảng giá CÓ gói, nhưng không gói nào thuộc loại dịch vụ đang
+                 chọn. Không im lặng đổ ra gói của nghề khác, cũng không để màn
+                 trống trơn — chỉ rõ đang thiếu gì và ba đường đi tiếp. */
+              <div className="rounded-[11px] px-4 py-5 text-center" style={{ border: "1px dashed var(--bd)" }}>
+                <p className="text-[13px] font-semibold">
+                  Bảng giá chưa có gói nào cho “{SHOOT_TYPE_LABEL[shootType]}”
+                </p>
+                <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  Gõ <b>gói riêng</b> ở ngay trên cho hợp đồng này, hoặc{" "}
+                  <Link href="/dashboard/studio/pricing" className="font-semibold underline" style={{ color: "var(--ac)" }}>
+                    tạo bảng giá cho {SHOOT_TYPE_LABEL[shootType].toLowerCase()}
+                  </Link>{" "}
+                  để lần sau chọn nhanh.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowAllLists(true)}
+                  className="btn-ghost mt-3 px-2.5 py-1.5 text-xs"
+                >
+                  Xem hết bảng giá
+                </button>
               </div>
             ) : (
               <>
@@ -949,72 +1100,6 @@ export default function NewContractForm({
               </>
             )}
 
-            {/* ── Gói riêng ───────────────────────────────────────────────────
-                Gói KHÔNG có trong bảng giá: khách đặt thêm một buổi chụp lạ,
-                gộp combo theo thoả thuận riêng, hay thuê một món thiết bị cho
-                đúng lần này. Trước đây studio phải tạo hợp đồng rồi mở màn chi
-                tiết mới thêm được hạng mục — mà bước Thanh toán ở đây đã chia
-                cọc theo tổng, nên cọc chia thiếu ngay từ lúc tạo. Cũng là đường
-                đi duy nhất khi bảng giá còn trống. */}
-            <div className="mt-[18px]">
-              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                <p className={eyebrow} style={eyebrowStyle}>Gói riêng (không có trong bảng giá)</p>
-                {customLines.length > 0 && (
-                  <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>Chỉ dùng cho hợp đồng này</span>
-                )}
-              </div>
-              <div className="grid gap-2">
-                {customLines.map((c, i) => (
-                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-[11px] px-3 py-2.5" style={{ border: "1px solid var(--bd)" }}>
-                    <input
-                      className="min-w-[150px] flex-1 rounded-[8px] px-2.5 py-2 text-[13px] font-semibold"
-                      style={inputStyle}
-                      value={c.name}
-                      aria-label={`Tên gói riêng ${i + 1}`}
-                      placeholder="VD: Chụp thêm buổi ở Đà Lạt"
-                      onChange={(e) => patchCustomLine(i, { name: e.target.value })}
-                    />
-                    <span className="flex flex-none items-center gap-1.5">
-                      <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>SL</span>
-                      <input
-                        type="number"
-                        min={1}
-                        className="tnum w-[62px] rounded-[8px] px-2 py-2 text-center text-[13px] font-semibold"
-                        style={inputStyle}
-                        value={c.qty}
-                        aria-label={`Số lượng gói riêng ${i + 1}`}
-                        onChange={(e) => patchCustomLine(i, { qty: Number(e.target.value) })}
-                      />
-                    </span>
-                    <MoneyInput
-                      value={c.unit_price}
-                      onChange={(n) => patchCustomLine(i, { unit_price: n })}
-                      placeholder="Đơn giá"
-                      ariaLabel={`Đơn giá gói riêng ${i + 1}`}
-                      className="tnum w-[124px] flex-none rounded-[8px] px-2.5 py-2 text-right text-[13px] font-bold"
-                      style={inputStyle}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeCustomLine(i)}
-                      aria-label={`Bỏ gói riêng ${i + 1}`}
-                      className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
-                      style={{ color: "var(--tx3)" }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addCustomLine}
-                  className="flex items-center justify-center gap-1.5 rounded-[11px] py-3 text-[12.5px] font-semibold"
-                  style={{ border: "1.5px dashed var(--bd)", color: "var(--tx2)" }}
-                >
-                  <Plus size={16} /> Nhập gói riêng
-                </button>
-              </div>
-            </div>
 
             {lines.length > 0 && (
               <div className="mt-4 flex items-baseline justify-between rounded-[11px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>

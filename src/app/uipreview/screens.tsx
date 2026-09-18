@@ -389,6 +389,38 @@ export const SCREENS: Record<
       />
     ),
   },
+  "hop-dong-moi-goi": {
+    title: "Tạo hợp đồng — bước 3: Gói riêng đứng trên bảng giá",
+    render: () => (
+      <NewContractForm
+        ownerId="o1"
+        assignTo={null}
+        templates={[]}
+        services={f.dichVu}
+        packages={f.goiDichVu}
+        roster={f.roster}
+        recentClients={f.khachGanDay}
+        bank={f.bank}
+        initialStep={2}
+      />
+    ),
+  },
+  "hop-dong-moi-chua-co-goi": {
+    title: "Tạo hợp đồng — bước 3: loại dịch vụ này chưa có gói nào",
+    render: () => (
+      <NewContractForm
+        ownerId="o1"
+        assignTo={null}
+        templates={[]}
+        services={[f.dichVu[1]]}
+        packages={f.goiDichVu}
+        roster={f.roster}
+        recentClients={f.khachGanDay}
+        bank={f.bank}
+        initialStep={2}
+      />
+    ),
+  },
   "hop-dong-thue-do": {
     title: "Hợp đồng · Thuê đồ (có đơn)",
     render: () => <ThueDoDemo />,

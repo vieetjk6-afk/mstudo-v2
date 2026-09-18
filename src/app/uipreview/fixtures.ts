@@ -518,8 +518,11 @@ export const rentalDons = [
    Bảng giá cố tình thuộc HAI dịch vụ khác nhau, để soi được việc "gói dịch vụ
    hiện theo loại dịch vụ": chọn dịch vụ nào thì chỉ còn gói của dịch vụ đó. */
 export const dichVu = [
-  { id: "sv-cuoi", name: "Chụp cưới trọn gói", clauses: "Cọc 20%, thanh toán đủ khi giao file." },
-  { id: "sv-makeup", name: "Trang điểm & thuê đồ", clauses: "Cọc giữ đồ, hoàn khi trả đủ." },
+  { id: "sv-cuoi", name: "Chụp cưới trọn gói", clauses: "Cọc 20%, thanh toán đủ khi giao file.", shoot_type: "photo" as const },
+  { id: "sv-makeup", name: "Trang điểm & thuê đồ", clauses: "Cọc giữ đồ, hoàn khi trả đủ.", shoot_type: "makeup" as const },
+  // Dịch vụ CHƯA gắn loại — luôn hiện ra dù chọn loại nào. Đây là trạng thái
+  // của mọi dịch vụ đã có sẵn trước khi studio vào gắn loại.
+  { id: "sv-chung", name: "Dịch vụ lẻ", clauses: "Theo thoả thuận.", shoot_type: null },
 ];
 
 export const goiDichVu = [
