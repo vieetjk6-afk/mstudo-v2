@@ -365,12 +365,16 @@ export default function NewContractForm({
     setClientPhone(c.phone);
   }
   /** Chọn/bỏ gói chính. Bỏ chọn thì xoá luôn giá đã sửa của gói đó. */
-  function pickMain(id: string) {
-    const off = mainPkgId === id;
-    setMainPkgId(off ? "" : id);
+  /** Chọn gói chính từ ô đổ xuống. Khác pickMain ở chỗ KHÔNG bật/tắt: chọn lại
+   *  đúng gói đang chọn mà nó tự bỏ chọn thì không ai hiểu chuyện gì xảy ra. */
+  function chonGoiChinh(id: string) {
+    if (id === mainPkgId) return;
+    // Bỏ chọn hẳn thì trả giá gói cũ về bảng giá — giống nút cũ bấm lần hai.
+    if (!id && mainPkgId) clearPkgPrice(mainPkgId);
+    setMainPkgId(id);
     setExtraIds((prev) => prev.filter((x) => x !== id));
-    if (off) clearPkgPrice(id);
   }
+
   function toggleExtra(id: string) {
     const off = extraIds.includes(id);
     setExtraIds((prev) => (off ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -979,73 +983,70 @@ export default function NewContractForm({
                 <p className="mb-2 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                   Chọn gói rồi <b>sửa thẳng ô giá</b> nếu đã thương lượng khác bảng giá — bảng giá gốc không đổi.
                 </p>
-                <div className="grid min-w-0 gap-2">
-                  {packageGroups.map(([key, list]) => (
-                    <div key={key} className="grid min-w-0 gap-2">
-                      {packageGroups.length > 1 && (
-                        <p className="mt-1 truncate text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>{listLabel(key)}</p>
+                {/* MENU ĐỔ XUỐNG thay cho danh sách thẻ. Studio có vài chục gói thì
+                    danh sách thẻ dài hơn cả màn hình, phải cuộn mới thấy hết —
+                    mà đây chỉ là chọn MỘT gói. Nhóm bảng giá thành <optgroup>,
+                    nên vẫn thấy gói nào thuộc bảng giá nào.
+                    Phần sửa giá và mô tả không mất, chỉ dời xuống ngay dưới ô
+                    chọn — và chỉ hiện cho gói đang chọn, đúng cái cần đọc. */}
+                <select
+                  className={inputCls}
+                  style={inputStyle}
+                  aria-label="Gói chính"
+                  value={mainPkgId}
+                  onChange={(e) => chonGoiChinh(e.target.value)}
+                >
+                  <option value="">— Chưa chọn gói —</option>
+                  {packageGroups.length > 1
+                    ? packageGroups.map(([key, list]) => (
+                        <optgroup key={key} label={listLabel(key)}>
+                          {list.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name} · {vnd(p.price)}</option>
+                          ))}
+                        </optgroup>
+                      ))
+                    : packageGroups[0]?.[1].map((p) => (
+                        <option key={p.id} value={p.id}>{p.name} · {vnd(p.price)}</option>
+                      ))}
+                </select>
+
+                {mainPkg && (
+                  <div
+                    className="mt-2 flex flex-wrap items-center gap-2 rounded-[11px] p-3"
+                    style={{ border: "1px solid var(--ac)", background: "var(--acS)" }}
+                  >
+                    <span className="min-w-0 flex-1 text-[11.5px]" style={{ color: "var(--tx2)" }}>
+                      {priceEdited(mainPkg)
+                        ? `Giá bảng giá ${vnd(mainPkg.price)} — đang dùng giá sửa`
+                        : [mainPkg.category, mainPkg.description, mainPkg.unit].filter(Boolean).join(" · ") ||
+                          "Gói trong bảng giá"}
+                    </span>
+                    <span className="flex flex-none items-center gap-1">
+                      <MoneyInput
+                        value={priceOf(mainPkg)}
+                        onChange={(n) => setPkgPriceFor(mainPkg.id, n)}
+                        placeholder="Giá"
+                        ariaLabel={`Giá gói ${mainPkg.name}`}
+                        className="tnum h-9 w-[124px] rounded-[8px] px-2.5 text-right text-[13px] font-bold"
+                        style={{ border: "1px solid var(--bd)", background: "var(--sf)", color: "var(--tx)" }}
+                      />
+                      {priceEdited(mainPkg) && (
+                        <button
+                          type="button"
+                          onClick={() => clearPkgPrice(mainPkg.id)}
+                          aria-label={`Hoàn giá bảng giá cho ${mainPkg.name}`}
+                          title={`Hoàn về ${vnd(mainPkg.price)}`}
+                          /* h-9 w-9 cho bằng đúng ô giá bên cạnh — hai điều khiển
+                             cùng hàng mà lệch chiều cao là lỗi ui:test vẫn bắt. */
+                          className="flex h-9 w-9 flex-none items-center justify-center rounded-[8px]"
+                          style={{ color: "var(--tx3)" }}
+                        >
+                          <RotateCcw size={15} />
+                        </button>
                       )}
-                      {list.map((p) => {
-                        const on = mainPkgId === p.id;
-                        const edited = priceEdited(p);
-                        return (
-                          /* Không còn là MỘT nút: gói đã chọn phải sửa được giá
-                             ngay tại chỗ, mà <input> không đặt trong <button>
-                             được (bấm vào ô là bấm cả nút). Nên tách: nút chọn
-                             chiếm phần tên, ô giá nằm ngoài nút. */
-                          <div
-                            key={p.id}
-                            className="flex min-w-0 items-center gap-2 rounded-[11px] pr-2.5"
-                            style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => pickMain(p.id)}
-                              className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3.5 text-left"
-                              aria-pressed={on}
-                            >
-                              <Package size={19} style={{ flex: "none", color: on ? "var(--ac)" : "var(--tx3)" }} />
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-[13.5px] font-semibold">{p.name}</span>
-                                <span className="block truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                                  {on && edited
-                                    ? `Giá bảng giá ${vnd(p.price)} — đang dùng giá sửa`
-                                    : [p.category, p.description, p.unit].filter(Boolean).join(" · ") || "Gói trong bảng giá"}
-                                </span>
-                              </span>
-                            </button>
-                            {on ? (
-                              <span className="flex flex-none items-center gap-1">
-                                <MoneyInput
-                                  value={priceOf(p)}
-                                  onChange={(n) => setPkgPriceFor(p.id, n)}
-                                  placeholder="Giá"
-                                  ariaLabel={`Giá gói ${p.name}`}
-                                  className="tnum w-[112px] rounded-[8px] px-2.5 py-2 text-right text-[13px] font-bold"
-                                  style={{ border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" }}
-                                />
-                                {edited && (
-                                  <button
-                                    type="button"
-                                    onClick={() => clearPkgPrice(p.id)}
-                                    aria-label={`Hoàn giá bảng giá cho ${p.name}`}
-                                    title={`Hoàn về ${vnd(p.price)}`}
-                                    className="flex h-7 w-7 flex-none items-center justify-center rounded-[8px]"
-                                    style={{ color: "var(--tx3)" }}
-                                  >
-                                    <RotateCcw size={15} />
-                                  </button>
-                                )}
-                              </span>
-                            ) : (
-                              <strong className="tnum flex-none whitespace-nowrap text-[13.5px]">{vnd(p.price)}</strong>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
+                    </span>
+                  </div>
+                )}
 
                 <p className={`mb-2 mt-[18px] ${eyebrow}`} style={eyebrowStyle}>Hạng mục thêm</p>
                 <div className="grid gap-2 sm:grid-cols-2">
