@@ -101,7 +101,9 @@ export default function PackagesManager({
                       </div>
                       <button onClick={() => remove(p.id)} aria-label="Xoá thẻ buổi" className="btn-ghost px-2.5 py-1.5 text-xs"><Trash2 size={14} /></button>
                     </div>
-                    <div className="mt-3 flex items-center justify-between">
+                    {/* flex-wrap + gap: thanh tiến độ rộng cố định 160px cộng
+                        hai nút không bẻ dòng thì màn 390px không đủ chỗ. */}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <p className="font-serif text-lg font-medium" style={{ color: remaining > 0 ? "var(--text)" : "var(--s-red)" }}>
                           Còn {remaining}/{p.total_sessions} buổi

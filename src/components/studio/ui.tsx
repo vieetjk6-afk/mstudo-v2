@@ -93,8 +93,14 @@ export function StatCard({
           <Icon size={19} />
         </span>
         {delta ? (
+          /* min-w-0 + truncate chứ KHÔNG flex-none: lưới thẻ số là 2 cột kể cả
+             trên điện thoại, nên ở khổ 320px mỗi thẻ chỉ còn ~106px chỗ trống —
+             viên "khách chưa thấy" rộng 102px cộng ô icon là lòi ra, đẩy CẢ
+             TRANG kéo ngang được. Cho nó co lại và cắt bớt thì các thẻ vẫn cao
+             bằng nhau; title giữ nguyên chữ đầy đủ. */
           <span
-            className="flex-none whitespace-nowrap rounded-[20px] px-[7px] py-[3px] text-[10.5px] font-bold"
+            title={delta}
+            className="min-w-0 truncate rounded-[20px] px-[7px] py-[3px] text-[10.5px] font-bold"
             style={{ background: TONE[deltaTone].soft, color: TONE[deltaTone].fg }}
           >
             {delta}

@@ -1722,9 +1722,12 @@ export default function ContractEditor({
               <>
               {/* Items */}
               <div className="card p-6">
-                <div className="mb-4 flex items-center justify-between gap-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-serif text-lg font-medium">Hạng mục &amp; báo giá</h2>
-                  <div className="flex items-center gap-1.5">
+                  {/* flex-wrap: hai nút này không co được (chữ trong nút không
+                      bẻ dòng), nên màn 320px phải cho chúng xuống dòng — không
+                      thì cả trang kéo ngang được 50px. */}
+                  <div className="flex flex-wrap items-center gap-1.5">
                     <button onClick={() => setItems((p) => [...p, { name: "", qty: 1, unit_price: 0 }])} className="btn-ghost px-2.5 py-1.5 text-xs">
                       <Plus size={14} /> Thêm hạng mục
                     </button>
@@ -1738,12 +1741,12 @@ export default function ContractEditor({
                     <p className="mb-1.5 text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>Thêm nhanh</p>
                     <div className="flex flex-wrap gap-1.5">
                       {pricelist.map((p, i) => (
-                        <button key={`pl${i}`} type="button" onClick={() => setItems((prev) => [...prev, { name: p.name, qty: 1, unit_price: p.price }])} className="rounded-full px-2.5 py-1 text-xs" style={{ border: "1px solid var(--border2)", color: "var(--text2)" }}>
+                        <button key={`pl${i}`} type="button" onClick={() => setItems((prev) => [...prev, { name: p.name, qty: 1, unit_price: p.price }])} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px solid var(--border2)", color: "var(--text2)" }}>
                           + {p.name} · {vnd(p.price)}
                         </button>
                       ))}
                       {PRESET_ITEMS.map((name) => (
-                        <button key={name} type="button" onClick={() => setItems((prev) => [...prev, { name, qty: 1, unit_price: 0 }])} className="rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
+                        <button key={name} type="button" onClick={() => setItems((prev) => [...prev, { name, qty: 1, unit_price: 0 }])} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
                           + {name}
                         </button>
                       ))}
@@ -2065,12 +2068,12 @@ export default function ContractEditor({
                 {/* Quick amounts */}
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {QUICK_AMOUNTS.map((a) => (
-                    <button key={a} onClick={() => setPlanForm((p) => ({ ...p, amount: a }))} className="rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
+                    <button key={a} onClick={() => setPlanForm((p) => ({ ...p, amount: a }))} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}>
                       {vnd(a)}
                     </button>
                   ))}
                   {balance > 0 && (
-                    <button onClick={() => setPlanForm((p) => ({ ...p, amount: balance }))} className="rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>
+                    <button onClick={() => setPlanForm((p) => ({ ...p, amount: balance }))} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--accent)" }}>
                       Còn lại · {vnd(balance)}
                     </button>
                   )}
@@ -2240,7 +2243,7 @@ export default function ContractEditor({
                           if (clash && !confirm(`${r.name || r.phone} ${clash.toLowerCase()} ngày ${f.event_date}.\n\nVẫn gán người này?`)) return;
                           setCrew((p) => [...p, { name: r.name, phone: r.phone, role: r.role, salary: 0, note: "" }]);
                         }}
-                        className="rounded-full px-2.5 py-1 text-xs"
+                        className="max-w-full truncate rounded-full px-2.5 py-1 text-xs"
                         style={{ background: "var(--surface2)", border: conflictFor(r.phone) ? "1px solid var(--s-red)" : "1px solid var(--border)" }}
                         title={conflictFor(r.phone) ?? undefined}
                       >
@@ -2404,7 +2407,7 @@ export default function ContractEditor({
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {PRESET_TASKS.filter((label) => !tasks.some((t) => t.label === label)).map((label) => (
-                    <button key={label} type="button" onClick={() => addTaskLabel(label)} className="rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
+                    <button key={label} type="button" onClick={() => addTaskLabel(label)} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
                       + {label}
                     </button>
                   ))}
@@ -2472,7 +2475,7 @@ export default function ContractEditor({
                 <p className="mb-3 text-xs" style={{ color: "var(--text3)" }}>Các nội dung cần xử lý &amp; sản phẩm — quản lý &amp; giao việc ở mục “Xử lý hình ảnh”.</p>
                 <div className="mb-4 flex flex-wrap gap-1.5">
                   {["Xử lý hình ảnh", "Xử lý video", "In ấn album", "In ấn ảnh", "Ép gỗ / khung"].map((name) => (
-                    <button key={name} type="button" onClick={() => setProdForm((p) => ({ ...p, name }))} className="rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
+                    <button key={name} type="button" onClick={() => setProdForm((p) => ({ ...p, name }))} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
                       + {name}
                     </button>
                   ))}

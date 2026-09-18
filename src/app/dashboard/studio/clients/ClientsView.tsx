@@ -130,7 +130,7 @@ export default function ClientsView({ clients, studio }: { clients: ClientAgg[];
     downloadCsv(clientsCsvRows(studio, exportRows(), exportMeta()), "khach-hang");
   }
 
-  const btn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
+  const btn = "flex h-input flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
   const btnStyle = { border: "1px solid var(--bd)", background: "var(--sf)" };
 
   if (clients.length === 0) {
@@ -175,7 +175,9 @@ export default function ClientsView({ clients, studio }: { clients: ClientAgg[];
           <input className="input pl-9" placeholder="Tên hoặc số điện thoại…" aria-label="Tìm khách hàng" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <select
-          className="input w-auto flex-none py-2 text-[12.5px]"
+          // Không ghi đè đệm/cỡ chữ: ô này đứng cạnh ô tìm kiếm trong cùng
+          // một hàng, ghi đè vào là thấp hơn nó 10px, nhìn so le.
+          className="input w-auto flex-none"
           aria-label="Sắp xếp khách hàng"
           value={sort}
           onChange={(e) => setSort(e.target.value as "recent" | "value" | "count")}

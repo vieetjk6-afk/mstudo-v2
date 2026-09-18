@@ -103,7 +103,7 @@ export default function DiscountCodes({ initial }: { initial: DiscountCode[] }) 
         <Field label="Hạn dùng">
           <DateInput wrapperClassName="w-36" value={form.expires} onChange={(v) => setForm({ ...form, expires: v })} />
         </Field>
-        <button onClick={addCode} className="btn-primary self-end"><Plus size={14} /> Thêm mã</button>
+        <button onClick={addCode} className="btn-primary h-input self-end"><Plus size={14} /> Thêm mã</button>
       </div>
       <button
         type="button"
