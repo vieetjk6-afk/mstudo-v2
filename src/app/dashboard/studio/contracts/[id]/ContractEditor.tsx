@@ -52,7 +52,7 @@ import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
 import VietQRButton, { qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { nextContractCode } from "@/lib/contract-code";
-import { contractKind, kindHasRental, PRESET_ITEMS_BY_KIND, PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
+import { contractKind, kindHasRental, kindHasPhotoWork, CREW_ROLES_BY_KIND, PRESET_ITEMS_BY_KIND, PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
 import ContractRentalPanel from "./ContractRentalPanel";
 import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
 import { receiptNo, receiptPrintData, yearOf } from "@/lib/accounting";
@@ -223,6 +223,7 @@ export default function ContractEditor({
   initialQuoteOptions: _initialQuoteOptions,
   staffList,
   canAssign,
+  canRental = false,
   bank,
   sameDayContracts,
   pricelist,
@@ -264,6 +265,8 @@ export default function ContractEditor({
   initialQuoteOptions: ContractQuoteOption[];
   staffList: { id: string; full_name: string | null; email: string }[];
   canAssign: boolean;
+  /** Gói Studio mới có kho đồ — xem planAllowsRental trong lib/plans. */
+  canRental?: boolean;
   bank: BankInfo;
   sameDayContracts: { id: string; title: string; client_name: string | null }[];
   pricelist: { name: string; price: number; unit: string | null }[];
@@ -1390,12 +1393,24 @@ export default function ContractEditor({
      lưu: studio đổi gói từ "Chụp ảnh" sang "Trang điểm" là danh sách gợi ý phải
      đổi theo ngay, chứ không đợi bấm Lưu rồi tải lại trang. */
   const kind = contractKind(f.shoot_type);
-  const tabsHienThi = DETAIL_TABS.filter(([k]) => k !== "rental" || kindHasRental(kind));
-  // Đang đứng ở tab Thuê đồ mà studio đổi gói sang nhóm chụp thì tab biến mất
-  // khỏi dải — không rơi về tab khác là màn trống trơn, không hiểu vì sao.
+  /* Tab hiện ra theo NGHỀ của hợp đồng:
+       · "Thuê đồ"   — chỉ makeup & trọn gói.
+       · "Sản phẩm"  — chỉ nhóm có hậu kỳ ảnh. Tab này chỉ có "Album khách hàng
+         & hạn giao" và "Xử lý ảnh / video / in ấn"; hợp đồng makeup không có
+         tấm ảnh nào nên mở ra chỉ thấy hai khối rỗng không dùng được. */
+  const tabsHienThi = DETAIL_TABS.filter(([k]) => {
+    if (k === "rental") return kindHasRental(kind) && canRental;
+    if (k === "album") return kindHasPhotoWork(kind);
+    return true;
+  });
+  // Đang đứng ở một tab mà studio đổi gói dịch vụ khiến tab đó biến mất khỏi
+  // dải thì phải rơi về tab khác — không thì màn trống trơn, không hiểu vì sao.
   useEffect(() => {
-    if (tab === "rental" && !kindHasRental(kind)) setTab("info");
-  }, [tab, kind]);
+    if (!tabsHienThi.some(([k]) => k === tab)) setTab("info");
+    // tabsHienThi dựng lại mỗi lần vẽ nên KHÔNG đưa vào deps: chỉ `kind` mới
+    // thật sự làm dải tab đổi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, kind, canRental]);
 
   // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
   const lifecycle: ContractLifecycle = {
@@ -1590,6 +1605,7 @@ export default function ContractEditor({
       <div className="mb-3.5">
         <ContractStepper
           state={lifecycle}
+          kind={kind}
           right={
             <label className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
               Trạng thái
@@ -2302,7 +2318,9 @@ export default function ContractEditor({
                             <input className="input sm:col-span-4" placeholder="Tên" value={c.name} onChange={(e) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x)))} />
                             <input className="input sm:col-span-3" placeholder="SĐT" value={c.phone} onChange={(e) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, phone: e.target.value } : x)))} />
                             <select className="input sm:col-span-3" value={c.role} onChange={(e) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, role: e.target.value as CrewRole } : x)))}>
-                              {(Object.keys(CREW_ROLE_LABEL) as CrewRole[]).map((k) => (
+                              {/* Lọc theo nhóm: hợp đồng chụp không cần "Trang
+                                  điểm", hợp đồng makeup không cần "Cameraman". */}
+                              {CREW_ROLES_BY_KIND[kind].map((k) => (
                                 <option key={k} value={k}>{CREW_ROLE_LABEL[k]}</option>
                               ))}
                             </select>
@@ -2600,7 +2618,7 @@ export default function ContractEditor({
               </>
             )}
 
-            {tab === "rental" && kindHasRental(kind) && (
+            {tab === "rental" && kindHasRental(kind) && canRental && (
               <ContractRentalPanel
                 contractId={contract.id}
                 ownerId={contract.owner_id}

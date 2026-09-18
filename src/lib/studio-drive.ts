@@ -1,6 +1,7 @@
 import "server-only";
 import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { contractKind, kindHasPhotoWork } from "@/lib/contract-kind";
 import { signOAuthState, verifyOAuthState } from "@/lib/oauth-state";
 import { contractBaseName } from "@/lib/desktop/contract-doc";
 import { cleanFolderName, serviceFolderName, monthFolderName, contractFolderSegments } from "@/lib/desktop/contract-path";
@@ -513,11 +514,17 @@ export async function wireContractAlbums(
   //   - Album GIAO KHÁCH: chỉ tạo khi HĐ "hoàn thành".
   const inProduction =
     contract.status === "in_progress" || contract.status === "post_production" || contract.status === "completed";
+  /* Hợp đồng makeup / thuê đồ KHÔNG có ảnh nào để chọn hay giao, nên đừng tạo
+     album và thư mục Drive cho nó — tạo ra là rác trong thư viện, và kéo theo
+     cả chuỗi nhắc "mời khách chọn ảnh" qua Zalo cho một hợp đồng không có ảnh.
+     Chỉ chặn đường SUY RA MẶC ĐỊNH: chỗ nào truyền thẳng `opts.phases` là studio
+     chủ động yêu cầu, vẫn làm như thường. */
+  const coHauKyAnh = kindHasPhotoWork(contractKind(contract.shoot_type as never));
   const phases =
     opts?.phases ??
     ([
-      ...(inProduction ? ["selection"] : []),
-      ...(contract.status === "completed" ? ["delivery"] : []),
+      ...(inProduction && coHauKyAnh ? ["selection"] : []),
+      ...(contract.status === "completed" && coHauKyAnh ? ["delivery"] : []),
     ] as ("selection" | "delivery")[]);
   const wantSel = phases.includes("selection");
   const wantDel = phases.includes("delivery");

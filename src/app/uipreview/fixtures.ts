@@ -51,6 +51,16 @@ export const contracts: ContractRow[] = [
     event_date: "2026-08-01", event_time: null, status: "completed", shoot_type: "photo",
     contract_items: [{ qty: 40, unit_price: 350_000 }], contract_payments: [{ amount: 14_000_000 }], contract_crew: [],
   },
+  // Hợp đồng nghề MAKEUP — để dải lọc theo nghề ở danh sách hợp đồng có đủ ba
+  // nhóm. Thiếu nó thì dải chỉ ra hai nghề và không ai soi được nhóm thứ ba.
+  {
+    id: "c6", code: "HD2611", title: "Makeup cô dâu + thuê váy — nhà gái", client_name: "Phạm Thu Hà",
+    client_phone: "0977888999", event_date: "2026-10-02", event_time: "05:30",
+    status: "approved", shoot_type: "makeup",
+    contract_items: [{ qty: 1, unit_price: 3_500_000, name: "Makeup cô dâu" }, { qty: 1, unit_price: 4_500_000, name: "Thuê váy cưới" }],
+    contract_payments: [{ amount: 2_000_000 }],
+    contract_crew: [{ id: "k6", name: "Ngọc", role: "makeup", status: "accepted" }],
+  },
   // Đang hậu kỳ: đã chụp xong (ngày chụp ở quá khứ) nhưng chưa giao. Có mặt ở
   // đây để cột kanban mới và viên trạng thái tím thật sự hiện ra trong
   // /uipreview — trạng thái nào không có dữ liệu mẫu thì không ai soi được.
@@ -384,6 +394,27 @@ export const contractFull: StudioContract = {
   brief_note: null, brief_submitted_at: null, chosen_quote_option_id: null,
   chosen_quote_at: null, intake_token: null, intake: null, intake_submitted_at: null,
   branch_id: "b1", created_at: `${D}T08:00:00Z`, updated_at: `${D}T09:12:00Z`,
+};
+
+/* Cùng một hợp đồng nhưng nhóm MAKEUP — để soi được phần app phải ẨN đi: không
+   tab "Sản phẩm", có tab "Thuê đồ", và ba bước cuối của thang vòng đời đổi chữ.
+   Không có dữ liệu mẫu cho nhóm này thì khác biệt đó không ai nhìn thấy. */
+export const contractMakeup: StudioContract = {
+  ...contractFull,
+  id: "c9",
+  code: "HD2611",
+  title: "Makeup cô dâu + thuê váy — nhà gái",
+  shoot_type: "makeup",
+};
+
+/* Nhóm CHỤP — soi phần phải ẩn ở chiều ngược lại: có tab "Sản phẩm", KHÔNG có
+   tab "Thuê đồ", và không viên hạng mục makeup nào. */
+export const contractChup: StudioContract = {
+  ...contractFull,
+  id: "c8",
+  code: "HD2612",
+  title: "Chụp kỷ yếu lớp 12A3 — 45 bạn",
+  shoot_type: "photo",
 };
 
 export const contractItems: ContractItem[] = [

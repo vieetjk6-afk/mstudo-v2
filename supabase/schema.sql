@@ -780,7 +780,8 @@ create table if not exists public.contract_crew (
   name         text not null default '',
   phone        text,                          -- crew identify themselves by phone
   role         text not null default 'photographer'
-                 check (role in ('photographer', 'cameraman', 'assistant', 'editor', 'other')),
+                 check (role in ('photographer', 'cameraman', 'makeup', 'hair',
+                                 'assistant', 'editor', 'other')),
   salary       integer not null default 0,    -- lương theo hợp đồng (VND)
   status       text not null default 'pending'
                  check (status in ('pending', 'accepted', 'declined')),
