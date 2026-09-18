@@ -24,6 +24,7 @@ import {
   CircleAlert,
   Landmark,
   RotateCcw,
+  ReceiptText,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -79,13 +80,19 @@ export type RecentClient = { name: string; phone: string; last: string | null; c
 type CrewPick = { id: string; name: string; phone: string; role: CrewRole; salary: number };
 type Instalment = { label: string; amount: number; due: string };
 
-/* ── 5 bước của bản thiết kế ────────────────────────────────────────────────
+/* ── 6 bước của bản thiết kế ────────────────────────────────────────────────
    Mỗi bước là MỘT câu hỏi, hỏi đúng thứ tự studio vẫn hỏi khách qua điện
-   thoại: của ai → chụp gói nào → khi nào & ai đi → trả tiền thế nào → soát
-   lại. Không nhồi tất cả vào một form dài như bản cũ. */
+   thoại: làm dịch vụ gì → của ai → gói nào → khi nào & ai đi → trả tiền thế
+   nào → soát lại. Không nhồi tất cả vào một form dài như bản cũ.
+
+   LOẠI DỊCH VỤ ĐỨNG ĐẦU vì mọi bước sau bám theo nó: bảng giá hiện ra lọc
+   theo dịch vụ đã chọn, còn hạng mục gợi ý và việc gieo sẵn thì theo nhóm
+   nghề của nó. Trước đây nó nằm lẫn trong bước Gói dịch vụ — studio chọn gói
+   xong mới thấy ô loại dịch vụ ngay bên cạnh, tức là chọn ngược. */
 const STEPS = [
+  { icon: Package, label: "Loại dịch vụ", title: "Khách đặt dịch vụ gì?", hint: "Chọn trước để mọi bước sau bám theo: gói dịch vụ, hạng mục gợi ý và việc cần làm đều đổi theo lựa chọn này." },
   { icon: User, label: "Khách hàng", title: "Hợp đồng này của ai?", hint: "Gõ số điện thoại để tìm khách cũ — hoặc chọn từ danh sách gần đây." },
-  { icon: Package, label: "Gói dịch vụ", title: "Khách chụp gói nào?", hint: "Chọn 1 gói chính, tick thêm hạng mục phát sinh — sửa được giá từng gói, hoặc nhập gói riêng ngoài bảng giá." },
+  { icon: ReceiptText, label: "Gói dịch vụ", title: "Khách chọn gói nào?", hint: "Chọn 1 gói chính, tick thêm hạng mục phát sinh — sửa được giá từng gói, hoặc nhập gói riêng ngoài bảng giá." },
   { icon: CalendarDays, label: "Lịch & nhân sự", title: "Chụp khi nào, ai đi?", hint: "Chọn ngày giờ, địa điểm rồi phân công người đi chụp." },
   { icon: Wallet, label: "Thanh toán", title: "Khách trả tiền thế nào?", hint: "Chia đợt thu — mỗi đợt có hạn riêng để nhắc khách." },
   { icon: ClipboardCheck, label: "Kiểm tra", title: "Kiểm tra lần cuối", hint: "Bấm vào dòng bất kỳ để quay lại sửa." },
@@ -107,7 +114,7 @@ export default function NewContractForm({
   assignTo: string | null;
   /**
    * Chi nhánh đang xem trên thanh trên cùng. Hợp đồng mới THỪA HƯỞNG cơ sở đó
-   * thay vì hỏi thêm một bước — luồng tạo hợp đồng đã 5 bước, và người đang xem
+   * thay vì hỏi thêm một bước — luồng tạo hợp đồng đã 6 bước, và người đang xem
    * "Chi nhánh Quận 1" thì gần như chắc chắn đang tạo hợp đồng cho Quận 1. Đổi
    * lại được ở màn chi tiết hợp đồng.
    */
@@ -124,12 +131,12 @@ export default function NewContractForm({
   const router = useRouter();
   const [step, setStep] = useState(0);
 
-  // ── Bước 1 — khách hàng ──────────────────────────────────────────────────
+  // ── Bước 2 — khách hàng ──────────────────────────────────────────────────
   const [clientQuery, setClientQuery] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
 
-  // ── Bước 2 — gói & hạng mục ─────────────────────────────────────────────
+  // ── Bước 3 — gói & hạng mục ─────────────────────────────────────────────
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   // Bảng giá lọc theo loại dịch vụ đang chọn. Bật cờ này để xem lại TẤT CẢ —
   // lối thoát khi bảng giá không đặt theo dịch vụ nên lọc ra ít hơn mong đợi.
@@ -150,14 +157,14 @@ export default function NewContractForm({
      chung chỉ làm bảng giá rác dần. */
   const [customLines, setCustomLines] = useState<LineCustom[]>([]);
 
-  // ── Bước 3 — lịch & nhân sự ─────────────────────────────────────────────
+  // ── Bước 4 — lịch & nhân sự ─────────────────────────────────────────────
   const [eventDate, setEventDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
   const [picked, setPicked] = useState<CrewPick[]>([]);
 
-  // ── Bước 4 — thanh toán ─────────────────────────────────────────────────
+  // ── Bước 5 — thanh toán ─────────────────────────────────────────────────
   const [plan, setPlan] = useState<Instalment[] | null>(null);
 
   // ── Tuỳ chọn giữ lại từ bản cũ ──────────────────────────────────────────
@@ -370,7 +377,7 @@ export default function NewContractForm({
   }
 
   /** Bước hiện tại đã đủ dữ liệu để đi tiếp chưa. */
-  const canNext = step === 0 ? phoneOk : step === 1 ? lines.length > 0 : true;
+  const canNext = step === 1 ? phoneOk : step === 2 ? lines.length > 0 : true;
   const autoTitle = selectedService
     ? `Hợp đồng ${selectedService.name} ${fmtDate(eventDate || new Date())}`
     : `Hợp đồng ${fmtDate(eventDate || new Date())}`;
@@ -378,7 +385,9 @@ export default function NewContractForm({
   async function create(mode: "draft" | "send") {
     setErr(null);
     if (!phoneOk) {
-      setStep(0);
+      // Bước 1 (chỉ số 1) là Khách hàng — nơi có ô điện thoại. Trước khi đưa
+      // Loại dịch vụ lên đầu thì đó là chỉ số 0.
+      setStep(1);
       setErr("SĐT khách phải đủ 10 số (dùng làm mật khẩu để khách mở cổng hợp đồng).");
       return;
     }
@@ -569,7 +578,7 @@ export default function NewContractForm({
           className={`flex items-center gap-1.5 rounded-[10px] px-4 py-2.5 text-[12.5px] font-bold disabled:opacity-50 sm:px-5 sm:text-[13px] ${step === 0 ? "ml-auto" : ""}`}
           style={{ background: "var(--ac)", color: "#fff" }}
         >
-          {step === 0 ? "Chọn gói" : step === 1 ? "Đặt lịch" : step === 2 ? "Chia tiền" : "Xem lại"}
+          {step === 0 ? "Nhập khách" : step === 1 ? "Chọn gói" : step === 2 ? "Đặt lịch" : step === 3 ? "Chia tiền" : "Xem lại"}
           <ArrowRight size={16} />
         </button>
       ) : (
@@ -647,8 +656,55 @@ export default function NewContractForm({
         <h3 className="text-[16px] font-bold">{STEPS[step].title}</h3>
         <p className="mb-4 mt-0.5 text-[12.5px]" style={{ color: "var(--tx2)" }}>{STEPS[step].hint}</p>
 
-        {/* ── Bước 1 · Khách hàng ─────────────────────────────────────────── */}
+        {/* ── Bước 1 · Loại dịch vụ ──────────────────────────────────────── */}
         {step === 0 && (
+          <div>
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              {/* Ô này trước đây CHỈ hiện khi studio chưa cấu hình điều khoản
+                  dịch vụ — studio nào đã cấu hình thì không có đường nào đánh
+                  dấu hợp đồng là makeup, và mọi hợp đồng đều nhận nhóm chụp.
+                  Chia mục theo nhóm để thấy ngay lựa chọn này kéo theo gì. */}
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-shoot">Loại dịch vụ</label>
+                <select id="nc-shoot" className={inputCls} style={inputStyle} value={shootType} onChange={(e) => setShootType(e.target.value as ShootType)}>
+                  {(Object.keys(nhomDichVu) as ContractKind[]).map((k) => (
+                    <optgroup key={k} label={CONTRACT_KIND_LABEL[k]}>
+                      {nhomDichVu[k].map((t) => <option key={t} value={t}>{SHOOT_TYPE_LABEL[t]}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                  Nhóm <b>{CONTRACT_KIND_LABEL[contractKind(shootType)]}</b> — hạng mục gợi ý và việc cần làm đổi theo nhóm này.
+                </p>
+              </div>
+              {services.length > 0 && (
+                <div>
+                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-svc">Điều khoản áp dụng</label>
+                  <select id="nc-svc" className={inputCls} style={inputStyle} value={serviceId} onChange={(e) => changeService(e.target.value)}>
+                    {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                    Quyết định điều khoản in vào hợp đồng, và bảng giá hiện ra ở bước Gói dịch vụ.
+                  </p>
+                </div>
+              )}
+              {templates.length > 0 && (
+                <div>
+                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-tpl">Tạo từ mẫu hợp đồng</label>
+                  <select id="nc-tpl" className={inputCls} style={inputStyle} value={templateId} onChange={(e) => pickTemplate(e.target.value)}>
+                    <option value="">— Không dùng mẫu —</option>
+                    {templates.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.contract_template_items?.length || 0} hạng mục)</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Bước 2 · Khách hàng ─────────────────────────────────────────── */}
+        {step === 1 && (
           <div>
             {/* NHẬP TAY ĐẶT TRÊN ĐẦU: phần lớn hợp đồng là khách mới, mà trước
                 đây hai ô này nằm cuối bước, sau cả danh sách khách cũ và một nút
@@ -738,48 +794,9 @@ export default function NewContractForm({
           </div>
         )}
 
-        {/* ── Bước 2 · Gói dịch vụ ────────────────────────────────────────── */}
-        {step === 1 && (
+        {/* ── Bước 3 · Gói dịch vụ ────────────────────────────────────────── */}
+        {step === 2 && (
           <div>
-            <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              {services.length > 0 && (
-                <div>
-                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-svc">Điều khoản áp dụng</label>
-                  <select id="nc-svc" className={inputCls} style={inputStyle} value={serviceId} onChange={(e) => changeService(e.target.value)}>
-                    {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
-                </div>
-              )}
-              {/* Ô này trước đây CHỈ hiện khi studio chưa cấu hình điều khoản
-                  dịch vụ — studio nào đã cấu hình thì không có đường nào đánh
-                  dấu hợp đồng là makeup, và mọi hợp đồng đều nhận nhóm chụp.
-                  Chia mục theo nhóm để thấy ngay lựa chọn này kéo theo gì. */}
-              <div>
-                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-shoot">Loại dịch vụ</label>
-                <select id="nc-shoot" className={inputCls} style={inputStyle} value={shootType} onChange={(e) => setShootType(e.target.value as ShootType)}>
-                  {(Object.keys(nhomDichVu) as ContractKind[]).map((k) => (
-                    <optgroup key={k} label={CONTRACT_KIND_LABEL[k]}>
-                      {nhomDichVu[k].map((t) => <option key={t} value={t}>{SHOOT_TYPE_LABEL[t]}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-                <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
-                  Nhóm <b>{CONTRACT_KIND_LABEL[contractKind(shootType)]}</b> — hạng mục gợi ý và việc cần làm đổi theo nhóm này.
-                </p>
-              </div>
-              {templates.length > 0 && (
-                <div>
-                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-tpl">Tạo từ mẫu hợp đồng</label>
-                  <select id="nc-tpl" className={inputCls} style={inputStyle} value={templateId} onChange={(e) => pickTemplate(e.target.value)}>
-                    <option value="">— Không dùng mẫu —</option>
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name} ({t.contract_template_items?.length || 0} hạng mục)</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
             {packages.length === 0 ? (
               <div className="rounded-[11px] px-4 py-5 text-center" style={{ border: "1px dashed var(--bd)" }}>
                 <p className="text-[13px] font-semibold">Bảng giá đang trống</p>
@@ -1008,8 +1025,8 @@ export default function NewContractForm({
           </div>
         )}
 
-        {/* ── Bước 3 · Lịch & nhân sự ─────────────────────────────────────── */}
-        {step === 2 && (
+        {/* ── Bước 4 · Lịch & nhân sự ─────────────────────────────────────── */}
+        {step === 3 && (
           <div>
             <div className="mb-3 grid gap-3 sm:grid-cols-3">
               <div>
@@ -1090,8 +1107,8 @@ export default function NewContractForm({
           </div>
         )}
 
-        {/* ── Bước 4 · Thanh toán ─────────────────────────────────────────── */}
-        {step === 3 && (
+        {/* ── Bước 5 · Thanh toán ─────────────────────────────────────────── */}
+        {step === 4 && (
           <div>
             <div className="mb-4 grid gap-2">
               {instalments.map((p, i) => {
@@ -1176,24 +1193,24 @@ export default function NewContractForm({
           </div>
         )}
 
-        {/* ── Bước 5 · Kiểm tra lần cuối ──────────────────────────────────── */}
-        {step === 4 && (
+        {/* ── Bước 6 · Kiểm tra lần cuối ──────────────────────────────────── */}
+        {step === 5 && (
           <div>
             <div className="mb-4 overflow-hidden rounded-[12px]" style={{ border: "1px solid var(--bd)" }}>
               {([
-                [0, "Khách hàng", [clientName || "Chưa có tên", clientPhone].filter(Boolean).join(" · ")],
-                [1, "Dịch vụ", selectedService?.name || SHOOT_TYPE_LABEL[shootType]],
+                [1, "Khách hàng", [clientName || "Chưa có tên", clientPhone].filter(Boolean).join(" · ")],
+                [0, "Dịch vụ", selectedService?.name || SHOOT_TYPE_LABEL[shootType]],
                 // Giá hiện ở đây là giá ĐÃ SỬA, không phải giá bảng giá — nếu
                 // in giá niêm yết thì bước soát lại sẽ khẳng định một con số
                 // khác với con số thật đang nằm trong hợp đồng.
-                [1, "Gói chính", mainPkg ? `${mainPkg.name} · ${vnd(priceOf(mainPkg))}${priceEdited(mainPkg) ? " (đã sửa giá)" : ""}` : template ? `Mẫu: ${template.name}` : "Chưa chọn"],
-                [1, "Hạng mục thêm", extras.length ? extras.map((x) => `${x.name} · ${vnd(priceOf(x))}`).join(", ") : "Không có"],
-                [1, "Gói riêng", customPreview || "Không có"],
-                [2, "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
-                [2, "Khung giờ", startTime || endTime ? [startTime, endTime].filter(Boolean).join(" – ") : "Chưa đặt giờ"],
-                [2, "Địa điểm", location || "Chưa có"],
-                [2, "Nhân sự", picked.length ? picked.map((c) => c.name || c.phone).join(", ") : "Chưa phân công"],
-                [3, "Đợt thanh toán", instalments.length ? instalments.map((p) => `${p.label} ${vnd(p.amount)}`).join(" · ") : "Chưa chia đợt"],
+                [2, "Gói chính", mainPkg ? `${mainPkg.name} · ${vnd(priceOf(mainPkg))}${priceEdited(mainPkg) ? " (đã sửa giá)" : ""}` : template ? `Mẫu: ${template.name}` : "Chưa chọn"],
+                [2, "Hạng mục thêm", extras.length ? extras.map((x) => `${x.name} · ${vnd(priceOf(x))}`).join(", ") : "Không có"],
+                [2, "Gói riêng", customPreview || "Không có"],
+                [3, "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
+                [3, "Khung giờ", startTime || endTime ? [startTime, endTime].filter(Boolean).join(" – ") : "Chưa đặt giờ"],
+                [3, "Địa điểm", location || "Chưa có"],
+                [3, "Nhân sự", picked.length ? picked.map((c) => c.name || c.phone).join(", ") : "Chưa phân công"],
+                [4, "Đợt thanh toán", instalments.length ? instalments.map((p) => `${p.label} ${vnd(p.amount)}`).join(" · ") : "Chưa chia đợt"],
               ] as [number, string, string][]).map(([goto, label, value], i) => (
                 <button
                   key={i}

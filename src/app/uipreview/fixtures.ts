@@ -513,3 +513,27 @@ export const rentalDons = [
     rental_order_items: [{ id: "ri4", name: "Mấn cô dâu đính ngọc trai", price: 300_000, qty: 1 }],
   },
 ] as const;
+
+/* ── Trình tạo hợp đồng 6 bước ───────────────────────────────────────────────
+   Bảng giá cố tình thuộc HAI dịch vụ khác nhau, để soi được việc "gói dịch vụ
+   hiện theo loại dịch vụ": chọn dịch vụ nào thì chỉ còn gói của dịch vụ đó. */
+export const dichVu = [
+  { id: "sv-cuoi", name: "Chụp cưới trọn gói", clauses: "Cọc 20%, thanh toán đủ khi giao file." },
+  { id: "sv-makeup", name: "Trang điểm & thuê đồ", clauses: "Cọc giữ đồ, hoàn khi trả đủ." },
+];
+
+export const goiDichVu = [
+  { id: "g1", list_key: "sv-cuoi", name: "Phóng sự x1", price: 3_500_000, unit: "", category: "Gói chụp cơ bản",
+    description: "1 thợ chụp nhà gái\nGiao toàn bộ file gốc\n150–200 hình chỉnh sửa" },
+  { id: "g2", list_key: "sv-cuoi", name: "Phóng sự x2", price: 6_000_000, unit: "", category: "Gói chụp cơ bản",
+    description: "1 thợ nhà gái, 1 thợ nhà trai\nChỉnh sửa 300–400 hình" },
+  { id: "g3", list_key: "sv-cuoi", name: "Gói combo chụp + quay", price: 13_500_000, unit: "", category: "Gói quay",
+    description: "2 thợ chụp, 2 thợ quay, 1 flycam\nTặng Album 150 ảnh" },
+  { id: "g4", list_key: "sv-makeup", name: "Makeup cô dâu tại nhà", price: 3_500_000, unit: "", category: "Trang điểm", description: null },
+  { id: "g5", list_key: "sv-makeup", name: "Thuê váy cưới (3 ngày)", price: 4_500_000, unit: "", category: "Thuê đồ", description: null },
+];
+
+export const khachGanDay = [
+  { name: "Nguyễn Thị Lan Phương", phone: "0912345678", last: D, count: 3 },
+  { name: "Trần Văn B", phone: "0987654321", last: "2026-08-01", count: 1 },
+];
