@@ -1,5 +1,6 @@
 import BoardView from "@/app/dashboard/studio/board/BoardView";
 import ThueDoDemo from "./ThueDoDemo";
+import NewContractForm from "@/app/dashboard/studio/contracts/new/NewContractForm";
 import { ContractsList } from "@/app/dashboard/studio/contracts/ContractsListView";
 import ClientsView from "@/app/dashboard/studio/clients/ClientsView";
 import LeadsView from "@/app/dashboard/studio/leads/LeadsView";
@@ -371,6 +372,21 @@ export const SCREENS: Record<
             pricelist={f.pricelistRows}
             initialTab="info"
           />
+    ),
+  },
+  "hop-dong-moi": {
+    title: "Tạo hợp đồng — 6 bước (bước 1: loại dịch vụ)",
+    render: () => (
+      <NewContractForm
+        ownerId="o1"
+        assignTo={null}
+        templates={[]}
+        services={f.dichVu}
+        packages={f.goiDichVu}
+        roster={f.roster}
+        recentClients={f.khachGanDay}
+        bank={f.bank}
+      />
     ),
   },
   "hop-dong-thue-do": {
