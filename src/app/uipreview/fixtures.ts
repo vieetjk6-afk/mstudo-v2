@@ -443,3 +443,42 @@ export const pricelistRows = [
   { name: "Gói phóng sự cưới trọn gói", price: 45_000_000, unit: "gói" },
   { name: "Album in 30x30", price: 3_500_000, unit: "cuốn" },
 ];
+
+/* ── Thuê đồ trong hợp đồng ──────────────────────────────────────────────────
+   Cố tình có cả ca dễ vỡ: tên món dài, đơn nhiều món (chuỗi tên nối lại rất
+   dài), đơn quá hạn (màu đỏ), và một đơn đã trả. */
+export const rentalKho = [
+  { id: "r1", owner_id: "o1", name: "Váy cưới đuôi cá ren Pháp — size S", category: "dress", code: "V-01",
+    size: "S", color: "trắng", rental_price: 4_500_000, deposit: 3_000_000, quantity: 1,
+    cover_url: null, status: "available", note: null, created_at: D },
+  { id: "r2", owner_id: "o1", name: "Áo dài đỏ thêu tay", category: "ao_dai", code: "AD-07",
+    size: "M", color: "đỏ", rental_price: 1_200_000, deposit: 1_000_000, quantity: 2,
+    cover_url: null, status: "available", note: null, created_at: D },
+  { id: "r3", owner_id: "o1", name: "Vest chú rể xanh navy", category: "vest", code: "VS-03",
+    size: "L", color: "navy", rental_price: 900_000, deposit: 800_000, quantity: 1,
+    cover_url: null, status: "available", note: null, created_at: D },
+  { id: "r4", owner_id: "o1", name: "Mấn cô dâu đính ngọc trai", category: "accessory", code: null,
+    size: null, color: null, rental_price: 300_000, deposit: 0, quantity: 3,
+    cover_url: null, status: "available", note: null, created_at: D },
+] as const;
+
+export const rentalDons = [
+  {
+    id: "rd1", owner_id: "o1", contract_id: "c1", client_name: "Nguyễn Thị Lan Phương",
+    client_phone: "0912345678", pickup_date: "2026-09-10", return_date: "2026-09-14",
+    returned_at: null, total_price: 6_600_000, deposit_paid: 4_800_000,
+    status: "picked_up", note: null, created_at: D, updated_at: D,
+    rental_order_items: [
+      { id: "ri1", name: "Váy cưới đuôi cá ren Pháp — size S", price: 4_500_000, qty: 1 },
+      { id: "ri2", name: "Áo dài đỏ thêu tay", price: 1_200_000, qty: 1 },
+      { id: "ri3", name: "Vest chú rể xanh navy", price: 900_000, qty: 1 },
+    ],
+  },
+  {
+    id: "rd2", owner_id: "o1", contract_id: "c1", client_name: "Nguyễn Thị Lan Phương",
+    client_phone: "0912345678", pickup_date: "2026-08-02", return_date: "2026-08-05",
+    returned_at: null, total_price: 300_000, deposit_paid: 0,
+    status: "overdue", note: null, created_at: D, updated_at: D,
+    rental_order_items: [{ id: "ri4", name: "Mấn cô dâu đính ngọc trai", price: 300_000, qty: 1 }],
+  },
+] as const;

@@ -9,7 +9,8 @@ import { DEPOSIT_STATUS_LABEL } from "@/lib/booking-deposit";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { studioUrl } from "@/lib/hosts";
-import { nextContractCode, DEFAULT_TASKS } from "@/lib/contract-code";
+import { nextContractCode } from "@/lib/contract-code";
+import { DEFAULT_TASKS_BY_KIND } from "@/lib/contract-kind";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { messengerUrl } from "@/components/MessengerButton";
 import { vnd, type StudioBooking } from "@/lib/types";
@@ -160,7 +161,14 @@ export default function BookingsView({
     if (b.package_name) {
       await supabase.from("contract_items").insert({ contract_id: data.id, name: b.package_name, qty: 1, unit_price: b.package_price || 0, position: 0 });
     }
-    await supabase.from("contract_tasks").insert(DEFAULT_TASKS.map((label, position) => ({ contract_id: data.id, label, position })));
+    // Yêu cầu đặt lịch chỉ có dịch vụ dạng CHỮ TỰ DO ("makeup cô dâu", "chụp
+    // kỷ yếu"…), không phải gói dịch vụ có mã, nên không suy ra nhóm được. Hợp
+    // đồng tạo ra nhận shoot_type mặc định của database là 'photo' → nhóm chụp;
+    // gieo đúng danh sách của nhóm đó. Studio đổi gói dịch vụ thì sửa lại
+    // checklist trong hợp đồng.
+    await supabase
+      .from("contract_tasks")
+      .insert(DEFAULT_TASKS_BY_KIND.shoot.map((label, position) => ({ contract_id: data.id, label, position })));
     await supabase.from("studio_bookings").update({ status: "handled" }).eq("id", b.id);
     router.push(`/dashboard/studio/contracts/${data.id}`);
   }

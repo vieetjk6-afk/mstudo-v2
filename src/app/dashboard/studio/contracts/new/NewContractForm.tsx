@@ -34,7 +34,8 @@ import {
   type CrewRole,
   type ShootType,
 } from "@/lib/types";
-import { nextContractCode, DEFAULT_TASKS } from "@/lib/contract-code";
+import { nextContractCode } from "@/lib/contract-code";
+import { contractKind, shootTypesByKind, CONTRACT_KIND_LABEL, DEFAULT_TASKS_BY_KIND, type ContractKind } from "@/lib/contract-kind";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { computeRoundedDeposit } from "@/lib/quote-deposit";
 import {
@@ -170,6 +171,7 @@ export default function NewContractForm({
 
   const selectedService = services.find((s) => s.id === serviceId) || null;
   const template = templates.find((t) => t.id === templateId) || null;
+  const nhomDichVu = shootTypesByKind(SHOOT_TYPES);
   const mainPkg = packages.find((p) => p.id === mainPkgId) || null;
   const extras = packages.filter((p) => extraIds.includes(p.id));
 
@@ -280,6 +282,13 @@ export default function NewContractForm({
 
   /** Đổi loại dịch vụ ⇒ bỏ gói đã chọn: giá của dịch vụ cũ không còn nhìn thấy
       nữa, để lại trong tổng tiền là một khoản vô hình không ai gỡ được. */
+  /** Chọn mẫu hợp đồng thì kéo luôn gói dịch vụ của mẫu vào ô chọn. */
+  function pickTemplate(id: string) {
+    setTemplateId(id);
+    const t = templates.find((x) => x.id === id);
+    if (t) setShootType(t.shoot_type);
+  }
+
   function changeService(id: string) {
     if (id === serviceId) return;
     setServiceId(id);
@@ -390,7 +399,7 @@ export default function NewContractForm({
         title: title.trim() || autoTitle,
         client_name: clientName.trim() || null,
         client_phone: clientPhone.replace(/\D/g, "") || null,
-        shoot_type: template?.shoot_type ?? shootType,
+        shoot_type: shootType,
         ...(serviceId ? { service_id: serviceId } : {}),
         event_date: eventDate || null,
         event_time: startTime || null,
@@ -455,7 +464,13 @@ export default function NewContractForm({
       addChecklist
         ? supabase
             .from("contract_tasks")
-            .insert(DEFAULT_TASKS.map((label, position) => ({ contract_id: data.id, label, position })))
+            // Việc gieo sẵn theo NHÓM hợp đồng: hợp đồng makeup không có ảnh
+            // nào để "Chọn ảnh"/"Chỉnh sửa ảnh", gieo vào là studio phải xoá tay.
+            .insert(
+              DEFAULT_TASKS_BY_KIND[contractKind(shootType)].map((label, position) => ({
+                contract_id: data.id, label, position,
+              }))
+            )
         : null,
     ]);
 
@@ -727,25 +742,35 @@ export default function NewContractForm({
         {step === 1 && (
           <div>
             <div className="mb-4 grid gap-3 sm:grid-cols-2">
-              {services.length > 0 ? (
+              {services.length > 0 && (
                 <div>
-                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-svc">Loại dịch vụ (điều khoản)</label>
+                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-svc">Điều khoản áp dụng</label>
                   <select id="nc-svc" className={inputCls} style={inputStyle} value={serviceId} onChange={(e) => changeService(e.target.value)}>
                     {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
-              ) : (
-                <div>
-                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-shoot">Loại dịch vụ</label>
-                  <select id="nc-shoot" className={inputCls} style={inputStyle} value={shootType} onChange={(e) => setShootType(e.target.value as ShootType)}>
-                    {SHOOT_TYPES.map((k) => <option key={k} value={k}>{SHOOT_TYPE_LABEL[k]}</option>)}
-                  </select>
-                </div>
               )}
+              {/* Ô này trước đây CHỈ hiện khi studio chưa cấu hình điều khoản
+                  dịch vụ — studio nào đã cấu hình thì không có đường nào đánh
+                  dấu hợp đồng là makeup, và mọi hợp đồng đều nhận nhóm chụp.
+                  Chia mục theo nhóm để thấy ngay lựa chọn này kéo theo gì. */}
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-shoot">Loại dịch vụ</label>
+                <select id="nc-shoot" className={inputCls} style={inputStyle} value={shootType} onChange={(e) => setShootType(e.target.value as ShootType)}>
+                  {(Object.keys(nhomDichVu) as ContractKind[]).map((k) => (
+                    <optgroup key={k} label={CONTRACT_KIND_LABEL[k]}>
+                      {nhomDichVu[k].map((t) => <option key={t} value={t}>{SHOOT_TYPE_LABEL[t]}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                  Nhóm <b>{CONTRACT_KIND_LABEL[contractKind(shootType)]}</b> — hạng mục gợi ý và việc cần làm đổi theo nhóm này.
+                </p>
+              </div>
               {templates.length > 0 && (
                 <div>
                   <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-tpl">Tạo từ mẫu hợp đồng</label>
-                  <select id="nc-tpl" className={inputCls} style={inputStyle} value={templateId} onChange={(e) => setTemplateId(e.target.value)}>
+                  <select id="nc-tpl" className={inputCls} style={inputStyle} value={templateId} onChange={(e) => pickTemplate(e.target.value)}>
                     <option value="">— Không dùng mẫu —</option>
                     {templates.map((t) => (
                       <option key={t.id} value={t.id}>{t.name} ({t.contract_template_items?.length || 0} hạng mục)</option>

@@ -1,4 +1,5 @@
 import BoardView from "@/app/dashboard/studio/board/BoardView";
+import ThueDoDemo from "./ThueDoDemo";
 import { ContractsList } from "@/app/dashboard/studio/contracts/ContractsListView";
 import ClientsView from "@/app/dashboard/studio/clients/ClientsView";
 import LeadsView from "@/app/dashboard/studio/leads/LeadsView";
@@ -110,6 +111,7 @@ export const SCREENS: Record<
       ["pay", "Thanh toán"],
       ["crew", "Nhân sự"],
       ["album", "Sản phẩm"],
+      ["rental", "Thuê đồ"],
       ["send", "Ký và thực hiện"],
     ] as const).map(([tab, nhan]) => [
       `hop-dong-${tab}`,
@@ -263,6 +265,10 @@ export const SCREENS: Record<
   },
   // Bảng màu: canh đúng loại lỗi "token chỉ có trong shell" — xem ghi chú đầu
   // TokenSwatches.tsx. Tự dựng cả ba khung nên KHÔNG cho route bọc shell.
+  "hop-dong-thue-do": {
+    title: "Hợp đồng · Thuê đồ (có đơn)",
+    render: () => <ThueDoDemo />,
+  },
   "bang-mau": {
     title: "Bảng màu — ngoài shell / shell sáng / shell tối",
     render: () => <TokenSwatches />,

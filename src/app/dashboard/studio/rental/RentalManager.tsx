@@ -93,10 +93,16 @@ export default function RentalManager({
     const activeOrders = orders.filter((o) => ACTIVE_ORDER_STATUSES.includes(o.status));
     const rentedUnits = [...unitsOut.values()].reduce((s, n) => s + n, 0);
     const depositsHeld = activeOrders.reduce((s, o) => s + (o.deposit_paid || 0), 0);
-    // Revenue booked this month (by pickup date, falling back to created date).
+    // Doanh thu tháng (tính theo ngày nhận đồ, không có thì theo ngày tạo đơn).
+    //
+    // BỎ QUA đơn đã gắn hợp đồng: tiền thuê của những đơn đó được ghi thành một
+    // hạng mục của hợp đồng (xem ContractRentalPanel), nên đã nằm trong doanh
+    // thu hợp đồng rồi. Cộng ở đây nữa là cùng một khoản đếm hai lần, và chủ
+    // studio cộng hai màn lại sẽ ra con số không có thật.
     const month = todayISO().slice(0, 7);
     const revenueMonth = orders
       .filter((o) => o.status !== "canceled")
+      .filter((o) => !o.contract_id)
       .filter((o) => (o.pickup_date ?? o.created_at).slice(0, 7) === month)
       .reduce((s, o) => s + (o.total_price || 0), 0);
     const overdue = orders.filter(isOverdue).length;
@@ -122,7 +128,7 @@ export default function RentalManager({
         <StatCard icon={<Wallet size={16} />} label="Cọc đang giữ" value={vnd(stats.depositsHeld)} />
         <StatCard
           icon={stats.overdue > 0 ? <AlertTriangle size={16} /> : <TrendingUp size={16} />}
-          label={stats.overdue > 0 ? "Quá hạn" : "Doanh thu tháng"}
+          label={stats.overdue > 0 ? "Quá hạn" : "Thuê lẻ tháng này"}
           value={stats.overdue > 0 ? `${stats.overdue} đơn` : vnd(stats.revenueMonth)}
           alert={stats.overdue > 0}
         />
