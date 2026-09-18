@@ -23,11 +23,15 @@ export async function GET(req: NextRequest) {
   const db = createAdminClient();
 
   // Tự chuyển HĐ (đã gửi/đã duyệt) sang "đang thực hiện" khi tới ngày sớm nhất
-  // (event_date hoặc mốc studio_events như ngày đãi trước). Chạy mỗi ngày cho
-  // MỌI chủ studio — kể cả khi họ không mở trang.
+  // (event_date hoặc mốc studio_events như ngày đãi trước), rồi sang "đang hậu
+  // kỳ" khi đã QUA ngày chụp cuối. Chạy mỗi ngày cho MỌI chủ studio — kể cả khi
+  // họ không mở trang.
   let advanced = 0;
+  let toPostProduction = 0;
   try {
-    advanced = (await autoAdvanceContracts(db)).length;
+    const r = await autoAdvanceContracts(db);
+    advanced = r.started.length;
+    toPostProduction = r.toPostProduction.length;
   } catch {
     /* không chặn digest nhắc việc nếu bước này lỗi */
   }
@@ -139,7 +143,7 @@ export async function GET(req: NextRequest) {
   for (const a of storage) bucket(a.owner_id).storage.push(a);
 
   const allOwnerIds = [...new Set([...byOwner.keys(), ...shoots.map((s) => s.owner_id), ...done.map((d) => d.owner_id)])];
-  if (allOwnerIds.length === 0) return NextResponse.json({ ok: true, sent: 0, advanced, appointments: appts.length, note: "nothing to remind" });
+  if (allOwnerIds.length === 0) return NextResponse.json({ ok: true, sent: 0, advanced, toPostProduction, appointments: appts.length, note: "nothing to remind" });
 
   const { data: owners } = await db.from("profiles").select("id, email, full_name, auto_client_emails").in("id", allOwnerIds);
   type OwnerRow = { id: string; email: string | null; full_name: string | null; auto_client_emails: boolean };
@@ -312,5 +316,5 @@ ${link ? `<p><a href="${link}">Mở album ảnh &amp; đánh giá →</a> (mật
   // Tin Zalo tự động (nhắc lịch/thanh toán/chọn ảnh) chạy ở cron riêng
   // /api/cron/zalo lúc 11h trưa — xem src/app/api/cron/zalo/route.ts.
 
-  return NextResponse.json({ ok: true, sent, pushed, clientSent, advanced, appointments: appts.length, owners: results.length });
+  return NextResponse.json({ ok: true, sent, pushed, clientSent, advanced, toPostProduction, appointments: appts.length, owners: results.length });
 }

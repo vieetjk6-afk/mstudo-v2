@@ -43,7 +43,7 @@ export async function GET(_req: Request, props: { params: Promise<{ token: strin
   if (!owner) return new Response("Not found", { status: 404 });
 
   const [{ data: contracts }, { data: events }] = await Promise.all([
-    db.from("studio_contracts").select("id, title, client_name, event_date, event_time, location, status").eq("owner_id", owner.id).not("event_date", "is", null).in("status", ["approved", "in_progress", "completed"]),
+    db.from("studio_contracts").select("id, title, client_name, event_date, event_time, location, status").eq("owner_id", owner.id).not("event_date", "is", null).in("status", ["approved", "in_progress", "post_production", "completed"]),
     db.from("studio_events").select("id, title, event_date, event_time, note, contract:studio_contracts(title, event_date)").eq("owner_id", owner.id),
   ]);
 

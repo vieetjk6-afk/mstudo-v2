@@ -79,7 +79,7 @@ export default async function StudioTab() {
         .from("studio_contracts")
         .select("id, code, title, client_name, client_phone, event_date, status")
         .eq("owner_id", profile.id)
-        .in("status", ["sent", "approved", "in_progress"]),
+        .in("status", ["sent", "approved", "in_progress", "post_production"]),
       scope.selected
     )
       .order("event_date", { ascending: false })

@@ -66,6 +66,7 @@ const TABS: [string, string][] = [
   ["sent", "Chờ duyệt"],
   ["approved", "Đã duyệt"],
   ["in_progress", "Đang chụp"],
+  ["post_production", "Hậu kỳ"],
   ["completed", "Hoàn thành"],
 ];
 

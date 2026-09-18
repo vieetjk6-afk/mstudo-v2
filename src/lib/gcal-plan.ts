@@ -8,7 +8,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /** Hợp đồng ở trạng thái nào thì được lên lịch Google. */
-export const GCAL_CONTRACT_STATUSES = ["approved", "in_progress", "completed"] as const;
+export const GCAL_CONTRACT_STATUSES = ["approved", "in_progress", "post_production", "completed"] as const;
 
 export type GCalPlan =
   /** Tạo mới hoặc cập nhật sự kiện. */

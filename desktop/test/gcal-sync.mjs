@@ -44,7 +44,7 @@ check(
   ["hợp đồng chưa có ngày chụp", "hợp đồng chưa xác nhận/ký — chỉ lịch đã chốt mới lên Google"],
 );
 
-check("đúng ba trạng thái được lên lịch", [...GCAL_CONTRACT_STATUSES], ["approved", "in_progress", "completed"]);
+check("đúng bốn trạng thái được lên lịch", [...GCAL_CONTRACT_STATUSES], ["approved", "in_progress", "post_production", "completed"]);
 
 /* ── 2. Mọi đường KHÔNG có phiên đăng nhập đều phải tự đồng bộ ───────────── */
 

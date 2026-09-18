@@ -37,7 +37,7 @@ export async function POST(req: Request) {
   }
   // Hợp đồng đã sẵn sàng mới tạo thư mục: khách đã ký HOẶC studio đã duyệt / đang
   // thực hiện / hoàn thành (khớp bộ lọc ?drive=1 của /api/desktop/contracts).
-  const driveReady = !!contract.client_signed_at || ["approved", "in_progress", "completed"].includes(contract.status || "");
+  const driveReady = !!contract.client_signed_at || ["approved", "in_progress", "post_production", "completed"].includes(contract.status || "");
   if (!driveReady) {
     return NextResponse.json({ error: "not_signed" }, { status: 409 });
   }

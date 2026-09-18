@@ -47,7 +47,7 @@ export default async function ShootTab() {
       )
         .not("event_date", "is", null)
         // Chỉ hiện hợp đồng đã xác nhận/khách đã ký — bỏ nháp & mới gửi.
-        .in("status", ["approved", "in_progress", "completed"]),
+        .in("status", ["approved", "in_progress", "post_production", "completed"]),
       scope.selected
     ),
   ]);

@@ -138,7 +138,7 @@ export async function POST(req: Request) {
       //  - sang "hoàn thành" → tạo thêm album GIAO KHÁCH, nhưng chỉ khi thư mục
       //    ảnh chỉnh sửa đã có ảnh (hoàn thành = thu đủ tiền, không có nghĩa hậu
       //    kỳ đã xong) — xem @/lib/contract-delivery.
-      if (table === "studio_contracts" && (payload.status === "in_progress" || payload.status === "completed")) {
+      if (table === "studio_contracts" && (payload.status === "in_progress" || payload.status === "post_production" || payload.status === "completed")) {
         try {
           await autoCreateContractSelectionOnProduction(owner, id);
         } catch {

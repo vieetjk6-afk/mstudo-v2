@@ -7,7 +7,7 @@ import { syncContractCalendar } from "@/lib/gcal-sync";
 
 export const dynamic = "force-dynamic";
 
-const VALID = new Set(["draft", "sent", "approved", "in_progress", "completed", "cancelled"]);
+const VALID = new Set(["draft", "sent", "approved", "in_progress", "post_production", "completed", "cancelled"]);
 
 /**
  * Đổi trạng thái hợp đồng — điểm TẬP TRUNG cho mọi nơi trên web (ContractEditor,
@@ -62,7 +62,7 @@ export async function POST(req: Request) {
   // Chuyển SANG "đang thực hiện" / "hoàn thành" → giờ mới tạo album CHỌN ẢNH
   // (trước mốc này album được giữ chưa tạo để không hiện trong thư viện). Bao cả
   // completed để trường hợp bỏ qua bước in_progress vẫn có album chọn ảnh.
-  if ((status === "in_progress" || status === "completed") && contract.status !== status) {
+  if ((status === "in_progress" || status === "post_production" || status === "completed") && contract.status !== status) {
     try {
       await autoCreateContractSelectionOnProduction(user.id, contractId);
     } catch {

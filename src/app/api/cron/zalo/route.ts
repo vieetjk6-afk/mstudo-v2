@@ -227,7 +227,7 @@ export async function GET(req: NextRequest) {
     .lte("event_date", today)
     // Cả hợp đồng ĐÃ HOÀN THÀNH mà chưa có album giao khách: khách trả đủ tiền
     // trước khi hậu kỳ xong là chuyện thường, việc chọn ảnh vẫn còn nguyên đó.
-    .in("status", ["in_progress", "completed"])
+    .in("status", ["in_progress", "post_production", "completed"])
     .not("selection_album_id", "is", null)
     .is("gallery_album_id", null);
 
@@ -278,7 +278,7 @@ export async function GET(req: NextRequest) {
   const { data: silent } = await db
     .from("studio_contracts")
     .select("id, owner_id, title, client_name, client_phone, selection_album_id, select_invited_at, select_nudges, select_nudged_at")
-    .in("status", ["in_progress", "completed"])
+    .in("status", ["in_progress", "post_production", "completed"])
     .not("select_invited_at", "is", null)
     .not("selection_album_id", "is", null)
     .is("gallery_album_id", null)

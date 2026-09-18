@@ -26,7 +26,7 @@ export type BoardCard = {
  * trong đó coi như biến mất. Bốn cột thì vừa màn, và hai cột kia bật lại bằng
  * một nút khi cần.
  */
-const CORE_COLUMNS: ContractStatus[] = ["sent", "approved", "in_progress", "completed"];
+const CORE_COLUMNS: ContractStatus[] = ["sent", "approved", "in_progress", "post_production", "completed"];
 const EXTRA_COLUMNS: ContractStatus[] = ["draft", "cancelled"];
 export default function BoardView({ initial }: { initial: BoardCard[] }) {
   const [cards, setCards] = useState<BoardCard[]>(initial);
@@ -80,7 +80,12 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
               onDragOver={(e) => { e.preventDefault(); setOver(col); }}
               onDragLeave={() => setOver((o) => (o === col ? null : o))}
               onDrop={() => { if (dragId) moveTo(dragId, col); setDragId(null); setOver(null); }}
-              className="w-[270px] shrink-0 rounded-[14px] p-3"
+              /* Co giãn thay vì rộng cứng 270px. Từ khi có cột thứ 5 ("Đang hậu
+               kỳ"), 5×270 + khoảng hở đã vượt màn laptop 1280px — cả bảng
+               phải cuộn ngang mới thấy cột cuối. basis 228px cho 5 cột vừa
+               một màn, max 320px để màn rộng cột khỏi giãn quá thưa, và khi
+               hẹp hơn sàn 228px thì khung cha vẫn cuộn ngang như cũ. */
+            className="min-w-[228px] max-w-[320px] flex-1 basis-[228px] rounded-[14px] p-3"
               style={{ background: over === col ? "var(--sf2)" : "var(--sf)", border: `1px solid ${over === col ? "var(--acM)" : "var(--bd)"}` }}
             >
               <div className="mb-3 flex items-center gap-2 px-1">

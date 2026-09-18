@@ -1367,7 +1367,7 @@ export default function ContractEditor({
     hasCrew: crew.length > 0,
     hasDeposit: collected > 0,
     shot:
-      f.status === "in_progress" || f.status === "completed" ||
+      f.status === "in_progress" || f.status === "post_production" || f.status === "completed" ||
       (!!f.event_date && f.event_date < todayVN()),
     postDone:
       f.status === "completed" ||

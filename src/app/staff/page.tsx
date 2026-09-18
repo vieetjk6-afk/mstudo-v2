@@ -100,7 +100,7 @@ export default async function StaffPage() {
       .select("id, code, title, status, contract_tasks(id, label, done, position)")
       .eq("owner_id", profile.id)
       .eq("assigned_to", me)
-      .in("status", ["approved", "in_progress"])
+      .in("status", ["approved", "in_progress", "post_production"])
       .order("event_date", { ascending: true })
       .limit(20),
   ]);

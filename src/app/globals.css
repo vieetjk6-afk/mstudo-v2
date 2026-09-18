@@ -120,6 +120,12 @@
      màu: var() không giải được → khai báo hỏng ở computed-value time, nền
      thành trong suốt và chữ tụt về màu kế thừa. */
   --tl: #0f8a8a;
+  /* Tím — hợp đồng ĐANG HẬU KỲ. Chen giữa xanh ngọc (đang thực hiện) và
+     xanh lá (hoàn thành) trong danh sách nên phải là màu không lẫn cả hai.
+     Phải khai ở MỌI khối token, kể cả client-doc: thiếu một khối thì
+     var(--pu) không giải được và viên trạng thái mất màu hẳn. */
+  --pu: #6b46c1;
+  --puS: color-mix(in srgb, #6b46c1 12%, var(--surface));
   --tlS: color-mix(in srgb, #0f8a8a 12%, var(--surface));
   --nu: var(--text2);
   --nuS: var(--surface2);
@@ -154,6 +160,8 @@
   --rdS: color-mix(in srgb, var(--danger) 22%, var(--surface));
   --bl: #7eadf6;
   --blS: color-mix(in srgb, #7eadf6 22%, var(--surface));
+  --pu: #b79bf0;
+  --puS: color-mix(in srgb, #b79bf0 22%, var(--surface));
   --tl: #5fd3d3;
   --tlS: color-mix(in srgb, #5fd3d3 22%, var(--surface));
 }
@@ -1042,6 +1050,12 @@ body {
   --rd: #c13c3c;
   --rdS: #fbeaea; /* lỗi, quá hạn */
   --nu: #6b6a70;
+  /* Tím — hợp đồng ĐANG HẬU KỲ. Chen giữa xanh ngọc (đang thực hiện) và
+     xanh lá (hoàn thành) trong danh sách nên phải là màu không lẫn cả hai.
+     Phải khai ở MỌI khối token, kể cả client-doc: thiếu một khối thì
+     var(--pu) không giải được và viên trạng thái mất màu hẳn. */
+  --pu: #6b46c1;
+  --puS: #efe9fb;
   --nuS: #f0eeeb; /* trung tính — hợp đồng nháp */
   --tl: #0f8a8a;
   --tlS: #e2f4f4; /* xanh mòng két — hợp đồng đang thực hiện */
@@ -1135,6 +1149,8 @@ body {
   --rd: #f18787;
   --rdS: #3e2023;
   --nu: #a19da9;
+  --pu: #b79bf0;
+  --puS: #2b2340;
   --nuS: #2b2934;
   --tl: #5fd3d3;
   --tlS: #12333a;
@@ -1172,6 +1188,8 @@ body {
   --rd: #c13c3c;
   --rdS: #fbeaea;
   --nu: #6b6a70;
+  --pu: #6b46c1;
+  --puS: #efe9fb;
   --nuS: #f0eeeb;
   --tl: #0f8a8a;
   --tlS: #e2f4f4;
@@ -1237,6 +1255,8 @@ body {
   --rd: #f18787;
   --rdS: #3e2023;
   --nu: #a19da9;
+  --pu: #b79bf0;
+  --puS: #2b2340;
   --nuS: #2b2934;
   --tl: #5fd3d3;
   --tlS: #12333a;
