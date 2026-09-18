@@ -280,7 +280,8 @@ create table if not exists public.studio_contracts (
   event_time    text,
   location      text,
   status        text not null default 'draft'
-                  check (status in ('draft', 'sent', 'approved', 'in_progress', 'completed', 'cancelled')),
+                  check (status in ('draft', 'sent', 'approved', 'in_progress',
+                                    'post_production', 'completed', 'cancelled')),
   deposit       integer not null default 0, -- tiền cọc (VND)
   note          text,
   client_token  text not null unique,       -- /c/[token]
@@ -4836,6 +4837,41 @@ alter table public.contract_items
 
 comment on column public.contract_items.description is
   'Mô tả chi tiết hạng mục (phạm vi công việc, số lượng ảnh, thời gian giao…). Để trống thì không hiện.';
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/contract_post_production.sql — Trạng thái hợp đồng "Đang hậu kỳ" (chạy SAU schema.sql)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Hợp đồng: thêm trạng thái 'post_production' ("Đang hậu kỳ")
+--
+-- Chen vào giữa 'in_progress' và 'completed'. Vòng đời sau bản này:
+--
+--   draft → sent → approved → in_progress → post_production → completed
+--                                    │                            ▲
+--                                    └──── cancelled ─────────────┘
+--
+-- Ai chuyển: autoAdvanceToPostProduction() trong src/lib/contract-status.ts,
+-- chạy trong cron hằng ngày (/api/cron/reminders) và mỗi lần studio mở danh
+-- sách hợp đồng. Điều kiện: đã QUA ngày chụp CUỐI CÙNG — max(event_date, mọi
+-- mốc studio_events). Lấy ngày muộn nhất chứ không phải sớm nhất, vì đám cưới
+-- thường nhiều buổi; lấy sớm nhất thì hợp đồng nhảy sang hậu kỳ trong khi vẫn
+-- còn buổi chưa chụp.
+--
+-- KHÔNG đổi dữ liệu cũ: hợp đồng đang 'in_progress' mà đã qua ngày chụp sẽ tự
+-- sang 'post_production' ở lần cron chạy kế tiếp, không cần UPDATE ở đây.
+--
+-- Chạy được nhiều lần.
+-- ─────────────────────────────────────────────────────────────────────────
+
+alter table public.studio_contracts
+  drop constraint if exists studio_contracts_status_check;
+
+alter table public.studio_contracts
+  add constraint studio_contracts_status_check
+  check (status in ('draft', 'sent', 'approved', 'in_progress',
+                    'post_production', 'completed', 'cancelled'));
 
 
 -- ══════════════════════════════════════════════════════════════════════════

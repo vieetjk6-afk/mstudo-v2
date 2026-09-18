@@ -745,7 +745,8 @@ create table if not exists public.studio_contracts (
   event_time    text,
   location      text,
   status        text not null default 'draft'
-                  check (status in ('draft', 'sent', 'approved', 'in_progress', 'completed', 'cancelled')),
+                  check (status in ('draft', 'sent', 'approved', 'in_progress',
+                                    'post_production', 'completed', 'cancelled')),
   deposit       integer not null default 0, -- tiền cọc (VND)
   note          text,
   client_token  text not null unique,       -- /c/[token]

@@ -290,6 +290,7 @@ export type ContractStatus =
   | "sent"
   | "approved"
   | "in_progress"
+  | "post_production"
   | "completed"
   | "cancelled";
 export type CrewRole = "photographer" | "cameraman" | "assistant" | "editor" | "other";
@@ -963,6 +964,8 @@ export const CONTRACT_STATUS_LABEL: Record<ContractStatus, string> = {
   sent: "Chờ khách duyệt",
   approved: "Khách đã duyệt",
   in_progress: "Đang thực hiện",
+  // Tự chuyển sang sau khi QUA ngày chụp cuối — xem autoAdvanceContracts().
+  post_production: "Đang hậu kỳ",
   completed: "Hoàn thành",
   cancelled: "Đã huỷ",
 };
@@ -976,6 +979,9 @@ export const CONTRACT_STATUS_TONE: Record<ContractStatus, { fg: string; bg: stri
   sent: { fg: "var(--am)", bg: "var(--amS)" },
   approved: { fg: "var(--bl)", bg: "var(--blS)" },
   in_progress: { fg: "var(--tl)", bg: "var(--tlS)" },
+  // Tím: nằm giữa "đang thực hiện" (xanh ngọc) và "hoàn thành" (xanh lá), phải
+  // là màu KHÔNG trùng hai màu đó thì liếc một cái mới phân biệt được.
+  post_production: { fg: "var(--pu)", bg: "var(--puS)" },
   completed: { fg: "var(--gn)", bg: "var(--gnS)" },
   cancelled: { fg: "var(--rd)", bg: "var(--rdS)" },
 };

@@ -373,7 +373,13 @@ export default function CalendarView({
 
         <div className="ml-auto flex flex-wrap items-center gap-3.5">
           <div className="hidden gap-3 min-[1100px]:flex">
-            {[["var(--am)", "Chờ khách duyệt"], ["var(--bl)", "Khách đã duyệt"], ["var(--tl)", "Đang thực hiện"], ["var(--gn)", "Hoàn thành"]].map(([c, l]) => (
+            {/* Đọc thẳng từ bảng nhãn/màu dùng chung. Chép tay lại vào đây thì mỗi
+                lần thêm trạng thái là chú giải nói sai màu trên lịch mà không ai
+                biết — lịch tô bằng CONTRACT_STATUS_TONE ở dưới. Bỏ 'draft' và
+                'cancelled' vì hợp đồng nháp/đã huỷ không lên lịch. */}
+            {(["sent", "approved", "in_progress", "post_production", "completed"] as ContractStatus[])
+              .map((k) => [CONTRACT_STATUS_TONE[k].fg, CONTRACT_STATUS_LABEL[k]])
+              .map(([c, l]) => (
               <span key={l} className="flex items-center gap-1.5 whitespace-nowrap text-[11.5px]" style={{ color: "var(--tx2)" }}>
                 <span className="h-[9px] w-[9px] flex-none rounded-[3px]" style={{ background: c }} /> {l}
               </span>

@@ -56,7 +56,7 @@ export default async function VendorsPage() {
     .from("studio_contracts")
     .select("id, title, code, client_name")
     .eq("owner_id", profile.id)
-    .in("status", ["approved", "in_progress", "completed"])
+    .in("status", ["approved", "in_progress", "post_production", "completed"])
     .order("event_date", { ascending: false })
     .limit(200);
 

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
 import { syncContractCalendar } from "@/lib/gcal-sync";
+import { dueForPostProduction } from "@/lib/contract-phase";
 
 // Trạng thái được phép TỰ chuyển sang 'in_progress' khi tới ngày. Chỉ những HĐ
 // đang hoạt động (đã gửi/đã duyệt) — KHÔNG đụng bản nháp (draft), đã hoàn tất
@@ -21,10 +22,16 @@ export function vnToday(): string {
  * - `ownerId` có → chỉ xử lý HĐ của chủ đó (khi mở trang, phản hồi tức thì).
  * - `ownerId` rỗng → tất cả HĐ (dùng cho cron chạy hằng ngày).
  *
- * Trả về danh sách id HĐ vừa được đổi trạng thái. Idempotent: HĐ đã in_progress
- * không nằm trong diện xét nên gọi lại nhiều lần vẫn an toàn.
+ * Rồi chuyển tiếp **'in_progress' → 'post_production'** ("Đang hậu kỳ") khi đã
+ * QUA ngày chụp CUỐI CÙNG — xem autoAdvanceToPostProduction() bên dưới.
+ *
+ * Trả về id HĐ của từng bước. Idempotent: HĐ đã ở trạng thái đích không nằm
+ * trong diện xét nên gọi lại nhiều lần vẫn an toàn.
  */
-export async function autoAdvanceContracts(db: SupabaseClient, ownerId?: string): Promise<string[]> {
+export async function autoAdvanceContracts(
+  db: SupabaseClient,
+  ownerId?: string
+): Promise<{ started: string[]; toPostProduction: string[] }> {
   const today = vnToday();
 
   // 1) Ứng viên: HĐ đang hoạt động, chưa đang thực hiện/hoàn tất/huỷ.
@@ -34,7 +41,7 @@ export async function autoAdvanceContracts(db: SupabaseClient, ownerId?: string)
     .in("status", ADVANCEABLE as unknown as string[]);
   if (ownerId) q = q.eq("owner_id", ownerId);
   const { data: contracts } = await q;
-  if (!contracts?.length) return [];
+  if (!contracts?.length) return { started: [], toPostProduction: await autoAdvanceToPostProduction(db, ownerId) };
 
   // 2) Mốc sớm nhất theo studio_events cho các HĐ ứng viên (vd ngày đãi trước).
   const ids = contracts.map((c) => c.id as string);
@@ -62,7 +69,7 @@ export async function autoAdvanceContracts(db: SupabaseClient, ownerId?: string)
     const earliest = dates.reduce((a, b) => (a < b ? a : b));
     if (earliest <= today) toAdvance.push(c.id as string);
   }
-  if (!toAdvance.length) return [];
+  if (!toAdvance.length) return { started: [], toPostProduction: await autoAdvanceToPostProduction(db, ownerId) };
 
   await db.from("studio_contracts").update({ status: "in_progress" }).in("id", toAdvance);
 
@@ -82,5 +89,66 @@ export async function autoAdvanceContracts(db: SupabaseClient, ownerId?: string)
     // thao tác nào của người dùng để kích hoạt lối đồng bộ cũ từ trình duyệt.
     await syncContractCalendar(oid, id);
   }
-  return toAdvance;
+
+  // Bước 2 chạy SAU bước 1 và xét cả những HĐ vừa đổi ở trên: hợp đồng nhập vào
+  // sau khi đã chụp xong phải về đúng "Đang hậu kỳ" ngay trong một lần chạy,
+  // chứ không phải đợi cron ngày hôm sau.
+  return { started: toAdvance, toPostProduction: await autoAdvanceToPostProduction(db, ownerId) };
+}
+
+/**
+ * Tự chuyển hợp đồng **'in_progress' → 'post_production'** ("Đang hậu kỳ") khi
+ * đã QUA ngày chụp cuối cùng.
+ *
+ * Ngày cuối = max(`studio_contracts.event_date`, mọi mốc `studio_events` của
+ * HĐ). Phải lấy MUỘN NHẤT chứ không phải sớm nhất: đám cưới hay có nhiều buổi
+ * (ngày đãi trước, ngày cưới chính, chụp thêm hôm sau) — lấy ngày sớm nhất thì
+ * HĐ nhảy sang "đang hậu kỳ" trong khi vẫn còn buổi chưa chụp.
+ *
+ * So sánh `< today` chứ không phải `<=`: ngày chụp vẫn là ngày đang chụp, sang
+ * hôm sau mới là hậu kỳ.
+ *
+ * KHÔNG đụng 'completed' và 'cancelled' (đã xong/đã huỷ), cũng không đụng
+ * 'draft'/'sent'/'approved' (chưa tới lượt — bước 1 lo).
+ */
+export async function autoAdvanceToPostProduction(db: SupabaseClient, ownerId?: string): Promise<string[]> {
+  const today = vnToday();
+
+  let q = db.from("studio_contracts").select("id, owner_id, event_date").eq("status", "in_progress");
+  if (ownerId) q = q.eq("owner_id", ownerId);
+  const { data: contracts } = await q;
+  if (!contracts?.length) return [];
+
+  const ids = contracts.map((c) => c.id as string);
+  const { data: events } = await db
+    .from("studio_events")
+    .select("contract_id, event_date")
+    .in("contract_id", ids)
+    .not("event_date", "is", null);
+  const latestMilestone = new Map<string, string>();
+  for (const e of events ?? []) {
+    const cid = e.contract_id as string | null;
+    const d = e.event_date as string | null;
+    if (!cid || !d) continue;
+    const cur = latestMilestone.get(cid);
+    if (!cur || d > cur) latestMilestone.set(cid, d);
+  }
+
+  const toPost: string[] = [];
+  for (const c of contracts) {
+    const moc = latestMilestone.get(c.id as string) ?? null;
+    if (dueForPostProduction(c.event_date as string | null, [moc], today)) toPost.push(c.id as string);
+  }
+  if (!toPost.length) return [];
+
+  await db.from("studio_contracts").update({ status: "post_production" }).in("id", toPost);
+
+  // Đổi trạng thái thì sự kiện trên Google Lịch cũng phải theo — nhánh này chạy
+  // trong cron, không có thao tác người dùng nào để kích hoạt lối đồng bộ cũ.
+  const ownerById = new Map(contracts.map((c) => [c.id as string, c.owner_id as string]));
+  for (const id of toPost) {
+    const oid = ownerById.get(id);
+    if (oid) await syncContractCalendar(oid, id);
+  }
+  return toPost;
 }

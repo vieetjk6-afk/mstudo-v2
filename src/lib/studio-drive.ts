@@ -511,7 +511,8 @@ export async function wireContractAlbums(
   //     hoặc "hoàn thành". HĐ mới ký (approved) mà CHƯA tới giai đoạn thực hiện
   //     thì CHƯA tạo album (yêu cầu: ẩn/không tạo album cho tới khi thực hiện).
   //   - Album GIAO KHÁCH: chỉ tạo khi HĐ "hoàn thành".
-  const inProduction = contract.status === "in_progress" || contract.status === "completed";
+  const inProduction =
+    contract.status === "in_progress" || contract.status === "post_production" || contract.status === "completed";
   const phases =
     opts?.phases ??
     ([

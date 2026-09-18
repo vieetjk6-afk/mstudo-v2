@@ -4,7 +4,7 @@ import { requireDesktopOwner } from "@/lib/desktop/auth";
 
 export const dynamic = "force-dynamic";
 
-const STATUSES = new Set(["draft", "sent", "approved", "in_progress", "completed", "cancelled"]);
+const STATUSES = new Set(["draft", "sent", "approved", "in_progress", "post_production", "completed", "cancelled"]);
 
 /**
  * Danh sách hợp đồng cho MStudo Desktop.

@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     .select(
       "id, owner_id, title, client_name, client_phone, client_email, client_token, status, client_signed_at, event_date, selection_album_id, gallery_album_id"
     )
-    .in("status", ["sent", "approved", "in_progress", "completed"])
+    .in("status", ["sent", "approved", "in_progress", "post_production", "completed"])
     .limit(2000);
 
   const list = (contracts ?? []) as {

@@ -41,7 +41,7 @@ const monthKey = (s) => (s ? String(s).slice(0, 7) : "");
 const todayVN = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 const thisMonth = () => todayVN().slice(0, 7);
 
-const CONTRACT_STATUS = { draft: "Nháp", sent: "Đã gửi", approved: "Đã duyệt", in_progress: "Đang thực hiện", completed: "Hoàn thành", cancelled: "Đã hủy" };
+const CONTRACT_STATUS = { draft: "Nháp", sent: "Đã gửi", approved: "Đã duyệt", in_progress: "Đang thực hiện", post_production: "Đang hậu kỳ", completed: "Hoàn thành", cancelled: "Đã hủy" };
 const QUOTE_STATUS = { draft: "Nháp", sent: "Đã gửi", viewed: "Đã xem", adjust_requested: "Xin chỉnh", accepted: "Đã chốt", converted: "Đã chuyển HĐ", expired: "Hết hạn", cancelled: "Đã hủy" };
 const BOOKING_STATUS = { new: "Mới", handled: "Đã xử lý", archived: "Lưu trữ" };
 const SHOOT_TYPE = { photo: "Chụp ảnh", video: "Quay phim", both: "Chụp & quay", psc: "Phóng sự cưới", makeup: "Trang điểm", rental: "Thuê đồ", prewedding: "Pre-wedding", wedding: "Ngày cưới", other: "Khác" };
@@ -185,7 +185,7 @@ function renderOverview() {
 
   const active = list.filter((c) => c.status !== "completed").length;
   const upcomingShoots = list
-    .filter((c) => c.event_date && c.event_date >= today0 && ["approved", "in_progress", "completed"].includes(c.status))
+    .filter((c) => c.event_date && c.event_date >= today0 && ["approved", "in_progress", "post_production", "completed"].includes(c.status))
     .slice(0, 6);
   const selectingAlbums = T("albums").filter((a) => a.phase === "selection" && a.status === "published" && !a.is_gallery).length;
   // Web đếm từ `list` (đã bỏ hợp đồng huỷ) — bám theo để không đếm dư.

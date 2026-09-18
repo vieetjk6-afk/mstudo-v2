@@ -11,7 +11,7 @@ const COLS =
   "id, code, title, client_name, client_phone, event_date, shoot_type, service_id, status, drive_folder_id, drive_tree, drive_make_photo, drive_make_video, selection_album_id, gallery_album_id";
 
 /** Hợp đồng ở trạng thái nào thì đáng tạo thư mục. Nháp thì chưa. */
-const READY = ["approved", "in_progress", "completed"];
+const READY = ["approved", "in_progress", "post_production", "completed"];
 
 const folderUrl = (id: string) => `https://drive.google.com/drive/folders/${id}`;
 

@@ -73,6 +73,7 @@ const ORDER = [
   ["migrations/album_people.sql", "Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)"],
   ["migrations/album_faces.sql", "Kho khuôn mặt đã quét — để lượt quét tự động chạy tiếp được (chạy SAU album_people)"],
   ["migrations/contract_item_description.sql", "Mô tả chi tiết cho từng hạng mục hợp đồng"],
+  ["migrations/contract_post_production.sql", "Trạng thái hợp đồng \"Đang hậu kỳ\" (chạy SAU schema.sql)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];

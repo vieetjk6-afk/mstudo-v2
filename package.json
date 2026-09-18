@@ -27,6 +27,7 @@
     "test:missing-column": "node --experimental-strip-types desktop/test/missing-column.mjs",
     "test:fetch-khong-cache": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/fetch-khong-cache.mjs",
     "test:lifecycle": "node --experimental-strip-types desktop/test/lifecycle.mjs",
+    "test:hau-ky": "node --experimental-strip-types desktop/test/hau-ky.mjs",
     "test:referral-deposit": "node --experimental-strip-types desktop/test/referral-deposit.mjs",
     "test:pricelist-label": "node --experimental-strip-types desktop/test/pricelist-label.mjs",
     "test:activity": "node --experimental-strip-types desktop/test/activity.mjs",

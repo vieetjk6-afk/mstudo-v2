@@ -51,6 +51,16 @@ export const contracts: ContractRow[] = [
     event_date: "2026-08-01", event_time: null, status: "completed", shoot_type: "photo",
     contract_items: [{ qty: 40, unit_price: 350_000 }], contract_payments: [{ amount: 14_000_000 }], contract_crew: [],
   },
+  // Đang hậu kỳ: đã chụp xong (ngày chụp ở quá khứ) nhưng chưa giao. Có mặt ở
+  // đây để cột kanban mới và viên trạng thái tím thật sự hiện ra trong
+  // /uipreview — trạng thái nào không có dữ liệu mẫu thì không ai soi được.
+  {
+    id: "c5", code: "HD2607", title: "Chụp sản phẩm mỹ phẩm · 120 mẫu", client_name: "Công ty TNHH Hạ Vy",
+    client_phone: "0903111222", event_date: "2026-07-20", event_time: "09:00",
+    status: "post_production", shoot_type: "photo",
+    contract_items: [{ qty: 120, unit_price: 150_000 }], contract_payments: [{ amount: 9_000_000 }],
+    contract_crew: [{ id: "k5", name: "Hà", role: "photographer", status: "accepted" }],
+  },
   // Hợp đồng nháp, thiếu gần hết trường — ca hay làm vỡ bảng nhất.
   {
     id: "c3", code: null, title: "Chưa đặt tên", client_name: null, client_phone: null,
@@ -66,9 +76,14 @@ export const contracts: ContractRow[] = [
 
 export const board: BoardCard[] = contracts.map((c) => ({
   id: c.id, title: c.title, client_name: c.client_name, status: c.status,
-  event_date: c.event_date, delivery_due: c.status === "in_progress" ? "2026-10-05" : null,
+  event_date: c.event_date,
+  // Hợp đồng đang hậu kỳ cũng có hạn giao và việc đang làm dở — nếu để trống
+  // thì thẻ trong cột mới trông rỗng, không phản ánh đúng ca thật.
+  delivery_due: c.status === "in_progress" ? "2026-10-05" : c.status === "post_production" ? "2026-08-15" : null,
   contract_items: c.contract_items.map((i) => ({ qty: i.qty, unit_price: i.unit_price })),
-  contract_tasks: c.status === "in_progress" ? [{ done: true }, { done: true }, { done: false }] : [],
+  contract_tasks:
+    c.status === "in_progress" ? [{ done: true }, { done: true }, { done: false }] :
+    c.status === "post_production" ? [{ done: true }, { done: true }, { done: true }, { done: false }] : [],
 }));
 
 export const clients: ClientAgg[] = [

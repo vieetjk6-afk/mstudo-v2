@@ -294,7 +294,7 @@ export default async function StudioOverview() {
   //  • Cắt `.slice(0, 6)` ngay tại đây khiến thẻ KPI "Lịch sắp tới" không bao giờ
   //    quá 6, dù studio có 30 buổi. Giữ danh sách đầy đủ để đếm; cắt lúc VẼ.
   const upcoming = list
-    .filter((c) => c.event_date && c.event_date >= today && ["approved", "in_progress", "completed"].includes(c.status))
+    .filter((c) => c.event_date && c.event_date >= today && ["approved", "in_progress", "post_production", "completed"].includes(c.status))
     .sort((a, b) =>
       (a.event_date as string).localeCompare(b.event_date as string) ||
       // Buổi chưa ghi giờ xuống cuối ngày hôm đó, không đoán hộ là sáng hay chiều.
@@ -488,7 +488,9 @@ export default async function StudioOverview() {
   // 5. Đã chụp xong nhưng chưa tạo album chọn ảnh.
   for (const c of notCancelled) {
     if (!c.event_date || c.event_date >= today) continue;
-    if (c.status !== "approved" && c.status !== "in_progress") continue;
+    // post_production BẮT BUỘC có mặt: sau ngày chụp hợp đồng tự sang trạng
+    // thái đó, thiếu nó thì nhắc "chưa tạo album chọn ảnh" không bao giờ hiện.
+    if (c.status !== "approved" && c.status !== "in_progress" && c.status !== "post_production") continue;
     if (c.selection_album_id) continue;
     urgent.push({
       key: `album-${c.id}`, icon: ImagePlus, tone: "blue",
