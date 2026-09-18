@@ -12,7 +12,8 @@
  *   npm run huong-dan:hop-dong              # cửa sổ 2
  *
  * Kết quả (ghi đè mỗi lần chạy) vào public/huong-dan/tao-hop-dong/:
- *   huong-dan-tao-hop-dong.webm   video liền mạch, có con trỏ giả + lời thuyết minh
+ *   huong-dan-tao-hop-dong.mp4    video liền mạch, có con trỏ giả + lời thuyết minh
+ *                                 (thành .webm nếu máy không có ffmpeg — xem doiSangMp4)
  *   buoc-0…buoc-5.png             ảnh từng bước, có khung vàng chỉ vào chỗ cần bấm
  *
  * Trang /huong-dan/tao-hop-dong đọc đúng thư mục này, nên chạy script xong là
@@ -23,6 +24,8 @@
  */
 import { chromium } from "playwright";
 import { mkdir, readdir, rename, rm } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import path from "node:path";
 // Nạp thẳng file .ts (`node --experimental-strip-types`, xem package.json).
 // Đường dẫn tương đối + đuôi .ts: node không hiểu alias `@/` của tsconfig.
@@ -424,12 +427,64 @@ async function quayVideo(browser) {
   const video = page.video();
   await context.close();
   if (video) {
-    await rename(await video.path(), path.join(OUT, "huong-dan-tao-hop-dong.webm"));
-    console.log("video · huong-dan-tao-hop-dong.webm");
+    const webm = path.join(OUT, "huong-dan-tao-hop-dong.webm");
+    await rename(await video.path(), webm);
+    await doiSangMp4(webm);
   }
   // Playwright để lại thư mục rỗng + có thể vài file thừa nếu chạy hỏng giữa chừng.
   for (const f of await readdir(tam).catch(() => [])) await rm(path.join(tam, f), { force: true });
   await rm(tam, { recursive: true, force: true });
+}
+
+/* ── WebM → MP4 ──────────────────────────────────────────────────────────────
+   Playwright CHỈ quay được .webm. Trên máy tính thì trình duyệt nào cũng mở
+   được, nhưng người nhận hướng dẫn phần lớn xem bằng ĐIỆN THOẠI — và Safari
+   trên iPhone đời cũ (trước iOS 17.4) không mở webm: bấm vào chỉ thấy một ô
+   đen. MP4 H.264 thì máy nào cũng phát, lại nhẹ hơn khoảng bốn lần.
+
+   Không thêm ffmpeg vào devDependencies (gói nhị phân ~80 MB, cả đội phải tải
+   cho một việc chạy vài tháng một lần): tìm ffmpeg đang có sẵn, không thấy thì
+   giữ nguyên .webm — trang hướng dẫn khai CẢ HAI nguồn nên vẫn xem được. */
+function timFfmpeg() {
+  const ungVien = [process.env.FFMPEG_PATH, "ffmpeg"];
+  try {
+    // ffmpeg-static nếu ai đó đã cài; không có thì bỏ qua, không phải lỗi.
+    ungVien.push(createRequire(import.meta.url)("ffmpeg-static"));
+  } catch {}
+  for (const f of ungVien) {
+    if (!f) continue;
+    // Bản ffmpeg đi kèm Playwright CÓ trên máy nhưng chỉ biết webm — hỏi thẳng
+    // xem có libx264 không, đừng đoán theo tên file.
+    const r = spawnSync(f, ["-hide_banner", "-encoders"], { encoding: "utf8" });
+    if (r.status === 0 && r.stdout.includes("libx264")) return f;
+  }
+  return null;
+}
+
+async function doiSangMp4(webm) {
+  const ff = timFfmpeg();
+  if (!ff) {
+    console.log("video · huong-dan-tao-hop-dong.webm (không tìm thấy ffmpeg có libx264 — bỏ qua bản MP4)");
+    console.log("        Muốn có MP4 cho iPhone: npx -y ffmpeg-static-bin || đặt FFMPEG_PATH trỏ tới ffmpeg của máy.");
+    return;
+  }
+  const mp4 = webm.replace(/\.webm$/, ".mp4");
+  const r = spawnSync(ff, [
+    "-hide_banner", "-loglevel", "error", "-i", webm,
+    "-c:v", "libx264", "-preset", "slow", "-crf", "26",
+    // yuv420p + profile high: kiểu duy nhất mọi máy đều giải mã được. Bỏ ra là
+    // ffmpeg chọn yuv444p theo nguồn, và Safari/iPhone lại không mở được.
+    "-pix_fmt", "yuv420p", "-profile:v", "high", "-level", "4.0",
+    // Đẩy phần mô tả lên đầu file để trình duyệt phát được ngay khi tải dở.
+    "-movflags", "+faststart",
+    "-an", "-y", mp4,
+  ], { encoding: "utf8" });
+  if (r.status !== 0) {
+    console.log(`video · huong-dan-tao-hop-dong.webm (đổi sang MP4 hỏng: ${(r.stderr || "").trim().split("\n").pop()})`);
+    return;
+  }
+  await rm(webm, { force: true });
+  console.log("video · huong-dan-tao-hop-dong.mp4");
 }
 
 /* ── Chạy ────────────────────────────────────────────────────────────────── */

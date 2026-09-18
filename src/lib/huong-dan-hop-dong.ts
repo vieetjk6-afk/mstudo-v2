@@ -104,7 +104,20 @@ export const HUONG_DAN_TAO_HOP_DONG: BuocHuongDan[] = [
 
 /** Thư mục chứa ảnh + video do scripts/huong-dan-tao-hop-dong.mjs sinh ra. */
 export const THU_MUC_HUONG_DAN = "/huong-dan/tao-hop-dong";
-export const VIDEO_TAO_HOP_DONG = `${THU_MUC_HUONG_DAN}/huong-dan-tao-hop-dong.webm`;
+
+/**
+ * Video hướng dẫn, HAI định dạng theo thứ tự ưu tiên.
+ *
+ * MP4 (H.264) đứng trước vì đó là thứ duy nhất máy nào cũng phát được — kể cả
+ * Safari trên iPhone đời cũ, nơi .webm chỉ hiện một ô đen. Playwright chỉ quay
+ * được .webm nên script đổi sang MP4 sau khi quay; máy không có ffmpeg thì chỉ
+ * còn .webm, và thẻ <video> tự rơi xuống nguồn thứ hai.
+ */
+export const VIDEO_TAO_HOP_DONG: { src: string; type: string }[] = [
+  { src: `${THU_MUC_HUONG_DAN}/huong-dan-tao-hop-dong.mp4`, type: "video/mp4" },
+  { src: `${THU_MUC_HUONG_DAN}/huong-dan-tao-hop-dong.webm`, type: "video/webm" },
+];
+
 export const anhCuaBuoc = (b: BuocHuongDan) => `${THU_MUC_HUONG_DAN}/${b.ten}.png`;
 
 /**

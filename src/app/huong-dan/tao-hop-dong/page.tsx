@@ -47,20 +47,29 @@ export default function HuongDanTaoHopDongPage() {
 
       {/* ── Video ──────────────────────────────────────────────────────────── */}
       <section className="mt-8">
+        {/* `playsInline`: thiếu nó thì Safari trên iPhone nuốt luôn video vào
+            trình phát toàn màn hình của hệ thống ngay khi bấm play. */}
         <video
           controls
+          playsInline
           preload="metadata"
           poster={anhCuaBuoc(moMan)}
           className="w-full rounded-[16px]"
           style={{ border: "1px solid var(--bd)", background: "var(--sf2)" }}
         >
-          <source src={VIDEO_TAO_HOP_DONG} type="video/webm" />
+          {VIDEO_TAO_HOP_DONG.map((v) => (
+            <source key={v.src} src={v.src} type={v.type} />
+          ))}
           Trình duyệt không mở được video. Cuộn xuống xem ảnh từng bước bên dưới.
         </video>
-        <p className="mt-2 text-[12px]" style={{ color: "var(--text3)" }}>
+        <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]" style={{ color: "var(--text3)" }}>
           {/* Không ghi độ dài video: mỗi lần chạy lại script là con số đổi, mà
               chẳng ai nhớ sửa dòng này theo. */}
-          Video quay trên chính giao diện của app · dữ liệu trong ví dụ là dữ liệu mẫu · không có tiếng.
+          <span>Video quay trên chính giao diện của app · dữ liệu trong ví dụ là dữ liệu mẫu · không có tiếng.</span>
+          {/* Đường tải về để gửi cho thợ qua Zalo, không phải ai cũng mở link web. */}
+          <a href={VIDEO_TAO_HOP_DONG[0].src} download className="font-semibold underline" style={{ color: "var(--ac)" }}>
+            Tải video về máy
+          </a>
         </p>
       </section>
 

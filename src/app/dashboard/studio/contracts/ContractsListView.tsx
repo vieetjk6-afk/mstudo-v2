@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Search, Download, FileSpreadsheet, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText, CalendarClock } from "lucide-react";
+import { Plus, Search, Download, FileSpreadsheet, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText, CalendarClock, PlayCircle } from "lucide-react";
 import { useCachedJson } from "@/lib/client-cache";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, avatarStyle, initials } from "@/lib/avatar";
@@ -324,6 +324,19 @@ export function ContractsList({
             <FileSpreadsheet size={16} /> {exporting ? "Đang tạo…" : "Xuất Excel"}
           </button>
           <button onClick={exportCsv} className={btn} style={btnStyle} title="Bản CSV cho công cụ khác"><Download size={16} /> CSV</button>
+          {/* Hướng dẫn mở TAB MỚI: người bấm vào đây hầu như luôn đang dở tay
+              tạo hợp đồng và cần vừa xem vừa làm — điều hướng đè lên màn hiện
+              tại là bắt họ quay lại rồi mở lại từ đầu. */}
+          <a
+            href="/huong-dan/tao-hop-dong"
+            target="_blank"
+            rel="noopener"
+            className={btn}
+            style={btnStyle}
+            title="Video + ảnh hướng dẫn từng bước tạo hợp đồng"
+          >
+            <PlayCircle size={16} /> Hướng dẫn
+          </a>
           <Link
             href="/dashboard/studio/contracts/new"
             className="flex flex-none items-center gap-1.5 rounded-[9px] px-3.5 py-2 text-[12.5px] font-semibold"
