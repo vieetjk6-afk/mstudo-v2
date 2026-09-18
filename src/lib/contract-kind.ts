@@ -1,4 +1,4 @@
-import type { ShootType } from "@/lib/types";
+import type { CrewRole, ShootType } from "@/lib/types";
 
 /**
  * PHÂN LOẠI HỢP ĐỒNG — gom các gói dịch vụ thành ba nhóm làm việc khác nhau.
@@ -123,3 +123,18 @@ export function shootTypesByKind(all: ShootType[]): Record<ContractKind, ShootTy
   for (const t of all) ra[contractKind(t)].push(t);
   return ra;
 }
+
+/**
+ * Vai trò nhân sự hợp với từng nhóm hợp đồng.
+ *
+ * Trước bản này ô chọn vai trò luôn là Photographer / Cameraman / Sửa ảnh, nên
+ * hợp đồng makeup không có lấy một vai trò nào đúng nghề — studio phải chọn
+ * "Khác" cho thợ trang điểm, rồi bảng lương và cổng thợ đều hiện "Khác".
+ *
+ * "Trợ lý" và "Khác" có ở mọi nhóm; trọn gói có tất cả vì làm cả hai nghề.
+ */
+export const CREW_ROLES_BY_KIND: Record<ContractKind, CrewRole[]> = {
+  shoot: ["photographer", "cameraman", "editor", "assistant", "other"],
+  makeup: ["makeup", "hair", "assistant", "other"],
+  combo: ["photographer", "cameraman", "makeup", "hair", "editor", "assistant", "other"],
+};

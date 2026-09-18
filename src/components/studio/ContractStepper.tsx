@@ -1,11 +1,17 @@
 "use client";
 
 import { Check } from "lucide-react";
+import type { ContractKind } from "@/lib/contract-kind";
 
 /**
  * Stepper vòng đời hợp đồng — 7 bước của bản thiết kế, thay cho ô chọn trạng
  * thái ở màn chi tiết:
  *   Báo giá → Ký hợp đồng → Phân công → Nhận cọc → Chụp → Hậu kỳ → Giao album
+ *
+ * BA BƯỚC CUỐI ĐỔI TÊN THEO NHÓM HỢP ĐỒNG. Hợp đồng makeup / thuê đồ không có
+ * tấm ảnh nào: gọi bước cuối là "Giao album" thì thợ makeup nhìn vào không biết
+ * mình đang ở đâu. Chỉ đổi CHỮ, ba mốc dữ liệu vẫn y nguyên (đã tới ngày làm
+ * chưa, xong việc chưa, kết thúc chưa) nên không có logic nào phải sửa theo.
  *
  * Mỗi bước ĐƯỢC SUY RA TỪ DỮ LIỆU THẬT của hợp đồng (có hạng mục chưa, khách ký
  * chưa, đã phân công chưa, đã thu đồng nào chưa…), không phải một cột trạng
@@ -22,17 +28,40 @@ export type ContractLifecycle = {
   delivered: boolean;
 };
 
-const STEPS: { key: keyof ContractLifecycle; label: string }[] = [
+const DAU: { key: keyof ContractLifecycle; label: string }[] = [
   { key: "hasItems", label: "Báo giá" },
   { key: "signed", label: "Ký hợp đồng" },
   { key: "hasCrew", label: "Phân công" },
   { key: "hasDeposit", label: "Nhận cọc" },
-  { key: "shot", label: "Chụp" },
-  { key: "postDone", label: "Hậu kỳ" },
-  { key: "delivered", label: "Giao album" },
 ];
 
-export default function ContractStepper({ state, right }: { state: ContractLifecycle; right?: React.ReactNode }) {
+/** Ba bước cuối, theo nhóm. Trọn gói giữ chữ của nghề ảnh vì có cả hai nghề. */
+const CUOI: Record<ContractKind, { key: keyof ContractLifecycle; label: string }[]> = {
+  shoot: [
+    { key: "shot", label: "Chụp" },
+    { key: "postDone", label: "Hậu kỳ" },
+    { key: "delivered", label: "Giao album" },
+  ],
+  makeup: [
+    { key: "shot", label: "Ngày làm" },
+    { key: "postDone", label: "Trả đồ" },
+    { key: "delivered", label: "Hoàn tất" },
+  ],
+  combo: [
+    { key: "shot", label: "Chụp" },
+    { key: "postDone", label: "Hậu kỳ" },
+    { key: "delivered", label: "Giao album" },
+  ],
+};
+
+export default function ContractStepper({
+  state, right, kind = "shoot",
+}: {
+  state: ContractLifecycle;
+  right?: React.ReactNode;
+  kind?: ContractKind;
+}) {
+  const STEPS = [...DAU, ...CUOI[kind]];
   // Bước hiện tại = bước chưa xong đầu tiên. Xong hết thì không bước nào sáng.
   const currentIndex = STEPS.findIndex((s) => !state[s.key]);
 

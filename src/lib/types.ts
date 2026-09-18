@@ -293,7 +293,7 @@ export type ContractStatus =
   | "post_production"
   | "completed"
   | "cancelled";
-export type CrewRole = "photographer" | "cameraman" | "assistant" | "editor" | "other";
+export type CrewRole = "photographer" | "cameraman" | "makeup" | "hair" | "assistant" | "editor" | "other";
 export type CrewStatus = "pending" | "accepted" | "declined";
 
 export interface StudioService {
@@ -989,6 +989,8 @@ export const CONTRACT_STATUS_TONE: Record<ContractStatus, { fg: string; bg: stri
 export const CREW_ROLE_LABEL: Record<CrewRole, string> = {
   photographer: "Photographer",
   cameraman: "Cameraman",
+  makeup: "Trang điểm",
+  hair: "Làm tóc",
   assistant: "Trợ lý",
   editor: "Sửa ảnh / Dựng phim",
   other: "Khác",

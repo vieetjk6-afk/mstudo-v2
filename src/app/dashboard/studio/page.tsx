@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { contractKind, kindHasPhotoWork } from "@/lib/contract-kind";
 import { redirect } from "next/navigation";
 import {
   Plus, FileText, CalendarDays, Users, AlertCircle, Wallet, Clock, Globe, Images,
@@ -491,6 +492,10 @@ export default async function StudioOverview() {
     // post_production BẮT BUỘC có mặt: sau ngày chụp hợp đồng tự sang trạng
     // thái đó, thiếu nó thì nhắc "chưa tạo album chọn ảnh" không bao giờ hiện.
     if (c.status !== "approved" && c.status !== "in_progress" && c.status !== "post_production") continue;
+    // Hợp đồng makeup / thuê đồ không có ảnh nào để chọn — giục tạo album chọn
+    // ảnh cho nó là việc không làm được, và mục này nằm ở khu VIỆC GẤP nên đẩy
+    // những thứ thật sự gấp xuống dưới.
+    if (!kindHasPhotoWork(contractKind(c.shoot_type))) continue;
     if (c.selection_album_id) continue;
     urgent.push({
       key: `album-${c.id}`, icon: ImagePlus, tone: "blue",

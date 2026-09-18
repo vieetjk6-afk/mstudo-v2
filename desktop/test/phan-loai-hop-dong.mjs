@@ -17,8 +17,9 @@
 import {
   contractKind, shootTypesByKind, kindHasRental, kindHasPhotoWork,
   CONTRACT_KIND_LABEL, PRESET_ITEMS_BY_KIND, DEFAULT_TASKS_BY_KIND, PRESET_TASKS_BY_KIND,
+  CREW_ROLES_BY_KIND,
 } from "../../src/lib/contract-kind.ts";
-import { SHOOT_TYPES, SHOOT_TYPE_LABEL } from "../../src/lib/types.ts";
+import { SHOOT_TYPES, SHOOT_TYPE_LABEL, CREW_ROLE_LABEL } from "../../src/lib/types.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -97,6 +98,44 @@ for (const k of ["shoot", "makeup", "combo"]) {
 
 check("nhóm nào có thuê đồ", ["shoot", "makeup", "combo"].map(kindHasRental), [false, true, true]);
 check("nhóm nào có hậu kỳ ảnh", ["shoot", "makeup", "combo"].map(kindHasPhotoWork), [true, false, true]);
+
+/* ── 5. Vai trò nhân sự theo nhóm ─────────────────────────────────────────── */
+
+// Mỗi nhóm phải có ít nhất một vai trò ĐÚNG NGHỀ, không chỉ còn "Khác": studio
+// buộc phải chọn "Khác" thì bảng lương và cổng thợ đều hiện "Khác".
+ok("nhóm chụp có vai trò chụp", CREW_ROLES_BY_KIND.shoot.includes("photographer"));
+ok("nhóm makeup có vai trò trang điểm", CREW_ROLES_BY_KIND.makeup.includes("makeup"));
+ok("nhóm makeup có vai trò làm tóc", CREW_ROLES_BY_KIND.makeup.includes("hair"));
+ok("nhóm makeup KHÔNG hiện vai trò của nghề ảnh",
+  !CREW_ROLES_BY_KIND.makeup.some((r) => ["photographer", "cameraman", "editor"].includes(r)),
+  `đang có: ${CREW_ROLES_BY_KIND.makeup.join(", ")}`);
+ok("nhóm chụp KHÔNG hiện vai trò makeup",
+  !CREW_ROLES_BY_KIND.shoot.some((r) => ["makeup", "hair"].includes(r)),
+  `đang có: ${CREW_ROLES_BY_KIND.shoot.join(", ")}`);
+for (const k of ["shoot", "makeup", "combo"]) {
+  ok(`nhóm ${k} luôn có "Khác" để thoát`, CREW_ROLES_BY_KIND[k].includes("other"));
+  ok(`mọi vai trò của nhóm ${k} đều có nhãn`, CREW_ROLES_BY_KIND[k].every((r) => !!CREW_ROLE_LABEL[r]),
+    `thiếu nhãn: ${CREW_ROLES_BY_KIND[k].filter((r) => !CREW_ROLE_LABEL[r]).join(", ")}`);
+  const d = CREW_ROLES_BY_KIND[k].filter((x, i) => CREW_ROLES_BY_KIND[k].indexOf(x) !== i);
+  ok(`vai trò nhóm ${k} không lặp`, d.length === 0, `lặp: ${d.join(", ")}`);
+}
+// Trọn gói làm cả hai nghề nên phải gộp đủ.
+for (const k of ["shoot", "makeup"]) {
+  const thieu = CREW_ROLES_BY_KIND[k].filter((r) => !CREW_ROLES_BY_KIND.combo.includes(r));
+  ok(`trọn gói có đủ vai trò của nhóm ${k}`, thieu.length === 0, `thiếu: ${thieu.join(", ")}`);
+}
+// Ràng buộc trong database phải cho phép mọi vai trò app đưa ra, không thì
+// studio chọn xong bấm lưu là database từ chối.
+const sql = (await import("node:fs")).readFileSync(new URL("../../supabase/schema.sql", import.meta.url), "utf8");
+// Phải cắt ĐÚNG khối bảng contract_crew trước khi tìm. Tìm thẳng trên cả file
+// thì `check (role in ('admin','photographer'))` của bảng profiles khớp trước
+// — bản đo đầu tiên dính đúng bẫy này và báo 6 lỗi giả.
+const khoi = sql.slice(sql.indexOf("create table if not exists public.contract_crew ("));
+const rang = khoi.slice(0, khoi.indexOf("\n);")).match(/check \(role in \(([^)]*)\)\)/s)?.[1] ?? "";
+ok("đọc được ràng buộc vai trò của contract_crew", rang.includes("photographer"), `cắt ra: ${rang.slice(0, 60)}`);
+for (const r of Object.keys(CREW_ROLE_LABEL)) {
+  ok(`database chấp nhận vai trò "${r}"`, rang.includes(`'${r}'`), `ràng buộc đang là: ${rang.replace(/\s+/g, " ")}`);
+}
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

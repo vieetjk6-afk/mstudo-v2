@@ -386,6 +386,27 @@ export const contractFull: StudioContract = {
   branch_id: "b1", created_at: `${D}T08:00:00Z`, updated_at: `${D}T09:12:00Z`,
 };
 
+/* Cùng một hợp đồng nhưng nhóm MAKEUP — để soi được phần app phải ẨN đi: không
+   tab "Sản phẩm", có tab "Thuê đồ", và ba bước cuối của thang vòng đời đổi chữ.
+   Không có dữ liệu mẫu cho nhóm này thì khác biệt đó không ai nhìn thấy. */
+export const contractMakeup: StudioContract = {
+  ...contractFull,
+  id: "c9",
+  code: "HD2611",
+  title: "Makeup cô dâu + thuê váy — nhà gái",
+  shoot_type: "makeup",
+};
+
+/* Nhóm CHỤP — soi phần phải ẩn ở chiều ngược lại: có tab "Sản phẩm", KHÔNG có
+   tab "Thuê đồ", và không viên hạng mục makeup nào. */
+export const contractChup: StudioContract = {
+  ...contractFull,
+  id: "c8",
+  code: "HD2612",
+  title: "Chụp kỷ yếu lớp 12A3 — 45 bạn",
+  shoot_type: "photo",
+};
+
 export const contractItems: ContractItem[] = [
   { id: "i1", contract_id: "c1", name: "Gói phóng sự cưới trọn gói hai ngày (chụp + quay)", qty: 1, unit_price: 45_000_000, position: 0, description: "Bao gồm 2 thợ chụp, 1 thợ quay, 1 trợ lý.", created_at: `${D}T08:00:00Z` },
   { id: "i2", contract_id: "c1", name: "Album in 30x30 (60 trang)", qty: 2, unit_price: 3_500_000, position: 1, description: null, created_at: `${D}T08:00:00Z` },
