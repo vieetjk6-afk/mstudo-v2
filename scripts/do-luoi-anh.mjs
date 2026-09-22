@@ -24,8 +24,13 @@
 import { chromium } from "playwright";
 
 const URL_BASE = process.env.PREVIEW_URL || "http://127.0.0.1:3333";
-const PAGE = `${URL_BASE}/uipreview/luoi-anh`;
+// `?wm=1`: đo ô NẶNG NHẤT — album có watermark.
+const PAGE = `${URL_BASE}/uipreview/luoi-anh?wm=1`;
 const EXEC = process.env.CHROME_PATH || undefined;
+/** Trần số thẻ HTML mỗi ô. Ô hiện có 6 thẻ (ô, ảnh, lớp watermark, nút tim +
+ *  svg bên trong). Vượt 8 là có ai đó rải lại hàng loạt thẻ con vào từng ô —
+ *  chuyện đã từng xảy ra với watermark (8 thẻ chữ mỗi ô) và làm nặng cả trang. */
+const TRAN_THE_MOI_O = 8;
 /** Trần số ảnh được giữ cùng lúc. Cửa sổ giữ là ±150% màn hình nên thực tế
  *  ~30–60 tấm; 150 là mức "rõ ràng đã hỏng" chứ không phải mức chuẩn. */
 const TRAN_GIU = 150;
@@ -64,10 +69,16 @@ for (let i = 0; i < 45; i++) {
   });
   if (giu > giuMax) giuMax = giu;
 }
-const { tong, caoCuoi } = await page.evaluate(() => ({
+const { tong, caoCuoi, the, o } = await page.evaluate(() => ({
   tong: document.querySelectorAll("#luoi-anh-demo img").length,
   caoCuoi: document.documentElement.scrollHeight,
+  the: document.querySelectorAll("#luoi-anh-demo *").length,
+  o: document.querySelectorAll("#luoi-anh-demo > div > div").length,
 }));
+
+const theMoiO = the / o;
+if (theMoiO <= TRAN_THE_MOI_O) ok(`mỗi ô chỉ ${theMoiO.toFixed(1)} thẻ HTML (${the} thẻ cho ${o} ô)`);
+else bad(`Ô ẢNH PHÌNH THẺ — ${theMoiO.toFixed(1)} thẻ/ô (trần ${TRAN_THE_MOI_O}), tổng ${the} thẻ cho ${o} ô`);
 
 if (giuMax <= TRAN_GIU) ok(`cuộn hết ${tong} ô mà chỉ giữ tối đa ${giuMax} ảnh trong bộ nhớ`);
 else bad(`ẢNH KHÔNG ĐƯỢC NHẢ — cuộn hết ${tong} ô thì giữ tới ${giuMax} ảnh (trần ${TRAN_GIU})`);

@@ -46,6 +46,7 @@ import {
 import { loadLedger, saveLedger } from "@/lib/album-store";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
+import { watermarkLayer } from "@/lib/album-watermark";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
@@ -1256,13 +1257,7 @@ export default function CustomerAlbum({
                       {...masonry.imgProps(p.id)}
                     />
                     {wm && (
-                      <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
-                        {Array.from({ length: 8 }).map((_, i) => (
-                          <span key={i} className="rotate-[-30deg] whitespace-nowrap text-xs font-semibold tracking-widest text-white">
-                            {wm}
-                          </span>
-                        ))}
-                      </div>
+                      <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer(wm)} />
                     )}
                     {/* heart select — large tap target for mobile. Ảnh đang ở mục
                         không thích thì chỉ còn nút hoàn tác, không cho thích luôn. */}

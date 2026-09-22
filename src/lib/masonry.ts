@@ -218,7 +218,20 @@ export function useMasonry(colsMobile = 2, colsDesktop = 4) {
     [applySpan]
   );
 
-  /** Style cho MỘT ô ảnh ở lượt dựng đầu (sau đó `tileRef` lo cập nhật). */
+  /**
+   * Style cho MỘT ô ảnh ở lượt dựng đầu (sau đó `tileRef` lo cập nhật).
+   *
+   * ĐÃ THỬ `content-visibility: auto` ở đây (kèm `contain-intrinsic-size` theo
+   * số dòng lưới) — nghe thì đúng bài "ô ngoài khung nhìn khỏi vẽ", nhưng ĐO RA
+   * CHẬM HƠN HẲN trên chính lưới này (1200 ô, khổ iPhone, `npm run ui:luoi-anh`
+   * + đo bằng Performance.getMetrics):
+   *     layout   127 lần / 0,41s  →  2203 lần / 2,97s
+   *     style     85 lần / 0,28s  →  2172 lần / 0,66s
+   *     tác vụ dài  8 lượt / 425ms →  1 lượt / 1886ms
+   * Lý do: ô ra vào "vùng đáng vẽ" liên tục khi cuộn, mỗi lần đổi trạng thái là
+   * một lần xếp lại — với hàng nghìn ô thì tiền xếp lại đắt hơn tiền vẽ tiết
+   * kiệm được. Đừng thêm lại nếu không đo lại và thấy số khác.
+   */
   const tileStyle = useCallback(
     (id: string): CSSProperties => ({ gridRowEnd: `span ${spanOf(id)}` }),
     [spanOf]

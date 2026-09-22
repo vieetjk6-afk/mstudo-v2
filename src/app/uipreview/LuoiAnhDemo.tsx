@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { Heart } from "lucide-react";
 import { useMasonry } from "@/lib/masonry";
+import { watermarkLayer } from "@/lib/album-watermark";
+import { ICON_HALO } from "@/lib/album-icon";
 
 /**
  * LƯỚI ẢNH ALBUM — bài kiểm tra "cuộn sâu có lag không" (dữ liệu giả).
@@ -44,6 +47,12 @@ export default function LuoiAnhDemo() {
   const masonry = useMasonry(2, 4);
   const photos = useMemo(() => Array.from({ length: TOTAL }, (_, i) => fakePhoto(i)), []);
   const [held, setHeld] = useState<number | null>(null);
+  const [nodes, setNodes] = useState<number | null>(null);
+  // `?wm=1` bật lớp watermark — album có watermark là ô nặng nhất, phải đo được.
+  const [wm, setWm] = useState(false);
+  useEffect(() => {
+    setWm(new URLSearchParams(window.location.search).get("wm") === "1");
+  }, []);
 
   // Đếm số ảnh CÒN GIỮ byte: ảnh đã nhả mang dấu `data-mst-src` (chỗ cất src cũ).
   useEffect(() => {
@@ -52,6 +61,7 @@ export default function LuoiAnhDemo() {
       let n = 0;
       all.forEach((im) => { if (!im.dataset.mstSrc) n++; });
       setHeld(n);
+      setNodes(document.querySelectorAll("#luoi-anh-demo *").length);
     };
     tick();
     const t = setInterval(tick, 400);
@@ -64,7 +74,8 @@ export default function LuoiAnhDemo() {
         className="sticky top-0 z-10 mb-3 rounded-xl px-3.5 py-2.5 text-[13px]"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
-        <b>{TOTAL}</b> ô ảnh · đang giữ byte ảnh: <b data-test="giu">{held ?? "…"}</b>
+        <b>{TOTAL}</b> ô ảnh{wm ? " (có watermark)" : ""} · đang giữ byte ảnh:{" "}
+        <b data-test="giu">{held ?? "…"}</b> · thẻ HTML: <b data-test="nut">{nodes ?? "…"}</b>
         <span className="ml-2" style={{ color: "var(--text3)" }}>
           cuộn xuống sâu — con số này phải đứng yên ở mức thấp
         </span>
@@ -76,7 +87,7 @@ export default function LuoiAnhDemo() {
             <div
               key={p.id}
               ref={masonry.tileRef(p.id)}
-              className="overflow-hidden"
+              className="relative overflow-hidden"
               style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}
             >
               <img
@@ -87,6 +98,18 @@ export default function LuoiAnhDemo() {
                 decoding="async"
                 className="block h-full w-full object-cover"
               />
+              {/* Hai thứ này có trong ô album THẬT — đo mà bỏ chúng đi là đo thiếu. */}
+              {wm && (
+                <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer("Studio ABC")} />
+              )}
+              <button
+                type="button"
+                aria-label="Chọn ảnh"
+                className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center"
+                style={{ color: "#fff", filter: ICON_HALO }}
+              >
+                <Heart size={16} strokeWidth={2.2} />
+              </button>
             </div>
           ))}
         </div>

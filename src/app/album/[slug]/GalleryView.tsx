@@ -80,6 +80,7 @@ import PhotoZoom from "@/components/PhotoZoom";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
+import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
 import type { Feedback } from "@/lib/types";
 
@@ -167,9 +168,14 @@ export default function GalleryView({
           more = (await res.json()).photos ?? [];
         } catch { return; /* giữ những gì đã có nếu mạng lỗi */ }
         if (cancelled || more.length === 0) return;
-        setPhotos((prev) => {
-          const seen = new Set(prev.map((p) => p.id));
-          return [...prev, ...more.filter((p) => !seen.has(p.id))];
+        // Album 2–3 nghìn ảnh: gắn thêm một lô vào danh sách bắt React tính lại
+        // cả lưới. startTransition để việc đó nhường chỗ cho thao tác của khách
+        // (cuộn, bấm tim, mở ảnh) thay vì khoá luồng chính giữa chừng.
+        startTransition(() => {
+          setPhotos((prev) => {
+            const seen = new Set(prev.map((p) => p.id));
+            return [...prev, ...more.filter((p) => !seen.has(p.id))];
+          });
         });
         offset += more.length;
       }
@@ -479,11 +485,7 @@ export default function GalleryView({
                   <div key={p.id} ref={masonry.tileRef(p.id)} className="group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}>
                     <img {...masonry.imgProps(p.id)} onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-full w-full cursor-zoom-in select-none object-cover" />
                     {wm && (
-                      <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
-                        {Array.from({ length: 8 }).map((_, wi) => (
-                          <span key={wi} className="rotate-[-30deg] whitespace-nowrap text-xs font-semibold tracking-widest text-white">{wm}</span>
-                        ))}
-                      </div>
+                      <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer(wm)} />
                     )}
                     {isSel && <div className="pointer-events-none absolute inset-0 z-[2]" style={{ boxShadow: "inset 0 0 0 2px var(--gold)" }} />}
                     {isVideo(p) && (
