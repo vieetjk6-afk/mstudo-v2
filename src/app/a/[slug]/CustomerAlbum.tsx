@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Heart,
   HeartOff,
@@ -46,6 +46,7 @@ import {
 import { loadLedger, saveLedger } from "@/lib/album-store";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
+import { watermarkLayer } from "@/lib/album-watermark";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
@@ -668,7 +669,12 @@ export default function CustomerAlbum({
     ioRef.current = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
+          // startTransition: dựng thêm 250 ô là việc NẶNG. Đánh dấu là việc nền
+          // thì React 19 được phép cắt nhỏ và nhường lại cho cuộn/chạm, thay vì
+          // khoá luồng chính một nhịp dài mỗi lần chạm đáy.
+          startTransition(() => {
+            setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
+          });
         }
       },
       { rootMargin: "800px 0px" }
@@ -1215,6 +1221,7 @@ export default function CustomerAlbum({
               return (
                 <div
                   key={p.id}
+                  ref={masonry.tileRef(p.id)}
                   className="overflow-hidden animate-[vkPop_.45s_ease_both]"
                   style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}
                 >
@@ -1250,13 +1257,7 @@ export default function CustomerAlbum({
                       {...masonry.imgProps(p.id)}
                     />
                     {wm && (
-                      <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">
-                        {Array.from({ length: 8 }).map((_, i) => (
-                          <span key={i} className="rotate-[-30deg] whitespace-nowrap text-xs font-semibold tracking-widest text-white">
-                            {wm}
-                          </span>
-                        ))}
-                      </div>
+                      <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer(wm)} />
                     )}
                     {/* heart select — large tap target for mobile. Ảnh đang ở mục
                         không thích thì chỉ còn nút hoàn tác, không cho thích luôn. */}

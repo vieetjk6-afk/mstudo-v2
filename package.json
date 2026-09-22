@@ -80,6 +80,7 @@
     "inbox:zalo-worker": "node scripts/zalo-inbox-worker.mjs",
     "ui:shot": "node scripts/chup-giao-dien.mjs",
     "ui:test": "node scripts/kiem-tra-giao-dien.mjs",
+    "ui:luoi-anh": "node scripts/do-luoi-anh.mjs",
     "postinstall": "node scripts/chep-mediapipe.mjs"
   },
   "dependencies": {
