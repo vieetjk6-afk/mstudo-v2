@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { fetchAllPhotos } from "@/lib/photos";
 import CustomerAlbum from "./CustomerAlbum";
+import OpenInBrowserNotice from "@/components/OpenInBrowserNotice";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import Brand from "@/components/Brand";
 import { buildAlbumMetadata } from "@/lib/album-meta";
@@ -230,32 +231,36 @@ export default async function PublicAlbumPage(
   }
 
   return (
-    <CustomerAlbum
-      album={{
-        id: album.id,
-        slug: album.slug,
-        title: album.title,
-        description: album.description,
-        cover_url: album.cover_url,
-        selection_limit: album.selection_limit,
-        watermark_enabled: canWatermark && album.watermark_enabled,
-        watermark_text: album.watermark_text,
-        hasPassword,
-        allowDownload,
-        allowNotes,
-      }}
-      initialPhotos={photos}
-      initialSources={sources}
-      initialSelected={selected}
-      initialDisliked={disliked}
-      initialNotes={notes}
-      shareIds={shareIds}
-      initialDriveFolders={driveFolders}
-      initialPeople={people}
-      faceScan={faceScan}
-      studioName={studioName}
-      logoUrl={brand.logoUrl}
-      studioHost={studioHost}
-    />
+    <>
+      <CustomerAlbum
+        album={{
+          id: album.id,
+          slug: album.slug,
+          title: album.title,
+          description: album.description,
+          cover_url: album.cover_url,
+          selection_limit: album.selection_limit,
+          watermark_enabled: canWatermark && album.watermark_enabled,
+          watermark_text: album.watermark_text,
+          hasPassword,
+          allowDownload,
+          allowNotes,
+        }}
+        initialPhotos={photos}
+        initialSources={sources}
+        initialSelected={selected}
+        initialDisliked={disliked}
+        initialNotes={notes}
+        shareIds={shareIds}
+        initialDriveFolders={driveFolders}
+        initialPeople={people}
+        faceScan={faceScan}
+        studioName={studioName}
+        logoUrl={brand.logoUrl}
+        studioHost={studioHost}
+      />
+      {/* Zalo/Messenger mở link trong webview của app — nhắc khách sang trình duyệt thật. */}
+      <OpenInBrowserNotice />
+    </>
   );
 }
