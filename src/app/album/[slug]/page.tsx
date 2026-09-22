@@ -7,6 +7,7 @@ import { isDeliveryPhase } from "@/lib/album-phase";
 import { getStudioBrand } from "@/lib/studio-brand";
 import Brand from "@/components/Brand";
 import GalleryView from "./GalleryView";
+import OpenInBrowserNotice from "@/components/OpenInBrowserNotice";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { MAIN_HOST } from "@/lib/hosts";
 import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
@@ -163,33 +164,37 @@ export default async function GalleryPage(
   }
 
   return (
-    <GalleryView
-      gallery={{
-        id: album.id,
-        slug: album.slug,
-        title: album.title,
-        event_date: album.event_date,
-        cover_url: album.cover_url,
-        hasPassword,
-        allowDownload: album.download_enabled !== false,
-        // Nguồn có gắn giai đoạn "giao khách" ⇒ thư mục Drive đúng là FILE
-        // CHỈNH SỬA. Album chưa gắn giai đoạn thì shownSources rơi về TẤT CẢ
-        // nguồn (kể cả thư mục ảnh chọn), lúc đó không được gọi là file chỉnh sửa.
-        driveIsEdited: useStages,
-        watermark: canWatermark && album.watermark_delivery ? (album.watermark_text || studioName) : null,
-      }}
-      initialPhotos={photos}
-      initialPeople={people}
-      faceScan={faceScan}
-      totalPhotos={totalPhotos}
-      initialSources={sources}
-      initialDriveFolders={driveFolders}
-      initialOriginalFolders={originalFolders}
-      feedback={(feedback ?? []) as Feedback[]}
-      shareIds={shareIds}
-      studioName={studioName}
-      logoUrl={brand.logoUrl}
-      studioHost={studioHost}
-    />
+    <>
+      <GalleryView
+        gallery={{
+          id: album.id,
+          slug: album.slug,
+          title: album.title,
+          event_date: album.event_date,
+          cover_url: album.cover_url,
+          hasPassword,
+          allowDownload: album.download_enabled !== false,
+          // Nguồn có gắn giai đoạn "giao khách" ⇒ thư mục Drive đúng là FILE
+          // CHỈNH SỬA. Album chưa gắn giai đoạn thì shownSources rơi về TẤT CẢ
+          // nguồn (kể cả thư mục ảnh chọn), lúc đó không được gọi là file chỉnh sửa.
+          driveIsEdited: useStages,
+          watermark: canWatermark && album.watermark_delivery ? (album.watermark_text || studioName) : null,
+        }}
+        initialPhotos={photos}
+        initialPeople={people}
+        faceScan={faceScan}
+        totalPhotos={totalPhotos}
+        initialSources={sources}
+        initialDriveFolders={driveFolders}
+        initialOriginalFolders={originalFolders}
+        feedback={(feedback ?? []) as Feedback[]}
+        shareIds={shareIds}
+        studioName={studioName}
+        logoUrl={brand.logoUrl}
+        studioHost={studioHost}
+      />
+      {/* Zalo/Messenger mở link trong webview của app — nhắc khách sang trình duyệt thật. */}
+      <OpenInBrowserNotice />
+    </>
   );
 }
