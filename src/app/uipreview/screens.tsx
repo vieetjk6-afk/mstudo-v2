@@ -26,6 +26,7 @@ import FaceFinderDemo from "./FaceFinderDemo";
 import FaceScanProgressDemo from "./FaceScanProgressDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
+import LuoiAnhDemo from "./LuoiAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
@@ -90,6 +91,10 @@ export const SCREENS: Record<
   "bao-chua-chay-sql": {
     title: "Bảng điều khiển — báo chưa bật được tìm theo khuôn mặt",
     render: () => <FaceSetupDemo />,
+  },
+  "luoi-anh": {
+    title: "Album khách — lưới 1200 ảnh (đo cuộn sâu có lag không)",
+    render: () => <LuoiAnhDemo />,
   },
   "giao-khach-tim-mat": {
     title: "Album GIAO KHÁCH — tìm ảnh theo khuôn mặt (dữ liệu giả)",

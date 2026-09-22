@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { fmtDate } from "@/lib/date";
 import FaceFinder from "@/app/a/[slug]/FaceFinder";
 import { filterByPerson, type PersonChip } from "@/lib/face-people";
@@ -309,7 +309,12 @@ export default function GalleryView({
     ioRef.current = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
+          // startTransition: dựng thêm 250 ô là việc NẶNG. Đánh dấu là việc nền
+          // thì React 19 được phép cắt nhỏ và nhường lại cho cuộn/chạm, thay vì
+          // khoá luồng chính một nhịp dài mỗi lần chạm đáy.
+          startTransition(() => {
+            setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
+          });
         }
       },
       { rootMargin: "800px 0px" }
@@ -471,7 +476,7 @@ export default function GalleryView({
                 {items.map(({ p, i }) => {
                   const isSel = selected.has(p.id);
                   return (
-                  <div key={p.id} className="group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}>
+                  <div key={p.id} ref={masonry.tileRef(p.id)} className="group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}>
                     <img {...masonry.imgProps(p.id)} onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-full w-full cursor-zoom-in select-none object-cover" />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] flex flex-wrap content-center items-center justify-center gap-x-8 gap-y-6 opacity-20">

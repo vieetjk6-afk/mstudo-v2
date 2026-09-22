@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Heart,
   HeartOff,
@@ -668,7 +668,12 @@ export default function CustomerAlbum({
     ioRef.current = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
+          // startTransition: dựng thêm 250 ô là việc NẶNG. Đánh dấu là việc nền
+          // thì React 19 được phép cắt nhỏ và nhường lại cho cuộn/chạm, thay vì
+          // khoá luồng chính một nhịp dài mỗi lần chạm đáy.
+          startTransition(() => {
+            setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
+          });
         }
       },
       { rootMargin: "800px 0px" }
@@ -1215,6 +1220,7 @@ export default function CustomerAlbum({
               return (
                 <div
                   key={p.id}
+                  ref={masonry.tileRef(p.id)}
                   className="overflow-hidden animate-[vkPop_.45s_ease_both]"
                   style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}
                 >
