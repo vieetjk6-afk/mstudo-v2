@@ -132,8 +132,6 @@ export default function GalleryView({
   const [pwLoading, setPwLoading] = useState(false);
 
   const [activeTab, setActiveTab] = useState("all");
-  // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
-  const masonry = useMasonry(2, 4);
   // Nút "Xem album" ở ảnh bìa cuộn thẳng xuống lưới ảnh.
   const photosRef = useRef<HTMLDivElement | null>(null);
   const scrollToPhotos = useCallback(() => {
@@ -278,6 +276,13 @@ export default function GalleryView({
   const activePerson = useMemo(() => people.find((p) => p.id === personId) ?? null, [people, personId]);
   /** id ảnh → id file Drive, để ảnh thẻ khuôn mặt không phải quét mảng mỗi lần vẽ. */
   const driveIdOf = useMemo(() => new Map(photos.map((p) => [p.id, p.drive_file_id])), [photos]);
+  // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
+  // Hàm thứ ba cho lưới biết địa chỉ ảnh của từng ô để gọi sẵn byte ảnh sắp tới
+  // (xem @/lib/masonry) — không có nó thì cuộn nhanh sẽ thấy ô trắng.
+  const masonry = useMasonry(2, 4, (id) => {
+    const f = driveIdOf.get(id);
+    return f ? thumbnailUrl(f, 400) : null;
+  });
   const visible = useMemo(() => {
     let base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
     if (shareSet) base = base.filter((p) => shareSet.has(p.id));
@@ -287,46 +292,15 @@ export default function GalleryView({
   }, [photos, activeTab, shareSet, activePerson]);
   const sections = useMemo(() => {
     const idx = visible.map((p, i) => ({ p, i }));
-    if (activeTab !== "all" || tabSources.length <= 1) return [{ id: "all", name: "", items: idx }];
+    const keo = (id: string, name: string, items: { p: P; i: number }[]) => ({ id, name, items, ids: items.map((x) => x.p.id) });
+    if (activeTab !== "all" || tabSources.length <= 1) return [keo("all", "", idx)];
     const m = new Map<string, { p: P; i: number }[]>();
     idx.forEach((it) => { const k = it.p.source_id ?? "none"; if (!m.has(k)) m.set(k, []); m.get(k)!.push(it); });
-    const out: { id: string; name: string; items: { p: P; i: number }[] }[] = [];
-    for (const s of sources) if (m.has(s.id)) { out.push({ id: s.id, name: s.name, items: m.get(s.id)! }); m.delete(s.id); }
-    for (const [k, items] of m) out.push({ id: k, name: "", items });
+    const out: { id: string; name: string; items: { p: P; i: number }[]; ids: string[] }[] = [];
+    for (const s of sources) if (m.has(s.id)) { out.push(keo(s.id, s.name, m.get(s.id)!)); m.delete(s.id); }
+    for (const [k, items] of m) out.push(keo(k, "", items));
     return out;
   }, [visible, sources, tabSources.length, activeTab]);
-
-  // Tải lũy tiến: album cưới thường 1500–3000 ảnh; mount tất cả cùng lúc làm
-  // nặng hydration + hàng nghìn DOM node. Chỉ dựng một "cửa sổ" ảnh và tăng dần
-  // khi cuộn tới đáy. Chỉ số `i` vẫn theo `visible` nên lightbox/chọn ảnh/điều
-  // hướng phím KHÔNG đổi — chỉ ít node hơn được render tại một thời điểm.
-  const RENDER_BATCH = 250;
-  const [renderLimit, setRenderLimit] = useState(RENDER_BATCH);
-  useEffect(() => { setRenderLimit(RENDER_BATCH); }, [activeTab, shareSet, photos, personId]);
-  // Dùng CALLBACK REF (không phải effect theo visible.length): quan sát lại mỗi khi
-  // sentinel gắn/mount lại — kể cả khi đổi sang tab CÙNG SỐ ẢNH (renderLimit reset
-  // làm sentinel mount lại nhưng visible.length không đổi → effect cũ không chạy lại).
-  const ioRef = useRef<IntersectionObserver | null>(null);
-  const visibleCountRef = useRef(visible.length);
-  visibleCountRef.current = visible.length;
-  const sentinelRef = useCallback((node: HTMLDivElement | null) => {
-    ioRef.current?.disconnect();
-    if (!node) return;
-    ioRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          // startTransition: dựng thêm 250 ô là việc NẶNG. Đánh dấu là việc nền
-          // thì React 19 được phép cắt nhỏ và nhường lại cho cuộn/chạm, thay vì
-          // khoá luồng chính một nhịp dài mỗi lần chạm đáy.
-          startTransition(() => {
-            setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
-          });
-        }
-      },
-      { rootMargin: "800px 0px" }
-    );
-    ioRef.current.observe(node);
-  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -463,9 +437,10 @@ export default function GalleryView({
           className="mt-7 space-y-9 scroll-mt-20"
         >
           {sections.map((sec) => {
-            // Chỉ dựng các ảnh nằm trong cửa sổ hiện tại (i < renderLimit).
-            const items = sec.items.filter((it) => it.i < renderLimit);
-            if (items.length === 0) return null;
+            if (sec.items.length === 0) return null;
+            // Chỉ dựng phần ô đang nằm quanh khung nhìn (xem @/lib/masonry).
+            const [dau, cuoi] = masonry.range(sec.id);
+            const items = sec.items.slice(dau, cuoi);
             return (
             <section key={sec.id}>
               {sec.name && (
@@ -478,11 +453,12 @@ export default function GalleryView({
                   khe gần như bằng 0, KHÔNG bo góc và KHÔNG cắt ảnh — mỗi tấm giữ
                   đúng tỉ lệ gốc, và ảnh được đặt lần lượt TRÁI → PHẢI
                   (xem src/lib/masonry.ts). */}
-              <div className="grid grid-cols-2 md:grid-cols-4" style={masonry.gridStyle}>
-                {items.map(({ p, i }) => {
+              <div {...masonry.lattice(sec.id, sec.ids)}>
+                {items.map(({ p, i }, k) => {
                   const isSel = selected.has(p.id);
+                  const o = masonry.tileProps(sec.id, p.id, dau + k);
                   return (
-                  <div key={p.id} ref={masonry.tileRef(p.id)} className="group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}>
+                  <div key={p.id} ref={o.ref} className="o-anh-cho group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...o.style }}>
                     <img {...masonry.imgProps(p.id)} onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-full w-full cursor-zoom-in select-none object-cover" />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer(wm)} />
@@ -515,12 +491,6 @@ export default function GalleryView({
             </section>
             );
           })}
-          {/* Sentinel: khi lọt vào tầm nhìn (kể cả trước 800px) sẽ nạp thêm ảnh. */}
-          {renderLimit < visible.length && (
-            <div ref={sentinelRef} className="flex justify-center py-6 text-[13px]" style={{ color: "var(--text3)" }}>
-              Đang tải thêm ảnh… ({renderLimit}/{visible.length})
-            </div>
-          )}
         </div>
 
         {/* Feedback */}
