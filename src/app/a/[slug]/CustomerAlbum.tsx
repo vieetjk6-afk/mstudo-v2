@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Heart,
   HeartOff,
@@ -154,8 +154,6 @@ export default function CustomerAlbum({
   const selectedOnly = view === "selected";
   const dislikedOnly = view === "disliked";
   const [activeTab, setActiveTab] = useState<string>("all");
-  // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
-  const masonry = useMasonry(2, 4);
   // Nút "Xem album" trên ảnh bìa cuộn thẳng xuống phần chọn ảnh.
   const contentRef = useRef<HTMLDivElement | null>(null);
   const scrollToContent = useCallback(() => {
@@ -599,6 +597,13 @@ export default function CustomerAlbum({
     () => new Map(photos.map((p) => [p.id, p.drive_file_id])),
     [photos]
   );
+  // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
+  // Hàm thứ ba cho lưới biết địa chỉ ảnh của từng ô để gọi sẵn byte ảnh sắp tới
+  // (xem @/lib/masonry) — không có nó thì cuộn nhanh sẽ thấy ô trắng.
+  const masonry = useMasonry(2, 4, (id) => {
+    const f = driveIdOf.get(id);
+    return f ? thumbnailUrl(f, 400) : null;
+  });
 
   const visiblePhotos = useMemo(() => {
     const tabbed = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
@@ -633,7 +638,7 @@ export default function CustomerAlbum({
   const sections = useMemo(() => {
     const indexed = visiblePhotos.map((p, idx) => ({ p, idx }));
     if (activeTab !== "all" || selectedOnly || dislikedOnly || tabSources.length <= 1) {
-      return [{ id: "all", name: "", items: indexed }];
+      return [{ id: "all", name: "", items: indexed, ids: indexed.map((x) => x.p.id) }];
     }
     const byId = new Map<string, { p: PublicPhoto; idx: number }[]>();
     for (const it of indexed) {
@@ -641,46 +646,16 @@ export default function CustomerAlbum({
       if (!byId.has(sid)) byId.set(sid, []);
       byId.get(sid)!.push(it);
     }
-    const ordered: { id: string; name: string; items: { p: PublicPhoto; idx: number }[] }[] = [];
+    const ordered: { id: string; name: string; items: { p: PublicPhoto; idx: number }[]; ids: string[] }[] = [];
     for (const s of sources) {
       if (byId.has(s.id)) {
-        ordered.push({ id: s.id, name: s.name, items: byId.get(s.id)! });
+        ordered.push({ id: s.id, name: s.name, items: byId.get(s.id)!, ids: byId.get(s.id)!.map((x) => x.p.id) });
         byId.delete(s.id);
       }
     }
-    for (const [sid, items] of byId) ordered.push({ id: sid, name: sid === "none" ? "Khác" : "", items });
+    for (const [sid, items] of byId) ordered.push({ id: sid, name: sid === "none" ? "Khác" : "", items, ids: items.map((x) => x.p.id) });
     return ordered;
   }, [visiblePhotos, sources, selectedOnly, dislikedOnly, activeTab, tabSources.length]);
-
-  // Tải lũy tiến: chỉ dựng một "cửa sổ" ảnh và tăng dần khi cuộn tới đáy (album
-  // chọn ảnh có thể vài nghìn tấm). Chỉ số `idx` vẫn theo visiblePhotos nên
-  // lightbox/chọn ảnh không đổi.
-  const RENDER_BATCH = 250;
-  const [renderLimit, setRenderLimit] = useState(RENDER_BATCH);
-  useEffect(() => { setRenderLimit(RENDER_BATCH); }, [activeTab, view, shareSet, photos]);
-  // Callback ref: quan sát lại sentinel mỗi khi nó mount lại (kể cả khi đổi sang
-  // tab CÙNG SỐ ẢNH sau khi renderLimit reset — effect theo visible.length sẽ bỏ sót).
-  const ioRef = useRef<IntersectionObserver | null>(null);
-  const visibleCountRef = useRef(visiblePhotos.length);
-  visibleCountRef.current = visiblePhotos.length;
-  const sentinelRef = useCallback((node: HTMLDivElement | null) => {
-    ioRef.current?.disconnect();
-    if (!node) return;
-    ioRef.current = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-          // startTransition: dựng thêm 250 ô là việc NẶNG. Đánh dấu là việc nền
-          // thì React 19 được phép cắt nhỏ và nhường lại cho cuộn/chạm, thay vì
-          // khoá luồng chính một nhịp dài mỗi lần chạm đáy.
-          startTransition(() => {
-            setRenderLimit((n) => (n < visibleCountRef.current ? n + RENDER_BATCH : n));
-          });
-        }
-      },
-      { rootMargin: "800px 0px" }
-    );
-    ioRef.current.observe(node);
-  }, []);
 
   function copyList() {
     navigator.clipboard.writeText(selectedPhotos.map((p) => stripExtension(p.name)).join("\n"));
@@ -1196,9 +1171,13 @@ export default function CustomerAlbum({
           // Sections — each Drive source shown separately, left-to-right
           <div ref={masonry.ref} className="space-y-9">
             {sections.map((sec) => {
-              // Chỉ dựng ảnh trong cửa sổ hiện tại (idx < renderLimit).
-              const items = sec.items.filter((it) => it.idx < renderLimit);
-              if (items.length === 0) return null;
+              if (sec.items.length === 0) return null;
+              // Chỉ dựng phần ô đang nằm quanh khung nhìn (xem @/lib/masonry).
+              // Khai báo lưới TRƯỚC rồi mới hỏi khoảng: hỏi trước thì lượt dựng
+              // đầu chưa có lưới nào để trả lời, album hiện ra trống một nhịp.
+              const luoi = masonry.lattice(sec.id, sec.ids);
+              const [dau, cuoi] = masonry.range(sec.id);
+              const items = sec.items.slice(dau, cuoi);
               return (
               <section key={sec.id}>
                 {sec.name && (
@@ -1213,17 +1192,18 @@ export default function CustomerAlbum({
                     tính, khe gần như bằng 0, KHÔNG bo góc và KHÔNG cắt ảnh —
                     mỗi tấm giữ đúng tỉ lệ gốc, và ảnh được đặt lần lượt
                     TRÁI → PHẢI (xem src/lib/masonry.ts). */}
-                <div className="grid grid-cols-2 md:grid-cols-4" style={masonry.gridStyle}>
-            {items.map(({ p, idx }) => {
+                <div {...luoi}>
+            {items.map(({ p, idx }, k) => {
               const isSel = selected.has(p.id);
               const isDis = disliked.has(p.id);
               const note = notes[p.id];
+              const o = masonry.tileProps(sec.id, p.id, dau + k);
               return (
                 <div
                   key={p.id}
-                  ref={masonry.tileRef(p.id)}
-                  className="overflow-hidden animate-[vkPop_.45s_ease_both]"
-                  style={{ background: "var(--surface)", ...masonry.tileStyle(p.id) }}
+                  ref={o.ref}
+                  className="o-anh-cho overflow-hidden animate-[vkPop_.45s_ease_both]"
+                  style={{ background: "var(--surface)", ...o.style }}
                 >
                   <div className="relative h-full w-full">
                     <div
@@ -1318,12 +1298,6 @@ export default function CustomerAlbum({
               </section>
               );
             })}
-            {/* Sentinel: nạp thêm ảnh khi cuộn gần tới đáy. */}
-            {renderLimit < visiblePhotos.length && (
-              <div ref={sentinelRef} className="flex justify-center py-6 text-[13px]" style={{ color: "var(--text3)" }}>
-                Đang tải thêm ảnh… ({renderLimit}/{visiblePhotos.length})
-              </div>
-            )}
           </div>
         )}
       </div>
