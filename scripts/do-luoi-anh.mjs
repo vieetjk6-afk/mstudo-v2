@@ -1,16 +1,19 @@
 /**
- * ĐO LƯỚI ẢNH ALBUM — cuộn album lớn có mượt không, và có ô trắng không.
+ * ĐO LƯỚI ẢNH ALBUM — cuộn sâu có phình bộ nhớ không.
  *
- * Cái lag khách kêu ("kéo xuống càng nhiều ảnh càng giật") không hiện ra trên 20
- * tấm; nó chỉ lòi ra ở album vài nghìn tấm. Đo trên chính màn /uipreview/luoi-anh
- * (ô ảnh giống hệt ô album thật: ảnh, watermark, nút tim) với 3000 ô:
+ * Cái lag khách kêu ("kéo xuống càng nhiều ảnh càng giật") không phải lỗi thấy
+ * được bằng mắt trên 20 tấm: nó chỉ hiện ra sau khi cuộn qua hàng nghìn tấm,
+ * lúc số ảnh ĐÃ GIẢI MÃ nằm trong RAM vượt sức máy. Một tấm 400×600 tốn ~1MB
+ * RAM, nên 1500 tấm là ~1,5GB — Safari trên iPhone tụt dần rồi tự tải lại trang.
  *
- *   1. Cuộn phải giữ được 60 hình/giây — đây là con số quyết định "mượt".
- *   2. Album 3000 ảnh thì DOM vẫn chỉ được có vài trăm thẻ (lưới chỉ dựng phần
- *      quanh khung nhìn). Đây là gốc của chuyện mượt: đo ra 3000 ô trong DOM là
- *      26 hình/giây, 300 ô là 60 hình/giây phẳng.
- *   3. Ô ảnh cao theo đúng tỉ lệ ảnh thật.
- *   4. Cuộn ngược lên vùng ĐÃ XEM thì không được có ô trắng.
+ * `useMasonry` (src/lib/masonry.ts) chống lại bằng cách NHẢ byte ảnh của những ô
+ * đã cuộn qua xa. Bài này canh đúng điều đó trên màn /uipreview/luoi-anh (1200 ô
+ * ảnh giả, KHÔNG có cửa sổ dựng dần như album thật):
+ *
+ *   1. Đo được tỉ lệ thật của ảnh (số dòng lưới phải khác nhau theo ảnh ngang/dọc).
+ *   2. Cuộn hết 1200 ô mà số ảnh CÒN GIỮ byte vẫn đứng ở mức thấp.
+ *   3. Cuộn ngược về đầu thì ảnh đã nhả phải gắn lại được (không để ô trắng).
+ *   4. Nhả ảnh KHÔNG được làm đổi chiều cao trang (nhảy layout giữa lúc đang cuộn).
  *
  * Cách dùng — cần một máy chủ đang chạy, giống `npm run ui:test`:
  *   npx next dev -p 3333        # cửa sổ 1
@@ -21,13 +24,16 @@
 import { chromium } from "playwright";
 
 const URL_BASE = process.env.PREVIEW_URL || "http://127.0.0.1:3333";
-/** `?wm=1`: đo ô NẶNG NHẤT — album có watermark. `?n=`: cỡ album cưới lớn. */
-const SO_O = 3000;
-const PAGE = `${URL_BASE}/uipreview/luoi-anh?wm=1&n=${SO_O}`;
+// `?wm=1`: đo ô NẶNG NHẤT — album có watermark.
+const PAGE = `${URL_BASE}/uipreview/luoi-anh?wm=1`;
 const EXEC = process.env.CHROME_PATH || undefined;
-/** Trần số thẻ HTML. Lưới chỉ dựng quanh khung nhìn nên album 3000 ảnh cũng chỉ
- *  vài trăm thẻ; vượt 1500 nghĩa là cơ chế đó hỏng và máy khách sẽ giật lại. */
-const TRAN_THE = 1500;
+/** Trần số thẻ HTML mỗi ô. Ô hiện có 6 thẻ (ô, ảnh, lớp watermark, nút tim +
+ *  svg bên trong). Vượt 8 là có ai đó rải lại hàng loạt thẻ con vào từng ô —
+ *  chuyện đã từng xảy ra với watermark (8 thẻ chữ mỗi ô) và làm nặng cả trang. */
+const TRAN_THE_MOI_O = 8;
+/** Trần số ảnh được giữ cùng lúc. Cửa sổ giữ là ±150% màn hình nên thực tế
+ *  ~30–60 tấm; 150 là mức "rõ ràng đã hỏng" chứ không phải mức chuẩn. */
+const TRAN_GIU = 150;
 
 const browser = await chromium.launch(EXEC ? { executablePath: EXEC } : {});
 const fails = [];
@@ -37,69 +43,61 @@ const bad = (m) => {
   console.log("✗", m);
 };
 
+// Khổ điện thoại — chỗ duy nhất cái lag này thành vấn đề thật.
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
-await page.goto(PAGE, { waitUntil: "load", timeout: 180000 });
-await page.waitForSelector("#luoi-anh-demo img", { timeout: 120000 });
-await page.waitForTimeout(3000);
+await page.goto(PAGE, { waitUntil: "load", timeout: 120000 });
+await page.waitForSelector("#luoi-anh-demo img", { timeout: 60000 });
+await page.waitForTimeout(2500); // lô ảnh đầu tải xong + đo tỉ lệ
 
-/** Cuộn bằng rAF như ngón tay vuốt, ghi lại khoảng cách giữa các khung hình. */
-const cuon = (huong, buoc, soKhung) =>
-  page.evaluate(
-    ([huong, buoc, soKhung]) =>
-      new Promise((xong) => {
-        const khung = [];
-        let truoc = performance.now();
-        let n = 0;
-        function b() {
-          const gio = performance.now();
-          khung.push(gio - truoc);
-          truoc = gio;
-          window.scrollBy(0, huong * buoc);
-          if (++n < soKhung) requestAnimationFrame(b);
-          else xong(khung);
-        }
-        requestAnimationFrame(b);
-      }),
-    [huong, buoc, soKhung]
-  );
-
-const cao = await page.$$eval("#luoi-anh-demo div[style*='position: absolute']", (els) =>
-  els.slice(0, 20).map((e) => e.style.height)
+const spans = await page.$$eval("#luoi-anh-demo > div > div", (els) =>
+  els.slice(0, 20).map((e) => e.style.gridRowEnd)
 );
-const rieng = new Set(cao.filter(Boolean));
+const rieng = new Set(spans);
 if (rieng.size >= 3) ok(`ô ảnh cao theo tỉ lệ thật (${rieng.size} cỡ khác nhau trong 20 ô đầu)`);
 else bad(`ô ảnh KHÔNG theo tỉ lệ thật — 20 ô đầu chỉ có ${rieng.size} cỡ (${[...rieng].join(", ")})`);
 
-const xuong = await cuon(1, 90, 300);
-const the = await page.evaluate(() => document.querySelectorAll("#luoi-anh-demo *").length);
-await page.waitForTimeout(1200);
-const len = await cuon(-1, 90, 300);
-await page.waitForTimeout(1500);
-
-const giat = (a) => a.filter((x) => x > 32).length;
-const giua = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)].toFixed(1);
-
-for (const [ten, a] of [["xuống", xuong], ["lên", len]]) {
-  const g = giat(a);
-  // 3% số khung là chỗ dung sai cho máy chạy test đang bận việc khác.
-  if (g <= Math.ceil(a.length * 0.03)) ok(`cuộn ${ten} mượt: ${giua(a)}ms mỗi khung, ${g}/${a.length} khung vẽ quá 32ms`);
-  else bad(`CUỘN ${ten.toUpperCase()} GIẬT: ${giua(a)}ms mỗi khung, ${g}/${a.length} khung vẽ quá 32ms`);
-}
-
-if (the <= TRAN_THE) ok(`album ${SO_O} ảnh chỉ dựng ${the} thẻ HTML`);
-else bad(`DỰNG QUÁ NHIỀU — album ${SO_O} ảnh mà có ${the} thẻ HTML (trần ${TRAN_THE})`);
-
-const trong = await page.evaluate(() => {
-  const vh = window.innerHeight;
-  let t = 0;
-  document.querySelectorAll("#luoi-anh-demo img").forEach((im) => {
-    const r = im.getBoundingClientRect();
-    if (r.bottom > 0 && r.top < vh && (!im.complete || im.naturalWidth <= 1)) t++;
+let giuMax = 0;
+for (let i = 0; i < 45; i++) {
+  await page.evaluate(() => window.scrollBy(0, 1400));
+  await page.waitForTimeout(130);
+  const giu = await page.evaluate(() => {
+    let n = 0;
+    document.querySelectorAll("#luoi-anh-demo img").forEach((im) => {
+      if (!im.dataset.mstSrc) n++;
+    });
+    return n;
   });
-  return t;
+  if (giu > giuMax) giuMax = giu;
+}
+const { tong, caoCuoi, the, o } = await page.evaluate(() => ({
+  tong: document.querySelectorAll("#luoi-anh-demo img").length,
+  caoCuoi: document.documentElement.scrollHeight,
+  the: document.querySelectorAll("#luoi-anh-demo *").length,
+  o: document.querySelectorAll("#luoi-anh-demo > div > div").length,
+}));
+
+const theMoiO = the / o;
+if (theMoiO <= TRAN_THE_MOI_O) ok(`mỗi ô chỉ ${theMoiO.toFixed(1)} thẻ HTML (${the} thẻ cho ${o} ô)`);
+else bad(`Ô ẢNH PHÌNH THẺ — ${theMoiO.toFixed(1)} thẻ/ô (trần ${TRAN_THE_MOI_O}), tổng ${the} thẻ cho ${o} ô`);
+
+if (giuMax <= TRAN_GIU) ok(`cuộn hết ${tong} ô mà chỉ giữ tối đa ${giuMax} ảnh trong bộ nhớ`);
+else bad(`ẢNH KHÔNG ĐƯỢC NHẢ — cuộn hết ${tong} ô thì giữ tới ${giuMax} ảnh (trần ${TRAN_GIU})`);
+
+await page.evaluate(() => window.scrollTo(0, 0));
+await page.waitForTimeout(1200);
+
+// So chiều cao SAU khi đã cuộn hết (mọi ô đã đo được tỉ lệ thật) với chiều cao
+// sau khi cuộn ngược về đầu. Đo sớm hơn là so nhầm: lúc mới vào, ô chưa tải còn
+// dùng tỉ lệ tạm nên trang cao khác — đó là lưới đang đo, không phải nhả ảnh.
+const caoVeDau = await page.evaluate(() => document.documentElement.scrollHeight);
+if (caoVeDau === caoCuoi) ok(`nhả rồi gắn lại ảnh KHÔNG đổi chiều cao trang (${caoCuoi}px)`);
+else bad(`NHẢ/GẮN ẢNH LÀM NHẢY LAYOUT — trang cao ${caoCuoi}px → ${caoVeDau}px`);
+const trong = await page.evaluate(() => {
+  const imgs = [...document.querySelectorAll("#luoi-anh-demo img")].slice(0, 8);
+  return imgs.filter((im) => im.dataset.mstSrc || !im.complete || im.naturalWidth <= 1).length;
 });
-if (trong === 0) ok("cuộn ngược lên vùng đã xem: không ô nào trắng");
-else bad(`CUỘN NGƯỢC LÊN CÒN ${trong} Ô TRẮNG — ảnh vùng đã xem phải hiện lại ngay`);
+if (trong === 0) ok("cuộn ngược về đầu: ảnh đã nhả gắn lại đủ, không ô nào trắng");
+else bad(`cuộn về đầu còn ${trong}/8 ô TRẮNG — ảnh nhả rồi không gắn lại được`);
 
 await browser.close();
 if (fails.length) {

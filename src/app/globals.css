@@ -253,16 +253,6 @@ body {
     transform: none;
   }
 }
-/* Ô ảnh album chưa có ảnh: nền thở nhè nhẹ để khách đọc ra "đang tải". Ảnh tải
-   xong tự đè lên nên không cần gỡ lớp — không tốn một dòng JS nào. */
-.o-anh-cho {
-  animation: nhipChoAnh 1.5s ease-in-out infinite;
-}
-@keyframes nhipChoAnh {
-  0%, 100% { background-color: var(--surface); }
-  50% { background-color: var(--surface2); }
-}
-
 @keyframes vkPop {
   from {
     opacity: 0;
