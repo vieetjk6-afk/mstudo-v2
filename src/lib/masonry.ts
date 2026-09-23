@@ -86,6 +86,7 @@ export function useMasonry(
   const dangTaiTruoc = useRef(0);
   const srcRef = useRef(srcOf);
   srcRef.current = srcOf;
+  const luoiRefs = useRef(new Map<string, (el: HTMLElement | null) => void>());
   const tileRefs = useRef(new Map<string, (el: HTMLElement | null) => void>());
   const imgPropsCache = useRef(new Map<string, { onLoad: (e: { currentTarget: HTMLImageElement }) => void; ref: (el: HTMLImageElement | null) => void }>());
 
@@ -139,7 +140,12 @@ export function useMasonry(
   const tinhCuaSo = useCallback(
     (l: Luoi): [number, number] => {
       const n = l.ids.length;
-      if (!l.el || !colWidth.current) return [0, Math.min(n, 60)];
+      // Chưa gắn vào DOM (hoặc chưa đo được bề rộng) thì GIỮ NGUYÊN cửa sổ đang
+      // có. Trả về một cửa sổ mặc định ở đây là sinh lỗi thật: album nhiều mục
+      // thì React tháo hết ref rồi mới gắn lại từng cái, nên mỗi lượt quét luôn
+      // gặp một lưới "chưa gắn" → cửa sổ nhảy về mặc định → dựng lại → tháo ref
+      // → lặp vô tận, và trang văng ra "Đã có lỗi xảy ra".
+      if (!l.el || !colWidth.current) return [l.dau, l.cuoi || Math.min(n, 60)];
       const r = l.el.getBoundingClientRect();
       const vh = window.innerHeight || 800;
       const du = vh * DU_MAN_HINH;
@@ -278,24 +284,39 @@ export function useMasonry(
         l.cuoi = cuoi;
       }
       for (const id of ids) thuoc.current.set(id, key);
-      const luoiNay = l;
-      return {
-        ref: (el: HTMLElement | null) => {
-          luoiNay.el = el;
+      // Hàm ref phải giữ nguyên danh tính: tạo mới mỗi lượt dựng là React tháo
+      // ra gắn lại toàn bộ khung lưới sau mỗi lần dựng — vừa phí, vừa là thứ đã
+      // làm album nhiều mục dựng lại vô tận.
+      let gan = luoiRefs.current.get(key);
+      if (!gan) {
+        gan = (el: HTMLElement | null) => {
+          const cua = luoi.current.get(key);
+          if (!cua) return;
+          cua.el = el;
           if (!el) return;
-          el.style.height = `${luoiNay.cao}px`;
+          el.style.height = `${cua.cao}px`;
           quet();
-        },
-        style: { position: "relative", height: luoiNay.cao } as CSSProperties,
+        };
+        luoiRefs.current.set(key, gan);
+      }
+      return {
+        ref: gan,
+        style: { position: "relative", height: l.cao } as CSSProperties,
       };
     },
     [xep, tinhCuaSo, quet]
   );
 
-  /** Khoảng ô cần dựng của một lưới: dùng để cắt mảng ảnh (`slice`). */
+  /**
+   * Khoảng ô cần dựng của một lưới: dùng để cắt mảng ảnh (`slice`).
+   * Kẹp lại theo số ảnh hiện có — khách đổi tab hay lọc theo khuôn mặt là danh
+   * sách ngắn lại ngay, cửa sổ cũ có thể còn trỏ ra ngoài mảng.
+   */
   const range = useCallback((key: string): [number, number] => {
     const l = luoi.current.get(key);
-    return l ? [l.dau, l.cuoi] : [0, 0];
+    if (!l) return [0, 0];
+    const n = l.ids.length;
+    return [Math.min(l.dau, n), Math.min(l.cuoi, n)];
   }, []);
 
   /** Props cho MỘT ô ảnh: vị trí tuyệt đối trong lưới của nó. */
@@ -303,12 +324,15 @@ export function useMasonry(
     (key: string, id: string, i: number) => {
       const l = luoi.current.get(key);
       const w = colWidth.current || COL_TAM;
+      // `?? 0` chứ không tin chắc có: nếu danh sách vừa ngắn lại mà ô cũ còn kịp
+      // dựng thêm một nhịp thì l.cot[i] là undefined, nhân lên ra NaN và ô bay
+      // khỏi màn hình. Nhịp sau lưới xếp lại là đâu vào đấy.
       const style: CSSProperties = {
         position: "absolute",
-        left: l ? l.cot[i] * (w + MASONRY_GAP) : 0,
-        top: l ? l.y[i] : 0,
+        left: (l?.cot[i] ?? 0) * (w + MASONRY_GAP),
+        top: l?.y[i] ?? 0,
         width: w,
-        height: l ? l.h[i] : Math.round(w * FALLBACK_RATIO),
+        height: l?.h[i] ?? Math.round(w * FALLBACK_RATIO),
       };
       let f = tileRefs.current.get(id);
       if (!f) {

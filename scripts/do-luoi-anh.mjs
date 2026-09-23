@@ -21,9 +21,15 @@
 import { chromium } from "playwright";
 
 const URL_BASE = process.env.PREVIEW_URL || "http://127.0.0.1:3333";
-/** `?wm=1`: đo ô NẶNG NHẤT — album có watermark. `?n=`: cỡ album cưới lớn. */
+/**
+ * `?wm=1`: ô NẶNG NHẤT — album có watermark. `?n=`: cỡ album cưới lớn.
+ * `?muc=3`: album chia làm 3 mục (3 thư mục Drive). Phải có mục thứ hai trở lên:
+ * album MỘT mục từng chạy tốt trong khi album nhiều mục dựng lại vô tận rồi
+ * văng ra trang lỗi — bài đo một mục không bắt được lỗi đó, khách bắt được.
+ */
 const SO_O = 3000;
-const PAGE = `${URL_BASE}/uipreview/luoi-anh?wm=1&n=${SO_O}`;
+const SO_MUC = 3;
+const PAGE = `${URL_BASE}/uipreview/luoi-anh?wm=1&n=${SO_O}&muc=${SO_MUC}`;
 const EXEC = process.env.CHROME_PATH || undefined;
 /** Trần số thẻ HTML. Lưới chỉ dựng quanh khung nhìn nên album 3000 ảnh cũng chỉ
  *  vài trăm thẻ; vượt 1500 nghĩa là cơ chế đó hỏng và máy khách sẽ giật lại. */
@@ -38,8 +44,27 @@ const bad = (m) => {
 };
 
 const page = await browser.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 3 });
+
+// Lỗi vòng dựng lại vô tận ("Maximum update depth exceeded") KHÔNG làm trang
+// trắng ngay — React vẫn kịp vẽ rồi mới văng — nên phải bắt qua console/lỗi trang.
+const loiTrang = [];
+page.on("pageerror", (e) => loiTrang.push(String(e).slice(0, 160)));
+page.on("console", (m) => {
+  if (m.type() === "error") loiTrang.push(m.text().slice(0, 160));
+});
+
 await page.goto(PAGE, { waitUntil: "load", timeout: 180000 });
-await page.waitForSelector("#luoi-anh-demo img", { timeout: 120000 });
+try {
+  // Lưới dựng không nổi gần như luôn là vòng dựng lại vô tận (React ném "Maximum
+  // update depth exceeded" rồi trang rơi vào khối báo lỗi) — nói thẳng ra thế,
+  // đừng để người chạy test phải đọc một cục TimeoutError.
+  await page.waitForSelector("#luoi-anh-demo img", { timeout: 60000 });
+} catch {
+  bad(`LƯỚI KHÔNG DỰNG NỔI — trang treo hoặc văng lỗi${loiTrang[0] ? `: ${loiTrang[0]}` : ""}`);
+  await browser.close();
+  console.log("\n1 MỤC SAI");
+  process.exit(1);
+}
 await page.waitForTimeout(3000);
 
 /** Cuộn bằng rAF như ngón tay vuốt, ghi lại khoảng cách giữa các khung hình. */
@@ -100,6 +125,13 @@ const trong = await page.evaluate(() => {
 });
 if (trong === 0) ok("cuộn ngược lên vùng đã xem: không ô nào trắng");
 else bad(`CUỘN NGƯỢC LÊN CÒN ${trong} Ô TRẮNG — ảnh vùng đã xem phải hiện lại ngay`);
+
+const muc = await page.evaluate(() => document.querySelectorAll("#luoi-anh-demo > section").length);
+if (muc === SO_MUC) ok(`album ${SO_MUC} mục dựng đủ cả ${muc} mục, không mục nào chết`);
+else bad(`ALBUM NHIỀU MỤC HỎNG — chỉ dựng ${muc}/${SO_MUC} mục`);
+
+if (loiTrang.length === 0) ok("không lỗi trang nào trong suốt bài đo");
+else bad(`TRANG BÁO LỖI (${loiTrang.length} lần): ${loiTrang[0]}`);
 
 await browser.close();
 if (fails.length) {

@@ -1173,6 +1173,9 @@ export default function CustomerAlbum({
             {sections.map((sec) => {
               if (sec.items.length === 0) return null;
               // Chỉ dựng phần ô đang nằm quanh khung nhìn (xem @/lib/masonry).
+              // Khai báo lưới TRƯỚC rồi mới hỏi khoảng: hỏi trước thì lượt dựng
+              // đầu chưa có lưới nào để trả lời, album hiện ra trống một nhịp.
+              const luoi = masonry.lattice(sec.id, sec.ids);
               const [dau, cuoi] = masonry.range(sec.id);
               const items = sec.items.slice(dau, cuoi);
               return (
@@ -1189,7 +1192,7 @@ export default function CustomerAlbum({
                     tính, khe gần như bằng 0, KHÔNG bo góc và KHÔNG cắt ảnh —
                     mỗi tấm giữ đúng tỉ lệ gốc, và ảnh được đặt lần lượt
                     TRÁI → PHẢI (xem src/lib/masonry.ts). */}
-                <div {...masonry.lattice(sec.id, sec.ids)}>
+                <div {...luoi}>
             {items.map(({ p, idx }, k) => {
               const isSel = selected.has(p.id);
               const isDis = disliked.has(p.id);

@@ -9,7 +9,9 @@ import { ICON_HALO } from "@/lib/album-icon";
 /**
  * LƯỚI ẢNH ALBUM — bài kiểm tra "cuộn sâu có lag không" (dữ liệu giả).
  *
- * `?n=` số ô, `?wm=1` bật watermark, `?anh=<địa chỉ>` dùng ảnh JPEG thật.
+ * `?n=` số ô, `?muc=` số mục (mỗi thư mục Drive của album là một mục — mặc định
+ * 2 vì album NHIỀU MỤC từng làm trang văng lỗi, phải luôn có trong bài đo),
+ * `?wm=1` bật watermark, `?anh=<địa chỉ>` dùng ảnh JPEG thật.
  *
  * Album cưới thật 1500–3000 tấm không mở được ở máy dev (cần Drive + Supabase),
  * mà đúng chỗ đó mới lòi ra cái lag: ảnh đã cuộn qua vẫn nằm trong RAM, cuộn
@@ -63,12 +65,15 @@ export default function LuoiAnhDemo() {
   // `?wm=1` bật lớp watermark — album có watermark là ô nặng nhất, phải đo được.
   const [wm, setWm] = useState(false);
   const [total, setTotal] = useState(MAC_DINH);
+  const [soMuc, setSoMuc] = useState(2);
   const [anhBase, setAnhBase] = useState<string | null>(null);
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     setWm(q.get("wm") === "1");
     const n = Number(q.get("n"));
     if (Number.isFinite(n) && n > 0 && n <= 6000) setTotal(Math.round(n));
+    const m = Number(q.get("muc"));
+    if (Number.isFinite(m) && m >= 1 && m <= 10) setSoMuc(Math.round(m));
     const base = q.get("anh");
     if (base && /^https?:\/\/[\w.:@-]+$/.test(base)) setAnhBase(base);
   }, []);
@@ -80,11 +85,15 @@ export default function LuoiAnhDemo() {
       }),
     [total, anhBase]
   );
-  const ids = useMemo(() => {
+  /** Chia ảnh thành từng mục như album chia theo thư mục Drive. */
+  const mucs = useMemo(() => {
     srcOf.current = new Map(photos.map((p) => [p.id, p.src]));
-    return photos.map((p) => p.id);
-  }, [photos]);
-  const [dau, cuoi] = masonry.range("demo");
+    const moi = Math.ceil(photos.length / soMuc);
+    return Array.from({ length: soMuc }, (_, m) => {
+      const items = photos.slice(m * moi, (m + 1) * moi);
+      return { key: `muc${m}`, ten: soMuc > 1 ? `Thư mục ${m + 1}` : "", items, ids: items.map((p) => p.id) };
+    }).filter((x) => x.items.length > 0);
+  }, [photos, soMuc]);
 
   // Đếm số ô ĐANG DỰNG: album bao nhiêu ảnh cũng chỉ nên vài trăm ô trong DOM.
   useEffect(() => {
@@ -103,48 +112,64 @@ export default function LuoiAnhDemo() {
         className="sticky top-0 z-10 mb-3 rounded-xl px-3.5 py-2.5 text-[13px]"
         style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
-        <b>{total}</b> ô ảnh{wm ? " (có watermark)" : ""} · đang dựng:{" "}
+        <b>{total}</b> ô ảnh / <b>{mucs.length}</b> mục{wm ? " · có watermark" : ""} · đang dựng:{" "}
         <b data-test="giu">{held ?? "…"}</b> ô · thẻ HTML: <b data-test="nut">{nodes ?? "…"}</b>
         <span className="ml-2" style={{ color: "var(--text3)" }}>
           cuộn xuống sâu — hai con số này phải đứng yên ở mức thấp
         </span>
       </div>
 
-      <div id="luoi-anh-demo" ref={masonry.ref}>
-        <div {...masonry.lattice("demo", ids)}>
-          {photos.slice(dau, cuoi).map((p, k) => {
-            const o = masonry.tileProps("demo", p.id, dau + k);
-            return (
-            <div
-              key={p.id}
-              ref={o.ref}
-              className="o-anh-cho overflow-hidden"
-              style={{ background: "var(--surface)", ...o.style }}
-            >
-              <img
-                {...masonry.imgProps(p.id)}
-                src={p.src}
-                alt={p.id}
-                loading="lazy"
-                decoding="async"
-                className="block h-full w-full object-cover"
-              />
-              {/* Hai thứ này có trong ô album THẬT — đo mà bỏ chúng đi là đo thiếu. */}
-              {wm && (
-                <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer("Studio ABC")} />
-              )}
-              <button
-                type="button"
-                aria-label="Chọn ảnh"
-                className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center"
-                style={{ color: "#fff", filter: ICON_HALO }}
-              >
-                <Heart size={16} strokeWidth={2.2} />
-              </button>
+      <div id="luoi-anh-demo" ref={masonry.ref} className="space-y-9">
+        {mucs.map((muc) => {
+          const luoi = masonry.lattice(muc.key, muc.ids);
+          const [dau, cuoi] = masonry.range(muc.key);
+          return (
+          <section key={muc.key}>
+            {muc.ten && (
+              <h2 className="mb-3 font-serif text-xl font-medium">
+                {muc.ten}
+                <span className="ml-2 text-[13px] font-normal" style={{ color: "var(--text3)" }}>
+                  · {muc.items.length} ảnh
+                </span>
+              </h2>
+            )}
+            <div {...luoi}>
+              {muc.items.slice(dau, cuoi).map((p, k) => {
+                const o = masonry.tileProps(muc.key, p.id, dau + k);
+                return (
+                <div
+                  key={p.id}
+                  ref={o.ref}
+                  className="o-anh-cho overflow-hidden"
+                  style={{ background: "var(--surface)", ...o.style }}
+                >
+                  <img
+                    {...masonry.imgProps(p.id)}
+                    src={p.src}
+                    alt={p.id}
+                    loading="lazy"
+                    decoding="async"
+                    className="block h-full w-full object-cover"
+                  />
+                  {/* Hai thứ này có trong ô album THẬT — đo mà bỏ chúng đi là đo thiếu. */}
+                  {wm && (
+                    <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer("Studio ABC")} />
+                  )}
+                  <button
+                    type="button"
+                    aria-label="Chọn ảnh"
+                    className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center"
+                    style={{ color: "#fff", filter: ICON_HALO }}
+                  >
+                    <Heart size={16} strokeWidth={2.2} />
+                  </button>
+                </div>
+                );
+              })}
             </div>
-            );
-          })}
-        </div>
+          </section>
+          );
+        })}
       </div>
     </div>
   );
