@@ -139,6 +139,13 @@ export default function ContractView({ token }: { token: string }) {
   const [editMsg, setEditMsg] = useState("");
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  // Báo lỗi bằng toast trong app thay vì alert() của trình duyệt (hộp thoại OS
+  // chặn cứng, lạc lõng trên trang ký hợp đồng của khách).
+  const [toast, setToast] = useState<string | null>(null);
+  function flashToast(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 3200);
+  }
 
   // signing
   const [signName, setSignName] = useState("");
@@ -235,7 +242,7 @@ export default function ContractView({ token }: { token: string }) {
       setEditMsg("");
       setTimeout(() => setSent(false), 4000);
     } else {
-      alert(t("genericErr"));
+      flashToast(t("genericErr"));
     }
   }
 
@@ -246,12 +253,12 @@ export default function ContractView({ token }: { token: string }) {
       body: JSON.stringify({ action: "paid", phone }),
     });
     if (res.ok) setPaidReported(true);
-    else alert(t("genericErr"));
+    else flashToast(t("genericErr"));
   }
 
   async function uploadProof(file: File, planId?: string) {
     const check = checkImageFile(file);
-    if (!check.ok) { alert(check.error); return; }
+    if (!check.ok) { flashToast(check.error); return; }
     setProofUploading(true);
     // Compress before upload (keep numbers legible) so stored proofs stay light.
     let upload: File = file;
@@ -270,7 +277,7 @@ export default function ContractView({ token }: { token: string }) {
       setProofUrls((p) => [...p, url]);
       setPaidReported(true);
     } else {
-      alert(t("genericErr"));
+      flashToast(t("genericErr"));
     }
     setProofUploading(false);
   }
@@ -282,7 +289,7 @@ export default function ContractView({ token }: { token: string }) {
       body: JSON.stringify({ action: "choose_quote", phone, option_id: optionId }),
     });
     if (res.ok) setChosenQuote(optionId);
-    else alert(t("genericErr"));
+    else flashToast(t("genericErr"));
   }
 
   async function submitBrief() {
@@ -406,6 +413,16 @@ export default function ContractView({ token }: { token: string }) {
 
   return (
     <>
+      {/* Toast lỗi — nổi trên cùng, tự tắt sau vài giây (thay alert của trình duyệt) */}
+      {toast && (
+        <div
+          className="no-print fixed left-1/2 top-4 z-[100] -translate-x-1/2 rounded-lg px-4 py-2.5 text-[13px] shadow-lg"
+          style={{ background: "var(--danger, #d66)", color: "#fff", maxWidth: "90vw" }}
+          role="alert"
+        >
+          {toast}
+        </div>
+      )}
       {/* Bản trên màn hình (ẩn khi in) */}
       <div className="client-doc no-print min-h-screen">
         <div className="mx-auto flex max-w-[720px] flex-col gap-3.5 px-4 py-6 sm:px-5 sm:py-9">
