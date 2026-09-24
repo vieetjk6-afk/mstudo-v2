@@ -23,6 +23,7 @@
     "test:album-phase": "node --experimental-strip-types desktop/test/album-phase.mjs",
     "test:album-offline": "node --experimental-strip-types desktop/test/album-offline.mjs",
     "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs",
+    "test:push-mot-tin": "node --experimental-strip-types desktop/test/push-mot-tin-moi-nguoi.mjs",
     "test:safe-next": "node --experimental-strip-types desktop/test/safe-next.mjs",
     "test:missing-column": "node --experimental-strip-types desktop/test/missing-column.mjs",
     "test:fetch-khong-cache": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/fetch-khong-cache.mjs",

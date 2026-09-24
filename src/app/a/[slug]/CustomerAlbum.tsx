@@ -193,6 +193,8 @@ export default function CustomerAlbum({
   const [copied, setCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [notifyingDone, setNotifyingDone] = useState(false);
+  /** Cùng việc với `notifyingDone` nhưng đọc được NGAY — xem notifyDone(). */
+  const dangBaoRef = useRef(false);
   const [doneSent, setDoneSent] = useState(false);
   // Các chuỗi ảnh na ná nhau (do khách tự bấm tìm) và có đang ẩn bản trùng không.
   // Không lưu xuống sổ ngoại tuyến: đây là kết quả của một lượt quét, không phải
@@ -435,7 +437,11 @@ export default function CustomerAlbum({
   // Khách bấm "đã chọn xong" → lưu nốt lựa chọn rồi báo studio (chuông + push +
   // Zalo). Giữ cờ doneSent để đổi nhãn nút; vẫn cho báo lại nếu khách đổi ý.
   async function notifyDone() {
-    if (notifyingDone) return;
+    // Chốt bằng REF chứ không bằng state: state chỉ đổi ở lượt dựng sau, nên hai
+    // cú chạm sát nhau (hay tay run trên điện thoại) lọt cả hai và studio nhận
+    // hai thông báo cho cùng một lần chọn.
+    if (dangBaoRef.current) return;
+    dangBaoRef.current = true;
     setNotifyingDone(true);
     if (saveTimer.current) {
       clearTimeout(saveTimer.current);
@@ -447,6 +453,7 @@ export default function CustomerAlbum({
     // "chọn xong 42 ảnh" rồi mở ra thấy danh sách cũ — tệ hơn cả không báo gì.
     if (isPending(ledgerRef.current)) {
       setNotifyingDone(false);
+      dangBaoRef.current = false;
       flashToast(
         online
           ? "Chưa gửi xong lựa chọn lên studio. Đợi viên “Đã lưu” rồi báo lại nhé."
@@ -470,6 +477,7 @@ export default function CustomerAlbum({
       flashToast("Mất kết nối khi báo studio.");
     }
     setNotifyingDone(false);
+    dangBaoRef.current = false;
   }
 
   const limit = album.selection_limit;
