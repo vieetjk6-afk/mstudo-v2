@@ -56,7 +56,10 @@ export type QuickDraft = {
   deposit?: number;
   depositDue?: string;
   title?: string;
+  /** Yêu cầu của KHÁCH — lưu vào Brief, khách đọc được ở cổng hợp đồng. */
   note?: string;
+  /** Ghi chú NỘI BỘ của studio — khách không bao giờ thấy. */
+  internalNote?: string;
 };
 
 /** Gợi ý các thông tin nên có — hiện thành chip bấm để chèn vào ô nhập. */
@@ -71,7 +74,8 @@ export const QUICK_HINTS: { key: keyof QuickDraft | "price"; label: string; inse
   { key: "deposit", label: "Tiền cọc", insert: "Cọc: " },
   { key: "extraIds", label: "Hạng mục thêm", insert: "Thêm: " },
   { key: "crewIds", label: "Người đi chụp", insert: "Thợ: " },
-  { key: "note", label: "Ghi chú", insert: "Ghi chú: " },
+  { key: "note", label: "Yêu cầu của khách", insert: "Yêu cầu: " },
+  { key: "internalNote", label: "Ghi chú nội bộ", insert: "Nội bộ: " },
 ];
 
 export const QUICK_EXAMPLE =
@@ -249,7 +253,10 @@ export function heuristicParse(text: string, ctx: QuickContext): QuickDraft {
   const lab = labelled(src);
 
   // SĐT: chuỗi 10 số (cho phép cách/chấm/gạch), hoặc +84.
-  const phoneHit = src.match(/(?:\+?84|0)(?:[\s.-]?\d){9}/);
+  // Đoạn chat từ Hộp thư: số trong tin [Studio] là hotline của studio, không
+  // phải SĐT khách — bỏ những dòng đó khi dò.
+  const phoneSrc = src.split("\n").filter((l) => !l.startsWith("[Studio]")).join("\n");
+  const phoneHit = phoneSrc.match(/(?:\+?84|0)(?:[\s.-]?\d){9}/);
   const phone = phoneHit ? normalizePhone(phoneHit[0]) : undefined;
   if (phone) out.clientPhone = phone;
 
@@ -313,7 +320,8 @@ export function heuristicParse(text: string, ctx: QuickContext): QuickDraft {
     ? undefined
     : (phoneHit ? src.replace(phoneHit[0], " ") : src)
         .split("\n")
-        .filter((l) => !/c[ọo]c/i.test(l))
+        // Bỏ dòng cọc và dòng ghi chú ("Nội bộ: đã bớt 1tr" không phải giá gói).
+        .filter((l) => !/c[ọo]c/i.test(l) && !/^\s*(nội bộ|noi bo|ghi chú|ghi chu|yêu cầu|yeu cau|lưu ý|luu y)/i.test(l))
         .map((l) => l.match(/\d+(?:[.,]\d+)?\s*(?:tr(?:iệu|ieu)?|k|nghìn|ngàn)\d{0,3}(?![\p{L}])|\d{1,3}(?:[.,]\d{3}){2,3}/iu)?.[0])
         .find(Boolean);
   if (priceLine || looseMoney) {
@@ -359,7 +367,14 @@ export function heuristicParse(text: string, ctx: QuickContext): QuickDraft {
   if (!out.endTime) delete out.endTime;
 
   // Địa điểm: dòng có nhãn, hoặc "tại …" tới hết câu.
-  const loc = pick(lab, /^(dia diem|noi chup|tai|o|dia chi)$/) ?? src.match(/(?:tại|tai)\s+([^\n,;]+)/i)?.[1];
+  // Không có nhãn thì lấy cụm "tại …" CUỐI CÙNG, bỏ qua dòng Gói/Thêm: tên gói
+  // hay chứa chữ "tại" ("Makeup cô dâu tại nhà") mà đó không phải nơi chụp.
+  const locSrc = src
+    .split("\n")
+    .filter((l) => !/^\s*(g[óo]i|th[êe]m|h[ạa]ng m[ụu]c|d[ịi]ch v[ụu])\s*[:：]/i.test(l))
+    .join("\n");
+  const locHits = [...locSrc.matchAll(/(?:^|[\s,(])(?:tại|tai)\s+([^\n,;]+)/gi)];
+  const loc = pick(lab, /^(dia diem|noi chup|tai|o|dia chi)$/) ?? locHits[locHits.length - 1]?.[1];
   if (loc) out.location = loc.trim().replace(/[.]$/, "");
 
   // Thợ: dòng "Thợ: A, B" hoặc tên trong sổ thợ xuất hiện nguyên văn.
@@ -369,8 +384,10 @@ export function heuristicParse(text: string, ctx: QuickContext): QuickDraft {
     .map((c) => c.id);
   if (crewIds.length) out.crewIds = crewIds;
 
-  const note = pick(lab, /^(ghi chu|luu y|note)$/);
+  const note = pick(lab, /^(ghi chu|luu y|note|yeu cau( khach| rieng)?)$/);
   if (note) out.note = note;
+  const internal = pick(lab, /^(noi bo|ghi chu noi bo|ghi chu studio|note noi bo)$/);
+  if (internal) out.internalNote = internal;
 
   return out;
 }
@@ -449,6 +466,8 @@ export function normalizeDraft(raw: unknown, ctx: QuickContext): QuickDraft {
   if (title) out.title = title;
   const note = str(r.note, 1000);
   if (note) out.note = note;
+  const internal = str(r.internalNote, 1000);
+  if (internal) out.internalNote = internal;
   return out;
 }
 
@@ -517,10 +536,12 @@ export function buildQuickPrompt(ctx: QuickContext): string {
     '  "crewIds": string[],             // id người trong SỔ THỢ',
     '  "deposit": number,               // tiền cọc (đồng); "cọc 30%" thì tự tính theo tổng',
     '  "depositDue": "YYYY-MM-DD",',
-    '  "note": string                   // yêu cầu riêng của KHÁCH về buổi chụp (khách sẽ đọc được) — không ghi nhận xét nội bộ',
+    '  "note": string,                  // yêu cầu riêng của KHÁCH về buổi chụp (khách sẽ đọc được) — không ghi nhận xét nội bộ',
+    '  "internalNote": string           // ghi chú NỘI BỘ cho studio (khách không thấy): lưu ý về khách, việc cần nhớ',
     "}",
     "",
     'Tiền: "15tr" = 15000000, "1tr5" = 1500000, "500k" = 500000.',
+    "Nếu đầu vào là ĐOẠN CHAT (các dòng bắt đầu bằng [Khách] / [Studio]): thông tin của khách lấy từ dòng [Khách] và phần đầu đoạn; giá/ngày/gói lấy theo thoả thuận SAU CÙNG hai bên đã chốt, bỏ qua các phương án đã bị đổi. SĐT của studio trong dòng [Studio] KHÔNG phải SĐT khách.",
     "Chỉ dùng id có trong danh sách dưới đây. Gói khách nhắc không có trong bảng giá → đưa vào customLines kèm giá nếu có.",
     "",
     "DANH SÁCH DỊCH VỤ:",
@@ -545,4 +566,43 @@ export function extractJson(text: string): unknown {
   } catch {
     return null;
   }
+}
+
+/* ── Đoạn chat hộp thư → đầu vào cho Tạo nhanh ─────────────────────────── */
+
+export type TranscriptMessage = { direction: "in" | "out"; body: string };
+
+/**
+ * Dựng đoạn chữ từ một hội thoại hộp thư để đưa vào ô Tạo nhanh: tên/SĐT của
+ * người nhắn đặt lên ĐẦU (bộ đọc quy tắc lấy SĐT đầu tiên gặp được — đó phải là
+ * SĐT khách, không phải hotline studio nằm trong tin trả lời), rồi các tin theo
+ * thứ tự thời gian. Quá dài thì bỏ tin CŨ: thoả thuận chốt luôn nằm ở cuối.
+ */
+export function buildTranscript(
+  contact: { name?: string | null; phone?: string | null },
+  messages: TranscriptMessage[],
+  max = 3500
+): string {
+  const head: string[] = [];
+  const name = (contact.name || "").trim();
+  if (name) head.push(`Tên khách: ${name}`);
+  const phone = normalizePhone(contact.phone ?? "");
+  if (phone) head.push(`SĐT: ${phone}`);
+  const headText = head.join("\n");
+
+  const lines = messages
+    .map((m) => ({ ...m, body: (m.body || "").replace(/\s+/g, " ").trim() }))
+    .filter((m) => m.body)
+    .map((m) => `${m.direction === "in" ? "[Khách]" : "[Studio]"} ${m.body}`);
+
+  const budget = Math.max(0, max - headText.length - 2);
+  const kept: string[] = [];
+  let used = 0;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const l = lines[i].length > 600 ? `${lines[i].slice(0, 600)}…` : lines[i];
+    if (used + l.length + 1 > budget) break;
+    kept.unshift(l);
+    used += l.length + 1;
+  }
+  return [headText, kept.join("\n")].filter(Boolean).join("\n\n");
 }

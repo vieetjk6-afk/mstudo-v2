@@ -340,6 +340,8 @@ export interface StudioContract {
   brief_outfit: string | null;
   brief_refs: string | null;
   brief_note: string | null;
+  /** Ghi chú nội bộ của studio — KHÔNG đưa ra API cổng khách. Có thể thiếu khi DB chưa chạy migration. */
+  internal_note?: string | null;
   brief_submitted_at: string | null;
   chosen_quote_option_id: string | null;
   chosen_quote_at: string | null;

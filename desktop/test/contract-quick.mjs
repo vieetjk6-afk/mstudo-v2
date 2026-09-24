@@ -17,6 +17,7 @@ import {
   draftTotal,
   extractJson,
   QUICK_EXAMPLE,
+  buildTranscript,
 } from "../../src/lib/contract-quick.ts";
 
 let fail = 0;
@@ -144,6 +145,37 @@ check("AI: rác", normalizeDraft("xin chào", ctx), {});
 // ── Gộp: AI thắng, quy tắc vá chỗ trống, không tính tiền hai lần ──
 const merged = mergeDrafts({ mainPkgId: "p-cuoi" }, { customLines: [{ name: "Gói dịch vụ", qty: 1, unit_price: 9e6 }], clientPhone: "0901234567" });
 check("gộp: bỏ gói riêng đoán khi AI đã chọn gói", merged, { clientPhone: "0901234567", mainPkgId: "p-cuoi" });
+
+// ── "tại" trong tên gói không phải địa điểm ──
+const locT = heuristicParse("Gói: Trọn gói cưới\nThêm: Makeup cô dâu tại nhà\nNgày 15/12 tại Nhà hàng Riverside", ctx);
+check("địa điểm: bỏ 'tại' trong dòng Thêm", locT.location, "Nhà hàng Riverside");
+
+// ── Đoạn chat hộp thư ──
+const tr = buildTranscript({ name: "Mai Anh", phone: "+84 912 000 111" }, [
+  { direction: "in", body: "Chào shop, mình hỏi gói cưới" },
+  { direction: "out", body: "Dạ gọi hotline 0281234567 nhé" },
+  { direction: "in", body: "   " },
+  { direction: "in", body: "Chốt trọn gói cưới 11tr ngày 20/12 nha" },
+]);
+check("chat: đầu đoạn có tên + SĐT chuẩn hoá", tr.split("\n").slice(0, 2), ["Tên khách: Mai Anh", "SĐT: 0912000111"]);
+check("chat: bỏ tin rỗng, gắn nhãn", tr.split("\n").slice(3), [
+  "[Khách] Chào shop, mình hỏi gói cưới",
+  "[Studio] Dạ gọi hotline 0281234567 nhé",
+  "[Khách] Chốt trọn gói cưới 11tr ngày 20/12 nha",
+]);
+const trParsed = heuristicParse(tr, ctx);
+check("chat: SĐT khách, tên, gói, giá", [trParsed.clientPhone, trParsed.clientName, trParsed.mainPkgId, trParsed.mainPrice], ["0912000111", "Mai Anh", "p-cuoi", 11_000_000]);
+const noPhone = heuristicParse(buildTranscript({ name: "X" }, [{ direction: "out", body: "Hotline 0281234567" }]), ctx);
+check("chat: không lấy hotline studio làm SĐT khách", noPhone.clientPhone, undefined);
+const long = buildTranscript({ name: "A" }, Array.from({ length: 200 }, (_, i) => ({ direction: "in", body: `tin số ${i} ` + "x".repeat(50) })), 1000);
+check("chat: quá dài thì giữ tin MỚI nhất", [long.length <= 1000, long.includes("tin số 199"), long.includes("tin số 0 ")], [true, true, false]);
+
+// ── Ghi chú nội bộ tách khỏi yêu cầu của khách ──
+const notes = heuristicParse("SĐT 0901234567\nYêu cầu: tông ảnh film\nNội bộ: khách quen, đã bớt 1tr", ctx);
+check("ghi chú: yêu cầu khách", notes.note, "tông ảnh film");
+check("ghi chú: nội bộ", notes.internalNote, "khách quen, đã bớt 1tr");
+check("ghi chú: tiền trong ghi chú không thành giá", notes.customLines, undefined);
+check("AI: internalNote giữ lại", normalizeDraft({ internalNote: " nhớ đèn " }, ctx), { internalNote: "nhớ đèn" });
 
 // ── JSON bọc markdown ──
 check("extractJson", extractJson('Đây:\n```json\n{"a":1}\n```'), { a: 1 });

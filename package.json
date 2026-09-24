@@ -14,6 +14,7 @@
     "test:contract-print": "node --experimental-strip-types desktop/test/contract-print.mjs",
     "test:contract-lines": "node --experimental-strip-types desktop/test/contract-lines.mjs",
     "test:contract-quick": "node --experimental-strip-types desktop/test/contract-quick.mjs",
+    "test:contract-conflicts": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/contract-conflicts.mjs",
     "test:studio-export": "node --experimental-strip-types desktop/test/studio-export.mjs",
     "test:album-buttons": "node --experimental-strip-types desktop/test/album-buttons.mjs",
     "test:album-dislike": "node --experimental-strip-types desktop/test/album-dislike.mjs",
