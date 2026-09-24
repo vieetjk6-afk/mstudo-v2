@@ -77,7 +77,10 @@ interface PublicAlbum {
   watermark_enabled: boolean;
   watermark_text: string | null;
   hasPassword: boolean;
+  /** Tải ảnh ngay trong app (byte đi qua hệ thống) — khoá theo gói. */
   allowDownload: boolean;
+  /** Mở thư mục Drive của studio — mọi gói, vì Google tự phục vụ file. */
+  allowDrive: boolean;
   allowNotes: boolean;
 }
 
@@ -1032,7 +1035,7 @@ export default function CustomerAlbum({
 
           {/* Tải cả album từ Drive. Ẩn ở chế độ chia sẻ chọn lọc: link Drive mở
               CẢ thư mục nên sẽ lộ toàn album chứ không riêng mấy ảnh được chia sẻ. */}
-          {!shareMode && album.allowDownload && driveFolders.length > 0 && (
+          {!shareMode && album.allowDrive && driveFolders.length > 0 && (
             <DriveFolderLinks
               folders={driveFolders}
               label={t("driveFolderPick")}
@@ -1305,7 +1308,7 @@ export default function CustomerAlbum({
                 Link Drive: Google tự nén và tự phục vụ nên không byte nào đi qua
                 Vercel/Supabase (xem DriveFolderLinks). Ẩn ở chế độ chia sẻ chọn
                 lọc vì link mở CẢ thư mục, sẽ lộ toàn album. */}
-            {!shareMode && album.allowDownload && driveFolders.length > 0 && (
+            {!shareMode && album.allowDrive && driveFolders.length > 0 && (
               <div
                 className="mt-14 rounded-2xl px-5 py-6 text-center"
                 style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
