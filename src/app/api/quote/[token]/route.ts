@@ -110,7 +110,12 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     }
 
     // 1) Lock the client info + mark accepted.
-    await db
+    // Cập nhật CÓ ĐIỀU KIỆN theo status vừa đọc (optimistic concurrency): hai lần
+    // "đồng ý" bấm gần nhau (khách bấm đúp) cùng đọc status "sent" rồi cùng chạy
+    // tiếp thì trước đây TẠO RA HAI hợp đồng. Đặt điều kiện `status = <giá trị vừa
+    // đọc>` khiến Postgres tuần tự hoá: chỉ request đầu đổi được status, request
+    // sau khớp 0 dòng → dừng, nên convertQuoteToContract chỉ chạy đúng một lần.
+    const { data: flipped } = await db
       .from("studio_quotes")
       .update({
         client_name: clientName,
@@ -121,7 +126,13 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
         status: "accepted",
         accepted_at: new Date().toISOString(),
       })
-      .eq("id", quote.id);
+      .eq("id", quote.id)
+      .eq("status", quote.status)
+      .select("id");
+    if (!flipped || flipped.length === 0) {
+      // Một request khác vừa chốt trước — không chạy lại thông báo/tạo hợp đồng.
+      return NextResponse.json({ error: "Báo giá đã chốt, không thể thay đổi." }, { status: 409 });
+    }
 
     // 2) Fetch owner info once — used for both notification and tier check.
     const { data: owner } = await db

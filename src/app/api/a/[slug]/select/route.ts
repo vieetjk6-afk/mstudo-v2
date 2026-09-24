@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIp } from "@/lib/rate-limit";
 import { excludeDisliked } from "@/lib/album-dislike";
+import { verifyAlbumAccess } from "@/lib/album-access";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +26,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     photoIds?: string[];
     dislikedIds?: string[];
     notes?: Record<string, string>;
+    access?: string;
   };
 
   const sessionId = body.sessionId?.trim().slice(0, 100);
@@ -45,12 +47,19 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
 
   const { data: album } = await admin
     .from("albums")
-    .select("id, status, selection_limit")
+    .select("id, status, selection_limit, password_hash")
     .eq("slug", params.slug)
     .single();
 
   if (!album || album.status !== "published") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Album CÓ mật khẩu: chỉ ghi được khi kèm vé hợp lệ do /access phát ra sau khi
+  // nhập đúng mật khẩu. Không vé → không được đụng vào lựa chọn của khách (trước
+  // đây ai biết slug cũng xoá sạch/đổi được lựa chọn của album có khoá).
+  if (album.password_hash && !verifyAlbumAccess(album.id, album.password_hash, body.access)) {
+    return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }
 
   if (album.selection_limit && photoIds.length > album.selection_limit) {
@@ -126,16 +135,26 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
  * Return the album's shared selection so any visitor can see what has already
  * been chosen (and avoid picking the same photos).
  */
-export async function GET(_req: Request, props: { params: Promise<{ slug: string }> }) {
+export async function GET(req: Request, props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
   const admin = createAdminClient();
   const { data: album } = await admin
     .from("albums")
-    .select("id, status")
+    .select("id, status, password_hash")
     .eq("slug", params.slug)
     .single();
 
   if (!album || album.status !== "published") {
+    return NextResponse.json({ selected: [], disliked: [], notes: {} });
+  }
+
+  // Album CÓ mật khẩu: chỉ trả lựa chọn + ghi chú (client_note là văn bản tự do
+  // của khách) cho ai cầm vé hợp lệ. Không vé → trả rỗng như album chưa có gì,
+  // nên không phân biệt được "sai vé" với "chưa chọn" → không làm máy dò.
+  if (
+    album.password_hash &&
+    !verifyAlbumAccess(album.id, album.password_hash, req.headers.get("x-album-access"))
+  ) {
     return NextResponse.json({ selected: [], disliked: [], notes: {} });
   }
 

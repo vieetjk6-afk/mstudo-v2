@@ -17,6 +17,11 @@ function displayToIso(s: string): string {
   if (!m) return "";
   const d = +m[1], mo = +m[2], y = +m[3];
   if (mo < 1 || mo > 12 || d < 1 || d > 31) return "";
+  // Chặn ngày KHÔNG có thật (vd 31/02): nếu chỉ kiểm 1–31 thì "2026-02-31" khi
+  // parse lại bị JS đẩy sang 03/03 — ô nhập âm thầm nhảy sang ngày khác ngày người
+  // dùng gõ. Dựng Date rồi soi lại từng thành phần để loại các ngày tràn tháng.
+  const probe = new Date(y, mo - 1, d);
+  if (probe.getFullYear() !== y || probe.getMonth() !== mo - 1 || probe.getDate() !== d) return "";
   return `${y}-${String(mo).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 }
 // Today as a local yyyy-mm-dd (not UTC, so it flips at local midnight).

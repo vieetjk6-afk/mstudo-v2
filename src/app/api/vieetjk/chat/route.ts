@@ -62,6 +62,14 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
+  // Endpoint CÔNG KHAI, không đăng nhập: mỗi lần gọi kích hoạt một completion LLM
+  // trên khoá API của chủ studio (tốn quota/tiền), giữ function tới maxDuration=60s,
+  // và ghi một dòng vào hộp thư hợp nhất bằng service-role. Không giới hạn thì một
+  // script lặp POST có thể đốt sạch quota LLM và làm cạn tài nguyên. Chặn ngay từ
+  // đầu — trước cả khi nạp provider — cùng lớp phòng thủ bền như /vieetjk/lead.
+  const limited = await limitByIpDurable(req, "vjk-chat", 20, 60_000);
+  if (limited) return limited;
+
   const providers = loadProviders();
   if (providers.length === 0) {
     return Response.json({ error: "assistant_unavailable" }, { status: 503 });

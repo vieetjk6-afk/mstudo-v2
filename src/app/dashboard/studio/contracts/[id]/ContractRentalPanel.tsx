@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, Shirt, Trash2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import DateInput from "@/components/DateInput";
-import { fmtDate } from "@/lib/date";
+import { fmtDate, todayVN } from "@/lib/date";
 import MoneyInput from "@/components/MoneyInput";
 import {
   RENTAL_CATEGORY_LABEL, RENTAL_ORDER_STATUS_LABEL, vnd,
@@ -148,7 +148,7 @@ export default function ContractRentalPanel({
     setDons((p) => p.map((x) => (x.id === don.id ? { ...x, status: moi } : x)));
     await supabase
       .from("rental_orders")
-      .update({ status: moi, returned_at: moi === "returned" ? new Date().toISOString().slice(0, 10) : null })
+      .update({ status: moi, returned_at: moi === "returned" ? todayVN() : null })
       .eq("id", don.id);
   }
 

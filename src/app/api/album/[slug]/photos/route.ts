@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
 import { isDeliveryPhase } from "@/lib/album-phase";
 
 export const runtime = "nodejs";
@@ -36,14 +35,31 @@ export async function GET(req: Request, props: { params: Promise<{ slug: string 
     return NextResponse.json({ error: "password_required" }, { status: 403 });
   }
 
-  const [{ data: sources }, allPhotos] = await Promise.all([
-    admin.from("album_sources").select("id, stage").eq("album_id", album.id),
-    fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position, is_video"),
-  ]);
-  const filtered = filterDeliveryPhotos(allPhotos ?? [], sources ?? []);
+  // Phân trang PHÍA DB thay vì đọc cả bảng rồi cắt trong JS: một album 3.000 ảnh
+  // trước đây mỗi lượt gọi (kể cả xin ảnh 300–2300) đều nạp trọn 3.000 dòng. Nay
+  // chỉ đọc đúng một trang + đếm tổng trong CÙNG một truy vấn ({ count: "exact" }).
+  const { data: sources } = await admin
+    .from("album_sources")
+    .select("id, stage")
+    .eq("album_id", album.id);
+  const deliveryIds = (sources ?? []).filter((s) => s.stage === "delivery").map((s) => s.id as string);
+
+  let query = admin
+    .from("photos")
+    .select("id, drive_file_id, name, source_id, position, is_video", { count: "exact" })
+    .eq("album_id", album.id);
+  // Tương đương filterDeliveryPhotos: có source giai đoạn "delivery" thì chỉ lấy
+  // ảnh của các source đó (hoặc ảnh chưa gắn source); không có thì lấy tất cả.
+  if (deliveryIds.length > 0) {
+    query = query.or(`source_id.is.null,source_id.in.(${deliveryIds.join(",")})`);
+  }
+  const { data: photos, count } = await query
+    .order("position")
+    .order("id")
+    .range(offset, offset + limit - 1);
 
   return NextResponse.json(
-    { photos: filtered.slice(offset, offset + limit), total: filtered.length },
+    { photos: photos ?? [], total: count ?? 0 },
     { headers: { "Cache-Control": CACHE } }
   );
 }

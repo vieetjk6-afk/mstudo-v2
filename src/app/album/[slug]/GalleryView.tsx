@@ -33,6 +33,8 @@ const TR = {
     fbNamePh: "Tên của bạn",
     fbContentPh: "Chia sẻ cảm nhận của bạn về bộ ảnh…",
     fbSend: "Gửi cảm nhận",
+    fbSending: "Đang gửi…",
+    fbErr: "Không gửi được cảm nhận, vui lòng thử lại.",
     fbEmpty: "Chưa có cảm nhận nào.",
     fbGuest: "Khách",
   },
@@ -61,6 +63,8 @@ const TR = {
     fbNamePh: "Your name",
     fbContentPh: "Share your thoughts about this photo set…",
     fbSend: "Send feedback",
+    fbSending: "Sending…",
+    fbErr: "Couldn't send your feedback, please try again.",
     fbEmpty: "No feedback yet.",
     fbGuest: "Guest",
   },
@@ -232,6 +236,8 @@ export default function GalleryView({
   const [fbList] = useState<Feedback[]>(feedback);
   const [fbSent, setFbSent] = useState(false);
   const [fbCaptcha, setFbCaptcha] = useState<string | null>(null);
+  const [fbSending, setFbSending] = useState(false);
+  const [fbErr, setFbErr] = useState(false);
   const onFbCaptcha = useCallback((t: string) => setFbCaptcha(t), []);
 
   async function unlock(e: React.FormEvent) {
@@ -327,18 +333,31 @@ export default function GalleryView({
   }
 
   async function sendFeedback() {
-    if (!fbContent.trim() || !fbCaptcha) return;
-    const res = await fetch("/api/feedback", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ albumId: gallery.id, clientName: fbName, rating: fbRating, content: fbContent, captcha: fbCaptcha }),
-    });
-    if (res.ok) {
-      setFbSent(true);
-      // KHÔNG chèn cảm nhận vừa gửi vào danh sách bên cạnh nữa. Danh sách đó là
-      // những cảm nhận studio ĐÃ DUYỆT cho hiện; cảm nhận mới vào ở trạng thái
-      // chờ duyệt, nên chèn vào là nói với khách một điều không đúng ("đã đăng")
-      // rồi tải lại trang là nó biến mất. Lời cảm ơn nói rõ là còn chờ duyệt.
-      setFbContent(""); setFbName("");
+    // Chốt chống bấm nhiều lần: mạng chậm thì trước đây khách bấm lại được và gửi
+    // trùng. `fbSending` khoá nút trong lúc đang bay.
+    if (!fbContent.trim() || !fbCaptcha || fbSending) return;
+    setFbSending(true);
+    setFbErr(false);
+    try {
+      const res = await fetch("/api/feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ albumId: gallery.id, clientName: fbName, rating: fbRating, content: fbContent, captcha: fbCaptcha }),
+      });
+      if (res.ok) {
+        setFbSent(true);
+        // KHÔNG chèn cảm nhận vừa gửi vào danh sách bên cạnh nữa. Danh sách đó là
+        // những cảm nhận studio ĐÃ DUYỆT cho hiện; cảm nhận mới vào ở trạng thái
+        // chờ duyệt, nên chèn vào là nói với khách một điều không đúng ("đã đăng")
+        // rồi tải lại trang là nó biến mất. Lời cảm ơn nói rõ là còn chờ duyệt.
+        setFbContent(""); setFbName("");
+      } else {
+        // Trước đây thất bại thì im lặng — khách không biết đã gửi được chưa.
+        setFbErr(true);
+      }
+    } catch {
+      setFbErr(true);
+    } finally {
+      setFbSending(false);
     }
   }
 
@@ -518,7 +537,8 @@ export default function GalleryView({
                   </div>
                   <textarea value={fbContent} onChange={(e) => setFbContent(e.target.value)} placeholder={tr.fbContentPh} className="input min-h-[90px] resize-y" />
                   <Turnstile onVerify={onFbCaptcha} onExpire={() => setFbCaptcha(null)} onError={() => setFbCaptcha(null)} className="mt-3" />
-                  <button onClick={sendFeedback} disabled={!fbCaptcha} className="btn-primary mt-3 w-full"><Send size={15} /> {tr.fbSend}</button>
+                  {fbErr && <p className="mt-2 text-[12.5px]" style={{ color: "var(--s-red, #d66)" }}>{tr.fbErr}</p>}
+                  <button onClick={sendFeedback} disabled={!fbCaptcha || fbSending} className="btn-primary mt-3 w-full"><Send size={15} /> {fbSending ? tr.fbSending : tr.fbSend}</button>
                 </>
               )}
             </div>
