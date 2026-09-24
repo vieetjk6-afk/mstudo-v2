@@ -197,6 +197,33 @@ export async function applyToBooking(
   return { ok: true, bookingId: b.id, name: b.name, code: b.deposit_code };
 }
 
+/**
+ * Studio chấp nhận khoản cọc giữ ngày khách chuyển THIẾU: mức cọc của yêu cầu
+ * đặt lịch đổi thành đúng số đã nhận, rồi xác nhận. Đây là quyết định của
+ * studio (bấm tay), webhook không bao giờ tự làm việc này.
+ */
+export async function acceptBookingDeposit(
+  db: Db,
+  opts: { ownerId: string; bookingId: string; amount: number }
+): Promise<{ ok: true } | { ok: false; reason: "not_found" | "deposit_done" }> {
+  const { data: b } = await db
+    .from("studio_bookings")
+    .select("id, owner_id, deposit_status, deposit_paid_at")
+    .eq("id", opts.bookingId)
+    .maybeSingle();
+  if (!b || b.owner_id !== opts.ownerId) return { ok: false, reason: "not_found" };
+  if (b.deposit_status === "confirmed") return { ok: false, reason: "deposit_done" };
+  await db
+    .from("studio_bookings")
+    .update({
+      deposit_amount: Math.max(0, Math.round(opts.amount)),
+      deposit_status: "confirmed",
+      deposit_paid_at: b.deposit_paid_at ?? new Date().toISOString(),
+    })
+    .eq("id", b.id);
+  return { ok: true };
+}
+
 /** Chuông + thông báo đẩy cho studio. */
 export async function notifyStudio(
   db: Db,

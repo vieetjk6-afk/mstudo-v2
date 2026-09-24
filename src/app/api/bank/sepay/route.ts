@@ -148,8 +148,8 @@ export async function POST(req: NextRequest) {
       await mark({ status: "mismatch", note: res.reason, booking_id: res.bookingId ?? null });
       await notifyStudio(db, ownerId, {
         title: "Cọc giữ ngày cần xem lại",
-        message: `${money} · ${res.reason === "deposit_under" ? "chuyển thiếu so với mức cọc" : "cọc đã xác nhận từ trước"}`,
-        url: "/dashboard/studio/bookings",
+        message: `${money} · ${res.reason === "deposit_under" ? "chuyển thiếu so với mức cọc · bạn có thể nhận luôn số này làm cọc" : "cọc đã xác nhận từ trước"}`,
+        url: res.reason === "deposit_under" ? "/dashboard/studio/pricing#tu-xac-nhan" : "/dashboard/studio/bookings",
         tag: `bank-${row.id}`,
       });
       return NextResponse.json({ success: true });

@@ -3,7 +3,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { phanLoaiLoi } from "@/lib/pg-loi";
 import { newHookSecret, vnDate } from "@/lib/bank-reconcile";
-import { applyToPlan, confirmDepositZalo } from "@/lib/bank-apply";
+import { applyToPlan, confirmDepositZalo, acceptBookingDeposit } from "@/lib/bank-apply";
 
 export const dynamic = "force-dynamic";
 
@@ -84,16 +84,25 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  if (b.action === "ignore" || b.action === "assign") {
+  if (b.action === "ignore" || b.action === "assign" || b.action === "accept_deposit") {
     if (!b.txnId) return NextResponse.json({ error: "bad_request" }, { status: 400 });
     const { data: txn } = await db
       .from("studio_bank_transactions")
-      .select("id, owner_id, amount, txn_at, status")
+      .select("id, owner_id, amount, txn_at, status, note, booking_id")
       .eq("id", b.txnId)
       .maybeSingle();
     if (!txn || txn.owner_id !== profile.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
     // Đã ghi thu thì không gán lại: gỡ khoản thu là việc của màn hợp đồng.
     if (txn.status === "matched") return NextResponse.json({ error: "already_matched" }, { status: 409 });
+
+    // Cọc giữ ngày chuyển thiếu → studio đồng ý lấy đúng số đó làm cọc.
+    if (b.action === "accept_deposit") {
+      if (!txn.booking_id || txn.note !== "deposit_under") return NextResponse.json({ error: "bad_request" }, { status: 400 });
+      const res = await acceptBookingDeposit(db, { ownerId: profile.id, bookingId: txn.booking_id, amount: Number(txn.amount) || 0 });
+      if (!res.ok) return NextResponse.json({ error: res.reason }, { status: res.reason === "not_found" ? 404 : 409 });
+      await db.from("studio_bank_transactions").update({ status: "matched", note: "deposit_accepted" }).eq("id", txn.id);
+      return NextResponse.json({ ok: true });
+    }
 
     if (b.action === "ignore") {
       await db.from("studio_bank_transactions").update({ status: "ignored" }).eq("id", txn.id);

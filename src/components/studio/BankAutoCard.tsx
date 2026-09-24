@@ -98,6 +98,7 @@ export default function BankAutoCard() {
         already_paid: "Đợt này vừa được đánh dấu thu rồi.",
         already_matched: "Giao dịch này đã ghi thu.",
         write_failed: "Không ghi được lần thu. Sổ kỳ này đã khoá?",
+        deposit_done: "Cọc giữ ngày này đã được xác nhận rồi.",
       };
       toast(msg[j.error] || "Không thực hiện được, thử lại sau.");
       return false;
@@ -289,7 +290,24 @@ export default function BankAutoCard() {
                           <Pill tone={STATUS_TONE[t.status]}>{BANK_TXN_STATUS_LABEL[t.status]}</Pill>
                         </div>
                       </div>
-                      {open && (
+                      {open && t.booking_id && t.note === "deposit_under" && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <button
+                            className="btn-primary px-3 py-1.5 text-xs"
+                            disabled={!!busy}
+                            onClick={async () => {
+                              if (!confirm(`Nhận ${vnd(t.amount)} làm cọc giữ ngày? Mức cọc của yêu cầu đặt lịch sẽ đổi thành số này và được xác nhận.`)) return;
+                              if (await act("accept_deposit", { txnId: t.id }, `dep-${t.id}`)) toast("Đã xác nhận cọc giữ ngày.");
+                            }}
+                          >
+                            {busy === `dep-${t.id}` ? "Đang xác nhận…" : `Nhận ${vnd(t.amount)} làm cọc`}
+                          </button>
+                          <button className="btn-ghost px-3 py-1.5 text-xs" disabled={!!busy} onClick={() => act("ignore", { txnId: t.id }, `ignore-${t.id}`)}>
+                            Bỏ qua
+                          </button>
+                        </div>
+                      )}
+                      {open && !(t.booking_id && t.note === "deposit_under") && (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           <select
                             className="input max-w-full py-1.5 text-xs sm:max-w-md"
