@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { openRemainderIfSettled } from "@/lib/bank-apply";
+import { asPaymentMethod } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,8 @@ export async function POST(req: Request) {
   const profile = await requireStudio("full");
   if (!profile) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  const { planId } = (await req.json().catch(() => ({}))) as { planId?: string };
+  const { planId, method: rawMethod } = (await req.json().catch(() => ({}))) as { planId?: string; method?: string };
+  const method = asPaymentMethod(rawMethod);
   if (!planId) return NextResponse.json({ error: "bad_request" }, { status: 400 });
 
   const db = createAdminClient();
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
 
   const { data: payment } = await db
     .from("contract_payments")
-    .insert({ contract_id: contract.id, amount, kind: "installment", paid_at: today, note: plan.label })
+    .insert({ contract_id: contract.id, amount, kind: "installment", method, paid_at: today, note: plan.label })
     .select("id")
     .single();
 

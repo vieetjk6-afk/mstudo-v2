@@ -1004,6 +1004,26 @@ export const CREW_STATUS_LABEL: Record<CrewStatus, string> = {
   declined: "Từ chối",
 };
 
+/**
+ * Tiền về bằng gì. Cột contract_payments.method có từ schema nền nhưng trước
+ * đây bỏ trống. Giờ studio chọn khi đánh dấu thu, còn SePay tự ghi "transfer".
+ * Tách tiền mặt ra để cuối ngày studio đối chiếu được với tiền đang giữ trong két.
+ */
+export type PaymentMethod = "cash" | "transfer";
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: "Tiền mặt",
+  transfer: "Chuyển khoản",
+};
+/** Nhãn phương thức; giá trị lạ (dữ liệu cũ nhập tay) thì giữ nguyên, trống thì "". */
+export function paymentMethodLabel(m: string | null | undefined): string {
+  if (!m) return "";
+  return PAYMENT_METHOD_LABEL[m as PaymentMethod] ?? m;
+}
+/** Chỉ nhận đúng hai giá trị; mọi thứ khác → null (không ghi rác vào sổ). */
+export function asPaymentMethod(m: unknown): PaymentMethod | null {
+  return m === "cash" || m === "transfer" ? m : null;
+}
+
 export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
   deposit: "Đặt cọc",
   installment: "Thanh toán đợt",

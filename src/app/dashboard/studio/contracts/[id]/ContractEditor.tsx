@@ -68,6 +68,9 @@ import {
   CREW_ROLE_LABEL,
   CREW_STATUS_LABEL,
   PAYMENT_KIND_LABEL,
+  PAYMENT_METHOD_LABEL,
+  paymentMethodLabel,
+  type PaymentMethod,
   intakeIsWedding,
   type StudioContract,
   type ContractItem,
@@ -430,6 +433,10 @@ export default function ContractEditor({
   }
   const [clientProofs] = useState(initialClientProofs);
   const [planProof, setPlanProof] = useState<string>(""); // proof image for the next instalment
+  // Tiền về bằng gì cho "Thêm & đã thu". Đính ảnh chuyển khoản thì tự chuyển sang CK.
+  const [planMethod, setPlanMethod] = useState<PaymentMethod>("cash");
+  // Đợt đang chờ chọn "Tiền mặt / Chuyển khoản" sau khi bấm "Đánh dấu thu".
+  const [collectFor, setCollectFor] = useState<string | null>(null);
   const [proofBusy, setProofBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null); // zoomed transfer-proof image
   const [mounted, setMounted] = useState(false);
@@ -870,7 +877,7 @@ export default function ContractEditor({
         no,
         paidOn: fmtDate(p.paid_at),
         amount: p.amount,
-        kindLabel: [PAYMENT_KIND_LABEL[p.kind], p.method].filter(Boolean).join(" · "),
+        kindLabel: [PAYMENT_KIND_LABEL[p.kind], paymentMethodLabel(p.method)].filter(Boolean).join(" · "),
         note: p.note ?? null,
         studio: {
           name: studioName,
@@ -1145,7 +1152,10 @@ export default function ContractEditor({
     setProofBusy(true);
     const url = await uploadProof(file);
     setProofBusy(false);
-    if (url) setPlanProof(url);
+    if (url) {
+      setPlanProof(url);
+      setPlanMethod("transfer");
+    }
   }
 
   // Attach (or replace) the transfer-proof image on an already-recorded payment.
@@ -1172,7 +1182,7 @@ export default function ContractEditor({
     if (markPaid) {
       const { data: payment, error } = await supabase
         .from("contract_payments")
-        .insert({ contract_id: contract.id, amount, kind: "installment", paid_at: today(), note: label, ...(planProof ? { proof_url: planProof } : {}) })
+        .insert({ contract_id: contract.id, amount, kind: "installment", method: planMethod, paid_at: today(), note: label, ...(planProof ? { proof_url: planProof } : {}) })
         .select("*")
         .single();
       // Ghi lần thu HỎNG (thường là hàng rào khoá sổ) thì DỪNG — không ghi tiếp
@@ -1208,7 +1218,8 @@ export default function ContractEditor({
     }
   }
   // Mark an instalment collected → records a real payment; un-marking removes it.
-  async function markPlanPaid(it: ContractPaymentPlan) {
+  async function markPlanPaid(it: ContractPaymentPlan, method: PaymentMethod | null = null) {
+    setCollectFor(null);
     if (it.paid) {
       if (it.payment_id) {
         const old = payments.find((x) => x.id === it.payment_id)?.proof_url;
@@ -1229,7 +1240,7 @@ export default function ContractEditor({
       const nowIso = new Date().toISOString();
       const { data: payment, error } = await supabase
         .from("contract_payments")
-        .insert({ contract_id: contract.id, amount, kind: "installment", paid_at: today(), note: it.label })
+        .insert({ contract_id: contract.id, amount, kind: "installment", method, paid_at: today(), note: it.label })
         .select("*")
         .single();
       if (error || !payment) {
@@ -2090,9 +2101,32 @@ export default function ContractEditor({
                             {it.paid && linked && (
                               <button onClick={() => printReceipt(linked)} className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
                             )}
-                            <button onClick={() => markPlanPaid(it)} className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]" style={{ color: it.paid ? "var(--s-green)" : "var(--text3)" }}>
-                              {it.paid ? "✓ Đã thu" : "Đánh dấu thu"}
-                            </button>
+                            {!it.paid && collectFor === it.id ? (
+                              // Chọn tiền về bằng gì — tiền mặt tách riêng để đối chiếu két.
+                              <span className="inline-flex shrink-0 items-center gap-1">
+                                {(["cash", "transfer"] as const).map((m) => (
+                                  <button
+                                    key={m}
+                                    onClick={() => markPlanPaid(it, m)}
+                                    className="inline-flex h-7 items-center rounded-md px-2 text-[11px] font-semibold"
+                                    style={{ background: "var(--s-greenS)", color: "var(--s-green)" }}
+                                  >
+                                    {PAYMENT_METHOD_LABEL[m]}
+                                  </button>
+                                ))}
+                                <button onClick={() => setCollectFor(null)} className="inline-flex h-7 items-center px-1 text-[11px]" style={{ color: "var(--text3)" }}>Huỷ</button>
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => (it.paid ? markPlanPaid(it) : setCollectFor(it.id))}
+                                className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]"
+                                style={{ color: it.paid ? "var(--s-green)" : "var(--text3)" }}
+                              >
+                                {it.paid
+                                  ? `✓ Đã thu${linked?.method ? ` · ${paymentMethodLabel(linked.method)}` : ""}`
+                                  : "Đánh dấu thu"}
+                              </button>
+                            )}
                             <button onClick={() => deletePlan(it)} className="inline-flex h-7 w-7 shrink-0 items-center justify-center" aria-label="Xoá đợt thanh toán" title="Xoá" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                           </div>
                           </div>
@@ -2143,6 +2177,25 @@ export default function ContractEditor({
                     </button>
                   )}
                 </div>
+                {/* Tiền về bằng gì — chỉ áp cho "Thêm & đã thu". */}
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                  <span style={{ color: "var(--text3)" }}>Nếu đã thu, khách trả bằng:</span>
+                  {(["cash", "transfer"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPlanMethod(m)}
+                      className="rounded-full px-2.5 py-1"
+                      style={{
+                        border: `1px solid ${planMethod === m ? "var(--s-green)" : "var(--border)"}`,
+                        background: planMethod === m ? "var(--s-greenS)" : "transparent",
+                        color: planMethod === m ? "var(--s-green)" : "var(--text2)",
+                      }}
+                    >
+                      {PAYMENT_METHOD_LABEL[m]}
+                    </button>
+                  ))}
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button onClick={() => addPlan(false)} disabled={busy === "plan"} className="btn-ghost"><Plus size={15} /> {busy === "plan" ? "Đang thêm…" : "Thêm đợt thu"}</button>
                   <button onClick={() => addPlan(true)} disabled={busy === "planPaid"} className="btn-ghost" style={{ color: "var(--s-green)" }}><Check size={15} /> {busy === "planPaid" ? "Đang lưu…" : "Thêm & đã thu"}</button>
@@ -2172,7 +2225,7 @@ export default function ContractEditor({
                           <div>
                             <p className="text-sm font-medium">{vnd(p.amount)} · {PAYMENT_KIND_LABEL[p.kind]}</p>
                             <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-                              {p.paid_at}{p.method ? ` · ${p.method}` : ""}{p.note ? ` · ${p.note}` : ""}
+                              {p.paid_at}{p.method ? ` · ${paymentMethodLabel(p.method)}` : ""}{p.note ? ` · ${p.note}` : ""}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
