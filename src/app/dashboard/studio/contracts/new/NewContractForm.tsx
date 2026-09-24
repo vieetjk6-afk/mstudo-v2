@@ -25,6 +25,7 @@ import {
   Landmark,
   RotateCcw,
   ReceiptText,
+  Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -52,6 +53,8 @@ import { fmtDate, fmtDow } from "@/lib/date";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { noAccent } from "@/lib/studio-nav";
 import { makeListLabel } from "@/lib/pricelist-label";
+import { draftTotal, missingFields, type QuickDraft } from "@/lib/contract-quick";
+import QuickContractBox from "./QuickContractBox";
 
 export type TemplateOption = {
   id: string;
@@ -172,6 +175,12 @@ export default function NewContractForm({
   const [addChecklist, setAddChecklist] = useState(true);
   const [makePhoto, setMakePhoto] = useState(true);
   const [makeVideo, setMakeVideo] = useState(false);
+
+  /* Yêu cầu riêng của khách (ô Tạo nhanh điền sẵn) — lưu vào brief_note, tức mục
+     Brief KHÁCH XEM ĐƯỢC ở cổng hợp đồng, nên nhãn ở bước Kiểm tra nói rõ điều đó. */
+  const [briefNote, setBriefNote] = useState("");
+  /* Kết quả lần "Tạo nhanh" gần nhất — hiện dải tóm tắt ở bước Kiểm tra. */
+  const [quick, setQuick] = useState<{ source: "ai" | "rules"; missing: string[]; filled: number } | null>(null);
 
   const [saving, setSaving] = useState<"draft" | "send" | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -376,6 +385,82 @@ export default function NewContractForm({
     setPlan(instalments.filter((_, idx) => idx !== i));
   }
 
+  /* ── Tạo nhanh ────────────────────────────────────────────────────────────
+     Ngữ cảnh gửi cho bộ phân tích: đúng những gói/dịch vụ/thợ form đang có —
+     id nào AI trả về cũng phải nằm trong đây. Memo để ô Tạo nhanh không chạy
+     lại bộ đọc quy tắc mỗi lần form re-render. */
+  const quickContext = useMemo(
+    () => ({
+      packages: packages.map((p) => ({ id: p.id, name: p.name, price: p.price, list_key: p.list_key })),
+      services: services.map((s) => ({ id: s.id, name: s.name })),
+      crew: roster.map((r) => ({ id: r.id, name: r.name || r.phone, role: CREW_ROLE_LABEL[r.role] })),
+    }),
+    [packages, services, roster]
+  );
+
+  /** Đổ bản nháp vào mọi bước rồi nhảy tới bước Kiểm tra. Trường nào bản nháp
+      không có thì GIỮ nguyên thứ studio đã nhập tay, không xoá trắng. */
+  function applyQuick(d: QuickDraft, source: "ai" | "rules") {
+    const pkgIds = new Set(packages.map((p) => p.id));
+    let filled = 0;
+    const hit = () => (filled += 1);
+
+    if (d.serviceId && services.some((x) => x.id === d.serviceId)) {
+      setServiceId(d.serviceId);
+      setShowAllLists(false);
+      hit();
+    }
+    if (d.shootType) setShootType(d.shootType);
+    if (d.clientName) (setClientName(d.clientName), hit());
+    if (d.clientPhone) (setClientPhone(d.clientPhone), hit());
+
+    const main = d.mainPkgId && pkgIds.has(d.mainPkgId) ? d.mainPkgId : "";
+    if (main || d.extraIds?.length || d.customLines?.length) {
+      setMainPkgId(main);
+      setExtraIds((d.extraIds ?? []).filter((id) => pkgIds.has(id) && id !== main));
+      setPkgPrice(main && d.mainPrice !== undefined ? { [main]: Math.max(0, d.mainPrice) } : {});
+      setCustomLines(d.customLines ?? []);
+      hit();
+    }
+    // Gói AI chọn có thể thuộc bảng giá của dịch vụ khác → mở "xem tất cả" để
+    // studio luôn thấy gói vừa chọn khi quay lại bước Gói dịch vụ. (Không lọc
+    // theo serviceListKeys ở đây được: nó còn tính theo dịch vụ CŨ.)
+    if (main || d.extraIds?.length) setShowAllLists(true);
+
+    if (d.eventDate) (setEventDate(d.eventDate), hit());
+    if (d.startTime) setStartTime(d.startTime);
+    if (d.endTime) setEndTime(d.endTime);
+    if (d.location) (setLocation(d.location), hit());
+    if (d.crewIds?.length) {
+      setPicked(
+        roster
+          .filter((r) => d.crewIds!.includes(r.id))
+          .map((r) => ({ id: r.id, name: r.name, phone: r.phone, role: r.role, salary: 0 }))
+      );
+      hit();
+    }
+
+    // Cọc: có số cọc thì dựng kế hoạch 2 đợt theo tổng MỚI của bản nháp; không
+    // có thì trả về kế hoạch mặc định (cọc làm tròn theo chính sách).
+    const t = draftTotal(d, { ...quickContext, today: "" });
+    if (d.deposit && d.deposit > 0 && t > 0) {
+      const dep = Math.min(t, d.deposit);
+      const next: Instalment[] = [{ label: "Cọc giữ lịch", amount: dep, due: d.depositDue ?? "" }];
+      if (t - dep > 0) next.push({ label: "Thanh toán khi giao sản phẩm", amount: t - dep, due: "" });
+      setPlan(next);
+      hit();
+    } else {
+      setPlan(null);
+    }
+    if (d.title) setTitle(d.title);
+    if (d.note) setBriefNote(d.note);
+    if (d.shootType === "video" || d.shootType === "psc") setMakeVideo(true);
+
+    setQuick({ source, missing: missingFields(d), filled });
+    setErr(null);
+    setStep(STEPS.length - 1);
+  }
+
   /** Bước hiện tại đã đủ dữ liệu để đi tiếp chưa. */
   const canNext = step === 1 ? phoneOk : step === 2 ? lines.length > 0 : true;
   const autoTitle = selectedService
@@ -417,6 +502,7 @@ export default function NewContractForm({
         client_token: token,
         drive_make_photo: makePhoto,
         drive_make_video: makeVideo,
+        ...(briefNote.trim() ? { brief_note: briefNote.trim() } : {}),
         ...(assignTo ? { assigned_to: assignTo } : {}),
         ...(branchId ? { branch_id: branchId } : {}),
       })
@@ -650,6 +736,9 @@ export default function NewContractForm({
             đáy màn ở cuối file này. */}
         <div className={`${panel} hidden px-3 py-2.5 sm:block`} style={panelStyle}>{actionBar}</div>
       </div>
+
+      {/* ── Tạo nhanh: chỉ ở bước đầu — đã đi vào từng bước thì là nhập tay. ── */}
+      {step === 0 && <QuickContractBox context={quickContext} onApply={applyQuick} />}
 
       {/* ── Nội dung bước ──────────────────────────────────────────────────── */}
       <div className={`${panel} px-5 py-5`} style={panelStyle}>
@@ -1196,6 +1285,31 @@ export default function NewContractForm({
         {/* ── Bước 6 · Kiểm tra lần cuối ──────────────────────────────────── */}
         {step === 5 && (
           <div>
+            {quick && (
+              <div
+                className="mb-4 flex gap-2.5 rounded-[11px] px-3.5 py-3"
+                style={{ background: quick.missing.length ? "var(--amS)" : "var(--gnS)" }}
+              >
+                <Sparkles size={18} style={{ flex: "none", marginTop: 1, color: quick.missing.length ? "var(--am)" : "var(--gn)" }} />
+                <div className="min-w-0 text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)" }}>
+                  <p className="font-bold" style={{ color: "var(--tx)" }}>
+                    {quick.source === "ai" ? "AI đã điền sẵn hợp đồng" : "Đã điền sẵn hợp đồng"} — kiểm tra kỹ trước khi gửi khách.
+                  </p>
+                  {quick.missing.length > 0 ? (
+                    <p>
+                      Còn thiếu: <b>{quick.missing.join(", ")}</b>. Bấm vào dòng tương ứng bên dưới để bổ sung.
+                    </p>
+                  ) : (
+                    <p>Đủ các thông tin chính. Bấm vào dòng bất kỳ để sửa.</p>
+                  )}
+                  {quick.source === "rules" && (
+                    <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                      Đang dùng bộ đọc cơ bản (chưa cấu hình AI hoặc AI không phản hồi) — câu chữ càng rõ nhãn “Tên: …, SĐT: …” càng chính xác.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
             <div className="mb-4 overflow-hidden rounded-[12px]" style={{ border: "1px solid var(--bd)" }}>
               {([
                 [1, "Khách hàng", [clientName || "Chưa có tên", clientPhone].filter(Boolean).join(" · ")],
@@ -1282,6 +1396,21 @@ export default function NewContractForm({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                 />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-brief">Yêu cầu riêng của khách</label>
+                <textarea
+                  id="nc-brief"
+                  rows={2}
+                  className={inputCls}
+                  style={{ ...inputStyle, background: "var(--sf)" }}
+                  placeholder="Không bắt buộc — VD: cô dâu muốn tông ảnh nhẹ, có 2 bé đi cùng"
+                  value={briefNote}
+                  onChange={(e) => setBriefNote(e.target.value)}
+                />
+                <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                  Lưu vào mục Brief — <b>khách xem được</b> trong cổng hợp đồng. Đừng ghi nhận xét nội bộ ở đây.
+                </p>
               </div>
               <label className="flex items-center gap-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>
                 <input type="checkbox" checked={addChecklist} onChange={(e) => setAddChecklist(e.target.checked)} />

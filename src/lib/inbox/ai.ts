@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { loadChatConfig } from "@/lib/vieetjk/chat-config";
-import { loadProviders, requestProvider, extractDelta, finishReason } from "@/lib/vieetjk/providers";
+import { loadProviders, requestProvider, collectText } from "@/lib/vieetjk/providers";
 import { platformLabel } from "./platforms";
 import { recentTurns } from "./store";
 
@@ -55,38 +55,6 @@ function buildSystemPrompt(studioName: string, platform: string, instructions: s
   return lines.join("\n");
 }
 
-/** Gom toàn bộ SSE của một provider thành một chuỗi. */
-async function collect(res: Response, p: Parameters<typeof extractDelta>[0]): Promise<{ text: string; reason: string }> {
-  if (!res.body) return { text: "", reason: "no_body" };
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  let text = "";
-  let reason = "";
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    let nl: number;
-    while ((nl = buf.indexOf("\n")) !== -1) {
-      const line = buf.slice(0, nl).trim();
-      buf = buf.slice(nl + 1);
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (!payload || payload === "[DONE]") continue;
-      try {
-        const json = JSON.parse(payload);
-        const delta = extractDelta(p, json);
-        if (delta) text += delta;
-        else reason = finishReason(p, json) || reason;
-      } catch {
-        /* chunk chưa trọn */
-      }
-    }
-  }
-  return { text: text.trim(), reason };
-}
-
 export interface AiReplyResult {
   text: string | null;
   /** Vì sao không có câu trả lời — ghi log máy chủ, KHÔNG gửi cho khách. */
@@ -121,7 +89,7 @@ export async function generateReply(
         debug.push(`${p.label}: ${res.status}`);
         continue;
       }
-      const { text, reason } = await collect(res, p);
+      const { text, reason } = await collectText(res, p);
       if (text) return { text };
       debug.push(`${p.label}: empty${reason ? ` (${reason})` : ""}`);
     } catch (e) {
