@@ -751,6 +751,8 @@ export interface ContractPaymentPlan {
   payment_id: string | null;
   position: number;
   created_at: string;
+  /** Mã đợt in vào nội dung chuyển khoản để SePay tự ghi thu (migrations/bank_auto_reconcile.sql). */
+  pay_code?: string | null;
 }
 
 export interface StudioExpense {

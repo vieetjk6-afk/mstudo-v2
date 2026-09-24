@@ -10,7 +10,8 @@
     "migrations/weather.sql",
     "migrations/album_people.sql",
     "migrations/album_faces.sql",
-    "migrations/contract_item_description.sql"
+    "migrations/contract_item_description.sql",
+    "migrations/bank_auto_reconcile.sql"
   ],
   "muc": [
     {
@@ -640,6 +641,17 @@
       "bang": [],
       "cot": [
         "contract_items.description"
+      ]
+    },
+    {
+      "file": "migrations/bank_auto_reconcile.sql",
+      "mo_ta": "Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)",
+      "bang": [
+        "studio_bank_hooks",
+        "studio_bank_transactions"
+      ],
+      "cot": [
+        "contract_payment_plan.pay_code"
       ]
     }
   ]

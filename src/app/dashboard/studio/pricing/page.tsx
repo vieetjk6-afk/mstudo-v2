@@ -7,6 +7,7 @@ import { ALL_SEED } from "@/lib/pricelist-seeds";
 import type { PricelistItem } from "@/lib/types";
 import PricingManager from "./PricingManager";
 import StudioDenied from "@/components/StudioDenied";
+import BankAutoCard from "@/components/studio/BankAutoCard";
 
 
 export default async function PricingPage() {
@@ -60,7 +61,10 @@ export default async function PricingPage() {
   // Báo giá cần gói Studio (plus trở lên) — booking-tier chỉ có bảng giá.
   const canQuote = STUDIO_TIER_RANK[profile.studioTier as StudioTier] >= STUDIO_TIER_RANK.plus;
 
+  const isOwner = profile.actingRole === "owner" || profile.actingRole === "admin";
+
   return (
+    <div className="space-y-3.5">
     <PricingManager
       ownerId={profile.id}
       initial={(data ?? []) as PricelistItem[]}
@@ -85,5 +89,10 @@ export default async function PricingPage() {
         pl_logo_url: profile.pl_logo_url ?? "",
       }}
     />
+    {/* Tự xác nhận chuyển khoản đặt ngay dưới phần "Liên hệ & chuyển khoản":
+        cùng là "tiền của khách về đâu". Chỉ chủ studio: khoá webhook là quyền
+        ghi tiền vào sổ. */}
+    {isOwner && <BankAutoCard />}
+    </div>
   );
 }

@@ -549,7 +549,7 @@ export default function ContractEditor({
    * đợt đó, nên nút QR và tin nhắc Zalo luôn khớp nhau.
    */
   function planNote(it: ContractPaymentPlan): string {
-    return instalmentNote(qrInfo, it.label);
+    return instalmentNote(qrInfo, it.label, it.pay_code);
   }
 
   /** Tin Zalo nhắc MỘT đợt thanh toán (ảnh QR gửi kèm là QR của chính đợt đó). */

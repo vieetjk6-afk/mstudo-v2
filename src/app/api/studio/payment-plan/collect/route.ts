@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { contractTotal, sumAmounts } from "@/lib/types";
+import { openRemainderIfSettled } from "@/lib/bank-apply";
 
 export const dynamic = "force-dynamic";
 
@@ -58,25 +58,7 @@ export async function POST(req: Request) {
   // Thu hết các đợt mà hợp đồng vẫn còn dư nợ → mở tiếp một đợt cho phần còn
   // lại, đúng như màn hợp đồng làm. Không có bước này thì phần dư biến mất khỏi
   // mọi danh sách công nợ.
-  const [{ data: allPlans }, { data: items }, { data: pays }] = await Promise.all([
-    db.from("contract_payment_plan").select("id, amount, paid, payment_id").eq("contract_id", contract.id),
-    db.from("contract_items").select("qty, unit_price").eq("contract_id", contract.id),
-    db.from("contract_payments").select("id, amount").eq("contract_id", contract.id),
-  ]);
-  const plans = allPlans ?? [];
-  if (plans.length > 0 && plans.every((p) => p.paid)) {
-    const total = contractTotal((items ?? []) as { qty: number; unit_price: number }[]);
-    const collected = sumAmounts((pays ?? []) as { amount: number }[]);
-    const balance = total - collected;
-    if (balance > 0) {
-      await db.from("contract_payment_plan").insert({
-        contract_id: contract.id,
-        label: "Thanh toán toàn bộ hợp đồng",
-        amount: balance,
-        position: plans.length + 1,
-      });
-    }
-  }
+  await openRemainderIfSettled(db, contract.id);
 
   return NextResponse.json({ ok: true, amount, isDeposit: (plan.label || "").toLowerCase().includes("cọc") });
 }

@@ -13,6 +13,7 @@ import StudioTrialButton from "@/components/StudioTrialButton";
 import MessengerButton from "@/components/MessengerButton";
 import VietQRButton from "@/components/VietQR";
 import { instalmentNote } from "@/lib/vietqr";
+import { isMissingColumn } from "@/lib/missing-column";
 import CollectButton from "@/components/studio/CollectButton";
 import AutoEmailToggle from "@/components/AutoEmailToggle";
 import UpcomingSchedule from "@/components/studio/UpcomingSchedule";
@@ -217,14 +218,22 @@ export default async function StudioOverview() {
     { count: pendingReviews },
   ] = await Promise.all([
     cq.order("event_date", { ascending: true, nullsFirst: false }),
-    supabase
-      .from("contract_payment_plan")
-      .select("id, label, amount, due_date, paid, contract:studio_contracts!inner(id, owner_id, code, title)")
-      .eq("contract.owner_id", profile.id)
-      .eq("paid", false)
-      .not("due_date", "is", null)
-      .lte("due_date", dueLimit)
-      .order("due_date"),
+    // pay_code (mã đợt cho SePay) chỉ có sau migrations/bank_auto_reconcile.sql.
+    // Chưa chạy thì lùi về bản không có cột, không để cả Tổng quan hỏng.
+    (async () => {
+      const q = (cols: string) =>
+        supabase
+          .from("contract_payment_plan")
+          .select(cols)
+          .eq("contract.owner_id", profile.id)
+          .eq("paid", false)
+          .not("due_date", "is", null)
+          .lte("due_date", dueLimit)
+          .order("due_date");
+      const base = "id, label, amount, due_date, paid, contract:studio_contracts!inner(id, owner_id, code, title)";
+      const full = await q(`${base}, pay_code`);
+      return full.error && isMissingColumn(full.error, "pay_code") ? q(base) : full;
+    })(),
     supabase
       .from("contract_payments")
       .select("amount, contract:studio_contracts!inner(owner_id)")
@@ -375,7 +384,7 @@ export default async function StudioOverview() {
 
   // Scheduled payment installments due within 7 days (or overdue) & unpaid.
   const duePlan = ((planRows ?? []) as unknown as Array<{
-    id: string; label: string; amount: number; due_date: string;
+    id: string; label: string; amount: number; due_date: string; pay_code?: string | null;
     contract: { id: string; code: string | null; title: string } | null;
   }>);
 
@@ -468,7 +477,7 @@ export default async function StudioOverview() {
       // hai nội dung khác nhau và sao kê không đối chiếu về đâu được.
       action: (
         <span className="flex flex-wrap items-center gap-2">
-          <VietQRButton bank={bank} amount={d.amount} addInfo={instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label)} label="QR" />
+          <VietQRButton bank={bank} amount={d.amount} addInfo={instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label, d.pay_code)} label="QR" />
           {d.contract && <CollectButton planId={d.id} contractId={d.contract.id} amountLabel={vnd(d.amount)} />}
         </span>
       ),

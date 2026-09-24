@@ -337,5 +337,17 @@ ok(
   q("nen", "select count(*) from information_schema.columns where table_name='albums' and column_name='faces_clustered_at'") === "1"
 );
 
+// Tự xác nhận chuyển khoản: MỌI đợt thanh toán phải tự có mã đợt, kể cả đợt do
+// chỗ nào đó chèn mà không biết cột này (mẫu hợp đồng, báo giá chuyển thành HĐ…).
+// Thiếu default là QR của đợt đó không có mã, và tiền về lại phải dò tay.
+ok(
+  "Đợt thanh toán tự có mã đợt (default gen_pay_code)",
+  /gen_pay_code/.test(q("moi", "select column_default from information_schema.columns where table_name='contract_payment_plan' and column_name='pay_code'"))
+);
+ok(
+  "…và mã sinh ra đúng dạng MS + 8 ký tự không dễ nhầm",
+  q("moi", "select public.gen_pay_code() ~ '^MS[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$'") === "t"
+);
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

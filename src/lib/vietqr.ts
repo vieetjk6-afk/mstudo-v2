@@ -26,11 +26,15 @@ export function qrUrl(bank: BankInfo, amount: number, addInfo: string): string |
 }
 
 /**
- * Nội dung chuyển khoản của MỘT đợt: mã hợp đồng + tên đợt, cắt cho vừa trường
- * nội dung của ngân hàng. Trang studio, cổng khách và thẻ công nợ ở Tổng quan
- * dùng CHUNG hàm này để ba mã QR của cùng một đợt không lệch nội dung — sao kê
- * về là đối chiếu được ngay tiền của đợt nào.
+ * Nội dung chuyển khoản của MỘT đợt: mã đợt + mã hợp đồng + tên đợt, cắt cho
+ * vừa trường nội dung của ngân hàng. Trang studio, cổng khách và thẻ công nợ ở
+ * Tổng quan dùng CHUNG hàm này để ba mã QR của cùng một đợt không lệch nội dung —
+ * sao kê về là đối chiếu được ngay tiền của đợt nào.
+ *
+ * Mã đợt (MSxxxxxxxx, cột pay_code) đứng ĐẦU: nó là thứ webhook SePay dò để tự
+ * ghi thu, nên không bao giờ được là phần bị cắt mất khi nội dung quá dài. Đợt
+ * chưa có mã (database chưa chạy migration) thì nội dung như cũ.
  */
-export function instalmentNote(ref?: string | null, label?: string | null): string {
-  return [(ref || "").trim(), (label || "").trim()].filter(Boolean).join(" ").slice(0, 50);
+export function instalmentNote(ref?: string | null, label?: string | null, payCode?: string | null): string {
+  return [(payCode || "").trim(), (ref || "").trim(), (label || "").trim()].filter(Boolean).join(" ").slice(0, 50);
 }

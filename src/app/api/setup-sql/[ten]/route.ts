@@ -27,9 +27,10 @@ export const maxDuration = 60;
  * do gì để phát schema cho người lạ.
  */
 
-/** Chỉ ba file này. Danh sách trắng, không ghép đường dẫn từ tham số. */
+/** Chỉ các file này. Danh sách trắng, không ghép đường dẫn từ tham số. */
 const CHO_PHEP: Record<string, string> = {
   "khuon-mat": "khuon-mat.sql",
+  "doi-soat-ngan-hang": "doi-soat-ngan-hang.sql",
   "cap-nhat": "cap-nhat.sql",
   "setup-all": "setup-all.sql",
 };
