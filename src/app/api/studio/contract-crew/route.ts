@@ -41,10 +41,17 @@ async function loadContract(contractId: string) {
   const db = createAdminClient();
   const { data: contract } = await db
     .from("studio_contracts")
-    .select("id, owner_id, title, event_date, event_time, location")
+    .select("id, owner_id, assigned_to, title, event_date, event_time, location")
     .eq("id", contractId)
     .maybeSingle();
   if (!contract || contract.owner_id !== profile.id) {
+    return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
+  }
+  // Nhân viên thường CHỈ sửa nhân sự/lương của hợp đồng ĐƯỢC GIAO cho mình —
+  // giống cách contracts-list lọc theo assigned_to. Trước đây route chỉ kiểm
+  // "thuộc studio", nên một nhân viên gọi thẳng API có thể sửa đội ngũ và LƯƠNG
+  // của bất kỳ hợp đồng nào trong studio. Quản lý/kế toán/chủ không bị giới hạn.
+  if (profile.actingRole === "staff" && contract.assigned_to !== profile.actingUserId) {
     return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   }
   return { db, contract, ownerId: profile.id };
