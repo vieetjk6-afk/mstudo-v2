@@ -27,17 +27,32 @@ export function pickOriginalLinks(sources: readonly SourceRow[]): DriveFolderLin
 }
 
 /**
- * Chỉ những nguồn là THƯ MỤC Drive — dùng cho nút "Tải ảnh từ Drive" ở album
- * chọn ảnh của khách.
+ * Link Drive trỏ tới MỘT FILE lẻ. Drive chỉ có đúng một dạng cho việc chia sẻ
+ * một file (".../file/d/<id>/..."), nên đây là dấu hiệu chắc chắn; mọi dạng còn
+ * lại ("/drive/folders/…", "open?id=…") studio dán vào album đều là thư mục.
+ */
+function laFileLe(url: string): boolean {
+  return /\/file\/d\//.test(url);
+}
+
+/**
+ * Nguồn là THƯ MỤC Drive — dùng cho nút "Tải ảnh gốc" ở album chọn ảnh của khách.
  *
- * Khác `pickOriginalLinks` ở chỗ không nhận link file lẻ: `stage` mặc định là
+ * Khác `pickOriginalLinks` ở chỗ loại link file lẻ: `stage` mặc định là
  * 'selection' cho mọi nguồn, nên nếu nhận cả link file thì một album ghép từ 30
  * ảnh lẻ sẽ đẻ ra menu 30 dòng — trong khi lời hứa của nút là "mở thư mục, lưu
- * cả loạt". Không có thư mục nào thì không hiện nút, đúng hơn là hiện nút sai.
+ * cả loạt".
+ *
+ * KHÔNG dựa mỗi vào `kind`: cờ đó do isFolderLink() ĐOÁN từ dạng URL lúc lưu và
+ * chỉ khớp ".../folders/…". Studio dán link chia sẻ dạng "open?id=…" — vẫn là
+ * thư mục thật — thì nguồn bị ghi là "file" và nút tải biến mất, dù link mở ra
+ * đúng thư mục ảnh. Đây chính là lỗi đã từng làm mất nút ở album giao khách
+ * (xem desktop/test/album-buttons.mjs). Nên quy tắc là: nhận mọi link TRỪ link
+ * file lẻ.
  */
 export function pickFolderLinks(sources: readonly SourceRow[]): DriveFolderLink[] {
   return sources
-    .filter((x) => !!x.drive_url && x.kind === "folder")
+    .filter((x) => !!x.drive_url && (x.kind === "folder" || !laFileLe(x.drive_url)))
     .map((x) => ({ name: x.name || "Thư mục ảnh", url: x.drive_url as string }));
 }
 

@@ -1298,6 +1298,32 @@ export default function CustomerAlbum({
               </section>
               );
             })}
+
+            {/* CUỐI ALBUM — chỗ khách tìm sau khi xem xong và muốn giữ file gốc.
+                Nút cùng việc trên thanh công cụ dễ bị bỏ qua giữa mấy nút chọn
+                ảnh, mà lúc khách nghĩ tới "tải về" thì họ đang ở dưới đáy.
+                Link Drive: Google tự nén và tự phục vụ nên không byte nào đi qua
+                Vercel/Supabase (xem DriveFolderLinks). Ẩn ở chế độ chia sẻ chọn
+                lọc vì link mở CẢ thư mục, sẽ lộ toàn album. */}
+            {!shareMode && album.allowDownload && driveFolders.length > 0 && (
+              <div
+                className="mt-14 rounded-2xl px-5 py-6 text-center"
+                style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+              >
+                <p className="text-[15px] font-semibold">{t("originalTitle")}</p>
+                <p className="mx-auto mt-1.5 max-w-md text-[13px] leading-relaxed" style={{ color: "var(--text2)" }}>
+                  {t("originalHint")}
+                </p>
+                <div className="mt-4 flex justify-center">
+                  <DriveFolderLinks
+                    folders={driveFolders}
+                    label={t("driveFolderPick")}
+                    labelOne={t("driveFolder")}
+                    className="btn-primary px-4 py-2 text-[13.5px]"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
