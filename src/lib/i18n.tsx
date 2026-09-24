@@ -96,8 +96,13 @@ export const dict: Dict = {
   copyList: { vi: "Copy danh sách", en: "Copy list" },
   copied: { vi: "Đã copy!", en: "Copied!" },
   downloadPhoto: { vi: "Tải ảnh", en: "Download photo" },
-  driveFolder: { vi: "Tải ảnh từ Drive", en: "Download from Drive" },
-  driveFolderPick: { vi: "Tải ảnh từ Drive", en: "Download from Drive" },
+  driveFolder: { vi: "Tải ảnh gốc", en: "Download originals" },
+  driveFolderPick: { vi: "Tải ảnh gốc", en: "Download originals" },
+  originalTitle: { vi: "Cần file ảnh gốc?", en: "Need the original files?" },
+  originalHint: {
+    vi: "Ảnh gốc nằm trên Google Drive của studio. Mở thư mục rồi lưu cả loạt về máy — không giới hạn số lượng.",
+    en: "The original files live in the studio's Google Drive. Open the folder and save them all at once.",
+  },
   // Gợi ý cho khách dùng điện thoại: nhấn giữ ảnh là Safari/Chrome lưu thẳng
   // vào thư viện Ảnh của máy — không tốn thêm băng thông, vì ảnh đã tải sẵn.
   saveToPhotosHint: {

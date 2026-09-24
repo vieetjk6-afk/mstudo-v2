@@ -1,11 +1,14 @@
-/* Kiểm thử luật chọn link thư mục Drive cho nút "Tải ảnh từ Drive" ở album khách.
+/* Kiểm thử luật chọn link thư mục Drive cho nút "Tải ảnh gốc" ở album khách.
  *
  * Nút này là đường tải hàng loạt DUY NHẤT không tốn băng thông Vercel/Supabase
- * (Google tự nén và tự phục vụ). Ba điều dễ vỡ:
- *  1. Chỉ nhận nguồn là THƯ MỤC. `stage` mặc định 'selection' cho mọi nguồn, nên
- *     nếu nhận cả link file lẻ thì album ghép từ 30 ảnh sẽ đẻ ra menu 30 dòng.
- *  2. Nguồn thiếu drive_url phải bị loại, không được đẻ ra link rỗng.
- *  3. pickOriginalLinks (nút "File gốc" ở album giao khách) vẫn phải giữ nguyên
+ * (Google tự nén và tự phục vụ). Bốn điều dễ vỡ:
+ *  1. Loại link FILE LẺ. `stage` mặc định 'selection' cho mọi nguồn, nên nếu
+ *     nhận cả link file thì album ghép từ 30 ảnh sẽ đẻ ra menu 30 dòng.
+ *  2. Nhưng KHÔNG được đòi `kind === "folder"`: cờ đó do isFolderLink() đoán từ
+ *     dạng URL, studio dán link thư mục dạng "open?id=…" là nguồn bị ghi thành
+ *     "file" và nút tải biến mất — đúng lỗi đã từng xảy ra ở album giao khách.
+ *  3. Nguồn thiếu drive_url phải bị loại, không được đẻ ra link rỗng.
+ *  4. pickOriginalLinks (nút "File gốc" ở album giao khách) vẫn phải giữ nguyên
  *     hành vi cũ — rộng hơn, có nhận link file khi stage='selection'.
  *
  * Nạp thẳng code thật ở src/lib/album-original.ts.
@@ -38,6 +41,21 @@ check(
   "trộn thư mục và file lẻ → chỉ lấy thư mục",
   pickFolderLinks([file("1.jpg", "https://drive.google.com/file/d/A/view"), folder("Buổi 2", "https://drive.google.com/drive/folders/BBB")]),
   [{ name: "Buổi 2", url: "https://drive.google.com/drive/folders/BBB" }]
+);
+
+check(
+  "link THƯ MỤC dạng open?id= tuy bị ghi kind='file' → VẪN hiện nút (lỗi từng làm mất nút)",
+  pickFolderLinks([file("Ảnh gốc", "https://drive.google.com/open?id=AAA")]),
+  [{ name: "Ảnh gốc", url: "https://drive.google.com/open?id=AAA" }]
+);
+
+check(
+  "trộn link thư mục dạng lạ với ảnh lẻ → chỉ lấy thư mục",
+  pickFolderLinks([
+    file("1.jpg", "https://drive.google.com/file/d/A/view"),
+    file("Ảnh gốc", "https://drive.google.com/open?id=BBB"),
+  ]).map((f) => f.name),
+  ["Ảnh gốc"]
 );
 
 check(

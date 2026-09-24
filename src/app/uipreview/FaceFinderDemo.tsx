@@ -93,6 +93,9 @@ export default function FaceFinderDemo() {
           watermark_text: null,
           hasPassword: false,
           allowDownload: false,
+          // Studio cho phép tải qua Drive (mọi gói đều được), nhưng màn này
+          // không gắn thư mục nào nên khối "Tải ảnh gốc" vẫn không hiện.
+          allowDrive: true,
           allowNotes: false,
         }}
         initialPhotos={PHOTOS}
