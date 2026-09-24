@@ -349,5 +349,30 @@ ok(
   q("moi", "select public.gen_pay_code() ~ '^MS[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$'") === "t"
 );
 
+// Studio gỡ "Đã thu" ở màn hợp đồng (xoá contract_payments) → giao dịch SePay
+// đã ghi vào khoản đó phải quay về hàng chờ, không được mãi "Đã tự ghi thu".
+// Dựng dữ liệu với session_replication_role = replica để bỏ qua khoá ngoại
+// (database test không có auth.users thật). Phải là lượt psql RIÊNG với lượt
+// xoá: Postgres kiểm lại khoá ngoại khi cập nhật dòng chèn trong CÙNG giao dịch.
+q(
+  "moi",
+  "set session_replication_role = replica; " +
+    "insert into public.studio_bank_transactions (id, owner_id, provider_txn_id, status, payment_id, contract_id) values " +
+    "('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000001', 'test-go-thu', 'matched', " +
+    "'00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000c1'); " +
+    "insert into public.contract_payments (id, contract_id, amount) values " +
+    "('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000c1', 5000000)"
+);
+ok(
+  "Gỡ khoản thu → giao dịch ngân hàng về lại 'chưa rõ của ai'",
+  // psql in cả thẻ "DELETE 1" trước kết quả select → chỉ lấy dòng cuối.
+  q(
+    "moi",
+    "delete from public.contract_payments where id = '00000000-0000-0000-0000-0000000000b1'; " +
+      "select status || '/' || coalesce(note, '') || '/' || coalesce(payment_id::text, 'null') || '/' || coalesce(contract_id::text, 'null') " +
+      "from public.studio_bank_transactions where id = '00000000-0000-0000-0000-0000000000a1'"
+  ).split("\n").pop() === "unmatched/unlinked/null/null"
+);
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

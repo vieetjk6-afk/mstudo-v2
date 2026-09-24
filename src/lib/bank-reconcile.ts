@@ -195,4 +195,5 @@ export const BANK_TXN_NOTE_LABEL: Record<string, string> = {
   no_code: "Nội dung chuyển khoản không có mã nào của studio",
   write_failed: "Có mã nhưng ghi thu hỏng (sổ đã khoá?)",
   manual: "Studio gán tay",
+  unlinked: "Khoản thu đã bị gỡ khỏi hợp đồng: gán lại vào đúng đợt hoặc bỏ qua",
 };

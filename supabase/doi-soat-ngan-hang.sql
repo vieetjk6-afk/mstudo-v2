@@ -140,6 +140,35 @@ create index if not exists studio_bank_transactions_owner_idx
 -- Ghi (webhook, gán tay, bỏ qua) đều đi qua API bằng service-role: gán một giao
 -- dịch vào đợt là ghi TIỀN, không để client tự sửa trạng thái.
 
+-- ── 4) Gỡ khoản thu → giao dịch về lại hàng chờ ─────────────────────────────
+-- Studio gỡ dấu "Đã thu" hoặc xoá đợt ở màn hợp đồng, tức là xoá dòng
+-- contract_payments mà webhook đã ghi. Tiền thì vẫn nằm trong tài khoản, nên
+-- giao dịch phải quay về "chưa rõ của ai" để gán lại hoặc bỏ qua. Nếu không nó
+-- cứ hiện "Đã tự ghi thu" mà sổ thu không có đồng nào.
+--
+-- BEFORE DELETE chứ không AFTER: khoá ngoại payment_id `on delete set null` chạy
+-- trong lúc xoá, nên tới AFTER thì không còn dòng nào trỏ về khoản thu này để tìm.
+-- security definer vì người xoá (client của studio) không có quyền UPDATE bảng
+-- giao dịch; trigger chỉ đụng đúng các dòng trỏ vào khoản thu đang bị xoá.
+create or replace function public.bank_txn_release_payment()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.studio_bank_transactions
+     set status = 'unmatched', note = 'unlinked', payment_id = null, plan_id = null, contract_id = null
+   where payment_id = old.id;
+  return old;
+end $$;
+
+drop trigger if exists bank_txn_release_payment on public.contract_payments;
+
+create trigger bank_txn_release_payment
+  before delete on public.contract_payments
+  for each row execute function public.bank_txn_release_payment();
+
 notify pgrst, 'reload schema';
 
 

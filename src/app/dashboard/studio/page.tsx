@@ -216,6 +216,7 @@ export default async function StudioOverview() {
     { data: recentQuotes },
     { data: pendingProofs },
     { count: pendingReviews },
+    { count: pendingBank },
   ] = await Promise.all([
     cq.order("event_date", { ascending: true, nullsFirst: false }),
     // pay_code (mã đợt cho SePay) chỉ có sau migrations/bank_auto_reconcile.sql.
@@ -269,6 +270,15 @@ export default async function StudioOverview() {
       .eq("album.owner_id", profile.id)
       .eq("approved", false)
       .is("moderated_at", null),
+    // Tiền SePay báo về mà không tự ghi thu được (nội dung không có mã đợt, hoặc
+    // có mã nhưng lệch). Chỉ ĐẾM. Studio không dùng SePay, hoặc chưa chạy
+    // migrations/bank_auto_reconcile.sql, thì count là 0/null và thẻ không hiện:
+    // truy vấn lỗi trả về { count: null } chứ không ném, nên Tổng quan không sập.
+    supabase
+      .from("studio_bank_transactions")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", profile.id)
+      .in("status", ["unmatched", "mismatch"]),
   ]);
 
   type CrewLite = { id: string; name: string; phone: string | null; role: CrewRole; status: string };
@@ -462,6 +472,18 @@ export default async function StudioOverview() {
       action: pr.plan ? (
         <CollectButton planId={pr.plan.id} contractId={pr.contract.id} amountLabel={vnd(pr.plan.amount)} />
       ) : undefined,
+    });
+  }
+
+  // 2b. Tiền đã vào tài khoản (SePay báo) nhưng chưa biết của hợp đồng nào. Gộp
+  //     một dòng: gán từng khoản làm ở thẻ Tự xác nhận, nơi có ô chọn đợt.
+  //     Chỉ chủ studio: sổ giao dịch ngân hàng là của riêng chủ.
+  if ((pendingBank ?? 0) > 0 && (profile.actingRole === "owner" || profile.actingRole === "admin")) {
+    urgent.push({
+      key: "bank-pending", icon: Banknote, tone: "amber",
+      title: `${pendingBank} khoản tiền vào chưa rõ của hợp đồng nào`,
+      sub: "SePay đã báo tiền về nhưng nội dung không có mã đợt · gán vào đúng đợt hoặc bỏ qua",
+      tag: "Thanh toán", cta: "Xem & gán", href: "/dashboard/studio/pricing#tu-xac-nhan",
     });
   }
 
