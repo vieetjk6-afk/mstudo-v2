@@ -19,6 +19,7 @@ import InboxView from "@/app/dashboard/studio/inbox/InboxView";
 import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManager";
 import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
+import SepayGuideVideo from "@/components/SepayGuideVideo";
 import AiCompareDemo from "./AiCompareDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
@@ -397,6 +398,27 @@ export const SCREENS: Record<
   "hop-dong-thue-do": {
     title: "Hợp đồng · Thuê đồ (có đơn)",
     render: () => <ThueDoDemo />,
+  },
+  "video-sepay": {
+    title: "Video hướng dẫn nối SePay (trình phát trong thẻ Tự xác nhận)",
+    render: () => (
+      <div style={{ maxWidth: 900 }}>
+        <SepayGuideVideo />
+      </div>
+    ),
+  },
+  // Khung 1280×720 trần, không nút — scripts/xuat-video-sepay.mjs chụp từng
+  // khung ở đây rồi ghép thành MP4 để gửi Zalo / đăng Facebook.
+  "video-sepay-xuat": {
+    title: "Video SePay · chế độ xuất MP4",
+    render: () => (
+      <div style={{ position: "fixed", inset: 0, width: 1280, height: 720, zIndex: 9999 }}>
+        {/* Nút "N" của Next dev không được lọt vào video. */}
+        <style>{"nextjs-portal{display:none!important}"}</style>
+        <SepayGuideVideo renderMode />
+      </div>
+    ),
+    bare: true,
   },
   "bang-mau": {
     title: "Bảng màu — ngoài shell / shell sáng / shell tối",

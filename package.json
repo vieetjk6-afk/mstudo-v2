@@ -82,6 +82,7 @@
     "ui:shot": "node scripts/chup-giao-dien.mjs",
     "ui:test": "node scripts/kiem-tra-giao-dien.mjs",
     "ui:luoi-anh": "node scripts/do-luoi-anh.mjs",
+    "video:sepay": "node scripts/xuat-video-sepay.mjs public/huong-dan/sepay.mp4",
     "postinstall": "node scripts/chep-mediapipe.mjs"
   },
   "dependencies": {

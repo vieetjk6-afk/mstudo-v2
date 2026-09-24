@@ -1,12 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Zap, Copy, Check, RefreshCw, Pause, Play, Eye, EyeOff, ExternalLink } from "lucide-react";
+import { Zap, Copy, Check, RefreshCw, Pause, Play, PlayCircle, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { vnd } from "@/lib/types";
 import { fmtDateTime } from "@/lib/date";
 import { Pill, type ToneKey } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
 import { BANK_TXN_STATUS_LABEL, BANK_TXN_NOTE_LABEL } from "@/lib/bank-reconcile";
+import SepayGuideVideo from "@/components/SepayGuideVideo";
+
+/**
+ * Link đăng ký SePay. mstudo là đối tác giới thiệu của SePay: đặt link giới
+ * thiệu vào NEXT_PUBLIC_SEPAY_REF_URL để studio đăng ký qua đó được ghi nhận.
+ * Chưa đặt thì về trang đăng ký thường.
+ */
+const SEPAY_SIGNUP_URL = process.env.NEXT_PUBLIC_SEPAY_REF_URL || "https://my.sepay.vn/register";
 
 /**
  * Tự xác nhận chuyển khoản qua SePay.
@@ -57,6 +65,7 @@ export default function BankAutoCard() {
   const [copied, setCopied] = useState<string | null>(null);
   const [pick, setPick] = useState<Record<string, string>>({});
   const [origin, setOrigin] = useState("");
+  const [video, setVideo] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch("/api/studio/bank-hook", { cache: "no-store" }).catch(() => null);
@@ -126,6 +135,20 @@ export default function BankAutoCard() {
         )}
       </div>
 
+      <div className="mt-3">
+        <button className="btn-ghost inline-flex items-center gap-1.5 px-3 py-1.5 text-xs" onClick={() => setVideo((v) => !v)}>
+          <PlayCircle size={14} /> {video ? "Ẩn video hướng dẫn" : "Xem video hướng dẫn (1 phút)"}
+        </button>
+        {video && (
+          <div className="mt-3 max-w-3xl">
+            <SepayGuideVideo autoPlay />
+            <a href="/huong-dan/sepay.mp4" download className="mt-2 inline-block text-[11px] underline" style={{ color: "var(--text3)" }}>
+              Tải video MP4 (gửi cho người làm cài đặt giúp bạn)
+            </a>
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <p className="mt-4 text-sm" style={{ color: "var(--text3)" }}>Đang tải…</p>
       ) : missingFile ? (
@@ -141,6 +164,12 @@ export default function BankAutoCard() {
           </button>
           <p className="mt-2 text-[11px]" style={{ color: "var(--text3)" }}>
             Bật xong sẽ có URL webhook và khoá để dán vào SePay. Chưa cấu hình SePay thì chưa có gì thay đổi.
+          </p>
+          <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+            Chưa có tài khoản SePay?{" "}
+            <a href={SEPAY_SIGNUP_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline">
+              Đăng ký miễn phí <ExternalLink size={11} />
+            </a>
           </p>
         </div>
       ) : (
@@ -180,7 +209,7 @@ export default function BankAutoCard() {
             <ol className="mt-2 list-decimal space-y-1 pl-5">
               <li>
                 Đăng ký tại{" "}
-                <a href="https://my.sepay.vn/register" target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline">
+                <a href={SEPAY_SIGNUP_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5 underline">
                   my.sepay.vn <ExternalLink size={11} />
                 </a>{" "}
                 và chọn gói Miễn phí.
@@ -188,7 +217,7 @@ export default function BankAutoCard() {
               <li>Liên kết tài khoản ngân hàng mà bạn đang dùng để nhận tiền (đúng số tài khoản trên QR của bảng giá).</li>
               <li>Vào <b>Tích hợp WebHooks</b> → <b>Thêm webhooks</b>. Sự kiện: <b>Có tiền vào</b>.</li>
               <li>Dán <b>URL webhook</b> ở trên. Kiểu chứng thực: <b>API Key</b>, rồi dán <b>API Key</b> ở trên.</li>
-              <li>Bấm Thêm, rồi dùng nút <b>Gửi thử</b> của SePay: giao dịch thử sẽ hiện ở danh sách bên dưới.</li>
+              <li>Bấm Thêm, rồi tự <b>chuyển thử 10.000đ</b> vào tài khoản đó: vài giây sau giao dịch hiện ở danh sách bên dưới là đã nối xong (bấm Bỏ qua).</li>
             </ol>
             <p className="mt-2" style={{ color: "var(--text3)" }}>
               Mọi mã QR của đợt thanh toán giờ có sẵn mã đợt (dạng <span className="font-mono">MS…</span>) ở đầu nội dung.
