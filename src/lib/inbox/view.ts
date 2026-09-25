@@ -18,6 +18,9 @@ import type { ConversationView, MessageRow } from "./types";
  * nghiệp — sai một cách im lặng, kiểu tệ nhất. Danh sách nhân viên lấy riêng
  * bằng service-role (xem `staffNames` bên dưới) rồi giao diện tự ghép tên.
  */
+/** Tên hiện thay khi người nhắn chưa có tên — chữ giữ chỗ, KHÔNG phải tên thật. */
+export const UNNAMED_CONTACT = "Khách chưa cho tên";
+
 const CONVERSATION_SELECT = `
   id, status, ai_enabled, assignee_id, last_message, last_message_at,
   last_direction, last_inbound_at, unread,
@@ -32,7 +35,7 @@ function toView(row: any): ConversationView | null {
     id: row.id,
     platform,
     channelName: row.channel?.name ?? null,
-    contactName: row.contact?.name || "Khách chưa cho tên",
+    contactName: row.contact?.name || UNNAMED_CONTACT,
     contactAvatar: row.contact?.avatar_url ?? null,
     contactPhone: row.contact?.phone ?? null,
     status: row.status,

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { getBranchScope } from "@/lib/branches";
-import { getConversation } from "@/lib/inbox/view";
+import { getConversation, UNNAMED_CONTACT } from "@/lib/inbox/view";
 import { platformLabel } from "@/lib/inbox/platforms";
 import { buildTranscript, type TranscriptMessage } from "@/lib/contract-quick";
 import type { StudioService, StudioCrew } from "@/lib/types";
@@ -104,7 +104,10 @@ export default async function NewContractPage(props: { searchParams?: Promise<{ 
         .order("created_at", { ascending: false })
         .limit(80);
       const list = ((msgs ?? []) as TranscriptMessage[]).reverse();
-      initialQuickText = buildTranscript({ name: convo.contactName, phone: convo.contactPhone }, list);
+      // contactName là chữ giữ chỗ khi người nhắn chưa có tên thật — không được
+      // để nó thành tên khách trên hợp đồng.
+      const realName = convo.contactName === UNNAMED_CONTACT ? null : convo.contactName;
+      initialQuickText = buildTranscript({ name: realName, phone: convo.contactPhone }, list);
       quickSourceNote = `Đã chép sẵn cuộc trò chuyện ${platformLabel(convo.platform)} với ${convo.contactName} — bấm phân tích để điền hợp đồng.`;
     }
   }

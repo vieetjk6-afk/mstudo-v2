@@ -177,6 +177,17 @@ check("ghi chú: nội bộ", notes.internalNote, "khách quen, đã bớt 1tr")
 check("ghi chú: tiền trong ghi chú không thành giá", notes.customLines, undefined);
 check("AI: internalNote giữ lại", normalizeDraft({ internalNote: " nhớ đèn " }, ctx), { internalNote: "nhớ đèn" });
 
+// ── Sửa sau review: tiền/SĐT không bị đọc thành ngày, tên không tràn dòng, không tính tiền 2 lần ──
+check("ngày: bỏ qua '2.5tr'", heuristicParse("giá 2.5tr, chụp ngày 12/10", ctx).eventDate, "2026-10-12");
+check("ngày: bỏ qua '15.000.000'", heuristicParse("giá 15.000.000, chụp 12/10", ctx).eventDate, "2026-10-12");
+check("ngày: bỏ qua SĐT có chấm", heuristicParse("SĐT 0901.234.567 chụp 3/11", ctx).eventDate, "2026-11-03");
+check("tên: không nối sang dòng sau", heuristicParse("Khách Lan\nNgày 12/10", ctx).clientName, "Lan");
+check(
+  "gộp: AI chọn gói riêng thì bỏ gói đoán mờ của quy tắc",
+  mergeDrafts({ customLines: [{ name: "Gói lạ", qty: 1, unit_price: 9e6 }] }, { mainPkgId: "p-cuoi", mainPrice: 9e6 }),
+  { customLines: [{ name: "Gói lạ", qty: 1, unit_price: 9e6 }] }
+);
+
 // ── JSON bọc markdown ──
 check("extractJson", extractJson('Đây:\n```json\n{"a":1}\n```'), { a: 1 });
 check("extractJson hỏng", extractJson("không có"), null);

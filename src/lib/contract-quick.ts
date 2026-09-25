@@ -154,24 +154,31 @@ const MONEY_RE =
 /** Ngày "d/m", "d/m/yy", "d-m-yyyy", "ngày d tháng m" → ISO. Thiếu năm thì lấy lần tới gần nhất. */
 export function parseDateText(raw: string, today: string): string | undefined {
   const s = noAccent(raw);
-  let d: number, m: number, y: number | undefined;
-  let hit = s.match(/(\d{1,2})\s*[/.-]\s*(\d{1,2})(?:\s*[/.-]\s*(\d{2,4}))?/);
-  if (!hit) hit = s.match(/ngay\s*(\d{1,2})\s*thang\s*(\d{1,2})(?:\s*nam\s*(\d{2,4}))?/);
-  if (!hit) return undefined;
-  d = Number(hit[1]);
-  m = Number(hit[2]);
-  if (hit[3]) {
-    y = Number(hit[3]);
-    if (y < 100) y += 2000;
-  }
   const [ty, tm, td] = today.split("-").map(Number);
-  if (y === undefined) {
-    y = ty;
-    // Ngày đã qua trong năm nay → hiểu là năm sau (studio không lập hợp đồng cho quá khứ).
-    if (m < tm || (m === tm && d < td)) y += 1;
+  // Duyệt MỌI cụm giống ngày, lấy cụm hợp lệ đầu tiên: số tiền "2.5tr",
+  // "15.000.000" hay SĐT "0901.234.567" cũng có dạng d.m nhưng không phải ngày.
+  // Cụm dính chữ số ở hai đầu (một phần của số dài hơn) hoặc theo sau là đơn vị
+  // tiền thì bỏ qua.
+  const hits = [
+    ...s.matchAll(/(?<![\d.,])(\d{1,2})\s*[/.-]\s*(\d{1,2})(?:\s*[/.-]\s*(\d{2,4}))?(?![\d.,]*\d)(?!\s*(?:tr|trieu|k|m\b|nghin|ngan))/g),
+    ...s.matchAll(/ngay\s*(\d{1,2})\s*thang\s*(\d{1,2})(?:\s*nam\s*(\d{2,4}))?/g),
+  ];
+  for (const hit of hits) {
+    const d = Number(hit[1]);
+    const m = Number(hit[2]);
+    let y: number | undefined;
+    if (hit[3]) {
+      y = Number(hit[3]);
+      if (y < 100) y += 2000;
+    }
+    if (y === undefined) {
+      y = ty;
+      // Ngày đã qua trong năm nay → hiểu là năm sau (studio không lập hợp đồng cho quá khứ).
+      if (m < tm || (m === tm && d < td)) y += 1;
+    }
+    if (isValidDate(y, m, d)) return `${y}-${pad(m)}-${pad(d)}`;
   }
-  if (!isValidDate(y, m, d)) return undefined;
-  return `${y}-${pad(m)}-${pad(d)}`;
+  return undefined;
 }
 
 /* ── Khớp tên với danh sách của studio ──────────────────────────────────── */
@@ -266,7 +273,7 @@ export function heuristicParse(text: string, ctx: QuickContext): QuickDraft {
     out.clientName = nameLab.replace(/(?:\+?84|0)(?:[\s.-]?\d){9}.*/, "").replace(/[,-]\s*$/, "").trim();
   } else {
     // Tên riêng = các từ Viết Hoa liền nhau (không bắt "SĐT" viết hoa toàn bộ).
-    const m = src.match(/(?:^|[\s,])(?:[Aa]nh|[Cc]hị|[Cc]hi|[Cc]ô|[Cc]hú|[Bb]ạn|[Ee]m|[Kk]hách|[Kk]hach)\s+((?:\p{Lu}\p{Ll}+\s?){1,5})/u);
+    const m = src.match(/(?:^|[\s,])(?:[Aa]nh|[Cc]hị|[Cc]hi|[Cc]ô|[Cc]hú|[Bb]ạn|[Ee]m|[Kk]hách|[Kk]hach)\s+((?:\p{Lu}\p{Ll}+[ \t]?){1,5})/u);
     if (m) out.clientName = m[1].trim();
   }
   if (out.clientName === "") delete out.clientName;
@@ -477,6 +484,12 @@ export function mergeDrafts(primary: QuickDraft, fallback: QuickDraft): QuickDra
   // Đã có gói chính từ bảng giá thì bỏ "gói riêng" đoán từ giá của tầng quy tắc —
   // nếu không, cùng một khoản tiền bị tính hai lần.
   if (primary.mainPkgId && !primary.customLines && fallback.customLines && !fallback.mainPkgId) delete out.customLines;
+  // Ngược lại: AI coi là gói riêng (customLines, không có gói chính) còn tầng quy
+  // tắc lại khớp mờ ra một gói trong bảng giá → bỏ gói đoán của tầng quy tắc.
+  if (!primary.mainPkgId && primary.customLines?.length && fallback.mainPkgId) {
+    delete out.mainPkgId;
+    if (primary.mainPrice === undefined) delete out.mainPrice;
+  }
   if (primary.mainPkgId !== undefined && primary.mainPkgId !== fallback.mainPkgId && primary.mainPrice === undefined) {
     delete out.mainPrice;
   }
