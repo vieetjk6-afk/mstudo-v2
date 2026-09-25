@@ -26,6 +26,7 @@ import type {
 } from "@/lib/types";
 import { crewPortalUrl as buildCrewPortalUrl } from "@/lib/crew-show";
 import ContractEditor from "./ContractEditor";
+import type { ContractAddendum } from "@/lib/contract-addenda";
 import StudioDenied from "@/components/StudioDenied";
 
 
@@ -117,6 +118,7 @@ export default async function ContractPage(
     { data: conflictUnavail },
     { data: sameDay },
     { data: appointments },
+    { data: addenda },
   ] = await Promise.all([
     canAssign ? createAdminClient().from("profiles").select("id, full_name, email").eq("studio_owner_id", profile.id).order("full_name") : empty,
     supabase.from("contract_items").select("*").eq("contract_id", params.id).order("position"),
@@ -143,6 +145,8 @@ export default async function ContractPage(
     // chạy migration studio_appointments thì `data` là null → khối lịch hẹn chỉ
     // rỗng, phần còn lại của màn hợp đồng không bị ảnh hưởng.
     supabase.from("studio_appointments").select("*").eq("contract_id", params.id).order("appt_date"),
+    // Phụ lục — chưa chạy migration contract_addenda.sql thì null, thẻ phụ lục rỗng.
+    supabase.from("contract_addenda").select("id, contract_id, no, title, note, lines, signed_at, signed_by, signed_name, created_at").eq("contract_id", params.id).order("no"),
   ]);
 
   // Scheduling conflicts: crew booked on another contract that day, or busy.
@@ -188,6 +192,9 @@ export default async function ContractPage(
       services={(services ?? []) as { id: string; name: string; clauses: string }[]}
       pricelist={(pricelistRows ?? []) as { name: string; price: number; unit: string | null }[]}
       initialItems={(items ?? []) as ContractItem[]}
+      initialAddenda={(addenda ?? []) as ContractAddendum[]}
+      canEditAddenda={profile.actingRole !== "staff" && profile.actingRole !== "accountant"}
+      canSeeAudit={["owner", "admin", "accountant"].includes(profile.actingRole as string)}
       initialCrew={(crew ?? []) as ContractCrew[]}
       crewPortalUrl={crewPortalUrl}
       initialRequests={(requests ?? []) as ContractEditRequest[]}

@@ -6,6 +6,7 @@ import { todayVN, fmtDate } from "@/lib/date";
 import { vnd, asPaymentMethod } from "@/lib/types";
 import { cancelQuote, cancelPolicyOf, cancelClientMessage } from "@/lib/contract-cancel";
 import { studioFor, loadContract, contractCrew, notifyContractChanged, netCollected } from "@/lib/contract-change";
+import { logAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -111,6 +112,13 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     contract.id,
     `Huỷ hợp đồng “${contract.title}”${contract.event_date ? ` ngày ${fmtDate(contract.event_date)}` : ""}${refund > 0 ? ` · hoàn ${vnd(refund)}` : ""}`
   );
+
+  await logAction(db, {
+    ownerId: contract.owner_id, actorId: (profile.actingUserId as string | undefined) ?? profile.id,
+    action: "contract.cancel", entity: "contract", entityId: contract.id,
+    summary: `Huỷ hợp đồng · đã thu ${vnd(collected)} · hoàn ${vnd(refund)}${reason ? ` · lý do: ${reason}` : ""}`,
+    before: { status: contract.status }, after: { status: "cancelled", refund, reason },
+  });
 
   // 5) Google Lịch: hợp đồng huỷ thì syncContractCalendar tự gỡ sự kiện.
   await syncContractCalendar(profile.id, contract.id);

@@ -30,6 +30,44 @@ export const getSessionUser = cache(async () => {
   return user;
 });
 
+/**
+ * Tài khoản đã BẬT xác thực 2 lớp mà phiên này mới qua mật khẩu (aal1)?
+ *
+ * Khi đúng thì:
+ *   · dashboard/layout.tsx và staff/layout.tsx chuyển sang /login/mfa
+ *   · requireStudio() / requireAdmin() trả null → mọi route API dùng chúng từ chối
+ * Tài khoản chưa bật 2 lớp → luôn false, không đổi gì.
+ *
+ * KHÔNG dùng supabase.auth.mfa.getAuthenticatorAssuranceLevel() không tham số:
+ * phía máy chủ nó đọc danh sách yếu tố từ `session.user` trong COOKIE — phần đó
+ * không có chữ ký, người cầm phiên aal1 xoá `factors` khỏi cookie là lách được.
+ * Ở đây danh sách yếu tố lấy từ getSessionUser() (getUser() — Supabase xác minh),
+ * còn mức aal đọc từ access token mà chính lượt getUser() ấy vừa kiểm hợp lệ.
+ */
+export const needsMfa = cache(async () => {
+  const user = await getSessionUser();
+  if (!user) return false;
+  const hasFactor = (user.factors ?? []).some((f) => f.status === "verified");
+  if (!hasFactor) return false;
+  const supabase = await createClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  return jwtAal(session?.access_token) !== "aal2";
+});
+
+/** Đọc claim `aal` của access token (không kiểm chữ ký — người gọi đã kiểm qua getUser()). */
+function jwtAal(token: string | undefined): string | null {
+  const part = token?.split(".")[1];
+  if (!part) return null;
+  try {
+    const json = JSON.parse(Buffer.from(part.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")) as { aal?: string };
+    return json.aal ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const getProfileById = cache(async (id: string) => {
   const supabase = await createClient();
   const { data } = await supabase.from("profiles").select("*").eq("id", id).single();
@@ -40,6 +78,7 @@ export const getProfileById = cache(async (id: string) => {
 export async function requireAdmin() {
   const user = await getSessionUser();
   if (!user) return null;
+  if (await needsMfa()) return null;
 
   const profile = await getProfileById(user.id);
   if (!profile || profile.role !== "admin" || !profile.is_active) return null;
@@ -64,6 +103,7 @@ export async function requireAdmin() {
 export async function requireStudio(minTier: "booking" | "plus" | "full" = "full") {
   const user = await getSessionUser();
   if (!user) return null;
+  if (await needsMfa()) return null;
 
   const me = await getProfileById(user.id);
   if (!me || !me.is_active) return null;

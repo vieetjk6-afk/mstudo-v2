@@ -716,6 +716,9 @@ Supabase, và đặc tả client desktop.
 [`docs/goi-y-hoan-thien-app.md`](docs/goi-y-hoan-thien-app.md) là danh sách những
 chỗ app còn thiếu để đủ vòng, kèm phần "ĐÃ LÀM" ghi lại **vì sao** mỗi tính năng
 được dựng như vậy — đọc phần đó trước khi sửa lọc ảnh AI hoặc ứng dụng khách.
+[`docs/goi-y-tinh-nang-vong-2.md`](docs/goi-y-tinh-nang-vong-2.md) là vòng tiếp theo:
+khoá giá sau ký + phụ lục, nhật ký thao tác, voucher, xác thực 2 lớp (đã làm) và
+những mục còn lại — kèm lý do dựng từng tính năng như vậy.
 
 ## Xem & chụp giao diện mà không cần đăng nhập
 

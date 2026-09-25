@@ -5,6 +5,8 @@ import Link from "next/link";
 import { fmtDate, fmtDateLunar, fmtDateTime } from "@/lib/date";
 import { Lock, MapPin, Calendar, Send, Check, Printer, PenLine, Images, ImagePlus, Star, ListChecks, Package, Upload, Heart } from "lucide-react";
 import SignaturePad from "@/components/SignaturePad";
+import ClientAddenda from "./ClientAddenda";
+import type { ContractAddendum } from "@/lib/contract-addenda";
 import CalendarButtons from "@/components/CalendarButtons";
 import VietQRButton, { VietQR, qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { thiepUrl } from "@/lib/hosts";
@@ -124,6 +126,7 @@ export default function ContractView({ token }: { token: string }) {
   const [expenses, setExpenses] = useState<ExpenseRow[]>([]);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
+  const [addenda, setAddenda] = useState<ContractAddendum[]>([]);
   const [bank, setBank] = useState<BankInfo>({ bin: null, account: null, holder: null, name: null });
   const [paidReported, setPaidReported] = useState(false);
   const [proofUploading, setProofUploading] = useState(false);
@@ -199,6 +202,7 @@ export default function ContractView({ token }: { token: string }) {
     setExpenses(j.expenses ?? []);
     setTasks(j.tasks ?? []);
     setProducts(j.products ?? []);
+    setAddenda(j.addenda ?? []);
     if (j.bank) setBank(j.bank as BankInfo);
     setMessenger(j.contract?.client_messenger ?? "");
     setBrief({
@@ -866,6 +870,9 @@ export default function ContractView({ token }: { token: string }) {
           </div>
 
           {/* ══ Khối phụ ═══════════════════════════════════════════════════ */}
+
+          {/* Phụ lục: thêm/bớt dịch vụ sau khi đã ký — khách ký thì mới cộng tiền. */}
+          <ClientAddenda token={token} phone={phone} lang={lang} addenda={addenda} onSigned={() => fetchContract(phone)} />
 
           {/* Chọn gói dịch vụ */}
           {quoteOptions.length > 0 && (

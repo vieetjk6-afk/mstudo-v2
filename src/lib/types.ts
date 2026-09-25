@@ -476,6 +476,8 @@ export interface ContractItem {
   qty: number;
   unit_price: number;
   position: number;
+  /** Dòng thuộc một phụ lục ĐÃ KÝ (contract_addenda). null = hạng mục gốc. */
+  addendum_id?: string | null;
   created_at: string;
 }
 
@@ -501,7 +503,7 @@ export interface ContractCrew {
 }
 
 /** 'refund' = tiền TRẢ LẠI khách khi huỷ; amount của nó là số ÂM (xem migrations/contract_cancel_reschedule.sql). */
-export type PaymentKind = "deposit" | "installment" | "final" | "other" | "refund";
+export type PaymentKind = "deposit" | "installment" | "final" | "other" | "refund" | "voucher";
 
 export interface ContractPayment {
   id: string;
@@ -1034,6 +1036,7 @@ export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
   final: "Tất toán",
   other: "Khác",
   refund: "Hoàn tiền",
+  voucher: "Voucher",
 };
 
 export const EXPENSE_CATEGORY_LABEL: Record<string, string> = {

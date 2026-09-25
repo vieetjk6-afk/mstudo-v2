@@ -10,6 +10,8 @@ import { syncContractCalendar } from "@/lib/gcal-sync";
 import { fetchAllPhotos } from "@/lib/photos";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { isMissingColumn } from "@/lib/missing-column";
+import { listAddenda, signAddendum } from "@/lib/contract-addenda-server";
+import { addendumLabel } from "@/lib/contract-addenda";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     rating?: number;
     brief?: { concept?: string; outfit?: string; refs?: string; note?: string };
     option_id?: string;
+    addendum_id?: string;
   };
   const db = createAdminClient();
 
@@ -81,7 +84,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   // ghi từ cổng khách (ký, yêu cầu sửa, gửi brief, chọn gói...) đều bị chặn.
   const planLocked =
     studioTier(effectivePlan(ownerObj?.plan, ownerObj?.plan_expires_at), ownerObj?.role === "admin") !== "full";
-  const WRITE_ACTIONS = ["paid", "edit_request", "review", "brief", "choose_quote", "set_messenger", "sign"];
+  const WRITE_ACTIONS = ["paid", "edit_request", "review", "brief", "choose_quote", "set_messenger", "sign", "sign_addendum"];
   if (planLocked && WRITE_ACTIONS.includes(body.action || "")) {
     return NextResponse.json(
       { error: "plan_locked", message: "Hợp đồng tạm khóa do gói dịch vụ của studio đã hết hạn. Vui lòng liên hệ studio." },
@@ -217,6 +220,25 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     // studio không thể chạy. Đó là lý do lịch trước đây chỉ lên khi mở hợp đồng
     // sửa tay một lần nữa. Hàm này tự nuốt lỗi: Google hỏng thì việc ký vẫn xong.
     await syncContractCalendar(contract.owner_id as string, contract.id as string);
+    return NextResponse.json({ ok: true });
+  }
+
+  if (body.action === "sign_addendum") {
+    const name = body.name?.trim();
+    if (!name) return NextResponse.json({ error: "no_name" }, { status: 400 });
+    const signature = body.signature?.trim();
+    if (signature && signature.length > 200_000) return NextResponse.json({ error: "too_large" }, { status: 413 });
+    const validSig = !!signature && /^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]+$/.test(signature);
+    // Phụ lục phải thuộc ĐÚNG hợp đồng của token này — không ký hộ hợp đồng khác.
+    const target = (await listAddenda(db, cId)).find((a) => a.id === body.addendum_id);
+    if (!target) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    const r = await signAddendum(db, target.id, { by: "client", name, signature: validSig ? signature : null });
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.error === "already_signed" ? 409 : 500 });
+    await db.from("studio_audit_log").insert({
+      owner_id: cOwnerId, actor_id: null, action: "addendum.sign", entity: "contract", entity_id: cId, contract_id: cId,
+      summary: `Khách ${name} ký ${addendumLabel(target)}`, after: { lines: target.lines },
+    }).then(undefined, () => undefined);
+    await notify("signed", `${name} đã ký ${addendumLabel(target)} của HĐ “${contract.title}”`, true);
     return NextResponse.json({ ok: true });
   }
 
@@ -372,5 +394,6 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     story,
     appointments: appointments ?? [],
     album,
+    addenda: await listAddenda(db, cId),
   });
 }

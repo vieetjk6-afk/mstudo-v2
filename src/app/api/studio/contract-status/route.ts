@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { syncContractCalendar } from "@/lib/gcal-sync";
+import { logAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,12 @@ export async function POST(req: Request) {
 
   const { error } = await db.from("studio_contracts").update(patch).eq("id", contractId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (contract.status !== status) {
+    await logAction(db, {
+      ownerId: contract.owner_id as string, actorId: user.id, action: "contract.status", entity: "contract", entityId: contractId,
+      summary: `Đổi trạng thái ${contract.status} → ${status}`, before: { status: contract.status }, after: { status },
+    });
+  }
 
   // Trạng thái là thứ QUYẾT ĐỊNH hợp đồng có nằm trên Google Lịch hay không
   // (chỉ approved/in_progress/completed mới lên). Đồng bộ ngay sau khi ghi, cả

@@ -77,6 +77,12 @@ const ORDER = [
   ["migrations/crew_role_makeup.sql", "Vai trò nhân sự Trang điểm / Làm tóc (chạy SAU schema.sql)"],
   ["migrations/bank_auto_reconcile.sql", "Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)"],
   ["migrations/contract_cancel_reschedule.sql", "Huỷ hợp đồng (hoàn / giữ cọc, chính sách huỷ) + lịch sử dời lịch"],
+  // Vòng 2 của docs/goi-y-tinh-nang-vong-2.md. studio_vouchers PHẢI sau
+  // contract_cancel_reschedule: cả hai cùng thay ràng buộc kind của
+  // contract_payments, bản của voucher là tập cha (có cả 'refund').
+  ["migrations/contract_addenda.sql", "Khoá giá sau khi khách ký + phụ lục hợp đồng"],
+  ["migrations/studio_vouchers.sql", "Voucher / thẻ quà tặng của studio (chạy SAU contract_cancel_reschedule)"],
+  ["migrations/studio_audit_log.sql", "Nhật ký thao tác tiền & hợp đồng"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];
@@ -111,6 +117,9 @@ const MOI = [
   "migrations/contract_item_description.sql",
   "migrations/bank_auto_reconcile.sql",
   "migrations/contract_cancel_reschedule.sql",
+  "migrations/contract_addenda.sql",
+  "migrations/studio_vouchers.sql",
+  "migrations/studio_audit_log.sql",
 ];
 
 /**

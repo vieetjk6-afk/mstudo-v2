@@ -12,7 +12,10 @@
     "migrations/album_faces.sql",
     "migrations/contract_item_description.sql",
     "migrations/bank_auto_reconcile.sql",
-    "migrations/contract_cancel_reschedule.sql"
+    "migrations/contract_cancel_reschedule.sql",
+    "migrations/contract_addenda.sql",
+    "migrations/studio_vouchers.sql",
+    "migrations/studio_audit_log.sql"
   ],
   "muc": [
     {
@@ -668,6 +671,32 @@
         "studio_contracts.cancel_reason",
         "studio_contracts.cancelled_at"
       ]
+    },
+    {
+      "file": "migrations/contract_addenda.sql",
+      "mo_ta": "Khoá giá sau khi khách ký + phụ lục hợp đồng",
+      "bang": [
+        "contract_addenda"
+      ],
+      "cot": [
+        "contract_items.addendum_id"
+      ]
+    },
+    {
+      "file": "migrations/studio_vouchers.sql",
+      "mo_ta": "Voucher / thẻ quà tặng của studio (chạy SAU contract_cancel_reschedule)",
+      "bang": [
+        "studio_vouchers"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/studio_audit_log.sql",
+      "mo_ta": "Nhật ký thao tác tiền & hợp đồng",
+      "bang": [
+        "studio_audit_log"
+      ],
+      "cot": []
     }
   ]
 }
