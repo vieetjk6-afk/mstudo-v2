@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Save, HardDrive, ReceiptText, Landmark, Gift, Percent, MapPin } from "lucide-react";
+import { Check, Save, HardDrive, ReceiptText, Landmark, Gift, Percent, MapPin, Ban, Copy } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { coordsInText } from "@/lib/weather";
+import { cancelClauseText, DEFAULT_CANCEL_POLICY, type CancelPolicy } from "@/lib/contract-cancel";
 
 /**
  * Hai chính sách chạy NGẦM của studio, đặt một lần rồi thôi:
@@ -26,6 +27,7 @@ export default function StudioPolicyCard({
   initialStudioAddress = "",
   initialStudioLat = null,
   initialStudioLng = null,
+  initialCancelPolicy = DEFAULT_CANCEL_POLICY,
 }: {
   ownerId: string;
   initialStorageMonths: number;
@@ -42,6 +44,8 @@ export default function StudioPolicyCard({
   initialStudioAddress?: string;
   initialStudioLat?: number | null;
   initialStudioLng?: number | null;
+  /** Chính sách huỷ: gợi ý số tiền hoàn khi bấm "Huỷ HĐ". */
+  initialCancelPolicy?: CancelPolicy;
 }) {
   const supabase = createClient();
   const [months, setMonths] = useState(initialStorageMonths);
@@ -58,6 +62,9 @@ export default function StudioPolicyCard({
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [locNote, setLocNote] = useState<string | null>(null);
+  const [cancel, setCancel] = useState<CancelPolicy>(initialCancelPolicy);
+  const [clauseCopied, setClauseCopied] = useState(false);
+  const pct = (n: number) => Math.max(0, Math.min(100, Math.round(n) || 0));
 
   /** Dán link Google Maps (hoặc "lat,lng") → tự đọc ra toạ độ. */
   function onAddr(v: string) {
@@ -106,6 +113,25 @@ export default function StudioPolicyCard({
         missing
           ? "Đã lưu chính sách. Riêng vị trí studio cần chạy supabase/migrations/weather.sql trước."
           : `Đã lưu chính sách, nhưng chưa lưu được vị trí studio: ${locErr.message}`
+      );
+    }
+
+    // Chính sách huỷ: lượt RIÊNG như vị trí studio — chưa chạy
+    // migrations/contract_cancel_reschedule.sql thì phần còn lại vẫn lưu được.
+    const { error: cErr } = await supabase
+      .from("profiles")
+      .update({
+        cancel_early_days: Math.max(0, Math.min(365, Math.round(cancel.earlyDays) || 0)),
+        cancel_early_refund_pct: pct(cancel.earlyPct),
+        cancel_late_refund_pct: pct(cancel.latePct),
+      })
+      .eq("id", ownerId);
+    if (cErr) {
+      const missing = cErr.code === "42703" || cErr.code === "PGRST204" || /column .* does not exist/i.test(cErr.message);
+      setLocNote((prev) =>
+        [prev, missing ? "Chính sách huỷ cần chạy supabase/huy-doi-lich.sql trước." : `Chưa lưu được chính sách huỷ: ${cErr.message}`]
+          .filter(Boolean)
+          .join(" ")
       );
     }
 
@@ -222,6 +248,51 @@ export default function StudioPolicyCard({
                 : "0 = form đặt lịch không hỏi SĐT người giới thiệu."}
             </p>
           </div>
+        </div>
+      </div>
+
+      {/* ── Chính sách huỷ ─────────────────────────────────────────────────
+          Chỉ là GỢI Ý số tiền hoàn khi bấm "Huỷ HĐ" — studio luôn sửa được số
+          cuối cùng, vì huỷ là chuyện thương lượng với khách. */}
+      <div className="mt-5 border-t pt-4" style={{ borderColor: "var(--border)" }}>
+        <p className="flex items-center gap-1.5 text-sm font-medium"><Ban size={14} /> Chính sách huỷ hợp đồng</p>
+        <div className="mt-3 grid gap-4 sm:grid-cols-3">
+          <div>
+            <label className="label">Huỷ sớm là trước ngày chụp từ</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={0} max={365} className="input" value={cancel.earlyDays} onChange={(e) => setCancel((c) => ({ ...c, earlyDays: Number(e.target.value) }))} />
+              <span className="flex-none text-sm" style={{ color: "var(--text3)" }}>ngày</span>
+            </div>
+          </div>
+          <div>
+            <label className="label">Huỷ sớm: hoàn</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={0} max={100} className="input" value={cancel.earlyPct} onChange={(e) => setCancel((c) => ({ ...c, earlyPct: Number(e.target.value) }))} />
+              <span className="flex-none text-sm" style={{ color: "var(--text3)" }}>% đã thu</span>
+            </div>
+          </div>
+          <div>
+            <label className="label">Huỷ muộn hơn: hoàn</label>
+            <div className="flex items-center gap-2">
+              <input type="number" min={0} max={100} className="input" value={cancel.latePct} onChange={(e) => setCancel((c) => ({ ...c, latePct: Number(e.target.value) }))} />
+              <span className="flex-none text-sm" style={{ color: "var(--text3)" }}>% đã thu</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 rounded-lg p-3 text-[12px]" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+          <p className="mb-1 font-medium" style={{ color: "var(--text2)" }}>Điều khoản gợi ý cho hợp đồng mẫu</p>
+          <pre className="whitespace-pre-wrap" style={{ fontFamily: "inherit", color: "var(--text2)" }}>{cancelClauseText({ earlyDays: Math.max(0, Math.round(cancel.earlyDays) || 0), earlyPct: pct(cancel.earlyPct), latePct: pct(cancel.latePct) })}</pre>
+          <button
+            type="button"
+            className="btn-ghost mt-2 px-2.5 py-1 text-xs"
+            onClick={() => {
+              navigator.clipboard?.writeText(cancelClauseText({ earlyDays: Math.max(0, Math.round(cancel.earlyDays) || 0), earlyPct: pct(cancel.earlyPct), latePct: pct(cancel.latePct) }));
+              setClauseCopied(true);
+              setTimeout(() => setClauseCopied(false), 1500);
+            }}
+          >
+            {clauseCopied ? <Check size={13} /> : <Copy size={13} />} {clauseCopied ? "Đã chép" : "Chép điều khoản"}
+          </button>
         </div>
       </div>
 

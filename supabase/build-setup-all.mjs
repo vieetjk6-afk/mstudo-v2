@@ -75,6 +75,8 @@ const ORDER = [
   ["migrations/contract_item_description.sql", "Mô tả chi tiết cho từng hạng mục hợp đồng"],
   ["migrations/contract_post_production.sql", "Trạng thái hợp đồng \"Đang hậu kỳ\" (chạy SAU schema.sql)"],
   ["migrations/crew_role_makeup.sql", "Vai trò nhân sự Trang điểm / Làm tóc (chạy SAU schema.sql)"],
+  ["migrations/bank_auto_reconcile.sql", "Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)"],
+  ["migrations/contract_cancel_reschedule.sql", "Huỷ hợp đồng (hoàn / giữ cọc, chính sách huỷ) + lịch sử dời lịch"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];
@@ -107,6 +109,8 @@ const MOI = [
   "migrations/album_people.sql",
   "migrations/album_faces.sql",
   "migrations/contract_item_description.sql",
+  "migrations/bank_auto_reconcile.sql",
+  "migrations/contract_cancel_reschedule.sql",
 ];
 
 /**
@@ -135,6 +139,24 @@ const NHOM = {
       "-- hàng rào của tính năng khác bật lên là cuốn theo cả tính năng này.",
     ],
     files: ["migrations/album_people.sql", "migrations/album_faces.sql"],
+  },
+  "doi-soat-ngan-hang.sql": {
+    tieuDe: "TỰ XÁC NHẬN CHUYỂN KHOẢN QUA SEPAY",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng tính năng này. Nó chỉ cần các bảng hợp đồng,",
+      "-- đợt thanh toán và yêu cầu đặt lịch (có từ schema nền). Tách riêng để",
+      "-- hàng rào của tính năng khác không kéo nó rollback theo.",
+    ],
+    files: ["migrations/bank_auto_reconcile.sql"],
+  },
+  "huy-doi-lich.sql": {
+    tieuDe: "HUỶ HỢP ĐỒNG (HOÀN / GIỮ CỌC) + DỜI LỊCH",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng tính năng này, chỉ cần các bảng hợp đồng và",
+      "-- lần thu có từ schema nền. Tách riêng để hàng rào của tính năng khác không",
+      "-- kéo nó rollback theo.",
+    ],
+    files: ["migrations/contract_cancel_reschedule.sql"],
   },
 };
 

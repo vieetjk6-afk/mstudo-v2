@@ -54,7 +54,7 @@ type Item = { id: string; name: string; description: string | null; qty: number;
 type Payment = { id: string; amount: number; kind: PaymentKind; paid_at: string };
 type Milestone = { id: string; title: string; event_date: string; event_time: string | null; note: string | null };
 type QuoteOption = { id: string; name: string; price: number; description: string | null };
-type PlanRow = { id: string; label: string; amount: number; due_date: string | null; paid: boolean; paid_at: string | null };
+type PlanRow = { id: string; label: string; amount: number; due_date: string | null; paid: boolean; paid_at: string | null; pay_code?: string | null };
 type ExpenseRow = { id: string; title: string; amount: number; category: string | null; spent_at: string };
 type TaskRow = { id: string; label: string; done: boolean };
 type ProductRow = { id: string; name: string; qty: number; cost: number; status: string };
@@ -396,7 +396,11 @@ export default function ContractView({ token }: { token: string }) {
   const nextDue = plan.find((p) => !p.paid) ?? null;
   const dueAmount = nextDue ? nextDue.amount : balance;
   const duePct = total > 0 ? Math.round((dueAmount / total) * 100) : 0;
-  const dueQr = qrUrl(bank, dueAmount, (contract.code || contract.title || "").slice(0, 25));
+  // Có đợt kế tiếp → nội dung mang MÃ ĐỢT, để studio bật SePay là tiền về tự
+  // ghi đúng đợt. Không còn đợt nào thì như cũ: mã hợp đồng.
+  const contractRef = (contract.code || contract.title || "").slice(0, 25);
+  const dueNote = nextDue ? instalmentNote(contractRef, nextDue.label, nextDue.pay_code) : contractRef;
+  const dueQr = qrUrl(bank, dueAmount, dueNote);
   const unpaidPlan = plan.filter((p) => !p.paid);
   // Điều khoản: mỗi dòng một ý, để hiện thành danh sách có dấu tích như thiết kế.
   const termLines = (contract.note || "")
@@ -649,7 +653,7 @@ export default function ContractView({ token }: { token: string }) {
                     onClick={(e) => e.target === e.currentTarget && setQrOpen(false)}
                   >
                     <div className="w-full max-w-[320px] rounded-[16px] p-6" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
-                      <VietQR bank={bank} amount={dueAmount} addInfo={(contract.code || contract.title || "").slice(0, 25)} />
+                      <VietQR bank={bank} amount={dueAmount} addInfo={dueNote} />
                       <button
                         onClick={() => setQrOpen(false)}
                         className="mt-4 w-full rounded-[10px] py-2.5 text-[12.5px] font-semibold"
@@ -682,7 +686,7 @@ export default function ContractView({ token }: { token: string }) {
                         </div>
                         <span className="flex-none whitespace-nowrap text-[13px] font-bold">{vnd(p.amount)}</span>
                         {!p.paid && bank.bin && (
-                          <VietQRButton bank={bank} amount={p.amount} addInfo={instalmentNote((contract.code || contract.title || "").slice(0, 25), p.label)} label="QR" />
+                          <VietQRButton bank={bank} amount={p.amount} addInfo={instalmentNote(contractRef, p.label, p.pay_code)} label="QR" />
                         )}
                       </div>
                     ))}

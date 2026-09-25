@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
+import { PAYMENT_METHOD_LABEL, type PaymentMethod } from "@/lib/types";
 
 /**
  * "Đã nhận" — chốt một đợt thanh toán ngay tại thẻ việc, không phải mở hợp đồng.
@@ -25,15 +26,19 @@ export default function CollectButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
+  // Bấm "Đã nhận" → hỏi tiền về bằng gì. Tiền mặt tách riêng để cuối ngày đối
+  // chiếu với két; hỏi ngay tại chỗ vì sau này không ai nhớ khoản nào là tiền mặt.
+  const [choosing, setChoosing] = useState(false);
 
-  async function collect() {
-    if (!confirm(`Xác nhận ĐÃ NHẬN ${amountLabel}? Khoản này sẽ được ghi vào thu chi của hợp đồng.`)) return;
+  async function collect(method: PaymentMethod) {
+    if (!confirm(`Xác nhận ĐÃ NHẬN ${amountLabel} (${PAYMENT_METHOD_LABEL[method].toLowerCase()})? Khoản này sẽ được ghi vào thu chi của hợp đồng.`)) return;
+    setChoosing(false);
     setBusy(true);
     try {
       const r = await fetch("/api/studio/payment-plan/collect", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId }),
+        body: JSON.stringify({ planId, method }),
       }).then((x) => x.json());
       if (r?.ok) {
         setDone(true);
@@ -56,10 +61,31 @@ export default function CollectButton({
     setBusy(false);
   }
 
+  if (choosing && !busy && !done) {
+    return (
+      <span className="inline-flex flex-none items-center gap-1.5">
+        {(["cash", "transfer"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => collect(m)}
+            className="rounded-[9px] px-2.5 py-2 text-[12px] font-semibold"
+            style={{ background: "var(--gnS)", color: "var(--gn)" }}
+          >
+            {PAYMENT_METHOD_LABEL[m]}
+          </button>
+        ))}
+        <button type="button" onClick={() => setChoosing(false)} className="px-1.5 py-2 text-[12px]" style={{ color: "var(--tx3)" }}>
+          Huỷ
+        </button>
+      </span>
+    );
+  }
+
   return (
     <button
       type="button"
-      onClick={collect}
+      onClick={() => setChoosing(true)}
       disabled={busy || done}
       className="flex-none rounded-[9px] px-3 py-2 text-[12px] font-semibold disabled:opacity-60"
       style={{ background: "var(--gnS)", color: "var(--gn)" }}

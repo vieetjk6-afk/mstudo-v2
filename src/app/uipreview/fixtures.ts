@@ -154,8 +154,8 @@ export const bookings: StudioBooking[] = [
 ];
 
 export const payments: PaymentRow[] = [
-  { id: "m1", amount: 15_000_000, kind: "deposit", paid_at: "2026-08-20", contract: { title: LONG } },
-  { id: "m2", amount: 14_000_000, kind: "final", paid_at: "2026-08-05", contract: { title: "Chụp kỷ yếu 12A3" } },
+  { id: "m1", amount: 15_000_000, kind: "deposit", method: "transfer", paid_at: "2026-08-20", contract: { title: LONG } },
+  { id: "m2", amount: 14_000_000, kind: "final", method: "cash", paid_at: "2026-08-05", contract: { title: "Chụp kỷ yếu 12A3" } },
 ];
 
 export const salaries: SalaryRow[] = [

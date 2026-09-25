@@ -15,6 +15,7 @@ import {
   Link as LinkIcon,
   PenLine,
   CalendarClock,
+  Ban,
   CalendarRange,
   Star,
   FileText,
@@ -68,6 +69,9 @@ import {
   CREW_ROLE_LABEL,
   CREW_STATUS_LABEL,
   PAYMENT_KIND_LABEL,
+  PAYMENT_METHOD_LABEL,
+  paymentMethodLabel,
+  type PaymentMethod,
   intakeIsWedding,
   type StudioContract,
   type ContractItem,
@@ -92,6 +96,7 @@ import {
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 import { CREW_TASK_LABEL, CREW_SIDE_LABEL, CREW_TASKS, CREW_SIDES } from "@/lib/crew-show";
 import TimeInput from "@/components/TimeInput";
+import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
 // giảm giá — khi lưu sẽ ghi unit_price ÂM để trừ vào tổng (không cần cột DB mới).
@@ -430,6 +435,36 @@ export default function ContractEditor({
   }
   const [clientProofs] = useState(initialClientProofs);
   const [planProof, setPlanProof] = useState<string>(""); // proof image for the next instalment
+  // Tiền về bằng gì cho "Thêm & đã thu". Đính ảnh chuyển khoản thì tự chuyển sang CK.
+  const [planMethod, setPlanMethod] = useState<PaymentMethod>("cash");
+  // Đợt đang chờ chọn "Tiền mặt / Chuyển khoản" sau khi bấm "Đánh dấu thu".
+  const [collectFor, setCollectFor] = useState<string | null>(null);
+  // Hộp thoại Dời lịch / Huỷ. Làm xong thì đóng hộp thoại là tải lại cả trang:
+  // hai thao tác này đổi đợt thu, hạng mục, lần thu ở máy chủ, mà màn này giữ
+  // bản sao của từng thứ trong state.
+  const [changeDlg, setChangeDlg] = useState<"reschedule" | "cancel" | null>(null);
+  const [changeDone, setChangeDone] = useState(false);
+  function closeChangeDlg() {
+    setChangeDlg(null);
+    if (changeDone) window.location.reload();
+  }
+  // Lịch sử dời lịch (bảng chỉ có sau migrations/contract_cancel_reschedule.sql;
+  // chưa chạy thì lỗi truy vấn → danh sách rỗng, không hiện gì).
+  const [reschedules, setReschedules] = useState<{ id: string; old_date: string | null; new_date: string; reason: string | null; fee: number; created_at: string }[]>([]);
+  useEffect(() => {
+    supabase
+      .from("contract_reschedules")
+      .select("id, old_date, new_date, reason, fee, created_at")
+      .eq("contract_id", contract.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setReschedules((data ?? []) as typeof reschedules), () => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contract.id]);
+  function onChangeDone(patch: { event_date?: string; event_time?: string; status?: "cancelled" }) {
+    setChangeDone(true);
+    // setF thẳng (không qua set()) để form mang giá trị mới trước lần tự lưu kế.
+    setF((prev) => ({ ...prev, ...patch }));
+  }
   const [proofBusy, setProofBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null); // zoomed transfer-proof image
   const [mounted, setMounted] = useState(false);
@@ -549,7 +584,7 @@ export default function ContractEditor({
    * đợt đó, nên nút QR và tin nhắc Zalo luôn khớp nhau.
    */
   function planNote(it: ContractPaymentPlan): string {
-    return instalmentNote(qrInfo, it.label);
+    return instalmentNote(qrInfo, it.label, it.pay_code);
   }
 
   /** Tin Zalo nhắc MỘT đợt thanh toán (ảnh QR gửi kèm là QR của chính đợt đó). */
@@ -870,7 +905,7 @@ export default function ContractEditor({
         no,
         paidOn: fmtDate(p.paid_at),
         amount: p.amount,
-        kindLabel: [PAYMENT_KIND_LABEL[p.kind], p.method].filter(Boolean).join(" · "),
+        kindLabel: [PAYMENT_KIND_LABEL[p.kind], paymentMethodLabel(p.method)].filter(Boolean).join(" · "),
         note: p.note ?? null,
         studio: {
           name: studioName,
@@ -1145,7 +1180,10 @@ export default function ContractEditor({
     setProofBusy(true);
     const url = await uploadProof(file);
     setProofBusy(false);
-    if (url) setPlanProof(url);
+    if (url) {
+      setPlanProof(url);
+      setPlanMethod("transfer");
+    }
   }
 
   // Attach (or replace) the transfer-proof image on an already-recorded payment.
@@ -1172,7 +1210,7 @@ export default function ContractEditor({
     if (markPaid) {
       const { data: payment, error } = await supabase
         .from("contract_payments")
-        .insert({ contract_id: contract.id, amount, kind: "installment", paid_at: today(), note: label, ...(planProof ? { proof_url: planProof } : {}) })
+        .insert({ contract_id: contract.id, amount, kind: "installment", method: planMethod, paid_at: today(), note: label, ...(planProof ? { proof_url: planProof } : {}) })
         .select("*")
         .single();
       // Ghi lần thu HỎNG (thường là hàng rào khoá sổ) thì DỪNG — không ghi tiếp
@@ -1208,7 +1246,8 @@ export default function ContractEditor({
     }
   }
   // Mark an instalment collected → records a real payment; un-marking removes it.
-  async function markPlanPaid(it: ContractPaymentPlan) {
+  async function markPlanPaid(it: ContractPaymentPlan, method: PaymentMethod | null = null) {
+    setCollectFor(null);
     if (it.paid) {
       if (it.payment_id) {
         const old = payments.find((x) => x.id === it.payment_id)?.proof_url;
@@ -1229,7 +1268,7 @@ export default function ContractEditor({
       const nowIso = new Date().toISOString();
       const { data: payment, error } = await supabase
         .from("contract_payments")
-        .insert({ contract_id: contract.id, amount, kind: "installment", paid_at: today(), note: it.label })
+        .insert({ contract_id: contract.id, amount, kind: "installment", method, paid_at: today(), note: it.label })
         .select("*")
         .single();
       if (error || !payment) {
@@ -1501,6 +1540,16 @@ export default function ContractEditor({
           <button onClick={() => setTab("pay")} className="act-btn">
             <Wallet size={16} /> Ghi nhận thanh toán
           </button>
+          {f.status !== "cancelled" && (
+            <button onClick={() => setChangeDlg("reschedule")} className="act-btn">
+              <CalendarClock size={16} /> Dời lịch
+            </button>
+          )}
+          {f.status !== "cancelled" && (
+            <button onClick={() => setChangeDlg("cancel")} className="act-btn">
+              <Ban size={16} /> Huỷ HĐ
+            </button>
+          )}
           <button onClick={() => setSendOpen(true)} className="act-btn act-btn-primary col-span-2 min-[820px]:col-auto">
             <Send size={16} /> Gửi khách
           </button>
@@ -1613,7 +1662,13 @@ export default function ContractEditor({
                 className="input py-1.5 text-[12px]"
                 style={{ width: "auto" }}
                 value={f.status}
-                onChange={(e) => changeStatus(e.target.value as ContractStatus)}
+                // Chọn "Đã huỷ" là mở hộp thoại Huỷ: huỷ phải đi kèm quyết định
+                // hoàn / giữ cọc, gỡ lịch thợ… chứ không chỉ đổi một chữ.
+                onChange={(e) => {
+                  const v = e.target.value as ContractStatus;
+                  if (v === "cancelled") setChangeDlg("cancel");
+                  else changeStatus(v);
+                }}
                 data-testid="contract-status-select"
               >
                 {(Object.keys(CONTRACT_STATUS_LABEL) as ContractStatus[]).map((k) => (
@@ -1624,6 +1679,39 @@ export default function ContractEditor({
           }
         />
       </div>
+
+      {/* Hợp đồng đã huỷ: huỷ khi nào, vì sao — thay cho việc chỉ có một chữ "Đã huỷ". */}
+      {f.status === "cancelled" && (
+        <div className="card mb-3.5 p-4" style={{ borderColor: "var(--rdS)", background: "var(--rdS)" }}>
+          <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--rd)" }}>
+            <Ban size={16} /> Hợp đồng đã huỷ{contract.cancelled_at ? ` ngày ${fmtDate(contract.cancelled_at)}` : ""}
+          </p>
+          {contract.cancel_reason && <p className="mt-1 text-[13px]" style={{ color: "var(--tx2)" }}>Lý do: {contract.cancel_reason}</p>}
+          {payments.some((p) => p.kind === "refund") && (
+            <p className="mt-1 text-[13px]" style={{ color: "var(--tx2)" }}>
+              Đã hoàn khách {vnd(-payments.filter((p) => p.kind === "refund").reduce((s2, p) => s2 + p.amount, 0))} ·
+              studio giữ {vnd(Math.max(0, payments.reduce((s2, p) => s2 + p.amount, 0)))}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Lịch sử dời lịch: ngày cũ không bị quên khi khách hỏi "hồi đó hẹn ngày nào". */}
+      {reschedules.length > 0 && (
+        <div className="card mb-3.5 p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold"><CalendarClock size={16} /> Đã dời lịch {reschedules.length} lần</p>
+          <ul className="mt-1.5 space-y-1 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+            {reschedules.map((r) => (
+              <li key={r.id}>
+                {r.old_date ? fmtDate(r.old_date) : "chưa có ngày"} → <b>{fmtDate(r.new_date)}</b>
+                {r.reason ? ` · ${r.reason}` : ""}
+                {r.fee > 0 ? ` · phí ${vnd(r.fee)}` : ""}
+                <span style={{ color: "var(--tx3)" }}> · {fmtDate(r.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Same-day scheduling warning */}
       {sameDayContracts.length > 0 && (
@@ -2090,9 +2178,32 @@ export default function ContractEditor({
                             {it.paid && linked && (
                               <button onClick={() => printReceipt(linked)} className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
                             )}
-                            <button onClick={() => markPlanPaid(it)} className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]" style={{ color: it.paid ? "var(--s-green)" : "var(--text3)" }}>
-                              {it.paid ? "✓ Đã thu" : "Đánh dấu thu"}
-                            </button>
+                            {!it.paid && collectFor === it.id ? (
+                              // Chọn tiền về bằng gì — tiền mặt tách riêng để đối chiếu két.
+                              <span className="inline-flex shrink-0 items-center gap-1">
+                                {(["cash", "transfer"] as const).map((m) => (
+                                  <button
+                                    key={m}
+                                    onClick={() => markPlanPaid(it, m)}
+                                    className="inline-flex h-7 items-center rounded-md px-2 text-[11px] font-semibold"
+                                    style={{ background: "var(--s-greenS)", color: "var(--s-green)" }}
+                                  >
+                                    {PAYMENT_METHOD_LABEL[m]}
+                                  </button>
+                                ))}
+                                <button onClick={() => setCollectFor(null)} className="inline-flex h-7 items-center px-1 text-[11px]" style={{ color: "var(--text3)" }}>Huỷ</button>
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => (it.paid ? markPlanPaid(it) : setCollectFor(it.id))}
+                                className="inline-flex h-7 shrink-0 items-center px-1 text-[11px]"
+                                style={{ color: it.paid ? "var(--s-green)" : "var(--text3)" }}
+                              >
+                                {it.paid
+                                  ? `✓ Đã thu${linked?.method ? ` · ${paymentMethodLabel(linked.method)}` : ""}`
+                                  : "Đánh dấu thu"}
+                              </button>
+                            )}
                             <button onClick={() => deletePlan(it)} className="inline-flex h-7 w-7 shrink-0 items-center justify-center" aria-label="Xoá đợt thanh toán" title="Xoá" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                           </div>
                           </div>
@@ -2143,6 +2254,25 @@ export default function ContractEditor({
                     </button>
                   )}
                 </div>
+                {/* Tiền về bằng gì — chỉ áp cho "Thêm & đã thu". */}
+                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs">
+                  <span style={{ color: "var(--text3)" }}>Nếu đã thu, khách trả bằng:</span>
+                  {(["cash", "transfer"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setPlanMethod(m)}
+                      className="rounded-full px-2.5 py-1"
+                      style={{
+                        border: `1px solid ${planMethod === m ? "var(--s-green)" : "var(--border)"}`,
+                        background: planMethod === m ? "var(--s-greenS)" : "transparent",
+                        color: planMethod === m ? "var(--s-green)" : "var(--text2)",
+                      }}
+                    >
+                      {PAYMENT_METHOD_LABEL[m]}
+                    </button>
+                  ))}
+                </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button onClick={() => addPlan(false)} disabled={busy === "plan"} className="btn-ghost"><Plus size={15} /> {busy === "plan" ? "Đang thêm…" : "Thêm đợt thu"}</button>
                   <button onClick={() => addPlan(true)} disabled={busy === "planPaid"} className="btn-ghost" style={{ color: "var(--s-green)" }}><Check size={15} /> {busy === "planPaid" ? "Đang lưu…" : "Thêm & đã thu"}</button>
@@ -2170,13 +2300,16 @@ export default function ContractEditor({
                       {orphanPayments.map((p) => (
                         <li key={p.id} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
                           <div>
-                            <p className="text-sm font-medium">{vnd(p.amount)} · {PAYMENT_KIND_LABEL[p.kind]}</p>
+                            <p className="text-sm font-medium" style={p.amount < 0 ? { color: "var(--rd)" } : undefined}>{vnd(p.amount)} · {PAYMENT_KIND_LABEL[p.kind]}</p>
                             <p className="text-[11px]" style={{ color: "var(--text3)" }}>
-                              {p.paid_at}{p.method ? ` · ${p.method}` : ""}{p.note ? ` · ${p.note}` : ""}
+                              {p.paid_at}{p.method ? ` · ${paymentMethodLabel(p.method)}` : ""}{p.note ? ` · ${p.note}` : ""}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <button onClick={() => printReceipt(p)} className="text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
+                            {/* Khoản hoàn là tiền CHI ra, không in "phiếu thu". */}
+                            {p.kind !== "refund" && (
+                              <button onClick={() => printReceipt(p)} className="text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
+                            )}
                             <button onClick={() => deletePayment(p.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                           </div>
                         </li>
@@ -2970,6 +3103,26 @@ export default function ContractEditor({
           hết màn hình.
           Căn giữa ở MỌI khổ (không dán đáy như bottom-sheet) để popover danh
           sách bạn Zalo — mở xuống dưới dòng của nó — còn chỗ hiển thị. */}
+      {changeDlg === "reschedule" && (
+        <RescheduleDialog
+          contractId={contract.id}
+          eventDate={f.event_date || null}
+          eventTime={f.event_time || null}
+          clientName={f.client_name || null}
+          clientPhone={f.client_phone || null}
+          onClose={closeChangeDlg}
+          onDone={onChangeDone}
+        />
+      )}
+      {changeDlg === "cancel" && (
+        <CancelDialog
+          contractId={contract.id}
+          clientName={f.client_name || null}
+          clientPhone={f.client_phone || null}
+          onClose={closeChangeDlg}
+          onDone={onChangeDone}
+        />
+      )}
       {mounted && sendOpen && createPortal(
         <div
           onClick={() => setSendOpen(false)}

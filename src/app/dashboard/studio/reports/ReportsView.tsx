@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wall
 import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/MoneyInput";
 import { Panel, PanelHead, EmptyState, StatCard } from "@/components/studio/ui";
-import { vnd, vndShort, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, type StudioExpense, type PaymentKind } from "@/lib/types";
+import { vnd, vndShort, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, paymentMethodLabel, type StudioExpense, type PaymentKind } from "@/lib/types";
 import { fmtDayMonth, todayVN } from "@/lib/date";
 import type { FunnelStage } from "@/lib/lead-source";
 import { blocksWrite, blockedWriteMessage } from "@/lib/accounting";
@@ -23,6 +23,8 @@ export type PaymentRow = {
   id: string;
   amount: number;
   kind: PaymentKind;
+  /** "cash" | "transfer" | null (lần thu cũ chưa ghi phương thức). */
+  method?: string | null;
   paid_at: string;
   contract: { title: string } | null;
 };
@@ -145,7 +147,7 @@ export default function ReportsView({
     const income: MoneyRow[] = monthPayments
       .map((p) => ({
         date: p.paid_at,
-        kind: PAYMENT_KIND_LABEL[p.kind],
+        kind: [PAYMENT_KIND_LABEL[p.kind], paymentMethodLabel(p.method)].filter(Boolean).join(" · "),
         title: `${PAYMENT_KIND_LABEL[p.kind]} · ${p.contract?.title || "Hợp đồng"}`,
         ref: p.contract?.title || "",
         amount: p.amount || 0,
@@ -271,11 +273,23 @@ export default function ReportsView({
     })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
+  // Tiền mặt tách riêng: số studio phải thấy trong két. Chuyển khoản thì ngân
+  // hàng đã giữ sổ hộ; lần thu cũ chưa ghi phương thức xếp vào "chưa rõ".
+  const cashIn = monthPayments.filter((p) => p.method === "cash").reduce((s2, p) => s2 + (p.amount || 0), 0);
+  const transferIn = monthPayments.filter((p) => p.method === "transfer").reduce((s2, p) => s2 + (p.amount || 0), 0);
+  const unknownIn = income - cashIn - transferIn;
+
   return (
     <div className="page-in flex flex-col gap-3.5">
       {/* ── 4 thẻ số liệu tháng ───────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">
-        <StatCard icon={TrendingUp} tone="green" label="Doanh thu (đã thu)" value={vndShort(income)} sub={`${monthPayments.length} lần thu trong ${periodWord}`} />
+        <StatCard
+          icon={TrendingUp}
+          tone="green"
+          label="Doanh thu (đã thu)"
+          value={vndShort(income)}
+          sub={cashIn > 0 ? `Tiền mặt ${vndShort(cashIn)} · ${monthPayments.length} lần thu` : `${monthPayments.length} lần thu trong ${periodWord}`}
+        />
         <StatCard icon={TrendingDown} tone="amber" label="Chi tiền công" value={vndShort(salaryOut)} sub={`${monthSalaries.length} khoản đã trả`} />
         <StatCard icon={Receipt} tone="red" label="Chi phí khác" value={vndShort(otherOut)} sub={`${monthExpenses.length} khoản chi`} />
         <StatCard
@@ -376,6 +390,13 @@ export default function ReportsView({
       {tab === "in" && (
         <Panel>
           <PanelHead icon={TrendingUp} tone="green" title="Tiền vào" count={vnd(income)} note={`Tiền thực nhận về studio trong ${periodWord}`} />
+          {monthPayments.length > 0 && (
+            <div className="flex flex-wrap gap-x-5 gap-y-1 px-[18px] py-[10px] text-[12.5px]" style={{ borderBottom: "1px solid var(--bd2)", background: "var(--sf2)" }}>
+              <span>Tiền mặt: <b className="tnum">{vnd(cashIn)}</b></span>
+              <span>Chuyển khoản: <b className="tnum">{vnd(transferIn)}</b></span>
+              {unknownIn > 0 && <span style={{ color: "var(--tx3)" }}>Chưa ghi phương thức: <span className="tnum">{vnd(unknownIn)}</span></span>}
+            </div>
+          )}
           {monthPayments.length === 0 ? (
             <EmptyState icon={TrendingUp} title={`Chưa có khoản thu nào trong ${periodWord}`} hint="Ghi nhận thanh toán ở màn chi tiết hợp đồng, số liệu sẽ chạy về đây." />
           ) : (
@@ -384,12 +405,14 @@ export default function ReportsView({
                 <span className="tnum w-11 flex-none text-[12px]" style={{ color: "var(--tx3)" }}>{fmtDayMonth(p.paid_at)}</span>
                 <div className="min-w-[160px] flex-1">
                   <p className="truncate text-[13.5px] font-semibold">{p.contract?.title || "Hợp đồng"}</p>
-                  <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{PAYMENT_KIND_LABEL[p.kind]}</p>
+                  <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                    {[PAYMENT_KIND_LABEL[p.kind], paymentMethodLabel(p.method)].filter(Boolean).join(" · ")}
+                  </p>
                 </div>
-                <span className="flex-none whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-semibold" style={{ background: "var(--gnS)", color: "var(--gn)" }}>
+                <span className="flex-none whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-semibold" style={p.kind === "refund" ? { background: "var(--rdS)", color: "var(--rd)" } : { background: "var(--gnS)", color: "var(--gn)" }}>
                   {PAYMENT_KIND_LABEL[p.kind]}
                 </span>
-                <span className="tnum min-w-[120px] flex-none text-right text-[14px] font-bold" style={{ color: "var(--gn)" }}>{vnd(p.amount)}</span>
+                <span className="tnum min-w-[120px] flex-none text-right text-[14px] font-bold" style={{ color: p.amount < 0 ? "var(--rd)" : "var(--gn)" }}>{vnd(p.amount)}</span>
               </div>
             ))
           )}

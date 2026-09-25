@@ -5,6 +5,7 @@ import type { StudioService } from "@/lib/types";
 import ServicesTemplatesTabs from "./ServicesTemplatesTabs";
 import StudioPolicyCard from "@/components/studio/StudioPolicyCard";
 import AutomationsCard from "@/components/studio/AutomationsCard";
+import { cancelPolicyOf } from "@/lib/contract-cancel";
 import type { AutomationConfig } from "@/lib/automations";
 import type { TemplateWithItems } from "../templates/TemplatesManager";
 
@@ -85,6 +86,7 @@ export default async function ServicesPage(props: { searchParams?: Promise<{ tab
           initialStudioAddress={(profile as { studio_address?: string | null }).studio_address ?? ""}
           initialStudioLat={(profile as { studio_lat?: number | null }).studio_lat ?? null}
           initialStudioLng={(profile as { studio_lng?: number | null }).studio_lng ?? null}
+          initialCancelPolicy={cancelPolicyOf(profile as Parameters<typeof cancelPolicyOf>[0])}
         />
       )}
       {/* Việc tự động cũng là "studio này làm việc theo luật nào" → cùng trang
