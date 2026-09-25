@@ -2,17 +2,20 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIp } from "@/lib/rate-limit";
 import { sendPushToOwner } from "@/lib/push";
-import { sendZalo } from "@/lib/zalo/send";
 import { verifyAlbumAccess } from "@/lib/album-access";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Khách bấm "đã chọn xong" trên trang album → báo cho studio. Public (không đăng
- * nhập). Ba kênh:
- *   1. Chuông (studio_notifications) hiện trong dashboard.
- *   2. Web-push tới điện thoại chủ studio (giống khi khách ký hợp đồng).
- *   3. Zalo cho chủ studio (best-effort, nếu đã kết nối Zalo + có SĐT).
+ * nhập). HAI kênh:
+ *   1. Chuông (studio_notifications) hiện trong dashboard — nơi việc này được
+ *      lưu lại để studio xử lý, thông báo đẩy thì lướt qua là mất.
+ *   2. Web-push: ĐÚNG MỘT tin cho mỗi người trong studio (xem @/lib/push).
+ *
+ * TRƯỚC ĐÂY CÓ KÊNH THỨ BA — Zalo cho chủ studio — và đã bỏ: một lần khách bấm
+ * mà studio nhận tin ở ba chỗ thì phần lớn là phiền chứ không phải nhắc việc.
+ * Cần báo ra ngoài giờ chỉ còn thông báo đẩy.
  */
 export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
@@ -33,7 +36,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   }
 
   // Album có mật khẩu: chỉ khách đã mở khoá mới bấm được "đã chọn xong" — nếu
-  // không, ai biết slug cũng bắn được thông báo (chuông + push + Zalo) cho chủ.
+  // không, ai biết slug cũng bắn được thông báo (chuông + push) cho chủ.
   if (album.password_hash && !verifyAlbumAccess(album.id, album.password_hash, body.access)) {
     return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }
@@ -79,27 +82,6 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     });
   } catch {
     /* push chưa cấu hình VAPID → bỏ qua */
-  }
-
-  // 3) Zalo cho chủ studio (best-effort).
-  try {
-    const { data: owner } = await admin
-      .from("profiles")
-      .select("pl_phone, full_name")
-      .eq("id", album.owner_id)
-      .maybeSingle();
-    if (owner?.pl_phone) {
-      await sendZalo({
-        ownerId: album.owner_id,
-        toPhone: owner.pl_phone,
-        toName: owner.full_name,
-        body: `🔔 ${message}\n— Vào Dashboard → Album → Lựa chọn khách để lọc ảnh.`,
-        kind: "selection_done",
-        log: false,
-      });
-    }
-  } catch {
-    /* chưa kết nối Zalo / lỗi tạm → bỏ qua */
   }
 
   return NextResponse.json({ ok: true, count: n, disliked: nDis });

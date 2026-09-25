@@ -61,8 +61,11 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     .select("role, can_zip, plan, plan_expires_at")
     .eq("id", album.owner_id)
     .maybeSingle();
-  const allowDownload =
-    (owner?.role === "admin" || !!owner?.can_zip) && album.download_enabled !== false;
+  // Mở thư mục Drive KHÔNG khoá theo gói: Google tự phục vụ file nên hệ thống
+  // không tốn byte nào. Vẫn theo cờ "cho phép tải" của album. Cùng luật với
+  // src/app/a/[slug]/page.tsx — hai đường lệch nhau là album CÓ mật khẩu hiện
+  // khác album không mật khẩu.
+  const allowDrive = album.download_enabled !== false;
   // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Phải chốt ở ĐÂY nữa,
   // không chỉ ở trang: album CÓ MẬT KHẨU nhận toàn bộ khuôn mặt qua route này,
   // nên bỏ sót chỗ này là để ngỏ đúng những album mà trang chưa gửi gì.
@@ -70,7 +73,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     effectivePlan(owner?.plan as Plan, owner?.plan_expires_at),
     owner?.role === "admin",
   );
-  const driveFolders = allowDownload
+  const driveFolders = allowDrive
     ? pickFolderLinks((sources ?? []).filter((x) => x.stage !== "delivery"))
     : [];
 

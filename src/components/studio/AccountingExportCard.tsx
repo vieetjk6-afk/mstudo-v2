@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FileSpreadsheet, Lock, LockOpen, Loader2, Check } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { XlsxSheet } from "@/lib/xlsx";
-import { vnd } from "@/lib/types";
+import { vnd, paymentMethodLabel } from "@/lib/types";
 import { todayVN } from "@/lib/date";
 import {
   categoryLabel,
@@ -59,7 +59,7 @@ export default function AccountingExportCard({
     const [{ data: pay }, { data: exp }, { data: con }] = await Promise.all([
       supabase
         .from("contract_payments")
-        .select("amount, kind, paid_at, note, contract:studio_contracts!inner(owner_id, code, title, client_name)")
+        .select("amount, kind, method, paid_at, note, contract:studio_contracts!inner(owner_id, code, title, client_name)")
         .eq("contract.owner_id", ownerId)
         .gte("paid_at", from)
         .lte("paid_at", to),
@@ -77,13 +77,14 @@ export default function AccountingExportCard({
     ]);
 
     type PayRow = {
-      amount: number; kind: string; paid_at: string; note: string | null;
+      amount: number; kind: string; method: string | null; paid_at: string; note: string | null;
       contract: { code: string | null; title: string; client_name: string | null } | null;
     };
     const income: MoneyRow[] = ((pay ?? []) as unknown as PayRow[]).map((p) => ({
       date: p.paid_at,
       amount: p.amount,
-      label: p.note || p.kind,
+      // Kế toán cần tách tiền mặt khỏi chuyển khoản khi đối chiếu quỹ / sao kê.
+      label: [p.note || p.kind, paymentMethodLabel(p.method)].filter(Boolean).join(" · "),
       contractCode: p.contract?.code ?? null,
       contractTitle: p.contract?.title ?? null,
       clientName: p.contract?.client_name ?? null,

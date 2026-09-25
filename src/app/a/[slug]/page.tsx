@@ -145,9 +145,16 @@ export default async function PublicAlbumPage(
   ]);
   const studioName = brand.name;
   const isAdminOwner = owner?.role === "admin";
-  // `can_zip` là cờ gói "cho khách tải ảnh" (nay tải thẳng từ Drive, không còn
-  // nén ZIP) — giữ nguyên cột cũ để khỏi phải di trú dữ liệu.
+  // HAI quyền tải, KHÁC nhau có chủ ý:
+  //
+  //  - allowDownload: tải ảnh NGAY TRONG APP (nút tải ở khung xem ảnh). Byte đi
+  //    qua /api/img, tốn băng thông của hệ thống → vẫn khoá theo gói bằng cờ
+  //    `can_zip` (tên cột cũ từ thời còn nén ZIP, giữ nguyên để khỏi di trú).
+  //  - allowDrive: mở THƯ MỤC DRIVE của studio. Google tự nén và tự phục vụ nên
+  //    hệ thống không tốn byte nào → mọi gói đều được, chỉ cần studio bật cho
+  //    phép tải ở album này.
   const allowDownload = (isAdminOwner || !!owner?.can_zip) && album.download_enabled !== false;
+  const allowDrive = album.download_enabled !== false;
   const allowNotes = isAdminOwner || !!owner?.can_notes;
   // Watermark: chỉ Photographer Plus & Studio. Chốt phía server để album bật từ
   // trước, hoặc của gói đã hết hạn, tự thôi watermark — ảnh không watermark mới
@@ -216,9 +223,9 @@ export default async function PublicAlbumPage(
     photos = filtered.length > 0 ? filtered : (p ?? []);
     const shown = filtered.length > 0 ? selSources : (s ?? []);
     sources = shown.map(({ id, name, position }) => ({ id, name, position }));
-    // Chỉ khi studio cho phép tải — link thư mục mở ra CẢ album, nên nó phải
-    // theo đúng quyền tải như nút tải từng ảnh.
-    if (allowDownload) driveFolders = pickFolderLinks(shown);
+    // Link thư mục mở ra CẢ album nên vẫn theo cờ "cho phép tải" của album, chỉ
+    // không còn theo gói (xem allowDrive ở trên).
+    if (allowDrive) driveFolders = pickFolderLinks(shown);
     selected = (sel ?? []).map((r) => r.photo_id);
     disliked = (dis ?? []).map((r) => r.photo_id);
     for (const r of sel ?? []) if (r.client_note) notes[r.photo_id] = r.client_note;
@@ -244,6 +251,7 @@ export default async function PublicAlbumPage(
           watermark_text: album.watermark_text,
           hasPassword,
           allowDownload,
+          allowDrive,
           allowNotes,
         }}
         initialPhotos={photos}

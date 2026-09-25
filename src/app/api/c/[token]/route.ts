@@ -9,6 +9,7 @@ import { autoCreateContractDriveOnSign } from "@/lib/studio-drive";
 import { syncContractCalendar } from "@/lib/gcal-sync";
 import { fetchAllPhotos } from "@/lib/photos";
 import { isDeliveryPhase } from "@/lib/album-phase";
+import { isMissingColumn } from "@/lib/missing-column";
 
 export const dynamic = "force-dynamic";
 
@@ -229,7 +230,14 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     db.from("contract_payments").select("id, amount, kind, paid_at").eq("contract_id", contract.id).order("paid_at", { ascending: false }),
     db.from("studio_events").select("id, title, event_date, event_time, note").eq("contract_id", contract.id).order("event_date"),
     db.from("contract_quote_options").select("id, name, price, description, position").eq("contract_id", contract.id).order("position"),
-    db.from("contract_payment_plan").select("id, label, amount, due_date, paid, paid_at").eq("contract_id", contract.id).order("position"),
+    // pay_code (mã đợt để SePay tự ghi thu) chỉ có sau migrations/bank_auto_reconcile.sql;
+    // chưa chạy thì lùi về bản cũ, không để cổng khách hỏng.
+    (async () => {
+      const q = (cols: string) => db.from("contract_payment_plan").select(cols).eq("contract_id", contract.id).order("position");
+      const base = "id, label, amount, due_date, paid, paid_at";
+      const full = await q(`${base}, pay_code`);
+      return full.error && isMissingColumn(full.error, "pay_code") ? q(base) : full;
+    })(),
     db.from("studio_expenses").select("id, title, amount, category, spent_at").eq("contract_id", contract.id).eq("client_visible", true).order("spent_at", { ascending: false }),
     db.from("contract_tasks").select("id, label, done, position").eq("contract_id", contract.id).order("position"),
     db.from("contract_products").select("id, name, qty, cost, status, position").eq("contract_id", contract.id).order("position"),

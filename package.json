@@ -23,6 +23,7 @@
     "test:album-phase": "node --experimental-strip-types desktop/test/album-phase.mjs",
     "test:album-offline": "node --experimental-strip-types desktop/test/album-offline.mjs",
     "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs",
+    "test:push-mot-tin": "node --experimental-strip-types desktop/test/push-mot-tin-moi-nguoi.mjs",
     "test:safe-next": "node --experimental-strip-types desktop/test/safe-next.mjs",
     "test:missing-column": "node --experimental-strip-types desktop/test/missing-column.mjs",
     "test:fetch-khong-cache": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/fetch-khong-cache.mjs",
@@ -48,6 +49,8 @@
     "test:album-order": "node --experimental-strip-types desktop/test/album-order.mjs",
     "test:gcal-sync": "node --experimental-strip-types desktop/test/gcal-sync.mjs",
     "test:studio-nav": "node --experimental-strip-types desktop/test/studio-nav.mjs",
+    "test:contract-cancel": "node --experimental-strip-types desktop/test/contract-cancel.mjs",
+    "test:bank-reconcile": "node --experimental-strip-types desktop/test/bank-reconcile.mjs",
     "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs",
     "test:upgrade-payment": "node --experimental-strip-types desktop/test/upgrade-payment.mjs",
     "test:inbox": "node --experimental-strip-types desktop/test/inbox.mjs",
@@ -81,6 +84,7 @@
     "ui:shot": "node scripts/chup-giao-dien.mjs",
     "ui:test": "node scripts/kiem-tra-giao-dien.mjs",
     "ui:luoi-anh": "node scripts/do-luoi-anh.mjs",
+    "video:sepay": "node scripts/xuat-video-sepay.mjs public/huong-dan/sepay.mp4",
     "postinstall": "node scripts/chep-mediapipe.mjs"
   },
   "dependencies": {
