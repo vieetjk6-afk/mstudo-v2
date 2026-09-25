@@ -409,10 +409,10 @@ export default function ReportsView({
                     {[PAYMENT_KIND_LABEL[p.kind], paymentMethodLabel(p.method)].filter(Boolean).join(" · ")}
                   </p>
                 </div>
-                <span className="flex-none whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-semibold" style={{ background: "var(--gnS)", color: "var(--gn)" }}>
+                <span className="flex-none whitespace-nowrap rounded-[20px] px-2.5 py-[3px] text-[11px] font-semibold" style={p.kind === "refund" ? { background: "var(--rdS)", color: "var(--rd)" } : { background: "var(--gnS)", color: "var(--gn)" }}>
                   {PAYMENT_KIND_LABEL[p.kind]}
                 </span>
-                <span className="tnum min-w-[120px] flex-none text-right text-[14px] font-bold" style={{ color: "var(--gn)" }}>{vnd(p.amount)}</span>
+                <span className="tnum min-w-[120px] flex-none text-right text-[14px] font-bold" style={{ color: p.amount < 0 ? "var(--rd)" : "var(--gn)" }}>{vnd(p.amount)}</span>
               </div>
             ))
           )}

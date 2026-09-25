@@ -374,5 +374,21 @@ ok(
   ).split("\n").pop() === "unmatched/unlinked/null/null"
 );
 
+// Huỷ hợp đồng ghi khoản hoàn là một lần thu kind='refund', số ÂM. Ràng buộc
+// kind cũ (4 giá trị) mà còn thì mọi lần huỷ có hoàn tiền đều hỏng ở máy chủ.
+ok(
+  "Lần thu nhận loại 'refund' (hoàn tiền khi huỷ hợp đồng)",
+  q(
+    "moi",
+    "set session_replication_role = replica; " +
+      "insert into public.contract_payments (contract_id, amount, kind) values " +
+      "('00000000-0000-0000-0000-0000000000c2', -2500000, 'refund') returning kind"
+  ).split("\n").includes("refund")
+);
+ok(
+  "…và bảng lịch sử dời lịch có sẵn",
+  q("moi", "select count(*) from information_schema.tables where table_name = 'contract_reschedules'") === "1"
+);
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

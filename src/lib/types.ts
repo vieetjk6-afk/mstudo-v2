@@ -319,6 +319,9 @@ export interface StudioContract {
   event_date: string | null;
   event_time: string | null;
   location: string | null;
+  /** Huỷ lúc nào / vì sao (migrations/contract_cancel_reschedule.sql). */
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
   status: ContractStatus;
   deposit: number;
   note: string | null;
@@ -497,7 +500,8 @@ export interface ContractCrew {
   end_time: string | null;
 }
 
-export type PaymentKind = "deposit" | "installment" | "final" | "other";
+/** 'refund' = tiền TRẢ LẠI khách khi huỷ; amount của nó là số ÂM (xem migrations/contract_cancel_reschedule.sql). */
+export type PaymentKind = "deposit" | "installment" | "final" | "other" | "refund";
 
 export interface ContractPayment {
   id: string;
@@ -1029,6 +1033,7 @@ export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
   installment: "Thanh toán đợt",
   final: "Tất toán",
   other: "Khác",
+  refund: "Hoàn tiền",
 };
 
 export const EXPENSE_CATEGORY_LABEL: Record<string, string> = {

@@ -48,6 +48,7 @@
     "test:album-order": "node --experimental-strip-types desktop/test/album-order.mjs",
     "test:gcal-sync": "node --experimental-strip-types desktop/test/gcal-sync.mjs",
     "test:studio-nav": "node --experimental-strip-types desktop/test/studio-nav.mjs",
+    "test:contract-cancel": "node --experimental-strip-types desktop/test/contract-cancel.mjs",
     "test:bank-reconcile": "node --experimental-strip-types desktop/test/bank-reconcile.mjs",
     "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs",
     "test:upgrade-payment": "node --experimental-strip-types desktop/test/upgrade-payment.mjs",

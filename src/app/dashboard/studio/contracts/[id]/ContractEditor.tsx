@@ -15,6 +15,7 @@ import {
   Link as LinkIcon,
   PenLine,
   CalendarClock,
+  Ban,
   CalendarRange,
   Star,
   FileText,
@@ -95,6 +96,7 @@ import {
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 import { CREW_TASK_LABEL, CREW_SIDE_LABEL, CREW_TASKS, CREW_SIDES } from "@/lib/crew-show";
 import TimeInput from "@/components/TimeInput";
+import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
 // giảm giá — khi lưu sẽ ghi unit_price ÂM để trừ vào tổng (không cần cột DB mới).
@@ -437,6 +439,32 @@ export default function ContractEditor({
   const [planMethod, setPlanMethod] = useState<PaymentMethod>("cash");
   // Đợt đang chờ chọn "Tiền mặt / Chuyển khoản" sau khi bấm "Đánh dấu thu".
   const [collectFor, setCollectFor] = useState<string | null>(null);
+  // Hộp thoại Dời lịch / Huỷ. Làm xong thì đóng hộp thoại là tải lại cả trang:
+  // hai thao tác này đổi đợt thu, hạng mục, lần thu ở máy chủ, mà màn này giữ
+  // bản sao của từng thứ trong state.
+  const [changeDlg, setChangeDlg] = useState<"reschedule" | "cancel" | null>(null);
+  const [changeDone, setChangeDone] = useState(false);
+  function closeChangeDlg() {
+    setChangeDlg(null);
+    if (changeDone) window.location.reload();
+  }
+  // Lịch sử dời lịch (bảng chỉ có sau migrations/contract_cancel_reschedule.sql;
+  // chưa chạy thì lỗi truy vấn → danh sách rỗng, không hiện gì).
+  const [reschedules, setReschedules] = useState<{ id: string; old_date: string | null; new_date: string; reason: string | null; fee: number; created_at: string }[]>([]);
+  useEffect(() => {
+    supabase
+      .from("contract_reschedules")
+      .select("id, old_date, new_date, reason, fee, created_at")
+      .eq("contract_id", contract.id)
+      .order("created_at", { ascending: false })
+      .then(({ data }) => setReschedules((data ?? []) as typeof reschedules), () => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contract.id]);
+  function onChangeDone(patch: { event_date?: string; event_time?: string; status?: "cancelled" }) {
+    setChangeDone(true);
+    // setF thẳng (không qua set()) để form mang giá trị mới trước lần tự lưu kế.
+    setF((prev) => ({ ...prev, ...patch }));
+  }
   const [proofBusy, setProofBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null); // zoomed transfer-proof image
   const [mounted, setMounted] = useState(false);
@@ -1512,6 +1540,16 @@ export default function ContractEditor({
           <button onClick={() => setTab("pay")} className="act-btn">
             <Wallet size={16} /> Ghi nhận thanh toán
           </button>
+          {f.status !== "cancelled" && (
+            <button onClick={() => setChangeDlg("reschedule")} className="act-btn">
+              <CalendarClock size={16} /> Dời lịch
+            </button>
+          )}
+          {f.status !== "cancelled" && (
+            <button onClick={() => setChangeDlg("cancel")} className="act-btn">
+              <Ban size={16} /> Huỷ HĐ
+            </button>
+          )}
           <button onClick={() => setSendOpen(true)} className="act-btn act-btn-primary col-span-2 min-[820px]:col-auto">
             <Send size={16} /> Gửi khách
           </button>
@@ -1624,7 +1662,13 @@ export default function ContractEditor({
                 className="input py-1.5 text-[12px]"
                 style={{ width: "auto" }}
                 value={f.status}
-                onChange={(e) => changeStatus(e.target.value as ContractStatus)}
+                // Chọn "Đã huỷ" là mở hộp thoại Huỷ: huỷ phải đi kèm quyết định
+                // hoàn / giữ cọc, gỡ lịch thợ… chứ không chỉ đổi một chữ.
+                onChange={(e) => {
+                  const v = e.target.value as ContractStatus;
+                  if (v === "cancelled") setChangeDlg("cancel");
+                  else changeStatus(v);
+                }}
                 data-testid="contract-status-select"
               >
                 {(Object.keys(CONTRACT_STATUS_LABEL) as ContractStatus[]).map((k) => (
@@ -1635,6 +1679,39 @@ export default function ContractEditor({
           }
         />
       </div>
+
+      {/* Hợp đồng đã huỷ: huỷ khi nào, vì sao — thay cho việc chỉ có một chữ "Đã huỷ". */}
+      {f.status === "cancelled" && (
+        <div className="card mb-3.5 p-4" style={{ borderColor: "var(--rdS)", background: "var(--rdS)" }}>
+          <p className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--rd)" }}>
+            <Ban size={16} /> Hợp đồng đã huỷ{contract.cancelled_at ? ` ngày ${fmtDate(contract.cancelled_at)}` : ""}
+          </p>
+          {contract.cancel_reason && <p className="mt-1 text-[13px]" style={{ color: "var(--tx2)" }}>Lý do: {contract.cancel_reason}</p>}
+          {payments.some((p) => p.kind === "refund") && (
+            <p className="mt-1 text-[13px]" style={{ color: "var(--tx2)" }}>
+              Đã hoàn khách {vnd(-payments.filter((p) => p.kind === "refund").reduce((s2, p) => s2 + p.amount, 0))} ·
+              studio giữ {vnd(Math.max(0, payments.reduce((s2, p) => s2 + p.amount, 0)))}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Lịch sử dời lịch: ngày cũ không bị quên khi khách hỏi "hồi đó hẹn ngày nào". */}
+      {reschedules.length > 0 && (
+        <div className="card mb-3.5 p-4">
+          <p className="flex items-center gap-2 text-sm font-semibold"><CalendarClock size={16} /> Đã dời lịch {reschedules.length} lần</p>
+          <ul className="mt-1.5 space-y-1 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+            {reschedules.map((r) => (
+              <li key={r.id}>
+                {r.old_date ? fmtDate(r.old_date) : "chưa có ngày"} → <b>{fmtDate(r.new_date)}</b>
+                {r.reason ? ` · ${r.reason}` : ""}
+                {r.fee > 0 ? ` · phí ${vnd(r.fee)}` : ""}
+                <span style={{ color: "var(--tx3)" }}> · {fmtDate(r.created_at)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Same-day scheduling warning */}
       {sameDayContracts.length > 0 && (
@@ -2223,13 +2300,16 @@ export default function ContractEditor({
                       {orphanPayments.map((p) => (
                         <li key={p.id} className="flex items-center justify-between rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
                           <div>
-                            <p className="text-sm font-medium">{vnd(p.amount)} · {PAYMENT_KIND_LABEL[p.kind]}</p>
+                            <p className="text-sm font-medium" style={p.amount < 0 ? { color: "var(--rd)" } : undefined}>{vnd(p.amount)} · {PAYMENT_KIND_LABEL[p.kind]}</p>
                             <p className="text-[11px]" style={{ color: "var(--text3)" }}>
                               {p.paid_at}{p.method ? ` · ${paymentMethodLabel(p.method)}` : ""}{p.note ? ` · ${p.note}` : ""}
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <button onClick={() => printReceipt(p)} className="text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
+                            {/* Khoản hoàn là tiền CHI ra, không in "phiếu thu". */}
+                            {p.kind !== "refund" && (
+                              <button onClick={() => printReceipt(p)} className="text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
+                            )}
                             <button onClick={() => deletePayment(p.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                           </div>
                         </li>
@@ -3023,6 +3103,26 @@ export default function ContractEditor({
           hết màn hình.
           Căn giữa ở MỌI khổ (không dán đáy như bottom-sheet) để popover danh
           sách bạn Zalo — mở xuống dưới dòng của nó — còn chỗ hiển thị. */}
+      {changeDlg === "reschedule" && (
+        <RescheduleDialog
+          contractId={contract.id}
+          eventDate={f.event_date || null}
+          eventTime={f.event_time || null}
+          clientName={f.client_name || null}
+          clientPhone={f.client_phone || null}
+          onClose={closeChangeDlg}
+          onDone={onChangeDone}
+        />
+      )}
+      {changeDlg === "cancel" && (
+        <CancelDialog
+          contractId={contract.id}
+          clientName={f.client_name || null}
+          clientPhone={f.client_phone || null}
+          onClose={closeChangeDlg}
+          onDone={onChangeDone}
+        />
+      )}
       {mounted && sendOpen && createPortal(
         <div
           onClick={() => setSendOpen(false)}
