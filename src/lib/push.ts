@@ -1,6 +1,7 @@
 import "server-only";
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { motThietBiMoiNguoi } from "@/lib/push-chon-thiet-bi";
 
 // VAPID keys — set on Vercel. The public key is also exposed to the client as
 // NEXT_PUBLIC_VAPID_PUBLIC_KEY for subscribing.
@@ -26,6 +27,8 @@ export type PushPayload = {
 };
 
 type SubRow = { id: string; endpoint: string; p256dh: string; auth: string };
+/** Như SubRow nhưng kèm cột để chọn "mỗi người một thiết bị". */
+type SubRowChon = SubRow & { user_id: string; created_at: string | null };
 
 /** Kết quả gửi tới MỘT thiết bị. `service` là tên dịch vụ push, không phải URL
  *  đầy đủ — endpoint là bí mật của thiết bị đó, đừng ghi ra log hay trả về UI. */
@@ -101,10 +104,17 @@ export async function sendPushToSubscriptions(subs: SubRow[], payload: PushPaylo
 }
 
 /**
- * Send a push notification to every registered device of a studio owner.
- * Silently no-ops if VAPID keys aren't configured, so notification creation
- * never fails just because push isn't set up yet. Dead subscriptions (410/404)
- * are pruned automatically.
+ * Gửi thông báo đẩy cho studio: MỖI NGƯỜI trong studio đúng MỘT tin.
+ *
+ * Không gửi tới mọi đăng ký nữa. Một người bật thông báo ở nhiều chỗ (Safari,
+ * app đã thêm vào màn hình chính, máy tính, hay cài lại app) là mỗi chỗ một
+ * đăng ký, và trình duyệt chỉ gộp được tin trong CÙNG một đăng ký — nên studio
+ * nhận hai ba tin liên tiếp cho cùng một việc. Chọn đăng ký mới nhất của từng
+ * tài khoản (xem @/lib/push-chon-thiet-bi) thì mỗi người nhận đúng một tin, trên
+ * thiết bị họ bật thông báo gần đây nhất.
+ *
+ * Chưa cấu hình VAPID thì lặng lẽ không làm gì — tạo thông báo không được phép
+ * hỏng chỉ vì push chưa bật. Đăng ký chết (404/410) tự bị dọn khi gửi.
  */
 export async function sendPushToOwner(ownerId: string, payload: PushPayload): Promise<void> {
   if (!ensureConfigured()) return;
@@ -112,10 +122,10 @@ export async function sendPushToOwner(ownerId: string, payload: PushPayload): Pr
   const db = createAdminClient();
   const { data: subs } = await db
     .from("push_subscriptions")
-    .select("id, endpoint, p256dh, auth")
+    .select("id, endpoint, p256dh, auth, user_id, created_at")
     .eq("owner_id", ownerId);
 
-  await deliver((subs ?? []) as SubRow[], payload);
+  await deliver(motThietBiMoiNguoi((subs ?? []) as SubRowChon[]), payload);
 }
 
 /**
@@ -134,9 +144,11 @@ export async function sendPushToOwners(ownerIds: string[], payload: PushPayload)
     const ids = ownerIds.slice(i, i + CHUNK);
     const { data: subs } = await db
       .from("push_subscriptions")
-      .select("id, endpoint, p256dh, auth")
+      .select("id, endpoint, p256dh, auth, user_id, created_at")
       .in("owner_id", ids);
-    total += (await deliver((subs ?? []) as SubRow[], payload)).filter((r) => r.ok).length;
+    // Cùng luật "mỗi người một tin" như sendPushToOwner — thông báo hệ thống mà
+    // nhân đôi nhân ba thì còn khó chịu hơn, vì nó tới cùng lúc cho mọi studio.
+    total += (await deliver(motThietBiMoiNguoi((subs ?? []) as SubRowChon[]), payload)).filter((r) => r.ok).length;
   }
   return total;
 }

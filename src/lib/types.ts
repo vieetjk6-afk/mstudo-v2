@@ -319,6 +319,9 @@ export interface StudioContract {
   event_date: string | null;
   event_time: string | null;
   location: string | null;
+  /** Huỷ lúc nào / vì sao (migrations/contract_cancel_reschedule.sql). */
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
   status: ContractStatus;
   deposit: number;
   note: string | null;
@@ -499,7 +502,8 @@ export interface ContractCrew {
   end_time: string | null;
 }
 
-export type PaymentKind = "deposit" | "installment" | "final" | "other";
+/** 'refund' = tiền TRẢ LẠI khách khi huỷ; amount của nó là số ÂM (xem migrations/contract_cancel_reschedule.sql). */
+export type PaymentKind = "deposit" | "installment" | "final" | "other" | "refund";
 
 export interface ContractPayment {
   id: string;
@@ -753,6 +757,8 @@ export interface ContractPaymentPlan {
   payment_id: string | null;
   position: number;
   created_at: string;
+  /** Mã đợt in vào nội dung chuyển khoản để SePay tự ghi thu (migrations/bank_auto_reconcile.sql). */
+  pay_code?: string | null;
 }
 
 export interface StudioExpense {
@@ -1004,11 +1010,32 @@ export const CREW_STATUS_LABEL: Record<CrewStatus, string> = {
   declined: "Từ chối",
 };
 
+/**
+ * Tiền về bằng gì. Cột contract_payments.method có từ schema nền nhưng trước
+ * đây bỏ trống. Giờ studio chọn khi đánh dấu thu, còn SePay tự ghi "transfer".
+ * Tách tiền mặt ra để cuối ngày studio đối chiếu được với tiền đang giữ trong két.
+ */
+export type PaymentMethod = "cash" | "transfer";
+export const PAYMENT_METHOD_LABEL: Record<PaymentMethod, string> = {
+  cash: "Tiền mặt",
+  transfer: "Chuyển khoản",
+};
+/** Nhãn phương thức; giá trị lạ (dữ liệu cũ nhập tay) thì giữ nguyên, trống thì "". */
+export function paymentMethodLabel(m: string | null | undefined): string {
+  if (!m) return "";
+  return PAYMENT_METHOD_LABEL[m as PaymentMethod] ?? m;
+}
+/** Chỉ nhận đúng hai giá trị; mọi thứ khác → null (không ghi rác vào sổ). */
+export function asPaymentMethod(m: unknown): PaymentMethod | null {
+  return m === "cash" || m === "transfer" ? m : null;
+}
+
 export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
   deposit: "Đặt cọc",
   installment: "Thanh toán đợt",
   final: "Tất toán",
   other: "Khác",
+  refund: "Hoàn tiền",
 };
 
 export const EXPENSE_CATEGORY_LABEL: Record<string, string> = {

@@ -337,5 +337,58 @@ ok(
   q("nen", "select count(*) from information_schema.columns where table_name='albums' and column_name='faces_clustered_at'") === "1"
 );
 
+// Tự xác nhận chuyển khoản: MỌI đợt thanh toán phải tự có mã đợt, kể cả đợt do
+// chỗ nào đó chèn mà không biết cột này (mẫu hợp đồng, báo giá chuyển thành HĐ…).
+// Thiếu default là QR của đợt đó không có mã, và tiền về lại phải dò tay.
+ok(
+  "Đợt thanh toán tự có mã đợt (default gen_pay_code)",
+  /gen_pay_code/.test(q("moi", "select column_default from information_schema.columns where table_name='contract_payment_plan' and column_name='pay_code'"))
+);
+ok(
+  "…và mã sinh ra đúng dạng MS + 8 ký tự không dễ nhầm",
+  q("moi", "select public.gen_pay_code() ~ '^MS[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{8}$'") === "t"
+);
+
+// Studio gỡ "Đã thu" ở màn hợp đồng (xoá contract_payments) → giao dịch SePay
+// đã ghi vào khoản đó phải quay về hàng chờ, không được mãi "Đã tự ghi thu".
+// Dựng dữ liệu với session_replication_role = replica để bỏ qua khoá ngoại
+// (database test không có auth.users thật). Phải là lượt psql RIÊNG với lượt
+// xoá: Postgres kiểm lại khoá ngoại khi cập nhật dòng chèn trong CÙNG giao dịch.
+q(
+  "moi",
+  "set session_replication_role = replica; " +
+    "insert into public.studio_bank_transactions (id, owner_id, provider_txn_id, status, payment_id, contract_id) values " +
+    "('00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-000000000001', 'test-go-thu', 'matched', " +
+    "'00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000c1'); " +
+    "insert into public.contract_payments (id, contract_id, amount) values " +
+    "('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000c1', 5000000)"
+);
+ok(
+  "Gỡ khoản thu → giao dịch ngân hàng về lại 'chưa rõ của ai'",
+  // psql in cả thẻ "DELETE 1" trước kết quả select → chỉ lấy dòng cuối.
+  q(
+    "moi",
+    "delete from public.contract_payments where id = '00000000-0000-0000-0000-0000000000b1'; " +
+      "select status || '/' || coalesce(note, '') || '/' || coalesce(payment_id::text, 'null') || '/' || coalesce(contract_id::text, 'null') " +
+      "from public.studio_bank_transactions where id = '00000000-0000-0000-0000-0000000000a1'"
+  ).split("\n").pop() === "unmatched/unlinked/null/null"
+);
+
+// Huỷ hợp đồng ghi khoản hoàn là một lần thu kind='refund', số ÂM. Ràng buộc
+// kind cũ (4 giá trị) mà còn thì mọi lần huỷ có hoàn tiền đều hỏng ở máy chủ.
+ok(
+  "Lần thu nhận loại 'refund' (hoàn tiền khi huỷ hợp đồng)",
+  q(
+    "moi",
+    "set session_replication_role = replica; " +
+      "insert into public.contract_payments (contract_id, amount, kind) values " +
+      "('00000000-0000-0000-0000-0000000000c2', -2500000, 'refund') returning kind"
+  ).split("\n").includes("refund")
+);
+ok(
+  "…và bảng lịch sử dời lịch có sẵn",
+  q("moi", "select count(*) from information_schema.tables where table_name = 'contract_reschedules'") === "1"
+);
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

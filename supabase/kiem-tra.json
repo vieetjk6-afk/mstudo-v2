@@ -11,7 +11,9 @@
     "migrations/album_people.sql",
     "migrations/album_faces.sql",
     "migrations/contract_item_description.sql",
-    "migrations/contract_internal_note.sql"
+    "migrations/contract_internal_note.sql",
+    "migrations/bank_auto_reconcile.sql",
+    "migrations/contract_cancel_reschedule.sql"
   ],
   "muc": [
     {
@@ -649,6 +651,31 @@
       "bang": [],
       "cot": [
         "studio_contracts.internal_note"
+      ]
+    },
+    {
+      "file": "migrations/bank_auto_reconcile.sql",
+      "mo_ta": "Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)",
+      "bang": [
+        "studio_bank_hooks",
+        "studio_bank_transactions"
+      ],
+      "cot": [
+        "contract_payment_plan.pay_code"
+      ]
+    },
+    {
+      "file": "migrations/contract_cancel_reschedule.sql",
+      "mo_ta": "Huỷ hợp đồng (hoàn / giữ cọc, chính sách huỷ) + lịch sử dời lịch",
+      "bang": [
+        "contract_reschedules"
+      ],
+      "cot": [
+        "profiles.cancel_early_days",
+        "profiles.cancel_early_refund_pct",
+        "profiles.cancel_late_refund_pct",
+        "studio_contracts.cancel_reason",
+        "studio_contracts.cancelled_at"
       ]
     }
   ]

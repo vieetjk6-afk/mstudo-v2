@@ -55,7 +55,7 @@ export default async function ReportsPage() {
     applyBranch(
       supabase
         .from("contract_payments")
-        .select("id, amount, kind, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
+        .select("id, amount, kind, method, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
         .eq("contract.owner_id", profile.id),
       scope.selected,
       "contract.branch_id"
