@@ -234,7 +234,7 @@ export function coordsInText(input: string | null | undefined): LatLng | null {
   if (!s) return null;
   const patterns = [
     /@(-?\d+\.\d+),(-?\d+\.\d+)/,        // .../maps/@10.77,106.70,17z
-    /[?&]q=(-?\d+\.\d+),\s*(-?\d+\.\d+)/, // ...maps?q=10.77,106.70
+    /[?&](?:q|query|destination)=(-?\d+\.\d+),\s*(-?\d+\.\d+)/, // ...maps?q= / search/?api=1&query=10.77,106.70
     /!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/,    // ...!3d10.77!4d106.70
     /(^|\s)(-?\d{1,2}\.\d{3,}),\s*(-?\d{1,3}\.\d{3,})(\s|$)/, // "10.7769, 106.7009"
   ];

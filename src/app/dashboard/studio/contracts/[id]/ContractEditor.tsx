@@ -6,7 +6,7 @@ import { fmtDate, fmtDateLunar, fmtDateTime, todayVN } from "@/lib/date";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { intakeViewHref } from "@/lib/notifications";
-import { cleanIntakeLocation } from "@/lib/intake-text";
+import { cleanIntakeLocation, intakeDirections } from "@/lib/intake-text";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -28,6 +28,7 @@ import {
   ChevronDown,
   ClipboardList,
   MapPin,
+  Navigation,
   Tag,
   Pencil,
   Phone,
@@ -3544,9 +3545,16 @@ function IntakeSide({
           </div>
         ))}
         {location && (
-          <a href={location.mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ color: "#0068FF" }}>
-            <MapPin size={12} /> Xem vị trí trên bản đồ
-          </a>
+          <div className="flex flex-wrap gap-x-3">
+            <a href={location.mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ color: "#0068FF" }}>
+              <MapPin size={12} /> Xem vị trí
+            </a>
+            {intakeDirections(location) && (
+              <a href={intakeDirections(location)!} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ color: "#0068FF" }}>
+                <Navigation size={12} /> Chỉ đường
+              </a>
+            )}
+          </div>
         )}
       </div>
     </div>

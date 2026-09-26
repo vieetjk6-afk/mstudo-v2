@@ -187,7 +187,9 @@ export function mapOpenHref(input: string, fallbackAddress = ""): string | null 
   }
   const target = parseMapInput(raw) ?? parseMapInput(fallbackAddress);
   if (!target) return null;
-  if (target.kind === "coords") return `https://www.google.com/maps?q=${target.lat},${target.lng}`;
-  if (target.kind === "query") return `https://www.google.com/maps?q=${encodeURIComponent(target.q)}`;
+  // Dạng Maps URLs (`search/?api=1`) — dạng `maps?q=` bị app Google Maps trên
+  // iPhone từ chối ("Liên kết không được hỗ trợ").
+  if (target.kind === "coords") return `https://www.google.com/maps/search/?api=1&query=${target.lat},${target.lng}`;
+  if (target.kind === "query") return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(target.q)}`;
   return null;
 }
