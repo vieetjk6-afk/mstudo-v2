@@ -239,16 +239,18 @@ async function startRecorder(page, fmt, dir) {
     resume() { offset += now() - pausedAt; paused = false; },
     async stop() {
       await cdp.send("Page.stopScreencast").catch(() => {});
-      return frames;
+      // Màn hình đứng yên thì screencast không gửi khung mới — khung cuối phải
+      // kéo tới đúng lúc dừng quay, không thì thẻ kết thúc chỉ lóe lên 1 giây.
+      return { frames, end: now() - offset };
     },
   };
 }
 
-async function encode(frames, out, [w, h]) {
+async function encode({ frames, end }, out, [w, h]) {
   const list = join(frames[0].file, "..", "list.txt");
   let txt = "";
   for (let i = 0; i < frames.length; i++) {
-    const d = i < frames.length - 1 ? Math.max(0.001, frames[i + 1].t - frames[i].t) : 1.0;
+    const d = Math.max(0.001, (i < frames.length - 1 ? frames[i + 1].t : end) - frames[i].t);
     txt += `file '${frames[i].file}'\nduration ${d.toFixed(4)}\n`;
   }
   txt += `file '${frames[frames.length - 1].file}'\n`;
@@ -546,12 +548,13 @@ async function record(name, fmt) {
   await A.card(CARD.outro);
   await A.wait(4200);
 
-  const frames = await rec.stop();
+  const shot = await rec.stop();
   await browser.close();
   const out = join(outDir, `hop-dong-${name}.mp4`);
-  await encode(frames, out, fmt.out);
+  await encode(shot, out, fmt.out);
   rmSync(tmp, { recursive: true, force: true });
-  const secs = frames.length ? (frames[frames.length - 1].t - frames[0].t + 1).toFixed(1) : "0";
+  const { frames } = shot;
+  const secs = frames.length ? (shot.end - frames[0].t).toFixed(1) : "0";
   console.log(`Đã xuất ${out} · ${frames.length} khung · ~${secs}s`);
 }
 
