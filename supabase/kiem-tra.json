@@ -16,7 +16,8 @@
     "migrations/contract_cancel_reschedule.sql",
     "migrations/contract_addenda.sql",
     "migrations/studio_vouchers.sql",
-    "migrations/studio_audit_log.sql"
+    "migrations/studio_audit_log.sql",
+    "migrations/contract_crew_milestone.sql"
   ],
   "muc": [
     {
@@ -706,6 +707,14 @@
         "studio_audit_log"
       ],
       "cot": []
+    },
+    {
+      "file": "migrations/contract_crew_milestone.sql",
+      "mo_ta": "Phân công thợ theo mốc thời gian của hợp đồng (chạy SAU crew_profile_show)",
+      "bang": [],
+      "cot": [
+        "contract_crew.event_id"
+      ]
     }
   ]
 }

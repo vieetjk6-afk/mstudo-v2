@@ -84,6 +84,7 @@ const ORDER = [
   ["migrations/contract_addenda.sql", "Khoá giá sau khi khách ký + phụ lục hợp đồng"],
   ["migrations/studio_vouchers.sql", "Voucher / thẻ quà tặng của studio (chạy SAU contract_cancel_reschedule)"],
   ["migrations/studio_audit_log.sql", "Nhật ký thao tác tiền & hợp đồng"],
+  ["migrations/contract_crew_milestone.sql", "Phân công thợ theo mốc thời gian của hợp đồng (chạy SAU crew_profile_show)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];
@@ -122,6 +123,7 @@ const MOI = [
   "migrations/contract_addenda.sql",
   "migrations/studio_vouchers.sql",
   "migrations/studio_audit_log.sql",
+  "migrations/contract_crew_milestone.sql",
 ];
 
 /**
