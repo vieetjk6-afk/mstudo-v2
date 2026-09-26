@@ -31,6 +31,7 @@ import GalleryFaceDemo from "./GalleryFaceDemo";
 import LuoiAnhDemo from "./LuoiAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
+import { VideoHangMucDemo, VideoPhuLucDemo } from "./VideoHopDongDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import * as f from "./fixtures";
 
@@ -424,6 +425,15 @@ export const SCREENS: Record<
       </div>
     ),
     bare: true,
+  },
+  // Hai màn cho video giới thiệu hợp đồng — scripts/quay-video-hop-dong.mjs.
+  "video-hop-dong-hang-muc": {
+    title: "Video hợp đồng · hạng mục (nháp, có bảng giá + mốc lịch)",
+    render: () => <VideoHangMucDemo />,
+  },
+  "video-hop-dong-phu-luc": {
+    title: "Video hợp đồng · phụ lục (khách đã ký)",
+    render: () => <VideoPhuLucDemo />,
   },
   "bang-mau": {
     title: "Bảng màu — ngoài shell / shell sáng / shell tối",
