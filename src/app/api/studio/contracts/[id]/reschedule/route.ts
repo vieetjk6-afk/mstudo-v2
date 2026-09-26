@@ -169,7 +169,17 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   }
 
   // 5) Lịch của thợ đi theo ngày mới.
-  const crew = await contractCrew(db, contract.id);
+  // Thợ gán theo MỐC khác (đãi trước, thử đồ…) giữ nguyên ngày của mốc — dời
+  // buổi chính không kéo họ theo, cũng không báo họ. Chưa có cột event_id thì
+  // coi như không ai gán theo mốc.
+  const { data: onMs } = await db
+    .from("contract_crew")
+    .select("id")
+    .eq("contract_id", contract.id)
+    .not("event_id", "is", null)
+    .then((r) => r, () => ({ data: null }));
+  const onMilestone = new Set(((onMs ?? []) as { id: string }[]).map((r) => r.id));
+  const crew = (await contractCrew(db, contract.id)).filter((c) => !onMilestone.has(c.id));
   if (crew.length && oldDate !== newDate) {
     const { data: moved } = await db
       .from("crew_unavailable")

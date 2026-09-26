@@ -300,6 +300,29 @@ export async function POST(req: Request) {
     mine = (all ?? []).filter((r) => digits(r.phone) === phone);
   }
 
+  // Việc gán theo MỐC thời gian (đãi trước, thử đồ…): thợ thấy ngày/giờ của mốc
+  // và tên "<tên mốc> · <tên hợp đồng>" thay vì buổi chính. Truy vấn riêng và
+  // nuốt lỗi để cổng thợ vẫn chạy khi chưa chạy contract_crew_milestone.sql.
+  if (mine.length) {
+    const { data: evs, error: evErr } = await db
+      .from("contract_crew")
+      .select("id, event:studio_events(title, event_date, event_time)")
+      .in("id", mine.map((r) => r.id as string))
+      .not("event_id", "is", null);
+    if (!evErr && evs?.length) {
+      type Ev = { title: string; event_date: string; event_time: string | null };
+      const byId = new Map(
+        (evs as unknown as { id: string; event: Ev | null }[]).filter((e) => e.event).map((e) => [e.id, e.event as Ev]),
+      );
+      mine = mine.map((r) => {
+        const ev = byId.get(r.id as string);
+        const c = r.contract as unknown as { title: string; event_date: string | null; event_time: string | null } | null;
+        if (!ev || !c) return r;
+        return { ...r, contract: { ...c, title: `${ev.title} · ${c.title}`, event_date: ev.event_date, event_time: ev.event_time } } as unknown as typeof r;
+      });
+    }
+  }
+
   const [{ data: busy }, { data: shiftPlan }] = await Promise.all([
     // select("*") để cổng thợ vẫn chạy trước khi migration crew_schedule.sql
     // được chạy — xem ghi chú ở dashboard/studio/team/page.tsx.

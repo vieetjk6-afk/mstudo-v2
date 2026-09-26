@@ -166,6 +166,8 @@ type CrewRow = {
   side?: string;
   start?: string;
   end?: string;
+  /** Mốc thời gian (studio_events.id) người này làm; trống = buổi chính. */
+  eventId?: string;
 };
 
 /** Một nguồn duy nhất để đổi dòng contract_crew → CrewRow. */
@@ -173,6 +175,7 @@ function toCrewRow(c: {
   id?: string; name: string; phone: string | null; role: CrewRole; salary: number;
   note: string | null; status?: string; paid?: boolean;
   task?: string | null; side?: string | null; start_time?: string | null; end_time?: string | null;
+  event_id?: string | null;
 }): CrewRow {
   return {
     id: c.id,
@@ -187,6 +190,7 @@ function toCrewRow(c: {
     side: c.side ?? "",
     start: (c.start_time ?? "").slice(0, 5),
     end: (c.end_time ?? "").slice(0, 5),
+    eventId: c.event_id ?? "",
   };
 }
 
@@ -1070,6 +1074,12 @@ export default function ContractEditor({
     await syncMilestone(id, "delete");
     await supabase.from("studio_events").delete().eq("id", id);
     setMilestones((p) => p.filter((m) => m.id !== id));
+    // DB tự đưa phân công về buổi chính (on delete set null), nhưng mốc trên
+    // lịch thợ chỉ đổi ngày khi lưu lại nhân sự — nhắc studio bấm Lưu.
+    if (crew.some((c) => c.eventId === id)) {
+      setCrew((p) => p.map((c) => (c.eventId === id ? { ...c, eventId: "" } : c)));
+      toast("Thợ của mốc này đã chuyển về buổi chính — bấm “Lưu nhân sự & lương” để cập nhật lịch thợ.");
+    }
   }
 
   function syncMilestone(id: string, action: "upsert" | "delete") {
@@ -2047,6 +2057,11 @@ export default function ContractEditor({
                         <div>
                           <p className="text-sm font-medium">{m.title}</p>
                           <p className="text-[11px]" style={{ color: "var(--text3)" }}>{fmtDate(m.event_date)}{m.event_time ? ` · ${m.event_time}` : ""}</p>
+                          {crew.some((c) => c.id && c.eventId === m.id) && (
+                            <p className="text-[11px]" style={{ color: "var(--text2)" }}>
+                              Thợ: {crew.filter((c) => c.id && c.eventId === m.id).map((c) => c.name || c.phone).join(", ")}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-3">
                           <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: f.location }} />
@@ -2459,6 +2474,17 @@ export default function ContractEditor({
                             </select>
                             <MoneyInput className="input text-right sm:col-span-2" placeholder="Lương" value={c.salary} onChange={(n) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, salary: n } : x)))} />
                           </div>
+                          {/* Mốc thời gian: gán người này vào buổi chính hay một
+                              mốc (đãi trước, thử đồ…). Lịch thợ lấy ngày/giờ của
+                              mốc và ghi "<tên mốc> · <tên hợp đồng>". */}
+                          {milestones.length > 0 && (
+                          <select className="input mt-2 w-full" value={c.eventId ?? ""} onChange={(e) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, eventId: e.target.value } : x)))} aria-label="Mốc thời gian">
+                            <option value="">Buổi chính{f.event_date ? ` · ${fmtDate(f.event_date)}${f.event_time ? ` ${f.event_time}` : ""}` : ""}</option>
+                            {milestones.map((m) => (
+                              <option key={m.id} value={m.id}>{m.title} · {fmtDate(m.event_date)}{m.event_time ? ` ${m.event_time}` : ""}</option>
+                            ))}
+                          </select>
+                          )}
                           <div className="mt-2 grid gap-2 sm:grid-cols-12">
                             <select className="input sm:col-span-3" value={c.task ?? ""} onChange={(e) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, task: e.target.value } : x)))} aria-label="Chụp hay quay">
                               <option value="">— Chụp/Quay —</option>
@@ -2472,7 +2498,7 @@ export default function ContractEditor({
                             <TimeInput className="input sm:col-span-3" value={c.end ?? ""} onChange={(v) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, end: v } : x)))} ariaLabel="Đến giờ" placeholder="Đến 17:00" />
                           </div>
                           <input className="input mt-2" placeholder="Yêu cầu riêng gửi cho người này (vd: mang lens 35mm, có mặt 7:30)…" value={c.note} onChange={(e) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, note: e.target.value } : x)))} />
-                          {c.phone && conflictFor(c.phone) && (
+                          {c.phone && !c.eventId && conflictFor(c.phone) && (
                             <p className="mt-2 rounded-lg px-2.5 py-1.5 text-[11px]" style={{ background: "rgba(199,123,123,0.12)", color: "var(--s-red)" }}>
                               ⚠ {conflictFor(c.phone)} (ngày {f.event_date})
                             </p>

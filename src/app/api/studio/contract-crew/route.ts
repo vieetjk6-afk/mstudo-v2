@@ -32,6 +32,8 @@ type CrewInput = {
   side?: string;
   start?: string;
   end?: string;
+  /** Mốc thời gian (studio_events.id) của hợp đồng; trống = buổi chính. */
+  eventId?: string;
 };
 
 /** Hợp đồng này có thuộc studio đang đăng nhập không. */
@@ -81,11 +83,18 @@ export async function GET(req: Request) {
       .eq("date", date)
       .in("phone", phones)
       .eq("owner_id", profile.id),
-    db
-      .from("contract_crew")
-      .select("phone, contract:studio_contracts!inner(id, owner_id, title, event_date, status)")
-      .eq("contract.owner_id", profile.id)
-      .eq("contract.event_date", date),
+    (async () => {
+      // Thợ gán theo MỐC (event_id) không làm ở ngày buổi chính — mốc lịch của
+      // họ đã nằm trong crew_unavailable ở trên. Chưa có cột thì lùi lối cũ.
+      const q = (cols: string) =>
+        db
+          .from("contract_crew")
+          .select(cols)
+          .eq("contract.owner_id", profile.id)
+          .eq("contract.event_date", date);
+      const r = await q("phone, event_id, contract:studio_contracts!inner(id, owner_id, title, event_date, status)");
+      return r.error ? q("phone, contract:studio_contracts!inner(id, owner_id, title, event_date, status)") : r;
+    })(),
   ]);
 
   const busy: Record<string, string[]> = {};
@@ -94,9 +103,9 @@ export async function GET(req: Request) {
     const when = m.start_time && m.end_time ? `${m.start_time.slice(0, 5)}–${m.end_time.slice(0, 5)}` : "cả ngày";
     (busy[p] ||= []).push(`${when}${m.title ? ` · ${m.title}` : m.note ? ` · ${m.note}` : ""}`);
   }
-  type A = { phone: string | null; contract: { id: string; title: string; status: string } | null };
+  type A = { phone: string | null; event_id?: string | null; contract: { id: string; title: string; status: string } | null };
   for (const a of (assigns ?? []) as unknown as A[]) {
-    if (!a.contract || a.contract.status === "cancelled") continue;
+    if (!a.contract || a.contract.status === "cancelled" || a.event_id) continue;
     if (exclude && a.contract.id === exclude) continue; // hợp đồng đang mở thì không tự báo trùng chính nó
     const p = digits(a.phone);
     if (p) (busy[p] ||= []).push(`Hợp đồng “${a.contract.title}”`);
@@ -125,6 +134,25 @@ export async function POST(req: Request) {
   const { data: me } = await db.from("profiles").select("crew_token").eq("id", ownerId).maybeSingle();
   const portal = crewPortalUrl(me?.crew_token as string | null);
 
+  // Các mốc thời gian của CHÍNH hợp đồng này — chỉ nhận eventId nằm trong đây,
+  // để không ai gán thợ vào mốc của hợp đồng khác bằng cách sửa request.
+  const { data: evRows } = await db
+    .from("studio_events")
+    .select("id, title, event_date, event_time")
+    .eq("contract_id", contract.id);
+  const events = new Map(
+    ((evRows ?? []) as { id: string; title: string; event_date: string; event_time: string | null }[]).map((e) => [e.id, e]),
+  );
+
+  const { error: colErr } = await db.from("contract_crew").select("event_id").limit(1);
+  const hasEventCol = !colErr;
+  if (!hasEventCol && (body.crew ?? []).some((c) => c.eventId)) {
+    return NextResponse.json(
+      { error: "Chưa gán được mốc thời gian: chạy supabase/migrations/contract_crew_milestone.sql rồi Reload schema cache." },
+      { status: 500 },
+    );
+  }
+
   const notified: string[] = [];
   // Chẩn đoán giờ: ghi lại giá trị THÔ client gửi, giá trị sau chuẩn hoá, và giá
   // trị ĐỌC LẠI từ DB. Ba con số đó chỉ đúng một thủ phạm, khỏi đoán tiếp.
@@ -143,6 +171,8 @@ export async function POST(req: Request) {
       }
     }
 
+    const ev = c.eventId ? events.get(c.eventId) ?? null : null;
+
     const row = {
       name,
       phone: phone || null,
@@ -154,6 +184,9 @@ export async function POST(req: Request) {
       start_time: normTime(c.start),
       end_time: normTime(c.end),
       position: idx,
+      // Chưa chạy migration contract_crew_milestone.sql thì bỏ cột này đi —
+      // vẫn lưu buổi chính như cũ thay vì hỏng cả lần lưu.
+      ...(hasEventCol ? { event_id: ev?.id ?? null } : {}),
     };
 
     // Trước đây chỗ này âm thầm lùi về bộ cột cũ khi ghi hỏng, nên thiếu cột
@@ -212,13 +245,16 @@ export async function POST(req: Request) {
     // ── Ghi mốc vào lịch của thợ ─────────────────────────────────────────
     // Nối bằng contract_crew_id: mỗi phân công đúng MỘT mốc, sửa thì cập nhật
     // tại chỗ chứ không đẻ thêm; gỡ thợ khỏi hợp đồng thì cascade tự xoá.
-    if (phone && contract.event_date) {
-      const label = showLabel({ title: contract.title, task: c.task, side: c.side });
-      const start = row.start_time ?? normTime(contract.event_time);
+    // Gán vào một mốc thì lịch thợ lấy NGÀY/GIỜ của mốc, và tên mốc đứng trước
+    // tên hợp đồng: "Đãi trước · HĐ PSC 20/10 · Chụp".
+    const date = ev?.event_date ?? contract.event_date;
+    if (phone && date) {
+      const label = showLabel({ title: ev ? `${ev.title} · ${contract.title}` : contract.title, task: c.task, side: c.side });
+      const start = row.start_time ?? normTime(ev ? ev.event_time : contract.event_time);
       const end = row.end_time;
       const entry = {
         phone: digits(phone),
-        date: contract.event_date,
+        date,
         start_time: start,
         end_time: end,
         overnight: !!(start && end && end <= start),
@@ -242,7 +278,7 @@ export async function POST(req: Request) {
       // autoNotify tự bỏ qua nếu studio chưa kết nối Zalo hoặc chưa bật mốc
       // này, nên ở đây không cần kiểm tra gì thêm.
       if (isNew) {
-        const when = `${fmtDate(contract.event_date)}${start ? ` lúc ${start}` : ""}`;
+        const when = `${fmtDate(date)}${start ? ` lúc ${start}` : ""}`;
         const r = await autoNotify({
           ownerId,
           event: "crew_assigned",
@@ -253,7 +289,7 @@ export async function POST(req: Request) {
           templateData: {
             name: name || "",
             show: label,
-            date: fmtDate(contract.event_date),
+            date: fmtDate(date),
             time: start ?? "",
             location: contract.location ?? "",
             link: portal,
