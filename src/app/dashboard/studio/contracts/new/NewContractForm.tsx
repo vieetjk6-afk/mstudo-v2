@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DateInput from "@/components/DateInput";
 import TimeInput from "@/components/TimeInput";
 import MoneyInput from "@/components/MoneyInput";
@@ -25,6 +25,10 @@ import {
   Landmark,
   RotateCcw,
   ReceiptText,
+  Sparkles,
+  History,
+  CalendarX2,
+  Lock,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -52,6 +56,10 @@ import { fmtDate, fmtDow } from "@/lib/date";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { noAccent } from "@/lib/studio-nav";
 import { makeListLabel } from "@/lib/pricelist-label";
+import { draftTotal, missingFields, type QuickDraft } from "@/lib/contract-quick";
+import QuickContractBox from "./QuickContractBox";
+import { crewClashes, type DayContract, type DayCrewRow } from "@/lib/contract-conflicts";
+import { isMissingColumn } from "@/lib/missing-column";
 
 export type TemplateOption = {
   id: string;
@@ -109,8 +117,13 @@ export default function NewContractForm({
   recentClients = [],
   bank,
   listLabels = {},
+  initialQuickText = "",
+  quickSourceNote,
 }: {
   ownerId: string;
+  /** Đoạn chữ điền sẵn vào ô Tạo nhanh — vd đoạn chat khi mở từ Hộp thư. */
+  initialQuickText?: string;
+  quickSourceNote?: string;
   assignTo: string | null;
   /**
    * Chi nhánh đang xem trên thanh trên cùng. Hợp đồng mới THỪA HƯỞNG cơ sở đó
@@ -172,6 +185,14 @@ export default function NewContractForm({
   const [addChecklist, setAddChecklist] = useState(true);
   const [makePhoto, setMakePhoto] = useState(true);
   const [makeVideo, setMakeVideo] = useState(false);
+
+  /* Yêu cầu riêng của khách (ô Tạo nhanh điền sẵn) — lưu vào brief_note, tức mục
+     Brief KHÁCH XEM ĐƯỢC ở cổng hợp đồng, nên nhãn ở bước Kiểm tra nói rõ điều đó. */
+  const [briefNote, setBriefNote] = useState("");
+  /* Kết quả lần "Tạo nhanh" gần nhất — hiện dải tóm tắt ở bước Kiểm tra. */
+  /* Ghi chú NỘI BỘ — cột internal_note, khách không bao giờ thấy. */
+  const [internalNote, setInternalNote] = useState("");
+  const [quick, setQuick] = useState<{ source: "ai" | "rules"; missing: string[]; filled: number } | null>(null);
 
   const [saving, setSaving] = useState<"draft" | "send" | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -236,6 +257,98 @@ export default function NewContractForm({
   );
 
   const phoneOk = /^\d{10}$/.test(clientPhone.replace(/\D/g, ""));
+  const phoneDigits = clientPhone.replace(/\D/g, "");
+
+  /* ── Khách cũ ────────────────────────────────────────────────────────────
+     Danh sách "khách gần đây" chỉ có 8 người; gõ (hoặc Tạo nhanh điền) một SĐT
+     đã từng ký thì vẫn phải nhận ra, để studio thấy ngay đây là khách quay lại
+     và dùng lại đúng tên đã lưu thay vì sinh thêm một cách viết tên nữa. */
+  const [returning, setReturning] = useState<{ phone: string; count: number; name: string; last: string | null } | null>(null);
+  useEffect(() => {
+    if (!phoneOk) return;
+    let alive = true;
+    const t = setTimeout(async () => {
+      // Chỉ là gợi ý: tra hỏng (mất mạng, RLS) thì im lặng, không chặn form.
+      let data: unknown[] | null = null;
+      try {
+        ({ data } = await createClient()
+          .from("studio_contracts")
+          .select("client_name, event_date, created_at")
+          .eq("owner_id", ownerId)
+          .eq("client_phone", phoneDigits)
+          .neq("status", "cancelled")
+          .order("created_at", { ascending: false })
+          .limit(50));
+      } catch {
+        return;
+      }
+      if (!alive) return;
+      const rows = (data ?? []) as { client_name: string | null; event_date: string | null }[];
+      setReturning(
+        rows.length
+          ? {
+              phone: phoneDigits,
+              count: rows.length,
+              name: rows.find((r) => r.client_name?.trim())?.client_name?.trim() || "",
+              last: rows.map((r) => r.event_date).filter(Boolean).sort().pop() ?? null,
+            }
+          : { phone: phoneDigits, count: 0, name: "", last: null }
+      );
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
+  }, [phoneOk, phoneDigits, ownerId]);
+  const returningHit = returning && returning.phone === phoneDigits && returning.count > 0 ? returning : null;
+  const savedNameDiffers =
+    !!returningHit?.name && noAccent(returningHit.name.trim()) !== noAccent(clientName.trim());
+
+  /* ── Cùng ngày đã có show nào ────────────────────────────────────────────
+     Đọc lại mỗi khi đổi ngày; so thợ trùng giờ tính ở dưới (không cần gọi lại
+     khi chỉ đổi người/giờ). */
+  const [dayInfo, setDayInfo] = useState<{ date: string; contracts: DayContract[]; crew: DayCrewRow[] } | null>(null);
+  useEffect(() => {
+    if (!eventDate) return;
+    let alive = true;
+    (async () => {
+      try {
+        const db = createClient();
+        const { data: cs } = await db
+          .from("studio_contracts")
+          .select("id, code, title, client_name, event_time")
+          .eq("owner_id", ownerId)
+          .eq("event_date", eventDate)
+          .neq("status", "cancelled")
+          .limit(50);
+        const contracts = (cs ?? []) as DayContract[];
+        let crew: DayCrewRow[] = [];
+        if (contracts.length) {
+          const { data: cr } = await db
+            .from("contract_crew")
+            .select("contract_id, name, phone, start_time, end_time")
+            .in("contract_id", contracts.map((c) => c.id));
+          crew = (cr ?? []) as DayCrewRow[];
+        }
+        if (alive) setDayInfo({ date: eventDate, contracts, crew });
+      } catch {
+        /* Cảnh báo trùng lịch là phụ — tra hỏng thì thôi, không chặn tạo hợp đồng. */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [eventDate, ownerId]);
+  const sameDayAll = dayInfo && dayInfo.date === eventDate ? dayInfo.contracts : [];
+  const clashes = useMemo(
+    () =>
+      dayInfo && dayInfo.date === eventDate
+        ? crewClashes(picked.map((c) => ({ name: c.name, phone: c.phone })), dayInfo.contracts, dayInfo.crew, startTime, endTime)
+        : [],
+    [dayInfo, eventDate, picked, startTime, endTime]
+  );
+  // Show cùng ngày đã nêu tên trong cảnh báo thợ thì khỏi liệt kê lại lần nữa.
+  const sameDay = sameDayAll.filter((c) => !clashes.some((x) => x.contract.id === c.id));
 
   /* ── Khách gần đây: lọc không dấu như ô ⌘K ────────────────────────────── */
   const filteredClients = useMemo(() => {
@@ -376,6 +489,83 @@ export default function NewContractForm({
     setPlan(instalments.filter((_, idx) => idx !== i));
   }
 
+  /* ── Tạo nhanh ────────────────────────────────────────────────────────────
+     Ngữ cảnh gửi cho bộ phân tích: đúng những gói/dịch vụ/thợ form đang có —
+     id nào AI trả về cũng phải nằm trong đây. Memo để ô Tạo nhanh không chạy
+     lại bộ đọc quy tắc mỗi lần form re-render. */
+  const quickContext = useMemo(
+    () => ({
+      packages: packages.map((p) => ({ id: p.id, name: p.name, price: p.price, list_key: p.list_key })),
+      services: services.map((s) => ({ id: s.id, name: s.name })),
+      crew: roster.map((r) => ({ id: r.id, name: r.name || r.phone, role: CREW_ROLE_LABEL[r.role] })),
+    }),
+    [packages, services, roster]
+  );
+
+  /** Đổ bản nháp vào mọi bước rồi nhảy tới bước Kiểm tra. Trường nào bản nháp
+      không có thì GIỮ nguyên thứ studio đã nhập tay, không xoá trắng. */
+  function applyQuick(d: QuickDraft, source: "ai" | "rules") {
+    const pkgIds = new Set(packages.map((p) => p.id));
+    let filled = 0;
+    const hit = () => (filled += 1);
+
+    if (d.serviceId && services.some((x) => x.id === d.serviceId)) {
+      setServiceId(d.serviceId);
+      setShowAllLists(false);
+      hit();
+    }
+    if (d.shootType) setShootType(d.shootType);
+    if (d.clientName) (setClientName(d.clientName), hit());
+    if (d.clientPhone) (setClientPhone(d.clientPhone), hit());
+
+    const main = d.mainPkgId && pkgIds.has(d.mainPkgId) ? d.mainPkgId : "";
+    if (main || d.extraIds?.length || d.customLines?.length) {
+      setMainPkgId(main);
+      setExtraIds((d.extraIds ?? []).filter((id) => pkgIds.has(id) && id !== main));
+      setPkgPrice(main && d.mainPrice !== undefined ? { [main]: Math.max(0, d.mainPrice) } : {});
+      setCustomLines(d.customLines ?? []);
+      hit();
+    }
+    // Gói AI chọn có thể thuộc bảng giá của dịch vụ khác → mở "xem tất cả" để
+    // studio luôn thấy gói vừa chọn khi quay lại bước Gói dịch vụ. (Không lọc
+    // theo serviceListKeys ở đây được: nó còn tính theo dịch vụ CŨ.)
+    if (main || d.extraIds?.length) setShowAllLists(true);
+
+    if (d.eventDate) (setEventDate(d.eventDate), hit());
+    if (d.startTime) setStartTime(d.startTime);
+    if (d.endTime) setEndTime(d.endTime);
+    if (d.location) (setLocation(d.location), hit());
+    if (d.crewIds?.length) {
+      setPicked(
+        roster
+          .filter((r) => d.crewIds!.includes(r.id))
+          .map((r) => ({ id: r.id, name: r.name, phone: r.phone, role: r.role, salary: 0 }))
+      );
+      hit();
+    }
+
+    // Cọc: có số cọc thì dựng kế hoạch 2 đợt theo tổng MỚI của bản nháp; không
+    // có thì trả về kế hoạch mặc định (cọc làm tròn theo chính sách).
+    const t = draftTotal(d, { ...quickContext, today: "" });
+    if (d.deposit && d.deposit > 0 && t > 0) {
+      const dep = Math.min(t, d.deposit);
+      const next: Instalment[] = [{ label: "Cọc giữ lịch", amount: dep, due: d.depositDue ?? "" }];
+      if (t - dep > 0) next.push({ label: "Thanh toán khi giao sản phẩm", amount: t - dep, due: "" });
+      setPlan(next);
+      hit();
+    } else {
+      setPlan(null);
+    }
+    if (d.title) setTitle(d.title);
+    if (d.note) setBriefNote(d.note);
+    if (d.internalNote) setInternalNote(d.internalNote);
+    if (d.shootType === "video" || d.shootType === "psc") setMakeVideo(true);
+
+    setQuick({ source, missing: missingFields(d), filled });
+    setErr(null);
+    setStep(STEPS.length - 1);
+  }
+
   /** Bước hiện tại đã đủ dữ liệu để đi tiếp chưa. */
   const canNext = step === 1 ? phoneOk : step === 2 ? lines.length > 0 : true;
   const autoTitle = selectedService
@@ -400,28 +590,36 @@ export default function NewContractForm({
     const code = await nextContractCode(supabase, ownerId);
     // Điều khoản cố định theo dịch vụ; nếu không có thì lấy mẫu / bộ mặc định.
     const note = selectedService?.clauses || template?.note || fullClauseText();
-    const { data, error } = await supabase
-      .from("studio_contracts")
-      .insert({
-        owner_id: ownerId,
-        code,
-        title: title.trim() || autoTitle,
-        client_name: clientName.trim() || null,
-        client_phone: clientPhone.replace(/\D/g, "") || null,
-        shoot_type: shootType,
-        ...(serviceId ? { service_id: serviceId } : {}),
-        event_date: eventDate || null,
-        event_time: startTime || null,
-        location: location.trim() || null,
-        note,
-        client_token: token,
-        drive_make_photo: makePhoto,
-        drive_make_video: makeVideo,
-        ...(assignTo ? { assigned_to: assignTo } : {}),
-        ...(branchId ? { branch_id: branchId } : {}),
-      })
-      .select("id")
-      .single();
+    const row: Record<string, unknown> = {
+      owner_id: ownerId,
+      code,
+      title: title.trim() || autoTitle,
+      client_name: clientName.trim() || null,
+      client_phone: clientPhone.replace(/\D/g, "") || null,
+      shoot_type: shootType,
+      ...(serviceId ? { service_id: serviceId } : {}),
+      event_date: eventDate || null,
+      event_time: startTime || null,
+      location: location.trim() || null,
+      note,
+      client_token: token,
+      drive_make_photo: makePhoto,
+      drive_make_video: makeVideo,
+      ...(briefNote.trim() ? { brief_note: briefNote.trim() } : {}),
+      ...(internalNote.trim() ? { internal_note: internalNote.trim() } : {}),
+      ...(assignTo ? { assigned_to: assignTo } : {}),
+      ...(branchId ? { branch_id: branchId } : {}),
+    };
+    let { data, error } = await supabase.from("studio_contracts").insert(row).select("id").single();
+    // Database chưa chạy migration contract_internal_note.sql → lưu hợp đồng
+    // không kèm ghi chú nội bộ, rồi BÁO ra (ở danh sách "không lưu được" bên dưới)
+    // thay vì chặn cả việc tạo hợp đồng.
+    let noteLost = false;
+    if (error && row.internal_note !== undefined && isMissingColumn(error, "internal_note")) {
+      delete row.internal_note;
+      noteLost = true;
+      ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
+    }
     if (error || !data) {
       setSaving(null);
       setErr(error?.message || "Không tạo được hợp đồng.");
@@ -486,8 +684,9 @@ export default function NewContractForm({
     // Tên bảng theo đúng thứ tự trong Promise.all ở trên.
     const failed = ["Hạng mục", "Nhân sự", "Đợt thanh toán", "Checklist"]
       .filter((_, i) => saved[i]?.error);
+    if (noteLost) failed.push("Ghi chú nội bộ (chưa chạy migration contract_internal_note.sql)");
     if (failed.length) {
-      const first = saved.find((r) => r?.error)?.error;
+      const first = saved.find((r) => r?.error)?.error ?? null;
       setSaving(null);
       setErr(
         `Hợp đồng đã tạo nhưng KHÔNG lưu được: ${failed.join(", ")}. ` +
@@ -539,6 +738,71 @@ export default function NewContractForm({
      màn, ngay trên thanh điều hướng — ngón cái với tới được mà không phải cuộn
      hết một bước dài. Trước đây thanh này nằm cuối trang nên mỗi lần sang bước
      mới đều phải cuộn xuống đáy tìm nút. */
+  /* Khách cũ: hiện ở bước Khách hàng VÀ bước Kiểm tra (Tạo nhanh nhảy thẳng
+     tới Kiểm tra nên không đi qua bước Khách hàng). */
+  const returningBanner = returningHit ? (
+    <div className="mt-3 flex flex-wrap items-center gap-2.5 rounded-[11px] px-3.5 py-2.5" style={{ background: "var(--blS)" }}>
+      <History size={17} style={{ flex: "none", color: "var(--bl)" }} />
+      <p className="min-w-0 flex-1 text-[12.5px]" style={{ color: "var(--tx2)" }}>
+        <b style={{ color: "var(--tx)" }}>Khách cũ</b> — đã có {returningHit.count} hợp đồng
+        {returningHit.name ? <> với tên <b>{returningHit.name}</b></> : null}
+        {returningHit.last ? <>, show gần nhất {fmtDate(returningHit.last)}</> : null}.
+      </p>
+      {savedNameDiffers && (
+        <button
+          type="button"
+          onClick={() => setClientName(returningHit.name)}
+          className="flex-none rounded-[8px] px-2.5 py-1.5 text-[12px] font-semibold"
+          style={{ background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--bl)" }}
+        >
+          Dùng tên đã lưu
+        </button>
+      )}
+    </div>
+  ) : null;
+
+  /* Trùng lịch: thợ trùng giờ là cảnh báo đỏ; chỉ "cùng ngày có show khác" là
+     thông tin vàng. Không chặn tạo — studio quyết. */
+  const conflictBanner =
+    clashes.length > 0 || sameDay.length > 0 ? (
+      <div
+        className="mb-4 flex gap-2.5 rounded-[11px] px-3.5 py-3"
+        style={{ background: clashes.some((c) => c.overlap) ? "var(--rdS)" : "var(--amS)" }}
+      >
+        <CalendarX2 size={18} style={{ flex: "none", marginTop: 1, color: clashes.some((c) => c.overlap) ? "var(--rd)" : "var(--am)" }} />
+        <div className="min-w-0 text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)" }}>
+          {clashes.length > 0 ? (
+            <>
+              <p className="font-bold" style={{ color: "var(--tx)" }}>Nhân sự có thể trùng lịch</p>
+              <ul className="mt-0.5">
+                {clashes.map((c, i) => (
+                  <li key={i}>
+                    <b>{c.crewName}</b> {c.overlap ? "đang đi" : "cũng có mặt ở"}{" "}
+                    <Link href={`/dashboard/studio/contracts/${c.contract.id}`} className="font-semibold underline" target="_blank">
+                      {c.contract.code || c.contract.title || "hợp đồng khác"}
+                    </Link>
+                    {c.contract.client_name ? ` (${c.contract.client_name})` : ""} · {c.otherTime}
+                    {!c.overlap && " — chưa đủ giờ để so, kiểm tra lại"}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+          {sameDay.length > 0 && (
+            <p className={clashes.length ? "mt-1.5" : ""}>
+              {clashes.length ? null : <b style={{ color: "var(--tx)" }}>Ngày này đã có show khác. </b>}
+              {sameDay.length} hợp đồng {clashes.length ? "khác " : ""}cùng ngày:{" "}
+              {sameDay
+                .slice(0, 4)
+                .map((c) => [c.code || c.title, c.client_name, c.event_time?.slice(0, 5)].filter(Boolean).join(" · "))
+                .join("; ")}
+              {sameDay.length > 4 ? `; +${sameDay.length - 4}` : ""}
+            </p>
+          )}
+        </div>
+      </div>
+    ) : null;
+
   const actionBar = (
     <div className="flex flex-wrap items-center gap-2">
       <Link
@@ -651,6 +915,16 @@ export default function NewContractForm({
         <div className={`${panel} hidden px-3 py-2.5 sm:block`} style={panelStyle}>{actionBar}</div>
       </div>
 
+      {/* ── Tạo nhanh: chỉ ở bước đầu — đã đi vào từng bước thì là nhập tay. ── */}
+      {step === 0 && (
+        <QuickContractBox
+          context={quickContext}
+          onApply={applyQuick}
+          initialText={initialQuickText}
+          sourceNote={quickSourceNote}
+        />
+      )}
+
       {/* ── Nội dung bước ──────────────────────────────────────────────────── */}
       <div className={`${panel} px-5 py-5`} style={panelStyle}>
         <h3 className="text-[16px] font-bold">{STEPS[step].title}</h3>
@@ -735,6 +1009,7 @@ export default function NewContractForm({
                 SĐT phải đủ 10 số — khách dùng chính số này làm mật khẩu mở cổng hợp đồng.
               </p>
             )}
+            {returningBanner}
 
             {recentClients.length > 0 && (
               <>
@@ -1104,6 +1379,7 @@ export default function NewContractForm({
                 {picked.length} người · tiền công <b className="tnum" style={{ color: "var(--tx2)" }}>{vnd(payroll)}</b>
               </p>
             )}
+            {conflictBanner && <div className="mt-3 [&>div]:mb-0">{conflictBanner}</div>}
           </div>
         )}
 
@@ -1196,6 +1472,33 @@ export default function NewContractForm({
         {/* ── Bước 6 · Kiểm tra lần cuối ──────────────────────────────────── */}
         {step === 5 && (
           <div>
+            {quick && (
+              <div
+                className="mb-4 flex gap-2.5 rounded-[11px] px-3.5 py-3"
+                style={{ background: quick.missing.length ? "var(--amS)" : "var(--gnS)" }}
+              >
+                <Sparkles size={18} style={{ flex: "none", marginTop: 1, color: quick.missing.length ? "var(--am)" : "var(--gn)" }} />
+                <div className="min-w-0 text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)" }}>
+                  <p className="font-bold" style={{ color: "var(--tx)" }}>
+                    {quick.source === "ai" ? "AI đã điền sẵn hợp đồng" : "Đã điền sẵn hợp đồng"} — kiểm tra kỹ trước khi gửi khách.
+                  </p>
+                  {quick.missing.length > 0 ? (
+                    <p>
+                      Còn thiếu: <b>{quick.missing.join(", ")}</b>. Bấm vào dòng tương ứng bên dưới để bổ sung.
+                    </p>
+                  ) : (
+                    <p>Đủ các thông tin chính. Bấm vào dòng bất kỳ để sửa.</p>
+                  )}
+                  {quick.source === "rules" && (
+                    <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                      Đang dùng bộ đọc cơ bản (chưa cấu hình AI hoặc AI không phản hồi) — câu chữ càng rõ nhãn “Tên: …, SĐT: …” càng chính xác.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            {conflictBanner}
+            {returningHit && <div className="-mt-1 mb-4">{returningBanner}</div>}
             <div className="mb-4 overflow-hidden rounded-[12px]" style={{ border: "1px solid var(--bd)" }}>
               {([
                 [1, "Khách hàng", [clientName || "Chưa có tên", clientPhone].filter(Boolean).join(" · ")],
@@ -1281,6 +1584,35 @@ export default function NewContractForm({
                   placeholder={autoTitle}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-brief">Yêu cầu riêng của khách</label>
+                <textarea
+                  id="nc-brief"
+                  rows={2}
+                  className={inputCls}
+                  style={{ ...inputStyle, background: "var(--sf)" }}
+                  placeholder="Không bắt buộc — VD: cô dâu muốn tông ảnh nhẹ, có 2 bé đi cùng"
+                  value={briefNote}
+                  onChange={(e) => setBriefNote(e.target.value)}
+                />
+                <p className="mt-1 text-[11px]" style={{ color: "var(--tx3)" }}>
+                  Lưu vào mục Brief — <b>khách xem được</b> trong cổng hợp đồng. Nhận xét nội bộ ghi ở ô dưới.
+                </p>
+              </div>
+              <div className="sm:col-span-2">
+                <label className={`${fieldLabel} flex items-center gap-1`} style={fieldLabelStyle} htmlFor="nc-internal">
+                  <Lock size={12} /> Ghi chú nội bộ
+                </label>
+                <textarea
+                  id="nc-internal"
+                  rows={2}
+                  className={inputCls}
+                  style={{ ...inputStyle, background: "var(--sf)" }}
+                  placeholder="Chỉ người trong studio thấy — VD: khách quen, đã bớt 1tr; nhớ mang thêm đèn"
+                  value={internalNote}
+                  onChange={(e) => setInternalNote(e.target.value)}
                 />
               </div>
               <label className="flex items-center gap-2 text-[12.5px]" style={{ color: "var(--tx2)" }}>

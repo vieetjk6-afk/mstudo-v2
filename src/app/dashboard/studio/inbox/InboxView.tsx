@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  Bot, Check, CircleAlert, Inbox, Plug, Search, Send, User, UserCheck, X,
+  Bot, Check, CircleAlert, FilePlus2, Inbox, Plug, Search, Send, User, UserCheck, X,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { canReply, platformColor, platformLabel, replyBlockedReason, type Platform } from "@/lib/inbox/platforms";
@@ -376,6 +376,16 @@ export default function InboxView({
                     <UserCheck size={14} /> Tôi tiếp quản
                   </button>
                 )}
+
+                {/* Chốt được khách trong chat → mở màn tạo hợp đồng với nguyên đoạn
+                    chat dán sẵn vào ô Tạo nhanh, khỏi chép tay tên/SĐT/giá. */}
+                <Link
+                  href={`/dashboard/studio/contracts/new?inbox=${active.id}`}
+                  className="btn-ghost px-2.5 py-1.5 text-xs"
+                  title="Tạo hợp đồng từ cuộc trò chuyện này"
+                >
+                  <FilePlus2 size={14} /> Tạo hợp đồng
+                </Link>
 
                 <button
                   onClick={() => patchActive({ status: active.status === "open" ? "closed" : "open" })}

@@ -48,6 +48,7 @@ import ZaloSendButton from "@/components/ZaloSendButton";
 import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
 import LoveStoryCard from "./LoveStoryCard";
+import InternalNoteCard from "./InternalNoteCard";
 import CalendarButtons from "@/components/CalendarButtons";
 import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
@@ -1855,6 +1856,7 @@ export default function ContractEditor({
                 </div>
               </div>
 
+              <InternalNoteCard contractId={contract.id} initial={contract.internal_note} />
               </>
             )}
 

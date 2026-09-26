@@ -1,6 +1,7 @@
 import BoardView from "@/app/dashboard/studio/board/BoardView";
 import ThueDoDemo from "./ThueDoDemo";
 import NewContractForm from "@/app/dashboard/studio/contracts/new/NewContractForm";
+import NewQuoteForm from "@/app/dashboard/studio/quotes/new/NewQuoteForm";
 import { ContractsList } from "@/app/dashboard/studio/contracts/ContractsListView";
 import ClientsView from "@/app/dashboard/studio/clients/ClientsView";
 import LeadsView from "@/app/dashboard/studio/leads/LeadsView";
@@ -394,6 +395,10 @@ export const SCREENS: Record<
         bank={f.bank}
       />
     ),
+  },
+  "bao-gia-moi": {
+    title: "Tạo báo giá (có ô Tạo nhanh bằng AI)",
+    render: () => <NewQuoteForm ownerId="o1" services={f.dichVu} pricelist={f.goiDichVu} />,
   },
   "hop-dong-thue-do": {
     title: "Hợp đồng · Thuê đồ (có đơn)",

@@ -1,6 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { getBranchScope } from "@/lib/branches";
+import { getConversation, UNNAMED_CONTACT } from "@/lib/inbox/view";
+import { platformLabel } from "@/lib/inbox/platforms";
+import { buildTranscript, type TranscriptMessage } from "@/lib/contract-quick";
 import type { StudioService, StudioCrew } from "@/lib/types";
 import NewContractForm, {
   type TemplateOption,
@@ -12,7 +15,8 @@ import NewContractForm, {
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
-export default async function NewContractPage() {
+export default async function NewContractPage(props: { searchParams?: Promise<{ inbox?: string }> }) {
+  const searchParams = await props.searchParams;
   const profile = await requireStudio("plus");
   if (!profile) {
     return (
@@ -83,6 +87,31 @@ export default async function NewContractPage() {
     });
   }
 
+  /* Mở từ Hộp thư (?inbox=<id hội thoại>): dựng sẵn đoạn chat cho ô Tạo nhanh.
+     Đọc bằng client của người dùng nên RLS tự chặn hội thoại của studio khác;
+     kế toán không vào được hộp thư thì cũng không được đọc chat qua đường này.
+     Lấy 80 tin MỚI NHẤT (đảo lại cho đúng thứ tự) — thoả thuận chốt nằm ở cuối. */
+  let initialQuickText = "";
+  let quickSourceNote: string | undefined;
+  const inboxId = typeof searchParams?.inbox === "string" ? searchParams.inbox : "";
+  if (/^[0-9a-f-]{36}$/i.test(inboxId) && profile.actingRole !== "accountant") {
+    const convo = await getConversation(supabase, inboxId);
+    if (convo) {
+      const { data: msgs } = await supabase
+        .from("inbox_messages")
+        .select("direction, body, created_at")
+        .eq("conversation_id", inboxId)
+        .order("created_at", { ascending: false })
+        .limit(80);
+      const list = ((msgs ?? []) as TranscriptMessage[]).reverse();
+      // contactName là chữ giữ chỗ khi người nhắn chưa có tên thật — không được
+      // để nó thành tên khách trên hợp đồng.
+      const realName = convo.contactName === UNNAMED_CONTACT ? null : convo.contactName;
+      initialQuickText = buildTranscript({ name: realName, phone: convo.contactPhone }, list);
+      quickSourceNote = `Đã chép sẵn cuộc trò chuyện ${platformLabel(convo.platform)} với ${convo.contactName} — bấm phân tích để điền hợp đồng.`;
+    }
+  }
+
   const assignTo = profile.actingRole === "staff" ? (profile.actingUserId as string) : null;
   // Chi nhánh đang xem → hợp đồng mới thuộc luôn cơ sở đó. "Xem gộp" hoặc "chưa
   // gán" thì để trống, không đoán hộ.
@@ -99,6 +128,8 @@ export default async function NewContractPage() {
       packages={(packages ?? []) as unknown as PackageOption[]}
       roster={(roster ?? []) as Pick<StudioCrew, "id" | "name" | "phone" | "role">[]}
       recentClients={Array.from(byClient.values()).slice(0, 8)}
+      initialQuickText={initialQuickText}
+      quickSourceNote={quickSourceNote}
       bank={{
         name: (profile.pl_bank_name as string | null) ?? null,
         account: (profile.pl_bank_account as string | null) ?? null,

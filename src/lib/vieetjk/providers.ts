@@ -196,3 +196,39 @@ export function finishReason(p: ChatProvider, json: any): string {
   }
   return json?.choices?.[0]?.finish_reason || "";
 }
+
+/**
+ * Gom toàn bộ SSE của một provider thành một chuỗi — cho nơi cần câu trả lời
+ * TRỌN VẸN một lần (hộp thư Zalo/Messenger, trích dữ liệu hợp đồng), không
+ * stream ra màn.
+ */
+export async function collectText(res: Response, p: ChatProvider): Promise<{ text: string; reason: string }> {
+  if (!res.body) return { text: "", reason: "no_body" };
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  let text = "";
+  let reason = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) !== -1) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+      try {
+        const json = JSON.parse(payload);
+        const delta = extractDelta(p, json);
+        if (delta) text += delta;
+        else reason = finishReason(p, json) || reason;
+      } catch {
+        /* chunk chưa trọn */
+      }
+    }
+  }
+  return { text: text.trim(), reason };
+}

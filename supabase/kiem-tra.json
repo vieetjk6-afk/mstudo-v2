@@ -11,6 +11,7 @@
     "migrations/album_people.sql",
     "migrations/album_faces.sql",
     "migrations/contract_item_description.sql",
+    "migrations/contract_internal_note.sql",
     "migrations/bank_auto_reconcile.sql",
     "migrations/contract_cancel_reschedule.sql"
   ],
@@ -642,6 +643,14 @@
       "bang": [],
       "cot": [
         "contract_items.description"
+      ]
+    },
+    {
+      "file": "migrations/contract_internal_note.sql",
+      "mo_ta": "Ghi chú nội bộ cho hợp đồng (khách không thấy)",
+      "bang": [],
+      "cot": [
+        "studio_contracts.internal_note"
       ]
     },
     {

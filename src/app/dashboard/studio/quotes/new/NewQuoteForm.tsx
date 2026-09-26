@@ -23,6 +23,8 @@ import { computeRoundedDeposit, depositRatio } from "@/lib/quote-deposit";
 import { fmtDate } from "@/lib/date";
 import { vnd } from "@/lib/types";
 import { makeListLabel } from "@/lib/pricelist-label";
+import QuickContractBox from "@/app/dashboard/studio/contracts/new/QuickContractBox";
+import type { QuickDraft } from "@/lib/contract-quick";
 
 /** `src` nhớ hạng mục này sinh ra từ dòng nào của bảng giá, để tick/bỏ tick
  *  ở hai khối trên cùng một nguồn mà không so khớp theo tên. */
@@ -158,6 +160,52 @@ export default function NewQuoteForm({
     });
   }
 
+  /* ── Tạo nhanh: cùng bộ phân tích với màn tạo hợp đồng ───────────────────
+     Báo giá không có thợ, cọc hay giờ chụp nên chỉ lấy phần khách + gói. Gói
+     chính là hạng mục BẮT BUỘC, hạng mục thêm là TUỲ CHỌN (khách tự tick ở
+     trang báo giá) — đúng như khi studio bấm chọn tay ở bên dưới. */
+  const quickContext = useMemo(
+    () => ({
+      packages: pricelist.map((p) => ({ id: p.id, name: p.name, price: p.price, list_key: p.list_key })),
+      services: services.map((x) => ({ id: x.id, name: x.name })),
+      crew: [],
+    }),
+    [pricelist, services]
+  );
+  const [quickDone, setQuickDone] = useState<"ai" | "rules" | null>(null);
+  function applyQuick(d: QuickDraft, source: "ai" | "rules") {
+    if (d.clientName) setClientName(d.clientName);
+    if (d.clientPhone) setClientPhone(d.clientPhone);
+    if (d.eventDate) setEventDate(d.eventDate);
+    if (d.location) setLocation(d.location);
+    if (d.serviceId && services.some((x) => x.id === d.serviceId)) setServiceId(d.serviceId);
+    if (d.title) setTitle(d.title);
+    const byId = new Map(pricelist.map((p) => [p.id, p]));
+    const main = d.mainPkgId ? byId.get(d.mainPkgId) : undefined;
+    const extras = (d.extraIds ?? []).map((id) => byId.get(id)).filter((p): p is PriceItem => !!p && p.id !== main?.id);
+    if (main || extras.length || d.customLines?.length) {
+      const rows: Draft[] = [];
+      if (main) {
+        rows.push({
+          name: main.name, description: main.description || "", qty: 1,
+          unit_price: d.mainPrice ?? main.price, is_optional: false, is_discount: false, package_group: "", src: main.id,
+        });
+      }
+      for (const c of d.customLines ?? []) {
+        rows.push({ name: c.name, description: "", qty: c.qty, unit_price: c.unit_price, is_optional: false, is_discount: false, package_group: "" });
+      }
+      for (const x of extras) {
+        rows.push({
+          name: x.name, description: x.description || "", qty: 1,
+          unit_price: x.price, is_optional: true, is_discount: false, package_group: "", src: x.id,
+        });
+      }
+      // Giữ các dòng studio tự gõ tay không thuộc bảng giá; thay phần từ bảng giá.
+      setItems((arr) => [...rows, ...arr.filter((i) => !i.src && !rows.some((r) => r.name === i.name))]);
+    }
+    setQuickDone(source);
+  }
+
   const autoTitle = `Báo giá${services.find((s) => s.id === serviceId)?.name ? ` ${services.find((s) => s.id === serviceId)?.name}` : ""} ${fmtDate(eventDate || new Date())}`;
 
   async function save(mode: "draft" | "send") {
@@ -248,6 +296,21 @@ export default function NewQuoteForm({
     >
       {/* ══ Cột trái — studio nhập ══════════════════════════════════════════ */}
       <div className="flex min-w-0 flex-col gap-3.5">
+
+        <QuickContractBox
+          context={quickContext}
+          onApply={applyQuick}
+          title="Tạo báo giá nhanh bằng AI"
+          subtitle="Dán tin nhắn hỏi giá của khách — hệ thống điền khách, gói và hạng mục, bạn chỉ chỉnh lại."
+          actionLabel="Phân tích & điền báo giá"
+          hideHints={["startTime", "deposit", "crewIds", "note", "internalNote"]}
+        />
+        {quickDone && (
+          <p className="-mt-1.5 rounded-[10px] px-3 py-2 text-[12.5px]" style={{ background: "var(--gnS)", color: "var(--tx2)" }}>
+            <b style={{ color: "var(--gn)" }}>{quickDone === "ai" ? "AI đã điền sẵn báo giá." : "Đã điền sẵn báo giá."}</b>{" "}
+            Kiểm tra lại khách, gói và giá bên dưới trước khi gửi.
+          </p>
+        )}
 
         {/* ── Khách hàng & gói chính ─────────────────────────────────────── */}
         <div className={panel} style={panelStyle}>
