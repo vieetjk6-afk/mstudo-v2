@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
+import { sendPushToOwner } from "@/lib/push";
+import { intakeViewHref } from "@/lib/notifications";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -11,7 +13,10 @@ function loc(v: any): { lat: number | null; lng: number | null; mapUrl: string }
   if (!v || typeof v !== "object") return null;
   const lat = Number(v.lat);
   const lng = Number(v.lng);
-  const hasCoords = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  // (0,0) là giá trị mặc định khi trình duyệt chưa lấy được GPS — giữa Đại Tây
+  // Dương, không phải vị trí thật → coi như không có toạ độ.
+  const hasCoords =
+    Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
   if (hasCoords) {
     return { lat, lng, mapUrl: `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` };
   }
@@ -81,43 +86,28 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
     .eq("id", c.id);
   if (error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
 
-  // Báo studio (chuông thông báo) kèm link vị trí đã chọn.
-  const lines: string[] = [`Khách ${c.client_name || ""} đã điền thông tin buổi chụp "${c.title || ""}".`];
-  if (type === "psc") {
-    lines.push(
-      `Nhà gái${intake.bride.name ? ` (${intake.bride.name})` : ""}: SĐT ${intake.bride.phone || "—"}, makeup ${intake.bride.makeup_time || "—"}, lễ ${intake.bride.ceremony_time || "—"}${
-        intake.bride.location ? `, vị trí: ${intake.bride.location.mapUrl}` : ""
-      }`
-    );
-    lines.push(
-      `Nhà trai${intake.groom.name ? ` (${intake.groom.name})` : ""}: SĐT ${intake.groom.phone || "—"}, xuất phát ${intake.groom.depart_time || "—"}, lễ ${intake.groom.ceremony_time || "—"}${
-        intake.groom.location ? `, vị trí: ${intake.groom.location.mapUrl}` : ""
-      }`
-    );
-    if (intake.reception.time || intake.reception.location) {
-      lines.push(
-        `Tiệc: giờ ${intake.reception.time || "—"}${intake.reception.location ? `, vị trí: ${intake.reception.location.mapUrl}` : ""}`
-      );
-    }
-  } else {
-    lines.push(
-      `${intake.contact_name ? `Người liên hệ: ${intake.contact_name}, ` : ""}SĐT: ${intake.contact_phone || "—"}${
-        intake.start_time ? `, bắt đầu: ${intake.start_time}` : ""
-      }${intake.location ? `, vị trí: ${intake.location.mapUrl}` : ""}`
-    );
-  }
-  if (intake.note) lines.push(`Ghi chú: ${intake.note}`);
+  // Báo studio: CHỈ một dòng ngắn. Chi tiết (SĐT, giờ, vị trí từng nhà) xem ở
+  // màn "Thông tin buổi chụp" — bấm thông báo là mở thẳng màn đó (kind "intake",
+  // xem notificationHref). Trước đây cả khối chi tiết bị nhét vào thông báo nên
+  // chuông dài cả màn hình mà vẫn không gửi riêng được cho từng thợ.
+  const message = `Khách ${c.client_name || ""} đã điền thông tin buổi chụp "${c.title || ""}".`.replace(/\s+/g, " ");
 
   try {
     await db.from("studio_notifications").insert({
       owner_id: c.owner_id,
       contract_id: c.id,
-      kind: "info",
-      message: lines.join("\n"),
+      kind: "intake",
+      message,
     });
   } catch {
     /* không chặn: form vẫn lưu thành công */
   }
+  await sendPushToOwner(c.owner_id, {
+    title: "Khách đã điền thông tin buổi chụp",
+    body: message,
+    url: intakeViewHref(c.id),
+    tag: `intake-${c.id}`,
+  }).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }

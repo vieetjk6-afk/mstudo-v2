@@ -5,6 +5,7 @@ import DateInput from "@/components/DateInput";
 import { fmtDate, fmtDateLunar, fmtDateTime, todayVN } from "@/lib/date";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import { intakeViewHref } from "@/lib/notifications";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -3127,6 +3128,9 @@ export default function ContractEditor({
                         Ghi chú: {contract.intake.note}
                       </p>
                     )}
+                    <Link href={intakeViewHref(contract.id)} className="act-btn sm:col-span-2">
+                      <Send size={14} /> Xem riêng &amp; gửi từng phần cho thợ
+                    </Link>
                   </div>
                 )}
               </div>
