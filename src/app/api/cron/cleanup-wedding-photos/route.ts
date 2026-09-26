@@ -49,6 +49,10 @@ export async function GET(req: NextRequest) {
     const { data, error } = await db
       .from("wedding_invitations")
       .select("id")
+      // BẮT BUỘC có thứ tự ổn định: PostgREST không đảm bảo thứ tự giữa các trang
+      // .range() khi không ORDER BY, nên với >1000 thiệp một id đang dùng có thể
+      // bị bỏ sót khỏi tập "live" → ảnh còn dùng bị coi là mồ côi và XOÁ VĨNH VIỄN.
+      .order("id")
       .range(from, from + PAGE - 1);
     if (error || !data || data.length === 0) break;
     for (const r of data) live.add(r.id as string);

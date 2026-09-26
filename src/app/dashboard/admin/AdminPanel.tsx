@@ -42,6 +42,11 @@ export default function AdminPanel({
   const [form, setForm] = useState({ email: "", password: "", full_name: "" });
   /** Lọc theo mức hoạt động — "" = xem tất cả. */
   const [level, setLevel] = useState<ActivityLevel | "">("");
+  /** Tìm theo email/tên — giúp admin lọc nhanh thay vì dựng cả bảng. */
+  const [q, setQ] = useState("");
+  /** Số hàng dựng ra mỗi lần — chặn nổ DOM khi có hàng nghìn tài khoản. */
+  const PAGE = 100;
+  const [shownCount, setShownCount] = useState(PAGE);
 
   // Chỉ đếm CHỦ tài khoản (studio_owner_id = null): nhân viên là tài khoản con
   // của một studio, đếm cả họ thì số "bao nhiêu studio đang dùng" bị thổi lên.
@@ -53,10 +58,22 @@ export default function AdminPanel({
     return by;
   }, [owners]);
 
-  const visible = useMemo(
-    () => (level ? rows.filter((p) => !p.studio_owner_id && activityLevel(p.last_active_at) === level) : rows),
-    [rows, level],
-  );
+  const visible = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return rows.filter((p) => {
+      if (level && (p.studio_owner_id || activityLevel(p.last_active_at) !== level)) return false;
+      if (needle) {
+        const hay = `${p.full_name ?? ""} ${p.email ?? ""}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+  }, [rows, level, q]);
+
+  // Chỉ dựng PAGE hàng đầu; phần còn lại nạp thêm khi bấm "Xem thêm". Trước đây
+  // dựng toàn bộ tài khoản (mỗi hàng nhiều ô select/input) nên bảng nặng dần
+  // tuyến tính theo số khách.
+  const shown = useMemo(() => visible.slice(0, shownCount), [visible, shownCount]);
 
   function flash(m: string) {
     setMsg(m);
@@ -246,6 +263,19 @@ export default function AdminPanel({
         </div>
       </div>
 
+      {/* Tìm nhanh theo email / tên — lọc trước khi dựng bảng */}
+      <div className="mb-3 flex items-center gap-3">
+        <input
+          className="input max-w-xs px-3 py-2 text-sm"
+          placeholder="Email / tên…"
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setShownCount(PAGE); }}
+        />
+        <span className="text-xs" style={{ color: "var(--text3)" }}>
+          {visible.length} tài khoản
+        </span>
+      </div>
+
       {/* Table */}
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
@@ -267,7 +297,7 @@ export default function AdminPanel({
             </tr>
           </thead>
           <tbody>
-            {visible.map((p) => (
+            {shown.map((p) => (
               <tr key={p.id} className="border-b border-ink-850/60">
                 <td className="px-4 py-3">
                   <div className="text-accent">{p.full_name}</div>
@@ -420,6 +450,17 @@ export default function AdminPanel({
             ))}
           </tbody>
         </table>
+        {shown.length < visible.length && (
+          <div className="flex justify-center border-t border-ink-850/60 p-3">
+            <button
+              onClick={() => setShownCount((n) => n + PAGE)}
+              className="rounded-md px-4 py-2 text-sm hover:bg-white/5"
+              style={{ color: "var(--text2)" }}
+            >
+              Xem thêm ({visible.length - shown.length} tài khoản)
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Nâng cấp gói: yêu cầu chờ duyệt & mã giảm giá. Dọn từ "Cấu hình mstudo"

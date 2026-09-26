@@ -43,8 +43,9 @@ export function newDepositCode(): string {
 
 /** Token dài để khách quay lại trang cọc — không đoán được từ id. */
 export function newDepositToken(): string {
-  const uuid = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}${Math.random()}`;
-  return uuid.replace(/-/g, "");
+  // Web Crypto có sẵn trên Node 18+ và edge. KHÔNG lùi về Math.random (đoán được)
+  // — thà ném lỗi còn hơn phát một token yếu cho đường tiền.
+  return globalThis.crypto.randomUUID().replace(/-/g, "");
 }
 
 /**

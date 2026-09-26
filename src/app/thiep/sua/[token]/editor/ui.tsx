@@ -104,13 +104,27 @@ export function GalleryEditor({ gallery, onUpload, onChange }: { gallery: string
 
 export function EventsEditor({ events, onChange }: { events: WeddingEventBlock[]; onChange: (e: WeddingEventBlock[]) => void }) {
   const up = (i: number, p: Partial<WeddingEventBlock>) => onChange(events.map((e, j) => (j === i ? { ...e, ...p } : e)));
+  // Key ỔN ĐỊNH client-only cho từng sự kiện (không lưu vào config). Dùng index
+  // làm key thì xoá sự kiện GIỮA khiến React gán lại các ô nhập theo vị trí — mất
+  // focus, chữ đang gõ nhảy sang dòng khác. Mảng key song song chỉ đổi khi
+  // thêm/xoá, giữ nguyên khi sửa nội dung.
+  const keyId = useRef(0);
+  const [keys, setKeys] = useState<string[]>(() => events.map(() => `ev-${keyId.current++}`));
+  // Số sự kiện lệch số key (nạp bất đồng bộ từ ngoài) → dựng lại, giữ phần đầu.
+  // CHỈ phụ thuộc độ dài: sửa nội dung không đổi số key, không cần dựng lại.
+  useEffect(() => {
+    setKeys((prev) => (prev.length === events.length ? prev : events.map((_, i) => prev[i] ?? `ev-${keyId.current++}`)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [events.length]);
+  const addEvent = () => { setKeys((k) => [...k, `ev-${keyId.current++}`]); onChange([...events, { label: "" }]); };
+  const delEvent = (i: number) => { setKeys((k) => k.filter((_, j) => j !== i)); onChange(events.filter((_, j) => j !== i)); };
   return (
     <div className="space-y-3">
       {events.map((e, i) => (
-        <div key={i} className="rounded-lg border border-stone-200 p-3">
+        <div key={keys[i] ?? `ev-init-${i}`} className="rounded-lg border border-stone-200 p-3">
           <div className="mb-2 flex items-center justify-between gap-2">
             <input className={`${inp} max-w-[60%]`} value={e.label ?? ""} onChange={(ev) => up(i, { label: ev.target.value })} placeholder="Lễ Vu Quy / Tiệc cưới…" />
-            <button type="button" aria-label="Xoá sự kiện" onClick={() => onChange(events.filter((_, j) => j !== i))} className="text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+            <button type="button" aria-label="Xoá sự kiện" onClick={() => delEvent(i)} className="text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <input type="date" className={inp} value={(e.date ?? "").slice(0, 10)} onChange={(ev) => up(i, { date: ev.target.value })} />
@@ -121,7 +135,7 @@ export function EventsEditor({ events, onChange }: { events: WeddingEventBlock[]
           <input className={`${inp} mt-2`} value={e.map_url ?? ""} onChange={(ev) => up(i, { map_url: ev.target.value })} placeholder="Link Google Maps (không bắt buộc)" />
         </div>
       ))}
-      <button type="button" onClick={() => onChange([...events, { label: "" }])} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-stone-300 px-3 py-2 text-sm text-stone-500 hover:border-rose-300 hover:text-rose-500">
+      <button type="button" onClick={addEvent} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-stone-300 px-3 py-2 text-sm text-stone-500 hover:border-rose-300 hover:text-rose-500">
         <Plus size={14} /> Thêm sự kiện
       </button>
     </div>

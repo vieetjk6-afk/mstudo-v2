@@ -361,6 +361,15 @@ export default function FilterTool({
   const notFound = useMemo(() => wantedNames.filter((n) => !matchedNorm.has(norm(n))), [wantedNames, matchedNorm]);
   const matchedKey = matched.map((m) => m.key).join("|");
 
+  // Chỉ DỰNG một cửa sổ ô ảnh, không phải cả tập khớp (có thể hàng nghìn file
+  // của cả buổi chụp). Dựng hết thì mỗi file là một <img> → cuộn giật, ngốn bộ
+  // nhớ. Đường xem trước local vốn đã chặn ở 300; lưới hiển thị nay cũng vậy.
+  const GRID_PAGE = 300;
+  const [gridLimit, setGridLimit] = useState(GRID_PAGE);
+  // Tập khớp đổi (danh sách mới / đổi định dạng) → dựng lại từ đầu cửa sổ.
+  useEffect(() => { setGridLimit(GRID_PAGE); }, [matchedKey, fmt]);
+  const gridShown = useMemo(() => shown.slice(0, gridLimit), [shown, gridLimit]);
+
   // Generate previews for matched local files.
   useEffect(() => {
     if (photoSource !== "local") return;
@@ -822,7 +831,7 @@ export default function FilterTool({
           </p>
         ) : (
           <div className={`grid items-start gap-3 ${compact ? "[grid-template-columns:repeat(auto-fill,minmax(110px,1fr))]" : "[grid-template-columns:repeat(auto-fill,minmax(130px,1fr))]"}`}>
-            {shown.map((f) => (
+            {gridShown.map((f) => (
               <div key={f.key} className="overflow-hidden rounded-lg" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
                 <div className="flex aspect-square items-center justify-center" style={{ color: "var(--text3)" }}>
                   {f.driveId || thumbs[f.key] ? (
@@ -840,6 +849,17 @@ export default function FilterTool({
                 </p>
               </div>
             ))}
+          </div>
+        )}
+        {gridShown.length < shown.length && (
+          <div className="mt-3 flex justify-center">
+            <button
+              onClick={() => setGridLimit((n) => n + GRID_PAGE)}
+              className="rounded-lg px-4 py-2 text-[13px]"
+              style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
+            >
+              Xem thêm ảnh ({shown.length - gridShown.length} còn lại)
+            </button>
           </div>
         )}
 

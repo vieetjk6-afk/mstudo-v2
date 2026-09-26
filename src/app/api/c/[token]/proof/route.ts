@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { driveImageUrlOrNull } from "@/lib/mstudo-drive";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { sendPushToOwner } from "@/lib/push";
+import { sniffImageType } from "@/lib/upload-guard";
 import { vnd } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -38,26 +39,28 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
   const file = form.get("file") as File | null;
   if (!file) return NextResponse.json({ error: "no_file" }, { status: 400 });
 
-  // Validate image
-  if (!file.type.startsWith("image/")) return NextResponse.json({ error: "not_image" }, { status: 400 });
   // Backstop: the client compresses before upload, so anything this large is abuse.
   if (file.size > 3 * 1024 * 1024) return NextResponse.json({ error: "too_large" }, { status: 400 });
 
-  // H-2: Derive extension from validated MIME type, not client-supplied filename
-  const EXT_MAP: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/heic": "heic" };
-  const ext = EXT_MAP[file.type] ?? "jpg";
+  // Kiểm ảnh bằng MAGIC BYTES, không tin file.type do client gửi — chặn nhồi tệp
+  // không-phải-ảnh vào bucket công khai rồi phục vụ dưới content-type ảnh. Kiểu
+  // và đuôi tệp đều suy ra từ nội dung thật (đồng bộ với /api/upload).
+  const buf = Buffer.from(await file.arrayBuffer());
+  const mime = sniffImageType(buf);
+  if (!mime) return NextResponse.json({ error: "not_image" }, { status: 400 });
+  const EXT_MAP: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "image/heic": "heic", "image/avif": "avif", "image/bmp": "bmp", "image/tiff": "tiff" };
+  const ext = EXT_MAP[mime] ?? "jpg";
 
   // Lưu ưu tiên vào Drive admin; nếu chưa kết nối thì fallback Supabase.
   let publicUrl: string;
-  const buf = Buffer.from(await file.arrayBuffer());
-  const driveUrl = await driveImageUrlOrNull(buf, `proof-${contract.id}-${Date.now()}.${ext}`, file.type, true);
+  const driveUrl = await driveImageUrlOrNull(buf, `proof-${contract.id}-${Date.now()}.${ext}`, mime, true);
   if (driveUrl) {
     publicUrl = driveUrl;
   } else {
     const path = `client/${contract.id}/${Date.now()}.${ext}`;
     const { error: upErr } = await db.storage
       .from("payment-proofs")
-      .upload(path, buf, { contentType: file.type, upsert: false });
+      .upload(path, buf, { contentType: mime, upsert: false });
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
     publicUrl = db.storage.from("payment-proofs").getPublicUrl(path).data.publicUrl;
   }

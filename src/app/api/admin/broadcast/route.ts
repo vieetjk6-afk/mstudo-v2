@@ -63,7 +63,11 @@ export async function POST(req: Request) {
     const tier = studioTier(effectivePlan(p.plan, p.plan_expires_at), p.role === "admin");
     if (target === "studio") return tier === "full";
     if (target === "booking") return tier === "booking";
-    return tier === "full" || tier === "booking"; // "all" — bất kỳ ai có quyền dùng studio
+    // "all" — bất kỳ ai CÓ quyền dùng studio. Phải dùng `!== "none"` chứ không
+    // liệt kê full/booking: studioTier() map Photographer Plus thành "plus", nên
+    // liệt kê tay sẽ bỏ sót nhóm này (họ vẫn vào được dashboard studio đầy đủ).
+    // Cả app dùng `tier !== "none"` để nghĩa là "có quyền studio".
+    return tier !== "none";
   });
 
   if (recipients.length === 0) {

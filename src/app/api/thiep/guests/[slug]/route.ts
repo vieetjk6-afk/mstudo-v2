@@ -1,7 +1,20 @@
 import { NextResponse } from "next/server";
+import crypto from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import type { WeddingConfig } from "@/lib/types";
+
+/** So sánh mật khẩu theo THỜI GIAN HẰNG SỐ (không rò rỉ độ dài khớp qua timing). */
+function sameSecret(a: string, b: string): boolean {
+  const ba = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ba.length !== bb.length) return false;
+  try {
+    return crypto.timingSafeEqual(ba, bb);
+  } catch {
+    return false;
+  }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +26,9 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
   // Chặn dò mật khẩu (bền giữa các instance nếu có Upstash; nếu không → in-memory).
-  const limited = await limitByIpDurable(req, "thiep-guests", 20, 60_000);
+  // failClosed: cổng này mở ra danh sách khách + lời chúc, nên khi kho đếm trục
+  // trặc thì CHẶN tạm còn hơn mở toang cửa brute-force (giống cổng mật khẩu album).
+  const limited = await limitByIpDurable(req, "thiep-guests", 20, 60_000, { failClosed: true });
   if (limited) return limited;
 
   const body = (await req.json().catch(() => null)) as { password?: string } | null;
@@ -31,7 +46,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   const cfg = (inv.config ?? {}) as WeddingConfig;
   const real = (cfg.guests_password ?? "").trim();
   if (!real) return NextResponse.json({ error: "disabled" }, { status: 404 });
-  if (entered !== real) return NextResponse.json({ error: "wrong_password" }, { status: 401 });
+  if (!sameSecret(entered, real)) return NextResponse.json({ error: "wrong_password" }, { status: 401 });
 
   const { data: rsvps } = await db
     .from("wedding_rsvps")

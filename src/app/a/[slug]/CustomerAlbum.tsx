@@ -144,6 +144,10 @@ export default function CustomerAlbum({
   const [personId, setPersonId] = useState<string | null>(null);
 
   const [password, setPassword] = useState("");
+  // Vé mở khoá do /access phát ra (album có mật khẩu). Đính kèm mọi lượt ghi /
+  // đồng bộ lựa chọn để máy chủ biết khách đã nhập đúng mật khẩu. Album không mật
+  // khẩu thì vé rỗng và server không đòi.
+  const accessRef = useRef<string>("");
   const [pwError, setPwError] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
 
@@ -327,6 +331,7 @@ export default function CustomerAlbum({
           photoIds: sentPicks.selected,
           dislikedIds: sentPicks.disliked,
           notes: sentPicks.notes,
+          access: accessRef.current || undefined,
         }),
         keepalive: true,
       });
@@ -422,7 +427,10 @@ export default function CustomerAlbum({
   const refresh = useCallback(async () => {
     if (saveTimer.current || savingRef.current) return; // có bản đang chờ gửi — đọc sau
     try {
-      const res = await fetch(`/api/a/${album.slug}/select`, { cache: "no-store" });
+      const res = await fetch(`/api/a/${album.slug}/select`, {
+        cache: "no-store",
+        headers: accessRef.current ? { "x-album-access": accessRef.current } : undefined,
+      });
       if (!res.ok) return;
       const data = await res.json();
       await hydrate(
@@ -465,7 +473,7 @@ export default function CustomerAlbum({
       const res = await fetch(`/api/a/${album.slug}/done`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ access: accessRef.current || undefined }),
       });
       if (res.ok) {
         setDoneSent(true);
@@ -575,6 +583,7 @@ export default function CustomerAlbum({
       return;
     }
     const data = await res.json();
+    accessRef.current = typeof data.access === "string" ? data.access : "";
     setPhotos(data.photos ?? []);
     setSources(data.sources ?? []);
     setDriveFolders(data.driveFolders ?? []);

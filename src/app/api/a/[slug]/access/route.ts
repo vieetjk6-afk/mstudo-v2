@@ -7,6 +7,7 @@ import { pickFolderLinks } from "@/lib/album-original";
 import { faceChips } from "@/lib/face-people";
 import { tienDoQuet } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
+import { mintAlbumAccess } from "@/lib/album-access";
 
 export const dynamic = "force-dynamic";
 
@@ -112,6 +113,10 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     disliked,
     notes,
     people,
+    // Vé cho phép ghi/đồng bộ lựa chọn về sau mà không phải gửi lại mật khẩu mỗi
+    // lần (xem lib/album-access). Chỉ phát khi album CÓ mật khẩu — album mở thì
+    // /select vốn công khai nên không cần vé.
+    access: album.password_hash ? mintAlbumAccess(album.id, album.password_hash) : undefined,
     // Chưa có mặt nào: phân biệt "máy chủ đang quét tới đâu" với "quét rồi mà
     // album không có mặt người" — hai câu trả lời rất khác nhau cho khách.
     faceScan: canFaceSearch && people.length === 0 ? await tienDoQuet(admin, album.id) : null,

@@ -224,7 +224,8 @@ export async function POST(req: Request) {
     const { data: existing } = await db.from("crew_account").select("calendar_token").eq("phone", phone).maybeSingle();
     let token = existing?.calendar_token as string | undefined;
     if (!token) {
-      token = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)).replace(/-/g, "");
+      // Web Crypto có sẵn trên Node 18+/edge — không lùi về Math.random (đoán được).
+      token = crypto.randomUUID().replace(/-/g, "");
       await db.from("crew_account").upsert({ phone, calendar_token: token }, { onConflict: "phone" });
     }
     return NextResponse.json({ token });

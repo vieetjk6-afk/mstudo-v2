@@ -202,7 +202,10 @@ const CREW_STATUS_TONE: Record<string, string> = {
 };
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  // Phải theo giờ Việt Nam (UTC+7): dùng trực tiếp toISOString() (UTC) thì từ
+  // 00:00–07:00 VN sẽ ra NGÀY HÔM QUA — một khoản thu nhập lúc 1h sáng ngày 1 bị
+  // ghi vào ngày cuối tháng trước, rơi sai kỳ kế toán (có thể vào sổ đã khoá).
+  return todayVN();
 }
 
 export default function ContractEditor({

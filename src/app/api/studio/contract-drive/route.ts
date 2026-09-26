@@ -39,10 +39,14 @@ export async function POST(req: Request) {
   if (body?.contractId) {
     const { data: ct } = await db
       .from("studio_contracts")
-      .select(`${COLS}, owner_id`)
+      .select(`${COLS}, owner_id, assigned_to`)
       .eq("id", body.contractId)
       .maybeSingle();
     if (!ct || (ct as { owner_id: string }).owner_id !== profile.id) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    // Nhân viên thường chỉ tạo thư mục cho hợp đồng ĐƯỢC GIAO cho mình.
+    if (profile.actingRole === "staff" && (ct as { assigned_to?: string | null }).assigned_to !== profile.actingUserId) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
     const res = await ensureContractDriveTree(profile.id, ct as never);
@@ -62,6 +66,9 @@ export async function POST(req: Request) {
 
   // ── Hàng loạt ───────────────────────────────────────────────────────
   if (!body?.all) return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  // Tạo thư mục HÀNG LOẠT cho cả studio là việc của quản lý/chủ, không phải của
+  // một nhân viên — chặn vai trò staff ở đường này.
+  if (profile.actingRole === "staff") return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const { data: cts } = await db
     .from("studio_contracts")

@@ -26,10 +26,14 @@ export async function POST(req: Request) {
   const db = createAdminClient();
   const { data: c } = await db
     .from("studio_contracts")
-    .select("id, owner_id, gallery_album_id")
+    .select("id, owner_id, assigned_to, gallery_album_id")
     .eq("id", contractId)
     .maybeSingle();
   if (!c || c.owner_id !== profile.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  // Nhân viên thường chỉ giao khách hợp đồng ĐƯỢC GIAO cho mình (giống contract-crew).
+  if (profile.actingRole === "staff" && c.assigned_to !== profile.actingUserId) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const r = await deliverContractIfReady(profile.id, contractId, { force: true, notifyExisting: true });
   if (!r.album) {

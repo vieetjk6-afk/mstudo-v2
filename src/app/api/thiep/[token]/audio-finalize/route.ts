@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { limitByIp } from "@/lib/rate-limit";
+import { limitByIpDurable } from "@/lib/rate-limit";
 import { driveFileUrlOrNull } from "@/lib/mstudo-drive";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
+
+// Trần dung lượng nhạc nền (nhạc thiệp ~10MB) — chốt phía server để một edit_token
+// không đẩy được file khổng lồ sang Drive admin, không chỉ dựa vào giới hạn bucket.
+const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 
 /**
  * Chuyển file nhạc vừa tải lên từ Supabase Storage sang Drive admin.
@@ -20,7 +24,7 @@ export const maxDuration = 60;
  */
 export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
-  const limited = limitByIp(req, "thiep-audio-finalize", 30, 60_000);
+  const limited = await limitByIpDurable(req, "thiep-audio-finalize", 30, 60_000);
   if (limited) return limited;
 
   const db = createAdminClient();
@@ -44,6 +48,11 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   if (dlErr || !blob) return NextResponse.json({ url: null, reason: "download_failed" });
 
   const buf = Buffer.from(await blob.arrayBuffer());
+  if (buf.length > MAX_AUDIO_BYTES) {
+    // Quá cỡ → dọn khỏi Storage rồi từ chối, không đẩy sang Drive.
+    await db.storage.from("wedding-photos").remove([path]).catch(() => {});
+    return NextResponse.json({ url: null, reason: "too_large" });
+  }
   const name = path.split("/").pop() || "nhac.mp3";
   const url = await driveFileUrlOrNull(buf, `thiep-${inv.id}-${name}`, blob.type || "audio/mpeg");
   if (!url) return NextResponse.json({ url: null, reason: "drive_unavailable" });

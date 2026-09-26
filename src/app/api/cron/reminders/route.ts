@@ -58,10 +58,14 @@ export async function GET(req: NextRequest) {
       .neq("status", "cancelled"),
     db
       .from("contract_payment_plan")
-      .select("amount, label, due_date, contract:studio_contracts!inner(owner_id, title)")
+      .select("amount, label, due_date, contract:studio_contracts!inner(owner_id, title, status)")
       .eq("paid", false)
       .not("due_date", "is", null)
-      .lte("due_date", tomorrow),
+      .lte("due_date", tomorrow)
+      // Huỷ hợp đồng KHÔNG xoá các đợt thu → nếu không loại ở đây, bản tóm tắt
+      // hằng ngày cứ nhắc chủ studio đi đòi tiền của hợp đồng đã huỷ. Truy vấn
+      // "trễ giao" bên dưới và accounting.receivables() đều đã loại "cancelled".
+      .neq("contract.status", "cancelled"),
     db
       .from("studio_contracts")
       .select("owner_id, title, delivery_due")

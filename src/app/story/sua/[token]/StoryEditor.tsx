@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Heart, Save, Eye, Loader2, Check, ExternalLink, Plus, Trash2, FolderOpen, RefreshCw, Cloud, CloudOff, Video, Users, QrCode, Printer, Download } from "lucide-react";
 import type { StoryConfig, StoryTimelineItem } from "@/lib/types";
 import { escapeHtml } from "@/lib/html-escape";
@@ -52,6 +52,19 @@ export default function StoryEditor({ token }: { token: string }) {
   }, []);
 
   const patch = useCallback((p: Partial<StoryConfig>) => setCfg((c) => ({ ...(c ?? {}), ...p })), []);
+
+  // Key ỔN ĐỊNH cho từng mốc timeline — client-only, KHÔNG lưu vào config.
+  // Trước đây dùng index làm key: xoá một mốc GIỮA khiến React gán lại ô nhập
+  // theo vị trí (mất focus, đang gõ tiếng Việt nhảy sang dòng khác). Mảng key
+  // song song này chỉ đổi khi thêm/xoá mốc, giữ nguyên khi sửa nội dung.
+  const tlKeyId = useRef(0);
+  const [tlKeys, setTlKeys] = useState<string[]>([]);
+  const tlSeeded = useRef(false);
+  useEffect(() => {
+    if (tlSeeded.current || !cfg) return;
+    tlSeeded.current = true;
+    setTlKeys((cfg.timeline ?? []).map(() => `tl-${tlKeyId.current++}`));
+  }, [cfg]);
 
   async function save(nextPub?: boolean) {
     if (!cfg) return;
@@ -107,6 +120,9 @@ export default function StoryEditor({ token }: { token: string }) {
   const inp = "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100";
   const timeline = cfg.timeline ?? [];
   const upTl = (i: number, p: Partial<StoryTimelineItem>) => patch({ timeline: timeline.map((t, j) => (j === i ? { ...t, ...p } : t)) });
+  // Thêm/xoá mốc phải cập nhật CẢ mảng key song song để key luôn khớp mốc.
+  const addTl = () => { setTlKeys((k) => [...k, `tl-${tlKeyId.current++}`]); patch({ timeline: [...timeline, {}] }); };
+  const delTl = (i: number) => { setTlKeys((k) => k.filter((_, j) => j !== i)); patch({ timeline: timeline.filter((_, j) => j !== i) }); };
 
   return (
     <div className="min-h-screen bg-stone-50 pb-28 text-stone-800">
@@ -236,16 +252,16 @@ export default function StoryEditor({ token }: { token: string }) {
         <Section title="Dòng thời gian (timeline)">
           <div className="space-y-3">
             {timeline.map((t, i) => (
-              <div key={i} className="rounded-lg border border-stone-200 p-3">
+              <div key={tlKeys[i] ?? `tl-init-${i}`} className="rounded-lg border border-stone-200 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <input type="date" className={`${inp} max-w-[45%]`} value={(t.date ?? "").slice(0, 10)} onChange={(e) => upTl(i, { date: e.target.value })} />
-                  <button onClick={() => patch({ timeline: timeline.filter((_, j) => j !== i) })} className="text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+                  <button onClick={() => delTl(i)} className="text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
                 </div>
                 <input className={`${inp} mb-2`} value={t.title ?? ""} onChange={(e) => upTl(i, { title: e.target.value })} placeholder="Tiêu đề (vd: Lần đầu gặp nhau)" />
                 <textarea className={inp} value={t.text ?? ""} onChange={(e) => upTl(i, { text: e.target.value })} placeholder="Nội dung" rows={2} />
               </div>
             ))}
-            <button onClick={() => patch({ timeline: [...timeline, {}] })} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-stone-300 px-3 py-2 text-sm text-stone-500"><Plus size={14} /> Thêm mốc</button>
+            <button onClick={addTl} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-stone-300 px-3 py-2 text-sm text-stone-500"><Plus size={14} /> Thêm mốc</button>
           </div>
         </Section>
 

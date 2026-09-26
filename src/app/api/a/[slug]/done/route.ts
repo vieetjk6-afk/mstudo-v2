@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIp } from "@/lib/rate-limit";
 import { sendPushToOwner } from "@/lib/push";
+import { verifyAlbumAccess } from "@/lib/album-access";
 
 export const dynamic = "force-dynamic";
 
@@ -22,16 +23,22 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   const limited = limitByIp(req, `album-done:${params.slug}`, 6, 60_000);
   if (limited) return limited;
 
-  const body = (await req.json().catch(() => ({}))) as { clientName?: string };
+  const body = (await req.json().catch(() => ({}))) as { clientName?: string; access?: string };
 
   const admin = createAdminClient();
   const { data: album } = await admin
     .from("albums")
-    .select("id, owner_id, title, status")
+    .select("id, owner_id, title, status, password_hash")
     .eq("slug", params.slug)
     .single();
   if (!album || album.status !== "published") {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Album có mật khẩu: chỉ khách đã mở khoá mới bấm được "đã chọn xong" — nếu
+  // không, ai biết slug cũng bắn được thông báo (chuông + push) cho chủ.
+  if (album.password_hash && !verifyAlbumAccess(album.id, album.password_hash, body.access)) {
+    return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }
 
   // Đếm số ảnh khách đã chọn + số ảnh khách không thích (dùng trong nội dung

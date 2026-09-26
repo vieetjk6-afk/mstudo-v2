@@ -47,7 +47,7 @@ export async function POST(req: Request) {
 
   const raw = await req.text();
   if (raw.length > MAX_BYTES) return NextResponse.json({ error: "too_large" }, { status: 413 });
-  const body = JSON.parse(raw || "{}") as {
+  let body: {
     id?: string;
     name?: string;
     size?: unknown;
@@ -55,6 +55,12 @@ export async function POST(req: Request) {
     spreads?: unknown;
     folder?: string;
   };
+  try {
+    // Thân request hỏng phải trả 400 rõ ràng, đừng để JSON.parse ném ra 500.
+    body = JSON.parse(raw || "{}");
+  } catch {
+    return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  }
 
   const db = createAdminClient();
   const patch = {

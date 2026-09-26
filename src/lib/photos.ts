@@ -16,7 +16,11 @@ export async function fetchAllPhotos(
       .from("photos")
       .select(columns)
       .eq("album_id", albumId)
+      // Thứ tự phụ theo id để phá thế hoà `position`: có nó thì thứ tự TỔNG là xác
+      // định, nên phân trang phía DB (album/[slug]/photos) khớp đúng với lô SSR —
+      // không trùng/sót ảnh ở ranh giới trang.
       .order("position")
+      .order("id")
       .range(from, from + size - 1);
     if (error || !data || data.length === 0) break;
     out.push(...data);
