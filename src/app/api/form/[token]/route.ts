@@ -3,28 +3,13 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { sendPushToOwner } from "@/lib/push";
 import { intakeViewHref } from "@/lib/notifications";
+import { normalizeIntakeLocation } from "@/lib/intake-location";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 export const dynamic = "force-dynamic";
 
 const str = (v: any, n = 200) => (typeof v === "string" ? v.trim().slice(0, n) : "");
-function loc(v: any): { lat: number | null; lng: number | null; mapUrl: string } | null {
-  if (!v || typeof v !== "object") return null;
-  const lat = Number(v.lat);
-  const lng = Number(v.lng);
-  // (0,0) là giá trị mặc định khi trình duyệt chưa lấy được GPS — giữa Đại Tây
-  // Dương, không phải vị trí thật → coi như không có toạ độ.
-  const hasCoords =
-    Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat === 0 && lng === 0);
-  if (hasCoords) {
-    return { lat, lng, mapUrl: `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}` };
-  }
-  // Không có toạ độ → chấp nhận link Google Maps khách dán (chỉ http/https, chống chèn javascript:).
-  const url = typeof v.mapUrl === "string" ? v.mapUrl.trim().slice(0, 500) : "";
-  if (/^https?:\/\//i.test(url)) return { lat: null, lng: null, mapUrl: url };
-  return null;
-}
 
 /** Khách gửi form điền thông tin. Xác thực bằng intake_token (không mật khẩu). */
 export async function POST(req: NextRequest, props: { params: Promise<{ token: string }> }) {
@@ -45,6 +30,14 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
   const b = await req.json().catch(() => ({}));
   const type = b?.type === "psc" ? "psc" : "generic";
 
+  // Vị trí chuẩn hoá song song (link rút gọn phải nhờ server mở ra → mất vài
+  // trăm ms mỗi link, không nên chờ lần lượt).
+  const [brideLoc, groomLoc, receptionLoc, genLoc] = await Promise.all(
+    type === "psc"
+      ? [b?.bride?.location, b?.groom?.location, b?.reception?.location, null].map(normalizeIntakeLocation)
+      : [null, null, null, b?.location].map(normalizeIntakeLocation)
+  );
+
   let intake: any;
   if (type === "psc") {
     intake = {
@@ -54,18 +47,18 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
         phone: str(b?.bride?.phone, 30),
         makeup_time: str(b?.bride?.makeup_time, 20),
         ceremony_time: str(b?.bride?.ceremony_time, 20),
-        location: loc(b?.bride?.location),
+        location: brideLoc,
       },
       groom: {
         name: str(b?.groom?.name, 100),
         phone: str(b?.groom?.phone, 30),
         depart_time: str(b?.groom?.depart_time, 20),
         ceremony_time: str(b?.groom?.ceremony_time, 20),
-        location: loc(b?.groom?.location),
+        location: groomLoc,
       },
       reception: {
         time: str(b?.reception?.time, 20),
-        location: loc(b?.reception?.location),
+        location: receptionLoc,
       },
       note: str(b?.note, 1000),
     };
@@ -75,7 +68,7 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
       contact_name: str(b?.contact_name, 100),
       contact_phone: str(b?.contact_phone, 30),
       start_time: str(b?.start_time, 20),
-      location: loc(b?.location),
+      location: genLoc,
       note: str(b?.note, 1000),
     };
   }
