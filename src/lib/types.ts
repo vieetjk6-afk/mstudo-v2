@@ -428,6 +428,8 @@ export type NotificationKind =
   // Kết quả thanh toán gói dịch vụ MStudo (admin xác nhận / từ chối chuyển khoản).
   | "plan_activated"
   | "payment_failed"
+  // Khách vừa gửi form thông tin buổi chụp — bấm mở màn "Thông tin buổi chụp".
+  | "intake"
   | "info";
 
 export interface StudioNotification {

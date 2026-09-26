@@ -7,7 +7,7 @@ import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PushToggle from "@/components/PushToggle";
 import { Panel, EmptyState } from "@/components/studio/ui";
-import { notificationHref, notificationMeta } from "@/lib/notifications";
+import { notificationHref, notificationMeta, notificationText } from "@/lib/notifications";
 import type { StudioNotification } from "@/lib/types";
 
 export default function NotificationsList({ initial }: { initial: StudioNotification[] }) {
@@ -83,7 +83,7 @@ export default function NotificationsList({ initial }: { initial: StudioNotifica
                   <Icon size={17} style={{ color: fg }} />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[13.5px]" style={{ fontWeight: n.read ? 500 : 700, textWrap: "pretty" }}>{n.message}</p>
+                  <p className="text-[13.5px]" style={{ fontWeight: n.read ? 500 : 700, textWrap: "pretty" }}>{notificationText(n)}</p>
                   <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
                     {fmtDateTime(n.created_at)}
                     {href && <span style={{ color: "var(--ac)", fontWeight: 600 }}> · Xem chi tiết →</span>}

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
-import { notificationHref, notificationMeta } from "@/lib/notifications";
+import { notificationHref, notificationMeta, notificationText } from "@/lib/notifications";
 import { todayVN } from "@/lib/date";
 import type { StudioNotification } from "@/lib/types";
 
@@ -103,7 +103,7 @@ export default function StaffNotifications({
                         className="block text-[13.5px]"
                         style={{ fontWeight: n.read ? 550 : 700, textWrap: "pretty" }}
                       >
-                        {n.message}
+                        {notificationText(n)}
                       </span>
                       {href && (
                         <Link href={href} className="mt-0.5 inline-block text-[12px] font-semibold" style={{ color: "var(--ac)" }}>

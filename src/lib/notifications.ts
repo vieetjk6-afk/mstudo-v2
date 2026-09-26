@@ -1,7 +1,7 @@
 import {
   PenLine, MessageSquare, UserCheck, UserX, Star, Wallet, Bell, FileCheck, Megaphone,
   UserPlus, ArrowUpCircle, Mail, ImageDown, AlarmClock, CalendarCog, UserPlus2,
-  FilePlus2, Crown, WalletCards,
+  FilePlus2, Crown, WalletCards, ClipboardList,
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationKind, StudioNotification } from "@/lib/types";
@@ -47,6 +47,7 @@ export const NOTIFICATION_KIND_META: Record<NotificationKind, NotificationMeta> 
   // Kết quả thanh toán gói dịch vụ MStudo — studio thấy ở chuông của họ.
   plan_activated: { Icon: Crown, fg: "var(--gn)", soft: "var(--gnS)", label: "Nâng cấp thành công" },
   payment_failed: { Icon: WalletCards, fg: "var(--rd)", soft: "var(--rdS)", label: "Thanh toán thất bại" },
+  intake: { Icon: ClipboardList, fg: "var(--tl)", soft: "var(--tlS)", label: "Thông tin buổi chụp" },
   info: { Icon: Bell, fg: "var(--tx3)", soft: "var(--sf2)", label: "Thông tin" },
 };
 
@@ -72,7 +73,31 @@ export function notificationMeta(kind: string): NotificationMeta {
  */
 export const UPGRADE_REVIEW_HREF = "/dashboard/admin#yeu-cau-nang-cap";
 
-export function notificationHref(n: Pick<StudioNotification, "kind" | "contract_id" | "album_id">): string | null {
+/** Màn "Thông tin buổi chụp" (form khách điền) của một hợp đồng. */
+export function intakeViewHref(contractId: string): string {
+  return `/dashboard/studio/contracts/${contractId}/buoi-chup`;
+}
+
+/**
+ * Thông báo "khách đã điền thông tin buổi chụp". Bản cũ lưu kind "info" và
+ * nhét cả khối chi tiết vào message — vẫn nhận ra qua câu mở đầu để những
+ * thông báo đã có trong chuông cũng mở đúng màn và hiện gọn.
+ */
+function isIntake(n: Pick<StudioNotification, "kind" | "contract_id"> & { message?: string }): boolean {
+  if (!n.contract_id) return false;
+  return n.kind === "intake" || (n.kind === "info" && /đã điền thông tin buổi chụp/.test(n.message ?? ""));
+}
+
+/** Nội dung hiện trong danh sách. Thông báo form cũ chỉ giữ câu đầu (chi tiết xem ở màn riêng). */
+export function notificationText(n: Pick<StudioNotification, "kind" | "contract_id" | "message">): string {
+  if (isIntake(n)) return n.message.split("\n")[0];
+  return n.message;
+}
+
+export function notificationHref(
+  n: Pick<StudioNotification, "kind" | "contract_id" | "album_id"> & { message?: string }
+): string | null {
+  if (isIntake(n)) return intakeViewHref(n.contract_id!);
   if (n.album_id) return `/dashboard/albums/${n.album_id}`;
   if (n.contract_id) return `/dashboard/studio/contracts/${n.contract_id}`;
   if (n.kind === "quote_accepted") return "/dashboard/studio/quotes";
