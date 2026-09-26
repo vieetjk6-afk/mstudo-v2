@@ -12,9 +12,13 @@
  *
  * Cần: `npm run dev` đang chạy và ffmpeg có libx264.
  *
- *   node scripts/quay-video-hop-dong.mjs [--dir ra/] [--only ngang|doc] [--url http://localhost:3000]
+ *   node scripts/quay-video-hop-dong.mjs [--dir ra/] [--only ngang|doc] [--ngan] [--url http://localhost:3000]
  *
  * Ra: <dir>/hop-dong-ngang.mp4 (1920×1080) và <dir>/hop-dong-doc.mp4 (1080×1920).
+ * `--ngan`: bản ~60 giây cho TikTok / Reels (bỏ bớt thao tác phụ, nhịp nhanh
+ * hơn, tin nhắn được "dán" một lần thay vì gõ) → <dir>/hop-dong-<khổ>-60s.mp4.
+ * `--dai <giây>`: tăng/giảm tốc đều cả video cho vừa đúng thời lượng đó
+ * (bản --ngan mặc định ép về 59.9 giây — TikTok/Reels tính 60s là tròn).
  */
 import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
@@ -29,6 +33,10 @@ const opt = (name, def) => {
 const base = opt("url", "http://localhost:3000");
 const outDir = resolve(opt("dir", "."));
 const only = opt("only", "");
+const SHORT = args.includes("--ngan");
+/** Thời lượng theo bản: đầy đủ hay ~60 giây. */
+const T = (full, short) => (SHORT ? short : full);
+const TARGET = Number(opt("dai", SHORT ? "59.9" : "0")) || 0;
 const ffmpeg = process.env.FFMPEG || "ffmpeg";
 const EXEC = process.env.CHROME_PATH || undefined;
 
@@ -247,6 +255,8 @@ async function startRecorder(page, fmt, dir) {
 }
 
 async function encode({ frames, end }, out, [w, h]) {
+  const total = end - frames[0].t;
+  const speed = TARGET > 0 ? `setpts=PTS/${(total / TARGET).toFixed(5)},` : "";
   const list = join(frames[0].file, "..", "list.txt");
   let txt = "";
   for (let i = 0; i < frames.length; i++) {
@@ -257,7 +267,7 @@ async function encode({ frames, end }, out, [w, h]) {
   writeFileSync(list, txt);
   await new Promise((res, rej) => {
     const ff = spawn(ffmpeg, ["-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", list,
-      "-vf", `scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=0xf3f2ef,fps=30,format=yuv420p`,
+      "-vf", `${speed}scale=${w}:${h}:force_original_aspect_ratio=decrease,pad=${w}:${h}:(ow-iw)/2:(oh-ih)/2:color=0xf3f2ef,fps=30,format=yuv420p`,
       "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-movflags", "+faststart", out], { stdio: "inherit" });
     ff.on("close", (c) => (c === 0 ? res() : rej(new Error(`ffmpeg thoát mã ${c}`))));
   });
@@ -296,7 +306,7 @@ function actor(page) {
     await wait(150);
   }
 
-  async function moveTo(loc, { dx = 0.5, dy = 0.5, ms = 650 } = {}) {
+  async function moveTo(loc, { dx = 0.5, dy = 0.5, ms = T(650, 450) } = {}) {
     await reveal(loc);
     const box = await loc.boundingBox();
     const tx = box.x + box.width * dx;
@@ -319,24 +329,25 @@ function actor(page) {
 
   async function click(loc, opts = {}) {
     const { x, y } = await moveTo(loc, opts);
-    await wait(120);
+    await wait(T(120, 70));
     await ov("press", true);
     await ov("ripple");
     await page.mouse.click(x, y);
     await wait(90);
     await ov("press", false);
-    await wait(opts.after ?? 350);
+    await wait(opts.after ?? T(350, 250));
   }
 
   async function type(loc, text, { delay = 55, clear = false } = {}) {
-    await click(loc, { after: 150 });
+    await click(loc, { after: T(150, 100) });
     if (clear) {
       await page.keyboard.press("Control+A");
       await page.keyboard.press("Backspace");
       await wait(120);
     }
-    await page.keyboard.type(text, { delay });
-    await wait(300);
+    if (delay === 0) await page.keyboard.insertText(text); // "dán" một lần
+    else await page.keyboard.type(text, { delay });
+    await wait(T(300, 200));
   }
 
   /** Mở ô chọn: vẽ danh sách giả (ô chọn gốc của hệ điều hành không lên hình). */
@@ -361,9 +372,9 @@ function actor(page) {
     }, value);
     for (let i = 0; i <= info.hi; i++) {
       await ov("dropdown", info.rect, info.groups, i);
-      await wait(i === 0 ? 700 : 170);
+      await wait(i === 0 ? T(700, 500) : 170);
     }
-    await wait(450);
+    await wait(T(450, 350));
     await ov("dropdown", null);
     await loc.selectOption(value);
     await wait(500);
@@ -420,141 +431,147 @@ async function record(name, fmt) {
   await open("hop-dong-moi");
   await A.cardInstant(CARD.intro);
   const rec = await startRecorder(page, fmt, tmp);
-  await A.wait(3800);
+  await A.wait(T(3800, 2200));
 
   // ── PHẦN 1: tạo hợp đồng tự động ─────────────────────────────────────────
   await A.card(CARD.s1);
-  await A.wait(2600);
+  await A.wait(T(2600, 1400));
   await A.card(null);
-  await A.wait(600);
+  await A.wait(T(600, 300));
   const box = page.locator("textarea").first();
   await A.caption("1", "Dán tin nhắn chốt với khách", "Tên, SĐT, gói, ngày giờ, địa điểm, tiền cọc… viết tự nhiên là được");
-  await A.type(box, QUICK_TEXT, { delay: portrait ? 22 : 26 });
-  await A.wait(700);
+  await A.type(box, QUICK_TEXT, { delay: SHORT ? 0 : portrait ? 22 : 26 });
+  await A.wait(T(700, 900));
   await A.caption("1", "Các mục nhận ra được tự đánh dấu ✓", "Nhìn là biết còn thiếu thông tin gì");
-  await A.moveTo(page.getByText("Tên khách", { exact: false }).first(), { ms: 800 });
-  await A.wait(1600);
+  await A.moveTo(page.getByText("Tên khách", { exact: false }).first(), { ms: T(800, 500) });
+  await A.wait(T(1600, 700));
   await A.caption("1", "Bấm “Phân tích & điền hợp đồng”", "AI đọc tin nhắn và điền sẵn cả 6 bước");
-  await A.click(page.getByRole("button", { name: /Phân tích/ }), { after: 2200 });
+  await A.click(page.getByRole("button", { name: /Phân tích/ }), { after: T(2200, 1900) });
   await page.evaluate(() => window.scrollTo(0, 0));
   await A.caption("1", "Hợp đồng đã điền sẵn — chỉ cần soát lại", "Khách, gói dịch vụ, lịch chụp, nhân sự, các đợt thanh toán");
-  await A.wait(1800);
+  await A.wait(T(1800, 900));
   const vh = fmt.viewport.height;
-  for (let i = 0; i < 4; i++) {
-    await A.smoothScroll(vh * 0.55, 1100);
-    await A.wait(900);
+  for (let i = 0; i < T(4, 2); i++) {
+    await A.smoothScroll(vh * T(0.55, 0.7), T(1100, 900));
+    await A.wait(T(900, 400));
   }
   await A.caption("1", "Bấm vào dòng bất kỳ để sửa, xong bấm “Tạo & gửi khách ký”", "Khách ký online ngay trên điện thoại");
-  await A.moveTo(page.getByRole("button", { name: /Tạo & gửi khách ký/ }).filter({ visible: true }).first(), { ms: 900 });
-  await A.wait(2600);
+  await A.moveTo(page.getByRole("button", { name: /Tạo & gửi khách ký/ }).filter({ visible: true }).first(), { ms: T(900, 600) });
+  await A.wait(T(2600, 1300));
   await A.caption(null);
   await A.card(CARD.s2);
-  await A.wait(700);
+  await A.wait(T(700, 500));
 
   // ── PHẦN 2: chỉnh sửa hạng mục ───────────────────────────────────────────
   rec.pause();
   await open("video-hop-dong-hang-muc");
   await A.cardInstant(CARD.s2);
   rec.resume();
-  await A.wait(2200);
+  await A.wait(T(2200, 1200));
   await A.card(null);
-  await A.wait(600);
+  await A.wait(T(600, 300));
 
   const sel = page.getByLabel("Chọn hạng mục");
   await A.caption("2", "Chọn hạng mục từ danh sách đổ xuống", "Lấy thẳng từ bảng giá của studio — không phải gõ lại");
   await A.pickFromSelect(sel, "pl:0");
-  await A.wait(600);
+  await A.wait(T(600, 300));
   // Dòng vừa thêm là dòng cuối cùng (chưa có giảm giá).
   const rows = page.locator('input[placeholder="VD: Chụp phóng sự cả ngày"]');
   const newRow = rows.last();
   await A.reveal(newRow, 0.3);
-  await A.caption("2", "Hạng mục mới tự vào nhóm “phụ”", "Mỗi hợp đồng có một hạng mục chính, còn lại là phụ");
-  await A.wait(1600);
+  if (!SHORT) {
+    await A.caption("2", "Hạng mục mới tự vào nhóm “phụ”", "Mỗi hợp đồng có một hạng mục chính, còn lại là phụ");
+    await A.wait(1600);
+  }
   await A.caption("2", "Đánh dấu hạng mục chính / phụ", "Bấm một cái là đổi");
-  await A.click(page.getByRole("radio", { name: "Hạng mục phụ" }).nth(2), { after: 900 });
+  await A.click(page.getByRole("radio", { name: "Hạng mục phụ" }).nth(2), { after: T(900, 600) });
 
   await A.caption("2", "Tick “Thêm vào mốc lịch” rồi chọn ngày", "Hạng mục tự thành một mốc trên lịch studio và lịch thợ");
-  await A.click(page.getByRole("checkbox", { name: /Thêm vào mốc lịch/ }).nth(3), { after: 500 });
+  await A.click(page.getByRole("checkbox", { name: /Thêm vào mốc lịch/ }).nth(3), { after: T(500, 300) });
   const dateBox = newRow.locator("xpath=ancestor::div[contains(@class,'grid-cols-12')][1]").locator('input[placeholder="dd/mm/yyyy"]');
-  await A.type(dateBox, "18/12/2026", { delay: 90 });
-  await A.wait(1500);
+  await A.type(dateBox, "18/12/2026", { delay: T(90, 50) });
+  await A.wait(T(1500, 900));
 
   // Mốc vừa tạo nằm trong thẻ "Lịch & mốc thời gian" — cuộn xuống xem, rồi sửa tên.
   const msCard = page.getByText("Lịch & mốc thời gian").first();
   await A.caption("2", "Mốc lịch đã có — tên lấy theo hạng mục", "Hiện luôn trên Lịch, Google Calendar và cổng khách");
   await A.reveal(msCard, 0.12);
-  await A.wait(1800);
+  await A.wait(T(1800, 1000));
   await A.caption("2", "Nút sửa tên mốc thời gian", "Đổi tên, ngày, giờ ngay tại chỗ — lịch thợ đổi theo");
   const pencils = page.getByRole("button", { name: "Sửa tên mốc" });
-  await A.click(pencils.last(), { after: 500 });
-  await A.type(page.getByPlaceholder("Tên mốc", { exact: true }), "Đãi trước nhà gái", { clear: true, delay: 70 });
-  await A.click(page.getByRole("button", { name: "Lưu", exact: true }), { after: 1800 });
+  await A.click(pencils.last(), { after: T(500, 300) });
+  await A.type(page.getByPlaceholder("Tên mốc", { exact: true }), "Đãi trước nhà gái", { clear: true, delay: T(70, 40) });
+  await A.click(page.getByRole("button", { name: "Lưu", exact: true }), { after: T(1800, 1100) });
 
-  // Thêm / bớt / sửa số lượng.
-  await A.caption("2", "Thêm, bớt, sửa số lượng và giá", "Tổng hợp đồng tự cộng lại");
-  const qty = page.locator('input[type="number"]').nth(2);
-  await A.type(qty, "3", { clear: true, delay: 100 });
-  await A.wait(500);
-  await A.click(page.getByRole("button", { name: /Thêm giảm giá/ }).first(), { after: 500 });
-  const disc = page.locator('input[placeholder="Tên khoản giảm giá"]').last();
-  await A.type(disc, " khách quen", { delay: 55 });
-  const discPrice = disc.locator("xpath=ancestor::div[contains(@class,'grid-cols-12')][1]").locator("input").nth(1);
-  await A.type(discPrice, "1000000", { clear: true, delay: 70 });
-  await A.wait(500);
+  if (!SHORT) {
+    // Thêm / bớt / sửa số lượng.
+    await A.caption("2", "Thêm, bớt, sửa số lượng và giá", "Tổng hợp đồng tự cộng lại");
+    const qty = page.locator('input[type="number"]').nth(2);
+    await A.type(qty, "3", { clear: true, delay: 100 });
+    await A.wait(500);
+    await A.click(page.getByRole("button", { name: /Thêm giảm giá/ }).first(), { after: 500 });
+    const disc = page.locator('input[placeholder="Tên khoản giảm giá"]').last();
+    await A.type(disc, " khách quen", { delay: 55 });
+    const discPrice = disc.locator("xpath=ancestor::div[contains(@class,'grid-cols-12')][1]").locator("input").nth(1);
+    await A.type(discPrice, "1000000", { clear: true, delay: 70 });
+    await A.wait(500);
+  }
   await A.caption("2", "Bỏ hạng mục khách không lấy", "Bấm thùng rác ở cuối dòng");
-  await A.click(page.getByRole("button", { name: "Xoá" }).nth(1), { after: 900 });
-  await A.caption("2", "Bấm “Lưu hạng mục” là xong", "");
-  await A.click(page.getByRole("button", { name: "Lưu hạng mục" }), { after: 2200 });
+  await A.click(page.getByRole("button", { name: "Xoá" }).nth(1), { after: T(900, 600) });
+  await A.caption("2", "Bấm “Lưu hạng mục” là xong", "Tổng hợp đồng tự cộng lại");
+  await A.click(page.getByRole("button", { name: "Lưu hạng mục" }), { after: T(2200, 1300) });
   await A.caption(null);
   await A.card(CARD.s3);
-  await A.wait(700);
+  await A.wait(T(700, 500));
 
   // ── PHẦN 3: phụ lục ──────────────────────────────────────────────────────
   rec.pause();
   await open("video-hop-dong-phu-luc");
   await A.cardInstant(CARD.s3);
   rec.resume();
-  await A.wait(2200);
+  await A.wait(T(2200, 1200));
   await A.card(null);
-  await A.wait(500);
+  await A.wait(T(500, 300));
   await A.caption("3", "Khách đã ký — bảng giá gốc tự khoá", "Không ai sửa lén được giá đã thoả thuận");
-  await A.moveTo(page.getByTestId("items-locked"), { ms: 800 });
-  await A.wait(2200);
-  await A.caption("3", "Thêm / bớt dịch vụ bằng phụ lục", "");
-  await A.click(page.getByRole("button", { name: /Tạo phụ lục/ }).first(), { after: 500 });
-  await A.type(page.getByPlaceholder(/Tiêu đề \(vd/), "Thêm quay phim & flycam", { delay: 45 });
+  await A.moveTo(page.getByTestId("items-locked"), { ms: T(800, 500) });
+  await A.wait(T(2200, 1100));
+  await A.caption("3", "Thêm / bớt dịch vụ bằng phụ lục", "Tổng phụ lục tự tính — cộng, trừ rõ ràng");
+  await A.click(page.getByRole("button", { name: /Tạo phụ lục/ }).first(), { after: T(500, 300) });
+  await A.type(page.getByPlaceholder(/Tiêu đề \(vd/), T("Thêm quay phim & flycam", "Thêm quay phim highlight"), { delay: T(45, 30) });
   const addBox = page.getByTestId("contract-addenda");
-  await A.type(addBox.getByPlaceholder("Tên dịch vụ").first(), "Quay phim highlight 5 phút", { delay: 40 });
-  await A.type(addBox.locator("input[inputmode], input.text-right").first(), "6000000", { clear: true, delay: 60 });
-  await A.click(addBox.getByRole("button", { name: /Thêm dòng/ }), { after: 400 });
-  await A.type(addBox.getByPlaceholder("Tên dịch vụ").last(), "Flycam quay toàn cảnh", { delay: 40 });
-  await A.type(addBox.locator("input.text-right").nth(1), "2500000", { clear: true, delay: 60 });
-  await A.click(addBox.getByRole("button", { name: /Thêm giảm giá/ }), { after: 400 });
-  await A.type(addBox.locator("input.text-right").nth(2), "500000", { clear: true, delay: 60 });
-  await A.caption("3", "Tổng phụ lục tự tính — cộng, trừ rõ ràng", "");
-  await A.moveTo(addBox.getByText("Tổng phụ lục"), { ms: 700 });
-  await A.wait(1400);
-  await A.click(addBox.getByRole("button", { name: "Tạo phụ lục" }).last(), { after: 1400 });
+  await A.type(addBox.getByPlaceholder("Tên dịch vụ").first(), "Quay phim highlight 5 phút", { delay: T(40, 28) });
+  await A.type(addBox.locator("input[inputmode], input.text-right").first(), "6000000", { clear: true, delay: T(60, 45) });
+  if (!SHORT) {
+    await A.click(addBox.getByRole("button", { name: /Thêm dòng/ }), { after: 400 });
+    await A.type(addBox.getByPlaceholder("Tên dịch vụ").last(), "Flycam quay toàn cảnh", { delay: 40 });
+    await A.type(addBox.locator("input.text-right").nth(1), "2500000", { clear: true, delay: 60 });
+    await A.click(addBox.getByRole("button", { name: /Thêm giảm giá/ }), { after: 400 });
+    await A.type(addBox.locator("input.text-right").nth(2), "500000", { clear: true, delay: 60 });
+    await A.caption("3", "Tổng phụ lục tự tính — cộng, trừ rõ ràng", "");
+    await A.moveTo(addBox.getByText("Tổng phụ lục"), { ms: 700 });
+    await A.wait(1400);
+  }
+  await A.click(addBox.getByRole("button", { name: "Tạo phụ lục" }).last(), { after: T(1400, 1000) });
   await A.caption("3", "Khách ký phụ lục ngay trên trang hợp đồng", "Hoặc studio “Xác nhận thay khách” khi đã chốt qua điện thoại / Zalo");
-  await A.wait(2000);
-  await A.click(addBox.getByRole("button", { name: /Xác nhận thay khách/ }), { after: 300 });
-  await A.type(addBox.getByPlaceholder(/Tên người đồng ý/), "Mai Anh", { delay: 70 });
-  await A.click(addBox.getByRole("button", { name: "Xác nhận", exact: true }), { after: 1400 });
+  await A.wait(T(2000, 1000));
+  await A.click(addBox.getByRole("button", { name: /Xác nhận thay khách/ }), { after: T(300, 200) });
+  await A.type(addBox.getByPlaceholder(/Tên người đồng ý/), "Mai Anh", { delay: T(70, 45) });
+  await A.click(addBox.getByRole("button", { name: "Xác nhận", exact: true }), { after: T(1400, 1000) });
   await A.caption("3", "Đã ký — phụ lục cộng thẳng vào tổng hợp đồng", "Lưu vết ai xác nhận, lúc nào");
   await A.reveal(page.getByText("Tổng giá trị hợp đồng").first(), 0.45);
-  await A.wait(2800);
+  await A.wait(T(2800, 1800));
   await A.caption(null);
 
   await A.card(CARD.outro);
-  await A.wait(4200);
+  await A.wait(T(4200, 3000));
 
   const shot = await rec.stop();
   await browser.close();
-  const out = join(outDir, `hop-dong-${name}.mp4`);
+  const out = join(outDir, `hop-dong-${name}${SHORT ? "-60s" : ""}.mp4`);
   await encode(shot, out, fmt.out);
   rmSync(tmp, { recursive: true, force: true });
   const { frames } = shot;
-  const secs = frames.length ? (shot.end - frames[0].t).toFixed(1) : "0";
+  const secs = TARGET > 0 ? TARGET.toFixed(1) : frames.length ? (shot.end - frames[0].t).toFixed(1) : "0";
   console.log(`Đã xuất ${out} · ${frames.length} khung · ~${secs}s`);
 }
 

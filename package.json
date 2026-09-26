@@ -90,6 +90,7 @@
     "ui:luoi-anh": "node scripts/do-luoi-anh.mjs",
     "video:sepay": "node scripts/xuat-video-sepay.mjs public/huong-dan/sepay.mp4",
     "video:hop-dong": "node scripts/quay-video-hop-dong.mjs --dir video-ra",
+    "video:hop-dong-60s": "node scripts/quay-video-hop-dong.mjs --dir video-ra --only doc --ngan",
     "postinstall": "node scripts/chep-mediapipe.mjs"
   },
   "dependencies": {
