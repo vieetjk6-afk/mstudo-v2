@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import StaffFrame from "./StaffFrame";
+import { needsMfa } from "@/lib/auth-guards";
 
 export const metadata: Metadata = {
   title: "Cổng nhân viên",
@@ -7,6 +9,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function StaffLayout({ children }: { children: React.ReactNode }) {
+export default async function StaffLayout({ children }: { children: React.ReactNode }) {
+  if (await needsMfa()) redirect("/login/mfa?next=/staff");
   return <StaffFrame>{children}</StaffFrame>;
 }

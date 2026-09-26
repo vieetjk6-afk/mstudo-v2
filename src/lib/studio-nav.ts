@@ -5,7 +5,7 @@ import {
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
   MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
-  Building2, UserRound, MessageCircle, Star, Truck,
+  Building2, UserRound, MessageCircle, Star, Truck, History, Ticket,
   type LucideIcon,
 } from "lucide-react";
 
@@ -79,6 +79,8 @@ const OWNER_OK = ["owner", "admin"] as const;
  */
 const MONEY_OK = ["owner", "admin", "accountant", "branch_manager"] as const;
 const ADMIN_ONLY = ["admin"] as const;
+/** Nhật ký thao tác: chủ studio + kế toán — người cần truy "ai xoá khoản thu này". */
+const AUDIT_OK = ["owner", "admin", "accountant"] as const;
 
 export const NAV_GROUPS: readonly NavGroup[] = [
   {
@@ -110,6 +112,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // Danh bạ khách về đây (trước ở nhóm "Khách hàng" riêng): nó là tài sản
       // bán hàng — tái ký, giới thiệu, chăm sau cưới — chứ không phải việc hậu kỳ.
       { href: "/dashboard/studio/clients", label: "Khách hàng", icon: Users, minTier: "booking", roles: MANAGER_OK, keywords: "danh ba khach" },
+      // Voucher cạnh Khách hàng: bán thẻ quà là việc BÁN HÀNG (mùa lễ), và khách
+      // dùng voucher ở hợp đồng — cùng mạch với danh bạ khách.
+      { href: "/dashboard/studio/vouchers", label: "Voucher & thẻ quà", icon: Ticket, minTier: "plus", roles: MANAGER_OK, keywords: "voucher the qua tang gift card ma qua le tet valentine 8/3 20/10", sub: "Bán thẻ quà, khách dùng ở hợp đồng" },
       { href: "/dashboard/studio/reviews", label: "Đánh giá khách", icon: Star, minTier: "booking", roles: MANAGER_OK, badge: "reviews", keywords: "danh gia cam nhan review sao testimonial y kien khach duyet", sub: "Duyệt & trả lời cảm nhận khách" },
     ],
   },
@@ -167,6 +172,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // roles/minTier giữ nguyên MANAGER_OK + "booking": nhóm chỉ là NHÃN, mỗi
       // mục vẫn tự lọc theo vai trò — quản lý không xem được tiền vẫn thấy đúng
       // một dòng "Gói & bảng giá" trong nhóm này, không lộ thêm con số nào.
+      // Nhật ký đứng TRƯỚC bảng giá (bảng giá phải cuối nhóm — xem test studio-nav):
+      // mở khi có chuyện ("khoản thu này đâu rồi?"), thường hơn sửa giá gói.
+      { href: "/dashboard/studio/audit", label: "Nhật ký thao tác", icon: History, minTier: "plus", roles: AUDIT_OK, keywords: "lich su ai xoa ai sua nhat ky audit log dau vet thao tac", sub: "Ai ghi, sửa, xoá tiền & hợp đồng" },
       { href: "/dashboard/studio/pricing", label: "Gói & bảng giá", icon: Package, minTier: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/packages"], keywords: "goi dich vu bang gia" },
     ],
   },

@@ -9,6 +9,7 @@ import { fmtDate } from "@/lib/date";
 import { vnd } from "@/lib/types";
 import { daysBetween, shiftDate, rescheduleClientMessage } from "@/lib/contract-cancel";
 import { studioFor, loadContract, contractCrew, notifyContractChanged } from "@/lib/contract-change";
+import { logAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -133,6 +134,12 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     .update({ event_date: newDate, event_time: newTime })
     .eq("id", contract.id);
   if (cErr) return NextResponse.json({ error: "write_failed", message: cErr.message }, { status: 500 });
+  await logAction(db, {
+    ownerId: contract.owner_id, actorId: (profile.actingUserId as string | undefined) ?? profile.id,
+    action: "contract.reschedule", entity: "contract", entityId: contract.id,
+    summary: `Dời lịch ${oldDate ? fmtDate(oldDate) : "—"} → ${fmtDate(newDate)}${fee > 0 ? ` · phí ${vnd(fee)}` : ""}${reason ? ` · ${reason}` : ""}`,
+    before: { event_date: oldDate, event_time: oldTime }, after: { event_date: newDate, event_time: newTime },
+  });
 
   const delta = oldDate ? daysBetween(oldDate, newDate) ?? 0 : 0;
   let shiftedPlans = 0;

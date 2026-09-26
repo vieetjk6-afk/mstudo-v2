@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getSessionUser, getProfileById } from "@/lib/auth-guards";
+import { getSessionUser, getProfileById, needsMfa } from "@/lib/auth-guards";
 import DashboardChrome from "@/components/DashboardChrome";
 import NavProgress from "@/components/NavProgress";
 import TrialExpiredBanner from "@/components/TrialExpiredBanner";
@@ -29,6 +29,8 @@ export default async function DashboardLayout({
   const user = await getSessionUser();
 
   if (!user) redirect("/login");
+  // Đã bật xác thực 2 lớp mà phiên mới qua mật khẩu → nhập mã trước đã.
+  if (await needsMfa()) redirect("/login/mfa");
 
   let profile = await getProfileById(user.id);
 

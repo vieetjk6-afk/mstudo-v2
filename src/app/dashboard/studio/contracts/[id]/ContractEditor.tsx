@@ -36,6 +36,7 @@ import {
   UserPlus,
   Printer,
   PackageCheck,
+  History,
 } from "lucide-react";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { createClient } from "@/lib/supabase/client";
@@ -97,6 +98,9 @@ import {
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 import { CREW_TASK_LABEL, CREW_SIDE_LABEL, CREW_TASKS, CREW_SIDES } from "@/lib/crew-show";
 import TimeInput from "@/components/TimeInput";
+import ContractAddenda from "./ContractAddenda";
+import VoucherRedeem from "./VoucherRedeem";
+import { isSignedLockError, type ContractAddendum } from "@/lib/contract-addenda";
 import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
@@ -212,6 +216,9 @@ export default function ContractEditor({
   contract,
   studioHost = null,
   initialItems,
+  initialAddenda = [],
+  canEditAddenda = false,
+  canSeeAudit = false,
   initialCrew,
   crewPortalUrl = "",
   initialRequests,
@@ -249,6 +256,12 @@ export default function ContractEditor({
   studioHost?: string | null;
   storyComingSoon?: boolean;
   initialItems: ContractItem[];
+  /** Phụ lục của hợp đồng (chỉ có sau migration contract_addenda.sql). */
+  initialAddenda?: ContractAddendum[];
+  /** Vai trò được tạo/xác nhận phụ lục (không phải nhân viên thường). */
+  canEditAddenda?: boolean;
+  /** Chủ studio / kế toán: thấy nút "Lịch sử" dẫn tới nhật ký thao tác của hợp đồng. */
+  canSeeAudit?: boolean;
   initialCrew: ContractCrew[];
   /** Cổng thợ của studio — nhét vào tin nhắn gửi thợ. */
   crewPortalUrl?: string;
@@ -394,9 +407,15 @@ export default function ContractEditor({
       return next;
     });
 
+  // Bảng hạng mục CHỈ giữ hạng mục gốc. Dòng của phụ lục đã ký (addendum_id)
+  // nằm riêng: chúng bất biến và hiện trong thẻ Phụ lục, nhưng vẫn vào tổng tiền.
   const [items, setItems] = useState<ItemRow[]>(
-    initialItems.map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 }))
+    initialItems.filter((i) => !i.addendum_id).map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 }))
   );
+  const [addendumItems, setAddendumItems] = useState<ContractItem[]>(initialItems.filter((i) => !!i.addendum_id));
+  // Khách đã ký → hạng mục gốc khoá (trigger guard_signed_contract_items dưới DB
+  // là hàng rào thật; ở đây chỉ để không cho bấm rồi mới báo lỗi).
+  const itemsLocked = !!contract.client_signed_at;
   // Phải map ĐÚNG BẰNG refetchCrew. Thiếu trường nào ở đây thì sau khi tải lại
   // trang ô đó trắng, và lần lưu kế tiếp ghi đè trắng lên giá trị đã lưu —
   // trông y như "bấm lưu không ăn".
@@ -518,7 +537,7 @@ export default function ContractEditor({
     setTimeout(() => setMsg(null), 2200);
   }
 
-  const total = contractTotal(signedItems(items));
+  const total = contractTotal(signedItems(items)) + contractTotal(addendumItems);
   const collected = sumAmounts(payments);
   const balance = total - collected;
 
@@ -727,9 +746,22 @@ export default function ContractEditor({
    * ở lần chạy hiện tại (panel Thuê đồ cần đúng việc này).
    */
   async function luuHangMuc(list: ItemRow[]) {
+    if (itemsLocked) {
+      toast("Khách đã ký hợp đồng — thêm/bớt dịch vụ bằng phụ lục ở tab Hạng mục.");
+      return;
+    }
     setBusy("items");
     const clean = serializeItems(list);
-    await supabase.from("contract_items").delete().eq("contract_id", contract.id);
+    const del = await supabase.from("contract_items").delete().eq("contract_id", contract.id).is("addendum_id", null);
+    // Chưa chạy migration contract_addenda.sql thì chưa có cột addendum_id →
+    // xoá như cũ. Có cột mà bị khoá thì DỪNG, đừng chèn thêm một bảng giá nữa.
+    if (del.error && isMissingColumn(del.error, "addendum_id")) {
+      await supabase.from("contract_items").delete().eq("contract_id", contract.id);
+    } else if (del.error) {
+      setBusy(null);
+      toast(isSignedLockError(del.error) ? "Khách đã ký hợp đồng — bảng giá đã khoá, dùng phụ lục." : `Lưu hạng mục KHÔNG thành công: ${del.error.message}`);
+      return;
+    }
     if (clean.length) {
       const rows = clean.map((i, idx) => ({ ...i, contract_id: contract.id, position: idx }));
       let { error } = await supabase.from("contract_items").insert(rows);
@@ -754,7 +786,7 @@ export default function ContractEditor({
       .order("position");
     // Map phải ĐỦ TRƯỜNG như lúc nạp trang: thiếu trường nào ở đây thì sau khi
     // bấm Lưu ô đó trắng ngay trên màn hình, dù trong database vẫn còn.
-    setItems((data ?? []).map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 })));
+    setItems((data ?? []).filter((i) => !i.addendum_id).map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 })));
     setBusy(null);
     toast("Đã lưu hạng mục.");
   }
@@ -771,6 +803,10 @@ export default function ContractEditor({
    * bảng hạng mục trước khi ghi lại nên dòng chèn từ nơi khác sẽ mất.
    */
   async function themHangMucVaLuu(name: string, unit_price: number) {
+    if (itemsLocked) {
+      toast(`Khách đã ký — thêm “${name}” bằng một phụ lục ở tab Hạng mục.`);
+      return;
+    }
     const moi: ItemRow[] = [...items, { name, qty: 1, unit_price } as ItemRow];
     setItems(moi);
     await luuHangMuc(moi);
@@ -1545,6 +1581,11 @@ export default function ContractEditor({
           <button onClick={printContract} className="act-btn">
             <Printer size={16} /> Xuất PDF
           </button>
+          {canSeeAudit && (
+            <Link href={`/dashboard/studio/audit?contract=${contract.id}`} className="act-btn">
+              <History size={16} /> Lịch sử
+            </Link>
+          )}
           <a href={shareUrl} target="_blank" rel="noreferrer" className="act-btn">
             <FileText size={16} /> Xem như khách
           </a>
@@ -1878,6 +1919,13 @@ export default function ContractEditor({
               <>
               {/* Items */}
               <div className="card p-6">
+                {itemsLocked && (
+                  <p className="mb-3 flex items-start gap-2 rounded-[10px] px-3 py-2 text-[12.5px]" style={{ background: "var(--s-amberS)", color: "var(--s-amber)" }} data-testid="items-locked">
+                    <PenLine size={15} className="mt-0.5 flex-none" />
+                    Khách đã ký hợp đồng nên bảng giá gốc đã khoá. Thêm/bớt dịch vụ bằng phụ lục bên dưới — khách ký phụ lục thì mới cộng vào tổng.
+                  </p>
+                )}
+                <fieldset disabled={itemsLocked} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                   <h2 className="font-serif text-lg font-medium">Hạng mục &amp; báo giá</h2>
                   {/* flex-wrap: hai nút này không co được (chữ trong nút không
@@ -1988,14 +2036,29 @@ export default function ContractEditor({
                     })}
                   </div>
                 )}
+                </fieldset>
                 <div className="mt-4 flex items-center justify-between border-t pt-4" style={{ borderColor: "var(--border)" }}>
-                  <span className="text-sm" style={{ color: "var(--text2)" }}>Tổng giá trị hợp đồng</span>
+                  <span className="text-sm" style={{ color: "var(--text2)" }}>
+                    Tổng giá trị hợp đồng{addendumItems.length > 0 ? " (gồm phụ lục đã ký)" : ""}
+                  </span>
                   <span className="font-serif text-xl font-medium">{vnd(total)}</span>
                 </div>
-                <button onClick={saveItems} disabled={busy === "items"} className="btn-primary mt-4">
-                  {busy === "items" ? "Đang lưu…" : "Lưu hạng mục"}
-                </button>
+                {!itemsLocked && (
+                  <button onClick={saveItems} disabled={busy === "items"} className="btn-primary mt-4">
+                    {busy === "items" ? "Đang lưu…" : "Lưu hạng mục"}
+                  </button>
+                )}
               </div>
+
+              {itemsLocked && (
+                <ContractAddenda
+                  contractId={contract.id}
+                  initialAddenda={initialAddenda}
+                  canEdit={canEditAddenda}
+                  onChanged={setAddendumItems}
+                  toast={toast}
+                />
+              )}
 
               {/* Dịch vụ & điều khoản — chuyển từ tab Thông tin sang đây: chọn
                   dịch vụ là NẠP LẠI bộ điều khoản ngay bên dưới, nên hai ô phải
@@ -2115,6 +2178,9 @@ export default function ContractEditor({
                 <p className="mb-4 text-[11px]" style={{ color: "var(--text3)" }}>
                   Mỗi đợt thu đặt sẵn số tiền &amp; hạn — bấm “Đã thu” để ghi nhận khoản thu (quá hạn chưa thu sẽ cảnh báo ở Tổng quan).
                 </p>
+                {f.status !== "cancelled" && (
+                  <VoucherRedeem contractId={contract.id} balance={balance} onRedeemed={(p) => setPayments((prev) => [p, ...prev])} toast={toast} />
+                )}
 
                 {plan.length > 0 && (
                   <ul className="space-y-2">

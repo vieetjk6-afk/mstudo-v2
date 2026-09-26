@@ -390,5 +390,116 @@ ok(
   q("moi", "select count(*) from information_schema.tables where table_name = 'contract_reschedules'") === "1"
 );
 
+
+// ── Vòng 2: khoá giá sau ký · phụ lục · nhật ký thao tác · voucher ──────────
+// Các trigger này chỉ chạy khi CÓ người dùng (auth.uid() khác null) — lời gọi
+// từ máy chủ (service role) được đi qua. Shim ở trên luôn trả null, nên ở đây
+// đổi nó sang đọc biến phiên `test.uid` để đóng vai "người dùng đang đăng nhập".
+// Thân hàm để trong nháy đơn: q() đưa SQL qua shell trong nháy kép, `$q$` sẽ bị
+// shell nuốt mất.
+const P = "00000000-0000-0000-0000-00000000aa01";
+const SIGNED = "00000000-0000-0000-0000-00000000cc01";
+const OPEN = "00000000-0000-0000-0000-00000000cc02";
+const AS_USER = `set test.uid = '${P}'; `;
+q(
+  "moi",
+  "create or replace function auth.uid() returns uuid language sql stable as " +
+    "'select nullif(current_setting(''test.uid'', true), '''')::uuid'"
+);
+q(
+  "moi",
+  "set session_replication_role = replica; " +
+    `insert into public.profiles (id, email) values ('${P}', 'chu@studio.test') on conflict do nothing; ` +
+    `insert into public.studio_contracts (id, owner_id, title, client_token, client_signed_at) values ('${SIGNED}', '${P}', 'HĐ đã ký', 'tok-da-ky', now()); ` +
+    `insert into public.studio_contracts (id, owner_id, title, client_token) values ('${OPEN}', '${P}', 'HĐ chưa ký', 'tok-chua-ky'); ` +
+    `insert into public.contract_items (contract_id, name, qty, unit_price, position) values ('${SIGNED}', 'Gói cưới', 1, 20000000, 0)`
+);
+const threw = (sql) => {
+  try {
+    q("moi", sql);
+    return "";
+  } catch (e) {
+    return String(e.stderr || e);
+  }
+};
+ok(
+  "Hợp đồng ĐÃ KÝ: người dùng không chèn thêm hạng mục gốc được",
+  threw(AS_USER + `insert into public.contract_items (contract_id, name, qty, unit_price, position) values ('${SIGNED}', 'Lén thêm', 1, 1, 1)`).includes("contract_signed_locked")
+);
+ok(
+  "…không xoá được hạng mục gốc",
+  threw(AS_USER + `delete from public.contract_items where contract_id = '${SIGNED}'`).includes("contract_signed_locked")
+);
+ok(
+  "…không sửa giá được",
+  threw(AS_USER + `update public.contract_items set unit_price = 1 where contract_id = '${SIGNED}'`).includes("contract_signed_locked")
+);
+ok(
+  "Hợp đồng CHƯA ký: người dùng vẫn lưu hạng mục như cũ",
+  threw(AS_USER + `insert into public.contract_items (contract_id, name, qty, unit_price, position) values ('${OPEN}', 'Album', 2, 1500000, 0)`) === ""
+);
+ok(
+  "…và lần lưu đó vào nhật ký, MỘT dòng cho cả câu lệnh, kèm người thao tác",
+  q("moi", `select count(*) || '/' || max(actor_id::text) || '/' || max(summary) from public.studio_audit_log where contract_id = '${OPEN}' and action = 'items.save'`) ===
+    `1/${P}/Lưu 1 hạng mục · tổng 3.000.000đ`
+);
+// Máy chủ chép phụ lục đã ký thành hạng mục (auth.uid() null → đi qua hàng rào).
+q(
+  "moi",
+  `insert into public.contract_addenda (id, contract_id, owner_id, no, lines, signed_at, signed_by, signed_name) values ` +
+    `('00000000-0000-0000-0000-00000000ad01', '${SIGNED}', '${P}', 1, '[]', now(), 'client', 'Lan'); ` +
+    `insert into public.contract_items (contract_id, addendum_id, name, qty, unit_price, position) values ` +
+    `('${SIGNED}', '00000000-0000-0000-0000-00000000ad01', 'Thêm album', 1, 2500000, 5)`
+);
+ok(
+  "Máy chủ chép được dòng phụ lục vào hợp đồng đã ký",
+  q("moi", `select count(*) from public.contract_items where contract_id = '${SIGNED}' and addendum_id is not null`) === "1"
+);
+ok(
+  "…còn người dùng thì không xoá được dòng phụ lục đã ký",
+  threw(AS_USER + `delete from public.contract_items where addendum_id is not null`).includes("contract_signed_locked")
+);
+ok(
+  "…và máy chủ không ghi dòng nhật ký trùng (trigger bỏ qua khi không có người dùng)",
+  q("moi", `select count(*) from public.studio_audit_log where contract_id = '${SIGNED}'`) === "0"
+);
+// Nhật ký tiền: xoá khoản thu phải để lại dấu, kể cả khi dòng đã biến mất.
+q("moi", AS_USER + `insert into public.contract_payments (id, contract_id, amount, kind) values ('00000000-0000-0000-0000-00000000bb01', '${OPEN}', 5000000, 'deposit')`);
+q("moi", AS_USER + `delete from public.contract_payments where id = '00000000-0000-0000-0000-00000000bb01'`);
+ok(
+  "Ghi rồi xoá khoản thu → nhật ký có đủ hai dòng",
+  q("moi", `select string_agg(action, ',' order by id) from public.studio_audit_log where entity = 'payment'`) === "payment.insert,payment.delete"
+);
+ok(
+  "…người dùng không sửa / xoá được nhật ký (không có policy ghi)",
+  q("moi", "select count(*) from pg_policies where tablename = 'studio_audit_log' and cmd <> 'SELECT'") === "0"
+);
+// Voucher: xoá khoản thu voucher → thẻ quay về còn hiệu lực.
+q(
+  "moi",
+  `insert into public.contract_payments (id, contract_id, amount, kind) values ('00000000-0000-0000-0000-00000000bb02', '${OPEN}', 2000000, 'voucher'); ` +
+    `insert into public.studio_vouchers (owner_id, code, amount, paid, status, redeemed_contract_id, redeemed_payment_id, redeemed_at) values ` +
+    `('${P}', 'QUA-TEST22', 2000000, true, 'redeemed', '${OPEN}', '00000000-0000-0000-0000-00000000bb02', now())`
+);
+ok(
+  "Xoá khoản thu voucher → thẻ về lại 'còn hiệu lực'",
+  q(
+    "moi",
+    "delete from public.contract_payments where id = '00000000-0000-0000-0000-00000000bb02'; " +
+      "select status || '/' || coalesce(redeemed_payment_id::text, 'null') from public.studio_vouchers where code = 'QUA-TEST22'"
+  ).split("\n").pop() === "active/null"
+);
+
+// Xoá hẳn một hợp đồng ĐÃ KÝ có phụ lục (studio xoá HĐ đã huỷ): hạng mục và dòng
+// phụ lục bị xoá dây chuyền — hàng rào khoá giá KHÔNG được chặn việc đó.
+ok(
+  "Người dùng xoá được hợp đồng đã ký có phụ lục (xoá dây chuyền không bị khoá)",
+  threw(AS_USER + `delete from public.studio_contracts where id = '${SIGNED}'`) === ""
+);
+ok(
+  "…và việc xoá hợp đồng vào nhật ký",
+  q("moi", `select count(*) from public.studio_audit_log where contract_id = '${SIGNED}' and action = 'contract.delete'`) === "1"
+);
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

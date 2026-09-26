@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { openRemainderIfSettled } from "@/lib/bank-apply";
-import { asPaymentMethod } from "@/lib/types";
+import { asPaymentMethod, vnd } from "@/lib/types";
+import { logAction } from "@/lib/audit-log";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,11 @@ export async function POST(req: Request) {
     .update({ paid: true, paid_at: new Date().toISOString(), payment_id: payment?.id ?? null })
     .eq("id", plan.id);
   if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
+  await logAction(db, {
+    ownerId: contract.owner_id, actorId: (profile.actingUserId as string | undefined) ?? profile.id,
+    action: "payment.insert", entity: "payment", entityId: payment?.id ?? null, contractId: contract.id,
+    summary: `Ghi thu ${vnd(amount)} · ${plan.label || "đợt thanh toán"} (từ Tổng quan)`,
+  });
 
   // Thu hết các đợt mà hợp đồng vẫn còn dư nợ → mở tiếp một đợt cho phần còn
   // lại, đúng như màn hợp đồng làm. Không có bước này thì phần dư biến mất khỏi
