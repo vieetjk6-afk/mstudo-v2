@@ -500,6 +500,8 @@ export interface ContractCrew {
   side: string | null;
   start_time: string | null;
   end_time: string | null;
+  /** Mốc thời gian (studio_events) người này được gán; null = buổi chính. */
+  event_id?: string | null;
 }
 
 /** 'refund' = tiền TRẢ LẠI khách khi huỷ; amount của nó là số ÂM (xem migrations/contract_cancel_reschedule.sql). */

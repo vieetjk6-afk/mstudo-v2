@@ -29,11 +29,13 @@ export default async function TeamTab() {
 
   const supabase = await createClient();
   const [{ data: crewRows }, { data: roster }] = await Promise.all([
-    supabase
-      .from("contract_crew")
-      .select("name, phone, role, status, contract:studio_contracts!inner(id, owner_id, title, event_date, status)")
-      .eq("contract.owner_id", profile.id)
-      .not("contract.event_date", "is", null),
+    (async () => {
+      // Kèm mốc thời gian (event) nếu có: thợ gán cho "đãi trước" làm ở ngày của
+      // mốc chứ không phải buổi chính. Chưa chạy migration thì lùi lối cũ.
+      const q = (cols: string) => supabase.from("contract_crew").select(cols).eq("contract.owner_id", profile.id);
+      const r = await q("name, phone, role, status, event:studio_events(title, event_date), contract:studio_contracts!inner(id, owner_id, title, event_date, status)");
+      return r.error ? q("name, phone, role, status, contract:studio_contracts!inner(id, owner_id, title, event_date, status)") : r;
+    })(),
     supabase.from("studio_crew").select("name, phone, role").eq("owner_id", profile.id).order("name"),
   ]);
 
@@ -43,18 +45,19 @@ export default async function TeamTab() {
     role: TeamAssignment["role"];
     status: TeamAssignment["status"];
     contract: { id: string; title: string; event_date: string | null; status: string } | null;
+    event?: { title: string; event_date: string } | null;
   };
 
   const assignments: TeamAssignment[] = ((crewRows ?? []) as unknown as Row[])
-    .filter((r) => r.contract?.event_date && r.contract.status !== "cancelled")
+    .filter((r) => (r.event?.event_date || r.contract?.event_date) && r.contract?.status !== "cancelled")
     .map((r) => ({
       name: r.name || r.phone || "—",
       phone: r.phone,
       role: r.role,
       status: r.status,
-      date: r.contract!.event_date as string,
+      date: (r.event?.event_date || r.contract!.event_date) as string,
       contractId: r.contract!.id,
-      contractTitle: r.contract!.title,
+      contractTitle: r.event ? `${r.event.title} · ${r.contract!.title}` : r.contract!.title,
     }));
 
   // Sổ thợ, khoá theo SĐT dạng số — crew_unavailable/crew_shift_plan đều lưu
