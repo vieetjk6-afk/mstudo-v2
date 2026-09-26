@@ -6,6 +6,7 @@ import { fmtDate, fmtDateLunar, fmtDateTime, todayVN } from "@/lib/date";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { intakeViewHref } from "@/lib/notifications";
+import { cleanIntakeLocation } from "@/lib/intake-text";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -3103,17 +3104,17 @@ export default function ContractEditor({
                           ["SĐT", contract.intake.bride?.phone],
                           ["Makeup", contract.intake.bride?.makeup_time],
                           ["Giờ lễ", contract.intake.bride?.ceremony_time],
-                        ]} location={contract.intake.bride?.location} />
+                        ]} location={cleanIntakeLocation(contract.intake.bride?.location)} />
                         <IntakeSide title="Nhà trai (chú rể)" rows={[
                           ["Tên", contract.intake.groom?.name],
                           ["SĐT", contract.intake.groom?.phone],
                           ["Xuất phát", contract.intake.groom?.depart_time],
                           ["Giờ lễ", contract.intake.groom?.ceremony_time],
-                        ]} location={contract.intake.groom?.location} />
+                        ]} location={cleanIntakeLocation(contract.intake.groom?.location)} />
                         {(contract.intake.reception?.time || contract.intake.reception?.location) && (
                           <IntakeSide title="Tiệc cưới / địa điểm khác" rows={[
                             ["Giờ đãi tiệc", contract.intake.reception?.time],
-                          ]} location={contract.intake.reception?.location} />
+                          ]} location={cleanIntakeLocation(contract.intake.reception?.location)} />
                         )}
                       </>
                     ) : (
@@ -3121,7 +3122,7 @@ export default function ContractEditor({
                         ["Người làm việc trực tiếp", contract.intake.contact_name],
                         ["SĐT", contract.intake.contact_phone],
                         ["Thời gian bắt đầu", contract.intake.start_time],
-                      ]} location={contract.intake.location} />
+                      ]} location={cleanIntakeLocation(contract.intake.location)} />
                     )}
                     {contract.intake.note && (
                       <p className="sm:col-span-2 text-[12px]" style={{ color: "var(--text2)" }}>

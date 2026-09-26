@@ -6,6 +6,7 @@ import { useState } from "react";
 import { Check, Loader2, Send, Pencil } from "lucide-react";
 import LocationPicker from "@/components/LocationPicker";
 import type { ContractIntake, IntakeLocation } from "@/lib/types";
+import { cleanIntakeLocation } from "@/lib/intake-text";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -36,21 +37,21 @@ export default function IntakeForm({
   const [bridePhone, setBridePhone] = useState(initial?.bride?.phone ?? "");
   const [brideMakeup, setBrideMakeup] = useState(initial?.bride?.makeup_time ?? "");
   const [brideCeremony, setBrideCeremony] = useState(initial?.bride?.ceremony_time ?? "");
-  const [brideLoc, setBrideLoc] = useState<IntakeLocation | null>(initial?.bride?.location ?? null);
+  const [brideLoc, setBrideLoc] = useState<IntakeLocation | null>(cleanIntakeLocation(initial?.bride?.location));
   // Nhà trai
   const [groomName, setGroomName] = useState(initial?.groom?.name ?? "");
   const [groomPhone, setGroomPhone] = useState(initial?.groom?.phone ?? "");
   const [groomDepart, setGroomDepart] = useState(initial?.groom?.depart_time ?? "");
   const [groomCeremony, setGroomCeremony] = useState(initial?.groom?.ceremony_time ?? "");
-  const [groomLoc, setGroomLoc] = useState<IntakeLocation | null>(initial?.groom?.location ?? null);
+  const [groomLoc, setGroomLoc] = useState<IntakeLocation | null>(cleanIntakeLocation(initial?.groom?.location));
   // Tiệc cưới / địa điểm chung
   const [receptionTime, setReceptionTime] = useState(initial?.reception?.time ?? "");
-  const [receptionLoc, setReceptionLoc] = useState<IntakeLocation | null>(initial?.reception?.location ?? null);
+  const [receptionLoc, setReceptionLoc] = useState<IntakeLocation | null>(cleanIntakeLocation(initial?.reception?.location));
   // Chung (loại khác)
   const [contactName, setContactName] = useState(initial?.contact_name ?? "");
   const [contactPhone, setContactPhone] = useState(initial?.contact_phone ?? "");
   const [startTime, setStartTime] = useState(initial?.start_time ?? "");
-  const [genLoc, setGenLoc] = useState<IntakeLocation | null>(initial?.location ?? null);
+  const [genLoc, setGenLoc] = useState<IntakeLocation | null>(cleanIntakeLocation(initial?.location));
   const [note, setNote] = useState(initial?.note ?? "");
 
   async function submit() {
@@ -133,7 +134,7 @@ export default function IntakeForm({
             </div>
             <div className="mt-3">
               <label className={lbl}>Vị trí nhà gái</label>
-              <LocationPicker value={brideLoc} onChange={setBrideLoc} />
+              <LocationPicker token={token} value={brideLoc} onChange={setBrideLoc} />
             </div>
           </section>
 
@@ -159,7 +160,7 @@ export default function IntakeForm({
             </div>
             <div className="mt-3">
               <label className={lbl}>Vị trí nhà trai</label>
-              <LocationPicker value={groomLoc} onChange={setGroomLoc} />
+              <LocationPicker token={token} value={groomLoc} onChange={setGroomLoc} />
             </div>
           </section>
 
@@ -171,7 +172,7 @@ export default function IntakeForm({
             </div>
             <div className="mt-3">
               <label className={lbl}>Vị trí nơi đãi tiệc</label>
-              <LocationPicker value={receptionLoc} onChange={setReceptionLoc} />
+              <LocationPicker token={token} value={receptionLoc} onChange={setReceptionLoc} />
             </div>
           </section>
         </>
@@ -193,7 +194,7 @@ export default function IntakeForm({
           </div>
           <div className="mt-3">
             <label className={lbl}>Vị trí</label>
-            <LocationPicker value={genLoc} onChange={setGenLoc} />
+            <LocationPicker token={token} value={genLoc} onChange={setGenLoc} />
           </div>
         </section>
       )}

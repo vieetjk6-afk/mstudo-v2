@@ -1,4 +1,5 @@
 import type { ContractIntake, IntakeLocation } from "@/lib/types";
+import { validCoords } from "@/lib/map-coords";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THÔNG TIN BUỔI CHỤP (form khách điền) → các PHẦN riêng lẻ.
@@ -24,6 +25,17 @@ export type IntakeSection = {
 
 const v = (s: string | null | undefined) => (s ?? "").trim();
 
+/**
+ * Vị trí dùng được, hoặc null. Bản cũ từng lưu (0,0) — link "q=0,0" giữa Đại
+ * Tây Dương — khi khách dán link rút gọn; hiện ra hay gửi cho thợ đều chỉ gây
+ * lạc đường, nên coi như khách chưa nhập vị trí.
+ */
+export function cleanIntakeLocation(loc: IntakeLocation | null | undefined): IntakeLocation | null {
+  if (!loc || typeof loc.mapUrl !== "string" || !loc.mapUrl) return null;
+  if (loc.lat == null && loc.lng == null) return loc;
+  return validCoords(loc.lat, loc.lng) ? loc : null;
+}
+
 /** Tách dữ liệu form thành các phần. Phần trống hẳn bị bỏ. */
 export function intakeSections(intake: ContractIntake | null | undefined): IntakeSection[] {
   if (!intake) return [];
@@ -45,7 +57,7 @@ export function intakeSections(intake: ContractIntake | null | undefined): Intak
         { label: "Makeup", value: v(b.makeup_time) },
         { label: "Giờ lễ", value: v(b.ceremony_time) },
       ],
-      location: b.location ?? null,
+      location: cleanIntakeLocation(b.location),
     });
     push({
       key: "trai",
@@ -56,13 +68,13 @@ export function intakeSections(intake: ContractIntake | null | undefined): Intak
         { label: "Xuất phát", value: v(g.depart_time) },
         { label: "Giờ lễ", value: v(g.ceremony_time) },
       ],
-      location: g.location ?? null,
+      location: cleanIntakeLocation(g.location),
     });
     push({
       key: "tiec",
       title: "Tiệc cưới / địa điểm khác",
       rows: [{ label: "Giờ đãi tiệc", value: v(r.time) }],
-      location: r.location ?? null,
+      location: cleanIntakeLocation(r.location),
     });
   } else {
     push({
@@ -73,7 +85,7 @@ export function intakeSections(intake: ContractIntake | null | undefined): Intak
         { label: "SĐT", value: v(intake.contact_phone), tel: true },
         { label: "Bắt đầu", value: v(intake.start_time) },
       ],
-      location: intake.location ?? null,
+      location: cleanIntakeLocation(intake.location),
     });
   }
   if (v(intake.note)) push({ key: "ghichu", title: "Ghi chú của khách", rows: [{ label: "Ghi chú", value: v(intake.note) }], location: null });
