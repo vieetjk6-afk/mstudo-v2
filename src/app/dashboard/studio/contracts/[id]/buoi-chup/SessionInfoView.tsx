@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ClipboardList, Copy, Link as LinkIcon, MapPin, Phone, Send, Share2, UserPlus } from "lucide-react";
+import { ArrowLeft, ClipboardList, Copy, Link as LinkIcon, MapPin, Navigation, Phone, Send, Share2, UserPlus } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
 import ZaloSendButton from "@/components/ZaloSendButton";
@@ -10,7 +10,7 @@ import { fmtDate, fmtDateTime } from "@/lib/date";
 import { CREW_ROLE_LABEL, type ContractCrew, type ContractIntake } from "@/lib/types";
 import { CREW_SIDE_LABEL } from "@/lib/crew-show";
 import {
-  intakeSections, intakeMessage, sectionText, defaultKeysForSide,
+  intakeSections, intakeMessage, sectionText, defaultKeysForSide, intakeDirections,
   type IntakeSection, type IntakeSectionKey,
 } from "@/lib/intake-text";
 
@@ -203,15 +203,16 @@ function SectionCard({ s, onCopy, onShare }: { s: IntakeSection; onCopy: () => v
         ))}
       </dl>
       {s.location && (
-        <a
-          href={s.location.mapUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-semibold"
-          style={{ color: "var(--bl)" }}
-        >
-          <MapPin size={13} /> Xem vị trí / chỉ đường
-        </a>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px] font-semibold">
+          <a href={s.location.mapUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ color: "var(--bl)" }}>
+            <MapPin size={13} /> Xem vị trí
+          </a>
+          {intakeDirections(s.location) && (
+            <a href={intakeDirections(s.location)!} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ color: "var(--bl)" }}>
+              <Navigation size={13} /> Chỉ đường
+            </a>
+          )}
+        </div>
       )}
       <div className="mt-2.5 flex gap-2">
         <button type="button" onClick={onCopy} className="act-btn flex-1">

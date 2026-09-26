@@ -7,9 +7,21 @@
 
 export type Coords = { lat: number; lng: number };
 
-/** Link Google Maps mở đúng toạ độ (studio/thợ bấm là có chỉ đường). */
+/**
+ * Link Google Maps mở đúng toạ độ (studio/thợ bấm là có chỉ đường).
+ *
+ * Dùng dạng "Maps URLs" chính thức (`/maps/search/?api=1&query=`) — dạng DUY
+ * NHẤT Google cam kết mở được ở mọi nơi: trình duyệt, app Google Maps Android
+ * VÀ iOS. Dạng cũ `google.com/maps?q=lat,lng` bị app Google Maps trên iPhone
+ * chặn với lỗi "Liên kết không được hỗ trợ" khi bấm từ app khác (Zalo, mstudo).
+ */
 export function mapsLink(lat: number, lng: number): string {
-  return `https://www.google.com/maps?q=${lat.toFixed(6)},${lng.toFixed(6)}`;
+  return `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lng.toFixed(6)}`;
+}
+
+/** Link mở thẳng chế độ CHỈ ĐƯỜNG tới toạ độ (cùng chuẩn Maps URLs). */
+export function directionsLink(lat: number, lng: number): string {
+  return `https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lng.toFixed(6)}`;
 }
 
 /**

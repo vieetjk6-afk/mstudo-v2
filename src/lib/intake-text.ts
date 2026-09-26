@@ -1,5 +1,5 @@
 import type { ContractIntake, IntakeLocation } from "@/lib/types";
-import { validCoords } from "@/lib/map-coords";
+import { directionsLink, mapsLink, validCoords } from "@/lib/map-coords";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THÔNG TIN BUỔI CHỤP (form khách điền) → các PHẦN riêng lẻ.
@@ -33,7 +33,10 @@ const v = (s: string | null | undefined) => (s ?? "").trim();
 export function cleanIntakeLocation(loc: IntakeLocation | null | undefined): IntakeLocation | null {
   if (!loc || typeof loc.mapUrl !== "string" || !loc.mapUrl) return null;
   if (loc.lat == null && loc.lng == null) return loc;
-  return validCoords(loc.lat, loc.lng) ? loc : null;
+  const c = validCoords(loc.lat, loc.lng);
+  // Dựng lại link từ toạ độ: dữ liệu cũ lưu dạng `maps?q=` mà app Google Maps
+  // trên iPhone không mở được (xem mapsLink).
+  return c ? { lat: c.lat, lng: c.lng, mapUrl: mapsLink(c.lat, c.lng) } : null;
 }
 
 /** Tách dữ liệu form thành các phần. Phần trống hẳn bị bỏ. */
@@ -92,11 +95,21 @@ export function intakeSections(intake: ContractIntake | null | undefined): Intak
   return out;
 }
 
+/** Link chỉ đường tới vị trí (chỉ khi có toạ độ). */
+export function intakeDirections(loc: IntakeLocation | null | undefined): string | null {
+  const c = loc ? validCoords(loc.lat, loc.lng) : null;
+  return c ? directionsLink(c.lat, c.lng) : null;
+}
+
 /** Một phần dưới dạng chữ thuần (để sao chép / gửi Zalo). */
 export function sectionText(s: IntakeSection): string {
   const lines = [s.title.toUpperCase()];
   for (const r of s.rows) lines.push(`• ${r.label}: ${r.value}`);
-  if (s.location) lines.push(`• Vị trí: ${s.location.mapUrl}`);
+  if (s.location) {
+    lines.push(`• Vị trí: ${s.location.mapUrl}`);
+    const d = intakeDirections(s.location);
+    if (d) lines.push(`• Chỉ đường: ${d}`);
+  }
   return lines.join("\n");
 }
 
