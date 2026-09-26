@@ -17,7 +17,8 @@
     "migrations/contract_addenda.sql",
     "migrations/studio_vouchers.sql",
     "migrations/studio_audit_log.sql",
-    "migrations/contract_crew_milestone.sql"
+    "migrations/contract_crew_milestone.sql",
+    "migrations/contract_item_tier_milestone.sql"
   ],
   "muc": [
     {
@@ -714,6 +715,15 @@
       "bang": [],
       "cot": [
         "contract_crew.event_id"
+      ]
+    },
+    {
+      "file": "migrations/contract_item_tier_milestone.sql",
+      "mo_ta": "Hạng mục chính/phụ và gắn hạng mục vào mốc lịch",
+      "bang": [],
+      "cot": [
+        "contract_items.event_id",
+        "contract_items.tier"
       ]
     }
   ]

@@ -27,6 +27,7 @@ import {
   ClipboardList,
   MapPin,
   Tag,
+  Pencil,
   Phone,
   MessageCircle,
   UserRound,
@@ -113,7 +114,22 @@ import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
  * Nhờ vậy không cần giữ thêm state "ô nào đang mở" — thứ sẽ lệch ngay khi
  * studio xoá một dòng ở giữa danh sách.
  */
-type ItemRow = { id?: string; name: string; description?: string; qty: number; unit_price: number; is_discount?: boolean };
+type ItemRow = {
+  id?: string; name: string; description?: string; qty: number; unit_price: number; is_discount?: boolean;
+  /** Hạng mục chính / phụ. Trống = chưa phân loại (hợp đồng cũ). */
+  tier?: "main" | "sub" | "";
+  /** Mốc lịch (studio_events) tạo từ hạng mục này. */
+  event_id?: string | null;
+};
+
+/** Một nguồn duy nhất đổi dòng contract_items → ItemRow (lúc nạp trang và sau khi lưu). */
+function toItemRow(i: ContractItem): ItemRow {
+  return {
+    id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty,
+    unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0,
+    tier: i.tier ?? "", event_id: i.event_id ?? null,
+  };
+}
 
 /* ── Tab của màn chi tiết (bản thiết kế) ────────────────────────────────────
    Bản thiết kế xếp mọi thứ của một hợp đồng vào một thẻ có thanh tab, thay vì
@@ -131,6 +147,11 @@ const DETAIL_TABS = [
 ] as const;
 type DetailTab = (typeof DETAIL_TABS)[number][0];
 
+/** Hạng mục mới: chưa có hạng mục chính thì là chính, có rồi thì là phụ. */
+function nextTier(items: ItemRow[]): "main" | "sub" {
+  return items.some((i) => !i.is_discount && i.tier === "main") ? "sub" : "main";
+}
+
 /** Quy đổi hạng mục sang giá trị CÓ DẤU để tính tổng (giảm giá = âm). */
 function signedItems(items: ItemRow[]): { qty: number; unit_price: number }[] {
   return items.map((i) => ({
@@ -140,7 +161,7 @@ function signedItems(items: ItemRow[]): { qty: number; unit_price: number }[] {
 }
 
 /** Chuẩn hoá hạng mục để lưu DB: giảm giá lưu unit_price âm, còn lại dương. */
-function serializeItems(items: ItemRow[]): { name: string; description: string | null; qty: number; unit_price: number }[] {
+function serializeItems(items: ItemRow[]): { name: string; description: string | null; qty: number; unit_price: number; tier: string | null; event_id: string | null }[] {
   return items
     .map((i) => {
       const mag = Math.max(0, Math.round(Number(i.unit_price) || 0));
@@ -151,6 +172,8 @@ function serializeItems(items: ItemRow[]): { name: string; description: string |
         description: i.description?.trim() || null,
         qty: i.is_discount ? 1 : Math.max(0, Math.round(Number(i.qty) || 0)),
         unit_price: i.is_discount ? -mag : mag,
+        tier: i.is_discount ? null : i.tier || null,
+        event_id: i.event_id ?? null,
       };
     })
     .filter((i) => i.name);
@@ -410,7 +433,7 @@ export default function ContractEditor({
   // Bảng hạng mục CHỈ giữ hạng mục gốc. Dòng của phụ lục đã ký (addendum_id)
   // nằm riêng: chúng bất biến và hiện trong thẻ Phụ lục, nhưng vẫn vào tổng tiền.
   const [items, setItems] = useState<ItemRow[]>(
-    initialItems.filter((i) => !i.addendum_id).map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 }))
+    initialItems.filter((i) => !i.addendum_id).map(toItemRow)
   );
   const [addendumItems, setAddendumItems] = useState<ContractItem[]>(initialItems.filter((i) => !!i.addendum_id));
   // Khách đã ký → hạng mục gốc khoá (trigger guard_signed_contract_items dưới DB
@@ -522,6 +545,10 @@ export default function ContractEditor({
 
   // new milestone form
   const [ms, setMs] = useState({ title: "", event_date: "", event_time: "" });
+  // Hạng mục đã tick "Thêm vào mốc lịch" nhưng chưa chọn ngày (theo vị trí dòng).
+  const [msOpen, setMsOpen] = useState<Record<number, boolean>>({});
+  // Mốc đang sửa tại chỗ (tên / ngày / giờ) — null = không sửa mốc nào.
+  const [editMs, setEditMs] = useState<{ id: string; title: string; event_date: string; event_time: string } | null>(null);
   // studio signature
   const [studioSignName, setStudioSignName] = useState(contract.studio_signed_name ?? "");
   const [studioSignature, setStudioSignature] = useState("");
@@ -764,13 +791,7 @@ export default function ContractEditor({
     }
     if (clean.length) {
       const rows = clean.map((i, idx) => ({ ...i, contract_id: contract.id, position: idx }));
-      let { error } = await supabase.from("contract_items").insert(rows);
-      // Database chưa chạy migration cột `description` thì ghi lại bản không có
-      // cột đó. Nếu không, hàm này vừa XOÁ hết hạng mục xong lại chèn hỏng —
-      // studio bấm "Lưu" một cái là mất sạch bảng giá.
-      if (error && isMissingColumn(error, "description")) {
-        ({ error } = await supabase.from("contract_items").insert(withoutColumn(rows, "description")));
-      }
+      const error = await insertItems(rows);
       if (error) {
         // Báo thật, và giữ nguyên state đang có để studio bấm Lưu lại được —
         // trước đây lỗi insert bị nuốt, màn hình vẫn hiện "Đã lưu hạng mục."
@@ -786,9 +807,26 @@ export default function ContractEditor({
       .order("position");
     // Map phải ĐỦ TRƯỜNG như lúc nạp trang: thiếu trường nào ở đây thì sau khi
     // bấm Lưu ô đó trắng ngay trên màn hình, dù trong database vẫn còn.
-    setItems((data ?? []).filter((i) => !i.addendum_id).map((i) => ({ id: i.id, name: i.name, description: i.description ?? undefined, qty: i.qty, unit_price: Math.abs(i.unit_price), is_discount: i.unit_price < 0 })));
+    setItems(((data ?? []) as ContractItem[]).filter((i) => !i.addendum_id).map(toItemRow));
     setBusy(null);
     toast("Đã lưu hạng mục.");
+  }
+
+  /**
+   * Chèn hạng mục, chịu được database chưa chạy migration. Thiếu cột nào
+   * (description, tier, event_id) thì bỏ cột đó rồi ghi lại — nếu không, hàm
+   * lưu vừa XOÁ hết hạng mục xong lại chèn hỏng, studio mất sạch bảng giá.
+   */
+  async function insertItems(rows: Record<string, unknown>[]) {
+    let cur = rows;
+    let { error } = await supabase.from("contract_items").insert(cur);
+    for (const col of ["description", "tier", "event_id"]) {
+      if (error && isMissingColumn(error, col)) {
+        cur = withoutColumn(cur, col);
+        ({ error } = await supabase.from("contract_items").insert(cur));
+      }
+    }
+    return error;
   }
 
   /** Vỏ bọc KHÔNG tham số cho nút "Lưu hạng mục" — xem ghi chú ở luuHangMuc. */
@@ -1075,36 +1113,107 @@ export default function ContractEditor({
   }
 
   // ── Milestones (shared with the studio calendar via studio_events) ─────
+  /** Tạo một mốc lịch cho hợp đồng này — dùng chung cho form "Thêm mốc lịch" và hạng mục. */
+  async function createMilestone(title: string, event_date: string, event_time: string | null): Promise<StudioEvent | null> {
+    const { data, error } = await supabase
+      .from("studio_events")
+      .insert({
+        owner_id: contract.owner_id,
+        contract_id: contract.id,
+        title: title.trim() || "Mốc lịch",
+        event_date,
+        event_time: event_time?.trim() || null,
+        remind: true,
+      })
+      .select("*")
+      .single();
+    if (error || !data) {
+      toast(`Lỗi: ${error?.message ?? "không tạo được mốc lịch"}`);
+      return null;
+    }
+    setMilestones((p) => [...p, data as StudioEvent].sort((a, b) => a.event_date.localeCompare(b.event_date)));
+    // Mốc lịch (ngày đãi trước, thử đồ...) cũng là lịch phải chạy — trước đây
+    // chỉ ghi vào DB nên Google Lịch chỉ có mỗi ngày chụp chính.
+    syncMilestone(data.id as string, "upsert");
+    return data as StudioEvent;
+  }
+
   async function addMilestone() {
     if (!ms.event_date) {
       toast("Chọn ngày cho mốc lịch.");
       return;
     }
     setBusy("milestone");
-    const { data, error } = await supabase
-      .from("studio_events")
-      .insert({
-        owner_id: contract.owner_id,
-        contract_id: contract.id,
-        title: ms.title.trim() || "Mốc lịch",
-        event_date: ms.event_date,
-        event_time: ms.event_time.trim() || null,
-        remind: true,
-      })
-      .select("*")
-      .single();
+    const ev = await createMilestone(ms.title, ms.event_date, ms.event_time);
     setBusy(null);
+    if (ev) setMs({ title: "", event_date: "", event_time: "" });
+  }
+
+  /**
+   * Sửa tên / ngày / giờ của một mốc. Thợ được gán vào mốc này có lịch ghi
+   * "<tên mốc> · <tên hợp đồng>" theo ngày của mốc, nên lưu lại nhân sự luôn để
+   * lịch thợ đổi theo — không thì lịch thợ còn tên và ngày cũ.
+   */
+  async function updateMilestone(id: string, patch: { title?: string; event_date?: string; event_time?: string | null }) {
+    const clean = {
+      ...patch,
+      ...(patch.title !== undefined ? { title: patch.title.trim() || "Mốc lịch" } : {}),
+      ...(patch.event_time !== undefined ? { event_time: patch.event_time?.trim() || null } : {}),
+    };
+    if (clean.event_date === "") {
+      toast("Chọn ngày cho mốc lịch.");
+      return false;
+    }
+    const { error } = await supabase.from("studio_events").update(clean).eq("id", id);
     if (error) {
       toast(`Lỗi: ${error.message}`);
+      return false;
+    }
+    setMilestones((p) => p.map((m) => (m.id === id ? { ...m, ...clean } : m)).sort((a, b) => a.event_date.localeCompare(b.event_date)));
+    syncMilestone(id, "upsert");
+    if (crew.some((c) => c.id && c.eventId === id)) await saveCrew();
+    else toast("Đã cập nhật mốc lịch.");
+    return true;
+  }
+
+  async function saveEditMilestone() {
+    if (!editMs) return;
+    setBusy("milestone-edit");
+    const ok = await updateMilestone(editMs.id, { title: editMs.title, event_date: editMs.event_date, event_time: editMs.event_time });
+    setBusy(null);
+    if (ok) setEditMs(null);
+  }
+
+  // ── Hạng mục ↔ mốc lịch ───────────────────────────────────────
+  /**
+   * Chọn ngày cho hạng mục → tạo mốc lịch mang tên hạng mục (vd: "Đãi trước")
+   * rồi lưu liên kết. Lưu hạng mục ngay: mốc đã nằm trong DB rồi, để tới lần
+   * bấm Lưu sau thì studio có thể đã đóng trang và liên kết mất.
+   */
+  async function linkItemToMilestone(idx: number, date: string) {
+    const it = items[idx];
+    if (!it || !date) return;
+    if (it.event_id) {
+      await updateMilestone(it.event_id, { event_date: date });
       return;
     }
-    if (data) {
-      setMilestones((p) => [...p, data as StudioEvent].sort((a, b) => a.event_date.localeCompare(b.event_date)));
-      setMs({ title: "", event_date: "", event_time: "" });
-      // Mốc lịch (ngày đãi trước, thử đồ...) cũng là lịch phải chạy — trước đây
-      // chỉ ghi vào DB nên Google Lịch chỉ có mỗi ngày chụp chính.
-      syncMilestone(data.id as string, "upsert");
-    }
+    setBusy("item-ms");
+    const ev = await createMilestone(it.name || "Mốc lịch", date, null);
+    setBusy(null);
+    if (!ev) return;
+    const next = items.map((x, i) => (i === idx ? { ...x, event_id: ev.id } : x));
+    setItems(next);
+    await luuHangMuc(next);
+  }
+
+  async function unlinkItemMilestone(idx: number) {
+    const id = items[idx]?.event_id;
+    if (!id) return;
+    if (!confirm("Bỏ mốc lịch của hạng mục này? Mốc sẽ bị xoá khỏi lịch.")) return;
+    await deleteMilestone(id);
+    const next = items.map((x, i) => (i === idx ? { ...x, event_id: null } : x));
+    setItems(next);
+    await luuHangMuc(next);
   }
 
   async function deleteMilestone(id: string) {
@@ -1114,6 +1223,8 @@ export default function ContractEditor({
     await syncMilestone(id, "delete");
     await supabase.from("studio_events").delete().eq("id", id);
     setMilestones((p) => p.filter((m) => m.id !== id));
+    // Hạng mục gắn mốc này: DB tự bỏ liên kết (on delete set null), state theo.
+    setItems((p) => p.map((x) => (x.event_id === id ? { ...x, event_id: null } : x)));
     // DB tự đưa phân công về buổi chính (on delete set null), nhưng mốc trên
     // lịch thợ chỉ đổi ngày khi lưu lại nhân sự — nhắc studio bấm Lưu.
     if (crew.some((c) => c.eventId === id)) {
@@ -1457,9 +1568,10 @@ export default function ContractEditor({
       toast(`Lỗi: ${error?.message || "không nhân bản được"}`);
       return;
     }
-    const clean = serializeItems(items);
+    // Mốc lịch thuộc hợp đồng cũ — bản sao không mang theo liên kết đó.
+    const clean = serializeItems(items).map((i) => ({ ...i, event_id: null }));
     if (clean.length) {
-      await supabase.from("contract_items").insert(clean.map((i, idx) => ({ ...i, contract_id: data.id, position: idx })));
+      await insertItems(clean.map((i, idx) => ({ ...i, contract_id: data.id, position: idx })));
     }
     router.push(`/dashboard/studio/contracts/${data.id}`);
   }
@@ -1932,31 +2044,51 @@ export default function ContractEditor({
                       bẻ dòng), nên màn 320px phải cho chúng xuống dòng — không
                       thì cả trang kéo ngang được 50px. */}
                   <div className="flex flex-wrap items-center gap-1.5">
-                    <button onClick={() => setItems((p) => [...p, { name: "", qty: 1, unit_price: 0 }])} className="btn-ghost px-2.5 py-1.5 text-xs">
-                      <Plus size={14} /> Thêm hạng mục
+                    <button onClick={() => setItems((p) => [...p, { name: "", qty: 1, unit_price: 0, tier: nextTier(p) }])} className="btn-ghost px-2.5 py-1.5 text-xs">
+                      <Plus size={14} /> Tự nhập
                     </button>
                     <button onClick={() => setItems((p) => [...p, { name: "Giảm giá", qty: 1, unit_price: 0, is_discount: true }])} className="btn-ghost px-2.5 py-1.5 text-xs" style={{ color: "var(--s-amber)" }}>
                       <Tag size={14} /> Thêm giảm giá
                     </button>
                   </div>
                 </div>
-                {(pricelist.length > 0 || PRESET_ITEMS_BY_KIND[kind].length > 0) && (
-                  <div className="mb-4">
-                    <p className="mb-1.5 text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>Thêm nhanh</p>
-                    <div className="flex flex-wrap gap-1.5">
+                {/* Chọn hạng mục từ danh sách đổ xuống — gọn hơn một rừng nút khi
+                    bảng giá dài. Chọn xong là thêm dòng, ô chọn trở về trống. */}
+                <select
+                  className="input mb-4 w-full"
+                  value=""
+                  aria-label="Chọn hạng mục"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    if (v === "custom") {
+                      setItems((p) => [...p, { name: "", qty: 1, unit_price: 0, tier: nextTier(p) }]);
+                    } else if (v.startsWith("pl:")) {
+                      const pl = pricelist[Number(v.slice(3))];
+                      if (pl) setItems((p) => [...p, { name: pl.name, qty: 1, unit_price: pl.price, tier: nextTier(p) }]);
+                    } else if (v.startsWith("pre:")) {
+                      const name = v.slice(4);
+                      setItems((p) => [...p, { name, qty: 1, unit_price: 0, tier: nextTier(p) }]);
+                    }
+                  }}
+                >
+                  <option value="">+ Chọn hạng mục để thêm…</option>
+                  {pricelist.length > 0 && (
+                    <optgroup label="Bảng giá">
                       {pricelist.map((p, i) => (
-                        <button key={`pl${i}`} type="button" onClick={() => setItems((prev) => [...prev, { name: p.name, qty: 1, unit_price: p.price }])} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px solid var(--border2)", color: "var(--text2)" }}>
-                          + {p.name} · {vnd(p.price)}
-                        </button>
+                        <option key={`pl${i}`} value={`pl:${i}`}>{p.name} · {vnd(p.price)}</option>
                       ))}
+                    </optgroup>
+                  )}
+                  {PRESET_ITEMS_BY_KIND[kind].length > 0 && (
+                    <optgroup label="Gợi ý">
                       {PRESET_ITEMS_BY_KIND[kind].map((name) => (
-                        <button key={name} type="button" onClick={() => setItems((prev) => [...prev, { name, qty: 1, unit_price: 0 }])} className="max-w-full truncate rounded-full px-2.5 py-1 text-xs" style={{ border: "1px dashed var(--border2)", color: "var(--text3)" }}>
-                          + {name}
-                        </button>
+                        <option key={name} value={`pre:${name}`}>{name}</option>
                       ))}
-                    </div>
-                  </div>
-                )}
+                    </optgroup>
+                  )}
+                  <option value="custom">Khác — tự nhập tên…</option>
+                </select>
                 {items.length === 0 ? (
                   <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có hạng mục. Bấm “Thêm hạng mục”.</p>
                 ) : (
@@ -2014,7 +2146,7 @@ export default function ContractEditor({
                           </span>
                           <MoneyInput className="input col-span-7 text-right sm:col-span-3" value={it.unit_price}
                             onChange={(n) => setItem({ unit_price: n })} />
-                          <button onClick={() => setItems((p) => p.filter((_, i) => i !== idx))} className="col-span-2 flex items-center justify-center self-stretch sm:col-span-1" style={{ color: "var(--text3)" }} aria-label="Xoá">
+                          <button onClick={() => { setItems((p) => p.filter((_, i) => i !== idx)); setMsOpen({}); }} className="col-span-2 flex items-center justify-center self-stretch sm:col-span-1" style={{ color: "var(--text3)" }} aria-label="Xoá">
                             <Trash2 size={15} />
                           </button>
                           {descBox}
@@ -2027,9 +2159,49 @@ export default function ContractEditor({
                             onChange={(e) => setItem({ qty: Number(e.target.value) })} />
                           <MoneyInput className="input col-span-7 text-right sm:col-span-3" value={it.unit_price}
                             onChange={(n) => setItem({ unit_price: n })} />
-                          <button onClick={() => setItems((p) => p.filter((_, i) => i !== idx))} className="col-span-2 flex items-center justify-center self-stretch sm:col-span-1" style={{ color: "var(--text3)" }} aria-label="Xoá">
+                          <button onClick={() => { setItems((p) => p.filter((_, i) => i !== idx)); setMsOpen({}); }} className="col-span-2 flex items-center justify-center self-stretch sm:col-span-1" style={{ color: "var(--text3)" }} aria-label="Xoá">
                             <Trash2 size={15} />
                           </button>
+                          <div className="col-span-12 flex flex-wrap items-center gap-x-4 gap-y-2 px-1 text-[12.5px]">
+                            {/* Hạng mục chính / phụ */}
+                            <div className="flex items-center gap-3" role="radiogroup" aria-label="Loại hạng mục">
+                              {(["main", "sub"] as const).map((t) => (
+                                <label key={t} className="flex cursor-pointer items-center gap-1.5" style={{ color: it.tier === t ? "var(--text)" : "var(--text3)" }}>
+                                  <input type="radio" name={`tier-${idx}`} checked={it.tier === t} onChange={() => setItem({ tier: t })} />
+                                  {t === "main" ? "Hạng mục chính" : "Hạng mục phụ"}
+                                </label>
+                              ))}
+                            </div>
+                            {/* Thêm vào mốc lịch: tick → chọn ngày → tự tạo mốc mang tên hạng mục. */}
+                            <label className="flex cursor-pointer items-center gap-1.5" style={{ color: it.event_id || msOpen[idx] ? "var(--text)" : "var(--text3)" }}>
+                              <input
+                                type="checkbox"
+                                checked={!!it.event_id || !!msOpen[idx]}
+                                disabled={busy === "item-ms"}
+                                onChange={(e) => {
+                                  if (e.target.checked) setMsOpen((p) => ({ ...p, [idx]: true }));
+                                  else if (it.event_id) unlinkItemMilestone(idx);
+                                  else setMsOpen((p) => ({ ...p, [idx]: false }));
+                                }}
+                              />
+                              <CalendarClock size={13} /> Thêm vào mốc lịch
+                            </label>
+                            {(it.event_id || msOpen[idx]) && (
+                              <DateInput
+                                wrapperClassName="min-w-[150px]"
+                                value={milestones.find((m) => m.id === it.event_id)?.event_date ?? ""}
+                                onChange={(v) => {
+                                  if (!v) return;
+                                  if (!it.name.trim()) {
+                                    toast("Nhập tên hạng mục trước — tên đó sẽ là tên mốc lịch.");
+                                    return;
+                                  }
+                                  setMsOpen((p) => ({ ...p, [idx]: false }));
+                                  linkItemToMilestone(idx, v);
+                                }}
+                              />
+                            )}
+                          </div>
                           {descBox}
                         </div>
                       );
@@ -2120,7 +2292,22 @@ export default function ContractEditor({
                   <p className="text-sm" style={{ color: "var(--text3)" }}>Chưa có mốc nào.</p>
                 ) : (
                   <ul className="space-y-2">
-                    {milestones.map((m) => (
+                    {milestones.map((m) =>
+                      editMs?.id === m.id ? (
+                        <li key={m.id} className="grid gap-2 rounded-xl px-3 py-2.5 sm:grid-cols-12" style={{ background: "var(--surface2)" }}>
+                          <input className="input sm:col-span-6" autoFocus placeholder="Tên mốc" value={editMs.title}
+                            onChange={(e) => setEditMs((p) => (p ? { ...p, title: e.target.value } : p))}
+                            onKeyDown={(e) => { if (e.key === "Enter") saveEditMilestone(); if (e.key === "Escape") setEditMs(null); }} />
+                          <DateInput wrapperClassName="sm:col-span-4" value={editMs.event_date} onChange={(v) => setEditMs((p) => (p ? { ...p, event_date: v } : p))} />
+                          <input className="input sm:col-span-2" placeholder="08:00" value={editMs.event_time} onChange={(e) => setEditMs((p) => (p ? { ...p, event_time: e.target.value } : p))} />
+                          <div className="flex gap-2 sm:col-span-12">
+                            <button onClick={saveEditMilestone} disabled={busy === "milestone-edit"} className="btn-primary px-3 py-1.5 text-xs">
+                              {busy === "milestone-edit" ? "Đang lưu…" : "Lưu"}
+                            </button>
+                            <button onClick={() => setEditMs(null)} className="btn-ghost px-3 py-1.5 text-xs">Huỷ</button>
+                          </div>
+                        </li>
+                      ) : (
                       <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl px-3 py-2.5" style={{ background: "var(--surface2)" }}>
                         <div>
                           <p className="text-sm font-medium">{m.title}</p>
@@ -2133,10 +2320,12 @@ export default function ContractEditor({
                         </div>
                         <div className="flex items-center gap-3">
                           <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: f.location }} />
+                          <button onClick={() => setEditMs({ id: m.id, title: m.title, event_date: m.event_date, event_time: m.event_time ?? "" })} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Sửa tên mốc" title="Sửa tên / ngày mốc"><Pencil size={14} /></button>
                           <button onClick={() => deleteMilestone(m.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
                         </div>
                       </li>
-                    ))}
+                      ),
+                    )}
                   </ul>
                 )}
                 <div className="mt-4 grid gap-2 border-t pt-4 sm:grid-cols-12" style={{ borderColor: "var(--border)" }}>
