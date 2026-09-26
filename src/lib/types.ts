@@ -480,6 +480,10 @@ export interface ContractItem {
   position: number;
   /** Dòng thuộc một phụ lục ĐÃ KÝ (contract_addenda). null = hạng mục gốc. */
   addendum_id?: string | null;
+  /** 'main' = hạng mục chính, 'sub' = hạng mục phụ; null = chưa phân loại. */
+  tier?: "main" | "sub" | null;
+  /** Mốc lịch (studio_events) tạo từ hạng mục này. */
+  event_id?: string | null;
   created_at: string;
 }
 
