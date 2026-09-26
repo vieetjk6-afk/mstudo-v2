@@ -14,7 +14,7 @@ function buildLists(allItems: PricelistItem[], hidden: string[] = []) {
     (l) => !hidden.includes(l.key) && allItems.some((i) => (i.list_key || "cuoi") === l.key)
   );
   const builtInKeys = new Set(PRICE_LISTS.map((l) => l.key));
-  const customKeys = [...new Set(allItems.map((i) => i.list_key || "cuoi"))].filter((k) => !builtInKeys.has(k));
+  const customKeys = [...new Set(allItems.map((i) => i.list_key || "cuoi"))].filter((k) => !builtInKeys.has(k) && !hidden.includes(k));
   const custom = customKeys.map((k) => ({ key: k, label: k, title: `Bảng giá ${k}` }));
   const combined = [...builtIn, ...custom];
   return combined.length ? combined : PRICE_LISTS.slice(0, 1);

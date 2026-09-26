@@ -11,7 +11,7 @@ function buildLists(allItems: PricelistItem[], hidden: string[] = [], labels: Re
     (l) => !hidden.includes(l.key) && allItems.some((i) => (i.list_key || "cuoi") === l.key)
   ).map((l) => ({ ...l, label: labels[l.key] || l.label, title: labels[l.key] ? `Bảng giá ${labels[l.key]}` : l.title }));
   const builtInKeys = new Set(PRICE_LISTS.map((l) => l.key));
-  const customKeys = [...new Set(allItems.map((i) => i.list_key || "cuoi"))].filter((k) => !builtInKeys.has(k));
+  const customKeys = [...new Set(allItems.map((i) => i.list_key || "cuoi"))].filter((k) => !builtInKeys.has(k) && !hidden.includes(k));
   const custom = customKeys.map((k) => { const lb = labels[k] || k; return { key: k, label: lb, title: `Bảng giá ${lb}` }; });
   const combined = [...builtIn, ...custom];
   return combined.length ? combined : PRICE_LISTS.slice(0, 1);
