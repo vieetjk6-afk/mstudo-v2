@@ -116,7 +116,22 @@ export default function PricingManager({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownerId]);
 
-  const allLists = [...visibleBuiltIns, ...customLists];
+  // Lists that exist only as rows in the DB (e.g. created on another device, or
+  // an old slug like "bng-gi-k-yu-c-nhn") are not in localStorage, so their tab
+  // never showed here — yet the public page still served them, with no way to
+  // delete. Derive them from the items so every list the public sees has a tab.
+  const knownKeys = new Set([...PRICE_LISTS.map((l) => l.key), ...customLists.map((l) => l.key)]);
+  const orphanLists = [...new Set(list.map((it) => it.list_key || "cuoi"))]
+    .filter((k) => !knownKeys.has(k))
+    .map((k) => ({ key: k, label: listLabels[k] || k, title: `Bảng giá ${listLabels[k] || k}` }));
+  const serviceIds = new Set(services.map((s) => s.id));
+  const visibleCustom = [...customLists, ...orphanLists].filter((l) => !hiddenLists.includes(l.key));
+  const allLists = [...visibleBuiltIns, ...visibleCustom];
+  // Hidden lists that can be restored: built-ins + service tabs.
+  const hiddenRestorable = [
+    ...PRICE_LISTS.filter((l) => hiddenLists.includes(l.key)),
+    ...services.filter((s) => hiddenLists.includes(s.id)).map((s) => ({ key: s.id, label: s.name })),
+  ];
 
   function saveCustomLists(next: typeof customLists) {
     setCustomLists(next);
@@ -137,7 +152,7 @@ export default function PricingManager({
     const next = [...new Set([...hiddenLists, key])];
     await saveHiddenLists(next);
     if (activeList === key) {
-      const remaining = [...PRICE_LISTS.filter((l) => !next.includes(l.key)), ...customLists];
+      const remaining = allLists.filter((l) => !next.includes(l.key));
       setActiveList((remaining[0] ?? PRICE_LISTS[0]).key);
     }
   }
@@ -188,9 +203,36 @@ export default function PricingManager({
     await supabase.from("profiles").update({ pl_list_labels: nextLabels }).eq("id", ownerId);
   }
 
-  function removeCustomList(key: string) {
-    saveCustomLists(customLists.filter((l) => l.key !== key));
-    if (activeList === key) setActiveList(PRICE_LISTS[0].key);
+  // Custom list: delete its rows for real. Previously this only dropped the tab
+  // from localStorage, so the items stayed live on the public /gia page.
+  // Service tabs are re-created from studio_services on every load, so those
+  // are hidden instead (restorable) rather than deleted.
+  async function removeCustomList(key: string) {
+    const label = getLabel(key, allLists.find((l) => l.key === key)?.label ?? key);
+    if (serviceIds.has(key)) {
+      if (!confirm(`Ẩn bảng giá "${label}"? Bạn có thể khôi phục lại sau.`)) return;
+      const next = [...new Set([...hiddenLists, key])];
+      await saveHiddenLists(next);
+    } else {
+      const n = list.filter((it) => (it.list_key || "cuoi") === key).length;
+      if (!confirm(`Xóa bảng giá "${label}"${n ? ` cùng ${n} mục giá` : ""}? Không thể hoàn tác.`)) return;
+      if (n) {
+        const { error } = await supabase.from("studio_pricelist").delete().eq("owner_id", ownerId).eq("list_key", key);
+        if (error) { alert("Không xóa được: " + error.message); return; }
+        setList((p) => p.filter((it) => (it.list_key || "cuoi") !== key));
+      }
+      saveCustomLists(customLists.filter((l) => l.key !== key));
+      if (key in listLabels) {
+        const nextLabels = { ...listLabels };
+        delete nextLabels[key];
+        setListLabels(nextLabels);
+        await supabase.from("profiles").update({ pl_list_labels: nextLabels }).eq("id", ownerId);
+      }
+    }
+    if (activeList === key) {
+      const remaining = allLists.filter((l) => l.key !== key);
+      setActiveList((remaining[0] ?? PRICE_LISTS[0]).key);
+    }
   }
 
   function startEdit(it: PricelistItem) {
@@ -392,7 +434,7 @@ export default function PricingManager({
       {/* List tabs */}
       <div className="mb-6 flex flex-wrap items-center gap-2">
         {allLists.map((l) => {
-          const isCustom = customLists.some((c) => c.key === l.key);
+          const isCustom = visibleCustom.some((c) => c.key === l.key);
           const displayLabel = getLabel(l.key, l.label);
           return (
             <div key={l.key} className="relative flex items-center">
@@ -470,10 +512,10 @@ export default function PricingManager({
       </div>
 
       {/* Restore hidden built-in lists */}
-      {PRICE_LISTS.some((l) => hiddenLists.includes(l.key)) && (
+      {hiddenRestorable.length > 0 && (
         <div className="mb-6 -mt-2 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text3)" }}>
           <span>Đã ẩn:</span>
-          {PRICE_LISTS.filter((l) => hiddenLists.includes(l.key)).map((l) => (
+          {hiddenRestorable.map((l) => (
             <button
               key={l.key}
               onClick={() => restoreBuiltinList(l.key)}
