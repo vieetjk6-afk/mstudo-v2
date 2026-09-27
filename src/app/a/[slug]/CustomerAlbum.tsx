@@ -48,6 +48,7 @@ import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
 import { useGridThumbWidth, useFullImageWidth } from "@/lib/use-img-width";
 import ZoomHiRes from "@/components/ZoomHiRes";
+import ImgDebug from "@/components/ImgDebug";
 import { watermarkLayer } from "@/lib/album-watermark";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
@@ -1418,6 +1419,7 @@ export default function CustomerAlbum({
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
             <div ref={lbStage} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4">
+              <ImgDebug stageRef={lbStage} />
               {hiResLoading && (
               <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-[12px]" style={{ background: "rgba(0,0,0,.6)", color: "#fff" }}>
                 Đang tải ảnh gốc cho nét…
