@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { openRemainderIfSettled } from "@/lib/bank-apply";
+import { approveOnDeposit } from "@/lib/contract-approve";
 import { asPaymentMethod, vnd } from "@/lib/types";
 import { logAction } from "@/lib/audit-log";
 
@@ -68,5 +69,8 @@ export async function POST(req: Request) {
   // mọi danh sách công nợ.
   await openRemainderIfSettled(db, contract.id);
 
-  return NextResponse.json({ ok: true, amount, isDeposit: (plan.label || "").toLowerCase().includes("cọc") });
+  // Đã nhận tiền → hợp đồng nháp / chờ duyệt thành "đã duyệt", không cần khách ký.
+  const approved = await approveOnDeposit(db, profile.id, contract.id);
+
+  return NextResponse.json({ ok: true, amount, approved, isDeposit: (plan.label || "").toLowerCase().includes("cọc") });
 }

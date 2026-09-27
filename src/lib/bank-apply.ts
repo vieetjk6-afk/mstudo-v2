@@ -6,6 +6,7 @@ import { autoNotify } from "@/lib/zalo/notify";
 import { depositConfirmMessage, paymentDoneMessage } from "@/lib/zalo/messages";
 import { isFullyPaid } from "@/lib/zalo/events";
 import { mainUrl } from "@/lib/hosts";
+import { approveOnDeposit } from "@/lib/contract-approve";
 import { amountFit, type AmountFit } from "@/lib/bank-reconcile";
 
 /**
@@ -128,6 +129,9 @@ export async function applyToPlan(
   } else {
     await openRemainderIfSettled(db, contract.id);
   }
+
+  // Tiền đã về → hợp đồng nháp / chờ duyệt thành "đã duyệt", không cần khách ký.
+  await approveOnDeposit(db, opts.ownerId, contract.id);
 
   return {
     ok: true,

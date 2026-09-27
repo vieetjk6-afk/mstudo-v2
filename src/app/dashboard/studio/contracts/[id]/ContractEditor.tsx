@@ -1424,7 +1424,28 @@ export default function ContractEditor({
       setPlanForm({ label: "", amount: 0, due_date: "" });
       setPlanProof("");
     }
-    if (payment_id) paymentZalo(amount, label);
+    if (payment_id) {
+      paymentZalo(amount, label);
+      approveIfDeposited();
+    }
+  }
+  /**
+   * Vừa ghi một khoản thu → hợp đồng nháp / chờ khách duyệt tự thành "Khách đã
+   * duyệt", không cần chữ ký (khách chốt bằng cọc). Máy chủ lo Drive + Google
+   * Lịch như lúc khách ký. setF thẳng để lần tự lưu sau không ghi đè lại trạng
+   * thái cũ.
+   */
+  function approveIfDeposited() {
+    if (f.status !== "draft" && f.status !== "sent") return;
+    fetch(`/api/studio/contracts/${contract.id}/approve-on-deposit`, { method: "POST" })
+      .then((r) => r.json())
+      .then((j) => {
+        if (j?.approved) {
+          setF((prev) => ({ ...prev, status: "approved" }));
+          toast("Đã nhận cọc · hợp đồng chuyển sang Khách đã duyệt");
+        }
+      })
+      .catch(() => {});
   }
   // Mark an instalment collected → records a real payment; un-marking removes it.
   async function markPlanPaid(it: ContractPaymentPlan, method: PaymentMethod | null = null) {
@@ -1460,6 +1481,7 @@ export default function ContractEditor({
       setPayments((p) => [payment as ContractPayment, ...p]);
       await supabase.from("contract_payment_plan").update({ paid: true, paid_at: nowIso, payment_id: pid }).eq("id", it.id);
       setPlan((p) => p.map((x) => (x.id === it.id ? { ...x, paid: true, paid_at: nowIso, payment_id: pid } : x)));
+      approveIfDeposited();
       paymentZalo(amount, it.label);
       // Compute updated plan
       const updatedPlan = plan.map((x) => (x.id === it.id ? { ...x, paid: true } : x));
@@ -1628,7 +1650,8 @@ export default function ContractEditor({
   // Vòng đời 7 bước — suy ra từ dữ liệu thật, không phải cột trạng thái riêng.
   const lifecycle: ContractLifecycle = {
     hasItems: items.length > 0,
-    signed: !!contract.client_signed_at,
+    // Chốt bằng cọc cũng là đã chốt: có tiền mà trạng thái đã qua "chờ duyệt".
+    signed: !!contract.client_signed_at || (collected > 0 && f.status !== "draft" && f.status !== "sent" && f.status !== "cancelled"),
     hasCrew: crew.length > 0,
     hasDeposit: collected > 0,
     shot:
