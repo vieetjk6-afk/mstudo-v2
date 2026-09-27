@@ -3,7 +3,8 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { contractTotal, sumAmounts, vnd } from "@/lib/types";
 import { sendPushToOwner } from "@/lib/push";
 import { autoNotify } from "@/lib/zalo/notify";
-import { depositConfirmMessage } from "@/lib/zalo/messages";
+import { depositConfirmMessage, paymentDoneMessage } from "@/lib/zalo/messages";
+import { isFullyPaid } from "@/lib/zalo/events";
 import { mainUrl } from "@/lib/hosts";
 import { amountFit, type AmountFit } from "@/lib/bank-reconcile";
 
@@ -140,29 +141,88 @@ export async function applyToPlan(
   };
 }
 
-/** Đợt cọc → khách nhận tin Zalo xác nhận (nếu studio đã bật mốc và đã kết nối Zalo). */
-export async function confirmDepositZalo(db: Db, ownerId: string, contractId: string, amount: number): Promise<void> {
-  const [{ data: c }, { data: owner }] = await Promise.all([
-    db.from("studio_contracts").select("id, title, client_name, client_phone, client_token").eq("id", contractId).maybeSingle(),
-    db.from("profiles").select("full_name").eq("id", ownerId).maybeSingle(),
-  ]);
-  if (!c?.client_phone) return;
-  const body = depositConfirmMessage({
-    name: c.client_name,
-    amount: amount > 0 ? vnd(amount) : null,
-    title: c.title,
-    link: c.client_token ? mainUrl(`/c/${c.client_token}`) : null,
-    studio: (owner as { full_name?: string | null } | null)?.full_name || "Studio",
-  });
-  await autoNotify({
-    ownerId,
-    event: "deposit_confirm",
-    audience: "client",
-    toPhone: c.client_phone,
-    toName: c.client_name,
-    body,
-    contractId: c.id,
-  }).catch(() => undefined);
+/**
+ * Tin Zalo cho khách sau MỘT lần ghi thu (webhook SePay, gán tay, nút "Đã thu"):
+ *
+ *  • lần thu này làm hợp đồng ĐỦ tiền → "đã thanh toán đủ" (mốc `payment_done`),
+ *    đúng một lần cho mỗi hợp đồng;
+ *  • chưa đủ mà là đợt cọc → "đã nhận cọc" như trước.
+ *
+ * Khách trả thẳng toàn bộ vào đợt tên "Cọc" chỉ nhận MỘT tin (đủ tiền), không
+ * nhận hai tin liền nhau. Mọi lỗi đều nuốt: tiền đã ghi xong, tin nhắn hỏng
+ * không được làm hỏng việc ghi tiền.
+ */
+export async function notifyPaymentZalo(
+  db: Db,
+  ownerId: string,
+  contractId: string,
+  opts: { amount: number; isDeposit: boolean }
+): Promise<"payment_done" | "deposit_confirm" | null> {
+  try {
+    const [{ data: c }, { data: owner }, { data: items }, { data: pays }] = await Promise.all([
+      db
+        .from("studio_contracts")
+        .select("id, owner_id, title, client_name, client_phone, client_token, status")
+        .eq("id", contractId)
+        .maybeSingle(),
+      db.from("profiles").select("full_name").eq("id", ownerId).maybeSingle(),
+      db.from("contract_items").select("qty, unit_price").eq("contract_id", contractId),
+      db.from("contract_payments").select("amount").eq("contract_id", contractId),
+    ]);
+    if (!c || c.owner_id !== ownerId || !c.client_phone || c.status === "cancelled") return null;
+    const studio = (owner as { full_name?: string | null } | null)?.full_name || "Studio";
+    const link = c.client_token ? mainUrl(`/c/${c.client_token}`) : null;
+    const total = contractTotal((items ?? []) as { qty: number; unit_price: number }[]);
+    const collected = sumAmounts((pays ?? []) as { amount: number }[]);
+
+    if (isFullyPaid(total, collected)) {
+      // Gỡ dấu "đã thu" rồi bấm lại là chuyện thường — khách chỉ cần nghe một lần.
+      const { data: sent } = await db
+        .from("zalo_messages")
+        .select("id")
+        .eq("owner_id", ownerId)
+        .eq("contract_id", contractId)
+        .eq("kind", "payment_done")
+        .eq("status", "sent")
+        .limit(1);
+      if (sent?.length) return null;
+      const res = await autoNotify({
+        ownerId,
+        event: "payment_done",
+        audience: "client",
+        toPhone: c.client_phone,
+        toName: c.client_name,
+        body: paymentDoneMessage({ name: c.client_name, total: vnd(total), title: c.title, link, studio }),
+        contractId: c.id,
+      });
+      return res.ok ? "payment_done" : null;
+    }
+
+    if (!opts.isDeposit) return null;
+    const res = await autoNotify({
+      ownerId,
+      event: "deposit_confirm",
+      audience: "client",
+      toPhone: c.client_phone,
+      toName: c.client_name,
+      body: depositConfirmMessage({
+        name: c.client_name,
+        amount: opts.amount > 0 ? vnd(opts.amount) : null,
+        title: c.title,
+        link,
+        studio,
+      }),
+      contractId: c.id,
+    });
+    return res.ok ? "deposit_confirm" : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Đợt có phải đợt CỌC không — theo tên đợt, như mọi màn khác vẫn nhận. */
+export function isDepositLabel(label: string | null | undefined): boolean {
+  return (label || "").toLowerCase().includes("cọc");
 }
 
 export type BookingApplyResult =

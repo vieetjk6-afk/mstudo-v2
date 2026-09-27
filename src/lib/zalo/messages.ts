@@ -71,6 +71,24 @@ export function depositConfirmMessage(opts: {
   return lines.join("\n") + sign(opts.studio);
 }
 
+/** Khách đã thanh toán ĐỦ hợp đồng — cảm ơn + link để xem lại phiếu thu. */
+export function paymentDoneMessage(opts: {
+  name?: string | null;
+  total?: string | null;
+  title?: string | null;
+  link?: string | null;
+  studio?: string | null;
+}): string {
+  const lines = [
+    hi(opts.name),
+    `Studio đã nhận đủ${opts.total ? ` ${opts.total}` : ""} cho hợp đồng${
+      opts.title ? ` "${opts.title}"` : ""
+    }. Hợp đồng của mình đã thanh toán xong, cảm ơn anh/chị rất nhiều ạ!`,
+  ];
+  if (opts.link) lines.push(`Anh/chị xem lại các lần thanh toán tại: ${opts.link} (mật khẩu là SĐT của anh/chị).`);
+  return lines.join("\n") + sign(opts.studio);
+}
+
 /** Nhắc thanh toán số tiền còn lại + link hợp đồng. */
 export function paymentDueMessage(opts: {
   name?: string | null;

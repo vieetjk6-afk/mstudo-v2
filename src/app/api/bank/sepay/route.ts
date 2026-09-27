@@ -8,7 +8,7 @@ import {
   depositCodeCandidates,
   vnDate,
 } from "@/lib/bank-reconcile";
-import { applyToPlan, applyToBooking, confirmDepositZalo, notifyStudio } from "@/lib/bank-apply";
+import { applyToPlan, applyToBooking, notifyPaymentZalo, isDepositLabel, notifyStudio } from "@/lib/bank-apply";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -113,9 +113,10 @@ export async function POST(req: NextRequest) {
           url: `/dashboard/studio/contracts/${res.contractId}?tab=pay`,
           tag: `bank-${row.id}`,
         });
-        if (res.label.toLowerCase().includes("cọc")) {
-          await confirmDepositZalo(db, ownerId, res.contractId, txn.amount);
-        }
+        await notifyPaymentZalo(db, ownerId, res.contractId, {
+          amount: txn.amount,
+          isDeposit: isDepositLabel(res.label),
+        });
       } else {
         await mark({ status: "mismatch", note: res.reason, plan_id: planId, contract_id: res.contractId ?? null });
         await notifyStudio(db, ownerId, {
