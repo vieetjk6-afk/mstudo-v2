@@ -46,6 +46,7 @@ import {
 import { loadLedger, saveLedger } from "@/lib/album-store";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
+import { useGridThumbWidth, useFullImageWidth } from "@/lib/use-img-width";
 import { watermarkLayer } from "@/lib/album-watermark";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
@@ -620,9 +621,13 @@ export default function CustomerAlbum({
   // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
   // Hàm thứ ba cho lưới biết địa chỉ ảnh của từng ô để gọi sẵn byte ảnh sắp tới
   // (xem @/lib/masonry) — không có nó thì cuộn nhanh sẽ thấy ô trắng.
+  // Cỡ ảnh theo màn hình thật (xem @/lib/use-img-width) — 400px cố định bị mờ
+  // trên điện thoại và màn retina.
+  const gridW = useGridThumbWidth(2, 4);
+  const fullW = useFullImageWidth();
   const masonry = useMasonry(2, 4, (id) => {
     const f = driveIdOf.get(id);
-    return f ? thumbnailUrl(f, 400) : null;
+    return f ? thumbnailUrl(f, gridW) : null;
   });
 
   const visiblePhotos = useMemo(() => {
@@ -742,17 +747,17 @@ export default function CustomerAlbum({
   }, [lbIdx, lbPhotos.length, closeLightbox]);
 
   // Preload neighbouring full images so prev/next switches feel instant
-  // (otherwise each step fetches a fresh 1600px image from Drive and lags).
+  // (otherwise each step fetches a fresh full-size image from Drive and lags).
   useEffect(() => {
     if (lbIdx === null) return;
     for (const off of [1, -1, 2, -2]) {
       const p = lbPhotos[lbIdx + off];
       if (p) {
         const img = new Image();
-        img.src = fullImageUrl(p.drive_file_id, 1600);
+        img.src = fullImageUrl(p.drive_file_id, fullW);
       }
     }
-  }, [lbIdx, lbPhotos]);
+  }, [lbIdx, lbPhotos, fullW]);
 
   // Step to the prev/next photo (clamped to the visible list).
   function go(delta: number) {
@@ -1237,7 +1242,7 @@ export default function CustomerAlbum({
                       }
                     />
                     <img
-                      src={thumbnailUrl(p.drive_file_id, 400)}
+                      src={thumbnailUrl(p.drive_file_id, gridW)}
                       alt={p.name}
                       loading="lazy"
                       decoding="async"
@@ -1432,7 +1437,7 @@ export default function CustomerAlbum({
                 >
                   <img
                     key={lbPhoto.id}
-                    src={fullImageUrl(lbPhoto.drive_file_id, 1600)}
+                    src={fullImageUrl(lbPhoto.drive_file_id, fullW)}
                     alt={lbPhoto.name}
                     draggable={false}
                     decoding="async"
@@ -1442,7 +1447,7 @@ export default function CustomerAlbum({
                       boxShadow: "0 30px 80px rgba(0,0,0,.6)",
                       // Show the cached grid thumbnail behind while the full image
                       // decodes, so the picture changes immediately on prev/next.
-                      backgroundImage: `url(${thumbnailUrl(lbPhoto.drive_file_id, 400)})`,
+                      backgroundImage: `url(${thumbnailUrl(lbPhoto.drive_file_id, gridW)})`,
                       backgroundSize: "contain",
                       backgroundRepeat: "no-repeat",
                       backgroundPosition: "center",
