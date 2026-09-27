@@ -213,6 +213,7 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
         /* trình duyệt từ chối bắt con trỏ — cử chỉ vẫn chạy, chỉ kém mượt ở mép */
       }
       box.style.transition = "none";
+      box.style.willChange = "transform";
       if (s.pointers.size === 1) {
         s.startX = e.clientX;
         s.startY = e.clientY;
@@ -295,6 +296,9 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
       if (s.pointers.size > 0) return;
 
       box.style.transition = TRANSITION;
+      // Thả tay là bỏ will-change: còn giữ thì trình duyệt cứ phóng BITMAP đã
+      // vẽ ở mức 1 lên — phóng 3 lần là mờ 3 lần. Bỏ đi nó vẽ lại theo mức mới.
+      box.style.willChange = "auto";
       const swiped = s.swiping && s.moved && s.horizontal ? s.swipeDx : 0;
       const tapped = !s.moved;
       s.swipeDx = 0;
@@ -371,7 +375,8 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
         transformOrigin: "center",
         transition: TRANSITION,
         cursor: "zoom-in",
-        willChange: "transform",
+        // KHÔNG đặt will-change cố định (chỉ bật trong lúc kéo/chụm — xem
+        // endGesture): lớp will-change bị vẽ một lần rồi phóng như ảnh bitmap.
         touchAction: "none",
       }}
     >

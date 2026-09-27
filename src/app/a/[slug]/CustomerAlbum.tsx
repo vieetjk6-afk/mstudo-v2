@@ -46,7 +46,8 @@ import {
 import { loadLedger, saveLedger } from "@/lib/album-store";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
-import { useGridThumbWidth, useFullImageWidth } from "@/lib/use-img-width";
+import { useGridThumbWidth, useFullImageWidth, zoomImageWidth } from "@/lib/use-img-width";
+import ZoomHiRes from "@/components/ZoomHiRes";
 import { watermarkLayer } from "@/lib/album-watermark";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
@@ -1453,6 +1454,7 @@ export default function CustomerAlbum({
                       backgroundPosition: "center",
                     }}
                   />
+                  <ZoomHiRes src={fullImageUrl(lbPhoto.drive_file_id, zoomImageWidth(!!wm))} active={zoom > 1} className="rounded" />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 overflow-hidden opacity-30">
                       {Array.from({ length: 16 }).map((_, i) => (

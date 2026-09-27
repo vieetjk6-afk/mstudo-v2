@@ -83,7 +83,8 @@ import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import PhotoZoom from "@/components/PhotoZoom";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
-import { useGridThumbWidth, useFullImageWidth } from "@/lib/use-img-width";
+import { useGridThumbWidth, useFullImageWidth, zoomImageWidth } from "@/lib/use-img-width";
+import ZoomHiRes from "@/components/ZoomHiRes";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
@@ -143,6 +144,8 @@ export default function GalleryView({
     photosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
   const [lbIdx, setLbIdx] = useState<number | null>(null);
+  /** Khách đang phóng to ảnh trong khung xem → gọi bản độ phân giải cao (ZoomHiRes). */
+  const [lbZoomed, setLbZoomed] = useState(false);
   // Vùng nền của khung xem ảnh — PhotoZoom bắt cử chỉ trên đây (kể cả dải đen
   // hai bên ảnh dọc, chỗ ngón cái hay quẹt).
   const lbStage = useRef<HTMLDivElement | null>(null);
@@ -332,6 +335,9 @@ export default function GalleryView({
       if (p && !isVideo(p)) { const im = new Image(); im.src = fullImageUrl(p.drive_file_id, fullW); }
     }
   }, [lbIdx, visible, fullW]);
+
+  // Đổi ảnh → khung xem dựng lại ở mức 1 (key theo id ảnh), nhãn phóng to cũng về 0.
+  useEffect(() => { setLbZoomed(false); }, [lbIdx]);
 
   function go(delta: number) {
     setLbIdx((i) => (i === null ? i : Math.max(0, Math.min(visible.length - 1, i + delta))));
@@ -620,8 +626,9 @@ export default function GalleryView({
               // Khung ngoài KHÔNG bị transform nên kích thước bằng đúng ảnh —
               // nút thích vì thế dính đúng góc ảnh.
               <div className="relative inline-block">
-                <PhotoZoom key={lb.id} stageRef={lbStage} onSwipe={go} className="relative inline-block">
+                <PhotoZoom key={lb.id} stageRef={lbStage} onSwipe={go} onZoomChange={(k) => setLbZoomed(k > 1)} className="relative inline-block">
                   <img key={lb.id} src={fullImageUrl(lb.drive_file_id, fullW)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, gridW)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
+                  <ZoomHiRes key={lb.id} src={fullImageUrl(lb.drive_file_id, zoomImageWidth(!!wm))} active={lbZoomed} className="rounded" />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 opacity-20">
                       {Array.from({ length: 12 }).map((_, wi) => (

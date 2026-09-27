@@ -175,7 +175,9 @@ export async function GET(req: Request) {
 
   // Clamp width: never proxy anything huge (caps origin transfer per request).
   // 2560 keeps the "download original" path (w=2400) working.
-  const width = Math.min(Math.max(Number(searchParams.get("w")) || 500, 16), 2560);
+  // Lượt chỉ HIỂN THỊ (sẽ 302 sang Google, Vercel không chở byte) được tới 4096
+  // — khung xem ảnh cần cỡ đó khi khách phóng to (xem components/ZoomHiRes).
+  const width = Math.min(Math.max(Number(searchParams.get("w")) || 500, 16), canRedirect ? 4096 : 2560);
 
   // ── Display CDN redirect (mặc định BẬT; tắt bằng IMG_CDN_REDIRECT=0) ─────
   // Ảnh chỉ để HIỂN THỊ thì 302 thẳng sang CDN của Google — Vercel phục vụ gần
