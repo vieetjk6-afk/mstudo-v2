@@ -60,3 +60,13 @@ export function useFullImageWidth(): number {
     () => 1600,
   );
 }
+
+/**
+ * Bản ảnh để PHÓNG TO trong khung xem. 4096 là mức Google render lại cho
+ * nhanh mà vẫn đủ nét khi chụm 3–4 lần trên điện thoại. Album có watermark
+ * chỉ lên 2560 — watermark trên web chỉ là lớp chữ phủ, không nên phát bản
+ * gần như gốc ra ngoài.
+ */
+export function zoomImageWidth(watermarked: boolean): number {
+  return watermarked ? 2560 : 4096;
+}
