@@ -11,10 +11,10 @@ import SepayGuideVideo from "@/components/SepayGuideVideo";
 
 /**
  * Link đăng ký SePay. mstudo là đối tác giới thiệu của SePay: đặt link giới
- * thiệu vào NEXT_PUBLIC_SEPAY_REF_URL để studio đăng ký qua đó được ghi nhận.
- * Chưa đặt thì về trang đăng ký thường.
+ * thiệu mặc định là của mstudo (gcid=1028); NEXT_PUBLIC_SEPAY_REF_URL chỉ để
+ * đổi sang link khác mà không phải sửa code.
  */
-const SEPAY_SIGNUP_URL = process.env.NEXT_PUBLIC_SEPAY_REF_URL || "https://my.sepay.vn/register";
+const SEPAY_SIGNUP_URL = process.env.NEXT_PUBLIC_SEPAY_REF_URL || "https://my.sepay.vn/register?gcid=1028";
 
 /**
  * Tự xác nhận chuyển khoản qua SePay.
