@@ -83,6 +83,7 @@ import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import PhotoZoom from "@/components/PhotoZoom";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
+import { useGridThumbWidth, useFullImageWidth } from "@/lib/use-img-width";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
@@ -285,9 +286,13 @@ export default function GalleryView({
   // Lưới ảnh: 2 cột trên điện thoại, 4 cột trên máy tính, đặt ảnh trái → phải.
   // Hàm thứ ba cho lưới biết địa chỉ ảnh của từng ô để gọi sẵn byte ảnh sắp tới
   // (xem @/lib/masonry) — không có nó thì cuộn nhanh sẽ thấy ô trắng.
+  // Cỡ ảnh theo màn hình thật (xem @/lib/use-img-width) — 400px cố định bị mờ
+  // trên điện thoại và màn retina.
+  const gridW = useGridThumbWidth(2, 4);
+  const fullW = useFullImageWidth();
   const masonry = useMasonry(2, 4, (id) => {
     const f = driveIdOf.get(id);
-    return f ? thumbnailUrl(f, 400) : null;
+    return f ? thumbnailUrl(f, gridW) : null;
   });
   const visible = useMemo(() => {
     let base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
@@ -324,9 +329,9 @@ export default function GalleryView({
     if (lbIdx === null) return;
     for (const off of [1, -1, 2, -2]) {
       const p = visible[lbIdx + off];
-      if (p && !isVideo(p)) { const im = new Image(); im.src = fullImageUrl(p.drive_file_id, 1600); }
+      if (p && !isVideo(p)) { const im = new Image(); im.src = fullImageUrl(p.drive_file_id, fullW); }
     }
-  }, [lbIdx, visible]);
+  }, [lbIdx, visible, fullW]);
 
   function go(delta: number) {
     setLbIdx((i) => (i === null ? i : Math.max(0, Math.min(visible.length - 1, i + delta))));
@@ -481,7 +486,7 @@ export default function GalleryView({
                   const o = masonry.tileProps(sec.id, p.id, dau + k);
                   return (
                   <div key={p.id} ref={o.ref} className="o-anh-cho group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...o.style }}>
-                    <img {...masonry.imgProps(p.id)} onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, 400)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-full w-full cursor-zoom-in select-none object-cover" />
+                    <img {...masonry.imgProps(p.id)} onClick={() => setLbIdx(i)} role="button" tabIndex={0} aria-label={`Xem ${p.name}`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setLbIdx(i); } }} src={thumbnailUrl(p.drive_file_id, gridW)} alt={p.name} loading="lazy" decoding="async" draggable={false} onContextMenu={(e) => wm && e.preventDefault()} className="block h-full w-full cursor-zoom-in select-none object-cover" />
                     {wm && (
                       <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer(wm)} />
                     )}
@@ -616,7 +621,7 @@ export default function GalleryView({
               // nút thích vì thế dính đúng góc ảnh.
               <div className="relative inline-block">
                 <PhotoZoom key={lb.id} stageRef={lbStage} onSwipe={go} className="relative inline-block">
-                  <img key={lb.id} src={fullImageUrl(lb.drive_file_id, 1600)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, 400)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
+                  <img key={lb.id} src={fullImageUrl(lb.drive_file_id, fullW)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, gridW)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 opacity-20">
                       {Array.from({ length: 12 }).map((_, wi) => (
