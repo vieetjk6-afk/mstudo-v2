@@ -79,12 +79,13 @@ import ShareButton from "@/components/ShareButton";
 import ShareDialog from "@/components/ShareDialog";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
-import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
+import { thumbnailUrl, fullImageUrl, originalImageUrl, retryViaProxy } from "@/lib/drive";
 import PhotoZoom from "@/components/PhotoZoom";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
-import { useGridThumbWidth, useFullImageWidth, zoomImageWidth } from "@/lib/use-img-width";
+import { useGridThumbWidth, useFullImageWidth } from "@/lib/use-img-width";
 import ZoomHiRes from "@/components/ZoomHiRes";
+import ImgDebug from "@/components/ImgDebug";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
@@ -146,6 +147,8 @@ export default function GalleryView({
   const [lbIdx, setLbIdx] = useState<number | null>(null);
   /** Khách đang phóng to ảnh trong khung xem → gọi bản độ phân giải cao (ZoomHiRes). */
   const [lbZoomed, setLbZoomed] = useState(false);
+  /** Đang tải ảnh gốc cho lúc phóng to (xem ZoomHiRes) → hiện chỉ báo nhỏ. */
+  const [hiResLoading, setHiResLoading] = useState(false);
   // Vùng nền của khung xem ảnh — PhotoZoom bắt cử chỉ trên đây (kể cả dải đen
   // hai bên ảnh dọc, chỗ ngón cái hay quẹt).
   const lbStage = useRef<HTMLDivElement | null>(null);
@@ -337,7 +340,7 @@ export default function GalleryView({
   }, [lbIdx, visible, fullW]);
 
   // Đổi ảnh → khung xem dựng lại ở mức 1 (key theo id ảnh), nhãn phóng to cũng về 0.
-  useEffect(() => { setLbZoomed(false); }, [lbIdx]);
+  useEffect(() => { setLbZoomed(false); setHiResLoading(false); }, [lbIdx]);
 
   function go(delta: number) {
     setLbIdx((i) => (i === null ? i : Math.max(0, Math.min(visible.length - 1, i + delta))));
@@ -612,6 +615,12 @@ export default function GalleryView({
             <button onClick={() => setLbIdx(null)} aria-label="Đóng" className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", color: "var(--text)" }}><X size={17} /></button>
           </div>
           <div ref={lbStage} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4">
+            <ImgDebug stageRef={lbStage} />
+            {hiResLoading && (
+            <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-[12px]" style={{ background: "rgba(0,0,0,.6)", color: "#fff" }}>
+              Đang tải ảnh gốc cho nét…
+            </div>
+            )}
             {/* Chỉ còn dấu < > chồng lên ảnh: bỏ nền + viền để ảnh chiếm chỗ tối đa. */}
             <button onClick={() => setLbIdx(Math.max(0, lbIdx - 1))} disabled={lbIdx === 0} aria-label="Ảnh trước" className="absolute left-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:opacity-20 md:w-14" style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}><ChevronLeft size={34} strokeWidth={1.6} /></button>
             {isVideo(lb) ? (
@@ -627,8 +636,8 @@ export default function GalleryView({
               // nút thích vì thế dính đúng góc ảnh.
               <div className="relative inline-block">
                 <PhotoZoom key={lb.id} stageRef={lbStage} onSwipe={go} onZoomChange={(k) => setLbZoomed(k > 1)} className="relative inline-block">
-                  <img key={lb.id} src={fullImageUrl(lb.drive_file_id, fullW)} alt={lb.name} draggable={false} decoding="async" onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, gridW)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
-                  <ZoomHiRes key={lb.id} src={fullImageUrl(lb.drive_file_id, zoomImageWidth(!!wm))} active={lbZoomed} className="rounded" />
+                  <img key={lb.id} src={fullImageUrl(lb.drive_file_id, fullW)} alt={lb.name} draggable={false} decoding="async" onError={retryViaProxy} onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, gridW)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
+                  <ZoomHiRes key={lb.id} srcs={[originalImageUrl(lb.drive_file_id), fullImageUrl(lb.drive_file_id, 4096), `${fullImageUrl(lb.drive_file_id, 2560)}&raw=1`]} active={lbZoomed} onLoadingChange={setHiResLoading} className="rounded" />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 opacity-20">
                       {Array.from({ length: 12 }).map((_, wi) => (
