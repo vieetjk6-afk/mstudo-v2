@@ -55,6 +55,23 @@ export function fullImageUrl(fileId: string, width = 1600): string {
   return `/api/img?id=${fileId}&w=${width}`;
 }
 
+/** Ảnh GỐC đúng độ phân giải chụp, để hiển thị (proxy 302 thẳng sang Google). */
+export function originalImageUrl(fileId: string): string {
+  return `/api/img?id=${fileId}&orig=1`;
+}
+
+/**
+ * Nếu ảnh hiển thị hỏng (CDN Google đôi khi từ chối, nhất là webview trong app),
+ * thử lại một lần qua proxy đọc byte (`raw=1`) — proxy tự dò nhiều nguồn. Trước
+ * đây ảnh lớn trong khung xem hỏng là khách chỉ còn thấy ảnh nền nhỏ, mờ.
+ */
+export function retryViaProxy(e: { currentTarget: HTMLImageElement }) {
+  const im = e.currentTarget;
+  if (im.dataset.retried || im.src.includes("raw=1")) return;
+  im.dataset.retried = "1";
+  im.src = `${im.src}&raw=1`;
+}
+
 /** Direct download URL for an original file. */
 export function downloadUrl(fileId: string): string {
   return `https://drive.google.com/uc?export=download&id=${fileId}`;

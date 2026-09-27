@@ -26,7 +26,7 @@ import LanguageSwitcher from "@/components/LanguageSwitcher";
 import InstallPwaButton from "@/components/InstallPwaButton";
 import ShareDialog from "@/components/ShareDialog";
 import { useLang } from "@/lib/i18n";
-import { thumbnailUrl, fullImageUrl, stripExtension } from "@/lib/drive";
+import { thumbnailUrl, fullImageUrl, originalImageUrl, retryViaProxy, stripExtension } from "@/lib/drive";
 import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { filterByPerson, type PersonChip } from "@/lib/face-people";
@@ -46,7 +46,7 @@ import {
 import { loadLedger, saveLedger } from "@/lib/album-store";
 import { triggerDownload, downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
-import { useGridThumbWidth, useFullImageWidth, zoomImageWidth } from "@/lib/use-img-width";
+import { useGridThumbWidth, useFullImageWidth } from "@/lib/use-img-width";
 import ZoomHiRes from "@/components/ZoomHiRes";
 import { watermarkLayer } from "@/lib/album-watermark";
 import { studioUrl } from "@/lib/hosts";
@@ -186,6 +186,8 @@ export default function CustomerAlbum({
   // Mức phóng chỉ để bật/tắt nút "thu nhỏ" — cử chỉ (chụm ngón, kéo, vuốt, lăn
   // chuột) do PhotoZoom lo và KHÔNG render lại trang, xem @/components/PhotoZoom.
   const [zoom, setZoom] = useState(1);
+  /** Đang tải ảnh gốc cho lúc phóng to (xem ZoomHiRes) → hiện chỉ báo nhỏ. */
+  const [hiResLoading, setHiResLoading] = useState(false);
   const zoomRef = useRef<PhotoZoomHandle>(null);
   // Vùng nền của khung xem ảnh — nơi PhotoZoom bắt cử chỉ.
   const lbStage = useRef<HTMLDivElement | null>(null);
@@ -737,6 +739,7 @@ export default function CustomerAlbum({
   // (key theo id ảnh) nên đã ở mức 1; đây chỉ là đồng bộ nhãn cho nút bấm.
   useEffect(() => {
     setZoom(1);
+    setHiResLoading(false);
   }, [lbIdx]);
 
   // Đánh dấu "không thích" ngay trong lightbox làm ảnh rời khỏi danh sách đang
@@ -1415,6 +1418,11 @@ export default function CustomerAlbum({
 
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
             <div ref={lbStage} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-1 md:p-4">
+              {hiResLoading && (
+              <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-[12px]" style={{ background: "rgba(0,0,0,.6)", color: "#fff" }}>
+                Đang tải ảnh gốc cho nét…
+              </div>
+            )}
               <button
                 onClick={() => setLbIdx(Math.max(0, lbIdx - 1))}
                 disabled={lbIdx === 0}
@@ -1442,6 +1450,7 @@ export default function CustomerAlbum({
                     alt={lbPhoto.name}
                     draggable={false}
                     decoding="async"
+                    onError={retryViaProxy}
                     onContextMenu={(e) => wm && e.preventDefault()}
                     className="max-h-[calc(100dvh-232px)] max-w-full select-none rounded object-contain md:max-h-[80vh]"
                     style={{
@@ -1454,7 +1463,7 @@ export default function CustomerAlbum({
                       backgroundPosition: "center",
                     }}
                   />
-                  <ZoomHiRes src={fullImageUrl(lbPhoto.drive_file_id, zoomImageWidth(!!wm))} active={zoom > 1} className="rounded" />
+                  <ZoomHiRes srcs={[originalImageUrl(lbPhoto.drive_file_id), fullImageUrl(lbPhoto.drive_file_id, 4096), `${fullImageUrl(lbPhoto.drive_file_id, 2560)}&raw=1`]} active={zoom > 1} onLoadingChange={setHiResLoading} className="rounded" />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 overflow-hidden opacity-30">
                       {Array.from({ length: 16 }).map((_, i) => (
