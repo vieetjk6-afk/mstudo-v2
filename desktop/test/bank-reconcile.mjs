@@ -17,6 +17,7 @@ import {
   normalizeMemo,
   payCodeCandidates,
   depositCodeCandidates,
+  upgradeCodeCandidates,
   parseSepay,
   hookSecretFromHeader,
   amountFit,
@@ -63,6 +64,12 @@ check("ngân hàng nối tiền tố bằng dấu chấm", depositCodeCandidates
 check("chữ 'cọc' thường không phải mã", depositCodeCandidates("tien coc dam cuoi"), []);
 check("chữ 'cọc' dính chữ sau không phải mã", depositCodeCandidates("TIENCOCDAMCUOI"), []);
 check("mã dài hơn 4 ký tự không phải mã", depositCodeCandidates("COC-7F3AB"), []);
+
+// ── Dò mã thanh toán gói mstudo ────────────────────────────────────────────
+check("MS-7F3A nguyên dạng", upgradeCodeCandidates("MS-7F3A nang cap goi studio"), ["MS-7F3A"]);
+check("ngân hàng xoá gạch + tiền tố", upgradeCodeCandidates("MBVCB.123456.MS7F3A.CT tu 0901"), ["MS-7F3A"]);
+check("mã đợt của studio KHÔNG bị nhận nhầm là mã gói", upgradeCodeCandidates("MSAB23CD45 HD-2026-001"), []);
+check("chữ ms thường không phải mã", upgradeCodeCandidates("chuyen tien ms lan"), []);
 
 // ── Mã sinh ra phải dò lại được ────────────────────────────────────────────
 {

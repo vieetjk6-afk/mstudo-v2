@@ -75,16 +75,30 @@ export function payCodeCandidates(text: string | null | undefined): string[] {
  * cụm riêng. Luôn tra kèm owner_id: mã chỉ cần duy nhất trong một studio.
  */
 export function depositCodeCandidates(text: string | null | undefined): string[] {
+  return shortCodeCandidates(text, "COC");
+}
+
+/**
+ * Mã thanh toán GÓI mstudo ("MS-7F3A", xem upgrade-payment.ts). Cùng luật đứng
+ * thành cụm riêng như mã cọc. Mã đợt của studio ("MSAB23CD45", 8 ký tự sau MS)
+ * không bao giờ lọt vào đây: sau 4 ký tự còn chữ/số liền kề nên bị loại.
+ */
+export function upgradeCodeCandidates(text: string | null | undefined): string[] {
+  return shortCodeCandidates(text, "MS");
+}
+
+/** Mã "<TIỀN TỐ>-XXXX" đứng thành một cụm riêng; nhận cả khi ngân hàng xoá dấu gạch. */
+function shortCodeCandidates(text: string | null | undefined, prefix: string): string[] {
   const s = (text || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[đĐ]/g, "D")
     .toUpperCase();
   const out = new Set<string>();
-  const re = new RegExp(`(?:^|[^A-Z0-9])COC[-_. ]?([${PAY_CODE_ALPHABET}]{4})(?![A-Z0-9])`, "g");
+  const re = new RegExp(`(?:^|[^A-Z0-9])${prefix}[-_. ]?([${PAY_CODE_ALPHABET}]{4})(?![A-Z0-9])`, "g");
   let m: RegExpExecArray | null;
   while ((m = re.exec(s))) {
-    out.add(`COC-${m[1]}`);
+    out.add(`${prefix}-${m[1]}`);
     re.lastIndex = m.index + 1;
   }
   return [...out];

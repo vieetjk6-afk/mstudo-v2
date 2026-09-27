@@ -23,6 +23,7 @@ export default function PaymentView({
   initialStatus,
   initialNote,
   bank,
+  autoConfirm = false,
 }: {
   id: string;
   plan: string | null;
@@ -32,6 +33,8 @@ export default function PaymentView({
   initialStatus: UpgradePaymentStatus;
   initialNote: string | null;
   bank: BankInfo;
+  /** mstudo đã nối SePay (SEPAY_MSTUDO_KEY): tiền về là gói tự nâng, không cần admin. */
+  autoConfirm?: boolean;
 }) {
   const [status, setStatus] = useState<UpgradePaymentStatus>(initialStatus);
   const [note, setNote] = useState<string | null>(initialNote);
@@ -50,8 +53,13 @@ export default function PaymentView({
   // CHỈ hỏi khi tab đang HIỆN, và hỏi ngay lúc người dùng quay lại: một tab bỏ
   // quên mà cứ gõ cửa 20 giây/lần là hơn 4.000 request mỗi ngày cho màn hình
   // không ai nhìn — đúng bài học đã ghi ở trang album của khách.
+  //
+  // Có SePay thì tiền về là gói tự nâng trong vài giây, nên hỏi dày hơn (6 giây)
+  // và hỏi cả khi studio CHƯA bấm "Tôi đã chuyển": phần lớn người dùng quét QR
+  // xong là chờ, không bấm gì thêm.
   useEffect(() => {
-    if (status !== "awaiting_confirm") return;
+    const waiting = status === "awaiting_confirm" || (autoConfirm && status === "none");
+    if (!waiting) return;
     let stopped = false;
     const ask = async () => {
       if (document.visibilityState !== "visible") return;
@@ -65,14 +73,14 @@ export default function PaymentView({
         /* mất mạng một nhịp — lần sau hỏi lại */
       }
     };
-    const t = setInterval(ask, 20_000);
+    const t = setInterval(ask, autoConfirm ? 6_000 : 20_000);
     document.addEventListener("visibilitychange", ask);
     return () => {
       stopped = true;
       clearInterval(t);
       document.removeEventListener("visibilitychange", ask);
     };
-  }, [id, status]);
+  }, [id, status, autoConfirm]);
 
   async function declare() {
     setBusy(true);
@@ -121,8 +129,17 @@ export default function PaymentView({
           Gói {planLabel} · {cycleLabel}
         </h1>
         <p className="mt-2 text-[14px]" style={{ color: "var(--text2)" }}>
-          Chuyển khoản đúng số tiền &amp; nội dung bên dưới, rồi bấm <b>Tôi đã chuyển khoản</b>.
-          Bên mình đối chiếu sao kê và nâng gói cho bạn.
+          {autoConfirm ? (
+            <>
+              Quét mã QR bên dưới (giữ nguyên số tiền &amp; nội dung). Tiền về là gói được <b>nâng tự động</b> sau vài
+              giây, trang này tự cập nhật.
+            </>
+          ) : (
+            <>
+              Chuyển khoản đúng số tiền &amp; nội dung bên dưới, rồi bấm <b>Tôi đã chuyển khoản</b>.
+              Bên mình đối chiếu sao kê và nâng gói cho bạn.
+            </>
+          )}
         </p>
       </div>
 
