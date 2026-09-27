@@ -13,6 +13,7 @@ import {
   HardDrive,
   FolderInput,
   FolderOutput,
+  FolderOpen,
   FolderPlus,
   CopyCheck,
   ExternalLink,
@@ -109,6 +110,8 @@ export default function FilterTool({
   const [destName, setDestName] = useState("");
   const [copying, setCopying] = useState(false);
   const [copyMsg, setCopyMsg] = useState<string | null>(null);
+  /** Lần copy gần nhất đã chép được ít nhất 1 ảnh → hiện nút "Mở thư mục đích". */
+  const [copyDone, setCopyDone] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const folderInput = useRef<HTMLInputElement>(null);
 
@@ -324,6 +327,7 @@ export default function FilterTool({
       const dir = await (window as any).showDirectoryPicker({ id: "vk-dest", mode: "readwrite" });
       setDestDir(dir);
       setDestName(dir.name);
+      setCopyDone(false);
     } catch {
       /* cancelled */
     }
@@ -460,6 +464,7 @@ export default function FilterTool({
     if (!(await ensureFilterUse())) return;
     setCopying(true);
     setCopyMsg(null);
+    setCopyDone(false);
 
     // Quét cả thư mục con nên HAI ảnh KHÁC NHAU có thể trùng tên (IMG_001.jpg ở
     // "Ngày 1" và ở "Ngày 2"). Thư mục đích phẳng, ghi thẳng theo tên là tấm sau
@@ -504,12 +509,26 @@ export default function FilterTool({
       }
     }
     setCopying(false);
+    setCopyDone(done > 0);
     setCopyMsg(
       `Đã copy ${done}/${shown.length} ảnh sang “${destName}”` +
         (renamed ? ` · ${renamed} ảnh trùng tên (khác thư mục con) được đổi tên để không đè nhau` : "") +
         (failed ? ` · ${failed} ảnh lỗi` : "") +
         "."
     );
+  }
+
+  // Trình duyệt không cho biết đường dẫn thật của thư mục (chỉ có handle) nên
+  // không gọi được Explorer/Finder. Cách gần nhất: mở hộp thoại hệ thống NGAY
+  // TẠI thư mục đích (startIn) — thấy luôn ảnh vừa copy, và từ đó mở được bằng
+  // Explorer (chuột phải → Mở). Chọn hay huỷ đều bỏ qua, không làm gì thêm.
+  async function openDestFolder() {
+    if (!destDir) return;
+    try {
+      await (window as any).showOpenFilePicker({ startIn: destDir, multiple: true });
+    } catch {
+      /* huỷ / trình duyệt không hỗ trợ startIn */
+    }
   }
 
   // Copy ảnh đã lọc sang Drive — máy chủ dùng KẾT NỐI đã lưu (toàn quyền) để tự
@@ -739,13 +758,13 @@ export default function FilterTool({
 
                         {driveCopyMsg && (
                           <p className="mt-2 text-[12.5px]" style={{ color: "var(--gold)" }}>
-                            {driveCopyMsg}{" "}
-                            {driveCopyLink && (
-                              <a href={driveCopyLink} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 underline" style={{ color: "var(--accent)" }}>
-                                <ExternalLink size={12} /> Mở thư mục ảnh chọn
-                              </a>
-                            )}
+                            {driveCopyMsg}
                           </p>
+                        )}
+                        {driveCopyLink && !driveCopying && (
+                          <a href={driveCopyLink} target="_blank" rel="noopener noreferrer" className="btn-ghost mt-2 w-full py-2.5">
+                            <ExternalLink size={15} /> Mở thư mục đích trên Drive
+                          </a>
                         )}
                       </div>
             ) : (
@@ -769,6 +788,11 @@ export default function FilterTool({
                       <CopyCheck size={16} /> {copying ? "Đang copy…" : `Copy ${shown.length} ảnh sang thư mục đích`}
                     </button>
                     {copyMsg && <p className="mt-2 text-[13px]" style={{ color: "var(--gold)" }}>{copyMsg}</p>}
+                    {copyDone && !copying && (
+                      <button type="button" onClick={openDestFolder} className="btn-ghost mt-2 w-full py-2.5">
+                        <FolderOpen size={15} /> Mở thư mục đích {destName && `· ${destName}`}
+                      </button>
+                    )}
                   </>
                 ) : (
                   <p className="mt-3 text-[12.5px]" style={{ color: "var(--text3)" }}>
