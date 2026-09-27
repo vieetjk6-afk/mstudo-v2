@@ -15,7 +15,15 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
  * khung này (CustomerAlbum, GalleryView) render cả lưới hàng trăm thẻ <img>
  * trong CÙNG một component với khung xem. Đặt một `setState` trong pointermove
  * nghĩa là mỗi lần nhích ngón tay lại dựng lại từng ấy thẻ ảnh — đó chính là
- * cái giật khi kéo/phóng to. Ở đây cử chỉ ghi thẳng vào `style.transform` trong
+ * cái giật khi kéo/phóng to.
+ *
+ * Vì sao THẢ TAY lại đổi sang phóng bằng KÍCH THƯỚC thật (commit): Safari iOS
+ * giải mã và vẽ ảnh theo cỡ TRƯỚC transform rồi kéo giãn bitmap đó — đo trên
+ * iPhone: ảnh gốc 4672px đã tải xong, phóng 3,8 lần vẫn mờ như ảnh 1200px.
+ * Nên trong lúc cử chỉ còn chạy thì dùng transform (mượt), thả tay là đặt
+ * width/height thật = cỡ × mức phóng (margin âm giữ nguyên chỗ trong bố cục)
+ * để trình duyệt vẽ lại ảnh đúng độ phân giải. Cử chỉ mới bắt đầu thì quay về
+ * transform trước khi đo. Ở đây cử chỉ ghi thẳng vào `style.transform` trong
  * một khung hình rAF; React chỉ được báo khi cử chỉ kết thúc (để bật/tắt nút
  * thu nhỏ).
  *
@@ -104,6 +112,9 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
     lastTouch: 0,
     raf: 0,
     notified: 1,
+    /** Đang ở dạng "kích thước thật" (xem commit) thay vì transform scale. */
+    committed: false,
+    commitTimer: 0 as ReturnType<typeof setTimeout> | 0,
   });
 
   useEffect(() => {
@@ -121,13 +132,56 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
       if (s.raf) return;
       s.raf = requestAnimationFrame(() => {
         s.raf = 0;
+        if (s.committed) return;
         box.style.transform = `translate3d(${s.tx + s.swipeDx}px, ${s.ty}px, 0) scale(${s.scale})`;
         box.style.cursor = s.scale > 1 ? (s.panning ? "grabbing" : "grab") : "zoom-in";
       });
     };
 
+    /** Về lại dạng transform (hình trên màn hình y hệt) — trước mọi cử chỉ/đo đạc. */
+    const uncommit = () => {
+      if (s.commitTimer) {
+        clearTimeout(s.commitTimer);
+        s.commitTimer = 0;
+      }
+      if (!s.committed) return;
+      s.committed = false;
+      box.style.transition = "none";
+      box.style.width = "";
+      box.style.height = "";
+      box.style.margin = "";
+      delete box.dataset.pzCommit;
+      box.style.transform = `translate3d(${s.tx}px, ${s.ty}px, 0) scale(${s.scale})`;
+    };
+
+    /**
+     * Đổi phóng-bằng-transform sang phóng-bằng-kích-thước để ảnh được vẽ lại
+     * nét (xem đầu file). Margin âm bù phần lớn thêm nên khung vẫn chiếm đúng
+     * chỗ cũ trong bố cục — nút thích/không thích bên ngoài không bị đẩy đi.
+     */
+    const commit = () => {
+      s.commitTimer = 0;
+      if (s.pointers.size > 0 || s.scale <= 1.001 || !s.bw || !s.bh) return;
+      const w = s.bw * s.scale;
+      const h = s.bh * s.scale;
+      s.committed = true;
+      box.style.transition = "none";
+      box.style.width = `${w}px`;
+      box.style.height = `${h}px`;
+      box.style.margin = `${-(h - s.bh) / 2}px ${-(w - s.bw) / 2}px`;
+      box.dataset.pzCommit = "1";
+      box.style.transform = `translate(${s.tx}px, ${s.ty}px)`;
+    };
+
+    /** Hẹn commit sau khi hiệu ứng chuyển (TRANSITION .18s) chạy xong. */
+    const scheduleCommit = (ms = 230) => {
+      if (s.commitTimer) clearTimeout(s.commitTimer);
+      s.commitTimer = setTimeout(commit, ms);
+    };
+
     /** Đo lại tâm khung + cỡ khung & nền. Gọi khi BẮT ĐẦU một cử chỉ. */
     const measure = () => {
+      uncommit();
       const r = box.getBoundingClientRect();
       s.cx = r.left + r.width / 2 - s.tx - s.swipeDx;
       s.cy = r.top + r.height / 2 - s.ty;
@@ -179,6 +233,7 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
       measure();
       zoomAt(s.scale > 1 ? 1 / s.scale : TAP_ZOOM, fx, fy);
       notify(true);
+      scheduleCommit();
     };
 
     handle.current = {
@@ -187,8 +242,10 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
         measure();
         zoomAt(k, s.cx + s.tx, s.cy + s.ty);
         notify(true);
+        scheduleCommit();
       },
       reset: () => {
+        uncommit();
         box.style.transition = TRANSITION;
         s.scale = 1;
         s.tx = 0;
@@ -309,6 +366,7 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
 
       if (e.pointerType !== "mouse") s.lastTouch = Date.now();
 
+      scheduleCommit();
       if (swiped <= -SWIPE_MIN) cb.current.onSwipe?.(1);
       else if (swiped >= SWIPE_MIN) cb.current.onSwipe?.(-1);
       else if (tapped && e.pointerType !== "mouse") {
@@ -344,6 +402,7 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
       // nhảy nấc lớn nên đi theo dấu của deltaY.
       zoomAt(e.ctrlKey ? Math.exp(-e.deltaY / 100) : e.deltaY < 0 ? 1.15 : 1 / 1.15, e.clientX, e.clientY);
       notify(true);
+      scheduleCommit(250);
     };
 
     stage.addEventListener("pointerdown", onDown);
@@ -362,6 +421,8 @@ const PhotoZoom = forwardRef<PhotoZoomHandle, Props>(function PhotoZoom(
       stage.style.touchAction = prevTouch;
       if (s.raf) cancelAnimationFrame(s.raf);
       s.raf = 0;
+      if (s.commitTimer) clearTimeout(s.commitTimer);
+      s.commitTimer = 0;
       s.pointers.clear();
     };
   }, [stageRef, maxScale]);
