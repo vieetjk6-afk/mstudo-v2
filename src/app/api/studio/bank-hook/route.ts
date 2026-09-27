@@ -3,7 +3,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { phanLoaiLoi } from "@/lib/pg-loi";
 import { newHookSecret, vnDate } from "@/lib/bank-reconcile";
-import { applyToPlan, confirmDepositZalo, acceptBookingDeposit } from "@/lib/bank-apply";
+import { applyToPlan, notifyPaymentZalo, isDepositLabel, acceptBookingDeposit } from "@/lib/bank-apply";
 
 export const dynamic = "force-dynamic";
 
@@ -131,9 +131,10 @@ export async function POST(req: Request) {
         payment_id: res.paymentId,
       })
       .eq("id", txn.id);
-    if (res.label.toLowerCase().includes("cọc")) {
-      await confirmDepositZalo(db, profile.id, res.contractId, Number(txn.amount) || 0);
-    }
+    await notifyPaymentZalo(db, profile.id, res.contractId, {
+      amount: Number(txn.amount) || 0,
+      isDeposit: isDepositLabel(res.label),
+    });
     return NextResponse.json({ ok: true, fit: res.fit, contractId: res.contractId });
   }
 

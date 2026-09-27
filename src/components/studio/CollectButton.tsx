@@ -42,15 +42,13 @@ export default function CollectButton({
       }).then((x) => x.json());
       if (r?.ok) {
         setDone(true);
-        // Đợt CỌC → gửi tin xác nhận cho khách, đúng như màn hợp đồng vẫn làm.
-        // Bắn rồi quên: studio đã có tiền, tin nhắn hỏng không được chặn việc.
-        if (r.isDeposit) {
-          fetch("/api/studio/zalo/lifecycle", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ contractId, event: "deposit_confirm", amount: r.amount }),
-          }).catch(() => {});
-        }
+        // Tin Zalo cho khách (đủ tiền → cảm ơn, đợt cọc → xác nhận cọc), như
+        // màn hợp đồng. Bắn rồi quên: tin nhắn hỏng không được chặn việc thu.
+        fetch("/api/studio/zalo/lifecycle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contractId, event: "payment_received", amount: r.amount, isDeposit: !!r.isDeposit }),
+        }).catch(() => {});
         router.refresh();
       } else {
         alert("Không ghi nhận được, thử lại hoặc mở hợp đồng.");

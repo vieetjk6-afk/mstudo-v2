@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircle, Check, X, AlertTriangle, Loader2, QrCode, BadgeCheck, ExternalLink } from "lucide-react";
+import { eventCfg } from "@/lib/zalo/events";
 
 type AutoCfg = { client?: boolean; crew?: boolean; templateId?: string };
 
@@ -26,6 +27,7 @@ type Status = {
 const EVENTS: { key: string; label: string; audiences: ("client" | "crew")[] }[] = [
   { key: "booking_confirm", label: "Xác nhận đặt lịch", audiences: ["client"] },
   { key: "deposit_confirm", label: "Xác nhận đã nhận cọc", audiences: ["client"] },
+  { key: "payment_done", label: "Xác nhận đã thanh toán đủ", audiences: ["client"] },
   { key: "shoot_reminder", label: "Nhắc lịch chụp (trước 1 ngày)", audiences: ["client", "crew"] },
   { key: "payment_due", label: "Nhắc thanh toán tới hạn", audiences: ["client"] },
   { key: "select_ready", label: "Mời khách chọn ảnh", audiences: ["client"] },
@@ -128,7 +130,7 @@ export default function ZaloPanel() {
   }
 
   function toggle(key: string, aud: "client" | "crew") {
-    const cur = autoEvents[key] ?? {};
+    const cur = eventCfg(autoEvents, key);
     const next = { ...autoEvents, [key]: { ...cur, [aud]: !cur[aud] } };
     saveEvents(next);
   }
@@ -369,7 +371,7 @@ export default function ZaloPanel() {
             </thead>
             <tbody>
               {EVENTS.map((e) => {
-                const cfg = autoEvents[e.key] ?? {};
+                const cfg = eventCfg(autoEvents, e.key);
                 return (
                   <tr key={e.key} className="border-t border-white/5">
                     <td className="px-3 py-2">{e.label}</td>

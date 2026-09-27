@@ -1364,6 +1364,22 @@ export default function ContractEditor({
     setProofBusy(false);
   }
 
+  // Zalo sau một lần thu: đủ tiền → "đã thanh toán đủ", đợt cọc → "đã nhận cọc".
+  // Máy chủ tự tính và tự kiểm tra studio đã bật mốc + kết nối Zalo chưa.
+  // Fire-and-forget, không chặn UI.
+  function paymentZalo(amount: number, label: string | null | undefined) {
+    fetch("/api/studio/zalo/lifecycle", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contractId: contract.id,
+        event: "payment_received",
+        amount,
+        isDeposit: (label || "").toLowerCase().includes("cọc"),
+      }),
+    }).catch(() => {});
+  }
+
   // ── Payment schedule (unified: marking an instalment paid records a payment) ──
   async function addPlan(markPaid = false) {
     const amount = Math.max(0, Math.round(Number(planForm.amount) || 0));
@@ -1408,6 +1424,7 @@ export default function ContractEditor({
       setPlanForm({ label: "", amount: 0, due_date: "" });
       setPlanProof("");
     }
+    if (payment_id) paymentZalo(amount, label);
   }
   // Mark an instalment collected → records a real payment; un-marking removes it.
   async function markPlanPaid(it: ContractPaymentPlan, method: PaymentMethod | null = null) {
@@ -1443,15 +1460,7 @@ export default function ContractEditor({
       setPayments((p) => [payment as ContractPayment, ...p]);
       await supabase.from("contract_payment_plan").update({ paid: true, paid_at: nowIso, payment_id: pid }).eq("id", it.id);
       setPlan((p) => p.map((x) => (x.id === it.id ? { ...x, paid: true, paid_at: nowIso, payment_id: pid } : x)));
-      // Zalo: xác nhận cọc (chỉ với đợt CỌC) — tự gửi cho khách nếu studio đã bật
-      // mốc "Xác nhận cọc" + đã kết nối Zalo. Fire-and-forget, không chặn UI.
-      if ((it.label || "").toLowerCase().includes("cọc")) {
-        fetch("/api/studio/zalo/lifecycle", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contractId: contract.id, event: "deposit_confirm", amount }),
-        }).catch(() => {});
-      }
+      paymentZalo(amount, it.label);
       // Compute updated plan
       const updatedPlan = plan.map((x) => (x.id === it.id ? { ...x, paid: true } : x));
       const stillUnpaid = updatedPlan.filter((x) => !x.paid);

@@ -42,6 +42,7 @@ export interface ZaloRow {
 export const AUTO_EVENTS: { key: string; label: string; audiences: ("client" | "crew")[] }[] = [
   { key: "booking_confirm", label: "Xác nhận đặt lịch", audiences: ["client"] },
   { key: "deposit_confirm", label: "Xác nhận đã nhận cọc", audiences: ["client"] },
+  { key: "payment_done", label: "Xác nhận đã thanh toán đủ", audiences: ["client"] },
   { key: "crew_assigned", label: "Báo thợ khi được xếp lịch", audiences: ["crew"] },
   { key: "shoot_reminder", label: "Nhắc lịch chụp (trước 1 ngày)", audiences: ["client", "crew"] },
   { key: "payment_due", label: "Nhắc thanh toán tới hạn", audiences: ["client"] },
@@ -70,6 +71,7 @@ export const DEFAULT_AUTO_EVENTS: AutoEvents = {
   shoot_reminder: { client: true, crew: true },
   select_ready: { client: true },
   deposit_confirm: { client: true },
+  payment_done: { client: true },
 };
 
 /** Bộ mốc để lưu khi kết nối: giữ nguyên cấu hình cũ, chỉ mồi khi còn rỗng. */

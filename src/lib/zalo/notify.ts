@@ -1,5 +1,6 @@
 import "server-only";
 import { loadZalo } from "./config";
+import { eventCfg } from "./events";
 import { sendZalo, type SendResult } from "./send";
 
 /**
@@ -23,7 +24,7 @@ export async function autoNotify(opts: {
   const row = await loadZalo(opts.ownerId);
   if (!row || row.status !== "connected") return { ok: false, skipped: true, error: "not_connected" };
 
-  const cfg = row.auto_events?.[opts.event];
+  const cfg = eventCfg(row.auto_events, opts.event);
   const enabled = opts.audience === "client" ? cfg?.client : cfg?.crew;
   if (!enabled) return { ok: false, skipped: true, error: "event_disabled" };
   if (!opts.toPhone) return { ok: false, skipped: true, error: "no_phone" };
