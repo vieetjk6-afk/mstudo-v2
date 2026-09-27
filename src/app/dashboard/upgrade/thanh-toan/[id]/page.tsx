@@ -54,6 +54,7 @@ export default async function UpgradePaymentPage(props: { params: Promise<{ id: 
       initialStatus={isUpgradePaymentStatus(row.payment_status) ? row.payment_status : "none"}
       initialNote={row.review_note ?? null}
       bank={bank}
+      autoConfirm={!!process.env.SEPAY_MSTUDO_KEY}
     />
   );
 }

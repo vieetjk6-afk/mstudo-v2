@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
-import { activatePlan } from "@/lib/upgrade-activate";
-import type { Plan } from "@/lib/plans";
+import { confirmUpgrade, UPGRADE_ROW_COLUMNS, type UpgradeRow } from "@/lib/upgrade-confirm";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +33,7 @@ export async function POST(req: Request) {
   const db = createAdminClient();
   const { data: row } = await db
     .from("upgrade_requests")
-    .select("id, user_id, email, plan, cycle, payment_status, payment_amount, payment_code")
+    .select(UPGRADE_ROW_COLUMNS)
     .eq("id", id)
     .maybeSingle();
   if (!row) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -64,37 +63,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, status: "failed" });
   }
 
-  // confirm — nâng gói thật.
-  const validPlan =
-    row.plan === "basic" || row.plan === "photographer" || row.plan === "photographer_plus" || row.plan === "studio"
-      ? (row.plan as Plan)
-      : null;
-  if (!row.user_id || !validPlan) return NextResponse.json({ error: "no_plan" }, { status: 400 });
-
-  await activatePlan({
-    db,
-    userId: row.user_id,
-    userEmail: row.email ?? "",
-    plan: validPlan,
-    cycle: row.cycle === "year" ? "year" : "month",
-    saleAmount: row.payment_amount ?? 0,
-  });
-
-  await db
-    .from("upgrade_requests")
-    .update({ payment_status: "paid", reviewed_at: now, reviewed_by: admin.id, review_note: reviewNote, handled: true })
-    .eq("id", row.id);
-
-  const msg = `Đã nhận thanh toán — tài khoản của bạn đã lên gói ${validPlan} (${row.cycle === "year" ? "1 năm" : "1 tháng"}).`;
-  await db.from("studio_notifications").insert({
-    owner_id: row.user_id, contract_id: null, kind: "plan_activated", message: msg,
-  });
-  await sendPushToOwner(row.user_id, {
-    title: "Nâng cấp thành công 🎉",
-    body: msg,
-    url: "/dashboard/upgrade",
-    tag: `upgrade-${row.id}`,
-  });
-
+  // confirm — nâng gói thật. Cùng hàm với webhook SePay của mstudo.
+  const res = await confirmUpgrade(db, row as UpgradeRow, { reviewedBy: admin.id, note: reviewNote });
+  if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.error === "already_paid" ? 409 : 400 });
   return NextResponse.json({ ok: true, status: "paid" });
 }
