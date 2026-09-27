@@ -1471,3 +1471,12 @@ body {
     font-family: "Times New Roman", "DejaVu Serif", Arial, sans-serif !important;
   }
 }
+
+/* PhotoZoom đã "commit" mức phóng thành kích thước thật (xem components/PhotoZoom):
+   ảnh bên trong phải lấp đúng khung, bỏ các giới hạn max-w/max-h của mức 1. */
+[data-pz-commit] img {
+  max-width: none !important;
+  max-height: none !important;
+  width: 100% !important;
+  height: 100% !important;
+}
