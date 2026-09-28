@@ -5,6 +5,7 @@ import Link from "next/link";
 import { History, ChevronDown } from "lucide-react";
 import { Panel, PanelHead, EmptyState } from "@/components/studio/ui";
 import { fmtDateTime } from "@/lib/date";
+import { auditFields, type AuditField } from "@/lib/audit-fields";
 import { AUDIT_GROUP_LABEL, auditGroup, auditIsDestructive, type AuditGroup } from "@/lib/audit-labels";
 
 export type AuditRow = {
@@ -86,7 +87,8 @@ export default function AuditView({
           <ul>
             {shown.map((r) => {
               const danger = auditIsDestructive(r.action);
-              const hasDetail = r.before != null || r.after != null;
+              const fields = auditFields(r.before, r.after);
+              const hasDetail = fields.length > 0;
               return (
                 <li key={r.id} style={{ borderTop: "1px solid var(--bd2)" }}>
                   <button
@@ -114,9 +116,8 @@ export default function AuditView({
                     {hasDetail && <ChevronDown size={15} className="mt-0.5 flex-none" style={{ color: "var(--tx3)", transform: open === r.id ? "rotate(180deg)" : undefined }} />}
                   </button>
                   {open === r.id && (
-                    <div className="grid gap-2 px-4 pb-3 sm:grid-cols-2">
-                      {r.before != null && <Snapshot title="Trước" value={r.before} />}
-                      {r.after != null && <Snapshot title="Sau" value={r.after} />}
+                    <div className="px-4 pb-3">
+                      <Details fields={fields} />
                     </div>
                   )}
                 </li>
@@ -129,11 +130,41 @@ export default function AuditView({
   );
 }
 
-function Snapshot({ title, value }: { title: string; value: unknown }) {
+/** Chi tiết một dòng nhật ký: trường đã đổi (trước → sau) hoặc thông tin của khoản vừa ghi / vừa xoá. */
+function Details({ fields }: { fields: AuditField[] }) {
   return (
-    <div className="min-w-0 rounded-[10px] p-2.5" style={{ background: "var(--sf2)", border: "1px solid var(--bd2)" }}>
-      <p className="mb-1 text-[10.5px] font-extrabold uppercase" style={{ letterSpacing: ".6px", color: "var(--tx3)" }}>{title}</p>
-      <pre className="overflow-x-auto whitespace-pre-wrap break-words text-[11px]" style={{ color: "var(--tx2)" }}>{JSON.stringify(value, null, 2)}</pre>
-    </div>
+    <dl
+      className="grid grid-cols-[minmax(92px,auto)_1fr] gap-x-3 gap-y-1.5 rounded-[10px] p-3 text-[12.5px]"
+      style={{ background: "var(--sf2)", border: "1px solid var(--bd2)" }}
+    >
+      {fields.map((f) => (
+        <div key={f.label} className="contents">
+          <dt style={{ color: "var(--tx3)" }}>{f.label}</dt>
+          <dd className="min-w-0 break-words">
+            {f.lines ? (
+              <ul className="space-y-0.5">
+                {f.lines.map((l, i) => (
+                  <li key={i} className="flex justify-between gap-3">
+                    <span className="min-w-0">
+                      {l.name}
+                      {l.qty !== "1" && <span style={{ color: "var(--tx3)" }}> × {l.qty}</span>}
+                    </span>
+                    <span className="tnum flex-none">{l.price}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : f.before !== undefined && f.after !== undefined ? (
+              <>
+                <span style={{ color: "var(--tx3)", textDecoration: "line-through" }}>{f.before}</span>
+                {" → "}
+                <span className="font-semibold">{f.after}</span>
+              </>
+            ) : (
+              <span className="font-semibold">{f.after ?? f.before}</span>
+            )}
+          </dd>
+        </div>
+      ))}
+    </dl>
   );
 }
