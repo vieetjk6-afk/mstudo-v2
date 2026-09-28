@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { fmtDateTime, fmtDate } from "@/lib/date";
+import { quoteShareMessage } from "@/lib/share-messages";
 import DateInput from "@/components/DateInput";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -302,8 +303,9 @@ ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discount
   }
 
   async function copyLink() {
-    await navigator.clipboard.writeText(shareUrl);
-    flash("Đã copy link!");
+    // Chép kèm lời nhắn để studio dán thẳng vào Zalo/Messenger, không phải gõ câu dẫn.
+    await navigator.clipboard.writeText(quoteShareMessage(quote.client_name, quote.title, shareUrl));
+    flash("Đã chép link kèm lời nhắn!");
   }
 
   async function markSent() {
@@ -439,7 +441,7 @@ ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discount
             <Printer size={12} /> Xuất PDF
           </button>
           <button onClick={copyLink} className="btn-ghost px-3 py-2 text-xs" data-testid="quote-copy-link">
-            <Copy size={12} /> Copy link khách
+            <Copy size={12} /> Chép link kèm lời nhắn
           </button>
           <a href={shareUrl} target="_blank" rel="noreferrer" className="btn-ghost px-3 py-2 text-xs">
             <ExternalLink size={12} /> Xem trang khách

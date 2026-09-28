@@ -18,6 +18,7 @@ export default function ShareButton({
   label = "Chia sẻ",
   className = "btn-ghost",
   compact = false,
+  message,
 }: {
   path: string;
   title?: string;
@@ -26,6 +27,8 @@ export default function ShareButton({
   /** Skip the popover: clicking shares (native) / copies the link directly.
    * Useful inside cards with `overflow-hidden` that would clip a popover. */
   compact?: boolean;
+  /** Lời nhắn có sẵn link (như tin Zalo) — nút chép sẽ chép cả lời nhắn này. */
+  message?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [url, setUrl] = useState(path);
@@ -33,6 +36,7 @@ export default function ShareButton({
   const { copied, canNativeShare, copy, nativeShare, quickShareOrCopy } = useShareLink(
     url,
     title || "Album ảnh",
+    message,
   );
 
   useEffect(() => {
@@ -106,7 +110,7 @@ export default function ShareButton({
           </div>
 
           {/* Link + copy */}
-          <CopyLinkRow url={url} copied={copied} onCopy={copy} />
+          <CopyLinkRow url={url} copied={copied} onCopy={copy} withMessage={!!message} />
 
           {/* Quick share via the native share sheet (Messenger / Zalo / …) */}
           {canNativeShare && <NativeShareButton onShare={() => nativeShare()} />}

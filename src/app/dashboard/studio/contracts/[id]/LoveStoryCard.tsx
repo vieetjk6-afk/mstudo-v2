@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Clapperboard, Copy, Check, ExternalLink, Loader2, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { studioUrl } from "@/lib/hosts";
+import { storyEditMessage } from "@/lib/share-messages";
 import MessengerButton from "@/components/MessengerButton";
 import type { StoryConfig } from "@/lib/types";
 
@@ -102,8 +103,8 @@ export default function LoveStoryCard({
           <div className="flex flex-wrap items-center gap-2">
             <Pencil size={13} style={{ color: "var(--text3)" }} />
             <span className="min-w-0 flex-1 truncate text-sm" style={{ color: "var(--text2)" }}>{editUrl}</span>
-            <MessengerButton link={clientMessenger} label="Gửi khách sửa" message={`Bên em tặng anh/chị trang Love Story. Mở link này để điền nội dung & dán link folder ảnh/video Google Drive của mình nhé: ${editUrl}`} />
-            <button onClick={() => copy(editUrl, "edit")} className="btn-ghost px-2.5 py-1.5 text-xs">{copied === "edit" ? <Check size={13} /> : <Copy size={13} />} {copied === "edit" ? "Đã chép" : "Chép link sửa"}</button>
+            <MessengerButton link={clientMessenger} label="Gửi khách sửa" message={storyEditMessage(editUrl)} />
+            <button onClick={() => copy(storyEditMessage(editUrl), "edit")} className="btn-ghost px-2.5 py-1.5 text-xs">{copied === "edit" ? <Check size={13} /> : <Copy size={13} />} {copied === "edit" ? "Đã chép lời nhắn" : "Chép link sửa kèm lời nhắn"}</button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ExternalLink size={13} style={{ color: "var(--text3)" }} />

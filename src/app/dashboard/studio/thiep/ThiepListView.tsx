@@ -8,6 +8,7 @@ import { Heart, ExternalLink, Pencil, Copy, Check, Download, FileSpreadsheet, Us
 import { createClient } from "@/lib/supabase/client";
 import ThiepTabs from "@/components/studio/ThiepTabs";
 import { thiepUrl } from "@/lib/hosts";
+import { weddingEditMessage } from "@/lib/share-messages";
 import { getTemplateMeta } from "../../../thiep/[slug]/templates";
 import { escapeHtml } from "@/lib/html-escape";
 import type { WeddingConfig, WeddingRsvp } from "@/lib/types";
@@ -180,8 +181,8 @@ export default function ThiepListView({ rows, ownerId, studio }: { rows: Invitat
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
                   <a href={viewUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><ExternalLink size={13} /> Xem</a>
                   <a href={editUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><Pencil size={13} /> Mở trình sửa</a>
-                  <button onClick={() => copy(editUrl, `edit-${r.id}`)} className="btn-ghost px-2.5 py-1.5 text-xs">
-                    {copied === `edit-${r.id}` ? <Check size={13} /> : <Copy size={13} />} Chép link sửa
+                  <button onClick={() => copy(weddingEditMessage(editUrl), `edit-${r.id}`)} className="btn-ghost px-2.5 py-1.5 text-xs">
+                    {copied === `edit-${r.id}` ? <Check size={13} /> : <Copy size={13} />} {copied === `edit-${r.id}` ? "Đã chép lời nhắn" : "Chép link sửa kèm lời nhắn"}
                   </button>
                   <button onClick={() => openQr(couple, viewUrl)} className="btn-ghost px-2.5 py-1.5 text-xs">
                     <QrCode size={13} /> Mã QR / In

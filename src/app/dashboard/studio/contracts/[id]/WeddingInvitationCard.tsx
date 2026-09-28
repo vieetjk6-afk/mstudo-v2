@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Heart, Copy, Check, ExternalLink, Loader2, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { thiepUrl } from "@/lib/hosts";
+import { weddingEditMessage } from "@/lib/share-messages";
 import MessengerButton from "@/components/MessengerButton";
 import type { WeddingConfig } from "@/lib/types";
 
@@ -123,10 +124,10 @@ export default function WeddingInvitationCard({
             <MessengerButton
               link={clientMessenger}
               label="Gửi khách sửa"
-              message={`Chúc mừng anh/chị! Bên em tặng anh/chị thiệp cưới online. Anh/chị mở link này để tự điền thông tin & chọn ảnh nhé: ${editUrl}`}
+              message={weddingEditMessage(editUrl)}
             />
-            <button onClick={() => copy(editUrl, "edit")} className="btn-ghost px-2.5 py-1.5 text-xs">
-              {copied === "edit" ? <Check size={13} /> : <Copy size={13} />} {copied === "edit" ? "Đã chép" : "Chép link sửa"}
+            <button onClick={() => copy(weddingEditMessage(editUrl), "edit")} className="btn-ghost px-2.5 py-1.5 text-xs">
+              {copied === "edit" ? <Check size={13} /> : <Copy size={13} />} {copied === "edit" ? "Đã chép lời nhắn" : "Chép link sửa kèm lời nhắn"}
             </button>
           </div>
           {/* Public link */}

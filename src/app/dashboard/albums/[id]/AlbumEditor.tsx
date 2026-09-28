@@ -35,6 +35,7 @@ import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
 import { fmtDate } from "@/lib/date";
+import { albumShareMessage } from "@/lib/share-messages";
 import { storageUntil, storageState, storageLabel, STORAGE_EXTEND_CHOICES } from "@/lib/storage-lifecycle";
 import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } from "@/lib/types";
 
@@ -576,7 +577,7 @@ export default function AlbumEditor({
           <a href={clientLink} target="_blank" rel="noreferrer" className="act-btn">
             <ExternalLink size={16} /> Mở link khách
           </a>
-          <ShareButton path={clientLink} title={form.title} className="act-btn" />
+          <ShareButton path={clientLink} title={form.title} className="act-btn" message={albumShareMessage(clientName || album.client_name, clientLink)} />
           {/* Ô nhập số điện thoại + nút gửi nên chiếm cả hàng trên điện thoại,
               nhồi vào nửa hàng thì ô nhập chỉ còn vài chục pixel. */}
           <div className="col-span-2 min-[820px]:col-auto">
@@ -588,7 +589,7 @@ export default function AlbumEditor({
               kind="album_share"
               askPhone
               className="act-btn act-btn-auto flex-1"
-              message={`Chào ${clientName || album.client_name || "anh/chị"}, mời anh/chị xem album ảnh tại: ${clientLink}`}
+              message={albumShareMessage(clientName || album.client_name, clientLink)}
             />
           </div>
           <button onClick={() => setTab("sources")} className="act-btn act-btn-primary">

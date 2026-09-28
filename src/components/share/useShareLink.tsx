@@ -14,7 +14,12 @@ import { Share2, Copy, Check } from "lucide-react";
  * `url` may be null (e.g. while a share link is still being built server-side);
  * copy / share become no-ops until it resolves.
  */
-export function useShareLink(url: string | null, shareTitle?: string) {
+/**
+ * `message` (tuỳ chọn) — lời nhắn đã có link bên trong. Có thì "Chép" chép cả
+ * lời nhắn, và bảng chia sẻ hệ điều hành nhận lời nhắn làm nội dung, đúng như
+ * tin studio gửi qua Zalo.
+ */
+export function useShareLink(url: string | null, shareTitle?: string, message?: string) {
   const [copied, setCopied] = useState(false);
   const [canNativeShare, setCanNativeShare] = useState(false);
 
@@ -25,7 +30,7 @@ export function useShareLink(url: string | null, shareTitle?: string) {
   async function copy() {
     if (!url) return;
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(message || url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
@@ -36,7 +41,7 @@ export function useShareLink(url: string | null, shareTitle?: string) {
   async function nativeShare(fallbackTitle = "Chia sẻ") {
     if (!url) return;
     try {
-      await navigator.share({ title: shareTitle || fallbackTitle, url });
+      await navigator.share({ title: shareTitle || fallbackTitle, ...(message ? { text: message } : {}), url });
     } catch {
       /* cancelled */
     }
@@ -47,7 +52,7 @@ export function useShareLink(url: string | null, shareTitle?: string) {
     if (!url) return;
     if (navigator.share) {
       try {
-        await navigator.share({ title: shareTitle || fallbackTitle, url });
+        await navigator.share({ title: shareTitle || fallbackTitle, ...(message ? { text: message } : {}), url });
         return;
       } catch {
         /* cancelled — fall through to copy */
@@ -64,10 +69,13 @@ export function CopyLinkRow({
   url,
   copied,
   onCopy,
+  withMessage = false,
 }: {
   url: string;
   copied: boolean;
   onCopy: () => void;
+  /** Nút chép chép cả lời nhắn — nói rõ trên nhãn để studio không bất ngờ khi dán. */
+  withMessage?: boolean;
 }) {
   return (
     <div
@@ -90,7 +98,7 @@ export function CopyLinkRow({
         style={{ background: "var(--accent)", color: "var(--accentInk)" }}
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
-        {copied ? "Đã chép" : "Chép"}
+        {copied ? "Đã chép" : withMessage ? "Chép kèm lời nhắn" : "Chép"}
       </button>
       <span aria-live="polite" className="sr-only">
         {copied ? "Đã chép đường dẫn vào bộ nhớ tạm" : ""}
