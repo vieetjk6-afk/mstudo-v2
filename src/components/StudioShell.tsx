@@ -230,6 +230,12 @@ export default function StudioShell({
     [tier, effectiveRole, comingSoon.join("|"), hiddenNav.join("|")],
   );
   const groups = useMemo(() => visibleGroups(access), [access]);
+  // Lối tải MStudo Desktop: gói Plus/Studio, chỉ chủ studio (trang tải chặn nhân
+  // viên), và trang chưa bị ẩn vì chưa xuất bản.
+  const desktopOk =
+    (tier === "plus" || tier === "full") &&
+    isOwner &&
+    (role === "admin" || !hiddenNav.includes("/dashboard/studio/desktop"));
 
   // Badge = số việc CHƯA xử lý. Lấy sau khi shell đã vẽ để không chặn trang, và
   // làm mới khi đổi route (đã xử lý xong thì con số phải tụt ngay) — nhưng
@@ -389,7 +395,7 @@ export default function StudioShell({
               <MessageSquare size={18} style={{ color: "var(--ac)" }} />
               Nhóm Zalo hỗ trợ
             </a>
-            <DownloadAppButton tier={tier} />
+            <DownloadAppButton desktop={desktopOk} />
             <SyncControlButton />
             {/* Giao diện: ba lựa chọn hiện HẾT thành một dải, không phải một nút
                 xoay vòng — trong ngăn kéo có chỗ, và "theo máy" mà nấp sau
@@ -448,7 +454,7 @@ export default function StudioShell({
           </nav>
 
           <div className="flex flex-col gap-2 pt-2.5" style={{ borderTop: "1px solid var(--bd2)" }}>
-            <SidebarDriveStatus />
+            <SidebarDriveStatus desktop={desktopOk} />
             <SyncControlButton />
             <p className="px-2 text-[10.5px]" style={{ color: "var(--tx3)" }}>Phiên bản {APP_VERSION}</p>
           </div>
