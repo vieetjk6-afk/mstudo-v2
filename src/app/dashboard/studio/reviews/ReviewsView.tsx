@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import ShareButton from "@/components/ShareButton";
 import { Panel, PanelHead, Pill, StatCard, EmptyState, type ToneKey } from "@/components/studio/ui";
 import { studioUrl } from "@/lib/hosts";
+import { reviewRequestMessage } from "@/lib/share-messages";
 import { fmtDate } from "@/lib/date";
 import { reviewScore, type AwaitingReviewAlbum, type ReviewRow } from "@/lib/types";
 
@@ -317,6 +318,7 @@ export default function ReviewsView({
                   path={url}
                   title={a.title || "Album ảnh"}
                   label="Xin đánh giá"
+                  message={reviewRequestMessage(a.client_name, url)}
                   className="btn-ghost px-3 py-1.5 text-[13px]"
                 />
               </div>

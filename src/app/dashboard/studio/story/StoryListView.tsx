@@ -7,6 +7,7 @@ import { Heart, ExternalLink, Pencil, Copy, Check, Users, FileText, Plus, Loader
 import { createClient } from "@/lib/supabase/client";
 import ThiepTabs from "@/components/studio/ThiepTabs";
 import { studioUrl } from "@/lib/hosts";
+import { storyEditMessage } from "@/lib/share-messages";
 import { escapeHtml } from "@/lib/html-escape";
 import type { StoryConfig } from "@/lib/types";
 
@@ -96,7 +97,7 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
                   <a href={viewUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><ExternalLink size={13} /> Xem</a>
                   <a href={editUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><Pencil size={13} /> Mở trình sửa</a>
-                  <button onClick={() => copy(editUrl, `e-${r.id}`)} className="btn-ghost px-2.5 py-1.5 text-xs">{copied === `e-${r.id}` ? <Check size={13} /> : <Copy size={13} />} Chép link sửa</button>
+                  <button onClick={() => copy(storyEditMessage(editUrl), `e-${r.id}`)} className="btn-ghost px-2.5 py-1.5 text-xs">{copied === `e-${r.id}` ? <Check size={13} /> : <Copy size={13} />} {copied === `e-${r.id}` ? "Đã chép lời nhắn" : "Chép link sửa kèm lời nhắn"}</button>
                   <button onClick={() => openQr(couple, viewUrl)} className="btn-ghost px-2.5 py-1.5 text-xs"><QrCode size={13} /> Mã QR / In</button>
                   {r.contract_id && <Link href={`/dashboard/studio/contracts/${r.contract_id}`} className="btn-ghost px-2.5 py-1.5 text-xs"><FileText size={13} /> Hợp đồng</Link>}
                 </div>
