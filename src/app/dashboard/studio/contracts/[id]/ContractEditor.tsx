@@ -667,9 +667,13 @@ export default function ContractEditor({
       })
     : null;
 
-  /** Chép link cổng khách, hiện "Đã chép" 1,5 giây. */
+  /**
+   * Chép ĐÚNG lời nhắn như nút Gửi Zalo (lời chào + link + mật khẩu), hiện
+   * "Đã chép" 1,5 giây. Studio dán vào Messenger/SMS là gửi được ngay, không
+   * phải tự gõ lại câu dẫn quanh cái link trơ trọi.
+   */
   function copyShareUrl() {
-    navigator.clipboard?.writeText(shareUrl);
+    navigator.clipboard?.writeText(clientPortalMsg);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
@@ -691,7 +695,7 @@ export default function ContractEditor({
       }
     }
     copyShareUrl();
-    toast("Trình duyệt không hỗ trợ chia sẻ nhanh — đã chép link.");
+    toast("Trình duyệt không hỗ trợ chia sẻ nhanh — đã chép lời nhắn kèm link.");
   }
 
   // Required fields — flagged red until valid. Phone must be 10 digits.
@@ -3481,7 +3485,7 @@ export default function ContractEditor({
                 <Share2 size={15} /> Gửi nhanh qua chia sẻ
               </button>
               <button onClick={copyShareUrl} className="act-btn">
-                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Đã chép link" : "Chép link"}
+                {copied ? <Check size={15} /> : <Copy size={15} />} {copied ? "Đã chép lời nhắn" : "Chép link kèm lời nhắn"}
               </button>
             </div>
 
