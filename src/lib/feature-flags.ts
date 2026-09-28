@@ -61,9 +61,13 @@ export function branchesComingSoon(_flags: FeatureFlags): boolean {
 /**
  * MStudo Desktop: chưa xuất bản — ẩn HOÀN TOÀN với non-admin (không hiện cả
  * nhãn "Sắp ra mắt") cho tới khi admin bật live.
+ *
+ * Đồng bộ Drive đã live thì Desktop cũng phải hiện: chính app desktop đẩy
+ * ảnh/video lên Drive, nên mở Đồng bộ Drive mà giấu chỗ tải app thì studio kết
+ * nối xong Drive rồi không biết tải gì để nó tự chạy.
  */
 export function desktopHidden(flags: FeatureFlags): boolean {
-  return flags?.desktop !== "live";
+  return flags?.desktop !== "live" && driveSyncComingSoon(flags);
 }
 
 /**

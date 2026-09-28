@@ -4,15 +4,15 @@ import Link from "next/link";
 import { Monitor } from "lucide-react";
 import InstallPwaButton from "@/components/InstallPwaButton";
 
-const RANK: Record<string, number> = { none: 0, booking: 1, plus: 2, full: 3 };
-
 /**
  * Nút tải ứng dụng theo gói:
  *  - 2 gói lớn nhất (Photographer Plus + Studio) → "Tải MStudo Desktop".
  *  - Các gói còn lại → nút cài web app (PWA).
+ * `desktop` do StudioShell tính: đúng gói, là chủ studio, trang tải chưa bị ẩn —
+ * không thì nút dẫn tới trang 404 hoặc trang "chỉ dành cho chủ studio".
  */
-export default function DownloadAppButton({ tier }: { tier: string }) {
-  if ((RANK[tier] ?? 0) >= RANK.plus) {
+export default function DownloadAppButton({ desktop }: { desktop: boolean }) {
+  if (desktop) {
     return (
       <Link
         href="/dashboard/studio/desktop"

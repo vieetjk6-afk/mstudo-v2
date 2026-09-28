@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HardDrive, Check, Loader2, AlertTriangle, Plus, Trash2, FolderTree } from "lucide-react";
+import Link from "next/link";
+import { HardDrive, Check, Loader2, AlertTriangle, Plus, Trash2, FolderTree, Monitor, Download } from "lucide-react";
 
 /**
  * Kết nối Google Drive của studio + cấu hình mẫu thư mục cho MStudo Desktop.
@@ -58,6 +59,9 @@ export default function StudioDriveCard() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [flash, setFlash] = useState("");
+  // Số máy đang chạy MStudo Desktop (null = chưa biết / API không trả) — để bước
+  // 3 của hướng dẫn tự đánh dấu xong khi studio đã cài và kết nối app.
+  const [devices, setDevices] = useState<number | null>(null);
 
   useEffect(() => {
     fetch("/api/studio/drive/status")
@@ -68,6 +72,12 @@ export default function StudioDriveCard() {
         setRootName(d.rootFolderName || "MStudo");
       })
       .catch(() => setState({ configured: false, connected: false, rootFolderName: "MStudo", rootCreated: false, template: { photo: [], video: [] } }));
+    fetch("/api/desktop/devices")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { devices?: { revoked_at: string | null }[] } | null) => {
+        if (j?.devices) setDevices(j.devices.filter((d) => !d.revoked_at).length);
+      })
+      .catch(() => {});
     // Thông báo sau khi quay lại từ Google.
     const q = new URLSearchParams(window.location.search).get("drive");
     if (q === "connected") setFlash("Đã kết nối Google Drive!");
@@ -176,6 +186,65 @@ export default function StudioDriveCard() {
         Trong thư mục hợp đồng có <code>Photo/JPG Goc · Raw · File ChinhSua</code> (và <code>Video</code> nếu có quay);{" "}
         <b>JPG Goc</b> tự thành album chọn ảnh, <b>File ChinhSua</b> tự thành gallery giao khách.
       </p>
+
+      {/* Hướng dẫn 3 bước: Drive chỉ TỰ đồng bộ khi MStudo Desktop chạy trên máy
+          studio. Trước đây trang này chỉ có nút kết nối Drive, studio kết nối
+          xong rồi chờ mãi không thấy ảnh lên vì chưa hề cài app. */}
+      <div className="mt-4 rounded-xl p-4" style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}>
+        <p className="text-sm font-medium">Cách để ảnh/video tự đồng bộ lên Drive</p>
+        <ol className="mt-3 space-y-3">
+          {[
+            {
+              done: devices !== null && devices > 0,
+              title: "Tải và cài MStudo Desktop trên máy tính (Windows 10/11)",
+              body: (
+                <>
+                  App chạy nền trên máy chứa ảnh; không có app thì Drive không tự đồng bộ.{" "}
+                  <Link href="/dashboard/studio/desktop" className="btn-primary mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs">
+                    <Download size={13} /> Tải MStudo Desktop
+                  </Link>
+                </>
+              ),
+            },
+            {
+              done: !!state?.connected,
+              title: "Kết nối Google Drive của studio",
+              body: <>Bấm <b>Kết nối Google Drive</b> ngay bên dưới và chọn tài khoản Google chứa ảnh của studio. Chỉ làm một lần.</>,
+            },
+            {
+              done: devices !== null && devices > 0,
+              title: "Mở app, kết nối máy và chọn thư mục gốc",
+              body: (
+                <>
+                  Ở trang <Link href="/dashboard/studio/desktop" className="underline">MStudo Desktop</Link> bấm{" "}
+                  <b>Kết nối thiết bị mới</b>, chép <b>mã kết nối</b> và <b>địa chỉ máy chủ</b> dán vào app. Sau đó: biểu tượng
+                  khay → <i>Bảng điều khiển &amp; đồng bộ</i> → <i>Chọn thư mục gốc</i> (nơi chứa ảnh/video trên máy).
+                  Từ đó mỗi hợp đồng đã ký tự có thư mục; ảnh bỏ vào thư mục trên máy sẽ <b>tự tải lên Drive</b>,
+                  JPG Goc thành album chọn ảnh, File ChinhSua thành gallery giao khách.
+                </>
+              ),
+            },
+          ].map((st, i) => (
+            <li key={i} className="flex gap-3">
+              <span
+                className="flex h-6 w-6 flex-none items-center justify-center rounded-full text-xs font-semibold"
+                style={st.done ? { background: "#4caf72", color: "#fff" } : { background: "var(--surface)", border: "1px solid var(--border)" }}
+              >
+                {st.done ? <Check size={13} /> : i + 1}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">{st.title}</p>
+                <p className="mt-0.5 text-xs" style={{ color: "var(--text2)" }}>{st.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+        {devices !== null && devices > 0 && (
+          <p className="mt-3 inline-flex items-center gap-1.5 text-xs" style={{ color: "var(--text2)" }}>
+            <Monitor size={13} style={{ color: "var(--brand)" }} /> Đang có {devices} máy chạy MStudo Desktop.
+          </p>
+        )}
+      </div>
 
       {/* Không chạy desktop thì trước đây KHÔNG hợp đồng nào có thư mục, và cũng
           không có chỗ nào báo. Nút này tạo thẳng từ web. */}
