@@ -26,6 +26,7 @@ import FilterDialog from "@/components/FilterDialog";
 import FaceSetupNotice from "@/components/FaceSetupNotice";
 import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
 import { isDeliveryPhase } from "@/lib/album-phase";
+import { storageUntil } from "@/lib/storage-lifecycle";
 
 export interface AlbumRow {
   id: string;
@@ -128,17 +129,35 @@ function AlbumEmpty({ title, hint, cta, href }: { title: string; hint: string; c
 // Tách thư viện thành 2 TAB theo giai đoạn: ALBUM CHỌN ẢNH (phase 'selection') và
 // ALBUM GIAO KHÁCH (phase 'delivery') — cùng kiểu tab với trang Hợp đồng.
 function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHost }: { albums: AlbumRow[]; canDelivery: boolean; canWatermark: boolean; canFaceSearch: boolean; studioHost: string | null }) {
-  const deliveryAlbums = sortAlbums(albums.filter((a) => isDeliveryPhase(a)));
-  const selectionAlbums = sortAlbums(albums.filter((a) => !isDeliveryPhase(a)));
+  // Giai đoạn studio vừa đổi ở menu ba chấm của thẻ: ghi đè lên dữ liệu server
+  // để thẻ chuyển sang đúng tab NGAY, không phải tải lại trang.
+  const [moved, setMoved] = useState<Record<string, { phase: "selection" | "delivery"; clearedDone: boolean }>>({});
+  const [toast, setToast] = useState<{ title: string; phase: "selection" | "delivery" } | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 4000);
+    return () => clearTimeout(t);
+  }, [toast]);
+  const live = albums.map((a) => {
+    const m = moved[a.id];
+    if (!m) return a;
+    return { ...a, phase: m.phase, ...(m.clearedDone ? { selection_done_at: null } : {}) };
+  });
+  const deliveryAlbums = sortAlbums(live.filter((a) => isDeliveryPhase(a)));
+  const selectionAlbums = sortAlbums(live.filter((a) => !isDeliveryPhase(a)));
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
-  const doneCount = pendingSelectionCount(albums);
+  const doneCount = pendingSelectionCount(live);
+  const onPhaseChange = (a: AlbumRow, phase: "selection" | "delivery", clearedDone: boolean) => {
+    setMoved((m) => ({ ...m, [a.id]: { phase, clearedDone: clearedDone || !!m[a.id]?.clearedDone } }));
+    setToast({ title: a.title, phase });
+  };
 
   const grid = (rows: AlbumRow[]) => (
     // 5 thẻ một hàng trên màn rộng: ba thẻ trải hết 1100px làm mỗi thẻ dài ngoẵng
     // và lệch tỉ lệ so với ảnh bìa. Bậc thang xuống 4 · 3 · 2 · 1 theo bề ngang.
     <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 min-[820px]:grid-cols-3 min-[1060px]:grid-cols-4 min-[1320px]:grid-cols-5">
       {rows.map((a) => (
-        <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} canFaceSearch={canFaceSearch} studioHost={studioHost} />
+        <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} canFaceSearch={canFaceSearch} studioHost={studioHost} onPhaseChange={onPhaseChange} />
       ))}
     </div>
   );
@@ -158,7 +177,7 @@ function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHos
     </div>
   ) : null;
 
-  if (!canDelivery && deliveryAlbums.length === 0) return <>{banner}{grid(sortAlbums(albums))}</>;
+  if (!canDelivery && deliveryAlbums.length === 0) return <>{banner}{grid(sortAlbums(live))}</>;
 
   const rows = tab === "delivery" ? deliveryAlbums : selectionAlbums;
 
@@ -196,6 +215,23 @@ function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHos
         })}
       </div>
 
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-5 left-1/2 z-50 flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-[12px] px-4 py-2.5 text-[12.5px] font-semibold"
+          style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "0 12px 34px rgba(20,15,25,.28)" }}
+        >
+          <span className="min-w-0 truncate">
+            Đã chuyển “{toast.title}” sang {toast.phase === "delivery" ? "Album giao khách" : "Album chọn ảnh"}
+          </span>
+          {tab !== toast.phase && (
+            <button type="button" onClick={() => { setTab(toast.phase); setToast(null); }} className="flex-none underline">
+              Xem
+            </button>
+          )}
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <AlbumEmpty
           title={tab === "delivery" ? "Chưa có album giao khách nào" : "Chưa có album chọn ảnh nào"}
@@ -217,7 +253,7 @@ function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHos
  * phụ (ảnh · đã chọn), thanh tiến độ chọn ảnh, rồi chân thẻ ghi trạng thái
  * watermark / xuất bản và nút ba chấm mở bảng bật-tắt nhanh.
  */
-function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean; canFaceSearch?: boolean; studioHost?: string | null }) {
+function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null, onPhaseChange }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean; canFaceSearch?: boolean; studioHost?: string | null; /** Báo lên lưới để thẻ sang đúng tab (Album chọn ảnh ⟷ Album giao khách). */ onPhaseChange?: (a: AlbumRow, phase: "selection" | "delivery", clearedDone: boolean) => void }) {
   const { t } = useLang();
   const supabase = createClient();
   const [menu, setMenu] = useState(false);
@@ -276,6 +312,50 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch =
 
   async function patch(fields: Record<string, unknown>) {
     await supabase.from("albums").update(fields).eq("id", a.id);
+  }
+
+  const [phaseBusy, setPhaseBusy] = useState(false);
+  const [phaseErr, setPhaseErr] = useState<string | null>(null);
+  /**
+   * Đổi giai đoạn album ngay từ thư viện — cùng luật với nút trong trang chỉnh
+   * sửa đầy đủ (AlbumEditor.switchPhase):
+   *   • Lần ĐẦU sang Giao khách đặt `delivered_at` + `storage_until` (mốc đếm
+   *     hạn lưu trữ ảnh gốc); chuyển tới lui không đẩy hạn ra xa thêm.
+   *   • Sang Giao khách = đã lọc xong đợt chọn → gỡ luôn mốc "khách đã chọn xong".
+   *   • Gói không có giao khách vẫn được đưa album VỀ Chọn ảnh (gỡ album kẹt).
+   */
+  async function switchPhase(next: "selection" | "delivery") {
+    if (next === phase || phaseBusy) return;
+    if (next === "delivery" && !canDelivery) return;
+    setPhaseBusy(true);
+    setPhaseErr(null);
+    const fields: Record<string, unknown> = { phase: next };
+    const clearDone = next === "delivery" && !!doneAt;
+    if (clearDone) fields.selection_done_at = null;
+    if (next === "delivery") {
+      // Hai cột này đến từ migration vòng đời lưu trữ — DB chưa chạy thì bỏ qua,
+      // việc đổi giai đoạn vẫn phải chạy được.
+      const { data: cur } = await supabase.from("albums").select("delivered_at").eq("id", a.id).maybeSingle();
+      if (cur && !(cur as { delivered_at?: string | null }).delivered_at) {
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: prof } = user
+          ? await supabase.from("profiles").select("storage_months").eq("id", user.id).maybeSingle()
+          : { data: null };
+        const now = new Date();
+        fields.delivered_at = now.toISOString();
+        fields.storage_until = storageUntil(now, (prof as { storage_months?: number } | null)?.storage_months ?? 6);
+      }
+    }
+    const { error } = await supabase.from("albums").update(fields).eq("id", a.id);
+    setPhaseBusy(false);
+    if (error) {
+      setPhaseErr(error.message);
+      return;
+    }
+    setPhase(next);
+    if (clearDone) setDoneAt(null);
+    setMenu(false);
+    onPhaseChange?.(a, next, clearDone);
   }
 
   return (
@@ -404,25 +484,39 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch =
                 <CheckCircle2 size={14} /> Đã lọc xong — bỏ đánh dấu
               </button>
             )}
-            <Toggle label="Đã xuất bản" on={status === "published"} onChange={(v) => { setStatus(v ? "published" : "draft"); patch({ status: v ? "published" : "draft" }); }} />
-            {canDelivery && (
-              <Toggle
-                label="Giao khách (ảnh hoàn thiện)"
-                on={phase === "delivery"}
-                onChange={(v) => {
-                  const next = v ? "delivery" : "selection";
-                  setPhase(next);
-                  // Chuyển sang GIAO KHÁCH nghĩa là đã lọc xong đợt chọn này —
-                  // gỡ luôn mốc chờ, nếu không album cứ nằm mãi đầu thư viện.
-                  if (v && doneAt) {
-                    setDoneAt(null);
-                    patch({ phase: next, selection_done_at: null });
-                  } else {
-                    patch({ phase: next });
-                  }
-                }}
-              />
+            {/* Chuyển giai đoạn ngay tại thư viện, không phải mở trang chỉnh sửa.
+                Gói không có giao khách vẫn thấy nút để đưa album VỀ Chọn ảnh. */}
+            <p className="mb-1.5 text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>Giai đoạn album</p>
+            <div role="radiogroup" aria-label="Giai đoạn album" className="mb-2 grid grid-cols-2 gap-[3px] rounded-[10px] p-[3px]" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+              {([
+                ["selection", "Chọn ảnh"],
+                ["delivery", "Giao khách"],
+              ] as const).map(([key, label]) => {
+                const on = phase === key;
+                const locked = key === "delivery" && !canDelivery && !on;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    disabled={phaseBusy || locked}
+                    title={locked ? "Gói hiện tại chưa có album giao khách" : undefined}
+                    onClick={() => switchPhase(key)}
+                    className="rounded-[8px] py-[7px] text-[12px] font-bold disabled:opacity-50"
+                    style={on
+                      ? { background: "var(--sf)", color: key === "delivery" ? "var(--gn)" : "var(--ac)", boxShadow: "0 1px 3px rgba(0,0,0,.10)" }
+                      : { background: "transparent", color: "var(--tx2)" }}
+                  >
+                    {phaseBusy && !on ? "Đang chuyển…" : label}
+                  </button>
+                );
+              })}
+            </div>
+            {phaseErr && (
+              <p className="mb-1.5 text-[11.5px]" style={{ color: "var(--danger)" }}>Không đổi được giai đoạn: {phaseErr}</p>
             )}
+            <Toggle label="Đã xuất bản" on={status === "published"} onChange={(v) => { setStatus(v ? "published" : "draft"); patch({ status: v ? "published" : "draft" }); }} />
             {/* Watermark: chỉ Photographer Plus & Studio — ảnh có watermark buộc phải
                 đi qua proxy khi khách tải, ảnh thường tải thẳng từ Drive. */}
             {canWatermark && (
