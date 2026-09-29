@@ -10,6 +10,7 @@ import { vnd } from "@/lib/types";
 import { fmtDate, todayVN } from "@/lib/date";
 import { escapeHtml } from "@/lib/html-escape";
 import { useToast } from "@/components/studio/Toast";
+import { IssuedVoucher } from "@/app/dashboard/studio/contracts/[id]/LoyaltyVoucherCard";
 import { VOUCHER_STATE_LABEL, defaultExpiry, isLoyalty, voucherState, voucherSummary, voucherValueLabel, type Voucher, type VoucherState } from "@/lib/vouchers";
 
 const STATE_TONE: Record<VoucherState, ToneKey> = {
@@ -38,7 +39,9 @@ export default function VouchersView({
   migrated,
   studioName,
   studioPhone,
+  studioHost,
 }: {
+  studioHost: string | null;
   initial: Voucher[];
   migrated: boolean;
   studioName: string;
@@ -48,11 +51,19 @@ export default function VouchersView({
   const [list, setList] = useState<Voucher[]>(initial);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [filter, setFilter] = useState<VoucherState | "all">("all");
+  const [kind, setKind] = useState<"all" | "gift" | "loyalty">("all");
+  const [sharing, setSharing] = useState<Voucher | null>(null);
   const [busy, setBusy] = useState(false);
   const { toast, toastNode } = useToast();
 
   const sum = useMemo(() => voucherSummary(list, today), [list, today]);
-  const shown = list.filter((v) => filter === "all" || voucherState(v, today) === filter);
+  const loyaltyCount = list.filter((v) => isLoyalty(v)).length;
+  const loyaltyActive = list.filter((v) => isLoyalty(v) && voucherState(v, today) === "usable").length;
+  const shown = list.filter(
+    (v) =>
+      (filter === "all" || voucherState(v, today) === filter) &&
+      (kind === "all" || (kind === "loyalty" ? isLoyalty(v) : !isLoyalty(v)))
+  );
 
   async function call(body: Record<string, unknown>) {
     setBusy(true);
@@ -134,7 +145,8 @@ export default function VouchersView({
         <div>
           <h1 className="text-[21px] font-bold" style={{ letterSpacing: "-.4px" }}>Voucher &amp; thẻ quà</h1>
           <p className="mt-1 text-[12.5px]" style={{ color: "var(--tx2)" }}>
-            Bán thẻ quà mùa lễ. Khách dùng thẻ ở tab <b>Thanh toán</b> của hợp đồng — lúc đó mới tính là doanh thu.
+            Bán thẻ quà mùa lễ và quản lý voucher ưu đãi đã tặng khách. Khách dùng cả hai ở tab <b>Thanh toán</b> của hợp đồng.
+            Tặng voucher ưu đãi: mở hợp đồng đã ký → tab <b>Thanh toán</b> → <b>Tặng voucher</b>.
           </p>
         </div>
         <button
@@ -152,16 +164,28 @@ export default function VouchersView({
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard icon={Ticket} label="Đã bán" value={String(sum.sold)} sub="không tính thẻ đã huỷ" />
         <StatCard icon={Wallet} tone="green" label="Đã thu từ bán thẻ" value={vnd(sum.collected)} sub="giá bán thực thu" />
         <StatCard icon={Gift} tone="amber" label="Còn nợ khách" value={vnd(sum.outstanding)} sub={`${sum.outstandingCount} thẻ còn hiệu lực`} />
         <StatCard icon={Check} tone="blue" label="Đã dùng" value={vnd(sum.redeemed)} sub="đã thành doanh thu ở hợp đồng" />
+        <StatCard icon={Ticket} tone="brand" label="Voucher ưu đãi" value={String(loyaltyActive)} sub={`còn hiệu lực · ${loyaltyCount} đã tặng`} />
       </div>
 
       <Panel>
         <PanelHead icon={Ticket} tone="brand" title="Danh sách voucher" count={String(shown.length)} />
         <div className="flex flex-wrap gap-1.5 px-4 py-2.5" style={{ borderBottom: "1px solid var(--bd2)" }}>
+          {([["all", "Mọi loại"], ["gift", "Thẻ quà"], ["loyalty", "Ưu đãi lần sau"]] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setKind(k)}
+              className="rounded-[20px] px-2.5 py-1 text-[11.5px] font-semibold"
+              style={{ border: "1px solid var(--bd)", background: kind === k ? "var(--ac)" : "var(--sf)", color: kind === k ? "#fff" : "var(--tx2)" }}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="mx-1 self-center" style={{ color: "var(--bd)" }}>|</span>
           {(["all", "usable", "unpaid", "redeemed", "expired", "void"] as const).map((k) => (
             <button
               key={k}
@@ -216,7 +240,7 @@ export default function VouchersView({
                       <button onClick={() => printCard(v)} className="btn-ghost px-2.5 py-1.5 text-xs"><Printer size={13} /> In thẻ</button>
                     )}
                     {isLoyalty(v) && v.public_token && v.status !== "void" && (
-                      <a href={`/voucher/${v.public_token}`} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><Ticket size={13} /> Xem voucher</a>
+                      <button onClick={() => setSharing(v)} className="btn-ghost px-2.5 py-1.5 text-xs"><Ticket size={13} /> Xem & gửi</button>
                     )}
                     {isLoyalty(v) && v.status === "redeemed" && (
                       <button onClick={() => act(v, "release")} disabled={busy} className="btn-ghost px-2.5 py-1.5 text-xs">Trả lại</button>
@@ -290,6 +314,25 @@ export default function VouchersView({
         </Modal>
       )}
 
+      {sharing && (
+        <Modal onClose={() => setSharing(null)} labelledBy="voucher-share-title" maxWidth={760}>
+          <div className="px-[18px] py-3.5" style={{ borderBottom: "1px solid var(--bd2)" }}>
+            <h2 id="voucher-share-title" className="text-[15px] font-bold">Voucher {sharing.code}</h2>
+          </div>
+          <div className="p-[18px]">
+            <IssuedVoucher
+              v={sharing}
+              today={today}
+              studioHost={studioHost}
+              studioName={studioName}
+              clientName={sharing.recipient_name ?? ""}
+              clientPhone={sharing.buyer_phone ?? ""}
+              clientMessenger=""
+              contractId={sharing.source_contract_id ?? null}
+            />
+          </div>
+        </Modal>
+      )}
       {toastNode}
     </div>
   );

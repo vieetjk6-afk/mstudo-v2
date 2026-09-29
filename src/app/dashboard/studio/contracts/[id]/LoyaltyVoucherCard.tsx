@@ -223,7 +223,8 @@ export default function LoyaltyVoucherCard({
   );
 }
 
-function IssuedVoucher({
+/** Một voucher đã tặng: thẻ có QR + các nút gửi/chép/tải. Màn Voucher & thẻ quà dùng lại. */
+export function IssuedVoucher({
   v,
   today,
   studioHost,
@@ -240,7 +241,7 @@ function IssuedVoucher({
   clientName: string;
   clientPhone: string;
   clientMessenger: string;
-  contractId: string;
+  contractId: string | null;
 }) {
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
