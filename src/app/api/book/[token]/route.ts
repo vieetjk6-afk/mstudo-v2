@@ -6,6 +6,8 @@ import { limitByIp } from "@/lib/rate-limit";
 import { depositFor, newDepositCode, newDepositToken } from "@/lib/booking-deposit";
 import { digitsOnly, isUsablePhone, samePhone } from "@/lib/referral";
 import { isLeadSource, type Utm } from "@/lib/lead-source";
+import { VOUCHER_COLS, canRedeem, normalizeVoucherCode, voucherValueLabel, type Voucher } from "@/lib/vouchers";
+import { todayVN } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,8 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     package_price?: number;
     facebook?: string;
     referrer_phone?: string;
+    /** Mã voucher ưu đãi (từ QR). Kiểm lại ở đây — trình duyệt gửi gì cũng được. */
+    voucher_code?: string | null;
     captcha?: string;
     /** Nguồn khách — trình duyệt suy ra rồi gửi kèm (xem @/lib/lead-source). */
     source?: string;
@@ -67,13 +71,28 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   const depositAmount = depositFor(owner.booking_deposit ?? 0, pkgPrice);
   const wantsDeposit = depositAmount > 0;
 
+  // Voucher: chỉ nhận mã THẬT của chính studio này và còn dùng được. Ghi cả
+  // vào ghi chú để studio thấy ngay ở mọi màn, kể cả khi DB chưa có cột.
+  let voucherCode: string | null = null;
+  let voucherNote: string | null = null;
+  const vcode = normalizeVoucherCode(body.voucher_code);
+  if (vcode) {
+    const { data: vrow } = await db.from("studio_vouchers").select(VOUCHER_COLS).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
+    const v = (vrow as Voucher | null) ?? null;
+    if (v && canRedeem(v, todayVN()).ok) {
+      voucherCode = v.code;
+      voucherNote = `🎁 Voucher ${v.code} · ${voucherValueLabel(v)}`;
+    }
+  }
+  const note = [voucherNote, body.note?.trim()].filter(Boolean).join("\n") || null;
+
   const core = {
     owner_id: owner.id,
     name: body.name.trim(),
     phone: body.phone.trim(),
     service: body.service?.trim() || null,
     preferred_date: body.preferred_date || null,
-    note: body.note?.trim() || null,
+    note,
     package_name: pkgName,
     package_price: pkgPrice,
     facebook: body.facebook?.trim() || null,
@@ -92,9 +111,17 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   // `getStudioHost` đang đỡ cột `custom_domain_verified` chưa migrate.
   let { data: booking, error } = await db
     .from("studio_bookings")
-    .insert({ ...core, source, utm, landing_path: landingPath })
+    .insert({ ...core, source, utm, landing_path: landingPath, ...(voucherCode ? { voucher_code: voucherCode } : {}) })
     .select(cols)
     .single();
+  if (error && voucherCode) {
+    // Chưa chạy studio_vouchers_loyalty.sql: bỏ cột voucher (mã vẫn nằm trong ghi chú).
+    ({ data: booking, error } = await db
+      .from("studio_bookings")
+      .insert({ ...core, source, utm, landing_path: landingPath })
+      .select(cols)
+      .single());
+  }
   if (error) {
     console.warn("[book] ghi nguồn khách hỏng, thử lại không kèm nguồn:", error.message);
     ({ data: booking, error } = await db.from("studio_bookings").insert(core).select(cols).single());

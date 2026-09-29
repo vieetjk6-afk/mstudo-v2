@@ -10,7 +10,7 @@ import { vnd } from "@/lib/types";
 import { fmtDate, todayVN } from "@/lib/date";
 import { escapeHtml } from "@/lib/html-escape";
 import { useToast } from "@/components/studio/Toast";
-import { VOUCHER_STATE_LABEL, defaultExpiry, voucherState, voucherSummary, type Voucher, type VoucherState } from "@/lib/vouchers";
+import { VOUCHER_STATE_LABEL, defaultExpiry, isLoyalty, voucherState, voucherSummary, voucherValueLabel, type Voucher, type VoucherState } from "@/lib/vouchers";
 
 const STATE_TONE: Record<VoucherState, ToneKey> = {
   usable: "green",
@@ -60,7 +60,11 @@ export default function VouchersView({
       const res = await fetch("/api/studio/vouchers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        toast(j.error === "missing_migration" ? "Cần chạy supabase/migrations/studio_vouchers.sql trước." : `Lỗi: ${j.error || res.status}`);
+        toast(
+          j.error === "missing_migration" ? "Cần chạy supabase/migrations/studio_vouchers.sql trước."
+          : j.error === "still_applied" ? "Hợp đồng vẫn còn dòng giảm giá của voucher này — gỡ dòng đó rồi mới trả lại được."
+          : `Lỗi: ${j.error || res.status}`
+        );
         return null;
       }
       return j as { voucher?: Voucher };
@@ -83,8 +87,9 @@ export default function VouchersView({
     }
   }
 
-  async function act(v: Voucher, action: "mark_paid" | "void") {
+  async function act(v: Voucher, action: "mark_paid" | "void" | "release") {
     if (action === "void" && !confirm(`Huỷ voucher ${v.code}? Thẻ sẽ không dùng được nữa.`)) return;
+    if (action === "release" && !confirm(`Trả voucher ${v.code} về "còn hiệu lực"? Chỉ làm khi đã gỡ dòng giảm giá khỏi hợp đồng.`)) return;
     const j = await call({ action, id: v.id, paid_method: "transfer" });
     if (j?.voucher) setList((p) => p.map((x) => (x.id === v.id ? j.voucher! : x)));
   }
@@ -180,10 +185,14 @@ export default function VouchersView({
                     <p className="flex flex-wrap items-center gap-2 text-[13.5px] font-semibold">
                       <span className="font-mono tracking-wide">{v.code}</span>
                       <Pill tone={STATE_TONE[st]}>{VOUCHER_STATE_LABEL[st]}</Pill>
+                      {isLoyalty(v) && <Pill tone="brand">Ưu đãi lần sau</Pill>}
                     </p>
                     <p className="mt-0.5 text-[12px]" style={{ color: "var(--tx3)" }}>
                       {v.title}
                       {v.buyer_name ? ` · mua: ${v.buyer_name}` : ""}
+                      {isLoyalty(v) && v.source_contract_id && (
+                        <> · <Link href={`/dashboard/studio/contracts/${v.source_contract_id}`} style={{ color: "var(--ac)" }}>tặng từ HĐ</Link></>
+                      )}
                       {v.recipient_name ? ` · tặng: ${v.recipient_name}` : ""}
                       {v.expires_on ? ` · hạn ${fmtDate(v.expires_on)}` : ""}
                       {v.redeemed_contract_id && (
@@ -192,15 +201,25 @@ export default function VouchersView({
                     </p>
                   </div>
                   <div className="tnum flex-none text-right">
-                    <p className="text-[14px] font-bold">{vnd(v.amount)}</p>
-                    {v.price !== v.amount && <p className="text-[11px]" style={{ color: "var(--tx3)" }}>bán {vnd(v.price)}</p>}
+                    <p className="text-[14px] font-bold">{voucherValueLabel(v)}</p>
+                    {isLoyalty(v) ? (
+                      <p className="text-[11px]" style={{ color: "var(--tx3)" }}>quà tặng</p>
+                    ) : (
+                      v.price !== v.amount && <p className="text-[11px]" style={{ color: "var(--tx3)" }}>bán {vnd(v.price)}</p>
+                    )}
                   </div>
                   <div className="flex flex-none gap-1.5">
                     {v.status === "active" && !v.paid && (
                       <button onClick={() => act(v, "mark_paid")} disabled={busy} className="btn-ghost px-2.5 py-1.5 text-xs"><Check size={13} /> Đã thu</button>
                     )}
-                    {v.status !== "void" && (
+                    {v.status !== "void" && !isLoyalty(v) && (
                       <button onClick={() => printCard(v)} className="btn-ghost px-2.5 py-1.5 text-xs"><Printer size={13} /> In thẻ</button>
+                    )}
+                    {isLoyalty(v) && v.public_token && v.status !== "void" && (
+                      <a href={`/voucher/${v.public_token}`} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><Ticket size={13} /> Xem voucher</a>
+                    )}
+                    {isLoyalty(v) && v.status === "redeemed" && (
+                      <button onClick={() => act(v, "release")} disabled={busy} className="btn-ghost px-2.5 py-1.5 text-xs">Trả lại</button>
                     )}
                     {v.status === "active" && (
                       <button onClick={() => act(v, "void")} disabled={busy} className="btn-ghost px-2.5 py-1.5 text-xs" style={{ color: "var(--rd)" }} aria-label="Huỷ voucher"><Ban size={13} /></button>

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PRICE_LISTS } from "@/lib/pricelist-seeds";
-import BookingForm, { type PkgOption } from "./BookingForm";
+import { VOUCHER_COLS, REDEEM_ERROR_TEXT, canRedeem, normalizeVoucherCode, voucherValueLabel, type Voucher } from "@/lib/vouchers";
+import { todayVN } from "@/lib/date";
+import BookingForm, { type PkgOption, type BookingVoucher } from "./BookingForm";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ export async function generateMetadata(props: { params: Promise<{ token: string 
 export default async function BookingPage(
   props: {
     params: Promise<{ token: string }>;
-    searchParams?: Promise<{ pkg?: string; list?: string; ref?: string }>;
+    searchParams?: Promise<{ pkg?: string; list?: string; ref?: string; voucher?: string }>;
   }
 ) {
   const searchParams = await props.searchParams;
@@ -82,8 +84,23 @@ export default async function BookingPage(
         }
       : null;
 
+  // Vào từ QR của voucher ưu đãi (?voucher=MÃ) → kiểm mã ngay để khách thấy
+  // ưu đãi của mình trước khi điền. Chỉ KIỂM, chưa trừ: trừ lúc studio chuyển
+  // yêu cầu thành hợp đồng.
+  let voucher: BookingVoucher | null = null;
+  const vcode = normalizeVoucherCode(searchParams?.voucher);
+  if (vcode) {
+    const { data: vrow } = await db.from("studio_vouchers").select(VOUCHER_COLS).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
+    const v = (vrow as Voucher | null) ?? null;
+    const c = canRedeem(v, todayVN());
+    voucher = c.ok && v
+      ? { code: v.code, label: voucherValueLabel(v), ok: true }
+      : { code: vcode, label: "", ok: false, message: c.ok ? REDEEM_ERROR_TEXT.not_found : REDEEM_ERROR_TEXT[c.error] };
+  }
+
   return (
     <BookingForm
+      voucher={voucher}
       token={params.token}
       studioName={owner.full_name || "Studio"}
       packages={packages}

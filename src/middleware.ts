@@ -178,7 +178,7 @@ async function route(request: NextRequest) {
         // "/portal/" = trang riêng của khách theo hợp đồng (tiến độ, lịch trình,
         // thanh toán, album). Thiếu nó ở danh sách này thì link studio gửi khách
         // bị rewrite thành trang portfolio và khách gặp 404.
-        const CUSTOMER = ["/a/", "/album", "/c/", "/portal/", "/q/", "/gia/", "/book/", "/crew", "/quote", "/showcase", "/story", "/form/"];
+        const CUSTOMER = ["/a/", "/album", "/c/", "/portal/", "/q/", "/gia/", "/book/", "/voucher/", "/crew", "/quote", "/showcase", "/story", "/form/"];
         if (CUSTOMER.some((p) => pathname.startsWith(p))) {
           return NextResponse.next();
         }
@@ -202,7 +202,7 @@ async function route(request: NextRequest) {
       return NextResponse.redirect(new URL(pathname + search, `https://${MAIN_HOST}`));
     }
     if (SEO_FILES.has(pathname)) return NextResponse.next();
-    const CUSTOMER = ["/a/", "/album", "/c/", "/portal/", "/q/", "/gia/", "/book/", "/crew", "/showcase", "/story", "/form/"];
+    const CUSTOMER = ["/a/", "/album", "/c/", "/portal/", "/q/", "/gia/", "/book/", "/voucher/", "/crew", "/showcase", "/story", "/form/"];
     if (CUSTOMER.some((p) => pathname.startsWith(p))) {
       return NextResponse.next();
     }

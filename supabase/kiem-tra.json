@@ -16,6 +16,7 @@
     "migrations/contract_cancel_reschedule.sql",
     "migrations/contract_addenda.sql",
     "migrations/studio_vouchers.sql",
+    "migrations/studio_vouchers_loyalty.sql",
     "migrations/studio_audit_log.sql",
     "migrations/contract_crew_milestone.sql",
     "migrations/contract_item_tier_milestone.sql"
@@ -700,6 +701,20 @@
         "studio_vouchers"
       ],
       "cot": []
+    },
+    {
+      "file": "migrations/studio_vouchers_loyalty.sql",
+      "mo_ta": "Voucher ưu đãi lần sau: giảm theo tiền / %, QR đặt lịch (chạy SAU studio_vouchers)",
+      "bang": [],
+      "cot": [
+        "studio_bookings.voucher_code",
+        "studio_vouchers.discount_type",
+        "studio_vouchers.kind",
+        "studio_vouchers.max_discount",
+        "studio_vouchers.percent",
+        "studio_vouchers.public_token",
+        "studio_vouchers.source_contract_id"
+      ]
     },
     {
       "file": "migrations/studio_audit_log.sql",

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { brandFrom } from "@/lib/studio-brand";
 import StudioDenied from "@/components/StudioDenied";
 import VouchersView from "./VouchersView";
-import type { Voucher } from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_COLS_BASE, type Voucher } from "@/lib/vouchers";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    VOUCHER & THẺ QUÀ — /dashboard/studio/vouchers
@@ -21,16 +21,15 @@ export default async function VouchersPage() {
   if (!ROLES.includes(profile.actingRole as string)) return <StudioDenied />;
 
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("studio_vouchers")
-    .select("id, code, title, amount, price, buyer_name, buyer_phone, recipient_name, paid, paid_method, paid_at, expires_on, status, redeemed_contract_id, redeemed_at, note, created_at")
-    .eq("owner_id", profile.id)
-    .order("created_at", { ascending: false })
-    .limit(1000);
+  const q = (cols: string) =>
+    supabase.from("studio_vouchers").select(cols).eq("owner_id", profile.id).order("created_at", { ascending: false }).limit(1000);
+  // Chưa chạy studio_vouchers_loyalty.sql thì đọc bộ cột cũ — thẻ quà vẫn hiện.
+  let { data, error } = await q(VOUCHER_COLS);
+  if (error) ({ data, error } = await q(VOUCHER_COLS_BASE));
 
   return (
     <VouchersView
-      initial={(data ?? []) as Voucher[]}
+      initial={(data ?? []) as unknown as Voucher[]}
       migrated={!error}
       studioName={brandFrom(profile).name}
       studioPhone={(profile.pl_phone as string | null) ?? null}

@@ -4,6 +4,9 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export type VoucherStatus = "active" | "redeemed" | "void";
+/** gift = thẻ quà studio BÁN; loyalty = voucher ưu đãi studio TẶNG khách đã ký cho lần sau. */
+export type VoucherKind = "gift" | "loyalty";
+export type DiscountType = "amount" | "percent";
 
 export type Voucher = {
   id: string;
@@ -23,7 +26,19 @@ export type Voucher = {
   redeemed_at: string | null;
   note: string | null;
   created_at: string;
+  // Cột của studio_vouchers_loyalty.sql — thiếu (DB chưa chạy migration) = thẻ quà.
+  kind?: VoucherKind | null;
+  discount_type?: DiscountType | null;
+  percent?: number | null;
+  max_discount?: number | null;
+  source_contract_id?: string | null;
+  public_token?: string | null;
 };
+
+/** Cột đọc ra ở mọi nơi. Bản CŨ dùng khi DB chưa chạy studio_vouchers_loyalty.sql. */
+export const VOUCHER_COLS_BASE =
+  "id, code, title, amount, price, buyer_name, buyer_phone, recipient_name, paid, paid_method, paid_at, expires_on, status, redeemed_contract_id, redeemed_at, note, created_at";
+export const VOUCHER_COLS = `${VOUCHER_COLS_BASE}, kind, discount_type, percent, max_discount, source_contract_id, public_token`;
 
 /** Trạng thái HIỂN THỊ: gộp cả hạn dùng và việc đã thu tiền hay chưa. */
 export type VoucherState = "usable" | "unpaid" | "expired" | "redeemed" | "void";
@@ -63,13 +78,24 @@ export function voucherState(v: Pick<Voucher, "status" | "paid" | "expires_on">,
   return "usable";
 }
 
-export type RedeemCheck = { ok: true } | { ok: false; error: "not_found" | "unpaid" | "expired" | "redeemed" | "void" };
+export type RedeemCheck =
+  | { ok: true }
+  | { ok: false; error: "not_found" | "unpaid" | "expired" | "redeemed" | "void" | "same_contract" };
 
-/** Dùng được thẻ này ở hợp đồng không? */
-export function canRedeem(v: Pick<Voucher, "status" | "paid" | "expires_on"> | null | undefined, today: string): RedeemCheck {
+/**
+ * Dùng được thẻ này ở hợp đồng không? `contractId` (tuỳ chọn) = hợp đồng định
+ * dùng: voucher ưu đãi không dùng được ở chính hợp đồng đã tặng ra nó.
+ */
+export function canRedeem(
+  v: Pick<Voucher, "status" | "paid" | "expires_on" | "source_contract_id"> | null | undefined,
+  today: string,
+  contractId?: string | null
+): RedeemCheck {
   if (!v) return { ok: false, error: "not_found" };
   const s = voucherState(v, today);
-  return s === "usable" ? { ok: true } : { ok: false, error: s };
+  if (s !== "usable") return { ok: false, error: s };
+  if (contractId && v.source_contract_id && v.source_contract_id === contractId) return { ok: false, error: "same_contract" };
+  return { ok: true };
 }
 
 export const REDEEM_ERROR_TEXT: Record<Exclude<RedeemCheck, { ok: true }>["error"], string> = {
@@ -78,7 +104,45 @@ export const REDEEM_ERROR_TEXT: Record<Exclude<RedeemCheck, { ok: true }>["error
   expired: "Voucher đã hết hạn.",
   redeemed: "Voucher đã được dùng rồi.",
   void: "Voucher đã bị huỷ.",
+  same_contract: "Voucher này được tặng từ chính hợp đồng này — chỉ dùng được cho hợp đồng lần sau.",
 };
+
+export const isLoyalty = (v: Pick<Voucher, "kind">) => v.kind === "loyalty";
+
+/** "Giảm 10% (tối đa 2.000.000đ)" · "Giảm 500.000đ" · thẻ quà: "2.000.000đ". */
+export function voucherValueLabel(v: Pick<Voucher, "kind" | "discount_type" | "percent" | "max_discount" | "amount">): string {
+  const money = (n: number) => Math.round(n).toLocaleString("vi-VN") + "đ";
+  if (v.discount_type === "percent" && v.percent) {
+    return `Giảm ${v.percent}%${v.max_discount ? ` (tối đa ${money(v.max_discount)})` : ""}`;
+  }
+  return isLoyalty(v) ? `Giảm ${money(v.amount)}` : money(v.amount);
+}
+
+/**
+ * Số tiền voucher ưu đãi trừ vào hợp đồng có tổng `total` (trước voucher).
+ * % làm tròn xuống bội 1.000đ (không ai muốn thấy "giảm 1.234.567đ"), chặn
+ * trần max_discount, và không bao giờ vượt quá tổng hợp đồng.
+ */
+export function voucherDiscount(
+  v: Pick<Voucher, "discount_type" | "percent" | "max_discount" | "amount">,
+  total: number
+): number {
+  const base = Math.max(0, Math.round(total));
+  let d: number;
+  if (v.discount_type === "percent" && v.percent) {
+    d = Math.floor((base * v.percent) / 100 / 1000) * 1000;
+    if (v.max_discount && v.max_discount > 0) d = Math.min(d, v.max_discount);
+  } else {
+    d = Math.max(0, Math.round(v.amount));
+  }
+  return Math.min(d, base);
+}
+
+/** Tên dòng giảm giá ghi vào hợp đồng — có MÃ để luôn truy ngược được về voucher. */
+export function voucherLineName(v: Pick<Voucher, "code" | "discount_type" | "percent" | "kind" | "max_discount" | "amount">): string {
+  return `Voucher ${v.code} · ${voucherValueLabel(v)}`.slice(0, 200);
+}
+
 
 /** Hạn mặc định: 12 tháng kể từ ngày bán (giữ đúng ngày, 29/2 → 28/2). */
 export function defaultExpiry(today: string, months = 12): string {
@@ -101,7 +165,9 @@ export type VoucherSummary = { sold: number; collected: number; outstanding: num
 export function voucherSummary(list: Voucher[], today: string): VoucherSummary {
   const out: VoucherSummary = { sold: 0, collected: 0, outstanding: 0, outstandingCount: 0, redeemed: 0 };
   for (const v of list) {
-    if (v.status === "void") continue;
+    // Voucher ưu đãi là quà tặng, không phải tiền khách đã trả: không vào các
+    // con số "đã thu / còn nợ khách / đã thành doanh thu".
+    if (v.status === "void" || isLoyalty(v)) continue;
     out.sold += 1;
     if (v.paid) out.collected += v.price;
     const s = voucherState(v, today);
