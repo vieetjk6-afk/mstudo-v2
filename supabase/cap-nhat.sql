@@ -43,6 +43,9 @@ create table if not exists public.studio_automations (
   unique (owner_id, rule)
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.studio_automations    enable row level security;
+
 -- ── Sổ ĐÃ CHẠY (chống lặp) ──────────────────────────────────────────────────
 create table if not exists public.studio_automation_log (
   id          uuid primary key default gen_random_uuid(),
@@ -61,6 +64,8 @@ create table if not exists public.studio_automation_log (
 
   fired_at    timestamptz not null default now()
 );
+
+alter table public.studio_automation_log enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -97,6 +102,9 @@ create table if not exists public.crew_timesheet (
   created_at  timestamptz not null default now()
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.crew_timesheet  enable row level security;
+
 -- ── Khoảng RẢNH thợ tự đăng ký ──────────────────────────────────────────────
 -- Ngược của crew_unavailable. Cố ý là bảng RIÊNG chứ không thêm cột `kind` vào
 -- crew_unavailable: bảng kia đã có RLS, index và một cổng ghi riêng, và "bận"
@@ -114,6 +122,8 @@ create table if not exists public.crew_available (
   created_at timestamptz not null default now(),
   unique (phone, date, start_time)
 );
+
+alter table public.crew_available  enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -133,6 +143,12 @@ create table if not exists public.studio_vendors (
   active     boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+-- Xoá đơn thì dòng chi đi theo (on delete cascade ở trên) — tiền của một đơn
+-- không còn tồn tại thì cũng không được nằm lại trong báo cáo.
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.studio_vendors enable row level security;
 
 -- ── Đơn đặt ngoài ───────────────────────────────────────────────────────────
 create table if not exists public.vendor_orders (
@@ -160,6 +176,8 @@ create table if not exists public.vendor_orders (
   updated_at  timestamptz not null default now()
 );
 
+alter table public.vendor_orders  enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/accounting.sql — Phiếu thu có số & khoá sổ kế toán
@@ -174,6 +192,8 @@ create table if not exists public.studio_receipt_seq (
   last_no  integer not null default 0,
   primary key (owner_id, year)
 );
+
+alter table public.studio_receipt_seq enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -210,6 +230,12 @@ create table if not exists public.album_people (
   created_at     timestamptz not null default now()
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+-- Chủ album (và admin) đọc/ghi. KHÔNG mở đọc công khai: trang khách
+-- (src/app/a/[slug]/page.tsx) chạy trên máy chủ bằng service role, nên khách
+-- không cần quyền gì trên bảng này.
+alter table public.album_people enable row level security;
+
 -- ── Ảnh nào có ai ───────────────────────────────────────────────────────────
 create table if not exists public.album_photo_people (
   -- album_id là bản sao CÓ CHỦ Ý của album_people.album_id: câu truy vấn duy
@@ -219,6 +245,8 @@ create table if not exists public.album_photo_people (
   photo_id  uuid not null references public.photos (id) on delete cascade,
   primary key (person_id, photo_id)
 );
+
+alter table public.album_photo_people enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -239,6 +267,11 @@ create table if not exists public.album_faces (
   primary key (photo_id, at)
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+-- Chủ album (và admin) đọc/ghi. Khách KHÔNG cần quyền gì: trang khách chỉ đọc
+-- album_people/album_photo_people, và đọc bằng service role trên máy chủ.
+alter table public.album_faces enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/bank_auto_reconcile.sql — Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)
@@ -253,6 +286,8 @@ create table if not exists public.studio_bank_hooks (
   last_event_at timestamptz,
   created_at    timestamptz not null default now()
 );
+
+alter table public.studio_bank_hooks enable row level security;
 
 -- ── 3) Sổ giao dịch ngân hàng ──────────────────────────────────────────────
 -- matched   — đã tự ghi vào đúng đợt / đúng cọc giữ ngày
@@ -281,6 +316,8 @@ create table if not exists public.studio_bank_transactions (
   unique (owner_id, provider, provider_txn_id)
 );
 
+alter table public.studio_bank_transactions enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/contract_cancel_reschedule.sql — Huỷ hợp đồng (hoàn / giữ cọc, chính sách huỷ) + lịch sử dời lịch
@@ -299,6 +336,8 @@ create table if not exists public.contract_reschedules (
   created_by  uuid references public.profiles (id) on delete set null,
   created_at  timestamptz not null default now()
 );
+
+alter table public.contract_reschedules enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -322,6 +361,10 @@ create table if not exists public.contract_addenda (
   created_at  timestamptz not null default now(),
   unique (contract_id, no)
 );
+
+-- Đọc: mọi thành viên studio. Ghi: CHỈ qua route máy chủ (service role) — không
+-- cấp policy ghi nào cho authenticated.
+alter table public.contract_addenda enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -351,6 +394,8 @@ create table if not exists public.studio_vouchers (
   created_at           timestamptz not null default now(),
   unique (owner_id, code)
 );
+
+alter table public.studio_vouchers enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -394,6 +439,8 @@ create table if not exists public.studio_audit_log (
   after       jsonb,
   created_at  timestamptz not null default now()
 );
+
+alter table public.studio_audit_log enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1795,11 +1842,6 @@ comment on column public.contract_items.event_id is
 -- ▶ migrations/automations.sql — Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── RLS ─────────────────────────────────────────────────────────────────────
-alter table public.studio_automations    enable row level security;
-
-alter table public.studio_automation_log enable row level security;
-
 drop policy if exists studio_automations_owner_all on public.studio_automations;
 
 create policy studio_automations_owner_all on public.studio_automations
@@ -1818,11 +1860,6 @@ create policy studio_automation_log_read on public.studio_automation_log
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/crew_timesheet.sql — Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)
 -- ══════════════════════════════════════════════════════════════════════════
-
--- ── RLS ─────────────────────────────────────────────────────────────────────
-alter table public.crew_timesheet  enable row level security;
-
-alter table public.crew_available  enable row level security;
 
 -- Chấm công: studio đọc/sửa dòng của CHÍNH mình (nhập bù, sửa giờ sai). Thợ ghi
 -- qua service-role ở cổng thợ công khai, nên không cần policy cho anon.
@@ -1845,14 +1882,6 @@ create policy crew_available_read on public.crew_available
 -- ▶ migrations/vendors.sql — Nhà cung cấp & đơn đặt ngoài
 -- ══════════════════════════════════════════════════════════════════════════
 
--- Xoá đơn thì dòng chi đi theo (on delete cascade ở trên) — tiền của một đơn
--- không còn tồn tại thì cũng không được nằm lại trong báo cáo.
-
--- ── RLS ─────────────────────────────────────────────────────────────────────
-alter table public.studio_vendors enable row level security;
-
-alter table public.vendor_orders  enable row level security;
-
 drop policy if exists studio_vendors_owner_all on public.studio_vendors;
 
 create policy studio_vendors_owner_all on public.studio_vendors
@@ -1869,8 +1898,6 @@ create policy vendor_orders_owner_all on public.vendor_orders
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/accounting.sql — Phiếu thu có số & khoá sổ kế toán
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.studio_receipt_seq enable row level security;
 
 drop policy if exists studio_receipt_seq_owner_all on public.studio_receipt_seq;
 
@@ -1902,12 +1929,6 @@ grant update (studio_lat, studio_lng, studio_address) on public.profiles to auth
 -- ▶ migrations/album_people.sql — Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── RLS ─────────────────────────────────────────────────────────────────────
--- Chủ album (và admin) đọc/ghi. KHÔNG mở đọc công khai: trang khách
--- (src/app/a/[slug]/page.tsx) chạy trên máy chủ bằng service role, nên khách
--- không cần quyền gì trên bảng này.
-alter table public.album_people enable row level security;
-
 drop policy if exists album_people_owner_rw on public.album_people;
 
 create policy album_people_owner_rw on public.album_people
@@ -1919,8 +1940,6 @@ create policy album_people_owner_rw on public.album_people
     exists (select 1 from public.albums a
             where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
   );
-
-alter table public.album_photo_people enable row level security;
 
 drop policy if exists album_photo_people_owner_rw on public.album_photo_people;
 
@@ -1953,11 +1972,6 @@ create policy album_photo_people_owner_rw on public.album_photo_people
 -- ▶ migrations/album_faces.sql — Kho khuôn mặt đã quét — để lượt quét tự động chạy tiếp được (chạy SAU album_people)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── RLS ─────────────────────────────────────────────────────────────────────
--- Chủ album (và admin) đọc/ghi. Khách KHÔNG cần quyền gì: trang khách chỉ đọc
--- album_people/album_photo_people, và đọc bằng service role trên máy chủ.
-alter table public.album_faces enable row level security;
-
 drop policy if exists album_faces_owner_rw on public.album_faces;
 
 create policy album_faces_owner_rw on public.album_faces
@@ -1983,8 +1997,6 @@ create policy album_faces_owner_rw on public.album_faces
 -- ▶ migrations/bank_auto_reconcile.sql — Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.studio_bank_hooks enable row level security;
-
 -- Chỉ chủ studio (và admin) đọc được khoá. Tạo và đổi khoá đi qua
 -- /api/studio/bank-hook để khoá luôn do máy chủ sinh ngẫu nhiên, nên RLS chỉ
 -- cho đọc.
@@ -1992,8 +2004,6 @@ drop policy if exists studio_bank_hooks_owner_read on public.studio_bank_hooks;
 
 create policy studio_bank_hooks_owner_read on public.studio_bank_hooks
   for select using (owner_id = auth.uid() or public.is_admin());
-
-alter table public.studio_bank_transactions enable row level security;
 
 drop policy if exists studio_bank_transactions_owner_read on public.studio_bank_transactions;
 
@@ -2010,8 +2020,6 @@ create policy studio_bank_transactions_owner_read on public.studio_bank_transact
 grant update (cancel_early_days, cancel_early_refund_pct, cancel_late_refund_pct)
   on public.profiles to authenticated;
 
-alter table public.contract_reschedules enable row level security;
-
 -- Đọc: chủ hợp đồng + admin. Ghi đi qua /api/studio/contracts/[id]/reschedule
 -- (service-role) vì một lần dời còn kéo theo lịch thợ, hạn thu, lịch hẹn.
 drop policy if exists contract_reschedules_owner_read on public.contract_reschedules;
@@ -2027,10 +2035,6 @@ create policy contract_reschedules_owner_read on public.contract_reschedules
 -- ▶ migrations/contract_addenda.sql — Khoá giá sau khi khách ký + phụ lục hợp đồng
 -- ══════════════════════════════════════════════════════════════════════════
 
--- Đọc: mọi thành viên studio. Ghi: CHỈ qua route máy chủ (service role) — không
--- cấp policy ghi nào cho authenticated.
-alter table public.contract_addenda enable row level security;
-
 drop policy if exists contract_addenda_member_read on public.contract_addenda;
 
 create policy contract_addenda_member_read on public.contract_addenda
@@ -2041,8 +2045,6 @@ create policy contract_addenda_member_read on public.contract_addenda
 -- ▶ migrations/studio_vouchers.sql — Voucher / thẻ quà tặng của studio (chạy SAU contract_cancel_reschedule)
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.studio_vouchers enable row level security;
-
 drop policy if exists studio_vouchers_member_read on public.studio_vouchers;
 
 create policy studio_vouchers_member_read on public.studio_vouchers
@@ -2052,8 +2054,6 @@ create policy studio_vouchers_member_read on public.studio_vouchers
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/studio_audit_log.sql — Nhật ký thao tác tiền & hợp đồng
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.studio_audit_log enable row level security;
 
 drop policy if exists studio_audit_log_read on public.studio_audit_log;
 

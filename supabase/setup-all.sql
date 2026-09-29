@@ -48,6 +48,11 @@ create table if not exists public.profiles (
 );
 
 -- ============================================================================
+-- Row Level Security
+-- ============================================================================
+alter table public.profiles       enable row level security;
+
+-- ============================================================================
 -- albums
 -- ============================================================================
 create table if not exists public.albums (
@@ -69,6 +74,8 @@ create table if not exists public.albums (
   updated_at      timestamptz not null default now()
 );
 
+alter table public.albums         enable row level security;
+
 -- ============================================================================
 -- album_sources: each album can have several Google Drive sources (groups),
 -- which can be displayed separately or merged together.
@@ -83,6 +90,8 @@ create table if not exists public.album_sources (
   created_at  timestamptz not null default now()
 );
 
+alter table public.album_sources  enable row level security;
+
 -- ============================================================================
 -- photos: individual images resolved from sources
 -- ============================================================================
@@ -95,6 +104,8 @@ create table if not exists public.photos (
   position      integer not null default 0,
   created_at    timestamptz not null default now()
 );
+
+alter table public.photos         enable row level security;
 
 -- ============================================================================
 -- selections: photos chosen by customers (no login required).
@@ -112,6 +123,8 @@ create table if not exists public.selections (
   created_at       timestamptz not null default now(),
   unique (album_id, photo_id, session_id)
 );
+
+alter table public.selections     enable row level security;
 
 -- ============================================================================
 -- dislikes: photos the customer explicitly does NOT want (selection albums).
@@ -131,6 +144,8 @@ create table if not exists public.dislikes (
   unique (album_id, photo_id, session_id)
 );
 
+alter table public.dislikes       enable row level security;
+
 -- ============================================================================
 -- album_shares: short-token links to a hand-picked subset of an album's photos.
 -- Lets "share N selected photos" produce a short URL (?s=token) instead of
@@ -142,6 +157,8 @@ create table if not exists public.album_shares (
   photo_ids   text[] not null default '{}',
   created_at  timestamptz not null default now()
 );
+
+alter table public.album_shares enable row level security;
 
 -- ============================================================================
 -- feedback: client testimonials for a gallery / the photographer
@@ -155,6 +172,8 @@ create table if not exists public.feedback (
   approved    boolean not null default true,
   created_at  timestamptz not null default now()
 );
+
+alter table public.feedback enable row level security;
 
 -- ============================================================================
 -- site_settings: single-row studio profile + contact info (public read)
@@ -179,6 +198,8 @@ create table if not exists public.site_settings (
   updated_at       timestamptz not null default now()
 );
 
+alter table public.site_settings enable row level security;
+
 -- ============================================================================
 -- bookings: leads from the homepage booking form (insert via service role)
 -- ============================================================================
@@ -193,6 +214,8 @@ create table if not exists public.bookings (
   created_at  timestamptz not null default now()
 );
 
+alter table public.bookings enable row level security;
+
 -- ============================================================================
 -- upgrade_requests: photographers asking to lift the free-tier limits
 -- (inserted via the service role; admins read/manage)
@@ -206,6 +229,8 @@ create table if not exists public.upgrade_requests (
   created_at  timestamptz not null default now()
 );
 
+alter table public.upgrade_requests enable row level security;
+
 -- ============================================================================
 -- Monthly album-creation quota. Counted from an append-only creation log so
 -- that DELETING an album does NOT free up the monthly quota. Admins exempt.
@@ -216,6 +241,8 @@ create table if not exists public.album_creations (
   created_at timestamptz not null default now()
 );
 
+alter table public.album_creations enable row level security;
+
 -- null = chưa dùng thử lần nào
 
 -- Per-month "filter tool" usage log (free = 10/month).
@@ -224,6 +251,8 @@ create table if not exists public.filter_usages (
   user_id    uuid references auth.users (id) on delete cascade,
   created_at timestamptz not null default now()
 );
+
+alter table public.filter_usages enable row level security;
 
 -- final price after discount (VND)
 
@@ -241,6 +270,9 @@ create table if not exists public.discount_codes (
   created_at timestamptz not null default now()
 );
 
+-- >0 = instant self-serve trial of `plan` for N days
+alter table public.discount_codes enable row level security;
+
 -- Per-account redemption log: each code can be used at most once per user.
 create table if not exists public.discount_redemptions (
   id         uuid primary key default gen_random_uuid(),
@@ -250,12 +282,16 @@ create table if not exists public.discount_redemptions (
   unique (code, user_id)
 );
 
+alter table public.discount_redemptions enable row level security;
+
 create table if not exists public.compress_usages (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid references auth.users (id) on delete cascade,
   kind       text not null default 'basic',   -- 'basic' | 'picker'
   created_at timestamptz not null default now()
 );
+
+alter table public.compress_usages enable row level security;
 
 -- ============================================================================
 -- STUDIO MODULE (studio.vieetjk.com) — contracts, crew, salaries, schedule.
@@ -289,6 +325,9 @@ create table if not exists public.studio_contracts (
   updated_at    timestamptz not null default now()
 );
 
+-- RLS: owner (logged-in studio) + admin only. Public access is service-role.
+alter table public.studio_contracts      enable row level security;
+
 -- Contract line items (hạng mục tự nhập + đơn giá) ----------------------------
 create table if not exists public.contract_items (
   id          uuid primary key default gen_random_uuid(),
@@ -300,6 +339,8 @@ create table if not exists public.contract_items (
   position    integer not null default 0,
   created_at  timestamptz not null default now()
 );
+
+alter table public.contract_items        enable row level security;
 
 -- Crew assigned to a contract (photographer / cameraman) + salary -------------
 create table if not exists public.contract_crew (
@@ -319,6 +360,8 @@ create table if not exists public.contract_crew (
   created_at   timestamptz not null default now()
 );
 
+alter table public.contract_crew         enable row level security;
+
 -- Client requests to amend a contract -----------------------------------------
 create table if not exists public.contract_edit_requests (
   id          uuid primary key default gen_random_uuid(),
@@ -328,6 +371,8 @@ create table if not exists public.contract_edit_requests (
   created_at  timestamptz not null default now(),
   resolved_at timestamptz
 );
+
+alter table public.contract_edit_requests enable row level security;
 
 -- Studio crew roster (sổ thợ, quản lý theo SĐT) -------------------------------
 create table if not exists public.studio_crew (
@@ -340,6 +385,8 @@ create table if not exists public.studio_crew (
   created_at timestamptz not null default now(),
   unique (owner_id, phone)
 );
+
+alter table public.studio_crew           enable row level security;
 
 -- Calendar notes / reminders (lịch ghi chú hợp đồng) --------------------------
 create table if not exists public.studio_events (
@@ -354,6 +401,8 @@ create table if not exists public.studio_events (
   created_at  timestamptz not null default now()
 );
 
+alter table public.studio_events         enable row level security;
+
 -- Print / physical product orders per contract (album in, ảnh ép gỗ…).
 create table if not exists public.contract_products (
   id          uuid primary key default gen_random_uuid(),
@@ -367,6 +416,8 @@ create table if not exists public.contract_products (
   created_at  timestamptz not null default now()
 );
 
+alter table public.contract_products enable row level security;
+
 -- Multi-option quote (báo giá nhiều phương án) — client picks one in the portal.
 create table if not exists public.contract_quote_options (
   id          uuid primary key default gen_random_uuid(),
@@ -377,6 +428,8 @@ create table if not exists public.contract_quote_options (
   position    integer not null default 0,
   created_at  timestamptz not null default now()
 );
+
+alter table public.contract_quote_options enable row level security;
 
 -- Prepaid session packages / combo cards (thẻ buổi trả trước) per client.
 create table if not exists public.studio_packages (
@@ -393,6 +446,8 @@ create table if not exists public.studio_packages (
   created_at     timestamptz not null default now()
 );
 
+alter table public.studio_packages enable row level security;
+
 -- Public price list / rate card (bảng giá gửi khách). Shared via booking_token.
 create table if not exists public.studio_pricelist (
   id          uuid primary key default gen_random_uuid(),
@@ -408,6 +463,8 @@ create table if not exists public.studio_pricelist (
   created_at  timestamptz not null default now()
 );
 
+alter table public.studio_pricelist enable row level security;
+
 -- Saved message templates (mẫu tin nhắn) for quick copy into Zalo/Messenger/email.
 create table if not exists public.message_templates (
   id         uuid primary key default gen_random_uuid(),
@@ -416,6 +473,8 @@ create table if not exists public.message_templates (
   body       text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table public.message_templates enable row level security;
 
 create table if not exists public.studio_bookings (
   id             uuid primary key default gen_random_uuid(),
@@ -429,6 +488,8 @@ create table if not exists public.studio_bookings (
   created_at     timestamptz not null default now()
 );
 
+alter table public.studio_bookings enable row level security;
+
 -- Equipment roster (sổ thiết bị) + per-contract assignment (tránh trùng máy/lens).
 create table if not exists public.studio_equipment (
   id         uuid primary key default gen_random_uuid(),
@@ -440,6 +501,8 @@ create table if not exists public.studio_equipment (
   created_at timestamptz not null default now()
 );
 
+alter table public.studio_equipment enable row level security;
+
 create table if not exists public.contract_equipment (
   id           uuid primary key default gen_random_uuid(),
   contract_id  uuid not null references public.studio_contracts (id) on delete cascade,
@@ -447,6 +510,8 @@ create table if not exists public.contract_equipment (
   name         text not null default '',
   created_at   timestamptz not null default now()
 );
+
+alter table public.contract_equipment enable row level security;
 
 -- Planned payment schedule (lịch thu nhiều đợt có ngày đến hạn). Separate from
 -- contract_payments (actual receipts) — drives the "sắp đến hạn thu" reminder.
@@ -462,6 +527,8 @@ create table if not exists public.contract_payment_plan (
   created_at  timestamptz not null default now()
 );
 
+alter table public.contract_payment_plan enable row level security;
+
 -- ============================================================================
 -- Studio notifications (chuông): events worth the studio's attention. Inserted
 -- both by the owner's own client (RLS) and the service role (client/crew portals).
@@ -476,6 +543,8 @@ create table if not exists public.studio_notifications (
   created_at  timestamptz not null default now()
 );
 
+alter table public.studio_notifications enable row level security;
+
 -- Per-contract checklist (đặt cọc, chụp, chọn ảnh, retouch, in album, giao…).
 create table if not exists public.contract_tasks (
   id          uuid primary key default gen_random_uuid(),
@@ -485,6 +554,8 @@ create table if not exists public.contract_tasks (
   position    integer not null default 0,
   created_at  timestamptz not null default now()
 );
+
+alter table public.contract_tasks enable row level security;
 
 -- Reusable contract templates (mẫu hợp đồng): a named set of line items + terms.
 create table if not exists public.contract_templates (
@@ -496,6 +567,8 @@ create table if not exists public.contract_templates (
   created_at timestamptz not null default now()
 );
 
+alter table public.contract_templates      enable row level security;
+
 create table if not exists public.contract_template_items (
   id          uuid primary key default gen_random_uuid(),
   template_id uuid not null references public.contract_templates (id) on delete cascade,
@@ -504,6 +577,8 @@ create table if not exists public.contract_template_items (
   unit_price  integer not null default 0,
   position    integer not null default 0
 );
+
+alter table public.contract_template_items enable row level security;
 
 -- Crew busy/unavailable days (keyed by phone — crew have no login). Crew add
 -- these via the public portal (service role); studios read them to avoid
@@ -517,6 +592,8 @@ create table if not exists public.crew_unavailable (
   unique (phone, date)
 );
 
+alter table public.crew_unavailable enable row level security;
+
 -- Ca công ty của thợ freelancer (Hòa Phát A/B/C). Chỉ nhớ thợ thuộc ca nào; các
 -- ca cụ thể được TÍNH lúc hiển thị (src/lib/crew-shift.ts), không sinh sẵn dòng.
 create table if not exists public.crew_shift_plan (
@@ -525,6 +602,8 @@ create table if not exists public.crew_shift_plan (
   shift      text not null check (shift in ('A', 'B', 'C')),
   updated_at timestamptz not null default now()
 );
+
+alter table public.crew_shift_plan enable row level security;
 
 -- Payments collected from the client (deposit / installments / final).
 create table if not exists public.contract_payments (
@@ -539,6 +618,8 @@ create table if not exists public.contract_payments (
   created_at  timestamptz not null default now()
 );
 
+alter table public.contract_payments enable row level security;
+
 -- Client-submitted payment proof images (uploaded via the public contract portal).
 create table if not exists public.contract_client_proofs (
   id          uuid primary key default gen_random_uuid(),
@@ -547,6 +628,8 @@ create table if not exists public.contract_client_proofs (
   note        text,
   uploaded_at timestamptz not null default now()
 );
+
+alter table public.contract_client_proofs enable row level security;
 
 -- Misc studio expenses (chi phí khác ngoài lương) for the monthly report.
 create table if not exists public.studio_expenses (
@@ -560,6 +643,8 @@ create table if not exists public.studio_expenses (
   created_at timestamptz not null default now()
 );
 
+alter table public.studio_expenses   enable row level security;
+
 -- Studio-defined service types (loại dịch vụ) with their own contract clauses.
 -- Picking a service in a contract/quote loads that service's clauses.
 create table if not exists public.studio_services (
@@ -571,6 +656,8 @@ create table if not exists public.studio_services (
   active     boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+alter table public.studio_services enable row level security;
 
 -- ============================================================================
 -- Site builder (multi-tenant portfolio sites on <sub>.vieetjk.com)
@@ -589,6 +676,8 @@ create table if not exists public.sites (
   updated_at    timestamptz not null default now()
 );
 
+alter table public.sites enable row level security;
+
 -- Ordered content blocks that make up a site (the drag-and-drop builder model).
 create table if not exists public.site_blocks (
   id          uuid primary key default gen_random_uuid(),
@@ -599,6 +688,8 @@ create table if not exists public.site_blocks (
   config      jsonb not null default '{}'::jsonb,
   created_at  timestamptz not null default now()
 );
+
+alter table public.site_blocks enable row level security;
 
 -- ============================================================================
 -- Album Designer — album đã lưu (thiết kế dàn trang để in)
@@ -616,6 +707,8 @@ create table if not exists public.album_designs (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+alter table public.album_designs enable row level security;
 
 -- ============================================================================
 -- Customer quotes (báo giá gửi khách trước khi ký hợp đồng)
@@ -648,6 +741,8 @@ create table if not exists public.studio_quotes (
   updated_at      timestamptz not null default now()
 );
 
+alter table public.studio_quotes enable row level security;
+
 -- Quote line items. is_optional=false items are required (client can't deselect).
 create table if not exists public.quote_items (
   id           uuid primary key default gen_random_uuid(),
@@ -662,6 +757,8 @@ create table if not exists public.quote_items (
   created_at   timestamptz not null default now()
 );
 
+alter table public.quote_items enable row level security;
+
 -- Client-submitted adjustment requests on a quote (chat-style messages).
 create table if not exists public.quote_adjustments (
   id         uuid primary key default gen_random_uuid(),
@@ -671,6 +768,8 @@ create table if not exists public.quote_adjustments (
   resolved   boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.quote_adjustments enable row level security;
 
 -- ============================================================================
 -- Affiliate / referral system
@@ -684,6 +783,8 @@ create table if not exists public.affiliate_codes (
   active      boolean not null default true,
   created_at  timestamptz not null default now()
 );
+
+alter table public.affiliate_codes enable row level security;
 
 -- Commission records: created when a referred user buys a plan.
 create table if not exists public.affiliate_commissions (
@@ -703,6 +804,8 @@ create table if not exists public.affiliate_commissions (
   paid_at             timestamptz
 );
 
+alter table public.affiliate_commissions enable row level security;
+
 -- ============================================================================
 -- THIỆP CƯỚI ONLINE (online wedding invitation) — see supabase/wedding_invitations.sql
 -- A free gift attached to a wedding contract. Studio creates a draft; the
@@ -721,6 +824,8 @@ create table if not exists public.wedding_invitations (
   updated_at   timestamptz not null default now()
 );
 
+alter table public.wedding_invitations enable row level security;
+
 create table if not exists public.wedding_rsvps (
   id            uuid primary key default gen_random_uuid(),
   invitation_id uuid not null references public.wedding_invitations (id) on delete cascade,
@@ -731,6 +836,8 @@ create table if not exists public.wedding_rsvps (
   wish          text,
   created_at    timestamptz not null default now()
 );
+
+alter table public.wedding_rsvps enable row level security;
 
 -- ============================================================================
 -- TRANG LOVE STORY — see supabase/story_pages.sql
@@ -747,6 +854,8 @@ create table if not exists public.story_pages (
   updated_at   timestamptz not null default now()
 );
 
+alter table public.story_pages enable row level security;
+
 create table if not exists public.story_wishes (
   id         uuid primary key default gen_random_uuid(),
   story_id   uuid not null references public.story_pages (id) on delete cascade,
@@ -754,6 +863,8 @@ create table if not exists public.story_wishes (
   wish       text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table public.story_wishes enable row level security;
 
 -- app-created folder id for guest uploads
 
@@ -768,6 +879,8 @@ create table if not exists public.story_uploads (
   created_at    timestamptz not null default now()
 );
 
+alter table public.story_uploads enable row level security;
+
 -- ─── MStudo Desktop (client Windows) ──────────────────────────────────────────
 -- Thiết bị đã đăng ký của chủ studio — tối đa 2 máy hoạt động / tài khoản.
 create table if not exists public.desktop_devices (
@@ -780,6 +893,8 @@ create table if not exists public.desktop_devices (
   revoked_at   timestamptz,                       -- null = đang hoạt động
   created_at   timestamptz not null default now()
 );
+
+alter table public.desktop_devices enable row level security;
 
 -- ─── MStudo Desktop · Đồng bộ ảnh/video hợp đồng lên Google Drive ─────────────
 -- Khi hợp đồng ĐÃ KÝ, client tạo cây thư mục trên máy + trên Drive studio rồi tải
@@ -796,6 +911,8 @@ create table if not exists public.studio_drive (
   updated_at       timestamptz not null default now()
 );
 
+alter table public.studio_drive enable row level security;
+
 -- ─── Google Drive của ADMIN (lưu nội dung người dùng) — refresh token BÍ MẬT ───
 -- Tách khỏi site_settings (bảng có policy đọc công khai). RLS bật + revoke → chỉ
 -- service-role (API server) đọc/ghi được. Xem src/lib/mstudo-drive.ts.
@@ -805,6 +922,8 @@ create table if not exists public.admin_drive (
   folder_id     text,
   updated_at    timestamptz not null default now()
 );
+
+alter table public.admin_drive enable row level security;
 
 -- ─── Tự động nhắn tin Zalo (per-studio) — CHỈ gói `studio` ──────────────────
 -- Xem supabase/migrations/studio_zalo.sql. Token OA + phiên cá nhân là BÍ MẬT →
@@ -828,6 +947,8 @@ create table if not exists public.studio_zalo (
   updated_at           timestamptz not null default now()
 );
 
+alter table public.studio_zalo enable row level security;
+
 create table if not exists public.zalo_messages (
   id           uuid primary key default gen_random_uuid(),
   owner_id     uuid not null references public.profiles (id) on delete cascade,
@@ -848,6 +969,8 @@ create table if not exists public.zalo_messages (
   sent_at      timestamptz
 );
 
+alter table public.zalo_messages enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ push_subscriptions.sql — Web Push (thông báo đẩy)
@@ -863,6 +986,10 @@ create table if not exists push_subscriptions (
   auth        text not null,
   created_at  timestamptz default now()
 );
+
+-- Writes go through the service-role key (server API routes), so RLS can stay
+-- enabled with no public policies — clients never touch this table directly.
+alter table push_subscriptions enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -891,6 +1018,8 @@ create table if not exists public.wedding_invitations (
   updated_at   timestamptz not null default now()
 );
 
+alter table public.wedding_invitations enable row level security;
+
 -- Guest RSVPs (khách mời xác nhận tham dự + lời chúc). Written by the public
 -- page via the service-role API; read by the studio/owner.
 create table if not exists public.wedding_rsvps (
@@ -903,6 +1032,8 @@ create table if not exists public.wedding_rsvps (
   wish          text,                            -- lời chúc
   created_at    timestamptz not null default now()
 );
+
+alter table public.wedding_rsvps enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -930,6 +1061,8 @@ create table if not exists public.story_pages (
   updated_at   timestamptz not null default now()
 );
 
+alter table public.story_pages enable row level security;
+
 -- Guest wishes (lời chúc) — written by the public page via the service-role API.
 create table if not exists public.story_wishes (
   id         uuid primary key default gen_random_uuid(),
@@ -938,6 +1071,8 @@ create table if not exists public.story_wishes (
   wish       text not null default '',
   created_at timestamptz not null default now()
 );
+
+alter table public.story_wishes enable row level security;
 
 -- app-created folder id for guest uploads
 
@@ -951,6 +1086,8 @@ create table if not exists public.story_uploads (
   approved      boolean not null default true, -- tự duyệt; cặp đôi có thể gỡ trong trình sửa
   created_at    timestamptz not null default now()
 );
+
+alter table public.story_uploads enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -971,6 +1108,8 @@ create table if not exists public.admin_drive (
   folder_id     text,
   updated_at    timestamptz not null default now()
 );
+
+alter table public.admin_drive enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -993,6 +1132,8 @@ create table if not exists public.album_designs (
   updated_at  timestamptz not null default now()
 );
 
+alter table public.album_designs enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/crew_schedule.sql — Lịch thợ (phải chạy TRƯỚC crew_profile_show)
@@ -1013,6 +1154,8 @@ create table if not exists public.crew_shift_plan (
   updated_at timestamptz not null default now()
 );
 
+alter table public.crew_shift_plan enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/crew_profile_show.sql — Hồ sơ thợ & thông tin show
@@ -1025,6 +1168,8 @@ create table if not exists public.crew_account (
   calendar_token text unique,
   created_at     timestamptz not null default now()
 );
+
+alter table public.crew_account enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1058,6 +1203,9 @@ create table if not exists public.rental_items (
   created_at    timestamptz not null default now()
 );
 
+-- RLS: owner (studio đăng nhập) + admin.
+alter table public.rental_items       enable row level security;
+
 -- Đơn thuê -------------------------------------------------------------------
 create table if not exists public.rental_orders (
   id            uuid primary key default gen_random_uuid(),
@@ -1077,6 +1225,8 @@ create table if not exists public.rental_orders (
   updated_at    timestamptz not null default now()
 );
 
+alter table public.rental_orders      enable row level security;
+
 -- Dòng đơn thuê (nối đơn ↔ trang phục) ---------------------------------------
 create table if not exists public.rental_order_items (
   id         uuid primary key default gen_random_uuid(),
@@ -1087,6 +1237,8 @@ create table if not exists public.rental_order_items (
   qty        integer not null default 1,
   created_at timestamptz not null default now()
 );
+
+alter table public.rental_order_items enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1108,6 +1260,8 @@ create table if not exists public.site_views (
   views   integer not null default 0,
   primary key (site_id, day)
 );
+
+alter table public.site_views enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1136,6 +1290,8 @@ create table if not exists public.studio_drive (
   connected_at     timestamptz,
   updated_at       timestamptz not null default now()
 );
+
+alter table public.studio_drive enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1181,6 +1337,8 @@ create table if not exists public.studio_zalo (
   updated_at           timestamptz not null default now()
 );
 
+alter table public.studio_zalo enable row level security;
+
 -- ── Hàng đợi + nhật ký tin Zalo đã gửi ─────────────────────────────────────
 -- Chủ studio ĐỌC được tin của mình (hiển thị lịch sử); chỉ service-role GHI
 -- (việc gửi luôn chạy phía máy chủ).
@@ -1204,6 +1362,8 @@ create table if not exists public.zalo_messages (
   sent_at      timestamptz
 );
 
+alter table public.zalo_messages enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/website_chat_config.sql — Cấu hình chatbox website
@@ -1225,6 +1385,8 @@ create table if not exists public.website_chat_config (
   instructions  text,
   updated_at    timestamptz not null default now()
 );
+
+alter table public.website_chat_config enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1256,6 +1418,8 @@ create table if not exists public.website_leads (
   updated_at  timestamptz not null default now()
 );
 
+alter table public.website_leads enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/album_dislikes.sql — Ảnh khách 'không thích' trong album chọn ảnh
@@ -1281,6 +1445,9 @@ create table if not exists public.dislikes (
   created_at   timestamptz not null default now(),
   unique (album_id, photo_id, session_id)
 );
+
+-- RLS: chủ album (và admin) đọc/ghi; khách ghi qua service role trong API route.
+alter table public.dislikes enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1313,6 +1480,8 @@ create table if not exists public.studio_referrals (
   created_at      timestamptz not null default now(),
   granted_at      timestamptz
 );
+
+alter table public.studio_referrals enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1386,6 +1555,8 @@ create table if not exists public.studio_appointments (
   updated_at    timestamptz not null default now()
 );
 
+alter table public.studio_appointments enable row level security;
+
 -- ============================================================================
 -- PHÒNG & NGUỒN LỰC — danh sách phòng để lịch studio vẽ thanh công suất
 --
@@ -1407,6 +1578,8 @@ create table if not exists public.studio_rooms (
   position      integer not null default 0,
   created_at    timestamptz not null default now()
 );
+
+alter table public.studio_rooms enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1447,6 +1620,8 @@ create table if not exists public.studio_branches (
   created_at  timestamptz not null default now()
 );
 
+alter table public.studio_branches enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/inbox_unified.sql — Hộp thư hợp nhất: gom tin Zalo/Facebook/Instagram/website về một chỗ
@@ -1486,6 +1661,8 @@ create table if not exists public.inbox_channels (
   unique (platform, external_id)
 );
 
+alter table public.inbox_channels enable row level security;
+
 -- ── 2. NGƯỜI NHẮN ──────────────────────────────────────────────────────────
 create table if not exists public.inbox_contacts (
   id               uuid primary key default gen_random_uuid(),
@@ -1500,6 +1677,8 @@ create table if not exists public.inbox_contacts (
   updated_at       timestamptz not null default now(),
   unique (channel_id, external_user_id)
 );
+
+alter table public.inbox_contacts enable row level security;
 
 -- ── 3. HỘI THOẠI ───────────────────────────────────────────────────────────
 -- Một người trên một kênh = một hội thoại chạy dài (không cắt theo phiên), để
@@ -1537,6 +1716,8 @@ create table if not exists public.inbox_conversations (
   unique (contact_id)
 );
 
+alter table public.inbox_conversations enable row level security;
+
 -- ── 4. TIN NHẮN ────────────────────────────────────────────────────────────
 -- `sender` phân biệt AI với người: khách phải biết mình đang nói với ai, và
 -- studio phải xem lại được bot đã hứa gì với khách.
@@ -1558,6 +1739,8 @@ create table if not exists public.inbox_messages (
   error           text,
   created_at      timestamptz not null default now()
 );
+
+alter table public.inbox_messages enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1587,6 +1770,9 @@ create table if not exists public.studio_automations (
   unique (owner_id, rule)
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.studio_automations    enable row level security;
+
 -- ── Sổ ĐÃ CHẠY (chống lặp) ──────────────────────────────────────────────────
 create table if not exists public.studio_automation_log (
   id          uuid primary key default gen_random_uuid(),
@@ -1605,6 +1791,8 @@ create table if not exists public.studio_automation_log (
 
   fired_at    timestamptz not null default now()
 );
+
+alter table public.studio_automation_log enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1641,6 +1829,9 @@ create table if not exists public.crew_timesheet (
   created_at  timestamptz not null default now()
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.crew_timesheet  enable row level security;
+
 -- ── Khoảng RẢNH thợ tự đăng ký ──────────────────────────────────────────────
 -- Ngược của crew_unavailable. Cố ý là bảng RIÊNG chứ không thêm cột `kind` vào
 -- crew_unavailable: bảng kia đã có RLS, index và một cổng ghi riêng, và "bận"
@@ -1658,6 +1849,8 @@ create table if not exists public.crew_available (
   created_at timestamptz not null default now(),
   unique (phone, date, start_time)
 );
+
+alter table public.crew_available  enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1677,6 +1870,12 @@ create table if not exists public.studio_vendors (
   active     boolean not null default true,
   created_at timestamptz not null default now()
 );
+
+-- Xoá đơn thì dòng chi đi theo (on delete cascade ở trên) — tiền của một đơn
+-- không còn tồn tại thì cũng không được nằm lại trong báo cáo.
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+alter table public.studio_vendors enable row level security;
 
 -- ── Đơn đặt ngoài ───────────────────────────────────────────────────────────
 create table if not exists public.vendor_orders (
@@ -1704,6 +1903,8 @@ create table if not exists public.vendor_orders (
   updated_at  timestamptz not null default now()
 );
 
+alter table public.vendor_orders  enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/accounting.sql — Phiếu thu có số & khoá sổ kế toán
@@ -1718,6 +1919,8 @@ create table if not exists public.studio_receipt_seq (
   last_no  integer not null default 0,
   primary key (owner_id, year)
 );
+
+alter table public.studio_receipt_seq enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1754,6 +1957,12 @@ create table if not exists public.album_people (
   created_at     timestamptz not null default now()
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+-- Chủ album (và admin) đọc/ghi. KHÔNG mở đọc công khai: trang khách
+-- (src/app/a/[slug]/page.tsx) chạy trên máy chủ bằng service role, nên khách
+-- không cần quyền gì trên bảng này.
+alter table public.album_people enable row level security;
+
 -- ── Ảnh nào có ai ───────────────────────────────────────────────────────────
 create table if not exists public.album_photo_people (
   -- album_id là bản sao CÓ CHỦ Ý của album_people.album_id: câu truy vấn duy
@@ -1763,6 +1972,8 @@ create table if not exists public.album_photo_people (
   photo_id  uuid not null references public.photos (id) on delete cascade,
   primary key (person_id, photo_id)
 );
+
+alter table public.album_photo_people enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1783,6 +1994,11 @@ create table if not exists public.album_faces (
   primary key (photo_id, at)
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+-- Chủ album (và admin) đọc/ghi. Khách KHÔNG cần quyền gì: trang khách chỉ đọc
+-- album_people/album_photo_people, và đọc bằng service role trên máy chủ.
+alter table public.album_faces enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/bank_auto_reconcile.sql — Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)
@@ -1797,6 +2013,8 @@ create table if not exists public.studio_bank_hooks (
   last_event_at timestamptz,
   created_at    timestamptz not null default now()
 );
+
+alter table public.studio_bank_hooks enable row level security;
 
 -- ── 3) Sổ giao dịch ngân hàng ──────────────────────────────────────────────
 -- matched   — đã tự ghi vào đúng đợt / đúng cọc giữ ngày
@@ -1825,6 +2043,8 @@ create table if not exists public.studio_bank_transactions (
   unique (owner_id, provider, provider_txn_id)
 );
 
+alter table public.studio_bank_transactions enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/contract_cancel_reschedule.sql — Huỷ hợp đồng (hoàn / giữ cọc, chính sách huỷ) + lịch sử dời lịch
@@ -1843,6 +2063,8 @@ create table if not exists public.contract_reschedules (
   created_by  uuid references public.profiles (id) on delete set null,
   created_at  timestamptz not null default now()
 );
+
+alter table public.contract_reschedules enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1866,6 +2088,10 @@ create table if not exists public.contract_addenda (
   created_at  timestamptz not null default now(),
   unique (contract_id, no)
 );
+
+-- Đọc: mọi thành viên studio. Ghi: CHỈ qua route máy chủ (service role) — không
+-- cấp policy ghi nào cho authenticated.
+alter table public.contract_addenda enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1895,6 +2121,8 @@ create table if not exists public.studio_vouchers (
   created_at           timestamptz not null default now(),
   unique (owner_id, code)
 );
+
+alter table public.studio_vouchers enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -1938,6 +2166,8 @@ create table if not exists public.studio_audit_log (
   after       jsonb,
   created_at  timestamptz not null default now()
 );
+
+alter table public.studio_audit_log enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -5798,29 +6028,12 @@ on conflict (id) do nothing;
 -- ▶ schema.sql — Nền: profiles, albums, hợp đồng, studio, site_settings, storage buckets
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.album_shares enable row level security;
-
 -- Đọc qua service-role (trang share dùng createAdminClient). KHÔNG mở đọc công khai:
 -- policy using(true) trước đây cho phép anon (bằng anon key) DUYỆT toàn bộ token
 -- share của mọi studio. Thu hồi quyền đọc của anon/authenticated.
 drop policy if exists album_shares_public_read on public.album_shares;
 
 revoke select on public.album_shares from anon, authenticated;
-
--- ============================================================================
--- Row Level Security
--- ============================================================================
-alter table public.profiles       enable row level security;
-
-alter table public.albums         enable row level security;
-
-alter table public.album_sources  enable row level security;
-
-alter table public.photos         enable row level security;
-
-alter table public.selections     enable row level security;
-
-alter table public.dislikes       enable row level security;
 
 -- profiles -------------------------------------------------------------------
 drop policy if exists profiles_self_read on public.profiles;
@@ -5921,8 +6134,6 @@ create policy dislikes_owner_rw on public.dislikes
             where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.feedback enable row level security;
-
 -- Public can read approved feedback (homepage / gallery); owner & admin manage.
 drop policy if exists feedback_public_read on public.feedback;
 
@@ -5941,8 +6152,6 @@ create policy feedback_owner_manage on public.feedback
     exists (select 1 from public.albums a where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.site_settings enable row level security;
-
 drop policy if exists site_settings_public_read on public.site_settings;
 
 create policy site_settings_public_read on public.site_settings
@@ -5953,37 +6162,26 @@ drop policy if exists site_settings_admin_write on public.site_settings;
 create policy site_settings_admin_write on public.site_settings
   for all using (public.is_admin()) with check (public.is_admin());
 
-alter table public.bookings enable row level security;
-
 -- Only admins read/manage; customer inserts happen through the service role.
 drop policy if exists bookings_admin_all on public.bookings;
 
 create policy bookings_admin_all on public.bookings
   for all using (public.is_admin()) with check (public.is_admin());
 
-alter table public.upgrade_requests enable row level security;
-
 drop policy if exists upgrade_admin_all on public.upgrade_requests;
 
 create policy upgrade_admin_all on public.upgrade_requests
   for all using (public.is_admin()) with check (public.is_admin());
-
-alter table public.album_creations enable row level security;
 
 drop policy if exists album_creations_read on public.album_creations;
 
 create policy album_creations_read on public.album_creations
   for select using (user_id = auth.uid() or public.is_admin());
 
-alter table public.filter_usages enable row level security;
-
 drop policy if exists filter_usages_read on public.filter_usages;
 
 create policy filter_usages_read on public.filter_usages
   for select using (user_id = auth.uid() or public.is_admin());
-
--- >0 = instant self-serve trial of `plan` for N days
-alter table public.discount_codes enable row level security;
 
 -- Only admins read/manage directly; customers validate a code via the API (service role).
 drop policy if exists discount_codes_admin on public.discount_codes;
@@ -5991,14 +6189,10 @@ drop policy if exists discount_codes_admin on public.discount_codes;
 create policy discount_codes_admin on public.discount_codes
   for all using (public.is_admin()) with check (public.is_admin());
 
-alter table public.discount_redemptions enable row level security;
-
 drop policy if exists discount_redemptions_read on public.discount_redemptions;
 
 create policy discount_redemptions_read on public.discount_redemptions
   for select using (user_id = auth.uid() or public.is_admin());
-
-alter table public.compress_usages enable row level security;
 
 -- Users read their own usage; admins read all. Inserts happen via the service
 -- role through the /api/compress/use route, so no public insert policy needed.
@@ -6006,19 +6200,6 @@ drop policy if exists compress_usages_read on public.compress_usages;
 
 create policy compress_usages_read on public.compress_usages
   for select using (user_id = auth.uid() or public.is_admin());
-
--- RLS: owner (logged-in studio) + admin only. Public access is service-role.
-alter table public.studio_contracts      enable row level security;
-
-alter table public.contract_items        enable row level security;
-
-alter table public.contract_crew         enable row level security;
-
-alter table public.contract_edit_requests enable row level security;
-
-alter table public.studio_crew           enable row level security;
-
-alter table public.studio_events         enable row level security;
 
 drop policy if exists studio_contracts_owner_all on public.studio_contracts;
 
@@ -6072,8 +6253,6 @@ create policy studio_events_owner_all on public.studio_events
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
 
-alter table public.contract_products enable row level security;
-
 drop policy if exists contract_products_owner_all on public.contract_products;
 
 create policy contract_products_owner_all on public.contract_products
@@ -6084,8 +6263,6 @@ create policy contract_products_owner_all on public.contract_products
     exists (select 1 from public.studio_contracts c
             where c.id = contract_id and (c.owner_id = auth.uid() or public.is_admin()))
   );
-
-alter table public.contract_quote_options enable row level security;
 
 drop policy if exists contract_quote_options_owner_all on public.contract_quote_options;
 
@@ -6098,15 +6275,11 @@ create policy contract_quote_options_owner_all on public.contract_quote_options
             where c.id = contract_id and (c.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.studio_packages enable row level security;
-
 drop policy if exists studio_packages_owner_all on public.studio_packages;
 
 create policy studio_packages_owner_all on public.studio_packages
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.studio_pricelist enable row level security;
 
 drop policy if exists studio_pricelist_owner_all on public.studio_pricelist;
 
@@ -6114,15 +6287,11 @@ create policy studio_pricelist_owner_all on public.studio_pricelist
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
 
-alter table public.message_templates enable row level security;
-
 drop policy if exists message_templates_owner_all on public.message_templates;
 
 create policy message_templates_owner_all on public.message_templates
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.studio_bookings enable row level security;
 
 -- Owner/admin manage; public inserts go through the service role API.
 drop policy if exists studio_bookings_owner_all on public.studio_bookings;
@@ -6131,15 +6300,11 @@ create policy studio_bookings_owner_all on public.studio_bookings
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
 
-alter table public.studio_equipment enable row level security;
-
 drop policy if exists studio_equipment_owner_all on public.studio_equipment;
 
 create policy studio_equipment_owner_all on public.studio_equipment
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.contract_equipment enable row level security;
 
 drop policy if exists contract_equipment_owner_all on public.contract_equipment;
 
@@ -6152,8 +6317,6 @@ create policy contract_equipment_owner_all on public.contract_equipment
             where c.id = contract_id and (c.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.contract_payment_plan enable row level security;
-
 drop policy if exists contract_payment_plan_owner_all on public.contract_payment_plan;
 
 create policy contract_payment_plan_owner_all on public.contract_payment_plan
@@ -6165,15 +6328,11 @@ create policy contract_payment_plan_owner_all on public.contract_payment_plan
             where c.id = contract_id and (c.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.studio_notifications enable row level security;
-
 drop policy if exists studio_notifications_owner_all on public.studio_notifications;
 
 create policy studio_notifications_owner_all on public.studio_notifications
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.contract_tasks enable row level security;
 
 drop policy if exists contract_tasks_owner_all on public.contract_tasks;
 
@@ -6185,8 +6344,6 @@ create policy contract_tasks_owner_all on public.contract_tasks
     exists (select 1 from public.studio_contracts c
             where c.id = contract_id and (c.owner_id = auth.uid() or public.is_admin()))
   );
-
-alter table public.crew_unavailable enable row level security;
 
 -- CHỈ ĐỌC DÒNG CỦA CHÍNH MÌNH. Policy cũ mở cho mọi tài khoản đã đăng nhập, từ
 -- hồi bảng chỉ có (phone, date) = "ngày này thợ bận" — thứ thật sự ít nhạy cảm.
@@ -6202,16 +6359,10 @@ drop policy if exists crew_unavailable_read on public.crew_unavailable;
 create policy crew_unavailable_read on public.crew_unavailable
   for select using (owner_id = auth.uid() or public.is_admin());
 
-alter table public.crew_shift_plan enable row level security;
-
 drop policy if exists crew_shift_plan_read on public.crew_shift_plan;
 
 create policy crew_shift_plan_read on public.crew_shift_plan
   for select using (auth.role() = 'authenticated');
-
-alter table public.contract_templates      enable row level security;
-
-alter table public.contract_template_items enable row level security;
 
 drop policy if exists contract_templates_owner_all on public.contract_templates;
 
@@ -6230,18 +6381,12 @@ create policy contract_template_items_owner_all on public.contract_template_item
             where t.id = template_id and (t.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.contract_client_proofs enable row level security;
-
 drop policy if exists contract_client_proofs_owner on public.contract_client_proofs;
 
 create policy contract_client_proofs_owner on public.contract_client_proofs
   for all using (
     exists (select 1 from public.studio_contracts c where c.id = contract_id and c.owner_id = auth.uid())
   );
-
-alter table public.contract_payments enable row level security;
-
-alter table public.studio_expenses   enable row level security;
 
 drop policy if exists contract_payments_owner_all on public.contract_payments;
 
@@ -6336,8 +6481,6 @@ drop policy if exists studio_pricelist_owner_all on public.studio_pricelist;
 create policy studio_pricelist_owner_all on public.studio_pricelist
   for all using (public.is_studio_member(owner_id)) with check (public.is_studio_member(owner_id));
 
-alter table public.studio_services enable row level security;
-
 drop policy if exists studio_services_owner_all on public.studio_services;
 
 create policy studio_services_owner_all on public.studio_services
@@ -6350,15 +6493,11 @@ create policy contract_template_items_owner_all on public.contract_template_item
   for all using (exists (select 1 from public.contract_templates t where t.id = template_id and public.is_studio_member(t.owner_id)))
   with check (exists (select 1 from public.contract_templates t where t.id = template_id and public.is_studio_member(t.owner_id)));
 
-alter table public.sites enable row level security;
-
 drop policy if exists sites_owner_all on public.sites;
 
 create policy sites_owner_all on public.sites
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.site_blocks enable row level security;
 
 drop policy if exists site_blocks_owner_all on public.site_blocks;
 
@@ -6366,23 +6505,17 @@ create policy site_blocks_owner_all on public.site_blocks
   for all using (exists (select 1 from public.sites s where s.id = site_id and (s.owner_id = auth.uid() or public.is_admin())))
   with check (exists (select 1 from public.sites s where s.id = site_id and (s.owner_id = auth.uid() or public.is_admin())));
 
-alter table public.album_designs enable row level security;
-
 drop policy if exists album_designs_owner_all on public.album_designs;
 
 create policy album_designs_owner_all on public.album_designs
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
 
-alter table public.studio_quotes enable row level security;
-
 drop policy if exists studio_quotes_owner_all on public.studio_quotes;
 
 create policy studio_quotes_owner_all on public.studio_quotes
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.quote_items enable row level security;
 
 drop policy if exists quote_items_owner_all on public.quote_items;
 
@@ -6395,8 +6528,6 @@ create policy quote_items_owner_all on public.quote_items
             where q.id = quote_id and (q.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.quote_adjustments enable row level security;
-
 drop policy if exists quote_adjustments_owner_all on public.quote_adjustments;
 
 create policy quote_adjustments_owner_all on public.quote_adjustments
@@ -6408,8 +6539,6 @@ create policy quote_adjustments_owner_all on public.quote_adjustments
             where q.id = quote_id and (q.owner_id = auth.uid() or public.is_admin()))
   );
 
-alter table public.affiliate_codes enable row level security;
-
 drop policy if exists affiliate_codes_owner on public.affiliate_codes;
 
 create policy affiliate_codes_owner on public.affiliate_codes
@@ -6419,8 +6548,6 @@ drop policy if exists affiliate_codes_admin on public.affiliate_codes;
 
 create policy affiliate_codes_admin on public.affiliate_codes
   for all using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-
-alter table public.affiliate_commissions enable row level security;
 
 drop policy if exists affiliate_commissions_owner on public.affiliate_commissions;
 
@@ -6432,15 +6559,11 @@ drop policy if exists affiliate_commissions_admin on public.affiliate_commission
 create policy affiliate_commissions_admin on public.affiliate_commissions
   for all using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
-alter table public.wedding_invitations enable row level security;
-
 drop policy if exists wedding_invitations_owner_all on public.wedding_invitations;
 
 create policy wedding_invitations_owner_all on public.wedding_invitations
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.wedding_rsvps enable row level security;
 
 drop policy if exists wedding_rsvps_owner_read on public.wedding_rsvps;
 
@@ -6475,15 +6598,11 @@ drop policy if exists logos_delete on storage.objects;
 create policy logos_delete on storage.objects
   for delete to authenticated using (bucket_id = 'logos');
 
-alter table public.story_pages enable row level security;
-
 drop policy if exists story_pages_owner_all on public.story_pages;
 
 create policy story_pages_owner_all on public.story_pages
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.story_wishes enable row level security;
 
 drop policy if exists story_wishes_owner_read on public.story_wishes;
 
@@ -6493,8 +6612,6 @@ create policy story_wishes_owner_read on public.story_wishes
     where s.id = story_id and (s.owner_id = auth.uid() or public.is_admin())
   ));
 
-alter table public.story_uploads enable row level security;
-
 drop policy if exists story_uploads_owner_read on public.story_uploads;
 
 create policy story_uploads_owner_read on public.story_uploads
@@ -6502,8 +6619,6 @@ create policy story_uploads_owner_read on public.story_uploads
     select 1 from public.story_pages s
     where s.id = story_id and (s.owner_id = auth.uid() or public.is_admin())
   ));
-
-alter table public.desktop_devices enable row level security;
 
 drop policy if exists desktop_devices_owner on public.desktop_devices;
 
@@ -6513,17 +6628,9 @@ create policy desktop_devices_owner on public.desktop_devices
 
 revoke all on public.studio_drive from anon, authenticated;
 
-alter table public.studio_drive enable row level security;
-
 revoke all on public.admin_drive from anon, authenticated;
 
-alter table public.admin_drive enable row level security;
-
 revoke all on public.studio_zalo from anon, authenticated;
-
-alter table public.studio_zalo enable row level security;
-
-alter table public.zalo_messages enable row level security;
 
 drop policy if exists zalo_messages_owner_read on public.zalo_messages;
 
@@ -6532,19 +6639,8 @@ create policy zalo_messages_owner_read on public.zalo_messages
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ push_subscriptions.sql — Web Push (thông báo đẩy)
--- ══════════════════════════════════════════════════════════════════════════
-
--- Writes go through the service-role key (server API routes), so RLS can stay
--- enabled with no public policies — clients never touch this table directly.
-alter table push_subscriptions enable row level security;
-
-
--- ══════════════════════════════════════════════════════════════════════════
 -- ▶ wedding_invitations.sql — Thiệp cưới online
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.wedding_invitations enable row level security;
 
 -- Studio owner manages their own invitations from the dashboard. Public reads
 -- (the guest-facing page) and client edits (via edit_token) go through the
@@ -6554,8 +6650,6 @@ drop policy if exists wedding_invitations_owner_all on public.wedding_invitation
 create policy wedding_invitations_owner_all on public.wedding_invitations
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.wedding_rsvps enable row level security;
 
 drop policy if exists wedding_rsvps_owner_read on public.wedding_rsvps;
 
@@ -6575,15 +6669,11 @@ create policy wedding_photos_read on storage.objects
 -- ▶ story_pages.sql — Trang Love Story
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.story_pages enable row level security;
-
 drop policy if exists story_pages_owner_all on public.story_pages;
 
 create policy story_pages_owner_all on public.story_pages
   for all using (owner_id = auth.uid() or public.is_admin())
   with check (owner_id = auth.uid() or public.is_admin());
-
-alter table public.story_wishes enable row level security;
 
 drop policy if exists story_wishes_owner_read on public.story_wishes;
 
@@ -6592,8 +6682,6 @@ create policy story_wishes_owner_read on public.story_wishes
     select 1 from public.story_pages s
     where s.id = story_id and (s.owner_id = auth.uid() or public.is_admin())
   ));
-
-alter table public.story_uploads enable row level security;
 
 drop policy if exists story_uploads_owner_read on public.story_uploads;
 
@@ -6641,8 +6729,6 @@ grant update (
 
 revoke all on public.admin_drive from anon, authenticated;
 
-alter table public.admin_drive enable row level security;
-
 -- album_shares: đọc qua service-role, thu hồi quyền đọc của anon/authenticated.
 drop policy if exists album_shares_public_read on public.album_shares;
 
@@ -6652,8 +6738,6 @@ revoke select on public.album_shares from anon, authenticated;
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/album_designs.sql — Thiết kế Album
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.album_designs enable row level security;
 
 drop policy if exists album_designs_owner_all on public.album_designs;
 
@@ -6666,8 +6750,6 @@ create policy album_designs_owner_all on public.album_designs
 -- ▶ migrations/crew_schedule.sql — Lịch thợ (phải chạy TRƯỚC crew_profile_show)
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.crew_shift_plan enable row level security;
-
 -- Studio đã đăng nhập đọc được để xem lịch đội; ghi đi qua service role từ cổng
 -- thợ (thợ không có tài khoản) — giống hệt cách crew_unavailable đang làm.
 drop policy if exists crew_shift_plan_read on public.crew_shift_plan;
@@ -6679,8 +6761,6 @@ create policy crew_shift_plan_read on public.crew_shift_plan
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/crew_profile_show.sql — Hồ sơ thợ & thông tin show
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.crew_account enable row level security;
 
 -- Ghi đi qua service role từ cổng thợ; studio đã đăng nhập chỉ cần đọc.
 drop policy if exists crew_account_read on public.crew_account;
@@ -6745,13 +6825,6 @@ create policy crew_unavailable_read on public.crew_unavailable
 -- ▶ migrations/rental.sql — Phòng váy: kho trang phục & đơn thuê
 -- ══════════════════════════════════════════════════════════════════════════
 
--- RLS: owner (studio đăng nhập) + admin.
-alter table public.rental_items       enable row level security;
-
-alter table public.rental_orders      enable row level security;
-
-alter table public.rental_order_items enable row level security;
-
 drop policy if exists rental_items_owner_all on public.rental_items;
 
 create policy rental_items_owner_all on public.rental_items
@@ -6781,8 +6854,6 @@ create policy rental_order_items_owner_all on public.rental_order_items
 -- ▶ migrations/site_views.sql — Đếm lượt xem website studio
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.site_views enable row level security;
-
 -- Chủ studio (và admin) chỉ ĐỌC số liệu của site mình.
 drop policy if exists site_views_owner_read on public.site_views;
 
@@ -6807,8 +6878,6 @@ grant execute on function public.bump_site_view(uuid) to service_role;
 -- bật RLS mà KHÔNG tạo policy → chỉ service-role (bỏ qua RLS) mới truy cập được.
 revoke all on public.studio_drive from anon, authenticated;
 
-alter table public.studio_drive enable row level security;
-
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/studio_zalo.sql — Tự động nhắn Zalo theo từng studio
@@ -6817,10 +6886,6 @@ alter table public.studio_drive enable row level security;
 -- Không để lộ token/cookie ra trình duyệt: khoá mọi quyền của anon/authenticated,
 -- bật RLS mà KHÔNG tạo policy → chỉ service-role (bỏ qua RLS) mới truy cập được.
 revoke all on public.studio_zalo from anon, authenticated;
-
-alter table public.studio_zalo enable row level security;
-
-alter table public.zalo_messages enable row level security;
 
 drop policy if exists zalo_messages_owner_read on public.zalo_messages;
 
@@ -6831,8 +6896,6 @@ create policy zalo_messages_owner_read on public.zalo_messages
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/website_chat_config.sql — Cấu hình chatbox website
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.website_chat_config enable row level security;
 
 drop policy if exists website_chat_config_owner_read on public.website_chat_config;
 
@@ -6855,8 +6918,6 @@ create policy website_chat_config_owner_update on public.website_chat_config
 -- ▶ migrations/website_leads.sql — Lead & hội thoại từ chatbox
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.website_leads enable row level security;
-
 -- Chủ studio (và admin) ĐỌC lead của mình.
 drop policy if exists website_leads_owner_read on public.website_leads;
 
@@ -6877,9 +6938,6 @@ revoke insert on public.website_leads from anon, authenticated;
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/album_dislikes.sql — Ảnh khách 'không thích' trong album chọn ảnh
 -- ══════════════════════════════════════════════════════════════════════════
-
--- RLS: chủ album (và admin) đọc/ghi; khách ghi qua service role trong API route.
-alter table public.dislikes enable row level security;
 
 drop policy if exists dislikes_owner_rw on public.dislikes;
 
@@ -6916,8 +6974,6 @@ grant update (storage_months, quote_valid_days) on public.profiles to authentica
 grant update (referral_reward, referral_discount, booking_deposit)
   on public.profiles to authenticated;
 
-alter table public.studio_referrals enable row level security;
-
 drop policy if exists studio_referrals_owner_all on public.studio_referrals;
 
 create policy studio_referrals_owner_all on public.studio_referrals
@@ -6929,8 +6985,6 @@ create policy studio_referrals_owner_all on public.studio_referrals
 -- ▶ migrations/studio_appointments.sql — Lịch studio: lịch trang điểm / thử đồ / tư vấn, phòng & nguồn lực
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.studio_appointments enable row level security;
-
 -- Cùng luật với studio_events: mọi thành viên của studio đều dùng được. Cổng
 -- khách và cổng thợ (không đăng nhập) đi qua service-role như các cổng khác.
 drop policy if exists studio_appointments_owner_all on public.studio_appointments;
@@ -6938,8 +6992,6 @@ drop policy if exists studio_appointments_owner_all on public.studio_appointment
 create policy studio_appointments_owner_all on public.studio_appointments
   for all using (public.is_studio_member(owner_id))
   with check (public.is_studio_member(owner_id));
-
-alter table public.studio_rooms enable row level security;
 
 drop policy if exists studio_rooms_owner_all on public.studio_rooms;
 
@@ -6951,8 +7003,6 @@ create policy studio_rooms_owner_all on public.studio_rooms
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/studio_branches.sql — Chi nhánh studio: nhiều cơ sở trong một tài khoản (chạy SAU studio_appointments)
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.studio_branches enable row level security;
 
 drop policy if exists studio_branches_owner_all on public.studio_branches;
 
@@ -7002,14 +7052,10 @@ grant select (
   last_error, connected_at, updated_at
 ) on public.inbox_channels to authenticated;
 
-alter table public.inbox_channels enable row level security;
-
 drop policy if exists inbox_channels_member_read on public.inbox_channels;
 
 create policy inbox_channels_member_read on public.inbox_channels
   for select using (public.is_studio_member(owner_id));
-
-alter table public.inbox_contacts enable row level security;
 
 drop policy if exists inbox_contacts_member_all on public.inbox_contacts;
 
@@ -7017,15 +7063,11 @@ create policy inbox_contacts_member_all on public.inbox_contacts
   for all using (public.is_studio_member(owner_id))
   with check (public.is_studio_member(owner_id));
 
-alter table public.inbox_conversations enable row level security;
-
 drop policy if exists inbox_conversations_member_all on public.inbox_conversations;
 
 create policy inbox_conversations_member_all on public.inbox_conversations
   for all using (public.is_studio_member(owner_id))
   with check (public.is_studio_member(owner_id));
-
-alter table public.inbox_messages enable row level security;
 
 drop policy if exists inbox_messages_member_all on public.inbox_messages;
 
@@ -7037,11 +7079,6 @@ create policy inbox_messages_member_all on public.inbox_messages
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/automations.sql — Việc tự động theo trạng thái hợp đồng (chạy SAU album_selection_done)
 -- ══════════════════════════════════════════════════════════════════════════
-
--- ── RLS ─────────────────────────────────────────────────────────────────────
-alter table public.studio_automations    enable row level security;
-
-alter table public.studio_automation_log enable row level security;
 
 drop policy if exists studio_automations_owner_all on public.studio_automations;
 
@@ -7061,11 +7098,6 @@ create policy studio_automation_log_read on public.studio_automation_log
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/crew_timesheet.sql — Chấm công thợ & khoảng rảnh (chạy SAU studio_appointments)
 -- ══════════════════════════════════════════════════════════════════════════
-
--- ── RLS ─────────────────────────────────────────────────────────────────────
-alter table public.crew_timesheet  enable row level security;
-
-alter table public.crew_available  enable row level security;
 
 -- Chấm công: studio đọc/sửa dòng của CHÍNH mình (nhập bù, sửa giờ sai). Thợ ghi
 -- qua service-role ở cổng thợ công khai, nên không cần policy cho anon.
@@ -7088,14 +7120,6 @@ create policy crew_available_read on public.crew_available
 -- ▶ migrations/vendors.sql — Nhà cung cấp & đơn đặt ngoài
 -- ══════════════════════════════════════════════════════════════════════════
 
--- Xoá đơn thì dòng chi đi theo (on delete cascade ở trên) — tiền của một đơn
--- không còn tồn tại thì cũng không được nằm lại trong báo cáo.
-
--- ── RLS ─────────────────────────────────────────────────────────────────────
-alter table public.studio_vendors enable row level security;
-
-alter table public.vendor_orders  enable row level security;
-
 drop policy if exists studio_vendors_owner_all on public.studio_vendors;
 
 create policy studio_vendors_owner_all on public.studio_vendors
@@ -7112,8 +7136,6 @@ create policy vendor_orders_owner_all on public.vendor_orders
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/accounting.sql — Phiếu thu có số & khoá sổ kế toán
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.studio_receipt_seq enable row level security;
 
 drop policy if exists studio_receipt_seq_owner_all on public.studio_receipt_seq;
 
@@ -7145,12 +7167,6 @@ grant update (studio_lat, studio_lng, studio_address) on public.profiles to auth
 -- ▶ migrations/album_people.sql — Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── RLS ─────────────────────────────────────────────────────────────────────
--- Chủ album (và admin) đọc/ghi. KHÔNG mở đọc công khai: trang khách
--- (src/app/a/[slug]/page.tsx) chạy trên máy chủ bằng service role, nên khách
--- không cần quyền gì trên bảng này.
-alter table public.album_people enable row level security;
-
 drop policy if exists album_people_owner_rw on public.album_people;
 
 create policy album_people_owner_rw on public.album_people
@@ -7162,8 +7178,6 @@ create policy album_people_owner_rw on public.album_people
     exists (select 1 from public.albums a
             where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
   );
-
-alter table public.album_photo_people enable row level security;
 
 drop policy if exists album_photo_people_owner_rw on public.album_photo_people;
 
@@ -7196,11 +7210,6 @@ create policy album_photo_people_owner_rw on public.album_photo_people
 -- ▶ migrations/album_faces.sql — Kho khuôn mặt đã quét — để lượt quét tự động chạy tiếp được (chạy SAU album_people)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── RLS ─────────────────────────────────────────────────────────────────────
--- Chủ album (và admin) đọc/ghi. Khách KHÔNG cần quyền gì: trang khách chỉ đọc
--- album_people/album_photo_people, và đọc bằng service role trên máy chủ.
-alter table public.album_faces enable row level security;
-
 drop policy if exists album_faces_owner_rw on public.album_faces;
 
 create policy album_faces_owner_rw on public.album_faces
@@ -7226,8 +7235,6 @@ create policy album_faces_owner_rw on public.album_faces
 -- ▶ migrations/bank_auto_reconcile.sql — Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.studio_bank_hooks enable row level security;
-
 -- Chỉ chủ studio (và admin) đọc được khoá. Tạo và đổi khoá đi qua
 -- /api/studio/bank-hook để khoá luôn do máy chủ sinh ngẫu nhiên, nên RLS chỉ
 -- cho đọc.
@@ -7235,8 +7242,6 @@ drop policy if exists studio_bank_hooks_owner_read on public.studio_bank_hooks;
 
 create policy studio_bank_hooks_owner_read on public.studio_bank_hooks
   for select using (owner_id = auth.uid() or public.is_admin());
-
-alter table public.studio_bank_transactions enable row level security;
 
 drop policy if exists studio_bank_transactions_owner_read on public.studio_bank_transactions;
 
@@ -7253,8 +7258,6 @@ create policy studio_bank_transactions_owner_read on public.studio_bank_transact
 grant update (cancel_early_days, cancel_early_refund_pct, cancel_late_refund_pct)
   on public.profiles to authenticated;
 
-alter table public.contract_reschedules enable row level security;
-
 -- Đọc: chủ hợp đồng + admin. Ghi đi qua /api/studio/contracts/[id]/reschedule
 -- (service-role) vì một lần dời còn kéo theo lịch thợ, hạn thu, lịch hẹn.
 drop policy if exists contract_reschedules_owner_read on public.contract_reschedules;
@@ -7270,10 +7273,6 @@ create policy contract_reschedules_owner_read on public.contract_reschedules
 -- ▶ migrations/contract_addenda.sql — Khoá giá sau khi khách ký + phụ lục hợp đồng
 -- ══════════════════════════════════════════════════════════════════════════
 
--- Đọc: mọi thành viên studio. Ghi: CHỈ qua route máy chủ (service role) — không
--- cấp policy ghi nào cho authenticated.
-alter table public.contract_addenda enable row level security;
-
 drop policy if exists contract_addenda_member_read on public.contract_addenda;
 
 create policy contract_addenda_member_read on public.contract_addenda
@@ -7284,8 +7283,6 @@ create policy contract_addenda_member_read on public.contract_addenda
 -- ▶ migrations/studio_vouchers.sql — Voucher / thẻ quà tặng của studio (chạy SAU contract_cancel_reschedule)
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.studio_vouchers enable row level security;
-
 drop policy if exists studio_vouchers_member_read on public.studio_vouchers;
 
 create policy studio_vouchers_member_read on public.studio_vouchers
@@ -7295,8 +7292,6 @@ create policy studio_vouchers_member_read on public.studio_vouchers
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/studio_audit_log.sql — Nhật ký thao tác tiền & hợp đồng
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.studio_audit_log enable row level security;
 
 drop policy if exists studio_audit_log_read on public.studio_audit_log;
 

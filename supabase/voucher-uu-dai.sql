@@ -43,6 +43,8 @@ create table if not exists public.studio_vouchers (
   unique (owner_id, code)
 );
 
+alter table public.studio_vouchers enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
@@ -184,8 +186,6 @@ alter table public.studio_bookings add column if not exists voucher_code text;
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/studio_vouchers.sql — Voucher / thẻ quà tặng của studio (chạy SAU contract_cancel_reschedule)
 -- ══════════════════════════════════════════════════════════════════════════
-
-alter table public.studio_vouchers enable row level security;
 
 drop policy if exists studio_vouchers_member_read on public.studio_vouchers;
 
