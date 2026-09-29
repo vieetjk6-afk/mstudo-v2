@@ -593,6 +593,8 @@ export interface StudioBooking {
   deposit_token: string | null;
   /** SĐT khách cũ đã giới thiệu khách này (nếu có) — xem lib/referral.ts. */
   referrer_phone: string | null;
+  /** Mã voucher ưu đãi khách mang tới khi đặt lịch (studio_vouchers_loyalty.sql). */
+  voucher_code?: string | null;
   branch_id: string | null;
   /** Khách tới từ đâu — trình duyệt suy ra lúc gửi yêu cầu (@/lib/lead-source).
    *  Cùng tập nhãn với `studio_contracts.source` để nối được thành phễu. */

@@ -29,3 +29,19 @@ export function quoteShareMessage(name: string | null | undefined, title: string
 export function reviewRequestMessage(name: string | null | undefined, link: string): string {
   return `${hi(name)}, cảm ơn anh/chị đã tin tưởng bên em! Nếu hài lòng với bộ ảnh, anh/chị để lại vài dòng cảm nhận giúp em tại: ${link}. Em cảm ơn ạ!`;
 }
+
+/** Tặng khách voucher ưu đãi cho lần sau. */
+export function loyaltyVoucherMessage(opts: {
+  name?: string | null;
+  value: string;
+  code: string;
+  link: string;
+  expires?: string | null;
+  studio?: string | null;
+}): string {
+  return [
+    `${hi(opts.name)}, cảm ơn anh/chị đã đồng hành cùng ${opts.studio?.trim() || "bên em"}! Bên em gửi tặng anh/chị voucher ${opts.value} cho lần chụp sau.`,
+    `Mã: ${opts.code}${opts.expires ? ` · dùng đến ${opts.expires}` : ""}.`,
+    `Xem voucher, lưu về máy hoặc đặt lịch ngay tại: ${opts.link}`,
+  ].join("\n");
+}

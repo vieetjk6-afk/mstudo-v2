@@ -31,6 +31,7 @@ import GalleryFaceDemo from "./GalleryFaceDemo";
 import LuoiAnhDemo from "./LuoiAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
+import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo } from "./VoucherDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import * as f from "./fixtures";
 
@@ -395,6 +396,26 @@ export const SCREENS: Record<
         bank={f.bank}
       />
     ),
+  },
+  "voucher-khach": {
+    title: "Voucher ưu đãi · trang khách (quét QR)",
+    render: () => <VoucherKhachDemo />,
+  },
+  "voucher-khach-da-dung": {
+    title: "Voucher ưu đãi · trang khách (đã dùng)",
+    render: () => <VoucherKhachDemo used />,
+  },
+  "dat-lich-voucher": {
+    title: "Đặt lịch kèm voucher (vào từ QR)",
+    render: () => <DatLichVoucherDemo />,
+  },
+  "dat-lich-voucher-loi": {
+    title: "Đặt lịch với mã voucher hết hạn",
+    render: () => <DatLichVoucherDemo bad />,
+  },
+  "tang-voucher": {
+    title: "Hợp đồng · Tặng voucher lần sau",
+    render: () => <TangVoucherDemo />,
   },
   "bao-gia-moi": {
     title: "Tạo báo giá (có ô Tạo nhanh bằng AI)",

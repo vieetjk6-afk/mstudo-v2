@@ -87,6 +87,9 @@ export type PkgOption = { name: string; price: number };
 
 export type DepositInfo = { amount: number; code: string; token: string };
 
+/** Voucher ưu đãi khách mang tới (từ QR, ?voucher=…), đã kiểm ở máy chủ. */
+export type BookingVoucher = { code: string; label: string; ok: boolean; message?: string };
+
 export default function BookingForm({
   token,
   studioName,
@@ -95,6 +98,7 @@ export default function BookingForm({
   presetReferrer = "",
   referralDiscount = 0,
   bank = null,
+  voucher = null,
 }: {
   token: string;
   studioName: string;
@@ -106,6 +110,7 @@ export default function BookingForm({
   referralDiscount?: number;
   /** Tài khoản nhận cọc; null = chưa cấu hình → không hiện bước cọc. */
   bank?: BankInfo | null;
+  voucher?: BookingVoucher | null;
 }) {
   const [lang, setLang] = useState<Lang>("vi");
   useEffect(() => {
@@ -185,7 +190,14 @@ export default function BookingForm({
       const res = await fetch(`/api/book/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...f, package_name: packageName, package_price: packagePrice, captcha: captchaToken, ...attribution }),
+        body: JSON.stringify({
+          ...f,
+          package_name: packageName,
+          package_price: packagePrice,
+          voucher_code: voucher?.ok ? voucher.code : null,
+          captcha: captchaToken,
+          ...attribution,
+        }),
       });
       if (res.ok) {
         const data = (await res.json().catch(() => ({}))) as { deposit?: DepositInfo | null };
@@ -269,6 +281,25 @@ export default function BookingForm({
         <CalendarCheck size={24} /> {tr.eyebrow}
       </h1>
       <p className="mt-1 text-sm" style={{ color: "var(--text2)" }}>{tr.subtitle}</p>
+
+      {voucher && (
+        <div
+          className="mt-5 rounded-[14px] px-4 py-3 text-[13.5px]"
+          style={voucher.ok
+            ? { background: "#fbf3e4", border: "1px solid #b8863b77", color: "#2b2118" }
+            : { background: "#fdecec", border: "1px solid #e5a3a3", color: "#8a2b2b" }}
+          data-testid="booking-voucher"
+        >
+          {voucher.ok ? (
+            <>
+              🎁 Đang dùng voucher <b className="font-mono">{voucher.code}</b> · <b>{voucher.label}</b>
+              <span className="mt-0.5 block text-[12px] opacity-80">Studio sẽ trừ ưu đãi này thẳng vào hợp đồng của bạn.</span>
+            </>
+          ) : (
+            <>Mã <b className="font-mono">{voucher.code}</b>: {voucher.message} Bạn vẫn đặt lịch bình thường được.</>
+          )}
+        </div>
+      )}
 
       <form onSubmit={submit} className="card mt-6 space-y-4 p-6">
         <label className="block">

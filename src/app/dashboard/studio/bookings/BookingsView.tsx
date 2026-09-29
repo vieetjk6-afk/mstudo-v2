@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { REDEEM_ERROR_TEXT } from "@/lib/vouchers";
 import {
   Link as LinkIcon, Copy, Check, Phone, FilePlus, Archive, MessageCircle,
   CheckCircle, XCircle, Pencil, Trash2, X, Save, ExternalLink, Landmark,
@@ -160,6 +161,21 @@ export default function BookingsView({
     if (error || !data) { setBusy(null); alert("Không tạo được hợp đồng: " + (error?.message || "")); return; }
     if (b.package_name) {
       await supabase.from("contract_items").insert({ contract_id: data.id, name: b.package_name, qty: 1, unit_price: b.package_price || 0, position: 0 });
+    }
+    // Khách đặt lịch kèm voucher ưu đãi → áp luôn vào hợp đồng vừa tạo (dòng
+    // giảm giá, máy chủ tự tính % theo gói). Hỏng thì chỉ báo: hợp đồng đã có,
+    // studio áp tay ở tab Thanh toán được.
+    if (b.voucher_code) {
+      const r = await fetch("/api/studio/vouchers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "redeem", code: b.voucher_code, contractId: data.id }),
+      }).then((x) => x.json()).catch(() => null);
+      if (!r?.ok) {
+        alert(
+          `Chưa áp được voucher ${b.voucher_code}: ${REDEEM_ERROR_TEXT[r?.error as keyof typeof REDEEM_ERROR_TEXT] ?? (r?.error === "nothing_to_discount" ? "hợp đồng chưa có giá để trừ" : r?.error || "lỗi mạng")}. Bạn áp lại ở tab Thanh toán của hợp đồng nhé.`
+        );
+      }
     }
     // Yêu cầu đặt lịch chỉ có dịch vụ dạng CHỮ TỰ DO ("makeup cô dâu", "chụp
     // kỷ yếu"…), không phải gói dịch vụ có mã, nên không suy ra nhóm được. Hợp
@@ -328,6 +344,11 @@ export default function BookingsView({
                     </div>
                   )}
 
+                  {b.voucher_code && (
+                    <p className="mt-1.5 text-[11px] font-semibold" style={{ color: "var(--brand, var(--accent))" }}>
+                      🎁 Dùng voucher <span className="font-mono">{b.voucher_code}</span> — tự áp khi tạo hợp đồng
+                    </p>
+                  )}
                   {b.referrer_phone && (
                     <p className="mt-1.5 text-[11px]" style={{ color: "var(--brand, var(--accent))" }}>
                       Được giới thiệu bởi {b.referrer_phone}

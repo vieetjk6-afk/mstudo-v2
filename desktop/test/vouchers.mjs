@@ -2,6 +2,7 @@
  * Nạp thẳng src/lib/vouchers.ts. */
 import {
   makeVoucherCode, normalizeVoucherCode, voucherState, canRedeem, defaultExpiry, voucherSummary,
+  voucherDiscount, voucherValueLabel, voucherLineName,
 } from "../../src/lib/vouchers.ts";
 
 let fail = 0;
@@ -48,6 +49,27 @@ check("tổng quan", voucherSummary([
   v({ status: "void" }),
   v({ expires_on: "2020-01-01" }),
 ], T), { sold: 4, collected: 5_400_000, outstanding: 2_000_000, outstandingCount: 1, redeemed: 2_000_000 });
+
+/* ── voucher ưu đãi lần sau ─────────────────────────────────────────── */
+const pct = { kind: "loyalty", discount_type: "percent", percent: 10, max_discount: null, amount: 0 };
+const fix = { kind: "loyalty", discount_type: "amount", percent: null, max_discount: null, amount: 500_000 };
+check("% làm tròn xuống bội 1.000đ", voucherDiscount(pct, 12_345_678), 1_234_000);
+check("% có trần", voucherDiscount({ ...pct, max_discount: 1_000_000 }, 15_000_000), 1_000_000);
+check("% dưới trần giữ nguyên", voucherDiscount({ ...pct, max_discount: 5_000_000 }, 15_000_000), 1_500_000);
+check("số tiền cố định", voucherDiscount(fix, 15_000_000), 500_000);
+check("không giảm quá tổng hợp đồng", voucherDiscount(fix, 300_000), 300_000);
+check("hợp đồng 0đ thì không giảm", voucherDiscount(pct, 0), 0);
+check("tổng âm (toàn dòng giảm) không thành số âm", voucherDiscount(fix, -100), 0);
+check("nhãn %", voucherValueLabel(pct), "Giảm 10%");
+check("nhãn % có trần", voucherValueLabel({ ...pct, max_discount: 2_000_000 }), "Giảm 10% (tối đa 2.000.000đ)");
+check("nhãn số tiền", voucherValueLabel(fix), "Giảm 500.000đ");
+check("nhãn thẻ quà giữ như cũ", voucherValueLabel({ kind: "gift", discount_type: "amount", amount: 2_000_000 }), "2.000.000đ");
+check("thẻ quà cũ (chưa có cột kind) vẫn là thẻ quà", voucherValueLabel({ amount: 2_000_000 }), "2.000.000đ");
+check("dòng giảm giá mang mã voucher", voucherLineName({ ...pct, code: "UD-7K3M9P" }), "Voucher UD-7K3M9P · Giảm 10%");
+check("không dùng ở chính HĐ đã tặng", canRedeem({ ...base, source_contract_id: "hd1" }, T, "hd1"), { ok: false, error: "same_contract" });
+check("dùng ở HĐ khác được", canRedeem({ ...base, source_contract_id: "hd1" }, T, "hd2"), { ok: true });
+check("hết hạn báo hết hạn trước", canRedeem({ ...base, source_contract_id: "hd1", expires_on: "2020-01-01" }, T, "hd1"), { ok: false, error: "expired" });
+check("voucher ưu đãi không vào tổng tiền thẻ quà", voucherSummary([v({}), v({ kind: "loyalty", price: 0 })], T), { sold: 1, collected: 1_800_000, outstanding: 2_000_000, outstandingCount: 1, redeemed: 0 });
 
 if (fail) {
   console.log(`\n${fail} kiểm thử HỎNG`);

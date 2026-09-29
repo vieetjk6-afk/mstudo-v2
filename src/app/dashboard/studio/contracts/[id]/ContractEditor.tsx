@@ -54,6 +54,7 @@ import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
 import LoveStoryCard from "./LoveStoryCard";
 import InternalNoteCard from "./InternalNoteCard";
+import LoyaltyVoucherCard from "./LoyaltyVoucherCard";
 import CalendarButtons from "@/components/CalendarButtons";
 import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
@@ -2407,7 +2408,15 @@ export default function ContractEditor({
                   Mỗi đợt thu đặt sẵn số tiền &amp; hạn — bấm “Đã thu” để ghi nhận khoản thu (quá hạn chưa thu sẽ cảnh báo ở Tổng quan).
                 </p>
                 {f.status !== "cancelled" && (
-                  <VoucherRedeem contractId={contract.id} balance={balance} onRedeemed={(p) => setPayments((prev) => [p, ...prev])} toast={toast} />
+                  <VoucherRedeem
+                    contractId={contract.id}
+                    balance={balance}
+                    onRedeemed={(p) => setPayments((prev) => [p, ...prev])}
+                    onItemAdded={(it) => setItems((prev) => [...prev, toItemRow(it)])}
+                    // % tính theo bảng giá ĐÃ LƯU ở máy chủ — lưu phần đang sửa dở trước.
+                    beforeLoyalty={itemsLocked ? undefined : () => luuHangMuc(items)}
+                    toast={toast}
+                  />
                 )}
 
                 {plan.length > 0 && (
@@ -3028,12 +3037,23 @@ export default function ContractEditor({
                   <Gift size={16} style={{ color: "var(--brand)" }} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">Tiện ích tặng khách &amp; xin đánh giá</p>
-                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>Thiệp cưới online · Love Story · Xin khách đánh giá</p>
+                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>Voucher lần sau · Thiệp cưới online · Love Story · Xin khách đánh giá</p>
                   </div>
                   <ChevronDown size={16} className="transition-transform group-open:rotate-180" style={{ color: "var(--text3)" }} />
                 </summary>
 
                 <div className="mt-3">
+                  {/* Voucher ưu đãi cho hợp đồng lần sau (chỉ sau khi khách đã ký) */}
+                  <LoyaltyVoucherCard
+                    contractId={contract.id}
+                    signed={!!contract.client_signed_at || ["approved", "in_progress", "post_production", "completed"].includes(f.status)}
+                    clientName={f.client_name}
+                    clientPhone={f.client_phone}
+                    clientMessenger={f.client_messenger}
+                    studioHost={studioHost}
+                    studioName={studioName}
+                  />
+
                   {/* Online wedding invitation (free gift) */}
                   <WeddingInvitationCard
                     contract={{ id: contract.id, owner_id: contract.owner_id, title: f.title, event_date: f.event_date || null, location: f.location || null }}
