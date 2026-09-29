@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { TURNSTILE_UNAVAILABLE } from "@/lib/turnstile";
 
@@ -166,5 +166,72 @@ export default function Turnstile({ onVerify, onExpire, onError, size = "normal"
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return <div ref={ref} className={className} />;
+  return (
+    <div className={className}>
+      <InAppBrowserNotice />
+      <div ref={ref} />
+    </div>
+  );
+}
+
+// Trình duyệt nhúng của Facebook / Messenger / Instagram / Zalo / LINE / TikTok
+// hay chặn iframe challenges.cloudflare.com: ô captcha hiện "Không thể kết nối
+// với trang web" và đứng im, nút gửi xám mãi. Không nới captcha — chỉ chỉ
+// đường cho khách mở trang bằng Safari/Chrome, nơi Turnstile chạy bình thường.
+const IN_APP_UA = /FBAN|FBAV|FB_IAB|FBIOS|Messenger|Instagram|Zalo|Line\/|musical_ly|TikTok|BytedanceWebview/i;
+
+function InAppBrowserNotice() {
+  const [ua, setUa] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    // Chỉ đọc được UA sau khi hydrate (tránh lệch HTML giữa server và client).
+    setUa(navigator.userAgent);
+  }, []);
+
+  if (!ua || !IN_APP_UA.test(ua)) return null;
+
+  const isAndroid = /Android/i.test(ua);
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+
+  const openExternal = () => {
+    const url = window.location.href;
+    if (isAndroid) {
+      const u = new URL(url);
+      window.location.href =
+        `intent://${u.host}${u.pathname}${u.search}${u.hash}` +
+        `#Intent;scheme=${u.protocol.replace(":", "")};package=com.android.chrome;` +
+        `S.browser_fallback_url=${encodeURIComponent(url)};end`;
+    } else if (isIOS) {
+      // iOS 17+ hiểu scheme này và mở thẳng Safari.
+      window.location.href = url.replace(/^https?:\/\//, "x-safari-https://");
+    }
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+    } catch { /* ignore */ }
+  };
+
+  return (
+    <div className="mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+      <p>
+        Bạn đang mở trang trong trình duyệt của ứng dụng (Facebook, Messenger, Zalo…). Ô xác minh
+        có thể báo <b>“Không thể kết nối với trang web”</b>. Hãy mở bằng {isIOS ? "Safari" : "Chrome"} để gửi được form
+        — hoặc bấm <b>•••</b> ở góc trên rồi chọn <b>“Mở bằng trình duyệt”</b>.
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {(isAndroid || isIOS) && (
+          <button type="button" onClick={openExternal} className="rounded-lg bg-amber-900 px-3 py-1.5 text-white dark:bg-amber-200 dark:text-amber-950">
+            Mở bằng {isIOS ? "Safari" : "Chrome"}
+          </button>
+        )}
+        <button type="button" onClick={copyLink} className="rounded-lg border border-amber-900/40 px-3 py-1.5 dark:border-amber-200/40">
+          {copied ? "Đã chép link ✓" : "Chép link"}
+        </button>
+      </div>
+    </div>
+  );
 }
