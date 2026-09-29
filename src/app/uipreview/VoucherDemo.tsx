@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import VoucherPublicView from "@/app/voucher/[token]/VoucherPublicView";
 import BookingForm from "@/app/book/[token]/BookingForm";
 import LoyaltyVoucherCard from "@/app/dashboard/studio/contracts/[id]/LoyaltyVoucherCard";
+import VouchersView from "@/app/dashboard/studio/vouchers/VouchersView";
 
 /** Trang khách mở khi quét QR voucher. */
 export function VoucherKhachDemo({ used = false }: { used?: boolean }) {
@@ -58,5 +59,27 @@ export function TangVoucherDemo() {
         studioName="Mây Studio"
       />
     </div>
+  );
+}
+
+const base = {
+  buyer_name: null, paid_method: null, paid_at: "2026-09-01", redeemed_contract_id: null, redeemed_at: null, note: null,
+  created_at: "2026-09-01T10:00:00Z", paid: true, status: "active" as const,
+};
+
+/** Màn Voucher & thẻ quà: thẻ quà đã bán + voucher ưu đãi đã tặng. */
+export function VoucherQuanLyDemo() {
+  return (
+    <VouchersView
+      migrated
+      studioName="Mây Studio"
+      studioPhone="0933444555"
+      studioHost="mayanh.mstudo.com"
+      initial={[
+        { ...base, id: "v1", code: "UD-7K3M9P", title: "Voucher ưu đãi lần sau", amount: 0, price: 0, buyer_phone: "0933444555", recipient_name: "Phạm Thị Nhật Ý", expires_on: "2027-09-29", kind: "loyalty", discount_type: "percent", percent: 10, max_discount: 2_000_000, source_contract_id: "c1", public_token: "demo-token-1234567890" },
+        { ...base, id: "v2", code: "UD-4HRT8W", title: "Voucher ưu đãi lần sau", amount: 500_000, price: 0, buyer_phone: "0911222333", recipient_name: "Trần Minh Khoa", expires_on: null, kind: "loyalty", discount_type: "amount", status: "redeemed", redeemed_contract_id: "c2", source_contract_id: "c3", public_token: "demo-token-abcdefghij" },
+        { ...base, id: "v3", code: "QUA-9PXK2M", title: "Voucher chụp ảnh 20/10", amount: 2_000_000, price: 1_800_000, buyer_phone: "0988777666", buyer_name: "Lê Văn Hùng", recipient_name: "Nguyễn Thu Hà", expires_on: "2027-10-20" },
+      ]}
+    />
   );
 }

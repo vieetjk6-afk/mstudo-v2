@@ -2642,6 +2642,18 @@ export default function ContractEditor({
                 )}
               </div>
 
+              {/* Tặng voucher ưu đãi cho hợp đồng LẦN SAU — cạnh ô "Khách dùng voucher" để
+                  studio thấy cả hai chiều ở một chỗ. Chỉ bật khi khách đã ký. */}
+              <LoyaltyVoucherCard
+                contractId={contract.id}
+                signed={!!contract.client_signed_at || ["approved", "in_progress", "post_production", "completed"].includes(f.status)}
+                clientName={f.client_name}
+                clientPhone={f.client_phone}
+                clientMessenger={f.client_messenger}
+                studioHost={studioHost}
+                studioName={studioName}
+              />
+
               {/* Per-contract expenses */}
               <div className="card p-6">
                 <h2 className="mb-1 font-serif text-lg font-medium">Chi phí phát sinh</h2>
@@ -3037,23 +3049,12 @@ export default function ContractEditor({
                   <Gift size={16} style={{ color: "var(--brand)" }} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">Tiện ích tặng khách &amp; xin đánh giá</p>
-                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>Voucher lần sau · Thiệp cưới online · Love Story · Xin khách đánh giá</p>
+                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>Thiệp cưới online · Love Story · Xin khách đánh giá</p>
                   </div>
                   <ChevronDown size={16} className="transition-transform group-open:rotate-180" style={{ color: "var(--text3)" }} />
                 </summary>
 
                 <div className="mt-3">
-                  {/* Voucher ưu đãi cho hợp đồng lần sau (chỉ sau khi khách đã ký) */}
-                  <LoyaltyVoucherCard
-                    contractId={contract.id}
-                    signed={!!contract.client_signed_at || ["approved", "in_progress", "post_production", "completed"].includes(f.status)}
-                    clientName={f.client_name}
-                    clientPhone={f.client_phone}
-                    clientMessenger={f.client_messenger}
-                    studioHost={studioHost}
-                    studioName={studioName}
-                  />
-
                   {/* Online wedding invitation (free gift) */}
                   <WeddingInvitationCard
                     contract={{ id: contract.id, owner_id: contract.owner_id, title: f.title, event_date: f.event_date || null, location: f.location || null }}

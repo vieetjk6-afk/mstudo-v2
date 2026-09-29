@@ -1,6 +1,7 @@
 import { requireStudio } from "@/lib/auth-guards";
 import { createClient } from "@/lib/supabase/server";
 import { brandFrom } from "@/lib/studio-brand";
+import { getStudioHost } from "@/lib/studio-site";
 import StudioDenied from "@/components/StudioDenied";
 import VouchersView from "./VouchersView";
 import { VOUCHER_COLS, VOUCHER_COLS_BASE, type Voucher } from "@/lib/vouchers";
@@ -27,8 +28,11 @@ export default async function VouchersPage() {
   let { data, error } = await q(VOUCHER_COLS);
   if (error) ({ data, error } = await q(VOUCHER_COLS_BASE));
 
+  const studioHost = await getStudioHost(supabase, profile.id);
+
   return (
     <VouchersView
+      studioHost={studioHost}
       initial={(data ?? []) as unknown as Voucher[]}
       migrated={!error}
       studioName={brandFrom(profile).name}
