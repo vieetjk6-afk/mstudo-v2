@@ -3,6 +3,7 @@
 import {
   makeVoucherCode, normalizeVoucherCode, voucherState, canRedeem, defaultExpiry, voucherSummary,
   voucherDiscount, voucherValueLabel, voucherLineName,
+  isWeddingContract, phoneUnlocks, samePhoneNumber, voucherTerms,
 } from "../../src/lib/vouchers.ts";
 
 let fail = 0;
@@ -70,6 +71,25 @@ check("không dùng ở chính HĐ đã tặng", canRedeem({ ...base, source_con
 check("dùng ở HĐ khác được", canRedeem({ ...base, source_contract_id: "hd1" }, T, "hd2"), { ok: true });
 check("hết hạn báo hết hạn trước", canRedeem({ ...base, source_contract_id: "hd1", expires_on: "2020-01-01" }, T, "hd1"), { ok: false, error: "expired" });
 check("voucher ưu đãi không vào tổng tiền thẻ quà", voucherSummary([v({}), v({ kind: "loyalty", price: 0 })], T), { sold: 1, collected: 1_800_000, outstanding: 2_000_000, outstandingCount: 1, redeemed: 0 });
+
+/* ── luật dùng voucher ưu đãi: SĐT mở khoá, chỉ gói phóng sự cưới ───────── */
+const lv = { kind: "loyalty", buyer_phone: "0933 444 555" };
+check("cùng SĐT khác định dạng", samePhoneNumber("+84933444555", "0933.444.555"), true);
+check("SĐT ngắn không bao giờ khớp", samePhoneNumber("444555", "444555"), false);
+check("chính người được tặng dùng được", phoneUnlocks(lv, "0933444555"), true);
+check("người khác nhập đúng SĐT gốc dùng được", phoneUnlocks(lv, "0911222333", "0933444555"), true);
+check("người khác không có SĐT gốc thì không", phoneUnlocks(lv, "0911222333", ""), false);
+check("thẻ quà không cần SĐT", phoneUnlocks({ kind: "gift", buyer_phone: "0933444555" }, null), true);
+check("voucher cũ không ghi SĐT không cần kiểm", phoneUnlocks({ kind: "loyalty", buyer_phone: null }, null), true);
+check("gói phóng sự cưới theo tên hạng mục", isWeddingContract("photo", ["Cưới · Phóng sự x2"]), true);
+check("PSC theo loại dịch vụ", isWeddingContract("psc", []), true);
+check("prewedding không phải phóng sự cưới", isWeddingContract("prewedding", ["Chụp prewedding Đà Lạt"]), false);
+check("kỷ yếu không phải", isWeddingContract("photo", ["Chụp kỷ yếu lớp 12A"]), false);
+check("điều kiện in trên voucher", voucherTerms({ kind: "loyalty", applies_to: "wedding" }), [
+  "Áp dụng cho gói phóng sự cưới.",
+  "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.",
+  "Không có giá trị quy đổi thành tiền mặt.",
+]);
 
 if (fail) {
   console.log(`\n${fail} kiểm thử HỎNG`);

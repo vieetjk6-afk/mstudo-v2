@@ -6,7 +6,7 @@ import { limitByIp } from "@/lib/rate-limit";
 import { depositFor, newDepositCode, newDepositToken } from "@/lib/booking-deposit";
 import { digitsOnly, isUsablePhone, samePhone } from "@/lib/referral";
 import { isLeadSource, type Utm } from "@/lib/lead-source";
-import { VOUCHER_COLS, canRedeem, normalizeVoucherCode, voucherValueLabel, type Voucher } from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_COLS_FULL, canRedeem, normalizeVoucherCode, phoneUnlocks, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import { todayVN } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +29,8 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     referrer_phone?: string;
     /** Mã voucher ưu đãi (từ QR). Kiểm lại ở đây — trình duyệt gửi gì cũng được. */
     voucher_code?: string | null;
+    /** SĐT của hợp đồng được tặng voucher (khi người đặt là người khác). */
+    voucher_phone?: string | null;
     captcha?: string;
     /** Nguồn khách — trình duyệt suy ra rồi gửi kèm (xem @/lib/lead-source). */
     source?: string;
@@ -77,8 +79,13 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   let voucherNote: string | null = null;
   const vcode = normalizeVoucherCode(body.voucher_code);
   if (vcode) {
-    const { data: vrow } = await db.from("studio_vouchers").select(VOUCHER_COLS).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
-    const v = (vrow as Voucher | null) ?? null;
+    let vr = await db.from("studio_vouchers").select(VOUCHER_COLS_FULL).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
+    if (vr.error) vr = await db.from("studio_vouchers").select(VOUCHER_COLS).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
+    const v = (vr.data as unknown as Voucher | null) ?? null;
+    // Tặng được người khác, nhưng phải có SĐT hợp đồng gốc — biết mã thôi chưa đủ.
+    if (v && canRedeem(v, todayVN()).ok && !phoneUnlocks(v, body.phone, body.voucher_phone)) {
+      return NextResponse.json({ error: "voucher_phone" }, { status: 400 });
+    }
     if (v && canRedeem(v, todayVN()).ok) {
       voucherCode = v.code;
       voucherNote = `🎁 Voucher ${v.code} · ${voucherValueLabel(v)}`;

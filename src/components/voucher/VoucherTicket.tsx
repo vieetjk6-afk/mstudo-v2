@@ -21,6 +21,8 @@ export type TicketData = {
   qr: string | null;
   /** "Đã dùng" / "Hết hạn"… — null khi còn dùng được. */
   stateLabel?: string | null;
+  /** Điều kiện dùng ("Áp dụng cho gói phóng sự cưới", "Không quy đổi tiền mặt"…). */
+  terms?: string[];
 };
 
 const INK = "#2b2118";
@@ -53,6 +55,13 @@ export function VoucherTicket({ d }: { d: TicketData }) {
           <p className="mt-1 text-[11px]" style={{ color: `${INK}88` }}>Quét mã để đặt lịch kèm ưu đãi</p>
         </div>
       </div>
+      {d.terms && d.terms.length > 0 && (
+        <ul className="space-y-0.5 px-5 pb-4 text-[11px] leading-snug" style={{ color: `${INK}99` }}>
+          {d.terms.map((t) => (
+            <li key={t}>• {t}</li>
+          ))}
+        </ul>
+      )}
       {d.stateLabel && (
         <div
           className="absolute right-3 top-3 rotate-6 rounded-md px-2 py-0.5 text-[11px] font-extrabold uppercase"
@@ -85,7 +94,8 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
 /** Vẽ thẻ thành PNG (1080×1350, tỉ lệ ảnh dọc của điện thoại). */
 export async function voucherImageBlob(d: TicketData): Promise<Blob | null> {
   const W = 1080;
-  const H = 1350;
+  const terms = d.terms ?? [];
+  const H = 1350 + (terms.length ? 24 + terms.length * 40 : 0);
   const c = document.createElement("canvas");
   c.width = W;
   c.height = H;
@@ -163,6 +173,8 @@ export async function voucherImageBlob(d: TicketData): Promise<Blob | null> {
   ctx.fillStyle = `${INK}88`;
   ctx.font = font(400, 28);
   ctx.fillText("Quét mã để đặt lịch kèm ưu đãi", W / 2, y + 1176);
+  ctx.font = font(400, 27);
+  terms.forEach((t, i) => ctx.fillText(fit(ctx, `• ${t}`, w - 100), W / 2, y + 1236 + i * 40));
 
   return new Promise((resolve) => c.toBlob((b) => resolve(b), "image/png"));
 }

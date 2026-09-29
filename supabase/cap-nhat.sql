@@ -1705,6 +1705,18 @@ drop trigger if exists voucher_void_on_contract_cancel on public.studio_contract
 create trigger voucher_void_on_contract_cancel after update of status on public.studio_contracts
   for each row execute function public.voucher_void_on_contract_cancel();
 
+-- ── Phạm vi áp dụng ─────────────────────────────────────────────────────────
+-- wedding_only: chương trình chỉ cho dùng voucher ở hợp đồng GÓI PHÓNG SỰ CƯỚI.
+-- applies_to trên từng voucher chốt luật lúc phát ('wedding' | null = mọi gói),
+-- để studio đổi cài đặt sau này không làm đổi voucher khách đang cầm.
+alter table public.studio_voucher_program add column if not exists wedding_only boolean not null default true;
+
+alter table public.studio_vouchers add column if not exists applies_to text;
+
+alter table public.studio_vouchers drop constraint if exists studio_vouchers_applies_to_check;
+
+alter table public.studio_vouchers add constraint studio_vouchers_applies_to_check check (applies_to is null or applies_to in ('wedding'));
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/studio_audit_log.sql — Nhật ký thao tác tiền & hợp đồng

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PRICE_LISTS } from "@/lib/pricelist-seeds";
-import { VOUCHER_COLS, REDEEM_ERROR_TEXT, canRedeem, normalizeVoucherCode, voucherValueLabel, type Voucher } from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_COLS_FULL, REDEEM_ERROR_TEXT, canRedeem, normalizeVoucherCode, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import { todayVN } from "@/lib/date";
 import BookingForm, { type PkgOption, type BookingVoucher } from "./BookingForm";
 
@@ -90,11 +90,19 @@ export default async function BookingPage(
   let voucher: BookingVoucher | null = null;
   const vcode = normalizeVoucherCode(searchParams?.voucher);
   if (vcode) {
-    const { data: vrow } = await db.from("studio_vouchers").select(VOUCHER_COLS).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
-    const v = (vrow as Voucher | null) ?? null;
+    let vr = await db.from("studio_vouchers").select(VOUCHER_COLS_FULL).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
+    if (vr.error) vr = await db.from("studio_vouchers").select(VOUCHER_COLS).eq("owner_id", owner.id).eq("code", vcode).maybeSingle();
+    const v = (vr.data as unknown as Voucher | null) ?? null;
     const c = canRedeem(v, todayVN());
     voucher = c.ok && v
-      ? { code: v.code, label: voucherValueLabel(v), ok: true }
+      ? {
+          code: v.code,
+          label: voucherValueLabel(v),
+          ok: true,
+          terms: voucherTerms(v),
+          // Voucher có ghi SĐT hợp đồng gốc → form hỏi SĐT đó nếu người đặt là người khác.
+          needsPhone: v.kind === "loyalty" && (v.buyer_phone ?? "").replace(/\D/g, "").length >= 9,
+        }
       : { code: vcode, label: "", ok: false, message: c.ok ? REDEEM_ERROR_TEXT.not_found : REDEEM_ERROR_TEXT[c.error] };
   }
 

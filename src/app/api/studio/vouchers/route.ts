@@ -8,6 +8,9 @@ import { vnd, asPaymentMethod } from "@/lib/types";
 import {
   VOUCHER_COLS,
   VOUCHER_COLS_BASE,
+  VOUCHER_COLS_FULL,
+  isWeddingContract,
+  phoneUnlocks,
   canRedeem,
   defaultExpiry,
   isLoyalty,
@@ -58,10 +61,11 @@ export async function POST(req: Request) {
   // DB chưa chạy studio_vouchers_loyalty.sql thì các cột mới chưa có — đọc lại
   // bằng bộ cột cũ để thẻ quà vẫn chạy như trước.
   const one = async (field: "id" | "code", value: string) => {
-    const first = await db.from("studio_vouchers").select(VOUCHER_COLS).eq("owner_id", ownerId).eq(field, value).maybeSingle();
-    if (!first.error) return (first.data as Voucher | null) ?? null;
-    const { data } = await db.from("studio_vouchers").select(VOUCHER_COLS_BASE).eq("owner_id", ownerId).eq(field, value).maybeSingle();
-    return (data as Voucher | null) ?? null;
+    for (const cols of [VOUCHER_COLS_FULL, VOUCHER_COLS, VOUCHER_COLS_BASE]) {
+      const r = await db.from("studio_vouchers").select(cols).eq("owner_id", ownerId).eq(field, value).maybeSingle();
+      if (!r.error) return (r.data as unknown as Voucher | null) ?? null;
+    }
+    return null;
   };
   const byId = async (id: unknown) => (typeof id === "string" ? one("id", id) : null);
   const byCode = async (code: unknown) => {
@@ -121,9 +125,16 @@ export async function POST(req: Request) {
       max_discount: Number(b.max_discount) > 0 ? Math.round(Number(b.max_discount)) : null,
       valid_months: months,
       title: str(b.title, 120) ?? "Voucher ưu đãi lần sau",
+      wedding_only: b.wedding_only !== false,
       updated_at: new Date().toISOString(),
     };
-    const { error } = await db.from("studio_voucher_program").upsert(row, { onConflict: "owner_id" });
+    let { error } = await db.from("studio_voucher_program").upsert(row, { onConflict: "owner_id" });
+    if (error && /wedding_only/.test(error.message)) {
+      // DB chưa có cột wedding_only (chưa chạy bản SQL mới) → lưu phần còn lại.
+      const { wedding_only: _w, ...rest } = row;
+      void _w;
+      ({ error } = await db.from("studio_voucher_program").upsert(rest, { onConflict: "owner_id" }));
+    }
     if (error) {
       if (error.code === "42P01" || /studio_voucher_program/.test(error.message)) {
         return NextResponse.json({ error: "missing_migration", file: "supabase/voucher-uu-dai.sql" }, { status: 409 });
@@ -268,7 +279,19 @@ export async function POST(req: Request) {
     const v = await byCode(b.code);
     const c = canRedeem(v, today, contract.id);
     if (!c.ok || !v) return NextResponse.json({ error: c.ok ? "not_found" : c.error }, { status: 409 });
-    if (isLoyalty(v)) return redeemLoyalty(v, contract);
+    if (isLoyalty(v)) {
+      // SĐT mở khoá: SĐT của hợp đồng đang áp, SĐT studio nhập hộ, hoặc yêu
+      // cầu đặt lịch mà máy chủ đã kiểm SĐT lúc khách gửi (bookingId).
+      let bookingOk = false;
+      if (typeof b.bookingId === "string") {
+        const { data: bk } = await db.from("studio_bookings").select("owner_id, voucher_code").eq("id", b.bookingId).maybeSingle();
+        bookingOk = !!bk && bk.owner_id === ownerId && bk.voucher_code === v.code;
+      }
+      if (!bookingOk && !phoneUnlocks(v, contract.client_phone, typeof b.phone === "string" ? b.phone : null)) {
+        return NextResponse.json({ error: "phone_mismatch" }, { status: 409 });
+      }
+      return redeemLoyalty(v, contract);
+    }
 
     // Giành thẻ TRƯỚC bằng UPDATE có điều kiện — hai người dùng cùng một mã cùng
     // lúc thì chỉ một người thắng, thẻ không bao giờ bị trừ hai lần.
@@ -310,8 +333,19 @@ export async function POST(req: Request) {
     const { data: sig } = await db.from("studio_contracts").select("client_signed_at").eq("id", contract.id).maybeSingle();
     if (sig?.client_signed_at) return NextResponse.json({ error: "contract_signed" }, { status: 409 });
 
-    const { data: items } = await db.from("contract_items").select("qty, unit_price, position").eq("contract_id", contract.id);
-    const rows = (items ?? []) as { qty: number; unit_price: number; position: number | null }[];
+    const { data: items } = await db.from("contract_items").select("name, qty, unit_price, position").eq("contract_id", contract.id);
+    const rows = (items ?? []) as { name: string | null; qty: number; unit_price: number; position: number | null }[];
+    if (v.applies_to === "wedding") {
+      const { data: meta } = await db
+        .from("studio_contracts")
+        .select("shoot_type, title, service:studio_services(name)")
+        .eq("id", contract.id)
+        .maybeSingle();
+      const m = meta as { shoot_type?: string | null; title?: string | null; service?: { name?: string | null } | null } | null;
+      if (!isWeddingContract(m?.shoot_type, [m?.service?.name, m?.title, ...rows.map((r) => r.name)])) {
+        return NextResponse.json({ error: "not_wedding" }, { status: 409 });
+      }
+    }
     const total = rows.reduce((t, r) => t + (r.qty || 0) * (r.unit_price || 0), 0);
     const discount = voucherDiscount(v, total);
     if (discount <= 0) return NextResponse.json({ error: "nothing_to_discount" }, { status: 409 });

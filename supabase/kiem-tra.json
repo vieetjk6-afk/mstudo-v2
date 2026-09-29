@@ -725,6 +725,8 @@
       ],
       "cot": [
         "studio_contracts.loyalty_percent",
+        "studio_voucher_program.wedding_only",
+        "studio_vouchers.applies_to",
         "studio_vouchers.program_issued"
       ]
     },

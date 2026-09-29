@@ -12,7 +12,7 @@ import MessengerButton from "@/components/MessengerButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import { VoucherTicket, saveVoucherImage, type TicketData } from "@/components/voucher/VoucherTicket";
 import { loyaltyVoucherMessage } from "@/lib/share-messages";
-import { VOUCHER_COLS, VOUCHER_STATE_LABEL, voucherState, voucherValueLabel, type Voucher } from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_STATE_LABEL, voucherState, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 
 type Loyalty = {
   stage: "off" | "teaser" | "pending" | "issued" | "cancelled";
@@ -244,6 +244,7 @@ export function IssuedVoucher({
     recipient: v.recipient_name,
     qr,
     stateLabel: state === "usable" ? null : VOUCHER_STATE_LABEL[state],
+    terms: voucherTerms(v),
   };
 
   return (

@@ -793,6 +793,14 @@ export default function ContractView({ token }: { token: string }) {
               </div>
             )}
 
+            {/* Voucher ưu đãi: ngay dưới phần thanh toán, trên điều khoản — chỗ khách
+                đang cân nhắc tiền nhất, để lời mời "ký & cọc nhận voucher" dễ thấy. */}
+            {loyalty && (
+              <div className="px-5 py-5 sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                <PortalVoucher l={loyalty} studioName={studioName} clientName={contract.client_name} />
+              </div>
+            )}
+
             {/* Điều khoản chính */}
             {termLines.length > 0 && (
               <div className="px-5 py-5 sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
@@ -818,13 +826,6 @@ export default function ContractView({ token }: { token: string }) {
                     </div>
                   </details>
                 )}
-              </div>
-            )}
-
-            {/* Voucher ưu đãi của chương trình: trước khi ký là lời mời chốt, đủ điều kiện là voucher thật */}
-            {loyalty && (
-              <div className="px-5 pb-5 sm:px-7">
-                <PortalVoucher l={loyalty} studioName={studioName} clientName={contract.client_name} />
               </div>
             )}
 

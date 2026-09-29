@@ -10,6 +10,8 @@ export type VoucherProgram = {
   /** null = không giới hạn thời gian */
   valid_months: number | null;
   title: string;
+  /** Chỉ dùng voucher cho hợp đồng gói phóng sự cưới. */
+  wedding_only: boolean;
 };
 
 export const DEFAULT_PROGRAM: VoucherProgram = {
@@ -18,6 +20,7 @@ export const DEFAULT_PROGRAM: VoucherProgram = {
   max_discount: null,
   valid_months: 12,
   title: "Voucher ưu đãi lần sau",
+  wedding_only: true,
 };
 
 /**
@@ -90,5 +93,6 @@ export function readProgram(row: Partial<VoucherProgram> | null | undefined): Vo
     max_discount: row.max_discount ? Number(row.max_discount) : null,
     valid_months: row.valid_months == null ? null : Number(row.valid_months),
     title: (row.title || "").trim() || DEFAULT_PROGRAM.title,
+    wedding_only: row.wedding_only == null ? true : !!row.wedding_only,
   };
 }
