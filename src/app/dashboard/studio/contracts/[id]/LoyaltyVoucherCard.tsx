@@ -1,36 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { Ticket, Plus, Download, Copy, Check, ExternalLink, Loader2 } from "lucide-react";
+import { Ticket, Download, Copy, Check, ExternalLink, CircleDashed, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { studioUrl } from "@/lib/hosts";
 import { fmtDate, todayVN } from "@/lib/date";
-import MoneyInput from "@/components/MoneyInput";
-import DateInput from "@/components/DateInput";
+import { vnd } from "@/lib/types";
 import MessengerButton from "@/components/MessengerButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import { VoucherTicket, saveVoucherImage, type TicketData } from "@/components/voucher/VoucherTicket";
 import { loyaltyVoucherMessage } from "@/lib/share-messages";
-import {
-  VOUCHER_COLS,
-  VOUCHER_STATE_LABEL,
-  defaultExpiry,
-  voucherState,
-  voucherValueLabel,
-  type DiscountType,
-  type Voucher,
-} from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_STATE_LABEL, voucherState, voucherValueLabel, type Voucher } from "@/lib/vouchers";
+
+type Loyalty = {
+  stage: "off" | "teaser" | "pending" | "issued" | "cancelled";
+  percent: number;
+  amount: number;
+  max: number | null;
+  missing: string[];
+  voucher: Voucher | null;
+};
 
 /**
- * "Tặng voucher lần sau" — studio tặng khách của hợp đồng ĐÃ KÝ một voucher
- * giảm giá (theo tiền hoặc %) cho hợp đồng tiếp theo. Voucher có QR trỏ về
- * /voucher/<token>: khách quét để đặt lịch kèm mã, hoặc lưu ảnh về máy.
- * Không dùng được ở chính hợp đồng này (máy chủ chặn).
+ * Voucher ưu đãi của hợp đồng theo CHƯƠNG TRÌNH của studio (cài ở Voucher &
+ * thẻ quà). Studio không phải bấm tặng: đủ ba điều kiện (khách ký, studio xác
+ * nhận cọc, studio ký) là máy chủ tự phát, và khách thấy ngay trên cổng hợp
+ * đồng. Ở đây studio xem tiến độ, tắt hoặc đặt % riêng cho hợp đồng này, và
+ * gửi / tải voucher khi đã có.
  */
 export default function LoyaltyVoucherCard({
   contractId,
-  signed,
+  initialPercent,
+  refreshKey,
   clientName,
   clientPhone,
   clientMessenger,
@@ -38,7 +41,10 @@ export default function LoyaltyVoucherCard({
   studioName,
 }: {
   contractId: string;
-  signed: boolean;
+  /** studio_contracts.loyalty_percent: null theo chương trình · 0 tắt · n% riêng */
+  initialPercent: number | null;
+  /** Đổi khi thu tiền / ký thay đổi → hỏi lại máy chủ (có thể vừa đủ điều kiện). */
+  refreshKey: string;
   clientName: string;
   clientPhone: string;
   clientMessenger: string;
@@ -47,164 +53,135 @@ export default function LoyaltyVoucherCard({
 }) {
   const supabase = createClient();
   const today = todayVN();
-  const [list, setList] = useState<Voucher[] | null>(null);
-  const [missing, setMissing] = useState(false);
-  const [form, setForm] = useState<null | { type: DiscountType; amount: number; percent: number; max: number; expires: string; noExpiry: boolean }>(null);
-  const [busy, setBusy] = useState(false);
+  const [l, setL] = useState<Loyalty | null>(null);
+  const [others, setOthers] = useState<Voucher[]>([]);
+  const [mode, setMode] = useState<"program" | "off" | "custom">(initialPercent == null ? "program" : initialPercent === 0 ? "off" : "custom");
+  const [custom, setCustom] = useState<number>(initialPercent && initialPercent > 0 ? initialPercent : 5);
   const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  /** Vai trò không có quyền voucher (vd. thợ) → ẩn cả thẻ thay vì "Đang tải…" mãi. */
+  const [hidden, setHidden] = useState(false);
+
+  const call = useCallback(
+    async (body: Record<string, unknown>) => {
+      setBusy(true);
+      try {
+        const res = await fetch("/api/studio/vouchers", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contractId, ...body }),
+        });
+        const j = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          setHidden(true);
+          return;
+        }
+        if (!res.ok) {
+          setErr(j.error === "missing_migration" ? "Cần chạy supabase/voucher-uu-dai.sql trong Supabase trước." : `Lỗi: ${j.error || res.status}`);
+          return;
+        }
+        setErr(null);
+        setL(j.loyalty as Loyalty);
+      } catch {
+        setErr("Lỗi mạng, thử lại nhé.");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [contractId]
+  );
 
   useEffect(() => {
-    let alive = true;
+    call({ action: "loyalty_status" });
+  }, [call, refreshKey]);
+
+  // Voucher tặng TAY từ trước (bản cũ) vẫn hiện để studio gửi / theo dõi.
+  useEffect(() => {
     supabase
       .from("studio_vouchers")
       .select(VOUCHER_COLS)
       .eq("source_contract_id", contractId)
+      .eq("program_issued", false)
       .order("created_at", { ascending: false })
-      .then(({ data, error }) => {
-        if (!alive) return;
-        if (error) setMissing(true);
-        setList((data ?? []) as Voucher[]);
-      });
-    return () => {
-      alive = false;
-    };
+      .then(({ data }) => setOthers((data ?? []) as Voucher[]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contractId]);
 
-  async function issue() {
-    if (!form) return;
-    if (form.type === "amount" && form.amount <= 0) return setErr("Nhập số tiền giảm.");
-    if (form.type === "percent" && (form.percent < 1 || form.percent > 100)) return setErr("Nhập % giảm từ 1 đến 100.");
-    setBusy(true);
-    setErr(null);
-    try {
-      const res = await fetch("/api/studio/vouchers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "issue",
-          contractId,
-          discount_type: form.type,
-          amount: form.amount,
-          percent: form.percent,
-          max_discount: form.max,
-          expires_on: form.expires,
-          no_expiry: form.noExpiry,
-        }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErr(
-          j.error === "missing_migration" ? `Cần chạy ${j.file || "supabase/voucher-uu-dai.sql"} trong Supabase trước.`
-          : j.error === "contract_not_signed" ? "Hợp đồng chưa ký — tặng voucher sau khi khách đã ký."
-          : res.status === 403 ? "Bạn không có quyền tặng voucher."
-          : `Lỗi: ${j.error || res.status}`
-        );
-        return;
-      }
-      setList((p) => [j.voucher as Voucher, ...(p ?? [])]);
-      setForm(null);
-    } catch {
-      setErr("Lỗi mạng, thử lại nhé.");
-    } finally {
-      setBusy(false);
-    }
+  function saveMode(next: "program" | "off" | "custom", pct = custom) {
+    setMode(next);
+    call({ action: "contract_loyalty", percent: next === "program" ? null : next === "off" ? 0 : pct });
   }
+
+  const issued = l?.voucher ?? null;
+  const steps = [
+    { label: "Khách ký hợp đồng", done: !l?.missing.includes("Khách ký hợp đồng") },
+    { label: "Studio xác nhận đã nhận cọc", done: !l?.missing.includes("Studio xác nhận đã nhận cọc") },
+    { label: "Studio ký xác nhận hợp đồng", done: !l?.missing.includes("Studio ký xác nhận hợp đồng") },
+  ];
+
+  if (hidden) return null;
 
   return (
     <div className="card mb-6 p-4" data-testid="loyalty-voucher-card">
-      <div className="flex flex-wrap items-center gap-3">
-        <Ticket size={16} style={{ color: "var(--brand)" }} />
+      <div className="flex flex-wrap items-start gap-3">
+        <Ticket size={16} className="mt-0.5" style={{ color: "var(--brand)" }} />
         <div className="min-w-0 flex-1">
           <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>🎟️ Voucher ưu đãi lần sau</p>
           <p className="text-sm" style={{ color: "var(--text2)" }}>
-            {signed
-              ? "Tặng khách mã giảm giá cho hợp đồng tiếp theo — theo số tiền hoặc % hợp đồng, có QR để đặt lịch."
-              : "Tặng được sau khi khách đã ký hợp đồng này."}
+            {!l ? "Đang tải…"
+              : issued ? `Đã tặng khách voucher ${vnd(issued.amount)} (${l.percent}% giá trị hợp đồng).`
+              : l.stage === "cancelled" ? "Hợp đồng đã huỷ — không tặng voucher."
+              : l.stage === "off" ? (mode === "off" ? "Đã tắt voucher cho hợp đồng này." : "Chương trình voucher đang tắt hoặc hợp đồng chưa có giá.")
+              : `Khách sẽ nhận voucher ~${vnd(l.amount)} (${l.percent}%${l.max ? `, tối đa ${vnd(l.max)}` : ""}) khi đủ điều kiện. Cổng khách đang hiện lời mời này.`}
           </p>
         </div>
-        {signed && !form && !missing && (
-          <button
-            onClick={() => { setErr(null); setForm({ type: "percent", amount: 0, percent: 10, max: 0, expires: defaultExpiry(today), noExpiry: false }); }}
-            className="btn-primary px-3 py-2 text-xs"
-          >
-            <Plus size={14} /> Tặng voucher
-          </button>
-        )}
+        <Link href="/dashboard/studio/vouchers" className="text-xs font-semibold" style={{ color: "var(--brand)" }}>Cài đặt chương trình →</Link>
       </div>
 
-      {missing && (
-        <p className="mt-2 text-xs" style={{ color: "var(--s-amber)" }}>
-          Cần chạy <code>supabase/voucher-uu-dai.sql</code> trong Supabase SQL Editor để dùng tính năng này.
-        </p>
-      )}
-
-      {form && (
-        <div className="mt-3 space-y-3 rounded-xl p-3" style={{ background: "var(--surface2)" }}>
-          <div className="flex gap-1.5">
-            {(["percent", "amount"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setForm({ ...form, type: t })}
-                className="rounded-[20px] px-3 py-1.5 text-xs font-semibold"
-                style={{ border: "1px solid var(--border)", background: form.type === t ? "var(--brand)" : "transparent", color: form.type === t ? "#fff" : "var(--text2)" }}
-              >
-                {t === "percent" ? "Giảm theo %" : "Giảm số tiền"}
-              </button>
-            ))}
-          </div>
-          {form.type === "percent" ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block">
-                <span className="label">% giảm trên tổng hợp đồng</span>
-                <input
-                  className="input"
-                  inputMode="numeric"
-                  value={form.percent || ""}
-                  onChange={(e) => setForm({ ...form, percent: Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0) })}
-                />
-              </label>
-              <label className="block">
-                <span className="label">Giảm tối đa (không bắt buộc)</span>
-                <MoneyInput className="input" value={form.max} onChange={(n) => setForm({ ...form, max: n })} />
-              </label>
-            </div>
-          ) : (
-            <label className="block">
-              <span className="label">Số tiền giảm</span>
-              <MoneyInput className="input" value={form.amount} onChange={(n) => setForm({ ...form, amount: n })} />
-            </label>
-          )}
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <span className="label">Hạn dùng</span>
-              {form.noExpiry ? (
-                <p className="input flex items-center" style={{ color: "var(--text3)" }}>Không giới hạn</p>
-              ) : (
-                <DateInput value={form.expires} onChange={(v) => setForm({ ...form, expires: v })} />
-              )}
-            </div>
-            <label className="flex items-end gap-2 pb-2 text-sm">
-              <input type="checkbox" checked={form.noExpiry} onChange={(e) => setForm({ ...form, noExpiry: e.target.checked })} />
-              Không giới hạn thời gian
-            </label>
-          </div>
-          <p className="text-[11.5px]" style={{ color: "var(--text3)" }}>
-            Voucher không dùng được cho chính hợp đồng này. Khi áp vào hợp đồng sau, voucher thành một dòng giảm giá.
-          </p>
-          {err && <p className="text-xs text-red-500">{err}</p>}
-          <div className="flex gap-2">
-            <button onClick={issue} disabled={busy} className="btn-primary px-3 py-2 text-xs disabled:opacity-50">
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <Ticket size={14} />} Tạo voucher
+      {!issued && l?.stage !== "cancelled" && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          <span style={{ color: "var(--text3)" }}>Hợp đồng này:</span>
+          {([["program", "Theo chương trình"], ["custom", "% riêng"], ["off", "Tắt"]] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => saveMode(k)}
+              disabled={busy}
+              className="rounded-[20px] px-2.5 py-1 font-semibold"
+              style={{ border: "1px solid var(--border)", background: mode === k ? "var(--brand)" : "transparent", color: mode === k ? "#fff" : "var(--text2)" }}
+            >
+              {label}
             </button>
-            <button onClick={() => setForm(null)} className="btn-ghost px-3 py-2 text-xs">Huỷ</button>
-          </div>
+          ))}
+          {mode === "custom" && (
+            <span className="flex items-center gap-1">
+              <input
+                className="input w-16 py-1 text-center"
+                inputMode="numeric"
+                value={custom || ""}
+                onChange={(e) => setCustom(Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0))}
+                onBlur={() => custom > 0 && saveMode("custom", custom)}
+              />
+              %
+            </span>
+          )}
         </div>
       )}
 
-      {list && list.length > 0 && (
+      {!issued && l && (l.stage === "teaser" || l.stage === "pending") && (
+        <ul className="mt-3 space-y-1 text-[12.5px]">
+          {steps.map((s) => (
+            <li key={s.label} className="flex items-center gap-1.5" style={{ color: s.done ? "var(--s-green)" : "var(--text3)" }}>
+              {s.done ? <CheckCircle2 size={14} /> : <CircleDashed size={14} />} {s.label}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {err && <p className="mt-2 text-xs text-red-500">{err}</p>}
+
+      {(issued || others.length > 0) && (
         <div className="mt-4 space-y-5">
-          {list.map((v) => (
+          {[...(issued ? [issued] : []), ...others].map((v) => (
             <IssuedVoucher
               key={v.id}
               v={v}

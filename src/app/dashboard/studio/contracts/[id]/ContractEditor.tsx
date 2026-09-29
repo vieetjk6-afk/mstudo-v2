@@ -2642,11 +2642,12 @@ export default function ContractEditor({
                 )}
               </div>
 
-              {/* Tặng voucher ưu đãi cho hợp đồng LẦN SAU — cạnh ô "Khách dùng voucher" để
-                  studio thấy cả hai chiều ở một chỗ. Chỉ bật khi khách đã ký. */}
+              {/* Voucher ưu đãi cho hợp đồng LẦN SAU theo chương trình của studio — tự
+                  phát khi khách ký + studio xác nhận cọc + studio ký. */}
               <LoyaltyVoucherCard
                 contractId={contract.id}
-                signed={!!contract.client_signed_at || ["approved", "in_progress", "post_production", "completed"].includes(f.status)}
+                initialPercent={contract.loyalty_percent ?? null}
+                refreshKey={`${collected}|${studioSigned}|${!!contract.client_signed_at}|${f.status}|${total}`}
                 clientName={f.client_name}
                 clientPhone={f.client_phone}
                 clientMessenger={f.client_messenger}

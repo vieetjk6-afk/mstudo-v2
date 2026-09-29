@@ -17,6 +17,7 @@
     "migrations/contract_addenda.sql",
     "migrations/studio_vouchers.sql",
     "migrations/studio_vouchers_loyalty.sql",
+    "migrations/studio_voucher_program.sql",
     "migrations/studio_audit_log.sql",
     "migrations/contract_crew_milestone.sql",
     "migrations/contract_item_tier_milestone.sql"
@@ -714,6 +715,17 @@
         "studio_vouchers.percent",
         "studio_vouchers.public_token",
         "studio_vouchers.source_contract_id"
+      ]
+    },
+    {
+      "file": "migrations/studio_voucher_program.sql",
+      "mo_ta": "Chương trình voucher ưu đãi tự gắn mọi hợp đồng (chạy SAU studio_vouchers_loyalty)",
+      "bang": [
+        "studio_voucher_program"
+      ],
+      "cot": [
+        "studio_contracts.loyalty_percent",
+        "studio_vouchers.program_issued"
       ]
     },
     {

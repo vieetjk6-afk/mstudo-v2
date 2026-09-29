@@ -18,6 +18,7 @@ import {
   voucherValueLabel,
   type Voucher,
 } from "@/lib/vouchers";
+import { contractLoyalty } from "@/lib/voucher-program-server";
 
 export const dynamic = "force-dynamic";
 
@@ -105,6 +106,48 @@ export async function POST(req: Request) {
       }
     }
     return NextResponse.json({ error: "code_collision" }, { status: 500 });
+  }
+
+  // ── Chương trình voucher ưu đãi (tự gắn mọi hợp đồng) ────────────────────
+  if (b.action === "program_save") {
+    const percent = Math.round(Number(b.percent) || 0);
+    if (percent < 1 || percent > 100) return NextResponse.json({ error: "bad_percent" }, { status: 400 });
+    const months = b.valid_months == null || b.valid_months === "" ? null : Math.round(Number(b.valid_months) || 0);
+    if (months !== null && (months < 1 || months > 120)) return NextResponse.json({ error: "bad_months" }, { status: 400 });
+    const row = {
+      owner_id: ownerId,
+      enabled: b.enabled === true,
+      percent,
+      max_discount: Number(b.max_discount) > 0 ? Math.round(Number(b.max_discount)) : null,
+      valid_months: months,
+      title: str(b.title, 120) ?? "Voucher ưu đãi lần sau",
+      updated_at: new Date().toISOString(),
+    };
+    const { error } = await db.from("studio_voucher_program").upsert(row, { onConflict: "owner_id" });
+    if (error) {
+      if (error.code === "42P01" || /studio_voucher_program/.test(error.message)) {
+        return NextResponse.json({ error: "missing_migration", file: "supabase/voucher-uu-dai.sql" }, { status: 409 });
+      }
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    await logAction(db, {
+      ownerId, actorId: actor, action: "voucher.program", entity: "voucher", entityId: null,
+      summary: `${row.enabled ? "Bật" : "Tắt"} chương trình voucher: ${percent}% HĐ${row.max_discount ? ` · tối đa ${vnd(row.max_discount)}` : ""}${months ? ` · hạn ${months} tháng` : " · không giới hạn"}`,
+      after: row,
+    });
+    return NextResponse.json({ ok: true, program: row });
+  }
+
+  if (b.action === "loyalty_status" || b.action === "contract_loyalty") {
+    const contract = typeof b.contractId === "string" ? await loadContract(db, b.contractId, ownerId) : null;
+    if (!contract) return NextResponse.json({ error: "contract_not_found" }, { status: 404 });
+    if (b.action === "contract_loyalty") {
+      // null = theo chương trình · 0 = tắt riêng hợp đồng này · n = n% riêng
+      const p = b.percent == null || b.percent === "" ? null : Math.max(0, Math.min(100, Math.round(Number(b.percent) || 0)));
+      const { error } = await db.from("studio_contracts").update({ loyalty_percent: p }).eq("id", contract.id);
+      if (error) return NextResponse.json({ error: "missing_migration", file: "supabase/voucher-uu-dai.sql" }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, loyalty: await contractLoyalty(db, contract.id) });
   }
 
   if (b.action === "issue") {

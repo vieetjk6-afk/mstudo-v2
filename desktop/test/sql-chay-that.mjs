@@ -490,6 +490,26 @@ ok(
   ).split("\n").pop() === "active/null"
 );
 
+// Chương trình voucher: hợp đồng huỷ → voucher ưu đãi CHƯA DÙNG tự huỷ; voucher
+// đã dùng thì giữ nguyên. Mỗi hợp đồng chỉ phát được MỘT voucher chương trình.
+q(
+  "moi",
+  `insert into public.studio_vouchers (owner_id, code, kind, amount, paid, status, source_contract_id, program_issued) values ` +
+    `('${P}', 'UD-TEST01', 'loyalty', 1000000, true, 'active', '${OPEN}', true)`
+);
+ok(
+  "Voucher chương trình: không phát được cái thứ hai cho cùng hợp đồng",
+  threw(
+    `insert into public.studio_vouchers (owner_id, code, kind, amount, paid, status, source_contract_id, program_issued) values ` +
+      `('${P}', 'UD-TEST02', 'loyalty', 1000000, true, 'active', '${OPEN}', true)`
+  ) !== ""
+);
+ok(
+  "Huỷ hợp đồng → voucher ưu đãi chưa dùng tự huỷ",
+  q("moi", `update public.studio_contracts set status = 'cancelled' where id = '${OPEN}'; select status from public.studio_vouchers where code = 'UD-TEST01'`)
+    .split("\n").pop() === "void"
+);
+
 // Xoá hẳn một hợp đồng ĐÃ KÝ có phụ lục (studio xoá HĐ đã huỷ): hạng mục và dòng
 // phụ lục bị xoá dây chuyền — hàng rào khoá giá KHÔNG được chặn việc đó.
 ok(
