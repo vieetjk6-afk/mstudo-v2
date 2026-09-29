@@ -33,16 +33,16 @@ export type Voucher = {
   max_discount?: number | null;
   source_contract_id?: string | null;
   public_token?: string | null;
-  /** 'wedding' = chỉ dùng cho gói phóng sự cưới · null = mọi gói */
-  applies_to?: string | null;
+  /** Tên các gói trong bảng giá được dùng voucher này · null/rỗng = mọi gói */
+  applies_packages?: string[] | null;
 };
 
 /** Cột đọc ra ở mọi nơi. Bản CŨ dùng khi DB chưa chạy studio_vouchers_loyalty.sql. */
 export const VOUCHER_COLS_BASE =
   "id, code, title, amount, price, buyer_name, buyer_phone, recipient_name, paid, paid_method, paid_at, expires_on, status, redeemed_contract_id, redeemed_at, note, created_at";
 export const VOUCHER_COLS = `${VOUCHER_COLS_BASE}, kind, discount_type, percent, max_discount, source_contract_id, public_token`;
-/** Có thêm applies_to (studio_voucher_program.sql). Đọc bằng loyaltyCols() để DB cũ không hỏng. */
-export const VOUCHER_COLS_FULL = `${VOUCHER_COLS}, applies_to`;
+/** Có thêm applies_packages (studio_voucher_program.sql). Luôn đọc kèm đường lùi về VOUCHER_COLS. */
+export const VOUCHER_COLS_FULL = `${VOUCHER_COLS}, applies_packages`;
 
 /** Trạng thái HIỂN THỊ: gộp cả hạn dùng và việc đã thu tiền hay chưa. */
 export type VoucherState = "usable" | "unpaid" | "expired" | "redeemed" | "void";
@@ -84,7 +84,7 @@ export function voucherState(v: Pick<Voucher, "status" | "paid" | "expires_on">,
 
 export type RedeemCheck =
   | { ok: true }
-  | { ok: false; error: "not_found" | "unpaid" | "expired" | "redeemed" | "void" | "same_contract" | "not_wedding" | "phone_mismatch" };
+  | { ok: false; error: "not_found" | "unpaid" | "expired" | "redeemed" | "void" | "same_contract" | "not_package" | "phone_mismatch" };
 
 /**
  * Dùng được thẻ này ở hợp đồng không? `contractId` (tuỳ chọn) = hợp đồng định
@@ -109,7 +109,7 @@ export const REDEEM_ERROR_TEXT: Record<Exclude<RedeemCheck, { ok: true }>["error
   redeemed: "Voucher đã được dùng rồi.",
   void: "Voucher đã bị huỷ.",
   same_contract: "Voucher này được tặng từ chính hợp đồng này — chỉ dùng được cho hợp đồng lần sau.",
-  not_wedding: "Voucher chỉ áp dụng cho gói phóng sự cưới.",
+  not_package: "Voucher không áp dụng cho gói dịch vụ của hợp đồng này.",
   phone_mismatch: "Cần nhập đúng số điện thoại của hợp đồng đã được tặng voucher.",
 };
 
@@ -207,22 +207,34 @@ export function phoneUnlocks(v: Pick<Voucher, "buyer_phone" | "kind">, ...phones
   return phones.some((p) => samePhoneNumber(p, v.buyer_phone));
 }
 
+const plain = (s: string | null | undefined) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+
 /**
- * Hợp đồng có phải GÓI PHÓNG SỰ CƯỚI không — theo loại dịch vụ, tên dịch vụ và
- * tên các hạng mục (studio hay gõ "Cưới · Phóng sự x2", "PSC trọn gói").
+ * Hợp đồng có gói nằm trong danh sách studio chọn không. So theo TÊN gói (bỏ
+ * dấu, không phân biệt hoa thường) nằm trong tên hạng mục — hạng mục từ bảng
+ * giá mang đúng tên gói, còn từ trang đặt lịch thì có thêm tiền tố "Cưới · …".
+ * Danh sách rỗng = mọi gói.
  */
-export function isWeddingContract(shootType: string | null | undefined, names: (string | null | undefined)[]): boolean {
-  if (shootType === "psc" || shootType === "wedding") return true;
-  const hay = names.filter(Boolean).join(" ").toLowerCase();
-  if (/pre[\s-]?wed|prewedding/.test(hay) && !/phóng sự|psc/.test(hay)) return false;
-  return /phóng sự|psc|cưới|wedding|đám cưới|vu quy|tân hôn|thành hôn|rước dâu|đón dâu/.test(hay);
+export function matchesPackages(packages: string[] | null | undefined, itemNames: (string | null | undefined)[]): boolean {
+  const want = (packages ?? []).map(plain).filter(Boolean);
+  if (want.length === 0) return true;
+  const have = itemNames.map(plain).filter(Boolean);
+  return have.some((n) => want.some((w) => n === w || n.includes(w)));
 }
 
 /** Dòng điều kiện in trên voucher / trang khách. */
-export function voucherTerms(v: Pick<Voucher, "applies_to" | "kind">): string[] {
+export function voucherTerms(v: Pick<Voucher, "applies_packages" | "kind">): string[] {
   if (v.kind !== "loyalty") return ["Không quy đổi thành tiền mặt."];
   const out = [];
-  if (v.applies_to === "wedding") out.push("Áp dụng cho gói phóng sự cưới.");
+  const pk = (v.applies_packages ?? []).filter(Boolean);
+  if (pk.length) out.push(`Áp dụng cho: ${pk.join(", ")}.`);
   out.push("Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.");
   out.push("Không có giá trị quy đổi thành tiền mặt.");
   return out;

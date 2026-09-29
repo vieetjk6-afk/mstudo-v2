@@ -9,7 +9,7 @@ import {
   VOUCHER_COLS,
   VOUCHER_COLS_BASE,
   VOUCHER_COLS_FULL,
-  isWeddingContract,
+  matchesPackages,
   phoneUnlocks,
   canRedeem,
   defaultExpiry,
@@ -125,14 +125,17 @@ export async function POST(req: Request) {
       max_discount: Number(b.max_discount) > 0 ? Math.round(Number(b.max_discount)) : null,
       valid_months: months,
       title: str(b.title, 120) ?? "Voucher ưu đãi lần sau",
-      wedding_only: b.wedding_only !== false,
+      // Gói được áp dụng: tên gói trong bảng giá (tối đa 100, mỗi tên ≤ 200 ký tự). Rỗng = mọi gói.
+      package_names: Array.isArray(b.package_names)
+        ? [...new Set((b.package_names as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.trim().slice(0, 200)).filter(Boolean))].slice(0, 100)
+        : [],
       updated_at: new Date().toISOString(),
     };
     let { error } = await db.from("studio_voucher_program").upsert(row, { onConflict: "owner_id" });
-    if (error && /wedding_only/.test(error.message)) {
-      // DB chưa có cột wedding_only (chưa chạy bản SQL mới) → lưu phần còn lại.
-      const { wedding_only: _w, ...rest } = row;
-      void _w;
+    if (error && /package_names/.test(error.message)) {
+      // DB chưa có cột package_names (chưa chạy bản SQL mới) → lưu phần còn lại.
+      const { package_names: _p, ...rest } = row;
+      void _p;
       ({ error } = await db.from("studio_voucher_program").upsert(rest, { onConflict: "owner_id" }));
     }
     if (error) {
@@ -143,7 +146,7 @@ export async function POST(req: Request) {
     }
     await logAction(db, {
       ownerId, actorId: actor, action: "voucher.program", entity: "voucher", entityId: null,
-      summary: `${row.enabled ? "Bật" : "Tắt"} chương trình voucher: ${percent}% HĐ${row.max_discount ? ` · tối đa ${vnd(row.max_discount)}` : ""}${months ? ` · hạn ${months} tháng` : " · không giới hạn"}`,
+      summary: `${row.enabled ? "Bật" : "Tắt"} chương trình voucher: ${percent}% HĐ${row.max_discount ? ` · tối đa ${vnd(row.max_discount)}` : ""}${months ? ` · hạn ${months} tháng` : " · không giới hạn"}${row.package_names.length ? ` · gói: ${row.package_names.join(", ")}` : " · mọi gói"}`,
       after: row,
     });
     return NextResponse.json({ ok: true, program: row });
@@ -335,16 +338,8 @@ export async function POST(req: Request) {
 
     const { data: items } = await db.from("contract_items").select("name, qty, unit_price, position").eq("contract_id", contract.id);
     const rows = (items ?? []) as { name: string | null; qty: number; unit_price: number; position: number | null }[];
-    if (v.applies_to === "wedding") {
-      const { data: meta } = await db
-        .from("studio_contracts")
-        .select("shoot_type, title, service:studio_services(name)")
-        .eq("id", contract.id)
-        .maybeSingle();
-      const m = meta as { shoot_type?: string | null; title?: string | null; service?: { name?: string | null } | null } | null;
-      if (!isWeddingContract(m?.shoot_type, [m?.service?.name, m?.title, ...rows.map((r) => r.name)])) {
-        return NextResponse.json({ error: "not_wedding" }, { status: 409 });
-      }
+    if (!matchesPackages(v.applies_packages, rows.map((r) => r.name))) {
+      return NextResponse.json({ error: "not_package", packages: v.applies_packages }, { status: 409 });
     }
     const total = rows.reduce((t, r) => t + (r.qty || 0) * (r.unit_price || 0), 0);
     const discount = voucherDiscount(v, total);

@@ -27,15 +27,15 @@ export type ContractLoyalty = {
   missing: string[];
   title: string;
   voucher: Voucher | null;
-  /** Luật chương trình hiện tại (cho lời mời trước khi phát). */
-  weddingOnly: boolean;
+  /** Gói được áp dụng (voucher đã phát: đúng danh sách chốt lúc phát). */
+  packages: string[];
 };
 
-const OFF: ContractLoyalty = { stage: "off", percent: 0, amount: 0, max: null, missing: [], title: "", voucher: null, weddingOnly: false };
+const OFF: ContractLoyalty = { stage: "off", percent: 0, amount: 0, max: null, missing: [], title: "", voucher: null, packages: [] };
 
 export async function loadProgram(db: Db, ownerId: string): Promise<VoucherProgram | null> {
   const q = (cols: string) => db.from("studio_voucher_program").select(cols).eq("owner_id", ownerId).maybeSingle();
-  let r = await q("enabled, percent, max_discount, valid_months, title, wedding_only");
+  let r = await q("enabled, percent, max_discount, valid_months, title, package_names");
   if (r.error) r = await q("enabled, percent, max_discount, valid_months, title");
   if (r.error) return null; // chưa chạy migration → coi như chương trình tắt
   return readProgram(r.data as unknown as Partial<VoucherProgram> | null);
@@ -83,7 +83,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
       missing: [],
       title: existing.title,
       voucher: existing,
-      weddingOnly: existing.applies_to === "wedding",
+      packages: existing.applies_packages ?? [],
     };
   }
   if (!program) return OFF;
@@ -104,7 +104,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
     studioSigned: !!c.studio_signed_at,
   };
   const stage = programStage(input);
-  const base: ContractLoyalty = { stage, percent, amount, max: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null, weddingOnly: program.wedding_only };
+  const base: ContractLoyalty = { stage, percent, amount, max: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null, packages: program.package_names };
   if (stage !== "issued" || opts.issue === false) return base;
 
   const today = todayVN();
@@ -128,7 +128,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
         source_contract_id: c.id,
         expires_on: program.valid_months ? defaultExpiry(today, program.valid_months) : null,
         note: `Chương trình ${percent}% giá trị HĐ ${c.code ?? c.title}`.slice(0, 500),
-        ...(program.wedding_only ? { applies_to: "wedding" } : {}),
+        ...(program.package_names.length ? { applies_packages: program.package_names } : {}),
       })
       .select(VOUCHER_COLS)
       .single();

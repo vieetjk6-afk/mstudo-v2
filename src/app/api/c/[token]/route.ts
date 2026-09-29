@@ -408,7 +408,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
         percent: l.percent,
         title: l.title,
         missing: l.missing,
-        terms: voucherTerms({ kind: "loyalty", applies_to: l.voucher ? l.voucher.applies_to : l.weddingOnly ? "wedding" : null }),
+        terms: voucherTerms({ kind: "loyalty", applies_packages: l.packages }),
         voucher: l.voucher && l.voucher.status !== "void"
           ? { code: l.voucher.code, amount: l.voucher.amount, expires_on: l.voucher.expires_on, public_token: l.voucher.public_token, status: l.voucher.status, title: l.voucher.title }
           : null,

@@ -5817,6 +5817,15 @@ alter table public.studio_vouchers drop constraint if exists studio_vouchers_app
 
 alter table public.studio_vouchers add constraint studio_vouchers_applies_to_check check (applies_to is null or applies_to in ('wedding'));
 
+-- ── Gói được áp dụng (studio tự chọn) ───────────────────────────────────────
+-- package_names: tên các gói trong bảng giá (studio_pricelist.name) mà voucher
+-- được dùng. Rỗng / null = mọi gói. Voucher chốt danh sách lúc phát
+-- (applies_packages) — studio đổi cài đặt sau không đổi voucher khách đang cầm.
+-- (wedding_only / applies_to của bản trước không còn dùng.)
+alter table public.studio_voucher_program add column if not exists package_names text[];
+
+alter table public.studio_vouchers add column if not exists applies_packages text[];
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/studio_audit_log.sql — Nhật ký thao tác tiền & hợp đồng

@@ -16,10 +16,13 @@ export default function VoucherProgramCard({
   initial,
   migrated,
   toast,
+  packages = [],
 }: {
   initial: VoucherProgram;
   migrated: boolean;
   toast: (m: string) => void;
+  /** Gói trong bảng giá của studio, để chọn gói được dùng voucher. */
+  packages?: { name: string; group: string }[];
 }) {
   const [p, setP] = useState<VoucherProgram>(initial);
   const [saved, setSaved] = useState<VoucherProgram>(initial);
@@ -95,10 +98,11 @@ export default function VoucherProgramCard({
           </label>
         </div>
 
-        <label className="flex items-center gap-2.5">
-          <input type="checkbox" className="h-4 w-4" checked={p.wedding_only} onChange={(e) => setP({ ...p, wedding_only: e.target.checked })} />
-          Chỉ áp dụng cho gói <b>phóng sự cưới</b>
-        </label>
+        <PackagePicker
+          packages={packages}
+          value={p.package_names}
+          onChange={(names) => setP({ ...p, package_names: names })}
+        />
         <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
           Voucher tặng được cho người khác, khi dùng phải nhập đúng SĐT của hợp đồng được tặng. Không quy đổi thành tiền mặt.
         </p>
@@ -114,5 +118,69 @@ export default function VoucherProgramCard({
         )}
       </div>
     </Panel>
+  );
+}
+
+/** Chọn gói được dùng voucher: "Mọi gói" hoặc tick từng gói trong bảng giá (theo nhóm). */
+function PackagePicker({
+  packages,
+  value,
+  onChange,
+}: {
+  packages: { name: string; group: string }[];
+  value: string[];
+  onChange: (names: string[]) => void;
+}) {
+  const [open, setOpen] = useState(value.length > 0);
+  const groups = new Map<string, string[]>();
+  for (const p of packages) {
+    const list = groups.get(p.group) ?? [];
+    if (!list.includes(p.name)) list.push(p.name);
+    groups.set(p.group, list);
+  }
+  // Gói đã chọn mà không còn trong bảng giá (đổi tên / ẩn) vẫn hiện để bỏ tick được.
+  const orphans = value.filter((n) => !packages.some((p) => p.name === n));
+  if (orphans.length) groups.set("Không còn trong bảng giá", orphans);
+  const toggle = (n: string) => onChange(value.includes(n) ? value.filter((x) => x !== n) : [...value, n]);
+
+  return (
+    <div className="space-y-2">
+      <span className="label">Áp dụng cho gói</span>
+      <div className="flex flex-wrap gap-1.5">
+        {([[false, "Mọi gói"], [true, "Chọn gói"]] as const).map(([pick, label]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={() => { setOpen(pick); if (!pick) onChange([]); }}
+            className="rounded-[20px] px-2.5 py-1 text-[12px] font-semibold"
+            style={{ border: "1px solid var(--bd)", background: open === pick ? "var(--ac)" : "var(--sf)", color: open === pick ? "#fff" : "var(--tx2)" }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {open && (
+        packages.length === 0 && orphans.length === 0 ? (
+          <p className="text-[12px]" style={{ color: "var(--tx3)" }}>Bảng giá chưa có gói nào — thêm gói ở mục Bảng giá trước.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[...groups.entries()].map(([g, names]) => (
+              <div key={g}>
+                <p className="mb-1 text-[11px] font-bold uppercase" style={{ letterSpacing: ".5px", color: "var(--tx3)" }}>{g}</p>
+                {names.map((n) => (
+                  <label key={n} className="flex items-center gap-2 py-0.5 text-[13px]">
+                    <input type="checkbox" className="h-4 w-4" checked={value.includes(n)} onChange={() => toggle(n)} />
+                    {n}
+                  </label>
+                ))}
+              </div>
+            ))}
+          </div>
+        )
+      )}
+      {open && value.length === 0 && packages.length > 0 && (
+        <p className="text-[12px]" style={{ color: "var(--am)" }}>Chưa chọn gói nào — đang áp dụng cho mọi gói.</p>
+      )}
+    </div>
   );
 }

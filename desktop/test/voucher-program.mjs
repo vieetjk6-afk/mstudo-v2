@@ -40,7 +40,7 @@ t("cọc = lần thu thật, không tính hoàn tiền / trừ voucher", () => {
 t("đọc cài đặt: chưa có dòng → mặc định TẮT", () => {
   assert.equal(readProgram(null).enabled, false);
   assert.equal(readProgram({ enabled: true, percent: 7, valid_months: null }).valid_months, null);
-  assert.equal(readProgram({ enabled: true }).wedding_only, true, "chưa có cột → mặc định chỉ phóng sự cưới");
-  assert.equal(readProgram({ enabled: true, wedding_only: false }).wedding_only, false);
+  assert.deepEqual(readProgram({ enabled: true }).package_names, [], "chưa có cột → mọi gói");
+  assert.deepEqual(readProgram({ enabled: true, package_names: ["Phóng sự x2", "", null] }).package_names, ["Phóng sự x2"]);
 });
 console.log(`\n${n} ca đạt`);
