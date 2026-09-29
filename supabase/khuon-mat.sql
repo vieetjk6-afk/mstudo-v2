@@ -50,6 +50,12 @@ create table if not exists public.album_people (
   created_at     timestamptz not null default now()
 );
 
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+-- Chủ album (và admin) đọc/ghi. KHÔNG mở đọc công khai: trang khách
+-- (src/app/a/[slug]/page.tsx) chạy trên máy chủ bằng service role, nên khách
+-- không cần quyền gì trên bảng này.
+alter table public.album_people enable row level security;
+
 -- ── Ảnh nào có ai ───────────────────────────────────────────────────────────
 create table if not exists public.album_photo_people (
   -- album_id là bản sao CÓ CHỦ Ý của album_people.album_id: câu truy vấn duy
@@ -59,6 +65,8 @@ create table if not exists public.album_photo_people (
   photo_id  uuid not null references public.photos (id) on delete cascade,
   primary key (person_id, photo_id)
 );
+
+alter table public.album_photo_people enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -78,6 +86,11 @@ create table if not exists public.album_faces (
   sharpness  real not null default 0,
   primary key (photo_id, at)
 );
+
+-- ── RLS ─────────────────────────────────────────────────────────────────────
+-- Chủ album (và admin) đọc/ghi. Khách KHÔNG cần quyền gì: trang khách chỉ đọc
+-- album_people/album_photo_people, và đọc bằng service role trên máy chủ.
+alter table public.album_faces enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -241,12 +254,6 @@ create index if not exists album_faces_album_idx on public.album_faces (album_id
 -- ▶ migrations/album_people.sql — Gom ảnh theo từng người trong album (chạy SAU schema.sql — cần albums + photos)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── RLS ─────────────────────────────────────────────────────────────────────
--- Chủ album (và admin) đọc/ghi. KHÔNG mở đọc công khai: trang khách
--- (src/app/a/[slug]/page.tsx) chạy trên máy chủ bằng service role, nên khách
--- không cần quyền gì trên bảng này.
-alter table public.album_people enable row level security;
-
 drop policy if exists album_people_owner_rw on public.album_people;
 
 create policy album_people_owner_rw on public.album_people
@@ -258,8 +265,6 @@ create policy album_people_owner_rw on public.album_people
     exists (select 1 from public.albums a
             where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
   );
-
-alter table public.album_photo_people enable row level security;
 
 drop policy if exists album_photo_people_owner_rw on public.album_photo_people;
 
@@ -291,11 +296,6 @@ create policy album_photo_people_owner_rw on public.album_photo_people
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/album_faces.sql — Kho khuôn mặt đã quét — để lượt quét tự động chạy tiếp được (chạy SAU album_people)
 -- ══════════════════════════════════════════════════════════════════════════
-
--- ── RLS ─────────────────────────────────────────────────────────────────────
--- Chủ album (và admin) đọc/ghi. Khách KHÔNG cần quyền gì: trang khách chỉ đọc
--- album_people/album_photo_people, và đọc bằng service role trên máy chủ.
-alter table public.album_faces enable row level security;
 
 drop policy if exists album_faces_owner_rw on public.album_faces;
 

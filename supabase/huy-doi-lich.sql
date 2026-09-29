@@ -33,6 +33,8 @@ create table if not exists public.contract_reschedules (
   created_at  timestamptz not null default now()
 );
 
+alter table public.contract_reschedules enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
@@ -125,8 +127,6 @@ notify pgrst, 'reload schema';
 -- theo cột. Thiếu dòng này thì thẻ chính sách lưu im lặng không đổi gì.
 grant update (cancel_early_days, cancel_early_refund_pct, cancel_late_refund_pct)
   on public.profiles to authenticated;
-
-alter table public.contract_reschedules enable row level security;
 
 -- Đọc: chủ hợp đồng + admin. Ghi đi qua /api/studio/contracts/[id]/reschedule
 -- (service-role) vì một lần dời còn kéo theo lịch thợ, hạn thu, lịch hẹn.

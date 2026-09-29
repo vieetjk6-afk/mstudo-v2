@@ -273,6 +273,20 @@ function isTableCreate(stmt) {
 }
 
 /**
+ * Bật RLS cho một bảng — đi LIỀN SAU câu tạo bảng (nhịp 1), không dời xuống
+ * nhịp quyền như policy/grant.
+ *
+ * Vì sao: Supabase SQL Editor tự chèn `ALTER TABLE … ENABLE ROW LEVEL SECURITY`
+ * ("-- Added by Supabase") khi thấy một `create table` chưa bật RLS ngay sau.
+ * Bộ chèn đó tự cắt câu lệnh theo dấu `;` nên chèn TRÚNG giữa thân hàm
+ * `$$ … $$` phía sau, và cả file hỏng với "unterminated dollar-quoted string".
+ * Bật RLS chỉ cần bảng đã tồn tại, nên đặt nó ngay cạnh bảng là an toàn.
+ */
+function isRlsEnable(stmt) {
+  return /^alter\s+table\s+[^ ]+\s+(enable|force)\s+row\s+level\s+security\b/.test(head(stmt));
+}
+
+/**
  * Câu lệnh PHÂN QUYỀN — phải chạy SAU khi mọi bảng/cột đã tồn tại.
  *
  * Cùng nguyên nhân: phần RLS nằm gần đầu schema.sql nhưng liệt kê cả những cột
@@ -328,6 +342,35 @@ if (missing.length) {
   process.exit(1);
 }
 
+/** Tên bảng (public.x) của câu `create table` / `alter table … row level security`. */
+function tableOf(stmt) {
+  const m = /^(?:create\s+table(?:\s+if\s+not\s+exists)?|alter\s+table)\s+([a-z0-9_."]+)/.exec(head(stmt));
+  return m ? m[1].replace(/"/g, "") : null;
+}
+
+/** Kéo câu bật RLS của mỗi bảng về LIỀN SAU câu tạo bảng đó (xem isRlsEnable). */
+function rlsNextToTable(list) {
+  const rls = new Map();
+  for (const st of list) if (isRlsEnable(st)) rls.set(tableOf(st), st);
+  const out = [];
+  const used = new Set();
+  for (const st of list) {
+    if (isRlsEnable(st)) {
+      if (!used.has(st)) out.push(st); // bảng tạo ở file khác → giữ chỗ cũ
+      continue;
+    }
+    out.push(st);
+    const t = isTableCreate(st) ? tableOf(st) : null;
+    const r = t ? rls.get(t) : null;
+    if (r && !used.has(r) && list.indexOf(r) > list.indexOf(st)) {
+      out.push(r);
+      used.add(r);
+    }
+  }
+  // Câu RLS đứng TRƯỚC câu tạo bảng của nó (không có trong file nào) — giữ nguyên.
+  return out.filter((st, i) => !(isRlsEnable(st) && used.has(st) && out.indexOf(st) !== i));
+}
+
 /** Đọc một danh sách file SQL rồi xếp lại theo 3 nhịp: bảng → vá → quyền. */
 function assemble(files, headLines, footLines = []) {
   const tables = [];
@@ -342,9 +385,10 @@ function assemble(files, headLines, footLines = []) {
     for (const stmt of splitStatements(sql)) {
       if (!stmt.trim()) continue;
       nStmt++;
-      const bucket = isGrantLike(stmt) ? "grants" : isTableCreate(stmt) ? "tables" : "setup";
+      const bucket = isRlsEnable(stmt) || isTableCreate(stmt) ? "tables" : isGrantLike(stmt) ? "grants" : "setup";
       mine[bucket].push(stmt.trim());
     }
+    mine.tables = rlsNextToTable(mine.tables);
     for (const k of ["tables", "setup", "grants"]) {
       const target = k === "tables" ? tables : k === "setup" ? setup : grants;
       if (mine[k].length) target.push(banner, "", mine[k].join("\n\n"), "");

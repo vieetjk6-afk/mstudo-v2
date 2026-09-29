@@ -29,6 +29,8 @@ create table if not exists public.studio_bank_hooks (
   created_at    timestamptz not null default now()
 );
 
+alter table public.studio_bank_hooks enable row level security;
+
 -- ── 3) Sổ giao dịch ngân hàng ──────────────────────────────────────────────
 -- matched   — đã tự ghi vào đúng đợt / đúng cọc giữ ngày
 -- unmatched — nội dung không có mã nào của studio, chờ studio gán tay
@@ -55,6 +57,8 @@ create table if not exists public.studio_bank_transactions (
   created_at      timestamptz not null default now(),
   unique (owner_id, provider, provider_txn_id)
 );
+
+alter table public.studio_bank_transactions enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -180,8 +184,6 @@ notify pgrst, 'reload schema';
 -- ▶ migrations/bank_auto_reconcile.sql — Tự xác nhận chuyển khoản qua SePay: mã đợt, khoá webhook, sổ giao dịch (chạy SAU referral_deposit)
 -- ══════════════════════════════════════════════════════════════════════════
 
-alter table public.studio_bank_hooks enable row level security;
-
 -- Chỉ chủ studio (và admin) đọc được khoá. Tạo và đổi khoá đi qua
 -- /api/studio/bank-hook để khoá luôn do máy chủ sinh ngẫu nhiên, nên RLS chỉ
 -- cho đọc.
@@ -189,8 +191,6 @@ drop policy if exists studio_bank_hooks_owner_read on public.studio_bank_hooks;
 
 create policy studio_bank_hooks_owner_read on public.studio_bank_hooks
   for select using (owner_id = auth.uid() or public.is_admin());
-
-alter table public.studio_bank_transactions enable row level security;
 
 drop policy if exists studio_bank_transactions_owner_read on public.studio_bank_transactions;
 
