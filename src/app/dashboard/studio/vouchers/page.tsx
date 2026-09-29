@@ -5,6 +5,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import StudioDenied from "@/components/StudioDenied";
 import VouchersView from "./VouchersView";
 import { VOUCHER_COLS, VOUCHER_COLS_BASE, type Voucher } from "@/lib/vouchers";
+import { readProgram, type VoucherProgram } from "@/lib/voucher-program";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    VOUCHER & THẺ QUÀ — /dashboard/studio/vouchers
@@ -29,10 +30,17 @@ export default async function VouchersPage() {
   if (error) ({ data, error } = await q(VOUCHER_COLS_BASE));
 
   const studioHost = await getStudioHost(supabase, profile.id);
+  const prog = await supabase
+    .from("studio_voucher_program")
+    .select("enabled, percent, max_discount, valid_months, title")
+    .eq("owner_id", profile.id)
+    .maybeSingle();
 
   return (
     <VouchersView
       studioHost={studioHost}
+      program={readProgram(prog.data as Partial<VoucherProgram> | null)}
+      programMigrated={!prog.error}
       initial={(data ?? []) as unknown as Voucher[]}
       migrated={!error}
       studioName={brandFrom(profile).name}

@@ -11,6 +11,8 @@ import { fmtDate, todayVN } from "@/lib/date";
 import { escapeHtml } from "@/lib/html-escape";
 import { useToast } from "@/components/studio/Toast";
 import { IssuedVoucher } from "@/app/dashboard/studio/contracts/[id]/LoyaltyVoucherCard";
+import VoucherProgramCard from "./VoucherProgramCard";
+import type { VoucherProgram } from "@/lib/voucher-program";
 import { VOUCHER_STATE_LABEL, defaultExpiry, isLoyalty, voucherState, voucherSummary, voucherValueLabel, type Voucher, type VoucherState } from "@/lib/vouchers";
 
 const STATE_TONE: Record<VoucherState, ToneKey> = {
@@ -40,8 +42,12 @@ export default function VouchersView({
   studioName,
   studioPhone,
   studioHost,
+  program,
+  programMigrated,
 }: {
   studioHost: string | null;
+  program: VoucherProgram;
+  programMigrated: boolean;
   initial: Voucher[];
   migrated: boolean;
   studioName: string;
@@ -146,7 +152,7 @@ export default function VouchersView({
           <h1 className="text-[21px] font-bold" style={{ letterSpacing: "-.4px" }}>Voucher &amp; thẻ quà</h1>
           <p className="mt-1 text-[12.5px]" style={{ color: "var(--tx2)" }}>
             Bán thẻ quà mùa lễ và quản lý voucher ưu đãi đã tặng khách. Khách dùng cả hai ở tab <b>Thanh toán</b> của hợp đồng.
-            Tặng voucher ưu đãi: mở hợp đồng đã ký → tab <b>Thanh toán</b> → <b>Tặng voucher</b>.
+            Voucher ưu đãi tự gắn vào mọi hợp đồng theo chương trình bên dưới.
           </p>
         </div>
         <button
@@ -163,6 +169,8 @@ export default function VouchersView({
           Chưa chạy <code>supabase/migrations/studio_vouchers.sql</code> — chạy nó trong Supabase SQL Editor để bắt đầu bán voucher.
         </div>
       )}
+
+      <VoucherProgramCard initial={program} migrated={programMigrated} toast={toast} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard icon={Ticket} label="Đã bán" value={String(sum.sold)} sub="không tính thẻ đã huỷ" />

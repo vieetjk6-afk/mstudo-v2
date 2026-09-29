@@ -84,6 +84,7 @@ const ORDER = [
   ["migrations/contract_addenda.sql", "Khoá giá sau khi khách ký + phụ lục hợp đồng"],
   ["migrations/studio_vouchers.sql", "Voucher / thẻ quà tặng của studio (chạy SAU contract_cancel_reschedule)"],
   ["migrations/studio_vouchers_loyalty.sql", "Voucher ưu đãi lần sau: giảm theo tiền / %, QR đặt lịch (chạy SAU studio_vouchers)"],
+  ["migrations/studio_voucher_program.sql", "Chương trình voucher ưu đãi tự gắn mọi hợp đồng (chạy SAU studio_vouchers_loyalty)"],
   ["migrations/studio_audit_log.sql", "Nhật ký thao tác tiền & hợp đồng"],
   ["migrations/contract_crew_milestone.sql", "Phân công thợ theo mốc thời gian của hợp đồng (chạy SAU crew_profile_show)"],
   ["migrations/contract_item_tier_milestone.sql", "Hạng mục chính/phụ và gắn hạng mục vào mốc lịch"],
@@ -125,6 +126,7 @@ const MOI = [
   "migrations/contract_addenda.sql",
   "migrations/studio_vouchers.sql",
   "migrations/studio_vouchers_loyalty.sql",
+  "migrations/studio_voucher_program.sql",
   "migrations/studio_audit_log.sql",
   "migrations/contract_crew_milestone.sql",
   "migrations/contract_item_tier_milestone.sql",
@@ -182,7 +184,7 @@ const NHOM = {
       "-- theo tiền / %, gắn với hợp đồng đã ký, link QR để khách đặt lịch kèm mã.",
       "-- Chỉ cần các bảng hợp đồng / lần thu / yêu cầu đặt lịch có từ schema nền.",
     ],
-    files: ["migrations/studio_vouchers.sql", "migrations/studio_vouchers_loyalty.sql"],
+    files: ["migrations/studio_vouchers.sql", "migrations/studio_vouchers_loyalty.sql", "migrations/studio_voucher_program.sql"],
   },
 };
 

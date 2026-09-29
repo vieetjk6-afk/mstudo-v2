@@ -55,6 +55,7 @@
     "test:studio-nav": "node --experimental-strip-types desktop/test/studio-nav.mjs",
     "test:contract-cancel": "node --experimental-strip-types desktop/test/contract-cancel.mjs",
     "test:bank-reconcile": "node --experimental-strip-types desktop/test/bank-reconcile.mjs",
+    "test:voucher-program": "node --experimental-strip-types desktop/test/voucher-program.mjs",
     "test:audit-fields": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/audit-fields.mjs",
     "test:zalo-payment-done": "node --experimental-strip-types desktop/test/zalo-payment-done.mjs",
     "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs",

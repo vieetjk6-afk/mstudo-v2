@@ -10,6 +10,7 @@ import type { ContractAddendum } from "@/lib/contract-addenda";
 import CalendarButtons from "@/components/CalendarButtons";
 import VietQRButton, { VietQR, qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { thiepUrl } from "@/lib/hosts";
+import PortalVoucher, { type PortalLoyalty } from "./PortalVoucher";
 import { contractPrintBody, contractPrintCss, type ContractPrintData } from "@/lib/contract-print";
 import { compressImage, checkImageFile } from "@/lib/image";
 import {
@@ -127,6 +128,7 @@ export default function ContractView({ token }: { token: string }) {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [addenda, setAddenda] = useState<ContractAddendum[]>([]);
+  const [loyalty, setLoyalty] = useState<PortalLoyalty | null>(null);
   const [bank, setBank] = useState<BankInfo>({ bin: null, account: null, holder: null, name: null });
   const [paidReported, setPaidReported] = useState(false);
   const [proofUploading, setProofUploading] = useState(false);
@@ -210,6 +212,7 @@ export default function ContractView({ token }: { token: string }) {
     setTasks(j.tasks ?? []);
     setProducts(j.products ?? []);
     setAddenda(j.addenda ?? []);
+    setLoyalty(j.loyalty ?? null);
     if (j.bank) setBank(j.bank as BankInfo);
     setMessenger(j.contract?.client_messenger ?? "");
     setBrief({
@@ -815,6 +818,13 @@ export default function ContractView({ token }: { token: string }) {
                     </div>
                   </details>
                 )}
+              </div>
+            )}
+
+            {/* Voucher ưu đãi của chương trình: trước khi ký là lời mời chốt, đủ điều kiện là voucher thật */}
+            {loyalty && (
+              <div className="px-5 pb-5 sm:px-7">
+                <PortalVoucher l={loyalty} studioName={studioName} clientName={contract.client_name} />
               </div>
             )}
 

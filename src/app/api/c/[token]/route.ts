@@ -12,6 +12,7 @@ import { isDeliveryPhase } from "@/lib/album-phase";
 import { isMissingColumn } from "@/lib/missing-column";
 import { listAddenda, signAddendum } from "@/lib/contract-addenda-server";
 import { addendumLabel } from "@/lib/contract-addenda";
+import { contractLoyalty } from "@/lib/voucher-program-server";
 
 export const dynamic = "force-dynamic";
 
@@ -395,5 +396,21 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     appointments: appointments ?? [],
     album,
     addenda: await listAddenda(db, cId),
+    loyalty: await (async () => {
+      // Voucher ưu đãi của chương trình: trước khi ký là lời mời chốt ("lên đến
+      // …"), đủ điều kiện thì phát luôn tại đây. Chỉ gửi đúng phần khách cần.
+      const l = await contractLoyalty(db, cId).catch(() => null);
+      if (!l || l.stage === "off") return null;
+      return {
+        stage: l.stage,
+        amount: l.amount,
+        percent: l.percent,
+        title: l.title,
+        missing: l.missing,
+        voucher: l.voucher && l.voucher.status !== "void"
+          ? { code: l.voucher.code, amount: l.voucher.amount, expires_on: l.voucher.expires_on, public_token: l.voucher.public_token, status: l.voucher.status, title: l.voucher.title }
+          : null,
+      };
+    })(),
   });
 }

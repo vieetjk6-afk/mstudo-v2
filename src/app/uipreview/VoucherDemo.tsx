@@ -6,6 +6,7 @@ import VoucherPublicView from "@/app/voucher/[token]/VoucherPublicView";
 import BookingForm from "@/app/book/[token]/BookingForm";
 import LoyaltyVoucherCard from "@/app/dashboard/studio/contracts/[id]/LoyaltyVoucherCard";
 import VouchersView from "@/app/dashboard/studio/vouchers/VouchersView";
+import PortalVoucher from "@/app/c/[token]/PortalVoucher";
 
 /** Trang khách mở khi quét QR voucher. */
 export function VoucherKhachDemo({ used = false }: { used?: boolean }) {
@@ -51,7 +52,8 @@ export function TangVoucherDemo() {
     <div style={{ maxWidth: 900 }}>
       <LoyaltyVoucherCard
         contractId="c1"
-        signed
+        initialPercent={null}
+        refreshKey="demo"
         clientName="Phạm Thị Nhật Ý"
         clientPhone="0933444555"
         clientMessenger=""
@@ -71,6 +73,8 @@ const base = {
 export function VoucherQuanLyDemo() {
   return (
     <VouchersView
+      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau" }}
+      programMigrated
       migrated
       studioName="Mây Studio"
       studioPhone="0933444555"
@@ -81,5 +85,24 @@ export function VoucherQuanLyDemo() {
         { ...base, id: "v3", code: "QUA-9PXK2M", title: "Voucher chụp ảnh 20/10", amount: 2_000_000, price: 1_800_000, buyer_phone: "0988777666", buyer_name: "Lê Văn Hùng", recipient_name: "Nguyễn Thu Hà", expires_on: "2027-10-20" },
       ]}
     />
+  );
+}
+
+/** Voucher trên cổng hợp đồng của khách, ba giai đoạn. */
+export function PortalVoucherDemo() {
+  const base = { percent: 5, title: "Voucher ưu đãi lần sau", missing: [] as string[], voucher: null };
+  return (
+    <div className="mx-auto max-w-[520px] space-y-6">
+      <p className="text-xs font-bold">1 · Chưa ký</p>
+      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "teaser", amount: 2_000_000 }} />
+      <p className="text-xs font-bold">2 · Đã ký, chờ studio</p>
+      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "pending", amount: 2_000_000, missing: ["Studio xác nhận đã nhận cọc", "Studio ký xác nhận hợp đồng"] }} />
+      <p className="text-xs font-bold">3 · Đã phát</p>
+      <PortalVoucher
+        studioName="Mây Studio"
+        clientName="Phạm Thị Nhật Ý"
+        l={{ ...base, stage: "issued", amount: 2_000_000, voucher: { code: "UD-7K3M9P", amount: 2_000_000, expires_on: "2027-09-29", public_token: "demo-token-1234567890", status: "active", title: "Voucher ưu đãi lần sau" } }}
+      />
+    </div>
   );
 }
