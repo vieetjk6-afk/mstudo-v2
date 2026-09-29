@@ -13,6 +13,8 @@ export type PortalLoyalty = {
   percent: number;
   title: string;
   missing: string[];
+  /** Điều kiện dùng — in dưới lời mời và trên tấm voucher. */
+  terms?: string[];
   voucher: { code: string; amount: number; expires_on: string | null; public_token: string | null; status: string; title: string } | null;
 };
 
@@ -49,6 +51,7 @@ export default function PortalVoucher({ l, studioName, clientName }: { l: Portal
       recipient: clientName,
       qr,
       stateLabel: v.status === "redeemed" ? "Đã dùng" : null,
+      terms: l.terms,
     };
     return (
       <div className="rounded-[16px] px-4 py-5" style={{ background: "#efe6d8", color: "#2b2118" }} data-testid="portal-voucher">
@@ -106,6 +109,9 @@ export default function PortalVoucher({ l, studioName, clientName }: { l: Portal
               Voucher sẽ hiện ở đây ngay khi {l.missing.length ? l.missing.map((s) => s.toLowerCase()).join(" và ") : "studio xác nhận"}.
             </p>
           </>
+        )}
+        {l.terms && l.terms.length > 0 && (
+          <p className="mt-1.5 text-[11.5px]" style={{ color: "#2b211899" }}>{l.terms.join(" · ")}</p>
         )}
       </div>
     </div>

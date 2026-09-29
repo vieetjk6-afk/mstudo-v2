@@ -13,6 +13,7 @@ import { isMissingColumn } from "@/lib/missing-column";
 import { listAddenda, signAddendum } from "@/lib/contract-addenda-server";
 import { addendumLabel } from "@/lib/contract-addenda";
 import { contractLoyalty } from "@/lib/voucher-program-server";
+import { voucherTerms } from "@/lib/vouchers";
 
 export const dynamic = "force-dynamic";
 
@@ -407,6 +408,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
         percent: l.percent,
         title: l.title,
         missing: l.missing,
+        terms: voucherTerms({ kind: "loyalty", applies_to: l.voucher ? l.voucher.applies_to : l.weddingOnly ? "wedding" : null }),
         voucher: l.voucher && l.voucher.status !== "void"
           ? { code: l.voucher.code, amount: l.voucher.amount, expires_on: l.voucher.expires_on, public_token: l.voucher.public_token, status: l.voucher.status, title: l.voucher.title }
           : null,

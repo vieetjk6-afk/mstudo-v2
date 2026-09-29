@@ -88,7 +88,7 @@ export type PkgOption = { name: string; price: number };
 export type DepositInfo = { amount: number; code: string; token: string };
 
 /** Voucher ưu đãi khách mang tới (từ QR, ?voucher=…), đã kiểm ở máy chủ. */
-export type BookingVoucher = { code: string; label: string; ok: boolean; message?: string };
+export type BookingVoucher = { code: string; label: string; ok: boolean; message?: string; terms?: string[]; needsPhone?: boolean };
 
 export default function BookingForm({
   token,
@@ -129,6 +129,8 @@ export default function BookingForm({
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  /** SĐT của hợp đồng được tặng voucher — chỉ cần khi người đặt là người khác. */
+  const [voucherPhone, setVoucherPhone] = useState("");
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
 
   /* Khách này từ đâu tới. ĐỌC MỘT LẦN lúc trang vừa mở, không đọc lúc bấm gửi:
@@ -195,10 +197,18 @@ export default function BookingForm({
           package_name: packageName,
           package_price: packagePrice,
           voucher_code: voucher?.ok ? voucher.code : null,
+          voucher_phone: voucher?.ok ? voucherPhone : null,
           captcha: captchaToken,
           ...attribution,
         }),
       });
+      if (res.status === 400) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        if (j.error === "voucher_phone") {
+          setErr("Số điện thoại xác nhận voucher chưa đúng — nhập SĐT của hợp đồng đã được tặng voucher.");
+          return;
+        }
+      }
       if (res.ok) {
         const data = (await res.json().catch(() => ({}))) as { deposit?: DepositInfo | null };
         // Có cọc VÀ studio đã khai tài khoản nhận tiền thì mới sang bước QR —
@@ -294,6 +304,21 @@ export default function BookingForm({
             <>
               🎁 Đang dùng voucher <b className="font-mono">{voucher.code}</b> · <b>{voucher.label}</b>
               <span className="mt-0.5 block text-[12px] opacity-80">Studio sẽ trừ ưu đãi này thẳng vào hợp đồng của bạn.</span>
+              {voucher.terms && voucher.terms.length > 0 && (
+                <span className="mt-1 block text-[11.5px] opacity-70">{voucher.terms.join(" · ")}</span>
+              )}
+              {voucher.needsPhone && (
+                <label className="mt-2.5 block">
+                  <span className="block text-[12px] font-semibold">SĐT của hợp đồng được tặng voucher</span>
+                  <input
+                    className="input mt-1"
+                    inputMode="tel"
+                    placeholder="Bỏ trống nếu là chính bạn"
+                    value={voucherPhone}
+                    onChange={(e) => setVoucherPhone(e.target.value)}
+                  />
+                </label>
+              )}
             </>
           ) : (
             <>Mã <b className="font-mono">{voucher.code}</b>: {voucher.message} Bạn vẫn đặt lịch bình thường được.</>

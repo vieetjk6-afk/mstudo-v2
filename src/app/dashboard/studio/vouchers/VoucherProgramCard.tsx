@@ -95,6 +95,14 @@ export default function VoucherProgramCard({
           </label>
         </div>
 
+        <label className="flex items-center gap-2.5">
+          <input type="checkbox" className="h-4 w-4" checked={p.wedding_only} onChange={(e) => setP({ ...p, wedding_only: e.target.checked })} />
+          Chỉ áp dụng cho gói <b>phóng sự cưới</b>
+        </label>
+        <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
+          Voucher tặng được cho người khác, khi dùng phải nhập đúng SĐT của hợp đồng được tặng. Không quy đổi thành tiền mặt.
+        </p>
+
         <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
           Ví dụ hợp đồng {vnd(sample)} → voucher <b>{vnd(programAmount(sample, p.percent, p.max_discount))}</b>. Từng hợp đồng tắt được hoặc đặt % riêng ở tab Thanh toán.
         </p>

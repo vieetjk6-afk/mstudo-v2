@@ -30,16 +30,14 @@ export default async function VouchersPage() {
   if (error) ({ data, error } = await q(VOUCHER_COLS_BASE));
 
   const studioHost = await getStudioHost(supabase, profile.id);
-  const prog = await supabase
-    .from("studio_voucher_program")
-    .select("enabled, percent, max_discount, valid_months, title")
-    .eq("owner_id", profile.id)
-    .maybeSingle();
+  const pq = (cols: string) => supabase.from("studio_voucher_program").select(cols).eq("owner_id", profile.id).maybeSingle();
+  let prog = await pq("enabled, percent, max_discount, valid_months, title, wedding_only");
+  if (prog.error) prog = await pq("enabled, percent, max_discount, valid_months, title");
 
   return (
     <VouchersView
       studioHost={studioHost}
-      program={readProgram(prog.data as Partial<VoucherProgram> | null)}
+      program={readProgram(prog.data as unknown as Partial<VoucherProgram> | null)}
       programMigrated={!prog.error}
       initial={(data ?? []) as unknown as Voucher[]}
       migrated={!error}

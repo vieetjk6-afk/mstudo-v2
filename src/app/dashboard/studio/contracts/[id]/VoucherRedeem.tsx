@@ -34,6 +34,9 @@ export default function VoucherRedeem({
   const [code, setCode] = useState("");
   const [found, setFound] = useState<Voucher | null>(null);
   const [busy, setBusy] = useState(false);
+  /** SĐT hợp đồng được tặng — hỏi khi khách của hợp đồng này là NGƯỜI KHÁC. */
+  const [needPhone, setNeedPhone] = useState(false);
+  const [vphone, setVphone] = useState("");
 
   async function call(action: "check" | "redeem") {
     setBusy(true);
@@ -41,7 +44,7 @@ export default function VoucherRedeem({
       const res = await fetch("/api/studio/vouchers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, code, contractId }),
+        body: JSON.stringify({ action, code, contractId, phone: vphone || undefined }),
       });
       return { res, j: await res.json().catch(() => ({})) };
     } finally {
@@ -62,6 +65,10 @@ export default function VoucherRedeem({
   async function redeem() {
     if (found && isLoyalty(found) && beforeLoyalty) await beforeLoyalty();
     const { res, j } = await call("redeem");
+    if (j.error === "phone_mismatch") {
+      setNeedPhone(true);
+      return toast(vphone ? "SĐT chưa khớp với hợp đồng được tặng voucher." : "Voucher của người khác — nhập SĐT của hợp đồng được tặng rồi bấm áp lại.");
+    }
     if (!res.ok) {
       return toast(
         j.error === "missing_migration" ? "Cần chạy supabase/migrations/studio_vouchers.sql trước."
@@ -80,6 +87,8 @@ export default function VoucherRedeem({
     setOpen(false);
     setCode("");
     setFound(null);
+    setNeedPhone(false);
+    setVphone("");
   }
 
   if (!open) {
@@ -111,6 +120,15 @@ export default function VoucherRedeem({
               <span style={{ color: "var(--s-amber)" }}> — lớn hơn số còn phải thu ({vnd(balance)}), khách sẽ thành trả dư</span>
             )}
           </span>
+          {needPhone && (
+            <input
+              className="input w-full sm:w-56"
+              inputMode="tel"
+              placeholder="SĐT hợp đồng được tặng"
+              value={vphone}
+              onChange={(e) => setVphone(e.target.value)}
+            />
+          )}
           <div className="flex-1" />
           <button onClick={redeem} disabled={busy} className="btn-primary px-3 py-1.5 text-xs">
             {busy ? "Đang trừ…" : isLoyalty(found) ? "Áp vào hợp đồng" : `Trừ ${vnd(found.amount)} vào hợp đồng`}

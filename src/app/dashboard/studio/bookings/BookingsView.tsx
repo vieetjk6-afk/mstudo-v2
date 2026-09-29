@@ -169,7 +169,8 @@ export default function BookingsView({
       const r = await fetch("/api/studio/vouchers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "redeem", code: b.voucher_code, contractId: data.id }),
+        // bookingId: máy chủ đã kiểm SĐT mở khoá voucher lúc khách gửi yêu cầu.
+        body: JSON.stringify({ action: "redeem", code: b.voucher_code, contractId: data.id, bookingId: b.id }),
       }).then((x) => x.json()).catch(() => null);
       if (!r?.ok) {
         alert(

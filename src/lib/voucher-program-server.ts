@@ -4,7 +4,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { todayVN } from "@/lib/date";
 import { logAction } from "@/lib/audit-log";
 import { vnd } from "@/lib/types";
-import { VOUCHER_COLS, defaultExpiry, makeVoucherCode, type Voucher } from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_COLS_FULL, defaultExpiry, makeVoucherCode, type Voucher } from "@/lib/vouchers";
 import {
   effectivePercent,
   hasDeposit,
@@ -27,28 +27,26 @@ export type ContractLoyalty = {
   missing: string[];
   title: string;
   voucher: Voucher | null;
+  /** Luật chương trình hiện tại (cho lời mời trước khi phát). */
+  weddingOnly: boolean;
 };
 
-const OFF: ContractLoyalty = { stage: "off", percent: 0, amount: 0, max: null, missing: [], title: "", voucher: null };
+const OFF: ContractLoyalty = { stage: "off", percent: 0, amount: 0, max: null, missing: [], title: "", voucher: null, weddingOnly: false };
 
 export async function loadProgram(db: Db, ownerId: string): Promise<VoucherProgram | null> {
-  const { data, error } = await db
-    .from("studio_voucher_program")
-    .select("enabled, percent, max_discount, valid_months, title")
-    .eq("owner_id", ownerId)
-    .maybeSingle();
-  if (error) return null; // chưa chạy migration → coi như chương trình tắt
-  return readProgram(data as Partial<VoucherProgram> | null);
+  const q = (cols: string) => db.from("studio_voucher_program").select(cols).eq("owner_id", ownerId).maybeSingle();
+  let r = await q("enabled, percent, max_discount, valid_months, title, wedding_only");
+  if (r.error) r = await q("enabled, percent, max_discount, valid_months, title");
+  if (r.error) return null; // chưa chạy migration → coi như chương trình tắt
+  return readProgram(r.data as unknown as Partial<VoucherProgram> | null);
 }
 
 async function issuedVoucher(db: Db, contractId: string): Promise<Voucher | null> {
-  const { data, error } = await db
-    .from("studio_vouchers")
-    .select(VOUCHER_COLS)
-    .eq("source_contract_id", contractId)
-    .eq("program_issued", true)
-    .maybeSingle();
-  return error ? null : ((data as Voucher | null) ?? null);
+  for (const cols of [VOUCHER_COLS_FULL, VOUCHER_COLS]) {
+    const r = await db.from("studio_vouchers").select(cols).eq("source_contract_id", contractId).eq("program_issued", true).maybeSingle();
+    if (!r.error) return (r.data as unknown as Voucher | null) ?? null;
+  }
+  return null;
 }
 
 /**
@@ -85,6 +83,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
       missing: [],
       title: existing.title,
       voucher: existing,
+      weddingOnly: existing.applies_to === "wedding",
     };
   }
   if (!program) return OFF;
@@ -105,7 +104,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
     studioSigned: !!c.studio_signed_at,
   };
   const stage = programStage(input);
-  const base: ContractLoyalty = { stage, percent, amount, max: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null };
+  const base: ContractLoyalty = { stage, percent, amount, max: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null, weddingOnly: program.wedding_only };
   if (stage !== "issued" || opts.issue === false) return base;
 
   const today = todayVN();
@@ -129,6 +128,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
         source_contract_id: c.id,
         expires_on: program.valid_months ? defaultExpiry(today, program.valid_months) : null,
         note: `Chương trình ${percent}% giá trị HĐ ${c.code ?? c.title}`.slice(0, 500),
+        ...(program.wedding_only ? { applies_to: "wedding" } : {}),
       })
       .select(VOUCHER_COLS)
       .single();

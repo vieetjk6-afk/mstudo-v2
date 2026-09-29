@@ -7,7 +7,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import { studioUrl } from "@/lib/hosts";
 import { fmtDate, todayVN } from "@/lib/date";
 import { ensureBookingToken, voucherBookingUrl } from "@/lib/voucher-links";
-import { VOUCHER_COLS, VOUCHER_STATE_LABEL, voucherState, voucherValueLabel, type Voucher } from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_COLS_FULL, VOUCHER_STATE_LABEL, voucherState, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import VoucherPublicView from "./VoucherPublicView";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,9 @@ export const dynamic = "force-dynamic";
 async function load(token: string) {
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(token)) return null;
   const db = createAdminClient();
-  const { data } = await db.from("studio_vouchers").select(`owner_id, ${VOUCHER_COLS}`).eq("public_token", token).maybeSingle();
+  let r = await db.from("studio_vouchers").select(`owner_id, ${VOUCHER_COLS_FULL}`).eq("public_token", token).maybeSingle();
+  if (r.error) r = await db.from("studio_vouchers").select(`owner_id, ${VOUCHER_COLS}`).eq("public_token", token).maybeSingle();
+  const data = r.data;
   if (!data) return null;
   const v = data as Voucher & { owner_id: string };
   if (v.status === "void") return null;
@@ -67,6 +69,7 @@ export default async function VoucherPage(props: { params: Promise<{ token: stri
         recipient: v.recipient_name,
         qr,
         stateLabel: usable ? null : VOUCHER_STATE_LABEL[state],
+        terms: voucherTerms(v),
       }}
       logo={brand.logoUrl}
       bookUrl={bookingToken ? voucherBookingUrl(host, bookingToken, v.code) : null}

@@ -25,6 +25,7 @@ export function VoucherKhachDemo({ used = false }: { used?: boolean }) {
         recipient: "Phạm Thị Nhật Ý",
         qr,
         stateLabel: used ? "Đã dùng" : null,
+        terms: ["Áp dụng cho gói phóng sự cưới.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
       }}
       logo={null}
       bookUrl={used ? null : "/book/demo?voucher=UD-7K3M9P"}
@@ -41,7 +42,7 @@ export function DatLichVoucherDemo({ bad = false }: { bad?: boolean }) {
       token="demo"
       studioName="Mây Studio"
       packages={[{ name: "Chụp cưới · Gói Vàng", price: 15_000_000 }, { name: "Chụp cưới · Gói Bạc", price: 9_000_000 }]}
-      voucher={bad ? { code: "UD-XXXXXX", label: "", ok: false, message: "Voucher đã hết hạn." } : { code: "UD-7K3M9P", label: "Giảm 10% (tối đa 2.000.000đ)", ok: true }}
+      voucher={bad ? { code: "UD-XXXXXX", label: "", ok: false, message: "Voucher đã hết hạn." } : { code: "UD-7K3M9P", label: "Giảm 1.000.000đ", ok: true, needsPhone: true, terms: ["Áp dụng cho gói phóng sự cưới.", "Không có giá trị quy đổi thành tiền mặt."] }}
     />
   );
 }
@@ -73,7 +74,7 @@ const base = {
 export function VoucherQuanLyDemo() {
   return (
     <VouchersView
-      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau" }}
+      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau", wedding_only: true }}
       programMigrated
       migrated
       studioName="Mây Studio"
@@ -90,7 +91,13 @@ export function VoucherQuanLyDemo() {
 
 /** Voucher trên cổng hợp đồng của khách, ba giai đoạn. */
 export function PortalVoucherDemo() {
-  const base = { percent: 5, title: "Voucher ưu đãi lần sau", missing: [] as string[], voucher: null };
+  const base = {
+    percent: 5,
+    title: "Voucher ưu đãi lần sau",
+    missing: [] as string[],
+    voucher: null,
+    terms: ["Áp dụng cho gói phóng sự cưới.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
+  };
   return (
     <div className="mx-auto max-w-[520px] space-y-6">
       <p className="text-xs font-bold">1 · Chưa ký</p>
