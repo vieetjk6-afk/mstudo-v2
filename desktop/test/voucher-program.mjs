@@ -1,6 +1,6 @@
 // Chương trình voucher ưu đãi: % áp cho từng hợp đồng, giá trị, giai đoạn.
 import assert from "node:assert/strict";
-import { effectiveTiers, previewPercent, nextTier, programStage, missingSteps, hasDeposit, readProgram } from "../../src/lib/voucher-program.ts";
+import { effectiveTiers, previewPercent, nextTier, tierAt, tierMax, cleanTiers, programStage, missingSteps, hasDeposit, readProgram } from "../../src/lib/voucher-program.ts";
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log("✓", name); };
@@ -20,6 +20,13 @@ t("% tặng theo giá trị hợp đồng khách chốt", () => {
   assert.equal(previewPercent(tiersOn.tiers, 10_000_000), 5);
   assert.equal(previewPercent(tiersOn.tiers, 25_000_000), 8);
   assert.equal(previewPercent([{ min: 10_000_000, percent: 5 }], 9_000_000), 0, "chưa đạt mốc thấp nhất");
+});
+t("trần tiền giảm theo mốc, không có thì trần chung", () => {
+  const tt = cleanTiers([{ min: 0, percent: 5 }, { min: 30_000_000, percent: 10, max: 3_000_000 }]);
+  assert.equal(tierMax(tierAt(tt, 40_000_000), 1_000_000), 3_000_000, "mốc có trần riêng");
+  assert.equal(tierMax(tierAt(tt, 10_000_000), 1_000_000), 1_000_000, "mốc không trần → trần chung");
+  assert.equal(tierMax(tierAt(tt, 10_000_000), null), null, "không trần nào");
+  assert.deepEqual(cleanTiers([{ min: 0, percent: 5, max: -3 }]), [{ min: 0, percent: 5 }], "trần hỏng bị bỏ");
 });
 t("gợi ý mốc cao hơn kế tiếp", () => {
   assert.deepEqual(nextTier(tiersOn.tiers, 10_000_000), { min: 20_000_000, percent: 8 });

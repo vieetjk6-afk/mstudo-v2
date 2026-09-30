@@ -38,7 +38,12 @@ export type Voucher = {
 };
 
 /** Một mốc của chương trình: hợp đồng CHỐT từ `min` đồng trở lên được tặng voucher `percent`%. */
-export type PercentTier = { min: number; percent: number };
+export type PercentTier = {
+  min: number;
+  percent: number;
+  /** Số tiền giảm tối đa của voucher mốc này · bỏ trống = theo mức tối đa chung của chương trình. */
+  max?: number | null;
+};
 
 /** Cột đọc ra ở mọi nơi. Bản CŨ dùng khi DB chưa chạy studio_vouchers_loyalty.sql. */
 export const VOUCHER_COLS_BASE =
@@ -248,14 +253,15 @@ export function voucherTerms(v: Pick<Voucher, "applies_packages" | "kind">): str
 /** Làm sạch mốc studio nhập: bỏ dòng hỏng, % trong 1–100, mỗi mức tiền một mốc, xếp tăng dần. */
 export function normalizeTiers(raw: unknown): PercentTier[] {
   if (!Array.isArray(raw)) return [];
-  const byMin = new Map<number, number>();
+  const byMin = new Map<number, PercentTier>();
   for (const t of raw) {
     const min = Math.max(0, Math.round(Number((t as PercentTier)?.min) || 0));
     const percent = Math.round(Number((t as PercentTier)?.percent) || 0);
     if (percent < 1 || percent > 100) continue;
-    byMin.set(min, percent);
+    const max = Math.round(Number((t as PercentTier)?.max) || 0);
+    byMin.set(min, { min, percent, ...(max > 0 ? { max } : {}) });
   }
-  return [...byMin.entries()].map(([min, percent]) => ({ min, percent })).sort((a, b) => a.min - b.min);
+  return [...byMin.values()].sort((a, b) => a.min - b.min);
 }
 
 /** % voucher tặng cho hợp đồng chốt `total`: mốc cao nhất mà hợp đồng đạt. Chưa đạt mốc nào = 0. */

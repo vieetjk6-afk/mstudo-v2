@@ -410,7 +410,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
         percent: l.percent,
         value: voucherValueLabel(l.voucher ?? shape),
         // Chưa phát: gợi ý mốc cao hơn kế tiếp để khách cân nhắc thêm gói.
-        hint: !l.voucher && l.next ? `Hợp đồng từ ${vnd(l.next.min)} được tặng voucher ${l.next.percent}%.` : null,
+        hint: !l.voucher && l.next ? `Hợp đồng từ ${vnd(l.next.min)} được tặng voucher ${l.next.percent}%${(l.next.max ?? l.progMax) ? ` (tối đa ${vnd((l.next.max ?? l.progMax) as number)})` : ""}.` : null,
         title: l.title,
         missing: l.missing,
         terms: voucherTerms(l.voucher ? { ...l.voucher, kind: "loyalty" } : shape),

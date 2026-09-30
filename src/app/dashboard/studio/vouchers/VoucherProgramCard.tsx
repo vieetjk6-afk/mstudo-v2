@@ -5,7 +5,7 @@ import { Sparkles, Loader2, Plus, X } from "lucide-react";
 import MoneyInput from "@/components/MoneyInput";
 import { Panel, PanelHead } from "@/components/studio/ui";
 import { vnd } from "@/lib/types";
-import { cleanTiers, maxTierPercent, previewPercent, type VoucherProgram } from "@/lib/voucher-program";
+import { cleanTiers, maxTierPercent, tierAt, tierMax, type VoucherProgram } from "@/lib/voucher-program";
 import type { PercentTier } from "@/lib/vouchers";
 
 /**
@@ -73,11 +73,11 @@ export default function VoucherProgramCard({
           Bật chương trình
         </label>
 
-        <TierEditor tiers={p.tiers} onChange={(tiers) => setP({ ...p, tiers, percent: maxTierPercent(cleanTiers(tiers)) || p.percent })} />
+        <TierEditor tiers={p.tiers} defaultMax={p.max_discount} onChange={(tiers) => setP({ ...p, tiers, percent: maxTierPercent(cleanTiers(tiers)) || p.percent })} />
 
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="block">
-            <span className="label">Tối đa (không bắt buộc)</span>
+            <span className="label">Giảm tối đa chung (mốc không đặt riêng)</span>
             <MoneyInput className="input" value={p.max_discount ?? 0} onChange={(n) => setP({ ...p, max_discount: n > 0 ? n : null })} />
           </label>
           <label className="block">
@@ -109,15 +109,16 @@ export default function VoucherProgramCard({
         <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
           Ví dụ khách chốt{" "}
           {[8_000_000, 20_000_000, 40_000_000].map((t, i) => {
-            const pct = previewPercent(p.tiers, t);
+            const hit = tierAt(p.tiers, t);
+            const cap = tierMax(hit, p.max_discount);
             return (
               <span key={t}>
                 {i ? " · " : ""}
-                {vnd(t)} → voucher <b>{pct ? `giảm ${pct}%` : "không có"}</b>
+                {vnd(t)} → voucher <b>{hit ? `giảm ${hit.percent}%${cap ? ` (tối đa ${vnd(cap)})` : ""}` : "không có"}</b>
               </span>
             );
           })}
-          . Lần sau, số tiền giảm = % đó × giá trị hợp đồng mới{p.max_discount ? `, tối đa ${vnd(p.max_discount)}` : ""}. Từng hợp đồng tắt được hoặc đặt % riêng ở tab Thanh toán.
+          . Lần sau, số tiền giảm = % đó × giá trị hợp đồng mới, không vượt mức tối đa. Từng hợp đồng tắt được hoặc đặt % riêng ở tab Thanh toán.
         </p>
 
         {dirty && (
@@ -195,11 +196,12 @@ function PackagePicker({
 }
 
 /**
- * Bảng mốc %: mỗi dòng "hợp đồng chốt từ X đồng → tặng voucher Y%". Dòng "từ 0đ"
+ * Bảng mốc %: mỗi dòng "hợp đồng chốt từ X đồng → tặng voucher Y%, giảm tối đa
+ * Z đồng" (bỏ trống Z = theo mức tối đa chung). Dòng "từ 0đ"
  * là mức cho mọi hợp đồng dưới các mốc khác; bỏ nó đi thì hợp đồng dưới mốc
  * thấp nhất không được tặng.
  */
-function TierEditor({ tiers, onChange }: { tiers: PercentTier[]; onChange: (t: PercentTier[]) => void }) {
+function TierEditor({ tiers, defaultMax, onChange }: { tiers: PercentTier[]; defaultMax: number | null; onChange: (t: PercentTier[]) => void }) {
   const rows = tiers.length ? tiers : [{ min: 0, percent: 5 }];
   const set = (i: number, patch: Partial<PercentTier>) => onChange(rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   return (
@@ -207,22 +209,34 @@ function TierEditor({ tiers, onChange }: { tiers: PercentTier[]; onChange: (t: P
       <span className="label">Mốc % tặng theo giá trị hợp đồng khách chốt</span>
       <div className="space-y-2">
         {rows.map((r, i) => (
-          <div key={i} className="flex items-center gap-2 text-[13px]">
-            <span className="flex-none" style={{ color: "var(--tx3)" }}>Từ</span>
-            <MoneyInput className="input w-0 min-w-0 flex-1 sm:w-40 sm:flex-none" placeholder="0đ (mọi HĐ)" value={r.min} onChange={(n) => set(i, { min: n })} />
-            <span className="flex-none" style={{ color: "var(--tx3)" }}>→ tặng</span>
-            <input
-              className="input w-14 flex-none text-center"
-              inputMode="numeric"
-              value={r.percent || ""}
-              onChange={(e) => set(i, { percent: Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0) })}
-            />
-            <span>%</span>
-            {rows.length > 1 && (
-              <button type="button" onClick={() => onChange(rows.filter((_, k) => k !== i))} className="p-1" style={{ color: "var(--tx3)" }} aria-label="Xoá mốc">
-                <X size={14} />
-              </button>
-            )}
+          <div key={i} className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-[13px]">
+            <div className="flex w-full items-center gap-2 sm:w-auto">
+              <span className="flex-none" style={{ color: "var(--tx3)" }}>Từ</span>
+              <MoneyInput className="input w-0 min-w-0 flex-1 sm:w-40 sm:flex-none" placeholder="0đ (mọi HĐ)" value={r.min} onChange={(n) => set(i, { min: n })} />
+              <span className="flex-none" style={{ color: "var(--tx3)" }}>→ tặng</span>
+              <input
+                className="input w-14 flex-none text-center"
+                inputMode="numeric"
+                value={r.percent || ""}
+                onChange={(e) => set(i, { percent: Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0) })}
+              />
+              <span>%</span>
+            </div>
+            <div className="flex w-full items-center gap-2 pl-6 sm:w-auto sm:pl-0">
+              <span className="flex-none" style={{ color: "var(--tx3)" }}>tối đa</span>
+              <MoneyInput
+                className="input w-0 min-w-0 flex-1 sm:w-48 sm:flex-none"
+                placeholder={defaultMax ? `${defaultMax.toLocaleString("vi-VN")} (chung)` : "không giới hạn"}
+                value={r.max ?? 0}
+                onChange={(n) => set(i, { max: n > 0 ? n : null })}
+                ariaLabel="Số tiền giảm tối đa của mốc"
+              />
+              {rows.length > 1 && (
+                <button type="button" onClick={() => onChange(rows.filter((_, k) => k !== i))} className="p-1" style={{ color: "var(--tx3)" }} aria-label="Xoá mốc">
+                  <X size={14} />
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

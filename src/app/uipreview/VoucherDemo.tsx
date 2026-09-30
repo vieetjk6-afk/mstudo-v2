@@ -74,7 +74,7 @@ const base = {
 export function VoucherQuanLyDemo() {
   return (
     <VouchersView
-      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau", package_names: ["Phóng sự x2", "Gói combo"], tiers: [{ min: 0, percent: 5 }, { min: 15_000_000, percent: 7 }, { min: 30_000_000, percent: 10 }] }}
+      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau", package_names: ["Phóng sự x2", "Gói combo"], tiers: [{ min: 0, percent: 5 }, { min: 15_000_000, percent: 7 }, { min: 30_000_000, percent: 10, max: 3_000_000 }] }}
       packages={[
         { name: "Truyền thống", group: "Cưới · Gói chụp cơ bản" },
         { name: "Phóng sự x1", group: "Cưới · Gói chụp cơ bản" },

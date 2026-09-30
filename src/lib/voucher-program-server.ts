@@ -10,7 +10,8 @@ import {
   hasDeposit,
   missingSteps,
   nextTier,
-  previewPercent,
+  tierAt,
+  tierMax,
   programStage,
   readProgram,
   type ProgramStage,
@@ -29,7 +30,10 @@ export type ContractLoyalty = {
   total: number;
   /** Mốc cao hơn kế tiếp — gợi ý khách thêm gói để được % cao hơn. Đã phát thì null. */
   next: PercentTier | null;
+  /** Trần tiền giảm của voucher hợp đồng này (mốc riêng hoặc trần chung). */
   max: number | null;
+  /** Trần chung của chương trình (cho mốc không đặt trần riêng). */
+  progMax: number | null;
   missing: string[];
   title: string;
   voucher: Voucher | null;
@@ -37,7 +41,7 @@ export type ContractLoyalty = {
   packages: string[];
 };
 
-const OFF: ContractLoyalty = { stage: "off", percent: 0, tiers: [], total: 0, next: null, max: null, missing: [], title: "", voucher: null, packages: [] };
+const OFF: ContractLoyalty = { stage: "off", percent: 0, tiers: [], total: 0, next: null, max: null, progMax: null, missing: [], title: "", voucher: null, packages: [] };
 
 export async function loadProgram(db: Db, ownerId: string): Promise<VoucherProgram | null> {
   const q = (cols: string) => db.from("studio_voucher_program").select(cols).eq("owner_id", ownerId).maybeSingle();
@@ -89,6 +93,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
       total: 0,
       next: null,
       max: existing.max_discount ?? null,
+      progMax: program?.max_discount ?? null,
       missing: [],
       title: existing.title,
       voucher: existing,
@@ -106,7 +111,10 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
   // vào voucher: hợp đồng sau dùng đúng % đó, tính trên giá trị hợp đồng sau —
   // không phải số tiền cố định (hợp đồng này lớn, hợp đồng sau nhỏ thì trừ quá tay).
   const tiers = effectiveTiers(program, c.loyalty_percent);
-  const percent = previewPercent(tiers, total);
+  const hit = tierAt(tiers, total);
+  const percent = hit?.percent ?? 0;
+  // Trần tiền giảm: của riêng mốc hợp đồng đạt, không có thì trần chung.
+  const max = tierMax(hit, program.max_discount);
   const input = {
     percent,
     cancelled: c.status === "cancelled",
@@ -115,7 +123,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
     studioSigned: !!c.studio_signed_at,
   };
   const stage = programStage(input);
-  const base: ContractLoyalty = { stage, percent, tiers, total, next: nextTier(tiers, total), max: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null, packages: program.package_names };
+  const base: ContractLoyalty = { stage, percent, tiers, total, next: nextTier(tiers, total), max, progMax: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null, packages: program.package_names };
   if (stage !== "issued" || opts.issue === false) return base;
 
   const today = todayVN();
@@ -126,7 +134,7 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
     title: program.title,
     discount_type: "percent",
     percent,
-    max_discount: program.max_discount,
+    max_discount: max,
     amount: 0,
     price: 0,
     paid: true,

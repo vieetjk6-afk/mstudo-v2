@@ -48,22 +48,34 @@ export function effectiveTiers(program: VoucherProgram | null | undefined, contr
 /** Bản làm sạch mốc (giống normalizeTiers ở vouchers.ts — chép lại để file này tự đứng khi test). */
 export function cleanTiers(raw: unknown): PercentTier[] {
   if (!Array.isArray(raw)) return [];
-  const byMin = new Map<number, number>();
+  const byMin = new Map<number, PercentTier>();
   for (const t of raw) {
     const min = Math.max(0, Math.round(Number((t as PercentTier)?.min) || 0));
     const percent = Math.round(Number((t as PercentTier)?.percent) || 0);
-    if (percent >= 1 && percent <= 100) byMin.set(min, percent);
+    const max = Math.round(Number((t as PercentTier)?.max) || 0);
+    if (percent >= 1 && percent <= 100) byMin.set(min, { min, percent, ...(max > 0 ? { max } : {}) });
   }
-  return [...byMin.entries()].map(([min, percent]) => ({ min, percent })).sort((a, b) => a.min - b.min);
+  return [...byMin.values()].sort((a, b) => a.min - b.min);
 }
 
 export const maxTierPercent = (t: PercentTier[]) => t.reduce((m, x) => Math.max(m, x.percent), 0);
 
+/** Mốc hợp đồng chốt `total` đạt được (mốc cao nhất ≤ total) · null = chưa đạt mốc thấp nhất. */
+export function tierAt(tiers: PercentTier[], total: number): PercentTier | null {
+  let hit: PercentTier | null = null;
+  for (const t of cleanTiers(tiers)) if (total >= t.min) hit = t;
+  return hit;
+}
+
 /** % voucher tặng cho hợp đồng chốt `total` (0 = chưa đạt mốc thấp nhất). */
 export function previewPercent(tiers: PercentTier[], total: number): number {
-  let p = 0;
-  for (const t of cleanTiers(tiers)) if (total >= t.min) p = t.percent;
-  return p;
+  return tierAt(tiers, total)?.percent ?? 0;
+}
+
+/** Trần số tiền giảm của voucher: trần riêng của mốc, không có thì trần chung. */
+export function tierMax(tier: PercentTier | null | undefined, programMax: number | null | undefined): number | null {
+  if (tier?.max && tier.max > 0) return tier.max;
+  return programMax && programMax > 0 ? programMax : null;
 }
 
 export type ProgramStage =
