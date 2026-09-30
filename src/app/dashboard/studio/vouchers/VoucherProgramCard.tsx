@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Plus, X } from "lucide-react";
 import MoneyInput from "@/components/MoneyInput";
 import { Panel, PanelHead } from "@/components/studio/ui";
 import { vnd } from "@/lib/types";
-import { programAmount, type VoucherProgram } from "@/lib/voucher-program";
+import { cleanTiers, maxTierPercent, previewPercent, type VoucherProgram } from "@/lib/voucher-program";
+import type { PercentTier } from "@/lib/vouchers";
 
 /**
  * Cài đặt CHƯƠNG TRÌNH voucher ưu đãi — một lần cho cả studio. Bật lên là mọi
@@ -28,7 +29,6 @@ export default function VoucherProgramCard({
   const [saved, setSaved] = useState<VoucherProgram>(initial);
   const [busy, setBusy] = useState(false);
   const dirty = JSON.stringify(p) !== JSON.stringify(saved);
-  const sample = 20_000_000;
 
   async function save(next: VoucherProgram) {
     setBusy(true);
@@ -63,8 +63,9 @@ export default function VoucherProgramCard({
           </p>
         )}
         <p style={{ color: "var(--tx2)" }}>
-          Tặng khách một phần giá trị hợp đồng thành voucher cho lần sau. Tự gắn vào <b>mọi hợp đồng</b>: khách thấy lời mời ngay khi đọc hợp đồng,
-          và nhận voucher khi <b>đã ký + studio xác nhận cọc + studio ký</b>. Hợp đồng huỷ thì voucher tự huỷ.
+          Tặng khách voucher <b>giảm % cho hợp đồng lần sau</b> — % theo các mốc giá trị của chính hợp đồng sau (lớn thì giảm nhiều), nên hợp đồng sau nhỏ
+          không bao giờ bị trừ quá tay. Tự gắn vào <b>mọi hợp đồng</b>: khách thấy lời mời ngay khi đọc hợp đồng, và nhận voucher khi
+          <b> đã ký + studio xác nhận cọc + studio ký</b>. Hợp đồng huỷ thì voucher tự huỷ.
         </p>
 
         <label className="flex items-center gap-2.5 font-semibold">
@@ -72,11 +73,9 @@ export default function VoucherProgramCard({
           Bật chương trình
         </label>
 
-        <div className="grid gap-3 sm:grid-cols-4">
-          <label className="block">
-            <span className="label">% giá trị hợp đồng</span>
-            <input className="input" inputMode="numeric" value={p.percent || ""} onChange={(e) => setP({ ...p, percent: Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0) })} />
-          </label>
+        <TierEditor tiers={p.tiers} onChange={(tiers) => setP({ ...p, tiers, percent: maxTierPercent(cleanTiers(tiers)) || p.percent })} />
+
+        <div className="grid gap-3 sm:grid-cols-3">
           <label className="block">
             <span className="label">Tối đa (không bắt buộc)</span>
             <MoneyInput className="input" value={p.max_discount ?? 0} onChange={(n) => setP({ ...p, max_discount: n > 0 ? n : null })} />
@@ -108,11 +107,23 @@ export default function VoucherProgramCard({
         </p>
 
         <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
-          Ví dụ hợp đồng {vnd(sample)} → voucher <b>{vnd(programAmount(sample, p.percent, p.max_discount))}</b>. Từng hợp đồng tắt được hoặc đặt % riêng ở tab Thanh toán.
+          Ví dụ hợp đồng sau{" "}
+          {[8_000_000, 20_000_000, 40_000_000].map((t, i) => {
+            const pct = previewPercent(p.tiers, t);
+            let d = Math.floor((t * pct) / 100 / 1000) * 1000;
+            if (p.max_discount) d = Math.min(d, p.max_discount);
+            return (
+              <span key={t}>
+                {i ? " · " : ""}
+                {vnd(t)} → giảm <b>{pct}%{pct ? ` = ${vnd(d)}` : ""}</b>
+              </span>
+            );
+          })}
+          . Từng hợp đồng tắt được hoặc đặt % riêng ở tab Thanh toán.
         </p>
 
         {dirty && (
-          <button onClick={() => save(p)} disabled={busy || !migrated || p.percent < 1} className="btn-primary px-3 py-2 text-xs disabled:opacity-50">
+          <button onClick={() => save(p)} disabled={busy || !migrated || cleanTiers(p.tiers).length === 0} className="btn-primary px-3 py-2 text-xs disabled:opacity-50">
             {busy && <Loader2 size={14} className="animate-spin" />} Lưu cài đặt
           </button>
         )}
@@ -181,6 +192,52 @@ function PackagePicker({
       {open && value.length === 0 && packages.length > 0 && (
         <p className="text-[12px]" style={{ color: "var(--am)" }}>Chưa chọn gói nào — đang áp dụng cho mọi gói.</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Bảng mốc %: mỗi dòng "hợp đồng từ X đồng → giảm Y%". Dòng "từ 0đ" là mức cho
+ * mọi hợp đồng dưới các mốc khác; bỏ nó đi thì hợp đồng dưới mốc thấp nhất
+ * không được giảm.
+ */
+function TierEditor({ tiers, onChange }: { tiers: PercentTier[]; onChange: (t: PercentTier[]) => void }) {
+  const rows = tiers.length ? tiers : [{ min: 0, percent: 5 }];
+  const set = (i: number, patch: Partial<PercentTier>) => onChange(rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
+  return (
+    <div>
+      <span className="label">Mốc % theo giá trị hợp đồng sau</span>
+      <div className="space-y-2">
+        {rows.map((r, i) => (
+          <div key={i} className="flex items-center gap-2 text-[13px]">
+            <span className="flex-none" style={{ color: "var(--tx3)" }}>Từ</span>
+            <MoneyInput className="input w-0 min-w-0 flex-1 sm:w-40 sm:flex-none" placeholder="0đ (mọi HĐ)" value={r.min} onChange={(n) => set(i, { min: n })} />
+            <span className="flex-none" style={{ color: "var(--tx3)" }}>→ giảm</span>
+            <input
+              className="input w-14 flex-none text-center"
+              inputMode="numeric"
+              value={r.percent || ""}
+              onChange={(e) => set(i, { percent: Math.min(100, Number(e.target.value.replace(/\D/g, "")) || 0) })}
+            />
+            <span>%</span>
+            {rows.length > 1 && (
+              <button type="button" onClick={() => onChange(rows.filter((_, k) => k !== i))} className="p-1" style={{ color: "var(--tx3)" }} aria-label="Xoá mốc">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          const top = rows.reduce((m, r) => Math.max(m, r.min), 0);
+          onChange([...rows, { min: top ? top * 2 : 15_000_000, percent: Math.min(100, maxTierPercent(cleanTiers(rows)) + 2) }]);
+        }}
+        className="btn-ghost mt-2 px-2.5 py-1.5 text-xs"
+      >
+        <Plus size={13} /> Thêm mốc
+      </button>
     </div>
   );
 }

@@ -10,6 +10,8 @@ import {
   VOUCHER_COLS_BASE,
   VOUCHER_COLS_FULL,
   matchesPackages,
+  normalizeTiers,
+  topPercent,
   phoneUnlocks,
   canRedeem,
   defaultExpiry,
@@ -114,7 +116,9 @@ export async function POST(req: Request) {
 
   // ── Chương trình voucher ưu đãi (tự gắn mọi hợp đồng) ────────────────────
   if (b.action === "program_save") {
-    const percent = Math.round(Number(b.percent) || 0);
+    // Mốc % theo giá trị hợp đồng sau. Không gửi mốc (trình duyệt cũ) → một mức `percent`.
+    const tiers = normalizeTiers(b.tiers).slice(0, 20);
+    const percent = tiers.length ? topPercent(tiers) : Math.round(Number(b.percent) || 0);
     if (percent < 1 || percent > 100) return NextResponse.json({ error: "bad_percent" }, { status: 400 });
     const months = b.valid_months == null || b.valid_months === "" ? null : Math.round(Number(b.valid_months) || 0);
     if (months !== null && (months < 1 || months > 120)) return NextResponse.json({ error: "bad_months" }, { status: 400 });
@@ -129,13 +133,15 @@ export async function POST(req: Request) {
       package_names: Array.isArray(b.package_names)
         ? [...new Set((b.package_names as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.trim().slice(0, 200)).filter(Boolean))].slice(0, 100)
         : [],
+      tiers: tiers.length ? tiers : [{ min: 0, percent }],
       updated_at: new Date().toISOString(),
     };
     let { error } = await db.from("studio_voucher_program").upsert(row, { onConflict: "owner_id" });
-    if (error && /package_names/.test(error.message)) {
-      // DB chưa có cột package_names (chưa chạy bản SQL mới) → lưu phần còn lại.
-      const { package_names: _p, ...rest } = row;
+    if (error && /package_names|tiers/.test(error.message)) {
+      // DB chưa có cột mới (chưa chạy bản SQL mới) → lưu phần còn lại.
+      const { package_names: _p, tiers: _t, ...rest } = row;
       void _p;
+      void _t;
       ({ error } = await db.from("studio_voucher_program").upsert(rest, { onConflict: "owner_id" }));
     }
     if (error) {
@@ -146,7 +152,7 @@ export async function POST(req: Request) {
     }
     await logAction(db, {
       ownerId, actorId: actor, action: "voucher.program", entity: "voucher", entityId: null,
-      summary: `${row.enabled ? "Bật" : "Tắt"} chương trình voucher: ${percent}% HĐ${row.max_discount ? ` · tối đa ${vnd(row.max_discount)}` : ""}${months ? ` · hạn ${months} tháng` : " · không giới hạn"}${row.package_names.length ? ` · gói: ${row.package_names.join(", ")}` : " · mọi gói"}`,
+      summary: `${row.enabled ? "Bật" : "Tắt"} chương trình voucher: ${row.tiers.map((t) => `${t.min ? `từ ${vnd(t.min)} ` : ""}${t.percent}%`).join(" · ")}${row.max_discount ? ` · tối đa ${vnd(row.max_discount)}` : ""}${months ? ` · hạn ${months} tháng` : " · không giới hạn"}${row.package_names.length ? ` · gói: ${row.package_names.join(", ")}` : " · mọi gói"}`,
       after: row,
     });
     return NextResponse.json({ ok: true, program: row });

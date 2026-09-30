@@ -84,3 +84,12 @@ alter table public.studio_vouchers add constraint studio_vouchers_applies_to_che
 -- (wedding_only / applies_to của bản trước không còn dùng.)
 alter table public.studio_voucher_program add column if not exists package_names text[];
 alter table public.studio_vouchers add column if not exists applies_packages text[];
+
+-- ── Mốc % theo giá trị hợp đồng sau ─────────────────────────────────────────
+-- Voucher là % giảm cho HỢP ĐỒNG SAU (không phải số tiền tính từ hợp đồng
+-- trước — hợp đồng trước lớn mà hợp đồng sau nhỏ thì tiền cố định trừ quá tay).
+-- tiers = [{ "min": 0, "percent": 5 }, { "min": 15000000, "percent": 7 }, …]:
+-- hợp đồng sau từ `min` đồng trở lên được giảm `percent`%. Voucher chốt bảng mốc
+-- lúc phát (percent_tiers).
+alter table public.studio_voucher_program add column if not exists tiers jsonb;
+alter table public.studio_vouchers add column if not exists percent_tiers jsonb;

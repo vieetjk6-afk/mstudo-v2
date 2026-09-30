@@ -91,18 +91,35 @@ function fit(ctx: CanvasRenderingContext2D, text: string, max: number): string {
   return `${t}…`;
 }
 
+/** Chia chữ thành các dòng vừa bề ngang (theo từ). */
+function wrap(ctx: CanvasRenderingContext2D, text: string, max: number): string[] {
+  const lines: string[] = [];
+  let line = "";
+  for (const word of text.split(" ")) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && ctx.measureText(next).width > max) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) lines.push(fit(ctx, line, max));
+  return lines;
+}
+
 /** Vẽ thẻ thành PNG (1080×1350, tỉ lệ ảnh dọc của điện thoại). */
 export async function voucherImageBlob(d: TicketData): Promise<Blob | null> {
   const W = 1080;
-  const terms = d.terms ?? [];
-  const H = 1350 + (terms.length ? 24 + terms.length * 40 : 0);
   const c = document.createElement("canvas");
-  c.width = W;
-  c.height = H;
   const ctx = c.getContext("2d");
   if (!ctx) return null;
   const font = (w: number, px: number, mono = false) =>
     `${w} ${px}px ${mono ? "ui-monospace, Menlo, Consolas, monospace" : "-apple-system, 'Segoe UI', Roboto, Arial, sans-serif"}`;
+  // Điều kiện dài (bảng mốc %) xuống dòng thay vì bị cắt "…".
+  ctx.font = font(400, 27);
+  const terms = (d.terms ?? []).flatMap((t) => wrap(ctx, `• ${t}`, W - 240));
+  const H = 1350 + (terms.length ? 24 + terms.length * 40 : 0);
+  c.width = W;
+  c.height = H;
 
   ctx.fillStyle = "#efe6d8";
   ctx.fillRect(0, 0, W, H);
@@ -174,7 +191,7 @@ export async function voucherImageBlob(d: TicketData): Promise<Blob | null> {
   ctx.font = font(400, 28);
   ctx.fillText("Quét mã để đặt lịch kèm ưu đãi", W / 2, y + 1176);
   ctx.font = font(400, 27);
-  terms.forEach((t, i) => ctx.fillText(fit(ctx, `• ${t}`, w - 100), W / 2, y + 1236 + i * 40));
+  terms.forEach((t, i) => ctx.fillText(t, W / 2, y + 1236 + i * 40));
 
   return new Promise((resolve) => c.toBlob((b) => resolve(b), "image/png"));
 }

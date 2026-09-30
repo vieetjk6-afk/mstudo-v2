@@ -242,6 +242,7 @@ function today() {
 export default function ContractEditor({
   contract,
   studioHost = null,
+  savedSignature = null,
   initialItems,
   initialAddenda = [],
   canEditAddenda = false,
@@ -281,6 +282,8 @@ export default function ContractEditor({
 }: {
   contract: StudioContract;
   studioHost?: string | null;
+  /** Chữ ký Bên A studio đã lưu (studio_saved_signature) — ký một chạm. */
+  savedSignature?: { name: string; signature: string } | null;
   storyComingSoon?: boolean;
   initialItems: ContractItem[];
   /** Phụ lục của hợp đồng (chỉ có sau migration contract_addenda.sql). */
@@ -556,6 +559,10 @@ export default function ContractEditor({
   // studio signature
   const [studioSignName, setStudioSignName] = useState(contract.studio_signed_name ?? "");
   const [studioSignature, setStudioSignature] = useState("");
+  /** Chữ ký đã lưu dùng được ngay; `drawNew` = studio muốn ký tay chữ ký khác. */
+  const [savedSig, setSavedSig] = useState(savedSignature);
+  const [drawNew, setDrawNew] = useState(!savedSignature);
+  const [rememberSig, setRememberSig] = useState(true);
 
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1548,8 +1555,14 @@ export default function ContractEditor({
 
   // ── Quote options ──────────────────────────────────────────────
   // ── Studio counter-signature ───────────────────────────────────
-  async function saveStudioSignature() {
-    if (!studioSignName.trim()) {
+  /**
+   * Ký Bên A. `useSaved` = ký bằng chữ ký đã lưu (một chạm). Ký tay mới mà tick
+   * "Lưu để lần sau" thì lưu chữ ký đó thay cho chữ ký cũ.
+   */
+  async function saveStudioSignature(useSaved = false) {
+    const name = useSaved && savedSig ? savedSig.name : studioSignName.trim();
+    const sig = useSaved && savedSig ? savedSig.signature : studioSignature;
+    if (!name) {
       toast("Nhập tên người ký (Bên A).");
       return;
     }
@@ -1557,14 +1570,23 @@ export default function ContractEditor({
     const { error } = await supabase
       .from("studio_contracts")
       .update({
-        studio_signed_name: studioSignName.trim(),
-        ...(studioSignature ? { studio_signature: studioSignature } : {}),
+        studio_signed_name: name,
+        ...(sig ? { studio_signature: sig } : {}),
         studio_signed_at: new Date().toISOString(),
       })
       .eq("id", contract.id);
     setBusy(null);
+    if (!error && !useSaved && rememberSig && sig) {
+      const r = await fetch("/api/studio/signature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, signature: sig }),
+      }).catch(() => null);
+      if (r?.ok) setSavedSig({ name, signature: sig });
+    }
     toast(error ? `Lỗi: ${error.message}` : "Đã lưu chữ ký Bên A.");
     if (!error) {
+      setStudioSignName(name);
       // Ký xong là hợp đồng đã chốt — đẩy luôn lên Google Lịch thay vì đợi lần
       // sửa ô nào đó kế tiếp mới chạy autosave.
       syncContractCalendar();
@@ -3267,14 +3289,41 @@ export default function ContractEditor({
                     </div>
                   </div>
                 )}
-                <input className="input" placeholder="Tên người ký (đại diện studio)" value={studioSignName} onChange={(e) => setStudioSignName(e.target.value)} />
-                <div className="mt-3">
-                  <label className="label">Chữ ký {contract.studio_signed_at ? "(ký lại nếu muốn thay)" : ""}</label>
-                  <SignaturePad onChange={setStudioSignature} />
-                </div>
-                <button onClick={saveStudioSignature} disabled={busy === "sign"} className="btn-primary mt-3">
-                  <PenLine size={15} /> {busy === "sign" ? "Đang lưu…" : "Lưu chữ ký Bên A"}
-                </button>
+                {savedSig && !drawNew ? (
+                  <div className="rounded-xl p-3" style={{ border: "1px solid var(--border)" }} data-testid="saved-signature">
+                    <p className="label">Chữ ký đã lưu</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <img src={savedSig.signature} alt="Chữ ký đã lưu" className="h-14 rounded bg-white p-1" />
+                      <span className="text-sm font-semibold">{savedSig.name}</span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button onClick={() => saveStudioSignature(true)} disabled={busy === "sign"} className="btn-primary">
+                        <PenLine size={15} /> {busy === "sign" ? "Đang ký…" : contract.studio_signed_at ? "Ký lại bằng chữ ký đã lưu" : "Ký bằng chữ ký đã lưu"}
+                      </button>
+                      <button onClick={() => setDrawNew(true)} className="btn-ghost">Ký tay chữ ký khác</button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <input className="input" placeholder="Tên người ký (đại diện studio)" value={studioSignName} onChange={(e) => setStudioSignName(e.target.value)} />
+                    <div className="mt-3">
+                      <label className="label">Chữ ký {contract.studio_signed_at ? "(ký lại nếu muốn thay)" : ""}</label>
+                      <SignaturePad onChange={setStudioSignature} />
+                    </div>
+                    <label className="mt-2 flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={rememberSig} onChange={(e) => setRememberSig(e.target.checked)} />
+                      Lưu chữ ký này để lần sau ký một chạm
+                    </label>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button onClick={() => saveStudioSignature(false)} disabled={busy === "sign"} className="btn-primary">
+                        <PenLine size={15} /> {busy === "sign" ? "Đang lưu…" : "Lưu chữ ký Bên A"}
+                      </button>
+                      {savedSig && (
+                        <button onClick={() => setDrawNew(false)} className="btn-ghost">Dùng chữ ký đã lưu</button>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
               </>
             )}

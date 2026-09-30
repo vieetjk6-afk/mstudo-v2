@@ -3,7 +3,7 @@
 import {
   makeVoucherCode, normalizeVoucherCode, voucherState, canRedeem, defaultExpiry, voucherSummary,
   voucherDiscount, voucherValueLabel, voucherLineName,
-  matchesPackages, phoneUnlocks, samePhoneNumber, voucherTerms,
+  matchesPackages, phoneUnlocks, normalizeTiers, tierFor, tiersLabel, samePhoneNumber, voucherTerms,
 } from "../../src/lib/vouchers.ts";
 
 let fail = 0;
@@ -94,6 +94,22 @@ check("điều kiện in trên voucher (có gói)", voucherTerms({ kind: "loyalt
   "Không có giá trị quy đổi thành tiền mặt.",
 ]);
 check("điều kiện in trên voucher (mọi gói)", voucherTerms({ kind: "loyalty", applies_packages: null }).length, 2);
+
+/* ── mốc % theo giá trị hợp đồng sau ───────────────────────────────────── */
+const tiers = [{ min: 30_000_000, percent: 10 }, { min: 0, percent: 5 }, { min: 15_000_000, percent: 7 }];
+check("mốc xếp tăng dần", normalizeTiers(tiers).map((t) => t.min), [0, 15_000_000, 30_000_000]);
+check("bỏ mốc % hỏng", normalizeTiers([{ min: 0, percent: 0 }, { min: 1, percent: 150 }, { min: 2, percent: 5 }]), [{ min: 2, percent: 5 }]);
+check("HĐ 8tr → 5%", tierFor(tiers, 8_000_000), 5);
+check("HĐ đúng 15tr → 7%", tierFor(tiers, 15_000_000), 7);
+check("HĐ 40tr → 10%", tierFor(tiers, 40_000_000), 10);
+check("chưa đạt mốc thấp nhất → 0", tierFor([{ min: 10_000_000, percent: 5 }], 9_000_000), 0);
+const tv = { kind: "loyalty", discount_type: "percent", percent: 10, max_discount: null, amount: 0, percent_tiers: tiers };
+check("voucher mốc: HĐ sau nhỏ giảm ít", voucherDiscount(tv, 8_000_000), 400_000);
+check("voucher mốc: HĐ sau lớn giảm nhiều", voucherDiscount(tv, 40_000_000), 4_000_000);
+check("voucher mốc có trần", voucherDiscount({ ...tv, max_discount: 3_000_000 }, 40_000_000), 3_000_000);
+check("nhãn voucher mốc", voucherValueLabel(tv), "Giảm đến 10%");
+check("dòng mốc in trên voucher", tiersLabel(tiers), "HĐ từ 30.000.000đ giảm 10% · từ 15.000.000đ giảm 7% · dưới 15.000.000đ giảm 5%.");
+check("một mốc từ 0 thì không in dòng mốc", tiersLabel([{ min: 0, percent: 5 }]), "");
 
 if (fail) {
   console.log(`\n${fail} kiểm thử HỎNG`);

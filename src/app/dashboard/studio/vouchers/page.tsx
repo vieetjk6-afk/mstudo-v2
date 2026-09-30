@@ -40,7 +40,8 @@ export default async function VouchersPage() {
     .gt("price", 0)
     .order("position");
   const pq = (cols: string) => supabase.from("studio_voucher_program").select(cols).eq("owner_id", profile.id).maybeSingle();
-  let prog = await pq("enabled, percent, max_discount, valid_months, title, package_names");
+  let prog = await pq("enabled, percent, max_discount, valid_months, title, package_names, tiers");
+  if (prog.error) prog = await pq("enabled, percent, max_discount, valid_months, title, package_names");
   if (prog.error) prog = await pq("enabled, percent, max_discount, valid_months, title");
 
   return (

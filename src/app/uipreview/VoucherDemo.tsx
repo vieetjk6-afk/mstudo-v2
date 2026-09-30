@@ -25,7 +25,7 @@ export function VoucherKhachDemo({ used = false }: { used?: boolean }) {
         recipient: "Phạm Thị Nhật Ý",
         qr,
         stateLabel: used ? "Đã dùng" : null,
-        terms: ["Áp dụng cho: Phóng sự x2, Gói combo.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
+        terms: ["HĐ từ 30.000.000đ giảm 10% · từ 15.000.000đ giảm 7% · dưới 15.000.000đ giảm 5%.", "Áp dụng cho: Phóng sự x2, Gói combo.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
       }}
       logo={null}
       bookUrl={used ? null : "/book/demo?voucher=UD-7K3M9P"}
@@ -74,7 +74,7 @@ const base = {
 export function VoucherQuanLyDemo() {
   return (
     <VouchersView
-      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau", package_names: ["Phóng sự x2", "Gói combo"] }}
+      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau", package_names: ["Phóng sự x2", "Gói combo"], tiers: [{ min: 0, percent: 5 }, { min: 15_000_000, percent: 7 }, { min: 30_000_000, percent: 10 }] }}
       packages={[
         { name: "Truyền thống", group: "Cưới · Gói chụp cơ bản" },
         { name: "Phóng sự x1", group: "Cưới · Gói chụp cơ bản" },
@@ -103,19 +103,19 @@ export function PortalVoucherDemo() {
     title: "Voucher ưu đãi lần sau",
     missing: [] as string[],
     voucher: null,
-    terms: ["Áp dụng cho: Phóng sự x2, Gói combo.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
+    terms: ["HĐ từ 30.000.000đ giảm 10% · từ 15.000.000đ giảm 7% · dưới 15.000.000đ giảm 5%.", "Áp dụng cho: Phóng sự x2, Gói combo.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
   };
   return (
     <div className="mx-auto max-w-[520px] space-y-6">
       <p className="text-xs font-bold">1 · Chưa ký</p>
-      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "teaser", amount: 2_000_000 }} />
+      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "teaser", value: "Giảm đến 10% (tối đa 3.000.000đ)" }} />
       <p className="text-xs font-bold">2 · Đã ký, chờ studio</p>
-      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "pending", amount: 2_000_000, missing: ["Studio xác nhận đã nhận cọc", "Studio ký xác nhận hợp đồng"] }} />
+      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "pending", value: "Giảm đến 10% (tối đa 3.000.000đ)", missing: ["Studio xác nhận đã nhận cọc", "Studio ký xác nhận hợp đồng"] }} />
       <p className="text-xs font-bold">3 · Đã phát</p>
       <PortalVoucher
         studioName="Mây Studio"
         clientName="Phạm Thị Nhật Ý"
-        l={{ ...base, stage: "issued", amount: 2_000_000, voucher: { code: "UD-7K3M9P", amount: 2_000_000, expires_on: "2027-09-29", public_token: "demo-token-1234567890", status: "active", title: "Voucher ưu đãi lần sau" } }}
+        l={{ ...base, stage: "issued", value: "Giảm đến 10% (tối đa 3.000.000đ)", voucher: { code: "UD-7K3M9P", expires_on: "2027-09-29", public_token: "demo-token-1234567890", status: "active", title: "Voucher ưu đãi lần sau" } }}
       />
     </div>
   );
