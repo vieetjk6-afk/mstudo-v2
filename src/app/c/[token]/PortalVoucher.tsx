@@ -5,22 +5,25 @@ import QRCode from "qrcode";
 import { Gift, Download, ExternalLink } from "lucide-react";
 import { VoucherTicket, saveVoucherImage, type TicketData } from "@/components/voucher/VoucherTicket";
 import { fmtDate } from "@/lib/date";
-import { vnd } from "@/lib/types";
 
 export type PortalLoyalty = {
   stage: "teaser" | "pending" | "issued" | "cancelled";
-  amount: number;
+  /** % voucher khách được tặng — theo mốc giá trị hợp đồng này, dùng cho hợp đồng sau. */
   percent: number;
+  /** "Giảm 10% (tối đa 2.000.000đ)" — máy chủ dựng sẵn. */
+  value: string;
+  /** Mốc cao hơn kế tiếp ("Hợp đồng từ 30.000.000đ được tặng voucher 10%.") — chỉ khi chưa phát. */
+  hint?: string | null;
   title: string;
   missing: string[];
   /** Điều kiện dùng — in dưới lời mời và trên tấm voucher. */
   terms?: string[];
-  voucher: { code: string; amount: number; expires_on: string | null; public_token: string | null; status: string; title: string } | null;
+  voucher: { code: string; expires_on: string | null; public_token: string | null; status: string; title: string } | null;
 };
 
 /**
  * Voucher ưu đãi trên cổng hợp đồng của khách — theo đúng vòng đời chương trình:
- *   · chưa ký   → lời mời "Ký & đặt cọc để nhận voucher lên đến …" (thu hút chốt)
+ *   · chưa ký   → lời mời "Ký & đặt cọc để nhận voucher X%" (thu hút chốt)
  *   · đã ký     → "voucher kích hoạt khi studio xác nhận cọc"
  *   · đủ điều kiện → tấm voucher thật: QR, lưu ảnh, mở trang đặt lịch
  */
@@ -45,7 +48,7 @@ export default function PortalVoucher({ l, studioName, clientName }: { l: Portal
     const ticket: TicketData = {
       studio: studioName,
       title: v.title,
-      value: `Giảm ${vnd(v.amount)}`,
+      value: l.value,
       code: v.code,
       expires: v.expires_on ? fmtDate(v.expires_on) : null,
       recipient: clientName,
@@ -55,7 +58,7 @@ export default function PortalVoucher({ l, studioName, clientName }: { l: Portal
     };
     return (
       <div className="rounded-[16px] px-4 py-5" style={{ background: "#efe6d8", color: "#2b2118" }} data-testid="portal-voucher">
-        <p className="mb-3 text-center text-[13.5px] font-bold">🎉 Bạn được tặng voucher {vnd(v.amount)} cho lần chụp sau!</p>
+        <p className="mb-3 text-center text-[13.5px] font-bold">🎉 Bạn được tặng voucher {l.value.replace(/^Giảm/, "giảm")} cho lần chụp sau!</p>
         <VoucherTicket d={ticket} />
         <div className="mx-auto mt-4 flex max-w-[360px] gap-2">
           <button
@@ -96,15 +99,16 @@ export default function PortalVoucher({ l, studioName, clientName }: { l: Portal
         {l.stage === "teaser" ? (
           <>
             <p className="text-[14.5px] font-extrabold leading-snug">
-              🎁 Ký hợp đồng &amp; đặt cọc để nhận voucher lên đến {vnd(l.amount)}
+              🎁 Ký hợp đồng &amp; đặt cọc để nhận voucher {l.value.replace(/^Giảm/, "giảm")} cho lần chụp sau
             </p>
             <p className="mt-1 text-[12.5px]" style={{ color: "#2b2118bb", textWrap: "pretty" }}>
-              {studioName} tặng {l.percent}% giá trị hợp đồng thành voucher cho lần chụp tiếp theo của bạn.
+              {studioName} tặng voucher theo giá trị hợp đồng này — hợp đồng càng lớn, % tặng càng cao. Lần sau đặt lịch được giảm đúng {l.percent}% giá trị hợp đồng mới.
             </p>
+            {l.hint && <p className="mt-1 text-[12.5px] font-bold" style={{ color: "#8a5a17" }}>✨ {l.hint}</p>}
           </>
         ) : (
           <>
-            <p className="text-[14.5px] font-extrabold leading-snug">🎁 Voucher ~{vnd(l.amount)} đang chờ kích hoạt</p>
+            <p className="text-[14.5px] font-extrabold leading-snug">🎁 Voucher {l.value.replace(/^Giảm/, "giảm")} đang chờ kích hoạt</p>
             <p className="mt-1 text-[12.5px]" style={{ color: "#2b2118bb", textWrap: "pretty" }}>
               Voucher sẽ hiện ở đây ngay khi {l.missing.length ? l.missing.map((s) => s.toLowerCase()).join(" và ") : "studio xác nhận"}.
             </p>

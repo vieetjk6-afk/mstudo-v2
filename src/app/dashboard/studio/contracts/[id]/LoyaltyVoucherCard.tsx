@@ -17,7 +17,10 @@ import { VOUCHER_COLS, VOUCHER_STATE_LABEL, voucherState, voucherTerms, voucherV
 type Loyalty = {
   stage: "off" | "teaser" | "pending" | "issued" | "cancelled";
   percent: number;
-  amount: number;
+  tiers: { min: number; percent: number }[];
+  total: number;
+  next: { min: number; percent: number; max?: number | null } | null;
+  progMax: number | null;
   max: number | null;
   missing: string[];
   voucher: Voucher | null;
@@ -129,10 +132,10 @@ export default function LoyaltyVoucherCard({
           <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>🎟️ Voucher ưu đãi lần sau</p>
           <p className="text-sm" style={{ color: "var(--text2)" }}>
             {!l ? "Đang tải…"
-              : issued ? `Đã tặng khách voucher ${vnd(issued.amount)} (${l.percent}% giá trị hợp đồng).`
+              : issued ? `Đã tặng khách voucher ${voucherValueLabel(issued).replace(/^Giảm/, "giảm")} cho hợp đồng lần sau.`
               : l.stage === "cancelled" ? "Hợp đồng đã huỷ — không tặng voucher."
-              : l.stage === "off" ? (mode === "off" ? "Đã tắt voucher cho hợp đồng này." : "Chương trình voucher đang tắt hoặc hợp đồng chưa có giá.")
-              : `Khách sẽ nhận voucher ~${vnd(l.amount)} (${l.percent}%${l.max ? `, tối đa ${vnd(l.max)}` : ""}) khi đủ điều kiện. Cổng khách đang hiện lời mời này.`}
+              : l.stage === "off" ? (mode === "off" ? "Đã tắt voucher cho hợp đồng này." : l.tiers.length && l.total > 0 ? `Hợp đồng ${vnd(l.total)} chưa đạt mốc tặng voucher thấp nhất.` : "Chương trình voucher đang tắt hoặc hợp đồng chưa có giá.")
+              : `Hợp đồng ${vnd(l.total)} → khách nhận voucher giảm ${l.percent}%${l.max ? ` (tối đa ${vnd(l.max)})` : ""} cho hợp đồng lần sau khi đủ điều kiện. Cổng khách đang hiện lời mời này.${l.next ? ` Lên từ ${vnd(l.next.min)} được ${l.next.percent}%${(l.next.max ?? l.progMax) ? ` (tối đa ${vnd((l.next.max ?? l.progMax) as number)})` : ""}.` : ""}`}
           </p>
         </div>
         <Link href="/dashboard/studio/vouchers" className="text-xs font-semibold" style={{ color: "var(--brand)" }}>Cài đặt chương trình →</Link>

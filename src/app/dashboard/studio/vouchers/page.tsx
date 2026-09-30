@@ -2,6 +2,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { createClient } from "@/lib/supabase/server";
 import { brandFrom } from "@/lib/studio-brand";
 import { getStudioHost } from "@/lib/studio-site";
+import { PRICE_LISTS } from "@/lib/pricelist-seeds";
 import StudioDenied from "@/components/StudioDenied";
 import VouchersView from "./VouchersView";
 import { VOUCHER_COLS, VOUCHER_COLS_BASE, type Voucher } from "@/lib/vouchers";
@@ -30,8 +31,17 @@ export default async function VouchersPage() {
   if (error) ({ data, error } = await q(VOUCHER_COLS_BASE));
 
   const studioHost = await getStudioHost(supabase, profile.id);
+  // Gói trong bảng giá — để studio chọn gói được dùng voucher ưu đãi.
+  const { data: pl } = await supabase
+    .from("studio_pricelist")
+    .select("name, list_key, category")
+    .eq("owner_id", profile.id)
+    .eq("active", true)
+    .gt("price", 0)
+    .order("position");
   const pq = (cols: string) => supabase.from("studio_voucher_program").select(cols).eq("owner_id", profile.id).maybeSingle();
-  let prog = await pq("enabled, percent, max_discount, valid_months, title, wedding_only");
+  let prog = await pq("enabled, percent, max_discount, valid_months, title, package_names, tiers");
+  if (prog.error) prog = await pq("enabled, percent, max_discount, valid_months, title, package_names");
   if (prog.error) prog = await pq("enabled, percent, max_discount, valid_months, title");
 
   return (
@@ -39,6 +49,10 @@ export default async function VouchersPage() {
       studioHost={studioHost}
       program={readProgram(prog.data as unknown as Partial<VoucherProgram> | null)}
       programMigrated={!prog.error}
+      packages={((pl ?? []) as { name: string; list_key: string | null; category: string | null }[]).map((r) => ({
+        name: r.name,
+        group: [PRICE_LISTS.find((l) => l.key === r.list_key)?.label, r.category].filter(Boolean).join(" · ") || "Bảng giá",
+      }))}
       initial={(data ?? []) as unknown as Voucher[]}
       migrated={!error}
       studioName={brandFrom(profile).name}

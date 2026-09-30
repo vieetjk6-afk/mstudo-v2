@@ -4,12 +4,14 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { todayVN } from "@/lib/date";
 import { logAction } from "@/lib/audit-log";
 import { vnd } from "@/lib/types";
-import { VOUCHER_COLS, VOUCHER_COLS_FULL, defaultExpiry, makeVoucherCode, type Voucher } from "@/lib/vouchers";
+import { VOUCHER_COLS, VOUCHER_COLS_FULL, defaultExpiry, makeVoucherCode, type PercentTier, type Voucher } from "@/lib/vouchers";
 import {
-  effectivePercent,
+  effectiveTiers,
   hasDeposit,
   missingSteps,
-  programAmount,
+  nextTier,
+  tierAt,
+  tierMax,
   programStage,
   readProgram,
   type ProgramStage,
@@ -20,22 +22,31 @@ type Db = ReturnType<typeof createAdminClient>;
 
 export type ContractLoyalty = {
   stage: ProgramStage;
+  /** % voucher hợp đồng này được tặng — theo mốc giá trị hợp đồng này (đã phát: % chốt trên voucher). */
   percent: number;
-  /** Chưa phát: giá trị ước tính theo tổng hiện tại. Đã phát: đúng mệnh giá voucher. */
-  amount: number;
+  /** Mốc % của chương trình (theo giá trị hợp đồng khách chốt). */
+  tiers: PercentTier[];
+  /** Giá trị hợp đồng này (tổng các dòng). */
+  total: number;
+  /** Mốc cao hơn kế tiếp — gợi ý khách thêm gói để được % cao hơn. Đã phát thì null. */
+  next: PercentTier | null;
+  /** Trần tiền giảm của voucher hợp đồng này (mốc riêng hoặc trần chung). */
   max: number | null;
+  /** Trần chung của chương trình (cho mốc không đặt trần riêng). */
+  progMax: number | null;
   missing: string[];
   title: string;
   voucher: Voucher | null;
-  /** Luật chương trình hiện tại (cho lời mời trước khi phát). */
-  weddingOnly: boolean;
+  /** Gói được áp dụng (voucher đã phát: đúng danh sách chốt lúc phát). */
+  packages: string[];
 };
 
-const OFF: ContractLoyalty = { stage: "off", percent: 0, amount: 0, max: null, missing: [], title: "", voucher: null, weddingOnly: false };
+const OFF: ContractLoyalty = { stage: "off", percent: 0, tiers: [], total: 0, next: null, max: null, progMax: null, missing: [], title: "", voucher: null, packages: [] };
 
 export async function loadProgram(db: Db, ownerId: string): Promise<VoucherProgram | null> {
   const q = (cols: string) => db.from("studio_voucher_program").select(cols).eq("owner_id", ownerId).maybeSingle();
-  let r = await q("enabled, percent, max_discount, valid_months, title, wedding_only");
+  let r = await q("enabled, percent, max_discount, valid_months, title, package_names, tiers");
+  if (r.error) r = await q("enabled, percent, max_discount, valid_months, title, package_names");
   if (r.error) r = await q("enabled, percent, max_discount, valid_months, title");
   if (r.error) return null; // chưa chạy migration → coi như chương trình tắt
   return readProgram(r.data as unknown as Partial<VoucherProgram> | null);
@@ -77,13 +88,16 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
   if (existing) {
     return {
       stage: existing.status === "void" || c.status === "cancelled" ? "cancelled" : "issued",
-      percent: effectivePercent(program, c.loyalty_percent),
-      amount: existing.amount,
-      max: program?.max_discount ?? null,
+      percent: existing.percent ?? 0,
+      tiers: program?.tiers ?? [],
+      total: 0,
+      next: null,
+      max: existing.max_discount ?? null,
+      progMax: program?.max_discount ?? null,
       missing: [],
       title: existing.title,
       voucher: existing,
-      weddingOnly: existing.applies_to === "wedding",
+      packages: existing.applies_packages ?? [],
     };
   }
   if (!program) return OFF;
@@ -93,57 +107,73 @@ export async function contractLoyalty(db: Db, contractId: string, opts: { issue?
     db.from("contract_payments").select("amount, kind").eq("contract_id", c.id),
   ]);
   const total = ((items ?? []) as { qty: number; unit_price: number }[]).reduce((t, r) => t + (r.qty || 0) * (r.unit_price || 0), 0);
-  const percent = effectivePercent(program, c.loyalty_percent);
-  const amount = programAmount(total, percent, program.max_discount);
+  // % tặng theo mốc giá trị CHÍNH hợp đồng khách chốt (lớn thì % cao), rồi chốt
+  // vào voucher: hợp đồng sau dùng đúng % đó, tính trên giá trị hợp đồng sau —
+  // không phải số tiền cố định (hợp đồng này lớn, hợp đồng sau nhỏ thì trừ quá tay).
+  const tiers = effectiveTiers(program, c.loyalty_percent);
+  const hit = tierAt(tiers, total);
+  const percent = hit?.percent ?? 0;
+  // Trần tiền giảm: của riêng mốc hợp đồng đạt, không có thì trần chung.
+  const max = tierMax(hit, program.max_discount);
   const input = {
     percent,
-    amount,
     cancelled: c.status === "cancelled",
     clientSigned: !!c.client_signed_at,
     depositConfirmed: hasDeposit((pays ?? []) as { amount: number; kind: string | null }[]),
     studioSigned: !!c.studio_signed_at,
   };
   const stage = programStage(input);
-  const base: ContractLoyalty = { stage, percent, amount, max: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null, weddingOnly: program.wedding_only };
+  const base: ContractLoyalty = { stage, percent, tiers, total, next: nextTier(tiers, total), max, progMax: program.max_discount, missing: missingSteps(input), title: program.title, voucher: null, packages: program.package_names };
   if (stage !== "issued" || opts.issue === false) return base;
 
   const today = todayVN();
-  for (let i = 0; i < 5; i++) {
+  const row = {
+    owner_id: c.owner_id,
+    kind: "loyalty",
+    program_issued: true,
+    title: program.title,
+    discount_type: "percent",
+    percent,
+    max_discount: max,
+    amount: 0,
+    price: 0,
+    paid: true,
+    paid_at: today,
+    recipient_name: c.client_name,
+    buyer_phone: c.client_phone,
+    source_contract_id: c.id,
+    expires_on: program.valid_months ? defaultExpiry(today, program.valid_months) : null,
+    note: `Chương trình voucher: HĐ ${c.code ?? c.title} chốt ${vnd(total)} → tặng ${percent}%`.slice(0, 500),
+  };
+  // Gói áp dụng là cột MỚI — DB chưa chạy SQL mới thì phát không kèm giới hạn gói.
+  const extras: Record<string, unknown>[] = [
+    program.package_names.length ? { applies_packages: program.package_names } : {},
+    {},
+  ];
+  let set = 0; // bộ cột đang thử (lùi dần khi DB thiếu cột mới)
+  for (let tries = 0; tries < 8 && set < extras.length; tries++) {
+    const extra = extras[set];
     const { data, error } = await db
       .from("studio_vouchers")
-      .insert({
-        owner_id: c.owner_id,
-        kind: "loyalty",
-        program_issued: true,
-        code: makeVoucherCode(Math.random, "UD"),
-        public_token: randomBytes(16).toString("base64url"),
-        title: program.title,
-        discount_type: "amount",
-        amount,
-        price: 0,
-        paid: true,
-        paid_at: today,
-        recipient_name: c.client_name,
-        buyer_phone: c.client_phone,
-        source_contract_id: c.id,
-        expires_on: program.valid_months ? defaultExpiry(today, program.valid_months) : null,
-        note: `Chương trình ${percent}% giá trị HĐ ${c.code ?? c.title}`.slice(0, 500),
-        ...(program.wedding_only ? { applies_to: "wedding" } : {}),
-      })
+      .insert({ ...row, ...extra, code: makeVoucherCode(Math.random, "UD"), public_token: randomBytes(16).toString("base64url") })
       .select(VOUCHER_COLS)
       .single();
     if (!error && data) {
       const v = data as Voucher;
       await logAction(db, {
         ownerId: c.owner_id, actorId: null, action: "voucher.issue", entity: "voucher", entityId: v.id, contractId: c.id,
-        summary: `Tự tặng voucher ${v.code} · ${vnd(amount)} (${percent}% HĐ) cho ${c.client_name || "khách"}`,
+        summary: `Tự tặng voucher ${v.code} · giảm ${percent}% HĐ lần sau cho ${c.client_name || "khách"} (HĐ này ${vnd(total)})`,
       }).catch(() => undefined);
-      return { ...base, voucher: v, missing: [] };
+      return { ...base, next: null, voucher: { ...v, applies_packages: (extra.applies_packages as string[] | undefined) ?? null }, missing: [] };
     }
     if (error?.code === "23505") {
       // Bên khác vừa phát (cổng khách + màn studio mở cùng lúc) hoặc trùng mã → đọc lại.
       const again = await issuedVoucher(db, c.id);
-      if (again) return { ...base, amount: again.amount, voucher: again, missing: [] };
+      if (again) return { ...base, next: null, percent: again.percent ?? percent, voucher: again, missing: [] };
+      continue;
+    }
+    if (error && /applies_packages/.test(error.message)) {
+      set++;
       continue;
     }
     return base; // lỗi khác: không phát lần này, lần xem sau thử lại

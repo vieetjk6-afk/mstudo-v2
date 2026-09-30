@@ -537,3 +537,11 @@ export const khachGanDay = [
   { name: "Nguyễn Thị Lan Phương", phone: "0912345678", last: D, count: 3 },
   { name: "Trần Văn B", phone: "0987654321", last: "2026-08-01", count: 1 },
 ];
+
+/** Chữ ký Bên A đã lưu (ảnh 1×1 trong suốt thay cho nét ký thật). */
+export const savedSignature = {
+  name: "Nguyễn Văn Mây",
+  signature:
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70"><path d="M10 50 C 40 10, 60 70, 90 30 S 140 60, 170 20 S 200 50, 210 40" stroke="#1e3a8a" stroke-width="3" fill="none"/></svg>'),
+};

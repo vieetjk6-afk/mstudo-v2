@@ -1,34 +1,44 @@
 // Chương trình voucher ưu đãi: % áp cho từng hợp đồng, giá trị, giai đoạn.
 import assert from "node:assert/strict";
-import { effectivePercent, programAmount, programStage, missingSteps, hasDeposit, readProgram } from "../../src/lib/voucher-program.ts";
+import { effectiveTiers, previewPercent, nextTier, tierAt, tierMax, cleanTiers, programStage, missingSteps, hasDeposit, readProgram } from "../../src/lib/voucher-program.ts";
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log("✓", name); };
 const on = { enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher" };
 
+const tiersOn = { ...on, tiers: [{ min: 0, percent: 5 }, { min: 20_000_000, percent: 8 }] };
 t("chương trình tắt → không hợp đồng nào có voucher", () => {
-  assert.equal(effectivePercent({ ...on, enabled: false }, null), 0);
-  assert.equal(effectivePercent({ ...on, enabled: false }, 10), 0);
-  assert.equal(effectivePercent(null, null), 0);
+  assert.deepEqual(effectiveTiers({ ...tiersOn, enabled: false }, null), []);
+  assert.deepEqual(effectiveTiers(null, null), []);
 });
 t("hợp đồng theo chương trình / tắt riêng / % riêng", () => {
-  assert.equal(effectivePercent(on, null), 5);
-  assert.equal(effectivePercent(on, 0), 0);
-  assert.equal(effectivePercent(on, 8), 8);
+  assert.deepEqual(effectiveTiers(tiersOn, null), tiersOn.tiers);
+  assert.deepEqual(effectiveTiers(tiersOn, 0), []);
+  assert.deepEqual(effectiveTiers(tiersOn, 12), [{ min: 0, percent: 12 }]);
 });
-t("giá trị: % × tổng, làm tròn xuống 1.000đ, có trần", () => {
-  assert.equal(programAmount(20_000_000, 5, null), 1_000_000);
-  assert.equal(programAmount(12_345_678, 5, null), 617_000);
-  assert.equal(programAmount(60_000_000, 5, 2_000_000), 2_000_000);
-  assert.equal(programAmount(0, 5, null), 0);
+t("% tặng theo giá trị hợp đồng khách chốt", () => {
+  assert.equal(previewPercent(tiersOn.tiers, 10_000_000), 5);
+  assert.equal(previewPercent(tiersOn.tiers, 25_000_000), 8);
+  assert.equal(previewPercent([{ min: 10_000_000, percent: 5 }], 9_000_000), 0, "chưa đạt mốc thấp nhất");
 });
-const base = { percent: 5, amount: 1_000_000, cancelled: false, clientSigned: false, depositConfirmed: false, studioSigned: false };
+t("trần tiền giảm theo mốc, không có thì trần chung", () => {
+  const tt = cleanTiers([{ min: 0, percent: 5 }, { min: 30_000_000, percent: 10, max: 3_000_000 }]);
+  assert.equal(tierMax(tierAt(tt, 40_000_000), 1_000_000), 3_000_000, "mốc có trần riêng");
+  assert.equal(tierMax(tierAt(tt, 10_000_000), 1_000_000), 1_000_000, "mốc không trần → trần chung");
+  assert.equal(tierMax(tierAt(tt, 10_000_000), null), null, "không trần nào");
+  assert.deepEqual(cleanTiers([{ min: 0, percent: 5, max: -3 }]), [{ min: 0, percent: 5 }], "trần hỏng bị bỏ");
+});
+t("gợi ý mốc cao hơn kế tiếp", () => {
+  assert.deepEqual(nextTier(tiersOn.tiers, 10_000_000), { min: 20_000_000, percent: 8 });
+  assert.equal(nextTier(tiersOn.tiers, 25_000_000), null);
+});
+const base = { percent: 5, cancelled: false, clientSigned: false, depositConfirmed: false, studioSigned: false };
 t("giai đoạn: chưa ký → lời mời", () => assert.equal(programStage(base), "teaser"));
 t("ký rồi mà chưa cọc → chờ", () => assert.equal(programStage({ ...base, clientSigned: true, studioSigned: true }), "pending"));
 t("ký + cọc nhưng studio chưa ký → chờ", () => assert.equal(programStage({ ...base, clientSigned: true, depositConfirmed: true }), "pending"));
 t("đủ ba điều kiện → phát", () => assert.equal(programStage({ ...base, clientSigned: true, depositConfirmed: true, studioSigned: true }), "issued"));
 t("hợp đồng huỷ thắng mọi thứ", () => assert.equal(programStage({ ...base, cancelled: true, clientSigned: true, depositConfirmed: true, studioSigned: true }), "cancelled"));
-t("giá trị 0 → tắt", () => assert.equal(programStage({ ...base, amount: 0 }), "off"));
+t("không có mốc → tắt", () => assert.equal(programStage({ ...base, percent: 0 }), "off"));
 t("liệt kê việc còn thiếu", () => {
   assert.deepEqual(missingSteps({ ...base, clientSigned: true }), ["Studio xác nhận đã nhận cọc", "Studio ký xác nhận hợp đồng"]);
 });
@@ -39,8 +49,9 @@ t("cọc = lần thu thật, không tính hoàn tiền / trừ voucher", () => {
 });
 t("đọc cài đặt: chưa có dòng → mặc định TẮT", () => {
   assert.equal(readProgram(null).enabled, false);
+  assert.deepEqual(readProgram({ enabled: true, percent: 6 }).tiers, [{ min: 0, percent: 6 }], "chưa có cột mốc → một mức");
   assert.equal(readProgram({ enabled: true, percent: 7, valid_months: null }).valid_months, null);
-  assert.equal(readProgram({ enabled: true }).wedding_only, true, "chưa có cột → mặc định chỉ phóng sự cưới");
-  assert.equal(readProgram({ enabled: true, wedding_only: false }).wedding_only, false);
+  assert.deepEqual(readProgram({ enabled: true }).package_names, [], "chưa có cột → mọi gói");
+  assert.deepEqual(readProgram({ enabled: true, package_names: ["Phóng sự x2", "", null] }).package_names, ["Phóng sự x2"]);
 });
 console.log(`\n${n} ca đạt`);

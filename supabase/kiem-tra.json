@@ -18,6 +18,7 @@
     "migrations/studio_vouchers.sql",
     "migrations/studio_vouchers_loyalty.sql",
     "migrations/studio_voucher_program.sql",
+    "migrations/studio_saved_signature.sql",
     "migrations/studio_audit_log.sql",
     "migrations/contract_crew_milestone.sql",
     "migrations/contract_item_tier_milestone.sql"
@@ -725,10 +726,21 @@
       ],
       "cot": [
         "studio_contracts.loyalty_percent",
+        "studio_voucher_program.package_names",
+        "studio_voucher_program.tiers",
         "studio_voucher_program.wedding_only",
+        "studio_vouchers.applies_packages",
         "studio_vouchers.applies_to",
         "studio_vouchers.program_issued"
       ]
+    },
+    {
+      "file": "migrations/studio_saved_signature.sql",
+      "mo_ta": "Lưu chữ ký Bên A của studio để ký hợp đồng một chạm",
+      "bang": [
+        "studio_saved_signature"
+      ],
+      "cot": []
     },
     {
       "file": "migrations/studio_audit_log.sql",

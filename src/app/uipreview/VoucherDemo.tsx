@@ -25,7 +25,7 @@ export function VoucherKhachDemo({ used = false }: { used?: boolean }) {
         recipient: "Phạm Thị Nhật Ý",
         qr,
         stateLabel: used ? "Đã dùng" : null,
-        terms: ["Áp dụng cho gói phóng sự cưới.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
+        terms: ["Áp dụng cho: Phóng sự x2, Gói combo.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
       }}
       logo={null}
       bookUrl={used ? null : "/book/demo?voucher=UD-7K3M9P"}
@@ -42,7 +42,7 @@ export function DatLichVoucherDemo({ bad = false }: { bad?: boolean }) {
       token="demo"
       studioName="Mây Studio"
       packages={[{ name: "Chụp cưới · Gói Vàng", price: 15_000_000 }, { name: "Chụp cưới · Gói Bạc", price: 9_000_000 }]}
-      voucher={bad ? { code: "UD-XXXXXX", label: "", ok: false, message: "Voucher đã hết hạn." } : { code: "UD-7K3M9P", label: "Giảm 1.000.000đ", ok: true, needsPhone: true, terms: ["Áp dụng cho gói phóng sự cưới.", "Không có giá trị quy đổi thành tiền mặt."] }}
+      voucher={bad ? { code: "UD-XXXXXX", label: "", ok: false, message: "Voucher đã hết hạn." } : { code: "UD-7K3M9P", label: "Giảm 1.000.000đ", ok: true, needsPhone: true, terms: ["Áp dụng cho: Phóng sự x2, Gói combo.", "Không có giá trị quy đổi thành tiền mặt."] }}
     />
   );
 }
@@ -74,7 +74,14 @@ const base = {
 export function VoucherQuanLyDemo() {
   return (
     <VouchersView
-      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau", wedding_only: true }}
+      program={{ enabled: true, percent: 5, max_discount: 2_000_000, valid_months: 12, title: "Voucher ưu đãi lần sau", package_names: ["Phóng sự x2", "Gói combo"], tiers: [{ min: 0, percent: 5 }, { min: 15_000_000, percent: 7 }, { min: 30_000_000, percent: 10, max: 3_000_000 }] }}
+      packages={[
+        { name: "Truyền thống", group: "Cưới · Gói chụp cơ bản" },
+        { name: "Phóng sự x1", group: "Cưới · Gói chụp cơ bản" },
+        { name: "Phóng sự x2", group: "Cưới · Gói chụp cơ bản" },
+        { name: "Gói quay cơ bản", group: "Cưới · Gói quay PS ngày cưới" },
+        { name: "Gói combo", group: "Cưới · Gói quay PS ngày cưới" },
+      ]}
       programMigrated
       migrated
       studioName="Mây Studio"
@@ -92,23 +99,23 @@ export function VoucherQuanLyDemo() {
 /** Voucher trên cổng hợp đồng của khách, ba giai đoạn. */
 export function PortalVoucherDemo() {
   const base = {
-    percent: 5,
+    percent: 7,
     title: "Voucher ưu đãi lần sau",
     missing: [] as string[],
     voucher: null,
-    terms: ["Áp dụng cho gói phóng sự cưới.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
+    terms: ["Áp dụng cho: Phóng sự x2, Gói combo.", "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.", "Không có giá trị quy đổi thành tiền mặt."],
   };
   return (
     <div className="mx-auto max-w-[520px] space-y-6">
       <p className="text-xs font-bold">1 · Chưa ký</p>
-      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "teaser", amount: 2_000_000 }} />
+      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "teaser", value: "Giảm 7% (tối đa 3.000.000đ)", hint: "Hợp đồng từ 30.000.000đ được tặng voucher 10%." }} />
       <p className="text-xs font-bold">2 · Đã ký, chờ studio</p>
-      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "pending", amount: 2_000_000, missing: ["Studio xác nhận đã nhận cọc", "Studio ký xác nhận hợp đồng"] }} />
+      <PortalVoucher studioName="Mây Studio" clientName="Phạm Thị Nhật Ý" l={{ ...base, stage: "pending", value: "Giảm 7% (tối đa 3.000.000đ)", missing: ["Studio xác nhận đã nhận cọc", "Studio ký xác nhận hợp đồng"] }} />
       <p className="text-xs font-bold">3 · Đã phát</p>
       <PortalVoucher
         studioName="Mây Studio"
         clientName="Phạm Thị Nhật Ý"
-        l={{ ...base, stage: "issued", amount: 2_000_000, voucher: { code: "UD-7K3M9P", amount: 2_000_000, expires_on: "2027-09-29", public_token: "demo-token-1234567890", status: "active", title: "Voucher ưu đãi lần sau" } }}
+        l={{ ...base, stage: "issued", value: "Giảm 7% (tối đa 3.000.000đ)", voucher: { code: "UD-7K3M9P", expires_on: "2027-09-29", public_token: "demo-token-1234567890", status: "active", title: "Voucher ưu đãi lần sau" } }}
       />
     </div>
   );

@@ -175,12 +175,19 @@ export default async function ContractPage(
   // full_name/pl_logo_url) — bản PDF hợp đồng in đúng thương hiệu này.
   const brand = brandFrom(profile);
   const studioHost = await getStudioHost(supabase, profile.id);
+  // Chữ ký Bên A đã lưu — chưa chạy migration thì đơn giản là chưa có.
+  const { data: savedSig } = await supabase
+    .from("studio_saved_signature")
+    .select("signer_name, signature")
+    .eq("owner_id", profile.id)
+    .maybeSingle();
   const storyLocked = storyComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin";
 
   return (
     <ContractEditor
       contract={contract as StudioContract}
       studioHost={studioHost}
+      savedSignature={savedSig ? { name: savedSig.signer_name as string, signature: savedSig.signature as string } : null}
       storyComingSoon={storyLocked}
       bank={{
         bin: (profile.pl_bank_bin as string | null) ?? null,

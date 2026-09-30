@@ -3,7 +3,7 @@
 import {
   makeVoucherCode, normalizeVoucherCode, voucherState, canRedeem, defaultExpiry, voucherSummary,
   voucherDiscount, voucherValueLabel, voucherLineName,
-  isWeddingContract, phoneUnlocks, samePhoneNumber, voucherTerms,
+  matchesPackages, phoneUnlocks, normalizeTiers, tierFor, tiersLabel, samePhoneNumber, voucherTerms,
 } from "../../src/lib/vouchers.ts";
 
 let fail = 0;
@@ -81,15 +81,36 @@ check("người khác nhập đúng SĐT gốc dùng được", phoneUnlocks(lv,
 check("người khác không có SĐT gốc thì không", phoneUnlocks(lv, "0911222333", ""), false);
 check("thẻ quà không cần SĐT", phoneUnlocks({ kind: "gift", buyer_phone: "0933444555" }, null), true);
 check("voucher cũ không ghi SĐT không cần kiểm", phoneUnlocks({ kind: "loyalty", buyer_phone: null }, null), true);
-check("gói phóng sự cưới theo tên hạng mục", isWeddingContract("photo", ["Cưới · Phóng sự x2"]), true);
-check("PSC theo loại dịch vụ", isWeddingContract("psc", []), true);
-check("prewedding không phải phóng sự cưới", isWeddingContract("prewedding", ["Chụp prewedding Đà Lạt"]), false);
-check("kỷ yếu không phải", isWeddingContract("photo", ["Chụp kỷ yếu lớp 12A"]), false);
-check("điều kiện in trên voucher", voucherTerms({ kind: "loyalty", applies_to: "wedding" }), [
-  "Áp dụng cho gói phóng sự cưới.",
+check("không chọn gói → mọi gói", matchesPackages([], ["Chụp kỷ yếu"]), true);
+check("null → mọi gói", matchesPackages(null, []), true);
+check("đúng tên gói", matchesPackages(["Phóng sự x2"], ["Phóng sự x2", "Makeup"]), true);
+check("tên gói trong hạng mục từ đặt lịch (có tiền tố)", matchesPackages(["Phóng sự x2"], ["Cưới · Phóng sự x2"]), true);
+check("không phân biệt dấu / hoa thường", matchesPackages(["Phóng sự x2"], ["PHONG SU X2"]), true);
+check("gói khác thì không", matchesPackages(["Phóng sự x2"], ["Phóng sự x1", "Truyền thống"]), false);
+check("hợp đồng chưa có hạng mục thì không", matchesPackages(["Gói combo"], []), false);
+check("điều kiện in trên voucher (có gói)", voucherTerms({ kind: "loyalty", applies_packages: ["Phóng sự x2", "Gói combo"] }), [
+  "Áp dụng cho: Phóng sự x2, Gói combo.",
   "Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.",
   "Không có giá trị quy đổi thành tiền mặt.",
 ]);
+check("điều kiện in trên voucher (mọi gói)", voucherTerms({ kind: "loyalty", applies_packages: null }).length, 2);
+
+/* ── mốc % theo giá trị hợp đồng khách chốt ───────────────────────────────────── */
+const tiers = [{ min: 30_000_000, percent: 10 }, { min: 0, percent: 5 }, { min: 15_000_000, percent: 7 }];
+check("mốc xếp tăng dần", normalizeTiers(tiers).map((t) => t.min), [0, 15_000_000, 30_000_000]);
+check("bỏ mốc % hỏng", normalizeTiers([{ min: 0, percent: 0 }, { min: 1, percent: 150 }, { min: 2, percent: 5 }]), [{ min: 2, percent: 5 }]);
+check("HĐ 8tr → 5%", tierFor(tiers, 8_000_000), 5);
+check("HĐ đúng 15tr → 7%", tierFor(tiers, 15_000_000), 7);
+check("HĐ 40tr → 10%", tierFor(tiers, 40_000_000), 10);
+check("chưa đạt mốc thấp nhất → 0", tierFor([{ min: 10_000_000, percent: 5 }], 9_000_000), 0);
+// Voucher phát ra chốt MỘT % (theo giá trị HĐ gốc) → HĐ sau giảm đúng % đó trên giá trị HĐ sau.
+const tv = { kind: "loyalty", discount_type: "percent", percent: 7, max_discount: null, amount: 0 };
+check("voucher 7%: HĐ sau 8tr giảm 560k", voucherDiscount(tv, 8_000_000), 560_000);
+check("voucher 7%: HĐ sau 40tr giảm 2,8tr", voucherDiscount(tv, 40_000_000), 2_800_000);
+check("voucher có trần", voucherDiscount({ ...tv, max_discount: 2_000_000 }, 40_000_000), 2_000_000);
+check("nhãn voucher", voucherValueLabel(tv), "Giảm 7%");
+check("dòng mốc (lời mời)", tiersLabel(tiers), "HĐ từ 30.000.000đ tặng 10% · từ 15.000.000đ tặng 7% · dưới 15.000.000đ tặng 5%.");
+check("một mốc từ 0 thì không in dòng mốc", tiersLabel([{ min: 0, percent: 5 }]), "");
 
 if (fail) {
   console.log(`\n${fail} kiểm thử HỎNG`);

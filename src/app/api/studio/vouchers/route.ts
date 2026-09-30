@@ -9,7 +9,9 @@ import {
   VOUCHER_COLS,
   VOUCHER_COLS_BASE,
   VOUCHER_COLS_FULL,
-  isWeddingContract,
+  matchesPackages,
+  normalizeTiers,
+  topPercent,
   phoneUnlocks,
   canRedeem,
   defaultExpiry,
@@ -114,7 +116,9 @@ export async function POST(req: Request) {
 
   // ── Chương trình voucher ưu đãi (tự gắn mọi hợp đồng) ────────────────────
   if (b.action === "program_save") {
-    const percent = Math.round(Number(b.percent) || 0);
+    // Mốc % theo giá trị hợp đồng khách chốt. Không gửi mốc (trình duyệt cũ) → một mức `percent`.
+    const tiers = normalizeTiers(b.tiers).slice(0, 20);
+    const percent = tiers.length ? topPercent(tiers) : Math.round(Number(b.percent) || 0);
     if (percent < 1 || percent > 100) return NextResponse.json({ error: "bad_percent" }, { status: 400 });
     const months = b.valid_months == null || b.valid_months === "" ? null : Math.round(Number(b.valid_months) || 0);
     if (months !== null && (months < 1 || months > 120)) return NextResponse.json({ error: "bad_months" }, { status: 400 });
@@ -125,14 +129,19 @@ export async function POST(req: Request) {
       max_discount: Number(b.max_discount) > 0 ? Math.round(Number(b.max_discount)) : null,
       valid_months: months,
       title: str(b.title, 120) ?? "Voucher ưu đãi lần sau",
-      wedding_only: b.wedding_only !== false,
+      // Gói được áp dụng: tên gói trong bảng giá (tối đa 100, mỗi tên ≤ 200 ký tự). Rỗng = mọi gói.
+      package_names: Array.isArray(b.package_names)
+        ? [...new Set((b.package_names as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.trim().slice(0, 200)).filter(Boolean))].slice(0, 100)
+        : [],
+      tiers: tiers.length ? tiers : [{ min: 0, percent }],
       updated_at: new Date().toISOString(),
     };
     let { error } = await db.from("studio_voucher_program").upsert(row, { onConflict: "owner_id" });
-    if (error && /wedding_only/.test(error.message)) {
-      // DB chưa có cột wedding_only (chưa chạy bản SQL mới) → lưu phần còn lại.
-      const { wedding_only: _w, ...rest } = row;
-      void _w;
+    if (error && /package_names|tiers/.test(error.message)) {
+      // DB chưa có cột mới (chưa chạy bản SQL mới) → lưu phần còn lại.
+      const { package_names: _p, tiers: _t, ...rest } = row;
+      void _p;
+      void _t;
       ({ error } = await db.from("studio_voucher_program").upsert(rest, { onConflict: "owner_id" }));
     }
     if (error) {
@@ -143,7 +152,7 @@ export async function POST(req: Request) {
     }
     await logAction(db, {
       ownerId, actorId: actor, action: "voucher.program", entity: "voucher", entityId: null,
-      summary: `${row.enabled ? "Bật" : "Tắt"} chương trình voucher: ${percent}% HĐ${row.max_discount ? ` · tối đa ${vnd(row.max_discount)}` : ""}${months ? ` · hạn ${months} tháng` : " · không giới hạn"}`,
+      summary: `${row.enabled ? "Bật" : "Tắt"} chương trình voucher: ${row.tiers.map((t) => `${t.min ? `từ ${vnd(t.min)} ` : ""}${t.percent}%`).join(" · ")}${row.max_discount ? ` · tối đa ${vnd(row.max_discount)}` : ""}${months ? ` · hạn ${months} tháng` : " · không giới hạn"}${row.package_names.length ? ` · gói: ${row.package_names.join(", ")}` : " · mọi gói"}`,
       after: row,
     });
     return NextResponse.json({ ok: true, program: row });
@@ -335,16 +344,8 @@ export async function POST(req: Request) {
 
     const { data: items } = await db.from("contract_items").select("name, qty, unit_price, position").eq("contract_id", contract.id);
     const rows = (items ?? []) as { name: string | null; qty: number; unit_price: number; position: number | null }[];
-    if (v.applies_to === "wedding") {
-      const { data: meta } = await db
-        .from("studio_contracts")
-        .select("shoot_type, title, service:studio_services(name)")
-        .eq("id", contract.id)
-        .maybeSingle();
-      const m = meta as { shoot_type?: string | null; title?: string | null; service?: { name?: string | null } | null } | null;
-      if (!isWeddingContract(m?.shoot_type, [m?.service?.name, m?.title, ...rows.map((r) => r.name)])) {
-        return NextResponse.json({ error: "not_wedding" }, { status: 409 });
-      }
+    if (!matchesPackages(v.applies_packages, rows.map((r) => r.name))) {
+      return NextResponse.json({ error: "not_package", packages: v.applies_packages }, { status: 409 });
     }
     const total = rows.reduce((t, r) => t + (r.qty || 0) * (r.unit_price || 0), 0);
     const discount = voucherDiscount(v, total);

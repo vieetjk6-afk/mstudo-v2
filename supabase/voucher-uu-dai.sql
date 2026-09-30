@@ -65,6 +65,34 @@ alter table public.studio_voucher_program enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/studio_saved_signature.sql — Lưu chữ ký Bên A của studio để ký hợp đồng một chạm
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- CHỮ KÝ BÊN A ĐÃ LƯU CỦA STUDIO
+--
+-- Studio ký xác nhận hợp đồng rất nhiều lần — mỗi lần vẽ lại chữ ký trên màn
+-- hình vừa mất công vừa mỗi lần một khác. Lưu MỘT chữ ký (tên người đại diện +
+-- ảnh chữ ký) cho cả studio; lần sau bấm "Ký bằng chữ ký đã lưu" là xong.
+--
+-- Chỉ ghi qua route /api/studio/signature (chủ / quản lý), để một tài khoản
+-- nhân viên bất kỳ không thay được chữ ký đại diện của studio. Thành viên
+-- studio đọc được (màn hợp đồng cần hiện ra để ký).
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+create table if not exists public.studio_saved_signature (
+  owner_id    uuid primary key references public.profiles (id) on delete cascade,
+  signer_name text not null,
+  signature   text not null,              -- ảnh PNG data URL
+  updated_by  uuid references public.profiles (id) on delete set null,
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.studio_saved_signature enable row level security;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -272,6 +300,22 @@ alter table public.studio_vouchers drop constraint if exists studio_vouchers_app
 
 alter table public.studio_vouchers add constraint studio_vouchers_applies_to_check check (applies_to is null or applies_to in ('wedding'));
 
+-- ── Gói được áp dụng (studio tự chọn) ───────────────────────────────────────
+-- package_names: tên các gói trong bảng giá (studio_pricelist.name) mà voucher
+-- được dùng. Rỗng / null = mọi gói. Voucher chốt danh sách lúc phát
+-- (applies_packages) — studio đổi cài đặt sau không đổi voucher khách đang cầm.
+-- (wedding_only / applies_to của bản trước không còn dùng.)
+alter table public.studio_voucher_program add column if not exists package_names text[];
+
+alter table public.studio_vouchers add column if not exists applies_packages text[];
+
+-- ── Mốc % theo giá trị hợp đồng khách chốt ──────────────────────────────────
+-- tiers = [{ "min": 0, "percent": 5 }, { "min": 15000000, "percent": 7 }, …]:
+-- hợp đồng CHỐT từ `min` đồng trở lên được tặng voucher `percent`%. Lúc phát,
+-- % được chốt vào voucher (cột percent) — hợp đồng sau dùng đúng % đó, tính
+-- trên giá trị hợp đồng sau, có trần max_discount.
+alter table public.studio_voucher_program add column if not exists tiers jsonb;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 3 — PHÂN QUYỀN, RLS & POLICY (chạy sau khi mọi bảng/cột đã có)
@@ -294,6 +338,16 @@ create policy studio_vouchers_member_read on public.studio_vouchers
 drop policy if exists studio_voucher_program_member_read on public.studio_voucher_program;
 
 create policy studio_voucher_program_member_read on public.studio_voucher_program
+  for select using (public.is_studio_member(owner_id));
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/studio_saved_signature.sql — Lưu chữ ký Bên A của studio để ký hợp đồng một chạm
+-- ══════════════════════════════════════════════════════════════════════════
+
+drop policy if exists studio_saved_signature_member_read on public.studio_saved_signature;
+
+create policy studio_saved_signature_member_read on public.studio_saved_signature
   for select using (public.is_studio_member(owner_id));
 
 

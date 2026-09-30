@@ -157,6 +157,7 @@ export const SCREENS: Record<
             sameDayContracts={[]}
             pricelist={f.pricelistRows}
             initialTab={tab}
+            savedSignature={tab === "send" ? f.savedSignature : null}
           />
         ),
       },

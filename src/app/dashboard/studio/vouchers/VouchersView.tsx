@@ -44,7 +44,9 @@ export default function VouchersView({
   studioHost,
   program,
   programMigrated,
+  packages = [],
 }: {
+  packages?: { name: string; group: string }[];
   studioHost: string | null;
   program: VoucherProgram;
   programMigrated: boolean;
@@ -170,7 +172,7 @@ export default function VouchersView({
         </div>
       )}
 
-      <VoucherProgramCard initial={program} migrated={programMigrated} toast={toast} />
+      <VoucherProgramCard initial={program} migrated={programMigrated} toast={toast} packages={packages} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard icon={Ticket} label="Đã bán" value={String(sum.sold)} sub="không tính thẻ đã huỷ" />
