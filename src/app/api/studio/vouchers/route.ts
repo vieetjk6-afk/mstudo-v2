@@ -116,7 +116,7 @@ export async function POST(req: Request) {
 
   // ── Chương trình voucher ưu đãi (tự gắn mọi hợp đồng) ────────────────────
   if (b.action === "program_save") {
-    // Mốc % theo giá trị hợp đồng sau. Không gửi mốc (trình duyệt cũ) → một mức `percent`.
+    // Mốc % theo giá trị hợp đồng khách chốt. Không gửi mốc (trình duyệt cũ) → một mức `percent`.
     const tiers = normalizeTiers(b.tiers).slice(0, 20);
     const percent = tiers.length ? topPercent(tiers) : Math.round(Number(b.percent) || 0);
     if (percent < 1 || percent > 100) return NextResponse.json({ error: "bad_percent" }, { status: 400 });

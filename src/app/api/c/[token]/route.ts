@@ -14,6 +14,7 @@ import { listAddenda, signAddendum } from "@/lib/contract-addenda-server";
 import { addendumLabel } from "@/lib/contract-addenda";
 import { contractLoyalty } from "@/lib/voucher-program-server";
 import { voucherTerms, voucherValueLabel } from "@/lib/vouchers";
+import { vnd } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -398,15 +399,18 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     album,
     addenda: await listAddenda(db, cId),
     loyalty: await (async () => {
-      // Voucher ưu đãi của chương trình: trước khi ký là lời mời chốt ("lên đến
-      // …"), đủ điều kiện thì phát luôn tại đây. Chỉ gửi đúng phần khách cần.
+      // Voucher ưu đãi của chương trình: trước khi ký là lời mời chốt ("ký & cọc
+      // để nhận voucher X%"), đủ điều kiện thì phát luôn tại đây. Chỉ gửi đúng
+      // phần khách cần.
       const l = await contractLoyalty(db, cId).catch(() => null);
       if (!l || l.stage === "off") return null;
-      const shape = { kind: "loyalty" as const, discount_type: "percent" as const, percent: l.percent, amount: 0, max_discount: l.max, percent_tiers: l.tiers, applies_packages: l.packages };
+      const shape = { kind: "loyalty" as const, discount_type: "percent" as const, percent: l.percent, amount: 0, max_discount: l.max, applies_packages: l.packages };
       return {
         stage: l.stage,
         percent: l.percent,
         value: voucherValueLabel(l.voucher ?? shape),
+        // Chưa phát: gợi ý mốc cao hơn kế tiếp để khách cân nhắc thêm gói.
+        hint: !l.voucher && l.next ? `Hợp đồng từ ${vnd(l.next.min)} được tặng voucher ${l.next.percent}%.` : null,
         title: l.title,
         missing: l.missing,
         terms: voucherTerms(l.voucher ? { ...l.voucher, kind: "loyalty" } : shape),

@@ -63,8 +63,8 @@ export default function VoucherProgramCard({
           </p>
         )}
         <p style={{ color: "var(--tx2)" }}>
-          Tặng khách voucher <b>giảm % cho hợp đồng lần sau</b> — % theo các mốc giá trị của chính hợp đồng sau (lớn thì giảm nhiều), nên hợp đồng sau nhỏ
-          không bao giờ bị trừ quá tay. Tự gắn vào <b>mọi hợp đồng</b>: khách thấy lời mời ngay khi đọc hợp đồng, và nhận voucher khi
+          Tặng khách voucher <b>giảm % cho hợp đồng lần sau</b>. Hợp đồng khách chốt càng lớn thì % tặng càng cao (theo các mốc bên dưới);
+          lần sau khách được giảm đúng % đó trên giá trị hợp đồng mới. Tự gắn vào <b>mọi hợp đồng</b>: khách thấy lời mời ngay khi đọc hợp đồng, và nhận voucher khi
           <b> đã ký + studio xác nhận cọc + studio ký</b>. Hợp đồng huỷ thì voucher tự huỷ.
         </p>
 
@@ -107,19 +107,17 @@ export default function VoucherProgramCard({
         </p>
 
         <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
-          Ví dụ hợp đồng sau{" "}
+          Ví dụ khách chốt{" "}
           {[8_000_000, 20_000_000, 40_000_000].map((t, i) => {
             const pct = previewPercent(p.tiers, t);
-            let d = Math.floor((t * pct) / 100 / 1000) * 1000;
-            if (p.max_discount) d = Math.min(d, p.max_discount);
             return (
               <span key={t}>
                 {i ? " · " : ""}
-                {vnd(t)} → giảm <b>{pct}%{pct ? ` = ${vnd(d)}` : ""}</b>
+                {vnd(t)} → voucher <b>{pct ? `giảm ${pct}%` : "không có"}</b>
               </span>
             );
           })}
-          . Từng hợp đồng tắt được hoặc đặt % riêng ở tab Thanh toán.
+          . Lần sau, số tiền giảm = % đó × giá trị hợp đồng mới{p.max_discount ? `, tối đa ${vnd(p.max_discount)}` : ""}. Từng hợp đồng tắt được hoặc đặt % riêng ở tab Thanh toán.
         </p>
 
         {dirty && (
@@ -197,22 +195,22 @@ function PackagePicker({
 }
 
 /**
- * Bảng mốc %: mỗi dòng "hợp đồng từ X đồng → giảm Y%". Dòng "từ 0đ" là mức cho
- * mọi hợp đồng dưới các mốc khác; bỏ nó đi thì hợp đồng dưới mốc thấp nhất
- * không được giảm.
+ * Bảng mốc %: mỗi dòng "hợp đồng chốt từ X đồng → tặng voucher Y%". Dòng "từ 0đ"
+ * là mức cho mọi hợp đồng dưới các mốc khác; bỏ nó đi thì hợp đồng dưới mốc
+ * thấp nhất không được tặng.
  */
 function TierEditor({ tiers, onChange }: { tiers: PercentTier[]; onChange: (t: PercentTier[]) => void }) {
   const rows = tiers.length ? tiers : [{ min: 0, percent: 5 }];
   const set = (i: number, patch: Partial<PercentTier>) => onChange(rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   return (
     <div>
-      <span className="label">Mốc % theo giá trị hợp đồng sau</span>
+      <span className="label">Mốc % tặng theo giá trị hợp đồng khách chốt</span>
       <div className="space-y-2">
         {rows.map((r, i) => (
           <div key={i} className="flex items-center gap-2 text-[13px]">
             <span className="flex-none" style={{ color: "var(--tx3)" }}>Từ</span>
             <MoneyInput className="input w-0 min-w-0 flex-1 sm:w-40 sm:flex-none" placeholder="0đ (mọi HĐ)" value={r.min} onChange={(n) => set(i, { min: n })} />
-            <span className="flex-none" style={{ color: "var(--tx3)" }}>→ giảm</span>
+            <span className="flex-none" style={{ color: "var(--tx3)" }}>→ tặng</span>
             <input
               className="input w-14 flex-none text-center"
               inputMode="numeric"

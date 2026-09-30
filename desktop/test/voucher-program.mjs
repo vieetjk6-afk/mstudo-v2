@@ -1,6 +1,6 @@
 // Chương trình voucher ưu đãi: % áp cho từng hợp đồng, giá trị, giai đoạn.
 import assert from "node:assert/strict";
-import { effectiveTiers, previewPercent, programStage, missingSteps, hasDeposit, readProgram } from "../../src/lib/voucher-program.ts";
+import { effectiveTiers, previewPercent, nextTier, programStage, missingSteps, hasDeposit, readProgram } from "../../src/lib/voucher-program.ts";
 
 let n = 0;
 const t = (name, fn) => { fn(); n++; console.log("✓", name); };
@@ -16,9 +16,14 @@ t("hợp đồng theo chương trình / tắt riêng / % riêng", () => {
   assert.deepEqual(effectiveTiers(tiersOn, 0), []);
   assert.deepEqual(effectiveTiers(tiersOn, 12), [{ min: 0, percent: 12 }]);
 });
-t("xem thử % theo giá trị hợp đồng sau", () => {
+t("% tặng theo giá trị hợp đồng khách chốt", () => {
   assert.equal(previewPercent(tiersOn.tiers, 10_000_000), 5);
   assert.equal(previewPercent(tiersOn.tiers, 25_000_000), 8);
+  assert.equal(previewPercent([{ min: 10_000_000, percent: 5 }], 9_000_000), 0, "chưa đạt mốc thấp nhất");
+});
+t("gợi ý mốc cao hơn kế tiếp", () => {
+  assert.deepEqual(nextTier(tiersOn.tiers, 10_000_000), { min: 20_000_000, percent: 8 });
+  assert.equal(nextTier(tiersOn.tiers, 25_000_000), null);
 });
 const base = { percent: 5, cancelled: false, clientSigned: false, depositConfirmed: false, studioSigned: false };
 t("giai đoạn: chưa ký → lời mời", () => assert.equal(programStage(base), "teaser"));

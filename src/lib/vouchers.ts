@@ -35,11 +35,9 @@ export type Voucher = {
   public_token?: string | null;
   /** Tên các gói trong bảng giá được dùng voucher này · null/rỗng = mọi gói */
   applies_packages?: string[] | null;
-  /** Mốc %: giá trị hợp đồng DÙNG voucher càng cao thì % càng cao. Có mốc thì bỏ qua `percent`. */
-  percent_tiers?: PercentTier[] | null;
 };
 
-/** Một mốc: hợp đồng từ `min` đồng trở lên được giảm `percent`%. */
+/** Một mốc của chương trình: hợp đồng CHỐT từ `min` đồng trở lên được tặng voucher `percent`%. */
 export type PercentTier = { min: number; percent: number };
 
 /** Cột đọc ra ở mọi nơi. Bản CŨ dùng khi DB chưa chạy studio_vouchers_loyalty.sql. */
@@ -47,7 +45,7 @@ export const VOUCHER_COLS_BASE =
   "id, code, title, amount, price, buyer_name, buyer_phone, recipient_name, paid, paid_method, paid_at, expires_on, status, redeemed_contract_id, redeemed_at, note, created_at";
 export const VOUCHER_COLS = `${VOUCHER_COLS_BASE}, kind, discount_type, percent, max_discount, source_contract_id, public_token`;
 /** Có thêm applies_packages (studio_voucher_program.sql). Luôn đọc kèm đường lùi về VOUCHER_COLS. */
-export const VOUCHER_COLS_FULL = `${VOUCHER_COLS}, applies_packages, percent_tiers`;
+export const VOUCHER_COLS_FULL = `${VOUCHER_COLS}, applies_packages`;
 
 /** Trạng thái HIỂN THỊ: gộp cả hạn dùng và việc đã thu tiền hay chưa. */
 export type VoucherState = "usable" | "unpaid" | "expired" | "redeemed" | "void";
@@ -121,15 +119,8 @@ export const REDEEM_ERROR_TEXT: Record<Exclude<RedeemCheck, { ok: true }>["error
 export const isLoyalty = (v: Pick<Voucher, "kind">) => v.kind === "loyalty";
 
 /** "Giảm 10% (tối đa 2.000.000đ)" · "Giảm 500.000đ" · thẻ quà: "2.000.000đ". */
-export function voucherValueLabel(v: Pick<Voucher, "kind" | "discount_type" | "percent" | "max_discount" | "amount" | "percent_tiers">): string {
+export function voucherValueLabel(v: Pick<Voucher, "kind" | "discount_type" | "percent" | "max_discount" | "amount">): string {
   const money = (n: number) => Math.round(n).toLocaleString("vi-VN") + "đ";
-  const tiers = normalizeTiers(v.percent_tiers);
-  if (tiers.length > 1) {
-    return `Giảm đến ${topPercent(tiers)}%${v.max_discount ? ` (tối đa ${money(v.max_discount)})` : ""}`;
-  }
-  if (tiers.length === 1) {
-    return `Giảm ${tiers[0].percent}%${v.max_discount ? ` (tối đa ${money(v.max_discount)})` : ""}`;
-  }
   if (v.discount_type === "percent" && v.percent) {
     return `Giảm ${v.percent}%${v.max_discount ? ` (tối đa ${money(v.max_discount)})` : ""}`;
   }
@@ -142,18 +133,12 @@ export function voucherValueLabel(v: Pick<Voucher, "kind" | "discount_type" | "p
  * trần max_discount, và không bao giờ vượt quá tổng hợp đồng.
  */
 export function voucherDiscount(
-  v: Pick<Voucher, "discount_type" | "percent" | "max_discount" | "amount" | "percent_tiers">,
+  v: Pick<Voucher, "discount_type" | "percent" | "max_discount" | "amount">,
   total: number
 ): number {
   const base = Math.max(0, Math.round(total));
   let d: number;
-  const tiers = normalizeTiers(v.percent_tiers);
-  if (tiers.length) {
-    // Mốc % theo giá trị CHÍNH hợp đồng đang dùng voucher.
-    const pct = tierFor(tiers, base);
-    d = Math.floor((base * pct) / 100 / 1000) * 1000;
-    if (v.max_discount && v.max_discount > 0) d = Math.min(d, v.max_discount);
-  } else if (v.discount_type === "percent" && v.percent) {
+  if (v.discount_type === "percent" && v.percent) {
     d = Math.floor((base * v.percent) / 100 / 1000) * 1000;
     if (v.max_discount && v.max_discount > 0) d = Math.min(d, v.max_discount);
   } else {
@@ -163,7 +148,7 @@ export function voucherDiscount(
 }
 
 /** Tên dòng giảm giá ghi vào hợp đồng — có MÃ để luôn truy ngược được về voucher. */
-export function voucherLineName(v: Pick<Voucher, "code" | "discount_type" | "percent" | "kind" | "max_discount" | "amount" | "percent_tiers">): string {
+export function voucherLineName(v: Pick<Voucher, "code" | "discount_type" | "percent" | "kind" | "max_discount" | "amount">): string {
   return `Voucher ${v.code} · ${voucherValueLabel(v)}`.slice(0, 200);
 }
 
@@ -248,11 +233,9 @@ export function matchesPackages(packages: string[] | null | undefined, itemNames
 }
 
 /** Dòng điều kiện in trên voucher / trang khách. */
-export function voucherTerms(v: Pick<Voucher, "applies_packages" | "kind" | "percent_tiers">): string[] {
+export function voucherTerms(v: Pick<Voucher, "applies_packages" | "kind">): string[] {
   if (v.kind !== "loyalty") return ["Không quy đổi thành tiền mặt."];
   const out = [];
-  const tl = tiersLabel(normalizeTiers(v.percent_tiers));
-  if (tl) out.push(tl);
   const pk = (v.applies_packages ?? []).filter(Boolean);
   if (pk.length) out.push(`Áp dụng cho: ${pk.join(", ")}.`);
   out.push("Tặng được người khác, khi dùng nhập đúng SĐT hợp đồng gốc.");
@@ -275,7 +258,7 @@ export function normalizeTiers(raw: unknown): PercentTier[] {
   return [...byMin.entries()].map(([min, percent]) => ({ min, percent })).sort((a, b) => a.min - b.min);
 }
 
-/** % của hợp đồng có tổng `total`: mốc cao nhất mà hợp đồng đạt. Chưa đạt mốc nào = 0. */
+/** % voucher tặng cho hợp đồng chốt `total`: mốc cao nhất mà hợp đồng đạt. Chưa đạt mốc nào = 0. */
 export function tierFor(tiers: PercentTier[], total: number): number {
   let pct = 0;
   for (const t of normalizeTiers(tiers)) if (total >= t.min) pct = t.percent;
@@ -286,16 +269,16 @@ export function topPercent(tiers: PercentTier[]): number {
   return normalizeTiers(tiers).reduce((m, t) => Math.max(m, t.percent), 0);
 }
 
-/** "HĐ từ 30.000.000đ giảm 10% · từ 15.000.000đ giảm 7% · dưới 15.000.000đ giảm 5%." */
+/** "HĐ từ 30.000.000đ tặng 10% · từ 15.000.000đ tặng 7% · dưới 15.000.000đ tặng 5%." */
 export function tiersLabel(tiers: PercentTier[]): string {
   const t = normalizeTiers(tiers);
   if (t.length <= 1) {
-    return t.length && t[0].min > 0 ? `Áp dụng cho hợp đồng từ ${money0(t[0].min)}.` : "";
+    return t.length && t[0].min > 0 ? `Hợp đồng từ ${money0(t[0].min)} được tặng ${t[0].percent}%.` : "";
   }
   const parts = [...t].reverse().map((x, i, arr) => {
     const isLowest = i === arr.length - 1;
-    if (isLowest && x.min === 0) return `dưới ${money0(arr[i - 1].min)} giảm ${x.percent}%`;
-    return `${i === 0 ? "HĐ từ" : "từ"} ${money0(x.min)} giảm ${x.percent}%`;
+    if (isLowest && x.min === 0) return `dưới ${money0(arr[i - 1].min)} tặng ${x.percent}%`;
+    return `${i === 0 ? "HĐ từ" : "từ"} ${money0(x.min)} tặng ${x.percent}%`;
   });
   return parts.join(" · ") + ".";
 }

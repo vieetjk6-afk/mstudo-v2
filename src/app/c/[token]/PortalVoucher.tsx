@@ -8,10 +8,12 @@ import { fmtDate } from "@/lib/date";
 
 export type PortalLoyalty = {
   stage: "teaser" | "pending" | "issued" | "cancelled";
-  /** % cao nhất (mốc cao nhất) khách có thể được ở hợp đồng sau. */
+  /** % voucher khách được tặng — theo mốc giá trị hợp đồng này, dùng cho hợp đồng sau. */
   percent: number;
-  /** "Giảm đến 10% (tối đa 2.000.000đ)" — máy chủ dựng sẵn. */
+  /** "Giảm 10% (tối đa 2.000.000đ)" — máy chủ dựng sẵn. */
   value: string;
+  /** Mốc cao hơn kế tiếp ("Hợp đồng từ 30.000.000đ được tặng voucher 10%.") — chỉ khi chưa phát. */
+  hint?: string | null;
   title: string;
   missing: string[];
   /** Điều kiện dùng — in dưới lời mời và trên tấm voucher. */
@@ -21,7 +23,7 @@ export type PortalLoyalty = {
 
 /**
  * Voucher ưu đãi trên cổng hợp đồng của khách — theo đúng vòng đời chương trình:
- *   · chưa ký   → lời mời "Ký & đặt cọc để nhận voucher lên đến …" (thu hút chốt)
+ *   · chưa ký   → lời mời "Ký & đặt cọc để nhận voucher X%" (thu hút chốt)
  *   · đã ký     → "voucher kích hoạt khi studio xác nhận cọc"
  *   · đủ điều kiện → tấm voucher thật: QR, lưu ảnh, mở trang đặt lịch
  */
@@ -100,8 +102,9 @@ export default function PortalVoucher({ l, studioName, clientName }: { l: Portal
               🎁 Ký hợp đồng &amp; đặt cọc để nhận voucher {l.value.replace(/^Giảm/, "giảm")} cho lần chụp sau
             </p>
             <p className="mt-1 text-[12.5px]" style={{ color: "#2b2118bb", textWrap: "pretty" }}>
-              {studioName} tặng bạn voucher giảm giá theo % giá trị hợp đồng lần sau — hợp đồng càng lớn, ưu đãi càng cao.
+              {studioName} tặng voucher theo giá trị hợp đồng này — hợp đồng càng lớn, % tặng càng cao. Lần sau đặt lịch được giảm đúng {l.percent}% giá trị hợp đồng mới.
             </p>
+            {l.hint && <p className="mt-1 text-[12.5px] font-bold" style={{ color: "#8a5a17" }}>✨ {l.hint}</p>}
           </>
         ) : (
           <>

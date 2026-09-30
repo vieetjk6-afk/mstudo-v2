@@ -10,8 +10,9 @@ export type VoucherProgram = {
   /** % mặc định cũ (một mức). Chương trình mới dùng `tiers`. */
   percent: number;
   /**
-   * Mốc % theo giá trị hợp đồng DÙNG voucher (hợp đồng sau): hợp đồng càng lớn
-   * giảm càng nhiều. Studio tự điền. Không có mốc → một mức `percent`.
+   * Mốc % theo giá trị hợp đồng KHÁCH CHỐT: hợp đồng càng lớn thì voucher tặng
+   * % càng cao. % đó chốt vào voucher và áp nguyên cho hợp đồng sau. Studio tự
+   * điền. Không có mốc → một mức `percent`.
    */
   tiers: PercentTier[];
   max_discount: number | null;
@@ -58,7 +59,7 @@ export function cleanTiers(raw: unknown): PercentTier[] {
 
 export const maxTierPercent = (t: PercentTier[]) => t.reduce((m, x) => Math.max(m, x.percent), 0);
 
-/** % hợp đồng có tổng `total` được hưởng (để studio xem thử). */
+/** % voucher tặng cho hợp đồng chốt `total` (0 = chưa đạt mốc thấp nhất). */
 export function previewPercent(tiers: PercentTier[], total: number): number {
   let p = 0;
   for (const t of cleanTiers(tiers)) if (total >= t.min) p = t.percent;
@@ -66,9 +67,9 @@ export function previewPercent(tiers: PercentTier[], total: number): number {
 }
 
 export type ProgramStage =
-  /** chương trình tắt / hợp đồng tắt / giá trị 0 */
+  /** chương trình tắt / hợp đồng tắt / chưa đạt mốc thấp nhất */
   | "off"
-  /** chưa ký — cổng khách "nhận voucher lên đến …" */
+  /** chưa ký — cổng khách mời "ký & cọc để nhận voucher X%" */
   | "teaser"
   /** khách đã ký, chờ studio xác nhận cọc và/hoặc ký */
   | "pending"
@@ -78,7 +79,7 @@ export type ProgramStage =
   | "cancelled";
 
 export type StageInput = {
-  /** % cao nhất khách có thể được (mốc cao nhất) — 0 = không có voucher. */
+  /** % voucher hợp đồng này được tặng (theo mốc) — 0 = không có voucher. */
   percent: number;
   cancelled: boolean;
   clientSigned: boolean;
@@ -120,4 +121,10 @@ export function readProgram(row: Partial<VoucherProgram> | null | undefined): Vo
     title: (row.title || "").trim() || DEFAULT_PROGRAM.title,
     package_names: Array.isArray(row.package_names) ? row.package_names.filter((s) => typeof s === "string" && s.trim()) : [],
   };
+}
+
+/** Mốc kế tiếp cao hơn mức hợp đồng đang đạt — để gợi ý khách "thêm … nhận Y%". */
+export function nextTier(tiers: PercentTier[], total: number): PercentTier | null {
+  const cur = previewPercent(tiers, total);
+  return cleanTiers(tiers).find((t) => t.min > total && t.percent > cur) ?? null;
 }
