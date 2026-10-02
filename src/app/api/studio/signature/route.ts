@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   const name = String(b.name ?? "").trim().slice(0, 120);
   const signature = String(b.signature ?? "");
   if (!name) return NextResponse.json({ error: "no_name" }, { status: 400 });
-  if (signature.length > 200_000) return NextResponse.json({ error: "too_large" }, { status: 413 });
+  if (signature.length > 600_000) return NextResponse.json({ error: "too_large" }, { status: 413 });
   if (!SIG.test(signature)) return NextResponse.json({ error: "bad_signature" }, { status: 400 });
 
   const db = createAdminClient();

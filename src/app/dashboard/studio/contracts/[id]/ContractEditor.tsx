@@ -239,6 +239,53 @@ function today() {
   return todayVN();
 }
 
+/**
+ * Thu nhỏ ảnh chữ ký (canvas trên máy Retina rất to) — cắt sát nét ký và giới
+ * hạn bề ngang, để lưu / in nhẹ và không vượt giới hạn dung lượng.
+ */
+async function shrinkSignature(dataUrl: string): Promise<string> {
+  if (!dataUrl || typeof document === "undefined") return dataUrl;
+  try {
+    const img = await new Promise<HTMLImageElement>((ok, bad) => {
+      const i = new Image();
+      i.onload = () => ok(i);
+      i.onerror = bad;
+      i.src = dataUrl;
+    });
+    const src = document.createElement("canvas");
+    src.width = img.width;
+    src.height = img.height;
+    const sctx = src.getContext("2d");
+    if (!sctx) return dataUrl;
+    sctx.drawImage(img, 0, 0);
+    const { data, width, height } = sctx.getImageData(0, 0, src.width, src.height);
+    let x0 = width, y0 = height, x1 = -1, y1 = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (data[(y * width + x) * 4 + 3] > 8) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < 0) return dataUrl;
+    const pad = 8;
+    x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad);
+    x1 = Math.min(width - 1, x1 + pad); y1 = Math.min(height - 1, y1 + pad);
+    const w = x1 - x0 + 1, h = y1 - y0 + 1;
+    const scale = Math.min(1, 600 / w, 240 / h);
+    const out = document.createElement("canvas");
+    out.width = Math.max(1, Math.round(w * scale));
+    out.height = Math.max(1, Math.round(h * scale));
+    out.getContext("2d")?.drawImage(src, x0, y0, w, h, 0, 0, out.width, out.height);
+    return out.toDataURL("image/png");
+  } catch {
+    return dataUrl;
+  }
+}
+
 export default function ContractEditor({
   contract,
   studioHost = null,
@@ -1564,7 +1611,7 @@ export default function ContractEditor({
    */
   async function saveStudioSignature(useSaved = false) {
     const name = useSaved && savedSig ? savedSig.name : studioSignName.trim();
-    const sig = useSaved && savedSig ? savedSig.signature : studioSignature;
+    const sig = useSaved && savedSig ? savedSig.signature : await shrinkSignature(studioSignature);
     if (!name) {
       toast("Nhập tên người ký (Bên A).");
       return;
@@ -1579,6 +1626,9 @@ export default function ContractEditor({
       })
       .eq("id", contract.id);
     setBusy(null);
+    // Lưu chữ ký để lần sau ký một chạm. Lỗi thì NÓI RA (trước đây im lặng →
+    // studio tưởng đã lưu mà lần sau không thấy).
+    let warn: string | null = null;
     if (!error && !useSaved && rememberSig && sig) {
       const r = await fetch("/api/studio/signature", {
         method: "POST",
@@ -1586,8 +1636,15 @@ export default function ContractEditor({
         body: JSON.stringify({ name, signature: sig }),
       }).catch(() => null);
       if (r?.ok) setSavedSig({ name, signature: sig });
+      else {
+        const j = r ? await r.json().catch(() => ({})) : {};
+        warn =
+          j.error === "missing_migration" ? "Đã ký, nhưng chưa lưu được chữ ký: cần chạy supabase/voucher-uu-dai.sql."
+            : r?.status === 403 ? "Đã ký, nhưng chỉ chủ / quản lý mới lưu được chữ ký mặc định."
+            : `Đã ký, nhưng chưa lưu được chữ ký để dùng lại (${j.error || r?.status || "lỗi mạng"}).`;
+      }
     }
-    toast(error ? `Lỗi: ${error.message}` : "Đã lưu chữ ký Bên A.");
+    toast(error ? `Lỗi: ${error.message}` : warn ?? (useSaved ? "Đã ký bằng chữ ký đã lưu." : rememberSig && sig ? "Đã ký và lưu chữ ký để lần sau ký một chạm." : "Đã ký Bên A."));
     if (!error) {
       setStudioSignName(name);
       // Ký xong là hợp đồng đã chốt — đẩy luôn lên Google Lịch thay vì đợi lần
