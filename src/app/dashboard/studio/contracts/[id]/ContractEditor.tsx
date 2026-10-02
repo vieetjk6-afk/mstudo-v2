@@ -243,6 +243,7 @@ export default function ContractEditor({
   contract,
   studioHost = null,
   savedSignature = null,
+  defaultSignName = "",
   initialItems,
   initialAddenda = [],
   canEditAddenda = false,
@@ -284,6 +285,8 @@ export default function ContractEditor({
   studioHost?: string | null;
   /** Chữ ký Bên A studio đã lưu (studio_saved_signature) — ký một chạm. */
   savedSignature?: { name: string; signature: string } | null;
+  /** Tên người ký Bên A điền sẵn: tên của chữ ký đã lưu → tên ký lần trước → tên chủ studio. */
+  defaultSignName?: string;
   storyComingSoon?: boolean;
   initialItems: ContractItem[];
   /** Phụ lục của hợp đồng (chỉ có sau migration contract_addenda.sql). */
@@ -557,7 +560,7 @@ export default function ContractEditor({
   // Mốc đang sửa tại chỗ (tên / ngày / giờ) — null = không sửa mốc nào.
   const [editMs, setEditMs] = useState<{ id: string; title: string; event_date: string; event_time: string } | null>(null);
   // studio signature
-  const [studioSignName, setStudioSignName] = useState(contract.studio_signed_name ?? "");
+  const [studioSignName, setStudioSignName] = useState(contract.studio_signed_name || defaultSignName);
   const [studioSignature, setStudioSignature] = useState("");
   /** Chữ ký đã lưu dùng được ngay; `drawNew` = studio muốn ký tay chữ ký khác. */
   const [savedSig, setSavedSig] = useState(savedSignature);
