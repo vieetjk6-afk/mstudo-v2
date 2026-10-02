@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { fmtDate, fmtDateLunar, fmtDateTime } from "@/lib/date";
 import { Lock, MapPin, Calendar, Send, Check, Printer, PenLine, Images, ImagePlus, Star, ListChecks, Package, Upload, Heart } from "lucide-react";
@@ -11,6 +11,7 @@ import CalendarButtons from "@/components/CalendarButtons";
 import VietQRButton, { VietQR, qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { thiepUrl } from "@/lib/hosts";
 import PortalVoucher, { type PortalLoyalty } from "./PortalVoucher";
+import { usePaymentWatch, PaidConfirmScreen, type PaidEvent } from "./PaidConfirm";
 import { contractPrintBody, contractPrintCss, type ContractPrintData } from "@/lib/contract-print";
 import { compressImage, checkImageFile } from "@/lib/image";
 import {
@@ -134,7 +135,14 @@ export default function ContractView({ token }: { token: string }) {
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUrls, setProofUrls] = useState<string[]>([]);
   const [selectedPlanId, setSelectedPlanId] = useState("");
-  const [qrOpen, setQrOpen] = useState(false);
+  const [qrOpen, setQrOpenRaw] = useState(false);
+  // Khách có thao tác thanh toán (mở QR, gửi ảnh, báo đã chuyển) → theo dõi tiền về.
+  const [payNudge, setPayNudge] = useState(0);
+  const [paidNow, setPaidNow] = useState<PaidEvent | null>(null);
+  const setQrOpen = (v: boolean) => {
+    setQrOpenRaw(v);
+    if (v) setPayNudge((n) => n + 1);
+  };
   const [qr, setQr] = useState("");
   const [lang, setLang] = useState<Lang>("vi");
   const t = (k: keyof typeof TR.vi) => TR[lang][k];
@@ -259,7 +267,10 @@ export default function ContractView({ token }: { token: string }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "paid", phone }),
     });
-    if (res.ok) setPaidReported(true);
+    if (res.ok) {
+      setPaidReported(true);
+      setPayNudge((n) => n + 1);
+    }
     else flashToast(t("genericErr"));
   }
 
@@ -282,6 +293,7 @@ export default function ContractView({ token }: { token: string }) {
     if (res.ok) {
       const { url } = await res.json();
       setProofUrls((p) => [...p, url]);
+      setPayNudge((n) => n + 1);
       setPaidReported(true);
     } else {
       flashToast(t("genericErr"));
@@ -359,6 +371,25 @@ export default function ContractView({ token }: { token: string }) {
   const headCls = "px-5 py-4 text-[10.5px] font-extrabold uppercase";
   const headStyle = { letterSpacing: ".7px", color: "var(--tx3)", borderBottom: "1px solid var(--bd2)" } as const;
 
+  // Tiền về (SePay tự ghi thu, hoặc studio ghi tay) khi khách đang mở trang →
+  // tải lại hợp đồng và chuyển sang màn "Đã nhận cọc".
+  const knownPayIds = useMemo(() => payments.map((p) => p.id), [payments]);
+  usePaymentWatch({
+    token,
+    phone,
+    active:
+      !!contract &&
+      contract.status !== "cancelled" &&
+      (plan.some((p) => !p.paid) || contractTotal(items) > sumAmounts(payments)),
+    knownIds: knownPayIds,
+    nudge: payNudge,
+    onPaid: async (e) => {
+      await fetchContract(phone).catch(() => undefined);
+      setQrOpenRaw(false);
+      setPaidNow(e);
+    },
+  });
+
   if (!contract) {
     return (
       <div className="client-doc flex min-h-screen items-center justify-center px-5 py-10">
@@ -424,6 +455,17 @@ export default function ContractView({ token }: { token: string }) {
 
   return (
     <>
+      {paidNow && (
+        <PaidConfirmScreen
+          e={paidNow}
+          lang={lang}
+          studioName={studioName}
+          contractRef={contract.code || contract.title}
+          eventDate={contract.event_date}
+          remaining={Math.max(0, balance)}
+          onClose={() => setPaidNow(null)}
+        />
+      )}
       {/* Toast lỗi — nổi trên cùng, tự tắt sau vài giây (thay alert của trình duyệt) */}
       {toast && (
         <div
