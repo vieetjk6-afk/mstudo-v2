@@ -115,6 +115,16 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     }
   }
 
+  // Nhẹ: trang hợp đồng hỏi định kỳ khi khách đang chuyển khoản, để tiền về
+  // (SePay tự ghi thu) là chuyển ngay sang màn "Đã nhận cọc".
+  if (body.action === "pay_status") {
+    const [{ data: pays }, { data: plan }] = await Promise.all([
+      db.from("contract_payments").select("id, amount, kind, paid_at").eq("contract_id", contract.id),
+      db.from("contract_payment_plan").select("id, label, amount, paid, paid_at").eq("contract_id", contract.id),
+    ]);
+    return NextResponse.json({ payments: pays ?? [], plan: plan ?? [] });
+  }
+
   if (body.action === "paid") {
     await notify("payment", `${who} báo đã chuyển khoản cho HĐ “${contract.title}”`, true);
     return NextResponse.json({ ok: true });

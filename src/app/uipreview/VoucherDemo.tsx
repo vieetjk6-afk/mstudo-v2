@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { PaidConfirmScreen } from "@/app/c/[token]/PaidConfirm";
 import QRCode from "qrcode";
 import VoucherPublicView from "@/app/voucher/[token]/VoucherPublicView";
 import BookingForm from "@/app/book/[token]/BookingForm";
@@ -116,6 +117,23 @@ export function PortalVoucherDemo() {
         studioName="Mây Studio"
         clientName="Phạm Thị Nhật Ý"
         l={{ ...base, stage: "issued", value: "Giảm 7% (tối đa 3.000.000đ)", voucher: { code: "UD-7K3M9P", expires_on: "2027-09-29", public_token: "demo-token-1234567890", status: "active", title: "Voucher ưu đãi lần sau" } }}
+      />
+    </div>
+  );
+}
+
+/** Màn "Đã nhận cọc" của cổng hợp đồng khi tiền về. */
+export function PaidConfirmDemo() {
+  return (
+    <div className="client-doc min-h-[700px]">
+      <PaidConfirmScreen
+        e={{ amount: 5_000_000, paidAt: "2026-10-02T09:15:00+07:00", label: "Đặt cọc giữ lịch", deposit: true }}
+        lang="vi"
+        studioName="Mây Studio"
+        contractRef="HD2609"
+        eventDate="2026-12-12"
+        remaining={59_000_000}
+        onClose={() => {}}
       />
     </div>
   );

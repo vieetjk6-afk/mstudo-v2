@@ -31,7 +31,7 @@ import GalleryFaceDemo from "./GalleryFaceDemo";
 import LuoiAnhDemo from "./LuoiAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
-import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo } from "./VoucherDemo";
+import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo, PaidConfirmDemo } from "./VoucherDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import * as f from "./fixtures";
 
@@ -413,6 +413,10 @@ export const SCREENS: Record<
   "dat-lich-voucher-loi": {
     title: "Đặt lịch với mã voucher hết hạn",
     render: () => <DatLichVoucherDemo bad />,
+  },
+  "da-nhan-coc": {
+    title: "Cổng hợp đồng — màn Đã nhận cọc khi tiền về",
+    render: () => <PaidConfirmDemo />,
   },
   "voucher-cong-khach": {
     title: "Voucher trên cổng hợp đồng của khách (3 giai đoạn)",
