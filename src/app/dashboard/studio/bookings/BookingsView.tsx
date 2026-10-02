@@ -174,7 +174,7 @@ export default function BookingsView({
       }).then((x) => x.json()).catch(() => null);
       if (!r?.ok) {
         alert(
-          `Chưa áp được voucher ${b.voucher_code}: ${REDEEM_ERROR_TEXT[r?.error as keyof typeof REDEEM_ERROR_TEXT] ?? (r?.error === "nothing_to_discount" ? "hợp đồng chưa có giá để trừ" : r?.error || "lỗi mạng")}. Bạn áp lại ở tab Thanh toán của hợp đồng nhé.`
+          `Chưa áp được voucher ${b.voucher_code}: ${REDEEM_ERROR_TEXT[r?.error as keyof typeof REDEEM_ERROR_TEXT] ?? (r?.error === "nothing_to_discount" ? "hợp đồng chưa có giá để trừ" : r?.error === "forbidden" ? "tài khoản của bạn không có quyền áp voucher (nhờ chủ studio / quản lý)" : r?.error || "lỗi mạng")}. Bạn áp lại ở tab Thanh toán của hợp đồng nhé.`
         );
       }
     }

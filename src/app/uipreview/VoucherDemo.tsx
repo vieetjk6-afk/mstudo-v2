@@ -127,7 +127,7 @@ export function PaidConfirmDemo() {
   return (
     <div className="client-doc min-h-[700px]">
       <PaidConfirmScreen
-        e={{ amount: 5_000_000, paidAt: "2026-10-02T09:15:00+07:00", label: "Đặt cọc giữ lịch", deposit: true }}
+        e={{ amount: 5_000_000, paidAt: "2026-10-02T09:15:00+07:00", hasTime: true, label: "Đặt cọc giữ lịch", deposit: true }}
         lang="vi"
         studioName="Mây Studio"
         contractRef="HD2609"

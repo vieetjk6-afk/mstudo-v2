@@ -248,7 +248,20 @@ export async function POST(req: Request) {
   if (b.action === "check") {
     const v = await byCode(b.code);
     const c = canRedeem(v, today, typeof b.contractId === "string" ? b.contractId : null);
-    return NextResponse.json({ ok: c.ok, error: c.ok ? undefined : c.error, voucher: v, label: v ? voucherValueLabel(v) : null });
+    const label = v ? voucherValueLabel(v) : null;
+    if (!c.ok || !v) return NextResponse.json({ ok: false, error: c.ok ? "not_found" : c.error, voucher: v, label });
+    // Voucher ưu đãi: kiểm TRƯỚC đúng những luật mà "redeem" sẽ chặn (gói áp
+    // dụng, SĐT hợp đồng được tặng) — không để màn báo hợp lệ rồi áp mới lỗi.
+    let needPhone = false;
+    const contract = isLoyalty(v) && typeof b.contractId === "string" ? await loadContract(db, b.contractId, ownerId) : null;
+    if (contract && v) {
+      const { data: items } = await db.from("contract_items").select("name").eq("contract_id", contract.id);
+      if (!matchesPackages(v.applies_packages, ((items ?? []) as { name: string | null }[]).map((r) => r.name))) {
+        return NextResponse.json({ ok: false, error: "not_package", voucher: v, label, packages: v.applies_packages });
+      }
+      needPhone = !phoneUnlocks(v, contract.client_phone, typeof b.phone === "string" ? b.phone : null);
+    }
+    return NextResponse.json({ ok: true, voucher: v, label, needPhone });
   }
 
   if (b.action === "release") {

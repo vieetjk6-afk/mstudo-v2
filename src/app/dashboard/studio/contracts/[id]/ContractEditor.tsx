@@ -291,6 +291,7 @@ export default function ContractEditor({
   studioHost = null,
   savedSignature = null,
   defaultSignName = "",
+  canSignStudio = true,
   initialItems,
   initialAddenda = [],
   canEditAddenda = false,
@@ -334,6 +335,8 @@ export default function ContractEditor({
   savedSignature?: { name: string; signature: string } | null;
   /** Tên người ký Bên A điền sẵn: tên của chữ ký đã lưu → tên ký lần trước → tên chủ studio. */
   defaultSignName?: string;
+  /** Chỉ chủ / quản lý được ký Bên A (chữ ký đại diện studio). */
+  canSignStudio?: boolean;
   storyComingSoon?: boolean;
   initialItems: ContractItem[];
   /** Phụ lục của hợp đồng (chỉ có sau migration contract_addenda.sql). */
@@ -3349,7 +3352,11 @@ export default function ContractEditor({
                     </div>
                   </div>
                 )}
-                {savedSig && !drawNew ? (
+                {!canSignStudio ? (
+                  <p className="text-sm" style={{ color: "var(--text3)" }}>
+                    {contract.studio_signed_at ? "" : "Chỉ chủ studio hoặc quản lý được ký Bên A."}
+                  </p>
+                ) : savedSig && !drawNew ? (
                   <div className="rounded-xl p-3" style={{ border: "1px solid var(--border)" }} data-testid="saved-signature">
                     <p className="label">Chữ ký đã lưu</p>
                     <div className="flex flex-wrap items-center gap-3">
