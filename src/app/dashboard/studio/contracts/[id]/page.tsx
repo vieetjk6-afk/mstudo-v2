@@ -181,12 +181,28 @@ export default async function ContractPage(
     .select("signer_name, signature")
     .eq("owner_id", profile.id)
     .maybeSingle();
+  // Tên người ký Bên A lần trước (ở bất kỳ hợp đồng nào) — điền sẵn, khỏi gõ lại.
+  const { data: lastSigned } = savedSig
+    ? { data: null }
+    : await supabase
+        .from("studio_contracts")
+        .select("studio_signed_name")
+        .eq("owner_id", profile.id)
+        .not("studio_signed_name", "is", null)
+        .order("studio_signed_at", { ascending: false, nullsFirst: false })
+        .limit(1)
+        .maybeSingle();
+  const defaultSignName =
+    (savedSig?.signer_name as string | undefined) ||
+    ((lastSigned as { studio_signed_name?: string | null } | null)?.studio_signed_name ?? "").trim() ||
+    ((profile.full_name as string | null) ?? "").trim();
   const storyLocked = storyComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin";
 
   return (
     <ContractEditor
       contract={contract as StudioContract}
       studioHost={studioHost}
+      defaultSignName={defaultSignName}
       savedSignature={savedSig ? { name: savedSig.signer_name as string, signature: savedSig.signature as string } : null}
       storyComingSoon={storyLocked}
       bank={{
