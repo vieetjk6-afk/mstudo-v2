@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test:overview": "node desktop/test/overview-parity.mjs",
+    "test:messenger-url": "node --experimental-strip-types desktop/test/messenger-url.mjs",
     "test:contract-filter": "node --experimental-strip-types desktop/test/contract-filter.mjs",
     "test:contract-print": "node --experimental-strip-types desktop/test/contract-print.mjs",
     "test:contract-lines": "node --experimental-strip-types desktop/test/contract-lines.mjs",
