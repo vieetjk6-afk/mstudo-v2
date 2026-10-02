@@ -181,21 +181,26 @@ export default async function ContractPage(
     .select("signer_name, signature")
     .eq("owner_id", profile.id)
     .maybeSingle();
-  // Tên người ký Bên A lần trước (ở bất kỳ hợp đồng nào) — điền sẵn, khỏi gõ lại.
+  // Chưa lưu chữ ký (hoặc lưu lỗi) → dùng chữ ký Bên A ở hợp đồng ký gần nhất,
+  // để lần sau vẫn ký một chạm và không phải gõ lại tên.
   const { data: lastSigned } = savedSig
     ? { data: null }
     : await supabase
         .from("studio_contracts")
-        .select("studio_signed_name")
+        .select("studio_signed_name, studio_signature")
         .eq("owner_id", profile.id)
         .not("studio_signed_name", "is", null)
+        .not("studio_signature", "is", null)
         .order("studio_signed_at", { ascending: false, nullsFirst: false })
         .limit(1)
         .maybeSingle();
-  const defaultSignName =
-    (savedSig?.signer_name as string | undefined) ||
-    ((lastSigned as { studio_signed_name?: string | null } | null)?.studio_signed_name ?? "").trim() ||
-    ((profile.full_name as string | null) ?? "").trim();
+  const last = lastSigned as { studio_signed_name: string | null; studio_signature: string | null } | null;
+  const reusableSig = savedSig
+    ? { name: savedSig.signer_name as string, signature: savedSig.signature as string }
+    : last?.studio_signed_name && last.studio_signature
+      ? { name: last.studio_signed_name, signature: last.studio_signature }
+      : null;
+  const defaultSignName = reusableSig?.name || ((profile.full_name as string | null) ?? "").trim();
   const storyLocked = storyComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin";
 
   return (
@@ -203,7 +208,7 @@ export default async function ContractPage(
       contract={contract as StudioContract}
       studioHost={studioHost}
       defaultSignName={defaultSignName}
-      savedSignature={savedSig ? { name: savedSig.signer_name as string, signature: savedSig.signature as string } : null}
+      savedSignature={reusableSig}
       storyComingSoon={storyLocked}
       bank={{
         bin: (profile.pl_bank_bin as string | null) ?? null,
