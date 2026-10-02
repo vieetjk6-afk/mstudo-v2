@@ -59,7 +59,11 @@ export default function VoucherProgramCard({
       <div className="space-y-3 p-4 text-[13px]">
         {!migrated && (
           <p className="rounded-[10px] px-3 py-2 text-[12.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
-            Cần chạy <code>supabase/voucher-uu-dai.sql</code> trong Supabase SQL Editor để dùng chương trình.
+            Cần chạy{" "}
+            <a href="/api/setup-sql/voucher-uu-dai" target="_blank" rel="noreferrer" className="underline">
+              supabase/voucher-uu-dai.sql
+            </a>{" "}
+            (bấm để mở, chép toàn bộ) trong Supabase SQL Editor để dùng chương trình.
           </p>
         )}
         <p style={{ color: "var(--tx2)" }}>

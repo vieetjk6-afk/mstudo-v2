@@ -176,14 +176,17 @@ export default async function ContractPage(
   const brand = brandFrom(profile);
   const studioHost = await getStudioHost(supabase, profile.id);
   // Chữ ký Bên A đã lưu — chưa chạy migration thì đơn giản là chưa có.
-  const { data: savedSig } = await supabase
+  // Chữ ký ĐẠI DIỆN studio: chỉ chủ / quản lý được ký Bên A — thợ, kế toán
+  // không nhận chữ ký đã lưu và không thấy khung ký.
+  const canSignStudio = !profile.actingRole || ["owner", "admin", "manager", "branch_manager"].includes(profile.actingRole as string);
+  const { data: savedSig } = !canSignStudio ? { data: null } : await supabase
     .from("studio_saved_signature")
     .select("signer_name, signature")
     .eq("owner_id", profile.id)
     .maybeSingle();
   // Chưa lưu chữ ký (hoặc lưu lỗi) → dùng chữ ký Bên A ở hợp đồng ký gần nhất,
   // để lần sau vẫn ký một chạm và không phải gõ lại tên.
-  const { data: lastSigned } = savedSig
+  const { data: lastSigned } = savedSig || !canSignStudio
     ? { data: null }
     : await supabase
         .from("studio_contracts")
@@ -207,7 +210,8 @@ export default async function ContractPage(
     <ContractEditor
       contract={contract as StudioContract}
       studioHost={studioHost}
-      defaultSignName={defaultSignName}
+      defaultSignName={canSignStudio ? defaultSignName : ""}
+      canSignStudio={canSignStudio}
       savedSignature={reusableSig}
       storyComingSoon={storyLocked}
       bank={{
