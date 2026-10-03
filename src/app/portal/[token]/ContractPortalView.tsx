@@ -558,6 +558,17 @@ function ActivePortal({
                       <Images size={16} /> Album hoàn thiện <ArrowRight size={15} />
                     </a>
                   )}
+                  {data.final_links.originals_url && (
+                    <a
+                      href={data.final_links.originals_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-bold"
+                      style={{ border: "1px solid var(--bd)", color: "var(--tx)" }}
+                    >
+                      <Download size={16} /> Toàn bộ file gốc
+                    </a>
+                  )}
                   {data.final_links.videos.map((v, i, all) => (
                     <a
                       key={i}

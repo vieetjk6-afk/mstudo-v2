@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { effectivePlan, studioTier } from "@/lib/plans";
+import { effectivePlan, planAllowsWatermark, studioTier } from "@/lib/plans";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { sendEmail } from "@/lib/email";
 import { sendPushToOwner } from "@/lib/push";
@@ -363,12 +363,13 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     title: string;
     cover_url: string | null;
     download_enabled: boolean;
+    watermark: string | null;
     photos: { id: string; drive_file_id: string; name: string; is_video: boolean }[];
   } | null = null;
   if (contract.status === "completed" && deliveredAlbumId) {
     const { data: a } = await db
       .from("albums")
-      .select("id, slug, title, cover_url, download_enabled, status")
+      .select("id, slug, title, cover_url, download_enabled, watermark_delivery, watermark_text, status")
       .eq("id", deliveredAlbumId)
       .maybeSingle();
     if (a && a.status === "published") {
@@ -380,6 +381,12 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
         title: a.title as string,
         cover_url: (a.cover_url as string | null) ?? null,
         download_enabled: !!a.download_enabled,
+        // Cùng luật với trang /album/[slug]: watermark chỉ còn hiệu lực khi gói
+        // của studio còn cho phép — nút tải từng ảnh ở cổng khách đóng dấu y hệt.
+        watermark:
+          a.watermark_delivery && planAllowsWatermark(effectivePlan(ownerObj?.plan, ownerObj?.plan_expires_at), ownerObj?.role === "admin")
+            ? ((a.watermark_text as string | null) || studioName)
+            : null,
         // Giới hạn 400 ảnh: trang album vẽ lưới thumbnail, quá số này thì payload
         // phình mà mắt cũng không xem hết — khách bấm "Mở album đầy đủ" để xem trọn.
         photos: photos.slice(0, 400).map((ph) => ({
@@ -394,18 +401,18 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
 
   // Link album / video hoàn thiện studio dán tay trên hợp đồng. Đọc riêng để
   // studio chưa chạy migrations/contract_final_links.sql vẫn mở được cổng.
-  let finalLinks: { album_url: string | null; videos: FinalVideo[] } | null = null;
+  // Cột file gốc (contract_final_originals.sql) đọc RIÊNG một lượt nữa: studio
+  // mới chạy migration đầu thì album / video vẫn hiện, chỉ thiếu ô file gốc.
+  let finalLinks: { album_url: string | null; videos: FinalVideo[]; originals_url: string | null } | null = null;
   {
-    const { data: fl } = await db
-      .from("studio_contracts")
-      .select("final_album_url, final_video_urls")
-      .eq("id", contract.id)
-      .maybeSingle();
-    if (fl) {
-      const albumUrl = safeUrl(fl.final_album_url as string | null);
-      const videos = parseFinalVideos(fl.final_video_urls as string | null);
-      if (albumUrl || videos.length) finalLinks = { album_url: albumUrl, videos };
-    }
+    const [{ data: fl }, { data: fo }] = await Promise.all([
+      db.from("studio_contracts").select("final_album_url, final_video_urls").eq("id", contract.id).maybeSingle(),
+      db.from("studio_contracts").select("final_originals_url").eq("id", contract.id).maybeSingle(),
+    ]);
+    const albumUrl = safeUrl((fl?.final_album_url as string | null) ?? null);
+    const videos = parseFinalVideos((fl?.final_video_urls as string | null) ?? null);
+    const originalsUrl = safeUrl((fo?.final_originals_url as string | null) ?? null);
+    if (albumUrl || videos.length || originalsUrl) finalLinks = { album_url: albumUrl, videos, originals_url: originalsUrl };
   }
 
   // Never expose internal crew/salary to the client (gallery/selection ids hidden).

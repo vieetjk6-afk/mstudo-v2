@@ -33,6 +33,7 @@ import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
 import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo, PaidConfirmDemo } from "./VoucherDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
+import { PortalAlbumDemo } from "./PortalAlbumDemo";
 import * as f from "./fixtures";
 
 /**
@@ -417,6 +418,16 @@ export const SCREENS: Record<
   "da-nhan-coc": {
     title: "Cổng hợp đồng — màn Đã nhận cọc khi tiền về",
     render: () => <PaidConfirmDemo />,
+  },
+  "album-cong-khach": {
+    title: "Cổng khách — trang album khi hợp đồng hoàn thành (ảnh + tải từng ảnh)",
+    render: () => <PortalAlbumDemo />,
+    bare: true,
+  },
+  "album-cong-khach-video": {
+    title: "Cổng khách — trang album, tab Video (phát lớn + danh sách phát)",
+    render: () => <PortalAlbumDemo tab="videos" />,
+    bare: true,
   },
   "voucher-cong-khach": {
     title: "Voucher trên cổng hợp đồng của khách (3 giai đoạn)",

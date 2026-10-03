@@ -50,6 +50,7 @@ export const AUTO_EVENTS: { key: string; label: string; audiences: ("client" | "
   { key: "select_nudge", label: "Nhắc lại khi khách chưa chọn ảnh", audiences: ["client"] },
   { key: "quote_expiring", label: "Nhắc báo giá sắp hết hiệu lực", audiences: ["client"] },
   { key: "delivery_ready", label: "Báo đã giao ảnh", audiences: ["client"] },
+  { key: "portal_link", label: "Hoàn thành → gửi link trang riêng của khách", audiences: ["client"] },
 ];
 
 /**

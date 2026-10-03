@@ -185,6 +185,25 @@ export function deliveryReadyMessage(opts: {
 }
 
 /**
+ * Hợp đồng HOÀN THÀNH → gửi khách link trang riêng /portal/<token>: nơi gom
+ * album, video, file gốc và toàn bộ hợp đồng. Trang mở bằng số điện thoại khách
+ * đã đăng ký, nên nói luôn điều đó để khách khỏi bối rối ở màn chặn.
+ */
+export function portalLinkMessage(opts: {
+  name?: string | null;
+  link: string;
+  studio?: string | null;
+}): string {
+  const lines = [
+    hi(opts.name),
+    "Hợp đồng của anh/chị đã hoàn thành — cảm ơn anh/chị đã tin tưởng studio!",
+    `Album ảnh, video, file gốc và toàn bộ thông tin hợp đồng ở trang riêng của anh/chị: ${opts.link}`,
+    "Anh/chị mở trang bằng số điện thoại đã đăng ký với studio nhé.",
+  ];
+  return lines.join("\n") + sign(opts.studio);
+}
+
+/**
  * Nhắc MỘT đợt thanh toán cụ thể trong hợp đồng (nút "Nhắc Zalo" ở tab Thanh
  * toán). Khác `paymentDueMessage` — vốn nói về TỔNG số còn lại — tin này gọi
  * đúng tên đợt, số tiền của đợt đó và kèm mã QR chuyển khoản đã điền sẵn số

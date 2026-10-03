@@ -22,7 +22,8 @@
     "migrations/studio_audit_log.sql",
     "migrations/contract_crew_milestone.sql",
     "migrations/contract_item_tier_milestone.sql",
-    "migrations/contract_final_links.sql"
+    "migrations/contract_final_links.sql",
+    "migrations/contract_final_originals.sql"
   ],
   "muc": [
     {
@@ -774,6 +775,14 @@
       "bang": [],
       "cot": [
         "studio_contracts.final_album_url"
+      ]
+    },
+    {
+      "file": "migrations/contract_final_originals.sql",
+      "mo_ta": "Link toàn bộ file gốc + dấu đã gửi link trang riêng cho khách",
+      "bang": [],
+      "cot": [
+        "studio_contracts.final_originals_url"
       ]
     }
   ]

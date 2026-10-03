@@ -54,6 +54,8 @@ export type PortalAlbum = {
   title: string;
   cover_url: string | null;
   download_enabled: boolean;
+  /** Chữ watermark khi tải từng ảnh — null = tải thẳng file gốc. */
+  watermark?: string | null;
   photos: { id: string; drive_file_id: string; name: string; is_video: boolean }[];
 };
 
@@ -73,8 +75,8 @@ export type PortalPayload = {
   tasks: PortalTask[];
   appointments: PortalAppointment[];
   album: PortalAlbum | null;
-  /** Link album / video hoàn thiện studio dán tay trên hợp đồng. */
-  final_links?: { album_url: string | null; videos: FinalVideo[] } | null;
+  /** Link album / video / file gốc studio dán tay trên hợp đồng. */
+  final_links?: { album_url: string | null; videos: FinalVideo[]; originals_url?: string | null } | null;
   gallery: { slug: string; title: string } | null;
   selection: { slug: string; title: string; phase?: string } | null;
   wedding: { slug: string; edit_token: string; published: boolean } | null;
