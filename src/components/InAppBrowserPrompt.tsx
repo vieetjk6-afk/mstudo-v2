@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Check, Copy, ExternalLink } from "lucide-react";
 import {
   browserEscapeUrl,
+  canAutoEscape,
   detectInAppBrowser,
   inAppName,
   isCustomerLinkPath,
@@ -16,6 +17,30 @@ import { useShareLink } from "./share/useShareLink";
 
 /** Khách đã bấm "Ở lại" — chỉ nhớ trong phiên này, mở link lần sau vẫn nhắc. */
 const STAY_KEY = "mstudo:o-lai-trong-app";
+/** Đã TỰ chuyển sang trình duyệt một lần trong phiên — không tự chuyển lại, kẻo
+ *  khách quay về Zalo là bị đẩy đi lần nữa (hoặc lặp khi app nạp lại trang). */
+const AUTO_KEY = "mstudo:da-tu-mo-trinh-duyet";
+
+/**
+ * Điều hướng sang link thoát (x-safari-https / intent). `done(true)` khi trang
+ * bị ẩn — đã rời sang trình duyệt; `done(false)` sau 1,5 giây vẫn còn ở đây —
+ * app nuốt mất lệnh mở.
+ */
+function goExternal(target: string, done: (left: boolean) => void) {
+  let settled = false;
+  const finish = (left: boolean) => {
+    if (settled) return;
+    settled = true;
+    window.clearTimeout(timer);
+    document.removeEventListener("visibilitychange", onHide);
+    done(left);
+  };
+  const timer = window.setTimeout(() => finish(false), 1500);
+  const onHide = () => { if (document.hidden) finish(true); };
+  document.addEventListener("visibilitychange", onHide);
+  window.addEventListener("pagehide", () => finish(true), { once: true });
+  window.location.href = target;
+}
 
 const TR = {
   vi: {
@@ -24,6 +49,7 @@ const TR = {
       `Mở bằng ${browser} để tải ảnh, video về máy, phát video mượt và lưu trang ra màn hình chính.`,
     open: (browser: string) => `Mở bằng ${browser}`,
     opening: "Đang mở…",
+    autoOpening: (browser: string) => `Đang chuyển sang ${browser}…`,
     stay: "Ở lại",
     stepsTitle: "Chưa mở được? Làm theo 2 bước:",
     copyHint: "Hoặc chép link rồi dán vào trình duyệt:",
@@ -36,6 +62,7 @@ const TR = {
       `Open in ${browser} to save photos and videos, play videos smoothly and add the page to your home screen.`,
     open: (browser: string) => `Open in ${browser}`,
     opening: "Opening…",
+    autoOpening: (browser: string) => `Switching to ${browser}…`,
     stay: "Stay here",
     stepsTitle: "Nothing happened? Two steps:",
     copyHint: "Or copy the link and paste it into your browser:",
@@ -49,10 +76,12 @@ const TR = {
  * `isCustomerLinkPath`) khi đang ở trình duyệt trong Zalo / Facebook / Messenger /
  * Instagram / TikTok…
  *
- * Hộp thoại nổi GIỮA màn hình trên một lớp mờ nhẹ — trang vẫn nhìn thấy phía
- * sau nhưng chưa bấm được, khách BẮT BUỘC chọn một trong hai: "Mở bằng
- * Safari/Chrome" hoặc "Ở lại". Không đóng bằng cách chạm ra ngoài, không tự
- * nhảy ra trình duyệt: khách quyết định.
+ * Android (app đã biết — `canAutoEscape`): TỰ chuyển sang Chrome ngay khi mở,
+ * một lần mỗi phiên. iPhone không tự chuyển được (iOS bắt buộc có cử chỉ).
+ *
+ * Còn lại — và khi tự chuyển không ăn — là hộp thoại nổi GIỮA màn hình trên
+ * một lớp mờ nhẹ: trang vẫn nhìn thấy phía sau nhưng chưa bấm được, khách BẮT
+ * BUỘC chọn "Mở bằng Safari/Chrome" hoặc "Ở lại". Chạm ra ngoài không đóng.
  *
  * Nút mở dùng `x-safari-https://` (iPhone) / `intent://` (Android) — xem
  * @/lib/in-app-browser. App nào nuốt mất lệnh đó thì sau 1,5 giây thẻ tự mở
@@ -67,6 +96,7 @@ export default function InAppBrowserPrompt() {
   const [url, setUrl] = useState<string | null>(null);
   const [stay, setStay] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [autoBusy, setAutoBusy] = useState(false);
   const [showSteps, setShowSteps] = useState(false);
   const [lang, setLang] = useState<"vi" | "en">("vi");
   const { copied, copy } = useShareLink(url);
@@ -85,7 +115,8 @@ export default function InAppBrowserPrompt() {
     const standalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (navigator as Navigator & { standalone?: boolean }).standalone === true;
-    setInfo(detectInAppBrowser(navigator.userAgent, { standalone }));
+    const b = detectInAppBrowser(navigator.userAgent, { standalone });
+    setInfo(b);
     setUrl(window.location.href);
     // Cùng quy tắc với LangProvider (@/lib/i18n): tiếng Việt, trừ khi khách đã
     // tự chọn tiếng Anh. KHÔNG theo ngôn ngữ máy — nhiều khách Việt để điện
@@ -95,6 +126,19 @@ export default function InAppBrowserPrompt() {
     } catch {
       /* chặn storage → giữ tiếng Việt */
     }
+
+    // Tự chuyển được thì tự chuyển — một lần mỗi phiên.
+    if (!b || !canAutoEscape(b)) return;
+    try {
+      if (sessionStorage.getItem(AUTO_KEY) === "1") return;
+      sessionStorage.setItem(AUTO_KEY, "1");
+    } catch {
+      /* không ghi được dấu thì vẫn thử một lần */
+    }
+    const target = browserEscapeUrl(window.location.href, b.os);
+    if (!target) return;
+    setAutoBusy(true);
+    goExternal(target, () => setAutoBusy(false));
   }, [gated, pathname]);
 
   // Khoá cuộn trang phía sau trong lúc hộp thoại đang chờ khách chọn.
@@ -120,25 +164,11 @@ export default function InAppBrowserPrompt() {
       return;
     }
     setBusy(true);
-    // Rời được thật thì trang bị ẩn → huỷ hẹn giờ. Còn ở lại nghĩa là app nuốt
-    // mất lệnh mở → chỉ khách cách làm tay.
-    const timer = window.setTimeout(() => {
+    // Còn ở lại sau 1,5 giây nghĩa là app nuốt mất lệnh mở → chỉ cách làm tay.
+    goExternal(target, (left) => {
       setBusy(false);
-      setShowSteps(true);
-    }, 1500);
-    const cancel = () => {
-      window.clearTimeout(timer);
-      setBusy(false);
-    };
-    window.addEventListener("pagehide", cancel, { once: true });
-    const onHide = () => {
-      if (document.hidden) {
-        cancel();
-        document.removeEventListener("visibilitychange", onHide);
-      }
-    };
-    document.addEventListener("visibilitychange", onHide);
-    window.location.href = target;
+      if (!left) setShowSteps(true);
+    });
   }
 
   function keepHere() {
@@ -177,11 +207,11 @@ export default function InAppBrowserPrompt() {
         <button
           type="button"
           onClick={openExternal}
-          disabled={busy}
+          disabled={busy || autoBusy}
           className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-[13px] px-4 py-3 text-[14.5px] font-bold"
           style={{ background: "#fff", color: "#141215" }}
         >
-          <ExternalLink size={17} /> {busy ? tr.opening : tr.open(browser)}
+          <ExternalLink size={17} /> {autoBusy ? tr.autoOpening(browser) : busy ? tr.opening : tr.open(browser)}
         </button>
         <button
           type="button"

@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import {
   browserEscapeUrl,
+  canAutoEscape,
   detectInAppBrowser,
   isCustomerLinkPath,
 } from "../../src/lib/in-app-browser.ts";
@@ -42,6 +43,15 @@ for (const p of ["/", "/thiep/abc", "/story/abc", "/site/may/", "/book/tok", "/g
   assert.equal(isCustomerLinkPath(p), false, String(p));
 }
 console.log("✓ chỉ nhắc ở trang gửi khách; thiệp, story, website, đặt lịch, khu quản lý thì không");
+
+// ── Khi nào được tự chuyển ───────────────────────────────────────────────────
+assert.equal(canAutoEscape(detectInAppBrowser(UA.zaloAndroid)), true);
+assert.equal(canAutoEscape(detectInAppBrowser(UA.fbAndroid)), true);
+assert.equal(canAutoEscape(detectInAppBrowser(UA.messengerAndroid)), true);
+assert.equal(canAutoEscape(detectInAppBrowser(UA.zaloIos)), false);
+assert.equal(canAutoEscape(detectInAppBrowser(UA.fbIos)), false);
+assert.equal(canAutoEscape(detectInAppBrowser(UA.bankAndroid)), false);
+console.log("✓ tự chuyển ở Android với app đã biết; iPhone và webview lạ thì hỏi khách");
 
 // ── Đường thoát ──────────────────────────────────────────────────────────────
 assert.equal(
