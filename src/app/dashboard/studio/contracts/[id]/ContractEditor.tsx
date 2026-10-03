@@ -300,7 +300,7 @@ export default function ContractEditor({
   initialRequests,
   initialPayments,
   roster,
-  galleries: _galleries,
+  galleries,
   selectionAlbums,
   initialMilestones,
   initialAppointments,
@@ -412,6 +412,41 @@ export default function ContractEditor({
   // đoạn Chọn ảnh" biến mất ngay khi vừa giao, không phải tải lại trang.
   const [deliveryDone, setDeliveryDone] = useState(!!contract.gallery_album_id);
   const [deliverBusy, setDeliverBusy] = useState(false);
+
+  // Link album / video hoàn thiện — lưu RIÊNG khỏi autosaveContract: studio chưa
+  // chạy migrations/contract_final_links.sql thì chỉ hai ô này báo lỗi, các ô
+  // khác của hợp đồng vẫn lưu bình thường.
+  const [finalLinks, setFinalLinks] = useState({
+    album: contract.final_album_url ?? "",
+    videos: contract.final_video_urls ?? "",
+  });
+  const [finalSaved, setFinalSaved] = useState<"idle" | "saving" | "saved">("idle");
+  const finalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function setFinal(k: "album" | "videos", v: string) {
+    setFinalLinks((p) => {
+      const next = { ...p, [k]: v };
+      if (finalTimer.current) clearTimeout(finalTimer.current);
+      finalTimer.current = setTimeout(async () => {
+        setFinalSaved("saving");
+        const { error } = await supabase
+          .from("studio_contracts")
+          .update({ final_album_url: next.album.trim() || null, final_video_urls: next.videos.trim() || null })
+          .eq("id", contract.id);
+        if (error) {
+          setFinalSaved("idle");
+          toast(
+            isMissingColumn(error, "final_")
+              ? "Chưa lưu được link: hãy chạy supabase/migrations/contract_final_links.sql trên Supabase."
+              : `Lỗi lưu link: ${error.message}`
+          );
+          return;
+        }
+        setFinalSaved("saved");
+        setTimeout(() => setFinalSaved("idle"), 1500);
+      }, 700);
+      return next;
+    });
+  }
 
   // Tab của cột trái (bản thiết kế màn "Chi tiết hợp đồng"). Cả trang trước đây
   // là một cột dài ~10 thẻ; gom vào tab để mỗi lần chỉ thấy đúng việc đang làm.
@@ -3061,6 +3096,49 @@ export default function ContractEditor({
                         Mẹo: nếu dùng Dự án hợp nhất, chỉ cần gắn ô này — link sẽ tự chuyển sang ảnh giao khách khi bạn đổi giai đoạn.
                       </p>
                     )}
+                  </div>
+                  <div>
+                    <label className="label">Album hoàn thiện (giao khách)</label>
+                    <select
+                      className="input"
+                      value={f.gallery_album_id}
+                      onChange={(e) => { set("gallery_album_id", e.target.value); setDeliveryDone(!!e.target.value); }}
+                    >
+                      <option value="">— Chưa gắn —</option>
+                      {galleries.map((a) => (
+                        <option key={a.id} value={a.id}>{a.title}</option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                      Album phải ở giai đoạn Giao khách và đã xuất bản thì khách mới thấy ảnh/video trên trang riêng.
+                    </p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <label className="label">Link album hoàn thiện</label>
+                      <span className="text-[11px]" style={{ color: "var(--text3)" }}>
+                        {finalSaved === "saving" ? "Đang lưu…" : finalSaved === "saved" ? "Đã lưu" : ""}
+                      </span>
+                    </div>
+                    <input
+                      className="input"
+                      inputMode="url"
+                      placeholder="https://photos.app.goo.gl/… hoặc link Google Drive"
+                      value={finalLinks.album}
+                      onChange={(e) => setFinal("album", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Link video hoàn thiện</label>
+                    <textarea
+                      className="input min-h-[84px]"
+                      placeholder={"Mỗi dòng một link (YouTube / Drive / Vimeo)\nCó thể đặt tên: Phóng sự cưới | https://youtu.be/…"}
+                      value={finalLinks.videos}
+                      onChange={(e) => setFinal("videos", e.target.value)}
+                    />
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                      Hai link này hiện ngay trên trang riêng của khách — video YouTube/Drive phát thẳng trong trang.
+                    </p>
                   </div>
                   <div>
                     <label className="label">Hạn giao ảnh</label>

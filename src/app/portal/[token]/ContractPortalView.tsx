@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Lock, MapPin, CalendarDays, Check, Package, Images, MessagesSquare, LifeBuoy,
-  FileText, Download, StickyNote, ArrowRight, Clock, CloudOff, LogOut,
+  FileText, Download, StickyNote, ArrowRight, Clock, CloudOff, LogOut, Video,
 } from "lucide-react";
 import { useToast } from "@/components/studio/Toast";
 import InstallPwaButton from "@/components/InstallPwaButton";
@@ -510,16 +510,19 @@ function ActivePortal({
             )}
 
             {/* Album xem trước */}
-            {(data.selection || data.gallery) && (
+            {(data.selection || data.gallery) && (() => {
+              // Dự án hợp nhất: chính album chọn ảnh đã sang giai đoạn giao khách.
+              const delivered = !!data.gallery || data.selection?.phase === "delivery";
+              return (
               <section className="rounded-[16px] px-5 pb-4 pt-[18px]" style={card}>
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-[15px] font-bold">Ảnh của bạn</h3>
                   <span className="rounded-[20px] px-2.5 py-[4px] text-[11px] font-bold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
-                    {data.gallery ? "Album đã giao" : "Đang chờ bạn chọn ảnh"}
+                    {delivered ? "Album đã giao" : "Đang chờ bạn chọn ảnh"}
                   </span>
                 </div>
                 <p className="mt-1 text-[12.5px]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
-                  {data.gallery
+                  {delivered
                     ? "Album hoàn thiện đã sẵn sàng — mở để xem và tải về."
                     : "Mở album để đánh dấu những tấm bạn thích; studio hậu kỳ theo lựa chọn của bạn."}
                 </p>
@@ -528,8 +531,47 @@ function ActivePortal({
                   className="mt-3 inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-bold"
                   style={{ background: "var(--ac)", color: "#fff" }}
                 >
-                  <Images size={16} /> {data.gallery ? "Mở album của bạn" : "Chọn ảnh của bạn"} <ArrowRight size={15} />
+                  <Images size={16} /> {delivered ? "Mở album của bạn" : "Chọn ảnh của bạn"} <ArrowRight size={15} />
                 </Link>
+              </section>
+              );
+            })()}
+
+            {/* Album / video hoàn thiện — link studio dán trên hợp đồng */}
+            {data.final_links && (
+              <section className="rounded-[16px] px-5 pb-4 pt-[18px]" style={card}>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="text-[15px] font-bold">Sản phẩm hoàn thiện</h3>
+                  <span className="rounded-[20px] px-2.5 py-[4px] text-[11px] font-bold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
+                    Đã sẵn sàng
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {data.final_links.album_url && (
+                    <a
+                      href={data.final_links.album_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-bold"
+                      style={{ background: "var(--ac)", color: "#fff" }}
+                    >
+                      <Images size={16} /> Album hoàn thiện <ArrowRight size={15} />
+                    </a>
+                  )}
+                  {data.final_links.videos.map((v, i, all) => (
+                    <a
+                      key={i}
+                      href={v.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex max-w-full items-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[13px] font-bold"
+                      style={{ border: "1px solid var(--bd)", color: "var(--tx)" }}
+                    >
+                      <Video size={16} />
+                      <span className="truncate">{v.title || (all.length > 1 ? `Video ${i + 1}` : "Video hoàn thiện")}</span>
+                    </a>
+                  ))}
+                </div>
               </section>
             )}
           </div>

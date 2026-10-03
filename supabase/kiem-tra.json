@@ -21,7 +21,8 @@
     "migrations/studio_saved_signature.sql",
     "migrations/studio_audit_log.sql",
     "migrations/contract_crew_milestone.sql",
-    "migrations/contract_item_tier_milestone.sql"
+    "migrations/contract_item_tier_milestone.sql",
+    "migrations/contract_final_links.sql"
   ],
   "muc": [
     {
@@ -765,6 +766,14 @@
       "cot": [
         "contract_items.event_id",
         "contract_items.tier"
+      ]
+    },
+    {
+      "file": "migrations/contract_final_links.sql",
+      "mo_ta": "Link album & video hoàn thiện dán tay trên hợp đồng",
+      "bang": [],
+      "cot": [
+        "studio_contracts.final_album_url"
       ]
     }
   ]

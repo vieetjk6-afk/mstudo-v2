@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  Images, Video, Download, Star, Share2, Play, X as XIcon, ChevronLeft, ChevronRight, Check,
+  Images, Video, Download, Star, Share2, Play, X as XIcon, ChevronLeft, ChevronRight, Check, ExternalLink,
 } from "lucide-react";
 import { useToast } from "@/components/studio/Toast";
 import { Portal } from "@/components/studio/Modal";
@@ -47,6 +47,10 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
   const album = data.album;
   const photos = useMemo(() => (album?.photos ?? []).filter((p) => !p.is_video), [album]);
   const videos = useMemo(() => (album?.photos ?? []).filter((p) => p.is_video), [album]);
+  // Link studio dán tay trên hợp đồng (YouTube / Drive / Google Photos…).
+  const linkVideos = data.final_links?.videos ?? [];
+  const albumLink = data.final_links?.album_url ?? null;
+  const hasContent = !!album || !!albumLink || linkVideos.length > 0;
   const cover = album?.cover_url || (photos[0] ? fullImageUrl(photos[0].drive_file_id, 1600) : null);
 
   /** Điều hướng ảnh trong lightbox bằng bàn phím — album là màn để xem, không
@@ -103,7 +107,7 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
 
   const TABS: { key: Tab; label: string; n: number | null }[] = [
     { key: "photos", label: "Ảnh", n: photos.length },
-    { key: "videos", label: "Video", n: videos.length },
+    { key: "videos", label: "Video", n: videos.length + linkVideos.length },
     { key: "files", label: "Tải về", n: null },
   ];
 
@@ -154,7 +158,17 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
           >
             <Share2 size={15} /> Chia sẻ
           </button>
-          {album && (
+          {albumLink ? (
+            <a
+              href={albumLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex flex-none items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[12.5px] font-bold"
+              style={{ background: "#fff", color: BG }}
+            >
+              <Images size={15} /> Mở album hoàn thiện
+            </a>
+          ) : album && (
             <Link
               href={`/album/${album.slug}`}
               className="flex flex-none items-center gap-1.5 rounded-[10px] px-3.5 py-2 text-[12.5px] font-bold"
@@ -166,13 +180,27 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
         </div>
 
         {/* ── Nội dung ─────────────────────────────────────────────────── */}
-        {!album ? (
+        {!hasContent ? (
           <Empty title="Album đang được studio hoàn thiện" hint="Ngay khi studio giao album, ảnh và video sẽ hiện ở đây." />
         ) : (
           <div key={tab} className="mt-3.5 animate-[vkFade_.3s_ease_both]">
             {tab === "photos" && (
               photos.length === 0 ? (
-                <Empty title="Chưa có ảnh trong album" hint="Studio sẽ đưa ảnh đã chỉnh màu lên đây." />
+                albumLink ? (
+                  <a
+                    href={albumLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3.5 flex flex-col items-center rounded-[16px] px-5 py-10 text-center"
+                    style={{ background: CARD, border: `1px solid ${LINE}` }}
+                  >
+                    <Images size={26} />
+                    <span className="mt-2 text-[14.5px] font-bold">Album hoàn thiện đã sẵn sàng</span>
+                    <span className="mt-1 text-[12.5px]" style={{ color: DIM }}>Bấm để mở album, xem và tải ảnh về.</span>
+                  </a>
+                ) : (
+                  <Empty title="Chưa có ảnh trong album" hint="Studio sẽ đưa ảnh đã chỉnh màu lên đây." />
+                )
               ) : (
                 <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
                   {photos.map((p, i) => (
@@ -190,10 +218,46 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
             )}
 
             {tab === "videos" && (
-              videos.length === 0 ? (
+              videos.length === 0 && linkVideos.length === 0 ? (
                 <Empty title="Hợp đồng này không có video" hint="Nếu bạn muốn thêm video highlight, hãy nhắn cho studio." />
               ) : (
-                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))" }}>
+                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
+                  {linkVideos.map((v, i) => (
+                    <div key={`link-${i}`} className="overflow-hidden rounded-[13px]" style={{ background: CARD, border: `1px solid ${LINE}` }}>
+                      {v.embed ? (
+                        <iframe
+                          src={v.embed}
+                          title={v.title || `Video ${i + 1}`}
+                          className="block w-full"
+                          style={{ aspectRatio: "16 / 9", border: 0 }}
+                          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                          allowFullScreen
+                          loading="lazy"
+                        />
+                      ) : (
+                        <a
+                          href={v.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center"
+                          style={{ aspectRatio: "16 / 9", background: "rgba(255,255,255,.04)" }}
+                        >
+                          <span className="flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "rgba(255,255,255,.92)", color: BG }}>
+                            <Play size={20} style={{ marginLeft: 2 }} />
+                          </span>
+                        </a>
+                      )}
+                      <a
+                        href={v.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-3.5 py-3 text-[14px] font-bold"
+                      >
+                        <span className="min-w-0 flex-1 truncate">{v.title || `Video ${linkVideos.length > 1 ? i + 1 : "hoàn thiện"}`}</span>
+                        <ExternalLink size={15} style={{ flex: "none", color: DIM }} />
+                      </a>
+                    </div>
+                  ))}
                   {videos.map((v) => (
                     <a
                       key={v.id}
@@ -221,13 +285,21 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
 
             {tab === "files" && (
               <div className="flex flex-col gap-2.5">
+                {albumLink && (
+                  <FileRow href={albumLink} external icon={Images} title="Album hoàn thiện" sub="Mở album để xem và tải ảnh về" />
+                )}
+                {linkVideos.map((v, i) => (
+                  <FileRow key={`fv-${i}`} href={v.url} external icon={Video} title={v.title || `Video ${linkVideos.length > 1 ? i + 1 : "hoàn thiện"}`} sub="Mở để xem và tải video" />
+                ))}
+                {album && (
                 <FileRow
                   href={`/album/${album.slug}`}
                   icon={Images}
                   title="Toàn bộ ảnh đã chỉnh"
                   sub={`${photos.length} ảnh · mở album để chọn và tải về`}
                 />
-                {videos.length > 0 && (
+                )}
+                {album && videos.length > 0 && (
                   <FileRow
                     href={`/album/${album.slug}`}
                     icon={Video}
@@ -333,13 +405,9 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
   );
 }
 
-function FileRow({ href, icon: Icon, title, sub }: { href: string; icon: typeof Images; title: string; sub: string }) {
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 rounded-[13px] px-4 py-3.5"
-      style={{ background: CARD, border: `1px solid ${LINE}` }}
-    >
+function FileRow({ href, icon: Icon, title, sub, external }: { href: string; icon: typeof Images; title: string; sub: string; external?: boolean }) {
+  const body = (
+    <>
       <span className="flex-none rounded-[10px] p-2" style={{ background: "rgba(255,255,255,.06)", lineHeight: 0 }}>
         <Icon size={17} style={{ color: "#fff" }} />
       </span>
@@ -347,8 +415,15 @@ function FileRow({ href, icon: Icon, title, sub }: { href: string; icon: typeof 
         <span className="block text-[13.5px] font-bold">{title}</span>
         <span className="block truncate text-[11.5px]" style={{ color: DIM }}>{sub}</span>
       </span>
-      <Download size={17} style={{ flex: "none", color: DIM }} />
-    </Link>
+      {external ? <ExternalLink size={17} style={{ flex: "none", color: DIM }} /> : <Download size={17} style={{ flex: "none", color: DIM }} />}
+    </>
+  );
+  const cls = "flex items-center gap-3 rounded-[13px] px-4 py-3.5";
+  const style = { background: CARD, border: `1px solid ${LINE}` };
+  return external ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={cls} style={style}>{body}</a>
+  ) : (
+    <Link href={href} className={cls} style={style}>{body}</Link>
   );
 }
 
