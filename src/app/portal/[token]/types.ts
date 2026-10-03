@@ -1,3 +1,4 @@
+import type { FinalVideo } from "@/lib/final-links";
 import type {
   AppointmentKind, AppointmentStatus, ContractStatus, PaymentKind, ProductStatus, ShootType,
 } from "@/lib/types";
@@ -72,6 +73,8 @@ export type PortalPayload = {
   tasks: PortalTask[];
   appointments: PortalAppointment[];
   album: PortalAlbum | null;
+  /** Link album / video hoàn thiện studio dán tay trên hợp đồng. */
+  final_links?: { album_url: string | null; videos: FinalVideo[] } | null;
   gallery: { slug: string; title: string } | null;
   selection: { slug: string; title: string; phase?: string } | null;
   wedding: { slug: string; edit_token: string; published: boolean } | null;

@@ -15,6 +15,7 @@ import { addendumLabel } from "@/lib/contract-addenda";
 import { contractLoyalty } from "@/lib/voucher-program-server";
 import { voucherTerms, voucherValueLabel } from "@/lib/vouchers";
 import { vnd } from "@/lib/types";
+import { parseFinalVideos, safeUrl, type FinalVideo } from "@/lib/final-links";
 
 export const dynamic = "force-dynamic";
 
@@ -312,10 +313,16 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   if (contract.selection_album_id) {
     const { data: s } = await db
       .from("albums")
-      .select("slug, title, status, phase")
+      .select("id, slug, title, status, phase, is_gallery")
       .eq("id", contract.selection_album_id)
       .maybeSingle();
-    if (s && s.status === "published") selection = { slug: s.slug, title: s.title, phase: s.phase ?? "selection" };
+    if (s && s.status === "published") {
+      selection = { slug: s.slug, title: s.title, phase: s.phase ?? "selection" };
+      // Dự án hợp nhất: CHÍNH album chọn ảnh được chuyển sang giai đoạn giao
+      // khách, không có album giao khách riêng. Trước đây trường hợp này bị bỏ
+      // sót — hợp đồng hoàn thành mà trang album của khách vẫn trống trơn.
+      if (!deliveredAlbumId && isDeliveryPhase(s)) deliveredAlbumId = s.id as string;
+    }
   }
 
   // Giai đoạn giao khách: khi đã có album hoàn thiện (giao khách), album chọn ảnh
@@ -385,6 +392,22 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     }
   }
 
+  // Link album / video hoàn thiện studio dán tay trên hợp đồng. Đọc riêng để
+  // studio chưa chạy migrations/contract_final_links.sql vẫn mở được cổng.
+  let finalLinks: { album_url: string | null; videos: FinalVideo[] } | null = null;
+  {
+    const { data: fl } = await db
+      .from("studio_contracts")
+      .select("final_album_url, final_video_urls")
+      .eq("id", contract.id)
+      .maybeSingle();
+    if (fl) {
+      const albumUrl = safeUrl(fl.final_album_url as string | null);
+      const videos = parseFinalVideos(fl.final_video_urls as string | null);
+      if (albumUrl || videos.length) finalLinks = { album_url: albumUrl, videos };
+    }
+  }
+
   // Never expose internal crew/salary to the client (gallery/selection ids hidden).
   return NextResponse.json({
     contract: { ...contract, owner: undefined, gallery_album_id: undefined, selection_album_id: undefined },
@@ -407,6 +430,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     story,
     appointments: appointments ?? [],
     album,
+    final_links: finalLinks,
     addenda: await listAddenda(db, cId),
     loyalty: await (async () => {
       // Voucher ưu đãi của chương trình: trước khi ký là lời mời chốt ("ký & cọc
