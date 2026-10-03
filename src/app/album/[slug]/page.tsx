@@ -7,7 +7,6 @@ import { isDeliveryPhase } from "@/lib/album-phase";
 import { getStudioBrand } from "@/lib/studio-brand";
 import Brand from "@/components/Brand";
 import GalleryView from "./GalleryView";
-import OpenInBrowserNotice from "@/components/OpenInBrowserNotice";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { MAIN_HOST } from "@/lib/hosts";
 import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
@@ -193,8 +192,6 @@ export default async function GalleryPage(
         logoUrl={brand.logoUrl}
         studioHost={studioHost}
       />
-      {/* Zalo/Messenger mở link trong webview của app — nhắc khách sang trình duyệt thật. */}
-      <OpenInBrowserNotice />
     </>
   );
 }
