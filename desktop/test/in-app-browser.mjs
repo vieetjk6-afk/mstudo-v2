@@ -1,10 +1,9 @@
-// Ép mở bằng trình duyệt thật: nhận diện webview Zalo/Facebook, trang nào bị chặn, khi nào tự nhảy.
+// Cảnh báo "Mở bằng trình duyệt": nhận diện webview Zalo/Facebook, trang nào được nhắc, link thoát.
 import assert from "node:assert/strict";
 import {
   browserEscapeUrl,
-  canAutoEscape,
   detectInAppBrowser,
-  isGatedPath,
+  isCustomerLinkPath,
 } from "../../src/lib/in-app-browser.ts";
 
 const UA = {
@@ -33,24 +32,16 @@ for (const k of ["safari", "chromeIos", "chromeAndroid", "desktop"]) {
   assert.equal(detectInAppBrowser(UA[k]), null, k);
 }
 assert.equal(detectInAppBrowser(UA.zaloIos, { standalone: true }), null);
-console.log("✓ trình duyệt thật, máy tính, webapp đã cài → không chặn");
+console.log("✓ trình duyệt thật, máy tính, webapp đã cài → không nhắc");
 
-// ── Trang nào bị chặn ────────────────────────────────────────────────────────
+// ── Trang nào được nhắc ──────────────────────────────────────────────────────
 for (const p of ["/portal/abc", "/c/abc", "/album/cuoi-a-b", "/a/chon-anh", "/q/tok", "/voucher/tok", "/form/tok"]) {
-  assert.equal(isGatedPath(p), true, p);
+  assert.equal(isCustomerLinkPath(p), true, p);
 }
 for (const p of ["/", "/thiep/abc", "/story/abc", "/site/may/", "/book/tok", "/gia/may", "/dashboard/studio", "/albums", "/a", null]) {
-  assert.equal(isGatedPath(p), false, String(p));
+  assert.equal(isCustomerLinkPath(p), false, String(p));
 }
-console.log("✓ chỉ chặn trang gửi khách; thiệp, story, website, đặt lịch, khu quản lý thì không");
-
-// ── Khi nào được tự nhảy ─────────────────────────────────────────────────────
-assert.equal(canAutoEscape(detectInAppBrowser(UA.zaloAndroid)), true);
-assert.equal(canAutoEscape(detectInAppBrowser(UA.fbAndroid)), true);
-assert.equal(canAutoEscape(detectInAppBrowser(UA.zaloIos)), false);
-assert.equal(canAutoEscape(detectInAppBrowser(UA.fbIos)), false);
-assert.equal(canAutoEscape(detectInAppBrowser(UA.bankAndroid)), false);
-console.log("✓ chỉ tự nhảy ở Android với app đã biết; iPhone và webview lạ phải bấm nút");
+console.log("✓ chỉ nhắc ở trang gửi khách; thiệp, story, website, đặt lịch, khu quản lý thì không");
 
 // ── Đường thoát ──────────────────────────────────────────────────────────────
 assert.equal(

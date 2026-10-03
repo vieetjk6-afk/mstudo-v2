@@ -9,7 +9,7 @@ import { THEME_BOOT_SCRIPT } from "@/lib/theme-boot";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getBrandForHost } from "@/lib/host-brand";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
-import InAppBrowserGate from "@/components/InAppBrowserGate";
+import InAppBrowserPrompt from "@/components/InAppBrowserPrompt";
 
 // Font UI chính (mọi trang) → preload để tránh nháy chữ.
 const hanken = Hanken_Grotesk({
@@ -196,8 +196,8 @@ export default function RootLayout({
           <LangProvider>{children}</LangProvider>
         </ThemeProvider>
         <ServiceWorkerRegistrar />
-        {/* Trang gửi khách mở trong Zalo / Facebook → ép mở bằng trình duyệt thật. */}
-        <InAppBrowserGate />
+        {/* Trang gửi khách mở trong Zalo / Facebook → cảnh báo nổi "Mở bằng trình duyệt". */}
+        <InAppBrowserPrompt />
       </body>
     </html>
   );

@@ -17,9 +17,9 @@
  * Android dễ hơn hẳn: `intent://…#Intent;scheme=https;…;end` mở đúng trình
  * duyệt mặc định, và `S.browser_fallback_url` lo nốt trường hợp máy không hiểu.
  *
- * Trên các trang mstudo gửi cho KHÁCH (xem `isGatedPath`), components/
- * InAppBrowserGate chặn cả trang bằng màn "Mở bằng trình duyệt": Android thử tự
- * nhảy sang Chrome ngay khi mở (`canAutoEscape`), iPhone cần khách bấm nút.
+ * Trên các trang mstudo gửi cho KHÁCH (xem `isCustomerLinkPath`),
+ * components/InAppBrowserPrompt hiện một cảnh báo nổi với hai nút "Mở bằng
+ * trình duyệt" / "Ở lại" — khách tự quyết định, không tự nhảy.
  */
 
 export type InAppApp = "zalo" | "messenger" | "facebook" | "instagram" | "tiktok" | "line" | "other";
@@ -133,28 +133,15 @@ export function openInBrowserSteps(b: InAppBrowser, lang: "vi" | "en" = "vi"): s
 /**
  * Trang mstudo gửi cho KHÁCH qua Zalo / Messenger — mở trong webview là mất
  * đúng những thứ trang đó cần (tải ảnh/video, lưu ra màn hình chính, phát
- * video, lưu mã QR chuyển khoản), nên bị chặn bằng màn "Mở bằng trình duyệt".
+ * video, lưu mã QR chuyển khoản), nên hiện cảnh báo "Mở bằng trình duyệt".
  *
- * CỐ Ý không chặn: thiệp cưới / love story (khách mời chỉ xem, ép họ rời Zalo
- * là thêm phiền cho người không phải khách của studio), website studio, bảng giá
- * và trang đặt lịch (khách lạ đến từ quảng cáo Facebook — bắt rời app là rơi
- * khách), và toàn bộ khu quản lý.
+ * CỐ Ý không nhắc: thiệp cưới / love story (khách mời chỉ xem, không phải khách
+ * của studio), website studio, bảng giá và trang đặt lịch (khách lạ đến từ quảng
+ * cáo Facebook — thêm một bước là rơi khách), và toàn bộ khu quản lý.
  */
-export const GATED_PATH_PREFIXES = ["/portal/", "/c/", "/album/", "/a/", "/q/", "/voucher/", "/form/"] as const;
+export const CUSTOMER_LINK_PREFIXES = ["/portal/", "/c/", "/album/", "/a/", "/q/", "/voucher/", "/form/"] as const;
 
-export function isGatedPath(pathname: string | null | undefined): boolean {
+export function isCustomerLinkPath(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
-  return GATED_PATH_PREFIXES.some((p) => pathname.startsWith(p));
-}
-
-/**
- * Được TỰ nhảy ra trình duyệt ngay khi trang mở (không cần khách bấm)?
- *
- * Chỉ Android, và chỉ các app đã biết là tự chuyển `intent://` cho hệ thống.
- * Webview lạ (app ngân hàng, ví…) có thể không xử lý lược đồ này và hiện trang
- * lỗi "ERR_UNKNOWN_URL_SCHEME" thay cho nội dung — với chúng chỉ nhảy khi khách
- * bấm nút. iPhone luôn cần cử chỉ của khách (xem ghi chú đầu file).
- */
-export function canAutoEscape(b: InAppBrowser): boolean {
-  return b.os === "android" && b.app !== "other";
+  return CUSTOMER_LINK_PREFIXES.some((p) => pathname.startsWith(p));
 }
