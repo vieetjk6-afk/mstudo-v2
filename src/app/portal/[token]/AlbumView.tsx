@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  Images, Video, Download, Star, Share2, Play, X as XIcon, ChevronLeft, ChevronRight, Check, ExternalLink,
-} from "lucide-react";
+import { Images, Video, Download, Star, Share2, Check, ExternalLink, FolderDown } from "lucide-react";
 import { useToast } from "@/components/studio/Toast";
-import { Portal } from "@/components/studio/Modal";
 import { fullImageUrl, thumbnailUrl } from "@/lib/drive";
 import { fmtDate } from "@/lib/date";
+import { useFullImageWidth } from "@/lib/use-img-width";
+import PortalPhotoGrid from "./PortalPhotoGrid";
+import PortalVideos, { type PortalVideo } from "./PortalVideos";
+import { BG, CARD, DIM, LINE } from "./dark";
 import type { PortalPayload } from "./types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -22,49 +23,72 @@ import type { PortalPayload } from "./types";
    bản thiết kế cho trang album, không đổi theo chế độ sáng/tối của khách — ảnh
    cưới phải luôn nằm trên đúng một nền.
 
-   Tải hàng loạt và xem toàn bộ ảnh vẫn dùng trang album sẵn có (/album/<slug>):
-   nơi đó đã có nén ZIP, đóng dấu mờ, và luật hạn lưu trữ ảnh gốc. Trang này là
-   bề mặt trưng bày + đánh giá, không dựng lại những thứ đó lần thứ hai.
+   Tải hàng loạt vẫn dùng trang album sẵn có (/album/<slug>) hoặc link thư mục
+   file gốc studio dán trên hợp đồng. Trang này trưng bày, cho tải TỪNG ảnh /
+   video (theo đúng cờ cho tải + watermark của album) và nhận đánh giá.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const BG = "#141215";
-const CARD = "#1E1B1F";
-const LINE = "rgba(255,255,255,.08)";
-const DIM = "rgba(255,255,255,.5)";
 const STAR_ON = "#F0B429";
 const STAR_OFF = "rgba(255,255,255,.22)";
 
 type Tab = "photos" | "videos" | "files";
 
-export default function AlbumView({ token, phone, data }: { token: string; phone: string; data: PortalPayload }) {
+export default function AlbumView({
+  token,
+  phone,
+  data,
+  initialTab,
+}: {
+  token: string;
+  phone: string;
+  data: PortalPayload;
+  /** Tab mở sẵn — chỉ màn xem trước giao diện (/uipreview) dùng. */
+  initialTab?: Tab;
+}) {
   const { toast, toastNode } = useToast();
-  const [tab, setTab] = useState<Tab>("photos");
   const [rating, setRating] = useState(0);
   const [rated, setRated] = useState(false);
-  const [lightbox, setLightbox] = useState<number | null>(null);
 
   const c = data.contract;
   const album = data.album;
   const photos = useMemo(() => (album?.photos ?? []).filter((p) => !p.is_video), [album]);
-  const videos = useMemo(() => (album?.photos ?? []).filter((p) => p.is_video), [album]);
+  const albumVideos = useMemo(() => (album?.photos ?? []).filter((p) => p.is_video), [album]);
   // Link studio dán tay trên hợp đồng (YouTube / Drive / Google Photos…).
-  const linkVideos = data.final_links?.videos ?? [];
+  const linkVideos = useMemo(() => data.final_links?.videos ?? [], [data.final_links]);
   const albumLink = data.final_links?.album_url ?? null;
-  const hasContent = !!album || !!albumLink || linkVideos.length > 0;
-  const cover = album?.cover_url || (photos[0] ? fullImageUrl(photos[0].drive_file_id, 1600) : null);
+  const originalsLink = data.final_links?.originals_url ?? null;
+  const canDownload = !!album?.download_enabled;
 
-  /** Điều hướng ảnh trong lightbox bằng bàn phím — album là màn để xem, không
-   *  phải màn để bấm chuột từng tấm. */
-  useEffect(() => {
-    if (lightbox == null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setLightbox(null);
-      if (e.key === "ArrowRight") setLightbox((i) => (i == null ? i : Math.min(photos.length - 1, i + 1)));
-      if (e.key === "ArrowLeft") setLightbox((i) => (i == null ? i : Math.max(0, i - 1)));
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lightbox, photos.length]);
+  /** Một danh sách phát chung: video dán link trước (thường là phim chính đã
+   *  dựng), rồi tới video nằm trong album Drive. */
+  const videos = useMemo<PortalVideo[]>(() => {
+    const fromLinks = linkVideos.map((v, i) => ({
+      key: `link-${i}`,
+      title: v.title || (linkVideos.length > 1 ? `Video ${i + 1}` : "Video hoàn thiện"),
+      kind: v.kind ?? "other",
+      embed: v.embed,
+      poster: v.poster ?? null,
+      openUrl: v.url,
+      // Link Drive studio tự dán = studio đã chủ ý chia sẻ file đó cho khách.
+      downloadUrl: v.drive_id ? `/api/img?id=${encodeURIComponent(v.drive_id)}&dl=1` : null,
+    }));
+    const fromAlbum = albumVideos.map((v) => ({
+      key: v.id,
+      title: v.name.replace(/\.[a-z0-9]{2,4}$/i, ""),
+      kind: "drive" as const,
+      embed: `https://drive.google.com/file/d/${v.drive_file_id}/preview`,
+      poster: thumbnailUrl(v.drive_file_id, 1024),
+      openUrl: `https://drive.google.com/file/d/${v.drive_file_id}/view`,
+      downloadUrl: canDownload ? `/api/img?id=${encodeURIComponent(v.drive_file_id)}&dl=1` : null,
+    }));
+    return [...fromLinks, ...fromAlbum];
+  }, [linkVideos, albumVideos, canDownload]);
+
+  const hasContent = !!album || !!albumLink || !!originalsLink || videos.length > 0;
+  // Không có ảnh nhưng có video → mở thẳng tab Video, khỏi bắt khách bấm thêm.
+  const [tab, setTab] = useState<Tab>(() => initialTab ?? (photos.length === 0 && !albumLink && videos.length > 0 ? "videos" : "photos"));
+  const coverW = useFullImageWidth();
+  const cover = album?.cover_url || (photos[0] ? fullImageUrl(photos[0].drive_file_id, coverW) : null);
 
   async function sendRating(stars: number) {
     setRating(stars);
@@ -107,7 +131,7 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
 
   const TABS: { key: Tab; label: string; n: number | null }[] = [
     { key: "photos", label: "Ảnh", n: photos.length },
-    { key: "videos", label: "Video", n: videos.length + linkVideos.length },
+    { key: "videos", label: "Video", n: videos.length },
     { key: "files", label: "Tải về", n: null },
   ];
 
@@ -115,12 +139,15 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
     <main className="min-h-screen" style={{ background: BG, color: "#fff" }}>
       <div className="mx-auto w-full max-w-[1180px] px-[18px] pb-[70px] pt-[22px]">
         {/* ── Hero ─────────────────────────────────────────────────────── */}
+        {/* Tỉ lệ khung đổi theo màn hình. KHÔNG dùng `minHeight` cùng
+            `aspectRatio`: trình duyệt suy ngược ra bề rộng tối thiểu (260 × 21/8
+            ≈ 680px) và khung tràn khỏi màn điện thoại, kéo cả trang tràn ngang. */}
         <div
-          className="relative flex items-end overflow-hidden rounded-[20px]"
-          style={{ aspectRatio: "21 / 8", minHeight: 260, background: CARD, border: `1px solid ${LINE}` }}
+          className="relative flex aspect-[4/3] items-end overflow-hidden rounded-[20px] sm:aspect-[21/8]"
+          style={{ background: CARD, border: `1px solid ${LINE}` }}
         >
           {cover && (
-            <img src={cover} alt="" className="absolute inset-0 h-full w-full object-cover" />
+            <img src={cover} alt="" fetchPriority="high" decoding="async" className="absolute inset-0 h-full w-full object-cover" />
           )}
           <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(10,8,11,.86), transparent)" }} />
           <div className="relative w-full px-6 pb-6 sm:px-8 sm:pb-8">
@@ -135,14 +162,15 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
 
         {/* ── Tab + hành động ──────────────────────────────────────────── */}
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <div className="flex flex-none items-center gap-1 rounded-[12px] p-1" style={{ background: "rgba(255,255,255,.06)" }}>
+          {/* Điện thoại: tab chiếm trọn một hàng, nút hành động xuống hàng dưới. */}
+          <div className="flex w-full items-center gap-1 rounded-[12px] p-1 sm:w-auto sm:flex-none" style={{ background: "rgba(255,255,255,.06)" }}>
             {TABS.map((t) => {
               const on = tab === t.key;
               return (
                 <button
                   key={t.key}
                   onClick={() => setTab(t.key)}
-                  className="rounded-[9px] px-3 py-2 text-[12.5px]"
+                  className="flex-1 rounded-[9px] px-3 py-2 text-[12.5px] sm:flex-none"
                   style={on ? { background: "#fff", color: BG, fontWeight: 700 } : { color: DIM, fontWeight: 600 }}
                 >
                   {t.label}{t.n != null ? ` (${t.n})` : ""}
@@ -202,94 +230,28 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
                   <Empty title="Chưa có ảnh trong album" hint="Studio sẽ đưa ảnh đã chỉnh màu lên đây." />
                 )
               ) : (
-                <div className="grid gap-2.5" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
-                  {photos.map((p, i) => (
-                    <button
-                      key={p.id}
-                      onClick={() => setLightbox(i)}
-                      className="overflow-hidden rounded-[13px]"
-                      style={{ aspectRatio: "4 / 5", background: CARD, border: `1px solid ${LINE}` }}
-                    >
-                      <img src={thumbnailUrl(p.drive_file_id, 500)} alt={p.name} loading="lazy" className="h-full w-full object-cover" />
-                    </button>
-                  ))}
-                </div>
+                <PortalPhotoGrid photos={photos} canDownload={canDownload} watermark={album?.watermark ?? null} toast={toast} />
               )
             )}
 
             {tab === "videos" && (
-              videos.length === 0 && linkVideos.length === 0 ? (
+              videos.length === 0 ? (
                 <Empty title="Hợp đồng này không có video" hint="Nếu bạn muốn thêm video highlight, hãy nhắn cho studio." />
               ) : (
-                <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(320px, 100%), 1fr))" }}>
-                  {linkVideos.map((v, i) => (
-                    <div key={`link-${i}`} className="overflow-hidden rounded-[13px]" style={{ background: CARD, border: `1px solid ${LINE}` }}>
-                      {v.embed ? (
-                        <iframe
-                          src={v.embed}
-                          title={v.title || `Video ${i + 1}`}
-                          className="block w-full"
-                          style={{ aspectRatio: "16 / 9", border: 0 }}
-                          allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                          allowFullScreen
-                          loading="lazy"
-                        />
-                      ) : (
-                        <a
-                          href={v.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-center"
-                          style={{ aspectRatio: "16 / 9", background: "rgba(255,255,255,.04)" }}
-                        >
-                          <span className="flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "rgba(255,255,255,.92)", color: BG }}>
-                            <Play size={20} style={{ marginLeft: 2 }} />
-                          </span>
-                        </a>
-                      )}
-                      <a
-                        href={v.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-2 px-3.5 py-3 text-[14px] font-bold"
-                      >
-                        <span className="min-w-0 flex-1 truncate">{v.title || `Video ${linkVideos.length > 1 ? i + 1 : "hoàn thiện"}`}</span>
-                        <ExternalLink size={15} style={{ flex: "none", color: DIM }} />
-                      </a>
-                    </div>
-                  ))}
-                  {videos.map((v) => (
-                    <a
-                      key={v.id}
-                      href={`https://drive.google.com/file/d/${v.drive_file_id}/view`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="overflow-hidden rounded-[13px]"
-                      style={{ background: CARD, border: `1px solid ${LINE}` }}
-                    >
-                      <span className="relative block" style={{ aspectRatio: "16 / 9" }}>
-                        <img src={thumbnailUrl(v.drive_file_id, 640)} alt={v.name} loading="lazy" className="h-full w-full object-cover" />
-                        <span
-                          className="absolute left-1/2 top-1/2 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
-                          style={{ background: "rgba(255,255,255,.92)", color: BG }}
-                        >
-                          <Play size={20} style={{ marginLeft: 2 }} />
-                        </span>
-                      </span>
-                      <span className="block px-3.5 py-3 text-[14px] font-bold" style={{ textWrap: "pretty" }}>{v.name}</span>
-                    </a>
-                  ))}
-                </div>
+                <PortalVideos videos={videos} />
               )
             )}
 
             {tab === "files" && (
               <div className="flex flex-col gap-2.5">
+                {originalsLink && (
+                  <FileRow href={originalsLink} external icon={FolderDown} title="Toàn bộ file gốc" sub="Thư mục chứa toàn bộ file gốc — mở để tải về máy" />
+                )}
                 {albumLink && (
                   <FileRow href={albumLink} external icon={Images} title="Album hoàn thiện" sub="Mở album để xem và tải ảnh về" />
                 )}
-                {linkVideos.map((v, i) => (
-                  <FileRow key={`fv-${i}`} href={v.url} external icon={Video} title={v.title || `Video ${linkVideos.length > 1 ? i + 1 : "hoàn thiện"}`} sub="Mở để xem và tải video" />
+                {videos.filter((v) => v.key.startsWith("link-")).map((v) => (
+                  <FileRow key={v.key} href={v.downloadUrl ?? v.openUrl} external={!v.downloadUrl} icon={Video} title={v.title} sub={v.downloadUrl ? "Tải video về máy" : "Mở để xem video"} />
                 ))}
                 {album && (
                 <FileRow
@@ -299,12 +261,12 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
                   sub={`${photos.length} ảnh · mở album để chọn và tải về`}
                 />
                 )}
-                {album && videos.length > 0 && (
+                {album && albumVideos.length > 0 && (
                   <FileRow
                     href={`/album/${album.slug}`}
                     icon={Video}
                     title="Video"
-                    sub={`${videos.length} video · tải bản gốc từ album`}
+                    sub={`${albumVideos.length} video · tải bản gốc từ album`}
                   />
                 )}
                 {data.wedding?.published && (
@@ -353,53 +315,6 @@ export default function AlbumView({ token, phone, data }: { token: string; phone
         </p>
       </div>
 
-      {/* ── Lightbox ─────────────────────────────────────────────────────── */}
-      {lightbox != null && photos[lightbox] && (
-        // Portal ra <body>: khung xem ảnh phải phủ đúng khung nhìn, không phụ
-        // thuộc phần tử cha nào (xem ghi chú trong components/studio/Modal.tsx).
-        <Portal>
-        <div className="fixed inset-0 z-[160] flex items-center justify-center" style={{ background: "rgba(8,6,9,.94)" }} onClick={() => setLightbox(null)}>
-          <img
-            src={fullImageUrl(photos[lightbox].drive_file_id, 1600)}
-            alt={photos[lightbox].name}
-            className="max-h-[88vh] max-w-[94vw] object-contain"
-            onClick={(e) => e.stopPropagation()}
-          />
-          <button
-            onClick={() => setLightbox(null)}
-            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full"
-            style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}
-            aria-label="Đóng"
-          >
-            <XIcon size={18} />
-          </button>
-          {lightbox > 0 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightbox(lightbox - 1); }}
-              className="absolute left-3 flex h-11 w-11 items-center justify-center rounded-full"
-              style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}
-              aria-label="Ảnh trước"
-            >
-              <ChevronLeft size={20} />
-            </button>
-          )}
-          {lightbox < photos.length - 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); setLightbox(lightbox + 1); }}
-              className="absolute right-3 flex h-11 w-11 items-center justify-center rounded-full"
-              style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}
-              aria-label="Ảnh sau"
-            >
-              <ChevronRight size={20} />
-            </button>
-          )}
-          <p className="tnum absolute bottom-4 left-1/2 -translate-x-1/2 text-[12px]" style={{ color: DIM }}>
-            {lightbox + 1} / {photos.length}
-          </p>
-        </div>
-        </Portal>
-      )}
-
       {toastNode}
     </main>
   );
@@ -420,11 +335,11 @@ function FileRow({ href, icon: Icon, title, sub, external }: { href: string; ico
   );
   const cls = "flex items-center gap-3 rounded-[13px] px-4 py-3.5";
   const style = { background: CARD, border: `1px solid ${LINE}` };
-  return external ? (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={cls} style={style}>{body}</a>
-  ) : (
-    <Link href={href} className={cls} style={style}>{body}</Link>
-  );
+  if (external) return <a href={href} target="_blank" rel="noopener noreferrer" className={cls} style={style}>{body}</a>;
+  // Link tải file (/api/img?dl=1 → Drive) phải là <a> thường: <Link> của Next
+  // sẽ tải trước và điều hướng phía client tới một route API.
+  if (href.startsWith("/api/")) return <a href={href} rel="noopener" className={cls} style={style}>{body}</a>;
+  return <Link href={href} className={cls} style={style}>{body}</Link>;
 }
 
 function Empty({ title, hint }: { title: string; hint: string }) {

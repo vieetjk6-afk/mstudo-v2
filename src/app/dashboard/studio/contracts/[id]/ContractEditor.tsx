@@ -419,19 +419,27 @@ export default function ContractEditor({
   const [finalLinks, setFinalLinks] = useState({
     album: contract.final_album_url ?? "",
     videos: contract.final_video_urls ?? "",
+    originals: contract.final_originals_url ?? "",
   });
   const [finalSaved, setFinalSaved] = useState<"idle" | "saving" | "saved">("idle");
   const finalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function setFinal(k: "album" | "videos", v: string) {
+  function setFinal(k: "album" | "videos" | "originals", v: string) {
     setFinalLinks((p) => {
       const next = { ...p, [k]: v };
       if (finalTimer.current) clearTimeout(finalTimer.current);
       finalTimer.current = setTimeout(async () => {
         setFinalSaved("saving");
-        const { error } = await supabase
-          .from("studio_contracts")
-          .update({ final_album_url: next.album.trim() || null, final_video_urls: next.videos.trim() || null })
-          .eq("id", contract.id);
+        // Ghi CẢ BA ô một lượt (bộ hẹn giờ dùng chung, gõ ô này rồi sang ô kia
+        // thì lượt trước bị huỷ). Ô file gốc nằm ở migration thứ hai
+        // (contract_final_originals.sql): chưa chạy thì vẫn lưu album / video.
+        const base = { final_album_url: next.album.trim() || null, final_video_urls: next.videos.trim() || null };
+        const write = (patch: Record<string, string | null>) => supabase.from("studio_contracts").update(patch).eq("id", contract.id);
+        let { error } = await write({ ...base, final_originals_url: next.originals.trim() || null });
+        let originalsMissing = false;
+        if (error && isMissingColumn(error, "final_originals_url")) {
+          originalsMissing = true;
+          ({ error } = await write(base));
+        }
         if (error) {
           setFinalSaved("idle");
           toast(
@@ -439,6 +447,11 @@ export default function ContractEditor({
               ? "Chưa lưu được link: hãy chạy supabase/migrations/contract_final_links.sql trên Supabase."
               : `Lỗi lưu link: ${error.message}`
           );
+          return;
+        }
+        if (originalsMissing && next.originals.trim()) {
+          setFinalSaved("idle");
+          toast("Chưa lưu được link file gốc: hãy chạy supabase/migrations/contract_final_originals.sql trên Supabase.");
           return;
         }
         setFinalSaved("saved");
@@ -824,13 +837,16 @@ export default function ContractEditor({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { toast(`Lỗi: ${data?.error || res.status}`); return; }
+      const sentNote = data?.portalSent ? " · đã gửi link trang riêng cho khách" : "";
       if (status === "completed" && data?.deliveryAlbum) {
         setDeliveryDone(true);
-        toast("Đã hoàn thành · đã tạo album giao khách");
+        toast(`Đã hoàn thành · đã tạo album giao khách${sentNote}`);
       } else if (status === "completed" && data?.deliveryWaiting) {
         // Hoàn thành = thu đủ tiền. Ảnh chỉnh sửa chưa có thì đừng đẩy khách sang
         // album rỗng — nói rõ album còn ở giai đoạn chọn ảnh để studio khỏi tưởng lỗi.
-        toast("Đã hoàn thành · chưa có ảnh chỉnh sửa nên album vẫn ở giai đoạn Chọn ảnh");
+        toast(`Đã hoàn thành · chưa có ảnh chỉnh sửa nên album vẫn ở giai đoạn Chọn ảnh${sentNote}`);
+      } else if (status === "completed" && sentNote) {
+        toast(`Đã hoàn thành${sentNote}`);
       } else {
         toast(`Trạng thái: ${CONTRACT_STATUS_LABEL[status]}`);
       }
@@ -3136,8 +3152,19 @@ export default function ContractEditor({
                       value={finalLinks.videos}
                       onChange={(e) => setFinal("videos", e.target.value)}
                     />
+                  </div>
+                  <div>
+                    <label className="label">Link toàn bộ file gốc</label>
+                    <input
+                      className="input"
+                      inputMode="url"
+                      placeholder="Link thư mục Google Drive / Fshare… chứa toàn bộ file gốc"
+                      value={finalLinks.originals}
+                      onChange={(e) => setFinal("originals", e.target.value)}
+                    />
                     <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                      Hai link này hiện ngay trên trang riêng của khách — video YouTube/Drive phát thẳng trong trang.
+                      Các link này hiện ngay trên trang riêng của khách (mục “Tải về”) — video YouTube/Drive phát thẳng trong trang.
+                      Nhớ chia sẻ thư mục ở chế độ “Bất kỳ ai có đường liên kết”.
                     </p>
                   </div>
                   <div>

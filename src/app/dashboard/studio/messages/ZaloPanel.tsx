@@ -32,6 +32,7 @@ const EVENTS: { key: string; label: string; audiences: ("client" | "crew")[] }[]
   { key: "payment_due", label: "Nhắc thanh toán tới hạn", audiences: ["client"] },
   { key: "select_ready", label: "Mời khách chọn ảnh", audiences: ["client"] },
   { key: "delivery_ready", label: "Báo đã giao ảnh", audiences: ["client"] },
+  { key: "portal_link", label: "Hoàn thành → gửi link trang riêng của khách", audiences: ["client"] },
 ];
 
 /** QR có thể là data URL sẵn hoặc base64 thô → chuẩn hoá về src hợp lệ. */

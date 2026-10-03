@@ -262,6 +262,15 @@ body {
   0%, 100% { background-color: var(--surface); }
   50% { background-color: var(--surface2); }
 }
+/* Cùng ý đó cho trang album NỀN TỐI của cổng khách (/portal) — màu cố định vì
+   trang đó không đổi theo chế độ sáng/tối. */
+.o-anh-cho-toi {
+  animation: nhipChoAnhToi 1.5s ease-in-out infinite;
+}
+@keyframes nhipChoAnhToi {
+  0%, 100% { background-color: #1e1b1f; }
+  50% { background-color: #2a262b; }
+}
 
 @keyframes vkPop {
   from {

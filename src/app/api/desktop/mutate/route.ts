@@ -146,7 +146,7 @@ export async function POST(req: Request) {
         }
       }
       if (table === "studio_contracts" && payload.status === "completed") {
-        await deliverContractIfReady(owner, id, { notifyExisting: true });
+        await deliverContractIfReady(owner, id, { notifyExisting: true, portalOnComplete: true });
       }
       // App máy tính sửa hợp đồng (ngày, giờ, nơi chụp, trạng thái) thì Google
       // Lịch phải đổi theo. Máy tính không chạy trong trình duyệt đã đăng nhập

@@ -83,11 +83,14 @@ export async function POST(req: Request) {
   // lên Drive, hoặc studio bấm "Giao khách ngay" ở tab Sản phẩm.
   let deliveryAlbum = false;
   let deliveryWaiting = false;
+  let portalSent = false;
   if (status === "completed" && contract.status !== "completed") {
-    const r = await deliverContractIfReady(user.id, contractId, { notifyExisting: true });
+    // portalOnComplete: gửi khách link trang riêng /portal/<token> (một lần).
+    const r = await deliverContractIfReady(user.id, contractId, { notifyExisting: true, portalOnComplete: true });
     deliveryAlbum = r.album;
     deliveryWaiting = r.waiting;
+    portalSent = !!r.portalSent;
   }
 
-  return NextResponse.json({ ok: true, deliveryAlbum, deliveryWaiting, gcal });
+  return NextResponse.json({ ok: true, deliveryAlbum, deliveryWaiting, portalSent, gcal });
 }

@@ -13,6 +13,8 @@ export type EventCfg = { client?: boolean; crew?: boolean; templateId?: string }
  */
 export const LATE_DEFAULT_EVENTS: Record<string, EventCfg> = {
   payment_done: { client: true },
+  // Hợp đồng hoàn thành → gửi khách link trang riêng (album, video, file gốc).
+  portal_link: { client: true },
 };
 
 /** Cấu hình thật của một mốc: studio đã chỉnh thì theo studio, chưa thì theo mặc định muộn. */

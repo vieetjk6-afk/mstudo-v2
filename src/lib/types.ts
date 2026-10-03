@@ -341,6 +341,8 @@ export interface StudioContract {
   /** Link album / video hoàn thiện dán tay (migrations/contract_final_links.sql). */
   final_album_url?: string | null;
   final_video_urls?: string | null;
+  /** Link thư mục toàn bộ file gốc (migrations/contract_final_originals.sql). */
+  final_originals_url?: string | null;
   source: string | null;
   brief_concept: string | null;
   brief_outfit: string | null;
