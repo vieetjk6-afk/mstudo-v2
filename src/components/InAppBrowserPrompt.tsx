@@ -49,9 +49,10 @@ const TR = {
  * `isCustomerLinkPath`) khi đang ở trình duyệt trong Zalo / Facebook / Messenger /
  * Instagram / TikTok…
  *
- * Một thẻ nổi ở cuối màn hình — KHÔNG che trang, khách vẫn xem được phía sau —
- * với hai lựa chọn: "Mở bằng Safari/Chrome" và "Ở lại". Không tự nhảy ra
- * trình duyệt: khách quyết định.
+ * Hộp thoại nổi GIỮA màn hình trên một lớp mờ nhẹ — trang vẫn nhìn thấy phía
+ * sau nhưng chưa bấm được, khách BẮT BUỘC chọn một trong hai: "Mở bằng
+ * Safari/Chrome" hoặc "Ở lại". Không đóng bằng cách chạm ra ngoài, không tự
+ * nhảy ra trình duyệt: khách quyết định.
  *
  * Nút mở dùng `x-safari-https://` (iPhone) / `intent://` (Android) — xem
  * @/lib/in-app-browser. App nào nuốt mất lệnh đó thì sau 1,5 giây thẻ tự mở
@@ -96,7 +97,16 @@ export default function InAppBrowserPrompt() {
     }
   }, [gated, pathname]);
 
-  if (!gated || !info || stay) return null;
+  // Khoá cuộn trang phía sau trong lúc hộp thoại đang chờ khách chọn.
+  const showing = gated && !!info && !stay;
+  useEffect(() => {
+    if (!showing) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [showing]);
+
+  if (!showing || !info) return null;
 
   const tr = TR[lang];
   const app = inAppName(info.app);
@@ -143,49 +153,47 @@ export default function InAppBrowserPrompt() {
   return (
     <div
       role="alertdialog"
+      aria-modal="true"
       aria-labelledby="iab-title"
       aria-describedby="iab-desc"
-      className="fixed inset-x-0 bottom-0 z-[400] px-3"
-      style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      className="fixed inset-0 z-[400] overflow-y-auto animate-[vkOverlay_.2s_ease_both]"
+      style={{ background: "rgba(10,8,11,.55)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }}
     >
+      {/* min-h-full + items-center: giữa màn hình khi vừa, cuộn được (không
+          bị cắt đầu) khi phần hướng dẫn mở rộng trên điện thoại nhỏ. */}
+      <div className="flex min-h-full items-center justify-center px-4 py-6">
       <div
-        className="mx-auto w-full max-w-[420px] rounded-[18px] p-4 animate-[vkPop_.25s_ease_both]"
-        style={{ background: "#1E1B1F", color: "#fff", border: "1px solid rgba(255,255,255,.1)", boxShadow: "0 18px 50px rgba(0,0,0,.45)" }}
+        className="w-full max-w-[360px] rounded-[22px] px-5 pb-5 pt-6 text-center animate-[vkPop_.25s_ease_both]"
+        style={{ background: "#1E1B1F", color: "#fff", border: "1px solid rgba(255,255,255,.1)", boxShadow: "0 24px 70px rgba(0,0,0,.5)" }}
       >
-        <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[12px]" style={{ background: "rgba(240,180,41,.16)", color: "#F0B429" }}>
-            <ExternalLink size={19} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p id="iab-title" className="text-[14.5px] font-bold leading-snug">{tr.title(app)}</p>
-            <p id="iab-desc" className="mt-0.5 text-[12.5px] leading-snug" style={{ color: "rgba(255,255,255,.66)", textWrap: "pretty" }}>
-              {tr.desc(browser)}
-            </p>
-          </div>
-        </div>
+        <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-[14px]" style={{ background: "rgba(240,180,41,.16)", color: "#F0B429" }}>
+          <ExternalLink size={22} />
+        </span>
+        <p id="iab-title" className="mt-3.5 text-[17px] font-bold leading-snug">{tr.title(app)}</p>
+        <p id="iab-desc" className="mx-auto mt-1.5 max-w-[290px] text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,.68)", textWrap: "pretty" }}>
+          {tr.desc(browser)}
+        </p>
 
-        <div className="mt-3.5 flex gap-2">
-          <button
-            type="button"
-            onClick={keepHere}
-            className="flex-none rounded-[12px] px-4 py-2.5 text-[13.5px] font-semibold"
-            style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.85)" }}
-          >
-            {tr.stay}
-          </button>
-          <button
-            type="button"
-            onClick={openExternal}
-            disabled={busy}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-[12px] px-4 py-2.5 text-[13.5px] font-bold"
-            style={{ background: "#fff", color: "#141215" }}
-          >
-            <ExternalLink size={16} /> {busy ? tr.opening : tr.open(browser)}
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={openExternal}
+          disabled={busy}
+          className="mt-5 flex w-full items-center justify-center gap-1.5 rounded-[13px] px-4 py-3 text-[14.5px] font-bold"
+          style={{ background: "#fff", color: "#141215" }}
+        >
+          <ExternalLink size={17} /> {busy ? tr.opening : tr.open(browser)}
+        </button>
+        <button
+          type="button"
+          onClick={keepHere}
+          className="mt-2 w-full rounded-[13px] px-4 py-3 text-[14px] font-semibold"
+          style={{ background: "rgba(255,255,255,.08)", color: "rgba(255,255,255,.85)" }}
+        >
+          {tr.stay}
+        </button>
 
         {showSteps && (
-          <div className="mt-3.5 border-t pt-3" style={{ borderColor: "rgba(255,255,255,.1)" }}>
+          <div className="mt-4 border-t pt-3.5 text-left" style={{ borderColor: "rgba(255,255,255,.1)" }}>
             <p className="text-[12.5px] font-bold">{tr.stepsTitle}</p>
             <ol className="mt-1.5 space-y-1 text-[12.5px]" style={{ color: "rgba(255,255,255,.75)" }}>
               {steps.map((s, i) => (
@@ -215,6 +223,7 @@ export default function InAppBrowserPrompt() {
             )}
           </div>
         )}
+      </div>
       </div>
     </div>
   );
