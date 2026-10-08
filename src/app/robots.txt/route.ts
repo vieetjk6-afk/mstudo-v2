@@ -1,4 +1,5 @@
 import { isMainHost, requestHost, tenantSiteForHost } from "@/lib/seo-host";
+import { AI_ORIGIN, isVieetjkAiHost } from "@/lib/vieetjk-ai/content";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,11 @@ function body(lines: string[]): Response {
 
 export async function GET(req: Request) {
   const host = requestHost(req);
+
+  // ai.vieetjk.com — trang công ty code tay, không có dòng `sites` để tra.
+  if (isVieetjkAiHost(host)) {
+    return body(["User-agent: *", "Allow: /", "Disallow: /api/", "", `Sitemap: ${AI_ORIGIN}/sitemap.xml`]);
+  }
 
   if (!isMainHost(host)) {
     const { site, failed } = await tenantSiteForHost(host);

@@ -1,6 +1,6 @@
 # Mở file nào?
 
-Trong thư mục này có 13 file, nhưng **lúc chuyển đổi bạn chỉ cần 3 file**. Bảng
+Trong thư mục này có 14 file, nhưng **lúc chuyển đổi bạn chỉ cần 3 file**. Bảng
 này để bạn khỏi phải đoán.
 
 ## Đang chuyển mstudo sang bản 2.0
@@ -21,6 +21,7 @@ Ba file trên là đủ. Không cần mở file nào khác.
 |---|---|
 | [`thiet-lap-moi.md`](./thiet-lap-moi.md) | Dựng Supabase + Vercel từ số 0 (khi làm bản thử mới, không phải lúc chuyển đổi) |
 | [`ten-mien-phu.md`](./ten-mien-phu.md) | `*.mstudo.com` — dựng wildcard, và soi khi tên miền phụ của studio không chạy |
+| [`ai-vieetjk.md`](./ai-vieetjk.md) | `ai.vieetjk.com` — trang Công ty giải pháp công nghệ Vieetjk: bật tên miền, sửa nội dung, form liên hệ |
 | [`supabase-usage.md`](./supabase-usage.md) | Vì sao vượt hạn mức Supabase và cách kéo xuống |
 | [`desktop-client-spec.md`](./desktop-client-spec.md) | Đặc tả app desktop cho gói Studio |
 

@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadSiteBundle, type SiteData } from "@/lib/site-loader";
 import SiteRenderer from "@/components/SiteRenderer";
@@ -11,6 +11,10 @@ import { loadVieetjkData } from "@/lib/vieetjk/data";
 import VieetjkChrome from "@/components/vieetjk/VieetjkChrome";
 import VieetjkHome from "@/components/vieetjk/VieetjkHome";
 import VieetjkService from "@/components/vieetjk/VieetjkService";
+import { AI_ORIGIN, COMPANY as AI_COMPANY, SEO as AI_SEO, getService as getAiService, isVieetjkAiHost } from "@/lib/vieetjk-ai/content";
+import AiChrome from "@/components/vieetjk-ai/AiChrome";
+import AiHome from "@/components/vieetjk-ai/AiHome";
+import AiService from "@/components/vieetjk-ai/AiService";
 
 export const dynamic = "force-dynamic";
 
@@ -72,9 +76,49 @@ const loadTenant = cache(async (key: string): Promise<SiteData | null> => {
   return loadSiteBundle(createAdminClient(), match.site, true);
 });
 
+/**
+ * Metadata trang ai.vieetjk.com (Công ty giải pháp công nghệ Vieetjk) — trang
+ * code tay, không có dòng `sites`, nên tự khai đủ favicon / canonical / OG ở đây
+ * thay cho bộ mặc định mstudo của layout gốc.
+ */
+function aiMetadata(path: string[]): Metadata {
+  const svc = path.length === 1 ? getAiService(path[0]) : null;
+  const title = svc ? `${svc.title} | ${AI_COMPANY.shortName}` : AI_SEO.title;
+  const description = svc ? svc.seoDescription : AI_SEO.description;
+  const url = svc ? `${AI_ORIGIN}/${svc.slug}` : `${AI_ORIGIN}/`;
+  const image = { url: `${AI_ORIGIN}/vieetjk-ai-og.png`, width: 1200, height: 630, alt: AI_COMPANY.legalName };
+  return {
+    title,
+    description,
+    keywords: AI_SEO.keywords,
+    applicationName: AI_COMPANY.legalName,
+    alternates: { canonical: url },
+    robots: { index: true, follow: true },
+    icons: { icon: "/vieetjk-ai-icon.svg", shortcut: "/vieetjk-ai-icon.svg", apple: "/vieetjk-ai-icon.png" },
+    appleWebApp: { capable: true, title: `${AI_COMPANY.shortName} ${AI_COMPANY.brandSuffix}`, statusBarStyle: "black-translucent" },
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url,
+      siteName: AI_COMPANY.legalName,
+      locale: "en_US",
+      images: [image],
+    },
+    twitter: { card: "summary_large_image", title, description, images: [image.url] },
+  };
+}
+
+/** Thanh trình duyệt điện thoại cùng màu nền tối của ai.vieetjk.com. */
+export async function generateViewport(props: { params: Promise<Params> }): Promise<Viewport> {
+  const { subdomain } = await props.params;
+  return isVieetjkAiHost(subdomain) ? { themeColor: "#060912" } : {};
+}
+
 export async function generateMetadata(props: { params: Promise<Params> }): Promise<Metadata> {
   const params = await props.params;
   const key = params.subdomain;
+  if (isVieetjkAiHost(key)) return aiMetadata(params.path ?? []);
   if (isVieetjkKey(key) || (await siteHasVieetjkTemplate(key))) {
     const lang = await currentLang();
     const svc = params.path?.length ? getService(params.path[0]) : null;
@@ -118,6 +162,24 @@ export default async function SitePage(props: { params: Promise<Params> }) {
   const params = await props.params;
   const key = params.subdomain;
   const path = params.path ?? [];
+
+  // ── ai.vieetjk.com — Công ty giải pháp công nghệ Vieetjk (code tay) ─────
+  if (isVieetjkAiHost(key)) {
+    if (path.length === 0) {
+      return (
+        <AiChrome>
+          <AiHome />
+        </AiChrome>
+      );
+    }
+    const svc = path.length === 1 ? getAiService(path[0]) : null;
+    if (!svc) notFound();
+    return (
+      <AiChrome active={svc.slug}>
+        <AiService service={svc} />
+      </AiChrome>
+    );
+  }
 
   // ── Trang riêng của vieetjk (thiết kế code tay, không dùng builder) ──────
   const vieetjk = isVieetjkKey(key) || (await siteHasVieetjkTemplate(key));
