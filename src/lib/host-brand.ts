@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStudioBrand, type StudioBrandInfo } from "@/lib/studio-brand";
 import { MAIN_HOST, APP_HOST, IMG_HOST, ADMIN_HOST, THIEP_HOST } from "@/lib/hosts";
+import { isVieetjkAiHost } from "@/lib/vieetjk-ai/content";
 
 const SYSTEM_HOSTS = new Set([MAIN_HOST, APP_HOST, IMG_HOST, ADMIN_HOST, THIEP_HOST].filter(Boolean));
 
@@ -19,6 +20,9 @@ export const getBrandForHost = cache(async (rawHost: string | null | undefined):
   if (!host || SYSTEM_HOSTS.has(host) || host === "localhost" || host.endsWith(".vercel.app") || host.endsWith(".local")) {
     return null;
   }
+  // ai.vieetjk.com là trang code tay, không có dòng `sites` — tra DB mỗi lượt xem
+  // chỉ tốn một vòng gọi Supabase để nhận về null. Trang tự khai favicon/tiêu đề.
+  if (isVieetjkAiHost(host)) return null;
 
   try {
     const db = createAdminClient();

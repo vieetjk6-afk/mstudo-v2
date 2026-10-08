@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isMainHost, requestHost, tenantSiteForHost } from "@/lib/seo-host";
+import { AI_ORIGIN, aiSitemapPaths, isVieetjkAiHost } from "@/lib/vieetjk-ai/content";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +41,11 @@ function escapeXml(s: string): string {
 export async function GET(req: Request) {
   const host = requestHost(req);
   const base = `https://${host}`;
+
+  // ── ai.vieetjk.com — trang chủ + từng trang dịch vụ ──────────────────────
+  if (isVieetjkAiHost(host)) {
+    return xml(aiSitemapPaths().map(({ path, priority }) => ({ loc: `${AI_ORIGIN}${path}`, priority })));
+  }
 
   // ── Website riêng của studio ──────────────────────────────────────────────
   if (!isMainHost(host)) {
