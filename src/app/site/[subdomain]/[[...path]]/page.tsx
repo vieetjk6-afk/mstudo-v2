@@ -102,7 +102,7 @@ function aiMetadata(path: string[]): Metadata {
       description,
       url,
       siteName: AI_COMPANY.legalName,
-      locale: "vi_VN",
+      locale: "en_US",
       images: [image],
     },
     twitter: { card: "summary_large_image", title, description, images: [image.url] },

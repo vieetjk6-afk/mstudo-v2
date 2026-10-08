@@ -1,18 +1,18 @@
 import { Facebook, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
-import { COMPANY, SERVICES } from "@/lib/vieetjk-ai/content";
+import { AGENT_SLUG, COMPANY, SERVICES } from "@/lib/vieetjk-ai/content";
 import { VaMark } from "./icons";
 import MobileNav, { type NavItem } from "./MobileNav";
 import { VA_CSS } from "./styles";
 
 function Logo() {
   return (
-    <a href="/" className="va-logo" aria-label={`${COMPANY.legalName} — Trang chủ`}>
+    <a href="/" className="va-logo" aria-label={`${COMPANY.legalName} — Home`}>
       <VaMark size={36} />
       <span className="va-logo-text">
         <span className="va-logo-name">
           {COMPANY.shortName} <span className="va-grad-text">{COMPANY.brandSuffix}</span>
         </span>
-        <span className="va-logo-sub">Giải pháp công nghệ</span>
+        <span className="va-logo-sub">Technology Solutions</span>
       </span>
     </a>
   );
@@ -24,24 +24,24 @@ function Logo() {
  */
 export default function AiChrome({ children, active = "" }: { children: React.ReactNode; active?: string }) {
   const nav: NavItem[] = [
-    { href: "/#gioi-thieu", label: "Giới thiệu" },
-    { href: "/#dich-vu", label: "Dịch vụ", active: !!active && active !== "ai-agent" },
-    { href: "/ai-agent", label: "AI Agent", active: active === "ai-agent" },
-    { href: "/#san-pham", label: "Sản phẩm" },
-    { href: "/#quy-trinh", label: "Quy trình" },
-    { href: "#lien-he", label: "Liên hệ" },
+    { href: "/#about", label: "About" },
+    { href: "/#services", label: "Services", active: !!active && active !== AGENT_SLUG },
+    { href: `/${AGENT_SLUG}`, label: "AI Agents", active: active === AGENT_SLUG },
+    { href: "/#products", label: "Products" },
+    { href: "/#process", label: "Process" },
+    { href: "#contact", label: "Contact" },
   ];
-  const cta: NavItem = { href: "#lien-he", label: "Nhận tư vấn miễn phí" };
+  const cta: NavItem = { href: "#contact", label: "Get a free consultation" };
   const year = new Date().getFullYear();
 
   return (
-    <div className="va-root">
+    <div className="va-root" lang="en">
       <style dangerouslySetInnerHTML={{ __html: VA_CSS }} />
 
       <header className="va-header">
         <div className="va-wrap va-headin">
           <Logo />
-          <nav className="va-nav" aria-label="Menu chính">
+          <nav className="va-nav" aria-label="Main menu">
             {nav.map((it) => (
               <a key={it.href} href={it.href} className={it.active ? "active" : undefined}>
                 {it.label}
@@ -53,7 +53,7 @@ export default function AiChrome({ children, active = "" }: { children: React.Re
               <Phone size={15} /> {COMPANY.phone}
             </a>
             <a href={cta.href} className="va-btn va-btn-primary va-btn-sm">
-              Nhận tư vấn
+              Get in touch
             </a>
             <MobileNav items={nav} cta={cta} />
           </div>
@@ -68,8 +68,8 @@ export default function AiChrome({ children, active = "" }: { children: React.Re
             <div>
               <Logo />
               <p className="va-foot-about">
-                {COMPANY.legalName} — phát triển ứng dụng, giải pháp AI, AI Agent và SEO cho doanh nghiệp Việt. Thành
-                lập ngày {COMPANY.foundedLabel}.
+                {COMPANY.legalName} ({COMPANY.nativeName}) — app development, AI solutions, AI agents and SEO for
+                growing businesses. Founded {COMPANY.foundedLabel}.
               </p>
               <div className="va-social">
                 <a href={COMPANY.facebook} target="_blank" rel="noopener noreferrer" aria-label="Facebook">
@@ -84,7 +84,7 @@ export default function AiChrome({ children, active = "" }: { children: React.Re
               </div>
             </div>
             <div>
-              <h4>Dịch vụ</h4>
+              <h4>Services</h4>
               <ul className="va-foot-links">
                 {SERVICES.map((s) => (
                   <li key={s.slug}>
@@ -94,17 +94,17 @@ export default function AiChrome({ children, active = "" }: { children: React.Re
               </ul>
             </div>
             <div>
-              <h4>Công ty</h4>
+              <h4>Company</h4>
               <ul className="va-foot-links">
-                <li><a href="/#gioi-thieu">Về Vieetjk</a></li>
-                <li><a href="/#san-pham">Sản phẩm</a></li>
-                <li><a href="/#linh-vuc">Lĩnh vực phục vụ</a></li>
-                <li><a href="/#quy-trinh">Quy trình hợp tác</a></li>
-                <li><a href="/#hoi-dap">Câu hỏi thường gặp</a></li>
+                <li><a href="/#about">About Vieetjk</a></li>
+                <li><a href="/#products">Products</a></li>
+                <li><a href="/#industries">Industries</a></li>
+                <li><a href="/#process">How we work</a></li>
+                <li><a href="/#faq">FAQ</a></li>
               </ul>
             </div>
             <div>
-              <h4>Liên hệ</h4>
+              <h4>Contact</h4>
               <ul className="va-foot-links">
                 <li style={{ display: "flex", gap: 10 }}>
                   <MapPin size={16} style={{ flexShrink: 0, marginTop: 4 }} /> {COMPANY.address.full}
@@ -124,16 +124,16 @@ export default function AiChrome({ children, active = "" }: { children: React.Re
           </div>
           <div className="va-foot-bottom">
             <span>
-              © {year} {COMPANY.legalName}. Bảo lưu mọi quyền.
+              © {year} {COMPANY.legalName}. All rights reserved.
             </span>
-            <span>ai.vieetjk.com · Thành lập {COMPANY.foundedLabel}</span>
+            <span>ai.vieetjk.com · Founded {COMPANY.foundedLabel}</span>
           </div>
         </div>
       </footer>
 
-      <a href={COMPANY.zalo} target="_blank" rel="noopener noreferrer" className="va-float" aria-label="Chat Zalo với Vieetjk">
+      <a href={COMPANY.zalo} target="_blank" rel="noopener noreferrer" className="va-float" aria-label="Chat with Vieetjk on Zalo">
         <MessageCircle size={18} />
-        <span>Chat Zalo</span>
+        <span>Chat on Zalo</span>
       </a>
     </div>
   );

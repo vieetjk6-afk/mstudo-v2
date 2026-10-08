@@ -2,27 +2,27 @@ import { Clock, Mail, MapPin, MessageCircle, Phone } from "lucide-react";
 import { COMPANY } from "@/lib/vieetjk-ai/content";
 import ContactForm from "./ContactForm";
 
-/** Khối "Liên hệ" — có ở cuối mọi trang (anchor #lien-he). */
+/** Khối "Liên hệ" — có ở cuối mọi trang (anchor #contact). */
 export default function ContactSection({ defaultService = "" }: { defaultService?: string }) {
   const rows = [
-    { icon: MapPin, k: "Địa chỉ", v: COMPANY.address.full, href: COMPANY.mapLink, external: true },
+    { icon: MapPin, k: "Address", v: COMPANY.address.full, href: COMPANY.mapLink, external: true },
     { icon: Phone, k: "Hotline", v: COMPANY.phone, href: COMPANY.phoneHref },
     { icon: MessageCircle, k: "Zalo", v: COMPANY.phone, href: COMPANY.zalo, external: true },
     { icon: Mail, k: "Email", v: COMPANY.email, href: `mailto:${COMPANY.email}` },
-    { icon: Clock, k: "Giờ làm việc", v: COMPANY.hours, href: null },
+    { icon: Clock, k: "Business hours", v: COMPANY.hours, href: null },
   ];
 
   return (
-    <section id="lien-he" className="va-section alt">
+    <section id="contact" className="va-section alt">
       <div className="va-wrap">
         <div className="va-head center">
-          <span className="va-eyebrow">Liên hệ</span>
+          <span className="va-eyebrow">Contact</span>
           <h2 className="va-h2">
-            Bắt đầu dự án của bạn <span className="va-grad-text">ngay hôm nay</span>
+            Start your project <span className="va-grad-text">today</span>
           </h2>
           <p className="va-lead">
-            Tư vấn và khảo sát hoàn toàn miễn phí. Hãy kể cho chúng tôi nghe về bài toán của bạn — dù chỉ mới là một ý
-            tưởng.
+            Consultation and discovery are completely free. Tell us about your challenge — even if it&apos;s just an
+            idea.
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export default function ContactSection({ defaultService = "" }: { defaultService
             <div className="va-map">
               <iframe
                 src={COMPANY.mapEmbed}
-                title={`Bản đồ: ${COMPANY.address.full}`}
+                title={`Map: ${COMPANY.address.full}`}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
               />

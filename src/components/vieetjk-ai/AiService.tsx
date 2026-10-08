@@ -1,14 +1,14 @@
 import { ArrowRight, Check, ChevronDown, ChevronRight } from "lucide-react";
-import { SERVICES, type Service } from "@/lib/vieetjk-ai/content";
+import { AGENT_SLUG, SERVICES, type Service } from "@/lib/vieetjk-ai/content";
 import { breadcrumbLd, faqLd, ldJson, serviceLd } from "@/lib/vieetjk-ai/json-ld";
 import { SERVICE_ICONS } from "./icons";
 import { AgentConsole, AgentPanel } from "./AgentBlocks";
 import ContactSection from "./ContactSection";
 
-/** Trang chi tiết một dịch vụ: /phat-trien-ung-dung, /ai-agent, /seo… */
+/** Trang chi tiết một dịch vụ: /app-development, /ai-agents, /seo… */
 export default function AiService({ service: s }: { service: Service }) {
   const Icon = SERVICE_ICONS[s.icon];
-  const isAgent = s.slug === "ai-agent";
+  const isAgent = s.slug === AGENT_SLUG;
   const others = SERVICES.filter((o) => o.slug !== s.slug);
 
   return (
@@ -22,9 +22,9 @@ export default function AiService({ service: s }: { service: Service }) {
         <span className="va-glow g1" />
         <div className="va-wrap" style={{ position: "relative", zIndex: 1 }}>
           <nav className="va-crumbs" aria-label="Breadcrumb">
-            <a href="/">Trang chủ</a>
+            <a href="/">Home</a>
             <ChevronRight size={14} />
-            <a href="/#dich-vu">Dịch vụ</a>
+            <a href="/#services">Services</a>
             <ChevronRight size={14} />
             <span style={{ color: "var(--ink2)" }}>{s.name}</span>
           </nav>
@@ -45,11 +45,11 @@ export default function AiService({ service: s }: { service: Service }) {
                 </ul>
               )}
               <div className="va-btnrow">
-                <a href="#lien-he" className="va-btn va-btn-primary">
-                  Nhận tư vấn & báo giá <ArrowRight size={17} />
+                <a href="#contact" className="va-btn va-btn-primary">
+                  Get a free quote <ArrowRight size={17} />
                 </a>
-                <a href="#tinh-nang" className="va-btn va-btn-ghost">
-                  Xem giải pháp
+                <a href="#solutions" className="va-btn va-btn-ghost">
+                  See solutions
                 </a>
               </div>
             </div>
@@ -57,7 +57,7 @@ export default function AiService({ service: s }: { service: Service }) {
               <AgentConsole />
             ) : (
               <div className="va-hl">
-                <h2>Bạn nhận được</h2>
+                <h2>What you get</h2>
                 <ul>
                   {s.highlights.map((h) => (
                     <li key={h} className="va-check">
@@ -72,11 +72,11 @@ export default function AiService({ service: s }: { service: Service }) {
       </section>
 
       {/* ── Giải pháp ───────────────────────────────────────── */}
-      <section id="tinh-nang" className="va-section alt">
+      <section id="solutions" className="va-section alt">
         <div className="va-wrap">
           <div className="va-head">
-            <span className="va-eyebrow">Giải pháp</span>
-            <h2 className="va-h2">Chúng tôi có thể làm gì cho bạn</h2>
+            <span className="va-eyebrow">Solutions</span>
+            <h2 className="va-h2">What we can build for you</h2>
           </div>
           <div className="va-grid c3">
             {s.features.map((f, i) => (
@@ -105,13 +105,13 @@ export default function AiService({ service: s }: { service: Service }) {
       <section className={`va-section${isAgent ? " alt" : ""}`}>
         <div className="va-wrap">
           <div className="va-head">
-            <span className="va-eyebrow">Quy trình</span>
-            <h2 className="va-h2">Triển khai từng bước, thấy kết quả sớm</h2>
+            <span className="va-eyebrow">Process</span>
+            <h2 className="va-h2">Step-by-step delivery, early results</h2>
           </div>
           <ol className="va-timeline">
             {s.steps.map((st, i) => (
               <li key={st.title} className="va-step">
-                <span className="va-step-n va-grad-text">Bước 0{i + 1}</span>
+                <span className="va-step-n va-grad-text">Step 0{i + 1}</span>
                 <h3>{st.title}</h3>
                 <p>{st.text}</p>
                 <span className="va-step-time">⏱ {st.time}</span>
@@ -125,9 +125,9 @@ export default function AiService({ service: s }: { service: Service }) {
       <section className={`va-section tight${isAgent ? "" : " alt"}`}>
         <div className="va-wrap">
           <div className="va-head">
-            <span className="va-eyebrow">Công nghệ</span>
+            <span className="va-eyebrow">Technology</span>
             <h2 className="va-h2" style={{ fontSize: "clamp(24px,3vw,32px)" }}>
-              Công cụ & nền tảng chúng tôi sử dụng
+              Tools & platforms we use
             </h2>
           </div>
           <div className="va-chips" style={{ marginTop: 26 }}>
@@ -144,8 +144,8 @@ export default function AiService({ service: s }: { service: Service }) {
       <section className={`va-section${isAgent ? " alt" : ""}`}>
         <div className="va-wrap">
           <div className="va-head center">
-            <span className="va-eyebrow">Hỏi đáp</span>
-            <h2 className="va-h2">Câu hỏi thường gặp về {s.name}</h2>
+            <span className="va-eyebrow">FAQ</span>
+            <h2 className="va-h2">{s.name}: frequently asked questions</h2>
           </div>
           <div className="va-faq">
             {s.faq.map((f) => (
@@ -165,9 +165,9 @@ export default function AiService({ service: s }: { service: Service }) {
       <section className="va-section tight">
         <div className="va-wrap">
           <div className="va-head">
-            <span className="va-eyebrow">Khám phá thêm</span>
+            <span className="va-eyebrow">Explore more</span>
             <h2 className="va-h2" style={{ fontSize: "clamp(24px,3vw,32px)" }}>
-              Dịch vụ khác của Vieetjk
+              Other Vieetjk services
             </h2>
           </div>
           <div className="va-others">

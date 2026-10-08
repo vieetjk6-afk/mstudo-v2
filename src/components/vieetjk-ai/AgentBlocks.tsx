@@ -1,18 +1,18 @@
 import { ArrowRight, Check } from "lucide-react";
-import { AGENT, CONSOLE_LINES } from "@/lib/vieetjk-ai/content";
+import { AGENT, AGENT_SLUG, CONSOLE_LINES } from "@/lib/vieetjk-ai/content";
 
 const CONSOLE_MARK = { cmd: "›", ok: "✓", done: "◆" } as const;
 
 /** Khung "console" minh hoạ một AI Agent đang xử lý yêu cầu (chỉ CSS, không JS). */
 export function AgentConsole() {
   return (
-    <div className="va-console" aria-label="Minh hoạ một AI Agent đang xử lý yêu cầu của khách hàng" role="img">
+    <div className="va-console" aria-label="Illustration of an AI agent handling a customer request" role="img">
       <div className="va-console-in">
         <div className="va-console-bar" aria-hidden="true">
           <i />
           <i />
           <i />
-          <span className="va-console-title">vieetjk-agent · cskh</span>
+          <span className="va-console-title">vieetjk-agent · support</span>
           <span className="va-console-live">Live</span>
         </div>
         <div className="va-console-body" aria-hidden="true">
@@ -27,7 +27,7 @@ export function AgentConsole() {
           ))}
         </div>
         <div className="va-tools" aria-hidden="true">
-          {["Zalo OA", "CRM", "Google Sheets", "Email", "Lịch giao hàng"].map((t) => (
+          {["Zalo OA", "CRM", "Google Sheets", "Email", "Delivery schedule"].map((t) => (
             <span key={t} className="va-tool">
               {t}
             </span>
@@ -67,12 +67,12 @@ export function AgentPanel({ showLearnMore = true }: { showLearnMore?: boolean }
       </ol>
       <div className="va-btnrow">
         {showLearnMore && (
-          <a href="/ai-agent" className="va-btn va-btn-primary">
-            Tìm hiểu AI Agent <ArrowRight size={17} />
+          <a href={`/${AGENT_SLUG}`} className="va-btn va-btn-primary">
+            Explore AI agents <ArrowRight size={17} />
           </a>
         )}
-        <a href="#lien-he" className={`va-btn ${showLearnMore ? "va-btn-ghost" : "va-btn-primary"}`}>
-          Đặt lịch demo
+        <a href="#contact" className={`va-btn ${showLearnMore ? "va-btn-ghost" : "va-btn-primary"}`}>
+          Book a demo
         </a>
       </div>
     </div>

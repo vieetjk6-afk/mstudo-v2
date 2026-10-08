@@ -5,7 +5,8 @@ import { sendZalo } from "@/lib/zalo/send";
 import { limitByIpDurable } from "@/lib/rate-limit";
 
 /**
- * Form "Nhận tư vấn" trên ai.vieetjk.com (Công ty giải pháp công nghệ Vieetjk).
+ * Form "Get a free consultation" trên ai.vieetjk.com (Công ty giải pháp công
+ * nghệ Vieetjk — trang tiếng Anh). Chữ báo cho CHỦ (lead, Zalo) vẫn tiếng Việt.
  * Lưu vào website_leads (source = "vieetjk-ai") của cùng chủ tài khoản đang sở
  * hữu vieetjk.com → hiện chung ở Dashboard → Yêu cầu mới, rồi báo Zalo cho chủ.
  * Chạy server-side với service-role (bỏ qua RLS để insert).
@@ -16,9 +17,20 @@ export const dynamic = "force-dynamic";
 
 /** SĐT Việt Nam: 0xxxxxxxxx (10 số) hoặc +84/84xxxxxxxxx. */
 const PHONE_RE = /(?:\+?84|0)(?:\d[\s.-]?){8,9}\d/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
+/**
+ * Trang hiển thị tiếng Anh nên có cả khách nước ngoài: số bắt đầu bằng "+" mà
+ * không phải +84 được nhận theo dạng E.164 (8–15 chữ số). Số Việt Nam vẫn được
+ * chuẩn hoá về 0xxxxxxxxx như chatbox vieetjk.com.
+ */
 function cleanPhone(raw: string): string | null {
-  const m = raw.match(PHONE_RE);
+  const t = raw.trim();
+  if (t.startsWith("+") && !t.startsWith("+84")) {
+    const d = t.slice(1).replace(/[\s.()-]/g, "");
+    return /^\d{8,15}$/.test(d) ? `+${d}` : null;
+  }
+  const m = t.match(PHONE_RE);
   if (!m) return null;
   let d = m[0].replace(/[^\d]/g, "");
   if (d.startsWith("84")) d = "0" + d.slice(2);
@@ -51,11 +63,14 @@ export async function POST(req: NextRequest) {
   // thành công để nó không thử cách khác.
   if (text(body.website, 200)) return Response.json({ ok: true });
 
-  const phone = typeof body.phone === "string" ? cleanPhone(body.phone) : null;
-  if (!phone) return Response.json({ error: "no_phone" }, { status: 400 });
+  // Cần ít nhất MỘT cách liên lạc dùng được: SĐT hợp lệ hoặc email hợp lệ.
+  const rawPhone = text(body.phone, 40);
+  const phone = rawPhone ? cleanPhone(rawPhone) : null;
+  const rawEmail = text(body.email, 160);
+  const email = rawEmail && EMAIL_RE.test(rawEmail) ? rawEmail : null;
+  if (!phone && !email) return Response.json({ error: "no_contact" }, { status: 400 });
 
   const name = text(body.name, 120);
-  const email = text(body.email, 160);
   const company = text(body.company, 160);
   const service = text(body.service, 120);
   const budget = text(body.budget, 60);
@@ -64,12 +79,12 @@ export async function POST(req: NextRequest) {
   const { ownerId, phone: ownerPhone, name: ownerName } = await resolveVieetjkOwner();
   if (!ownerId) return Response.json({ error: "no_owner" }, { status: 500 });
 
-  const interest = ["ai.vieetjk.com", service, budget && `Ngân sách: ${budget}`].filter(Boolean).join(" · ");
+  const interest = ["ai.vieetjk.com (EN)", service, budget && `Ngân sách: ${budget}`].filter(Boolean).join(" · ");
   // LeadsView hiển thị transcript như hội thoại — gói nội dung form thành một
   // "tin nhắn" của khách để chủ đọc được đủ thông tin ở cùng một chỗ.
   const detail = [
     name && `Họ tên: ${name}`,
-    `SĐT: ${phone}`,
+    phone ? `SĐT: ${phone}` : rawPhone && `SĐT (chưa đúng định dạng): ${rawPhone}`,
     email && `Email: ${email}`,
     company && `Công ty: ${company}`,
     service && `Dịch vụ: ${service}`,

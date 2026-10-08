@@ -21,7 +21,7 @@ export default function MobileNav({ items, cta }: { items: NavItem[]; cta: NavIt
       <button
         type="button"
         className="va-burger"
-        aria-label={open ? "Đóng menu" : "Mở menu"}
+        aria-label={open ? "Close menu" : "Open menu"}
         aria-expanded={open}
         aria-controls="va-mobnav"
         onClick={() => setOpen((v) => !v)}
@@ -29,7 +29,7 @@ export default function MobileNav({ items, cta }: { items: NavItem[]; cta: NavIt
         {open ? <X size={20} /> : <Menu size={20} />}
       </button>
       {open && (
-        <nav id="va-mobnav" className="va-mobnav" aria-label="Menu chính">
+        <nav id="va-mobnav" className="va-mobnav" aria-label="Main menu">
           {items.map((it) => (
             <a key={it.href} href={it.href} className={it.active ? "active" : undefined} onClick={() => setOpen(false)}>
               {it.label}

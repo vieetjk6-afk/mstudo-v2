@@ -10,7 +10,7 @@ export function organizationLd() {
     "@type": "ProfessionalService",
     "@id": ORG_ID,
     name: COMPANY.legalName,
-    alternateName: [`${COMPANY.shortName} ${COMPANY.brandSuffix}`, COMPANY.englishName],
+    alternateName: [`${COMPANY.shortName} ${COMPANY.brandSuffix}`, COMPANY.nativeName],
     url: `${AI_ORIGIN}/`,
     logo: `${AI_ORIGIN}/vieetjk-ai-icon.png`,
     image: `${AI_ORIGIN}/vieetjk-ai-og.png`,
@@ -23,12 +23,12 @@ export function organizationLd() {
       addressRegion: COMPANY.address.region,
       addressCountry: "VN",
     },
-    areaServed: { "@type": "Country", name: "Việt Nam" },
+    areaServed: [{ "@type": "Country", name: "Vietnam" }, "Worldwide"],
     sameAs: [COMPANY.facebook],
-    knowsAbout: ["Phát triển ứng dụng di động", "Phát triển web", "Trí tuệ nhân tạo", "AI Agent", "SEO", "Chuyển đổi số"],
+    knowsAbout: ["Mobile app development", "Web development", "Artificial intelligence", "AI agents", "SEO", "Digital transformation"],
     hasOfferCatalog: {
       "@type": "OfferCatalog",
-      name: "Dịch vụ công nghệ",
+      name: "Technology services",
       itemListElement: SERVICES.map((s) => ({
         "@type": "Offer",
         itemOffered: { "@type": "Service", name: s.title, url: `${AI_ORIGIN}/${s.slug}` },
@@ -46,7 +46,7 @@ export function serviceLd(s: Service) {
     url: `${AI_ORIGIN}/${s.slug}`,
     serviceType: s.name,
     provider: { "@id": ORG_ID, "@type": "ProfessionalService", name: COMPANY.legalName },
-    areaServed: { "@type": "Country", name: "Việt Nam" },
+    areaServed: [{ "@type": "Country", name: "Vietnam" }, "Worldwide"],
   };
 }
 
@@ -67,7 +67,7 @@ export function breadcrumbLd(s: Service) {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Trang chủ", item: `${AI_ORIGIN}/` },
+      { "@type": "ListItem", position: 1, name: "Home", item: `${AI_ORIGIN}/` },
       { "@type": "ListItem", position: 2, name: s.name, item: `${AI_ORIGIN}/${s.slug}` },
     ],
   };

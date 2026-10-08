@@ -40,11 +40,11 @@ export default function AiHome() {
             </h1>
             <p className="va-hero-sub">{HERO.sub}</p>
             <div className="va-btnrow">
-              <a href="#lien-he" className="va-btn va-btn-primary">
-                Nhận tư vấn miễn phí <ArrowRight size={17} />
+              <a href="#contact" className="va-btn va-btn-primary">
+                Get a free consultation <ArrowRight size={17} />
               </a>
-              <a href="#dich-vu" className="va-btn va-btn-ghost">
-                Xem dịch vụ
+              <a href="#services" className="va-btn va-btn-ghost">
+                Explore services
               </a>
             </div>
             <div className="va-stats">
@@ -61,11 +61,11 @@ export default function AiHome() {
       </section>
 
       {/* ── Giới thiệu ───────────────────────────────────────── */}
-      <section id="gioi-thieu" className="va-section alt">
+      <section id="about" className="va-section alt">
         <div className="va-wrap">
           <div className="va-about">
             <div className="va-about-copy">
-              <span className="va-eyebrow">Về chúng tôi</span>
+              <span className="va-eyebrow">About us</span>
               <h2 className="va-h2">{ABOUT.title}</h2>
               <div style={{ marginTop: 20 }}>
                 {ABOUT.paragraphs.map((p) => (
@@ -75,7 +75,7 @@ export default function AiHome() {
             </div>
             <div className="va-founded">
               <div className="va-founded-in">
-                <div className="va-founded-label">Ngày thành lập</div>
+                <div className="va-founded-label">Founded</div>
                 <div className="va-founded-date va-grad-text">{COMPANY.foundedLabel}</div>
                 <div className="va-founded-rows">
                   <div className="va-founded-row">
@@ -83,16 +83,16 @@ export default function AiHome() {
                     <span>
                       <b style={{ color: "var(--ink)" }}>{COMPANY.legalName}</b>
                       <br />
-                      {COMPANY.englishName}
+                      {COMPANY.nativeName}
                     </span>
                   </div>
                   <div className="va-founded-row">
                     <MapPin size={17} />
-                    <span>Trụ sở: {COMPANY.address.full}</span>
+                    <span>Headquarters: {COMPANY.address.full}</span>
                   </div>
                   <div className="va-founded-row">
                     <Layers size={17} />
-                    <span>Lĩnh vực: phát triển ứng dụng, giải pháp AI, AI Agent, SEO & chuyển đổi số</span>
+                    <span>Focus: app development, AI solutions, AI agents, SEO & digital transformation</span>
                   </div>
                 </div>
               </div>
@@ -110,16 +110,16 @@ export default function AiHome() {
       </section>
 
       {/* ── Dịch vụ ─────────────────────────────────────────── */}
-      <section id="dich-vu" className="va-section">
+      <section id="services" className="va-section">
         <div className="va-wrap">
           <div className="va-head center">
-            <span className="va-eyebrow">Dịch vụ</span>
+            <span className="va-eyebrow">Services</span>
             <h2 className="va-h2">
-              Một đối tác cho <span className="va-grad-text">mọi nhu cầu công nghệ</span>
+              One partner for <span className="va-grad-text">all your technology needs</span>
             </h2>
             <p className="va-lead">
-              Từ ứng dụng đầu tiên của doanh nghiệp tới hệ thống AI Agent tự vận hành — chúng tôi đồng hành trọn vòng
-              đời sản phẩm.
+              From your company&apos;s very first app to self-running AI agent systems — we stay with you across the
+              whole product lifecycle.
             </p>
           </div>
           <div className="va-grid c3">
@@ -134,7 +134,7 @@ export default function AiHome() {
                   <h3>{s.name}</h3>
                   <p>{s.short}</p>
                   <span className="va-link">
-                    Xem chi tiết <ArrowRight size={15} />
+                    Learn more <ArrowRight size={15} />
                   </span>
                 </a>
               );
@@ -144,21 +144,21 @@ export default function AiHome() {
       </section>
 
       {/* ── AI Agent ────────────────────────────────────────── */}
-      <section id="ai-agent" className="va-section tight">
+      <section id="agents" className="va-section tight">
         <div className="va-wrap">
           <AgentPanel />
         </div>
       </section>
 
       {/* ── Sản phẩm ────────────────────────────────────────── */}
-      <section id="san-pham" className="va-section">
+      <section id="products" className="va-section">
         <div className="va-wrap">
           <div className="va-head">
-            <span className="va-eyebrow">Sản phẩm</span>
-            <h2 className="va-h2">Sản phẩm do Vieetjk phát triển & đang vận hành</h2>
+            <span className="va-eyebrow">Products</span>
+            <h2 className="va-h2">Products built and run by Vieetjk</h2>
             <p className="va-lead">
-              Chúng tôi làm sản phẩm cho chính mình trước — mỗi ngày phục vụ người dùng thật. Đó là cách chúng tôi kiểm
-              chứng công nghệ trước khi mang đến cho khách hàng.
+              We build for ourselves first — serving real users every day. That&apos;s how we prove a technology before
+              bringing it to our clients.
             </p>
           </div>
           <div className="va-grid c4">
@@ -190,12 +190,12 @@ export default function AiHome() {
       </section>
 
       {/* ── Lĩnh vực ────────────────────────────────────────── */}
-      <section id="linh-vuc" className="va-section alt">
+      <section id="industries" className="va-section alt">
         <div className="va-wrap">
           <div className="va-head center">
-            <span className="va-eyebrow">Lĩnh vực phục vụ</span>
-            <h2 className="va-h2">Giải pháp cho từng ngành nghề</h2>
-            <p className="va-lead">Hiểu đặc thù ngành giúp chúng tôi đi thẳng vào vấn đề và rút ngắn thời gian triển khai.</p>
+            <span className="va-eyebrow">Industries</span>
+            <h2 className="va-h2">Solutions for every industry</h2>
+            <p className="va-lead">Knowing your industry lets us get straight to the point and shorten delivery time.</p>
           </div>
           <div className="va-grid c3">
             {INDUSTRIES.map((it) => {
@@ -215,16 +215,16 @@ export default function AiHome() {
       </section>
 
       {/* ── Quy trình ───────────────────────────────────────── */}
-      <section id="quy-trinh" className="va-section">
+      <section id="process" className="va-section">
         <div className="va-wrap">
           <div className="va-head center">
-            <span className="va-eyebrow">Quy trình</span>
-            <h2 className="va-h2">Hợp tác rõ ràng, minh bạch từng bước</h2>
+            <span className="va-eyebrow">Process</span>
+            <h2 className="va-h2">Clear, transparent collaboration at every step</h2>
           </div>
           <ol className="va-steps">
             {PROCESS.map((s, i) => (
               <li key={s.title} className="va-step">
-                <span className="va-step-n va-grad-text">Bước 0{i + 1}</span>
+                <span className="va-step-n va-grad-text">Step 0{i + 1}</span>
                 <h3>{s.title}</h3>
                 <p>{s.text}</p>
               </li>
@@ -234,11 +234,11 @@ export default function AiHome() {
       </section>
 
       {/* ── Công nghệ ───────────────────────────────────────── */}
-      <section id="cong-nghe" className="va-section alt tight">
+      <section id="technology" className="va-section alt tight">
         <div className="va-wrap">
           <div className="va-head">
-            <span className="va-eyebrow">Công nghệ</span>
-            <h2 className="va-h2">Công nghệ hiện đại, đã được kiểm chứng</h2>
+            <span className="va-eyebrow">Technology</span>
+            <h2 className="va-h2">Modern, proven technology</h2>
           </div>
           <div className="va-tech">
             {TECH_GROUPS.map((g) => (
@@ -261,8 +261,8 @@ export default function AiHome() {
       <section className="va-section">
         <div className="va-wrap">
           <div className="va-head center">
-            <span className="va-eyebrow">Vì sao chọn Vieetjk</span>
-            <h2 className="va-h2">Cam kết của chúng tôi</h2>
+            <span className="va-eyebrow">Why Vieetjk</span>
+            <h2 className="va-h2">Our commitments</h2>
           </div>
           <div className="va-grid c3">
             {COMMITMENTS.map((c, i) => {
@@ -284,11 +284,11 @@ export default function AiHome() {
       </section>
 
       {/* ── Hỏi đáp ─────────────────────────────────────────── */}
-      <section id="hoi-dap" className="va-section">
+      <section id="faq" className="va-section">
         <div className="va-wrap">
           <div className="va-head center">
-            <span className="va-eyebrow">Hỏi đáp</span>
-            <h2 className="va-h2">Câu hỏi thường gặp</h2>
+            <span className="va-eyebrow">FAQ</span>
+            <h2 className="va-h2">Frequently asked questions</h2>
           </div>
           <div className="va-faq">
             {FAQ.map((f) => (
