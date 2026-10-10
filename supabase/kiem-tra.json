@@ -23,7 +23,8 @@
     "migrations/contract_crew_milestone.sql",
     "migrations/contract_item_tier_milestone.sql",
     "migrations/contract_final_links.sql",
-    "migrations/contract_final_originals.sql"
+    "migrations/contract_final_originals.sql",
+    "migrations/albumai_license.sql"
   ],
   "muc": [
     {
@@ -783,6 +784,15 @@
       "bang": [],
       "cot": [
         "studio_contracts.final_originals_url"
+      ]
+    },
+    {
+      "file": "migrations/albumai_license.sql",
+      "mo_ta": "Bản quyền Album AI tặng 1 năm cho gói Studio (mốc kích hoạt / hết hạn)",
+      "bang": [],
+      "cot": [
+        "profiles.albumai_activated_at",
+        "profiles.albumai_expires_at"
       ]
     }
   ]

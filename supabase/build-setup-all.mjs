@@ -91,6 +91,7 @@ const ORDER = [
   ["migrations/contract_item_tier_milestone.sql", "Hạng mục chính/phụ và gắn hạng mục vào mốc lịch"],
   ["migrations/contract_final_links.sql", "Link album & video hoàn thiện dán tay trên hợp đồng"],
   ["migrations/contract_final_originals.sql", "Link toàn bộ file gốc + dấu đã gửi link trang riêng cho khách"],
+  ["migrations/albumai_license.sql", "Bản quyền Album AI tặng 1 năm cho gói Studio (mốc kích hoạt / hết hạn)"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
 ];
@@ -136,6 +137,7 @@ const MOI = [
   "migrations/contract_item_tier_milestone.sql",
   "migrations/contract_final_links.sql",
   "migrations/contract_final_originals.sql",
+  "migrations/albumai_license.sql",
 ];
 
 /**

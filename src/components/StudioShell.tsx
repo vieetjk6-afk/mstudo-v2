@@ -19,7 +19,7 @@ import { THEME_OPTIONS, nextPref, useTheme } from "@/lib/theme";
 import { roleLabel } from "@/lib/studio-roles";
 import { APP_VERSION } from "@/lib/version";
 import {
-  isNavActive, visibleGroups,
+  isNavActive, needsUpgrade, visibleGroups,
   type NavAccess, type NavBadges, type NavGroup, type NavItem, type StudioTier,
 } from "@/lib/studio-nav";
 import type { Profile } from "@/lib/types";
@@ -102,6 +102,7 @@ type NavProps = {
   badges: NavBadges;
   comingSoon: string[];
   isAdmin: boolean;
+  tier: StudioTier;
 };
 
 const SOON_CHIP = (
@@ -110,13 +111,23 @@ const SOON_CHIP = (
   </span>
 );
 
+/** Mục của gói cao hơn (studio-nav `upsellFrom`): vẫn bấm được, ra màn mời nâng cấp. */
+const UPSELL_CHIP = (
+  <span className="ml-auto flex flex-none items-center gap-0.5 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide" style={{ color: "var(--am)", background: "var(--amS)" }}>
+    <Crown size={9} /> Studio
+  </span>
+);
+
 /**
  * Một mục nav. `dense` = sidebar desktop (bản thiết kế: 8px 10px, chữ 13.5px);
  * ngược lại là ngăn kéo điện thoại (hit target ≥44px).
  */
-function NavRow({ it, dense, pathname, badges, comingSoon, isAdmin }: NavProps & { it: NavItem; dense: boolean }) {
+function NavRow({ it, dense, pathname, badges, comingSoon, isAdmin, tier }: NavProps & { it: NavItem; dense: boolean }) {
   const active = isNavActive(it, pathname);
-  const flagged = comingSoon.includes(it.href);
+  // Gói chưa tới: luôn là link tới màn mời nâng cấp — kể cả khi tính năng đang
+  // "Sắp ra mắt", vì việc người dùng cần biết trước tiên là phải nâng gói.
+  const upsell = needsUpgrade(it, tier);
+  const flagged = !upsell && comingSoon.includes(it.href);
   const locked = flagged && !isAdmin;
   const count = it.badge ? badges[it.badge] ?? 0 : 0;
 
@@ -132,7 +143,7 @@ function NavRow({ it, dense, pathname, badges, comingSoon, isAdmin }: NavProps &
     <>
       <it.icon size={dense ? 19 : 20} style={{ flex: "none" }} />
       <span className="min-w-0 flex-1 truncate">{it.label}</span>
-      {flagged ? SOON_CHIP : count > 0 ? (
+      {upsell ? UPSELL_CHIP : flagged ? SOON_CHIP : count > 0 ? (
         <span
           className="flex-none whitespace-nowrap rounded-[20px] px-[5px] py-[1.5px] text-center text-[10.5px] font-bold"
           style={{
@@ -265,7 +276,7 @@ export default function StudioShell({
   const initials = (profile.full_name || profile.email || "?")
     .split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
-  const navProps = { groups, pathname, badges, comingSoon, isAdmin: role === "admin" };
+  const navProps = { groups, pathname, badges, comingSoon, isAdmin: role === "admin", tier };
 
   const brandChip = (
     <span className="ml-auto flex-none rounded-[5px] px-1.5 py-[3px] text-[9.5px] font-extrabold" style={{ letterSpacing: ".6px", color: "var(--ac)", background: "var(--acS)" }}>

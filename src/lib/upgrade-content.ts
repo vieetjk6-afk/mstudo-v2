@@ -101,6 +101,9 @@ export const UPGRADE_DEFAULTS: UpgradeContent = {
     { label: "Thiệp cưới online", free: N, basic: N, photographer: N, photographer_plus: N, studio: Y },
     { label: "Love Story · Slide chiếu tiệc", free: N, basic: N, photographer: N, photographer_plus: N, studio: Y },
     { label: "Thiết kế album (dàn trang in)", free: N, basic: N, photographer: N, photographer_plus: N, studio: Y },
+    // Quà cho STUDIO chứ không phải cho khách, nhưng đứng cạnh thiết kế album
+    // vì đó đúng là việc phần mềm làm. Luật tặng ở src/lib/albumai.ts.
+    { label: "Phần mềm Album AI (thiết kế album & slide ảnh bằng AI)", free: N, basic: N, photographer: N, photographer_plus: N, studio: "Tặng 1 năm" },
 
     { section: "Hỗ trợ & nâng cấp" },
     // Số ngày lấy từ trialDaysFor(): basic/photographer/photographer_plus 30

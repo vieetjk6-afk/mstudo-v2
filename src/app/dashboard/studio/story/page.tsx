@@ -3,19 +3,18 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { getStudioHost } from "@/lib/studio-site";
 import { getFeatureFlags, storyComingSoon } from "@/lib/feature-flags";
+import StudioUpsell from "@/components/studio/StudioUpsell";
 import StoryListView, { type StoryRow } from "./StoryListView";
 
 export default async function StoryManagePage() {
   const profile = await requireStudio();
   if (!profile) {
     return (
-      <div className="mx-auto max-w-lg text-center">
-        <div className="card p-8">
-          <h1 className="font-serif text-2xl font-medium">Cần gói Studio</h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>Trang Love Story chỉ dành cho tài khoản gói Studio.</p>
-          <a href="/dashboard/upgrade" className="btn-primary mt-5">Xem gói Studio</a>
-        </div>
-      </div>
+      <StudioUpsell
+        icon={Clapperboard}
+        feature="Love Story"
+        desc="Trang chia sẻ dòng thời gian chuyện tình của cặp đôi — ảnh, video và lời chúc của khách mời."
+      />
     );
   }
 

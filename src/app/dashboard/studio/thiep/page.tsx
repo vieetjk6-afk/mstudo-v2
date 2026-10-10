@@ -1,21 +1,21 @@
+import { Heart } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { brandFrom } from "@/lib/studio-brand";
+import StudioUpsell from "@/components/studio/StudioUpsell";
 import ThiepListView, { type InvitationRow } from "./ThiepListView";
 
 export default async function ThiepManagePage() {
   const profile = await requireStudio();
+  // Mục menu "Thiệp · Story · Slide" hiện cả với gói Photographer (nhãn Studio)
+  // và trỏ về đây — nên đây là màn mời nâng cấp của cả nhóm, kể cả slide ảnh.
   if (!profile) {
     return (
-      <div className="mx-auto max-w-lg text-center">
-        <div className="card p-8">
-          <h1 className="font-serif text-2xl font-medium">Cần gói Studio</h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--text2)" }}>
-            Tính năng thiệp cưới online chỉ dành cho tài khoản gói Studio.
-          </p>
-          <a href="/dashboard/upgrade" className="btn-primary mt-5">Xem gói Studio</a>
-        </div>
-      </div>
+      <StudioUpsell
+        icon={Heart}
+        feature="Thiệp · Story · Slide"
+        desc="Thiệp cưới online, trang Love Story và slide ảnh chiếu tiệc gửi tặng khách."
+      />
     );
   }
 

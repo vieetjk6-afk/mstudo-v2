@@ -53,6 +53,13 @@ export type NavItem = {
   keywords?: string;
   /** Dòng phụ trong ô ⌘K. Mục sidebar tự lấy tên nhóm nếu để trống. */
   sub?: string;
+  /**
+   * Gói THẤP hơn `minTier` nhưng từ bậc này trở lên vẫn THẤY mục — kèm nhãn
+   * "Studio", bấm vào ra màn mời nâng cấp (trang tự chặn bằng requireStudio).
+   * Dành cho tính năng muốn người dùng gói nhỏ BIẾT là có (thiết kế album,
+   * slide ảnh) thay vì giấu hẳn rồi họ không bao giờ hỏi tới.
+   */
+  upsellFrom?: StudioTier;
 };
 export type NavGroup = { label: string; items: NavItem[] };
 
@@ -134,8 +141,10 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/dashboard/studio/board", label: "Bảng công việc", icon: Kanban, minTier: "full", roles: MANAGER_OK, keywords: "kanban cong viec" },
       { href: "/dashboard/studio/production", label: "Xử lý hình ảnh", icon: Wand2, minTier: "full", roles: STAFF_OK, badge: "production", keywords: "hau ky san xuat in" },
       { href: "/dashboard/albums", label: "Thư viện album", icon: Images, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/create", "/dashboard/studio/album-categories"], keywords: "album chon anh giao khach" },
-      { href: "/dashboard/studio/album-designer", label: "Thiết kế album", icon: BookImage, minTier: "full", roles: MANAGER_OK, keywords: "dan trang album in" },
-      { href: "/dashboard/studio/thiep", label: "Thiệp · Story · Slide", icon: Sparkles, minTier: "full", roles: MANAGER_OK, match: ["/dashboard/studio/story", "/dashboard/studio/slide"], keywords: "thiep cuoi love story slide" },
+      // Hai mục "upsellFrom": gói Photographer / Photographer Plus vẫn thấy (nhãn
+      // Studio), bấm vào là màn mời nâng cấp — xem StudioUpsell.
+      { href: "/dashboard/studio/album-designer", label: "Thiết kế album", icon: BookImage, minTier: "full", upsellFrom: "booking", roles: MANAGER_OK, keywords: "dan trang album in album ai" },
+      { href: "/dashboard/studio/thiep", label: "Thiệp · Story · Slide", icon: Sparkles, minTier: "full", upsellFrom: "booking", roles: MANAGER_OK, match: ["/dashboard/studio/story", "/dashboard/studio/slide"], keywords: "thiep cuoi love story slide anh album ai" },
       // Công cụ lẻ, để CUỐI nhóm: mở khi cần xử lý một mớ ảnh, không nằm trên
       // đường đi chính của hợp đồng.
       { href: "/dashboard/tools", label: "Công cụ ảnh", icon: SlidersHorizontal, minTier: "booking", roles: STAFF_OK, match: ["/dashboard/filter", "/dashboard/compress"], keywords: "loc anh nen anh watermark chuan mang xa hoi facebook instagram tiktok zalo" },
@@ -279,8 +288,13 @@ export type NavAccess = {
 
 export function canSee(it: NavItem, a: NavAccess): boolean {
   if (a.hiddenNav?.includes(it.href) && a.role !== "admin") return false;
-  if (TIER_RANK[a.tier] < TIER_RANK[it.minTier]) return false;
+  if (TIER_RANK[a.tier] < TIER_RANK[it.upsellFrom ?? it.minTier]) return false;
   return it.roles.includes(a.role);
+}
+
+/** Mục đang hiện dưới dạng mời nâng cấp (gói chưa tới `minTier`, xem `upsellFrom`). */
+export function needsUpgrade(it: NavItem, tier: StudioTier): boolean {
+  return TIER_RANK[tier] < TIER_RANK[it.minTier];
 }
 
 /** Nhóm sidebar sau khi lọc theo gói + vai trò; nhóm rỗng bị bỏ luôn. */

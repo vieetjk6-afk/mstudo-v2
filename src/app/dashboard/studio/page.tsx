@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { contractKind, kindHasPhotoWork } from "@/lib/contract-kind";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import {
   Plus, FileText, CalendarDays, Users, AlertCircle, Wallet, Clock, Globe, Images,
   Bolt, UserPlus, Banknote, ImagePlus, ReceiptText, PenLine, CalendarClock,
@@ -36,9 +37,11 @@ import {
 } from "@/lib/types";
 import { fmtDate, fmtDow, todayVN, daysFromToday } from "@/lib/date";
 import { MILESTONE_LABEL, milestoneMessage, upcomingMilestones } from "@/lib/anniversary";
+import { ALBUMAI_HIDE_COOKIE, albumAiStatusOf } from "@/lib/albumai";
+import AlbumAiPromo from "@/components/AlbumAiPromo";
 
 /** Photographer-plan overview: bookings + upcoming shoots, no contracts/finance. */
-async function BookingOverview({ ownerId }: { ownerId: string }) {
+async function BookingOverview({ ownerId, promo }: { ownerId: string; promo: React.ReactNode }) {
   const supabase = await createClient();
   const today = todayVN();
 
@@ -101,7 +104,8 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
       </div>
       <p className="mb-4 text-[13px]" style={{ color: "var(--text3)" }}>Quản lý lịch chụp & yêu cầu đặt lịch của khách</p>
 
-      {/* Thông báo giao diện 2.0 — điểm nhấn: toàn bộ giao diện được làm mới */}
+      {/* Giới thiệu Album AI (tặng kèm gói Studio) — ẩn được, xem AlbumAiPromo. */}
+      {promo && <div className="mb-6">{promo}</div>}
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
         {stats.map((s) => (
@@ -175,11 +179,18 @@ export default async function StudioOverview() {
   // (not /dashboard, which redirects back here and would loop).
   if (!profile) redirect("/dashboard/albums");
 
+  // Thẻ giới thiệu Album AI cho MỌI gói vào được Tổng quan: gói Studio thấy quà
+  // 1 năm bản quyền và cách kích hoạt, gói thấp hơn thấy lời mời nâng cấp. Bấm X
+  // là ẩn hẳn (cookie đọc ở đây, nên thẻ đã ẩn không loé lên mỗi lần mở trang).
+  const albumAiCard = (await cookies()).get(ALBUMAI_HIDE_COOKIE) ? null : (
+    <AlbumAiPromo status={albumAiStatusOf(profile, profile.isStaff)} email={profile.isStaff ? null : profile.email} dismissible />
+  );
+
   const supabase = await createClient();
 
   // Photographer plan (booking tier): a focused overview around shoots &
   // bookings — no contracts/finance, which belong to the full Studio plan.
-  if (profile.studioTier === "booking") return <BookingOverview ownerId={profile.id} />;
+  if (profile.studioTier === "booking") return <BookingOverview ownerId={profile.id} promo={albumAiCard} />;
 
   const bank = {
     bin: (profile.pl_bank_bin as string | null) ?? null,
@@ -743,6 +754,8 @@ export default async function StudioOverview() {
         </div>
       </div>
 
+
+      {albumAiCard}
 
       {/* ── 4 thẻ KPI ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3 min-[1100px]:grid-cols-4">

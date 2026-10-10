@@ -335,6 +335,7 @@ export const PLAN_FEATURES: Record<Plan, string[]> = {
     "Thiết bị & lịch mượn",
     "Thiệp cưới online · Love Story · Slide chiếu tiệc",
     "Thiết kế album — dàn trang album in",
+    "Tặng 1 năm bản quyền phần mềm Album AI (albumai.mstudo.com) — thiết kế album & slide ảnh bằng AI",
     "Mẫu tin nhắn gửi khách soạn sẵn",
     "Hỗ trợ riêng · nhận miễn phí mọi tính năng nâng cấp sau này",
   ],

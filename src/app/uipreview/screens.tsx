@@ -31,6 +31,7 @@ import GalleryFaceDemo from "./GalleryFaceDemo";
 import LuoiAnhDemo from "./LuoiAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
+import AlbumAiDemo from "./AlbumAiDemo";
 import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo, PaidConfirmDemo } from "./VoucherDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import { PortalAlbumDemo } from "./PortalAlbumDemo";
@@ -56,6 +57,10 @@ export const SCREENS: Record<
   "hop-dong-hang-muc": {
     title: "Hợp đồng — tab Hạng mục (có ô mô tả từng hạng mục)",
     render: () => <HopDongHangMucDemo />,
+  },
+  "album-ai": {
+    title: "Album AI — thẻ giới thiệu ở mọi trạng thái bản quyền + màn mời nâng cấp",
+    render: () => <AlbumAiDemo />,
   },
   "thiep-cuoi": {
     title: "Thiệp cưới — 10 mẫu khổ điện thoại (dữ liệu giả)",

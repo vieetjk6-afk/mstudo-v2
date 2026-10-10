@@ -171,6 +171,7 @@ Thiết lập     Dịch vụ & điều khoản · Mẫu tin nhắn · Website &
 ```
 
 Số trong ngoặc là badge đếm. Chân sidebar: thẻ trạng thái đồng bộ Drive + số phiên bản.
+**Thiết kế album** và **Thiệp·Story·Slide** khai `upsellFrom: "booking"`: gói Photographer / Photographer Plus vẫn thấy hai mục này kèm nhãn **STUDIO**, bấm vào ra màn mời nâng cấp (`StudioUpsell`) — xem [`docs/album-ai.md`](docs/album-ai.md).
 Nhóm **Quản trị hệ thống** (Người dùng & studio · Cài đặt hệ thống · Cấu hình mstudo · Quản lý Affiliate) chỉ hiện với admin mstudo.
 
 **Ba quy tắc xếp menu** — sửa `NAV_GROUPS` thì giữ đúng ba điều này:
