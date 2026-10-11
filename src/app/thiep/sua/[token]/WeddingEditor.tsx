@@ -508,9 +508,10 @@ export default function WeddingEditor({ token }: { token: string }) {
                   )}
                 </Card>
                 <Card title="Nhạc nền" icon={<Music size={16} />}>
-                  <Field label="Link nhạc (mp3) hoặc tải file nhạc lên">
-                    <input className={inp} value={cfg.music_url ?? ""} onChange={(e) => patch({ music_url: e.target.value || undefined })} placeholder="https://…/nhac.mp3" />
+                  <Field label="Link YouTube, link file nhạc (mp3) hoặc tải file nhạc lên">
+                    <input className={inp} value={cfg.music_url ?? ""} onChange={(e) => patch({ music_url: e.target.value || undefined })} placeholder="https://youtu.be/… hoặc https://…/nhac.mp3" />
                   </Field>
+                  <p className="text-xs text-stone-400">Mẹo: muốn bỏ đoạn dạo đầu, mở YouTube trên máy tính, bấm Chia sẻ → tích “Bắt đầu tại” rồi sao chép link.</p>
                   <AudioUpload onUpload={uploadAudio} onChange={(url) => patch({ music_url: url || undefined })} currentUrl={cfg.music_url} />
                   {cfg.music_url && <Toggle checked={cfg.music_autoplay ?? false} onChange={(v) => patch({ music_autoplay: v })} label="Thử tự phát khi khách mở thiệp (trình duyệt có thể chặn)" />}
                 </Card>

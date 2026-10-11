@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ExternalLink, Loader2, Lock, Music, Image as ImageIcon, Plus, Trash2, X } from "lucide-react";
 import { BANKS } from "@/lib/banks";
+import { isMusicPageLink, parseYoutubeMusic } from "@/lib/youtube-music";
 import type { WeddingBank, WeddingEventBlock } from "@/lib/types";
 
 // Các ô nhập dùng chung cho trình chỉnh sửa thiệp cưới. Tách khỏi WeddingEditor
@@ -243,6 +244,7 @@ export function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: 
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [localErr, setLocalErr] = useState<string | null>(null);
+  const yt = parseYoutubeMusic(currentUrl);
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
@@ -260,12 +262,25 @@ export function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: 
       </div>
       {/* Phản hồi NGAY tại đây để không phải cuộn lên đầu trang mới thấy. */}
       {localErr && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{localErr}</p>}
-      {currentUrl && !localErr && (
+      {currentUrl && !localErr && (yt ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+          <p className="mb-1 text-xs font-medium text-green-700">Đã nhận link YouTube — nghe thử:</p>
+          <iframe
+            src={`https://www.youtube.com/embed/${yt.id}?start=${yt.start}&rel=0&playsinline=1`}
+            title="Nghe thử nhạc nền"
+            allow="autoplay; encrypted-media"
+            className="aspect-video w-full rounded-md"
+          />
+          <p className="mt-1 text-xs text-stone-500">Khung trên báo “Video không xem được” / “chủ sở hữu đã tắt phát trên trang web khác” thì thiệp cũng không phát được — chọn bản khác (lyric, cover, audio).</p>
+        </div>
+      ) : isMusicPageLink(currentUrl) ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Link này là trang nghe nhạc chứ không phải file nhạc nên thiệp không phát được. Hãy dán link YouTube hoặc tải file mp3 lên.</p>
+      ) : (
         <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
           <p className="mb-1 text-xs font-medium text-green-700">Đã có nhạc nền — nghe thử:</p>
           <audio src={currentUrl} controls preload="none" className="w-full" />
         </div>
-      )}
+      ))}
     </div>
   );
 }

@@ -87,8 +87,10 @@ const nextConfig = {
     // calls, Drive images and VietQR/YouTube/Vimeo embeds can't break.
     // 'unsafe-inline'/'unsafe-eval' are kept because Next ships an inline
     // bootstrap and the Google Picker (gapi) relies on eval.
+    // www.youtube.com: IFrame API cho nhạc nền thiệp dán link YouTube
+    // (src/app/thiep/[slug]/MusicPlayer.tsx) — thiếu là nút nhạc im lặng.
     const csp = [
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.gstatic.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.gstatic.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com https://www.youtube.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self' https://accounts.google.com",
@@ -119,7 +121,7 @@ const nextConfig = {
     const cspReportOnly = process.env.CSP_REPORT_ONLY === "1";
     const cspStrict = [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.gstatic.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.google.com https://*.gstatic.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com https://www.youtube.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       // Ảnh/nhạc đến từ nguồn tuỳ studio nhập → cho phép mọi https + data/blob.
