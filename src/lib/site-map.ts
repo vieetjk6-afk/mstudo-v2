@@ -197,25 +197,36 @@ export function mapEmbedSrc(input: string, fallbackAddress = ""): string | null 
   return `https://www.google.com/maps?q=${encodeURIComponent(target.q)}&hl=vi&output=embed`;
 }
 
-/** Link mở Google Maps trong tab mới (nút "Chỉ đường"). */
+/**
+ * Link mở Google Maps trong tab mới (nút "Chỉ đường").
+ *
+ * Luôn đổi về dạng Maps URLs (`/maps/search/?api=1&query=…`) — dạng DUY NHẤT
+ * Google cam kết mở được ở mọi nơi (xem lib/map-coords.ts). Link đầy đủ mở
+ * nguyên (…/maps?q=…&ftid=…, …/maps/place/…, kể cả link rút gọn sau khi server
+ * mở ra) bị app Google Maps trên iPhone từ chối "Liên kết không được hỗ trợ"
+ * khi bấm từ Safari / Zalo.
+ *
+ * Riêng link rút gọn maps.app.goo.gl giữ nguyên: chính app Google Maps tạo ra
+ * nó để chia sẻ, mở ở đâu cũng ra đúng địa điểm.
+ */
 export function mapOpenHref(input: string, fallbackAddress = ""): string | null {
   const raw = pickMapLink(input);
-  // Link gốc của studio mở đúng nhất — kể cả link rút gọn. Chỉ nhận link Google
-  // (khỏi biến nút "Chỉ đường" thành link đi đâu đó khác). Trừ URL nhúng
-  // (/maps/embed): mở thẳng ở tab mới thì Google báo lỗi "phải dùng trong iframe".
-  if (raw && looksLikeUrl(raw) && !iframeSrc(raw)) {
-    const u = parseUrl(raw);
-    const host = u?.hostname.toLowerCase() ?? "";
-    const isGoogle = SHORT_HOSTS.has(host) || EMBED_HOSTS.has(host) || host.endsWith(".google.com");
-    if (u && u.protocol === "https:" && isGoogle && !u.pathname.startsWith("/maps/embed")) return u.href;
-  }
+  const u = raw && looksLikeUrl(raw) && !iframeSrc(raw) ? parseUrl(raw) : null;
+  const host = u?.hostname.toLowerCase() ?? "";
+  if (u && u.protocol === "https:" && SHORT_HOSTS.has(host)) return u.href;
+
+  const search = (q: string) => `https://www.google.com/maps/search/?api=1&query=${q}`;
   const target = parseMapInput(raw) ?? parseMapInput(fallbackAddress);
-  if (!target) return null;
-  // Dạng Maps URLs (`search/?api=1`) — dạng `maps?q=` bị app Google Maps trên
-  // iPhone từ chối ("Liên kết không được hỗ trợ").
-  if (target.kind === "coords") return `https://www.google.com/maps/search/?api=1&query=${target.lat},${target.lng}`;
-  if (target.kind === "query") return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(target.q)}`;
+  if (target?.kind === "coords") return search(`${target.lat},${target.lng}`);
+  if (target?.kind === "query") return search(encodeURIComponent(target.q));
   // Mã nhúng / URL nhúng: mở theo toạ độ tâm bản đồ nằm trong tham số pb.
-  const c = embedCoords(target.src);
-  return c ? `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}` : null;
+  const c = target?.kind === "embed" ? embedCoords(target.src) : null;
+  if (c) return search(`${c.lat},${c.lng}`);
+
+  // Link Google không đọc được vị trí (vd …?cid=…) → đành mở nguyên link. Chỉ
+  // nhận link Google (khỏi biến nút thành link đi đâu đó khác), trừ URL nhúng:
+  // mở thẳng ở tab mới thì Google báo lỗi "phải dùng trong iframe".
+  const isGoogle = EMBED_HOSTS.has(host) || host.endsWith(".google.com");
+  if (u && u.protocol === "https:" && isGoogle && !u.pathname.startsWith("/maps/embed")) return u.href;
+  return null;
 }
