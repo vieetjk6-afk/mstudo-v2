@@ -19,7 +19,8 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { nextQuoteCode, newShareToken } from "@/lib/contract-code";
-import { computeRoundedDeposit, depositRatio } from "@/lib/quote-deposit";
+import { safeDeposit } from "@/lib/quote-lines";
+import { depositRatio } from "@/lib/quote-deposit";
 import { fmtDate } from "@/lib/date";
 import { vnd } from "@/lib/types";
 import { makeListLabel } from "@/lib/pricelist-label";
@@ -87,7 +88,8 @@ export default function NewQuoteForm({
   const grossTotal = items.reduce((s, i) => (i.is_discount ? s : s + (i.qty || 0) * (i.unit_price || 0)), 0);
   const discountTotal = items.reduce((s, i) => (i.is_discount ? s + (i.qty || 0) * (i.unit_price || 0) : s), 0);
   const total = grossTotal - discountTotal;
-  const deposit = computeRoundedDeposit(total);
+  // Kẹp cọc về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
+  const deposit = safeDeposit(total);
   const depositPct = depositRatio(total, deposit);
   const packageGroups = Array.from(new Set(items.map((i) => i.package_group.trim()).filter(Boolean)));
 

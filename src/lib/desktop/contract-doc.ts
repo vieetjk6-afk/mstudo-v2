@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
+import { fmtDate } from "@/lib/date";
 
 /**
  * Sinh file hợp đồng cho MStudo Desktop:
@@ -53,12 +54,9 @@ const PAY_KINDS: Record<string, string> = { deposit: "Đặt cọc", installment
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const vnd = (n: number | null | undefined) => (Number(n) || 0).toLocaleString("vi-VN") + " đ";
-const dmy = (s?: string | null) => {
-  if (!s) return "";
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return s;
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
-};
+// dd/mm/yyyy theo giờ VN (fmtDate) — máy chủ chạy UTC, getDate() giờ máy làm
+// ngày ký lúc 0h–7h sáng giờ VN lùi về hôm trước trên hợp đồng.
+const dmy = (s?: string | null) => (s ? fmtDate(s) || s : "");
 
 /** Tên file/thư mục hợp lệ Windows (giữ tiếng Việt, bỏ ký tự cấm). */
 export function safeFileName(s: string): string {

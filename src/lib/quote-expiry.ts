@@ -20,8 +20,10 @@ export const QUOTE_NUDGE_DAYS = 3;
 /** Mốc hết hạn = bây giờ + N ngày. `days <= 0` → null (không đặt hạn). */
 export function quoteExpiryFrom(days: number, from: Date = new Date()): string | null {
   if (!days || days <= 0) return null;
-  const d = new Date(from.getTime());
-  d.setDate(d.getDate() + days);
+  // Dời sang giờ VN rồi cộng ngày bằng getUTC*/setUTC* — không phụ thuộc múi
+  // giờ máy (máy chủ UTC gửi lúc 0h–7h sáng VN sẽ cộng từ "hôm qua").
+  const d = new Date(from.getTime() + 7 * 3600 * 1000);
+  d.setUTCDate(d.getUTCDate() + days);
   // Hết hạn vào CUỐI ngày đó theo giờ VN, không phải đúng giờ phút đã gửi:
   // khách nhận báo giá lúc 23h mà hạn 15 ngày thì ngày thứ 15 vẫn còn nguyên.
   d.setUTCHours(16, 59, 59, 999); // 23:59:59 giờ VN (UTC+7)

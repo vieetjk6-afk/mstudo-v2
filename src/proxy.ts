@@ -52,7 +52,7 @@ function isHttpUrl(value: string): boolean {
  * Cái thứ hai KHÔNG phải phiên: nó chỉ sống từ lúc bấm "Đăng nhập với Google"
  * tới lúc /auth/callback đổi code lấy phiên. Trước đây điều kiện nhận biết chỉ
  * là `startsWith("sb-") && includes("-auth-token")` nên nó khớp CẢ verifier →
- * middleware tưởng request đã có phiên và gọi getUser(); Supabase thấy phiên
+ * proxy tưởng request đã có phiên và gọi getUser(); Supabase thấy phiên
  * không hợp lệ liền ghi đè/xoá cả bộ cookie auth, kéo verifier đi theo. Bước
  * /auth/callback sau đó không còn verifier → "pkce_code_verifier_not_found".
  *
@@ -61,12 +61,28 @@ function isHttpUrl(value: string): boolean {
  * không — và luôn hỏng với người vừa xoá cookie để chữa một lỗi khác.
  *
  * Route /auth/* đã được bỏ qua từ trước, nhưng như thế chỉ cứu được đúng request
- * callback: mọi request KHÁC đi qua middleware trong lúc luồng PKCE đang bay
+ * callback: mọi request KHÁC đi qua proxy trong lúc luồng PKCE đang bay
  * (mở tab mới, tải lại /login, /manifest.webmanifest, một cú điều hướng của app
  * desktop…) vẫn xoá được verifier. Chặn từ gốc ở đây mới hết.
  */
 function isSessionCookie(name: string): boolean {
   return name.startsWith("sb-") && name.includes("-auth-token") && !name.includes("code-verifier");
+}
+
+/**
+ * /login?next=<đường dẫn + query cũ> — dùng chung cho MỌI nhánh chặn dashboard.
+ * Trước đây nhánh prefetch ghép chuỗi tay (`/login?next=${pathname}`, không mã
+ * hoá) còn các nhánh khác bỏ mất query (`?tab=…`), nên đăng nhập xong khách về
+ * sai màn. searchParams.set tự mã hoá; query gốc của request bị xoá để không
+ * lẫn vào URL /login.
+ */
+function loginUrl(request: NextRequest): URL {
+  const { pathname, search } = request.nextUrl;
+  const url = request.nextUrl.clone();
+  url.pathname = "/login";
+  url.search = "";
+  url.searchParams.set("next", pathname + search);
+  return url;
 }
 
 function hostForPath(path: string): string | undefined {
@@ -95,17 +111,18 @@ function hostForPath(path: string): string | undefined {
 }
 
 /**
- * Middleware chạy trên MỌI request, nên một exception ở đây không hỏng một
- * trang mà trả 500 (`MIDDLEWARE_INVOCATION_FAILED`) cho TOÀN BỘ site — kể cả
+ * Proxy (Next 16 đổi tên file `middleware.ts` → `proxy.ts`, hàm `middleware` →
+ * `proxy`; luôn chạy runtime Node.js) chạy trên MỌI request, nên một exception
+ * ở đây không hỏng một trang mà trả 500 cho TOÀN BỘ site — kể cả
  * landing. Không có việc gì trong này quan trọng hơn việc site còn sống: ghi
  * log rồi cho request đi tiếp. Hàng rào auth thật nằm ở dashboard/layout.tsx
  * (getSessionUser + redirect /login), không nằm ở đây.
  */
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   try {
     return await route(request);
   } catch (err) {
-    console.error("[middleware] cho request đi tiếp sau lỗi:", err);
+    console.error("[proxy] cho request đi tiếp sau lỗi:", err);
     return NextResponse.next();
   }
 }
@@ -120,7 +137,7 @@ async function route(request: NextRequest) {
   // đổi code lấy phiên.
   //
   // Tên cookie đó KHỚP điều kiện nhận biết cookie phiên ở dưới
-  // (`startsWith("sb-") && includes("-auth-token")`), nên middleware tưởng
+  // (`startsWith("sb-") && includes("-auth-token")`), nên proxy tưởng
   // request đã có phiên và gọi getUser(). Supabase thấy phiên không hợp lệ và
   // ghi đè bộ cookie auth; `NextResponse.next({ request })` truyền cookie ĐÃ SỬA
   // đó xuống route handler, thế là verifier biến mất trước khi
@@ -253,7 +270,7 @@ async function route(request: NextRequest) {
     // Prefetch: skip full auth round-trip, just check cookie presence for dashboard.
     if (pathname.startsWith("/dashboard")) {
       const hasSession = request.cookies.getAll().some((c) => isSessionCookie(c.name));
-      if (!hasSession) return NextResponse.redirect(new URL(`/login?next=${pathname}`, request.url));
+      if (!hasSession) return NextResponse.redirect(loginUrl(request));
     }
     return NextResponse.next();
   }
@@ -269,12 +286,7 @@ async function route(request: NextRequest) {
     if (refAnon && /^[A-Z0-9]{4,16}$/.test(refAnon) && !request.cookies.get("aff_ref")) {
       response.cookies.set("aff_ref", refAnon, { maxAge: 60 * 60 * 24 * 30, path: "/", sameSite: "lax", httpOnly: true });
     }
-    if (pathname.startsWith("/dashboard")) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/login";
-      url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
-    }
+    if (pathname.startsWith("/dashboard")) return NextResponse.redirect(loginUrl(request));
     return response;
   }
 
@@ -300,7 +312,7 @@ async function route(request: NextRequest) {
   // log rồi bỏ qua, đừng để một biến gõ sai kéo sập cả site.
   if (!isHttpUrl(supabaseUrl)) {
     console.error(
-      `[middleware] NEXT_PUBLIC_SUPABASE_URL sai dạng (${JSON.stringify(supabaseUrl)}) — bỏ qua refresh phiên. Phải là https://<mã-project>.supabase.co`
+      `[proxy] NEXT_PUBLIC_SUPABASE_URL sai dạng (${JSON.stringify(supabaseUrl)}) — bỏ qua refresh phiên. Phải là https://<mã-project>.supabase.co`
     );
     return response;
   }
@@ -342,16 +354,18 @@ async function route(request: NextRequest) {
   }
 
   // Only enforce auth for dashboard routes.
-  if (!user && pathname.startsWith("/dashboard")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
-  }
+  if (!user && pathname.startsWith("/dashboard")) return NextResponse.redirect(loginUrl(request));
 
   return response;
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon\\.ico|.*\\.svg|.*\\.png|.*\\.jpg|.*\\.mp4|api/).*)"],
+  // Bỏ qua tài nguyên tĩnh theo đuôi file: chạy proxy (và một lượt getUser tới
+  // Supabase) cho mỗi ảnh/font/script là phí, lại còn bị rewrite nhầm trên
+  // host thiệp/tenant. robots.txt & sitemap.xml đi thẳng tới route handler —
+  // handler tự đọc Host nên mỗi tenant vẫn ra nội dung riêng (giống nhánh
+  // SEO_FILES bên trên vẫn trả next()).
+  matcher: [
+    "/((?!_next/static|_next/image|api/|.*\\.(?:ico|svg|png|jpe?g|gif|webp|avif|bmp|mp4|webm|mov|mp3|woff2?|ttf|otf|eot|js|mjs|css|map|txt|xml|webmanifest)$).*)",
+  ],
 };

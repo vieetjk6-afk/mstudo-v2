@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { todayVN } from "@/lib/date";
 import { shiftBlockFor, SHIFT_COMPANY_LABEL, type ShiftLetter } from "@/lib/crew-shift";
 
 export const dynamic = "force-dynamic";
@@ -91,9 +92,10 @@ export async function GET(_req: Request, props: { params: Promise<{ token: strin
   // — đủ để lịch luôn có ca phía trước mà file không phình vô hạn.
   const shift = (plan?.shift as ShiftLetter | undefined) ?? null;
   if (shift) {
-    const today = new Date();
+    // Mốc là hôm nay theo giờ VN (máy chủ UTC: 0h–7h sáng VN vẫn là "hôm qua").
+    const today = todayVN();
     for (let i = -30; i < 180; i++) {
-      const d = new Date(today.getTime() + i * 86_400_000).toISOString().slice(0, 10);
+      const d = plusDay(today, i);
       const b = shiftBlockFor(d, shift);
       if (!b) continue;
       body.push(vevent(`shift-${d}-${b.shift}`, d, b.start, b.end, b.overnight, `Ca ${b.shift} · ${SHIFT_COMPANY_LABEL.hoa_phat}`, null, now));

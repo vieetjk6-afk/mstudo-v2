@@ -45,6 +45,7 @@
     "test:accounting": "node --experimental-strip-types desktop/test/accounting.mjs",
     "test:contract-addenda": "node --experimental-strip-types desktop/test/contract-addenda.mjs",
     "test:vouchers": "node --experimental-strip-types desktop/test/vouchers.mjs",
+    "test:quote-convert": "node --experimental-strip-types desktop/test/quote-convert.mjs",
     "test:setup-all": "node supabase/build-setup-all.mjs --check",
     "test:sql-chay-that": "node desktop/test/sql-chay-that.mjs",
     "test:rls-luu-nguoi": "node desktop/test/rls-luu-nguoi.mjs",

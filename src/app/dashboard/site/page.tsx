@@ -15,14 +15,25 @@ export default async function WebsitePage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return null; // middleware redirects unauthenticated users
+  if (!user) return null; // proxy redirects unauthenticated users
 
   const { data: existingSite } = await supabase.from("sites").select("*").eq("owner_id", user.id).maybeSingle();
 
   let site = existingSite as Site | null;
   if (!site) {
-    const { data: created } = await supabase.from("sites").insert({ owner_id: user.id }).select("*").single();
-    site = created as Site;
+    const { data: created, error } = await supabase.from("sites").insert({ owner_id: user.id }).select("*").single();
+    if (error) console.error("[dashboard/site] tạo trang thất bại:", error.message);
+    site = (created as Site | null) ?? null;
+  }
+  // Tạo trang thất bại (RLS, mất mạng, trùng owner do bấm hai tab…) thì
+  // `created` là null — trước đây vẫn đọc site.id và cả màn nổ 500.
+  if (!site) {
+    return (
+      <div className="card p-6 text-sm" role="alert">
+        <p className="font-medium">Chưa tạo được trang web của studio.</p>
+        <p className="mt-1" style={{ color: "var(--tx2)" }}>Vui lòng tải lại trang sau ít phút. Nếu vẫn lỗi, hãy liên hệ hỗ trợ.</p>
+      </div>
+    );
   }
 
   const since = new Date(Date.now() - 29 * 86400_000).toISOString().slice(0, 10);

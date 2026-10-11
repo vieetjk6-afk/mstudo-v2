@@ -189,14 +189,15 @@ export default async function StudioOverview() {
   };
 
   // Pre-compute date constants so all query groups can run in parallel.
-  const now = new Date();
+  // Mọi mốc ngày suy từ todayVN() rồi tính bằng Date.UTC — không trộn với
+  // new Date() giờ máy (máy chủ UTC: từ 0h–7h sáng VN là còn "hôm qua", và
+  // `new Date(y, m, 1).toISOString()` ở múi +7 lùi về ngày cuối tháng trước).
   const today = todayVN();
+  const [vnYear, vnMonth, vnDay] = today.split("-").map(Number); // vnMonth: 1–12
   const monthStart = `${today.slice(0, 7)}-01`;
-  const horizon = new Date();
-  horizon.setDate(horizon.getDate() + 7);
-  const dueLimit = horizon.toISOString().slice(0, 10);
+  const dueLimit = new Date(Date.UTC(vnYear, vnMonth - 1, vnDay + 7)).toISOString().slice(0, 10);
   // Start of the 6-month window for the revenue chart (this month minus 5).
-  const chartStart = new Date(now.getFullYear(), now.getMonth() - 5, 1).toISOString().slice(0, 10);
+  const chartStart = new Date(Date.UTC(vnYear, vnMonth - 1 - 5, 1)).toISOString().slice(0, 10);
 
   // Explicit columns + drop cancelled at the DB (less payload than select *).
   let cq = supabase
@@ -417,12 +418,12 @@ export default async function StudioOverview() {
   // 6 tháng doanh thu — gom tiền đã thu theo YYYY-MM.
   const sixMonthPays = (paySixMonths ?? []) as unknown as { amount: number; paid_at: string }[];
   const revBars = Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const d = new Date(Date.UTC(vnYear, vnMonth - 1 - 5 + i, 1));
+    const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
     const value = sixMonthPays
       .filter((p) => (p.paid_at || "").slice(0, 7) === key)
       .reduce((s, p) => s + (p.amount || 0), 0);
-    return { label: `T${d.getMonth() + 1}`, value };
+    return { label: `T${d.getUTCMonth() + 1}`, value };
   });
   const prevMonthRev = revBars.length >= 2 ? revBars[revBars.length - 2].value : 0;
   const revDeltaPct = prevMonthRev > 0 ? Math.round(((revenueMonth - prevMonthRev) / prevMonthRev) * 100) : null;
@@ -692,7 +693,7 @@ export default async function StudioOverview() {
       deltaTone: jobsDelta >= 0 ? "green" : "red",
     },
     {
-      icon: TrendingUp, tone: "green", label: `Doanh thu tháng ${new Date(today).getMonth() + 1}`,
+      icon: TrendingUp, tone: "green", label: `Doanh thu tháng ${vnMonth}`,
       value: vndShort(revenueMonth), sub: `${notCancelled.length} hợp đồng đang có`,
       delta: revDeltaPct != null ? `${revDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(revDeltaPct)}%` : undefined,
       deltaTone: (revDeltaPct ?? 0) >= 0 ? "green" : "red",

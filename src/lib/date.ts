@@ -2,16 +2,35 @@
 // (dd/mm/yyyy). Accepts a Date, an ISO string ("2026-06-27") or a timestamp.
 import { solarToLunar } from "@/lib/lunar";
 
+// Cả app hiển thị theo giờ Việt Nam (UTC+7, không có giờ mùa hè). Không dựa
+// vào getHours()/getDate() theo múi giờ MÁY: máy chủ chạy UTC, khách ở UTC+7 →
+// SSR in "07:30" còn trình duyệt in "14:30" (lệch giờ + lỗi hydration), và mốc
+// sau 17:00 UTC bị lùi về hôm trước. Mọi thứ đi qua vnParts() bên dưới.
+const VN_OFFSET_MS = 7 * 3600 * 1000;
+
 function toDate(v: string | number | Date | null | undefined): Date | null {
   if (v == null || v === "") return null;
   if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
-  // "YYYY-MM-DD" → treat as a local date (avoid TZ shifting the day).
+  // "YYYY-MM-DD" → nửa đêm theo giờ VN của ngày đó (không để múi giờ máy xô ngày).
   if (typeof v === "string") {
     const m = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    if (m) return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) - VN_OFFSET_MS);
   }
   const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
+}
+
+/** Ngày/giờ của một thời điểm theo giờ Việt Nam — như nhau trên server lẫn client. */
+function vnParts(d: Date) {
+  const s = new Date(d.getTime() + VN_OFFSET_MS);
+  return {
+    year: s.getUTCFullYear(),
+    month: s.getUTCMonth() + 1,
+    day: s.getUTCDate(),
+    hours: s.getUTCHours(),
+    minutes: s.getUTCMinutes(),
+    dow: s.getUTCDay(),
+  };
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -29,7 +48,8 @@ export function todayVN(): string {
 export function fmtDate(v: string | number | Date | null | undefined): string {
   const d = toDate(v);
   if (!d) return "";
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+  const p = vnParts(d);
+  return `${pad(p.day)}/${pad(p.month)}/${p.year}`;
 }
 
 /**
@@ -44,14 +64,16 @@ export function fmtDate(v: string | number | Date | null | undefined): string {
 export function fmtDateTime(v: string | number | Date | null | undefined): string {
   const d = toDate(v);
   if (!d) return "";
-  return `${pad(d.getHours())}:${pad(d.getMinutes())} ${fmtDate(d)}`;
+  const p = vnParts(d);
+  return `${pad(p.hours)}:${pad(p.minutes)} ${fmtDate(d)}`;
 }
 
 /** dd/mm — dạng ngắn dùng trong bảng, thẻ, lịch. "" nếu rỗng/không hợp lệ. */
 export function fmtDayMonth(v: string | number | Date | null | undefined): string {
   const d = toDate(v);
   if (!d) return "";
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+  const p = vnParts(d);
+  return `${pad(p.day)}/${pad(p.month)}`;
 }
 
 const DOW = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
@@ -59,7 +81,7 @@ const DOW = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
 /** Thứ dạng ngắn: T2 … CN. Bản thiết kế không dùng tên thứ đầy đủ trong bảng. */
 export function fmtDow(v: string | number | Date | null | undefined): string {
   const d = toDate(v);
-  return d ? DOW[d.getDay()] : "";
+  return d ? DOW[vnParts(d).dow] : "";
 }
 
 /** "T6 · 19/06" — nhãn ngày chuẩn của bản thiết kế. */
@@ -81,7 +103,8 @@ export function daysFromToday(v: string | number | Date | null | undefined): num
 export function fmtLunar(v: string | number | Date | null | undefined): string {
   const d = toDate(v);
   if (!d) return "";
-  const iso = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const p = vnParts(d);
+  const iso = `${p.year}-${pad(p.month)}-${pad(p.day)}`;
   const l = solarToLunar(iso);
   return `${pad(l.day)}/${pad(l.month)}/${l.year}${l.leap ? " nhuận" : ""}`;
 }

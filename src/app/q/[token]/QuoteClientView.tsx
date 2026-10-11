@@ -146,7 +146,8 @@ import {
   type QuoteItem,
   type QuoteAdjustment,
 } from "@/lib/types";
-import { computeRoundedDeposit, depositRatio } from "@/lib/quote-deposit";
+import { safeDeposit } from "@/lib/quote-lines";
+import { depositRatio } from "@/lib/quote-deposit";
 import { fmtDateLunar } from "@/lib/date";
 import { mainUrl } from "@/lib/hosts";
 
@@ -223,7 +224,8 @@ export default function QuoteClientView({
     selectedPackageGroup === quote.discount_package_group &&
     quote.bulk_discount_amount > 0;
   const effectiveTotal = bulkDiscountActive ? total - quote.bulk_discount_amount : total;
-  const deposit = computeRoundedDeposit(effectiveTotal);
+  // Kẹp cọc về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
+  const deposit = safeDeposit(effectiveTotal);
   const depositPct = depositRatio(effectiveTotal, deposit);
 
   const phoneDigits = clientPhone.replace(/\s+/g, "");
