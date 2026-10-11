@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDesktopOwner } from "@/lib/desktop/auth";
@@ -9,6 +10,8 @@ export const dynamic = "force-dynamic";
  * Xuất dữ liệu cho MStudo Desktop (và nút "Xuất ngay" trên web):
  *   GET /api/desktop/export?type=customers|quotes|expenses|payroll|bookings|staff  → .xlsx
  *   GET /api/desktop/export?type=backup                                           → .json đầy đủ (khôi phục ngược)
+ *   GET /api/desktop/export?type=backup&lite=1[&have=<hash>]                      → bản nhẹ cho cache offline của desktop
+ *       (bỏ ảnh chữ ký data-URL; trùng hash máy đang giữ → 304 rỗng, không gửi lại cả cục JSON)
  * Mỗi mảng 1 file. Chỉ chủ studio (phiên web) hoặc thiết bị đã đăng ký.
  */
 
@@ -189,7 +192,18 @@ export async function GET(req: Request) {
 
   if (type === "backup") {
     // Bản JSON ĐẦY ĐỦ mọi mảng — dùng cho khôi phục ngược (giai đoạn C).
-    const contracts = await all(db, "studio_contracts", "*", owner);
+    const params = new URL(req.url).searchParams;
+    // lite=1: desktop chỉ cần dữ liệu để XEM offline (Tổng quan/Hợp đồng/Lịch),
+    // không cần ảnh chữ ký (data-URL PNG, mỗi cái vài chục KB) → bỏ đi cho nhẹ.
+    // Bản tải về để khôi phục (nút trên web, file SaoLuu hằng ngày) vẫn ĐẦY ĐỦ.
+    const lite = params.get("lite") === "1";
+    const contracts = (await all(db, "studio_contracts", "*", owner)).map((c) => {
+      if (!lite) return c;
+      const rest = { ...c };
+      delete rest.client_signature;
+      delete rest.studio_signature;
+      return rest;
+    });
     const cIds = contracts.map((c) => S(c.id));
     const quotes = await all(db, "studio_quotes", "*", owner);
     const tables: Record<string, Row[]> = {
@@ -217,6 +231,19 @@ export async function GET(req: Request) {
       studio_equipment: await all(db, "studio_equipment", "*", owner),
       studio_services: await all(db, "studio_services", "*", owner),
     };
+    if (lite) {
+      // Hash nội dung (không tính exported_at) → desktop gửi lại ?have=<hash>;
+      // dữ liệu không đổi thì trả 304 rỗng thay vì cả trăm KB mỗi 5 phút.
+      const tablesJson = JSON.stringify(tables);
+      const hash = createHash("sha1").update(tablesJson).digest("hex");
+      if (params.get("have") === hash) {
+        return new NextResponse(null, { status: 304, headers: { "Cache-Control": "no-store" } });
+      }
+      const body = `{"format":"mstudo-backup","version":1,"exported_at":${JSON.stringify(new Date().toISOString())},"owner_id":${JSON.stringify(owner)},"hash":"${hash}","tables":${tablesJson}}`;
+      return new NextResponse(body, {
+        headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
+      });
+    }
     const backup = { format: "mstudo-backup", version: 1, exported_at: new Date().toISOString(), owner_id: owner, tables };
     return new NextResponse(JSON.stringify(backup), {
       headers: {

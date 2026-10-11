@@ -145,6 +145,9 @@ export async function generateMetadata(props: { params: Promise<Params> }): Prom
     // Google lập chỉ mục bình thường.
     robots: { index: true, follow: true },
     icons: logo ? { icon: logo } : undefined,
+    // Tên trên màn hình chính iOS — trước do layout gốc đặt theo host (headers()),
+    // nay layout gốc không đọc host nữa nên trang portfolio tự khai.
+    appleWebApp: { capable: true, title: name, statusBarStyle: "black-translucent" },
     openGraph: {
       type: "website",
       title,

@@ -46,6 +46,14 @@ const nextConfig = {
     "/api/db-status": ["./supabase/kiem-tra.json"],
   },
   reactStrictMode: true,
+  // Bot đọc link-preview phải nhận metadata (og:title/og:image) NGAY TRONG <head>.
+  // Trang khách (/a, /album, /c, /portal) có loading.tsx nên Next stream metadata
+  // vào <body> cho trình duyệt thường — bot nào không chạy JS sẽ mất ảnh xem trước.
+  // Danh sách mặc định của Next KHÔNG có Zalo (kênh gửi link chính của studio), nên
+  // khai lại: mặc định của Next + Zalo, Telegram, Viber, Pinterest, Line…
+  // (Khai htmlLimitedBots là THAY danh sách mặc định, nên phải chép lại phần đó.)
+  htmlLimitedBots:
+    /[\w-]+-Google|Google-[\w-]+|Chrome-Lighthouse|Slurp|DuckDuckBot|baiduspider|yandex|sogou|bitlybot|tumblr|vkShare|quora link preview|redditbot|ia_archiver|Bingbot|BingPreview|applebot|facebookexternalhit|facebookcatalog|Facebot|meta-externalagent|Twitterbot|LinkedInBot|Slackbot|Discordbot|WhatsApp|SkypeUriPreview|Yeti|googleweblight|Zalo|TelegramBot|Viber|Pinterest|Embedly|Iframely|Line\/|kakaotalk-scrap/i,
   experimental: {
     // Tree-shake per-icon imports so navigating studio pages ships less JS.
     optimizePackageImports: ["lucide-react"],
@@ -149,35 +157,35 @@ const nextConfig = {
         ],
       },
       {
-        // ── Hai cửa PHỤC VỤ BYTE, không phải tài liệu ─────────────────────────
-        // /api/img và /api/file trả ảnh, byte thô, hoặc một cú 302 RỖNG sang CDN
-        // của Google. Một trang gallery gọi chúng vài trăm lần cho mỗi lượt xem.
-        //
-        // Các header dưới đây bị BỎ ở đây vì chúng chỉ có nghĩa với TÀI LIỆU
-        // (trình duyệt không áp CSP, X-Frame-Options, Permissions-Policy hay COOP
-        // lên một tấm ảnh — chính sách áp cho ảnh đến từ trang nhúng nó):
+        // ── MỌI route /api/* (JSON, byte ảnh, cú 302 rỗng…) — KHÔNG phải tài liệu
+        // Trước đây chỉ /api/img và /api/file được miễn; mọi JSON khác vẫn cõng
+        // nguyên bộ header của TÀI LIỆU (~1,5–2 KB / response). Các header đó chỉ
+        // có nghĩa với trang HTML mà trình duyệt hiển thị (trình duyệt không áp
+        // CSP, X-Frame-Options, Permissions-Policy hay COOP lên một response
+        // JSON/ảnh — chính sách áp theo TRANG gọi nó):
         //   CSP · CSP-Report-Only · X-Frame-Options · COOP · Permissions-Policy ·
         //   Referrer-Policy · X-DNS-Prefetch-Control
+        // Một album/portal/desktop gọi API hàng trăm lần → bỏ đi là bớt thẳng
+        // Fast Origin Transfer.
         //
-        // Đo thực tế trước khi sửa: 2.118 byte header cho một cú 302 không có
-        // thân. Một album 300 ảnh = ~620 KB header thuần, mỗi lượt xem, cho các
-        // chính sách không bảo vệ được gì ở đây. Sau khi bỏ còn ~370 byte.
+        // Đo thực tế với /api/img trước khi sửa: 2.118 byte header cho một cú 302
+        // không có thân; sau khi bỏ còn ~370 byte.
         //
-        // GIỮ LẠI hai cái THỰC SỰ có tác dụng trên byte:
-        //   • nosniff — route này chuyển tiếp content-type của Google; đây đúng
-        //     là chỗ cần chặn trình duyệt tự đoán kiểu nội dung.
+        // GIỮ LẠI hai cái THỰC SỰ có tác dụng:
+        //   • nosniff — /api/img, /api/file chuyển tiếp content-type của Google;
+        //     JSON cũng không được để trình duyệt tự đoán kiểu.
         //   • HSTS    — áp cho cả origin, phải có mặt trên mọi response.
-        source: "/api/:path(img|file)",
+        source: "/api/:path*",
         headers: [
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
         ],
       },
       {
-        // Mọi thứ CÒN LẠI — trừ hai cửa phục vụ byte ở trên (Next áp TẤT CẢ luật
-        // khớp, nên phải loại trừ ngay trong mẫu đường dẫn chứ không phải trông
-        // vào thứ tự).
-        source: "/:path((?!api/img$|api/file$).*)",
+        // Mọi thứ CÒN LẠI (trang/tài liệu) — trừ /api/* ở trên. Next áp TẤT CẢ
+        // luật khớp, nên phải loại trừ ngay trong mẫu đường dẫn chứ không phải
+        // trông vào thứ tự; nếu không nosniff/HSTS sẽ bị gửi HAI lần.
+        source: "/:path((?!api/).*)",
         headers: [
           // Allow the Google Identity Services / Picker popup to work
           { key: "Cross-Origin-Opener-Policy", value: "same-origin-allow-popups" },

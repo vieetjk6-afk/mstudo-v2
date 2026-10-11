@@ -179,6 +179,44 @@ export async function fetchDriveBytes(token: string, fileId: string): Promise<Bl
   return res.blob();
 }
 
+// Đếm lượt tải thẳng bằng khoá trình duyệt: khoá có thể bị giới hạn chỉ cho
+// Picker API (không bật Drive API) → hỏng liên tiếp thì thôi thử trong phiên này,
+// để mỗi ảnh không phải tốn thêm một lượt gọi hỏng trước khi về proxy.
+let publicKeyOk = false;
+let publicKeyFails = 0;
+// Chỉ nhận định dạng trình duyệt nào cũng vẽ được lên canvas. HEIC/TIFF… thì
+// trả null để người gọi về đường proxy cũ (proxy đưa bản JPEG do Google dựng).
+const CANVAS_TYPES = /^image\/(jpeg|png|webp|gif)\b/;
+
+/**
+ * Tải ẢNH GỐC của file Drive CÔNG KHAI ("bất kỳ ai có đường liên kết") thẳng từ
+ * trình duyệt qua Drive API + khoá trình duyệt (NEXT_PUBLIC_GOOGLE_API_KEY).
+ * googleapis.com có gửi header CORS (chính file này đã fetch thẳng từ trình
+ * duyệt), nên byte KHÔNG đi qua Vercel — khác /api/img?raw=1 (tính vào Fast
+ * Origin Transfer). Trả null khi không được (thiếu khoá, khoá không bật Drive
+ * API, file không công khai, định dạng canvas không đọc được) → người gọi tự
+ * quay về proxy.
+ */
+export async function fetchPublicDriveBytes(fileId: string): Promise<Blob | null> {
+  if (!GOOGLE_PICKER_KEY || !/^[a-zA-Z0-9_-]+$/.test(fileId)) return null;
+  if (!publicKeyOk && publicKeyFails >= 2) return null;
+  try {
+    const res = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${encodeURIComponent(GOOGLE_PICKER_KEY)}`
+    );
+    const ct = res.headers.get("content-type") || "";
+    if (res.ok && CANVAS_TYPES.test(ct)) {
+      publicKeyOk = true;
+      return await res.blob();
+    }
+    // Định dạng lạ (HEIC…) không phải lỗi của khoá → không tính là hỏng.
+    if (!res.ok) publicKeyFails++;
+  } catch {
+    publicKeyFails++;
+  }
+  return null;
+}
+
 /** Create a sub-folder inside a folder the user granted via the Picker. */
 export async function createDriveFolder(token: string, name: string, parentId: string): Promise<string> {
   const res = await fetch("https://www.googleapis.com/drive/v3/files?fields=id", {

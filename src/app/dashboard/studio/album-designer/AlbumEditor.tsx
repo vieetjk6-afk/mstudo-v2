@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Wand2, Undo2, Redo2, Plus, Trash2, Shuffle, Loader2, Download, ImagePlus, ArrowLeft, Copy, ChevronLeft, ChevronRight, Type, Lock, Unlock, Save, LayoutGrid, Maximize, Images } from "lucide-react";
 import { buildPdf, cmToPt, type PdfPageSpec } from "@/lib/album-pdf";
+import { fetchPublicDriveBytes } from "@/lib/google-picker";
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 export type ADSize = { name: string; w: number; h: number };
@@ -578,6 +579,19 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
    * `bleedMm` > 0: mở rộng canvas ra mỗi phía; ô ảnh CHẠM mép trim được kéo
    * giãn vào vùng bleed để sau khi nhà in xén không lộ viền trắng. */
   const loadImg = (src: string) => new Promise<HTMLImageElement>((res, rej) => { const im = new Image(); im.crossOrigin = "anonymous"; im.onload = () => res(im); im.onerror = rej; im.src = src; });
+  // Ảnh gốc để xuất file in: thử tải THẲNG từ Drive API trong trình duyệt trước
+  // (có CORS, 0 byte qua Vercel — ảnh gốc mỗi tấm cỡ chục MB). Không được (khoá
+  // chưa bật Drive API, file không công khai, HEIC…) mới về proxy raw=1: ảnh gốc
+  // phải về cùng miền để canvas xuất được file in.
+  async function loadOriginal(full: string): Promise<HTMLImageElement> {
+    const id = full.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+    const blob = id ? await fetchPublicDriveBytes(id) : null;
+    if (blob) {
+      const url = URL.createObjectURL(blob);
+      try { return await loadImg(url); } catch { /* về proxy */ } finally { URL.revokeObjectURL(url); }
+    }
+    return loadImg(full + (full.includes("?") ? "&" : "?") + "raw=1");
+  }
   async function renderSpreadCanvas(s: Spread, bleed_mm: number): Promise<HTMLCanvasElement> {
     const DPI = 300;
     const trimW = Math.round((2 * size.w) * DPI / 2.54), trimH = Math.round(size.h * DPI / 2.54);
@@ -598,8 +612,7 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
       }
       if (c.type === "photo" && c.full) {
         try {
-          // raw=1: ảnh gốc phải về cùng miền để canvas xuất được file in.
-          const im = await loadImg(c.full + (c.full.includes("?") ? "&" : "?") + "raw=1");
+          const im = await loadOriginal(c.full);
           ctx.save(); cellPath(ctx, c, cx, cy, cw, ch, kpx); ctx.clip(); ctx.filter = cellFilter(c, kpx);
           const s0 = Math.max(cw / im.width, ch / im.height) * c.scale, dw = im.width * s0, dh = im.height * s0;
           const dx = cx + (cw - dw) * (c.posX / 100), dy = cy + (ch - dh) * (c.posY / 100);

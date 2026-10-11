@@ -61,15 +61,63 @@ export function originalImageUrl(fileId: string): string {
 }
 
 /**
- * Nếu ảnh hiển thị hỏng (CDN Google đôi khi từ chối, nhất là webview trong app),
- * thử lại một lần qua proxy đọc byte (`raw=1`) — proxy tự dò nhiều nguồn. Trước
- * đây ảnh lớn trong khung xem hỏng là khách chỉ còn thấy ảnh nền nhỏ, mờ.
+ * URL ảnh ở MÁY CHỦ GOOGLE CÒN LẠI (không phải cái /api/img vừa 302 sang).
+ * /api/img chuyển w ≤ 1024 sang drive.google.com/thumbnail, lớn hơn sang
+ * lh3.googleusercontent.com — nên thử lại bằng host kia: vẫn là CDN Google,
+ * Vercel không chở byte nào. null nếu src không phải /api/img?id=…&w=….
+ */
+function altGoogleUrl(src: string): string | null {
+  try {
+    const u = new URL(src, typeof location !== "undefined" ? location.href : "http://x");
+    if (u.pathname !== "/api/img" || u.searchParams.get("orig") === "1") return null;
+    const id = u.searchParams.get("id");
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return null;
+    const w = Math.min(Math.max(Number(u.searchParams.get("w")) || 500, 16), 4096);
+    return w <= 1024
+      ? `https://lh3.googleusercontent.com/d/${id}=w${w}`
+      : `https://drive.google.com/thumbnail?id=${id}&sz=w${w}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ảnh trong LƯỚI hỏng → thử một lần host Google còn lại, KHÔNG bao giờ rơi
+ * xuống proxy đọc byte: lưới có hàng trăm ô, mỗi ô hỏng mà kéo byte qua Vercel
+ * là đốt Fast Origin Transfer. Hỏng nữa thì để ô trống.
+ */
+export function retryAltHost(e: { currentTarget: HTMLImageElement }) {
+  const im = e.currentTarget;
+  if (im.dataset.retried) return;
+  im.dataset.retried = "alt";
+  const alt = altGoogleUrl(im.src);
+  if (alt) im.src = alt;
+}
+
+/**
+ * Ảnh LỚN trong khung xem hỏng (CDN Google đôi khi từ chối, nhất là webview
+ * trong app): thử host Google còn lại trước (0 byte qua Vercel), chỉ khi vẫn
+ * hỏng mới tới proxy đọc byte (`raw=1`) — proxy tự dò nhiều nguồn. Trước đây
+ * ảnh lớn hỏng là khách chỉ còn thấy ảnh nền nhỏ, mờ. Chỉ dùng cho khung xem
+ * một ảnh; lưới ảnh dùng retryAltHost.
  */
 export function retryViaProxy(e: { currentTarget: HTMLImageElement }) {
   const im = e.currentTarget;
-  if (im.dataset.retried || im.src.includes("raw=1")) return;
-  im.dataset.retried = "1";
-  im.src = `${im.src}&raw=1`;
+  const stage = im.dataset.retried;
+  if (stage === "raw" || im.src.includes("raw=1")) return;
+  if (!stage) {
+    const alt = altGoogleUrl(im.src);
+    if (alt) {
+      im.dataset.orig = im.src;
+      im.dataset.retried = "alt";
+      im.src = alt;
+      return;
+    }
+  }
+  const base = im.dataset.orig || im.src;
+  if (!base.includes("/api/img")) return;
+  im.dataset.retried = "raw";
+  im.src = `${base}&raw=1`;
 }
 
 /** Direct download URL for an original file. */

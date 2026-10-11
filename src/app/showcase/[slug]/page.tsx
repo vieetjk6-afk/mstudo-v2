@@ -5,6 +5,12 @@ import ShowcaseAlbum from "./ShowcaseAlbum";
 // Trang showcase công khai chỉ đổi khi studio publish lại → ISR + CDN cache 5'
 // thay vì SSR mọi lượt khách xem (giảm origin transfer, nhanh hơn).
 export const revalidate = 300;
+// force-static: client Supabase admin gọi fetch với cache "no-store" (xem
+// @/lib/no-store-fetch) — một fetch no-store trong lúc render là Next đánh dấu
+// cả trang dynamic, nên `revalidate` ở trên KHÔNG có tác dụng: mọi lượt xem đều
+// chạy hàm. force-static giữ trang là ISR (dữ liệu vẫn đọc mới mỗi lần dựng lại,
+// tức tối đa 5'). An toàn vì trang không đọc cookies/headers/searchParams.
+export const dynamic = "force-static";
 
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;

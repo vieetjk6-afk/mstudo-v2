@@ -102,11 +102,15 @@ export function buildClientManifest(o: {
 
 /** Phản hồi HTTP cho một route manifest. */
 export function manifestResponse(m: ClientManifest): Response {
-  return new Response(JSON.stringify(m, null, 2), {
+  // Không thụt lề: trình duyệt không cần đọc đẹp, bớt byte mỗi lượt tải.
+  return new Response(JSON.stringify(m), {
     headers: {
       "content-type": "application/manifest+json; charset=utf-8",
       // Đổi tên album là đổi tên app: đừng để bản cũ đóng đinh nhiều ngày.
-      "cache-control": "public, max-age=300, s-maxage=300",
+      // Trình duyệt giữ 5'; CDN giữ 1 giờ (+ SWR 1 ngày: quá 1 giờ thì lượt kế
+      // tiếp vẫn nhận bản cũ NGAY và CDN dựng lại ngầm). Tên/logo studio hiếm
+      // khi đổi, mà mỗi lượt mở trang khách đều xin manifest → bớt gọi hàm.
+      "cache-control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
       // Trang của MỘT khách — không cho lập chỉ mục.
       "x-robots-tag": "noindex",
     },

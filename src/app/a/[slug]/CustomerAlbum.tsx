@@ -814,14 +814,17 @@ export default function CustomerAlbum({
   useEffect(() => {
     if (!unlocked) return;
     refresh(); // fresh load right away — avoids showing stale/empty picks
-    // 20s, and only while the tab is actually on screen. An album left open in
-    // a background tab used to poll every 5s forever — 17k requests a day per
-    // tab against the Supabase egress quota, for a page nobody is looking at.
+    // 60s (trước 20s), and only while the tab is actually on screen. An album
+    // left open in a background tab used to poll every 5s forever — 17k requests
+    // a day per tab against the Supabase egress quota, for a page nobody is
+    // looking at. Lựa chọn của CHÍNH khách đã nằm sẵn trên máy (sổ offline); vòng
+    // này chỉ để thấy thay đổi từ thiết bị KHÁC (cô dâu + chú rể cùng chọn), nên
+    // chậm hơn một chút không sao — mỗi lượt là một lần gọi hàm trên Vercel.
     // Nothing is lost by waiting: the visibilitychange/focus handlers below
     // refresh the moment the viewer comes back.
     const iv = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
-    }, 20_000);
+    }, 60_000);
     const onFocus = () => refresh();
     const onVisibility = () => {
       if (document.visibilityState === "hidden") flush();
