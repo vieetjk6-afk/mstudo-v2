@@ -16,7 +16,7 @@ import GuestManager from "./GuestManager";
 import PreviewPane from "./editor/PreviewPane";
 import TemplateGallery from "./editor/TemplateGallery";
 import {
-  AlbumPicker, AudioUpload, BankEditor, Card, EventsEditor, Field, GalleryEditor, GuestsPasswordField,
+  AlbumPicker, AudioUpload, BankEditor, Card, EventsEditor, Field, GalleryEditor, GuestsPasswordField, MapLinkInput,
   ImageUpload, ResponsesLock, Toggle, inp,
 } from "./editor/ui";
 
@@ -123,6 +123,19 @@ export default function WeddingEditor({ token }: { token: string }) {
     const res = await fetch(`/api/thiep/${token}/upload`, { method: "POST", body: fd });
     if (!res.ok) { setErr("Tải ảnh thất bại."); return null; }
     return ((await res.json()) as { url: string }).url;
+  }
+
+  // Link Google Maps rút gọn (maps.app.goo.gl) → server mở ra link đầy đủ có toạ độ.
+  async function resolveMap(url: string): Promise<{ url?: string; error?: string }> {
+    try {
+      const r = await fetch(`/api/thiep/${token}/map`, {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }),
+      });
+      const j = (await r.json().catch(() => null)) as { url?: string; error?: string } | null;
+      return r.ok && j?.url ? { url: j.url } : { error: j?.error || "Không lấy được vị trí từ link này." };
+    } catch {
+      return { error: "Mất kết nối, thử lại nhé." };
+    }
   }
 
   // Tải nhạc THẲNG lên Supabase Storage qua URL ký sẵn (không qua serverless →
@@ -386,7 +399,7 @@ export default function WeddingEditor({ token }: { token: string }) {
                 </Card>
 
                 <Card title="Sự kiện cưới" icon={<CalendarDays size={16} />} hint="Vu quy · Tân hôn · Tiệc cưới… Thiệp hiện theo đúng thứ tự bạn thêm.">
-                  <EventsEditor events={cfg.events ?? []} onChange={(events) => patch({ events })} />
+                  <EventsEditor events={cfg.events ?? []} onChange={(events) => patch({ events })} resolveMap={resolveMap} />
                 </Card>
 
                 <Card title="Địa điểm chính" icon={<Heart size={16} />} hint="Để trống sẽ tự lấy theo sự kiện cuối cùng có địa chỉ (thường là tiệc cưới).">
@@ -395,7 +408,7 @@ export default function WeddingEditor({ token }: { token: string }) {
                     <Field label="Địa chỉ"><input className={inp} value={cfg.venue_address ?? ""} onChange={(e) => patch({ venue_address: e.target.value })} placeholder="88 Nguyễn Huệ, Q.1, TP.HCM" /></Field>
                   </div>
                   <Field label="Link Google Maps (nút “Chỉ đường”)" hint="Có link hoặc địa chỉ là thiệp tự hiện bản đồ.">
-                    <input className={inp} value={cfg.map_url ?? ""} onChange={(e) => patch({ map_url: e.target.value })} placeholder="https://maps.google.com/…" />
+                    <MapLinkInput value={cfg.map_url ?? ""} onChange={(v) => patch({ map_url: v })} resolve={resolveMap} placeholder="Dán link từ nút Chia sẻ của Google Maps" />
                   </Field>
                   <Field label="Ảnh chụp bản đồ (tuỳ chọn — thay cho bản đồ nhúng)">
                     <ImageUpload current={cfg.map_image} onUpload={uploadImage} onChange={(url) => patch({ map_image: url || undefined })} />

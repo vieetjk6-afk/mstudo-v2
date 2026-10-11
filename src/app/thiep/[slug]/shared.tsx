@@ -1,4 +1,5 @@
 import type { WeddingBank, WeddingConfig, WeddingInvitation } from "@/lib/types";
+import { mapOpenHref } from "@/lib/site-map";
 
 export type Wish = { guest_name: string; wish: string; created_at: string };
 
@@ -138,14 +139,22 @@ export function ThanksBlock({ note, photo, pal, dark }: { note?: string; photo?:
   );
 }
 
+/**
+ * Link "Chỉ đường" mở được ngay: cặp đôi dán đủ kiểu — thiếu https://, chữ kèm
+ * tên quán + link từ nút Chia sẻ, mã nhúng <iframe>, hay chỉ gõ địa chỉ. Gắn
+ * thẳng vào href thì thành link hỏng (đường dẫn tương đối → trang 404 của mình).
+ */
+const openMap = (v?: string) => (v?.trim() ? mapOpenHref(v) ?? undefined : undefined);
+
 /** Normalised, render-ready view of a config (defaults + filtered lists). */
 export function readConfig(inv: WeddingInvitation) {
-  const c = inv.config as WeddingConfig;
+  const raw = inv.config as WeddingConfig;
+  const c: WeddingConfig = { ...raw, map_url: openMap(raw.map_url) };
   return {
     c,
     groom: c.groom_name || "Chú rể",
     bride: c.bride_name || "Cô dâu",
-    events: (c.events ?? []).filter((e) => e.label || e.date || e.venue),
+    events: (c.events ?? []).filter((e) => e.label || e.date || e.venue).map((e) => ({ ...e, map_url: openMap(e.map_url) })),
     gallery: (c.gallery ?? []).filter(Boolean),
     hasGift: !!c.gift_enabled && (!!vietqrUrl(c.groom_bank) || !!vietqrUrl(c.bride_bank)),
   };

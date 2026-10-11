@@ -15,6 +15,8 @@
        phải nhờ server mở ra link đầy đủ trước, xem /api/maps/resolve)
      • "10.7769, 106.7009"                                   (toạ độ dán tay)
      • Địa chỉ chữ thường ("24 Lê Lợi, Quận 1, TP.HCM")
+     • Chữ lẫn link — nút Chia sẻ của app gửi kèm tên + địa chỉ ("Nhà hàng X
+       12 Lê Lợi… https://maps.app.goo.gl/…") → chỉ lấy đường link
    ───────────────────────────────────────────────────────────────────────────── */
 
 const DEFAULT_ZOOM = 16;
@@ -37,9 +39,22 @@ function parseUrl(raw: string): URL | null {
   }
 }
 
+/**
+ * Chữ dán vào có lẫn một đường link → chỉ giữ đường link. Không bóc thì cả đoạn
+ * "Tên quán + địa chỉ + link" bị coi là địa chỉ chữ: nút "Chỉ đường" tìm ra
+ * "không có kết quả", còn ở các mẫu gắn thẳng href thì thành link hỏng.
+ * Mã nhúng <iframe> giữ nguyên để bước bóc src xử lý.
+ */
+export function pickMapLink(raw: string): string {
+  const s = clean(raw);
+  if (/<iframe/i.test(s) || /^https?:\/\/\S+$/i.test(s)) return s;
+  const m = s.match(/https?:\/\/[^\s<>"']+/i);
+  return m ? m[0].replace(/[.,;!?]+$/, "") : s;
+}
+
 /** Link rút gọn của Google Maps (chưa nhúng được, cần mở ra link đầy đủ). */
 export function isShortMapLink(raw: string): boolean {
-  const u = parseUrl(raw);
+  const u = parseUrl(pickMapLink(raw));
   if (!u) return false;
   return SHORT_HOSTS.has(u.hostname.toLowerCase()) && u.pathname.length > 1;
 }
@@ -64,6 +79,14 @@ function parseLatLng(raw: string): { lat: number; lng: number } | null {
 function iframeSrc(raw: string): string | null {
   const m = clean(raw).match(/<iframe[^>]*\ssrc=["']([^"']+)["']/i);
   return m ? m[1] : null;
+}
+
+/** Toạ độ trong URL nhúng (…/maps/embed?pb=…!2d<lng>!3d<lat>…) — tâm bản đồ nhúng. */
+function embedCoords(src: string): { lat: number; lng: number } | null {
+  const m = src.match(/!2d(-?\d{1,3}(?:\.\d+)?)!3d(-?\d{1,3}(?:\.\d+)?)/);
+  if (!m) return null;
+  const lat = Number(m[2]), lng = Number(m[1]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }
 
 /** Mức phóng đọc được từ link (…,17z hoặc &z=17). */
@@ -91,7 +114,7 @@ type MapTarget =
  * Trả về null nếu là link rút gọn chưa mở ra được, hoặc không nhận dạng nổi.
  */
 export function parseMapInput(raw: string): MapTarget | null {
-  const input = clean(raw);
+  const input = pickMapLink(raw);
   if (!input) return null;
 
   // 1) Mã nhúng dán nguyên đoạn → lấy src rồi xử lý tiếp như một URL.
@@ -176,14 +199,15 @@ export function mapEmbedSrc(input: string, fallbackAddress = ""): string | null 
 
 /** Link mở Google Maps trong tab mới (nút "Chỉ đường"). */
 export function mapOpenHref(input: string, fallbackAddress = ""): string | null {
-  const raw = clean(input);
+  const raw = pickMapLink(input);
   // Link gốc của studio mở đúng nhất — kể cả link rút gọn. Chỉ nhận link Google
-  // (khỏi biến nút "Chỉ đường" thành link đi đâu đó khác).
+  // (khỏi biến nút "Chỉ đường" thành link đi đâu đó khác). Trừ URL nhúng
+  // (/maps/embed): mở thẳng ở tab mới thì Google báo lỗi "phải dùng trong iframe".
   if (raw && looksLikeUrl(raw) && !iframeSrc(raw)) {
     const u = parseUrl(raw);
     const host = u?.hostname.toLowerCase() ?? "";
     const isGoogle = SHORT_HOSTS.has(host) || EMBED_HOSTS.has(host) || host.endsWith(".google.com");
-    if (u && u.protocol === "https:" && isGoogle) return u.href;
+    if (u && u.protocol === "https:" && isGoogle && !u.pathname.startsWith("/maps/embed")) return u.href;
   }
   const target = parseMapInput(raw) ?? parseMapInput(fallbackAddress);
   if (!target) return null;
@@ -191,5 +215,7 @@ export function mapOpenHref(input: string, fallbackAddress = ""): string | null 
   // iPhone từ chối ("Liên kết không được hỗ trợ").
   if (target.kind === "coords") return `https://www.google.com/maps/search/?api=1&query=${target.lat},${target.lng}`;
   if (target.kind === "query") return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(target.q)}`;
-  return null;
+  // Mã nhúng / URL nhúng: mở theo toạ độ tâm bản đồ nằm trong tham số pb.
+  const c = embedCoords(target.src);
+  return c ? `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}` : null;
 }
