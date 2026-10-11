@@ -70,7 +70,7 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
           {creating ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />} Tạo Love Story mới
         </button>
       </header>
-      {err && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+      {err && <p className="mb-4 rounded-lg bg-[var(--rdS)] px-3 py-2 text-sm text-[var(--rd)]">{err}</p>}
 
       {rows.length === 0 ? (
         <div className="card p-8 text-center">
@@ -92,7 +92,7 @@ export default function StoryListView({ rows, ownerId, studioHost }: { rows: Sto
                       <span style={{ color: r.published ? "var(--s-green)" : "var(--text3)" }}>{r.published ? "Đang hiển thị" : "Nháp"}</span>
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700"><Users size={13} /> {r.wish_count} lời chúc</span>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--rdS)] px-3 py-1 text-sm text-[var(--rd)]"><Users size={13} /> {r.wish_count} lời chúc</span>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
                   <a href={viewUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs"><ExternalLink size={13} /> Xem</a>

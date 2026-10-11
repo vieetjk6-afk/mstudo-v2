@@ -54,7 +54,7 @@ export function ImageUpload({ current, onUpload, onChange }: { current?: string;
       <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-50">
         {busy ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />} {current ? "Đổi ảnh" : "Tải ảnh"}
       </button>
-      {current && <button type="button" onClick={() => onChange(null)} className="text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>}
+      {current && <button type="button" onClick={() => onChange(null)} className="text-stone-400 hover:text-red-500" aria-label="Xoá ảnh" title="Xoá ảnh"><Trash2 size={16} /></button>}
     </div>
   );
 }
@@ -256,7 +256,7 @@ export function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: 
         <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-50">
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />} {busy ? "Đang tải nhạc…" : "Tải file nhạc (≤10MB)"}
         </button>
-        {currentUrl && <button type="button" onClick={() => { setLocalErr(null); onChange(null); }} className="text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>}
+        {currentUrl && <button type="button" onClick={() => { setLocalErr(null); onChange(null); }} className="text-stone-400 hover:text-red-500" aria-label="Xoá nhạc" title="Xoá nhạc"><Trash2 size={16} /></button>}
       </div>
       {/* Phản hồi NGAY tại đây để không phải cuộn lên đầu trang mới thấy. */}
       {localErr && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{localErr}</p>}

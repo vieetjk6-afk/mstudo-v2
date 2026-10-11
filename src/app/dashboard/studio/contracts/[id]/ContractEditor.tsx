@@ -2494,7 +2494,7 @@ export default function ContractEditor({
                         <div className="flex items-center gap-3">
                           <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: f.location }} />
                           <button onClick={() => setEditMs({ id: m.id, title: m.title, event_date: m.event_date, event_time: m.event_time ?? "" })} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Sửa tên mốc" title="Sửa tên / ngày mốc"><Pencil size={14} /></button>
-                          <button onClick={() => deleteMilestone(m.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                          <button onClick={() => deleteMilestone(m.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Xoá mốc" title="Xoá mốc"><Trash2 size={14} /></button>
                         </div>
                       </li>
                       ),
@@ -2766,7 +2766,7 @@ export default function ContractEditor({
                             {p.kind !== "refund" && (
                               <button onClick={() => printReceipt(p)} className="text-[11px]" style={{ color: "var(--text2)" }}>Phiếu thu</button>
                             )}
-                            <button onClick={() => deletePayment(p.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                            <button onClick={() => deletePayment(p.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Xoá khoản thu" title="Xoá khoản thu"><Trash2 size={14} /></button>
                           </div>
                         </li>
                       ))}
@@ -2816,7 +2816,7 @@ export default function ContractEditor({
                           >
                             {e.client_visible ? "Khách thấy" : "Nội bộ"}
                           </button>
-                          <button onClick={() => deleteExpense(e.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                          <button onClick={() => deleteExpense(e.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Xoá khoản chi" title="Xoá khoản chi"><Trash2 size={14} /></button>
                         </div>
                       </li>
                     ))}
@@ -3058,7 +3058,7 @@ export default function ContractEditor({
                           {t.done && <Check size={15} color="#0c0c0c" />}
                         </button>
                         <span className="flex-1 text-sm" style={{ color: t.done ? "var(--text3)" : "var(--text)", textDecoration: t.done ? "line-through" : "none" }}>{t.label}</span>
-                        <button onClick={() => deleteTask(t.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                        <button onClick={() => deleteTask(t.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Xoá việc" title="Xoá việc"><Trash2 size={14} /></button>
                       </li>
                     ))}
                   </ul>
@@ -3071,7 +3071,7 @@ export default function ContractEditor({
                     onChange={(e) => setNewTask(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") addTask(); }}
                   />
-                  <button onClick={addTask} className="btn-ghost shrink-0"><Plus size={15} /></button>
+                  <button onClick={addTask} className="btn-ghost shrink-0" aria-label="Thêm việc" title="Thêm việc"><Plus size={15} /></button>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {PRESET_TASKS_BY_KIND[kind].filter((label) => !tasks.some((t) => t.label === label)).map((label) => (
@@ -3216,7 +3216,7 @@ export default function ContractEditor({
                           <button onClick={() => cycleProduct(it)} className="inline-flex h-7 items-center text-[11px]" style={{ color: PROD_TONE[it.status] }}>
                             {PRODUCT_STATUS_LABEL[it.status]}
                           </button>
-                          <button onClick={() => deleteProduct(it.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }}><Trash2 size={14} /></button>
+                          <button onClick={() => deleteProduct(it.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Xoá sản phẩm" title="Xoá sản phẩm"><Trash2 size={14} /></button>
                         </div>
                       </li>
                     ))}

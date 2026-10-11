@@ -347,7 +347,9 @@ export default function StudioShell({
           }}
         >
           <div className="mb-4 flex items-center gap-2.5 px-2">
-            <img src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"} alt="mstudo" className="h-8 w-auto" />
+            {/* Hai ảnh, CSS chọn theo giao diện — xem .logo-on-dark ở globals.css. */}
+            <img src="/logo-wordmark.svg" alt="mstudo" className="logo-on-light h-8 w-auto" />
+            <img src="/logo-wordmark-dark.svg" alt="mstudo" className="logo-on-dark h-8 w-auto" />
             {brandChip}
             <button
               onClick={() => setDrawerOpen(false)}
@@ -445,7 +447,9 @@ export default function StudioShell({
           style={{ background: "var(--sf)", borderRight: "1px solid var(--bd)" }}
         >
           <Link href="/dashboard/studio" className="mb-3.5 flex items-center gap-2.5 px-2 pb-0.5">
-            <img src={theme === "dark" ? "/logo-wordmark-dark.svg" : "/logo-wordmark.svg"} alt="mstudo" className="h-[26px] w-auto" />
+            {/* Hai ảnh, CSS chọn theo giao diện — xem .logo-on-dark ở globals.css. */}
+            <img src="/logo-wordmark.svg" alt="mstudo" className="logo-on-light h-[26px] w-auto" />
+            <img src="/logo-wordmark-dark.svg" alt="mstudo" className="logo-on-dark h-[26px] w-auto" />
             {brandChip}
           </Link>
 

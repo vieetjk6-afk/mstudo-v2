@@ -2,6 +2,10 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  // `dark:` đi theo công tắc sáng/tối của app (data-theme trên <html>, và trên
+  // `.studio-shell` / lớp phủ portal), KHÔNG theo prefers-color-scheme của máy —
+  // nếu không, máy để chế độ tối mà app đang sáng sẽ ra chữ sáng trên nền sáng.
+  darkMode: ["selector", '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {

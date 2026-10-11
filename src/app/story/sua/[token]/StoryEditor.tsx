@@ -255,7 +255,7 @@ export default function StoryEditor({ token }: { token: string }) {
               <div key={tlKeys[i] ?? `tl-init-${i}`} className="rounded-lg border border-stone-200 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <input type="date" className={`${inp} max-w-[45%]`} value={(t.date ?? "").slice(0, 10)} onChange={(e) => upTl(i, { date: e.target.value })} />
-                  <button onClick={() => delTl(i)} className="text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+                  <button onClick={() => delTl(i)} className="text-stone-400 hover:text-red-500" aria-label="Xoá mốc thời gian" title="Xoá mốc thời gian"><Trash2 size={16} /></button>
                 </div>
                 <input className={`${inp} mb-2`} value={t.title ?? ""} onChange={(e) => upTl(i, { title: e.target.value })} placeholder="Tiêu đề (vd: Lần đầu gặp nhau)" />
                 <textarea className={inp} value={t.text ?? ""} onChange={(e) => upTl(i, { text: e.target.value })} placeholder="Nội dung" rows={2} />

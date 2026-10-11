@@ -125,11 +125,10 @@ export const isLoyalty = (v: Pick<Voucher, "kind">) => v.kind === "loyalty";
 
 /** "Giảm 10% (tối đa 2.000.000đ)" · "Giảm 500.000đ" · thẻ quà: "2.000.000đ". */
 export function voucherValueLabel(v: Pick<Voucher, "kind" | "discount_type" | "percent" | "max_discount" | "amount">): string {
-  const money = (n: number) => Math.round(n).toLocaleString("vi-VN") + "đ";
   if (v.discount_type === "percent" && v.percent) {
-    return `Giảm ${v.percent}%${v.max_discount ? ` (tối đa ${money(v.max_discount)})` : ""}`;
+    return `Giảm ${v.percent}%${v.max_discount ? ` (tối đa ${money0(v.max_discount)})` : ""}`;
   }
-  return isLoyalty(v) ? `Giảm ${money(v.amount)}` : money(v.amount);
+  return isLoyalty(v) ? `Giảm ${money0(v.amount)}` : money0(v.amount);
 }
 
 /**
@@ -289,4 +288,6 @@ export function tiersLabel(tiers: PercentTier[]): string {
   return parts.join(" · ") + ".";
 }
 
+// Cùng định dạng với vnd() ở lib/types.ts ("1.500.000đ") nhưng giữ bản cục bộ:
+// file này không import gì để test chạy thẳng bằng node --experimental-strip-types.
 const money0 = (n: number) => Math.round(n).toLocaleString("vi-VN") + "đ";

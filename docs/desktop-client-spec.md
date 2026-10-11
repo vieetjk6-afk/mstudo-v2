@@ -119,10 +119,9 @@ MStudo/                                  ← studio chọn vị trí gốc
 4. ✅ Engine: tải bù theo mốc đồng bộ cuối (chỉ dời mốc khi lưu trọn vẹn),
    mỗi HĐ 1 thư mục + bản mới khi sửa (manifest mstudo.json), Excel hằng ngày
    + khi mở app, dọn 30 ngày (không đụng HopDong), đổi thư mục có hỏi di chuyển.
-5. ✅ Báo cập nhật: app kiểm tra /api/desktop/version khi mở + mỗi ngày, hiện
-   banner + nút tải bản mới (đặt DESKTOP_LATEST_VERSION + link trên Vercel là
-   xong — không cần khóa ký; nâng cấp lên tauri-plugin-updater sau nếu cần
-   cập nhật ngầm). Mã Rust đã `cargo check` sạch.
+5. ✅ Báo cập nhật: app hỏi thẳng GitHub Releases của repo bản cài khi mở +
+   mỗi ngày, hiện banner + nút tải bản mới (xem desktop/test/desktop-update.mjs).
+   Endpoint cũ /api/desktop/version không còn ai gọi nên đã gỡ. Mã Rust đã `cargo check` sạch.
 6. Còn lại: build file cài NSIS trên máy Windows (`cd desktop && npm install
    && npm run build`), upload + đặt NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL.
 

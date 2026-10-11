@@ -7,12 +7,14 @@ import { useTheme } from "@/lib/theme";
 /* ═══════════════════════════════════════════════════════════════════════════
    HỘP THOẠI — LUÔN đi qua portal ra <body>.
 
-   VÌ SAO BẮT BUỘC: `<main>` của StudioShell mang class `.page-in`, tức
-   `animation: pageIn .35s ease both`, và animation đó animate `transform`. Với
-   `fill-mode: both` animation CÒN HIỆU LỰC MÃI MÃI (không chỉ 0,35s đầu), nên
-   Chromium giữ `<main>` làm CONTAINING BLOCK cho mọi con `position: fixed`.
+   VÌ SAO BẮT BUỘC: `<main>` của StudioShell mang class `.page-in`, và animation
+   đó animate `transform`. Trước đây `fill-mode: both` làm transform CÒN HIỆU
+   LỰC MÃI MÃI, nên Chromium giữ `<main>` làm CONTAINING BLOCK cho mọi con
+   `position: fixed`. Nay đã đổi sang `backwards` (xem globals.css) nên hết
+   0,35s đầu là hết — nhưng trong 0,35s đó lỗi vẫn y nguyên, và <main> còn
+   `overflow-x-clip`, nên portal vẫn là đường an toàn.
 
-   Hệ quả đo được (Chromium, khung nhìn 493px, main cao 2044px):
+   Hệ quả đo được hồi còn `both` (Chromium, khung nhìn 493px, main cao 2044px):
        chỉ overflow-x:clip → lớp phủ inset-0 cao 493  (đúng, neo khung nhìn)
        có .page-in         → lớp phủ inset-0 cao 2044 (neo vào <main>)
 
