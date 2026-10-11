@@ -1,8 +1,8 @@
-import type { WeddingBank, WeddingConfig, WeddingInvitation } from "@/lib/types";
+import type { WeddingBank, WeddingConfig, PublicWeddingInvitation } from "@/lib/types";
 
 export type Wish = { guest_name: string; wish: string; created_at: string };
 
-export type TemplateProps = { inv: WeddingInvitation; wishes: Wish[]; guest?: string };
+export type TemplateProps = { inv: PublicWeddingInvitation; wishes: Wish[]; guest?: string };
 
 export function fmtDate(iso?: string): string {
   if (!iso) return "";
@@ -139,7 +139,7 @@ export function ThanksBlock({ note, photo, pal, dark }: { note?: string; photo?:
 }
 
 /** Normalised, render-ready view of a config (defaults + filtered lists). */
-export function readConfig(inv: WeddingInvitation) {
+export function readConfig(inv: PublicWeddingInvitation) {
   const c = inv.config as WeddingConfig;
   return {
     c,

@@ -93,6 +93,9 @@ const ORDER = [
   ["migrations/contract_final_originals.sql", "Link toàn bộ file gốc + dấu đã gửi link trang riêng cho khách"],
   // Vá cuối cùng: chạy SAU schema.sql vì nó create-or-replace handle_new_user().
   ["migrations/fix_google_signup_trigger.sql", "Vá đăng nhập Google báo server_error"],
+  // Vá quyền: chạy SAU cùng vì nó siết lại hàm / policy mà các file trên tạo
+  // (atomic_redemptions, accounting, crew_profile_show, schema.sql storage).
+  ["migrations/bao_mat_quyen_rpc_storage.sql", "Vá bảo mật: RPC chỉ service-role, số phiếu thu, storage, crew_account, affiliate_codes"],
 ];
 
 /**
@@ -136,6 +139,7 @@ const MOI = [
   "migrations/contract_item_tier_milestone.sql",
   "migrations/contract_final_links.sql",
   "migrations/contract_final_originals.sql",
+  "migrations/bao_mat_quyen_rpc_storage.sql",
 ];
 
 /**

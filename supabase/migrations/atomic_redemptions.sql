@@ -193,3 +193,18 @@ begin
   end loop;
 end;
 $$;
+
+-- ── Quyền gọi: CHỈ service-role ─────────────────────────────────────────────
+-- Cả bốn hàm nhận `p_user_id` / mã từ người gọi và chạy với quyền chủ hàm, mà
+-- Supabase mặc định cấp EXECUTE cho anon + authenticated → ai cầm anon key cũng
+-- gọi thẳng được qua /rest/v1/rpc (kích hoạt dùng thử cho tài khoản người khác,
+-- đốt lượt mã giảm giá…). App chỉ gọi chúng từ API route bằng service-role sau
+-- khi đã tự kiểm đăng nhập. Xem thêm migrations/bao_mat_quyen_rpc_storage.sql.
+revoke all on function public.redeem_discount_trial(text, uuid, timestamptz, text, integer, boolean, boolean, boolean, boolean) from public, anon, authenticated;
+revoke all on function public.start_free_trial(uuid, timestamptz, text, integer, boolean, boolean, boolean, boolean) from public, anon, authenticated;
+revoke all on function public.consume_discount_code(text) from public, anon, authenticated;
+revoke all on function public.get_or_create_affiliate_code(uuid, text) from public, anon, authenticated;
+grant execute on function public.redeem_discount_trial(text, uuid, timestamptz, text, integer, boolean, boolean, boolean, boolean) to service_role;
+grant execute on function public.start_free_trial(uuid, timestamptz, text, integer, boolean, boolean, boolean, boolean) to service_role;
+grant execute on function public.consume_discount_code(text) to service_role;
+grant execute on function public.get_or_create_affiliate_code(uuid, text) to service_role;

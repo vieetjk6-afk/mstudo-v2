@@ -1373,7 +1373,12 @@ create policy studio_expenses_owner_all on public.studio_expenses
 
 -- ============================================================================
 -- STORAGE: payment-proofs bucket (transfer screenshots attached to payments)
--- Public read (so receipts/links work); only signed-in studio users may write.
+-- Bucket PUBLIC: ảnh mở bằng URL công khai (không cần policy SELECT). Policy chỉ
+-- cho user đăng nhập đọc/ghi/xoá TRONG thư mục của chính mình (`<uid>/…`, hoặc
+-- `tmp/<uid>/…` của luồng ảnh lớn) — /api/upload ghi đúng dạng đó. Ảnh khách
+-- gửi (`client/…`, `booking/…`) đi qua service-role. KHÔNG có SELECT công khai:
+-- nó chỉ mở đường LIỆT KÊ ảnh chuyển khoản của mọi studio.
+-- split_part(name,'/',1) = (storage.foldername(name))[1], không phụ thuộc hàm riêng.
 -- ============================================================================
 insert into storage.buckets (id, name, public)
 values ('payment-proofs', 'payment-proofs', true)
@@ -1381,16 +1386,36 @@ on conflict (id) do nothing;
 
 drop policy if exists payment_proofs_read on storage.objects;
 create policy payment_proofs_read on storage.objects
-  for select using (bucket_id = 'payment-proofs');
+  for select to authenticated using (
+    bucket_id = 'payment-proofs'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 drop policy if exists payment_proofs_insert on storage.objects;
 create policy payment_proofs_insert on storage.objects
-  for insert to authenticated with check (bucket_id = 'payment-proofs');
+  for insert to authenticated with check (
+    bucket_id = 'payment-proofs'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 drop policy if exists payment_proofs_update on storage.objects;
 create policy payment_proofs_update on storage.objects
-  for update to authenticated using (bucket_id = 'payment-proofs');
+  for update to authenticated using (
+    bucket_id = 'payment-proofs'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  ) with check (
+    bucket_id = 'payment-proofs'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 drop policy if exists payment_proofs_delete on storage.objects;
 create policy payment_proofs_delete on storage.objects
-  for delete to authenticated using (bucket_id = 'payment-proofs');
+  for delete to authenticated using (
+    bucket_id = 'payment-proofs'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 
 -- ============================================================================
 -- MULTI-ACCOUNT / STAFF PERMISSIONS
@@ -1691,8 +1716,11 @@ create table if not exists public.affiliate_codes (
 );
 alter table public.affiliate_codes enable row level security;
 drop policy if exists affiliate_codes_owner on public.affiliate_codes;
+-- Chủ mã chỉ ĐỌC; mọi thao tác ghi đi qua service-role (RPC
+-- get_or_create_affiliate_code, upgrade-activate). `for all` từng cho user tự
+-- sửa `code` / bật lại `active` mà admin đã tắt.
 create policy affiliate_codes_owner on public.affiliate_codes
-  for all using (user_id = auth.uid());
+  for select using (user_id = auth.uid());
 drop policy if exists affiliate_codes_admin on public.affiliate_codes;
 create policy affiliate_codes_admin on public.affiliate_codes
   for all using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
@@ -1811,28 +1839,49 @@ on conflict (id) do update
       file_size_limit = 12582912,
       allowed_mime_types = null;
 
+-- Bucket PUBLIC + mọi thao tác ghi qua service-role / URL ký sẵn → không cần
+-- policy nào. Policy SELECT chỉ mở thêm đường LIỆT KÊ toàn bucket, nên bỏ.
 drop policy if exists wedding_photos_read on storage.objects;
-create policy wedding_photos_read on storage.objects
-  for select using (bucket_id = 'wedding-photos');
 
 -- STORAGE: logos bucket (studio brand logo + price-list poster logo).
--- Public read; only signed-in studio users upload their own logo.
+-- Public read bằng URL; user đăng nhập chỉ đọc/ghi/xoá trong thư mục của mình
+-- (`<uid>/…` của /api/upload, `tmp/<uid>/…` của luồng ảnh lớn).
 insert into storage.buckets (id, name, public)
 values ('logos', 'logos', true)
 on conflict (id) do nothing;
 
 drop policy if exists logos_read on storage.objects;
 create policy logos_read on storage.objects
-  for select using (bucket_id = 'logos');
+  for select to authenticated using (
+    bucket_id = 'logos'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 drop policy if exists logos_write on storage.objects;
 create policy logos_write on storage.objects
-  for insert to authenticated with check (bucket_id = 'logos');
+  for insert to authenticated with check (
+    bucket_id = 'logos'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 drop policy if exists logos_update on storage.objects;
 create policy logos_update on storage.objects
-  for update to authenticated using (bucket_id = 'logos');
+  for update to authenticated using (
+    bucket_id = 'logos'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  ) with check (
+    bucket_id = 'logos'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 drop policy if exists logos_delete on storage.objects;
 create policy logos_delete on storage.objects
-  for delete to authenticated using (bucket_id = 'logos');
+  for delete to authenticated using (
+    bucket_id = 'logos'
+    and (split_part(name, '/', 1) = auth.uid()::text
+         or (split_part(name, '/', 1) = 'tmp' and split_part(name, '/', 2) = auth.uid()::text))
+  );
 
 -- ============================================================================
 -- TRANG LOVE STORY — see supabase/story_pages.sql

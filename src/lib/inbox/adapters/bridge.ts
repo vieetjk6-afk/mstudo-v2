@@ -1,6 +1,7 @@
 import "server-only";
+import { lookup } from "node:dns/promises";
 import { decryptJSON, encryptJSON } from "@/lib/zalo/crypto";
-import { signBridgePayload, validRelayUrl } from "../bridge-protocol";
+import { isBlockedIp, signBridgePayload, validRelayUrl } from "../bridge-protocol";
 import type { ChannelRow, ContactRow } from "../types";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -54,6 +55,11 @@ export async function sendViaBridge(
 
   const check = validRelayUrl(secret.relayUrl);
   if (!check.ok) return { ok: false, error: check.error };
+  // validRelayUrl chỉ nhìn được CHỮ trong URL. Một tên miền bình thường vẫn có
+  // thể phân giải ra 127.0.0.1 hay 169.254.169.254 — nên phải hỏi DNS và chặn
+  // nếu BẤT KỲ địa chỉ nào nó trả về là địa chỉ nội bộ.
+  const dnsErr = await relayHostError(check.url.hostname);
+  if (dnsErr) return { ok: false, error: dnsErr };
 
   const body = JSON.stringify({
     platform: channel.platform,
@@ -72,19 +78,49 @@ export async function sendViaBridge(
       },
       body,
       cache: "no-store",
+      // KHÔNG đi theo chuyển hướng: URL đã kiểm ở trên có thể 302 sang một địa
+      // chỉ nội bộ, và fetch sẽ ngoan ngoãn gọi tới đó. 3xx coi như gửi hỏng.
+      redirect: "manual",
       // Cầu nối treo thì KHÔNG được kéo theo cả route gửi tin. Hết giờ thì coi
       // như gửi hỏng, nhân viên thấy ngay và gọi điện cho khách.
       signal: AbortSignal.timeout(15_000),
     });
 
+    if (res.status >= 300 && res.status < 400) {
+      return { ok: false, error: `cầu nối trả chuyển hướng ${res.status} — không đi theo` };
+    }
     if (!res.ok) {
-      // Trả nguyên văn lý do của cầu nối (cắt ngắn) — "gửi hỏng" chung chung thì
-      // nhân viên không biết là hết cửa sổ trả lời hay token của đối tác hết hạn.
-      const detail = await res.text().catch(() => "");
-      return { ok: false, error: `cầu nối trả ${res.status}${detail ? `: ${detail.slice(0, 200)}` : ""}` };
+      // CHỈ báo mã trạng thái, KHÔNG chép thân phản hồi vào lỗi: lỗi này hiện
+      // trong khung chat, và chép nguyên văn là biến cầu nối thành cái ống đọc
+      // phản hồi của bất kỳ máy chủ nào URL trỏ tới (SSRF có đọc được kết quả).
+      await res.body?.cancel().catch(() => {});
+      return { ok: false, error: `cầu nối trả ${res.status}` };
     }
     return { ok: true };
   } catch (e: any) {
-    return { ok: false, error: e?.name === "TimeoutError" ? "cầu nối không phản hồi" : e?.message || "bridge_failed" };
+    // Không chép e.message: lỗi mạng của undici có thể kèm địa chỉ/chi tiết nội bộ.
+    return { ok: false, error: e?.name === "TimeoutError" ? "cầu nối không phản hồi" : "không gọi được cầu nối" };
+  }
+}
+
+/**
+ * Phân giải tên miền của cầu nối và chặn nếu có địa chỉ nội bộ. Trả chuỗi lỗi
+ * (tiếng Việt, hiện cho nhân viên) hoặc null nếu gọi được.
+ *
+ * Còn một kẽ hở nhỏ: DNS rebinding — tên miền trả IP công khai lúc kiểm rồi đổi
+ * sang IP nội bộ lúc fetch tự phân giải lại. Với `redirect: "manual"` và không
+ * chép thân phản hồi, kẻ tấn công cũng không đọc được gì từ cú gọi đó.
+ */
+async function relayHostError(hostname: string): Promise<string | null> {
+  const host = hostname.replace(/^\[|\]$/g, "");
+  try {
+    const addrs = await lookup(host, { all: true, verbatim: true });
+    if (!addrs.length) return "không phân giải được tên miền cầu nối";
+    if (addrs.some((a) => isBlockedIp(a.address))) {
+      return "URL cầu nối không được trỏ vào địa chỉ nội bộ.";
+    }
+    return null;
+  } catch {
+    return "không phân giải được tên miền cầu nối";
   }
 }
