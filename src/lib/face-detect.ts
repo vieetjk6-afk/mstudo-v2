@@ -33,6 +33,7 @@
 import { laplacianVariance, subGray } from "./photo-ai";
 import type { FaceInfo, FaceMetrics } from "./face-ai";
 import type { ScanItem, ScanProgress } from "./photo-ai-scan";
+import { fetchMediaBytes } from "./media-origin";
 
 /**
  * Cạnh dài khi giải mã để nhận diện. Lớn hơn `SAMPLE_EDGE` (480) của bộ đo nét
@@ -148,7 +149,7 @@ async function decode(item: ScanItem): Promise<{
   width: number;
   height: number;
 }> {
-  const source: Blob = item.file ?? (await (await fetch(item.url!, { cache: "force-cache" })).blob());
+  const source: Blob = item.file ?? (await (await fetchMediaBytes(item.url!, { cache: "force-cache" })).blob());
   const probe = await createImageBitmap(source);
   const scale = FACE_EDGE / Math.max(probe.width, probe.height);
   const w = scale >= 1 ? probe.width : Math.max(8, Math.round(probe.width * scale));

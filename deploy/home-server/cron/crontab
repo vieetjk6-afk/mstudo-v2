@@ -1,0 +1,21 @@
+# Lịch của container cron — giờ UTC (container không đặt TZ), để khớp từng
+# dòng với vercel.json. 07:00 giờ VN = 00:00 UTC.
+# Mọi output đẩy vào stdout của PID 1 → xem bằng: docker compose logs -f cron
+#
+# phút giờ ngày tháng thứ  lệnh
+
+# ── Quét khuôn mặt: mỗi 10 phút (thay cho GitHub Actions) — HOME_CRON_FACE_SCAN
+*/10 * * * * /usr/local/bin/quet-khuon-mat.sh > /proc/1/fd/1 2>&1
+
+# ── Dọn dẹp (idempotent — chạy trùng với Vercel cũng vô hại) — HOME_CRON_CLEANUP
+30 1 * * *   /usr/local/bin/goi-cron.sh HOME_CRON_CLEANUP /api/cron/cleanup-proofs > /proc/1/fd/1 2>&1
+0 3 * * *    /usr/local/bin/goi-cron.sh HOME_CRON_CLEANUP /api/cron/cleanup-drive-cache > /proc/1/fd/1 2>&1
+0 2 * * 0    /usr/local/bin/goi-cron.sh HOME_CRON_CLEANUP /api/cron/cleanup-wedding-photos > /proc/1/fd/1 2>&1
+
+# ── Việc GỬI TIN hằng ngày — HOME_CRON_DAILY, MẶC ĐỊNH TẮT.
+# Chỉ bật SAU KHI đã tắt Cron Jobs trên Vercel (Settings → Cron Jobs), không thì
+# khách nhận tin nhắc/email HAI LẦN. Xem HUONG-DAN.md mục "Việc định kỳ".
+30 23 * * *  /usr/local/bin/goi-cron.sh HOME_CRON_DAILY /api/cron/automations > /proc/1/fd/1 2>&1
+0 0 * * *    /usr/local/bin/goi-cron.sh HOME_CRON_DAILY /api/cron/reminders > /proc/1/fd/1 2>&1
+0 1 * * *    /usr/local/bin/goi-cron.sh HOME_CRON_DAILY "/api/cron/zalo?only=money" > /proc/1/fd/1 2>&1
+0 4 * * *    /usr/local/bin/goi-cron.sh HOME_CRON_DAILY "/api/cron/zalo?only=work" > /proc/1/fd/1 2>&1

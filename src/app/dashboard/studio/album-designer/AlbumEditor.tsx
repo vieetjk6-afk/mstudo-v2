@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Wand2, Undo2, Redo2, Plus, Trash2, Shuffle, Loader2, Download, ImagePlus, ArrowLeft, Copy, ChevronLeft, ChevronRight, Type, Lock, Unlock, Save, LayoutGrid, Maximize, Images } from "lucide-react";
 import { buildPdf, cmToPt, type PdfPageSpec } from "@/lib/album-pdf";
 import { fetchPublicDriveBytes } from "@/lib/google-picker";
+import { loadMediaImage } from "@/lib/media-origin";
 
 /* ── Types ──────────────────────────────────────────────────────────────── */
 export type ADSize = { name: string; w: number; h: number };
@@ -590,7 +591,9 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
       const url = URL.createObjectURL(blob);
       try { return await loadImg(url); } catch { /* về proxy */ } finally { URL.revokeObjectURL(url); }
     }
-    return loadImg(full + (full.includes("?") ? "&" : "?") + "raw=1");
+    // Có máy media ở nhà thì byte gốc (chục MB/tấm) đi qua đó trước, hỏng thì
+    // lùi về đúng URL cùng miền này — @/lib/media-origin.
+    return loadMediaImage(full + (full.includes("?") ? "&" : "?") + "raw=1");
   }
   async function renderSpreadCanvas(s: Spread, bleed_mm: number): Promise<HTMLCanvasElement> {
     const DPI = 300;

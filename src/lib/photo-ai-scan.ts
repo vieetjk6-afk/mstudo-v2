@@ -24,6 +24,7 @@
  */
 
 import { SAMPLE_EDGE, cropRect, measure, type PhotoMetrics } from "./photo-ai";
+import { fetchMediaBytes } from "./media-origin";
 
 /** Số ảnh giải mã cùng lúc. 4 là mức an toàn cho cả máy yếu. */
 const CONCURRENCY = 4;
@@ -118,7 +119,9 @@ async function sampleOne(item: ScanItem): Promise<{ gray: Uint8Array; width: num
 }
 
 async function fetchBlob(url: string): Promise<Blob> {
-  const res = await fetch(url, { cache: "force-cache" });
+  // URL `/api/img?…&raw=1` đi qua máy media ở nhà trước (nếu có), hỏng thì lùi
+  // về cùng miền — @/lib/media-origin. URL khác giữ nguyên fetch() như cũ.
+  const res = await fetchMediaBytes(url, { cache: "force-cache" });
   if (!res.ok) throw new Error(`tải ảnh lỗi (${res.status})`);
   return res.blob();
 }

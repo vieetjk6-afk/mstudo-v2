@@ -16,14 +16,16 @@ export const dynamic = "force-dynamic";
  * thì ai xem trang cũng suy ra được.
  */
 export function GET() {
-  const sha = process.env.VERCEL_GIT_COMMIT_SHA || "";
+  // GIT_COMMIT_SHA / DEPLOY_ENV: máy chủ ở nhà (Docker) không có biến của
+  // Vercel — cap-nhat.sh truyền commit vào lúc dựng image. Xem deploy/home-server/.
+  const sha = process.env.VERCEL_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "";
   return NextResponse.json({
     commit: sha ? sha.slice(0, 7) : "local",
     commitFull: sha || null,
     branch: process.env.VERCEL_GIT_COMMIT_REF || null,
     // "production" hay "preview" — một bản preview mở nhầm cũng giải thích được
     // vì sao thấy khác với bản thật.
-    env: process.env.VERCEL_ENV || "local",
+    env: process.env.VERCEL_ENV || process.env.DEPLOY_ENV || "local",
     builtAt: process.env.VERCEL_DEPLOYMENT_ID ? undefined : null,
     // Mốc để đối chiếu nhanh: có tính năng tìm khuôn mặt hay chưa.
     tinhNang: {

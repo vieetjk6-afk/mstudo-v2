@@ -1,5 +1,39 @@
+/**
+ * MÁY CHỦ Ở NHÀ (deploy/home-server/) — dựng CÙNG mã nguồn này thành một server
+ * Node độc lập trong Docker. Hai cờ, CHỈ đặt trong Dockerfile ở nhà; Vercel
+ * không đặt cờ nào nên bản dựng Vercel giữ nguyên từng byte cấu hình như trước.
+ *
+ *   BUILD_STANDALONE=1 → `output: "standalone"`: .next/standalone/ chứa server.js
+ *     + đúng phần node_modules được trace (kể cả các file khai ở
+ *     outputFileTracingIncludes bên dưới — trọng số face-api, .wasm, supabase/*.sql).
+ *     public/ và .next/static KHÔNG tự vào đó: Dockerfile chép tay, đúng như tài
+ *     liệu output.md của Next yêu cầu.
+ *   MEDIA_ONLY=1 (đi kèm cờ trên) → bản dựng là "máy media": chỉ phục vụ những
+ *     route trong MEDIA_API_ALLOW, gửi CORS cho /api/img, gắn noindex. Xem
+ *     src/lib/media-host.ts (cùng danh sách, phía proxy) và HUONG-DAN.md.
+ */
+const STANDALONE = process.env.BUILD_STANDALONE === "1";
+const MEDIA_SERVER = STANDALONE && process.env.MEDIA_ONLY === "1";
+/**
+ * /api/* mà máy media được phục vụ — PHẢI khớp MEDIA_EXACT_PATHS/MEDIA_PREFIX_PATHS
+ * ở src/lib/media-host.ts (desktop/test/media-origin.mjs so hai bên). Proxy không
+ * chạy trên /api/* (matcher bỏ qua cho nhẹ), nên lớp chặn /api/* nằm ở đây, dưới
+ * dạng rewrite "beforeFiles" sang /api/media-chan (luôn trả 404).
+ */
+export const MEDIA_API_ALLOW = "img$|file$|version$|inbox/ingest$|cron/.+|media-chan$";
+/** Origin máy media (nếu có) — để CSP siết chặt (report-only) cho phép fetch tới. */
+const MEDIA_ORIGIN = (() => {
+  try {
+    const v = (process.env.NEXT_PUBLIC_MEDIA_ORIGIN || "").trim();
+    return v ? new URL(v).origin : "";
+  } catch {
+    return "";
+  }
+})();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  ...(STANDALONE ? { output: "standalone" } : {}),
   /**
    * Next 15 chuyển ba khoá dưới đây RA KHỎI `experimental`. Đổi tên/đổi chỗ mà
    * quên thì `next build` VẪN XANH và chỉ vỡ trên production — đúng kiểu hỏng
@@ -135,7 +169,7 @@ const nextConfig = {
       // Ảnh/nhạc đến từ nguồn tuỳ studio nhập → cho phép mọi https + data/blob.
       "img-src 'self' data: blob: https:",
       "media-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com",
+      `connect-src 'self'${MEDIA_ORIGIN ? ` ${MEDIA_ORIGIN}` : ""} https://*.supabase.co wss://*.supabase.co https://*.google.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com`,
       "frame-src 'self' https://www.youtube.com https://youtube.com https://player.vimeo.com https://drive.google.com https://docs.google.com https://accounts.google.com https://content.googleapis.com https://challenges.cloudflare.com https://*.google.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",
@@ -145,7 +179,37 @@ const nextConfig = {
       "frame-ancestors 'self'",
       "upgrade-insecure-requests",
     ].join("; ");
+    // ── Máy media ở nhà (MEDIA_SERVER) ─────────────────────────────────────
+    // CORS cho /api/img: trang trên mstudo.com / <studio>.mstudo.com / tên miền
+    // riêng của studio gọi fetch()/canvas crossOrigin sang media.mstudo.com.
+    // `*` chứ không phải danh sách origin, vì:
+    //   • /api/img không đọc cookie, không phân quyền — chỉ tải ảnh Drive CÔNG
+    //     KHAI theo id; ai cũng gọi được nó bằng curl. CORS chỉ quyết định trình
+    //     duyệt có cho JS đọc byte hay không, không phải ai được lấy byte.
+    //   • tên miền riêng của studio là danh sách động (trong DB) — liệt kê không xuể.
+    //   • echo Origin thì phải `Vary: Origin`, mà cache của Cloudflare bỏ qua Vary
+    //     → studio A nhận bản cache mang origin của studio B → CORS hỏng.
+    // Request không gửi credentials (crossOrigin="anonymous", credentials:"omit")
+    // nên `*` hợp lệ. GET đơn giản không preflight; OPTIONS do Next tự trả.
+    const mediaHeaders = MEDIA_SERVER
+      ? [
+          {
+            source: "/api/img",
+            headers: [
+              { key: "Access-Control-Allow-Origin", value: "*" },
+              { key: "Access-Control-Allow-Methods", value: "GET, HEAD, OPTIONS" },
+              { key: "Cross-Origin-Resource-Policy", value: "cross-origin" },
+            ],
+          },
+          {
+            // Máy media không phải một trang để Google lập chỉ mục.
+            source: "/:path*",
+            headers: [{ key: "X-Robots-Tag", value: "noindex, nofollow" }],
+          },
+        ]
+      : [];
     return [
+      ...mediaHeaders,
       {
         // Asset tĩnh trong public/ (logo, favicon, ảnh thương hiệu). KHÔNG dùng
         // 'immutable' vì các tệp này không băm-nội-dung — nếu thay ở cùng URL,
@@ -206,6 +270,24 @@ const nextConfig = {
       },
     ];
   },
+  ...(MEDIA_SERVER
+    ? {
+        async rewrites() {
+          return {
+            // beforeFiles: chạy TRƯỚC khi khớp route, nên route bị chặn không
+            // bao giờ được gọi. /robots.txt, /sitemap.xml là route handler đọc
+            // Host (không qua proxy vì matcher bỏ qua .txt/.xml) — chặn luôn.
+            beforeFiles: [
+              { source: `/api/:rest((?!${MEDIA_API_ALLOW}).*)`, destination: "/api/media-chan" },
+              { source: "/robots.txt", destination: "/api/media-chan" },
+              { source: "/sitemap.xml", destination: "/api/media-chan" },
+            ],
+            afterFiles: [],
+            fallback: [],
+          };
+        },
+      }
+    : {}),
 };
 
 export default nextConfig;

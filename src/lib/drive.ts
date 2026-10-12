@@ -1,6 +1,7 @@
 /**
  * Helpers for turning Google Drive links into file IDs and image URLs.
  */
+import { mediaImgSrc } from "./media-origin.ts";
 
 /** Extract a Drive file ID from common share-link formats. */
 export function extractFileId(url: string): string | null {
@@ -100,11 +101,17 @@ export function retryAltHost(e: { currentTarget: HTMLImageElement }) {
  * hỏng mới tới proxy đọc byte (`raw=1`) — proxy tự dò nhiều nguồn. Trước đây
  * ảnh lớn hỏng là khách chỉ còn thấy ảnh nền nhỏ, mờ. Chỉ dùng cho khung xem
  * một ảnh; lưới ảnh dùng retryAltHost.
+ *
+ * Có máy media ở nhà (NEXT_PUBLIC_MEDIA_ORIGIN) thì bậc đọc byte chia đôi: máy
+ * media trước ("media"), hỏng nữa mới tới proxy cùng miền ("raw"). Không có
+ * máy media thì chuỗi bậc y hệt trước.
  */
 export function retryViaProxy(e: { currentTarget: HTMLImageElement }) {
   const im = e.currentTarget;
   const stage = im.dataset.retried;
-  if (stage === "raw" || im.src.includes("raw=1")) return;
+  if (stage === "raw") return;
+  // Ảnh vốn đã là lượt đọc byte cùng miền (không do hàm này đổi) → hết đường lùi.
+  if (stage !== "media" && im.src.includes("raw=1")) return;
   if (!stage) {
     const alt = altGoogleUrl(im.src);
     if (alt) {
@@ -116,8 +123,18 @@ export function retryViaProxy(e: { currentTarget: HTMLImageElement }) {
   }
   const base = im.dataset.orig || im.src;
   if (!base.includes("/api/img")) return;
+  const raw = `${base}&raw=1`;
+  if (stage !== "media") {
+    const media = mediaImgSrc(raw);
+    if (media) {
+      im.dataset.orig = base;
+      im.dataset.retried = "media";
+      im.src = media;
+      return;
+    }
+  }
   im.dataset.retried = "raw";
-  im.src = `${base}&raw=1`;
+  im.src = raw;
 }
 
 /** Direct download URL for an original file. */

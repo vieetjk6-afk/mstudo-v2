@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { withMediaFirst } from "@/lib/media-origin";
 
 /**
  * Lớp ảnh GỐC phủ lên ảnh trong khung xem khi khách phóng to.
@@ -15,11 +16,14 @@ import { useEffect, useRef, useState } from "react";
  * thì lùi sang bản render lớn. Trước đây chỉ có một địa chỉ — hỏng là lớp này
  * im lặng không hiện và khách cứ nhìn ảnh nhỏ bên dưới.
  *
+ * URL `raw=1` (byte qua proxy) được chèn thêm bản máy media ở nhà NGAY TRƯỚC nó
+ * khi có NEXT_PUBLIC_MEDIA_ORIGIN — hỏng thì onError tự lùi sang bản cùng miền.
+ *
  * Đặt BÊN TRONG khung PhotoZoom (cùng khung `relative` với ảnh gốc) để bị thu
  * phóng/kéo cùng ảnh; `inset-0 object-contain` trùng khít ảnh bên dưới.
  */
 export default function ZoomHiRes({
-  srcs,
+  srcs: srcsIn,
   active,
   className,
   onLoadingChange,
@@ -30,6 +34,9 @@ export default function ZoomHiRes({
   /** Báo đang tải bản gốc (true) / xong hoặc bỏ cuộc (false) — để hiện chỉ báo. */
   onLoadingChange?: (loading: boolean) => void;
 }) {
+  // Danh sách tất định (chỉ phụ thuộc biến môi trường) nên `idx` vẫn trỏ đúng
+  // phần tử giữa các lần render.
+  const srcs = withMediaFirst(srcsIn);
   // Đã phóng to một lần thì giữ bản lớn — thu nhỏ về 1 vẫn nét, và lần phóng
   // sau không phải tải lại.
   const [wanted, setWanted] = useState(false);

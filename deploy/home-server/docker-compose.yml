@@ -1,0 +1,125 @@
+# MÁY CHỦ Ở NHÀ — 4 container, tự khởi động lại sau mất điện/khởi động máy.
+#
+#   app          Next.js (bản "máy media"): byte ảnh /api/img, quét khuôn mặt,
+#                nhận tin từ worker Zalo. KHÔNG mở cổng ra ngoài — chỉ cloudflared,
+#                cron và zalo-worker gọi được nó qua mạng nội bộ của Docker.
+#   zalo-worker  giữ websocket Zalo cá nhân sống 24/7 (Vercel không làm được).
+#   cron         đồng hồ: gọi /api/cron/* của `app` theo lịch (cron/crontab).
+#   cloudflared  Cloudflare Tunnel: media.<tên-miền> → http://app:3000.
+#                Đường hầm đi RA từ máy nhà, nên router không cần mở cổng nào.
+#
+# Chạy (trong thư mục này):
+#   docker compose up -d --build      # lần đầu / sau khi cập nhật mã
+#   docker compose ps                 # trạng thái + healthcheck
+#   docker compose logs -f app        # xem log
+#
+# Biến lấy từ file .env cạnh file này (chép từ .env.example). Hướng dẫn đầy đủ:
+# HUONG-DAN.md.
+name: mstudo
+
+x-log: &log
+  # Giới hạn log để ổ SSD không đầy dần sau vài tháng chạy liên tục.
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: deploy/home-server/Dockerfile
+      args:
+        GIT_COMMIT_SHA: ${GIT_COMMIT_SHA:-}
+      # .env đi vào bước build dưới dạng BuildKit secret (cần cho NEXT_PUBLIC_*),
+      # không nằm lại trong image. Xem ghi chú trong Dockerfile.
+      secrets:
+        - dotenv
+    image: mstudo-home:latest
+    env_file: .env
+    environment:
+      MEDIA_ONLY: "1"
+      DEPLOY_ENV: home-server
+      NODE_OPTIONS: --max-old-space-size=4096
+    expose:
+      - "3000"
+    # tini làm PID 1: chuyển SIGTERM cho Node để Next kết thúc request dở dang
+    # (và các after()) trước khi tắt — tài liệu self-hosting của Next khuyên 10–30 giây.
+    init: true
+    stop_grace_period: 30s
+    restart: unless-stopped
+    # Máy 16 GB: app tối đa 6 GB (quét khuôn mặt bằng tfjs-wasm ăn RAM theo lô),
+    # chừa chỗ cho `docker compose build` (next build cần ~4 GB) và hệ điều hành.
+    mem_limit: 6g
+    # N100 có 4 nhân: chừa 1 nhân để worker/cron/SSH không bị bỏ đói khi đang quét.
+    cpus: 3.0
+    volumes:
+      - next-cache:/app/.next/cache
+    logging: *log
+
+  zalo-worker:
+    # CÙNG image với app: Dockerfile chép sẵn scripts/zalo-inbox-worker.mjs kèm
+    # scripts/node_modules riêng (@supabase/supabase-js + zca-js đúng bản trong lock).
+    image: mstudo-home:latest
+    pull_policy: never
+    depends_on:
+      app:
+        condition: service_healthy
+    env_file: .env
+    environment:
+      # Đẩy tin về app NGAY TRONG MÁY (không ra Internet): nhanh hơn, không tốn
+      # lượt gọi Vercel, và phần nặng (AI trả lời tự động, gửi lại qua Zalo)
+      # chạy luôn ở nhà. Tin vẫn ghi vào cùng Supabase nên Hộp thư trên Vercel
+      # thấy ngay. Đổi thành https://<tên-miền-chính> nếu muốn Vercel xử lý.
+      MSTUDO_URL: http://app:3000
+    # Worker THOÁT khi chưa studio nào nối Zalo cá nhân (hoặc khi lỗi đọc DB).
+    # Ngủ 5 phút rồi mới để Docker khởi động lại — khỏi gõ cửa Supabase liên tục,
+    # và studio vừa nối kênh mới sẽ được nhận trong vòng 5 phút.
+    # Studio nối kênh MỚI khi worker đang chạy: `docker compose restart zalo-worker`.
+    command: ["sh", "-c", "node scripts/zalo-inbox-worker.mjs; echo '[zalo-worker] thoát — thử lại sau 5 phút'; sleep 300"]
+    init: true
+    restart: unless-stopped
+    mem_limit: 512m
+    healthcheck:
+      # Healthcheck của image là cho server web; worker không nghe cổng nào.
+      disable: true
+    logging: *log
+
+  cron:
+    build: ./cron
+    image: mstudo-home-cron:latest
+    depends_on:
+      app:
+        condition: service_healthy
+    # CHỈ đưa biến cron cần — không đưa cả .env (khoá Supabase…) vào container này.
+    environment:
+      CRON_SECRET: ${CRON_SECRET:?Thiếu CRON_SECRET trong .env}
+      APP_URL: http://app:3000
+      HOME_CRON_FACE_SCAN: ${HOME_CRON_FACE_SCAN:-true}
+      HOME_CRON_CLEANUP: ${HOME_CRON_CLEANUP:-false}
+      HOME_CRON_DAILY: ${HOME_CRON_DAILY:-false}
+      FACE_SCAN_ROUNDS: ${FACE_SCAN_ROUNDS:-8}
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *log
+
+  cloudflared:
+    # Image chính thức của Cloudflare. `cap-nhat.sh` kéo bản mới mỗi lần cập nhật;
+    # muốn đứng yên một bản thì đổi `latest` thành số phiên bản (vd 2025.x.y).
+    image: cloudflare/cloudflared:latest
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?Thiếu TUNNEL_TOKEN trong .env — xem HUONG-DAN.md bước 5}
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    mem_limit: 256m
+    logging: *log
+
+secrets:
+  dotenv:
+    file: ./.env
+
+volumes:
+  next-cache:

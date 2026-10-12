@@ -96,6 +96,8 @@ export const RESERVED_SUBDOMAINS = new Set([
   // Host nền tảng
   "www", "app", "album", "img", "image", "images", "admin", "thiep", "api",
   "auth", "login", "dashboard", "staff", "account", "accounts", "billing",
+  // media: máy chủ ở nhà (Cloudflare Tunnel) — deploy/home-server/HUONG-DAN.md
+  "media",
   "support", "help", "docs", "blog", "status", "beta", "dev", "test",
   "staging", "preview", "demo", "vercel",
   // Nhãn hạ tầng / DNS

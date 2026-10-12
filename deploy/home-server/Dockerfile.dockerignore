@@ -1,0 +1,21 @@
+# Danh sách bỏ qua khi dựng image (BuildKit đọc file <Dockerfile>.dockerignore
+# đặt cạnh Dockerfile; context là gốc repo). Mục đích: context nhỏ, build nhanh,
+# và KHÔNG BAO GIỜ đưa .env (bí mật) vào context — .env đi qua BuildKit secret.
+.git
+.github
+.next
+node_modules
+**/node_modules
+.vercel
+.claude
+.env
+.env.*
+**/.env
+**/.env.*
+!**/.env.example
+*.tsbuildinfo
+anh-giao-dien
+desktop/dist
+desktop/out
+deploy/home-server/du-lieu
+npm-debug.log*

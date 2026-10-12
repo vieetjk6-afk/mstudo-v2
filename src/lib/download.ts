@@ -1,14 +1,6 @@
 "use client";
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
-}
+import { loadMediaImage } from "@/lib/media-origin";
 
 /** Draw a tiled, diagonal watermark over an image and return a JPEG blob. */
 async function watermarkImage(img: HTMLImageElement, text: string): Promise<Blob> {
@@ -71,7 +63,9 @@ export async function downloadImage(fileId: string, name: string, watermark?: st
     // duyệt cũ (Safari iOS ≤ 16.3, webview Zalo/Facebook) không gửi
     // Sec-Fetch-*, thiếu cờ này thì rơi vào nhánh "ảnh hiển thị" → canvas bị
     // tainted → toBlob() ném lỗi, không đóng được watermark.
-    const img = await loadImage(`/api/img?id=${encodeURIComponent(fileId)}&w=2560&raw=1`);
+    // loadMediaImage: có máy media ở nhà (NEXT_PUBLIC_MEDIA_ORIGIN) thì byte đi
+    // qua đó trước, hỏng thì lùi về đúng URL cùng miền này — @/lib/media-origin.
+    const img = await loadMediaImage(`/api/img?id=${encodeURIComponent(fileId)}&w=2560&raw=1`);
     const blob = await watermarkImage(img, watermark);
     triggerDownload(blob, ensureExt(name, "jpg"));
     return;

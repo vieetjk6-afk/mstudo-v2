@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { cookieDomainForHost } from "@/lib/hosts";
+import { mediaGate, mediaHostFrom } from "@/lib/media-host";
 
 // Domain split (set these on Vercel to enable it). When unset (local dev,
 // *.vercel.app previews) the full app is served on one host.
@@ -16,6 +17,12 @@ const IMG_HOST = process.env.NEXT_PUBLIC_IMG_HOST;
 const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST;
 // thiep.mstudo.com -> online wedding invitations. Serves /thiep/* at the root.
 const THIEP_HOST = process.env.NEXT_PUBLIC_THIEP_HOST;
+// media.mstudo.com -> máy chủ ở nhà (Cloudflare Tunnel), CHỈ phục vụ byte ảnh +
+// cron + worker. Xem @/lib/media-host và deploy/home-server/HUONG-DAN.md.
+// MEDIA_HOST đặt thẳng, hoặc suy ra từ NEXT_PUBLIC_MEDIA_ORIGIN.
+const MEDIA_HOST = mediaHostFrom(process.env.MEDIA_HOST, process.env.NEXT_PUBLIC_MEDIA_ORIGIN);
+// MEDIA_ONLY=1 (docker-compose ở nhà): coi MỌI host là máy media.
+const MEDIA_ONLY = process.env.MEDIA_ONLY === "1";
 const COMPRESS_PATH = "/dashboard/compress";
 const ADMIN_PATH = "/dashboard/admin";
 
@@ -130,6 +137,22 @@ export async function proxy(request: NextRequest) {
 async function route(request: NextRequest) {
   const host = request.headers.get("host")?.split(":")[0] ?? "";
   const { pathname, search } = request.nextUrl;
+
+  // ── Máy media ở nhà — xét TRƯỚC mọi nhánh khác ───────────────────────────
+  // media.mstudo.com là một *.MAIN_HOST: để lọt xuống dưới thì nhánh tenant
+  // rewrite nó thành /site/media (hoặc nhánh tên miền riêng nhận nó). Và máy ở
+  // nhà không được phục vụ bảng điều khiển ra Internet: ngoài danh sách cho phép
+  // là 404. Không cấu hình MEDIA_HOST/MEDIA_ONLY thì "pass" — Vercel không đổi.
+  // (Proxy không chạy trên /api/* — matcher bỏ qua; lớp chặn /api/* của máy media
+  // nằm ở rewrites trong next.config.mjs.)
+  const gate = mediaGate({ host, pathname, mediaHost: MEDIA_HOST, mediaOnly: MEDIA_ONLY });
+  if (gate === "block") {
+    return new NextResponse("Not found", {
+      status: 404,
+      headers: { "Content-Type": "text/plain; charset=utf-8", "X-Robots-Tag": "noindex, nofollow" },
+    });
+  }
+  if (gate === "allow") return NextResponse.next();
 
   // ── /auth/* — KHÔNG đụng vào ─────────────────────────────────────────────
   // Đăng nhập Google đi theo luồng PKCE: trình duyệt lưu `code_verifier` trong

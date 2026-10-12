@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { stripExtension } from "@/lib/drive";
 import { triggerDownload } from "@/lib/download";
+import { fetchMediaBytes } from "@/lib/media-origin";
 import {
   overwriteDriveFile,
   createDriveFile,
@@ -445,7 +446,8 @@ export default function ToolPanel({
       if (direct) return direct;
       // raw=1: cần chính byte ảnh (nén + watermark bằng canvas) nên phải giữ
       // cùng miền, không để /api/img 302 sang Google (Drive không gửi CORS).
-      const res = await fetch(`/api/img?id=${encodeURIComponent(it.driveId)}&w=${fetchW}&raw=1`);
+      // fetchMediaBytes: qua máy media ở nhà trước nếu có, hỏng thì về cùng miền.
+      const res = await fetchMediaBytes(`/api/img?id=${encodeURIComponent(it.driveId)}&w=${fetchW}&raw=1`);
       return res.blob();
     }
     throw new Error("no_source");

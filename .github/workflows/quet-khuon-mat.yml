@@ -32,6 +32,13 @@ concurrency:
 
 jobs:
   quet:
+    # MÁY CHỦ Ở NHÀ đã nhận việc quét (container `cron` trong deploy/home-server/
+    # gọi thẳng http://app:3000/api/cron/face-scan mỗi 10 phút) → đặt biến repo
+    # FACE_SCAN_ON_HOME=true (Settings → Secrets and variables → Actions →
+    # Variables) để lịch ở đây NGỪNG, khỏi quét hai nơi. Bấm chạy tay
+    # (workflow_dispatch) vẫn được — dùng khi máy ở nhà đang tắt.
+    # Xoá biến (hoặc đặt khác 'true') là lịch GitHub chạy lại như cũ.
+    if: ${{ vars.FACE_SCAN_ON_HOME != 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     # Một lượt GitHub gọi app NHIỀU LẦN liên tiếp, vì mỗi lượt gọi chỉ quét được
     # ~30 ảnh (hạn 45 giây của hàm serverless). Gọi 8 lần ≈ 7 phút, vẫn gọn
