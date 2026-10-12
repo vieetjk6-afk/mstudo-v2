@@ -69,6 +69,14 @@ export default function WeddingEditor({ token }: { token: string }) {
     })().catch(() => setStatus("notfound"));
   }, [token]);
 
+  // Tải lại phản hồi mới nhất (khách vừa xác nhận) mà không mất phần đang sửa.
+  const refreshRsvps = useCallback(async () => {
+    const res = await fetch(`/api/thiep/${token}`, { cache: "no-store" }).catch(() => null);
+    if (!res?.ok) return;
+    const data = (await res.json()) as Loaded;
+    setRsvps(data.rsvps || []);
+  }, [token]);
+
   const patch = useCallback((p: Partial<WeddingConfig>) => {
     setCfg((c) => ({ ...(c ?? {}), ...p }));
     setDirty(true);
@@ -206,6 +214,8 @@ export default function WeddingEditor({ token }: { token: string }) {
   const guestsUrl = thiepUrl(`/${slug}/khach`);
   const absBase = publicUrl.startsWith("http") ? publicUrl : (typeof window !== "undefined" ? window.location.origin + publicUrl : publicUrl);
   const attendingCount = rsvps.filter((r) => r.attending).reduce((s, r) => s + (r.num_guests || 0), 0);
+  // Cặp đôi đặt mật khẩu "trang xem riêng" → phản hồi (cả trạng thái trong danh sách khách) khoá đến khi nhập đúng.
+  const responsesLocked = !!(cfg.guests_password ?? "").trim() && !responsesUnlocked;
   const meta = getTemplateMeta(template);
 
   // Nhắc những mục còn thiếu để thiệp trông "đủ" — bấm là nhảy sang đúng tab.
@@ -485,7 +495,7 @@ export default function WeddingEditor({ token }: { token: string }) {
             {/* ── KHÁCH MỜI ───────────────────────────────────────────── */}
             {tab === "khach" && (
               <>
-                <Card title="Khách mời (link & QR riêng)" icon={<Users size={16} />} hint="Mỗi khách có một link riêng, mở ra thiệp ghi đúng tên họ bằng chữ viết tay.">
+                <Card title="Khách mời (link & QR riêng)" icon={<Users size={16} />} hint="Mỗi khách có một link riêng, mở ra thiệp ghi đúng tên họ bằng chữ viết tay. Khách xác nhận tham dự trên thiệp thì trạng thái hiện ngay cạnh tên — chỉ bạn xem được ở đây.">
                   <Field label="Lời mời (hiện phía trên tên khách)">
                     <input className={inp} value={cfg.guest_greeting ?? ""} onChange={(e) => patch({ guest_greeting: e.target.value })} placeholder="Trân trọng kính mời" />
                   </Field>
@@ -495,7 +505,8 @@ export default function WeddingEditor({ token }: { token: string }) {
                       {(cfg.guests ?? []).filter(Boolean).map((g) => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </Field>
-                  <GuestManager baseUrl={absBase} accent={cfg.accent || meta.accent} guests={cfg.guests ?? []} onChange={(guests) => patch({ guests })} />
+                  {responsesLocked && <ResponsesLock expected={(cfg.guests_password ?? "").trim()} onUnlock={() => setResponsesUnlocked(true)} />}
+                  <GuestManager baseUrl={absBase} accent={cfg.accent || meta.accent} guests={cfg.guests ?? []} onChange={(guests) => patch({ guests })} rsvps={responsesLocked ? null : rsvps} onRefresh={refreshRsvps} />
                   <p className="text-xs text-stone-400">Nhớ bấm <b>“Lưu”</b> sau khi thêm/bớt khách.</p>
                 </Card>
 
@@ -551,7 +562,7 @@ export default function WeddingEditor({ token }: { token: string }) {
                 </Card>
 
                 <Card title={`Phản hồi của khách (${rsvps.length})`} icon={<MessageCircleHeart size={16} />}>
-                  {(cfg.guests_password ?? "").trim() && !responsesUnlocked ? (
+                  {responsesLocked ? (
                     <ResponsesLock expected={(cfg.guests_password ?? "").trim()} onUnlock={() => setResponsesUnlocked(true)} />
                   ) : (
                     <div className="rounded-lg bg-stone-100 p-3 text-sm">

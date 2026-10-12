@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendPushToOwner } from "@/lib/push";
 import { limitByIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Public guest RSVP for a wedding invitation (no login). Looks the invitation up
- * by slug, records the response, and pings the studio owner.
+ * by slug and records the response.
+ *
+ * KHÔNG báo về studio (thông báo / push): danh sách xác nhận là việc riêng của
+ * cặp đôi — họ xem ngay trong trang sửa thiệp (tab Khách mời & Phản hồi).
  */
 export async function POST(req: Request) {
   const limited = limitByIp(req, "rsvp", 10, 60_000);
@@ -29,7 +31,7 @@ export async function POST(req: Request) {
   const db = createAdminClient();
   const { data: inv } = await db
     .from("wedding_invitations")
-    .select("id, owner_id, contract_id, published, config")
+    .select("id, published, config")
     .eq("slug", slug)
     .maybeSingle();
   if (!inv || !inv.published) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -50,20 +52,6 @@ export async function POST(req: Request) {
     wish: (body.wish ?? "").trim().slice(0, 1000) || null,
   });
   if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
-
-  const msg = attending
-    ? `${name} xác nhận tham dự lễ cưới (${num} người)`
-    : `${name} gửi lời chúc mừng cưới`;
-  await db
-    .from("studio_notifications")
-    .insert({ owner_id: inv.owner_id, contract_id: inv.contract_id, kind: "info", message: msg })
-    .then(() => {}, () => {});
-  await sendPushToOwner(inv.owner_id, {
-    title: "Thiệp cưới",
-    body: msg,
-    url: inv.contract_id ? `/dashboard/studio/contracts/${inv.contract_id}` : "/dashboard/studio",
-    tag: `rsvp-${inv.id}`,
-  }).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }
