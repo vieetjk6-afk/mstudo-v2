@@ -1,4 +1,4 @@
-import type { CrewRole, ShootType } from "@/lib/types";
+import type { BuiltinCrewRole, ShootType } from "@/lib/types";
 
 /**
  * PHÂN LOẠI HỢP ĐỒNG — gom các gói dịch vụ thành ba nhóm làm việc khác nhau.
@@ -133,7 +133,7 @@ export function shootTypesByKind(all: ShootType[]): Record<ContractKind, ShootTy
  *
  * "Trợ lý" và "Khác" có ở mọi nhóm; trọn gói có tất cả vì làm cả hai nghề.
  */
-export const CREW_ROLES_BY_KIND: Record<ContractKind, CrewRole[]> = {
+export const CREW_ROLES_BY_KIND: Record<ContractKind, BuiltinCrewRole[]> = {
   shoot: ["photographer", "cameraman", "editor", "assistant", "other"],
   makeup: ["makeup", "hair", "assistant", "other"],
   combo: ["photographer", "cameraman", "makeup", "hair", "editor", "assistant", "other"],

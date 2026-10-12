@@ -9,7 +9,7 @@ import { buildAlbumMetadata } from "@/lib/album-meta";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
-import { isDeliveryPhase } from "@/lib/album-phase";
+import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { faceChips, type PersonChip } from "@/lib/face-people";
 import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 import { MAIN_HOST } from "@/lib/hosts";
@@ -63,20 +63,30 @@ export default async function PublicAlbumPage(
   // đưa nó về "Chọn ảnh" thì link này phải quay lại trang chọn ảnh, nếu không
   // nút đổi giai đoạn coi như vô tác dụng.
   if (album && album.phase !== "delivery") {
-    const { data: contract } = await admin
+    // Hai hợp đồng có thể cùng gắn một album (nhân bản hợp đồng, gắn tay) —
+    // .maybeSingle() khi đó báo lỗi và trả null, link khách không bao giờ được
+    // chuyển. Lấy hợp đồng mới nhất.
+    const { data: contracts } = await admin
       .from("studio_contracts")
       .select("gallery_album_id")
       .eq("selection_album_id", album.id)
-      .maybeSingle();
-    const galleryId = (contract as { gallery_album_id?: string | null } | null)?.gallery_album_id;
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const galleryId = (contracts?.[0] as { gallery_album_id?: string | null } | undefined)?.gallery_album_id;
     if (galleryId) {
       const { data: g } = await admin
         .from("albums")
-        .select("slug, status, is_gallery, phase")
+        .select("id, slug, status, is_gallery, phase")
         .eq("id", galleryId)
         .maybeSingle();
-      if (g && isDeliveryPhase(g) && g.status === "published") {
-        redirect(`/album/${g.slug}`);
+      // Luật chung ở @/lib/contract-album: album giao riêng đang giao khách +
+      // đã xuất bản thì thắng album này (album này chưa ở giai đoạn giao khách).
+      const delivered = resolveDeliveredAlbum<{ id: string; slug?: string; phase?: string | null; is_gallery?: boolean | null; status?: string | null }>({
+        gallery: g,
+        selection: { id: album.id, phase: album.phase, status: album.status },
+      });
+      if (delivered?.via === "gallery") {
+        redirect(`/album/${delivered.album.slug}`);
       }
     }
   }

@@ -6,19 +6,22 @@ import Link from "next/link";
 import { Sparkles, Crown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PLAN_LABEL, effectivePlan, type Plan } from "@/lib/plans";
+import type { PlanUsageData } from "@/lib/plan-usage";
 
-interface Usage {
-  used: number;
-  limit: number | null; // null = unlimited
-  pro: boolean;
-  plan: Plan;
-  expiresAt: string | null;
-}
+type Usage = PlanUsageData;
 
-export default function PlanUsage({ showUpgrade = true }: { showUpgrade?: boolean }) {
-  const [usage, setUsage] = useState<Usage | null>(null);
+/**
+ * `initial`: số liệu máy chủ đã tính sẵn (getPlanUsage ở @/lib/plan-usage) — có
+ * thì hiện ngay, KHÔNG chạy ba truy vấn nối đuôi ở trình duyệt nữa. Chỗ nào chưa
+ * truyền (trang tạo album, trang nâng cấp) vẫn tự tải như cũ.
+ */
+export default function PlanUsage({ showUpgrade = true, initial = null }: { showUpgrade?: boolean; initial?: PlanUsageData | null }) {
+  const [loaded, setUsage] = useState<Usage | null>(null);
+  // Số của máy chủ luôn thắng (router.refresh() đưa số mới xuống qua prop).
+  const usage = initial ?? loaded;
 
   useEffect(() => {
+    if (initial) return;
     (async () => {
       const supabase = createClient();
       const {
@@ -52,7 +55,7 @@ export default function PlanUsage({ showUpgrade = true }: { showUpgrade?: boolea
         expiresAt: plan === "free" ? null : profile?.plan_expires_at ?? null,
       });
     })();
-  }, []);
+  }, [initial]);
 
   // Giữ chỗ đúng chiều cao trong lúc tải để lưới album không bị nhảy (CLS).
   if (!usage) {

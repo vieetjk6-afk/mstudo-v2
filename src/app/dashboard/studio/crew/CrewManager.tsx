@@ -6,7 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import { mainUrl } from "@/lib/hosts";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
-import { CREW_ROLE_LABEL, type StudioCrew, type CrewRole } from "@/lib/types";
+import { type StudioCrew, type CrewRole } from "@/lib/types";
+import { crewRoleLabel, crewRolesFor, type CrewRoleRow } from "@/lib/crew-roles";
+import CrewRolesPanel from "./CrewRolesPanel";
 
 export default function CrewManager({
   ownerId,
@@ -15,6 +17,8 @@ export default function CrewManager({
   registerUrl = "",
   registerError = null,
   branches = [],
+  crewRoles = [],
+  canEditCrewRoles = false,
 }: {
   ownerId: string;
   initial: StudioCrew[];
@@ -25,6 +29,10 @@ export default function CrewManager({
   registerError?: string | null;
   /** Chi nhánh còn hoạt động. Rỗng → không hiện gì về chi nhánh. */
   branches?: { id: string; name: string }[];
+  /** Vai trò studio tự đặt / đè vai trò có sẵn (studio_crew_roles). */
+  crewRoles?: CrewRoleRow[];
+  /** Chủ studio / quản lý toàn studio — được sửa danh sách vai trò. */
+  canEditCrewRoles?: boolean;
 }) {
   const supabase = createClient();
   const statFor = (phone: string) => stats[(phone || "").replace(/\D/g, "")] || null;
@@ -36,6 +44,7 @@ export default function CrewManager({
   const [branchId, setBranchId] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [roles, setRoles] = useState<CrewRoleRow[]>(crewRoles);
   // Thợ tự đăng ký qua link riêng — chờ studio nhận vào sổ.
   const pending = list.filter((c) => (c as StudioCrew & { status?: string }).status === "pending");
 
@@ -48,6 +57,18 @@ export default function CrewManager({
     if (error) {
       setList((p) => p.map((c) => (c.id === id ? { ...c, branch_id: prev } : c)));
       setErr("Không đổi được chi nhánh của thợ này.");
+    }
+  }
+
+  /** Đổi vai trò của thợ đã có trong sổ (trước đây chỉ chọn được lúc thêm). */
+  async function setCrewRole(id: string, value: string) {
+    const prev = list.find((c) => c.id === id)?.role;
+    if (!value || value === prev) return;
+    setList((p) => p.map((c) => (c.id === id ? { ...c, role: value } : c)));
+    const { error } = await supabase.from("studio_crew").update({ role: value }).eq("id", id);
+    if (error) {
+      setList((p) => p.map((c) => (c.id === id ? { ...c, role: prev ?? c.role } : c)));
+      setErr("Không đổi được vai trò của thợ này.");
     }
   }
 
@@ -152,6 +173,8 @@ export default function CrewManager({
         </div>
       )}
 
+      <CrewRolesPanel ownerId={ownerId} roles={roles} onChange={setRoles} canEdit={canEditCrewRoles} />
+
       <div className="grid gap-3.5 lg:grid-cols-3">
         {/* Add form */}
         <Panel className="h-fit p-[18px]">
@@ -168,8 +191,8 @@ export default function CrewManager({
             <div className="field">
               <label className="label">Vai trò</label>
               <select className="input" value={role} onChange={(e) => setRole(e.target.value as CrewRole)}>
-                {(Object.keys(CREW_ROLE_LABEL) as CrewRole[]).map((k) => (
-                  <option key={k} value={k}>{CREW_ROLE_LABEL[k]}</option>
+                {crewRolesFor(null, roles, role).map((r) => (
+                  <option key={r.key} value={r.key}>{r.label}</option>
                 ))}
               </select>
             </div>
@@ -221,7 +244,7 @@ export default function CrewManager({
                     <div className="min-w-0">
                     <p className="text-[13.5px] font-semibold">{c.name || "(chưa đặt tên)"}</p>
                     <p className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                      <Phone size={12} /> {c.phone} · {CREW_ROLE_LABEL[c.role] ?? c.role}
+                      <Phone size={12} /> {c.phone} · {crewRoleLabel(c.role, roles)}
                       {c.note ? ` · ${c.note}` : ""}
                     </p>
                     {(() => {
@@ -238,6 +261,17 @@ export default function CrewManager({
                     </div>
                   </div>
                   <div className="flex flex-none items-center gap-2">
+                    <select
+                      className="input !py-1.5 !text-[11.5px]"
+                      style={{ width: "auto", minWidth: 110 }}
+                      value={c.role}
+                      onChange={(e) => setCrewRole(c.id, e.target.value)}
+                      aria-label={`Vai trò của ${c.name || c.phone}`}
+                    >
+                      {crewRolesFor(null, roles, c.role).map((r) => (
+                        <option key={r.key} value={r.key}>{r.label}</option>
+                      ))}
+                    </select>
                     {branches.length > 0 && (
                       <label className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--tx3)" }}>
                         <Building2 size={13} />

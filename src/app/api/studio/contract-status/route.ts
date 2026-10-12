@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { syncContractCalendar } from "@/lib/gcal-sync";
 import { logAction } from "@/lib/audit-log";
+import { isBranchScopedRole } from "@/lib/studio-roles";
 
 export const dynamic = "force-dynamic";
+// Tạo album giờ đồng bộ luôn ảnh từ Drive (createAlbumFromFolder) — cần thêm thời gian.
+export const maxDuration = 60;
 
 const VALID = new Set(["draft", "sent", "approved", "in_progress", "post_production", "completed", "cancelled"]);
 
@@ -17,12 +20,24 @@ const VALID = new Set(["draft", "sent", "approved", "in_progress", "post_product
  *   2. Khi chuyển sang "completed" thì tạo album giao khách (phase delivery) —
  *      NHƯNG chỉ khi ảnh chỉnh sửa đã lên Drive. Hoàn thành mà hậu kỳ chưa xong
  *      thì khách vẫn ở giai đoạn chọn ảnh (xem @/lib/contract-delivery).
- * Yêu cầu chủ hợp đồng (RLS-scoped: chỉ owner mới đổi được).
+ *
+ * Quyền: requireStudio() — chủ studio VÀ nhân viên (cùng luật màn hợp đồng /
+ * contract-deliver: nhân viên thường chỉ đổi hợp đồng được giao cho mình, quản
+ * lý chi nhánh chỉ hợp đồng chi nhánh mình). Trước đây route chỉ cho đúng chủ
+ * hợp đồng nên nhân viên luôn nhận 404, còn autosave của màn hợp đồng lén ghi
+ * `status` thẳng vào bảng — hoàn thành mà không có completed_at, không album,
+ * không Google Lịch. Mọi helper Drive/lịch/giao khách nhận id CHỦ studio
+ * (profile.id), không phải id nhân viên.
+ *
+ * Trả kèm { selectionAlbumId, galleryAlbumId } đọc LẠI từ DB để màn hợp đồng
+ * cập nhật ô chọn album mà không ghi đè bằng state cũ.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const profile = await requireStudio("plus");
+  if (!profile) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (profile.actingRole === "accountant") return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const ownerId = profile.id as string;
+  const actorId = profile.actingUserId as string;
 
   const { contractId, status } = (await req.json().catch(() => ({}))) as { contractId?: string; status?: string };
   if (!contractId || !status || !VALID.has(status)) {
@@ -33,11 +48,20 @@ export async function POST(req: Request) {
   // Xác minh quyền sở hữu trước khi ghi bằng service role.
   const { data: contract } = await db
     .from("studio_contracts")
-    .select("id, owner_id, status")
+    // "*" thay vì liệt kê: branch_id chỉ có sau migrations/studio_branches.sql —
+    // nêu tên cột chưa có là cả route 404.
+    .select("*")
     .eq("id", contractId)
     .maybeSingle();
-  if (!contract || contract.owner_id !== user.id) {
+  if (!contract || contract.owner_id !== ownerId) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  if (profile.actingRole === "staff" && contract.assigned_to !== actorId) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  if (isBranchScopedRole(profile.actingRole as string)) {
+    const mine = (profile.actingBranchId as string | null) ?? null;
+    if (!mine || contract.branch_id !== mine) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const patch: { status: string; completed_at?: string | null } = { status };
@@ -50,7 +74,7 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (contract.status !== status) {
     await logAction(db, {
-      ownerId: contract.owner_id as string, actorId: user.id, action: "contract.status", entity: "contract", entityId: contractId,
+      ownerId, actorId, action: "contract.status", entity: "contract", entityId: contractId,
       summary: `Đổi trạng thái ${contract.status} → ${status}`, before: { status: contract.status }, after: { status },
     });
   }
@@ -62,7 +86,7 @@ export async function POST(req: Request) {
   // công việc kéo thẻ đổi trạng thái mà Google Lịch không hề đổi theo.
   let gcal: string | null = null;
   if (contract.status !== status) {
-    const r = await syncContractCalendar(user.id, contractId);
+    const r = await syncContractCalendar(ownerId, contractId);
     gcal = r.contract.synced ? null : r.contract.reason ?? null;
   }
 
@@ -71,7 +95,7 @@ export async function POST(req: Request) {
   // completed để trường hợp bỏ qua bước in_progress vẫn có album chọn ảnh.
   if ((status === "in_progress" || status === "post_production" || status === "completed") && contract.status !== status) {
     try {
-      await autoCreateContractSelectionOnProduction(user.id, contractId);
+      await autoCreateContractSelectionOnProduction(ownerId, contractId);
     } catch {
       // Studio chưa nối Drive / lỗi tạm — desktop sẽ tạo bù khi đồng bộ.
     }
@@ -84,13 +108,31 @@ export async function POST(req: Request) {
   let deliveryAlbum = false;
   let deliveryWaiting = false;
   let portalSent = false;
+  let deliveryReason: string | null = null;
   if (status === "completed" && contract.status !== "completed") {
     // portalOnComplete: gửi khách link trang riêng /portal/<token> (một lần).
-    const r = await deliverContractIfReady(user.id, contractId, { notifyExisting: true, portalOnComplete: true });
+    const r = await deliverContractIfReady(ownerId, contractId, { notifyExisting: true, portalOnComplete: true });
     deliveryAlbum = r.album;
     deliveryWaiting = r.waiting;
+    deliveryReason = r.album ? null : r.reason ?? null;
     portalSent = !!r.portalSent;
   }
 
-  return NextResponse.json({ ok: true, deliveryAlbum, deliveryWaiting, portalSent, gcal });
+  // Id album đọc lại SAU mọi bước trên (album chọn ảnh vừa tạo, album giao vừa
+  // tạo) — màn hợp đồng áp thẳng vào state thay vì giữ giá trị cũ.
+  const { data: fresh } = await db
+    .from("studio_contracts")
+    .select("selection_album_id, gallery_album_id")
+    .eq("id", contractId)
+    .maybeSingle();
+  return NextResponse.json({
+    ok: true,
+    deliveryAlbum,
+    deliveryWaiting,
+    deliveryReason,
+    portalSent,
+    gcal,
+    selectionAlbumId: (fresh?.selection_album_id as string | null) ?? null,
+    galleryAlbumId: (fresh?.gallery_album_id as string | null) ?? null,
+  });
 }

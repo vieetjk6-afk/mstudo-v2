@@ -49,7 +49,12 @@ export async function POST(req: Request) {
 
   // Hợp đồng đã hoàn thành mà album giao khách chưa có (ảnh chỉnh sửa lúc trước
   // còn trống): desktop vừa tải ảnh lên xong thì đây là lúc tạo album + báo khách.
-  if (contract.status === "completed" && !albums.galleryAlbumId) {
+  // Lượt wire ở trên VỪA giao khách (tạo album giao / chuyển album của hợp đồng
+  // sang giao khách) thì báo khách luôn — trước đây lối này giao mà im lặng.
+  // deliverContractIfReady chống trùng tin bằng lịch sử Zalo.
+  if (contract.status === "completed" && albums.deliveryCreated) {
+    await deliverContractIfReady(auth.ownerId, contract.id, { notifyExisting: true }).catch(() => undefined);
+  } else if (contract.status === "completed" && !albums.galleryAlbumId && !albums.deliveredAlbumId) {
     const d = await deliverContractIfReady(auth.ownerId, contract.id);
     if (d.album) {
       const { data: fresh } = await db

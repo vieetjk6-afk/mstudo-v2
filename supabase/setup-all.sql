@@ -2217,6 +2217,27 @@ alter table public.studio_audit_log enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/vai_tro_tho_tu_dat.sql — Vai trò thợ studio tự đặt (đổi tên / ẩn / thêm vai trò) + bỏ ràng buộc vai trò contract_crew (chạy SAU crew_role_makeup)
+-- ══════════════════════════════════════════════════════════════════════════
+
+create table if not exists public.studio_crew_roles (
+  id         uuid primary key default gen_random_uuid(),
+  owner_id   uuid not null references public.profiles (id) on delete cascade,
+  key        text not null check (length(key) between 1 and 40),
+  -- Rỗng trên dòng đè vai trò có sẵn = giữ tên mặc định của app.
+  label      text not null default '' check (length(label) <= 60),
+  kinds      text[] not null default '{shoot,makeup,combo}'
+               check (kinds <@ array['shoot', 'makeup', 'combo']::text[]),
+  active     boolean not null default true,
+  position   integer not null default 0,
+  created_at timestamptz not null default now(),
+  unique (owner_id, key)
+);
+
+alter table public.studio_crew_roles enable row level security;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -5375,13 +5396,21 @@ alter table public.studio_contracts
 -- KHÔNG đổi dữ liệu cũ. Chạy được nhiều lần.
 -- ─────────────────────────────────────────────────────────────────────────
 
+-- Đã chạy vai_tro_tho_tu_dat.sql (studio tự đặt vai trò) thì ràng buộc này đã
+-- bị bỏ CÓ CHỦ Ý — tạo lại sẽ vấp ngay dòng nào đang mang vai trò tự đặt và làm
+-- hỏng cả lượt chạy setup-all / cap-nhat. Nên chỉ tạo khi bảng đó chưa có.
 alter table public.contract_crew
   drop constraint if exists contract_crew_role_check;
 
-alter table public.contract_crew
-  add constraint contract_crew_role_check
-  check (role in ('photographer', 'cameraman', 'makeup', 'hair',
-                  'assistant', 'editor', 'other'));
+do $$
+begin
+  if to_regclass('public.studio_crew_roles') is null then
+    alter table public.contract_crew
+      add constraint contract_crew_role_check
+      check (role in ('photographer', 'cameraman', 'makeup', 'hair',
+                      'assistant', 'editor', 'other'));
+  end if;
+end $$;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -6302,6 +6331,261 @@ $$;
 -- 2) Policy storage còn lại:
 -- select policyname, cmd, roles from pg_policies
 -- where schemaname = 'storage' and tablename = 'objects' order by 1;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/vai_tro_tho_tu_dat.sql — Vai trò thợ studio tự đặt (đổi tên / ẩn / thêm vai trò) + bỏ ràng buộc vai trò contract_crew (chạy SAU crew_role_makeup)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- VAI TRÒ THỢ STUDIO TỰ ĐẶT (tab "Đội ngũ thợ")
+--
+-- Vì sao: bảy vai trò có sẵn (Photographer, Cameraman, Trang điểm, Làm tóc,
+-- Trợ lý, Sửa ảnh / Dựng phim, Khác) không đủ cho mọi studio — có nơi cần
+-- "Flycam", "Stylist", "MC", "Thợ in album". Trước bản này họ chỉ còn cách chọn
+-- "Khác", rồi bảng lương, cổng thợ, tin Zalo gửi thợ đều hiện "Khác".
+--
+-- Bảng studio_crew_roles giữ HAI loại dòng (xem src/lib/crew-roles.ts):
+--   • key = khoá có sẵn (vd 'makeup') → ĐÈ vai trò có sẵn: đổi tên (label khác
+--     rỗng), ẩn khỏi ô chọn (active = false), đổi thứ tự (position).
+--   • key = 'c_xxxxxxxx'              → vai trò studio tự thêm; `kinds` = nhóm
+--     hợp đồng (shoot / makeup / combo) mà nó hiện trong ô chọn.
+-- Xoá vai trò tự thêm là xoá MỀM (active = false): hợp đồng cũ đã gán vẫn tra
+-- ra đúng tên.
+--
+-- contract_crew.role trước đây có CHECK chỉ nhận bảy khoá có sẵn → BỎ ràng buộc
+-- đó (không tạo lại). studio_crew.role vốn là chữ tự do, không cần sửa.
+--
+-- Quyền: thành viên studio ĐỌC được (ô chọn ở hợp đồng cần); chỉ chủ studio và
+-- quản lý toàn studio được SỬA — cùng mức với "gán chi nhánh" (canAssignBranch).
+--
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+do $$
+declare missing text[] := '{}';
+begin
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'profiles')
+  then missing := missing || 'profiles'; end if;
+  if not exists (select 1 from information_schema.tables
+                 where table_schema = 'public' and table_name = 'contract_crew')
+  then missing := missing || 'contract_crew'; end if;
+
+  if array_length(missing, 1) > 0 then
+    raise exception
+      'Thiếu bảng nền: %. Hãy chạy supabase/setup-all.sql trước (nó gồm cả schema nền lẫn migration này).',
+      array_to_string(missing, ', ');
+  end if;
+end $$;
+
+create index if not exists studio_crew_roles_owner_idx on public.studio_crew_roles (owner_id, position);
+
+-- Vai trò tự đặt phải ghi được vào hợp đồng → bỏ ràng buộc bảy khoá cũ.
+-- (crew_role_makeup.sql cũng không tạo lại nó khi bảng trên đã có.)
+alter table public.contract_crew drop constraint if exists contract_crew_role_check;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/zalo_nguoi_nhan.sql — Nhớ người nhận Zalo cho hợp đồng/album
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- NHỚ NGƯỜI NHẬN ZALO CHO HỢP ĐỒNG / ALBUM
+--
+-- Khách tắt "cho phép tìm bằng SĐT" (hoặc SĐT trên hợp đồng không phải số
+-- Zalo) thì "Gửi Zalo" theo SĐT báo không tìm thấy, studio phải mở danh sách
+-- bạn chọn tay — MỖI LẦN gửi. Lưu người đã chọn lên hợp đồng/album để lần sau
+-- nút thành "Gửi Zalo cho <tên>", một cú bấm là tới đúng người. Tin tự động
+-- (autoNotify, cron) cũng dùng luôn người đã lưu.
+--
+-- • zalo_uid : uid Zalo người nhận (theo tài khoản Zalo của studio)
+-- • zalo_name: tên bạn Zalo lúc chọn (hiện trên nút)
+-- • zalo_self: personal_self.id của tài khoản Zalo studio lúc lưu — uid Zalo
+--   chỉ có nghĩa với đúng tài khoản đã tra ra nó; studio đổi sang số Zalo khác
+--   thì uid cũ bị bỏ qua, gửi lại theo SĐT như thường.
+--
+-- Chỉ máy chủ ghi các cột này (service-role, src/lib/zalo/send.ts) sau khi đã
+-- lọc owner_id — không cần grant cột riêng (hai bảng không dùng grant theo cột).
+-- Bản web chịu được lúc CHƯA chạy file này: thiếu cột thì không nhớ gì, gửi
+-- như cũ.
+--
+-- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+alter table public.studio_contracts
+  add column if not exists zalo_uid  text,
+  add column if not exists zalo_name text,
+  add column if not exists zalo_self text;
+
+alter table public.albums
+  add column if not exists zalo_uid  text,
+  add column if not exists zalo_name text,
+  add column if not exists zalo_self text;
+
+-- Tra "hợp đồng khác cùng khách đã có người nhận" (lọc owner + tài khoản Zalo).
+create index if not exists studio_contracts_zalo_saved_idx
+  on public.studio_contracts (owner_id, zalo_self, updated_at desc)
+  where zalo_uid is not null;
+
+notify pgrst, 'reload schema';
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/tang_toc_thu_vien_album.sql — Tăng tốc thư viện album: chỉ mục, hàm đếm album_library_stats, policy RLS dạng initPlan (chạy SAU album_dislikes)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- TĂNG TỐC THƯ VIỆN ALBUM (/dashboard/albums, /dashboard)
+--
+-- Vì sao chậm: thư viện đếm ảnh / lượt chọn / ảnh "không thích" bằng embed
+-- `photos(count), selections(count), dislikes(count)` trên MỌI album, qua client
+-- có RLS. Policy của ba bảng đó là `exists (select 1 from albums a where … and
+-- (a.owner_id = auth.uid() or public.is_admin()))` — Postgres gọi auth.uid() và
+-- is_admin() (một câu SELECT trên profiles) LẠI cho TỪNG DÒNG ảnh. Studio vài
+-- trăm album × vài trăm ảnh là hàng chục nghìn lần gọi chỉ để ra mấy con số.
+--
+-- File này làm ba việc, KHÔNG đổi ai được thấy gì:
+--   1. Chỉ mục cho đúng các câu thư viện chạy (sắp theo updated_at, ảnh bìa dự
+--      phòng theo position, đếm album đã tạo trong tháng).
+--   2. Hàm album_library_stats(p_owner): một lượt trả đủ số đếm + ảnh bìa dự
+--      phòng cho mọi album của MỘT chủ. Quyền gọi giữ ĐÚNG như RLS hiện tại của
+--      albums: chính chủ hoặc admin. Nhân viên studio KHÔNG đọc được album của
+--      chủ qua RLS hôm nay, nên hàm này cũng không mở cửa đó.
+--   3. Viết lại bốn policy albums / photos / selections / dislikes sang dạng
+--      `(select auth.uid())` / `(select public.is_admin())`: Postgres tính MỘT
+--      lần mỗi câu (initPlan) thay vì mỗi dòng. Ý nghĩa giữ nguyên từng chữ.
+--
+-- Chưa chạy file này thì app vẫn chạy như cũ (src/lib/album-rows.ts tự lùi về
+-- đường embed). Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+-- ── 1) Chỉ mục ──────────────────────────────────────────────────────────────
+-- Ảnh bìa dự phòng = ảnh có position nhỏ nhất của album; cũng là thứ tự trang
+-- khách đọc ảnh.
+create index if not exists photos_album_position_idx on public.photos (album_id, position);
+
+-- Danh sách album của một chủ, mới sửa lên đầu.
+create index if not exists albums_owner_updated_idx on public.albums (owner_id, updated_at desc);
+
+-- "Đã tạo N album tháng này" (PlanUsage) và trigger hạn mức enforce_album_quota.
+create index if not exists album_creations_user_created_idx on public.album_creations (user_id, created_at);
+
+-- Đã có từ schema nền / album_dislikes.sql — nhắc lại cho database dựng tay.
+create index if not exists selections_album_idx on public.selections (album_id);
+
+create index if not exists dislikes_album_idx on public.dislikes (album_id);
+
+-- ── 2) album_library_stats ──────────────────────────────────────────────────
+-- SECURITY DEFINER để bỏ qua RLS từng dòng — nên tự kiểm quyền ở đầu hàm, đúng
+-- luật của policy albums_owner_all: owner_id = auth.uid() or is_admin().
+create or replace function public.album_library_stats(p_owner uuid)
+returns table (
+  album_id            uuid,
+  photo_count         bigint,
+  pick_count          bigint,
+  dislike_count       bigint,
+  first_drive_file_id text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+#variable_conflict use_column
+begin
+  if coalesce(auth.role(), '') <> 'service_role'
+     and not (p_owner = auth.uid() or public.is_admin()) then
+    raise exception 'không có quyền xem thư viện album này' using errcode = '42501';
+  end if;
+
+  return query
+  select
+    a.id,
+    (select count(*) from public.photos p where p.album_id = a.id),
+    (select count(*) from public.selections s where s.album_id = a.id),
+    (select count(*) from public.dislikes d where d.album_id = a.id),
+    -- Chỉ album CHƯA đặt cover_url mới cần ảnh bìa dự phòng.
+    case when a.cover_url is null then
+      (select p.drive_file_id from public.photos p
+        where p.album_id = a.id
+        order by p.position
+        limit 1)
+    end
+  from public.albums a
+  where a.owner_id = p_owner;
+end;
+$$;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/han_muc_album_may_chu.sql — Hạn mức album: bỏ qua khi máy chủ (service-role) tạo album cho hợp đồng — hết lỗi hợp đồng hoàn thành mà không có album giao khách
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Hạn mức album: bỏ qua khi album được tạo PHÍA MÁY CHỦ (service_role).
+--
+-- Vì sao: luồng hợp đồng (khách ký → đang thực hiện → hoàn thành, app desktop,
+-- cron) tạo album "Chọn ảnh · …" / "Giao khách · …" bằng service-role key ở máy
+-- chủ (src/lib/studio-drive.ts → createAlbumFromFolder). Trigger
+-- enforce_album_quota chặn mọi album is_gallery khi profiles.can_galleries tắt
+-- — cột cũ, chỉ được đồng bộ từ gói khi admin gán gói — nên studio đã trả tiền
+-- gói Studio vẫn có thể bị chặn ÂM THẦM: hợp đồng hoàn thành mà không có album
+-- giao khách, màn hợp đồng còn báo nhầm "chưa có thư mục Drive".
+--
+-- Có mở lỗ hổng không: KHÔNG. `auth.role()` đọc claim `role` của JWT mà
+-- PostgREST đã kiểm chữ ký; chỉ service-role key (chỉ nằm ở máy chủ, không bao
+-- giờ xuống trình duyệt) mới mang role 'service_role'. Người dùng đăng nhập
+-- (authenticated) và khách (anon) vẫn qua đủ hai chốt: quyền gallery + hạn mức
+-- album/tháng. Máy chủ đã tự chốt quyền ở tầng ứng dụng trước khi tới đây
+-- (requireStudio, xác thực desktop). Cùng cách nhận diện service-role với
+-- accounting.sql / bao_mat_quyen_rpc_storage.sql.
+--
+-- Trigger albums_log_creation KHÔNG đổi: album tạo phía máy chủ vẫn được ghi
+-- vào album_creations như cũ.
+-- Chạy lại nhiều lần an toàn (create or replace).
+-- ════════════════════════════════════════════════════════════════════════════
+
+create or replace function public.enforce_album_quota()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  lim   integer;
+  isadm boolean;
+  cangal boolean;
+  used  integer;
+begin
+  -- Album do máy chủ tạo (service-role) — quyền đã chốt ở tầng ứng dụng.
+  if coalesce(auth.role(), '') = 'service_role' then
+    return new;
+  end if;
+
+  select monthly_album_limit, (role = 'admin'), can_galleries
+    into lim, isadm, cangal
+    from public.profiles where id = new.owner_id;
+
+  if coalesce(new.is_gallery, false) then
+    -- Only admins / permitted accounts may create delivery galleries.
+    if not (coalesce(isadm, false) or coalesce(cangal, false)) then
+      raise exception 'Tài khoản chưa được cấp quyền tạo gallery khách.'
+        using errcode = 'P0001';
+    end if;
+    return new; -- galleries don't use the selection quota
+  end if;
+  if coalesce(isadm, false) then return new; end if;
+  if lim is null then return new; end if;
+
+  select count(*) into used
+    from public.album_creations
+    where user_id = new.owner_id
+      and created_at >= date_trunc('month', now());
+
+  if used >= lim then
+    raise exception 'Đã đạt giới hạn % album trong tháng này.', lim
+      using errcode = 'P0001';
+  end if;
+  return new;
+end;
+$$;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -7808,4 +8092,83 @@ drop policy if exists affiliate_codes_owner on public.affiliate_codes;
 
 create policy affiliate_codes_owner on public.affiliate_codes
   for select using (user_id = auth.uid());
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/vai_tro_tho_tu_dat.sql — Vai trò thợ studio tự đặt (đổi tên / ẩn / thêm vai trò) + bỏ ràng buộc vai trò contract_crew (chạy SAU crew_role_makeup)
+-- ══════════════════════════════════════════════════════════════════════════
+
+drop policy if exists studio_crew_roles_member_read on public.studio_crew_roles;
+
+create policy studio_crew_roles_member_read on public.studio_crew_roles
+  for select using (public.is_studio_member(owner_id));
+
+drop policy if exists studio_crew_roles_manager_write on public.studio_crew_roles;
+
+create policy studio_crew_roles_manager_write on public.studio_crew_roles
+  for all
+  using (
+    owner_id = auth.uid()
+    or public.is_admin()
+    or exists (select 1 from public.profiles p
+               where p.id = auth.uid() and p.studio_owner_id = owner_id and p.studio_role = 'manager')
+  )
+  with check (
+    owner_id = auth.uid()
+    or public.is_admin()
+    or exists (select 1 from public.profiles p
+               where p.id = auth.uid() and p.studio_owner_id = owner_id and p.studio_role = 'manager')
+  );
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/tang_toc_thu_vien_album.sql — Tăng tốc thư viện album: chỉ mục, hàm đếm album_library_stats, policy RLS dạng initPlan (chạy SAU album_dislikes)
+-- ══════════════════════════════════════════════════════════════════════════
+
+revoke all on function public.album_library_stats(uuid) from public, anon;
+
+grant execute on function public.album_library_stats(uuid) to authenticated, service_role;
+
+-- ── 3) Policy dạng initPlan — CÙNG ý nghĩa với schema.sql / album_dislikes.sql ─
+drop policy if exists albums_owner_all on public.albums;
+
+create policy albums_owner_all on public.albums
+  for all using (owner_id = (select auth.uid()) or (select public.is_admin()))
+  with check (owner_id = (select auth.uid()) or (select public.is_admin()));
+
+drop policy if exists photos_owner_all on public.photos;
+
+create policy photos_owner_all on public.photos
+  for all using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = (select auth.uid()) or (select public.is_admin())))
+  )
+  with check (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = (select auth.uid()) or (select public.is_admin())))
+  );
+
+drop policy if exists selections_owner_rw on public.selections;
+
+create policy selections_owner_rw on public.selections
+  for all using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = (select auth.uid()) or (select public.is_admin())))
+  )
+  with check (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = (select auth.uid()) or (select public.is_admin())))
+  );
+
+drop policy if exists dislikes_owner_rw on public.dislikes;
+
+create policy dislikes_owner_rw on public.dislikes
+  for all using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = (select auth.uid()) or (select public.is_admin())))
+  )
+  with check (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = (select auth.uid()) or (select public.is_admin())))
+  );
 

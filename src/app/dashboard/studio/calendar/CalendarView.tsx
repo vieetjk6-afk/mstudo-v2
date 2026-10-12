@@ -9,7 +9,8 @@ import MessengerButton from "@/components/MessengerButton";
 import { shootReminderMessage } from "@/lib/zalo";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
-import { SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, CREW_ROLE_LABEL, contractTotal, sumAmounts, vndShort, type StudioEvent, type ShootType, type ContractStatus, type CrewRole } from "@/lib/types";
+import { SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, contractTotal, sumAmounts, vndShort, type StudioEvent, type ShootType, type ContractStatus } from "@/lib/types";
+import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 import { lunarCellLabel, lunarFull } from "@/lib/lunar";
 
 export type ContractMarker = {
@@ -65,8 +66,11 @@ export default function CalendarView({
   contracts,
   feedUrl,
   gcal,
+  crewRoles = [],
 }: {
   ownerId: string;
+  /** Vai trò thợ studio tự đặt — để ra đúng tên vai trò. */
+  crewRoles?: CrewRoleRow[];
   initialEvents: EventRow[];
   contracts: ContractMarker[];
   feedUrl: string;
@@ -192,7 +196,7 @@ export default function CalendarView({
       for (const cr of c.contract_crew || []) {
         if (cr.status === "declined") continue;
         const name = (cr.name || "").trim() || "Chưa đặt tên";
-        const role = CREW_ROLE_LABEL[cr.role as CrewRole] ?? "";
+        const role = crewRoleLabel(cr.role, crewRoles);
         const cur = map.get(name) ?? { key: name, name, role, days: new Map<string, ContractMarker[]>() };
         const list = cur.days.get(c.event_date) ?? [];
         list.push(c);
@@ -201,7 +205,7 @@ export default function CalendarView({
       }
     }
     return Array.from(map.values()).sort((a, b) => b.days.size - a.days.size || a.name.localeCompare(b.name));
-  }, [contractList, weekDays]);
+  }, [contractList, weekDays, crewRoles]);
 
   /** Buổi chụp + mốc lịch của ngày đang xem ở chế độ "Ngày". */
   const dayContracts = useMemo(

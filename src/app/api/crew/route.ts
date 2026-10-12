@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
 import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIpDurable } from "@/lib/rate-limit";
+import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -286,7 +287,7 @@ export async function POST(req: Request) {
   // phí một lần mở cổng thợ tăng theo số studio trên nền tảng chứ không theo số
   // việc của thợ đó.
   const CREW_COLS =
-    "id, contract_id, name, role, salary, status, note, phone, responded_at, contract:studio_contracts(title, client_name, shoot_type, event_date, event_time, location, status)";
+    "id, contract_id, name, role, salary, status, note, phone, responded_at, contract:studio_contracts(owner_id, title, client_name, shoot_type, event_date, event_time, location, status)";
   const byDigits = await db
     .from("contract_crew")
     .select(CREW_COLS)
@@ -322,6 +323,26 @@ export async function POST(req: Request) {
         return { ...r, contract: { ...c, title: `${ev.title} · ${c.title}`, event_date: ev.event_date, event_time: ev.event_time } } as unknown as typeof r;
       });
     }
+  }
+
+  // Tên vai trò: studio có thể tự đặt vai trò (studio_crew_roles) — tra theo
+  // studio của TỪNG hợp đồng (thợ chạy nhiều studio thì mỗi nơi một bộ tên).
+  // Xong thì bỏ owner_id khỏi dữ liệu trả về: thợ không cần id studio.
+  {
+    type C = { owner_id?: string | null } & Record<string, unknown>;
+    const ownerOf = (r: (typeof mine)[number]) => (r.contract as unknown as C | null)?.owner_id ?? null;
+    const roleSets = await loadCrewRolesMany(db, mine.map(ownerOf));
+    mine = mine.map((r) => {
+      const c = r.contract as unknown as C | null;
+      const owner = ownerOf(r);
+      const contract = c ? { ...c } : null;
+      if (contract) delete contract.owner_id;
+      return {
+        ...r,
+        contract,
+        role_label: crewRoleLabel(r.role as string, owner ? roleSets.get(owner) : null),
+      } as unknown as typeof r;
+    });
   }
 
   const [{ data: busy }, { data: shiftPlan }] = await Promise.all([

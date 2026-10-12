@@ -43,12 +43,28 @@ async function coCot(
   return !error;
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  /*
+   * `?lite=1` — bản NHẸ cho banner <FaceSetupNotice/> ở đầu thư viện album.
+   *
+   * Banner chỉ cần ba thứ đọc từ biến môi trường: có CRON_SECRET không, mã
+   * project, link SQL Editor. Phần bảng nó đã tự hỏi từ trình duyệt. Bản đầy đủ
+   * bên dưới thì phân trang qua toàn bộ ảnh + khuôn mặt của mười album — đáng
+   * cho màn chẩn đoán, quá tay cho một banner hiện ở mọi lần mở thư viện.
+   */
+  if (new URL(req.url).searchParams.get("lite") === "1") {
+    return NextResponse.json({
+      cronSecret: !!process.env.CRON_SECRET,
+      duAn: maDuAn(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      sqlEditor: linkSqlEditor(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    });
+  }
 
   const db = createAdminClient();
   const goiChoTimMat = await chuAlbumDuocTimMat(db, user.id);

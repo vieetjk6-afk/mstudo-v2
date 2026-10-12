@@ -31,8 +31,8 @@ import {
   Lock,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 import {
-  CREW_ROLE_LABEL,
   SHOOT_TYPE_LABEL,
   SHOOT_TYPES,
   vnd,
@@ -114,6 +114,7 @@ export default function NewContractForm({
   services = [],
   packages = [],
   roster = [],
+  crewRoles = [],
   recentClients = [],
   bank,
   listLabels = {},
@@ -136,6 +137,8 @@ export default function NewContractForm({
   services?: ServiceOption[];
   packages?: PackageOption[];
   roster?: { id: string; name: string; phone: string; role: CrewRole }[];
+  /** Vai trò thợ studio tự đặt (studio_crew_roles) — để ra đúng tên vai trò. */
+  crewRoles?: CrewRoleRow[];
   recentClients?: RecentClient[];
   bank?: { name: string | null; account: string | null; holder: string | null };
   /** Nhãn studio tự đặt cho từng bảng giá (profiles.pl_list_labels). */
@@ -497,9 +500,9 @@ export default function NewContractForm({
     () => ({
       packages: packages.map((p) => ({ id: p.id, name: p.name, price: p.price, list_key: p.list_key })),
       services: services.map((s) => ({ id: s.id, name: s.name })),
-      crew: roster.map((r) => ({ id: r.id, name: r.name || r.phone, role: CREW_ROLE_LABEL[r.role] })),
+      crew: roster.map((r) => ({ id: r.id, name: r.name || r.phone, role: crewRoleLabel(r.role, crewRoles) })),
     }),
-    [packages, services, roster]
+    [packages, services, roster, crewRoles]
   );
 
   /** Đổ bản nháp vào mọi bước rồi nhảy tới bước Kiểm tra. Trường nào bản nháp
@@ -1354,7 +1357,7 @@ export default function NewContractForm({
                         </span>
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-[12.5px] font-semibold">{r.name || r.phone}</span>
-                          <span className="block truncate text-[10.5px]" style={{ color: "var(--tx3)" }}>{CREW_ROLE_LABEL[r.role]}</span>
+                          <span className="block truncate text-[10.5px]" style={{ color: "var(--tx3)" }}>{crewRoleLabel(r.role, crewRoles)}</span>
                         </span>
                       </button>
                       {on ? (

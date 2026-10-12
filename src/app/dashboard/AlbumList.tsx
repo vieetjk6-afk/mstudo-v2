@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { studioUrl } from "@/lib/hosts";
 import {
   Plus,
@@ -20,9 +21,12 @@ import { useLang } from "@/lib/i18n";
 import { thumbnailUrl } from "@/lib/drive";
 import { createClient } from "@/lib/supabase/client";
 import PlanUsage from "@/components/PlanUsage";
+import type { PlanUsageData } from "@/lib/plan-usage";
 import { Panel } from "@/components/studio/ui";
 import StudioTrialButton from "@/components/StudioTrialButton";
-import FilterDialog from "@/components/FilterDialog";
+// Cửa sổ lọc ảnh kéo theo cả chuỗi AI khuôn mặt (rất nặng) — chỉ tải khi studio
+// thật sự bấm "Lọc ảnh", không nhét vào bundle đầu của thư viện album.
+const FilterDialog = dynamic(() => import("@/components/FilterDialog"), { ssr: false });
 import FaceSetupNotice from "@/components/FaceSetupNotice";
 import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
 import { isDeliveryPhase } from "@/lib/album-phase";
@@ -49,10 +53,10 @@ export interface AlbumRow {
   dislikes?: { count: number }[];
 }
 
-export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean; /** Gói có mở tìm ảnh theo khuôn mặt không (Photographer Plus & Studio). */ canFaceSearch?: boolean; /** Domain riêng của studio — link mở album phải mang tên miền đó. */ studioHost?: string | null }) {
+export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null, planUsage = null }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean; /** Gói có mở tìm ảnh theo khuôn mặt không (Photographer Plus & Studio). */ canFaceSearch?: boolean; /** Domain riêng của studio — link mở album phải mang tên miền đó. */ studioHost?: string | null; /** Số liệu gói máy chủ tính sẵn — có thì PlanUsage khỏi tự tải. */ planUsage?: PlanUsageData | null }) {
   return (
     <div className="page-in">
-      <PlanUsage />
+      <PlanUsage initial={planUsage} />
 
       {/* Migration chưa chạy là thứ HOÀN TOÀN VÔ HÌNH trong app này: bảng thiếu
           thì màn liên quan chỉ trống, hoặc tệ hơn là nói sai. Nói thẳng ra ngay
@@ -138,15 +142,22 @@ function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHos
     const t = setTimeout(() => setToast(null), 4000);
     return () => clearTimeout(t);
   }, [toast]);
-  const live = albums.map((a) => {
-    const m = moved[a.id];
-    if (!m) return a;
-    return { ...a, phase: m.phase, ...(m.clearedDone ? { selection_done_at: null } : {}) };
-  });
-  const deliveryAlbums = sortAlbums(live.filter((a) => isDeliveryPhase(a)));
-  const selectionAlbums = sortAlbums(live.filter((a) => !isDeliveryPhase(a)));
+  // Lọc + sắp vài trăm album chỉ khi dữ liệu đổi — không phải mỗi lần bật tab
+  // hay hiện/tắt toast.
+  const { deliveryAlbums, selectionAlbums, allSorted, doneCount } = useMemo(() => {
+    const live = albums.map((a) => {
+      const m = moved[a.id];
+      if (!m) return a;
+      return { ...a, phase: m.phase, ...(m.clearedDone ? { selection_done_at: null } : {}) };
+    });
+    return {
+      deliveryAlbums: sortAlbums(live.filter((a) => isDeliveryPhase(a))),
+      selectionAlbums: sortAlbums(live.filter((a) => !isDeliveryPhase(a))),
+      allSorted: sortAlbums(live),
+      doneCount: pendingSelectionCount(live),
+    };
+  }, [albums, moved]);
   const [tab, setTab] = useState<"selection" | "delivery">("selection");
-  const doneCount = pendingSelectionCount(live);
   const onPhaseChange = (a: AlbumRow, phase: "selection" | "delivery", clearedDone: boolean) => {
     setMoved((m) => ({ ...m, [a.id]: { phase, clearedDone: clearedDone || !!m[a.id]?.clearedDone } }));
     setToast({ title: a.title, phase });
@@ -156,8 +167,8 @@ function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHos
     // 5 thẻ một hàng trên màn rộng: ba thẻ trải hết 1100px làm mỗi thẻ dài ngoẵng
     // và lệch tỉ lệ so với ảnh bìa. Bậc thang xuống 4 · 3 · 2 · 1 theo bề ngang.
     <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2 min-[820px]:grid-cols-3 min-[1060px]:grid-cols-4 min-[1320px]:grid-cols-5">
-      {rows.map((a) => (
-        <AlbumCard key={a.id} a={a} canDelivery={canDelivery} canWatermark={canWatermark} canFaceSearch={canFaceSearch} studioHost={studioHost} onPhaseChange={onPhaseChange} />
+      {rows.map((a, i) => (
+        <AlbumCard key={a.id} a={a} eager={i < EAGER_COVERS} canDelivery={canDelivery} canWatermark={canWatermark} canFaceSearch={canFaceSearch} studioHost={studioHost} onPhaseChange={onPhaseChange} />
       ))}
     </div>
   );
@@ -177,7 +188,7 @@ function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHos
     </div>
   ) : null;
 
-  if (!canDelivery && deliveryAlbums.length === 0) return <>{banner}{grid(sortAlbums(live))}</>;
+  if (!canDelivery && deliveryAlbums.length === 0) return <>{banner}{grid(allSorted)}</>;
 
   const rows = tab === "delivery" ? deliveryAlbums : selectionAlbums;
 
@@ -253,7 +264,13 @@ function AlbumTabs({ albums, canDelivery, canWatermark, canFaceSearch, studioHos
  * phụ (ảnh · đã chọn), thanh tiến độ chọn ảnh, rồi chân thẻ ghi trạng thái
  * watermark / xuất bản và nút ba chấm mở bảng bật-tắt nhanh.
  */
-function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null, onPhaseChange }: { a: AlbumRow; canDelivery?: boolean; canWatermark?: boolean; canFaceSearch?: boolean; studioHost?: string | null; /** Báo lên lưới để thẻ sang đúng tab (Album chọn ảnh ⟷ Album giao khách). */ onPhaseChange?: (a: AlbumRow, phase: "selection" | "delivery", clearedDone: boolean) => void }) {
+/**
+ * Số thẻ đầu lưới tải bìa NGAY (eager + fetchPriority cao): đúng hàng đầu ở màn
+ * rộng nhất (5 cột). Phần còn lại vẫn lazy như cũ.
+ */
+const EAGER_COVERS = 5;
+
+function AlbumCard({ a, eager = false, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null, onPhaseChange }: { a: AlbumRow; /** Thẻ nằm hàng đầu — tải bìa ngay, ưu tiên cao. */ eager?: boolean; canDelivery?: boolean; canWatermark?: boolean; canFaceSearch?: boolean; studioHost?: string | null; /** Báo lên lưới để thẻ sang đúng tab (Album chọn ảnh ⟷ Album giao khách). */ onPhaseChange?: (a: AlbumRow, phase: "selection" | "delivery", clearedDone: boolean) => void }) {
   const { t } = useLang();
   const supabase = createClient();
   const [menu, setMenu] = useState(false);
@@ -301,7 +318,9 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch =
     return () => document.removeEventListener("pointerdown", onDown);
   }, [menu]);
 
-  const cover = a.cover_url || (a.coverFallback ? thumbnailUrl(a.coverFallback, 800) : null);
+  // Bìa dự phòng lấy cỡ 480: thẻ rộng nhất của lưới chỉ ~270px CSS (≈540px ở
+  // màn 2x) — kéo bản 800 là phí băng thông cho cả trăm thẻ.
+  const cover = a.cover_url || (a.coverFallback ? thumbnailUrl(a.coverFallback, 480) : null);
   const picked = a.selections?.[0]?.count ?? 0;
   const photos = a.photoCount ?? 0;
   const pct = photos > 0 ? Math.min(100, Math.round((picked / photos) * 100)) : 0;
@@ -368,7 +387,7 @@ function AlbumCard({ a, canDelivery = true, canWatermark = true, canFaceSearch =
           của bản thiết kế, giữ đúng tỉ lệ ở mọi bậc lưới. */}
       <Link href={`/dashboard/albums/${a.id}`} className="relative block aspect-[4/3]" style={{ background: "var(--sf2)" }}>
         {cover ? (
-          <img src={cover} alt={a.title} loading="lazy" decoding="async" className="h-full w-full object-cover" />
+          <img src={cover} alt={a.title} loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"} decoding="async" className="h-full w-full object-cover" />
         ) : (
           <span className="flex h-full items-center justify-center" style={{ color: "var(--tx3)" }}>
             <ImageIcon size={26} />

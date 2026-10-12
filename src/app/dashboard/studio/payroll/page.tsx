@@ -4,6 +4,7 @@ import { brandFrom } from "@/lib/studio-brand";
 import PayrollView, { type PayrollRow } from "./PayrollView";
 import { applyBranch, getBranchScope } from "@/lib/branches";
 import type { TimesheetRow } from "@/lib/timesheet";
+import { loadCrewRoles } from "@/lib/crew-roles";
 
 
 export default async function PayrollPage() {
@@ -74,8 +75,11 @@ export default async function PayrollPage() {
     /* chưa chạy migration crew_timesheet.sql → màn vẫn chạy, chỉ không có cột giờ */
   }
 
+  const crewRoles = await loadCrewRoles(supabase, profile.id as string);
+
   return (
     <PayrollView
+      crewRoles={crewRoles}
       timesheet={sheet}
       rates={rates}
       rows={(data ?? []) as unknown as PayrollRow[]}

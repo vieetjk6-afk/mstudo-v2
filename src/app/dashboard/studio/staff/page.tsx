@@ -6,6 +6,7 @@ import { crewPortalUrl } from "@/lib/crew-show";
 import { ensureCrewToken } from "@/lib/crew-token";
 import { branchName } from "@/lib/branch-rules";
 import { canAssignBranch, canManageRoles, forcedBranchScope, isBranchScopedRole } from "@/lib/studio-roles";
+import { loadCrewRoles } from "@/lib/crew-roles";
 import type { StudioCrew } from "@/lib/types";
 import StaffAndCrew from "./StaffAndCrew";
 import type { StaffRow } from "./StaffManager";
@@ -59,7 +60,7 @@ export default async function StaffPage() {
   // không lọt dữ liệu cơ sở khác.
   const pinned = forcedBranchScope(role, myBranch);
 
-  const [{ data: crewRows }, { data: assignments }, branches, allBranches] = await Promise.all([
+  const [{ data: crewRows }, { data: assignments }, branches, allBranches, crewRoles] = await Promise.all([
     (pinned ? applyPin(supabase.from("studio_crew").select("*").eq("owner_id", ctx.id), pinned) : supabase.from("studio_crew").select("*").eq("owner_id", ctx.id)).order("name"),
     supabase
       .from("contract_crew")
@@ -70,6 +71,8 @@ export default async function StaffPage() {
       .not("phone", "is", null),
     getActiveBranches(ctx.id),
     getBranches(ctx.id),
+    // Vai trò thợ studio tự đặt (bảng chưa có → rỗng = chỉ vai trò có sẵn).
+    loadCrewRoles(supabase, ctx.id as string),
   ]);
 
   // Mã link đăng ký thợ. Chỉ chủ/quản lý được cấp mã mới; nhân viên chỉ đọc.
@@ -135,6 +138,11 @@ export default async function StaffPage() {
         registerUrl: crewToken ? crewPortalUrl(crewToken) : "",
         registerError: crewToken ? null : tokenError,
         branches: branchOpts,
+        crewRoles,
+        // Danh sách vai trò là cấu hình CHUNG cả studio → cùng mức quyền với gán
+        // chi nhánh: chủ studio + quản lý toàn studio. Khớp policy ghi của
+        // studio_crew_roles (vai_tro_tho_tu_dat.sql).
+        canEditCrewRoles: canAssignBranch(role),
       }}
       ranked={ranked}
     />

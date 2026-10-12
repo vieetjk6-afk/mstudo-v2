@@ -51,11 +51,24 @@ export default async function AlbumEditPage(
 
   // Album này có thuộc hợp đồng nào không? Nếu có → lấy SĐT/tên khách để gửi Zalo
   // thẳng; nếu không (album lẻ) → AlbumEditor sẽ hiện ô nhập SĐT.
-  const { data: linkedContract } = await supabase
+  // Hai hợp đồng cùng gắn album này → .maybeSingle() lỗi và trả null (mất SĐT
+  // khách, mất thẻ album song sinh). Lấy hợp đồng mới nhất.
+  const { data: linkedRows } = await supabase
     .from("studio_contracts")
     .select("id, client_name, client_phone, selection_album_id, gallery_album_id")
     .or(`selection_album_id.eq.${params.id},gallery_album_id.eq.${params.id}`)
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const linkedContract = linkedRows?.[0] ?? null;
+
+  // Tên bạn Zalo đã nhớ trên hợp đồng (nút "Gửi Zalo cho <tên>"). Truy vấn riêng
+  // và bỏ qua lỗi: database chưa chạy migrations/zalo_nguoi_nhan.sql thì cột
+  // chưa có, gộp vào select ở trên sẽ làm hỏng cả trang.
+  let contractZaloName: string | null = null;
+  if (linkedContract?.id) {
+    const { data: z } = await supabase.from("studio_contracts").select("zalo_name").eq("id", linkedContract.id).maybeSingle();
+    contractZaloName = (z as { zalo_name?: string | null } | null)?.zalo_name ?? null;
+  }
 
   // Hợp đồng đồng bộ Drive có HAI album: chọn ảnh (JPG Goc) và giao khách
   // (File ChinhSua). Khi album giao khách đã sẵn sàng, link khách của album
@@ -103,6 +116,7 @@ export default async function AlbumEditPage(
       deliveryTwin={deliveryTwin}
       clientPhone={linkedContract?.client_phone ?? null}
       clientName={linkedContract?.client_name ?? null}
+      zaloSavedName={(album as Album).zalo_name ?? contractZaloName}
       selections={(picks ?? []) as AlbumPick[]}
       // ?? 6 chứ không phải || 6: studio đặt 0 tháng nghĩa là CỐ Ý giữ ảnh vô
       // hạn, `||` sẽ nuốt mất lựa chọn đó và ép về 6.

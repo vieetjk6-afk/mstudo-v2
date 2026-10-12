@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, SearchX, FileText, User, IdCard } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { commandItems, noAccent, type NavAccess, type NavItem } from "@/lib/studio-nav";
+import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
 
 type Hit = {
   key: string;
@@ -18,7 +19,7 @@ type Hit = {
 };
 
 type ContractRow = { id: string; title: string; code: string | null; client_name: string | null; client_phone: string | null };
-type CrewRow = { id: string; name: string; phone: string | null; role: string | null };
+type CrewRow = { id: string; owner_id?: string; name: string; phone: string | null; role: string | null };
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
@@ -84,14 +85,18 @@ export default function StudioCommandK({ access }: { access: NavAccess }) {
           : Promise.resolve({ data: [] }),
         canSeeCrew
           ? supabase.from("studio_crew")
-              .select("id, name, phone, role")
+              .select("id, owner_id, name, phone, role")
               .or(`name.ilike.%${safe}%,phone.ilike.%${safe}%`)
               .limit(6)
           : Promise.resolve({ data: [] }),
       ]);
+      // Khoá vai trò → tên hiển thị (gồm vai trò studio tự đặt). Trước đây hiện
+      // thẳng khoá thô: "photographer", "makeup"…
+      const crewRows = (k.data ?? []) as CrewRow[];
+      const roleSets = crewRows.length ? await loadCrewRolesMany(supabase, crewRows.map((r) => r.owner_id)) : new Map();
       if (stale) return;
       setContracts((c.data ?? []) as ContractRow[]);
-      setCrew((k.data ?? []) as CrewRow[]);
+      setCrew(crewRows.map((r) => ({ ...r, role: r.role ? crewRoleLabel(r.role, roleSets.get(r.owner_id ?? "")) : r.role })));
       setCursor(0);
     }, 250);
     return () => { stale = true; clearTimeout(handle); };

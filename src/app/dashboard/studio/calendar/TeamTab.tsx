@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import type { ShiftLetter } from "@/lib/crew-shift";
+import { loadCrewRoles } from "@/lib/crew-roles";
 import TeamCalendar, { type TeamAssignment, type CrewScheduleRow, type CrewMember } from "./TeamCalendar";
 
 
@@ -28,7 +29,7 @@ export default async function TeamTab() {
   }
 
   const supabase = await createClient();
-  const [{ data: crewRows }, { data: roster }] = await Promise.all([
+  const [{ data: crewRows }, { data: roster }, crewRoles] = await Promise.all([
     (async () => {
       // Kèm mốc thời gian (event) nếu có: thợ gán cho "đãi trước" làm ở ngày của
       // mốc chứ không phải buổi chính. Chưa chạy migration thì lùi lối cũ.
@@ -37,6 +38,7 @@ export default async function TeamTab() {
       return r.error ? q("name, phone, role, status, contract:studio_contracts!inner(id, owner_id, title, event_date, status)") : r;
     })(),
     supabase.from("studio_crew").select("name, phone, role").eq("owner_id", profile.id).order("name"),
+    loadCrewRoles(supabase, profile.id as string),
   ]);
 
   type Row = {
@@ -96,6 +98,7 @@ export default async function TeamTab() {
       members={members}
       schedule={schedule}
       shifts={shifts}
+      crewRoles={crewRoles}
     />
   );
 }

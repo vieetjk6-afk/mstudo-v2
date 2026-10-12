@@ -6,6 +6,7 @@ import CrewFreeSlots, { type FreeSlot } from "./CrewFreeSlots";
 import type { TimesheetRow } from "@/lib/timesheet";
 
 import { fmtDate } from "@/lib/date";
+import { crewRoleLabel } from "@/lib/crew-roles";
 import { Phone, MapPin, Calendar, Check, X, Camera } from "lucide-react";
 import Turnstile from "@/components/Turnstile";
 import CrewSchedule, { type ScheduleEntry, type ShiftPlan } from "./CrewSchedule";
@@ -14,7 +15,6 @@ import type { ShiftLetter } from "@/lib/crew-shift";
 import {
   vnd,
   SHOOT_TYPE_LABEL,
-  CREW_ROLE_LABEL,
   CREW_STATUS_LABEL,
   type ShootType,
   type CrewRole,
@@ -61,6 +61,8 @@ type Assignment = {
   contract_id?: string | null;
   name: string;
   role: CrewRole;
+  /** Tên vai trò server đã tra sẵn (gồm cả vai trò studio tự đặt). */
+  role_label?: string;
   salary: number;
   status: CrewStatus;
   note: string | null;
@@ -251,7 +253,7 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
                       {a.contract?.title || tr.contract}
                     </p>
                     <p className="text-xs" style={{ color: "var(--text3)" }}>
-                      {CREW_ROLE_LABEL[a.role] ?? a.role}
+                      {a.role_label || crewRoleLabel(a.role)}
                       {a.contract ? ` · ${SHOOT_TYPE_LABEL[a.contract.shoot_type]}` : ""}
                     </p>
                   </div>

@@ -22,12 +22,10 @@ type Announcement = {
 export default function AnnouncementPopup() {
   const [items, setItems] = useState<Announcement[]>([]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (uid: string | undefined) => {
     const supabase = createClient();
     // QUAN TRỌNG: lọc theo owner_id của chính mình. Admin (RLS is_admin) mặc định
     // thấy thông báo của MỌI tài khoản → nếu không lọc sẽ hiện hàng loạt bản sao.
-    const { data: auth } = await supabase.auth.getUser();
-    const uid = auth.user?.id;
     if (!uid) {
       setItems([]);
       return;
@@ -57,18 +55,33 @@ export default function AnnouncementPopup() {
   }, []);
 
   useEffect(() => {
-    load();
     const supabase = createClient();
-    const channel = supabase
-      .channel("announce-popup")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: "studio_notifications" },
-        () => load()
-      )
-      .subscribe();
+    let alive = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    void (async () => {
+      // uid đọc từ phiên ĐÃ CÓ trong trình duyệt (getSession — không gọi mạng).
+      // Layout máy chủ đã xác minh đăng nhập bằng getUser(); RLS vẫn là hàng rào
+      // thật, uid ở đây chỉ để LỌC cho đúng người.
+      const { data } = await supabase.auth.getSession();
+      const uid = data.session?.user.id;
+      if (!alive) return;
+      await load(uid);
+      if (!alive || !uid) return;
+      // Chỉ nghe thông báo của CHÍNH mình. Không lọc thì mỗi thông báo của bất kỳ
+      // studio nào (admin thấy hết qua RLS) cũng bắt trình duyệt tải lại danh
+      // sách — với admin là cả hệ thống dồn về một tab.
+      channel = supabase
+        .channel(`announce-popup:${uid}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "studio_notifications", filter: `owner_id=eq.${uid}` },
+          () => void load(uid)
+        )
+        .subscribe();
+    })();
     return () => {
-      supabase.removeChannel(channel);
+      alive = false;
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [load]);
 

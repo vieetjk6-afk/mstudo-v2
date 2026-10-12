@@ -37,16 +37,39 @@ export async function POST(req: Request) {
 
   const r = await deliverContractIfReady(profile.id, contractId, { force: true, notifyExisting: true });
   if (!r.album) {
-    return NextResponse.json(
-      { error: "Chưa tạo được album giao khách — hợp đồng chưa có thư mục Drive (vào Đồng bộ Drive để kết nối/tạo)." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: deliveryReasonMessage(r.reason), reason: r.reason ?? null }, { status: 400 });
   }
 
   const { data: fresh } = await db
     .from("studio_contracts")
-    .select("gallery_album_id")
+    .select("gallery_album_id, selection_album_id")
     .eq("id", contractId)
     .maybeSingle();
-  return NextResponse.json({ ok: true, ...r, galleryAlbumId: fresh?.gallery_album_id ?? null });
+  return NextResponse.json({
+    ok: true,
+    ...r,
+    galleryAlbumId: fresh?.gallery_album_id ?? null,
+    selectionAlbumId: fresh?.selection_album_id ?? null,
+  });
+}
+
+/**
+ * Câu báo lỗi đúng với lý do thật. Trước đây mọi thất bại đều ra "chưa có thư
+ * mục Drive" — kể cả khi Drive ổn mà database từ chối tạo album (trigger
+ * enforce_album_quota chặn gallery vì tài khoản chưa bật quyền gallery).
+ */
+function deliveryReasonMessage(reason: string | undefined): string {
+  if (reason === "no_delivery_folder") {
+    return "Chưa giao được: cây thư mục Drive của hợp đồng không có thư mục giao khách (File ChinhSua). Kiểm tra mẫu thư mục ở Đồng bộ Drive.";
+  }
+  if (reason === "waiting") {
+    return "Chưa giao được: thư mục ảnh chỉnh sửa trên Drive còn trống.";
+  }
+  if (reason?.startsWith("insert_failed:")) {
+    return `Chưa tạo được album giao khách: ${reason.slice("insert_failed:".length)}`;
+  }
+  if (reason?.startsWith("update_failed:")) {
+    return `Chưa chuyển được album sang giai đoạn Giao khách: ${reason.slice("update_failed:".length)}`;
+  }
+  return "Chưa tạo được album giao khách — hợp đồng chưa có thư mục Drive (vào Đồng bộ Drive để kết nối/tạo).";
 }

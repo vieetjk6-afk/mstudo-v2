@@ -22,7 +22,7 @@ import {
   isNavActive, visibleGroups,
   type NavAccess, type NavBadges, type NavGroup, type NavItem, type StudioTier,
 } from "@/lib/studio-nav";
-import type { Profile } from "@/lib/types";
+import type { ChromeProfile } from "@/lib/types";
 
 /** Icon của từng lựa chọn giao diện — vẽ LỰA CHỌN hiện tại, không phải cái
  *  sắp tới, để nhìn nút là biết đang ở chế độ nào. */
@@ -186,7 +186,7 @@ export default function StudioShell({
   branchLocked = false,
   children,
 }: {
-  profile: Profile;
+  profile: ChromeProfile;
   tier: StudioTier;
   role: string;
   comingSoon?: string[];
@@ -239,13 +239,15 @@ export default function StudioShell({
 
   // Badge = số việc CHƯA xử lý. Lấy sau khi shell đã vẽ để không chặn trang, và
   // làm mới khi đổi route (đã xử lý xong thì con số phải tụt ngay) — nhưng
-  // không dày hơn 15s/lần để bấm qua lại nhanh không thành spam.
+  // không dày hơn 60s/lần: route đếm 7 bảng một lượt, bấm qua lại vài màn mà
+  // lượt nào cũng đếm lại thì badge thành thứ tốn nhất của cả shell. Gọi ép
+  // (force) thì bỏ qua cả cache HTTP 30s của route.
   const lastFetch = useRef(0);
   const loadBadges = useCallback((force = false) => {
     const now = Date.now();
-    if (!force && now - lastFetch.current < 15_000) return;
+    if (!force && now - lastFetch.current < 60_000) return;
     lastFetch.current = now;
-    fetch("/api/studio/nav-badges")
+    fetch("/api/studio/nav-badges", force ? { cache: "no-store" } : undefined)
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => { if (j) setBadges(j as NavBadges); })
       .catch(() => {});

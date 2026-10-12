@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import DashboardHeader from "@/components/DashboardHeader";
 import StudioFooterNav from "@/components/StudioFooterNav";
 import StudioShell from "@/components/StudioShell";
-import type { Profile } from "@/lib/types";
+import type { ChromeProfile } from "@/lib/types";
 import { isStudioPath } from "@/lib/studio-shell-paths";
 
 type StudioTier = "none" | "booking" | "plus" | "full";
@@ -29,7 +29,7 @@ export default function DashboardChrome({
   branchLocked = false,
   children,
 }: {
-  profile: Profile;
+  profile: ChromeProfile;
   kind: "app" | "img" | "admin";
   tier: StudioTier;
   role: string;

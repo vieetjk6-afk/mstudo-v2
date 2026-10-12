@@ -96,6 +96,10 @@ const ORDER = [
   // Vá quyền: chạy SAU cùng vì nó siết lại hàm / policy mà các file trên tạo
   // (atomic_redemptions, accounting, crew_profile_show, schema.sql storage).
   ["migrations/bao_mat_quyen_rpc_storage.sql", "Vá bảo mật: RPC chỉ service-role, số phiếu thu, storage, crew_account, affiliate_codes"],
+  ["migrations/vai_tro_tho_tu_dat.sql", "Vai trò thợ studio tự đặt (đổi tên / ẩn / thêm vai trò) + bỏ ràng buộc vai trò contract_crew (chạy SAU crew_role_makeup)"],
+  ["migrations/zalo_nguoi_nhan.sql", "Nhớ người nhận Zalo cho hợp đồng/album"],
+  ["migrations/tang_toc_thu_vien_album.sql", "Tăng tốc thư viện album: chỉ mục, hàm đếm album_library_stats, policy RLS dạng initPlan (chạy SAU album_dislikes)"],
+  ["migrations/han_muc_album_may_chu.sql", "Hạn mức album: bỏ qua khi máy chủ (service-role) tạo album cho hợp đồng — hết lỗi hợp đồng hoàn thành mà không có album giao khách"],
 ];
 
 /**
@@ -140,6 +144,10 @@ const MOI = [
   "migrations/contract_final_links.sql",
   "migrations/contract_final_originals.sql",
   "migrations/bao_mat_quyen_rpc_storage.sql",
+  "migrations/vai_tro_tho_tu_dat.sql",
+  "migrations/zalo_nguoi_nhan.sql",
+  "migrations/tang_toc_thu_vien_album.sql",
+  "migrations/han_muc_album_may_chu.sql",
 ];
 
 /**

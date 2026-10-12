@@ -90,6 +90,7 @@ export default function AlbumEditor({
   contractId = null,
   clientPhone = null,
   clientName = null,
+  zaloSavedName = null,
   selections = [],
   storageMonths = 6,
   deliveryTwin = null,
@@ -106,6 +107,8 @@ export default function AlbumEditor({
   contractId?: string | null;
   clientPhone?: string | null;
   clientName?: string | null;
+  /** Tên bạn Zalo đã nhớ (album, hoặc hợp đồng gắn album) — nút "Gửi Zalo cho <tên>". */
+  zaloSavedName?: string | null;
   /** Ảnh khách đã bấm chọn (bảng selections), gộp theo mã chọn ở ngay màn này. */
   selections?: AlbumPick[];
   /** Chính sách lưu trữ ảnh gốc của studio (tháng). 0 = giữ vô hạn. */
@@ -585,6 +588,8 @@ export default function AlbumEditor({
               phone={clientPhone || album.client_phone}
               name={clientName || album.client_name}
               contractId={contractId}
+              albumId={album.id}
+              savedName={zaloSavedName}
               audience="client"
               kind="album_share"
               askPhone

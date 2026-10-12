@@ -14,7 +14,7 @@ import { createClient } from "@/lib/supabase/client";
 import { appUrl, mainUrl } from "@/lib/hosts";
 import { effectivePlan, studioTier, STUDIO_TIER_RANK, type StudioTier } from "@/lib/plans";
 import { APP_VERSION } from "@/lib/version";
-import type { Profile } from "@/lib/types";
+import type { ChromeProfile } from "@/lib/types";
 
 interface NavLink {
   href: string;
@@ -33,7 +33,7 @@ export default function DashboardHeader({
   profile,
   kind = "app",
 }: {
-  profile: Profile;
+  profile: ChromeProfile;
   kind?: "app" | "img" | "admin";
 }) {
   const { t } = useLang();

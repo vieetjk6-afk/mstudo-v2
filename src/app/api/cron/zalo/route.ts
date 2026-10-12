@@ -13,10 +13,12 @@ import { OPEN_QUOTE_STATUSES, QUOTE_NUDGE_DAYS } from "@/lib/quote-expiry";
 import { ensureIntakeToken, intakeUrl } from "@/lib/contract-intake";
 import { listFolderImages } from "@/lib/drive-server";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
+import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { studioUrl } from "@/lib/hosts";
 import { getStudioHost } from "@/lib/studio-site";
 import { crewPortalUrl } from "@/lib/crew-show";
-import { vnd, CREW_ROLE_LABEL } from "@/lib/types";
+import { vnd } from "@/lib/types";
+import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -132,6 +134,8 @@ export async function GET(req: NextRequest) {
     .eq("event_date", tomorrow)
     .neq("status", "cancelled");
 
+  // Vai trò thợ studio tự đặt — một lượt cho mọi studio có buổi chụp ngày mai.
+  const crewRoleSets = await loadCrewRolesMany(db, ((shoots ?? []) as any[]).map((s) => s.owner_id));
   for (const s of (shoots ?? []) as any[]) {
     const studio = await studioName(s.owner_id);
 
@@ -171,7 +175,7 @@ export async function GET(req: NextRequest) {
           date: tomorrow,
           time: s.event_time,
           location: s.location,
-          role: CREW_ROLE_LABEL[c.role as keyof typeof CREW_ROLE_LABEL],
+          role: crewRoleLabel(c.role, crewRoleSets.get(s.owner_id)),
           studio,
           link: await crewPortal(s.owner_id),
         }),
@@ -342,7 +346,7 @@ export async function GET(req: NextRequest) {
   const deliverSince = new Date(Date.now() - DELIVER_WATCH_DAYS * 24 * 3600 * 1000).toISOString();
   const { data: doneCands } = await db
     .from("studio_contracts")
-    .select("id, owner_id, completed_at")
+    .select("id, owner_id, completed_at, selection_album_id")
     .eq("status", "completed")
     .is("gallery_album_id", null)
     // Đã có cây thư mục Drive mới soi được. Hợp đồng chưa có cây thì lối đổi
@@ -354,8 +358,19 @@ export async function GET(req: NextRequest) {
 
   // Mỗi hợp đồng tốn vài lượt gọi Drive; cron chỉ có 60s. Hết giờ thì để nhịp
   // ngày mai chạy tiếp — hợp đồng vẫn nằm nguyên trong diện quét.
+  // Album của hợp đồng ĐÃ được chuyển sang giao khách (dự án hợp nhất) cũng là
+  // đã giao — bỏ qua, đừng tốn lượt Drive (luật chung ở @/lib/contract-album).
+  const linkedSelIds = ((doneCands ?? []) as any[]).map((c) => c.selection_album_id).filter(Boolean) as string[];
+  const deliveredSel = new Set<string>();
+  if (linkedSelIds.length) {
+    const { data: selRows } = await db.from("albums").select("id, phase, is_gallery, status").in("id", linkedSelIds);
+    for (const a of (selRows ?? []) as any[]) {
+      if (resolveDeliveredAlbum({ gallery: null, selection: a })) deliveredSel.add(a.id as string);
+    }
+  }
   const deliverUntil = Date.now() + 25_000;
   for (const c of (doneCands ?? []) as any[]) {
+    if (c.selection_album_id && deliveredSel.has(c.selection_album_id)) continue;
     if (Date.now() > deliverUntil) break;
     const r = await deliverContractIfReady(c.owner_id, c.id);
     if (r.created) delivered++;

@@ -7,7 +7,8 @@ import { Panel, EmptyState } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import { fmtDate, fmtDateTime } from "@/lib/date";
-import { CREW_ROLE_LABEL, type ContractCrew, type ContractIntake } from "@/lib/types";
+import { type ContractCrew, type ContractIntake } from "@/lib/types";
+import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 import { CREW_SIDE_LABEL } from "@/lib/crew-show";
 import {
   intakeSections, intakeMessage, sectionText, defaultKeysForSide, intakeDirections,
@@ -26,7 +27,7 @@ async function copyText(text: string): Promise<boolean> {
 }
 
 export default function SessionInfoView({
-  contract, formUrl, crew, studioName,
+  contract, formUrl, crew, studioName, crewRoles = [],
 }: {
   contract: {
     id: string;
@@ -41,6 +42,8 @@ export default function SessionInfoView({
   formUrl: string | null;
   crew: CrewRow[];
   studioName: string;
+  /** Vai trò thợ studio tự đặt — để ra đúng tên vai trò. */
+  crewRoles?: CrewRoleRow[];
 }) {
   const { toast, toastNode } = useToast();
   const sections = useMemo(() => intakeSections(contract.intake), [contract.intake]);
@@ -153,7 +156,7 @@ export default function SessionInfoView({
                   sections={sections}
                   initialKeys={defaultKeysForSide(sections, c.side)}
                   name={c.name}
-                  sub={[CREW_ROLE_LABEL[c.role] ?? c.role, c.side ? CREW_SIDE_LABEL[c.side] : null, c.phone].filter(Boolean).join(" · ")}
+                  sub={[crewRoleLabel(c.role, crewRoles), c.side ? CREW_SIDE_LABEL[c.side] : null, c.phone].filter(Boolean).join(" · ")}
                   phone={c.phone}
                   buildMessage={(keys) => intakeMessage({ sections, keys, title: contract.title, date, to: c.name, studio: studioName })}
                   contractId={contract.id}
