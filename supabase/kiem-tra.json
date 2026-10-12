@@ -28,7 +28,8 @@
     "migrations/vai_tro_tho_tu_dat.sql",
     "migrations/zalo_nguoi_nhan.sql",
     "migrations/tang_toc_thu_vien_album.sql",
-    "migrations/han_muc_album_may_chu.sql"
+    "migrations/han_muc_album_may_chu.sql",
+    "migrations/che_do_album_hop_dong.sql"
   ],
   "muc": [
     {
@@ -805,6 +806,14 @@
       "cot": [
         "albums.zalo_uid",
         "studio_contracts.zalo_uid"
+      ]
+    },
+    {
+      "file": "migrations/che_do_album_hop_dong.sql",
+      "mo_ta": "Chế độ album của hợp đồng: album mặc định (mstudo desktop) hoặc nhập link ảnh riêng",
+      "bang": [],
+      "cot": [
+        "studio_contracts.album_mode"
       ]
     }
   ]

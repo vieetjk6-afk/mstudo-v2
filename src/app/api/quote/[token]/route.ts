@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { convertQuoteToContract } from "@/lib/quote-convert";
+import { applyDefaultAlbumMode } from "@/lib/studio-drive";
 import { effectivePlan, studioTier } from "@/lib/plans";
 import { sendEmail } from "@/lib/email";
 import { sendPushToOwner } from "@/lib/push";
@@ -178,6 +179,8 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       if (tier === "full") {
         const result = await convertQuoteToContract(db, quote.id);
         if (result.ok) {
+          // Chế độ album mặc định theo kết nối mstudo desktop / Drive của studio.
+          await applyDefaultAlbumMode(quote.owner_id as string, result.contract_id);
           return NextResponse.json({
             ok: true,
             contract_id: result.contract_id,

@@ -15,6 +15,12 @@ export type ConvertResult =
  * call (studio-owner explicit click, or anonymous client auto-accept).
  *
  * If the quote already has `contract_id`, returns that id (idempotent).
+ *
+ * Chế độ album (studio_contracts.album_mode) KHÔNG đặt ở đây vì hàm này nhận
+ * `db` của người gọi (có khi là client RLS, không đọc được studio_drive /
+ * desktop_devices). Hai route gọi hàm này gọi tiếp applyDefaultAlbumMode
+ * (@/lib/studio-drive): đủ kết nối mstudo desktop + Drive → "desktop", chưa →
+ * "manual" (nhập link riêng).
  */
 export async function convertQuoteToContract(
   db: SupabaseClient,

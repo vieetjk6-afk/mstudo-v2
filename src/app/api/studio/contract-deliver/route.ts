@@ -62,6 +62,9 @@ function deliveryReasonMessage(reason: string | undefined): string {
   if (reason === "no_delivery_folder") {
     return "Chưa giao được: cây thư mục Drive của hợp đồng không có thư mục giao khách (File ChinhSua). Kiểm tra mẫu thư mục ở Đồng bộ Drive.";
   }
+  if (reason === "manual_no_link") {
+    return "Chưa giao được: hợp đồng dùng link ảnh riêng — dán link ảnh hoàn thiện (Google Drive) vào album của hợp đồng ở tab Sản phẩm trước.";
+  }
   if (reason === "waiting") {
     return "Chưa giao được: thư mục ảnh chỉnh sửa trên Drive còn trống.";
   }

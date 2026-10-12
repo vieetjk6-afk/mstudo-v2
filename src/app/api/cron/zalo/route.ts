@@ -13,6 +13,7 @@ import { OPEN_QUOTE_STATUSES, QUOTE_NUDGE_DAYS } from "@/lib/quote-expiry";
 import { ensureIntakeToken, intakeUrl } from "@/lib/contract-intake";
 import { listFolderImages } from "@/lib/drive-server";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
+import { contractAlbumMode } from "@/lib/studio-drive";
 import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { studioUrl } from "@/lib/hosts";
 import { getStudioHost } from "@/lib/studio-site";
@@ -253,6 +254,13 @@ export async function GET(req: NextRequest) {
     // Fallback theo ngày: đã qua ngày chụp ít nhất 1 ngày.
     if (!eligible && c.event_date && c.event_date <= yesterday) eligible = true;
     if (!eligible) continue;
+    // Hợp đồng "Nhập link ảnh riêng" không có thư mục Drive để soi: album là
+    // album trống tạo lúc khách xác nhận, studio chưa dán link thì đừng mời
+    // khách vào một album rỗng.
+    if (!node?.id && (await contractAlbumMode(db, c.id)) === "manual") {
+      const { count } = await db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", c.selection_album_id);
+      if (!count) continue;
+    }
 
     const { data: al } = await db.from("albums").select("slug").eq("id", c.selection_album_id).maybeSingle();
     if (!al?.slug) continue;
