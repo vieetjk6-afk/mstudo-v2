@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ExternalLink, Loader2, Lock, Music, Image as ImageIcon, Plus, Trash2, X } from "lucide-react";
 import { BANKS } from "@/lib/banks";
+import { isMusicPageLink, parseYoutubeMusic } from "@/lib/youtube-music";
+import { isShortMapLink, looksLikeUrl, parseMapInput, pickMapLink } from "@/lib/site-map";
 import type { WeddingBank, WeddingEventBlock } from "@/lib/types";
 
 // Các ô nhập dùng chung cho trình chỉnh sửa thiệp cưới. Tách khỏi WeddingEditor
@@ -102,7 +104,56 @@ export function GalleryEditor({ gallery, onUpload, onChange }: { gallery: string
   );
 }
 
-export function EventsEditor({ events, onChange }: { events: WeddingEventBlock[]; onChange: (e: WeddingEventBlock[]) => void }) {
+export type ResolveMap = (url: string) => Promise<{ url?: string; error?: string }>;
+
+/**
+ * Ô dán link Google Maps. Rời ô thì bóc đúng đường link khỏi chữ dán kèm (nút
+ * Chia sẻ của app gửi cả tên quán + địa chỉ), còn link rút gọn maps.app.goo.gl
+ * thì nhờ server mở ra link đầy đủ — có toạ độ thì thiệp mới ghim đúng chỗ.
+ */
+export function MapLinkInput({ value, onChange, resolve, placeholder, className }: {
+  value: string; onChange: (v: string) => void; resolve: ResolveMap; placeholder?: string; className?: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  // Kết quả về SAU vài lần render → phải gọi bản onChange mới nhất: bản cũ còn
+  // giữ danh sách sự kiện cũ, ghi vào là mất chỗ vừa sửa ở ô khác.
+  const latest = useRef({ value, onChange });
+  latest.current = { value, onChange };
+
+  async function lookup(link: string) {
+    setBusy(true); setErr(null);
+    const r = await resolve(link);
+    setBusy(false);
+    if (pickMapLink(latest.current.value) !== link) return; // đã dán link khác trong lúc chờ
+    if (r.url) latest.current.onChange(r.url);
+    else setErr(r.error || "Không lấy được vị trí từ link này.");
+  }
+
+  function onBlur() {
+    const link = pickMapLink(value);
+    if (link !== value) onChange(link);
+    if (isShortMapLink(link)) void lookup(link);
+  }
+
+  const v = value.trim();
+  const target = v ? parseMapInput(v) : null;
+  let note: React.ReactNode = null;
+  if (busy) note = "Đang lấy vị trí từ link…";
+  else if (err) note = <span className="text-amber-700">{err}</span>;
+  else if (v && isShortMapLink(v)) note = <>Link rút gọn — <button type="button" onClick={() => void lookup(pickMapLink(v))} className="underline">lấy vị trí</button> để bản đồ ghim đúng chỗ.</>;
+  else if (target?.kind === "coords" || target?.kind === "embed") note = <span className="text-green-700">✓ Bản đồ ghim đúng vị trí theo link này.</span>;
+  else if (target?.kind === "query" && !looksLikeUrl(pickMapLink(v))) note = "Đây là địa chỉ chữ, bản đồ có thể lệch — dán link từ nút Chia sẻ của Google Maps để ghim đúng chỗ.";
+
+  return (
+    <>
+      <input className={className ?? inp} value={value} onChange={(e) => { setErr(null); onChange(e.target.value); }} onBlur={onBlur} placeholder={placeholder} />
+      {note && <span className="mt-1 block text-xs text-stone-500">{note}</span>}
+    </>
+  );
+}
+
+export function EventsEditor({ events, onChange, resolveMap }: { events: WeddingEventBlock[]; onChange: (e: WeddingEventBlock[]) => void; resolveMap: ResolveMap }) {
   const up = (i: number, p: Partial<WeddingEventBlock>) => onChange(events.map((e, j) => (j === i ? { ...e, ...p } : e)));
   // Key ỔN ĐỊNH client-only cho từng sự kiện (không lưu vào config). Dùng index
   // làm key thì xoá sự kiện GIỮA khiến React gán lại các ô nhập theo vị trí — mất
@@ -132,7 +183,7 @@ export function EventsEditor({ events, onChange }: { events: WeddingEventBlock[]
             <input className={inp} value={e.venue ?? ""} onChange={(ev) => up(i, { venue: ev.target.value })} placeholder="Tên địa điểm" />
             <input className={inp} value={e.address ?? ""} onChange={(ev) => up(i, { address: ev.target.value })} placeholder="Địa chỉ" />
           </div>
-          <input className={`${inp} mt-2`} value={e.map_url ?? ""} onChange={(ev) => up(i, { map_url: ev.target.value })} placeholder="Link Google Maps (không bắt buộc)" />
+          <MapLinkInput className={`${inp} mt-2`} value={e.map_url ?? ""} onChange={(v) => up(i, { map_url: v })} resolve={resolveMap} placeholder="Link Google Maps (không bắt buộc)" />
         </div>
       ))}
       <button type="button" onClick={addEvent} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-stone-300 px-3 py-2 text-sm text-stone-500 hover:border-rose-300 hover:text-rose-500">
@@ -243,6 +294,7 @@ export function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: 
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [localErr, setLocalErr] = useState<string | null>(null);
+  const yt = parseYoutubeMusic(currentUrl);
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
@@ -260,12 +312,25 @@ export function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: 
       </div>
       {/* Phản hồi NGAY tại đây để không phải cuộn lên đầu trang mới thấy. */}
       {localErr && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{localErr}</p>}
-      {currentUrl && !localErr && (
+      {currentUrl && !localErr && (yt ? (
+        <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
+          <p className="mb-1 text-xs font-medium text-green-700">Đã nhận link YouTube — nghe thử:</p>
+          <iframe
+            src={`https://www.youtube.com/embed/${yt.id}?start=${yt.start}&rel=0&playsinline=1`}
+            title="Nghe thử nhạc nền"
+            allow="autoplay; encrypted-media"
+            className="aspect-video w-full rounded-md"
+          />
+          <p className="mt-1 text-xs text-stone-500">Khung trên báo “Video không xem được” / “chủ sở hữu đã tắt phát trên trang web khác” thì thiệp cũng không phát được — chọn bản khác (lyric, cover, audio).</p>
+        </div>
+      ) : isMusicPageLink(currentUrl) ? (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">Link này là trang nghe nhạc chứ không phải file nhạc nên thiệp không phát được. Hãy dán link YouTube hoặc tải file mp3 lên.</p>
+      ) : (
         <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2">
           <p className="mb-1 text-xs font-medium text-green-700">Đã có nhạc nền — nghe thử:</p>
           <audio src={currentUrl} controls preload="none" className="w-full" />
         </div>
-      )}
+      ))}
     </div>
   );
 }
