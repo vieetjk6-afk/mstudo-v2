@@ -9,6 +9,9 @@ import { syncAlbumPhotos } from "@/lib/album-sync";
 import { storageUntil } from "@/lib/storage-lifecycle";
 import { isMissingColumn } from "@/lib/missing-column";
 import { isDeliveryPhase } from "@/lib/album-phase";
+import { defaultAlbumMode, manualCompletionAction, normalizeAlbumMode, type AlbumMode, type AlbumModeReadiness } from "@/lib/album-mode";
+import { effectivePlan, studioTier } from "@/lib/plans";
+import { extractFileId, extractFolderId, isFolderLink } from "@/lib/drive";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -156,6 +159,57 @@ export async function studioDriveStatus(
     rootCreated: !!row?.root_folder_id,
     template: normalizeTemplate(row?.folder_template),
   };
+}
+
+/**
+ * Studio đủ điều kiện dùng "Album mặc định — tự đồng bộ từ mstudo desktop" chưa
+ * (@/lib/album-mode). Bốn điều kiện:
+ *   • máy chủ đã cấu hình OAuth Drive cho studio;
+ *   • studio đã kết nối Google Drive (studio_drive.refresh_token);
+ *   • đã có thư mục gốc mặc định trên Drive (studio_drive.root_folder_id);
+ *   • có ít nhất một máy MStudo Desktop chưa thu hồi (desktop_devices).
+ * Bảng desktop_devices chưa migrate → coi như chưa kết nối desktop.
+ */
+export async function albumModeReadiness(ownerId: string, planAllowsDesktop = true): Promise<AlbumModeReadiness & { lastDesktopSyncAt: string | null }> {
+  const db = createAdminClient();
+  const [row, devs] = await Promise.all([
+    loadStudioDrive(ownerId),
+    db
+      .from("desktop_devices")
+      .select("id, last_sync_at")
+      .eq("owner_id", ownerId)
+      .is("revoked_at", null)
+      .order("last_sync_at", { ascending: false, nullsFirst: false })
+      .limit(5),
+  ]);
+  const devices = devs.error ? [] : ((devs.data ?? []) as { id: string; last_sync_at: string | null }[]);
+  return {
+    driveConfigured: studioDriveConfigured(),
+    driveConnected: !!row?.refresh_token,
+    rootFolderReady: !!row?.refresh_token && !!row?.root_folder_id,
+    desktopConnected: devices.length > 0,
+    planAllowsDesktop,
+    lastDesktopSyncAt: devices[0]?.last_sync_at ?? null,
+  };
+}
+
+/**
+ * Tạo thư mục GỐC mặc định của studio trên Drive ngay (không đợi hợp đồng đầu
+ * tiên). Idempotent: đã có thì trả lại id cũ.
+ */
+export async function ensureStudioRootFolder(ownerId: string): Promise<{ rootId: string } | { error: string }> {
+  const row = await loadStudioDrive(ownerId);
+  if (!row?.refresh_token) return { error: "not_connected" };
+  if (row.root_folder_id) return { rootId: row.root_folder_id };
+  const o = oauth();
+  o.setCredentials({ refresh_token: row.refresh_token });
+  const drive = google.drive({ version: "v3", auth: o });
+  try {
+    const { rootId } = await ensureRootFolder(createAdminClient(), drive, ownerId, row, true);
+    return rootId ? { rootId } : { error: "mkfolder_failed" };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "mkfolder_failed" };
+  }
 }
 
 /**
@@ -364,9 +418,12 @@ export async function ensureContractDriveTree(
   ownerId: string,
   contract: ContractForDrive
 ): Promise<{ folderId: string; tree: DriveTreeNode[]; pathSegments: string[] } | { error: string }> {
+  const db = createAdminClient();
+  // Hợp đồng "Nhập link ảnh riêng" KHÔNG có cây thư mục Drive — chặn ở đây là
+  // chặn cho MỌI lối (khách ký, đổi trạng thái, app desktop, nút tạo thư mục).
+  if ((await contractAlbumMode(db, contract.id)) === "manual") return { error: "manual_album_mode" };
   const row = await loadStudioDrive(ownerId);
   if (!row?.refresh_token) return { error: "not_connected" };
-  const db = createAdminClient();
 
   // Đã tạo rồi → trả lại (không tạo trùng). Vẫn tính lại đường dẫn (chỉ đọc DB)
   // để desktop lồng thư mục local đúng cấu trúc.
@@ -454,6 +511,7 @@ export type DeliveryReason =
   | "no_drive" // studio chưa nối Drive / hợp đồng chưa có cây thư mục
   | "no_delivery_folder" // cây thư mục không có thư mục vai trò "giao khách"
   | "waiting" // có thư mục giao khách nhưng còn trống
+  | "manual_no_link" // chế độ nhập link riêng: chưa dán link ảnh hoàn thiện (hoặc link chưa ra ảnh)
   | `insert_failed:${string}` // database từ chối tạo album (trigger hạn mức / quyền gallery…)
   | `update_failed:${string}`; // không chuyển được album của hợp đồng sang giao khách
 
@@ -495,17 +553,18 @@ async function resyncIfEmpty(db: any, albumId: string): Promise<void> {
   }
 }
 
-async function createAlbumFromFolder(
+/**
+ * Chèn MỘT album của hợp đồng (chưa có nguồn ảnh). Dùng chung cho album tạo từ
+ * thư mục Drive (createAlbumFromFolder) và album trống của chế độ "Nhập link
+ * ảnh riêng" (ensureManualContractAlbum) — cùng cột, cùng mặc định.
+ */
+async function insertContractAlbum(
   db: any,
   ownerId: string,
   opts: {
     title: string;
-    folderId: string;
     phase: "selection" | "delivery";
     isGallery: boolean;
-    sourceName: string;
-    /** Thư mục nguồn thêm (cùng giai đoạn) — vd "Video HoanThien" cạnh File ChinhSua. */
-    extraFolders?: AlbumFolder[];
     clientName?: string | null;
     clientPhone?: string | null;
     eventDate?: string | null;
@@ -547,7 +606,28 @@ async function createAlbumFromFolder(
   // gallery khi profiles.can_galleries tắt) và màn hợp đồng báo nhầm "chưa có
   // thư mục Drive". Giờ trả nguyên lý do lên.
   if (res.error || !res.data) return { id: null, error: res.error?.message || "không rõ lỗi" };
-  const albumId = res.data.id as string;
+  return { id: res.data.id as string };
+}
+
+async function createAlbumFromFolder(
+  db: any,
+  ownerId: string,
+  opts: {
+    title: string;
+    folderId: string;
+    phase: "selection" | "delivery";
+    isGallery: boolean;
+    sourceName: string;
+    /** Thư mục nguồn thêm (cùng giai đoạn) — vd "Video HoanThien" cạnh File ChinhSua. */
+    extraFolders?: AlbumFolder[];
+    clientName?: string | null;
+    clientPhone?: string | null;
+    eventDate?: string | null;
+  }
+): Promise<{ id: string | null; error?: string }> {
+  const ins = await insertContractAlbum(db, ownerId, opts);
+  if (!ins.id) return ins;
+  const albumId = ins.id;
 
   const folders: AlbumFolder[] = [{ id: opts.folderId, name: opts.sourceName }, ...(opts.extraFolders ?? [])];
   const { error: srcErr } = await db.from("album_sources").insert(
@@ -807,6 +887,12 @@ export async function autoCreateContractDriveOnSign(ownerId: string, contractId:
     .eq("id", contractId)
     .maybeSingle();
   if (!c) return;
+  // Chế độ "Nhập link ảnh riêng": khách xác nhận = lúc tạo MỘT album trống cho
+  // hợp đồng (studio dán link ảnh vào sau). Không dựng cây Drive.
+  if ((await contractAlbumMode(db, contractId)) === "manual") {
+    await ensureManualContractAlbum(ownerId, contractId);
+    return;
+  }
   const tree = await ensureContractDriveTree(ownerId, c as ContractForDrive);
   if ("error" in tree) return; // not_connected → studio chưa nối Drive
   // Khi ký: chỉ dựng sẵn cây thư mục Drive, CHƯA tạo album nào. Album chọn ảnh
@@ -831,6 +917,10 @@ export async function autoCreateContractSelectionOnProduction(ownerId: string, c
     .maybeSingle();
   if (!c) return false;
   if ((c as ContractForDrive).selection_album_id) return true; // đã có album chọn ảnh
+  // Nhập link riêng: album trống (nếu khách xác nhận mà chưa tạo được) — không Drive.
+  if ((await contractAlbumMode(db, contractId)) === "manual") {
+    return !!(await ensureManualContractAlbum(ownerId, contractId)).albumId;
+  }
   const tree = await ensureContractDriveTree(ownerId, c as ContractForDrive);
   if ("error" in tree) return false; // not_connected → studio chưa nối Drive
   const { selectionAlbumId } = await wireContractAlbums(ownerId, c as ContractForDrive, tree.tree, { phases: ["selection"] });
@@ -877,6 +967,11 @@ export async function autoCreateContractDeliveryOnComplete(
     await resyncIfEmpty(db, contract.gallery_album_id);
     return { album: true, created: false, waiting: false };
   }
+  // Nhập link riêng: giao khách trên CHÍNH album của hợp đồng, theo link ảnh
+  // hoàn thiện studio đã dán. Không bao giờ tạo album giao riêng.
+  if ((await contractAlbumMode(db, contractId)) === "manual") {
+    return deliverManualContractAlbum(ownerId, contractId, opts);
+  }
   // Album của hợp đồng đã ở giai đoạn giao khách → xong, khỏi gọi Drive.
   if (contract.selection_album_id) {
     const { data: s } = await db.from("albums").select("phase, is_gallery").eq("id", contract.selection_album_id).maybeSingle();
@@ -907,4 +1002,186 @@ export async function autoCreateContractDeliveryOnComplete(
     waiting: r.deliveryWaiting,
     reason: r.deliveredAlbumId ? undefined : r.deliveryReason,
   };
+}
+
+// ─── Chế độ "Nhập link ảnh riêng" (studio_contracts.album_mode = 'manual') ────
+
+/**
+ * Chế độ album của hợp đồng (@/lib/album-mode). Đọc RIÊNG một cột: database
+ * chưa chạy migrations/che_do_album_hop_dong.sql thì cột chưa có → null (hành
+ * vi cũ), không làm hỏng câu select của các lối khác.
+ */
+export async function contractAlbumMode(db: any, contractId: string): Promise<AlbumMode | null> {
+  try {
+    const { data, error } = await db.from("studio_contracts").select("album_mode").eq("id", contractId).maybeSingle();
+    if (error) return null;
+    return normalizeAlbumMode((data as { album_mode?: unknown } | null)?.album_mode);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Bảo đảm hợp đồng (chế độ nhập link riêng) có MỘT album — tạo album trống
+ * giai đoạn chọn ảnh nếu chưa có, gắn vào selection_album_id.
+ *
+ * Idempotent kể cả khi hai sự kiện tới cùng lúc (khách ký + tiền cọc về): gắn
+ * album bằng lệnh update CÓ ĐIỀU KIỆN `selection_album_id is null`; thua cuộc
+ * đua thì xoá album vừa tạo và trả album của bên thắng.
+ *
+ * Hợp đồng makeup / thuê đồ (không có hậu kỳ ảnh) → không tạo.
+ */
+export async function ensureManualContractAlbum(
+  ownerId: string,
+  contractId: string
+): Promise<{ albumId: string | null; created: boolean; error?: string }> {
+  const db = createAdminClient();
+  const { data: c } = await db
+    .from("studio_contracts")
+    .select("id, owner_id, code, client_name, client_phone, event_date, shoot_type, selection_album_id")
+    .eq("id", contractId)
+    .maybeSingle();
+  if (!c || c.owner_id !== ownerId) return { albumId: null, created: false, error: "not_found" };
+  if (c.selection_album_id) return { albumId: c.selection_album_id as string, created: false };
+  if (!kindHasPhotoWork(contractKind(c.shoot_type as never))) return { albumId: null, created: false, error: "no_photo_work" };
+
+  const who = c.client_name || c.code || "Hợp đồng";
+  const ins = await insertContractAlbum(db, ownerId, {
+    title: `Chọn ảnh · ${who}`,
+    phase: "selection",
+    isGallery: false,
+    clientName: c.client_name,
+    clientPhone: c.client_phone,
+    eventDate: c.event_date,
+  });
+  if (!ins.id) return { albumId: null, created: false, error: ins.error };
+
+  const { data: won } = await db
+    .from("studio_contracts")
+    .update({ selection_album_id: ins.id })
+    .eq("id", contractId)
+    .is("selection_album_id", null)
+    .select("id");
+  if (!won?.length) {
+    await db.from("albums").delete().eq("id", ins.id);
+    const { data: again } = await db.from("studio_contracts").select("selection_album_id").eq("id", contractId).maybeSingle();
+    return { albumId: (again?.selection_album_id as string | null) ?? null, created: false };
+  }
+  return { albumId: ins.id, created: true };
+}
+
+/** Tình trạng album hợp đồng: giai đoạn + nguồn giao khách + số ảnh giao khách. */
+async function manualAlbumState(db: any, albumId: string | null) {
+  if (!albumId) return { exists: false, isDelivery: false, deliverySources: 0, deliveryPhotos: 0 };
+  const { data: al } = await db.from("albums").select("id, phase, is_gallery").eq("id", albumId).maybeSingle();
+  if (!al) return { exists: false, isDelivery: false, deliverySources: 0, deliveryPhotos: 0 };
+  const { data: del } = await db.from("album_sources").select("id").eq("album_id", albumId).eq("stage", "delivery");
+  const ids = ((del ?? []) as { id: string }[]).map((x) => x.id);
+  let deliveryPhotos = 0;
+  if (ids.length) {
+    const { count } = await db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", albumId).in("source_id", ids);
+    deliveryPhotos = count ?? 0;
+  }
+  return { exists: true, isDelivery: isDeliveryPhase(al), deliverySources: ids.length, deliveryPhotos };
+}
+
+/**
+ * Chốt giao khách cho hợp đồng nhập link riêng (gọi từ
+ * autoCreateContractDeliveryOnComplete — tức mọi lối: đổi trạng thái, desktop,
+ * nút "Giao khách ngay"). Luật ở manualCompletionAction (@/lib/album-mode):
+ * có link ảnh hoàn thiện đã ra ảnh → chuyển CHÍNH album sang giao khách; chưa có
+ * → giữ chọn ảnh, trả reason "manual_no_link" để màn hợp đồng nhắc studio dán link.
+ */
+async function deliverManualContractAlbum(
+  ownerId: string,
+  contractId: string,
+  opts?: { force?: boolean }
+): Promise<DeliveryAlbumResult> {
+  const db = createAdminClient();
+  const ensured = await ensureManualContractAlbum(ownerId, contractId);
+  const albumId = ensured.albumId;
+  if (!albumId) {
+    return { album: false, created: false, waiting: false, reason: `insert_failed:${ensured.error ?? "không rõ lỗi"}` };
+  }
+  let state = await manualAlbumState(db, albumId);
+  // Có link hoàn thiện mà chưa có ảnh nào → đồng bộ lại một lượt rồi mới quyết.
+  if (!state.isDelivery && state.deliverySources > 0 && state.deliveryPhotos === 0) {
+    try {
+      await syncAlbumPhotos(db, albumId);
+    } catch {
+      /* lỗi đồng bộ → coi như chưa có ảnh */
+    }
+    state = await manualAlbumState(db, albumId);
+  }
+  const action = manualCompletionAction(state, opts);
+  if (action === "already") return { album: true, created: false, waiting: false };
+  if (action !== "promote") return { album: false, created: false, waiting: true, reason: "manual_no_link" };
+  const p = await promoteLinkedAlbum(db, ownerId, albumId, null, { force: true });
+  return p ?? { album: false, created: false, waiting: true, reason: "manual_no_link" };
+}
+
+/**
+ * Studio dán MỘT link Google Drive vào album của hợp đồng (chọn ảnh hoặc ảnh
+ * hoàn thiện) — từ tab Sản phẩm của hợp đồng. Thêm nguồn album_sources với
+ * stage tương ứng (trùng link thì không thêm lại) rồi đồng bộ ảnh.
+ * Caller đã kiểm quyền với hợp đồng; hàm tự kiểm album thuộc đúng chủ studio.
+ */
+export async function addContractAlbumLink(
+  ownerId: string,
+  albumId: string,
+  url: string,
+  stage: "selection" | "delivery"
+): Promise<{ ok: true; added: boolean; total: number; errors: string[] } | { ok: false; error: string }> {
+  const clean = (url || "").trim();
+  if (!extractFolderId(clean) && !extractFileId(clean)) return { ok: false, error: "bad_link" };
+  const db = createAdminClient();
+  const { data: al } = await db.from("albums").select("id, owner_id").eq("id", albumId).maybeSingle();
+  if (!al || al.owner_id !== ownerId) return { ok: false, error: "not_found" };
+  const { data: srcRows } = await db.from("album_sources").select("id, drive_url, position").eq("album_id", albumId);
+  const sources = (srcRows ?? []) as { id: string; drive_url: string | null; position: number | null }[];
+  const kind = isFolderLink(clean) ? "folder" : "file";
+  let added = false;
+  if (!sources.some((x) => (x.drive_url ?? "").trim() === clean)) {
+    const pos = sources.length ? Math.max(...sources.map((x) => x.position ?? 0)) + 1 : 0;
+    const { error } = await db.from("album_sources").insert({
+      album_id: albumId,
+      // Tên tạm "Folder"/"File" → lần đồng bộ đầu tự đổi theo tên thư mục Drive.
+      name: kind === "folder" ? "Folder" : "File",
+      drive_url: clean,
+      kind,
+      stage,
+      position: pos,
+    });
+    if (error) return { ok: false, error: error.message };
+    added = true;
+  }
+  try {
+    const r = await syncAlbumPhotos(db, albumId);
+    return { ok: true, added, total: r.total, errors: r.errors };
+  } catch (e) {
+    return { ok: true, added, total: 0, errors: [e instanceof Error ? e.message : "sync_failed"] };
+  }
+}
+
+/**
+ * Hợp đồng sinh ra KHÔNG qua form tạo hợp đồng (chuyển từ báo giá, khách tự
+ * chấp nhận báo giá) chưa có chế độ album → đặt theo trạng thái kết nối của
+ * studio: đủ điều kiện → album mặc định (desktop), chưa → nhập link riêng.
+ * Không đè chế độ đã có; hợp đồng không có hậu kỳ ảnh thì để trống. Không ném lỗi.
+ */
+export async function applyDefaultAlbumMode(ownerId: string, contractId: string): Promise<AlbumMode | null> {
+  try {
+    const db = createAdminClient();
+    const { data: c, error } = await db.from("studio_contracts").select("*").eq("id", contractId).maybeSingle();
+    if (error || !c || c.owner_id !== ownerId || !("album_mode" in c)) return null;
+    if (normalizeAlbumMode(c.album_mode)) return normalizeAlbumMode(c.album_mode);
+    if (!kindHasPhotoWork(contractKind(c.shoot_type as never))) return null;
+    const { data: owner } = await db.from("profiles").select("plan, plan_expires_at, role").eq("id", ownerId).maybeSingle();
+    const full = !!owner && studioTier(effectivePlan(owner.plan, owner.plan_expires_at), owner.role === "admin") === "full";
+    const mode = defaultAlbumMode(await albumModeReadiness(ownerId, full));
+    await db.from("studio_contracts").update({ album_mode: mode }).eq("id", contractId).is("album_mode", null);
+    return mode;
+  } catch {
+    return null;
+  }
 }

@@ -100,6 +100,7 @@ const ORDER = [
   ["migrations/zalo_nguoi_nhan.sql", "Nhớ người nhận Zalo cho hợp đồng/album"],
   ["migrations/tang_toc_thu_vien_album.sql", "Tăng tốc thư viện album: chỉ mục, hàm đếm album_library_stats, policy RLS dạng initPlan (chạy SAU album_dislikes)"],
   ["migrations/han_muc_album_may_chu.sql", "Hạn mức album: bỏ qua khi máy chủ (service-role) tạo album cho hợp đồng — hết lỗi hợp đồng hoàn thành mà không có album giao khách"],
+  ["migrations/che_do_album_hop_dong.sql", "Chế độ album của hợp đồng: album mặc định (mstudo desktop) hoặc nhập link ảnh riêng"],
 ];
 
 /**
@@ -148,6 +149,7 @@ const MOI = [
   "migrations/zalo_nguoi_nhan.sql",
   "migrations/tang_toc_thu_vien_album.sql",
   "migrations/han_muc_album_may_chu.sql",
+  "migrations/che_do_album_hop_dong.sql",
 ];
 
 /**

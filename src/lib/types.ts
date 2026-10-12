@@ -367,6 +367,9 @@ export interface StudioContract {
   delivery_due: string | null;
   client_messenger: string | null;
   selection_album_id: string | null;
+  /** Chế độ album: "desktop" (album mặc định, đồng bộ từ mstudo desktop) | "manual"
+   *  (nhập link ảnh riêng) | null = hợp đồng cũ (migrations/che_do_album_hop_dong.sql). */
+  album_mode?: "desktop" | "manual" | null;
   /** Link album / video hoàn thiện dán tay (migrations/contract_final_links.sql). */
   final_album_url?: string | null;
   final_video_urls?: string | null;

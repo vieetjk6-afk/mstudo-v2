@@ -108,6 +108,8 @@ import VoucherRedeem from "./VoucherRedeem";
 import { isSignedLockError, type ContractAddendum } from "@/lib/contract-addenda";
 import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
 import { albumOptionLabel, type ContractAlbumOption } from "@/lib/contract-album";
+import ContractAlbumModeCard from "./ContractAlbumModeCard";
+import { normalizeAlbumMode, type AlbumMode } from "@/lib/album-mode";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
 // giảm giá — khi lưu sẽ ghi unit_price ÂM để trừ vào tổng (không cần cột DB mới).
@@ -424,6 +426,9 @@ export default function ContractEditor({
   // đây chỉ nhìn gallery_album_id nên nút "Giao khách ngay" vẫn hiện dù đã giao.
   const [deliveryDone, setDeliveryDone] = useState(!!contract.gallery_album_id || linkedAlbumDelivered);
   const [deliverBusy, setDeliverBusy] = useState(false);
+  // Chế độ album (album mặc định / nhập link riêng) — thẻ ContractAlbumModeCard
+  // giữ nguồn thật, ở đây chỉ để ẩn khối "Giao khách ngay" của luồng Drive.
+  const [albumMode, setAlbumMode] = useState<AlbumMode | null>(normalizeAlbumMode(contract.album_mode));
 
   // Link album / video hoàn thiện — lưu RIÊNG khỏi autosaveContract: studio chưa
   // chạy migrations/contract_final_links.sql thì chỉ hai ô này báo lỗi, các ô
@@ -861,6 +866,8 @@ export default function ContractEditor({
       if (status === "completed" && data?.deliveryAlbum) {
         setDeliveryDone(true);
         toast(`Đã hoàn thành · đã tạo album giao khách${sentNote}`);
+      } else if (status === "completed" && data?.deliveryReason === "manual_no_link") {
+        toast(`Đã hoàn thành · dán link ảnh hoàn thiện ở tab Sản phẩm để giao khách${sentNote}`);
       } else if (status === "completed" && data?.deliveryWaiting) {
         // Hoàn thành = thu đủ tiền. Ảnh chỉnh sửa chưa có thì đừng đẩy khách sang
         // album rỗng — nói rõ album còn ở giai đoạn chọn ảnh để studio khỏi tưởng lỗi.
@@ -3145,6 +3152,14 @@ export default function ContractEditor({
               {/* Album giao khách + hạn giao ảnh — chuyển từ tab Thông tin sang
                   đây: cả hai đều nói về SẢN PHẨM giao cho khách, không phải
                   thông tin nhận việc. */}
+              <ContractAlbumModeCard
+                contractId={contract.id}
+                status={f.status}
+                toast={toast}
+                onAlbumIds={applyAlbumIds}
+                onModeChange={setAlbumMode}
+                onDelivered={() => setDeliveryDone(true)}
+              />
               <div className="card p-6">
                 <h2 className="mb-4 font-serif text-lg font-medium">Album khách hàng &amp; hạn giao</h2>
                 {(() => {
@@ -3208,6 +3223,9 @@ export default function ContractEditor({
                       </p>
                     )}
                   </div>
+                  {/* Nhập link ảnh riêng = MỘT album cho cả chọn ảnh lẫn giao khách:
+                      ẩn ô album giao riêng (trừ hợp đồng đã lỡ gắn từ trước). */}
+                  {(albumMode !== "manual" || !!f.gallery_album_id) && (
                   <div>
                     <label className="label">Album giao riêng (tuỳ chọn)</label>
                     <select
@@ -3230,6 +3248,7 @@ export default function ContractEditor({
                       khách mới thấy; khi đó link chọn ảnh tự chuyển sang album này.
                     </p>
                   </div>
+                  )}
                   <div>
                     <label className="label">Hạn giao ảnh</label>
                     <DateInput value={f.delivery_due} onChange={(v) => set("delivery_due", v)} />
@@ -3239,7 +3258,7 @@ export default function ContractEditor({
                       thu đủ thì chốt hợp đồng, hậu kỳ có thể còn dở. Nên album
                       chỉ tự chuyển sang giao khách khi thư mục ảnh chỉnh sửa đã
                       có ảnh; chưa có thì khách vẫn ở trang chọn ảnh. */}
-                  {f.status === "completed" && !deliveryDone && (
+                  {f.status === "completed" && !deliveryDone && albumMode !== "manual" && (
                     <div className="rounded-xl p-3.5" style={{ background: "var(--surface2)" }}>
                       <p className="text-[13px] font-semibold">Đang ở giai đoạn Chọn ảnh</p>
                       <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--text3)" }}>

@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { fetchAllPhotos } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
 import { effectivePlan, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
-import AlbumEditor, { type AlbumPick, type DeliveryTwin } from "./AlbumEditor";
+import AlbumEditor, { type AlbumPick, type DeliveryTwin, type LinkedContractInfo } from "./AlbumEditor";
+import { normalizeAlbumMode } from "@/lib/album-mode";
 import { categoryLabel } from "@/lib/category";
 import type { Album, AlbumSource, Photo } from "@/lib/types";
 
@@ -65,9 +66,21 @@ export default async function AlbumEditPage(
   // và bỏ qua lỗi: database chưa chạy migrations/zalo_nguoi_nhan.sql thì cột
   // chưa có, gộp vào select ở trên sẽ làm hỏng cả trang.
   let contractZaloName: string | null = null;
+  // Thẻ "Album của hợp đồng …" + chế độ album (album mặc định / nhập link riêng).
+  // select("*") để database chưa chạy che_do_album_hop_dong.sql vẫn đọc được.
+  let linkedInfo: LinkedContractInfo | null = null;
   if (linkedContract?.id) {
-    const { data: z } = await supabase.from("studio_contracts").select("zalo_name").eq("id", linkedContract.id).maybeSingle();
-    contractZaloName = (z as { zalo_name?: string | null } | null)?.zalo_name ?? null;
+    const { data: z } = await supabase.from("studio_contracts").select("*").eq("id", linkedContract.id).maybeSingle();
+    const zr = z as { zalo_name?: string | null; code?: string | null; title?: string | null; status?: string | null; album_mode?: unknown } | null;
+    contractZaloName = zr?.zalo_name ?? null;
+    linkedInfo = {
+      id: linkedContract.id as string,
+      code: zr?.code ?? null,
+      title: zr?.title ?? "",
+      status: zr?.status ?? null,
+      albumMode: normalizeAlbumMode(zr?.album_mode),
+      isSelectionAlbum: linkedContract.selection_album_id === params.id,
+    };
   }
 
   // Hợp đồng đồng bộ Drive có HAI album: chọn ảnh (JPG Goc) và giao khách
@@ -113,6 +126,7 @@ export default async function AlbumEditPage(
       studioHost={studioHost}
       studioCats={studioCats}
       contractId={linkedContract?.id ?? null}
+      linkedContract={linkedInfo}
       deliveryTwin={deliveryTwin}
       clientPhone={linkedContract?.client_phone ?? null}
       clientName={linkedContract?.client_name ?? null}

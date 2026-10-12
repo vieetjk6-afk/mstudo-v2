@@ -40,7 +40,9 @@ import {
   type ShootType,
 } from "@/lib/types";
 import { nextContractCode } from "@/lib/contract-code";
-import { contractKind, shootTypesByKind, CONTRACT_KIND_LABEL, DEFAULT_TASKS_BY_KIND, type ContractKind } from "@/lib/contract-kind";
+import { contractKind, kindHasPhotoWork, shootTypesByKind, CONTRACT_KIND_LABEL, DEFAULT_TASKS_BY_KIND, type ContractKind } from "@/lib/contract-kind";
+import { resolveAlbumMode, type AlbumMode } from "@/lib/album-mode";
+import AlbumModePicker, { type AlbumModeStatus } from "@/components/AlbumModePicker";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { computeRoundedDeposit } from "@/lib/quote-deposit";
 import {
@@ -188,6 +190,11 @@ export default function NewContractForm({
   const [addChecklist, setAddChecklist] = useState(true);
   const [makePhoto, setMakePhoto] = useState(true);
   const [makeVideo, setMakeVideo] = useState(false);
+  // Album ảnh của hợp đồng: album mặc định (mstudo desktop) hay nhập link riêng.
+  // Mặc định theo trạng thái kết nối: đủ điều kiện → album mặc định, chưa → link riêng.
+  const [albumMode, setAlbumMode] = useState<AlbumMode | null>(null);
+  const [albumModeTouched, setAlbumModeTouched] = useState(false);
+  const [albumStatus, setAlbumStatus] = useState<AlbumModeStatus | null>(null);
 
   /* Yêu cầu riêng của khách (ô Tạo nhanh điền sẵn) — lưu vào brief_note, tức mục
      Brief KHÁCH XEM ĐƯỢC ở cổng hợp đồng, nên nhãn ở bước Kiểm tra nói rõ điều đó. */
@@ -406,6 +413,29 @@ export default function NewContractForm({
   /** Đổi loại dịch vụ ⇒ bỏ gói đã chọn: giá của dịch vụ cũ không còn nhìn thấy
       nữa, để lại trong tổng tiền là một khoản vô hình không ai gỡ được. */
   /** Chọn mẫu hợp đồng thì kéo luôn gói dịch vụ của mẫu vào ô chọn. */
+  useEffect(() => {
+    let off = false;
+    fetch("/api/studio/album-mode-status", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: (AlbumModeStatus & { defaultMode?: AlbumMode }) | null) => {
+        if (off) return;
+        // Không đọc được trạng thái → coi như chưa kết nối (cách thủ công).
+        const st: AlbumModeStatus = d ?? { driveConfigured: false, driveConnected: false, rootFolderReady: false, desktopConnected: false };
+        setAlbumStatus(st);
+      })
+      .catch(() => {
+        if (!off) setAlbumStatus({ driveConfigured: false, driveConnected: false, rootFolderReady: false, desktopConnected: false });
+      });
+    return () => {
+      off = true;
+    };
+  }, []);
+  // Chế độ đang áp dụng: studio chưa tự chọn → theo mặc định; chọn album mặc
+  // định mà chưa đủ điều kiện → lùi về nhập link riêng.
+  const effectiveAlbumMode: AlbumMode | null = albumStatus
+    ? resolveAlbumMode(albumModeTouched ? albumMode : null, albumStatus)
+    : albumModeTouched ? albumMode : null;
+
   function pickTemplate(id: string) {
     setTemplateId(id);
     const t = templates.find((x) => x.id === id);
@@ -608,6 +638,11 @@ export default function NewContractForm({
       client_token: token,
       drive_make_photo: makePhoto,
       drive_make_video: makeVideo,
+      // Chỉ hợp đồng có hậu kỳ ảnh mới có album. Chưa kiểm tra xong kết nối thì
+      // resolveAlbumMode(null) = nhập link riêng (cách an toàn, không cần Drive).
+      ...(kindHasPhotoWork(contractKind(shootType))
+        ? { album_mode: effectiveAlbumMode ?? resolveAlbumMode(null, albumStatus) }
+        : {}),
       ...(briefNote.trim() ? { brief_note: briefNote.trim() } : {}),
       ...(internalNote.trim() ? { internal_note: internalNote.trim() } : {}),
       ...(assignTo ? { assigned_to: assignTo } : {}),
@@ -621,6 +656,12 @@ export default function NewContractForm({
     if (error && row.internal_note !== undefined && isMissingColumn(error, "internal_note")) {
       delete row.internal_note;
       noteLost = true;
+      ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
+    }
+    // Chưa chạy migration che_do_album_hop_dong.sql → lưu hợp đồng như cũ (hành
+    // vi album tự động cũ), không chặn việc tạo hợp đồng.
+    if (error && row.album_mode !== undefined && isMissingColumn(error, "album_mode")) {
+      delete row.album_mode;
       ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
     }
     if (error || !data) {
@@ -1633,6 +1674,26 @@ export default function NewContractForm({
                 </label>
               </div>
             </div>
+
+            {/* Album ảnh của hợp đồng — chỉ nhóm có hậu kỳ ảnh (cùng luật với tab Sản phẩm). */}
+            {kindHasPhotoWork(contractKind(shootType)) && (
+              <div className="mt-3.5 rounded-[11px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
+                <p className={fieldLabel} style={fieldLabelStyle}>Album ảnh của hợp đồng</p>
+                <AlbumModePicker
+                  name="nc-album-mode"
+                  value={effectiveAlbumMode}
+                  status={albumStatus}
+                  onStatus={setAlbumStatus}
+                  onChange={(m) => {
+                    setAlbumModeTouched(true);
+                    setAlbumMode(m);
+                  }}
+                />
+                <p className="mt-1.5 text-[11px]" style={{ color: "var(--tx3)" }}>
+                  Đổi lại được sau ở tab Sản phẩm của hợp đồng.
+                </p>
+              </div>
+            )}
 
             <div className="mt-3.5 flex gap-2.5 rounded-[11px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
               <Send size={18} style={{ flex: "none", color: "var(--ac)" }} />

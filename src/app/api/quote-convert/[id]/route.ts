@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { convertQuoteToContract } from "@/lib/quote-convert";
+import { applyDefaultAlbumMode } from "@/lib/studio-drive";
 
 export const dynamic = "force-dynamic";
 
@@ -29,5 +30,7 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
 
   const result = await convertQuoteToContract(supabase, quote.id);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
+  // Chế độ album mặc định theo kết nối mstudo desktop / Drive của studio.
+  await applyDefaultAlbumMode(profile.id as string, result.contract_id);
   return NextResponse.json({ ok: true, contract_id: result.contract_id });
 }

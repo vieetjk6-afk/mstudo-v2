@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
+import { autoCreateContractSelectionOnProduction, ensureManualContractAlbum } from "@/lib/studio-drive";
+import { normalizeAlbumMode, shouldEnsureManualAlbum } from "@/lib/album-mode";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { syncContractCalendar } from "@/lib/gcal-sync";
 import { logAction } from "@/lib/audit-log";
@@ -98,6 +99,17 @@ export async function POST(req: Request) {
       await autoCreateContractSelectionOnProduction(ownerId, contractId);
     } catch {
       // Studio chưa nối Drive / lỗi tạm — desktop sẽ tạo bù khi đồng bộ.
+    }
+  }
+
+  // Chế độ "Nhập link ảnh riêng": studio tự chuyển sang "Khách đã duyệt" cũng là
+  // khách đã xác nhận → tạo sẵn MỘT album trống cho hợp đồng (idempotent). Các
+  // trạng thái sau đó đã được autoCreateContractSelectionOnProduction lo ở trên.
+  if (status === "approved" && contract.status !== status && shouldEnsureManualAlbum(normalizeAlbumMode(contract.album_mode), status)) {
+    try {
+      await ensureManualContractAlbum(ownerId, contractId);
+    } catch {
+      /* lỗi tạm — nút "Tạo album cho hợp đồng" ở tab Sản phẩm tạo bù */
     }
   }
 

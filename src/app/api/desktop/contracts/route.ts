@@ -45,5 +45,20 @@ export async function GET(req: Request) {
 
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ contracts: data ?? [], now: new Date().toISOString() });
+  let contracts = data ?? [];
+  // Danh sách để ĐỒNG BỘ DRIVE (?drive=1, vòng theo dõi ?status=…): bỏ hợp đồng
+  // "Nhập link ảnh riêng" — chúng cố ý không có thư mục, gọi prepare chỉ nhận 409.
+  // Truy vấn riêng cột album_mode: chưa chạy migration thì bỏ qua bước lọc.
+  if ((driveReady || status) && contracts.length) {
+    const { data: manual, error: mErr } = await createAdminClient()
+      .from("studio_contracts")
+      .select("id")
+      .eq("owner_id", auth.ownerId)
+      .eq("album_mode", "manual");
+    if (!mErr && manual?.length) {
+      const skip = new Set(manual.map((r) => r.id as string));
+      contracts = contracts.filter((c) => !skip.has(c.id as string));
+    }
+  }
+  return NextResponse.json({ contracts, now: new Date().toISOString() });
 }

@@ -56,7 +56,9 @@ export async function POST(req: Request) {
           error:
             res.error === "not_connected"
               ? "Chưa kết nối Google Drive của studio — vào Đồng bộ Drive để kết nối."
-              : res.error,
+              : res.error === "manual_album_mode"
+                ? "Hợp đồng này dùng link ảnh riêng nên không tạo thư mục Drive. Đổi sang “Album mặc định” ở tab Sản phẩm nếu muốn đồng bộ từ mstudo desktop."
+                : res.error,
         },
         { status: 400 },
       );
@@ -93,6 +95,8 @@ export async function POST(req: Request) {
       if (res.error === "not_connected") {
         return NextResponse.json({ error: "Chưa kết nối Google Drive của studio — vào Đồng bộ Drive để kết nối." }, { status: 400 });
       }
+      // Hợp đồng nhập link ảnh riêng: cố ý không có thư mục — bỏ qua, không tính lỗi.
+      if (res.error === "manual_album_mode") continue;
       failed++;
       firstError ??= res.error;
       continue;

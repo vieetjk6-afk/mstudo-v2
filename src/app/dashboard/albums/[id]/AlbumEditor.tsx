@@ -77,6 +77,18 @@ export type DeliveryTwin = {
   is_gallery: boolean | null;
 };
 
+/** Hợp đồng gắn album này (để hiện thẻ "Album của hợp đồng …"). */
+export type LinkedContractInfo = {
+  id: string;
+  code: string | null;
+  title: string;
+  status: string | null;
+  /** Chế độ album của hợp đồng (@/lib/album-mode) — null = hợp đồng cũ. */
+  albumMode: "desktop" | "manual" | null;
+  /** Album này là album của hợp đồng (selection_album_id), không phải album giao riêng. */
+  isSelectionAlbum: boolean;
+};
+
 export default function AlbumEditor({
   album,
   initialSources,
@@ -94,6 +106,7 @@ export default function AlbumEditor({
   selections = [],
   storageMonths = 6,
   deliveryTwin = null,
+  linkedContract = null,
 }: {
   album: Album;
   initialSources: AlbumSource[];
@@ -115,6 +128,7 @@ export default function AlbumEditor({
   storageMonths?: number;
   /** Album giao khách của cùng hợp đồng (nếu album này là album chọn ảnh). */
   deliveryTwin?: DeliveryTwin | null;
+  linkedContract?: LinkedContractInfo | null;
 }) {
   const { t } = useLang();
   const supabase = createClient();
@@ -164,6 +178,8 @@ export default function AlbumEditor({
   // null) mà màn này ghi "Chọn ảnh" thì studio thấy một đằng, khách thấy một nẻo.
   const [phase, setPhase] = useState<AlbumPhase>(isDeliveryPhase(album) ? "delivery" : "selection");
   const [phaseBusy, setPhaseBusy] = useState(false);
+  // Album của hợp đồng "Nhập link ảnh riêng" (@/lib/album-mode).
+  const manualContract = !!linkedContract && linkedContract.albumMode === "manual" && linkedContract.isSelectionAlbum;
   // Link khách của album này có đang bị chuyển sang album giao khách của hợp
   // đồng không — điều kiện phải khớp Y HỆT src/app/a/[slug]/page.tsx.
   const [twinPhase, setTwinPhase] = useState<string | null>(
@@ -641,6 +657,40 @@ export default function AlbumEditor({
             <button onClick={twinBackToSelection} disabled={twinBusy} className="act-btn act-btn-primary">
               <ArrowLeft size={15} /> {twinBusy ? "Đang đổi…" : "Về giai đoạn Chọn ảnh"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Album thuộc hợp đồng nào. Hợp đồng "Nhập link ảnh riêng": MỘT album
+          này dùng cho cả chọn ảnh lẫn giao hoàn thiện — nói rõ dán link ở đâu. */}
+      {linkedContract && (
+        <div className="mb-3.5 flex flex-col gap-2.5 rounded-[12px] p-3.5 sm:flex-row sm:items-center" style={{ background: "var(--sf2)", border: "1px solid var(--bd)" }}>
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] font-bold">
+              Album của hợp đồng {linkedContract.code ? `${linkedContract.code} · ` : ""}{linkedContract.title}
+            </p>
+            <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx2)" }}>
+              {manualContract
+                ? "Hợp đồng dùng link ảnh riêng: dán link Drive ảnh chọn ở “Nguồn ảnh” (loại Ảnh chọn), link ảnh hoàn thiện ở “Giao khách”. Cùng album này dùng để khách chọn ảnh rồi nhận ảnh hoàn thiện."
+                : linkedContract.albumMode === "desktop"
+                  ? "Album mặc định — ảnh tự đồng bộ từ mstudo desktop qua thư mục Drive của hợp đồng."
+                  : "Album gắn với hợp đồng này."}
+            </p>
+            {manualContract && linkedContract.status === "completed" && phase !== "delivery" && (
+              <p className="mt-1 text-[11.5px] font-semibold" style={{ color: "var(--am)" }}>
+                Hợp đồng đã hoàn thành — dán link ảnh hoàn thiện để giao khách.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-none flex-wrap gap-2">
+            {manualContract && (
+              <button onClick={() => setTab(phase === "delivery" || linkedContract.status === "completed" ? "deliver" : "sources")} className="act-btn">
+                <Plus size={15} /> Dán link ảnh
+              </button>
+            )}
+            <Link href={`/dashboard/studio/contracts/${linkedContract.id}?tab=album`} className="act-btn">
+              Mở hợp đồng
+            </Link>
           </div>
         </div>
       )}
@@ -1359,9 +1409,14 @@ export default function AlbumEditor({
             {/* Delivery phase: studio pastes the EDITED-photos folder link. Those photos
                 are what the client sees in the delivery gallery; the originals the client
                 picked earlier auto-surface as the "File gốc" button (see getOriginalFolders). */}
-            {phase === "delivery" && (
+            {(phase === "delivery" || manualContract) && (
               <div className="card p-5">
                 <label className="label">Link ảnh đã chỉnh sửa (hiện cho khách ở album giao)</label>
+                {phase !== "delivery" && (
+                  <p className="mb-2 text-[11.5px]" style={{ color: "var(--tx2)" }}>
+                    Dán link ảnh hoàn thiện trước, rồi bấm <b>“Chuyển sang Giao khách”</b> ở trên — khách nhận ảnh trên chính album này.
+                  </p>
+                )}
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <input
                     className="input flex-1"
