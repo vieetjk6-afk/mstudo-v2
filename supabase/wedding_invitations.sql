@@ -74,6 +74,6 @@ on conflict (id) do update
       file_size_limit = 12582912,
       allowed_mime_types = null;
 
+-- Bucket PUBLIC: khách xem ảnh bằng URL công khai, không cần policy SELECT nào.
+-- Một policy SELECT chỉ mở thêm đường LIỆT KÊ toàn bucket → cố ý không có.
 drop policy if exists wedding_photos_read on storage.objects;
-create policy wedding_photos_read on storage.objects
-  for select using (bucket_id = 'wedding-photos');

@@ -148,7 +148,7 @@ export default function ThiepListView({ rows, ownerId, studio }: { rows: Invitat
         </button>
       </header>
 
-      {err && <p className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
+      {err && <p className="mb-4 rounded-lg bg-[var(--rdS)] px-3 py-2 text-sm text-[var(--rd)]">{err}</p>}
 
       {rows.length === 0 ? (
         <div className="card p-8 text-center">
@@ -173,7 +173,7 @@ export default function ThiepListView({ rows, ownerId, studio }: { rows: Invitat
                       <span style={{ color: r.published ? "var(--s-green)" : "var(--text3)" }}>{r.published ? "Đang hiển thị" : "Nháp"}</span>
                     </p>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-3 py-1 text-sm text-rose-700">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[var(--rdS)] px-3 py-1 text-sm text-[var(--rd)]">
                     <Users size={13} /> {r.rsvp_count} RSVP
                   </span>
                 </div>

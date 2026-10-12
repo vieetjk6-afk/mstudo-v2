@@ -136,7 +136,9 @@ export type PersonChip = {
   name: string;
   coverPhotoId: string | null;
   coverBox: number[] | null;
-  descriptor: number[] | null;
+  // KHÔNG có `descriptor` (128 số thực ≈ 2–3 KB JSON mỗi người): khách không
+  // cần — so khớp khuôn mặt chạy ở máy chủ (face-match) và đọc descriptor từ DB.
+  // Gửi kèm chỉ làm phình HTML/JSON của mọi lượt mở album.
   faceCount: number;
   photoIds: string[];
 };
@@ -190,7 +192,6 @@ export function faceChips(
       coverPhotoId:
         p.cover_photo_id && albumPhotoIds.has(p.cover_photo_id) ? p.cover_photo_id : null,
       coverBox: p.cover_box && p.cover_box.length === 4 ? p.cover_box : null,
-      descriptor: p.descriptor && p.descriptor.length > 0 ? p.descriptor : null,
       faceCount: p.face_count ?? 0,
       photoIds: byPerson.get(p.id)!,
     }));

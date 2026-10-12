@@ -1,13 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { unstable_cache } from "next/cache";
-import { headers } from "next/headers";
 import { Hanken_Grotesk, Cormorant_Garamond, Manrope, Dancing_Script, Great_Vibes, Be_Vietnam_Pro, Playfair_Display, Playpen_Sans, Lora } from "next/font/google";
 import "./globals.css";
 import { LangProvider } from "@/lib/i18n";
 import { ThemeProvider } from "@/lib/theme";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-boot";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getBrandForHost } from "@/lib/host-brand";
+import { getSiteMeta } from "@/lib/site-meta";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 import InAppBrowserPrompt from "@/components/InAppBrowserPrompt";
 
@@ -110,60 +107,30 @@ const lora = Lora({
   preload: false,
 });
 
-const DEFAULT_TITLE = "mstudo — Phần mềm quản lý studio ảnh";
-const DEFAULT_DESCRIPTION =
-  "mstudo · Phần mềm quản lý studio ảnh: hợp đồng, báo giá, đặt lịch, lịch chụp, đội ngũ & tài chính trong một nơi.";
-
-// Tiêu đề/favicon do admin chỉnh rất hiếm khi đổi → cache 5 phút giữa các
-// request thay vì query Supabase trên MỌI page-load (giảm TTFB toàn trang).
-const getSiteMeta = unstable_cache(
-  async () => {
-    let title = DEFAULT_TITLE;
-    let description = DEFAULT_DESCRIPTION;
-    let favicon: string | null = null;
-    try {
-      const db = createAdminClient();
-      const { data } = await db
-        .from("site_settings")
-        .select("site_title, site_description, favicon_url")
-        .eq("id", 1)
-        .maybeSingle();
-      if (data?.site_title) title = data.site_title;
-      if (data?.site_description) description = data.site_description;
-      if (data?.favicon_url) favicon = data.favicon_url;
-    } catch {
-      /* keep defaults */
-    }
-    return { title, description, favicon };
-  },
-  ["site-meta"],
-  { revalidate: 300 }
-);
-
-// Browser-tab title / description / favicon are admin-editable (Cài đặt → Trình
-// duyệt). Falls back to the defaults if Supabase isn't reachable or unset.
+// Browser-tab title / description are admin-editable (Cài đặt → Trình duyệt).
+// Falls back to the defaults if Supabase isn't reachable or unset.
+//
+// KHÔNG đọc headers() ở đây: layout gốc gọi headers() là MỌI trang thành
+// dynamic — ISR của showcase / gia / banggia chết hẳn, lượt xem nào cũng chạy
+// hàm (tốn Fast Origin Transfer). Phần phụ thuộc host đã chuyển đi:
+//   • favicon / icon iOS → /api/brand-icon (đọc Host, 302 sang logo studio trên
+//     tên miền riêng, hoặc favicon admin đặt trên host mstudo);
+//   • tiêu đề trên tên miền studio → mỗi trang khách tự đặt (generateMetadata
+//     của /site, /a, /album, /portal, /q, /c…).
+// appleWebApp.title bỏ trống có chủ ý: iOS lấy tên từ manifest của trang (album
+// / portal có manifest riêng mang tên studio, host chính là "mstudo") — đặt cứng
+// "mstudo" ở đây sẽ đè tên studio trên màn hình chính của khách.
 export async function generateMetadata(): Promise<Metadata> {
-  // On a studio's own domain/subdomain, white-label the tab: the studio's logo
-  // becomes the favicon and its brand name the title — never the mstudo mark.
-  const brand = await getBrandForHost((await headers()).get("host"));
-  if (brand) {
-    const icon = brand.logoUrl || "/favicon.svg";
-    return {
-      title: brand.name,
-      description: brand.name,
-      appleWebApp: { capable: true, title: brand.name, statusBarStyle: "black-translucent" },
-      icons: { icon, shortcut: icon, apple: icon },
-    };
-  }
-
-  const { title, description, favicon } = await getSiteMeta();
+  const { title, description } = await getSiteMeta();
   return {
     title,
     description,
-    appleWebApp: { capable: true, title: "mstudo", statusBarStyle: "black-translucent" },
-    icons: favicon
-      ? { icon: favicon, shortcut: favicon, apple: favicon }
-      : { icon: "/favicon.svg", shortcut: "/favicon.svg", apple: "/logo-mark.svg" },
+    appleWebApp: { capable: true, statusBarStyle: "black-translucent" },
+    icons: {
+      icon: "/api/brand-icon",
+      shortcut: "/api/brand-icon",
+      apple: "/api/brand-icon?apple=1",
+    },
   };
 }
 

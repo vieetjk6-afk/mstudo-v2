@@ -17,7 +17,9 @@ const saveCfg = () => localStorage.setItem("cfg", JSON.stringify(cfg));
 // bị giới hạn trong đây). Gọi lúc khởi động + mỗi khi đổi thư mục.
 const syncRoots = () => invoke("set_roots", { paths: [cfg.dir, cfg.mediaDir].filter(Boolean) }).catch(() => {});
 
-const SYNC_EVERY_MS = 20 * 1000;         // đồng bộ hợp đồng mỗi 20 giây (gần như tức thì)
+// 60 giây (trước 20s): mỗi lần gọi là 1 lượt hàm trên Vercel; khi mở/focus cửa
+// sổ vẫn đồng bộ ngay (focusSync) nên người dùng không thấy chậm.
+const SYNC_EVERY_MS = 60 * 1000;         // đồng bộ hợp đồng mỗi 60 giây
 const DATA_REFRESH_MS = 5 * 60 * 1000;    // tải lại dữ liệu offline mỗi 5 phút
 const KEEP_DAYS = 30;                     // giữ file xuất 30 ngày
 const EXPORTS = [
@@ -403,6 +405,8 @@ $("btnChangeFolder").onclick = async () => {
     } catch (e) { log("Lỗi di chuyển dữ liệu: " + e, "err"); }
   }
   cfg.dir = p; saveCfg(); syncRoots(); refreshStats();
+  // Thư mục mới có thể chưa có file cache → lần làm mới sau phải tải đủ (không 304).
+  if (typeof DB !== "undefined" && DB) delete DB.hash;
   log("Đổi thư mục lưu thành " + p);
 };
 $("btnDisconnect").onclick = async () => {
@@ -434,7 +438,7 @@ async function runSync(manual = false) {
     if (okAll) { cfg.lastSync = r.now; saveCfg(); }
     refreshStats();
     // Có hợp đồng mới (đã ký) → tạo thư mục ảnh/video trên máy + Drive ngay.
-    if (r.contracts.length) runDriveSync(false);
+    if (r.contracts.length) { _ipCache.at = 0; runDriveSync(false, true); }
   } catch (e) {
     if (manual) log("Không đồng bộ được: " + (e.message || e), "err");
   } finally {
@@ -487,15 +491,19 @@ async function saveContract(c) {
 // tự tạo "JPG Goc" → album chọn ảnh, "File ChinhSua" → gallery giao khách.
 //
 // PHƯƠNG ÁN TỐI ƯU (thay vì quét TẤT CẢ hợp đồng mỗi 10s):
-//  - Vòng CHẬM (2 phút): quét toàn bộ hợp đồng đã ký — bắt file bỏ vào muộn.
+//  - Vòng CHẬM (2 phút): quét thư mục trên máy của toàn bộ hợp đồng đã ký — bắt
+//    file bỏ vào muộn. Danh sách hợp đồng (?drive=1) cache 10 phút (có hợp đồng
+//    mới ký thì runSync gọi lại với fresh=true để lấy ngay).
 //  - Vòng NHANH (10s): CHỈ quét hợp đồng "đang thực hiện" — thợ đang đổ ảnh vào
 //    máy là tải lên gần như tức thì, không phải chờ. Nhẹ vì chỉ đụng vài hợp đồng
-//    đang chạy + danh sách hợp đồng được cache 30s (không gọi server mỗi vòng).
-//  - Cây thư mục Drive (plan) cache 5 phút → vòng nhanh không gọi lại server.
-const DRIVE_FULL_SYNC_MS = 2 * 60 * 1000;   // quét toàn bộ hợp đồng đã ký
+//    đang chạy + danh sách hợp đồng được cache 2 phút (không gọi server mỗi vòng).
+//  - Cây thư mục Drive (plan) cache theo id + updated_at của hợp đồng, lưu cả vào
+//    localStorage, hạn 6 giờ → chỉ gọi /drive/prepare khi hợp đồng thực sự đổi.
+const DRIVE_FULL_SYNC_MS = 2 * 60 * 1000;   // quét (trên máy) toàn bộ hợp đồng đã ký
+const DRIVE_LIST_TTL_MS = 10 * 60 * 1000;   // cache danh sách hợp đồng ?drive=1
 const DRIVE_WATCH_MS = 10 * 1000;           // theo dõi nhanh hợp đồng đang thực hiện
-const INPROGRESS_TTL_MS = 30 * 1000;        // cache danh sách hợp đồng đang thực hiện
-const PLAN_TTL_MS = 5 * 60 * 1000;          // cache cây thư mục Drive mỗi hợp đồng
+const INPROGRESS_TTL_MS = 2 * 60 * 1000;    // cache danh sách hợp đồng đang thực hiện
+const PLAN_TTL_MS = 6 * 3600 * 1000;        // cache cây thư mục Drive mỗi hợp đồng
 const THUMB_MAX_BYTES = 16 * 1024 * 1024;   // ảnh lớn hơn → không tạo xem trước
 // Số file tải SONG SONG cùng lúc (như app Google Drive) — chồng độ trễ mạng,
 // một video lớn không còn chặn các ảnh phía sau. Mặc định 10; chỉnh qua
@@ -505,7 +513,17 @@ const DRIVE_CONCURRENCY_DEFAULT = 10;
 const DRIVE_UPLOAD_RETRIES = 2;             // thử lại file lỗi (tạm mạng) trước khi bỏ qua
 let driveTok = { v: null, exp: 0 };
 let driveWarned = false;
-const planCache = new Map();                 // contractId → { tree, folderId, folderName, at }
+// contractId → { tree, folderId, folderName, pathSegments, updatedAt, at } — nạp
+// lại từ localStorage để mở app lại không phải gọi prepare cho từng hợp đồng.
+const planCache = new Map((() => { try { return Object.entries(JSON.parse(localStorage.getItem("planCache") || "{}")); } catch { return []; } })());
+const savePlanCache = () => {
+  try {
+    const now = Date.now();
+    const obj = {};
+    for (const [k, v] of planCache) if (now - v.at < PLAN_TTL_MS) obj[k] = v;
+    localStorage.setItem("planCache", JSON.stringify(obj));
+  } catch { /* localStorage đầy → chỉ cache trong bộ nhớ */ }
+};
 const driveSkipLogged = new Set();           // {id}:{reason} đã log (tránh lặp mỗi vòng)
 // Lý do bỏ qua 1 hợp đồng khi đồng bộ ảnh → câu tiếng Việt dễ hiểu.
 function driveSkipReason(msg) {
@@ -620,10 +638,12 @@ async function prepareContract(id, resync = false) {
   if (r.status >= 400) throw new Error("prepare HTTP " + r.status);
   return safeJson(r.body_b64);
 }
-// Lấy cây thư mục hợp đồng — cache để vòng theo dõi nhanh không gọi server mỗi lần.
-async function getPlan(id) {
+// Lấy cây thư mục hợp đồng — cache theo updated_at: hợp đồng không đổi thì dùng
+// lại plan cũ (tối đa 6 giờ), đổi (đổi tên/ngày/loại dịch vụ…) thì gọi lại server.
+// force=true (bấm tay) → luôn hỏi lại server.
+async function getPlan(id, updatedAt, force = false) {
   const c = planCache.get(id);
-  if (c && Date.now() - c.at < PLAN_TTL_MS) return c;
+  if (!force && c && Date.now() - c.at < PLAN_TTL_MS && (!updatedAt || c.updatedAt === updatedAt)) return c;
   const plan = await prepareContract(id, false);
   if (plan.skip) return { skip: plan.skip };
   // pathSegments = [Gốc, Loại dịch vụ, Thang N, Tên hợp đồng]; bản server cũ chỉ
@@ -631,15 +651,16 @@ async function getPlan(id) {
   const segments = Array.isArray(plan.pathSegments) && plan.pathSegments.length
     ? plan.pathSegments
     : [plan.rootFolderName, plan.folderName].filter(Boolean);
-  const entry = { tree: plan.tree, folderId: plan.folderId, folderName: plan.folderName, pathSegments: segments, at: Date.now() };
+  const entry = { tree: plan.tree, folderId: plan.folderId, folderName: plan.folderName, pathSegments: segments, updatedAt: updatedAt || null, at: Date.now() };
   planCache.set(id, entry);
+  savePlanCache();
   return entry;
 }
 
 // Quét 1 hợp đồng: trả DANH SÁCH file cần tải (chưa tải) + tham chiếu manifest,
 // để lõi đồng bộ gom tổng số ảnh/tổng dung lượng trước khi tải (tính % + ETA).
 async function scanContract(c, manual = false) {
-  const plan = await getPlan(c.id);
+  const plan = await getPlan(c.id, c.updated_at, manual);
   if (plan.skip) throw new Error(plan.skip);
   // Cây thư mục local = mediaDir + [Loại dịch vụ, Thang N, Tên hợp đồng] — y hệt
   // cấu trúc trên Drive (không kèm thư mục gốc; mediaDir chính là gốc trên máy).
@@ -768,7 +789,9 @@ async function driveSyncRun(contracts, manual = false) {
 let mediaDirWarned = false;
 
 // Vòng CHẬM + nút bấm tay: quét toàn bộ hợp đồng đã ký.
-async function runDriveSync(manual = false) {
+// fresh=true: bỏ qua cache danh sách (vừa có hợp đồng mới ký/sửa).
+let _driveList = { at: 0, list: [] };
+async function runDriveSync(manual = false, fresh = false) {
   if (busy("drive") || !cfg.token) return;
   if (!cfg.mediaDir) {
     // Cảnh báo cả ở vòng TỰ ĐỘNG (một lần), không chỉ khi bấm tay. Studio bỏ qua
@@ -791,8 +814,11 @@ async function runDriveSync(manual = false) {
     driveWarned = false;
     // ?drive=1: hợp đồng khách đã ký HOẶC studio đã duyệt/đang thực hiện/hoàn thành
     // (không chỉ hợp đồng khách e-ký) → mới tạo đủ thư mục trên máy.
-    const list = await apiJson("/api/desktop/contracts?drive=1");
-    const uploaded = await driveSyncRun(list.contracts || [], manual);
+    if (manual || fresh || Date.now() - _driveList.at >= DRIVE_LIST_TTL_MS) {
+      const list = await apiJson("/api/desktop/contracts?drive=1");
+      _driveList = { at: Date.now(), list: list.contracts || [] };
+    }
+    const uploaded = await driveSyncRun(_driveList.list, manual);
     cfg.lastDriveSync = new Date().toISOString(); saveCfg();
     if (manual) log(uploaded ? `Đã tải ${uploaded} file lên Drive.` : "Không có file mới để tải lên Drive.");
     refreshStats();
@@ -839,13 +865,25 @@ async function runDriveWatch() {
 // thay đổi trên web sau lần đó đều không hiện ra, dù "Đồng bộ ngay" vẫn báo vừa
 // chạy (runSync chỉ tải file hợp đồng, không đụng tới cache). Tệ hơn: một lỗi khi
 // xuất Excel sẽ ném ra trước và cache không bao giờ được ghi.
+// Mốc lần tải gần nhất (trong bộ nhớ) — setInterval 5 phút VÀ nhịp Rust mỗi 5
+// phút cùng gọi hàm này; có mốc này thì hai lịch gộp lại thành MỘT lần tải.
+let _lastDataAt = 0;
 async function refreshData(manual = false) {
   if (busy("data") || !cfg.token || !cfg.dir) return false;
+  if (!manual && Date.now() - _lastDataAt < DATA_REFRESH_MS - 30 * 1000) return "skip"; // vừa tải xong, chưa tới lượt
   busyOn("data");
+  _lastDataAt = Date.now();
   try {
-    const backup = await apiB64(`/api/desktop/export?type=backup`);
-    await invoke("write_file_b64", { path: cachePath(), contentsB64: backup });
-    setData(JSON.parse(b64ToText(backup)));
+    // lite=1: bỏ ảnh chữ ký (không dùng khi xem offline). have=<hash>: dữ liệu
+    // trên máy còn khớp máy chủ thì nhận 304 rỗng thay vì tải lại cả cục JSON.
+    const have = typeof DB !== "undefined" && DB && DB.hash ? `&have=${encodeURIComponent(DB.hash)}` : "";
+    const r = await api(`/api/desktop/export?type=backup&lite=1${have}`);
+    if (r.status !== 304) {
+      const backup = r.body_b64;
+      const parsed = JSON.parse(b64ToText(backup));
+      await invoke("write_file_b64", { path: cachePath(), contentsB64: backup });
+      setData(parsed);
+    }
     cfg.lastCache = new Date().toISOString();
     delete cfg.lastCacheErr;
     saveCfg(); refreshStats();
@@ -855,6 +893,7 @@ async function refreshData(manual = false) {
     // Báo cả khi TỰ ĐỘNG: cache cũ mà im lặng chính là thứ khiến số liệu lệch
     // với web mà không ai biết. Lỗi được GHI LẠI để màn Tổng quan nói ra ngay
     // dưới các con số — nhật ký trong tab khác thì không ai thấy.
+    _lastDataAt = 0; // lỗi → lượt sau thử lại ngay, không chờ đủ 5 phút
     cfg.lastCacheErr = { at: new Date().toISOString(), msg: String(e.message || e) };
     saveCfg();
     log("Không tải được dữ liệu mới: " + (e.message || e), "err");
@@ -933,6 +972,7 @@ window.localMutate = async function (table, op, row) {
   if (op === "insert") arr.unshift(row);
   else if (op === "update") { const i = arr.findIndex((x) => x.id === row.id); if (i >= 0) arr[i] = { ...arr[i], ...row }; else arr.unshift(row); }
   else if (op === "delete") { const i = arr.findIndex((x) => x.id === row.id); if (i >= 0) arr.splice(i, 1); }
+  delete DB.hash; // dữ liệu trên máy đã khác bản máy chủ → lần làm mới sau phải tải đủ
   if (typeof renderData === "function") renderData();
   try { await invoke("write_file_b64", { path: cachePath(), contentsB64: textToB64(JSON.stringify(DB)) }); } catch { /* */ }
   const q = loadQueue(); q.push({ table, op, row, at: Date.now() }); saveQueue(q);
@@ -1089,7 +1129,7 @@ window.__mstudoTick = () => {
   if (_tickCount % 5 === 1) {
     try { runSync(false); } catch { /* nhịp sau thử lại */ }
     try { runDriveSync(false); } catch { /* nhịp sau thử lại */ }
-    try { refreshData(false).then(checkAccount); } catch { /* nhịp sau thử lại */ }
+    try { refreshData(false).then((r) => { if (r !== "skip") checkAccount(); }); } catch { /* nhịp sau thử lại */ }
   }
 };
 
@@ -1119,7 +1159,9 @@ function bootSync(first = false) {
   setInterval(() => runSync(false), SYNC_EVERY_MS);
   setInterval(flushQueue, 60 * 1000); // thử đồng bộ thay đổi cục bộ mỗi phút
   // Dữ liệu offline làm mới mỗi 5 phút — KHÔNG chờ tới ngày hôm sau như trước.
-  setInterval(() => refreshData(false).then(checkAccount), DATA_REFRESH_MS);
+  // Nhịp Rust (__mstudoTick) cũng gọi mỗi ~5 phút; refreshData tự bỏ lượt trùng
+  // (mốc _lastDataAt) nên thực tế chỉ tải MỘT lần / 5 phút.
+  setInterval(() => refreshData(false).then((r) => { if (r !== "skip") checkAccount(); }), DATA_REFRESH_MS);
   setInterval(() => { if (cfg.lastExportDate !== today()) runExports(); }, 10 * 60 * 1000);
   setInterval(() => runDriveSync(false), DRIVE_FULL_SYNC_MS); // vòng chậm: toàn bộ HĐ đã ký
   setInterval(runDriveWatch, DRIVE_WATCH_MS);                 // vòng nhanh: HĐ đang thực hiện

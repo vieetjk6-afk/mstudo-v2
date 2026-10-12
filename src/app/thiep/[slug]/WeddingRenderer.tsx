@@ -1,4 +1,4 @@
-import type { WeddingConfig, WeddingInvitation } from "@/lib/types";
+import type { WeddingConfig, PublicWeddingInvitation } from "@/lib/types";
 import type { Wish } from "./shared";
 import CardIntro from "./CardIntro";
 import ClassicTemplate from "./designs/ClassicTemplate";
@@ -55,7 +55,7 @@ const TEMPLATES = {
  * thư (che mất nội dung đang sửa) và cho các khối cố định biết là đang ở trong
  * khung xem trước chứ không phải cả màn hình.
  */
-export default function WeddingRenderer({ inv, wishes = [], guest = "", storyUrl = "", preview = false }: { inv: WeddingInvitation; wishes?: Wish[]; guest?: string; storyUrl?: string; preview?: boolean }) {
+export default function WeddingRenderer({ inv, wishes = [], guest = "", storyUrl = "", preview = false }: { inv: PublicWeddingInvitation; wishes?: Wish[]; guest?: string; storyUrl?: string; preview?: boolean }) {
   const Template = TEMPLATES[inv.template as keyof typeof TEMPLATES] ?? ClassicTemplate;
   const cfg = inv.config as WeddingConfig;
   const accent = cfg?.accent || "#b08968";

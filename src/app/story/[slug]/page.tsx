@@ -9,10 +9,12 @@ import StoryRenderer, { type StoryPhoto, type StoryWish } from "./StoryRenderer"
 export const dynamic = "force-dynamic";
 
 async function load(slug: string): Promise<StoryPage | null> {
+  // KHÔNG lấy edit_token: cả object được truyền xuống StoryRenderer (client) —
+  // lấy ra là lộ mã sửa trang cho mọi người xem.
   const db = createAdminClient();
   const { data } = await db
     .from("story_pages")
-    .select("id, owner_id, contract_id, slug, edit_token, config, published, created_at, updated_at")
+    .select("id, owner_id, contract_id, slug, config, published, created_at, updated_at")
     .eq("slug", slug.toLowerCase())
     .maybeSingle();
   if (!data || !data.published) return null;

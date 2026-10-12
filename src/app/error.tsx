@@ -13,6 +13,10 @@ export default function Error({ reset }: { error: Error & { digest?: string }; r
 
   useEffect(() => {
     let cancelled = false;
+    // Hẹn giờ giữ ở phạm vi effect: cleanup phải trả về ĐỒNG BỘ. Trả về từ bên
+    // trong hàm async thì React không bao giờ nhận được, hẹn giờ không bị huỷ và
+    // vẫn chuyển trang dù người dùng đã bấm "Thử lại" hoặc đã rời đi.
+    let timer: ReturnType<typeof setTimeout> | undefined;
     (async () => {
       let signedIn = false;
       try {
@@ -25,10 +29,12 @@ export default function Error({ reset }: { error: Error & { digest?: string }; r
       const dest = signedIn ? "/dashboard/studio" : "/";
       setHome(dest);
       // Grace period so the retry button is actually usable.
-      const timer = setTimeout(() => router.replace(dest), 6000);
-      return () => clearTimeout(timer);
+      timer = setTimeout(() => router.replace(dest), 6000);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [router]);
 
   return (

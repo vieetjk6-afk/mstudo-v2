@@ -6,6 +6,10 @@ import { VA_CSS } from "./styles";
 
 function Logo() {
   return (
+    // <a> chứ không phải <Link>: trang này được REWRITE từ tên miền riêng sang
+    // /site/<sub>, nên "/" phải là một lượt tải thật để middleware dựng lại đúng
+    // ngữ cảnh tenant — cùng quy ước với components/vieetjk.
+    // eslint-disable-next-line @next/next/no-html-link-for-pages
     <a href="/" className="va-logo" aria-label={`${COMPANY.legalName} — Home`}>
       <VaMark size={36} />
       <span className="va-logo-text">
@@ -95,6 +99,8 @@ export default function AiChrome({ children, active = "" }: { children: React.Re
             </div>
             <div>
               <h4>Company</h4>
+              {/* <a> thay vì <Link> — xem ghi chú ở Logo phía trên. */}
+              {/* eslint-disable @next/next/no-html-link-for-pages */}
               <ul className="va-foot-links">
                 <li><a href="/#about">About Vieetjk</a></li>
                 <li><a href="/#products">Products</a></li>
@@ -102,6 +108,7 @@ export default function AiChrome({ children, active = "" }: { children: React.Re
                 <li><a href="/#process">How we work</a></li>
                 <li><a href="/#faq">FAQ</a></li>
               </ul>
+              {/* eslint-enable @next/next/no-html-link-for-pages */}
             </div>
             <div>
               <h4>Contact</h4>

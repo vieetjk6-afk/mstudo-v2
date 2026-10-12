@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { effectivePlan } from "@/lib/plans";
 import { canAssignBranch, canManageRoles, isAssignableRole } from "@/lib/studio-roles";
 
 export const dynamic = "force-dynamic";
@@ -38,8 +37,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "branch_required" }, { status: 400 });
   }
 
-  // 1) Tạo tài khoản auth. Nếu email đã tồn tại → nhận tài khoản đó làm nhân viên
-  //    (nhưng KHÔNG chiếm tài khoản đang trả phí / admin / thuộc studio khác).
+  // 1) Tạo tài khoản auth. Nếu email đã tồn tại thì CHỈ chấp nhận khi tài khoản
+  //    đó vốn đã là nhân viên của chính studio này.
+  //
+  //    Bản trước "nhận" luôn mọi tài khoản free chưa thuộc studio nào rồi ĐẶT LẠI
+  //    MẬT KHẨU của nó theo mật khẩu chủ studio nhập — tức là ai biết email của
+  //    một người dùng khác đều chiếm được tài khoản đó (đổi mật khẩu + gắn vào
+  //    studio mình). Tài khoản của người khác thì KHÔNG được đụng tới.
   let userId: string;
   const { data: created, error } = await db.auth.admin.createUser({
     email: emailNorm,
@@ -52,23 +56,28 @@ export async function POST(req: Request) {
   } else {
     const { data: existing } = await db
       .from("profiles")
-      .select("id, role, plan, plan_expires_at, studio_owner_id")
+      .select("id, studio_owner_id")
       .eq("email", emailNorm)
       .maybeSingle();
     if (!existing) {
       return NextResponse.json({ error: error?.message || "create_failed" }, { status: 500 });
     }
     const alreadyMine = existing.studio_owner_id === ctx.id;
-    const isFreeUnclaimed =
-      existing.role !== "admin" &&
-      !existing.studio_owner_id &&
-      effectivePlan(existing.plan, existing.plan_expires_at) === "free";
-    if (!alreadyMine && !isFreeUnclaimed) {
-      // Email đã thuộc một tài khoản trả phí / admin / studio khác.
-      return NextResponse.json({ error: "email_taken" }, { status: 409 });
+    if (!alreadyMine) {
+      // Email đã có tài khoản (của chính người đó, hoặc của studio khác). KHÔNG
+      // đổi mật khẩu, KHÔNG gắn vào studio này.
+      return NextResponse.json(
+        {
+          error: "email_taken",
+          message:
+            "Email này đã có tài khoản mstudo. Hãy dùng một email khác cho nhân viên, " +
+            "hoặc nhờ chủ email đó liên hệ với bạn.",
+        },
+        { status: 409 }
+      );
     }
     userId = existing.id;
-    // Đặt lại mật khẩu theo mật khẩu chủ studio nhập để nhân viên đăng nhập được.
+    // Đã là nhân viên của chính studio này: chủ studio đặt lại mật khẩu được.
     await db.auth.admin.updateUserById(userId, { password });
   }
 

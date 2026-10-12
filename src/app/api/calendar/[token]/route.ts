@@ -24,7 +24,9 @@ function vevent(uid: string, date: string, time: string | null, summary: string,
     }
     lines.push(`DTSTART:${start}`, `DTEND:${ymd(endDate)}T${pad(endH)}${pad(+mt[2])}00`);
   } else {
-    const d = new Date(date + "T00:00:00");
+    // "Z" như nhánh trên: không có Z thì Date hiểu theo giờ máy, ở múi +7 rồi
+    // toISOString() lùi một ngày → DTEND = DTSTART, sự kiện cả ngày biến mất.
+    const d = new Date(date + "T00:00:00Z");
     const next = new Date(d.getTime() + 86400000).toISOString().slice(0, 10);
     lines.push(`DTSTART;VALUE=DATE:${ymd(date)}`, `DTEND;VALUE=DATE:${ymd(next)}`);
   }

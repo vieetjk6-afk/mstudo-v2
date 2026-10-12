@@ -31,6 +31,7 @@ import {
   openDrivePicker,
   listFolderImages,
   fetchDriveBytes,
+  fetchPublicDriveBytes,
 } from "@/lib/google-picker";
 import {
   compressImage,
@@ -439,6 +440,9 @@ export default function ToolPanel({
         const token = await ensureDriveToken();
         return fetchDriveBytes(token, it.driveId);
       }
+      // Thử tải ảnh gốc THẲNG từ Drive API (có CORS, 0 byte qua Vercel) trước.
+      const direct = await fetchPublicDriveBytes(it.driveId);
+      if (direct) return direct;
       // raw=1: cần chính byte ảnh (nén + watermark bằng canvas) nên phải giữ
       // cùng miền, không để /api/img 302 sang Google (Drive không gửi CORS).
       const res = await fetch(`/api/img?id=${encodeURIComponent(it.driveId)}&w=${fetchW}&raw=1`);

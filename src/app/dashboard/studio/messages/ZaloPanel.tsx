@@ -197,7 +197,7 @@ export default function ZaloPanel() {
         <MessageCircle size={18} className="text-[#0068FF]" />
         <h2 className="font-serif text-xl font-medium">Tự động nhắn tin Zalo</h2>
         {st?.connected && (
-          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs text-emerald-400">
+          <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-[var(--gnS)] px-2.5 py-1 text-xs text-[var(--gn)]">
             <Check size={13} /> Đã kết nối
           </span>
         )}
@@ -209,13 +209,13 @@ export default function ZaloPanel() {
 
       {/* Kết quả quay về từ cổng cấp quyền OA */}
       {ketQuaOA === "ok" && (
-        <div className="mt-4 flex gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-300">
+        <div className="mt-4 flex gap-2 rounded-lg bg-[var(--gnS)] p-3 text-xs text-[var(--gn)]">
           <Check size={16} className="mt-0.5 shrink-0" />
           <div>Đã kết nối Official Account. Từ giờ tin tự động gửi qua kênh chính thống.</div>
         </div>
       )}
       {ketQuaOA === "loi" && (
-        <div className="mt-4 flex gap-2 rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+        <div className="mt-4 flex gap-2 rounded-lg bg-[var(--rdS)] p-3 text-xs text-[var(--rd)]">
           <X size={16} className="mt-0.5 shrink-0" />
           <div>Chưa cấp quyền được cho Official Account. Thử lại, hoặc kiểm tra xem tài khoản Zalo đang đăng nhập có phải quản trị viên của OA không.</div>
         </div>
@@ -236,7 +236,7 @@ export default function ZaloPanel() {
               aria-pressed={kenh === id}
               className="rounded-xl border p-3 text-left transition"
               style={{
-                borderColor: kenh === id ? "#0068FF" : "rgba(255,255,255,.12)",
+                borderColor: kenh === id ? "#0068FF" : "var(--bd)",
                 background: kenh === id ? "rgba(0,104,255,.08)" : "transparent",
               }}
             >
@@ -254,7 +254,7 @@ export default function ZaloPanel() {
       {/* Cảnh báo rủi ro — chỉ đúng với kênh CÁ NHÂN. Kênh OA là chính thống
           nên dán cảnh báo này lên đó là nói sai và làm studio ngại dùng. */}
       {kenh === "personal" && (
-        <div className="mt-4 flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-300">
+        <div className="mt-4 flex gap-2 rounded-lg bg-[var(--amS)] p-3 text-xs text-[var(--am)]">
           <AlertTriangle size={16} className="mt-0.5 shrink-0" />
           <div>
             <b>Lưu ý:</b> đây là kênh dùng tài khoản Zalo cá nhân (không chính thống). Gửi tin tự động
@@ -289,7 +289,7 @@ export default function ZaloPanel() {
             </>
           )}
           {st?.lastError && !st.connected && (
-            <span className="text-xs text-rose-400">Lỗi: {st.lastError}</span>
+            <span className="text-xs text-[var(--rd)]">Lỗi: {st.lastError}</span>
           )}
         </div>
       ) : (
@@ -318,23 +318,23 @@ export default function ZaloPanel() {
               {connecting ? "Đang chờ quét…" : "Đăng nhập Zalo bằng QR"}
             </button>
             {st?.personalAvailable === false && (
-              <span className="text-xs text-amber-400">Máy chủ chưa cài zca-js — liên hệ hỗ trợ để bật.</span>
+              <span className="text-xs text-[var(--am)]">Máy chủ chưa cài zca-js — liên hệ hỗ trợ để bật.</span>
             )}
           </>
         )}
         {st?.lastError && !st.connected && !connecting && (
-          <span className="text-xs text-rose-400">Lỗi: {st.lastError}</span>
+          <span className="text-xs text-[var(--rd)]">Lỗi: {st.lastError}</span>
         )}
       </div>
       )}
 
       {/* QR để quét — chỉ của kênh cá nhân */}
       {kenh === "personal" && connecting && !st?.connected && (
-        <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-white/10 p-5">
+        <div className="mt-4 flex flex-col items-center gap-2 rounded-xl border border-[var(--bd)] p-5">
           {scanned ? (
             <>
-              <Loader2 size={28} className="animate-spin text-emerald-400" />
-              <p className="text-sm text-emerald-400">Đã quét — đang hoàn tất đăng nhập…</p>
+              <Loader2 size={28} className="animate-spin text-[var(--gn)]" />
+              <p className="text-sm text-[var(--gn)]">Đã quét — đang hoàn tất đăng nhập…</p>
             </>
           ) : qr ? (
             <>
@@ -361,9 +361,9 @@ export default function ZaloPanel() {
         </div>
         {/* overflow-x-auto (không phải hidden): vẫn bo góc như cũ nhưng nếu bảng
             rộng hơn khung thì cuộn ngang được, không bị cắt mất cột. */}
-        <div className="mt-2 overflow-x-auto rounded-xl border border-white/10">
+        <div className="mt-2 overflow-x-auto rounded-xl border border-[var(--bd)]">
           <table className="w-full text-sm">
-            <thead className="bg-white/5 text-xs opacity-70">
+            <thead className="bg-[var(--sf2)] text-xs opacity-70">
               <tr>
                 <th className="px-3 py-2 text-left font-medium">Mốc</th>
                 <th className="px-3 py-2 text-center font-medium">Gửi khách</th>
@@ -374,7 +374,7 @@ export default function ZaloPanel() {
               {EVENTS.map((e) => {
                 const cfg = eventCfg(autoEvents, e.key);
                 return (
-                  <tr key={e.key} className="border-t border-white/5">
+                  <tr key={e.key} className="border-t border-[var(--bd2)]">
                     <td className="px-3 py-2">{e.label}</td>
                     <td className="px-3 py-2 text-center">
                       {e.audiences.includes("client") ? (
@@ -405,7 +405,7 @@ export default function ZaloPanel() {
 
       {/* Gửi thử */}
       {st?.connected && (
-        <div className="mt-6 rounded-xl border border-white/10 p-4">
+        <div className="mt-6 rounded-xl border border-[var(--bd)] p-4">
           <div className="text-sm font-medium">Gửi thử</div>
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <input
@@ -419,8 +419,8 @@ export default function ZaloPanel() {
             </button>
           </div>
           <textarea value={testMsg} onChange={(e) => setTestMsg(e.target.value)} rows={2} className="input mt-2 w-full" />
-          {testState === "ok" && <p className="mt-1 text-xs text-emerald-400">Đã gửi ✓</p>}
-          {testState === "fail" && <p className="mt-1 text-xs text-rose-400">Lỗi: {testErr}</p>}
+          {testState === "ok" && <p className="mt-1 text-xs text-[var(--gn)]">Đã gửi ✓</p>}
+          {testState === "fail" && <p className="mt-1 text-xs text-[var(--rd)]">Lỗi: {testErr}</p>}
         </div>
       )}
     </div>

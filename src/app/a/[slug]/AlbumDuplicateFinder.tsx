@@ -111,12 +111,13 @@ export default function AlbumDuplicateFinder({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      // 640px là đúng cỡ lưới ảnh đang dùng, nên phần lớn tấm đã có sẵn trong
-      // cache của service worker — quét gần như không tốn thêm mạng.
+      // 640px: đủ để so trùng. raw=1: quét bằng fetch() nên cần byte cùng miền
+      // (/api/img chỉ trả byte khi URL có raw=1; thiếu thì 302 sang Google không
+      // có CORS → fetch hỏng). Đã quét một lần thì service worker giữ lại.
       const items: ScanItem[] = scanList.map((p) => ({
         key: p.id,
         name: p.name,
-        url: thumbnailUrl(p.drive_file_id, 640),
+        url: `${thumbnailUrl(p.drive_file_id, 640)}&raw=1`,
       }));
       const outcome = await scanPhotos(items, setProgress, ac.signal);
       if (!outcome.aborted || outcome.metrics.length > 0) {

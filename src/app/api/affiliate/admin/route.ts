@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth-guards";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Chỉ admin (role + is_active) VÀ đã qua MFA nếu tài khoản có bật — dùng chung
+ * requireAdmin với mọi route admin khác. Bản cũ tự kiểm bằng getUser nên bỏ
+ * sót bước MFA: lộ mật khẩu admin là sửa được hoa hồng affiliate.
+ */
 async function assertAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const db = createAdminClient();
-  // M-4: Check both role AND is_active to block deactivated admins
-  const { data: profile } = await db.from("profiles").select("role, is_active").eq("id", user.id).maybeSingle();
-  return profile?.role === "admin" && profile?.is_active !== false ? db : null;
+  const admin = await requireAdmin();
+  return admin ? createAdminClient() : null;
 }
 
 /** GET — all commissions with referrer info */

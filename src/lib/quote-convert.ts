@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { nextContractCode, newShareToken } from "@/lib/contract-code";
-import { computeRoundedDeposit } from "@/lib/quote-deposit";
+import { quoteToContractLines } from "@/lib/quote-lines";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { fmtDate } from "@/lib/date";
 import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
@@ -45,17 +45,12 @@ export async function convertQuoteToContract(
     .eq("quote_id", quote.id)
     .order("position");
 
-  const chosen = (items ?? []).filter((it) => !it.is_optional || it.selected);
-  if (chosen.length === 0) return { ok: false, error: "Không có hạng mục nào được chọn." };
-
-  // Total = (positive lines) - (discount lines). Discount lines are carried
-  // into contract_items with a negative unit_price so the contract math
-  // stays consistent without a separate column.
-  const total = chosen.reduce((s, it) => {
-    const line = (it.qty || 0) * (it.unit_price || 0);
-    return it.is_discount ? s - line : s + line;
-  }, 0);
-  const deposit = computeRoundedDeposit(total);
+  // Dòng hạng mục + tổng + cọc dựng ở quote-lines.ts (thuần, có test). Dòng
+  // giảm giá — kể cả ưu đãi gói `bulk_discount_amount` khách đã thấy trên trang
+  // báo giá — sang contract_items với đơn giá âm, nên tổng hợp đồng tự trừ.
+  // Cọc tính trên tổng ĐÃ giảm và được kẹp về [0, tổng].
+  const { lines, total, deposit, depositPct } = quoteToContractLines(quote, items ?? []);
+  if (lines.length === 0) return { ok: false, error: "Không có hạng mục nào được chọn." };
 
   const code = await nextContractCode(db, quote.owner_id);
   const token = newShareToken();
@@ -109,14 +104,14 @@ export async function convertQuoteToContract(
     .select("id")
     .single();
   if (cErr || !contract) return { ok: false, error: cErr?.message || "Tạo hợp đồng thất bại" };
-  const rows = chosen.map((it, idx) => ({
+  const rows = lines.map((l, idx) => ({
     contract_id: contract.id,
-    name: it.is_discount ? `🏷️ ${it.name}` : it.name,
+    name: l.name,
     // Mô tả hạng mục đi theo sang hợp đồng. Trước đây bị bỏ rơi ở đây: studio
     // gõ mô tả trên báo giá, khách đọc thấy, ký xong thì hợp đồng trắng trơn.
-    description: it.description ?? null,
-    qty: it.qty,
-    unit_price: it.is_discount ? -Math.abs(it.unit_price || 0) : it.unit_price,
+    description: l.description,
+    qty: l.qty,
+    unit_price: l.unit_price,
     position: idx,
   }));
   let { error: iErr } = await db.from("contract_items").insert(rows);
@@ -131,8 +126,7 @@ export async function convertQuoteToContract(
   }
 
   // Auto-create a deposit instalment so the client sees a payment schedule immediately.
-  if (deposit > 0) {
-    const depositPct = Math.round((deposit / total) * 100);
+  if (deposit > 0 && total > 0) {
     await db.from("contract_payment_plan").insert({
       contract_id: contract.id,
       label: `Cọc ${depositPct}%`,

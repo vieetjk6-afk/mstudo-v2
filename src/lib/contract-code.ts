@@ -1,13 +1,14 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { todayVN } from "@/lib/date";
 
 /**
  * Next contract code for a studio: HD-{MM}-{YYYY}-{NNN}, sequence per month.
  * e.g. the 1st contract in June 2026 → "HD-06-2026-001".
  */
 export async function nextContractCode(supabase: SupabaseClient, ownerId: string): Promise<string> {
-  const now = new Date();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = now.getFullYear();
+  // Tháng theo giờ VN — máy chủ chạy UTC, đơn tạo lúc 0h–7h sáng ngày 1 sẽ bị
+  // đánh số vào tháng trước nếu lấy getMonth() giờ máy.
+  const [yyyy, mm] = todayVN().split("-");
   const prefix = `HD-${mm}-${yyyy}-`;
   const { count } = await supabase
     .from("studio_contracts")
@@ -22,9 +23,9 @@ export async function nextContractCode(supabase: SupabaseClient, ownerId: string
  * e.g. the 1st quote in June 2026 → "BG-06-2026-001".
  */
 export async function nextQuoteCode(supabase: SupabaseClient, ownerId: string): Promise<string> {
-  const now = new Date();
-  const mm = String(now.getMonth() + 1).padStart(2, "0");
-  const yyyy = now.getFullYear();
+  // Tháng theo giờ VN — máy chủ chạy UTC, đơn tạo lúc 0h–7h sáng ngày 1 sẽ bị
+  // đánh số vào tháng trước nếu lấy getMonth() giờ máy.
+  const [yyyy, mm] = todayVN().split("-");
   const prefix = `BG-${mm}-${yyyy}-`;
   const { count } = await supabase
     .from("studio_quotes")

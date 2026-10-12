@@ -447,8 +447,8 @@ export default function PricingManager({
                     onChange={(e) => setRenameVal(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") saveRename(l.key); if (e.key === "Escape") setRenamingKey(null); }}
                   />
-                  <button onClick={() => saveRename(l.key)} className="btn-primary rounded-full px-2 py-1.5 text-xs"><Check size={13} /></button>
-                  <button onClick={() => setRenamingKey(null)} className="btn-ghost rounded-full px-2 py-1.5 text-xs"><X size={13} /></button>
+                  <button onClick={() => saveRename(l.key)} className="btn-primary rounded-full px-2 py-1.5 text-xs" aria-label="Lưu tên bảng giá" title="Lưu tên bảng giá"><Check size={13} /></button>
+                  <button onClick={() => setRenamingKey(null)} className="btn-ghost rounded-full px-2 py-1.5 text-xs" aria-label="Huỷ đổi tên" title="Huỷ đổi tên"><X size={13} /></button>
                 </div>
               ) : (
                 <>
@@ -497,8 +497,8 @@ export default function PricingManager({
               onChange={(e) => setNewListName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addCustomList(); if (e.key === "Escape") setShowNewList(false); }}
             />
-            <button onClick={addCustomList} className="btn-primary rounded-full px-3 py-1.5 text-xs"><Check size={13} /></button>
-            <button onClick={() => setShowNewList(false)} className="btn-ghost rounded-full px-3 py-1.5 text-xs"><X size={13} /></button>
+            <button onClick={addCustomList} className="btn-primary rounded-full px-3 py-1.5 text-xs" aria-label="Tạo bảng giá" title="Tạo bảng giá"><Check size={13} /></button>
+            <button onClick={() => setShowNewList(false)} className="btn-ghost rounded-full px-3 py-1.5 text-xs" aria-label="Huỷ tạo bảng giá" title="Huỷ tạo bảng giá"><X size={13} /></button>
           </div>
         ) : (
           <button
@@ -761,7 +761,7 @@ export default function PricingManager({
                         <button onClick={() => toggleActive(it)} className="btn-ghost px-2.5 py-1.5 text-xs" title={it.active ? "Đang hiện" : "Đang ẩn"}>
                           {it.active ? <Eye size={14} /> : <EyeOff size={14} />}
                         </button>
-                        <button onClick={() => remove(it.id)} className="btn-ghost px-2.5 py-1.5 text-xs"><Trash2 size={14} /></button>
+                        <button onClick={() => remove(it.id)} className="btn-ghost px-2.5 py-1.5 text-xs" aria-label="Xoá mục" title="Xoá mục"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   )
@@ -792,7 +792,7 @@ export default function PricingManager({
                         <button onClick={() => toggleActive(it)} className="btn-ghost px-2.5 py-1.5 text-xs" title={it.active ? "Đang hiện" : "Đang ẩn"}>
                           {it.active ? <Eye size={14} /> : <EyeOff size={14} />}
                         </button>
-                        <button onClick={() => remove(it.id)} className="btn-ghost px-2.5 py-1.5 text-xs"><Trash2 size={14} /></button>
+                        <button onClick={() => remove(it.id)} className="btn-ghost px-2.5 py-1.5 text-xs" aria-label="Xoá mục" title="Xoá mục"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   )

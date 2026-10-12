@@ -79,7 +79,7 @@ export async function GET(request: NextRequest) {
       //
       // Trước đây chỗ này dùng COOKIE_DOMAIN cố định (suy ra từ
       // NEXT_PUBLIC_MAIN_HOST) thay vì xét host của request, khác với
-      // middleware.ts và lib/supabase/client.ts. Hậu quả: nếu app được phục vụ
+      // proxy.ts và lib/supabase/client.ts. Hậu quả: nếu app được phục vụ
       // trên một host khác MAIN_HOST (vừa đổi domain mà chưa sửa env, domain
       // riêng, bản preview *.vercel.app), trình duyệt ÂM THẦM TỪ CHỐI cookie có
       // Domain không khớp trang → phiên không bao giờ được lưu → đăng nhập

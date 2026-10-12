@@ -61,21 +61,35 @@ create policy studio_receipt_seq_owner_all on public.studio_receipt_seq
  * bấm in một lúc thì Postgres tuần tự hoá chúng và mỗi người nhận một số khác
  * nhau. Đọc-rồi-ghi ở tầng ứng dụng KHÔNG làm được điều đó.
  */
+/*
+ * Người gọi phải là chủ / nhân viên của studio `p_owner` (is_studio_member —
+ * nhân viên in phiếu với p_owner = id chủ studio), hoặc service-role. Không có
+ * chốt này thì bất kỳ tài khoản nào cũng đẩy được bộ đếm của studio khác.
+ * Cùng định nghĩa với migrations/bao_mat_quyen_rpc_storage.sql — sửa thì sửa cả hai.
+ */
 create or replace function public.next_receipt_no(p_owner uuid, p_year integer)
 returns integer
-language sql
+language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_no integer;
+begin
+  if coalesce(auth.role(), '') <> 'service_role' and not public.is_studio_member(p_owner) then
+    raise exception 'không có quyền cấp số phiếu cho studio này' using errcode = '42501';
+  end if;
   insert into public.studio_receipt_seq (owner_id, year, last_no)
   values (p_owner, p_year, 1)
   on conflict (owner_id, year)
   do update set last_no = public.studio_receipt_seq.last_no + 1
-  returning last_no;
+  returning last_no into v_no;
+  return v_no;
+end;
 $$;
 
 revoke all on function public.next_receipt_no(uuid, integer) from public, anon;
-grant execute on function public.next_receipt_no(uuid, integer) to authenticated;
+grant execute on function public.next_receipt_no(uuid, integer) to authenticated, service_role;
 
 -- ── Khoá sổ ─────────────────────────────────────────────────────────────────
 -- Ngày CUỐI CÙNG đã chốt. Mọi bút toán có ngày ≤ mốc này là bất biến (luật ở

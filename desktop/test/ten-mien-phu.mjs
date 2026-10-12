@@ -66,7 +66,7 @@ check("mailbox vẫn dùng được", ok("mailbox"), true);
 
 // ── Danh sách giữ chỗ phải đồng bộ với middleware ─────────────────────────
 // Mọi host hệ thống mà middleware nhận ra (xem systemHosts trong
-// src/middleware.ts) đều phải nằm trong danh sách này, nếu không studio lấy
+// src/proxy.ts — trước là middleware.ts) đều phải nằm trong danh sách này, nếu không studio lấy
 // được tên rồi trang không bao giờ mở.
 for (const label of ["www", "album", "img", "admin", "thiep"]) {
   check(`RESERVED có “${label}”`, RESERVED_SUBDOMAINS.has(label), true);

@@ -516,22 +516,27 @@ body {
 }
 
 /* ── Page entry animation (applied on main) ───────────────────────
-   CẢNH BÁO cho ai dựng hộp thoại: animation này animate `transform`, và
-   `fill-mode: both` làm nó CÒN HIỆU LỰC MÃI MÃI (không chỉ 0,35s đầu). Vì thế
-   phần tử mang `.page-in` là CONTAINING BLOCK của mọi con `position: fixed` —
-   vĩnh viễn. Một lớp phủ `fixed inset-0` bên trong <main> sẽ neo vào <main>
-   (đo được: cao 2044px, top -394px trên khung nhìn 713px) chứ không neo vào
-   khung nhìn, nên phần đầu hộp thoại trôi ra ngoài màn hình và nút Đóng không
-   bấm được.
+   CẢNH BÁO cho ai dựng hộp thoại: animation này animate `transform`. Phần tử
+   đang có transform là CONTAINING BLOCK của mọi con `position: fixed` — một
+   lớp phủ `fixed inset-0` bên trong <main> sẽ neo vào <main> (đo được: cao
+   2044px, top -394px trên khung nhìn 713px) chứ không neo vào khung nhìn, nên
+   phần đầu hộp thoại trôi ra ngoài màn hình và nút Đóng không bấm được.
 
-   → Mọi hộp thoại / toast / khung xem ảnh phải đi qua <Portal> ra <body>:
-     xem src/components/studio/Modal.tsx (có cả cách giữ lại khối token). */
+   Trước đây dùng `fill-mode: both` nên transform CÒN HIỆU LỰC MÃI MÃI sau khi
+   chạy xong → <main> làm containing block vĩnh viễn. Giờ dùng `backwards`: chỉ
+   áp khung `from` trong lúc trễ/đang chạy, hết 0,35s là KHÔNG còn transform nào
+   trên <main>, lớp phủ fixed tự neo lại vào khung nhìn.
+
+   Dù vậy, trong 0,35s đầu khi vào trang thì <main> VẪN là containing block, và
+   <main> còn `overflow-x-clip` → hộp thoại / toast / khung xem ảnh mới vẫn nên
+   đi qua <Portal> ra <body>: xem src/components/studio/Modal.tsx (có cả cách
+   giữ lại khối token). */
 @keyframes pageIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
 .page-in {
-  animation: pageIn 0.35s ease both;
+  animation: pageIn 0.35s ease backwards;
 }
 
 /* ── Dải cuộn ngang một hàng ──────────────────────────────────────
@@ -978,6 +983,20 @@ body {
   display: none;
 }
 :root[data-theme="dark"] .mstudo-landing .ms-logo-dark {
+  display: block;
+}
+/* Cùng cách đó cho logo NGOÀI landing (Brand, thanh bên StudioShell): render cả
+   hai ảnh, CSS chọn theo data-theme trên <html> — boot script đặt nó trước khi
+   paint, nên không còn nháy logo sáng rồi mới đổi sang tối sau khi hydrate như
+   khi chọn ảnh bằng state React. Neo vào :root chứ không vào .studio-shell vì
+   data-theme của shell do React đặt, lượt dựng đầu vẫn là "light". */
+.logo-on-dark {
+  display: none;
+}
+:root[data-theme="dark"] .logo-on-light {
+  display: none;
+}
+:root[data-theme="dark"] .logo-on-dark {
   display: block;
 }
 /* Bảng giá: mobile 1 cột, tablet 2 cột (2+2, không lẻ 1 hàng), desktop 4 cột. */

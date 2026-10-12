@@ -23,7 +23,8 @@
     "migrations/contract_crew_milestone.sql",
     "migrations/contract_item_tier_milestone.sql",
     "migrations/contract_final_links.sql",
-    "migrations/contract_final_originals.sql"
+    "migrations/contract_final_originals.sql",
+    "migrations/bao_mat_quyen_rpc_storage.sql"
   ],
   "muc": [
     {

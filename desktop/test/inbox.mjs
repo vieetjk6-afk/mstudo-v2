@@ -89,6 +89,10 @@ for (const bad of [
   "https://localhost/x", "https://127.0.0.1/x", "https://10.1.2.3/x",
   "https://192.168.1.1/x", "https://169.254.169.254/latest/meta-data/",
   "https://172.16.0.1/x", "https://[::1]/x", "https://kho.internal/x",
+  // CGNAT, "this network", IPv4 bọc trong IPv6, NAT64, link-local IPv6.
+  "https://100.64.0.1/x", "https://0.0.0.0/x", "https://[::ffff:127.0.0.1]/x",
+  "https://[::ffff:169.254.169.254]/x", "https://[64:ff9b::a9fe:a9fe]/x", "https://[fe80::1]/x",
+  "https://[::]/x", "https://2130706433/x",
 ]) {
   check(`chặn địa chỉ nội bộ ${bad}`, validRelayUrl(bad).ok, false);
 }

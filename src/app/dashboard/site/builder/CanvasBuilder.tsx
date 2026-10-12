@@ -1583,7 +1583,7 @@ function Inspector({ block, blocks = [], siteUrl = "", albums, priceLists = [], 
           {S("image") ? (
             <div style={{ position: "relative", marginBottom: 8 }}>
               <img src={S("image")} alt="" style={{ width: "100%", borderRadius: 10, display: "block" }} />
-              <button onClick={() => { onBeforeEdit(); onEdit("image", "", true); }} style={{ position: "absolute", top: 6, right: 6, background: "var(--text)", color: "var(--bg)", border: 0, borderRadius: 999, width: 26, height: 26, cursor: "pointer" }}><X size={14} /></button>
+              <button onClick={() => { onBeforeEdit(); onEdit("image", "", true); }} aria-label="Gỡ ảnh" title="Gỡ ảnh" style={{ position: "absolute", top: 6, right: 6, background: "var(--text)", color: "var(--bg)", border: 0, borderRadius: 999, width: 26, height: 26, cursor: "pointer" }}><X size={14} /></button>
             </div>
           ) : null}
           <button onClick={() => pickFile("image")} style={{ ...insInput, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, cursor: "pointer", background: "var(--surface2)" }}>

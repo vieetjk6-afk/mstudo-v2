@@ -1256,6 +1256,14 @@ export interface WeddingInvitation {
   updated_at: string;
 }
 
+/**
+ * Thiệp ở dạng CÔNG KHAI — thứ trang /thiep/<slug> đưa xuống trình duyệt khách.
+ * Bỏ `edit_token`: ai cầm token đó là sửa được thiệp (/thiep/sua/<token>), nên
+ * nó tuyệt đối không được nằm trong payload của trang công khai. Các component
+ * render thiệp nhận kiểu này để trình biên dịch chặn luôn việc lỡ dùng tới nó.
+ */
+export type PublicWeddingInvitation = Omit<WeddingInvitation, "edit_token">;
+
 export interface WeddingRsvp {
   id: string;
   invitation_id: string;

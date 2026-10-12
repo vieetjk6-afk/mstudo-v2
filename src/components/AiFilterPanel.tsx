@@ -155,9 +155,9 @@ export default function AiFilterPanel({
           out.push({ key: f.key, name: f.name });
         }
       } else if (f.driveId) {
-        // 640px: đủ chi tiết để đo nét/gom trùng, và đúng cỡ /api/img đã phục vụ
-        // cho lưới ảnh nên phần lớn đã nằm trong cache trình duyệt.
-        out.push({ key: f.key, name: f.name, url: thumbnailUrl(f.driveId, 640) });
+        // 640px: đủ chi tiết để đo nét/gom trùng. raw=1: quét bằng fetch() nên
+        // cần byte cùng miền (/api/img chỉ trả byte khi URL có raw=1).
+        out.push({ key: f.key, name: f.name, url: `${thumbnailUrl(f.driveId, 640)}&raw=1` });
       }
     }
     return out;

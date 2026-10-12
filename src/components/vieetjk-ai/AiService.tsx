@@ -22,8 +22,13 @@ export default function AiService({ service: s }: { service: Service }) {
         <span className="va-glow g1" />
         <div className="va-wrap" style={{ position: "relative", zIndex: 1 }}>
           <nav className="va-crumbs" aria-label="Breadcrumb">
+            {/* <a> chứ không phải <Link>: trang được REWRITE từ tên miền riêng sang
+                /site/<sub>, "/" phải là lượt tải thật để middleware dựng lại ngữ
+                cảnh tenant — cùng quy ước với components/vieetjk. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/">Home</a>
             <ChevronRight size={14} />
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a href="/#services">Services</a>
             <ChevronRight size={14} />
             <span style={{ color: "var(--ink2)" }}>{s.name}</span>

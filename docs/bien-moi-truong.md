@@ -29,8 +29,6 @@ Cột **Xử lý** đọc thế này:
 |---|---|---|
 | `CHAT_PROVIDERS` | 🟢 | **để trống** — code tự dùng `GEMINI_API_KEY`, xem 7.6 |
 | `CRON_SECRET` | 🆕 | mục 2 |
-| `DESKTOP_LATEST_VERSION` | 🟢 | để trống → app tưởng bản mới nhất là `0.1.0` |
-| `DESKTOP_UPDATE_NOTE` | ⚪ | mô tả ngắn bản desktop mới, tuỳ chọn |
 | `DRIVE_IMG_CACHE_BUCKET` | ⚪ | **nên để trống** — bucket này làm vượt hạn mức Supabase cũ |
 | `DRIVE_IMG_CACHE_MAX_AGE_DAYS` | ⚪ | như trên |
 | `DRIVE_IMG_CACHE_MAX_BYTES` | ⚪ | như trên |
@@ -317,7 +315,6 @@ thông báo phải đăng ký lại**. Cố lấy đúng cặp cũ; mất hẳn 
 | `CHAT_PROVIDERS` | code tự dùng `GEMINI_API_KEY` làm nhà cung cấp duy nhất | **để trống** — xem 7.6 |
 | `IMG_CDN_REDIRECT` | **tối ưu băng thông BẬT** (mặc định) | **để trống** ⚠️ xem cảnh báo dưới |
 | `CSP_REPORT_ONLY` | header CSP-Report-Only **TẮT** (mặc định) | **để trống** — xem ghi chú dưới |
-| `DESKTOP_LATEST_VERSION` | app desktop tưởng bản mới nhất là `0.1.0` → không nhắc cập nhật | điền số phiên bản hiện tại, hoặc để trống |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | nút tải rơi về trang GitHub Releases | để trống được |
 | `NEXT_PUBLIC_DESKTOP_RELEASES_REPO` | dùng `vieetjk01/Studio` (repo cũ, công khai) | **để trống** cho tới khi có repo công khai mới chứa bản cài |
 | `VERCEL_PROJECT_ID` | tính năng "studio gắn tên miền riêng" chỉ **lưu domain + chỉ dẫn DNS thủ công**, không tự đăng ký | project MỚI → Settings → General → Project ID *(giữ project cũ thì giữ nguyên)* |
@@ -616,7 +613,6 @@ Vậy nên: **để trống `CHAT_PROVIDERS`, khai `GEMINI_API_KEY` là xong.**
 |---|---|
 | 3 khoá Supabase | lấy từ Supabase **MỚI**, giá trị cũ vô dụng |
 | `VERCEL_PROJECT_ID` | lấy ID của project **MỚI** |
-| `DESKTOP_LATEST_VERSION` | đặt số phiên bản desktop hiện tại; sai thì chỉ hiện nhầm số |
 | 4 biến ở mục 5a | code không dùng |
 
 ---

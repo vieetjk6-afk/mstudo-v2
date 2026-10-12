@@ -18,7 +18,8 @@ import {
   type QuoteAdjustment,
   type QuoteStatus,
 } from "@/lib/types";
-import { computeRoundedDeposit, depositRatio } from "@/lib/quote-deposit";
+import { activeBulkDiscount, safeDeposit } from "@/lib/quote-lines";
+import { depositRatio } from "@/lib/quote-deposit";
 import { quoteExpiryFrom, quoteExpiryLabel, isQuoteExpired } from "@/lib/quote-expiry";
 
 type EditableQuoteFields = Pick<
@@ -84,8 +85,11 @@ export default function QuoteEditor({
     (s, i) => (i.is_discount ? s + (i.qty || 0) * (i.unit_price || 0) : s),
     0,
   );
-  const deposit = computeRoundedDeposit(total);
-  const depositPct = depositRatio(total, deposit);
+  // Cọc tính trên tổng ĐÃ trừ ưu đãi gói (khớp trang khách và hợp đồng chốt
+  // ra), kẹp về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
+  const payableTotal = total - activeBulkDiscount(quote, items);
+  const deposit = safeDeposit(payableTotal);
+  const depositPct = depositRatio(payableTotal, deposit);
   const locked = quote.status === "accepted" || quote.status === "converted";
 
   /**
@@ -136,6 +140,7 @@ ${quote.intro ? `<p class="note" style="margin-top:14px">${esc(quote.intro)}</p>
 <tr><td>Tổng hạng mục:</td><td class="v">${vnd(grossTotal)}</td></tr>
 ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discountTotal)}</td></tr>` : ""}
 <tr><td>Tổng báo giá:</td><td class="v">${vnd(total)}</td></tr>
+${payableTotal !== total ? `<tr><td>Ưu đãi gói ${esc(quote.discount_package_group || "")}:</td><td class="v">− ${vnd(total - payableTotal)}</td></tr><tr><td>Khách thanh toán:</td><td class="v">${vnd(payableTotal)}</td></tr>` : ""}
 <tr><td>Cọc đề xuất (~${depositPct.toFixed(0)}%):</td><td class="v">${vnd(deposit)}</td></tr>
 </tbody></table>
 <p style="margin-top:24px;font-size:12px;color:#555">Báo giá chỉ mang tính tham khảo và có thể thay đổi theo thoả thuận. Hạng mục "Tuỳ chọn" khách tự chọn trên trang báo giá trực tuyến.</p>
@@ -361,7 +366,7 @@ ${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discount
   }
 
   async function convertToContract() {
-    if (!confirm(`Tạo hợp đồng từ báo giá này?\n\nTổng tiền: ${vnd(total)}\nCọc đề xuất: ${vnd(deposit)}`)) return;
+    if (!confirm(`Tạo hợp đồng từ báo giá này?\n\nTổng tiền: ${vnd(payableTotal)}\nCọc đề xuất: ${vnd(deposit)}`)) return;
     setBusy(true);
     setErr(null);
     try {

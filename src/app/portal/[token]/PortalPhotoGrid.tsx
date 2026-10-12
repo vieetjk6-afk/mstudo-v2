@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { preconnect } from "react-dom";
 import { ChevronLeft, ChevronRight, Download, Loader2, X as XIcon } from "lucide-react";
 import { Portal } from "@/components/studio/Modal";
-import { fullImageUrl, retryViaProxy, thumbnailUrl } from "@/lib/drive";
+import { fullImageUrl, retryAltHost, retryViaProxy, thumbnailUrl } from "@/lib/drive";
 import { downloadImage } from "@/lib/download";
 import { useFullImageWidth, useGridThumbWidth } from "@/lib/use-img-width";
 import { DIM, LINE } from "./dark";
@@ -105,7 +105,7 @@ export default function PortalPhotoGrid({
                 draggable={false}
                 ref={(im) => { if (im?.complete && im.naturalWidth > 0) im.style.opacity = "1"; }}
                 onLoad={(e) => { e.currentTarget.style.opacity = "1"; }}
-                onError={retryViaProxy}
+                onError={retryAltHost}
                 className="h-full w-full object-cover transition-[opacity,transform] duration-300 group-hover:scale-[1.02]"
                 style={{ opacity: 0 }}
               />

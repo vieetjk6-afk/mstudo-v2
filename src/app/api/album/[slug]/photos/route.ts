@@ -6,11 +6,16 @@ export const runtime = "nodejs";
 
 // Danh sách ảnh của một gallery giao khách CÔNG KHAI (không mật khẩu), phân
 // trang. Tách khỏi HTML SSR để trang chỉ gửi ~lô ảnh đầu; phần còn lại nạp qua
-// đây. s-maxage cho CDN phục vụ lượt xem lặp (giảm Fast Origin Transfer), nhưng
-// GIỮ NGẮN (60s): nếu chủ studio khoá mật khẩu / gỡ xuất bản album, bản public
-// đã cache chỉ còn phục vụ tối đa ~60s trước khi CDN xác thực lại (handler khi
-// đó trả 403/404). Đủ để hấp thụ lưu lượng dồn, đủ ngắn để hạn chế lộ.
-const CACHE = "public, max-age=0, s-maxage=60, stale-while-revalidate=60";
+// đây. s-maxage cho CDN phục vụ lượt xem lặp (giảm Fast Origin Transfer).
+//
+// 10 phút (trước 60s): danh sách ảnh chỉ đổi khi studio đồng bộ thêm/bớt ảnh,
+// và URL lô sau đã chứa `limit` tính từ tổng số ảnh trong HTML (HTML không
+// cache) nên thêm ảnh là URL đổi, CDN tự lấy bản mới. Đánh đổi còn lại: chủ
+// studio khoá mật khẩu / gỡ xuất bản album thì bản public đã cache còn phục vụ
+// tối đa ~11 phút trước khi CDN xác thực lại (handler khi đó trả 403/404).
+// stale-while-revalidate cố ý GIỮ NGẮN (60s), KHÔNG để cả ngày: SWR dài là CDN
+// được phép phát bản cũ rất lâu sau khi album đã khoá.
+const CACHE = "public, max-age=0, s-maxage=600, stale-while-revalidate=60";
 
 export async function GET(req: Request, props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;

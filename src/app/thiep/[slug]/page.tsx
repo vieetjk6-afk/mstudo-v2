@@ -2,20 +2,24 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { mainUrl } from "@/lib/hosts";
-import type { WeddingConfig, WeddingInvitation } from "@/lib/types";
+import type { PublicWeddingInvitation, WeddingConfig } from "@/lib/types";
 import WeddingRenderer, { type Wish } from "./WeddingRenderer";
 
 export const dynamic = "force-dynamic";
 
-async function load(slug: string): Promise<WeddingInvitation | null> {
+/**
+ * KHÔNG chọn `edit_token`: kết quả này đi thẳng xuống component client, mà ai
+ * cầm token đó là sửa được thiệp qua /thiep/sua/<token>.
+ */
+async function load(slug: string): Promise<PublicWeddingInvitation | null> {
   const db = createAdminClient();
   const { data } = await db
     .from("wedding_invitations")
-    .select("id, owner_id, contract_id, slug, edit_token, template, config, published, created_at, updated_at")
+    .select("id, owner_id, contract_id, slug, template, config, published, created_at, updated_at")
     .eq("slug", slug.toLowerCase())
     .maybeSingle();
   if (!data) return null;
-  return data as WeddingInvitation;
+  return data as PublicWeddingInvitation;
 }
 
 /** Tên khách mời từ query (?guest=…) — cắt gọn, chống rỗng. */
@@ -108,7 +112,7 @@ export default async function WeddingInvitationPage(
   // KHÔNG để mật khẩu "trang xem riêng" lọt xuống thiệp công khai (config được
   // truyền vào component client) — lọc bỏ trước khi render.
   const { guests_password: _pw, ...safeCfg } = inv.config as WeddingConfig;
-  const safeInv = { ...inv, config: safeCfg } as WeddingInvitation;
+  const safeInv = { ...inv, config: safeCfg } as PublicWeddingInvitation;
 
   return <WeddingRenderer inv={safeInv} wishes={wishes} guest={guest} storyUrl={storyUrl} />;
 }

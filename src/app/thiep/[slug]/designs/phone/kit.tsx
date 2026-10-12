@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import type { WeddingBank, WeddingConfig, WeddingInvitation } from "@/lib/types";
+import type { WeddingBank, WeddingConfig, PublicWeddingInvitation } from "@/lib/types";
 import { mapEmbedSrc, mapOpenHref } from "@/lib/site-map";
 import { vietqrUrl, type Wish } from "../../shared";
 import PhoneCountdown from "./PhoneCountdown";
@@ -106,7 +106,7 @@ export type PhoneData = {
 };
 
 /** Đọc config của thiệp thành dữ liệu render-ready cho các mẫu điện thoại. */
-export function phoneData(inv: WeddingInvitation, guest?: string): PhoneData {
+export function phoneData(inv: PublicWeddingInvitation, guest?: string): PhoneData {
   const c = (inv.config ?? {}) as WeddingConfig;
   const groom = c.groom_name?.trim() || "Chú rể";
   const bride = c.bride_name?.trim() || "Cô dâu";

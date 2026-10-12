@@ -101,23 +101,18 @@ export async function GET(req: Request) {
   }
 
   // ── Lượt xem thường hay lượt ĐỌC BYTE? ───────────────────────────────────
-  // Chỉ ba nhóm dưới đây cần byte đi qua Vercel (cùng miền thì canvas mới
-  // không bị "tainted", fetch mới đọc được):
-  //   • raw=1        — chính app đánh dấu: ZIP, watermark, xuất album.
-  //   • mode = cors  — <img crossOrigin> / fetch có CORS.
-  //   • dest ≠ image — fetch()/XHR (Sec-Fetch-Dest: "empty").
-  // Mọi thứ còn lại là ẢNH HIỂN THỊ → 302 thẳng sang CDN của Google.
+  // CHỈ quyết định bằng `raw=1` trong URL — chính app đánh dấu những chỗ cần
+  // byte cùng miền: ZIP, watermark, xuất album, quét AI (fetch), lượt thử lại
+  // cuối cùng của khung xem ảnh. Mọi thứ còn lại là ẢNH HIỂN THỊ → 302 thẳng
+  // sang CDN của Google.
   //
-  // Trước đây điều kiện viết ngược: CHỈ chuyển hướng khi dest === "image", nên
-  // client KHÔNG gửi Sec-Fetch-* (Safari iOS ≤ 16.3, webview trong Zalo /
-  // Facebook, bot đọc link) rơi hết vào đường proxy — mỗi thumbnail ~90 KB đi
-  // qua Vercel. Đảo lại: thiếu header thì coi là lượt xem, còn ba nhóm đọc byte
-  // vẫn nhận đúng byte vì chúng tự nhận diện được (raw=1 là chốt chặn cuối cho
-  // trình duyệt cũ không gửi Sec-Fetch-*).
-  const dest = req.headers.get("sec-fetch-dest");
-  const mode = req.headers.get("sec-fetch-mode");
-  const wantsBytes =
-    searchParams.get("raw") === "1" || mode === "cors" || (dest !== null && dest !== "image");
+  // Trước đây còn đoán theo Sec-Fetch-Mode / Sec-Fetch-Dest. Nhưng cùng MỘT URL
+  // khi thì trả 302, khi thì trả byte (mà không có Vary) → CDN của Vercel lưu
+  // phản hồi nào tới trước rồi phát cho mọi người: lượt xem thường có thể nhận
+  // nguyên byte ảnh đi qua Vercel (tốn Fast Origin Transfer), còn lượt fetch()
+  // lại nhận 302 sang Google không có CORS → hỏng. Quyết định theo URL thì URL
+  // là khoá cache đúng: mỗi URL chỉ có một kiểu phản hồi.
+  const wantsBytes = searchParams.get("raw") === "1";
   // IMG_CDN_REDIRECT=0 vẫn tắt được tối ưu này (xem docs/bien-moi-truong.md).
   const canRedirect = process.env.IMG_CDN_REDIRECT !== "0" && !wantsBytes;
 

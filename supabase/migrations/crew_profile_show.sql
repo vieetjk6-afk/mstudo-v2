@@ -45,10 +45,10 @@ create table if not exists public.crew_account (
   created_at     timestamptz not null default now()
 );
 alter table public.crew_account enable row level security;
--- Ghi đi qua service role từ cổng thợ; studio đã đăng nhập chỉ cần đọc.
+-- Đọc/ghi CHỈ qua service role (/api/crew, /api/crew-calendar). Cố ý KHÔNG có
+-- policy nào: bảng giữ calendar_token — ai có token là tải được feed lịch của
+-- thợ (tên khách, địa điểm). Policy cũ cho mọi tài khoản đăng nhập đọc cả bảng.
 drop policy if exists crew_account_read on public.crew_account;
-create policy crew_account_read on public.crew_account
-  for select using (auth.role() = 'authenticated');
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 6) Cách ly HOÀN TOÀN lịch bận theo studio.

@@ -9,8 +9,11 @@ export const MASONRY_GAP = 6;
 const FALLBACK_RATIO = 2 / 3;
 /** Bề rộng cột giả định cho lượt dựng ĐẦU (máy chủ chưa biết màn hình rộng bao
  *  nhiêu). Phải là hằng số: máy chủ và trình duyệt cùng dựng ra một kết quả thì
- *  React mới không kêu lệch. Ngay khi gắn vào DOM là đo lại, trước lúc vẽ. */
-const COL_TAM = 180;
+ *  React mới không kêu lệch. Ngay khi gắn vào DOM là đo lại, trước lúc vẽ.
+ *  Chọn 160 chứ không 180: 2 cột × 180 + khe 6 = 366px, cộng lề 2 × 16px là
+ *  tràn ngang chừng 25px trên điện thoại 375px trong khoảnh khắc trước khi đo.
+ *  2 × 160 + 6 = 326px — lọt khổ 360px trở lên kể cả lề. */
+const COL_TAM = 160;
 /** Dựng thêm bao nhiêu MÀN HÌNH phía trên và dưới khung nhìn. Đo trên khổ
  *  iPhone: 3 màn hình mỗi phía ≈ 150 ô trong DOM — vẫn 60 hình/giây phẳng. */
 const DU_MAN_HINH = 3;

@@ -440,7 +440,7 @@ export default function StoryFeed({
         {cam !== "closed" && (
           <div style={{ position: "fixed", inset: 0, zIndex: 120, background: "#000", display: "flex", flexDirection: "column", animation: "stfade .2s ease both" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 16px", color: "#fff" }}>
-              <button onClick={closeCamera} style={{ border: "none", background: "none", color: "#fff", fontSize: 22, cursor: "pointer" }}>✕</button>
+              <button onClick={closeCamera} aria-label="Đóng" style={{ border: "none", background: "none", color: "#fff", fontSize: 22, cursor: "pointer" }}>✕</button>
               <span style={{ fontSize: 14, fontWeight: 700 }}>{captured ? "Bài viết mới" : camErr ? "Máy ảnh" : "Chụp khoảnh khắc"}</span>
               <div style={{ width: 22 }} />
             </div>
