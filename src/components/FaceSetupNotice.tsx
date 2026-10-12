@@ -35,6 +35,34 @@ import { createClient } from "@/lib/supabase/client";
  */
 const DUONG_DAN_SQL = "/api/setup-sql/khuon-mat";
 
+/*
+ * NHỚ THEO PHIÊN (sessionStorage) để thư viện album không hỏi lại mỗi lần mở.
+ *
+ *   · BANG_DU — hai bảng đã có. Chỉ nhớ khi ĐỦ: còn thiếu thì lần mở sau phải
+ *     hỏi lại, studio vừa chạy SQL xong là banner biến mất ngay.
+ *   · MOI_TRUONG — cronSecret / mã project / link SQL Editor. Đều đến từ biến
+ *     môi trường của máy chủ, cả phiên không đổi.
+ * "Kiểm tra lại" bỏ qua cả hai. Trình duyệt chặn storage → coi như chưa nhớ.
+ */
+const KHOA_BANG_DU = "mstudo:face-setup:bang-du";
+const KHOA_MOI_TRUONG = "mstudo:face-setup:moi-truong";
+type MoiTruong = { cronSecret?: boolean; duAn?: string | null; sqlEditor?: string | null };
+function docNho(khoa: string): string | null {
+  try {
+    return sessionStorage.getItem(khoa);
+  } catch {
+    return null;
+  }
+}
+function ghiNho(khoa: string, giaTri: string | null) {
+  try {
+    if (giaTri === null) sessionStorage.removeItem(khoa);
+    else sessionStorage.setItem(khoa, giaTri);
+  } catch {
+    /* storage bị chặn — lần sau hỏi lại, không sao */
+  }
+}
+
 export default function FaceSetupNotice() {
   const [missing, setMissing] = useState<string[] | null>(null);
   const [copied, setCopied] = useState<"" | "dang" | "xong" | "hong">("");
@@ -62,8 +90,17 @@ export default function FaceSetupNotice() {
   const [duAn, setDuAn] = useState<{ ma: string | null; sqlEditor: string | null }>({ ma: null, sqlEditor: null });
 
   useEffect(() => {
-    const supabase = createClient();
     let alive = true;
+    // Phiên này đã thấy đủ bảng (và không phải bấm "Kiểm tra lại") → khỏi hỏi.
+    if (nhip === 0 && docNho(KHOA_BANG_DU) === "1") {
+      queueMicrotask(() => {
+        if (alive) setMissing([]);
+      });
+      return () => {
+        alive = false;
+      };
+    }
+    const supabase = createClient();
     void (async () => {
       const probes = await Promise.all(
         ["album_people", "album_faces"].map(async (t) => {
@@ -75,9 +112,12 @@ export default function FaceSetupNotice() {
              * nên câu lỗi về rỗng và phép nhận dạng bên dưới không khớp gì cả —
              * banner sẽ không bao giờ hiện, đúng vào lúc cần nhất. Bài kiểm ở
              * /uipreview/bao-chua-chay-sql bắt được chính điều đó. Đổi lại là
-             * kéo về nhiều nhất một hàng: không đáng gì.
+             * kéo về nhiều nhất một hàng: không đáng gì — và chỉ MỘT cột.
+             * Cột `album_id` vì cả hai bảng đều có (album_faces KHÔNG có `id`:
+             * chọn `id` ở đó là lỗi "column does not exist" và banner báo nhầm
+             * là thiếu bảng).
              */
-            const { error } = await supabase.from(t).select("*").limit(1);
+            const { error } = await supabase.from(t).select("album_id").limit(1);
             if (!error) return null;
             // Thiếu BẢNG là lỗi schema; bị RLS chặn hay bảng rỗng thì không phải
             // chuyện của thông báo này. Xét CẢ mã lỗi lẫn câu chữ: 42P01 là
@@ -96,7 +136,9 @@ export default function FaceSetupNotice() {
           }
         })
       );
-      if (alive) setMissing(probes.filter((x): x is string => x !== null));
+      const thieu = probes.filter((x): x is string => x !== null);
+      ghiNho(KHOA_BANG_DU, thieu.length === 0 ? "1" : null);
+      if (alive) setMissing(thieu);
     })();
     return () => {
       alive = false;
@@ -108,21 +150,35 @@ export default function FaceSetupNotice() {
   useEffect(() => {
     if (!missing) return;
     let alive = true;
+    const apDung = (d: MoiTruong) => {
+      if (!alive) return;
+      setDuAn({ ma: d.duAn ?? null, sqlEditor: d.sqlEditor ?? null });
+      // Cảnh báo cron chỉ khi phần bảng đã sạch: còn thiếu bảng thì việc phải
+      // làm đã rõ rồi, thêm một cảnh báo nữa chỉ làm loãng.
+      setThieuCron(missing.length === 0 && d.cronSecret === false);
+    };
     void (async () => {
+      const daNho = docNho(KHOA_MOI_TRUONG);
+      if (daNho) {
+        try {
+          apDung(JSON.parse(daNho) as MoiTruong);
+          return;
+        } catch {
+          ghiNho(KHOA_MOI_TRUONG, null);
+        }
+      }
       try {
-        const res = await fetch("/api/face-status", { cache: "no-store" });
+        // `lite=1`: chỉ biến môi trường (cron, mã project) — KHÔNG quét ảnh /
+        // khuôn mặt của mười album như bản chẩn đoán đầy đủ.
+        const res = await fetch("/api/face-status?lite=1", { cache: "no-store" });
         if (!res.ok) return;
-        const d = (await res.json()) as {
-          ok?: boolean;
-          cronSecret?: boolean;
-          duAn?: string | null;
-          sqlEditor?: string | null;
-        };
-        if (!alive) return;
-        setDuAn({ ma: d.duAn ?? null, sqlEditor: d.sqlEditor ?? null });
-        // Cảnh báo cron chỉ khi phần bảng đã sạch: còn thiếu bảng thì việc phải
-        // làm đã rõ rồi, thêm một cảnh báo nữa chỉ làm loãng.
-        if (d.ok === true && d.cronSecret === false) setThieuCron(true);
+        const d = (await res.json()) as MoiTruong;
+        // Chỉ nhớ khi cron ĐÃ ổn: còn thiếu CRON_SECRET thì studio sẽ đặt biến,
+        // Redeploy rồi tải lại trang — lúc đó phải hỏi lại để cảnh báo tự tắt.
+        if (d.cronSecret !== false) {
+          ghiNho(KHOA_MOI_TRUONG, JSON.stringify({ cronSecret: d.cronSecret, duAn: d.duAn ?? null, sqlEditor: d.sqlEditor ?? null }));
+        }
+        apDung(d);
       } catch {
         /* im lặng — xem ghi chú ở khai báo state */
       }
@@ -232,6 +288,8 @@ export default function FaceSetupNotice() {
         <button
           type="button"
           onClick={() => {
+            ghiNho(KHOA_BANG_DU, null);
+            ghiNho(KHOA_MOI_TRUONG, null);
             setMissing(null);
             setNhip((n) => n + 1);
           }}

@@ -64,5 +64,11 @@ export async function GET() {
     notifications: notifications.count ?? 0,
     inbox: inbox.count ?? 0,
     reviews: reviews.count ?? 0,
+  }, {
+    // Cache RIÊNG của trình duyệt này (private — số đếm theo từng tài khoản,
+    // không bao giờ để CDN giữ). 30s đủ để bấm qua lại các màn không đếm lại
+    // 7 bảng, mà vẫn đủ ngắn để badge tụt sau khi xử lý xong việc. Vary: Cookie
+    // để đăng xuất rồi vào tài khoản khác không nhận nhầm số của người trước.
+    headers: { "Cache-Control": "private, max-age=30", Vary: "Cookie" },
   });
 }

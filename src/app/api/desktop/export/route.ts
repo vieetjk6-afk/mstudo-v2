@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireDesktopOwner } from "@/lib/desktop/auth";
 import { buildXlsx, type Sheet } from "@/lib/desktop/xlsx";
+import { crewRoleLabel, loadCrewRoles } from "@/lib/crew-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -147,12 +148,14 @@ export async function GET(req: Request) {
     const contracts = await all(db, "studio_contracts", "id, code, title, event_date", owner);
     const byId = new Map(contracts.map((c) => [S(c.id), c]));
     const crew = await byIds(db, "contract_crew", "contract_id", contracts.map((c) => S(c.id)));
+    // Tên vai trò (gồm vai trò studio tự đặt) — trước đây file xuất ra khoá thô "photographer".
+    const roles = await loadCrewRoles(db, owner);
     const sheet: Sheet = {
       name: "Lương theo hợp đồng",
       columns: ["Tên", "SĐT", "Vai trò", "Mã HĐ", "Hợp đồng", "Ngày chụp", "Lương (VND)", "Đã trả", "Ngày trả", "Nhận việc"],
       rows: crew.map((cr) => {
         const c = byId.get(S(cr.contract_id));
-        return [S(cr.name), S(cr.phone), S(cr.role), S(c?.code), S(c?.title), dmy(c?.event_date), N(cr.salary), cr.paid ? "Rồi" : "Chưa", dmy(cr.paid_at), CREW_STATUS[S(cr.status)] || S(cr.status)];
+        return [S(cr.name), S(cr.phone), crewRoleLabel(S(cr.role), roles), S(c?.code), S(c?.title), dmy(c?.event_date), N(cr.salary), cr.paid ? "Rồi" : "Chưa", dmy(cr.paid_at), CREW_STATUS[S(cr.status)] || S(cr.status)];
       }),
     };
     return xlsxResponse(await buildXlsx([sheet]), `Luong_${today}.xlsx`);
@@ -177,6 +180,7 @@ export async function GET(req: Request) {
   if (type === "staff") {
     const staff = await all(db, "profiles", "full_name, email, studio_role, is_active, created_at", owner, "studio_owner_id");
     const crew = await all(db, "studio_crew", "name, phone, role, note, created_at", owner);
+    const roles = await loadCrewRoles(db, owner);
     const s1: Sheet = {
       name: "Nhân viên",
       columns: ["Họ tên", "Email", "Vai trò", "Hoạt động", "Ngày tạo"],
@@ -185,7 +189,7 @@ export async function GET(req: Request) {
     const s2: Sheet = {
       name: "Sổ thợ",
       columns: ["Tên", "SĐT", "Vai trò", "Ghi chú", "Ngày thêm"],
-      rows: crew.map((c) => [S(c.name), S(c.phone), S(c.role), S(c.note), dmy(c.created_at)]),
+      rows: crew.map((c) => [S(c.name), S(c.phone), crewRoleLabel(S(c.role), roles), S(c.note), dmy(c.created_at)]),
     };
     return xlsxResponse(await buildXlsx([s1, s2]), `NhanVien_${today}.xlsx`);
   }

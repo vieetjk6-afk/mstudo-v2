@@ -7,6 +7,7 @@ import { sendEmail } from "@/lib/email";
 import { escapeHtml } from "@/lib/html-escape";
 import { studioUrl } from "@/lib/hosts";
 import { getStudioHost } from "@/lib/studio-site";
+import { resolveDeliveredAlbum } from "@/lib/contract-album";
 
 /**
  * Chốt giai đoạn GIAO KHÁCH của hợp đồng — điểm gọi CHUNG cho web (đổi trạng
@@ -79,11 +80,22 @@ async function notifyDeliveryReady(ownerId: string, contractId: string): Promise
 
   const { data: c } = await db
     .from("studio_contracts")
-    .select("client_name, client_phone, gallery_album_id")
+    .select("client_name, client_phone, gallery_album_id, selection_album_id")
     .eq("id", contractId)
     .maybeSingle();
-  if (!c?.client_phone || !c.gallery_album_id) return;
-  const { data: al } = await db.from("albums").select("slug").eq("id", c.gallery_album_id).maybeSingle();
+  if (!c?.client_phone) return;
+  // Album giao khách: album giao riêng nếu đang giao khách, không thì CHÍNH album
+  // của hợp đồng nếu nó đã được chuyển sang giao khách (luật chung ở
+  // @/lib/contract-album). Trước đây chỉ nhìn gallery_album_id nên dự án hợp
+  // nhất không bao giờ được báo "ảnh đã sẵn sàng".
+  const ids = [c.gallery_album_id, c.selection_album_id].filter(Boolean) as string[];
+  if (!ids.length) return;
+  const { data: rows } = await db.from("albums").select("id, slug, phase, is_gallery, status").in("id", ids);
+  const byId = new Map(((rows ?? []) as { id: string; slug: string; phase: string | null; is_gallery: boolean | null; status: string | null }[]).map((r) => [r.id, r]));
+  const al = resolveDeliveredAlbum({
+    gallery: c.gallery_album_id ? byId.get(c.gallery_album_id) : null,
+    selection: c.selection_album_id ? byId.get(c.selection_album_id) : null,
+  })?.album;
   if (!al?.slug) return;
 
   const { data: owner } = await db.from("profiles").select("full_name").eq("id", ownerId).maybeSingle();

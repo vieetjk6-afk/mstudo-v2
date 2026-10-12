@@ -76,12 +76,15 @@ export async function getOriginalFolders(
   if (own.length > 0) return own;
 
   // (B) album chọn ảnh riêng, liên kết qua hợp đồng.
-  const { data: contract } = await admin
+  // Hai hợp đồng cùng gắn một album → .maybeSingle() lỗi và trả null; lấy hợp
+  // đồng mới nhất.
+  const { data: contracts } = await admin
     .from("studio_contracts")
     .select("selection_album_id")
     .eq("gallery_album_id", galleryAlbumId)
-    .maybeSingle();
-  const selectionAlbumId = (contract as { selection_album_id?: string | null } | null)?.selection_album_id;
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const selectionAlbumId = (contracts?.[0] as { selection_album_id?: string | null } | undefined)?.selection_album_id;
   if (!selectionAlbumId) return [];
 
   const { data: selSources } = await admin

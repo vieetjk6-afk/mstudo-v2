@@ -60,7 +60,8 @@ import SignaturePad from "@/components/SignaturePad";
 import MoneyInput from "@/components/MoneyInput";
 import VietQRButton, { qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
 import { nextContractCode } from "@/lib/contract-code";
-import { contractKind, kindHasRental, kindHasPhotoWork, CREW_ROLES_BY_KIND, PRESET_ITEMS_BY_KIND, PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
+import { contractKind, kindHasRental, kindHasPhotoWork, PRESET_ITEMS_BY_KIND, PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
+import { crewRoleLabel, crewRolesFor, type CrewRoleRow } from "@/lib/crew-roles";
 import ContractRentalPanel from "./ContractRentalPanel";
 import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
 import { receiptNo, receiptPrintData, yearOf } from "@/lib/accounting";
@@ -73,7 +74,6 @@ import {
   SHOOT_TYPE_LABEL,
   CONTRACT_STATUS_LABEL,
   CONTRACT_STATUS_TONE,
-  CREW_ROLE_LABEL,
   CREW_STATUS_LABEL,
   PAYMENT_KIND_LABEL,
   PAYMENT_METHOD_LABEL,
@@ -107,6 +107,7 @@ import ContractAddenda from "./ContractAddenda";
 import VoucherRedeem from "./VoucherRedeem";
 import { isSignedLockError, type ContractAddendum } from "@/lib/contract-addenda";
 import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
+import { albumOptionLabel, type ContractAlbumOption } from "@/lib/contract-album";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
 // giảm giá — khi lưu sẽ ghi unit_price ÂM để trừ vào tổng (không cần cột DB mới).
@@ -300,8 +301,11 @@ export default function ContractEditor({
   initialRequests,
   initialPayments,
   roster,
+  crewRoles = [],
   galleries,
   selectionAlbums,
+  linkedAlbumDelivered = false,
+  albumPhotoCounts = {},
   initialMilestones,
   initialAppointments,
   ownerId,
@@ -348,8 +352,14 @@ export default function ContractEditor({
   initialRequests: ContractEditRequest[];
   initialPayments: ContractPayment[];
   roster: StudioCrew[];
-  galleries: { id: string; title: string; slug: string }[];
-  selectionAlbums: { id: string; title: string; slug: string }[];
+  /** Vai trò thợ studio tự đặt / đè vai trò có sẵn (studio_crew_roles). */
+  crewRoles?: CrewRoleRow[];
+  galleries: ContractAlbumOption[];
+  selectionAlbums: ContractAlbumOption[];
+  /** Album của hợp đồng (selection_album_id) đã ở giai đoạn giao khách — page.tsx tính bằng isDeliveryPhase. */
+  linkedAlbumDelivered?: boolean;
+  /** Số ảnh của album đang gắn (theo id), nếu đếm được. */
+  albumPhotoCounts?: Record<string, number>;
   initialMilestones: StudioEvent[];
   initialAppointments: StudioAppointment[];
   /** Id chủ studio — cần để ghi dòng studio_appointments (bảng scope theo chủ). */
@@ -410,7 +420,9 @@ export default function ContractEditor({
   const [contractSaved, setContractSaved] = useState<"idle" | "saving" | "saved">("idle");
   // Hợp đồng đã có album giao khách hay chưa. Giữ ở state để thẻ "đang ở giai
   // đoạn Chọn ảnh" biến mất ngay khi vừa giao, không phải tải lại trang.
-  const [deliveryDone, setDeliveryDone] = useState(!!contract.gallery_album_id);
+  // Tính cả album của hợp đồng đã chuyển sang giao khách (dự án hợp nhất) — trước
+  // đây chỉ nhìn gallery_album_id nên nút "Giao khách ngay" vẫn hiện dù đã giao.
+  const [deliveryDone, setDeliveryDone] = useState(!!contract.gallery_album_id || linkedAlbumDelivered);
   const [deliverBusy, setDeliverBusy] = useState(false);
 
   // Link album / video hoàn thiện — lưu RIÊNG khỏi autosaveContract: studio chưa
@@ -479,15 +491,17 @@ export default function ContractEditor({
         client_email: data.client_email.trim() || null,
         shoot_type: data.shoot_type,
         service_id: data.service_id || null,
-        status: data.status,
+        // KHÔNG ghi `status`, `gallery_album_id`, `selection_album_id` ở đây
+        // (xem AUTOSAVE_FORBIDDEN_KEYS trong @/lib/contract-album): state cục bộ
+        // có thể đã cũ — server vừa tạo album khi đổi trạng thái — và lượt tự lưu
+        // kế tiếp sẽ xoá mất album đó. Trạng thái đi qua changeStatus(), album
+        // lưu ngay bằng saveAlbumLink().
         event_date: data.event_date || null,
         event_time: data.event_time.trim() || null,
         location: data.location.trim() || null,
         note: data.note.trim() || null,
-        gallery_album_id: data.gallery_album_id || null,
         delivery_due: data.delivery_due || null,
         client_messenger: data.client_messenger.trim() || null,
-        selection_album_id: data.selection_album_id || null,
         source: data.source || null,
         ...(canAssign ? { assigned_to: data.assigned_to || null } : {}),
         branch_id: data.branch_id || null,
@@ -826,7 +840,12 @@ export default function ContractEditor({
   // lifecycle (Nháp → Đã gửi → … → Hoàn thành) in one click.
   async function changeStatus(status: ContractStatus) {
     if (status === f.status) return;
-    set("status", status);
+    const prevStatus = f.status;
+    // setF thẳng, KHÔNG qua set(): trạng thái chỉ ghi qua route server, không
+    // hẹn lượt autosave nào. (Lượt autosave đang chờ của ô khác vẫn chạy — nó
+    // không còn ghi status / album nên không đè được gì.)
+    setF((p) => ({ ...p, status }));
+    const revert = () => setF((p) => (p.status === status ? { ...p, status: prevStatus } : p));
     // Đổi qua route server tập trung: nó đóng dấu completed_at và khi "completed"
     // sẽ tự tạo album giao khách (album chọn ảnh đã tạo lúc khách ký).
     try {
@@ -836,7 +855,8 @@ export default function ContractEditor({
         body: JSON.stringify({ contractId: contract.id, status }),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) { toast(`Lỗi: ${data?.error || res.status}`); return; }
+      if (!res.ok) { revert(); toast(`Lỗi: ${data?.error || res.status}`); return; }
+      applyAlbumIds(data);
       const sentNote = data?.portalSent ? " · đã gửi link trang riêng cho khách" : "";
       if (status === "completed" && data?.deliveryAlbum) {
         setDeliveryDone(true);
@@ -852,8 +872,36 @@ export default function ContractEditor({
       }
       router.refresh();
     } catch {
+      revert();
       toast("Lỗi mạng, thử lại nhé.");
     }
+  }
+
+  /** Áp id album server vừa trả (đọc lại từ DB) vào form — không bao giờ ghi ngược. */
+  function applyAlbumIds(data: { selectionAlbumId?: string | null; galleryAlbumId?: string | null } | null | undefined) {
+    if (!data) return;
+    setF((p) => ({
+      ...p,
+      ...(data.selectionAlbumId !== undefined ? { selection_album_id: data.selectionAlbumId ?? "" } : {}),
+      ...(data.galleryAlbumId !== undefined ? { gallery_album_id: data.galleryAlbumId ?? "" } : {}),
+    }));
+  }
+
+  /**
+   * Gắn / gỡ album cho hợp đồng — lưu NGAY bằng một lượt update riêng (không qua
+   * autosave, xem ghi chú ở autosaveContract). Lỗi thì trả ô chọn về giá trị cũ.
+   */
+  async function saveAlbumLink(k: "selection_album_id" | "gallery_album_id", id: string) {
+    const prev = f[k];
+    setF((p) => ({ ...p, [k]: id }));
+    const { error } = await supabase.from("studio_contracts").update({ [k]: id || null }).eq("id", contract.id);
+    if (error) {
+      setF((p) => ({ ...p, [k]: prev }));
+      toast(`Lỗi lưu album: ${error.message}`);
+      return;
+    }
+    toast(id ? "Đã gắn album" : "Đã gỡ album");
+    router.refresh();
   }
 
   /**
@@ -871,6 +919,7 @@ export default function ContractEditor({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { toast(`Lỗi: ${data?.error || res.status}`); return; }
+      applyAlbumIds(data);
       setDeliveryDone(true);
       toast("Đã chuyển sang giai đoạn Giao khách");
       router.refresh();
@@ -1795,10 +1844,13 @@ export default function ContractEditor({
     shot:
       f.status === "in_progress" || f.status === "post_production" || f.status === "completed" ||
       (!!f.event_date && f.event_date < todayVN()),
+    // Album đã sang giao khách cũng là hậu kỳ xong — đừng bắt studio bấm từng
+    // sản phẩm "Xử lý hình ảnh" sang "xong" mới qua được bước này.
     postDone:
       f.status === "completed" ||
+      deliveryDone ||
       (products.length > 0 && products.every((x) => x.status === "done")),
-    delivered: f.status === "completed" || !!f.gallery_album_id,
+    delivered: f.status === "completed" || !!f.gallery_album_id || deliveryDone,
   };
 
   const statusTone = CONTRACT_STATUS_TONE[f.status];
@@ -2612,6 +2664,7 @@ export default function ContractEditor({
                                   name={f.client_name}
                                   audience="client"
                                   contractId={contract.id}
+                                  savedName={contract.zalo_name}
                                   kind="payment_reminder"
                                   label="Nhắc Zalo"
                                   wrapClassName="w-auto"
@@ -2922,8 +2975,8 @@ export default function ContractEditor({
                             <select className="input sm:col-span-3" value={c.role} onChange={(e) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, role: e.target.value as CrewRole } : x)))}>
                               {/* Lọc theo nhóm: hợp đồng chụp không cần "Trang
                                   điểm", hợp đồng makeup không cần "Cameraman". */}
-                              {CREW_ROLES_BY_KIND[kind].map((k) => (
-                                <option key={k} value={k}>{CREW_ROLE_LABEL[k]}</option>
+                              {crewRolesFor(kind, crewRoles, c.role).map((r) => (
+                                <option key={r.key} value={r.key}>{r.label}</option>
                               ))}
                             </select>
                             <MoneyInput className="input text-right sm:col-span-2" placeholder="Lương" value={c.salary} onChange={(n) => setCrew((p) => p.map((x, i) => (i === idx ? { ...x, salary: n } : x)))} />
@@ -2973,7 +3026,7 @@ export default function ContractEditor({
                                   date: f.event_date,
                                   time: f.event_time,
                                   location: f.location,
-                                  role: CREW_ROLE_LABEL[c.role],
+                                  role: crewRoleLabel(c.role, crewRoles),
                                   link: crewPortalUrl,
                                 })}
                               />
@@ -2990,7 +3043,7 @@ export default function ContractEditor({
                                   date: f.event_date,
                                   time: f.event_time,
                                   location: f.location,
-                                  role: CREW_ROLE_LABEL[c.role],
+                                  role: crewRoleLabel(c.role, crewRoles),
                                   studio: studioName,
                                   link: crewPortalUrl,
                                 })}
@@ -3094,77 +3147,87 @@ export default function ContractEditor({
                   thông tin nhận việc. */}
               <div className="card p-6">
                 <h2 className="mb-4 font-serif text-lg font-medium">Album khách hàng &amp; hạn giao</h2>
+                {(() => {
+                  // Album khách đang thấy: album giao riêng (nếu có) thắng, không thì
+                  // album của hợp đồng — cùng luật với cổng khách (@/lib/contract-album).
+                  const all = [...selectionAlbums, ...galleries];
+                  const find = (id: string) => (id ? all.find((a) => a.id === id) ?? null : null);
+                  const sel = find(f.selection_album_id);
+                  const gal = find(f.gallery_album_id);
+                  const shown = gal && gal.phase === "delivery" ? gal : sel ?? gal;
+                  if (!shown) return null;
+                  const count = albumPhotoCounts[shown.id];
+                  return (
+                    <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl px-3.5 py-3" style={{ background: "var(--surface2)" }}>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-semibold">{shown.title}</p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
+                          <span
+                            className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                            style={shown.phase === "delivery"
+                              ? { background: "var(--gnS)", color: "var(--success)" }
+                              : { background: "var(--surface)", color: "var(--text2)" }}
+                          >
+                            {shown.phase === "delivery" ? "Giao khách" : "Chọn ảnh"}
+                          </span>
+                          {typeof count === "number" && <span>{count} ảnh/video</span>}
+                          {!shown.published && <span>· chưa xuất bản</span>}
+                        </p>
+                      </div>
+                      <Link href={`/dashboard/albums/${shown.id}`} className="btn-ghost whitespace-nowrap">Mở album</Link>
+                    </div>
+                  );
+                })()}
                 <div className="space-y-4">
                   <div>
-                    <label className="label">Album khách hàng (Album chọn ảnh hoặc album hoàn thiện gửi khách hàng)</label>
-                    <select className="input" value={f.selection_album_id} onChange={(e) => set("selection_album_id", e.target.value)}>
+                    <label className="label">Album của hợp đồng (chọn ảnh → giao khách)</label>
+                    <select
+                      className="input"
+                      value={f.selection_album_id}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const opt = selectionAlbums.find((a) => a.id === v);
+                        saveAlbumLink("selection_album_id", v);
+                        if (!f.gallery_album_id) setDeliveryDone(opt?.phase === "delivery");
+                      }}
+                    >
                       <option value="">— Chưa gắn —</option>
                       {selectionAlbums.map((a) => (
-                        <option key={a.id} value={a.id}>{a.title}</option>
+                        <option key={a.id} value={a.id}>{albumOptionLabel(a)}</option>
                       ))}
                     </select>
                     {selectionAlbums.length === 0 ? (
                       <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                        Chưa có album chọn ảnh. Tạo album ở “Tạo album” rồi quay lại gắn.
+                        Chưa có album nào. Tạo album ở “Tạo album” rồi quay lại gắn.
                       </p>
                     ) : (
                       <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                        Mẹo: nếu dùng Dự án hợp nhất, chỉ cần gắn ô này — link sẽ tự chuyển sang ảnh giao khách khi bạn đổi giai đoạn.
+                        Khách chọn ảnh trên album này. Khi hợp đồng hoàn thành và thư mục ảnh chỉnh sửa (File ChinhSua)
+                        đã có ảnh — hoặc khi bạn bấm “Giao khách ngay” — CHÍNH album này chuyển sang giai đoạn Giao khách,
+                        cùng một link khách đang giữ. Không cần tạo album thứ hai.
                       </p>
                     )}
                   </div>
                   <div>
-                    <label className="label">Album hoàn thiện (giao khách)</label>
+                    <label className="label">Album giao riêng (tuỳ chọn)</label>
                     <select
                       className="input"
                       value={f.gallery_album_id}
-                      onChange={(e) => { set("gallery_album_id", e.target.value); setDeliveryDone(!!e.target.value); }}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        const opt = galleries.find((a) => a.id === v);
+                        saveAlbumLink("gallery_album_id", v);
+                        setDeliveryDone(v ? opt?.phase === "delivery" : !!selectionAlbums.find((a) => a.id === f.selection_album_id && a.phase === "delivery"));
+                      }}
                     >
-                      <option value="">— Chưa gắn —</option>
+                      <option value="">— Không dùng —</option>
                       {galleries.map((a) => (
-                        <option key={a.id} value={a.id}>{a.title}</option>
+                        <option key={a.id} value={a.id}>{albumOptionLabel(a)}</option>
                       ))}
                     </select>
                     <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                      Album phải ở giai đoạn Giao khách và đã xuất bản thì khách mới thấy ảnh/video trên trang riêng.
-                    </p>
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="label">Link album hoàn thiện</label>
-                      <span className="text-[11px]" style={{ color: "var(--text3)" }}>
-                        {finalSaved === "saving" ? "Đang lưu…" : finalSaved === "saved" ? "Đã lưu" : ""}
-                      </span>
-                    </div>
-                    <input
-                      className="input"
-                      inputMode="url"
-                      placeholder="https://photos.app.goo.gl/… hoặc link Google Drive"
-                      value={finalLinks.album}
-                      onChange={(e) => setFinal("album", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Link video hoàn thiện</label>
-                    <textarea
-                      className="input min-h-[84px]"
-                      placeholder={"Mỗi dòng một link (YouTube / Drive / Vimeo)\nCó thể đặt tên: Phóng sự cưới | https://youtu.be/…"}
-                      value={finalLinks.videos}
-                      onChange={(e) => setFinal("videos", e.target.value)}
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Link toàn bộ file gốc</label>
-                    <input
-                      className="input"
-                      inputMode="url"
-                      placeholder="Link thư mục Google Drive / Fshare… chứa toàn bộ file gốc"
-                      value={finalLinks.originals}
-                      onChange={(e) => setFinal("originals", e.target.value)}
-                    />
-                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                      Các link này hiện ngay trên trang riêng của khách (mục “Tải về”) — video YouTube/Drive phát thẳng trong trang.
-                      Nhớ chia sẻ thư mục ở chế độ “Bất kỳ ai có đường liên kết”.
+                      Chỉ gắn khi ảnh giao khách nằm ở một album KHÁC. Album phải ở giai đoạn Giao khách và đã xuất bản thì
+                      khách mới thấy; khi đó link chọn ảnh tự chuyển sang album này.
                     </p>
                   </div>
                   <div>
@@ -3181,13 +3244,61 @@ export default function ContractEditor({
                       <p className="text-[13px] font-semibold">Đang ở giai đoạn Chọn ảnh</p>
                       <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
                         Hợp đồng đã hoàn thành nhưng thư mục ảnh chỉnh sửa còn trống, nên khách vẫn ở trang
-                        chọn ảnh. Album giao khách sẽ tự tạo khi ảnh lên Drive — hoặc bấm giao ngay nếu bạn đã xong.
+                        chọn ảnh. Album sẽ tự chuyển sang Giao khách khi ảnh lên Drive — hoặc bấm giao ngay nếu bạn đã xong.
                       </p>
                       <button type="button" onClick={deliverNow} disabled={deliverBusy} className="btn-ghost mt-2.5">
-                        <PackageCheck size={15} /> {deliverBusy ? "Đang tạo…" : "Giao khách ngay"}
+                        <PackageCheck size={15} /> {deliverBusy ? "Đang chuyển…" : "Giao khách ngay"}
                       </button>
                     </div>
                   )}
+
+                  {/* Link ngoài: album / video / file gốc gửi bằng nơi khác (Google
+                      Photos, YouTube, Fshare…). Thu gọn mặc định — phần lớn studio
+                      giao bằng album ở trên. Tự mở khi đã có link. */}
+                  <details className="group rounded-xl" style={{ border: "1px solid var(--border)" }} open={!!(contract.final_album_url || contract.final_video_urls || contract.final_originals_url)}>
+                    <summary className="flex cursor-pointer list-none items-center gap-2 px-3.5 py-3 text-[13px] font-semibold">
+                      <span className="flex-1">Link ngoài (tuỳ chọn)</span>
+                      <span className="text-[11px] font-normal" style={{ color: "var(--text3)" }}>
+                        {finalSaved === "saving" ? "Đang lưu…" : finalSaved === "saved" ? "Đã lưu" : ""}
+                      </span>
+                      <ChevronDown size={15} className="transition-transform group-open:rotate-180" style={{ color: "var(--text3)" }} />
+                    </summary>
+                    <div className="space-y-4 px-3.5 pb-3.5">
+                      <div>
+                        <label className="label">Link album hoàn thiện</label>
+                        <input
+                          className="input"
+                          inputMode="url"
+                          placeholder="https://photos.app.goo.gl/… hoặc link Google Drive"
+                          value={finalLinks.album}
+                          onChange={(e) => setFinal("album", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Link video hoàn thiện</label>
+                        <textarea
+                          className="input min-h-[84px]"
+                          placeholder={"Mỗi dòng một link (YouTube / Drive / Vimeo)\nCó thể đặt tên: Phóng sự cưới | https://youtu.be/…"}
+                          value={finalLinks.videos}
+                          onChange={(e) => setFinal("videos", e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <label className="label">Link toàn bộ file gốc</label>
+                        <input
+                          className="input"
+                          inputMode="url"
+                          placeholder="Link thư mục Google Drive / Fshare… chứa toàn bộ file gốc"
+                          value={finalLinks.originals}
+                          onChange={(e) => setFinal("originals", e.target.value)}
+                        />
+                        <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                          Các link này hiện ngay trên trang riêng của khách (mục “Tải về”) — video YouTube/Drive phát thẳng trong trang.
+                          Nhớ chia sẻ thư mục ở chế độ “Bất kỳ ai có đường liên kết”.
+                        </p>
+                      </div>
+                    </div>
+                  </details>
                 </div>
               </div>
 
@@ -3273,7 +3384,7 @@ export default function ContractEditor({
                         return (
                           <div className="flex flex-wrap items-center gap-2">
                             <MessengerButton link={f.client_messenger} label="Gửi cho khách" message={reviewMsg} />
-                            <ZaloSendButton phone={f.client_phone} name={f.client_name} audience="client" contractId={contract.id} kind="review_request" message={reviewMsg} />
+                            <ZaloSendButton phone={f.client_phone} name={f.client_name} audience="client" contractId={contract.id} savedName={contract.zalo_name} kind="review_request" message={reviewMsg} />
                             <EmailButton to={f.client_email} label="Email" subject={`Xin đánh giá — ${studioName}`} message={reviewMsg} />
                           </div>
                         );
@@ -3335,7 +3446,7 @@ export default function ContractEditor({
                             <LinkIcon size={14} /> Mở form
                           </a>
                           <MessengerButton link={f.client_messenger} label={btnLabel} message={msg} className="act-btn" />
-                          <ZaloSendButton phone={f.client_phone} name={f.client_name} audience="client" contractId={contract.id} kind="intake_form" message={msg} className="act-btn" />
+                          <ZaloSendButton phone={f.client_phone} name={f.client_name} audience="client" contractId={contract.id} savedName={contract.zalo_name} kind="intake_form" message={msg} className="act-btn" />
                         </div>
                       );
                     })()}
@@ -3587,7 +3698,7 @@ export default function ContractEditor({
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[12.5px] font-semibold">{c.name || c.phone || "Chưa đặt tên"}</p>
-                    <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{CREW_ROLE_LABEL[c.role]}</p>
+                    <p className="truncate text-[11px]" style={{ color: "var(--tx3)" }}>{crewRoleLabel(c.role, crewRoles)}</p>
                   </div>
                   <div className="flex-none text-right">
                     <p className="tnum text-[12px] font-bold">{vnd(c.salary || 0)}</p>
@@ -3723,6 +3834,7 @@ export default function ContractEditor({
                 name={f.client_name}
                 audience="client"
                 contractId={contract.id}
+                savedName={contract.zalo_name}
                 kind="contract_share"
                 label="Gửi Zalo"
                 show="send"
@@ -3734,6 +3846,7 @@ export default function ContractEditor({
                 name={f.client_name}
                 audience="client"
                 contractId={contract.id}
+                savedName={contract.zalo_name}
                 kind="contract_share"
                 show="friends"
                 friendsLabel="Chọn từ danh sách bạn Zalo"

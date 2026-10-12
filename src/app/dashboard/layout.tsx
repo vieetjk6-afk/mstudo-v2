@@ -19,20 +19,27 @@ import {
 import { effectivePlan, planProfilePatch, studioTier } from "@/lib/plans";
 import { getFeatureFlags, comingSoonNav, desktopHidden } from "@/lib/feature-flags";
 import { BRANCH_COOKIE, getBranchScope } from "@/lib/branches";
-import type { Profile } from "@/lib/types";
+import type { ChromeProfile, Profile } from "@/lib/types";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Cờ tính năng không phụ thuộc người dùng (đọc bằng service-role, tự nuốt lỗi)
+  // — khởi động NGAY để chạy chồng lên các bước xác thực bên dưới thay vì đợi
+  // tới cuối layout mới bắt đầu.
+  const flagsP = getFeatureFlags();
   const user = await getSessionUser();
 
   if (!user) redirect("/login");
+  // MFA và hồ sơ không phụ thuộc nhau → hỏi song song. Cần MFA thì hồ sơ đọc
+  // thừa một lần, vô hại (RLS chỉ trả dòng của chính mình).
+  const [mfa, profile0] = await Promise.all([needsMfa(), getProfileById(user.id)]);
   // Đã bật xác thực 2 lớp mà phiên mới qua mật khẩu → nhập mã trước đã.
-  if (await needsMfa()) redirect("/login/mfa");
+  if (mfa) redirect("/login/mfa");
 
-  let profile = await getProfileById(user.id);
+  let profile = profile0;
 
   // Detect expired trial BEFORE the downgrade resets the plan column.
   const trialJustExpired =
@@ -133,7 +140,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
   //     khai chi nhánh (hoặc chưa chạy migration) → enabled = false.
   const owner = profile.studio_owner_id ?? profile.id;
   const [flags, branchScope] = await Promise.all([
-    getFeatureFlags(),
+    flagsP,
     tier === "none"
       ? Promise.resolve({ branches: [], selected: null, enabled: false, locked: false })
       // Ở layout, `profile` là dòng của CHÍNH người đang đăng nhập (không đi qua
@@ -154,7 +161,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
       </Suspense>
       {expiredTrialPlan && <TrialExpiredBanner expiredPlan={expiredTrialPlan} />}
       <DashboardChrome
-        profile={profile as Profile}
+        profile={chromeProfile(profile as Profile)}
         kind={kind}
         tier={tier}
         role={actingRole}
@@ -174,4 +181,22 @@ on conflict (id) do update set role='admin', is_active=true;`}
       <ActivityPing />
     </div>
   );
+}
+
+/**
+ * Chỉ những cột khung dashboard thật sự đọc (xem ChromeProfile). Viết tường minh
+ * từng trường — KHÔNG `...profile` — để thêm cột bí mật vào profiles về sau
+ * cũng không tự chảy xuống trình duyệt.
+ */
+function chromeProfile(p: Profile): ChromeProfile {
+  return {
+    id: p.id,
+    email: p.email,
+    full_name: p.full_name,
+    role: p.role,
+    plan: p.plan,
+    plan_expires_at: p.plan_expires_at,
+    studio_owner_id: p.studio_owner_id,
+    studio_role: p.studio_role,
+  };
 }

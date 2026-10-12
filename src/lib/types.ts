@@ -32,11 +32,27 @@ export interface Profile {
   created_at: string;
 }
 
+/**
+ * Phần hồ sơ mà khung dashboard (DashboardChrome → StudioShell / DashboardHeader)
+ * cần ở TRÌNH DUYỆT. Layout chỉ đưa đúng chừng này xuống client: hồ sơ đầy đủ
+ * (`select("*")`) còn mang google_refresh_token, booking_token, calendar_token,
+ * crew_token… — mọi prop của client component đều bị in nguyên vào HTML/RSC
+ * payload của MỌI trang dashboard.
+ */
+export type ChromeProfile = Pick<
+  Profile,
+  "id" | "email" | "full_name" | "role" | "plan" | "plan_expires_at" | "studio_owner_id" | "studio_role"
+>;
+
 export type AlbumStatus = "draft" | "published";
 
 export interface Album {
   id: string;
   owner_id: string;
+  /** Người nhận Zalo đã nhớ cho album (migrations/zalo_nguoi_nhan.sql) — tuỳ chọn. */
+  zalo_uid?: string | null;
+  zalo_name?: string | null;
+  zalo_self?: string | null;
   slug: string;
   title: string;
   description: string | null;
@@ -293,7 +309,15 @@ export type ContractStatus =
   | "post_production"
   | "completed"
   | "cancelled";
-export type CrewRole = "photographer" | "cameraman" | "makeup" | "hair" | "assistant" | "editor" | "other";
+/** Bảy vai trò có sẵn của app. */
+export type BuiltinCrewRole = "photographer" | "cameraman" | "makeup" | "hair" | "assistant" | "editor" | "other";
+/**
+ * Vai trò của một thợ: vai trò có sẵn HOẶC khoá vai trò studio tự đặt
+ * (`c_xxxx`, bảng studio_crew_roles). `string & {}` giữ được gợi ý gõ của bảy
+ * khoá có sẵn. Muốn ra chữ hiển thị thì đi qua `crewRoleLabel` (lib/crew-roles),
+ * đừng tra thẳng CREW_ROLE_LABEL — khoá tự đặt không có trong đó.
+ */
+export type CrewRole = BuiltinCrewRole | (string & {});
 export type CrewStatus = "pending" | "accepted" | "declined";
 
 export interface StudioService {
@@ -309,6 +333,11 @@ export interface StudioService {
 export interface StudioContract {
   id: string;
   owner_id: string;
+  /** Người nhận Zalo đã nhớ cho khách của hợp đồng (migrations/zalo_nguoi_nhan.sql).
+   *  Tuỳ chọn: database chưa chạy SQL thì không có. */
+  zalo_uid?: string | null;
+  zalo_name?: string | null;
+  zalo_self?: string | null;
   code: string | null;
   title: string;
   client_name: string | null;
@@ -1013,7 +1042,7 @@ export const CONTRACT_STATUS_TONE: Record<ContractStatus, { fg: string; bg: stri
   cancelled: { fg: "var(--rd)", bg: "var(--rdS)" },
 };
 
-export const CREW_ROLE_LABEL: Record<CrewRole, string> = {
+export const CREW_ROLE_LABEL: Record<BuiltinCrewRole, string> = {
   photographer: "Photographer",
   cameraman: "Cameraman",
   makeup: "Trang điểm",

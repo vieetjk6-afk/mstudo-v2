@@ -3,6 +3,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { mainUrl } from "@/lib/hosts";
 import { gcalHealth } from "@/lib/gcal";
 import { applyBranch, getBranchScope } from "@/lib/branches";
+import { loadCrewRoles } from "@/lib/crew-roles";
 import CalendarView, { type ContractMarker, type EventRow } from "./CalendarView";
 
 
@@ -37,7 +38,7 @@ export default async function ShootTab() {
   const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const CONTRACT_COLS =
     "id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, branch_id, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)";
-  const [{ data: events }, { data: contracts }] = await Promise.all([
+  const [{ data: events }, { data: contracts }, crewRoles] = await Promise.all([
     // Kèm tên & ngày của HỢP ĐỒNG CHÍNH để lịch ghi rõ mốc thuộc hợp đồng nào.
     supabase.from("studio_events").select("*, contract:studio_contracts(title, event_date)").eq("owner_id", profile.id).order("event_date"),
     applyBranch(
@@ -50,6 +51,7 @@ export default async function ShootTab() {
         .in("status", ["approved", "in_progress", "post_production", "completed"]),
       scope.selected
     ),
+    loadCrewRoles(supabase, profile.id as string),
   ]);
 
   // Read-only calendar feed (owner sets it once; staff just see the URL).
@@ -66,6 +68,7 @@ export default async function ShootTab() {
       initialEvents={(events ?? []) as unknown as EventRow[]}
       contracts={(contracts ?? []) as ContractMarker[]}
       feedUrl={feedUrl}
+      crewRoles={crewRoles}
       gcal={await gcalHealth(profile.id)}
     />
   );

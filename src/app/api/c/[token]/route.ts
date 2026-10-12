@@ -7,8 +7,8 @@ import { sendPushToOwner } from "@/lib/push";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { autoCreateContractDriveOnSign } from "@/lib/studio-drive";
 import { syncContractCalendar } from "@/lib/gcal-sync";
-import { fetchAllPhotos } from "@/lib/photos";
-import { isDeliveryPhase } from "@/lib/album-phase";
+import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
+import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { isMissingColumn } from "@/lib/missing-column";
 import { listAddenda, signAddendum } from "@/lib/contract-addenda-server";
 import { addendumLabel } from "@/lib/contract-addenda";
@@ -291,38 +291,29 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
 
   // Album giao khách đã gắn (để cổng khách dẫn thẳng tới ảnh). Chỉ tính là ĐÃ
   // GIAO khi album còn ở giai đoạn giao khách và đã xuất bản: studio đưa album
-  // về "Chọn ảnh" thì cổng khách phải quay lại thẻ chọn ảnh.
+  // về "Chọn ảnh" thì cổng khách phải quay lại thẻ chọn ảnh. Album nào là album
+  // giao khách — luật chung ở @/lib/contract-album (album giao riêng thắng, không
+  // thì chính album của hợp đồng khi nó đã sang giai đoạn giao khách).
+  type LinkedRow = { id: string; slug: string; title: string; status: string | null; phase: string | null; is_gallery: boolean | null };
+  const linkedIds = [contract.gallery_album_id, contract.selection_album_id].filter(Boolean) as string[];
+  const { data: linkedRows } = linkedIds.length
+    ? await db.from("albums").select("id, slug, title, status, is_gallery, phase").in("id", linkedIds)
+    : { data: [] as LinkedRow[] };
+  const linkedById = new Map(((linkedRows ?? []) as LinkedRow[]).map((r) => [r.id, r]));
+  const gRow = contract.gallery_album_id ? linkedById.get(contract.gallery_album_id) ?? null : null;
+  const sRow = contract.selection_album_id ? linkedById.get(contract.selection_album_id) ?? null : null;
+  const delivered = resolveDeliveredAlbum({ gallery: gRow, selection: sRow });
+  const deliveredAlbumId: string | null = delivered?.album.id ?? null;
+
   let gallery: { slug: string; title: string } | null = null;
-  let deliveredAlbumId: string | null = null;
-  if (contract.gallery_album_id) {
-    const { data: g } = await db
-      .from("albums")
-      .select("id, slug, title, status, is_gallery, phase")
-      .eq("id", contract.gallery_album_id)
-      .maybeSingle();
-    if (g && isDeliveryPhase(g) && g.status === "published") {
-      gallery = { slug: g.slug, title: g.title };
-      deliveredAlbumId = g.id as string;
-    }
-  }
+  if (delivered?.via === "gallery") gallery = { slug: delivered.album.slug, title: delivered.album.title };
 
   // Linked selection album (client picks their photos at /a/[slug]). For a
   // unified project the same link evolves to the delivery view, so we expose its
   // phase and let the portal adapt the card label.
   let selection: { slug: string; title: string; phase: string } | null = null;
-  if (contract.selection_album_id) {
-    const { data: s } = await db
-      .from("albums")
-      .select("id, slug, title, status, phase, is_gallery")
-      .eq("id", contract.selection_album_id)
-      .maybeSingle();
-    if (s && s.status === "published") {
-      selection = { slug: s.slug, title: s.title, phase: s.phase ?? "selection" };
-      // Dự án hợp nhất: CHÍNH album chọn ảnh được chuyển sang giai đoạn giao
-      // khách, không có album giao khách riêng. Trước đây trường hợp này bị bỏ
-      // sót — hợp đồng hoàn thành mà trang album của khách vẫn trống trơn.
-      if (!deliveredAlbumId && isDeliveryPhase(s)) deliveredAlbumId = s.id as string;
-    }
+  if (sRow && sRow.status === "published") {
+    selection = { slug: sRow.slug, title: sRow.title, phase: sRow.phase ?? "selection" };
   }
 
   // Giai đoạn giao khách: khi đã có album hoàn thiện (giao khách), album chọn ảnh
@@ -373,9 +364,17 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       .eq("id", deliveredAlbumId)
       .maybeSingle();
     if (a && a.status === "published") {
-      const photos = (await fetchAllPhotos(db, a.id as string, "id, drive_file_id, name, is_video, position")) as {
-        id: string; drive_file_id: string; name: string; is_video: boolean | null;
-      }[];
+      const [allPhotos, { data: srcs }] = await Promise.all([
+        fetchAllPhotos(db, a.id as string, "id, drive_file_id, name, is_video, position, source_id"),
+        db.from("album_sources").select("id, stage").eq("album_id", a.id as string),
+      ]);
+      // Cùng luật với /album/[slug]: album có nguồn giai đoạn "delivery" thì chỉ
+      // lấy ảnh giao khách. Thiếu bước này, album của hợp đồng vừa chuyển sang
+      // giao khách sẽ đổ cả ảnh gốc (JPG Goc) lẫn ảnh chỉnh sửa lên cổng khách.
+      const photos = filterDeliveryPhotos(
+        allPhotos as { id: string; drive_file_id: string; name: string; is_video: boolean | null; source_id: string | null }[],
+        (srcs ?? []) as { id: string; stage: string | null }[],
+      );
       album = {
         slug: a.slug as string,
         title: a.title as string,

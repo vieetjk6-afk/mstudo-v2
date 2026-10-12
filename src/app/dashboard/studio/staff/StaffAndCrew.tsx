@@ -7,6 +7,7 @@ import StaffManager, { type StaffRow } from "./StaffManager";
 import RankingList, { type RankRow } from "./RankingList";
 import CrewManager from "../crew/CrewManager";
 import type { StudioCrew } from "@/lib/types";
+import type { CrewRoleRow } from "@/lib/crew-roles";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NHÂN SỰ — một màn, hai tab.
@@ -47,6 +48,8 @@ export default function StaffAndCrew({
     registerUrl: string;
     registerError: string | null;
     branches: { id: string; name: string }[];
+    crewRoles: CrewRoleRow[];
+    canEditCrewRoles: boolean;
   };
   canSeeStaffTab: boolean;
   /** Bảng xếp hạng thợ — gộp từ màn /ranking cũ. */
@@ -105,7 +108,7 @@ export default function StaffAndCrew({
 
       <div key={tab} className="animate-[vkFade_.3s_ease_both]">
         {tab === "ranking" ? (
-          <RankingList ranked={ranked} />
+          <RankingList ranked={ranked} crewRoles={crewProps.crewRoles} />
         ) : tab === "staff" && canSeeStaffTab ? (
           <StaffManager {...staffProps} />
         ) : (

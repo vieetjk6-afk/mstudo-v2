@@ -25,7 +25,10 @@ import type {
   StudioAppointment,
 } from "@/lib/types";
 import { crewPortalUrl as buildCrewPortalUrl } from "@/lib/crew-show";
+import { loadCrewRoles } from "@/lib/crew-roles";
 import ContractEditor from "./ContractEditor";
+import { isDeliveryPhase } from "@/lib/album-phase";
+import { resolveDeliveredAlbum, type ContractAlbumOption } from "@/lib/contract-album";
 import type { ContractAddendum } from "@/lib/contract-addenda";
 import StudioDenied from "@/components/StudioDenied";
 
@@ -95,6 +98,8 @@ export default async function ContractPage(
   // of 8 sequential waves, so the page loads in ~2 round-trips.
   const ed = contract.event_date;
   const empty = Promise.resolve({ data: [] as never[] });
+  // Vai trò thợ tự đặt — chạy song song với lượt dưới, không ném lỗi (thiếu bảng → []).
+  const crewRolesP = loadCrewRoles(supabase, profile.id as string);
 
   const [
     { data: staffList },
@@ -103,8 +108,8 @@ export default async function ContractPage(
     { data: requests },
     { data: payments },
     { data: roster },
-    { data: galleries },
-    { data: selectionAlbums },
+    { data: ownerAlbums },
+    { data: otherAlbumLinks },
     { data: milestones },
     { data: tasks },
     { data: expenses },
@@ -126,8 +131,18 @@ export default async function ContractPage(
     supabase.from("contract_edit_requests").select("*").eq("contract_id", params.id).order("created_at", { ascending: false }),
     supabase.from("contract_payments").select("*").eq("contract_id", params.id).order("paid_at", { ascending: false }),
     supabase.from("studio_crew").select("*").eq("owner_id", profile.id).order("name"),
-    supabase.from("albums").select("id, title, slug").eq("owner_id", profile.id).eq("is_gallery", true).order("created_at", { ascending: false }),
-    supabase.from("albums").select("id, title, slug").eq("owner_id", profile.id).eq("is_gallery", false).order("created_at", { ascending: false }),
+    // MỘT lượt cho cả hai ô chọn album, chia theo GIAI ĐOẠN (isDeliveryPhase) chứ
+    // không theo cờ cũ is_gallery: album giao khách tạo từ "Tạo album" mang
+    // phase='delivery' mà is_gallery = false nên trước đây không bao giờ hiện
+    // trong ô "Album giao riêng".
+    supabase.from("albums").select("id, title, slug, phase, is_gallery, status").eq("owner_id", profile.id).order("created_at", { ascending: false }),
+    // Album đang gắn ở hợp đồng KHÁC — đánh dấu trong ô chọn để studio khỏi gắn trùng.
+    supabase
+      .from("studio_contracts")
+      .select("id, selection_album_id, gallery_album_id")
+      .eq("owner_id", profile.id)
+      .neq("id", params.id)
+      .or("selection_album_id.not.is.null,gallery_album_id.not.is.null"),
     supabase.from("studio_events").select("*").eq("contract_id", params.id).order("event_date"),
     supabase.from("contract_tasks").select("*").eq("contract_id", params.id).order("position"),
     supabase.from("studio_expenses").select("*").eq("contract_id", params.id).order("spent_at", { ascending: false }),
@@ -148,6 +163,42 @@ export default async function ContractPage(
     // Phụ lục — chưa chạy migration contract_addenda.sql thì null, thẻ phụ lục rỗng.
     supabase.from("contract_addenda").select("id, contract_id, no, title, note, lines, signed_at, signed_by, signed_name, created_at").eq("contract_id", params.id).order("no"),
   ]);
+
+  // ── Album của hợp đồng ────────────────────────────────────────────────────
+  type AlbumRow = { id: string; title: string; slug: string; phase: string | null; is_gallery: boolean | null; status: string | null };
+  const albumRows = (ownerAlbums ?? []) as AlbumRow[];
+  const usedElsewhere = new Set<string>();
+  for (const r of (otherAlbumLinks ?? []) as { selection_album_id: string | null; gallery_album_id: string | null }[]) {
+    if (r.selection_album_id) usedElsewhere.add(r.selection_album_id);
+    if (r.gallery_album_id) usedElsewhere.add(r.gallery_album_id);
+  }
+  const toAlbumOption = (a: AlbumRow): ContractAlbumOption => ({
+    id: a.id,
+    title: a.title,
+    slug: a.slug,
+    phase: isDeliveryPhase(a) ? "delivery" : "selection",
+    published: a.status === "published",
+    linkedElsewhere: usedElsewhere.has(a.id),
+  });
+  const selId = contract.selection_album_id as string | null;
+  const galId = contract.gallery_album_id as string | null;
+  // Album đang gắn LUÔN có mặt trong ô của nó, kể cả khi giai đoạn đã đổi (album
+  // của hợp đồng vừa sang giao khách vẫn phải hiện ở ô "Album của hợp đồng").
+  const selectionAlbums = albumRows.filter((a) => !isDeliveryPhase(a) || a.id === selId).map(toAlbumOption);
+  const galleries = albumRows.filter((a) => isDeliveryPhase(a) || a.id === galId).map(toAlbumOption);
+  const selRow = selId ? albumRows.find((a) => a.id === selId) ?? null : null;
+  const galRow = galId ? albumRows.find((a) => a.id === galId) ?? null : null;
+  // Album của hợp đồng đã ở giai đoạn giao khách (dự án hợp nhất) — màn hợp đồng
+  // dùng để ẩn "Giao khách ngay" và tính bước "Đã giao" của vòng đời.
+  const linkedAlbumDelivered = !!resolveDeliveredAlbum({ gallery: galRow, selection: selRow });
+  // Số ảnh của album đang gắn (tối đa 2 lượt đếm head-only — rẻ).
+  const albumPhotoCounts: Record<string, number> = {};
+  await Promise.all(
+    [selId, galId].filter((x): x is string => !!x).map(async (id) => {
+      const { count } = await supabase.from("photos").select("id", { count: "exact", head: true }).eq("album_id", id);
+      if (typeof count === "number") albumPhotoCounts[id] = count;
+    }),
+  );
 
   // Scheduling conflicts: crew booked on another contract that day, or busy.
   const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
@@ -228,8 +279,11 @@ export default async function ContractPage(
       initialRequests={(requests ?? []) as ContractEditRequest[]}
       initialPayments={(payments ?? []) as ContractPayment[]}
       roster={(roster ?? []) as StudioCrew[]}
-      galleries={(galleries ?? []) as { id: string; title: string; slug: string }[]}
-      selectionAlbums={(selectionAlbums ?? []) as { id: string; title: string; slug: string }[]}
+      crewRoles={await crewRolesP}
+      galleries={galleries}
+      selectionAlbums={selectionAlbums}
+      linkedAlbumDelivered={linkedAlbumDelivered}
+      albumPhotoCounts={albumPhotoCounts}
       initialMilestones={(milestones ?? []) as StudioEvent[]}
       initialAppointments={(appointments ?? []) as StudioAppointment[]}
       ownerId={profile.id as string}

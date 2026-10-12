@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { digitsOnly, humanHours, suggestPay, summarizeByPerson, type TimesheetRow } from "@/lib/timesheet";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
-import { vnd, CREW_ROLE_LABEL, CREW_STATUS_LABEL, type CrewRole, type CrewStatus } from "@/lib/types";
+import { vnd, CREW_STATUS_LABEL, type CrewRole, type CrewStatus } from "@/lib/types";
+import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 import { fmtDate } from "@/lib/date";
 import {
   exportPayroll,
@@ -41,7 +42,7 @@ function monthOptions(): { value: string; label: string }[] {
 }
 
 export default function PayrollView({
-  rows, studio, timesheet = [], rates = {},
+  rows, studio, timesheet = [], rates = {}, crewRoles = [],
 }: {
   rows: PayrollRow[];
   studio: ExportStudio;
@@ -49,6 +50,8 @@ export default function PayrollView({
   timesheet?: TimesheetRow[];
   /** Đơn giá giờ theo SĐT thợ. Thiếu = studio chưa khai → không đề xuất tiền. */
   rates?: Record<string, number>;
+  /** Vai trò studio tự đặt — để ra đúng tên vai trò. */
+  crewRoles?: CrewRoleRow[];
 }) {
   const supabase = createClient();
   const [month, setMonth] = useState("all");
@@ -132,7 +135,7 @@ export default function PayrollView({
     return filtered.map((r) => ({
       name: r.name,
       phone: r.phone || "",
-      role: CREW_ROLE_LABEL[r.role],
+      role: crewRoleLabel(r.role, crewRoles),
       contract: r.contract?.title || "Không gắn hợp đồng",
       code: r.contract?.code || "",
       date: r.contract?.event_date || null,
@@ -317,7 +320,7 @@ export default function PayrollView({
                               {r.contract?.title || "Hợp đồng"}
                             </Link>
                             <p className="text-[11px]" style={{ color: "var(--tx3)" }}>
-                              {CREW_ROLE_LABEL[r.role]} · {r.contract?.event_date ? fmtDate(r.contract.event_date) : "chưa có ngày"} · {CREW_STATUS_LABEL[r.status]}
+                              {crewRoleLabel(r.role, crewRoles)} · {r.contract?.event_date ? fmtDate(r.contract.event_date) : "chưa có ngày"} · {CREW_STATUS_LABEL[r.status]}
                             </p>
                           </div>
                           <span className="tnum font-semibold">{vnd(r.salary)}</span>
@@ -361,7 +364,7 @@ export default function PayrollView({
                     {j.rows.slice(0, 4).map((p) => (
                       <span
                         key={p.id}
-                        title={`${p.name} · ${CREW_ROLE_LABEL[p.role]} · ${vnd(p.salary)}`}
+                        title={`${p.name} · ${crewRoleLabel(p.role, crewRoles)} · ${vnd(p.salary)}`}
                         className="-ml-[7px] flex h-[26px] w-[26px] items-center justify-center rounded-full text-[9.5px] font-bold text-white first:ml-0"
                         style={{ background: avatarColor(p.name), border: "2px solid var(--sf)" }}
                       >

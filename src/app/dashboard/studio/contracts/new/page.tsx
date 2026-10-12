@@ -5,6 +5,7 @@ import { getConversation, UNNAMED_CONTACT } from "@/lib/inbox/view";
 import { platformLabel } from "@/lib/inbox/platforms";
 import { buildTranscript, type TranscriptMessage } from "@/lib/contract-quick";
 import type { StudioService, StudioCrew } from "@/lib/types";
+import { loadCrewRoles } from "@/lib/crew-roles";
 import NewContractForm, {
   type TemplateOption,
   type ServiceOption,
@@ -116,6 +117,7 @@ export default async function NewContractPage(props: { searchParams?: Promise<{ 
   // Chi nhánh đang xem → hợp đồng mới thuộc luôn cơ sở đó. "Xem gộp" hoặc "chưa
   // gán" thì để trống, không đoán hộ.
   const branchScope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
+  const crewRoles = (roster ?? []).length ? await loadCrewRoles(supabase, profile.id as string) : [];
   const branchId =
     typeof branchScope.selected === "string" && branchScope.selected !== "none" ? branchScope.selected : null;
   return (
@@ -127,6 +129,7 @@ export default async function NewContractPage(props: { searchParams?: Promise<{ 
       services={((services ?? []) as Pick<StudioService, "id" | "name" | "clauses">[]) as ServiceOption[]}
       packages={(packages ?? []) as unknown as PackageOption[]}
       roster={(roster ?? []) as Pick<StudioCrew, "id" | "name" | "phone" | "role">[]}
+      crewRoles={crewRoles}
       recentClients={Array.from(byClient.values()).slice(0, 8)}
       initialQuickText={initialQuickText}
       quickSourceNote={quickSourceNote}

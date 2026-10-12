@@ -16,10 +16,18 @@
 -- KHÔNG đổi dữ liệu cũ. Chạy được nhiều lần.
 -- ─────────────────────────────────────────────────────────────────────────
 
+-- Đã chạy vai_tro_tho_tu_dat.sql (studio tự đặt vai trò) thì ràng buộc này đã
+-- bị bỏ CÓ CHỦ Ý — tạo lại sẽ vấp ngay dòng nào đang mang vai trò tự đặt và làm
+-- hỏng cả lượt chạy setup-all / cap-nhat. Nên chỉ tạo khi bảng đó chưa có.
 alter table public.contract_crew
   drop constraint if exists contract_crew_role_check;
 
-alter table public.contract_crew
-  add constraint contract_crew_role_check
-  check (role in ('photographer', 'cameraman', 'makeup', 'hair',
-                  'assistant', 'editor', 'other'));
+do $$
+begin
+  if to_regclass('public.studio_crew_roles') is null then
+    alter table public.contract_crew
+      add constraint contract_crew_role_check
+      check (role in ('photographer', 'cameraman', 'makeup', 'hair',
+                      'assistant', 'editor', 'other'));
+  end if;
+end $$;

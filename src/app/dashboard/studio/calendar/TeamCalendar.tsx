@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Clock, Plus, Trash2, Lock, ChevronDown, Search, X } from "lucide-react";
-import { CREW_ROLE_LABEL, CREW_STATUS_LABEL, type CrewRole, type CrewStatus } from "@/lib/types";
+import { CREW_STATUS_LABEL, type CrewRole, type CrewStatus } from "@/lib/types";
+import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 import { lunarCellLabel } from "@/lib/lunar";
 import { todayVN } from "@/lib/date";
 import TimeInput from "@/components/TimeInput";
@@ -55,11 +56,14 @@ export default function TeamCalendar({
   members,
   schedule,
   shifts,
+  crewRoles = [],
 }: {
   assignments: TeamAssignment[];
   members: CrewMember[];
   schedule: CrewScheduleRow[];
   shifts: Record<string, ShiftLetter>;
+  /** Vai trò thợ studio tự đặt — để ra đúng tên vai trò. */
+  crewRoles?: CrewRoleRow[];
 }) {
   const router = useRouter();
   const todayStr = todayVN();
@@ -355,7 +359,7 @@ export default function TeamCalendar({
                     <span className="text-sm font-medium">{a.name}</span>
                     <span className="text-[11px]" style={{ color: STATUS_TONE[a.status] }}>{CREW_STATUS_LABEL[a.status]}</span>
                   </div>
-                  <p className="text-[11px]" style={{ color: "var(--text3)" }}>{CREW_ROLE_LABEL[a.role]} · {a.contractTitle}</p>
+                  <p className="text-[11px]" style={{ color: "var(--text3)" }}>{crewRoleLabel(a.role, crewRoles)} · {a.contractTitle}</p>
                 </Link>
               ))}
 

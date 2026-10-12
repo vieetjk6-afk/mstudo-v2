@@ -28,13 +28,13 @@ import {
   vnd,
   vndShort,
   SHOOT_TYPE_LABEL,
-  CREW_ROLE_LABEL,
   quoteSelectedTotal,
   type ContractStatus,
   type QuoteStatus,
   type CrewRole,
 } from "@/lib/types";
 import { fmtDate, fmtDow, todayVN, daysFromToday } from "@/lib/date";
+import { crewRoleLabel, loadCrewRoles } from "@/lib/crew-roles";
 import { MILESTONE_LABEL, milestoneMessage, upcomingMilestones } from "@/lib/anniversary";
 
 /** Photographer-plan overview: bookings + upcoming shoots, no contracts/finance. */
@@ -582,17 +582,18 @@ export default async function StudioOverview() {
     });
   }
 
-  // 9. Thợ chưa nhận job.
+  // 9. Thợ chưa nhận job. Vai trò tự đặt chỉ cần đọc khi có thợ để nhắc.
+  const crewRoles = pendingCrew.length ? await loadCrewRoles(supabase, profile.id as string) : [];
   for (const { c, cr } of pendingCrew) {
     urgent.push({
       key: `pcrew-${cr.id}`, icon: Users, tone: "blue",
       title: `${cr.name || cr.phone || "Thợ"} chưa phản hồi lời mời`,
-      sub: `${CREW_ROLE_LABEL[cr.role]} · ${c.title}${c.event_date ? ` · ${fmtDate(c.event_date)}` : ""}`,
+      sub: `${crewRoleLabel(cr.role, crewRoles)} · ${c.title}${c.event_date ? ` · ${fmtDate(c.event_date)}` : ""}`,
       tag: "Nhân sự", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${c.id}`,
       action: (
         <MessengerButton
           label="Nhắc thợ"
-          message={shootReminderMessage({ name: cr.name, title: c.title, date: c.event_date, time: c.event_time, location: c.location, role: CREW_ROLE_LABEL[cr.role], link: crewPortal })}
+          message={shootReminderMessage({ name: cr.name, title: c.title, date: c.event_date, time: c.event_time, location: c.location, role: crewRoleLabel(cr.role, crewRoles), link: crewPortal })}
         />
       ),
     });

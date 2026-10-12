@@ -169,7 +169,7 @@ ok(
   const page = await browser.newPage();
   await page.route("**/rest/v1/album_faces*", gone("album_faces"));
   await page.route("**/rest/v1/album_people*", gone("album_people"));
-  await page.route("**/api/face-status", (r) =>
+  await page.route("**/api/face-status*", (r) =>
     r.fulfill({
       status: 200,
       contentType: "application/json",
@@ -202,7 +202,7 @@ async function bangCron(faceStatus) {
   const page = await browser.newPage();
   await page.route("**/rest/v1/album_faces*", okEmpty);
   await page.route("**/rest/v1/album_people*", okEmpty);
-  await page.route("**/api/face-status", (r) =>
+  await page.route("**/api/face-status*", (r) =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(faceStatus) })
   );
   await page.goto(PAGE, { waitUntil: "domcontentloaded", timeout: 25_000 });

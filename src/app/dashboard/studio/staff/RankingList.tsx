@@ -3,7 +3,8 @@
 import { Trophy } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
-import { vnd, CREW_ROLE_LABEL, type CrewRole } from "@/lib/types";
+import { vnd, type CrewRole } from "@/lib/types";
+import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 
 export type RankRow = { key: string; name: string; role: CrewRole; jobs: number; accepted: number; earned: number };
 
@@ -18,7 +19,7 @@ export type RankRow = { key: string; name: string; role: CrewRole; jobs: number;
  * kiếm được bao nhiêu), không phải công nợ — nên nó tính cả phần đã trả lẫn
  * chưa trả, và ở đúng nhóm quyền của quản lý (Đối soát tiền công cần quyền tiền).
  */
-export default function RankingList({ ranked }: { ranked: RankRow[] }) {
+export default function RankingList({ ranked, crewRoles = [] }: { ranked: RankRow[]; crewRoles?: CrewRoleRow[] }) {
   const medal = ["#C9A227", "#8E9099", "#B4703A"];
   const topEarn = Math.max(1, ...ranked.map((r) => r.earned));
 
@@ -52,7 +53,7 @@ export default function RankingList({ ranked }: { ranked: RankRow[] }) {
             <div className="min-w-0 flex-1">
               <p className="truncate text-[13.5px] font-semibold">{r.name}</p>
               <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                {CREW_ROLE_LABEL[r.role] ?? r.role} · nhận {r.accepted}/{r.jobs} buổi
+                {crewRoleLabel(r.role, crewRoles)} · nhận {r.accepted}/{r.jobs} buổi
               </p>
               <div className="mt-1.5 h-[3px] overflow-hidden rounded-[3px]" style={{ background: "var(--bd2)" }}>
                 <div className="h-full rounded-[3px]" style={{ width: `${(r.earned / topEarn) * 100}%`, background: "var(--ac)" }} />

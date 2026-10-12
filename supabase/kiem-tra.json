@@ -24,7 +24,11 @@
     "migrations/contract_item_tier_milestone.sql",
     "migrations/contract_final_links.sql",
     "migrations/contract_final_originals.sql",
-    "migrations/bao_mat_quyen_rpc_storage.sql"
+    "migrations/bao_mat_quyen_rpc_storage.sql",
+    "migrations/vai_tro_tho_tu_dat.sql",
+    "migrations/zalo_nguoi_nhan.sql",
+    "migrations/tang_toc_thu_vien_album.sql",
+    "migrations/han_muc_album_may_chu.sql"
   ],
   "muc": [
     {
@@ -784,6 +788,23 @@
       "bang": [],
       "cot": [
         "studio_contracts.final_originals_url"
+      ]
+    },
+    {
+      "file": "migrations/vai_tro_tho_tu_dat.sql",
+      "mo_ta": "Vai trò thợ studio tự đặt (đổi tên / ẩn / thêm vai trò) + bỏ ràng buộc vai trò contract_crew (chạy SAU crew_role_makeup)",
+      "bang": [
+        "studio_crew_roles"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/zalo_nguoi_nhan.sql",
+      "mo_ta": "Nhớ người nhận Zalo cho hợp đồng/album",
+      "bang": [],
+      "cot": [
+        "albums.zalo_uid",
+        "studio_contracts.zalo_uid"
       ]
     }
   ]

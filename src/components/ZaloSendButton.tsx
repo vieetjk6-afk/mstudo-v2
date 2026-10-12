@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { MessageCircle, Check, Loader2, AlertCircle, Users, Search } from "lucide-react";
 
 /**
@@ -13,6 +13,12 @@ import { MessageCircle, Check, Loader2, AlertCircle, Users, Search } from "lucid
  *  - "Chọn bạn Zalo" → chọn trực tiếp từ danh sách bạn bè (gửi theo uid, KHÔNG
  *    phụ thuộc quyền "tìm bằng SĐT" của người nhận → gửi được cho bạn bè dù họ
  *    tắt tìm-bằng-SĐT).
+ *
+ * Nhớ người nhận (tin gửi KHÁCH có contractId/albumId): người chọn từ danh sách
+ * bạn được máy chủ lưu lên hợp đồng/album → lần sau nút thành "Gửi Zalo cho
+ * <tên>", bấm một cái là tới đúng người (máy chủ tự dùng uid đã lưu), kèm nút
+ * nhỏ "đổi người" để chọn lại. Chỉ kênh cá nhân mới nhớ — kênh OA/chưa kết nối
+ * thì máy chủ không trả `saved`, nút giữ nguyên như cũ.
  */
 const ERROR_VI: Record<string, string> = {
   not_connected: "Chưa kết nối Zalo. Vào Tin nhắn → kết nối trước.",
@@ -26,8 +32,17 @@ const ERROR_VI: Record<string, string> = {
 };
 const mapErr = (e: string) => ERROR_VI[e] || e || "Lỗi";
 
+// Báo cho các nút khác của CÙNG hợp đồng/album khi người nhận vừa được nhớ/quên
+// (vd bảng "Gửi khách" có nút gửi và nút chọn bạn là hai phiên bản riêng).
+const REMEMBER_EVENT = "mstudo:zalo-remembered";
+type RememberDetail = { contractId: string | null; albumId: string | null; name: string };
+
 // Cache danh sách bạn bè ở cấp module → nhiều nút không phải tải lại.
 let _friendsCache: Array<{ uid: string; name: string; avatar: string }> | null = null;
+function cacheFriends(list: Array<{ uid: string; name: string; avatar: string }>) {
+  _friendsCache = list;
+  return list;
+}
 
 export default function ZaloSendButton({
   phone,
@@ -44,6 +59,8 @@ export default function ZaloSendButton({
   show = "both",
   friendsLabel,
   wrapClassName = "w-full",
+  savedName,
+  albumId,
 }: {
   phone?: string | null;
   name?: string | null;
@@ -68,6 +85,11 @@ export default function ZaloSendButton({
   /** Lớp cho khung ngoài. Mặc định giãn hết hàng; truyền "w-auto" khi nút phải
    *  đứng chung hàng với các nút khác (vd hàng thao tác của đợt thanh toán). */
   wrapClassName?: string;
+  /** Tên bạn Zalo đã nhớ cho hợp đồng/album này (cột zalo_name). Chỉ có nghĩa
+   *  với audience="client" kèm contractId/albumId. */
+  savedName?: string | null;
+  /** Album đang gửi — để máy chủ nhớ người nhận cho album (kể cả album lẻ). */
+  albumId?: string | null;
 }) {
   const [state, setState] = useState<null | "sending" | "ok" | "fail">(null);
   const [err, setErr] = useState("");
@@ -75,6 +97,11 @@ export default function ZaloSendButton({
   // ninh khách đã có mã, nên phải nói ra.
   const [imgWarn, setImgWarn] = useState("");
   const [manualPhone, setManualPhone] = useState("");
+  // Người nhận đã nhớ theo lần gửi gần nhất: undefined = chưa biết (dùng
+  // savedName từ trang), "" = máy chủ báo không còn nhớ ai, chuỗi = tên.
+  const [memName, setMemName] = useState<string | undefined>(undefined);
+  // Gợi ý hiện trong bảng chọn bạn khi gửi theo SĐT không tìm thấy.
+  const [pickHint, setPickHint] = useState("");
   // Picker bạn bè
   const [pickOpen, setPickOpen] = useState(false);
   const [friends, setFriends] = useState<Array<{ uid: string; name: string; avatar: string }>>([]);
@@ -106,6 +133,31 @@ export default function ZaloSendButton({
     return () => window.removeEventListener("resize", place);
   }, [pickOpen]);
 
+  const canRemember = audience === "client" && !!(contractId || albumId);
+  const remembered = canRemember ? ((memName ?? savedName ?? "").trim() || null) : null;
+  const shortName = remembered && remembered.length > 22 ? remembered.slice(0, 21) + "…" : remembered;
+  const mainLabel = !shortName ? label : label === "Gửi Zalo" ? `Gửi Zalo cho ${shortName}` : `${label} · ${shortName}`;
+
+  useEffect(() => {
+    if (!canRemember) return;
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<RememberDetail>).detail;
+      if (!d) return;
+      if ((contractId && d.contractId === contractId) || (albumId && d.albumId === albumId)) setMemName(d.name);
+    };
+    window.addEventListener(REMEMBER_EVENT, on);
+    return () => window.removeEventListener(REMEMBER_EVENT, on);
+  }, [canRemember, contractId, albumId]);
+
+  function remember(name: string) {
+    setMemName(name);
+    window.dispatchEvent(
+      new CustomEvent<RememberDetail>(REMEMBER_EVENT, {
+        detail: { contractId: contractId ?? null, albumId: albumId ?? null, name },
+      })
+    );
+  }
+
   const fixed = (phone || "").trim();
   const inputMode = !fixed && askPhone;
   // Nút chọn bạn mặc định mang cùng lớp với nút gửi để hai cái cao bằng nhau.
@@ -123,12 +175,31 @@ export default function ZaloSendButton({
       const res = await fetch("/api/studio/zalo/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, body: message, imageUrl: imageUrl ?? null, audience, contractId, kind }),
+        body: JSON.stringify({
+          ...payload,
+          body: message,
+          imageUrl: imageUrl ?? null,
+          audience,
+          contractId,
+          albumId: albumId ?? null,
+          kind,
+        }),
       }).then((x) => x.json());
       if (res.ok) {
         setState("ok");
+        setPickHint("");
+        if (canRemember && typeof res.saved === "boolean") {
+          remember(res.saved ? String(res.name || payload.toName || "").trim() || "bạn Zalo" : "");
+        }
         if (res.imageError) setImgWarn("Đã gửi nhưng KHÔNG kèm được ảnh QR — khách bấm link QR trong tin.");
         setTimeout(() => setState(null), 2500);
+      } else if (res.error === "recipient_not_found" && !payload.toUid) {
+        // Không tìm được theo SĐT (khách tắt tìm-bằng-SĐT / số không đăng ký
+        // Zalo) → mở luôn danh sách bạn để chọn, máy chủ sẽ nhớ cho lần sau.
+        setState(null);
+        if (canRemember) remember("");
+        setPickHint("Không tìm thấy qua SĐT — chọn bạn Zalo để lưu cho lần sau");
+        if (!pickOpen) void togglePicker();
       } else {
         setState("fail");
         setErr(mapErr(res.error));
@@ -141,6 +212,11 @@ export default function ZaloSendButton({
 
   function sendByPhone() {
     const to = fixed || manualPhone.trim();
+    // Đã nhớ người nhận → không cần SĐT, máy chủ gửi thẳng theo uid đã lưu.
+    if (!to && remembered) {
+      doSend({ toName: remembered });
+      return;
+    }
     if (!to) {
       setState("fail");
       setErr("Nhập số điện thoại trước.");
@@ -152,14 +228,14 @@ export default function ZaloSendButton({
   async function togglePicker() {
     const next = !pickOpen;
     setPickOpen(next);
+    if (!next) setPickHint("");
     if (next && !_friendsCache && !loadingFriends) {
       setLoadingFriends(true);
       setFriendsErr("");
       try {
         const r = await fetch("/api/studio/zalo/friends", { cache: "no-store" }).then((x) => x.json());
         if (r.ok) {
-          _friendsCache = r.friends || [];
-          setFriends(_friendsCache!);
+          setFriends(cacheFriends(r.friends || []));
         } else setFriendsErr(mapErr(r.error));
       } catch {
         setFriendsErr("Lỗi mạng, thử lại.");
@@ -172,6 +248,7 @@ export default function ZaloSendButton({
 
   function pickFriend(f: { uid: string; name: string }) {
     setPickOpen(false);
+    setPickHint("");
     setQ("");
     doSend({ toUid: f.uid, toName: f.name });
   }
@@ -212,7 +289,18 @@ export default function ZaloSendButton({
             title="Gửi tự động qua Zalo studio"
             style={{ color: "#0068FF" }}
           >
-            {icon} {state === "ok" ? "Đã gửi" : label}
+            {icon} {state === "ok" ? "Đã gửi" : mainLabel}
+          </button>
+        )}
+        {show !== "friends" && remembered && (
+          <button
+            type="button"
+            onClick={togglePicker}
+            className="text-[11px] underline-offset-2 hover:underline"
+            title="Chọn người nhận Zalo khác cho hợp đồng/album này"
+            style={{ color: "var(--text3)" }}
+          >
+            đổi người
           </button>
         )}
         {show !== "send" && (
@@ -235,6 +323,9 @@ export default function ZaloSendButton({
           className="absolute z-50 mt-1 w-[260px] max-w-[calc(100vw-1.5rem)] rounded-xl border p-2 shadow-xl"
           style={{ top: "100%", left: popLeft, background: "var(--surface)", borderColor: "var(--border)" }}
         >
+          {pickHint && (
+            <div className="mb-1.5 px-1 text-[11px]" style={{ color: "var(--s-amber)" }}>{pickHint}</div>
+          )}
           <div className="flex items-center gap-1.5 rounded-lg px-2 py-1" style={{ background: "var(--surface2)" }}>
             <Search size={13} style={{ color: "var(--text3)" }} />
             <input

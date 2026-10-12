@@ -9,6 +9,7 @@ import { studioUrl } from "@/lib/hosts";
 import StudioDenied from "@/components/StudioDenied";
 import type { ContractCrew, ContractIntake } from "@/lib/types";
 import SessionInfoView from "./SessionInfoView";
+import { loadCrewRoles } from "@/lib/crew-roles";
 
 /**
  * "Thông tin buổi chụp" — màn riêng xem dữ liệu khách điền ở form (/form/[token])
@@ -53,7 +54,10 @@ export default async function SessionInfoPage(props: { params: Promise<{ id: str
     .eq("contract_id", params.id)
     .order("position");
 
-  const studioHost = await getStudioHost(supabase, profile.id);
+  const [studioHost, crewRoles] = await Promise.all([
+    getStudioHost(supabase, profile.id),
+    (crew ?? []).length ? loadCrewRoles(supabase, profile.id as string) : Promise.resolve([]),
+  ]);
 
   return (
     <SessionInfoView
@@ -70,6 +74,7 @@ export default async function SessionInfoPage(props: { params: Promise<{ id: str
       formUrl={token ? studioUrl(studioHost, `/form/${token}`) : null}
       crew={(crew ?? []) as Pick<ContractCrew, "id" | "name" | "phone" | "role" | "side" | "event_id">[]}
       studioName={brandFrom(profile).name}
+      crewRoles={crewRoles}
     />
   );
 }
