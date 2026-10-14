@@ -137,6 +137,7 @@ const PHONE_TEMPLATES: WeddingTemplateMeta[] = [
   { name: "glass", label: "3D glass", tagline: "Quả cầu nổi · kính mờ hiện đại", group: "phone", bg: "#22224a", ink: "#ffffff", accent: "#ff9ad5", serif: false, dark: true },
   { name: "neon", label: "Neon ticket", tagline: "Cyberpunk · vé concert phát sáng", group: "phone", bg: "#07080f", ink: "#d6f7f2", accent: "#00ffd5", serif: false, dark: true },
   { name: "scrapbook", label: "Scrapbook", tagline: "Polaroid dán tay · giấy note vàng", group: "phone", bg: "#e9e3d6", ink: "#3a3227", accent: "#a8734f", serif: false, dark: false },
+  { name: "thumoi", label: "Thư mời nâu", tagline: "Ảnh bìa · tờ lịch tháng · trắng & nâu cà phê", group: "phone", bg: "#ffffff", ink: "#545454", accent: "#6b503d", serif: true, dark: false },
 ];
 
 /** Mẫu "trang dài" — bộ gốc, đẹp cả trên máy tính. */
