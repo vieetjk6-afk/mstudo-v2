@@ -20,6 +20,7 @@ import VintageTemplate from "./designs/phone/VintageTemplate";
 import GlassTemplate from "./designs/phone/GlassTemplate";
 import NeonTemplate from "./designs/phone/NeonTemplate";
 import ScrapbookTemplate from "./designs/phone/ScrapbookTemplate";
+import ThuMoiTemplate from "./designs/phone/ThuMoiTemplate";
 import { isPhoneTemplate } from "./templates";
 import { PreviewProvider } from "./preview-mode";
 
@@ -46,6 +47,7 @@ const TEMPLATES = {
   glass: GlassTemplate,
   neon: NeonTemplate,
   scrapbook: ScrapbookTemplate,
+  thumoi: ThuMoiTemplate,
 } as const;
 
 /**
