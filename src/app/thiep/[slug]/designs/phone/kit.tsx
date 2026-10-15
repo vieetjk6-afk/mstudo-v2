@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { WeddingBank, WeddingConfig, PublicWeddingInvitation } from "@/lib/types";
 import { mapEmbedSrc, mapOpenHref } from "@/lib/site-map";
+import { lunarText } from "@/lib/lunar";
 import { vietqrUrl, type Wish } from "../../shared";
 import PhoneCountdown from "./PhoneCountdown";
 import QuickRsvp from "./QuickRsvp";
@@ -62,7 +63,12 @@ export function initial(name: string): string {
 }
 
 export type InfoItem = { label: string; value?: string; swatches?: string[] };
-export type PhoneEvent = { label: string; time?: string; date?: string; where?: string };
+export type PhoneEvent = {
+  label: string; time?: string; date?: string; where?: string;
+  /** Tách riêng tên nơi và địa chỉ cho mẫu xếp hai dòng. */ venue?: string; address?: string;
+  /** Ngày đầy đủ của riêng sự kiện này. */ bits?: DateBits;
+  /** Link chỉ đường riêng của sự kiện (nhà trai / nhà gái ở hai nơi). */ href?: string;
+};
 export type Portrait = { role: string; name: string; photo?: string; sub?: string };
 export type Gift = { title: string; qr: string; bank: WeddingBank; fallbackName: string };
 
@@ -103,6 +109,12 @@ export type PhoneData = {
   thanksPhoto?: string;
   rsvpOn: boolean;
   wishesOn: boolean;
+  /** Ngày âm lịch: chữ cặp đôi tự gõ, để trống thì tự tính từ ngày cưới. */ lunarLine?: string;
+  /** Lịch trình buổi tiệc (giờ · việc). */ timeline: { time: string; label: string }[];
+  homes: { groom?: string; bride?: string };
+  bios: { groom?: string; bride?: string };
+  /** Giờ bắt đầu đọc được ("17:30") — từ lịch trình, giờ đón khách hoặc sự kiện đầu. */ startTime?: string;
+  /** Link thêm ngày cưới vào Google Calendar; null khi chưa có ngày. */ calendarHref: string | null;
 };
 
 /** Đọc config của thiệp thành dữ liệu render-ready cho các mẫu điện thoại. */
@@ -121,6 +133,10 @@ export function phoneData(inv: PublicWeddingInvitation, guest?: string): PhoneDa
     time: e.time?.trim() || undefined,
     date: e.date ? dateBits(e.date).slash : undefined,
     where: [e.venue?.trim(), e.address?.trim()].filter(Boolean).join(" — ") || undefined,
+    venue: e.venue?.trim() || undefined,
+    address: e.address?.trim() || undefined,
+    bits: e.date ? dateBits(e.date) : undefined,
+    href: e.map_url?.trim() ? mapOpenHref(e.map_url) ?? undefined : undefined,
   }));
 
   // Địa điểm chính: ưu tiên field riêng, sau đó sự kiện CÓ địa chỉ cuối cùng
@@ -131,6 +147,11 @@ export function phoneData(inv: PublicWeddingInvitation, guest?: string): PhoneDa
     address: c.venue_address?.trim() || withVenue?.address?.trim() || undefined,
     mapUrl: c.map_url?.trim() || withVenue?.map_url?.trim() || undefined,
   };
+
+  const timeline = (c.timeline ?? [])
+    .map((t) => ({ time: t.time?.trim() || "", label: t.label?.trim() || "" }))
+    .filter((t) => t.time || t.label);
+  const startTime = readTime(timeline[0]?.time, c.reception_time, rawEvents[rawEvents.length - 1]?.time, rawEvents[0]?.time);
 
   const dress = (c.dress_code ?? []).filter(Boolean);
   const infos: InfoItem[] = [
@@ -194,7 +215,48 @@ export function phoneData(inv: PublicWeddingInvitation, guest?: string): PhoneDa
     thanksPhoto: c.thanks_photo || undefined,
     rsvpOn: c.rsvp_enabled !== false,
     wishesOn: c.guestbook_enabled !== false,
+    lunarLine: c.lunar_date?.trim() || lunarText(c.wedding_date) || undefined,
+    timeline,
+    homes: { groom: c.groom_home?.trim() || undefined, bride: c.bride_home?.trim() || undefined },
+    bios: { groom: c.groom_bio?.trim() || undefined, bride: c.bride_bio?.trim() || undefined },
+    startTime,
+    calendarHref: calendarLink({
+      date: c.wedding_date, time: startTime, title: `Lễ cưới ${groom} & ${bride}`,
+      place: [venue.name, venue.address].filter(Boolean).join(", "),
+    }),
   };
+}
+
+/** "17:30" từ chữ tự do: "17:30", "17h30", "Đón khách từ 17 giờ", "18g". */
+export function readTime(...texts: (string | undefined)[]): string | undefined {
+  for (const t of texts) {
+    const m = /(\d{1,2})\s*(?::|h|g|giờ)\s*(\d{2})?/i.exec(t ?? "");
+    if (m && +m[1] < 24 && (!m[2] || +m[2] < 60)) return `${two(+m[1])}:${m[2] ?? "00"}`;
+  }
+  return undefined;
+}
+
+/**
+ * Link "Thêm vào lịch" (Google Calendar — mở được trên mọi điện thoại, kể cả
+ * iPhone qua trình duyệt). Có giờ thì đặt sự kiện 4 tiếng theo giờ Việt Nam,
+ * không có thì đặt cả ngày.
+ */
+export function calendarLink({ date, time, title, place }: { date?: string; time?: string; title: string; place?: string }): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date ?? "");
+  if (!m) return null;
+  const ymd = `${m[1]}${m[2]}${m[3]}`;
+  let dates: string;
+  if (time) {
+    const [h, mi] = time.split(":").map(Number);
+    const end = Math.min(23, h + 4);
+    dates = `${ymd}T${two(h)}${two(mi)}00/${ymd}T${two(end)}${two(end === 23 ? 59 : mi)}00`;
+  } else {
+    const next = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3] + 1));
+    dates = `${ymd}/${next.getUTCFullYear()}${two(next.getUTCMonth() + 1)}${two(next.getUTCDate())}`;
+  }
+  const q = new URLSearchParams({ action: "TEMPLATE", text: title, dates, ctz: "Asia/Ho_Chi_Minh" });
+  if (place) q.set("location", place);
+  return `https://calendar.google.com/calendar/render?${q.toString()}`;
 }
 
 // ── Khung ngoài ─────────────────────────────────────────────────────────────
@@ -306,6 +368,8 @@ export function PhoneShell({
         @keyframes wedFloat { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-7px) } }
         .wed-float { animation: wedFloat 4.2s ease-in-out infinite; }
         @keyframes wedSpinSlow { to { transform: rotate(360deg) } }
+        @keyframes wedHeartbeat { 0%,100% { transform: scale(1) } 12% { transform: scale(1.14) } 24% { transform: scale(1) } 36% { transform: scale(1.1) } 48% { transform: scale(1) } }
+        .wed-heartbeat { animation: wedHeartbeat 2.4s ease-in-out infinite; }
         .wed-spin { animation: wedSpinSlow 26s linear infinite; }
         /*
          * Ánh kim quét qua chữ và chữ đổ màu chuyển động.
@@ -421,6 +485,49 @@ export function MapBox({ d, height = 140, radius = 0, style }: { d: PhoneData; h
   return (
     <div style={{ height, borderRadius: radius, overflow: "hidden", ...style }}>
       <iframe title="Bản đồ" src={d.mapEmbed} loading="lazy" style={{ width: "100%", height: "100%", border: 0, display: "block" }} />
+    </div>
+  );
+}
+
+// ── Lịch tháng khoanh ngày cưới ─────────────────────────────────────────────
+
+/**
+ * Lịch cả tháng cưới, tuần bắt đầu từ thứ Hai như lịch treo tường Việt Nam,
+ * ngày cưới đánh dấu bằng một trái tim. Chưa có ngày cưới thì không vẽ.
+ * Mỗi mẫu truyền màu/phông riêng; phần dựng lưới chỉ viết một lần.
+ */
+export function MonthCalendar({
+  date, title, heads = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"], ink, muted, accent, heartInk = "#fff", font, cell = 34, style,
+}: {
+  date?: string; title?: (month: number, year: number) => ReactNode; heads?: string[];
+  ink: string; muted: string; accent: string; heartInk?: string; font?: string; cell?: number; style?: CSSProperties;
+}) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date ?? "");
+  if (!m) return null;
+  const y = +m[1], mo = +m[2], day = +m[3];
+  const first = new Date(Date.UTC(y, mo - 1, 1)).getUTCDay();          // 0 = CN
+  const lead = (first + 6) % 7;                                        // ô trống trước ngày 1 (tuần bắt đầu thứ Hai)
+  const days = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  const cells: (number | null)[] = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
+  while (cells.length % 7) cells.push(null);
+  return (
+    <div style={{ fontFamily: font, ...style }}>
+      {title ? title(mo, y) : <div style={{ textAlign: "center", fontSize: 20, color: ink, marginBottom: 10 }}>Tháng {two(mo)} · {y}</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", rowGap: 4, textAlign: "center" }}>
+        {heads.map((h) => <div key={h} style={{ fontSize: 10.5, letterSpacing: ".06em", color: muted, paddingBottom: 6 }}>{h}</div>)}
+        {cells.map((n, i) => (
+          <div key={i} style={{ height: cell, display: "flex", alignItems: "center", justifyContent: "center", position: "relative", fontSize: 13, color: ink }}>
+            {n === day ? (
+              <span className="wed-heartbeat" style={{ position: "relative", width: cell, height: cell, display: "inline-flex", alignItems: "center", justifyContent: "center", color: heartInk, fontWeight: 600 }}>
+                <svg viewBox="0 0 24 24" width={cell} height={cell} style={{ position: "absolute", inset: 0 }} aria-hidden>
+                  <path d="M12 21s-7.5-4.6-10-9.3C.3 8.4 2.2 4.5 5.9 4.5c2.3 0 3.6 1.3 4.4 2.5.4.6.9.6 1.4 0 .8-1.2 2.1-2.5 4.4-2.5 3.7 0 5.6 3.9 3.9 7.2C19.5 16.4 12 21 12 21z" fill={accent} />
+                </svg>
+                <span style={{ position: "relative", fontSize: 12, marginTop: -2 }}>{n}</span>
+              </span>
+            ) : n ?? ""}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -21,6 +21,9 @@ import GlassTemplate from "./designs/phone/GlassTemplate";
 import NeonTemplate from "./designs/phone/NeonTemplate";
 import ScrapbookTemplate from "./designs/phone/ScrapbookTemplate";
 import ThuMoiTemplate from "./designs/phone/ThuMoiTemplate";
+import DoDoTemplate from "./designs/phone/DoDoTemplate";
+import DemSaoTemplate from "./designs/phone/DemSaoTemplate";
+import VomTemplate from "./designs/phone/VomTemplate";
 import { isPhoneTemplate } from "./templates";
 import { PreviewProvider } from "./preview-mode";
 
@@ -48,6 +51,13 @@ const TEMPLATES = {
   neon: NeonTemplate,
   scrapbook: ScrapbookTemplate,
   thumoi: ThuMoiTemplate,
+  dodo: DoDoTemplate,
+  demsao: DemSaoTemplate,
+  "vom-matong": VomTemplate,
+  "vom-xothom": VomTemplate,
+  "vom-navy": VomTemplate,
+  "vom-ghi": VomTemplate,
+  "vom-nau": VomTemplate,
 } as const;
 
 /**
@@ -61,6 +71,8 @@ export default function WeddingRenderer({ inv, wishes = [], guest = "", storyUrl
   const Template = TEMPLATES[inv.template as keyof typeof TEMPLATES] ?? ClassicTemplate;
   const cfg = inv.config as WeddingConfig;
   const accent = cfg?.accent || "#b08968";
+  // Ảnh cho hiệu ứng mở thiệp (polaroid xoè ra, ảnh tròn dưới sao băng…).
+  const photos = [cfg?.cover_url, ...(cfg?.gallery ?? [])].filter((u): u is string => !!u).slice(0, 3);
   const label = cfg?.guest_greeting?.trim() || "Trân trọng kính mời";
   const couple = [cfg?.groom_name, cfg?.bride_name].filter(Boolean).join(" & ");
   const phone = isPhoneTemplate(inv.template);
@@ -69,7 +81,9 @@ export default function WeddingRenderer({ inv, wishes = [], guest = "", storyUrl
     <>
       {/* Hiệu ứng mở thiệp: MẪU NÀO CŨNG CÓ, không chỉ khách có link riêng.
           Bỏ ở khung xem trước của trình chỉnh sửa vì nó che mất nội dung đang sửa. */}
-      {!preview && <CardIntro name={guest} label={label} couple={couple} accent={accent} template={inv.template} />}
+      {/* accent để trống khi cặp đôi chưa chọn màu → lớp mở lấy màu riêng của mẫu
+          (truyền màu nâu mặc định vào thì mẫu nào mở ra cũng nâu như nhau). */}
+      {!preview && <CardIntro name={guest} label={label} couple={couple} accent={cfg?.accent || ""} template={inv.template} photos={photos} />}
       {/* Tên khách mời được đưa VÀO nội dung mỗi mẫu (sau phần "Ngày trọng đại"),
           không còn cố định ở đầu trang. */}
       <Template inv={inv} wishes={wishes} guest={guest} />

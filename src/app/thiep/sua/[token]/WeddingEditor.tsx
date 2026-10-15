@@ -17,8 +17,9 @@ import PreviewPane from "./editor/PreviewPane";
 import TemplateGallery from "./editor/TemplateGallery";
 import {
   AlbumPicker, AudioUpload, BankEditor, Card, EventsEditor, Field, GalleryEditor, GuestsPasswordField, MapLinkInput,
-  ImageUpload, ResponsesLock, Toggle, inp,
+  ImageUpload, ResponsesLock, TimelineEditor, Toggle, inp,
 } from "./editor/ui";
+import { lunarText } from "@/lib/lunar";
 
 type Loaded = {
   invitation: { id: string; slug: string; template: string; config: WeddingConfig; published: boolean };
@@ -213,6 +214,7 @@ export default function WeddingEditor({ token }: { token: string }) {
   const publicUrl = thiepUrl(`/${slug}`);
   const guestsUrl = thiepUrl(`/${slug}/khach`);
   const absBase = publicUrl.startsWith("http") ? publicUrl : (typeof window !== "undefined" ? window.location.origin + publicUrl : publicUrl);
+  const autoLunar = lunarText(cfg.wedding_date);
   const attendingCount = rsvps.filter((r) => r.attending).reduce((s, r) => s + (r.num_guests || 0), 0);
   // Cặp đôi đặt mật khẩu "trang xem riêng" → phản hồi (cả trạng thái trong danh sách khách) khoá đến khi nhập đúng.
   const responsesLocked = !!(cfg.guests_password ?? "").trim() && !responsesUnlocked;
@@ -372,12 +374,14 @@ export default function WeddingEditor({ token }: { token: string }) {
                       <Field label="Vai vế"><input className={inp} value={cfg.bride_role ?? ""} onChange={(e) => patch({ bride_role: e.target.value })} placeholder="Trưởng nữ" /></Field>
                       <Field label="Cha mẹ (không bắt buộc)"><input className={inp} value={cfg.bride_subtitle ?? ""} onChange={(e) => patch({ bride_subtitle: e.target.value })} placeholder="Con Ông … và Bà …" /></Field>
                       <Field label="Ảnh chân dung"><ImageUpload current={cfg.bride_photo} onUpload={uploadImage} onChange={(url) => patch({ bride_photo: url || undefined })} /></Field>
+                      <Field label="Vài dòng giới thiệu (không bắt buộc)"><textarea className={`${inp} min-h-[60px]`} value={cfg.bride_bio ?? ""} onChange={(e) => patch({ bride_bio: e.target.value })} placeholder="Cô gái dịu dàng, luôn mang đến sự ấm áp…" /></Field>
                     </div>
                     <div className="space-y-2 rounded-lg border border-stone-200 p-3">
                       <p className="text-sm font-medium text-rose-700">Chú rể</p>
                       <Field label="Vai vế"><input className={inp} value={cfg.groom_role ?? ""} onChange={(e) => patch({ groom_role: e.target.value })} placeholder="Út nam" /></Field>
                       <Field label="Cha mẹ (không bắt buộc)"><input className={inp} value={cfg.groom_subtitle ?? ""} onChange={(e) => patch({ groom_subtitle: e.target.value })} placeholder="Con Ông … và Bà …" /></Field>
                       <Field label="Ảnh chân dung"><ImageUpload current={cfg.groom_photo} onUpload={uploadImage} onChange={(url) => patch({ groom_photo: url || undefined })} /></Field>
+                      <Field label="Vài dòng giới thiệu (không bắt buộc)"><textarea className={`${inp} min-h-[60px]`} value={cfg.groom_bio ?? ""} onChange={(e) => patch({ groom_bio: e.target.value })} placeholder="Chàng trai điềm đạm, người bạn đồng hành đáng tin cậy…" /></Field>
                     </div>
                   </div>
                 </Card>
@@ -390,6 +394,8 @@ export default function WeddingEditor({ token }: { token: string }) {
                     <Field label="Nhà gái">
                       <textarea className={`${inp} min-h-[70px]`} value={cfg.bride_family ?? ""} onChange={(e) => patch({ bride_family: e.target.value })} placeholder={"Ông Đặng Văn Sơn\nBà Trịnh Thu Hà"} />
                     </Field>
+                    <Field label="Địa chỉ nhà trai (không bắt buộc)"><input className={inp} value={cfg.groom_home ?? ""} onChange={(e) => patch({ groom_home: e.target.value })} placeholder="Ba Đình, Hà Nội" /></Field>
+                    <Field label="Địa chỉ nhà gái (không bắt buộc)"><input className={inp} value={cfg.bride_home ?? ""} onChange={(e) => patch({ bride_home: e.target.value })} placeholder="Đống Đa, Hà Nội" /></Field>
                   </div>
                 </Card>
               </>
@@ -403,9 +409,20 @@ export default function WeddingEditor({ token }: { token: string }) {
                     <input type="date" className={inp} value={(cfg.wedding_date ?? "").slice(0, 10)} onChange={(e) => patch({ wedding_date: e.target.value })} />
                   </Field>
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Field label="Ngày âm lịch (không bắt buộc)"><input className={inp} value={cfg.lunar_date ?? ""} onChange={(e) => patch({ lunar_date: e.target.value })} placeholder="Nhằm ngày 12/11 Âm lịch" /></Field>
+                    <Field label="Ngày âm lịch (không bắt buộc)" hint={autoLunar && !(cfg.lunar_date ?? "").trim() ? `Tự tính: ${autoLunar}` : undefined}>
+                      <div className="flex gap-2">
+                        <input className={inp} value={cfg.lunar_date ?? ""} onChange={(e) => patch({ lunar_date: e.target.value })} placeholder={autoLunar || "Nhằm ngày 12/11 Âm lịch"} />
+                        {autoLunar && cfg.lunar_date !== autoLunar && (
+                          <button type="button" onClick={() => patch({ lunar_date: autoLunar })} className="flex-none rounded-lg border border-stone-300 px-2.5 text-xs text-stone-600 hover:bg-stone-100" title="Điền ngày âm tính từ ngày cưới">Tự điền</button>
+                        )}
+                      </div>
+                    </Field>
                     <Field label="Giờ đón khách"><input className={inp} value={cfg.reception_time ?? ""} onChange={(e) => patch({ reception_time: e.target.value })} placeholder="Đón khách từ 17:30" /></Field>
                   </div>
+                </Card>
+
+                <Card title="Lịch trình buổi tiệc" icon={<CalendarDays size={16} />} hint="Các mốc trong ngày tiệc: đón khách, làm lễ, khai tiệc… Các mẫu Đỏ đô, Đêm sao, Khung vòm hiện thành dòng thời gian.">
+                  <TimelineEditor items={cfg.timeline ?? []} onChange={(timeline) => patch({ timeline })} />
                 </Card>
 
                 <Card title="Sự kiện cưới" icon={<CalendarDays size={16} />} hint="Vu quy · Tân hôn · Tiệc cưới… Thiệp hiện theo đúng thứ tự bạn thêm.">

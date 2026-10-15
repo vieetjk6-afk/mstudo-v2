@@ -15,6 +15,9 @@ import { getTemplateMeta } from "./templates";
  *   mở khoá  y2k · neon
  *   mở sổ    hoa lá vintage · scrapbook
  *   nở sáng  aurora
+ *   dấu sáp  đỏ đô      — phong bì đỏ rượu vang, dấu sáp vỡ, thư rút ra kèm ảnh polaroid xoè
+ *   sao băng đêm sao    — vệt sao băng rơi qua trời sao, ảnh tròn phát sáng hiện ra
+ *   cửa vòm  khung vòm  — hai cánh cửa vòm mở ra hai bên
  *
  * BA CHỐT AN TOÀN, vì lớp này che kín tấm thiệp:
  *   · <noscript> gỡ hẳn lớp phủ — không có JS thì bấm không ăn thua, mà thiệp
@@ -23,7 +26,7 @@ import { getTemplateMeta } from "./templates";
  *   · prefers-reduced-motion: vẫn có lớp mở nhưng bỏ hết chuyển động
  */
 
-export type IntroStyle = "envelope" | "curtain" | "unlock" | "book" | "bloom";
+export type IntroStyle = "envelope" | "curtain" | "unlock" | "book" | "bloom" | "seal" | "meteor" | "arch";
 
 /** Kiểu mở + vài nét trang trí riêng của từng mẫu. */
 type IntroSkin = {
@@ -48,13 +51,20 @@ const SKINS: Record<string, IntroSkin> = {
   neon:      { style: "unlock",   seal: "★", cta: "Quét vé vào tiệc", motes: { color: "rgba(0,255,213,.8)", count: 10, rise: true } },
   scrapbook: { style: "book",     seal: "♥", cta: "Mở sổ ra xem",    motes: { glyph: "♥", color: "rgba(168,115,79,.7)", count: 9, rise: true } },
   thumoi:    { style: "envelope", seal: "♥", cta: "Mở thư mời",      motes: { glyph: "♥", color: "rgba(107,80,61,.6)", count: 10, rise: true } },
+  dodo:      { style: "seal",     seal: "♥", cta: "Mở thiệp",        motes: { color: "rgba(200,164,110,.85)", count: 10, rise: true } },
+  demsao:    { style: "meteor",   seal: "✦", cta: "Mở thiệp",        motes: { color: "rgba(255,255,255,.9)", count: 16, rise: true } },
+  "vom-matong": { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
+  "vom-xothom": { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
+  "vom-navy":   { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
+  "vom-ghi":    { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
+  "vom-nau":    { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
 };
 
 const DEFAULT_SKIN: IntroSkin = { style: "envelope", seal: "♥", cta: "Mở thiệp", motes: { color: "rgba(255,255,255,.8)", count: 10 } };
 
 export default function CardIntro({
-  name, label, couple, accent, template,
-}: { name: string; label: string; couple: string; accent: string; template: string }) {
+  name, label, couple, accent, template, photos = [],
+}: { name: string; label: string; couple: string; accent: string; template: string; photos?: string[] }) {
   const [opening, setOpening] = useState(false);
   const [done, setDone] = useState(false);
   const [gone, setGone] = useState(false);
@@ -159,6 +169,15 @@ export default function CardIntro({
       {skin.style === "bloom" && (
         <Bloom opening={opening} accent={a} paper={paper} seal={skin.seal} ease={ease}>{caption}</Bloom>
       )}
+      {skin.style === "seal" && (
+        <WaxSeal opening={opening} accent={a} dark={dark} paper={paper} seal={skin.seal} ease={ease} photos={photos}>{caption}</WaxSeal>
+      )}
+      {skin.style === "meteor" && (
+        <Meteor opening={opening} accent={a} seal={skin.seal} ease={ease} photos={photos}>{caption}</Meteor>
+      )}
+      {skin.style === "arch" && (
+        <ArchDoors opening={opening} accent={a} dark={dark} paper={paper} seal={skin.seal} ease={ease}>{caption}</ArchDoors>
+      )}
 
       {button}
 
@@ -167,6 +186,7 @@ export default function CardIntro({
         @keyframes wedIntroFall{0%{top:-12%;opacity:0}12%,84%{opacity:.85}100%{top:108%;opacity:0;transform:translateX(var(--sx,18px)) rotate(var(--sr,220deg))}}
         @keyframes wedIntroRise{0%{top:106%;opacity:0}14%,82%{opacity:.85}100%{top:-12%;opacity:0;transform:translateX(var(--sx,-18px))}}
         @keyframes wedIntroPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+        @keyframes wedIntroMeteor{0%{opacity:0;transform:rotate(-38deg) translateX(0)}8%{opacity:1}30%,100%{opacity:0;transform:rotate(-38deg) translateX(-460px)}}
         @media (prefers-reduced-motion: reduce){
           .wed-intro, .wed-intro *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
         }
@@ -319,9 +339,152 @@ function Bloom({ opening, accent, paper, seal, ease, children }: StyleProps) {
   );
 }
 
-/** Bộ tham số chung của năm kiểu mở; kiểu nào không cần màu nào thì bỏ qua. */
+/**
+ * Dấu sáp: phong bì màu đậm khép bằng dấu sáp. Chạm vào thì dấu sáp vỡ, nắp
+ * lật, lá thư rút lên — phía sau xoè ra tối đa ba ảnh polaroid của cặp đôi.
+ */
+function WaxSeal({ opening, accent, dark, paper, seal, ease, photos = [], children }: StyleProps) {
+  const fan = photos.slice(0, 3);
+  const angle = [-16, 0, 16];
+  return (
+    <div style={{ perspective: 1200, width: "min(88vw, 360px)", marginTop: 40 }}>
+      <div style={{ position: "relative", width: "100%", aspectRatio: "4 / 3" }}>
+        {/* Ảnh polaroid nằm trong phong bì, xoè ra khi mở */}
+        {fan.map((src, i) => (
+          <div key={i} style={{
+            position: "absolute", left: "50%", top: "10%", width: "44%", marginLeft: "-22%", background: "#fff", padding: "6px 6px 20px",
+            boxShadow: "0 12px 24px -10px rgba(0,0,0,.45)", zIndex: 1,
+            transform: opening ? `translate(${(i - (fan.length - 1) / 2) * 62}%, -92%) rotate(${angle[fan.length === 1 ? 1 : i] ?? 0}deg)` : "translateY(10%) rotate(0deg)",
+            transition: `transform 1.1s ${ease} ${0.75 + i * 0.12}s`,
+          }}>
+            <img src={src} alt="" style={{ width: "100%", aspectRatio: "4 / 5", objectFit: "cover", display: "block" }} />
+          </div>
+        ))}
+        <div style={{ position: "absolute", inset: 0, borderRadius: 6, background: `linear-gradient(170deg, ${shade(accent, 0.08)}, ${dark})`, boxShadow: "0 26px 60px -20px rgba(0,0,0,.55)" }} />
+        {/* Lá thư */}
+        <div style={{
+          position: "absolute", left: "7%", right: "7%", top: "7%", bottom: "9%", borderRadius: 4, background: paper,
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: opening ? 5 : 2,
+          transform: opening ? "translateY(-58%)" : "none", transition: `transform 1.1s ${ease} .45s`,
+          boxShadow: "0 8px 20px rgba(0,0,0,.18)",
+        }}>
+          <div style={{ opacity: opening ? 1 : 0, transition: `opacity .5s ${ease} .9s` }}>{children}</div>
+        </div>
+        {/* Túi dưới */}
+        <div style={{
+          position: "absolute", left: 0, right: 0, bottom: 0, top: "38%", zIndex: 6, borderRadius: "0 0 6px 6px",
+          background: `linear-gradient(${shade(accent, -0.02)}, ${dark})`, clipPath: "polygon(0 0, 50% 44%, 100% 0, 100% 100%, 0 100%)",
+        }} />
+        {/* Nắp */}
+        <div style={{
+          position: "absolute", left: 0, right: 0, top: 0, height: "62%", zIndex: opening ? 3 : 7,
+          background: `linear-gradient(${shade(accent, 0.12)}, ${shade(accent, -0.12)})`, clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+          transformOrigin: "top", transform: opening ? "rotateX(180deg)" : "none", transition: `transform .8s ${ease}`, backfaceVisibility: "hidden",
+        }} />
+        {/* Dấu sáp: vỡ ra khi mở */}
+        <div style={{
+          position: "absolute", left: "50%", top: "58%", width: 70, height: 70, marginLeft: -35, marginTop: -35, zIndex: 9, borderRadius: "50%",
+          background: `radial-gradient(circle at 35% 30%, ${shade(accent, 0.35)}, ${shade(accent, -0.1)} 55%, ${shade(accent, -0.35)})`,
+          boxShadow: "0 6px 14px rgba(0,0,0,.35), inset 0 -4px 8px rgba(0,0,0,.25), inset 0 3px 6px rgba(255,255,255,.25)",
+          display: "flex", alignItems: "center", justifyContent: "center", color: shade(accent, 0.6), fontSize: 26,
+          transform: opening ? "scale(1.5)" : "scale(1)", opacity: opening ? 0 : 1, transition: `transform .45s ${ease}, opacity .35s ${ease}`,
+        }}>
+          <span style={{ width: 52, height: 52, borderRadius: "50%", border: `1.5px dashed ${shade(accent, 0.45)}`, display: "flex", alignItems: "center", justifyContent: "center" }}>{seal}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Sao băng: trời sao, một vệt sao băng rơi chéo qua lặp lại; giữa là ảnh tròn
+ * phát sáng cùng tên. Mở ra thì cả bầu trời phóng vụt về phía người xem.
+ */
+function Meteor({ opening, accent, seal, ease, photos = [], children }: StyleProps) {
+  const photo = photos[0];
+  return (
+    <>
+      <div aria-hidden style={{
+        position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none",
+        backgroundImage: "radial-gradient(1px 1px at 12% 18%, #fff, transparent 60%), radial-gradient(1.4px 1.4px at 68% 42%, rgba(255,255,255,.85), transparent 60%), radial-gradient(1px 1px at 38% 76%, rgba(220,226,255,.8), transparent 60%), radial-gradient(1.8px 1.8px at 86% 12%, rgba(255,255,255,.7), transparent 60%), radial-gradient(1px 1px at 24% 58%, rgba(255,255,255,.6), transparent 60%)",
+        backgroundSize: "170px 200px",
+        transform: opening ? "scale(2.4)" : "scale(1)", opacity: opening ? 0 : 1, transition: `transform 1.4s ${ease}, opacity 1.2s ${ease}`,
+      }} />
+      {[0, 1].map((i) => (
+        <span key={i} aria-hidden style={{
+          position: "absolute", zIndex: 1, top: `${8 + i * 22}%`, left: `${58 + i * 22}%`, width: 150, height: 2, borderRadius: 2,
+          background: "linear-gradient(90deg, rgba(255,255,255,0), #fff)", filter: "drop-shadow(0 0 6px #fff)",
+          transform: "rotate(-38deg)", opacity: 0, animation: `wedIntroMeteor ${3.2 + i * 1.3}s ease-in ${0.6 + i * 1.7}s infinite`,
+        }} />
+      ))}
+      {/* Bấm mở: một loạt sao băng vụt qua cùng lúc */}
+      {opening && [0, 1, 2].map((i) => (
+        <span key={`b${i}`} aria-hidden style={{
+          position: "absolute", zIndex: 1, top: `${4 + i * 16}%`, left: `${44 + i * 18}%`, width: 190, height: 2, borderRadius: 2,
+          background: "linear-gradient(90deg, rgba(255,255,255,0), #fff)", filter: "drop-shadow(0 0 8px #fff)",
+          transform: "rotate(-38deg)", opacity: 0, animation: `wedIntroMeteor 1.3s ease-in ${i * 0.22}s forwards`,
+        }} />
+      ))}
+      {/* Ảnh + tên KHÔNG mờ đi lúc bấm: khách cần đọc tên mình đến khi cả lớp chuyển cảnh. */}
+      <div style={{
+        position: "relative", zIndex: 2, display: "flex", flexDirection: "column", alignItems: "center", gap: 18,
+        transform: opening ? "scale(1.06)" : "none", transition: `transform 2.4s ${ease}`,
+      }}>
+        <div style={{ padding: 7, borderRadius: "50%", border: "1px solid rgba(201,210,255,.4)", boxShadow: `0 0 60px -8px ${accent}`, animation: "wedIntroPulse 3.6s ease-in-out infinite" }}>
+          {photo
+            ? <img src={photo} alt="" style={{ width: 168, height: 168, borderRadius: "50%", objectFit: "cover", display: "block" }} />
+            : <div style={{ width: 168, height: 168, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 40, color: accent }}>{seal}</div>}
+        </div>
+        {children}
+      </div>
+    </>
+  );
+}
+
+/** Cửa vòm: hai cánh cửa nửa vòm khép giữa màn hình, chạm vào thì mở ra hai bên. */
+function ArchDoors({ opening, accent, dark, paper, seal, ease, children }: StyleProps) {
+  const leaf = (side: "l" | "r"): CSSProperties => ({
+    position: "absolute", top: 0, bottom: 0, width: "50%", [side === "l" ? "left" : "right"]: 0,
+    background: `linear-gradient(${side === "l" ? 100 : 260}deg, ${shade(accent, 0.12)}, ${dark})`,
+    borderRadius: side === "l" ? "999px 0 0 0" : "0 999px 0 0",
+    transformOrigin: side === "l" ? "left center" : "right center",
+    transform: opening ? `rotateY(${side === "l" ? -108 : 108}deg)` : "none",
+    transition: `transform 1.25s ${ease} .15s`, backfaceVisibility: "hidden",
+    boxShadow: "inset 0 0 0 1px rgba(255,255,255,.28)",
+  });
+  return (
+    <div style={{ perspective: 1300, width: "min(80vw, 320px)" }}>
+      <div style={{ position: "relative", width: "100%", aspectRatio: "3 / 4.3", borderRadius: "999px 999px 0 0", background: paper, boxShadow: "0 30px 60px -24px rgba(0,0,0,.45)" }}>
+        {/* Nội dung sau cánh cửa: hiện ra khi cửa mở */}
+        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 16px", opacity: opening ? 1 : 0.0, transition: `opacity .6s ${ease} .6s` }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 26, color: accent }}>{seal}</span>
+            {children}
+          </div>
+        </div>
+        <div style={leaf("l")}>
+          <span style={{ position: "absolute", inset: "14px 8px 14px 14px", borderRadius: "999px 0 0 0", border: "1px solid rgba(255,255,255,.35)", borderRight: 0 }} />
+          <span style={{ position: "absolute", right: 12, top: "56%", width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,.85)" }} />
+        </div>
+        <div style={leaf("r")}>
+          <span style={{ position: "absolute", inset: "14px 14px 14px 8px", borderRadius: "0 999px 0 0", border: "1px solid rgba(255,255,255,.35)", borderLeft: 0 }} />
+          <span style={{ position: "absolute", left: 12, top: "56%", width: 7, height: 7, borderRadius: "50%", background: "rgba(255,255,255,.85)" }} />
+        </div>
+        {/* Khi cửa còn khép: tên khách/cặp đôi in trên thẻ nhỏ giữa hai cánh */}
+        <div style={{
+          position: "absolute", left: "50%", top: "44%", transform: "translate(-50%,-50%)", width: "84%", zIndex: 3,
+          background: paper, borderRadius: 14, padding: "16px 8px", boxShadow: "0 14px 30px -14px rgba(0,0,0,.5)",
+          opacity: opening ? 0 : 1, transition: `opacity .4s ${ease}`,
+        }}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Bộ tham số chung của các kiểu mở; kiểu nào không cần màu nào thì bỏ qua. */
 type StyleProps = {
   opening: boolean; accent: string; seal: string; ease: string; children: ReactNode;
+  /** Ảnh của cặp đôi (bìa + album) — kiểu dấu sáp / sao băng dùng. */ photos?: string[];
   /** Màu đậm hơn accent — dùng cho nắp bì, cánh màn. */ dark?: string;
   /** Màu giấy — dùng cho tấm thiệp, trang sổ, huy hiệu. */ paper?: string;
 };
