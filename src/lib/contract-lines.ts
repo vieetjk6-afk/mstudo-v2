@@ -16,11 +16,19 @@
  * id nào thực sự đã sửa, gói không sửa vẫn ăn theo bảng giá.
  */
 
-export type LinePackage = { id: string; name: string; price: number };
+/** `description` = ô "Mô tả" của gói trong bảng giá — đi theo sang hạng mục. */
+export type LinePackage = { id: string; name: string; price: number; description?: string | null };
 export type LineTemplateItem = { name: string; qty: number; unit_price: number; position: number };
 /** Gói studio gõ tay — chưa chắc đã điền đủ, nên chuẩn hoá ở đây. */
 export type LineCustom = { name: string; qty: number; unit_price: number };
-export type ContractLine = { name: string; qty: number; unit_price: number };
+/** `description` chỉ có khi nguồn có mô tả — khách đọc nó ở cổng hợp đồng và trên bản in. */
+export type ContractLine = { name: string; qty: number; unit_price: number; description?: string };
+
+/** Mô tả gói từ bảng giá; trống thì bỏ hẳn khoá, khỏi lưu chuỗi rỗng. */
+function pkgLine(p: LinePackage, unit_price: number): ContractLine {
+  const description = p.description?.trim();
+  return { name: p.name, qty: 1, unit_price, ...(description ? { description } : {}) };
+}
 
 /** Tên mặc định cho gói riêng chưa đặt tên — không để hạng mục trống tên. */
 export const CUSTOM_LINE_FALLBACK_NAME = "Gói riêng";
@@ -65,8 +73,8 @@ export function buildContractLines({
     .sort((a, b) => a.position - b.position)
     .forEach((i) => out.push({ name: i.name, qty: i.qty, unit_price: i.unit_price }));
 
-  if (mainPkg) out.push({ name: mainPkg.name, qty: 1, unit_price: effectivePrice(mainPkg, pkgPrice) });
-  for (const x of extras) out.push({ name: x.name, qty: 1, unit_price: effectivePrice(x, pkgPrice) });
+  if (mainPkg) out.push(pkgLine(mainPkg, effectivePrice(mainPkg, pkgPrice)));
+  for (const x of extras) out.push(pkgLine(x, effectivePrice(x, pkgPrice)));
 
   for (const c of customLines) {
     if (!isCustomLineFilled(c)) continue;
