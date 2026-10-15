@@ -24,7 +24,10 @@ import ThuMoiTemplate from "./designs/phone/ThuMoiTemplate";
 import DoDoTemplate from "./designs/phone/DoDoTemplate";
 import DemSaoTemplate from "./designs/phone/DemSaoTemplate";
 import VomTemplate from "./designs/phone/VomTemplate";
-import { isPhoneTemplate } from "./templates";
+import TapChiTemplate from "./designs/phone/TapChiTemplate";
+import NudeTemplate from "./designs/phone/NudeTemplate";
+import ReuTemplate from "./designs/phone/ReuTemplate";
+import { TEMPLATE_ALIASES, isPhoneTemplate } from "./templates";
 import { PreviewProvider } from "./preview-mode";
 
 export type { Wish };
@@ -53,11 +56,10 @@ const TEMPLATES = {
   thumoi: ThuMoiTemplate,
   dodo: DoDoTemplate,
   demsao: DemSaoTemplate,
-  "vom-matong": VomTemplate,
-  "vom-xothom": VomTemplate,
-  "vom-navy": VomTemplate,
-  "vom-ghi": VomTemplate,
-  "vom-nau": VomTemplate,
+  vom: VomTemplate,
+  tapchi: TapChiTemplate,
+  nude: NudeTemplate,
+  reu: ReuTemplate,
 } as const;
 
 /**
@@ -68,7 +70,8 @@ const TEMPLATES = {
  * khung xem trước chứ không phải cả màn hình.
  */
 export default function WeddingRenderer({ inv, wishes = [], guest = "", storyUrl = "", preview = false }: { inv: PublicWeddingInvitation; wishes?: Wish[]; guest?: string; storyUrl?: string; preview?: boolean }) {
-  const Template = TEMPLATES[inv.template as keyof typeof TEMPLATES] ?? ClassicTemplate;
+  // Tên mẫu cũ đã gộp (vd. "vom-navy" → "vom") vẫn mở đúng mẫu.
+  const Template = TEMPLATES[(TEMPLATE_ALIASES[inv.template]?.name ?? inv.template) as keyof typeof TEMPLATES] ?? ClassicTemplate;
   const cfg = inv.config as WeddingConfig;
   const accent = cfg?.accent || "#b08968";
   // Ảnh cho hiệu ứng mở thiệp (polaroid xoè ra, ảnh tròn dưới sao băng…).

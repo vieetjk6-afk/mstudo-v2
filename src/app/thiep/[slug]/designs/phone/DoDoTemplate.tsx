@@ -1,6 +1,8 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
 import GiftBox from "./GiftBox";
+import { alpha, ensureContrast, mix, safeHex } from "@/lib/wedding-palette";
+import PhotoViewer from "./PhotoViewer";
 import { Ambient, Letters, MapBox, MonthCalendar, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData, type PhoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -15,8 +17,24 @@ import { Ambient, Letters, MapBox, MonthCalendar, PhoneCountdown, PhoneShell, Qu
 //   · mở thiệp: phong bì đỏ đô DẤU SÁP (xem CardIntro)
 // ════════════════════════════════════════════════════════════════════════════
 
-const BG = "#f6eee4", WINE = "#5c1822", WINE2 = "#7a2431", CREAM = "#f3e6d8", GOLD = "#c8a46e";
-const INK = "#3b1d20", MUTED = "#8a6b63", LINE = "rgba(92,24,34,.16)";
+const BG = "#f6eee4", CREAM = "#f3e6d8", GOLD = "#c8a46e";
+/*
+ * Màu thẻ đổi theo màu cặp đôi chọn (mặc định đỏ rượu vang): đặt thành biến CSS
+ * ở gốc thiệp (xem `dodoPalette`) để cả các khối con dùng chung.
+ */
+const WINE = "var(--dd-wine)", WINE2 = "var(--dd-wine2)", INK = "var(--dd-ink)", MUTED = "var(--dd-muted)", LINE = "var(--dd-line)";
+const DEFAULT_WINE = "#5c1822";
+
+/** Bảng màu từ màu chọn — ép đủ ĐẬM để chữ kem trên thẻ luôn đọc được. */
+function dodoPalette(color?: string) {
+  const wine = ensureContrast(safeHex(color, DEFAULT_WINE), CREAM, 6, "#000000");
+  const ink = ensureContrast(mix(wine, "#1c1416", 0.55), BG, 9);
+  const shadow = mix(wine, "#000000", 0.35);
+  return {
+    wine, wine2: mix(wine, "#ffffff", 0.13), ink, muted: mix(ink, BG, 0.42), line: alpha(wine, 0.16),
+    blush: mix(wine, BG, 0.86), sh: alpha(shadow, 0.5), sh2: alpha(shadow, 0.75),
+  };
+}
 const PLAY = "var(--font-playfair), serif";
 const CORM = "var(--font-cormorant), serif";
 const SANS = "var(--font-be-vietnam), system-ui, sans-serif";
@@ -29,7 +47,7 @@ function Colonnade({ color = WINE, opacity = 0.09, style }: { color?: string; op
   const arches = [0, 1, 2, 3, 4];
   return (
     <svg viewBox="0 0 400 220" preserveAspectRatio="xMidYMax meet" aria-hidden style={{ position: "absolute", left: 0, right: 0, bottom: 0, width: "100%", height: "auto", opacity, pointerEvents: "none", ...style }}>
-      <g fill="none" stroke={color} strokeWidth="1.2">
+      <g fill="none" style={{ stroke: color }} strokeWidth="1.2">
         {/* mái vòm giữa */}
         <path d="M150 92 Q200 30 250 92" />
         <path d="M160 92 Q200 44 240 92" />
@@ -60,7 +78,7 @@ function WineCard({ children, style }: { children: React.ReactNode; style?: Reac
   return (
     <div style={{
       position: "relative", background: `linear-gradient(165deg, ${WINE2} 0%, ${WINE} 62%)`, color: CREAM, borderRadius: 14,
-      padding: "34px 22px 30px", boxShadow: "0 26px 50px -26px rgba(60,10,18,.75)", textAlign: "center", ...style,
+      padding: "34px 22px 30px", boxShadow: "0 26px 50px -26px var(--dd-sh2)", textAlign: "center", ...style,
     }}>
       <span aria-hidden style={{ position: "absolute", inset: 8, border: `1px solid ${GOLD}55`, borderRadius: 10, pointerEvents: "none" }} />
       <span aria-hidden className="wed-float" style={{ position: "absolute", right: -9, top: -11, color: GOLD, fontSize: 20 }}>✦</span>
@@ -83,7 +101,8 @@ function arrival(d: PhoneData): { label: string; time: string }[] {
 
 export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
   const d = phoneData(inv, guest);
-  const accent = d.accent || WINE;
+  const P = dodoPalette(d.accent);
+  const accent = P.wine;
   const eyebrow = { fontFamily: CORM, fontSize: 13, letterSpacing: ".34em", textTransform: "uppercase" as const };
   const title = (t: string, color = accent) => (
     <div style={{ fontFamily: PLAY, fontSize: 25, letterSpacing: ".06em", textTransform: "uppercase", color, textAlign: "center" }}>{t}</div>
@@ -94,7 +113,10 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
   const parents = d.hasFamilies || d.homes.groom || d.homes.bride;
 
   return (
-    <PhoneShell card={BG} page="#e9ddd0" ink={INK} font={SANS} radius={18} accent={accent}>
+    <PhoneShell
+      card={BG} page="#e9ddd0" ink={INK} font={SANS} radius={18} accent={accent}
+      vars={{ "--dd-wine": P.wine, "--dd-wine2": P.wine2, "--dd-ink": P.ink, "--dd-muted": P.muted, "--dd-line": P.line, "--dd-blush": P.blush, "--dd-sh": P.sh, "--dd-sh2": P.sh2 }}
+    >
       <style>{`
         @keyframes ddDrop { from { opacity: 0; transform: translateY(-38px) rotate(var(--r0)) } to { opacity: 1; transform: rotate(var(--r1)) } }
         .dd-pola { animation: ddDrop 1.1s cubic-bezier(.2,.8,.25,1) both; }
@@ -115,10 +137,10 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
             return (
               <div key={i} className="dd-pola" style={{
                 position: "absolute", left: pos.left, right: pos.right, top: pos.top, zIndex: pos.z, width: 176,
-                background: "#fff", padding: "9px 9px 30px", boxShadow: "0 16px 32px -14px rgba(60,20,24,.45)",
+                background: "#fff", padding: "9px 9px 30px", boxShadow: "0 16px 32px -14px var(--dd-sh)",
                 animationDelay: `${0.25 + i * 0.22}s`, "--r0": pos.r0, "--r1": pos.r1, transform: `rotate(${pos.r1})`,
               } as CSSVars}>
-                <Slot src={src} height={196} tint={CREAM} fx="zoom" label="" />
+                <Slot src={src} height={196} tint={CREAM} fx={i === 1 ? "kb gloss" : "kb"} lazy={false} label="" />
               </div>
             );
           })}
@@ -168,8 +190,8 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
             {d.portraits.slice().reverse().map((p, i) => (
               <Reveal key={p.role} anim={i ? "right" : "left"}>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ background: "#fff", padding: 7, boxShadow: "0 14px 26px -16px rgba(60,20,24,.5)", transform: `rotate(${i ? 2 : -2}deg)` }}>
-                    <Slot src={p.photo} height={200} tint={CREAM} fx="zoom" fallback={<span style={{ fontFamily: PLAY, fontSize: 54, color: accent, opacity: 0.4 }}>{initial(p.name)}</span>} />
+                  <div className="wed-tilt" style={{ background: "#fff", padding: 7, boxShadow: "0 14px 26px -16px var(--dd-sh)", rotate: `${i ? 2 : -2}deg` }}>
+                    <Slot src={p.photo} height={200} tint={CREAM} fx="zoom parallax" fallback={<span style={{ fontFamily: PLAY, fontSize: 54, color: accent, opacity: 0.4 }}>{initial(p.name)}</span>} />
                   </div>
                   <div style={{ fontFamily: PLAY, fontSize: 20, color: accent, marginTop: 12 }}>{p.name}</div>
                   {(i ? d.bios.bride : d.bios.groom) && <p style={{ margin: "6px 0 0", fontFamily: CORM, fontSize: 15, lineHeight: 1.5, color: MUTED }}>{i ? d.bios.bride : d.bios.groom}</p>}
@@ -183,15 +205,17 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
         {album.length > 0 && (
           <div>
             {title("Album ảnh")}
-            <div className="wed-swipe" style={{ gap: 14, padding: "20px 6px 8px", margin: "0 -18px" }}>
-              <span style={{ width: 4 }} />
-              {album.map((src, i) => (
-                <div key={i} style={{ width: 230, background: "#fff", padding: 8, boxShadow: "0 14px 26px -16px rgba(60,20,24,.5)", transform: `rotate(${i % 2 ? 1.5 : -1.5}deg)` }}>
-                  <Slot src={src} height={300} tint={CREAM} fx="zoom" />
-                </div>
-              ))}
-              <span style={{ width: 4 }} />
-            </div>
+            <PhotoViewer photos={album}>
+              <div className="wed-swipe wed-cover3d" style={{ gap: 14, padding: "20px 6px 8px", margin: "0 -18px" }}>
+                <span style={{ width: 4 }} />
+                {album.map((src, i) => (
+                  <div key={i} data-c3 style={{ width: 230, background: "#fff", padding: 8, boxShadow: "0 14px 26px -16px var(--dd-sh)", transform: `rotate(${i % 2 ? 1.5 : -1.5}deg)` }}>
+                    <Slot src={src} pv={i} height={300} tint={CREAM} fx="develop" />
+                  </div>
+                ))}
+                <span style={{ width: 4 }} />
+              </div>
+            </PhotoViewer>
           </div>
         )}
 
@@ -229,7 +253,7 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
             )}
             <MonthCalendar
               date={d.c.wedding_date}
-              ink={INK} muted={MUTED} accent={WINE} font={CORM}
+              ink={P.ink} muted={P.muted} accent={P.wine} font={CORM}
               title={(m, y) => <div style={{ fontFamily: PLAY, fontSize: 21, color: WINE, marginBottom: 12 }}>Tháng {m} / {y}</div>}
               style={{ background: CREAM, borderRadius: 12, padding: "18px 12px 12px", marginTop: 24 }}
             />
@@ -250,7 +274,7 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
             {title("Các nghi lễ")}
             <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 18 }}>
               {d.events.map((e, i) => (
-                <Reveal key={i} anim="up" delay={i * 0.08}>
+                <Reveal key={i} anim="up" delay={i * 90}>
                   <div style={{ border: `1px solid ${LINE}`, borderRadius: 12, padding: "16px 18px", background: "#fffaf4", display: "grid", gridTemplateColumns: "auto 1fr", gap: 16, alignItems: "center" }}>
                     <div style={{ textAlign: "center", minWidth: 62, borderRight: `1px solid ${LINE}`, paddingRight: 14 }}>
                       <div style={{ fontFamily: PLAY, fontSize: 22, color: accent }}>{e.time || "—"}</div>
@@ -357,7 +381,7 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
             {title("Sổ lưu bút")}
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 16 }}>
               {wishes.slice(0, 8).map((w, i) => (
-                <div key={i} style={{ background: "#efdcd6", borderRadius: 10, padding: "12px 16px", textAlign: "left" }}>
+                <div key={i} style={{ background: "var(--dd-blush)", borderRadius: 10, padding: "12px 16px", textAlign: "left" }}>
                   <div style={{ fontFamily: CORM, fontSize: 14, fontWeight: 700, color: WINE }}>{w.guest_name}</div>
                   <div style={{ fontFamily: CORM, fontSize: 16, lineHeight: 1.5, color: INK, marginTop: 2 }}>{w.wish}</div>
                 </div>
@@ -377,7 +401,7 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
       {/* ── Cảm ơn ─────────────────────────────────────────────────────── */}
       <section style={{ position: "relative", padding: "30px 26px 120px", textAlign: "center", overflow: "hidden" }}>
         <Colonnade opacity={0.12} />
-        {d.thanksPhoto && <Slot src={d.thanksPhoto} height={150} width={150} radius="50%" tint={CREAM} fx="breathe" style={{ margin: "0 auto 18px", border: `3px solid #fff`, boxShadow: "0 10px 24px -12px rgba(60,20,24,.5)" }} />}
+        {d.thanksPhoto && <Slot src={d.thanksPhoto} height={150} width={150} radius="50%" tint={CREAM} fx="breathe" style={{ margin: "0 auto 18px", border: `3px solid #fff`, boxShadow: "0 10px 24px -12px var(--dd-sh)" }} />}
         <p style={{ position: "relative", fontFamily: PLAY, fontSize: 19, lineHeight: 1.6, color: WINE, margin: 0, whiteSpace: "pre-line" }}>
           {d.thanks || "Sự hiện diện của quý khách là niềm vinh hạnh của gia đình chúng tôi!"}
         </p>

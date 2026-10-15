@@ -269,7 +269,7 @@ export function calendarLink({ date, time, title, place }: { date?: string; time
  * dải chữ dọc); để trống thì nội dung chiếm trọn bề ngang như bình thường.
  */
 export function PhoneShell({
-  card, page, ink, font, accent, children, radius = 0, pattern, rail, railWidth = 44,
+  card, page, ink, font, accent, children, radius = 0, pattern, rail, railWidth = 44, vars,
 }: {
   card: string;
   page: string;
@@ -280,9 +280,15 @@ export function PhoneShell({
   pattern?: ReactNode;
   rail?: ReactNode;
   railWidth?: number;
+  /**
+   * Biến CSS của riêng mẫu (bảng màu suy từ màu cặp đôi chọn) — đặt ở gốc để
+   * cả nền thiệp lẫn các khối con dùng được `var(--…)`.
+   */
+  vars?: Record<`--${string}`, string>;
   children: ReactNode;
 }) {
   const root: CSSProperties & Record<string, string> = {
+    ...vars,
     "--wed-accent": accent,
     background: page, minHeight: "100vh", display: "flex", justifyContent: "center", padding: "0",
   };
@@ -349,6 +355,27 @@ export function PhoneShell({
         }
         .wed-frame::before { left: 0; right: 0; top: 0; height: 1px; animation: wedFrameH 1.1s ease .1s both; }
         .wed-frame::after { left: 0; right: 0; bottom: 0; height: 1px; animation: wedFrameH 1.1s ease .3s both; }
+        /*
+         * Hiệu ứng theo CUỘN TRANG (scroll-driven animation) — trình duyệt chưa
+         * hỗ trợ thì ảnh đứng yên như thường, không mất gì.
+         *   parallax · ảnh trôi chậm hơn trang, như nhìn qua khung cửa
+         *   develop  · ảnh "rửa phim": nhạt, ngả nâu rồi hiện đủ màu khi cuộn tới
+         *   pan      · ảnh ngang lia chậm theo cuộn
+         */
+        @keyframes wedParallax { from { translate: 0 -9% } to { translate: 0 9% } }
+        @keyframes wedDevelop { from { filter: sepia(.75) saturate(.35) brightness(1.35) contrast(.8) blur(2px) } to { filter: none } }
+        @keyframes wedPan { from { translate: 6% 0 } to { translate: -6% 0 } }
+        /* Dải ảnh vuốt ngang kiểu "coverflow": ảnh ở giữa đứng thẳng, hai bên ngả ra sau */
+        @keyframes wedCover3d { 0% { rotate: y 32deg; scale: .84; opacity: .55 } 50% { rotate: y 0deg; scale: 1; opacity: 1 } 100% { rotate: y -32deg; scale: .84; opacity: .55 } }
+        @supports (animation-timeline: view()) {
+          .wed-cover3d { perspective: 900px; }
+          .wed-cover3d > [data-c3] { animation: wedCover3d linear both; animation-timeline: view(inline); }
+          .wed-parallax img { scale: 1.22; animation: wedParallax linear both; animation-timeline: view(); }
+          .wed-develop img { animation: wedDevelop linear both; animation-timeline: view(); animation-range: entry 10% cover 45%; }
+          .wed-pan img { scale: 1.16; animation: wedPan linear both; animation-timeline: view(); }
+        }
+        /* Ảnh bấm được để xem to (album) */
+        .wed-pv [data-pv] { cursor: zoom-in; }
 
         /* ══ HIỆU ỨNG CHỮ ══════════════════════════════════════════════ */
         /* Tên cô dâu chú rể hiện dần từ MỜ sang NÉT */
@@ -421,10 +448,12 @@ export function PhoneShell({
         @keyframes wedTwinkle { 0%,100% { transform: scale(.35) rotate(0deg); opacity: 0 } 50% { transform: scale(1) rotate(45deg); opacity: var(--o,.9) } }
         @keyframes wedLeak { 0%,100% { opacity: 0; transform: translateX(-26%) } 50% { opacity: .42; transform: translateX(26%) } }
         @keyframes wedPulse { 0%,100% { opacity: .45 } 50% { opacity: 1 } }
+        @keyframes wedFlap { from { transform: scaleX(1) } to { transform: scaleX(.22) } }
         @media (prefers-reduced-motion: reduce) {
           .wed-phone-card *, .wed-phone-card *::before, .wed-phone-card *::after {
             animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important;
           }
+          .wed-parallax img, .wed-develop img, .wed-pan img, .wed-cover3d > [data-c3] { animation: none !important; }
         }
       `}</style>
     </main>
@@ -438,15 +467,18 @@ export function PhoneShell({
  * cục không sụp — cặp đôi nhìn bản xem trước là biết còn thiếu ảnh nào.
  */
 export function Slot({
-  src, height, width, radius = 0, border, tint = "rgba(128,128,128,.12)", label, style, lazy = true, fx, fallback, imgStyle,
+  src, height, width, radius = 0, border, tint = "rgba(128,128,128,.12)", label, style, lazy = true, fx, fallback, imgStyle, pv,
 }: {
   src?: string; height: number | string; width?: number | string; radius?: number | string; border?: string;
   tint?: string; label?: string; style?: CSSProperties; lazy?: boolean; imgStyle?: CSSProperties;
+  /** Số thứ tự ảnh trong <PhotoViewer> bao ngoài — chạm vào ảnh thì mở xem to. */
+  pv?: number;
   /**
    * Hiệu ứng ảnh, ghép được nhiều cái cách nhau bằng dấu cách — mỗi từ thành
    * lớp `wed-<từ>`: kb (phóng chậm Ken Burns) · kb-r (phóng ngược, lia ngang) ·
    * zoom (phóng khi chạm) · gloss (vệt sáng quét qua) · tilt (nghiêng 3D khi
-   * chạm) · breathe (phập phồng rất chậm) · duo (ngả nâu, chạm thì về màu thật).
+   * chạm) · breathe (phập phồng rất chậm) · duo (ngả nâu, chạm thì về màu thật) ·
+   * parallax (trôi theo cuộn) · develop (rửa phim khi cuộn tới) · pan (lia ngang theo cuộn).
    */
   fx?: string;
   /** Thay chữ "Ảnh" khi chưa có ảnh — ô chân dung dùng để vẽ chữ lồng. */
@@ -466,7 +498,7 @@ export function Slot({
   }
   const cls = fx ? fx.trim().split(/\s+/).map((f) => `wed-${f}`).join(" ") : undefined;
   return (
-    <div style={box} className={cls}>
+    <div style={box} className={cls} data-pv={pv}>
       <img src={src} alt="" loading={lazy ? "lazy" : undefined} style={{ width: "100%", height: "100%", objectFit: "cover", ...imgStyle }} />
     </div>
   );
@@ -569,6 +601,8 @@ export type AmbientKind =
   | "grain"    // hạt phim + vệt sáng lọt
   | "ray"      // tia sáng chéo
   | "heart"    // trái tim bay lên
+  | "butterfly"// bướm vỗ cánh bay lên
+  | "leaf"     // lá thon rơi xoay
   | "glow";    // quầng sáng thở
 
 /**
@@ -658,7 +692,7 @@ export function Ambient({
     <div style={layer} aria-hidden>
       {items.map((i) => {
         const a = rnd(i, 1), b = rnd(i, 2), c = rnd(i, 5);
-        const rise = kind === "bubble" || kind === "dust" || kind === "heart";
+        const rise = kind === "bubble" || kind === "dust" || kind === "heart" || kind === "butterfly";
         const dur = (kind === "sparkle" ? 2.4 : rise ? 12 : 11) + a * (kind === "sparkle" ? 2.6 : 9);
         const base: CSSProperties & Record<string, string> = {
           position: "absolute", left: `${(b * 100).toFixed(2)}%`,
@@ -670,6 +704,26 @@ export function Ambient({
         if (kind === "sparkle") {
           const sz = 5 + c * 9;
           return <span key={i} style={{ ...base, top: `${(c * 92).toFixed(1)}%`, width: sz, height: sz, background: color, clipPath: "polygon(50% 0,58% 42%,100% 50%,58% 58%,50% 100%,42% 58%,0 50%,42% 42%)" }} />;
+        }
+        if (kind === "butterfly") {
+          // Thân bay theo wedRise (lượn rộng hơn); hai cánh vỗ bằng scaleX ở lớp trong.
+          const sz = 16 + c * 16;
+          return (
+            <span key={i} style={{ ...base, top: 0, width: sz, height: sz, "--sway": `${((a - 0.5) * 140).toFixed(0)}px` } as CSSProperties}>
+              <svg viewBox="0 0 24 24" width={sz} height={sz} style={{ display: "block", transform: `rotate(${((b - 0.5) * 50).toFixed(0)}deg)` }}>
+                <g style={{ transformOrigin: "12px 12px", animation: `wedFlap ${(0.28 + c * 0.2).toFixed(2)}s ease-in-out infinite alternate` }}>
+                  <path d="M12 12C9 5 3 3 2.2 6.5 1.6 9.6 6 12 12 12z" fill={color} />
+                  <path d="M12 12C15 5 21 3 21.8 6.5 22.4 9.6 18 12 12 12z" fill={color} />
+                  <path d="M12 12C8.5 13 5 15.5 6.5 18.5 8 20.5 11 17 12 12z" fill={color2 || color} opacity=".85" />
+                  <path d="M12 12C15.5 13 19 15.5 17.5 18.5 16 20.5 13 17 12 12z" fill={color2 || color} opacity=".85" />
+                </g>
+              </svg>
+            </span>
+          );
+        }
+        if (kind === "leaf") {
+          const w = 12 + c * 12;
+          return <span key={i} style={{ ...base, top: 0, width: w, height: w * 0.36, background: i % 3 === 0 && color2 ? color2 : color, borderRadius: "100% 0 100% 0" }} />;
         }
         if (kind === "heart") {
           return <span key={i} style={{ ...base, top: 0, fontSize: 9 + c * 12, lineHeight: 1, color, fontFamily: "system-ui" }}>♥</span>;
