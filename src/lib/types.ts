@@ -1280,7 +1280,7 @@ export type WeddingTimelineItem = { time?: string; label?: string };
 export const WEDDING_TEMPLATES_CLASSIC = ["classic", "elegant", "floral", "modern", "cinematic", "story", "editorial", "royal", "sweet"] as const;
 
 /** Mẫu "thiệp điện thoại" — khổ dọc 390px, cuộn một mạch như một tấm thiệp. */
-export const WEDDING_TEMPLATES_PHONE = ["sen", "sonmai", "giaydo", "y2k", "aurora", "songhy", "vintage", "glass", "neon", "scrapbook"] as const;
+export const WEDDING_TEMPLATES_PHONE = ["sen", "sonmai", "giaydo", "y2k", "aurora", "songhy", "vintage", "glass", "neon", "scrapbook", "thumoi"] as const;
 
 export const WEDDING_TEMPLATES = [...WEDDING_TEMPLATES_CLASSIC, ...WEDDING_TEMPLATES_PHONE] as const;
 export type WeddingTemplate = (typeof WEDDING_TEMPLATES)[number];

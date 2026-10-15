@@ -50,6 +50,7 @@ const SKINS: Record<string, IntroSkin> = {
   glass:     { style: "curtain",  seal: "◇", cta: "Trượt để mở",     motes: { color: "rgba(255,255,255,.7)", count: 10, rise: true } },
   neon:      { style: "unlock",   seal: "★", cta: "Quét vé vào tiệc", motes: { color: "rgba(0,255,213,.8)", count: 10, rise: true } },
   scrapbook: { style: "book",     seal: "♥", cta: "Mở sổ ra xem",    motes: { glyph: "♥", color: "rgba(168,115,79,.7)", count: 9, rise: true } },
+  thumoi:    { style: "envelope", seal: "♥", cta: "Mở thư mời",      motes: { glyph: "♥", color: "rgba(107,80,61,.6)", count: 10, rise: true } },
   dodo:      { style: "seal",     seal: "♥", cta: "Mở thiệp",        motes: { color: "rgba(200,164,110,.85)", count: 10, rise: true } },
   demsao:    { style: "meteor",   seal: "✦", cta: "Mở thiệp",        motes: { color: "rgba(255,255,255,.9)", count: 16, rise: true } },
   "vom-matong": { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },

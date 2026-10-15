@@ -20,6 +20,7 @@ import VintageTemplate from "./designs/phone/VintageTemplate";
 import GlassTemplate from "./designs/phone/GlassTemplate";
 import NeonTemplate from "./designs/phone/NeonTemplate";
 import ScrapbookTemplate from "./designs/phone/ScrapbookTemplate";
+import ThuMoiTemplate from "./designs/phone/ThuMoiTemplate";
 import DoDoTemplate from "./designs/phone/DoDoTemplate";
 import DemSaoTemplate from "./designs/phone/DemSaoTemplate";
 import VomTemplate from "./designs/phone/VomTemplate";
@@ -49,6 +50,7 @@ const TEMPLATES = {
   glass: GlassTemplate,
   neon: NeonTemplate,
   scrapbook: ScrapbookTemplate,
+  thumoi: ThuMoiTemplate,
   dodo: DoDoTemplate,
   demsao: DemSaoTemplate,
   "vom-matong": VomTemplate,
