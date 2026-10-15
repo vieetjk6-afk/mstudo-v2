@@ -844,6 +844,18 @@ export interface StudioCrew {
   note: string | null;
   branch_id: string | null;
   created_at: string;
+  /** Hồ sơ thợ (migrations/crew_profile_show.sql) — studio nhập ở sổ thợ, hoặc
+   *  thợ tự điền ở /crew. Tuỳ chọn: database chưa chạy SQL thì không có. */
+  email?: string | null;
+  address?: string | null;
+  bank_name?: string | null;
+  bank_account?: string | null;
+  skills?: string | null;
+  equipment?: string | null;
+  /** 'active' = đã nhận vào sổ · 'pending' = thợ tự đăng ký, chờ studio duyệt. */
+  status?: string | null;
+  /** Lần cuối thợ tự sửa hồ sơ ở /crew. */
+  self_filled_at?: string | null;
 }
 
 export interface StudioEvent {

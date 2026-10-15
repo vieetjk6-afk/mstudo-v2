@@ -1348,6 +1348,10 @@ function PrintDoc({
     ],
     items: items.map((it) => ({
       name: it.name,
+      // Mô tả hạng mục in dưới tên, giống bản in phía studio. Thiếu dòng này thì
+      // khách bấm "Lưu PDF / In" ra bản không có phạm vi công việc, dù trên màn
+      // hình vẫn thấy.
+      description: it.description?.trim() || null,
       qty: it.qty,
       unitPrice: it.unit_price,
       amount: it.qty * it.unit_price,

@@ -128,5 +128,16 @@ const tplItems = [
 buildContractLines({ templateItems: tplItems });
 check("không sắp xếp tại chỗ mảng hạng mục mẫu", tplItems.map((i) => i.name), ["Hậu kỳ", "Chụp phóng sự"]);
 
+/* ── Mô tả gói trong bảng giá đi theo sang hạng mục ─────────────────────
+   Khách đọc mô tả ở cổng hợp đồng và trên bản in. Trước đây nó rơi mất ở bước
+   tạo hợp đồng: bảng giá có mô tả mà hợp đồng gửi khách thì trắng trơn. */
+const withDesc = buildContractLines({
+  mainPkg: { ...GOI_CUOI, description: "  2 thợ chụp\n300 ảnh chỉnh màu  " },
+  extras: [{ ...THEM_ALBUM, description: "   " }, THEM_FLYCAM],
+});
+check("mô tả gói chính đi theo, cắt khoảng trắng hai đầu", withDesc[0].description, "2 thợ chụp\n300 ảnh chỉnh màu");
+check("mô tả toàn khoảng trắng → không có khoá description", "description" in withDesc[1], false);
+check("gói không có mô tả → không có khoá description", "description" in withDesc[2], false);
+
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);
 process.exit(fail === 0 ? 0 : 1);

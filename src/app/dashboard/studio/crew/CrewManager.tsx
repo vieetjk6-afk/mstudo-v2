@@ -1,14 +1,37 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Plus, Trash2, Phone } from "lucide-react";
+import { Building2, Pencil, Plus, Trash2, Phone } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { mainUrl } from "@/lib/hosts";
+import { fmtDate } from "@/lib/date";
+import { isMissingColumn } from "@/lib/missing-column";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
 import { type StudioCrew, type CrewRole } from "@/lib/types";
 import { crewRoleLabel, crewRolesFor, type CrewRoleRow } from "@/lib/crew-roles";
 import CrewRolesPanel from "./CrewRolesPanel";
+
+/**
+ * Thông tin thợ studio sửa được — đúng bộ trường thợ tự khai ở /crew (xem
+ * SELF_FIELDS trong api/crew/profile) cộng ghi chú của studio. Trước đây chỉ
+ * thợ sửa được, studio nhìn không thấy cũng không sửa được gì ngoài vai trò và
+ * chi nhánh.
+ *
+ * SĐT không nằm ở đây: nó là danh tính của thợ — thợ đăng nhập /crew và nhận
+ * lịch theo số này, các phân công cũ cũng lưu theo số này. Nhập sai thì xoá
+ * rồi thêm lại.
+ */
+const PROFILE_FIELDS: { key: keyof StudioCrew & string; label: string; type?: string }[] = [
+  { key: "name", label: "Họ tên" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "address", label: "Địa chỉ" },
+  { key: "bank_name", label: "Tên ngân hàng" },
+  { key: "bank_account", label: "Số tài khoản" },
+  { key: "skills", label: "Kỹ năng (chụp, quay, dựng…)" },
+  { key: "equipment", label: "Thiết bị (body, lens, gimbal…)" },
+  { key: "note", label: "Ghi chú" },
+];
 
 export default function CrewManager({
   ownerId,
@@ -46,7 +69,46 @@ export default function CrewManager({
   const [err, setErr] = useState<string | null>(null);
   const [roles, setRoles] = useState<CrewRoleRow[]>(crewRoles);
   // Thợ tự đăng ký qua link riêng — chờ studio nhận vào sổ.
-  const pending = list.filter((c) => (c as StudioCrew & { status?: string }).status === "pending");
+  const pending = list.filter((c) => c.status === "pending");
+  // Thợ đang mở khung sửa thông tin (một thợ một lúc).
+  const [editId, setEditId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
+
+  function openEdit(c: StudioCrew) {
+    if (editId === c.id) {
+      setEditId(null);
+      return;
+    }
+    const d: Record<string, string> = {};
+    for (const f of PROFILE_FIELDS) d[f.key] = (c[f.key] as string | null | undefined) ?? "";
+    setDraft(d);
+    setEditErr(null);
+    setEditId(c.id);
+  }
+
+  /** Studio sửa thông tin thợ. studio_crew đi qua RLS thường nên ghi trực tiếp. */
+  async function saveEdit(id: string) {
+    const patch: Record<string, string | null> = {};
+    for (const f of PROFILE_FIELDS) patch[f.key] = draft[f.key]?.trim() || null;
+    // Cột name NOT NULL: để trống thì giữ tên cũ, đừng xoá mất.
+    if (!patch.name) delete patch.name;
+    setSavingEdit(true);
+    setEditErr(null);
+    const { data, error } = await supabase.from("studio_crew").update(patch).eq("id", id).select("*").single();
+    setSavingEdit(false);
+    if (error || !data) {
+      setEditErr(
+        PROFILE_FIELDS.some((f) => isMissingColumn(error, f.key))
+          ? "Database chưa có cột hồ sơ thợ — chạy supabase/migrations/crew_profile_show.sql rồi thử lại."
+          : `Không lưu được thông tin thợ: ${error?.message ?? "không rõ lỗi"}`
+      );
+      return;
+    }
+    setList((p) => p.map((c) => (c.id === id ? (data as StudioCrew) : c)));
+    setEditId(null);
+  }
 
   /** Đổi chi nhánh của một thợ. studio_crew đi qua RLS thường nên ghi trực tiếp. */
   async function setCrewBranch(id: string, value: string) {
@@ -236,7 +298,8 @@ export default function CrewManager({
           ) : (
             <div className="flex flex-col gap-2">
               {list.map((c) => (
-                <Panel key={c.id} className="flex items-center justify-between gap-3 px-4 py-3.5">
+                <Panel key={c.id} className="px-4 py-3.5">
+                  <div className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: avatarColor(c.name || c.phone) }}>
                       {initials(c.name || c.phone)}
@@ -290,6 +353,20 @@ export default function CrewManager({
                       </label>
                     )}
                     <button
+                      onClick={() => openEdit(c)}
+                      aria-label={`Sửa thông tin ${c.name || c.phone}`}
+                      aria-expanded={editId === c.id}
+                      title="Sửa thông tin thợ"
+                      className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
+                      style={
+                        editId === c.id
+                          ? { border: "1px solid var(--acM)", background: "var(--acS)", color: "var(--ac)" }
+                          : { border: "1px solid var(--bd)", color: "var(--tx3)" }
+                      }
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
                       onClick={() => remove(c.id)}
                       aria-label="Xoá thợ"
                       className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
@@ -298,6 +375,47 @@ export default function CrewManager({
                       <Trash2 size={14} />
                     </button>
                   </div>
+                  </div>
+
+                  {editId === c.id && (
+                    <div className="mt-3.5 pt-3.5" style={{ borderTop: "1px solid var(--bd2)" }}>
+                      <div className="grid gap-2.5 sm:grid-cols-2">
+                        <div className="field">
+                          <label className="label">Số điện thoại</label>
+                          <input
+                            className="input"
+                            readOnly
+                            value={c.phone}
+                            title="SĐT là mã nhận diện của thợ (thợ đăng nhập /crew bằng số này). Nhập sai thì xoá rồi thêm lại."
+                            style={{ opacity: 0.7 }}
+                          />
+                        </div>
+                        {PROFILE_FIELDS.map((f) => (
+                          <div key={f.key} className="field">
+                            <label className="label">{f.label}</label>
+                            <input
+                              className="input"
+                              type={f.type ?? "text"}
+                              value={draft[f.key] ?? ""}
+                              onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {c.self_filled_at && (
+                        <p className="mt-2 text-[11px]" style={{ color: "var(--tx3)" }}>
+                          Thợ tự cập nhật lần cuối ngày {fmtDate(c.self_filled_at)}.
+                        </p>
+                      )}
+                      {editErr && <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>{editErr}</p>}
+                      <div className="mt-3 flex gap-2">
+                        <button onClick={() => saveEdit(c.id)} disabled={savingEdit} className="btn-primary px-4 py-2 text-xs">
+                          {savingEdit ? "Đang lưu…" : "Lưu thông tin"}
+                        </button>
+                        <button onClick={() => setEditId(null)} className="btn-ghost px-4 py-2 text-xs">Huỷ</button>
+                      </div>
+                    </div>
+                  )}
                 </Panel>
               ))}
             </div>
