@@ -11,7 +11,7 @@ import { checkImageFile, compressToLimit } from "@/lib/image";
 import { thiepUrl } from "@/lib/hosts";
 import type { WeddingConfig, WeddingInvitation, WeddingRsvp } from "@/lib/types";
 import type { Wish } from "../../[slug]/WeddingRenderer";
-import { getTemplateMeta } from "../../[slug]/templates";
+import { TEMPLATE_ALIASES, getTemplateMeta } from "../../[slug]/templates";
 import GuestManager from "./GuestManager";
 import PreviewPane from "./editor/PreviewPane";
 import TemplateGallery from "./editor/TemplateGallery";
@@ -61,9 +61,12 @@ export default function WeddingEditor({ token }: { token: string }) {
       const res = await fetch(`/api/thiep/${token}`);
       if (!res.ok) { setStatus("notfound"); return; }
       const data = (await res.json()) as Loaded;
-      setCfg(data.invitation.config || {});
+      // Mẫu cũ đã gộp (vd. "vom-navy" → "vom"): đổi sang tên mới, giữ đúng màu cũ.
+      const alias = TEMPLATE_ALIASES[data.invitation.template];
+      const loadedCfg = data.invitation.config || {};
+      setCfg(alias && !loadedCfg.accent ? { ...loadedCfg, accent: alias.color } : loadedCfg);
       setSlug(data.invitation.slug);
-      setTemplate(data.invitation.template || "classic");
+      setTemplate(alias?.name || data.invitation.template || "classic");
       setPublished(data.invitation.published);
       setRsvps(data.rsvps || []);
       setStatus("ready");
@@ -339,11 +342,33 @@ export default function WeddingEditor({ token }: { token: string }) {
                 <Card title="Chọn mẫu thiệp" icon={<LayoutTemplate size={16} />} hint="Bấm một mẫu để xem ngay ở khung bên cạnh. Đổi thoải mái — chỉ khi bấm “Lưu” mới áp dụng cho khách.">
                   <TemplateGallery value={template} onChange={pickTemplate} cover={cfg.cover_url} bride={cfg.bride_name || "Cô dâu"} groom={cfg.groom_name || "Chú rể"} />
                 </Card>
-                <Card title="Màu & phông chữ" icon={<Type size={16} />} hint={meta.group === "phone" ? "Mẫu thiệp điện thoại dùng bộ phông riêng của mẫu; màu nhấn vẫn áp dụng được." : undefined}>
+                <Card
+                  title="Màu & phông chữ" icon={<Type size={16} />}
+                  hint={meta.color
+                    ? "Chọn một màu — cả tấm thiệp (nền, thẻ, chữ, màn mở thiệp) tự phối theo màu đó."
+                    : meta.group === "phone" ? "Mẫu thiệp điện thoại dùng bộ phông riêng của mẫu; màu nhấn vẫn áp dụng được." : undefined}
+                >
+                  {meta.color && (
+                    <div className="mb-4 flex flex-wrap gap-2" role="radiogroup" aria-label={meta.color.label}>
+                      {meta.color.swatches.map((sw) => {
+                        const on = (cfg.accent || meta.color!.default).toLowerCase() === sw.hex.toLowerCase();
+                        return (
+                          <button
+                            key={sw.hex} type="button" role="radio" aria-checked={on} title={sw.name}
+                            onClick={() => patch({ accent: sw.hex === meta.color!.default ? undefined : sw.hex })}
+                            className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-xs transition ${on ? "border-stone-800 bg-stone-50 font-semibold text-stone-900" : "border-stone-200 text-stone-600 hover:border-stone-400"}`}
+                          >
+                            <span className="h-6 w-6 rounded-full border border-black/10" style={{ background: sw.hex }} />
+                            {sw.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <div className="flex flex-wrap items-end gap-5">
-                    <Field label="Màu nhấn">
+                    <Field label={meta.color ? `${meta.color.label} (tự chọn)` : "Màu nhấn"}>
                       <div className="flex items-center gap-2">
-                        <input type="color" aria-label="Màu nhấn" className="h-9 w-16 rounded border border-stone-300" value={cfg.accent || meta.accent} onChange={(e) => patch({ accent: e.target.value })} />
+                        <input type="color" aria-label={meta.color?.label || "Màu nhấn"} className="h-9 w-16 rounded border border-stone-300" value={cfg.accent || meta.color?.default || meta.accent} onChange={(e) => patch({ accent: e.target.value })} />
                         {cfg.accent && <button type="button" onClick={() => patch({ accent: undefined })} className="text-xs text-stone-500 underline">Dùng màu gốc của mẫu</button>}
                       </div>
                     </Field>

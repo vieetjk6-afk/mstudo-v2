@@ -74,7 +74,17 @@ export default function TemplateGallery({
                       )}
                     </div>
                     <div className="border-t border-stone-100 px-2 py-1.5">
-                      <span className="block truncate text-xs font-medium text-stone-700">{t.label}</span>
+                      <span className="flex items-center gap-1 truncate text-xs font-medium text-stone-700">
+                        {t.label}
+                        {/* Mẫu đổi được cả bảng màu: vài chấm màu gợi ý ngay trên thẻ */}
+                        {t.color && (
+                          <span className="ml-auto flex shrink-0" title="Đổi được màu">
+                            {t.color.swatches.slice(0, 4).map((sw, k) => (
+                              <span key={sw.hex} className="h-2.5 w-2.5 rounded-full border border-white" style={{ background: sw.hex, marginLeft: k ? -3 : 0 }} />
+                            ))}
+                          </span>
+                        )}
+                      </span>
                       <span className="block truncate text-[11px] text-stone-400">{t.tagline}</span>
                     </div>
                   </button>

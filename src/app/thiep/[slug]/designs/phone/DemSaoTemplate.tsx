@@ -1,6 +1,8 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
 import GiftBox from "./GiftBox";
+import { mix, nightPalette } from "@/lib/wedding-palette";
+import PhotoViewer from "./PhotoViewer";
 import { Ambient, MapBox, MonthCalendar, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -16,8 +18,13 @@ import { Ambient, MapBox, MonthCalendar, PhoneCountdown, PhoneShell, QuickRsvp, 
 //   · mở thiệp: một VỆT SAO BĂNG rơi xuống rồi ảnh tròn hiện ra (xem CardIntro)
 // ════════════════════════════════════════════════════════════════════════════
 
-const NIGHT = "#0c1230", NIGHT2 = "#151d48", INK = "#eef0ff", MUTED = "#a3abd6", SILVER = "#c9d2ff", LINE = "rgba(201,210,255,.28)";
-const GLASS = "linear-gradient(160deg, rgba(48,60,130,.55), rgba(20,26,66,.72))";
+/*
+ * Bầu trời đổi theo màu cặp đôi chọn ("Màu bầu trời"), chữ/ánh bạc cùng sắc với
+ * trời — xem nightPalette. Đặt thành biến CSS ở gốc để các khối con dùng chung.
+ */
+const NIGHT = "var(--ds-sky)", NIGHT2 = "var(--ds-sky2)", INK = "var(--ds-ink)", MUTED = "var(--ds-muted)", SILVER = "var(--ds-silver)", LINE = "var(--ds-line)";
+const GLASS = "linear-gradient(160deg, var(--ds-glass1), var(--ds-glass2))";
+const DEFAULT_SKY = "#0c1230";
 const CORM = "var(--font-cormorant), serif";
 const HAND = "var(--font-hand), cursive";
 const SANS = "var(--font-be-vietnam), system-ui, sans-serif";
@@ -59,7 +66,7 @@ const Spark = () => <div aria-hidden style={{ textAlign: "center", color: SILVER
 /** Biểu tượng nét mảnh theo việc trong lịch trình. */
 function Icon({ label }: { label: string }) {
   const k = label.toLowerCase();
-  const p = { fill: "none", stroke: SILVER, strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const p = { fill: "none", style: { stroke: SILVER }, strokeWidth: 1.6, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
   return (
     <svg viewBox="0 0 24 24" width={20} height={20} aria-hidden>
       {/đón|check|khách/.test(k) ? <><path {...p} d="M4 20V9l8-5 8 5v11" /><path {...p} d="M10 20v-6h4v6" /></>
@@ -73,7 +80,8 @@ function Icon({ label }: { label: string }) {
 
 export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
   const d = phoneData(inv, guest);
-  const accent = d.accent || SILVER;
+  const N = nightPalette(d.accent, DEFAULT_SKY);
+  const accent = N.silver;
   const body = { fontFamily: CORM, fontSize: 16.5, lineHeight: 1.6, color: MUTED };
   const pill = { display: "inline-flex", alignItems: "center", gap: 8, border: `1px solid ${LINE}`, background: "rgba(255,255,255,.06)", color: INK, borderRadius: 999, padding: "10px 24px", fontFamily: CORM, fontSize: 14, letterSpacing: ".2em", textTransform: "uppercase" as const };
   const album = [...d.pair, ...d.trio];
@@ -81,22 +89,23 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
   return (
     <PhoneShell
       card={`${STARS}, linear-gradient(180deg, ${NIGHT} 0%, ${NIGHT2} 46%, ${NIGHT} 100%)`}
-      page="#060918" ink={INK} font={SANS} radius={18} accent={accent}
+      page={mix(N.sky, "#000000", 0.5)} ink={INK} font={SANS} radius={18} accent={accent}
+      vars={{ "--ds-sky": N.sky, "--ds-sky2": N.sky2, "--ds-ink": N.ink, "--ds-muted": N.muted, "--ds-silver": N.silver, "--ds-line": N.line, "--ds-glass1": N.glass1, "--ds-glass2": N.glass2 }}
       pattern={<div aria-hidden style={{ position: "absolute", inset: 0, backgroundImage: STARS, backgroundSize: "180px 220px", opacity: 0.9, pointerEvents: "none" }} />}
     >
       {/* ── Bìa: ảnh tròn phát sáng + tên viết tay + dải ngân hà ───────────── */}
       <section style={{ position: "relative", minHeight: "100svh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 24px 90px", overflow: "hidden", textAlign: "center" }}>
         <Ambient kind="sparkle" color="#ffffff" count={16} />
-        <Ambient kind="ray" color="rgba(170,185,255,.16)" />
-        <div aria-hidden style={{ position: "absolute", left: "-20%", right: "-20%", bottom: -60, height: 220, background: "radial-gradient(50% 50% at 50% 50%, rgba(160,175,255,.42), rgba(70,80,170,.18) 55%, transparent 75%)", filter: "blur(8px)" }} />
+        <Ambient kind="ray" color={N.glow(0.16)} />
+        <div aria-hidden style={{ position: "absolute", left: "-20%", right: "-20%", bottom: -60, height: 220, background: `radial-gradient(50% 50% at 50% 50%, ${N.glow(0.42)}, ${N.glow(0.2)} 55%, transparent 75%)`, filter: "blur(8px)" }} />
         <div style={{ position: "relative", fontFamily: CORM, fontSize: 12.5, letterSpacing: ".46em", textTransform: "uppercase", color: MUTED }}>✦ Lễ thành hôn ✦</div>
-        <div style={{ position: "relative", margin: "24px 0 22px", padding: 8, borderRadius: "50%", border: `1px solid ${LINE}`, boxShadow: `0 0 60px -6px rgba(160,175,255,.55), inset 0 0 22px rgba(160,175,255,.25)` }}>
-          <Slot src={d.hero} height={236} width={236} radius="50%" tint="rgba(255,255,255,.06)" fx="kb" lazy={false}
+        <div style={{ position: "relative", margin: "24px 0 22px", padding: 8, borderRadius: "50%", border: `1px solid ${LINE}`, boxShadow: `0 0 60px -6px ${N.glow(0.55)}, inset 0 0 22px ${N.glow(0.25)}` }}>
+          <Slot src={d.hero} height={236} width={236} radius="50%" tint="rgba(255,255,255,.06)" fx="kb gloss" lazy={false}
             fallback={<span style={{ fontFamily: HAND, fontSize: 64, color: SILVER }}>{initial(d.groom)}&amp;{initial(d.bride)}</span>} />
         </div>
-        <div className="wed-ink" style={{ position: "relative", fontFamily: HAND, fontSize: 54, lineHeight: 1.05, color: INK, textShadow: "0 0 24px rgba(170,185,255,.55)" }}>{d.groom}</div>
+        <div className="wed-ink" style={{ position: "relative", fontFamily: HAND, fontSize: 54, lineHeight: 1.05, color: INK, textShadow: `0 0 24px ${N.glow(0.55)}` }}>{d.groom}</div>
         <div style={{ position: "relative", fontFamily: HAND, fontSize: 30, color: SILVER, lineHeight: 1 }}>&amp;</div>
-        <div className="wed-ink-2" style={{ position: "relative", fontFamily: HAND, fontSize: 54, lineHeight: 1.05, color: INK, textShadow: "0 0 24px rgba(170,185,255,.55)" }}>{d.bride}</div>
+        <div className="wed-ink-2" style={{ position: "relative", fontFamily: HAND, fontSize: 54, lineHeight: 1.05, color: INK, textShadow: `0 0 24px ${N.glow(0.55)}` }}>{d.bride}</div>
         {d.date.valid && <div style={{ ...pill, position: "relative", marginTop: 22, letterSpacing: ".4em", fontSize: 15 }}>{d.date.day} . {d.date.month} . {d.date.year}</div>}
         {d.lunarLine && <div style={{ ...body, position: "relative", fontStyle: "italic", fontSize: 15, marginTop: 10 }}>{d.lunarLine.replace(/^Tức/, "Nhằm")}</div>}
       </section>
@@ -130,7 +139,7 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
             {d.portraits.slice().reverse().map((p, i) => (
               <div key={p.role} style={{ textAlign: "center" }}>
-                <div style={{ display: "inline-block", padding: 5, borderRadius: "50%", border: `1px solid ${LINE}`, boxShadow: "0 0 30px -10px rgba(160,175,255,.6)" }}>
+                <div style={{ display: "inline-block", padding: 5, borderRadius: "50%", border: `1px solid ${LINE}`, boxShadow: `0 0 30px -10px ${N.glow(0.6)}` }}>
                   <Slot src={p.photo} height={132} width={132} radius="50%" tint="rgba(255,255,255,.06)" fx="breathe"
                     fallback={<span style={{ fontFamily: HAND, fontSize: 44, color: SILVER }}>{initial(p.name)}</span>} />
                 </div>
@@ -150,12 +159,12 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
           <Glass style={{ marginTop: 16 }}>
             <div style={{ fontFamily: HAND, fontSize: 40, color: INK, lineHeight: 1.2 }}>{d.guest || "Quý Khách"}</div>
             <div style={{ ...body, marginTop: 4 }}>tới dự bữa tiệc chung vui cùng gia đình chúng tôi</div>
-            {d.pair[0] && <Slot src={d.pair[0]} height={190} radius={12} tint="rgba(255,255,255,.06)" fx="zoom" style={{ margin: "18px 0 6px" }} />}
+            {d.pair[0] && <Slot src={d.pair[0]} height={190} radius={12} tint="rgba(255,255,255,.06)" fx="zoom develop" style={{ margin: "18px 0 6px" }} />}
             {d.startTime && <div style={{ ...body, marginTop: 14 }}>Vào lúc <span style={{ color: INK, fontSize: 21 }}>{d.startTime.replace(":", " giờ ")}</span></div>}
             {d.date.valid && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 12, marginTop: 10 }}>
                 <div style={{ fontFamily: CORM, fontSize: 13.5, letterSpacing: ".22em", textTransform: "uppercase", color: MUTED, borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`, padding: "6px 0" }}>{d.date.weekday}</div>
-                <div style={{ fontFamily: CORM, fontSize: 56, color: INK, lineHeight: 1, textShadow: "0 0 18px rgba(170,185,255,.6)" }}>{d.date.day}</div>
+                <div style={{ fontFamily: CORM, fontSize: 56, color: INK, lineHeight: 1, textShadow: `0 0 18px ${N.glow(0.6)}` }}>{d.date.day}</div>
                 <div style={{ fontFamily: CORM, fontSize: 13.5, letterSpacing: ".22em", textTransform: "uppercase", color: MUTED, borderTop: `1px solid ${LINE}`, borderBottom: `1px solid ${LINE}`, padding: "6px 0" }}>Tháng {d.date.month}</div>
               </div>
             )}
@@ -177,7 +186,7 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
             <Heading kicker="Nghi lễ" title="Các Nghi Lễ" />
             <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>
               {d.events.map((e, i) => (
-                <Reveal key={i} anim="up" delay={i * 0.08}>
+                <Reveal key={i} anim="up" delay={i * 90}>
                   <Glass arch>
                     <div style={{ position: "absolute", left: "50%", top: -18, marginLeft: -18, width: 36, height: 36, borderRadius: "50%", background: NIGHT2, border: `1px solid ${LINE}`, display: "flex", alignItems: "center", justifyContent: "center" }}><Icon label={e.label} /></div>
                     <div style={{ fontFamily: HAND, fontSize: 32, color: INK, lineHeight: 1.2 }}>{e.label}</div>
@@ -199,7 +208,7 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
             <Heading kicker="Save the date" title="Lịch Cưới" />
             <Glass style={{ marginTop: 16 }}>
               <MonthCalendar
-                date={d.c.wedding_date} ink={INK} muted={MUTED} accent="#9fb0ff" heartInk={NIGHT} font={CORM}
+                date={d.c.wedding_date} ink={INK} muted={MUTED} accent={N.heart} heartInk={N.sky} font={CORM}
                 title={(m, y) => <div style={{ fontFamily: CORM, fontSize: 15, letterSpacing: ".34em", textTransform: "uppercase", color: INK, marginBottom: 12 }}>Tháng {m} · {y}</div>}
               />
             </Glass>
@@ -217,7 +226,7 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
             date={d.countdownTo}
             wrap={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginTop: 16 }}
             box={{ background: GLASS, border: `1px solid ${LINE}`, borderRadius: 14, padding: "16px 0", textAlign: "center" }}
-            num={{ fontFamily: CORM, fontSize: 32, color: INK, lineHeight: 1, textShadow: "0 0 14px rgba(170,185,255,.6)" }}
+            num={{ fontFamily: CORM, fontSize: 32, color: INK, lineHeight: 1, textShadow: `0 0 14px ${N.glow(0.6)}` }}
             lab={{ fontFamily: CORM, fontSize: 11.5, letterSpacing: ".2em", textTransform: "uppercase", color: MUTED, marginTop: 6 }}
           />
         </div>
@@ -274,12 +283,14 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
           <div>
             <Heading kicker="Album" title="Khoảnh Khắc" />
             <p style={{ ...body, textAlign: "center", fontStyle: "italic", fontSize: 15, margin: "6px 0 16px" }}>Mỗi khoảnh khắc bên nhau đều lấp lánh như sao trời</p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            <PhotoViewer photos={album} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {album.map((src, i) => (
-                <Slot key={i} src={src} height={i % 3 === 0 ? 250 : 170} radius={12} tint="rgba(255,255,255,.06)" fx="zoom"
-                  style={{ gridColumn: i % 3 === 0 ? "1 / -1" : undefined, border: `1px solid ${LINE}` }} />
+                <Reveal key={i} anim={i % 3 === 0 ? "iris" : "focus"} delay={(i % 3) * 110} style={{ gridColumn: i % 3 === 0 ? "1 / -1" : undefined }}>
+                  <Slot src={src} pv={i} height={i % 3 === 0 ? 250 : 170} radius={12} tint="rgba(255,255,255,.06)" fx={i % 3 === 0 ? "zoom parallax" : "zoom"}
+                    style={{ border: `1px solid ${LINE}` }} />
+                </Reveal>
               ))}
-            </div>
+            </PhotoViewer>
           </div>
         )}
 
@@ -324,7 +335,7 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
         {d.gifts.length > 0 && (
           <div>
             <Heading kicker="Mừng cưới" title="Hộp Mừng Cưới" />
-            <GiftBox gifts={d.gifts} note={d.giftNote ?? "Cảm ơn tấm lòng của bạn dành cho chúng mình"} box="#2a3a8c" ribbon="#e8ecff" ink={INK} muted={MUTED} card="#f4f5ff" cardInk={NIGHT} font={CORM} style={{ marginTop: 18 }} />
+            <GiftBox gifts={d.gifts} note={d.giftNote ?? "Cảm ơn tấm lòng của bạn dành cho chúng mình"} box={N.box} ribbon={N.ink} ink={INK} muted={MUTED} card={N.ink} cardInk={N.sky} font={CORM} style={{ marginTop: 18 }} />
           </div>
         )}
       </div>
@@ -332,7 +343,7 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
       {/* ── Cảm ơn: ảnh oval phát sáng ──────────────────────────────────── */}
       <section style={{ position: "relative", padding: "20px 26px 120px", textAlign: "center", overflow: "hidden" }}>
         <Ambient kind="sparkle" color="#ffffff" count={10} />
-        <div style={{ position: "relative", display: "inline-block", padding: 7, borderRadius: "50%", border: `1px solid ${LINE}`, boxShadow: "0 0 50px -10px rgba(160,175,255,.6)" }}>
+        <div style={{ position: "relative", display: "inline-block", padding: 7, borderRadius: "50%", border: `1px solid ${LINE}`, boxShadow: `0 0 50px -10px ${N.glow(0.6)}` }}>
           <Slot src={d.thanksPhoto || d.trio[d.trio.length - 1] || d.hero} height={290} width={210} radius="50%" tint="rgba(255,255,255,.06)" fx="breathe" />
         </div>
         <div className="wed-sheen" style={{ position: "relative", fontFamily: HAND, fontSize: 58, lineHeight: 1.1, marginTop: 16, color: INK, "--wed-t1": INK, "--wed-t2": "#fff" } as CSSVars}>Thank You</div>

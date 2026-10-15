@@ -123,6 +123,25 @@ export type WeddingTemplateMeta = {
   accent: string;     // màu nhấn
   serif: boolean;     // chữ tên dùng serif hay sans
   dark: boolean;
+  /**
+   * Mẫu đổi được CẢ BẢNG MÀU từ một màu cặp đôi chọn (thay vì chỉ màu nhấn).
+   * `cfg.accent` khi đó là màu chủ đạo; trình chỉnh sửa hiện thêm dải màu gợi ý.
+   *   tone "main"  · màn mở thiệp lấy luôn màu chọn làm nền
+   *   tone "night" · màn mở thiệp lấy màu chọn làm nền đêm (ép đủ tối)
+   */
+  color?: { label: string; default: string; swatches: { name: string; hex: string }[]; tone?: "main" | "night" };
+};
+
+/**
+ * Tên mẫu cũ đã gộp vào một mẫu khác. Thiệp lưu bằng tên cũ vẫn render đúng;
+ * trình chỉnh sửa mở ra sẽ tự chuyển sang tên mới + giữ đúng màu cũ.
+ */
+export const TEMPLATE_ALIASES: Record<string, { name: string; color: string }> = {
+  "vom-matong": { name: "vom", color: "#d6a05b" },
+  "vom-xothom": { name: "vom", color: "#6d8b74" },
+  "vom-navy": { name: "vom", color: "#2d3d6c" },
+  "vom-ghi": { name: "vom", color: "#7c948c" },
+  "vom-nau": { name: "vom", color: "#a86f3f" },
 };
 
 /** Mẫu "thiệp điện thoại": khổ dọc, cuộn một mạch như cầm tấm thiệp trên tay. */
@@ -138,15 +157,37 @@ const PHONE_TEMPLATES: WeddingTemplateMeta[] = [
   { name: "neon", label: "Neon ticket", tagline: "Cyberpunk · vé concert phát sáng", group: "phone", bg: "#07080f", ink: "#d6f7f2", accent: "#00ffd5", serif: false, dark: true },
   { name: "scrapbook", label: "Scrapbook", tagline: "Polaroid dán tay · giấy note vàng", group: "phone", bg: "#e9e3d6", ink: "#3a3227", accent: "#a8734f", serif: false, dark: false },
   { name: "thumoi", label: "Thư mời nâu", tagline: "Ảnh bìa · tờ lịch tháng · trắng & nâu cà phê", group: "phone", bg: "#ffffff", ink: "#545454", accent: "#6b503d", serif: true, dark: false },
-  { name: "dodo", label: "Đỏ đô", tagline: "Tối giản đỏ rượu vang · phong bì dấu sáp", group: "phone", bg: "#f6eee4", ink: "#3b1d20", accent: "#5c1822", serif: true, dark: false },
-  { name: "demsao", label: "Đêm sao", tagline: "Trời sao xanh đêm · sao băng mở thiệp", group: "phone", bg: "#0c1230", ink: "#eef0ff", accent: "#c9d2ff", serif: true, dark: true },
-  // Khung vòm: MỘT bố cục, năm bảng màu (VomTemplate.tsx → VOM_PALETTES). bg = màu chủ đạo
-  // của bìa nên chữ ảnh minh hoạ màu trắng; dark=false vì thân thiệp là thẻ sáng.
-  { name: "vom-matong", label: "Khung vòm · mật ong", tagline: "Cửa vòm mở · vàng mật ong", group: "phone", bg: "#d6a05b", ink: "#ffffff", accent: "#a26a2c", serif: true, dark: false },
-  { name: "vom-xothom", label: "Khung vòm · xô thơm", tagline: "Cửa vòm mở · xanh lá xô thơm", group: "phone", bg: "#6d8b74", ink: "#ffffff", accent: "#4a6852", serif: true, dark: false },
-  { name: "vom-navy", label: "Khung vòm · navy", tagline: "Cửa vòm mở · xanh navy & xanh phấn", group: "phone", bg: "#2d3d6c", ink: "#ffffff", accent: "#2d3d6c", serif: true, dark: false },
-  { name: "vom-ghi", label: "Khung vòm · ghi", tagline: "Cửa vòm mở · ghi xanh trầm", group: "phone", bg: "#7c948c", ink: "#ffffff", accent: "#58706a", serif: true, dark: false },
-  { name: "vom-nau", label: "Khung vòm · nâu", tagline: "Cửa vòm mở · nâu caramel", group: "phone", bg: "#a86f3f", ink: "#ffffff", accent: "#7c4d26", serif: true, dark: false },
+  { name: "dodo", label: "Đỏ đô", tagline: "Tối giản sang trọng · phong bì dấu sáp", group: "phone", bg: "#f6eee4", ink: "#3b1d20", accent: "#5c1822", serif: true, dark: false,
+    color: { label: "Màu thẻ", default: "#5c1822", swatches: [
+      { name: "Đỏ đô", hex: "#5c1822" }, { name: "Xanh navy", hex: "#1f2e55" }, { name: "Xanh rêu", hex: "#2f4a35" },
+      { name: "Nâu socola", hex: "#4a2c20" }, { name: "Tím mận", hex: "#4a1f3d" }, { name: "Xanh cổ vịt", hex: "#164450" },
+    ] } },
+  { name: "demsao", label: "Đêm sao", tagline: "Trời sao đêm · sao băng mở thiệp", group: "phone", bg: "#0c1230", ink: "#eef0ff", accent: "#c9d2ff", serif: true, dark: true,
+    color: { label: "Màu bầu trời", default: "#0c1230", tone: "night", swatches: [
+      { name: "Xanh đêm", hex: "#0c1230" }, { name: "Tím than", hex: "#1b1035" }, { name: "Xanh lục đêm", hex: "#0a2324" },
+      { name: "Đen huyền", hex: "#0d0d12" }, { name: "Đỏ rượu đêm", hex: "#2a0b16" },
+    ] } },
+  { name: "vom", label: "Khung vòm", tagline: "Cửa vòm mở · thẻ trắng trên nền màu tuỳ chọn", group: "phone", bg: "#6d8b74", ink: "#ffffff", accent: "#6d8b74", serif: true, dark: false,
+    color: { label: "Màu chủ đạo", default: "#6d8b74", tone: "main", swatches: [
+      { name: "Xô thơm", hex: "#6d8b74" }, { name: "Mật ong", hex: "#d6a05b" }, { name: "Navy", hex: "#2d3d6c" },
+      { name: "Ghi xanh", hex: "#7c948c" }, { name: "Nâu caramel", hex: "#a86f3f" }, { name: "Ô liu", hex: "#858a69" },
+      { name: "Hồng đất", hex: "#b5838d" }, { name: "Đỏ đô", hex: "#8e2f3c" },
+    ] } },
+  { name: "tapchi", label: "Bìa tạp chí", tagline: "Bìa tạp chí · mục lục bấm được · lật trang", group: "phone", bg: "#e2dfd8", ink: "#4b3427", accent: "#4b3427", serif: true, dark: false,
+    color: { label: "Màu mực", default: "#4b3427", swatches: [
+      { name: "Nâu espresso", hex: "#4b3427" }, { name: "Đen mực", hex: "#1f1f22" }, { name: "Xanh navy", hex: "#22314f" },
+      { name: "Đỏ gạch", hex: "#8a3324" }, { name: "Xanh rêu", hex: "#3c4a2c" }, { name: "Tím than", hex: "#3a2a4a" },
+    ] } },
+  { name: "nude", label: "Nude ngọt", tagline: "Thẻ nổi mềm · chữ tên khổng lồ · bướm bay", group: "phone", bg: "#f3e6e0", ink: "#6e5650", accent: "#d8b4a6", serif: true, dark: false,
+    color: { label: "Màu nền", default: "#d8b4a6", tone: "main", swatches: [
+      { name: "Nude", hex: "#d8b4a6" }, { name: "Hồng phấn", hex: "#e6b3bd" }, { name: "Be sữa", hex: "#d9c3a5" },
+      { name: "Xám khói", hex: "#bdb3ad" }, { name: "Bạc hà", hex: "#a9c8bb" }, { name: "Lavender", hex: "#c3b4d6" },
+    ] } },
+  { name: "reu", label: "Xanh rêu", tagline: "Ảnh tràn viền · vòng lá mở thiệp · rêu & trắng", group: "phone", bg: "#56622a", ink: "#ffffff", accent: "#56622a", serif: true, dark: false,
+    color: { label: "Màu chủ đạo", default: "#56622a", tone: "main", swatches: [
+      { name: "Xanh rêu", hex: "#56622a" }, { name: "Xanh lá thông", hex: "#2f5340" }, { name: "Xanh ô liu", hex: "#7a7d4b" },
+      { name: "Nâu đất", hex: "#7a5236" }, { name: "Xanh dương đậm", hex: "#2b4a6b" }, { name: "Đỏ đô", hex: "#7c2532" },
+    ] } },
 ];
 
 /** Mẫu "trang dài" — bộ gốc, đẹp cả trên máy tính. */
@@ -170,7 +211,8 @@ export const TEMPLATE_GROUPS: { key: TemplateGroup; title: string; hint: string 
 ];
 
 export function getTemplateMeta(name?: string): WeddingTemplateMeta {
-  return WEDDING_TEMPLATE_CATALOG.find((t) => t.name === name) ?? WEDDING_TEMPLATE_CATALOG[0];
+  const real = (name && TEMPLATE_ALIASES[name]?.name) || name;
+  return WEDDING_TEMPLATE_CATALOG.find((t) => t.name === real) ?? WEDDING_TEMPLATE_CATALOG[0];
 }
 
 /** Mẫu này là thiệp khổ điện thoại? (dùng để canh các khối phụ cho vừa khung) */

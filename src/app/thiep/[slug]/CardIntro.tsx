@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
-import { getTemplateMeta } from "./templates";
+import { nightPalette, lightPalette } from "@/lib/wedding-palette";
+import { TEMPLATE_ALIASES, getTemplateMeta } from "./templates";
 
 /**
  * HIỆU ỨNG MỞ THIỆP — lớp phủ khách thấy trước khi tấm thiệp hiện ra.
@@ -26,7 +27,7 @@ import { getTemplateMeta } from "./templates";
  *   · prefers-reduced-motion: vẫn có lớp mở nhưng bỏ hết chuyển động
  */
 
-export type IntroStyle = "envelope" | "curtain" | "unlock" | "book" | "bloom" | "seal" | "meteor" | "arch";
+export type IntroStyle = "envelope" | "curtain" | "unlock" | "book" | "bloom" | "seal" | "meteor" | "arch" | "pageflip" | "veil" | "wreath";
 
 /** Kiểu mở + vài nét trang trí riêng của từng mẫu. */
 type IntroSkin = {
@@ -53,11 +54,10 @@ const SKINS: Record<string, IntroSkin> = {
   thumoi:    { style: "envelope", seal: "♥", cta: "Mở thư mời",      motes: { glyph: "♥", color: "rgba(107,80,61,.6)", count: 10, rise: true } },
   dodo:      { style: "seal",     seal: "♥", cta: "Mở thiệp",        motes: { color: "rgba(200,164,110,.85)", count: 10, rise: true } },
   demsao:    { style: "meteor",   seal: "✦", cta: "Mở thiệp",        motes: { color: "rgba(255,255,255,.9)", count: 16, rise: true } },
-  "vom-matong": { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
-  "vom-xothom": { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
-  "vom-navy":   { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
-  "vom-ghi":    { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
-  "vom-nau":    { style: "arch",  seal: "❦", cta: "Ấn mở thiệp" },
+  vom:       { style: "arch",     seal: "❦", cta: "Ấn mở thiệp" },
+  tapchi:    { style: "pageflip", seal: "✦", cta: "Lật trang bìa" },
+  nude:      { style: "veil",     seal: "♡", cta: "Vén màn voan" },
+  reu:       { style: "wreath",   seal: "❦", cta: "Mở thiệp",        motes: { color: "rgba(255,255,255,.7)", count: 8 } },
 };
 
 const DEFAULT_SKIN: IntroSkin = { style: "envelope", seal: "♥", cta: "Mở thiệp", motes: { color: "rgba(255,255,255,.8)", count: 10 } };
@@ -70,8 +70,21 @@ export default function CardIntro({
   const [gone, setGone] = useState(false);
 
   const meta = getTemplateMeta(template);
-  const skin = SKINS[template] ?? DEFAULT_SKIN;
-  const a = accent || meta.accent;
+  const skin = SKINS[TEMPLATE_ALIASES[template]?.name ?? template] ?? DEFAULT_SKIN;
+  /*
+   * Mẫu đổi cả bảng màu (meta.color): màn mở thiệp cũng theo màu cặp đôi chọn.
+   *   main  · nền = màu chọn, chữ/nút = màu chọn đã chỉnh cho đọc được trên giấy
+   *   night · nền = màu chọn ép tối, chữ/nút giữ màu nhấn bạc của mẫu
+   * Thiệp cũ lưu bằng tên mẫu đã gộp (vom-navy…) chưa có màu → lấy màu của tên cũ.
+   */
+  const tone = meta.color?.tone;
+  const chosen = accent || TEMPLATE_ALIASES[template]?.color || "";
+  const bg = tone === "main" && chosen ? lightPalette(chosen, meta.bg).main
+    : tone === "night" && chosen ? nightPalette(chosen, meta.bg).sky
+    : meta.bg;
+  const a = tone === "night" ? nightPalette(chosen || meta.bg, meta.bg).silver
+    : tone === "main" ? lightPalette(chosen, meta.accent).text
+    : accent || meta.accent;
 
   /*
    * Khóa cuộn trang trong lúc lớp mở còn hiển thị.
@@ -100,7 +113,7 @@ export default function CardIntro({
 
   const ease = "cubic-bezier(.22,.61,.36,1)";
   const dark = shade(a, -0.22);
-  const paper = meta.dark ? shade(meta.bg, 0.06) : "#fffdfa";
+  const paper = meta.dark ? shade(bg, 0.06) : "#fffdfa";
   const ink = meta.dark ? meta.ink : "#2c2621";
   const serif = meta.serif ? "var(--font-cormorant), serif" : "var(--font-be-vietnam), system-ui, sans-serif";
 
@@ -143,8 +156,8 @@ export default function CardIntro({
         display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 24,
         cursor: opening ? "default" : "pointer",
         background: meta.dark
-          ? `radial-gradient(120% 120% at 50% 30%, ${shade(meta.bg, 0.14)} 0%, ${meta.bg} 100%)`
-          : `radial-gradient(120% 120% at 50% 30%, ${shade(meta.bg, 0.5)} 0%, ${meta.bg} 100%)`,
+          ? `radial-gradient(120% 120% at 50% 30%, ${shade(bg, 0.14)} 0%, ${bg} 100%)`
+          : `radial-gradient(120% 120% at 50% 30%, ${shade(bg, tone === "main" ? 0.22 : 0.5)} 0%, ${bg} 100%)`,
         opacity: done ? 0 : 1, transition: `opacity .8s ${ease}`, pointerEvents: done ? "none" : "auto",
         padding: 20,
       }}
@@ -178,6 +191,15 @@ export default function CardIntro({
       {skin.style === "arch" && (
         <ArchDoors opening={opening} accent={a} dark={dark} paper={paper} seal={skin.seal} ease={ease}>{caption}</ArchDoors>
       )}
+      {skin.style === "pageflip" && (
+        <PageFlip opening={opening} accent={a} dark={dark} paper={paper} seal={skin.seal} ease={ease} photos={photos}>{caption}</PageFlip>
+      )}
+      {skin.style === "veil" && (
+        <Veil opening={opening} accent={a} dark={dark} paper={paper} seal={skin.seal} ease={ease}>{caption}</Veil>
+      )}
+      {skin.style === "wreath" && (
+        <Wreath opening={opening} accent={a} dark={dark} paper={paper} seal={skin.seal} ease={ease}>{caption}</Wreath>
+      )}
 
       {button}
 
@@ -186,6 +208,12 @@ export default function CardIntro({
         @keyframes wedIntroFall{0%{top:-12%;opacity:0}12%,84%{opacity:.85}100%{top:108%;opacity:0;transform:translateX(var(--sx,18px)) rotate(var(--sr,220deg))}}
         @keyframes wedIntroRise{0%{top:106%;opacity:0}14%,82%{opacity:.85}100%{top:-12%;opacity:0;transform:translateX(var(--sx,-18px))}}
         @keyframes wedIntroPulse{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:1;transform:scale(1.06)}}
+        @keyframes wedIntroPeek{0%,70%,100%{transform:rotateY(0deg)}82%{transform:rotateY(-16deg)}}
+        @keyframes wedIntroSway{0%,100%{transform:skewX(-1.2deg) translateX(-4px)}50%{transform:skewX(1.2deg) translateX(4px)}}
+        @keyframes wedIntroFly{0%{opacity:0;transform:translate(0,0) scale(.4)}12%{opacity:1}85%{opacity:1}100%{opacity:0;transform:translate(var(--bx),var(--by)) scale(1.1)}}
+        @keyframes wedIntroFlap{from{transform:scaleX(1)}to{transform:scaleX(.2)}}
+        @keyframes wedIntroDraw{from{stroke-dashoffset:${(2 * Math.PI * 118).toFixed(0)}}to{stroke-dashoffset:0}}
+        @keyframes wedIntroLeaf{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
         @keyframes wedIntroMeteor{0%{opacity:0;transform:rotate(-38deg) translateX(0)}8%{opacity:1}30%,100%{opacity:0;transform:rotate(-38deg) translateX(-460px)}}
         @media (prefers-reduced-motion: reduce){
           .wed-intro, .wed-intro *{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
@@ -477,6 +505,159 @@ function ArchDoors({ opening, accent, dark, paper, seal, ease, children }: Style
           opacity: opening ? 0 : 1, transition: `opacity .4s ${ease}`,
         }}>{children}</div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Lật bìa tạp chí: trang bìa (ảnh + tên báo WEDDING) quay quanh gáy bên trái
+ * như mở một cuốn tạp chí, lộ trang trong in lời mời. Lúc chờ, mép bìa hé lên
+ * nhịp nhịp để gợi ý "lật ra".
+ */
+function PageFlip({ opening, accent, dark, paper, photos = [], children }: StyleProps) {
+  const photo = photos[0];
+  return (
+    <div style={{ perspective: 1700, width: "min(78vw, 300px)" }}>
+      <div style={{ position: "relative", width: "100%", aspectRatio: "3 / 4.25", transformStyle: "preserve-3d" }}>
+        {/* trang trong — lùi ra sau 2px để không "giành chỗ" với bìa ở sát gáy */}
+        <div style={{
+          position: "absolute", inset: 0, background: paper, boxShadow: "0 30px 60px -24px rgba(0,0,0,.5)", transform: "translateZ(-2px)",
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 12, padding: "0 14px",
+        }}>
+          <div style={{ fontFamily: "var(--font-be-vietnam), sans-serif", fontSize: 9.5, letterSpacing: ".34em", textTransform: "uppercase", color: accent }}>Trang 01 · Lời mời</div>
+          <div style={{ width: 40, height: 1, background: accent, opacity: 0.5 }} />
+          {children}
+        </div>
+        {/* trang bìa: mặt trước + mặt sau */}
+        {/* Lớp ngoài lật hẳn bìa (transition); lớp trong chỉ hé bìa lúc chờ (animation).
+            Tách hai lớp vì gỡ animation và đổi transform CÙNG một phần tử thì Chrome
+            bỏ qua transition — bìa biến mất tức thì thay vì lật. */}
+        <div style={{
+          position: "absolute", inset: 0, transformOrigin: "left center", transformStyle: "preserve-3d",
+          transform: opening ? "rotateY(-176deg)" : "rotateY(0deg)",
+          transition: "transform 1.9s cubic-bezier(.45,.05,.3,1) .1s",
+        }}>
+        <div style={{
+          position: "absolute", inset: 0, transformOrigin: "left center", transformStyle: "preserve-3d",
+          animation: opening ? undefined : "wedIntroPeek 2.6s ease-in-out 1s infinite",
+        }}>
+          <div style={{ position: "absolute", inset: 0, backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", overflow: "hidden", background: dark, boxShadow: "0 30px 60px -24px rgba(0,0,0,.55)" }}>
+            {photo && <img src={photo} alt="" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />}
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(0,0,0,.35), transparent 30%, transparent 60%, rgba(0,0,0,.6))" }} />
+            <div style={{ position: "absolute", left: 12, right: 12, top: 10, color: "#fff" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontFamily: "var(--font-be-vietnam), sans-serif", fontSize: 7.5, letterSpacing: ".26em" }}><span>VOL. 01</span><span>ẤN BẢN ĐẶC BIỆT</span></div>
+              <div style={{ fontFamily: "var(--font-playfair), serif", fontStyle: "italic", fontSize: 12, marginTop: 6 }}>The</div>
+              <div style={{ fontFamily: "var(--font-playfair), serif", fontWeight: 700, fontSize: 52, lineHeight: 0.86, letterSpacing: "-.02em" }}>WEDDING</div>
+            </div>
+            <div style={{ position: "absolute", left: 12, bottom: 14, color: "#fff", fontFamily: "var(--font-hand), cursive", fontSize: 34 }}>Forever</div>
+            <div aria-hidden style={{ position: "absolute", right: 12, bottom: 14, width: 54, height: 24, background: "repeating-linear-gradient(90deg, #111 0 2px, #fff 2px 3px, #111 3px 4px, #fff 4px 6px)", border: "3px solid #fff" }} />
+            {/* bóng gáy */}
+            <div style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 14, background: "linear-gradient(90deg, rgba(0,0,0,.35), transparent)" }} />
+          </div>
+          <div style={{ position: "absolute", inset: 0, transform: "rotateY(180deg)", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", background: shade(paper || "#fffdfa", -0.05), boxShadow: "inset -18px 0 30px -18px rgba(0,0,0,.35)" }} />
+        </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Vén màn voan: một tấm voan mỏng phủ kín màn hình, khẽ đung đưa; chạm vào thì
+ * voan cuộn lên trên và một đàn bướm bay toả ra từ giữa thiệp.
+ */
+function Veil({ opening, accent, paper, ease, children }: StyleProps) {
+  const flyers = Array.from({ length: 14 }, (_, i) => i);
+  return (
+    <>
+      <div style={{
+        position: "relative", zIndex: 2, width: "min(80vw, 300px)", aspectRatio: "3 / 4.1", borderRadius: "999px 999px 26px 26px",
+        background: paper, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 14px",
+        boxShadow: "14px 16px 34px -14px rgba(120,80,70,.38), -12px -12px 30px -10px rgba(255,255,255,.95), inset 0 0 0 10px rgba(255,255,255,.55)",
+      }}>
+        {children}
+      </div>
+      {/* tấm voan: lớp ngoài cuộn lên khi mở (transition), lớp trong đung đưa lúc chờ (animation) */}
+      <div aria-hidden style={{
+        position: "absolute", inset: "-6% -4% -4%", zIndex: 3, pointerEvents: "none", transformOrigin: "top center",
+        transform: opening ? "translateY(-112%) scaleY(.7)" : "none",
+        transition: `transform 1.7s ${ease}`,
+      }}>
+        <div style={{
+          position: "absolute", inset: 0,
+          background: `repeating-linear-gradient(90deg, rgba(255,255,255,.34) 0 14px, rgba(255,255,255,.12) 14px 30px, rgba(255,255,255,.26) 30px 44px),
+            radial-gradient(rgba(255,255,255,.55) .8px, transparent 1.2px) 0 0 / 9px 9px,
+            linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,.28))`,
+          WebkitMaskImage: "radial-gradient(28px 22px at 50% 100%, transparent 98%, #000) 0 0 / 56px 100% repeat-x",
+          maskImage: "radial-gradient(28px 22px at 50% 100%, transparent 98%, #000) 0 0 / 56px 100% repeat-x",
+          animation: opening ? undefined : "wedIntroSway 5s ease-in-out infinite",
+        }} />
+      </div>
+      {/* đàn bướm bay ra khi mở */}
+      {opening && flyers.map((i) => {
+        const ang = (i / flyers.length) * Math.PI * 2 + rnd(i, 4);
+        const dist = 200 + rnd(i, 9) * 170;
+        return (
+          <span key={i} aria-hidden style={{
+            position: "absolute", left: "50%", top: "48%", zIndex: 5, width: 40, height: 40, marginLeft: -20, marginTop: -20,
+            "--bx": `${Math.cos(ang) * dist}px`, "--by": `${Math.sin(ang) * dist - 120}px`,
+            animation: `wedIntroFly 2.2s ${ease} ${(i * 0.06).toFixed(2)}s both`,
+          } as CSSProperties}>
+            <svg viewBox="0 0 24 24" width={40} height={40} style={{ display: "block", filter: "drop-shadow(0 4px 6px rgba(0,0,0,.15))" }}>
+              <g style={{ transformOrigin: "12px 12px", animation: "wedIntroFlap .22s ease-in-out infinite alternate" }}>
+                <path d="M12 12C9 5 3 3 2.2 6.5 1.6 9.6 6 12 12 12z" fill={i % 2 ? accent : "#fff"} />
+                <path d="M12 12C15 5 21 3 21.8 6.5 22.4 9.6 18 12 12 12z" fill={i % 2 ? accent : "#fff"} />
+                <path d="M12 12C8.5 13 5 15.5 6.5 18.5 8 20.5 11 17 12 12z" fill={i % 2 ? "#fff" : accent} opacity=".85" />
+                <path d="M12 12C15.5 13 19 15.5 17.5 18.5 16 20.5 13 17 12 12z" fill={i % 2 ? "#fff" : accent} opacity=".85" />
+              </g>
+            </svg>
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+/**
+ * Vòng nguyệt quế: cành lá tự vẽ thành vòng tròn quanh tên khách; chạm vào thì
+ * lá bung bay ra bốn phía và vòng lá phóng to tan vào thiệp.
+ */
+function Wreath({ opening, accent, dark, paper, ease, children }: StyleProps) {
+  const leaves = Array.from({ length: 30 }, (_, i) => i);
+  const R = 118;
+  return (
+    <div style={{ position: "relative", width: "min(84vw, 320px)", aspectRatio: "1", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{
+        position: "absolute", inset: "9%", borderRadius: "50%", background: paper,
+        boxShadow: "0 30px 60px -26px rgba(0,0,0,.45)",
+      }} />
+      <svg viewBox="-150 -150 300 300" aria-hidden style={{
+        position: "absolute", inset: 0, width: "100%", height: "100%", overflow: "visible",
+        transform: opening ? "scale(1.5) rotate(18deg)" : "none", opacity: opening ? 0 : 1,
+        transition: `transform 1.6s ${ease} .2s, opacity 1.2s ${ease} .5s`,
+      }}>
+        {/* hai cành ôm vòng, tự vẽ ra */}
+        <circle r={R} fill="none" stroke={dark} strokeWidth="1.6" strokeDasharray={2 * Math.PI * R} style={{ animation: "wedIntroDraw 1.8s ease-out both" }} />
+        {leaves.map((i) => {
+          const t = (i / leaves.length) * Math.PI * 2;
+          const side = i % 2 ? 1 : -1;
+          const x = Math.cos(t) * R, y = Math.sin(t) * R;
+          const rot = (t * 180) / Math.PI + 90 + side * 38;
+          const fly = 1.6 + rnd(i, 3) * 1.4;
+          return (
+            <g key={i} transform={`translate(${x.toFixed(1)} ${y.toFixed(1)})`}>
+              <g style={{
+                transform: opening ? `translate(${(x * fly - x).toFixed(0)}px, ${(y * fly - y).toFixed(0)}px) rotate(${(rnd(i, 5) * 260).toFixed(0)}deg)` : "none",
+                transition: `transform 1.4s ${ease} ${(rnd(i, 7) * 0.25).toFixed(2)}s`,
+              }}>
+                <ellipse rx="5.6" ry="13" transform={`rotate(${rot.toFixed(0)}) translate(0 -9)`} fill={i % 3 ? accent : dark}
+                  style={{ animation: `wedIntroLeaf .5s ${ease} ${(0.5 + i * 0.04).toFixed(2)}s both`, transformBox: "fill-box", transformOrigin: "center" }} />
+              </g>
+            </g>
+          );
+        })}
+      </svg>
+      <div style={{ position: "relative", padding: "0 30px" }}>{children}</div>
     </div>
   );
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-type Anim = "up" | "zoom" | "left" | "right" | "fade" | "blur" | "rotate" | "clip";
+type Anim = "up" | "zoom" | "left" | "right" | "fade" | "blur" | "rotate" | "clip" | "wipe" | "iris" | "focus";
 
 /**
  * Scroll-reveal wrapper: children start hidden and animate in when they enter
@@ -53,6 +53,16 @@ export default function Reveal({
     blur: "translateY(18px)",
     rotate: "rotate(-3.5deg) translateY(26px) scale(.97)",
     clip: "none",
+    // Ba kiểu cho ẢNH: kéo màn ngang, mở tròn từ giữa, và lấy nét (ảnh phóng to
+    // mờ nhoè rồi thu về nét căng như ống kính vừa bắt nét).
+    wipe: "none",
+    iris: "none",
+    focus: "scale(1.06)",
+  };
+  const mask: Partial<Record<Anim, [string, string]>> = {
+    clip: ["inset(0 0 100% 0)", "inset(0 0 0 0)"],
+    wipe: ["inset(0 100% 0 0)", "inset(0 0 0 0)"],
+    iris: ["circle(0% at 50% 50%)", "circle(75% at 50% 50%)"],
   };
 
   return (
@@ -61,13 +71,13 @@ export default function Reveal({
       className={`wed-reveal ${className}`.trim()}
       style={{
         ...style,
-        opacity: shown ? 1 : 0,
         transform: shown ? "none" : hidden[anim],
-        filter: anim === "blur" && !shown ? "blur(9px)" : undefined,
-        clipPath: anim === "clip" ? (shown ? "inset(0 0 0 0)" : "inset(0 0 100% 0)") : undefined,
+        opacity: shown || anim === "wipe" || anim === "iris" ? 1 : 0,
+        filter: (anim === "blur" || anim === "focus") && !shown ? `blur(${anim === "focus" ? 12 : 9}px)` : undefined,
+        clipPath: mask[anim] ? mask[anim]![shown ? 1 : 0] : undefined,
         transition:
-          `opacity .7s ease ${delay}ms, transform .8s cubic-bezier(.16,.8,.3,1) ${delay}ms,`
-          + ` filter .8s ease ${delay}ms, clip-path .9s cubic-bezier(.16,.8,.3,1) ${delay}ms`,
+          `opacity .7s ease ${delay}ms, transform ${anim === "focus" ? 1.3 : 0.8}s cubic-bezier(.16,.8,.3,1) ${delay}ms,`
+          + ` filter ${anim === "focus" ? 1.1 : 0.8}s ease ${delay}ms, clip-path ${anim === "iris" ? 1.2 : 0.9}s cubic-bezier(.16,.8,.3,1) ${delay}ms`,
         willChange: "opacity, transform",
       }}
     >
