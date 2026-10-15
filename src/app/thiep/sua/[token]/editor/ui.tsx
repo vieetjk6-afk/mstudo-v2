@@ -5,7 +5,7 @@ import { Check, ExternalLink, Loader2, Lock, Music, Image as ImageIcon, Plus, Tr
 import { BANKS } from "@/lib/banks";
 import { isMusicPageLink, parseYoutubeMusic } from "@/lib/youtube-music";
 import { isShortMapLink, looksLikeUrl, parseMapInput, pickMapLink } from "@/lib/site-map";
-import type { WeddingBank, WeddingEventBlock } from "@/lib/types";
+import type { WeddingBank, WeddingEventBlock, WeddingTimelineItem } from "@/lib/types";
 
 // Các ô nhập dùng chung cho trình chỉnh sửa thiệp cưới. Tách khỏi WeddingEditor
 // để phần khung (2 cột: form ↔ xem trước) đọc được trong một màn hình.
@@ -189,6 +189,40 @@ export function EventsEditor({ events, onChange, resolveMap }: { events: Wedding
       <button type="button" onClick={addEvent} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-stone-300 px-3 py-2 text-sm text-stone-500 hover:border-rose-300 hover:text-rose-500">
         <Plus size={14} /> Thêm sự kiện
       </button>
+    </div>
+  );
+}
+
+/** Mốc gợi ý cho người chưa biết điền gì — chỉ đổ vào khi danh sách đang trống. */
+const TIMELINE_PRESET: WeddingTimelineItem[] = [
+  { time: "17:30", label: "Đón khách" },
+  { time: "18:00", label: "Cử hành hôn lễ" },
+  { time: "18:30", label: "Khai tiệc" },
+  { time: "20:00", label: "Giao lưu & chụp ảnh" },
+];
+
+/** Lịch trình buổi tiệc: mỗi dòng một mốc (giờ · việc). */
+export function TimelineEditor({ items, onChange }: { items: WeddingTimelineItem[]; onChange: (t: WeddingTimelineItem[]) => void }) {
+  const up = (i: number, p: Partial<WeddingTimelineItem>) => onChange(items.map((t, j) => (j === i ? { ...t, ...p } : t)));
+  return (
+    <div className="space-y-2">
+      {items.map((t, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input className={`${inp} w-24 flex-none`} value={t.time ?? ""} onChange={(e) => up(i, { time: e.target.value })} placeholder="17:30" aria-label="Giờ" />
+          <input className={inp} value={t.label ?? ""} onChange={(e) => up(i, { label: e.target.value })} placeholder="Đón khách" aria-label="Việc" />
+          <button type="button" aria-label="Xoá mốc" onClick={() => onChange(items.filter((_, j) => j !== i))} className="flex-none text-stone-400 hover:text-red-500"><Trash2 size={16} /></button>
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={() => onChange([...items, { time: "", label: "" }])} className="inline-flex items-center gap-1 rounded-lg border border-dashed border-stone-300 px-3 py-2 text-sm text-stone-500 hover:border-rose-300 hover:text-rose-500">
+          <Plus size={14} /> Thêm mốc
+        </button>
+        {items.length === 0 && (
+          <button type="button" onClick={() => onChange(TIMELINE_PRESET)} className="rounded-lg border border-stone-300 px-3 py-2 text-sm text-stone-600 hover:bg-stone-100">
+            Điền mẫu gợi ý
+          </button>
+        )}
+      </div>
     </div>
   );
 }

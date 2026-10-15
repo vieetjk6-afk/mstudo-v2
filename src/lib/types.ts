@@ -1264,7 +1264,17 @@ export type WeddingConfig = {
   parking_note?: string;     // "Hầm B2, miễn phí"
   hotline?: string;          // "0909 121 220 (chị Hạnh)"
   closing_line?: string;     // câu kết cuối thiệp ("Hân hạnh được đón tiếp")
+
+  // ── Thông tin thêm (bộ mẫu đỏ đô · đêm sao · khung vòm) — mẫu nào không có chỗ thì bỏ qua ──
+  timeline?: WeddingTimelineItem[]; // lịch trình buổi tiệc: 17:30 Đón khách · 18:00 Khai tiệc…
+  groom_home?: string;       // địa chỉ nhà trai (dưới tên bố mẹ)
+  bride_home?: string;       // địa chỉ nhà gái
+  groom_bio?: string;        // vài dòng giới thiệu chú rể
+  bride_bio?: string;        // vài dòng giới thiệu cô dâu
 };
+
+/** Một mốc trong lịch trình buổi tiệc (khác "sự kiện": các lễ ở nhiều nơi, nhiều ngày). */
+export type WeddingTimelineItem = { time?: string; label?: string };
 
 /** Mẫu "trang dài" — bộ gốc, hợp với cả máy tính lẫn điện thoại. */
 export const WEDDING_TEMPLATES_CLASSIC = ["classic", "elegant", "floral", "modern", "cinematic", "story", "editorial", "royal", "sweet"] as const;

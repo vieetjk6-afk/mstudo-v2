@@ -137,6 +137,15 @@ const PHONE_TEMPLATES: WeddingTemplateMeta[] = [
   { name: "glass", label: "3D glass", tagline: "Quả cầu nổi · kính mờ hiện đại", group: "phone", bg: "#22224a", ink: "#ffffff", accent: "#ff9ad5", serif: false, dark: true },
   { name: "neon", label: "Neon ticket", tagline: "Cyberpunk · vé concert phát sáng", group: "phone", bg: "#07080f", ink: "#d6f7f2", accent: "#00ffd5", serif: false, dark: true },
   { name: "scrapbook", label: "Scrapbook", tagline: "Polaroid dán tay · giấy note vàng", group: "phone", bg: "#e9e3d6", ink: "#3a3227", accent: "#a8734f", serif: false, dark: false },
+  { name: "dodo", label: "Đỏ đô", tagline: "Tối giản đỏ rượu vang · phong bì dấu sáp", group: "phone", bg: "#f6eee4", ink: "#3b1d20", accent: "#5c1822", serif: true, dark: false },
+  { name: "demsao", label: "Đêm sao", tagline: "Trời sao xanh đêm · sao băng mở thiệp", group: "phone", bg: "#0c1230", ink: "#eef0ff", accent: "#c9d2ff", serif: true, dark: true },
+  // Khung vòm: MỘT bố cục, năm bảng màu (VomTemplate.tsx → VOM_PALETTES). bg = màu chủ đạo
+  // của bìa nên chữ ảnh minh hoạ màu trắng; dark=false vì thân thiệp là thẻ sáng.
+  { name: "vom-matong", label: "Khung vòm · mật ong", tagline: "Cửa vòm mở · vàng mật ong", group: "phone", bg: "#d6a05b", ink: "#ffffff", accent: "#a26a2c", serif: true, dark: false },
+  { name: "vom-xothom", label: "Khung vòm · xô thơm", tagline: "Cửa vòm mở · xanh lá xô thơm", group: "phone", bg: "#6d8b74", ink: "#ffffff", accent: "#4a6852", serif: true, dark: false },
+  { name: "vom-navy", label: "Khung vòm · navy", tagline: "Cửa vòm mở · xanh navy & xanh phấn", group: "phone", bg: "#2d3d6c", ink: "#ffffff", accent: "#2d3d6c", serif: true, dark: false },
+  { name: "vom-ghi", label: "Khung vòm · ghi", tagline: "Cửa vòm mở · ghi xanh trầm", group: "phone", bg: "#7c948c", ink: "#ffffff", accent: "#58706a", serif: true, dark: false },
+  { name: "vom-nau", label: "Khung vòm · nâu", tagline: "Cửa vòm mở · nâu caramel", group: "phone", bg: "#a86f3f", ink: "#ffffff", accent: "#7c4d26", serif: true, dark: false },
 ];
 
 /** Mẫu "trang dài" — bộ gốc, đẹp cả trên máy tính. */

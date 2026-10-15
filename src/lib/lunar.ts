@@ -137,3 +137,24 @@ export function lunarFull(dateStr: string): string {
   const l = solarToLunar(dateStr);
   return `${l.day}/${l.month}${l.leap ? " nhuận" : ""} ÂL`;
 }
+
+const CAN = ["Giáp", "Ất", "Bính", "Đinh", "Mậu", "Kỷ", "Canh", "Tân", "Nhâm", "Quý"];
+const CHI = ["Tý", "Sửu", "Dần", "Mão", "Thìn", "Tỵ", "Ngọ", "Mùi", "Thân", "Dậu", "Tuất", "Hợi"];
+
+/** Năm âm lịch theo can chi: 2026 → "Bính Ngọ". */
+export function canChiYear(lunarYear: number): string {
+  return `${CAN[(lunarYear + 6) % 10]} ${CHI[(lunarYear + 8) % 12]}`;
+}
+
+/**
+ * Dòng in dưới ngày cưới trên thiệp: "Tức ngày 18 tháng 01 năm Bính Ngọ".
+ * Nhận ISO ("2026-03-06", có thể kèm giờ) và chỉ đọc phần ngày — không qua
+ * Date, khỏi lệch một ngày theo múi giờ máy chủ. Ngày không hợp lệ → "".
+ */
+export function lunarText(iso?: string, prefix = "Tức ngày"): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((iso ?? "").trim());
+  if (!m || +m[2] < 1 || +m[2] > 12 || +m[3] < 1 || +m[3] > 31) return "";
+  const l = solarToLunar(`${m[1]}-${m[2]}-${m[3]}`);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return `${prefix} ${two(l.day)} tháng ${two(l.month)}${l.leap ? " nhuận" : ""} năm ${canChiYear(l.year)}`;
+}
