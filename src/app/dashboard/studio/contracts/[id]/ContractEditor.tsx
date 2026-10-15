@@ -387,7 +387,7 @@ export default function ContractEditor({
   canRental?: boolean;
   bank: BankInfo;
   sameDayContracts: { id: string; title: string; client_name: string | null }[];
-  pricelist: { name: string; price: number; unit: string | null }[];
+  pricelist: { name: string; price: number; unit: string | null; description?: string | null }[];
   initialClientProofs: { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[];
   services?: { id: string; name: string; clauses: string }[];
   /** Tab mở sẵn (?tab=…) — màn tạo hợp đồng nhảy thẳng vào "send" sau khi tạo. */
@@ -961,9 +961,11 @@ export default function ContractEditor({
       toast(isSignedLockError(del.error) ? "Khách đã ký hợp đồng — bảng giá đã khoá, dùng phụ lục." : `Lưu hạng mục KHÔNG thành công: ${del.error.message}`);
       return;
     }
+    let descLost = false;
     if (clean.length) {
       const rows = clean.map((i, idx) => ({ ...i, contract_id: contract.id, position: idx }));
-      const error = await insertItems(rows);
+      const { error, dropped } = await insertItems(rows);
+      descLost = dropped.includes("description") && clean.some((i) => i.description);
       if (error) {
         // Báo thật, và giữ nguyên state đang có để studio bấm Lưu lại được —
         // trước đây lỗi insert bị nuốt, màn hình vẫn hiện "Đã lưu hạng mục."
@@ -981,24 +983,33 @@ export default function ContractEditor({
     // bấm Lưu ô đó trắng ngay trên màn hình, dù trong database vẫn còn.
     setItems(((data ?? []) as ContractItem[]).filter((i) => !i.addendum_id).map(toItemRow));
     setBusy(null);
-    toast("Đã lưu hạng mục.");
+    // Mô tả bị bỏ vì database thiếu cột thì NÓI RA: im lặng thì studio cứ tưởng
+    // khách đã thấy mô tả trên cổng hợp đồng và bản in.
+    toast(
+      descLost
+        ? "Đã lưu hạng mục nhưng CHƯA lưu được mô tả — database chưa có cột mô tả, chạy supabase/migrations/contract_item_description.sql."
+        : "Đã lưu hạng mục."
+    );
   }
 
   /**
    * Chèn hạng mục, chịu được database chưa chạy migration. Thiếu cột nào
    * (description, tier, event_id) thì bỏ cột đó rồi ghi lại — nếu không, hàm
    * lưu vừa XOÁ hết hạng mục xong lại chèn hỏng, studio mất sạch bảng giá.
+   * Trả kèm danh sách cột đã bỏ để nơi gọi báo cho studio biết.
    */
   async function insertItems(rows: Record<string, unknown>[]) {
     let cur = rows;
+    const dropped: string[] = [];
     let { error } = await supabase.from("contract_items").insert(cur);
     for (const col of ["description", "tier", "event_id"]) {
       if (error && isMissingColumn(error, col)) {
         cur = withoutColumn(cur, col);
+        dropped.push(col);
         ({ error } = await supabase.from("contract_items").insert(cur));
       }
     }
-    return error;
+    return { error, dropped };
   }
 
   /** Vỏ bọc KHÔNG tham số cho nút "Lưu hạng mục" — xem ghi chú ở luuHangMuc. */
@@ -2297,7 +2308,8 @@ export default function ContractEditor({
                       setItems((p) => [...p, { name: "", qty: 1, unit_price: 0, tier: nextTier(p) }]);
                     } else if (v.startsWith("pl:")) {
                       const pl = pricelist[Number(v.slice(3))];
-                      if (pl) setItems((p) => [...p, { name: pl.name, qty: 1, unit_price: pl.price, tier: nextTier(p) }]);
+                      // Mô tả gói trong bảng giá đi theo, hiện sẵn trong ô mô tả để studio sửa.
+                      if (pl) setItems((p) => [...p, { name: pl.name, description: pl.description?.trim() || undefined, qty: 1, unit_price: pl.price, tier: nextTier(p) }]);
                     } else if (v.startsWith("pre:")) {
                       const name = v.slice(4);
                       setItems((p) => [...p, { name, qty: 1, unit_price: 0, tier: nextTier(p) }]);

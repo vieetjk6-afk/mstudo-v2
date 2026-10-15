@@ -150,7 +150,7 @@ export default async function ContractPage(
     supabase.from("contract_products").select("*").eq("contract_id", params.id).order("position"),
     supabase.from("contract_quote_options").select("*").eq("contract_id", params.id).order("position"),
     supabase.from("studio_services").select("id, name, clauses").eq("owner_id", profile.id).eq("active", true).order("position", { ascending: true }),
-    supabase.from("studio_pricelist").select("name, price, unit").eq("owner_id", profile.id).eq("active", true).gt("price", 0).order("position"),
+    supabase.from("studio_pricelist").select("name, price, unit, description").eq("owner_id", profile.id).eq("active", true).gt("price", 0).order("position"),
     supabase.from("contract_client_proofs").select("id, url, note, uploaded_at, plan_id").eq("contract_id", params.id).order("uploaded_at", { ascending: false }),
     ed ? supabase.from("contract_crew").select("phone, contract:studio_contracts!inner(id, owner_id, event_date, title)").eq("contract.owner_id", profile.id).eq("contract.event_date", ed).not("phone", "is", null) : empty,
     // Chỉ mốc thuộc studio này — xem ghi chú cách ly ở team/page.tsx.
@@ -269,7 +269,7 @@ export default async function ContractPage(
       }}
       sameDayContracts={sameDayContracts}
       services={(services ?? []) as { id: string; name: string; clauses: string }[]}
-      pricelist={(pricelistRows ?? []) as { name: string; price: number; unit: string | null }[]}
+      pricelist={(pricelistRows ?? []) as { name: string; price: number; unit: string | null; description: string | null }[]}
       initialItems={(items ?? []) as ContractItem[]}
       initialAddenda={(addenda ?? []) as ContractAddendum[]}
       canEditAddenda={profile.actingRole !== "staff" && profile.actingRole !== "accountant"}

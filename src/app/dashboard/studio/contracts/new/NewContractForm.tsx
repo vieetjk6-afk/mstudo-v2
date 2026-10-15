@@ -61,7 +61,7 @@ import { makeListLabel } from "@/lib/pricelist-label";
 import { draftTotal, missingFields, type QuickDraft } from "@/lib/contract-quick";
 import QuickContractBox from "./QuickContractBox";
 import { crewClashes, type DayContract, type DayCrewRow } from "@/lib/contract-conflicts";
-import { isMissingColumn } from "@/lib/missing-column";
+import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 
 export type TemplateOption = {
   id: string;
@@ -681,9 +681,19 @@ export default function NewContractForm({
     // hỏng tệ nhất: studio tưởng đã có hợp đồng đầy đủ và gửi cho khách.
     const saved = await Promise.all([
       lines.length
-        ? supabase.from("contract_items").insert(
-            lines.map((l, position) => ({ contract_id: data.id, name: l.name, qty: l.qty, unit_price: l.unit_price, position }))
-          )
+        ? (async () => {
+            // Mô tả gói trong bảng giá đi theo sang hạng mục — khách đọc nó ở
+            // cổng hợp đồng và trên bản in. Trước đây bị bỏ rơi ở đây.
+            const rows = lines.map((l, position) => ({
+              contract_id: data.id, name: l.name, description: l.description ?? null, qty: l.qty, unit_price: l.unit_price, position,
+            }));
+            const res = await supabase.from("contract_items").insert(rows);
+            // Chưa chạy migration contract_item_description.sql → ghi bản không
+            // có mô tả, đừng để mất cả bảng hạng mục.
+            return res.error && isMissingColumn(res.error, "description")
+              ? supabase.from("contract_items").insert(withoutColumn(rows, "description"))
+              : res;
+          })()
         : null,
       picked.length
         ? supabase.from("contract_crew").insert(
