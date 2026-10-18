@@ -1,10 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import ChatboxConfig from "./ChatboxConfig";
+import AiProvidersEditor from "@/components/AiProvidersEditor";
 
 /**
  * Cấu hình chatbox tư vấn website: lời chào + kiến thức/FAQ/luật riêng. Lưu ở
  * website_chat_config; API chat ghép vào system prompt để bot trả lời theo ý.
+ * Bên dưới: key AI riêng của studio — chỉ chủ studio thấy (đó là tài khoản trả
+ * tiền của studio, nhân viên không được thay).
  */
 export default async function ChatboxConfigPage() {
   const profile = await requireStudio("booking");
@@ -29,11 +32,20 @@ export default async function ChatboxConfigPage() {
     .eq("owner_id", profile.id)
     .maybeSingle();
 
+  const canEditKeys = !profile.isStaff && (profile.actingRole === "owner" || profile.actingRole === "admin");
+
   return (
-    <ChatboxConfig
-      ownerId={profile.id}
-      greeting={(data?.greeting as string | undefined) ?? ""}
-      instructions={(data?.instructions as string | undefined) ?? ""}
-    />
+    <>
+      <ChatboxConfig
+        ownerId={profile.id}
+        greeting={(data?.greeting as string | undefined) ?? ""}
+        instructions={(data?.instructions as string | undefined) ?? ""}
+      />
+      {canEditKeys && (
+        <div className="mx-auto mt-6 max-w-3xl">
+          <AiProvidersEditor scope="studio" />
+        </div>
+      )}
+    </>
   );
 }

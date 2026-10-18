@@ -1,5 +1,7 @@
 import "server-only";
 import type { ChatTurn } from "./assistant";
+import type { ChatProvider } from "./provider-types";
+import { parseProviderList } from "./provider-input";
 import { noStoreFetch } from "@/lib/no-store-fetch";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -8,7 +10,9 @@ import { noStoreFetch } from "@/lib/no-store-fetch";
  * Nhiều nhà cung cấp AI cho chatbox — cấu hình danh sách, bot thử lần lượt, cái
  * nào lỗi/hết hạn mức thì tự chuyển sang cái kế tiếp (dự phòng, gộp quota).
  *
- * Cấu hình qua biến môi trường CHAT_PROVIDERS (JSON mảng), vd:
+ * Danh sách nguồn nhập ở trang quản trị (key chung) và trang Chatbox của studio
+ * (key riêng) — xem provider-store.ts. File này lo phần GỌI API, cùng nguồn dự
+ * phòng cuối là biến môi trường CHAT_PROVIDERS (JSON mảng), vd:
  * [
  *   {"type":"gemini","key":"AIza...","model":"gemini-flash-latest"},
  *   {"type":"openai","key":"sk-or-...","model":"deepseek/deepseek-chat","baseUrl":"https://openrouter.ai/api/v1"},
@@ -20,57 +24,22 @@ import { noStoreFetch } from "@/lib/no-store-fetch";
  * - type "openai": mọi API chuẩn OpenAI Chat Completions (OpenAI, OpenRouter,
  *   DeepSeek, Groq, Together…). baseUrl mặc định https://api.openai.com/v1.
  * - type "anthropic": Claude API trực tiếp (api.anthropic.com Messages API).
+ *   Field "effort" tuỳ chọn (low|medium|high) → output_config.effort — chỉ Claude
+ *   đời 4.6 trở lên nhận, đời cũ hơn trả 400.
  * - type "responses": OpenAI **Responses API** (/v1/responses, wire_api="responses")
  *   — dùng cho Codex & các reseller (vd base_url https://codex.../v1). Hỗ trợ
  *   reasoning effort + store:false. Field "effort" tuỳ chọn (low|medium|high|xhigh).
  */
 
-export type ChatProvider = {
-  type: "gemini" | "openai" | "anthropic" | "responses";
-  key: string;
-  model: string;
-  baseUrl?: string;
-  effort?: string;
-  label: string;
-};
+export type { ChatProvider } from "./provider-types";
 
-function normalize(p: any): ChatProvider | null {
-  const type =
-    p?.type === "openai"
-      ? "openai"
-      : p?.type === "gemini"
-      ? "gemini"
-      : p?.type === "anthropic"
-      ? "anthropic"
-      : p?.type === "responses"
-      ? "responses"
-      : null;
-  const key = typeof p?.key === "string" ? p.key.trim() : "";
-  if (!type || !key) return null;
-  const model =
-    typeof p?.model === "string" && p.model.trim()
-      ? p.model.trim()
-      : type === "gemini"
-      ? "gemini-flash-latest"
-      : type === "anthropic"
-      ? "claude-haiku-4-5"
-      : "gpt-4o-mini";
-  const baseUrl = typeof p?.baseUrl === "string" && p.baseUrl.trim() ? p.baseUrl.trim().replace(/\/+$/, "") : undefined;
-  const effort = typeof p?.effort === "string" && p.effort.trim() ? p.effort.trim() : undefined;
-  const label = typeof p?.label === "string" && p.label.trim() ? p.label.trim() : `${type}:${model}`;
-  return { type, key, model, baseUrl, effort, label };
-}
-
-/** Danh sách provider theo thứ tự ưu tiên. */
-export function loadProviders(): ChatProvider[] {
+/** Nguồn khai bằng biến môi trường (CHAT_PROVIDERS, hoặc GEMINI_API_KEY). */
+export function loadEnvProviders(): ChatProvider[] {
   const raw = process.env.CHAT_PROVIDERS;
   if (raw) {
     try {
-      const arr = JSON.parse(raw);
-      if (Array.isArray(arr)) {
-        const out = arr.map(normalize).filter((p): p is ChatProvider => !!p);
-        if (out.length) return out;
-      }
+      const out = parseProviderList(JSON.parse(raw));
+      if (out.length) return out;
     } catch {
       /* JSON hỏng → rơi xuống fallback bên dưới */
     }
@@ -82,8 +51,16 @@ export function loadProviders(): ChatProvider[] {
   return [];
 }
 
+/** Tuỳ chọn thêm cho fetch — nút "Thử" cần hẹn giờ và không đi theo chuyển hướng. */
+export type RequestOptions = { signal?: AbortSignal; redirect?: RequestRedirect };
+
 /** Gọi provider ở chế độ streaming; trả về Response thô để đọc SSE. */
-export function requestProvider(p: ChatProvider, systemText: string, turns: ChatTurn[]): Promise<Response> {
+export function requestProvider(
+  p: ChatProvider,
+  systemText: string,
+  turns: ChatTurn[],
+  opts: RequestOptions = {}
+): Promise<Response> {
   if (p.type === "gemini") {
     const base = p.baseUrl || "https://generativelanguage.googleapis.com/v1beta";
     const generationConfig: Record<string, unknown> = { temperature: 0.6, maxOutputTokens: 2048 };
@@ -101,6 +78,7 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
         generationConfig,
       }),
       cache: "no-store",
+      ...opts,
     });
   }
   if (p.type === "responses") {
@@ -120,6 +98,7 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
       body: JSON.stringify(bodyResp),
       cache: "no-store",
+      ...opts,
     });
   }
 
@@ -139,8 +118,12 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
         system: systemText,
         messages: turns.map((t) => ({ role: t.role, content: t.content })),
         stream: true,
+        // Claude đời mới mặc định tự suy nghĩ trước khi trả lời, và phần suy nghĩ
+        // ăn vào max_tokens. Chatbox nên đặt "low" để khách không phải chờ.
+        ...(p.effort ? { output_config: { effort: p.effort } } : {}),
       }),
       cache: "no-store",
+      ...opts,
     });
   }
 
@@ -157,6 +140,7 @@ export function requestProvider(p: ChatProvider, systemText: string, turns: Chat
       messages: [{ role: "system", content: systemText }, ...turns.map((t) => ({ role: t.role, content: t.content }))],
     }),
     cache: "no-store",
+    ...opts,
   });
 }
 

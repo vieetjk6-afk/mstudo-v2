@@ -2,7 +2,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { loadChatConfig } from "@/lib/vieetjk/chat-config";
-import { loadProviders, requestProvider, collectText } from "@/lib/vieetjk/providers";
+import { requestProvider, collectText } from "@/lib/vieetjk/providers";
+import { loadProviders } from "@/lib/vieetjk/provider-store";
 import { platformLabel } from "./platforms";
 import { recentTurns } from "./store";
 
@@ -20,9 +21,9 @@ import { recentTurns } from "./store";
       lúc nào cũng có thể bị người thật cắt ngang. Nên nó được dặn viết ngắn,
       không hứa chắc về giá/lịch, và chủ động mời nhân viên vào khi vượt tầm.
 
-   Dùng lại đúng bộ provider của chatbox website (CHAT_PROVIDERS) — studio đã
-   cấu hình một lần thì cả hai nơi cùng chạy, và cùng được cơ chế tự chuyển nhà
-   cung cấp khi một cái hết hạn mức.
+   Dùng lại đúng bộ provider của chatbox website (key riêng của studio → key
+   chung → CHAT_PROVIDERS) — cấu hình một lần thì cả hai nơi cùng chạy, và cùng
+   được cơ chế tự chuyển nhà cung cấp khi một cái hết hạn mức.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /** Số lượt hội thoại lấy làm ngữ cảnh cho AI. */
@@ -71,7 +72,7 @@ export async function generateReply(
   conversationId: string,
   platform: string
 ): Promise<AiReplyResult> {
-  const providers = loadProviders();
+  const providers = await loadProviders(ownerId);
   if (providers.length === 0) return { text: null, debug: "no_provider" };
 
   const turns = await recentTurns(conversationId, CONTEXT_TURNS);

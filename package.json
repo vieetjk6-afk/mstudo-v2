@@ -72,6 +72,7 @@
     "test:payment-reminder": "node --experimental-strip-types desktop/test/payment-reminder.mjs",
     "test:upgrade-payment": "node --experimental-strip-types desktop/test/upgrade-payment.mjs",
     "test:inbox": "node --experimental-strip-types desktop/test/inbox.mjs",
+    "test:ai-providers": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/ai-providers.mjs",
     "test:reviews": "node --experimental-strip-types desktop/test/reviews.mjs",
     "test:lead-source": "node --experimental-strip-types desktop/test/lead-source.mjs",
     "test:anniversary": "node --experimental-strip-types desktop/test/anniversary.mjs",
