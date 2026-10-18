@@ -32,6 +32,7 @@ const CHO_PHEP: Record<string, string> = {
   "khuon-mat": "khuon-mat.sql",
   "doi-soat-ngan-hang": "doi-soat-ngan-hang.sql",
   "huy-doi-lich": "huy-doi-lich.sql",
+  "voucher-uu-dai": "voucher-uu-dai.sql",
   "cap-nhat": "cap-nhat.sql",
   "setup-all": "setup-all.sql",
 };

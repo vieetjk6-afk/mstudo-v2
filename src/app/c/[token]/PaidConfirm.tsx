@@ -9,20 +9,22 @@ import { fmtDate, fmtDateTime } from "@/lib/date";
 export type PaidEvent = {
   amount: number;
   paidAt: string | null;
+  /** paidAt có GIỜ (đợt thanh toán, timestamptz) hay chỉ có ngày (lần thu, kiểu date). */
+  hasTime: boolean;
   /** Tên đợt vừa thu ("Đặt cọc", "Đợt 2"…) nếu khớp được đợt. */
   label: string | null;
   deposit: boolean;
 };
 
 type PayRow = { id: string; amount: number; kind: string | null; paid_at: string | null };
-type PlanRow = { id: string; label: string; amount: number; paid: boolean; paid_at: string | null };
+type PlanRow = { id: string; label: string; paid: boolean; paid_at: string | null; payment_id?: string | null };
 
-const POLL_MS = 8_000;
+const POLL_MS = 12_000;
 /** Ngừng hỏi sau 30 phút không có thao tác thanh toán nào — tránh trang mở quên. */
 const IDLE_STOP_MS = 30 * 60_000;
 
 /**
- * Theo dõi tiền về khi khách đang ở trang hợp đồng: hỏi nhẹ máy chủ mỗi 8 giây
+ * Theo dõi tiền về khi khách đang ở trang hợp đồng: hỏi nhẹ máy chủ mỗi 12 giây
  * (chỉ khi trang đang hiện), và hỏi ngay khi khách quay lại từ app ngân hàng.
  * Có khoản thu MỚI → gọi onPaid để trang chuyển sang màn "Đã nhận cọc".
  */
@@ -61,10 +63,10 @@ export function usePaymentWatch({
       if (stopped || busy || document.visibilityState !== "visible" || Date.now() > until) return;
       busy = true;
       try {
-        const r = await fetch(`/api/c/${token}`, {
+        const r = await fetch(`/api/c/${token}/pay-status`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "pay_status", phone }),
+          body: JSON.stringify({ phone }),
         });
         if (!r.ok) return;
         const j = (await r.json()) as { payments?: PayRow[]; plan?: PlanRow[] };
@@ -72,12 +74,14 @@ export function usePaymentWatch({
         if (!fresh.length || stopped) return;
         for (const p of fresh) known.current.add(p.id);
         const amount = fresh.reduce((t, p) => t + p.amount, 0);
-        const latest = fresh.map((p) => p.paid_at).filter(Boolean).sort().pop() ?? null;
-        // Đợt vừa được đánh dấu thu gần nhất — để gọi đúng tên ("Đặt cọc"…).
-        const plan = (j.plan ?? []).filter((p) => p.paid && p.paid_at).sort((a, b) => (a.paid_at! < b.paid_at! ? 1 : -1))[0];
+        // Tên đợt: CHỈ đợt gắn đúng lần thu mới (payment_id) — không đoán theo
+        // "đợt thu gần nhất", kẻo khoản thu lẻ bị gọi nhầm là "Đặt cọc".
+        const ids = new Set(fresh.map((p) => p.id));
+        const plan = (j.plan ?? []).find((p) => p.payment_id && ids.has(p.payment_id)) ?? null;
         const label = plan?.label ?? null;
-        const deposit = /cọc|coc|deposit/i.test(label ?? "") || fresh.some((p) => p.kind === "deposit");
-        cb.current({ amount, paidAt: latest, label, deposit });
+        const deposit = fresh.some((p) => p.kind === "deposit") || /cọc|deposit/i.test(label ?? "");
+        const day = fresh.map((p) => p.paid_at).filter(Boolean).sort().pop() ?? null;
+        cb.current({ amount, paidAt: plan?.paid_at ?? day, hasTime: !!plan?.paid_at, label, deposit });
       } catch {
         /* mạng chập chờn: lần sau hỏi lại */
       } finally {
@@ -138,7 +142,7 @@ export function PaidConfirmScreen({
           <Row k={vi ? "Số tiền" : "Amount"} v={<b style={{ color: "var(--gn)" }}>{vnd(e.amount)}</b>} />
           {e.label && <Row k={vi ? "Khoản" : "For"} v={e.label} />}
           <Row k={vi ? "Hợp đồng" : "Contract"} v={contractRef} />
-          {e.paidAt && <Row k={vi ? "Thời gian" : "Time"} v={fmtDateTime(e.paidAt)} />}
+          {e.paidAt && <Row k={vi ? "Thời gian" : "Time"} v={e.hasTime ? fmtDateTime(e.paidAt) : fmtDate(e.paidAt)} />}
           {e.deposit && eventDate && <Row k={vi ? "Lịch đã giữ" : "Date held"} v={fmtDate(eventDate)} />}
           <Row k={vi ? "Còn lại" : "Remaining"} v={remaining > 0 ? vnd(remaining) : vi ? "Đã thanh toán đủ" : "Fully paid"} />
         </div>

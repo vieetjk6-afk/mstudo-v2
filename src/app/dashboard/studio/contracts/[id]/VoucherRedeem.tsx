@@ -60,6 +60,10 @@ export default function VoucherRedeem({
       return toast(REDEEM_ERROR_TEXT[j.error as keyof typeof REDEEM_ERROR_TEXT] ?? `Lỗi: ${j.error || res.status}`);
     }
     setFound(j.voucher as Voucher);
+    if (j.needPhone) {
+      setNeedPhone(true);
+      toast("Voucher của người khác — nhập SĐT của hợp đồng được tặng rồi bấm áp.");
+    }
   }
 
   async function redeem() {
