@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { mainUrl } from "@/lib/hosts";
 import { fmtDate } from "@/lib/date";
 import { isMissingColumn } from "@/lib/missing-column";
+import { crewPhoneError, normalizeCrewPhone } from "@/lib/crew-phone";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
 import { type StudioCrew, type CrewRole } from "@/lib/types";
@@ -19,8 +20,9 @@ import CrewRolesPanel from "./CrewRolesPanel";
  * chi nhánh.
  *
  * SĐT không nằm ở đây: nó là danh tính của thợ — thợ đăng nhập /crew và nhận
- * lịch theo số này, các phân công cũ cũng lưu theo số này. Nhập sai thì xoá
- * rồi thêm lại.
+ * lịch theo số này, phân công / lịch bận rảnh / chấm công cũng lưu theo số này.
+ * Đổi số đi qua /api/studio/crew/phone để chuyển cả những dòng đó theo (xoá
+ * rồi thêm lại thì mất hết lịch cũ của thợ).
  */
 const PROFILE_FIELDS: { key: keyof StudioCrew & string; label: string; type?: string }[] = [
   { key: "name", label: "Họ tên" },
@@ -58,7 +60,9 @@ export default function CrewManager({
   canEditCrewRoles?: boolean;
 }) {
   const supabase = createClient();
-  const statFor = (phone: string) => stats[(phone || "").replace(/\D/g, "")] || null;
+  // Giữ trong state: đổi SĐT thì thống kê lời mời phải đi theo sang số mới.
+  const [statMap, setStatMap] = useState(stats);
+  const statFor = (phone: string) => statMap[(phone || "").replace(/\D/g, "")] || null;
   const [list, setList] = useState<StudioCrew[]>(initial);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -81,21 +85,62 @@ export default function CrewManager({
       setEditId(null);
       return;
     }
-    const d: Record<string, string> = {};
+    const d: Record<string, string> = { phone: c.phone ?? "" };
     for (const f of PROFILE_FIELDS) d[f.key] = (c[f.key] as string | null | undefined) ?? "";
     setDraft(d);
     setEditErr(null);
     setEditId(c.id);
   }
 
-  /** Studio sửa thông tin thợ. studio_crew đi qua RLS thường nên ghi trực tiếp. */
-  async function saveEdit(id: string) {
+  /**
+   * Studio sửa thông tin thợ. Hồ sơ đi qua RLS thường nên ghi trực tiếp; SĐT thì
+   * đổi qua máy chủ trước (xem PROFILE_FIELDS), hỏng là dừng luôn.
+   */
+  async function saveEdit(c: StudioCrew) {
+    const id = c.id;
+    const nextPhone = normalizeCrewPhone(draft.phone);
+    // So theo số đã chuẩn hoá: số cũ lưu dạng "0912 345 678" thì mở ra bấm lưu
+    // không được tính là đổi số.
+    const phoneChanged = nextPhone !== normalizeCrewPhone(c.phone);
+    if (phoneChanged) {
+      const bad = crewPhoneError(nextPhone);
+      if (bad) {
+        setEditErr(bad);
+        return;
+      }
+      const ok = window.confirm(
+        `Đổi SĐT của ${c.name || c.phone} từ ${c.phone} sang ${nextPhone}?\n\n` +
+          "Phân công hợp đồng, lịch bận/rảnh và chấm công của thợ ở studio này sẽ chuyển theo số mới. " +
+          "Từ giờ thợ đăng nhập /crew bằng số mới."
+      );
+      if (!ok) return;
+    }
+
     const patch: Record<string, string | null> = {};
     for (const f of PROFILE_FIELDS) patch[f.key] = draft[f.key]?.trim() || null;
     // Cột name NOT NULL: để trống thì giữ tên cũ, đừng xoá mất.
     if (!patch.name) delete patch.name;
     setSavingEdit(true);
     setEditErr(null);
+
+    if (phoneChanged) {
+      const res = await fetch("/api/studio/crew/phone", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, phone: nextPhone }),
+      }).catch(() => null);
+      const out = await res?.json().catch(() => null);
+      if (!res?.ok || !out?.crew) {
+        setSavingEdit(false);
+        setEditErr(out?.error || "Không đổi được số điện thoại. Kiểm tra mạng rồi thử lại.");
+        return;
+      }
+      const oldKey = (c.phone || "").replace(/\D/g, "");
+      setStatMap((m) => (m[oldKey] && !m[nextPhone] ? { ...m, [nextPhone]: m[oldKey] } : m));
+      setList((p) => p.map((x) => (x.id === id ? { ...x, phone: (out.crew as StudioCrew).phone } : x)));
+      if (Array.isArray(out.warnings) && out.warnings.length) window.alert(out.warnings.join("\n"));
+    }
+
     const { data, error } = await supabase.from("studio_crew").update(patch).eq("id", id).select("*").single();
     setSavingEdit(false);
     if (error || !data) {
@@ -237,7 +282,11 @@ export default function CrewManager({
 
       <CrewRolesPanel ownerId={ownerId} roles={roles} onChange={setRoles} canEdit={canEditCrewRoles} />
 
-      <div className="grid gap-3.5 lg:grid-cols-3">
+      {/* grid-cols-1 = minmax(0, 1fr): KHÔNG để mặc định. Lưới không khai cột
+          thì cột ngầm rộng bằng phần tử rộng nhất bên trong (dòng thợ có hai ô
+          chọn + hai nút) — trên điện thoại cả form lẫn danh sách tràn ra ngoài
+          mép phải, nút Sửa/Xoá bị đẩy khỏi màn hình. */}
+      <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-3">
         {/* Add form */}
         <Panel className="h-fit p-[18px]">
           <h2 className="mb-3.5 text-[14px] font-bold">Thêm thợ vào sổ</h2>
@@ -286,7 +335,7 @@ export default function CrewManager({
         </Panel>
 
         {/* List */}
-        <div className="lg:col-span-2">
+        <div className="min-w-0 lg:col-span-2">
           {list.length === 0 ? (
             <Panel>
               <EmptyState
@@ -299,16 +348,21 @@ export default function CrewManager({
             <div className="flex flex-col gap-2">
               {list.map((c) => (
                 <Panel key={c.id} className="px-4 py-3.5">
-                  <div className="flex items-center justify-between gap-3">
+                  {/* Điện thoại: thông tin thợ ở trên, hàng ô chọn + nút xuống dòng dưới.
+                      Từ sm trở lên mới đứng cùng một hàng. */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="mt-0.5 flex h-9 w-9 flex-none items-center justify-center rounded-full text-[12px] font-bold text-white" style={{ background: avatarColor(c.name || c.phone) }}>
                       {initials(c.name || c.phone)}
                     </span>
                     <div className="min-w-0">
                     <p className="text-[13.5px] font-semibold">{c.name || "(chưa đặt tên)"}</p>
-                    <p className="flex items-center gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                      <Phone size={12} /> {c.phone} · {crewRoleLabel(c.role, roles)}
-                      {c.note ? ` · ${c.note}` : ""}
+                    <p className="flex items-start gap-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                      <Phone size={12} className="mt-[3px] flex-none" />
+                      <span className="min-w-0 break-words">
+                        {c.phone} · {crewRoleLabel(c.role, roles)}
+                        {c.note ? ` · ${c.note}` : ""}
+                      </span>
                     </p>
                     {(() => {
                       const s = statFor(c.phone);
@@ -323,10 +377,10 @@ export default function CrewManager({
                     })()}
                     </div>
                   </div>
-                  <div className="flex flex-none items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-none sm:flex-nowrap">
                     <select
                       className="input !py-1.5 !text-[11.5px]"
-                      style={{ width: "auto", minWidth: 110 }}
+                      style={{ width: "auto", minWidth: 110, maxWidth: "100%" }}
                       value={c.role}
                       onChange={(e) => setCrewRole(c.id, e.target.value)}
                       aria-label={`Vai trò của ${c.name || c.phone}`}
@@ -336,11 +390,11 @@ export default function CrewManager({
                       ))}
                     </select>
                     {branches.length > 0 && (
-                      <label className="flex items-center gap-1.5 text-[11px]" style={{ color: "var(--tx3)" }}>
-                        <Building2 size={13} />
+                      <label className="flex min-w-0 items-center gap-1.5 text-[11px]" style={{ color: "var(--tx3)" }}>
+                        <Building2 size={13} className="flex-none" />
                         <select
                           className="input !py-1.5 !text-[11.5px]"
-                          style={{ width: "auto", minWidth: 138 }}
+                          style={{ width: "auto", minWidth: 120, maxWidth: "100%" }}
                           value={c.branch_id ?? ""}
                           onChange={(e) => setCrewBranch(c.id, e.target.value)}
                           aria-label={`Chi nhánh của ${c.name || c.phone}`}
@@ -384,11 +438,17 @@ export default function CrewManager({
                           <label className="label">Số điện thoại</label>
                           <input
                             className="input"
-                            readOnly
-                            value={c.phone}
-                            title="SĐT là mã nhận diện của thợ (thợ đăng nhập /crew bằng số này). Nhập sai thì xoá rồi thêm lại."
-                            style={{ opacity: 0.7 }}
+                            type="tel"
+                            inputMode="tel"
+                            autoComplete="off"
+                            value={draft.phone ?? ""}
+                            onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
                           />
+                          {normalizeCrewPhone(draft.phone) !== normalizeCrewPhone(c.phone) && (
+                            <p className="w-full text-[11px]" style={{ color: "var(--tx3)" }}>
+                              Thợ sẽ đăng nhập /crew bằng số mới; phân công, lịch và chấm công ở studio này chuyển theo.
+                            </p>
+                          )}
                         </div>
                         {PROFILE_FIELDS.map((f) => (
                           <div key={f.key} className="field">
@@ -409,7 +469,7 @@ export default function CrewManager({
                       )}
                       {editErr && <p className="mt-2 text-sm" style={{ color: "var(--danger)" }}>{editErr}</p>}
                       <div className="mt-3 flex gap-2">
-                        <button onClick={() => saveEdit(c.id)} disabled={savingEdit} className="btn-primary px-4 py-2 text-xs">
+                        <button onClick={() => saveEdit(c)} disabled={savingEdit} className="btn-primary px-4 py-2 text-xs">
                           {savingEdit ? "Đang lưu…" : "Lưu thông tin"}
                         </button>
                         <button onClick={() => setEditId(null)} className="btn-ghost px-4 py-2 text-xs">Huỷ</button>
