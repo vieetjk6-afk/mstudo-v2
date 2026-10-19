@@ -14,6 +14,7 @@ import UpgradeRequests from "@/app/dashboard/admin/UpgradeRequests";
 import DiscountCodes from "@/app/dashboard/admin/DiscountCodes";
 import PaymentView from "@/app/dashboard/upgrade/thanh-toan/[id]/PaymentView";
 import StaffManager from "@/app/dashboard/studio/staff/StaffManager";
+import CrewManager from "@/app/dashboard/studio/crew/CrewManager";
 import EquipmentManager from "@/app/dashboard/studio/equipment/EquipmentManager";
 import PackagesManager from "@/app/dashboard/studio/packages/PackagesManager";
 import InboxView from "@/app/dashboard/studio/inbox/InboxView";
@@ -53,6 +54,18 @@ export const SCREENS: Record<
     bare?: boolean;
   }
 > = {
+  "so-tho": {
+    title: "Sổ thợ — có chi nhánh, tên dài, thống kê lời mời (canh tràn ngang trên điện thoại)",
+    render: () => (
+      <CrewManager
+        ownerId="o1"
+        initial={f.roster}
+        stats={{ "0987654321": { total: 2, accepted: 1, declined: 0 } }}
+        branches={f.branches}
+        canEditCrewRoles
+      />
+    ),
+  },
   "hop-dong-hang-muc": {
     title: "Hợp đồng — tab Hạng mục (có ô mô tả từng hạng mục)",
     render: () => <HopDongHangMucDemo />,
