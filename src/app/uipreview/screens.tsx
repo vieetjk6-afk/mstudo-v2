@@ -31,7 +31,7 @@ import FaceFinderDemo from "./FaceFinderDemo";
 import FaceScanProgressDemo from "./FaceScanProgressDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
-import { AnhInKhachDemo, AnhInStudioDemo } from "./AnhInDemo";
+import { AnhInAlbumLeDemo, AnhInKhachDemo, AnhInStudioDemo } from "./AnhInDemo";
 import LuoiAnhDemo from "./LuoiAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
@@ -65,6 +65,10 @@ export const SCREENS: Record<
   "anh-in-studio": {
     title: "Ảnh in tặng — thẻ ở tab Giao khách của album (studio)",
     render: () => <AnhInStudioDemo />,
+  },
+  "anh-in-album-le": {
+    title: "Ảnh in tặng — album lẻ không thuộc hợp đồng: nhập số ảnh in ngay trong album",
+    render: () => <AnhInAlbumLeDemo />,
   },
   "web-ten-dai": {
     title: "Web studio — tên studio dài, menu trên (canh tên tràn khỏi màn hình điện thoại)",

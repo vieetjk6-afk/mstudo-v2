@@ -7,8 +7,9 @@
 -- Mọi câu lệnh đều idempotent nên chạy lại nhiều lần vô hại.
 --
 -- Chỉ gồm migration của riêng tính năng này: cột số ảnh in tặng trên hợp
--- đồng, hai mốc thời gian trên album và bảng print_picks. Chỉ cần các bảng
--- hợp đồng / album / ảnh có từ schema nền.
+-- đồng và trên album lẻ, hai mốc thời gian trên album và bảng print_picks.
+-- Chỉ cần các bảng hợp đồng / album / ảnh có từ schema nền. Đã chạy bản
+-- trước thì chạy lại cả file này cũng an toàn.
 -- ══════════════════════════════════════════════════════════════════════════
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -66,6 +67,23 @@ alter table public.albums
   add column if not exists print_copied_at timestamptz;
 
 create index if not exists print_picks_album_idx on public.print_picks (album_id);
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/anh_in_album_le.sql — Ảnh in tặng cho album lẻ: số ảnh in nhập ngay trong album (chạy SAU anh_in_tang)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- ẢNH IN TẶNG CHO ALBUM LẺ (không thuộc hợp đồng nào).
+--
+-- albums.print_quota: số ảnh in tặng nhập ngay trong album (tab Giao khách).
+-- Album của hợp đồng vẫn lấy số ở hợp đồng (studio_contracts.print_quota) —
+-- máy chủ lấy số LỚN HƠN của hai nơi (src/lib/album-print.ts).
+-- Chạy SAU anh_in_tang.sql. Chạy trên Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+alter table public.albums
+  add column if not exists print_quota integer;
 
 
 -- ══════════════════════════════════════════════════════════════════════════

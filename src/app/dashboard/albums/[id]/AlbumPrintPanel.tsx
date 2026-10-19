@@ -1,14 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Check, Copy, ExternalLink, FolderInput, Loader2, Printer, RotateCcw } from "lucide-react";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { fmtDate } from "@/lib/date";
 import { PRINT_FOLDER_NAME } from "@/lib/album-print-rules";
 
-/** Ảnh in khách đã gửi + số ảnh hợp đồng tặng — page.tsx dựng. */
+/** Ảnh in khách đã gửi + số ảnh được tặng — page.tsx dựng. */
 export type AlbumPrintInfo = {
+  /** Số ảnh in tặng đang áp dụng = số lớn hơn của hợp đồng và của album. */
   quota: number;
+  /** Hợp đồng dùng album này (null = album lẻ — nhập số ngay tại đây). */
+  contractId: string | null;
+  contractQuota: number;
+  albumQuota: number;
   picks: { photo_id: string; photo_name: string }[];
   sentAt: string | null;
   copiedAt: string | null;
@@ -39,6 +45,39 @@ export default function AlbumPrintPanel({
   const [needConnect, setNeedConnect] = useState(false);
   const [result, setResult] = useState<CopyResult | null>(null);
   const [namesCopied, setNamesCopied] = useState(false);
+  // Album lẻ: số ảnh in tặng nhập ngay ở đây, tự lưu.
+  const [albumQuota, setAlbumQuota] = useState(info.albumQuota > 0 ? String(info.albumQuota) : "");
+  const [quotaSaved, setQuotaSaved] = useState<"idle" | "saving" | "saved">("idle");
+  const quotaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const quota = Math.max(info.contractQuota, Number(albumQuota) || 0);
+
+  function changeQuota(v: string) {
+    const clean = v.replace(/\D/g, "").slice(0, 3);
+    setAlbumQuota(clean);
+    if (quotaTimer.current) clearTimeout(quotaTimer.current);
+    quotaTimer.current = setTimeout(async () => {
+      setQuotaSaved("saving");
+      setErr(null);
+      try {
+        const res = await fetch(`/api/albums/${albumId}/print`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "quota", quota: Number(clean) || 0 }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || d.error) {
+          setQuotaSaved("idle");
+          setErr(d.error || "Chưa lưu được số ảnh in.");
+          return;
+        }
+        setQuotaSaved("saved");
+        setTimeout(() => setQuotaSaved("idle"), 1500);
+      } catch {
+        setQuotaSaved("idle");
+        setErr("Mất kết nối, chưa lưu được số ảnh in.");
+      }
+    }, 700);
+  }
 
   const n = info.picks.length;
 
@@ -94,16 +133,49 @@ export default function AlbumPrintPanel({
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium text-accent">
-            Ảnh in tặng khách{info.quota > 0 ? ` · ${info.quota} ảnh` : ""}
+            Ảnh in tặng khách{quota > 0 ? ` · ${quota} ảnh` : ""}
           </p>
           <p className="text-xs" style={{ color: "var(--text3)" }}>
-            {n === 0
+            {quota === 0 && n === 0
+              ? "Nhập số ảnh in tặng — album giao khách sẽ có thêm phần “Chọn ảnh in” cho khách."
+              : n === 0
               ? "Khách chưa gửi ảnh in. Ở album giao khách, khách bấm “Chọn ảnh in”, chọn rồi gửi cho studio — studio nhận thông báo."
-              : `Khách đã gửi ${n}${info.quota > 0 ? `/${info.quota}` : ""} ảnh${info.sentAt ? ` · ngày ${fmtDate(info.sentAt)}` : ""}.` +
+              : `Khách đã gửi ${n}${quota > 0 ? `/${quota}` : ""} ảnh${info.sentAt ? ` · ngày ${fmtDate(info.sentAt)}` : ""}.` +
                 (copiedAt ? ` Đã chuyển đi in ngày ${fmtDate(copiedAt)} — khách không sửa được nữa.` : "")}
           </p>
         </div>
       </div>
+
+      {/* Số ảnh in tặng: album của hợp đồng nhập ở hợp đồng (một nơi duy nhất),
+          album lẻ nhập ngay đây. */}
+      {info.contractId ? (
+        <p className="mt-3 text-[12.5px]" style={{ color: "var(--text2)" }}>
+          Số ảnh in tặng theo hợp đồng: <b>{info.contractQuota > 0 ? `${info.contractQuota} ảnh` : "chưa đặt"}</b> ·{" "}
+          <Link href={`/dashboard/studio/contracts/${info.contractId}?tab=album`} className="font-semibold underline" style={{ color: "var(--ac, var(--gold))" }}>
+            Sửa ở hợp đồng
+          </Link>
+        </p>
+      ) : (
+        <div className="mt-3">
+          <label className="label flex items-center gap-2">
+            <span>Số ảnh in tặng cho album này</span>
+            <span className="text-[11px] font-normal normal-case tracking-normal" style={{ color: "var(--text3)" }}>
+              {quotaSaved === "saving" ? "Đang lưu…" : quotaSaved === "saved" ? "Đã lưu" : ""}
+            </span>
+          </label>
+          <div className="flex items-center gap-2">
+            <input
+              className="input w-28"
+              inputMode="numeric"
+              placeholder="0"
+              value={albumQuota}
+              onChange={(e) => changeQuota(e.target.value)}
+              aria-label="Số ảnh in tặng cho album này"
+            />
+            <span className="text-[13px]" style={{ color: "var(--text2)" }}>ảnh · để trống = không tặng in</span>
+          </div>
+        </div>
+      )}
 
       {n > 0 && (
         <>

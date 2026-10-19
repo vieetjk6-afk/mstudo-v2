@@ -31,7 +31,8 @@
     "migrations/han_muc_album_may_chu.sql",
     "migrations/che_do_album_hop_dong.sql",
     "migrations/ai_providers.sql",
-    "migrations/anh_in_tang.sql"
+    "migrations/anh_in_tang.sql",
+    "migrations/anh_in_album_le.sql"
   ],
   "muc": [
     {
@@ -836,6 +837,14 @@
       "cot": [
         "albums.print_sent_at",
         "studio_contracts.print_quota"
+      ]
+    },
+    {
+      "file": "migrations/anh_in_album_le.sql",
+      "mo_ta": "Ảnh in tặng cho album lẻ: số ảnh in nhập ngay trong album (chạy SAU anh_in_tang)",
+      "bang": [],
+      "cot": [
+        "albums.print_quota"
       ]
     }
   ]
