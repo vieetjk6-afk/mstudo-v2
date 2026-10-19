@@ -4,6 +4,8 @@ import { fetchAllPhotos } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
 import { effectivePlan, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
 import AlbumEditor, { type AlbumPick, type DeliveryTwin, type LinkedContractInfo } from "./AlbumEditor";
+import type { AlbumPrintInfo } from "./AlbumPrintPanel";
+import { normalizeQuota } from "@/lib/album-print-rules";
 import { normalizeAlbumMode } from "@/lib/album-mode";
 import { categoryLabel } from "@/lib/category";
 import type { Album, AlbumSource, Photo } from "@/lib/types";
@@ -22,9 +24,11 @@ export async function generateMetadata(props: { params: Promise<{ id: string }> 
 export default async function AlbumEditPage(
   props: {
     params: Promise<{ id: string }>;
+    searchParams?: Promise<{ tab?: string }>;
   }
 ) {
   const params = await props.params;
+  const tabParam = (await props.searchParams)?.tab;
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -69,10 +73,13 @@ export default async function AlbumEditPage(
   // Thẻ "Album của hợp đồng …" + chế độ album (album mặc định / nhập link riêng).
   // select("*") để database chưa chạy che_do_album_hop_dong.sql vẫn đọc được.
   let linkedInfo: LinkedContractInfo | null = null;
+  // Số ảnh in hợp đồng tặng (migrations/anh_in_tang.sql) — đọc từ cùng select("*").
+  let printQuota = 0;
   if (linkedContract?.id) {
     const { data: z } = await supabase.from("studio_contracts").select("*").eq("id", linkedContract.id).maybeSingle();
     const zr = z as { zalo_name?: string | null; code?: string | null; title?: string | null; status?: string | null; album_mode?: unknown } | null;
     contractZaloName = zr?.zalo_name ?? null;
+    printQuota = normalizeQuota((z as { print_quota?: unknown } | null)?.print_quota);
     linkedInfo = {
       id: linkedContract.id as string,
       code: zr?.code ?? null,
@@ -96,6 +103,26 @@ export default async function AlbumEditPage(
       .eq("id", linkedContract.gallery_album_id)
       .maybeSingle();
     if (twin) deliveryTwin = twin as DeliveryTwin;
+  }
+
+  // Ảnh in khách gửi (thẻ "Ảnh in tặng" ở tab Giao khách). Lỗi = DB chưa chạy
+  // migrations/anh_in_tang.sql → không hiện thẻ, phần còn lại của trang vẫn chạy.
+  let printInfo: AlbumPrintInfo | null = null;
+  {
+    const { data: pp, error: ppErr } = await supabase
+      .from("print_picks")
+      .select("photo_id, photo_name, created_at")
+      .eq("album_id", params.id)
+      .order("created_at", { ascending: true });
+    if (!ppErr && (printQuota > 0 || (pp?.length ?? 0) > 0)) {
+      const a = album as Album & { print_sent_at?: string | null; print_copied_at?: string | null };
+      printInfo = {
+        quota: printQuota,
+        picks: (pp ?? []).map((r) => ({ photo_id: r.photo_id as string, photo_name: (r.photo_name as string) ?? "" })),
+        sentAt: a.print_sent_at ?? null,
+        copiedAt: a.print_copied_at ?? null,
+      };
+    }
   }
 
   // Loại album do CHÍNH studio này đã dùng (mỗi studio có bộ phân loại riêng).
@@ -132,6 +159,8 @@ export default async function AlbumEditPage(
       clientName={linkedContract?.client_name ?? null}
       zaloSavedName={(album as Album).zalo_name ?? contractZaloName}
       selections={(picks ?? []) as AlbumPick[]}
+      printInfo={printInfo}
+      initialTab={tabParam}
       // ?? 6 chứ không phải || 6: studio đặt 0 tháng nghĩa là CỐ Ý giữ ảnh vô
       // hạn, `||` sẽ nuốt mất lựa chọn đó và ép về 6.
       storageMonths={(profile as { storage_months?: number } | null)?.storage_months ?? 6}

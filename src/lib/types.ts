@@ -375,6 +375,8 @@ export interface StudioContract {
   final_video_urls?: string | null;
   /** Link thư mục toàn bộ file gốc (migrations/contract_final_originals.sql). */
   final_originals_url?: string | null;
+  /** Số ảnh in hợp đồng tặng khách (migrations/anh_in_tang.sql). Trống/0 = không tặng. */
+  print_quota?: number | null;
   source: string | null;
   brief_concept: string | null;
   brief_outfit: string | null;
@@ -454,6 +456,7 @@ export type NotificationKind =
   | "upgrade_request"
   | "contact"
   | "selection"
+  | "print_pick"
   // Ba loại của cổng nhân viên (bản thiết kế "Cổng nhân viên", tab Thông báo):
   // nhắc lịch sắp tới, hợp đồng vừa bị đổi lịch/đổi hạng mục, và vừa được phân
   // công một buổi. Cột `kind` trong DB là text không ràng buộc nên không cần

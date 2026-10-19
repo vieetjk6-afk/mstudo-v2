@@ -24,6 +24,7 @@
     "test:local-walk": "node --experimental-strip-types desktop/test/local-walk.mjs",
     "test:album-drive-links": "node --experimental-strip-types desktop/test/album-drive-links.mjs",
     "test:album-phase": "node --experimental-strip-types desktop/test/album-phase.mjs",
+    "test:album-print": "node --experimental-strip-types desktop/test/album-print.mjs",
     "test:album-mode": "node --experimental-strip-types desktop/test/album-mode.mjs",
     "test:contract-album": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/contract-album.mjs",
     "test:album-offline": "node --experimental-strip-types desktop/test/album-offline.mjs",
