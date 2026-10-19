@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type RefObject } from "react";
 import { Check, Printer, X } from "lucide-react";
 import { fmtDate } from "@/lib/date";
 import { ICON_HALO } from "@/lib/album-icon";
@@ -67,6 +67,8 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
   }, [slug, quota, locked]);
 
   const dirty = useMemo(() => !sameSet(picks, sent), [picks, sent]);
+  // Khách còn việc phải làm: được tặng in mà chưa gửi (hoặc đã sửa sau khi gửi).
+  const needsAction = quota > 0 && !locked && !(sentAt && !dirty);
 
   function toggle(id: string, printable: boolean) {
     if (locked || !printable) return;
@@ -119,6 +121,7 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
     sentAt,
     locked,
     dirty,
+    needsAction,
     mode,
     onlyPicked,
     busy,
@@ -140,8 +143,12 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
 
 export type PrintPicks = ReturnType<typeof usePrintPicks>;
 
-/** Thẻ giới thiệu ở đầu album: được tặng bao nhiêu ảnh, đã gửi chưa. */
-export function PrintCard({ pp }: { pp: PrintPicks }) {
+/**
+ * Thẻ giới thiệu ngay trên lưới ảnh: được tặng bao nhiêu ảnh, đã gửi chưa.
+ * `cardRef`: nút "Xem album" ở ảnh bìa cuộn tới ĐÂY (không phải thẳng xuống lưới)
+ * khi khách còn chưa gửi ảnh in — cuộn thẳng xuống lưới là khách lướt qua thẻ.
+ */
+export function PrintCard({ pp, cardRef }: { pp: PrintPicks; cardRef?: RefObject<HTMLDivElement | null> }) {
   if (!pp.enabled) return null;
   let title: string;
   let note: string;
@@ -160,7 +167,7 @@ export function PrintCard({ pp }: { pp: PrintPicks }) {
     cta = pp.picks.size > 0 ? `Tiếp tục chọn (${pp.picks.size}/${pp.quota})` : "Chọn ảnh in";
   }
   return (
-    <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
+    <div ref={cardRef} className="mt-5 flex scroll-mt-20 flex-wrap items-center gap-3 rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
       <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full" style={{ background: "color-mix(in srgb, var(--gold) 16%, transparent)", color: "var(--gold)" }}>
         <Printer size={19} />
       </span>
@@ -176,6 +183,39 @@ export function PrintCard({ pp }: { pp: PrintPicks }) {
       {pp.msg && !pp.mode && (
         <p className="w-full text-[12.5px]" style={{ color: pp.msg.ok ? "var(--success)" : "var(--danger)" }}>{pp.msg.text}</p>
       )}
+    </div>
+  );
+}
+
+/**
+ * Nút nổi "Chọn ảnh in" ở đáy màn hình — khách cuộn tới đâu cũng thấy, cho tới
+ * khi gửi xong. Ẩn khi thẻ giới thiệu đang nằm trong màn hình (đỡ hai nút cùng
+ * một việc) và khi đang chọn (thanh dưới đáy đã thay chỗ).
+ */
+export function PrintFab({ pp, cardRef }: { pp: PrintPicks; cardRef: RefObject<HTMLDivElement | null> }) {
+  const [cardInView, setCardInView] = useState(false);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setCardInView(e.isIntersecting), { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [cardRef, pp.enabled]);
+  if (!pp.needsAction || pp.mode || cardInView) return null;
+  // Căn giữa bằng khung bao, KHÔNG bằng translate trên chính nút: .btn-primary
+  // dùng transform cho hiệu ứng bấm (scale), đè mất translate → nút nhảy lệch
+  // sang phải đúng lúc khách chạm vào và bấm hụt.
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-[max(16px,env(safe-area-inset-bottom))] z-50 flex justify-center px-4">
+      <button
+        type="button"
+        onClick={() => pp.open()}
+        className="btn-primary pointer-events-auto px-5 py-2.5 text-[14px]"
+        style={{ boxShadow: "0 10px 30px rgba(0,0,0,.25)" }}
+      >
+        <Printer size={16} />
+        {pp.picks.size > 0 ? `Tiếp tục chọn ảnh in (${pp.picks.size}/${pp.quota})` : `Chọn ${pp.quota} ảnh in tặng`}
+      </button>
     </div>
   );
 }

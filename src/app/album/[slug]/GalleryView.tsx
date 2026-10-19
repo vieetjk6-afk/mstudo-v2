@@ -90,7 +90,7 @@ import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
 import type { Feedback } from "@/lib/types";
 import type { PrintState } from "@/lib/album-print-rules";
-import { PrintBar, PrintCard, PrintToggle, usePrintPicks } from "./PrintPicker";
+import { PrintBar, PrintCard, PrintFab, PrintToggle, usePrintPicks } from "./PrintPicker";
 
 interface P { id: string; drive_file_id: string; name: string; source_id: string | null; position: number; is_video?: boolean; }
 
@@ -146,9 +146,8 @@ export default function GalleryView({
   const [activeTab, setActiveTab] = useState("all");
   // Nút "Xem album" ở ảnh bìa cuộn thẳng xuống lưới ảnh.
   const photosRef = useRef<HTMLDivElement | null>(null);
-  const scrollToPhotos = useCallback(() => {
-    photosRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
+  // Thẻ "Bạn được tặng N ảnh in" — xem scrollToPhotos bên dưới.
+  const printCardRef = useRef<HTMLDivElement | null>(null);
   const [lbIdx, setLbIdx] = useState<number | null>(null);
   /** Khách đang phóng to ảnh trong khung xem → gọi bản độ phân giải cao (ZoomHiRes). */
   const [lbZoomed, setLbZoomed] = useState(false);
@@ -164,6 +163,12 @@ export default function GalleryView({
   // Ảnh in tặng — không có ở link chia sẻ chọn lọc (người nhận link không phải khách).
   const pp = usePrintPicks(gallery.slug, shareMode ? null : print, access);
   const printing = pp.enabled && pp.mode;
+  // Nút "Xem album" ở ảnh bìa: khách còn chưa gửi ảnh in thì dừng ở thẻ chọn ảnh
+  // in (nằm ngay trên lưới) — cuộn thẳng xuống lưới là khách lướt qua thẻ đó.
+  const scrollToPhotos = () => {
+    const target = pp.needsAction && printCardRef.current ? printCardRef.current : photosRef.current;
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // Nạp nền phần ảnh CÒN LẠI: SSR chỉ gửi lô đầu để HTML nhẹ + nhanh; số còn lại
   // lấy qua API có CDN cache. Bỏ qua khi có mật khẩu (access route trả đủ sau khi
@@ -461,7 +466,7 @@ export default function GalleryView({
           </div>
         ) : null}
 
-        <PrintCard pp={pp} />
+        <PrintCard pp={pp} cardRef={printCardRef} />
 
         {/* tabs */}
         {/* TÌM ẢNH THEO KHUÔN MẶT — album giao khách.
@@ -689,6 +694,7 @@ export default function GalleryView({
         </div>
       )}
 
+      <PrintFab pp={pp} cardRef={printCardRef} />
       <PrintBar pp={pp} />
 
       <ShareDialog
