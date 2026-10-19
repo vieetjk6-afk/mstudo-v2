@@ -439,6 +439,35 @@ export default function ContractEditor({
     originals: contract.final_originals_url ?? "",
   });
   const [finalSaved, setFinalSaved] = useState<"idle" | "saving" | "saved">("idle");
+  // Số ảnh in tặng — lưu RIÊNG như các link trên: chưa chạy
+  // migrations/anh_in_tang.sql thì chỉ ô này báo, hợp đồng vẫn lưu bình thường.
+  const [printQuota, setPrintQuota] = useState(contract.print_quota ? String(contract.print_quota) : "");
+  const [printSaved, setPrintSaved] = useState<"idle" | "saving" | "saved">("idle");
+  const printTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function changePrintQuota(v: string) {
+    const clean = v.replace(/\D/g, "").slice(0, 3);
+    setPrintQuota(clean);
+    if (printTimer.current) clearTimeout(printTimer.current);
+    printTimer.current = setTimeout(async () => {
+      setPrintSaved("saving");
+      const n = Number(clean);
+      const { error } = await supabase
+        .from("studio_contracts")
+        .update({ print_quota: n > 0 ? n : null })
+        .eq("id", contract.id);
+      if (error) {
+        setPrintSaved("idle");
+        toast(
+          isMissingColumn(error, "print_quota")
+            ? "Chưa lưu được số ảnh in: hãy chạy supabase/migrations/anh_in_tang.sql trên Supabase."
+            : `Lỗi lưu số ảnh in: ${error.message}`
+        );
+        return;
+      }
+      setPrintSaved("saved");
+      setTimeout(() => setPrintSaved("idle"), 1500);
+    }, 700);
+  }
   const finalTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   function setFinal(k: "album" | "videos" | "originals", v: string) {
     setFinalLinks((p) => {
@@ -3234,6 +3263,33 @@ export default function ContractEditor({
                         cùng một link khách đang giữ. Không cần tạo album thứ hai.
                       </p>
                     )}
+                  </div>
+                  {/* Ảnh in tặng: có số thì album giao khách hiện phần "Chọn ảnh in"
+                      cho khách, studio chép ảnh khách chọn sang thư mục "Ảnh in"
+                      ở tab Giao khách của album. */}
+                  <div>
+                    <label className="label flex items-center gap-2">
+                      <span>Số ảnh in tặng khách</span>
+                      <span className="text-[11px] font-normal normal-case tracking-normal" style={{ color: "var(--text3)" }}>
+                        {printSaved === "saving" ? "Đang lưu…" : printSaved === "saved" ? "Đã lưu" : ""}
+                      </span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="input w-28"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={printQuota}
+                        onChange={(e) => changePrintQuota(e.target.value)}
+                        aria-label="Số ảnh in tặng khách"
+                      />
+                      <span className="text-[13px]" style={{ color: "var(--text2)" }}>ảnh</span>
+                    </div>
+                    <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                      Hợp đồng có tặng ảnh in thì nhập số ảnh — khi giao file hoàn thiện, album của khách có thêm phần
+                      “Chọn ảnh in” (tối đa đúng số này). Khách gửi xong, studio vào album → tab Giao khách → bấm copy
+                      để chép ảnh vào thư mục “Ảnh in” trong thư mục Drive giao khách. Để trống = không tặng in.
+                    </p>
                   </div>
                   {/* Nhập link ảnh riêng = MỘT album cho cả chọn ảnh lẫn giao khách:
                       ẩn ô album giao riêng (trừ hợp đồng đã lỡ gắn từ trước). */}

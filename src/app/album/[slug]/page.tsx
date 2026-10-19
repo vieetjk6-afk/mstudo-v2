@@ -13,6 +13,7 @@ import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } f
 import { getOriginalFolders } from "@/lib/album-original";
 import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
+import { loadPrintState } from "@/lib/album-print";
 
 export const dynamic = "force-dynamic";
 
@@ -79,7 +80,7 @@ export default async function GalleryPage(
 
   // Chạy song song: brand, ảnh, sources, feedback và gói của chủ studio — gộp
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
-  const [brand, studioHost, allPhotos, { data: s }, { data: feedback }, { data: owner }, { data: ppl }, { data: pplLinks }] = await Promise.all([
+  const [brand, studioHost, allPhotos, { data: s }, { data: feedback }, { data: owner }, { data: ppl }, { data: pplLinks }, print] = await Promise.all([
     getStudioBrand(admin, album.owner_id),
     // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
     // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
@@ -102,6 +103,9 @@ export default async function GalleryPage(
     // và khối tìm mặt biến mất hẳn — xem ghi chú ở src/app/a/[slug]/page.tsx.
     admin.from("album_people").select("*").eq("album_id", album.id).order("position"),
     admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
+    // Ảnh in tặng của hợp đồng (null = không tặng in, hoặc DB chưa chạy
+    // migrations/anh_in_tang.sql). Chỉ là id ảnh — gửi cả khi album có mật khẩu.
+    loadPrintState(admin, album.id).catch(() => null),
   ]);
   const studioName = brand.name;
 
@@ -191,6 +195,7 @@ export default async function GalleryPage(
         studioName={studioName}
         logoUrl={brand.logoUrl}
         studioHost={studioHost}
+        print={print}
       />
     </>
   );

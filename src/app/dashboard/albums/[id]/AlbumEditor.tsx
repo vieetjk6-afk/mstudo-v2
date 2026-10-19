@@ -37,6 +37,7 @@ import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
 import { fmtDate } from "@/lib/date";
 import { albumShareMessage } from "@/lib/share-messages";
 import { storageUntil, storageState, storageLabel, STORAGE_EXTEND_CHOICES } from "@/lib/storage-lifecycle";
+import AlbumPrintPanel, { type AlbumPrintInfo } from "./AlbumPrintPanel";
 import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } from "@/lib/types";
 
 /* ── Tab của màn cài đặt album (bản thiết kế, màn "Album chọn ảnh") ──────────
@@ -107,6 +108,8 @@ export default function AlbumEditor({
   storageMonths = 6,
   deliveryTwin = null,
   linkedContract = null,
+  printInfo = null,
+  initialTab,
 }: {
   album: Album;
   initialSources: AlbumSource[];
@@ -129,12 +132,18 @@ export default function AlbumEditor({
   /** Album giao khách của cùng hợp đồng (nếu album này là album chọn ảnh). */
   deliveryTwin?: DeliveryTwin | null;
   linkedContract?: LinkedContractInfo | null;
+  /** Ảnh in tặng khách đã gửi (null = hợp đồng không tặng in). */
+  printInfo?: AlbumPrintInfo | null;
+  /** ?tab=… trên URL (vd thông báo "khách chọn ảnh in" mở thẳng tab Giao khách). */
+  initialTab?: string;
 }) {
   const { t } = useLang();
   const supabase = createClient();
   const router = useRouter();
   const [deleting, setDeleting] = useState(false);
-  const [tab, setTab] = useState<AlbumTab>("photos");
+  const [tab, setTab] = useState<AlbumTab>(() =>
+    ALBUM_TABS.some(([k]) => k === initialTab) ? (initialTab as AlbumTab) : "photos"
+  );
   // Tab "Lượt chọn": lọc theo mã chọn (session) và theo "chỉ ảnh có ghi chú".
   const [pickSession, setPickSession] = useState<string>("all");
   const [notesOnly, setNotesOnly] = useState(false);
@@ -1484,6 +1493,19 @@ export default function AlbumEditor({
                   );
                 })()}
               </div>
+            )}
+
+            {/* Ảnh in tặng: khách chọn ở album giao khách → studio chép vào thư mục
+                "Ảnh in" trong thư mục giao file hoàn thiện. */}
+            {/* Album chọn ảnh có album giao riêng (deliveryTwin): khách chọn ảnh in
+                bên album kia, thẻ chỉ hiện ở đó. */}
+            {printInfo && !deliveryTwin && (
+              <AlbumPrintPanel
+                albumId={album.id}
+                info={printInfo}
+                photos={photos}
+                hasDeliveryFolder={sources.some((x) => x.stage === "delivery" && !!x.drive_url)}
+              />
             )}
 
             {/* Delivery phase: download the finished album at ORIGINAL quality from Drive. */}

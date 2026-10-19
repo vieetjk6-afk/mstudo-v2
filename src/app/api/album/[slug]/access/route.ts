@@ -8,6 +8,7 @@ import { limitByIpDurable } from "@/lib/rate-limit";
 import { faceChips } from "@/lib/face-people";
 import { tienDoQuet } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
+import { mintAlbumAccess } from "@/lib/album-access";
 
 export const dynamic = "force-dynamic";
 
@@ -87,5 +88,9 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   // không có mặt người". Chỉ trường hợp đầu mới hiện tiến độ cho khách.
   const faceScan = canFaceSearch && people.length === 0 ? await tienDoQuet(admin, album.id) : null;
 
-  return NextResponse.json({ photos, sources, driveFolders, originalFolders, people, faceScan });
+  // Vé cho các lượt GHI về sau (gửi ảnh in — /api/album/[slug]/print) mà không
+  // phải gửi lại mật khẩu (xem @/lib/album-access). Chỉ phát khi album có khoá.
+  const access = !album.gallery_pinned && album.password_hash ? mintAlbumAccess(album.id, album.password_hash) : undefined;
+
+  return NextResponse.json({ photos, sources, driveFolders, originalFolders, people, faceScan, access });
 }

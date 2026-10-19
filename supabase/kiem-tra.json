@@ -30,7 +30,8 @@
     "migrations/tang_toc_thu_vien_album.sql",
     "migrations/han_muc_album_may_chu.sql",
     "migrations/che_do_album_hop_dong.sql",
-    "migrations/ai_providers.sql"
+    "migrations/ai_providers.sql",
+    "migrations/anh_in_tang.sql"
   ],
   "muc": [
     {
@@ -825,6 +826,17 @@
         "studio_ai_providers"
       ],
       "cot": []
+    },
+    {
+      "file": "migrations/anh_in_tang.sql",
+      "mo_ta": "Ảnh in tặng: số ảnh in theo hợp đồng + khách chọn ảnh in trong album giao khách",
+      "bang": [
+        "print_picks"
+      ],
+      "cot": [
+        "albums.print_sent_at",
+        "studio_contracts.print_quota"
+      ]
     }
   ]
 }

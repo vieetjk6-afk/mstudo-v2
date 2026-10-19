@@ -89,6 +89,8 @@ import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
 import type { Feedback } from "@/lib/types";
+import type { PrintState } from "@/lib/album-print-rules";
+import { PrintBar, PrintCard, PrintToggle, usePrintPicks } from "./PrintPicker";
 
 interface P { id: string; drive_file_id: string; name: string; source_id: string | null; position: number; is_video?: boolean; }
 
@@ -98,7 +100,7 @@ interface DriveFolder { name: string; url: string; }
 interface G { id: string; slug: string; title: string; event_date: string | null; cover_url: string | null; hasPassword: boolean; allowDownload?: boolean; driveIsEdited?: boolean; watermark?: string | null; }
 
 export default function GalleryView({
-  gallery, initialPhotos, initialPeople, faceScan = null, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null,
+  gallery, initialPhotos, initialPeople, faceScan = null, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioName = "Studio", logoUrl = null, studioHost = null, print = null,
 }: {
   gallery: G;
   initialPhotos: P[] | null;
@@ -119,6 +121,8 @@ export default function GalleryView({
   logoUrl?: string | null;
   /** Domain riêng của studio — link chia sẻ phải mang tên miền đó, không phải mstudo.com. */
   studioHost?: string | null;
+  /** Ảnh in tặng của hợp đồng (null = hợp đồng không tặng in). */
+  print?: PrintState | null;
 }) {
   const wm = gallery.watermark || null;
   const [unlocked, setUnlocked] = useState(!gallery.hasPassword);
@@ -136,6 +140,8 @@ export default function GalleryView({
   const [scan, setScan] = useState<TienDoQuet | null>(faceScan);
   const [pwError, setPwError] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
+  // Vé mở khoá (album có mật khẩu) — đính vào lượt gửi ảnh in.
+  const [access, setAccess] = useState<string | undefined>(undefined);
 
   const [activeTab, setActiveTab] = useState("all");
   // Nút "Xem album" ở ảnh bìa cuộn thẳng xuống lưới ảnh.
@@ -155,6 +161,9 @@ export default function GalleryView({
   // Client-side photo selection → build a "share only these" link.
   const shareMode = shareIds != null && shareIds.length > 0;
   const shareSet = useMemo(() => (shareIds ? new Set(shareIds) : null), [shareIds]);
+  // Ảnh in tặng — không có ở link chia sẻ chọn lọc (người nhận link không phải khách).
+  const pp = usePrintPicks(gallery.slug, shareMode ? null : print, access);
+  const printing = pp.enabled && pp.mode;
 
   // Nạp nền phần ảnh CÒN LẠI: SSR chỉ gửi lô đầu để HTML nhẹ + nhanh; số còn lại
   // lấy qua API có CDN cache. Bỏ qua khi có mật khẩu (access route trả đủ sau khi
@@ -261,6 +270,7 @@ export default function GalleryView({
     setOriginalFolders(data.originalFolders ?? []);
     setPeople(data.people ?? []);
     setScan((data.faceScan ?? null) as TienDoQuet | null);
+    setAccess(typeof data.access === "string" ? data.access : undefined);
     setUnlocked(true);
   }
 
@@ -302,10 +312,11 @@ export default function GalleryView({
   const visible = useMemo(() => {
     let base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
     if (shareSet) base = base.filter((p) => shareSet.has(p.id));
+    if (printing && pp.onlyPicked) base = base.filter((p) => pp.picks.has(p.id));
     // Lọc theo khuôn mặt SAU cùng: nó là câu hỏi "cho tôi xem ảnh của mẹ tôi",
     // còn tab nguồn và chế độ chia sẻ là phạm vi đang xem.
     return filterByPerson(base, activePerson);
-  }, [photos, activeTab, shareSet, activePerson]);
+  }, [photos, activeTab, shareSet, activePerson, printing, pp.onlyPicked, pp.picks]);
   const sections = useMemo(() => {
     const idx = visible.map((p, i) => ({ p, i }));
     const keo = (id: string, name: string, items: { p: P; i: number }[]) => ({ id, name, items, ids: items.map((x) => x.p.id) });
@@ -401,7 +412,7 @@ export default function GalleryView({
       <header className="sticky top-0 z-40 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-5 py-3.5 md:px-10" style={{ background: "color-mix(in srgb, var(--bg) 80%, transparent)", backdropFilter: "blur(20px)", borderBottom: "1px solid var(--border)" }}>
         <StudioBrand name={studioName} logoUrl={logoUrl} />
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {!shareMode && selected.size > 0 && (
+          {!shareMode && !printing && selected.size > 0 && (
             <button onClick={shareSelected} disabled={shareBusy} className="btn-primary px-3 py-1.5 text-[13px]">
               <Share2 size={14} />
               {shareBusy ? "Đang tạo link…" : `Chia sẻ ${selected.size} ảnh đã chọn`}
@@ -450,6 +461,8 @@ export default function GalleryView({
           </div>
         ) : null}
 
+        <PrintCard pp={pp} />
+
         {/* tabs */}
         {/* TÌM ẢNH THEO KHUÔN MẶT — album giao khách.
             Cùng khối với album chọn ảnh: máy chủ đã gom sẵn nên bấm một mặt chỉ
@@ -490,7 +503,7 @@ export default function GalleryView({
                   (xem src/lib/masonry.ts). */}
               <div {...luoi}>
                 {items.map(({ p, i }, k) => {
-                  const isSel = selected.has(p.id);
+                  const isSel = printing ? pp.picks.has(p.id) : selected.has(p.id);
                   const o = masonry.tileProps(sec.id, p.id, dau + k);
                   return (
                   <div key={p.id} ref={o.ref} className="o-anh-cho group relative cursor-pointer overflow-hidden" style={{ background: "var(--surface)", ...o.style }}>
@@ -504,8 +517,14 @@ export default function GalleryView({
                         <Play size={20} fill="currentColor" strokeWidth={0} />
                       </span>
                     )}
+                    {/* Đang chọn ảnh in: nút tròn chọn in thay chỗ trái tim. */}
+                    {printing && !isVideo(p) && (
+                      <div className="absolute right-0.5 top-0.5 z-[4]">
+                        <PrintToggle picked={pp.picks.has(p.id)} disabled={pp.locked} onToggle={() => pp.toggle(p.id, !isVideo(p))} />
+                      </div>
+                    )}
                     {/* Chỉ còn TRÁI TIM: không nền, không viền tròn, cỡ nhỏ lại. */}
-                    {!shareMode && (
+                    {!shareMode && !printing && (
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleSelect(p.id); }}
                         title={isSel ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
@@ -644,9 +663,14 @@ export default function GalleryView({
                     </div>
                   )}
                 </PhotoZoom>
+                {printing && (
+                  <div className="absolute right-1 top-1 z-20">
+                    <PrintToggle size="lg" picked={pp.picks.has(lb.id)} disabled={pp.locked} onToggle={() => pp.toggle(lb.id, true)} />
+                  </div>
+                )}
                 {/* Thích ảnh ngay trong khung xem — cùng góc với lưới ảnh bên
                     ngoài. Trước đây chỉ chọn được ở lưới. */}
-                {!shareMode && (
+                {!shareMode && !printing && (
                   <button
                     onClick={() => toggleSelect(lb.id)}
                     title={selected.has(lb.id) ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
@@ -664,6 +688,8 @@ export default function GalleryView({
           </div>
         </div>
       )}
+
+      <PrintBar pp={pp} />
 
       <ShareDialog
         url={shareUrl}

@@ -102,6 +102,7 @@ const ORDER = [
   ["migrations/han_muc_album_may_chu.sql", "Hạn mức album: bỏ qua khi máy chủ (service-role) tạo album cho hợp đồng — hết lỗi hợp đồng hoàn thành mà không có album giao khách"],
   ["migrations/che_do_album_hop_dong.sql", "Chế độ album của hợp đồng: album mặc định (mstudo desktop) hoặc nhập link ảnh riêng"],
   ["migrations/ai_providers.sql", "API key AI nhập trong trang quản trị: key chung của admin + key riêng của từng studio (đã mã hoá)"],
+  ["migrations/anh_in_tang.sql", "Ảnh in tặng: số ảnh in theo hợp đồng + khách chọn ảnh in trong album giao khách"],
 ];
 
 /**
@@ -152,6 +153,7 @@ const MOI = [
   "migrations/han_muc_album_may_chu.sql",
   "migrations/che_do_album_hop_dong.sql",
   "migrations/ai_providers.sql",
+  "migrations/anh_in_tang.sql",
 ];
 
 /**
@@ -216,6 +218,15 @@ const NHOM = {
       "-- Tách riêng để hàng rào của tính năng khác không kéo nó rollback theo.",
     ],
     files: ["migrations/ai_providers.sql"],
+  },
+  "anh-in-tang.sql": {
+    tieuDe: "ẢNH IN TẶNG — KHÁCH CHỌN ẢNH IN TRONG ALBUM GIAO KHÁCH",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng tính năng này: cột số ảnh in tặng trên hợp",
+      "-- đồng, hai mốc thời gian trên album và bảng print_picks. Chỉ cần các bảng",
+      "-- hợp đồng / album / ảnh có từ schema nền.",
+    ],
+    files: ["migrations/anh_in_tang.sql"],
   },
 };
 

@@ -1,7 +1,7 @@
 import {
   PenLine, MessageSquare, UserCheck, UserX, Star, Wallet, Bell, FileCheck, Megaphone,
   UserPlus, ArrowUpCircle, Mail, ImageDown, AlarmClock, CalendarCog, UserPlus2,
-  FilePlus2, Crown, WalletCards, ClipboardList,
+  FilePlus2, Crown, WalletCards, ClipboardList, Printer,
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationKind, StudioNotification } from "@/lib/types";
@@ -38,6 +38,7 @@ export const NOTIFICATION_KIND_META: Record<NotificationKind, NotificationMeta> 
   upgrade_request: { Icon: ArrowUpCircle, fg: "var(--am)", soft: "var(--amS)", label: "Yêu cầu nâng cấp" },
   contact: { Icon: Mail, fg: "var(--gn)", soft: "var(--gnS)", label: "Liên hệ" },
   selection: { Icon: ImageDown, fg: "var(--bl)", soft: "var(--blS)", label: "Khách chọn ảnh" },
+  print_pick: { Icon: Printer, fg: "var(--tl)", soft: "var(--tlS)", label: "Khách chọn ảnh in" },
   // Ba loại của cổng nhân viên. Bản thiết kế: alarm (--ac), edit_calendar (--am),
   // person_add (--bl) — icon lucide tương đương.
   schedule_reminder: { Icon: AlarmClock, fg: "var(--ac)", soft: "var(--acS)", label: "Nhắc lịch" },

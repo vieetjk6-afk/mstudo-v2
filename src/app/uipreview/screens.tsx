@@ -31,6 +31,7 @@ import FaceFinderDemo from "./FaceFinderDemo";
 import FaceScanProgressDemo from "./FaceScanProgressDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
+import { AnhInKhachDemo, AnhInStudioDemo } from "./AnhInDemo";
 import LuoiAnhDemo from "./LuoiAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
@@ -56,6 +57,15 @@ export const SCREENS: Record<
     bare?: boolean;
   }
 > = {
+  "anh-in-khach": {
+    title: "Ảnh in tặng — album giao khách, hợp đồng tặng 3 ảnh in",
+    render: () => <AnhInKhachDemo />,
+    bare: true,
+  },
+  "anh-in-studio": {
+    title: "Ảnh in tặng — thẻ ở tab Giao khách của album (studio)",
+    render: () => <AnhInStudioDemo />,
+  },
   "web-ten-dai": {
     title: "Web studio — tên studio dài, menu trên (canh tên tràn khỏi màn hình điện thoại)",
     render: () => <SiteRenderer demo data={f.longNameSite("top")} />,
