@@ -101,6 +101,7 @@ const ORDER = [
   ["migrations/tang_toc_thu_vien_album.sql", "Tăng tốc thư viện album: chỉ mục, hàm đếm album_library_stats, policy RLS dạng initPlan (chạy SAU album_dislikes)"],
   ["migrations/han_muc_album_may_chu.sql", "Hạn mức album: bỏ qua khi máy chủ (service-role) tạo album cho hợp đồng — hết lỗi hợp đồng hoàn thành mà không có album giao khách"],
   ["migrations/che_do_album_hop_dong.sql", "Chế độ album của hợp đồng: album mặc định (mstudo desktop) hoặc nhập link ảnh riêng"],
+  ["migrations/ai_providers.sql", "API key AI nhập trong trang quản trị: key chung của admin + key riêng của từng studio (đã mã hoá)"],
 ];
 
 /**
@@ -150,6 +151,7 @@ const MOI = [
   "migrations/tang_toc_thu_vien_album.sql",
   "migrations/han_muc_album_may_chu.sql",
   "migrations/che_do_album_hop_dong.sql",
+  "migrations/ai_providers.sql",
 ];
 
 /**
@@ -205,6 +207,15 @@ const NHOM = {
       "-- Chỉ cần các bảng hợp đồng / lần thu / yêu cầu đặt lịch có từ schema nền.",
     ],
     files: ["migrations/studio_vouchers.sql", "migrations/studio_vouchers_loyalty.sql", "migrations/studio_voucher_program.sql", "migrations/studio_saved_signature.sql"],
+  },
+  "khoa-ai.sql": {
+    tieuDe: "API KEY AI NHẬP TRONG TRANG QUẢN TRỊ",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng tính năng này: bảng key chung của admin và",
+      "-- bảng key riêng của từng studio. Chỉ cần bảng `profiles` có từ schema nền.",
+      "-- Tách riêng để hàng rào của tính năng khác không kéo nó rollback theo.",
+    ],
+    files: ["migrations/ai_providers.sql"],
   },
 };
 

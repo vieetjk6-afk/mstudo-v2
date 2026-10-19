@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { buildSystemPrompt, MAX_TURNS, type ChatTurn } from "@/lib/vieetjk/assistant";
-import { loadProviders, requestProvider, extractDelta, finishReason } from "@/lib/vieetjk/providers";
+import { requestProvider, extractDelta, finishReason } from "@/lib/vieetjk/providers";
+import { loadProviders } from "@/lib/vieetjk/provider-store";
 import { resolveVieetjkOwner } from "@/lib/vieetjk/data";
 import { loadChatConfig } from "@/lib/vieetjk/chat-config";
 import {
@@ -26,7 +27,8 @@ const LEAD_MARKER = "\u0002";
 
 /**
  * Trợ lý tư vấn tự động cho website vieetjk.com — hỗ trợ NHIỀU API.
- * Cấu hình qua CHAT_PROVIDERS (JSON) hoặc GEMINI_API_KEY (xem lib/vieetjk/providers).
+ * Nguồn AI: key riêng của studio → key chung trong trang quản trị → CHAT_PROVIDERS /
+ * GEMINI_API_KEY trên Vercel (xem lib/vieetjk/provider-store).
  * Bot thử lần lượt từng provider; cái nào lỗi/hết quota/không có text thì tự
  * chuyển sang cái kế tiếp. Trả về text chạy dần (streaming) cho widget.
  */
@@ -70,11 +72,6 @@ export async function POST(req: NextRequest) {
   const limited = await limitByIpDurable(req, "vjk-chat", 20, 60_000);
   if (limited) return limited;
 
-  const providers = loadProviders();
-  if (providers.length === 0) {
-    return Response.json({ error: "assistant_unavailable" }, { status: 503 });
-  }
-
   let body: { messages?: unknown; lang?: unknown; sessionId?: unknown };
   try {
     body = await req.json();
@@ -98,6 +95,12 @@ export async function POST(req: NextRequest) {
     if (ownerId) extra = (await loadChatConfig(ownerId)).instructions;
   } catch {
     /* không có cấu hình riêng → dùng mặc định */
+  }
+
+  // Nạp nguồn AI SAU khi biết studio: studio có key riêng thì dùng key đó trước.
+  const providers = await loadProviders(ownerId);
+  if (providers.length === 0) {
+    return Response.json({ error: "assistant_unavailable" }, { status: 503 });
   }
 
   // Đưa hội thoại website vào HỘP THƯ HỢP NHẤT: ghi tin khách vừa gõ, rồi hỏi

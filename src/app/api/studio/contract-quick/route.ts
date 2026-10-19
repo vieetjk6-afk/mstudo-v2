@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { rateLimit } from "@/lib/rate-limit";
 import { todayVN } from "@/lib/date";
-import { loadProviders, requestProvider, collectText } from "@/lib/vieetjk/providers";
+import { requestProvider, collectText } from "@/lib/vieetjk/providers";
+import { loadProviders } from "@/lib/vieetjk/provider-store";
 import {
   buildQuickPrompt,
   extractJson,
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
   const ctx = readContext(body);
   const rules = heuristicParse(text, ctx);
 
-  const providers = loadProviders();
+  const providers = await loadProviders(profile.id);
   if (providers.length === 0) {
     return NextResponse.json({ draft: rules, source: "rules", today: ctx.today });
   }

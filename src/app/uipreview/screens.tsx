@@ -23,6 +23,7 @@ import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
 import SepayGuideVideo from "@/components/SepayGuideVideo";
 import AiCompareDemo from "./AiCompareDemo";
+import AiProvidersDemo from "./AiProvidersDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
 import FaceFinderDemo from "./FaceFinderDemo";
@@ -54,6 +55,10 @@ export const SCREENS: Record<
     bare?: boolean;
   }
 > = {
+  "khoa-ai": {
+    title: "Nhà cung cấp AI — key chung (Quản trị hệ thống) + key riêng (trang Chatbox)",
+    render: () => <AiProvidersDemo />,
+  },
   "so-tho": {
     title: "Sổ thợ — có chi nhánh, tên dài, thống kê lời mời (canh tràn ngang trên điện thoại)",
     render: () => (

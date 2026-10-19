@@ -607,6 +607,19 @@ với model mặc định (`src/lib/vieetjk/providers.ts`).
 
 Vậy nên: **để trống `CHAT_PROVIDERS`, khai `GEMINI_API_KEY` là xong.**
 
+Cách dễ hơn nữa: **nhập API key ngay trong app**, không cần biến môi trường.
+**Quản trị hệ thống → Nhà cung cấp AI · key dùng chung** (`/dashboard/admin/system`)
+nhận Claude, Gemini, mọi API chuẩn OpenAI và Responses; có nút **Thử** để kiểm
+key, lưu xong áp dụng ngay không cần deploy. Studio nào muốn dùng tài khoản AI
+của mình thì nhập key riêng ở **Website → Cấu hình chatbox**; key riêng được
+dùng trước, hỏng thì bot rơi xuống key chung. Cần chạy
+`supabase/migrations/ai_providers.sql` (có trong `cap-nhat.sql`, hoặc riêng
+`supabase/khoa-ai.sql`). Thứ tự bot thử: key riêng của studio → key chung trong
+trang quản trị → `CHAT_PROVIDERS` / `GEMINI_API_KEY` (chỉ khi trang quản trị
+chưa nhập nguồn nào). Key lưu trong DB được mã hoá bằng khoá suy ra từ
+`ZALO_SESSION_SECRET` (hoặc `OAUTH_STATE_SECRET` / service-role key) — đổi khoá
+đó thì phải nhập lại key AI.
+
 ## 7.7. Không cần khôi phục
 
 | Biến | Vì sao |
