@@ -46,10 +46,27 @@ export function AnhInStudioDemo() {
         albumId="a1"
         info={{
           quota: 20,
+          contractId: "c1",
+          contractQuota: 20,
+          albumQuota: 0,
           picks: PHOTOS.slice(0, 6).map((p) => ({ photo_id: p.id, photo_name: p.name })),
           sentAt: "2026-10-18T09:00:00Z",
           copiedAt: null,
         }}
+        photos={PHOTOS}
+        hasDeliveryFolder
+      />
+    </div>
+  );
+}
+
+/** Album lẻ (không thuộc hợp đồng): studio nhập số ảnh in tặng ngay trong album. */
+export function AnhInAlbumLeDemo() {
+  return (
+    <div className="mx-auto max-w-3xl">
+      <AlbumPrintPanel
+        albumId="a2"
+        info={{ quota: 0, contractId: null, contractQuota: 0, albumQuota: 0, picks: [], sentAt: null, copiedAt: null }}
         photos={PHOTOS}
         hasDeliveryFolder
       />

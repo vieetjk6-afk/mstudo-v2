@@ -107,6 +107,8 @@ export default async function AlbumEditPage(
 
   // Ảnh in khách gửi (thẻ "Ảnh in tặng" ở tab Giao khách). Lỗi = DB chưa chạy
   // migrations/anh_in_tang.sql → không hiện thẻ, phần còn lại của trang vẫn chạy.
+  // Album lẻ (không thuộc hợp đồng) luôn có thẻ để studio nhập số ảnh in tặng
+  // ngay tại đây; album của hợp đồng thì chỉ hiện khi hợp đồng có tặng in.
   let printInfo: AlbumPrintInfo | null = null;
   {
     const { data: pp, error: ppErr } = await supabase
@@ -114,10 +116,15 @@ export default async function AlbumEditPage(
       .select("photo_id, photo_name, created_at")
       .eq("album_id", params.id)
       .order("created_at", { ascending: true });
-    if (!ppErr && (printQuota > 0 || (pp?.length ?? 0) > 0)) {
-      const a = album as Album & { print_sent_at?: string | null; print_copied_at?: string | null };
+    const a = album as Album & { print_sent_at?: string | null; print_copied_at?: string | null; print_quota?: unknown };
+    const albumQuota = normalizeQuota(a.print_quota);
+    const quota = Math.max(printQuota, albumQuota);
+    if (!ppErr && (!linkedContract?.id || quota > 0 || (pp?.length ?? 0) > 0)) {
       printInfo = {
-        quota: printQuota,
+        quota,
+        contractId: (linkedContract?.id as string | undefined) ?? null,
+        contractQuota: printQuota,
+        albumQuota,
         picks: (pp ?? []).map((r) => ({ photo_id: r.photo_id as string, photo_name: (r.photo_name as string) ?? "" })),
         sentAt: a.print_sent_at ?? null,
         copiedAt: a.print_copied_at ?? null,

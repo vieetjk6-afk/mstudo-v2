@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { copyFilesToFilterDrive } from "@/lib/filter-drive";
-import { PRINT_FOLDER_NAME, pickDeliveryFolder } from "@/lib/album-print-rules";
+import { PRINT_FOLDER_NAME, normalizeQuota, pickDeliveryFolder } from "@/lib/album-print-rules";
 
 export const dynamic = "force-dynamic";
 // Chép vài chục tới vài trăm ảnh, 4 ảnh một lượt — quá thời gian mặc định.
@@ -19,6 +19,9 @@ export const maxDuration = 120;
  *   khoá phần chọn của khách (albums.print_copied_at).
  * Body { action: "unlock" }:
  *   Mở lại cho khách chọn / gửi lại ảnh in.
+ * Body { action: "quota", quota }:
+ *   Số ảnh in tặng của ALBUM LẺ (albums.print_quota). Album của hợp đồng nhập
+ *   số ở hợp đồng; máy chủ lấy số lớn hơn của hai nơi (lib/album-print).
  *
  * Danh sách file KHÔNG nhận từ client: máy chủ tự tra print_picks → photos
  * (giống /api/filter/delete-from-drive), nên endpoint không chép được file tuỳ ý.
@@ -31,7 +34,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { action?: string };
+  const body = (await req.json().catch(() => ({}))) as { action?: string; quota?: unknown };
 
   // Quyền: đọc qua session nên RLS chỉ trả album của chính studio (hoặc admin).
   const { data: album } = await supabase.from("albums").select("id, title").eq("id", params.id).maybeSingle();
@@ -41,6 +44,14 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     const { error } = await supabase.from("albums").update({ print_copied_at: null }).eq("id", album.id);
     if (error) return NextResponse.json({ error: "Không mở lại được — chạy supabase/migrations/anh_in_tang.sql rồi thử lại." }, { status: 500 });
     return NextResponse.json({ ok: true });
+  }
+  if (body.action === "quota") {
+    const quota = normalizeQuota(body.quota);
+    const { error } = await supabase.from("albums").update({ print_quota: quota > 0 ? quota : null }).eq("id", album.id);
+    if (error) {
+      return NextResponse.json({ error: "Chưa lưu được — chạy supabase/anh-in-tang.sql trên Supabase (SQL Editor) rồi thử lại." }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, quota });
   }
   if (body.action !== "copy") return NextResponse.json({ error: "bad_request" }, { status: 400 });
 

@@ -6724,6 +6724,23 @@ create index if not exists print_picks_album_idx on public.print_picks (album_id
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/anh_in_album_le.sql — Ảnh in tặng cho album lẻ: số ảnh in nhập ngay trong album (chạy SAU anh_in_tang)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- ẢNH IN TẶNG CHO ALBUM LẺ (không thuộc hợp đồng nào).
+--
+-- albums.print_quota: số ảnh in tặng nhập ngay trong album (tab Giao khách).
+-- Album của hợp đồng vẫn lấy số ở hợp đồng (studio_contracts.print_quota) —
+-- máy chủ lấy số LỚN HƠN của hai nơi (src/lib/album-print.ts).
+-- Chạy SAU anh_in_tang.sql. Chạy trên Supabase SQL Editor. An toàn khi chạy lại.
+-- ============================================================================
+
+alter table public.albums
+  add column if not exists print_quota integer;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 3 — PHÂN QUYỀN, RLS & POLICY (chạy sau khi mọi bảng/cột đã có)
 -- ══════════════════════════════════════════════════════════════════════════
 
