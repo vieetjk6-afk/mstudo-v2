@@ -54,6 +54,7 @@
     "test:vouchers": "node --experimental-strip-types desktop/test/vouchers.mjs",
     "test:quote-convert": "node --experimental-strip-types desktop/test/quote-convert.mjs",
     "test:crew-roles": "node --experimental-strip-types desktop/test/crew-roles.mjs",
+    "test:crew-phone": "node --experimental-strip-types desktop/test/crew-phone.mjs",
     "test:zalo-recipient": "node --experimental-strip-types desktop/test/zalo-recipient.mjs",
     "test:setup-all": "node supabase/build-setup-all.mjs --check",
     "test:sql-chay-that": "node desktop/test/sql-chay-that.mjs",
