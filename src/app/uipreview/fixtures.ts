@@ -16,12 +16,14 @@ import type { PaymentRow, SalaryRow, SourceStat } from "@/app/dashboard/studio/r
 import { buildFunnel, type FunnelStage } from "@/lib/lead-source";
 import type { ExportStudio } from "@/lib/studio-export";
 import type { StaffRow } from "@/app/dashboard/studio/staff/StaffManager";
+import type { SiteData } from "@/lib/site-loader";
 import type { ChannelPublic, ConversationView, MessageRow } from "@/lib/inbox/types";
 import type {
   AwaitingReviewAlbum, ReviewRow,
   DiscountCode, StudioBooking, StudioEquipment, StudioExpense, StudioPackage, UpgradeRequest,
   StudioContract, ContractItem, ContractCrew, ContractPayment, ContractPaymentPlan,
   ContractTask, ContractProduct, ContractEditRequest, StudioCrew, StudioEvent, StudioAppointment,
+  Site, SiteBlock,
 } from "@/lib/types";
 
 /** Ngày cố định để ảnh chụp hai lần vẫn giống nhau (khỏi so nhầm khác biệt). */
@@ -545,3 +547,28 @@ export const savedSignature = {
     "data:image/svg+xml;utf8," +
     encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="220" height="70"><path d="M10 50 C 40 10, 60 70, 90 30 S 140 60, 170 20 S 200 50, 210 40" stroke="#1e3a8a" stroke-width="3" fill="none"/></svg>'),
 };
+
+/* ── Web studio có tên DÀI ───────────────────────────────────────────────────
+   Tên lấy đúng ca thật làm tràn header trên điện thoại (chữ in hoa, giãn chữ). */
+export function longNameSite(navPosition: "top" | "left"): SiteData {
+  const block = (id: string, type: SiteBlock["type"], position: number, config: Record<string, unknown>): SiteBlock => ({
+    id, site_id: "s1", type, position, visible: true, config, created_at: `${D}T00:00:00Z`,
+  });
+  return {
+    site: {
+      id: "s1", owner_id: "o1", subdomain: "trocfoto", custom_domain: null, template: "classic",
+      theme: { navPosition, mode: "dark" }, seo: {}, published: true,
+      created_at: `${D}T00:00:00Z`, updated_at: `${D}T00:00:00Z`,
+    } as Site,
+    blocks: [
+      block("h1", "hero", 0, { eyebrow: "Lưu trữ khoảnh khắc đẹp", heading: "Trọc Foto", subheading: "Wedding house Phóng sự cưới Cà Mau" }),
+      block("a1", "about", 1, { heading: "Về chúng tôi", text: "Một bộ phóng sự vô giá không nằm ở sự cầu kỳ, mà ở những rung động chân thật nhất của hai bạn." }),
+      block("c1", "contact", 2, { heading: "Liên hệ" }),
+    ],
+    owner: { full_name: "Trọc Foto Wedding house - Phóng sự cưới Cà Mau", pl_phone: "0912345678", pl_facebook: null, booking_token: "demo" },
+    albums: [],
+    pricelist: [],
+    priceLabels: {},
+    feedback: [],
+  };
+}
