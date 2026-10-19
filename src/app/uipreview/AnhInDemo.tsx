@@ -25,7 +25,8 @@ export function AnhInKhachDemo() {
         slug: "xem-truoc-anh-in",
         title: "Lan & Minh — ảnh cưới",
         event_date: null,
-        cover_url: null,
+        // Có ảnh bìa để thấy nút "Xem album" (phải dừng ở thẻ chọn ảnh in).
+        cover_url: "/vieetjk-ai-icon.png",
         hasPassword: false,
         allowDownload: false,
       }}
