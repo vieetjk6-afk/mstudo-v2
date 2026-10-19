@@ -15,6 +15,7 @@ import DiscountCodes from "@/app/dashboard/admin/DiscountCodes";
 import PaymentView from "@/app/dashboard/upgrade/thanh-toan/[id]/PaymentView";
 import StaffManager from "@/app/dashboard/studio/staff/StaffManager";
 import CrewManager from "@/app/dashboard/studio/crew/CrewManager";
+import SiteRenderer from "@/components/SiteRenderer";
 import EquipmentManager from "@/app/dashboard/studio/equipment/EquipmentManager";
 import PackagesManager from "@/app/dashboard/studio/packages/PackagesManager";
 import InboxView from "@/app/dashboard/studio/inbox/InboxView";
@@ -55,6 +56,16 @@ export const SCREENS: Record<
     bare?: boolean;
   }
 > = {
+  "web-ten-dai": {
+    title: "Web studio — tên studio dài, menu trên (canh tên tràn khỏi màn hình điện thoại)",
+    render: () => <SiteRenderer demo data={f.longNameSite("top")} />,
+    bare: true,
+  },
+  "web-ten-dai-cot": {
+    title: "Web studio — tên studio dài, menu cột trái (thu thành thanh ngang trên điện thoại)",
+    render: () => <SiteRenderer demo data={f.longNameSite("left")} />,
+    bare: true,
+  },
   "khoa-ai": {
     title: "Nhà cung cấp AI — key chung (Quản trị hệ thống) + key riêng (trang Chatbox)",
     render: () => <AiProvidersDemo />,

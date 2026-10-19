@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+import { brandNameText } from "@/lib/brand-name";
 
 type NavItem = { id: string; label: string };
 
@@ -52,7 +53,7 @@ export default function SiteNav({
   const brand = logo ? (
     <img src={logo} alt={name} />
   ) : (
-    <span className="s-brand-name" style={{ fontFamily: fontVar }}>{name}</span>
+    <span className="s-brand-name" style={{ fontFamily: fontVar }}>{brandNameText(name)}</span>
   );
 
   const link = (n: NavItem, onClick?: () => void) => (

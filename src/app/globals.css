@@ -646,11 +646,17 @@ body {
 .s-hdr-in {
   max-width: var(--s-navw, 1180px); margin: 0 auto;
   display: flex; align-items: center; justify-content: space-between; gap: 20px;
-  height: 70px; padding: 0 24px;
+  min-height: 70px; padding: 8px 24px;
 }
-.s-brand { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; flex-shrink: 0; }
-.s-brand img { height: 34px; width: auto; display: block; }
-.s-brand-name { font-size: 20px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+/* Tên studio được XUỐNG DÒNG, không cắt: trước đây nowrap + không co nên tên dài
+   ("Trọc Foto Wedding house - Phóng sự cưới Cà Mau") tràn ra ngoài màn hình điện
+   thoại và đẩy mất nút ☰. Header cao theo tên (min-height thay cho height). */
+.s-brand { display: inline-flex; align-items: center; gap: 10px; color: inherit; text-decoration: none; flex: 0 1 auto; min-width: 0; }
+.s-brand img { height: 34px; width: auto; max-width: 100%; object-fit: contain; object-position: left center; display: block; }
+.s-brand-name {
+  font-size: 20px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+  line-height: 1.2; overflow-wrap: anywhere; text-wrap: balance;
+}
 
 .s-nav-desktop {
   display: flex; align-items: center; gap: 28px; min-width: 0;
@@ -700,7 +706,10 @@ body {
 .s-mobile-menu .s-navlink.is-active::after { display: none; }
 .s-mobile-menu .s-cta { margin-top: 16px; width: 100%; justify-content: center; }
 @media (max-width: 900px) {
-  .s-hdr-in { height: 62px; padding: 0 18px; }
+  .s-hdr-in { min-height: 62px; padding: 8px 18px; gap: 12px; }
+  /* Điện thoại: chữ nhỏ lại theo bề ngang, giãn chữ hẹp hơn — tên ~45 ký tự
+     vừa hai dòng ở khổ 390px. */
+  .s-brand-name { font-size: clamp(13px, 3.9vw, 18px); letter-spacing: 0.06em; }
   .s-nav-desktop { display: none; }
   .s-burger { display: inline-flex; }
   .s-hdr-right > .s-cta { display: none; }
@@ -721,6 +730,9 @@ body {
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   }
   .s-sidebar > nav { flex-direction: row !important; flex-wrap: nowrap !important; overflow-x: auto; gap: 16px !important; }
+  /* Thanh ngang cuộn được: tên giữ tối đa ~một nửa bề ngang (xuống dòng trong
+     khoảng đó) thay vì bị dải menu ép còn một chữ mỗi dòng. */
+  .s-sidebar > .s-brand { flex: 0 0 auto; max-width: 55%; }
   .s-sidebar .s-cta { margin-top: 0 !important; }
 }
 

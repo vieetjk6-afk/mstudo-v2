@@ -7,6 +7,7 @@ import { SITE_BLOCK_LABEL, type SiteBlock } from "@/lib/types";
 import { buildPriceView } from "@/lib/site-pricing";
 import { mapEmbedSrc, mapOpenHref } from "@/lib/site-map";
 import type { SiteData } from "@/lib/site-loader";
+import { brandNameText } from "@/lib/brand-name";
 
 const str = (v: unknown, fallback = "") => (typeof v === "string" && v.trim() ? v : fallback);
 const lines = (v: unknown) => str(v).split("\n").map((s) => s.trim()).filter(Boolean);
@@ -92,7 +93,7 @@ export default function SiteRenderer({ data, demo = false }: { data: SiteData; d
   const brand = t.logo ? (
     <img src={t.logo} alt={name} style={{ height: 36, width: "auto" }} />
   ) : (
-    <span className="s-brand-name" style={{ fontFamily: fontVar }}>{name}</span>
+    <span className="s-brand-name" style={{ fontFamily: fontVar }}>{brandNameText(name)}</span>
   );
 
   const content =
