@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { buildSystemPrompt, MAX_TURNS, type ChatTurn } from "@/lib/vieetjk/assistant";
 import { requestProvider, extractDelta, finishReason } from "@/lib/vieetjk/providers";
 import { loadProviders } from "@/lib/vieetjk/provider-store";
+import { alertProviderFailures, type ProviderFailure } from "@/lib/vieetjk/provider-alert";
 import { resolveVieetjkOwner } from "@/lib/vieetjk/data";
 import { loadChatConfig } from "@/lib/vieetjk/chat-config";
 import {
@@ -172,6 +173,8 @@ export async function POST(req: NextRequest) {
       // Gom nguyên câu trả lời để ghi vào hộp thư sau khi phát xong — nhân viên
       // mở hộp thư phải đọc được bot đã hứa gì với khách.
       let fullText = "";
+      // Key bị từ chối (hết tiền, hỏng) — báo admin / chủ studio sau khi trả lời xong.
+      const failures: ProviderFailure[] = [];
 
       for (const p of providers) {
         // 1) Gửi yêu cầu tới provider hiện tại.
@@ -184,14 +187,16 @@ export async function POST(req: NextRequest) {
         }
         if (!upstream.ok || !upstream.body) {
           let d = "";
+          let raw = "";
           try {
-            const raw = await upstream.text();
+            raw = (await upstream.text()).slice(0, 4000);
             const j = raw ? JSON.parse(raw) : null;
             d = j?.error?.message || raw || "";
           } catch {
             /* bỏ qua */
           }
           debug.push(`${p.label}: ${upstream.status} ${String(d).slice(0, 160)}`);
+          failures.push({ provider: p, status: upstream.status, body: raw });
           continue; // → thử provider kế tiếp
         }
 
@@ -255,6 +260,7 @@ export async function POST(req: NextRequest) {
       if (ownerId && conversationId && fullText.trim()) {
         await recordWebsiteAiReply(ownerId, conversationId, fullText.trim());
       }
+      if (failures.length) await alertProviderFailures(failures, ownerId);
     },
   });
 

@@ -77,9 +77,9 @@ export async function loadProviders(ownerId?: string | null): Promise<ChatProvid
     readScope({ kind: "shared" }).catch(() => EMPTY),
   ]);
   return pickProviders({
-    own: withLabels(own.list, "riêng/"),
-    sharedDb: withLabels(shared.list),
-    env: loadEnvProviders(),
+    own: withLabels(own.list, "riêng/").map((p) => ({ ...p, scope: "studio" as const })),
+    sharedDb: withLabels(shared.list).map((p) => ({ ...p, scope: "shared" as const })),
+    env: loadEnvProviders().map((p) => ({ ...p, scope: "env" as const })),
   });
 }
 

@@ -4,6 +4,7 @@ import { getStudioBrand } from "@/lib/studio-brand";
 import { loadChatConfig } from "@/lib/vieetjk/chat-config";
 import { requestProvider, collectText } from "@/lib/vieetjk/providers";
 import { loadProviders } from "@/lib/vieetjk/provider-store";
+import { alertProviderFailures, readErrorBody, type ProviderFailure } from "@/lib/vieetjk/provider-alert";
 import { platformLabel } from "./platforms";
 import { recentTurns } from "./store";
 
@@ -83,19 +84,26 @@ export async function generateReply(
   const systemText = buildSystemPrompt(brand.name, platform, config.instructions);
 
   const debug: string[] = [];
-  for (const p of providers) {
-    try {
-      const res = await requestProvider(p, systemText, turns);
-      if (!res.ok) {
-        debug.push(`${p.label}: ${res.status}`);
-        continue;
+  // Key bị từ chối (hết tiền, hỏng) — báo admin / chủ studio, kể cả khi nguồn sau đã trả lời thay.
+  const failures: ProviderFailure[] = [];
+  try {
+    for (const p of providers) {
+      try {
+        const res = await requestProvider(p, systemText, turns);
+        if (!res.ok) {
+          debug.push(`${p.label}: ${res.status}`);
+          failures.push({ provider: p, status: res.status, body: await readErrorBody(res) });
+          continue;
+        }
+        const { text, reason } = await collectText(res, p);
+        if (text) return { text };
+        debug.push(`${p.label}: empty${reason ? ` (${reason})` : ""}`);
+      } catch (e) {
+        debug.push(`${p.label}: ${(e as Error)?.message || "net"}`);
       }
-      const { text, reason } = await collectText(res, p);
-      if (text) return { text };
-      debug.push(`${p.label}: empty${reason ? ` (${reason})` : ""}`);
-    } catch (e) {
-      debug.push(`${p.label}: ${(e as Error)?.message || "net"}`);
     }
+    return { text: null, debug: debug.join(" | ") };
+  } finally {
+    if (failures.length) await alertProviderFailures(failures, ownerId);
   }
-  return { text: null, debug: debug.join(" | ") };
 }

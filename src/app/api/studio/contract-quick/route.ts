@@ -1,9 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { rateLimit } from "@/lib/rate-limit";
 import { todayVN } from "@/lib/date";
 import { requestProvider, collectText } from "@/lib/vieetjk/providers";
 import { loadProviders } from "@/lib/vieetjk/provider-store";
+import { alertProviderFailures, readErrorBody, type ProviderFailure } from "@/lib/vieetjk/provider-alert";
 import {
   buildQuickPrompt,
   extractJson,
@@ -75,11 +76,15 @@ export async function POST(req: Request) {
 
   const system = buildQuickPrompt(ctx);
   const debug: string[] = [];
+  // Key bị từ chối (hết tiền, hỏng) — báo admin / chủ studio sau khi đã trả bản nháp.
+  const failures: ProviderFailure[] = [];
+  after(() => (failures.length ? alertProviderFailures(failures, profile.id) : undefined));
   for (const p of providers) {
     try {
       const res = await requestProvider(p, system, [{ role: "user", content: text }]);
       if (!res.ok) {
         debug.push(`${p.label}: ${res.status}`);
+        failures.push({ provider: p, status: res.status, body: await readErrorBody(res) });
         continue;
       }
       const { text: out, reason } = await collectText(res, p);

@@ -15,6 +15,7 @@ import {
   withLabels,
   parseProviderList,
 } from "../../src/lib/vieetjk/provider-input.ts";
+import { classifyProviderError, keyAlert } from "../../src/lib/vieetjk/provider-alert-rules.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -146,6 +147,70 @@ check(
     ["openai", "deepseek/deepseek-chat", "https://openrouter.ai/api/v1"],
   ]
 );
+
+/* ── Key hết tiền / hỏng → báo đúng người; lỗi thoáng qua thì im ─────────── */
+// Thân lỗi thật (rút gọn) của từng nhà cung cấp.
+const ERR = {
+  claudeCredit: '{"type":"error","error":{"type":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits."}}',
+  claudeRate: '{"type":"error","error":{"type":"rate_limit_error","message":"Number of request tokens has exceeded your per-minute rate limit"}}',
+  claudeOverloaded: '{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}',
+  claudeAuth: '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
+  openaiQuota: '{"error":{"message":"You exceeded your current quota, please check your plan and billing details.","type":"insufficient_quota","code":"insufficient_quota"}}',
+  openaiRate: '{"error":{"message":"Rate limit reached for gpt-4o-mini on requests per min (RPM): Limit 3. Please try again in 20s.","type":"requests","code":"rate_limit_exceeded"}}',
+  openrouter: '{"error":{"message":"Insufficient credits. Add more using https://openrouter.ai/credits","code":402}}',
+  deepseek: '{"error":{"message":"Insufficient Balance","type":"unknown_error"}}',
+  geminiMinute: '[{"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details. Please retry in 41s.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerMinutePerProjectPerModel-FreeTier"}]}]}}]',
+  geminiDay: '[{"error":{"code":429,"message":"You exceeded your current quota, please check your plan and billing details.","status":"RESOURCE_EXHAUSTED","details":[{"@type":"type.googleapis.com/google.rpc.QuotaFailure","violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}]',
+  geminiBadKey: '[{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}]',
+};
+check(
+  "nhận ra hết tiền / key hỏng",
+  [
+    classifyProviderError("anthropic", 400, ERR.claudeCredit),
+    classifyProviderError("anthropic", 402, ""),
+    classifyProviderError("anthropic", 401, ERR.claudeAuth),
+    classifyProviderError("openai", 429, ERR.openaiQuota),
+    classifyProviderError("openai", 402, ERR.openrouter),
+    classifyProviderError("openai", 402, ERR.deepseek),
+    classifyProviderError("gemini", 429, ERR.geminiDay),
+    classifyProviderError("gemini", 400, ERR.geminiBadKey),
+    classifyProviderError("responses", 403, ""),
+  ],
+  ["no_credit", "no_credit", "bad_key", "no_credit", "no_credit", "no_credit", "no_credit", "bad_key", "bad_key"]
+);
+check(
+  "lỗi thoáng qua thì không báo",
+  [
+    classifyProviderError("anthropic", 429, ERR.claudeRate),
+    classifyProviderError("anthropic", 529, ERR.claudeOverloaded),
+    classifyProviderError("openai", 429, ERR.openaiRate),
+    classifyProviderError("gemini", 429, ERR.geminiMinute),
+    classifyProviderError("openai", 500, "billing"),
+    classifyProviderError("openai", 404, '{"error":{"message":"The model `gpt-9` does not exist"}}'),
+    classifyProviderError("openai", 200, ""),
+  ],
+  [null, null, null, null, null, null, null]
+);
+
+const shared = { type: "anthropic", key: "sk-ant-api03-SECRET-9876", model: "claude-haiku-5-5", label: "Claude chính", scope: "shared" };
+const own = { ...shared, label: "riêng/Claude studio", scope: "studio" };
+const env = { type: "gemini", key: "AIzaSyENV-SECRET-5555", model: "gemini-flash-latest", label: "gemini", scope: "env" };
+{
+  const a = keyAlert({ provider: shared, status: 400, body: ERR.claudeCredit });
+  check("key chung → báo admin, trỏ trang Hệ thống", [a.audience, a.kind, a.url], ["admins", "ai_key_shared", "/dashboard/admin/system"]);
+  check("thông báo nêu đúng key mà không lộ key", [a.message.includes("Claude chính"), a.message.includes("sk-ant…9876"), a.message.includes("SECRET")], [true, true, false]);
+  check("thông báo không đổi giữa các lần (khoá chống báo trùng)", keyAlert({ provider: shared, status: 400, body: ERR.claudeCredit.replace("Billing", "billing") }).message, a.message);
+}
+{
+  const a = keyAlert({ provider: own, status: 401, body: ERR.claudeAuth });
+  check("key riêng → báo chủ studio, trỏ trang Chatbox", [a.audience, a.kind, a.url], ["studio", "ai_key_own", "/dashboard/studio/chatbox"]);
+  check("bỏ tiền tố riêng/ khỏi tên", [a.message.includes("“Claude studio”"), a.message.includes("riêng/")], [true, false]);
+}
+{
+  const a = keyAlert({ provider: env, status: 429, body: ERR.geminiDay });
+  check("key trong biến môi trường → báo admin", [a.audience, a.message.includes("biến môi trường Vercel")], ["admins", true]);
+}
+check("lỗi thoáng qua → không có thông báo", keyAlert({ provider: shared, status: 529, body: ERR.claudeOverloaded }), null);
 
 if (fail) {
   console.log(`\n${fail} kiểm thử lỗi`);

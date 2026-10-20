@@ -472,6 +472,10 @@ export type NotificationKind =
   | "payment_failed"
   // Khách vừa gửi form thông tin buổi chụp — bấm mở màn "Thông tin buổi chụp".
   | "intake"
+  // Key AI hết tiền / hỏng (lib/vieetjk/provider-alert): key chung → admin,
+  // key riêng của studio → chủ studio. Bấm mở đúng chỗ nhập key.
+  | "ai_key_shared"
+  | "ai_key_own"
   | "info";
 
 export interface StudioNotification {
