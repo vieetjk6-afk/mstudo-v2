@@ -9,10 +9,12 @@ import {
   detectInAppBrowser,
   inAppName,
   isCustomerLinkPath,
+  isWeddingCardPath,
   nativeBrowserName,
   openInBrowserSteps,
   type InAppBrowser,
 } from "@/lib/in-app-browser";
+import { THIEP_HOST } from "@/lib/hosts";
 import { useShareLink } from "./share/useShareLink";
 
 /** Khách đã bấm "Ở lại" — chỉ nhớ trong phiên này, mở link lần sau vẫn nhắc. */
@@ -47,6 +49,8 @@ const TR = {
     title: (app: string) => `Bạn đang mở trong ${app}`,
     desc: (browser: string) =>
       `Mở bằng ${browser} để tải ảnh, video về máy, phát video mượt và lưu trang ra màn hình chính.`,
+    cardDesc: (browser: string) =>
+      `Mở bằng ${browser} để thiệp chạy mượt, nghe nhạc và lưu ảnh, mã QR mừng cưới về máy.`,
     open: (browser: string) => `Mở bằng ${browser}`,
     opening: "Đang mở…",
     autoOpening: (browser: string) => `Đang chuyển sang ${browser}…`,
@@ -60,6 +64,8 @@ const TR = {
     title: (app: string) => `You're viewing inside ${app}`,
     desc: (browser: string) =>
       `Open in ${browser} to save photos and videos, play videos smoothly and add the page to your home screen.`,
+    cardDesc: (browser: string) =>
+      `Open in ${browser} for smooth animations, background music and to save photos and the gift QR code.`,
     open: (browser: string) => `Open in ${browser}`,
     opening: "Opening…",
     autoOpening: (browser: string) => `Switching to ${browser}…`,
@@ -100,7 +106,10 @@ export default function InAppBrowserPrompt() {
   const [showSteps, setShowSteps] = useState(false);
   const [lang, setLang] = useState<"vi" | "en">("vi");
   const { copied, copy } = useShareLink(url);
-  const gated = isCustomerLinkPath(pathname);
+  // Chỉ đọc host ở client; trên máy chủ (và lần render đầu) hộp thoại chưa hiện
+  // nên không lệch hydrate.
+  const onThiepHost = !!THIEP_HOST && typeof window !== "undefined" && window.location.hostname === THIEP_HOST;
+  const gated = isCustomerLinkPath(pathname, onThiepHost);
 
   useEffect(() => {
     if (!gated) return;
@@ -201,7 +210,7 @@ export default function InAppBrowserPrompt() {
         </span>
         <p id="iab-title" className="mt-3.5 text-[17px] font-bold leading-snug">{tr.title(app)}</p>
         <p id="iab-desc" className="mx-auto mt-1.5 max-w-[290px] text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,.68)", textWrap: "pretty" }}>
-          {tr.desc(browser)}
+          {isWeddingCardPath(pathname, onThiepHost) ? tr.cardDesc(browser) : tr.desc(browser)}
         </p>
 
         <button

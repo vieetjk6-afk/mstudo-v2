@@ -5,6 +5,7 @@ import {
   canAutoEscape,
   detectInAppBrowser,
   isCustomerLinkPath,
+  isWeddingCardPath,
 } from "../../src/lib/in-app-browser.ts";
 
 const UA = {
@@ -36,13 +37,29 @@ assert.equal(detectInAppBrowser(UA.zaloIos, { standalone: true }), null);
 console.log("✓ trình duyệt thật, máy tính, webapp đã cài → không nhắc");
 
 // ── Trang nào được nhắc ──────────────────────────────────────────────────────
-for (const p of ["/portal/abc", "/c/abc", "/album/cuoi-a-b", "/a/chon-anh", "/q/tok", "/voucher/tok", "/form/tok"]) {
+for (const p of ["/portal/abc", "/c/abc", "/album/cuoi-a-b", "/a/chon-anh", "/q/tok", "/voucher/tok", "/form/tok", "/thiep/an-binh", "/thiep/an-binh/khach", "/thiep/sua/tok"]) {
   assert.equal(isCustomerLinkPath(p), true, p);
 }
-for (const p of ["/", "/thiep/abc", "/story/abc", "/site/may/", "/book/tok", "/gia/may", "/dashboard/studio", "/albums", "/a", null]) {
+for (const p of ["/", "/thiep", "/story/abc", "/site/may/", "/book/tok", "/gia/may", "/dashboard/studio", "/albums", "/a", null]) {
   assert.equal(isCustomerLinkPath(p), false, String(p));
 }
-console.log("✓ chỉ nhắc ở trang gửi khách; thiệp, story, website, đặt lịch, khu quản lý thì không");
+console.log("✓ nhắc ở trang gửi khách và thiệp online; story, website, đặt lịch, khu quản lý thì không");
+
+assert.equal(isWeddingCardPath("/thiep/an-binh"), true);
+assert.equal(isWeddingCardPath("/album/cuoi-a-b"), false);
+assert.equal(isWeddingCardPath(null), false);
+console.log("✓ thiệp có lời nhắc riêng (nhạc, ảnh, QR mừng cưới)");
+
+// Host thiệp riêng (thiep.mstudo.com/<slug>) phục vụ thiệp ở gốc — không có "/thiep/".
+for (const p of ["/an-binh", "/an-binh/khach", "/sua/tok", "/thiep-cuoi-x"]) {
+  assert.equal(isCustomerLinkPath(p, true), true, p);
+  assert.equal(isWeddingCardPath(p, true), true, p);
+  assert.equal(isCustomerLinkPath(p), false, p);
+}
+for (const p of ["/", "/thiep", "/api/thiep/rsvp", null]) {
+  assert.equal(isCustomerLinkPath(p, true), false, String(p));
+}
+console.log("✓ host thiệp riêng: nhắc ở mọi thiệp, trừ trang chào");
 
 // ── Khi nào được tự chuyển ───────────────────────────────────────────────────
 assert.equal(canAutoEscape(detectInAppBrowser(UA.zaloAndroid)), true);
