@@ -15,6 +15,12 @@ export type ChatProvider = {
   baseUrl?: string;
   effort?: string;
   label: string;
+  /**
+   * Nguồn này của ai — để key hết tiền thì báo ĐÚNG người trả tiền
+   * (provider-alert): "studio" = key riêng → chủ studio; "shared" / "env" =
+   * key chung / biến môi trường → admin. Chỉ loadProviders điền.
+   */
+  scope?: "studio" | "shared" | "env";
 };
 
 /** Một nguồn AI lưu trong DB (trang quản trị / trang chatbox của studio). */
@@ -22,6 +28,10 @@ export type StoredProvider = ChatProvider & { id: string };
 
 /** Bản gửi xuống trình duyệt — KHÔNG có khoá, chỉ có khoá đã che. */
 export type PublicProvider = Omit<StoredProvider, "key"> & { keyMask: string };
+
+/** Chỗ nhập key AI — thông báo "key hết tiền" (provider-alert) trỏ thẳng tới đây. */
+export const AI_KEY_ADMIN_URL = "/dashboard/admin/system";
+export const AI_KEY_STUDIO_URL = "/dashboard/studio/chatbox";
 
 /** Mỗi nơi lưu tối đa bấy nhiêu nguồn — bot thử lần lượt, nhiều hơn chỉ chậm. */
 export const MAX_PROVIDERS = 10;

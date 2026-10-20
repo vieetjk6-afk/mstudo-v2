@@ -1,10 +1,11 @@
 import {
   PenLine, MessageSquare, UserCheck, UserX, Star, Wallet, Bell, FileCheck, Megaphone,
   UserPlus, ArrowUpCircle, Mail, ImageDown, AlarmClock, CalendarCog, UserPlus2,
-  FilePlus2, Crown, WalletCards, ClipboardList, Printer,
+  FilePlus2, Crown, WalletCards, ClipboardList, Printer, KeyRound,
   type LucideIcon,
 } from "lucide-react";
 import type { NotificationKind, StudioNotification } from "@/lib/types";
+import { AI_KEY_ADMIN_URL, AI_KEY_STUDIO_URL } from "@/lib/vieetjk/provider-types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THÔNG BÁO — icon, màu, nhãn cho MỌI loại thông báo, khai báo MỘT chỗ.
@@ -49,6 +50,8 @@ export const NOTIFICATION_KIND_META: Record<NotificationKind, NotificationMeta> 
   plan_activated: { Icon: Crown, fg: "var(--gn)", soft: "var(--gnS)", label: "Nâng cấp thành công" },
   payment_failed: { Icon: WalletCards, fg: "var(--rd)", soft: "var(--rdS)", label: "Thanh toán thất bại" },
   intake: { Icon: ClipboardList, fg: "var(--tl)", soft: "var(--tlS)", label: "Thông tin buổi chụp" },
+  ai_key_shared: { Icon: KeyRound, fg: "var(--rd)", soft: "var(--rdS)", label: "Key AI chung" },
+  ai_key_own: { Icon: KeyRound, fg: "var(--rd)", soft: "var(--rdS)", label: "Key AI riêng" },
   info: { Icon: Bell, fg: "var(--tx3)", soft: "var(--sf2)", label: "Thông tin" },
 };
 
@@ -108,6 +111,8 @@ export function notificationHref(
   if (n.kind === "plan_activated" || n.kind === "payment_failed") return "/dashboard/upgrade";
   if (n.kind === "contract_created" && n.contract_id) return `/dashboard/studio/contracts/${n.contract_id}`;
   if (n.kind === "contact") return "/dashboard/settings";
+  if (n.kind === "ai_key_shared") return AI_KEY_ADMIN_URL;
+  if (n.kind === "ai_key_own") return AI_KEY_STUDIO_URL;
   if (n.kind === "schedule_reminder" || n.kind === "assigned") return "/dashboard/studio/calendar?tab=studio";
   return null;
 }
