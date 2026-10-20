@@ -136,15 +136,33 @@ export function openInBrowserSteps(b: InAppBrowser, lang: "vi" | "en" = "vi"): s
  * đúng những thứ trang đó cần (tải ảnh/video, lưu ra màn hình chính, phát
  * video, lưu mã QR chuyển khoản), nên hiện cảnh báo "Mở bằng trình duyệt".
  *
- * CỐ Ý không nhắc: thiệp cưới / love story (khách mời chỉ xem, không phải khách
- * của studio), website studio, bảng giá và trang đặt lịch (khách lạ đến từ quảng
- * cáo Facebook — thêm một bước là rơi khách), và toàn bộ khu quản lý.
+ * Thiệp cưới online (/thiep/… — thiệp khách mời xem, trang sửa thiệp và danh
+ * sách khách của cô dâu chú rể) cũng nhắc: webview hay chặn nhạc nền, lưu ảnh
+ * và lưu mã QR mừng cưới.
+ *
+ * CỐ Ý không nhắc: love story, website studio, bảng giá và trang đặt lịch (khách
+ * lạ đến từ quảng cáo Facebook — thêm một bước là rơi khách), và toàn bộ khu
+ * quản lý.
  */
-export const CUSTOMER_LINK_PREFIXES = ["/portal/", "/c/", "/album/", "/a/", "/q/", "/voucher/", "/form/"] as const;
+export const CUSTOMER_LINK_PREFIXES = ["/portal/", "/c/", "/album/", "/a/", "/q/", "/voucher/", "/form/", "/thiep/"] as const;
 
-export function isCustomerLinkPath(pathname: string | null | undefined): boolean {
+/** `onThiepHost`: đang ở host thiệp riêng — xem `isWeddingCardPath`. */
+export function isCustomerLinkPath(pathname: string | null | undefined, onThiepHost = false): boolean {
   if (!pathname) return false;
-  return CUSTOMER_LINK_PREFIXES.some((p) => pathname.startsWith(p));
+  return CUSTOMER_LINK_PREFIXES.some((p) => pathname.startsWith(p)) || isWeddingCardPath(pathname, onThiepHost);
+}
+
+/**
+ * Trang thiệp cưới online — lời nhắc nói về nhạc, ảnh, QR mừng cưới thay vì album.
+ *
+ * Host thiệp riêng (thiep.mstudo.com) phục vụ /thiep/* ở GỐC: trình duyệt thấy
+ * "/<slug>", "/sua/<token>" chứ không có "/thiep/". Ở host đó (`onThiepHost`)
+ * mọi trang đều là thiệp, trừ trang chào "/".
+ */
+export function isWeddingCardPath(pathname: string | null | undefined, onThiepHost = false): boolean {
+  if (!pathname) return false;
+  if (pathname.startsWith("/thiep/")) return true;
+  return onThiepHost && pathname !== "/" && pathname !== "/thiep" && !pathname.startsWith("/api/");
 }
 
 /**
