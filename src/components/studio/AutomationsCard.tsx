@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Save, Zap, ListChecks, Bell, MessageSquare, Mail, RotateCcw } from "lucide-react";
+import { Check, Save, Zap, ListChecks, Bell, MessageSquare, Mail, RotateCcw, Heart } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import {
   AUTOMATION_RULES,
@@ -14,9 +14,9 @@ import {
 /* ═══════════════════════════════════════════════════════════════════════════
    VIỆC TỰ ĐỘNG — màn cấu hình.
 
-   TÁM luật, mỗi luật một công tắc. Cố ý KHÔNG có trình dựng luật: không chọn
-   điều kiện, không soạn hành động, không thêm luật thứ chín từ giao diện. Studio
-   cần tám việc đúng, bật/tắt được, sửa được số ngày và câu chữ — xem ghi chú đầu
+   CHÍN luật, mỗi luật một công tắc. Cố ý KHÔNG có trình dựng luật: không chọn
+   điều kiện, không soạn hành động, không thêm luật từ giao diện. Studio
+   cần chín việc đúng, bật/tắt được, sửa được số ngày và câu chữ — xem ghi chú đầu
    src/lib/automations.ts.
 
    Ba luật gửi Zalo cho KHÁCH đều TẮT sẵn và có nhãn cảnh báo riêng: một tin nhắn
@@ -31,6 +31,7 @@ const ACTION_META: Record<ActionKind, { label: string; icon: typeof Bell; tone: 
   // Không luật nào lấy email làm kênh chính — nó là kênh dự phòng của ba luật
   // nhắn khách. Vẫn khai ở đây để nhãn có sẵn nếu về sau có luật dùng nó.
   email: { label: "Gửi email cho khách", icon: Mail, tone: "var(--am)" },
+  invitation: { label: "Tạo & gửi thiệp cho khách", icon: Heart, tone: "var(--am)" },
 };
 
 type Row = { enabled: boolean; days: number; message: string };
@@ -94,7 +95,7 @@ export default function AutomationsCard({
         <Zap size={18} style={{ color: "var(--ac)" }} /> Việc tự động
       </h2>
       <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text3)" }}>
-        Tám luật chạy mỗi ngày theo trạng thái hợp đồng. Mỗi luật chỉ chạy <b>một lần</b> cho mỗi hợp đồng
+        {AUTOMATION_RULES.length} luật chạy mỗi ngày theo trạng thái hợp đồng. Mỗi luật chỉ chạy <b>một lần</b> cho mỗi hợp đồng
         (mỗi đợt thanh toán với luật quá hạn), nên bật lên không sợ bị nhắc lặp.
         Đang bật <b>{onCount}/{AUTOMATION_RULES.length}</b>.
       </p>
@@ -163,7 +164,7 @@ export default function AutomationsCard({
                       >
                         {open ? "Ẩn câu chữ" : edited ? "Câu chữ (đã sửa)" : "Sửa câu chữ"}
                       </button>
-                      {(r.action === "zalo" || r.action === "email") && (
+                      {(r.action === "zalo" || r.action === "email" || r.action === "invitation") && (
                         <span className="text-[11px] font-semibold" style={{ color: "var(--am)" }}>
                           Tin này gửi thẳng cho khách — đọc lại trước khi lưu.
                         </span>
@@ -183,7 +184,9 @@ export default function AutomationsCard({
                         <p className="text-[11px]" style={{ color: "var(--text3)" }}>
                           Ô thay được: <code>{"{khach}"}</code> <code>{"{hopdong}"}</code> <code>{"{ngay}"}</code>{" "}
                           <code>{"{conlai}"}</code> <code>{"{quahan}"}</code> <code>{"{dot}"}</code>{" "}
-                          <code>{"{tien}"}</code>. Ô không có dữ liệu sẽ tự biến mất.
+                          <code>{"{tien}"}</code>
+                          {r.action === "invitation" && <> <code>{"{link}"}</code> (link sửa thiệp — xoá đi thì link tự nối vào cuối)</>}
+                          . Ô không có dữ liệu sẽ tự biến mất.
                         </p>
                         {edited && (
                           <button

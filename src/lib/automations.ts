@@ -6,11 +6,11 @@
  * gọi khách xác nhận. Studio quên một việc là mất một khoản thu hoặc một đánh giá.
  *
  * CỐ Ý KHÔNG LÀM TRÌNH DỰNG LUẬT TỰ DO. Studio không cần Zapier — họ cần đúng
- * tám việc, bật/tắt bằng công tắc, sửa được số ngày và câu chữ. Nên:
+ * chín việc, bật/tắt bằng công tắc, sửa được số ngày và câu chữ. Nên:
  *
  *   • tập "KHI" là ĐÓNG (`TriggerKind`) — không có trình chọn điều kiện,
  *   • tập "THÌ" là ĐÓNG (`ActionKind`) — không có trình soạn hành động,
- *   • và cả tám luật được khai sẵn ở `AUTOMATION_RULES` dưới đây.
+ *   • và cả chín luật được khai sẵn ở `AUTOMATION_RULES` dưới đây.
  *
  * File này là LUẬT THUẦN: không đọc DB, không gọi mạng. `dueActions()` nhận một
  * ảnh chụp hợp đồng + cấu hình + những gì ĐÃ chạy, rồi trả về danh sách việc
@@ -57,7 +57,14 @@ export type ActionKind =
    * phiên cá nhân, mà phần lớn studio chưa làm — không có kênh dự phòng thì ba
    * luật nhắn khách bật lên vẫn không tới được ai, và studio tưởng đã nhắn rồi.
    */
-  | "email";
+  | "email"
+  /**
+   * Tạo THIỆP CƯỚI ONLINE cho hợp đồng (điền sẵn tên, ngày, địa điểm) rồi gửi
+   * khách link để tự sửa — Zalo, không được thì email. Không có đường nào tới
+   * khách thì vẫn tạo thiệp (khách thấy nó trong trang hợp đồng của mình) và
+   * giao studio một việc "gửi link cho khách".
+   */
+  | "invitation";
 
 export type AutomationRule = {
   /** Khoá bền — lưu xuống DB, KHÔNG đổi sau khi phát hành. */
@@ -85,12 +92,16 @@ export type AutomationRule = {
 };
 
 /**
- * TÁM LUẬT. Thứ tự ở đây là thứ tự hiện trên màn cấu hình, và nó kể lại vòng đời
- * một hợp đồng: ký → trước buổi chụp → tiền → chọn ảnh → giao → xong.
+ * CHÍN LUẬT. Thứ tự ở đây là thứ tự hiện trên màn cấu hình, và nó kể lại vòng đời
+ * một hợp đồng: ký → trước ngày cưới → trước buổi chụp → tiền → chọn ảnh → giao → xong.
  *
  * Chỉ luật sinh VIỆC hoặc CHUÔNG trong nhà được bật sẵn. Ba luật gửi Zalo cho
  * KHÁCH đều tắt sẵn: một tin nhắn tự động gửi sai tên hoặc sai lúc là chuyện
  * khách nhìn thấy, nên studio phải tự bật sau khi đọc lại câu chữ.
+ *
+ * NGOẠI LỆ: luật TẶNG THIỆP CƯỚI bật sẵn. Đó là một món quà chứ không phải lời
+ * nhắc, và mstudo chủ động tặng khách của các gói phóng sự cưới — studio vẫn tắt
+ * được, hoặc tắt riêng từng hợp đồng.
  */
 export const AUTOMATION_RULES: readonly AutomationRule[] = [
   {
@@ -102,6 +113,20 @@ export const AUTOMATION_RULES: readonly AutomationRule[] = [
     days: null,
     message: "Thu cọc hợp đồng {hopdong} — khách {khach}",
     onByDefault: true,
+  },
+  {
+    key: "gift_invitation",
+    label: "Trước ngày cưới → tặng thiệp cưới online",
+    hint:
+      "Còn N ngày tới ngày thực hiện thì tự tạo thiệp cưới online (điền sẵn tên, ngày, địa điểm) và gửi khách link để tự sửa rồi gửi quan khách. " +
+      "Áp dụng cho hợp đồng gói phóng sự cưới, và hợp đồng studio bật “Tặng thiệp” (mục Tiện ích tặng khách trong hợp đồng).",
+    trigger: "before_shoot",
+    action: "invitation",
+    days: 30,
+    message:
+      "Chào {khach}, studio tặng mình thiệp cưới online cho ngày cưới {ngay}. Mình bấm vào link để điền tên, ảnh, địa điểm rồi gửi cho quan khách nhé: {link}",
+    onByDefault: true,
+    fallback: "email",
   },
   {
     key: "crew_before_shoot",
@@ -245,7 +270,76 @@ export type ContractSnapshot = {
   /** Email khách — kênh dự phòng khi không gửi Zalo được. */
   clientEmail?: string | null;
   dues: DueRow[];
+  /** Gói phóng sự cưới (xem `isWeddingReportage`) — luật tặng thiệp. */
+  reportage?: boolean;
+  /**
+   * Studio chọn riêng cho hợp đồng này (`studio_contracts.gift_invitation`):
+   * true = tặng thiệp, false = không tặng, null = theo gói (phóng sự thì tặng).
+   */
+  giftInvitation?: boolean | null;
+  /** Hợp đồng đã có thiệp cưới online (studio tạo tay, hoặc lượt trước đã tạo). */
+  hasInvitation?: boolean;
 };
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Gói phóng sự cưới — ai được tặng thiệp
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/** Bỏ dấu, thường hoá — để so "Phóng Sự" với "phong su". */
+function fold(s: string): string {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/Đ/g, "d").toLowerCase();
+}
+
+export type PackageInfo = {
+  /** `studio_contracts.shoot_type` */
+  shootType?: string | null;
+  /** `studio_contracts.intake.type` — form điền thông tin kiểu phóng sự cưới ("psc"). */
+  intakeType?: string | null;
+  title?: string | null;
+  /** Tên dịch vụ studio tự đặt (`studio_services.name`). */
+  serviceName?: string | null;
+  /** Tên các hạng mục trong hợp đồng (`contract_items.name`). */
+  itemNames?: (string | null | undefined)[];
+};
+
+/**
+ * Hợp đồng này là GÓI PHÓNG SỰ CƯỚI?
+ *
+ * Không có cờ riêng nào nói điều này, nên đọc từ nhiều chỗ:
+ *   · loại dịch vụ "Quay chụp PSC" (psc) hoặc "Trọn gói ngày cưới" (wedding);
+ *   · form điền thông tin kiểu phóng sự cưới;
+ *   · chữ "phóng sự" / "PSC" trong tên hợp đồng, tên dịch vụ studio tự đặt, hoặc
+ *     tên hạng mục ("Phóng sự x2", "Gói chụp phóng sự") — vì chọn dịch vụ tự đặt
+ *     thì loại dịch vụ bị ghi đè thành "other".
+ * "Phóng sự" của sự kiện khác (sinh nhật, hội nghị, kỷ yếu…) KHÔNG tính — trừ khi
+ * cũng có chữ cưới.
+ */
+export function isWeddingReportage(p: PackageInfo): boolean {
+  if (p.shootType === "psc" || p.shootType === "wedding") return true;
+  if (p.intakeType === "psc") return true;
+  const hay = fold([p.title, p.serviceName, ...(p.itemNames ?? [])].filter(Boolean).join(" | "));
+  if (/pre[\s-]?wedding|pre[\s-]?wed/.test(hay) && !/phong su/.test(hay)) return false;
+  if (!/phong su|\bpsc\b/.test(hay)) return false;
+  if (/cuoi|wedding|vu quy|thanh hon|an hoi|don dau|ruoc dau/.test(hay)) return true;
+  return !/su kien|sinh nhat|thoi noi|day thang|hoi nghi|ky yeu|doanh nghiep|cong ty|khai truong|ra mat|gia dinh|tot nghiep/.test(hay);
+}
+
+/** Ít nhất bấy nhiêu ngày trước ngày cưới mới tặng thiệp — sát ngày thì khách không kịp gửi quan khách. */
+export const INVITATION_MIN_DAYS = 7;
+
+/**
+ * Hợp đồng có được tự TẶNG thiệp không (chưa xét ngày).
+ *   · đã có thiệp → không (studio đã tạo tay thì đã tự gửi; tạo thêm là trùng);
+ *   · khách chưa ký / chưa duyệt → không (hợp đồng còn có thể không thành);
+ *   · studio chọn riêng cho hợp đồng thì theo đó, không thì theo gói phóng sự.
+ */
+export function invitationEligible(c: ContractSnapshot): boolean {
+  if (c.hasInvitation) return false;
+  if (!c.signedAt && c.status !== "approved" && c.status !== "in_progress") return false;
+  if (c.giftInvitation === true) return true;
+  if (c.giftInvitation === false) return false;
+  return !!c.reportage;
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Câu chữ
@@ -259,6 +353,8 @@ export type MessageVars = {
   quahan?: string | number;
   dot?: string;
   tien?: string;
+  /** Link sửa thiệp cưới (luật tặng thiệp) — cron điền sau khi đã tạo thiệp. */
+  link?: string;
 };
 
 /**
@@ -270,7 +366,7 @@ export type MessageVars = {
  */
 export function renderMessage(template: string, vars: MessageVars): string {
   let out = String(template ?? "");
-  const keys: (keyof MessageVars)[] = ["khach", "hopdong", "ngay", "conlai", "quahan", "dot", "tien"];
+  const keys: (keyof MessageVars)[] = ["khach", "hopdong", "ngay", "conlai", "quahan", "dot", "tien", "link"];
   for (const k of keys) {
     const v = vars[k];
     const val = v === undefined || v === null || String(v).trim() === "" ? null : String(v).trim();
@@ -281,6 +377,17 @@ export function renderMessage(template: string, vars: MessageVars): string {
   // Ô lạ (studio gõ tay sai tên) cũng phải biến mất, không lọt ra ngoài.
   out = out.replace(/\s*\{[a-zA-Z_]+\}/g, "");
   return out.replace(/\s{2,}/g, " ").replace(/\s+([,.;!?])/g, "$1").trim();
+}
+
+/**
+ * Câu gửi khách kèm link thiệp. Studio sửa câu chữ mà lỡ xoá ô `{link}` thì link
+ * vẫn được nối vào cuối — tin tặng thiệp mà không có link là tin vô dụng.
+ * Link được điền SAU khi render: dấu chấm ngay sau link không được dính vào link.
+ */
+export function invitationText(template: string, vars: MessageVars, link: string): string {
+  const mark = "@@LINK@@";
+  const msg = renderMessage(template, { ...vars, link: mark });
+  return msg.includes(mark) ? msg.replace(mark, link) : `${msg}\n${link}`.trim();
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -304,6 +411,12 @@ export type PendingAction = {
   toEmail?: string | null;
   /** Kênh dự phòng của luật, chép sẵn để cron không phải tra lại bảng luật. */
   fallback?: ActionKind | null;
+  /**
+   * Luật tặng thiệp: câu chữ GỐC + các ô đã có, để cron render lại khi đã có
+   * link (`invitationText`). `message` khi đó là bản không có link, dùng để báo.
+   */
+  template?: string;
+  vars?: MessageVars;
 };
 
 /** Số ngày giữa hai mốc 'YYYY-MM-DD' (b - a). */
@@ -351,21 +464,27 @@ export function dueActions(
     // dự phòng: khách chỉ để email (khách công ty, khách nước ngoài) vẫn nhắn
     // được, và trước khi có `fallback` thì những hợp đồng đó im lặng tuột mất.
     if (rule.action === "zalo" && !c.clientPhone && !(rule.fallback === "email" && c.clientEmail)) continue;
+    // Tặng thiệp: chỉ hợp đồng đủ điều kiện. KHÔNG đòi có số/email khách — không
+    // gửi được thì thiệp vẫn được tạo (khách thấy trong trang hợp đồng) và studio
+    // nhận việc gửi link tay.
+    if (rule.action === "invitation" && !invitationEligible(c)) continue;
 
     const push = (vars: MessageVars, ref = "") => {
       const key = dedupeKey(rule.key, c.id, ref);
       if (fired.has(key)) return;
       const message = renderMessage(cfg.message, { ...base, ...vars });
       if (!message) return; // studio xoá trắng câu chữ → coi như tắt luật đó
+      const toClient = rule.action === "zalo" || rule.action === "invitation";
       out.push({
         rule: rule.key,
         action: rule.action,
         contractId: c.id,
         message,
         dedupeKey: key,
-        toPhone: rule.action === "zalo" ? c.clientPhone : null,
+        toPhone: toClient ? c.clientPhone : null,
         toEmail: rule.fallback === "email" ? c.clientEmail ?? null : null,
         fallback: rule.fallback ?? null,
+        ...(rule.action === "invitation" ? { template: cfg.message, vars: { ...base, ...vars } } : {}),
       });
     };
 
@@ -381,7 +500,10 @@ export function dueActions(
         // một ngày (Vercel lỗi, project mới bật). Nếu đòi khớp CHÍNH XÁC thì
         // việc đó mất hẳn. Khoá chống lặp lo phần "chỉ một lần".
         // Và `left >= 0`: buổi chụp đã qua thì không nhắc chuẩn bị nữa.
-        if (left !== null && left >= 0 && left <= cfg.days) push({ conlai: left });
+        // Tặng thiệp thì còn ÍT NHẤT một tuần mới tặng: sát ngày khách không kịp
+        // gửi quan khách, thiệp thành thừa. (Studio đặt số ngày < 7 thì lấy đúng số đó.)
+        const min = rule.action === "invitation" ? Math.min(INVITATION_MIN_DAYS, cfg.days) : 0;
+        if (left !== null && left >= min && left <= cfg.days) push({ conlai: left });
         break;
       }
 
@@ -462,6 +584,8 @@ export function emailSubject(ruleKey: string, studioName: string): string {
       return `Album của bạn đã sẵn sàng — ${studio}`;
     case "thanks_after_complete":
       return `Cảm ơn bạn — ${studio}`;
+    case "gift_invitation":
+      return `Thiệp cưới online tặng bạn — ${studio}`;
     default:
       return studio;
   }

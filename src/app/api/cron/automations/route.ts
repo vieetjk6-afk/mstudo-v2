@@ -3,12 +3,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
 import { sendZalo } from "@/lib/zalo/send";
 import { sendEmail } from "@/lib/email";
-import { mainUrl } from "@/lib/hosts";
+import { mainUrl, thiepUrl } from "@/lib/hosts";
 import { todayVN } from "@/lib/date";
+import { isMissingColumn } from "@/lib/missing-column";
+import { createInvitationForContract } from "@/lib/wedding-invite-auto";
 import {
+  RULE_BY_KEY,
+  daysBetween,
   dueActions,
   deliveryFor,
+  effectiveConfig,
   emailSubject,
+  invitationText,
+  isWeddingReportage,
   type AutomationConfig,
   type ContractSnapshot,
   type PendingAction,
@@ -79,19 +86,35 @@ export async function GET(req: NextRequest) {
 
   // Hợp đồng còn "sống": đã gửi / đã duyệt / đang chạy / vừa hoàn thành. Hợp
   // đồng huỷ và hợp đồng nháp không sinh việc gì (bộ luật cũng tự chặn 'cancelled').
-  const { data: contracts } = await db
-    .from("studio_contracts")
-    .select(
-      "id, owner_id, title, client_name, client_phone, client_email, client_token, status, client_signed_at, event_date, selection_album_id, gallery_album_id"
-    )
-    .in("status", ["sent", "approved", "in_progress", "post_production", "completed"])
-    .limit(2000);
+  // Thêm các cột cho luật tặng thiệp: loại gói (phóng sự?), giờ/địa điểm và tên
+  // cô dâu chú rể khách điền ở form thông tin (để điền sẵn vào thiệp).
+  const BASE: string =
+    "id, owner_id, title, client_name, client_phone, client_email, client_token, status, client_signed_at, event_date, selection_album_id, gallery_album_id";
+  const GIFT: string =
+    "shoot_type, service_id, event_time, location, intake_type:intake->>type, groom:intake->groom->>name, bride:intake->bride->>name";
+  const LIVE = ["sent", "approved", "in_progress", "post_production", "completed"];
+  const load = (cols: string) => db.from("studio_contracts").select(cols).in("status", LIVE).limit(2000);
+  let res = await load(`${BASE}, ${GIFT}, gift_invitation`);
+  // Chưa chạy migration thiep_tang_tu_dong.sql → chưa có cột lựa chọn tặng thiệp
+  // của từng hợp đồng. Vẫn chạy được: mọi hợp đồng coi như "theo gói".
+  if (res.error && isMissingColumn(res.error, "gift_invitation")) res = await load(`${BASE}, ${GIFT}`);
+  // Database cũ thiếu cột nào khác của luật tặng thiệp (intake…) thì CHỈ bỏ luật
+  // đó trong lượt này — tám luật còn lại không được phép chết theo.
+  let giftReady = true;
+  if (res.error) {
+    giftReady = false;
+    res = await load(BASE);
+  }
+  const contracts = res.data;
 
-  const list = (contracts ?? []) as {
+  const list = (contracts ?? []) as unknown as {
     id: string; owner_id: string; title: string; client_name: string | null; client_phone: string | null;
     client_email: string | null; client_token: string | null;
     status: string; client_signed_at: string | null; event_date: string | null;
     selection_album_id: string | null; gallery_album_id: string | null;
+    shoot_type: string | null; service_id: string | null; event_time: string | null; location: string | null;
+    intake_type: string | null; groom: string | null; bride: string | null;
+    gift_invitation?: boolean | null;
   }[];
   if (list.length === 0) return NextResponse.json({ ok: true, contracts: 0, done: 0 });
 
@@ -125,6 +148,47 @@ export async function GET(req: NextRequest) {
     ((albums ?? []) as { id: string; selection_done_at: string | null; delivered_at: string | null }[]).map((a) => [a.id, a])
   );
   const fired = new Set(((log ?? []) as { dedupe_key: string }[]).map((r) => r.dedupe_key));
+
+  // ── Luật tặng thiệp: chỉ nạp thêm dữ liệu cho hợp đồng SẮP tới ngày cưới ──
+  // (luật đang bật, ngày thực hiện nằm trong số ngày của luật). Tên dịch vụ,
+  // tên hạng mục → có phải gói phóng sự; thiệp đã có → không tạo thêm.
+  const giftRule = RULE_BY_KEY.gift_invitation;
+  const inviteCands = list.filter((c) => {
+    if (!giftReady || !c.event_date || fired.has(`gift_invitation:${c.id}`)) return false;
+    const eff = effectiveConfig(giftRule, cfgByOwner.get(c.owner_id)?.[giftRule.key]);
+    const left = daysBetween(today, c.event_date);
+    return eff.enabled && left !== null && left >= 0 && left <= eff.days;
+  });
+  const reportage = new Set<string>();
+  const hasInvitation = new Set<string>();
+  if (inviteCands.length) {
+    const candIds = inviteCands.map((c) => c.id);
+    const svcIds = [...new Set(inviteCands.map((c) => c.service_id).filter(Boolean) as string[])];
+    const [{ data: items }, { data: svcs }, { data: invs }] = await Promise.all([
+      db.from("contract_items").select("contract_id, name").in("contract_id", candIds),
+      svcIds.length
+        ? db.from("studio_services").select("id, name").in("id", svcIds)
+        : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+      db.from("wedding_invitations").select("contract_id").in("contract_id", candIds),
+    ]);
+    const itemsBy = new Map<string, string[]>();
+    for (const it of (items ?? []) as { contract_id: string; name: string | null }[]) {
+      if (!itemsBy.has(it.contract_id)) itemsBy.set(it.contract_id, []);
+      if (it.name) itemsBy.get(it.contract_id)!.push(it.name);
+    }
+    const svcName = new Map(((svcs ?? []) as { id: string; name: string }[]).map((s) => [s.id, s.name]));
+    for (const c of inviteCands) {
+      if (isWeddingReportage({
+        shootType: c.shoot_type,
+        intakeType: c.intake_type,
+        title: c.title,
+        serviceName: c.service_id ? svcName.get(c.service_id) : null,
+        itemNames: itemsBy.get(c.id),
+      })) reportage.add(c.id);
+    }
+    for (const r of (invs ?? []) as { contract_id: string | null }[]) if (r.contract_id) hasInvitation.add(r.contract_id);
+  }
+  const contractById = new Map(list.map((c) => [c.id, c]));
 
   // Studio nào GỬI ZALO ĐƯỢC, hỏi MỘT lần cho cả lượt chạy. `sendZalo` tự tra
   // lại cấu hình mỗi lần gọi, nhưng ta cần biết TRƯỚC khi ghi dấu chống lặp:
@@ -187,11 +251,84 @@ ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
       // (dự án hợp nhất) thì mốc nằm trên chính album chọn ảnh.
       deliveredAt: gal?.delivered_at ?? sel?.delivered_at ?? null,
       dues: duesBy.get(c.id) ?? [],
+      reportage: reportage.has(c.id),
+      giftInvitation: giftReady ? c.gift_invitation ?? null : false,
+      hasInvitation: hasInvitation.has(c.id),
     };
     for (const a of dueActions(snap, cfgByOwner.get(c.owner_id) ?? {}, fired, today)) {
       pending.push({ ...a, ownerId: c.owner_id });
     }
   }
+
+  /** Chuông trong dashboard + web-push tới điện thoại chủ studio. */
+  const ring = async (ownerId: string, contractId: string, message: string, tag: string) => {
+    await db.from("studio_notifications").insert({ owner_id: ownerId, contract_id: contractId, kind: "info", message });
+    await sendPushToOwner(ownerId, {
+      title: "mstudo",
+      body: message,
+      url: `/dashboard/studio/contracts/${contractId}`,
+      tag,
+    }).catch(() => {});
+  };
+
+  /**
+   * TẶNG THIỆP: tạo thiệp (hoặc lấy thiệp đã có) → gửi khách link sửa qua Zalo,
+   * không được thì email → báo studio. Không gửi được qua kênh nào thì thiệp vẫn
+   * nằm đó (khách thấy trong trang hợp đồng của mình) và studio nhận một việc
+   * "gửi link cho khách" kèm sẵn link.
+   */
+  const giftInvitation = async (a: PendingAction & { ownerId: string }) => {
+    const c = contractById.get(a.contractId);
+    if (!c) throw new Error("contract_missing");
+    const inv = await createInvitationForContract(db, c);
+    if (!inv.ok) {
+      // Chưa tạo được thiệp thì chưa có gì gửi đi — gỡ dấu chống lặp để mai thử lại.
+      await db.from("studio_automation_log").delete().eq("dedupe_key", a.dedupeKey);
+      throw new Error(inv.error);
+    }
+    // Thiệp đã có từ trước (studio vừa tạo tay giữa hai lượt đọc) → studio tự gửi
+    // rồi, không nhắn khách thêm một lần nữa.
+    if (!inv.created) return;
+    const rel = thiepUrl(`/sua/${inv.edit_token}`);
+    const link = rel.startsWith("/") ? mainUrl(rel) : rel;
+    const text = invitationText(a.template ?? a.message, a.vars ?? {}, link);
+    const studio = studioName.get(a.ownerId) || "Studio";
+    const khach = c.client_name || "khách";
+
+    let sentVia: "Zalo" | "email" | null = null;
+    if (zaloReady.has(a.ownerId) && a.toPhone) {
+      const z = await sendZalo({
+        ownerId: a.ownerId,
+        toPhone: a.toPhone,
+        toName: c.client_name,
+        body: text,
+        kind: `auto_${a.rule}`,
+        audience: "client",
+        contractId: a.contractId,
+      });
+      if (z.ok) sentVia = "Zalo";
+    }
+    if (!sentVia && mailReady && a.toEmail) {
+      const html = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#222">
+<p style="white-space:pre-wrap">${esc(text)}</p>
+<p><a href="${esc(link)}" style="display:inline-block;background:#141215;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Mở thiệp &amp; chỉnh sửa →</a></p>
+<p style="color:#888;font-size:12px">Thiệp cưới online — quà tặng từ ${esc(studio)}.</p></div>`;
+      const r = await sendEmail({ to: a.toEmail, subject: emailSubject(a.rule, studio), html });
+      if (r.ok) sentVia = "email";
+    }
+
+    if (sentVia) {
+      await ring(a.ownerId, a.contractId, `Đã tặng thiệp cưới online cho ${khach} — gửi link sửa qua ${sentVia}.`, `auto-${a.rule}-${a.contractId}`);
+    } else {
+      await db.from("contract_tasks").insert({ contract_id: a.contractId, label: `Gửi khách link sửa thiệp cưới online: ${link}` });
+      await ring(
+        a.ownerId,
+        a.contractId,
+        `Đã tạo thiệp cưới online cho ${khach} nhưng chưa gửi được (chưa nối Zalo / thiếu email khách) — gửi link giúp khách nhé.`,
+        `auto-${a.rule}-${a.contractId}`,
+      );
+    }
+  };
 
   // ── Thi hành ─────────────────────────────────────────────────────────────
   let done = 0;
@@ -222,6 +359,8 @@ ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
     try {
       if (via === "task") {
         await db.from("contract_tasks").insert({ contract_id: a.contractId, label: a.message });
+      } else if (via === "invitation") {
+        await giftInvitation(a);
       } else if (via === "notify") {
         await db.from("studio_notifications").insert({
           owner_id: a.ownerId,

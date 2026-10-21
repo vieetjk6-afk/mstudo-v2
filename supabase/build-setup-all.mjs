@@ -104,6 +104,7 @@ const ORDER = [
   ["migrations/ai_providers.sql", "API key AI nhập trong trang quản trị: key chung của admin + key riêng của từng studio (đã mã hoá)"],
   ["migrations/anh_in_tang.sql", "Ảnh in tặng: số ảnh in theo hợp đồng + khách chọn ảnh in trong album giao khách"],
   ["migrations/anh_in_album_le.sql", "Ảnh in tặng cho album lẻ: số ảnh in nhập ngay trong album (chạy SAU anh_in_tang)"],
+  ["migrations/thiep_tang_tu_dong.sql", "Tự tặng thiệp cưới online trước ngày cưới: lựa chọn tặng / không tặng của từng hợp đồng"],
 ];
 
 /**
@@ -156,6 +157,7 @@ const MOI = [
   "migrations/ai_providers.sql",
   "migrations/anh_in_tang.sql",
   "migrations/anh_in_album_le.sql",
+  "migrations/thiep_tang_tu_dong.sql",
 ];
 
 /**

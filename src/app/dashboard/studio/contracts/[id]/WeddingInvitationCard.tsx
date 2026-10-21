@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Heart, Copy, Check, ExternalLink, Loader2, Pencil } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { isMissingColumn } from "@/lib/missing-column";
 import { thiepUrl } from "@/lib/hosts";
 import { weddingEditMessage } from "@/lib/share-messages";
 import MessengerButton from "@/components/MessengerButton";
@@ -25,15 +26,26 @@ type Existing = { slug: string; edit_token: string; published: boolean } | null;
 /**
  * Studio-side card on a contract: create the free online wedding invitation
  * (a draft prefilled from the contract) and share the client's edit link.
+ *
+ * Chưa có thiệp thì card còn một công tắc "tự tặng": khoảng một tháng trước ngày
+ * cưới, việc tự động `gift_invitation` (src/lib/automations.ts) tự tạo thiệp và
+ * gửi khách link sửa. Gói phóng sự cưới bật sẵn; studio bật/tắt riêng từng hợp
+ * đồng (cột `studio_contracts.gift_invitation`).
  */
 export default function WeddingInvitationCard({
   contract,
   clientName,
   clientMessenger,
+  giftInvitation,
+  reportage,
 }: {
   contract: { id: string; owner_id: string; title: string; event_date: string | null; location: string | null };
   clientName: string;
   clientMessenger: string;
+  /** Lựa chọn riêng của hợp đồng: true tặng, false không tặng, null/undefined theo gói. */
+  giftInvitation?: boolean | null;
+  /** Hợp đồng là gói phóng sự cưới (mặc định được tặng). */
+  reportage: boolean;
 }) {
   const supabase = createClient();
   const [inv, setInv] = useState<Existing>(null);
@@ -41,6 +53,31 @@ export default function WeddingInvitationCard({
   const [creating, setCreating] = useState(false);
   const [copied, setCopied] = useState<"edit" | "view" | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [gift, setGift] = useState<boolean | null>(giftInvitation ?? null);
+  const [savingGift, setSavingGift] = useState(false);
+  const autoOn = gift ?? reportage;
+
+  /**
+   * Bật/tắt tự tặng cho hợp đồng này. Chọn trùng với mặc định của gói thì lưu
+   * null ("theo gói") chứ không đóng đinh true/false — đổi gói sau này là theo.
+   */
+  async function toggleGift() {
+    const next = !autoOn;
+    const value = next === reportage ? null : next;
+    setSavingGift(true);
+    setErr(null);
+    const { error } = await supabase.from("studio_contracts").update({ gift_invitation: value }).eq("id", contract.id);
+    setSavingGift(false);
+    if (error) {
+      setErr(
+        isMissingColumn(error, "gift_invitation")
+          ? "Cần cập nhật cơ sở dữ liệu (chạy supabase/cap-nhat.sql) để lưu lựa chọn này."
+          : error.message,
+      );
+      return;
+    }
+    setGift(value);
+  }
 
   useEffect(() => {
     (async () => {
@@ -112,6 +149,23 @@ export default function WeddingInvitationCard({
           </button>
         )}
       </div>
+
+      {!inv && (
+        <label className="mt-3 flex cursor-pointer items-start gap-2.5 border-t pt-3 text-[12.5px]" style={{ borderColor: "var(--border)" }}>
+          <input type="checkbox" className="mt-0.5" checked={autoOn} disabled={savingGift} onChange={toggleGift} />
+          <span>
+            <span className="font-semibold" style={{ color: "var(--text1, var(--text))" }}>
+              Tự tạo &amp; gửi thiệp cho khách khoảng 1 tháng trước ngày cưới
+            </span>
+            <span className="mt-0.5 block text-[11.5px] leading-relaxed" style={{ color: "var(--text3)" }}>
+              {reportage
+                ? "Gói phóng sự cưới — được tặng sẵn. Bỏ chọn nếu không muốn tặng hợp đồng này."
+                : "Gói này không phải phóng sự cưới — chọn để tặng thiệp cho khách."}{" "}
+              Gửi link sửa qua Zalo, chưa nối Zalo thì gửi email. Đổi số ngày hoặc tắt cho mọi hợp đồng ở Dịch vụ → Việc tự động.
+            </span>
+          </span>
+        </label>
+      )}
 
       {err && <p className="mt-2 text-xs text-red-500">{err}</p>}
 
