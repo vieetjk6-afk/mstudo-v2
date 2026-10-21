@@ -13,7 +13,7 @@ import { AI_KEY_ADMIN_URL, AI_KEY_STUDIO_URL, type ChatProvider } from "./provid
    Phần gửi (DB + push, chống báo trùng) nằm ở provider-alert.ts.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type KeyProblem = "no_credit" | "bad_key";
+export type KeyProblem = "no_credit" | "bad_key" | "bad_model";
 
 /** Một lần gọi nguồn AI bị từ chối — `body` là thân phản hồi lỗi (đã cắt ngắn). */
 export type ProviderFailure = { provider: ChatProvider; status: number; body: string };
@@ -33,16 +33,31 @@ const OPENAI_QUOTA = /exceeded your current quota/i;
 /** Gemini hết hạn mức của CẢ NGÀY (QuotaFailure …PerDay…). Hạn mức từng phút tự hồi sau vài giây, không báo. */
 const GEMINI_DAILY = /per ?day/i;
 
+/**
+ * Nhà cung cấp không có model này: sai tên (gõ thừa chữ, sai một ký tự), model
+ * đã ngừng, hoặc key / nhóm key của bên bán lại chưa được mở model đó. Bên bán
+ * lại chạy one-api / new-api trả 503 "No available channel for model …" — trông
+ * như máy chủ lỗi tạm thời nhưng thử lại bao nhiêu lần cũng vậy.
+ */
+const MODEL_MISSING =
+  /no available channel|model[^.\n]{0,80}(not found|does not exist|not exist|not supported|unsupported|is not available)|unknown model|invalid model|model_not_found/i;
+
+export function isModelMissing(body: string): boolean {
+  return MODEL_MISSING.test(body || "");
+}
+
 const BAD_KEY =
   /api[ _-]?key[ _-]?(not valid|invalid|expired)|API_KEY_INVALID|invalid[ _-]api[ _-]?key|invalid x-api-key|incorrect api key/i;
 
 /**
- * Lỗi này có cần admin / chủ studio ra tay không. null = lỗi thoáng qua hoặc
- * không phải chuyện của key (gọi dồn dập 429, máy chủ 5xx/529, sai model 404…).
+ * Lỗi này có cần admin / chủ studio ra tay không. null = lỗi thoáng qua (gọi
+ * dồn dập 429, máy chủ nhà cung cấp 5xx/529) — tự hết, không báo.
  */
 export function classifyProviderError(type: ChatProvider["type"], status: number, body: string): KeyProblem | null {
-  if (status < 400 || status >= 500) return null;
+  if (status < 400) return null;
   const b = body || "";
+  if (isModelMissing(b)) return "bad_model";
+  if (status >= 500) return null;
   if (status === 402 || NO_CREDIT.test(b)) return "no_credit";
   if (type === "gemini") {
     if (status === 429 && GEMINI_DAILY.test(b)) return "no_credit";
@@ -50,6 +65,7 @@ export function classifyProviderError(type: ChatProvider["type"], status: number
     return "no_credit";
   }
   if (status === 401 || status === 403 || BAD_KEY.test(b)) return "bad_key";
+  if (status === 404) return "bad_model";
   return null;
 }
 
@@ -66,6 +82,19 @@ export type KeyAlert = {
 const PROBLEM_TEXT: Record<KeyProblem, string> = {
   no_credit: "đã hết tiền / hết hạn mức",
   bad_key: "không còn dùng được (sai key, bị khoá hoặc hết hạn)",
+  bad_model: "không gọi được model này (sai tên model, sai địa chỉ API, hoặc nhà cung cấp không có / đã ngừng model)",
+};
+
+const FIX_TEXT: Record<KeyProblem, string> = {
+  no_credit: "Nạp thêm tiền hoặc thay key khác",
+  bad_key: "Thay key mới",
+  bad_model: "Sửa tên model (đúng từng ký tự) hoặc chọn model khác",
+};
+
+const ADMIN_TITLE: Record<KeyProblem, string> = {
+  no_credit: "Key AI cần nạp thêm",
+  bad_key: "Key AI cần thay",
+  bad_model: "Model AI cần sửa",
 };
 
 /** Thông báo cho một lần gọi lỗi, hoặc null khi lỗi không cần ai ra tay. */
@@ -77,7 +106,7 @@ export function keyAlert(f: ProviderFailure): KeyAlert | null {
   // Nhận ra đúng key nào mà không lộ key: loại · model · khoá đã che.
   const which = `“${name}” (${p.type} · ${p.model} · ${maskKey(p.key)})`;
   const what = `${PROBLEM_TEXT[problem]} — HTTP ${f.status}`;
-  const fix = problem === "no_credit" ? "Nạp thêm tiền hoặc thay key khác" : "Thay key mới";
+  const fix = FIX_TEXT[problem];
 
   if (p.scope === "studio") {
     return {
@@ -99,7 +128,7 @@ export function keyAlert(f: ProviderFailure): KeyAlert | null {
   return {
     audience: "admins",
     kind: "ai_key_shared",
-    title: "Key AI cần nạp thêm",
+    title: ADMIN_TITLE[problem],
     message: `${where} ${what}. ${place}`,
     url: AI_KEY_ADMIN_URL,
   };

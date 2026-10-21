@@ -14,8 +14,9 @@ import {
   checkBaseUrl,
   withLabels,
   parseProviderList,
+  cleanModel,
 } from "../../src/lib/vieetjk/provider-input.ts";
-import { classifyProviderError, keyAlert } from "../../src/lib/vieetjk/provider-alert-rules.ts";
+import { classifyProviderError, isModelMissing, keyAlert } from "../../src/lib/vieetjk/provider-alert-rules.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -186,11 +187,38 @@ check(
     classifyProviderError("openai", 429, ERR.openaiRate),
     classifyProviderError("gemini", 429, ERR.geminiMinute),
     classifyProviderError("openai", 500, "billing"),
-    classifyProviderError("openai", 404, '{"error":{"message":"The model `gpt-9` does not exist"}}'),
     classifyProviderError("openai", 200, ""),
   ],
-  [null, null, null, null, null, null, null]
+  [null, null, null, null, null, null]
 );
+
+/* ── Sai tên model / nhà cung cấp không có model ─────────────────────────── */
+// Bên bán lại chạy new-api: 503 nhưng thử lại bao nhiêu lần cũng vậy.
+const NEWAPI = '{"error":{"message":"No available channel for model model gpt-5.6-sol under group default (distributor) (request id: 2026102101164608)","type":"new_api_error"}}';
+check(
+  "nhận ra sai tên model",
+  [
+    isModelMissing(NEWAPI),
+    classifyProviderError("openai", 503, NEWAPI),
+    classifyProviderError("openai", 404, '{"error":{"message":"The model `gpt-9` does not exist or you do not have access to it.","code":"model_not_found"}}'),
+    classifyProviderError("gemini", 404, '[{"error":{"code":404,"message":"models/gemini-9 is not found for API version v1beta"}}]'),
+    classifyProviderError("anthropic", 404, '{"type":"error","error":{"type":"not_found_error","message":"model: claude-x"}}'),
+    isModelMissing("Overloaded"),
+  ],
+  [true, "bad_model", "bad_model", "bad_model", "bad_model", false]
+);
+check(
+  "gỡ chữ thừa dán theo tên model",
+  ["model gpt-5.6-sol", "Model: \"gpt-5\"", "model = 'gpt-5',", " gpt-4o-mini ", "model-x", "models/gemini-pro", "deepseek/deepseek-chat"].map(cleanModel),
+  ["gpt-5.6-sol", "gpt-5", "gpt-5", "gpt-4o-mini", "model-x", "models/gemini-pro", "deepseek/deepseek-chat"]
+);
+{
+  const r = mergeProviderInput([], [{ type: "openai", key: "sk-new-key-123456", model: "model gpt-5.6-sol" }], newId);
+  check("lưu tên model đã gỡ chữ thừa", r.ok && r.list[0].model, "gpt-5.6-sol");
+  const bad = mergeProviderInput([], [{ type: "openai", key: "sk-new-key-123456", model: "gpt 5" }], newId);
+  check("tên model có dấu cách → báo lỗi", bad.ok ? "" : bad.error.includes("dấu cách"), true);
+  check("nguồn đã lưu tên sai vẫn chạy", parseStoredList([{ id: "x1", type: "openai", key: "sk-1", model: "model gpt-5.6-sol" }])[0].model, "gpt-5.6-sol");
+}
 
 const shared = { type: "anthropic", key: "sk-ant-api03-SECRET-9876", model: "claude-haiku-5-5", label: "Claude chính", scope: "shared" };
 const own = { ...shared, label: "riêng/Claude studio", scope: "studio" };
@@ -209,6 +237,10 @@ const env = { type: "gemini", key: "AIzaSyENV-SECRET-5555", model: "gemini-flash
 {
   const a = keyAlert({ provider: env, status: 429, body: ERR.geminiDay });
   check("key trong biến môi trường → báo admin", [a.audience, a.message.includes("biến môi trường Vercel")], ["admins", true]);
+}
+{
+  const a = keyAlert({ provider: shared, status: 503, body: NEWAPI });
+  check("sai model → báo admin sửa model", [a.audience, a.title, a.message.includes("Sửa tên model")], ["admins", "Model AI cần sửa", true]);
 }
 check("lỗi thoáng qua → không có thông báo", keyAlert({ provider: shared, status: 529, body: ERR.claudeOverloaded }), null);
 

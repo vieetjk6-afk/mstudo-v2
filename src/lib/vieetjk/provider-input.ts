@@ -28,19 +28,30 @@ import {
 
 const TYPES: ProviderType[] = ["gemini", "openai", "anthropic", "responses"];
 
+/**
+ * Tên model người dùng dán vào — gỡ phần thừa hay dính theo khi chép từ tài
+ * liệu của bên bán lại: `model gpt-5`, `model: "gpt-5"`, `model = 'gpt-5',`.
+ * Tên model thật không bao giờ có dấu cách hay dấu nháy; để lọt là nhà cung
+ * cấp báo "không có model" (one-api: 503 "No available channel for model
+ * model gpt-5…") mà nhìn vào ô nhập khó nhận ra.
+ */
+export function cleanModel(raw: unknown): string {
+  if (typeof raw !== "string") return "";
+  return raw
+    .trim()
+    .replace(/^model(\s*[:=]\s*|\s+)/i, "")
+    .replace(/^["'`]+|["'`,;]+$/g, "")
+    .trim();
+}
+
 /** Đọc MỘT nguồn từ JSON tự do (biến môi trường / dữ liệu đã lưu). */
 export function normalizeProvider(p: any): ChatProvider | null {
   const type = TYPES.includes(p?.type) ? (p.type as ProviderType) : null;
   const key = typeof p?.key === "string" ? p.key.trim() : "";
   if (!type || !key) return null;
   const model =
-    typeof p?.model === "string" && p.model.trim()
-      ? p.model.trim()
-      : type === "gemini"
-      ? "gemini-flash-latest"
-      : type === "anthropic"
-      ? "claude-haiku-4-5"
-      : "gpt-4o-mini";
+    cleanModel(p?.model) ||
+    (type === "gemini" ? "gemini-flash-latest" : type === "anthropic" ? "claude-haiku-4-5" : "gpt-4o-mini");
   const baseUrl = typeof p?.baseUrl === "string" && p.baseUrl.trim() ? p.baseUrl.trim().replace(/\/+$/, "") : undefined;
   const effort = typeof p?.effort === "string" && p.effort.trim() ? p.effort.trim() : undefined;
   const label = typeof p?.label === "string" && p.label.trim() ? p.label.trim() : `${type}:${model}`;
@@ -157,8 +168,11 @@ export function mergeProviderInput(
     const n = `Nguồn #${i + 1}`;
     const type = TYPES.includes(x.type) ? (x.type as ProviderType) : null;
     if (!type) return { ok: false, error: `${n}: chưa chọn loại.` };
-    const model = str(x.model, 120);
+    const model = cleanModel(str(x.model, 120));
     if (!model) return { ok: false, error: `${n}: chưa nhập tên model.` };
+    if (/\s/.test(model)) {
+      return { ok: false, error: `${n}: tên model không có dấu cách — chỉ nhập đúng tên, vd gpt-4o-mini.` };
+    }
     const effort = str(x.effort, 10);
     if (effort && !(EFFORTS as readonly string[]).includes(effort)) {
       return { ok: false, error: `${n}: mức suy nghĩ không hợp lệ.` };
