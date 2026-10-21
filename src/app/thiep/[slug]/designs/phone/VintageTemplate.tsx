@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -306,7 +307,7 @@ export default function VintageTemplate({ inv, wishes, guest }: TemplateProps) {
 
             <Orn big />
             <footer>
-              <div style={{ fontFamily: SERIF, fontSize: 30, color: DARK }}>{d.bride} &amp; {d.groom}</div>
+              <FitLine text={`${d.bride} & ${d.groom}`} size={30} style={{ fontFamily: SERIF, color: DARK }} />
               <div style={{ ...lab, marginTop: 6 }}>Thiệp cưới online</div>
             </footer>
           </div>

@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -250,7 +251,7 @@ export default function SongHyTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         <footer style={{ textAlign: "center", borderTop: "1px solid rgba(255,215,122,.35)", paddingTop: 22 }}>
-          <div style={{ fontFamily: SERIF, fontSize: 30, color: accent }}>{d.bride} &amp; {d.groom}</div>
+          <FitLine text={`${d.bride} & ${d.groom}`} size={30} style={{ fontFamily: SERIF, color: accent }} />
           <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: SAND, marginTop: 6 }}>Thiệp cưới online</div>
         </footer>
       </div>

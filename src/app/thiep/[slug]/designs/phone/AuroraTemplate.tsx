@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -246,7 +247,7 @@ export default function AuroraTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         <footer style={{ textAlign: "center" }}>
-          <div style={{ fontFamily: HAND, fontSize: 34, color: accent }}>{d.bride} &amp; {d.groom}</div>
+          <FitLine text={`${d.bride} & ${d.groom}`} size={34} style={{ fontFamily: HAND, color: accent }} />
           <div style={{ ...lab, fontSize: 10, marginTop: 6 }}>Thiệp cưới online</div>
         </footer>
       </div>

@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -137,7 +138,7 @@ export default function ThuMoiTemplate({ inv, wishes, guest }: TemplateProps) {
         <Reveal anim="zoom">
           <div style={{ fontFamily: HAND, fontSize: 58, lineHeight: 1.1, color: "#111" }}>Thư Mời</div>
           <div style={{ marginTop: 8, fontSize: 15, letterSpacing: ".04em", color: "#111" }}>THAM DỰ LỄ CƯỚI CỦA</div>
-          <div style={{ fontFamily: HAND, fontSize: 38, lineHeight: 1.25, color: accent, marginTop: 4 }}>{d.groom} &amp; {d.bride}</div>
+          <FitLine text={`${d.groom} & ${d.bride}`} size={38} style={{ fontFamily: HAND, lineHeight: 1.25, color: accent, marginTop: 4 }} />
         </Reveal>
 
         {d.pair.length > 0 && (
@@ -355,7 +356,7 @@ export default function ThuMoiTemplate({ inv, wishes, guest }: TemplateProps) {
         <footer style={{ textAlign: "center" }}>
           {d.closing && <div style={{ fontSize: 13, letterSpacing: ".08em", textTransform: "uppercase", color: GREY }}>{d.closing}</div>}
           <p style={{ fontFamily: HAND, fontSize: 46, lineHeight: 1.2, color: accent, margin: "6px 0 0" }}>Thank you!</p>
-          <p style={{ fontFamily: HAND, fontSize: 28, color: INK, margin: 0 }}>{d.groom} &amp; {d.bride}</p>
+          <FitLine text={`${d.groom} & ${d.bride}`} size={28} style={{ fontFamily: HAND, color: INK, margin: 0 }} />
         </footer>
       </div>
 

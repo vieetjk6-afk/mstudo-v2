@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import GiftBox from "./GiftBox";
 import { alpha, ensureContrast, mix, safeHex } from "@/lib/wedding-palette";
 import PhotoViewer from "./PhotoViewer";
@@ -406,7 +407,7 @@ export default function DoDoTemplate({ inv, wishes, guest }: TemplateProps) {
           {d.thanks || "Sự hiện diện của quý khách là niềm vinh hạnh của gia đình chúng tôi!"}
         </p>
         {d.closing && <div style={{ position: "relative", fontFamily: HAND, fontSize: 30, color: accent, marginTop: 12 }}>{d.closing}</div>}
-        <div style={{ position: "relative", fontFamily: PLAY, fontSize: 24, color: accent, marginTop: 18 }}>{d.groom} &amp; {d.bride}</div>
+        <FitLine text={`${d.groom} & ${d.bride}`} size={24} style={{ position: "relative", fontFamily: PLAY, color: accent, marginTop: 18 }} />
       </section>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

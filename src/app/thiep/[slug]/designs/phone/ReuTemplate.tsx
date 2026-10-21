@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { alpha, contrast, ensureContrast, mix, safeHex } from "@/lib/wedding-palette";
 import PhotoViewer from "./PhotoViewer";
 import { Ambient, MapBox, MonthCalendar, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
@@ -323,7 +324,7 @@ export default function ReuTemplate({ inv, wishes, guest }: TemplateProps) {
           {d.thanks || "Sự hiện diện của bạn là niềm vinh hạnh cho gia đình chúng tôi.\nChân thành cảm ơn!"}
         </p>
         {d.closing && <div style={{ fontFamily: HAND, fontSize: 30, color: P.text, marginTop: 10 }}>{d.closing}</div>}
-        <div style={{ fontFamily: PLAY, fontSize: 22, color: P.text, marginTop: 14 }}>{d.groom} &amp; {d.bride}</div>
+        <FitLine text={`${d.groom} & ${d.bride}`} size={22} style={{ fontFamily: PLAY, color: P.text, marginTop: 14 }} />
       </section>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

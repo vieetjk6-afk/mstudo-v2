@@ -3,6 +3,7 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { nightPalette, lightPalette } from "@/lib/wedding-palette";
 import { TEMPLATE_ALIASES, getTemplateMeta } from "./templates";
+import FitLine from "./FitLine";
 
 /**
  * HIỆU ỨNG MỞ THIỆP — lớp phủ khách thấy trước khi tấm thiệp hiện ra.
@@ -117,20 +118,23 @@ export default function CardIntro({
   const ink = meta.dark ? meta.ink : "#2c2621";
   const serif = meta.serif ? "var(--font-cormorant), serif" : "var(--font-be-vietnam), system-ui, sans-serif";
 
-  /** Dòng chữ giữa lớp mở — dùng chung cho cả năm kiểu. */
+  /*
+   * Dòng chữ giữa lớp mở — dùng chung cho mọi kiểu mở.
+   * Tên khách / tên cô dâu chú rể luôn nằm trên MỘT hàng (FitLine tự thu nhỏ cỡ
+   * chữ khi tên dài): bẻ đôi kiểu "Đức Linh & Uyên / Phương" trông như lỗi.
+   * Bề ngang cố định (co theo khung cha nếu khung hẹp hơn) để FitLine có mốc mà đo.
+   */
   const caption = (
-    <div style={{ textAlign: "center", padding: "0 18px", color: ink }}>
+    <div style={{ textAlign: "center", padding: "0 14px", color: ink, width: "min(80vw, 320px)", maxWidth: "100%", boxSizing: "border-box" }}>
       <div style={{ fontFamily: serif, fontSize: 11, letterSpacing: ".22em", textTransform: "uppercase", color: a }}>
         {name ? label : "Thiệp cưới"}
       </div>
-      <div style={{
-        fontFamily: name ? "var(--font-hand), cursive" : serif,
-        fontSize: name ? 38 : 30, lineHeight: 1.12, marginTop: 6,
-      }}>
-        {name || couple || "Mời bạn"}
-      </div>
+      <FitLine
+        text={name || couple || "Mời bạn"} size={name ? 38 : 30} min={14}
+        style={{ fontFamily: name ? "var(--font-hand), cursive" : serif, lineHeight: 1.12, marginTop: 6 }}
+      />
       {name && couple && (
-        <div style={{ fontFamily: serif, fontSize: 12.5, letterSpacing: ".1em", color: a, marginTop: 8 }}>{couple}</div>
+        <FitLine text={couple} size={12.5} min={9} style={{ fontFamily: serif, letterSpacing: ".1em", color: a, marginTop: 8 }} />
       )}
     </div>
   );
@@ -657,7 +661,7 @@ function Wreath({ opening, accent, dark, paper, ease, children }: StyleProps) {
           );
         })}
       </svg>
-      <div style={{ position: "relative", padding: "0 30px" }}>{children}</div>
+      <div style={{ position: "relative", width: "100%", padding: "0 40px", boxSizing: "border-box" }}>{children}</div>
     </div>
   );
 }

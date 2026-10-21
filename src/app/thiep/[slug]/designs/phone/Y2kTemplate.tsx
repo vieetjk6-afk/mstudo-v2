@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -256,7 +257,7 @@ export default function Y2kTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         <footer style={{ textAlign: "center", paddingTop: 6 }}>
-          <div style={{ ...NAME, fontSize: 26 }}>{d.bride} &amp; {d.groom}</div>
+          <FitLine text={`${d.bride} & ${d.groom}`} size={26} style={{ ...NAME }} />
           <div style={{ ...lab, marginTop: 8 }}>Thiệp cưới online</div>
         </footer>
       </div>

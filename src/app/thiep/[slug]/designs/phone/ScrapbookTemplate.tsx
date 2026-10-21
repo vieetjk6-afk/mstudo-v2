@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -298,7 +299,7 @@ export default function ScrapbookTemplate({ inv, wishes, guest }: TemplateProps)
         )}
 
         <footer style={{ textAlign: "center", transform: "rotate(0.8deg)" }}>
-          <div style={{ fontFamily: HAND, fontSize: 30 }}>{d.bride} &amp; {d.groom}</div>
+          <FitLine text={`${d.bride} & ${d.groom}`} size={30} style={{ fontFamily: HAND }} />
           <div style={{ fontFamily: HAND, fontSize: 17, color: BROWN }}>thiệp cưới online</div>
         </footer>
       </div>

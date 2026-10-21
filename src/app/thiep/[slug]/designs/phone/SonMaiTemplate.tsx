@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -259,7 +260,7 @@ export default function SonMaiTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         <footer style={{ borderTop: `1px solid ${LINE}`, paddingTop: 22 }}>
-          <div style={{ fontFamily: SERIF, fontSize: 26, color: accent }}>{d.bride} &amp; {d.groom}</div>
+          <FitLine text={`${d.bride} & ${d.groom}`} size={26} style={{ fontFamily: SERIF, color: accent }} />
           <div style={{ fontSize: 10, letterSpacing: ".3em", textTransform: "uppercase", color: STEEL, marginTop: 6 }}>Thiệp cưới online</div>
         </footer>
       </div>
