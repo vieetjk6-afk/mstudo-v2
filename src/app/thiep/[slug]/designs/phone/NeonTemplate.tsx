@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -262,7 +263,7 @@ export default function NeonTemplate({ inv, wishes, guest }: TemplateProps) {
           )}
           <Barcode seed={d.slug || "wedding"} />
           <footer style={{ textAlign: "center" }}>
-            <div style={{ fontWeight: 700, fontSize: 18, color: "#fff" }}>{d.bride} &amp; {d.groom}</div>
+            <FitLine text={`${d.bride} & ${d.groom}`} size={18} style={{ fontWeight: 700, color: "#fff" }} />
             <div style={{ fontSize: 10, letterSpacing: ".3em", color: MUTED, whiteSpace: "pre-line", marginTop: 6 }}>
               {d.closing || "ONE NIGHT ONLY · SEE YOU THERE"}
             </div>

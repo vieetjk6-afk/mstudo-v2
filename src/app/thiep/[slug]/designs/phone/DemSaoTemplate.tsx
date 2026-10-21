@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import GiftBox from "./GiftBox";
 import { mix, nightPalette } from "@/lib/wedding-palette";
 import PhotoViewer from "./PhotoViewer";
@@ -349,7 +350,7 @@ export default function DemSaoTemplate({ inv, wishes, guest }: TemplateProps) {
         <div className="wed-sheen" style={{ position: "relative", fontFamily: HAND, fontSize: 58, lineHeight: 1.1, marginTop: 16, color: INK, "--wed-t1": INK, "--wed-t2": "#fff" } as CSSVars}>Thank You</div>
         <p style={{ ...body, position: "relative", margin: "8px auto 0", maxWidth: 300, whiteSpace: "pre-line" }}>{d.thanks || "Sự hiện diện của Quý khách là niềm vinh hạnh cho gia đình chúng tôi."}</p>
         {d.closing && <div style={{ position: "relative", fontFamily: HAND, fontSize: 28, color: SILVER, marginTop: 10 }}>{d.closing}</div>}
-        <div style={{ position: "relative", fontFamily: HAND, fontSize: 34, color: INK, marginTop: 14 }}>{d.groom} &amp; {d.bride}</div>
+        <FitLine text={`${d.groom} & ${d.bride}`} size={34} style={{ position: "relative", fontFamily: HAND, color: INK, marginTop: 14 }} />
       </section>
 
       {d.c.music_url && <MusicPlayer url={d.c.music_url} autoplay={d.c.music_autoplay} />}

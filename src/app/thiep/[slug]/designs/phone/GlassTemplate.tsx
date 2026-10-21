@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -265,7 +266,7 @@ export default function GlassTemplate({ inv, wishes, guest }: TemplateProps) {
         )}
 
         <footer style={{ textAlign: "center", paddingTop: 6 }}>
-          <div style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-.02em" }}>{d.bride} &amp; {d.groom}</div>
+          <FitLine text={`${d.bride} & ${d.groom}`} size={26} style={{ fontWeight: 700, letterSpacing: "-.02em" }} />
           <div style={{ ...lab, marginTop: 8 }}>Thiệp cưới online</div>
         </footer>
       </div>

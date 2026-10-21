@@ -1,5 +1,6 @@
 import MusicPlayer from "../../MusicPlayer";
 import type { TemplateProps } from "../../shared";
+import FitLine from "../../FitLine";
 import { Ambient, Letters, MapBox, PhoneCountdown, PhoneShell, QuickRsvp, Reveal, Slot, initial, phoneData } from "./kit";
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -259,7 +260,7 @@ export default function SenTemplate({ inv, wishes, guest }: TemplateProps) {
 
         <footer style={{ textAlign: "center", paddingTop: 10 }}>
           {rule}
-          <p style={{ fontFamily: SERIF, fontSize: 30, color: accent, margin: "14px 0 4px" }}>{d.bride} &amp; {d.groom}</p>
+          <FitLine text={`${d.bride} & ${d.groom}`} size={30} style={{ fontFamily: SERIF, color: accent, margin: "14px 0 4px" }} />
           <p style={{ fontSize: 11, letterSpacing: ".24em", textTransform: "uppercase", color: MUTED }}>Thiệp cưới online</p>
         </footer>
       </div>
