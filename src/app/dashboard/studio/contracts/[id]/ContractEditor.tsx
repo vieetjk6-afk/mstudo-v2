@@ -109,6 +109,7 @@ import { isSignedLockError, type ContractAddendum } from "@/lib/contract-addenda
 import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
 import { albumOptionLabel, type ContractAlbumOption } from "@/lib/contract-album";
 import ContractAlbumModeCard from "./ContractAlbumModeCard";
+import { isWeddingReportage } from "@/lib/automations";
 import { normalizeAlbumMode, type AlbumMode } from "@/lib/album-mode";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
@@ -3446,6 +3447,14 @@ export default function ContractEditor({
                     contract={{ id: contract.id, owner_id: contract.owner_id, title: f.title, event_date: f.event_date || null, location: f.location || null }}
                     clientName={f.client_name}
                     clientMessenger={f.client_messenger}
+                    giftInvitation={contract.gift_invitation}
+                    reportage={isWeddingReportage({
+                      shootType: f.shoot_type,
+                      intakeType: contract.intake?.type,
+                      title: f.title,
+                      serviceName: services.find((s) => s.id === f.service_id)?.name,
+                      itemNames: items.map((it) => it.name),
+                    })}
                   />
 
                   {/* Love Story page (free gift) */}

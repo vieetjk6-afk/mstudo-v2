@@ -21,8 +21,17 @@ import {
   dueActions,
   effectiveConfig,
   emailSubject,
+  invitationEligible,
+  invitationText,
+  isWeddingReportage,
+  INVITATION_MIN_DAYS,
   renderMessage,
 } from "../../src/lib/automations.ts";
+import {
+  invitationConfigFromContract,
+  invitationSlug,
+  invitationSlugName,
+} from "../../src/lib/wedding-invite-auto.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -59,10 +68,10 @@ const only = (key, over = {}) => {
 };
 const run = (c, cfg, fired = [], today = TODAY) => dueActions(c, cfg, new Set(fired), today);
 
-/* ═══ Bản khai tám luật ══════════════════════════════════════════════════════ */
+/* ═══ Bản khai chín luật ═════════════════════════════════════════════════════ */
 
-check("đúng tám luật", AUTOMATION_RULES.length, 8);
-ok("khoá luật không trùng nhau", new Set(AUTOMATION_RULES.map((r) => r.key)).size === 8);
+check("đúng chín luật", AUTOMATION_RULES.length, 9);
+ok("khoá luật không trùng nhau", new Set(AUTOMATION_RULES.map((r) => r.key)).size === 9);
 ok("mọi luật đều có câu chữ mặc định", AUTOMATION_RULES.every((r) => r.message.trim().length > 10));
 ok("mọi luật đều có câu giải thích cho studio đọc", AUTOMATION_RULES.every((r) => r.hint.trim().length > 10));
 ok(
@@ -269,7 +278,7 @@ check(
 
   // Ba luật nhắn khách phải CÓ dự phòng, các luật trong nhà thì KHÔNG.
   for (const r of AUTOMATION_RULES) {
-    if (r.action === "zalo") ok(`luật "${r.key}" có kênh dự phòng email`, r.fallback === "email");
+    if (r.action === "zalo" || r.action === "invitation") ok(`luật "${r.key}" có kênh dự phòng email`, r.fallback === "email");
     else ok(`luật trong nhà "${r.key}" không khai dự phòng`, r.fallback === undefined);
   }
 
@@ -298,6 +307,80 @@ check(
   ok("tiêu đề thư mang tên studio", emailSubject("ask_review_after_deliver", "Ánh Dương").includes("Ánh Dương"));
   ok("tiêu đề thư không rỗng khi thiếu tên studio", emailSubject("thanks_after_complete", "").length > 0);
   check("luật lạ → tiêu đề rơi về tên studio", emailSubject("khong_co_luat_nay", "Ánh Dương"), "Ánh Dương");
+}
+
+/* ═══ Tặng thiệp cưới online trước ngày cưới ═════════════════════════════════ */
+{
+  // Gói phóng sự cưới — đọc từ nhiều chỗ vì không có cờ riêng.
+  ok("loại dịch vụ PSC → phóng sự", isWeddingReportage({ shootType: "psc" }));
+  ok("Trọn gói ngày cưới → phóng sự", isWeddingReportage({ shootType: "wedding" }));
+  ok("form thông tin kiểu phóng sự cưới → phóng sự", isWeddingReportage({ shootType: "other", intakeType: "psc" }));
+  ok("tên hợp đồng 'Chụp phóng sự cưới' (dịch vụ tự đặt → other)",
+    isWeddingReportage({ shootType: "other", title: "Hợp đồng Chụp Phóng Sự Cưới 12/12/2026" }));
+  ok("hạng mục 'Phóng sự x2'", isWeddingReportage({ shootType: "other", title: "Hợp đồng dịch vụ", itemNames: ["Phóng sự x2", "Album 25x25"] }));
+  ok("dịch vụ studio đặt tên 'Gói PSC Premium'", isWeddingReportage({ shootType: "other", serviceName: "Gói PSC Premium" }));
+  ok("phóng sự SINH NHẬT không tính", !isWeddingReportage({ shootType: "other", title: "Chụp phóng sự sinh nhật bé Na" }));
+  ok("phóng sự SỰ KIỆN công ty không tính", !isWeddingReportage({ shootType: "other", itemNames: ["Phóng sự sự kiện công ty"] }));
+  ok("phóng sự sự kiện nhưng có chữ cưới → tính", isWeddingReportage({ shootType: "other", itemNames: ["Phóng sự sự kiện tiệc cưới"] }));
+  ok("chụp cưới studio (không phải phóng sự) không tính", !isWeddingReportage({ shootType: "photo", title: "Chụp ảnh cưới studio" }));
+  ok("prewedding không tính", !isWeddingReportage({ shootType: "prewedding", title: "Prewedding Đà Lạt" }));
+  ok("không có thông tin gì → không tính", !isWeddingReportage({}));
+
+  const today = "2026-11-01";
+  const psc = (o = {}) => contract({ eventDate: "2026-12-01", signedAt: "2026-06-01", reportage: true, clientEmail: "lan@x.vn", ...o });
+  const gift = only("gift_invitation");
+
+  const a = run(psc(), gift, [], today);
+  check("gói phóng sự, còn 30 ngày → tặng thiệp", a.map((x) => x.action), ["invitation"]);
+  check("gửi tới số khách", a[0]?.toPhone, "0912345678");
+  check("email dự phòng", a[0]?.toEmail, "lan@x.vn");
+  ok("giữ câu chữ gốc để cron điền link sau", a[0]?.template?.includes("{link}"));
+  ok("thông báo nội bộ không lộ ô {link}", !/[{}]/.test(a[0]?.message ?? "{"));
+  check("chạy lần hai KHÔNG tặng thêm", run(psc(), gift, [a[0].dedupeKey], today).length, 0);
+
+  check("còn 31 ngày → chưa tặng", run(psc({ eventDate: "2026-12-02" }), gift, [], today).length, 0);
+  check(`còn ${INVITATION_MIN_DAYS} ngày → vẫn tặng`, run(psc({ eventDate: "2026-11-08" }), gift, [], today).length, 1);
+  check("còn 6 ngày → thôi (khách không kịp gửi quan khách)", run(psc({ eventDate: "2026-11-07" }), gift, [], today).length, 0);
+  check("ngày cưới đã qua → không tặng", run(psc({ eventDate: "2026-10-30" }), gift, [], today).length, 0);
+  check("studio đặt 45 ngày → tặng ở mốc 40 ngày",
+    run(psc({ eventDate: "2026-12-11" }), only("gift_invitation", { days: 45 }), [], today).length, 1);
+  check("studio đặt 5 ngày → tặng ở mốc 5 ngày (không kẹt mốc 7)",
+    run(psc({ eventDate: "2026-11-06" }), only("gift_invitation", { days: 5 }), [], today).length, 1);
+
+  check("không phải gói phóng sự → không tặng", run(psc({ reportage: false }), gift, [], today).length, 0);
+  check("không phải phóng sự nhưng studio chọn TẶNG → tặng", run(psc({ reportage: false, giftInvitation: true }), gift, [], today).length, 1);
+  check("gói phóng sự nhưng studio chọn KHÔNG tặng → thôi", run(psc({ giftInvitation: false }), gift, [], today).length, 0);
+  check("đã có thiệp (studio tạo tay) → không tạo thêm", run(psc({ hasInvitation: true }), gift, [], today).length, 0);
+  check("khách chưa ký, mới gửi hợp đồng → chưa tặng", run(psc({ signedAt: null, status: "sent" }), gift, [], today).length, 0);
+  check("chưa ký nhưng khách đã duyệt → tặng", run(psc({ signedAt: null, status: "approved" }), gift, [], today).length, 1);
+  check("hợp đồng huỷ → không tặng", run(psc({ status: "cancelled" }), gift, [], today).length, 0);
+  check("không số, không email → VẪN tạo thiệp (studio nhận việc gửi tay)",
+    run(psc({ clientPhone: null, clientEmail: null }), gift, [], today).length, 1);
+  check("luật tắt → không tặng", run(psc(), only("crew_before_shoot"), [], today).filter((x) => x.action === "invitation").length, 0);
+  ok("luật tặng thiệp bật sẵn — là quà, không phải lời nhắc", RULE_BY_KEY.gift_invitation.onByDefault === true);
+  check("mặc định 30 ngày", effectiveConfig(RULE_BY_KEY.gift_invitation).days, 30);
+  ok("điều kiện tặng: hàm dùng chung cho cron", invitationEligible(psc()) && !invitationEligible(psc({ hasInvitation: true })));
+
+  // Câu gửi khách luôn có link — kể cả khi studio sửa câu chữ mà xoá ô {link}.
+  const link = "https://thiep.mstudo.com/sua/abc123";
+  const t1 = invitationText(RULE_BY_KEY.gift_invitation.message, { khach: "Lan", ngay: "01/12/2026" }, link);
+  ok("câu mặc định có link", t1.includes(link));
+  ok("câu mặc định không lộ ngoặc nhọn", !/[{}]/.test(t1));
+  check("studio xoá ô {link} → link nối xuống cuối", invitationText("Chào {khach}, quà của studio nè!", { khach: "Lan" }, link), `Chào Lan, quà của studio nè!\n${link}`);
+  check("dấu chấm sau link không dính vào link", invitationText("Link: {link}.", {}, link), `Link: ${link}.`);
+  check("tiêu đề thư tặng thiệp", emailSubject("gift_invitation", "Ánh Dương"), "Thiệp cưới online tặng bạn — Ánh Dương");
+
+  // Thiệp nháp điền sẵn từ hợp đồng.
+  const src = { id: "c1", owner_id: "o1", title: "HĐ", client_name: "Chị Lan", event_date: "2026-12-01", event_time: "17:30", location: "Nhà hàng Ngân Hà", bride: "Thu Hà", groom: "Minh Tuấn" };
+  const cfg = invitationConfigFromContract(src);
+  check("điền tên đôi, ngày cưới", [cfg.groom_name, cfg.bride_name, cfg.wedding_date], ["Minh Tuấn", "Thu Hà", "2026-12-01"]);
+  check("một sự kiện Tiệc cưới có giờ + địa điểm", cfg.events, [{ label: "Tiệc cưới", date: "2026-12-01", time: "17:30", venue: "Nhà hàng Ngân Hà" }]);
+  ok("bật xác nhận tham dự", cfg.rsvp_enabled === true);
+  const bare = invitationConfigFromContract({ id: "c2", owner_id: "o1", title: null, client_name: null, event_date: null });
+  check("thiếu hết → không bịa tên, không sự kiện rỗng", [bare.groom_name, bare.bride_name, bare.events], [undefined, undefined, []]);
+  check("slug từ tên đôi, bỏ dấu", invitationSlug(invitationSlugName(src), () => "x8k2p"), "thu-ha-minh-tuan-x8k2p");
+  check("không có tên đôi → tên khách", invitationSlugName({ ...src, bride: "", groom: null }), "Chị Lan");
+  check("không có gì → le-cuoi", invitationSlug("", () => "abcde"), "le-cuoi-abcde");
 }
 
 check("khoá chống lặp không kèm ref", dedupeKey("r", "c"), "r:c");

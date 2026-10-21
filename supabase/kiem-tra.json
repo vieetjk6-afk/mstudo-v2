@@ -32,7 +32,8 @@
     "migrations/che_do_album_hop_dong.sql",
     "migrations/ai_providers.sql",
     "migrations/anh_in_tang.sql",
-    "migrations/anh_in_album_le.sql"
+    "migrations/anh_in_album_le.sql",
+    "migrations/thiep_tang_tu_dong.sql"
   ],
   "muc": [
     {
@@ -845,6 +846,14 @@
       "bang": [],
       "cot": [
         "albums.print_quota"
+      ]
+    },
+    {
+      "file": "migrations/thiep_tang_tu_dong.sql",
+      "mo_ta": "Tự tặng thiệp cưới online trước ngày cưới: lựa chọn tặng / không tặng của từng hợp đồng",
+      "bang": [],
+      "cot": [
+        "studio_contracts.gift_invitation"
       ]
     }
   ]

@@ -392,6 +392,12 @@ export interface StudioContract {
   intake_token: string | null;
   intake: ContractIntake | null;
   intake_submitted_at: string | null;
+  /**
+   * Tự tặng thiệp cưới online trước ngày cưới (luật `gift_invitation`):
+   * true = tặng, false = không tặng, null/undefined = theo gói (phóng sự cưới thì tặng).
+   * Có từ migrations/thiep_tang_tu_dong.sql — chưa chạy thì không có cột.
+   */
+  gift_invitation?: boolean | null;
   /** Cơ sở thực hiện hợp đồng. null = chưa gán chi nhánh. */
   branch_id: string | null;
   created_at: string;
