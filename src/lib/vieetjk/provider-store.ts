@@ -6,6 +6,7 @@ import { decryptJSON, encryptJSON } from "@/lib/zalo/crypto";
 import { isBlockedIp } from "@/lib/inbox/bridge-protocol";
 import { collectText, loadEnvProviders, requestProvider } from "./providers";
 import { mergeProviderInput, parseStoredList, pickProviders, toPublic, withLabels } from "./provider-input";
+import { isModelMissing } from "./provider-alert-rules";
 import type { ChatProvider, PublicProvider, StoredProvider } from "./provider-types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -135,7 +136,12 @@ export async function saveProviderSettings(
 export type TestResult = { ok: true; ms: number; sample: string } | { ok: false; error: string };
 
 /** Lời nhắn dễ hiểu theo mã lỗi HTTP, ghép với câu báo lỗi của nhà cung cấp. */
-function httpHint(status: number): string {
+function httpHint(status: number, msg: string): string {
+  // Xét câu báo trước mã lỗi: bên bán lại (one-api / new-api) trả 503 khi không
+  // có model — đọc theo mã thì thành "máy chủ đang lỗi, thử lại sau", sai hướng.
+  if (isModelMissing(msg)) {
+    return "Nhà cung cấp không có model này — kiểm tra lại tên model (đúng từng ký tự), hoặc key chưa được mở model đó.";
+  }
   if (status === 401 || status === 403) return "Sai API key, hoặc key không có quyền dùng model này.";
   if (status === 404) return "Sai tên model hoặc sai địa chỉ API.";
   if (status === 402) return "Tài khoản AI hết tiền / chưa nạp tiền.";
@@ -198,7 +204,7 @@ export async function testProviderInput(scope: ProviderScope, input: unknown): P
     }
     if (!res.ok) {
       const msg = await apiErrorMessage(res);
-      return { ok: false, error: `${httpHint(res.status)} (HTTP ${res.status}${msg ? `: ${msg}` : ""})` };
+      return { ok: false, error: `${httpHint(res.status, msg)} (HTTP ${res.status}${msg ? `: ${msg}` : ""})` };
     }
     const { text, reason } = await collectText(res, p);
     if (!text) return { ok: false, error: `Kết nối được nhưng AI không trả chữ nào${reason ? ` (${reason})` : ""}.` };
