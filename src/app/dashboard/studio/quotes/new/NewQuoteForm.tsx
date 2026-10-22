@@ -519,10 +519,13 @@ export default function NewQuoteForm({
                       </button>
                     </div>
                   </div>
-                  <input
-                    className={`${inputCls} mt-2`}
+                  {/* Khung nhiều dòng: Enter xuống dòng, khách thấy đúng từng dòng
+                      trên trang báo giá, bản in và hợp đồng chốt từ báo giá. */}
+                  <textarea
+                    className={`${inputCls} mt-2 block min-h-[42px] resize-y`}
                     style={inputStyle}
-                    placeholder="Mô tả ngắn (tuỳ chọn)"
+                    rows={2}
+                    placeholder="Mô tả (tuỳ chọn) — Enter để xuống dòng"
                     value={it.description}
                     onChange={(e) => update(idx, { description: e.target.value })}
                   />
@@ -660,10 +663,17 @@ export default function NewQuoteForm({
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[13px] font-semibold">{l.name || "(chưa đặt tên)"}</p>
                 <p className="mt-px truncate text-[11px]" style={{ color: "var(--tx3)" }}>
-                  {[l.is_discount ? "Giảm giá" : l.is_optional ? "Khách tự chọn" : "Bắt buộc", l.qty > 1 ? `×${l.qty}` : null, l.description || null]
+                  {[l.is_discount ? "Giảm giá" : l.is_optional ? "Khách tự chọn" : "Bắt buộc", l.qty > 1 ? `×${l.qty}` : null]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {/* Mô tả tách dòng riêng, giữ nguyên chỗ xuống dòng studio gõ —
+                    nhét vào dòng `truncate` phía trên thì mọi dòng dồn thành một. */}
+                {l.description.trim() && (
+                  <p className="mt-0.5 whitespace-pre-line break-words text-[11px]" style={{ color: "var(--tx3)" }}>
+                    {l.description.trim()}
+                  </p>
+                )}
               </div>
               <span
                 className="tnum flex-none whitespace-nowrap text-[13px] font-bold"
