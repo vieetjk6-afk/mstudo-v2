@@ -103,7 +103,7 @@ export default function QuoteEditor({
       .map((it) => {
         const line = (it.qty || 0) * (it.unit_price || 0);
         const tag = it.is_discount ? "Giảm giá" : it.is_optional ? "Tuỳ chọn" : "Bắt buộc";
-        return `<tr><td>${esc(it.name || "")}${it.description ? `<div style="font-size:11px;color:#555">${esc(it.description)}</div>` : ""}</td>
+        return `<tr><td>${esc(it.name || "")}${it.description ? `<div style="font-size:11px;color:#555;white-space:pre-line">${esc(it.description.trim())}</div>` : ""}</td>
 <td class="c">${tag}</td><td class="c">${it.is_discount ? "" : it.qty}</td>
 <td class="r">${it.is_discount ? "− " : ""}${vnd(line)}</td></tr>`;
       })
@@ -702,11 +702,13 @@ ${payableTotal !== total ? `<tr><td>Ưu đãi gói ${esc(quote.discount_package_
                   )}
                 </div>
               </div>
-              <input
-                className="input mt-2"
+              {/* Khung nhiều dòng: Enter xuống dòng, khách thấy đúng từng dòng. */}
+              <textarea
+                className="input mt-2 block min-h-[42px] resize-y"
+                rows={2}
                 value={it.description || ""}
                 disabled={locked}
-                placeholder="Mô tả (tuỳ chọn)"
+                placeholder="Mô tả (tuỳ chọn) — Enter để xuống dòng"
                 onChange={(e) => patchItemLocal(it.id, { description: e.target.value })}
               />
               {it.is_optional && !it.is_discount && (

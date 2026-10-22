@@ -468,7 +468,13 @@ export default function QuoteClientView({
                       </div>
                       <ul className="mt-2 space-y-0.5 pl-[30px] text-[11.5px]" style={{ color: "var(--tx3)" }}>
                         {groupItems.map((gi) => (
-                          <li key={gi.id}>• {gi.name}{gi.description ? ` — ${gi.description}` : ""} ({gi.qty} × {vnd(gi.unit_price)})</li>
+                          <li key={gi.id}>
+                            • {gi.name} ({gi.qty} × {vnd(gi.unit_price)})
+                            {/* Mô tả xuống dòng riêng, giữ chỗ xuống dòng studio gõ. */}
+                            {gi.description?.trim() && (
+                              <span className="block whitespace-pre-line break-words pl-2.5">{gi.description.trim()}</span>
+                            )}
+                          </li>
                         ))}
                       </ul>
                     </button>
@@ -514,7 +520,7 @@ export default function QuoteClientView({
                         </span>
                         <div className="min-w-0 flex-1">
                           <p className="text-[13px] font-semibold" style={{ color: it.is_discount ? "var(--am)" : undefined }}>{it.name}</p>
-                          {it.description && <p className="mt-0.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>{it.description}</p>}
+                          {it.description?.trim() && <p className="mt-0.5 whitespace-pre-line break-words text-[11.5px]" style={{ color: "var(--tx3)" }}>{it.description.trim()}</p>}
                           <p className="mt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>{it.qty} × {vnd(it.unit_price)}</p>
                         </div>
                         <p className="flex-none whitespace-nowrap text-[13px] font-bold" style={{ color: it.is_discount ? "var(--am)" : "var(--tx)" }}>
