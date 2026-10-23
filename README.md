@@ -474,15 +474,21 @@ và cổng nhân viên).
   thêm mục "Lịch hẹn ngày mai" vào email nhắc việc.
 - Album hoàn thành **không** dựng lại phần tải hàng loạt: nút *Tải toàn bộ* dẫn
   về `/album/<slug>` — nơi đã có nén ZIP, đóng dấu mờ và luật hạn lưu trữ.
-- **Kế hoạch cưới** (`supabase/migrations/ke_hoach_cuoi.sql`, bảng `wedding_plans`):
-  việc cần làm theo mốc trước ngày cưới, ngân sách, lịch trình ngày cưới. Cùng
-  token + cổng SĐT với cổng khách, ghi qua `/api/c/[token]/ke-hoach` (kiểm SĐT
-  từng lần, ghi kèm điều kiện `rev` để hai máy cùng sửa không đè nhau). Việc gắn
-  dữ liệu studio tự tick (đã ký, đã chụp, thiệp, album, thanh toán); gói studio
-  là một dòng ngân sách đọc từ hợp đồng; lịch hẹn studio trong ngày cưới chen
-  vào lịch trình. Studio chỉ ĐỌC ở thẻ trên màn hợp đồng — không thấy ngân sách
-  của khách. Mặc định **Sắp ra mắt** (`feature_flags.planner`): khách không thấy
-  gì, trừ hợp đồng của tài khoản admin; mở ở Cài đặt hệ thống → Tính năng.
+- **Kế hoạch cưới** (`supabase/migrations/ke_hoach_cuoi.sql` + `ke_hoach_cuoi_mo_rong.sql`,
+  bảng `wedding_plans`, các danh sách mới nằm trong cột `extra`): 7 tab — tổng
+  quan ("Sắp tới" gom việc, khoản phải trả, lịch hẹn studio), việc cần làm theo
+  mốc (người lo, ưu tiên, hạn riêng), ngân sách (dự kiến / giá chốt / đã trả, ai
+  chi, hạn trả), khách mời & sơ đồ bàn (phản hồi qua thiệp tự khớp theo tên),
+  nhà cung cấp (so báo giá, chốt), ngày cưới (lịch trình tách cô dâu / chú rể,
+  đội hỗ trợ, đồ cần mang), phong cách & ảnh cần chụp. Cùng token + cổng SĐT
+  với cổng khách, ghi qua `/api/c/[token]/ke-hoach` (kiểm SĐT từng lần, ghi kèm
+  điều kiện `rev` để hai máy cùng sửa không đè nhau). Mọi danh sách đi chung một
+  bộ thao tác `add / set / remove` + bộ làm sạch theo loại dòng. Studio chỉ ĐỌC
+  ở thẻ trên màn hợp đồng: lịch trình, đội hỗ trợ, nhà cung cấp đã chốt, ảnh
+  cần chụp, bảng màu — không thấy ngân sách, báo giá, tiền mừng của khách. Chưa
+  chạy migration mở rộng thì chỉ 4 tab gốc hiện. Mặc định **Sắp ra mắt**
+  (`feature_flags.planner`): khách không thấy gì, trừ hợp đồng của tài khoản
+  admin; mở ở Cài đặt hệ thống → Tính năng.
   Luật thuần: `npm run test:wedding-plan`.
 - Cổng khách **cài được lên màn hình chính** (`/portal/<token>/manifest.webmanifest`,
   tên khách + logo studio), **nhớ số điện thoại 90 ngày** trên máy đó, và **đọc

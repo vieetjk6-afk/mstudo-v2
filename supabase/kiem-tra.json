@@ -34,7 +34,8 @@
     "migrations/anh_in_tang.sql",
     "migrations/anh_in_album_le.sql",
     "migrations/thiep_tang_tu_dong.sql",
-    "migrations/ke_hoach_cuoi.sql"
+    "migrations/ke_hoach_cuoi.sql",
+    "migrations/ke_hoach_cuoi_mo_rong.sql"
   ],
   "muc": [
     {
@@ -865,6 +866,14 @@
       ],
       "cot": [
         "studio_contracts.wedding_planner"
+      ]
+    },
+    {
+      "file": "migrations/ke_hoach_cuoi_mo_rong.sql",
+      "mo_ta": "Kế hoạch cưới mở rộng: khách mời & xếp bàn, nhà cung cấp, đội hỗ trợ, đồ cần mang, ảnh cần chụp, phong cách (chạy SAU ke_hoach_cuoi)",
+      "bang": [],
+      "cot": [
+        "wedding_plans.extra"
       ]
     }
   ]
