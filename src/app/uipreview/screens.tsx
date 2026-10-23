@@ -23,6 +23,7 @@ import ChannelsManager from "@/app/dashboard/studio/inbox/ket-noi/ChannelsManage
 import ReviewsView from "@/app/dashboard/studio/reviews/ReviewsView";
 import TokenSwatches from "./TokenSwatches";
 import SepayGuideVideo from "@/components/SepayGuideVideo";
+import WeddingGiftVideo from "@/components/WeddingGiftVideo";
 import AiCompareDemo from "./AiCompareDemo";
 import AiProvidersDemo from "./AiProvidersDemo";
 import AlbumDupDemo from "./AlbumDupDemo";
@@ -565,6 +566,44 @@ export const SCREENS: Record<
         {/* Nút "N" của Next dev không được lọt vào video. */}
         <style>{"nextjs-portal{display:none!important}"}</style>
         <SepayGuideVideo renderMode />
+      </div>
+    ),
+    bare: true,
+  },
+  "video-qua-cuoi": {
+    title: "Video quà cưới (dọc 9:16) — chốt lịch cưới nhận thiệp online + kế hoạch cưới",
+    render: () => (
+      <div style={{ maxWidth: 420 }}>
+        <WeddingGiftVideo studio="Mây Studio" phone="0909 000 000" />
+      </div>
+    ),
+  },
+  "video-qua-cuoi-ngang": {
+    title: "Video quà cưới (ngang 16:9)",
+    render: () => (
+      <div style={{ maxWidth: 960 }}>
+        <WeddingGiftVideo orientation="landscape" studio="Mây Studio" phone="0909 000 000" />
+      </div>
+    ),
+  },
+  // Khung trần, không nút — scripts/xuat-video-qua-cuoi.mjs chụp từng khung ở
+  // đây rồi ghép MP4. Tên / SĐT studio đi qua ?studio=…&phone=….
+  "video-qua-cuoi-xuat": {
+    title: "Video quà cưới · chế độ xuất MP4 (dọc)",
+    render: () => (
+      <div style={{ position: "fixed", inset: 0, width: 1080, height: 1920, zIndex: 9999 }}>
+        <style>{"nextjs-portal{display:none!important}"}</style>
+        <WeddingGiftVideo renderMode />
+      </div>
+    ),
+    bare: true,
+  },
+  "video-qua-cuoi-xuat-ngang": {
+    title: "Video quà cưới · chế độ xuất MP4 (ngang)",
+    render: () => (
+      <div style={{ position: "fixed", inset: 0, width: 1920, height: 1080, zIndex: 9999 }}>
+        <style>{"nextjs-portal{display:none!important}"}</style>
+        <WeddingGiftVideo orientation="landscape" renderMode />
       </div>
     ),
     bare: true,
