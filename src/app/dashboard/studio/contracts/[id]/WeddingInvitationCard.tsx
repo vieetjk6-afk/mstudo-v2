@@ -31,6 +31,10 @@ type Existing = { slug: string; edit_token: string; published: boolean } | null;
  * cưới, việc tự động `gift_invitation` (src/lib/automations.ts) tự tạo thiệp và
  * gửi khách link sửa. Gói phóng sự cưới bật sẵn; studio bật/tắt riêng từng hợp
  * đồng (cột `studio_contracts.gift_invitation`).
+ *
+ * Chế độ Quà cưới (`combo`): khách sửa thiệp ngay trong trang kế hoạch cưới, và
+ * thiệp tự có khi khách mở trang đó lần đầu — link gửi khách nằm ở thẻ Kế hoạch
+ * cưới, thẻ này chỉ còn link xem thiệp và lối vào trình sửa cho studio.
  */
 export default function WeddingInvitationCard({
   contract,
@@ -38,6 +42,7 @@ export default function WeddingInvitationCard({
   clientMessenger,
   giftInvitation,
   reportage,
+  combo = false,
 }: {
   contract: { id: string; owner_id: string; title: string; event_date: string | null; location: string | null };
   clientName: string;
@@ -46,6 +51,8 @@ export default function WeddingInvitationCard({
   giftInvitation?: boolean | null;
   /** Hợp đồng là gói phóng sự cưới (mặc định được tặng). */
   reportage: boolean;
+  /** Chế độ Quà cưới: thiệp nằm trong trang kế hoạch cưới của khách. */
+  combo?: boolean;
 }) {
   const supabase = createClient();
   const [inv, setInv] = useState<Existing>(null);
@@ -138,9 +145,13 @@ export default function WeddingInvitationCard({
             🎁 Thiệp cưới online tặng khách
           </p>
           <p className="text-sm" style={{ color: "var(--text2)" }}>
-            {inv
-              ? "Gửi link bên dưới để khách tự chỉnh sửa thiệp cưới của mình."
-              : "Tạo thiệp cưới online miễn phí — khách tự điền nội dung & ảnh, chia sẻ cho quan khách."}
+            {combo
+              ? inv
+                ? "Khách sửa thiệp ngay trong trang Quà cưới — gửi link ở thẻ Kế hoạch cưới phía trên."
+                : "Thiệp tự tạo khi khách mở trang Quà cưới lần đầu (gửi link ở thẻ Kế hoạch cưới phía trên)."
+              : inv
+                ? "Gửi link bên dưới để khách tự chỉnh sửa thiệp cưới của mình."
+                : "Tạo thiệp cưới online miễn phí — khách tự điền nội dung & ảnh, chia sẻ cho quan khách."}
           </p>
         </div>
         {!inv && (
@@ -155,7 +166,9 @@ export default function WeddingInvitationCard({
           <input type="checkbox" className="mt-0.5" checked={autoOn} disabled={savingGift} onChange={toggleGift} />
           <span>
             <span className="font-semibold" style={{ color: "var(--text1, var(--text))" }}>
-              Tự tạo &amp; gửi thiệp cho khách khoảng 1 tháng trước ngày cưới
+              {combo
+                ? "Khách chưa mở Quà cưới thì khoảng 1 tháng trước ngày cưới tự tạo thiệp & gửi link Quà cưới"
+                : "Tự tạo & gửi thiệp cho khách khoảng 1 tháng trước ngày cưới"}
             </span>
             <span className="mt-0.5 block text-[11.5px] leading-relaxed" style={{ color: "var(--text3)" }}>
               {reportage
@@ -172,18 +185,28 @@ export default function WeddingInvitationCard({
       {inv && (
         <div className="mt-3 space-y-2 border-t pt-3" style={{ borderColor: "var(--border)" }}>
           {/* Edit link (for the client) */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Pencil size={13} style={{ color: "var(--text3)" }} />
-            <span className="min-w-0 flex-1 truncate text-sm" style={{ color: "var(--text2)" }}>{editUrl}</span>
-            <MessengerButton
-              link={clientMessenger}
-              label="Gửi khách sửa"
-              message={weddingEditMessage(editUrl)}
-            />
-            <button onClick={() => copy(weddingEditMessage(editUrl), "edit")} className="btn-ghost px-2.5 py-1.5 text-xs">
-              {copied === "edit" ? <Check size={13} /> : <Copy size={13} />} {copied === "edit" ? "Đã chép lời nhắn" : "Chép link sửa kèm lời nhắn"}
-            </button>
-          </div>
+          {combo ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Pencil size={13} style={{ color: "var(--text3)" }} />
+              <span className="min-w-0 flex-1 text-sm" style={{ color: "var(--text2)" }}>Khách sửa trong trang Quà cưới</span>
+              <a href={editUrl} target="_blank" rel="noreferrer" className="btn-ghost px-2.5 py-1.5 text-xs">
+                <ExternalLink size={13} /> Mở trình sửa
+              </a>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <Pencil size={13} style={{ color: "var(--text3)" }} />
+              <span className="min-w-0 flex-1 truncate text-sm" style={{ color: "var(--text2)" }}>{editUrl}</span>
+              <MessengerButton
+                link={clientMessenger}
+                label="Gửi khách sửa"
+                message={weddingEditMessage(editUrl)}
+              />
+              <button onClick={() => copy(weddingEditMessage(editUrl), "edit")} className="btn-ghost px-2.5 py-1.5 text-xs">
+                {copied === "edit" ? <Check size={13} /> : <Copy size={13} />} {copied === "edit" ? "Đã chép lời nhắn" : "Chép link sửa kèm lời nhắn"}
+              </button>
+            </div>
+          )}
           {/* Public link */}
           <div className="flex flex-wrap items-center gap-2">
             <ExternalLink size={13} style={{ color: "var(--text3)" }} />

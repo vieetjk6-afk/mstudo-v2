@@ -19,6 +19,11 @@ export function plannerMessage(link: string): string {
   return `Bên em gửi anh/chị trang kế hoạch cưới: việc cần làm theo từng mốc, ngân sách, khách mời & xếp bàn, lịch trình ngày cưới. Anh/chị mở link này (mật khẩu là SĐT của anh/chị), lên lịch trình ngày cưới xong là ê-kíp bên em nắm giờ luôn nhé: ${link}`;
 }
 
+/** Chế độ Quà cưới: kế hoạch cưới + thiệp cưới online trong MỘT link. */
+export function weddingGiftMessage(link: string): string {
+  return `Chúc mừng anh/chị! Bên em tặng anh/chị trang Quà cưới: kế hoạch cưới (việc cần làm, ngân sách, khách mời & xếp bàn, lịch trình ngày cưới) và thiệp cưới online. Thêm khách một lần là có link thiệp ghi tên từng người, khách xác nhận trên thiệp thì danh sách tự cập nhật. Anh/chị mở link này (mật khẩu là SĐT của anh/chị): ${link}`;
+}
+
 /** Tặng khách trang Love Story — link để khách tự sửa. */
 export function storyEditMessage(link: string): string {
   return `Bên em tặng anh/chị trang Love Story. Mở link này để điền nội dung & dán link folder ảnh/video Google Drive của mình nhé: ${link}`;

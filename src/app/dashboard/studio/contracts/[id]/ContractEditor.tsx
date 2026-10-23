@@ -336,6 +336,7 @@ export default function ContractEditor({
   services = [],
   storyComingSoon = false,
   plannerComingSoon = false,
+  giftCombo = false,
   initialTab = "info",
 }: {
   contract: StudioContract;
@@ -347,6 +348,8 @@ export default function ContractEditor({
   storyComingSoon?: boolean;
   /** Kế hoạch cưới còn "Sắp ra mắt" với studio này (thẻ chỉ hiện nhãn). */
   plannerComingSoon?: boolean;
+  /** Chế độ Quà cưới (`weddingGiftCombo`): kế hoạch cưới + thiệp chung một trang. */
+  giftCombo?: boolean;
   initialItems: ContractItem[];
   /** Phụ lục của hợp đồng (chỉ có sau migration contract_addenda.sql). */
   initialAddenda?: ContractAddendum[];
@@ -3462,6 +3465,7 @@ export default function ContractEditor({
                       itemNames: items.map((it) => it.name),
                     })}
                     comingSoon={plannerComingSoon}
+                    combo={giftCombo}
                   />
 
                   {/* Online wedding invitation (free gift) */}
@@ -3470,6 +3474,7 @@ export default function ContractEditor({
                     clientName={f.client_name}
                     clientMessenger={f.client_messenger}
                     giftInvitation={contract.gift_invitation}
+                    combo={giftCombo && !plannerComingSoon}
                     reportage={isWeddingReportage({
                       shootType: f.shoot_type,
                       intakeType: contract.intake?.type,

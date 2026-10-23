@@ -39,7 +39,7 @@ import HopDongHangMucDemo from "./HopDongHangMucDemo";
 import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo, PaidConfirmDemo } from "./VoucherDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import { PortalAlbumDemo } from "./PortalAlbumDemo";
-import { KeHoachCuoiDemo } from "./KeHoachCuoiDemo";
+import { KeHoachCuoiDemo, QuaCuoiThiepDemo } from "./KeHoachCuoiDemo";
 import * as f from "./fixtures";
 
 /**
@@ -522,6 +522,21 @@ export const SCREENS: Record<
   "ke-hoach-cuoi-khoa": {
     title: "Kế hoạch cưới — chỉ xem (gói studio hết hạn)",
     render: () => <KeHoachCuoiDemo tab="budget" variant="locked" />,
+    bare: true,
+  },
+  "qua-cuoi": {
+    title: "Quà cưới (kế hoạch + thiệp, chế độ admin) — tổng quan: nút Thiệp cưới cạnh Tổng quan, thẻ thiệp bản nháp",
+    render: () => <KeHoachCuoiDemo variant="combo" />,
+    bare: true,
+  },
+  "qua-cuoi-khach": {
+    title: "Quà cưới — khách mời: link thiệp / QR từng khách, phản hồi qua thiệp đã ghi vào danh sách, khách tự thêm",
+    render: () => <KeHoachCuoiDemo variant="combo" tab="guests" />,
+    bare: true,
+  },
+  "qua-cuoi-thiep": {
+    title: "Quà cưới — trình sửa thiệp nhúng trong kế hoạch (nút về kế hoạch, khách mời dùng chung)",
+    render: () => <QuaCuoiThiepDemo />,
     bare: true,
   },
   "ke-hoach-cuoi-db-cu": {

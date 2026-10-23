@@ -1,11 +1,15 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { ClipboardPaste, Heart, Mail, MailCheck, Plus, Search, TriangleAlert, Upload, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Check, ClipboardPaste, Copy, Download, Heart, Link2, Loader2, Mail, MailCheck, Plus, QrCode, Search, Send, TriangleAlert, Upload, UserPlus,
+} from "lucide-react";
 import { parseGuestFile } from "@/lib/guest-import";
+import { downloadGuestQr, downloadGuestQrZip } from "@/lib/guest-qr";
+import { fmtDayMonth } from "@/lib/date";
 import { vnd } from "@/lib/types";
 import {
-  GUEST_GROUP_LABEL, RSVP_LABEL, guestCount, guestRsvp, guestSummary, tableSummary, tablesNeeded,
+  GUEST_GROUP_LABEL, RSVP_LABEL, guestCount, guestRsvp, guestSummary, inviteGuestLink, tableSummary, tablesNeeded,
   type GuestGroup, type PlanGuest, type Rsvp,
 } from "@/lib/wedding-plan";
 import {
@@ -20,6 +24,9 @@ const NEXT_RSVP: Record<Rsvp, Rsvp> = { pending: "yes", yes: "no", no: "pending"
 const PAGE = 100;
 
 const key = (s: string) => s.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+/** Link thiệp dán sang Zalo phải là link đầy đủ — "/thiep/…" người nhận bấm không ra đâu. */
+const absUrl = (u: string) => (u.startsWith("http") || typeof window === "undefined" ? u : window.location.origin + u);
+const QR_ACCENT = "#b08968";
 
 /**
  * KHÁCH MỜI — danh sách theo nhóm (họ hàng hai bên, bạn bè, đồng nghiệp), số
@@ -29,6 +36,10 @@ const key = (s: string) => s.normalize("NFC").trim().replace(/\s+/g, " ").toLowe
  *
  * Danh sách trong thiệp (để tạo link mời riêng) là một danh sách khác; nút "Nhập
  * từ thiệp" chép tên từ đó sang đây một lần.
+ *
+ * Chế độ Quà cưới: đây là danh sách DUY NHẤT — mỗi dòng có link thiệp ghi tên
+ * khách đó (chép / gửi / mã QR), và phản hồi qua thiệp máy chủ đã ghi sẵn vào
+ * từng dòng (`replied`), cặp đôi sửa tay vẫn được.
  */
 export default function GuestsTab({ ctx }: { ctx: Ctx }) {
   const { data, plan, readOnly, onOp, replies } = ctx;
@@ -92,6 +103,8 @@ export default function GuestsTab({ ctx }: { ctx: Ctx }) {
           </button>
         </div>
       )}
+
+      {data.combo && data.invite && <InviteLinks ctx={ctx} />}
 
       <Chips<View> value={view} onChange={setView} options={[["list", "Danh sách khách", plan.guests.length], ["tables", "Sơ đồ bàn", tables.length]]} />
 
@@ -169,17 +182,25 @@ function GuestList({ ctx }: { ctx: Ctx }) {
           Xem thêm {Math.min(PAGE, shown.length - limit)} khách
         </button>
       )}
-      {!readOnly && <p className="pb-1 pt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>Chạm vào trạng thái để đổi: chưa phản hồi → sẽ dự → không dự. Phản hồi gửi qua thiệp tự cập nhật.</p>}
+      {!readOnly && (
+        <p className="pb-1 pt-1 text-[11.5px]" style={{ color: "var(--tx3)" }}>
+          Chạm vào trạng thái để đổi: chưa phản hồi → sẽ dự → không dự.{" "}
+          {ctx.data.combo ? "Khách bấm xác nhận trên thiệp thì trạng thái và số người tự cập nhật ở đây." : "Phản hồi gửi qua thiệp tự cập nhật."}
+        </p>
+      )}
     </Section>
   );
 }
 
 function GuestRow({ g, first, ctx, onEdit }: { g: PlanGuest; first: boolean; ctx: Ctx; onEdit: () => void }) {
-  const { readOnly, onOp, replies } = ctx;
+  const { data, readOnly, onOp, replies } = ctx;
   const ops = listOps(onOp);
   const reply = replies[g.id];
   const rsvp = guestRsvp(g, reply);
   const n = guestCount(g, reply);
+  // Quà cưới: phản hồi đã nằm trong dòng (`replied`), sửa tay được — sửa thì bỏ dấu "qua thiệp".
+  const combo = data.combo;
+  const viaInvite = combo ? !!g.replied : !!reply;
   return (
     <li className="flex items-start gap-2.5 py-2.5" style={rowLine(first ? 0 : 1)}>
       <button
@@ -203,16 +224,21 @@ function GuestRow({ g, first, ctx, onEdit }: { g: PlanGuest; first: boolean; ctx
           <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{GUEST_GROUP_LABEL[g.group]}</span>
           <Pill
             tone={RSVP_TONE[rsvp]}
-            onClick={readOnly || reply ? undefined : () => ops.set("guests", g.id, { rsvp: NEXT_RSVP[g.rsvp] })}
-            title={reply ? "Khách đã phản hồi qua thiệp online" : "Chạm để đổi"}
+            onClick={readOnly || (!combo && reply) ? undefined : () => ops.set("guests", g.id, { rsvp: NEXT_RSVP[g.rsvp], ...(combo ? { replied: "" } : {}) })}
+            title={
+              combo
+                ? g.replied ? `Khách tự xác nhận qua thiệp ngày ${fmtDayMonth(g.replied)} — chạm để sửa` : "Chạm để đổi"
+                : reply ? "Khách đã phản hồi qua thiệp online" : "Chạm để đổi"
+            }
           >
-            {RSVP_LABEL[rsvp]}{reply ? " · qua thiệp" : ""}
+            {RSVP_LABEL[rsvp]}{viaInvite ? " · qua thiệp" : ""}
           </Pill>
           {g.table && <Pill tone="bl">Bàn {g.table}</Pill>}
           {g.gift > 0 && <Pill tone="am">Mừng {vnd(g.gift)}</Pill>}
           {g.thanked && <Pill tone="gn">Đã cảm ơn</Pill>}
         </div>
         {g.note && <p className="mt-1 whitespace-pre-line text-[12px]" style={{ color: "var(--tx2)" }}>{g.note}</p>}
+        {combo && data.invite && <GuestInviteActions g={g} ctx={ctx} />}
       </div>
       {!readOnly && <RowActions label={g.name} onEdit={onEdit} onRemove={() => ops.remove("guests", g.id)} />}
     </li>
@@ -236,7 +262,8 @@ function GuestEdit({ g, first, onDone, onSave }: { g: PlanGuest; first: boolean;
         onSubmit={(e) => {
           e.preventDefault();
           if (!name.trim()) return;
-          onSave({ name, group, count, phone, rsvp, table, gift, invited, thanked, note });
+          // Sửa tay xác nhận → không còn là "khách tự xác nhận qua thiệp".
+          onSave({ name, group, count, phone, rsvp, table, gift, invited, thanked, note, ...(rsvp !== g.rsvp ? { replied: "" } : {}) });
           onDone();
         }}
         className="grid grid-cols-2 gap-2.5 min-[640px]:grid-cols-4"
@@ -275,6 +302,121 @@ function GuestEdit({ g, first, onDone, onSave }: { g: PlanGuest; first: boolean;
         </div>
       </form>
     </li>
+  );
+}
+
+/**
+ * Gửi thiệp (chế độ Quà cưới): link chung, chép link riêng của cả danh sách, tải
+ * mã QR của cả danh sách. Link riêng từng người nằm ở chính dòng của người đó.
+ */
+function InviteLinks({ ctx }: { ctx: Ctx }) {
+  const { data, plan, openInvite } = ctx;
+  const inv = data.invite!;
+  const [copied, setCopied] = useState<"all" | "one" | null>(null);
+  const [zipping, setZipping] = useState(false);
+  // Tính lúc bấm (cần `window`) — xem GuestInviteActions.
+  const base = () => absUrl(inv.public_href);
+  const links = () => plan.guests.map((g) => ({ name: g.name, link: inviteGuestLink(base(), g.name) }));
+  const n = plan.guests.length;
+
+  async function copy(text: string, k: "all" | "one") {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(k);
+      setTimeout(() => setCopied((c) => (c === k ? null : c)), 1600);
+    } catch { /* trình duyệt chặn clipboard */ }
+  }
+  const btn = "flex items-center gap-1.5 rounded-[10px] px-3 py-2 text-[12.5px] font-bold disabled:opacity-60";
+
+  return (
+    <section className="rounded-[16px] px-4 py-3.5" style={{ background: "var(--acS)", border: "1px solid var(--acM)" }}>
+      <p className="flex items-center gap-1.5 text-[14px] font-bold" style={{ color: "var(--ac)" }}>
+        <Heart size={16} /> Gửi thiệp cho khách
+      </p>
+      <p className="mt-1 text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+        Mỗi khách trong danh sách có link thiệp ghi đúng tên người đó. Khách bấm xác nhận trên thiệp là trạng thái, số người và số bàn ở đây tự cập nhật.
+      </p>
+      {!inv.published && (
+        <p className="mt-2 flex items-start gap-2 rounded-[10px] px-3 py-2 text-[12.5px] font-semibold" style={{ background: "var(--amS)", color: "var(--am)" }}>
+          <TriangleAlert size={14} className="mt-[2px] flex-none" />
+          <span className="min-w-0 flex-1">
+            Thiệp chưa xuất bản — khách mở link sẽ chưa xem được.{" "}
+            {openInvite && <button type="button" onClick={openInvite} className="font-bold underline">Mở thiệp để xuất bản</button>}
+          </span>
+        </p>
+      )}
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <button type="button" onClick={() => copy(base(), "one")} className={btn} style={{ background: "var(--sf)", color: "var(--tx2)" }}>
+          {copied === "one" ? <Check size={14} /> : <Link2 size={14} />} {copied === "one" ? "Đã chép" : "Chép link chung"}
+        </button>
+        {n > 0 && (
+          <button type="button" onClick={() => copy(links().map((l) => `${l.name}: ${l.link}`).join("\n"), "all")} className={btn} style={{ background: "var(--sf)", color: "var(--tx2)" }}>
+            {copied === "all" ? <Check size={14} /> : <Copy size={14} />} {copied === "all" ? "Đã chép" : `Chép ${n} link riêng`}
+          </button>
+        )}
+        {n > 0 && (
+          <button
+            type="button"
+            disabled={zipping}
+            onClick={async () => {
+              setZipping(true);
+              try { await downloadGuestQrZip(links(), QR_ACCENT); } finally { setZipping(false); }
+            }}
+            className={btn}
+            style={{ background: "var(--sf)", color: "var(--tx2)" }}
+          >
+            {zipping ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Tải {n} mã QR (.zip)
+          </button>
+        )}
+        {openInvite && (
+          <button type="button" onClick={openInvite} className={btn} style={{ background: "var(--ac)", color: "#fff" }}>
+            <Heart size={14} /> Sửa thiệp
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Link thiệp của MỘT khách: chép (tự đánh dấu đã gửi thiệp), gửi qua app khác, tải mã QR. */
+function GuestInviteActions({ g, ctx }: { g: PlanGuest; ctx: Ctx }) {
+  const { data, readOnly, onOp } = ctx;
+  // Tính lúc bấm: link tuyệt đối cần `window`, dựng sẵn lúc render thì lệch bản máy chủ.
+  const link = () => inviteGuestLink(absUrl(data.invite!.public_href), g.name);
+  const [copied, setCopied] = useState(false);
+  const [canShare, setCanShare] = useState(false);
+  useEffect(() => setCanShare(typeof navigator !== "undefined" && typeof navigator.share === "function"), []);
+  const sent = () => {
+    if (!readOnly && !g.invited) listOps(onOp).set("guests", g.id, { invited: true });
+  };
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+      sent();
+    } catch { /* trình duyệt chặn clipboard */ }
+  }
+  async function share() {
+    try {
+      await navigator.share({ title: "Thiệp cưới", text: `Trân trọng kính mời ${g.name}`, url: link() });
+      sent();
+    } catch { /* khách đóng bảng chia sẻ */ }
+  }
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[12px] font-bold">
+      <button type="button" onClick={copy} className="inline-flex items-center gap-1" style={{ color: "var(--ac)" }}>
+        {copied ? <Check size={13} /> : <Link2 size={13} />} {copied ? "Đã chép link" : "Chép link thiệp"}
+      </button>
+      {canShare && (
+        <button type="button" onClick={share} className="inline-flex items-center gap-1" style={{ color: "var(--tx2)" }}>
+          <Send size={13} /> Gửi
+        </button>
+      )}
+      <button type="button" onClick={() => void downloadGuestQr(g.name, link(), QR_ACCENT)} className="inline-flex items-center gap-1" style={{ color: "var(--tx2)" }}>
+        <QrCode size={13} /> Tải QR
+      </button>
+    </div>
   );
 }
 

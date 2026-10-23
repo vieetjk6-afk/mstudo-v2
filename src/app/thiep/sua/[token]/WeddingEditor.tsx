@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Heart, Save, Eye, EyeOff, Check, Loader2, ExternalLink, Gift, Users, CalendarDays, Type,
   Music, LayoutTemplate, FolderOpen, Lock, Image as ImageIcon, MessageCircleHeart, AlertCircle,
-  Copy, Send,
+  Copy, Send, ArrowLeft,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { checkImageFile, compressToLimit } from "@/lib/image";
@@ -24,6 +24,24 @@ import { lunarText } from "@/lib/lunar";
 type Loaded = {
   invitation: { id: string; slug: string; template: string; config: WeddingConfig; published: boolean };
   rsvps: WeddingRsvp[];
+  /** Chế độ Quà cưới: danh sách khách nằm ở kế hoạch cưới — link tới đó. */
+  planner_href?: string | null;
+};
+
+/**
+ * Trình sửa thiệp NHÚNG trong kế hoạch cưới (chế độ Quà cưới). Danh sách khách
+ * là của kế hoạch: tab Khách mời ở đây chỉ còn lời mời, xem trước theo tên, và
+ * đường sang danh sách đó.
+ */
+export type EditorEmbed = {
+  /** Về kế hoạch cưới. */
+  onBack: () => void;
+  /** Sang tab Khách mời của kế hoạch. */
+  onOpenGuests: () => void;
+  /** Tên khách trong kế hoạch — để xem trước thiệp ghi tên một khách. */
+  guestNames: string[];
+  /** Báo còn thay đổi chưa lưu — trang kế hoạch hỏi lại trước khi rời. */
+  onDirty?: (dirty: boolean) => void;
 };
 
 const TABS = [
@@ -39,7 +57,7 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export default function WeddingEditor({ token }: { token: string }) {
+export default function WeddingEditor({ token, embed }: { token: string; embed?: EditorEmbed }) {
   const [cfg, setCfg] = useState<WeddingConfig | null>(null);
   const [slug, setSlug] = useState("");
   const [template, setTemplate] = useState("classic");
@@ -55,6 +73,7 @@ export default function WeddingEditor({ token }: { token: string }) {
   const [tab, setTab] = useState<TabId>("mau");
   const [previewOpen, setPreviewOpen] = useState(false);   // chỉ dùng trên màn hình hẹp
   const [previewGuest, setPreviewGuest] = useState("");
+  const [plannerHref, setPlannerHref] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -69,6 +88,7 @@ export default function WeddingEditor({ token }: { token: string }) {
       setTemplate(alias?.name || data.invitation.template || "classic");
       setPublished(data.invitation.published);
       setRsvps(data.rsvps || []);
+      setPlannerHref(data.planner_href ?? null);
       setStatus("ready");
     })().catch(() => setStatus("notfound"));
   }, [token]);
@@ -87,6 +107,9 @@ export default function WeddingEditor({ token }: { token: string }) {
   }, []);
 
   const pickTemplate = useCallback((name: string) => { setTemplate(name); setDirty(true); }, []);
+
+  const onDirty = embed?.onDirty;
+  useEffect(() => { onDirty?.(dirty); }, [dirty, onDirty]);
 
   // Nhắc trước khi rời trang khi còn thay đổi chưa lưu.
   useEffect(() => {
@@ -209,7 +232,14 @@ export default function WeddingEditor({ token }: { token: string }) {
   if (status === "notfound" || !cfg) {
     return (
       <div className="grid min-h-screen place-items-center px-6 text-center text-stone-600">
-        <div><Heart className="mx-auto mb-3 text-stone-400" /><p>Không tìm thấy thiệp cưới này. Link có thể đã hết hạn.</p></div>
+        <div>
+          <Heart className="mx-auto mb-3 text-stone-400" /><p>Không tìm thấy thiệp cưới này. Link có thể đã hết hạn.</p>
+          {embed && (
+            <button onClick={embed.onBack} className="mt-4 inline-flex items-center gap-1 rounded-full border border-stone-300 px-3 py-1.5 text-sm">
+              <ArrowLeft size={15} /> Về kế hoạch cưới
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -222,6 +252,14 @@ export default function WeddingEditor({ token }: { token: string }) {
   // Cặp đôi đặt mật khẩu "trang xem riêng" → phản hồi (cả trạng thái trong danh sách khách) khoá đến khi nhập đúng.
   const responsesLocked = !!(cfg.guests_password ?? "").trim() && !responsesUnlocked;
   const meta = getTemplateMeta(template);
+  // Quà cưới: khách mời là danh sách của kế hoạch cưới, không phải `cfg.guests`.
+  const combo = !!embed || !!plannerHref;
+  const guestNames = embed ? embed.guestNames : (cfg.guests ?? []).filter(Boolean);
+  const openGuests = embed ? embed.onOpenGuests : plannerHref ? () => { window.location.href = plannerHref; } : () => setTab("khach");
+  const back = () => {
+    if (dirty && !window.confirm("Thiệp còn thay đổi chưa lưu. Rời đi và bỏ các thay đổi đó?")) return;
+    embed?.onBack();
+  };
 
   // Nhắc những mục còn thiếu để thiệp trông "đủ" — bấm là nhảy sang đúng tab.
   const todo: { label: string; tab: TabId }[] = [
@@ -244,6 +282,12 @@ export default function WeddingEditor({ token }: { token: string }) {
       {/* ── Thanh trên cùng ─────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-stone-200 bg-white/95 px-3 py-2 backdrop-blur sm:px-4">
         <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {embed && (
+              <button onClick={back} className="inline-flex flex-none items-center gap-1 rounded-full border border-stone-300 px-2.5 py-1.5 text-sm text-stone-600 hover:bg-stone-100" aria-label="Về kế hoạch cưới">
+                <ArrowLeft size={15} /> <span className="hidden sm:inline">Kế hoạch cưới</span>
+              </button>
+            )}
           <div className="min-w-0">
             <div className="flex items-center gap-2 font-medium text-rose-700">
               <Heart size={17} className="flex-none" />
@@ -253,6 +297,7 @@ export default function WeddingEditor({ token }: { token: string }) {
             <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="hidden items-center gap-1 truncate text-xs text-stone-400 hover:text-rose-600 sm:flex">
               {publicUrl} <ExternalLink size={11} />
             </a>
+          </div>
           </div>
           <div className="flex flex-none items-center gap-2">
             <button
@@ -291,7 +336,7 @@ export default function WeddingEditor({ token }: { token: string }) {
                   aria-current={on ? "page" : undefined}
                   className={`inline-flex flex-none items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition ${on ? "bg-rose-600 text-white" : "text-stone-600 hover:bg-stone-100"}`}
                 >
-                  <Icon size={14} /> {t.label}
+                  <Icon size={14} /> {t.id === "khach" && combo ? "Khách mời" : t.label}
                 </button>
               );
             })}
@@ -332,8 +377,9 @@ export default function WeddingEditor({ token }: { token: string }) {
               */}
             <ShareBox
               publicUrl={absBase}
-              guestCount={(cfg.guests ?? []).filter(Boolean).length}
-              onOpenGuests={() => setTab("khach")}
+              guestCount={guestNames.length}
+              onOpenGuests={combo ? openGuests : () => setTab("khach")}
+              combo={combo}
             />
 
             {/* ── MẪU THIỆP ───────────────────────────────────────────── */}
@@ -537,19 +583,39 @@ export default function WeddingEditor({ token }: { token: string }) {
             {/* ── KHÁCH MỜI ───────────────────────────────────────────── */}
             {tab === "khach" && (
               <>
-                <Card title="Khách mời (link & QR riêng)" icon={<Users size={16} />} hint="Mỗi khách có một link riêng, mở ra thiệp ghi đúng tên họ bằng chữ viết tay. Khách xác nhận tham dự trên thiệp thì trạng thái hiện ngay cạnh tên — chỉ bạn xem được ở đây.">
+                <Card
+                  title={combo ? "Khách mời" : "Khách mời (link & QR riêng)"}
+                  icon={<Users size={16} />}
+                  hint={combo
+                    ? undefined
+                    : "Mỗi khách có một link riêng, mở ra thiệp ghi đúng tên họ bằng chữ viết tay. Khách xác nhận tham dự trên thiệp thì trạng thái hiện ngay cạnh tên — chỉ bạn xem được ở đây."}
+                >
                   <Field label="Lời mời (hiện phía trên tên khách)">
                     <input className={inp} value={cfg.guest_greeting ?? ""} onChange={(e) => patch({ guest_greeting: e.target.value })} placeholder="Trân trọng kính mời" />
                   </Field>
                   <Field label="Xem trước với tên khách">
                     <select className={inp} value={previewGuest} onChange={(e) => setPreviewGuest(e.target.value)}>
                       <option value="">— Không hiện tên khách —</option>
-                      {(cfg.guests ?? []).filter(Boolean).map((g) => <option key={g} value={g}>{g}</option>)}
+                      {[...new Set(guestNames)].map((g) => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </Field>
-                  {responsesLocked && <ResponsesLock expected={(cfg.guests_password ?? "").trim()} onUnlock={() => setResponsesUnlocked(true)} />}
-                  <GuestManager baseUrl={absBase} accent={cfg.accent || meta.accent} guests={cfg.guests ?? []} onChange={(guests) => patch({ guests })} rsvps={responsesLocked ? null : rsvps} onRefresh={refreshRsvps} />
-                  <p className="text-xs text-stone-400">Nhớ bấm <b>“Lưu”</b> sau khi thêm/bớt khách.</p>
+                  {combo ? (
+                    <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3 text-sm">
+                      <p className="font-medium text-rose-800">Danh sách khách dùng chung với Kế hoạch cưới</p>
+                      <p className="mt-1 text-xs leading-relaxed text-stone-600">
+                        Thêm khách ở tab <b>Khách mời</b> của kế hoạch là có ngay link thiệp + mã QR ghi tên người đó. Khách bấm xác nhận trên thiệp thì trạng thái, số người và số bàn trong danh sách tự cập nhật.
+                      </p>
+                      <button onClick={openGuests} className="mt-2 inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-1.5 text-sm font-medium text-white">
+                        <Users size={15} /> {guestNames.length ? `Mở danh sách ${guestNames.length} khách` : "Mở danh sách khách"}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {responsesLocked && <ResponsesLock expected={(cfg.guests_password ?? "").trim()} onUnlock={() => setResponsesUnlocked(true)} />}
+                      <GuestManager baseUrl={absBase} accent={cfg.accent || meta.accent} guests={cfg.guests ?? []} onChange={(guests) => patch({ guests })} rsvps={responsesLocked ? null : rsvps} onRefresh={refreshRsvps} />
+                      <p className="text-xs text-stone-400">Nhớ bấm <b>“Lưu”</b> sau khi thêm/bớt khách.</p>
+                    </>
+                  )}
                 </Card>
 
                 <Card title="Trang xem riêng (danh sách & lời chúc)" icon={<Lock size={16} />} hint="Đặt mật khẩu để mở một trang chỉ đọc gồm danh sách khách phản hồi và toàn bộ lời chúc — chia sẻ cho người thân mà không đưa link chỉnh sửa.">
@@ -659,7 +725,7 @@ export default function WeddingEditor({ token }: { token: string }) {
  * link riêng của từng khách. Đặt ngoài mọi tab vì đây là việc cặp đôi làm
  * NHIỀU NHẤT sau khi soạn xong — không nên bắt họ đi tìm.
  */
-function ShareBox({ publicUrl, guestCount, onOpenGuests }: { publicUrl: string; guestCount: number; onOpenGuests: () => void }) {
+function ShareBox({ publicUrl, guestCount, onOpenGuests, combo = false }: { publicUrl: string; guestCount: number; onOpenGuests: () => void; combo?: boolean }) {
   // publicUrl ở đây là bản TUYỆT ĐỐI (absBase): link dán sang Zalo/Facebook mà
   // chỉ có "/thiep/..." thì người nhận bấm vào không ra đâu cả.
   const [copied, setCopied] = useState(false);
@@ -698,7 +764,11 @@ function ShareBox({ publicUrl, guestCount, onOpenGuests }: { publicUrl: string; 
           <button onClick={onOpenGuests} className="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-2 text-sm font-medium text-rose-700">
             <Users size={15} /> {guestCount > 0 ? `Xem ${guestCount} link riêng` : "Tạo link riêng cho từng khách"}
           </button>
-          {guestCount === 0 && <span className="text-xs text-stone-500">Nhập tên khách là có ngay link + mã QR riêng cho từng người.</span>}
+          {guestCount === 0 && (
+            <span className="text-xs text-stone-500">
+              {combo ? "Thêm khách ở tab Khách mời của kế hoạch cưới là có ngay link + mã QR riêng." : "Nhập tên khách là có ngay link + mã QR riêng cho từng người."}
+            </span>
+          )}
         </div>
       </div>
     </section>

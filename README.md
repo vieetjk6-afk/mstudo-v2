@@ -490,6 +490,16 @@ và cổng nhân viên).
   (`feature_flags.planner`): khách không thấy gì, trừ hợp đồng của tài khoản
   admin; mở ở Cài đặt hệ thống → Tính năng.
   Luật thuần: `npm run test:wedding-plan`.
+- **Quà cưới** — kế hoạch cưới + thiệp cưới online thành MỘT trang (đang chạy
+  thử, chỉ hợp đồng của tài khoản admin: `weddingGiftCombo` trong
+  `src/lib/wedding-plan.ts`; studio khác vẫn dùng hai món riêng). Một link gửi
+  khách (`/portal/<token>/ke-hoach`); lần mở đầu tự tạo thiệp; thiệp sửa ngay
+  trong trang (`#thiep` — trình sửa của `/thiep/sua/<mã>` chạy chế độ nhúng).
+  Danh sách khách của kế hoạch là danh sách DUY NHẤT: mỗi khách có link thiệp
+  `?guest=<tên>` + mã QR; khách xác nhận trên thiệp thì `/api/thiep/rsvp` ghi
+  thẳng vào danh sách (`syncInviteReplies`, mốc `extra.invite_seen` — phản hồi
+  đã ghi không ghi lại, cặp đôi sửa tay được), khách lạ tự thêm vào nhóm "Khác".
+  Luật tự tặng thiệp gửi link Quà cưới thay link sửa thiệp. Không cần migration.
 - Cổng khách **cài được lên màn hình chính** (`/portal/<token>/manifest.webmanifest`,
   tên khách + logo studio), **nhớ số điện thoại 90 ngày** trên máy đó, và **đọc
   được khi mất mạng** từ bản chụp lần trước. Chi tiết + lý do ở

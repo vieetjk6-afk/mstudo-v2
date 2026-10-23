@@ -70,7 +70,18 @@ export default function OverviewTab({ ctx }: { ctx: Ctx }) {
         <div className="grid grid-cols-1 gap-3 min-[600px]:grid-cols-3">
           <MiniCard icon={Luggage} title="Đồ cần mang" value={plan.packing.length ? `${packed}/${plan.packing.length} đã xếp` : "Chưa có danh sách"} onClick={() => go("day")} />
           <MiniCard icon={Camera} title="Ảnh cần chụp" value={plan.shots.length ? `${plan.shots.length} tấm · ${data.studio_name} xem được` : "Chưa có danh sách"} onClick={() => go("style")} />
-          {data.invite ? (
+          {data.invite && ctx.openInvite ? (
+            // Quà cưới: thiệp sửa ngay trong trang này.
+            <button onClick={ctx.openInvite} className="flex items-center gap-3 rounded-[14px] px-4 py-3 text-left" style={card}>
+              <Heart size={18} style={{ color: "var(--ac)", flex: "none" }} />
+              <span className="min-w-0 flex-1">
+                <span className="block text-[13px] font-bold">Thiệp cưới online</span>
+                <span className="block truncate text-[12px]" style={{ color: data.invite.published ? "var(--tx3)" : "var(--am)" }}>
+                  {data.invite.published ? `Đang hiển thị · ${data.invite.replies.length} phản hồi` : "Bản nháp — mở để sửa & xuất bản"}
+                </span>
+              </span>
+            </button>
+          ) : data.invite ? (
             <Link href={data.invite.href} className="flex items-center gap-3 rounded-[14px] px-4 py-3" style={card}>
               <Heart size={18} style={{ color: "var(--ac)", flex: "none" }} />
               <span className="min-w-0 flex-1">

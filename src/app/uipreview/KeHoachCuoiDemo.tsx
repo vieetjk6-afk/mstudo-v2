@@ -3,7 +3,8 @@
 import { useState } from "react";
 import PlannerView, { type PlannerTab } from "@/app/portal/[token]/ke-hoach/PlannerView";
 import type { PlannerPayload } from "@/app/portal/[token]/ke-hoach/types";
-import { applyPlanOp, autoLinks, newPlan, templateFor, type PlanOp, type WeddingPlanData } from "@/lib/wedding-plan";
+import WeddingEditor from "@/app/thiep/sua/[token]/WeddingEditor";
+import { applyPlanOp, autoLinks, newPlan, syncInviteReplies, templateFor, type PlanOp, type WeddingPlanData } from "@/lib/wedding-plan";
 
 /**
  * Kế hoạch cưới của khách (/portal/<token>/ke-hoach) bằng dữ liệu giả. Bấm được
@@ -13,17 +14,25 @@ import { applyPlanOp, autoLinks, newPlan, templateFor, type PlanOp, type Wedding
  * Dữ liệu cố ý khó: tên đôi dài, khoản tiền 9 chữ số, ngân sách bị vượt, việc
  * đã quá hạn, bàn tiệc vượt sức chứa, khách phản hồi qua thiệp nhưng không có
  * trong danh sách, lịch hẹn studio chen vào giữa lịch trình khách tự lập.
+ *
+ * `variant="combo"`: chế độ Quà cưới — phản hồi qua thiệp đã ghi vào danh sách
+ * (đi qua chính `syncInviteReplies`), mỗi khách có link thiệp, thiệp chưa xuất bản.
  */
 export function KeHoachCuoiDemo({
   tab = "overview", variant, guestView,
-}: { tab?: PlannerTab; variant?: "no-date" | "locked" | "old-db"; guestView?: "list" | "tables" }) {
+}: { tab?: PlannerTab; variant?: "no-date" | "locked" | "old-db" | "combo"; guestView?: "list" | "tables" }) {
   const today = "2026-10-23";
-  const [plan, setPlan] = useState<WeddingPlanData>(() => demoPlan(variant === "no-date"));
+  const combo = variant === "combo";
+  const [plan, setPlan] = useState<WeddingPlanData>(() => {
+    const p = demoPlan(variant === "no-date");
+    return combo ? syncInviteReplies(p, REPLIES, id).plan : p;
+  });
   const ext = variant !== "old-db";
 
   const data: PlannerPayload = {
     enabled: true,
     ext,
+    combo,
     contract: { title: "Phóng sự cưới + prewedding Đà Lạt", client_name: "Nguyễn Hoàng Bảo Ngọc & Trần Đình Minh Khôi", event_date: "2026-11-02", status: "approved" },
     studio_name: "Mây Studio",
     studio_phone: "0909000000",
@@ -33,7 +42,7 @@ export function KeHoachCuoiDemo({
       studioName: "Mây Studio",
       signed: true,
       shot: false,
-      invitation: { published: true, href: "#" },
+      invitation: { published: !combo, href: combo ? "#thiep" : "#" },
       album: null,
       total: 28_900_000,
       paid: 8_670_000,
@@ -45,14 +54,12 @@ export function KeHoachCuoiDemo({
       { id: "a2", date: "2026-11-02", time: "05:00", title: "Chụp prewedding Đà Lạt", place: "Đồi chè Cầu Đất" },
     ],
     invite: variant === "no-date" ? null : {
-      href: "#",
-      published: true,
-      names: ["Gia đình chú Ba", "Bạn Minh", "Cô giáo Thu Hằng", "Anh Tuấn phòng kỹ thuật"],
-      replies: [
-        { guest_name: "Gia đình chú Ba", attending: true, num_guests: 5, created_at: "2026-10-20T10:00:00Z" },
-        { guest_name: "Bạn Minh", attending: false, num_guests: 1, created_at: "2026-10-21T10:00:00Z" },
-        { guest_name: "Chị Hoa (bạn cấp 3)", attending: true, num_guests: 2, created_at: "2026-10-22T10:00:00Z" },
-      ],
+      href: combo ? "#thiep" : "#",
+      token: "demo-qua",
+      public_href: "/thiep/bao-ngoc-minh-khoi-x8k2p",
+      published: !combo,
+      names: combo ? [] : ["Gia đình chú Ba", "Bạn Minh", "Cô giáo Thu Hằng", "Anh Tuấn phòng kỹ thuật"],
+      replies: REPLIES,
     },
     plan_locked: variant === "locked",
   };
@@ -62,8 +69,40 @@ export function KeHoachCuoiDemo({
     if (r.ok) setPlan(r.plan);
   }
 
-  return <PlannerView data={data} plan={plan} today={today} backHref="#" onOp={onOp} saving="saved" initialTab={tab} guestView={guestView} />;
+  return (
+    <PlannerView
+      data={data}
+      plan={plan}
+      today={today}
+      backHref="#"
+      onOp={onOp}
+      saving="saved"
+      initialTab={tab}
+      guestView={guestView}
+      onOpenInvite={combo ? () => {} : undefined}
+    />
+  );
 }
+
+/**
+ * Trình sửa thiệp nhúng trong kế hoạch cưới (chế độ Quà cưới). Trình sửa tự tải
+ * thiệp qua /api/thiep/demo-qua — trang xem thử không có thiệp đó, nên lúc chụp
+ * bố cục phải chặn đường gọi ấy và trả một thiệp giả.
+ */
+export function QuaCuoiThiepDemo() {
+  return (
+    <WeddingEditor
+      token="demo-qua"
+      embed={{ onBack: () => {}, onOpenGuests: () => {}, guestNames: ["Gia đình chú Ba", "Bạn Minh", "Cô giáo Thu Hằng"] }}
+    />
+  );
+}
+
+const REPLIES = [
+  { guest_name: "Gia đình chú Ba", attending: true, num_guests: 5, created_at: "2026-10-20T10:00:00Z" },
+  { guest_name: "Bạn Minh", attending: false, num_guests: 1, created_at: "2026-10-21T10:00:00Z" },
+  { guest_name: "Chị Hoa (bạn cấp 3)", attending: true, num_guests: 2, created_at: "2026-10-22T10:00:00Z" },
+];
 
 let n = 0;
 const id = () => `demo${++n}`;

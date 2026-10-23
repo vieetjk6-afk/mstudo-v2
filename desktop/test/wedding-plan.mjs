@@ -11,9 +11,9 @@
  */
 import {
   applyPlanOp, autoLinks, budgetSummary, cleanDate, cleanTime, currentWhen, daysUntil, defaultTasks,
-  groupTasks, guestSummary, isWeddingPackage, lineCost, mergeDay, newPlan, normalizePlan, opNeedsExtra,
-  payerBreakdown, planProgress, planToRow, plannerEnabled, shootsWeddingDay, tableSummary, tablesNeeded,
-  taskDone, taskStats, upcoming, whenDue, PLAN_LIMITS,
+  groupTasks, guestSummary, inviteGuestLink, isWeddingPackage, lineCost, mergeDay, newPlan, normalizePlan, opNeedsExtra,
+  payerBreakdown, planProgress, planToRow, plannerEnabled, shootsWeddingDay, syncInviteReplies, tableSummary, tablesNeeded,
+  taskDone, taskStats, upcoming, weddingGiftCombo, whenDue, PLAN_LIMITS,
 } from "../../src/lib/wedding-plan.ts";
 
 let fail = 0;
@@ -293,6 +293,57 @@ check("cleanDate: chặn năm vô lý", cleanDate("1900-01-01"), null);
   check("khách tick tay vẫn tính xong dù studio chưa ghi nhận", taskDone({ ...shoot, done: true }, auto), true);
   check("hợp đồng 0đ → việc thanh toán không tự xong", autoLinks({ studioName: "x", signed: false, shot: false, invitation: null, album: null, total: 0, paid: 0 }).pay.done, false);
   check("nhóm theo đúng thứ tự mốc", groupTasks(tasks).map((g) => g.when.key), ["m12", "m6", "m3", "w4", "w1", "d0", "after"]);
+}
+
+/* ── Quà cưới: phản hồi qua thiệp ghi thẳng vào danh sách khách ────────── */
+{
+  check("chế độ Quà cưới: chỉ tài khoản admin", [weddingGiftCombo("admin"), weddingGiftCombo("studio"), weddingGiftCombo(null)], [true, false, false]);
+  check("link thiệp ghi tên khách", inviteGuestLink("https://thiep.mstudo.vn/ngoc-khoi", " Gia đình chú Ba "), "https://thiep.mstudo.vn/ngoc-khoi?guest=Gia%20%C4%91%C3%ACnh%20ch%C3%BA%20Ba");
+  check("link thiệp đã có tham số → nối bằng &", inviteGuestLink("/thiep/abc?x=1", "Minh"), "/thiep/abc?x=1&guest=Minh");
+
+  let p = blank();
+  p = add(p, "guests", { name: "Gia đình chú Ba", group: "groom_family", count: 4, table: "1" });
+  p = add(p, "guests", { name: "Bạn Minh", group: "groom_friends" });
+  p = add(p, "guests", { name: "Cô Lan", group: "bride_family", rsvp: "yes", count: 2 });
+  const R = (guest_name, attending, num_guests, created_at) => ({ guest_name, attending, num_guests, created_at });
+  const replies = [
+    R("gia đình chú ba", true, 5, "2026-10-20T10:00:00.000000+00:00"),
+    R("Ban Minh", false, 1, "2026-10-20T18:30:00.000000+00:00"),
+    R("Chị Hoa (bạn cấp 3)", true, 2, "2026-10-21T02:00:00.000000+00:00"),
+  ];
+  const s1 = syncInviteReplies(p, replies, ids);
+  const g = (plan, name) => plan.guests.find((x) => x.name === name);
+  check("có phản hồi mới → đổi", s1.changed, true);
+  check("khớp tên bỏ hoa/thường → sẽ dự, số người theo phản hồi, đánh dấu đã gửi thiệp, giữ bàn",
+    (({ rsvp, count, invited, table, replied }) => ({ rsvp, count, invited, table, replied }))(g(s1.plan, "Gia đình chú Ba")),
+    { rsvp: "yes", count: 5, invited: true, table: "1", replied: "2026-10-20" });
+  check("gõ không dấu vẫn khớp (chỉ một người) → không dự, giữ số người; ngày theo giờ VN (18:30 UTC = 01:30 hôm sau)",
+    (({ rsvp, count, replied }) => ({ rsvp, count, replied }))(g(s1.plan, "Bạn Minh")), { rsvp: "no", count: 1, replied: "2026-10-21" });
+  check("không khớp ai → thêm khách mới nhóm Khác, đã gửi thiệp",
+    (({ group, count, rsvp, invited }) => ({ group, count, rsvp, invited }))(g(s1.plan, "Chị Hoa (bạn cấp 3)")), { group: "other", count: 2, rsvp: "yes", invited: true });
+  check("số người sẽ đến tính cả khách tự thêm", guestSummary(s1.plan.guests).people, 5 + 2 + 2);
+  check("ghi mốc phản hồi mới nhất", s1.plan.invite_seen, "2026-10-21T02:00:00.000000+00:00");
+  check("không sửa bản cũ", [p.guests.length, p.invite_seen], [3, null]);
+
+  // Cặp đôi sửa tay sau khi khách phản hồi → giữ nguyên ở lần đồng bộ sau.
+  const minh = g(s1.plan, "Bạn Minh");
+  const edited = must(apply(s1.plan, { op: "set", list: "guests", id: minh.id, patch: { rsvp: "yes", replied: "" } }));
+  check("sửa tay xoá dấu 'qua thiệp'", [g(edited, "Bạn Minh").rsvp, "replied" in g(edited, "Bạn Minh")], ["yes", false]);
+  const s2 = syncInviteReplies(edited, replies, ids);
+  check("phản hồi cũ không áp lại", [s2.changed, g(s2.plan, "Bạn Minh").rsvp, s2.plan.guests.length], [false, "yes", 4]);
+  const s3 = syncInviteReplies(edited, [...replies, R("Bạn Minh", true, 3, "2026-10-22T01:00:00+00:00")], ids);
+  check("khách gửi lại (đổi ý) → lấy lần mới", [g(s3.plan, "Bạn Minh").rsvp, g(s3.plan, "Bạn Minh").count], ["yes", 3]);
+  const s4 = syncInviteReplies(blank(), [R("A", true, 1, "2026-10-20T10:00:00+00:00"), R("a", false, 1, "2026-10-20T11:00:00+00:00")], ids);
+  check("một khách lạ gửi hai lần → một dòng, lấy lần sau", [s4.plan.guests.length, s4.plan.guests[0].rsvp], [1, "no"]);
+  check("bỏ phản hồi tên trống / mốc hỏng", syncInviteReplies(blank(), [R("  ", true, 1, "2026-10-20T10:00:00Z"), R("B", true, 1, "hôm qua")], ids).changed, false);
+  check("hai khách trùng tên bỏ dấu → không đoán, thêm dòng mới",
+    syncInviteReplies(add(add(blank(), "guests", { name: "Chú Hải" }), "guests", { name: "Chú Hài" }), [R("chu hai", true, 1, "2026-10-20T10:00:00Z")], ids).plan.guests.length, 3);
+
+  // Lưu / đọc lại.
+  const back = normalizePlan(planToRow(s1.plan));
+  check("mốc phản hồi & ngày phản hồi qua được DB", [back.invite_seen, g(back, "Bạn Minh").replied], ["2026-10-21T02:00:00.000000+00:00", "2026-10-21"]);
+  check("mốc rác trong DB → null", normalizePlan({ extra: { invite_seen: "'; drop" } }).invite_seen, null);
+  check("khách không sửa được mốc qua thao tác", must(apply(s1.plan, { op: "set_settings", invite_seen: "2000-01-01T00:00:00Z" })).invite_seen, s1.plan.invite_seen);
 }
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đều qua.");

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
+import { mainUrl } from "@/lib/hosts";
+import { weddingGiftCombo } from "@/lib/wedding-plan";
 import type { WeddingConfig } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +12,9 @@ export const dynamic = "force-dynamic";
  * the key, mirroring the /c/[token] contract portal).
  *   GET                       -> the invitation + its RSVP responses
  *   POST { config, published, template } -> save the client's edits
+ *
+ * Chế độ Quà cưới: GET trả thêm `planner_href` — danh sách khách & link mời
+ * riêng nằm ở kế hoạch cưới, trình sửa thiệp (mở thẳng link cũ) chỉ đường sang.
  */
 export async function GET(req: Request, props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
@@ -22,10 +27,19 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
   const db = createAdminClient();
   const { data: inv } = await db
     .from("wedding_invitations")
-    .select("id, owner_id, slug, template, config, published, updated_at")
+    .select("id, owner_id, contract_id, slug, template, config, published, updated_at")
     .eq("edit_token", params.token)
     .maybeSingle();
   if (!inv) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+  let plannerHref: string | null = null;
+  if (inv.contract_id) {
+    const [{ data: owner }, { data: c }] = await Promise.all([
+      db.from("profiles").select("role").eq("id", inv.owner_id).maybeSingle(),
+      db.from("studio_contracts").select("client_token").eq("id", inv.contract_id).maybeSingle(),
+    ]);
+    if (weddingGiftCombo(owner?.role) && c?.client_token) plannerHref = mainUrl(`/portal/${c.client_token}/ke-hoach`);
+  }
 
   const { data: rsvps } = await db
     .from("wedding_rsvps")
@@ -34,7 +48,7 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
     .order("created_at", { ascending: false })
     .limit(500);
 
-  return NextResponse.json({ invitation: inv, rsvps: rsvps ?? [] });
+  return NextResponse.json({ invitation: inv, rsvps: rsvps ?? [], planner_href: plannerHref });
 }
 
 export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {

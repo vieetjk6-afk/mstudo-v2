@@ -7,7 +7,8 @@ import { useToast } from "@/components/studio/Toast";
 import { forgetDevice, readPhone, rememberPhone } from "@/lib/portal-device";
 import { todayVN } from "@/lib/date";
 import { applyPlanOp, planErrorText, type PlanOp, type WeddingPlanData } from "@/lib/wedding-plan";
-import PlannerView, { type SaveState } from "./PlannerView";
+import WeddingEditor from "@/app/thiep/sua/[token]/WeddingEditor";
+import PlannerView, { type PlannerTab, type SaveState } from "./PlannerView";
 import type { PlannerOpResponse, PlannerPayload } from "./types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -20,6 +21,11 @@ import type { PlannerOpResponse, PlannerPayload } from "./types";
    lần lượt từng cái một. Gửi song song thì phản hồi về lệch thứ tự và bản cũ
    đè lên bản mới. Mỗi phản hồi là bản máy chủ mới nhất; các thao tác còn chờ
    được áp lại lên trên nó — nên hai máy cùng sửa vẫn thấy việc của nhau.
+
+   Chế độ Quà cưới: thiệp cưới sửa NGAY trong trang này — "#thiep" thay cả
+   trang bằng trình sửa thiệp (cùng trình sửa của /thiep/sua/<mã>, chạy chế độ
+   nhúng). Nút quay lại của trình duyệt đưa về kế hoạch; link "#thiep" gửi khách
+   (luật tự tặng thiệp) mở thẳng vào thiệp.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const card: React.CSSProperties = { background: "var(--sf)", border: "1px solid var(--bd)" };
@@ -48,11 +54,23 @@ export default function WeddingPlanner({ token }: { token: string }) {
   const [autoTrying, setAutoTrying] = useState(() => !!readPhone(token));
   const [saving, setSaving] = useState<SaveState>("idle");
   const { toast, toastNode } = useToast();
+  const [view, setView] = useState<"plan" | "invite">("plan");
+  const [returnTab, setReturnTab] = useState<PlannerTab>("overview");
 
   /** Bản máy chủ mới nhất + các thao tác chưa lưu xong (theo thứ tự). */
   const server = useRef<WeddingPlanData | null>(null);
   const queue = useRef<PlanOp[]>([]);
   const busy = useRef(false);
+  /** Tab kế hoạch đang mở — quay về từ thiệp thì về đúng tab đó. */
+  const tabNow = useRef<PlannerTab>("overview");
+  /** Trình sửa thiệp còn thay đổi chưa lưu. */
+  const editorDirty = useRef(false);
+  /** Mục "#thiep" trong lịch sử trình duyệt do chính trang này thêm vào. */
+  const pushed = useRef(false);
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const unlockedRef = useRef(unlocked);
+  unlockedRef.current = unlocked;
 
   const replay = useCallback((): WeddingPlanData | null => {
     if (!server.current) return null;
@@ -81,6 +99,8 @@ export default function WeddingPlanner({ token }: { token: string }) {
         setPlan(j.plan);
         setUnlocked(p);
         if (remember) rememberPhone(token, p);
+        // Mở bằng link "…/ke-hoach#thiep" → vào thẳng thiệp.
+        if (j.combo && j.invite && window.location.hash === "#thiep") setView("invite");
         return { ok: true };
       } catch {
         return { ok: false, error: "offline" };
@@ -100,6 +120,59 @@ export default function WeddingPlanner({ token }: { token: string }) {
     });
     return () => { alive = false; };
   }, [token, open]);
+
+  /** Về kế hoạch: tải lại để thấy thiệp vừa xuất bản, phản hồi mới (trừ khi còn thao tác chưa lưu). */
+  const toPlan = useCallback(() => {
+    setView("plan");
+    window.scrollTo(0, 0);
+    if (!busy.current && !queue.current.length && unlockedRef.current) void open(unlockedRef.current, false);
+  }, [open]);
+
+  const openInvite = useCallback(() => {
+    if (window.location.hash !== "#thiep") {
+      window.history.pushState(null, "", "#thiep");
+      pushed.current = true;
+    }
+    setView("invite");
+    window.scrollTo(0, 0);
+  }, []);
+
+  /** Rời thiệp (trình sửa đã hỏi lại nếu còn thay đổi chưa lưu). */
+  const closeInvite = useCallback((tab?: PlannerTab) => {
+    setReturnTab(tab ?? tabNow.current);
+    editorDirty.current = false;
+    if (pushed.current) {
+      // Lùi đúng một mục lịch sử — popstate bên dưới đưa về kế hoạch.
+      window.history.back();
+      return;
+    }
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    toPlan();
+  }, [toPlan]);
+
+  // Nút quay lại / tiến tới của trình duyệt.
+  useEffect(() => {
+    const onPop = () => {
+      const wantInvite = window.location.hash === "#thiep";
+      if (wantInvite) {
+        if (viewRef.current !== "invite") setView("invite");
+        return;
+      }
+      if (viewRef.current !== "invite") return;
+      if (editorDirty.current && !window.confirm("Thiệp còn thay đổi chưa lưu. Rời đi và bỏ các thay đổi đó?")) {
+        window.history.pushState(null, "", "#thiep");
+        pushed.current = true;
+        return;
+      }
+      pushed.current = false;
+      editorDirty.current = false;
+      toPlan();
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [toPlan]);
+
+  const onEditorDirty = useCallback((d: boolean) => { editorDirty.current = d; }, []);
 
   async function unlock(e: React.FormEvent) {
     e.preventDefault();
@@ -211,9 +284,36 @@ export default function WeddingPlanner({ token }: { token: string }) {
     );
   }
 
+  if (view === "invite" && data.combo && data.invite) {
+    return (
+      <>
+        <WeddingEditor
+          token={data.invite.token}
+          embed={{
+            onBack: () => closeInvite(),
+            onOpenGuests: () => closeInvite("guests"),
+            guestNames: plan.guests.map((g) => g.name),
+            onDirty: onEditorDirty,
+          }}
+        />
+        {toastNode}
+      </>
+    );
+  }
+
   return (
     <>
-      <PlannerView data={data} plan={plan} today={todayVN()} backHref={`/portal/${token}`} onOp={onOp} saving={saving} />
+      <PlannerView
+        data={data}
+        plan={plan}
+        today={todayVN()}
+        backHref={`/portal/${token}`}
+        onOp={onOp}
+        saving={saving}
+        initialTab={returnTab}
+        onTab={(t) => { tabNow.current = t; }}
+        onOpenInvite={data.combo && data.invite ? openInvite : undefined}
+      />
       {toastNode}
     </>
   );

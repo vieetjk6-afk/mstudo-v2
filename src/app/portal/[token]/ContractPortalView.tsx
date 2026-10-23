@@ -660,6 +660,7 @@ function ActivePortal({
 /**
  * Lối vào kế hoạch cưới — đặt ĐẦU cột phải: hợp đồng cưới chạy nhiều tháng,
  * và trong những tháng đó thứ khách mở lại nhiều nhất là "còn việc gì phải lo".
+ * Chế độ Quà cưới: cùng một lối vào cho cả kế hoạch lẫn thiệp cưới online.
  */
 function PlannerCard({
   token, planner, today,
@@ -669,14 +670,16 @@ function PlannerCard({
   return (
     <Link href={`/portal/${token}/ke-hoach`} className="block rounded-[16px] px-5 py-[18px]" style={{ background: "var(--acS)", border: "1px solid var(--acM)" }}>
       <span className="flex items-center gap-1.5 text-[14px] font-bold" style={{ color: "var(--ac)" }}>
-        <CalendarHeart size={17} /> Kế hoạch cưới của bạn
+        <CalendarHeart size={17} /> {planner.combo ? "Quà cưới của bạn" : "Kế hoạch cưới của bạn"}
         <ArrowRight size={15} className="ml-auto" />
       </span>
       <span className="mt-1.5 block text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
         {left !== null && left > 0
           ? <>Còn <b className="tnum">{left} ngày</b> tới ngày cưới. </>
           : left === 0 ? <>Hôm nay là ngày cưới! </> : null}
-        Việc cần làm, ngân sách và lịch trình ngày cưới ở một chỗ.
+        {planner.combo
+          ? "Kế hoạch cưới và thiệp cưới online ở một chỗ — danh sách khách dùng chung."
+          : "Việc cần làm, ngân sách và lịch trình ngày cưới ở một chỗ."}
       </span>
       <span className="mt-3 flex items-center gap-2.5">
         <ProgressBar pct={pct} height={5} className="flex-1" />

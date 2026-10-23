@@ -5,6 +5,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { tierAllowsRental } from "@/lib/plans";
 import { getStudioHost } from "@/lib/studio-site";
 import { getFeatureFlags, plannerComingSoon, storyComingSoon } from "@/lib/feature-flags";
+import { weddingGiftCombo } from "@/lib/wedding-plan";
 import { ensureIntakeToken } from "@/lib/contract-intake";
 import { brandFrom } from "@/lib/studio-brand";
 import { getActiveBranches } from "@/lib/branches";
@@ -266,6 +267,7 @@ export default async function ContractPage(
       savedSignature={reusableSig}
       storyComingSoon={storyLocked}
       plannerComingSoon={plannerLocked}
+      giftCombo={weddingGiftCombo(profile.role as string | null)}
       bank={{
         bin: (profile.pl_bank_bin as string | null) ?? null,
         account: (profile.pl_bank_account as string | null) ?? null,

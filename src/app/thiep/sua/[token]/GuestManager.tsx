@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Copy, Check, Download, QrCode, Loader2, ListPlus, Upload, RefreshCw } from "lucide-react";
 import { parseGuestFile } from "@/lib/guest-import";
+import { downloadGuestQr, downloadGuestQrZip, qrDataUrl } from "@/lib/guest-qr";
 import { matchGuestRsvps, type GuestStatus } from "@/lib/wedding-guests";
 import type { WeddingRsvp } from "@/lib/types";
 
@@ -49,10 +50,9 @@ export default function GuestManager({
   useEffect(() => {
     let alive = true;
     (async () => {
-      const QRCode = (await import("qrcode")).default;
       const next: Record<string, string> = {};
       for (const g of guests) {
-        try { next[g] = await QRCode.toDataURL(linkFor(g), { margin: 1, width: 512, color: { dark: "#1a1205", light: "#ffffff" } }); } catch { /* bỏ qua tên lỗi */ }
+        try { next[g] = await qrDataUrl(linkFor(g)); } catch { /* bỏ qua tên lỗi */ }
       }
       if (alive) setQrMap(next);
     })();
@@ -87,53 +87,16 @@ export default function GuestManager({
   }
   const copyAll = () => copy(guests.map((g) => `${g}: ${linkFor(g)}`).join("\n"), "__all__");
 
-  // Ghép QR + tên khách thành 1 ảnh PNG (để "QR hiện tên khách mời").
-  const composeCard = useCallback((name: string, qr: string): Promise<Blob> => new Promise((resolve) => {
-    const W = 640, H = 760, pad = 64;
-    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    const ctx = cv.getContext("2d")!;
-    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, W, H);
-    const img = new Image();
-    img.onload = () => {
-      ctx.drawImage(img, pad, pad, W - 2 * pad, W - 2 * pad);
-      ctx.fillStyle = accent; ctx.textAlign = "center";
-      ctx.font = "500 24px 'Cormorant Garamond', Georgia, serif";
-      ctx.fillText("TRÂN TRỌNG KÍNH MỜI", W / 2, W - pad + 66);
-      ctx.fillStyle = "#1a1205";
-      // Tên khách kiểu viết tay (dùng font script hệ thống — canvas không dùng được biến CSS).
-      ctx.font = "italic 46px 'Segoe Script', 'Brush Script MT', 'Comic Sans MS', cursive";
-      ctx.fillText(name.length > 24 ? name.slice(0, 23) + "…" : name, W / 2, W - pad + 122);
-      cv.toBlob((b) => resolve(b!), "image/png");
-    };
-    img.src = qr;
-  }), [accent]);
-
-  const safe = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "khach";
-
   async function downloadOne(name: string) {
     const qr = qrMap[name]; if (!qr) return;
-    const blob = await composeCard(name, qr);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `qr-${safe(name)}.png`; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    await downloadGuestQr(name, linkFor(name), accent, qr);
   }
   async function downloadAll() {
     if (!guests.length) return;
     setZipping(true);
     try {
-      const JSZip = (await import("jszip")).default;
-      const zip = new JSZip();
-      const used: Record<string, number> = {};
-      for (const g of guests) {
-        const qr = qrMap[g]; if (!qr) continue;
-        const blob = await composeCard(g, qr);
-        let base = safe(g); if (used[base] != null) { used[base]++; base = `${base}-${used[base]}`; } else used[base] = 0;
-        zip.file(`${base}.png`, blob);
-      }
-      const out = await zip.generateAsync({ type: "blob" });
-      const url = URL.createObjectURL(out);
-      const a = document.createElement("a"); a.href = url; a.download = "qr-khach-moi.zip"; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 8000);
+      // Chỉ những tên đã có QR (tên tạo QR lỗi thì bỏ qua, như trước).
+      await downloadGuestQrZip(guests.filter((g) => qrMap[g]).map((g) => ({ name: g, link: linkFor(g), qr: qrMap[g] })), accent);
     } finally { setZipping(false); }
   }
 

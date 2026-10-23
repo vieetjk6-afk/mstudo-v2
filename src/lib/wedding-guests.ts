@@ -24,9 +24,9 @@ export type GuestRsvpSummary<R extends RsvpLike> = {
 };
 
 /** So tên: bỏ hoa/thường, khoảng trắng thừa, dạng Unicode (dựng sẵn/tổ hợp). */
-const exactKey = (s: string) => s.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+export const exactKey = (s: string) => s.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
 /** Bỏ luôn dấu — khách gõ lại tên không dấu vẫn nhận ra (chỉ dùng khi không nhầm sang người khác). */
-const looseKey = (s: string) => exactKey(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
+export const looseKey = (s: string) => exactKey(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d");
 
 export function matchGuestRsvps<R extends RsvpLike>(guests: string[], rsvps: R[]): GuestRsvpSummary<R> {
   // Mới nhất trước: khách gửi lại (đổi ý) thì lấy lần gửi sau cùng.
