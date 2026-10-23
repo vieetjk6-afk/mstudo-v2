@@ -70,6 +70,12 @@ export type XlsxSheet = {
   /** Vùng gộp ô, ví dụ "A1:F1". */
   merges?: string[];
   chart?: XlsxChart;
+  /**
+   * In: khổ ngang, co cho vừa bề ngang một trang (chiều dọc chạy bao nhiêu
+   * trang cũng được). Không đặt thì in theo mặc định của Excel — bảng rộng bị
+   * cắt cột sang trang sau.
+   */
+  fitWidth?: boolean;
 };
 
 /* ── Tiện ích ──────────────────────────────────────────────────────────── */
@@ -224,6 +230,7 @@ function sheetXml(sheet: XlsxSheet, hasDrawing: boolean): string {
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+${sheet.fitWidth ? `<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>` : ""}
 <dimension ref="${dim}"/>
 <sheetViews><sheetView workbookViewId="0" showGridLines="0">${freeze}</sheetView></sheetViews>
 <sheetFormatPr defaultRowHeight="15"/>
@@ -231,6 +238,7 @@ ${cols}
 <sheetData>${rows}</sheetData>
 ${merges}
 <pageMargins left="0.5" right="0.5" top="0.6" bottom="0.6" header="0.3" footer="0.3"/>
+${sheet.fitWidth ? `<pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>` : ""}
 ${hasDrawing ? `<drawing r:id="rId1"/>` : ""}
 </worksheet>`;
 }

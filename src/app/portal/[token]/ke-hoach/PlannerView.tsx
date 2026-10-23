@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, CalendarHeart, Clock, Heart, LayoutDashboard, ListChecks, Lock, Palette, Store, Users, Wallet,
+  ArrowLeft, CalendarHeart, Clock, FileSpreadsheet, Heart, LayoutDashboard, ListChecks, Loader2, Lock, Palette, Store, Users, Wallet,
 } from "lucide-react";
 import DateInput from "@/components/DateInput";
 import { fmtDateLunar } from "@/lib/date";
@@ -99,7 +99,10 @@ export default function PlannerView({
           <Link href={backHref} className="flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: "var(--tx3)" }}>
             <ArrowLeft size={15} /> Trang hợp đồng của bạn
           </Link>
-          <SaveBadge state={saving} />
+          <span className="flex items-center gap-3">
+            <ExportButton data={data} plan={plan} today={today} replies={replies} />
+            <SaveBadge state={saving} />
+          </span>
         </div>
 
         <p className="mt-3 text-[11px] font-bold uppercase" style={{ letterSpacing: "1.2px", color: "var(--tx3)" }}>
@@ -182,6 +185,50 @@ export default function PlannerView({
         </div>
       </div>
     </main>
+  );
+}
+
+/**
+ * Tải cả kế hoạch về một file Excel (mỗi phần một sheet) — khách giữ một bản,
+ * in ra, gửi bố mẹ. Dựng ngay trong trình duyệt từ đúng dữ liệu đang hiện, kể
+ * cả thao tác chưa lưu xong; bộ ghi Excel chỉ nạp lúc bấm.
+ */
+function ExportButton({
+  data, plan, today, replies,
+}: { data: PlannerPayload; plan: WeddingPlanData; today: string; replies: Record<string, GuestReply> }) {
+  const [busy, setBusy] = useState(false);
+  async function run() {
+    setBusy(true);
+    try {
+      const { downloadPlanXlsx } = await import("@/lib/wedding-plan-export");
+      await downloadPlanXlsx({
+        plan,
+        couple: data.contract.client_name || data.contract.title,
+        studio: { name: data.studio_name, phone: data.studio_phone },
+        auto: data.auto,
+        studioLine: data.studio_line,
+        studioDay: data.studio_day,
+        replies,
+        today,
+        ext: data.ext,
+      });
+    } catch {
+      window.alert("Chưa tạo được file Excel — bạn thử lại sau giây lát nhé.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={run}
+      disabled={busy}
+      className="flex items-center gap-1.5 text-[12.5px] font-bold disabled:opacity-60"
+      style={{ color: "var(--ac)" }}
+      title="Tải kế hoạch về máy dạng file Excel"
+    >
+      {busy ? <Loader2 size={15} className="animate-spin" /> : <FileSpreadsheet size={15} />} Xuất Excel
+    </button>
   );
 }
 
