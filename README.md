@@ -489,7 +489,10 @@ và cổng nhân viên).
   chạy migration mở rộng thì chỉ 4 tab gốc hiện. Mặc định **Sắp ra mắt**
   (`feature_flags.planner`): khách không thấy gì, trừ hợp đồng của tài khoản
   admin; mở ở Cài đặt hệ thống → Tính năng.
-  Luật thuần: `npm run test:wedding-plan`.
+  Nút **Xuất Excel** ở đầu trang: tải cả kế hoạch về một file .xlsx, mỗi phần
+  một sheet, in ngang vừa khổ giấy (`src/lib/wedding-plan-export.ts`, dựng ngay
+  trong trình duyệt, bộ ghi Excel chỉ nạp lúc bấm).
+  Luật thuần: `npm run test:wedding-plan`, `npm run test:wedding-plan-export`.
 - **Quà cưới** — kế hoạch cưới + thiệp cưới online thành MỘT trang (đang chạy
   thử, chỉ hợp đồng của tài khoản admin: `weddingGiftCombo` trong
   `src/lib/wedding-plan.ts`; studio khác vẫn dùng hai món riêng). Một link gửi
