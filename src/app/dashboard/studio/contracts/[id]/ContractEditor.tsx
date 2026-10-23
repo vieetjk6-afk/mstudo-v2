@@ -53,6 +53,7 @@ import ZaloSendButton from "@/components/ZaloSendButton";
 import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
 import LoveStoryCard from "./LoveStoryCard";
+import WeddingPlanCard from "./WeddingPlanCard";
 import InternalNoteCard from "./InternalNoteCard";
 import LoyaltyVoucherCard from "./LoyaltyVoucherCard";
 import CalendarButtons from "@/components/CalendarButtons";
@@ -110,6 +111,7 @@ import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
 import { albumOptionLabel, type ContractAlbumOption } from "@/lib/contract-album";
 import ContractAlbumModeCard from "./ContractAlbumModeCard";
 import { isWeddingReportage } from "@/lib/automations";
+import { isWeddingPackage } from "@/lib/wedding-plan";
 import { normalizeAlbumMode, type AlbumMode } from "@/lib/album-mode";
 
 // unit_price giữ ĐỘ LỚN (số dương khách nhập); is_discount đánh dấu đây là dòng
@@ -333,6 +335,7 @@ export default function ContractEditor({
   initialClientProofs,
   services = [],
   storyComingSoon = false,
+  plannerComingSoon = false,
   initialTab = "info",
 }: {
   contract: StudioContract;
@@ -342,6 +345,8 @@ export default function ContractEditor({
   /** Tên người ký Bên A điền sẵn: tên của chữ ký đã lưu → tên ký lần trước → tên chủ studio. */
   defaultSignName?: string;
   storyComingSoon?: boolean;
+  /** Kế hoạch cưới còn "Sắp ra mắt" với studio này (thẻ chỉ hiện nhãn). */
+  plannerComingSoon?: boolean;
   initialItems: ContractItem[];
   /** Phụ lục của hợp đồng (chỉ có sau migration contract_addenda.sql). */
   initialAddenda?: ContractAddendum[];
@@ -3436,12 +3441,29 @@ export default function ContractEditor({
                   <Gift size={16} style={{ color: "var(--brand)" }} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold">Tiện ích tặng khách &amp; xin đánh giá</p>
-                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>Thiệp cưới online · Love Story · Xin khách đánh giá</p>
+                    <p className="text-[12px]" style={{ color: "var(--text3)" }}>Kế hoạch cưới · Thiệp cưới online · Love Story · Xin khách đánh giá</p>
                   </div>
                   <ChevronDown size={16} className="transition-transform group-open:rotate-180" style={{ color: "var(--text3)" }} />
                 </summary>
 
                 <div className="mt-3">
+                  {/* Kế hoạch cưới của khách (cổng khách /portal/<token>/ke-hoach) */}
+                  <WeddingPlanCard
+                    contractId={contract.id}
+                    clientToken={contract.client_token}
+                    studioHost={studioHost}
+                    clientMessenger={f.client_messenger}
+                    toggle={contract.wedding_planner}
+                    packageOn={isWeddingPackage({
+                      shootType: f.shoot_type,
+                      intakeType: contract.intake?.type,
+                      title: f.title,
+                      serviceName: services.find((s) => s.id === f.service_id)?.name,
+                      itemNames: items.map((it) => it.name),
+                    })}
+                    comingSoon={plannerComingSoon}
+                  />
+
                   {/* Online wedding invitation (free gift) */}
                   <WeddingInvitationCard
                     contract={{ id: contract.id, owner_id: contract.owner_id, title: f.title, event_date: f.event_date || null, location: f.location || null }}

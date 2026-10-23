@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
 import { tierAllowsRental } from "@/lib/plans";
 import { getStudioHost } from "@/lib/studio-site";
-import { getFeatureFlags, storyComingSoon } from "@/lib/feature-flags";
+import { getFeatureFlags, plannerComingSoon, storyComingSoon } from "@/lib/feature-flags";
 import { ensureIntakeToken } from "@/lib/contract-intake";
 import { brandFrom } from "@/lib/studio-brand";
 import { getActiveBranches } from "@/lib/branches";
@@ -252,7 +252,11 @@ export default async function ContractPage(
       ? { name: last.studio_signed_name, signature: last.studio_signature }
       : null;
   const defaultSignName = reusableSig?.name || ((profile.full_name as string | null) ?? "").trim();
-  const storyLocked = storyComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin";
+  const flags = await getFeatureFlags();
+  const storyLocked = storyComingSoon(flags) && profile.actingRole !== "admin";
+  // Kế hoạch cưới: cùng luật với cổng khách — còn "Sắp ra mắt" thì chỉ hợp đồng
+  // của tài khoản admin chạy thật (xem plannerComingSoon).
+  const plannerLocked = plannerComingSoon(flags) && profile.role !== "admin";
 
   return (
     <ContractEditor
@@ -261,6 +265,7 @@ export default async function ContractPage(
       defaultSignName={defaultSignName}
       savedSignature={reusableSig}
       storyComingSoon={storyLocked}
+      plannerComingSoon={plannerLocked}
       bank={{
         bin: (profile.pl_bank_bin as string | null) ?? null,
         account: (profile.pl_bank_account as string | null) ?? null,

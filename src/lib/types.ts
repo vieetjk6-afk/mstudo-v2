@@ -398,6 +398,12 @@ export interface StudioContract {
    * Có từ migrations/thiep_tang_tu_dong.sql — chưa chạy thì không có cột.
    */
   gift_invitation?: boolean | null;
+  /**
+   * Kế hoạch cưới trên cổng khách (/portal/<token>/ke-hoach): true = bật,
+   * false = tắt, null/undefined = theo gói (gói cưới thì bật).
+   * Có từ migrations/ke_hoach_cuoi.sql — chưa chạy thì không có cột.
+   */
+  wedding_planner?: boolean | null;
   /** Cơ sở thực hiện hợp đồng. null = chưa gán chi nhánh. */
   branch_id: string | null;
   created_at: string;

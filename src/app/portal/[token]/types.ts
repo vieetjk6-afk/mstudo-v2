@@ -81,6 +81,8 @@ export type PortalPayload = {
   selection: { slug: string; title: string; phase?: string } | null;
   wedding: { slug: string; edit_token: string; published: boolean } | null;
   story: { slug: string; edit_token: string; published: boolean } | null;
+  /** Tóm tắt kế hoạch cưới (/portal/<token>/ke-hoach); null = hợp đồng không có / chưa mở. */
+  planner?: { wedding_date: string | null; done: number; total: number } | null;
   plan_locked?: boolean;
 };
 

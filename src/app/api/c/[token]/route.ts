@@ -14,8 +14,11 @@ import { listAddenda, signAddendum } from "@/lib/contract-addenda-server";
 import { addendumLabel } from "@/lib/contract-addenda";
 import { contractLoyalty } from "@/lib/voucher-program-server";
 import { voucherTerms, voucherValueLabel } from "@/lib/vouchers";
-import { vnd } from "@/lib/types";
+import { contractTotal, sumAmounts, vnd } from "@/lib/types";
 import { parseFinalVideos, safeUrl, type FinalVideo } from "@/lib/final-links";
+import { getFeatureFlags, plannerComingSoon } from "@/lib/feature-flags";
+import { autoLinks, normalizePlan, planProgress, plannerEnabled, seedPlanFor, shootDone } from "@/lib/wedding-plan";
+import { todayVN } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -343,6 +346,49 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     if (s) story = { slug: s.slug, edit_token: s.edit_token, published: s.published };
   }
 
+  // Kế hoạch cưới (/portal/<token>/ke-hoach) — chỉ phần tóm tắt cho thẻ ở cổng
+  // khách. Mọi bước đều best-effort: chưa chạy migrations/ke_hoach_cuoi.sql thì
+  // `planner` = null và cổng khách chỉ đơn giản không có thẻ này.
+  let planner: { wedding_date: string | null; done: number; total: number } | null = null;
+  if (!plannerComingSoon(await getFeatureFlags()) || ownerObj?.role === "admin") {
+    const cq = (cols: string) => db.from("studio_contracts").select(cols).eq("id", cId).maybeSingle();
+    const [{ data: pRow, error: pErr }, extraFull] = await Promise.all([
+      db.from("wedding_plans").select("wedding_date, tasks").eq("contract_id", cId).maybeSingle(),
+      cq("wedding_planner, service_id, intake"),
+    ]);
+    const extra = (extraFull.error && isMissingColumn(extraFull.error, "wedding_planner") ? (await cq("service_id, intake")).data : extraFull.data) as
+      { wedding_planner?: boolean | null; service_id?: string | null; intake?: { type?: string } | null } | null;
+    if (!pErr) {
+      const { data: svc } = extra?.service_id
+        ? await db.from("studio_services").select("name").eq("id", extra.service_id).maybeSingle()
+        : { data: null };
+      const pkg = {
+        shootType: contract.shoot_type as string | null,
+        intakeType: extra?.intake?.type ?? null,
+        title: contract.title as string | null,
+        serviceName: (svc as { name?: string } | null)?.name ?? null,
+        itemNames: ((items ?? []) as { name: string | null }[]).map((i) => i.name),
+      };
+      if (plannerEnabled({ ...pkg, toggle: extra?.wedding_planner ?? null, hasPlan: !!pRow })) {
+        const p = pRow ? normalizePlan(pRow) : seedPlanFor((contract.event_date as string | null) ?? null, pkg);
+        // "Khách đã chọn xong ảnh" — đọc riêng: cột có từ album_selection_done.sql.
+        const { data: sDone } = sRow && !delivered
+          ? await db.from("albums").select("selection_done_at").eq("id", sRow.id).maybeSingle()
+          : { data: null };
+        const auto = autoLinks({
+          studioName,
+          signed: !!contract.client_signed_at,
+          shot: shootDone((appointments ?? []) as { kind: string; status: string; appt_date: string }[], (contract.event_date as string | null) ?? null, todayVN()),
+          invitation: wedding ? { published: wedding.published, href: "" } : null,
+          album: delivered ? { picked: true, href: "" } : selection ? { picked: !!(sDone as { selection_done_at?: string | null } | null)?.selection_done_at, href: "" } : null,
+          total: contractTotal((items ?? []) as { qty: number; unit_price: number }[]),
+          paid: sumAmounts((payments ?? []) as { amount: number }[]),
+        });
+        planner = { wedding_date: p.wedding_date, ...planProgress(p.tasks, auto) };
+      }
+    }
+  }
+
   /**
    * Ảnh & video của album giao khách — chỉ nạp khi hợp đồng đã **hoàn thành**.
    * Cổng khách /portal đổi sang trang album nền tối ở giai đoạn này, và trang
@@ -437,6 +483,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     appointments: appointments ?? [],
     album,
     final_links: finalLinks,
+    planner,
     addenda: await listAddenda(db, cId),
     loyalty: await (async () => {
       // Voucher ưu đãi của chương trình: trước khi ký là lời mời chốt ("ký & cọc

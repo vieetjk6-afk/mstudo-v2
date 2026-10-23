@@ -105,6 +105,7 @@ const ORDER = [
   ["migrations/anh_in_tang.sql", "Ảnh in tặng: số ảnh in theo hợp đồng + khách chọn ảnh in trong album giao khách"],
   ["migrations/anh_in_album_le.sql", "Ảnh in tặng cho album lẻ: số ảnh in nhập ngay trong album (chạy SAU anh_in_tang)"],
   ["migrations/thiep_tang_tu_dong.sql", "Tự tặng thiệp cưới online trước ngày cưới: lựa chọn tặng / không tặng của từng hợp đồng"],
+  ["migrations/ke_hoach_cuoi.sql", "Kế hoạch cưới của khách trên cổng khách: việc cần làm, ngân sách, lịch trình ngày cưới + bật/tắt theo hợp đồng"],
 ];
 
 /**
@@ -158,6 +159,7 @@ const MOI = [
   "migrations/anh_in_tang.sql",
   "migrations/anh_in_album_le.sql",
   "migrations/thiep_tang_tu_dong.sql",
+  "migrations/ke_hoach_cuoi.sql",
 ];
 
 /**

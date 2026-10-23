@@ -84,6 +84,21 @@ export function inboxComingSoon(flags: FeatureFlags): boolean {
   return flags?.inbox !== "live";
 }
 
+/**
+ * Kế hoạch cưới trên cổng khách (/portal/<token>/ke-hoach) — mặc định "Sắp ra
+ * mắt" cho tới khi admin đặt live.
+ *
+ * Còn khoá thì khách KHÔNG thấy gì (không thẻ, không trang), studio thấy thẻ
+ * "Sắp ra mắt" ở màn hợp đồng. Hợp đồng của chính tài khoản admin vẫn chạy thật
+ * — cổng khách không có đăng nhập, nên đó là đường duy nhất để admin thử trọn
+ * vòng (khách sửa kế hoạch → studio đọc) trước khi mở cho mọi studio.
+ *
+ * Bật khi sẵn sàng: Cài đặt hệ thống → Tính năng → bỏ tích "Kế hoạch cưới".
+ */
+export function plannerComingSoon(flags: FeatureFlags): boolean {
+  return flags?.planner !== "live";
+}
+
 /** Nav hrefs currently flagged "Sắp ra mắt" (used to chip + lock the sidebar). */
 export function comingSoonNav(flags: FeatureFlags): string[] {
   const out: string[] = [];

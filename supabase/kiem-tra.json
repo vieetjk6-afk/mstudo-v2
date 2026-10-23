@@ -33,7 +33,8 @@
     "migrations/ai_providers.sql",
     "migrations/anh_in_tang.sql",
     "migrations/anh_in_album_le.sql",
-    "migrations/thiep_tang_tu_dong.sql"
+    "migrations/thiep_tang_tu_dong.sql",
+    "migrations/ke_hoach_cuoi.sql"
   ],
   "muc": [
     {
@@ -854,6 +855,16 @@
       "bang": [],
       "cot": [
         "studio_contracts.gift_invitation"
+      ]
+    },
+    {
+      "file": "migrations/ke_hoach_cuoi.sql",
+      "mo_ta": "Kế hoạch cưới của khách trên cổng khách: việc cần làm, ngân sách, lịch trình ngày cưới + bật/tắt theo hợp đồng",
+      "bang": [
+        "wedding_plans"
+      ],
+      "cot": [
+        "studio_contracts.wedding_planner"
       ]
     }
   ]
