@@ -16,7 +16,7 @@ export function weddingEditMessage(link: string): string {
 
 /** Kế hoạch cưới trên cổng khách — mở bằng SĐT như trang hợp đồng. */
 export function plannerMessage(link: string): string {
-  return `Bên em gửi anh/chị trang kế hoạch cưới: việc cần làm theo từng mốc, ngân sách và lịch trình ngày cưới. Anh/chị mở link này (mật khẩu là SĐT của anh/chị), lên lịch trình ngày cưới xong là ê-kíp bên em nắm giờ luôn nhé: ${link}`;
+  return `Bên em gửi anh/chị trang kế hoạch cưới: việc cần làm theo từng mốc, ngân sách, khách mời & xếp bàn, lịch trình ngày cưới. Anh/chị mở link này (mật khẩu là SĐT của anh/chị), lên lịch trình ngày cưới xong là ê-kíp bên em nắm giờ luôn nhé: ${link}`;
 }
 
 /** Tặng khách trang Love Story — link để khách tự sửa. */

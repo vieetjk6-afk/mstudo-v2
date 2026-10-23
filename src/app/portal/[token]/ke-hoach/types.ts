@@ -1,5 +1,5 @@
 import type { ContractStatus } from "@/lib/types";
-import type { AutoLinks, DayRow, StudioBudgetLine, WeddingPlanData } from "@/lib/wedding-plan";
+import type { AutoLinks, DayRow, StudioAppt, StudioBudgetLine, WeddingPlanData } from "@/lib/wedding-plan";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Hình dữ liệu của trang kế hoạch cưới — đúng phần payload mà
@@ -7,22 +7,24 @@ import type { AutoLinks, DayRow, StudioBudgetLine, WeddingPlanData } from "@/lib
    không cần tiền công, hạng mục hay ảnh — chỉ những gì một kế hoạch cưới đọc.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type PlannerGuests = {
-  /** Số khách mời trong danh sách của thiệp. */
-  total: number;
-  /** Khách mời (trong danh sách) đã báo sẽ dự. */
-  attending: number;
-  /** Tổng số người sẽ đến, gồm cả khách ngoài danh sách. */
-  people: number;
-  /** Số phản hồi đã nhận. */
-  replies: number;
-  /** Trình sửa thiệp — nơi khách quản lý danh sách khách mời. */
+/** Thiệp cưới online studio tặng — nguồn phản hồi tham dự của khách mời. */
+export type PlannerInvite = {
+  /** Trình sửa thiệp. */
   href: string;
+  published: boolean;
+  /** Danh sách khách trong thiệp (link mời riêng) — để nhập sang danh sách khách mời. */
+  names: string[];
+  /** Phản hồi khách gửi qua thiệp; trang khớp với danh sách khách mời theo tên. */
+  replies: { guest_name: string; attending: boolean; num_guests: number; created_at: string }[];
 };
 
 export type PlannerPayload = {
-  /** false = studio chưa bật kế hoạch cưới cho hợp đồng này. */
   enabled: boolean;
+  /**
+   * Database đã có cột `extra` (migrations/ke_hoach_cuoi_mo_rong.sql). false = chỉ
+   * lưu được việc cần làm, ngân sách, lịch trình; các mục mới tạm ẩn.
+   */
+  ext: boolean;
   contract: {
     title: string;
     client_name: string | null;
@@ -40,7 +42,9 @@ export type PlannerPayload = {
   studio_line: StudioBudgetLine | null;
   /** Lịch hẹn studio xếp trong đúng ngày cưới (chỉ đọc). */
   studio_day: DayRow[];
-  guests: PlannerGuests | null;
+  /** Lịch hẹn studio từ hôm nay trở đi (thử đồ, chụp, trang điểm…). */
+  studio_appts: StudioAppt[];
+  invite: PlannerInvite | null;
   plan_locked: boolean;
 };
 

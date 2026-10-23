@@ -474,28 +474,58 @@ export const SCREENS: Record<
     bare: true,
   },
   "ke-hoach-cuoi": {
-    title: "Kế hoạch cưới của khách — việc cần làm theo mốc (có việc quá hạn, việc studio tự tick)",
+    title: "Kế hoạch cưới — tổng quan: bốn con số + Sắp tới (việc quá hạn, thanh toán, lịch hẹn studio)",
     render: () => <KeHoachCuoiDemo />,
     bare: true,
   },
+  "ke-hoach-cuoi-viec": {
+    title: "Kế hoạch cưới — việc cần làm theo mốc (người lo, ưu tiên, hạn riêng, việc studio tự tick)",
+    render: () => <KeHoachCuoiDemo tab="tasks" />,
+    bare: true,
+  },
   "ke-hoach-cuoi-ngan-sach": {
-    title: "Kế hoạch cưới — ngân sách vượt mức, gói studio đọc từ hợp đồng",
+    title: "Kế hoạch cưới — ngân sách vượt mức, giá chốt, ai chi bao nhiêu, thanh toán sắp tới",
     render: () => <KeHoachCuoiDemo tab="budget" />,
     bare: true,
   },
+  "ke-hoach-cuoi-khach": {
+    title: "Kế hoạch cưới — khách mời (phản hồi qua thiệp tự khớp, khách ngoài danh sách, tên rất dài)",
+    render: () => <KeHoachCuoiDemo tab="guests" />,
+    bare: true,
+  },
+  "ke-hoach-cuoi-so-do-ban": {
+    title: "Kế hoạch cưới — sơ đồ bàn (bàn vượt sức chứa, khách chưa xếp bàn)",
+    render: () => <KeHoachCuoiDemo tab="guests" guestView="tables" />,
+    bare: true,
+  },
+  "ke-hoach-cuoi-nha-cung-cap": {
+    title: "Kế hoạch cưới — nhà cung cấp: so báo giá theo hạng mục, đã chốt, đưa vào ngân sách",
+    render: () => <KeHoachCuoiDemo tab="vendors" />,
+    bare: true,
+  },
   "ke-hoach-cuoi-ngay-cuoi": {
-    title: "Kế hoạch cưới — lịch trình ngày cưới (gộp lịch hẹn studio, dòng chưa có giờ)",
+    title: "Kế hoạch cưới — ngày cưới: lịch trình tách cô dâu / chú rể, đội hỗ trợ, đồ cần mang",
     render: () => <KeHoachCuoiDemo tab="day" />,
     bare: true,
   },
+  "ke-hoach-cuoi-phong-cach": {
+    title: "Kế hoạch cưới — phong cách & ảnh cần chụp (bảng màu, concept, link cảm hứng)",
+    render: () => <KeHoachCuoiDemo tab="style" />,
+    bare: true,
+  },
   "ke-hoach-cuoi-chua-co-ngay": {
-    title: "Kế hoạch cưới — khách chưa chọn ngày cưới, lịch trình trống",
-    render: () => <KeHoachCuoiDemo variant="no-date" />,
+    title: "Kế hoạch cưới — khách chưa chọn ngày cưới, các danh sách còn trống",
+    render: () => <KeHoachCuoiDemo variant="no-date" tab="day" />,
     bare: true,
   },
   "ke-hoach-cuoi-khoa": {
     title: "Kế hoạch cưới — chỉ xem (gói studio hết hạn)",
     render: () => <KeHoachCuoiDemo tab="budget" variant="locked" />,
+    bare: true,
+  },
+  "ke-hoach-cuoi-db-cu": {
+    title: "Kế hoạch cưới — database chưa chạy migration mở rộng (chỉ 4 tab gốc)",
+    render: () => <KeHoachCuoiDemo variant="old-db" />,
     bare: true,
   },
   "voucher-cong-khach": {
