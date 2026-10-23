@@ -435,6 +435,7 @@ responsive — giữ nguyên bộ token ở trên; **màu nhấn vẫn là xanh 
 | Cổng nhân viên (3 tab) | `/staff` | `app/staff/StaffPortal.tsx`, `TodayView.tsx`, `TaskQueue.tsx`, `StaffNotifications.tsx` |
 | Cổng khách hàng theo hợp đồng | `/portal/<client_token>` | `app/portal/[token]/ContractPortalView.tsx`, `PaymentPanel.tsx` |
 | Trang album (khi hợp đồng hoàn thành) | cùng route `/portal/<client_token>` | `app/portal/[token]/AlbumView.tsx` |
+| Kế hoạch cưới của khách (**Sắp ra mắt**) | `/portal/<client_token>/ke-hoach` | `app/portal/[token]/ke-hoach/PlannerView.tsx`, `WeddingPlanner.tsx` · luật ở `src/lib/wedding-plan.ts` · thẻ studio `studio/contracts/[id]/WeddingPlanCard.tsx` |
 | Lịch hẹn trong màn hợp đồng | `/dashboard/studio/contracts/[id]` | `studio/contracts/[id]/ContractAppointments.tsx` |
 
 ### Model dữ liệu
@@ -473,6 +474,16 @@ và cổng nhân viên).
   thêm mục "Lịch hẹn ngày mai" vào email nhắc việc.
 - Album hoàn thành **không** dựng lại phần tải hàng loạt: nút *Tải toàn bộ* dẫn
   về `/album/<slug>` — nơi đã có nén ZIP, đóng dấu mờ và luật hạn lưu trữ.
+- **Kế hoạch cưới** (`supabase/migrations/ke_hoach_cuoi.sql`, bảng `wedding_plans`):
+  việc cần làm theo mốc trước ngày cưới, ngân sách, lịch trình ngày cưới. Cùng
+  token + cổng SĐT với cổng khách, ghi qua `/api/c/[token]/ke-hoach` (kiểm SĐT
+  từng lần, ghi kèm điều kiện `rev` để hai máy cùng sửa không đè nhau). Việc gắn
+  dữ liệu studio tự tick (đã ký, đã chụp, thiệp, album, thanh toán); gói studio
+  là một dòng ngân sách đọc từ hợp đồng; lịch hẹn studio trong ngày cưới chen
+  vào lịch trình. Studio chỉ ĐỌC ở thẻ trên màn hợp đồng — không thấy ngân sách
+  của khách. Mặc định **Sắp ra mắt** (`feature_flags.planner`): khách không thấy
+  gì, trừ hợp đồng của tài khoản admin; mở ở Cài đặt hệ thống → Tính năng.
+  Luật thuần: `npm run test:wedding-plan`.
 - Cổng khách **cài được lên màn hình chính** (`/portal/<token>/manifest.webmanifest`,
   tên khách + logo studio), **nhớ số điện thoại 90 ngày** trên máy đó, và **đọc
   được khi mất mạng** từ bản chụp lần trước. Chi tiết + lý do ở

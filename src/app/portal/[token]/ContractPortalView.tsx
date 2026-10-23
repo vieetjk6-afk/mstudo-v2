@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Lock, MapPin, CalendarDays, Check, Package, Images, MessagesSquare, LifeBuoy,
-  FileText, Download, StickyNote, ArrowRight, Clock, CloudOff, LogOut, Video,
+  FileText, Download, StickyNote, ArrowRight, Clock, CloudOff, LogOut, Video, CalendarHeart,
 } from "lucide-react";
 import { useToast } from "@/components/studio/Toast";
 import InstallPwaButton from "@/components/InstallPwaButton";
@@ -18,6 +18,7 @@ import {
   CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, PRODUCT_STATUS_LABEL, SHOOT_TYPE_LABEL,
   contractTotal, sumAmounts,
 } from "@/lib/types";
+import { daysUntil } from "@/lib/wedding-plan";
 import AlbumView from "./AlbumView";
 import PaymentPanel from "./PaymentPanel";
 import { PORTAL_STEPS, portalSteps, type PortalPayload } from "./types";
@@ -589,6 +590,8 @@ function ActivePortal({
 
           {/* ── Cột phải ────────────────────────────────────────────────── */}
           <div className="flex flex-col gap-3.5">
+            {data.planner && <PlannerCard token={token} planner={data.planner} today={today} />}
+
             <PaymentPanel
               token={token}
               phone={phone}
@@ -651,6 +654,37 @@ function ActivePortal({
       </div>
       {toastNode}
     </main>
+  );
+}
+
+/**
+ * Lối vào kế hoạch cưới — đặt ĐẦU cột phải: hợp đồng cưới chạy nhiều tháng,
+ * và trong những tháng đó thứ khách mở lại nhiều nhất là "còn việc gì phải lo".
+ */
+function PlannerCard({
+  token, planner, today,
+}: { token: string; planner: NonNullable<PortalPayload["planner"]>; today: string }) {
+  const left = daysUntil(planner.wedding_date, today);
+  const pct = planner.total ? (planner.done / planner.total) * 100 : 0;
+  return (
+    <Link href={`/portal/${token}/ke-hoach`} className="block rounded-[16px] px-5 py-[18px]" style={{ background: "var(--acS)", border: "1px solid var(--acM)" }}>
+      <span className="flex items-center gap-1.5 text-[14px] font-bold" style={{ color: "var(--ac)" }}>
+        <CalendarHeart size={17} /> Kế hoạch cưới của bạn
+        <ArrowRight size={15} className="ml-auto" />
+      </span>
+      <span className="mt-1.5 block text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
+        {left !== null && left > 0
+          ? <>Còn <b className="tnum">{left} ngày</b> tới ngày cưới. </>
+          : left === 0 ? <>Hôm nay là ngày cưới! </> : null}
+        Việc cần làm, ngân sách và lịch trình ngày cưới ở một chỗ.
+      </span>
+      <span className="mt-3 flex items-center gap-2.5">
+        <ProgressBar pct={pct} height={5} className="flex-1" />
+        <span className="tnum flex-none text-[12px] font-bold" style={{ color: "var(--ac)" }}>
+          {planner.done}/{planner.total} việc
+        </span>
+      </span>
+    </Link>
   );
 }
 

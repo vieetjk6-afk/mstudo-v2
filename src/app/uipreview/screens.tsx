@@ -38,6 +38,7 @@ import HopDongHangMucDemo from "./HopDongHangMucDemo";
 import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo, PaidConfirmDemo } from "./VoucherDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import { PortalAlbumDemo } from "./PortalAlbumDemo";
+import { KeHoachCuoiDemo } from "./KeHoachCuoiDemo";
 import * as f from "./fixtures";
 
 /**
@@ -470,6 +471,31 @@ export const SCREENS: Record<
   "album-cong-khach-video": {
     title: "Cổng khách — trang album, tab Video (phát lớn + danh sách phát)",
     render: () => <PortalAlbumDemo tab="videos" />,
+    bare: true,
+  },
+  "ke-hoach-cuoi": {
+    title: "Kế hoạch cưới của khách — việc cần làm theo mốc (có việc quá hạn, việc studio tự tick)",
+    render: () => <KeHoachCuoiDemo />,
+    bare: true,
+  },
+  "ke-hoach-cuoi-ngan-sach": {
+    title: "Kế hoạch cưới — ngân sách vượt mức, gói studio đọc từ hợp đồng",
+    render: () => <KeHoachCuoiDemo tab="budget" />,
+    bare: true,
+  },
+  "ke-hoach-cuoi-ngay-cuoi": {
+    title: "Kế hoạch cưới — lịch trình ngày cưới (gộp lịch hẹn studio, dòng chưa có giờ)",
+    render: () => <KeHoachCuoiDemo tab="day" />,
+    bare: true,
+  },
+  "ke-hoach-cuoi-chua-co-ngay": {
+    title: "Kế hoạch cưới — khách chưa chọn ngày cưới, lịch trình trống",
+    render: () => <KeHoachCuoiDemo variant="no-date" />,
+    bare: true,
+  },
+  "ke-hoach-cuoi-khoa": {
+    title: "Kế hoạch cưới — chỉ xem (gói studio hết hạn)",
+    render: () => <KeHoachCuoiDemo tab="budget" variant="locked" />,
     bare: true,
   },
   "voucher-cong-khach": {

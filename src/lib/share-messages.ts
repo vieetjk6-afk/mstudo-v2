@@ -14,6 +14,11 @@ export function weddingEditMessage(link: string): string {
   return `Chúc mừng anh/chị! Bên em tặng anh/chị thiệp cưới online. Anh/chị mở link này để tự điền thông tin & chọn ảnh nhé: ${link}`;
 }
 
+/** Kế hoạch cưới trên cổng khách — mở bằng SĐT như trang hợp đồng. */
+export function plannerMessage(link: string): string {
+  return `Bên em gửi anh/chị trang kế hoạch cưới: việc cần làm theo từng mốc, ngân sách và lịch trình ngày cưới. Anh/chị mở link này (mật khẩu là SĐT của anh/chị), lên lịch trình ngày cưới xong là ê-kíp bên em nắm giờ luôn nhé: ${link}`;
+}
+
 /** Tặng khách trang Love Story — link để khách tự sửa. */
 export function storyEditMessage(link: string): string {
   return `Bên em tặng anh/chị trang Love Story. Mở link này để điền nội dung & dán link folder ảnh/video Google Drive của mình nhé: ${link}`;

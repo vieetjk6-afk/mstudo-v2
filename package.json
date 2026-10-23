@@ -34,6 +34,7 @@
     "test:youtube-music": "node --experimental-strip-types desktop/test/youtube-music.mjs",
     "test:site-map": "node --experimental-strip-types desktop/test/site-map.mjs",
     "test:wedding-guests": "node --experimental-strip-types desktop/test/wedding-guests.mjs",
+    "test:wedding-plan": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/wedding-plan.mjs",
     "test:lunar": "node --experimental-strip-types desktop/test/lunar.mjs",
     "test:wedding-palette": "node --experimental-strip-types desktop/test/wedding-palette.mjs",
     "test:missing-column": "node --experimental-strip-types desktop/test/missing-column.mjs",
