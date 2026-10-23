@@ -657,6 +657,40 @@ export default function ContractView({ token }: { token: string }) {
               </div>
             </div>
 
+            {/* Lịch trình — ngay dưới hạng mục, để khách đọc gói dịch vụ xong là
+                thấy luôn các buổi hẹn, trước phần thanh toán. */}
+            {(contract.event_date || milestones.length > 0) && (
+              <div className="px-5 py-5 sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                <p className="eyebrow mb-1">{lang === "vi" ? "Lịch trình chi tiết" : "Schedule"}</p>
+                {contract.event_date && (
+                  <div className="flex flex-wrap items-start gap-3 py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                    <Calendar size={16} style={{ flex: "none", marginTop: 2, color: "var(--ac)" }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold">{lang === "vi" ? "Buổi chính" : "Main session"}{contract.title ? ` — ${contract.title}` : ""}</p>
+                      {contract.location && <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{contract.location}</p>}
+                    </div>
+                    <span className="flex-none whitespace-nowrap text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                      {fmtDateLunar(contract.event_date)}{contract.event_time ? ` · ${contract.event_time}` : ""}
+                    </span>
+                    <CalendarButtons compact event={{ date: contract.event_date, time: contract.event_time, title: contract.title, location: contract.location }} />
+                  </div>
+                )}
+                {milestones.map((m) => (
+                  <div key={m.id} className="flex flex-wrap items-start gap-3 py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
+                    <Calendar size={16} style={{ flex: "none", marginTop: 2, color: "var(--tx3)" }} />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13px] font-semibold">{m.title}</p>
+                      {m.note && <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{m.note}</p>}
+                    </div>
+                    <span className="flex-none whitespace-nowrap text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                      {fmtDateLunar(m.event_date)}{m.event_time ? ` · ${m.event_time}` : ""}
+                    </span>
+                    <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: contract.location }} />
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Cọc / chuyển khoản */}
             {balance > 0 && (
               <div className="px-5 py-5 sm:px-7" style={{ borderBottom: "1px solid var(--bd2)" }}>
@@ -973,41 +1007,6 @@ export default function ContractView({ token }: { token: string }) {
                     </div>
                   );
                 })}
-              </div>
-            </div>
-          )}
-
-          {/* Lịch trình */}
-          {(contract.event_date || milestones.length > 0) && (
-            <div className={sectionCls} style={sectionStyle}>
-              <p className={headCls} style={headStyle}>{lang === "vi" ? "Lịch trình chi tiết" : "Schedule"}</p>
-              <div className="px-5 py-2">
-                {contract.event_date && (
-                  <div className="flex flex-wrap items-start gap-3 py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
-                    <Calendar size={16} style={{ flex: "none", marginTop: 2, color: "var(--ac)" }} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold">{lang === "vi" ? "Buổi chính" : "Main session"}{contract.title ? ` — ${contract.title}` : ""}</p>
-                      {contract.location && <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{contract.location}</p>}
-                    </div>
-                    <span className="flex-none whitespace-nowrap text-[12.5px]" style={{ color: "var(--tx2)" }}>
-                      {fmtDateLunar(contract.event_date)}{contract.event_time ? ` · ${contract.event_time}` : ""}
-                    </span>
-                    <CalendarButtons compact event={{ date: contract.event_date, time: contract.event_time, title: contract.title, location: contract.location }} />
-                  </div>
-                )}
-                {milestones.map((m) => (
-                  <div key={m.id} className="flex flex-wrap items-start gap-3 py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
-                    <Calendar size={16} style={{ flex: "none", marginTop: 2, color: "var(--tx3)" }} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold">{m.title}</p>
-                      {m.note && <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{m.note}</p>}
-                    </div>
-                    <span className="flex-none whitespace-nowrap text-[12.5px]" style={{ color: "var(--tx2)" }}>
-                      {fmtDateLunar(m.event_date)}{m.event_time ? ` · ${m.event_time}` : ""}
-                    </span>
-                    <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: contract.location }} />
-                  </div>
-                ))}
               </div>
             </div>
           )}
