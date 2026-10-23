@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIp } from "@/lib/rate-limit";
+import { syncRepliesForInvitation } from "@/lib/wedding-plan-db";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,8 @@ export const dynamic = "force-dynamic";
  *
  * KHÔNG báo về studio (thông báo / push): danh sách xác nhận là việc riêng của
  * cặp đôi — họ xem ngay trong trang sửa thiệp (tab Khách mời & Phản hồi).
+ *
+ * Chế độ Quà cưới: phản hồi ghi luôn vào danh sách khách của kế hoạch cưới.
  */
 export async function POST(req: Request) {
   const limited = limitByIp(req, "rsvp", 10, 60_000);
@@ -31,7 +34,7 @@ export async function POST(req: Request) {
   const db = createAdminClient();
   const { data: inv } = await db
     .from("wedding_invitations")
-    .select("id, published, config")
+    .select("id, owner_id, contract_id, published, config")
     .eq("slug", slug)
     .maybeSingle();
   if (!inv || !inv.published) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -52,6 +55,9 @@ export async function POST(req: Request) {
     wish: (body.wish ?? "").trim().slice(0, 1000) || null,
   });
   if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
+
+  // Hỏng thì thôi: phản hồi đã lưu, lần sau cặp đôi mở kế hoạch sẽ ghi bù.
+  await syncRepliesForInvitation(db, inv).catch((e) => console.error("[api/thiep/rsvp] ghi vào kế hoạch lỗi", e));
 
   return NextResponse.json({ ok: true });
 }

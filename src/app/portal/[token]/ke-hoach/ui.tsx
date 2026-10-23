@@ -28,6 +28,8 @@ export type Ctx = {
   go: (tab: PlannerTab) => void;
   /** Mở sẵn sơ đồ bàn ở tab Khách mời (dùng cho /uipreview). */
   guestView?: "list" | "tables";
+  /** Chế độ Quà cưới: mở trình sửa thiệp (thay cả trang). */
+  openInvite?: () => void;
 };
 
 export const card: React.CSSProperties = { background: "var(--sf)", border: "1px solid var(--bd)" };

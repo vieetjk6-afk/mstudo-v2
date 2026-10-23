@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
-  ArrowLeft, CalendarHeart, Clock, LayoutDashboard, ListChecks, Lock, Palette, Store, Users, Wallet,
+  ArrowLeft, CalendarHeart, Clock, Heart, LayoutDashboard, ListChecks, Lock, Palette, Store, Users, Wallet,
 } from "lucide-react";
 import DateInput from "@/components/DateInput";
 import { fmtDateLunar } from "@/lib/date";
@@ -28,6 +28,10 @@ export type { PlannerTab, SaveState } from "./ui";
 
    Cùng bộ token `.client-doc` với cổng khách: chữ to hơn khu quản lý, không
    thuật ngữ nội bộ.
+
+   Chế độ Quà cưới (`data.combo`): thêm nút "Thiệp cưới" ngay sau Tổng quan
+   (mở trình sửa thiệp thay cả trang — `onOpenInvite`), và phản hồi qua thiệp
+   đã nằm sẵn trong danh sách khách nên không phủ thêm lúc hiển thị.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const TABS: [PlannerTab, string, typeof ListChecks, boolean][] = [
@@ -42,7 +46,7 @@ const TABS: [PlannerTab, string, typeof ListChecks, boolean][] = [
 ];
 
 export default function PlannerView({
-  data, plan, today, backHref, onOp, saving = "idle", initialTab = "overview", guestView,
+  data, plan, today, backHref, onOp, saving = "idle", initialTab = "overview", guestView, onTab, onOpenInvite,
 }: {
   data: PlannerPayload;
   /** Kế hoạch đang hiện — có thể đã gồm thao tác chưa lưu xong. */
@@ -53,8 +57,16 @@ export default function PlannerView({
   saving?: SaveState;
   initialTab?: PlannerTab;
   guestView?: "list" | "tables";
+  /** Báo tab đang mở (trang thật nhớ để quay về từ thiệp). */
+  onTab?: (tab: PlannerTab) => void;
+  /** Chế độ Quà cưới: mở trình sửa thiệp. */
+  onOpenInvite?: () => void;
 }) {
-  const [tab, setTab] = useState<PlannerTab>(initialTab);
+  const [tab, setTabState] = useState<PlannerTab>(initialTab);
+  const setTab = (t: PlannerTab) => {
+    setTabState(t);
+    onTab?.(t);
+  };
   const [editDate, setEditDate] = useState(false);
   const readOnly = data.plan_locked;
   const left = daysUntil(plan.wedding_date, today);
@@ -63,20 +75,21 @@ export default function PlannerView({
 
   // Phản hồi qua thiệp → khách trong danh sách, khớp theo tên (bỏ dấu, hoa /
   // thường). Tính lại mỗi lần danh sách đổi, để khách vừa thêm cũng khớp ngay.
+  // Chế độ Quà cưới: máy chủ đã ghi phản hồi vào danh sách — không phủ thêm.
   const { replies, unmatched } = useMemo(() => {
     const r: Record<string, GuestReply> = {};
-    if (!data.invite?.replies.length) return { replies: r, unmatched: [] };
+    if (data.combo || !data.invite?.replies.length) return { replies: r, unmatched: [] };
     const m = matchGuestRsvps(plan.guests.map((g) => g.name), data.invite.replies.map((x) => ({ ...x, wish: null })));
     for (const s of m.guests) if (s.rsvp) r[plan.guests[s.index].id] = { attending: s.rsvp.attending, num_guests: s.rsvp.num_guests };
     return { replies: r, unmatched: m.others };
-  }, [plan.guests, data.invite]);
+  }, [plan.guests, data.invite, data.combo]);
 
   // Tab đang mở luôn nằm trong tầm nhìn của thanh tab cuộn ngang (điện thoại).
   useEffect(() => {
     tabBar.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [tab]);
 
-  const ctx: Ctx = { data, plan, today, readOnly, onOp, replies, unmatched, go: setTab, guestView };
+  const ctx: Ctx = { data, plan, today, readOnly, onOp, replies, unmatched, go: setTab, guestView, openInvite: onOpenInvite };
 
   return (
     <main className="client-doc min-h-screen">
@@ -90,7 +103,7 @@ export default function PlannerView({
         </div>
 
         <p className="mt-3 text-[11px] font-bold uppercase" style={{ letterSpacing: "1.2px", color: "var(--tx3)" }}>
-          Kế hoạch cưới
+          {data.combo ? `Quà cưới từ ${data.studio_name}` : "Kế hoạch cưới"}
         </p>
         <h1 className="font-serif text-[26px] font-semibold leading-tight" style={{ textWrap: "balance" }}>
           {data.contract.client_name || data.contract.title}
@@ -132,16 +145,28 @@ export default function PlannerView({
           {tabs.map(([key, label, Icon]) => {
             const on = tab === key;
             return (
-              <button
-                key={key}
-                role="tab"
-                aria-selected={on}
-                onClick={() => setTab(key)}
-                className="flex flex-none items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-3 text-[13.5px]"
-                style={{ color: on ? "var(--ac)" : "var(--tx2)", fontWeight: on ? 700 : 550, borderBottom: `2px solid ${on ? "var(--ac)" : "transparent"}` }}
-              >
-                <Icon size={15} className="max-[420px]:hidden" /> {label}
-              </button>
+              <Fragment key={key}>
+                <button
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => setTab(key)}
+                  className="flex flex-none items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-3 text-[13.5px]"
+                  style={{ color: on ? "var(--ac)" : "var(--tx2)", fontWeight: on ? 700 : 550, borderBottom: `2px solid ${on ? "var(--ac)" : "transparent"}` }}
+                >
+                  <Icon size={15} className="max-[420px]:hidden" /> {label}
+                </button>
+                {/* Quà cưới: phần thứ hai của trang — đặt ngay cạnh Tổng quan cho dễ thấy. */}
+                {key === "overview" && onOpenInvite && (
+                  <button
+                    type="button"
+                    onClick={onOpenInvite}
+                    className="flex flex-none items-center gap-1.5 whitespace-nowrap px-2.5 pb-2.5 pt-3 text-[13.5px]"
+                    style={{ color: "var(--tx2)", fontWeight: 550, borderBottom: "2px solid transparent" }}
+                  >
+                    <Heart size={15} className="max-[420px]:hidden" /> Thiệp cưới
+                  </button>
+                )}
+              </Fragment>
             );
           })}
         </div>

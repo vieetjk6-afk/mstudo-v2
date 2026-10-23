@@ -21,6 +21,7 @@
 import { isWeddingReportage, type PackageInfo } from "./automations";
 import { safeUrl } from "./final-links";
 import { parseHex } from "./wedding-palette";
+import { exactKey, looseKey } from "./wedding-guests";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Hình dữ liệu
@@ -96,8 +97,14 @@ export type PlanGuest = {
   phone?: string;
   /** Đã gửi thiệp. */
   invited: boolean;
-  /** Xác nhận ghi tay; phản hồi từ thiệp online (khớp theo tên) được ưu tiên hơn. */
+  /**
+   * Xác nhận tham dự. Chế độ Quà cưới: phản hồi qua thiệp ghi thẳng vào đây
+   * (`syncInviteReplies`). Chế độ cũ: ghi tay, phản hồi qua thiệp khớp theo tên
+   * chỉ phủ lên lúc hiển thị (`guestRsvp`).
+   */
   rsvp: Rsvp;
+  /** Ngày khách tự xác nhận qua thiệp (chế độ Quà cưới) — cặp đôi sửa tay thì xoá. */
+  replied?: string;
   /** Bàn — "1", "VIP", "Bàn nhà trai 3"… */
   table?: string;
   /** Tiền mừng (đ). */
@@ -158,6 +165,12 @@ export type WeddingPlanData = {
   shots: PlanShot[];
   style: PlanStyle;
   settings: PlanSettings;
+  /**
+   * Chế độ Quà cưới: thời điểm (created_at) của phản hồi qua thiệp mới nhất đã
+   * ghi vào danh sách khách — lần đồng bộ sau chỉ lấy phản hồi mới hơn. Không
+   * thao tác nào của khách sửa được trường này.
+   */
+  invite_seen: string | null;
 };
 
 /** Các danh sách thêm / sửa / xoá được bằng thao tác chung. */
@@ -452,6 +465,7 @@ export function newPlan(opts: { weddingDate?: string | null; shootOnWeddingDay?:
     shots: [],
     style: { ...EMPTY_STYLE },
     settings: { ...DEFAULT_SETTINGS },
+    invite_seen: null,
   };
 }
 
@@ -695,6 +709,96 @@ export function tablesNeeded(people: number, tableSize: number): number {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Quà cưới: kế hoạch cưới + thiệp cưới online thành một
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/**
+ * CHẾ ĐỘ QUÀ CƯỚI — kế hoạch cưới và thiệp cưới online thành MỘT trang: thiệp
+ * sửa ngay trong kế hoạch, một danh sách khách chung (thêm khách là có link
+ * thiệp ghi tên khách đó), phản hồi qua thiệp ghi thẳng vào danh sách.
+ *
+ * Đang chạy thử: chỉ hợp đồng của tài khoản admin. Studio khác vẫn dùng hai món
+ * riêng như cũ. Mở cho mọi studio thì sửa đúng hàm này.
+ */
+export function weddingGiftCombo(ownerRole: string | null | undefined): boolean {
+  return ownerRole === "admin";
+}
+
+/** Link thiệp ghi đúng tên một khách — cùng dạng `?guest=` với trình quản lý khách của thiệp. */
+export function inviteGuestLink(publicUrl: string, name: string): string {
+  return `${publicUrl}${publicUrl.includes("?") ? "&" : "?"}guest=${encodeURIComponent(name.trim())}`;
+}
+
+/** Một phản hồi xác nhận tham dự gửi qua thiệp (bảng `wedding_rsvps`). */
+export type InviteReply = { guest_name: string; attending: boolean; num_guests: number; created_at: string };
+
+/** Mốc thời gian của Postgres ("2026-10-20T10:00:00.123+00:00") — giữ nguyên chuỗi để so thứ tự. */
+const STAMP = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}(:?\d{2})?)?$/;
+function cleanStamp(v: unknown): string | null {
+  return typeof v === "string" && v.length <= 40 && STAMP.test(v) && !Number.isNaN(Date.parse(v)) ? v : null;
+}
+
+/** Ngày (giờ Việt Nam) của một mốc thời gian — khách gửi lúc 1 giờ sáng vẫn tính đúng hôm đó. */
+function vnDay(stamp: string): string | undefined {
+  const t = Date.parse(stamp);
+  return Number.isNaN(t) ? undefined : new Date(t + 7 * 3_600_000).toISOString().slice(0, 10);
+}
+
+/**
+ * Ghi phản hồi qua thiệp vào thẳng danh sách khách (chế độ Quà cưới).
+ *
+ * Chỉ lấy phản hồi MỚI hơn `invite_seen`, áp theo thứ tự gửi:
+ *   · khớp một khách theo tên — đúng tên, hoặc bỏ dấu mà chỉ một người khớp
+ *     (cùng luật với @/lib/wedding-guests) → đổi xác nhận, số người (khi khách
+ *     báo dự), đánh dấu đã gửi thiệp, ghi ngày phản hồi;
+ *   · không khớp ai (khách mở link chung rồi tự gõ tên) → thêm thành khách mới
+ *     nhóm "Khác", để số người sẽ đến và số bàn tính đủ. Một người gõ tên hai
+ *     kiểu thì thành hai dòng — cặp đôi xoá bớt.
+ * Phản hồi đã ghi không ghi lại: cặp đôi sửa tay sau đó là giữ nguyên, tới khi
+ * chính khách đó gửi phản hồi mới.
+ */
+export function syncInviteReplies(
+  plan: WeddingPlanData,
+  replies: InviteReply[],
+  newId: () => string = newPlanId,
+): { plan: WeddingPlanData; changed: boolean } {
+  const seen = plan.invite_seen ?? "";
+  const fresh = replies
+    .filter((r) => cleanStamp(r.created_at) && r.created_at > seen && text(r.guest_name, PLAN_LIMITS.name))
+    .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0));
+  if (!fresh.length) return { plan, changed: false };
+
+  const guests = [...plan.guests];
+  const taken = new Set(guests.map((g) => g.id));
+  const byExact = new Map<string, number>();
+  const byLoose = new Map<string, number[]>();
+  const remember = (name: string, i: number) => {
+    if (!byExact.has(exactKey(name))) byExact.set(exactKey(name), i);
+    byLoose.set(looseKey(name), [...(byLoose.get(looseKey(name)) ?? []), i]);
+  };
+  guests.forEach((g, i) => remember(g.name, i));
+
+  for (const r of fresh) {
+    const name = text(r.guest_name, PLAN_LIMITS.name);
+    const loose = byLoose.get(looseKey(name));
+    const i = byExact.get(exactKey(name)) ?? (loose?.length === 1 ? loose[0] : undefined);
+    const rsvp: Rsvp = r.attending ? "yes" : "no";
+    const n = int(r.num_guests, 0, 50, 0);
+    const day = vnDay(r.created_at);
+    if (i !== undefined) {
+      const g = guests[i];
+      guests[i] = { ...g, rsvp, invited: true, count: r.attending && n > 0 ? n : g.count, ...(day ? { replied: day } : {}) };
+    } else if (guests.length < PLAN_LIMITS.guests) {
+      const id = pickId(undefined, taken, newId);
+      taken.add(id);
+      guests.push({ id, name, group: "other", count: Math.max(1, n), invited: true, rsvp, gift: 0, thanked: false, ...(day ? { replied: day } : {}) });
+      remember(name, guests.length - 1);
+    }
+  }
+  return { plan: { ...plan, guests, invite_seen: fresh[fresh.length - 1].created_at }, changed: true };
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Lịch trình, sắp tới
    ───────────────────────────────────────────────────────────────────────────── */
 
@@ -888,7 +992,7 @@ const CLEAN: { [K in PlanList]: (raw: unknown) => WeddingPlanData[K][number] | n
     return withOpt<PlanGuest>({
       id, name, group: oneOf(r.group, GROUPS) ?? "other", count: int(r.count, 1, 50, 1), invited: r.invited === true,
       rsvp: oneOf(r.rsvp, RSVPS) ?? "pending", gift: money(r.gift), thanked: r.thanked === true,
-    }, { phone: phone(r.phone), table: text(r.table, 24), note: note(r.note) });
+    }, { phone: phone(r.phone), table: text(r.table, 24), note: note(r.note), replied: cleanDate(r.replied) ?? undefined });
   },
   vendors(raw) {
     const r = rec(raw);
@@ -991,6 +1095,7 @@ export function normalizePlan(row: {
     shots: cleanList(x.shots, CLEAN.shots, PLAN_LIMITS.shots),
     style: cleanStyle(x.style),
     settings: cleanSettings(x.settings),
+    invite_seen: cleanStamp(x.invite_seen),
   };
 }
 
@@ -998,7 +1103,10 @@ export function normalizePlan(row: {
 export function planToRow(p: WeddingPlanData, withExtra = true) {
   const base = { wedding_date: p.wedding_date, budget_total: p.budget_total, tasks: p.tasks, budget: p.budget, day_plan: p.day };
   if (!withExtra) return base;
-  return { ...base, extra: { guests: p.guests, vendors: p.vendors, people: p.people, packing: p.packing, shots: p.shots, style: p.style, settings: p.settings } };
+  return {
+    ...base,
+    extra: { guests: p.guests, vendors: p.vendors, people: p.people, packing: p.packing, shots: p.shots, style: p.style, settings: p.settings, invite_seen: p.invite_seen },
+  };
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

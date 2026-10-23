@@ -8,46 +8,19 @@ import { phanLoaiLoi } from "@/lib/pg-loi";
 import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { apptTitle } from "@/lib/appointments";
 import { todayVN } from "@/lib/date";
+import { thiepUrl } from "@/lib/hosts";
+import { createInvitationForContract } from "@/lib/wedding-invite-auto";
+import { PLAN_BASE_COLS as BASE_COLS, readPlan, syncPlanReplies, type PlanRow } from "@/lib/wedding-plan-db";
 import { contractTotal, sumAmounts, type AppointmentKind, type WeddingConfig } from "@/lib/types";
 import {
-  applyPlanOp, autoLinks, normalizePlan, opNeedsExtra, planToRow, plannerEnabled, seedPlanFor, shootDone,
-  type DayRow, type StudioAppt,
+  applyPlanOp, autoLinks, normalizePlan, opNeedsExtra, planToRow, plannerEnabled, seedPlanFor, shootDone, shootsWeddingDay,
+  weddingGiftCombo, type DayRow, type StudioAppt,
 } from "@/lib/wedding-plan";
 import type { PlannerInvite, PlannerOpResponse, PlannerPayload } from "@/app/portal/[token]/ke-hoach/types";
 
 export const dynamic = "force-dynamic";
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
-
-type PlanRow = {
-  id: string;
-  wedding_date: string | null;
-  budget_total: number;
-  tasks: unknown;
-  budget: unknown;
-  day_plan: unknown;
-  extra?: unknown;
-  rev: number;
-  updated_at: string;
-};
-const BASE_COLS = "id, wedding_date, budget_total, tasks, budget, day_plan, rev, updated_at";
-
-type Db = ReturnType<typeof createAdminClient>;
-
-/**
- * Đọc kế hoạch của hợp đồng. Thử kèm cột `extra` trước; database chưa chạy
- * migrations/ke_hoach_cuoi_mo_rong.sql thì đọc lại phần gốc và báo `ext: false`
- * — ba danh sách gốc vẫn dùng được, chỉ các mục mới tạm ẩn.
- */
-async function readPlan(db: Db, contractId: string, ext: boolean | null) {
-  if (ext !== false) {
-    const full = await db.from("wedding_plans").select(`${BASE_COLS}, extra`).eq("contract_id", contractId).maybeSingle();
-    if (!full.error) return { row: full.data as PlanRow | null, ext: true, error: null };
-    if (phanLoaiLoi(full.error) !== "thieu-cot") return { row: null, ext: true, error: full.error };
-  }
-  const base = await db.from("wedding_plans").select(BASE_COLS).eq("contract_id", contractId).maybeSingle();
-  return { row: base.data as PlanRow | null, ext: false, error: base.error };
-}
 
 /**
  * KẾ HOẠCH CƯỚI của khách — /portal/<client_token>/ke-hoach (không đăng nhập).
@@ -56,7 +29,14 @@ async function readPlan(db: Db, contractId: string, ext: boolean | null) {
  *
  * Cùng cổng SĐT với /api/c/[token] (fail-closed, kiểm ở MỌI lần gọi), cùng luật
  * khoá ghi khi gói của studio hết hạn.
+ *
+ * Chế độ Quà cưới (`weddingGiftCombo`, đang chạy thử với tài khoản admin): lần
+ * mở đầu tiên tạo luôn thiệp cưới online cho hợp đồng, và mỗi lần mở thì ghi
+ * phản hồi mới qua thiệp vào danh sách khách.
  */
+const INV_COLS = "id, slug, edit_token, published, config";
+type InvRow = { id: string; slug: string; edit_token: string; published: boolean; config: WeddingConfig | null };
+
 export async function POST(req: Request, props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
   // Trang này ghi theo từng cú bấm (tick một việc, sửa một khoản tiền) nên trần
@@ -69,7 +49,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
 
   const { data: contract } = await db
     .from("studio_contracts")
-    .select("id, owner_id, title, client_name, client_phone, shoot_type, service_id, event_date, status, client_signed_at, gallery_album_id, selection_album_id, intake")
+    .select("id, owner_id, title, client_name, client_phone, shoot_type, service_id, event_date, event_time, location, status, client_signed_at, gallery_album_id, selection_album_id, intake")
     .eq("client_token", params.token)
     .maybeSingle();
   if (!contract) return NextResponse.json({ error: "not_found" }, { status: 404 });
@@ -100,6 +80,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   }
   const planLocked =
     studioTier(effectivePlan(ownerObj?.plan, ownerObj?.plan_expires_at), ownerObj?.role === "admin") !== "full";
+  const combo = weddingGiftCombo(ownerObj?.role);
 
   const read = await readPlan(db, cId, null);
   if (read.error) {
@@ -182,7 +163,6 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       .single();
     row = (made as PlanRow | null) ?? (await readPlan(db, cId, ext)).row;
   }
-  const plan = row ? normalizePlan(row) : seed();
 
   const today = todayVN();
   const linkedIds = [contract.gallery_album_id, contract.selection_album_id].filter(Boolean) as string[];
@@ -195,11 +175,50 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       .eq("client_visible", true)
       .neq("status", "cancelled")
       .order("appt_date"),
-    db.from("wedding_invitations").select("id, edit_token, published, config").eq("contract_id", cId).maybeSingle(),
+    db.from("wedding_invitations").select(INV_COLS).eq("contract_id", cId).maybeSingle(),
     linkedIds.length
       ? db.from("albums").select("id, slug, status, phase, is_gallery").in("id", linkedIds)
       : Promise.resolve({ data: [] }),
   ]);
+
+  // Quà cưới: thiệp tặng CÙNG kế hoạch — có ngay lần đầu cặp đôi mở trang, không
+  // đợi luật tự tặng (một tháng trước ngày cưới). Ngày cưới lấy theo kế hoạch;
+  // giờ và địa điểm của hợp đồng chỉ điền khi hợp đồng quay chụp chính ngày cưới
+  // (hợp đồng prewedding thì đó là giờ, chỗ đi chụp).
+  let invRow = inv as InvRow | null;
+  if (combo && !invRow && !planLocked) {
+    const intake = contract.intake as { groom?: { name?: string }; bride?: { name?: string } } | null;
+    const weddingDay = shootsWeddingDay(pkg);
+    const made = await createInvitationForContract(db, {
+      id: cId,
+      owner_id: contract.owner_id as string,
+      title: contract.title as string | null,
+      client_name: (contract.client_name as string | null) ?? null,
+      event_date: (row ? normalizePlan(row) : seed()).wedding_date,
+      event_time: weddingDay ? ((contract.event_time as string | null) ?? null) : null,
+      location: weddingDay ? ((contract.location as string | null) ?? null) : null,
+      groom: intake?.groom?.name ?? null,
+      bride: intake?.bride?.name ?? null,
+    });
+    if (made.ok) {
+      const { data: all } = await db
+        .from("wedding_invitations")
+        .select(INV_COLS)
+        .eq("contract_id", cId)
+        .order("created_at")
+        .order("id");
+      const rows = (all ?? []) as InvRow[];
+      invRow = rows[0] ?? null;
+      // Cô dâu và chú rể cùng mở lần đầu → hai thiệp cho một hợp đồng (trang hợp
+      // đồng đọc thiệp bằng maybeSingle, hai dòng là hỏng). Giữ thiệp tạo trước,
+      // xoá thiệp thừa của chính lượt này.
+      if (made.created && rows.length > 1 && rows[0].slug !== made.slug) {
+        await db.from("wedding_invitations").delete().eq("slug", made.slug);
+      }
+    }
+  }
+  if (combo && ext && row && invRow) row = await syncPlanReplies(db, row, invRow.id, cId);
+  const plan = row ? normalizePlan(row) : seed();
 
   type Appt = { id: string; kind: AppointmentKind; title: string; appt_date: string; start_time: string | null; location: string | null; room: string | null; status: string };
   const apptRows = (appts ?? []) as Appt[];
@@ -228,7 +247,8 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       ? { picked: !!(sDone as { selection_done_at?: string | null } | null)?.selection_done_at, href: `/a/${sRow.slug}` }
       : null;
 
-  const invRow = inv as { id: string; edit_token: string; published: boolean; config: WeddingConfig | null } | null;
+  // Quà cưới: thiệp sửa ngay trong trang này (#thiep), không mở trang riêng.
+  const inviteHref = invRow ? (combo ? "#thiep" : `/thiep/sua/${invRow.edit_token}`) : "";
   let invite: PlannerPayload["invite"] = null;
   if (invRow) {
     // Không gửi lời chúc: trang kế hoạch chỉ cần ai dự, bao nhiêu người.
@@ -239,7 +259,9 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       .order("created_at", { ascending: false })
       .limit(2000);
     invite = {
-      href: `/thiep/sua/${invRow.edit_token}`,
+      href: inviteHref,
+      token: invRow.edit_token,
+      public_href: thiepUrl(`/${invRow.slug}`),
       published: !!invRow.published,
       names: (invRow.config?.guests ?? []).filter((g) => typeof g === "string" && g.trim()),
       replies: (rsvps ?? []) as PlannerInvite["replies"],
@@ -260,6 +282,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   const payload: PlannerPayload = {
     enabled: true,
     ext,
+    combo,
     contract: {
       title: contract.title as string,
       client_name: (contract.client_name as string | null) ?? null,
@@ -274,7 +297,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       studioName: brand.name,
       signed: !!contract.client_signed_at,
       shot,
-      invitation: invRow ? { published: !!invRow.published, href: `/thiep/sua/${invRow.edit_token}` } : null,
+      invitation: invRow ? { published: !!invRow.published, href: inviteHref } : null,
       album,
       total,
       paid,

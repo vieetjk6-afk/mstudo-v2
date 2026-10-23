@@ -160,7 +160,12 @@ function TaskRow({ t, ctx, onEdit }: { t: PlanTask; ctx: Ctx; onEdit: () => void
         {auto?.sub && (
           <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[12px]" style={{ color: "var(--tx3)" }}>
             <Sparkles size={12} style={{ flex: "none", color: "var(--ac)" }} /> {auto.sub}
-            {auto.href && (
+            {auto.href === "#thiep" && ctx.openInvite ? (
+              // Quà cưới: thiệp sửa ngay trong trang này.
+              <button type="button" onClick={ctx.openInvite} className="inline-flex items-center gap-1 font-bold" style={{ color: "var(--ac)" }}>
+                Mở thiệp
+              </button>
+            ) : auto.href && (
               <Link href={auto.href} className="inline-flex items-center gap-1 font-bold" style={{ color: "var(--ac)" }}>
                 Mở <ExternalLink size={12} />
               </Link>

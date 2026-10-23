@@ -7,7 +7,7 @@ import { isMissingColumn } from "@/lib/missing-column";
 import { phanLoaiLoi } from "@/lib/pg-loi";
 import { studioUrl } from "@/lib/hosts";
 import { fmtDate, fmtDateTime, todayVN } from "@/lib/date";
-import { plannerMessage } from "@/lib/share-messages";
+import { plannerMessage, weddingGiftMessage } from "@/lib/share-messages";
 import { SIDE_LABEL, budgetCatLabel, daysUntil, guestSummary, mergeDay, normalizePlan, type WeddingPlanData } from "@/lib/wedding-plan";
 import MessengerButton from "@/components/MessengerButton";
 
@@ -22,9 +22,12 @@ import MessengerButton from "@/components/MessengerButton";
  *
  * Công tắc "Hiện trên cổng khách" là cột `studio_contracts.wedding_planner`
  * (null = theo gói: gói cưới thì bật), cùng kiểu với tự tặng thiệp.
+ *
+ * Chế độ Quà cưới (`combo`): link này là MỘT món quà gồm cả kế hoạch lẫn thiệp
+ * cưới online — studio gửi một tin nhắn duy nhất.
  */
 export default function WeddingPlanCard({
-  contractId, clientToken, studioHost, clientMessenger, toggle, packageOn, comingSoon = false,
+  contractId, clientToken, studioHost, clientMessenger, toggle, packageOn, comingSoon = false, combo = false,
 }: {
   contractId: string;
   clientToken: string | null;
@@ -35,6 +38,8 @@ export default function WeddingPlanCard({
   /** Gói của hợp đồng là gói cưới (mặc định bật). */
   packageOn: boolean;
   comingSoon?: boolean;
+  /** Chế độ Quà cưới: kế hoạch + thiệp chung một trang. */
+  combo?: boolean;
 }) {
   const [plan, setPlan] = useState<(WeddingPlanData & { updated_at: string }) | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
@@ -85,11 +90,15 @@ export default function WeddingPlanCard({
     <div className="flex flex-wrap items-center gap-3">
       <CalendarHeart size={16} style={{ color: "#d96e8f" }} />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>💍 Kế hoạch cưới của khách</p>
+        <p className="text-[11px] uppercase tracking-wide" style={{ color: "var(--text3)" }}>
+          {combo ? "🎁 Quà cưới của khách — kế hoạch cưới + thiệp cưới online" : "💍 Kế hoạch cưới của khách"}
+        </p>
         <p className="text-sm" style={{ color: "var(--text2)" }}>
           {comingSoon
             ? "Tính năng đang được hoàn thiện, sẽ sớm có mặt."
-            : "Khách tự lên kế hoạch ở cổng khách — studio đọc lịch trình, đội hỗ trợ, ảnh cần chụp ở đây (không thấy ngân sách của khách)."}
+            : combo
+              ? "Một link cho cả hai món: khách lên kế hoạch, sửa thiệp, thêm khách một lần là có link thiệp ghi tên từng người. Studio đọc lịch trình, đội hỗ trợ, ảnh cần chụp ở đây."
+              : "Khách tự lên kế hoạch ở cổng khách — studio đọc lịch trình, đội hỗ trợ, ảnh cần chụp ở đây (không thấy ngân sách của khách)."}
         </p>
       </div>
       {comingSoon && (
@@ -104,6 +113,7 @@ export default function WeddingPlanCard({
   if (state === "loading") return null;
 
   const url = clientToken ? studioUrl(studioHost, `/portal/${clientToken}/ke-hoach`) : "";
+  const message = combo ? weddingGiftMessage(url) : plannerMessage(url);
   const rows = plan ? mergeDay(plan.day, []) : [];
   const left = plan ? daysUntil(plan.wedding_date, todayVN()) : null;
   const done = plan ? plan.tasks.filter((t) => t.done).length : 0;
@@ -136,10 +146,10 @@ export default function WeddingPlanCard({
           {on && url && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="min-w-0 flex-1 truncate text-sm" style={{ color: "var(--text2)" }}>{url}</span>
-              <MessengerButton link={clientMessenger} label="Gửi khách" message={plannerMessage(url)} />
+              <MessengerButton link={clientMessenger} label="Gửi khách" message={message} />
               <button
                 onClick={() => {
-                  navigator.clipboard?.writeText(plannerMessage(url));
+                  navigator.clipboard?.writeText(message);
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1500);
                 }}

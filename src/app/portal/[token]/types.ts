@@ -82,7 +82,8 @@ export type PortalPayload = {
   wedding: { slug: string; edit_token: string; published: boolean } | null;
   story: { slug: string; edit_token: string; published: boolean } | null;
   /** Tóm tắt kế hoạch cưới (/portal/<token>/ke-hoach); null = hợp đồng không có / chưa mở. */
-  planner?: { wedding_date: string | null; done: number; total: number } | null;
+  /** `combo` = chế độ Quà cưới: thẻ mở cả kế hoạch cưới lẫn thiệp cưới online. */
+  planner?: { wedding_date: string | null; done: number; total: number; combo?: boolean } | null;
   plan_locked?: boolean;
 };
 

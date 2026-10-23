@@ -17,7 +17,7 @@ import { voucherTerms, voucherValueLabel } from "@/lib/vouchers";
 import { contractTotal, sumAmounts, vnd } from "@/lib/types";
 import { parseFinalVideos, safeUrl, type FinalVideo } from "@/lib/final-links";
 import { getFeatureFlags, plannerComingSoon } from "@/lib/feature-flags";
-import { autoLinks, normalizePlan, planProgress, plannerEnabled, seedPlanFor, shootDone } from "@/lib/wedding-plan";
+import { autoLinks, normalizePlan, planProgress, plannerEnabled, seedPlanFor, shootDone, weddingGiftCombo } from "@/lib/wedding-plan";
 import { todayVN } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
@@ -349,7 +349,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   // Kế hoạch cưới (/portal/<token>/ke-hoach) — chỉ phần tóm tắt cho thẻ ở cổng
   // khách. Mọi bước đều best-effort: chưa chạy migrations/ke_hoach_cuoi.sql thì
   // `planner` = null và cổng khách chỉ đơn giản không có thẻ này.
-  let planner: { wedding_date: string | null; done: number; total: number } | null = null;
+  let planner: { wedding_date: string | null; done: number; total: number; combo: boolean } | null = null;
   if (!plannerComingSoon(await getFeatureFlags()) || ownerObj?.role === "admin") {
     const cq = (cols: string) => db.from("studio_contracts").select(cols).eq("id", cId).maybeSingle();
     const [{ data: pRow, error: pErr }, extraFull] = await Promise.all([
@@ -384,7 +384,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
           total: contractTotal((items ?? []) as { qty: number; unit_price: number }[]),
           paid: sumAmounts((payments ?? []) as { amount: number }[]),
         });
-        planner = { wedding_date: p.wedding_date, ...planProgress(p.tasks, auto) };
+        planner = { wedding_date: p.wedding_date, ...planProgress(p.tasks, auto), combo: weddingGiftCombo(ownerObj?.role) };
       }
     }
   }

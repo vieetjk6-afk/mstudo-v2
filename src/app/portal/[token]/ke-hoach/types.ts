@@ -9,8 +9,12 @@ import type { AutoLinks, DayRow, StudioAppt, StudioBudgetLine, WeddingPlanData }
 
 /** Thiệp cưới online studio tặng — nguồn phản hồi tham dự của khách mời. */
 export type PlannerInvite = {
-  /** Trình sửa thiệp. */
+  /** Trình sửa thiệp — chế độ Quà cưới là "#thiep" (sửa ngay trong trang kế hoạch). */
   href: string;
+  /** Mã sửa thiệp (`edit_token`) — trình sửa nhúng trong trang kế hoạch gọi /api/thiep/<mã>. */
+  token: string;
+  /** Thiệp khách mời xem (link chung, chưa ghi tên khách). */
+  public_href: string;
   published: boolean;
   /** Danh sách khách trong thiệp (link mời riêng) — để nhập sang danh sách khách mời. */
   names: string[];
@@ -25,6 +29,11 @@ export type PlannerPayload = {
    * lưu được việc cần làm, ngân sách, lịch trình; các mục mới tạm ẩn.
    */
   ext: boolean;
+  /**
+   * Chế độ Quà cưới (`weddingGiftCombo`): thiệp sửa trong trang này, danh sách
+   * khách dùng chung với thiệp, phản hồi qua thiệp đã ghi sẵn vào danh sách.
+   */
+  combo: boolean;
   contract: {
     title: string;
     client_name: string | null;

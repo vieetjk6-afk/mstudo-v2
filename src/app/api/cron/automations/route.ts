@@ -7,6 +7,7 @@ import { mainUrl, thiepUrl } from "@/lib/hosts";
 import { todayVN } from "@/lib/date";
 import { isMissingColumn } from "@/lib/missing-column";
 import { createInvitationForContract } from "@/lib/wedding-invite-auto";
+import { weddingGiftCombo } from "@/lib/wedding-plan";
 import {
   RULE_BY_KEY,
   daysBetween,
@@ -197,7 +198,7 @@ export async function GET(req: NextRequest) {
   const owners = [...new Set(list.map((c) => c.owner_id))];
   const [{ data: zaloRows }, { data: ownerRows }] = await Promise.all([
     db.from("studio_zalo").select("owner_id, status").in("owner_id", owners),
-    db.from("profiles").select("id, full_name").in("id", owners),
+    db.from("profiles").select("id, full_name, role").in("id", owners),
   ]);
   const zaloReady = new Set(
     ((zaloRows ?? []) as { owner_id: string; status: string }[])
@@ -206,6 +207,10 @@ export async function GET(req: NextRequest) {
   );
   const studioName = new Map(
     ((ownerRows ?? []) as { id: string; full_name: string | null }[]).map((r) => [r.id, r.full_name || "Studio"])
+  );
+  // Studio ở chế độ Quà cưới: thiệp nằm trong trang kế hoạch cưới của khách.
+  const comboOwners = new Set(
+    ((ownerRows ?? []) as { id: string; role?: string | null }[]).filter((r) => weddingGiftCombo(r.role)).map((r) => r.id)
   );
   // Máy chủ chưa có RESEND_API_KEY thì KHÔNG có kênh email — nói ra ở đây thay
   // vì để `sendEmail` trả "not_configured" sau khi đã ghi dấu.
@@ -289,7 +294,9 @@ ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
     // Thiệp đã có từ trước (studio vừa tạo tay giữa hai lượt đọc) → studio tự gửi
     // rồi, không nhắn khách thêm một lần nữa.
     if (!inv.created) return;
-    const rel = thiepUrl(`/sua/${inv.edit_token}`);
+    // Quà cưới: một link duy nhất — trang kế hoạch cưới, mở thẳng phần thiệp.
+    const tok = tokenOf.get(a.contractId);
+    const rel = comboOwners.has(a.ownerId) && tok ? `/portal/${tok}/ke-hoach#thiep` : thiepUrl(`/sua/${inv.edit_token}`);
     const link = rel.startsWith("/") ? mainUrl(rel) : rel;
     const text = invitationText(a.template ?? a.message, a.vars ?? {}, link);
     const studio = studioName.get(a.ownerId) || "Studio";
