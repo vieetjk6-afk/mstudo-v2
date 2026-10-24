@@ -146,6 +146,30 @@ export default function SettingsPanel({
         <p className="text-sm" style={{ color: "var(--text2)" }}>
           Bật/tắt hiển thị các tính năng cho studio. Khi để “Sắp ra mắt”, mục sẽ hiện nhãn và tạm khoá với studio (admin vẫn vào được để hoàn thiện).
         </p>
+        {/* Giao diện mới (thử nghiệm) — xem @/lib/ui-version. Ba mức thay vì một
+            ô tích: chỉ admin → studio tự bật → mặc định cho mọi người. */}
+        <div className="flex flex-col gap-2 rounded-xl p-3 sm:flex-row sm:items-center" style={{ background: "var(--surface2)" }}>
+          <span className="flex-1 text-sm">
+            <b>Giao diện mới (thử nghiệm)</b> — ai được dùng khung giao diện mới.
+            <span style={{ color: "var(--text2)" }}>
+              {" "}
+              Dữ liệu dùng chung với bản cũ; người dùng luôn quay về bản cũ được trong menu tài khoản.
+            </span>
+          </span>
+          <select
+            className="input sm:w-64"
+            value={(form.feature_flags as Record<string, string> | null | undefined)?.ui_v2 ?? "admin"}
+            onChange={(e) => {
+              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
+              if (e.target.value === "admin") delete cur.ui_v2; else cur.ui_v2 = e.target.value;
+              set("feature_flags" as keyof SiteSettings, cur as never);
+            }}
+          >
+            <option value="admin">Chỉ admin dùng thử</option>
+            <option value="beta">Mọi studio thấy gợi ý, tự bật</option>
+            <option value="default">Mặc định cho mọi studio</option>
+          </select>
+        </div>
         <label className="flex items-center gap-3 rounded-xl p-3" style={{ background: "var(--surface2)" }}>
           <input
             type="checkbox"

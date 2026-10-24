@@ -41,7 +41,30 @@ import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDem
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import { PortalAlbumDemo } from "./PortalAlbumDemo";
 import { KeHoachCuoiDemo, QuaCuoiThiepDemo } from "./KeHoachCuoiDemo";
+import StudioShellV2 from "@/components/v2/StudioShellV2";
+import StudioShell from "@/components/StudioShell";
+import type { ChromeProfile } from "@/lib/types";
 import * as f from "./fixtures";
+
+/** Chủ studio giả cho các màn xem trước khung giao diện. */
+const shellProfile: ChromeProfile = {
+  id: "o", email: "mrlee@studio.vn", full_name: "Mr Lee", role: "photographer",
+  plan: "studio", plan_expires_at: null, studio_owner_id: null, studio_role: null,
+};
+
+function thuChi() {
+  return (
+    <ReportsView
+      ownerId="o"
+      studio={f.studio}
+      payments={f.payments}
+      salaries={f.salaries}
+      initialExpenses={f.expenses}
+      initialTarget={50_000_000}
+      sourceStats={f.sourceStats} funnel={f.funnel}
+    />
+  );
+}
 
 /**
  * Bảng màn hình xem trước: một khoá → một tiêu đề + phần dựng sẵn.
@@ -630,6 +653,34 @@ export const SCREENS: Record<
         <style>{"nextjs-portal{display:none!important}"}</style>
         <WeddingGiftVideo orientation="landscape" renderMode />
       </div>
+    ),
+    bare: true,
+  },
+  /* Khung GIAO DIỆN MỚI (thử nghiệm) bọc quanh màn thật — để so với khung cũ. */
+  "khung-moi-thu-chi": {
+    title: "Giao diện mới — khung + Thu chi",
+    render: () => (
+      <StudioShellV2 profile={shellProfile} tier="full" role="owner" accent="blue" previewPath="/dashboard/studio/reports">
+        {thuChi()}
+      </StudioShellV2>
+    ),
+    bare: true,
+  },
+  "khung-moi-hop-dong": {
+    title: "Giao diện mới — khung + Hợp đồng (màu tím)",
+    render: () => (
+      <StudioShellV2 profile={shellProfile} tier="full" role="owner" accent="violet" previewPath="/dashboard/studio/contracts">
+        <ContractsList rows={f.contracts} studio={f.studio} />
+      </StudioShellV2>
+    ),
+    bare: true,
+  },
+  "khung-cu-goi-y": {
+    title: "Khung cũ — thẻ gợi ý dùng giao diện mới",
+    render: () => (
+      <StudioShell profile={shellProfile} tier="full" role="owner" suggestNewUi>
+        {thuChi()}
+      </StudioShell>
     ),
     bare: true,
   },

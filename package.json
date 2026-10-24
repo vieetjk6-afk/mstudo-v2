@@ -38,6 +38,7 @@
     "test:wedding-plan": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/wedding-plan.mjs",
     "test:wedding-plan-export": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/wedding-plan-export.mjs",
     "test:lunar": "node --experimental-strip-types desktop/test/lunar.mjs",
+    "test:ui-version": "node --experimental-strip-types desktop/test/ui-version.mjs",
     "test:wedding-palette": "node --experimental-strip-types desktop/test/wedding-palette.mjs",
     "test:missing-column": "node --experimental-strip-types desktop/test/missing-column.mjs",
     "test:fetch-khong-cache": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/fetch-khong-cache.mjs",
