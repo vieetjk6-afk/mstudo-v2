@@ -10,11 +10,19 @@ export async function nextContractCode(supabase: SupabaseClient, ownerId: string
   // đánh số vào tháng trước nếu lấy getMonth() giờ máy.
   const [yyyy, mm] = todayVN().split("-");
   const prefix = `HD-${mm}-${yyyy}-`;
-  const { count } = await supabase
-    .from("studio_contracts")
-    .select("id", { count: "exact", head: true })
-    .eq("owner_id", ownerId)
-    .like("code", `${prefix}%`);
+  // Đếm qua RPC (security definer) chứ không qua RLS: nhân viên / quản lý chi
+  // nhánh chỉ THẤY một phần hợp đồng, đếm phần đó là cấp trùng mã. Database chưa
+  // chạy migrations/phan_quyen_vai_tro_hop_dong.sql thì chưa có hàm → đếm như cũ
+  // (lúc đó RLS vẫn cho mọi thành viên thấy cả studio nên kết quả vẫn đúng).
+  const rpc = await supabase.rpc("contract_code_count", { p_owner: ownerId, p_prefix: prefix });
+  let count = rpc.error ? null : Number(rpc.data);
+  if (count === null || !Number.isFinite(count)) {
+    ({ count } = await supabase
+      .from("studio_contracts")
+      .select("id", { count: "exact", head: true })
+      .eq("owner_id", ownerId)
+      .like("code", `${prefix}%`));
+  }
   return `${prefix}${String((count || 0) + 1).padStart(3, "0")}`;
 }
 
