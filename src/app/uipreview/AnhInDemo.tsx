@@ -45,6 +45,7 @@ export function AnhInStudioDemo() {
     <div className="mx-auto max-w-3xl">
       <AlbumPrintPanel
         albumId="a1"
+        albumSlug="demo"
         info={{
           quota: 20,
           contractId: "c1",
@@ -67,6 +68,7 @@ export function AnhInAlbumLeDemo() {
     <div className="mx-auto max-w-3xl">
       <AlbumPrintPanel
         albumId="a2"
+        albumSlug="demo"
         info={{ quota: 0, contractId: null, contractQuota: 0, albumQuota: 0, picks: [], sentAt: null, copiedAt: null }}
         photos={PHOTOS}
         hasDeliveryFolder

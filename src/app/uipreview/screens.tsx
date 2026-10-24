@@ -34,6 +34,7 @@ import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
 import { AnhInAlbumLeDemo, AnhInKhachDemo, AnhInStudioDemo } from "./AnhInDemo";
 import LuoiAnhDemo from "./LuoiAnhDemo";
+import AlbumMaAnhDemo from "./AlbumMaAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
 import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo, PaidConfirmDemo } from "./VoucherDemo";
@@ -63,6 +64,14 @@ export const SCREENS: Record<
     title: "Ảnh in tặng — album giao khách, hợp đồng tặng 3 ảnh in",
     render: () => <AnhInKhachDemo />,
     bare: true,
+  },
+  "ma-anh-album": {
+    title: "Mã ảnh — tab Ảnh của album: chép mã ảnh giao khách / ảnh chọn",
+    render: () => <AlbumMaAnhDemo tab="photos" />,
+  },
+  "ma-anh-chia-se": {
+    title: "Mã ảnh — tab Khách chia sẻ: link khách gửi người khác xem + mã ảnh",
+    render: () => <AlbumMaAnhDemo tab="shares" />,
   },
   "anh-in-studio": {
     title: "Ảnh in tặng — thẻ ở tab Giao khách của album (studio)",

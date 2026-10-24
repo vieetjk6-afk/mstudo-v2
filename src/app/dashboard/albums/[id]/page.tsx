@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
 import { effectivePlan, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
-import AlbumEditor, { type AlbumPick, type DeliveryTwin, type LinkedContractInfo } from "./AlbumEditor";
+import AlbumEditor, { type AlbumPick, type CustomerShare, type DeliveryTwin, type LinkedContractInfo } from "./AlbumEditor";
 import type { AlbumPrintInfo } from "./AlbumPrintPanel";
 import { normalizeQuota } from "@/lib/album-print-rules";
 import { normalizeAlbumMode } from "@/lib/album-mode";
@@ -132,6 +133,25 @@ export default async function AlbumEditPage(
     }
   }
 
+  // Link "chia sẻ ảnh đã chọn" khách tạo cho người khác xem (bảng album_shares).
+  // Bảng đã thu hồi quyền đọc của anon/authenticated nên đọc bằng service role —
+  // an toàn vì album phía trên đã đọc qua RLS: tới được đây là người có quyền
+  // xem album này. Lỗi (DB cũ) thì bỏ qua, phần còn lại của trang vẫn chạy.
+  let customerShares: CustomerShare[] = [];
+  {
+    const { data: sh } = await createAdminClient()
+      .from("album_shares")
+      .select("token, photo_ids, created_at")
+      .eq("album_id", params.id)
+      .order("created_at", { ascending: false })
+      .limit(200);
+    customerShares = (sh ?? []).map((r) => ({
+      token: r.token as string,
+      photoIds: (r.photo_ids as string[] | null) ?? [],
+      createdAt: r.created_at as string,
+    }));
+  }
+
   // Loại album do CHÍNH studio này đã dùng (mỗi studio có bộ phân loại riêng).
   const { data: catRows } = await supabase
     .from("albums")
@@ -167,6 +187,7 @@ export default async function AlbumEditPage(
       zaloSavedName={(album as Album).zalo_name ?? contractZaloName}
       selections={(picks ?? []) as AlbumPick[]}
       printInfo={printInfo}
+      customerShares={customerShares}
       initialTab={tabParam}
       // ?? 6 chứ không phải || 6: studio đặt 0 tháng nghĩa là CỐ Ý giữ ảnh vô
       // hạn, `||` sẽ nuốt mất lựa chọn đó và ép về 6.

@@ -31,10 +31,11 @@ import { studioUrl } from "@/lib/hosts";
 import ShareButton from "@/components/ShareButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import FilterPhotosButton from "@/components/FilterPhotosButton";
+import PhotoCodeButtons from "@/components/PhotoCodeButtons";
 import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
-import { fmtDate } from "@/lib/date";
+import { fmtDate, fmtDateTime } from "@/lib/date";
 import { albumShareMessage } from "@/lib/share-messages";
 import { storageUntil, storageState, storageLabel, STORAGE_EXTEND_CHOICES } from "@/lib/storage-lifecycle";
 import AlbumPrintPanel, { type AlbumPrintInfo } from "./AlbumPrintPanel";
@@ -47,6 +48,7 @@ import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } f
 const ALBUM_TABS = [
   ["photos", "Ảnh"],
   ["picked", "Lượt chọn"],
+  ["shares", "Khách chia sẻ"],
   ["sources", "Nguồn ảnh"],
   ["settings", "Cài đặt"],
   ["deliver", "Giao khách"],
@@ -63,6 +65,14 @@ export type AlbumPick = {
   client_note: string | null;
   photographer_note: string | null;
   created_at: string;
+};
+
+/** Một link "chia sẻ ảnh đã chọn" khách tạo cho người khác xem (bảng album_shares). */
+export type CustomerShare = {
+  token: string;
+  /** id ảnh (photos.id) — link rất cũ có thể lưu drive_file_id. */
+  photoIds: string[];
+  createdAt: string;
 };
 
 /**
@@ -109,6 +119,7 @@ export default function AlbumEditor({
   deliveryTwin = null,
   linkedContract = null,
   printInfo = null,
+  customerShares = [],
   initialTab,
 }: {
   album: Album;
@@ -134,6 +145,8 @@ export default function AlbumEditor({
   linkedContract?: LinkedContractInfo | null;
   /** Ảnh in tặng khách đã gửi (null = hợp đồng không tặng in). */
   printInfo?: AlbumPrintInfo | null;
+  /** Link khách tự tạo để chia sẻ một nhóm ảnh cho người khác xem. */
+  customerShares?: CustomerShare[];
   /** ?tab=… trên URL (vd thông báo "khách chọn ảnh in" mở thẳng tab Giao khách). */
   initialTab?: string;
 }) {
@@ -734,7 +747,7 @@ export default function AlbumEditor({
         <div role="tablist" aria-label="Nội dung album" className="flex gap-0.5 overflow-x-auto rounded-[14px] px-3" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
           {ALBUM_TABS.map(([key, label]) => {
             const on = tab === key;
-            const badge = key === "photos" ? photos.length : key === "picked" ? selections.length : key === "sources" ? sources.length : 0;
+            const badge = key === "photos" ? photos.length : key === "picked" ? selections.length : key === "shares" ? customerShares.length : key === "sources" ? sources.length : 0;
             return (
               <button
                 key={key}
@@ -774,6 +787,13 @@ export default function AlbumEditor({
                     <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: "color-mix(in srgb, var(--success) 15%, transparent)", color: "var(--success)" }}>{deliveryCount} giao</span>
                   </span>
                 )}
+                {/* Mã ảnh của đúng bộ đang xem (lọc giai đoạn) — đem đi lọc ảnh / gửi thợ. */}
+                <span className="ml-auto normal-case tracking-normal">
+                  <PhotoCodeButtons
+                    names={photoGroups.filter((g) => photoStage === "all" || photoStage === g.key).flatMap((g) => g.photos.map((p) => p.name))}
+                    fileName={`${album.slug}-${photoStage === "delivery" ? "anh-giao-khach" : photoStage === "selection" ? "anh-chon" : "tat-ca-anh"}`}
+                  />
+                </span>
               </h2>
               {pickedIds.size > 0 && (
                 <p className="mb-3 text-[12.5px]" style={{ color: "var(--tx2)" }}>
@@ -824,6 +844,11 @@ export default function AlbumEditor({
                         <span className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
                           {g.photos.length} ảnh · bấm ★ trên ảnh để đặt làm ảnh bìa
                         </span>
+                        {photoStage === "all" && (
+                          <span className="ml-auto">
+                            <PhotoCodeButtons compact names={g.photos.map((p) => p.name)} fileName={`${album.slug}-${g.key === "delivery" ? "anh-giao-khach" : "anh-chon"}`} />
+                          </span>
+                        )}
                       </div>
                     )}
                     {splitBySource(g.photos).map((sec) => (
@@ -1039,6 +1064,10 @@ export default function AlbumEditor({
           )}
 
           {/* Nguồn ảnh: các thư mục / link Drive nạp vào album */}
+          {tab === "shares" && (
+            <SharesPanel shares={customerShares} photos={photos} slug={album.slug} baseUrl={studioUrl(studioHost, `/${phase === "delivery" ? "album" : "a"}/${form.slug}`)} />
+          )}
+
           {tab === "sources" && (
             <>
             {/* Sources */}
@@ -1502,6 +1531,7 @@ export default function AlbumEditor({
             {printInfo && !deliveryTwin && (
               <AlbumPrintPanel
                 albumId={album.id}
+                albumSlug={album.slug}
                 info={printInfo}
                 photos={photos}
                 hasDeliveryFolder={sources.some((x) => x.stage === "delivery" && !!x.drive_url)}
@@ -1551,5 +1581,71 @@ export default function AlbumEditor({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Tab "Khách chia sẻ": mỗi link "chia sẻ ảnh đã chọn" khách gửi cho người khác
+ * (người thân, thợ in…) kèm đúng những ảnh trong link — studio chép mã ảnh để
+ * biết khách đang khoe/gửi in những tấm nào.
+ */
+function SharesPanel({ shares, photos, slug, baseUrl }: { shares: CustomerShare[]; photos: Photo[]; slug: string; baseUrl: string }) {
+  const byId = useMemo(() => {
+    const m = new Map<string, Photo>();
+    for (const p of photos) {
+      m.set(p.id, p);
+      if (p.drive_file_id) m.set(p.drive_file_id, p);
+    }
+    return m;
+  }, [photos]);
+
+  if (shares.length === 0) {
+    return (
+      <div className="card p-6 text-center text-[13px]" style={{ color: "var(--tx2)" }}>
+        Khách chưa tạo link chia sẻ nào. Khi khách chọn vài ảnh rồi bấm <b>“Chia sẻ ảnh đã chọn”</b> trên album,
+        link đó và mã các ảnh trong link sẽ hiện ở đây.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {shares.map((sh) => {
+        const list = sh.photoIds.map((id) => byId.get(id)).filter((p): p is Photo => !!p);
+        const missing = sh.photoIds.length - list.length;
+        const url = `${baseUrl}?s=${sh.token}`;
+        return (
+          <div key={sh.token} className="card p-5">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="min-w-0">
+                <p className="text-[13.5px] font-semibold">Link chia sẻ · {list.length} ảnh</p>
+                <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
+                  Tạo lúc {fmtDateTime(sh.createdAt)}
+                  {missing > 0 && ` · ${missing} ảnh không còn trong album`}
+                </p>
+              </div>
+              <div className="ml-auto flex flex-wrap items-center gap-1.5">
+                <a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
+                  <ExternalLink size={15} /> Mở link
+                </a>
+                <PhotoCodeButtons names={list.map((p) => p.name)} fileName={`${slug}-chia-se-${sh.token}`} />
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-8">
+              {list.map((p) => (
+                <figure key={p.id} className="min-w-0">
+                  <div className="aspect-square overflow-hidden rounded-md" style={{ background: "var(--sf2)" }}>
+                    <img src={thumbnailUrl(p.drive_file_id, 240)} alt={p.name} loading="lazy" className="h-full w-full object-cover" />
+                  </div>
+                  <figcaption className="mt-0.5 truncate text-[10.5px]" style={{ color: "var(--tx3)" }} title={p.name}>
+                    {stripExtension(p.name)}
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
