@@ -2688,126 +2688,113 @@ notify pgrst, 'reload schema';
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ migrations/luu_lua_chon_album.sql — Lưu lựa chọn ảnh của khách theo chênh lệch, một transaction: hàm save_album_selection (chạy SAU album_dislikes)
+-- ▶ migrations/luu_chon_anh_tung_phan.sql — Lưu lựa chọn ảnh của khách theo phần chênh trong một transaction: hàm save_album_selection (chạy SAU album_dislikes)
 -- ══════════════════════════════════════════════════════════════════════════
 
 -- ============================================================================
--- LƯU LỰA CHỌN CỦA KHÁCH THEO KIỂU "CHÊNH LỆCH", TRONG MỘT TRANSACTION
+-- LƯU LỰA CHỌN ẢNH CỦA KHÁCH THEO PHẦN CHÊNH (POST /api/a/[slug]/select)
 --
--- Vì sao cần: POST /api/a/[slug]/select trước đây XOÁ SẠCH lựa chọn của phiên
--- rồi CHÈN LẠI toàn bộ — mỗi lần khách bấm (client gửi sau ~250ms). Khách chọn
--- 500 ảnh là mỗi cú bấm ghi lại 500 dòng (O(n²) tổng cộng), bắn ~1000 sự kiện
--- Realtime sang dashboard studio, và KHÔNG nguyên tử: xoá xong mà chèn hỏng là
--- khách mất sạch lựa chọn. Thêm nữa, xoá-chèn lại làm mất `photographer_note`
--- studio đã ghi trên từng ảnh khách chọn.
+-- Vì sao: trang khách gửi lại TOÀN BỘ danh sách chọn mỗi ~250 ms khi khách bấm.
+-- Bản cũ xoá sạch selections / dislikes của phiên rồi chèn lại hết:
+--   • n lượt ghi cho mỗi lần bấm → O(n²) cả buổi chọn;
+--   • xoá và chèn là hai lượt gọi rời — chèn hỏng là MẤT lựa chọn của khách;
+--   • ~2n sự kiện Realtime mỗi lần lưu dội vào màn SelectionsView của studio;
+--   • kiểm ảnh bằng `.in("id", …)` hàng nghìn UUID trên URL — gãy từ ~300 ảnh.
 --
--- Hàm này làm trong MỘT transaction:
---   • bỏ qua mã ảnh không thuộc album (khỏi phải gửi hàng nghìn UUID qua URL
---     PostgREST bằng `.in()` — URL đó gãy khi quá ~300 ảnh);
---   • chèn dòng còn thiếu (on conflict do nothing theo unique sẵn có
---     (album_id, photo_id, session_id));
---   • cập nhật dòng đã có CHỈ KHI tên ảnh / tên khách / ghi chú đổi;
---   • xoá dòng khách đã bỏ.
--- `p_dislike_ids` null = client cũ không gửi danh sách "không thích" → KHÔNG
--- đụng bảng dislikes (giữ đúng luật của route).
+-- Hàm save_album_selection làm trọn trong MỘT transaction, mảng đi trong thân
+-- POST (không qua URL):
+--   1. Chỉ giữ ảnh THẬT SỰ thuộc album (join với photos theo album_id).
+--   2. Xoá đúng những ảnh khách đã bỏ.
+--   3. Upsert theo unique (album_id, photo_id, session_id) — dòng không đổi gì
+--      thì KHÔNG bị ghi lại, nên không sinh sự kiện Realtime.
+-- Như vậy mỗi lần bấm chỉ ghi đúng một hai dòng thay đổi.
 --
--- Chỉ máy chủ (service_role) được gọi: route đã kiểm album công khai, mật khẩu,
--- hạn mức trước khi gọi. Chưa chạy file này thì route tự lùi về đường cũ.
+-- Chỉ service_role gọi được (route dùng admin client, đã kiểm mật khẩu album).
+-- Chưa chạy file này thì route tự lùi về đường cũ (đã sửa để ghi theo phần chênh).
 -- Chạy 1 lần trong Supabase SQL Editor. An toàn khi chạy lại.
 -- ============================================================================
 
+-- Đã có từ schema nền / album_dislikes.sql — nhắc lại cho database dựng tay.
+create index if not exists selections_session_idx on public.selections (album_id, session_id);
+
+create index if not exists dislikes_session_idx on public.dislikes (album_id, session_id);
+
 create or replace function public.save_album_selection(
-  p_album       uuid,
-  p_session     text,
-  p_photo_ids   uuid[],
-  p_dislike_ids uuid[] default null,
-  p_client_name text default null,
-  p_notes       jsonb default '{}'::jsonb
+  p_album_id     uuid,
+  p_session_id   text,
+  p_client_name  text,
+  p_photo_ids    uuid[],
+  p_notes        jsonb default '{}'::jsonb,
+  -- null = client cũ không gửi danh sách "không thích" → không đụng bảng dislikes.
+  p_disliked_ids uuid[] default null
 )
-returns table (selected integer, disliked integer)
+returns table (pick_count integer, dislike_count integer)
 language plpgsql
-volatile
 security definer
-set search_path = public, pg_temp
+set search_path = public
 as $$
 declare
-  v_notes   jsonb := coalesce(p_notes, '{}'::jsonb);
-  v_name    text  := nullif(p_client_name, '');
-  v_sel_ids uuid[];
-  v_dis_ids uuid[];
-  v_sel     integer := 0;
-  v_dis     integer := 0;
+  v_notes jsonb := coalesce(p_notes, '{}'::jsonb);
+  v_want  uuid[];
+  v_dis   uuid[];
 begin
-  if p_album is null or coalesce(p_session, '') = '' then
-    raise exception 'thiếu album hoặc phiên' using errcode = '22023';
-  end if;
+  -- Hai lượt lưu của cùng một phiên chạy lần lượt, không xen nhau.
+  perform pg_advisory_xact_lock(hashtextextended(p_album_id::text || ':' || p_session_id, 0));
 
-  -- Hai lượt lưu của CÙNG phiên chạy chồng nhau (tab cũ + tab mới, mạng chập
-  -- chờn gửi lại) thì xếp hàng — không để hai bản chênh lệch đan xen.
-  perform pg_advisory_xact_lock(hashtextextended(p_album::text || ':' || p_session, 0));
-
-  -- Ảnh khách chọn, đã lọc: chỉ ảnh thuộc album, bỏ trùng, và trừ ảnh nằm trong
-  -- "không thích" (cùng luật excludeDisliked phía route). Giữ trong biến mảng,
-  -- KHÔNG dùng bảng tạm: mỗi lần tạo bảng tạm là ghi vào catalog, mà hàm này
-  -- chạy sau mỗi cú bấm của khách.
-  v_sel_ids := array(
-    select p.id from public.photos p
-    where p.album_id = p_album
-      and p.id = any(coalesce(p_photo_ids, '{}'::uuid[]))
-      and not (p.id = any(coalesce(p_dislike_ids, '{}'::uuid[])))
+  -- ── Ảnh chọn ──────────────────────────────────────────────────────────────
+  -- Chỉ giữ ảnh thuộc ĐÚNG album này; id lạ / của album khác bị bỏ qua.
+  v_want := array(
+    select distinct p.id
+    from unnest(coalesce(p_photo_ids, '{}'::uuid[])) as u(id)
+    join public.photos p on p.id = u.id and p.album_id = p_album_id
   );
-  v_sel := cardinality(v_sel_ids);
 
   delete from public.selections s
-  where s.album_id = p_album and s.session_id = p_session
-    and not (s.photo_id = any(v_sel_ids));
+  where s.album_id = p_album_id
+    and s.session_id = p_session_id
+    and not exists (select 1 from unnest(v_want) as w(id) where w.id = s.photo_id);
 
-  -- Chỉ cập nhật dòng thật sự đổi → không bắn sự kiện Realtime thừa, và không
-  -- đụng photographer_note của studio.
-  update public.selections s
-     set photo_name  = coalesce(p.name, ''),
-         client_name = v_name,
-         client_note = nullif(v_notes ->> p.id::text, '')
-    from public.photos p
-   where p.id = any(v_sel_ids) and p.album_id = p_album
-     and s.album_id = p_album and s.session_id = p_session and s.photo_id = p.id
-     and (s.photo_name, s.client_name, s.client_note)
-         is distinct from (coalesce(p.name, ''), v_name, nullif(v_notes ->> p.id::text, ''));
-
-  insert into public.selections (album_id, photo_id, photo_name, session_id, client_name, client_note)
-  select p_album, p.id, coalesce(p.name, ''), p_session, v_name, nullif(v_notes ->> p.id::text, '')
+  insert into public.selections as s
+    (album_id, photo_id, photo_name, session_id, client_name, client_note)
+  select p_album_id, p.id, coalesce(p.name, ''), p_session_id,
+         nullif(p_client_name, ''), nullif(v_notes ->> p.id::text, '')
   from public.photos p
-  where p.id = any(v_sel_ids) and p.album_id = p_album
-  on conflict (album_id, photo_id, session_id) do nothing;
+  where p.album_id = p_album_id and p.id = any (v_want)
+  on conflict (album_id, photo_id, session_id) do update
+    set photo_name  = excluded.photo_name,
+        client_name = excluded.client_name,
+        client_note = excluded.client_note
+    -- Dòng không đổi gì thì không ghi lại → không có sự kiện Realtime thừa.
+    where (s.photo_name, s.client_name, s.client_note)
+          is distinct from (excluded.photo_name, excluded.client_name, excluded.client_note);
 
-  if p_dislike_ids is not null then
-    v_dis_ids := array(
-      select p.id from public.photos p
-      where p.album_id = p_album and p.id = any(p_dislike_ids)
+  -- ── Ảnh không thích ───────────────────────────────────────────────────────
+  if p_disliked_ids is not null then
+    v_dis := array(
+      select distinct p.id
+      from unnest(p_disliked_ids) as u(id)
+      join public.photos p on p.id = u.id and p.album_id = p_album_id
     );
-    v_dis := cardinality(v_dis_ids);
 
     delete from public.dislikes d
-    where d.album_id = p_album and d.session_id = p_session
-      and not (d.photo_id = any(v_dis_ids));
+    where d.album_id = p_album_id
+      and d.session_id = p_session_id
+      and not exists (select 1 from unnest(v_dis) as w(id) where w.id = d.photo_id);
 
-    update public.dislikes d
-       set photo_name  = coalesce(p.name, ''),
-           client_note = nullif(v_notes ->> p.id::text, '')
-      from public.photos p
-     where p.id = any(v_dis_ids) and p.album_id = p_album
-       and d.album_id = p_album and d.session_id = p_session and d.photo_id = p.id
-       and (d.photo_name, d.client_note)
-           is distinct from (coalesce(p.name, ''), nullif(v_notes ->> p.id::text, ''));
-
-    insert into public.dislikes (album_id, photo_id, photo_name, session_id, client_note)
-    select p_album, p.id, coalesce(p.name, ''), p_session, nullif(v_notes ->> p.id::text, '')
+    insert into public.dislikes as d
+      (album_id, photo_id, photo_name, session_id, client_note)
+    select p_album_id, p.id, coalesce(p.name, ''), p_session_id,
+           nullif(v_notes ->> p.id::text, '')
     from public.photos p
-    where p.id = any(v_dis_ids) and p.album_id = p_album
-    on conflict (album_id, photo_id, session_id) do nothing;
+    where p.album_id = p_album_id and p.id = any (v_dis)
+    on conflict (album_id, photo_id, session_id) do update
+      set photo_name  = excluded.photo_name,
+          client_note = excluded.client_note
+      where (d.photo_name, d.client_note)
+            is distinct from (excluded.photo_name, excluded.client_note);
   end if;
 
-  return query select v_sel, v_dis;
+  return query select cardinality(v_want), coalesce(cardinality(v_dis), 0);
 end;
 $$;
 
@@ -2864,251 +2851,214 @@ end $$;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ migrations/rls_vai_tro_chi_nhanh_hop_dong.sql — Vá quyền: ghim chi nhánh cho Toàn quyền chi nhánh, kế toán chỉ đọc hợp đồng, nhân viên bị khoá mất quyền (chạy SAU studio_branches, ke_hoach_cuoi)
+-- ▶ migrations/phan_quyen_vai_tro_hop_dong.sql — Phân quyền theo vai trò cho hợp đồng: staff chỉ hợp đồng được giao, quản lý chi nhánh chỉ chi nhánh mình, kế toán chỉ đọc, chỉ chủ studio huỷ / hoàn tiền, tài khoản bị khoá mất quyền (chạy CUỐI)
 -- ══════════════════════════════════════════════════════════════════════════
 
 -- ============================================================================
--- HÀNG RÀO VAI TRÒ & CHI NHÁNH CHO HỢP ĐỒNG — ĐẶT Ở RLS, KHÔNG CHỈ Ở ROUTE API
+-- PHÂN QUYỀN THEO VAI TRÒ CHO HỢP ĐỒNG — ĐƯA LUẬT CỦA API XUỐNG DATABASE
 --
--- VÌ SAO CẦN
---   Luật "Toàn quyền chi nhánh chỉ thấy chi nhánh mình", "kế toán không sửa hợp
---   đồng", "tài khoản bị khoá không vào được" hôm nay chỉ nằm trong code trang /
---   route (requireStudio, forcedBranchScope, isBranchScopedRole). Còn RLS của
---   studio_contracts và các bảng con chỉ hỏi `is_studio_member(owner_id)` — tức
---   là "có phải người của studio này không". Bất kỳ nhân viên nào cầm anon key
---   (nằm sẵn trong trình duyệt) + JWT của chính mình đều gọi thẳng PostgREST
---   được: đọc hợp đồng của chi nhánh khác, sửa / xoá khoản thu, thêm mình vào
---   bảng tiền công. Hàng rào chỉ ở tầng giao diện thì không phải hàng rào.
+-- VẤN ĐỀ
+--   Vai trò (manager / branch_manager / staff / accountant) và chi nhánh chỉ
+--   được kiểm trong route API và trang server. Policy RLS của cả họ hợp đồng thì
+--   chỉ hỏi `public.is_studio_member(owner_id)` — "có phải người của studio này
+--   không" — nên MỌI thành viên làm được MỌI thứ trên dữ liệu studio.
 --
---   Thêm nữa: is_studio_member KHÔNG xem profiles.is_active. Chủ studio khoá một
---   nhân viên nghỉ việc → app (requireStudio) chặn, nhưng JWT còn hạn của người
---   đó vẫn đọc / ghi thẳng được toàn bộ dữ liệu studio qua PostgREST.
+--   Trình duyệt có anon key + JWT của người dùng, nên gọi thẳng PostgREST là
+--   lách được hết các chốt ở API:
+--     • nhân viên / kế toán / quản lý chi nhánh đọc được mọi hợp đồng, mọi khoản thu;
+--     • đặt status = 'cancelled' (huỷ / hoàn tiền là việc riêng của chủ studio —
+--       xem src/app/api/studio/contracts/[id]/cancel/route.ts);
+--     • chèn khoản thu vào bất kỳ hợp đồng nào;
+--     • quản lý chi nhánh đọc / ghi hợp đồng của cơ sở khác.
+--   Và is_studio_member không nhìn profiles.is_active: tài khoản đã bị khoá vẫn
+--   giữ nguyên quyền với database.
 --
--- FILE NÀY LÀM BỐN VIỆC
---   1. Ba hàm ngữ cảnh studio_staff_owner / _role / _branch: trả về "người đang
---      gọi là nhân viên CÒN HOẠT ĐỘNG của studio nào, vai trò gì, chi nhánh nào".
---      Policy gọi chúng dạng `(select public.studio_staff_owner())` để Postgres
---      tính MỘT lần mỗi câu (initPlan) thay vì mỗi dòng — cùng kiểu với
---      tang_toc_thu_vien_album.sql.
---   2. is_studio_member viết lại trên hàm (1): thêm điều kiện is_active cho
---      PHÍA NHÂN VIÊN, áp cho MỌI bảng đang dùng nó (không riêng hợp đồng).
---   3. Ghim chi nhánh cho branch_manager trên hợp đồng + mọi bảng con.
---   4. Siết GHI theo vai trò — chỉ đúng những chỗ không luồng hợp lệ nào trên
---      trình duyệt cần (xem bảng quyết định từng bảng ở dưới).
+-- LUẬT (khớp src/lib/studio-roles.ts + các trang / route đang chạy)
 --
--- KHOÁ TÀI KHOẢN — bắt chước đúng requireStudio (src/lib/auth-guards.ts)
---   requireStudio từ chối khi: (a) chính người đăng nhập is_active = false, hoặc
---   (b) họ là nhân viên mà CHỦ studio is_active = false. Phía nhân viên ở đây làm
---   đúng hai điều đó.
---   Phía CHỦ (target = auth.uid()) cố ý GIỮ NGUYÊN, không thêm is_active: mọi bảng
---   khác của chủ (albums, photos, sites…) đều là `owner_id = auth.uid()` trần, nên
---   thêm điều kiện ở riêng đây không khoá được chủ khỏi dữ liệu của mình — chỉ
---   sinh ra một nửa hàng rào khó đoán. Chủ bị khoá vẫn bị chặn ở tầng app
---   (requireStudio, dashboard/layout), và quan trọng hơn: nhân viên của chủ đó
---   mất quyền ngay ở đây.
+--   vai trò          đọc hợp đồng                     ghi hợp đồng & bảng con
+--   ───────────────  ───────────────────────────────  ─────────────────────────────
+--   chủ / admin      toàn studio                      toàn studio (cả huỷ, hoàn tiền)
+--   manager          toàn studio                      toàn studio, TRỪ huỷ / hoàn tiền
+--   branch_manager   branch_id = chi nhánh của mình   như cột đọc, TRỪ huỷ / hoàn tiền
+--   staff            assigned_to = mình (+ hợp đồng   assigned_to = mình, TRỪ huỷ /
+--                    có hạng mục hậu kỳ giao cho mình) hoàn tiền
+--   accountant       toàn studio (màn Thu chi cần)    KHÔNG — chỉ đánh dấu đã trả lương
+--                                                      (contract_crew.paid / paid_at)
 --
--- BRANCH_MANAGER — bắt chước forcedBranchScope (src/lib/studio-roles.ts)
---   Được gán chi nhánh X  → chỉ hợp đồng branch_id = X.
---   CHƯA được gán         → forcedBranchScope trả "none", applyBranch biến nó
---                           thành `branch_id IS NULL`: chỉ phần CHƯA GÁN. Ở đây
---                           dùng `branch_id is not distinct from studio_branch_id`
---                           nên ra đúng y như vậy — fail-closed theo nghĩa KHÔNG
---                           BAO GIỜ mở ra toàn studio, khớp từng chữ với app.
---   Bảng con (hạng mục, thu tiền, nhân sự…) lấy quyền qua hợp đồng cha: policy
---   con hỏi `exists (select 1 from studio_contracts c where c.id = contract_id)`,
---   và vì câu con đó CŨNG chịu RLS của studio_contracts nên nó thừa hưởng nguyên
---   luật chủ / admin / nhân viên / chi nhánh ở trên — một luật, một chỗ. (Nếu sau
---   này thêm một policy permissive mới trên studio_contracts, ví dụ cho cổng
---   khách, thì nó cũng mở luôn các bảng con — phải xem lại file này.)
+--   Quản lý chi nhánh CHƯA được gán chi nhánh thì không thấy hợp đồng nào
+--   (fail-closed, cùng tinh thần forcedBranchScope).
 --
---   Hợp đồng mới do branch_manager tạo mà KHÔNG mang branch_id (vd. "Tạo hợp
---   đồng" từ yêu cầu đặt lịch — BookingsView không gửi branch_id) sẽ được trigger
---   ghim vào chi nhánh của họ. Không có trigger này thì luật trên chối lệnh
---   insert và branch_manager không chuyển được yêu cầu đặt lịch thành hợp đồng.
+-- HIỆU NĂNG
+--   Mọi điều kiện về "người đang gọi" đi qua hàm `stable security definer` bọc
+--   trong `(select …)`: Postgres tính MỘT lần mỗi câu lệnh (initPlan) chứ không
+--   gọi lại cho từng dòng — cùng cách tang_toc_thu_vien_album.sql đã làm.
 --
--- CHỨNG CỨ: các luồng GHI từ TRÌNH DUYỆT (createClient của @/lib/supabase/client)
---   và vai trò tới được màn đó (studio-nav.ts + chốt ở page.tsx):
---     ContractEditor / NewContractForm (contracts — STAFF_OK, kế toán bị chặn ở
---       page): studio_contracts insert/update/delete; contract_items,
---       contract_crew, contract_payments, contract_payment_plan, contract_tasks,
---       contract_products, contract_edit_requests, contract_reschedules.
---       → Nhân viên (staff) dùng TOÀN BỘ, kể cả nút xoá hợp đồng và gỡ khoản thu.
---     BookingsView (MANAGER_OK): studio_contracts, contract_items, contract_tasks insert.
---     CalendarView (STAFF_OK): studio_contracts.calendar_color.
---     ProductionView (STAFF_OK), /staff TaskQueue (MỌI vai trò): contract_products update.
---     /staff TodayView (MỌI vai trò): contract_tasks update.
---     PayrollView (MONEY_OK — có kế toán): contract_crew update (đã trả công).
---     CrewManager (tab thợ của "Nhân viên & phân quyền" — page chỉ cho
---       owner/admin/manager/branch_manager): studio_crew insert/update/delete.
---   Ghi phía máy chủ (route API, cron, cổng khách) đều qua service-role → bỏ qua
---   RLS, không bị ảnh hưởng. Trigger trên các bảng này đều SECURITY DEFINER.
+-- VÌ SAO VIẾT TỪNG POLICY RA, KHÔNG DÙNG KHỐI do $$ … $$
+--   build-setup-all.mjs xếp khối do $$ vào PHẦN 2, còn `create policy` vào PHẦN 3.
+--   Khối do $$ của rls_thanh_vien_hop_dong.sql vì thế bị chính các policy
+--   chỉ-chủ-studio của schema.sql ở PHẦN 3 ghi đè trên project mới. Câu lệnh
+--   trần thì nằm đúng PHẦN 3, và file này đứng CUỐI ORDER nên thắng.
 --
--- QUYẾT ĐỊNH TỪNG BẢNG
---   studio_contracts      ĐỌC: chủ, admin, nhân viên còn hoạt động (bm: chỉ chi
---                         nhánh mình). GHI: như đọc, TRỪ kế toán — kế toán không
---                         có màn nào ghi hợp đồng (trang hợp đồng chặn kế toán).
---   contract_items, contract_payments, contract_payment_plan,
---   contract_edit_requests, contract_equipment, contract_quote_options
---                         ĐỌC: theo hợp đồng cha. GHI: theo hợp đồng cha, TRỪ kế
---                         toán. Kế toán vẫn ĐỌC được khoản thu (Thu chi, xuất kế
---                         toán) — chỉ không tự thêm / sửa / xoá khoản thu; ghi thu
---                         của màn Thu chi đi qua /api/studio/payment-plan/collect
---                         (service-role).
---   contract_crew, contract_tasks, contract_products
---                         Như nhóm trên, NHƯNG kế toán được UPDATE: Đối soát tiền
---                         công đánh dấu đã trả (contract_crew), cổng /staff tích
---                         việc xong / đổi trạng thái hậu kỳ (tasks, products).
---                         Kế toán KHÔNG insert / delete được — tức là không tự
---                         thêm mình vào bảng tiền công được.
---   contract_addenda, wedding_plans
---                         Vốn chỉ có policy ĐỌC cho thành viên (ghi qua máy chủ).
---                         Giữ chỉ-đọc, chuyển sang theo hợp đồng cha để
---                         branch_manager không đọc phụ lục / kế hoạch cưới của chi
---                         nhánh khác.
---   studio_crew           ĐỌC: mọi thành viên còn hoạt động — KHÔNG ghim chi nhánh:
---                         thợ tự do thường để branch_id trống và làm cho mọi cơ sở,
---                         ghim thì ô chọn thợ trong hợp đồng của branch_manager mất
---                         họ. GHI: chỉ owner/admin/manager/branch_manager — đúng
---                         những người mở được CrewManager. Thợ tự cập nhật hồ sơ
---                         qua /api/crew/profile (service-role).
---
--- CÒN MỞ (cố ý — siết thì vỡ luồng thật, ghi lại để khỏi tưởng đã kín)
---   • Nhân viên (staff) vẫn ĐỌC / GHI mọi hợp đồng của studio qua PostgREST, dù
---     app chỉ cho họ thấy hợp đồng được giao (assigned_to). Không siết được ở RLS:
---     người hậu kỳ được giao SẢN PHẨM (contract_products.assigned_to) trên hợp
---     đồng giao cho người khác, cổng /staff đọc qua hợp đồng cha; và trang hợp
---     đồng còn đọc hợp đồng khác cùng ngày để báo trùng lịch thợ.
---   • Kế toán UPDATE được contract_crew / tasks / products ở MỌI cột (RLS không
---     chặn theo cột được) — vd. sửa tiền công một dòng có sẵn.
---   • branch_manager đổi ô "Chi nhánh" của hợp đồng sang cơ sở khác / bỏ trống thì
---     nay bị chối (WITH CHECK) — đó là chủ đích, nhưng màn hình vẫn đưa lựa chọn.
---   • Cảnh báo trùng lịch thợ ở trang hợp đồng chạy bằng client của người dùng →
---     với branch_manager nay chỉ thấy trùng trong chi nhánh mình.
---   • studio_quotes / quote_items, studio_events, studio_expenses… chưa ghim chi
---     nhánh (ngoài phạm vi file này) — nhưng đã hưởng điều kiện is_active qua
---     is_studio_member.
---
--- THỨ TỰ CHẠY: SAU studio_branches.sql (cần studio_contracts.branch_id và
--- profiles.studio_branch_id), SAU rls_thanh_vien_hop_dong.sql, ke_hoach_cuoi.sql,
--- contract_addenda.sql. Chạy lại schema.sql hoặc rls_thanh_vien_hop_dong.sql
--- SAU file này sẽ dựng lại policy `*_owner_all` mở rộng — khi đó chạy lại file này.
---
--- AN TOÀN KHI CHẠY LẠI: chỉ thay hàm / trigger / policy, không đụng dữ liệu.
+-- Chạy SAU mọi migration tạo bảng hợp đồng (contract_cancel_reschedule,
+-- contract_addenda, studio_vouchers…). An toàn khi chạy lại.
 -- ============================================================================
 
--- Hàng rào: thiếu cột chi nhánh thì DỪNG với lời nhắn rõ ràng, thay vì để
--- `create policy` văng "column branch_id does not exist" khó hiểu ở giữa file.
-do $$
-begin
-  if not exists (select 1 from information_schema.columns
-                 where table_schema = 'public' and table_name = 'studio_contracts' and column_name = 'branch_id')
-     or not exists (select 1 from information_schema.columns
-                    where table_schema = 'public' and table_name = 'profiles' and column_name = 'studio_branch_id') then
-    raise exception 'Cần chạy supabase/migrations/studio_branches.sql TRƯỚC file này (thiếu cột branch_id / studio_branch_id).';
-  end if;
-end $$;
 
--- ── 1) Ngữ cảnh của người đang gọi ─────────────────────────────────────────
--- SECURITY DEFINER: nhân viên không đọc được dòng profiles của CHỦ qua RLS (xem
--- getProfileByIdAdmin trong auth-guards.ts), mà ta cần is_active của chủ.
--- Trả NULL cho mọi người KHÔNG phải nhân viên còn hiệu lực: chủ studio, thợ
--- ảnh độc lập, người chưa đăng nhập, nhân viên bị khoá, nhân viên của chủ bị khoá.
-
--- Studio mà người đang gọi làm nhân viên (chủ của họ), nếu cả hai còn hoạt động.
-create or replace function public.studio_staff_owner()
-returns uuid
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select me.studio_owner_id
-  from public.profiles me
-  join public.profiles o on o.id = me.studio_owner_id
-  where me.id = auth.uid()
-    and me.is_active
-    and o.is_active;
-$$;
-
--- Vai trò của nhân viên đó. Rỗng / NULL coi là 'staff' — đúng như requireStudio
--- (`me.studio_role || "staff"`): thiếu vai trò thì nhận quyền THẤP, không phải cao.
-create or replace function public.studio_staff_role()
-returns text
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select coalesce(nullif(me.studio_role, ''), 'staff')
-  from public.profiles me
-  join public.profiles o on o.id = me.studio_owner_id
-  where me.id = auth.uid()
-    and me.is_active
-    and o.is_active;
-$$;
-
--- Chi nhánh được gán cho chính nhân viên đó (NULL = chưa gán).
-create or replace function public.studio_staff_branch()
-returns uuid
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select me.studio_branch_id
-  from public.profiles me
-  join public.profiles o on o.id = me.studio_owner_id
-  where me.id = auth.uid()
-    and me.is_active
-    and o.is_active;
-$$;
-
--- ── 2) is_studio_member: thêm is_active cho phía nhân viên ─────────────────
--- Giữ chữ ký cũ để mọi policy / RPC đang gọi nó (inbox, lịch hẹn, kế toán…) tự
--- hưởng điều kiện mới mà không phải viết lại.
+-- ── 1) Thành viên studio phải còn ĐANG HOẠT ĐỘNG ─────────────────────────────
+-- Người gọi bị khoá → hết quyền. Nhân viên mà CHỦ studio bị khoá → cũng hết
+-- (requireStudio đã từ chối cả hai trường hợp; database giờ nói cùng một câu).
 create or replace function public.is_studio_member(target uuid)
-returns boolean
-language sql
-security definer
-stable
-set search_path = public
-as $$
+returns boolean language sql security definer stable set search_path = public as $$
   select
-    target = auth.uid()
-    or target = public.studio_staff_owner()
+    exists (
+      select 1 from public.profiles me
+      where me.id = auth.uid()
+        and me.is_active
+        and (
+          target = me.id
+          or (me.studio_owner_id = target
+              and exists (select 1 from public.profiles o where o.id = target and o.is_active))
+        )
+    )
     or public.is_admin();
 $$;
 
--- ── 3) Ghim chi nhánh khi branch_manager tạo hợp đồng không kèm chi nhánh ──
--- Chạy TRƯỚC khi Postgres kiểm WITH CHECK của RLS (trigger BEFORE luôn đi trước),
--- nên dòng mới đã mang đúng chi nhánh lúc bị kiểm. Service-role (auth.uid() NULL)
--- và chủ studio: studio_staff_role() trả NULL → không đổi gì.
-create or replace function public.studio_contracts_ghim_chi_nhanh()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
+-- ── 2) Hàm "người đang gọi là ai" — dùng dạng (select …) trong policy ────────
+
+-- Trả id CHỦ studio mà người gọi được hành động với một năng lực `cap`, hoặc
+-- NULL nếu không có năng lực đó (NULL so sánh với owner_id luôn ra false).
+--   'member'     mọi thành viên đang hoạt động (kể cả chủ)
+--   'owner'      chính chủ studio (không phải nhân viên)
+--   'all_read'   đọc toàn studio: chủ, manager, accountant
+--   'all_write'  ghi toàn studio: chủ, manager
+--   'branch'     branch_manager — phải so thêm branch_id với studio_my_branch()
+--   'assigned'   staff — phải so thêm assigned_to với auth.uid()
+--   'accountant' kế toán
+-- Vai trò lạ / để trống được coi là 'staff' — đúng như requireStudio
+-- (`me.studio_role || "staff"`), và là mức hẹp nhất.
+create or replace function public.studio_scope_owner(cap text)
+returns uuid language sql stable security definer set search_path = public as $$
+  select case
+           when cap = 'member'
+             or (cap = 'owner'      and m.role = 'owner')
+             or (cap = 'all_read'   and m.role in ('owner', 'manager', 'accountant'))
+             or (cap = 'all_write'  and m.role in ('owner', 'manager'))
+             or (cap = 'branch'     and m.role = 'branch_manager')
+             or (cap = 'assigned'   and m.role = 'staff')
+             or (cap = 'accountant' and m.role = 'accountant')
+           then m.owner_id
+         end
+  from (
+    select coalesce(me.studio_owner_id, me.id) as owner_id,
+           case
+             when me.studio_owner_id is null then 'owner'
+             when me.studio_role in ('manager', 'branch_manager', 'accountant') then me.studio_role
+             else 'staff'
+           end as role
+    from public.profiles me
+    where me.id = auth.uid()
+      and me.is_active
+      and (me.studio_owner_id is null
+           or exists (select 1 from public.profiles o where o.id = me.studio_owner_id and o.is_active))
+  ) m;
+$$;
+
+-- Chi nhánh của chính người đang đăng nhập (chỉ có nghĩa với branch_manager).
+create or replace function public.studio_my_branch()
+returns uuid language sql stable security definer set search_path = public as $$
+  select studio_branch_id from public.profiles where id = auth.uid();
+$$;
+
+-- Hợp đồng có hạng mục hậu kỳ (contract_products) giao cho CHÍNH nhân viên này.
+-- Cổng /staff hiện hàng đợi hậu kỳ theo contract_products.assigned_to, và người
+-- chỉnh ảnh thường KHÔNG phải người phụ trách hợp đồng — thiếu dòng này thì
+-- việc được giao biến mất khỏi hàng đợi của họ. Chỉ mở ĐỌC, không mở ghi.
+-- security definer → đọc contract_products không qua RLS, nên không vòng lặp
+-- policy studio_contracts ↔ contract_products.
+create or replace function public.studio_my_product_contracts()
+returns uuid[] language sql stable security definer set search_path = public as $$
+  select coalesce(array_agg(distinct p.contract_id), '{}'::uuid[])
+  from public.contract_products p
+  join public.studio_contracts c on c.id = p.contract_id
+  where p.assigned_to = auth.uid()
+    and c.owner_id = public.studio_scope_owner('assigned');
+$$;
+
+-- ── 3) Số thứ tự mã hợp đồng không phụ thuộc RLS ────────────────────────────
+-- nextContractCode() đếm hợp đồng đã có trong tháng để ra HD-MM-YYYY-NNN. Nhân
+-- viên / quản lý chi nhánh giờ chỉ THẤY một phần hợp đồng, đếm qua RLS sẽ ra số
+-- nhỏ hơn thật và cấp trùng mã. Hàm này đếm toàn studio nhưng chỉ trả một con số.
+create or replace function public.contract_code_count(p_owner uuid, p_prefix text)
+returns bigint language plpgsql stable security definer set search_path = public as $$
 begin
-  if new.branch_id is null and public.studio_staff_role() = 'branch_manager' then
-    new.branch_id := public.studio_staff_branch();
+  if coalesce(auth.role(), '') <> 'service_role' and not public.is_studio_member(p_owner) then
+    raise exception 'không có quyền với studio này' using errcode = '42501';
+  end if;
+  return (select count(*) from public.studio_contracts
+          where owner_id = p_owner and code like p_prefix || '%');
+end;
+$$;
+
+-- ── 4) Huỷ hợp đồng: chỉ chủ studio ──────────────────────────────────────────
+-- Policy không thấy được giá trị CŨ của dòng nên không phân biệt được "đang huỷ"
+-- với "sửa ghi chú của hợp đồng đã huỷ" — việc đó cần trigger. Máy chủ
+-- (service role, auth.uid() NULL) đi qua: route huỷ đã tự kiểm vai trò.
+create or replace function public.guard_contract_cancel()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+  if new.status = 'cancelled'
+     and (tg_op = 'INSERT' or old.status is distinct from 'cancelled')
+     -- coalesce: studio_scope_owner('owner') là NULL với nhân viên, và
+     -- `not (false or NULL)` là NULL — if bỏ qua, hàng rào thủng im lặng.
+     and not coalesce(public.is_admin() or new.owner_id = public.studio_scope_owner('owner'), false) then
+    raise exception 'contract_cancel_owner_only: chỉ chủ studio được huỷ hợp đồng'
+      using errcode = '42501';
   end if;
   return new;
 end;
 $$;
 
-drop trigger if exists studio_contracts_ghim_chi_nhanh on public.studio_contracts;
+drop trigger if exists guard_contract_cancel on public.studio_contracts;
 
-create trigger studio_contracts_ghim_chi_nhanh
-  before insert on public.studio_contracts
-  for each row execute function public.studio_contracts_ghim_chi_nhanh();
+create trigger guard_contract_cancel
+  before insert or update of status on public.studio_contracts
+  for each row execute function public.guard_contract_cancel();
+
+-- ── 5) Kế toán chỉ được đánh dấu đã trả lương ───────────────────────────────
+-- Màn Bảng lương (PayrollView) cập nhật contract_crew.paid / paid_at ngay từ
+-- trình duyệt. Policy cho kế toán UPDATE, trigger này giữ cho UPDATE đó không
+-- đụng được cột nào khác (lương, vai trò, SĐT…). AFTER để thấy dòng cuối cùng,
+-- kể cả cột sinh tự động phone_digits.
+create or replace function public.guard_contract_crew_accountant()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if auth.uid() is not null
+     and public.studio_scope_owner('accountant') is not null
+     and not public.is_admin()
+     and (to_jsonb(new) - 'paid' - 'paid_at') is distinct from (to_jsonb(old) - 'paid' - 'paid_at') then
+    raise exception 'payroll_paid_only: kế toán chỉ được đánh dấu đã trả lương'
+      using errcode = '42501';
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists guard_contract_crew_accountant on public.contract_crew;
+
+create trigger guard_contract_crew_accountant
+  after update on public.contract_crew
+  for each row execute function public.guard_contract_crew_accountant();
 
 -- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
--- Không còn dòng `*_owner_all` nào trên các bảng hợp đồng:
+-- Mỗi bảng phải có `…_member_read` + `…_member_write` (contract_reschedules,
+-- contract_addenda chỉ có read), và KHÔNG còn `…_owner_all`:
 --
 --   select tablename, policyname, cmd from pg_policies
 --   where schemaname = 'public'
---     and (tablename like 'contract%' or tablename in ('studio_contracts','studio_crew','wedding_plans'))
+--     and (tablename like 'contract\_%' or tablename in ('studio_contracts','studio_crew'))
 --   order by tablename, policyname;
 
 
@@ -3615,91 +3565,54 @@ create policy wedding_plans_member_read on public.wedding_plans
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ migrations/luu_lua_chon_album.sql — Lưu lựa chọn ảnh của khách theo chênh lệch, một transaction: hàm save_album_selection (chạy SAU album_dislikes)
+-- ▶ migrations/luu_chon_anh_tung_phan.sql — Lưu lựa chọn ảnh của khách theo phần chênh trong một transaction: hàm save_album_selection (chạy SAU album_dislikes)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- Supabase mặc định cấp execute cho anon/authenticated trên hàm mới trong
--- public — hàm này bỏ qua RLS nên phải thu lại, chỉ để máy chủ gọi.
-revoke all on function public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb) from public, anon, authenticated;
+revoke all on function public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[]) from public, anon, authenticated;
 
-grant execute on function public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb) to service_role;
+grant execute on function public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[]) to service_role;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ migrations/rls_vai_tro_chi_nhanh_hop_dong.sql — Vá quyền: ghim chi nhánh cho Toàn quyền chi nhánh, kế toán chỉ đọc hợp đồng, nhân viên bị khoá mất quyền (chạy SAU studio_branches, ke_hoach_cuoi)
+-- ▶ migrations/phan_quyen_vai_tro_hop_dong.sql — Phân quyền theo vai trò cho hợp đồng: staff chỉ hợp đồng được giao, quản lý chi nhánh chỉ chi nhánh mình, kế toán chỉ đọc, chỉ chủ studio huỷ / hoàn tiền, tài khoản bị khoá mất quyền (chạy CUỐI)
 -- ══════════════════════════════════════════════════════════════════════════
 
--- ── 4) Quyền gọi hàm ───────────────────────────────────────────────────────
--- anon PHẢI gọi được: policy áp cho mọi role, nên một câu anon chạm tới bảng mà
--- không gọi được hàm sẽ nổ "permission denied for function" thay vì trả rỗng.
--- Hàm chỉ trả ngữ cảnh của CHÍNH người gọi, với anon là NULL — không lộ gì.
-revoke all on function public.studio_staff_owner() from public;
+revoke all on function public.contract_code_count(uuid, text) from public, anon;
 
-revoke all on function public.studio_staff_role() from public;
+grant execute on function public.contract_code_count(uuid, text) to authenticated, service_role;
 
-revoke all on function public.studio_staff_branch() from public;
+-- ── 6) Policy ────────────────────────────────────────────────────────────────
+-- Mỗi bảng hai policy: `…_member_read` (SELECT) và `…_member_write` (mọi lệnh
+-- ghi). Bảng con lấy quyền theo hợp đồng cha qua contract_id.
 
-grant execute on function public.studio_staff_owner() to anon, authenticated, service_role;
-
-grant execute on function public.studio_staff_role() to anon, authenticated, service_role;
-
-grant execute on function public.studio_staff_branch() to anon, authenticated, service_role;
-
--- ── 5) studio_contracts ────────────────────────────────────────────────────
--- Bỏ policy mở rộng cũ (schema.sql + rls_thanh_vien_hop_dong.sql). Policy
--- permissive cộng bằng OR — để sót nó là mọi luật dưới đây vô nghĩa.
+-- studio_contracts
 drop policy if exists studio_contracts_owner_all on public.studio_contracts;
 
 drop policy if exists studio_contracts_member_read on public.studio_contracts;
 
 create policy studio_contracts_member_read on public.studio_contracts
   for select using (
-    owner_id = (select auth.uid())
-    or (select public.is_admin())
-    or (
-      owner_id = (select public.studio_staff_owner())
-      and (
-        (select public.studio_staff_role()) <> 'branch_manager'
-        or branch_id is not distinct from (select public.studio_staff_branch())
-      )
-    )
+    (select public.is_admin())
+    or owner_id = (select public.studio_scope_owner('all_read'))
+    or (owner_id = (select public.studio_scope_owner('branch')) and branch_id = (select public.studio_my_branch()))
+    or (owner_id = (select public.studio_scope_owner('assigned'))
+        and (assigned_to = (select auth.uid()) or id = any ((select public.studio_my_product_contracts())::uuid[])))
   );
 
--- FOR ALL: phần SELECT của nó trùng với policy đọc ở trên (OR) nên kế toán vẫn
--- đọc được; còn insert / update / delete thì kế toán không qua được câu này.
 drop policy if exists studio_contracts_member_write on public.studio_contracts;
 
 create policy studio_contracts_member_write on public.studio_contracts
   for all using (
-    owner_id = (select auth.uid())
-    or (select public.is_admin())
-    or (
-      owner_id = (select public.studio_staff_owner())
-      and (select public.studio_staff_role()) <> 'accountant'
-      and (
-        (select public.studio_staff_role()) <> 'branch_manager'
-        or branch_id is not distinct from (select public.studio_staff_branch())
-      )
-    )
-  )
-  with check (
-    owner_id = (select auth.uid())
-    or (select public.is_admin())
-    or (
-      owner_id = (select public.studio_staff_owner())
-      and (select public.studio_staff_role()) <> 'accountant'
-      and (
-        (select public.studio_staff_role()) <> 'branch_manager'
-        or branch_id is not distinct from (select public.studio_staff_branch())
-      )
-    )
+    (select public.is_admin())
+    or owner_id = (select public.studio_scope_owner('all_write'))
+    or (owner_id = (select public.studio_scope_owner('branch')) and branch_id = (select public.studio_my_branch()))
+    or (owner_id = (select public.studio_scope_owner('assigned')) and assigned_to = (select auth.uid()))
+  ) with check (
+    (select public.is_admin())
+    or owner_id = (select public.studio_scope_owner('all_write'))
+    or (owner_id = (select public.studio_scope_owner('branch')) and branch_id = (select public.studio_my_branch()))
+    or (owner_id = (select public.studio_scope_owner('assigned')) and assigned_to = (select auth.uid()))
   );
-
--- ── 6) Bảng con: theo hợp đồng cha, kế toán chỉ đọc ────────────────────────
--- `exists (… studio_contracts c where c.id = contract_id)` chịu RLS của
--- studio_contracts (mục 5) → thừa hưởng nguyên luật chủ / nhân viên / chi nhánh.
--- coalesce(…, '') vì với chủ / admin studio_staff_role() là NULL, và
--- `NULL <> 'accountant'` là NULL chứ không phải true.
 
 -- contract_items
 drop policy if exists contract_items_owner_all on public.contract_items;
@@ -3707,58 +3620,73 @@ drop policy if exists contract_items_owner_all on public.contract_items;
 drop policy if exists contract_items_member_read on public.contract_items;
 
 create policy contract_items_member_read on public.contract_items
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
 
 drop policy if exists contract_items_member_write on public.contract_items;
 
 create policy contract_items_member_write on public.contract_items
   for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
   );
 
--- contract_payments
-drop policy if exists contract_payments_owner_all on public.contract_payments;
+-- contract_crew (+ kế toán đánh dấu đã trả lương — xem trigger ở mục 5)
+drop policy if exists contract_crew_owner_all on public.contract_crew;
 
-drop policy if exists contract_payments_member_read on public.contract_payments;
+drop policy if exists contract_crew_member_read on public.contract_crew;
 
-create policy contract_payments_member_read on public.contract_payments
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
-
-drop policy if exists contract_payments_member_write on public.contract_payments;
-
-create policy contract_payments_member_write on public.contract_payments
-  for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+create policy contract_crew_member_read on public.contract_crew
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
   );
 
--- contract_payment_plan
-drop policy if exists contract_payment_plan_owner_all on public.contract_payment_plan;
+drop policy if exists contract_crew_member_write on public.contract_crew;
 
-drop policy if exists contract_payment_plan_member_read on public.contract_payment_plan;
-
-create policy contract_payment_plan_member_read on public.contract_payment_plan
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
-
-drop policy if exists contract_payment_plan_member_write on public.contract_payment_plan;
-
-create policy contract_payment_plan_member_write on public.contract_payment_plan
+create policy contract_crew_member_write on public.contract_crew
   for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  );
+
+drop policy if exists contract_crew_payroll_update on public.contract_crew;
+
+create policy contract_crew_payroll_update on public.contract_crew
+  for update using (
+    exists (select 1 from public.studio_contracts c
+            where c.id = contract_id and c.owner_id = (select public.studio_scope_owner('accountant')))
+  ) with check (
+    exists (select 1 from public.studio_contracts c
+            where c.id = contract_id and c.owner_id = (select public.studio_scope_owner('accountant')))
   );
 
 -- contract_edit_requests
@@ -3767,18 +3695,133 @@ drop policy if exists contract_edit_requests_owner_all on public.contract_edit_r
 drop policy if exists contract_edit_requests_member_read on public.contract_edit_requests;
 
 create policy contract_edit_requests_member_read on public.contract_edit_requests
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
 
 drop policy if exists contract_edit_requests_member_write on public.contract_edit_requests;
 
 create policy contract_edit_requests_member_write on public.contract_edit_requests
   for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  );
+
+-- contract_payments: thêm hàng rào HOÀN TIỀN — khoản kind='refund' hay số âm chỉ
+-- chủ studio ghi được (route huỷ ghi bằng service role, không qua đây).
+drop policy if exists contract_payments_owner_all on public.contract_payments;
+
+drop policy if exists contract_payments_member_read on public.contract_payments;
+
+create policy contract_payments_member_read on public.contract_payments
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
+
+drop policy if exists contract_payments_member_write on public.contract_payments;
+
+create policy contract_payments_member_write on public.contract_payments
+  for all using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+    and (
+      (kind is distinct from 'refund' and coalesce(amount, 0) >= 0)
+      or (select public.is_admin())
+      or exists (select 1 from public.studio_contracts c
+                 where c.id = contract_id and c.owner_id = (select public.studio_scope_owner('owner')))
+    )
+  );
+
+-- contract_payment_plan
+drop policy if exists contract_payment_plan_owner_all on public.contract_payment_plan;
+
+drop policy if exists contract_payment_plan_member_read on public.contract_payment_plan;
+
+create policy contract_payment_plan_member_read on public.contract_payment_plan
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
+
+drop policy if exists contract_payment_plan_member_write on public.contract_payment_plan;
+
+create policy contract_payment_plan_member_write on public.contract_payment_plan
+  for all using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  );
+
+-- contract_tasks
+drop policy if exists contract_tasks_owner_all on public.contract_tasks;
+
+drop policy if exists contract_tasks_member_read on public.contract_tasks;
+
+create policy contract_tasks_member_read on public.contract_tasks
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
+
+drop policy if exists contract_tasks_member_write on public.contract_tasks;
+
+create policy contract_tasks_member_write on public.contract_tasks
+  for all using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
   );
 
 -- contract_equipment
@@ -3787,18 +3830,76 @@ drop policy if exists contract_equipment_owner_all on public.contract_equipment;
 drop policy if exists contract_equipment_member_read on public.contract_equipment;
 
 create policy contract_equipment_member_read on public.contract_equipment
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
 
 drop policy if exists contract_equipment_member_write on public.contract_equipment;
 
 create policy contract_equipment_member_write on public.contract_equipment
   for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  );
+
+-- contract_products (+ người được giao hạng mục hậu kỳ đẩy được trạng thái của nó
+-- từ cổng /staff, kể cả khi hợp đồng không giao cho họ)
+drop policy if exists contract_products_owner_all on public.contract_products;
+
+drop policy if exists contract_products_member_read on public.contract_products;
+
+create policy contract_products_member_read on public.contract_products
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
+
+drop policy if exists contract_products_member_write on public.contract_products;
+
+create policy contract_products_member_write on public.contract_products
+  for all using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  );
+
+drop policy if exists contract_products_assignee_update on public.contract_products;
+
+create policy contract_products_assignee_update on public.contract_products
+  for update using (
+    assigned_to = (select auth.uid())
+    and exists (select 1 from public.studio_contracts c
+                where c.id = contract_id and c.owner_id = (select public.studio_scope_owner('member')))
+  ) with check (
+    assigned_to = (select auth.uid())
+    and exists (select 1 from public.studio_contracts c
+                where c.id = contract_id and c.owner_id = (select public.studio_scope_owner('member')))
   );
 
 -- contract_quote_options
@@ -3807,161 +3908,121 @@ drop policy if exists contract_quote_options_owner_all on public.contract_quote_
 drop policy if exists contract_quote_options_member_read on public.contract_quote_options;
 
 create policy contract_quote_options_member_read on public.contract_quote_options
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
 
 drop policy if exists contract_quote_options_member_write on public.contract_quote_options;
 
 create policy contract_quote_options_member_write on public.contract_quote_options
   for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
   );
 
--- ── 7) Bảng con kế toán được UPDATE (tiền công, việc, hậu kỳ) ──────────────
--- Ba policy: đọc (mọi người thấy hợp đồng cha), ghi đủ (trừ kế toán), và
--- UPDATE riêng cho kế toán. Kế toán vẫn không insert / delete được.
+-- contract_client_proofs: ảnh chuyển khoản khách tải lên (khách ghi qua route
+-- service role). Trước đây chỉ chủ studio đọc được — nhưng màn hợp đồng hiện
+-- chúng cho mọi vai trò mở được hợp đồng, nên giờ theo cùng luật hợp đồng.
+drop policy if exists contract_client_proofs_owner on public.contract_client_proofs;
 
--- contract_crew — Đối soát tiền công đánh dấu "đã trả".
-drop policy if exists contract_crew_owner_all on public.contract_crew;
+drop policy if exists contract_client_proofs_member_read on public.contract_client_proofs;
 
-drop policy if exists contract_crew_member_read on public.contract_crew;
+create policy contract_client_proofs_member_read on public.contract_client_proofs
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
 
-create policy contract_crew_member_read on public.contract_crew
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
+drop policy if exists contract_client_proofs_member_write on public.contract_client_proofs;
 
-drop policy if exists contract_crew_member_write on public.contract_crew;
-
-create policy contract_crew_member_write on public.contract_crew
+create policy contract_client_proofs_member_write on public.contract_client_proofs
   for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
+  ) with check (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_write'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned')) and c.assigned_to = (select auth.uid()))))
   );
 
-drop policy if exists contract_crew_accountant_update on public.contract_crew;
+-- contract_reschedules / contract_addenda: chỉ ĐỌC từ trình duyệt (ghi đi qua
+-- route service role), nay theo phạm vi hợp đồng thay vì chỉ-chủ / cả-studio.
+drop policy if exists contract_reschedules_owner_read on public.contract_reschedules;
 
-create policy contract_crew_accountant_update on public.contract_crew
-  for update using (
-    (select public.studio_staff_role()) = 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    (select public.studio_staff_role()) = 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
+drop policy if exists contract_reschedules_member_read on public.contract_reschedules;
+
+create policy contract_reschedules_member_read on public.contract_reschedules
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
   );
 
--- contract_tasks — cổng /staff tích "xong việc".
-drop policy if exists contract_tasks_owner_all on public.contract_tasks;
-
-drop policy if exists contract_tasks_member_read on public.contract_tasks;
-
-create policy contract_tasks_member_read on public.contract_tasks
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
-
-drop policy if exists contract_tasks_member_write on public.contract_tasks;
-
-create policy contract_tasks_member_write on public.contract_tasks
-  for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  );
-
-drop policy if exists contract_tasks_accountant_update on public.contract_tasks;
-
-create policy contract_tasks_accountant_update on public.contract_tasks
-  for update using (
-    (select public.studio_staff_role()) = 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    (select public.studio_staff_role()) = 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  );
-
--- contract_products — cổng /staff đổi trạng thái việc hậu kỳ.
-drop policy if exists contract_products_owner_all on public.contract_products;
-
-drop policy if exists contract_products_member_read on public.contract_products;
-
-create policy contract_products_member_read on public.contract_products
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
-
-drop policy if exists contract_products_member_write on public.contract_products;
-
-create policy contract_products_member_write on public.contract_products
-  for all using (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    coalesce((select public.studio_staff_role()), '') <> 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  );
-
-drop policy if exists contract_products_accountant_update on public.contract_products;
-
-create policy contract_products_accountant_update on public.contract_products
-  for update using (
-    (select public.studio_staff_role()) = 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  )
-  with check (
-    (select public.studio_staff_role()) = 'accountant'
-    and exists (select 1 from public.studio_contracts c where c.id = contract_id)
-  );
-
--- ── 8) Bảng con chỉ-đọc: phụ lục, kế hoạch cưới ────────────────────────────
--- Ghi đi qua máy chủ (service-role) nên vẫn KHÔNG có policy ghi.
 drop policy if exists contract_addenda_member_read on public.contract_addenda;
 
 create policy contract_addenda_member_read on public.contract_addenda
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
+  for select using (
+    exists (select 1 from public.studio_contracts c where c.id = contract_id and (
+      (select public.is_admin())
+      or c.owner_id = (select public.studio_scope_owner('all_read'))
+      or (c.owner_id = (select public.studio_scope_owner('branch')) and c.branch_id = (select public.studio_my_branch()))
+      or (c.owner_id = (select public.studio_scope_owner('assigned'))
+          and (c.assigned_to = (select auth.uid()) or c.id = any ((select public.studio_my_product_contracts())::uuid[])))))
+  );
 
-drop policy if exists wedding_plans_member_read on public.wedding_plans;
-
-create policy wedding_plans_member_read on public.wedding_plans
-  for select using (exists (select 1 from public.studio_contracts c where c.id = contract_id));
-
--- ── 9) studio_crew: mọi thành viên đọc, chỉ cấp quản lý ghi ────────────────
+-- studio_crew (sổ thợ): mọi thành viên đọc được để chọn thợ cho hợp đồng; quản
+-- lý chi nhánh chỉ thấy thợ của cơ sở mình + thợ chưa gán cơ sở (thợ tự do dùng
+-- chung). Ghi: chủ, manager, và branch_manager với thợ của cơ sở mình — đúng
+-- nhóm MANAGERS của trang Nhân sự.
 drop policy if exists studio_crew_owner_all on public.studio_crew;
 
 drop policy if exists studio_crew_member_read on public.studio_crew;
 
 create policy studio_crew_member_read on public.studio_crew
   for select using (
-    owner_id = (select auth.uid())
-    or owner_id = (select public.studio_staff_owner())
-    or (select public.is_admin())
+    (select public.is_admin())
+    or owner_id = (select public.studio_scope_owner('all_read'))
+    or owner_id = (select public.studio_scope_owner('assigned'))
+    or (owner_id = (select public.studio_scope_owner('branch'))
+        and (branch_id = (select public.studio_my_branch()) or branch_id is null))
   );
 
-drop policy if exists studio_crew_manager_write on public.studio_crew;
+drop policy if exists studio_crew_member_write on public.studio_crew;
 
-create policy studio_crew_manager_write on public.studio_crew
+create policy studio_crew_member_write on public.studio_crew
   for all using (
-    owner_id = (select auth.uid())
-    or (select public.is_admin())
-    or (
-      owner_id = (select public.studio_staff_owner())
-      and (select public.studio_staff_role()) in ('manager', 'branch_manager')
-    )
-  )
-  with check (
-    owner_id = (select auth.uid())
-    or (select public.is_admin())
-    or (
-      owner_id = (select public.studio_staff_owner())
-      and (select public.studio_staff_role()) in ('manager', 'branch_manager')
-    )
+    (select public.is_admin())
+    or owner_id = (select public.studio_scope_owner('all_write'))
+    or (owner_id = (select public.studio_scope_owner('branch')) and branch_id = (select public.studio_my_branch()))
+  ) with check (
+    (select public.is_admin())
+    or owner_id = (select public.studio_scope_owner('all_write'))
+    or (owner_id = (select public.studio_scope_owner('branch')) and branch_id = (select public.studio_my_branch()))
   );
 

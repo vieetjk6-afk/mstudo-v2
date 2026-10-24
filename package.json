@@ -19,6 +19,7 @@
     "test:studio-export": "node --experimental-strip-types desktop/test/studio-export.mjs",
     "test:album-buttons": "node --experimental-strip-types desktop/test/album-buttons.mjs",
     "test:album-dislike": "node --experimental-strip-types desktop/test/album-dislike.mjs",
+    "test:album-selection-save": "node --experimental-strip-types desktop/test/album-selection-save.mjs",
     "test:album-subfolders": "node --experimental-strip-types desktop/test/album-subfolders.mjs",
     "test:drive-walk": "node --experimental-strip-types desktop/test/drive-walk.mjs",
     "test:local-walk": "node --experimental-strip-types desktop/test/local-walk.mjs",

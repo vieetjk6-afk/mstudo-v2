@@ -362,162 +362,171 @@ const left = sql(
 ).out.split("\n").pop();
 ok("…và cuốn theo cả người, dòng nối lẫn kho khuôn mặt (không để rác)", Number(left) === 0, `còn ${left}`);
 
-/* ── 6. Hợp đồng: vai trò, chi nhánh, tài khoản bị khoá ─────────────────────
+/* ── 6. Hợp đồng theo VAI TRÒ — migrations/phan_quyen_vai_tro_hop_dong.sql ──
  *
- * migrations/rls_vai_tro_chi_nhanh_hop_dong.sql chuyển luật phân quyền hợp đồng
- * từ code trang xuống RLS. Nhân viên nào cũng cầm anon key + JWT của mình gọi
- * thẳng PostgREST được, nên ở đây đóng đúng vai đó: role authenticated + uid của
- * từng người, KHÔNG qua app. Hai chiều đều phải kiểm: chặn đúng chỗ, và các luồng
- * thật (chủ, nhân viên lưu hạng mục / thu tiền, kế toán đánh dấu đã trả công)
- * vẫn chạy — chặn thừa là studio bấm Lưu rồi nhận lỗi RLS.
+ * Trình duyệt có anon key + JWT của nhân viên, nên mọi luật vai trò mà chỉ nằm
+ * trong route API đều lách được bằng một lệnh gọi PostgREST thẳng. Phần này chạy
+ * đúng những lệnh đó dưới role `authenticated` với uid của từng vai trò.
  */
-console.log("\n— Hợp đồng: vai trò & chi nhánh —");
+console.log("\n— Hợp đồng theo vai trò (gọi thẳng PostgREST) —");
+const U = (n) => `0000000${n}-0000-0000-0000-00000000000${n}`.slice(-36);
+const STAFF = U(3), BM = U(4), BM0 = U(5), ACC = U(6), MGR = U(7), OFF = U(8), MB = U(9);
+const BR1 = "b1000000-0000-0000-0000-000000000001";
+const BR2 = "b2000000-0000-0000-0000-000000000002";
+const C1 = "c1000000-0000-0000-0000-000000000001"; // BR1, giao cho STAFF
+const C2 = "c2000000-0000-0000-0000-000000000002"; // BR2, chưa giao ai
+const C3 = "c3000000-0000-0000-0000-000000000003"; // chưa gán cơ sở, giao cho OFF (đã khoá)
+const C4 = "c4000000-0000-0000-0000-000000000004"; // BR2, có hạng mục hậu kỳ giao cho STAFF
+const CB = "cb000000-0000-0000-0000-00000000000b"; // của studio B
+const CREW2 = "ce000000-0000-0000-0000-000000000002";
+const PROD4 = "cf000000-0000-0000-0000-000000000004";
 {
-  const ids = {
-    S: "51000000-0000-0000-0000-000000000001", // nhân viên của A
-    K: "51000000-0000-0000-0000-000000000002", // kế toán của A
-    M: "51000000-0000-0000-0000-000000000003", // Toàn quyền chi nhánh 1 của A
-    U: "51000000-0000-0000-0000-000000000004", // Toàn quyền chi nhánh CHƯA gán
-    X: "51000000-0000-0000-0000-000000000005", // nhân viên A đã bị KHOÁ
-    Q: "51000000-0000-0000-0000-000000000006", // quản lý toàn studio A
-    C: "51000000-0000-0000-0000-000000000007", // chủ studio C — bị khoá
-    CS: "51000000-0000-0000-0000-000000000008", // nhân viên (còn hoạt động) của C
-  };
-  const BR1 = "b1000000-0000-0000-0000-000000000001";
-  const BR2 = "b1000000-0000-0000-0000-000000000002";
-  const HD = {
-    A1: "c1000000-0000-0000-0000-000000000001", // A, chi nhánh 1
-    A2: "c1000000-0000-0000-0000-000000000002", // A, chi nhánh 2
-    A0: "c1000000-0000-0000-0000-000000000003", // A, chưa gán chi nhánh
-    B1: "c1000000-0000-0000-0000-000000000004", // studio B
-    C1: "c1000000-0000-0000-0000-000000000005", // studio C (chủ bị khoá)
-  };
-  const CREW_A2 = "c2000000-0000-0000-0000-000000000002";
-  const seed2 = sql(`
+  const seedRoles = sql(`
 insert into auth.users (id, email) values
-  ('${ids.S}','s@a.vn'), ('${ids.K}','k@a.vn'), ('${ids.M}','m@a.vn'), ('${ids.U}','u@a.vn'),
-  ('${ids.X}','x@a.vn'), ('${ids.Q}','q@a.vn'), ('${ids.C}','c@x.vn'), ('${ids.CS}','cs@c.vn');
-insert into public.studio_branches (id, owner_id, name) values ('${BR1}','${A}','Quận 1'), ('${BR2}','${A}','Quận 7');
-update public.profiles set studio_owner_id = '${A}', studio_role = 'staff' where id = '${ids.S}';
-update public.profiles set studio_owner_id = '${A}', studio_role = 'accountant' where id = '${ids.K}';
-update public.profiles set studio_owner_id = '${A}', studio_role = 'branch_manager', studio_branch_id = '${BR1}' where id = '${ids.M}';
-update public.profiles set studio_owner_id = '${A}', studio_role = 'branch_manager' where id = '${ids.U}';
-update public.profiles set studio_owner_id = '${A}', studio_role = 'staff', is_active = false where id = '${ids.X}';
-update public.profiles set studio_owner_id = '${A}', studio_role = 'manager' where id = '${ids.Q}';
-update public.profiles set is_active = false where id = '${ids.C}';
-update public.profiles set studio_owner_id = '${ids.C}', studio_role = 'manager' where id = '${ids.CS}';
-insert into public.studio_contracts (id, owner_id, title, client_token, branch_id) values
-  ('${HD.A1}','${A}','HĐ Q1','tk-a1','${BR1}'), ('${HD.A2}','${A}','HĐ Q7','tk-a2','${BR2}'),
-  ('${HD.A0}','${A}','HĐ chưa gán','tk-a0',null), ('${HD.B1}','${B}','HĐ của B','tk-b1',null),
-  ('${HD.C1}','${ids.C}','HĐ của C','tk-c1',null);
-insert into public.contract_items (contract_id, name, qty, unit_price, position) values
-  ('${HD.A1}','Gói Q1',1,10000000,0), ('${HD.A2}','Gói Q7',1,20000000,0),
-  ('${HD.A0}','Gói chung',1,5000000,0), ('${HD.B1}','Gói B',1,30000000,0);
+  ('${STAFF}','staff@a.vn'), ('${BM}','bm@a.vn'), ('${BM0}','bm0@a.vn'), ('${ACC}','acc@a.vn'),
+  ('${MGR}','mgr@a.vn'), ('${OFF}','off@a.vn'), ('${MB}','mgr@b.vn');
+insert into public.studio_branches (id, owner_id, name) values ('${BR1}','${A}','Quận 1'), ('${BR2}','${A}','Gò Vấp');
+update public.profiles set studio_owner_id = '${A}', studio_role = 'staff' where id = '${STAFF}';
+update public.profiles set studio_owner_id = '${A}', studio_role = 'branch_manager', studio_branch_id = '${BR1}' where id = '${BM}';
+update public.profiles set studio_owner_id = '${A}', studio_role = 'branch_manager' where id = '${BM0}';
+update public.profiles set studio_owner_id = '${A}', studio_role = 'accountant' where id = '${ACC}';
+update public.profiles set studio_owner_id = '${A}', studio_role = 'manager' where id = '${MGR}';
+update public.profiles set studio_owner_id = '${A}', studio_role = 'staff', is_active = false where id = '${OFF}';
+update public.profiles set studio_owner_id = '${B}', studio_role = 'manager' where id = '${MB}';
+insert into public.studio_contracts (id, owner_id, title, client_token, branch_id, assigned_to, code) values
+  ('${C1}','${A}','HĐ C1','tok-c1','${BR1}','${STAFF}','HD-01-2026-001'),
+  ('${C2}','${A}','HĐ C2','tok-c2','${BR2}', null,     'HD-01-2026-002'),
+  ('${C3}','${A}','HĐ C3','tok-c3', null,   '${OFF}',  'HD-01-2026-003'),
+  ('${C4}','${A}','HĐ C4','tok-c4','${BR2}', null,     'HD-01-2026-004'),
+  ('${CB}','${B}','HĐ B', 'tok-cb', null,    null,     'HD-01-2026-001');
 insert into public.contract_payments (contract_id, amount, kind) values
-  ('${HD.A1}',1000000,'deposit'), ('${HD.A2}',2000000,'deposit'), ('${HD.B1}',3000000,'deposit');
-insert into public.contract_crew (id, contract_id, name, phone, role, salary, position) values
-  ('${CREW_A2}','${HD.A2}','Thợ Q7','0900000002','photographer',1500000,0);
-insert into public.studio_crew (owner_id, name, phone, role) values ('${A}','Thợ tự do','0900000009','photographer');
+  ('${C1}', 1000000, 'deposit'), ('${C2}', 2000000, 'deposit'), ('${C4}', 3000000, 'deposit');
+insert into public.contract_crew (id, contract_id, name, phone, salary) values ('${CREW2}','${C2}','Thợ Gò Vấp','0900000002', 800000);
+insert into public.contract_products (id, contract_id, name, assigned_to) values ('${PROD4}','${C4}','Chỉnh ảnh','${STAFF}');
+insert into public.studio_crew (owner_id, name, phone, branch_id) values
+  ('${A}','Thợ Q1','0911000001','${BR1}'), ('${A}','Thợ GV','0911000002','${BR2}'), ('${A}','Thợ tự do','0911000003', null);
 `);
-  ok("gieo được studio A (2 chi nhánh, đủ vai trò), studio B, studio C (chủ bị khoá)", seed2.ok, seed2.out.slice(0, 400));
+  ok("gieo được studio A có 2 chi nhánh, 6 vai trò, 4 hợp đồng", seedRoles.ok, seedRoles.out.slice(0, 400));
+}
 
-  /** Đếm số dòng một người THẤY — dòng cuối của psql là kết quả count. */
-  const seen = (uid, q) => asStudio(uid, q).out.split("\n").pop();
-  // Sắp ở phía JS (thứ tự collation của Postgres tuỳ máy), và '-' khi không thấy
-  // gì: dòng rỗng bị trim mất thì dòng cuối lại là "SET" của lệnh trước.
-  const contractsSeen = (uid) => {
-    const v = seen(uid, `select coalesce(string_agg(title, '|'), '-') from public.studio_contracts;`);
-    return v === "-" ? "" : v.split("|").sort().join(",");
-  };
+/** Giá trị dòng cuối (psql in thẻ lệnh "SET" trước kết quả). */
+const val = (uid, body) => asStudio(uid, body).out.split("\n").pop().trim();
+// Bọc trong [ ] để "không thấy gì" vẫn là một dòng có thật, không lẫn với thẻ "SET".
+const seen = (uid) =>
+  val(uid, `select '[' || coalesce(string_agg(title, ',' order by title), '') || ']' from public.studio_contracts;`).slice(1, -1);
+const titleOf = (id) => sql(`select title from public.studio_contracts where id = '${id}';`).out.split("\n").pop().trim();
+const pay = (uid, cid, extra = "") =>
+  asStudio(uid, `insert into public.contract_payments (contract_id, amount, kind) values ('${cid}', ${extra || "500000, 'installment'"});`);
 
-  // Chủ vẫn thấy đủ — vá này không được làm hỏng luồng chủ studio.
-  ok("chủ A thấy đủ 3 hợp đồng của mình, không thấy của B", contractsSeen(A) === "HĐ Q1,HĐ Q7,HĐ chưa gán", contractsSeen(A));
+// is_active + ranh giới studio
+ok("chủ studio A thấy đủ 4 hợp đồng của mình (không thấy của B)", seen(A) === "HĐ C1,HĐ C2,HĐ C3,HĐ C4", seen(A));
+ok("tài khoản đã KHOÁ không còn thấy hợp đồng nào (kể cả hợp đồng giao cho mình)", seen(OFF) === "", seen(OFF));
+ok("…và is_studio_member trả false cho tài khoản đã khoá", val(OFF, `select public.is_studio_member('${A}');`) === "f");
+sql(`update public.profiles set is_active = false where id = '${B}';`);
+ok("chủ studio bị khoá → quản lý của studio đó cũng mất quyền", seen(MB) === "", seen(MB));
+sql(`update public.profiles set is_active = true where id = '${B}';`);
+ok("…mở khoá lại thì quản lý thấy lại hợp đồng của studio mình", seen(MB) === "HĐ B", seen(MB));
 
-  // Nhân viên của A không thấy studio B — ở cả bảng cha lẫn bảng con.
-  ok("nhân viên A thấy hợp đồng của A, KHÔNG thấy của B", contractsSeen(ids.S) === "HĐ Q1,HĐ Q7,HĐ chưa gán", contractsSeen(ids.S));
+// staff: chỉ hợp đồng được giao (+ đọc hợp đồng có việc hậu kỳ giao cho mình)
+ok("nhân viên chỉ thấy hợp đồng giao cho mình + hợp đồng có hạng mục hậu kỳ của mình", seen(STAFF) === "HĐ C1,HĐ C4", seen(STAFF));
+ok(
+  "nhân viên KHÔNG đọc được khoản thu của hợp đồng không giao cho mình",
+  val(STAFF, `select count(*) from public.contract_payments where contract_id = '${C2}';`) === "0"
+);
+r = asStudio(STAFF, `update public.studio_contracts set title = 'Bị sửa' where id = '${C2}';`);
+ok("nhân viên KHÔNG sửa được hợp đồng không giao cho mình", r.ok && titleOf(C2) === "HĐ C2", r.out.slice(0, 200));
+ok("nhân viên KHÔNG chèn được khoản thu vào hợp đồng không giao cho mình", !pay(STAFF, C2).ok);
+ok("…kể cả hợp đồng chỉ được ĐỌC vì có việc hậu kỳ (C4)", !pay(STAFF, C4).ok);
+ok("nhân viên KHÔNG ghi được khoản HOÀN TIỀN (kind = refund)", !pay(STAFF, C1, "-200000, 'refund'").ok);
+r = asStudio(STAFF, `update public.studio_contracts set status = 'cancelled' where id = '${C1}';`);
+ok("nhân viên KHÔNG huỷ được hợp đồng (chỉ chủ studio)", !r.ok && /contract_cancel_owner_only/.test(r.out), r.out.slice(0, 200));
+r = asStudio(STAFF, `update public.studio_contracts set assigned_to = '${MGR}' where id = '${C1}';`);
+ok("nhân viên KHÔNG chuyển được hợp đồng của mình sang người khác", !r.ok);
+r = asStudio(STAFF, `insert into public.studio_contracts (owner_id, title, client_token) values ('${A}', 'Không giao ai', 'tok-s0');`);
+ok("nhân viên KHÔNG tạo được hợp đồng không giao cho mình", !r.ok);
+// Những việc màn hợp đồng / cổng /staff vẫn phải làm được.
+r = asStudio(STAFF, `update public.studio_contracts set title = 'HĐ C1 sửa' where id = '${C1}';`);
+ok("nhân viên VẪN sửa được hợp đồng giao cho mình", r.ok && titleOf(C1) === "HĐ C1 sửa", r.out.slice(0, 200));
+ok("…VẪN ghi được lần thu trên hợp đồng đó (màn hợp đồng ghi thẳng)", pay(STAFF, C1).ok);
+r = asStudio(STAFF, `insert into public.studio_contracts (owner_id, title, client_token, assigned_to) values ('${A}', 'HĐ nhân viên tạo', 'tok-s1', '${STAFF}') returning title;`);
+ok("…VẪN tạo được hợp đồng giao cho chính mình (NewContractForm)", r.ok, r.out.slice(0, 200));
+r = asStudio(STAFF, `update public.contract_products set status = 'in_progress' where id = '${PROD4}';`);
+ok(
+  "…VẪN đẩy được trạng thái hạng mục hậu kỳ giao cho mình (cổng /staff)",
+  r.ok && sql(`select status from public.contract_products where id = '${PROD4}';`).out.endsWith("in_progress"),
+  r.out.slice(0, 200)
+);
+ok(
+  "…và mã hợp đồng mới đếm trên TOÀN studio, không chỉ phần mình thấy (không cấp trùng mã)",
+  val(STAFF, `select public.contract_code_count('${A}', 'HD-01-2026-');`) === "4"
+);
+ok(
+  "…nhưng không đếm được hợp đồng của studio KHÁC",
+  !asStudio(STAFF, `select public.contract_code_count('${B}', 'HD-');`).ok
+);
+
+// branch_manager: chỉ chi nhánh của mình
+ok("quản lý chi nhánh Q1 chỉ thấy hợp đồng của Q1", seen(BM) === "HĐ C1 sửa", seen(BM));
+ok("quản lý chi nhánh CHƯA gán cơ sở không thấy hợp đồng nào (fail-closed)", seen(BM0) === "", seen(BM0));
+ok(
+  "quản lý chi nhánh KHÔNG đọc được khoản thu của cơ sở khác",
+  val(BM, `select count(*) from public.contract_payments where contract_id = '${C2}';`) === "0"
+);
+r = asStudio(BM, `update public.studio_contracts set title = 'Bị sửa' where id = '${C2}';`);
+ok("quản lý chi nhánh KHÔNG sửa được hợp đồng cơ sở khác", r.ok && titleOf(C2) === "HĐ C2");
+ok("quản lý chi nhánh KHÔNG chèn được khoản thu cho cơ sở khác", !pay(BM, C2).ok);
+r = asStudio(BM, `update public.studio_contracts set branch_id = '${BR2}' where id = '${C1}';`);
+ok("quản lý chi nhánh KHÔNG đẩy được hợp đồng sang cơ sở khác", !r.ok);
+r = asStudio(BM, `insert into public.studio_contracts (owner_id, title, client_token, branch_id) values ('${A}', 'HĐ GV', 'tok-b2', '${BR2}');`);
+ok("quản lý chi nhánh KHÔNG tạo được hợp đồng cho cơ sở khác", !r.ok);
+r = asStudio(BM, `update public.studio_contracts set status = 'cancelled' where id = '${C1}';`);
+ok("quản lý chi nhánh KHÔNG huỷ được hợp đồng", !r.ok && /contract_cancel_owner_only/.test(r.out), r.out.slice(0, 200));
+ok("quản lý chi nhánh VẪN ghi được lần thu cho hợp đồng cơ sở mình", pay(BM, C1).ok);
+r = asStudio(BM, `insert into public.studio_contracts (owner_id, title, client_token, branch_id) values ('${A}', 'HĐ Q1 mới', 'tok-b1', '${BR1}');`);
+ok("…VẪN tạo được hợp đồng cho cơ sở mình", r.ok, r.out.slice(0, 200));
+ok(
+  "quản lý chi nhánh thấy thợ của cơ sở mình + thợ tự do, không thấy thợ cơ sở khác",
+  val(BM, `select string_agg(name, ',' order by name) from public.studio_crew;`) === "Thợ Q1,Thợ tự do"
+);
+r = asStudio(BM, `insert into public.studio_crew (owner_id, name, phone, branch_id) values ('${A}', 'Lén', '0911999999', '${BR2}');`);
+ok("quản lý chi nhánh KHÔNG thêm được thợ vào cơ sở khác", !r.ok);
+
+// accountant: đọc toàn studio, không ghi — trừ đánh dấu đã trả lương
+ok("kế toán ĐỌC được toàn bộ hợp đồng (màn Thu chi cần)", seen(ACC).split(",").length === seen(A).split(",").length, seen(ACC));
+ok("kế toán KHÔNG chèn được khoản thu", !pay(ACC, C2).ok);
+r = asStudio(ACC, `update public.studio_contracts set title = 'Bị sửa' where id = '${C2}';`);
+ok("kế toán KHÔNG sửa được hợp đồng", r.ok && titleOf(C2) === "HĐ C2");
+r = asStudio(ACC, `update public.contract_crew set paid = true, paid_at = now() where id = '${CREW2}';`);
+ok(
+  "kế toán VẪN đánh dấu được đã trả lương (Bảng lương ghi thẳng)",
+  r.ok && sql(`select paid from public.contract_crew where id = '${CREW2}';`).out.endsWith("t"),
+  r.out.slice(0, 200)
+);
+r = asStudio(ACC, `update public.contract_crew set salary = 99000000 where id = '${CREW2}';`);
+ok("…nhưng KHÔNG sửa được tiền lương", !r.ok && /payroll_paid_only/.test(r.out), r.out.slice(0, 200));
+
+// manager: toàn studio, trừ huỷ / hoàn tiền
+ok("quản lý thấy toàn studio", seen(MGR) === seen(A), seen(MGR));
+ok("quản lý ghi được lần thu", pay(MGR, C2).ok);
+ok("quản lý KHÔNG ghi được khoản hoàn tiền", !pay(MGR, C2, "-100000, 'refund'").ok);
+r = asStudio(MGR, `update public.studio_contracts set status = 'cancelled' where id = '${C2}';`);
+ok("quản lý KHÔNG huỷ được hợp đồng", !r.ok && /contract_cancel_owner_only/.test(r.out));
+
+// chủ studio: huỷ + hoàn tiền
+ok("chủ studio ghi được khoản hoàn tiền", pay(A, C2, "-100000, 'refund'").ok);
+r = asStudio(A, `update public.studio_contracts set status = 'cancelled' where id = '${C2}';`);
+ok("chủ studio huỷ được hợp đồng", r.ok && sql(`select status from public.studio_contracts where id = '${C2}';`).out.endsWith("cancelled"), r.out.slice(0, 200));
+r = asStudio(MGR, `update public.studio_contracts set title = 'HĐ C2 đã huỷ' where id = '${C2}';`);
+ok("…và quản lý VẪN sửa được hợp đồng ĐÃ huỷ (chốt chỉ chặn lúc chuyển sang huỷ)", r.ok && titleOf(C2) === "HĐ C2 đã huỷ", r.out.slice(0, 200));
+
+// initPlan: hàm "người gọi là ai" tính MỘT lần mỗi câu, không phải mỗi dòng.
+{
+  const plan = asStudio(STAFF, `explain (costs off) select * from public.contract_payments;`).out;
+  const filters = plan.split("\n").filter((l) => /Filter:/.test(l)).join("\n");
   ok(
-    "nhân viên A không đọc được hạng mục / khoản thu của B",
-    seen(ids.S, `select (select count(*) from public.contract_items where contract_id='${HD.B1}') + (select count(*) from public.contract_payments where contract_id='${HD.B1}');`) === "0"
-  );
-  r = asStudio(ids.S, `insert into public.contract_items (contract_id, name, qty, unit_price, position) values ('${HD.B1}','Lén',1,1,9);`);
-  ok("nhân viên A không chèn được hạng mục vào hợp đồng của B", !r.ok);
-
-  // Luồng thật của nhân viên: lưu hạng mục, ghi / gỡ khoản thu, xoá hợp đồng.
-  r = asStudio(ids.S, `insert into public.contract_items (contract_id, name, qty, unit_price, position) values ('${HD.A0}','Album thêm',1,2000000,1);`);
-  ok("nhân viên A lưu được hạng mục (luồng ContractEditor)", r.ok, r.out.slice(0, 300));
-  r = asStudio(ids.S, `insert into public.contract_payments (id, contract_id, amount, kind) values ('c3000000-0000-0000-0000-000000000001','${HD.A0}',500000,'deposit');
-delete from public.contract_payments where id = 'c3000000-0000-0000-0000-000000000001';`);
-  ok("nhân viên A ghi rồi gỡ được khoản thu", r.ok, r.out.slice(0, 300));
-
-  // Toàn quyền chi nhánh: chỉ chi nhánh của mình.
-  ok("Toàn quyền chi nhánh Q1 CHỈ thấy hợp đồng Q1", contractsSeen(ids.M) === "HĐ Q1", contractsSeen(ids.M));
-  ok(
-    "…không đọc được hạng mục / khoản thu / nhân sự của Q7",
-    seen(ids.M, `select (select count(*) from public.contract_items where contract_id='${HD.A2}') + (select count(*) from public.contract_payments where contract_id='${HD.A2}') + (select count(*) from public.contract_crew where contract_id='${HD.A2}');`) === "0"
-  );
-  asStudio(ids.M, `update public.studio_contracts set title = 'Bị đổi' where id = '${HD.A2}';`);
-  ok("…không sửa được hợp đồng Q7 (đọc lại bằng chủ)", contractsSeen(A).includes("HĐ Q7"));
-  r = asStudio(ids.M, `insert into public.contract_items (contract_id, name, qty, unit_price, position) values ('${HD.A2}','Lén',1,1,9);`);
-  ok("…không chèn được hạng mục vào hợp đồng Q7", !r.ok);
-  r = asStudio(ids.M, `update public.studio_contracts set branch_id = '${BR2}' where id = '${HD.A1}';`);
-  ok("…không đẩy được hợp đồng của mình sang Q7 (WITH CHECK)", !r.ok);
-  r = asStudio(ids.M, `insert into public.contract_items (contract_id, name, qty, unit_price, position) values ('${HD.A1}','Ảnh phóng',1,800000,1);
-update public.studio_contracts set title = 'HĐ Q1' where id = '${HD.A1}';`);
-  ok("…nhưng vẫn lưu hạng mục & sửa hợp đồng Q1 bình thường", r.ok, r.out.slice(0, 300));
-  // "Tạo hợp đồng" từ yêu cầu đặt lịch không gửi branch_id — trigger phải ghim.
-  r = asStudio(ids.M, `insert into public.studio_contracts (owner_id, title, client_token) values ('${A}','Từ đặt lịch','tk-m-new') returning branch_id;`);
-  ok("…tạo hợp đồng KHÔNG kèm chi nhánh → tự ghim vào Q1 (luồng BookingsView)", r.ok && r.out.includes(BR1), r.out.slice(0, 300));
-
-  // Chưa gán chi nhánh: giống forcedBranchScope "none" — chỉ phần chưa gán.
-  ok("Toàn quyền chi nhánh CHƯA gán chỉ thấy hợp đồng chưa gán (không bao giờ toàn studio)", contractsSeen(ids.U) === "HĐ chưa gán", contractsSeen(ids.U));
-
-  // Quản lý toàn studio: thấy cả hai chi nhánh.
-  ok("quản lý toàn studio thấy cả Q1 lẫn Q7", contractsSeen(ids.Q).includes("HĐ Q1") && contractsSeen(ids.Q).includes("HĐ Q7"), contractsSeen(ids.Q));
-
-  // Kế toán: đọc được tiền, không tự ghi tiền / sửa hợp đồng; đánh dấu đã trả công được.
-  ok(
-    "kế toán ĐỌC được hợp đồng & khoản thu (màn Thu chi)",
-    seen(ids.K, `select count(*) from public.contract_payments p join public.studio_contracts c on c.id = p.contract_id;`) === "2"
-  );
-  r = asStudio(ids.K, `insert into public.contract_payments (contract_id, amount, kind) values ('${HD.A1}',9999999,'deposit');`);
-  ok("kế toán KHÔNG tự thêm khoản thu được", !r.ok);
-  r = asStudio(ids.K, `insert into public.contract_crew (contract_id, name, phone, role, salary, position) values ('${HD.A1}','Kế toán','0911111111','photographer',9000000,5);`);
-  ok("kế toán KHÔNG tự thêm mình vào bảng tiền công được", !r.ok);
-  asStudio(ids.K, `update public.studio_contracts set title = 'KT sửa' where id = '${HD.A1}';`);
-  ok("kế toán KHÔNG sửa được hợp đồng (đọc lại bằng chủ)", !contractsSeen(A).includes("KT sửa"));
-  asStudio(ids.K, `update public.contract_crew set paid = true, paid_at = now() where id = '${CREW_A2}';`);
-  ok(
-    "kế toán đánh dấu được 'đã trả công' (luồng Đối soát tiền công)",
-    seen(A, `select paid from public.contract_crew where id = '${CREW_A2}';`) === "t"
-  );
-
-  // Sổ thợ: ai cũng đọc, chỉ cấp quản lý ghi.
-  ok("nhân viên đọc được sổ thợ (ô chọn thợ trong hợp đồng)", seen(ids.S, `select count(*) from public.studio_crew;`) === "1");
-  r = asStudio(ids.S, `insert into public.studio_crew (owner_id, name, phone) values ('${A}','Lén','0922222222');`);
-  ok("nhân viên KHÔNG thêm được thợ vào sổ", !r.ok);
-  r = asStudio(ids.M, `insert into public.studio_crew (owner_id, name, phone, branch_id) values ('${A}','Thợ Q1','0933333333','${BR1}');`);
-  ok("Toàn quyền chi nhánh thêm được thợ (luồng CrewManager)", r.ok, r.out.slice(0, 300));
-
-  // Tài khoản bị khoá: mất quyền NGAY ở RLS, không đợi JWT hết hạn.
-  ok("nhân viên bị KHOÁ không thấy hợp đồng nào", contractsSeen(ids.X) === "");
-  ok(
-    "…không thấy hạng mục, khoản thu, sổ thợ, bảng giá",
-    seen(ids.X, `select (select count(*) from public.contract_items) + (select count(*) from public.contract_payments) + (select count(*) from public.studio_crew) + (select count(*) from public.studio_branches);`) === "0"
-  );
-  r = asStudio(ids.X, `insert into public.studio_contracts (owner_id, title, client_token) values ('${A}','Lén','tk-x');`);
-  ok("…và không tạo được hợp đồng", !r.ok);
-  ok("nhân viên của CHỦ bị khoá cũng không thấy gì (như requireStudio)", contractsSeen(ids.CS) === "", contractsSeen(ids.CS));
-
-  // initPlan: hàm ngữ cảnh phải nằm trong (select …) để Postgres tính MỘT lần.
-  // Postgres in lại policy dạng `( SELECT studio_staff_role() AS studio_staff_role)`;
-  // mọi lần gọi hàm phải đứng ngay sau SELECT — gọi trần là tính lại từng dòng.
-  const qual = sql(`select string_agg(qual || ' ' || coalesce(with_check, ''), ' ') from pg_policies where tablename = 'studio_contracts';`).out;
-  const calls = qual.match(/studio_staff_\w+\(\)/g) ?? [];
-  const wrapped = qual.match(/SELECT studio_staff_\w+\(\)/g) ?? [];
-  ok(
-    "policy hợp đồng gọi hàm ngữ cảnh dạng (select …) — tính một lần mỗi câu",
-    calls.length > 0 && calls.length === wrapped.length,
-    `${wrapped.length}/${calls.length} lần gọi được bọc: ${qual.slice(0, 300)}`
+    "policy dùng dạng initPlan: hàm vai trò nằm trong InitPlan, không nằm trong Filter từng dòng",
+    /InitPlan/.test(plan) && !/studio_scope_owner|studio_my_branch|is_admin\(\)/.test(filters),
+    plan.slice(0, 1200)
   );
 }
 

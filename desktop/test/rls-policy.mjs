@@ -18,7 +18,7 @@
  *
  * Đọc thẳng supabase/schema.sql — nguồn sự thật của lược đồ.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 
 const sql = readFileSync(new URL("../../supabase/schema.sql", import.meta.url), "utf8");
 
@@ -102,57 +102,86 @@ const daBat = new Set(
 const thieu = [...bang].filter((t) => !daBat.has(t));
 ok(`mọi bảng đều bật RLS (${bang.size} bảng)`, thieu.length === 0, `chưa bật: ${thieu.join(", ")}`);
 
-// ── 5. Hợp đồng: hàng rào vai trò / chi nhánh nằm ở RLS ───────────────────
-// migrations/rls_vai_tro_chi_nhanh_hop_dong.sql là chỗ DUY NHẤT chặn nhân viên
-// gọi thẳng PostgREST vượt quyền. Ba thứ dễ bị "dọn" mất trong một lần sửa
-// tưởng vô hại: điều kiện is_active, việc xoá policy `*_owner_all` cũ (policy
-// permissive cộng bằng OR — còn sót một câu là cả file vô nghĩa), và dạng
-// (select …) để policy không chạy lại hàm cho từng dòng. Bài chạy thật nằm ở
-// desktop/test/rls-luu-nguoi.mjs; đây là chốt văn bản, chạy không cần Postgres.
-{
-  const mig = readFileSync(
-    new URL("../../supabase/migrations/rls_vai_tro_chi_nhanh_hop_dong.sql", import.meta.url),
-    "utf8"
-  );
-  const ham = (ten) =>
-    new RegExp(`create or replace function public\\.${ten}\\([^)]*\\)[\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$`, "i").exec(mig)?.[1] ?? "";
+// ── 5. Họ hợp đồng: luật vai trò phải nằm ở DATABASE, không chỉ ở route API ──
+// Lỗ hổng thật: policy chỉ hỏi is_studio_member(owner_id), nên nhân viên / kế
+// toán / quản lý chi nhánh gọi thẳng PostgREST là đọc mọi hợp đồng, huỷ hợp
+// đồng, chèn khoản thu. Hành vi từng vai trò được kiểm trên Postgres thật ở
+// desktop/test/rls-luu-nguoi.mjs; ở đây chốt những thứ đọc được từ văn bản.
+const SUPA = new URL("../../supabase/", import.meta.url);
+const VAI_TRO = "migrations/phan_quyen_vai_tro_hop_dong.sql";
+const vaiTro = readFileSync(new URL(VAI_TRO, SUPA), "utf8");
 
-  const owner = ham("studio_staff_owner");
-  ok(
-    "studio_staff_owner chỉ nhận nhân viên CÒN hoạt động của chủ CÒN hoạt động",
-    /me\.is_active/.test(owner) && /o\.is_active/.test(owner),
-    `thân hàm: ${owner.trim().replace(/\s+/g, " ")}`
-  );
-  ok(
-    "is_studio_member đi qua studio_staff_owner (hưởng is_active)",
-    /studio_staff_owner\(\)/.test(ham("is_studio_member")) && !/studio_owner_id\s*=\s*target/.test(ham("is_studio_member"))
-  );
-
-  const BANG = [
-    "studio_contracts", "contract_items", "contract_payments", "contract_payment_plan",
-    "contract_edit_requests", "contract_equipment", "contract_quote_options",
-    "contract_crew", "contract_tasks", "contract_products", "studio_crew",
-  ];
-  for (const t of BANG) {
-    ok(
-      `${t}: policy mở rộng cũ ${t}_owner_all bị xoá`,
-      new RegExp(`drop policy if exists ${t}_owner_all on public\\.${t};`).test(mig)
-    );
+// 5a. MỌI bản khai is_studio_member đều kiểm is_active — chạy lại một file cũ
+//     không được trả tài khoản đã khoá về quyền cũ.
+const nguon = [
+  "schema.sql",
+  ...readdirSync(new URL("migrations/", SUPA)).filter((f) => f.endsWith(".sql")).map((f) => `migrations/${f}`),
+];
+for (const f of nguon) {
+  const text = readFileSync(new URL(f, SUPA), "utf8");
+  for (const m of text.matchAll(/function public\.is_studio_member\(target uuid\)[\s\S]*?\$\$([\s\S]*?)\$\$/g)) {
+    ok(`is_studio_member trong ${f} chặn tài khoản đã khoá (is_active)`, /me\.is_active/.test(m[1]) && /o\.is_active/.test(m[1]));
   }
+}
 
-  // Mọi lần gọi hàm ngữ cảnh trong policy phải nằm trong (select …).
-  const policyText = [...mig.matchAll(/create policy[\s\S]*?;/gi)].map((m) => m[0]).join("\n");
-  const tran = [...policyText.matchAll(/(\(select\s+)?public\.(studio_staff_\w+|is_admin)\(\)/gi)].filter((m) => !m[1]);
+// 5b. Mỗi bảng của họ hợp đồng có policy đọc + ghi theo vai trò.
+const vtPolicies = [...vaiTro.matchAll(/create policy\s+(\w+)\s+on\s+public\.(\w+)([\s\S]*?);/gi)].map(([, ten, bang, than]) => ({ ten, bang, than }));
+const HO_HOP_DONG = [
+  "studio_contracts", "contract_items", "contract_crew", "contract_edit_requests", "contract_payments",
+  "contract_payment_plan", "contract_tasks", "contract_equipment", "contract_products",
+  "contract_quote_options", "contract_client_proofs", "studio_crew",
+];
+for (const t of HO_HOP_DONG) {
   ok(
-    "policy gọi hàm ngữ cảnh dạng (select …) — initPlan, không chạy lại từng dòng",
-    tran.length === 0,
-    `gọi trần: ${tran.map((m) => m[0]).join(", ")}`
-  );
-  ok(
-    "branch_manager bị ghim theo studio_staff_branch()",
-    /branch_id is not distinct from \(select public\.studio_staff_branch\(\)\)/.test(policyText)
+    `${t} có policy đọc + ghi theo vai trò`,
+    vtPolicies.some((p) => p.bang === t && p.ten === `${t}_member_read`) &&
+      vtPolicies.some((p) => p.bang === t && p.ten === `${t}_member_write`)
   );
 }
+for (const t of ["contract_reschedules", "contract_addenda"]) {
+  ok(`${t} chỉ có policy ĐỌC theo vai trò (ghi đi qua service role)`, vtPolicies.filter((p) => p.bang === t).map((p) => p.ten).join() === `${t}_member_read`);
+}
+
+// 5c. Không còn "mọi thành viên làm được mọi thứ".
+ok(
+  "policy mới không dùng is_studio_member (cho mọi thành viên mọi quyền)",
+  vtPolicies.every((p) => !/is_studio_member/.test(p.than))
+);
+const ghi = vtPolicies.filter((p) => p.ten.endsWith("_member_write")).map((p) => p.than).join("\n");
+ok("policy GHI không mở cho kế toán (năng lực all_write không gồm accountant)", !/'all_read'|'accountant'|'member'/.test(ghi));
+ok(
+  "quản lý chi nhánh bị ghim theo branch_id ở mọi policy hợp đồng",
+  vtPolicies.filter((p) => HO_HOP_DONG.includes(p.bang) && /_member_/.test(p.ten)).every((p) => /branch_id = \(select public\.studio_my_branch\(\)\)/.test(p.than))
+);
+ok(
+  "nhân viên chỉ ghi được hợp đồng giao cho mình",
+  vtPolicies.filter((p) => p.ten.endsWith("_member_write") && p.bang !== "studio_crew").every((p) => /assigned_to = \(select auth\.uid\(\)\)/.test(p.than))
+);
+const thu = vtPolicies.find((p) => p.ten === "contract_payments_member_write");
+ok(
+  "khoản hoàn tiền / số âm chỉ chủ studio ghi được",
+  !!thu && /kind is distinct from 'refund'/.test(thu.than) && /amount, 0\) >= 0/.test(thu.than) && /studio_scope_owner\('owner'\)/.test(thu.than)
+);
+ok(
+  "huỷ hợp đồng chỉ chủ studio — trigger trên studio_contracts",
+  /before insert or update of status on public\.studio_contracts/.test(vaiTro) && /contract_cancel_owner_only/.test(vaiTro)
+);
+
+// 5d. Dạng initPlan: mọi lời gọi "người gọi là ai" trong policy phải bọc (select …).
+for (const p of vtPolicies) {
+  const tran = p.than.replace(/\(select (public\.\w+\([^()]*\)|auth\.uid\(\))(::uuid\[\])?\)/g, "");
+  ok(
+    `policy ${p.bang}.${p.ten} gọi hàm vai trò dạng (select …) — tính một lần mỗi câu`,
+    !/(auth\.uid\(\)|is_admin\(\)|studio_scope_owner\(|studio_my_branch\(|studio_my_product_contracts\()/.test(tran),
+    `còn lời gọi trần: ${(tran.match(/(auth\.uid\(\)|is_admin\(\)|studio_scope_owner\([^)]*\)|studio_my_branch\(\)|studio_my_product_contracts\(\))/) || [""])[0]}`
+  );
+}
+
+// 5e. File này phải chạy CUỐI: nó thay policy và hàm mà các file trước tạo.
+const build = readFileSync(new URL("build-setup-all.mjs", SUPA), "utf8");
+const order = build.slice(build.indexOf("const ORDER = ["), build.indexOf("];", build.indexOf("const ORDER = [")));
+const cuoi = [...order.matchAll(/\["([^"]+)"/g)].pop()?.[1];
+ok(`${VAI_TRO} đứng cuối ORDER`, cuoi === VAI_TRO, `đang cuối: ${cuoi}`);
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

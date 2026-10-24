@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIp } from "@/lib/rate-limit";
 import { excludeDisliked } from "@/lib/album-dislike";
 import { verifyAlbumAccess } from "@/lib/album-access";
-import { chunk } from "@/lib/photos";
+import { chunk, diffRows, onlyUuids, type SavedRow } from "@/lib/album-selection-save";
 import { phanLoaiLoi } from "@/lib/pg-loi";
 
 export const dynamic = "force-dynamic";
@@ -68,149 +68,159 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     return NextResponse.json({ error: "limit_exceeded" }, { status: 400 });
   }
 
-  // Chuẩn hoá tên khách + ghi chú MỘT lần ở đây (cắt độ dài theo đúng luật JS cũ)
-  // để đường RPC và đường cũ ghi ra cùng một dữ liệu.
   const clientName = body.clientName?.trim().slice(0, 200) || null;
+  const pickIds = onlyUuids(photoIds);
+  const dislikeIds = onlyUuids(dislikedIds);
+  // Chỉ gửi ghi chú của đúng những ảnh đang lưu, đã cắt gọn.
   const cleanNotes: Record<string, string> = {};
-  for (const id of [...photoIds, ...dislikedIds]) {
-    const n = typeof notes[id] === "string" ? notes[id].trim().slice(0, 2000) : "";
-    if (n) cleanNotes[id] = n;
+  for (const id of [...pickIds, ...dislikeIds]) {
+    const n = notes[id];
+    const t = typeof n === "string" ? n.trim().slice(0, 2000) : "";
+    if (t) cleanNotes[id] = t;
   }
 
-  // Đường CHÍNH: hàm save_album_selection (migrations/luu_lua_chon_album.sql) —
-  // chỉ ghi phần chênh lệch, trong MỘT transaction, lọc ảnh lạ ngay trong SQL.
-  // Trước đây mỗi cú bấm xoá sạch rồi chèn lại toàn bộ: O(n²) lượt ghi, ~2n sự
-  // kiện Realtime, mất photographer_note, và chèn hỏng giữa chừng là khách mất
-  // sạch lựa chọn.
-  // Mã không phải UUID thì bỏ trước khi gửi: ép kiểu uuid[] trong SQL sẽ làm hỏng
-  // CẢ lượt lưu, trong khi luật xưa giờ là "mã lạ thì lờ đi".
-  const selUuids = photoIds.filter(laUuid);
-  const disUuids = dislikedIds.filter(laUuid);
-  const { data: rpc, error: rpcErr } = await admin.rpc("save_album_selection", {
-    p_album: album.id,
-    p_session: sessionId,
-    p_photo_ids: selUuids,
-    p_dislike_ids: hasDislikes ? disUuids : null,
-    p_client_name: clientName,
-    p_notes: cleanNotes,
-  });
-  if (!rpcErr) {
-    const r = (Array.isArray(rpc) ? rpc[0] : rpc) as { selected?: number; disliked?: number } | null;
-    return NextResponse.json({ ok: true, count: r?.selected ?? 0, disliked: r?.disliked ?? 0 });
+  // Đường chính: một transaction trong Postgres, mảng đi trong thân POST.
+  if (!conNho(rpcThieuDen)) {
+    const { data, error } = await admin.rpc("save_album_selection", {
+      p_album_id: album.id,
+      p_session_id: sessionId,
+      p_client_name: clientName,
+      p_photo_ids: pickIds,
+      p_notes: cleanNotes,
+      p_disliked_ids: hasDislikes ? dislikeIds : null,
+    });
+    if (!error) {
+      const row = (Array.isArray(data) ? data[0] : data) as { pick_count?: number; dislike_count?: number } | null;
+      return NextResponse.json({ ok: true, count: row?.pick_count ?? 0, disliked: row?.dislike_count ?? 0 });
+    }
+    if (!thieuHam(error)) return NextResponse.json({ error: "server_error" }, { status: 500 });
+    // Database chưa chạy migrations/luu_chon_anh_tung_phan.sql → lùi về đường cũ.
+    rpcThieuDen = Date.now() + NHO_MS;
   }
-  // Chỉ lùi về đường cũ khi database CHƯA chạy migration (thiếu hàm, hoặc thiếu
-  // bảng dislikes mà hàm tham chiếu). Lỗi khác (mất kết nối, mã ảnh không phải
-  // UUID…) thì báo lỗi luôn — transaction đã rollback nên lựa chọn cũ còn nguyên.
-  if (!chuaCoHamLuu(rpcErr)) {
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
-  }
-  return saveLegacy(admin, album.id, sessionId, {
-    photoIds: selUuids,
-    dislikedIds: disUuids,
-    hasDislikes,
+
+  return saveByDiff(admin, {
+    albumId: album.id,
+    sessionId,
     clientName,
+    pickIds,
+    dislikeIds: hasDislikes ? dislikeIds : null,
     notes: cleanNotes,
   });
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function laUuid(id: unknown): id is string {
-  return typeof id === "string" && UUID_RE.test(id);
-}
+/**
+ * Nhớ (cấp tiến trình, có hạn) rằng database CHƯA có hàm save_album_selection,
+ * để mỗi lần khách bấm không phải đâm vào lỗi rồi mới lùi. Hết hạn thì thử lại —
+ * chủ studio chạy SQL xong là app tự dùng đường nhanh, không cần khởi động lại.
+ */
+const NHO_MS = 5 * 60_000;
+let rpcThieuDen = 0;
+const conNho = (den: number) => den > Date.now();
+// PGRST202 / 42883: không thấy hàm (rpc chưa tạo).
+const thieuHam = (e: { code?: string | null }) => e.code === "PGRST202" || e.code === "42883";
 
-/** Lỗi của rpc có phải do database chưa chạy luu_lua_chon_album.sql không. */
-function chuaCoHamLuu(e: { code?: string | null; message?: string | null }): boolean {
-  // PGRST202 (PostgREST không thấy hàm) / 42883 (Postgres: undefined_function) —
-  // cùng bộ mã src/lib/album-rows.ts dùng. Thiếu bảng (42P01/PGRST205) cũng tính:
-  // đường cũ biết bỏ qua bảng dislikes chưa có.
-  return e.code === "PGRST202" || e.code === "42883" || phanLoaiLoi(e) === "thieu-bang";
-}
-
-/** Số mã ảnh mỗi lượt `.in()` — giữ URL PostgREST ngắn (hàng nghìn UUID làm URL gãy). */
-const IN_CHUNK = 200;
+const thieuBang = (e: { code?: string | null; message?: string | null } | null) => phanLoaiLoi(e) === "thieu-bang";
 
 /**
- * ĐƯỜNG CŨ — chỉ chạy khi database chưa có hàm save_album_selection. Giữ nguyên
- * hành vi trước đây (xoá phiên rồi chèn lại), chỉ khác là kiểm ảnh thuộc album
- * theo từng lô thay vì một `.in()` khổng lồ.
+ * Đường LÙI khi chưa có hàm SQL: vẫn ghi theo phần chênh (upsert dòng mới/đổi,
+ * xoá đúng dòng đã bỏ) và chia nhỏ mọi `.in()`. Upsert chạy TRƯỚC xoá — hỏng
+ * giữa chừng thì khách chỉ còn thừa vài ảnh cũ, không bao giờ mất ảnh đã chọn.
  */
-async function saveLegacy(
+async function saveByDiff(
   admin: ReturnType<typeof createAdminClient>,
-  albumId: string,
-  sessionId: string,
   o: {
-    photoIds: string[];
-    dislikedIds: string[];
-    hasDislikes: boolean;
+    albumId: string;
+    sessionId: string;
     clientName: string | null;
+    pickIds: string[];
+    dislikeIds: string[] | null;
     notes: Record<string, string>;
   }
 ) {
-  // Validate the photos belong to this album and grab their names.
-  const allIds = [...new Set([...o.photoIds, ...o.dislikedIds])];
+  // Ảnh có thật trong album? Mỗi khúc một câu ngắn, chạy song song.
+  const allIds = [...new Set([...o.pickIds, ...(o.dislikeIds ?? [])])];
   const valid = new Map<string, string>();
-  for (const ids of chunk(allIds, IN_CHUNK)) {
-    const { data: photos } = await admin
-      .from("photos")
-      .select("id, name")
-      .eq("album_id", albumId)
-      .in("id", ids);
-    for (const p of photos ?? []) valid.set(p.id, p.name);
+  const found = await Promise.all(
+    chunk(allIds).map((ids) => admin.from("photos").select("id, name").eq("album_id", o.albumId).in("id", ids))
+  );
+  for (const { data, error } of found) {
+    if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
+    for (const p of data ?? []) valid.set(p.id, p.name ?? "");
   }
 
-  // Replace this session's selection (delete then insert).
-  await admin
-    .from("selections")
-    .delete()
-    .eq("album_id", albumId)
-    .eq("session_id", sessionId);
-
-  const rows = o.photoIds
+  const rows = o.pickIds
     .filter((id) => valid.has(id))
     .map((id) => ({
-      album_id: albumId,
+      album_id: o.albumId,
       photo_id: id,
       photo_name: valid.get(id) ?? "",
-      session_id: sessionId,
+      session_id: o.sessionId,
       client_name: o.clientName,
-      client_note: o.notes[id] || null,
+      client_note: o.notes[id] ?? null,
     }));
+  const res = await syncTable(admin, "selections", "photo_id, photo_name, client_name, client_note", o, rows);
+  if (res !== "ok") return NextResponse.json({ error: "server_error" }, { status: 500 });
 
-  if (rows.length > 0) {
-    const { error } = await admin.from("selections").insert(rows);
-    if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
-  }
-
-  // Danh sách "không thích" — thay thế trọn gói giống selections.
+  // Danh sách "không thích" — cùng cách ghi theo phần chênh.
   let dislikeCount = 0;
-  if (o.hasDislikes) {
-    await admin
-      .from("dislikes")
-      .delete()
-      .eq("album_id", albumId)
-      .eq("session_id", sessionId);
-
-    const dRows = o.dislikedIds
+  if (o.dislikeIds) {
+    const dRows = o.dislikeIds
       .filter((id) => valid.has(id))
       .map((id) => ({
-        album_id: albumId,
+        album_id: o.albumId,
         photo_id: id,
         photo_name: valid.get(id) ?? "",
-        session_id: sessionId,
-        client_note: o.notes[id] || null,
+        session_id: o.sessionId,
+        client_note: o.notes[id] ?? null,
       }));
     dislikeCount = dRows.length;
-    if (dRows.length > 0) {
-      const { error } = await admin.from("dislikes").insert(dRows);
-      // Bảng chưa tồn tại (chưa chạy migration album_dislikes.sql) thì bỏ qua —
-      // lựa chọn ảnh phía trên đã lưu xong, không được báo lỗi cho khách.
-      if (error && error.code !== "42P01" && error.code !== "PGRST205") {
-        return NextResponse.json({ error: "server_error" }, { status: 500 });
-      }
-    }
+    const dRes = await syncTable(admin, "dislikes", "photo_id, photo_name, client_note", o, dRows);
+    // Bảng chưa tồn tại (chưa chạy migration album_dislikes.sql) thì bỏ qua —
+    // lựa chọn ảnh phía trên đã lưu xong, không được báo lỗi cho khách.
+    if (dRes === "error") return NextResponse.json({ error: "server_error" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, count: rows.length, disliked: dislikeCount });
+}
+
+/** Đưa các dòng của một phiên trong `table` về đúng `want`, chỉ ghi phần chênh. */
+async function syncTable(
+  admin: ReturnType<typeof createAdminClient>,
+  table: "selections" | "dislikes",
+  cols: string,
+  o: { albumId: string; sessionId: string },
+  want: SavedRow[]
+): Promise<"ok" | "missing" | "error"> {
+  // Đọc dòng đang lưu theo trang — PostgREST cắt mỗi lượt ở max_rows (1000).
+  const existing: SavedRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await admin
+      .from(table)
+      .select(cols)
+      .eq("album_id", o.albumId)
+      .eq("session_id", o.sessionId)
+      .order("photo_id")
+      .range(from, from + 999);
+    if (error) return thieuBang(error) ? "missing" : "error";
+    existing.push(...((data ?? []) as unknown as SavedRow[]));
+    if (!data || data.length < 1000) break;
+  }
+
+  const { upsert, remove } = diffRows(existing, want);
+  for (const part of chunk(upsert, 500)) {
+    const { error } = await admin.from(table).upsert(part, { onConflict: "album_id,photo_id,session_id" });
+    if (error) return thieuBang(error) ? "missing" : "error";
+  }
+  for (const ids of chunk(remove)) {
+    const { error } = await admin
+      .from(table)
+      .delete()
+      .eq("album_id", o.albumId)
+      .eq("session_id", o.sessionId)
+      .in("photo_id", ids);
+    if (error) return "error";
+  }
+  return "ok";
 }
 
 /**

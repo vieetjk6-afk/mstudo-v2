@@ -28,7 +28,11 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     return NextResponse.json({ error: "Chỉ tạo hợp đồng từ báo giá khách đã đồng ý." }, { status: 409 });
   }
 
-  const result = await convertQuoteToContract(supabase, quote.id);
+  const result = await convertQuoteToContract(
+    supabase,
+    quote.id,
+    profile.actingRole === "staff" ? (profile.actingUserId as string) : null
+  );
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 500 });
   // Chế độ album mặc định theo kết nối mstudo desktop / Drive của studio.
   await applyDefaultAlbumMode(profile.id as string, result.contract_id);

@@ -250,20 +250,50 @@ if (first) {
   ok("cột nguồn khách", has(
     "select count(*) from information_schema.columns where table_schema='public' and column_name in ('source','channel','utm','landing_path')"
   ) >= 4);
-  // Vá quyền hợp đồng: trên database ĐANG CHẠY, policy mở rộng cũ phải biến mất.
-  // Còn sót một câu `*_owner_all` là mọi luật vai trò / chi nhánh vô nghĩa (OR).
-  ok("hợp đồng: không còn policy `*_owner_all` mở rộng trên các bảng hợp đồng", has(
-    "select count(*) from pg_policies where schemaname='public' and policyname like '%_owner_all' " +
-      "and tablename in ('studio_contracts','studio_crew','contract_items','contract_payments','contract_payment_plan'," +
-      "'contract_crew','contract_tasks','contract_products','contract_edit_requests','contract_equipment','contract_quote_options')"
-  ) === 0);
-  ok("hợp đồng: có policy đọc / ghi theo vai trò + trigger ghim chi nhánh", has(
-    "select (select count(*) from pg_policies where policyname in ('studio_contracts_member_read','studio_contracts_member_write','contract_payments_member_write','contract_crew_accountant_update')) " +
-      "+ (select count(*) from pg_trigger where tgname = 'studio_contracts_ghim_chi_nhanh')"
-  ) === 5);
   ok("cột toạ độ điểm chụp (thời tiết)", has(
     "select count(*) from information_schema.columns where table_schema='public' and column_name in ('lat','lng','studio_lat','studio_lng')"
   ) >= 4);
+}
+
+/* ── 2b. Phân quyền hợp đồng theo vai trò, trên CẢ HAI đường cài ────────────
+ *
+ * migrations/phan_quyen_vai_tro_hop_dong.sql thay policy mà schema.sql và các
+ * migration trước đã tạo. Trên project mới, bộ sinh xếp khối do $$ vào PHẦN 2 và
+ * `create policy` vào PHẦN 3 — nên một policy cũ còn sót là chuyện đã xảy ra thật
+ * (rls_thanh_vien_hop_dong bị schema.sql ghi đè). Kiểm trên database thật xem
+ * bản cuối cùng là bản nào. Hành vi từng vai trò: desktop/test/rls-luu-nguoi.mjs.
+ */
+console.log("\n— Phân quyền hợp đồng theo vai trò —");
+const BANG_HD = [
+  "studio_contracts", "contract_items", "contract_crew", "contract_edit_requests", "contract_payments",
+  "contract_payment_plan", "contract_tasks", "contract_equipment", "contract_products",
+  "contract_quote_options", "contract_client_proofs", "studio_crew",
+];
+const inList = (xs) => xs.map((t) => `'${t}'`).join(",");
+for (const db of ["moi", ...(first ? ["cu"] : [])]) {
+  const nhan = db === "moi" ? "project mới" : "project đang chạy";
+  ok(
+    `${nhan}: không còn policy cũ (…_owner_all / …_owner / …_owner_read) trên họ hợp đồng`,
+    q(db, `select count(*) from pg_policies where schemaname='public' and tablename in (${inList([...BANG_HD, "contract_reschedules"])}) and policyname ~ '_owner(_all|_read)?$'`) === "0",
+    q(db, `select string_agg(tablename || '.' || policyname, ', ') from pg_policies where schemaname='public' and tablename in (${inList([...BANG_HD, "contract_reschedules"])}) and policyname ~ '_owner(_all|_read)?$'`)
+  );
+  ok(
+    `${nhan}: mỗi bảng có đủ policy đọc + ghi theo vai trò`,
+    q(db, `select count(distinct tablename) from pg_policies where schemaname='public' and tablename in (${inList(BANG_HD)}) and policyname like '%\\_member\\_write'`) === String(BANG_HD.length) &&
+      q(db, `select count(distinct tablename) from pg_policies where schemaname='public' and tablename in (${inList([...BANG_HD, "contract_reschedules", "contract_addenda"])}) and policyname like '%\\_member\\_read'`) === String(BANG_HD.length + 2)
+  );
+  ok(
+    `${nhan}: policy mới gọi hàm vai trò dạng (select …) — initPlan, không phải từng dòng`,
+    q(db, `select count(*) from pg_policies where schemaname='public' and tablename in (${inList(BANG_HD)}) and (coalesce(qual,'') || coalesce(with_check,'')) ~ 'is_studio_member\\('`) === "0"
+  );
+  ok(
+    `${nhan}: is_studio_member kiểm profiles.is_active`,
+    /is_active/.test(q(db, "select pg_get_functiondef('public.is_studio_member(uuid)'::regprocedure)"))
+  );
+  ok(
+    `${nhan}: trigger chỉ-chủ-studio-được-huỷ + kế-toán-chỉ-đánh-dấu-đã-trả`,
+    q(db, "select count(*) from pg_trigger where tgname in ('guard_contract_cancel','guard_contract_crew_accountant') and not tgisinternal") === "2"
+  );
 }
 
 /* ── 3. Gói riêng của tính năng khuôn mặt ─────────────────────────────────
@@ -532,80 +562,81 @@ ok(
   q("moi", `select count(*) from public.studio_audit_log where contract_id = '${SIGNED}' and action = 'contract.delete'`) === "1"
 );
 
-// ── Lưu lựa chọn của khách: save_album_selection (luu_lua_chon_album.sql) ───
-// Route trước đây xoá sạch rồi chèn lại mỗi cú bấm. Hàm mới phải: thêm đúng ảnh
-// mới, xoá đúng ảnh bỏ, bỏ qua ảnh của album KHÁC, giữ ghi chú studio, và gọi
-// lại cùng dữ liệu thì không ghi gì (không bắn Realtime thừa).
-console.log("\n— Lưu lựa chọn: save_album_selection —");
-const ALB = "00000000-0000-0000-0000-00000000e001";
-const ALB2 = "00000000-0000-0000-0000-00000000e002";
-const ph = (n) => `00000000-0000-0000-0000-00000000f00${n}`;
-q(
-  "moi",
-  "set session_replication_role = replica; " +
-    `insert into public.albums (id, owner_id, slug, title, status) values ('${ALB}', '${P}', 'test-chon', 'Chọn', 'published'), ('${ALB2}', '${P}', 'test-khac', 'Khác', 'published'); ` +
-    `insert into public.photos (id, album_id, drive_file_id, name) values ` +
-    `('${ph(1)}', '${ALB}', 'f1', 'a1.jpg'), ('${ph(2)}', '${ALB}', 'f2', 'a2.jpg'), ('${ph(3)}', '${ALB}', 'f3', 'a3.jpg'), ` +
-    `('${ph(4)}', '${ALB}', 'f4', 'a4.jpg'), ('${ph(9)}', '${ALB2}', 'f9', 'khac.jpg')`
-);
-const luu = (sel, dis, notes = "{}") =>
+// ── Lưu lựa chọn ảnh theo phần chênh (save_album_selection) ────────────────
+// Trang khách gửi lại TOÀN BỘ danh sách mỗi lần bấm. Hàm phải: thêm ảnh mới,
+// xoá ảnh đã bỏ, bỏ qua ảnh của album khác, và KHÔNG ghi lại dòng không đổi
+// (mỗi lượt ghi thừa là một sự kiện Realtime dội vào màn studio).
+console.log("\n— Lưu lựa chọn ảnh theo phần chênh —");
+{
+  const A = "00000000-0000-0000-0000-0000000a1b01";
+  const B = "00000000-0000-0000-0000-0000000a1b02";
+  const ph = (n) => `00000000-0000-0000-0000-0000000f0${String(n).padStart(3, "0")}`;
+  const PX = ph(99); // ảnh của album KHÁC
   q(
     "moi",
-    `select selected || '/' || disliked from public.save_album_selection('${ALB}', 'phien-1', ` +
-      `'{${sel.map(ph).join(",")}}'::uuid[], ${dis === null ? "null" : `'{${dis.map(ph).join(",")}}'::uuid[]`}, 'Lan', '${notes}'::jsonb)`
+    "set session_replication_role = replica; " +
+      `insert into public.albums (id, owner_id, slug, title, status) values ` +
+      `('${A}', '${P}', 'chon-anh-a', 'A', 'published'), ('${B}', '${P}', 'chon-anh-b', 'B', 'published'); ` +
+      `insert into public.photos (id, album_id, drive_file_id, name) values ` +
+      [1, 2, 3, 4].map((n) => `('${ph(n)}', '${A}', 'f${n}', 'IMG_${n}.jpg')`).join(", ") +
+      `, ('${PX}', '${B}', 'fx', 'IMG_X.jpg')`
   );
-const chon = () =>
-  q("moi", `select coalesce(string_agg(photo_name, ',' order by photo_name), '') from public.selections where album_id = '${ALB}' and session_id = 'phien-1'`);
-const ghet = () =>
-  q("moi", `select coalesce(string_agg(photo_name, ',' order by photo_name), '') from public.dislikes where album_id = '${ALB}' and session_id = 'phien-1'`);
+  const arr = (ids) => (ids ? `array[${ids.map((i) => `'${ph(i)}'`).join(",")}]::uuid[]` : "null");
+  const save = (sess, picks, dislikes, notes = "{}", name = "Lan") =>
+    q(
+      "moi",
+      `select pick_count || '/' || dislike_count from public.save_album_selection(` +
+        `'${A}', '${sess}', '${name}', ${arr(picks)}, '${notes}'::jsonb, ${arr(dislikes)})`
+    );
+  const picks = (sess, table = "selections") =>
+    q("moi", `select coalesce(string_agg(photo_name, ',' order by photo_name), '') from public.${table} where album_id = '${A}' and session_id = '${sess}'`);
+  const xmin = (sess, n) =>
+    q("moi", `select xmin::text from public.selections where session_id = '${sess}' and photo_id = '${ph(n)}'`);
 
-ok(
-  "Lần đầu: chọn 2 ảnh + 1 ảnh của album KHÁC (bị bỏ qua), không thích 1 ảnh",
-  luu([1, 2, 9], [3], `{"${ph(1)}": "in to"}`) === "2/1" && chon() === "a1.jpg,a2.jpg" && ghet() === "a3.jpg",
-  `${chon()} | ${ghet()}`
-);
-ok(
-  "…ghi chú khách và tên khách được lưu",
-  q("moi", `select client_note || '/' || client_name from public.selections where photo_id = '${ph(1)}'`) === "in to/Lan"
-);
-// Studio ghi chú lên ảnh khách chọn — đường xoá-chèn cũ làm mất ghi chú này.
-q("moi", `update public.selections set photographer_note = 'đã chỉnh' where photo_id = '${ph(1)}'`);
-const truoc = q("moi", `select string_agg(xmin::text || id::text, ',' order by id) from public.selections where session_id = 'phien-1'`);
-ok("Gọi lại ĐÚNG dữ liệu cũ → vẫn 2/1", luu([1, 2, 9], [3], `{"${ph(1)}": "in to"}`) === "2/1");
-ok(
-  "…và không dòng nào bị ghi lại (idempotent, không bắn Realtime thừa)",
-  q("moi", `select string_agg(xmin::text || id::text, ',' order by id) from public.selections where session_id = 'phien-1'`) === truoc
-);
-ok(
-  "Thêm a4, bỏ a2 → chỉ đúng chênh lệch",
-  luu([1, 4], [3], `{"${ph(1)}": "in to"}`) === "2/1" && chon() === "a1.jpg,a4.jpg"
-);
-ok(
-  "…dòng a1 giữ nguyên, ghi chú studio KHÔNG mất",
-  q("moi", `select photographer_note from public.selections where photo_id = '${ph(1)}'`) === "đã chỉnh"
-);
-ok(
-  "Không gửi danh sách 'không thích' (client cũ) → bảng dislikes không bị đụng",
-  luu([1], null) === "1/0" && ghet() === "a3.jpg" && chon() === "a1.jpg"
-);
-ok(
-  "Ảnh vừa chọn vừa 'không thích' → bỏ khỏi danh sách chọn; xoá 'không thích' cũ",
-  luu([1, 2], [2]) === "1/1" && chon() === "a1.jpg" && ghet() === "a2.jpg"
-);
-ok("Bỏ hết → không còn dòng nào", luu([], []) === "0/0" && chon() === "" && ghet() === "");
-ok(
-  "Chỉ máy chủ gọi được: anon / authenticated không có quyền execute",
-  q(
-    "moi",
-    "select has_function_privilege('anon', 'public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb)', 'execute')::text || '/' || " +
-      "has_function_privilege('authenticated', 'public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb)', 'execute')::text || '/' || " +
-      "has_function_privilege('service_role', 'public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb)', 'execute')::text"
-  ) === "false/false/true"
-);
-ok(
-  "Hàm cũng có trên database cập nhật bằng cap-nhat.sql",
-  q("cu", "select count(*) from pg_proc where proname = 'save_album_selection'") === "1"
-);
+  ok("Lần lưu đầu: thêm 2 ảnh chọn + 1 ảnh không thích", save("s1", [1, 2], [3], '{"' + ph(1) + '": "đẹp"}') === "2/1");
+  ok("…đúng hai dòng chọn, kèm tên ảnh", picks("s1") === "IMG_1.jpg,IMG_2.jpg");
+  ok("…ghi chú của khách được lưu", q("moi", `select client_note from public.selections where session_id = 's1' and photo_id = '${ph(1)}'`) === "đẹp");
+  ok("…và ảnh không thích nằm ở bảng riêng", picks("s1", "dislikes") === "IMG_3.jpg");
+  const x1 = xmin("s1", 1);
+
+  // Bỏ ảnh 2, thêm ảnh 4, kèm một id của album khác (phải bị bỏ qua).
+  ok(
+    "Bấm tiếp: bỏ 1 ảnh, thêm 1 ảnh, id album khác bị bỏ qua",
+    q(
+      "moi",
+      `select pick_count || '/' || dislike_count from public.save_album_selection(` +
+        `'${A}', 's1', 'Lan', array['${ph(1)}','${ph(4)}','${PX}']::uuid[], '{"${ph(1)}": "đẹp"}'::jsonb, '{}'::uuid[])`
+    ) === "2/0"
+  );
+  ok("…danh sách còn đúng ảnh 1 và 4", picks("s1") === "IMG_1.jpg,IMG_4.jpg");
+  ok("…không ghi ảnh của album khác", q("moi", `select count(*) from public.selections where photo_id = '${PX}'`) === "0");
+  ok("…mảng không thích rỗng → xoá ảnh không thích cũ", picks("s1", "dislikes") === "");
+  ok("…dòng KHÔNG đổi gì thì không bị ghi lại (không có sự kiện Realtime thừa)", xmin("s1", 1) === x1);
+
+  save("s1", [1, 4], null, '{"' + ph(1) + '": "in to"}');
+  ok("Sửa ghi chú → chỉ dòng đó được cập nhật", q("moi", `select client_note from public.selections where session_id = 's1' and photo_id = '${ph(1)}'`) === "in to" && xmin("s1", 1) !== x1);
+
+  save("s2", [2], [3]);
+  save("s2", [2], null); // client cũ không gửi dislikedIds
+  ok("Client cũ không gửi danh sách không thích → không đụng bảng dislikes", picks("s2", "dislikes") === "IMG_3.jpg");
+  ok("…và phiên khác không ảnh hưởng phiên s1", picks("s1") === "IMG_1.jpg,IMG_4.jpg");
+  ok("Bỏ hết ảnh → phiên không còn dòng nào", save("s1", [], null) === "0/0" && picks("s1") === "");
+  ok(
+    "Chỉ service_role gọi được hàm (anon / authenticated thì không)",
+    q(
+      "moi",
+      "select has_function_privilege('anon', 'public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[])', 'execute')::text || '/' || " +
+        "has_function_privilege('authenticated', 'public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[])', 'execute')::text || '/' || " +
+        "has_function_privilege('service_role', 'public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[])', 'execute')::text"
+    ) === "false/false/true"
+  );
+}
+if (first) {
+  ok(
+    "cap-nhat.sql cũng tạo hàm save_album_selection cho project đang chạy",
+    q("cu", "select count(*) from pg_proc where proname = 'save_album_selection'") === "1"
+  );
+}
 
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);
