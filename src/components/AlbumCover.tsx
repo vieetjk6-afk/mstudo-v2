@@ -2,6 +2,7 @@
 
 import { ChevronDown } from "lucide-react";
 import { ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
+import CoverImg from "@/components/CoverImg";
 
 /**
  * Ảnh bìa album của khách — CHIẾM TRỌN MÀN HÌNH trên cả máy tính lẫn điện
@@ -35,7 +36,7 @@ export default function AlbumCover({
 }) {
   return (
     <section className="relative h-[100svh] min-h-[460px] w-full overflow-hidden">
-      <img src={url} alt={title} className="absolute inset-0 h-full w-full object-cover" />
+      <CoverImg src={url} alt={title} className="absolute inset-0 h-full w-full object-cover" />
       {/* Hai lớp: dải dọc cho mép trên/dưới, và một vệt tối hình bầu dục ngay
           sau khối chữ. Ảnh bìa cưới hay là nền trắng — váy, tường sáng — nếu
           chỉ có dải dọc nhạt thì chữ trắng chìm hẳn vào ảnh. */}

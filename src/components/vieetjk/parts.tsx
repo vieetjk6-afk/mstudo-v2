@@ -1,5 +1,6 @@
 import type { VjkAlbum, VjkFeedback } from "@/lib/vieetjk/data";
 import { UI, tr, type Lang, type PriceTier, type InfoItem } from "@/lib/vieetjk/content";
+import CoverImg from "@/components/CoverImg";
 
 const fmt = (n: number) => new Intl.NumberFormat("vi-VN").format(n) + "đ";
 
@@ -21,7 +22,7 @@ export function Gallery({ albums, lang, emptyHint }: { albums: VjkAlbum[]; lang:
       {albums.map((a) => (
         <a key={a.id} href={`/album/${a.slug}`} className="vjk-gal-item" title={a.title}>
           {a.cover_url ? (
-            <img src={a.cover_url} alt={a.title} loading="lazy" />
+            <CoverImg src={a.cover_url} alt={a.title} loading="lazy" />
           ) : (
             <div className="vjk-scard-ph" style={{ aspectRatio: "4 / 3" }} />
           )}

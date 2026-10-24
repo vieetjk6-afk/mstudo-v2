@@ -59,6 +59,7 @@ import Brand from "@/components/Brand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { VIDEO_CATEGORY } from "@/lib/types";
 import { categoryLabel } from "@/lib/category";
+import CoverImg from "@/components/CoverImg";
 
 export interface GalleryCard {
   slug: string;
@@ -274,7 +275,7 @@ function Grid({ items, video, dateLocale }: { items: GalleryCard[]; video?: bool
         >
           <div className="relative aspect-[4/5] overflow-hidden">
             {g.cover_url ? (
-              <img src={g.cover_url} alt={g.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <CoverImg src={g.cover_url} alt={g.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
             ) : (
               <div className="absolute inset-0" style={{ background: "var(--surface2)" }} />
             )}
