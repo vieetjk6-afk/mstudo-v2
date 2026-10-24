@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { Globe, Check, Loader2, Trash2, RefreshCw } from "lucide-react";
-
-type DnsRow = { type: string; name: string; value: string };
+import { Fragment, useState } from "react";
+import { Globe, Check, Loader2, Trash2, RefreshCw, Copy } from "lucide-react";
+import { apexOf, hostLabel, pointingRecords, type DnsRow } from "@/lib/domain-dns";
 
 /** Studio custom-domain manager (site builder → site settings). */
 export default function CustomDomain({ initialDomain, initialVerified }: { initialDomain: string | null; initialVerified: boolean }) {
@@ -14,6 +13,20 @@ export default function CustomDomain({ initialDomain, initialVerified }: { initi
   const [busy, setBusy] = useState<null | "set" | "verify" | "remove">(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  // Hướng dẫn mở sẵn khi tên miền đã lưu mà chưa chạy — đó là lúc studio cần nó.
+  const [guideOpen, setGuideOpen] = useState(!!initialDomain && !initialVerified);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  // Bản ghi hiện ngay từ tên miền đã lưu (không phải chờ bấm "Kiểm tra"); máy
+  // chủ trả về bản đầy đủ hơn (giá trị Vercel gợi ý riêng, TXT xác minh) thì dùng bản đó.
+  const rows: DnsRow[] = dns.length ? dns : saved ? pointingRecords(saved) : [];
+
+  function copy(v: string) {
+    navigator.clipboard?.writeText(v).then(() => {
+      setCopied(v);
+      setTimeout(() => setCopied((c) => (c === v ? null : c)), 1500);
+    }).catch(() => {});
+  }
 
   async function call(action: string, extra?: Record<string, unknown>) {
     setBusy(action as typeof busy);
@@ -38,6 +51,7 @@ export default function CustomDomain({ initialDomain, initialVerified }: { initi
     if (!d) return;
     setSaved(d.custom_domain);
     setVerified(!!d.verified);
+    setGuideOpen(!d.verified);
     // d.hint: lý do cụ thể khi Vercel từ chối (vd domain đang ở project khác) —
     // nói thẳng thay vì bảo studio đi trỏ DNS trong khi DNS không phải vấn đề.
     setMsg(d.verified ? "Đã kết nối tên miền!" : (d.hint as string) || "Đã lưu. Trỏ DNS theo hướng dẫn rồi bấm “Kiểm tra”.");
@@ -46,7 +60,12 @@ export default function CustomDomain({ initialDomain, initialVerified }: { initi
     const d = await call("verify");
     if (!d) return;
     setVerified(!!d.verified);
-    setMsg(d.verified ? "Tên miền đã xác minh — trang chạy trên domain của bạn." : "Chưa xác minh. Kiểm tra lại bản ghi DNS (có thể mất tới vài giờ).");
+    if (!d.verified) setGuideOpen(true);
+    setMsg(d.verified
+      ? "Tên miền đã xác minh — trang chạy trên domain của bạn."
+      : (d.hint as string) || (d.ownershipOk === false && d.dnsOk
+        ? "DNS đã trỏ đúng, còn thiếu bản ghi TXT xác minh bên dưới."
+        : "Chưa thấy DNS trỏ về mstudo. Kiểm tra lại bản ghi bên dưới — DNS mới thường mất 5–30 phút, có khi tới vài giờ."));
   }
   async function remove() {
     if (!confirm("Gỡ tên miền riêng khỏi trang?")) return;
@@ -86,20 +105,55 @@ export default function CustomDomain({ initialDomain, initialVerified }: { initi
             </button>
           </div>
 
-          {!verified && dns.length > 0 && (
+          {!verified && rows.length > 0 && (
             <div style={{ marginTop: 10, fontSize: 12, background: "var(--surface2)", borderRadius: 10, padding: 10 }}>
-              <p style={{ fontWeight: 600, marginBottom: 6 }}>Trỏ DNS tại nhà cung cấp tên miền:</p>
-              {dns.map((r, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "3px 0", borderTop: i ? "1px solid var(--border)" : undefined }}>
-                  <span style={{ color: "var(--text3)" }}>{r.type}</span>
-                  <span>{r.name}</span>
-                  <code style={{ color: "var(--text2)" }}>{r.value}</code>
-                </div>
-              ))}
+              <p style={{ fontWeight: 600, marginBottom: 6 }}>Thêm bản ghi DNS tại nơi bạn mua tên miền:</p>
+              <div style={{ display: "grid", gridTemplateColumns: "auto auto 1fr", gap: "4px 8px", alignItems: "center" }}>
+                <span style={{ color: "var(--text3)", fontSize: 11 }}>Loại</span>
+                <span style={{ color: "var(--text3)", fontSize: 11 }}>Tên / Host</span>
+                <span style={{ color: "var(--text3)", fontSize: 11 }}>Giá trị</span>
+                {rows.map((r, i) => (
+                  <Fragment key={i}>
+                    <b>{r.type}</b>
+                    <code>{r.name}</code>
+                    <button onClick={() => copy(r.value)} title="Chép giá trị"
+                      style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0, background: "none", border: 0, padding: 0, cursor: "pointer", color: "var(--text2)", textAlign: "left" }}>
+                      <code style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.value}</code>
+                      {copied === r.value ? <Check size={12} style={{ flexShrink: 0, color: "var(--success)" }} /> : <Copy size={12} style={{ flexShrink: 0 }} />}
+                    </button>
+                  </Fragment>
+                ))}
+              </div>
               {configured === false && (
                 <p style={{ marginTop: 6, color: "var(--text3)" }}>Sau khi trỏ DNS, cần thêm tên miền vào project trên Vercel (nếu máy chủ chưa nối Vercel API).</p>
               )}
             </div>
+          )}
+
+          {!verified && (
+          <details open={guideOpen} onToggle={(e) => setGuideOpen((e.target as HTMLDetailsElement).open)} style={{ marginTop: 10, fontSize: 12 }}>
+            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--text2)" }}>Hướng dẫn trỏ DNS từng bước</summary>
+            <ol style={{ margin: "8px 0 0", paddingLeft: 18, color: "var(--text2)", lineHeight: 1.55, display: "grid", gap: 6 }}>
+              <li>
+                Đăng nhập trang quản lý tên miền nơi bạn mua <b>{apexOf(saved)}</b> (Mắt Bão, PA Vietnam, Nhân Hòa, Tenten, iNET, GoDaddy, Namecheap, Cloudflare…) → mở mục <b>Quản lý DNS</b> / <b>DNS Records</b>.
+              </li>
+              <li>
+                <b>Xoá</b> bản ghi A / CNAME / AAAA cũ có cùng <b>Tên/Host</b> với bảng trên (thường là bản ghi trỏ về trang mặc định của nhà cung cấp) — trùng tên là DNS không chạy.
+              </li>
+              <li>
+                <b>Thêm</b> từng bản ghi trong bảng trên: chọn đúng <b>Loại</b>, ô <b>Tên/Host</b> nhập như bảng (<code>@</code> = tên miền gốc; nơi nào không nhận <code>@</code> thì để trống), dán <b>Giá trị</b> (bấm vào giá trị để chép). TTL để mặc định.
+              </li>
+              <li>
+                Dùng <b>Cloudflare</b>: bấm đám mây cam thành <b>xám (DNS only)</b>, không thì không xác minh được.
+              </li>
+              <li>
+                Chờ 5–30 phút (có khi tới vài giờ) rồi bấm <b>Kiểm tra</b>. Khi báo “Đã xác minh”, trang chạy trên tên miền của bạn, HTTPS (ổ khoá) được cấp tự động và mọi link gửi khách chuyển sang tên miền này.
+              </li>
+            </ol>
+            <p style={{ marginTop: 8, color: "var(--text3)" }}>
+              Chỉ đúng tên miền đã nhập ({saved}) được kết nối. Muốn khách vào bằng {hostLabelHint(saved)} thì gỡ rồi nhập lại tên miền đó.
+            </p>
+          </details>
           )}
         </>
       )}
@@ -107,4 +161,9 @@ export default function CustomDomain({ initialDomain, initialVerified }: { initi
       {msg && <p style={{ marginTop: 8, fontSize: 12, color: "var(--text2)" }}>{msg}</p>}
     </div>
   );
+}
+
+/** Bản còn lại của cặp "có www / không www" để nhắc studio chọn đúng một bản. */
+function hostLabelHint(domain: string): string {
+  return hostLabel(domain) === "www" ? apexOf(domain) : hostLabel(domain) ? `www.${apexOf(domain)}` : `www.${domain}`;
 }
