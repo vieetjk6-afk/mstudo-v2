@@ -101,6 +101,47 @@ export default async function ContractPage(
   const empty = Promise.resolve({ data: [] as never[] });
   // Vai trò thợ tự đặt — chạy song song với lượt dưới, không ném lỗi (thiếu bảng → []).
   const crewRolesP = loadCrewRoles(supabase, profile.id as string);
+  const selId = contract.selection_album_id as string | null;
+  const galId = contract.gallery_album_id as string | null;
+  // Phần "đuôi" trước đây chạy TUẦN TỰ sau lượt lớn (đếm ảnh, tên miền, chữ ký,
+  // cờ tính năng, chi nhánh) — mỗi cái một vòng chờ DB. Không cái nào cần kết
+  // quả lượt lớn, nên khởi động ngay cùng lúc và chỉ chờ ở dưới.
+  const tailP = Promise.all([
+    // Số ảnh của album đang gắn (tối đa 2 lượt đếm head-only — rẻ).
+    Promise.all(
+      [selId, galId].filter((x): x is string => !!x).map(async (id) => {
+        const { count } = await supabase.from("photos").select("id", { count: "exact", head: true }).eq("album_id", id);
+        return [id, count] as const;
+      }),
+    ),
+    getStudioHost(supabase, profile.id),
+    // Chữ ký Bên A đã lưu — chưa chạy migration thì đơn giản là chưa có.
+    // Hai bước vẫn nối nhau (bước sau chỉ chạy khi bước trước trống) nhưng cả
+    // chuỗi chạy song song với phần còn lại.
+    (async () => {
+      const { data: savedSig } = await supabase
+        .from("studio_saved_signature")
+        .select("signer_name, signature")
+        .eq("owner_id", profile.id)
+        .maybeSingle();
+      // Chưa lưu chữ ký (hoặc lưu lỗi) → dùng chữ ký Bên A ở hợp đồng ký gần nhất,
+      // để lần sau vẫn ký một chạm và không phải gõ lại tên.
+      const { data: lastSigned } = savedSig
+        ? { data: null }
+        : await supabase
+            .from("studio_contracts")
+            .select("studio_signed_name, studio_signature")
+            .eq("owner_id", profile.id)
+            .not("studio_signed_name", "is", null)
+            .not("studio_signature", "is", null)
+            .order("studio_signed_at", { ascending: false, nullsFirst: false })
+            .limit(1)
+            .maybeSingle();
+      return { savedSig, lastSigned };
+    })(),
+    getFeatureFlags(),
+    getActiveBranches(profile.id),
+  ]);
 
   const [
     { data: staffList },
@@ -181,8 +222,6 @@ export default async function ContractPage(
     published: a.status === "published",
     linkedElsewhere: usedElsewhere.has(a.id),
   });
-  const selId = contract.selection_album_id as string | null;
-  const galId = contract.gallery_album_id as string | null;
   // Album đang gắn LUÔN có mặt trong ô của nó, kể cả khi giai đoạn đã đổi (album
   // của hợp đồng vừa sang giao khách vẫn phải hiện ở ô "Album của hợp đồng").
   const selectionAlbums = albumRows.filter((a) => !isDeliveryPhase(a) || a.id === selId).map(toAlbumOption);
@@ -192,14 +231,11 @@ export default async function ContractPage(
   // Album của hợp đồng đã ở giai đoạn giao khách (dự án hợp nhất) — màn hợp đồng
   // dùng để ẩn "Giao khách ngay" và tính bước "Đã giao" của vòng đời.
   const linkedAlbumDelivered = !!resolveDeliveredAlbum({ gallery: galRow, selection: selRow });
-  // Số ảnh của album đang gắn (tối đa 2 lượt đếm head-only — rẻ).
+  const [photoCounts, studioHost, { savedSig, lastSigned }, flags, activeBranches] = await tailP;
   const albumPhotoCounts: Record<string, number> = {};
-  await Promise.all(
-    [selId, galId].filter((x): x is string => !!x).map(async (id) => {
-      const { count } = await supabase.from("photos").select("id", { count: "exact", head: true }).eq("album_id", id);
-      if (typeof count === "number") albumPhotoCounts[id] = count;
-    }),
-  );
+  for (const [id, count] of photoCounts) {
+    if (typeof count === "number") albumPhotoCounts[id] = count;
+  }
 
   // Scheduling conflicts: crew booked on another contract that day, or busy.
   const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
@@ -226,26 +262,6 @@ export default async function ContractPage(
   // Tên + logo khách nhìn thấy (studio_brand_name/studio_logo_url, lùi về
   // full_name/pl_logo_url) — bản PDF hợp đồng in đúng thương hiệu này.
   const brand = brandFrom(profile);
-  const studioHost = await getStudioHost(supabase, profile.id);
-  // Chữ ký Bên A đã lưu — chưa chạy migration thì đơn giản là chưa có.
-  const { data: savedSig } = await supabase
-    .from("studio_saved_signature")
-    .select("signer_name, signature")
-    .eq("owner_id", profile.id)
-    .maybeSingle();
-  // Chưa lưu chữ ký (hoặc lưu lỗi) → dùng chữ ký Bên A ở hợp đồng ký gần nhất,
-  // để lần sau vẫn ký một chạm và không phải gõ lại tên.
-  const { data: lastSigned } = savedSig
-    ? { data: null }
-    : await supabase
-        .from("studio_contracts")
-        .select("studio_signed_name, studio_signature")
-        .eq("owner_id", profile.id)
-        .not("studio_signed_name", "is", null)
-        .not("studio_signature", "is", null)
-        .order("studio_signed_at", { ascending: false, nullsFirst: false })
-        .limit(1)
-        .maybeSingle();
   const last = lastSigned as { studio_signed_name: string | null; studio_signature: string | null } | null;
   const reusableSig = savedSig
     ? { name: savedSig.signer_name as string, signature: savedSig.signature as string }
@@ -253,7 +269,6 @@ export default async function ContractPage(
       ? { name: last.studio_signed_name, signature: last.studio_signature }
       : null;
   const defaultSignName = reusableSig?.name || ((profile.full_name as string | null) ?? "").trim();
-  const flags = await getFeatureFlags();
   const storyLocked = storyComingSoon(flags) && profile.actingRole !== "admin";
   // Kế hoạch cưới: cùng luật với cổng khách — còn "Sắp ra mắt" thì chỉ hợp đồng
   // của tài khoản admin chạy thật (xem plannerComingSoon).
@@ -294,7 +309,7 @@ export default async function ContractPage(
       initialMilestones={(milestones ?? []) as StudioEvent[]}
       initialAppointments={(appointments ?? []) as StudioAppointment[]}
       ownerId={profile.id as string}
-      branches={(await getActiveBranches(profile.id)).map((b) => ({ id: b.id, name: b.name }))}
+      branches={activeBranches.map((b) => ({ id: b.id, name: b.name }))}
       studioName={brand.name}
       depositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? 25}
       studioLogo={brand.logoUrl}

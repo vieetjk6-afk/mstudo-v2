@@ -14,6 +14,8 @@ import MessengerButton from "@/components/MessengerButton";
 import VietQRButton from "@/components/VietQR";
 import { instalmentNote } from "@/lib/vietqr";
 import { isMissingColumn } from "@/lib/missing-column";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
+import { chunk } from "@/lib/photos";
 import CollectButton from "@/components/studio/CollectButton";
 import AutoEmailToggle from "@/components/AutoEmailToggle";
 import UpcomingSchedule from "@/components/studio/UpcomingSchedule";
@@ -199,27 +201,92 @@ export default async function StudioOverview() {
   // Start of the 6-month window for the revenue chart (this month minus 5).
   const chartStart = new Date(Date.UTC(vnYear, vnMonth - 1 - 5, 1)).toISOString().slice(0, 10);
 
-  // Explicit columns + drop cancelled at the DB (less payload than select *).
-  let cq = supabase
-    .from("studio_contracts")
-    .select(
-      "id, code, title, client_name, client_phone, client_messenger, location, event_date, event_time, delivery_due, status, shoot_type, client_signed_at, selection_album_id, select_invited_at, updated_at, contract_items(qty, unit_price), contract_edit_requests(status), contract_payments(amount), contract_crew(id, name, phone, role, status)"
-    )
-    .eq("owner_id", profile.id)
-    .neq("status", "cancelled");
-  if (profile.actingRole === "staff") cq = cq.eq("assigned_to", profile.actingUserId);
+  type CrewLite = { id: string; name: string; phone: string | null; role: CrewRole; status: string };
+  type ActiveRow = {
+    id: string;
+    code: string | null;
+    title: string;
+    client_name: string | null;
+    client_phone: string | null;
+    client_messenger: string | null;
+    location: string | null;
+    event_date: string | null;
+    event_time: string | null;
+    delivery_due: string | null;
+    status: ContractStatus;
+    shoot_type: keyof typeof SHOOT_TYPE_LABEL;
+    client_signed_at: string | null;
+    selection_album_id: string | null;
+    select_invited_at: string | null;
+    updated_at: string;
+    contract_items: { qty: number; unit_price: number }[];
+    contract_edit_requests: { status: string }[];
+    contract_payments: { amount: number }[];
+    contract_crew: CrewLite[];
+  };
+  type OldRow = Pick<
+    ActiveRow,
+    | "id" | "title" | "client_name" | "client_phone" | "location" | "event_date" | "event_time"
+    | "status" | "shoot_type" | "contract_items" | "contract_payments" | "contract_edit_requests" | "contract_crew"
+  >;
+
+  // Hợp đồng chia HAI tập theo việc trang này thật sự cần:
+  //  • ĐANG CHẠY — mọi trạng thái chưa xong (nháp → hậu kỳ) + hợp đồng đã xong
+  //    có ngày chụp trong 180 ngày gần đây. Đây là tập mọi khối lịch/tắc/giao ảnh
+  //    dùng tới (khối nào cũng chỉ nhìn hôm qua trở đi, hoặc HĐ chưa xong), nên
+  //    tải đủ cột + các bảng con.
+  //  • ĐÃ XONG TỪ LÂU (hoặc không ghi ngày) — chỉ còn góp vào số TỔNG: công nợ
+  //    khách, số hợp đồng đang có, mốc kỷ niệm, và yêu cầu sửa / thợ chưa nhận
+  //    còn treo. Tải cột nhẹ, bảng con sửa/thợ lọc sẵn ở DB nên gần như rỗng.
+  // Trước đây là MỘT truy vấn tải hết mọi hợp đồng từng có kèm bốn bảng con,
+  // không giới hạn: chậm, và vượt 1000 hàng là Supabase lặng lẽ cắt — KPI với
+  // danh sách tắc sai mà không ai biết. Cả hai tập giờ đều lật trang (fetchAllRows).
+  const recentCutoff = new Date(Date.UTC(vnYear, vnMonth - 1, vnDay - 180)).toISOString().slice(0, 10);
+  const isStaff = profile.actingRole === "staff";
+  const activeContracts = () =>
+    fetchAllRows<ActiveRow>((from, to) => {
+      let q = supabase
+        .from("studio_contracts")
+        .select(
+          "id, code, title, client_name, client_phone, client_messenger, location, event_date, event_time, delivery_due, status, shoot_type, client_signed_at, selection_album_id, select_invited_at, updated_at, contract_items(qty, unit_price), contract_edit_requests(status), contract_payments(amount), contract_crew(id, name, phone, role, status)"
+        )
+        .eq("owner_id", profile.id)
+        .neq("status", "cancelled")
+        .or(`status.neq.completed,event_date.gte.${recentCutoff}`);
+      if (isStaff) q = q.eq("assigned_to", profile.actingUserId);
+      // Thứ tự theo ngày chụp như cũ, thêm id để thứ tự là TỔNG (lật trang không trùng/sót).
+      return q.order("event_date", { ascending: true, nullsFirst: false }).order("id").range(from, to);
+    });
+  const oldContracts = () =>
+    fetchAllRows<OldRow>((from, to) => {
+      let q = supabase
+        .from("studio_contracts")
+        .select(
+          "id, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, contract_items(qty, unit_price), contract_payments(amount), contract_edit_requests(status), contract_crew(id, name, phone, role, status)"
+        )
+        .eq("owner_id", profile.id)
+        .eq("status", "completed")
+        .or(`event_date.lt.${recentCutoff},event_date.is.null`)
+        // Lọc HÀNG CON (không phải hàng cha): HĐ cũ vẫn về đủ để cộng công nợ,
+        // nhưng chỉ mang theo yêu cầu sửa đang mở và thợ chưa phản hồi.
+        .eq("contract_edit_requests.status", "open")
+        .eq("contract_crew.status", "pending");
+      if (isStaff) q = q.eq("assigned_to", profile.actingUserId);
+      return q.order("id").range(from, to);
+    });
 
   const [
-    { data: contracts },
+    contracts,
+    oldList,
     { data: planRows },
-    { data: payMonth },
     { data: paySixMonths },
     { data: recentQuotes },
     { data: pendingProofs },
     { count: pendingReviews },
     { count: pendingBank },
   ] = await Promise.all([
-    cq.order("event_date", { ascending: true, nullsFirst: false }),
+    activeContracts(),
+    oldContracts(),
     // pay_code (mã đợt cho SePay) chỉ có sau migrations/bank_auto_reconcile.sql.
     // Chưa chạy thì lùi về bản không có cột, không để cả Tổng quan hỏng.
     (async () => {
@@ -236,16 +303,18 @@ export default async function StudioOverview() {
       const full = await q(`${base}, pay_code`);
       return full.error && isMissingColumn(full.error, "pay_code") ? q(base) : full;
     })(),
-    supabase
-      .from("contract_payments")
-      .select("amount, contract:studio_contracts!inner(owner_id)")
-      .eq("contract.owner_id", profile.id)
-      .gte("paid_at", monthStart),
-    supabase
-      .from("contract_payments")
-      .select("amount, paid_at, contract:studio_contracts!inner(owner_id)")
-      .eq("contract.owner_id", profile.id)
-      .gte("paid_at", chartStart),
+    // Một truy vấn cho cả biểu đồ 6 tháng lẫn doanh thu tháng này — tháng này
+    // nằm gọn trong cửa sổ 6 tháng nên lọc lại bằng JS, khỏi gọi DB lần nữa.
+    // Lật trang luôn: studio đông khách vượt 1000 lượt thu trong 6 tháng là có thật.
+    fetchAllRows<{ amount: number; paid_at: string }>((from, to) =>
+      supabase
+        .from("contract_payments")
+        .select("amount, paid_at, contract:studio_contracts!inner(owner_id)")
+        .eq("contract.owner_id", profile.id)
+        .gte("paid_at", chartStart)
+        .order("id")
+        .range(from, to)
+    ).then((data) => ({ data })),
     supabase
       .from("studio_quotes")
       .select("id, code, title, client_name, client_phone, status, created_at, quote_items(qty, unit_price, selected, is_optional, is_discount)")
@@ -282,29 +351,13 @@ export default async function StudioOverview() {
       .in("status", ["unmatched", "mismatch"]),
   ]);
 
-  type CrewLite = { id: string; name: string; phone: string | null; role: CrewRole; status: string };
-  const list = (contracts ?? []) as Array<{
-    id: string;
-    code: string | null;
-    title: string;
-    client_name: string | null;
-    client_phone: string | null;
-    client_messenger: string | null;
-    location: string | null;
-    event_date: string | null;
-    event_time: string | null;
-    delivery_due: string | null;
-    status: ContractStatus;
-    shoot_type: keyof typeof SHOOT_TYPE_LABEL;
-    client_signed_at: string | null;
-    selection_album_id: string | null;
-    select_invited_at: string | null;
-    updated_at: string;
-    contract_items: { qty: number; unit_price: number }[];
-    contract_edit_requests: { status: string }[];
-    contract_payments: { amount: number }[];
-    contract_crew: CrewLite[];
-  }>;
+  const list = contracts;
+  // Toàn bộ hợp đồng chưa huỷ (hai tập gộp lại), sắp theo ngày chụp như truy vấn
+  // cũ — dùng cho những số phải tính trên MỌI hợp đồng: công nợ, yêu cầu sửa,
+  // thợ chưa nhận, mốc kỷ niệm. Khối lịch/tắc/giao ảnh vẫn dùng `list`.
+  const allContracts: OldRow[] = [...oldList, ...list].sort((a, b) =>
+    (a.event_date || "\uffff").localeCompare(b.event_date || "\uffff")
+  );
 
   // Lịch chụp sắp tới chỉ tính hợp đồng đã xác nhận/ký (bỏ nháp & mới gửi).
   //
@@ -322,7 +375,7 @@ export default async function StudioOverview() {
       (a.event_time || "99:99").localeCompare(b.event_time || "99:99")
     );
   // Yêu cầu sửa khách gửi mà chưa xử lý xong.
-  const openEdits = list.flatMap((c) =>
+  const openEdits = allContracts.flatMap((c) =>
     (c.contract_edit_requests || []).filter((r) => r.status === "open").map(() => c)
   );
 
@@ -335,12 +388,41 @@ export default async function StudioOverview() {
   const daysSince = (iso: string | null) =>
     iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 86400000) : 0;
 
+  // Crew who haven't responded yet (pending) on non-cancelled contracts.
+  // Tính sớm để đọc vai trò thợ SONG SONG với bước kiểm tra album bên dưới.
+  const pendingCrew = allContracts
+    .filter((c) => c.status !== "cancelled")
+    .flatMap((c) => (c.contract_crew || []).filter((cr) => cr.status === "pending").map((cr) => ({ c, cr })));
+  // Vai trò tự đặt chỉ cần đọc khi có thợ để nhắc (dùng ở mục 9 bên dưới).
+  const crewRolesP = pendingCrew.length ? loadCrewRoles(supabase, profile.id as string) : Promise.resolve([]);
+
   // Album chọn ảnh nào đã có khách bấm chọn → hợp đồng đó không còn tắc ở bước này.
-  const albumIds = list.map((c) => c.selection_album_id).filter((x): x is string => !!x);
-  const { data: pickedRows } = albumIds.length
-    ? await supabase.from("selections").select("album_id").in("album_id", albumIds)
-    : { data: [] as { album_id: string }[] };
-  const pickedAlbums = new Set((pickedRows ?? []).map((r) => r.album_id as string));
+  // Chỉ hỏi cho đúng những hợp đồng CÓ THỂ tắc ở bước này (đã mời ≥ STALL_DAYS
+  // ngày và không rơi vào nhánh "chưa ký" trước đó), mỗi album một câu
+  // `limit(1)` — biết "có hay không" là đủ. Trước đây kéo về MỌI lượt chọn của
+  // MỌI album chỉ để dựng một Set, với hàng trăm UUID nhét trong URL.
+  // (Không dùng albums.selection_done_at: cột đó là "đã bấm chốt", còn ở đây
+  // khách mới chọn vài ảnh là đã không còn tắc; album chốt trước migration lại NULL.)
+  const inviteCandidates = [
+    ...new Set(
+      list
+        .filter(
+          (c) =>
+            c.status !== "completed" && c.status !== "draft" &&
+            !(c.status === "sent" && !c.client_signed_at) &&
+            !!c.select_invited_at && !!c.selection_album_id &&
+            daysSince(c.select_invited_at) >= STALL_DAYS
+        )
+        .map((c) => c.selection_album_id as string)
+    ),
+  ];
+  const pickedAlbums = new Set<string>();
+  for (const part of chunk(inviteCandidates, 10)) {
+    const res = await Promise.all(
+      part.map((id) => supabase.from("selections").select("album_id").eq("album_id", id).limit(1))
+    );
+    res.forEach(({ data }, i) => { if (data && data.length > 0) pickedAlbums.add(part[i]); });
+  }
 
   type Stall = { c: (typeof list)[number]; reason: string; days: number; tone: ToneKey };
   const stalled: Stall[] = [];
@@ -370,17 +452,12 @@ export default async function StudioOverview() {
   stalled.sort((a, b) => b.days - a.days);
 
   // Outstanding debts: active contracts where collected < total.
-  const debts = list
+  const debts = allContracts
     .filter((c) => c.status !== "cancelled")
     .map((c) => ({ c, due: contractTotal(c.contract_items || []) - sumAmounts(c.contract_payments || []) }))
     .filter((d) => d.due > 0)
     .sort((a, b) => (a.c.event_date || "9999").localeCompare(b.c.event_date || "9999"));
   const totalDue = debts.reduce((s, d) => s + d.due, 0);
-
-  // Crew who haven't responded yet (pending) on non-cancelled contracts.
-  const pendingCrew = list
-    .filter((c) => c.status !== "cancelled")
-    .flatMap((c) => (c.contract_crew || []).filter((cr) => cr.status === "pending").map((cr) => ({ c, cr })));
 
   // Contracts sent to the client but not signed yet (oldest waiting first).
   const unsigned = list
@@ -400,7 +477,11 @@ export default async function StudioOverview() {
   }>);
 
   // ── Số liệu KPI ───────────────────────────────────────────────
-  const revenueMonth = sumAmounts((payMonth ?? []) as unknown as { amount: number }[]);
+  // 6 tháng doanh thu — gom tiền đã thu theo YYYY-MM.
+  const sixMonthPays = paySixMonths;
+  // Tháng này = phần của cửa sổ 6 tháng từ ngày 1 trở đi (paid_at ISO so chuỗi
+  // được với YYYY-MM-DD, đúng như `.gte("paid_at", monthStart)` trước đây).
+  const revenueMonth = sumAmounts(sixMonthPays.filter((p) => (p.paid_at || "") >= monthStart));
   const notCancelled = list.filter((c) => c.status !== "cancelled");
 
   const yesterday = new Date(new Date(today).getTime() - 86400000).toISOString().slice(0, 10);
@@ -415,8 +496,6 @@ export default async function StudioOverview() {
   const yesterdayJobs = notCancelled.filter((c) => c.event_date === yesterday).length;
   const jobsDelta = todayJobs.length - yesterdayJobs;
 
-  // 6 tháng doanh thu — gom tiền đã thu theo YYYY-MM.
-  const sixMonthPays = (paySixMonths ?? []) as unknown as { amount: number; paid_at: string }[];
   const revBars = Array.from({ length: 6 }, (_, i) => {
     const d = new Date(Date.UTC(vnYear, vnMonth - 1 - 5 + i, 1));
     const key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -582,8 +661,8 @@ export default async function StudioOverview() {
     });
   }
 
-  // 9. Thợ chưa nhận job. Vai trò tự đặt chỉ cần đọc khi có thợ để nhắc.
-  const crewRoles = pendingCrew.length ? await loadCrewRoles(supabase, profile.id as string) : [];
+  // 9. Thợ chưa nhận job. Vai trò tự đặt đã bắt đầu đọc từ trên (crewRolesP).
+  const crewRoles = await crewRolesP;
   for (const { c, cr } of pendingCrew) {
     urgent.push({
       key: `pcrew-${cr.id}`, icon: Users, tone: "blue",
@@ -612,15 +691,15 @@ export default async function StudioOverview() {
   }
 
   // ── Nên liên hệ tháng này (kỷ niệm & chụp lại) ────────────────────────
-  // Tính THẲNG từ `list` đã tải ở trên — không thêm truy vấn nào, vì danh sách
-  // hợp đồng vốn đã không giới hạn theo ngày nên đã chứa cả hợp đồng nhiều năm
-  // trước. Nhân sự không thấy khối này: đây là việc chăm khách của quản lý, mà
-  // `list` của nhân sự còn bị lọc theo phân công nên số sẽ sai.
+  // Tính THẲNG từ `allContracts` đã tải ở trên — không thêm truy vấn nào, vì tập
+  // "đã xong từ lâu" chứa đủ hợp đồng nhiều năm trước (mốc 1/3/5/10 năm đều cũ
+  // hơn cửa sổ 180 ngày). Nhân sự không thấy khối này: đây là việc chăm khách
+  // của quản lý, mà danh sách của nhân sự còn bị lọc theo phân công nên số sẽ sai.
   const milestones =
     profile.actingRole === "staff"
       ? []
       : upcomingMilestones(
-          list.map((c) => ({
+          allContracts.map((c) => ({
             id: c.id,
             title: c.title,
             client_name: c.client_name,
@@ -695,7 +774,7 @@ export default async function StudioOverview() {
     },
     {
       icon: TrendingUp, tone: "green", label: `Doanh thu tháng ${vnMonth}`,
-      value: vndShort(revenueMonth), sub: `${notCancelled.length} hợp đồng đang có`,
+      value: vndShort(revenueMonth), sub: `${allContracts.length} hợp đồng đang có`,
       delta: revDeltaPct != null ? `${revDeltaPct >= 0 ? "▲" : "▼"} ${Math.abs(revDeltaPct)}%` : undefined,
       deltaTone: (revDeltaPct ?? 0) >= 0 ? "green" : "red",
     },
