@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getSessionUser, getProfileById, needsMfa } from "@/lib/auth-guards";
 import DashboardChrome from "@/components/DashboardChrome";
@@ -20,6 +20,7 @@ import { effectivePlan, planProfilePatch, studioTier } from "@/lib/plans";
 import { getFeatureFlags, comingSoonNav, desktopHidden } from "@/lib/feature-flags";
 import { BRANCH_COOKIE, getBranchScope } from "@/lib/branches";
 import type { ChromeProfile, Profile } from "@/lib/types";
+import { ACCENT_COOKIE, UI_COOKIE, accentHex, accentKey, resolveUi, uiV2Mode } from "@/lib/ui-version";
 
 export default async function DashboardLayout({
   children,
@@ -148,6 +149,11 @@ on conflict (id) do update set role='admin', is_active=true;`}
       : getBranchScope(owner as string, profile.studio_branch_id as string | null, actingRole),
   ]);
   const comingSoon = comingSoonNav(flags);
+  // Giao diện mới (thử nghiệm): cờ ui_v2 quyết định AI được dùng, cookie là lựa
+  // chọn của từng người. Đọc ở server để vẽ đúng khung ngay lần đầu, không nháy.
+  const jar = await cookies();
+  const ui = resolveUi(uiV2Mode(flags), profile.role === "admin", jar.get(UI_COOKIE)?.value);
+  const accent = accentKey(jar.get(ACCENT_COOKIE)?.value);
   // Chưa xuất bản (ẩn hoàn toàn với non-admin, không hiện cả nhãn "Sắp ra mắt").
   const hiddenNav = desktopHidden(flags) ? ["/dashboard/studio/desktop"] : [];
 
@@ -157,7 +163,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
         {/* `tier` để thanh tiến độ mang màu của khu đang mở (xanh trong khu
             studio, vàng ngoài đó) — nó nằm NGOÀI .studio-shell nên không tự
             thừa hưởng token màu. Xem @/lib/studio-shell-paths. */}
-        <NavProgress tier={tier} />
+        <NavProgress tier={tier} color={ui.active ? accentHex(accent) : undefined} />
       </Suspense>
       {expiredTrialPlan && <TrialExpiredBanner expiredPlan={expiredTrialPlan} />}
       <DashboardChrome
@@ -172,6 +178,8 @@ on conflict (id) do update set role='admin', is_active=true;`}
         branchSelected={branchScope.selected}
         branchCookie={branchScope.enabled ? BRANCH_COOKIE : undefined}
         branchLocked={branchScope.locked}
+        ui={ui}
+        accent={accent}
       >
         {children}
       </DashboardChrome>

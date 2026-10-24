@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import DashboardHeader from "@/components/DashboardHeader";
 import StudioFooterNav from "@/components/StudioFooterNav";
 import StudioShell from "@/components/StudioShell";
+import StudioShellV2 from "@/components/v2/StudioShellV2";
+import type { AccentKey, UiState } from "@/lib/ui-version";
 import type { ChromeProfile } from "@/lib/types";
 import { isStudioPath } from "@/lib/studio-shell-paths";
 
@@ -27,6 +29,8 @@ export default function DashboardChrome({
   branchSelected = null,
   branchCookie,
   branchLocked = false,
+  ui = { eligible: false, active: false },
+  accent = "blue",
   children,
 }: {
   profile: ChromeProfile;
@@ -42,6 +46,9 @@ export default function DashboardChrome({
   branchCookie?: string;
   /** Phạm vi bị vai trò ghim — ô chọn hiện dạng khoá. */
   branchLocked?: boolean;
+  /** Giao diện mới (thử nghiệm) — xem @/lib/ui-version. */
+  ui?: UiState;
+  accent?: AccentKey;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -49,6 +56,25 @@ export default function DashboardChrome({
   // chung với <NavProgress/> — hai chỗ cùng một câu trả lời thì thanh tiến độ ở
   // đỉnh trang mới mang đúng màu của khu đang mở.
   const isStudio = isStudioPath(pathname, tier);
+
+  if (isStudio && tier !== "none" && ui.active) {
+    return (
+      <StudioShellV2
+        profile={profile}
+        tier={tier}
+        role={role}
+        comingSoon={comingSoon}
+        hiddenNav={hiddenNav}
+        branches={branches}
+        branchSelected={branchSelected}
+        branchCookie={branchCookie}
+        branchLocked={branchLocked}
+        accent={accent}
+      >
+        {children}
+      </StudioShellV2>
+    );
+  }
 
   if (isStudio && tier !== "none") {
     return (
@@ -62,6 +88,7 @@ export default function DashboardChrome({
         branchSelected={branchSelected}
         branchCookie={branchCookie}
         branchLocked={branchLocked}
+        suggestNewUi={ui.eligible}
       >
         {children}
       </StudioShell>

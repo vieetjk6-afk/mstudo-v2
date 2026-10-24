@@ -910,6 +910,150 @@ body {
 }
 
 /* ════════════════════════════════════════════════════════════════════════════
+   GIAO DIỆN MỚI (thử nghiệm) — lớp .ui-v2 đặt CÙNG phần tử với .studio-shell
+   (xem StudioShellV2). Chỉ ghi đè token, nên mọi màn cũ chạy bên trong khung mới
+   tự đổi sang bộ màu mới mà không phải sửa từng file.
+
+   Màu chủ đạo do người dùng chọn: khung gắn `--ac-base` (một trong ACCENTS của
+   @/lib/ui-version) lên style; mặc định xanh dương như ảnh tham khảo.
+   Nền xám ngả xanh, thẻ trắng, viền mảnh — gọn và dịu mắt hơn nền be của bản cũ.
+   ════════════════════════════════════════════════════════════════════════════ */
+.studio-shell.ui-v2 {
+  --ac: var(--ac-base, #0b5cc4);
+  --acS: color-mix(in srgb, var(--ac) 10%, #ffffff);
+  --acM: color-mix(in srgb, var(--ac) 20%, #ffffff);
+  --acD: color-mix(in srgb, var(--ac) 84%, #000000);
+
+  --bg: #f3f5f8;
+  --bg2: #eaeef3;
+  --sf: #ffffff;
+  --sf2: #f5f7fa;
+  --bd: #e1e6ec;
+  --bd2: #edf0f4;
+  --tx: #16202c;
+  --tx2: #4d5a69;
+  --tx3: #7b8796;
+
+  --gn: #14834f;
+  --gnS: #e3f4ea;
+  --am: #b26a00;
+  --amS: #fdf1dc;
+  --bl: #1f63c9;
+  --blS: #e6effc;
+  --rd: #c62f2f;
+  --rdS: #fce8e8;
+  --nuS: #eef1f5;
+
+  --r-card: 16px;
+  --r-sm: 11px;
+  --r-btn: 10px;
+  --topbar-h: 60px;
+  --topbar: rgba(255, 255, 255, 0.88);
+  --sh-pop: 0 18px 44px -12px rgba(15, 30, 55, 0.22), 0 2px 6px rgba(15, 30, 55, 0.06);
+}
+.studio-shell.ui-v2[data-theme="dark"] {
+  --ac: color-mix(in srgb, var(--ac-base, #0b5cc4) 72%, #ffffff);
+  --acS: color-mix(in srgb, var(--ac) 18%, #171e27);
+  --acM: color-mix(in srgb, var(--ac) 32%, #171e27);
+  --acD: color-mix(in srgb, var(--ac) 80%, #ffffff);
+  --bg: #0f141b;
+  --bg2: #0b1016;
+  --sf: #171e27;
+  --sf2: #1f2832;
+  --bd: #2b3540;
+  --bd2: #232c36;
+  --tx: #e8edf3;
+  --tx2: #a9b4c1;
+  --tx3: #7f8b99;
+  --gn: #4fc68a;
+  --gnS: #16301f;
+  --am: #e7a948;
+  --amS: #33280f;
+  --bl: #7eadf6;
+  --blS: #1a2c45;
+  --rd: #f07a72;
+  --rdS: #3a1b1b;
+  --nuS: #222b35;
+  --topbar: rgba(23, 30, 39, 0.88);
+  --sh-pop: 0 18px 44px -12px rgba(0, 0, 0, 0.6);
+}
+.ui-v2 .v2-side {
+  background: var(--sf);
+  border-right: 1px solid var(--bd);
+}
+.ui-v2 .v2-nav {
+  color: var(--tx2);
+  font-weight: 500;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.ui-v2 .v2-nav:hover:not(.is-active) {
+  background: var(--sf2);
+  color: var(--tx);
+}
+.ui-v2 .v2-nav.is-active {
+  background: var(--acS);
+  color: var(--ac);
+  font-weight: 650;
+}
+.ui-v2 .v2-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 20px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 650;
+  background: var(--amS);
+  color: var(--am);
+}
+.ui-v2 .v2-nav.is-active .v2-count {
+  background: var(--ac);
+  color: #fff;
+}
+.ui-v2 .v2-group {
+  color: var(--tx3);
+  letter-spacing: 0.01em;
+}
+.ui-v2 .v2-group:hover:not(:disabled) {
+  background: var(--sf2);
+  color: var(--tx2);
+}
+.ui-v2 .v2-group:disabled {
+  cursor: default;
+}
+.ui-v2 .v2-primary {
+  background: var(--ac);
+  color: #fff;
+  transition: background-color 0.12s ease;
+}
+.ui-v2 .v2-primary:hover {
+  background: var(--acD);
+}
+.ui-v2 .v2-icon {
+  color: var(--tx2);
+  transition: background-color 0.12s ease;
+}
+.ui-v2 .v2-icon:hover {
+  background: var(--sf2);
+}
+.ui-v2 .v2-pop {
+  background: var(--sf);
+  border: 1px solid var(--bd);
+  border-radius: 16px;
+  box-shadow: var(--sh-pop);
+}
+.ui-v2 .v2-menu {
+  color: var(--tx);
+  transition: background-color 0.12s ease;
+}
+.ui-v2 .v2-menu:hover {
+  background: var(--sf2);
+}
+/* Ô ⌘K và ô nhập của màn cũ: viền focus theo màu chủ đạo mới. */
+.ui-v2 .ck-bar:hover {
+  border-color: var(--ac);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
    TRANG GỬI KHÁCH (hợp đồng /c/… và báo giá /q/…) — CÙNG BỘ TOKEN VỚI KHU
    QUẢN LÝ. Bản thiết kế vẽ trang khách bằng đúng hệ màu/chữ của khu quản lý
    (màn "Hợp đồng gửi khách"), nên nó dùng lại y hệt token thay vì bộ :root cũ

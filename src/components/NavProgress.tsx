@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
-import { navProgressColor, type ShellTier } from "@/lib/studio-shell-paths";
+import { isStudioPath, navProgressColor, type ShellTier } from "@/lib/studio-shell-paths";
 
 /**
  * Zero-dependency top progress bar for App Router (Next 14, no router events).
@@ -12,10 +12,14 @@ import { navProgressColor, type ShellTier } from "@/lib/studio-shell-paths";
  * starts the moment an internal link is clicked — instant feedback — and
  * completes when the pathname/search actually changes (navigation done).
  */
-export default function NavProgress({ tier = "none" }: { tier?: ShellTier } = {}) {
+export default function NavProgress({ tier = "none", color: studioColor }: {
+  tier?: ShellTier;
+  /** Màu chủ đạo của giao diện mới — chỉ dùng trong khu studio. */
+  color?: string;
+} = {}) {
   const pathname = usePathname();
   const search = useSearchParams();
-  const color = navProgressColor(pathname, tier);
+  const color = studioColor && isStudioPath(pathname, tier) ? studioColor : navProgressColor(pathname, tier);
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState(false);
   const trickle = useRef<ReturnType<typeof setInterval> | null>(null);

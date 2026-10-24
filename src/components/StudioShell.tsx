@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Sun, Moon, MonitorSmartphone, LogOut, Menu, X as XIcon, Gift, Link2, UserCircle,
-  MessageSquare, Bell, Crown,
+  MessageSquare, Bell, Crown, Sparkles,
 } from "lucide-react";
+import UiSuggestCard from "@/components/v2/UiSuggestCard";
+import { setUiVersion } from "@/components/v2/ui-switch";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioCommandK from "@/components/StudioCommandK";
 import BranchSwitcher, { type SwitcherBranch } from "@/components/BranchSwitcher";
@@ -18,6 +20,8 @@ import { createClient } from "@/lib/supabase/client";
 import { THEME_OPTIONS, nextPref, useTheme } from "@/lib/theme";
 import { roleLabel } from "@/lib/studio-roles";
 import { APP_VERSION } from "@/lib/version";
+import { pageTitle } from "@/lib/studio-titles";
+import { useNavBadges } from "@/lib/use-nav-badges";
 import {
   isNavActive, visibleGroups,
   type NavAccess, type NavBadges, type NavGroup, type NavItem, type StudioTier,
@@ -30,65 +34,6 @@ const THEME_ICON = { light: Sun, dark: Moon, system: MonitorSmartphone } as cons
 
 // Zalo support group for studios using the app.
 const ZALO_SUPPORT_URL = "https://zalo.me/g/rycw0pqcgss14ib6u2xj";
-
-/** Tiêu đề + phụ đề topbar theo tiền tố route (khớp dài nhất thắng). */
-const TITLES: [string, string, string][] = [
-  ["/dashboard/studio/quotes/new", "Tạo báo giá", "Ghép gói và hạng mục, xem trước bản khách nhận"],
-  ["/dashboard/studio/quotes", "Báo giá", "Gửi khách · theo dõi · chốt thành hợp đồng"],
-  ["/dashboard/studio/contracts/new", "Tạo hợp đồng", "Lưu nháp tự động sau mỗi bước"],
-  ["/dashboard/studio/contracts", "Hợp đồng & lịch hẹn", "Toàn bộ buổi chụp và tiến độ"],
-  ["/dashboard/studio/templates", "Mẫu hợp đồng", "Mẫu hợp đồng & điều khoản"],
-  ["/dashboard/studio/board", "Bảng công việc", "Kéo thẻ sang cột khác để đổi trạng thái"],
-  ["/dashboard/studio/bookings", "Đặt lịch khách", "Yêu cầu đặt lịch gửi từ website và trang giá"],
-  ["/dashboard/studio/leads", "Yêu cầu mới", "Khách đặt lịch từ website & chatbox"],
-  // Ba màn lịch cũ đã gộp thành các tab của /calendar, nên chỉ còn MỘT dòng ở
-  // đây; /schedule và /team giờ là route chuyển hướng, không kịp vẽ topbar.
-  ["/dashboard/studio/calendar", "Lịch làm việc", "Buổi chụp · Lịch studio · Đội ngũ"],
-  ["/dashboard/studio/production", "Xử lý hình ảnh", "Ảnh, video, in ấn của mọi hợp đồng"],
-  ["/dashboard/studio/rental", "Phòng váy", "Kho trang phục và đơn cho thuê"],
-  ["/dashboard/studio/equipment", "Thiết bị", "Máy móc, ống kính, đèn và lịch mượn"],
-  ["/dashboard/studio/clients", "Khách hàng", "Danh bạ và lịch sử giao dịch"],
-  ["/dashboard/studio/reviews", "Đánh giá khách", "Duyệt, trả lời và đi xin cảm nhận"],
-  ["/dashboard/studio/thiep", "Thiệp cưới", "Chọn mẫu, điền nội dung, gửi link cho khách"],
-  ["/dashboard/studio/story", "Love Story", "Dòng thời gian chuyện tình của cặp đôi"],
-  ["/dashboard/studio/slide", "Slide cưới", "Dựng video chiếu tiệc từ ảnh đã chọn"],
-  ["/dashboard/studio/album-designer", "Thiết kế album", "Dàn trang album in cho từng hợp đồng"],
-  ["/dashboard/studio/album-categories", "Danh mục album", "Nhóm album theo thể loại"],
-  ["/dashboard/studio/reports", "Thu chi & công nợ", "Dòng tiền thực tế của studio"],
-  ["/dashboard/studio/payroll", "Đối soát tiền công", "Tiền công theo từng nhân sự"],
-  ["/dashboard/studio/branches", "Chi nhánh", "Nhiều cơ sở trong một tài khoản — đội ngũ, lịch và doanh thu riêng"],
-  ["/dashboard/studio/crew", "Nhân sự", "Đang chuyển sang màn Nhân viên & phân quyền…"],
-  ["/dashboard/studio/staff", "Nhân viên & phân quyền", "Tài khoản, vai trò và sổ thợ của studio"],
-  ["/dashboard/studio/ranking", "Xếp hạng đội ngũ", "Theo số buổi nhận và thu nhập từ studio"],
-  ["/dashboard/studio/messages", "Mẫu tin nhắn", "Tin soạn sẵn gửi khách qua Zalo / SMS"],
-  ["/dashboard/studio/pricing", "Gói & bảng giá", "Bảng giá và nội dung từng gói"],
-  ["/dashboard/studio/packages", "Gói dịch vụ", "Nội dung, giá và cách hiện trên website"],
-  ["/dashboard/studio/services", "Dịch vụ & điều khoản", "Bộ điều khoản áp dụng tự động cho từng loại dịch vụ"],
-  ["/dashboard/studio/chatbox", "Website & chatbox", "Dạy trợ lý trả lời theo ý bạn"],
-  ["/dashboard/studio/drive-sync", "Đồng bộ Drive", "Kết nối Google Drive & tự đồng bộ ảnh/video hợp đồng"],
-  ["/dashboard/studio/notifications", "Thông báo", "Mọi hoạt động của studio theo thời gian"],
-  ["/dashboard/studio/desktop", "Ứng dụng máy tính", "Tự lưu hợp đồng và sao lưu dữ liệu ngoại tuyến"],
-  ["/dashboard/studio", "Tổng quan", "Toàn cảnh studio hôm nay"],
-  ["/dashboard/albums", "Thư viện album", "Album chọn ảnh và album giao khách"],
-  ["/dashboard/create", "Tạo album", "Tạo album giao khách mới"],
-  // /dashboard/tools là route CHÍNH của mục "Công cụ ảnh" nhưng trước giờ không
-  // có dòng nào ở đây, nên nó rơi xuống mục "/dashboard" cuối bảng và topbar ghi
-  // nhầm thành "Thư viện album".
-  ["/dashboard/tools", "Công cụ ảnh", "Lọc ảnh khách chọn, nén ảnh và đóng dấu"],
-  ["/dashboard/filter", "Lọc ảnh khách chọn", "Tách ảnh khách đã chọn ra thư mục riêng"],
-  ["/dashboard/compress", "Nén ảnh & watermark", "Xử lý hàng loạt trước khi giao khách"],
-  ["/dashboard/site", "Website & chatbox", "Trang portfolio và trợ lý trả lời khách"],
-  ["/dashboard/upgrade", "Gói phần mềm", "Gói đang dùng và hạn mức của studio"],
-  ["/dashboard/connections", "Kết nối", "Tích hợp dịch vụ bên ngoài"],
-  ["/dashboard/affiliate", "Affiliate", "Giới thiệu studio khác và nhận hoa hồng"],
-  ["/dashboard/admin/system", "Cài đặt hệ thống", "Thông báo toàn studio, sao lưu & khôi phục"],
-  ["/dashboard/admin/affiliate", "Quản lý Affiliate", "Danh sách hoa hồng"],
-  ["/dashboard/admin", "Người dùng & studio", "Tài khoản, gói, DUYỆT yêu cầu nâng cấp & mã giảm giá"],
-  ["/dashboard/settings", "Cấu hình mstudo", "Cấu hình nền tảng, gói & giá, nội dung trang nâng cấp, góp ý"],
-  ["/dashboard/account", "Tài khoản & bảo mật", "Thông tin đăng nhập, mật khẩu, thiết bị"],
-  // Tổng quát nhất nằm cuối để mọi route ở trên khớp trước.
-  ["/dashboard", "Thư viện album", "Tất cả album của bạn"],
-];
 
 /** Xem-như: chủ studio thử giao diện của vai trò khác (chỉ LỌC bớt, không cấp quyền).
  *  KHÔNG có "Toàn quyền chi nhánh" ở đây: vai trò đó ghim phạm vi DỮ LIỆU ở phía
@@ -184,6 +129,7 @@ export default function StudioShell({
   branchSelected = null,
   branchCookie,
   branchLocked = false,
+  suggestNewUi = false,
   children,
 }: {
   profile: ChromeProfile;
@@ -198,6 +144,8 @@ export default function StudioShell({
   branchCookie?: string;
   /** Phạm vi bị vai trò ghim — ô chọn hiện dạng khoá, không bấm ra danh sách. */
   branchLocked?: boolean;
+  /** Được dùng giao diện mới mà đang ở bản cũ → hiện thẻ gợi ý + mục trong menu. */
+  suggestNewUi?: boolean;
   children: React.ReactNode;
 }) {
   const router = useRouter();
@@ -209,7 +157,6 @@ export default function StudioShell({
   const themeBtnLabel = `Giao diện: ${THEME_OPTIONS.find((o) => o.pref === themePref)!.label} — bấm để chuyển sang ${THEME_OPTIONS.find((o) => o.pref === nextPref(themePref))!.label.toLowerCase()}`;
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [avatarOpen, setAvatarOpen] = useState(false);
-  const [badges, setBadges] = useState<NavBadges>({});
   // null = đang xem bằng đúng vai trò thật của mình.
   const [viewAs, setViewAs] = useState<string | null>(null);
 
@@ -237,22 +184,7 @@ export default function StudioShell({
     isOwner &&
     (role === "admin" || !hiddenNav.includes("/dashboard/studio/desktop"));
 
-  // Badge = số việc CHƯA xử lý. Lấy sau khi shell đã vẽ để không chặn trang, và
-  // làm mới khi đổi route (đã xử lý xong thì con số phải tụt ngay) — nhưng
-  // không dày hơn 60s/lần: route đếm 7 bảng một lượt, bấm qua lại vài màn mà
-  // lượt nào cũng đếm lại thì badge thành thứ tốn nhất của cả shell. Gọi ép
-  // (force) thì bỏ qua cả cache HTTP 30s của route.
-  const lastFetch = useRef(0);
-  const loadBadges = useCallback((force = false) => {
-    const now = Date.now();
-    if (!force && now - lastFetch.current < 60_000) return;
-    lastFetch.current = now;
-    fetch("/api/studio/nav-badges", force ? { cache: "no-store" } : undefined)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => { if (j) setBadges(j as NavBadges); })
-      .catch(() => {});
-  }, []);
-  useEffect(() => { loadBadges(); }, [pathname, loadBadges]);
+  const badges = useNavBadges(pathname);
 
   async function signOut() {
     const supabase = createClient();
@@ -261,8 +193,7 @@ export default function StudioShell({
     router.refresh();
   }
 
-  const [title, sub] =
-    TITLES.find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.slice(1) ?? ["Studio", ""];
+  const [title, sub] = pageTitle(pathname);
 
   const initials = (profile.full_name || profile.email || "?")
     .split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
@@ -322,6 +253,15 @@ export default function StudioShell({
         <span style={{ color: "var(--tx2)" }}>Ngôn ngữ</span>
         <LanguageSwitcher />
       </div>
+      {suggestNewUi && (
+        <button
+          onClick={() => { setUiVersion("v2"); router.refresh(); }}
+          className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-semibold"
+          style={{ color: "#0b5cc4" }}
+        >
+          <Sparkles size={15} /> Dùng giao diện mới
+        </button>
+      )}
       <div className="my-1" style={{ borderTop: "1px solid var(--bd2)" }} />
       <button onClick={signOut} className="nav-item flex w-full items-center gap-2.5 rounded-[10px] px-3 py-2 text-[13px] font-medium" style={{ color: "var(--rd)" }}>
         <LogOut size={15} /> Đăng xuất
@@ -602,6 +542,8 @@ export default function StudioShell({
           <main className="page-in min-w-0 overflow-x-clip px-4 pb-28 pt-[22px] sm:px-6 lg:pb-14">{children}</main>
         </div>
       </div>
+
+      {suggestNewUi && <UiSuggestCard />}
 
       {/* Mobile bottom nav (sidebar is hidden below lg) */}
       <div className="lg:hidden">
