@@ -250,6 +250,17 @@ if (first) {
   ok("cột nguồn khách", has(
     "select count(*) from information_schema.columns where table_schema='public' and column_name in ('source','channel','utm','landing_path')"
   ) >= 4);
+  // Vá quyền hợp đồng: trên database ĐANG CHẠY, policy mở rộng cũ phải biến mất.
+  // Còn sót một câu `*_owner_all` là mọi luật vai trò / chi nhánh vô nghĩa (OR).
+  ok("hợp đồng: không còn policy `*_owner_all` mở rộng trên các bảng hợp đồng", has(
+    "select count(*) from pg_policies where schemaname='public' and policyname like '%_owner_all' " +
+      "and tablename in ('studio_contracts','studio_crew','contract_items','contract_payments','contract_payment_plan'," +
+      "'contract_crew','contract_tasks','contract_products','contract_edit_requests','contract_equipment','contract_quote_options')"
+  ) === 0);
+  ok("hợp đồng: có policy đọc / ghi theo vai trò + trigger ghim chi nhánh", has(
+    "select (select count(*) from pg_policies where policyname in ('studio_contracts_member_read','studio_contracts_member_write','contract_payments_member_write','contract_crew_accountant_update')) " +
+      "+ (select count(*) from pg_trigger where tgname = 'studio_contracts_ghim_chi_nhanh')"
+  ) === 5);
   ok("cột toạ độ điểm chụp (thời tiết)", has(
     "select count(*) from information_schema.columns where table_schema='public' and column_name in ('lat','lng','studio_lat','studio_lng')"
   ) >= 4);

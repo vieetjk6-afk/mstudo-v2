@@ -102,5 +102,57 @@ const daBat = new Set(
 const thieu = [...bang].filter((t) => !daBat.has(t));
 ok(`mọi bảng đều bật RLS (${bang.size} bảng)`, thieu.length === 0, `chưa bật: ${thieu.join(", ")}`);
 
+// ── 5. Hợp đồng: hàng rào vai trò / chi nhánh nằm ở RLS ───────────────────
+// migrations/rls_vai_tro_chi_nhanh_hop_dong.sql là chỗ DUY NHẤT chặn nhân viên
+// gọi thẳng PostgREST vượt quyền. Ba thứ dễ bị "dọn" mất trong một lần sửa
+// tưởng vô hại: điều kiện is_active, việc xoá policy `*_owner_all` cũ (policy
+// permissive cộng bằng OR — còn sót một câu là cả file vô nghĩa), và dạng
+// (select …) để policy không chạy lại hàm cho từng dòng. Bài chạy thật nằm ở
+// desktop/test/rls-luu-nguoi.mjs; đây là chốt văn bản, chạy không cần Postgres.
+{
+  const mig = readFileSync(
+    new URL("../../supabase/migrations/rls_vai_tro_chi_nhanh_hop_dong.sql", import.meta.url),
+    "utf8"
+  );
+  const ham = (ten) =>
+    new RegExp(`create or replace function public\\.${ten}\\([^)]*\\)[\\s\\S]*?\\$\\$([\\s\\S]*?)\\$\\$`, "i").exec(mig)?.[1] ?? "";
+
+  const owner = ham("studio_staff_owner");
+  ok(
+    "studio_staff_owner chỉ nhận nhân viên CÒN hoạt động của chủ CÒN hoạt động",
+    /me\.is_active/.test(owner) && /o\.is_active/.test(owner),
+    `thân hàm: ${owner.trim().replace(/\s+/g, " ")}`
+  );
+  ok(
+    "is_studio_member đi qua studio_staff_owner (hưởng is_active)",
+    /studio_staff_owner\(\)/.test(ham("is_studio_member")) && !/studio_owner_id\s*=\s*target/.test(ham("is_studio_member"))
+  );
+
+  const BANG = [
+    "studio_contracts", "contract_items", "contract_payments", "contract_payment_plan",
+    "contract_edit_requests", "contract_equipment", "contract_quote_options",
+    "contract_crew", "contract_tasks", "contract_products", "studio_crew",
+  ];
+  for (const t of BANG) {
+    ok(
+      `${t}: policy mở rộng cũ ${t}_owner_all bị xoá`,
+      new RegExp(`drop policy if exists ${t}_owner_all on public\\.${t};`).test(mig)
+    );
+  }
+
+  // Mọi lần gọi hàm ngữ cảnh trong policy phải nằm trong (select …).
+  const policyText = [...mig.matchAll(/create policy[\s\S]*?;/gi)].map((m) => m[0]).join("\n");
+  const tran = [...policyText.matchAll(/(\(select\s+)?public\.(studio_staff_\w+|is_admin)\(\)/gi)].filter((m) => !m[1]);
+  ok(
+    "policy gọi hàm ngữ cảnh dạng (select …) — initPlan, không chạy lại từng dòng",
+    tran.length === 0,
+    `gọi trần: ${tran.map((m) => m[0]).join(", ")}`
+  );
+  ok(
+    "branch_manager bị ghim theo studio_staff_branch()",
+    /branch_id is not distinct from \(select public\.studio_staff_branch\(\)\)/.test(policyText)
+  );
+}
+
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

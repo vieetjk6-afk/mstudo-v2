@@ -107,6 +107,10 @@ const ORDER = [
   ["migrations/thiep_tang_tu_dong.sql", "Tự tặng thiệp cưới online trước ngày cưới: lựa chọn tặng / không tặng của từng hợp đồng"],
   ["migrations/ke_hoach_cuoi.sql", "Kế hoạch cưới của khách trên cổng khách: việc cần làm, ngân sách, lịch trình ngày cưới + bật/tắt theo hợp đồng"],
   ["migrations/ke_hoach_cuoi_mo_rong.sql", "Kế hoạch cưới mở rộng: khách mời & xếp bàn, nhà cung cấp, đội hỗ trợ, đồ cần mang, ảnh cần chụp, phong cách (chạy SAU ke_hoach_cuoi)"],
+  // Siết RLS hợp đồng theo vai trò / chi nhánh + is_active. Chạy SAU CÙNG: nó
+  // thay hàm is_studio_member và xoá các policy `*_owner_all` mà schema.sql,
+  // rls_thanh_vien_hop_dong, contract_addenda, ke_hoach_cuoi tạo ra.
+  ["migrations/rls_vai_tro_chi_nhanh_hop_dong.sql", "Vá quyền: ghim chi nhánh cho Toàn quyền chi nhánh, kế toán chỉ đọc hợp đồng, nhân viên bị khoá mất quyền (chạy SAU studio_branches, ke_hoach_cuoi)"],
 ];
 
 /**
@@ -162,6 +166,7 @@ const MOI = [
   "migrations/thiep_tang_tu_dong.sql",
   "migrations/ke_hoach_cuoi.sql",
   "migrations/ke_hoach_cuoi_mo_rong.sql",
+  "migrations/rls_vai_tro_chi_nhanh_hop_dong.sql",
 ];
 
 /**
