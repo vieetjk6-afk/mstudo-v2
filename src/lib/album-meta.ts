@@ -1,6 +1,7 @@
 import "server-only";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAlbumOwner } from "@/lib/album-owner";
 
 /**
  * Display name of the studio that owns an album — used to personalise the share
@@ -9,18 +10,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * Falls back to the global site title only when the owner has no name set.
  */
 export async function albumOwnerName(ownerId?: string | null): Promise<string> {
-  const db = createAdminClient();
   try {
     if (ownerId) {
-      const { data } = await db
-        .from("profiles")
-        .select("full_name")
-        .eq("id", ownerId)
-        .maybeSingle();
-      const name = data?.full_name?.trim();
+      // Dùng chung dòng profiles đã cache theo request (xem @/lib/album-owner):
+      // page cũng đọc đúng dòng này, không tốn thêm round-trip nào.
+      const name = (await getAlbumOwner(ownerId)).profile?.full_name?.trim();
       if (name) return name;
     }
-    const { data: site } = await db
+    const { data: site } = await createAdminClient()
       .from("site_settings")
       .select("site_title, profile_name")
       .eq("id", 1)
@@ -54,18 +51,14 @@ export async function buildAlbumMetadata({
   path: string;
   ownerId?: string | null;
 }): Promise<Metadata> {
-  const studio = await albumOwnerName(ownerId);
+  // Tên studio và logo lấy song song; cả hai cùng dựa trên getAlbumOwner đã
+  // cache nên thực tế chỉ một lượt đọc profiles cho cả metadata lẫn page.
+  const [studio, owner] = await Promise.all([albumOwnerName(ownerId), getAlbumOwner(ownerId)]);
   const fullTitle = `${title} · ${studio}`;
 
   // Studio's own logo as the browser-tab favicon (white-label).
-  let logoUrl: string | null = null;
-  if (ownerId) {
-    try {
-      const db = createAdminClient();
-      const { data } = await db.from("profiles").select("studio_logo_url, pl_logo_url").eq("id", ownerId).maybeSingle();
-      logoUrl = data?.studio_logo_url || data?.pl_logo_url || null;
-    } catch { /* keep default favicon */ }
-  }
+  // brand.logoUrl = studio_logo_url || pl_logo_url — đúng luật favicon cũ.
+  const logoUrl: string | null = ownerId ? owner.brand.logoUrl : null;
   const desc =
     description?.trim() ||
     `Album ảnh từ ${studio}. Xem, chọn và tải những khung hình bạn yêu thích.`;

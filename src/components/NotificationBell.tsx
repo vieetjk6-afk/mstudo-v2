@@ -25,22 +25,29 @@ export default function NotificationBell() {
         .then(({ count }) => setCount(count || 0));
     };
 
+    // Realtime — chỉ nghe thông báo CỦA MÌNH. Không có filter thì mọi thông báo
+    // ghi ở BẤT KỲ studio nào cũng bắn sự kiện tới (và bị Realtime kiểm RLS cho)
+    // từng trình duyệt đang mở dashboard, rồi kéo theo một lượt đếm vô ích.
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let stopped = false;
     supabase.auth.getUser().then(({ data }) => {
       uid = data.user?.id ?? null;
       refresh();
+      if (!uid || stopped) return;
+      channel = supabase
+        .channel("notif-bell")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "studio_notifications", filter: `owner_id=eq.${uid}` },
+          () => refresh()
+        )
+        .subscribe();
     });
 
-    // Realtime — re-fetch count on any INSERT or UPDATE to studio_notifications
-    const channel = supabase
-      .channel("notif-bell")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "studio_notifications" },
-        () => refresh()
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      stopped = true;
+      if (channel) supabase.removeChannel(channel);
+    };
   }, []);
 
   return (

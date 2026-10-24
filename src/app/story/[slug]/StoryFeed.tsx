@@ -299,7 +299,10 @@ export default function StoryFeed({
                   <span style={{ color: v.muted, fontSize: 20, letterSpacing: 1 }}>⋯</span>
                 </div>
 
-                <div style={{ width: "100%", aspectRatio: "1/1", backgroundColor: v.chip, backgroundImage: `url('${p.src}')`, backgroundSize: "cover", backgroundPosition: "center", position: "relative" }}>
+                {/* <img loading="lazy"> chứ không phải background-image: ảnh nền CSS
+                    bị tải HẾT ngay khi vào trang, kể cả hàng trăm ảnh dưới màn hình. */}
+                <div style={{ width: "100%", aspectRatio: "1/1", backgroundColor: v.chip, position: "relative", overflow: "hidden" }}>
+                  <img src={p.src} alt="" loading="lazy" decoding="async" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
                   {p.isVideo && (
                     <a href={`https://drive.google.com/file/d/${p.id}/view`} target="_blank" rel="noreferrer" style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                       <div style={{ width: 54, height: 54, borderRadius: 999, background: "rgba(0,0,0,.5)", display: "flex", alignItems: "center", justifyContent: "center" }}><svg width="26" height="26" viewBox="0 0 24 24" fill="#fff"><path d="M8 5v14l11-7z" /></svg></div>

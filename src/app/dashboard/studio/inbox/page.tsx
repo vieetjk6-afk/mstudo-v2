@@ -68,6 +68,7 @@ export default async function InboxPage() {
       staff={staff}
       channels={channels.map(toPublic)}
       meId={profile.actingUserId as string}
+      ownerId={ownerId}
       canManageChannels={["owner", "admin", "manager"].includes(profile.actingRole as string)}
     />
   );

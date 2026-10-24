@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { createClient } from "@/lib/supabase/server";
+import { getProfileById, requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { docBanKe, dungSqlBuThieu, soiDatabase } from "@/lib/db-thieu";
 
@@ -25,6 +25,11 @@ export const maxDuration = 60;
  *
  * Cần đăng nhập. Repo vốn công khai nên đây không phải bí mật, nhưng không có lý
  * do gì để phát schema cho người lạ.
+ *
+ * Chỉ CHỦ tài khoản (chủ album/studio, admin) — không cho tài khoản nhân viên:
+ * nút chép SQL hiện cho chủ (FaceSetupNotice ở danh sách album, BankAutoCard ở
+ * bảng giá) vì chính họ là người dán vào Supabase; nhân viên không có quyền đó
+ * nên không cần đọc schema, và "bu-thieu" còn soi database bằng khoá dịch vụ.
  */
 
 /** Chỉ các file này. Danh sách trắng, không ghép đường dẫn từ tham số. */
@@ -38,11 +43,12 @@ const CHO_PHEP: Record<string, string> = {
 
 export async function GET(_req: Request, props: { params: Promise<{ ten: string }> }) {
   const params = await props.params;
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await getProfileById(user.id);
+  if (!me || !me.is_active || me.studio_owner_id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   /*
    * "bu-thieu" KHÔNG phải file có sẵn: nó được dựng ngay lúc gọi, gồm đúng những

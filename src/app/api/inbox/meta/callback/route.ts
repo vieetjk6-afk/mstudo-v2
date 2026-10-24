@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { sessionActsFor } from "@/lib/auth-guards";
 import { upsertChannel } from "@/lib/inbox/channels";
 import {
   exchangeCodeForPages,
@@ -36,6 +37,7 @@ export async function GET(req: NextRequest) {
   // Studio bấm "Huỷ" trên màn hình Facebook — không phải lỗi, đừng doạ họ.
   if (denied) return back("meta=cancelled");
   if (!code || !ownerId) return back("meta=error");
+  if (!(await sessionActsFor(ownerId))) return back("meta=error");
 
   let pages;
   try {

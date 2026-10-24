@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { sendZalo } from "@/lib/zalo/send";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { canActOnContract } from "@/lib/studio-roles";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -14,9 +16,18 @@ export const maxDuration = 30;
  * nhập — nhân viên thì là studio của chủ). Trả kèm { uid, name, saved } để nút
  * bấm hiện "Gửi Zalo cho <tên>".
  */
+/**
+ * Vai trò được gửi Zalo từ app. Nút gửi có ở màn hợp đồng (mọi vai trò trừ kế
+ * toán), Mẫu tin nhắn (MANAGER_OK) và album (chủ). Kế toán không thấy nút nào —
+ * mà đây là kênh nhắn THAY MẶT studio tới số bất kỳ, nên chặn hẳn.
+ */
+const SEND_ROLES = ["owner", "admin", "manager", "branch_manager", "staff"];
+
 export async function POST(req: NextRequest) {
   const profile = await requireStudio("full");
-  if (!profile) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!profile || !SEND_ROLES.includes(profile.actingRole as string)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const b = await req.json().catch(() => ({}));
   const toPhone = typeof b.toPhone === "string" ? b.toPhone.trim() : "";
@@ -32,6 +43,20 @@ export async function POST(req: NextRequest) {
   const canUseSaved = audience === "client" && (contractId || albumId);
   if (!toPhone && !b.toUid && !canUseSaved) return NextResponse.json({ error: "missing_recipient" }, { status: 400 });
   if (!body && !templateId) return NextResponse.json({ error: "missing_content" }, { status: 400 });
+
+  // Tin gắn hợp đồng: cùng hàng rào với màn hợp đồng — nhân viên chỉ hợp đồng
+  // được giao, quản lý chi nhánh chỉ chi nhánh mình. Không thì gửi kèm contractId
+  // của người khác là dùng được người nhận Zalo đã nhớ của hợp đồng đó.
+  if (contractId && (profile.actingRole === "staff" || profile.actingRole === "branch_manager")) {
+    const { data: c } = await createAdminClient()
+      .from("studio_contracts")
+      .select("owner_id, assigned_to, branch_id")
+      .eq("id", contractId)
+      .maybeSingle();
+    if (!c || c.owner_id !== profile.id || !canActOnContract(profile, c)) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+  }
 
   const res = await sendZalo({
     ownerId: profile.id,

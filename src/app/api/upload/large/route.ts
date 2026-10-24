@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const EXT_OK = /^[a-z0-9]{1,5}$/;
+// Chỉ đuôi ảnh: URL ký sẵn bỏ qua RLS và client tự đặt content-type khi PUT,
+// nên `svg`/`html` ở đây là đường gửi trang tuỳ ý lên bucket công khai.
+const EXT_OK = /^(jpe?g|png|webp|gif|heic|heif|avif)$/;
+// URL ký bằng service-role — không để client chọn bucket tuỳ ý.
+const BUCKETS = ["logos"];
 
 /**
  * Bước 1 của luồng tải ẢNH LỚN.
@@ -17,14 +21,14 @@ const EXT_OK = /^[a-z0-9]{1,5}$/;
  * File nằm dưới tiền tố `tmp/<user_id>/` — chỗ trung chuyển, không phải chỗ ở.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as { ext?: string; bucket?: string } | null;
   const raw = (body?.ext || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
   const ext = EXT_OK.test(raw) ? raw : "jpg";
   const bucket = body?.bucket || "logos";
+  if (!BUCKETS.includes(bucket)) return NextResponse.json({ error: "bad_bucket" }, { status: 400 });
 
   const path = `tmp/${user.id}/${crypto.randomUUID()}.${ext}`;
   // Service role: URL ký sẵn bỏ qua RLS, nên đường dẫn phải do SERVER đặt và

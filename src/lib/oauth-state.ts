@@ -36,8 +36,8 @@ function hmac(data: string): string {
 }
 
 /** Trả về chuỗi state đã ký: `<payload>.<exp>.<sig>`. */
-export function signOAuthState(payload: string): string {
-  const exp = Date.now() + TTL_MS;
+export function signOAuthState(payload: string, ttlMs: number = TTL_MS): string {
+  const exp = Date.now() + ttlMs;
   const data = `${b64url(Buffer.from(payload, "utf8"))}.${exp}`;
   return `${data}.${hmac(data)}`;
 }

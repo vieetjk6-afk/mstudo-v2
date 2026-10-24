@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { guardCaptcha } from "@/lib/captcha-guard";
+import { verifyCrewSession } from "@/lib/crew-session";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,8 @@ function clean(v: unknown): string | null {
 /**
  * Hồ sơ thợ ở cổng /crew.
  *
- *   POST { phone }                          -> hồ sơ ở từng studio đã nhận mình
- *   POST { action: "save", phone, studioId, profile } -> thợ tự điền
+ *   POST { phone, session }                 -> hồ sơ ở từng studio đã nhận mình
+ *   POST { action: "save", phone, session, studioId, profile } -> thợ tự điền
  *   POST { action: "register", phone, crewToken, profile } -> xin vào sổ 1 studio
  *
  * Đăng ký PHẢI kèm crewToken: /crew trần không biết thợ thuộc studio nào (nó cố
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
     studioId?: string;
     crewToken?: string;
     captcha?: string;
+    session?: string;
     profile?: Record<string, unknown>;
   };
   const phone = digits(body.phone);
@@ -44,6 +46,14 @@ export async function POST(req: Request) {
 
   const rl = await limitByIpDurable(req, `crewprof:${phone}`, 20, 60_000);
   if (rl) return rl;
+
+  // Xem/sửa hồ sơ (có số tài khoản nhận lương) cần phiên do lượt tra cứu ĐÃ
+  // QUA captcha ở /api/crew cấp. Trước đây chỉ cần SĐT: người lạ biết SĐT thợ
+  // là đọc được số tài khoản, rồi dùng owner_id trong phản hồi để GHI ĐÈ số tài
+  // khoản đó — tiền công studio trả sẽ chảy vào tài khoản kẻ gian.
+  if (body.action !== "register" && !verifyCrewSession(body.session, phone)) {
+    return NextResponse.json({ error: "no_session" }, { status: 401 });
+  }
 
   const db = createAdminClient();
 

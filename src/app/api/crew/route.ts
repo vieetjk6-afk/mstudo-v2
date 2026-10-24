@@ -4,6 +4,7 @@ import { sendPushToOwner } from "@/lib/push";
 import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
+import { signCrewSession, verifyCrewSession } from "@/lib/crew-session";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,11 @@ function normTime(v: string | null | undefined): string | null {
  *   POST { action: "busy_remove", id, phone }        -> clear one entry
  *   POST { action: "shift_set", phone, company, shift } -> set/clear công ty + ca
  */
+/** Các action ghi đã có nhánh riêng bên dưới (nhận diện bằng SĐT + id). */
+const WRITE_ACTIONS = new Set([
+  "clock_in", "clock_out", "free_add", "free_remove", "busy_add", "busy_remove", "shift_set", "respond",
+]);
+
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     phone?: string;
@@ -51,6 +57,7 @@ export async function POST(req: Request) {
     studioId?: string;
     contractId?: string;
     captcha?: string;
+    session?: string;
   };
   const phone = digits(body.phone);
   if (!phone) return NextResponse.json({ error: "no_phone" }, { status: 400 });
@@ -62,11 +69,19 @@ export async function POST(req: Request) {
   const rl = await limitByIpDurable(req, `crew:${phone}`, 30, 60_000);
   if (rl) return rl;
 
-  // Require CAPTCHA on initial phone lookup (not on follow-up actions that already have id)
-  if (!body.action || body.action === "lookup") {
-    // Tra cứu bằng SĐT trả về LỊCH LÀM VIỆC của thợ — dò hàng loạt là moi được
-    // dữ liệu cá nhân. Khi captcha không xác minh được thì chỉ cho vài lượt mỗi
-    // giờ trên mỗi IP thay vì mở cửa như trước.
+  // Action lạ KHÔNG được rơi xuống nhánh tra cứu cuối hàm: trước đây gửi
+  // `action: "x"` là bỏ qua được captcha mà vẫn nhận nguyên danh sách việc.
+  const isLookup = !body.action || body.action === "lookup";
+  if (!isLookup && !WRITE_ACTIONS.has(body.action!) && body.action !== "calendar_token") {
+    return NextResponse.json({ error: "bad_action" }, { status: 400 });
+  }
+
+  // Tra cứu bằng SĐT trả về LỊCH LÀM VIỆC của thợ — dò hàng loạt là moi được
+  // dữ liệu cá nhân. Cần captcha, HOẶC phiên do lượt tra cứu đã qua captcha cấp
+  // (mã Turnstile chỉ dùng một lần, mà cổng nạp lại sau mỗi thao tác). Khi
+  // captcha không xác minh được thì chỉ cho vài lượt mỗi giờ trên mỗi IP.
+  const hasSession = verifyCrewSession(body.session, phone);
+  if (isLookup && !hasSession) {
     const captcha = await guardCaptcha(req, "crew-lookup", body.captcha);
     if (captcha) return captcha;
   }
@@ -220,6 +235,8 @@ export async function POST(req: Request) {
   }
 
   if (body.action === "calendar_token") {
+    // Token mở feed lịch (khách, giờ, địa điểm) — chỉ cấp cho người đã qua tra cứu.
+    if (!hasSession) return NextResponse.json({ error: "no_session" }, { status: 401 });
     // Cấp một lần rồi dùng mãi — token nằm trong URL feed nên đổi token là mọi
     // lịch đã đăng ký ở máy thợ chết theo.
     const { data: existing } = await db.from("crew_account").select("calendar_token").eq("phone", phone).maybeSingle();
@@ -385,5 +402,6 @@ export async function POST(req: Request) {
     calendarToken: acc?.calendar_token ?? null,
     timesheet: { open: openEntry, recent },
     free,
+    session: signCrewSession(phone),
   });
 }

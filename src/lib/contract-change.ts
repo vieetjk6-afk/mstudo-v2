@@ -1,6 +1,7 @@
 import "server-only";
 import type { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
+import { forcedBranchScope } from "@/lib/studio-roles";
 
 /**
  * Phần dùng chung của hai thao tác lớn trên một hợp đồng: HUỶ và DỜI LỊCH. Cả
@@ -33,14 +34,29 @@ export async function studioFor(roles: readonly string[]) {
   return profile;
 }
 
-export async function loadContract(db: Db, id: string, ownerId: string): Promise<ChangeContract | null> {
+/** Người đang thao tác — đủ để biết studio và (nếu bị ghim) chi nhánh của họ. */
+type Actor = { id: unknown; actingRole?: unknown; actingBranchId?: unknown };
+
+const CHANGE_COLS = "id, owner_id, code, title, client_name, client_phone, client_token, event_date, event_time, location, status";
+
+/**
+ * Hợp đồng `id` nếu nó thuộc studio của `actor` — và, với vai trò bị ghim chi
+ * nhánh (branch_manager), thuộc ĐÚNG chi nhánh đó. Thiếu vế sau thì quản lý cơ
+ * sở A ký phụ lục đổi giá / dời lịch / áp voucher được cho hợp đồng cơ sở B,
+ * trong khi contract-status và contract-album đã chặn đúng việc này.
+ */
+export async function loadContract(db: Db, id: string, actor: Actor): Promise<ChangeContract | null> {
+  const scope = forcedBranchScope(actor.actingRole as string | null, actor.actingBranchId as string | null);
+  // "*" chỉ khi cần branch_id: cột này có sau migration, nêu tên khi chưa có là lỗi 400.
   const { data } = await db
     .from("studio_contracts")
-    .select("id, owner_id, code, title, client_name, client_phone, client_token, event_date, event_time, location, status")
+    .select(scope ? "*" : CHANGE_COLS)
     .eq("id", id)
     .maybeSingle();
-  if (!data || data.owner_id !== ownerId) return null;
-  return data as ChangeContract;
+  const row = data as (ChangeContract & { branch_id?: string | null }) | null;
+  if (!row || row.owner_id !== actor.id) return null;
+  if (scope && (row.branch_id ?? null) !== scope) return null;
+  return row;
 }
 
 /** Thợ đang gán vào hợp đồng (id phân công, tên, SĐT). */

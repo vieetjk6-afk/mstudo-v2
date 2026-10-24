@@ -68,6 +68,21 @@ function jwtAal(token: string | undefined): string | null {
   }
 }
 
+/**
+ * Người dùng đã đăng nhập VÀ đã qua cổng 2 lớp (nếu tài khoản có bật), hoặc null.
+ *
+ * Dùng thay cho `supabase.auth.getUser()` trần ở các route API chỉ cần biết
+ * "ai đang gọi": getUser() trần chấp nhận cả phiên aal1 của tài khoản đã bật 2
+ * lớp — tức người lấy được mật khẩu (chưa có mã OTP) vẫn gọi thẳng API đồng bộ
+ * album, tải ảnh, đổi tên miền… dù giao diện đã chặn ở /login/mfa.
+ */
+export async function requireUser() {
+  const user = await getSessionUser();
+  if (!user) return null;
+  if (await needsMfa()) return null;
+  return user;
+}
+
 export const getProfileById = cache(async (id: string) => {
   const supabase = await createClient();
   const { data } = await supabase.from("profiles").select("*").eq("id", id).single();
@@ -75,6 +90,24 @@ export const getProfileById = cache(async (id: string) => {
 });
 
 /** Returns the current admin profile, or null if the caller is not an admin. */
+/**
+ * Người đang đăng nhập có phải chính `ownerId` (hoặc nhân viên của studio đó)?
+ *
+ * Dùng ở callback OAuth: `state` ký HMAC chỉ chứng minh MÁY CHỦ đã cấp nó cho
+ * ownerId — không chứng minh trình duyệt đang quay về là của ownerId. Kẻ gian
+ * tự bấm "Kết nối" ở studio của mình, lấy link đồng ý của Google/Facebook rồi
+ * gửi cho nạn nhân: nạn nhân bấm "Cho phép" là token Lịch/Drive/Trang Facebook
+ * CỦA NẠN NHÂN được lưu vào studio của kẻ gian. Đối chiếu với phiên đăng nhập
+ * chặn đúng đường đó.
+ */
+export async function sessionActsFor(ownerId: string): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user) return false;
+  if (user.id === ownerId) return true;
+  const me = await getProfileById(user.id);
+  return !!me && me.studio_owner_id === ownerId;
+}
+
 export async function requireAdmin() {
   const user = await getSessionUser();
   if (!user) return null;

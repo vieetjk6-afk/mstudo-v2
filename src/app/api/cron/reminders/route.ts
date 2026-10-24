@@ -6,6 +6,7 @@ import { mainUrl } from "@/lib/hosts";
 import { vnd } from "@/lib/types";
 import { autoAdvanceContracts } from "@/lib/contract-status";
 import { STORAGE_WARN_DAYS, daysLeft } from "@/lib/storage-lifecycle";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   // Fail-closed: a missing CRON_SECRET must lock the endpoint, not open it —
   // otherwise anyone could trigger the mass-email digest.
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

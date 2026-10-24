@@ -159,7 +159,7 @@ export async function POST(req: Request) {
   }
 
   if (b.action === "loyalty_status" || b.action === "contract_loyalty") {
-    const contract = typeof b.contractId === "string" ? await loadContract(db, b.contractId, ownerId) : null;
+    const contract = typeof b.contractId === "string" ? await loadContract(db, b.contractId, profile) : null;
     if (!contract) return NextResponse.json({ error: "contract_not_found" }, { status: 404 });
     if (b.action === "contract_loyalty") {
       // null = theo chương trình · 0 = tắt riêng hợp đồng này · n = n% riêng
@@ -171,7 +171,7 @@ export async function POST(req: Request) {
   }
 
   if (b.action === "issue") {
-    const contract = typeof b.contractId === "string" ? await loadContract(db, b.contractId, ownerId) : null;
+    const contract = typeof b.contractId === "string" ? await loadContract(db, b.contractId, profile) : null;
     if (!contract) return NextResponse.json({ error: "contract_not_found" }, { status: 404 });
     const { data: signed } = await db.from("studio_contracts").select("client_signed_at").eq("id", contract.id).maybeSingle();
     if (!signed?.client_signed_at && !SIGNED_STATUSES.has(contract.status)) {
@@ -282,7 +282,7 @@ export async function POST(req: Request) {
   }
 
   if (b.action === "redeem") {
-    const contract = typeof b.contractId === "string" ? await loadContract(db, b.contractId, ownerId) : null;
+    const contract = typeof b.contractId === "string" ? await loadContract(db, b.contractId, profile) : null;
     if (!contract) return NextResponse.json({ error: "contract_not_found" }, { status: 404 });
     if (contract.status === "cancelled") return NextResponse.json({ error: "contract_cancelled" }, { status: 409 });
     const v = await byCode(b.code);

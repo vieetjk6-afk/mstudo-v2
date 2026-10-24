@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { upsertGCalEvent, contractToGCal, GCAL_CONTRACT_STATUSES } from "@/lib/gcal";
 import { SHOOT_TYPE_LABEL, type ShootType } from "@/lib/types";
@@ -20,8 +20,7 @@ const TIME_BUDGET_MS = 260_000;
  * sự kiện đó chứ không tạo trùng.
  */
 export async function POST() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const db = createAdminClient();

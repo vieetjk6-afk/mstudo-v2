@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { vnd } from "@/lib/types";
+// CSS .s-*/.sp-* của website studio — tách khỏi globals để trang khác không phải tải.
+import "@/components/site/site.css";
 import {
   buildPriceView,
   bullets,
