@@ -60,12 +60,15 @@ export default function BookingsView({
   tokenSaved = true,
   initial,
   studioHost = null,
+  assignTo = null,
 }: {
   ownerId: string;
   token: string;
   tokenSaved?: boolean;
   initial: StudioBooking[];
   studioHost?: string | null;
+  /** Nhân viên tạo hợp đồng → giao luôn cho chính họ (RLS chỉ cho họ ghi hợp đồng giao cho mình). */
+  assignTo?: string | null;
 }) {
   const router = useRouter();
   const supabase = createClient();
@@ -138,6 +141,10 @@ export default function BookingsView({
       title: b.service ? `${b.service} — ${b.name}` : `Hợp đồng — ${b.name}`,
       client_name: b.name,
       client_phone: b.phone,
+      // Hợp đồng ở lại cơ sở của yêu cầu đặt lịch: doanh thu chi nhánh tính đúng,
+      // và quản lý chi nhánh (RLS ghim theo branch_id) tạo được hợp đồng của mình.
+      branch_id: b.branch_id ?? null,
+      ...(assignTo ? { assigned_to: assignTo } : {}),
       client_messenger: b.facebook || null,
       event_date: b.preferred_date,
       note,

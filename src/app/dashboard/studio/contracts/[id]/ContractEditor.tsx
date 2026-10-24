@@ -1837,6 +1837,11 @@ export default function ContractEditor({
         note: f.note.trim() || null,
         source: f.source || null,
         client_token: token,
+        // Bản sao ở lại đúng cơ sở, và với nhân viên thì vẫn giao cho chính họ:
+        // RLS chỉ cho quản lý chi nhánh ghi hợp đồng của cơ sở mình, nhân viên ghi
+        // hợp đồng giao cho mình (migrations/phan_quyen_vai_tro_hop_dong.sql).
+        branch_id: f.branch_id || null,
+        ...(canAssign ? {} : { assigned_to: contract.assigned_to }),
       })
       .select("id")
       .single();

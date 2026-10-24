@@ -24,7 +24,9 @@ export type ConvertResult =
  */
 export async function convertQuoteToContract(
   db: SupabaseClient,
-  quoteId: string
+  quoteId: string,
+  /** Nhân viên chốt báo giá → hợp đồng giao cho chính họ (RLS chỉ cho họ ghi hợp đồng giao cho mình). */
+  assignTo: string | null = null
 ): Promise<ConvertResult> {
   const { data: quote } = await db
     .from("studio_quotes")
@@ -90,6 +92,7 @@ export async function convertQuoteToContract(
       // Hợp đồng thừa hưởng chi nhánh của báo giá — nếu không, mọi hợp đồng
       // chốt từ báo giá đều rơi về "chưa gán" và doanh thu chi nhánh bị hụt.
       branch_id: (quote as { branch_id?: string | null }).branch_id ?? null,
+      ...(assignTo ? { assigned_to: assignTo } : {}),
       code,
       title: contractTitle,
       service_id: quote.service_id ?? null,

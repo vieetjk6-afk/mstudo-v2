@@ -36,7 +36,8 @@
     "migrations/thiep_tang_tu_dong.sql",
     "migrations/ke_hoach_cuoi.sql",
     "migrations/ke_hoach_cuoi_mo_rong.sql",
-    "migrations/luu_chon_anh_tung_phan.sql"
+    "migrations/luu_chon_anh_tung_phan.sql",
+    "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
     {
