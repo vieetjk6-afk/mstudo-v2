@@ -215,6 +215,8 @@ export function CrewCalendarSync({ phone, token, onToken }: { phone: string; tok
             <button
               onClick={() => { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
               className="btn-ghost shrink-0"
+              aria-label={copied ? "Đã sao chép" : "Sao chép"}
+              title="Sao chép"
             >
               {copied ? <Check size={15} /> : <Copy size={15} />}
             </button>

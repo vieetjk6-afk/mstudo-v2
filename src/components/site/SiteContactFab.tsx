@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { MessageCircle, Phone, Calendar, X } from "lucide-react";
+// CSS .s-*/.sp-* của website studio — tách khỏi globals để trang khác không phải tải.
+import "@/components/site/site.css";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Nút liên hệ NỔI ở góc phải website studio.

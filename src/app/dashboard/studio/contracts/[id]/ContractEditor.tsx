@@ -107,7 +107,13 @@ import TimeInput from "@/components/TimeInput";
 import ContractAddenda from "./ContractAddenda";
 import VoucherRedeem from "./VoucherRedeem";
 import { isSignedLockError, type ContractAddendum } from "@/lib/contract-addenda";
-import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
+import dynamic from "next/dynamic";
+// Hộp thoại dời lịch / huỷ hợp đồng chỉ mở khi studio bấm nút (changeDlg mặc định
+// null) — tách chunk cho bundle trang hợp đồng nhẹ bớt. ssr:false an toàn vì
+// server không bao giờ render chúng. SignaturePad (nhỏ, hiện ngay khi chưa có chữ
+// ký lưu) và LoyaltyVoucherCard (luôn hiện) giữ import tĩnh để khỏi nháy layout.
+const RescheduleDialog = dynamic(() => import("./ContractChangeDialogs").then((m) => m.RescheduleDialog), { ssr: false });
+const CancelDialog = dynamic(() => import("./ContractChangeDialogs").then((m) => m.CancelDialog), { ssr: false });
 import { albumOptionLabel, type ContractAlbumOption } from "@/lib/contract-album";
 import ContractAlbumModeCard from "./ContractAlbumModeCard";
 import { isWeddingReportage } from "@/lib/automations";

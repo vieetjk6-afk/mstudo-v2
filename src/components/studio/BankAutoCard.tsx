@@ -7,7 +7,12 @@ import { fmtDateTime } from "@/lib/date";
 import { Pill, type ToneKey } from "@/components/studio/ui";
 import { useToast } from "@/components/studio/Toast";
 import { BANK_TXN_STATUS_LABEL, BANK_TXN_NOTE_LABEL } from "@/lib/bank-reconcile";
-import SepayGuideVideo from "@/components/SepayGuideVideo";
+import dynamic from "next/dynamic";
+
+// Video hướng dẫn SePay là một component hoạt hình rất nặng, chỉ hiện khi bấm
+// "Xem video hướng dẫn" — tách chunk để trang Cài đặt không phải tải nó lúc mở.
+// ssr:false an toàn vì mặc định video ẩn (state false), server không bao giờ render.
+const SepayGuideVideo = dynamic(() => import("@/components/SepayGuideVideo"), { ssr: false });
 
 /**
  * Link đăng ký SePay. mstudo là đối tác giới thiệu của SePay: đặt link giới

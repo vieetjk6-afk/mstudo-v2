@@ -8,6 +8,8 @@ import { buildPriceView } from "@/lib/site-pricing";
 import { mapEmbedSrc, mapOpenHref } from "@/lib/site-map";
 import type { SiteData } from "@/lib/site-loader";
 import { brandNameText } from "@/lib/brand-name";
+// CSS .s-*/.sp-* của website studio — tách khỏi globals để trang khác không phải tải.
+import "@/components/site/site.css";
 
 const str = (v: unknown, fallback = "") => (typeof v === "string" && v.trim() ? v : fallback);
 const lines = (v: unknown) => str(v).split("\n").map((s) => s.trim()).filter(Boolean);

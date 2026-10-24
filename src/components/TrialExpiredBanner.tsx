@@ -33,7 +33,7 @@ export default function TrialExpiredBanner({ expiredPlan }: Props) {
           Nâng cấp ngay
         </Link>
       </div>
-      <button onClick={() => setDismissed(true)} style={{ color: "#d6a44a", flexShrink: 0 }}>
+      <button onClick={() => setDismissed(true)} aria-label="Đóng" title="Đóng" style={{ color: "#d6a44a", flexShrink: 0 }}>
         <X size={16} />
       </button>
     </div>
