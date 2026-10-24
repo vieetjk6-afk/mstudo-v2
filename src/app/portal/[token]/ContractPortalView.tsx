@@ -168,7 +168,10 @@ export default function ContractPortalView({ token }: { token: string }) {
           <input
             className="mt-5 w-full rounded-[11px] px-3.5 py-3 text-center text-[15px] font-semibold tracking-wide"
             style={{ border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" }}
-            inputMode="numeric"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            aria-label="Số điện thoại"
             placeholder="Số điện thoại"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}

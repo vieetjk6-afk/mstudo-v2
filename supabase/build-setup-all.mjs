@@ -108,6 +108,11 @@ const ORDER = [
   ["migrations/ke_hoach_cuoi.sql", "Kế hoạch cưới của khách trên cổng khách: việc cần làm, ngân sách, lịch trình ngày cưới + bật/tắt theo hợp đồng"],
   ["migrations/ke_hoach_cuoi_mo_rong.sql", "Kế hoạch cưới mở rộng: khách mời & xếp bàn, nhà cung cấp, đội hỗ trợ, đồ cần mang, ảnh cần chụp, phong cách (chạy SAU ke_hoach_cuoi)"],
   ["migrations/luu_chon_anh_tung_phan.sql", "Lưu lựa chọn ảnh của khách theo phần chênh trong một transaction: hàm save_album_selection (chạy SAU album_dislikes)"],
+  ["migrations/chi_muc_bo_sung.sql", "Chỉ mục bổ sung: tìm hợp đồng theo album, khoá ngoại photo_id, sự kiện theo hợp đồng, doanh thu theo ngày thu"],
+  // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
+  // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
+  // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
+  ["migrations/phan_quyen_vai_tro_hop_dong.sql", "Phân quyền theo vai trò cho hợp đồng: staff chỉ hợp đồng được giao, quản lý chi nhánh chỉ chi nhánh mình, kế toán chỉ đọc, chỉ chủ studio huỷ / hoàn tiền, tài khoản bị khoá mất quyền (chạy CUỐI)"],
 ];
 
 /**
@@ -164,6 +169,8 @@ const MOI = [
   "migrations/ke_hoach_cuoi.sql",
   "migrations/ke_hoach_cuoi_mo_rong.sql",
   "migrations/luu_chon_anh_tung_phan.sql",
+  "migrations/chi_muc_bo_sung.sql",
+  "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
 /**

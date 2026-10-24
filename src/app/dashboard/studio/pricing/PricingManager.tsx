@@ -108,7 +108,8 @@ export default function PricingManager({
       if (Object.keys(missing).length) {
         const nextLabels = { ...initialListLabels, ...missing };
         setListLabels(nextLabels);
-        supabase.from("profiles").update({ pl_list_labels: nextLabels }).eq("id", ownerId);
+        // .then() mới thực sự gửi request (builder của supabase-js là lazy).
+        void supabase.from("profiles").update({ pl_list_labels: nextLabels }).eq("id", ownerId).then(() => undefined);
       }
       // Prefer a service tab as the default active list.
       if (services[0]) setActiveList((cur) => (byKey.has(cur) ? cur : services[0].id));

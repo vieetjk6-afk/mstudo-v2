@@ -35,7 +35,7 @@ const FIELDS: { key: keyof CrewProfile; label: string; type?: string }[] = [
 ];
 
 /** Hồ sơ của thợ ở từng studio — studio nhập gì thì hiện thế, trống thì thợ tự điền. */
-export function CrewProfileCard({ profiles, phone, onSaved }: { profiles: CrewProfile[]; phone: string; onSaved: () => void }) {
+export function CrewProfileCard({ profiles, phone, session, onSaved }: { profiles: CrewProfile[]; phone: string; session: string | null; onSaved: () => void }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -52,7 +52,7 @@ export function CrewProfileCard({ profiles, phone, onSaved }: { profiles: CrewPr
     const res = await fetch("/api/crew/profile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save", phone, studioId: p.owner_id, profile: draft }),
+      body: JSON.stringify({ action: "save", phone, session, studioId: p.owner_id, profile: draft }),
     });
     setSaving(false);
     if (res.ok) { setOpenId(null); onSaved(); }
@@ -178,7 +178,7 @@ export function CrewRegisterCard({ studioName, crewToken, phone }: { studioName:
  * chỗ gắn refresh token cho tử tế. Dán URL vào Google Calendar là xong, một
  * chiều app → lịch, không xin quyền gì của thợ.
  */
-export function CrewCalendarSync({ phone, token, onToken }: { phone: string; token: string | null; onToken: (t: string) => void }) {
+export function CrewCalendarSync({ phone, session, token, onToken }: { phone: string; session: string | null; token: string | null; onToken: (t: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const url = token ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/crew-calendar/${token}` : "";
@@ -188,7 +188,7 @@ export function CrewCalendarSync({ phone, token, onToken }: { phone: string; tok
     const res = await fetch("/api/crew", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "calendar_token", phone }),
+      body: JSON.stringify({ action: "calendar_token", phone, session }),
     });
     setBusy(false);
     const j = (await res.json().catch(() => ({}))) as { token?: string };
@@ -215,6 +215,8 @@ export function CrewCalendarSync({ phone, token, onToken }: { phone: string; tok
             <button
               onClick={() => { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
               className="btn-ghost shrink-0"
+              aria-label={copied ? "Đã sao chép" : "Sao chép"}
+              title="Sao chép"
             >
               {copied ? <Check size={15} /> : <Copy size={15} />}
             </button>

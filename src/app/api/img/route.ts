@@ -38,6 +38,19 @@ const CACHE_ORIGINALS = process.env.DRIVE_IMG_CACHE_ORIGINALS === "1";
 // download and would otherwise sit in the bucket forever.
 const CACHE_MAX_WIDTH = Number(process.env.DRIVE_IMG_CACHE_MAX_WIDTH || "1024");
 
+// Chỉ chuyển tiếp kiểu ảnh RASTER. Drive trả đúng MIME người tải lên khai —
+// một file `image/svg+xml` đi qua đường byte (raw=1) sẽ được phục vụ từ CHÍNH
+// miền app, và <script> trong SVG chạy với cookie phiên của studio (XSS lưu
+// trữ). Kiểu khác → coi như nguồn hỏng, thử nguồn kế tiếp.
+const RASTER = /^image\/(jpeg|jpg|png|webp|gif|avif|heic|heif|bmp)\b/i;
+function rasterType(res: Response): string | null {
+  const ct = res.headers.get("content-type") ?? "";
+  return RASTER.test(ct) ? ct : null;
+}
+// Lá chắn thứ hai cho phản hồi mang byte: kể cả khi có kiểu lạ lọt qua, trình
+// duyệt cũng không chạy script/nhúng gì từ nó.
+const BYTE_HEADERS = { "Content-Security-Policy": "default-src 'none'; sandbox" };
+
 function cacheKey(id: string, width: number) { return `${id}_w${width}.jpg`; }
 function publicUrl(key: string) { return `${SUPA_URL}/storage/v1/object/public/${BUCKET}/${key}`; }
 
@@ -55,8 +68,7 @@ async function fetchFromGoogle(id: string, width: number): Promise<Response | nu
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 7000);
       const res = await fetch(url, { cache: "no-store", redirect: "follow", headers: { "User-Agent": UA }, signal: ctrl.signal }).finally(() => clearTimeout(timer));
-      const ct = res.headers.get("content-type") ?? "";
-      if (res.ok && ct.startsWith("image/")) {
+      if (res.ok && rasterType(res)) {
         const len = Number(res.headers.get("content-length") || "0");
         if (len && len < 100) continue; // tiny = placeholder, try next source
         return res;
@@ -81,8 +93,7 @@ async function fetchOriginal(id: string): Promise<Response | null> {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 25000);
       const res = await fetch(url, { cache: "no-store", redirect: "follow", headers: { "User-Agent": UA }, signal: ctrl.signal }).finally(() => clearTimeout(timer));
-      const ct = res.headers.get("content-type") ?? "";
-      if (res.ok && ct.startsWith("image/")) return res;
+      if (res.ok && rasterType(res)) return res;
     } catch { /* try next */ }
   }
   return null;
@@ -158,14 +169,14 @@ export async function GET(req: Request) {
       } catch { /* fall through to proxy + cache */ }
       const res = await fetchOriginal(id);
       if (!res || !res.body) return NextResponse.json({ error: "fetch_failed" }, { status: 502, headers: { "Cache-Control": CACHE_ERR } });
-      const ct = res.headers.get("content-type") || "image/jpeg";
+      const ct = rasterType(res) || "image/jpeg";
       const buf = Buffer.from(await res.arrayBuffer());
       createAdminClient().storage.from(BUCKET).upload(key, buf, { contentType: ct, upsert: true, cacheControl: "31536000" }).catch(() => {});
-      return new NextResponse(buf, { headers: { "Content-Type": ct, "Cache-Control": CACHE_OK } });
+      return new NextResponse(buf, { headers: { "Content-Type": ct, "Cache-Control": CACHE_OK, ...BYTE_HEADERS } });
     }
     const res = await fetchOriginal(id);
     if (!res || !res.body) return NextResponse.json({ error: "fetch_failed" }, { status: 502, headers: { "Cache-Control": CACHE_ERR } });
-    return new NextResponse(res.body, { headers: { "Content-Type": res.headers.get("content-type") || "image/jpeg", "Cache-Control": CACHE_OK } });
+    return new NextResponse(res.body, { headers: { "Content-Type": rasterType(res) || "image/jpeg", "Cache-Control": CACHE_OK, ...BYTE_HEADERS } });
   }
 
   // Clamp width: never proxy anything huge (caps origin transfer per request).
@@ -206,11 +217,11 @@ export async function GET(req: Request) {
 
     const res = await fetchFromGoogle(id, width);
     if (!res) return NextResponse.json({ error: "fetch_failed", hint: "Ảnh có thể chưa được chia sẻ công khai trên Drive." }, { status: 502, headers: { "Cache-Control": CACHE_ERR } });
-    const ct = res.headers.get("content-type") || "image/jpeg";
+    const ct = rasterType(res) || "image/jpeg";
     const buf = Buffer.from(await res.arrayBuffer());
     // Best-effort cache for next time (upsert so concurrent misses are fine).
     createAdminClient().storage.from(BUCKET).upload(key, buf, { contentType: ct, upsert: true, cacheControl: "31536000" }).catch(() => {});
-    return new NextResponse(buf, { headers: { "Content-Type": ct, "Cache-Control": CACHE_OK } });
+    return new NextResponse(buf, { headers: { "Content-Type": ct, "Cache-Control": CACHE_OK, ...BYTE_HEADERS } });
   }
 
   // ── Plain proxy path (edge-cached) ───────────────────────────────────────
@@ -220,6 +231,6 @@ export async function GET(req: Request) {
   }
   // Stream the body straight through — no arrayBuffer() buffering in the function.
   return new NextResponse(res.body, {
-    headers: { "Content-Type": res.headers.get("content-type") || "image/jpeg", "Cache-Control": CACHE_OK },
+    headers: { "Content-Type": rasterType(res) || "image/jpeg", "Cache-Control": CACHE_OK, ...BYTE_HEADERS },
   });
 }

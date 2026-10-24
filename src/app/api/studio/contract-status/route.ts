@@ -6,7 +6,7 @@ import { normalizeAlbumMode, shouldEnsureManualAlbum } from "@/lib/album-mode";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { syncContractCalendar } from "@/lib/gcal-sync";
 import { logAction } from "@/lib/audit-log";
-import { isBranchScopedRole } from "@/lib/studio-roles";
+import { isBranchScopedRole, isOwnerLevel } from "@/lib/studio-roles";
 
 export const dynamic = "force-dynamic";
 // Tạo album giờ đồng bộ luôn ảnh từ Drive (createAlbumFromFolder) — cần thêm thời gian.
@@ -43,6 +43,12 @@ export async function POST(req: Request) {
   const { contractId, status } = (await req.json().catch(() => ({}))) as { contractId?: string; status?: string };
   if (!contractId || !status || !VALID.has(status)) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  }
+  // Huỷ là việc của chủ studio (kèm quyết định hoàn / giữ cọc — xem
+  // contracts/[id]/cancel). Route này ghi bằng service role nên trigger
+  // guard_contract_cancel trong database không chặn hộ được.
+  if (status === "cancelled" && !isOwnerLevel(profile.actingRole as string)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
   const db = createAdminClient();

@@ -68,6 +68,14 @@ export default function SelectionsView({
       if (data) setRows(data as Selection[]);
       if (dis) setDisRows(dis as Dislike[]);
     }
+    // Gom sự kiện: mỗi lần khách lưu, server xoá rồi ghi lại CẢ bộ lựa chọn →
+    // 300 ảnh đã chọn là ~600 sự kiện liền nhau. Tải lại một lần sau khi yên
+    // 500ms thay vì 600 lượt tải toàn bộ.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => { timer = null; void refetch(); }, 500);
+    };
     // HAI channel riêng, không gộp binding: một channel chỉ join được khi MỌI
     // binding hợp lệ. DB chưa chạy migration album_dislikes.sql thì binding
     // `dislikes` làm hỏng cả channel — mất luôn cập nhật trực tiếp của
@@ -77,7 +85,7 @@ export default function SelectionsView({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "selections", filter: `album_id=eq.${album.id}` },
-        () => refetch()
+        schedule
       )
       .subscribe((status) => setLive(status === "SUBSCRIBED"));
     const disChannel = supabase
@@ -85,10 +93,11 @@ export default function SelectionsView({
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "dislikes", filter: `album_id=eq.${album.id}` },
-        () => refetch()
+        schedule
       )
       .subscribe();
     return () => {
+      if (timer) clearTimeout(timer);
       supabase.removeChannel(channel);
       supabase.removeChannel(disChannel);
     };

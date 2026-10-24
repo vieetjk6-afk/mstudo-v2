@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { fetchThumbChiTiet, loadNets, modelDir, scanJpeg, wasmDir } from "@/lib/face-node";
@@ -41,9 +42,7 @@ const HAN_MS = 25_000;
 export async function GET(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { data: own } = await supabase.from("albums").select("id, owner_id").eq("id", params.id).maybeSingle();
   if (!own) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

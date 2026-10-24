@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +9,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { password } = (await req.json().catch(() => ({}))) as { password?: string };

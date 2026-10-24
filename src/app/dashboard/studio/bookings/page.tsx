@@ -47,5 +47,14 @@ export default async function BookingsPage() {
   ).order("created_at", { ascending: false });
 
   const studioHost = await getStudioHost(supabase, profile.id);
-  return <BookingsView ownerId={profile.id} token={token} tokenSaved={tokenSaved} initial={(data ?? []) as StudioBooking[]} studioHost={studioHost} />;
+  return (
+    <BookingsView
+      ownerId={profile.id}
+      token={token}
+      tokenSaved={tokenSaved}
+      initial={(data ?? []) as StudioBooking[]}
+      studioHost={studioHost}
+      assignTo={profile.actingRole === "staff" ? (profile.actingUserId as string) : null}
+    />
+  );
 }

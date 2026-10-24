@@ -107,7 +107,13 @@ import TimeInput from "@/components/TimeInput";
 import ContractAddenda from "./ContractAddenda";
 import VoucherRedeem from "./VoucherRedeem";
 import { isSignedLockError, type ContractAddendum } from "@/lib/contract-addenda";
-import { RescheduleDialog, CancelDialog } from "./ContractChangeDialogs";
+import dynamic from "next/dynamic";
+// Hộp thoại dời lịch / huỷ hợp đồng chỉ mở khi studio bấm nút (changeDlg mặc định
+// null) — tách chunk cho bundle trang hợp đồng nhẹ bớt. ssr:false an toàn vì
+// server không bao giờ render chúng. SignaturePad (nhỏ, hiện ngay khi chưa có chữ
+// ký lưu) và LoyaltyVoucherCard (luôn hiện) giữ import tĩnh để khỏi nháy layout.
+const RescheduleDialog = dynamic(() => import("./ContractChangeDialogs").then((m) => m.RescheduleDialog), { ssr: false });
+const CancelDialog = dynamic(() => import("./ContractChangeDialogs").then((m) => m.CancelDialog), { ssr: false });
 import { albumOptionLabel, type ContractAlbumOption } from "@/lib/contract-album";
 import ContractAlbumModeCard from "./ContractAlbumModeCard";
 import { isWeddingReportage } from "@/lib/automations";
@@ -315,6 +321,7 @@ export default function ContractEditor({
   initialAppointments,
   ownerId,
   branches,
+  branchLocked = false,
   studioName,
   depositPercent = 25,
   studioLogo = null,
@@ -377,6 +384,8 @@ export default function ContractEditor({
   ownerId: string;
   /** Chi nhánh còn hoạt động. Rỗng → không hiện ô chọn chi nhánh. */
   branches: { id: string; name: string }[];
+  /** Vai trò bị ghim chi nhánh (branch_manager): không được chuyển hợp đồng sang cơ sở khác — RLS cũng chặn. */
+  branchLocked?: boolean;
   studioName: string;
   /** % cọc gợi ý của studio ("Chính sách studio"). 0 = không gợi ý. */
   depositPercent?: number;
@@ -773,7 +782,9 @@ export default function ContractEditor({
     const dep = plan.find((p) => p.label === "Cọc hợp đồng" && !p.paid);
     if (dep && dep.amount === oldDeposit && dep.amount !== depositAmt) {
       setPlan((p) => p.map((x) => (x.id === dep.id ? { ...x, amount: depositAmt } : x)));
-      supabase.from("contract_payment_plan").update({ amount: depositAmt }).eq("id", dep.id);
+      // Builder của supabase-js chỉ GỬI khi được then/await — thiếu .then() là
+      // màn hình hiện cọc mới còn DB (cổng khách, nhắc nợ) giữ cọc cũ.
+      void supabase.from("contract_payment_plan").update({ amount: depositAmt }).eq("id", dep.id).then(() => undefined);
     }
   }, [total, plan, depositAmt, supabase, depositOf]);
   const payroll = crew.reduce((s, c) => s + (Number(c.salary) || 0), 0);
@@ -1837,6 +1848,11 @@ export default function ContractEditor({
         note: f.note.trim() || null,
         source: f.source || null,
         client_token: token,
+        // Bản sao ở lại đúng cơ sở, và với nhân viên thì vẫn giao cho chính họ:
+        // RLS chỉ cho quản lý chi nhánh ghi hợp đồng của cơ sở mình, nhân viên ghi
+        // hợp đồng giao cho mình (migrations/phan_quyen_vai_tro_hop_dong.sql).
+        branch_id: f.branch_id || null,
+        ...(canAssign ? {} : { assigned_to: contract.assigned_to }),
       })
       .select("id")
       .single();
@@ -2975,14 +2991,16 @@ export default function ContractEditor({
               {branches.length > 0 && (
                 <div className="card p-6">
                   <h2 className="mb-4 font-serif text-lg font-medium">Chi nhánh thực hiện</h2>
-                  <select className="input" value={f.branch_id} onChange={(e) => set("branch_id", e.target.value)}>
+                  <select className="input" value={f.branch_id} disabled={branchLocked} onChange={(e) => set("branch_id", e.target.value)}>
                     <option value="">— Chưa gán chi nhánh —</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
                   <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                    Quyết định hợp đồng này được tính vào doanh thu và lịch của cơ sở nào.
+                    {branchLocked
+                      ? "Bạn quản lý một chi nhánh nên không chuyển được hợp đồng sang cơ sở khác — nhờ chủ studio hoặc quản lý chung."
+                      : "Quyết định hợp đồng này được tính vào doanh thu và lịch của cơ sở nào."}
                   </p>
                 </div>
               )}

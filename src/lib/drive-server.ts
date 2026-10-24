@@ -51,6 +51,24 @@ export async function getFileMeta(fileId: string): Promise<DriveFile | null> {
   return (await res.json()) as DriveFile;
 }
 
+/**
+ * Thư mục công khai có ít nhất MỘT ảnh/video không? Chỉ hỏi Drive đúng 1 file,
+ * không sắp xếp — cron gọi hàm này cho từng hợp đồng, liệt kê cả nghìn file chỉ
+ * để xem có > 0 hay không là phí quota Drive và thời gian của function.
+ */
+export async function folderHasMedia(folderId: string): Promise<boolean> {
+  const params = new URLSearchParams({
+    q: `'${folderId}' in parents and (mimeType contains 'image/' or mimeType contains 'video/') and trashed = false`,
+    fields: "files(id)",
+    pageSize: "1",
+    key: key(),
+  });
+  const res = await driveFetch(`${API}/files?${params.toString()}`);
+  if (!res.ok) throw new Error(`Drive API error (${res.status})`);
+  const data = (await res.json()) as { files?: { id: string }[] };
+  return (data.files?.length ?? 0) > 0;
+}
+
 /** List image files inside a publicly shared folder (handles pagination). */
 export async function listFolderImages(folderId: string): Promise<DriveFile[]> {
   const out: DriveFile[] = [];

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { copyFilesToFilterDrive } from "@/lib/filter-drive";
 import { PRINT_FOLDER_NAME, normalizeQuota, pickDeliveryFolder } from "@/lib/album-print-rules";
 
@@ -29,9 +30,7 @@ export const maxDuration = 120;
 export async function POST(req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => ({}))) as { action?: string; quota?: unknown };

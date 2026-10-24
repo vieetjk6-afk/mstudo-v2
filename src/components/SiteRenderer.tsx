@@ -8,6 +8,8 @@ import { buildPriceView } from "@/lib/site-pricing";
 import { mapEmbedSrc, mapOpenHref } from "@/lib/site-map";
 import type { SiteData } from "@/lib/site-loader";
 import { brandNameText } from "@/lib/brand-name";
+// CSS .s-*/.sp-* của website studio — tách khỏi globals để trang khác không phải tải.
+import "@/components/site/site.css";
 
 const str = (v: unknown, fallback = "") => (typeof v === "string" && v.trim() ? v : fallback);
 const lines = (v: unknown) => str(v).split("\n").map((s) => s.trim()).filter(Boolean);
@@ -418,7 +420,7 @@ function Block({ block, data, fontVar, demo = false }: { block: SiteBlock; data:
       return (
         <Section fontVar={fontVar} heading={str(c.heading, "Video")} eyebrow={eyebrow} center={center}>
           <div style={{ position: "relative", paddingBottom: "56.25%", borderRadius: "var(--s-radius)", overflow: "hidden" }}>
-            <iframe src={url} title="video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} />
+            <iframe src={url} title="video" loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }} />
           </div>
         </Section>
       );

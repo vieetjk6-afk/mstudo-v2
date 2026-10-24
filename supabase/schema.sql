@@ -1431,9 +1431,20 @@ create index if not exists profiles_studio_owner_idx on public.profiles (studio_
 -- True if the current user is the owner, a member of that studio, or an admin.
 create or replace function public.is_studio_member(target uuid)
 returns boolean language sql security definer stable set search_path = public as $$
+  -- Chỉ tài khoản ĐANG HOẠT ĐỘNG (và chủ studio của nó cũng vậy) — bản đầy đủ,
+  -- kèm lý do, ở migrations/phan_quyen_vai_tro_hop_dong.sql. Giữ các bản khai lại
+  -- giống hệt nhau: chạy lại một file cũ không được làm mất kiểm tra is_active.
   select
-    target = auth.uid()
-    or exists (select 1 from public.profiles where id = auth.uid() and studio_owner_id = target)
+    exists (
+      select 1 from public.profiles me
+      where me.id = auth.uid()
+        and me.is_active
+        and (
+          target = me.id
+          or (me.studio_owner_id = target
+              and exists (select 1 from public.profiles o where o.id = target and o.is_active))
+        )
+    )
     or public.is_admin();
 $$;
 

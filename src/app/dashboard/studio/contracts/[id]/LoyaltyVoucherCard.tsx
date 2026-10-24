@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import QRCode from "qrcode";
 import { Ticket, Download, Copy, Check, ExternalLink, CircleDashed, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -235,7 +234,14 @@ export function IssuedVoucher({
 
   useEffect(() => {
     if (!link) return;
-    QRCode.toDataURL(link, { margin: 1, width: 480, color: { dark: "#2b2118", light: "#ffffff" } }).then(setQr).catch(() => setQr(null));
+    // Nạp thư viện QR lúc cần (chỉ khi đã có voucher) thay vì kéo vào bundle của
+    // trang hợp đồng vốn đã rất nặng. Cờ `stale` chặn setState khi link đổi/unmount.
+    let stale = false;
+    import("qrcode")
+      .then(({ default: QRCode }) => QRCode.toDataURL(link, { margin: 1, width: 480, color: { dark: "#2b2118", light: "#ffffff" } }))
+      .then((url) => { if (!stale) setQr(url); })
+      .catch(() => { if (!stale) setQr(null); });
+    return () => { stale = true; };
   }, [link]);
 
   const ticket: TicketData = {

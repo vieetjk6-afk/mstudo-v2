@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { copyFilesToFilterDrive } from "@/lib/filter-drive";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +18,7 @@ export const dynamic = "force-dynamic";
  * bấm copy nhiều lần không đẻ ra thư mục/ảnh trùng.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => ({}))) as {

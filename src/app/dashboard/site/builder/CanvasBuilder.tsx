@@ -32,6 +32,8 @@ import CustomDomain from "@/components/CustomDomain";
 import { compressImage, checkImageFile, MAX_IMAGE_UPLOAD_MB } from "@/lib/image";
 import { uploadImage, dataUrlToBlob } from "@/lib/upload-client";
 import { useTheme } from "@/lib/theme";
+// CSS .s-*/.sp-* của website studio — tách khỏi globals để trang khác không phải tải.
+import "@/components/site/site.css";
 
 /* ─────────────────────────────────────────────────────────────────────────
    Trình tạo website kéo-thả (canvas + inline edit + inspector).

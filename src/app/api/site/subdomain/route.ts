@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MAIN_HOST, subdomainError } from "@/lib/hosts";
 import { ensureSubdomainHost, getWildcard, removeDomain, vercelConfigured, type HostState } from "@/lib/vercel-domains";
@@ -79,9 +80,7 @@ async function releaseSubdomainHost(prev: string): Promise<void> {
 
 async function loadSite() {
   const db = await createClient();
-  const {
-    data: { user },
-  } = await db.auth.getUser();
+  const user = await requireUser();
   if (!user) return { db, user: null, site: null };
   const { data } = await db.from("sites").select("id, subdomain, published").eq("owner_id", user.id).maybeSingle();
   return { db, user, site: (data as SiteRow | null) ?? null };

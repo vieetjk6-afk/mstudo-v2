@@ -255,6 +255,47 @@ if (first) {
   ) >= 4);
 }
 
+/* ── 2b. Phân quyền hợp đồng theo vai trò, trên CẢ HAI đường cài ────────────
+ *
+ * migrations/phan_quyen_vai_tro_hop_dong.sql thay policy mà schema.sql và các
+ * migration trước đã tạo. Trên project mới, bộ sinh xếp khối do $$ vào PHẦN 2 và
+ * `create policy` vào PHẦN 3 — nên một policy cũ còn sót là chuyện đã xảy ra thật
+ * (rls_thanh_vien_hop_dong bị schema.sql ghi đè). Kiểm trên database thật xem
+ * bản cuối cùng là bản nào. Hành vi từng vai trò: desktop/test/rls-luu-nguoi.mjs.
+ */
+console.log("\n— Phân quyền hợp đồng theo vai trò —");
+const BANG_HD = [
+  "studio_contracts", "contract_items", "contract_crew", "contract_edit_requests", "contract_payments",
+  "contract_payment_plan", "contract_tasks", "contract_equipment", "contract_products",
+  "contract_quote_options", "contract_client_proofs", "studio_crew",
+];
+const inList = (xs) => xs.map((t) => `'${t}'`).join(",");
+for (const db of ["moi", ...(first ? ["cu"] : [])]) {
+  const nhan = db === "moi" ? "project mới" : "project đang chạy";
+  ok(
+    `${nhan}: không còn policy cũ (…_owner_all / …_owner / …_owner_read) trên họ hợp đồng`,
+    q(db, `select count(*) from pg_policies where schemaname='public' and tablename in (${inList([...BANG_HD, "contract_reschedules"])}) and policyname ~ '_owner(_all|_read)?$'`) === "0",
+    q(db, `select string_agg(tablename || '.' || policyname, ', ') from pg_policies where schemaname='public' and tablename in (${inList([...BANG_HD, "contract_reschedules"])}) and policyname ~ '_owner(_all|_read)?$'`)
+  );
+  ok(
+    `${nhan}: mỗi bảng có đủ policy đọc + ghi theo vai trò`,
+    q(db, `select count(distinct tablename) from pg_policies where schemaname='public' and tablename in (${inList(BANG_HD)}) and policyname like '%\\_member\\_write'`) === String(BANG_HD.length) &&
+      q(db, `select count(distinct tablename) from pg_policies where schemaname='public' and tablename in (${inList([...BANG_HD, "contract_reschedules", "contract_addenda"])}) and policyname like '%\\_member\\_read'`) === String(BANG_HD.length + 2)
+  );
+  ok(
+    `${nhan}: policy mới gọi hàm vai trò dạng (select …) — initPlan, không phải từng dòng`,
+    q(db, `select count(*) from pg_policies where schemaname='public' and tablename in (${inList(BANG_HD)}) and (coalesce(qual,'') || coalesce(with_check,'')) ~ 'is_studio_member\\('`) === "0"
+  );
+  ok(
+    `${nhan}: is_studio_member kiểm profiles.is_active`,
+    /is_active/.test(q(db, "select pg_get_functiondef('public.is_studio_member(uuid)'::regprocedure)"))
+  );
+  ok(
+    `${nhan}: trigger chỉ-chủ-studio-được-huỷ + kế-toán-chỉ-đánh-dấu-đã-trả`,
+    q(db, "select count(*) from pg_trigger where tgname in ('guard_contract_cancel','guard_contract_crew_accountant') and not tgisinternal") === "2"
+  );
+}
+
 /* ── 3. Gói riêng của tính năng khuôn mặt ─────────────────────────────────
  *
  * Đây là bài học phải trả giá bằng nhiều vòng: SQL Editor chạy cả file trong MỘT

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
@@ -6,7 +7,7 @@ import CustomerAlbum from "./CustomerAlbum";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioBrandMark from "@/components/StudioBrandMark";
 import { buildAlbumMetadata } from "@/lib/album-meta";
-import { getStudioBrand } from "@/lib/studio-brand";
+import { getAlbumOwner } from "@/lib/album-owner";
 import { getStudioHost } from "@/lib/studio-site";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { resolveDeliveredAlbum } from "@/lib/contract-album";
@@ -15,13 +16,26 @@ import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
-  const params = await props.params;
+/**
+ * Album theo slug — bọc React `cache()` để generateMetadata và page dùng chung
+ * MỘT lượt đọc trong cùng request (trước đây mỗi bên tự query albums một lần).
+ * Chọn đủ cột cho cả hai phía; slug là duy nhất nên maybeSingle tương đương
+ * single() cũ (không thấy → null).
+ */
+const getAlbumBySlug = cache(async (slug: string) => {
   const { data } = await createAdminClient()
     .from("albums")
-    .select("title, description, cover_url, owner_id")
-    .eq("slug", params.slug)
+    .select(
+      "id, owner_id, slug, title, description, status, password_hash, selection_limit, watermark_enabled, watermark_text, download_enabled, phase, cover_url"
+    )
+    .eq("slug", slug)
     .maybeSingle();
+  return data;
+});
+
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
+  const data = await getAlbumBySlug(params.slug);
   if (!data?.title) return { title: "Album ảnh" };
   const meta = await buildAlbumMetadata({
     title: data.title,
@@ -45,13 +59,7 @@ export default async function PublicAlbumPage(
   const params = await props.params;
   const admin = createAdminClient();
 
-  const { data: album } = await admin
-    .from("albums")
-    .select(
-      "id, owner_id, slug, title, description, status, password_hash, selection_limit, watermark_enabled, watermark_text, download_enabled, phase, cover_url"
-    )
-    .eq("slug", params.slug)
-    .single();
+  const album = await getAlbumBySlug(params.slug);
 
   // Đồng bộ Drive (2 album riêng): sau khi giao khách, hợp đồng đã có album giao
   // khách hoàn thiện → album chọn ảnh không còn hiện cho khách. Chuyển hướng
@@ -94,11 +102,8 @@ export default async function PublicAlbumPage(
   // owners don't get delivery, so their albums stay on the selection view even
   // if a stale phase value says otherwise.
   if (album && album.phase === "delivery") {
-    const { data: ownerRow } = await admin
-      .from("profiles")
-      .select("plan, plan_expires_at, role")
-      .eq("id", album.owner_id)
-      .maybeSingle();
+    // Cùng dòng profiles đã cache cho metadata — không đọc lại.
+    const ownerRow = (await getAlbumOwner(album.owner_id)).profile;
     const ownerIsAdmin = ownerRow?.role === "admin";
     const ownerEffective = ownerRow ? effectivePlan(ownerRow.plan, ownerRow.plan_expires_at) : "free";
     if (planAllowsDelivery(ownerEffective, ownerIsAdmin)) {
@@ -110,7 +115,7 @@ export default async function PublicAlbumPage(
     return (
       <main className="flex min-h-screen flex-col">
         <header className="flex items-center justify-between px-6 py-5 md:px-10">
-          <StudioBrandMark brand={album?.owner_id ? await getStudioBrand(admin, album.owner_id).catch(() => null) : null} />
+          <StudioBrandMark brand={album?.owner_id ? (await getAlbumOwner(album.owner_id)).brand : null} />
           <LanguageSwitcher />
         </header>
         <div className="flex flex-1 items-center justify-center px-6 text-center">
@@ -125,31 +130,21 @@ export default async function PublicAlbumPage(
   // View only specific photos (read-only): ?s=token (short link) or the legacy
   // ?share=id1,id2,id3. Token links keep the URL short for large selections.
   let shareIds: string[] | null = searchParams?.share ? searchParams.share.split(",").filter(Boolean) : null;
-  if (!shareIds && searchParams?.s) {
-    const { data: sh } = await admin
-      .from("album_shares")
-      .select("photo_ids")
-      .eq("token", searchParams.s)
-      .maybeSingle();
-    if (sh?.photo_ids?.length) shareIds = sh.photo_ids as string[];
-  }
 
   // Owner permissions gate customer download (ZIP) and notes.
-  // Keep the core owner query to SAFE columns only, so an un-migrated brand
-  // column can never break download/notes permissions or photo loading.
-  // Brand (logo/name) fetched separately, best-effort — missing columns just
-  // fall back to defaults without affecting anything else. Chạy song song với
-  // query owner (độc lập nhau) để bớt một round-trip tuần tự.
-  const [{ data: owner }, brand, studioHost] = await Promise.all([
-    admin
-      .from("profiles")
-      .select("role, can_zip, can_notes, full_name, plan, plan_expires_at")
-      .eq("id", album.owner_id)
-      .maybeSingle(),
-    getStudioBrand(admin, album.owner_id),
+  // getAlbumOwner (cache theo request) đọc profiles MỘT lần cho cả quyền lẫn
+  // thương hiệu; cột thương hiệu chưa migrate thì nó tự lùi về cột an toàn nên
+  // quyền tải/ghi chú không bao giờ hỏng vì brand. Tra token chia sẻ (?s=)
+  // chạy song song luôn — nó độc lập với owner.
+  const [{ profile: owner, brand }, studioHost, sh] = await Promise.all([
+    getAlbumOwner(album.owner_id),
     // Domain riêng của studio cho link "chia sẻ ảnh đã chọn".
     getStudioHost(admin, album.owner_id),
+    !shareIds && searchParams?.s
+      ? admin.from("album_shares").select("photo_ids").eq("token", searchParams.s).maybeSingle().then((r) => r.data)
+      : Promise.resolve(null),
   ]);
+  if (sh?.photo_ids?.length) shareIds = sh.photo_ids as string[];
   const studioName = brand.name;
   const isAdminOwner = owner?.role === "admin";
   // HAI quyền tải, KHÁC nhau có chủ ý:
