@@ -107,6 +107,7 @@ const ORDER = [
   ["migrations/thiep_tang_tu_dong.sql", "Tự tặng thiệp cưới online trước ngày cưới: lựa chọn tặng / không tặng của từng hợp đồng"],
   ["migrations/ke_hoach_cuoi.sql", "Kế hoạch cưới của khách trên cổng khách: việc cần làm, ngân sách, lịch trình ngày cưới + bật/tắt theo hợp đồng"],
   ["migrations/ke_hoach_cuoi_mo_rong.sql", "Kế hoạch cưới mở rộng: khách mời & xếp bàn, nhà cung cấp, đội hỗ trợ, đồ cần mang, ảnh cần chụp, phong cách (chạy SAU ke_hoach_cuoi)"],
+  ["migrations/luu_lua_chon_album.sql", "Lưu lựa chọn ảnh của khách theo chênh lệch, một transaction: hàm save_album_selection (chạy SAU album_dislikes)"],
 ];
 
 /**
@@ -162,6 +163,7 @@ const MOI = [
   "migrations/thiep_tang_tu_dong.sql",
   "migrations/ke_hoach_cuoi.sql",
   "migrations/ke_hoach_cuoi_mo_rong.sql",
+  "migrations/luu_lua_chon_album.sql",
 ];
 
 /**

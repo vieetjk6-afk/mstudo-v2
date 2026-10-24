@@ -35,7 +35,8 @@
     "migrations/anh_in_album_le.sql",
     "migrations/thiep_tang_tu_dong.sql",
     "migrations/ke_hoach_cuoi.sql",
-    "migrations/ke_hoach_cuoi_mo_rong.sql"
+    "migrations/ke_hoach_cuoi_mo_rong.sql",
+    "migrations/luu_lua_chon_album.sql"
   ],
   "muc": [
     {

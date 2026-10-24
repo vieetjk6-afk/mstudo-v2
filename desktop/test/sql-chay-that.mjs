@@ -521,5 +521,80 @@ ok(
   q("moi", `select count(*) from public.studio_audit_log where contract_id = '${SIGNED}' and action = 'contract.delete'`) === "1"
 );
 
+// ── Lưu lựa chọn của khách: save_album_selection (luu_lua_chon_album.sql) ───
+// Route trước đây xoá sạch rồi chèn lại mỗi cú bấm. Hàm mới phải: thêm đúng ảnh
+// mới, xoá đúng ảnh bỏ, bỏ qua ảnh của album KHÁC, giữ ghi chú studio, và gọi
+// lại cùng dữ liệu thì không ghi gì (không bắn Realtime thừa).
+console.log("\n— Lưu lựa chọn: save_album_selection —");
+const ALB = "00000000-0000-0000-0000-00000000e001";
+const ALB2 = "00000000-0000-0000-0000-00000000e002";
+const ph = (n) => `00000000-0000-0000-0000-00000000f00${n}`;
+q(
+  "moi",
+  "set session_replication_role = replica; " +
+    `insert into public.albums (id, owner_id, slug, title, status) values ('${ALB}', '${P}', 'test-chon', 'Chọn', 'published'), ('${ALB2}', '${P}', 'test-khac', 'Khác', 'published'); ` +
+    `insert into public.photos (id, album_id, drive_file_id, name) values ` +
+    `('${ph(1)}', '${ALB}', 'f1', 'a1.jpg'), ('${ph(2)}', '${ALB}', 'f2', 'a2.jpg'), ('${ph(3)}', '${ALB}', 'f3', 'a3.jpg'), ` +
+    `('${ph(4)}', '${ALB}', 'f4', 'a4.jpg'), ('${ph(9)}', '${ALB2}', 'f9', 'khac.jpg')`
+);
+const luu = (sel, dis, notes = "{}") =>
+  q(
+    "moi",
+    `select selected || '/' || disliked from public.save_album_selection('${ALB}', 'phien-1', ` +
+      `'{${sel.map(ph).join(",")}}'::uuid[], ${dis === null ? "null" : `'{${dis.map(ph).join(",")}}'::uuid[]`}, 'Lan', '${notes}'::jsonb)`
+  );
+const chon = () =>
+  q("moi", `select coalesce(string_agg(photo_name, ',' order by photo_name), '') from public.selections where album_id = '${ALB}' and session_id = 'phien-1'`);
+const ghet = () =>
+  q("moi", `select coalesce(string_agg(photo_name, ',' order by photo_name), '') from public.dislikes where album_id = '${ALB}' and session_id = 'phien-1'`);
+
+ok(
+  "Lần đầu: chọn 2 ảnh + 1 ảnh của album KHÁC (bị bỏ qua), không thích 1 ảnh",
+  luu([1, 2, 9], [3], `{"${ph(1)}": "in to"}`) === "2/1" && chon() === "a1.jpg,a2.jpg" && ghet() === "a3.jpg",
+  `${chon()} | ${ghet()}`
+);
+ok(
+  "…ghi chú khách và tên khách được lưu",
+  q("moi", `select client_note || '/' || client_name from public.selections where photo_id = '${ph(1)}'`) === "in to/Lan"
+);
+// Studio ghi chú lên ảnh khách chọn — đường xoá-chèn cũ làm mất ghi chú này.
+q("moi", `update public.selections set photographer_note = 'đã chỉnh' where photo_id = '${ph(1)}'`);
+const truoc = q("moi", `select string_agg(xmin::text || id::text, ',' order by id) from public.selections where session_id = 'phien-1'`);
+ok("Gọi lại ĐÚNG dữ liệu cũ → vẫn 2/1", luu([1, 2, 9], [3], `{"${ph(1)}": "in to"}`) === "2/1");
+ok(
+  "…và không dòng nào bị ghi lại (idempotent, không bắn Realtime thừa)",
+  q("moi", `select string_agg(xmin::text || id::text, ',' order by id) from public.selections where session_id = 'phien-1'`) === truoc
+);
+ok(
+  "Thêm a4, bỏ a2 → chỉ đúng chênh lệch",
+  luu([1, 4], [3], `{"${ph(1)}": "in to"}`) === "2/1" && chon() === "a1.jpg,a4.jpg"
+);
+ok(
+  "…dòng a1 giữ nguyên, ghi chú studio KHÔNG mất",
+  q("moi", `select photographer_note from public.selections where photo_id = '${ph(1)}'`) === "đã chỉnh"
+);
+ok(
+  "Không gửi danh sách 'không thích' (client cũ) → bảng dislikes không bị đụng",
+  luu([1], null) === "1/0" && ghet() === "a3.jpg" && chon() === "a1.jpg"
+);
+ok(
+  "Ảnh vừa chọn vừa 'không thích' → bỏ khỏi danh sách chọn; xoá 'không thích' cũ",
+  luu([1, 2], [2]) === "1/1" && chon() === "a1.jpg" && ghet() === "a2.jpg"
+);
+ok("Bỏ hết → không còn dòng nào", luu([], []) === "0/0" && chon() === "" && ghet() === "");
+ok(
+  "Chỉ máy chủ gọi được: anon / authenticated không có quyền execute",
+  q(
+    "moi",
+    "select has_function_privilege('anon', 'public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb)', 'execute')::text || '/' || " +
+      "has_function_privilege('authenticated', 'public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb)', 'execute')::text || '/' || " +
+      "has_function_privilege('service_role', 'public.save_album_selection(uuid, text, uuid[], uuid[], text, jsonb)', 'execute')::text"
+  ) === "false/false/true"
+);
+ok(
+  "Hàm cũng có trên database cập nhật bằng cap-nhat.sql",
+  q("cu", "select count(*) from pg_proc where proname = 'save_album_selection'") === "1"
+);
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);
