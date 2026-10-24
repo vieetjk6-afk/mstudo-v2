@@ -2,10 +2,11 @@
 
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { Check, Copy, ExternalLink, FolderInput, Loader2, Printer, RotateCcw } from "lucide-react";
+import { ExternalLink, FolderInput, Loader2, Printer, RotateCcw } from "lucide-react";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { fmtDate } from "@/lib/date";
 import { PRINT_FOLDER_NAME } from "@/lib/album-print-rules";
+import PhotoCodeButtons from "@/components/PhotoCodeButtons";
 
 /** Ảnh in khách đã gửi + số ảnh được tặng — page.tsx dựng. */
 export type AlbumPrintInfo = {
@@ -29,11 +30,14 @@ type CopyResult = { folderUrl: string; copied: number; skipped: number; failed: 
  */
 export default function AlbumPrintPanel({
   albumId,
+  albumSlug,
   info,
   photos,
   hasDeliveryFolder,
 }: {
   albumId: string;
+  /** Đặt tên file .txt mã ảnh in. */
+  albumSlug: string;
   info: AlbumPrintInfo;
   photos: { id: string; drive_file_id: string }[];
   hasDeliveryFolder: boolean;
@@ -44,7 +48,6 @@ export default function AlbumPrintPanel({
   const [err, setErr] = useState<string | null>(null);
   const [needConnect, setNeedConnect] = useState(false);
   const [result, setResult] = useState<CopyResult | null>(null);
-  const [namesCopied, setNamesCopied] = useState(false);
   // Album lẻ: số ảnh in tặng nhập ngay ở đây, tự lưu.
   const [albumQuota, setAlbumQuota] = useState(info.albumQuota > 0 ? String(info.albumQuota) : "");
   const [quotaSaved, setQuotaSaved] = useState<"idle" | "saving" | "saved">("idle");
@@ -111,17 +114,6 @@ export default function AlbumPrintPanel({
       setErr("Mất kết nối, thử lại.");
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function copyNames() {
-    const text = info.picks.map((p) => stripExtension(p.photo_name)).join("\n");
-    try {
-      await navigator.clipboard.writeText(text);
-      setNamesCopied(true);
-      setTimeout(() => setNamesCopied(false), 1800);
-    } catch {
-      window.prompt("Copy danh sách tên ảnh in:", text);
     }
   }
 
@@ -205,9 +197,7 @@ export default function AlbumPrintPanel({
               {busy ? <Loader2 size={15} className="animate-spin" /> : <FolderInput size={15} />}
               {busy ? "Đang chép…" : `Copy vào thư mục “${PRINT_FOLDER_NAME}” trên Drive`}
             </button>
-            <button type="button" onClick={copyNames} className="btn-ghost px-3 py-2 text-[13px]">
-              {namesCopied ? <Check size={15} /> : <Copy size={15} />} {namesCopied ? "Đã copy" : "Copy tên file"}
-            </button>
+            <PhotoCodeButtons names={info.picks.map((p) => p.photo_name)} fileName={`${albumSlug}-anh-in`} />
             {copiedAt && (
               <button type="button" onClick={() => call("unlock")} disabled={busy} className="btn-ghost px-3 py-2 text-[13px]">
                 <RotateCcw size={15} /> Cho khách chọn lại
