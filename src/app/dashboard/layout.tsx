@@ -20,7 +20,8 @@ import { effectivePlan, planProfilePatch, studioTier } from "@/lib/plans";
 import { getFeatureFlags, comingSoonNav, desktopHidden } from "@/lib/feature-flags";
 import { BRANCH_COOKIE, getBranchScope } from "@/lib/branches";
 import type { ChromeProfile, Profile } from "@/lib/types";
-import { ACCENT_COOKIE, UI_COOKIE, accentHex, accentKey, resolveUi, uiV2Mode } from "@/lib/ui-version";
+import { ACCENT_COOKIE, accentHex, accentKey } from "@/lib/ui-version";
+import { getUiState } from "@/lib/ui-server";
 
 export default async function DashboardLayout({
   children,
@@ -151,8 +152,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
   const comingSoon = comingSoonNav(flags);
   // Giao diện mới (thử nghiệm): cờ ui_v2 quyết định AI được dùng, cookie là lựa
   // chọn của từng người. Đọc ở server để vẽ đúng khung ngay lần đầu, không nháy.
-  const jar = await cookies();
-  const ui = resolveUi(uiV2Mode(flags), profile.role === "admin", jar.get(UI_COOKIE)?.value);
+  const [ui, jar] = await Promise.all([getUiState(), cookies()]);
   const accent = accentKey(jar.get(ACCENT_COOKIE)?.value);
   // Chưa xuất bản (ẩn hoàn toàn với non-admin, không hiện cả nhãn "Sắp ra mắt").
   const hiddenNav = desktopHidden(flags) ? ["/dashboard/studio/desktop"] : [];

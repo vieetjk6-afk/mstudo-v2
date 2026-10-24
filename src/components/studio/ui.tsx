@@ -46,7 +46,7 @@ export function Panel({
   return (
     <div
       {...rest}
-      className={`rounded-[14px] ${className}`}
+      className={`v1-panel rounded-[14px] ${className}`}
       // GỘP style của người gọi, không ghi đè: kiểu props cho phép truyền
       // `style` (HTMLAttributes) nên chỗ gọi tưởng là truyền được, mà trước đây
       // nó bị nuốt im lặng — nền/viền cứng luôn thắng. Người gọi cần đè nền thì
@@ -87,7 +87,7 @@ export function StatCard({
   sub?: string; delta?: string; deltaTone?: ToneKey;
 }) {
   return (
-    <Panel className="px-4 py-[15px]">
+    <Panel className="v1-stat px-4 py-[15px]">
       <div className="mb-[11px] flex items-center justify-between gap-2">
         <span className="flex-none rounded-[9px] p-[7px]" style={{ background: TONE[tone].soft, color: TONE[tone].fg, lineHeight: 0 }}>
           <Icon size={19} />
