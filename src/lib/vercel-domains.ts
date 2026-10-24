@@ -75,16 +75,55 @@ export type DomainInfo = {
   verified: boolean;
   /** Các bản ghi cần thêm khi chưa xác minh (TXT `_vercel`…). */
   verification: unknown[];
+  /** Không hỏi được Vercel — `present=false` khi đó KHÔNG có nghĩa là chưa thêm. */
+  unreachable?: boolean;
 };
 
 /** Tình trạng một host trong project. `present=false` khi Vercel trả 404. */
 export async function getDomain(host: string): Promise<DomainInfo> {
   const r = await vercelApi(`/v9/projects/${PROJECT}/domains/${encodeURIComponent(host)}`);
-  if (!r.ok) return { present: false, verified: false, verification: [] };
+  if (!r.ok) return { present: false, verified: false, verification: [], unreachable: !!r.unreachable };
   return {
     present: true,
     verified: !!r.data?.verified,
     verification: (r.data?.verification as unknown[]) ?? [],
+  };
+}
+
+export type DomainConfig = {
+  /**
+   * DNS đã trỏ về Vercel chưa. `null` = không hỏi được (API lỗi / đổi dạng) —
+   * khi đó chỗ gọi giữ cách cũ, chỉ dựa vào `verified`.
+   */
+  misconfigured: boolean | null;
+  /** Giá trị Vercel gợi ý riêng cho project (nếu có), thay cho giá trị mặc định. */
+  a?: string;
+  cname?: string;
+};
+
+/**
+ * DNS của host đã trỏ đúng chưa.
+ *
+ * VÌ SAO CẦN: `verified` của Vercel chỉ nói về QUYỀN SỞ HỮU — tên miền mới tinh
+ * thêm vào là `verified: true` ngay, dù studio chưa đụng tới DNS. Chỉ dựa vào nó
+ * thì ô tên miền báo "Đã kết nối" và giấu luôn hướng dẫn trỏ DNS, còn link gửi
+ * khách đã chuyển sang tên miền chưa chạy.
+ */
+export async function getDomainConfig(host: string): Promise<DomainConfig> {
+  const r = await vercelApi(`/v6/domains/${encodeURIComponent(host)}/config?projectIdOrName=${PROJECT}`);
+  if (!r.ok || typeof r.data?.misconfigured !== "boolean") return { misconfigured: null };
+  // recommendedIPv4: [{ rank, value: string[] }], recommendedCNAME: [{ rank, value }]
+  const pick = (list: unknown): unknown => {
+    if (!Array.isArray(list) || !list.length) return undefined;
+    const best = [...list].sort((x, y) => ((x as { rank?: number }).rank ?? 99) - ((y as { rank?: number }).rank ?? 99))[0];
+    return (best as { value?: unknown }).value;
+  };
+  const ip = pick(r.data.recommendedIPv4);
+  const cname = pick(r.data.recommendedCNAME);
+  return {
+    misconfigured: r.data.misconfigured as boolean,
+    a: Array.isArray(ip) && typeof ip[0] === "string" ? ip[0] : undefined,
+    cname: typeof cname === "string" ? cname.replace(/\.$/, "") : undefined,
   };
 }
 
