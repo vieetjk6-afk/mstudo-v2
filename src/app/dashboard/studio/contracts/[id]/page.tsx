@@ -310,6 +310,7 @@ export default async function ContractPage(
       initialAppointments={(appointments ?? []) as StudioAppointment[]}
       ownerId={profile.id as string}
       branches={activeBranches.map((b) => ({ id: b.id, name: b.name }))}
+      branchLocked={isBranchScopedRole(profile.actingRole as string)}
       studioName={brand.name}
       depositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? 25}
       studioLogo={brand.logoUrl}

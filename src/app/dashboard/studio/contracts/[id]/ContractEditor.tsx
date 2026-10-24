@@ -315,6 +315,7 @@ export default function ContractEditor({
   initialAppointments,
   ownerId,
   branches,
+  branchLocked = false,
   studioName,
   depositPercent = 25,
   studioLogo = null,
@@ -377,6 +378,8 @@ export default function ContractEditor({
   ownerId: string;
   /** Chi nhánh còn hoạt động. Rỗng → không hiện ô chọn chi nhánh. */
   branches: { id: string; name: string }[];
+  /** Vai trò bị ghim chi nhánh (branch_manager): không được chuyển hợp đồng sang cơ sở khác — RLS cũng chặn. */
+  branchLocked?: boolean;
   studioName: string;
   /** % cọc gợi ý của studio ("Chính sách studio"). 0 = không gợi ý. */
   depositPercent?: number;
@@ -2977,14 +2980,16 @@ export default function ContractEditor({
               {branches.length > 0 && (
                 <div className="card p-6">
                   <h2 className="mb-4 font-serif text-lg font-medium">Chi nhánh thực hiện</h2>
-                  <select className="input" value={f.branch_id} onChange={(e) => set("branch_id", e.target.value)}>
+                  <select className="input" value={f.branch_id} disabled={branchLocked} onChange={(e) => set("branch_id", e.target.value)}>
                     <option value="">— Chưa gán chi nhánh —</option>
                     {branches.map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>
                   <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                    Quyết định hợp đồng này được tính vào doanh thu và lịch của cơ sở nào.
+                    {branchLocked
+                      ? "Bạn quản lý một chi nhánh nên không chuyển được hợp đồng sang cơ sở khác — nhờ chủ studio hoặc quản lý chung."
+                      : "Quyết định hợp đồng này được tính vào doanh thu và lịch của cơ sở nào."}
                   </p>
                 </div>
               )}
