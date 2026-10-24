@@ -8,6 +8,7 @@ import { buildPriceView } from "@/lib/site-pricing";
 import { mapEmbedSrc, mapOpenHref } from "@/lib/site-map";
 import type { SiteData } from "@/lib/site-loader";
 import { brandNameText } from "@/lib/brand-name";
+import CoverImg from "@/components/CoverImg";
 
 const str = (v: unknown, fallback = "") => (typeof v === "string" && v.trim() ? v : fallback);
 const lines = (v: unknown) => str(v).split("\n").map((s) => s.trim()).filter(Boolean);
@@ -338,7 +339,7 @@ function Block({ block, data, fontVar, demo = false }: { block: SiteBlock; data:
             {picked.length > 0
               ? picked.map((a) => (
                   <a key={a.id} href={`/album/${a.slug}`} className="s-tile">
-                    {a.cover_url && <img src={a.cover_url} alt={a.title} loading="lazy" decoding="async" />}
+                    {a.cover_url && <CoverImg src={a.cover_url} alt={a.title} loading="lazy" decoding="async" />}
                     <span className="s-tile-cap">{a.title}</span>
                   </a>
                 ))
