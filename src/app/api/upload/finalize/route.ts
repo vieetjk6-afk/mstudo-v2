@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { uploadToAdminDrive } from "@/lib/mstudo-drive";
 import { sniffImageType } from "@/lib/upload-guard";
@@ -19,8 +19,7 @@ const MAX_BYTES = 25 * 1024 * 1024;
  * bucket và trả về public URL như luồng cũ.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => null)) as

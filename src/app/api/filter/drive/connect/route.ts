@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { getSessionUser, getProfileById } from "@/lib/auth-guards";
+import { getProfileById, requireUser } from "@/lib/auth-guards";
 import { filterDriveAuthUrl, filterDriveConfigured } from "@/lib/filter-drive";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const back = (q: string) => NextResponse.redirect(new URL(`/dashboard/filter?${q}`, req.url));
 
-  const user = await getSessionUser();
+  const user = await requireUser();
   if (!user) return back("driveconn=unauthorized");
 
   const profile = await getProfileById(user.id);

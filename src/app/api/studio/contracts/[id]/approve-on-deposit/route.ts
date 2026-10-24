@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { requireStudio } from "@/lib/auth-guards";
+import { studioFor } from "@/lib/contract-change";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { approveOnDeposit } from "@/lib/contract-approve";
+import { canActOnContract } from "@/lib/studio-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +14,23 @@ export const dynamic = "force-dynamic";
  * Chỉ chốt khi hợp đồng THẬT SỰ đã có tiền (tổng lần thu > 0): gọi route này
  * không kèm khoản thu nào thì không đổi gì.
  */
+/**
+ * Ngoài chủ studio/admin. Chỉ màn hợp đồng gọi route này, và màn đó chặn kế toán
+ * (contracts/[id]/page.tsx) — nên kế toán không có lý do gọi; nhân viên thì được
+ * vì họ ghi khoản thu trên hợp đồng được giao.
+ */
+const APPROVE_ROLES = ["manager", "branch_manager", "staff"] as const;
+
 export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
   const { id } = await props.params;
-  const profile = await requireStudio("booking");
+  const profile = await studioFor(APPROVE_ROLES);
   if (!profile) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const db = createAdminClient();
-  const { data: c } = await db.from("studio_contracts").select("id, owner_id").eq("id", id).maybeSingle();
-  if (!c || c.owner_id !== profile.id) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const { data: c } = await db.from("studio_contracts").select("id, owner_id, assigned_to, branch_id").eq("id", id).maybeSingle();
+  // Cùng hàng rào với màn hợp đồng: nhân viên chỉ hợp đồng được giao, quản lý
+  // chi nhánh chỉ chi nhánh mình.
+  if (!c || c.owner_id !== profile.id || !canActOnContract(profile, c)) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const { data: pays } = await db.from("contract_payments").select("amount").eq("contract_id", id);
   const collected = ((pays ?? []) as { amount: number }[]).reduce((s, p) => s + (Number(p.amount) || 0), 0);

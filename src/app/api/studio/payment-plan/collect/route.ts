@@ -5,6 +5,7 @@ import { openRemainderIfSettled } from "@/lib/bank-apply";
 import { approveOnDeposit } from "@/lib/contract-approve";
 import { asPaymentMethod, vnd } from "@/lib/types";
 import { logAction } from "@/lib/audit-log";
+import { canActOnContract } from "@/lib/studio-roles";
 
 export const dynamic = "force-dynamic";
 
@@ -23,9 +24,19 @@ export const dynamic = "force-dynamic";
  * Tin Zalo xác nhận cọc do người gọi bắn riêng (như màn hợp đồng), để route này
  * chỉ lo phần TIỀN.
  */
+/**
+ * Vai trò được chốt thu. Nút "Đã thu" nằm ở Tổng quan — màn MỌI vai trò đều mở
+ * (studio-nav: EVERYONE), và màn hợp đồng cũng cho mọi vai trò trừ kế toán ghi
+ * khoản thu; kế toán thì chính là người đối soát tiền. Nên danh sách là đủ cả,
+ * hàng rào thật nằm ở phạm vi hợp đồng bên dưới (canActOnContract).
+ */
+const COLLECT_ROLES = ["owner", "admin", "manager", "branch_manager", "staff", "accountant"];
+
 export async function POST(req: Request) {
   const profile = await requireStudio("full");
-  if (!profile) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!profile || !COLLECT_ROLES.includes(profile.actingRole as string)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
 
   const { planId, method: rawMethod } = (await req.json().catch(() => ({}))) as { planId?: string; method?: string };
   const method = asPaymentMethod(rawMethod);
@@ -34,12 +45,17 @@ export async function POST(req: Request) {
   const db = createAdminClient();
   const { data: plan } = await db
     .from("contract_payment_plan")
-    .select("id, label, amount, paid, contract:studio_contracts!inner(id, owner_id)")
+    .select("id, label, amount, paid, contract:studio_contracts!inner(id, owner_id, assigned_to, branch_id)")
     .eq("id", planId)
     .maybeSingle();
-  const contract = (plan as unknown as { contract: { id: string; owner_id: string } | null } | null)?.contract ?? null;
-  // Đợt của studio khác → coi như không tồn tại.
-  if (!plan || !contract || contract.owner_id !== profile.id) {
+  const contract =
+    (plan as unknown as { contract: { id: string; owner_id: string; assigned_to: string | null; branch_id: string | null } | null } | null)
+      ?.contract ?? null;
+  // Đợt của studio khác → coi như không tồn tại. Nhân viên chỉ chốt được hợp
+  // đồng được giao, quản lý chi nhánh chỉ hợp đồng chi nhánh mình — cùng hàng
+  // rào với màn hợp đồng; thiếu chốt này thì nhân viên bất kỳ chốt thu (và tự
+  // duyệt) hợp đồng của người khác chỉ bằng planId.
+  if (!plan || !contract || contract.owner_id !== profile.id || !canActOnContract(profile, contract)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   if (plan.paid) return NextResponse.json({ ok: true, alreadyPaid: true });

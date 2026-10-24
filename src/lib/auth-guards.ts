@@ -68,6 +68,21 @@ function jwtAal(token: string | undefined): string | null {
   }
 }
 
+/**
+ * Người dùng đã đăng nhập VÀ đã qua cổng 2 lớp (nếu tài khoản có bật), hoặc null.
+ *
+ * Dùng thay cho `supabase.auth.getUser()` trần ở các route API chỉ cần biết
+ * "ai đang gọi": getUser() trần chấp nhận cả phiên aal1 của tài khoản đã bật 2
+ * lớp — tức người lấy được mật khẩu (chưa có mã OTP) vẫn gọi thẳng API đồng bộ
+ * album, tải ảnh, đổi tên miền… dù giao diện đã chặn ở /login/mfa.
+ */
+export async function requireUser() {
+  const user = await getSessionUser();
+  if (!user) return null;
+  if (await needsMfa()) return null;
+  return user;
+}
+
 export const getProfileById = cache(async (id: string) => {
   const supabase = await createClient();
   const { data } = await supabase.from("profiles").select("*").eq("id", id).single();

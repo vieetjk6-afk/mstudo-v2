@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { albumsNeedingCluster, albumsNeedingScan, clusterAlbum, hanQuetMs, scanAlbum } from "@/lib/face-scan-server";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -40,8 +41,7 @@ const MAX_ALBUMS = 3;
  */
 export async function GET(req: NextRequest) {
   // Fail-closed: thiếu CRON_SECRET thì khoá, đừng mở.
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
   if (process.env.FACE_SCAN_OFF === "1") {

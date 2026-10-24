@@ -107,3 +107,24 @@ export function forcedBranchScope(
   if (!isBranchScopedRole(role)) return null;
   return branchId || "none";
 }
+
+/**
+ * Người đang thao tác có được đụng vào hợp đồng này không — cùng hàng rào với
+ * trang /dashboard/studio/contracts/[id]: `staff` chỉ hợp đồng được giao cho
+ * mình, `branch_manager` chỉ hợp đồng của chính chi nhánh mình (chưa gán chi
+ * nhánh → không gì cả, fail-closed như forcedBranchScope).
+ *
+ * Route API ghi bằng service-role phải tự kiểm lại điều này: trang chặn mở
+ * hợp đồng không có nghĩa là route chặn — gọi thẳng route bằng id là lách được.
+ */
+export function canActOnContract(
+  ctx: { actingRole?: string | null; actingUserId?: string | null; actingBranchId?: string | null },
+  contract: { assigned_to?: string | null; branch_id?: string | null }
+): boolean {
+  if (ctx.actingRole === "staff" && contract.assigned_to !== ctx.actingUserId) return false;
+  if (isBranchScopedRole(ctx.actingRole)) {
+    const mine = ctx.actingBranchId ?? null;
+    if (!mine || contract.branch_id !== mine) return false;
+  }
+  return true;
+}

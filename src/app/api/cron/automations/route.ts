@@ -21,6 +21,7 @@ import {
   type ContractSnapshot,
   type PendingAction,
 } from "@/lib/automations";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -56,8 +57,7 @@ const esc = (s: string) =>
 export async function GET(req: NextRequest) {
   // Fail-closed: thiếu CRON_SECRET thì KHOÁ, không mở. Nếu không, ai cũng gọi
   // được endpoint gửi Zalo hàng loạt này.
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
