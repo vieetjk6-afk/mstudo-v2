@@ -1,10 +1,11 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
 import { faceChips, type PersonChip } from "@/lib/face-people";
 import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 import { isDeliveryPhase } from "@/lib/album-phase";
-import { getStudioBrand } from "@/lib/studio-brand";
+import { getAlbumOwner } from "@/lib/album-owner";
 import Brand from "@/components/Brand";
 import GalleryView from "./GalleryView";
 import { buildAlbumMetadata } from "@/lib/album-meta";
@@ -17,13 +18,24 @@ import { loadPrintState } from "@/lib/album-print";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
-  const params = await props.params;
+/**
+ * Album theo slug — bọc React `cache()` để generateMetadata và page dùng chung
+ * MỘT lượt đọc trong cùng request. Chọn đủ cột cho cả hai phía (thêm
+ * `description` cho thẻ chia sẻ); slug duy nhất nên maybeSingle tương đương
+ * single() cũ.
+ */
+const getAlbumBySlug = cache(async (slug: string) => {
   const { data } = await createAdminClient()
     .from("albums")
-    .select("title, description, cover_url, owner_id")
-    .eq("slug", params.slug)
+    .select("id, slug, title, description, status, is_gallery, phase, password_hash, gallery_pinned, event_date, cover_url, category, category_label, client_name, download_enabled, watermark_delivery, watermark_text, owner_id")
+    .eq("slug", slug)
     .maybeSingle();
+  return data;
+});
+
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
+  const data = await getAlbumBySlug(params.slug);
   if (!data?.title) return { title: "mstudo" };
   const meta = await buildAlbumMetadata({
     title: data.title,
@@ -43,19 +55,15 @@ export default async function GalleryPage(
   const params = await props.params;
   const admin = createAdminClient();
   let shareIds: string[] | null = searchParams?.share ? searchParams.share.split(",").filter(Boolean) : null;
-  if (!shareIds && searchParams?.s) {
-    const { data: sh } = await admin
-      .from("album_shares")
-      .select("photo_ids")
-      .eq("token", searchParams.s)
-      .maybeSingle();
-    if (sh?.photo_ids?.length) shareIds = sh.photo_ids as string[];
-  }
-  const { data: album } = await admin
-    .from("albums")
-    .select("id, slug, title, status, is_gallery, phase, password_hash, gallery_pinned, event_date, cover_url, category, category_label, client_name, download_enabled, watermark_delivery, watermark_text, owner_id")
-    .eq("slug", params.slug)
-    .single();
+  // Tra token chia sẻ (?s=) và album SONG SONG — hai câu độc lập, trước đây
+  // chạy nối tiếp nên mỗi link chia sẻ tốn thêm một round-trip.
+  const [sh, album] = await Promise.all([
+    !shareIds && searchParams?.s
+      ? admin.from("album_shares").select("photo_ids").eq("token", searchParams.s).maybeSingle().then((r) => r.data)
+      : Promise.resolve(null),
+    getAlbumBySlug(params.slug),
+  ]);
+  if (sh?.photo_ids?.length) shareIds = sh.photo_ids as string[];
 
   // Giai đoạn quyết định trang này có nội dung hay không — `phase` thắng cờ cũ
   // `is_gallery` (xem @/lib/album-phase).
@@ -80,8 +88,10 @@ export default async function GalleryPage(
 
   // Chạy song song: brand, ảnh, sources, feedback và gói của chủ studio — gộp
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
-  const [brand, studioHost, allPhotos, { data: s }, { data: feedback }, { data: owner }, { data: ppl }, { data: pplLinks }, print] = await Promise.all([
-    getStudioBrand(admin, album.owner_id),
+  // Chủ album (gói + thương hiệu) lấy từ getAlbumOwner — đã cache theo request
+  // nên dùng lại đúng dòng profiles generateMetadata vừa đọc.
+  const [{ brand, profile: owner }, studioHost, allPhotos, { data: s }, { data: feedback }, { data: ppl }, { data: pplLinks }, print] = await Promise.all([
+    getAlbumOwner(album.owner_id),
     // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
     // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
     getStudioHost(admin, album.owner_id),
@@ -97,7 +107,6 @@ export default async function GalleryPage(
       .eq("album_id", album.id)
       .eq("approved", true)
       .order("created_at", { ascending: false }),
-    admin.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle(),
     // Nhóm khuôn mặt studio đã gom. `select("*")` có chủ ý: cover_box là cột
     // thêm sau, liệt kê tên nó ra thì database chưa chạy migration sẽ lỗi CẢ câu
     // và khối tìm mặt biến mất hẳn — xem ghi chú ở src/app/a/[slug]/page.tsx.
