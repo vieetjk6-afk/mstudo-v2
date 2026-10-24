@@ -706,8 +706,8 @@ export default function AlbumEditor({ size, tpl, onBack, initial }: { size: ADSi
         <button onClick={() => selCell && toggleLock(selCell.uid)} disabled={!selCell} className={`btn-ghost ${bar} gap-1 disabled:opacity-40`} title="Khóa/mở khóa layer" style={{ color: selCell?.locked ? "var(--brand)" : "var(--text2)" }}>{selCell?.locked ? <Lock size={15} /> : <Unlock size={15} />}</button>
         <button onClick={dupSpread} className={`btn-ghost ${bar} gap-1`}><Copy size={15} /> Clone</button>
         <span className="flex-1" />
-        <button onClick={undo} disabled={!hist.current.length} className={`btn-ghost ${bar} disabled:opacity-40`}><Undo2 size={15} /></button>
-        <button onClick={redo} disabled={!fut.current.length} className={`btn-ghost ${bar} disabled:opacity-40`}><Redo2 size={15} /></button>
+        <button onClick={undo} disabled={!hist.current.length} aria-label="Hoàn tác" title="Hoàn tác" className={`btn-ghost ${bar} disabled:opacity-40`}><Undo2 size={15} /></button>
+        <button onClick={redo} disabled={!fut.current.length} aria-label="Làm lại" title="Làm lại" className={`btn-ghost ${bar} disabled:opacity-40`}><Redo2 size={15} /></button>
         <div className="flex overflow-hidden rounded-lg text-xs font-semibold" style={panel}>
           {(["pdf", "jpg", "png"] as const).map((f) => (
             <button key={f} onClick={() => setFmt(f)} className="px-2.5 py-2" style={{ background: fmt === f ? "var(--brandSoft)" : "transparent", color: fmt === f ? "var(--brand)" : "var(--text2)" }}>{f.toUpperCase()}</button>

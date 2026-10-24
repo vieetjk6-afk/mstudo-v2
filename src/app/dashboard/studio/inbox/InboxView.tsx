@@ -28,6 +28,8 @@ interface Props {
   staff: Record<string, string>;
   channels: ChannelPublic[];
   meId: string;
+  /** id chủ studio (owner_id của các bảng inbox) — khác meId khi nhân viên đăng nhập. */
+  ownerId: string;
   canManageChannels: boolean;
 }
 
@@ -57,6 +59,7 @@ export default function InboxView({
   staff,
   channels,
   meId,
+  ownerId,
   canManageChannels,
 }: Props) {
   const supabase = useMemo(() => createClient(), []);
@@ -100,10 +103,14 @@ export default function InboxView({
      lại khung chat; mọi thay đổi khác chỉ làm mới danh sách bên trái. Cố ý nạp
      lại qua API thay vì tự ghép dòng từ payload: payload không kèm tên kênh và
      tên người, ghép tay sẽ ra những dòng thiếu thông tin nhấp nháy trên màn. */
+  /* Lọc theo owner_id NGAY TẠI server realtime: RLS vẫn chặn dòng của studio khác,
+     nhưng không có filter thì Realtime phải kiểm RLS cho từng thay đổi của MỌI
+     studio rồi mới loại — tốn tài nguyên và tăng độ trễ khi hệ thống đông. */
   useEffect(() => {
+    const ownerFilter = `owner_id=eq.${ownerId}`;
     const channel = supabase
       .channel("inbox-live")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "inbox_messages" }, (payload) => {
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "inbox_messages", filter: ownerFilter }, (payload) => {
         const convId = (payload.new as { conversation_id?: string })?.conversation_id;
         if (convId && convId === activeIdRef.current) {
           fetch(`/api/inbox/conversations/${convId}`, { cache: "no-store" })
@@ -113,14 +120,14 @@ export default function InboxView({
         }
         refreshList();
       })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "inbox_conversations" }, () => {
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "inbox_conversations", filter: ownerFilter }, () => {
         refreshList();
       })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, refreshList]);
+  }, [supabase, refreshList, ownerId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });

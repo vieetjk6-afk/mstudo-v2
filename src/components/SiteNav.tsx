@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { brandNameText } from "@/lib/brand-name";
+// CSS .s-*/.sp-* của website studio — tách khỏi globals để trang khác không phải tải.
+import "@/components/site/site.css";
 
 type NavItem = { id: string; label: string };
 

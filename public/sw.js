@@ -28,14 +28,18 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
-      // Focus an existing tab if one is open, otherwise open a new one.
-      for (const client of clients) {
-        if ("focus" in client) {
-          client.navigate(url);
-          return client.focus();
-        }
-      }
-      if (self.clients.openWindow) return self.clients.openWindow(url);
+      // Có tab đang mở thì đưa lên trước rồi điều hướng; không thì mở tab mới.
+      // navigate() REJECT với tab chưa do SW này điều khiển (tab mở trước khi SW
+      // cài, hoặc sau hard-reload) — trước đây lỗi đó nuốt mất cú bấm: tab được
+      // focus nhưng vẫn đứng ở trang cũ. Nay rơi về openWindow nếu điều hướng hỏng.
+      const client = clients.find((c) => "focus" in c);
+      const open = () => (self.clients.openWindow ? self.clients.openWindow(url) : undefined);
+      if (!client) return open();
+      return client
+        .focus()
+        .then((c) => (c || client).navigate(url))
+        .then((c) => c || open())
+        .catch(open);
     })
   );
 });
@@ -69,7 +73,8 @@ self.addEventListener("notificationclick", (event) => {
 const CACHE = "mstudo-v3";
 const IMG_CACHE = "mstudo-img-v1";
 const PAGE_CACHE = "mstudo-page-v1";
-const KEEP = [CACHE, IMG_CACHE, PAGE_CACHE];
+const STATIC_CACHE = "mstudo-static-v1";
+const KEEP = [CACHE, IMG_CACHE, PAGE_CACHE, STATIC_CACHE];
 
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [OFFLINE_URL, "/logo-mark.svg", "/favicon.svg"];
@@ -79,6 +84,9 @@ const PRECACHE = [OFFLINE_URL, "/logo-mark.svg", "/favicon.svg"];
 // vài nghìn tấm (lúc đó phần xem gần nhất được giữ, phần cũ bị dọn).
 const IMG_MAX = 600;
 const PAGE_MAX = 12;
+// JS/CSS của các trang khách đã lưu. Một trang App Router cần vài chục chunk;
+// 400 file đủ cho mấy bản build gần nhất mà vẫn chỉ vài MB.
+const STATIC_MAX = 400;
 
 /** Trang của KHÁCH — nơi được phép giữ lại HTML để mở khi mất mạng. */
 function isClientPage(pathname) {
@@ -139,6 +147,33 @@ async function imageFirst(req) {
   }
 }
 
+/**
+ * Chunk build (`/_next/static/…`): cache-first. Tên file gắn hash nội dung nên
+ * một địa chỉ không bao giờ đổi nội dung — HTML bản mới trỏ sang file mới, không
+ * thể "ghim" bản build cũ (nỗi lo khi bỏ cache asset ở v2). Lý do cần: HTML trang
+ * khách giữ trong PAGE_CACHE vô dụng khi mất mạng nếu HTTP cache đã dọn chunk của
+ * nó (điện thoại hay dọn) — trang trắng thay vì album. Chỉ giữ bản có header
+ * `immutable` (bản production); `next dev` trả no-cache nên không bị giữ.
+ */
+async function staticFirst(req) {
+  try {
+    const cache = await caches.open(STATIC_CACHE);
+    const hit = await cache.match(req);
+    if (hit) return hit;
+    const res = await fetch(req);
+    if (res && res.ok && /immutable/.test(res.headers.get("cache-control") || "")) {
+      await cache.put(req, res.clone());
+      trim(STATIC_CACHE, STATIC_MAX);
+    }
+    return res;
+  } catch (err) {
+    const cache = await caches.open(STATIC_CACHE).catch(() => null);
+    const hit = cache && (await cache.match(req));
+    if (hit) return hit;
+    throw err;
+  }
+}
+
 /** Trang khách: mạng trước (dữ liệu luôn mới), mất mạng thì mở bản đã lưu. */
 async function clientPage(req) {
   try {
@@ -172,9 +207,12 @@ self.addEventListener("fetch", (event) => {
   }
   if (url.pathname.startsWith("/api/")) return; // never cache API
 
-  // Build assets are content-hashed and served with immutable cache headers, so
-  // we let the browser's HTTP cache handle them. We do NOT cache them in the SW
-  // anymore — caching them risked pinning an old app build.
+  // Build assets: content-hashed → cache-first vào STATIC_CACHE có trần (xem
+  // staticFirst) để trang khách đã lưu còn mở được khi mất mạng.
+  if (url.pathname.startsWith("/_next/static/")) {
+    event.respondWith(staticFirst(req));
+    return;
+  }
 
   // Page navigations: network-first so data is always fresh; fall back to the
   // offline page only when the network is unreachable.

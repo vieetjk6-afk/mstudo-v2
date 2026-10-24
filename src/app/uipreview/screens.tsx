@@ -303,6 +303,7 @@ export const SCREENS: Record<
         staff={{ u1: "Phạm Thu Hà", u2: "Trần Hoài Nam" }}
         channels={f.inboxChannels}
         meId="u2"
+        ownerId="o1"
         canManageChannels
       />
     ),
@@ -321,7 +322,7 @@ export const SCREENS: Record<
         <ClientsView clients={[]} studio={f.studio} />
         <LeadsView leads={[]} />
         <ProductionView initial={[]} staff={[]} />
-        <InboxView conversations={[]} firstMessages={[]} staff={{}} channels={[]} meId="u2" canManageChannels />
+        <InboxView conversations={[]} firstMessages={[]} staff={{}} channels={[]} meId="u2" ownerId="o1" canManageChannels />
       </div>
     ),
   },

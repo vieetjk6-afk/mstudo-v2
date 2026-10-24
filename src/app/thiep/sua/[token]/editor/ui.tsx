@@ -87,7 +87,7 @@ export function GalleryEditor({ gallery, onUpload, onChange }: { gallery: string
             </div>
           </div>
         ))}
-        <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="grid aspect-square place-items-center rounded-lg border-2 border-dashed border-stone-300 text-stone-400 hover:border-rose-300 hover:text-rose-400 disabled:opacity-50">
+        <button type="button" aria-label="Thêm ảnh" onClick={() => ref.current?.click()} disabled={busy} className="grid aspect-square place-items-center rounded-lg border-2 border-dashed border-stone-300 text-stone-400 hover:border-rose-300 hover:text-rose-400 disabled:opacity-50">
           {busy ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
         </button>
       </div>
