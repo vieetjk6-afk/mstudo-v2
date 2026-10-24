@@ -362,9 +362,8 @@ export default async function StudioOverview() {
   // Lịch chụp sắp tới chỉ tính hợp đồng đã xác nhận/ký (bỏ nháp & mới gửi).
   //
   // Hai chỗ từng sai ở đây, cùng làm hỏng đúng một thứ — cái danh sách này:
-  //  • Truy vấn hợp đồng KHÔNG có `order by`, nên bản lọc ra cũng không theo thứ
-  //    tự nào. Phải tự sắp theo ngày (rồi giờ trong cùng ngày) thì "sắp tới" mới
-  //    đúng nghĩa gần-nhất-trước.
+  //  • Truy vấn hợp đồng chỉ sắp theo NGÀY, không theo giờ trong ngày. Phải tự
+  //    sắp lại (ngày rồi giờ) thì "sắp tới" mới đúng nghĩa gần-nhất-trước.
   //  • Cắt `.slice(0, 6)` ngay tại đây khiến thẻ KPI "Lịch sắp tới" không bao giờ
   //    quá 6, dù studio có 30 buổi. Giữ danh sách đầy đủ để đếm; cắt lúc VẼ.
   const upcoming = list
