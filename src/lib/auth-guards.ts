@@ -75,6 +75,24 @@ export const getProfileById = cache(async (id: string) => {
 });
 
 /** Returns the current admin profile, or null if the caller is not an admin. */
+/**
+ * Người đang đăng nhập có phải chính `ownerId` (hoặc nhân viên của studio đó)?
+ *
+ * Dùng ở callback OAuth: `state` ký HMAC chỉ chứng minh MÁY CHỦ đã cấp nó cho
+ * ownerId — không chứng minh trình duyệt đang quay về là của ownerId. Kẻ gian
+ * tự bấm "Kết nối" ở studio của mình, lấy link đồng ý của Google/Facebook rồi
+ * gửi cho nạn nhân: nạn nhân bấm "Cho phép" là token Lịch/Drive/Trang Facebook
+ * CỦA NẠN NHÂN được lưu vào studio của kẻ gian. Đối chiếu với phiên đăng nhập
+ * chặn đúng đường đó.
+ */
+export async function sessionActsFor(ownerId: string): Promise<boolean> {
+  const user = await getSessionUser();
+  if (!user) return false;
+  if (user.id === ownerId) return true;
+  const me = await getProfileById(user.id);
+  return !!me && me.studio_owner_id === ownerId;
+}
+
 export async function requireAdmin() {
   const user = await getSessionUser();
   if (!user) return null;

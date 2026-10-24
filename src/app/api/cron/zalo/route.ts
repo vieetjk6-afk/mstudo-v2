@@ -11,7 +11,7 @@ import {
 } from "@/lib/zalo/messages";
 import { OPEN_QUOTE_STATUSES, QUOTE_NUDGE_DAYS } from "@/lib/quote-expiry";
 import { ensureIntakeToken, intakeUrl } from "@/lib/contract-intake";
-import { listFolderImages } from "@/lib/drive-server";
+import { folderHasMedia } from "@/lib/drive-server";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { contractAlbumMode } from "@/lib/studio-drive";
 import { resolveDeliveredAlbum } from "@/lib/contract-album";
@@ -234,7 +234,13 @@ export async function GET(req: NextRequest) {
     // trước khi hậu kỳ xong là chuyện thường, việc chọn ảnh vẫn còn nguyên đó.
     .in("status", ["in_progress", "post_production", "completed"])
     .not("selection_album_id", "is", null)
-    .is("gallery_album_id", null);
+    .is("gallery_album_id", null)
+    // Lời mời gửi ĐÚNG MỘT LẦN (mốc ghi ngay bên dưới, kể cả khi Zalo hỏng);
+    // nhắc lại là việc của bước 4. Thiếu điều kiện này thì danh sách phình mãi
+    // theo mọi hợp đồng cũ (mỗi đêm một lượt Drive + vài query cho từng cái), và
+    // hết cửa sổ 30 ngày của alreadySent là khách bị mời lại từ đầu.
+    .is("select_invited_at", null)
+    .limit(300);
 
   for (const c of (selCands ?? []) as any[]) {
     if (!c.client_phone) continue;
@@ -245,8 +251,7 @@ export async function GET(req: NextRequest) {
     const node = Array.isArray(c.drive_tree) ? c.drive_tree.find((n: any) => n?.role === "selection" && n?.id) : null;
     if (node?.id) {
       try {
-        const files = await listFolderImages(node.id);
-        if (files.length > 0) eligible = true;
+        if (await folderHasMedia(node.id)) eligible = true;
       } catch {
         /* Drive lỗi/không công khai — rơi về fallback theo ngày */
       }

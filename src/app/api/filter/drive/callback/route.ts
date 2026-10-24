@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { connectFilterDrive, ownerFromFilterState } from "@/lib/filter-drive";
+import { sessionActsFor } from "@/lib/auth-guards";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,7 @@ export async function GET(req: NextRequest) {
   const back = (q: string) => NextResponse.redirect(new URL(`/dashboard/filter?${q}`, req.url));
 
   if (error || !code || !ownerId) return back("driveconn=error");
+  if (!(await sessionActsFor(ownerId))) return back("driveconn=error");
   try {
     await connectFilterDrive(ownerId, code);
     return back("driveconn=connected");

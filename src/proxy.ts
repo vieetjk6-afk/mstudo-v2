@@ -17,6 +17,10 @@ const ADMIN_HOST = process.env.NEXT_PUBLIC_ADMIN_HOST;
 // thiep.mstudo.com -> online wedding invitations. Serves /thiep/* at the root.
 const THIEP_HOST = process.env.NEXT_PUBLIC_THIEP_HOST;
 const COMPRESS_PATH = "/dashboard/compress";
+/** Trang công khai của khách — không đọc phiên đăng nhập (xem chỗ dùng bên dưới). */
+const PUBLIC_CLIENT_PREFIXES = [
+  "/a/", "/album/", "/thiep/", "/site/", "/portal/", "/c/", "/q/", "/story/", "/voucher/", "/book/", "/form/",
+];
 const ADMIN_PATH = "/dashboard/admin";
 
 /**
@@ -288,6 +292,21 @@ async function route(request: NextRequest) {
     }
     if (pathname.startsWith("/dashboard")) return NextResponse.redirect(loginUrl(request));
     return response;
+  }
+
+  // Perf: trang của KHÁCH (album, thiệp, cổng hợp đồng, báo giá, web studio…)
+  // đọc dữ liệu bằng service-role/token trong URL, không trang nào đọc phiên ở
+  // máy chủ (kiểm bằng grep: không có getUser/getSessionUser dưới các thư mục
+  // này). Vậy studio đang đăng nhập mở link khách thì không cần trả thêm một
+  // vòng mạng tới Supabase Auth ở đây — vòng này nằm thẳng trên TTFB. Phiên vẫn
+  // được làm mới ở lượt vào dashboard kế tiếp, hoặc bởi client trình duyệt.
+  if (PUBLIC_CLIENT_PREFIXES.some((p) => pathname.startsWith(p))) {
+    const res = NextResponse.next({ request });
+    const ref = request.nextUrl.searchParams.get("ref");
+    if (ref && /^[A-Z0-9]{4,16}$/.test(ref) && !request.cookies.get("aff_ref")) {
+      res.cookies.set("aff_ref", ref, { maxAge: 60 * 60 * 24 * 30, path: "/", sameSite: "lax", httpOnly: true });
+    }
+    return res;
   }
 
   let response = NextResponse.next({ request });

@@ -4,7 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
-const EXT_OK = /^[a-z0-9]{1,5}$/;
+// Chỉ đuôi ảnh: URL ký sẵn bỏ qua RLS và client tự đặt content-type khi PUT,
+// nên `svg`/`html` ở đây là đường gửi trang tuỳ ý lên bucket công khai.
+const EXT_OK = /^(jpe?g|png|webp|gif|heic|heif|avif)$/;
+// URL ký bằng service-role — không để client chọn bucket tuỳ ý.
+const BUCKETS = ["logos"];
 
 /**
  * Bước 1 của luồng tải ẢNH LỚN.
@@ -25,6 +29,7 @@ export async function POST(req: Request) {
   const raw = (body?.ext || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
   const ext = EXT_OK.test(raw) ? raw : "jpg";
   const bucket = body?.bucket || "logos";
+  if (!BUCKETS.includes(bucket)) return NextResponse.json({ error: "bad_bucket" }, { status: 400 });
 
   const path = `tmp/${user.id}/${crypto.randomUUID()}.${ext}`;
   // Service role: URL ký sẵn bỏ qua RLS, nên đường dẫn phải do SERVER đặt và

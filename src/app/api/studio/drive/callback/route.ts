@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { connectStudioDrive, ownerFromState } from "@/lib/studio-drive";
+import { sessionActsFor } from "@/lib/auth-guards";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,7 @@ export async function GET(req: NextRequest) {
   const back = (q: string) => NextResponse.redirect(new URL(`/dashboard/studio/drive-sync?${q}`, req.url));
 
   if (error || !code || !ownerId) return back("drive=error");
+  if (!(await sessionActsFor(ownerId))) return back("drive=error");
   try {
     await connectStudioDrive(ownerId, code);
     return back("drive=connected");

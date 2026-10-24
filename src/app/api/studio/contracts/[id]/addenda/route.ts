@@ -25,7 +25,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   const profile = await studioFor(ROLES);
   if (!profile) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const db = createAdminClient();
-  const contract = await loadContract(db, id, profile.id);
+  const contract = await loadContract(db, id, profile);
   if (!contract) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   const b = (await req.json().catch(() => ({}))) as {

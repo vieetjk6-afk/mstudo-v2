@@ -40,7 +40,7 @@ async function guard(id: string) {
   const profile = await studioFor(ROLES);
   if (!profile) return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) };
   const db = createAdminClient();
-  const contract = await loadContract(db, id, profile.id);
+  const contract = await loadContract(db, id, profile);
   if (!contract) return { error: NextResponse.json({ error: "not_found" }, { status: 404 }) };
   return { db, contract, profile };
 }

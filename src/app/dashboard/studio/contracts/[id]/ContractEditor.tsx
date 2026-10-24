@@ -773,7 +773,9 @@ export default function ContractEditor({
     const dep = plan.find((p) => p.label === "Cọc hợp đồng" && !p.paid);
     if (dep && dep.amount === oldDeposit && dep.amount !== depositAmt) {
       setPlan((p) => p.map((x) => (x.id === dep.id ? { ...x, amount: depositAmt } : x)));
-      supabase.from("contract_payment_plan").update({ amount: depositAmt }).eq("id", dep.id);
+      // Builder của supabase-js chỉ GỬI khi được then/await — thiếu .then() là
+      // màn hình hiện cọc mới còn DB (cổng khách, nhắc nợ) giữ cọc cũ.
+      void supabase.from("contract_payment_plan").update({ amount: depositAmt }).eq("id", dep.id).then(() => undefined);
     }
   }, [total, plan, depositAmt, supabase, depositOf]);
   const payroll = crew.reduce((s, c) => s + (Number(c.salary) || 0), 0);

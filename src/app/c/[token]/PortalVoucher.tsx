@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import QRCode from "qrcode";
 import { Gift, Download, ExternalLink } from "lucide-react";
 import { VoucherTicket, saveVoucherImage, type TicketData } from "@/components/voucher/VoucherTicket";
 import { fmtDate } from "@/lib/date";
@@ -39,7 +38,11 @@ export default function PortalVoucher({ l, studioName, clientName }: { l: Portal
 
   useEffect(() => {
     if (!link) return;
-    QRCode.toDataURL(link, { margin: 1, width: 480, color: { dark: "#2b2118", light: "#ffffff" } }).then(setQr).catch(() => setQr(null));
+    // Nạp qrcode lúc cần: trang hợp đồng của khách không phải ai cũng có voucher.
+    import("qrcode")
+      .then(({ default: QRCode }) => QRCode.toDataURL(link, { margin: 1, width: 480, color: { dark: "#2b2118", light: "#ffffff" } }))
+      .then(setQr)
+      .catch(() => setQr(null));
   }, [link]);
 
   if (l.stage === "cancelled") return null;

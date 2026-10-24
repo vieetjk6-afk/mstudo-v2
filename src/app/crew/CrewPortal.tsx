@@ -111,6 +111,9 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  // Phiên do lượt tra cứu qua captcha cấp — mã captcha chỉ dùng được một lần,
+  // các lượt nạp lại / hồ sơ / lịch đồng bộ trình phiên này thay thế.
+  const [session, setSession] = useState<string | null>(null);
 
   async function load(e?: React.FormEvent) {
     e?.preventDefault();
@@ -119,10 +122,12 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
     const res = await fetch("/api/crew", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, captcha: captchaToken }),
+      body: JSON.stringify({ phone, captcha: captchaToken, session }),
     });
     setLoading(false);
     const j = await res.json().catch(() => ({ assignments: [], busy: [], shift: null }));
+    const sess = (j.session as string | undefined) ?? null;
+    setSession(sess);
     setList(j.assignments ?? []);
     setSchedule(j.busy ?? []);
     setShiftPlan(j.shift ?? null);
@@ -146,7 +151,7 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
     // hiện form đăng ký phụ thuộc vào thợ đã có trong sổ studio đó chưa. Nạp
     // song song rồi mới vẽ thì tránh chớp nhoáng sai màn hình.
     const prof = await fetch("/api/crew/profile", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ phone, session: sess }),
     })
       .then((r) => r.json())
       .catch(() => ({ profiles: [] }));
@@ -335,7 +340,7 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
             onRemove={removeFree}
           />
 
-          <CrewProfileCard profiles={profiles} phone={phone} onSaved={load} />
+          <CrewProfileCard profiles={profiles} phone={phone} session={session} onSaved={load} />
 
           <CrewSchedule
             entries={schedule}
@@ -351,7 +356,7 @@ export default function CrewPortal({ studio }: { studio?: { id: string; name: st
             onShift={setShift}
           />
 
-          <CrewCalendarSync phone={phone} token={calToken} onToken={setCalToken} />
+          <CrewCalendarSync phone={phone} session={session} token={calToken} onToken={setCalToken} />
         </div>
       )}
     </div>

@@ -28,6 +28,8 @@ export async function POST(req: Request) {
     | null;
   const path = (body?.path || "").trim();
   const bucket = body?.bucket || "logos";
+  // Cùng danh sách với /api/upload/large — thao tác dưới đây chạy bằng service-role.
+  if (bucket !== "logos") return NextResponse.json({ error: "bad_bucket" }, { status: 400 });
   // Chốt quyền: chỉ được finalize file NẰM TRONG thư mục tạm của chính mình.
   // Thiếu chốt này thì bất kỳ ai đăng nhập cũng đọc/dời được file của người khác.
   const prefix = `tmp/${user.id}/`;

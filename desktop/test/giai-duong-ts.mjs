@@ -16,9 +16,16 @@ import { registerHooks } from "node:module";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+// Bí danh `@/` của tsconfig (`@/*` → `src/*`) — Node không biết, nên đổi nó
+// thành đường dẫn tuyệt đối rồi phân giải như đường dẫn tương đối.
+const SRC = new URL("../../src/", import.meta.url);
+
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier.startsWith(".") && !/\.[cm]?[jt]sx?$/.test(specifier)) {
+    if (specifier.startsWith("@/")) {
+      specifier = new URL(specifier.slice(2), SRC).href;
+    }
+    if ((specifier.startsWith(".") || specifier.startsWith("file:")) && !/\.[cm]?[jt]sx?$/.test(specifier)) {
       try {
         const base = new URL(specifier, context.parentURL);
         for (const ext of [".ts", ".tsx", "/index.ts"]) {
