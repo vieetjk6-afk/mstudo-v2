@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { MAIN_HOST } from "@/lib/hosts";
+import { MAIN_HOST, studioUrl } from "@/lib/hosts";
 
 /**
  * The studio's own customer-facing host, or null. Prefers a verified custom
@@ -25,4 +25,24 @@ export async function getStudioHost(db: SupabaseClient, ownerId: string): Promis
   if (row.custom_domain && row.custom_domain_verified) return row.custom_domain;
   if (row.subdomain && MAIN_HOST) return `${row.subdomain}.${MAIN_HOST}`;
   return null;
+}
+
+/**
+ * Dựng link GỬI KHÁCH theo tên miền của studio sở hữu (tên miền riêng → tên
+ * miền phụ → host chính khi studio chưa có website). Nhớ host theo owner nên
+ * một lượt cron / một route quét nhiều hợp đồng của cùng studio chỉ tra DB một
+ * lần. Mọi link tới khách (email, Zalo, thông báo) đi qua đây để không còn chỗ
+ * nào lỡ dựng thẳng mstudo.com khi studio đã có domain riêng.
+ */
+export function studioLinker(db: SupabaseClient): (ownerId: string, path: string) => Promise<string> {
+  const hosts = new Map<string, Promise<string | null>>();
+  return async (ownerId, path) => {
+    if (!hosts.has(ownerId)) hosts.set(ownerId, getStudioHost(db, ownerId).catch(() => null));
+    return studioUrl(await hosts.get(ownerId)!, path);
+  };
+}
+
+/** Link gửi khách cho MỘT studio — tiện cho route chỉ dựng một link. */
+export async function studioLink(db: SupabaseClient, ownerId: string, path: string): Promise<string> {
+  return studioLinker(db)(ownerId, path);
 }

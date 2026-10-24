@@ -4,6 +4,7 @@ import { PRICE_LISTS } from "@/lib/pricelist-seeds";
 import { VOUCHER_COLS, VOUCHER_COLS_FULL, REDEEM_ERROR_TEXT, canRedeem, normalizeVoucherCode, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import { todayVN } from "@/lib/date";
 import BookingForm, { type PkgOption, type BookingVoucher } from "./BookingForm";
+import { studioShareMetadata } from "@/lib/studio-share-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -12,18 +13,15 @@ export async function generateMetadata(props: { params: Promise<{ token: string 
   const db = createAdminClient();
   const { data: owner } = await db
     .from("profiles")
-    .select("full_name")
+    .select("id")
     .eq("booking_token", params.token)
     .maybeSingle();
-  const studioName = owner?.full_name || "Studio";
-  const title = `Đặt lịch · ${studioName}`;
-  const description = `Đặt lịch chụp ảnh với ${studioName} — nhanh chóng, tiện lợi.`;
-  return {
-    title,
-    description,
-    openGraph: { title, description, type: "website" },
-    twitter: { card: "summary", title, description },
-  };
+  return studioShareMetadata({
+    ownerId: owner?.id,
+    title: "Đặt lịch",
+    description: (studio) => `Đặt lịch chụp ảnh với ${studio} — nhanh chóng, tiện lợi.`,
+    path: `/book/${params.token}`,
+  });
 }
 
 export default async function BookingPage(

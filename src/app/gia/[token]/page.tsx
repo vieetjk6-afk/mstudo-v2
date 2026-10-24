@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PRICE_LISTS } from "@/lib/pricelist-seeds";
 import PricelistPoster from "@/components/PricelistPoster";
 import type { PricelistItem } from "@/lib/types";
+import type { Metadata } from "next";
+import { studioShareMetadata } from "@/lib/studio-share-meta";
 
 // Bảng giá công khai theo token — hiếm đổi → ISR + CDN cache 5' thay vì no-store.
 export const revalidate = 300;
@@ -15,6 +17,21 @@ function buildLists(allItems: PricelistItem[], hidden: string[] = [], labels: Re
   const custom = customKeys.map((k) => { const lb = labels[k] || k; return { key: k, label: lb, title: `Bảng giá ${lb}` }; });
   const combined = [...builtIn, ...custom];
   return combined.length ? combined : PRICE_LISTS.slice(0, 1);
+}
+
+export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const params = await props.params;
+  const { data: owner } = await createAdminClient()
+    .from("profiles")
+    .select("id")
+    .eq("booking_token", params.token)
+    .maybeSingle();
+  return studioShareMetadata({
+    ownerId: owner?.id,
+    title: "Bảng giá dịch vụ",
+    description: (studio) => `Bảng giá chụp ảnh của ${studio} — xem gói dịch vụ và đặt lịch ngay.`,
+    path: `/gia/${params.token}`,
+  });
 }
 
 export default async function PublicPricelist(

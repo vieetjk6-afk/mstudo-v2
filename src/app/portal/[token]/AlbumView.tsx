@@ -11,6 +11,7 @@ import PortalPhotoGrid from "./PortalPhotoGrid";
 import PortalVideos, { type PortalVideo } from "./PortalVideos";
 import { BG, CARD, DIM, LINE } from "./dark";
 import type { PortalPayload } from "./types";
+import { thiepUrl } from "@/lib/hosts";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TRANG ALBUM — giai đoạn HOÀN THÀNH của cổng khách hàng
@@ -270,7 +271,7 @@ export default function AlbumView({
                   />
                 )}
                 {data.wedding?.published && (
-                  <FileRow href={`/thiep/${data.wedding.slug}`} icon={Images} title="Thiệp cưới điện tử" sub="Studio tặng kèm hợp đồng" />
+                  <FileRow href={thiepUrl(`/${data.wedding.slug}`)} icon={Images} title="Thiệp cưới điện tử" sub="Studio tặng kèm hợp đồng" />
                 )}
                 {data.story?.published && (
                   <FileRow href={`/story/${data.story.slug}`} icon={Images} title="Trang Love Story" sub="Studio tặng kèm hợp đồng" />

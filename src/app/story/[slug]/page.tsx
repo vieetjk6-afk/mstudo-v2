@@ -5,6 +5,7 @@ import { resolveSource } from "@/lib/drive-server";
 import { isFolderLink } from "@/lib/drive";
 import type { StoryConfig, StoryPage } from "@/lib/types";
 import StoryRenderer, { type StoryPhoto, type StoryWish } from "./StoryRenderer";
+import { studioShareMetadata } from "@/lib/studio-share-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,16 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
   if (!s) return { title: "Không tìm thấy trang" };
   const c = s.config as StoryConfig;
   const couple = [c.groom_name, c.bride_name].filter(Boolean).join(" ❤ ") || "Love Story";
-  return { title: `Love Story · ${couple}`, description: c.tagline || `Câu chuyện của ${couple}.`, openGraph: { images: c.cover_url ? [c.cover_url] : undefined } };
+  // Trang của cặp đôi: tiêu đề giữ tên hai bạn; thương hiệu studio nằm ở
+  // og:site_name, favicon và ảnh dự phòng khi chưa có ảnh bìa.
+  return studioShareMetadata({
+    ownerId: s.owner_id,
+    title: `Love Story · ${couple}`,
+    description: c.tagline || `Câu chuyện của ${couple}.`,
+    path: `/story/${s.slug}`,
+    image: c.cover_url,
+    appendBrand: false,
+  });
 }
 
 export default async function StoryPageView(props: { params: Promise<{ slug: string }> }) {

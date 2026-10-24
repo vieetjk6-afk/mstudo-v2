@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syncContractCalendar } from "@/lib/gcal-sync";
-import { mainUrl } from "@/lib/hosts";
+import { studioLink } from "@/lib/studio-site";
 import { todayVN, fmtDate } from "@/lib/date";
 import { vnd, asPaymentMethod } from "@/lib/types";
 import { cancelQuote, cancelPolicyOf, cancelClientMessage } from "@/lib/contract-cancel";
@@ -134,6 +134,6 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       refund: refund > 0 ? vnd(refund) : null,
       studio: profile.full_name,
     }),
-    link: contract.client_token ? mainUrl(`/c/${contract.client_token}`) : null,
+    link: contract.client_token ? await studioLink(db, contract.owner_id, `/c/${contract.client_token}`) : null,
   });
 }

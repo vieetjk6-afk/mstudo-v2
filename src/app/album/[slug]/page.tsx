@@ -5,10 +5,9 @@ import { faceChips, type PersonChip } from "@/lib/face-people";
 import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { getStudioBrand } from "@/lib/studio-brand";
-import Brand from "@/components/Brand";
+import StudioBrandMark from "@/components/StudioBrandMark";
 import GalleryView from "./GalleryView";
 import { buildAlbumMetadata } from "@/lib/album-meta";
-import { MAIN_HOST } from "@/lib/hosts";
 import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { getOriginalFolders } from "@/lib/album-original";
 import { getStudioHost } from "@/lib/studio-site";
@@ -24,12 +23,11 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
     .select("title, description, cover_url, owner_id")
     .eq("slug", params.slug)
     .maybeSingle();
-  if (!data?.title) return { title: "mstudo" };
+  if (!data?.title) return { title: "Album ảnh" };
   const meta = await buildAlbumMetadata({
     title: data.title,
     description: data.description,
     coverUrl: data.cover_url,
-    host: MAIN_HOST,
     path: `/album/${params.slug}`,
     ownerId: data.owner_id,
   });
@@ -67,7 +65,7 @@ export default async function GalleryPage(
     return (
       <main className="flex min-h-screen flex-col">
         <header className="flex items-center px-6 py-5 md:px-10">
-          <Brand />
+          <StudioBrandMark brand={album?.owner_id ? await getStudioBrand(admin, album.owner_id).catch(() => null) : null} />
         </header>
         <div className="flex flex-1 items-center justify-center px-6 text-center">
           <p style={{ color: "var(--text2)" }}>Album không khả dụng.</p>

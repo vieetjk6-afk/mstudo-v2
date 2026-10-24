@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 import { sendPushToOwner } from "@/lib/push";
-import { mainUrl } from "@/lib/hosts";
+import { studioLinker } from "@/lib/studio-site";
 import { vnd } from "@/lib/types";
 import { autoAdvanceContracts } from "@/lib/contract-status";
 import { STORAGE_WARN_DAYS, daysLeft } from "@/lib/storage-lifecycle";
@@ -302,12 +302,14 @@ ${parts.join("")}
     if (r.ok) clientSent++;
   }
 
+  // Link gửi khách theo domain riêng / tên miền phụ của từng studio.
+  const clientLink = studioLinker(db);
   for (const c of done) {
     if (!c.client_email || !optedIn(c.owner_id)) continue;
     const studio = ownerMap.get(c.owner_id)?.full_name || "Studio";
     // Hợp đồng đã hoàn thành → /portal là TRANG ALBUM (ảnh, video, tải về, đánh
     // giá sao), đúng thứ khách cần lúc này. Bản hợp đồng vẫn ở /c/<token>.
-    const link = c.client_token ? mainUrl(`/portal/${c.client_token}`) : "";
+    const link = c.client_token ? await clientLink(c.owner_id, `/portal/${c.client_token}`) : "";
     const html = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#222">
 <p>Xin chào ${esc(c.client_name || "anh/chị")},</p>
 <p>Cảm ơn anh/chị đã tin tưởng ${esc(studio)}! Nếu hài lòng, anh/chị dành chút thời gian <b>đánh giá</b> giúp studio nhé.</p>

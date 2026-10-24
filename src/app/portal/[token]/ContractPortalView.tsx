@@ -22,6 +22,7 @@ import { daysUntil } from "@/lib/wedding-plan";
 import AlbumView from "./AlbumView";
 import PaymentPanel from "./PaymentPanel";
 import { PORTAL_STEPS, portalSteps, type PortalPayload } from "./types";
+import { thiepUrl } from "@/lib/hosts";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CỔNG KHÁCH HÀNG — giai đoạn ĐANG THỰC HIỆN
@@ -622,7 +623,7 @@ function ActivePortal({
                   sub={`${data.items.length} hạng mục · ${data.payments.length} lần thu`}
                 />
                 {data.wedding?.published && (
-                  <FileRow href={`/thiep/${data.wedding.slug}`} icon={Images} title="Thiệp cưới điện tử" sub="Studio tặng kèm hợp đồng" />
+                  <FileRow href={thiepUrl(`/${data.wedding.slug}`)} icon={Images} title="Thiệp cưới điện tử" sub="Studio tặng kèm hợp đồng" />
                 )}
                 {data.story?.published && (
                   <FileRow href={`/story/${data.story.slug}`} icon={Images} title="Trang Love Story" sub="Studio tặng kèm hợp đồng" />

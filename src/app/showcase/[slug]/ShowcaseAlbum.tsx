@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, X, ArrowLeft } from "lucide-react";
-import Brand from "@/components/Brand";
+import StudioBrandMark from "@/components/StudioBrandMark";
+import type { StudioBrandInfo } from "@/lib/studio-brand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 
@@ -18,7 +19,9 @@ export default function ShowcaseAlbum({
   kind,
   description,
   photos,
+  brand,
 }: {
+  brand: StudioBrandInfo | null;
   title: string;
   kind: string;
   description: string | null;
@@ -49,7 +52,7 @@ export default function ShowcaseAlbum({
           borderBottom: "1px solid var(--border)",
         }}
       >
-        <Brand />
+        <StudioBrandMark brand={brand} />
         <LanguageSwitcher />
       </header>
 

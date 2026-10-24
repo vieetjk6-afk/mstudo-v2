@@ -1,5 +1,8 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { Metadata } from "next";
+import { getStudioBrand } from "@/lib/studio-brand";
+import { studioShareMetadata } from "@/lib/studio-share-meta";
 import ShowcaseAlbum from "./ShowcaseAlbum";
 
 // Trang showcase công khai chỉ đổi khi studio publish lại → ISR + CDN cache 5'
@@ -12,20 +15,20 @@ export const revalidate = 300;
 // tức tối đa 5'). An toàn vì trang không đọc cookies/headers/searchParams.
 export const dynamic = "force-static";
 
-export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
+export async function generateMetadata(props: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const params = await props.params;
-  const db = createAdminClient();
-  const { data } = await db
+  const { data } = await createAdminClient()
     .from("albums")
-    .select("title, owner_id")
+    .select("title, description, cover_url, owner_id")
     .eq("slug", params.slug)
     .maybeSingle();
-  let studio = "mstudo";
-  if (data?.owner_id) {
-    const { data: owner } = await db.from("profiles").select("full_name").eq("id", data.owner_id).maybeSingle();
-    studio = (owner?.full_name ?? "").trim() || studio;
-  }
-  return { title: data?.title ? `${data.title} · ${studio}` : studio };
+  return studioShareMetadata({
+    ownerId: data?.owner_id,
+    title: data?.title || "Album",
+    description: data?.description,
+    path: `/showcase/${params.slug}`,
+    image: data?.cover_url,
+  });
 }
 
 export default async function ShowcasePage(
@@ -38,7 +41,7 @@ export default async function ShowcasePage(
 
   const { data: album } = await db
     .from("albums")
-    .select("id, slug, title, kind, description, status, is_showcase")
+    .select("id, owner_id, slug, title, kind, description, status, is_showcase")
     .eq("slug", params.slug)
     .maybeSingle();
 
@@ -54,6 +57,7 @@ export default async function ShowcasePage(
 
   return (
     <ShowcaseAlbum
+      brand={album.owner_id ? await getStudioBrand(db, album.owner_id).catch(() => null) : null}
       title={album.title}
       kind={(album.kind as string | null) ?? "Album"}
       description={album.description as string | null}
