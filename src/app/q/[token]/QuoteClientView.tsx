@@ -149,7 +149,6 @@ import {
 import { safeDeposit } from "@/lib/quote-lines";
 import { depositRatio } from "@/lib/quote-deposit";
 import { fmtDateLunar } from "@/lib/date";
-import { mainUrl } from "@/lib/hosts";
 
 export default function QuoteClientView({
   quote,
@@ -631,7 +630,7 @@ export default function QuoteClientView({
                   <p className="mt-1.5 text-[13px]" style={{ color: "var(--tx2)", textWrap: "pretty" }}>{tr.contractCreated}</p>
                   <div className="mt-4 flex flex-col items-center gap-2">
                     <a
-                      href={mainUrl(`/c/${contractToken}`)}
+                      href={`/c/${contractToken}`}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-2 rounded-[11px] px-5 py-3 text-[13.5px] font-bold"
@@ -642,7 +641,7 @@ export default function QuoteClientView({
                     </a>
                     <button
                       onClick={async () => {
-                        await navigator.clipboard.writeText(mainUrl(`/c/${contractToken}`));
+                        await navigator.clipboard.writeText(`${window.location.origin}/c/${contractToken}`);
                         setCopied(true);
                         setTimeout(() => setCopied(false), 1800);
                       }}

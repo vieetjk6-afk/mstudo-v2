@@ -9,6 +9,7 @@ import { fmtDate, todayVN } from "@/lib/date";
 import { ensureBookingToken, voucherBookingUrl } from "@/lib/voucher-links";
 import { VOUCHER_COLS, VOUCHER_COLS_FULL, VOUCHER_STATE_LABEL, voucherState, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import VoucherPublicView from "./VoucherPublicView";
+import { shareMetadataFor } from "@/lib/studio-share-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -38,10 +39,16 @@ async function load(token: string) {
 export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const { token } = await props.params;
   const r = await load(token);
-  if (!r) return { title: "Voucher" };
-  const studio = brandFrom(r.owner).name;
-  const title = `${voucherValueLabel(r.v)} · ${studio}`;
-  return { title, description: `Voucher ưu đãi ${r.v.code} của ${studio}.`, robots: { index: false } };
+  if (!r) return { title: "Voucher", robots: { index: false } };
+  const brand = brandFrom(r.owner);
+  return shareMetadataFor({
+    brand,
+    host: await getStudioHost(r.db, r.v.owner_id).catch(() => null),
+    title: voucherValueLabel(r.v),
+    description: `Voucher ưu đãi ${r.v.code} của ${brand.name}.`,
+    path: `/voucher/${token}`,
+    noindex: true,
+  });
 }
 
 export default async function VoucherPage(props: { params: Promise<{ token: string }> }) {

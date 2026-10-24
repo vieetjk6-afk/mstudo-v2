@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
-import { mainUrl } from "@/lib/hosts";
+import { studioLink } from "@/lib/studio-site";
 import { weddingGiftCombo } from "@/lib/wedding-plan";
 import type { WeddingConfig } from "@/lib/types";
 
@@ -38,7 +38,7 @@ export async function GET(req: Request, props: { params: Promise<{ token: string
       db.from("profiles").select("role").eq("id", inv.owner_id).maybeSingle(),
       db.from("studio_contracts").select("client_token").eq("id", inv.contract_id).maybeSingle(),
     ]);
-    if (weddingGiftCombo(owner?.role) && c?.client_token) plannerHref = mainUrl(`/portal/${c.client_token}/ke-hoach`);
+    if (weddingGiftCombo(owner?.role) && c?.client_token) plannerHref = await studioLink(db, inv.owner_id, `/portal/${c.client_token}/ke-hoach`);
   }
 
   const { data: rsvps } = await db

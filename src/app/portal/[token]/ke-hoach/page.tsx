@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFeatureFlags, plannerComingSoon } from "@/lib/feature-flags";
 import WeddingPlanner from "./WeddingPlanner";
+import { studioShareMetadata } from "@/lib/studio-share-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -21,17 +22,20 @@ export async function generateMetadata(props: { params: Promise<{ token: string 
   const params = await props.params;
   const { data } = await createAdminClient()
     .from("studio_contracts")
-    .select("client_name, title")
+    .select("client_name, title, owner_id")
     .eq("client_token", params.token)
     .maybeSingle();
   const who = data?.client_name || data?.title;
-  return {
+  const meta = await studioShareMetadata({
+    ownerId: data?.owner_id,
     title: who ? `Kế hoạch cưới · ${who}` : "Kế hoạch cưới",
-    robots: { index: false, follow: false },
-    // Cùng manifest với cổng khách: đã "Lưu vào máy" thì mở từ màn hình chính
-    // vẫn là một app, trang này chỉ là một màn trong đó.
-    manifest: `/portal/${params.token}/manifest.webmanifest`,
-  };
+    description: (studio) => `Kế hoạch cưới, khách mời và thiệp cưới — ${studio} đồng hành cùng bạn.`,
+    path: `/portal/${params.token}/ke-hoach`,
+    noindex: true,
+  });
+  // Cùng manifest với cổng khách: đã "Lưu vào máy" thì mở từ màn hình chính
+  // vẫn là một app, trang này chỉ là một màn trong đó.
+  return { ...meta, manifest: `/portal/${params.token}/manifest.webmanifest` };
 }
 
 export default async function WeddingPlannerPage(props: { params: Promise<{ token: string }> }) {

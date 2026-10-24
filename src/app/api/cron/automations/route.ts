@@ -3,7 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
 import { sendZalo } from "@/lib/zalo/send";
 import { sendEmail } from "@/lib/email";
-import { mainUrl, thiepUrl } from "@/lib/hosts";
+import { thiepUrl } from "@/lib/hosts";
+import { studioLinker } from "@/lib/studio-site";
 import { todayVN } from "@/lib/date";
 import { isMissingColumn } from "@/lib/missing-column";
 import { createInvitationForContract } from "@/lib/wedding-invite-auto";
@@ -226,10 +227,12 @@ export async function GET(req: NextRequest) {
    * một lớp HTML tối giản chứ không dựng mẫu thư riêng — chữ studio đã đọc và
    * duyệt ở màn cấu hình phải tới khách y như thế.
    */
-  const mail = (a: PendingAction & { ownerId: string }) => {
+  // Link gửi khách mang domain riêng / tên miền phụ của từng studio.
+  const clientLink = studioLinker(db);
+  const mail = async (a: PendingAction & { ownerId: string }) => {
     const studio = studioName.get(a.ownerId) || "Studio";
     const tok = tokenOf.get(a.contractId);
-    const link = tok ? mainUrl(`/portal/${tok}`) : "";
+    const link = tok ? await clientLink(a.ownerId, `/portal/${tok}`) : "";
     const html = `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;color:#222">
 <p style="white-space:pre-wrap">${esc(a.message)}</p>
 ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
@@ -297,7 +300,7 @@ ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
     // Quà cưới: một link duy nhất — trang kế hoạch cưới, mở thẳng phần thiệp.
     const tok = tokenOf.get(a.contractId);
     const rel = comboOwners.has(a.ownerId) && tok ? `/portal/${tok}/ke-hoach#thiep` : thiepUrl(`/sua/${inv.edit_token}`);
-    const link = rel.startsWith("/") ? mainUrl(rel) : rel;
+    const link = rel.startsWith("/") ? await clientLink(a.ownerId, rel) : rel;
     const text = invitationText(a.template ?? a.message, a.vars ?? {}, link);
     const studio = studioName.get(a.ownerId) || "Studio";
     const khach = c.client_name || "khách";

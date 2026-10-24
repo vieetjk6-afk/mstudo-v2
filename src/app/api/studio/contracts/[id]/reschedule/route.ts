@@ -4,7 +4,7 @@ import { syncContractCalendar } from "@/lib/gcal-sync";
 import { autoNotify } from "@/lib/zalo/notify";
 import { crewPortalUrl } from "@/lib/crew-show";
 import { phanLoaiLoi } from "@/lib/pg-loi";
-import { mainUrl } from "@/lib/hosts";
+import { studioLink } from "@/lib/studio-site";
 import { fmtDate } from "@/lib/date";
 import { vnd } from "@/lib/types";
 import { daysBetween, shiftDate, rescheduleClientMessage } from "@/lib/contract-cancel";
@@ -254,7 +254,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
       newDate: fmtDate(newDate),
       newTime,
       fee: fee > 0 ? vnd(fee) : null,
-      link: contract.client_token ? mainUrl(`/c/${contract.client_token}`) : null,
+      link: contract.client_token ? await studioLink(db, contract.owner_id, `/c/${contract.client_token}`) : null,
       studio: profile.full_name,
     }),
   });

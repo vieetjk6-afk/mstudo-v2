@@ -1,7 +1,8 @@
 import "server-only";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { mainUrl } from "@/lib/hosts";
+import { studioUrl } from "@/lib/hosts";
+import { getStudioHost } from "@/lib/studio-site";
 import type { Lang } from "./content";
 
 /**
@@ -147,6 +148,9 @@ export async function lookupClientStatus(ownerId: string, phone: string): Promis
 
   // Album đã giao gắn với hợp đồng → dùng để deep-link ngay trong dòng hợp đồng
   // và không liệt kê lại ở mục thư viện.
+  // Link gửi khách mang domain riêng / tên miền phụ của studio (không phải mstudo.com).
+  const host = await getStudioHost(db, ownerId).catch(() => null);
+  const link = (path: string) => studioUrl(host, path);
   const albumById = new Map<string, Record<string, unknown>>();
   for (const a of albums) albumById.set(String(a.id), a);
 
@@ -162,7 +166,7 @@ export async function lookupClientStatus(ownerId: string, phone: string): Promis
       // `phase` thắng cờ cũ `is_gallery`: album đã được đưa về giai đoạn chọn
       // ảnh thì đừng gửi khách link giao khách nữa (xem @/lib/album-phase).
       if (isDeliveryPhase(al as { phase?: string | null; is_gallery?: boolean | null })) {
-        galleryUrl = mainUrl(`/album/${String(al.slug)}`);
+        galleryUrl = link(`/album/${String(al.slug)}`);
         usedAlbumIds.add(gid);
       }
     }
@@ -171,7 +175,7 @@ export async function lookupClientStatus(ownerId: string, phone: string): Promis
       code: c.code ? String(c.code) : null,
       status: String(c.status ?? ""),
       eventDate: c.event_date ? String(c.event_date) : null,
-      contractUrl: mainUrl(`/c/${token}`),
+      contractUrl: link(`/c/${token}`),
       galleryUrl,
     });
   }
@@ -182,7 +186,7 @@ export async function lookupClientStatus(ownerId: string, phone: string): Promis
     galleryHits.push({
       title: String(a.title ?? ""),
       phase: String(a.phase ?? "delivery"),
-      url: mainUrl(`/album/${String(a.slug)}`),
+      url: link(`/album/${String(a.slug)}`),
     });
   }
 

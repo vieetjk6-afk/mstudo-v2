@@ -10,7 +10,7 @@ import {
   quoteExpiringMessage,
 } from "@/lib/zalo/messages";
 import { OPEN_QUOTE_STATUSES, QUOTE_NUDGE_DAYS } from "@/lib/quote-expiry";
-import { ensureIntakeToken, intakeUrl } from "@/lib/contract-intake";
+import { ensureIntakeToken } from "@/lib/contract-intake";
 import { folderHasMedia } from "@/lib/drive-server";
 import { deliverContractIfReady } from "@/lib/contract-delivery";
 import { contractAlbumMode } from "@/lib/studio-drive";
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
           date: tomorrow,
           time: s.event_time,
           location: s.location,
-          formLink: intakeUrl(token),
+          formLink: await clientUrl(s.owner_id, `/form/${token}`),
           studio,
         }),
         contractId: s.id,

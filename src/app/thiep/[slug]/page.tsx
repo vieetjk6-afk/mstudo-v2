@@ -2,7 +2,7 @@ import { cache } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { mainUrl } from "@/lib/hosts";
+import { studioLink } from "@/lib/studio-site";
 import type { PublicWeddingInvitation, WeddingConfig } from "@/lib/types";
 import WeddingRenderer, { type Wish } from "./WeddingRenderer";
 
@@ -113,9 +113,10 @@ export default async function WeddingInvitationPage(
 
   const storySlug = sps?.[0]?.slug;
   if (!storyUrl && storySlug) storyUrl = `/story/${storySlug}`;
-  // Trang story phục vụ ở HOST CHÍNH; thiệp có thể ở subdomain khác nên đường
-  // dẫn tương đối sẽ sai host → chuyển sang URL tuyệt đối trên host chính.
-  if (storyUrl.startsWith("/")) storyUrl = mainUrl(storyUrl);
+  // Thiệp ở host thiệp riêng nên đường dẫn tương đối sẽ sai host → chuyển sang
+  // URL tuyệt đối trên domain của studio (domain riêng / tên miền phụ, chưa có
+  // mới về host chính).
+  if (storyUrl.startsWith("/")) storyUrl = await studioLink(db, inv.owner_id, storyUrl);
 
   // KHÔNG để mật khẩu "trang xem riêng" lọt xuống thiệp công khai (config được
   // truyền vào component client) — lọc bỏ trước khi render.

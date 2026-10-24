@@ -5,7 +5,7 @@ import { sendPushToOwner } from "@/lib/push";
 import { autoNotify } from "@/lib/zalo/notify";
 import { depositConfirmMessage, paymentDoneMessage } from "@/lib/zalo/messages";
 import { isFullyPaid } from "@/lib/zalo/events";
-import { mainUrl } from "@/lib/hosts";
+import { studioLink } from "@/lib/studio-site";
 import { approveOnDeposit } from "@/lib/contract-approve";
 import { amountFit, type AmountFit } from "@/lib/bank-reconcile";
 
@@ -175,7 +175,7 @@ export async function notifyPaymentZalo(
     ]);
     if (!c || c.owner_id !== ownerId || !c.client_phone || c.status === "cancelled") return null;
     const studio = (owner as { full_name?: string | null } | null)?.full_name || "Studio";
-    const link = c.client_token ? mainUrl(`/c/${c.client_token}`) : null;
+    const link = c.client_token ? await studioLink(db, ownerId, `/c/${c.client_token}`) : null;
     const total = contractTotal((items ?? []) as { qty: number; unit_price: number }[]);
     const collected = sumAmounts((pays ?? []) as { amount: number }[]);
 

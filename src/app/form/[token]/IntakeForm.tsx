@@ -209,7 +209,7 @@ export default function IntakeForm({
       <button onClick={submit} disabled={busy} className="btn-primary mt-4 w-full py-3">
         {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} {submitted ? "Cập nhật thông tin" : "Gửi thông tin cho studio"}
       </button>
-      <p className="mt-2 text-center text-[11px] opacity-50">— {studio || "MStudo"} —</p>
+      <p className="mt-2 text-center text-[11px] opacity-50">— {studio || "Studio"} —</p>
     </div>
   );
 }

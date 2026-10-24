@@ -5,6 +5,7 @@ import { getStudioBrand } from "@/lib/studio-brand";
 import { effectivePlan, studioTier } from "@/lib/plans";
 import QuoteClientView from "./QuoteClientView";
 import type { StudioQuote, QuoteItem, QuoteAdjustment } from "@/lib/types";
+import { studioShareMetadata } from "@/lib/studio-share-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -13,22 +14,20 @@ export async function generateMetadata(props: { params: Promise<{ token: string 
   const db = createAdminClient();
   const { data } = await db
     .from("studio_quotes")
-    .select("title, client_name, studio_quotes_owner:profiles!owner_id(full_name)")
+    .select("title, client_name, owner_id")
     .eq("client_token", params.token)
     .maybeSingle();
 
-  const studioName = (data?.studio_quotes_owner as { full_name?: string } | null)?.full_name || "Studio";
   const title = data?.title
     ? `${data.title}${data.client_name ? ` · ${data.client_name}` : ""}`
     : "Báo giá dịch vụ";
-  const description = `${studioName} — xem và xác nhận báo giá dịch vụ nhiếp ảnh.`;
-
-  return {
+  return studioShareMetadata({
+    ownerId: data?.owner_id,
     title,
-    description,
-    openGraph: { title, description, type: "website" },
-    twitter: { card: "summary", title, description },
-  };
+    description: (studio) => `${studio} — xem và xác nhận báo giá dịch vụ nhiếp ảnh.`,
+    path: `/q/${params.token}`,
+    noindex: true,
+  });
 }
 
 export default async function QuoteClientPage(props: { params: Promise<{ token: string }> }) {

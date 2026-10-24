@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ContractPortalView from "./ContractPortalView";
+import { studioShareMetadata } from "@/lib/studio-share-meta";
 
 export const dynamic = "force-dynamic";
 
@@ -23,22 +24,21 @@ export async function generateMetadata(props: { params: Promise<{ token: string 
   const db = createAdminClient();
   const { data } = await db
     .from("studio_contracts")
-    .select("title, client_name, portal_owner:profiles!owner_id(full_name)")
+    .select("title, client_name, owner_id")
     .eq("client_token", params.token)
     .maybeSingle();
 
-  const studioName = (data?.portal_owner as { full_name?: string } | null)?.full_name || "Studio";
   const title = data?.client_name ? `Trang của ${data.client_name}` : data?.title || "Trang khách hàng";
-
-  return {
+  const meta = await studioShareMetadata({
+    ownerId: data?.owner_id,
     title,
-    description: `${studioName} — theo dõi lịch trình, thanh toán và sản phẩm của hợp đồng.`,
+    description: (studio) => `${studio} — theo dõi lịch trình, thanh toán và sản phẩm của hợp đồng.`,
+    path: `/portal/${params.token}`,
     // Trang riêng của một khách: không cho công cụ tìm kiếm lập chỉ mục.
-    robots: { index: false, follow: false },
-    // Manifest riêng → khách cài "trang hợp đồng của tôi" lên màn hình chính.
-    manifest: `/portal/${params.token}/manifest.webmanifest`,
-    openGraph: { title, type: "website" },
-  };
+    noindex: true,
+  });
+  // Manifest riêng → khách cài "trang hợp đồng của tôi" lên màn hình chính.
+  return { ...meta, manifest: `/portal/${params.token}/manifest.webmanifest` };
 }
 
 export default async function ContractPortalPage(props: { params: Promise<{ token: string }> }) {
