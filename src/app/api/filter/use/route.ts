@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitsFor, effectivePlan, type Plan } from "@/lib/plans";
 
@@ -15,9 +16,7 @@ function startOfMonthVN(): string {
 
 async function getStatus() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return null;
 
   const { data: profile } = await supabase

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { pushConfigured, sendPushToSubscriptions } from "@/lib/push";
 
@@ -24,8 +24,7 @@ export const dynamic = "force-dynamic";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export async function POST() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   if (!pushConfigured()) {

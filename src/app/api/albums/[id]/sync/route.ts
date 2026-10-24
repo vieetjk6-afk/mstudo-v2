@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { resolveSource, listSubFolders } from "@/lib/drive-server";
 import { thumbnailUrl } from "@/lib/drive";
 import { planSubFolderSources } from "@/lib/album-subfolders";
@@ -15,9 +16,7 @@ export const dynamic = "force-dynamic";
 export async function POST(_req: Request, props: { params: Promise<{ id: string }> }) {
   const params = await props.params;
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const albumId = params.id;

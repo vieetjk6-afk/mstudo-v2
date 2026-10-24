@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clusterAlbum, hanQuetMs, pendingRows, scanAlbum, type ScanRow } from "@/lib/face-scan-server";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
@@ -23,9 +24,7 @@ export const maxDuration = 60;
  */
 async function ownsAlbum(albumId: string): Promise<boolean> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return false;
   const { data } = await supabase.from("albums").select("id").eq("id", albumId).maybeSingle();
   return !!data;

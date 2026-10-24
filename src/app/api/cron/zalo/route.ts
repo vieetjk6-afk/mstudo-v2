@@ -20,6 +20,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import { crewPortalUrl } from "@/lib/crew-show";
 import { vnd } from "@/lib/types";
 import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -51,8 +52,7 @@ const DELIVER_WATCH_DAYS = 120;
  * Chống gửi trùng: kiểm tra zalo_messages đã 'sent' cùng (contract, kind) gần đây.
  */
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

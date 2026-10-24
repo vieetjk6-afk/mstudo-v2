@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteFromAdminDrive, driveIdFromUrl } from "@/lib/mstudo-drive";
+import { isCronAuthorized } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 // Xoá từng file trên Drive là một lệnh gọi API mỗi file — cần thời gian.
@@ -20,8 +21,7 @@ function pathFromUrl(url: string | null | undefined): string | null {
 // client transfer-proof images (to reclaim storage) and notify the studio.
 // Scheduled via vercel.json crons.
 export async function GET(req: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.get("authorization") !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
