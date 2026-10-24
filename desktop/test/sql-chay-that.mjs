@@ -562,5 +562,81 @@ ok(
   q("moi", `select count(*) from public.studio_audit_log where contract_id = '${SIGNED}' and action = 'contract.delete'`) === "1"
 );
 
+// ── Lưu lựa chọn ảnh theo phần chênh (save_album_selection) ────────────────
+// Trang khách gửi lại TOÀN BỘ danh sách mỗi lần bấm. Hàm phải: thêm ảnh mới,
+// xoá ảnh đã bỏ, bỏ qua ảnh của album khác, và KHÔNG ghi lại dòng không đổi
+// (mỗi lượt ghi thừa là một sự kiện Realtime dội vào màn studio).
+console.log("\n— Lưu lựa chọn ảnh theo phần chênh —");
+{
+  const A = "00000000-0000-0000-0000-0000000a1b01";
+  const B = "00000000-0000-0000-0000-0000000a1b02";
+  const ph = (n) => `00000000-0000-0000-0000-0000000f0${String(n).padStart(3, "0")}`;
+  const PX = ph(99); // ảnh của album KHÁC
+  q(
+    "moi",
+    "set session_replication_role = replica; " +
+      `insert into public.albums (id, owner_id, slug, title, status) values ` +
+      `('${A}', '${P}', 'chon-anh-a', 'A', 'published'), ('${B}', '${P}', 'chon-anh-b', 'B', 'published'); ` +
+      `insert into public.photos (id, album_id, drive_file_id, name) values ` +
+      [1, 2, 3, 4].map((n) => `('${ph(n)}', '${A}', 'f${n}', 'IMG_${n}.jpg')`).join(", ") +
+      `, ('${PX}', '${B}', 'fx', 'IMG_X.jpg')`
+  );
+  const arr = (ids) => (ids ? `array[${ids.map((i) => `'${ph(i)}'`).join(",")}]::uuid[]` : "null");
+  const save = (sess, picks, dislikes, notes = "{}", name = "Lan") =>
+    q(
+      "moi",
+      `select pick_count || '/' || dislike_count from public.save_album_selection(` +
+        `'${A}', '${sess}', '${name}', ${arr(picks)}, '${notes}'::jsonb, ${arr(dislikes)})`
+    );
+  const picks = (sess, table = "selections") =>
+    q("moi", `select coalesce(string_agg(photo_name, ',' order by photo_name), '') from public.${table} where album_id = '${A}' and session_id = '${sess}'`);
+  const xmin = (sess, n) =>
+    q("moi", `select xmin::text from public.selections where session_id = '${sess}' and photo_id = '${ph(n)}'`);
+
+  ok("Lần lưu đầu: thêm 2 ảnh chọn + 1 ảnh không thích", save("s1", [1, 2], [3], '{"' + ph(1) + '": "đẹp"}') === "2/1");
+  ok("…đúng hai dòng chọn, kèm tên ảnh", picks("s1") === "IMG_1.jpg,IMG_2.jpg");
+  ok("…ghi chú của khách được lưu", q("moi", `select client_note from public.selections where session_id = 's1' and photo_id = '${ph(1)}'`) === "đẹp");
+  ok("…và ảnh không thích nằm ở bảng riêng", picks("s1", "dislikes") === "IMG_3.jpg");
+  const x1 = xmin("s1", 1);
+
+  // Bỏ ảnh 2, thêm ảnh 4, kèm một id của album khác (phải bị bỏ qua).
+  ok(
+    "Bấm tiếp: bỏ 1 ảnh, thêm 1 ảnh, id album khác bị bỏ qua",
+    q(
+      "moi",
+      `select pick_count || '/' || dislike_count from public.save_album_selection(` +
+        `'${A}', 's1', 'Lan', array['${ph(1)}','${ph(4)}','${PX}']::uuid[], '{"${ph(1)}": "đẹp"}'::jsonb, '{}'::uuid[])`
+    ) === "2/0"
+  );
+  ok("…danh sách còn đúng ảnh 1 và 4", picks("s1") === "IMG_1.jpg,IMG_4.jpg");
+  ok("…không ghi ảnh của album khác", q("moi", `select count(*) from public.selections where photo_id = '${PX}'`) === "0");
+  ok("…mảng không thích rỗng → xoá ảnh không thích cũ", picks("s1", "dislikes") === "");
+  ok("…dòng KHÔNG đổi gì thì không bị ghi lại (không có sự kiện Realtime thừa)", xmin("s1", 1) === x1);
+
+  save("s1", [1, 4], null, '{"' + ph(1) + '": "in to"}');
+  ok("Sửa ghi chú → chỉ dòng đó được cập nhật", q("moi", `select client_note from public.selections where session_id = 's1' and photo_id = '${ph(1)}'`) === "in to" && xmin("s1", 1) !== x1);
+
+  save("s2", [2], [3]);
+  save("s2", [2], null); // client cũ không gửi dislikedIds
+  ok("Client cũ không gửi danh sách không thích → không đụng bảng dislikes", picks("s2", "dislikes") === "IMG_3.jpg");
+  ok("…và phiên khác không ảnh hưởng phiên s1", picks("s1") === "IMG_1.jpg,IMG_4.jpg");
+  ok("Bỏ hết ảnh → phiên không còn dòng nào", save("s1", [], null) === "0/0" && picks("s1") === "");
+  ok(
+    "Chỉ service_role gọi được hàm (anon / authenticated thì không)",
+    q(
+      "moi",
+      "select has_function_privilege('anon', 'public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[])', 'execute')::text || '/' || " +
+        "has_function_privilege('authenticated', 'public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[])', 'execute')::text || '/' || " +
+        "has_function_privilege('service_role', 'public.save_album_selection(uuid, text, text, uuid[], jsonb, uuid[])', 'execute')::text"
+    ) === "false/false/true"
+  );
+}
+if (first) {
+  ok(
+    "cap-nhat.sql cũng tạo hàm save_album_selection cho project đang chạy",
+    q("cu", "select count(*) from pg_proc where proname = 'save_album_selection'") === "1"
+  );
+}
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);
