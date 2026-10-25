@@ -1,20 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { Check, MessageSquare } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-
-const PLACEHOLDER = `Ví dụ bạn có thể viết:
-
-• Giọng văn: thân thiện, xưng "studio" và gọi khách là "anh/chị".
-• Chính sách cọc: đặt cọc 30% để giữ lịch, hoàn cọc nếu báo trước 7 ngày.
-• Thời gian giao ảnh: cưới 20-30 ngày, sự kiện 3-5 ngày.
-• Khu vực nhận chụp: Quảng Ngãi và các tỉnh lân cận; ngoại tỉnh phụ thu đi lại.
-• Khuyến mãi hiện tại: giảm 10% cho khách đặt trong tháng này.
-• Câu hỏi hay gặp:
-  - Hỏi "có quay flycam không?" → Có, báo giá riêng tùy buổi.
-  - Hỏi "chụp ngoài trời được không?" → Được, tư vấn địa điểm theo mùa.
-• Luôn mời khách để lại số điện thoại hoặc đặt lịch khi họ quan tâm.`;
+import { PLACEHOLDER, useChatboxConfig } from "./useChatboxConfig";
 
 export default function ChatboxConfig({
   ownerId,
@@ -25,34 +12,8 @@ export default function ChatboxConfig({
   greeting: string;
   instructions: string;
 }) {
-  const supabase = createClient();
-  const [g, setG] = useState(greeting);
-  const [ins, setIns] = useState(instructions);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function save() {
-    setSaving(true);
-    setErr(null);
-    setSaved(false);
-    const { error } = await supabase.from("website_chat_config").upsert(
-      {
-        owner_id: ownerId,
-        greeting: g.trim() || null,
-        instructions: ins.trim() || null,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "owner_id" }
-    );
-    setSaving(false);
-    if (error) {
-      setErr("Lưu thất bại. Vui lòng thử lại.");
-      return;
-    }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
-  }
+  // Logic dùng chung với bản mới (ChatboxConfigV2) — xem ./useChatboxConfig.
+  const { g, setG, ins, setIns, saving, saved, err, save } = useChatboxConfig({ ownerId, greeting, instructions });
 
   return (
     <div className="mx-auto max-w-3xl page-in">

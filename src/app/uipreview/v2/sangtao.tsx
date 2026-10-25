@@ -8,6 +8,8 @@ import AlbumDesigner from "@/app/dashboard/studio/album-designer/AlbumDesigner";
 import type { SavedDesign } from "@/app/dashboard/studio/album-designer/AlbumEditor";
 import { DesignerEditorDemo, FakeDesignerApi, SeedSlidePhotos } from "./sangtao-demo";
 import * as f from "../fixtures";
+import { PreviewV2 } from "./shell";
+import CreativeGateV2 from "@/app/dashboard/studio/thiep/CreativeGateV2";
 
 /* ── Ảnh giả: dải màu SVG, không cần mạng ─────────────────────────────────── */
 function photo(seed: number, w = 600, h = 800) {
@@ -75,6 +77,109 @@ const DESIGNER = { designs: DESIGNS, spreads: SPREADS, lib: LIB };
 const DESIGNER_EMPTY = { designs: [], spreads: SPREADS, lib: LIB };
 
 export const SCREENS_SANGTAO: Record<string, { title: string; render: () => React.ReactNode; bare?: boolean }> = {
+  /* ── Giao diện mới ── */
+  "v2-thiep": {
+    title: "Giao diện mới — Thiệp cưới",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/thiep">
+        <ThiepListView rows={THIEP} ownerId="o" studio={f.studio} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-thiep-trong": {
+    title: "Giao diện mới — Thiệp cưới (chưa có thiệp)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/thiep">
+        <ThiepListView rows={[]} ownerId="o" studio={f.studio} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-story": {
+    title: "Giao diện mới — Love Story",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/story">
+        <StoryListView rows={STORIES} ownerId="o" studioHost="maistudio.mstudo.com" />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-story-trong": {
+    title: "Giao diện mới — Love Story (chưa có trang)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/story">
+        <StoryListView rows={[]} ownerId="o" studioHost={null} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-slide": {
+    title: "Giao diện mới — Slide cưới (đã nạp 9 ảnh)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/slide">
+        <SeedSlidePhotos>
+          <SlideStudio />
+        </SeedSlidePhotos>
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-slide-trong": {
+    title: "Giao diện mới — Slide cưới (chưa có ảnh)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/slide">
+        <SlideStudio />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-slide-sap-ra-mat": {
+    title: "Giao diện mới — Slide cưới đang “Sắp ra mắt”",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/slide">
+        <CreativeGateV2
+          kind="soon"
+          tab="slide"
+          feature="Slide cưới"
+          hint="Công cụ tự tạo video slideshow ảnh cưới — chọn ảnh, chủ đề, nhạc, hiệu ứng chuyển cảnh rồi xuất video. Bọn mình đang hoàn thiện và sẽ báo khi sẵn sàng."
+        />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-album-designer": {
+    title: "Giao diện mới — Thiết kế album (album đã lưu)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/album-designer">
+        <FakeDesignerApi data={DESIGNER}>
+          <AlbumDesigner />
+        </FakeDesignerApi>
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-album-designer-trong": {
+    title: "Giao diện mới — Thiết kế album (chưa có album)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/album-designer">
+        <FakeDesignerApi data={DESIGNER_EMPTY}>
+          <AlbumDesigner />
+        </FakeDesignerApi>
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-album-designer-editor": {
+    title: "Giao diện mới — Thiết kế album (trình dàn trang)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/album-designer">
+        <DesignerEditorDemo data={DESIGNER} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+
   /* ── Bản cũ (để so: tắt giao diện mới phải giữ y nguyên) ── */
   "v1-thiep": {
     title: "Bản cũ — Thiệp cưới (danh sách)",

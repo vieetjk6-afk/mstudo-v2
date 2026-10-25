@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import { isUiV2 } from "@/lib/ui-server";
+import { Callout } from "@/components/v2/kit";
 import VendorsView, { type ContractOption, type OrderRow, type VendorRow } from "./VendorsView";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -60,6 +62,32 @@ export default async function VendorsPage() {
     .order("event_date", { ascending: false })
     .limit(200);
 
+  const view = (
+    <VendorsView
+      ownerId={profile.id}
+      initialVendors={vendors}
+      initialOrders={orders}
+      contracts={(contracts ?? []) as ContractOption[]}
+      readOnly={profile.actingRole === "staff"}
+    />
+  );
+
+  // Giao diện mới: cùng dữ liệu đã tải ở trên, chỉ khác cách báo "chưa chạy migration".
+  if (await isUiV2()) {
+    return (
+      <>
+        {!migrated && (
+          <div className="mb-5">
+            <Callout tone="amber" title="Màn này đang trống vì cơ sở dữ liệu chưa có bảng nhà cung cấp">
+              Chạy <code>supabase/migrations/vendors.sql</code> trong Supabase SQL Editor rồi tải lại trang.
+            </Callout>
+          </div>
+        )}
+        {view}
+      </>
+    );
+  }
+
   return (
     <>
       {!migrated && (
@@ -71,13 +99,7 @@ export default async function VendorsPage() {
           trong Supabase SQL Editor.
         </div>
       )}
-      <VendorsView
-        ownerId={profile.id}
-        initialVendors={vendors}
-        initialOrders={orders}
-        contracts={(contracts ?? []) as ContractOption[]}
-        readOnly={profile.actingRole === "staff"}
-      />
+      {view}
     </>
   );
 }

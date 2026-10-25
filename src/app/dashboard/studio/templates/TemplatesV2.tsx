@@ -170,7 +170,7 @@ export default function TemplatesV2({ t, onCreate }: { t: TemplatesState; onCrea
           </Section>
 
           <Section icon={ScrollText} title="Điều khoản / ghi chú mặc định" desc="In cuối hợp đồng tạo từ mẫu này.">
-            <textarea className={`${inputCls} min-h-[140px]`} value={t.note} onChange={(e) => t.setNote(e.target.value)} aria-label="Điều khoản / ghi chú mặc định" />
+            <textarea className={`${inputCls} !min-h-[140px]`} value={t.note} onChange={(e) => t.setNote(e.target.value)} aria-label="Điều khoản / ghi chú mặc định" />
             <ClauseInserter onInsert={(x) => t.setNote((n) => (n.trim() ? `${n.trim()}\n\n${x}` : x))} />
           </Section>
         </div>

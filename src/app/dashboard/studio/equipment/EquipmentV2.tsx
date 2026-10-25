@@ -18,8 +18,8 @@ import { emptyEquipmentForm, useEquipment, type EquipmentForm } from "./useEquip
        (có "Thêm & nhập tiếp" để khai cả túi máy một lượt).
      • Một thanh: tìm · nhóm thiết bị (đếm theo nhóm) · tình trạng (khi có máy
        ngừng dùng).
-     • Lưới thẻ gom theo nhóm, mỗi thẻ một nhãn tình trạng. Bấm thẻ mở ngăn chi
-       tiết; xoá nằm trong ⋯ và ngăn chi tiết, có hỏi lại.
+     • Bảng gom theo nhóm (điện thoại: dòng gọn), mỗi dòng một nhãn tình trạng.
+       Bấm dòng mở ngăn chi tiết; xoá nằm trong ⋯ và ngăn chi tiết, có hỏi lại.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 type State = "all" | "active" | "inactive";
@@ -33,7 +33,7 @@ const SUGGEST = ["Máy ảnh", "Ống kính", "Đèn", "Âm thanh", "Flycam", "P
 
 /** Icon theo nhóm/tên — chỉ để dễ nhìn, không ảnh hưởng dữ liệu. */
 const ICON_RULES: [RegExp, LucideIcon][] = [
-  [/lens|ống kính|(^|\s)ống(\s|$)|\d+-\d+\s?mm|f\/?\d/i, Aperture],
+  [/lens|ống kính|(^|\s)ống(\s|$)|\d+mm/i, Aperture],
   [/máy ảnh|máy quay|camera|body|sony|canon|nikon|fuji|lumix|a7/i, Camera],
   [/đèn|light|flash|godox|softbox|led/i, Lightbulb],
   [/mic|âm thanh|thu âm|audio|rode/i, Mic],
@@ -41,7 +41,9 @@ const ICON_RULES: [RegExp, LucideIcon][] = [
   [/thẻ nhớ|ổ cứng|ssd|(^|\s)sd(\s|$)|cfexpress/i, HardDrive],
   [/pin|sạc|battery/i, Battery],
 ];
-const iconOf = (e: StudioEquipment): LucideIcon => ICON_RULES.find(([re]) => re.test(`${e.category ?? ""} ${e.name}`))?.[1] ?? Package;
+const iconOf = (e: StudioEquipment): LucideIcon =>
+  // Nhóm do studio đặt đáng tin hơn tên máy (tên "Sony A7 + lens 24-70" có cả hai).
+  ICON_RULES.find(([re]) => re.test(e.category ?? ""))?.[1] ?? ICON_RULES.find(([re]) => re.test(e.name))?.[1] ?? Package;
 
 export default function EquipmentV2({ ownerId, initial }: EquipmentManagerProps) {
   const { list, add, remove } = useEquipment(ownerId, initial);
@@ -100,38 +102,36 @@ export default function EquipmentV2({ ownerId, initial }: EquipmentManagerProps)
         </div>
       ) : (
         <>
-          <div className="v2-card v2-card-pad flex flex-col gap-3">
-            <Toolbar>
-              <div className="min-w-[220px] flex-[1_1_240px]">
-                <SearchInput value={q} onChange={setQ} placeholder="Tìm tên, nhóm, ghi chú…" className="w-full" />
-              </div>
-              {inactiveCount > 0 && (
-                <select aria-label="Tình trạng" className={inputCls} value={state} onChange={(e) => setState(e.target.value as State)}>
-                  <option value="all">Mọi tình trạng</option>
-                  <option value="active">Đang dùng</option>
-                  <option value="inactive">Ngừng dùng</option>
-                </select>
-              )}
-              {cats.length > 1 && (
-                <div className="w-full min-w-0">
-                  <Segmented<string>
-                    label="Nhóm thiết bị"
-                    value={cat}
-                    onChange={setCat}
-                    options={[
-                      { value: "all", label: "Tất cả", count: pool.length },
-                      ...cats.map((k) => ({ value: k, label: catLabel(k), count: pool.filter((e) => catKey(e) === k).length })),
-                    ]}
-                  />
+          <div className="v2-card overflow-hidden">
+            <div className="v2-card-pad flex flex-col gap-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
+              <Toolbar>
+                <div className="min-w-[220px] flex-[1_1_240px]">
+                  <SearchInput value={q} onChange={setQ} placeholder="Tìm tên, nhóm, ghi chú…" className="w-full" />
                 </div>
-              )}
-            </Toolbar>
-            <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
-              {filtering ? `${shown.length} / ${list.length} thiết bị khớp bộ lọc` : `${list.length} thiết bị · ${cats.length} nhóm`}
-              {inactiveCount && !filtering ? ` · ${inactiveCount} ngừng dùng` : ""}
+                {inactiveCount > 0 && (
+                  <select aria-label="Tình trạng" className={inputCls} value={state} onChange={(e) => setState(e.target.value as State)}>
+                    <option value="all">Mọi tình trạng</option>
+                    <option value="active">Đang dùng</option>
+                    <option value="inactive">Ngừng dùng</option>
+                  </select>
+                )}
+                {cats.length > 1 && (
+                  <div className="w-full min-w-0">
+                    <Segmented<string>
+                      label="Nhóm thiết bị"
+                      value={cat}
+                      onChange={setCat}
+                      options={[
+                        { value: "all", label: "Tất cả", count: pool.length },
+                        ...cats.map((k) => ({ value: k, label: catLabel(k), count: pool.filter((e) => catKey(e) === k).length })),
+                      ]}
+                    />
+                  </div>
+                )}
+              </Toolbar>
               {filtering ? (
-                <>
-                  {" · "}
+                <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
+                  {shown.length} / {list.length} thiết bị khớp bộ lọc ·{" "}
                   <button
                     type="button"
                     className="font-semibold"
@@ -144,32 +144,25 @@ export default function EquipmentV2({ ownerId, initial }: EquipmentManagerProps)
                   >
                     Xoá lọc
                   </button>
-                </>
+                </p>
               ) : null}
+            </div>
+
+            {shown.length === 0 ? (
+              <Empty compact icon={Search} title="Không tìm thấy thiết bị phù hợp" hint="Thử gõ ít chữ hơn hoặc chọn nhóm “Tất cả”." />
+            ) : (
+              <EquipmentList
+                groups={cats
+                  .map((k) => ({ key: k, items: shown.filter((e) => catKey(e) === k) }))
+                  .filter((g) => g.items.length > 0)}
+                onOpen={setPeekId}
+                onDelete={setConfirm}
+              />
+            )}
+            <p className="px-4 py-3 text-[12.5px] sm:px-5" style={{ color: "var(--tx3)", borderTop: "1px solid var(--bd)", background: "var(--sf2)" }}>
+              {list.length} thiết bị · {cats.length} nhóm{inactiveCount ? ` · ${inactiveCount} ngừng dùng` : ""}
             </p>
           </div>
-
-          {shown.length === 0 ? (
-            <div className="v2-card">
-              <Empty compact icon={Search} title="Không tìm thấy thiết bị phù hợp" hint="Thử gõ ít chữ hơn hoặc chọn nhóm “Tất cả”." />
-            </div>
-          ) : (
-            cats
-              .filter((k) => shown.some((e) => catKey(e) === k))
-              .map((k) => {
-                const items = shown.filter((e) => catKey(e) === k);
-                return (
-                  <section key={k} className="flex flex-col gap-2.5">
-                    {cat === "all" ? <GroupLabel count={`${items.length} thiết bị`}>{catLabel(k)}</GroupLabel> : null}
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 min-[1700px]:grid-cols-4">
-                      {items.map((e) => (
-                        <EquipmentCard key={e.id} e={e} onOpen={() => setPeekId(e.id)} onDelete={() => setConfirm(e)} />
-                      ))}
-                    </div>
-                  </section>
-                );
-              })
-          )}
         </>
       )}
 
@@ -241,40 +234,124 @@ function EquipmentTile({ e, size = 42 }: { e: StudioEquipment; size?: number }) 
   );
 }
 
-function EquipmentCard({ e, onOpen, onDelete }: { e: StudioEquipment; onOpen: () => void; onDelete: () => void }) {
+function StateBadge({ active }: { active: boolean }) {
+  return active ? (
+    <Badge tone="green" dot>
+      Đang dùng
+    </Badge>
+  ) : (
+    <Badge tone="gray" dot>
+      Ngừng dùng
+    </Badge>
+  );
+}
+
+/** Danh sách gom theo nhóm: bảng trên máy tính, dòng gọn trên điện thoại. */
+function EquipmentList({
+  groups,
+  onOpen,
+  onDelete,
+}: {
+  groups: { key: string; items: StudioEquipment[] }[];
+  onOpen: (id: string) => void;
+  onDelete: (e: StudioEquipment) => void;
+}) {
+  const menu = (e: StudioEquipment) => (
+    <Menu
+      label={`Thao tác cho ${e.name}`}
+      items={[
+        { label: "Xem chi tiết", icon: Eye, onClick: () => onOpen(e.id) },
+        "divider",
+        { label: "Xoá khỏi sổ", icon: Trash2, danger: true, onClick: () => onDelete(e) },
+      ]}
+    />
+  );
+  const head = (g: { key: string; items: StudioEquipment[] }) => (
+    <GroupLabel count={`${g.items.length} thiết bị`}>{catLabel(g.key)}</GroupLabel>
+  );
   return (
-    <div className="v2-card v2-card-link relative flex items-start gap-3 p-3.5" style={e.active ? undefined : { opacity: 0.72 }}>
-      {/* Lớp bấm phủ cả thẻ → mở chi tiết; menu ⋯ nằm trên lớp này. */}
-      <button type="button" className="absolute inset-0 rounded-[16px]" aria-label={`Xem ${e.name}`} onClick={onOpen} />
-      <EquipmentTile e={e} />
-      <div className="pointer-events-none min-w-0 flex-1">
-        <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{e.name}</p>
-        <p className="mt-0.5 truncate text-[12.5px]" style={{ color: "var(--tx3)" }}>
-          {e.note || "Không có ghi chú"}
-        </p>
-        <div className="mt-2">
-          {e.active ? (
-            <Badge tone="green" dot>
-              Đang dùng
-            </Badge>
-          ) : (
-            <Badge tone="gray" dot>
-              Ngừng dùng
-            </Badge>
-          )}
-        </div>
+    <>
+      <div className="v2-table-wrap hidden md:block">
+        <table className="v2-table" style={{ tableLayout: "fixed" }}>
+          <thead>
+            <tr>
+              <th>Thiết bị · ghi chú</th>
+              <th style={{ width: 150 }}>Thêm vào sổ</th>
+              <th style={{ width: 150 }}>Tình trạng</th>
+              <th style={{ width: 64 }} aria-label="Thao tác" />
+            </tr>
+          </thead>
+          {groups.map((g) => (
+            <tbody key={g.key}>
+              <tr>
+                <td colSpan={4} style={{ background: "var(--sf2)", padding: "8px 16px" }}>
+                  {head(g)}
+                </td>
+              </tr>
+              {g.items.map((e) => (
+                <tr key={e.id} className="cursor-pointer" onClick={() => onOpen(e.id)} style={e.active ? undefined : { opacity: 0.65 }}>
+                  <td>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <EquipmentTile e={e} size={36} />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold" title={e.name}>
+                          {e.name}
+                        </p>
+                        {e.note ? (
+                          <p className="truncate text-[12.5px]" style={{ color: "var(--tx3)" }} title={e.note}>
+                            {e.note}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="v2-num whitespace-nowrap" style={{ color: "var(--tx2)" }}>
+                    {fmtDate(e.created_at) || "—"}
+                  </td>
+                  <td>
+                    <StateBadge active={e.active} />
+                  </td>
+                  <td onClick={(ev) => ev.stopPropagation()} className="text-right">
+                    {menu(e)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          ))}
+        </table>
       </div>
-      <div className="relative -mr-1.5 -mt-1.5 flex-none">
-        <Menu
-          label={`Thao tác cho ${e.name}`}
-          items={[
-            { label: "Xem chi tiết", icon: Eye, onClick: onOpen },
-            "divider",
-            { label: "Xoá khỏi sổ", icon: Trash2, danger: true, onClick: onDelete },
-          ]}
-        />
+
+      <div className="md:hidden">
+        {groups.map((g) => (
+          <ul key={g.key}>
+            <li className="px-4 py-2" style={{ background: "var(--sf2)", borderBottom: "1px solid var(--bd2)" }}>
+              {head(g)}
+            </li>
+            {g.items.map((e) => (
+              <li key={e.id} className="relative flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid var(--bd2)", opacity: e.active ? 1 : 0.65 }}>
+                {/* Lớp bấm phủ cả dòng → mở chi tiết; menu ⋯ nằm trên lớp này. */}
+                <button type="button" className="absolute inset-0" aria-label={`Xem ${e.name}`} onClick={() => onOpen(e.id)} />
+                <EquipmentTile e={e} size={40} />
+                <div className="pointer-events-none min-w-0 flex-1">
+                  <p className="truncate text-[14.5px] font-semibold">{e.name}</p>
+                  {e.note ? (
+                    <p className="truncate text-[12.5px]" style={{ color: "var(--tx3)" }}>
+                      {e.note}
+                    </p>
+                  ) : null}
+                  {!e.active ? (
+                    <span className="mt-1 inline-flex">
+                      <StateBadge active={false} />
+                    </span>
+                  ) : null}
+                </div>
+                <div className="relative -mr-1.5 flex-none">{menu(e)}</div>
+              </li>
+            ))}
+          </ul>
+        ))}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -286,15 +363,7 @@ function EquipmentPeek({ e }: { e: StudioEquipment }) {
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold leading-snug">{e.name}</p>
           <div className="mt-1.5">
-            {e.active ? (
-              <Badge tone="green" dot>
-                Đang dùng
-              </Badge>
-            ) : (
-              <Badge tone="gray" dot>
-                Ngừng dùng
-              </Badge>
-            )}
+            <StateBadge active={e.active} />
           </div>
         </div>
       </div>

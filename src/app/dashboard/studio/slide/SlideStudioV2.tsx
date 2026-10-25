@@ -71,6 +71,8 @@ export default function SlideStudioV2() {
             <span className="hidden sm:inline">· {theme.name} · {musicLabel}</span>
           </p>
         </div>
+        {/* Điện thoại: nút chính trải hết hàng (bọc vì Menu tự co theo nút). */}
+        <div className="w-full sm:w-auto [&>div]:w-full sm:[&>div]:w-auto">
         <Menu
           width={250}
           trigger={({ toggle, open }) => (
@@ -83,9 +85,10 @@ export default function SlideStudioV2() {
             { label: "Video dọc", hint: "9:16 · Reels, TikTok, Story", icon: RectangleVertical, onClick: () => void eng.exportVideo("portrait") },
           ]}
         />
+        </div>
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start">
+      <div className="grid gap-5 lg:grid-cols-[384px_minmax(0,1fr)] lg:items-start">
         {/* ── Cột phải (điện thoại: lên đầu): xem trước + cảnh đang xem ──── */}
         <div className="flex min-w-0 flex-col gap-5 lg:order-2">
           <section className="v2-card overflow-hidden">
@@ -207,7 +210,7 @@ export default function SlideStudioV2() {
                   </div>
                 ) : null}
                 {curIsGrid && (
-                  <div className="flex min-w-0 flex-col gap-1.5">
+                  <div className="flex min-w-0 flex-col items-start gap-1.5">
                     <p className="v2-label">Bố cục cảnh</p>
                     <Segmented<string>
                       size="sm"
@@ -236,7 +239,7 @@ export default function SlideStudioV2() {
                   role="tab"
                   aria-selected={on}
                   onClick={() => eng.go(id)}
-                  className="flex min-w-0 flex-col items-center gap-1.5 rounded-[10px] px-0.5 py-2 text-[11.5px] font-semibold transition-colors"
+                  className="flex min-w-0 flex-col items-center gap-1.5 rounded-[10px] px-0 py-2 text-[11px] font-semibold transition-colors sm:text-[11.5px]"
                   style={{ background: on ? "var(--acS)" : "transparent", color: on ? "var(--ac)" : "var(--tx2)" }}
                 >
                   <span
@@ -245,7 +248,7 @@ export default function SlideStudioV2() {
                   >
                     {ok && !on ? <Check size={13} strokeWidth={3} /> : num}
                   </span>
-                  <span className="max-w-full truncate">{label}</span>
+                  <span className="whitespace-nowrap">{label}</span>
                 </button>
               );
             })}

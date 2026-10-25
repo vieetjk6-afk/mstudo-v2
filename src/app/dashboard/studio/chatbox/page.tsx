@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import ChatboxConfig from "./ChatboxConfig";
+import ChatboxConfigV2 from "./ChatboxConfigV2";
+import { isUiV2 } from "@/lib/ui-server";
 import AiProvidersEditor from "@/components/AiProvidersEditor";
 
 /**
@@ -33,6 +35,18 @@ export default async function ChatboxConfigPage() {
     .maybeSingle();
 
   const canEditKeys = !profile.isStaff && (profile.actingRole === "owner" || profile.actingRole === "admin");
+
+  // Giao diện mới: hai cột soạn | xem trước, key AI là khối riêng ở dưới.
+  if (await isUiV2()) {
+    return (
+      <ChatboxConfigV2
+        ownerId={profile.id}
+        greeting={(data?.greeting as string | undefined) ?? ""}
+        instructions={(data?.instructions as string | undefined) ?? ""}
+        aiKeys={canEditKeys ? <AiProvidersEditor scope="studio" /> : null}
+      />
+    );
+  }
 
   return (
     <>

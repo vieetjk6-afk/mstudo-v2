@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { buildPdf, cmToPt, type PdfPageSpec } from "@/lib/album-pdf";
 import { fetchPublicDriveBytes } from "@/lib/google-picker";
 import {
-  DECOS, FILTERS, ROLE_SIZE, SEED_PLAN, bumpUid, buildSpread, cellFilter, cellPath, clamp, layoutVariants, nextUid, sig,
+  DECOS, ROLE_SIZE, SEED_PLAN, bumpUid, buildSpread, cellFilter, cellPath, clamp, layoutVariants, nextUid, sig,
   type ADSize, type ADTpl, type Cell, type Lib, type Orient, type Rect, type SavedDesign, type Spread,
 } from "./designer-core";
 

@@ -1,32 +1,23 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { fmtDateTime } from "@/lib/date";
-import { useRouter } from "next/navigation";
 import { Bell, CheckCheck } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import PushToggle from "@/components/PushToggle";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { notificationHref, notificationMeta, notificationText } from "@/lib/notifications";
 import type { StudioNotification } from "@/lib/types";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { useNotifications } from "./useNotifications";
+import NotificationsV2 from "./NotificationsV2";
 
-export default function NotificationsList({ initial }: { initial: StudioNotification[] }) {
-  const router = useRouter();
-  const [items, setItems] = useState<StudioNotification[]>(initial);
-  const unreadCount = useMemo(() => items.filter((n) => !n.read).length, [items]);
+/** Giao diện mới có bản riêng (NotificationsV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
+export default function NotificationsList(props: { initial: StudioNotification[] }) {
+  return useUiV2() ? <NotificationsV2 {...props} /> : <NotificationsListV1 {...props} />;
+}
 
-  async function markRead(ids: string[]) {
-    if (ids.length === 0) return;
-    setItems((p) => p.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)));
-    const supabase = createClient();
-    await supabase.from("studio_notifications").update({ read: true }).in("id", ids);
-  }
-
-  function openNotification(n: StudioNotification) {
-    if (!n.read) markRead([n.id]); // fire-and-forget; UI updates optimistically
-    const href = notificationHref(n);
-    if (href) router.push(href);
-  }
+function NotificationsListV1({ initial }: { initial: StudioNotification[] }) {
+  // Logic dùng chung với bản mới (NotificationsV2) — xem ./useNotifications.
+  const { items, unreadCount, markRead, openNotification } = useNotifications(initial);
 
   return (
     <div className="page-in max-w-[860px]">

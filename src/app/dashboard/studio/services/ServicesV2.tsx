@@ -107,7 +107,7 @@ export default function ServicesV2({ s, onCreate }: { s: ServicesState; onCreate
               hint="Mỗi dòng một ý. Khách đọc bộ điều khoản này trong hợp đồng và báo giá."
             >
               <textarea
-                className={`${inputCls} min-h-[440px] font-mono text-[13px] leading-relaxed`}
+                className={`${inputCls} !min-h-[440px] font-mono text-[13px] leading-relaxed`}
                 value={s.clauses}
                 onChange={(e) => s.setClauses(e.target.value)}
                 placeholder="Nhập điều khoản riêng cho dịch vụ này…"

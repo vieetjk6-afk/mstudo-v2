@@ -5,7 +5,7 @@ import Link from "next/link";
 import { ArrowRight, CalendarDays, Eye, EyeOff, FilePlus, FileText, KanbanSquare, ListChecks, MoreHorizontal, Search } from "lucide-react";
 import { Avatar, Badge, Empty, PageHead, Stack, Toolbar, btn, iconBtn, type Tone } from "@/components/v2/kit";
 import { Menu, SearchInput, Segmented, type MenuItem } from "@/components/v2/kit-client";
-import { CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, contractTotal, vndShort, type ContractStatus } from "@/lib/types";
+import { CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, contractTotal, vndShort } from "@/lib/types";
 import { fmtDate, fmtDayMonth, todayVN } from "@/lib/date";
 import { daysToDue } from "@/lib/vendors";
 import type { BoardCard } from "./BoardView";
@@ -102,7 +102,7 @@ export default function BoardV2({ initial }: { initial: BoardCard[] }) {
   return (
     <Stack>
       <PageHead
-        desc="Mỗi thẻ là một hợp đồng, mỗi cột là một trạng thái. Trên điện thoại, bấm ⋯ trên thẻ để chuyển cột."
+        desc="Mỗi thẻ là một hợp đồng. Trên điện thoại, bấm ⋯ trên thẻ để chuyển cột."
         actions={
           <button type="button" className={btn("secondary")} onClick={() => setShowExtra((v) => !v)} aria-pressed={showExtra}>
             {showExtra ? <EyeOff size={16} /> : <Eye size={16} />}

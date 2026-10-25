@@ -316,8 +316,6 @@ function Inventory({
 
 /* ─────────────────────────────── Đơn thuê ─────────────────────────────── */
 
-type Line = { item_id: string; name: string; price: number; qty: number; max: number };
-
 function Orders({
   items,
   orders,

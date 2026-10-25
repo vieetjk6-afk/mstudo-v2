@@ -488,7 +488,7 @@ function PkgFields({ v, set, categories }: { v: PkgDraft; set: (patch: Partial<P
         </datalist>
       </Field>
       <Field label="Mô tả" hint="Mỗi dòng một ý.">
-        <textarea className={`${inputCls} min-h-[140px]`} value={v.description} onChange={(e) => set({ description: e.target.value })} />
+        <textarea className={`${inputCls} !min-h-[140px]`} value={v.description} onChange={(e) => set({ description: e.target.value })} />
       </Field>
       {v.price === 0 ? (
         <Callout tone="blue">Mục giá 0đ được xếp vào “Chi phí phát sinh & lưu ý”, không hiện như một gói.</Callout>
@@ -504,7 +504,7 @@ function NoteFields({ title, body, onTitle, onBody }: { title: string; body: str
         <input className={inputCls} value={title} onChange={(e) => onTitle(e.target.value)} placeholder="VD: Phát sinh thêm, Lưu ý…" autoFocus />
       </Field>
       <Field label="Nội dung" hint="Mỗi dòng một ý.">
-        <textarea className={`${inputCls} min-h-[160px]`} value={body} onChange={(e) => onBody(e.target.value)} />
+        <textarea className={`${inputCls} !min-h-[160px]`} value={body} onChange={(e) => onBody(e.target.value)} />
       </Field>
     </div>
   );

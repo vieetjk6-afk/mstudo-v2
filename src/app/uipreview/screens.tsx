@@ -58,6 +58,7 @@ import { SCREENS_TAOHD } from "./v2/taohd";
 import { SCREENS_SANXUAT } from "./v2/sanxuat";
 import { SCREENS_SANGTAO } from "./v2/sangtao";
 import { SCREENS_WEBSITE } from "./v2/website";
+import { SCREENS_TAIKHOAN } from "./v2/taikhoan";
 import * as f from "./fixtures";
 
 /** Chủ studio giả cho các màn xem trước khung giao diện. */
@@ -734,6 +735,7 @@ export const SCREENS: Record<
   ...SCREENS_SANXUAT,
   ...SCREENS_SANGTAO,
   ...SCREENS_WEBSITE,
+  ...SCREENS_TAIKHOAN,
   "bang-mau": {
     title: "Bảng màu — ngoài shell / shell sáng / shell tối",
     render: () => <TokenSwatches />,

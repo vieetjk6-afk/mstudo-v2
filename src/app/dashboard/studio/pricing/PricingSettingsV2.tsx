@@ -53,7 +53,7 @@ export function ContactTabV2({ p, bankAuto }: { p: PricingState; bankAuto?: Reac
           </div>
         </Section>
 
-        <Section icon={QrCode} title="Mã QR chuyển khoản" desc="Xem trước — mã mở, khách tự nhập số tiền.">
+        <Section icon={QrCode} title="Mã QR chuyển khoản" desc="Mã mở — khách tự nhập số tiền.">
           {c.pl_bank_bin && c.pl_bank_account ? (
             <div className="flex flex-col items-center gap-2">
               <VietQR bank={{ bin: c.pl_bank_bin, account: c.pl_bank_account, holder: c.pl_bank_holder, name: c.pl_bank_name }} amount={0} addInfo="" />

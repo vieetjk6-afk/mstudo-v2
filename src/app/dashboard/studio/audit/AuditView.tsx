@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
 import { History, ChevronDown } from "lucide-react";
 import { Panel, PanelHead, EmptyState } from "@/components/studio/ui";
 import { fmtDateTime } from "@/lib/date";
 import { auditFields, type AuditField } from "@/lib/audit-fields";
 import { AUDIT_GROUP_LABEL, auditGroup, auditIsDestructive, type AuditGroup } from "@/lib/audit-labels";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { useAudit } from "./useAudit";
+import AuditV2 from "./AuditV2";
 
 export type AuditRow = {
   id: number;
@@ -23,27 +25,16 @@ export type AuditRow = {
   created_at: string;
 };
 
-export default function AuditView({
-  rows,
-  migrated,
-  filteredContract,
-}: {
-  rows: AuditRow[];
-  migrated: boolean;
-  filteredContract: string | null;
-}) {
-  const [group, setGroup] = useState<AuditGroup | "all">("all");
-  const [actor, setActor] = useState<string>("all");
-  const [open, setOpen] = useState<number | null>(null);
+export type AuditProps = { rows: AuditRow[]; migrated: boolean; filteredContract: string | null };
 
-  const actors = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const r of rows) m.set(r.actor_id ?? "system", r.actor_name ?? "Khách / hệ thống");
-    return [...m.entries()];
-  }, [rows]);
-  const shown = rows.filter(
-    (r) => (group === "all" || auditGroup(r.action) === group) && (actor === "all" || (r.actor_id ?? "system") === actor)
-  );
+/** Giao diện mới có bản riêng (AuditV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
+export default function AuditView(props: AuditProps) {
+  return useUiV2() ? <AuditV2 {...props} /> : <AuditViewV1 {...props} />;
+}
+
+function AuditViewV1({ rows, migrated, filteredContract }: AuditProps) {
+  // Logic dùng chung với bản mới (AuditV2) — xem ./useAudit.
+  const { group, setGroup, actor, setActor, open, setOpen, actors, shown } = useAudit(rows);
 
   return (
     <div className="space-y-3.5">

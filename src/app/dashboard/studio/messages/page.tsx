@@ -3,6 +3,8 @@ import { requireStudio } from "@/lib/auth-guards";
 import type { MessageTemplate } from "@/lib/types";
 import MessagesManager from "./MessagesManager";
 import ZaloPanel from "./ZaloPanel";
+import MessagesV2 from "./MessagesV2";
+import { isUiV2 } from "@/lib/ui-server";
 
 
 export default async function MessagesPage() {
@@ -24,6 +26,9 @@ export default async function MessagesPage() {
     .select("*")
     .eq("owner_id", profile.id)
     .order("created_at", { ascending: false });
+
+  // Giao diện mới: mẫu tin và Zalo tự động thành hai tab của cùng một màn.
+  if (await isUiV2()) return <MessagesV2 ownerId={profile.id} initial={(data ?? []) as MessageTemplate[]} />;
 
   return (
     <div className="space-y-6">

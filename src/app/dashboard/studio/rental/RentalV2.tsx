@@ -153,12 +153,15 @@ export default function RentalV2(props: RentalManagerProps) {
         }
       />
 
-      <StatGrid>
-        <Stat icon={Boxes} tone="brand" label="Trong kho" value={`${stats.totalItems} món`} sub={`${items.length} mẫu · ${freeUnits} món sẵn sàng`} />
-        <Stat icon={PackageOpen} tone="blue" label="Đang cho thuê" value={`${stats.rentedUnits} món`} sub={`${stats.activeOrders} đơn chưa trả đồ`} />
-        <Stat icon={Wallet} tone="amber" label="Cọc đang giữ" value={vndShort(stats.depositsHeld)} sub="Hoàn lại khi khách trả đồ" />
-        <Stat icon={TrendingUp} tone="green" label="Thuê lẻ tháng này" value={vndShort(stats.revenueMonth)} sub="Không tính đơn gắn hợp đồng" />
-      </StatGrid>
+      {/* Tài khoản mới (chưa có món, chưa có đơn): bốn số 0 không nói gì — ẩn đi. */}
+      {items.length > 0 || orders.length > 0 ? (
+        <StatGrid>
+          <Stat icon={Boxes} tone="brand" label="Trong kho" value={`${stats.totalItems} món`} sub={`${items.length} mẫu · ${freeUnits} món sẵn sàng`} />
+          <Stat icon={PackageOpen} tone="blue" label="Đang cho thuê" value={`${stats.rentedUnits} món`} sub={`${stats.activeOrders} đơn chưa trả đồ`} />
+          <Stat icon={Wallet} tone="amber" label="Cọc đang giữ" value={vndShort(stats.depositsHeld)} sub="Hoàn lại khi khách trả đồ" />
+          <Stat icon={TrendingUp} tone="green" label="Thuê lẻ tháng này" value={vndShort(stats.revenueMonth)} sub="Không tính đơn gắn hợp đồng" />
+        </StatGrid>
+      ) : null}
 
       {stats.overdue > 0 ? (
         <Callout

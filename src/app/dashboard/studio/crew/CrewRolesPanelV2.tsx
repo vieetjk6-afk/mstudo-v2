@@ -182,10 +182,10 @@ function RoleRow({
       </div>
       {canEdit && !editing ? (
         <div className="flex flex-none items-center">
-          <button type="button" className={iconBtn()} disabled={r.busy || i === 0} onClick={() => r.move(i, -1)} aria-label={`Đưa ${o.label} lên`} title="Lên">
+          <button type="button" className={iconBtn("disabled:opacity-30")} disabled={r.busy || i === 0} onClick={() => r.move(i, -1)} aria-label={`Đưa ${o.label} lên`} title="Lên">
             <ArrowUp size={16} />
           </button>
-          <button type="button" className={iconBtn()} disabled={r.busy || last} onClick={() => r.move(i, 1)} aria-label={`Đưa ${o.label} xuống`} title="Xuống">
+          <button type="button" className={iconBtn("disabled:opacity-30")} disabled={r.busy || last} onClick={() => r.move(i, 1)} aria-label={`Đưa ${o.label} xuống`} title="Xuống">
             <ArrowDown size={16} />
           </button>
           <Menu

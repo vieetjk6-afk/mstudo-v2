@@ -47,8 +47,12 @@ export function Slider({ label, min, max, step, value, onChange }: { label: stri
 /**
  * Khung spread TƯƠNG TÁC đang chỉnh: bấm chọn ô, kéo / kéo góc đổi cỡ, thả ảnh
  * từ thư viện vào ô, bấm đúp để đặt lại khung ảnh, nhãn DPI thấp, khoá layer.
+ *
+ * `keepSelection`: chặn sự kiện click của ô nổi lên khung spread. Không chặn thì
+ * ô vừa được chọn ở pointerdown bị bỏ chọn ngay ở click (khung có onClick bỏ
+ * chọn) — bản cũ đang như vậy nên bảng chỉnh ô không mở được; bản mới bật cờ này.
  */
-export function SpreadCanvas({ ed, tpl }: { ed: AlbumDesignEditor; tpl: ADTpl }) {
+export function SpreadCanvas({ ed, tpl, keepSelection = false }: { ed: AlbumDesignEditor; tpl: ADTpl; keepSelection?: boolean }) {
   const { setSel, spreadPxW, spreadPxH, spread, sel, cellDpi, onCellDown, fillCell, dragLib, patchCell, scale } = ed;
   return (
     <div onClick={() => setSel(null)} style={{ position: "relative", width: spreadPxW, height: spreadPxH, background: spread?.bg || tpl.page, boxShadow: "0 10px 40px rgba(0,0,0,.18)" }}>
@@ -58,6 +62,7 @@ export function SpreadCanvas({ ed, tpl }: { ed: AlbumDesignEditor; tpl: ADTpl })
         const dpi = c.type === "photo" ? cellDpi(c) : null;
         return (
           <div key={c.uid} onPointerDown={(e) => onCellDown(e, c, "move")}
+            onClick={keepSelection ? (e) => e.stopPropagation() : undefined}
             onDragOver={c.type === "photo" ? (e) => e.preventDefault() : undefined}
             onDrop={c.type === "photo" ? () => { if (dragLib.current) { fillCell(c.uid, dragLib.current); dragLib.current = null; } } : undefined}
             onDoubleClick={() => { if (c.type === "photo" && c.photo) patchCell(c.uid, { scale: 1, posX: 50, posY: 50 }); }}

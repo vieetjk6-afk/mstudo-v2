@@ -26,7 +26,7 @@ function AlbumEditorV1({ size, tpl, onBack, initial }: AlbumEditorProps) {
     fmt, setFmt, bleedMm, setBleedMm, showExport, setShowExport, exportSel, setExportSel, showAuto, setShowAuto,
     autoSpreads, setAutoSpreads, autoMin, setAutoMin, autoMax, setAutoMax, autoPlan, multi, setMulti, railOpen,
     setRailOpen, showLib, setShowLib, name, setName, saving, dirty, dragPage, stageRef, hist, fut, undo, redo,
-    patchCell, spreadPxW, spreadPxH, onThumbClick, usedIds, applyRects, curPhotoSig,
+    patchCell, onThumbClick, usedIds, applyRects, curPhotoSig,
     chooseCount, addText, addDeco, delCell, clearPhoto, shuffle, delSpread, addSpread, dupSpread, moveSpread, dragLib,
     autoFill, openAuto, regenAuto, applyAutoPlan, reflowAll, toggleLock, setSpreadBg, reorderSpread, save, cellDpi,
     exportPages, scenesUsed, railLayouts, nbW, nbH,

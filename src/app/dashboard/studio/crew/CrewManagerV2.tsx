@@ -100,8 +100,8 @@ export function CrewPanelV2({ c, registerUrl, registerError, branches, hideErr }
     <div className="flex flex-col gap-4">
       {!registerUrl && registerError ? (
         <Callout tone="amber" icon={AlertTriangle} title="Chưa cấp được link đăng ký cho thợ">
-          Chưa ghi được mã link vào hồ sơ studio. Thường là do chưa chạy <code>supabase/migrations/crew_profile_show.sql</code>. Chạy xong tải lại trang.
-          <span className="mt-1 block font-mono text-[12px]">{registerError}</span>
+          Chưa ghi được mã link vào hồ sơ studio. Thường là do chưa chạy <code className="break-all">supabase/migrations/crew_profile_show.sql</code>. Chạy xong tải lại trang.
+          <span className="mt-1 block break-all font-mono text-[12px]">{registerError}</span>
         </Callout>
       ) : null}
 
@@ -123,18 +123,22 @@ export function CrewPanelV2({ c, registerUrl, registerError, branches, hideErr }
             </div>
           </header>
           {c.pending.map((x) => (
-            <div key={x.id} className="v2-row">
-              <Avatar name={x.name || x.phone} size={36} />
-              <div className="min-w-0 flex-1">
-                <p className="v2-row-title">{x.name || x.phone}</p>
-                <p className="v2-row-sub">{x.phone} · {crewRoleLabel(x.role, c.roles)}</p>
+            <div key={x.id} className="v2-row flex-wrap">
+              <div className="flex min-w-0 flex-1 basis-[200px] items-center gap-3">
+                <Avatar name={x.name || x.phone} size={36} />
+                <div className="min-w-0 flex-1">
+                  <p className="v2-row-title">{x.name || x.phone}</p>
+                  <p className="v2-row-sub">{x.phone} · {crewRoleLabel(x.role, c.roles)}</p>
+                </div>
               </div>
-              <button type="button" onClick={() => void c.remove(x.id)} className={btn("ghost", "sm")}>
-                <X size={15} /> Từ chối
-              </button>
-              <button type="button" onClick={() => void c.approve(x.id)} className={btn("soft", "sm")}>
-                <Check size={15} /> Nhận
-              </button>
+              <div className="ml-auto flex flex-none gap-2">
+                <button type="button" onClick={() => void c.remove(x.id)} className={btn("ghost", "sm")}>
+                  <X size={15} /> Từ chối
+                </button>
+                <button type="button" onClick={() => void c.approve(x.id)} className={btn("soft", "sm")}>
+                  <Check size={15} /> Nhận vào sổ
+                </button>
+              </div>
             </div>
           ))}
         </section>

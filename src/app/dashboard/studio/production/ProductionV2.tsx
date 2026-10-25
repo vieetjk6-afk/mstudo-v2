@@ -279,7 +279,7 @@ export default function ProductionV2({ initial, staff, orders = [] }: Production
 
   return (
     <Stack>
-      <PageHead desc="Việc nào sắp tới hạn giao khách nằm trên cùng. Bấm một việc để giao người làm hoặc đổi tiến độ." />
+      <PageHead desc="Việc gần hạn giao nằm trên cùng. Bấm một việc để giao người làm hoặc đổi tiến độ." />
 
       {rows.length > 0 && (
         <StatGrid>
@@ -708,7 +708,7 @@ function ProductPeek({
               <Badge tone={STAGE_TONE[r.status]} dot>
                 {PRODUCT_STATUS_LABEL[r.status]}
               </Badge>
-              <Badge tone={due.tone}>{due.text}</Badge>
+              {late ? null : <Badge tone={due.tone}>{due.text}</Badge>}
             </div>
             <p className="mt-1.5 truncate text-[13px]" style={{ color: "var(--tx3)" }}>
               {r.contract?.title || "Hạng mục không gắn hợp đồng"}

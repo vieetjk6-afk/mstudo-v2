@@ -360,8 +360,9 @@ function DesignCardV2({
   onDelete: () => void;
 }) {
   const ar = s.size?.w && s.size?.h ? (2 * s.size.w) / s.size.h : 2; // spread = hai trang
-  // Cuốn album minh hoạ: rộng tối đa 78% thẻ, cao tối đa 62%.
-  const w = ar >= 1.26 ? 78 : 62 * ar * 0.75;
+  // Cuốn album minh hoạ vừa khung 4:3: rộng tối đa 78% bề ngang, cao tối đa
+  // 62% bề cao (= 46.5% bề ngang) — tính ra % bề ngang theo tỉ lệ spread.
+  const w = Math.min(78, 46.5 * ar);
   const page = s.tpl?.page || "var(--sf)";
   const ink = s.tpl?.ink || "var(--tx)";
 

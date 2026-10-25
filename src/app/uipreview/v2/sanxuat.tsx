@@ -6,7 +6,9 @@ import { PreviewV2 } from "./shell";
 import ProductionView, { type ProductRow, type VendorOrderRow } from "@/app/dashboard/studio/production/ProductionView";
 import BoardView, { type BoardCard } from "@/app/dashboard/studio/board/BoardView";
 import RentalManager from "@/app/dashboard/studio/rental/RentalManager";
-import type { RentalItem, RentalOrderWithItems } from "@/lib/types";
+import EquipmentManager from "@/app/dashboard/studio/equipment/EquipmentManager";
+import VendorsView, { type ContractOption, type OrderRow, type VendorRow } from "@/app/dashboard/studio/vendors/VendorsView";
+import type { RentalItem, RentalOrderWithItems, StudioEquipment } from "@/lib/types";
 
 /** Ngày TƯƠNG ĐỐI so với hôm nay (giờ VN), để nhóm "quá hạn / sắp tới hạn" luôn có hàng. */
 const inDays = (n: number) => new Date(Date.now() + 7 * 3600_000 + n * 86_400_000).toISOString().slice(0, 10);
@@ -79,6 +81,42 @@ const rentalOrders: RentalOrderWithItems[] = [
     items: [line("ro5", "l7", "r4", "Mấn cô dâu đính ngọc trai", 300_000)] },
 ];
 
+/* ── Thiết bị ───────────────────────────────────────────────────────────── */
+const eq = (id: string, name: string, category: string | null, note: string | null = null, active = true): StudioEquipment => ({
+  id, owner_id: "o", name, category, note, active, branch_id: null, created_at: "2026-03-02T03:00:00Z",
+});
+const equipment: StudioEquipment[] = [
+  ...f.equipment,
+  eq("e4", "Canon R6 Mark II #2", "Máy ảnh", "Thẻ CFexpress 256GB kèm theo"),
+  eq("e5", "Sony FE 85mm f/1.4 GM", "Ống kính"),
+  eq("e6", "Sigma 35mm f/1.4 Art", "Ống kính", "Ống chính chụp phóng sự"),
+  eq("e7", "Đèn LED Aputure 300d", "Đèn"),
+  eq("e8", "Micro Rode Wireless Go II", "Âm thanh"),
+  eq("e9", "Flycam DJI Mavic 3 Classic", "Flycam", "Chỉ bay khi có giấy phép"),
+  eq("e10", "Ổ cứng SSD Samsung T7 1TB", "Phụ kiện"),
+];
+
+/* ── Nhà cung cấp & đơn đặt ngoài ─────────────────────────────────────── */
+const vendors: VendorRow[] = [
+  { id: "v1", name: "Xưởng album Minh Anh", kind: "album", phone: "0903456789", contact: "Anh Minh", note: "Album 30x30 in 7 ngày", active: true },
+  { id: "v2", name: "Trang điểm Ngọc", kind: "makeup", phone: "0911222333", contact: null, note: null, active: true },
+  { id: "v3", name: "In ấn Sài Gòn", kind: "print", phone: null, contact: "Chị Thảo", note: null, active: true },
+  { id: "v4", name: "Xe hoa Phúc Lộc", kind: "car", phone: "0988777666", contact: null, note: "Đã ngưng — giá cao", active: false },
+];
+const vendorContracts: ContractOption[] = [
+  { id: "c1", title: LONG, code: "HD2609", client_name: "Nguyễn Thị Lan Phương" },
+  { id: "c2", title: "Chụp kỷ yếu 12A3", code: "HD2610", client_name: "Trần Văn B" },
+  { id: "c7", title: "Phóng sự cưới nhà trai — Hà Nội", code: "HD2613", client_name: "Đỗ Quang Huy" },
+];
+const vendorOrders: OrderRow[] = [
+  { id: "vo1", vendor_id: "v1", vendor_name: "Xưởng album Minh Anh", contract_id: "c1", title: "Album 30x30 cao cấp, 40 trang, bìa da bò khắc tên cô dâu chú rể", amount: 3_500_000, status: "doing", due_date: inDays(-2), note: null },
+  { id: "vo2", vendor_id: "v2", vendor_name: "Trang điểm Ngọc", contract_id: "c7", title: "Makeup ngoài cho nhà trai", amount: 1_500_000, status: "sent", due_date: inDays(1), note: "2 người" },
+  { id: "vo3", vendor_id: "v3", vendor_name: "In ấn Sài Gòn", contract_id: "c2", title: "In ảnh phóng 60x90 × 2", amount: 900_000, status: "received", due_date: inDays(3), note: null },
+  { id: "vo4", vendor_id: null, vendor_name: null, contract_id: null, title: "Thuê địa điểm chụp ngoại cảnh", amount: 2_000_000, status: "sent", due_date: null, note: null },
+  { id: "vo5", vendor_id: "v1", vendor_name: "Xưởng album Minh Anh", contract_id: "c2", title: "Photobook kỷ yếu 20x20", amount: 6_000_000, status: "doing", due_date: inDays(12), note: null },
+  { id: "vo6", vendor_id: "v1", vendor_name: "Xưởng album Minh Anh", contract_id: null, title: "Album mẫu trưng bày", amount: 1_200_000, status: "delivered", due_date: inDays(-15), note: null },
+];
+
 export const SCREENS_SANXUAT: Record<string, { title: string; render: () => React.ReactNode; bare?: boolean }> = {
   "v2-xu-ly-anh": {
     title: "Giao diện mới — Xử lý hình ảnh",
@@ -130,6 +168,51 @@ export const SCREENS_SANXUAT: Record<string, { title: string; render: () => Reac
     render: () => (
       <PreviewV2 path="/dashboard/studio/rental">
         <RentalManager ownerId="o" initialItems={[]} initialOrders={[]} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-thiet-bi": {
+    title: "Giao diện mới — Thiết bị",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/equipment">
+        <EquipmentManager ownerId="o" initial={equipment} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-thiet-bi-trong": {
+    title: "Giao diện mới — Thiết bị (chưa có)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/equipment">
+        <EquipmentManager ownerId="o" initial={[]} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-nha-cung-cap": {
+    title: "Giao diện mới — Nhà cung cấp & đơn đặt ngoài",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/vendors">
+        <VendorsView ownerId="o" initialVendors={vendors} initialOrders={vendorOrders} contracts={vendorContracts} readOnly={false} />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-nha-cung-cap-chi-xem": {
+    title: "Giao diện mới — Nhà cung cấp (nhân viên chỉ xem)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/vendors">
+        <VendorsView ownerId="o" initialVendors={vendors} initialOrders={vendorOrders} contracts={vendorContracts} readOnly />
+      </PreviewV2>
+    ),
+    bare: true,
+  },
+  "v2-nha-cung-cap-trong": {
+    title: "Giao diện mới — Nhà cung cấp (chưa có đơn)",
+    render: () => (
+      <PreviewV2 path="/dashboard/studio/vendors">
+        <VendorsView ownerId="o" initialVendors={[]} initialOrders={[]} contracts={[]} readOnly={false} />
       </PreviewV2>
     ),
     bare: true,
