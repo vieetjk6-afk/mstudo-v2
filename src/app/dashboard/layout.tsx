@@ -22,6 +22,7 @@ import { BRANCH_COOKIE, getBranchScope } from "@/lib/branches";
 import type { ChromeProfile, Profile } from "@/lib/types";
 import { ACCENT_COOKIE, accentHex, accentKey } from "@/lib/ui-version";
 import { getUiState } from "@/lib/ui-server";
+import { NAV_PINS_COOKIE, parseNavPins } from "@/lib/nav-pins";
 
 export default async function DashboardLayout({
   children,
@@ -154,6 +155,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
   // chọn của từng người. Đọc ở server để vẽ đúng khung ngay lần đầu, không nháy.
   const [ui, jar] = await Promise.all([getUiState(), cookies()]);
   const accent = accentKey(jar.get(ACCENT_COOKIE)?.value);
+  const navPins = parseNavPins(jar.get(NAV_PINS_COOKIE)?.value);
   // Chưa xuất bản (ẩn hoàn toàn với non-admin, không hiện cả nhãn "Sắp ra mắt").
   const hiddenNav = desktopHidden(flags) ? ["/dashboard/studio/desktop"] : [];
 
@@ -180,6 +182,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
         branchLocked={branchScope.locked}
         ui={ui}
         accent={accent}
+        navPins={navPins}
       >
         {children}
       </DashboardChrome>

@@ -26,6 +26,17 @@ Bật/tắt:
   "Dùng giao diện mới" trong menu tài khoản.
 - **Khung mới**: menu tài khoản → "Về giao diện cũ".
 
+## Menu trái: mục hay dùng
+
+Phần "Hay dùng" trên cùng do studio tự chọn: rê chuột vào một mục rồi bấm biểu
+tượng ghim, hoặc bấm "Tùy chỉnh" để ghim, bỏ ghim và đổi thứ tự (tối đa 10 mục).
+Mọi mục còn lại nằm trong các nhóm thu gọn bên dưới. Thanh tab dưới đáy trên
+điện thoại lấy 5 mục ghim đầu tiên.
+
+Lưu theo từng máy trong cookie `mstudo_nav_pins` (`src/lib/nav-pins.ts`), đọc ở
+layout nên menu vẽ đúng ngay lần đầu. Cookie chỉ nhận đường dẫn có thật trong
+menu. Test: `npm run test:nav-pins`.
+
 ## Màu chủ đạo
 
 Mặc định xanh dương `#0b5cc4`. Người dùng chọn 1 trong 8 màu ở menu tài khoản,

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Sun, Moon, MonitorSmartphone, LogOut, Menu, X as XIcon, Gift, Link2, UserCircle,
   MessageSquare, Bell, Crown, Plus, ChevronDown, Check, Undo2, Palette,
+  Pin, PinOff, SlidersHorizontal, ArrowUp, ArrowDown, RotateCcw,
 } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioCommandK from "@/components/StudioCommandK";
@@ -15,7 +16,10 @@ import DownloadAppButton from "@/components/DownloadAppButton";
 import SyncControlButton from "@/components/SyncControlButton";
 import MobileTabBarV2 from "@/components/v2/MobileTabBarV2";
 import { UiV2Provider } from "@/components/v2/UiV2Context";
-import { setAccentCookie, setUiVersion } from "@/components/v2/ui-switch";
+import { setAccentCookie, setNavPinsCookie, setUiVersion } from "@/components/v2/ui-switch";
+import { Drawer } from "@/components/v2/kit-client";
+import { btn, iconBtn } from "@/components/v2/kit";
+import { DEFAULT_PINS, MAX_PINS } from "@/lib/nav-pins";
 import { createClient } from "@/lib/supabase/client";
 import { THEME_OPTIONS, useTheme } from "@/lib/theme";
 import { roleLabel } from "@/lib/studio-roles";
@@ -36,8 +40,10 @@ import type { ChromeProfile } from "@/lib/types";
    globals.css), nên mọi dữ liệu và chức năng giữ nguyên.
 
    Khác khung cũ ở chỗ:
-     • Menu trái: ghim 6 màn dùng hằng ngày; các nhóm còn lại tự thu gọn, chỉ mở
-       nhóm đang dùng (người dùng mở thêm thì nhớ lại cho lần sau).
+     • Menu trái: phần "Hay dùng" do studio tự ghim (rê chuột vào mục → nút ghim,
+       hoặc "Tùy chỉnh" để chọn và sắp xếp; lưu theo máy, xem @/lib/nav-pins);
+       mọi mục còn lại nằm trong nhóm thu gọn, chỉ mở nhóm đang dùng (mở thêm
+       thì nhớ lại cho lần sau).
      • Topbar: một nút chính "Tạo mới"; sáng/tối, màu chủ đạo, ngôn ngữ, xem-như
        vai trò dồn vào menu tài khoản.
      • Điện thoại: thanh 5 tab dưới đáy + nút + nổi để tạo nhanh.
@@ -47,18 +53,7 @@ const THEME_ICON = { light: Sun, dark: Moon, system: MonitorSmartphone } as cons
 const ZALO_SUPPORT_URL = "https://zalo.me/g/rycw0pqcgss14ib6u2xj";
 const VIEW_ROLES: [string, string][] = [["owner", "Chủ"], ["manager", "Quản lý"], ["staff", "Nhân sự"]];
 
-/** Màn dùng hằng ngày — ghim ở đầu menu, theo đúng thứ tự này. */
-const PINNED = [
-  "/dashboard/studio",
-  "/staff",
-  "/dashboard/studio/contracts",
-  "/dashboard/studio/calendar",
-  "/dashboard/albums",
-  "/dashboard/studio/reports",
-  "/dashboard/studio/clients",
-];
-
-/** Nhãn ngắn cho mục ghim — tên đầy đủ vẫn ở tiêu đề trang. */
+/** Nhãn ngắn khi một màn nằm trong phần ghim — tên đầy đủ vẫn ở tiêu đề trang. */
 const SHORT: Record<string, string> = {
   "/dashboard/studio/contracts": "Hợp đồng",
   "/dashboard/studio/calendar": "Lịch làm việc",
@@ -93,7 +88,9 @@ type NavCtx = {
   roomy?: boolean;
 };
 
-function NavRow({ it, label, ctx }: { it: NavItem; label?: string; ctx: NavCtx }) {
+type PinCtl = { pinned: boolean; full: boolean; onToggle: () => void };
+
+function NavRow({ it, label, ctx, pin }: { it: NavItem; label?: string; ctx: NavCtx; pin?: PinCtl }) {
   const active = isNavActive(it, ctx.pathname);
   const flagged = ctx.comingSoon.includes(it.href);
   const locked = flagged && !ctx.isAdmin;
@@ -101,48 +98,102 @@ function NavRow({ it, label, ctx }: { it: NavItem; label?: string; ctx: NavCtx }
 
   const cls = `v2-nav flex w-full items-center gap-2.5 rounded-[10px] px-2.5 ${
     ctx.roomy ? "py-2.5 text-[14.5px]" : "py-[7px] text-[13.5px]"
-  }${active ? " is-active" : ""}`;
+  }${active ? " is-active" : ""}${pin ? " pr-9" : ""}`;
 
+  // Số đếm nhường chỗ cho nút ghim khi rê chuột (chỉ ở sidebar máy tính).
+  const hideOnHover = pin ? " group-hover/nav:invisible" : "";
   const inner = (
     <>
       <it.icon size={ctx.roomy ? 19 : 18} className="flex-none" strokeWidth={active ? 2.2 : 1.9} />
       <span className="min-w-0 flex-1 truncate">{label ?? it.label}</span>
       {flagged ? (
-        <span className="flex-none rounded-[6px] px-1.5 py-px text-[10px] font-semibold" style={{ color: "var(--tx3)", background: "var(--sf2)" }}>
+        <span className={`flex-none rounded-[6px] px-1.5 py-px text-[10px] font-semibold${hideOnHover}`} style={{ color: "var(--tx3)", background: "var(--sf2)" }}>
           Sắp có
         </span>
       ) : count > 0 ? (
-        <span className="v2-count flex-none">{count > 99 ? "99+" : count}</span>
+        <span className={`v2-count flex-none${hideOnHover}`}>{count > 99 ? "99+" : count}</span>
       ) : null}
     </>
   );
 
-  if (locked) {
-    return <div className={cls} style={{ opacity: 0.5, cursor: "not-allowed" }} title="Tính năng sắp ra mắt">{inner}</div>;
-  }
-  return (
+  const row = locked ? (
+    <div className={cls} style={{ opacity: 0.5, cursor: "not-allowed" }} title="Tính năng sắp ra mắt">{inner}</div>
+  ) : (
     <Link href={it.href} className={cls} aria-current={active ? "page" : undefined}>
       {inner}
     </Link>
   );
+  if (!pin) return row;
+
+  const disabled = !pin.pinned && pin.full;
+  const PinIcon = pin.pinned ? PinOff : Pin;
+  return (
+    <div className="group/nav relative">
+      {row}
+      <button
+        type="button"
+        onClick={pin.onToggle}
+        disabled={disabled}
+        aria-label={pin.pinned ? `Bỏ ghim ${it.label}` : `Ghim ${it.label} lên đầu menu`}
+        title={disabled ? `Đã ghim tối đa ${MAX_PINS} mục` : pin.pinned ? "Bỏ ghim" : "Ghim lên phần hay dùng"}
+        className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-[8px] opacity-0 transition-opacity hover:bg-[var(--sf)] focus-visible:opacity-100 group-hover/nav:opacity-100 disabled:cursor-not-allowed disabled:opacity-0 disabled:group-hover/nav:opacity-40"
+        style={{ color: "var(--tx3)" }}
+      >
+        <PinIcon size={14} />
+      </button>
+    </div>
+  );
 }
 
-/** Menu: phần ghim + các nhóm thu gọn. Dùng cho cả sidebar và ngăn kéo. */
-function NavTree({ groups, ctx, open, toggle }: {
+/**
+ * Menu: phần "Hay dùng" (studio tự ghim) + các nhóm thu gọn chứa mọi mục còn
+ * lại. Dùng cho cả sidebar và ngăn kéo điện thoại. Nút ghim nhanh chỉ hiện ở
+ * sidebar máy tính (rê chuột); trên điện thoại dùng "Tùy chỉnh".
+ */
+function NavTree({ groups, ctx, open, toggle, pins, onTogglePin, onCustomize, quickPin }: {
   groups: NavGroup[];
   ctx: NavCtx;
   open: string[];
   toggle: (label: string) => void;
+  pins: string[];
+  onTogglePin: (href: string) => void;
+  onCustomize: () => void;
+  quickPin: boolean;
 }) {
   const all = groups.flatMap((g) => g.items);
-  const pinned = PINNED.map((h) => all.find((it) => it.href === h)).filter(Boolean) as NavItem[];
+  const pinned = pins.map((h) => all.find((it) => it.href === h)).filter(Boolean) as NavItem[];
+  const full = pins.length >= MAX_PINS;
   const rest = groups
-    .map((g) => ({ label: g.label || "Khác", items: g.items.filter((it) => !PINNED.includes(it.href)) }))
+    .map((g) => ({ label: g.label || "Khác", items: g.items.filter((it) => !pins.includes(it.href)) }))
     .filter((g) => g.items.length > 0);
+  const pinOf = (href: string, isPinned: boolean): PinCtl | undefined =>
+    quickPin ? { pinned: isPinned, full, onToggle: () => onTogglePin(href) } : undefined;
 
   return (
     <div className="flex flex-col gap-px">
-      {pinned.map((it) => <NavRow key={it.href} it={it} label={SHORT[it.href]} ctx={ctx} />)}
+      <div className="flex items-center gap-2 px-2.5 pb-1">
+        <span className="flex-1 text-[11.5px] font-semibold" style={{ color: "var(--tx3)" }}>Hay dùng</span>
+        <button
+          type="button"
+          onClick={onCustomize}
+          className="v2-group flex items-center gap-1 rounded-[7px] px-1.5 py-0.5 text-[11.5px] font-semibold"
+          title="Chọn và sắp xếp mục hay dùng"
+        >
+          <SlidersHorizontal size={12} /> Tùy chỉnh
+        </button>
+      </div>
+      {pinned.length === 0 ? (
+        <button
+          type="button"
+          onClick={onCustomize}
+          className="mx-1 rounded-[10px] px-3 py-2.5 text-left text-[12.5px]"
+          style={{ border: "1px dashed var(--bd)", color: "var(--tx3)" }}
+        >
+          Chưa ghim mục nào. Bấm để chọn màn hay dùng.
+        </button>
+      ) : (
+        pinned.map((it) => <NavRow key={it.href} it={it} label={SHORT[it.href]} ctx={ctx} pin={pinOf(it.href, true)} />)
+      )}
 
       <div className="my-2.5 h-px" style={{ background: "var(--bd2)" }} />
 
@@ -165,13 +216,116 @@ function NavTree({ groups, ctx, open, toggle }: {
             </button>
             {isOpen && (
               <div className="mb-1.5 flex flex-col gap-px">
-                {g.items.map((it) => <NavRow key={it.href} it={it} ctx={ctx} />)}
+                {g.items.map((it) => <NavRow key={it.href} it={it} ctx={ctx} pin={pinOf(it.href, false)} />)}
               </div>
             )}
           </div>
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Ngăn "Tùy chỉnh menu": danh sách đang ghim (đổi thứ tự, bỏ ghim) và mọi mục
+ * còn lại theo nhóm (ghim thêm). Dùng được cả trên điện thoại — nơi không có rê
+ * chuột để hiện nút ghim nhanh.
+ */
+function CustomizeNavDrawer({ open, onClose, groups, pins, setPins }: {
+  open: boolean;
+  onClose: () => void;
+  groups: NavGroup[];
+  pins: string[];
+  setPins: (next: string[]) => void;
+}) {
+  const all = groups.flatMap((g) => g.items);
+  const pinned = pins.map((h) => all.find((it) => it.href === h)).filter(Boolean) as NavItem[];
+  const full = pins.length >= MAX_PINS;
+  const move = (i: number, d: -1 | 1) => {
+    const next = [...pins];
+    const j = i + d;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j], next[i]];
+    setPins(next);
+  };
+  const isDefault = pins.join("|") === DEFAULT_PINS.join("|");
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title="Tùy chỉnh menu"
+      desc={`Chọn tối đa ${MAX_PINS} màn hay dùng để luôn nằm trên cùng. Các màn khác vẫn ở trong nhóm thu gọn bên dưới.`}
+      width={440}
+      footer={
+        <>
+          <button type="button" className={btn("ghost")} disabled={isDefault} onClick={() => setPins([...DEFAULT_PINS])}>
+            <RotateCcw size={15} /> Khôi phục mặc định
+          </button>
+          <button type="button" className={btn("primary")} onClick={onClose}>
+            Xong
+          </button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-5">
+        <section className="flex flex-col gap-2">
+          <p className="v2-label">
+            Hay dùng <span style={{ color: "var(--tx3)", fontWeight: 500 }}>· {pinned.length}/{MAX_PINS}</span>
+          </p>
+          {pinned.length === 0 ? (
+            <p className="rounded-[10px] px-3 py-3 text-[13px]" style={{ background: "var(--sf2)", color: "var(--tx3)" }}>
+              Chưa ghim mục nào. Bấm “Ghim” ở danh sách bên dưới.
+            </p>
+          ) : (
+            <div className="v2-card overflow-hidden" style={{ boxShadow: "none" }}>
+              {pinned.map((it, i) => (
+                <div key={it.href} className="flex items-center gap-2.5 px-3 py-2" style={{ borderTop: i ? "1px solid var(--bd2)" : undefined }}>
+                  <it.icon size={17} className="flex-none" style={{ color: "var(--tx2)" }} />
+                  <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium">{it.label}</span>
+                  <button type="button" className={iconBtn()} style={{ width: 30, height: 30 }} disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Đưa ${it.label} lên`}>
+                    <ArrowUp size={15} />
+                  </button>
+                  <button type="button" className={iconBtn()} style={{ width: 30, height: 30 }} disabled={i === pinned.length - 1} onClick={() => move(i, 1)} aria-label={`Đưa ${it.label} xuống`}>
+                    <ArrowDown size={15} />
+                  </button>
+                  <button type="button" className={iconBtn()} style={{ width: 30, height: 30 }} onClick={() => setPins(pins.filter((h) => h !== it.href))} aria-label={`Bỏ ghim ${it.label}`}>
+                    <PinOff size={15} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
+        {groups.map((g) => {
+          const items = g.items.filter((it) => !pins.includes(it.href));
+          if (!items.length) return null;
+          return (
+            <section key={g.label || "khac"} className="flex flex-col gap-2">
+              <p className="v2-label">{g.label || "Khác"}</p>
+              <div className="v2-card overflow-hidden" style={{ boxShadow: "none" }}>
+                {items.map((it, i) => (
+                  <div key={it.href} className="flex items-center gap-2.5 px-3 py-2" style={{ borderTop: i ? "1px solid var(--bd2)" : undefined }}>
+                    <it.icon size={17} className="flex-none" style={{ color: "var(--tx3)" }} />
+                    <span className="min-w-0 flex-1 truncate text-[13.5px]" style={{ color: "var(--tx2)" }}>{it.label}</span>
+                    <button
+                      type="button"
+                      className={btn("secondary", "sm")}
+                      disabled={full}
+                      title={full ? `Đã ghim tối đa ${MAX_PINS} mục` : undefined}
+                      onClick={() => setPins([...pins, it.href])}
+                    >
+                      <Pin size={14} /> Ghim
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </Drawer>
   );
 }
 
@@ -186,6 +340,7 @@ export default function StudioShellV2({
   branchCookie,
   branchLocked = false,
   accent: accentInit,
+  navPins = null,
   previewPath,
   children,
 }: {
@@ -199,6 +354,8 @@ export default function StudioShellV2({
   branchCookie?: string;
   branchLocked?: boolean;
   accent: AccentKey;
+  /** Mục ghim menu trái đọc từ cookie ở layout; null = bộ mặc định. */
+  navPins?: string[] | null;
   /** Chỉ cho /uipreview: giả như đang mở route này để menu và tiêu đề sáng đúng. */
   previewPath?: string;
   children: React.ReactNode;
@@ -214,6 +371,15 @@ export default function StudioShellV2({
   const [accent, setAccent] = useState<AccentKey>(accentInit);
   const [open, setOpen] = useState<string[]>([]);
   const [switching, setSwitching] = useState(false);
+  const [pins, setPinsState] = useState<string[]>(() => navPins ?? [...DEFAULT_PINS]);
+  const [customizing, setCustomizing] = useState(false);
+  const setPins = (next: string[]) => {
+    const clean = next.filter((h, i) => next.indexOf(h) === i).slice(0, MAX_PINS);
+    setPinsState(clean);
+    setNavPinsCookie(clean);
+  };
+  const togglePin = (href: string) =>
+    setPins(pins.includes(href) ? pins.filter((h) => h !== href) : [...pins, href]);
 
   useEffect(() => { setOpen(readOpen()); }, []);
   useEffect(() => { setDrawerOpen(false); setAvatarOpen(false); setCreateOpen(false); }, [pathname]);
@@ -438,7 +604,7 @@ export default function StudioShellV2({
               <XIcon size={17} />
             </button>
           </div>
-          <NavTree groups={groups} ctx={{ ...ctx, roomy: true }} open={open} toggle={toggleGroup} />
+          <NavTree groups={groups} ctx={{ ...ctx, roomy: true }} open={open} toggle={toggleGroup} pins={pins} onTogglePin={togglePin} onCustomize={() => setCustomizing(true)} quickPin={false} />
           <div className="mt-auto flex flex-col gap-2 pt-6">
             <DownloadAppButton desktop={desktopOk} />
             <SyncControlButton />
@@ -455,7 +621,7 @@ export default function StudioShellV2({
             </span>
           </Link>
           <nav className="min-h-0 flex-1 overflow-y-auto pb-2 pr-0.5" aria-label="Menu chính">
-            <NavTree groups={groups} ctx={ctx} open={open} toggle={toggleGroup} />
+            <NavTree groups={groups} ctx={ctx} open={open} toggle={toggleGroup} pins={pins} onTogglePin={togglePin} onCustomize={() => setCustomizing(true)} quickPin />
           </nav>
           <div className="flex flex-col gap-2 pt-2.5" style={{ borderTop: "1px solid var(--bd2)" }}>
             <SidebarDriveStatus desktop={desktopOk} />
@@ -549,7 +715,9 @@ export default function StudioShellV2({
       </div>
 
       {/* ── Điện thoại: thanh tab + nút tạo nhanh ─────────────── */}
-      <MobileTabBarV2 groups={groups} pathname={pathname} creates={creates} />
+      <MobileTabBarV2 groups={groups} pathname={pathname} creates={creates} pins={pins} />
+
+      <CustomizeNavDrawer open={customizing} onClose={() => setCustomizing(false)} groups={groups} pins={pins} setPins={setPins} />
     </div>
   );
 }

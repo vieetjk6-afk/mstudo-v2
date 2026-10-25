@@ -31,6 +31,7 @@ export default function DashboardChrome({
   branchLocked = false,
   ui = { eligible: false, active: false },
   accent = "blue",
+  navPins = null,
   children,
 }: {
   profile: ChromeProfile;
@@ -49,6 +50,8 @@ export default function DashboardChrome({
   /** Giao diện mới (thử nghiệm) — xem @/lib/ui-version. */
   ui?: UiState;
   accent?: AccentKey;
+  /** Mục ghim menu trái của giao diện mới (null = bộ mặc định). */
+  navPins?: string[] | null;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -70,6 +73,7 @@ export default function DashboardChrome({
         branchCookie={branchCookie}
         branchLocked={branchLocked}
         accent={accent}
+        navPins={navPins}
       >
         {children}
       </StudioShellV2>

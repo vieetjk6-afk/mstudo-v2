@@ -1,6 +1,7 @@
 "use client";
 
 import { ACCENT_COOKIE, UI_COOKIE, UI_COOKIE_MAX_AGE, type AccentKey } from "@/lib/ui-version";
+import { NAV_PINS_COOKIE, serializeNavPins } from "@/lib/nav-pins";
 
 function writeCookie(name: string, value: string) {
   // path=/ để mọi route của khu quản lý đọc chung một lựa chọn; SameSite=Lax là
@@ -20,4 +21,9 @@ export function setUiVersion(v: "v1" | "v2") {
 /** Ghi màu chủ đạo. Khung mới đổi màu ngay bằng state, cookie để lần sau nhớ. */
 export function setAccentCookie(key: AccentKey) {
   writeCookie(ACCENT_COOKIE, key);
+}
+
+/** Ghi các mục ghim trên menu trái (theo máy). Menu đổi ngay bằng state, cookie để lần sau nhớ. */
+export function setNavPinsCookie(pins: readonly string[]) {
+  writeCookie(NAV_PINS_COOKIE, serializeNavPins(pins));
 }
