@@ -1075,8 +1075,13 @@ body {
 }
 
 /* ── Nút ── */
-.ui-v2 .v2-btn {
+/* `display` tách vào :where() (độ ưu tiên 0) để lớp Tailwind như `hidden`,
+   `sm:inline-flex` vẫn ẩn/hiện được nút. */
+:where(.ui-v2 .v2-btn),
+:where(.ui-v2 .v2-icon-btn) {
   display: inline-flex;
+}
+.ui-v2 .v2-btn {
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -1108,7 +1113,6 @@ body {
 .ui-v2 .v2-btn-danger { background: transparent; color: var(--rd); border-color: color-mix(in srgb, var(--rd) 30%, transparent); }
 .ui-v2 .v2-btn-danger:hover:not(:disabled) { background: var(--rdS); }
 .ui-v2 .v2-icon-btn {
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 36px;
@@ -1212,13 +1216,14 @@ body {
 @media (max-width: 640px) {
   .ui-v2 .v2-toolbar > select.v2-input { flex: 1 1 130px; min-width: 0; }
 }
+/* min-width ở :where() để `min-w-[…]` của Tailwind ghi đè được. */
+:where(.ui-v2 .v2-search) { min-width: 0; }
 .ui-v2 .v2-search {
   display: flex;
   align-items: center;
   gap: 8px;
   height: var(--v2-h);
   padding: 0 12px;
-  min-width: 0;
   border-radius: var(--v2-r);
   background: var(--sf);
   border: 1px solid var(--bd);
@@ -1349,6 +1354,8 @@ body {
 .ui-v2 .v2-menu-pop {
   position: absolute;
   top: calc(100% + 6px);
+  max-height: min(70vh, 420px);
+  overflow-y: auto;
   z-index: 60;
   padding: 6px;
   border-radius: 14px;
@@ -1357,6 +1364,7 @@ body {
   box-shadow: var(--sh-pop);
   animation: ckPop 0.14s ease both;
 }
+.ui-v2 .v2-menu-pop.is-up { top: auto; bottom: calc(100% + 6px); }
 .ui-v2 .v2-menu-item {
   display: flex;
   align-items: center;

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Minimize2, Stamp, FileImage, Share2 } from "lucide-react";
-import { pickerConfigured, preloadGoogle, requestDriveToken } from "@/lib/google-picker";
-import ToolPanel, { type Tool, type QuotaState } from "./ToolPanel";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import ToolPanel, { type Tool } from "./ToolPanel";
+import { useCompressPage } from "./useCompressPage";
+import CompressV2 from "./CompressV2";
 
 /** Pill hạn mức — bo 20px, cặp màu trạng thái của bản thiết kế. */
 function QuotaChip({ label, text, warn, active }: { label: string; text: string; warn: boolean; active: boolean }) {
@@ -18,46 +19,11 @@ function QuotaChip({ label, text, warn, active }: { label: string; text: string;
 }
 
 export default function CompressPage() {
-  const [tool, setTool] = useState<Tool>("social");
-  const [driveToken, setDriveToken] = useState<string | null>(null);
-  const [quota, setQuota] = useState<QuotaState | null>(null);
-  const [pro, setPro] = useState(false);
+  return useUiV2() ? <CompressV2 /> : <CompressPageV1 />;
+}
 
-  useEffect(() => {
-    if (pickerConfigured) preloadGoogle();
-    refreshQuota();
-  }, []);
-
-  async function refreshQuota() {
-    try {
-      const r = await fetch("/api/compress/use");
-      if (r.ok) {
-        const d = await r.json();
-        setQuota({ basic: d.basic, picker: d.picker });
-        setPro(!!d.pro);
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  async function ensureDriveToken(force = false): Promise<string> {
-    if (driveToken && !force) return driveToken;
-    const t = await requestDriveToken(force);
-    setDriveToken(t);
-    return t;
-  }
-
-  async function consumeQuota(kind: "basic" | "picker") {
-    const r = await fetch("/api/compress/use", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind }),
-    });
-    const data = await r.json().catch(() => null);
-    if (data?.basic) setQuota({ basic: data.basic, picker: data.picker });
-    return { ok: r.ok, status: r.status, data };
-  }
+function CompressPageV1() {
+  const { tool, setTool, quota, pro, ensureDriveToken, consumeQuota } = useCompressPage();
 
   const tabs: { key: Tool; label: string; Icon: typeof Minimize2 }[] = [
     { key: "social", label: "Chuẩn mạng xã hội", Icon: Share2 },

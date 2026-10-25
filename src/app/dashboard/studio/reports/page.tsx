@@ -5,6 +5,7 @@ import { buildFunnel, sourceLabel } from "@/lib/lead-source";
 import { brandFrom } from "@/lib/studio-brand";
 import { applyBranch, getBranchScope } from "@/lib/branches";
 import AccountingExportCard from "@/components/studio/AccountingExportCard";
+import { isUiV2 } from "@/lib/ui-server";
 import ReportsView, { type PaymentRow, type SalaryRow, type SourceStat } from "./ReportsView";
 
 
@@ -122,6 +123,21 @@ export default async function ReportsPage() {
     srcMap.set(key, cur);
   }
 
+  // Công nợ (giao diện mới): hợp đồng chưa huỷ còn thiếu tiền — tính trên từng
+  // hợp đồng, hợp đồng thu dư không bù vào nợ của hợp đồng khác (cùng luật với
+  // `receivables` ở @/lib/accounting).
+  const receivable = { total: 0, count: 0 };
+  for (const c of (srcContracts ?? []) as unknown as Array<{
+    contract_items: { qty: number; unit_price: number }[];
+    contract_payments: { amount: number }[];
+  }>) {
+    const remaining = contractTotal(c.contract_items || []) - sumAmounts(c.contract_payments || []);
+    if (remaining > 0) {
+      receivable.total += remaining;
+      receivable.count += 1;
+    }
+  }
+
   const sourceStats: SourceStat[] = [...srcMap.entries()]
     .map(([source, v]) => ({ source, label: source === UNKNOWN ? sourceLabel(null) : sourceLabel(source), ...v }))
     .sort((a, b) => b.value - a.value || b.bookings - a.bookings);
@@ -136,31 +152,41 @@ export default async function ReportsPage() {
     revenue: [...srcMap.values()].reduce((n, v) => n + v.collected, 0),
   });
 
+  const closedUntil = (profile as { books_closed_until?: string | null }).books_closed_until ?? null;
+  const viewProps = {
+    ownerId: profile.id,
+    studio: {
+      name: brandFrom(profile).name,
+      phone: (profile.pl_phone as string | null) ?? null,
+      email: (profile.email as string | null) ?? null,
+    },
+    payments: (payments ?? []) as unknown as PaymentRow[],
+    salaries: (salaries ?? []) as unknown as SalaryRow[],
+    initialExpenses: (expenses ?? []) as StudioExpense[],
+    initialTarget: Number(profile.monthly_revenue_target) || 0,
+    sourceStats,
+    funnel,
+    closedUntil,
+  };
+  const accounting = (
+    <AccountingExportCard
+      ownerId={profile.id}
+      initialClosedUntil={closedUntil}
+      canClose={profile.actingRole === "owner" || profile.actingRole === "admin" || profile.actingRole === "accountant"}
+    />
+  );
+
+  // Giao diện mới: thẻ Xuất kế toán & khoá sổ do bản V2 tự đặt vào khối riêng
+  // cuối màn (cùng một thẻ, cùng quyền khoá sổ).
+  if (await isUiV2()) return <ReportsView {...viewProps} accounting={accounting} receivable={receivable} />;
+
   return (
     <div className="space-y-3.5">
-    <ReportsView
-      ownerId={profile.id}
-      studio={{
-        name: brandFrom(profile).name,
-        phone: (profile.pl_phone as string | null) ?? null,
-        email: (profile.email as string | null) ?? null,
-      }}
-      payments={(payments ?? []) as unknown as PaymentRow[]}
-      salaries={(salaries ?? []) as unknown as SalaryRow[]}
-      initialExpenses={(expenses ?? []) as StudioExpense[]}
-      initialTarget={Number(profile.monthly_revenue_target) || 0}
-      sourceStats={sourceStats}
-      funnel={funnel}
-      closedUntil={(profile as { books_closed_until?: string | null }).books_closed_until ?? null}
-    />
+      <ReportsView {...viewProps} />
       {/* Xuất kế toán + khoá sổ để RIÊNG dưới màn Thu chi, không nhồi vào dải
           tab: đây là việc làm vài lần một tháng (gửi kế toán, chốt kỳ), khác
           hẳn nhịp của các tab số liệu vốn mở hằng tuần. */}
-      <AccountingExportCard
-        ownerId={profile.id}
-        initialClosedUntil={(profile as { books_closed_until?: string | null }).books_closed_until ?? null}
-        canClose={profile.actingRole === "owner" || profile.actingRole === "admin" || profile.actingRole === "accountant"}
-      />
+      {accounting}
     </div>
   );
 }

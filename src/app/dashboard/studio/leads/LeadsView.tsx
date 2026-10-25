@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { Phone, MessageCircle, ChevronDown, Check, RotateCcw, Inbox } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import LeadsV2 from "./LeadsV2";
+import { useLeads, fmtLeadTime, zaloUrl } from "./useLeads";
 
 export interface Lead {
   id: string;
@@ -15,31 +17,13 @@ export interface Lead {
   created_at: string;
 }
 
-function fmt(ts: string): string {
-  try {
-    return new Date(ts).toLocaleString("vi-VN", {
-      day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit",
-    });
-  } catch {
-    return ts;
-  }
+export default function LeadsView(props: { leads: Lead[] }) {
+  return useUiV2() ? <LeadsV2 {...props} /> : <LeadsViewV1 {...props} />;
 }
 
-function zaloUrl(phone: string): string {
-  return `https://zalo.me/${phone.replace(/\D/g, "")}`;
-}
-
-export default function LeadsView({ leads }: { leads: Lead[] }) {
-  const supabase = createClient();
-  const [rows, setRows] = useState<Lead[]>(leads);
+function LeadsViewV1({ leads }: { leads: Lead[] }) {
+  const { rows, setStatus, newCount } = useLeads(leads);
   const [openId, setOpenId] = useState<string | null>(null);
-
-  async function setStatus(id: string, status: Lead["status"]) {
-    setRows((cur) => cur.map((r) => (r.id === id ? { ...r, status } : r)));
-    await supabase.from("website_leads").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
-  }
-
-  const newCount = rows.filter((r) => r.status === "new").length;
 
   if (rows.length === 0) {
     return (
@@ -85,7 +69,7 @@ export default function LeadsView({ leads }: { leads: Lead[] }) {
                     )}
                   </div>
                   <div className="mt-0.5 text-[13px]" style={{ color: "var(--text3)" }}>
-                    {fmt(r.created_at)}
+                    {fmtLeadTime(r.created_at)}
                     {r.interest && <> · {r.interest.slice(0, 80)}</>}
                   </div>
                 </div>

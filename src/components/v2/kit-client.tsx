@@ -44,9 +44,13 @@ export function Menu({
   width?: number;
 }) {
   const [open, setOpen] = useState(false);
+  // Mở NGƯỢC lên trên khi dưới nút không đủ chỗ (menu trong chân ngăn kéo, hàng cuối bảng).
+  const [up, setUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
+    const r = ref.current?.getBoundingClientRect();
+    if (r) setUp(window.innerHeight - r.bottom < 300 && r.top > window.innerHeight - r.bottom);
     const down = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
@@ -71,7 +75,7 @@ export function Menu({
       {open && (
         <div
           role="menu"
-          className="v2-menu-pop"
+          className={cx("v2-menu-pop", up && "is-up")}
           style={{ width, [align === "right" ? "right" : "left"]: 0 }}
         >
           {items.map((it, i) => {

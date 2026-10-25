@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Camera, CalendarRange, UsersRound, type LucideIcon } from "lucide-react";
 import { tabHref, type CalendarTab } from "./tabs";
+import { useUiV2 } from "@/components/v2/UiV2Context";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DẢI TAB CỦA MÀN LỊCH — /dashboard/studio/calendar?tab=…
@@ -25,7 +26,18 @@ const TABS: { key: CalendarTab; label: string; icon: LucideIcon }[] = [
   { key: "team", label: "Đội ngũ", icon: UsersRound },
 ];
 
-export default function CalendarTabs({
+type CalendarTabsProps = {
+  show: readonly CalendarTab[];
+  active: CalendarTab;
+};
+
+/** Giao diện mới vẽ dải tab ngay trong đầu từng tab (xem cal-v2-parts.tsx →
+ *  CalTabs), nên ở đây chỉ còn bản cũ. Đổi KIỂU component, không rẽ nhánh giữa hook. */
+export default function CalendarTabs(props: CalendarTabsProps) {
+  return useUiV2() ? null : <CalendarTabsV1 {...props} />;
+}
+
+function CalendarTabsV1({
   show,
   active,
 }: {

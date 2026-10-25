@@ -21,15 +21,16 @@ import {
   filterContracts, sortContracts, upcomingContracts, UPCOMING_DAYS,
   type ContractSort,
 } from "@/lib/contract-filter";
-import { contractKind, CONTRACT_KIND_LABEL, type ContractKind } from "@/lib/contract-kind";
+import { contractKind, type ContractKind } from "@/lib/contract-kind";
 import {
   exportContracts,
   contractsCsvRows,
   downloadCsv,
-  stamp,
-  type ContractExportRow,
   type ExportStudio,
 } from "@/lib/studio-export";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { SORT_OPTIONS, NGHE, contractExportRows, contractExportMeta } from "./contracts-list-shared";
+import ContractsListV2 from "./ContractsListV2";
 
 export type ContractRow = {
   id: string;
@@ -46,35 +47,14 @@ export type ContractRow = {
   contract_crew: { id: string; name: string | null; role: string; status: string }[];
 };
 
-/** Nhãn sắp xếp — nói rõ chiều để không phải đoán "gần nhất" là trước hay sau. */
-const SORT_OPTIONS: [ContractSort, string][] = [
-  ["default", "Mới tạo trước"],
-  ["event_asc", "Ngày thực hiện: cũ → mới"],
-  ["event_desc", "Ngày thực hiện: mới → cũ"],
-  ["code_asc", "Mã HĐ: A → Z"],
-  ["code_desc", "Mã HĐ: Z → A"],
-];
+/* SORT_OPTIONS + NGHE (nhãn sắp xếp, lọc theo nghề) ở ./contracts-list-shared
+   — giao diện mới dùng chung. */
 
 /**
  * Tab lọc. Bốn tab sau lọc thẳng theo TRẠNG THÁI; riêng "Sắp tới" lọc theo NGÀY
  * CHỤP — đó là câu hỏi khác hẳn ("tuần này phải chuẩn bị gì"), và là câu studio
  * hỏi mỗi sáng, nên nó đứng ngay sau "Tất cả" chứ không nằm cuối hàng.
  */
-/**
- * Lọc theo NGHỀ — trục thứ hai, độc lập với tab trạng thái.
- *
- * Để riêng một dải chứ không nhồi vào hàng tab trạng thái: hai thứ trả lời hai
- * câu hỏi khác nhau ("hợp đồng nào đang chờ duyệt" và "xem việc makeup thôi"),
- * trộn vào một hàng thì thành 10 nút và người dùng không đoán được bấm cái này
- * có tắt cái kia không.
- */
-const NGHE: [string, string][] = [
-  ["all", "Mọi nghề"],
-  ["shoot", CONTRACT_KIND_LABEL.shoot],
-  ["makeup", CONTRACT_KIND_LABEL.makeup],
-  ["combo", CONTRACT_KIND_LABEL.combo],
-];
-
 const UPCOMING_TAB = "upcoming";
 const TABS: [string, string][] = [
   ["all", "Tất cả"],
@@ -127,16 +107,25 @@ export default function ContractsListView({
   );
 }
 
-/** Phần DỰNG thuần: nhận danh sách đã có, không tự gọi API. */
-export function ContractsList({
-  rows,
-  initialLoading = false,
-  studio,
-}: {
+type ContractsListProps = {
   rows: ContractRow[];
   initialLoading?: boolean;
   studio: ExportStudio;
-}) {
+};
+
+/**
+ * Phần DỰNG thuần: nhận danh sách đã có, không tự gọi API. Giao diện mới có
+ * bản riêng (ContractsListV2) — đổi KIỂU component, không rẽ nhánh giữa các hook.
+ */
+export function ContractsList(props: ContractsListProps) {
+  return useUiV2() ? <ContractsListV2 {...props} /> : <ContractsListV1 {...props} />;
+}
+
+function ContractsListV1({
+  rows,
+  initialLoading = false,
+  studio,
+}: ContractsListProps) {
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<string>("all");
   const [nghe, setNghe] = useState<string>("all");
@@ -199,41 +188,15 @@ export function ContractsList({
    * Dòng dữ liệu cho file xuất ra — đúng danh sách ĐANG THẤY (tab + bộ lọc +
    * thứ tự sắp xếp), để file khớp với màn hình chứ không phải toàn bộ hợp đồng.
    */
-  function exportRows(): ContractExportRow[] {
-    return filtered.map((c) => {
-      const total = contractTotal(c.contract_items || []);
-      const collected = sumAmounts(c.contract_payments || []);
-      return {
-        code: c.code || "",
-        title: c.title,
-        client: c.client_name || "",
-        phone: c.client_phone || "",
-        service: SHOOT_TYPE_LABEL[c.shoot_type],
-        eventDate: c.event_date,
-        eventTime: c.event_time,
-        status: CONTRACT_STATUS_LABEL[c.status],
-        crew: (c.contract_crew || []).map((m) => m.name).filter(Boolean).join(", "),
-        total,
-        collected,
-        balance: total - collected,
-      };
-    });
+  function exportRows() {
+    return contractExportRows(filtered);
   }
 
   /** Mô tả bộ lọc đang bật — in ở đầu file để biết file này là của kỳ/lát cắt nào. */
   function exportMeta(): string[] {
     const tabLabel = TABS.find(([k]) => k === tab)?.[1] || "Tất cả";
     const ngheLabel = nghe === "all" ? "" : ` · ${NGHE.find(([k]) => k === nghe)?.[1] ?? ""}`;
-    const bits = [
-      q.trim() && `từ khoá "${q.trim()}"`,
-      code.trim() && `mã "${code.trim()}"`,
-      from && `từ ngày ${from}`,
-      to && `đến ngày ${to}`,
-    ].filter(Boolean);
-    return [
-      `Danh sách: ${tabLabel}${ngheLabel} · ${filtered.length} hợp đồng${bits.length ? ` · lọc theo ${bits.join(", ")}` : ""}`,
-      `Ngày xuất: ${stamp()}`,
-    ];
+    return contractExportMeta(`${tabLabel}${ngheLabel}`, filtered.length, { q, code, from, to });
   }
 
   async function exportExcel() {

@@ -1,22 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, Download, FileSpreadsheet, HeartHandshake, Users, UserPlus } from "lucide-react";
 import MessengerButton from "@/components/MessengerButton";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { vnd, vndShort } from "@/lib/types";
-import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
-import { fmtDate } from "@/lib/date";
-import {
-  exportClients,
-  clientsCsvRows,
-  downloadCsv,
-  stamp,
-  type ClientExportRow,
-  type ExportStudio,
-} from "@/lib/studio-export";
+import type { ExportStudio } from "@/lib/studio-export";
+import type { StudioReferral } from "@/lib/types";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import ClientsV2 from "./ClientsV2";
+import { useClients, clientHref, sourceLabel, lastLabel, inviteBackMessage } from "./useClients";
 
 export type ClientAgg = {
   key: string;
@@ -29,31 +23,28 @@ export type ClientAgg = {
   source: string | null;
 };
 
-const digits = (s: string) => (s || "").replace(/\D/g, "");
-
-/** Đường tới hồ sơ khách — dùng chung cho bảng (máy tính) và thẻ (điện thoại). */
-const clientHref = (c: ClientAgg) => `/dashboard/studio/clients/${encodeURIComponent(digits(c.phone) || c.key)}`;
-const sourceLabel = (c: ClientAgg) => (c.source ? LEAD_SOURCE_LABEL[c.source] || c.source : "Không rõ nguồn");
-const lastLabel = (c: ClientAgg) => (c.last ? `gần nhất ${fmtDate(c.last)}` : "chưa có buổi nào");
-
 /** Lưới cột bảng khách hàng — bản thiết kế: min-width 940px, cuộn ngang dưới 1240px. */
 const COLS = "minmax(230px,2fr) minmax(96px,1fr) minmax(128px,1.1fr) minmax(120px,1.1fr) minmax(140px,1.2fr)";
 const HEADS = ["Khách hàng", "Số job", "Tổng chi tiêu", "Còn nợ", "Nguồn / gần nhất"];
 
-export default function ClientsView({ clients, studio }: { clients: ClientAgg[]; studio: ExportStudio }) {
-  const [q, setQ] = useState("");
-  const [onlyOld, setOnlyOld] = useState(false);
-  const [sort, setSort] = useState<"recent" | "value" | "count">("recent");
-  const [exporting, setExporting] = useState(false);
+type ClientsProps = {
+  clients: ClientAgg[];
+  studio: ExportStudio;
+  /** Chỉ giao diện mới dùng: sổ giới thiệu thành một tab cạnh danh bạ. Bản cũ
+   *  vẽ ReferralsPanel riêng bên dưới (xem page.tsx). */
+  referrals?: { rows: StudioReferral[]; bookingUrl: string | null };
+};
 
-  // "Lâu chưa quay lại": lần chụp gần nhất đã quá 6 tháng.
-  const cutoff = useMemo(() => {
-    const d = new Date();
-    d.setMonth(d.getMonth() - 6);
-    return d.toISOString().slice(0, 10);
-  }, []);
-  const isOld = (c: ClientAgg) => !!c.last && c.last < cutoff;
-  const oldCount = clients.filter(isOld).length;
+export default function ClientsView(props: ClientsProps) {
+  return useUiV2() ? <ClientsV2 {...props} /> : <ClientsViewV1 {...props} />;
+}
+
+function ClientsViewV1({ clients, studio }: ClientsProps) {
+  const {
+    q, setQ, segment, setSegment, sort, setSort, exporting,
+    isOld, oldCount, returning, totalSpent, totalDebt, filtered, exportExcel, exportCsv,
+  } = useClients(clients, studio);
+  const onlyOld = segment === "old";
 
   /** Hai nhãn của một khách + nút mời lại — dùng chung cho bảng (máy tính) và
    *  thẻ (điện thoại), để hai cách trình bày không lệch nội dung. */
@@ -70,65 +61,16 @@ export default function ClientsView({ clients, studio }: { clients: ClientAgg[];
   const InviteBack = ({ c }: { c: ClientAgg }) => (
     <MessengerButton
       label="Mời lại"
-      message={`Xin chào ${c.name}, đã lâu chưa được phục vụ anh/chị. Studio đang có ưu đãi cho khách cũ, anh/chị có dịp nào muốn chụp lại không ạ? Cảm ơn anh/chị!`}
+      message={inviteBackMessage(c)}
     />
   );
 
-  const returning = clients.filter((c) => c.count > 1).length;
-  const totalSpent = clients.reduce((s, c) => s + c.value, 0);
-  const totalDebt = clients.reduce((s, c) => s + Math.max(0, c.value - c.collected), 0);
   const kpis = [
     { v: String(clients.length), l: "Khách đã từng chụp" },
     { v: clients.length ? `${Math.round((returning / clients.length) * 100)}%` : "0%", l: "Khách quay lại" },
     { v: clients.length ? vndShort(Math.round(totalSpent / clients.length)) : "0", l: "Giá trị trung bình / khách" },
     { v: vndShort(totalDebt), l: "Đang còn nợ" },
   ];
-
-  const filtered = useMemo(() => {
-    const n = q.trim().toLowerCase();
-    const list = clients.filter((c) => {
-      if (onlyOld && !isOld(c)) return false;
-      if (!n) return true;
-      return c.name.toLowerCase().includes(n) || c.phone.toLowerCase().includes(n);
-    });
-    const sorted = [...list];
-    if (sort === "value") sorted.sort((a, b) => b.value - a.value);
-    else if (sort === "count") sorted.sort((a, b) => b.count - a.count || b.value - a.value);
-    else sorted.sort((a, b) => (b.last || "").localeCompare(a.last || ""));
-    return sorted;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clients, q, onlyOld, cutoff, sort]);
-
-  /** Dòng dữ liệu cho file xuất ra — đúng danh sách đang lọc/sắp xếp. */
-  function exportRows(): ClientExportRow[] {
-    return filtered.map((c) => ({
-      name: c.name,
-      phone: c.phone,
-      jobs: c.count,
-      value: c.value,
-      collected: c.collected,
-      last: c.last,
-      source: c.source ? LEAD_SOURCE_LABEL[c.source] || c.source : "",
-    }));
-  }
-
-  const exportMeta = () => [
-    `Danh sách: ${onlyOld ? "khách lâu chưa quay lại" : "tất cả khách"}${q.trim() ? ` · từ khoá "${q.trim()}"` : ""} · ${filtered.length} khách`,
-    `Ngày xuất: ${stamp()}`,
-  ];
-
-  async function exportExcel() {
-    setExporting(true);
-    try {
-      await exportClients(studio, exportRows(), exportMeta(), "khach-hang");
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  function exportCsv() {
-    downloadCsv(clientsCsvRows(studio, exportRows(), exportMeta()), "khach-hang");
-  }
 
   const btn = "flex h-input flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
   const btnStyle = { border: "1px solid var(--bd)", background: "var(--sf)" };
@@ -187,7 +129,7 @@ export default function ClientsView({ clients, studio }: { clients: ClientAgg[];
           <option value="count">Nhiều hợp đồng nhất</option>
         </select>
         <button
-          onClick={() => setOnlyOld((v) => !v)}
+          onClick={() => setSegment(onlyOld ? "all" : "old")}
           className={btn}
           style={onlyOld ? { border: "1px solid var(--acM)", background: "var(--acS)", color: "var(--ac)" } : btnStyle}
         >

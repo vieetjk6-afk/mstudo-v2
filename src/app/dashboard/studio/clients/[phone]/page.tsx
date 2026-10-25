@@ -10,6 +10,8 @@ import {
   type ContractStatus,
 } from "@/lib/types";
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
+import { isUiV2 } from "@/lib/ui-server";
+import ClientDetailV2 from "./ClientDetailV2";
 
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
@@ -58,6 +60,25 @@ export default async function ClientDetail(props: { params: Promise<{ phone: str
   const source = mine.find((r) => r.source)?.source || null;
   const totalValue = mine.reduce((s, r) => s + contractTotal(r.contract_items || []), 0);
   const collected = mine.reduce((s, r) => s + sumAmounts(r.contract_payments || []), 0);
+
+  if (await isUiV2()) {
+    return (
+      <ClientDetailV2
+        name={name}
+        phone={phone}
+        email={email}
+        sourceLabel={source ? LEAD_SOURCE_LABEL[source] || source : null}
+        rows={mine.map((r) => ({
+          id: r.id,
+          title: r.title,
+          event_date: r.event_date,
+          status: r.status,
+          value: contractTotal(r.contract_items || []),
+          collected: sumAmounts(r.contract_payments || []),
+        }))}
+      />
+    );
+  }
 
   return (
     <div className="page-in">

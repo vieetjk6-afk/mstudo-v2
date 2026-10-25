@@ -16,7 +16,8 @@ import { isMissingColumn } from "@/lib/missing-column";
    thay vì để ô nhập "lưu" vào hư không.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export default function InternalNoteCard({ contractId, initial }: { contractId: string; initial: string | null | undefined }) {
+/** Logic tự lưu của ghi chú nội bộ — dùng chung cho thẻ bản cũ và khối ở bản mới. */
+export function useInternalNote(contractId: string, initial: string | null | undefined) {
   const [value, setValue] = useState(initial ?? "");
   const [state, setState] = useState<"idle" | "saving" | "saved" | "missing" | "error">("idle");
   const first = useRef(true);
@@ -37,6 +38,16 @@ export default function InternalNoteCard({ contractId, initial }: { contractId: 
     }, 700);
     return () => clearTimeout(t);
   }, [value, contractId]);
+
+  return { value, setValue, state };
+}
+
+/** Câu trạng thái lưu hiện dưới ô ghi chú (chung cho hai bản). */
+export const INTERNAL_NOTE_MISSING =
+  "Chưa lưu được: database chưa có cột ghi chú nội bộ — chủ studio chạy supabase/cap-nhat.sql (hoặc migrations/contract_internal_note.sql).";
+
+export default function InternalNoteCard({ contractId, initial }: { contractId: string; initial: string | null | undefined }) {
+  const { value, setValue, state } = useInternalNote(contractId, initial);
 
   return (
     <div className="card p-6">
@@ -63,7 +74,7 @@ export default function InternalNoteCard({ contractId, initial }: { contractId: 
           : state === "saved"
             ? <><Check size={13} /> Đã lưu</>
             : state === "missing"
-              ? "Chưa lưu được: database chưa có cột ghi chú nội bộ — chủ studio chạy supabase/cap-nhat.sql (hoặc migrations/contract_internal_note.sql)."
+              ? INTERNAL_NOTE_MISSING
               : state === "error"
                 ? "Không lưu được — thử lại sau."
                 : "Tự động lưu khi nhập"}

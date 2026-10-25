@@ -38,6 +38,22 @@ import {
 import { fmtDate, fmtDow, todayVN, daysFromToday } from "@/lib/date";
 import { crewRoleLabel, loadCrewRoles } from "@/lib/crew-roles";
 import { MILESTONE_LABEL, milestoneMessage, upcomingMilestones } from "@/lib/anniversary";
+import { isUiV2 } from "@/lib/ui-server";
+import OverviewV2, { OverviewBookingV2 } from "./OverviewV2";
+import type { OvAct, OvTask, OvTaskKind } from "./OverviewTypes";
+
+/** Thao tác tại chỗ của một việc trong "Cần xử lý ngay" — bản cũ (V1). */
+function UrgentActV1({ act, bank }: { act: OvAct; bank: Parameters<typeof VietQRButton>[0]["bank"] }) {
+  if (act.kind === "collect") return <CollectButton planId={act.planId} contractId={act.contractId} amountLabel={act.amountLabel} />;
+  if (act.kind === "qr")
+    return (
+      <span className="flex flex-wrap items-center gap-2">
+        <VietQRButton bank={bank} amount={act.amount} addInfo={act.addInfo} label="QR" />
+        {act.contractId && <CollectButton planId={act.planId} contractId={act.contractId} amountLabel={act.amountLabel} />}
+      </span>
+    );
+  return <MessengerButton link={act.link} label={act.label} message={act.message} />;
+}
 
 /** Photographer-plan overview: bookings + upcoming shoots, no contracts/finance. */
 async function BookingOverview({ ownerId }: { ownerId: string }) {
@@ -81,6 +97,20 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
     { icon: CalendarDays, label: "Lịch sắp tới", value: String(upcoming.length) },
     { icon: Users, label: "Tổng yêu cầu đặt lịch", value: String(bookings.length) },
   ];
+
+  // Giao diện mới: cùng dữ liệu đã tải ở trên, chỉ khác cách sắp xếp.
+  if (await isUiV2())
+    return (
+      <OverviewBookingV2
+        today={today}
+        newCount={newCount}
+        selectingAlbums={selectingAlbums ?? 0}
+        totalBookings={bookings.length}
+        upcoming={upcoming}
+        newBookings={bookings.filter((b) => b.status === "new").slice(0, 6)}
+        trialUsed={trialUsed}
+      />
+    );
 
   const quickLinks = [
     { href: "/dashboard/studio/bookings", icon: Clock, label: "Đặt lịch", desc: "Yêu cầu khách gửi" },
@@ -474,6 +504,15 @@ export default async function StudioOverview() {
     id: string; label: string; amount: number; due_date: string; pay_code?: string | null;
     contract: { id: string; code: string | null; title: string } | null;
   }>);
+  // CÙNG nội dung chuyển khoản với mã QR trong hợp đồng (mã HĐ + tên đợt).
+  const planAct = (d: (typeof duePlan)[number]): OvAct => ({
+    kind: "qr",
+    amount: d.amount,
+    addInfo: instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label, d.pay_code),
+    planId: d.id,
+    contractId: d.contract?.id ?? null,
+    amountLabel: vnd(d.amount),
+  });
 
   // ── Số liệu KPI ───────────────────────────────────────────────
   // 6 tháng doanh thu — gom tiền đã thu theo YYYY-MM.
@@ -512,9 +551,9 @@ export default async function StudioOverview() {
   // Mỗi dòng là một việc CÓ THẬT đang treo, kèm nút hành động tại chỗ. Làm xong
   // là dòng tự biến mất vì nó sinh ra từ chính dữ liệu, không phải danh sách tay.
   type Urgent = {
-    key: string; icon: typeof FileText; tone: ToneKey;
+    key: string; kind: OvTaskKind; icon: typeof FileText; tone: ToneKey;
     title: string; sub: string; tag: string; cta: string; href: string;
-    action?: React.ReactNode;
+    act?: OvAct;
   };
   const urgent: Urgent[] = [];
 
@@ -526,7 +565,7 @@ export default async function StudioOverview() {
     if ((c.contract_crew || []).length > 0) continue;
     if (c.status === "draft") continue;
     urgent.push({
-      key: `crew-${c.id}`, icon: UserPlus, tone: "red",
+      key: `crew-${c.id}`, kind: "crew", icon: UserPlus, tone: "red",
       title: `${c.title} chưa có nhân sự`,
       sub: `${fmtDow(c.event_date)} ${fmtDate(c.event_date)}${c.event_time ? ` · ${c.event_time}` : ""} · ${c.client_name || "khách chưa đặt tên"}`,
       tag: "Phân công", cta: "Phân công", href: `/dashboard/studio/contracts/${c.id}`,
@@ -543,14 +582,12 @@ export default async function StudioOverview() {
   }>)) {
     if (!pr.contract) continue;
     urgent.push({
-      key: `proof-${pr.id}`, icon: Banknote, tone: "amber",
+      key: `proof-${pr.id}`, kind: "proof", icon: Banknote, tone: "amber",
       title: `Chờ đối soát: ${pr.contract.client_name || pr.contract.title}`,
       sub: `Khách đã gửi ảnh chuyển khoản${pr.plan ? ` · ${pr.plan.label} · ${vnd(pr.plan.amount)}` : ""} · ${fmtDate(pr.created_at)}`,
       tag: "Thanh toán", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${pr.contract.id}?tab=pay`,
       // Chốt NGAY tại thẻ: bốn bước (mở HĐ → tab → tìm đợt → bấm) xuống một.
-      action: pr.plan ? (
-        <CollectButton planId={pr.plan.id} contractId={pr.contract.id} amountLabel={vnd(pr.plan.amount)} />
-      ) : undefined,
+      act: pr.plan ? { kind: "collect", planId: pr.plan.id, contractId: pr.contract.id, amountLabel: vnd(pr.plan.amount) } : undefined,
     });
   }
 
@@ -559,7 +596,7 @@ export default async function StudioOverview() {
   //     Chỉ chủ studio: sổ giao dịch ngân hàng là của riêng chủ.
   if ((pendingBank ?? 0) > 0 && (profile.actingRole === "owner" || profile.actingRole === "admin")) {
     urgent.push({
-      key: "bank-pending", icon: Banknote, tone: "amber",
+      key: "bank-pending", kind: "bank", icon: Banknote, tone: "amber",
       title: `${pendingBank} khoản tiền vào chưa rõ của hợp đồng nào`,
       sub: "SePay đã báo tiền về nhưng nội dung không có mã đợt · gán vào đúng đợt hoặc bỏ qua",
       tag: "Thanh toán", cta: "Xem & gán", href: "/dashboard/studio/pricing#tu-xac-nhan",
@@ -569,19 +606,14 @@ export default async function StudioOverview() {
   // 3. Đợt thu đã quá hạn.
   for (const d of duePlan.filter((x) => x.due_date < today)) {
     urgent.push({
-      key: `plan-${d.id}`, icon: Banknote, tone: "red",
+      key: `plan-${d.id}`, kind: "plan", icon: Banknote, tone: "red",
       title: `Quá hạn thu: ${d.contract?.title || "hợp đồng"}`,
       sub: `${d.label} · ${vnd(d.amount)} · hạn ${fmtDate(d.due_date)}`,
       tag: "Công nợ", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${d.contract?.id ?? ""}`,
       // CÙNG nội dung chuyển khoản với mã QR trong hợp đồng (mã HĐ + tên đợt).
       // Trước đây chỗ này chỉ lấy tên hợp đồng, nên hai mã của CÙNG một đợt ra
       // hai nội dung khác nhau và sao kê không đối chiếu về đâu được.
-      action: (
-        <span className="flex flex-wrap items-center gap-2">
-          <VietQRButton bank={bank} amount={d.amount} addInfo={instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label, d.pay_code)} label="QR" />
-          {d.contract && <CollectButton planId={d.id} contractId={d.contract.id} amountLabel={vnd(d.amount)} />}
-        </span>
-      ),
+      act: planAct(d),
     });
   }
 
@@ -589,7 +621,7 @@ export default async function StudioOverview() {
   for (const c of lateDeliveries) {
     const late = Math.abs(daysFromToday(c.delivery_due) ?? 0);
     urgent.push({
-      key: `late-${c.id}`, icon: Clock, tone: "red",
+      key: `late-${c.id}`, kind: "late", icon: Clock, tone: "red",
       title: `Trễ cam kết giao ảnh: ${c.title}`,
       sub: `${c.client_name || "—"} · hạn ${fmtDate(c.delivery_due)} · quá ${late} ngày`,
       tag: "Cam kết", cta: "Giao ngay", href: `/dashboard/studio/contracts/${c.id}`,
@@ -608,7 +640,7 @@ export default async function StudioOverview() {
     if (!kindHasPhotoWork(contractKind(c.shoot_type))) continue;
     if (c.selection_album_id) continue;
     urgent.push({
-      key: `album-${c.id}`, icon: ImagePlus, tone: "blue",
+      key: `album-${c.id}`, kind: "album", icon: ImagePlus, tone: "blue",
       title: `${c.title} đã chụp xong — chưa có album chọn ảnh`,
       sub: `${c.client_name || "—"} · chụp ${fmtDate(c.event_date)}${c.delivery_due ? ` · hạn giao ${fmtDate(c.delivery_due)}` : ""}`,
       tag: "Album", cta: "Tạo album", href: `/dashboard/studio/contracts/${c.id}`,
@@ -618,17 +650,16 @@ export default async function StudioOverview() {
   // 6. Hợp đồng đã gửi, khách chưa ký.
   for (const { c, days } of unsigned.filter((u) => u.days >= 1)) {
     urgent.push({
-      key: `sign-${c.id}`, icon: PenLine, tone: "amber",
+      key: `sign-${c.id}`, kind: "sign", icon: PenLine, tone: "amber",
       title: `${c.title} chưa được ký`,
       sub: `${c.client_name || "—"} · đã gửi ${days} ngày trước`,
       tag: "Hợp đồng", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${c.id}`,
-      action: (
-        <MessengerButton
-          link={c.client_messenger}
-          label="Nhắc khách"
-          message={`Xin chào ${c.client_name || "anh/chị"}, studio gửi lại hợp đồng "${c.title}" để anh/chị xem & ký xác nhận giúp em nhé. Cảm ơn ạ!`}
-        />
-      ),
+      act: {
+        kind: "messenger",
+        link: c.client_messenger,
+        label: "Nhắc khách",
+        message: `Xin chào ${c.client_name || "anh/chị"}, studio gửi lại hợp đồng "${c.title}" để anh/chị xem & ký xác nhận giúp em nhé. Cảm ơn ạ!`,
+      },
     });
   }
 
@@ -643,7 +674,7 @@ export default async function StudioOverview() {
     const days = Math.floor((Date.now() - new Date(q.created_at).getTime()) / 86400000);
     if (days < 2) continue;
     urgent.push({
-      key: `quote-${q.id}`, icon: ReceiptText, tone: "amber",
+      key: `quote-${q.id}`, kind: "quote", icon: ReceiptText, tone: "amber",
       title: `Báo giá "${q.title || q.code || "chưa đặt tên"}" khách chưa chốt`,
       sub: `${q.client_name || "—"} · ${vnd(quoteSelectedTotal(q.quote_items || []))} · gửi ${days} ngày trước`,
       tag: "Báo giá", cta: "Mở báo giá", href: `/dashboard/studio/quotes/${q.id}`,
@@ -653,7 +684,7 @@ export default async function StudioOverview() {
   // 8. Khách gửi yêu cầu sửa chưa xử lý.
   for (const c of openEdits) {
     urgent.push({
-      key: `edit-${c.id}`, icon: CircleAlert, tone: "amber",
+      key: `edit-${c.id}`, kind: "edit", icon: CircleAlert, tone: "amber",
       title: `Khách yêu cầu sửa: ${c.title}`,
       sub: `${c.client_name || "—"} · yêu cầu đang mở`,
       tag: "Yêu cầu sửa", cta: "Xem yêu cầu", href: `/dashboard/studio/contracts/${c.id}`,
@@ -664,16 +695,15 @@ export default async function StudioOverview() {
   const crewRoles = await crewRolesP;
   for (const { c, cr } of pendingCrew) {
     urgent.push({
-      key: `pcrew-${cr.id}`, icon: Users, tone: "blue",
+      key: `pcrew-${cr.id}`, kind: "pcrew", icon: Users, tone: "blue",
       title: `${cr.name || cr.phone || "Thợ"} chưa phản hồi lời mời`,
       sub: `${crewRoleLabel(cr.role, crewRoles)} · ${c.title}${c.event_date ? ` · ${fmtDate(c.event_date)}` : ""}`,
       tag: "Nhân sự", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${c.id}`,
-      action: (
-        <MessengerButton
-          label="Nhắc thợ"
-          message={shootReminderMessage({ name: cr.name, title: c.title, date: c.event_date, time: c.event_time, location: c.location, role: crewRoleLabel(cr.role, crewRoles), link: crewPortal })}
-        />
-      ),
+      act: {
+        kind: "messenger",
+        label: "Nhắc thợ",
+        message: shootReminderMessage({ name: cr.name, title: c.title, date: c.event_date, time: c.event_time, location: c.location, role: crewRoleLabel(cr.role, crewRoles), link: crewPortal }),
+      },
     });
   }
 
@@ -682,7 +712,7 @@ export default async function StudioOverview() {
   //     đẩy chín việc khác ra khỏi top 6.
   if ((pendingReviews ?? 0) > 0) {
     urgent.push({
-      key: "reviews-pending", icon: Star, tone: "amber",
+      key: "reviews-pending", kind: "reviews", icon: Star, tone: "amber",
       title: `${pendingReviews} đánh giá khách chờ bạn duyệt`,
       sub: "Khách đã viết cảm nhận — duyệt thì mới lên website studio",
       tag: "Đánh giá", cta: "Duyệt ngay", href: "/dashboard/studio/reviews",
@@ -795,6 +825,64 @@ export default async function StudioOverview() {
   // Ký tên cuối lời chúc kỷ niệm — tên thương hiệu studio, không phải tên chủ.
   const studioName = brandFrom(profile).name;
 
+  // ── Giao diện mới (V2): cùng dữ liệu đã tính ở trên, chỉ đổi cách bày ─────
+  if (await isUiV2()) {
+    const toTask = (u: Urgent): OvTask => ({
+      key: u.key, kind: u.kind, tone: u.tone, title: u.title, sub: u.sub, tag: u.tag, cta: u.cta, href: u.href, act: u.act,
+    });
+    return (
+      <OverviewV2
+        greeting={greeting}
+        firstName={firstName}
+        today={today}
+        vnMonth={vnMonth}
+        todayJobs={todayJobs.length}
+        jobsDelta={jobsDelta}
+        revenueMonth={revenueMonth}
+        revDeltaPct={revDeltaPct}
+        contractsCount={allContracts.length}
+        totalDue={totalDue}
+        debtsCount={debts.length}
+        overdueDebtsCount={overdueDebts.length}
+        tasks={urgent.map(toTask)}
+        dueSoon={duePlan
+          .filter((d) => d.due_date >= today)
+          .map((d) => ({
+            key: `soon-${d.id}`, kind: "plan-soon", tone: "blue",
+            title: d.contract?.title || "Hợp đồng",
+            sub: `${d.label} · ${vnd(d.amount)} · hạn ${fmtDate(d.due_date)}`,
+            tag: "Sắp tới hạn", cta: "Mở hợp đồng", href: `/dashboard/studio/contracts/${d.contract?.id ?? ""}`,
+            act: planAct(d),
+          }))}
+        schedule={schedule.map((c) => ({
+          id: c.id, title: c.title, client_name: c.client_name, event_date: c.event_date, event_time: c.event_time,
+          status: c.status, location: c.location, shootLabel: SHOOT_TYPE_LABEL[c.shoot_type] ?? "",
+          crewCount: (c.contract_crew || []).filter((cr) => cr.status !== "declined").length,
+        }))}
+        warns={warnTop.map((w) => ({ key: w.key, tone: w.tone, title: w.title, sub: w.sub, kind: w.icon === CalendarRange ? "day" : "person" }))}
+        sla={slaRows.map(({ c, left }) => ({
+          id: c.id, title: c.title, client_name: c.client_name, shootLabel: SHOOT_TYPE_LABEL[c.shoot_type] ?? "", delivery_due: c.delivery_due, left,
+        }))}
+        slaLate={slaLate}
+        stalled={stalled.map(({ c, reason, days, tone }) => ({ id: c.id, title: c.title, client_name: c.client_name, reason, days, tone }))}
+        stallDays={STALL_DAYS}
+        milestones={milestoneTop.map((m) => ({
+          key: `${m.contractId}-${m.years}`,
+          contractId: m.contractId,
+          name: m.clientName || m.title || "Khách cũ",
+          label: MILESTONE_LABEL[m.kind](m.years),
+          date: m.date,
+          inDays: m.inDays,
+          message: milestoneMessage({ clientName: m.clientName, kind: m.kind, years: m.years, studio: studioName }),
+        }))}
+        milestonesTotal={milestones.length}
+        revBars={revBars}
+        bank={bank}
+        autoEmail={profile.actingRole !== "staff" ? { ownerId: profile.id, initial: !!profile.auto_client_emails } : null}
+      />
+    );
+  }
+
   return (
     <div className="page-in flex flex-col gap-3.5">
       {/* ── Lời chào + hành động chính ───────────────────────────────── */}
@@ -851,7 +939,7 @@ export default async function StudioOverview() {
                 <p className="mt-px text-[11.5px]" style={{ color: "var(--tx3)" }}>{u.sub}</p>
               </div>
               <Pill tone={u.tone}>{u.tag}</Pill>
-              {u.action}
+              {u.act && <UrgentActV1 act={u.act} bank={bank} />}
               <Link
                 href={u.href}
                 className="flex-none whitespace-nowrap rounded-[9px] px-[13px] py-[7px] text-[12px] font-semibold"

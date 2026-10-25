@@ -3,12 +3,19 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import FilterTool from "@/components/FilterTool";
+import FilterToolV2 from "@/components/FilterToolV2";
+import { useUiV2 } from "@/components/v2/UiV2Context";
 
 /**
  * Trang Lọc ảnh đầy đủ. Toàn bộ chức năng nằm trong <FilterTool/> để popup
  * "Lọc ảnh" ở quản lý album dùng lại y hệt (src/components/FilterDialog.tsx).
  */
 export default function FilterPage() {
+  // Giao diện mới: bản V2 tự có đầu trang (mô tả + nút quay lại Công cụ ảnh).
+  return useUiV2() ? <FilterToolV2 readQueryParams /> : <FilterPageV1 />;
+}
+
+function FilterPageV1() {
   return (
     <div className="page-in">
       {/* Quay lại màn Công cụ ảnh — công cụ này là một trong ba thẻ ở đó. */}

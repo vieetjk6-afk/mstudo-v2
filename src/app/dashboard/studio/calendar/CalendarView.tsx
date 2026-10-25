@@ -4,14 +4,20 @@ import { useEffect, useMemo, useState } from "react";
 import { fmtDate, fmtDow, fmtDayMonth, todayVN } from "@/lib/date";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ChevronDown, Plus, Trash2, Bell, BellOff, Camera, CalendarDays, CalendarRange, Users } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import MessengerButton from "@/components/MessengerButton";
 import { shootReminderMessage } from "@/lib/zalo";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarColor, initials } from "@/lib/avatar";
 import { SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, contractTotal, sumAmounts, vndShort, type StudioEvent, type ShootType, type ContractStatus } from "@/lib/types";
-import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
+import type { CrewRoleRow } from "@/lib/crew-roles";
 import { lunarCellLabel, lunarFull } from "@/lib/lunar";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import type { CalendarTab } from "./tabs";
+import CalendarV2 from "./CalendarV2";
+import {
+  DEFAULT_MARK, MARK_COLORS, MONTHS, WD, crewOf, eventLabel, hourOf, monthGrid, peopleWeek, summarizeRange,
+  upcomingAfter, useShootCalendar, weekOf, ymd,
+} from "./shoot-calendar";
 
 export type ContractMarker = {
   id: string;
@@ -33,41 +39,7 @@ export type ContractMarker = {
 /** Mốc thời gian (studio_events) kèm thông tin HỢP ĐỒNG CHÍNH (nếu có). */
 export type EventRow = StudioEvent & { contract?: { title: string; event_date: string | null } | null };
 
-/** Nhãn mốc: nếu mốc thuộc hợp đồng và KHÁC ngày hợp đồng chính → ghi rõ
- *  "{Tên mốc} — [Tên hợp đồng chính]" để không nhầm mốc thuộc hợp đồng nào. */
-function eventLabel(e: EventRow): string {
-  const c = e.contract;
-  if (c && c.event_date && c.event_date !== e.event_date) return `${e.title} — [${c.title}]`;
-  return e.title;
-}
-
-const WD = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
-
-/** Ê-kíp còn nhận việc (bỏ người đã từ chối) — dùng ở cả bốn chế độ xem. */
-function crewOf(c: ContractMarker) {
-  return (c.contract_crew || []).filter((x) => x.status !== "declined");
-}
-
-// Default marker colour + the swatch palette the user can pick from per shoot.
-const DEFAULT_MARK = "#c7a76b";
-const MARK_COLORS = ["#c7a76b", "#3fb98a", "#6ba3c7", "#e0746f", "#b07ad0", "#d6a44a", "#7bb38a", "#e0719e"];
-const MONTHS = [
-  "Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6",
-  "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12",
-];
-
-function ymd(y: number, m: number, d: number) {
-  return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-export default function CalendarView({
-  ownerId,
-  initialEvents,
-  contracts,
-  feedUrl,
-  gcal,
-  crewRoles = [],
-}: {
+export type CalendarViewProps = {
   ownerId: string;
   /** Vai trò thợ studio tự đặt — để ra đúng tên vai trò. */
   crewRoles?: CrewRoleRow[];
@@ -76,41 +48,32 @@ export default function CalendarView({
   feedUrl: string;
   /** Trạng thái THẬT của kết nối Google Lịch (đã gọi thử API). */
   gcal?: { connected: boolean; ok: boolean; error: string | null };
-}) {
-  const [feedCopied, setFeedCopied] = useState(false);
-  const [gcalMsg, setGcalMsg] = useState<string | null>(null);
-  const [backfilling, setBackfilling] = useState(false);
+  /** Các tab của màn Lịch được phép mở — chỉ giao diện mới dùng (bản cũ có
+   *  dải tab riêng do page.tsx vẽ). */
+  tabs?: readonly CalendarTab[];
+};
 
-  /** Đẩy toàn bộ lịch ĐÃ CÓ lên Google — dành cho lịch tạo trước khi kết nối. */
-  async function backfillGcal() {
-    setBackfilling(true);
-    setGcalMsg(null);
-    try {
-      const r = await fetch("/api/gcal/backfill", { method: "POST" });
-      const j = (await r.json().catch(() => ({}))) as {
-        ok?: boolean; reason?: string; contracts?: number; events?: number; failed?: number; done?: boolean; firstError?: string | null;
-      };
-      if (!r.ok || !j.ok) {
-        setGcalMsg(`Không đồng bộ được: ${j.reason ?? "lỗi không rõ"}`);
-        return;
-      }
-      setGcalMsg(
-        `Đã đẩy ${j.contracts ?? 0} hợp đồng và ${j.events ?? 0} ghi chú lên Google Lịch` +
-          (j.failed ? ` · ${j.failed} mục lỗi (${j.firstError ?? ""})` : "") +
-          (j.done === false ? " · còn dở, bấm lại để chạy tiếp" : "."),
-      );
-    } catch (e) {
-      setGcalMsg(`Không đồng bộ được: ${(e as Error)?.message || e}`);
-    } finally {
-      setBackfilling(false);
-    }
-  }
-  const supabase = createClient();
+/** Giao diện mới có bản riêng (CalendarV2) — đổi KIỂU component, không rẽ nhánh giữa các hook. */
+export default function CalendarView(props: CalendarViewProps) {
+  return useUiV2() ? <CalendarV2 {...props} /> : <CalendarViewV1 {...props} />;
+}
+
+function CalendarViewV1({
+  ownerId,
+  initialEvents,
+  contracts,
+  feedUrl,
+  gcal,
+  crewRoles = [],
+}: CalendarViewProps) {
+  const [feedCopied, setFeedCopied] = useState(false);
   const todayStr = todayVN();
+  const {
+    events, contractList, eventsOn, contractsOn, upcoming,
+    gcalMsg, backfilling, backfillGcal, busy, addNote: addNoteOn, delEvent, setContractColor,
+  } = useShootCalendar({ ownerId, initialEvents, contracts, todayStr });
   const [y, mIdx] = todayStr.split("-").map(Number);
   const [cursor, setCursor] = useState({ year: y, month: mIdx - 1 });
-  const [events, setEvents] = useState<EventRow[]>(initialEvents);
-  const [contractList, setContractList] = useState<ContractMarker[]>(contracts);
   const [selected, setSelected] = useState<string | null>(null);
   const [view, setView] = useState<"day" | "week" | "month" | "people">("month");
   // Ngày đang xem ở chế độ "Ngày" (mặc định hôm nay).
@@ -127,32 +90,11 @@ export default function CalendarView({
   const [time, setTime] = useState("");
   const [note, setNote] = useState("");
   const [remind, setRemind] = useState(true);
-  const [busy, setBusy] = useState(false);
 
-  const grid = useMemo(() => {
-    const first = new Date(cursor.year, cursor.month, 1);
-    const startWd = (first.getDay() + 6) % 7; // Mon=0
-    const daysInMonth = new Date(cursor.year, cursor.month + 1, 0).getDate();
-    const cells: (number | null)[] = [];
-    for (let i = 0; i < startWd; i++) cells.push(null);
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d);
-    while (cells.length % 7 !== 0) cells.push(null);
-    return cells;
-  }, [cursor]);
+  const grid = useMemo(() => monthGrid(cursor.year, cursor.month), [cursor]);
 
   // Mon–Sun days of the week containing weekAnchor.
-  const weekDays = useMemo(() => {
-    const [wy, wm, wd] = weekAnchor.split("-").map(Number);
-    const base = new Date(wy, wm - 1, wd);
-    const startWd = (base.getDay() + 6) % 7; // Mon=0
-    const monday = new Date(base);
-    monday.setDate(base.getDate() - startWd);
-    return Array.from({ length: 7 }, (_, i) => {
-      const dt = new Date(monday);
-      dt.setDate(monday.getDate() + i);
-      return ymd(dt.getFullYear(), dt.getMonth(), dt.getDate());
-    });
-  }, [weekAnchor]);
+  const weekDays = useMemo(() => weekOf(weekAnchor), [weekAnchor]);
 
   function moveWeek(delta: number) {
     setSelected(null);
@@ -162,13 +104,6 @@ export default function CalendarView({
     setWeekAnchor(ymd(dt.getFullYear(), dt.getMonth(), dt.getDate()));
   }
 
-  function eventsOn(dateStr: string) {
-    return events.filter((e) => e.event_date === dateStr);
-  }
-  function contractsOn(dateStr: string) {
-    return contractList.filter((c) => c.event_date === dateStr);
-  }
-
   /**
    * Buổi chụp gần nhất SAU tuần đang xem — dùng khi tuần trống.
    *
@@ -176,36 +111,13 @@ export default function CalendarView({
    * trống là chuyện thường; để trắng thì màn hình không nói được gì. Ba buổi kế
    * tiếp cho biết ngay "sắp tới có gì" mà không phải bấm sang từng tuần.
    */
-  const upcomingAfterWeek = useMemo(() => {
-    const last = weekDays[weekDays.length - 1];
-    return contractList
-      .filter((c) => c.event_date && c.event_date > last)
-      .sort((a, b) => (a.event_date || "").localeCompare(b.event_date || ""))
-      .slice(0, 3);
-  }, [contractList, weekDays]);
+  const upcomingAfterWeek = useMemo(
+    () => upcomingAfter(contractList, weekDays[weekDays.length - 1], 3),
+    [contractList, weekDays]
+  );
 
-  /**
-   * Lịch theo nhân sự (tính năng mới số 4): mỗi người MỘT HÀNG × 7 ngày của
-   * tuần đang xem, kèm cột "tải tuần" đổi màu. Người nào nhận ≥4 ngày/tuần là
-   * đang quá tải — đúng ngưỡng cảnh báo dồn lịch ở màn Tổng quan.
-   */
-  const peopleRows = useMemo(() => {
-    const map = new Map<string, { key: string; name: string; role: string; days: Map<string, ContractMarker[]> }>();
-    for (const c of contractList) {
-      if (!weekDays.includes(c.event_date)) continue;
-      for (const cr of c.contract_crew || []) {
-        if (cr.status === "declined") continue;
-        const name = (cr.name || "").trim() || "Chưa đặt tên";
-        const role = crewRoleLabel(cr.role, crewRoles);
-        const cur = map.get(name) ?? { key: name, name, role, days: new Map<string, ContractMarker[]>() };
-        const list = cur.days.get(c.event_date) ?? [];
-        list.push(c);
-        cur.days.set(c.event_date, list);
-        map.set(name, cur);
-      }
-    }
-    return Array.from(map.values()).sort((a, b) => b.days.size - a.days.size || a.name.localeCompare(b.name));
-  }, [contractList, weekDays, crewRoles]);
+  /** Lịch theo nhân sự (tính năng mới số 4) — xem peopleWeek(). */
+  const peopleRows = useMemo(() => peopleWeek(contractList, weekDays, crewRoles), [contractList, weekDays, crewRoles]);
 
   /** Buổi chụp + mốc lịch của ngày đang xem ở chế độ "Ngày". */
   const dayContracts = useMemo(
@@ -220,12 +132,6 @@ export default function CalendarView({
     setDayAnchor(ymd(dt.getFullYear(), dt.getMonth(), dt.getDate()));
   }
 
-  // Assign a distinct colour to a shoot so several on the same day stand apart.
-  async function setContractColor(id: string, color: string) {
-    setContractList((p) => p.map((c) => (c.id === id ? { ...c, calendar_color: color } : c)));
-    await supabase.from("studio_contracts").update({ calendar_color: color }).eq("id", id);
-  }
-
   function move(delta: number) {
     setSelected(null);
     setCursor((c) => {
@@ -238,66 +144,16 @@ export default function CalendarView({
 
   async function addNote() {
     if (!selected || (!title.trim() && !note.trim())) return;
-    setBusy(true);
-    const { data } = await supabase
-      .from("studio_events")
-      .insert({
-        owner_id: ownerId,
-        title: title.trim() || "Ghi chú",
-        event_date: selected,
-        event_time: time.trim() || null,
-        note: note.trim() || null,
-        remind,
-      })
-      .select("*")
-      .single();
-    setBusy(false);
-    if (data) {
-      setEvents((p) => [...p, data as EventRow]);
+    if (await addNoteOn(selected, { title, time, note, remind })) {
       setTitle("");
       setTime("");
       setNote("");
       setRemind(true);
-      // Sync to Google Calendar (fire-and-forget).
-      fetch("/api/gcal/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "event", id: data.id, action: "upsert" }),
-      })
-        .then(async (r) => {
-          const j = (await r.json().catch(() => ({}))) as { synced?: boolean; reason?: string };
-          if (!r.ok || j.synced === false) setGcalMsg(`Chưa lên Google Lịch: ${j.reason ?? "lỗi không rõ"}`);
-        })
-        .catch((e) => setGcalMsg(`Chưa lên Google Lịch: ${(e as Error)?.message || e}`));
     }
-  }
-
-  async function delEvent(id: string) {
-    // Gỡ trên Google TRƯỚC, và PHẢI `await`: server tra `gcal_event_id` từ chính
-    // hàng này, nên xoá hàng trước thì không còn gì để tra và sự kiện nằm lại
-    // trên lịch Google vĩnh viễn. Trước đây gọi rồi bỏ mặc, thắng thua tuỳ mạng.
-    await fetch("/api/gcal/sync", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "event", id, action: "delete" }),
-    }).catch(() => {});
-    await supabase.from("studio_events").delete().eq("id", id);
-    setEvents((p) => p.filter((e) => e.id !== id));
   }
 
   const selEvents = selected ? eventsOn(selected) : [];
   const selContracts = selected ? contractsOn(selected) : [];
-
-  // Upcoming reminders (next 30 days)
-  const upcoming = useMemo(() => {
-    const in30 = new Date();
-    in30.setDate(in30.getDate() + 30);
-    const lim = in30.toISOString().slice(0, 10);
-    return events
-      .filter((e) => e.remind && e.event_date >= todayStr && e.event_date <= lim)
-      .sort((a, b) => a.event_date.localeCompare(b.event_date))
-      .slice(0, 8);
-  }, [events, todayStr]);
 
   /** Điều hướng chung cho thanh trên: ‹ / › đổi đơn vị theo chế độ đang mở. */
   function step(delta: number) {
@@ -328,22 +184,8 @@ export default function CalendarView({
     return weekDays;
   }, [view, dayAnchor, grid, cursor, weekDays]);
 
-  const summary = useMemo(() => {
-    const set = new Set(rangeDays);
-    const cons = contractList.filter((c) => set.has(c.event_date));
-    const notes = events.filter((e) => set.has(e.event_date));
-    const noCrew = cons.filter((c) => (c.contract_crew || []).filter((x) => x.status !== "declined").length === 0).length;
-    const value = cons.reduce((sum, c) => sum + contractTotal(c.contract_items || []), 0);
-    const due = cons.reduce(
-      (sum, c) => sum + Math.max(0, contractTotal(c.contract_items || []) - sumAmounts(c.contract_payments || [])),
-      0
-    );
-    // Ngày dồn lịch: từ 3 buổi trở lên trong một ngày (ngưỡng cảnh báo ở Tổng quan).
-    const perDay = new Map<string, number>();
-    for (const c of cons) perDay.set(c.event_date, (perDay.get(c.event_date) ?? 0) + 1);
-    const busyDays = Array.from(perDay.values()).filter((n) => n >= 3).length;
-    return { shoots: cons.length, notes: notes.length, noCrew, value, due, busyDays };
-  }, [rangeDays, contractList, events]);
+  const summary = useMemo(() => summarizeRange(rangeDays, contractList, events), [rangeDays, contractList, events]);
+
 
   const navBtn = "flex h-8 w-8 flex-none items-center justify-center rounded-[9px]";
   const navStyle = { border: "1px solid var(--bd)", background: "var(--sf)" } as const;
@@ -735,13 +577,6 @@ export default function CalendarView({
 const HOUR_H = 46;
 const DEFAULT_FROM = 6;
 const DEFAULT_TO = 20;
-/** "08:30" → 8.5; không đọc được thì null (buổi "cả ngày"). */
-function hourOf(t: string | null | undefined): number | null {
-  const m = /^(\d{1,2}):(\d{2})/.exec((t || "").trim());
-  if (!m) return null;
-  const h = Number(m[1]) + Number(m[2]) / 60;
-  return h >= 0 && h < 24 ? h : null;
-}
 
 /* ── Thẻ chi tiết một hợp đồng ──────────────────────────────────────────────
    Dùng ở hai nơi: panel "ngày đang chọn" của chế độ Tháng, và danh sách dưới

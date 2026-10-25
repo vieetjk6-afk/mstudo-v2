@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { FilePlus, Eye, ExternalLink, ReceiptText } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { vnd, vndShort, QUOTE_STATUS_LABEL, quoteSelectedTotal, type StudioQuote, type QuoteStatus } from "@/lib/types";
 import { fmtDate } from "@/lib/date";
 import { studioUrl } from "@/lib/hosts";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { useQuoteRows, quotePipeline } from "./quotes-list-shared";
+import QuotesListV2 from "./QuotesListV2";
 
 export type QuoteRow = StudioQuote & {
   quote_items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount: boolean }[];
@@ -28,43 +29,25 @@ const STATUS_TONE: Record<QuoteStatus, { fg: string; bg: string }> = {
   cancelled: { fg: "var(--rd)", bg: "var(--rdS)" },
 };
 
-export default function QuotesListView({ list: initialList, studioHost = null }: { list: QuoteRow[]; studioHost?: string | null }) {
-  const [rows, setRows] = useState<QuoteRow[]>(initialList);
-  const [updating, setUpdating] = useState<string | null>(null);
-  const supabase = createClient();
-  const router = useRouter();
+export type QuotesListProps = { list: QuoteRow[]; studioHost?: string | null };
 
-  async function changeStatus(id: string, next: QuoteStatus) {
-    if (next === "converted") return; // "đã tạo hợp đồng" chỉ do luồng tạo HĐ đặt
-    setUpdating(id);
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: next } : r)));
-    await supabase.from("studio_quotes").update({ status: next }).eq("id", id);
-    setUpdating(null);
-    router.refresh();
-  }
+/** Giao diện mới có bản riêng (QuotesListV2) — đổi KIỂU component, không rẽ nhánh giữa các hook. */
+export default function QuotesListView(props: QuotesListProps) {
+  return useUiV2() ? <QuotesListV2 {...props} /> : <QuotesListV1 {...props} />;
+}
+
+function QuotesListV1({ list: initialList, studioHost = null }: QuotesListProps) {
+  // Danh sách + đổi trạng thái dùng chung với bản mới (./quotes-list-shared).
+  const { rows, updating, changeStatus } = useQuoteRows(initialList);
 
   const kpis = useMemo(() => {
-    const totalOf = (q: QuoteRow) => quoteSelectedTotal(q.quote_items || []);
-    // Quá hạn thì KHÔNG còn là "đang chờ khách": trang của khách đã khoá nút
-    // đồng ý ngay khi qua ngày hết hiệu lực (QuoteClientView tự tính theo ngày),
-    // trong khi trạng thái trong DB chỉ được cron đổi sang "expired" mỗi ngày
-    // một lần. Tính theo ngày ở đây để studio không nhìn thấy một pipeline có
-    // cả những báo giá mà khách không bấm được nữa.
-    const nowMs = Date.now();
-    const stillOpen = (r: QuoteRow) => !r.expires_at || new Date(r.expires_at).getTime() >= nowMs;
-    const waiting = rows.filter(
-      (r) => (r.status === "sent" || r.status === "viewed" || r.status === "adjust_requested") && stillOpen(r),
-    );
-    const won = rows.filter((r) => r.status === "accepted" || r.status === "converted");
-    const closable = rows.filter((r) => r.status !== "draft");
+    // Quá hạn thì KHÔNG còn là "đang chờ khách" — xem quoteStillOpen.
+    const p = quotePipeline(rows, Date.now());
     return [
       { v: String(rows.length), l: "Báo giá đã tạo", c: "var(--tx)" },
-      { v: String(waiting.length), l: "Đang chờ khách", c: "var(--am)" },
-      { v: vndShort(waiting.reduce((s, q) => s + totalOf(q), 0)), l: "Giá trị đang chờ", c: "var(--ac)" },
-      {
-        v: closable.length ? `${Math.round((won.length / closable.length) * 100)}%` : "0%",
-        l: "Tỉ lệ khách đồng ý", c: "var(--gn)",
-      },
+      { v: String(p.waiting.length), l: "Đang chờ khách", c: "var(--am)" },
+      { v: vndShort(p.waitingValue), l: "Giá trị đang chờ", c: "var(--ac)" },
+      { v: `${p.rate}%`, l: "Tỉ lệ khách đồng ý", c: "var(--gn)" },
     ];
   }, [rows]);
 

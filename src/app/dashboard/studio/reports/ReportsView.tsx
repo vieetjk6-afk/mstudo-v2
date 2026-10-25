@@ -1,23 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import DateInput from "@/components/DateInput";
 import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download, FileSpreadsheet, Receipt, Target, PieChart, Filter } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import MoneyInput from "@/components/MoneyInput";
 import { Panel, PanelHead, EmptyState, StatCard } from "@/components/studio/ui";
 import { vnd, vndShort, EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, paymentMethodLabel, type StudioExpense, type PaymentKind } from "@/lib/types";
-import { fmtDayMonth, todayVN } from "@/lib/date";
+import { fmtDayMonth } from "@/lib/date";
 import type { FunnelStage } from "@/lib/lead-source";
-import { blocksWrite, blockedWriteMessage } from "@/lib/accounting";
-import {
-  exportFinance,
-  downloadCsv,
-  financeCsvRows,
-  type ExportStudio,
-  type FinanceExport,
-  type MoneyRow,
-} from "@/lib/studio-export";
+import type { ExportStudio } from "@/lib/studio-export";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { useReports } from "./useReports";
+import ReportsV2 from "./ReportsV2";
 
 export type PaymentRow = {
   id: string;
@@ -38,25 +32,13 @@ export type SalaryRow = {
 };
 export type SourceStat = { source: string; label: string; count: number; value: number; collected: number; bookings: number };
 
-const MONTHS = ["Tháng 1", "Tháng 2", "Tháng 3", "Tháng 4", "Tháng 5", "Tháng 6", "Tháng 7", "Tháng 8", "Tháng 9", "Tháng 10", "Tháng 11", "Tháng 12"];
-
 const TABS: [string, string][] = [
   ["in", "Tiền vào"],
   ["out", "Tiền ra"],
   ["chart", "Biểu đồ & mục tiêu"],
 ];
 
-export default function ReportsView({
-  ownerId,
-  studio,
-  payments,
-  salaries,
-  initialExpenses,
-  initialTarget,
-  sourceStats,
-  funnel,
-  closedUntil = null,
-}: {
+export type ReportsProps = {
   ownerId: string;
   /** Thông tin studio in ở đầu file Excel/CSV xuất ra. */
   studio: ExportStudio;
@@ -73,188 +55,46 @@ export default function ReportsView({
    * Vì vậy đường lỗi từ DB vẫn phải hiện ra, không được bỏ.
    */
   closedUntil?: string | null;
-}) {
-  const supabase = createClient();
-  const now = new Date();
-  const [cursor, setCursor] = useState({ year: now.getFullYear(), month: now.getMonth() });
-  const [expenses, setExpenses] = useState<StudioExpense[]>(initialExpenses);
-  const [target, setTarget] = useState(initialTarget);
+  /** Chỉ giao diện mới dùng: thẻ Xuất kế toán & khoá sổ (page.tsx dựng sẵn). */
+  accounting?: React.ReactNode;
+  /** Chỉ giao diện mới dùng: công nợ = hợp đồng (chưa huỷ) còn thiếu tiền, toàn thời gian. */
+  receivable?: { total: number; count: number };
+};
+
+/** Giao diện mới bật → bản V2; không thì bản cũ y nguyên. */
+export default function ReportsView(props: ReportsProps) {
+  if (useUiV2()) return <ReportsV2 {...props} />;
+  // page.tsx chỉ truyền `accounting` khi đang ở giao diện mới; nếu hai bên lệch
+  // nhau thì vẫn giữ thẻ kế toán ngay dưới, đúng như bản cũ.
+  return props.accounting ? (
+    <div className="space-y-3.5">
+      <ReportsViewV1 {...props} />
+      {props.accounting}
+    </div>
+  ) : (
+    <ReportsViewV1 {...props} />
+  );
+}
+
+function ReportsViewV1(props: ReportsProps) {
+  const { sourceStats, funnel } = props;
+  const {
+    period, setPeriod, ym, periodLabel, periodWord, move,
+    monthPayments, monthSalaries, monthExpenses,
+    income, salaryOut, otherOut, profit, margin, cashIn, transferIn, unknownIn,
+    target, periodTarget, targetPct, saveTarget: persistTarget,
+    series, chartMax, seriesTitle,
+    exporting, exportExcel, exportCsv,
+    exp, setExp, busy, addExpense, delExpense,
+  } = useReports(props);
   const [targetEdit, setTargetEdit] = useState(false);
-  const [targetInput, setTargetInput] = useState(initialTarget || 0);
+  const [targetInput, setTargetInput] = useState(props.initialTarget || 0);
   const [tab, setTab] = useState<string>("in");
   const [showAdd, setShowAdd] = useState(false);
-  // Tổng kết theo THÁNG hay theo NĂM. Mọi con số trên trang (4 thẻ, hai danh
-  // sách, file xuất ra) đều đọc từ một tiền tố ngày duy nhất bên dưới, nên
-  // chuyển nút là cả trang đổi theo — không có chỗ nào còn tính riêng.
-  const [period, setPeriod] = useState<"month" | "year">("month");
-
-  const [exp, setExp] = useState({ title: "", amount: 0, category: "equipment", spent_at: todayVN(), note: "" });
-  const [busy, setBusy] = useState(false);
-  const [exporting, setExporting] = useState(false);
-
-  const mm = String(cursor.month + 1).padStart(2, "0");
-  // Ngày trong DB là "YYYY-MM-DD" nên so tiền tố chuỗi là đủ: "2026" lọc cả
-  // năm, "2026-08" lọc một tháng.
-  const ym = period === "year" ? `${cursor.year}` : `${cursor.year}-${mm}`;
-  const periodLabel = period === "year" ? `Năm ${cursor.year}` : `${MONTHS[cursor.month]} ${cursor.year}`;
-  const periodWord = period === "year" ? "năm" : "tháng";
-
-  const monthPayments = useMemo(() => payments.filter((p) => (p.paid_at || "").startsWith(ym)), [payments, ym]);
-  const monthSalaries = useMemo(() => salaries.filter((s) => (s.paid_at || "").startsWith(ym)), [salaries, ym]);
-  const monthExpenses = useMemo(() => expenses.filter((e) => (e.spent_at || "").startsWith(ym)), [expenses, ym]);
-
-  const income = monthPayments.reduce((s, p) => s + (p.amount || 0), 0);
-  const salaryOut = monthSalaries.reduce((s, p) => s + (p.salary || 0), 0);
-  const otherOut = monthExpenses.reduce((s, p) => s + (p.amount || 0), 0);
-  const profit = income - salaryOut - otherOut;
-  // Mục tiêu được ĐẶT THEO THÁNG. Khi tổng kết cả năm phải nhân 12, nếu không
-  // doanh thu 12 tháng đem so mục tiêu 1 tháng là lúc nào cũng "vượt mục tiêu".
-  const periodTarget = period === "year" ? target * 12 : target;
-  const targetPct = periodTarget > 0 ? Math.min(100, Math.round((income / periodTarget) * 100)) : 0;
-  const margin = income > 0 ? Math.round((profit / income) * 100) : null;
 
   async function saveTarget() {
-    const v = Math.max(0, Math.round(Number(targetInput) || 0));
-    await supabase.from("profiles").update({ monthly_revenue_target: v }).eq("id", ownerId);
-    setTarget(v);
+    await persistTarget(targetInput);
     setTargetEdit(false);
-  }
-
-  // Chuỗi 12 tháng cho biểu đồ: xem theo NĂM thì đúng 12 tháng của năm đó, xem
-  // theo THÁNG thì 12 tháng tính ngược từ tháng đang xem (không phải từ tháng
-  // hiện tại — lùi về tháng 3 mà biểu đồ vẫn dừng ở hôm nay là đọc sai kỳ).
-  const series = useMemo(() => {
-    const out: { ym: string; label: string; income: number; expense: number; profit: number }[] = [];
-    const months =
-      period === "year"
-        ? Array.from({ length: 12 }, (_, m) => new Date(cursor.year, m, 1))
-        : Array.from({ length: 12 }, (_, i) => new Date(cursor.year, cursor.month - 11 + i, 1));
-    for (const d of months) {
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      const inc = payments.filter((p) => (p.paid_at || "").startsWith(key)).reduce((s, p) => s + (p.amount || 0), 0);
-      const ex =
-        salaries.filter((s2) => (s2.paid_at || "").startsWith(key)).reduce((s, p) => s + (p.salary || 0), 0) +
-        expenses.filter((e) => (e.spent_at || "").startsWith(key)).reduce((s, p) => s + (p.amount || 0), 0);
-      out.push({ ym: key, label: `T${d.getMonth() + 1}`, income: inc, expense: ex, profit: inc - ex });
-    }
-    return out;
-  }, [payments, salaries, expenses, cursor, period]);
-  const chartMax = Math.max(1, ...series.map((s) => Math.max(s.income, s.expense)));
-  const seriesTitle = period === "year" ? `Thu · chi 12 tháng năm ${cursor.year}` : "Thu · chi 12 tháng gần nhất";
-
-  /** Dữ liệu chung cho cả bản Excel lẫn bản CSV — hai file luôn khớp nhau. */
-  function financeData(): FinanceExport {
-    const income: MoneyRow[] = monthPayments
-      .map((p) => ({
-        date: p.paid_at,
-        kind: [PAYMENT_KIND_LABEL[p.kind], paymentMethodLabel(p.method)].filter(Boolean).join(" · "),
-        title: `${PAYMENT_KIND_LABEL[p.kind]} · ${p.contract?.title || "Hợp đồng"}`,
-        ref: p.contract?.title || "",
-        amount: p.amount || 0,
-      }))
-      .sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-    const outflow: MoneyRow[] = [
-      ...monthSalaries.map((s) => ({
-        date: s.paid_at || "",
-        kind: "Tiền công",
-        title: s.name,
-        ref: s.contract?.title || "Không gắn hợp đồng",
-        amount: s.salary || 0,
-      })),
-      ...monthExpenses.map((e) => ({
-        date: e.spent_at,
-        kind: "Chi phí khác",
-        title: e.title,
-        ref: EXPENSE_CATEGORY_LABEL[e.category || "other"] || e.category || "Khác",
-        amount: e.amount || 0,
-      })),
-    ].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
-
-    return {
-      periodLabel,
-      income,
-      outflow,
-      salaryTotal: salaryOut,
-      expenseTotal: otherOut,
-      series: series.map((m) => ({ label: m.label, income: m.income, expense: m.expense })),
-      seriesTitle,
-      sources: sourceStats.map((s) => ({ label: s.label, count: s.count, value: s.value, collected: s.collected })),
-      // Mục tiêu theo đúng kỳ đang xem (năm = mục tiêu tháng × 12).
-      target: periodTarget,
-    };
-  }
-
-  const fileBase = `thu-chi-${ym}`;
-
-  async function exportExcel() {
-    setExporting(true);
-    try {
-      await exportFinance(studio, financeData(), fileBase);
-    } finally {
-      setExporting(false);
-    }
-  }
-
-  function exportCsv() {
-    downloadCsv(financeCsvRows(studio, financeData()), fileBase);
-  }
-
-  /** Lùi/tiến một tháng, hoặc một năm khi đang tổng kết theo năm. */
-  function move(d: number) {
-    setCursor((c) => {
-      if (period === "year") return { ...c, year: c.year + d };
-      const m = c.month + d;
-      return { year: c.year + Math.floor(m / 12), month: ((m % 12) + 12) % 12 };
-    });
-  }
-
-  async function addExpense() {
-    const amount = Math.max(0, Math.round(Number(exp.amount) || 0));
-    if (!exp.title.trim() || !amount) return;
-    // Ghi lùi vào kỳ đã chốt: nói ra TRƯỚC khi gọi DB. Không có câu này thì
-    // trigger chối, `error` bị bỏ qua, và form chỉ đứng im không nói gì.
-    if (blocksWrite({ op: "insert", closedUntil, newDate: exp.spent_at })) {
-      alert(blockedWriteMessage(closedUntil!));
-      return;
-    }
-    setBusy(true);
-    const { data, error } = await supabase
-      .from("studio_expenses")
-      .insert({
-        owner_id: ownerId,
-        title: exp.title.trim(),
-        amount,
-        category: exp.category,
-        spent_at: exp.spent_at,
-        note: exp.note.trim() || null,
-      })
-      .select("*")
-      .single();
-    setBusy(false);
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    if (data) {
-      setExpenses((p) => [...p, data as StudioExpense]);
-      setExp({ title: "", amount: 0, category: "equipment", spent_at: todayVN(), note: "" });
-    }
-  }
-
-  async function delExpense(id: string) {
-    const row = expenses.find((e) => e.id === id);
-    if (blocksWrite({ op: "delete", closedUntil, oldDate: row?.spent_at })) {
-      alert(blockedWriteMessage(closedUntil!));
-      return;
-    }
-    const { error } = await supabase.from("studio_expenses").delete().eq("id", id);
-    // Lỗi từng bị nuốt: hàng rào khoá sổ chối lệnh xoá mà dòng vẫn biến mất khỏi
-    // màn hình, F5 lại thấy. Thông báo của trigger đã là tiếng Việt đầy đủ.
-    if (error) {
-      alert(error.message);
-      return;
-    }
-    setExpenses((p) => p.filter((e) => e.id !== id));
   }
 
   const btn = "flex flex-none items-center gap-1.5 rounded-[9px] px-3 py-2 text-[12.5px] font-semibold";
@@ -272,12 +112,6 @@ export default function ReportsView({
       amount: e.amount, canDelete: true as const, rawId: e.id,
     })),
   ].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-
-  // Tiền mặt tách riêng: số studio phải thấy trong két. Chuyển khoản thì ngân
-  // hàng đã giữ sổ hộ; lần thu cũ chưa ghi phương thức xếp vào "chưa rõ".
-  const cashIn = monthPayments.filter((p) => p.method === "cash").reduce((s2, p) => s2 + (p.amount || 0), 0);
-  const transferIn = monthPayments.filter((p) => p.method === "transfer").reduce((s2, p) => s2 + (p.amount || 0), 0);
-  const unknownIn = income - cashIn - transferIn;
 
   return (
     <div className="page-in flex flex-col gap-3.5">
