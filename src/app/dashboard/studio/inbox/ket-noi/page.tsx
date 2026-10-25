@@ -5,6 +5,8 @@ import { getFeatureFlags, inboxComingSoon } from "@/lib/feature-flags";
 import { listChannels, toPublic } from "@/lib/inbox/channels";
 import { loadZalo } from "@/lib/zalo/config";
 import { metaOAuthConfigured } from "@/lib/inbox/adapters/meta-oauth";
+import { isUiV2 } from "@/lib/ui-server";
+import IntegrationGateV2 from "@/app/dashboard/connections/IntegrationGateV2";
 import ChannelsManager from "./ChannelsManager";
 
 /**
@@ -15,6 +17,16 @@ export default async function InboxChannelsPage() {
   const profile = await requireStudio("booking");
   const role = (profile?.actingRole as string) ?? "";
   if (!profile || !["owner", "admin", "manager"].includes(role)) {
+    if (await isUiV2()) {
+      return (
+        <IntegrationGateV2
+          kind="role"
+          title="Không có quyền"
+          hint="Chỉ chủ studio và quản lý được nối kênh mạng xã hội."
+          action={{ href: "/dashboard/studio/inbox", label: "Về hộp thư" }}
+        />
+      );
+    }
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">

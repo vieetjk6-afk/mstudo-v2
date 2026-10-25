@@ -1,78 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { fmtDate } from "@/lib/date";
 import { Check, X, Clock, Save, TrendingUp } from "lucide-react";
+import { useUiV2 } from "@/components/v2/UiV2Context";
 import { PLAN_LABEL, formatVnd, type Plan } from "@/lib/plans";
-
-interface Commission {
-  id: string;
-  referrer_id: string;
-  referred_email: string | null;
-  plan: string;
-  cycle: string;
-  sale_amount: number;
-  commission_pct: number;
-  commission_amount: number;
-  status: "pending" | "paid" | "cancelled";
-  created_at: string;
-  paid_at: string | null;
-  note: string | null;
-  referrer: { full_name: string | null; email: string | null } | null;
-}
+import AdminAffiliateV2 from "./AdminAffiliateV2";
+import { useAdminAffiliate } from "./useAdminAffiliate";
 
 const STATUS_LABEL: Record<string, string> = { pending: "Chờ", paid: "Đã trả", cancelled: "Huỷ" };
 const STATUS_COLOR: Record<string, string> = { pending: "var(--gold)", paid: "var(--success)", cancelled: "var(--text3)" };
 
+/** Quản lý Affiliate: giao diện mới (AdminAffiliateV2) hay bản cũ — xem UiV2Context. */
 export default function AdminAffiliatePage() {
-  const [commissions, setCommissions] = useState<Commission[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [rates, setRates] = useState({ basic: 10, photographer: 10, photographer_plus: 10, studio: 10 });
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  return useUiV2() ? <AdminAffiliateV2 /> : <AdminAffiliateV1 />;
+}
 
-  useEffect(() => {
-    fetch("/api/affiliate/admin")
-      .then((r) => r.json())
-      .then((d) => {
-        setCommissions(d.commissions ?? []);
-        if (d.settings) {
-          setRates({
-            basic: d.settings.affiliate_commission_basic ?? 10,
-            photographer: d.settings.affiliate_commission_photographer ?? 10,
-            photographer_plus: d.settings.affiliate_commission_photographer_plus ?? 10,
-            studio: d.settings.affiliate_commission_studio ?? 10,
-          });
-        }
-        setLoading(false);
-      });
-  }, []);
-
-  async function updateStatus(id: string, status: string) {
-    await fetch("/api/affiliate/admin", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status }),
-    });
-    setCommissions((prev) =>
-      prev.map((c) => c.id === id ? { ...c, status: status as Commission["status"], paid_at: status === "paid" ? new Date().toISOString() : null } : c)
-    );
-  }
-
-  async function saveRates() {
-    setSaving(true);
-    await fetch("/api/affiliate/admin", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(rates),
-    });
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  }
-
-  const totalPending = commissions.filter((c) => c.status === "pending").reduce((s, c) => s + c.commission_amount, 0);
-  const totalPaid = commissions.filter((c) => c.status === "paid").reduce((s, c) => s + c.commission_amount, 0);
+function AdminAffiliateV1() {
+  // Logic dùng chung với bản mới — xem ./useAdminAffiliate.
+  const { commissions, loading, rates, setRates, saving, saved, updateStatus, saveRates, totalPending, totalPaid } = useAdminAffiliate();
 
   return (
     <div className="page-in">

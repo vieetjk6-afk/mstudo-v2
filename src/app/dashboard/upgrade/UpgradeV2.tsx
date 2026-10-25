@@ -201,6 +201,14 @@ function TrialCodeCard({ u }: { u: UpgradeState }) {
       {u.trialMsg ? (
         <p className="text-[13px] font-medium" style={{ color: u.trialOk ? "var(--gn)" : "var(--rd)" }}>{u.trialMsg}</p>
       ) : null}
+      <p className="mt-auto flex items-start gap-2 border-t pt-3 text-[12.5px]" style={{ borderColor: "var(--bd2)", color: "var(--tx3)" }}>
+        <Sparkles size={14} className="mt-[2px] flex-none" />
+        {u.trialUsed
+          ? "Tài khoản đã dùng lượt dùng thử miễn phí."
+          : u.currentPlan === "free"
+            ? "Chưa có mã? Mỗi tài khoản được dùng thử miễn phí một lần — bấm “Dùng thử” ở thẻ gói bên dưới."
+            : "Dùng thử miễn phí chỉ áp dụng khi đang ở gói Miễn phí."}
+      </p>
     </Card>
   );
 }

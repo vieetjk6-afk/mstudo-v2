@@ -14,7 +14,7 @@
  * Nạp thẳng code thật (cần --import ./desktop/test/giai-duong-ts.mjs vì
  * contract-album.ts nhập "./album-phase" không đuôi).
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   resolveDeliveredAlbum,
@@ -82,10 +82,13 @@ check(
 );
 
 /* ── Chốt autosave của màn hợp đồng ────────────────────────────────────── */
-const editor = readFileSync(
-  resolve(import.meta.dirname, "../../src/app/dashboard/studio/contracts/[id]/ContractEditor.tsx"),
-  "utf8",
-);
+// Logic màn hợp đồng nằm ở hook dùng chung (useContractEditor.ts) cho cả bản cũ
+// lẫn giao diện mới; đọc GỘP hook + mọi file giao diện của màn để luật bên dưới
+// soi được cả hai bản.
+const editorDir = resolve(import.meta.dirname, "../../src/app/dashboard/studio/contracts/[id]");
+const editor = ["useContractEditor.ts", ...readdirSync(editorDir).filter((n) => /^Contract.*\.tsx$/.test(n)).sort()]
+  .map((n) => readFileSync(resolve(editorDir, n), "utf8"))
+  .join("\n");
 const start = editor.indexOf("async function autosaveContract(");
 check("tìm thấy autosaveContract", start >= 0, true);
 // Thân hàm tới `.eq("id", contract.id)` đầu tiên — chính là payload update.

@@ -76,7 +76,7 @@ export function SubdomainField({ pub, mainHost, stacked = false }: { pub: Publis
       }
     >
       <div className={stacked ? "flex flex-col gap-2" : "flex items-center gap-2"}>
-        <label className="v2-search min-w-0 flex-1" style={{ boxShadow: "none" }}>
+        <label className={`v2-search ${stacked ? "w-full" : "min-w-0 flex-1"}`} style={{ boxShadow: "none" }}>
           <input
             value={pub.subdomain}
             onChange={(e) => pub.setSubdomain(e.target.value.toLowerCase())}

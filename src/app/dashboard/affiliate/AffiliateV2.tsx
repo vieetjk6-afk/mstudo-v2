@@ -32,7 +32,7 @@ export default function AffiliateV2({ seed }: { seed?: AffiliateSeed }) {
       <PageHead desc="Giới thiệu mstudo cho studio khác — mỗi khi họ mua gói qua link của bạn, bạn nhận hoa hồng." />
 
       <StatGrid cols={3}>
-        <Stat label="Tổng hoa hồng" value={formatVnd(a.totalEarned)} icon={TrendingUp} tone="brand" sub={`${a.commissions.length} lần giới thiệu thành công`} />
+        <Stat label="Tổng hoa hồng" value={formatVnd(a.totalEarned)} icon={TrendingUp} tone="brand" sub={`${a.commissions.length} lần ghi nhận`} />
         <Stat label="Đã nhận" value={formatVnd(a.totalPaid)} icon={Wallet} tone="green" sub="Đã chuyển cho bạn" />
         <Stat label="Chờ thanh toán" value={formatVnd(a.totalPending)} icon={Clock} tone="amber" valueTone={a.totalPending > 0 ? "amber" : undefined} sub="Trả sau khi xác nhận giao dịch" />
       </StatGrid>
@@ -96,14 +96,15 @@ export default function AffiliateV2({ seed }: { seed?: AffiliateSeed }) {
       </Card>
 
       <section className="v2-card overflow-hidden">
-        <header className="v2-section-head flex-wrap">
+        <header className="v2-section-head">
           <div className="min-w-0 flex-1">
             <h3 className="v2-section-title">Lịch sử hoa hồng</h3>
             <p className="v2-section-desc">{a.commissions.length} lần · mới nhất ở trên</p>
           </div>
-          {a.commissions.length > 0 ? (
+        </header>
+        {a.commissions.length > 0 ? (
+          <div className="v2-card-pad" style={{ borderBottom: "1px solid var(--bd2)" }}>
             <Segmented<Filter>
-              size="sm"
               label="Lọc theo trạng thái"
               value={filter}
               onChange={setFilter}
@@ -114,8 +115,8 @@ export default function AffiliateV2({ seed }: { seed?: AffiliateSeed }) {
                 { value: "cancelled", label: "Đã huỷ", count: count("cancelled") },
               ]}
             />
-          ) : null}
-        </header>
+          </div>
+        ) : null}
 
         {a.loading ? (
           <div className="flex flex-col gap-2 p-5">

@@ -5,6 +5,8 @@ import { getFeatureFlags, inboxComingSoon } from "@/lib/feature-flags";
 import { requireStudio } from "@/lib/auth-guards";
 import { listConversations, listMessages, staffNames } from "@/lib/inbox/view";
 import { listChannels, toPublic } from "@/lib/inbox/channels";
+import { isUiV2 } from "@/lib/ui-server";
+import IntegrationGateV2 from "@/app/dashboard/connections/IntegrationGateV2";
 import InboxView from "./InboxView";
 
 /**
@@ -16,7 +18,18 @@ import InboxView from "./InboxView";
  */
 export default async function InboxPage() {
   const profile = await requireStudio("booking");
+  const v2 = await isUiV2();
   if (!profile || profile.actingRole === "accountant") {
+    if (v2) {
+      return (
+        <IntegrationGateV2
+          kind="plan"
+          title="Cần gói Photographer trở lên"
+          hint="Hộp thư hợp nhất gom tin nhắn khách từ mọi mạng xã hội về một chỗ."
+          action={{ href: "/dashboard/upgrade", label: "Nâng cấp gói" }}
+        />
+      );
+    }
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">
@@ -34,6 +47,16 @@ export default async function InboxPage() {
 
   // "Sắp ra mắt": khoá với studio; admin vẫn vào để hoàn thiện.
   if (inboxComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin") {
+    if (v2) {
+      return (
+        <IntegrationGateV2
+          kind="soon"
+          icon={MessageCircle}
+          title="Hộp thư hợp nhất"
+          hint="Khách nhắn từ Zalo, Facebook, Instagram, TikTok hay chatbox website sẽ đổ chung về một chỗ; trợ lý AI trả lời trước, nhân viên bấm một nút là tiếp quản. Bọn mình đang hoàn thiện và sẽ báo khi sẵn sàng."
+        />
+      );
+    }
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">

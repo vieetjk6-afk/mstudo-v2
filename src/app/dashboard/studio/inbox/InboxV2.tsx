@@ -378,7 +378,7 @@ export default function InboxV2(props: InboxProps) {
         </div>
       ) : (
         <>
-          <header className="flex flex-none flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5 sm:px-4" style={{ borderBottom: "1px solid var(--bd)" }}>
+          <header className="flex flex-none items-center gap-3 px-3 py-2.5 sm:px-4" style={{ borderBottom: "1px solid var(--bd2)" }}>
             <button type="button" onClick={() => x.setMobileThread(false)} className={iconBtn("-ml-1 lg:hidden")} aria-label="Quay lại danh sách">
               <ArrowLeft size={19} />
             </button>
@@ -395,13 +395,14 @@ export default function InboxV2(props: InboxProps) {
                 {active.assigneeId && <> · phụ trách: {staff[active.assigneeId] || "nhân viên"}</>}
               </p>
             </div>
-            <div className="flex w-full flex-none items-center gap-2 sm:w-auto">
-              {aiToggle}
-              <span className="flex-1 sm:hidden" />
-              {mainAction}
-              <Menu label="Thêm thao tác với hội thoại" width={250} items={threadMenu} />
-            </div>
+            <Menu label="Thêm thao tác với hội thoại" width={250} items={threadMenu} />
           </header>
+          {/* Dải trạng thái: ai đang trả lời + việc tiếp theo. */}
+          <div className="flex flex-none items-center gap-2 px-3 py-2 sm:px-4" style={{ borderBottom: "1px solid var(--bd)", background: "var(--sf2)" }}>
+            {aiToggle}
+            <span className="flex-1" />
+            {mainAction}
+          </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-5" style={{ background: "var(--bg)" }}>
             {bubbles}
@@ -471,7 +472,7 @@ export default function InboxV2(props: InboxProps) {
 
   return (
     <div className="v2-card overflow-hidden lg:-mb-8 lg:h-[calc(100dvh-112px)] lg:min-h-[560px]">
-      <div className="grid h-full lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[216px_340px_minmax(0,1fr)]">
+      <div className="grid h-full lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[228px_340px_minmax(0,1fr)]">
         {sidePane}
         {listPane}
         {threadPane}

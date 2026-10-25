@@ -1,28 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { HardDrive, Check, Loader2, AlertTriangle } from "lucide-react";
+import { useAdminDrive } from "./useAdminDrive";
 
 /** Kết nối Google Drive của admin để lưu nội dung người dùng (thay Supabase). */
 export default function AdminDriveCard() {
-  type Status = { configured: boolean; connected: boolean; ok: boolean; error: string | null; lastUploadError: string | null };
-  const [state, setState] = useState<Status | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/admin/drive/status")
-      .then((r) => r.json())
-      .then((d) => setState({ configured: !!d.configured, connected: !!d.connected, ok: !!d.ok, error: d.error ?? null, lastUploadError: d.lastUploadError ?? null }))
-      .catch(() => setState({ configured: false, connected: false, ok: false, error: null, lastUploadError: null }));
-  }, []);
-
-  async function disconnect() {
-    if (!confirm("Ngắt kết nối Drive? Upload mới sẽ quay lại lưu trên Supabase.")) return;
-    setBusy(true);
-    await fetch("/api/admin/drive/status", { method: "DELETE" }).catch(() => {});
-    setBusy(false);
-    setState((s) => (s ? { ...s, connected: false, ok: false } : s));
-  }
+  // Logic dùng chung với bản mới (SystemV2) — xem ./useAdminDrive.
+  const { state, busy, disconnect } = useAdminDrive();
 
   return (
     <div className="card p-5">

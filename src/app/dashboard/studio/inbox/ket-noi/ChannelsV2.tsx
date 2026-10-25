@@ -6,7 +6,7 @@ import {
   ArrowLeft, Check, CheckCircle2, ChevronDown, CircleAlert, Copy, Facebook, Globe, Instagram, MessageCircle, Music2, Plug,
   TriangleAlert, Unplug, type LucideIcon,
 } from "lucide-react";
-import { Badge, Callout, Field, PageHead, Section, Stack, btn, iconBtn, inputCls, type Tone } from "@/components/v2/kit";
+import { Badge, Callout, Field, GroupLabel, PageHead, Section, Stack, btn, iconBtn, inputCls, type Tone } from "@/components/v2/kit";
 import { Menu, Switch } from "@/components/v2/kit-client";
 import { PLATFORM_INFO, PLATFORMS, platformColor, type Platform } from "@/lib/inbox/platforms";
 import { useChannels, type ChannelsProps } from "./useChannels";
@@ -116,6 +116,9 @@ export default function ChannelsV2(props: ChannelsProps) {
       )}
 
       {/* ── Thẻ từng kênh ────────────────────────────────────────────────── */}
+      <div className="-mb-2">
+        <GroupLabel count={`${PLATFORMS.filter((p) => c.byPlatform(p)).length}/${PLATFORMS.length} đang nhận tin`}>Kênh của bạn</GroupLabel>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {PLATFORMS.map((p) => {
           const info = PLATFORM_INFO[p];
@@ -125,7 +128,7 @@ export default function ChannelsV2(props: ChannelsProps) {
           const anchor = ANCHOR[p];
           return (
             <div key={p} className="v2-card flex flex-col p-4">
-              <div className="flex items-start gap-3">
+              <div className="flex items-center gap-3">
                 <span
                   className="flex h-10 w-10 flex-none items-center justify-center rounded-[11px]"
                   style={{ background: `color-mix(in srgb, ${color} 13%, var(--sf))`, color }}
@@ -134,10 +137,10 @@ export default function ChannelsV2(props: ChannelsProps) {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[14.5px] font-semibold">{info.label}</p>
-                  <p className="truncate text-[12.5px]" style={{ color: "var(--tx3)" }}>
-                    {/* Chỉ hiện tên riêng khi nó KHÁC nhãn kênh. */}
-                    {ch ? (ch.name && ch.name !== info.label ? ch.name : "Đã nối") : "Chưa nối"}
-                  </p>
+                  {/* Chỉ hiện tên riêng khi nó KHÁC nhãn kênh. */}
+                  {ch?.name && ch.name !== info.label ? (
+                    <p className="truncate text-[12.5px]" style={{ color: "var(--tx3)" }}>{ch.name}</p>
+                  ) : null}
                 </div>
                 {ch ? (
                   ch.lastError ? <Badge tone="red" dot>Có lỗi</Badge> : <Badge tone="green" dot>Đang nhận tin</Badge>

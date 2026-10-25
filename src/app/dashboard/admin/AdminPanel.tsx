@@ -11,15 +11,11 @@ import {
 import type { DiscountCode, Profile, UpgradeRequest } from "@/lib/types";
 import UpgradeRequests from "./UpgradeRequests";
 import DiscountCodes from "./DiscountCodes";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import AdminPanelV2 from "./AdminPanelV2";
 import { LEVEL_ORDER, PAGE, planValue, useAdminUsers } from "./useAdminUsers";
 
-export default function AdminPanel({
-  profiles,
-  albumCounts = {},
-  contractCounts = {},
-  upgrades = [],
-  codes = [],
-}: {
+type AdminPanelProps = {
   profiles: Profile[];
   /** Số album theo owner_id — đếm sống ở server, xem page.tsx. */
   albumCounts?: Record<string, number>;
@@ -28,7 +24,20 @@ export default function AdminPanel({
   /** Yêu cầu nâng cấp gói (gồm cả đơn chờ duyệt chuyển khoản). */
   upgrades?: UpgradeRequest[];
   codes?: DiscountCode[];
-}) {
+};
+
+/** Màn Người dùng & studio: giao diện mới (AdminPanelV2) hay bản cũ — xem UiV2Context. */
+export default function AdminPanel(props: AdminPanelProps) {
+  return useUiV2() ? <AdminPanelV2 {...props} /> : <AdminPanelV1 {...props} />;
+}
+
+function AdminPanelV1({
+  profiles,
+  albumCounts = {},
+  contractCounts = {},
+  upgrades = [],
+  codes = [],
+}: AdminPanelProps) {
   // Logic dùng chung với bản mới (AdminPanelV2) — xem ./useAdminUsers.
   const {
     t, msg, creating, form, setForm, level, setLevel, q, search, setShownCount,

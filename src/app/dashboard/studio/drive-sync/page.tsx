@@ -1,7 +1,10 @@
 import { HardDrive } from "lucide-react";
 import { requireStudio } from "@/lib/auth-guards";
 import { getFeatureFlags, driveSyncComingSoon } from "@/lib/feature-flags";
+import { isUiV2 } from "@/lib/ui-server";
+import IntegrationGateV2 from "@/app/dashboard/connections/IntegrationGateV2";
 import StudioDriveCard from "./StudioDriveCard";
+import StudioDriveV2 from "./StudioDriveV2";
 
 /**
  * Đồng bộ Google Drive — tính năng riêng trong nhóm Khách hàng.
@@ -10,7 +13,9 @@ import StudioDriveCard from "./StudioDriveCard";
  */
 export default async function DriveSyncPage() {
   const profile = await requireStudio("full");
+  const v2 = await isUiV2();
   if (!profile) {
+    if (v2) return <IntegrationGateV2 kind="plan" title="Cần gói Studio" hint="Đồng bộ Google Drive chỉ dành cho tài khoản gói Studio." action={{ href: "/dashboard/upgrade", label: "Xem gói Studio" }} />;
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">
@@ -23,6 +28,16 @@ export default async function DriveSyncPage() {
   }
   // "Sắp ra mắt": khoá với studio; admin vẫn vào để hoàn thiện.
   if (driveSyncComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin") {
+    if (v2) {
+      return (
+        <IntegrationGateV2
+          kind="soon"
+          icon={HardDrive}
+          title="Đồng bộ Google Drive"
+          hint="Tự đồng bộ ảnh/video hợp đồng lên Google Drive của studio: tạo thư mục theo tên hợp đồng, JPG Goc thành album chọn ảnh, File ChinhSua thành gallery giao khách. Bọn mình đang hoàn thiện và sẽ báo khi sẵn sàng."
+        />
+      );
+    }
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">
@@ -39,6 +54,7 @@ export default async function DriveSyncPage() {
 
   // Chỉ CHỦ studio (không phải nhân viên) kết nối Drive & chỉnh cấu hình đồng bộ.
   if (profile.isStaff || (profile.actingRole !== "owner" && profile.actingRole !== "admin")) {
+    if (v2) return <IntegrationGateV2 kind="role" title="Chỉ dành cho chủ studio" hint="Kết nối Google Drive và cấu hình đồng bộ chỉ chủ tài khoản studio mới thao tác được." />;
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">
@@ -50,6 +66,8 @@ export default async function DriveSyncPage() {
       </div>
     );
   }
+
+  if (v2) return <StudioDriveV2 />;
 
   return (
     <div className="mx-auto max-w-4xl">

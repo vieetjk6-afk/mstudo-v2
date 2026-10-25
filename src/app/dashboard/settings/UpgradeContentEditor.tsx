@@ -1,47 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { Save, Plus, Trash2, ArrowUp, ArrowDown, Heading } from "lucide-react";
-import { mergeUpgradeContent, type CompareRow, type UpgradeContent } from "@/lib/upgrade-content";
-import type { Plan } from "@/lib/plans";
-
-const PLANS: { key: Plan; label: string }[] = [
-  { key: "free", label: "Miễn phí" },
-  { key: "basic", label: "Basic" },
-  { key: "photographer", label: "Photographer" },
-  { key: "photographer_plus", label: "Photographer Plus" },
-  { key: "studio", label: "Studio" },
-];
-
-const isSection = (r: CompareRow): r is { section: string } => "section" in r;
+import { PLANS, isSection, useUpgradeContent } from "./useUpgradeContent";
 
 export default function UpgradeContentEditor({ initial }: { initial: unknown }) {
-  const [uc, setUc] = useState<UpgradeContent>(() => mergeUpgradeContent(initial));
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  async function save() {
-    setSaving(true);
-    const res = await fetch("/api/admin/settings", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ upgrade_content: uc }),
-    });
-    setSaving(false);
-    setMsg(res.ok ? "Đã lưu nội dung trang nâng cấp" : "Lỗi khi lưu");
-    setTimeout(() => setMsg(null), 2500);
-  }
-
-  const setRows = (rows: CompareRow[]) => setUc((u) => ({ ...u, compare: rows }));
-  const editRow = (i: number, patch: Partial<Extract<CompareRow, { label: string }>> & { section?: string }) =>
-    setRows(uc.compare.map((r, j) => (j === i ? ({ ...r, ...patch } as CompareRow) : r)));
-  const removeRow = (i: number) => setRows(uc.compare.filter((_, j) => j !== i));
-  const moveRow = (i: number, d: number) => {
-    const j = i + d;
-    if (j < 0 || j >= uc.compare.length) return;
-    const next = [...uc.compare];
-    [next[i], next[j]] = [next[j], next[i]];
-    setRows(next);
-  };
+  // Logic dùng chung với bản mới (UpgradeContentEditorV2) — xem ./useUpgradeContent.
+  const { uc, setUc, saving, msg, save, editRow, removeRow, moveRow, addFeatureRow, addSectionRow } = useUpgradeContent(initial);
 
   const inp = "input w-full";
   const cellInp = "input w-full text-center text-[13px]";
@@ -108,8 +72,8 @@ export default function UpgradeContentEditor({ initial }: { initial: unknown }) 
           ))}
         </div>
         <div className="mt-2 flex gap-2">
-          <button onClick={() => setRows([...uc.compare, { label: "", free: "✗", basic: "✗", photographer: "✗", photographer_plus: "✗", studio: "✗" }])} className="btn-ghost text-xs"><Plus size={13} /> Thêm dòng</button>
-          <button onClick={() => setRows([...uc.compare, { section: "" }])} className="btn-ghost text-xs"><Heading size={13} /> Thêm tiêu đề nhóm</button>
+          <button onClick={addFeatureRow} className="btn-ghost text-xs"><Plus size={13} /> Thêm dòng</button>
+          <button onClick={addSectionRow} className="btn-ghost text-xs"><Heading size={13} /> Thêm tiêu đề nhóm</button>
         </div>
       </div>
 
