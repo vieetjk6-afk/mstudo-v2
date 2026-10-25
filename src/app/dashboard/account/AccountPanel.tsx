@@ -1,14 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { fmtDate } from "@/lib/date";
-import { useRouter } from "next/navigation";
 import {
   User, Mail, Lock, Shield, CreditCard, LogOut,
   Check, AlertCircle, Eye, EyeOff, Loader2, KeyRound,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import LogoUpload from "@/components/LogoUpload";
+import { useAccount, type AccountProps } from "./useAccount";
 
 const PLAN_LABEL: Record<string, string> = {
   free: "Miễn phí",
@@ -24,20 +22,7 @@ const PLAN_COLOR: Record<string, string> = {
   studio: "var(--s-green)",
 };
 
-type Props = {
-  userId: string;
-  email: string;
-  fullName: string | null;
-  plan: string;
-  planExpiresAt: string | null;
-  planCycle: string | null;
-  createdAt: string;
-  providers: string[];
-  hasPassword: boolean;
-  role: string;
-  studioBrandName: string | null;
-  studioLogo: string | null;
-};
+type Props = AccountProps;
 
 export default function AccountPanel({
   userId,
@@ -53,138 +38,20 @@ export default function AccountPanel({
   studioBrandName,
   studioLogo,
 }: Props) {
-  const router = useRouter();
-  const supabase = createClient();
-
-  // ── Name ────────────────────────────────────────────────────────
-  const [name, setName] = useState(fullName ?? "");
-  const [nameSaving, setNameSaving] = useState(false);
-  const [nameMsg, setNameMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  // ── Email ────────────────────────────────────────────────────────
-  const [newEmail, setNewEmail] = useState("");
-  const [emailSaving, setEmailSaving] = useState(false);
-  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  // ── Password ─────────────────────────────────────────────────────
-  const [hasPassword, setHasPassword] = useState(initialHasPassword);
-  const [showPwForm, setShowPwForm] = useState(false);
-  const [currentPw, setCurrentPw] = useState("");
-  const [newPw, setNewPw] = useState("");
-  const [confirmPw, setConfirmPw] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [pwSaving, setPwSaving] = useState(false);
-  const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  // ── Studio brand (white-label) ────────────────────────────────────
-  const canBrand = plan === "studio" || role === "admin";
-  const [brandName, setBrandName] = useState(studioBrandName ?? "");
-  const [brandLogo, setBrandLogo] = useState(studioLogo ?? "");
-  const [brandSaving, setBrandSaving] = useState(false);
-  const [brandMsg, setBrandMsg] = useState<{ ok: boolean; text: string } | null>(null);
-
-  async function saveBrand(nextLogo?: string) {
-    setBrandSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ studio_brand_name: brandName.trim() || null, studio_logo_url: (nextLogo ?? brandLogo) || null })
-      .eq("id", userId);
-    setBrandSaving(false);
-    flash(setBrandMsg, error ? { ok: false, text: "Lỗi: " + error.message } : { ok: true, text: "Đã lưu thương hiệu studio." });
-    if (!error) router.refresh();
-  }
-
-  // ── Sign out ──────────────────────────────────────────────────────
-  const [signingOut, setSigningOut] = useState(false);
-
-  function flash(set: (v: { ok: boolean; text: string } | null) => void, msg: { ok: boolean; text: string }) {
-    set(msg);
-    setTimeout(() => set(null), 4000);
-  }
-
-  // ── Save display name ─────────────────────────────────────────────
-  async function saveName() {
-    if (!name.trim()) return;
-    setNameSaving(true);
-    const { error } = await supabase
-      .from("profiles")
-      .update({ full_name: name.trim() })
-      .eq("id", (await supabase.auth.getUser()).data.user!.id);
-    setNameSaving(false);
-    flash(setNameMsg, error ? { ok: false, text: "Lỗi: " + error.message } : { ok: true, text: "Đã lưu tên hiển thị." });
-    if (!error) router.refresh();
-  }
-
-  // ── Change / set email ────────────────────────────────────────────
-  async function changeEmail() {
-    if (!newEmail.trim() || !newEmail.includes("@")) {
-      flash(setEmailMsg, { ok: false, text: "Vui lòng nhập email hợp lệ." });
-      return;
-    }
-    setEmailSaving(true);
-    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
-    setEmailSaving(false);
-    flash(
-      setEmailMsg,
-      error
-        ? { ok: false, text: "Lỗi: " + error.message }
-        : { ok: true, text: "Đã gửi link xác nhận đến email mới. Kiểm tra hộp thư và bấm xác nhận." }
-    );
-    if (!error) setNewEmail("");
-  }
-
-  // ── Change / set password ─────────────────────────────────────────
-  async function savePassword() {
-    if (newPw.length < 8) {
-      flash(setPwMsg, { ok: false, text: "Mật khẩu phải có ít nhất 8 ký tự." });
-      return;
-    }
-    if (newPw !== confirmPw) {
-      flash(setPwMsg, { ok: false, text: "Mật khẩu xác nhận không khớp." });
-      return;
-    }
-    setPwSaving(true);
-
-    // If account has no password yet (OAuth-only), set password directly.
-    // If already has password, verify current first via re-auth.
-    if (hasPassword && currentPw) {
-      // Re-sign-in to verify current password before allowing change
-      const { error: signInErr } = await supabase.auth.signInWithPassword({
-        email,
-        password: currentPw,
-      });
-      if (signInErr) {
-        setPwSaving(false);
-        flash(setPwMsg, { ok: false, text: "Mật khẩu hiện tại không đúng." });
-        return;
-      }
-    }
-
-    const { error } = await supabase.auth.updateUser({ password: newPw });
-    setPwSaving(false);
-    if (error) {
-      flash(setPwMsg, { ok: false, text: "Lỗi: " + error.message });
-    } else {
-      flash(setPwMsg, { ok: true, text: hasPassword ? "Đã đổi mật khẩu thành công." : "Đã tạo mật khẩu thành công. Bây giờ bạn có thể đăng nhập bằng email + mật khẩu." });
-      setHasPassword(true);
-      setCurrentPw("");
-      setNewPw("");
-      setConfirmPw("");
-      setShowPwForm(false);
-    }
-  }
-
-  // ── Sign out ──────────────────────────────────────────────────────
-  async function signOut() {
-    setSigningOut(true);
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
+  // Logic dùng chung với bản mới (AccountV2) — xem ./useAccount.
+  const {
+    name, setName, nameSaving, nameMsg, saveName,
+    newEmail, setNewEmail, emailSaving, emailMsg, changeEmail,
+    hasPassword, showPwForm, setShowPwForm,
+    currentPw, setCurrentPw, newPw, setNewPw, confirmPw, setConfirmPw,
+    showCurrent, setShowCurrent, showNew, setShowNew,
+    pwSaving, pwMsg, savePassword, cancelPassword, pwStrength,
+    canBrand, brandName, setBrandName, brandLogo, setBrandLogo, brandSaving, brandMsg, saveBrand,
+    signingOut, signOut,
+  } = useAccount({ userId, email, fullName, plan, hasPassword: initialHasPassword, role, studioBrandName, studioLogo });
 
   const planExpiry = planExpiresAt ? fmtDate(planExpiresAt) : null;
   const joinDate = fmtDate(createdAt);
-  const pwStrength = newPw.length === 0 ? null : newPw.length < 8 ? "weak" : newPw.length < 12 ? "fair" : "strong";
 
   return (
     <div className="page-in mx-auto max-w-xl space-y-5">
@@ -428,7 +295,7 @@ export default function AccountPanel({
                 {pwSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
                 {hasPassword ? "Đổi mật khẩu" : "Tạo mật khẩu"}
               </button>
-              <button onClick={() => { setShowPwForm(false); setCurrentPw(""); setNewPw(""); setConfirmPw(""); setPwMsg(null); }}
+              <button onClick={cancelPassword}
                 className="btn-ghost px-4 text-sm">
                 Huỷ
               </button>

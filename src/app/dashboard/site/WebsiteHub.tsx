@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { fmtDate } from "@/lib/date";
 import { useState } from "react";
 import {
   Globe,
@@ -16,12 +15,14 @@ import {
   Check,
   Plus,
 } from "lucide-react";
+import { updatedAgo, chatRules, DEFAULT_GREETING } from "./hub-shared";
 
 /**
  * Màn "Website & chatbox" (bản thiết kế, mục 43).
  * Trái: tình trạng trang + 3 con số lượt xem + danh sách khối nội dung.
  * Phải: trợ lý chatbox — lời chào và các dòng kịch bản đang dạy bot.
  * Sửa nội dung trang nằm ở trình tạo kéo-thả (/dashboard/site/builder).
+ * Giao diện mới: ./WebsiteHubV2 (page.tsx chọn bản theo isUiV2()).
  */
 export default function WebsiteHub({
   host,
@@ -50,21 +51,10 @@ export default function WebsiteHub({
   const eyebrowStyle = { letterSpacing: ".5px", color: "var(--tx3)" } as const;
 
   // Ngày cập nhật gần nhất, nói theo kiểu người đọc ("3 ngày trước").
-  const ago = (() => {
-    const d = new Date(updatedAt).getTime();
-    if (!d) return "";
-    const days = Math.floor((Date.now() - d) / 86400_000);
-    if (days <= 0) return "hôm nay";
-    if (days === 1) return "hôm qua";
-    if (days < 30) return `${days} ngày trước`;
-    return fmtDate(updatedAt);
-  })();
+  const ago = updatedAgo(updatedAt);
 
   // Kịch bản chatbox: mỗi dòng gạch đầu dòng trong ô hướng dẫn là một luật.
-  const rules = instructions
-    .split("\n")
-    .map((s) => s.replace(/^[-•*\s]+/, "").trim())
-    .filter(Boolean);
+  const rules = chatRules(instructions);
 
   return (
     <div className="page-in grid items-start gap-3.5 min-[1180px]:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
@@ -193,7 +183,7 @@ export default function WebsiteHub({
 
         <p className={`mb-2 mt-3.5 ${eyebrow}`} style={eyebrowStyle}>Lời chào mở đầu</p>
         <p className="rounded-[10px] px-3 py-2.5 text-[12.5px] leading-relaxed" style={{ background: "var(--sf2)", color: "var(--tx2)", textWrap: "pretty" }}>
-          {greeting.trim() || "Xin chào! Studio có thể giúp gì cho anh/chị hôm nay?"}
+          {greeting.trim() || DEFAULT_GREETING}
         </p>
 
         <p className={`mb-1 mt-4 ${eyebrow}`} style={eyebrowStyle}>Kịch bản trả lời</p>

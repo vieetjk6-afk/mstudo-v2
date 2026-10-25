@@ -1,82 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { fmtDate } from "@/lib/date";
 import { Copy, Check, Share2, TrendingUp, Clock, Wallet, ChevronDown, ChevronUp, Gift } from "lucide-react";
+import { useUiV2 } from "@/components/v2/UiV2Context";
 import { PLAN_LABEL, formatVnd, type Plan } from "@/lib/plans";
-import { mainUrl } from "@/lib/hosts";
+import AffiliateV2 from "./AffiliateV2";
+import { STATUS_LABEL, useAffiliate } from "./useAffiliate";
 
-interface Commission {
-  id: string;
-  referred_email: string | null;
-  plan: string;
-  cycle: string;
-  sale_amount: number;
-  commission_pct: number;
-  commission_amount: number;
-  status: "pending" | "paid" | "cancelled";
-  created_at: string;
-  paid_at: string | null;
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  pending: "Chờ thanh toán",
-  paid: "Đã nhận",
-  cancelled: "Đã huỷ",
-};
 const STATUS_COLOR: Record<string, string> = {
   pending: "var(--gold)",
   paid: "var(--success)",
   cancelled: "var(--text3)",
 };
 
+/** Màn Affiliate: giao diện mới (AffiliateV2) hay bản cũ — xem UiV2Context. */
 export default function AffiliatePage() {
-  const [code, setCode] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [commissions, setCommissions] = useState<Commission[]>([]);
-  const [totalEarned, setTotalEarned] = useState(0);
-  const [totalPaid, setTotalPaid] = useState(0);
-  const [totalPending, setTotalPending] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [showAll, setShowAll] = useState(false);
+  return useUiV2() ? <AffiliateV2 /> : <AffiliateV1 />;
+}
 
-  useEffect(() => {
-    (async () => {
-      const [codeRes, statsRes] = await Promise.all([
-        fetch("/api/affiliate/code").then((r) => r.json()).catch(() => null),
-        fetch("/api/affiliate/stats").then((r) => r.json()).catch(() => null),
-      ]);
-      if (codeRes?.code) setCode(codeRes.code);
-      if (statsRes) {
-        setCommissions(statsRes.commissions ?? []);
-        setTotalEarned(statsRes.totalEarned ?? 0);
-        setTotalPaid(statsRes.totalPaid ?? 0);
-        setTotalPending(statsRes.totalPending ?? 0);
-      }
-      setLoading(false);
-    })();
-  }, []);
-
-  const refLink = code ? `${mainUrl("/")}?ref=${code}` : "";
-
-  function copyLink() {
-    if (!refLink) return;
-    navigator.clipboard.writeText(refLink).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }
-
-  function shareLink() {
-    if (!refLink) return;
-    if (navigator.share) {
-      navigator.share({ title: "Giới thiệu mstudo", url: refLink });
-    } else {
-      copyLink();
-    }
-  }
-
-  const visible = showAll ? commissions : commissions.slice(0, 5);
+function AffiliateV1() {
+  // Logic dùng chung với bản mới — xem ./useAffiliate.
+  const {
+    code, copied, commissions, totalEarned, totalPaid, totalPending, loading,
+    showAll, setShowAll, refLink, copyLink, shareLink, visible,
+  } = useAffiliate();
 
   return (
     <div className="page-in">

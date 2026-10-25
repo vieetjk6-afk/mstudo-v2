@@ -525,7 +525,9 @@ export function BlockBody({ block, fontHead, accent, albums, pricelist, priceLab
 }
 
 /* ── Inspector (right panel for the selected block) ───────────────────── */
-export function Inspector({ block, blocks = [], siteUrl = "", albums, priceLists = [], accent, onEdit, onBeforeEdit }: {
+export function Inspector({ block, blocks = [], siteUrl = "", albums, priceLists = [], accent, onEdit, onBeforeEdit, hideHead = false }: {
+  /** true = bỏ tiêu đề riêng của bảng (khung V2 đã có đầu bảng). */
+  hideHead?: boolean;
   block: SiteBlock;
   blocks?: SiteBlock[];
   siteUrl?: string;
@@ -573,8 +575,12 @@ export function Inspector({ block, blocks = [], siteUrl = "", albums, priceLists
   return (
     <div style={{ padding: 16 }}>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
-      <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>{SITE_BLOCK_LABEL[block.type]}</h3>
-      <p style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 16 }}>Chỉnh nội dung & bố cục khối này.</p>
+      {!hideHead && (
+        <>
+          <h3 style={{ fontSize: 14, fontWeight: 800, marginBottom: 2 }}>{SITE_BLOCK_LABEL[block.type]}</h3>
+          <p style={{ fontSize: 11.5, color: "var(--text3)", marginBottom: 16 }}>Chỉnh nội dung & bố cục khối này.</p>
+        </>
+      )}
 
       {/* Text fields */}
       {"heading" in DEFAULTS[block.type]! || ["hero", "about", "cta", "quote", "map", "contact"].includes(block.type) ? (

@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
-import { effectivePlan, planAllowsCustomDomain } from "@/lib/plans";
 import { availableLists } from "@/lib/site-pricing";
 import CanvasBuilder, { type AlbumOption, type PriceItem } from "./CanvasBuilder";
+import { siteCaps } from "../site-caps";
 import type { Site, SiteBlock } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,11 +21,8 @@ export default async function SiteBuilderPage() {
     supabase.from("profiles").select("*").eq("id", user.id).maybeSingle(),
     supabase.from("sites").select("*").eq("owner_id", user.id).maybeSingle(),
   ]);
-  const plan = profile ? effectivePlan(profile.plan, profile.plan_expires_at) : "free";
-  const isAdmin = profile?.role === "admin";
-  const canPublish = isAdmin || plan === "photographer" || plan === "photographer_plus" || plan === "studio";
-  // Tên miền riêng: Photographer Plus & Studio.
-  const canCustomDomain = planAllowsCustomDomain(plan, isAdmin);
+  // Xuất bản: Photographer trở lên; tên miền riêng: Photographer Plus & Studio.
+  const { canPublish, canCustomDomain } = siteCaps(profile);
 
   let site = existingSite;
   if (!site) {

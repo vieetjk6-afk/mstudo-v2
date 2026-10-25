@@ -1,23 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { fmtDate } from "@/lib/date";
 import { UserPlus, Trash2 } from "lucide-react";
-import { useLang } from "@/lib/i18n";
-import { planExpiry, planProfilePatch, type Plan } from "@/lib/plans";
 import {
   activityLevel,
   lastActiveLabel,
   ACTIVITY_LABEL,
   ACTIVITY_TONE,
-  type ActivityLevel,
 } from "@/lib/activity";
 import type { DiscountCode, Profile, UpgradeRequest } from "@/lib/types";
 import UpgradeRequests from "./UpgradeRequests";
 import DiscountCodes from "./DiscountCodes";
-
-/** Thứ tự hiện dải số liệu: nhóm cần gọi điện trước đứng trước. */
-const LEVEL_ORDER: ActivityLevel[] = ["active", "idle", "dormant", "lost", "never"];
+import { LEVEL_ORDER, PAGE, planValue, useAdminUsers } from "./useAdminUsers";
 
 export default function AdminPanel({
   profiles,
@@ -35,146 +29,11 @@ export default function AdminPanel({
   upgrades?: UpgradeRequest[];
   codes?: DiscountCode[];
 }) {
-  const { t } = useLang();
-  const [rows, setRows] = useState<Profile[]>(profiles);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", full_name: "" });
-  /** Lọc theo mức hoạt động — "" = xem tất cả. */
-  const [level, setLevel] = useState<ActivityLevel | "">("");
-  /** Tìm theo email/tên — giúp admin lọc nhanh thay vì dựng cả bảng. */
-  const [q, setQ] = useState("");
-  /** Số hàng dựng ra mỗi lần — chặn nổ DOM khi có hàng nghìn tài khoản. */
-  const PAGE = 100;
-  const [shownCount, setShownCount] = useState(PAGE);
-
-  // Chỉ đếm CHỦ tài khoản (studio_owner_id = null): nhân viên là tài khoản con
-  // của một studio, đếm cả họ thì số "bao nhiêu studio đang dùng" bị thổi lên.
-  const owners = useMemo(() => rows.filter((p) => !p.studio_owner_id), [rows]);
-
-  const stats = useMemo(() => {
-    const by: Record<ActivityLevel, number> = { never: 0, active: 0, idle: 0, dormant: 0, lost: 0 };
-    for (const p of owners) by[activityLevel(p.last_active_at)]++;
-    return by;
-  }, [owners]);
-
-  const visible = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return rows.filter((p) => {
-      if (level && (p.studio_owner_id || activityLevel(p.last_active_at) !== level)) return false;
-      if (needle) {
-        const hay = `${p.full_name ?? ""} ${p.email ?? ""}`.toLowerCase();
-        if (!hay.includes(needle)) return false;
-      }
-      return true;
-    });
-  }, [rows, level, q]);
-
-  // Chỉ dựng PAGE hàng đầu; phần còn lại nạp thêm khi bấm "Xem thêm". Trước đây
-  // dựng toàn bộ tài khoản (mỗi hàng nhiều ô select/input) nên bảng nặng dần
-  // tuyến tính theo số khách.
-  const shown = useMemo(() => visible.slice(0, shownCount), [visible, shownCount]);
-
-  function flash(m: string) {
-    setMsg(m);
-    setTimeout(() => setMsg(null), 2500);
-  }
-
-  async function update(p: Profile, patch: Partial<Profile>) {
-    const next = { ...p, ...patch };
-    setRows((r) => r.map((x) => (x.id === p.id ? next : x)));
-    const res = await fetch("/api/admin/photographers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: p.id, ...patch }),
-    });
-    if (!res.ok) flash(t("error"));
-  }
-
-  // Assign a plan with a billing cycle (sets auto-expiry server-side).
-  // Xem trước cùng công thức server: mua theo năm được tặng thêm 30 ngày.
-  async function setPlan(p: Profile, plan: Plan, cycle: "month" | "year") {
-    const expires: string | null = plan === "free" ? null : planExpiry(cycle);
-    const patch: Partial<Profile> = {
-      ...planProfilePatch(plan),
-      plan_cycle: plan === "free" ? null : cycle,
-      plan_expires_at: expires,
-    };
-    setRows((r) => r.map((x) => (x.id === p.id ? { ...x, ...patch } : x)));
-    const res = await fetch("/api/admin/photographers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: p.id, plan, cycle }),
-    });
-    if (!res.ok) flash(t("error"));
-  }
-
-  // Cấp dùng thử miễn phí (Studio 7 ngày / Basic·Photographer 30 ngày). Admin ghi đè.
-  async function setTrialPlan(p: Profile, plan: Plan) {
-    const days = plan === "studio" ? 7 : 30;
-    const expires = new Date(Date.now() + days * 86400000).toISOString();
-    const patch: Partial<Profile> = { ...planProfilePatch(plan), plan_cycle: "trial", plan_expires_at: expires };
-    setRows((r) => r.map((x) => (x.id === p.id ? { ...x, ...patch } : x)));
-    const res = await fetch("/api/admin/photographers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: p.id, trial_plan: plan }),
-    });
-    if (!res.ok) flash(t("error"));
-  }
-
-  async function removeUser(p: Profile) {
-    if (!window.confirm(t("confirmDeleteUser").replace("{email}", p.email))) return;
-    setRows((r) => r.filter((x) => x.id !== p.id));
-    const res = await fetch(`/api/admin/photographers?id=${p.id}`, { method: "DELETE" });
-    if (!res.ok) flash(t("error"));
-  }
-
-  async function createUser(e: React.FormEvent) {
-    e.preventDefault();
-    setCreating(true);
-    const res = await fetch("/api/admin/photographers/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    const data = await res.json();
-    setCreating(false);
-    if (!res.ok) return flash(data.error ?? t("error"));
-    setRows((r) => [
-      ...r,
-      {
-        id: data.id,
-        email: form.email,
-        full_name: form.full_name || form.email,
-        role: "photographer",
-        max_albums: null,
-        monthly_album_limit: 5,
-        can_zip: false,
-        can_notes: false,
-        can_galleries: false,
-        compress_daily_limit: 2,
-        compress_picker_limit: 1,
-        can_watermark_pro: false,
-        plan: "free",
-        plan_cycle: null,
-        plan_expires_at: null,
-        trial_used_at: null,
-        studio_owner_id: null,
-        studio_role: null,
-        is_active: true,
-        // Tài khoản vừa tạo chưa từng mở app — để null/0 để nó rơi đúng vào nhóm
-        // "Chưa từng mở" thay vì trông như đang hoạt động.
-        last_active_at: null,
-        last_active_day: null,
-        active_days: 0,
-        visit_count: 0,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-    setForm({ email: "", password: "", full_name: "" });
-    flash(t("saved"));
-  }
+  // Logic dùng chung với bản mới (AdminPanelV2) — xem ./useAdminUsers.
+  const {
+    t, msg, creating, form, setForm, level, setLevel, q, search, setShownCount,
+    owners, stats, visible, shown, update, applyPlanValue, removeUser, createUser,
+  } = useAdminUsers(profiles);
 
   return (
     <div className="animate-fade-in">
@@ -269,7 +128,7 @@ export default function AdminPanel({
           className="input max-w-xs px-3 py-2 text-sm"
           placeholder="Email / tên…"
           value={q}
-          onChange={(e) => { setQ(e.target.value); setShownCount(PAGE); }}
+          onChange={(e) => search(e.target.value)}
         />
         <span className="text-xs" style={{ color: "var(--text3)" }}>
           {visible.length} tài khoản
@@ -306,16 +165,8 @@ export default function AdminPanel({
                 <td className="px-4 py-3">
                   <select
                     className="input px-2 py-1 text-xs"
-                    value={p.plan === "free" ? "free" : p.plan_cycle === "trial" ? `trial-${p.plan}` : `${p.plan}-${p.plan_cycle ?? "month"}`}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "free") setPlan(p, "free", "month");
-                      else if (v.startsWith("trial-")) setTrialPlan(p, v.slice(6) as Plan);
-                      else {
-                        const [pl, cy] = v.split("-");
-                        setPlan(p, pl as Plan, cy as "month" | "year");
-                      }
-                    }}
+                    value={planValue(p)}
+                    onChange={(e) => applyPlanValue(p, e.target.value)}
                   >
                     <option value="free">{t("planFree")}</option>
                     <option value="basic-month">Basic · {t("cycleMonth")}</option>
