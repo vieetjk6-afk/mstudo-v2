@@ -86,3 +86,25 @@ File V2 đặt ngay cạnh file cũ, tên có hậu tố `V2` (vd `ContractsList
 4. Chụp ảnh ở khổ 1440 và 390, nền sáng và nền tối. Mở bằng
    `http://localhost:3333`, không mở bằng 127.0.0.1. Phải không tràn ngang và
    không có lỗi JavaScript.
+
+## Trang khách (không đăng nhập)
+
+Trang khách gồm hợp đồng `/c`, báo giá `/q`, album `/a`, cổng khách `/portal`,
+đặt lịch `/book`, form `/form`, voucher, bảng giá, cổng thợ `/crew`… Chúng không
+nằm trong khung studio nên không dùng `useUiV2()`. Cách làm:
+
+- **Bật hay không:** trong `page.tsx` (server), gọi
+  `const v2 = await customerUiV2(ownerId)` từ `@/lib/ui-server`, rồi vẽ `<XxxV2>`
+  hoặc bản cũ. Quyết định đi theo studio sở hữu trang: cờ `ui_v2 = "default"` là
+  mọi studio, còn lại chỉ studio của tài khoản admin.
+- **Khung:** bọc bằng `CustomerRootV2` (+ `CustomerHeaderV2`, `CustomerMainV2`)
+  từ `src/components/v2/customer.tsx`. Lớp `client-doc ui-v2` cho đúng bộ màu V2,
+  bên trong dùng đúng bộ khối `kit.tsx` / `kit-client.tsx`.
+- **Viết cho khách, không phải cho studio:** chữ to và dễ hiểu hơn, một việc
+  chính mỗi màn (ký, thanh toán, chọn ảnh, gửi form), trạng thái rõ ràng (đã ký,
+  còn phải trả bao nhiêu, hạn khi nào). Trang phải đẹp trên điện thoại trước,
+  vì khách mở link từ Zalo hoặc Messenger.
+- **Giữ nguyên:** token và link, phân quyền, chức năng in và PDF, chữ ký, mã QR
+  thanh toán, metadata chia sẻ (`studioShareMetadata`), mọi API khách gọi.
+- **Không vẽ lại** phần trang trí nghệ thuật (mẫu thiệp cưới, love story, website
+  studio do studio tự dựng). Chỉ làm lại phần khung thao tác quanh chúng nếu có.

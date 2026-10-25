@@ -3,6 +3,7 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { getSessionUser, getProfileById } from "@/lib/auth-guards";
 import { getFeatureFlags } from "@/lib/feature-flags";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { UI_COOKIE, resolveUi, uiV2Mode, type UiState } from "@/lib/ui-version";
 
 /**
@@ -22,3 +23,24 @@ export const getUiState = cache(async (): Promise<UiState> => {
 export async function isUiV2(): Promise<boolean> {
   return (await getUiState()).active;
 }
+
+/**
+ * TRANG KHÁCH (hợp đồng, báo giá, album, cổng khách, đặt lịch, cổng thợ…) có vẽ
+ * bằng giao diện mới không. Khách không đăng nhập nên không có công tắc riêng —
+ * quyết định theo STUDIO sở hữu trang, đúng tinh thần "admin dùng trước":
+ *   • cờ ui_v2 = "default" → mọi studio;
+ *   • còn lại (chỉ admin / studio tự bật) → chỉ studio của tài khoản admin.
+ * Đọc role bằng service-role (trang khách không có phiên đăng nhập), cache theo
+ * lượt dựng trang.
+ */
+export const customerUiV2 = cache(async (ownerId: string | null | undefined): Promise<boolean> => {
+  const flags = await getFeatureFlags();
+  if (uiV2Mode(flags) === "default") return true;
+  if (!ownerId) return false;
+  try {
+    const { data } = await createAdminClient().from("profiles").select("role").eq("id", ownerId).maybeSingle();
+    return (data as { role?: string } | null)?.role === "admin";
+  } catch {
+    return false;
+  }
+});

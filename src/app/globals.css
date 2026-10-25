@@ -918,7 +918,9 @@ body {
    @/lib/ui-version) lên style; mặc định xanh dương như ảnh tham khảo.
    Nền xám ngả xanh, thẻ trắng, viền mảnh — gọn và dịu mắt hơn nền be của bản cũ.
    ════════════════════════════════════════════════════════════════════════════ */
-.studio-shell.ui-v2 {
+/* Trang khách V2 (.client-doc.ui-v2) dùng CHUNG bộ token với khung studio mới. */
+.studio-shell.ui-v2,
+.client-doc.ui-v2 {
   --ac: var(--ac-base, #0b5cc4);
   --acS: color-mix(in srgb, var(--ac) 10%, #ffffff);
   --acM: color-mix(in srgb, var(--ac) 20%, #ffffff);
@@ -950,8 +952,13 @@ body {
   --topbar-h: 60px;
   --topbar: rgba(255, 255, 255, 0.88);
   --sh-pop: 0 18px 44px -12px rgba(15, 30, 55, 0.22), 0 2px 6px rgba(15, 30, 55, 0.06);
+  /* Ba token dưới đây khung studio có sẵn, trang khách (.client-doc) thì không. */
+  --bdS: color-mix(in srgb, var(--bd) 72%, var(--tx3));
+  --sh-modal: 0 24px 70px rgba(15, 30, 55, 0.28);
+  --sh-toast: 0 12px 34px rgba(15, 30, 55, 0.3);
 }
-.studio-shell.ui-v2[data-theme="dark"] {
+.studio-shell.ui-v2[data-theme="dark"],
+.client-doc.ui-v2[data-theme="dark"] {
   --ac: color-mix(in srgb, var(--ac-base, #0b5cc4) 72%, #ffffff);
   --acS: color-mix(in srgb, var(--ac) 18%, #171e27);
   --acM: color-mix(in srgb, var(--ac) 32%, #171e27);
