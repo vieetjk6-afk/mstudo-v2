@@ -5,7 +5,7 @@ import { Badge, Progress, btn, type Tone } from "@/components/v2/kit";
 import { CREW_STATUS_LABEL, vnd, type CrewStatus } from "@/lib/types";
 import { fmtDate, todayVN } from "@/lib/date";
 import { crewRoleLabel } from "@/lib/crew-roles";
-import { CREW_TONE, CrewFaces, DateTile, initialsOf, nextSession, relDay, sessionWhen, sessionsOf, toneText, type V2Ctx } from "./ContractV2Parts";
+import { CREW_TONE, CrewFaces, DateTile, initialsOf, nextSession, relDay, sessionWhen, sessionsOf, toneText, type V2Ctx } from "./ContractV2Shared";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Cột phải của màn chi tiết hợp đồng (giao diện mới): ba thẻ tóm tắt — tiền,
@@ -84,7 +84,7 @@ export function RailMoney({ ctx }: { ctx: V2Ctx }) {
 
       {ed.balance > 0 && ed.props.contract.status !== "cancelled" && (
         <div className="mt-3 flex gap-2">
-          <button type="button" className={btn("secondary", "sm", "flex-1")} onClick={() => ctx.openCollect(next?.id)}>
+          <button type="button" className={btn("secondary", "sm", "!flex-1")} onClick={() => ctx.openCollect(next?.id)}>
             <Wallet size={15} /> Ghi nhận
           </button>
           <button

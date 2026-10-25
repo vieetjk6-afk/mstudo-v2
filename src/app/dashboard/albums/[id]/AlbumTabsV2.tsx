@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
-  ArrowRight, ArrowUpRight, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, Eye, FileText, Filter, FolderInput,
+  ArrowRight, ArrowUpRight, CheckCircle2, ChevronDown, Copy, Download, ExternalLink, Eye, FileText, FolderInput,
   FolderOpen, HardDrive, HardDriveDownload, Heart, Info, Link2, Lock, MessageCircle, MessageSquareText, MousePointerClick,
   PackageCheck, Printer, Send, Share2, Trash2, Users,
 } from "lucide-react";
@@ -31,15 +31,11 @@ export function PicksTabV2({
   e,
   albumId,
   selections,
-  canFilter,
-  onFilter,
   onShare,
 }: {
   e: AlbumEditorState;
   albumId: string;
   selections: AlbumPick[];
-  canFilter: boolean;
-  onFilter: () => void;
   onShare: () => void;
 }) {
   if (selections.length === 0) {
@@ -130,11 +126,6 @@ export function PicksTabV2({
                   { label: "Tải .txt kèm ghi chú", hint: "Gửi thợ chỉnh ảnh", icon: FileText, onClick: e.exportPickList },
                 ]}
               />
-              {canFilter && (
-                <button type="button" onClick={onFilter} className={btn("secondary")}>
-                  <Filter size={16} /> Lọc ảnh
-                </button>
-              )}
               <Link href={`/dashboard/albums/${albumId}/selections`} className={btn("ghost")}>
                 Chi tiết <ArrowUpRight size={15} />
               </Link>
@@ -252,12 +243,12 @@ export function ShareTabV2({
   zaloSavedName: string | null;
 }) {
   const link = e.clientLink;
-  const message = albumShareMessage(clientName || album.client_name, link);
   // Link có thể tương đối (chưa bật tên miền riêng) — hiện & chép bản đầy đủ.
   // Gốc trang chỉ biết ở trình duyệt; máy chủ dựng bản tương đối, không lệch hydrate.
   const origin = useSyncExternalStore(noSubscribe, () => window.location.origin, () => "");
   const absolute = /^https?:\/\//i.test(link) ? link : `${origin}${link}`;
-  const share = useShareLink(absolute, e.form.title, albumShareMessage(clientName || album.client_name, absolute));
+  const message = albumShareMessage(clientName || album.client_name, absolute);
+  const share = useShareLink(absolute, e.form.title, message);
   const isDelivery = e.phase === "delivery";
 
   return (
@@ -393,17 +384,25 @@ function CustomerSharesV2({ e, shares, slug, baseUrl }: { e: AlbumEditorState; s
           const missing = sh.photoIds.length - list.length;
           const url = `${baseUrl}?s=${sh.token}`;
           const names = list.map((p) => p.name);
+          const moreCls = `v2-num h-10 w-10 items-center justify-center rounded-[9px] text-[12px] font-semibold ${list.length > 4 ? "flex" : "flex sm:hidden"}`;
+          const moreStyle = { border: "2px solid var(--sf)", background: "var(--sf2)", color: "var(--tx2)" };
           return (
             <div key={sh.token} className="v2-row flex-wrap sm:flex-nowrap">
               <div className="flex flex-none -space-x-2">
-                {list.slice(0, 4).map((p) => (
-                  <span key={p.id} className="h-10 w-10 overflow-hidden rounded-[9px]" style={{ border: "2px solid var(--sf)", background: "var(--sf2)" }}>
+                {/* Điện thoại 2 ảnh, máy tính 4 ảnh — phần còn lại gộp thành "+N". */}
+                {list.slice(0, 4).map((p, i) => (
+                  <span
+                    key={p.id}
+                    className={`h-10 w-10 overflow-hidden rounded-[9px] ${i >= 2 ? "hidden sm:block" : "block"}`}
+                    style={{ border: "2px solid var(--sf)", background: "var(--sf2)" }}
+                  >
                     <Thumb fileId={p.drive_file_id} alt={p.name} w={120} />
                   </span>
                 ))}
-                {list.length > 4 && (
-                  <span className="v2-num flex h-10 w-10 items-center justify-center rounded-[9px] text-[12px] font-semibold" style={{ border: "2px solid var(--sf)", background: "var(--sf2)", color: "var(--tx2)" }}>
-                    +{list.length - 4}
+                {list.length > 2 && (
+                  <span className={moreCls} style={moreStyle}>
+                    <span className="sm:hidden">+{list.length - 2}</span>
+                    {list.length > 4 && <span className="hidden sm:inline">+{list.length - 4}</span>}
                   </span>
                 )}
               </div>
@@ -843,11 +842,17 @@ export function SettingsTabV2({
         </div>
       </Section>
 
-      <Section icon={Trash2} title="Xoá album" desc="Xoá album và mọi lựa chọn của khách. Không hoàn tác được; số album đã tạo trong tháng vẫn được tính.">
-        <button type="button" onClick={() => void e.deleteAlbum()} disabled={e.deleting} className={btn("danger")}>
+      <div className="v2-card v2-card-pad flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="min-w-0 flex-1">
+          <p className="text-[14px] font-semibold" style={{ color: "var(--rd)" }}>Xoá album</p>
+          <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
+            Xoá album và mọi lựa chọn của khách, không hoàn tác được. Số album đã tạo trong tháng vẫn được tính.
+          </p>
+        </div>
+        <button type="button" onClick={() => void e.deleteAlbum()} disabled={e.deleting} className={btn("danger", "md", "self-start sm:self-auto")}>
           <Trash2 size={16} /> {e.deleting ? "Đang xoá…" : "Xoá album này"}
         </button>
-      </Section>
+      </div>
 
       {!e.dirty && (
         <p className="flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--tx3)" }}>

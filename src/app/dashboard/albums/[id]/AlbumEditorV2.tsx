@@ -5,7 +5,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import {
   ArrowLeft, ArrowLeftRight, CheckCircle2, ExternalLink, FileText, Filter, FolderOpen, Heart, Images, ListChecks, Lock,
-  MousePointerClick, PackageCheck, Printer, RefreshCw, Save, Send, Settings2, Share2, Trash2,
+  MousePointerClick, PackageCheck, Plus, Printer, RefreshCw, Save, Send, Settings2, Share2, Trash2,
 } from "lucide-react";
 import { fmtDate } from "@/lib/date";
 import { Badge, Callout, Stack, btn, iconBtn } from "@/components/v2/kit";
@@ -87,7 +87,12 @@ export default function AlbumEditorV2({
   const canFilter = !isDelivery;
   const coverFile = e.photos[0]?.drive_file_id ?? null;
 
-  const primary = done ? (
+  const empty = e.photos.length === 0;
+  const primary = empty ? (
+    <button type="button" onClick={() => setSourcesOpen(true)} className={btn("primary")}>
+      <Plus size={16} /> Thêm ảnh từ Drive
+    </button>
+  ) : done ? (
     <button type="button" onClick={() => setFilterOpen(true)} className={btn("primary")}>
       <Filter size={16} /> Lọc ảnh
     </button>
@@ -96,7 +101,7 @@ export default function AlbumEditorV2({
       <Send size={16} /> Gửi cho khách
     </button>
   );
-  const secondary = done ? (
+  const secondary = empty ? null : done ? (
     <button type="button" onClick={() => go("share")} className={btn("secondary")}>
       <Send size={16} /> Gửi cho khách
     </button>
@@ -288,8 +293,6 @@ export default function AlbumEditorV2({
             e={e}
             albumId={album.id}
             selections={selections}
-            canFilter={canFilter}
-            onFilter={() => setFilterOpen(true)}
             onShare={() => go("share")}
           />
         )}
@@ -333,7 +336,7 @@ export default function AlbumEditorV2({
 
       {/* Thanh lưu dính đáy: hiện ở MỌI tab khi cài đặt có thay đổi chưa lưu. */}
       {e.dirty && (
-        <div className="sticky bottom-[84px] z-40 lg:bottom-5">
+        <div className="sticky bottom-[80px] z-40 lg:bottom-5">
           <div className="v2-card flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3" style={{ boxShadow: "var(--sh-pop)" }}>
             <span className="h-2 w-2 flex-none rounded-full" style={{ background: "var(--am)" }} />
             <p className="min-w-0 flex-1 text-[13.5px] font-semibold">
@@ -344,11 +347,11 @@ export default function AlbumEditorV2({
                 </button>
               ) : null}
             </p>
-            <div className="flex w-full gap-2 sm:w-auto">
-              <button type="button" onClick={e.resetForm} disabled={e.saving} className={btn("ghost", "md", "flex-1 sm:flex-none")}>
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+              <button type="button" onClick={e.resetForm} disabled={e.saving} className={btn("ghost")}>
                 Huỷ thay đổi
               </button>
-              <button type="button" onClick={e.saveSettings} disabled={e.saving} className={btn("primary", "md", "flex-1 sm:flex-none")}>
+              <button type="button" onClick={e.saveSettings} disabled={e.saving} className={btn("primary")}>
                 <Save size={16} /> {e.saving ? "Đang lưu…" : "Lưu thay đổi"}
               </button>
             </div>

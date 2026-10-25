@@ -349,9 +349,9 @@ export function CrewFaces({ rows, max = 4 }: { rows: CrewRow[]; max?: number }) 
       {rows.slice(0, max).map((r, i) => (
         <span
           key={r.id ?? `n${i}`}
-          className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full text-[10px] font-bold"
+          className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[10px] font-bold"
           style={{
-            marginLeft: i ? -7 : 0,
+            marginLeft: i ? -5 : 0,
             boxShadow: "0 0 0 2px var(--sf)",
             background: "var(--acS)",
             color: "var(--ac)",
@@ -362,8 +362,8 @@ export function CrewFaces({ rows, max = 4 }: { rows: CrewRow[]; max?: number }) 
       ))}
       {rows.length > max && (
         <span
-          className="flex h-[26px] min-w-[26px] flex-none items-center justify-center rounded-full px-1 text-[10px] font-semibold"
-          style={{ marginLeft: -7, boxShadow: "0 0 0 2px var(--sf)", background: "var(--sf2)", color: "var(--tx2)" }}
+          className="flex h-7 min-w-7 flex-none items-center justify-center rounded-full px-1 text-[10px] font-semibold"
+          style={{ marginLeft: -5, boxShadow: "0 0 0 2px var(--sf)", background: "var(--sf2)", color: "var(--tx2)" }}
         >
           +{rows.length - max}
         </span>

@@ -34,7 +34,7 @@ import { qrUrl } from "@/components/VietQR";
 import VoucherRedeem from "./VoucherRedeem";
 import LoyaltyVoucherCard from "./LoyaltyVoucherCard";
 import { serializeItems, toItemRow } from "./useContractEditor";
-import { ProofThumb, type V2Ctx } from "./ContractV2Parts";
+import { ProofThumb, type V2Ctx } from "./ContractV2Shared";
 import { EMBED } from "./ContractV2Items";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -60,14 +60,14 @@ export default function ContractV2Payments({ ctx }: { ctx: V2Ctx }) {
         icon={Wallet}
         desc="Mỗi đợt đặt sẵn số tiền và hạn. Khách trả thì bấm Ghi thu — quá hạn sẽ được nhắc ở Tổng quan."
         actions={
-          <button type="button" className={btn("secondary", "sm")} onClick={() => ctx.openAddPlan()}>
-            <Plus size={15} /> Thêm đợt
+          <button type="button" className={btn("secondary", "sm")} onClick={() => ctx.openAddPlan()} aria-label="Thêm đợt thanh toán">
+            <Plus size={15} /> <span className="hidden sm:inline">Thêm đợt</span>
           </button>
         }
         flush
       >
         {/* Tóm tắt */}
-        <div className="grid grid-cols-3 gap-2 px-4 pt-4 sm:px-5">
+        <div className="grid gap-2 px-4 pt-4 sm:grid-cols-3 sm:px-5">
           <Money label="Giá trị hợp đồng" value={vnd(ed.total)} />
           <Money label="Đã thu" value={vnd(ed.collected)} color="var(--gn)" />
           <Money label={done ? "Còn lại" : "Còn phải thu"} value={vnd(Math.max(0, ed.balance))} color={ed.balance > 0 ? "var(--am)" : "var(--gn)"} />
@@ -198,11 +198,11 @@ export default function ContractV2Payments({ ctx }: { ctx: V2Ctx }) {
 
 function Money({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="min-w-0 rounded-[12px] px-3 py-2.5" style={{ background: "var(--sf2)" }}>
-      <p className="truncate text-[12px]" style={{ color: "var(--tx3)" }}>
+    <div className="flex min-w-0 items-baseline justify-between gap-3 rounded-[12px] px-3 py-2.5 sm:block" style={{ background: "var(--sf2)" }}>
+      <p className="truncate text-[12.5px] sm:text-[12px]" style={{ color: "var(--tx3)" }}>
         {label}
       </p>
-      <p className="v2-num mt-0.5 truncate text-[15px] font-bold sm:text-[16.5px]" style={{ color: color ?? "var(--tx)" }}>
+      <p className="v2-num truncate text-[15px] font-bold sm:mt-0.5 sm:text-[16.5px]" style={{ color: color ?? "var(--tx)" }}>
         {value}
       </p>
     </div>
@@ -258,11 +258,11 @@ function PlanRow({ ctx, it, onRemind, onEdit }: { ctx: V2Ctx; it: ContractPaymen
       ];
 
   return (
-    <li className="flex items-start gap-3 px-4 py-3.5 sm:px-5" style={{ borderBottom: "1px solid var(--bd2)" }}>
+    <li className="flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3.5 sm:flex-nowrap sm:px-5" style={{ borderBottom: "1px solid var(--bd2)" }}>
       <span className="mt-0.5 flex-none" style={{ color: it.paid ? "var(--gn)" : overdue ? "var(--rd)" : "var(--tx3)" }}>
         {it.paid ? <CheckCircle2 size={20} /> : <Circle size={20} />}
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-[230px]">
         <div className="flex items-baseline justify-between gap-3">
           <p className="min-w-0 truncate text-[14px] font-semibold">{it.label}</p>
           <p className="v2-num flex-none text-[14.5px] font-semibold" style={{ color: it.paid ? "var(--gn)" : "var(--tx)" }}>
@@ -290,7 +290,7 @@ function PlanRow({ ctx, it, onRemind, onEdit }: { ctx: V2Ctx; it: ContractPaymen
           {proofs.length > 0 && !it.paid && <Badge tone="blue">Khách đã gửi ảnh CK</Badge>}
         </div>
       </div>
-      <div className="flex flex-none items-center gap-1">
+      <div className="ml-auto flex flex-none items-center gap-1">
         {!it.paid && (
           <Menu
             label={`Ghi thu ${it.label}`}

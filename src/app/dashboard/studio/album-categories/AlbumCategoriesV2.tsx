@@ -147,7 +147,7 @@ function CatRow({
           }}
           aria-label={`Tên mới cho loại ${cat.label}`}
         />
-        <div className="flex flex-none gap-2">
+        <div className="ml-auto flex flex-none gap-2">
           <button type="button" onClick={onCancel} className={btn("ghost", "md")}>
             <X size={16} /> Huỷ
           </button>
@@ -164,10 +164,13 @@ function CatRow({
       <div className="min-w-0 flex-1">
         <p className="v2-row-title">{cat.label}</p>
         <p className="v2-row-sub">
+          <span className="sm:hidden">{cat.count} album · </span>
           <span className="v2-num">{cat.slug}</span>
         </p>
       </div>
-      <Badge tone="gray">{cat.count} album</Badge>
+      <span className="hidden sm:inline-flex">
+        <Badge tone="gray">{cat.count} album</Badge>
+      </span>
       <button type="button" onClick={onEdit} className={iconBtn()} aria-label={`Đổi tên ${cat.label}`} title="Đổi tên">
         <Pencil size={16} />
       </button>

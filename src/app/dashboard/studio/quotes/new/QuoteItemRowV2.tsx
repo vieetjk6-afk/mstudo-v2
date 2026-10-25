@@ -65,9 +65,10 @@ export default function QuoteItemRowV2({
     >
       {item.is_discount ? <span aria-hidden className="absolute inset-y-0 left-0 w-[3px]" style={{ background: "var(--am)" }} /> : null}
 
-      <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)_auto_auto] items-center gap-2 md:grid-cols-[minmax(0,1fr)_64px_136px_auto_auto]">
+      {/* Dòng chính: tên · SL · đơn giá · xoá. Điện thoại: tên + xoá, rồi SL + đơn giá. */}
+      <div className="grid min-w-0 grid-cols-[64px_minmax(0,1fr)_auto] items-center gap-2 [grid-template-areas:'name_name_del'_'qty_price_price'] md:grid-cols-[minmax(0,1fr)_64px_140px_auto] md:[grid-template-areas:'name_qty_price_del']">
         <input
-          className={`${inputCls} col-span-4 font-medium md:col-span-1`}
+          className={`${inputCls} font-medium [grid-area:name]`}
           placeholder={item.is_discount ? "Tên giảm giá" : "Tên hạng mục"}
           value={item.name}
           disabled={disabled}
@@ -78,7 +79,7 @@ export default function QuoteItemRowV2({
         <input
           type="number"
           min={1}
-          className={`${inputCls} tnum text-center`}
+          className={`${inputCls} tnum text-center [grid-area:qty]`}
           placeholder="SL"
           title="Số lượng"
           aria-label={`Số lượng hạng mục ${index + 1}`}
@@ -89,7 +90,7 @@ export default function QuoteItemRowV2({
         {disabled ? (
           // Báo giá đã chốt: chỉ xem (MoneyInput không có trạng thái khoá).
           <input
-            className={`${inputCls} tnum text-right font-semibold`}
+            className={`${inputCls} tnum text-right font-semibold [grid-area:price]`}
             value={item.unit_price ? item.unit_price.toLocaleString("vi-VN") : ""}
             aria-label={`Đơn giá hạng mục ${index + 1}`}
             disabled
@@ -101,35 +102,22 @@ export default function QuoteItemRowV2({
             onChange={(n) => onPatch({ unit_price: n })}
             placeholder="Đơn giá"
             ariaLabel={`Đơn giá hạng mục ${index + 1}`}
-            className={`${inputCls} tnum text-right font-semibold`}
+            className={`${inputCls} tnum text-right font-semibold [grid-area:price]`}
           />
         )}
-        <button
-          type="button"
-          onClick={() => onPatch({ is_optional: !item.is_optional })}
-          disabled={disabled}
-          className={btn("secondary", "md", "px-3")}
-          title={item.is_optional ? "Khách tự chọn có lấy hay không — bấm để khoá thành bắt buộc" : "Khách không bỏ được — bấm để mở thành tuỳ chọn"}
-          data-testid={testIds.toggle}
-        >
-          {item.is_optional ? <LockOpen size={14} /> : <Lock size={14} />}
-          <span className="text-[12.5px]">{item.is_optional ? "Tuỳ chọn" : "Bắt buộc"}</span>
-        </button>
         {onRemove && !disabled ? (
-          <button type="button" onClick={onRemove} aria-label={`Xoá hạng mục ${index + 1}`} title="Xoá" className={iconBtn()}>
+          <button type="button" onClick={onRemove} aria-label={`Xoá hạng mục ${index + 1}`} title="Xoá" className={iconBtn("[grid-area:del]")}>
             <Trash2 size={16} />
           </button>
-        ) : (
-          <span className="hidden md:block" />
-        )}
+        ) : null}
       </div>
 
       {descOpen ? (
         // Nhiều dòng: Enter xuống dòng, khách thấy đúng từng dòng ở trang báo giá, bản in và hợp đồng chốt từ báo giá.
         <textarea
           className={`${inputCls} mt-2 block resize-y text-[13.5px]`}
-          style={{ minHeight: 64 }}
-          rows={2}
+          style={{ minHeight: 0 }}
+          rows={Math.min(6, Math.max(2, desc.split("\n").length))}
           value={desc}
           disabled={disabled}
           aria-label={`Mô tả hạng mục ${index + 1}`}
@@ -150,13 +138,25 @@ export default function QuoteItemRowV2({
         />
       ) : null}
 
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12.5px]">
+        <button
+          type="button"
+          onClick={() => onPatch({ is_optional: !item.is_optional })}
+          disabled={disabled}
+          className={btn("secondary", "sm", "h-7 gap-1 px-2.5 text-[12.5px]")}
+          title={item.is_optional ? "Khách tự chọn có lấy hay không — bấm để khoá thành bắt buộc" : "Khách không bỏ được — bấm để mở thành tuỳ chọn"}
+          aria-label={item.is_optional ? "Đang là tuỳ chọn — bấm để khoá thành bắt buộc" : "Đang là bắt buộc — bấm để mở thành tuỳ chọn"}
+          data-testid={testIds.toggle}
+        >
+          {item.is_optional ? <LockOpen size={13} /> : <Lock size={13} />}
+          {item.is_optional ? "Tuỳ chọn" : "Bắt buộc"}
+        </button>
         {item.is_discount ? (
           <Badge tone="amber" icon={Tag}>Giảm giá — trừ vào tổng</Badge>
         ) : showSelection ? (
-          <span style={{ color: item.is_optional ? (item.selected ? "var(--gn)" : "var(--tx3)") : "var(--tx3)" }}>
-            {item.is_optional ? (item.selected ? "✓ Khách đã chọn" : "✗ Khách bỏ chọn") : "Bắt buộc"}
-          </span>
+          item.is_optional ? (
+            <span style={{ color: item.selected ? "var(--gn)" : "var(--tx3)" }}>{item.selected ? "✓ Khách đã chọn" : "✗ Khách bỏ chọn"}</span>
+          ) : null
         ) : null}
         {!disabled && !descOpen ? (
           <button type="button" onClick={() => setShowDesc(true)} className="inline-flex items-center gap-1 font-medium hover:underline" style={{ color: "var(--tx2)" }}>

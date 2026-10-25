@@ -171,25 +171,34 @@ export default function SelectionsV2(props: SelectionsProps) {
                   ...(s.dislikeItems.length ? [{ value: "disliked" as const, label: "Không thích", count: s.dislikeItems.length }] : []),
                 ]}
               />
-              {s.groups.length > 1 && view !== "disliked" && (
-                <select aria-label="Mã chọn" className={inputCls} value={session} onChange={(e) => setSession(e.target.value)}>
-                  <option value="all">Mọi mã chọn ({s.groups.length})</option>
-                  {s.groups.map((g) => (
-                    <option key={g.sessionId} value={g.sessionId}>
-                      {groupName(g)} · {g.items.length} ảnh
-                    </option>
-                  ))}
-                </select>
-              )}
-              <Menu
-                width={280}
-                trigger={({ toggle, open }) => (
-                  <button type="button" onClick={toggle} aria-expanded={open} className={btn("secondary")}>
-                    <Copy size={16} /> Chép mã ảnh <ChevronDown size={15} className="-mr-1 opacity-70" />
-                  </button>
+              {/* Mã chọn + menu chép đi chung một hàng (điện thoại không tràn khỏi thẻ). */}
+              <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+                {s.groups.length > 1 && view !== "disliked" && (
+                  <select
+                    aria-label="Mã chọn"
+                    className={`${inputCls} min-w-0 flex-1 sm:flex-none`}
+                    style={{ width: "auto" }}
+                    value={session}
+                    onChange={(e) => setSession(e.target.value)}
+                  >
+                    <option value="all">Mọi mã ({s.groups.length})</option>
+                    {s.groups.map((g) => (
+                      <option key={g.sessionId} value={g.sessionId}>
+                        {groupName(g)} · {g.items.length} ảnh
+                      </option>
+                    ))}
+                  </select>
                 )}
-                items={copyItems}
-              />
+                <Menu
+                  width={280}
+                  trigger={({ toggle, open }) => (
+                    <button type="button" onClick={toggle} aria-expanded={open} className={btn("secondary")}>
+                      <Copy size={16} /> Chép mã ảnh <ChevronDown size={15} className="-mr-1 opacity-70" />
+                    </button>
+                  )}
+                  items={copyItems}
+                />
+              </div>
             </Toolbar>
           </div>
 

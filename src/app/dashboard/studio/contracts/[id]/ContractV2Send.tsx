@@ -13,7 +13,7 @@ import { intakeIsWedding } from "@/lib/types";
 import { studioUrl } from "@/lib/hosts";
 import { intakeViewHref } from "@/lib/notifications";
 import { cleanIntakeLocation, intakeDirections } from "@/lib/intake-text";
-import { ClientLinks, SendOptions, ViewedLine, type V2Ctx } from "./ContractV2Parts";
+import { ClientLinks, SendOptions, ViewedLine, type V2Ctx } from "./ContractV2Shared";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab KÝ & GỬI (giao diện mới): gửi cổng khách → chữ ký hai bên → yêu cầu
@@ -247,6 +247,11 @@ function IntakeSection({ ctx, wedding, studioHost }: { ctx: V2Ctx; wedding: bool
       }
     >
       <div className="flex flex-col gap-4">
+        {!formUrl && !submitted && (
+          <p className="text-[13px]" style={{ color: "var(--tx3)" }}>
+            Chưa có link form cho hợp đồng này — tải lại trang để tạo.
+          </p>
+        )}
         {formUrl && (
           <div className="flex flex-wrap gap-2">
             <a href={formUrl} target="_blank" rel="noreferrer" className={btn("secondary", "sm")}>

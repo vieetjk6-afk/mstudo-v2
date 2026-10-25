@@ -30,7 +30,7 @@ import { crewRoleLabel } from "@/lib/crew-roles";
 import { CREW_SIDE_LABEL, CREW_TASK_LABEL } from "@/lib/crew-show";
 import { PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
 import ContractAppointments from "./ContractAppointments";
-import { CREW_TONE, CrewFaces, DateTile, relDay, sessionWhen, sessionsOf, toneText, type Session, type V2Ctx } from "./ContractV2Parts";
+import { CREW_TONE, CrewFaces, DateTile, relDay, sessionWhen, sessionsOf, toneText, type Session, type V2Ctx } from "./ContractV2Shared";
 import { EMBED } from "./ContractV2Items";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -57,8 +57,8 @@ export default function ContractV2Crew({ ctx }: { ctx: V2Ctx }) {
         icon={CalendarDays}
         desc="Buổi chính và các mốc (thử đồ, đãi tiệc, trao ảnh…) — hiện trên Lịch, lịch thợ và cổng khách."
         actions={
-          <button type="button" className={btn("secondary", "sm")} onClick={() => setMsEdit({ id: null })}>
-            <Plus size={15} /> Thêm buổi
+          <button type="button" className={btn("secondary", "sm")} onClick={() => setMsEdit({ id: null })} aria-label="Thêm buổi hoặc mốc lịch">
+            <Plus size={15} /> <span className="hidden sm:inline">Thêm buổi</span>
           </button>
         }
         flush
@@ -77,8 +77,8 @@ export default function ContractV2Crew({ ctx }: { ctx: V2Ctx }) {
         desc={crew.length ? `${ed.activeCrew.length} người · tổng tiền công ${vnd(ed.payroll)} · đã trả ${vnd(ed.paidPayroll)}` : "Ai làm hợp đồng này và tiền công của từng người."}
         actions={
           <>
-            <button type="button" className={btn("secondary", "sm")} onClick={() => ctx.openCrew(null)}>
-              <UserPlus size={15} /> Thêm người
+            <button type="button" className={btn("secondary", "sm")} onClick={() => ctx.openCrew(null)} aria-label="Thêm người vào ê-kíp">
+              <UserPlus size={15} /> <span className="hidden sm:inline">Thêm người</span>
             </button>
             <Menu
               label="Thao tác ê-kíp"

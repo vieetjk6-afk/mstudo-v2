@@ -466,8 +466,8 @@ export default function NewContractFormV2(props: NewContractFormProps) {
         return (
           <Stack gap={20}>
             <div>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Ngày chụp">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <Field label="Ngày chụp" className="col-span-2 sm:col-span-1">
                   <DateInput value={eventDate} onChange={f.setEventDate} className={inputCls} />
                 </Field>
                 <Field label="Bắt đầu">
@@ -528,7 +528,8 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                             <span className="block truncate text-[14px] font-medium">{r.name || r.phone}</span>
                             <span className="block truncate text-[12.5px]" style={{ color: "var(--tx3)" }}>{crewRoleLabel(r.role, crewRoles)}</span>
                           </span>
-                          {on ? <Check size={17} style={{ flex: "none", color: "var(--ac)" }} /> : <Plus size={17} style={{ flex: "none", color: "var(--tx3)" }} />}
+                          {/* Đã chọn: nền nhạt + ô tiền công đủ nói lên điều đó — điện thoại bỏ dấu ✓ để tên khỏi bị cắt. */}
+                          {on ? <Check size={17} className="hidden sm:block" style={{ flex: "none", color: "var(--ac)" }} /> : <Plus size={17} style={{ flex: "none", color: "var(--tx3)" }} />}
                         </button>
                         {on ? (
                           <MoneyInput
@@ -563,7 +564,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                          Điện thoại: tên đợt một mình một dòng, hạn thu + số tiền dòng dưới. */
                       <div
                         key={i}
-                        className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)_minmax(0,1fr)_auto] items-start gap-2 px-3 py-3 [grid-template-areas:'pct_label_label_del'_'._due_amt_amt'] md:grid-cols-[48px_minmax(0,1fr)_150px_auto] md:[grid-template-areas:'pct_label_amt_del'_'._due_._.']"
+                        className="grid min-w-0 grid-cols-[48px_minmax(0,1fr)_minmax(0,1fr)_auto] items-start gap-2 px-3 py-3 [grid-template-areas:'pct_label_label_del'_'due_due_amt_amt'] md:grid-cols-[48px_minmax(0,1fr)_150px_auto] md:[grid-template-areas:'pct_label_amt_del'_'._due_._.']"
                       >
                         <span className="tnum flex h-[38px] items-center justify-center rounded-[10px] text-[12.5px] font-bold [grid-area:pct]" style={{ background: "var(--acS)", color: "var(--ac)" }}>
                           {pct}%
@@ -584,7 +585,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                           onChange={(v) => f.patchInstalment(i, { due: v })}
                           className={inputCls}
                           wrapperClassName="[grid-area:due] md:max-w-[220px]"
-                          placeholder="Hạn thu (dd/mm/yyyy)"
+                          placeholder="Hạn thu"
                         />
                       </div>
                     );

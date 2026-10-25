@@ -337,11 +337,11 @@ function PhotoDrawer({
               void e.removePhoto(photo.id);
               onClose();
             }}
-            className={btn("danger", "md", "flex-1 sm:flex-none")}
+            className={btn("danger")}
           >
             <Trash2 size={16} /> Gỡ khỏi album
           </button>
-          <button type="button" onClick={() => void e.setCover(photo.drive_file_id)} disabled={isCover} className={btn("primary", "md", "flex-1 sm:flex-none")}>
+          <button type="button" onClick={() => void e.setCover(photo.drive_file_id)} disabled={isCover} className={btn("primary")}>
             <Star size={16} /> {isCover ? "Đang là ảnh bìa" : "Đặt làm ảnh bìa"}
           </button>
         </>
@@ -412,14 +412,14 @@ export function SourcesDrawerV2({
       width={520}
       footer={
         <>
-          <button type="button" onClick={onClose} className={btn("ghost", "md", "flex-1 sm:flex-none")}>
+          <button type="button" onClick={onClose} className={btn("ghost")}>
             Đóng
           </button>
           <button
             type="button"
             onClick={() => void e.sync()}
             disabled={e.syncing || e.sources.length === 0}
-            className={btn("primary", "md", "flex-1 sm:flex-none")}
+            className={btn("primary")}
           >
             <RefreshCw size={16} className={e.syncing ? "animate-spin" : ""} /> {e.syncing ? "Đang đồng bộ…" : "Đồng bộ ảnh"}
           </button>

@@ -172,7 +172,7 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-x-5 gap-y-4 border-t px-5 py-4 lg:grid-cols-4" style={{ borderColor: "var(--bd2)" }}>
-        <div className="min-w-0">
+        <div className="col-span-2 min-w-0 lg:col-span-1">
           <p className={factLabel} style={{ color: "var(--tx3)" }}>Khách hàng</p>
           {quote.client_name || quote.client_phone ? (
             <div className="mt-1.5 flex min-w-0 items-center gap-2.5">
@@ -191,7 +191,7 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
         <div className="min-w-0">
           <p className={factLabel} style={{ color: "var(--tx3)" }}>Khách đang chọn</p>
           <p className="tnum mt-1 text-[20px] font-bold" style={{ color: "var(--ac)", letterSpacing: "-.4px" }}>{vnd(showing)}</p>
-          <p className="tnum text-[12.5px]" style={{ color: "var(--tx3)" }}>Cọc ~{e.depositPct.toFixed(0)}%: {vnd(e.deposit)}</p>
+          <p className="tnum text-[12.5px]" style={{ color: "var(--tx3)" }}>Cọc đề xuất ≈{e.depositPct.toFixed(0)}%: {vnd(e.deposit)}</p>
         </div>
         <div className="min-w-0" data-testid={quote.status !== "draft" ? "quote-expiry" : undefined}>
           <p className={factLabel} style={{ color: "var(--tx3)" }}>Hiệu lực</p>
@@ -222,7 +222,7 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
             </>
           )}
         </div>
-        <div className="min-w-0">
+        <div className="col-span-2 min-w-0 lg:col-span-1">
           <p className={factLabel} style={{ color: "var(--tx3)" }}>Ngày sự kiện</p>
           <p className="mt-1.5 truncate text-[14px] font-medium" style={{ color: quote.event_date ? "var(--tx)" : "var(--tx3)" }}>
             {quote.event_date ? `${fmtDow(quote.event_date)} · ${fmtDate(quote.event_date)}` : "Chưa có"}
@@ -275,8 +275,11 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
         )}
       </div>
       <div className="border-t px-5 py-3" style={{ borderColor: "var(--bd2)" }}>
+        {e.bulkDiscountActive ? (
+          <SumRow label={`Ưu đãi gói ${quote.discount_package_group}`} value={`− ${vnd(quote.bulk_discount_amount ?? 0)}`} tone="var(--gn)" />
+        ) : null}
         <SumRow label="Khách đang chọn" value={vnd(showing)} strong />
-        <SumRow label={`Cọc đề xuất ~${e.depositPct.toFixed(0)}%`} sub="Làm tròn 500K" value={vnd(e.deposit)} />
+        <SumRow label={`Cọc đề xuất ≈${e.depositPct.toFixed(0)}%`} sub="Làm tròn 500K" value={vnd(e.deposit)} />
       </div>
     </aside>
   );
@@ -364,22 +367,21 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
               title="Hạng mục"
               desc={disabledHint}
               icon={ReceiptText}
-              flush={items.length > 0}
-              actions={
-                !locked ? (
-                  <>
-                    <button type="button" onClick={() => e.addItem(true)} className={btn("ghost", "sm")} style={{ color: "var(--am)" }} data-testid="quote-add-discount">
-                      <Tag size={14} /> Giảm giá
-                    </button>
-                    <button type="button" onClick={() => e.addItem(false)} className={btn("secondary", "sm")}>
-                      <Plus size={15} /> Hạng mục
-                    </button>
-                  </>
-                ) : null
-              }
+              flush
             >
               {items.length === 0 ? (
-                <Empty compact icon={ListPlus} title="Chưa có hạng mục" hint={locked ? undefined : "Bấm “Hạng mục” để thêm dòng đầu tiên."} />
+                <Empty
+                  compact
+                  icon={ListPlus}
+                  title="Chưa có hạng mục"
+                  action={
+                    !locked ? (
+                      <button type="button" onClick={() => e.addItem(false)} className={btn("secondary", "sm")}>
+                        <Plus size={15} /> Thêm hạng mục
+                      </button>
+                    ) : undefined
+                  }
+                />
               ) : (
                 <>
                   <div className="[&>*+*]:border-t [&>*+*]:border-[color:var(--bd2)]">
@@ -396,6 +398,16 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
                       />
                     ))}
                   </div>
+                  {!locked ? (
+                    <div className="flex flex-wrap items-center gap-2 border-t px-3.5 py-3" style={{ borderColor: "var(--bd2)" }}>
+                      <button type="button" onClick={() => e.addItem(false)} className={btn("secondary", "sm")}>
+                        <Plus size={15} /> Thêm hạng mục
+                      </button>
+                      <button type="button" onClick={() => e.addItem(true)} className={btn("ghost", "sm")} style={{ color: "var(--am)" }} data-testid="quote-add-discount">
+                        <Tag size={14} /> Thêm giảm giá
+                      </button>
+                    </div>
+                  ) : null}
                   <div className="border-t px-5 py-3.5" style={{ borderColor: "var(--bd)", background: "var(--sf2)" }}>
                     <div className="ml-auto max-w-[380px]">
                       <SumRow label="Tổng hạng mục" value={vnd(e.grossTotal)} />
@@ -404,7 +416,7 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
                         <SumRow label={`Ưu đãi gói ${quote.discount_package_group}`} value={`− ${vnd(quote.bulk_discount_amount ?? 0)}`} tone="var(--gn)" />
                       ) : null}
                       <SumRow label="Khách đang chọn" value={vnd(showing)} strong />
-                      <SumRow label={`Cọc đề xuất ~${e.depositPct.toFixed(0)}%`} sub="Làm tròn 500K" value={vnd(e.deposit)} />
+                      <SumRow label={`Cọc đề xuất ≈${e.depositPct.toFixed(0)}%`} sub="Làm tròn 500K" value={vnd(e.deposit)} />
                     </div>
                   </div>
                 </>

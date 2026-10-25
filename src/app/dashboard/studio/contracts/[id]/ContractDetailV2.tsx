@@ -38,8 +38,8 @@ import { Menu, Modal, Tabs, type MenuItem } from "@/components/v2/kit-client";
 import { CONTRACT_STATUS_LABEL, vnd, type ContractStatus } from "@/lib/types";
 import { kindHasPhotoWork, kindHasRental } from "@/lib/contract-kind";
 import { useContractEditor, type ContractEditorProps } from "./useContractEditor";
-import { LifeBar, STATUS_TONE, relDay, sessionWhen, toneText, type AskOpts, type V2Ctx, type V2Tab } from "./ContractV2Parts";
-import { ContractV2Rail } from "./ContractV2Rail";
+import { LifeBar, STATUS_TONE, relDay, sessionWhen, toneText, type AskOpts, type V2Ctx, type V2Tab } from "./ContractV2Shared";
+import { ContractV2Rail } from "./ContractV2Summary";
 import { AddPlanModal, CollectModal, CrewDrawer, InfoDrawer, QrModal, SendModal } from "./ContractV2Dialogs";
 import ContractV2Overview from "./ContractV2Overview";
 import ContractV2Items from "./ContractV2Items";
@@ -249,7 +249,7 @@ export default function ContractDetailV2(props: ContractEditorProps) {
 
   const stepBtn = (size: "sm" | "md" = "md", full = false) =>
     step ? (
-      <button type="button" onClick={step.run} className={btn("primary", size, full ? "flex-1" : "")}>
+      <button type="button" onClick={step.run} className={btn("primary", size, full ? "!flex-1" : "")}>
         <step.icon size={size === "sm" ? 15 : 17} /> {step.label}
       </button>
     ) : null;
@@ -320,7 +320,7 @@ export default function ContractDetailV2(props: ContractEditorProps) {
           <Fact label="Ngày chụp" className="[border-right:1px_solid_var(--bd2)]">
             {f.event_date ? (
               <>
-                <span className="block truncate">{sessionWhen({ date: f.event_date, time: f.event_time || null })}</span>
+                <span className="block">{sessionWhen({ date: f.event_date, time: f.event_time || null })}</span>
                 {rel && (
                   <span className="mt-0.5 block text-[12.5px] font-medium" style={{ color: toneText(rel.tone) }}>
                     {rel.text}
@@ -377,7 +377,8 @@ export default function ContractDetailV2(props: ContractEditorProps) {
       {/* ── Thanh tab dính ── */}
       <div ref={navRef} className="sticky top-[60px] z-20 -mx-4 px-4 pt-1 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8" style={{ background: "var(--bg)" }}>
         <div className="flex items-end gap-3">
-          <div className="min-w-0 flex-1">
+          {/* Thanh dính đang hiện tên khách + nút chính: bỏ icon tab cho đủ chỗ. */}
+          <div className={`min-w-0 flex-1 ${compact ? "xl:[&_.v2-tab_svg]:hidden" : ""}`}>
             <Tabs
               label="Nội dung hợp đồng"
               value={tabOk ? tab : "info"}
@@ -387,11 +388,16 @@ export default function ContractDetailV2(props: ContractEditorProps) {
           </div>
           {compact && (
             <div className="hidden flex-none items-center gap-2.5 pb-1.5 xl:flex">
-              <span className="max-w-[200px] truncate text-[13.5px] font-semibold">{clientName}</span>
-              <Badge tone={STATUS_TONE[f.status]} dot>
-                {CONTRACT_STATUS_LABEL[f.status]}
-              </Badge>
-              {stepBtn("sm")}
+              <span className="hidden max-w-[190px] truncate text-[13.5px] font-semibold min-[1400px]:inline" title={clientName}>
+                {clientName}
+              </span>
+              {step ? (
+                stepBtn("sm")
+              ) : (
+                <Badge tone={STATUS_TONE[f.status]} dot>
+                  {CONTRACT_STATUS_LABEL[f.status]}
+                </Badge>
+              )}
             </div>
           )}
         </div>

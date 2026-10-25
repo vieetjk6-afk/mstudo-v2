@@ -28,8 +28,8 @@ import { daysFromToday, fmtDate, fmtDateLunar } from "@/lib/date";
 import { kindHasPhotoWork } from "@/lib/contract-kind";
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 import { INTERNAL_NOTE_MISSING, useInternalNote } from "./InternalNoteCard";
-import { RailCrew, RailMoney, RailShoot } from "./ContractV2Rail";
-import type { V2Ctx } from "./ContractV2Parts";
+import { RailCrew, RailMoney, RailShoot } from "./ContractV2Summary";
+import type { V2Ctx } from "./ContractV2Shared";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab TỔNG QUAN (giao diện mới): việc cần làm ngay → (màn hẹp) ba thẻ tóm tắt

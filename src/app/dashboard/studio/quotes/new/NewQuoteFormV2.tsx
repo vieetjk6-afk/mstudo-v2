@@ -53,8 +53,8 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
   const toc = [
     { id: "q2-client", label: "Khách hàng", done: !!(q.clientName.trim() || q.clientPhone.trim()) },
     { id: "q2-packages", label: "Gói & hạng mục", done: items.length > 0 },
-    { id: "q2-items", label: "Danh sách hạng mục", done: items.some((i) => i.name.trim()) },
-    { id: "q2-terms", label: "Điều kiện báo giá", done: !!(q.eventDate || q.location.trim() || q.title.trim()) },
+    { id: "q2-items", label: "Hạng mục", done: items.some((i) => i.name.trim()) },
+    { id: "q2-terms", label: "Điều kiện", done: !!(q.eventDate || q.location.trim() || q.title.trim()) },
   ];
   const jump = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
@@ -109,7 +109,7 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
               {vnd(total)}
             </strong>
           </div>
-          <SumRow label={`Cọc đề xuất ~${depositPct.toFixed(0)}%`} sub="Làm tròn 500K" value={vnd(deposit)} />
+          <SumRow label={`Cọc đề xuất ≈${depositPct.toFixed(0)}%`} sub="Làm tròn 500K" value={vnd(deposit)} />
         </div>
       </div>
 
@@ -270,20 +270,10 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
             desc={<>Khoá <b>Bắt buộc</b> thì khách không bỏ được; <b>Tuỳ chọn</b> thì khách tự chọn.</>}
             icon={ReceiptText}
             className="scroll-mt-[84px]"
-            actions={
-              <>
-                <button type="button" onClick={() => q.add(true)} className={btn("ghost", "sm")} style={{ color: "var(--am)" }} data-testid="quote-add-discount">
-                  <Tag size={14} /> Giảm giá
-                </button>
-                <button type="button" onClick={() => q.add(false)} className={btn("secondary", "sm")} data-testid="quote-item-add">
-                  <Plus size={15} /> Hạng mục
-                </button>
-              </>
-            }
-            flush={items.length > 0}
+            flush
           >
             {items.length === 0 ? (
-              <Empty compact icon={ListPlus} title="Chưa có hạng mục nào" hint="Chọn một gói ở trên, hoặc bấm “Hạng mục” để tự nhập." />
+              <Empty compact icon={ListPlus} title="Chưa có hạng mục nào" hint="Chọn một gói ở trên, hoặc thêm hạng mục tự nhập." />
             ) : (
               <div className="[&>*+*]:border-t [&>*+*]:border-[color:var(--bd2)]">
                 {items.map((it, idx) => (
@@ -298,6 +288,14 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
                 ))}
               </div>
             )}
+            <div className="flex flex-wrap items-center gap-2 border-t px-3.5 py-3" style={{ borderColor: "var(--bd2)" }}>
+              <button type="button" onClick={() => q.add(false)} className={btn("secondary", "sm")} data-testid="quote-item-add">
+                <Plus size={15} /> Thêm hạng mục
+              </button>
+              <button type="button" onClick={() => q.add(true)} className={btn("ghost", "sm")} style={{ color: "var(--am)" }} data-testid="quote-add-discount">
+                <Tag size={14} /> Thêm giảm giá
+              </button>
+            </div>
           </Section>
 
           <Section
@@ -319,7 +317,7 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
                   { label: "Dịch vụ (điều khoản)", value: serviceName || "Không chọn" },
                   { label: "Ngày sự kiện", value: q.eventDate ? fmtDate(q.eventDate) : "Chưa có" },
                   { label: "Địa điểm", value: q.location.trim() || "Chưa có" },
-                  { label: "Cọc đề xuất", value: total > 0 ? `${vnd(deposit)} (~${depositPct.toFixed(0)}%)` : "—" },
+                  { label: "Cọc đề xuất", value: total > 0 ? `${vnd(deposit)} (≈${depositPct.toFixed(0)}%)` : "—" },
                   {
                     label: "Giảm theo gói chỉ định",
                     value: q.bulkDiscountAmount > 0 && q.discountPackageGroup ? `${q.discountPackageGroup} · −${vnd(q.bulkDiscountAmount)}` : "Không áp dụng",

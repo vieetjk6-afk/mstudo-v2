@@ -10,7 +10,7 @@ import { vnd } from "@/lib/types";
 import { PRESET_ITEMS_BY_KIND } from "@/lib/contract-kind";
 import ContractAddenda from "./ContractAddenda";
 import { nextTier, type ItemRow } from "./useContractEditor";
-import { SaveBar, type V2Ctx } from "./ContractV2Parts";
+import { SaveBar, type V2Ctx } from "./ContractV2Shared";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab HẠNG MỤC (giao diện mới): thêm từ bảng giá bằng một ô chọn, mỗi dòng
@@ -280,14 +280,14 @@ function ItemCard({
           {!disc && (
             <input
               type="number"
-              className={`${inputCls} w-[68px] flex-none text-center`}
+              className={`${inputCls} !w-[68px] flex-none text-center`}
               value={it.qty}
               onChange={(e) => setItem({ qty: Number(e.target.value) })}
               aria-label="Số lượng"
               title="Số lượng"
             />
           )}
-          <MoneyInput className={`${inputCls} min-w-0 flex-1 text-right sm:w-[150px] sm:flex-none`} value={it.unit_price} onChange={(n) => setItem({ unit_price: n })} ariaLabel={disc ? "Số tiền giảm" : "Đơn giá"} placeholder="0" />
+          <MoneyInput className={`${inputCls} min-w-0 flex-1 text-right sm:!w-[150px] sm:flex-none`} value={it.unit_price} onChange={(n) => setItem({ unit_price: n })} ariaLabel={disc ? "Số tiền giảm" : "Đơn giá"} placeholder="0" />
           <Menu items={menu} label={`Thao tác cho ${it.name || "hạng mục"}`} />
         </div>
       </div>

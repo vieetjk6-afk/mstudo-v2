@@ -18,7 +18,7 @@ import WeddingPlanCard from "./WeddingPlanCard";
 import WeddingInvitationCard from "./WeddingInvitationCard";
 import LoveStoryCard from "./LoveStoryCard";
 import { EMBED } from "./ContractV2Items";
-import type { V2Ctx } from "./ContractV2Parts";
+import type { V2Ctx } from "./ContractV2Shared";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab SẢN PHẨM (giao diện mới): chế độ album → album khách đang thấy + hạn
@@ -192,7 +192,7 @@ export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
               <div className="flex items-center gap-2">
                 <input
                   id="al-print"
-                  className={`${inputCls} w-28`}
+                  className={`${inputCls} !w-28`}
                   inputMode="numeric"
                   placeholder="0"
                   value={ed.printQuota}

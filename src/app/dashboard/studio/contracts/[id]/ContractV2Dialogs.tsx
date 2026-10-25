@@ -17,7 +17,7 @@ import { crewRoleLabel, crewRolesFor } from "@/lib/crew-roles";
 import { CREW_SIDE_LABEL, CREW_SIDES, CREW_TASK_LABEL, CREW_TASKS } from "@/lib/crew-show";
 import { shootReminderMessage } from "@/lib/zalo";
 import { QUICK_AMOUNTS, type CrewRow } from "./useContractEditor";
-import { ClientLinks, CREW_TONE, ProofThumb, SendOptions, ViewedLine, mainSessionTitle, type Ed, type V2Ctx } from "./ContractV2Parts";
+import { ClientLinks, CREW_TONE, ProofThumb, SendOptions, ViewedLine, mainSessionTitle, type Ed, type V2Ctx } from "./ContractV2Shared";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Hộp thoại & ngăn kéo dùng chung của màn chi tiết hợp đồng (giao diện mới).
