@@ -3,13 +3,15 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Package, Clock, Truck } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Panel, PanelHead, Pill, EmptyState } from "@/components/studio/ui";
 import { PRODUCT_STATUS_LABEL, type ProductStatus } from "@/lib/types";
-import { fmtDate, todayVN } from "@/lib/date";
+import { fmtDate } from "@/lib/date";
 import {
   ORDER_STATUS_LABEL, ORDER_STATUS_TONE, dueLabel, lateness, sortByUrgency, type OrderStatus,
 } from "@/lib/vendors";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import ProductionV2 from "./ProductionV2";
+import { PRODUCT_ORDER, toVendorOrder, useProduction, type ProductionStaff } from "./useProduction";
 
 export type ProductRow = {
   id: string;
@@ -22,7 +24,7 @@ export type ProductRow = {
   contract: { id: string; title: string; client_name: string | null; delivery_due: string | null } | null;
 };
 
-type Staff = { id: string; full_name: string | null; email: string };
+type Staff = ProductionStaff;
 
 /** Đơn đặt ngoài đang chạy — hình dữ liệu đúng phần page.tsx đọc lên. */
 export type VendorOrderRow = {
@@ -30,7 +32,7 @@ export type VendorOrderRow = {
   title: string; amount: number; status: OrderStatus; due_date: string | null;
 };
 
-const ORDER: ProductStatus[] = ["ordered", "in_progress", "done"];
+const ORDER: ProductStatus[] = PRODUCT_ORDER;
 /** Màu pill hạng mục sản xuất — cùng bộ màu trạng thái của bản thiết kế. */
 const TONE: Record<ProductStatus, { fg: string; bg: string }> = {
   ordered: { fg: "var(--am)", bg: "var(--amS)" },
@@ -38,45 +40,26 @@ const TONE: Record<ProductStatus, { fg: string; bg: string }> = {
   done: { fg: "var(--gn)", bg: "var(--gnS)" },
 };
 
-export default function ProductionView({
-  initial, staff, orders = [],
-}: {
+export type ProductionViewProps = {
   initial: ProductRow[];
   staff: Staff[];
   /** Đơn đặt ngoài chưa giao khách (album in, makeup thuê ngoài, xe hoa…). */
   orders?: VendorOrderRow[];
-}) {
-  const supabase = createClient();
-  const [rows, setRows] = useState<ProductRow[]>(initial);
-  const [filter, setFilter] = useState<ProductStatus | "all">("all");
-  const today = todayVN();
-  const staffName = (id: string | null) => {
-    if (!id) return "";
-    const s = staff.find((x) => x.id === id);
-    return s ? s.full_name || s.email : "";
-  };
+};
 
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: rows.length, ordered: 0, in_progress: 0, done: 0 };
-    for (const r of rows) c[r.status] = (c[r.status] || 0) + 1;
-    return c;
-  }, [rows]);
-  const doneCount = counts.done || 0;
-  const pct = rows.length ? Math.round((doneCount / rows.length) * 100) : 0;
+/** Giao diện mới → ProductionV2; bản cũ giữ nguyên bên dưới. Logic chung ở ./useProduction. */
+export default function ProductionView(props: ProductionViewProps) {
+  return useUiV2() ? <ProductionV2 {...props} /> : <ProductionViewV1 {...props} />;
+}
+
+function ProductionViewV1({ initial, staff, orders = [] }: ProductionViewProps) {
+  const { rows, today, staffName, counts, doneCount, pct, setStatus, setAssignee } = useProduction(initial, staff);
+  const [filter, setFilter] = useState<ProductStatus | "all">("all");
 
   const visible = useMemo(() => {
     const list = filter === "all" ? rows.filter((r) => r.status !== "done") : rows.filter((r) => r.status === filter);
     return [...list].sort((a, b) => (a.contract?.delivery_due || "9999").localeCompare(b.contract?.delivery_due || "9999"));
   }, [rows, filter]);
-
-  async function setStatus(id: string, status: ProductStatus) {
-    setRows((p) => p.map((r) => (r.id === id ? { ...r, status } : r)));
-    await supabase.from("contract_products").update({ status }).eq("id", id);
-  }
-  async function setAssignee(id: string, assigned_to: string | null) {
-    setRows((p) => p.map((r) => (r.id === id ? { ...r, assigned_to } : r)));
-    await supabase.from("contract_products").update({ assigned_to }).eq("id", id);
-  }
 
   const tabs: { key: ProductStatus | "all"; label: string }[] = [
     { key: "all", label: "Đang xử lý" },
@@ -112,13 +95,7 @@ export default function ProductionView({
         <Panel>
           <PanelHead icon={Truck} tone="amber" title="Đơn đặt ngoài đang chạy" count={String(orders.length)} />
           <div className="flex flex-col">
-            {sortByUrgency(
-              orders.map((o) => ({
-                id: o.id, vendorId: null, vendorName: o.vendor_name, contractId: o.contract_id,
-                title: o.title, amount: o.amount, status: o.status, dueDate: o.due_date, note: null,
-              })),
-              today
-            ).map((o) => {
+            {sortByUrgency(orders.map(toVendorOrder), today).map((o) => {
               const late = lateness(o, today);
               const job = rows.find((r) => r.contract?.id === o.contractId)?.contract;
               return (

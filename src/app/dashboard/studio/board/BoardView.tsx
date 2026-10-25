@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { contractTotal, vnd, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, type ContractStatus } from "@/lib/types";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDate, todayVN } from "@/lib/date";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import BoardV2 from "./BoardV2";
+import { useBoard } from "./useBoard";
 
 export type BoardCard = {
   id: string;
@@ -17,45 +19,14 @@ export type BoardCard = {
   contract_tasks: { done: boolean }[];
 };
 
-/**
- * Bốn cột LUÔN hiện — đúng dòng chảy của một hợp đồng đang sống.
- *
- * "Nháp" và "Đã huỷ" tách ra vì chúng nằm ngoài dòng chảy đó: nháp là đơn chưa
- * gửi, huỷ là đơn đã chết. Để cả sáu cột thì trên laptop 1280px cột cuối bị
- * đẩy khuất khỏi mép phải mà không có dấu hiệu gì báo là cuộn được — thẻ nằm
- * trong đó coi như biến mất. Bốn cột thì vừa màn, và hai cột kia bật lại bằng
- * một nút khi cần.
- */
-const CORE_COLUMNS: ContractStatus[] = ["sent", "approved", "in_progress", "post_production", "completed"];
-const EXTRA_COLUMNS: ContractStatus[] = ["draft", "cancelled"];
-export default function BoardView({ initial }: { initial: BoardCard[] }) {
-  const [cards, setCards] = useState<BoardCard[]>(initial);
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [over, setOver] = useState<ContractStatus | null>(null);
-  const [showExtra, setShowExtra] = useState(false);
+/** Giao diện mới → BoardV2; bản cũ giữ nguyên bên dưới. Logic chung (cột, kéo thả, đổi trạng thái) ở ./useBoard. */
+export default function BoardView(props: { initial: BoardCard[] }) {
+  return useUiV2() ? <BoardV2 {...props} /> : <BoardViewV1 {...props} />;
+}
+
+function BoardViewV1({ initial }: { initial: BoardCard[] }) {
+  const { cards, dragId, over, showExtra, setShowExtra, columns, extraCount, columnDnd, cardDnd } = useBoard(initial);
   const today = todayVN();
-
-  // Vẫn giữ đúng thứ tự vòng đời khi bật thêm: nháp đứng đầu, huỷ đứng cuối.
-  const columns = showExtra ? ["draft", ...CORE_COLUMNS, "cancelled"] as ContractStatus[] : CORE_COLUMNS;
-  const extraCount = cards.filter((c) => EXTRA_COLUMNS.includes(c.status)).length;
-
-  async function moveTo(id: string, status: ContractStatus) {
-    const card = cards.find((c) => c.id === id);
-    if (!card || card.status === status) return;
-    const prev = card.status;
-    setCards((p) => p.map((c) => (c.id === id ? { ...c, status } : c)));
-    // Route server tập trung: đóng dấu completed_at + tạo album giao khi hoàn thành.
-    try {
-      const res = await fetch("/api/studio/contract-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contractId: id, status }),
-      });
-      if (!res.ok) setCards((p) => p.map((c) => (c.id === id ? { ...c, status: prev } : c)));
-    } catch {
-      setCards((p) => p.map((c) => (c.id === id ? { ...c, status: prev } : c)));
-    }
-  }
 
   return (
     <div className="page-in">
@@ -77,9 +48,7 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
           return (
             <div
               key={col}
-              onDragOver={(e) => { e.preventDefault(); setOver(col); }}
-              onDragLeave={() => setOver((o) => (o === col ? null : o))}
-              onDrop={() => { if (dragId) moveTo(dragId, col); setDragId(null); setOver(null); }}
+              {...columnDnd(col)}
               /* Co giãn thay vì rộng cứng 270px. Từ khi có cột thứ 5 ("Đang hậu
                kỳ"), 5×270 + khoảng hở đã vượt màn laptop 1280px — cả bảng
                phải cuộn ngang mới thấy cột cuối. basis 228px cho 5 cột vừa
@@ -106,9 +75,7 @@ export default function BoardView({ initial }: { initial: BoardCard[] }) {
                   return (
                     <div
                       key={c.id}
-                      draggable
-                      onDragStart={() => setDragId(c.id)}
-                      onDragEnd={() => { setDragId(null); setOver(null); }}
+                      {...cardDnd(c.id)}
                       className="cursor-grab rounded-[11px] p-3 active:cursor-grabbing"
                       style={{ background: "var(--sf2)", border: "1px solid var(--bd)", opacity: dragId === c.id ? 0.5 : 1 }}
                     >

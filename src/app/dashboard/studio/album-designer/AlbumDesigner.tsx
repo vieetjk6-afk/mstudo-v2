@@ -1,99 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { fmtDate } from "@/lib/date";
 import { Check, ArrowRight, Plus, Trash2, Loader2, Clock, BookImage } from "lucide-react";
-import AlbumEditor, { type ADSize, type ADTpl, type SavedDesign } from "./AlbumEditor";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import AlbumEditor from "./AlbumEditor";
+import AlbumDesignerV2 from "./AlbumDesignerV2";
+import { CATS, SIZES, TEMPLATES } from "./designer-data";
+import { useAlbumDesigner } from "./useAlbumDesigner";
 
 /**
  * Thiết kế Album — trình thiết kế album cưới.
  *   Trang chính: album đã lưu (mở lại) + "Tạo mới".
  *   Tạo mới: Chọn khổ → Chọn mẫu → Editor (kéo-thả, AI rải ảnh, xuất PDF in).
  * Album được LƯU trên server nên có thể làm dở rồi quay lại.
+ *
+ * Khổ/mẫu ở ./designer-data, logic ở ./useAlbumDesigner — bản cũ
+ * (AlbumDesignerV1 bên dưới) và bản mới (./AlbumDesignerV2) dùng chung.
  */
-
-type Size = { id: string; name: string; dim: string; w: number; h: number; tag: string };
-const SIZES: Size[] = [
-  { id: "sq30", name: "Vuông 30×30", dim: "30 × 30 cm", w: 30, h: 30, tag: "Bán chạy nhất" },
-  { id: "sq25", name: "Vuông 25×25", dim: "25 × 25 cm", w: 25, h: 25, tag: "Gọn nhẹ" },
-  { id: "ls32", name: "Ngang 30×20", dim: "30 × 20 cm", w: 30, h: 20, tag: "Kể chuyện" },
-  { id: "ls43", name: "Ngang 40×30", dim: "40 × 30 cm", w: 40, h: 30, tag: "Khổ lớn" },
-  { id: "pt23", name: "Dọc 20×30", dim: "20 × 30 cm", w: 20, h: 30, tag: "Chân dung" },
-  { id: "a4l", name: "A4 Ngang", dim: "29.7 × 21 cm", w: 29.7, h: 21, tag: "Tiêu chuẩn" },
-  { id: "a4p", name: "A4 Dọc", dim: "21 × 29.7 cm", w: 21, h: 29.7, tag: "Tiêu chuẩn" },
-  { id: "sq20", name: "Vuông 20×20", dim: "20 × 20 cm", w: 20, h: 20, tag: "Mini" },
-];
-
-type Tpl = { id: string; name: string; cat: string; page: string; ink: string; font: string; sample: string; upper?: boolean };
-const CM = "var(--font-cormorant), serif";
-const SC = "var(--font-script), cursive";
-const TEMPLATES: Tpl[] = [
-  { id: "blanc", name: "Blanc", cat: "Hiện đại", page: "#ffffff", ink: "#17181a", font: CM, sample: "Blanc" },
-  { id: "grid", name: "Grid Studio", cat: "Hiện đại", page: "#f5f4f1", ink: "#1b1b1b", font: "var(--font-manrope), sans-serif", sample: "STUDIO", upper: true },
-  { id: "vogue", name: "Éditorial", cat: "Editorial", page: "#fbfaf8", ink: "#111111", font: CM, sample: "Vol. 01" },
-  { id: "kinfolk", name: "Kinfolk", cat: "Editorial", page: "#f2f0ea", ink: "#2a2723", font: CM, sample: "Moments" },
-  { id: "amour", name: "Amour", cat: "Lãng mạn", page: "#fbf5ef", ink: "#4a3b34", font: SC, sample: "Amour" },
-  { id: "bloom", name: "Bloom", cat: "Lãng mạn", page: "#fcf6f3", ink: "#5b4a45", font: CM, sample: "In Bloom" },
-  { id: "noir", name: "Noir", cat: "Sang trọng", page: "#1a1a1c", ink: "#ece7dd", font: CM, sample: "NOIR", upper: true },
-  { id: "velvet", name: "Velvet", cat: "Sang trọng", page: "#241d24", ink: "#efe6ea", font: CM, sample: "Velvet" },
-  { id: "lumen", name: "Lumen", cat: "Hiện đại", page: "#f7f7f5", ink: "#1c1c1e", font: "var(--font-manrope), sans-serif", sample: "Lumen" },
-  { id: "korea", name: "Hàn Quốc", cat: "Hiện đại", page: "#f4f2ee", ink: "#2b2a28", font: "var(--font-manrope), sans-serif", sample: "Seoul" },
-  { id: "ivory", name: "Ivory", cat: "Editorial", page: "#faf7f1", ink: "#26221c", font: CM, sample: "Ivory" },
-  { id: "film", name: "Film", cat: "Lãng mạn", page: "#efe7db", ink: "#4b3f31", font: CM, sample: "Kodak" },
-  { id: "sage", name: "Sage", cat: "Lãng mạn", page: "#eef1ea", ink: "#38402f", font: CM, sample: "Sage" },
-  { id: "onyx", name: "Onyx", cat: "Sang trọng", page: "#101012", ink: "#e8e6e2", font: CM, sample: "ONYX", upper: true },
-  { id: "mocha", name: "Mocha", cat: "Sang trọng", page: "#efe7df", ink: "#4a3b30", font: CM, sample: "Mocha" },
-];
-const CATS = ["Tất cả", "Hiện đại", "Editorial", "Lãng mạn", "Sang trọng"];
-
-type SavedRow = { id: string; name: string; size: ADSize; tpl: ADTpl; updated_at: string };
-type Step = "home" | "size" | "template" | "editor";
-
 export default function AlbumDesigner() {
-  const [step, setStep] = useState<Step>("home");
-  const [customW, setCustomW] = useState("30");
-  const [customH, setCustomH] = useState("30");
-  const [cat, setCat] = useState("Tất cả");
-  // Trạng thái mở editor.
-  const [edSize, setEdSize] = useState<ADSize | null>(null);
-  const [edTpl, setEdTpl] = useState<ADTpl | null>(null);
-  const [initial, setInitial] = useState<SavedDesign | null>(null);
-  // Album đã lưu.
-  const [saved, setSaved] = useState<SavedRow[]>([]);
-  const [loadingSaved, setLoadingSaved] = useState(false);
-  const [opening, setOpening] = useState<string | null>(null);
+  return useUiV2() ? <AlbumDesignerV2 /> : <AlbumDesignerV1 />;
+}
 
-  async function loadSaved() {
-    setLoadingSaved(true);
-    try {
-      const res = await fetch("/api/album-designer/designs");
-      const d = await res.json();
-      setSaved(d.designs || []);
-    } catch { /* bỏ qua */ } finally { setLoadingSaved(false); }
-  }
-  useEffect(() => { if (step === "home") loadSaved(); }, [step]);
-
-  async function openSaved(id: string) {
-    setOpening(id);
-    try {
-      const res = await fetch(`/api/album-designer/designs?id=${id}`);
-      const d = await res.json();
-      if (!res.ok || !d.design) return;
-      const dg = d.design as { id: string; name: string; size: ADSize; tpl: ADTpl; spreads: unknown[]; folder?: string };
-      setEdSize(dg.size); setEdTpl(dg.tpl);
-      setInitial({ id: dg.id, name: dg.name, folder: dg.folder, spreads: dg.spreads as SavedDesign["spreads"] });
-      setStep("editor");
-    } finally { setOpening(null); }
-  }
-
-  async function del(id: string) {
-    setSaved((p) => p.filter((s) => s.id !== id));
-    await fetch(`/api/album-designer/designs?id=${id}`, { method: "DELETE" }).catch(() => {});
-  }
-
-  function startNew() { setInitial(null); setEdSize(null); setEdTpl(null); setStep("size"); }
-  function chooseSize(s: Size) { setEdSize({ name: s.name, w: s.w, h: s.h }); setStep("template"); }
-  function chooseTpl(t: Tpl) { setEdTpl({ id: t.id, name: t.name, page: t.page, ink: t.ink, font: t.font }); setStep("editor"); }
+function AlbumDesignerV1() {
+  const {
+    step, setStep, customW, setCustomW, customH, setCustomH, cat, setCat, edSize, edTpl, initial, saved, loadingSaved,
+    opening, openSaved, del, startNew, chooseSize, chooseTpl,
+  } = useAlbumDesigner();
 
   const eyebrow = "text-[11px] font-bold uppercase tracking-[0.05em]";
   const h2 = "text-[26px] font-extrabold tracking-tight sm:text-[28px]";
