@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { Trophy, UserCog, UsersRound } from "lucide-react";
+import { useUiV2 } from "@/components/v2/UiV2Context";
 import StaffManager, { type StaffRow } from "./StaffManager";
 import RankingList, { type RankRow } from "./RankingList";
 import CrewManager from "../crew/CrewManager";
 import type { StudioCrew } from "@/lib/types";
 import type { CrewRoleRow } from "@/lib/crew-roles";
+import { useStaffTab, type StaffTab } from "./useStaffTab";
+import StaffAndCrewV2 from "./StaffAndCrewV2";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NHÂN SỰ — một màn, hai tab.
@@ -25,15 +26,9 @@ import type { CrewRoleRow } from "@/lib/crew-roles";
    lại trang không bị nhảy về tab đầu.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-type Tab = "staff" | "crew" | "ranking";
+type Tab = StaffTab;
 
-export default function StaffAndCrew({
-  staffProps,
-  crewProps,
-  /** Nhân viên/quản lý chi nhánh không quản tài khoản → chỉ mở được tab thợ. */
-  canSeeStaffTab,
-  ranked,
-}: {
+export type StaffAndCrewProps = {
   staffProps: {
     initial: StaffRow[];
     branches: { id: string; name: string }[];
@@ -54,19 +49,21 @@ export default function StaffAndCrew({
   canSeeStaffTab: boolean;
   /** Bảng xếp hạng thợ — gộp từ màn /ranking cũ. */
   ranked: RankRow[];
-}) {
-  const router = useRouter();
-  const params = useSearchParams();
-  const q = params.get("tab");
-  const fromUrl: Tab = q === "crew" ? "crew" : q === "ranking" ? "ranking" : "staff";
-  const [tab, setTab] = useState<Tab>(canSeeStaffTab ? fromUrl : "crew");
+};
 
-  function go(next: Tab) {
-    setTab(next);
-    // replace (không push): bấm qua lại giữa hai tab không nên nhồi lịch sử
-    // trình duyệt, nút Back phải đưa về màn TRƯỚC đó.
-    router.replace(next === "staff" ? "/dashboard/studio/staff" : `/dashboard/studio/staff?tab=${next}`, { scroll: false });
-  }
+/** Giao diện mới có bản riêng (StaffAndCrewV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
+export default function StaffAndCrew(props: StaffAndCrewProps) {
+  return useUiV2() ? <StaffAndCrewV2 {...props} /> : <StaffAndCrewV1 {...props} />;
+}
+
+function StaffAndCrewV1({
+  staffProps,
+  crewProps,
+  /** Nhân viên/quản lý chi nhánh không quản tài khoản → chỉ mở được tab thợ. */
+  canSeeStaffTab,
+  ranked,
+}: StaffAndCrewProps) {
+  const { tab, go } = useStaffTab(canSeeStaffTab);
 
   const TABS: { key: Tab; label: string; icon: typeof UserCog; count: number }[] = [
     { key: "staff", label: "Nhân viên & phân quyền", icon: UserCog, count: staffProps.initial.length },

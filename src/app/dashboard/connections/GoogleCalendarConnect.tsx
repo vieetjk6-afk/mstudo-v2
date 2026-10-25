@@ -1,24 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { Calendar, Check, X, Loader2, ExternalLink, Info } from "lucide-react";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import GoogleCalendarV2 from "./GoogleCalendarV2";
+import { GCAL_FEATURES, GCAL_STEPS, useGcalConnection, type GcalProps } from "./useGcalConnection";
 
-interface Props {
-  connected: boolean;
-  gcalStatus: string | null;
-  gcalMsg: string | null;
+type Props = GcalProps;
+
+/** Logic chung ở ./useGcalConnection; giao diện mới ở ./GoogleCalendarV2. */
+export default function GoogleCalendarConnect(props: Props) {
+  return useUiV2() ? <GoogleCalendarV2 {...props} /> : <GoogleCalendarConnectV1 {...props} />;
 }
 
-export default function GoogleCalendarConnect({ connected: initialConnected, gcalStatus, gcalMsg }: Props) {
-  const [connected, setConnected] = useState(initialConnected);
-  const [disconnecting, setDisconnecting] = useState(false);
-
-  async function disconnect() {
-    setDisconnecting(true);
-    await fetch("/api/gcal/disconnect", { method: "POST" });
-    setConnected(false);
-    setDisconnecting(false);
-  }
+function GoogleCalendarConnectV1({ connected: initialConnected, gcalStatus, gcalMsg }: Props) {
+  const { connected, disconnecting, disconnect } = useGcalConnection(initialConnected);
 
   return (
     <div className="page-in">
@@ -57,12 +52,7 @@ export default function GoogleCalendarConnect({ connected: initialConnected, gca
         </div>
 
         <ul className="mb-5 space-y-2 text-[13.5px]" style={{ color: "var(--text2)" }}>
-          {[
-            "Tạo hợp đồng có ngày chụp → sự kiện tự thêm vào Google Calendar",
-            "Tạo hoặc chỉnh sửa sự kiện trong Lịch studio → đồng bộ ngay lên Google Calendar",
-            "Xoá sự kiện hoặc hợp đồng → tự xoá khỏi Google Calendar",
-            "Dùng lịch chính (primary calendar) của tài khoản Google đã kết nối",
-          ].map((f) => (
+          {GCAL_FEATURES.map((f) => (
             <li key={f} className="flex items-start gap-2">
               <Check size={14} className="mt-0.5 shrink-0" style={{ color: "var(--brand, #3fb98a)" }} />
               {f}
@@ -110,12 +100,7 @@ export default function GoogleCalendarConnect({ connected: initialConnected, gca
           Cách hoạt động
         </h3>
         <ol className="space-y-3 text-[13.5px]" style={{ color: "var(--text2)" }}>
-          {[
-            "Bấm \"Kết nối Google Calendar\" — trình duyệt chuyển sang trang đăng nhập Google",
-            "Chọn tài khoản Google bạn muốn dùng → bấm \"Cho phép\" để cấp quyền quản lý sự kiện",
-            "Quay lại studio — từ đây mọi hợp đồng có ngày chụp và sự kiện trong Lịch studio sẽ tự đồng bộ lên Google Calendar",
-            "Cập nhật hoặc xoá trong studio → Google Calendar cũng tự thay đổi theo",
-          ].map((step, i) => (
+          {GCAL_STEPS.map((step, i) => (
             <li key={i} className="flex items-start gap-3">
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold" style={{ background: "var(--brand, #3fb98a)", color: "var(--brandFg, #06120c)" }}>
                 {i + 1}

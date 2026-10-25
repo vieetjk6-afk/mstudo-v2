@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { MAIN_HOST } from "@/lib/hosts";
 import { SITE_BLOCK_LABEL, type Site, type SiteBlock, type SiteBlockType } from "@/lib/types";
+import { isUiV2 } from "@/lib/ui-server";
+import { Empty } from "@/components/v2/kit";
+import { AlertTriangle } from "lucide-react";
 import WebsiteHub from "./WebsiteHub";
+import WebsiteHubV2 from "./WebsiteHubV2";
+import { siteCaps } from "./site-caps";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +33,17 @@ export default async function WebsitePage() {
   // Tạo trang thất bại (RLS, mất mạng, trùng owner do bấm hai tab…) thì
   // `created` là null — trước đây vẫn đọc site.id và cả màn nổ 500.
   if (!site) {
+    if (await isUiV2()) {
+      return (
+        <div className="v2-card" role="alert">
+          <Empty
+            icon={AlertTriangle}
+            title="Chưa tạo được trang web của studio"
+            hint="Vui lòng tải lại trang sau ít phút. Nếu vẫn lỗi, hãy liên hệ hỗ trợ."
+          />
+        </div>
+      );
+    }
     return (
       <div className="card p-6 text-sm" role="alert">
         <p className="font-medium">Chưa tạo được trang web của studio.</p>
@@ -53,17 +69,43 @@ export default async function WebsitePage() {
       ? `https://${site.subdomain}.${MAIN_HOST}`
       : "";
 
+  const stats = {
+    today: views.find((v) => v.day === today)?.views ?? 0,
+    week: views.filter((v) => v.day >= last7).reduce((s, v) => s + v.views, 0),
+    month: views.reduce((s, v) => s + v.views, 0),
+  };
+
+  // Giao diện mới: sửa được địa chỉ trang + SEO ngay tại đây → cần cả dòng
+  // `sites` và quyền xuất bản (cùng cách tính với trình dựng, ở ./site-caps).
+  if (await isUiV2()) {
+    const { data: profile } = await supabase.from("profiles").select("plan, plan_expires_at, role").eq("id", user.id).maybeSingle();
+    const { canPublish, canCustomDomain } = siteCaps(profile);
+    return (
+      <WebsiteHubV2
+        site={site}
+        stats={stats}
+        blocks={((blocks ?? []) as Pick<SiteBlock, "id" | "type" | "position" | "visible">[]).map((b) => ({
+          id: b.id,
+          type: b.type,
+          label: SITE_BLOCK_LABEL[b.type as SiteBlockType] ?? b.type,
+          visible: b.visible,
+        }))}
+        greeting={(chat?.greeting as string | undefined) ?? ""}
+        instructions={(chat?.instructions as string | undefined) ?? ""}
+        canPublish={canPublish}
+        canCustomDomain={canCustomDomain}
+        mainHost={process.env.NEXT_PUBLIC_MAIN_HOST || ""}
+      />
+    );
+  }
+
   return (
     <WebsiteHub
       host={site.custom_domain || (site.subdomain && MAIN_HOST ? `${site.subdomain}.${MAIN_HOST}` : "")}
       liveUrl={liveUrl}
       published={!!site.published}
       updatedAt={site.updated_at}
-      stats={{
-        today: views.find((v) => v.day === today)?.views ?? 0,
-        week: views.filter((v) => v.day >= last7).reduce((s, v) => s + v.views, 0),
-        month: views.reduce((s, v) => s + v.views, 0),
-      }}
+      stats={stats}
       blocks={((blocks ?? []) as Pick<SiteBlock, "id" | "type" | "position" | "visible">[]).map((b) => ({
         id: b.id,
         label: SITE_BLOCK_LABEL[b.type as SiteBlockType] ?? b.type,

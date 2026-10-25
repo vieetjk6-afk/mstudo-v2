@@ -46,7 +46,7 @@ export default async function CalendarPage(
   return (
     <div>
       <CalendarTabs show={show} active={active} />
-      {active === "studio" ? <StudioTab /> : active === "team" ? <TeamTab /> : <ShootTab />}
+      {active === "studio" ? <StudioTab tabs={show} /> : active === "team" ? <TeamTab tabs={show} /> : <ShootTab tabs={show} />}
     </div>
   );
 }

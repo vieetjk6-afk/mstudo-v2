@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { fmtDateTime } from "@/lib/date";
 import { Check, Crown, Trash2, X as XIcon } from "lucide-react";
 import { Section } from "@/components/admin/Section";
 import { UPGRADE_PAYMENT_LABEL, type UpgradePaymentStatus } from "@/lib/upgrade-payment";
 import type { UpgradeRequest } from "@/lib/types";
+import { useUpgradeRequests } from "./useUpgradeRequests";
 
 /** Màu viên trạng thái thanh toán — cùng bảng màu với các nhãn khác của app. */
 function payTone(st: string | null | undefined): React.CSSProperties {
@@ -23,46 +23,8 @@ function payTone(st: string | null | undefined): React.CSSProperties {
  * việc rời hai màn thì admin cứ phải nhảy qua nhảy lại.
  */
 export default function UpgradeRequests({ initial }: { initial: UpgradeRequest[] }) {
-  const [rows, setRows] = useState<UpgradeRequest[]>(initial);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  function flash(m: string) {
-    setMsg(m);
-    setTimeout(() => setMsg(null), 3000);
-  }
-
-  async function handle(action: "handled" | "delete", id: string, handled?: boolean) {
-    setRows((r) => (action === "delete" ? r.filter((x) => x.id !== id) : r.map((x) => (x.id === id ? { ...x, handled: !!handled } : x))));
-    await fetch("/api/admin/requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "upgrade", action, id, handled }),
-    });
-  }
-
-  // Chốt một yêu cầu ĐÃ CHUYỂN KHOẢN. Không cập nhật lạc quan như hai nút trên:
-  // đây là việc động tới TIỀN và tới gói của người khác, nên chỉ đổi màn hình
-  // sau khi máy chủ trả lời xong.
-  async function review(id: string, action: "confirm" | "reject") {
-    if (action === "confirm" && !confirm("Xác nhận ĐÃ NHẬN được tiền chuyển khoản? Gói của studio sẽ được nâng ngay.")) return;
-    const note = action === "reject" ? (prompt("Lý do gửi cho studio (bỏ trống cũng được):") ?? "") : "";
-    setBusy(id);
-    const res = await fetch("/api/admin/upgrade-payment", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action, note }),
-    });
-    const data = await res.json().catch(() => null);
-    setBusy(null);
-    if (!res.ok || !data?.ok) {
-      flash(data?.error === "already_paid" ? "Đơn này đã xác nhận trước đó." : "Không cập nhật được, thử lại.");
-      return;
-    }
-    setRows((r) =>
-      r.map((x) => (x.id === id ? { ...x, payment_status: data.status as UpgradePaymentStatus, handled: data.status === "paid" } : x)),
-    );
-  }
+  // Logic dùng chung với bản mới (UpgradeRequestsV2) — xem ./useUpgradeRequests.
+  const { rows, busy, msg, handle, review } = useUpgradeRequests(initial);
 
   return (
     <Section title={`Yêu cầu nâng cấp (${rows.length})`} icon={Crown}>

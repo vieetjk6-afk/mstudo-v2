@@ -51,7 +51,7 @@ const conNho = (den: number) => den > Date.now();
 // `is_gallery` đi kèm `phase`: cờ cũ vẫn quyết định giai đoạn của album đời
 // đầu (phase còn null) — thư viện phải đọc CÙNG luật với trang khách, xem
 // @/lib/album-phase.
-const CORE_COLS = "id, slug, title, cover_url, status, watermark_enabled, download_enabled, phase, is_gallery";
+const CORE_COLS = "id, slug, title, cover_url, status, watermark_enabled, download_enabled, phase, is_gallery, created_at";
 // + mốc khách chốt chọn ảnh (migrations/album_selection_done.sql).
 const DONE_COL = "selection_done_at";
 
@@ -217,6 +217,7 @@ function toRow(
     // chia tab bằng isDeliveryPhase(), cần cả hai cột.
     is_gallery: a.is_gallery ?? null,
     selection_done_at: a.selection_done_at ?? null,
+    created_at: a.created_at ?? null,
     selections: [{ count: n.picks }],
     dislikes: n.dislikes === undefined ? undefined : [{ count: n.dislikes }],
     photoCount: n.photoCount,

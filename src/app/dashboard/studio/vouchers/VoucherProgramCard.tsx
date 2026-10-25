@@ -7,6 +7,7 @@ import { Panel, PanelHead } from "@/components/studio/ui";
 import { vnd } from "@/lib/types";
 import { cleanTiers, maxTierPercent, tierAt, tierMax, type VoucherProgram } from "@/lib/voucher-program";
 import type { PercentTier } from "@/lib/vouchers";
+import { useVoucherProgram } from "./useVoucherProgram";
 
 /**
  * Cài đặt CHƯƠNG TRÌNH voucher ưu đãi — một lần cho cả studio. Bật lên là mọi
@@ -25,33 +26,8 @@ export default function VoucherProgramCard({
   /** Gói trong bảng giá của studio, để chọn gói được dùng voucher. */
   packages?: { name: string; group: string }[];
 }) {
-  const [p, setP] = useState<VoucherProgram>(initial);
-  const [saved, setSaved] = useState<VoucherProgram>(initial);
-  const [busy, setBusy] = useState(false);
-  const dirty = JSON.stringify(p) !== JSON.stringify(saved);
-
-  async function save(next: VoucherProgram) {
-    setBusy(true);
-    try {
-      const res = await fetch("/api/studio/vouchers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "program_save", ...next }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        toast(j.error === "missing_migration" ? "Cần chạy supabase/voucher-uu-dai.sql trong Supabase trước." : res.status === 403 ? "Bạn không có quyền đổi chương trình." : `Lỗi: ${j.error || res.status}`);
-        return;
-      }
-      setP(next);
-      setSaved(next);
-      toast(next.enabled ? "Đã lưu — chương trình voucher đang BẬT." : "Đã lưu — chương trình voucher đang tắt.");
-    } catch {
-      toast("Lỗi mạng, thử lại nhé.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Logic dùng chung với bản mới (VouchersV2) — xem ./useVoucherProgram.
+  const { p, setP, busy, dirty, save } = useVoucherProgram(initial, toast);
 
   return (
     <Panel>

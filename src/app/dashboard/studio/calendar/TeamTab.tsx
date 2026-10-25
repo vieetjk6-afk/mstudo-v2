@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import type { CalendarTab } from "./tabs";
 import type { ShiftLetter } from "@/lib/crew-shift";
 import { loadCrewRoles } from "@/lib/crew-roles";
 import TeamCalendar, { type TeamAssignment, type CrewScheduleRow, type CrewMember } from "./TeamCalendar";
@@ -14,7 +15,7 @@ import TeamCalendar, { type TeamAssignment, type CrewScheduleRow, type CrewMembe
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
-export default async function TeamTab() {
+export default async function TeamTab({ tabs }: { tabs?: readonly CalendarTab[] } = {}) {
   const profile = await requireStudio();
   if (!profile) {
     return (
@@ -94,6 +95,7 @@ export default async function TeamTab() {
 
   return (
     <TeamCalendar
+      tabs={tabs}
       assignments={assignments}
       members={members}
       schedule={schedule}

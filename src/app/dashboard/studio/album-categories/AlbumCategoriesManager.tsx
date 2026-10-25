@@ -1,64 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Trash2, Check, X, Tag } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { slugifyVi } from "@/lib/category";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import AlbumCategoriesV2 from "./AlbumCategoriesV2";
+import { useAlbumCategories, type AlbumCategoriesProps } from "./useAlbumCategories";
 
-type Cat = { slug: string; label: string; count: number };
+/** Giao diện mới có bản riêng (AlbumCategoriesV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
+export default function AlbumCategoriesManager(props: AlbumCategoriesProps) {
+  return useUiV2() ? <AlbumCategoriesV2 {...props} /> : <AlbumCategoriesManagerV1 {...props} />;
+}
 
-export default function AlbumCategoriesManager({ ownerId, initial }: { ownerId: string; initial: Cat[] }) {
-  const supabase = createClient();
-  const [cats, setCats] = useState<Cat[]>(initial);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  function flash(m: string) {
-    setMsg(m);
-    setTimeout(() => setMsg(null), 2500);
-  }
-
-  async function rename(cat: Cat) {
-    const label = draft.trim();
-    if (!label) return;
-    const newSlug = slugifyVi(label) || cat.slug;
-    setBusy(true);
-    const { error } = await supabase
-      .from("albums")
-      .update({ category: newSlug, category_label: label })
-      .eq("owner_id", ownerId)
-      .eq("category", cat.slug);
-    setBusy(false);
-    if (error) return flash(error.message);
-    // Gộp nếu slug mới trùng loại đã có.
-    setCats((prev) => {
-      const others = prev.filter((c) => c.slug !== cat.slug);
-      const merged = others.find((c) => c.slug === newSlug);
-      if (merged) {
-        return others.map((c) => (c.slug === newSlug ? { ...c, label, count: c.count + cat.count } : c));
-      }
-      return [...others, { slug: newSlug, label, count: cat.count }].sort((a, b) => b.count - a.count);
-    });
-    setEditing(null);
-    flash("Đã lưu");
-  }
-
-  async function remove(cat: Cat) {
-    if (!confirm(`Bỏ loại "${cat.label}" khỏi ${cat.count} album? (Album vẫn giữ nguyên, chỉ gỡ phân loại.)`)) return;
-    setBusy(true);
-    const { error } = await supabase
-      .from("albums")
-      .update({ category: null, category_label: null })
-      .eq("owner_id", ownerId)
-      .eq("category", cat.slug);
-    setBusy(false);
-    if (error) return flash(error.message);
-    setCats((prev) => prev.filter((c) => c.slug !== cat.slug));
-    flash("Đã gỡ loại");
-  }
+function AlbumCategoriesManagerV1(props: AlbumCategoriesProps) {
+  const { cats, editing, setEditing, draft, setDraft, busy, msg, rename, remove } = useAlbumCategories(props);
 
   return (
     <div className="mx-auto max-w-2xl">

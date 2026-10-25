@@ -31,6 +31,8 @@ import FaceSetupNotice from "@/components/FaceSetupNotice";
 import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { storageUntil } from "@/lib/storage-lifecycle";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import AlbumListV2 from "./AlbumListV2";
 
 export interface AlbumRow {
   id: string;
@@ -43,6 +45,8 @@ export interface AlbumRow {
   phase?: "selection" | "delivery" | null;
   /** Cờ CŨ của album giao khách — vẫn quyết định khi `phase` còn null. */
   is_gallery?: boolean | null;
+  /** Ngày tạo — giao diện mới nhóm thư viện theo tháng. */
+  created_at?: string | null;
   /** Lần gần nhất khách bấm "Đã chọn xong" trên trang album. null = chưa chốt. */
   selection_done_at?: string | null;
   // Đếm ảnh + 1 ảnh bìa dự phòng (thay vì kéo toàn bộ drive_file_id mọi ảnh).
@@ -53,7 +57,14 @@ export interface AlbumRow {
   dislikes?: { count: number }[];
 }
 
-export default function AlbumList({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null, planUsage = null }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean; /** Gói có mở tìm ảnh theo khuôn mặt không (Photographer Plus & Studio). */ canFaceSearch?: boolean; /** Domain riêng của studio — link mở album phải mang tên miền đó. */ studioHost?: string | null; /** Số liệu gói máy chủ tính sẵn — có thì PlanUsage khỏi tự tải. */ planUsage?: PlanUsageData | null }) {
+type AlbumListProps = Parameters<typeof AlbumListV1>[0];
+
+/** Giao diện mới có bản riêng (AlbumListV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
+export default function AlbumList(props: AlbumListProps) {
+  return useUiV2() ? <AlbumListV2 {...props} /> : <AlbumListV1 {...props} />;
+}
+
+function AlbumListV1({ albums, showTrial = false, trialUsed = false, canDelivery = true, canWatermark = true, canFaceSearch = true, studioHost = null, planUsage = null }: { albums: AlbumRow[]; showTrial?: boolean; trialUsed?: boolean; canDelivery?: boolean; canWatermark?: boolean; /** Gói có mở tìm ảnh theo khuôn mặt không (Photographer Plus & Studio). */ canFaceSearch?: boolean; /** Domain riêng của studio — link mở album phải mang tên miền đó. */ studioHost?: string | null; /** Số liệu gói máy chủ tính sẵn — có thì PlanUsage khỏi tự tải. */ planUsage?: PlanUsageData | null }) {
   return (
     <div className="page-in">
       <PlanUsage initial={planUsage} />

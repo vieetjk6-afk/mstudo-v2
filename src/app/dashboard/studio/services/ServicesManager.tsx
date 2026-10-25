@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { Plus, Trash2, Check, FileText, Wand2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { fullClauseText } from "@/lib/contract-clauses";
 import type { StudioService } from "@/lib/types";
+import { useServices } from "./useServices";
 
 export default function ServicesManager({
   ownerId,
@@ -14,67 +13,9 @@ export default function ServicesManager({
   ownerId: string;
   initial: StudioService[];
 }) {
-  const supabase = createClient();
-  const [services, setServices] = useState<StudioService[]>(initial);
-  const [selId, setSelId] = useState<string | null>(initial[0]?.id ?? null);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const sel = services.find((s) => s.id === selId) || null;
-  const [name, setName] = useState(sel?.name ?? "");
-  const [clauses, setClauses] = useState(sel?.clauses ?? "");
-
-  function toast(m: string) {
-    setMsg(m);
-    setTimeout(() => setMsg(null), 2000);
-  }
-
-  function select(s: StudioService) {
-    setSelId(s.id);
-    setName(s.name);
-    setClauses(s.clauses);
-  }
-
-  async function createService() {
-    setBusy(true);
-    const { data, error } = await supabase
-      .from("studio_services")
-      .insert({ owner_id: ownerId, name: "Dịch vụ mới", clauses: fullClauseText(), position: services.length })
-      .select("*")
-      .single();
-    setBusy(false);
-    if (!error && data) {
-      const s = data as StudioService;
-      setServices((p) => [...p, s]);
-      select(s);
-      toast("Đã tạo dịch vụ.");
-    } else {
-      toast(error?.message.includes("studio_services") ? "Chưa chạy migration studio_services." : (error?.message || "Lỗi"));
-    }
-  }
-
-  async function saveService() {
-    if (!sel) return;
-    setBusy(true);
-    const patch = { name: name.trim() || "Dịch vụ", clauses };
-    await supabase.from("studio_services").update(patch).eq("id", sel.id);
-    setServices((p) => p.map((s) => (s.id === sel.id ? { ...s, ...patch } : s)));
-    setBusy(false);
-    toast("Đã lưu.");
-  }
-
-  async function deleteService(s: StudioService) {
-    if (!confirm(`Xoá dịch vụ "${s.name}"? Các hợp đồng/báo giá đã tạo không bị ảnh hưởng.`)) return;
-    await supabase.from("studio_services").delete().eq("id", s.id);
-    const next = services.filter((x) => x.id !== s.id);
-    setServices(next);
-    if (selId === s.id) {
-      const first = next[0] ?? null;
-      setSelId(first?.id ?? null);
-      setName(first?.name ?? "");
-      setClauses(first?.clauses ?? "");
-    }
-  }
+  // Logic dùng chung với bản mới (ServicesV2) — xem ./useServices.
+  const { services, selId, sel, busy, msg, name, setName, clauses, setClauses, select, createService, saveService, deleteService } =
+    useServices(ownerId, initial);
 
   return (
     <div className="page-in">

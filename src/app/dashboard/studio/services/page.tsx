@@ -3,6 +3,8 @@ import { requireStudio } from "@/lib/auth-guards";
 import { STUDIO_TIER_RANK, type StudioTier } from "@/lib/plans";
 import type { StudioService } from "@/lib/types";
 import ServicesTemplatesTabs from "./ServicesTemplatesTabs";
+import ServicesTemplatesTabsV2 from "./ServicesTemplatesTabsV2";
+import { isUiV2 } from "@/lib/ui-server";
 import StudioPolicyCard from "@/components/studio/StudioPolicyCard";
 import AutomationsCard from "@/components/studio/AutomationsCard";
 import { cancelPolicyOf } from "@/lib/contract-cancel";
@@ -62,6 +64,45 @@ export default async function ServicesPage(props: { searchParams?: Promise<{ tab
 
   const initialTab = searchParams?.tab === "templates" ? "templates" : "services";
 
+  const isOwner = profile.actingRole === "owner" || profile.actingRole === "admin";
+  // Chính sách chạy ngầm (hạn lưu trữ ảnh gốc, hiệu lực báo giá) đặt cùng
+  // trang với điều khoản dịch vụ — đều là "studio này làm việc theo luật
+  // nào". Chỉ chủ studio đặt được, nhân viên không thấy.
+  const policy = isOwner ? (
+    <StudioPolicyCard
+      ownerId={profile.id}
+      initialStorageMonths={(profile as { storage_months?: number }).storage_months ?? 6}
+      initialQuoteValidDays={(profile as { quote_valid_days?: number }).quote_valid_days ?? 15}
+      initialDeposit={(profile as { booking_deposit?: number }).booking_deposit ?? 0}
+      initialContractDepositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? 25}
+      initialReferralReward={(profile as { referral_reward?: number }).referral_reward ?? 0}
+      initialReferralDiscount={(profile as { referral_discount?: number }).referral_discount ?? 0}
+      initialStudioAddress={(profile as { studio_address?: string | null }).studio_address ?? ""}
+      initialStudioLat={(profile as { studio_lat?: number | null }).studio_lat ?? null}
+      initialStudioLng={(profile as { studio_lng?: number | null }).studio_lng ?? null}
+      initialCancelPolicy={cancelPolicyOf(profile as Parameters<typeof cancelPolicyOf>[0])}
+    />
+  ) : null;
+  // Việc tự động cũng là "studio này làm việc theo luật nào" → cùng trang
+  // với điều khoản và chính sách. Chỉ chủ studio bật/tắt được: luật gửi
+  // Zalo cho khách là thứ nhân viên không nên tự mở.
+  const automationsCard = isOwner ? <AutomationsCard ownerId={profile.id} initial={automations} /> : null;
+
+  // Giao diện mới: chính sách và việc tự động thành hai tab của cùng một màn.
+  if (await isUiV2()) {
+    return (
+      <ServicesTemplatesTabsV2
+        ownerId={profile.id}
+        services={(services ?? []) as StudioService[]}
+        templates={(templates ?? []) as unknown as TemplateWithItems[]}
+        canUseTemplates={canUseTemplates}
+        initialTab={initialTab}
+        policy={policy}
+        automations={automationsCard}
+      />
+    );
+  }
+
   return (
     <div className="space-y-3.5">
       <ServicesTemplatesTabs
@@ -71,30 +112,8 @@ export default async function ServicesPage(props: { searchParams?: Promise<{ tab
         canUseTemplates={canUseTemplates}
         initialTab={initialTab}
       />
-      {/* Chính sách chạy ngầm (hạn lưu trữ ảnh gốc, hiệu lực báo giá) đặt cùng
-          trang với điều khoản dịch vụ — đều là "studio này làm việc theo luật
-          nào". Chỉ chủ studio đặt được, nhân viên không thấy. */}
-      {(profile.actingRole === "owner" || profile.actingRole === "admin") && (
-        <StudioPolicyCard
-          ownerId={profile.id}
-          initialStorageMonths={(profile as { storage_months?: number }).storage_months ?? 6}
-          initialQuoteValidDays={(profile as { quote_valid_days?: number }).quote_valid_days ?? 15}
-          initialDeposit={(profile as { booking_deposit?: number }).booking_deposit ?? 0}
-          initialContractDepositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? 25}
-          initialReferralReward={(profile as { referral_reward?: number }).referral_reward ?? 0}
-          initialReferralDiscount={(profile as { referral_discount?: number }).referral_discount ?? 0}
-          initialStudioAddress={(profile as { studio_address?: string | null }).studio_address ?? ""}
-          initialStudioLat={(profile as { studio_lat?: number | null }).studio_lat ?? null}
-          initialStudioLng={(profile as { studio_lng?: number | null }).studio_lng ?? null}
-          initialCancelPolicy={cancelPolicyOf(profile as Parameters<typeof cancelPolicyOf>[0])}
-        />
-      )}
-      {/* Việc tự động cũng là "studio này làm việc theo luật nào" → cùng trang
-          với điều khoản và chính sách. Chỉ chủ studio bật/tắt được: luật gửi
-          Zalo cho khách là thứ nhân viên không nên tự mở. */}
-      {(profile.actingRole === "owner" || profile.actingRole === "admin") && (
-        <AutomationsCard ownerId={profile.id} initial={automations} />
-      )}
+      {policy}
+      {automationsCard}
     </div>
   );
 }

@@ -14,8 +14,6 @@ import {
   TrendingUp,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { todayVN } from "@/lib/date";
 import {
   RENTAL_CATEGORIES,
   RENTAL_CATEGORY_LABEL,
@@ -28,6 +26,22 @@ import {
   type RentalOrderStatus,
   type RentalOrderWithItems,
 } from "@/lib/types";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import RentalV2 from "./RentalV2";
+import {
+  ITEM_STATUSES,
+  ORDER_STATUSES,
+  emptyItemForm,
+  emptyOrderForm,
+  filterItems,
+  filterOrders,
+  isOverdue,
+  useOrderLines,
+  useRental,
+  type ItemForm,
+  type Line,
+  type OrderForm,
+} from "./useRental";
 
 type Tab = "inventory" | "orders";
 
@@ -37,83 +51,21 @@ const TABS: { key: Tab; label: string; icon: LucideIcon }[] = [
   { key: "orders", label: "Đơn thuê", icon: ClipboardList },
 ];
 
-const ITEM_STATUSES: RentalItemStatus[] = ["available", "maintenance", "retired"];
-const ORDER_STATUSES: RentalOrderStatus[] = [
-  "booked",
-  "picked_up",
-  "returned",
-  "overdue",
-  "canceled",
-];
-
-/** Orders in these statuses still hold physical stock (item is "out"). */
-const ACTIVE_ORDER_STATUSES: RentalOrderStatus[] = ["booked", "picked_up", "overdue"];
-
-const todayISO = () => todayVN();
-
-/**
- * How many units of each item are currently out (reserved by active orders).
- * Keyed by item_id → total qty across all non-returned / non-canceled orders.
- */
-function computeUnitsOut(orders: RentalOrderWithItems[]): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const o of orders) {
-    if (!ACTIVE_ORDER_STATUSES.includes(o.status)) continue;
-    for (const l of o.items) {
-      if (!l.item_id) continue;
-      out.set(l.item_id, (out.get(l.item_id) ?? 0) + (l.qty || 0));
-    }
-  }
-  return out;
-}
-
-/** An order is effectively overdue when its return date has passed & it isn't back. */
-function isOverdue(o: RentalOrderWithItems): boolean {
-  if (o.status === "returned" || o.status === "canceled") return false;
-  return !!o.return_date && o.return_date < todayISO();
-}
-
-export default function RentalManager({
-  ownerId,
-  initialItems,
-  initialOrders,
-}: {
+export type RentalManagerProps = {
   ownerId: string;
   initialItems: RentalItem[];
   initialOrders: RentalOrderWithItems[];
-}) {
-  const supabase = createClient();
+};
+
+/** Giao diện mới → RentalV2; bản cũ giữ nguyên bên dưới. Logic chung ở ./useRental. */
+export default function RentalManager(props: RentalManagerProps) {
+  return useUiV2() ? <RentalV2 {...props} /> : <RentalManagerV1 {...props} />;
+}
+
+function RentalManagerV1(props: RentalManagerProps) {
+  const r = useRental(props);
+  const { items, orders, unitsOut, stats } = r;
   const [tab, setTab] = useState<Tab>("inventory");
-  const [items, setItems] = useState<RentalItem[]>(initialItems);
-  const [orders, setOrders] = useState<RentalOrderWithItems[]>(initialOrders);
-
-  const unitsOut = useMemo(() => computeUnitsOut(orders), [orders]);
-
-  const stats = useMemo(() => {
-    const activeOrders = orders.filter((o) => ACTIVE_ORDER_STATUSES.includes(o.status));
-    const rentedUnits = [...unitsOut.values()].reduce((s, n) => s + n, 0);
-    const depositsHeld = activeOrders.reduce((s, o) => s + (o.deposit_paid || 0), 0);
-    // Doanh thu tháng (tính theo ngày nhận đồ, không có thì theo ngày tạo đơn).
-    //
-    // BỎ QUA đơn đã gắn hợp đồng: tiền thuê của những đơn đó được ghi thành một
-    // hạng mục của hợp đồng (xem ContractRentalPanel), nên đã nằm trong doanh
-    // thu hợp đồng rồi. Cộng ở đây nữa là cùng một khoản đếm hai lần, và chủ
-    // studio cộng hai màn lại sẽ ra con số không có thật.
-    const month = todayISO().slice(0, 7);
-    const revenueMonth = orders
-      .filter((o) => o.status !== "canceled")
-      .filter((o) => !o.contract_id)
-      .filter((o) => (o.pickup_date ?? o.created_at).slice(0, 7) === month)
-      .reduce((s, o) => s + (o.total_price || 0), 0);
-    const overdue = orders.filter(isOverdue).length;
-    return {
-      totalItems: items.reduce((s, i) => s + (i.quantity || 0), 0),
-      rentedUnits,
-      depositsHeld,
-      revenueMonth,
-      overdue,
-    };
-  }, [orders, items, unitsOut]);
 
   return (
     <div className="page-in">
@@ -160,9 +112,16 @@ export default function RentalManager({
       </div>
 
       {tab === "inventory" ? (
-        <Inventory supabase={supabase} ownerId={ownerId} items={items} setItems={setItems} unitsOut={unitsOut} />
+        <Inventory items={items} unitsOut={unitsOut} addItem={r.addItem} removeItem={r.removeItem} setItemStatus={r.setItemStatus} />
       ) : (
-        <Orders supabase={supabase} ownerId={ownerId} items={items} orders={orders} setOrders={setOrders} unitsOut={unitsOut} />
+        <Orders
+          items={items}
+          orders={orders}
+          availById={r.availById}
+          createOrder={r.createOrder}
+          setOrderStatus={r.setOrderStatus}
+          removeOrder={r.removeOrder}
+        />
       )}
     </div>
   );
@@ -192,44 +151,24 @@ function StatCard({
 /* ─────────────────────────── Kho trang phục ─────────────────────────── */
 
 function Inventory({
-  supabase,
-  ownerId,
   items,
-  setItems,
   unitsOut,
+  addItem,
+  removeItem,
+  setItemStatus,
 }: {
-  supabase: ReturnType<typeof createClient>;
-  ownerId: string;
   items: RentalItem[];
-  setItems: React.Dispatch<React.SetStateAction<RentalItem[]>>;
   unitsOut: Map<string, number>;
+  addItem: (f: ItemForm) => Promise<boolean>;
+  removeItem: (id: string) => Promise<boolean>;
+  setItemStatus: (id: string, status: RentalItemStatus) => Promise<void>;
 }) {
-  const emptyForm = {
-    name: "",
-    category: "dress" as RentalCategory,
-    code: "",
-    size: "",
-    color: "",
-    rental_price: "",
-    deposit: "",
-    quantity: "1",
-    note: "",
-  };
-  const [f, setF] = useState(emptyForm);
+  const [f, setF] = useState<ItemForm>(emptyItemForm);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [filterCat, setFilterCat] = useState<RentalCategory | "all">("all");
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return items.filter((it) => {
-      if (filterCat !== "all" && it.category !== filterCat) return false;
-      if (!needle) return true;
-      return [it.name, it.code, it.color, it.size]
-        .filter(Boolean)
-        .some((v) => v!.toLowerCase().includes(needle));
-    });
-  }, [items, q, filterCat]);
+  const filtered = useMemo(() => filterItems(items, q, filterCat), [items, q, filterCat]);
 
   const grouped = useMemo(() => {
     const map = new Map<RentalCategory, RentalItem[]>();
@@ -244,41 +183,17 @@ function Inventory({
   async function add() {
     if (!f.name.trim()) return;
     setBusy(true);
-    const { data, error } = await supabase
-      .from("rental_items")
-      .insert({
-        owner_id: ownerId,
-        name: f.name.trim(),
-        category: f.category,
-        code: f.code.trim() || null,
-        size: f.size.trim() || null,
-        color: f.color.trim() || null,
-        rental_price: Number(f.rental_price) || 0,
-        deposit: Number(f.deposit) || 0,
-        quantity: Number(f.quantity) || 1,
-        note: f.note.trim() || null,
-      })
-      .select("*")
-      .single();
+    const ok = await addItem(f);
     setBusy(false);
-    if (!error && data) {
-      setItems((p) => [...p, data as RentalItem]);
-      setF(emptyForm);
-    }
+    if (ok) setF(emptyItemForm());
   }
 
   async function remove(id: string) {
-    if ((unitsOut.get(id) ?? 0) > 0) {
-      alert("Món này đang có trong đơn thuê chưa trả — không thể xoá.");
-      return;
-    }
-    await supabase.from("rental_items").delete().eq("id", id);
-    setItems((p) => p.filter((e) => e.id !== id));
+    await removeItem(id);
   }
 
   async function setStatus(id: string, status: RentalItemStatus) {
-    await supabase.from("rental_items").update({ status }).eq("id", id);
-    setItems((p) => p.map((e) => (e.id === id ? { ...e, status } : e)));
+    await setItemStatus(id, status);
   }
 
   return (
@@ -401,134 +316,44 @@ function Inventory({
 
 /* ─────────────────────────────── Đơn thuê ─────────────────────────────── */
 
-type Line = { item_id: string; name: string; price: number; qty: number; max: number };
-
 function Orders({
-  supabase,
-  ownerId,
   items,
   orders,
-  setOrders,
-  unitsOut,
+  availById,
+  createOrder,
+  setOrderStatus,
+  removeOrder,
 }: {
-  supabase: ReturnType<typeof createClient>;
-  ownerId: string;
   items: RentalItem[];
   orders: RentalOrderWithItems[];
-  setOrders: React.Dispatch<React.SetStateAction<RentalOrderWithItems[]>>;
-  unitsOut: Map<string, number>;
+  availById: Map<string, number>;
+  createOrder: (f: OrderForm, lines: Line[]) => Promise<boolean>;
+  setOrderStatus: (id: string, status: RentalOrderStatus) => Promise<void>;
+  removeOrder: (id: string) => Promise<void>;
 }) {
-  const emptyForm = {
-    client_name: "",
-    client_phone: "",
-    pickup_date: "",
-    return_date: "",
-    deposit_paid: "",
-    note: "",
-  };
-  const [f, setF] = useState(emptyForm);
-  const [lines, setLines] = useState<Line[]>([]);
+  const [f, setF] = useState<OrderForm>(emptyOrderForm);
+  const { lines, setLines, selectableItems, total, addLine, setLineQty, removeLine } = useOrderLines(items, availById);
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<RentalOrderStatus | "all">("all");
 
-  // Available units per item = quantity − units already out in other active orders.
-  const availById = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const it of items) {
-      if (it.status !== "available") continue;
-      m.set(it.id, Math.max(0, (it.quantity || 0) - (unitsOut.get(it.id) ?? 0)));
-    }
-    return m;
-  }, [items, unitsOut]);
-
-  const selectableItems = items.filter((i) => i.status === "available" && (availById.get(i.id) ?? 0) > 0);
-  const total = lines.reduce((s, l) => s + l.price * l.qty, 0);
-
-  const shownOrders = useMemo(() => {
-    if (filter === "all") return orders;
-    if (filter === "overdue") return orders.filter((o) => o.status === "overdue" || isOverdue(o));
-    return orders.filter((o) => o.status === filter);
-  }, [orders, filter]);
-
-  function addLine(itemId: string) {
-    const it = items.find((i) => i.id === itemId);
-    if (!it) return;
-    const max = availById.get(itemId) ?? 0;
-    if (max <= 0) return;
-    setLines((p) => {
-      if (p.some((l) => l.item_id === itemId)) return p;
-      return [...p, { item_id: it.id, name: it.name, price: it.rental_price, qty: 1, max }];
-    });
-  }
-
-  function setLineQty(itemId: string, qty: number) {
-    setLines((p) => p.map((l) => (l.item_id === itemId ? { ...l, qty: Math.max(1, Math.min(l.max, qty)) } : l)));
-  }
-
-  function removeLine(itemId: string) {
-    setLines((p) => p.filter((l) => l.item_id !== itemId));
-  }
+  const shownOrders = useMemo(() => filterOrders(orders, filter), [orders, filter]);
 
   async function create() {
     if (!f.client_name.trim() || lines.length === 0) return;
     setBusy(true);
-    const { data: order, error } = await supabase
-      .from("rental_orders")
-      .insert({
-        owner_id: ownerId,
-        client_name: f.client_name.trim(),
-        client_phone: f.client_phone.trim() || null,
-        pickup_date: f.pickup_date || null,
-        return_date: f.return_date || null,
-        total_price: total,
-        deposit_paid: Number(f.deposit_paid) || 0,
-        note: f.note.trim() || null,
-      })
-      .select("*")
-      .single();
-
-    if (error || !order) {
-      setBusy(false);
-      alert("Không tạo được đơn. Thử lại nhé.");
-      return;
-    }
-
-    const { data: lineRows } = await supabase
-      .from("rental_order_items")
-      .insert(
-        lines.map((l) => ({
-          order_id: order.id,
-          item_id: l.item_id,
-          name: l.name,
-          price: l.price,
-          qty: l.qty,
-        }))
-      )
-      .select("*");
-
+    const ok = await createOrder(f, lines);
     setBusy(false);
-    setOrders((p) => [{ ...(order as RentalOrderWithItems), items: lineRows ?? [] }, ...p]);
-    setF(emptyForm);
+    if (!ok) return;
+    setF(emptyOrderForm());
     setLines([]);
   }
 
   async function setStatus(id: string, status: RentalOrderStatus) {
-    const patch: Record<string, unknown> = { status };
-    if (status === "returned") patch.returned_at = todayISO();
-    else patch.returned_at = null;
-    await supabase.from("rental_orders").update(patch).eq("id", id);
-    setOrders((p) =>
-      p.map((o) =>
-        o.id === id
-          ? { ...o, status, returned_at: status === "returned" ? (patch.returned_at as string) : null }
-          : o
-      )
-    );
+    await setOrderStatus(id, status);
   }
 
   async function remove(id: string) {
-    await supabase.from("rental_orders").delete().eq("id", id);
-    setOrders((p) => p.filter((o) => o.id !== id));
+    await removeOrder(id);
   }
 
   return (

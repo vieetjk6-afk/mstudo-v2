@@ -2,14 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ChevronLeft, ChevronRight, Clock, Plus, Trash2, Lock, ChevronDown, Search, X } from "lucide-react";
 import { CREW_STATUS_LABEL, type CrewRole, type CrewStatus } from "@/lib/types";
 import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 import { lunarCellLabel } from "@/lib/lunar";
 import { todayVN } from "@/lib/date";
 import TimeInput from "@/components/TimeInput";
-import { SHIFT_COMPANY_LABEL, shiftBlockFor, type ShiftLetter } from "@/lib/crew-shift";
+import { SHIFT_COMPANY_LABEL, type ShiftLetter } from "@/lib/crew-shift";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import type { CalendarTab } from "./tabs";
+import { useTeamCalendar } from "./team-logic";
+import TeamV2 from "./TeamV2";
 
 export type TeamAssignment = {
   name: string;
@@ -51,32 +54,38 @@ function timeLabel(r: CrewScheduleRow): string {
   return `${hhmm(r.start_time)}–${hhmm(r.end_time)}${r.overnight ? " (+1)" : ""}`;
 }
 
-export default function TeamCalendar({
-  assignments,
-  members,
-  schedule,
-  shifts,
-  crewRoles = [],
-}: {
+export type TeamCalendarProps = {
   assignments: TeamAssignment[];
   members: CrewMember[];
   schedule: CrewScheduleRow[];
   shifts: Record<string, ShiftLetter>;
   /** Vai trò thợ studio tự đặt — để ra đúng tên vai trò. */
   crewRoles?: CrewRoleRow[];
-}) {
-  const router = useRouter();
+  /** Các tab của màn Lịch — chỉ giao diện mới dùng. */
+  tabs?: readonly CalendarTab[];
+};
+
+/** Giao diện mới có bản riêng (TeamV2) — đổi KIỂU component, không rẽ nhánh giữa các hook. */
+export default function TeamCalendar(props: TeamCalendarProps) {
+  return useUiV2() ? <TeamV2 {...props} /> : <TeamCalendarV1 {...props} />;
+}
+
+function TeamCalendarV1({
+  assignments,
+  members,
+  schedule,
+  shifts,
+  crewRoles = [],
+}: TeamCalendarProps) {
   const todayStr = todayVN();
   const [y, mIdx] = todayStr.split("-").map(Number);
   const [cursor, setCursor] = useState({ year: y, month: mIdx - 1 });
   const [selected, setSelected] = useState<string>(todayStr);
-  // "" = cả đội. Lọc theo một thợ để xem riêng lịch của người đó.
-  const [who, setWho] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [form, setForm] = useState({ phone: "", start: "08:00", end: "17:00", title: "", allDay: false });
+  const {
+    who, setWho, busy, form, setForm, q, setQ, showShift, setShowShift, nameOf, filteredMembers,
+    byDateAssign, byDateSched, shiftsOn, addForCrew: addForCrewOn, removeEntry,
+  } = useTeamCalendar({ assignments, members, schedule, shifts });
   const [pickOpen, setPickOpen] = useState(false);
-  const [q, setQ] = useState("");
-  const [showShift, setShowShift] = useState(false);
   const pickRef = useRef<HTMLDivElement>(null);
 
   // Bấm ra ngoài thì đóng menu chọn thợ.
@@ -89,56 +98,6 @@ export default function TeamCalendar({
     return () => document.removeEventListener("mousedown", onDown);
   }, [pickOpen]);
 
-  const nameOf = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const c of members) m[c.phone] = c.name;
-    return m;
-  }, [members]);
-
-  const filteredMembers = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return members;
-    // Tìm theo cả tên lẫn SĐT — studio nhớ số nhanh hơn nhớ tên là chuyện thường.
-    return members.filter((m) => m.name.toLowerCase().includes(needle) || m.phone.includes(needle.replace(/\D/g, "")));
-  }, [members, q]);
-
-  const visibleSchedule = useMemo(
-    () => (who ? schedule.filter((r) => r.phone === who) : schedule),
-    [schedule, who],
-  );
-  const visibleAssignments = useMemo(
-    () => (who ? assignments.filter((a) => (a.phone ?? "").replace(/\D/g, "") === who) : assignments),
-    [assignments, who],
-  );
-  // Ca công ty CHỈ hiện khi đang xem một thợ cụ thể và studio bật lên. Ở chế độ
-  // cả đội thì lịch chỉ còn việc của studio — ca nhà máy của chục người chồng
-  // lên nhau làm lịch không đọc nổi, mà cũng không phải việc studio xếp.
-  const visibleShifts = useMemo(
-    () => (who && showShift && shifts[who] ? { [who]: shifts[who] } : {}),
-    [shifts, who, showShift],
-  );
-
-  const byDateAssign = useMemo(() => {
-    const map: Record<string, TeamAssignment[]> = {};
-    for (const a of visibleAssignments) (map[a.date] ||= []).push(a);
-    return map;
-  }, [visibleAssignments]);
-
-  const byDateSched = useMemo(() => {
-    const map: Record<string, CrewScheduleRow[]> = {};
-    for (const r of visibleSchedule) (map[r.date] ||= []).push(r);
-    return map;
-  }, [visibleSchedule]);
-
-  /** Ca công ty của những thợ đang hiển thị, cho một ngày cụ thể. */
-  function shiftsOn(dateStr: string) {
-    const out: { phone: string; name: string; label: string }[] = [];
-    for (const [phone, letter] of Object.entries(visibleShifts)) {
-      const b = shiftBlockFor(dateStr, letter);
-      if (b) out.push({ phone, name: nameOf[phone] || phone, label: `Ca ${b.shift} ${b.start}–${b.end}${b.overnight ? " (+1)" : ""}` });
-    }
-    return out;
-  }
 
   const grid = useMemo(() => {
     const first = new Date(cursor.year, cursor.month, 1);
@@ -157,39 +116,10 @@ export default function TeamCalendar({
       return { year: c.year + Math.floor(m / 12), month: ((m % 12) + 12) % 12 };
     });
   }
-
-  async function addForCrew() {
-    const phone = form.phone || who;
-    if (!phone) return;
-    setBusy(true);
-    const res = await fetch("/api/studio/crew-schedule", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        phone,
-        date: selected,
-        start: form.allDay ? "" : form.start,
-        end: form.allDay ? "" : form.end,
-        title: form.title,
-      }),
-    });
-    setBusy(false);
-    if (res.ok) {
-      setForm((f) => ({ ...f, title: "" }));
-      router.refresh();
-    }
+  function addForCrew() {
+    return addForCrewOn(selected);
   }
 
-  async function removeEntry(r: CrewScheduleRow) {
-    setBusy(true);
-    await fetch("/api/studio/crew-schedule", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: r.phone, id: r.id }),
-    });
-    setBusy(false);
-    router.refresh();
-  }
 
   const selAssign = byDateAssign[selected] ?? [];
   const selSched = byDateSched[selected] ?? [];

@@ -14,6 +14,7 @@ import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
 import SyncControlButton from "@/components/SyncControlButton";
 import MobileTabBarV2 from "@/components/v2/MobileTabBarV2";
+import { UiV2Provider } from "@/components/v2/UiV2Context";
 import { setAccentCookie, setUiVersion } from "@/components/v2/ui-switch";
 import { createClient } from "@/lib/supabase/client";
 import { THEME_OPTIONS, useTheme } from "@/lib/theme";
@@ -542,7 +543,7 @@ export default function StudioShellV2({
           </header>
 
           <main className="page-in mx-auto w-full min-w-0 max-w-[1440px] overflow-x-clip px-4 pb-32 pt-5 sm:px-6 lg:px-8 lg:pb-14 lg:pt-7">
-            {children}
+            <UiV2Provider>{children}</UiV2Provider>
           </main>
         </div>
       </div>

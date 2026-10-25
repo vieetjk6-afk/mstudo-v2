@@ -8,6 +8,7 @@ import StudioDenied from "@/components/StudioDenied";
 import { getStudioHost } from "@/lib/studio-site";
 import { studioUrl } from "@/lib/hosts";
 import { applyBranch, getBranchScope } from "@/lib/branches";
+import { isUiV2 } from "@/lib/ui-server";
 
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
@@ -85,16 +86,29 @@ export default async function ClientsPage() {
   const studioHost = await getStudioHost(supabase, profile.id);
   const bookingToken = (me as { booking_token?: string | null } | null)?.booking_token ?? null;
   const bookingUrl = bookingToken ? studioUrl(studioHost, `/book/${bookingToken}`) : null;
+  const studioInfo = {
+    name: brandFrom(profile).name,
+    phone: (profile.pl_phone as string | null) ?? null,
+    email: (profile.email as string | null) ?? null,
+  };
+
+  // Giao diện mới: sổ giới thiệu thành một tab cạnh danh bạ, không nằm rời
+  // dưới đáy trang. Cùng dữ liệu đã tải ở trên.
+  if (await isUiV2()) {
+    return (
+      <ClientsView
+        clients={clients}
+        studio={studioInfo}
+        referrals={canSeeReferrals ? { rows: (referrals ?? []) as StudioReferral[], bookingUrl } : undefined}
+      />
+    );
+  }
 
   return (
     <>
       <ClientsView
         clients={clients}
-        studio={{
-          name: brandFrom(profile).name,
-          phone: (profile.pl_phone as string | null) ?? null,
-          email: (profile.email as string | null) ?? null,
-        }}
+        studio={studioInfo}
       />
       {canSeeReferrals && (
         <ReferralsPanel rows={(referrals ?? []) as StudioReferral[]} bookingUrl={bookingUrl} />

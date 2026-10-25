@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { CopyCheck, Minimize2, HardDrive, ArrowRight } from "lucide-react";
 import StudioDenied from "@/components/StudioDenied";
+import { isUiV2 } from "@/lib/ui-server";
+import ToolsV2 from "./ToolsV2";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +35,9 @@ export default async function PhotoToolsPage() {
   ]);
 
   const driveReady = profile.studioTier === "full";
+
+  if (await isUiV2())
+    return <ToolsV2 albumCount={albumCount ?? 0} compressRuns={compressRuns ?? 0} driveReady={driveReady} />;
 
   const TOOLS: { icon: typeof CopyCheck; title: string; desc: string; stat: string; cta: string; href: string }[] = [
     {

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
+import type { CalendarTab } from "./tabs";
 import { todayVN } from "@/lib/date";
 import { addDays, mondayOf } from "@/lib/appointments";
 import { applyBranch, getActiveBranches, getBranchScope } from "@/lib/branches";
@@ -28,7 +29,7 @@ const DEFAULT_ROOMS: { name: string; kind: StudioRoom["kind"]; capacity_week: nu
   { name: "Phim trường", kind: "studio", capacity_week: 10, position: 3 },
 ];
 
-export default async function StudioTab() {
+export default async function StudioTab({ tabs }: { tabs?: readonly CalendarTab[] } = {}) {
   const profile = await requireStudio("booking");
   if (!profile) {
     return (
@@ -168,6 +169,7 @@ export default async function StudioTab() {
 
   return (
     <SchedulePage
+      tabs={tabs}
       ownerId={profile.id}
       readOnly={profile.actingRole === "staff"}
       today={today}

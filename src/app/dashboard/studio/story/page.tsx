@@ -3,11 +3,16 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { getStudioHost } from "@/lib/studio-site";
 import { getFeatureFlags, storyComingSoon } from "@/lib/feature-flags";
+import { isUiV2 } from "@/lib/ui-server";
 import StoryListView, { type StoryRow } from "./StoryListView";
+import CreativeGateV2 from "../thiep/CreativeGateV2";
 
 export default async function StoryManagePage() {
   const profile = await requireStudio();
   if (!profile) {
+    if (await isUiV2()) {
+      return <CreativeGateV2 kind="plan" feature="Cần gói Studio" hint="Trang Love Story chỉ dành cho tài khoản gói Studio." />;
+    }
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">
@@ -21,6 +26,17 @@ export default async function StoryManagePage() {
 
   // "Sắp ra mắt": khoá với studio, admin vẫn vào để hoàn thiện.
   if (storyComingSoon(await getFeatureFlags()) && profile.actingRole !== "admin") {
+    if (await isUiV2()) {
+      return (
+        <CreativeGateV2
+          kind="soon"
+          tab="story"
+          icon={Clapperboard}
+          feature="Love Story"
+          hint="Tính năng trang chia sẻ khoảnh khắc đang được hoàn thiện. Bọn mình sẽ thông báo khi sẵn sàng — cảm ơn bạn đã chờ nhé!"
+        />
+      );
+    }
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">

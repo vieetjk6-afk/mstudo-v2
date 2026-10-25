@@ -1,60 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { useLang } from "@/lib/i18n";
-import { createClient } from "@/lib/supabase/client";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import NewAlbumV2 from "./NewAlbumV2";
+import { useNewAlbum } from "./useNewAlbum";
 
-function slugify(s: string) {
-  const base = s
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/đ/g, "d")
-    .replace(/Đ/g, "d")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 40);
-  const suffix = Math.random().toString(36).slice(2, 7);
-  return `${base || "album"}-${suffix}`;
+/** Giao diện mới có bản riêng (NewAlbumV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
+export default function NewAlbumPage() {
+  return useUiV2() ? <NewAlbumV2 /> : <NewAlbumPageV1 />;
 }
 
-export default function NewAlbumPage() {
-  const { t } = useLang();
-  const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function create(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      router.push("/login");
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from("albums")
-      .insert({ owner_id: user.id, title, slug: slugify(title) })
-      .select("id")
-      .single();
-
-    if (error || !data) {
-      setError(error?.message ?? t("error"));
-      setLoading(false);
-      return;
-    }
-    router.push(`/dashboard/albums/${data.id}`);
-  }
+function NewAlbumPageV1() {
+  const { t, title, setTitle, loading, error, create } = useNewAlbum();
 
   return (
     <div className="mx-auto max-w-lg animate-fade-in">

@@ -1,11 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { brandFrom } from "@/lib/studio-brand";
+import { isUiV2 } from "@/lib/ui-server";
 import ThiepListView, { type InvitationRow } from "./ThiepListView";
+import CreativeGateV2 from "./CreativeGateV2";
 
 export default async function ThiepManagePage() {
   const profile = await requireStudio();
   if (!profile) {
+    if (await isUiV2()) {
+      return <CreativeGateV2 kind="plan" feature="Cần gói Studio" hint="Thiệp cưới online chỉ dành cho tài khoản gói Studio." />;
+    }
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">

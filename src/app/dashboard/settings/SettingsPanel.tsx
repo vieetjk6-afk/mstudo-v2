@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { fmtDateTime } from "@/lib/date";
 import {
   Save, Trash2, Check, MessageSquare,
@@ -8,17 +7,13 @@ import {
 } from "lucide-react";
 import type { SiteSettings } from "@/lib/types";
 import { Section, Field } from "@/components/admin/Section";
+import { useUiV2 } from "@/components/v2/UiV2Context";
 import UpgradeContentEditor from "./UpgradeContentEditor";
+import SettingsPanelV2 from "./SettingsPanelV2";
+import { PRICE_ROWS, toPercent, toPrice, useSettings, type Feedback } from "./useSettings";
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
-export interface Feedback {
-  id: string;
-  name: string;
-  email: string | null;
-  message: string;
-  handled: boolean;
-  created_at: string;
-}
+export type { Feedback } from "./useSettings";
 
 function Input({ value, onChange, placeholder, type = "text" }: { value: string | number; onChange: (v: string) => void; placeholder?: string; type?: string }) {
   return (
@@ -45,42 +40,26 @@ function Textarea({ value, onChange, placeholder, rows = 3 }: { value: string; o
 }
 
 /* ── Main component ─────────────────────────────────────────────────────────── */
-export default function SettingsPanel({
+type SettingsPanelProps = { settings: SiteSettings | null; feedbacks: Feedback[] };
+
+/** Cấu hình mstudo: giao diện mới (SettingsPanelV2) hay bản cũ — xem UiV2Context. */
+export default function SettingsPanel(props: SettingsPanelProps) {
+  return useUiV2() ? <SettingsPanelV2 {...props} /> : <SettingsPanelV1 {...props} />;
+}
+
+function SettingsPanelV1({
   settings,
   feedbacks: initialFeedbacks,
 }: {
   settings: SiteSettings | null;
   feedbacks: Feedback[];
 }) {
-  const [form, setForm] = useState<Partial<SiteSettings>>(settings ?? {});
-  const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  const set = <K extends keyof SiteSettings>(k: K, v: SiteSettings[K]) =>
-    setForm((f) => ({ ...f, [k]: v }));
-  const str = (k: keyof SiteSettings) => ((form[k] ?? "") as string);
-
-  // ── Feedback ─────────────────────────────────────────────────────────────
-  const [feedbacks, setFeedbacks] = useState<Feedback[]>(initialFeedbacks);
-  async function handleFeedback(action: "handled" | "delete", id: string, handled?: boolean) {
-    setFeedbacks((r) => action === "delete" ? r.filter((x) => x.id !== id) : r.map((x) => x.id === id ? { ...x, handled: !!handled } : x));
-    await fetch("/api/admin/requests", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "feedback", action, id, handled }),
-    });
-  }
-  // ── Save ──────────────────────────────────────────────────────────────────
-  async function save() {
-    setSaving(true);
-    const res = await fetch("/api/admin/settings", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setSaving(false);
-    setMsg(res.ok ? "Đã lưu" : "Lỗi");
-    setTimeout(() => setMsg(null), 2500);
-  }
+  // Logic dùng chung với bản mới (SettingsPanelV2) — xem ./useSettings.
+  const {
+    form, set, str, saving, msg, save,
+    flagLocked, setFlagLocked, uiV2Value, setUiV2,
+    feedbacks, handleFeedback,
+  } = useSettings(settings, initialFeedbacks);
 
   const SaveBtn = ({ label = "Lưu thay đổi" }: { label?: string }) => (
     <button onClick={save} disabled={saving} className="btn-primary gap-2">
@@ -158,12 +137,8 @@ export default function SettingsPanel({
           </span>
           <select
             className="input sm:w-64"
-            value={(form.feature_flags as Record<string, string> | null | undefined)?.ui_v2 ?? "admin"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              if (e.target.value === "admin") delete cur.ui_v2; else cur.ui_v2 = e.target.value;
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            value={uiV2Value}
+            onChange={(e) => setUiV2(e.target.value)}
           >
             <option value="admin">Chỉ admin dùng thử</option>
             <option value="beta">Mọi studio thấy gợi ý, tự bật</option>
@@ -174,12 +149,8 @@ export default function SettingsPanel({
           <input
             type="checkbox"
             className="h-4 w-4 accent-[var(--brand,var(--gold))]"
-            checked={((form.feature_flags as Record<string, string> | null | undefined)?.inbox ?? "coming_soon") !== "live"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              cur.inbox = e.target.checked ? "coming_soon" : "live";
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            checked={flagLocked("inbox")}
+            onChange={(e) => setFlagLocked("inbox", e.target.checked)}
           />
           <span className="text-sm">
             <b>Hộp thư hợp nhất</b> — hiển thị “Sắp ra mắt” &amp; tạm khoá với studio.
@@ -193,12 +164,8 @@ export default function SettingsPanel({
           <input
             type="checkbox"
             className="h-4 w-4 accent-[var(--brand,var(--gold))]"
-            checked={((form.feature_flags as Record<string, string> | null | undefined)?.story) === "coming_soon"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              if (e.target.checked) cur.story = "coming_soon"; else delete cur.story;
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            checked={flagLocked("story")}
+            onChange={(e) => setFlagLocked("story", e.target.checked)}
           />
           <span className="text-sm">
             <b>Love Story</b> — hiển thị “Sắp ra mắt” &amp; tạm khoá với studio
@@ -208,12 +175,8 @@ export default function SettingsPanel({
           <input
             type="checkbox"
             className="h-4 w-4 accent-[var(--brand,var(--gold))]"
-            checked={((form.feature_flags as Record<string, string> | null | undefined)?.album ?? "coming_soon") !== "live"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              cur.album = e.target.checked ? "coming_soon" : "live";
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            checked={flagLocked("album")}
+            onChange={(e) => setFlagLocked("album", e.target.checked)}
           />
           <span className="text-sm">
             <b>Thiết kế Album</b> — hiển thị “Sắp ra mắt” &amp; tạm khoá với studio
@@ -223,12 +186,8 @@ export default function SettingsPanel({
           <input
             type="checkbox"
             className="h-4 w-4 accent-[var(--brand,var(--gold))]"
-            checked={((form.feature_flags as Record<string, string> | null | undefined)?.slide ?? "coming_soon") !== "live"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              cur.slide = e.target.checked ? "coming_soon" : "live";
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            checked={flagLocked("slide")}
+            onChange={(e) => setFlagLocked("slide", e.target.checked)}
           />
           <span className="text-sm">
             <b>Slide cưới</b> — hiển thị “Sắp ra mắt” &amp; tạm khoá với studio
@@ -238,12 +197,8 @@ export default function SettingsPanel({
           <input
             type="checkbox"
             className="h-4 w-4 accent-[var(--brand,var(--gold))]"
-            checked={((form.feature_flags as Record<string, string> | null | undefined)?.drive_sync ?? "coming_soon") !== "live"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              cur.drive_sync = e.target.checked ? "coming_soon" : "live";
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            checked={flagLocked("drive_sync")}
+            onChange={(e) => setFlagLocked("drive_sync", e.target.checked)}
           />
           <span className="text-sm">
             <b>Đồng bộ Drive</b> — hiển thị “Sắp ra mắt” &amp; tạm khoá với studio
@@ -253,12 +208,8 @@ export default function SettingsPanel({
           <input
             type="checkbox"
             className="h-4 w-4 accent-[var(--brand,var(--gold))]"
-            checked={((form.feature_flags as Record<string, string> | null | undefined)?.planner ?? "coming_soon") !== "live"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              cur.planner = e.target.checked ? "coming_soon" : "live";
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            checked={flagLocked("planner")}
+            onChange={(e) => setFlagLocked("planner", e.target.checked)}
           />
           <span className="text-sm">
             <b>Kế hoạch cưới</b> (cổng khách) — hiển thị “Sắp ra mắt” &amp; tạm khoá với studio.
@@ -272,12 +223,8 @@ export default function SettingsPanel({
           <input
             type="checkbox"
             className="h-4 w-4 accent-[var(--brand,var(--gold))]"
-            checked={((form.feature_flags as Record<string, string> | null | undefined)?.desktop ?? "") !== "live"}
-            onChange={(e) => {
-              const cur = { ...((form.feature_flags as Record<string, string>) ?? {}) };
-              if (e.target.checked) delete cur.desktop; else cur.desktop = "live";
-              set("feature_flags" as keyof SiteSettings, cur as never);
-            }}
+            checked={flagLocked("desktop")}
+            onChange={(e) => setFlagLocked("desktop", e.target.checked)}
           />
           <span className="text-sm">
             <b>MStudo Desktop</b> — ẩn hoàn toàn với studio (chỉ admin thấy); bỏ chọn để xuất bản
@@ -291,19 +238,14 @@ export default function SettingsPanel({
       <Section title="Gói & giá (VND)" icon={BadgeDollarSign}>
         {/* Mỗi gói 1 cột: giá tháng, giá năm, giảm giá tháng, giảm giá năm. */}
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {([
-            { name: "Basic", m: "price_basic_month", y: "price_basic_year", dm: "basic_discount_month_percent", dy: "basic_discount_year_percent" },
-            { name: "Photographer", m: "price_photographer_month", y: "price_photographer_year", dm: "photographer_discount_month_percent", dy: "photographer_discount_year_percent" },
-            { name: "Photographer Plus", m: "price_photographer_plus_month", y: "price_photographer_plus_year", dm: "photographer_plus_discount_month_percent", dy: "photographer_plus_discount_year_percent" },
-            { name: "Studio", m: "price_studio_month", y: "price_studio_year", dm: "studio_discount_month_percent", dy: "studio_discount_year_percent" },
-          ] as { name: string; m: keyof SiteSettings; y: keyof SiteSettings; dm: keyof SiteSettings; dy: keyof SiteSettings }[]).map((p) => (
+          {PRICE_ROWS.map((p) => (
             <div key={p.name} className="rounded-xl border p-3" style={{ borderColor: "var(--border)" }}>
               <div className="mb-2 text-[13px] font-semibold" style={{ color: "var(--text)" }}>{p.name}</div>
               <div className="space-y-2">
-                <Field label="Giá / tháng"><Input type="number" value={(form[p.m] as number) ?? 0} onChange={(v) => set(p.m, Math.max(0, Math.round(Number(v) || 0)) as never)} placeholder="0" /></Field>
-                <Field label="Giá / năm"><Input type="number" value={(form[p.y] as number) ?? 0} onChange={(v) => set(p.y, Math.max(0, Math.round(Number(v) || 0)) as never)} placeholder="0" /></Field>
-                <Field label="Giảm / tháng (%)"><Input type="number" value={(form[p.dm] as number) ?? 0} onChange={(v) => set(p.dm, Math.max(0, Math.min(100, Number(v) || 0)) as never)} /></Field>
-                <Field label="Giảm / năm (%)"><Input type="number" value={(form[p.dy] as number) ?? 0} onChange={(v) => set(p.dy, Math.max(0, Math.min(100, Number(v) || 0)) as never)} /></Field>
+                <Field label="Giá / tháng"><Input type="number" value={(form[p.m] as number) ?? 0} onChange={(v) => set(p.m, toPrice(v) as never)} placeholder="0" /></Field>
+                <Field label="Giá / năm"><Input type="number" value={(form[p.y] as number) ?? 0} onChange={(v) => set(p.y, toPrice(v) as never)} placeholder="0" /></Field>
+                <Field label="Giảm / tháng (%)"><Input type="number" value={(form[p.dm] as number) ?? 0} onChange={(v) => set(p.dm, toPercent(v) as never)} /></Field>
+                <Field label="Giảm / năm (%)"><Input type="number" value={(form[p.dy] as number) ?? 0} onChange={(v) => set(p.dy, toPercent(v) as never)} /></Field>
               </div>
             </div>
           ))}

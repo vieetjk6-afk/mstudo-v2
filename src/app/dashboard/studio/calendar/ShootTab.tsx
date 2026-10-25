@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import type { CalendarTab } from "./tabs";
 import { mainUrl } from "@/lib/hosts";
 import { gcalHealth } from "@/lib/gcal";
 import { applyBranch, getBranchScope } from "@/lib/branches";
@@ -15,7 +16,7 @@ import CalendarView, { type ContractMarker, type EventRow } from "./CalendarView
    trong ba góc nhìn — xem CalendarTabs.tsx.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export default async function ShootTab() {
+export default async function ShootTab({ tabs }: { tabs?: readonly CalendarTab[] } = {}) {
   const profile = await requireStudio("booking");
   if (!profile) {
     return (
@@ -64,6 +65,7 @@ export default async function ShootTab() {
 
   return (
     <CalendarView
+      tabs={tabs}
       ownerId={profile.id}
       initialEvents={(events ?? []) as unknown as EventRow[]}
       contracts={(contracts ?? []) as ContractMarker[]}

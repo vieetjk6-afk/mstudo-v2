@@ -6,6 +6,8 @@ import { STUDIO_TIER_RANK, type StudioTier } from "@/lib/plans";
 import { ALL_SEED } from "@/lib/pricelist-seeds";
 import type { PricelistItem } from "@/lib/types";
 import PricingManager from "./PricingManager";
+import PricingV2 from "./PricingV2";
+import { isUiV2 } from "@/lib/ui-server";
 import StudioDenied from "@/components/StudioDenied";
 import BankAutoCard from "@/components/studio/BankAutoCard";
 
@@ -63,32 +65,39 @@ export default async function PricingPage() {
 
   const isOwner = profile.actingRole === "owner" || profile.actingRole === "admin";
 
+  const pricingProps = {
+    ownerId: profile.id,
+    initial: (data ?? []) as PricelistItem[],
+    hiddenLists,
+    listLabels,
+    services: (services ?? []) as { id: string; name: string }[],
+    showClauses,
+    canQuote,
+    shareUrl: token ? studioUrl(studioHost, `/gia/${token}`) : "",
+    contact: {
+      pl_phone: profile.pl_phone ?? "",
+      pl_facebook: profile.pl_facebook ?? "",
+      pl_bank_holder: profile.pl_bank_holder ?? "",
+      pl_bank_account: profile.pl_bank_account ?? "",
+      pl_bank_name: profile.pl_bank_name ?? "",
+      pl_bank_bin: profile.pl_bank_bin ?? "",
+    },
+    appearance: {
+      pl_bg: profile.pl_bg ?? "",
+      pl_text: profile.pl_text ?? "",
+      pl_accent: profile.pl_accent ?? "",
+      pl_logo_url: profile.pl_logo_url ?? "",
+    },
+  };
+
+  // Giao diện mới: thẻ tự xác nhận chuyển khoản nằm trong tab "Liên hệ & chuyển khoản".
+  if (await isUiV2()) {
+    return <PricingV2 {...pricingProps} bankAuto={isOwner ? <BankAutoCard /> : null} />;
+  }
+
   return (
     <div className="space-y-3.5">
-    <PricingManager
-      ownerId={profile.id}
-      initial={(data ?? []) as PricelistItem[]}
-      hiddenLists={hiddenLists}
-      listLabels={listLabels}
-      services={(services ?? []) as { id: string; name: string }[]}
-      showClauses={showClauses}
-      canQuote={canQuote}
-      shareUrl={token ? studioUrl(studioHost, `/gia/${token}`) : ""}
-      contact={{
-        pl_phone: profile.pl_phone ?? "",
-        pl_facebook: profile.pl_facebook ?? "",
-        pl_bank_holder: profile.pl_bank_holder ?? "",
-        pl_bank_account: profile.pl_bank_account ?? "",
-        pl_bank_name: profile.pl_bank_name ?? "",
-        pl_bank_bin: profile.pl_bank_bin ?? "",
-      }}
-      appearance={{
-        pl_bg: profile.pl_bg ?? "",
-        pl_text: profile.pl_text ?? "",
-        pl_accent: profile.pl_accent ?? "",
-        pl_logo_url: profile.pl_logo_url ?? "",
-      }}
-    />
+    <PricingManager {...pricingProps} />
     {/* Tự xác nhận chuyển khoản đặt ngay dưới phần "Liên hệ & chuyển khoản":
         cùng là "tiền của khách về đâu". Chỉ chủ studio: khoá webhook là quyền
         ghi tiền vào sổ. */}

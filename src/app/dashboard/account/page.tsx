@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import AccountPanel from "./AccountPanel";
-import MfaCard from "./MfaCard";
+import AccountScreen from "./AccountScreen";
 
 export default async function AccountPage() {
   const supabase = await createClient();
@@ -20,8 +19,7 @@ export default async function AccountPage() {
   const providers = user.identities?.map((i) => i.provider) ?? [];
 
   return (
-    <>
-    <AccountPanel
+    <AccountScreen
       userId={user.id}
       email={user.email ?? ""}
       fullName={profile?.full_name ?? null}
@@ -35,7 +33,5 @@ export default async function AccountPage() {
       studioBrandName={profile?.studio_brand_name ?? null}
       studioLogo={profile?.studio_logo_url ?? null}
     />
-    <MfaCard />
-    </>
   );
 }

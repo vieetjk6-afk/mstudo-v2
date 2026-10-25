@@ -49,12 +49,25 @@ dev từ origin lạ nên trang sẽ không chạy được JavaScript.
 
 ## Lộ trình
 
-0. ✅ Nền móng: công tắc, cờ, bộ màu, màu cá nhân.
+0. ✅ Nền móng: công tắc, cờ, bộ màu, màu cá nhân, bộ khối V2 (`src/components/v2/kit*.tsx`).
 1. ✅ Khung: menu trái, topbar, thanh tab điện thoại.
-2. Thiết lập ban đầu 5 bước cho studio mới và popup cập nhật cho studio cũ.
-3. Tổng quan → Hợp đồng → Lịch → Album & lọc ảnh → Tài chính → Bán hàng → các
-   màn còn lại. Có thể làm theo thứ tự nào cũng được.
+2. ✅ Mọi màn trong khu quản lý đều có bản V2: Tổng quan, Hợp đồng (danh sách,
+   chi tiết, tạo mới), Báo giá (danh sách, tạo, sửa), Lịch, Album (thư viện, chi
+   tiết, lựa chọn khách, tạo, loại album), Công cụ ảnh (lọc ảnh, nén, watermark),
+   Thu chi, Tiền công, Khách hàng, Yêu cầu mới, Đặt lịch, Đánh giá, Sản xuất, Bảng
+   công việc, Phòng váy, Thiết bị, Nhà cung cấp, Thiệp, Love Story, Slide, Thiết
+   kế album, Nhân sự, Chi nhánh, Thẻ buổi, Dịch vụ & điều khoản, Bảng giá, Mẫu tin
+   nhắn, Chatbox, Voucher, Nhật ký, Thông báo, Website, Hộp thư, Kết nối kênh, Đồng
+   bộ Drive, Ứng dụng máy tính, Google Lịch, Tài khoản, Gói phần mềm, Thanh toán,
+   Affiliate, Quản trị, Cấu hình.
+   Mỗi màn: logic ở hook dùng chung (`use*.ts`), bản cũ giữ nguyên giao diện, bản
+   mới ở file `*V2.tsx` cạnh bản cũ. Xem trước: `/uipreview` các màn `v2-*`.
+3. Thiết lập ban đầu 5 bước cho studio mới và popup cập nhật cho studio cũ.
 4. Mở cho người dùng: `beta` → `default` → gỡ khung cũ và công tắc.
+
+Còn giữ kiểu cũ bên trong khung mới (dùng chung với nơi khác, chưa vẽ lại): ô
+tên miền riêng, bảng chỉnh khối của trình dựng website, vài thẻ phụ trong chi
+tiết hợp đồng (phụ lục, thuê đồ, voucher), trang `buoi-chup/` của hợp đồng.
 
 Hoa hồng theo bộ phận (Bán hàng / Sản xuất) là tính năng mới cần dữ liệu mới,
 làm riêng sau.

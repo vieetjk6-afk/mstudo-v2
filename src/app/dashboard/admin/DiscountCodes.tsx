@@ -1,66 +1,19 @@
 "use client";
 
-import { useState } from "react";
 import { fmtDate } from "@/lib/date";
 import { Plus, Shuffle, Tag, Trash2 } from "lucide-react";
 import DateInput from "@/components/DateInput";
 import { Section, Field } from "@/components/admin/Section";
 import type { DiscountCode } from "@/lib/types";
-
-const BLANK = { code: "", percent: 10, plan: "", cycle: "", uses: "many" as "1" | "many", expires: "", trial: 0 };
+import { useDiscountCodes } from "./useDiscountCodes";
 
 /**
  * Mã giảm giá & mã dùng thử. Ở cùng tab với tài khoản và yêu cầu nâng cấp: ba
  * việc này luôn đi liền nhau khi chốt một studio (phát mã → studio dùng → duyệt).
  */
 export default function DiscountCodes({ initial }: { initial: DiscountCode[] }) {
-  const [codes, setCodes] = useState<DiscountCode[]>(initial);
-  const [form, setForm] = useState(BLANK);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  function randomCode() {
-    // Bỏ I/O/0/1 — mã hay được đọc qua điện thoại cho studio.
-    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    let s = "";
-    for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
-    setForm((n) => ({ ...n, code: s }));
-  }
-
-  async function addCode() {
-    const code = form.code.trim().toUpperCase();
-    if (!code) return;
-    const res = await fetch("/api/admin/discount-codes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "create",
-        code,
-        percent: form.percent,
-        plan: form.plan || null,
-        cycle: form.cycle || null,
-        max_uses: form.uses === "1" ? 1 : null,
-        expires_at: form.expires || null,
-        trial_days: form.trial || null,
-      }),
-    });
-    const data = await res.json().catch(() => null);
-    if (res.ok && data?.code) {
-      setCodes((c) => [data.code, ...c]);
-      setForm(BLANK);
-    } else {
-      setMsg(data?.error?.includes("duplicate") ? "Mã đã tồn tại" : "Lỗi");
-      setTimeout(() => setMsg(null), 2500);
-    }
-  }
-
-  async function deleteCode(id: string) {
-    setCodes((c) => c.filter((x) => x.id !== id));
-    await fetch("/api/admin/discount-codes", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete", id }),
-    });
-  }
+  // Logic dùng chung với bản mới (DiscountCodesV2) — xem ./useDiscountCodes.
+  const { codes, form, setForm, msg, randomCode, quickTrial, addCode, deleteCode } = useDiscountCodes(initial);
 
   return (
     <Section title={`Mã giảm giá (${codes.length})`} icon={Tag}>
@@ -107,7 +60,7 @@ export default function DiscountCodes({ initial }: { initial: DiscountCode[] }) 
       </div>
       <button
         type="button"
-        onClick={() => { randomCode(); setForm((n) => ({ ...n, plan: "studio", trial: 1, percent: 0, uses: "many" })); }}
+        onClick={quickTrial}
         className="text-[12px] underline underline-offset-2"
         style={{ color: "var(--brand, var(--gold))" }}
       >

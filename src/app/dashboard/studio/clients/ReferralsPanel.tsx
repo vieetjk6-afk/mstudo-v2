@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Gift, Check, X, Copy } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Panel, PanelHead, EmptyState } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDate } from "@/lib/date";
 import { vnd, type StudioReferral } from "@/lib/types";
-import { REFERRAL_STATUS_LABEL, referralBookingUrl } from "@/lib/referral";
+import { REFERRAL_STATUS_LABEL } from "@/lib/referral";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import ReferralsV2 from "./ReferralsV2";
+import { useReferrals } from "./useReferrals";
 
 const TONE: Record<StudioReferral["status"], { fg: string; bg: string }> = {
   pending: { fg: "var(--am)", bg: "var(--amS)" },
@@ -26,36 +27,18 @@ const TONE: Record<StudioReferral["status"], { fg: string; bg: string }> = {
  * nào là việc studio biết, đoán máy móc theo SĐT sẽ ghép nhầm khi một khách có
  * nhiều hợp đồng.
  */
-export default function ReferralsPanel({
-  rows,
-  bookingUrl,
-}: {
+type ReferralsProps = {
   rows: StudioReferral[];
   /** Link đặt lịch gốc của studio; null khi studio chưa bật link đặt lịch. */
   bookingUrl: string | null;
-}) {
-  const supabase = createClient();
-  const [list, setList] = useState(rows);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [copied, setCopied] = useState<string | null>(null);
+};
 
-  async function setStatus(id: string, status: StudioReferral["status"]) {
-    setBusy(id);
-    const patch: Record<string, unknown> = { status };
-    if (status === "granted") patch.granted_at = new Date().toISOString();
-    await supabase.from("studio_referrals").update(patch).eq("id", id);
-    setList((p) => p.map((r) => (r.id === id ? { ...r, status, granted_at: status === "granted" ? new Date().toISOString() : r.granted_at } : r)));
-    setBusy(null);
-  }
+export default function ReferralsPanel(props: ReferralsProps) {
+  return useUiV2() ? <ReferralsV2 {...props} /> : <ReferralsPanelV1 {...props} />;
+}
 
-  function copyLink(phone: string) {
-    if (!bookingUrl) return;
-    navigator.clipboard?.writeText(referralBookingUrl(bookingUrl, phone));
-    setCopied(phone);
-    setTimeout(() => setCopied(null), 1600);
-  }
-
-  const owed = list.filter((r) => r.status === "earned").reduce((s, r) => s + (r.reward_amount || 0), 0);
+function ReferralsPanelV1({ rows, bookingUrl }: ReferralsProps) {
+  const { list, busy, copied, setStatus, copyLink, owed } = useReferrals(rows, bookingUrl);
 
   return (
     <Panel className="mt-3.5">

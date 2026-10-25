@@ -44,6 +44,21 @@ import { KeHoachCuoiDemo, QuaCuoiThiepDemo } from "./KeHoachCuoiDemo";
 import StudioShellV2 from "@/components/v2/StudioShellV2";
 import StudioShell from "@/components/StudioShell";
 import type { ChromeProfile } from "@/lib/types";
+import AlbumList, { type AlbumRow } from "@/app/dashboard/AlbumList";
+import { SCREENS_TONGQUAN } from "./v2/tongquan";
+import { SCREENS_HOPDONG } from "./v2/hopdong";
+import { SCREENS_TAICHINH } from "./v2/taichinh";
+import { SCREENS_LICH } from "./v2/lich";
+import { SCREENS_KHACHHANG } from "./v2/khachhang";
+import { SCREENS_CONGCU } from "./v2/congcu";
+import { SCREENS_HOPDONGCT } from "./v2/hopdongct";
+import { SCREENS_ALBUMCT } from "./v2/albumct";
+import { SCREENS_THIETLAP } from "./v2/thietlap";
+import { SCREENS_TAOHD } from "./v2/taohd";
+import { SCREENS_SANXUAT } from "./v2/sanxuat";
+import { SCREENS_SANGTAO } from "./v2/sangtao";
+import { SCREENS_WEBSITE } from "./v2/website";
+import { SCREENS_TAIKHOAN } from "./v2/taikhoan";
 import * as f from "./fixtures";
 
 /** Chủ studio giả cho các màn xem trước khung giao diện. */
@@ -51,6 +66,19 @@ const shellProfile: ChromeProfile = {
   id: "o", email: "mrlee@studio.vn", full_name: "Mr Lee", role: "photographer",
   plan: "studio", plan_expires_at: null, studio_owner_id: null, studio_role: null,
 };
+
+/** Bìa giả: dải màu SVG, không cần mạng. */
+function bia(a: string, b: string) {
+  return `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='400' height='300'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='${a}'/><stop offset='1' stop-color='${b}'/></linearGradient></defs><rect width='400' height='300' fill='url(#g)'/></svg>`)}`;
+}
+const albumMau: AlbumRow[] = [
+  { id: "a1", slug: "su-kien", title: "ALBUM SU KIEN", cover_url: bia("#4b6cb7", "#182848"), status: "published", watermark_enabled: true, download_enabled: false, phase: "selection", selection_done_at: "2026-10-16T06:47:00Z", created_at: "2026-10-16T03:00:00Z", photoCount: 15, coverFallback: null, selections: [{ count: 4 }] },
+  { id: "a2", slug: "anh-cuoi", title: "ALBUM ANH CUOI", cover_url: bia("#f7971e", "#7b2ff7"), status: "published", watermark_enabled: true, download_enabled: false, phase: "selection", selection_done_at: "2026-10-16T02:45:00Z", created_at: "2026-10-16T01:00:00Z", photoCount: 10, coverFallback: null, selections: [{ count: 6 }] },
+  { id: "a3", slug: "hoai-mo", title: "Simple Hoai Mo", cover_url: bia("#d7d2cc", "#304352"), status: "published", watermark_enabled: false, download_enabled: true, phase: "selection", selection_done_at: null, created_at: "2026-10-15T01:00:00Z", photoCount: 344, coverFallback: null, selections: [{ count: 15 }], dislikes: [{ count: 3 }] },
+  { id: "a4", slug: "may-1", title: "May 1 — Tiệc cưới Thảo & Nam", cover_url: bia("#ee9ca7", "#ffdde1"), status: "published", watermark_enabled: false, download_enabled: true, phase: "delivery", selection_done_at: null, created_at: "2026-10-11T01:00:00Z", photoCount: 413, coverFallback: null, selections: [{ count: 9 }] },
+  { id: "a5", slug: "a", title: "Chụp ngoại cảnh Đà Lạt", cover_url: bia("#c2e59c", "#64b3f4"), status: "draft", watermark_enabled: false, download_enabled: false, phase: "selection", selection_done_at: null, created_at: "2026-09-07T01:00:00Z", photoCount: 4, coverFallback: null, selections: [{ count: 0 }] },
+  { id: "a6", slug: "ssss", title: "Kỷ yếu 12A3", cover_url: null, status: "published", watermark_enabled: true, download_enabled: false, phase: "selection", selection_done_at: null, created_at: "2026-09-02T01:00:00Z", photoCount: 0, coverFallback: null, selections: [{ count: 0 }] },
+];
 
 function thuChi() {
   return (
@@ -675,6 +703,15 @@ export const SCREENS: Record<
     ),
     bare: true,
   },
+  "moi-album": {
+    title: "Giao diện mới — Thư viện album",
+    render: () => (
+      <StudioShellV2 profile={shellProfile} tier="full" role="owner" accent="blue" previewPath="/dashboard/albums">
+        <AlbumList albums={albumMau} canDelivery canWatermark canFaceSearch studioHost={null} planUsage={null} />
+      </StudioShellV2>
+    ),
+    bare: true,
+  },
   "khung-cu-goi-y": {
     title: "Khung cũ — thẻ gợi ý dùng giao diện mới",
     render: () => (
@@ -684,6 +721,21 @@ export const SCREENS: Record<
     ),
     bare: true,
   },
+  /* Giao diện mới theo nhóm màn — mỗi nhóm một file trong ./v2. */
+  ...SCREENS_TONGQUAN,
+  ...SCREENS_HOPDONG,
+  ...SCREENS_TAICHINH,
+  ...SCREENS_LICH,
+  ...SCREENS_KHACHHANG,
+  ...SCREENS_CONGCU,
+  ...SCREENS_HOPDONGCT,
+  ...SCREENS_ALBUMCT,
+  ...SCREENS_THIETLAP,
+  ...SCREENS_TAOHD,
+  ...SCREENS_SANXUAT,
+  ...SCREENS_SANGTAO,
+  ...SCREENS_WEBSITE,
+  ...SCREENS_TAIKHOAN,
   "bang-mau": {
     title: "Bảng màu — ngoài shell / shell sáng / shell tối",
     render: () => <TokenSwatches />,

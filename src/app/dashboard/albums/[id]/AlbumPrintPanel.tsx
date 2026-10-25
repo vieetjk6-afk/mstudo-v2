@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ExternalLink, FolderInput, Loader2, Printer, RotateCcw } from "lucide-react";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import { fmtDate } from "@/lib/date";
 import { PRINT_FOLDER_NAME } from "@/lib/album-print-rules";
 import PhotoCodeButtons from "@/components/PhotoCodeButtons";
+import { useAlbumPrint } from "./useAlbumPrint";
 
 /** Ảnh in khách đã gửi + số ảnh được tặng — page.tsx dựng. */
 export type AlbumPrintInfo = {
@@ -20,8 +20,6 @@ export type AlbumPrintInfo = {
   sentAt: string | null;
   copiedAt: string | null;
 };
-
-type CopyResult = { folderUrl: string; copied: number; skipped: number; failed: { name: string }[] };
 
 /**
  * Thẻ "Ảnh in tặng" ở tab Giao khách: xem ảnh khách chọn để in, chép tên file,
@@ -42,80 +40,8 @@ export default function AlbumPrintPanel({
   photos: { id: string; drive_file_id: string }[];
   hasDeliveryFolder: boolean;
 }) {
-  const driveOf = useMemo(() => new Map(photos.map((p) => [p.id, p.drive_file_id])), [photos]);
-  const [copiedAt, setCopiedAt] = useState(info.copiedAt);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [needConnect, setNeedConnect] = useState(false);
-  const [result, setResult] = useState<CopyResult | null>(null);
-  // Album lẻ: số ảnh in tặng nhập ngay ở đây, tự lưu.
-  const [albumQuota, setAlbumQuota] = useState(info.albumQuota > 0 ? String(info.albumQuota) : "");
-  const [quotaSaved, setQuotaSaved] = useState<"idle" | "saving" | "saved">("idle");
-  const quotaTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const quota = Math.max(info.contractQuota, Number(albumQuota) || 0);
-
-  function changeQuota(v: string) {
-    const clean = v.replace(/\D/g, "").slice(0, 3);
-    setAlbumQuota(clean);
-    if (quotaTimer.current) clearTimeout(quotaTimer.current);
-    quotaTimer.current = setTimeout(async () => {
-      setQuotaSaved("saving");
-      setErr(null);
-      try {
-        const res = await fetch(`/api/albums/${albumId}/print`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "quota", quota: Number(clean) || 0 }),
-        });
-        const d = await res.json().catch(() => ({}));
-        if (!res.ok || d.error) {
-          setQuotaSaved("idle");
-          setErr(d.error || "Chưa lưu được số ảnh in.");
-          return;
-        }
-        setQuotaSaved("saved");
-        setTimeout(() => setQuotaSaved("idle"), 1500);
-      } catch {
-        setQuotaSaved("idle");
-        setErr("Mất kết nối, chưa lưu được số ảnh in.");
-      }
-    }, 700);
-  }
-
-  const n = info.picks.length;
-
-  async function call(action: "copy" | "unlock") {
-    setBusy(true);
-    setErr(null);
-    setNeedConnect(false);
-    try {
-      const res = await fetch(`/api/albums/${albumId}/print`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (d.error === "not_connected") {
-        setNeedConnect(true);
-        return;
-      }
-      if (!res.ok || d.error) {
-        setErr(d.error || "Không thực hiện được, thử lại sau.");
-        return;
-      }
-      if (action === "unlock") {
-        setCopiedAt(null);
-        setResult(null);
-      } else {
-        setResult({ folderUrl: d.folderUrl, copied: d.copied ?? 0, skipped: d.skipped ?? 0, failed: d.failed ?? [] });
-        if (d.copiedAt) setCopiedAt(d.copiedAt);
-      }
-    } catch {
-      setErr("Mất kết nối, thử lại.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { driveOf, copiedAt, busy, err, needConnect, result, albumQuota, quotaSaved, quota, changeQuota, n, call } =
+    useAlbumPrint({ albumId, info, photos });
 
   return (
     <div className="card p-5">
