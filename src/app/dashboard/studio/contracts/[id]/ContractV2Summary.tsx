@@ -39,7 +39,7 @@ const linkBtn = "text-[12.5px] font-semibold";
 export function RailMoney({ ctx }: { ctx: V2Ctx }) {
   const { ed } = ctx;
   const next = ed.plan.find((p) => !p.paid) ?? null;
-  const nextOverdue = !!next?.due_date && next.due_date < ed.todayStr;
+  const nextOverdue = ed.f.status !== "cancelled" && !!next?.due_date && next.due_date < ed.todayStr;
   const marginTone: Tone = ed.total <= 0 ? "gray" : ed.marginPct < 45 ? "red" : ed.marginPct < 60 ? "amber" : "green";
   const done = ed.total > 0 && ed.balance <= 0;
   return (

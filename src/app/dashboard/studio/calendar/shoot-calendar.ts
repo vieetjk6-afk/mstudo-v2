@@ -1,3 +1,5 @@
+"use client";
+
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { contractTotal, sumAmounts } from "@/lib/types";

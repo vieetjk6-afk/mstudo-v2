@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Phần DÙNG CHUNG của danh sách báo giá — bản cũ (QuotesListView) và giao diện
  * mới (QuotesListV2) cùng gọi: đổi trạng thái và các con số pipeline. Để một

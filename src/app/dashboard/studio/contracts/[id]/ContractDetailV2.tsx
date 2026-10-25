@@ -168,7 +168,8 @@ export default function ContractDetailV2(props: ContractEditorProps) {
   /* ── Việc cần làm tiếp → nút chính ── */
   const live = f.status !== "cancelled";
   const unpaid = ed.plan.filter((p) => !p.paid);
-  const overdue = unpaid.filter((p) => p.due_date && p.due_date < ed.todayStr);
+  // Hợp đồng đã huỷ thì không còn "quá hạn" để nhắc.
+  const overdue = live ? unpaid.filter((p) => p.due_date && p.due_date < ed.todayStr) : [];
   const step: Step | null = !live
     ? null
     : ed.items.length === 0 && ed.addendumItems.length === 0

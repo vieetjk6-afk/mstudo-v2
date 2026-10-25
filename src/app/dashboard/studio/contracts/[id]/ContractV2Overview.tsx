@@ -87,7 +87,7 @@ export default function ContractV2Overview({ ctx }: { ctx: V2Ctx }) {
       action: { label: "Xem", run: () => ctx.go("send", "v2-requests") },
     });
   for (const p of ed.plan) {
-    if (p.paid || !p.due_date || p.due_date >= ed.todayStr) continue;
+    if (!live || p.paid || !p.due_date || p.due_date >= ed.todayStr) continue;
     const late = -(daysFromToday(p.due_date) ?? 0);
     todos.push({
       key: `od-${p.id}`,

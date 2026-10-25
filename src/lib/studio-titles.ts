@@ -6,7 +6,7 @@
 export const TITLES: [string, string, string][] = [
   ["/dashboard/studio/quotes/new", "Tạo báo giá", "Ghép gói và hạng mục, xem trước bản khách nhận"],
   ["/dashboard/studio/quotes", "Báo giá", "Gửi khách · theo dõi · chốt thành hợp đồng"],
-  ["/dashboard/studio/contracts/new", "Tạo hợp đồng", "Lưu nháp tự động sau mỗi bước"],
+  ["/dashboard/studio/contracts/new", "Tạo hợp đồng", "Điền lần lượt từng bước, lưu nháp khi cần"],
   ["/dashboard/studio/contracts", "Hợp đồng & lịch hẹn", "Toàn bộ buổi chụp và tiến độ"],
   ["/dashboard/studio/templates", "Mẫu hợp đồng", "Mẫu hợp đồng & điều khoản"],
   ["/dashboard/studio/board", "Bảng công việc", "Kéo thẻ sang cột khác để đổi trạng thái"],
