@@ -1122,6 +1122,7 @@ body {
   transition: background-color 0.12s ease, color 0.12s ease;
 }
 .ui-v2 .v2-icon-btn:hover:not(:disabled) { background: var(--sf2); color: var(--tx); }
+.ui-v2 .v2-icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ── Đầu trang ── */
 .ui-v2 .v2-pagehead {

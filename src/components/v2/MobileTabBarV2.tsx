@@ -9,9 +9,10 @@ import { isNavActive, type NavGroup, type NavItem } from "@/lib/studio-nav";
  * Thanh tab đáy của giao diện mới (chỉ hiện dưới lg).
  *
  * Năm tab cố định thay vì dải cuộn ngang của khung cũ: lấy 5 màn đầu tiên trong
- * danh sách ưu tiên mà người này ĐƯỢC THẤY (lọc sẵn theo gói + vai trò qua
- * `groups`), nên không bao giờ có tab dẫn tới trang bị chặn. Màn còn lại nằm ở
- * menu ☰ trên topbar. Nút + nổi mở bảng tạo nhanh.
+ * danh sách GHIM của studio (menu trái → "Tùy chỉnh"), thiếu thì bù bằng danh
+ * sách ưu tiên bên dưới — chỉ những màn người này ĐƯỢC THẤY (lọc sẵn theo gói +
+ * vai trò qua `groups`), nên không bao giờ có tab dẫn tới trang bị chặn. Màn còn
+ * lại nằm ở menu ☰ trên topbar. Nút + nổi mở bảng tạo nhanh.
  */
 const PRIORITY: [string, string][] = [
   ["/dashboard/studio", "Tổng quan"],
@@ -25,16 +26,23 @@ const PRIORITY: [string, string][] = [
   ["/dashboard/tools", "Công cụ"],
 ];
 
-export default function MobileTabBarV2({ groups, pathname, creates }: {
+/** Nhãn tab ngắn (thanh đáy chỉ đủ chỗ ~9 ký tự). Mục không có ở đây dùng tên menu. */
+const SHORT_TAB = new Map(PRIORITY);
+
+export default function MobileTabBarV2({ groups, pathname, creates, pins = [] }: {
   groups: NavGroup[];
   pathname: string;
   creates: NavItem[];
+  /** Mục studio đã ghim ở menu trái — lên thanh đáy trước, theo đúng thứ tự ghim. */
+  pins?: string[];
 }) {
   const all = groups.flatMap((g) => g.items);
-  const tabs = PRIORITY
-    .map(([href, label]) => {
+  // Ghim của studio trước, thiếu chỗ thì bù bằng danh sách ưu tiên mặc định.
+  const order = [...pins, ...PRIORITY.map(([href]) => href)].filter((h, i, a) => a.indexOf(h) === i);
+  const tabs = order
+    .map((href) => {
       const it = all.find((x) => x.href === href);
-      return it ? { it, label } : null;
+      return it ? { it, label: SHORT_TAB.get(href) ?? it.label } : null;
     })
     .filter((t): t is { it: NavItem; label: string } => !!t)
     .slice(0, 5);
@@ -119,7 +127,7 @@ export default function MobileTabBarV2({ groups, pathname, creates }: {
                 >
                   <it.icon size={20} strokeWidth={active ? 2.2 : 1.9} />
                 </span>
-                <span className="text-[11px]" style={{ fontWeight: active ? 650 : 500 }}>{label}</span>
+                <span className="max-w-full truncate px-0.5 text-[11px]" style={{ fontWeight: active ? 650 : 500 }}>{label}</span>
               </Link>
             );
           })}
