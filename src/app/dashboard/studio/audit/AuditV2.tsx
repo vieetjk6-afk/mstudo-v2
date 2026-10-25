@@ -60,7 +60,6 @@ export default function AuditV2({ rows, migrated, filteredContract }: AuditProps
   return (
     <Stack>
       <PageHead
-        title="Nhật ký thao tác"
         desc="Ai ghi, sửa, xoá tiền và hợp đồng — lúc nào. Không ai (kể cả chủ studio) sửa hay xoá được dòng nhật ký."
       />
 
@@ -191,11 +190,11 @@ function AuditRowV2({ r, onOpen }: { r: AuditRow; onOpen: () => void }) {
     </>
   );
   return hasDetail || r.contract_id ? (
-    <button type="button" onClick={onOpen} className="v2-row v2-row-link w-full items-start text-left">
+    <button type="button" onClick={onOpen} className="v2-row v2-row-link w-full !items-start text-left">
       {body}
     </button>
   ) : (
-    <div className="v2-row items-start">{body}</div>
+    <div className="v2-row !items-start">{body}</div>
   );
 }
 

@@ -125,13 +125,13 @@ export default function NotificationsV2({ initial }: { initial: StudioNotificati
                       key={x.id}
                       type="button"
                       onClick={() => n.openNotification(x)}
-                      className="v2-row v2-row-link w-full items-start text-left"
+                      className="v2-row v2-row-link w-full !items-start text-left"
                       style={x.read ? undefined : { background: "color-mix(in srgb, var(--acS) 55%, transparent)" }}
                     >
                       {body}
                     </button>
                   ) : (
-                    <div key={x.id} className="v2-row items-start">{body}</div>
+                    <div key={x.id} className="v2-row !items-start">{body}</div>
                   );
                 })}
               </Fragment>

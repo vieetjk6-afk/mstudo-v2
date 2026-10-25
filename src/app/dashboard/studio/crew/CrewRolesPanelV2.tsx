@@ -135,7 +135,7 @@ function RoleRow({
   const editing = r.editing === o.key;
   const clickableKinds = canEdit && !o.builtin;
   return (
-    <div className="v2-row flex-wrap items-start" style={{ opacity: o.active ? 1 : 0.6 }}>
+    <div className="v2-row flex-wrap !items-start" style={{ opacity: o.active ? 1 : 0.6 }}>
       <div className="min-w-0 flex-1">
         {editing ? (
           <form

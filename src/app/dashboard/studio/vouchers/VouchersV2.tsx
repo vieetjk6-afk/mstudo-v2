@@ -86,7 +86,6 @@ export default function VouchersV2({ initial, migrated, studioName, studioPhone,
   return (
     <Stack>
       <PageHead
-        title="Voucher & thẻ quà"
         desc="Bán thẻ quà mùa lễ và quản lý voucher ưu đãi đã tặng khách. Khách dùng cả hai ở tab Thanh toán của hợp đồng."
         actions={
           <button type="button" onClick={() => v.setDraft(v.newDraft())} disabled={!migrated} className={btn("primary")}>
@@ -203,7 +202,7 @@ export default function VouchersV2({ initial, migrated, studioName, studioPhone,
               {shown.map((x) => {
                 const st = voucherState(x, v.today);
                 return (
-                  <div key={x.id} className="v2-row flex-col items-stretch gap-2" style={st === "void" || st === "expired" ? { opacity: 0.7 } : undefined}>
+                  <div key={x.id} className="v2-row flex-col !items-stretch gap-2" style={st === "void" || st === "expired" ? { opacity: 0.7 } : undefined}>
                     <div className="flex items-start gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="font-mono text-[14px] font-semibold tracking-wide">{x.code}</p>

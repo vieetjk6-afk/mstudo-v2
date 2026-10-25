@@ -195,7 +195,7 @@ export default function PackagesV2({ ownerId, initial }: PackagesProps) {
                 {shown.map((p) => {
                   const left = remainingOf(p);
                   return (
-                    <div key={p.id} className="v2-row flex-col items-stretch gap-2.5">
+                    <div key={p.id} className="v2-row flex-col !items-stretch gap-2.5">
                       <div className="flex min-w-0 items-center gap-3">
                         <Avatar name={p.client_name} size={40} />
                         <div className="min-w-0 flex-1">

@@ -324,7 +324,7 @@ function ListsTab({ p, activeLabel, onAddPkg, onAddNote }: { p: PricingState; ac
               <Empty compact icon={StickyNote} title="Chưa có mục ghi chú" hint="VD: phụ thu đi tỉnh, chụp thêm giờ, lưu ý trang phục…" />
             ) : (
               p.notes.map((it) => (
-                <div key={it.id} className="v2-row items-start" style={{ opacity: it.active ? 1 : 0.55 }}>
+                <div key={it.id} className="v2-row !items-start" style={{ opacity: it.active ? 1 : 0.55 }}>
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2 text-[14px] font-semibold">
                       {it.category || it.name}
@@ -361,7 +361,7 @@ function PkgRow({ it, p }: { it: PricelistItem; p: PricingState }) {
       onDragOver={(e) => e.preventDefault()}
       onDrop={() => void p.reorderPkg(it.id)}
       onDragEnd={() => p.setDragId(null)}
-      className="v2-row items-start"
+      className="v2-row !items-start"
       style={{ opacity: p.dragId === it.id ? 0.4 : it.active ? 1 : 0.55 }}
     >
       <GripVertical size={16} className="mt-1 hidden flex-none cursor-grab sm:block" style={{ color: "var(--tx3)" }} aria-hidden />
@@ -372,9 +372,14 @@ function PkgRow({ it, p }: { it: PricelistItem; p: PricingState }) {
           {!it.active ? <Badge tone="gray">Đang ẩn</Badge> : null}
           {it.active && !it.show_on_home ? <Badge tone="amber">Ẩn ở trang chủ</Badge> : null}
         </p>
+        {/* Điện thoại: giá nằm ngay dưới tên, nhường chỗ cho tên gói dài. */}
+        <p className="v2-num mt-0.5 text-[14px] font-bold sm:hidden" style={{ color: "var(--ac)" }}>
+          {vnd(it.price)}
+          {it.unit ? <span className="font-medium" style={{ color: "var(--tx3)" }}> {it.unit}</span> : null}
+        </p>
         {it.description ? <p className="mt-0.5 line-clamp-2 whitespace-pre-line text-[13px]" style={{ color: "var(--tx3)" }}>{it.description}</p> : null}
       </div>
-      <p className="v2-num flex-none text-right text-[15px] font-bold" style={{ color: "var(--ac)" }}>
+      <p className="v2-num hidden flex-none text-right text-[15px] font-bold sm:block" style={{ color: "var(--ac)" }}>
         {vnd(it.price)}
         {it.unit ? <span className="block text-[12px] font-medium" style={{ color: "var(--tx3)" }}>{it.unit}</span> : null}
       </p>
