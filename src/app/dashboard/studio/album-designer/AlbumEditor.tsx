@@ -137,7 +137,7 @@ function AlbumEditorV1({ size, tpl, onBack, initial }: AlbumEditorProps) {
               </button>
             )}
             {/* Spread hiện tại — tương tác */}
-            <SpreadCanvas ed={ed} tpl={tpl} />
+            <SpreadCanvas ed={ed} tpl={tpl} keepSelection />
             {/* Spread sau (ngữ cảnh) */}
             {multi && cur < spreads.length - 1 && (
               <button onClick={() => { setCur(cur + 1); setSel(null); }} className="flex-none opacity-60 transition-opacity hover:opacity-90" title="Spread sau">
