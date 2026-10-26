@@ -14,15 +14,15 @@ import WeddingRenderer, { type Wish } from "../../../[slug]/WeddingRenderer";
 // thiệp thật (qua createPortal) nên những gì thấy ở đây là thứ khách sẽ thấy.
 // ────────────────────────────────────────────────────────────────────────────
 
-const DEVICES = {
+export const DEVICES = {
   phone: { w: 390, h: 844, label: "Điện thoại" },
   wide: { w: 1180, h: 800, label: "Máy tính" },
 } as const;
 
-type Device = keyof typeof DEVICES;
+export type Device = keyof typeof DEVICES;
 
 /** Iframe cùng nguồn + portal: sao chép stylesheet của trang cha vào trong. */
-function Frame({ width, height, children }: { width: number; height: number; children: React.ReactNode }) {
+export function Frame({ width, height, children }: { width: number; height: number; children: React.ReactNode }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [body, setBody] = useState<HTMLElement | null>(null);
 
@@ -95,6 +95,50 @@ function Frame({ width, height, children }: { width: number; height: number; chi
   );
 }
 
+/**
+ * Tỉ lệ thu nhỏ khung thiết bị cho vừa cột xem trước (không bao giờ phóng to
+ * quá 1:1). `fitHeight` (giao diện mới): vừa cả chiều cao — điện thoại hiện
+ * trọn một màn, không phải cuộn khung ngoài.
+ */
+export function usePreviewScale(w: number, h: number, fitHeight = false) {
+  const [scale, setScale] = useState(1);
+  const hostRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const fit = () => {
+      const byW = (host.clientWidth - 8) / w;
+      if (!fitHeight) { setScale(Math.min(1, byW)); return; }
+      // Khung đang ẩn (tab khác trên điện thoại) thì đo ra 0 — giữ tỉ lệ cũ.
+      if (host.clientWidth <= 8 || host.clientHeight <= 8) return;
+      setScale(Math.max(0.2, Math.min(1, byW, (host.clientHeight - 8) / h)));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [w, h, fitHeight]);
+  return { hostRef, scale };
+}
+
+/** Khung thiết bị đã thu nhỏ: hộp giữ chỗ đúng kích thước + iframe bên trong. */
+export function ScaledDevice({ w, h, scale, frameKey, children }: { w: number; h: number; scale: number; frameKey: string; children: React.ReactNode }) {
+  return (
+    <div style={{ width: w * scale, height: h * scale, margin: "0 auto" }}>
+      <div
+        style={{
+          width: w, height: h, transform: `scale(${scale})`, transformOrigin: "top left",
+          borderRadius: 18, overflow: "hidden", boxShadow: "0 10px 30px -12px rgba(30,25,20,.35)",
+        }}
+      >
+        <Frame key={frameKey} width={w} height={h}>
+          {children}
+        </Frame>
+      </div>
+    </div>
+  );
+}
+
 export default function PreviewPane({
   inv, wishes, guest, storyUrl, publicUrl,
 }: {
@@ -106,20 +150,9 @@ export default function PreviewPane({
 }) {
   const [device, setDevice] = useState<Device>("phone");
   const [nonce, setNonce] = useState(0);
-  const [scale, setScale] = useState(1);
-  const hostRef = useRef<HTMLDivElement>(null);
   const { w, h } = DEVICES[device];
-
   // Thu nhỏ vừa đúng chiều ngang cột xem trước (không bao giờ phóng to quá 1:1).
-  useLayoutEffect(() => {
-    const host = hostRef.current;
-    if (!host) return;
-    const fit = () => setScale(Math.min(1, (host.clientWidth - 8) / w));
-    fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(host);
-    return () => ro.disconnect();
-  }, [w]);
+  const { hostRef, scale } = usePreviewScale(w, h);
 
   const cfg = inv.config as WeddingConfig;
 
@@ -152,26 +185,17 @@ export default function PreviewPane({
       </div>
 
       <div ref={hostRef} className="flex-1 overflow-auto bg-stone-100 p-2">
-        <div style={{ width: w * scale, height: h * scale, margin: "0 auto" }}>
-          <div
-            style={{
-              width: w, height: h, transform: `scale(${scale})`, transformOrigin: "top left",
-              borderRadius: 18, overflow: "hidden", boxShadow: "0 10px 30px -12px rgba(30,25,20,.35)",
-            }}
-          >
-            {/* nonce: đổi khi bấm "Xem lại từ đầu" → dựng lại iframe để hiệu ứng chạy lại. */}
-            <Frame key={`${device}-${nonce}`} width={w} height={h}>
-              <WeddingRenderer
-                key={`${inv.template}-${nonce}`}
-                inv={inv}
-                wishes={cfg.guestbook_enabled === false ? [] : wishes}
-                guest={guest}
-                storyUrl={storyUrl}
-                preview
-              />
-            </Frame>
-          </div>
-        </div>
+        {/* nonce: đổi khi bấm "Xem lại từ đầu" → dựng lại iframe để hiệu ứng chạy lại. */}
+        <ScaledDevice w={w} h={h} scale={scale} frameKey={`${device}-${nonce}`}>
+          <WeddingRenderer
+            key={`${inv.template}-${nonce}`}
+            inv={inv}
+            wishes={cfg.guestbook_enabled === false ? [] : wishes}
+            guest={guest}
+            storyUrl={storyUrl}
+            preview
+          />
+        </ScaledDevice>
       </div>
     </div>
   );

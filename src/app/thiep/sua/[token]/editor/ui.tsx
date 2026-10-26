@@ -1,14 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { Check, ExternalLink, Loader2, Lock, Music, Image as ImageIcon, Plus, Trash2, X } from "lucide-react";
 import { BANKS } from "@/lib/banks";
 import { isMusicPageLink, parseYoutubeMusic } from "@/lib/youtube-music";
-import { isShortMapLink, looksLikeUrl, parseMapInput, pickMapLink } from "@/lib/site-map";
 import type { WeddingBank, WeddingEventBlock, WeddingTimelineItem } from "@/lib/types";
+import {
+  TIMELINE_PRESET, useAlbumPhotos, useAudioPick, useGalleryPick, useImagePick, useMapLink, usePasswordField, useStableKeys, useUnlock,
+  type ResolveMap,
+} from "./hooks";
 
 // Các ô nhập dùng chung cho trình chỉnh sửa thiệp cưới. Tách khỏi WeddingEditor
 // để phần khung (2 cột: form ↔ xem trước) đọc được trong một màn hình.
+// Logic (tải ảnh/nhạc, link bản đồ, key ổn định, mật khẩu, album) ở ./hooks —
+// bản giao diện mới (./ui-v2.tsx) dùng chung.
+
+export type { ResolveMap };
 
 export const inp = "w-full rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-100";
 
@@ -42,17 +48,11 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
 }
 
 export function ImageUpload({ current, onUpload, onChange }: { current?: string; onUpload: (f: File) => Promise<string | null>; onChange: (url: string | null) => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+  const { ref, busy, onInput } = useImagePick(onUpload, onChange);
   return (
     <div className="flex items-center gap-3">
       {current && <img src={current} alt="" className="h-16 w-16 rounded-lg object-cover" />}
-      <input ref={ref} type="file" accept="image/*" hidden onChange={async (e) => {
-        const f = e.target.files?.[0]; if (!f) return;
-        setBusy(true); const url = await onUpload(f); setBusy(false);
-        if (url) onChange(url);
-        if (ref.current) ref.current.value = "";
-      }} />
+      <input ref={ref} type="file" accept="image/*" hidden onChange={onInput} />
       <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-50">
         {busy ? <Loader2 size={14} className="animate-spin" /> : <ImageIcon size={14} />} {current ? "Đổi ảnh" : "Tải ảnh"}
       </button>
@@ -62,15 +62,7 @@ export function ImageUpload({ current, onUpload, onChange }: { current?: string;
 }
 
 export function GalleryEditor({ gallery, onUpload, onChange }: { gallery: string[]; onUpload: (f: File) => Promise<string | null>; onChange: (g: string[]) => void }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const move = (i: number, dir: -1 | 1) => {
-    const j = i + dir;
-    if (j < 0 || j >= gallery.length) return;
-    const next = [...gallery];
-    [next[i], next[j]] = [next[j], next[i]];
-    onChange(next);
-  };
+  const { ref, busy, onInput, move } = useGalleryPick(gallery, onUpload, onChange);
   return (
     <div>
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -91,20 +83,10 @@ export function GalleryEditor({ gallery, onUpload, onChange }: { gallery: string
           {busy ? <Loader2 size={18} className="animate-spin" /> : <Plus size={18} />}
         </button>
       </div>
-      <input ref={ref} type="file" accept="image/*" multiple hidden onChange={async (e) => {
-        const files = Array.from(e.target.files ?? []); if (!files.length) return;
-        setBusy(true);
-        const urls: string[] = [];
-        for (const f of files) { const url = await onUpload(f); if (url) urls.push(url); }
-        setBusy(false);
-        if (urls.length) onChange([...gallery, ...urls]);
-        if (ref.current) ref.current.value = "";
-      }} />
+      <input ref={ref} type="file" accept="image/*" multiple hidden onChange={onInput} />
     </div>
   );
 }
-
-export type ResolveMap = (url: string) => Promise<{ url?: string; error?: string }>;
 
 /**
  * Ô dán link Google Maps. Rời ô thì bóc đúng đường link khỏi chữ dán kèm (nút
@@ -114,40 +96,19 @@ export type ResolveMap = (url: string) => Promise<{ url?: string; error?: string
 export function MapLinkInput({ value, onChange, resolve, placeholder, className }: {
   value: string; onChange: (v: string) => void; resolve: ResolveMap; placeholder?: string; className?: string;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  // Kết quả về SAU vài lần render → phải gọi bản onChange mới nhất: bản cũ còn
-  // giữ danh sách sự kiện cũ, ghi vào là mất chỗ vừa sửa ở ô khác.
-  const latest = useRef({ value, onChange });
-  latest.current = { value, onChange };
+  const m = useMapLink(value, onChange, resolve);
 
-  async function lookup(link: string) {
-    setBusy(true); setErr(null);
-    const r = await resolve(link);
-    setBusy(false);
-    if (pickMapLink(latest.current.value) !== link) return; // đã dán link khác trong lúc chờ
-    if (r.url) latest.current.onChange(r.url);
-    else setErr(r.error || "Không lấy được vị trí từ link này.");
-  }
-
-  function onBlur() {
-    const link = pickMapLink(value);
-    if (link !== value) onChange(link);
-    if (isShortMapLink(link)) void lookup(link);
-  }
-
-  const v = value.trim();
-  const target = v ? parseMapInput(v) : null;
   let note: React.ReactNode = null;
-  if (busy) note = "Đang lấy vị trí từ link…";
-  else if (err) note = <span className="text-amber-700">{err}</span>;
-  else if (v && isShortMapLink(v)) note = <>Link rút gọn — <button type="button" onClick={() => void lookup(pickMapLink(v))} className="underline">lấy vị trí</button> để bản đồ ghim đúng chỗ.</>;
-  else if (target?.kind === "coords" || target?.kind === "embed") note = <span className="text-green-700">✓ Bản đồ ghim đúng vị trí theo link này.</span>;
-  else if (target?.kind === "query" && !looksLikeUrl(pickMapLink(v))) note = "Đây là địa chỉ chữ, bản đồ có thể lệch — dán link từ nút Chia sẻ của Google Maps để ghim đúng chỗ.";
+  const n = m.note;
+  if (n?.kind === "busy") note = "Đang lấy vị trí từ link…";
+  else if (n?.kind === "error") note = <span className="text-amber-700">{n.text}</span>;
+  else if (n?.kind === "short") note = <>Link rút gọn — <button type="button" onClick={() => void m.lookup(n.link)} className="underline">lấy vị trí</button> để bản đồ ghim đúng chỗ.</>;
+  else if (n?.kind === "pinned") note = <span className="text-green-700">✓ Bản đồ ghim đúng vị trí theo link này.</span>;
+  else if (n?.kind === "text") note = "Đây là địa chỉ chữ, bản đồ có thể lệch — dán link từ nút Chia sẻ của Google Maps để ghim đúng chỗ.";
 
   return (
     <>
-      <input className={className ?? inp} value={value} onChange={(e) => { setErr(null); onChange(e.target.value); }} onBlur={onBlur} placeholder={placeholder} />
+      <input className={className ?? inp} value={value} onChange={(e) => m.onInput(e.target.value)} onBlur={m.onBlur} placeholder={placeholder} />
       {note && <span className="mt-1 block text-xs text-stone-500">{note}</span>}
     </>
   );
@@ -155,20 +116,11 @@ export function MapLinkInput({ value, onChange, resolve, placeholder, className 
 
 export function EventsEditor({ events, onChange, resolveMap }: { events: WeddingEventBlock[]; onChange: (e: WeddingEventBlock[]) => void; resolveMap: ResolveMap }) {
   const up = (i: number, p: Partial<WeddingEventBlock>) => onChange(events.map((e, j) => (j === i ? { ...e, ...p } : e)));
-  // Key ỔN ĐỊNH client-only cho từng sự kiện (không lưu vào config). Dùng index
-  // làm key thì xoá sự kiện GIỮA khiến React gán lại các ô nhập theo vị trí — mất
-  // focus, chữ đang gõ nhảy sang dòng khác. Mảng key song song chỉ đổi khi
-  // thêm/xoá, giữ nguyên khi sửa nội dung.
-  const keyId = useRef(0);
-  const [keys, setKeys] = useState<string[]>(() => events.map(() => `ev-${keyId.current++}`));
-  // Số sự kiện lệch số key (nạp bất đồng bộ từ ngoài) → dựng lại, giữ phần đầu.
-  // CHỈ phụ thuộc độ dài: sửa nội dung không đổi số key, không cần dựng lại.
-  useEffect(() => {
-    setKeys((prev) => (prev.length === events.length ? prev : events.map((_, i) => prev[i] ?? `ev-${keyId.current++}`)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [events.length]);
-  const addEvent = () => { setKeys((k) => [...k, `ev-${keyId.current++}`]); onChange([...events, { label: "" }]); };
-  const delEvent = (i: number) => { setKeys((k) => k.filter((_, j) => j !== i)); onChange(events.filter((_, j) => j !== i)); };
+  // Key ỔN ĐỊNH cho từng sự kiện (xem useStableKeys): xoá sự kiện GIỮA không
+  // làm ô nhập nhảy dòng.
+  const { keys, add, remove } = useStableKeys(events.length, "ev");
+  const addEvent = () => { add(); onChange([...events, { label: "" }]); };
+  const delEvent = (i: number) => { remove(i); onChange(events.filter((_, j) => j !== i)); };
   return (
     <div className="space-y-3">
       {events.map((e, i) => (
@@ -192,14 +144,6 @@ export function EventsEditor({ events, onChange, resolveMap }: { events: Wedding
     </div>
   );
 }
-
-/** Mốc gợi ý cho người chưa biết điền gì — chỉ đổ vào khi danh sách đang trống. */
-const TIMELINE_PRESET: WeddingTimelineItem[] = [
-  { time: "17:30", label: "Đón khách" },
-  { time: "18:00", label: "Cử hành hôn lễ" },
-  { time: "18:30", label: "Khai tiệc" },
-  { time: "20:00", label: "Giao lưu & chụp ảnh" },
-];
 
 /** Lịch trình buổi tiệc: mỗi dòng một mốc (giờ · việc). */
 export function TimelineEditor({ items, onChange }: { items: WeddingTimelineItem[]; onChange: (t: WeddingTimelineItem[]) => void }) {
@@ -258,9 +202,7 @@ export function BankEditor({ title, bank, onChange }: { title: string; bank?: We
  * đôi đã đặt mật khẩu, phải nhập đúng mới xem (mở khoá một lần cho phiên này).
  */
 export function ResponsesLock({ expected, onUnlock }: { expected: string; onUnlock: () => void }) {
-  const [entry, setEntry] = useState("");
-  const [wrong, setWrong] = useState(false);
-  const submit = () => (entry.trim() === expected ? onUnlock() : setWrong(true));
+  const { entry, change, wrong, submit } = useUnlock(expected, onUnlock);
   return (
     <div className="mt-3 rounded-lg border border-stone-200 bg-stone-50 p-4 text-center">
       <Lock size={18} className="mx-auto mb-2 text-stone-400" />
@@ -268,7 +210,7 @@ export function ResponsesLock({ expected, onUnlock }: { expected: string; onUnlo
       <div className="mx-auto mt-3 flex max-w-xs gap-2">
         <input
           type="password" value={entry} autoComplete="off" aria-label="Mật khẩu xem phản hồi"
-          onChange={(e) => { setEntry(e.target.value); setWrong(false); }}
+          onChange={(e) => change(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
           placeholder="Mật khẩu" className={`${inp} flex-1`}
         />
@@ -284,10 +226,7 @@ export function ResponsesLock({ expected, onUnlock }: { expected: string; onUnlo
  * phải nhập ĐÚNG mật khẩu hiện tại (mở khoá một lần cho phiên chỉnh sửa này).
  */
 export function GuestsPasswordField({ value, onChange, guestsUrl }: { value?: string; onChange: (v?: string) => void; guestsUrl: string }) {
-  const [initial] = useState((value ?? "").trim());
-  const [locked, setLocked] = useState(!!(value ?? "").trim());
-  const [entry, setEntry] = useState("");
-  const [wrong, setWrong] = useState(false);
+  const { locked, entry, change, wrong, submit } = usePasswordField(value);
 
   if (locked) {
     return (
@@ -296,11 +235,11 @@ export function GuestsPasswordField({ value, onChange, guestsUrl }: { value?: st
         <div className="flex gap-2">
           <input
             type="password" value={entry} autoComplete="off" aria-label="Mật khẩu hiện tại"
-            onChange={(e) => { setEntry(e.target.value); setWrong(false); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (entry.trim() === initial ? setLocked(false) : setWrong(true)); } }}
+            onChange={(e) => change(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); submit(); } }}
             placeholder="Mật khẩu hiện tại" className={`${inp} flex-1`}
           />
-          <button type="button" onClick={() => (entry.trim() === initial ? setLocked(false) : setWrong(true))} className="flex-none rounded-lg border border-stone-300 bg-white px-3 text-sm font-medium" style={{ color: "#6a6459" }}>Mở khoá để sửa</button>
+          <button type="button" onClick={submit} className="flex-none rounded-lg border border-stone-300 bg-white px-3 text-sm font-medium" style={{ color: "#6a6459" }}>Mở khoá để sửa</button>
         </div>
         {wrong && <p className="mt-2 text-sm text-red-600">Mật khẩu hiện tại chưa đúng.</p>}
       </div>
@@ -325,24 +264,16 @@ export function GuestsPasswordField({ value, onChange, guestsUrl }: { value?: st
 }
 
 export function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: File) => Promise<{ url?: string; error?: string }>; onChange: (url: string | null) => void; currentUrl?: string }) {
-  const ref = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
-  const [localErr, setLocalErr] = useState<string | null>(null);
+  const { ref, busy, localErr, onInput, clear } = useAudioPick(onUpload, onChange);
   const yt = parseYoutubeMusic(currentUrl);
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-3">
-        <input ref={ref} type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac" hidden onChange={async (e) => {
-          const f = e.target.files?.[0]; if (!f) return;
-          setLocalErr(null); setBusy(true);
-          const r = await onUpload(f); setBusy(false);
-          if (r.url) onChange(r.url); else setLocalErr(r.error || "Tải nhạc thất bại.");
-          if (ref.current) ref.current.value = "";
-        }} />
+        <input ref={ref} type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg,.aac,.flac" hidden onChange={onInput} />
         <button type="button" onClick={() => ref.current?.click()} disabled={busy} className="inline-flex items-center gap-1 rounded-lg border border-stone-300 px-3 py-2 text-sm disabled:opacity-50">
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />} {busy ? "Đang tải nhạc…" : "Tải file nhạc (≤10MB)"}
         </button>
-        {currentUrl && <button type="button" onClick={() => { setLocalErr(null); onChange(null); }} className="text-stone-400 hover:text-red-500" aria-label="Xoá nhạc" title="Xoá nhạc"><Trash2 size={16} /></button>}
+        {currentUrl && <button type="button" onClick={clear} className="text-stone-400 hover:text-red-500" aria-label="Xoá nhạc" title="Xoá nhạc"><Trash2 size={16} /></button>}
       </div>
       {/* Phản hồi NGAY tại đây để không phải cuộn lên đầu trang mới thấy. */}
       {localErr && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{localErr}</p>}
@@ -369,25 +300,9 @@ export function AudioUpload({ onUpload, onChange, currentUrl }: { onUpload: (f: 
   );
 }
 
-type AlbumPhoto = { id: string; name: string; url: string; thumb: string };
-
 /** Modal: pick photos from the couple's own album (linked to the contract). */
 export function AlbumPicker({ token, existing, onClose, onAdd }: { token: string; existing: string[]; onClose: () => void; onAdd: (urls: string[]) => void }) {
-  const [photos, setPhotos] = useState<AlbumPhoto[] | null>(null);
-  const [sel, setSel] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    (async () => {
-      const res = await fetch(`/api/thiep/${token}/album-photos`);
-      const data = res.ok ? ((await res.json()) as { photos: AlbumPhoto[] }) : { photos: [] };
-      setPhotos(data.photos);
-    })().catch(() => setPhotos([]));
-  }, [token]);
-
-  const have = new Set(existing);
-  function toggle(url: string) {
-    setSel((s) => { const n = new Set(s); if (n.has(url)) n.delete(url); else n.add(url); return n; });
-  }
+  const { photos, sel, have, toggle } = useAlbumPhotos(token, existing);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center" onClick={onClose}>
