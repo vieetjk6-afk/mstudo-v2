@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { ScanFace, Upload, X } from "lucide-react";
 import { thumbnailUrl } from "@/lib/drive";
 import { faceCrop, type PersonChip } from "@/lib/face-people";
 import { conDangQuet, type TienDoQuet } from "@/lib/face-pending";
 import { useLang } from "@/lib/i18n";
+import { useFaceSearch } from "./useFaceSearch";
 
 /**
  * TÌM ẢNH THEO KHUÔN MẶT — phía khách.
@@ -29,9 +30,6 @@ import { useLang } from "@/lib/i18n";
 
 /** Số mặt hiện sẵn; còn lại nằm sau nút "xem thêm". */
 const FIRST_ROW = 10;
-
-/** Cạnh dài nhất của ảnh khách gửi lên. Đủ cho bộ dò, mà nhẹ cho mạng 3G. */
-const UPLOAD_EDGE = 800;
 
 export default function FaceFinder({
   people,
@@ -59,86 +57,13 @@ export default function FaceFinder({
 }) {
   const { t } = useLang();
   const [expanded, setExpanded] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  // Đường "gửi một ảnh của mình" — logic chung với ngăn kéo của giao diện mới.
+  const { busy, note, setNote, fileRef, fileInputProps } = useFaceSearch({ slug, password, onPick });
 
   const shown = useMemo(
     () => (expanded ? people : people.slice(0, FIRST_ROW)),
     [people, expanded]
   );
-
-  /**
-   * Thu nhỏ ảnh khách chọn và vẽ lại thành JPEG trước khi gửi.
-   *
-   * Ba việc trong một bước, và cả ba đều cần: (a) 4 MB ảnh gốc từ điện thoại
-   * xuống còn ~100 KB, (b) HEIC/PNG/WebP đều thành JPEG — máy chủ chỉ đọc JPEG,
-   * (c) xoay đúng chiều, vì trình duyệt đã áp EXIF khi vẽ ảnh ra canvas.
-   */
-  async function toJpeg(file: File): Promise<Blob | null> {
-    const url = URL.createObjectURL(file);
-    try {
-      const img = await new Promise<HTMLImageElement | null>((resolve) => {
-        const el = new Image();
-        el.onload = () => resolve(el);
-        el.onerror = () => resolve(null);
-        el.src = url;
-      });
-      if (!img || !img.naturalWidth) return null;
-      const k = Math.min(1, UPLOAD_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
-      const w = Math.max(1, Math.round(img.naturalWidth * k));
-      const h = Math.max(1, Math.round(img.naturalHeight * k));
-      const cv = document.createElement("canvas");
-      cv.width = w;
-      cv.height = h;
-      cv.getContext("2d")!.drawImage(img, 0, 0, w, h);
-      return await new Promise<Blob | null>((resolve) => cv.toBlob(resolve, "image/jpeg", 0.9));
-    } finally {
-      URL.revokeObjectURL(url);
-    }
-  }
-
-  /** Khách gửi một ảnh có mặt mình → hỏi máy chủ "tôi là ai trong album này". */
-  async function search(file: File) {
-    setNote(null);
-    try {
-      setBusy(t("faceLoading"));
-      const jpg = await toJpeg(file);
-      if (!jpg) {
-        setNote(t("faceNoSupport"));
-        return;
-      }
-      setBusy(t("faceSearching"));
-      const body = new FormData();
-      body.append("file", jpg, "toi.jpg");
-      if (password) body.append("password", password);
-      const res = await fetch(`/api/album/${encodeURIComponent(slug)}/face-match`, { method: "POST", body });
-      const data = (await res.json().catch(() => ({}))) as {
-        personId?: string;
-        faces?: number;
-        error?: string;
-      };
-      if (data.personId) {
-        onPick(data.personId);
-        // Nhiều mặt trong ảnh khách gửi thì máy chủ lấy mặt TO NHẤT. Nói ra, vì
-        // nếu nó chọn nhầm người thì khách phải hiểu tại sao mà chọn lại ảnh.
-        const many = (data.faces ?? 1) > 1 ? ` ${t("faceUsedBiggest")}` : "";
-        setNote(`${t("faceFound")}${many}`);
-        return;
-      }
-      setNote(
-        data.error === "khong_thay_mat"
-          ? t("faceNoneInPhoto")
-          : data.error === "khong_khop"
-            ? t("faceNoMatch")
-            : t("faceFailed")
-      );
-    } catch {
-      setNote(t("faceFailed"));
-    } finally {
-      setBusy(null);
-    }
-  }
 
   // Chưa có khuôn mặt nào. Hai trường hợp rất khác nhau và phải nói khác nhau:
   // máy chủ CÒN ĐANG QUÉT (album vừa tạo) thì hẹn khách quay lại; quét xong mà
@@ -243,18 +168,7 @@ export default function FaceFinder({
         >
           <Upload size={13} /> {busy ?? t("faceUpload")}
         </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            // Xoá giá trị để chọn LẠI đúng file vừa rồi vẫn kích hoạt onChange.
-            e.target.value = "";
-            if (f) void search(f);
-          }}
-        />
+        <input {...fileInputProps} />
         <span className="text-[11.5px]" style={{ color: "var(--text3)" }}>
           {t("faceUploadCost")}
         </span>

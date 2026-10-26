@@ -34,17 +34,11 @@ export type GridPhoto = { id: string; drive_file_id: string; name: string };
 
 const STEP = 48;
 
-export default function PortalPhotoGrid({
-  photos,
-  canDownload,
-  watermark,
-  toast,
-}: {
-  photos: GridPhoto[];
-  canDownload: boolean;
-  watermark: string | null;
-  toast: (m: string) => void;
-}) {
+/**
+ * Trạng thái của lưới ảnh: dựng dần từng đợt, ảnh đang xem lớn, ảnh đang tải về.
+ * Bản cũ (nền tối) và bản giao diện mới dùng chung — chỉ khác phần vẽ.
+ */
+export function usePhotoGrid(photos: GridPhoto[], watermark: string | null, toast: (m: string) => void) {
   const gridW = useGridThumbWidth(2, 5, 1180);
   const fullW = useFullImageWidth();
   const [shown, setShown] = useState(STEP);
@@ -85,6 +79,24 @@ export default function PortalPhotoGrid({
     },
     [busy, watermark, toast]
   );
+
+  return { gridW, fullW, shown, open, setOpen, busy, sentinel, download };
+}
+
+export default function PortalPhotoGrid({
+  photos,
+  canDownload,
+  watermark,
+  toast,
+}: {
+  photos: GridPhoto[];
+  canDownload: boolean;
+  watermark: string | null;
+  toast: (m: string) => void;
+}) {
+  // Dựng dần, cỡ thumbnail theo màn hình, tải từng ảnh — dùng chung với bản
+  // giao diện mới (PortalPhotoGridV2).
+  const { gridW, fullW, shown, open, setOpen, busy, sentinel, download } = usePhotoGrid(photos, watermark, toast);
 
   return (
     <>
@@ -144,7 +156,7 @@ export default function PortalPhotoGrid({
   );
 }
 
-function Lightbox({
+export function Lightbox({
   photos,
   index,
   setIndex,

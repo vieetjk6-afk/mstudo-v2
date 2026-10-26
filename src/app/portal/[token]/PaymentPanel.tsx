@@ -1,6 +1,5 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { CheckCircle2, Clock, QrCode, Wallet, X as XIcon } from "lucide-react";
 import { VietQR, type BankInfo } from "@/components/VietQR";
 import { ProgressBar } from "@/components/studio/ui";
@@ -8,6 +7,7 @@ import { Modal } from "@/components/studio/Modal";
 import { fmtDate } from "@/lib/date";
 import { PAYMENT_KIND_LABEL, vnd } from "@/lib/types";
 import type { PortalPayment, PortalPlanRow } from "./types";
+import { usePortalPayment } from "./usePortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THẺ THANH TOÁN CỦA CỔNG KHÁCH — đã thu / còn lại / các đợt.
@@ -35,44 +35,11 @@ export default function PaymentPanel({
   contractCode: string | null;
   toast: (m: string) => void;
 }) {
-  const remaining = Math.max(0, total - paid);
-  const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : 0;
-  const [qrOpen, setQrOpen] = useState(false);
-  const [reporting, setReporting] = useState(false);
-
-  /** Đợt tiếp theo phải thu = đợt chưa thu, hạn gần nhất. */
-  const nextDue = useMemo(() => plan.find((p) => !p.paid) ?? null, [plan]);
-  const qrAmount = nextDue?.amount ?? remaining;
-  const addInfo = `${contractCode ? `${contractCode} ` : ""}${nextDue?.label ?? "Thanh toan hop dong"}`.slice(0, 50);
-
-  async function reportPaid() {
-    setReporting(true);
-    // Bọc try/catch: khách bấm nút này ở quầy ngân hàng, trong thang máy, ở nơi
-    // mạng chập chờn. Không bọc thì `fetch` ném ra ngoài, nút kẹt vĩnh viễn ở
-    // "Đang gửi…" và khách không biết studio đã nhận hay chưa. Báo chuyển khoản
-    // KHÔNG được xếp hàng lại gửi sau: khách phải biết ngay là chưa gửi được để
-    // còn nhắn Zalo cho studio.
-    let res: Response;
-    try {
-      res = await fetch(`/api/c/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "paid", phone }),
-      });
-    } catch {
-      setReporting(false);
-      toast("Đang mất mạng — chưa báo được studio. Vui lòng thử lại khi có mạng.");
-      return;
-    }
-    setReporting(false);
-    if (res.ok) {
-      toast("Đã báo studio — cảm ơn bạn!");
-      setQrOpen(false);
-      return;
-    }
-    const j = (await res.json().catch(() => ({}))) as { message?: string };
-    toast(j.message || "Chưa gửi được thông báo, thử lại sau.");
-  }
+  // Đợt tiếp theo, mã QR, báo đã chuyển khoản — dùng chung với bản giao diện
+  // mới (./usePortal).
+  const { remaining, pct, qrOpen, setQrOpen, reporting, reportPaid, nextDue, qrAmount, addInfo } = usePortalPayment({
+    token, phone, total, paid, plan, contractCode, toast,
+  });
 
   return (
     <section className="rounded-[16px] px-5 py-[18px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
