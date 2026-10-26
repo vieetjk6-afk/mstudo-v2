@@ -1,8 +1,8 @@
 "use client";
 
-import { Check, Copy, ExternalLink, CalendarRange, Share2, Users, type LucideIcon } from "lucide-react";
+import { Check, Copy, ExternalLink, CalendarRange, Share2, Users } from "lucide-react";
 import ZaloSendButton from "@/components/ZaloSendButton";
-import { btn, toneBg, toneFg, type Tone } from "@/components/v2/kit";
+import { btn, type Tone } from "@/components/v2/kit";
 import { daysFromToday, fmtDayMonth, fmtDow } from "@/lib/date";
 import type { ContractKind } from "@/lib/contract-kind";
 import type { ContractStatus } from "@/lib/types";
@@ -390,93 +390,5 @@ export function PeopleCount({ n }: { n: number }) {
     <span className="inline-flex items-center gap-1 text-[12.5px]" style={{ color: "var(--tx3)" }}>
       <Users size={14} /> {n} người
     </span>
-  );
-}
-
-/* ── Khối quà tặng khách (kế hoạch cưới, thiệp, Love Story, xin đánh giá) ──
-   Thẻ con nằm trong khối "Quà tặng khách & xin đánh giá" của tab Sản phẩm:
-   icon · tên · nhãn trạng thái · MỘT nút bên phải, thân bên dưới. */
-export function GiftBlock({
-  icon: Icon,
-  tone = "brand",
-  title,
-  badge,
-  desc,
-  action,
-  children,
-  muted = false,
-  testId,
-}: {
-  icon: LucideIcon;
-  tone?: Tone;
-  title: React.ReactNode;
-  badge?: React.ReactNode;
-  desc?: React.ReactNode;
-  action?: React.ReactNode;
-  children?: React.ReactNode;
-  muted?: boolean;
-  testId?: string;
-}) {
-  return (
-    <div className="rounded-[14px] p-4" style={{ border: "1px solid var(--bd)", background: "var(--sf)", opacity: muted ? 0.8 : 1 }} data-testid={testId}>
-      <div className="flex flex-wrap items-start gap-x-3 gap-y-2.5">
-        <span className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]" style={{ background: toneBg(tone), color: toneFg(tone) }}>
-          <Icon size={17} />
-        </span>
-        <div className="min-w-0 flex-[1_1_200px]">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="text-[14px] font-semibold">{title}</p>
-            {badge}
-          </div>
-          {desc ? (
-            <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--tx3)" }}>
-              {desc}
-            </p>
-          ) : null}
-        </div>
-        {action ? <div className="ml-auto flex flex-none flex-wrap items-center gap-2">{action}</div> : null}
-      </div>
-      {children ? <div className="mt-3.5 flex flex-col gap-3">{children}</div> : null}
-    </div>
-  );
-}
-
-/** Một link gửi khách (link sửa / link xem): nhãn · đường dẫn · các nút. */
-export function LinkRow({
-  icon: Icon,
-  label,
-  url,
-  href,
-  meta,
-  children,
-}: {
-  icon: LucideIcon;
-  label: React.ReactNode;
-  url: string;
-  /** Có thì đường dẫn bấm được (mở tab mới). */
-  href?: string;
-  meta?: React.ReactNode;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[12px] px-3 py-2.5" style={{ background: "var(--sf2)" }}>
-      <Icon size={16} className="flex-none" style={{ color: "var(--tx3)" }} />
-      <div className="min-w-0 flex-[1_1_180px]">
-        <p className="flex flex-wrap items-center gap-x-2 text-[12px] font-medium" style={{ color: "var(--tx3)" }}>
-          {label}
-          {meta}
-        </p>
-        {href ? (
-          <a href={href} target="_blank" rel="noreferrer" className="block truncate text-[13px] underline-offset-2 hover:underline" style={{ color: "var(--tx2)" }}>
-            {url}
-          </a>
-        ) : (
-          <p className="truncate text-[13px]" style={{ color: "var(--tx2)" }}>
-            {url}
-          </p>
-        )}
-      </div>
-      {children ? <div className="flex flex-none flex-wrap items-center gap-1.5">{children}</div> : null}
-    </div>
   );
 }

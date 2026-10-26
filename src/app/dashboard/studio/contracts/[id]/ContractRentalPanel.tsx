@@ -27,7 +27,7 @@ import {
  */
 
 type DongDon = { id: string; name: string; price: number; qty: number };
-export type DonThue = RentalOrder & { rental_order_items: DongDon[] };
+type DonThue = RentalOrder & { rental_order_items: DongDon[] };
 
 const TONE: Record<RentalOrderStatus, string> = {
   booked: "var(--bl)",
@@ -37,7 +37,10 @@ const TONE: Record<RentalOrderStatus, string> = {
   canceled: "var(--tx3)",
 };
 
-export type ContractRentalProps = {
+export default function ContractRentalPanel({
+  contractId, ownerId, clientName, clientPhone, eventDate, onThemHangMuc,
+  donsBanDau, khoBanDau,
+}: {
   contractId: string;
   ownerId: string;
   clientName: string;
@@ -50,13 +53,7 @@ export type ContractRentalProps = {
      "Đang tải kho đồ…" — mà màn không soi được thì lỗi bố cục không ai thấy. */
   donsBanDau?: DonThue[];
   khoBanDau?: RentalItem[];
-};
-
-/** Logic thuê đồ của hợp đồng — dùng chung cho bản cũ và ContractRentalPanelV2. */
-export function useContractRental({
-  contractId, ownerId, clientName, clientPhone, eventDate, onThemHangMuc,
-  donsBanDau, khoBanDau,
-}: ContractRentalProps) {
+}) {
   /* useMemo chứ KHÔNG gọi thẳng: createClient() trả về đối tượng MỚI mỗi lần
      vẽ, mà `supabase` nằm trong dependency của nap() → nap đổi danh tính mỗi
      lần vẽ → useEffect chạy lại → setState → vẽ lại… thành vòng lặp gọi
@@ -161,21 +158,6 @@ export function useContractRental({
     setDons((p) => p.filter((x) => x.id !== don.id));
     await supabase.from("rental_orders").delete().eq("id", don.id);
   }
-
-  return {
-    dons, kho, dangNap, moForm, setMoForm, busy, loi, setLoi,
-    chon, setChon, nhan, setNhan, tra, setTra, coc, setCoc,
-    daChon, tongThue, cocGoiY, taoDon, doiTrangThai, xoaDon,
-  };
-}
-
-export default function ContractRentalPanel(props: ContractRentalProps) {
-  const { eventDate } = props;
-  const {
-    dons, kho, dangNap, moForm, setMoForm, busy, loi, setLoi,
-    chon, setChon, nhan, setNhan, tra, setTra, coc, setCoc,
-    daChon, tongThue, cocGoiY, taoDon, doiTrangThai, xoaDon,
-  } = useContractRental(props);
 
   if (dangNap) {
     return (

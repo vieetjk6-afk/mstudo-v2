@@ -7,8 +7,7 @@ import { AlertTriangle, FolderOpen, ImagePlus, PackageCheck, Plus, RefreshCw } f
 import AlbumModePicker, { type AlbumModeStatus } from "@/components/AlbumModePicker";
 import { ALBUM_MODE_LABEL, needsDesktopWarning, readinessHints, type AlbumMode } from "@/lib/album-mode";
 
-export type AlbumSource = { id: string; name: string; url: string; stage: "selection" | "delivery" };
-type Source = AlbumSource;
+type Source = { id: string; name: string; url: string; stage: "selection" | "delivery" };
 type AlbumInfo = {
   id: string;
   title: string;
@@ -19,7 +18,7 @@ type AlbumInfo = {
   deliveryPhotos: number;
   sources: Source[];
 };
-export type AlbumModeSnapshot = {
+type Snapshot = {
   mode: AlbumMode | null;
   migrated: boolean;
   status: string | null;
@@ -28,9 +27,22 @@ export type AlbumModeSnapshot = {
   galleryAlbumId: string | null;
   album: AlbumInfo | null;
 };
-type Snapshot = AlbumModeSnapshot;
 
-export type ContractAlbumModeProps = {
+/**
+ * Tab Sản phẩm → "Album ảnh của hợp đồng": chế độ album (album mặc định từ
+ * mstudo desktop / nhập link ảnh riêng) và — với chế độ nhập link riêng — MỘT
+ * album dùng cho cả chọn ảnh lẫn giao hoàn thiện: dán link Drive ảnh chọn, dán
+ * link ảnh hoàn thiện, chuyển sang giao khách. Mọi thao tác qua
+ * /api/studio/contract-album (kiểm quyền theo hợp đồng, nhân viên dùng được).
+ */
+export default function ContractAlbumModeCard({
+  contractId,
+  status,
+  onAlbumIds,
+  onModeChange,
+  onDelivered,
+  toast,
+}: {
   contractId: string;
   /** Trạng thái hợp đồng hiện tại — đổi thì tải lại (hoàn thành → nhắc dán link). */
   status: string;
@@ -38,14 +50,7 @@ export type ContractAlbumModeProps = {
   onModeChange?: (m: AlbumMode | null) => void;
   onDelivered?: () => void;
   toast: (m: string) => void;
-};
-
-/** Câu hỏi lại trước khi bỏ album mặc định (desktop) sang nhập link riêng. */
-export const ALBUM_MODE_MANUAL_CONFIRM =
-  "Chuyển hợp đồng sang nhập link ảnh riêng? mstudo desktop sẽ không đồng bộ thư mục của hợp đồng này nữa.";
-
-/** Logic thẻ "Album ảnh của hợp đồng" — dùng chung cho bản cũ và ContractAlbumModeCardV2. */
-export function useContractAlbumMode({ contractId, status, onAlbumIds, onModeChange, onDelivered, toast }: ContractAlbumModeProps) {
+}) {
   const router = useRouter();
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -107,32 +112,10 @@ export function useContractAlbumMode({ contractId, status, onAlbumIds, onModeCha
     }
   }
 
-  /** Đổi chế độ album, KHÔNG hỏi lại (chỗ gọi hỏi bằng confirm() hoặc hộp thoại). */
-  async function applyMode(m: AlbumMode) {
-    await post("set_mode", { mode: m }, m === "manual" ? "Đã chuyển sang nhập link ảnh riêng" : "Đã chuyển sang album mặc định");
-  }
-
-  /** Đổi chế độ này có phải hỏi lại không (bỏ album mặc định đang chạy). */
-  const modeNeedsConfirm = (m: AlbumMode) => m === "manual" && snap?.mode === "desktop";
-
-  return { snap, setSnap, loadErr, busy, selUrl, setSelUrl, delUrl, setDelUrl, post, applyMode, modeNeedsConfirm };
-}
-
-/**
- * Tab Sản phẩm → "Album ảnh của hợp đồng": chế độ album (album mặc định từ
- * mstudo desktop / nhập link ảnh riêng) và — với chế độ nhập link riêng — MỘT
- * album dùng cho cả chọn ảnh lẫn giao hoàn thiện: dán link Drive ảnh chọn, dán
- * link ảnh hoàn thiện, chuyển sang giao khách. Mọi thao tác qua
- * /api/studio/contract-album (kiểm quyền theo hợp đồng, nhân viên dùng được).
- */
-export default function ContractAlbumModeCard(props: ContractAlbumModeProps) {
-  const { contractId, onDelivered } = props;
-  const { snap, setSnap, loadErr, busy, selUrl, setSelUrl, delUrl, setDelUrl, post, applyMode, modeNeedsConfirm } = useContractAlbumMode(props);
-
   async function setMode(m: AlbumMode) {
     if (!snap || m === snap.mode) return;
-    if (modeNeedsConfirm(m) && !confirm(ALBUM_MODE_MANUAL_CONFIRM)) return;
-    await applyMode(m);
+    if (m === "manual" && snap.mode === "desktop" && !confirm("Chuyển hợp đồng sang nhập link ảnh riêng? mstudo desktop sẽ không đồng bộ thư mục của hợp đồng này nữa.")) return;
+    await post("set_mode", { mode: m }, m === "manual" ? "Đã chuyển sang nhập link ảnh riêng" : "Đã chuyển sang album mặc định");
   }
 
   if (loadErr) {

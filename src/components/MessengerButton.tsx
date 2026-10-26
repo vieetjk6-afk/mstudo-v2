@@ -4,8 +4,6 @@ import { useState } from "react";
 import { MessageSquare, Check } from "lucide-react";
 
 import { messengerUrl } from "@/lib/messenger-url";
-import { useUiV2 } from "@/components/v2/UiV2Context";
-import { btn } from "@/components/v2/kit";
 
 export { messengerUrl };
 
@@ -23,17 +21,13 @@ export default function MessengerButton({
   link,
   message,
   label = "Gửi cho khách",
-  className,
+  className = "btn-ghost px-2.5 py-1.5 text-xs",
 }: {
   link?: string | null | undefined;
   message: string;
   label?: string;
   className?: string;
 }) {
-  // Giao diện mới: chỗ gọi không truyền lớp riêng thì dùng nút phụ cỡ "sm" của
-  // bộ khối, cho khớp các nút bên cạnh. Bản cũ giữ đúng lớp mặc định cũ.
-  const v2 = useUiV2();
-  const cls = className ?? (v2 ? btn("secondary", "sm") : "btn-ghost px-2.5 py-1.5 text-xs");
   const [done, setDone] = useState(false);
   const url = messengerUrl(link);
 
@@ -57,7 +51,7 @@ export default function MessengerButton({
         setDone(true);
         setTimeout(() => setDone(false), 2000);
       }}
-      className={cls}
+      className={className}
       title="Gửi nội dung đã soạn cho khách (chọn Messenger/Zalo/SMS…)"
     >
       {done ? <Check size={14} /> : <MessageSquare size={14} />} {done ? "Đang mở…" : label}

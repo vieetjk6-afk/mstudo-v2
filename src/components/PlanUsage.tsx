@@ -7,8 +7,6 @@ import { Sparkles, Crown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { PLAN_LABEL, effectivePlan, type Plan } from "@/lib/plans";
 import type { PlanUsageData } from "@/lib/plan-usage";
-import { useUiV2 } from "@/components/v2/UiV2Context";
-import { Badge, Progress, btn } from "@/components/v2/kit";
 
 type Usage = PlanUsageData;
 
@@ -17,7 +15,7 @@ type Usage = PlanUsageData;
  * thì hiện ngay, KHÔNG chạy ba truy vấn nối đuôi ở trình duyệt nữa. Chỗ nào chưa
  * truyền (trang tạo album, trang nâng cấp) vẫn tự tải như cũ.
  */
-function usePlanUsage(initial: PlanUsageData | null): Usage | null {
+export default function PlanUsage({ showUpgrade = true, initial = null }: { showUpgrade?: boolean; initial?: PlanUsageData | null }) {
   const [loaded, setUsage] = useState<Usage | null>(null);
   // Số của máy chủ luôn thắng (router.refresh() đưa số mới xuống qua prop).
   const usage = initial ?? loaded;
@@ -58,17 +56,6 @@ function usePlanUsage(initial: PlanUsageData | null): Usage | null {
       });
     })();
   }, [initial]);
-  return usage;
-}
-
-type Props = { showUpgrade?: boolean; initial?: PlanUsageData | null };
-
-export default function PlanUsage(props: Props) {
-  return useUiV2() ? <PlanUsageV2 {...props} /> : <PlanUsageV1 {...props} />;
-}
-
-function PlanUsageV1({ showUpgrade = true, initial = null }: Props) {
-  const usage = usePlanUsage(initial);
 
   // Giữ chỗ đúng chiều cao trong lúc tải để lưới album không bị nhảy (CLS).
   if (!usage) {
@@ -113,58 +100,6 @@ function PlanUsageV1({ showUpgrade = true, initial = null }: Props) {
           style={{ background: "var(--gold)", color: "#1a1205" }}
         >
           Nâng cấp
-        </Link>
-      )}
-    </div>
-  );
-}
-
-/** Giao diện mới: một thẻ gọn — gói đang dùng, số album tháng này (kèm thanh
- *  tiến độ khi gói có hạn mức) và nút nâng cấp. Không có lề dưới riêng: màn V2
- *  xếp khối bằng <Stack>. */
-function PlanUsageV2({ showUpgrade = true, initial = null }: Props) {
-  const usage = usePlanUsage(initial);
-
-  if (!usage) {
-    return (
-      <div className="v2-card flex items-center gap-3 px-4 py-3.5 sm:px-5" aria-hidden="true">
-        <span className="skeleton h-9 w-9 rounded-[10px]" />
-        <span className="skeleton h-4 w-52 max-w-[60%] rounded" />
-      </div>
-    );
-  }
-
-  const reached = usage.limit != null && usage.used >= usage.limit;
-  const Icon = usage.pro ? Crown : Sparkles;
-
-  return (
-    <div
-      className="v2-card flex flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-3.5 sm:px-5"
-      style={reached ? { borderColor: "color-mix(in srgb, var(--am) 45%, var(--bd))" } : undefined}
-    >
-      <span className="v2-stat-icon" style={{ width: 36, height: 36, color: "var(--ac)", background: "var(--acS)" }}>
-        <Icon size={17} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <p className="text-[14px] font-semibold">Gói {PLAN_LABEL[usage.plan]}</p>
-          {reached ? <Badge tone="amber" dot>Hết lượt tạo album tháng này</Badge> : null}
-          {usage.expiresAt ? <span className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Hết hạn {fmtDate(usage.expiresAt)}</span> : null}
-        </div>
-        <p className="text-[12.5px]" style={{ color: "var(--tx2)" }}>
-          {usage.limit == null
-            ? `Đã tạo ${usage.used} album tháng này · không giới hạn`
-            : `Đã tạo ${usage.used}/${usage.limit} album trong tháng này`}
-        </p>
-        {usage.limit != null && usage.limit > 0 ? (
-          <div className="mt-2 max-w-[360px]">
-            <Progress value={(usage.used / usage.limit) * 100} tone={reached ? "amber" : "brand"} />
-          </div>
-        ) : null}
-      </div>
-      {showUpgrade && !usage.pro && (
-        <Link href="/dashboard/upgrade" className={btn("secondary", "sm")}>
-          <Crown size={14} /> Nâng cấp
         </Link>
       )}
     </div>

@@ -16,16 +16,16 @@ function slugify(s: string): string {
 
 type Existing = { slug: string; edit_token: string; published: boolean } | null;
 
-export type LoveStoryProps = {
+/** Studio-side card on a contract: create the Love Story page & share its link. */
+export default function LoveStoryCard({
+  contract, clientName, clientMessenger, studioHost, comingSoon = false,
+}: {
   contract: { id: string; owner_id: string; title: string; event_date: string | null; location: string | null };
   clientName: string;
   clientMessenger: string;
   studioHost: string | null;
   comingSoon?: boolean;
-};
-
-/** Logic thẻ Love Story — dùng chung cho bản cũ và LoveStoryCardV2. */
-export function useLoveStory({ contract, clientName, studioHost }: LoveStoryProps) {
+}) {
   const supabase = createClient();
   const [row, setRow] = useState<Existing>(null);
   const [loading, setLoading] = useState(true);
@@ -61,18 +61,6 @@ export function useLoveStory({ contract, clientName, studioHost }: LoveStoryProp
     setRow(data as Existing);
   }
 
-  const editUrl = row ? studioUrl(studioHost, `/story/sua/${row.edit_token}`) : "";
-  const viewUrl = row ? studioUrl(studioHost, `/story/${row.slug}`) : "";
-  function copy(text: string, key: "edit" | "view") { navigator.clipboard?.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 1500); }
-
-  return { row, loading, creating, copied, err, create, editUrl, viewUrl, copy };
-}
-
-/** Studio-side card on a contract: create the Love Story page & share its link. */
-export default function LoveStoryCard(props: LoveStoryProps) {
-  const { clientMessenger, comingSoon = false } = props;
-  const { row, loading, creating, copied, err, create, editUrl, viewUrl, copy } = useLoveStory(props);
-
   if (comingSoon) return (
     <div className="card mb-6 p-4" style={{ opacity: 0.85 }}>
       <div className="flex flex-wrap items-center gap-3">
@@ -87,6 +75,9 @@ export default function LoveStoryCard(props: LoveStoryProps) {
   );
 
   if (loading) return null;
+  const editUrl = row ? studioUrl(studioHost, `/story/sua/${row.edit_token}`) : "";
+  const viewUrl = row ? studioUrl(studioHost, `/story/${row.slug}`) : "";
+  function copy(text: string, key: "edit" | "view") { navigator.clipboard?.writeText(text); setCopied(key); setTimeout(() => setCopied(null), 1500); }
 
   return (
     <div className="card mb-6 p-4">

@@ -1,19 +1,25 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
 import { Zap, Copy, Check, RefreshCw, Pause, Play, PlayCircle, Eye, EyeOff, ExternalLink } from "lucide-react";
 import { vnd } from "@/lib/types";
 import { fmtDateTime } from "@/lib/date";
 import { Pill, type ToneKey } from "@/components/studio/ui";
-import { useUiV2 } from "@/components/v2/UiV2Context";
+import { useToast } from "@/components/studio/Toast";
 import { BANK_TXN_STATUS_LABEL, BANK_TXN_NOTE_LABEL } from "@/lib/bank-reconcile";
 import dynamic from "next/dynamic";
-import BankAutoCardV2 from "./BankAutoCardV2";
-import { SEPAY_SIGNUP_URL, useBankAuto, type BankTxn } from "./useBankAuto";
 
 // Video hướng dẫn SePay là một component hoạt hình rất nặng, chỉ hiện khi bấm
 // "Xem video hướng dẫn" — tách chunk để trang Cài đặt không phải tải nó lúc mở.
 // ssr:false an toàn vì mặc định video ẩn (state false), server không bao giờ render.
 const SepayGuideVideo = dynamic(() => import("@/components/SepayGuideVideo"), { ssr: false });
+
+/**
+ * Link đăng ký SePay. mstudo là đối tác giới thiệu của SePay: đặt link giới
+ * thiệu mặc định là của mstudo (gcid=1028); NEXT_PUBLIC_SEPAY_REF_URL chỉ để
+ * đổi sang link khác mà không phải sửa code.
+ */
+const SEPAY_SIGNUP_URL = process.env.NEXT_PUBLIC_SEPAY_REF_URL || "https://my.sepay.vn/register?gcid=1028";
 
 /**
  * Tự xác nhận chuyển khoản qua SePay.
@@ -24,7 +30,28 @@ const SepayGuideVideo = dynamic(() => import("@/components/SepayGuideVideo"), { 
  * không có mã hiện ở danh sách dưới để gán tay.
  */
 
-const STATUS_TONE: Record<BankTxn["status"], ToneKey> = {
+type Hook = { secret: string; enabled: boolean; last_event_at: string | null; created_at: string };
+type Txn = {
+  id: string;
+  amount: number;
+  content: string | null;
+  gateway: string | null;
+  txn_at: string | null;
+  created_at: string;
+  status: "matched" | "unmatched" | "mismatch" | "ignored";
+  note: string | null;
+  contract_id: string | null;
+  booking_id: string | null;
+};
+type OpenPlan = {
+  id: string;
+  label: string;
+  amount: number;
+  due_date: string | null;
+  contract: { id: string; code: string | null; title: string; client_name: string | null } | null;
+};
+
+const STATUS_TONE: Record<Txn["status"], ToneKey> = {
   matched: "green",
   unmatched: "amber",
   mismatch: "red",
@@ -32,14 +59,67 @@ const STATUS_TONE: Record<BankTxn["status"], ToneKey> = {
 };
 
 export default function BankAutoCard() {
-  return useUiV2() ? <BankAutoCardV2 /> : <BankAutoCardV1 />;
-}
+  const { toast, toastNode } = useToast();
+  const [loading, setLoading] = useState(true);
+  const [missingFile, setMissingFile] = useState<string | null>(null);
+  const [hook, setHook] = useState<Hook | null>(null);
+  const [txns, setTxns] = useState<Txn[]>([]);
+  const [plans, setPlans] = useState<OpenPlan[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [pick, setPick] = useState<Record<string, string>>({});
+  const [origin, setOrigin] = useState("");
+  const [video, setVideo] = useState(false);
 
-function BankAutoCardV1() {
-  const {
-    toast, toastNode, loading, missingFile, hook, txns, plans, busy, showKey, setShowKey, copied, pick, setPick,
-    video, setVideo, act, copy, webhookUrl, pending,
-  } = useBankAuto();
+  const load = useCallback(async () => {
+    const r = await fetch("/api/studio/bank-hook", { cache: "no-store" }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    setLoading(false);
+    if (j.missing) return setMissingFile(j.file || "supabase/doi-soat-ngan-hang.sql");
+    if (!r?.ok) return;
+    setHook(j.hook ?? null);
+    setTxns(j.txns ?? []);
+    setPlans(j.plans ?? []);
+  }, []);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+    load();
+  }, [load]);
+
+  async function act(action: string, extra: Record<string, string> = {}, key = action) {
+    setBusy(key);
+    const r = await fetch("/api/studio/bank-hook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...extra }),
+    }).catch(() => null);
+    const j = r ? await r.json().catch(() => ({})) : {};
+    setBusy(null);
+    if (j.missing) return setMissingFile(j.file || "supabase/doi-soat-ngan-hang.sql");
+    if (!r?.ok) {
+      const msg: Record<string, string> = {
+        already_paid: "Đợt này vừa được đánh dấu thu rồi.",
+        already_matched: "Giao dịch này đã ghi thu.",
+        write_failed: "Không ghi được lần thu. Sổ kỳ này đã khoá?",
+        deposit_done: "Cọc giữ ngày này đã được xác nhận rồi.",
+      };
+      toast(msg[j.error] || "Không thực hiện được, thử lại sau.");
+      return false;
+    }
+    await load();
+    return true;
+  }
+
+  function copy(text: string, key: string) {
+    navigator.clipboard?.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 1500);
+  }
+
+  const webhookUrl = origin ? `${origin}/api/bank/sepay` : "/api/bank/sepay";
+  const pending = txns.filter((t) => t.status === "unmatched" || t.status === "mismatch");
 
   return (
     <div className="card p-5" id="tu-xac-nhan">

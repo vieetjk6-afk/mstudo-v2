@@ -47,11 +47,11 @@ import ContractV2Payments from "./ContractV2Payments";
 import ContractV2Crew from "./ContractV2Crew";
 import ContractV2Album from "./ContractV2Album";
 import ContractV2Send from "./ContractV2Send";
-import ContractRentalPanelV2 from "./ContractRentalPanelV2";
+import ContractRentalPanel from "./ContractRentalPanel";
 
-// Hai hộp thoại Dời lịch / Huỷ — cùng logic với bản cũ (useReschedule / useCancelContract, gọi route máy chủ).
-const RescheduleDialog = dynamic(() => import("./ContractChangeDialogsV2").then((m) => m.RescheduleDialogV2), { ssr: false });
-const CancelDialog = dynamic(() => import("./ContractChangeDialogsV2").then((m) => m.CancelDialogV2), { ssr: false });
+// Cùng hai hộp thoại Dời lịch / Huỷ với bản cũ (tự chứa logic, gọi route máy chủ).
+const RescheduleDialog = dynamic(() => import("./ContractChangeDialogs").then((m) => m.RescheduleDialog), { ssr: false });
+const CancelDialog = dynamic(() => import("./ContractChangeDialogs").then((m) => m.CancelDialog), { ssr: false });
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CHI TIẾT HỢP ĐỒNG — giao diện mới. Cùng state, cùng truy vấn, cùng thao tác
@@ -413,14 +413,16 @@ export default function ContractDetailV2(props: ContractEditorProps) {
           {tab === "crew" && <ContractV2Crew ctx={ctx} />}
           {tab === "album" && kindHasPhotoWork(ed.kind) && <ContractV2Album ctx={ctx} />}
           {tab === "rental" && kindHasRental(ed.kind) && canRental && (
-            <ContractRentalPanelV2
-              contractId={contract.id}
-              ownerId={contract.owner_id}
-              clientName={f.client_name || ""}
-              clientPhone={f.client_phone || ""}
-              eventDate={f.event_date || null}
-              onThemHangMuc={ed.themHangMucVaLuu}
-            />
+            <section className="v2-card v2-card-pad">
+              <ContractRentalPanel
+                contractId={contract.id}
+                ownerId={contract.owner_id}
+                clientName={f.client_name || ""}
+                clientPhone={f.client_phone || ""}
+                eventDate={f.event_date || null}
+                onThemHangMuc={ed.themHangMucVaLuu}
+              />
+            </section>
           )}
           {tab === "send" && <ContractV2Send ctx={ctx} />}
         </div>

@@ -29,8 +29,9 @@ import { googleCalendarUrl, downloadIcs, type CalEvent } from "@/lib/calendar";
 import { crewRoleLabel } from "@/lib/crew-roles";
 import { CREW_SIDE_LABEL, CREW_TASK_LABEL } from "@/lib/crew-show";
 import { PRESET_TASKS_BY_KIND } from "@/lib/contract-kind";
-import ContractAppointmentsV2 from "./ContractAppointmentsV2";
+import ContractAppointments from "./ContractAppointments";
 import { CREW_TONE, CrewFaces, DateTile, relDay, sessionWhen, sessionsOf, toneText, type Session, type V2Ctx } from "./ContractV2Shared";
+import { EMBED } from "./ContractV2Items";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab Ê-KÍP & LỊCH (giao diện mới):
@@ -276,15 +277,17 @@ export default function ContractV2Crew({ ctx }: { ctx: V2Ctx }) {
       )}
 
       {/* Lịch hẹn dịch vụ — cùng bảng studio_appointments với màn Lịch studio. */}
-      <ContractAppointmentsV2
-        ownerId={ownerId}
-        contractId={contract.id}
-        clientName={f.client_name}
-        clientPhone={f.client_phone}
-        initial={initialAppointments}
-        roster={roster}
-        canEdit={canAssign}
-      />
+      <div className={EMBED}>
+        <ContractAppointments
+          ownerId={ownerId}
+          contractId={contract.id}
+          clientName={f.client_name}
+          clientPhone={f.client_phone}
+          initial={initialAppointments}
+          roster={roster}
+          canEdit={canAssign}
+        />
+      </div>
 
       <Checklist ctx={ctx} />
 

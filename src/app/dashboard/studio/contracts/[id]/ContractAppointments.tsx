@@ -25,7 +25,9 @@ import {
    nào thì không trùng.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type ContractAppointmentsProps = {
+export default function ContractAppointments({
+  ownerId, contractId, clientName, clientPhone, initial, roster, canEdit,
+}: {
   ownerId: string;
   contractId: string;
   clientName: string;
@@ -33,10 +35,7 @@ export type ContractAppointmentsProps = {
   initial: StudioAppointment[];
   roster: StudioCrew[];
   canEdit: boolean;
-};
-
-/** Logic lịch hẹn của hợp đồng — dùng chung cho bản cũ và ContractAppointmentsV2. */
-export function useContractAppointments({ ownerId, contractId, clientName, clientPhone, initial, roster }: ContractAppointmentsProps) {
+}) {
   const supabase = createClient();
   const [rows, setRows] = useState<StudioAppointment[]>(initial);
   const [busy, setBusy] = useState(false);
@@ -49,9 +48,8 @@ export function useContractAppointments({ ownerId, contractId, clientName, clien
     crew_id: "",
   });
 
-  /** Thêm một buổi hẹn từ form; trả true khi đã ghi. */
-  async function add(): Promise<boolean> {
-    if (!form.appt_date) { setErr("Chọn ngày cho buổi hẹn."); return false; }
+  async function add() {
+    if (!form.appt_date) { setErr("Chọn ngày cho buổi hẹn."); return; }
     setBusy(true);
     setErr(null);
     const crew = roster.find((r) => r.id === form.crew_id);
@@ -79,26 +77,17 @@ export function useContractAppointments({ ownerId, contractId, clientName, clien
           ? "Chưa chạy migration studio_appointments.sql trong Supabase."
           : error?.message || "Không thêm được lịch hẹn."
       );
-      return false;
+      return;
     }
     setRows((p) => [...p, data as StudioAppointment].sort((a, b) => a.appt_date.localeCompare(b.appt_date)));
     setForm((p) => ({ ...p, appt_date: "", start_time: "" }));
-    return true;
   }
 
-  async function remove(id: string): Promise<boolean> {
+  async function remove(id: string) {
     const { error } = await supabase.from("studio_appointments").delete().eq("id", id);
-    if (error) { setErr(error.message); return false; }
+    if (error) { setErr(error.message); return; }
     setRows((p) => p.filter((x) => x.id !== id));
-    return true;
   }
-
-  return { rows, busy, err, setErr, form, setForm, add, remove };
-}
-
-export default function ContractAppointments(props: ContractAppointmentsProps) {
-  const { roster, canEdit } = props;
-  const { rows, busy, err, form, setForm, add, remove } = useContractAppointments(props);
 
   return (
     <div className="card p-6">

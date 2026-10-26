@@ -1,9 +1,7 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Upload, X } from "lucide-react";
-import { useUiV2 } from "@/components/v2/UiV2Context";
-import { btn, inputCls } from "@/components/v2/kit";
 
 const MAX_BYTES = 500 * 1024; // 500 KB
 const MAX_LABEL = "500 KB";
@@ -16,7 +14,7 @@ interface Props {
   label?: string;
 }
 
-function useLogoUpload(onChange: (url: string) => void, bucket: string) {
+export default function LogoUpload({ value, onChange, bucket = "logos", label = "Logo" }: Props) {
   const ref = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -63,16 +61,6 @@ function useLogoUpload(onChange: (url: string) => void, bucket: string) {
     }
   }
 
-  return { ref, uploading, err, pick };
-}
-
-export default function LogoUpload(props: Props) {
-  return useUiV2() ? <LogoUploadV2 {...props} /> : <LogoUploadV1 {...props} />;
-}
-
-function LogoUploadV1({ value, onChange, bucket = "logos", label = "Logo" }: Props) {
-  const { ref, uploading, err, pick } = useLogoUpload(onChange, bucket);
-
   return (
     <div>
       <label className="label">{label} <span style={{ color: "var(--text3)", fontWeight: 400 }}>(tối đa {MAX_LABEL})</span></label>
@@ -114,44 +102,6 @@ function LogoUploadV1({ value, onChange, bucket = "logos", label = "Logo" }: Pro
         <input ref={ref} type="file" accept="image/*" className="hidden" onChange={pick} />
       </div>
       {err && <p className="mt-1 text-xs" style={{ color: "var(--danger)" }}>{err}</p>}
-    </div>
-  );
-}
-
-/** Giao diện mới: nhãn + ô link + nút tải lên theo bộ khối; ảnh xem trước 38px. */
-function LogoUploadV2({ value, onChange, bucket = "logos", label = "Logo" }: Props) {
-  const { ref, uploading, err, pick } = useLogoUpload(onChange, bucket);
-  const id = useId();
-
-  return (
-    <div className="v2-field">
-      <label className="v2-label" htmlFor={id}>
-        {label} <span style={{ color: "var(--tx3)", fontWeight: 400 }}>(tối đa {MAX_LABEL})</span>
-      </label>
-      <div className="flex items-center gap-2">
-        {value ? (
-          <div className="relative flex-none">
-            <img src={value} alt="logo" className="h-[38px] w-[38px] rounded-[10px] object-contain" style={{ border: "1px solid var(--bd)", background: "var(--sf2)" }} />
-            <button
-              type="button"
-              aria-label="Gỡ logo"
-              title="Gỡ logo"
-              onClick={() => onChange("")}
-              className="absolute -right-1.5 -top-1.5 flex h-[18px] w-[18px] items-center justify-center rounded-full"
-              style={{ background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--tx2)" }}
-            >
-              <X size={10} />
-            </button>
-          </div>
-        ) : null}
-        <input id={id} className={`${inputCls} min-w-0 flex-1`} placeholder="https://… hoặc tải ảnh lên" value={value} onChange={(e) => onChange(e.target.value)} />
-        <button type="button" disabled={uploading} onClick={() => ref.current?.click()} className={btn("secondary")}>
-          <Upload size={15} />
-          {uploading ? "Đang tải…" : "Tải lên"}
-        </button>
-        <input ref={ref} type="file" accept="image/*" className="hidden" onChange={pick} />
-      </div>
-      {err && <p className="v2-field-error">{err}</p>}
     </div>
   );
 }

@@ -5,10 +5,6 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { X, ExternalLink, Filter } from "lucide-react";
 import FilterTool from "./FilterTool";
-import FilterToolV2 from "./FilterToolV2";
-import { useUiV2 } from "@/components/v2/UiV2Context";
-import { btn } from "@/components/v2/kit";
-import { Drawer } from "@/components/v2/kit-client";
 
 /**
  * Popup công cụ Lọc ảnh — mở ngay trong quản lý album, KHÔNG rời trang.
@@ -16,18 +12,17 @@ import { Drawer } from "@/components/v2/kit-client";
  * trên máy tính rồi đối chiếu danh sách ảnh khách chọn), kèm nút mở trang lọc
  * ảnh đầy đủ khi cần làm việc rộng hơn.
  */
-type Props = {
+export default function FilterDialog({
+  albumId,
+  albumTitle,
+  driveUrl,
+  onClose,
+}: {
   albumId?: string;
   albumTitle?: string;
   driveUrl?: string;
   onClose: () => void;
-};
-
-export default function FilterDialog(props: Props) {
-  return useUiV2() ? <FilterDialogV2 {...props} /> : <FilterDialogV1 {...props} />;
-}
-
-function FilterDialogV1({ albumId, albumTitle, driveUrl, onClose }: Props) {
+}) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -97,38 +92,5 @@ function FilterDialogV1({ albumId, albumTitle, driveUrl, onClose }: Props) {
       </div>
     </div>,
     document.body
-  );
-}
-
-/**
- * Giao diện mới: ngăn kéo rộng của bộ khối (điện thoại: trượt từ đáy) chứa bản
- * V2 của công cụ lọc ảnh — cùng logic (useFilterTool), cùng albumId / driveUrl.
- * Nút "Công cụ ảnh" ở đầu công cụ chỉ có nghĩa trên trang /dashboard/filter nên
- * ẩn ở đây; "Mở trang lọc ảnh" nằm ở chân ngăn kéo.
- */
-function FilterDialogV2({ albumId, albumTitle, driveUrl, onClose }: Props) {
-  const fullPage = albumId ? `/dashboard/filter?album=${albumId}` : "/dashboard/filter";
-  return (
-    <Drawer
-      open
-      onClose={onClose}
-      width={1120}
-      title="Lọc ảnh"
-      desc={albumTitle || undefined}
-      footer={
-        <>
-          <Link href={fullPage} className={btn("ghost")}>
-            <ExternalLink size={15} /> Mở trang lọc ảnh
-          </Link>
-          <button type="button" onClick={onClose} className={btn("secondary")}>
-            Đóng
-          </button>
-        </>
-      }
-    >
-      <div className="[&_.v2-pagehead-actions>a]:hidden">
-        <FilterToolV2 albumId={albumId} driveUrl={driveUrl} />
-      </div>
-    </Drawer>
   );
 }

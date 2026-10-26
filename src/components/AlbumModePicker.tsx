@@ -4,8 +4,6 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, FolderPlus, Laptop, Link2 } from "lucide-react";
 import { isDesktopReady, readinessHints, type AlbumMode, type AlbumModeReadiness } from "@/lib/album-mode";
-import { useUiV2 } from "@/components/v2/UiV2Context";
-import { Callout } from "@/components/v2/kit";
 
 /** Trạng thái /api/studio/album-mode-status trả về. */
 export type AlbumModeStatus = AlbumModeReadiness & {
@@ -21,7 +19,14 @@ export type AlbumModeStatus = AlbumModeReadiness & {
  *
  * `status` = null nghĩa là đang kiểm tra.
  */
-type Props = {
+export default function AlbumModePicker({
+  value,
+  onChange,
+  status,
+  onStatus,
+  disabled = false,
+  name = "album-mode",
+}: {
   value: AlbumMode | null;
   onChange: (m: AlbumMode) => void;
   status: AlbumModeStatus | null;
@@ -29,13 +34,7 @@ type Props = {
   onStatus?: (s: AlbumModeStatus) => void;
   disabled?: boolean;
   name?: string;
-};
-
-export default function AlbumModePicker(props: Props) {
-  return useUiV2() ? <AlbumModePickerV2 {...props} /> : <AlbumModePickerV1 {...props} />;
-}
-
-function useAlbumModePicker(status: AlbumModeStatus | null, onStatus?: (s: AlbumModeStatus) => void) {
+}) {
   const ready = isDesktopReady(status);
   const hints = status ? readinessHints(status) : [];
   const [rootBusy, setRootBusy] = useState(false);
@@ -59,12 +58,6 @@ function useAlbumModePicker(status: AlbumModeStatus | null, onStatus?: (s: Album
       setRootBusy(false);
     }
   }
-
-  return { ready, hints, rootBusy, rootErr, createRoot };
-}
-
-function AlbumModePickerV1({ value, onChange, status, onStatus, disabled = false, name = "album-mode" }: Props) {
-  const { ready, hints, rootBusy, rootErr, createRoot } = useAlbumModePicker(status, onStatus);
 
   const option = (m: AlbumMode, icon: ReactNode, title: string, desc: string, locked: boolean) => {
     const on = value === m;
@@ -144,96 +137,6 @@ function AlbumModePickerV1({ value, onChange, status, onStatus, disabled = false
             {rootErr && <p className="mt-1 font-semibold" style={{ color: "var(--rd)" }}>{rootErr}</p>}
           </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-/** Giao diện mới: hai thẻ lựa chọn (viền + nền màu chủ đạo khi chọn), trạng thái
- *  kết nối là một dòng xanh lá hoặc <Callout> amber kèm việc còn thiếu. */
-function AlbumModePickerV2({ value, onChange, status, onStatus, disabled = false, name = "album-mode" }: Props) {
-  const { ready, hints, rootBusy, rootErr, createRoot } = useAlbumModePicker(status, onStatus);
-
-  const option = (m: AlbumMode, icon: ReactNode, title: string, desc: string, locked: boolean) => {
-    const on = value === m;
-    const off = locked || disabled;
-    return (
-      <label
-        className="flex gap-3 rounded-[12px] px-3.5 py-3 transition-colors"
-        style={{
-          background: on ? "var(--acS)" : "var(--sf)",
-          border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`,
-          boxShadow: on ? "0 0 0 1px var(--ac)" : undefined,
-          opacity: locked ? 0.6 : 1,
-          cursor: off ? "not-allowed" : "pointer",
-        }}
-      >
-        <input
-          type="radio"
-          name={name}
-          className="mt-1 h-4 w-4 flex-none"
-          style={{ accentColor: "var(--ac)" }}
-          checked={on}
-          disabled={off}
-          onChange={() => onChange(m)}
-        />
-        <span
-          className="flex h-8 w-8 flex-none items-center justify-center rounded-[9px]"
-          style={on ? { background: "var(--sf)", color: "var(--ac)" } : { background: "var(--sf2)", color: "var(--tx3)" }}
-        >
-          {icon}
-        </span>
-        <span className="min-w-0">
-          <span className="block text-[13.5px] font-semibold">{title}</span>
-          <span className="mt-0.5 block text-[12.5px] leading-relaxed" style={{ color: "var(--tx2)" }}>{desc}</span>
-        </span>
-      </label>
-    );
-  };
-
-  return (
-    <div className="flex flex-col gap-2">
-      {option(
-        "desktop",
-        <Laptop size={17} />,
-        "Album mặc định — tự đồng bộ từ mstudo desktop",
-        "Thợ đổ ảnh vào thư mục hợp đồng trên máy, mstudo desktop tự đưa lên Google Drive; album chọn ảnh và giao khách tự tạo, tự cập nhật.",
-        !ready
-      )}
-      {option(
-        "manual",
-        <Link2 size={17} />,
-        "Nhập link ảnh riêng",
-        "Khách xác nhận hợp đồng thì tạo sẵn MỘT album. Có ảnh thì dán link Google Drive vào album đó — dùng để khách chọn ảnh, rồi giao ảnh hoàn thiện trên cùng album.",
-        false
-      )}
-
-      {status === null ? (
-        <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Đang kiểm tra kết nối mstudo desktop & Google Drive…</p>
-      ) : ready ? (
-        <p className="flex items-center gap-1.5 text-[12.5px] font-medium" style={{ color: "var(--gn)" }}>
-          <CheckCircle2 size={14} /> Đã kết nối mstudo desktop và thư mục mặc định trên Google Drive.
-        </p>
-      ) : (
-        <Callout tone="amber" icon={AlertTriangle} title="Chưa dùng được album mặc định — tạm dùng cách nhập link ảnh riêng.">
-          <ul className="mt-1 space-y-1 text-[12.5px] leading-relaxed">
-            {hints.map((h) => (
-              <li key={h.key}>
-                • {h.text}{" "}
-                {h.action === "create_root" ? (
-                  <button type="button" onClick={createRoot} disabled={rootBusy} className="inline-flex items-center gap-1 font-semibold underline" style={{ color: "var(--ac)" }}>
-                    <FolderPlus size={13} /> {rootBusy ? "Đang tạo…" : "Tạo thư mục trên Drive"}
-                  </button>
-                ) : (
-                  <Link href={h.href} className="font-semibold underline" style={{ color: "var(--ac)" }} target="_blank">
-                    Cài đặt
-                  </Link>
-                )}
-              </li>
-            ))}
-          </ul>
-          {rootErr && <p className="mt-1 text-[12.5px] font-semibold" style={{ color: "var(--rd)" }}>{rootErr}</p>}
-        </Callout>
       )}
     </div>
   );

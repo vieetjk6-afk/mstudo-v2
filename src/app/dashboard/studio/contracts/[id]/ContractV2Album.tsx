@@ -13,11 +13,12 @@ import { PRODUCT_STATUS_LABEL, vnd, type ProductStatus } from "@/lib/types";
 import { albumOptionLabel } from "@/lib/contract-album";
 import { isWeddingReportage } from "@/lib/automations";
 import { isWeddingPackage } from "@/lib/wedding-plan";
-import ContractAlbumModeCardV2 from "./ContractAlbumModeCardV2";
-import WeddingPlanCardV2 from "./WeddingPlanCardV2";
-import WeddingInvitationCardV2 from "./WeddingInvitationCardV2";
-import LoveStoryCardV2 from "./LoveStoryCardV2";
-import { GiftBlock, type V2Ctx } from "./ContractV2Shared";
+import ContractAlbumModeCard from "./ContractAlbumModeCard";
+import WeddingPlanCard from "./WeddingPlanCard";
+import WeddingInvitationCard from "./WeddingInvitationCard";
+import LoveStoryCard from "./LoveStoryCard";
+import { EMBED } from "./ContractV2Items";
+import type { V2Ctx } from "./ContractV2Shared";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab SẢN PHẨM (giao diện mới): chế độ album → album khách đang thấy + hạn
@@ -53,14 +54,16 @@ export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
 
   return (
     <>
-      <ContractAlbumModeCardV2
-        contractId={contract.id}
-        status={f.status}
-        toast={ed.toast}
-        onAlbumIds={ed.applyAlbumIds}
-        onModeChange={ed.setAlbumMode}
-        onDelivered={() => ed.setDeliveryDone(true)}
-      />
+      <div className={EMBED}>
+        <ContractAlbumModeCard
+          contractId={contract.id}
+          status={f.status}
+          toast={ed.toast}
+          onAlbumIds={ed.applyAlbumIds}
+          onModeChange={ed.setAlbumMode}
+          onDelivered={() => ed.setDeliveryDone(true)}
+        />
+      </div>
 
       <Section
         title="Album của khách"
@@ -336,8 +339,8 @@ export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
           </div>
           <ChevronDown size={18} className="flex-none transition-transform group-open:rotate-180" style={{ color: "var(--tx3)" }} />
         </summary>
-        <div className="flex flex-col gap-3 px-4 pb-4 sm:px-5" style={{ borderTop: "1px solid var(--bd2)", paddingTop: 16 }}>
-          <WeddingPlanCardV2
+        <div className={`flex flex-col gap-3 px-4 pb-4 sm:px-5 ${EMBED} [&_.card]:!shadow-none`} style={{ borderTop: "1px solid var(--bd2)", paddingTop: 16 }}>
+          <WeddingPlanCard
             contractId={contract.id}
             clientToken={contract.client_token}
             studioHost={studioHost}
@@ -347,7 +350,7 @@ export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
             comingSoon={plannerComingSoon}
             combo={giftCombo}
           />
-          <WeddingInvitationCardV2
+          <WeddingInvitationCard
             contract={{ id: contract.id, owner_id: contract.owner_id, title: f.title, event_date: f.event_date || null, location: f.location || null }}
             clientName={f.client_name}
             clientMessenger={f.client_messenger}
@@ -355,15 +358,24 @@ export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
             combo={giftCombo && !plannerComingSoon}
             reportage={isWeddingReportage(pkgInput)}
           />
-          <LoveStoryCardV2
+          <LoveStoryCard
             contract={{ id: contract.id, owner_id: contract.owner_id, title: f.title, event_date: f.event_date || null, location: f.location || null }}
             clientName={f.client_name}
             clientMessenger={f.client_messenger}
             studioHost={studioHost}
             comingSoon={storyComingSoon}
           />
-          <GiftBlock icon={Star} tone="amber" title="Xin khách đánh giá" desc="Gửi sau khi giao ảnh — kèm link cổng khách, mục “Đánh giá studio”.">
-            <div className="flex flex-wrap items-center gap-2">
+          <div className="rounded-[14px] p-4" style={{ border: "1px solid var(--bd)" }}>
+            <div className="flex items-start gap-3">
+              <Star size={17} className="mt-0.5 flex-none" style={{ color: "var(--am)" }} />
+              <div className="min-w-0 flex-1">
+                <p className="text-[14px] font-semibold">Xin khách đánh giá</p>
+                <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
+                  Gửi sau khi giao ảnh — kèm link cổng khách, mục “Đánh giá studio”.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <MessengerButton link={f.client_messenger} label="Gửi cho khách" message={reviewMsg} className={btn("secondary", "sm")} />
               <ZaloSendButton
                 phone={f.client_phone}
@@ -378,7 +390,7 @@ export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
               />
               <EmailButton to={f.client_email} label="Email" subject={`Xin đánh giá — ${studioName}`} message={reviewMsg} className={btn("secondary", "sm")} />
             </div>
-          </GiftBlock>
+          </div>
         </div>
       </details>
 

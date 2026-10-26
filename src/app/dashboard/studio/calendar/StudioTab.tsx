@@ -1,8 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
-import { isUiV2 } from "@/lib/ui-server";
-import PlanLockedV2 from "./PlanLockedV2";
 import type { CalendarTab } from "./tabs";
 import { todayVN } from "@/lib/date";
 import { addDays, mondayOf } from "@/lib/appointments";
@@ -34,7 +32,6 @@ const DEFAULT_ROOMS: { name: string; kind: StudioRoom["kind"]; capacity_week: nu
 export default async function StudioTab({ tabs }: { tabs?: readonly CalendarTab[] } = {}) {
   const profile = await requireStudio("booking");
   if (!profile) {
-    if (await isUiV2()) return <PlanLockedV2 title="Cần gói Photographer trở lên" hint="Lịch studio dành cho tài khoản gói Photographer trở lên." cta="Nâng cấp gói" />;
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">

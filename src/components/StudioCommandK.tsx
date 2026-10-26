@@ -2,14 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { createPortal } from "react-dom";
 import { Search, SearchX, FileText, User, IdCard } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { commandItems, noAccent, type NavAccess, type NavItem } from "@/lib/studio-nav";
 import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
-import { useUiV2 } from "@/components/v2/UiV2Context";
-import { Badge, iconBtn, type Tone } from "@/components/v2/kit";
-import { v2PortalProps } from "@/components/v2parts/portal-scope";
 
 type Hit = {
   key: string;
@@ -34,13 +30,7 @@ const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
  * Đây cũng là thứ giữ cho việc gộp sidebar xuống 24 mục không làm mất đường tới
  * những màn đã rời khỏi nav (lịch đội ngũ, nhân viên, mẫu hợp đồng, nén ảnh…).
  */
-export default function StudioCommandK(props: { access: NavAccess }) {
-  return useUiV2() ? <StudioCommandKV2 {...props} /> : <StudioCommandKV1 {...props} />;
-}
-
-/** Mở/đóng bằng ⌘K, tìm hợp đồng + nhân sự trên server, lọc lệnh, điều khiển
- *  bằng bàn phím — dùng chung hai bản. */
-function useCommandK(access: NavAccess) {
+export default function StudioCommandK({ access }: { access: NavAccess }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -173,12 +163,6 @@ function useCommandK(access: NavAccess) {
     listRef.current?.querySelector<HTMLElement>(`[data-i="${cursor}"]`)?.scrollIntoView({ block: "nearest" });
   }, [cursor]);
 
-  return { open, setOpen, q, setQ, cursor, setCursor, inputRef, listRef, hits, go, onInputKey };
-}
-
-function StudioCommandKV1({ access }: { access: NavAccess }) {
-  const { open, setOpen, q, setQ, cursor, setCursor, inputRef, listRef, hits, go, onInputKey } = useCommandK(access);
-
   return (
     <>
       {/* Ô mở lệnh trên topbar — desktop hiện cả ô, mobile chỉ nút kính lúp. */}
@@ -276,140 +260,6 @@ function StudioCommandKV1({ access }: { access: NavAccess }) {
           </div>
         </div>
       )}
-    </>
-  );
-}
-
-/* ── Giao diện mới ────────────────────────────────────────────────────────────
-   Cùng logic (useCommandK). Ô mở lệnh là "viên tìm kiếm" cao 38px như các nút
-   topbar; bảng lệnh đi qua portal (mang lớp `studio-shell ui-v2` để giữ token
-   màu), kết quả chia nhóm theo loại thay cho nhãn màu ở từng dòng. */
-const GROUP: Record<string, { label: string; tone: Tone }> = {
-  "Hành động": { label: "Màn hình & thao tác", tone: "brand" },
-  "Hợp đồng": { label: "Hợp đồng", tone: "blue" },
-  Khách: { label: "Khách hàng", tone: "green" },
-  "Nhân sự": { label: "Nhân sự", tone: "amber" },
-};
-
-function StudioCommandKV2({ access }: { access: NavAccess }) {
-  const { open, setOpen, q, setQ, cursor, setCursor, inputRef, listRef, hits, go, onInputKey } = useCommandK(access);
-  const scope = open ? v2PortalProps() : null;
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="ck-bar hidden h-[38px] min-w-0 items-center gap-2 rounded-[10px] px-3 text-left transition-colors sm:flex"
-        style={{ flex: "0 1 280px", border: "1px solid var(--bd)", background: "var(--sf2)" }}
-        aria-label="Tìm hoặc chạy lệnh"
-      >
-        <Search size={16} className="flex-none" style={{ color: "var(--tx3)" }} />
-        <span className="min-w-0 flex-1 truncate text-[13px]" style={{ color: "var(--tx3)" }}>Tìm hoặc chạy lệnh…</span>
-        <span className="flex flex-none gap-[3px]">
-          <kbd className="ck-key">⌘</kbd>
-          <kbd className="ck-key">K</kbd>
-        </span>
-      </button>
-      <button type="button" onClick={() => setOpen(true)} className={iconBtn("flex-none sm:hidden")} aria-label="Tìm kiếm" title="Tìm kiếm">
-        <Search size={18} />
-      </button>
-
-      {open && scope &&
-        createPortal(
-          <div className="studio-shell ui-v2" data-theme={scope["data-theme"]} style={scope.style}>
-            <div
-              onClick={() => setOpen(false)}
-              className="ck-overlay fixed inset-0 z-[95] flex items-start justify-center px-3 pb-6 sm:px-6"
-              style={{ paddingTop: "max(12px, 10vh)", background: "rgba(10, 18, 30, 0.42)" }}
-              role="dialog"
-              aria-modal="true"
-              aria-label="Ô lệnh nhanh"
-            >
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="ck-panel w-full overflow-hidden rounded-[18px]"
-                style={{ maxWidth: 640, background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-modal)", color: "var(--tx)" }}
-              >
-                <div className="flex items-center gap-3 px-4 py-3.5" style={{ borderBottom: "1px solid var(--bd2)" }}>
-                  <Search size={20} className="flex-none" style={{ color: "var(--tx3)" }} />
-                  <input
-                    ref={inputRef}
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                    onKeyDown={onInputKey}
-                    placeholder="Tìm khách, mã hợp đồng, hoặc gõ việc muốn làm…"
-                    aria-label="Tìm khách, mã hợp đồng, hoặc gõ việc muốn làm"
-                    className="min-w-0 flex-1 border-0 bg-transparent text-[15px] font-medium outline-none"
-                    style={{ color: "var(--tx)" }}
-                  />
-                  <button type="button" onClick={() => setOpen(false)} className="flex-none" aria-label="Đóng">
-                    <kbd className="ck-key">ESC</kbd>
-                  </button>
-                </div>
-
-                <div ref={listRef} className="overflow-y-auto p-2" style={{ maxHeight: "min(56vh, 480px)" }}>
-                  {hits.map((h, i) => {
-                    const g = GROUP[h.tag] ?? { label: h.tag, tone: "gray" as Tone };
-                    const first = i === 0 || hits[i - 1].tag !== h.tag;
-                    const on = i === cursor;
-                    return (
-                      <div key={h.key}>
-                        {first && (
-                          <p className="px-3 pb-1 pt-2 text-[11.5px] font-semibold uppercase tracking-wide" style={{ color: "var(--tx3)" }}>
-                            {g.label}
-                          </p>
-                        )}
-                        <button
-                          type="button"
-                          data-i={i}
-                          onMouseEnter={() => setCursor(i)}
-                          onClick={() => go(h.href)}
-                          className="flex w-full items-center gap-3 rounded-[11px] px-3 py-2.5 text-left"
-                          style={{ background: on ? "var(--acS)" : "transparent" }}
-                        >
-                          <span
-                            className="flex h-9 w-9 flex-none items-center justify-center rounded-[10px]"
-                            style={on ? { background: "var(--sf)", color: "var(--ac)" } : { background: "var(--sf2)", color: "var(--tx2)" }}
-                          >
-                            <h.icon size={18} />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[14px] font-semibold" style={on ? { color: "var(--ac)" } : undefined}>{h.title}</span>
-                            <span className="block truncate text-[12px]" style={{ color: "var(--tx3)" }}>{h.sub}</span>
-                          </span>
-                          {on ? (
-                            <kbd className="ck-key flex-none">↵</kbd>
-                          ) : h.tag !== "Hành động" ? (
-                            <span className="hidden flex-none sm:inline-flex">
-                              <Badge tone={g.tone}>{h.tag}</Badge>
-                            </span>
-                          ) : null}
-                        </button>
-                      </div>
-                    );
-                  })}
-                  {hits.length === 0 && (
-                    <div className="px-5 py-10 text-center">
-                      <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-[12px]" style={{ background: "var(--sf2)", color: "var(--tx3)" }}>
-                        <SearchX size={22} />
-                      </span>
-                      <p className="mt-2.5 text-[14px] font-semibold">Không tìm thấy gì khớp</p>
-                      <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--tx3)" }}>Thử tên khách, số điện thoại hoặc mã hợp đồng.</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-3.5 px-4 py-2.5 text-[12px]" style={{ borderTop: "1px solid var(--bd2)", background: "var(--sf2)", color: "var(--tx3)" }}>
-                  <span className="flex items-center gap-1"><kbd className="ck-key">↑</kbd><kbd className="ck-key">↓</kbd> chọn</span>
-                  <span className="flex items-center gap-1"><kbd className="ck-key">↵</kbd> mở</span>
-                  <span className="ml-auto hidden truncate sm:inline">{q ? "" : "Gõ tên khách, mã hợp đồng, hoặc việc muốn làm"}</span>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
     </>
   );
 }
