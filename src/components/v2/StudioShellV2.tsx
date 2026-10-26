@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   Sun, Moon, MonitorSmartphone, LogOut, Menu, X as XIcon, Gift, Link2, UserCircle,
   MessageSquare, Bell, Crown, Plus, ChevronDown, Check, Undo2, Palette,
-  Pin, PinOff, SlidersHorizontal, ArrowUp, ArrowDown, RotateCcw,
+  Pin, PinOff, SlidersHorizontal, ArrowUp, ArrowDown, RotateCcw, MessageSquareHeart,
 } from "lucide-react";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioCommandK from "@/components/StudioCommandK";
@@ -15,6 +15,7 @@ import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
 import SyncControlButton from "@/components/SyncControlButton";
 import MobileTabBarV2 from "@/components/v2/MobileTabBarV2";
+import UiFeedback from "@/components/v2/UiFeedback";
 import { UiV2Provider } from "@/components/v2/UiV2Context";
 import { setAccentCookie, setNavPinsCookie, setUiVersion } from "@/components/v2/ui-switch";
 import { Drawer } from "@/components/v2/kit-client";
@@ -373,6 +374,8 @@ export default function StudioShellV2({
   const [switching, setSwitching] = useState(false);
   const [pins, setPinsState] = useState<string[]>(() => navPins ?? [...DEFAULT_PINS]);
   const [customizing, setCustomizing] = useState(false);
+  /** Hộp góp ý đang mở: góp ý thường, hay hỏi nhanh lúc bấm "Về giao diện cũ". */
+  const [feedback, setFeedback] = useState<"feedback" | "leave" | null>(null);
   const setPins = (next: string[]) => {
     const clean = next.filter((h, i) => next.indexOf(h) === i).slice(0, MAX_PINS);
     setPinsState(clean);
@@ -542,7 +545,10 @@ export default function StudioShellV2({
       </div>
 
       <div className="py-1.5" style={{ borderTop: "1px solid var(--bd2)" }}>
-        <button type="button" onClick={backToOld} disabled={switching} className={`${menuLink} w-full disabled:opacity-60`}>
+        <button type="button" onClick={() => { setAvatarOpen(false); setFeedback("feedback"); }} className={`${menuLink} w-full`}>
+          <MessageSquareHeart size={16} /> Góp ý giao diện mới
+        </button>
+        <button type="button" onClick={() => { setAvatarOpen(false); setFeedback("leave"); }} disabled={switching} className={`${menuLink} w-full disabled:opacity-60`}>
           <Undo2 size={16} /> {switching ? "Đang chuyển…" : "Về giao diện cũ"}
         </button>
         <button type="button" onClick={signOut} className={`${menuLink} w-full`} style={{ color: "var(--rd)" }}>
@@ -704,7 +710,7 @@ export default function StudioShellV2({
               {avatarOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setAvatarOpen(false)} />
-                  <div className="v2-pop absolute right-0 top-full z-50 mt-2 max-h-[calc(100vh-80px)] w-[300px] max-w-[calc(100vw-24px)] overflow-y-auto">
+                  <div className="v2-pop absolute right-0 top-full z-50 mt-2 max-h-[calc(100dvh-210px)] w-[300px] lg:max-h-[calc(100vh-80px)] max-w-[calc(100vw-24px)] overflow-y-auto">
                     {accountMenu}
                   </div>
                 </>
@@ -722,6 +728,7 @@ export default function StudioShellV2({
       <MobileTabBarV2 groups={groups} pathname={pathname} creates={creates} pins={pins} />
 
       <CustomizeNavDrawer open={customizing} onClose={() => setCustomizing(false)} groups={groups} pins={pins} setPins={setPins} />
+      <UiFeedback mode={feedback ?? "feedback"} open={feedback !== null} onClose={() => setFeedback(null)} onLeave={backToOld} />
     </div>
     </UiV2Provider>
   );

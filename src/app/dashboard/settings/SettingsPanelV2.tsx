@@ -236,6 +236,12 @@ function FeatureSection({ s }: { s: SettingsState }) {
             <p className="text-[12.5px]" style={{ color: "var(--tx2)" }}>
               Ai được dùng khung giao diện mới. Dữ liệu dùng chung với bản cũ; người dùng luôn quay về bản cũ được trong menu tài khoản.
             </p>
+            {s.uiV2Value !== "default" && (
+              <p className="mt-1 text-[12.5px]" style={{ color: "var(--tx3)" }}>
+                Trang gửi khách (hợp đồng, album, cổng khách…) chỉ đổi sang giao diện mới khi chọn “Mặc định cho mọi studio”.
+                Góp ý của studio dùng thử về mục “Góp ý & liên hệ” bên dưới và chuông thông báo.
+              </p>
+            )}
           </div>
           <select className={inputCls} value={s.uiV2Value} onChange={(e) => s.setUiV2(e.target.value)} aria-label="Giao diện mới (thử nghiệm)">
             {UI_V2_OPTIONS.map((o) => (

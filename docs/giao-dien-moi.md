@@ -24,7 +24,21 @@ Bật/tắt:
 
 - **Khung cũ**: thẻ gợi ý ở góc màn hình ("Để sau" ẩn 3 ngày) và mục
   "Dùng giao diện mới" trong menu tài khoản.
-- **Khung mới**: menu tài khoản → "Về giao diện cũ".
+- **Khung mới**: menu tài khoản → "Về giao diện cũ". Bấm vào sẽ hỏi nhanh điều gì
+  chưa ổn (chọn lý do hoặc gõ, không bắt buộc) rồi mới chuyển.
+
+Trang gửi khách (hợp đồng, báo giá, album, cổng khách…) không có công tắc riêng:
+chúng theo studio sở hữu trang, chỉ vẽ bản mới khi cờ là `default` hoặc studio
+của tài khoản admin (`customerUiV2` trong `src/lib/ui-server.ts`). Ở mức `beta`,
+studio dùng thử chỉ đổi khu quản lý, khách của họ vẫn thấy bản cũ.
+
+## Góp ý của studio dùng thử
+
+Menu tài khoản của khung mới có mục "Góp ý giao diện mới"; lúc bấm "Về giao diện
+cũ" cũng hỏi lý do. Góp ý gửi qua `POST /api/studio/ui-feedback` (cần đăng nhập,
+5 lượt / 10 phút mỗi người), ghi vào bảng `feedbacks` (Cấu hình mstudo → "Góp ý &
+liên hệ", mở đầu bằng `[Giao diện mới]`) và gửi thông báo kèm nội dung cho mọi
+admin. Mỗi góp ý ghi kèm trang đang mở và loại máy (điện thoại / máy tính).
 
 ## Menu trái: mục hay dùng
 
@@ -74,7 +88,8 @@ dev từ origin lạ nên trang sẽ không chạy được JavaScript.
    Mỗi màn: logic ở hook dùng chung (`use*.ts`), bản cũ giữ nguyên giao diện, bản
    mới ở file `*V2.tsx` cạnh bản cũ. Xem trước: `/uipreview` các màn `v2-*`.
 3. Thiết lập ban đầu 5 bước cho studio mới và popup cập nhật cho studio cũ.
-4. Mở cho người dùng: `beta` → `default` → gỡ khung cũ và công tắc.
+4. Mở cho người dùng: `beta` (đang ở bước này: mọi studio thấy gợi ý dùng thử,
+   gửi góp ý được) → `default` → gỡ khung cũ và công tắc.
 
    Các khối dùng chung cũng đã có bản V2: ô tên miền riêng, thẻ cài đặt (xuất kế
    toán, việc tự động, chuyển khoản tự xác nhận, chính sách studio), ⌘K, chọn chi
