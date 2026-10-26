@@ -1126,6 +1126,15 @@ body {
 .ui-v2 .v2-btn-lg { height: 44px; padding: 0 18px; font-size: 14.5px; border-radius: 12px; }
 .ui-v2 .v2-btn-primary { background: var(--ac); color: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12); }
 .ui-v2 .v2-btn-primary:hover:not(:disabled) { background: var(--acD); }
+/* Nền tối: --ac được làm sáng lên để chữ/viền màu nhấn đọc được trên nền đen,
+   nhưng NỀN nút đặc mà sáng thì chữ trắng lại mờ. Nút đặc dùng màu gốc đậm. */
+.ui-v2[data-theme="dark"] .v2-btn-primary,
+.ui-v2[data-theme="dark"] .v2-primary,
+.ui-v2[data-theme="dark"] .btn-primary,
+.ui-v2[data-theme="dark"] .act-btn-primary { background: var(--ac-base, #0b5cc4); color: #fff; }
+.ui-v2[data-theme="dark"] .v2-btn-primary:hover:not(:disabled),
+.ui-v2[data-theme="dark"] .v2-primary:hover,
+.ui-v2[data-theme="dark"] .btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--ac-base, #0b5cc4) 85%, #ffffff); }
 .ui-v2 .v2-btn-secondary { background: var(--sf); color: var(--tx); border-color: var(--bd); box-shadow: var(--v2-shadow); }
 .ui-v2 .v2-btn-secondary:hover:not(:disabled) { background: var(--sf2); border-color: var(--bdS); }
 .ui-v2 .v2-btn-ghost { background: transparent; color: var(--tx2); }

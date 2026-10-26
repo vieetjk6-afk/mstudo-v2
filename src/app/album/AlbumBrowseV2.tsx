@@ -157,7 +157,7 @@ function CardGrid({ items, video, dateLocale }: { items: GalleryCard[]; video?: 
                 <Play size={20} fill="currentColor" strokeWidth={0} />
               </span>
             )}
-            <span className="v2-badge absolute left-2.5 top-2.5" style={{ background: "rgba(255,255,255,.94)", color: "var(--tx)", boxShadow: "0 1px 3px rgba(0,0,0,.15)" }}>
+            <span className="v2-badge absolute left-2.5 top-2.5" style={{ background: "rgba(10,10,12,.55)", color: "#fff", backdropFilter: "blur(6px)" }}>
               {categoryLabel(g.category, g.category_label)}
             </span>
             <span
