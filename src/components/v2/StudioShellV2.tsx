@@ -570,6 +570,10 @@ export default function StudioShellV2({
   );
 
   return (
+    // Provider bọc CẢ khung (không chỉ <main>): các mảnh dùng chung nằm ở topbar,
+    // sidebar và ngăn kéo (ô ⌘K, chọn chi nhánh, trạng thái Drive…) cũng cần biết
+    // mình đang ở giao diện mới để vẽ bản V2.
+    <UiV2Provider>
     <div
       className="studio-shell ui-v2"
       data-theme={theme}
@@ -719,5 +723,6 @@ export default function StudioShellV2({
 
       <CustomizeNavDrawer open={customizing} onClose={() => setCustomizing(false)} groups={groups} pins={pins} setPins={setPins} />
     </div>
+    </UiV2Provider>
   );
 }

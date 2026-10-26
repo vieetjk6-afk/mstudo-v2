@@ -8,7 +8,7 @@ import { Badge, Callout, Empty, Field, Section, btn, iconBtn, inputCls } from "@
 import { Menu, Segmented, type MenuItem } from "@/components/v2/kit-client";
 import { vnd } from "@/lib/types";
 import { PRESET_ITEMS_BY_KIND } from "@/lib/contract-kind";
-import ContractAddenda from "./ContractAddenda";
+import ContractAddendaV2 from "./ContractAddendaV2";
 import { nextTier, type ItemRow } from "./useContractEditor";
 import { SaveBar, type V2Ctx } from "./ContractV2Shared";
 
@@ -172,9 +172,7 @@ export default function ContractV2Items({ ctx }: { ctx: V2Ctx }) {
       )}
 
       {itemsLocked && (
-        <div className={EMBED}>
-          <ContractAddenda contractId={contract.id} initialAddenda={initialAddenda} canEdit={canEditAddenda} onChanged={ed.setAddendumItems} toast={ed.toast} />
-        </div>
+        <ContractAddendaV2 contractId={contract.id} initialAddenda={initialAddenda} canEdit={canEditAddenda} onChanged={ed.setAddendumItems} toast={ed.toast} />
       )}
 
       {/* Dịch vụ & điều khoản: chọn dịch vụ là nạp lại bộ điều khoản ngay dưới. */}

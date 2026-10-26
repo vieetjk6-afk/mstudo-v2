@@ -1,68 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ClipboardList, Copy, Link as LinkIcon, MapPin, Navigation, Phone, Send, Share2, UserPlus } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
-import { useToast } from "@/components/studio/Toast";
 import ZaloSendButton from "@/components/ZaloSendButton";
-import { fmtDate, fmtDateTime } from "@/lib/date";
-import { type ContractCrew, type ContractIntake } from "@/lib/types";
-import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
+import { fmtDateTime } from "@/lib/date";
+import { crewRoleLabel } from "@/lib/crew-roles";
 import { CREW_SIDE_LABEL } from "@/lib/crew-show";
 import {
-  intakeSections, intakeMessage, sectionText, defaultKeysForSide, intakeDirections,
+  intakeMessage, sectionText, defaultKeysForSide, intakeDirections,
   type IntakeSection, type IntakeSectionKey,
 } from "@/lib/intake-text";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { useSendRow, useSessionInfo, type SessionInfoProps } from "./useSessionInfo";
+import SessionInfoViewV2 from "./SessionInfoViewV2";
 
-type CrewRow = Pick<ContractCrew, "id" | "name" | "phone" | "role" | "side" | "event_id">;
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
+/** Trong khung giao diện mới vẽ bản V2; logic chung ở ./useSessionInfo. */
+export default function SessionInfoView(props: SessionInfoProps) {
+  return useUiV2() ? <SessionInfoViewV2 {...props} /> : <SessionInfoViewV1 {...props} />;
 }
 
-export default function SessionInfoView({
+function SessionInfoViewV1({
   contract, formUrl, crew, studioName, crewRoles = [],
-}: {
-  contract: {
-    id: string;
-    title: string;
-    clientName: string;
-    eventDate: string | null;
-    eventTime: string | null;
-    location: string | null;
-    intake: ContractIntake | null;
-    submittedAt: string | null;
-  };
-  formUrl: string | null;
-  crew: CrewRow[];
-  studioName: string;
-  /** Vai trò thợ studio tự đặt — để ra đúng tên vai trò. */
-  crewRoles?: CrewRoleRow[];
-}) {
-  const { toast, toastNode } = useToast();
-  const sections = useMemo(() => intakeSections(contract.intake), [contract.intake]);
-  const date = contract.eventDate ? fmtDate(contract.eventDate) : null;
-  // Web Share chỉ có trên trình duyệt (chủ yếu điện thoại) — dò sau khi mount
-  // để bản vẽ server và client khớp nhau.
-  const [canShare, setCanShare] = useState(false);
-  useEffect(() => setCanShare(typeof navigator.share === "function"), []);
-
-  async function copy(text: string, what = "Đã chép") {
-    toast((await copyText(text)) ? what : "Không chép được — hãy chọn chữ và chép tay");
-  }
-  async function share(text: string) {
-    try {
-      await navigator.share({ text });
-    } catch {
-      /* người dùng đóng bảng chia sẻ */
-    }
-  }
+}: SessionInfoProps) {
+  const { toastNode, sections, date, canShare, copy, share } = useSessionInfo(contract);
 
   return (
     <div className="page-in max-w-[860px]">
@@ -247,11 +208,7 @@ function SendRow({
   onCopy: (text: string) => void;
   onShare?: (text: string) => void;
 }) {
-  const [keys, setKeys] = useState<IntakeSectionKey[]>(initialKeys);
-  // Giữ thứ tự hiển thị của các phần, không theo thứ tự bấm.
-  const picked = sections.map((s) => s.key).filter((k) => keys.includes(k));
-  const message = buildMessage(picked);
-  const toggle = (k: IntakeSectionKey) => setKeys((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]));
+  const { keys, picked, message, toggle } = useSendRow(sections, initialKeys, buildMessage);
 
   return (
     <div className="rounded-[12px] p-3" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}>

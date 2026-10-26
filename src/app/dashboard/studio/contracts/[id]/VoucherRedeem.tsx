@@ -13,14 +13,7 @@ import { REDEEM_ERROR_TEXT, isLoyalty, voucherValueLabel, type Voucher } from "@
  * Voucher ƯU ĐÃI (studio tặng) thì khác: không có tiền nào vào quỹ, nên trừ =
  * một DÒNG GIẢM GIÁ trong hạng mục (máy chủ tự tính % theo tổng hiện tại).
  */
-export default function VoucherRedeem({
-  contractId,
-  balance,
-  onRedeemed,
-  onItemAdded,
-  beforeLoyalty,
-  toast,
-}: {
+export type VoucherRedeemProps = {
   contractId: string;
   balance: number;
   onRedeemed: (p: ContractPayment) => void;
@@ -29,7 +22,10 @@ export default function VoucherRedeem({
   /** Chạy trước khi áp voucher ưu đãi (lưu bảng hạng mục đang sửa dở). */
   beforeLoyalty?: () => Promise<void>;
   toast: (m: string) => void;
-}) {
+};
+
+/** Logic kiểm & trừ voucher — dùng chung cho bản cũ và VoucherRedeemV2. */
+export function useVoucherRedeem({ contractId, onRedeemed, onItemAdded, beforeLoyalty, toast }: VoucherRedeemProps) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [found, setFound] = useState<Voucher | null>(null);
@@ -90,6 +86,20 @@ export default function VoucherRedeem({
     setNeedPhone(false);
     setVphone("");
   }
+
+  /** Đóng ô nhập mã (giữ nguyên SĐT đã nhập như bản cũ). */
+  function close() {
+    setOpen(false);
+    setFound(null);
+    setCode("");
+  }
+
+  return { open, setOpen, code, setCode, found, setFound, busy, needPhone, vphone, setVphone, check, redeem, close };
+}
+
+export default function VoucherRedeem(props: VoucherRedeemProps) {
+  const { balance } = props;
+  const { open, setOpen, code, setCode, found, setFound, busy, needPhone, vphone, setVphone, check, redeem } = useVoucherRedeem(props);
 
   if (!open) {
     return (

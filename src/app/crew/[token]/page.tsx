@@ -1,5 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { customerUiV2 } from "@/lib/ui-server";
+import { getStudioBrand } from "@/lib/studio-brand";
 import CrewPortal from "../CrewPortal";
+import CrewPortalV2 from "../CrewPortalV2";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +24,20 @@ export default async function CrewStudioPortalPage(props: { params: Promise<{ to
     .eq("crew_token", params.token)
     .maybeSingle();
 
-  if (!studio) return <CrewPortal />;
-  return <CrewPortal studio={{ id: studio.id as string, name: studio.full_name || "Studio", crewToken: params.token }} />;
+  // Giao diện mới đi theo studio sở hữu link (token sai → cổng chung, không chủ).
+  const v2 = await customerUiV2((studio?.id as string | undefined) ?? null);
+
+  if (!studio) return v2 ? <CrewPortalV2 /> : <CrewPortal />;
+  const crewStudio = { id: studio.id as string, name: studio.full_name || "Studio", crewToken: params.token };
+  if (v2) {
+    // Logo + tên thương hiệu studio cho đầu trang; thiếu thì dùng tên đã tải.
+    const brand = await getStudioBrand(db, crewStudio.id).catch(() => null);
+    return (
+      <CrewPortalV2
+        studio={crewStudio}
+        brand={{ name: brand && brand.name !== "Studio" ? brand.name : crewStudio.name, logoUrl: brand?.logoUrl ?? null }}
+      />
+    );
+  }
+  return <CrewPortal studio={crewStudio} />;
 }

@@ -1,13 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Bell, CheckCheck } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { notificationHref, notificationMeta, notificationText } from "@/lib/notifications";
-import { todayVN } from "@/lib/date";
 import type { StudioNotification } from "@/lib/types";
+import { shortWhen, useStaffNotifications } from "./useStaffPortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TAB "THÔNG BÁO" — cùng dòng thông báo với khu quản lý (studio_notifications),
@@ -18,42 +16,13 @@ import type { StudioNotification } from "@/lib/types";
    nhắc lịch, hợp đồng thay đổi, phân công.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** "vừa xong" / "3 giờ trước" / "12/07" — cột thời gian bên phải mỗi hàng. */
-function shortWhen(iso: string, today: string): string {
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const mins = Math.round((Date.now() - d.getTime()) / 60000);
-  if (mins < 1) return "vừa xong";
-  if (mins < 60) return `${mins} phút`;
-  const isToday = new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10) === today;
-  if (isToday) return `${Math.floor(mins / 60)} giờ`;
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-}
+// shortWhen ("vừa xong" / "3 giờ" / "12/07"), nhóm Hôm nay/Trước đó và thao tác
+// đánh dấu đã đọc nằm ở ./useStaffPortal — dùng chung với giao diện mới.
 
 export default function StaffNotifications({
   initial, toast,
 }: { initial: StudioNotification[]; toast: (m: string) => void }) {
-  const supabase = createClient();
-  const [items, setItems] = useState(initial);
-  const today = todayVN();
-
-  const unread = useMemo(() => items.filter((n) => !n.read), [items]);
-
-  const groups = useMemo(() => {
-    const isToday = (n: StudioNotification) =>
-      new Date(new Date(n.created_at).getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10) === today;
-    return [
-      { label: "Hôm nay", rows: items.filter(isToday) },
-      { label: "Trước đó", rows: items.filter((n) => !isToday(n)) },
-    ].filter((g) => g.rows.length > 0);
-  }, [items, today]);
-
-  async function markRead(ids: string[]) {
-    if (ids.length === 0) return;
-    setItems((p) => p.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)));
-    const { error } = await supabase.from("studio_notifications").update({ read: true }).in("id", ids);
-    if (error) toast("Không lưu được trạng thái đã đọc.");
-  }
+  const { items, unread, groups, markRead, markAllRead, today } = useStaffNotifications(initial, toast);
 
   return (
     <div className="mx-auto flex max-w-[760px] flex-col gap-3">
@@ -63,7 +32,7 @@ export default function StaffNotifications({
         </p>
         {unread.length > 0 && (
           <button
-            onClick={() => { markRead(unread.map((n) => n.id)); toast("Đã đánh dấu đọc tất cả."); }}
+            onClick={markAllRead}
             className="ml-auto flex flex-none items-center gap-1.5 text-[12.5px] font-bold"
             style={{ color: "var(--ac)" }}
           >

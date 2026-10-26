@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { btn } from "@/components/v2/kit";
 
 interface Props {
   /** Has this user already used the Studio trial? */
   used: boolean;
 }
 
-export default function StudioTrialButton({ used: initialUsed }: Props) {
+function useStudioTrial(initialUsed: boolean) {
   const [used, setUsed] = useState(initialUsed);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -31,6 +33,16 @@ export default function StudioTrialButton({ used: initialUsed }: Props) {
     }
   }
 
+  return { used, busy, msg, activate };
+}
+
+export default function StudioTrialButton(props: Props) {
+  return useUiV2() ? <StudioTrialButtonV2 {...props} /> : <StudioTrialButtonV1 {...props} />;
+}
+
+function StudioTrialButtonV1({ used: initialUsed }: Props) {
+  const { used, busy, msg, activate } = useStudioTrial(initialUsed);
+
   if (used) {
     return msg ? (
       <p className="text-xs font-medium" style={{ color: "var(--success)" }}>{msg}</p>
@@ -50,6 +62,29 @@ export default function StudioTrialButton({ used: initialUsed }: Props) {
         <Sparkles size={14} /> {busy ? "Đang kích hoạt…" : "Dùng thử Studio 7 ngày"}
       </button>
       {msg && <p className="text-xs" style={{ color: msg.includes("Đã kích") ? "var(--success)" : "var(--danger)" }}>{msg}</p>}
+    </div>
+  );
+}
+
+/** Giao diện mới: nút phụ chữ màu chủ đạo — nổi trên cả nền thẻ trắng lẫn nền
+ *  <Callout> màu chủ đạo (màn đã có một nút primary riêng). */
+function StudioTrialButtonV2({ used: initialUsed }: Props) {
+  const { used, busy, msg, activate } = useStudioTrial(initialUsed);
+
+  if (used) {
+    return msg ? (
+      <p className="text-[12.5px] font-medium" style={{ color: "var(--gn)" }}>{msg}</p>
+    ) : (
+      <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Đã dùng thử Studio.</p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button type="button" onClick={activate} disabled={busy} className={btn("secondary", "sm")} style={{ color: "var(--ac)" }}>
+        <Sparkles size={14} /> {busy ? "Đang kích hoạt…" : "Dùng thử Studio 7 ngày"}
+      </button>
+      {msg && <p className="text-[12px]" style={{ color: msg.includes("Đã kích") ? "var(--gn)" : "var(--rd)" }}>{msg}</p>}
     </div>
   );
 }
