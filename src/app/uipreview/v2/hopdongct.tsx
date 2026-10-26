@@ -155,7 +155,7 @@ const session = (withIntake: boolean) => (
       contract={{
         id: "c1",
         title: f.contractFull.title,
-        clientName: f.contractFull.client_name,
+        clientName: f.contractFull.client_name ?? "",
         eventDate: f.contractFull.event_date,
         eventTime: f.contractFull.event_time,
         location: f.contractFull.location,
