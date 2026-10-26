@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { studioShareMetadata } from "@/lib/studio-share-meta";
 import ShowcaseAlbum from "./ShowcaseAlbum";
+import ShowcaseAlbumV2 from "./ShowcaseAlbumV2";
+import { customerUiV2 } from "@/lib/ui-server";
 
 // Trang showcase công khai chỉ đổi khi studio publish lại → ISR + CDN cache 5'
 // thay vì SSR mọi lượt khách xem (giảm origin transfer, nhanh hơn).
@@ -55,8 +57,10 @@ export default async function ShowcasePage(
     .eq("album_id", album.id)
     .order("position");
 
+  const View = (await customerUiV2(album.owner_id as string | null)) ? ShowcaseAlbumV2 : ShowcaseAlbum;
+
   return (
-    <ShowcaseAlbum
+    <View
       brand={album.owner_id ? await getStudioBrand(db, album.owner_id).catch(() => null) : null}
       title={album.title}
       kind={(album.kind as string | null) ?? "Album"}

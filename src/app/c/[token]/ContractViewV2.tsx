@@ -36,21 +36,21 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import SignaturePad from "@/components/SignaturePad";
-import { CustomerHeaderV2, CustomerMainV2, CustomerRootV2 } from "@/components/v2/customer";
+import { CustomerHeaderV2, CustomerMainV2 } from "@/components/v2/customer";
 import { Badge, Callout, Card, Field, Progress, Section, Stack, btn, iconBtn, inputCls, toneBg, toneFg, type Tone } from "@/components/v2/kit";
-import { Menu, Modal, Segmented, type MenuItem } from "@/components/v2/kit-client";
+import { Menu, Modal, Segmented } from "@/components/v2/kit-client";
 import type { StudioBrandInfo } from "@/lib/studio-brand";
 import { daysFromToday, fmtDate, fmtDateTime, fmtDow, fmtLunar, todayVN } from "@/lib/date";
 import { downloadIcs, googleCalendarUrl, type CalEvent } from "@/lib/calendar";
 import { instalmentNote, qrUrl } from "@/lib/vietqr";
 import { thiepUrl } from "@/lib/hosts";
-import { vnd, SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, PRODUCT_STATUS_LABEL, type ContractStatus } from "@/lib/types";
+import { vnd, SHOOT_TYPE_LABEL, PRODUCT_STATUS_LABEL, type ContractStatus } from "@/lib/types";
 import PortalVoucher from "./PortalVoucher";
 import { PaidConfirmScreen } from "./PaidConfirm";
 import ContractPrintDoc from "./ContractPrintDoc";
 import ClientAddendaV2 from "./ClientAddendaV2";
 import { useContractPortal, type ContractPortal, type PortalPayload } from "./useContractPortal";
-import { CopyRow, Fact, LangToggle, MoneyLine, StepsBar, StickyActionBar, ToastV2, useInView } from "./DocPartsV2";
+import { CopyRow, CustomerRootAuto, Fact, LangToggle, MoneyLine, StepsBar, StickyActionBar, ToastV2, useInView } from "./DocPartsV2";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    HỢP ĐỒNG GỬI KHÁCH — giao diện mới. Cùng state, cùng lời gọi máy chủ với bản
@@ -70,14 +70,15 @@ import { CopyRow, Fact, LangToggle, MoneyLine, StepsBar, StickyActionBar, ToastV
        (./ContractPrintDoc) như bản cũ.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const STATUS_TONE: Record<ContractStatus, Tone> = {
-  draft: "gray",
-  sent: "amber",
-  approved: "blue",
-  in_progress: "teal",
-  post_production: "violet",
-  completed: "green",
-  cancelled: "red",
+/* Nhãn trạng thái viết cho KHÁCH (bản in vẫn dùng CONTRACT_STATUS_LABEL như bản cũ). */
+const STATUS: Record<ContractStatus, { tone: Tone; vi: string; en: string }> = {
+  draft: { tone: "gray", vi: "Bản nháp", en: "Draft" },
+  sent: { tone: "amber", vi: "Chờ bạn ký", en: "Awaiting signature" },
+  approved: { tone: "blue", vi: "Đã ký", en: "Signed" },
+  in_progress: { tone: "teal", vi: "Đang thực hiện", en: "In progress" },
+  post_production: { tone: "violet", vi: "Đang hậu kỳ", en: "Editing photos" },
+  completed: { tone: "green", vi: "Hoàn thành", en: "Completed" },
+  cancelled: { tone: "red", vi: "Đã huỷ", en: "Cancelled" },
 };
 
 type Action = { label: string; icon: LucideIcon; onClick?: () => void; href?: string; external?: boolean; note: React.ReactNode };
@@ -130,7 +131,7 @@ export default function ContractViewV2({
 
   return (
     <>
-      <CustomerRootV2 className="no-print">
+      <CustomerRootAuto className="no-print">
         <CustomerHeaderV2
           brand={headerBrand}
           sub={L("Hợp đồng dịch vụ", "Service contract")}
@@ -196,7 +197,7 @@ export default function ContractViewV2({
             onClose={() => p.setPaidNow(null)}
           />
         )}
-      </CustomerRootV2>
+      </CustomerRootAuto>
 
       {/* Bản in chính thức (đen trắng, A4) — dùng chung với bản cũ. */}
       {c && (
@@ -329,7 +330,7 @@ function Body({
       sub:
         p.collected <= 0 && p.balance > 0
           ? L(
-              `Đọc kỹ nội dung bên dưới rồi ký xác nhận. Sau khi ký, bạn chuyển ${p.nextDue ? p.nextDue.label.toLowerCase() : "khoản cọc"} ${vnd(p.dueAmount)} để giữ lịch.`,
+              `Đọc kỹ nội dung bên dưới rồi ký xác nhận. Sau khi ký, bạn thanh toán ${p.nextDue ? `“${p.nextDue.label}”` : "khoản cọc"} ${vnd(p.dueAmount)}.`,
               `Read the contract below, then sign. After signing, transfer ${vnd(p.dueAmount)} to hold your date.`,
             )
           : L("Đọc kỹ nội dung bên dưới rồi ký xác nhận. Có điểm chưa ổn? Gửi yêu cầu chỉnh sửa cho studio trước.", "Read the contract below, then sign. Something off? Ask the studio to change it first."),
@@ -451,8 +452,8 @@ function Body({
                     </span>
                   </>
                 )}
-                <Badge tone={STATUS_TONE[c.status]} dot>
-                  {CONTRACT_STATUS_LABEL[c.status]}
+                <Badge tone={STATUS[c.status].tone} dot>
+                  {p.lang === "vi" ? STATUS[c.status].vi : STATUS[c.status].en}
                 </Badge>
               </div>
               <h1 className="mt-2 text-[20px] font-bold leading-snug tracking-[-0.3px] sm:text-[24px]" style={{ textWrap: "pretty" }}>
@@ -541,7 +542,7 @@ function Body({
 
           <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:gap-5">
             <Stack gap={16}>
-              {p.quoteOptions.length > 0 && <QuoteOptionsSection p={p} L={L} />}
+              {p.quoteOptions.length > 0 && <QuoteOptionsSection p={p} />}
               <ItemsSection p={p} L={L} />
               <ClientAddendaV2 id="v2-addenda" token={token} phone={p.phone} lang={p.lang} addenda={p.addenda} onSigned={() => p.fetchContract(p.phone)} />
               {(c.event_date || p.milestones.length > 0) && <ScheduleSection p={p} L={L} />}
@@ -601,7 +602,7 @@ function TrackingLink({ token, L, className = "" }: { token: string; L: Tr; clas
 }
 
 /* ── Chọn gói dịch vụ (studio gửi nhiều phương án) ── */
-function QuoteOptionsSection({ p, L }: { p: ContractPortal; L: Tr }) {
+function QuoteOptionsSection({ p }: { p: ContractPortal }) {
   return (
     <Section icon={Package} title={p.t("quoteTitle")} desc={p.t("quotePrompt")}>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -698,7 +699,7 @@ function ItemsSection({ p, L }: { p: ContractPortal; L: Tr }) {
         </>
       )}
 
-      <div className="px-4 py-4 sm:px-5" style={{ background: "var(--sf2)", borderTop: "1px solid var(--bd2)" }}>
+      <div className="-mt-px px-4 py-4 sm:px-5" style={{ background: "var(--sf2)", borderTop: "1px solid var(--bd2)" }}>
         {(p.surcharge > 0 || p.printing > 0) && <MoneyLine label={L("Giá trị dịch vụ", "Services")} value={vnd(p.itemsTotal)} />}
         {p.surcharge > 0 && <MoneyLine label={L("Chi phí phát sinh", "Surcharges")} value={vnd(p.surcharge)} />}
         {p.printing > 0 && <MoneyLine label={L("Chi phí in ấn", "Printing")} value={vnd(p.printing)} />}
@@ -887,7 +888,7 @@ function PaySection({ p, L, overdue, openPay }: { p: ContractPortal; L: Tr; over
                       {row.paid ? <Check size={15} strokeWidth={2.6} /> : late ? <CircleAlert size={15} /> : <span className="h-2 w-2 rounded-full" style={{ background: "currentColor" }} />}
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-semibold">{row.label}</p>
+                      <p className="break-words text-[14px] font-semibold leading-snug">{row.label}</p>
                       <p className="text-[12.5px]" style={{ color: row.paid ? "var(--gn)" : late ? "var(--rd)" : "var(--tx3)" }}>
                         {row.paid
                           ? `${L("Đã thanh toán", "Paid")}${row.paid_at ? ` · ${fmtDate(row.paid_at)}` : ""}`
@@ -899,11 +900,15 @@ function PaySection({ p, L, overdue, openPay }: { p: ContractPortal; L: Tr; over
                     <span className="flex-none whitespace-nowrap text-[14px] font-semibold" style={{ fontVariantNumeric: "tabular-nums" }}>
                       {vnd(row.amount)}
                     </span>
-                    {!row.paid && p.bank.bin && (
-                      <button type="button" onClick={() => openPay(row.id)} className={iconBtn()} aria-label={`${L("Mã QR", "QR")} · ${row.label}`} title={L("Mã QR chuyển khoản", "Transfer QR")}>
-                        <QrCode size={17} />
-                      </button>
-                    )}
+                    {p.bank.bin &&
+                      p.unpaidPlan.length > 0 &&
+                      (row.paid ? (
+                        <span className="w-9 flex-none" aria-hidden />
+                      ) : (
+                        <button type="button" onClick={() => openPay(row.id)} className={iconBtn()} aria-label={`${L("Mã QR", "QR")} · ${row.label}`} title={L("Mã QR chuyển khoản", "Transfer QR")}>
+                          <QrCode size={17} />
+                        </button>
+                      ))}
                   </div>
                 );
               })}
@@ -974,7 +979,7 @@ function ProofUpload({ p, L }: { p: ContractPortal; L: Tr }) {
         />
         <Upload size={22} className="mx-auto mb-1.5" style={{ color: p.proofUploading ? "var(--ac)" : "var(--tx3)" }} />
         <p className="text-[14px] font-semibold" style={{ color: p.proofUploading ? "var(--ac)" : "var(--tx2)" }}>
-          {p.proofUploading ? L("Đang tải lên…", "Uploading…") : L("Chạm để chọn ảnh chuyển khoản", "Tap to choose the receipt")}
+          {p.proofUploading ? L("Đang tải lên…", "Uploading…") : L("Bấm để chọn ảnh chuyển khoản", "Choose the receipt photo")}
         </p>
         {!p.proofUploading && (
           <p className="mt-0.5 text-[12px]" style={{ color: "var(--tx3)" }}>
@@ -1001,7 +1006,7 @@ function TermsSection({ p, L }: { p: ContractPortal; L: Tr }) {
   const FIRST = 4;
   const lines = open ? p.termLines : p.termLines.slice(0, FIRST);
   return (
-    <Section icon={FileText} title={L("Điều khoản", "Terms")} desc={L(`${p.termLines.length} điều khoản · đọc trước khi ký`, `${p.termLines.length} terms · read before signing`)}>
+    <Section icon={FileText} title={L("Điều khoản", "Terms")} desc={p.signed ? L(`${p.termLines.length} điều khoản`, `${p.termLines.length} terms`) : L(`${p.termLines.length} điều khoản · đọc trước khi ký`, `${p.termLines.length} terms · read before signing`)}>
       <ul className="flex flex-col gap-2">
         {lines.map((line, i) => (
           <li key={i} className="flex gap-2.5">
@@ -1523,7 +1528,7 @@ function PayModal({
         )}
         {url ? (
           <div className="flex justify-center">
-            <img src={url} alt="VietQR" width={232} height={232} className="h-[232px] w-[232px] rounded-[16px] bg-white object-contain p-2" style={{ border: "1px solid var(--bd)" }} />
+            <img src={url} alt="VietQR" width={232} height={232} className="h-[208px] w-[208px] rounded-[16px] bg-white object-contain p-2 sm:h-[232px] sm:w-[232px]" style={{ border: "1px solid var(--bd)" }} />
           </div>
         ) : (
           <Callout tone="amber" icon={CircleAlert} title={L("Studio chưa cài số tài khoản", "No bank account set up")}>

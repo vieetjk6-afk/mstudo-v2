@@ -1,13 +1,12 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft, CalendarHeart, Clock, FileSpreadsheet, Heart, LayoutDashboard, ListChecks, Loader2, Lock, Palette, Store, Users, Wallet,
 } from "lucide-react";
 import DateInput from "@/components/DateInput";
 import { fmtDateLunar } from "@/lib/date";
-import { matchGuestRsvps } from "@/lib/wedding-guests";
 import { daysUntil, type GuestReply, type PlanOp, type WeddingPlanData } from "@/lib/wedding-plan";
 import { SaveBadge, card, type Ctx, type PlannerTab, type SaveState } from "./ui";
 import OverviewTab from "./tabs/Overview";
@@ -18,6 +17,7 @@ import VendorsTab from "./tabs/Vendors";
 import DayTab from "./tabs/Day";
 import StyleTab from "./tabs/Style";
 import type { PlannerPayload } from "./types";
+import { usePlanExport, usePlannerReplies } from "./usePlanner";
 
 export type { PlannerTab, SaveState } from "./ui";
 
@@ -73,16 +73,8 @@ export default function PlannerView({
   const tabs = TABS.filter(([, , , ext]) => !ext || data.ext);
   const tabBar = useRef<HTMLDivElement>(null);
 
-  // Phản hồi qua thiệp → khách trong danh sách, khớp theo tên (bỏ dấu, hoa /
-  // thường). Tính lại mỗi lần danh sách đổi, để khách vừa thêm cũng khớp ngay.
-  // Chế độ Quà cưới: máy chủ đã ghi phản hồi vào danh sách — không phủ thêm.
-  const { replies, unmatched } = useMemo(() => {
-    const r: Record<string, GuestReply> = {};
-    if (data.combo || !data.invite?.replies.length) return { replies: r, unmatched: [] };
-    const m = matchGuestRsvps(plan.guests.map((g) => g.name), data.invite.replies.map((x) => ({ ...x, wish: null })));
-    for (const s of m.guests) if (s.rsvp) r[plan.guests[s.index].id] = { attending: s.rsvp.attending, num_guests: s.rsvp.num_guests };
-    return { replies: r, unmatched: m.others };
-  }, [plan.guests, data.invite, data.combo]);
+  // Phản hồi qua thiệp → khách trong danh sách, khớp theo tên (./usePlanner).
+  const { replies, unmatched } = usePlannerReplies(data, plan);
 
   // Tab đang mở luôn nằm trong tầm nhìn của thanh tab cuộn ngang (điện thoại).
   useEffect(() => {
@@ -196,28 +188,8 @@ export default function PlannerView({
 function ExportButton({
   data, plan, today, replies,
 }: { data: PlannerPayload; plan: WeddingPlanData; today: string; replies: Record<string, GuestReply> }) {
-  const [busy, setBusy] = useState(false);
-  async function run() {
-    setBusy(true);
-    try {
-      const { downloadPlanXlsx } = await import("@/lib/wedding-plan-export");
-      await downloadPlanXlsx({
-        plan,
-        couple: data.contract.client_name || data.contract.title,
-        studio: { name: data.studio_name, phone: data.studio_phone },
-        auto: data.auto,
-        studioLine: data.studio_line,
-        studioDay: data.studio_day,
-        replies,
-        today,
-        ext: data.ext,
-      });
-    } catch {
-      window.alert("Chưa tạo được file Excel — bạn thử lại sau giây lát nhé.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  // Dựng file ngay trong trình duyệt — dùng chung với bản giao diện mới (./usePlanner).
+  const { busy, run } = usePlanExport({ data, plan, today, replies });
   return (
     <button
       type="button"

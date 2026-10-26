@@ -1,9 +1,13 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getFeatureFlags, plannerComingSoon } from "@/lib/feature-flags";
 import WeddingPlanner from "./WeddingPlanner";
+import WeddingPlannerV2 from "./WeddingPlannerV2";
 import { studioShareMetadata } from "@/lib/studio-share-meta";
+import { customerUiV2 } from "@/lib/ui-server";
+import { getStudioBrand } from "@/lib/studio-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -18,13 +22,19 @@ export const dynamic = "force-dynamic";
    — trừ hợp đồng của tài khoản admin, để admin thử trọn vòng trước khi mở.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
-  const params = await props.params;
+/** Tên + chủ hợp đồng — metadata và trang dùng chung MỘT lượt đọc (cache theo lượt dựng). */
+const contractHead = cache(async (token: string) => {
   const { data } = await createAdminClient()
     .from("studio_contracts")
     .select("client_name, title, owner_id")
-    .eq("client_token", params.token)
+    .eq("client_token", token)
     .maybeSingle();
+  return data as { client_name: string | null; title: string | null; owner_id: string | null } | null;
+});
+
+export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const params = await props.params;
+  const data = await contractHead(params.token);
   const who = data?.client_name || data?.title;
   const meta = await studioShareMetadata({
     ownerId: data?.owner_id,
@@ -40,13 +50,19 @@ export async function generateMetadata(props: { params: Promise<{ token: string 
 
 export default async function WeddingPlannerPage(props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
+  const c = await contractHead(params.token);
   if (plannerComingSoon(await getFeatureFlags())) {
     const db = createAdminClient();
-    const { data: c } = await db.from("studio_contracts").select("owner_id").eq("client_token", params.token).maybeSingle();
-    const { data: owner } = c
+    const { data: owner } = c?.owner_id
       ? await db.from("profiles").select("role").eq("id", c.owner_id).maybeSingle()
       : { data: null };
     if (owner?.role !== "admin") notFound();
+  }
+  // Giao diện mới theo studio sở hữu hợp đồng (xem customerUiV2). Thương hiệu
+  // studio cho cổng SĐT chỉ đọc khi bật — bản cũ không tốn gì thêm.
+  if (c?.owner_id && (await customerUiV2(c.owner_id))) {
+    const brand = await getStudioBrand(createAdminClient(), c.owner_id);
+    return <WeddingPlannerV2 token={params.token} brand={brand} />;
   }
   return <WeddingPlanner token={params.token} />;
 }

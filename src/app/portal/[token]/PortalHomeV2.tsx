@@ -220,7 +220,7 @@ export default function PortalHomeV2({
         </Card>
 
         {/* Ba ô trạng thái — điện thoại: ngay dưới thẻ đầu; máy tính: cột phải. */}
-        <div className="v2-statgrid v2-statgrid-3 lg:hidden">{tiles}</div>
+        <div className="lg:hidden"><div className="v2-statgrid v2-statgrid-3">{tiles}</div></div>
 
         <TimelineSection timeline={timeline} today={today} />
 
@@ -235,8 +235,8 @@ export default function PortalHomeV2({
                     <Package size={17} />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="min-w-0 flex-1 truncate text-[14px] font-semibold">{p.name}</p>
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 flex-1 text-[14px] font-semibold leading-snug" style={{ textWrap: "pretty" }}>{p.name}</p>
                       <Badge tone={tone}>{PRODUCT_STATUS_LABEL[p.status]}</Badge>
                     </div>
                     <div className="mt-1.5 flex items-center gap-2.5">

@@ -64,10 +64,10 @@ export default function PaymentPanelV2({
               <div className="mt-4 flex items-center gap-3 rounded-[12px] px-3.5 py-3" style={{ background: overdue ? "var(--rdS)" : "var(--sf2)" }}>
                 {overdue ? <AlertCircle size={18} style={{ color: "var(--rd)", flex: "none" }} /> : <Clock size={18} style={{ color: "var(--am)", flex: "none" }} />}
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13.5px] font-semibold">Đợt tiếp theo · {nextDue.label}</p>
                   <p className="text-[12.5px]" style={{ color: overdue ? "var(--rd)" : "var(--tx3)" }}>
-                    {nextDue.due_date ? `${overdue ? "Quá hạn từ" : "Hạn"} ${fmtDate(nextDue.due_date)}` : "Chưa đặt hạn"}
+                    Đợt tiếp theo · {nextDue.due_date ? `${overdue ? "quá hạn từ" : "hạn"} ${fmtDate(nextDue.due_date)}` : "chưa đặt hạn"}
                   </p>
+                  <p className="text-[14px] font-semibold leading-snug" style={{ textWrap: "pretty" }}>{nextDue.label}</p>
                 </div>
                 <span className="tnum flex-none text-[14px] font-bold">{vnd(nextDue.amount)}</span>
               </div>

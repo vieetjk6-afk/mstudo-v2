@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ContractPortalView from "./ContractPortalView";
+import ContractPortalViewV2 from "./ContractPortalViewV2";
 import { studioShareMetadata } from "@/lib/studio-share-meta";
+import { customerUiV2 } from "@/lib/ui-server";
+import { getStudioBrand } from "@/lib/studio-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -19,14 +23,19 @@ export const dynamic = "force-dynamic";
    mới không phải dựng lại cổng chặn theo số điện thoại.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
-  const params = await props.params;
-  const db = createAdminClient();
-  const { data } = await db
+/** Tên + chủ hợp đồng — metadata và trang dùng chung MỘT lượt đọc (cache theo lượt dựng). */
+const contractHead = cache(async (token: string) => {
+  const { data } = await createAdminClient()
     .from("studio_contracts")
     .select("title, client_name, owner_id")
-    .eq("client_token", params.token)
+    .eq("client_token", token)
     .maybeSingle();
+  return data as { title: string | null; client_name: string | null; owner_id: string | null } | null;
+});
+
+export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const params = await props.params;
+  const data = await contractHead(params.token);
 
   const title = data?.client_name ? `Trang của ${data.client_name}` : data?.title || "Trang khách hàng";
   const meta = await studioShareMetadata({
@@ -43,5 +52,12 @@ export async function generateMetadata(props: { params: Promise<{ token: string 
 
 export default async function ContractPortalPage(props: { params: Promise<{ token: string }> }) {
   const params = await props.params;
+  // Giao diện mới theo studio sở hữu hợp đồng (xem customerUiV2). Bản V2 cần
+  // thương hiệu studio cho cổng SĐT — chỉ đọc khi bật, bản cũ không tốn gì thêm.
+  const ownerId = (await contractHead(params.token))?.owner_id ?? null;
+  if (ownerId && (await customerUiV2(ownerId))) {
+    const brand = await getStudioBrand(createAdminClient(), ownerId);
+    return <ContractPortalViewV2 token={params.token} brand={brand} />;
+  }
   return <ContractPortalView token={params.token} />;
 }

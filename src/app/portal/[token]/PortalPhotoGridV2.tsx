@@ -29,7 +29,7 @@ export default function PortalPhotoGridV2({
 
   return (
     <>
-      <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(168px, 30vw), 1fr))" }}>
+      <div className="grid gap-1.5 sm:gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(168px, 28vw), 1fr))" }}>
         {photos.slice(0, shown).map((p, i) => (
           <div key={p.id} className="group relative overflow-hidden rounded-[10px]" style={{ aspectRatio: "4 / 5", background: "var(--sf2)" }}>
             <button type="button" onClick={() => setOpen(i)} className="block h-full w-full" aria-label={`Xem ảnh ${p.name}`}>

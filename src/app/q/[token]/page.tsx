@@ -4,6 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { effectivePlan, studioTier } from "@/lib/plans";
 import QuoteClientView from "./QuoteClientView";
+import QuoteClientViewV2 from "./QuoteClientViewV2";
+import { customerUiV2 } from "@/lib/ui-server";
 import type { StudioQuote, QuoteItem, QuoteAdjustment } from "@/lib/types";
 import { studioShareMetadata } from "@/lib/studio-share-meta";
 
@@ -58,10 +60,11 @@ export default async function QuoteClientPage(props: { params: Promise<{ token: 
     ? studioTier(effectivePlan(owner.plan, owner.plan_expires_at), owner.role === "admin") === "full"
     : false;
 
-  const brand = await getStudioBrand(db, quote.owner_id);
+  const [brand, v2] = await Promise.all([getStudioBrand(db, quote.owner_id), customerUiV2(quote.owner_id)]);
+  const View = v2 ? QuoteClientViewV2 : QuoteClientView;
 
   return (
-    <QuoteClientView
+    <View
       quote={quote as StudioQuote}
       initialItems={(items ?? []) as QuoteItem[]}
       initialAdjustments={(adjustments ?? []) as QuoteAdjustment[]}

@@ -136,21 +136,21 @@ function DeliveredAlbum({
             </h2>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 px-4 py-3 sm:px-5">
-          <p className="min-w-0 flex-1 text-[13px]" style={{ color: "var(--tx2)" }}>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2.5 px-4 py-3 sm:px-5">
+          <p className="w-full text-[13px] sm:w-auto sm:min-w-0 sm:flex-1" style={{ color: "var(--tx2)" }}>
             <span className="tnum font-semibold" style={{ color: "var(--tx)" }}>{photos.length}</span> ảnh ·{" "}
             <span className="tnum font-semibold" style={{ color: "var(--tx)" }}>{videos.length}</span> video
             {canDownload ? " · tải được từng ảnh" : ""}
           </p>
-          <button type="button" onClick={share} className={btn("secondary", "md")}>
+          <button type="button" onClick={share} className={btn("secondary", "md", "flex-1 sm:flex-none")}>
             <Share2 size={16} /> Chia sẻ
           </button>
           {albumLink ? (
-            <a href={albumLink} target="_blank" rel="noopener noreferrer" className={btn("primary", "md")}>
+            <a href={albumLink} target="_blank" rel="noopener noreferrer" className={btn("primary", "md", "flex-[2] sm:flex-none")}>
               <Images size={16} /> Mở album hoàn thiện
             </a>
           ) : album ? (
-            <Link href={`/album/${album.slug}`} className={btn("primary", "md")}>
+            <Link href={`/album/${album.slug}`} className={btn("primary", "md", "flex-[2] sm:flex-none")}>
               <Download size={16} /> Tải toàn bộ
             </Link>
           ) : null}

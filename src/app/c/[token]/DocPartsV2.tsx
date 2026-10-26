@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Languages } from "lucide-react";
 import { btn } from "@/components/v2/kit";
+import { CustomerRootV2 } from "@/components/v2/customer";
+import { useTheme } from "@/lib/theme";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    KHỐI NHỎ DÙNG CHUNG cho các trang tài liệu gửi khách ở giao diện mới (hợp
@@ -13,6 +15,20 @@ import { btn } from "@/components/v2/kit";
 
 function cx(...a: (string | false | null | undefined)[]) {
   return a.filter(Boolean).join(" ");
+}
+
+/**
+ * <CustomerRootV2> đi theo nền sáng/tối người xem đang dùng (như bản cũ của
+ * trang hợp đồng/báo giá: `:root[data-theme="dark"] .client-doc`). Mặc định
+ * nền sáng — khách chưa từng chọn thì luôn sáng.
+ */
+export function CustomerRootAuto({ children, className }: { children: React.ReactNode; className?: string }) {
+  const { theme } = useTheme();
+  return (
+    <CustomerRootV2 theme={theme} className={className}>
+      {children}
+    </CustomerRootV2>
+  );
 }
 
 /**
@@ -39,9 +55,11 @@ export function StickyActionBar({ show, children, always = false }: { show: bool
   return (
     <div
       aria-hidden={!show}
-      className={cx("fixed inset-x-0 bottom-0 z-40 transition-transform duration-200", !always && "lg:hidden")}
+      className={cx("fixed inset-x-0 bottom-0 z-40", !always && "lg:hidden")}
       style={{
         transform: show ? "translateY(0)" : "translateY(110%)",
+        visibility: show ? "visible" : "hidden",
+        transition: show ? "transform .2s ease" : "transform .2s ease, visibility 0s linear .2s",
         background: "color-mix(in srgb, var(--sf) 94%, transparent)",
         backdropFilter: "blur(14px)",
         WebkitBackdropFilter: "blur(14px)",
@@ -124,7 +142,7 @@ export function CopyRow({
           {label}
         </p>
         <p
-          className={cx("break-words", strong ? "text-[16px] font-bold" : "text-[14px] font-semibold", mono && "font-mono tracking-wide")}
+          className={cx("break-words", strong ? "text-[16px] font-bold" : "text-[14px] font-semibold", mono && "tracking-[0.03em]")}
           style={{ fontVariantNumeric: "tabular-nums" }}
         >
           {value}

@@ -87,7 +87,7 @@ export function PortalGateV2({
               onChange={(e) => setPhone(e.target.value)}
             />
           </label>
-          {err ? <Callout tone="red">{err}</Callout> : null}
+          {err ? <Callout tone="red" title={err} /> : null}
           <button type="submit" disabled={loading} className={btn("primary", "lg", "w-full")}>
             {loading ? <Loader2 size={17} className="animate-spin" /> : null}
             {loading ? "Đang mở…" : submitLabel}

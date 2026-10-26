@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PRICE_LISTS } from "@/lib/pricelist-seeds";
 import PricelistPoster from "@/components/PricelistPoster";
+import PricelistV2 from "@/app/gia/PricelistV2";
+import { customerUiV2 } from "@/lib/ui-server";
 import type { PricelistItem } from "@/lib/types";
 import type { Metadata } from "next";
 import { studioShareMetadata } from "@/lib/studio-share-meta";
@@ -92,8 +94,11 @@ export default async function PublicPricelist(
   let theme: { bg?: string | null; text?: string | null; accent?: string | null; logo?: string | null } | undefined;
   if (th) theme = { bg: th.pl_bg, text: th.pl_text, accent: th.pl_accent, logo: th.pl_logo_url };
 
+  // Giao diện mới đi theo studio sở hữu bảng giá; màu pl_* vẫn áp dụng ở cả hai bản.
+  const Poster = (await customerUiV2(owner.id)) ? PricelistV2 : PricelistPoster;
+
   return (
-    <PricelistPoster
+    <Poster
       contact={owner as never}
       items={items}
       lists={lists}

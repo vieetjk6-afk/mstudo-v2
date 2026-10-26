@@ -8,6 +8,9 @@ import { isDeliveryPhase } from "@/lib/album-phase";
 import { getAlbumOwner } from "@/lib/album-owner";
 import StudioBrandMark from "@/components/StudioBrandMark";
 import GalleryView from "./GalleryView";
+import GalleryViewV2 from "./GalleryViewV2";
+import AlbumUnavailableV2 from "@/app/a/[slug]/AlbumUnavailableV2";
+import { customerUiV2 } from "@/lib/ui-server";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { getOriginalFolders } from "@/lib/album-original";
@@ -70,10 +73,13 @@ export default async function GalleryPage(
   // chết, đưa khách sang đúng trang chọn ảnh của chính album đó.
   if (album && !isDelivery && album.status === "published") redirect(`/a/${album.slug}`);
   if (!album || !isDelivery || album.status !== "published") {
+    const ownerBrand = album?.owner_id ? (await getAlbumOwner(album.owner_id)).brand : null;
+    // Giao diện mới theo studio sở hữu album (xem customerUiV2).
+    if (await customerUiV2(album?.owner_id)) return <AlbumUnavailableV2 brand={ownerBrand} title="Album không khả dụng" />;
     return (
       <main className="flex min-h-screen flex-col">
         <header className="flex items-center px-6 py-5 md:px-10">
-          <StudioBrandMark brand={album?.owner_id ? (await getAlbumOwner(album.owner_id)).brand : null} />
+          <StudioBrandMark brand={ownerBrand} />
         </header>
         <div className="flex flex-1 items-center justify-center px-6 text-center">
           <p style={{ color: "var(--text2)" }}>Album không khả dụng.</p>
@@ -88,7 +94,7 @@ export default async function GalleryPage(
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
   // Chủ album (gói + thương hiệu) lấy từ getAlbumOwner — đã cache theo request
   // nên dùng lại đúng dòng profiles generateMetadata vừa đọc.
-  const [{ brand, profile: owner }, studioHost, allPhotos, { data: s }, { data: feedback }, { data: ppl }, { data: pplLinks }, print] = await Promise.all([
+  const [{ brand, profile: owner }, studioHost, allPhotos, { data: s }, { data: feedback }, { data: ppl }, { data: pplLinks }, print, v2] = await Promise.all([
     getAlbumOwner(album.owner_id),
     // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
     // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
@@ -113,6 +119,8 @@ export default async function GalleryPage(
     // Ảnh in tặng của hợp đồng (null = không tặng in, hoặc DB chưa chạy
     // migrations/anh_in_tang.sql). Chỉ là id ảnh — gửi cả khi album có mật khẩu.
     loadPrintState(admin, album.id).catch(() => null),
+    // Giao diện mới (V2) hay bản cũ — theo studio sở hữu album. Cache theo lượt dựng.
+    customerUiV2(album.owner_id),
   ]);
   const studioName = brand.name;
 
@@ -173,9 +181,11 @@ export default async function GalleryPage(
     originalFolders = await getOriginalFolders(admin, album.id, s ?? []);
   }
 
+  // Hai bản nhận ĐÚNG cùng một bộ prop (logic chung ở ./useGalleryView).
+  const Gallery = v2 ? GalleryViewV2 : GalleryView;
   return (
     <>
-      <GalleryView
+      <Gallery
         gallery={{
           id: album.id,
           slug: album.slug,

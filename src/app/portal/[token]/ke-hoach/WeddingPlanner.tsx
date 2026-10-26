@@ -1,15 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CalendarHeart } from "lucide-react";
-import { useToast } from "@/components/studio/Toast";
-import { forgetDevice, readPhone, rememberPhone } from "@/lib/portal-device";
 import { todayVN } from "@/lib/date";
-import { applyPlanOp, planErrorText, type PlanOp, type WeddingPlanData } from "@/lib/wedding-plan";
 import WeddingEditor from "@/app/thiep/sua/[token]/WeddingEditor";
-import PlannerView, { type PlannerTab, type SaveState } from "./PlannerView";
-import type { PlannerOpResponse, PlannerPayload } from "./types";
+import PlannerView from "./PlannerView";
+import { useWeddingPlanner } from "./usePlanner";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    KẾ HOẠCH CƯỚI — trang thật: cổng SĐT, tải dữ liệu, lưu từng thao tác.
@@ -30,216 +26,13 @@ import type { PlannerOpResponse, PlannerPayload } from "./types";
 
 const card: React.CSSProperties = { background: "var(--sf)", border: "1px solid var(--bd)" };
 
-/** Mã lỗi mở trang → câu cho khách. */
-function openErrorText(code?: string): string {
-  switch (code) {
-    case "wrong_phone": return "Số điện thoại không khớp. Vui lòng kiểm tra lại.";
-    case "not_found": return "Không tìm thấy hợp đồng.";
-    case "disabled": return "Studio chưa mở kế hoạch cưới cho hợp đồng này.";
-    case "coming_soon": return "Kế hoạch cưới sắp ra mắt — studio sẽ báo bạn khi mở.";
-    case "not_ready": return "Studio đang cài đặt tính năng này. Bạn quay lại sau nhé.";
-    case "rate_limited": return "Bạn thử quá nhiều lần. Đợi một phút rồi thử lại.";
-    case "offline": return "Đang mất mạng. Hãy thử lại khi có mạng.";
-    default: return "Có lỗi xảy ra, thử lại sau.";
-  }
-}
-
 export default function WeddingPlanner({ token }: { token: string }) {
-  const [phone, setPhone] = useState("");
-  const [unlocked, setUnlocked] = useState("");
-  const [data, setData] = useState<PlannerPayload | null>(null);
-  const [plan, setPlan] = useState<WeddingPlanData | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [autoTrying, setAutoTrying] = useState(() => !!readPhone(token));
-  const [saving, setSaving] = useState<SaveState>("idle");
-  const { toast, toastNode } = useToast();
-  const [view, setView] = useState<"plan" | "invite">("plan");
-  const [returnTab, setReturnTab] = useState<PlannerTab>("overview");
-
-  /** Bản máy chủ mới nhất + các thao tác chưa lưu xong (theo thứ tự). */
-  const server = useRef<WeddingPlanData | null>(null);
-  const queue = useRef<PlanOp[]>([]);
-  const busy = useRef(false);
-  /** Tab kế hoạch đang mở — quay về từ thiệp thì về đúng tab đó. */
-  const tabNow = useRef<PlannerTab>("overview");
-  /** Trình sửa thiệp còn thay đổi chưa lưu. */
-  const editorDirty = useRef(false);
-  /** Mục "#thiep" trong lịch sử trình duyệt do chính trang này thêm vào. */
-  const pushed = useRef(false);
-  const viewRef = useRef(view);
-  viewRef.current = view;
-  const unlockedRef = useRef(unlocked);
-  unlockedRef.current = unlocked;
-
-  const replay = useCallback((): WeddingPlanData | null => {
-    if (!server.current) return null;
-    return queue.current.reduce<WeddingPlanData>((p, o) => {
-      const r = applyPlanOp(p, o);
-      return r.ok ? r.plan : p;
-    }, server.current);
-  }, []);
-
-  const open = useCallback(
-    async (p: string, remember: boolean): Promise<{ ok: boolean; error?: string }> => {
-      try {
-        const res = await fetch(`/api/c/${token}/ke-hoach`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: p }),
-        });
-        const j = (await res.json().catch(() => ({}))) as PlannerPayload & { error?: string };
-        if (!res.ok) {
-          if (j.error === "wrong_phone") forgetDevice(token);
-          return { ok: false, error: j.error };
-        }
-        server.current = j.plan;
-        queue.current = [];
-        setData(j);
-        setPlan(j.plan);
-        setUnlocked(p);
-        if (remember) rememberPhone(token, p);
-        // Mở bằng link "…/ke-hoach#thiep" → vào thẳng thiệp.
-        if (j.combo && j.invite && window.location.hash === "#thiep") setView("invite");
-        return { ok: true };
-      } catch {
-        return { ok: false, error: "offline" };
-      }
-    },
-    [token],
-  );
-
-  useEffect(() => {
-    const saved = readPhone(token);
-    if (!saved) return;
-    let alive = true;
-    void open(saved, false).then((r) => {
-      if (!alive) return;
-      setAutoTrying(false);
-      if (!r.ok) setErr(r.error === "wrong_phone" ? "Studio đã cập nhật số điện thoại. Vui lòng nhập lại số mới." : openErrorText(r.error));
-    });
-    return () => { alive = false; };
-  }, [token, open]);
-
-  /** Về kế hoạch: tải lại để thấy thiệp vừa xuất bản, phản hồi mới (trừ khi còn thao tác chưa lưu). */
-  const toPlan = useCallback(() => {
-    setView("plan");
-    window.scrollTo(0, 0);
-    if (!busy.current && !queue.current.length && unlockedRef.current) void open(unlockedRef.current, false);
-  }, [open]);
-
-  const openInvite = useCallback(() => {
-    if (window.location.hash !== "#thiep") {
-      window.history.pushState(null, "", "#thiep");
-      pushed.current = true;
-    }
-    setView("invite");
-    window.scrollTo(0, 0);
-  }, []);
-
-  /** Rời thiệp (trình sửa đã hỏi lại nếu còn thay đổi chưa lưu). */
-  const closeInvite = useCallback((tab?: PlannerTab) => {
-    setReturnTab(tab ?? tabNow.current);
-    editorDirty.current = false;
-    if (pushed.current) {
-      // Lùi đúng một mục lịch sử — popstate bên dưới đưa về kế hoạch.
-      window.history.back();
-      return;
-    }
-    window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    toPlan();
-  }, [toPlan]);
-
-  // Nút quay lại / tiến tới của trình duyệt.
-  useEffect(() => {
-    const onPop = () => {
-      const wantInvite = window.location.hash === "#thiep";
-      if (wantInvite) {
-        if (viewRef.current !== "invite") setView("invite");
-        return;
-      }
-      if (viewRef.current !== "invite") return;
-      if (editorDirty.current && !window.confirm("Thiệp còn thay đổi chưa lưu. Rời đi và bỏ các thay đổi đó?")) {
-        window.history.pushState(null, "", "#thiep");
-        pushed.current = true;
-        return;
-      }
-      pushed.current = false;
-      editorDirty.current = false;
-      toPlan();
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, [toPlan]);
-
-  const onEditorDirty = useCallback((d: boolean) => { editorDirty.current = d; }, []);
-
-  async function unlock(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-    setLoading(true);
-    const r = await open(phone, true);
-    setLoading(false);
-    if (!r.ok) setErr(openErrorText(r.error));
-  }
-
-  async function flush() {
-    if (busy.current) return;
-    busy.current = true;
-    setSaving("saving");
-    let failed = false;
-    let reload = false;
-    while (queue.current.length) {
-      const o = queue.current[0];
-      let res: Response | null = null;
-      try {
-        res = await fetch(`/api/c/${token}/ke-hoach`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ phone: unlocked, op: o }),
-        });
-      } catch {
-        res = null;
-      }
-      if (!res) {
-        // Mất mạng: bỏ hết thao tác chờ, trả về bản máy chủ — không để khách
-        // tưởng đã lưu một thứ chưa lên tới đâu.
-        queue.current = [];
-        failed = true;
-        toast(planErrorText("offline"));
-        break;
-      }
-      const j = (await res.json().catch(() => ({}))) as Partial<PlannerOpResponse>;
-      queue.current.shift();
-      if (j.plan) server.current = j.plan;
-      if (!res.ok) {
-        failed = true;
-        toast(planErrorText(j.error ?? ""));
-      } else if (o.op === "set_date") {
-        // Ngày cưới đổi thì lịch hẹn studio trong ngày cưới cũng đổi theo.
-        reload = true;
-      }
-      setPlan(replay());
-    }
-    setPlan(replay());
-    busy.current = false;
-    setSaving(failed ? "error" : "saved");
-    if (reload && !queue.current.length) void open(unlocked, false);
-  }
-
-  function onOp(o: PlanOp) {
-    const shown = replay();
-    if (!shown) return;
-    // Thao tác hỏng ngay ở máy khách (ô trống, quá dài…) thì khỏi gửi.
-    const r = applyPlanOp(shown, o);
-    if (!r.ok) {
-      toast(planErrorText(r.error));
-      return;
-    }
-    queue.current.push(o);
-    setPlan(r.plan);
-    void flush();
-  }
+  // Cổng SĐT, hàng đợi lưu, trình sửa thiệp nhúng — dùng chung với bản giao
+  // diện mới (./usePlanner).
+  const {
+    phone, setPhone, data, plan, err, loading, autoTrying, saving, toastNode, view, returnTab,
+    unlock, onOp, openInvite, closeInvite, onEditorDirty, setTab,
+  } = useWeddingPlanner(token);
 
   if (!data || !plan) {
     if (autoTrying) {
@@ -311,7 +104,7 @@ export default function WeddingPlanner({ token }: { token: string }) {
         onOp={onOp}
         saving={saving}
         initialTab={returnTab}
-        onTab={(t) => { tabNow.current = t; }}
+        onTab={setTab}
         onOpenInvite={data.combo && data.invite ? openInvite : undefined}
       />
       {toastNode}
