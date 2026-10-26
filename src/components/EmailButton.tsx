@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Mail, Check } from "lucide-react";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { btn } from "@/components/v2/kit";
 
 /** Send a prepared email to a client via /api/studio/email. */
 export default function EmailButton({
@@ -9,7 +11,7 @@ export default function EmailButton({
   subject,
   message,
   label = "Gửi email",
-  className = "btn-ghost px-3 py-2 text-xs",
+  className,
 }: {
   to: string | null | undefined;
   subject: string;
@@ -17,6 +19,9 @@ export default function EmailButton({
   label?: string;
   className?: string;
 }) {
+  // Giao diện mới: không truyền lớp riêng thì dùng nút phụ cỡ "sm" của bộ khối.
+  const v2 = useUiV2();
+  const cls = className ?? (v2 ? btn("secondary", "sm") : "btn-ghost px-3 py-2 text-xs");
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   if (!to) return null;
 
@@ -42,7 +47,7 @@ export default function EmailButton({
   }
 
   return (
-    <button type="button" onClick={send} disabled={state === "sending"} className={className} title={`Gửi email tới ${to}`}>
+    <button type="button" onClick={send} disabled={state === "sending"} className={cls} title={`Gửi email tới ${to}`}>
       {state === "sent" ? <Check size={14} /> : <Mail size={14} />} {state === "sent" ? "Đã gửi" : state === "sending" ? "Đang gửi…" : label}
     </button>
   );

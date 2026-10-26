@@ -1,29 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
 import { Ticket, Download, Copy, Check, ExternalLink, CircleDashed, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { studioUrl } from "@/lib/hosts";
-import { fmtDate, todayVN } from "@/lib/date";
 import { vnd } from "@/lib/types";
 import MessengerButton from "@/components/MessengerButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
-import { VoucherTicket, saveVoucherImage, type TicketData } from "@/components/voucher/VoucherTicket";
-import { loyaltyVoucherMessage } from "@/lib/share-messages";
-import { VOUCHER_COLS, VOUCHER_STATE_LABEL, voucherState, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
-
-type Loyalty = {
-  stage: "off" | "teaser" | "pending" | "issued" | "cancelled";
-  percent: number;
-  tiers: { min: number; percent: number }[];
-  total: number;
-  next: { min: number; percent: number; max?: number | null } | null;
-  progMax: number | null;
-  max: number | null;
-  missing: string[];
-  voucher: Voucher | null;
-};
+import { VoucherTicket, saveVoucherImage } from "@/components/voucher/VoucherTicket";
+import { voucherValueLabel } from "@/lib/vouchers";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { useIssuedVoucher, useLoyaltyVoucher, type IssuedVoucherProps, type LoyaltyVoucherProps } from "./useLoyaltyVoucher";
+import { IssuedVoucherV2 } from "./LoyaltyVoucherCardV2";
 
 /**
  * Voucher ưu đãi của hợp đồng theo CHƯƠNG TRÌNH của studio (cài ở Voucher &
@@ -32,94 +18,9 @@ type Loyalty = {
  * đồng. Ở đây studio xem tiến độ, tắt hoặc đặt % riêng cho hợp đồng này, và
  * gửi / tải voucher khi đã có.
  */
-export default function LoyaltyVoucherCard({
-  contractId,
-  initialPercent,
-  refreshKey,
-  clientName,
-  clientPhone,
-  clientMessenger,
-  studioHost,
-  studioName,
-}: {
-  contractId: string;
-  /** studio_contracts.loyalty_percent: null theo chương trình · 0 tắt · n% riêng */
-  initialPercent: number | null;
-  /** Đổi khi thu tiền / ký thay đổi → hỏi lại máy chủ (có thể vừa đủ điều kiện). */
-  refreshKey: string;
-  clientName: string;
-  clientPhone: string;
-  clientMessenger: string;
-  studioHost: string | null;
-  studioName: string;
-}) {
-  const supabase = createClient();
-  const today = todayVN();
-  const [l, setL] = useState<Loyalty | null>(null);
-  const [others, setOthers] = useState<Voucher[]>([]);
-  const [mode, setMode] = useState<"program" | "off" | "custom">(initialPercent == null ? "program" : initialPercent === 0 ? "off" : "custom");
-  const [custom, setCustom] = useState<number>(initialPercent && initialPercent > 0 ? initialPercent : 5);
-  const [err, setErr] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  /** Vai trò không có quyền voucher (vd. thợ) → ẩn cả thẻ thay vì "Đang tải…" mãi. */
-  const [hidden, setHidden] = useState(false);
-
-  const call = useCallback(
-    async (body: Record<string, unknown>) => {
-      setBusy(true);
-      try {
-        const res = await fetch("/api/studio/vouchers", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ contractId, ...body }),
-        });
-        const j = await res.json().catch(() => ({}));
-        if (res.status === 401 || res.status === 403) {
-          setHidden(true);
-          return;
-        }
-        if (!res.ok) {
-          setErr(j.error === "missing_migration" ? "Cần chạy supabase/voucher-uu-dai.sql trong Supabase trước." : `Lỗi: ${j.error || res.status}`);
-          return;
-        }
-        setErr(null);
-        setL(j.loyalty as Loyalty);
-      } catch {
-        setErr("Lỗi mạng, thử lại nhé.");
-      } finally {
-        setBusy(false);
-      }
-    },
-    [contractId]
-  );
-
-  useEffect(() => {
-    call({ action: "loyalty_status" });
-  }, [call, refreshKey]);
-
-  // Voucher tặng TAY từ trước (bản cũ) vẫn hiện để studio gửi / theo dõi.
-  useEffect(() => {
-    supabase
-      .from("studio_vouchers")
-      .select(VOUCHER_COLS)
-      .eq("source_contract_id", contractId)
-      .eq("program_issued", false)
-      .order("created_at", { ascending: false })
-      .then(({ data }) => setOthers((data ?? []) as Voucher[]));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contractId]);
-
-  function saveMode(next: "program" | "off" | "custom", pct = custom) {
-    setMode(next);
-    call({ action: "contract_loyalty", percent: next === "program" ? null : next === "off" ? 0 : pct });
-  }
-
-  const issued = l?.voucher ?? null;
-  const steps = [
-    { label: "Khách ký hợp đồng", done: !l?.missing.includes("Khách ký hợp đồng") },
-    { label: "Studio xác nhận đã nhận cọc", done: !l?.missing.includes("Studio xác nhận đã nhận cọc") },
-    { label: "Studio ký xác nhận hợp đồng", done: !l?.missing.includes("Studio ký xác nhận hợp đồng") },
-  ];
+export default function LoyaltyVoucherCard(props: LoyaltyVoucherProps) {
+  const { contractId, clientName, clientPhone, clientMessenger, studioHost, studioName } = props;
+  const { today, l, others, mode, custom, setCustom, err, busy, hidden, saveMode, issued, steps } = useLoyaltyVoucher(props);
 
   if (hidden) return null;
 
@@ -202,59 +103,17 @@ export default function LoyaltyVoucherCard({
   );
 }
 
-/** Một voucher đã tặng: thẻ có QR + các nút gửi/chép/tải. Màn Voucher & thẻ quà dùng lại. */
-export function IssuedVoucher({
-  v,
-  today,
-  studioHost,
-  studioName,
-  clientName,
-  clientPhone,
-  clientMessenger,
-  contractId,
-}: {
-  v: Voucher;
-  today: string;
-  studioHost: string | null;
-  studioName: string;
-  clientName: string;
-  clientPhone: string;
-  clientMessenger: string;
-  contractId: string | null;
-}) {
-  const [qr, setQr] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const link = v.public_token ? studioUrl(studioHost, `/voucher/${v.public_token}`) : null;
-  const state = voucherState(v, today);
-  const expires = v.expires_on ? fmtDate(v.expires_on) : null;
-  const message = link
-    ? loyaltyVoucherMessage({ name: clientName, value: voucherValueLabel(v), code: v.code, link, expires, studio: studioName })
-    : "";
+/**
+ * Một voucher đã tặng: thẻ có QR + các nút gửi/chép/tải. Màn Voucher & thẻ quà
+ * dùng lại — trong khung giao diện mới thì vẽ bản V2 (IssuedVoucherV2).
+ */
+export function IssuedVoucher(props: IssuedVoucherProps) {
+  return useUiV2() ? <IssuedVoucherV2 {...props} /> : <IssuedVoucherV1 {...props} />;
+}
 
-  useEffect(() => {
-    if (!link) return;
-    // Nạp thư viện QR lúc cần (chỉ khi đã có voucher) thay vì kéo vào bundle của
-    // trang hợp đồng vốn đã rất nặng. Cờ `stale` chặn setState khi link đổi/unmount.
-    let stale = false;
-    import("qrcode")
-      .then(({ default: QRCode }) => QRCode.toDataURL(link, { margin: 1, width: 480, color: { dark: "#2b2118", light: "#ffffff" } }))
-      .then((url) => { if (!stale) setQr(url); })
-      .catch(() => { if (!stale) setQr(null); });
-    return () => { stale = true; };
-  }, [link]);
-
-  const ticket: TicketData = {
-    studio: studioName,
-    title: v.title,
-    value: voucherValueLabel(v),
-    code: v.code,
-    expires,
-    recipient: v.recipient_name,
-    qr,
-    stateLabel: state === "usable" ? null : VOUCHER_STATE_LABEL[state],
-    terms: voucherTerms(v),
-  };
+function IssuedVoucherV1(props: IssuedVoucherProps) {
+  const { v, clientName, clientPhone, clientMessenger, contractId } = props;
+  const { qr, copied, setCopied, saving, setSaving, link, state, message, ticket } = useIssuedVoucher(props);
 
   return (
     <div className="grid gap-3 sm:grid-cols-[minmax(0,360px)_1fr] sm:items-center">

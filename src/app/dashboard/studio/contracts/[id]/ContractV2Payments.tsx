@@ -31,11 +31,10 @@ import { Drawer, Menu, Modal, Switch, type MenuItem } from "@/components/v2/kit-
 import { PAYMENT_KIND_LABEL, paymentMethodLabel, vnd, type ContractPayment, type ContractPaymentPlan } from "@/lib/types";
 import { daysFromToday, fmtDate } from "@/lib/date";
 import { qrUrl } from "@/components/VietQR";
-import VoucherRedeem from "./VoucherRedeem";
-import LoyaltyVoucherCard from "./LoyaltyVoucherCard";
+import VoucherRedeemV2 from "./VoucherRedeemV2";
+import LoyaltyVoucherCardV2 from "./LoyaltyVoucherCardV2";
 import { serializeItems, toItemRow } from "./useContractEditor";
 import { ProofThumb, type V2Ctx } from "./ContractV2Shared";
-import { EMBED } from "./ContractV2Items";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab THANH TOÁN (giao diện mới): tóm tắt tiền ở đầu, mỗi đợt một dòng gọn
@@ -52,6 +51,7 @@ export default function ContractV2Payments({ ctx }: { ctx: V2Ctx }) {
   const editing = plan.find((p) => p.id === editId) ?? null;
   const looseProofs = clientProofs.filter((cp) => !cp.plan_id);
   const done = ed.total > 0 && ed.balance <= 0;
+  const moneyActions = ed.balance > 0 || f.status !== "cancelled";
 
   return (
     <>
@@ -72,46 +72,48 @@ export default function ContractV2Payments({ ctx }: { ctx: V2Ctx }) {
           <Money label="Đã thu" value={vnd(ed.collected)} color="var(--gn)" />
           <Money label={done ? "Còn lại" : "Còn phải thu"} value={vnd(Math.max(0, ed.balance))} color={ed.balance > 0 ? "var(--am)" : "var(--gn)"} />
         </div>
-        <div className="flex items-center gap-3 px-4 pb-4 pt-3 sm:px-5">
+        <div className={`flex items-center gap-3 px-4 pt-3 sm:px-5 ${moneyActions ? "" : "pb-4"}`}>
           <div className="min-w-0 flex-1">
             <Progress value={ed.pct} tone={done ? "green" : "brand"} />
           </div>
           <span className="v2-num text-[12.5px] font-semibold" style={{ color: "var(--tx2)" }}>
             {ed.pct}%
           </span>
-          {ed.balance > 0 && (
-            <button
-              type="button"
-              className={btn("ghost", "sm")}
-              onClick={() => ctx.openQr({ amount: ed.balance, addInfo: ed.qrInfo, title: `QR thu ${vnd(ed.balance)}` })}
-            >
-              <QrCode size={15} /> QR phần còn lại
-            </button>
-          )}
         </div>
-
-        {f.status !== "cancelled" && (
-          <div className="px-4 sm:px-5 [&>*]:!mb-3" style={{ borderTop: "1px solid var(--bd2)", paddingTop: 12 }}>
-            <VoucherRedeem
-              contractId={contract.id}
-              balance={ed.balance}
-              onRedeemed={(p) => ed.setPayments((prev) => [p, ...prev])}
-              onItemAdded={(it) => {
-                // Dòng này máy chủ đã ghi — thêm vào cả bản "đã lưu" để khỏi báo nhầm "chưa lưu".
-                const row = toItemRow(it);
-                ed.setItems((prev) => [...prev, row]);
-                ed.setSavedItems((prev) => [...prev, ...serializeItems([row])]);
-              }}
-              // % tính theo bảng giá ĐÃ LƯU ở máy chủ — lưu phần đang sửa dở trước.
-              beforeLoyalty={
-                ed.itemsLocked
-                  ? undefined
-                  : async () => {
-                      await ed.luuHangMuc(ed.items);
-                    }
-              }
-              toast={ed.toast}
-            />
+        {moneyActions && (
+          <div className="flex flex-wrap items-center gap-1 px-2.5 pb-3 pt-1.5 sm:px-3.5">
+            {ed.balance > 0 && (
+              <button
+                type="button"
+                className={btn("ghost", "sm")}
+                onClick={() => ctx.openQr({ amount: ed.balance, addInfo: ed.qrInfo, title: `QR thu ${vnd(ed.balance)}` })}
+              >
+                <QrCode size={15} /> QR phần còn lại
+              </button>
+            )}
+            {/* Khách có voucher / thẻ quà: kiểm mã rồi trừ — mở trong hộp thoại. */}
+            {f.status !== "cancelled" && (
+              <VoucherRedeemV2
+                contractId={contract.id}
+                balance={ed.balance}
+                onRedeemed={(p) => ed.setPayments((prev) => [p, ...prev])}
+                onItemAdded={(it) => {
+                  // Dòng này máy chủ đã ghi — thêm vào cả bản "đã lưu" để khỏi báo nhầm "chưa lưu".
+                  const row = toItemRow(it);
+                  ed.setItems((prev) => [...prev, row]);
+                  ed.setSavedItems((prev) => [...prev, ...serializeItems([row])]);
+                }}
+                // % tính theo bảng giá ĐÃ LƯU ở máy chủ — lưu phần đang sửa dở trước.
+                beforeLoyalty={
+                  ed.itemsLocked
+                    ? undefined
+                    : async () => {
+                        await ed.luuHangMuc(ed.items);
+                      }
+                }
+                toast={ed.toast}
+              />
+            )}
           </div>
         )}
 
@@ -174,19 +176,17 @@ export default function ContractV2Payments({ ctx }: { ctx: V2Ctx }) {
         )}
       </Section>
 
-      <div className={EMBED}>
-        {/* Voucher ưu đãi lần sau — tự phát khi khách ký + studio xác nhận cọc + studio ký. */}
-        <LoyaltyVoucherCard
-          contractId={contract.id}
-          initialPercent={contract.loyalty_percent ?? null}
-          refreshKey={`${ed.collected}|${ed.studioSigned}|${!!contract.client_signed_at}|${f.status}|${ed.total}`}
-          clientName={f.client_name}
-          clientPhone={f.client_phone}
-          clientMessenger={f.client_messenger}
-          studioHost={studioHost}
-          studioName={studioName}
-        />
-      </div>
+      {/* Voucher ưu đãi lần sau — tự phát khi khách ký + studio xác nhận cọc + studio ký. */}
+      <LoyaltyVoucherCardV2
+        contractId={contract.id}
+        initialPercent={contract.loyalty_percent ?? null}
+        refreshKey={`${ed.collected}|${ed.studioSigned}|${!!contract.client_signed_at}|${f.status}|${ed.total}`}
+        clientName={f.client_name}
+        clientPhone={f.client_phone}
+        clientMessenger={f.client_messenger}
+        studioHost={studioHost}
+        studioName={studioName}
+      />
 
       <Expenses ctx={ctx} />
 

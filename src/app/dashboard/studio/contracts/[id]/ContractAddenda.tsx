@@ -16,17 +16,13 @@ import { addendumLabel, addendumTotal, type AddendumLine, type ContractAddendum 
    mới vào tổng hợp đồng.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-type Draft = { id?: string; title: string; note: string; lines: (AddendumLine & { discount?: boolean })[] };
+export type AddendumDraft = { id?: string; title: string; note: string; lines: (AddendumLine & { discount?: boolean })[] };
+type Draft = AddendumDraft;
 
-const emptyLine = (): Draft["lines"][number] => ({ name: "", description: null, qty: 1, unit_price: 0 });
+export const emptyAddendumLine = (): Draft["lines"][number] => ({ name: "", description: null, qty: 1, unit_price: 0 });
+const emptyLine = emptyAddendumLine;
 
-export default function ContractAddenda({
-  contractId,
-  initialAddenda,
-  canEdit,
-  onChanged,
-  toast,
-}: {
+export type ContractAddendaProps = {
   contractId: string;
   initialAddenda: ContractAddendum[];
   /** Nhân viên thường chỉ xem — tạo phụ lục là thay đổi giá. */
@@ -34,7 +30,10 @@ export default function ContractAddenda({
   /** Báo cho trình sửa hợp đồng khi các dòng đã ký thay đổi (để cập nhật tổng). */
   onChanged: (addendumItems: ContractItem[]) => void;
   toast: (m: string) => void;
-}) {
+};
+
+/** Logic phụ lục — dùng chung cho thẻ bản cũ và khối ở giao diện mới (ContractAddendaV2). */
+export function useContractAddenda({ contractId, initialAddenda, onChanged, toast }: ContractAddendaProps) {
   const [addenda, setAddenda] = useState<ContractAddendum[]>(initialAddenda);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirming, setConfirming] = useState<{ id: string; name: string } | null>(null);
@@ -93,9 +92,35 @@ export default function ContractAddenda({
     });
   }
 
+  /** Studio xác nhận thay khách (đã thoả thuận qua điện thoại / Zalo). */
+  async function confirmFor(id: string, name: string): Promise<boolean> {
+    if (await call({ action: "confirm", addendumId: id, name })) {
+      setConfirming(null);
+      toast("Đã xác nhận phụ lục — đã cộng vào tổng hợp đồng.");
+      return true;
+    }
+    return false;
+  }
+
+  /** Xoá một phụ lục nháp (chỗ gọi tự hỏi lại trước). */
+  async function remove(id: string): Promise<boolean> {
+    if (await call({ action: "delete", addendumId: id })) {
+      toast("Đã xoá phụ lục.");
+      return true;
+    }
+    return false;
+  }
+
   const draftTotal = draft
     ? draft.lines.reduce((s, l) => s + (l.discount ? -Math.abs(l.unit_price || 0) : (l.qty || 0) * (l.unit_price || 0)), 0)
     : 0;
+
+  return { addenda, draft, setDraft, confirming, setConfirming, busy, call, saveDraft, edit, confirmFor, remove, draftTotal };
+}
+
+export default function ContractAddenda(props: ContractAddendaProps) {
+  const { canEdit, toast } = props;
+  const { addenda, draft, setDraft, confirming, setConfirming, busy, call, saveDraft, edit, draftTotal } = useContractAddenda(props);
 
   return (
     <div className="card p-6" data-testid="contract-addenda">

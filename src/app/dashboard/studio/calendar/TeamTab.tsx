@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import { isUiV2 } from "@/lib/ui-server";
+import PlanLockedV2 from "./PlanLockedV2";
 import type { CalendarTab } from "./tabs";
 import type { ShiftLetter } from "@/lib/crew-shift";
 import { loadCrewRoles } from "@/lib/crew-roles";
@@ -18,6 +20,7 @@ const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 export default async function TeamTab({ tabs }: { tabs?: readonly CalendarTab[] } = {}) {
   const profile = await requireStudio();
   if (!profile) {
+    if (await isUiV2()) return <PlanLockedV2 title="Cần gói Studio" hint="Tính năng này chỉ dành cho tài khoản gói Studio." cta="Xem gói Studio" />;
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">

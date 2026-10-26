@@ -36,14 +36,7 @@ type Existing = { slug: string; edit_token: string; published: boolean } | null;
  * thiệp tự có khi khách mở trang đó lần đầu — link gửi khách nằm ở thẻ Kế hoạch
  * cưới, thẻ này chỉ còn link xem thiệp và lối vào trình sửa cho studio.
  */
-export default function WeddingInvitationCard({
-  contract,
-  clientName,
-  clientMessenger,
-  giftInvitation,
-  reportage,
-  combo = false,
-}: {
+export type WeddingInvitationProps = {
   contract: { id: string; owner_id: string; title: string; event_date: string | null; location: string | null };
   clientName: string;
   clientMessenger: string;
@@ -53,7 +46,10 @@ export default function WeddingInvitationCard({
   reportage: boolean;
   /** Chế độ Quà cưới: thiệp nằm trong trang kế hoạch cưới của khách. */
   combo?: boolean;
-}) {
+};
+
+/** Logic thẻ thiệp cưới online — dùng chung cho bản cũ và WeddingInvitationCardV2. */
+export function useWeddingInvitation({ contract, clientName, giftInvitation, reportage }: WeddingInvitationProps) {
   const supabase = createClient();
   const [inv, setInv] = useState<Existing>(null);
   const [loading, setLoading] = useState(true);
@@ -125,8 +121,6 @@ export default function WeddingInvitationCard({
     setInv(data as Existing);
   }
 
-  if (loading) return null;
-
   const editUrl = inv ? thiepUrl(`/sua/${inv.edit_token}`) : "";
   const viewUrl = inv ? thiepUrl(`/${inv.slug}`) : "";
 
@@ -135,6 +129,15 @@ export default function WeddingInvitationCard({
     setCopied(key);
     setTimeout(() => setCopied(null), 1500);
   }
+
+  return { inv, loading, creating, copied, err, savingGift, autoOn, toggleGift, create, editUrl, viewUrl, copy };
+}
+
+export default function WeddingInvitationCard(props: WeddingInvitationProps) {
+  const { clientMessenger, reportage, combo = false } = props;
+  const { inv, loading, creating, copied, err, savingGift, autoOn, toggleGift, create, editUrl, viewUrl, copy } = useWeddingInvitation(props);
+
+  if (loading) return null;
 
   return (
     <div className="card mb-6 p-4">

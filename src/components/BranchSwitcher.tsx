@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { Building2, Check, ChevronDown, Lock } from "lucide-react";
 import { BRANCH_ALL, BRANCH_NONE, UNASSIGNED_LABEL } from "@/lib/branch-rules";
 import { useTheme } from "@/lib/theme";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { v2PortalProps } from "@/components/v2parts/portal-scope";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Ô CHỌN CHI NHÁNH trên thanh trên cùng — "xem gộp hoặc tách".
@@ -47,12 +49,7 @@ export type SwitcherBranch = { id: string; name: string; code: string | null; ac
 const EDGE = 8;
 const MENU_W = 248;
 
-export default function BranchSwitcher({
-  branches,
-  selected,
-  cookieName,
-  locked = false,
-}: {
+type Props = {
   branches: SwitcherBranch[];
   /** null = gộp · "none" = chưa gán · id = một cơ sở. */
   selected: string | null;
@@ -63,9 +60,15 @@ export default function BranchSwitcher({
    * `getBranchScope` phía server, nên sửa DOM cũng không đổi được phạm vi.
    */
   locked?: boolean;
-}) {
+};
+
+export default function BranchSwitcher(props: Props) {
+  return useUiV2() ? <BranchSwitcherV2 {...props} /> : <BranchSwitcherV1 {...props} />;
+}
+
+/** Đo/kẹp bảng chọn, cookie chi nhánh và nhãn hiện tại — dùng chung hai bản. */
+function useBranchSwitcher({ branches, selected, cookieName }: Props) {
   const router = useRouter();
-  const { theme } = useTheme();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const btn = useRef<HTMLButtonElement | null>(null);
@@ -115,8 +118,6 @@ export default function BranchSwitcher({
     };
   }, [open, place]);
 
-  if (branches.length === 0 && !locked) return null;
-
   function pick(value: string) {
     // 180 ngày: lựa chọn phạm vi là thói quen làm việc, không phải thao tác một
     // lần — chủ studio phụ trách một cơ sở không nên phải chọn lại mỗi phiên.
@@ -141,6 +142,16 @@ export default function BranchSwitcher({
         : branches.find((b) => b.id === selected)?.code?.trim() ||
           branches.find((b) => b.id === selected)?.name ||
           "Tất cả";
+
+  return { open, setOpen, mounted, btn, menu, pos, place, pick, current, shortCurrent };
+}
+
+function BranchSwitcherV1(props: Props) {
+  const { branches, selected, locked = false } = props;
+  const { theme } = useTheme();
+  const { open, setOpen, mounted, btn, menu, pos, place, pick, current, shortCurrent } = useBranchSwitcher(props);
+
+  if (branches.length === 0 && !locked) return null;
 
   if (locked) {
     const missing = selected === BRANCH_NONE;
@@ -255,6 +266,111 @@ function Row({ label, sub, on, onClick }: { label: string; sub?: string; on: boo
         {sub && <span className="block truncate text-[11px]" style={{ color: "var(--tx3)" }}>{sub}</span>}
       </span>
       {on && <Check size={15} style={{ flex: "none", color: "var(--ac)" }} />}
+    </button>
+  );
+}
+
+/* ── Giao diện mới ────────────────────────────────────────────────────────────
+   Cùng logic (useBranchSwitcher): nút cao 38px như các nút topbar khác, bảng
+   chọn dùng khung menu ⋯ của bộ khối (.v2-menu-pop / .v2-menu-item) — vẫn đi
+   qua portal và đặt toạ độ `fixed` theo khung nhìn như bản cũ. */
+function BranchSwitcherV2(props: Props) {
+  const { branches, selected, locked = false } = props;
+  const { open, setOpen, mounted, btn, menu, pos, place, pick, current, shortCurrent } = useBranchSwitcher(props);
+
+  if (branches.length === 0 && !locked) return null;
+
+  if (locked) {
+    const missing = selected === BRANCH_NONE;
+    return (
+      <span
+        className="flex h-[38px] flex-none items-center gap-1.5 rounded-[10px] px-3 text-[13px] font-semibold"
+        style={{
+          background: missing ? "var(--rdS)" : "var(--acS)",
+          color: missing ? "var(--rd)" : "var(--ac)",
+        }}
+        title={
+          missing
+            ? "Vai trò Toàn quyền chi nhánh nhưng chưa được gán chi nhánh — liên hệ chủ studio."
+            : `Bạn chỉ xem được chi nhánh ${current}`
+        }
+      >
+        <Lock size={15} />
+        <span className="hidden max-w-[130px] truncate min-[900px]:inline">{missing ? "Chưa gán chi nhánh" : current}</span>
+        <span className="max-w-[70px] truncate min-[900px]:hidden">{missing ? "Chưa gán" : shortCurrent}</span>
+      </span>
+    );
+  }
+
+  const scoped = selected !== null;
+  const scope = mounted && open && pos ? v2PortalProps() : null;
+  return (
+    <div className="flex-none">
+      <button
+        ref={btn}
+        type="button"
+        onClick={() => {
+          if (!open) place();
+          setOpen((v) => !v);
+        }}
+        className="v2-btn v2-btn-secondary"
+        style={{ paddingInline: 11, gap: 6, ...(scoped ? { background: "var(--acS)", color: "var(--ac)", borderColor: "var(--acM)" } : null) }}
+        title={`Chi nhánh: ${current}`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <Building2 size={16} className="flex-none" />
+        <span className="hidden max-w-[130px] truncate min-[900px]:inline">{current}</span>
+        <span className="max-w-[70px] truncate min-[900px]:hidden">{shortCurrent}</span>
+        <ChevronDown size={14} className="flex-none" style={{ opacity: 0.6 }} />
+      </button>
+
+      {scope && pos &&
+        createPortal(
+          <div className="studio-shell ui-v2" data-theme={scope["data-theme"]} style={scope.style}>
+            <div
+              ref={menu}
+              role="listbox"
+              aria-label="Chọn chi nhánh"
+              className="v2-menu-pop"
+              style={{ position: "fixed", top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxH, zIndex: 140 }}
+            >
+              <RowV2 label="Tất cả chi nhánh" sub="Xem gộp toàn studio" on={selected === null} onClick={() => pick(BRANCH_ALL)} />
+              <div className="v2-menu-div" />
+              {branches.map((b) => (
+                <RowV2
+                  key={b.id}
+                  label={b.name}
+                  sub={[b.code?.trim(), b.active ? null : "tạm ẩn"].filter(Boolean).join(" · ") || undefined}
+                  on={selected === b.id}
+                  onClick={() => pick(b.id)}
+                />
+              ))}
+              <div className="v2-menu-div" />
+              <RowV2 label={UNASSIGNED_LABEL} sub="Dữ liệu chưa thuộc cơ sở nào" on={selected === BRANCH_NONE} onClick={() => pick(BRANCH_NONE)} />
+            </div>
+          </div>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+function RowV2({ label, sub, on, onClick }: { label: string; sub?: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={on}
+      onClick={onClick}
+      className="v2-menu-item"
+      style={on ? { background: "var(--acS)" } : undefined}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate" style={on ? { color: "var(--ac)", fontWeight: 650 } : undefined}>{label}</span>
+        {sub && <span className="v2-menu-hint truncate">{sub}</span>}
+      </span>
+      {on && <Check size={16} className="flex-none" style={{ color: "var(--ac)" }} />}
     </button>
   );
 }
