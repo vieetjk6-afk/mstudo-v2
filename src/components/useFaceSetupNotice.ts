@@ -24,6 +24,9 @@ import { createClient } from "@/lib/supabase/client";
  */
 export const DUONG_DAN_SQL = "/api/setup-sql/khuon-mat";
 
+/* Hai bảng tính năng khuôn mặt cần có. */
+export const BANG_KHUON_MAT = ["album_people", "album_faces"];
+
 /*
  * NHỚ THEO PHIÊN (sessionStorage) để thư viện album không hỏi lại mỗi lần mở.
  *
@@ -92,7 +95,7 @@ export function useFaceSetupNotice() {
     const supabase = createClient();
     void (async () => {
       const probes = await Promise.all(
-        ["album_people", "album_faces"].map(async (t) => {
+        BANG_KHUON_MAT.map(async (t) => {
           try {
             /*
              * `limit(1)` chứ KHÔNG `head: true`.

@@ -13,6 +13,7 @@ import ClauseInserter from "@/components/ClauseInserter";
 import FilterDialog from "@/components/FilterDialog";
 import LogoUpload from "@/components/LogoUpload";
 import { FaceSetupNoticeV2View, type FaceSetupNoticeState } from "@/components/FaceSetupNoticeV2";
+import { BANG_KHUON_MAT } from "@/components/useFaceSetupNotice";
 import { useToast } from "@/components/studio/Toast";
 import BankAutoCard from "@/components/studio/BankAutoCard";
 import { Field, Section, Stack, btn, inputCls } from "@/components/v2/kit";
@@ -81,7 +82,7 @@ export function DriveStatusMock({ children }: { children: React.ReactNode }) {
 /* ── Báo khuôn mặt: dữ liệu giả cho phần hình ───────────────────────────── */
 export function FaceSetupDemoV2() {
   const missing: FaceSetupNoticeState = {
-    missing: ["album_people", "album_faces"],
+    missing: BANG_KHUON_MAT,
     copied: "",
     thieuCron: false,
     duAn: { ma: "abcd1234efgh", sqlEditor: "https://supabase.com/dashboard/project/abcd1234efgh/sql/new" },

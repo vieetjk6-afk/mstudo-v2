@@ -14,6 +14,8 @@ import {
   ImageUpload, ResponsesLock, TimelineEditor, Toggle, inp,
 } from "./editor/ui";
 import { deriveWedding, useWeddingEditor, type EditorEmbed, type TodoKey } from "./useWeddingEditor";
+import WeddingEditorV2 from "./WeddingEditorV2";
+import type { StudioBrandInfo } from "@/lib/studio-brand";
 
 export type { EditorEmbed };
 
@@ -39,8 +41,12 @@ const TODO_TAB: Record<TodoKey, TabId> = {
   names: "capdoi", date: "ngay", cover: "anh", portraits: "capdoi", gallery: "anh", events: "ngay",
 };
 
-export default function WeddingEditor({ token, embed }: { token: string; embed?: EditorEmbed }) {
-  return <WeddingEditorV1 token={token} embed={embed} />;
+/**
+ * `v2` (thương hiệu studio) có mặt = vẽ giao diện mới. Rẽ nhánh bằng KIỂU
+ * component (không rẽ sau các hook) để thứ tự hook của mỗi bản luôn cố định.
+ */
+export default function WeddingEditor({ token, embed, v2 }: { token: string; embed?: EditorEmbed; v2?: { brand: StudioBrandInfo } | null }) {
+  return v2 ? <WeddingEditorV2 token={token} embed={embed} brand={v2.brand} /> : <WeddingEditorV1 token={token} embed={embed} />;
 }
 
 function WeddingEditorV1({ token, embed }: { token: string; embed?: EditorEmbed }) {
