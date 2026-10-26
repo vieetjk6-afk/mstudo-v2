@@ -7,7 +7,7 @@ import { TEMPLATE_GROUPS, WEDDING_TEMPLATE_CATALOG, type WeddingTemplateMeta } f
 // kiểu chữ của mẫu, kèm ảnh bìa thật của cặp đôi nếu đã tải lên. Bấm vào thẻ là
 // khung xem trước bên cạnh đổi sang mẫu đó ngay (chưa lưu cho tới khi bấm Lưu).
 
-function Mini({ t, cover, bride, groom, wide }: { t: WeddingTemplateMeta; cover?: string; bride: string; groom: string; wide: boolean }) {
+export function Mini({ t, cover, bride, groom, wide }: { t: WeddingTemplateMeta; cover?: string; bride: string; groom: string; wide: boolean }) {
   const font = t.serif ? "var(--font-cormorant), serif" : "var(--font-be-vietnam), system-ui, sans-serif";
   const faint = t.dark ? "rgba(255,255,255,.25)" : "rgba(0,0,0,.12)";
   const line = (w: string) => <span style={{ display: "block", height: 3, width: w, borderRadius: 2, background: faint }} />;

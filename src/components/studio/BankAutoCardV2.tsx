@@ -180,7 +180,7 @@ export default function BankAutoCardV2() {
                     return (
                       <li key={t.id} className="px-3.5 py-3" style={{ borderTop: i ? "1px solid var(--bd2)" : undefined }}>
                         <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 basis-[240px]">
                             <p className="flex flex-wrap items-baseline gap-x-2 text-[14px] font-semibold">
                               <span className="v2-num" style={{ color: t.status === "ignored" ? "var(--tx2)" : "var(--gn)" }}>+{vnd(t.amount)}</span>
                               <span className="text-[12px] font-normal" style={muted}>

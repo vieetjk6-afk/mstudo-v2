@@ -270,7 +270,7 @@ function LinkStage({
         </ul>
       )}
       <div className="flex flex-col gap-2 sm:flex-row">
-        <input id={id} className={`${inputCls} min-w-0 flex-1`} inputMode="url" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
+        <input id={id} className={`${inputCls} min-w-0 sm:flex-1`} inputMode="url" placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)} />
         <button type="button" className={btn("secondary", "md", "whitespace-nowrap")} disabled={disabled || !value.trim()} onClick={onAdd}>
           {icon} {busy ? "Đang đồng bộ…" : "Thêm & đồng bộ"}
         </button>

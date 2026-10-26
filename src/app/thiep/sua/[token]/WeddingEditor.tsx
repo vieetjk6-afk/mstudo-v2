@@ -1,17 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import {
   Heart, Save, Eye, EyeOff, Check, Loader2, ExternalLink, Gift, Users, CalendarDays, Type,
   Music, LayoutTemplate, FolderOpen, Lock, Image as ImageIcon, MessageCircleHeart, AlertCircle,
   Copy, Send, ArrowLeft,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import { checkImageFile, compressToLimit } from "@/lib/image";
-import { thiepUrl } from "@/lib/hosts";
-import type { WeddingConfig, WeddingInvitation, WeddingRsvp } from "@/lib/types";
-import type { Wish } from "../../[slug]/WeddingRenderer";
-import { TEMPLATE_ALIASES, getTemplateMeta } from "../../[slug]/templates";
 import GuestManager from "./GuestManager";
 import PreviewPane from "./editor/PreviewPane";
 import TemplateGallery from "./editor/TemplateGallery";
@@ -19,30 +13,15 @@ import {
   AlbumPicker, AudioUpload, BankEditor, Card, EventsEditor, Field, GalleryEditor, GuestsPasswordField, MapLinkInput,
   ImageUpload, ResponsesLock, TimelineEditor, Toggle, inp,
 } from "./editor/ui";
-import { lunarText } from "@/lib/lunar";
+import { deriveWedding, useWeddingEditor, type EditorEmbed, type TodoKey } from "./useWeddingEditor";
+import WeddingEditorV2 from "./WeddingEditorV2";
+import type { StudioBrandInfo } from "@/lib/studio-brand";
 
-type Loaded = {
-  invitation: { id: string; slug: string; template: string; config: WeddingConfig; published: boolean };
-  rsvps: WeddingRsvp[];
-  /** Chế độ Quà cưới: danh sách khách nằm ở kế hoạch cưới — link tới đó. */
-  planner_href?: string | null;
-};
+export type { EditorEmbed };
 
-/**
- * Trình sửa thiệp NHÚNG trong kế hoạch cưới (chế độ Quà cưới). Danh sách khách
- * là của kế hoạch: tab Khách mời ở đây chỉ còn lời mời, xem trước theo tên, và
- * đường sang danh sách đó.
- */
-export type EditorEmbed = {
-  /** Về kế hoạch cưới. */
-  onBack: () => void;
-  /** Sang tab Khách mời của kế hoạch. */
-  onOpenGuests: () => void;
-  /** Tên khách trong kế hoạch — để xem trước thiệp ghi tên một khách. */
-  guestNames: string[];
-  /** Báo còn thay đổi chưa lưu — trang kế hoạch hỏi lại trước khi rời. */
-  onDirty?: (dirty: boolean) => void;
-};
+/* Trình sửa thiệp cưới /thiep/sua/<token>. Logic (tải, lưu, tải ảnh/nhạc…) ở
+   ./useWeddingEditor — bản cũ dưới đây (WeddingEditorV1) và bản giao diện mới
+   (./WeddingEditorV2) dùng chung; page.tsx chọn bản theo customerUiV2. */
 
 const TABS = [
   { id: "mau", label: "Mẫu thiệp", icon: LayoutTemplate },
@@ -57,174 +36,27 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
-export default function WeddingEditor({ token, embed }: { token: string; embed?: EditorEmbed }) {
-  const [cfg, setCfg] = useState<WeddingConfig | null>(null);
-  const [slug, setSlug] = useState("");
-  const [template, setTemplate] = useState("classic");
-  const [published, setPublished] = useState(false);
-  const [rsvps, setRsvps] = useState<WeddingRsvp[]>([]);
-  const [status, setStatus] = useState<"loading" | "ready" | "notfound">("loading");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [albumOpen, setAlbumOpen] = useState(false);
-  const [responsesUnlocked, setResponsesUnlocked] = useState(false);
+/** Mục còn thiếu → tab có ô để điền mục đó. */
+const TODO_TAB: Record<TodoKey, TabId> = {
+  names: "capdoi", date: "ngay", cover: "anh", portraits: "capdoi", gallery: "anh", events: "ngay",
+};
+
+/**
+ * `v2` (thương hiệu studio) có mặt = vẽ giao diện mới. Rẽ nhánh bằng KIỂU
+ * component (không rẽ sau các hook) để thứ tự hook của mỗi bản luôn cố định.
+ */
+export default function WeddingEditor({ token, embed, v2 }: { token: string; embed?: EditorEmbed; v2?: { brand: StudioBrandInfo } | null }) {
+  return v2 ? <WeddingEditorV2 token={token} embed={embed} brand={v2.brand} /> : <WeddingEditorV1 token={token} embed={embed} />;
+}
+
+function WeddingEditorV1({ token, embed }: { token: string; embed?: EditorEmbed }) {
+  const w = useWeddingEditor(token, embed);
+  const {
+    cfg, template, published, rsvps, status, saving, saved, dirty, err, albumOpen, setAlbumOpen, setResponsesUnlocked,
+    previewGuest, setPreviewGuest, refreshRsvps, patch, pickTemplate, save, uploadImage, resolveMap, uploadAudio, draft, previewWishes, back,
+  } = w;
   const [tab, setTab] = useState<TabId>("mau");
   const [previewOpen, setPreviewOpen] = useState(false);   // chỉ dùng trên màn hình hẹp
-  const [previewGuest, setPreviewGuest] = useState("");
-  const [plannerHref, setPlannerHref] = useState<string | null>(null);
-
-  useEffect(() => {
-    (async () => {
-      const res = await fetch(`/api/thiep/${token}`);
-      if (!res.ok) { setStatus("notfound"); return; }
-      const data = (await res.json()) as Loaded;
-      // Mẫu cũ đã gộp (vd. "vom-navy" → "vom"): đổi sang tên mới, giữ đúng màu cũ.
-      const alias = TEMPLATE_ALIASES[data.invitation.template];
-      const loadedCfg = data.invitation.config || {};
-      setCfg(alias && !loadedCfg.accent ? { ...loadedCfg, accent: alias.color } : loadedCfg);
-      setSlug(data.invitation.slug);
-      setTemplate(alias?.name || data.invitation.template || "classic");
-      setPublished(data.invitation.published);
-      setRsvps(data.rsvps || []);
-      setPlannerHref(data.planner_href ?? null);
-      setStatus("ready");
-    })().catch(() => setStatus("notfound"));
-  }, [token]);
-
-  // Tải lại phản hồi mới nhất (khách vừa xác nhận) mà không mất phần đang sửa.
-  const refreshRsvps = useCallback(async () => {
-    const res = await fetch(`/api/thiep/${token}`, { cache: "no-store" }).catch(() => null);
-    if (!res?.ok) return;
-    const data = (await res.json()) as Loaded;
-    setRsvps(data.rsvps || []);
-  }, [token]);
-
-  const patch = useCallback((p: Partial<WeddingConfig>) => {
-    setCfg((c) => ({ ...(c ?? {}), ...p }));
-    setDirty(true);
-  }, []);
-
-  const pickTemplate = useCallback((name: string) => { setTemplate(name); setDirty(true); }, []);
-
-  const onDirty = embed?.onDirty;
-  useEffect(() => { onDirty?.(dirty); }, [dirty, onDirty]);
-
-  // Nhắc trước khi rời trang khi còn thay đổi chưa lưu.
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); };
-    window.addEventListener("beforeunload", warn);
-    return () => window.removeEventListener("beforeunload", warn);
-  }, [dirty]);
-
-  async function save(nextPublished?: boolean) {
-    if (!cfg) return;
-    setSaving(true);
-    setErr(null);
-    const willPublish = nextPublished ?? published;
-    try {
-      const res = await fetch(`/api/thiep/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ config: cfg, published: willPublish, template }),
-      });
-      if (!res.ok) { setErr("Lưu không thành công, thử lại nhé."); return; }
-      setPublished(willPublish);
-      setDirty(false);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // Mạng lỗi: báo lỗi thay vì kẹt nút Lưu/Xuất bản ở trạng thái disabled.
-      setErr("Lưu không thành công, thử lại nhé.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function uploadImage(file: File): Promise<string | null> {
-    const check = checkImageFile(file);
-    if (!check.ok) { setErr(check.error); return null; }
-    let blob: Blob = file;
-    try {
-      // Nén ảnh xuống ≤ 1MB trước khi tải lên.
-      const dataUrl = await compressToLimit(file, 1024 * 1024);
-      const b = await (await fetch(dataUrl)).blob();
-      if (b.size > 0) blob = b;
-    } catch { /* fall back to original */ }
-    const fd = new FormData();
-    fd.append("file", new File([blob], "photo.webp", { type: blob.type || "image/webp" }));
-    const res = await fetch(`/api/thiep/${token}/upload`, { method: "POST", body: fd });
-    if (!res.ok) { setErr("Tải ảnh thất bại."); return null; }
-    return ((await res.json()) as { url: string }).url;
-  }
-
-  // Link Google Maps rút gọn (maps.app.goo.gl) → server mở ra link đầy đủ có toạ độ.
-  async function resolveMap(url: string): Promise<{ url?: string; error?: string }> {
-    try {
-      const r = await fetch(`/api/thiep/${token}/map`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }),
-      });
-      const j = (await r.json().catch(() => null)) as { url?: string; error?: string } | null;
-      return r.ok && j?.url ? { url: j.url } : { error: j?.error || "Không lấy được vị trí từ link này." };
-    } catch {
-      return { error: "Mất kết nối, thử lại nhé." };
-    }
-  }
-
-  // Tải nhạc THẲNG lên Supabase Storage qua URL ký sẵn (không qua serverless →
-  // không vướng trần body ~4.5MB của Vercel, vốn là lý do file nhạc lớn báo lỗi).
-  async function uploadAudio(file: File): Promise<{ url?: string; error?: string }> {
-    if (file.size > 10 * 1024 * 1024) return { error: "File nhạc quá lớn (tối đa 10MB)." };
-    const ext = (file.name.split(".").pop() || "mp3").toLowerCase();
-    let signed: { path: string; token: string; publicUrl: string };
-    try {
-      const r = await fetch(`/api/thiep/${token}/audio-upload-url`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ext }),
-      });
-      if (!r.ok) {
-        const j = (await r.json().catch(() => null)) as { error?: string } | null;
-        if (j?.error === "not_found") return { error: "Phiên chỉnh sửa đã hết hạn, tải lại trang giúp mình nhé." };
-        return { error: "Không tạo được phiên tải nhạc" + (j?.error ? ` (${j.error})` : ".") };
-      }
-      signed = await r.json();
-    } catch {
-      return { error: "Mất kết nối khi tải nhạc, thử lại nhé." };
-    }
-    const AUDIO_MIME: Record<string, string> = { mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", ogg: "audio/ogg", oga: "audio/ogg", flac: "audio/flac", weba: "audio/webm" };
-    const contentType = file.type || AUDIO_MIME[ext] || "audio/mpeg";
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.storage.from("wedding-photos").uploadToSignedUrl(signed.path, signed.token, file, { contentType });
-      if (error) return { error: "Tải nhạc thất bại (" + error.message + ")" };
-    } catch (e) {
-      return { error: "Tải nhạc thất bại (" + ((e as Error)?.message || e) + ")" };
-    }
-    // Nhờ server chuyển file sang Drive admin rồi xoá bản trên Supabase. Hỏng
-    // thì thôi — URL Supabase ở trên vẫn dùng tốt.
-    try {
-      const r = await fetch(`/api/thiep/${token}/audio-finalize`, {
-        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ path: signed.path }),
-      });
-      if (r.ok) {
-        const j = (await r.json()) as { url?: string | null };
-        if (j.url) return { url: j.url };
-      }
-    } catch { /* giữ URL Supabase */ }
-    return { url: signed.publicUrl };
-  }
-
-  // Thiệp "nháp trong bộ nhớ" để khung xem trước dựng lại đúng thứ đang sửa.
-  const draft = useMemo(() => ({
-    id: "preview", owner_id: "", contract_id: null, slug: slug || "xem-truoc", edit_token: token,
-    template, config: cfg ?? {}, published, created_at: "", updated_at: "",
-  }) as WeddingInvitation, [slug, token, template, cfg, published]);
-
-  const previewWishes: Wish[] = useMemo(
-    () => rsvps.filter((r) => r.wish && r.guest_name).slice(0, 12).map((r) => ({ guest_name: r.guest_name, wish: r.wish as string, created_at: r.created_at })),
-    [rsvps],
-  );
 
   if (status === "loading") {
     return <div className="grid min-h-screen place-items-center text-stone-500"><Loader2 className="animate-spin" /></div>;
@@ -244,34 +76,12 @@ export default function WeddingEditor({ token, embed }: { token: string; embed?:
     );
   }
 
-  const publicUrl = thiepUrl(`/${slug}`);
-  const guestsUrl = thiepUrl(`/${slug}/khach`);
-  const absBase = publicUrl.startsWith("http") ? publicUrl : (typeof window !== "undefined" ? window.location.origin + publicUrl : publicUrl);
-  const autoLunar = lunarText(cfg.wedding_date);
-  const attendingCount = rsvps.filter((r) => r.attending).reduce((s, r) => s + (r.num_guests || 0), 0);
-  // Cặp đôi đặt mật khẩu "trang xem riêng" → phản hồi (cả trạng thái trong danh sách khách) khoá đến khi nhập đúng.
-  const responsesLocked = !!(cfg.guests_password ?? "").trim() && !responsesUnlocked;
-  const meta = getTemplateMeta(template);
-  // Quà cưới: khách mời là danh sách của kế hoạch cưới, không phải `cfg.guests`.
-  const combo = !!embed || !!plannerHref;
-  const guestNames = embed ? embed.guestNames : (cfg.guests ?? []).filter(Boolean);
-  const openGuests = embed ? embed.onOpenGuests : plannerHref ? () => { window.location.href = plannerHref; } : () => setTab("khach");
-  const back = () => {
-    if (dirty && !window.confirm("Thiệp còn thay đổi chưa lưu. Rời đi và bỏ các thay đổi đó?")) return;
-    embed?.onBack();
-  };
+  const d = deriveWedding(w, cfg, embed);
+  const { publicUrl, guestsUrl, absBase, autoLunar, attendingCount, responsesLocked, meta, combo, guestNames } = d;
+  const openGuests = d.openPlannerGuests ?? (() => setTab("khach"));
 
   // Nhắc những mục còn thiếu để thiệp trông "đủ" — bấm là nhảy sang đúng tab.
-  const todo: { label: string; tab: TabId }[] = [
-    ...(cfg.groom_name && cfg.bride_name ? [] : [{ label: "Tên cô dâu & chú rể", tab: "capdoi" as TabId }]),
-    ...(cfg.wedding_date ? [] : [{ label: "Ngày cưới", tab: "ngay" as TabId }]),
-    ...(cfg.cover_url ? [] : [{ label: "Ảnh bìa", tab: "anh" as TabId }]),
-    // Mọi mẫu điện thoại đều có khối chân dung cô dâu — chú rể; thiếu ảnh thì
-    // khối đó chỉ còn chữ lồng, nên nhắc ngay ở danh sách việc cần làm.
-    ...(cfg.bride_photo && cfg.groom_photo ? [] : [{ label: "Ảnh chân dung cô dâu & chú rể", tab: "capdoi" as TabId }]),
-    ...((cfg.gallery ?? []).length ? [] : [{ label: "Album ảnh cưới", tab: "anh" as TabId }]),
-    ...((cfg.events ?? []).length ? [] : [{ label: "Ít nhất một sự kiện", tab: "ngay" as TabId }]),
-  ];
+  const todo: { label: string; tab: TabId }[] = d.todo.map((t) => ({ label: t.label, tab: TODO_TAB[t.key] }));
 
   const preview = (
     <PreviewPane inv={draft} wishes={previewWishes} guest={previewGuest} storyUrl={cfg.story_url} publicUrl={publicUrl} />

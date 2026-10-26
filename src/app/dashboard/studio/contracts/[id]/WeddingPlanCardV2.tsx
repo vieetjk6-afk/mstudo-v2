@@ -84,11 +84,14 @@ export default function WeddingPlanCardV2(props: WeddingPlanProps) {
                 <Mini label="Cập nhật" value={fmtDateTime(plan.updated_at)} small />
               </dl>
               <button type="button" className={btn("secondary", "md", "w-full !justify-between")} onClick={() => setOpen(true)}>
-                <span className="flex min-w-0 items-center gap-2 truncate">
-                  <CalendarHeart size={16} /> Xem lịch trình & ghi chú của khách
+                <span className="flex min-w-0 items-center gap-2">
+                  <CalendarHeart size={16} className="flex-none" /> <span className="truncate">Xem lịch trình & ghi chú của khách</span>
                 </span>
                 <span className="flex flex-none items-center gap-1 text-[12.5px] font-medium" style={{ color: "var(--tx3)" }}>
-                  {w.rows.length} mốc · {w.shots.length} ảnh <ChevronRight size={16} />
+                  <span className="hidden sm:inline">
+                    {w.rows.length} mốc · {w.shots.length} ảnh
+                  </span>
+                  <ChevronRight size={16} />
                 </span>
               </button>
             </>
@@ -252,7 +255,7 @@ function Mini({ label, value, sub, small = false }: { label: string; value: stri
       <dt className="truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
         {label}
       </dt>
-      <dd className={`truncate font-semibold ${small ? "text-[12.5px]" : "text-[14px]"}`}>{value}</dd>
+      <dd className={`font-semibold ${small ? "text-[12.5px] leading-snug" : "truncate text-[14px]"}`}>{value}</dd>
       {sub ? (
         <dd className="truncate text-[11.5px]" style={{ color: "var(--am)" }}>
           {sub}

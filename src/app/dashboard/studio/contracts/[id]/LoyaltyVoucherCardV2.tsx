@@ -66,15 +66,17 @@ export default function LoyaltyVoucherCardV2(props: LoyaltyVoucherProps) {
         }
       >
         <div className="flex flex-col gap-4">
-          <div className="flex items-start gap-3">
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:gap-3">
             <p className="min-w-0 flex-1 text-[13.5px]" style={{ color: "var(--tx2)" }}>
               {status}
               {nextTier ? <span style={{ color: "var(--tx3)" }}> {nextTier}</span> : null}
             </p>
             {badge && (
-              <Badge tone={badge.tone} dot>
-                {badge.text}
-              </Badge>
+              <span className="order-first flex-none sm:order-none">
+                <Badge tone={badge.tone} dot>
+                  {badge.text}
+                </Badge>
+              </span>
             )}
           </div>
 

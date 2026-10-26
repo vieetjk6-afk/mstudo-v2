@@ -145,7 +145,7 @@ function PlanUsageV2({ showUpgrade = true, initial = null }: Props) {
       <span className="v2-stat-icon" style={{ width: 36, height: 36, color: "var(--ac)", background: "var(--acS)" }}>
         <Icon size={17} />
       </span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 basis-[220px]">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="text-[14px] font-semibold">Gói {PLAN_LABEL[usage.plan]}</p>
           {reached ? <Badge tone="amber" dot>Hết lượt tạo album tháng này</Badge> : null}

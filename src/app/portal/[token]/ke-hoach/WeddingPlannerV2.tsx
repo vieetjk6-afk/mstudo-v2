@@ -59,6 +59,7 @@ export default function WeddingPlannerV2({ token, brand }: { token: string; bran
             guestNames: plan.guests.map((g) => g.name),
             onDirty: onEditorDirty,
           }}
+          v2={{ brand }}
         />
         {toastNode}
       </>

@@ -82,7 +82,15 @@ function StudioTrialButtonV2({ used: initialUsed }: Props) {
   return (
     <div className="flex flex-col gap-1">
       <button type="button" onClick={activate} disabled={busy} className={btn("secondary", "sm")} style={{ color: "var(--ac)" }}>
-        <Sparkles size={14} /> {busy ? "Đang kích hoạt…" : "Dùng thử Studio 7 ngày"}
+        <Sparkles size={14} />
+        {busy ? (
+          "Đang kích hoạt…"
+        ) : (
+          <>
+            <span className="sm:hidden">Dùng thử 7 ngày</span>
+            <span className="hidden sm:inline">Dùng thử Studio 7 ngày</span>
+          </>
+        )}
       </button>
       {msg && <p className="text-[12px]" style={{ color: msg.includes("Đã kích") ? "var(--gn)" : "var(--rd)" }}>{msg}</p>}
     </div>

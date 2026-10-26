@@ -76,9 +76,18 @@ dev từ origin lạ nên trang sẽ không chạy được JavaScript.
 3. Thiết lập ban đầu 5 bước cho studio mới và popup cập nhật cho studio cũ.
 4. Mở cho người dùng: `beta` → `default` → gỡ khung cũ và công tắc.
 
-Còn giữ kiểu cũ bên trong khung mới (dùng chung với nơi khác, chưa vẽ lại): ô
-tên miền riêng, bảng chỉnh khối của trình dựng website, vài thẻ phụ trong chi
-tiết hợp đồng (phụ lục, thuê đồ, voucher), trang `buoi-chup/` của hợp đồng.
+   Các khối dùng chung cũng đã có bản V2: ô tên miền riêng, thẻ cài đặt (xuất kế
+   toán, việc tự động, chuyển khoản tự xác nhận, chính sách studio), ⌘K, chọn chi
+   nhánh, lọc ảnh AI, chèn điều khoản, tải logo, nút gửi Zalo/Messenger/Email, thông
+   báo nhỏ (toast); các thẻ phụ trong chi tiết hợp đồng (phụ lục, thuê đồ, voucher,
+   lịch hẹn, album, thiệp, love story, kế hoạch cưới) và trang `buoi-chup/`.
+   Trang khách (hợp đồng, báo giá, album, cổng khách, kế hoạch cưới, đặt lịch, form,
+   voucher, bảng giá, cổng nhân viên và thợ) và trình sửa thiệp / love story của
+   khách cũng theo bộ màu mới, bật theo studio sở hữu trang (`customerUiV2`).
+
+Còn giữ kiểu cũ bên trong khung mới (ít gặp, chưa vẽ lại): bảng chỉnh khối của
+trình dựng website, nút cài ứng dụng (`InstallPwaButton`) cho gói chưa có bản máy
+tính.
 
 Hoa hồng theo bộ phận (Bán hàng / Sản xuất) là tính năng mới cần dữ liệu mới,
 làm riêng sau.

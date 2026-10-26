@@ -476,7 +476,7 @@ export function LinkRow({
           </p>
         )}
       </div>
-      {children ? <div className="flex flex-none flex-wrap items-center gap-1.5">{children}</div> : null}
+      {children ? <div className="flex max-w-full flex-wrap items-center gap-1.5">{children}</div> : null}
     </div>
   );
 }
