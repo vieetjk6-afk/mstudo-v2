@@ -2,6 +2,9 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { intakeIsWedding } from "@/lib/types";
 import IntakeForm from "./IntakeForm";
+import IntakeFormV2 from "./IntakeFormV2";
+import { customerUiV2 } from "@/lib/ui-server";
+import { getStudioBrand } from "@/lib/studio-brand";
 import type { Metadata } from "next";
 import { studioShareMetadata } from "@/lib/studio-share-meta";
 
@@ -45,17 +48,22 @@ export default async function IntakeFormPage(props: { params: Promise<{ token: s
       : Promise.resolve({ data: null }),
   ]);
 
-  return (
-    <IntakeForm
-      token={params.token}
-      isWedding={intakeIsWedding(c.shoot_type, svc?.name ?? null)}
-      clientName={c.client_name}
-      title={c.title}
-      studio={owner?.studio_brand_name?.trim() || owner?.full_name || null}
-      submitted={!!c.intake_submitted_at}
-      // `intake` là cột jsonb: Supabase trả về kiểu rộng, IntakeForm mới là nơi
-      // biết hình dạng thật. Ép qua kiểu prop của chính nó thay vì `any`.
-      initial={(c.intake ?? null) as React.ComponentProps<typeof IntakeForm>["initial"]}
-    />
-  );
+  const formProps = {
+    token: params.token,
+    isWedding: intakeIsWedding(c.shoot_type, svc?.name ?? null),
+    clientName: c.client_name,
+    title: c.title,
+    studio: owner?.studio_brand_name?.trim() || owner?.full_name || null,
+    submitted: !!c.intake_submitted_at,
+    // `intake` là cột jsonb: Supabase trả về kiểu rộng, IntakeForm mới là nơi
+    // biết hình dạng thật. Ép qua kiểu prop của chính nó thay vì `any`.
+    initial: (c.intake ?? null) as React.ComponentProps<typeof IntakeForm>["initial"],
+  };
+
+  // Giao diện mới theo studio sở hữu form; chỉ khi đó mới đọc thêm logo.
+  if (await customerUiV2(c.owner_id)) {
+    const brand = await getStudioBrand(db, c.owner_id).catch(() => null);
+    return <IntakeFormV2 {...formProps} brand={{ name: formProps.studio || brand?.name || "Studio", logoUrl: brand?.logoUrl ?? null }} />;
+  }
+  return <IntakeForm {...formProps} />;
 }

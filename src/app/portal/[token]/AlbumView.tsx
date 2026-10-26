@@ -1,17 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Images, Video, Download, Star, Share2, Check, ExternalLink, FolderDown } from "lucide-react";
 import { useToast } from "@/components/studio/Toast";
-import { fullImageUrl, thumbnailUrl } from "@/lib/drive";
 import { fmtDate } from "@/lib/date";
-import { useFullImageWidth } from "@/lib/use-img-width";
 import PortalPhotoGrid from "./PortalPhotoGrid";
-import PortalVideos, { type PortalVideo } from "./PortalVideos";
+import PortalVideos from "./PortalVideos";
 import { BG, CARD, DIM, LINE } from "./dark";
 import type { PortalPayload } from "./types";
 import { thiepUrl } from "@/lib/hosts";
+import { sharePortalPage, useAlbumContent, usePortalRating } from "./usePortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TRANG ALBUM — giai đoạn HOÀN THÀNH của cổng khách hàng
@@ -47,88 +46,15 @@ export default function AlbumView({
   initialTab?: Tab;
 }) {
   const { toast, toastNode } = useToast();
-  const [rating, setRating] = useState(0);
-  const [rated, setRated] = useState(false);
+  // Ảnh, video, link tải, đánh giá — dùng chung với bản giao diện mới (./usePortal).
+  const { rating, rated, sendRating } = usePortalRating(token, phone, toast);
 
   const c = data.contract;
-  const album = data.album;
-  const photos = useMemo(() => (album?.photos ?? []).filter((p) => !p.is_video), [album]);
-  const albumVideos = useMemo(() => (album?.photos ?? []).filter((p) => p.is_video), [album]);
-  // Link studio dán tay trên hợp đồng (YouTube / Drive / Google Photos…).
-  const linkVideos = useMemo(() => data.final_links?.videos ?? [], [data.final_links]);
-  const albumLink = data.final_links?.album_url ?? null;
-  const originalsLink = data.final_links?.originals_url ?? null;
-  const canDownload = !!album?.download_enabled;
-
-  /** Một danh sách phát chung: video dán link trước (thường là phim chính đã
-   *  dựng), rồi tới video nằm trong album Drive. */
-  const videos = useMemo<PortalVideo[]>(() => {
-    const fromLinks = linkVideos.map((v, i) => ({
-      key: `link-${i}`,
-      title: v.title || (linkVideos.length > 1 ? `Video ${i + 1}` : "Video hoàn thiện"),
-      kind: v.kind ?? "other",
-      embed: v.embed,
-      poster: v.poster ?? null,
-      openUrl: v.url,
-      // Link Drive studio tự dán = studio đã chủ ý chia sẻ file đó cho khách.
-      downloadUrl: v.drive_id ? `/api/img?id=${encodeURIComponent(v.drive_id)}&dl=1` : null,
-    }));
-    const fromAlbum = albumVideos.map((v) => ({
-      key: v.id,
-      title: v.name.replace(/\.[a-z0-9]{2,4}$/i, ""),
-      kind: "drive" as const,
-      embed: `https://drive.google.com/file/d/${v.drive_file_id}/preview`,
-      poster: thumbnailUrl(v.drive_file_id, 1024),
-      openUrl: `https://drive.google.com/file/d/${v.drive_file_id}/view`,
-      downloadUrl: canDownload ? `/api/img?id=${encodeURIComponent(v.drive_file_id)}&dl=1` : null,
-    }));
-    return [...fromLinks, ...fromAlbum];
-  }, [linkVideos, albumVideos, canDownload]);
-
-  const hasContent = !!album || !!albumLink || !!originalsLink || videos.length > 0;
+  const { album, photos, albumVideos, videos, albumLink, originalsLink, canDownload, hasContent, firstTab, cover } = useAlbumContent(data);
   // Không có ảnh nhưng có video → mở thẳng tab Video, khỏi bắt khách bấm thêm.
-  const [tab, setTab] = useState<Tab>(() => initialTab ?? (photos.length === 0 && !albumLink && videos.length > 0 ? "videos" : "photos"));
-  const coverW = useFullImageWidth();
-  const cover = album?.cover_url || (photos[0] ? fullImageUrl(photos[0].drive_file_id, coverW) : null);
+  const [tab, setTab] = useState<Tab>(() => initialTab ?? firstTab);
 
-  async function sendRating(stars: number) {
-    setRating(stars);
-    // Mất mạng → `fetch` ném ra ngoài, sao đã sáng lên mà đánh giá không tới
-    // studio và khách tưởng đã gửi. Nói thật thay vì im lặng.
-    let res: Response;
-    try {
-      res = await fetch(`/api/c/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "review", phone, rating: stars, message: "" }),
-      });
-    } catch {
-      setRating(0);
-      toast("Đang mất mạng — chưa gửi được đánh giá. Thử lại khi có mạng nhé.");
-      return;
-    }
-    if (res.ok) {
-      setRated(true);
-      toast("Cảm ơn bạn đã đánh giá!");
-      return;
-    }
-    const j = (await res.json().catch(() => ({}))) as { message?: string };
-    toast(j.message || "Chưa gửi được đánh giá, thử lại sau.");
-  }
-
-  async function share() {
-    const url = window.location.href;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: c.client_name || c.title, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      toast("Đã sao chép đường dẫn album.");
-    } catch {
-      toast("Không chia sẻ được — hãy sao chép đường dẫn trên trình duyệt.");
-    }
-  }
+  const share = () => sharePortalPage(c.client_name || c.title, toast);
 
   const TABS: { key: Tab; label: string; n: number | null }[] = [
     { key: "photos", label: "Ảnh", n: photos.length },

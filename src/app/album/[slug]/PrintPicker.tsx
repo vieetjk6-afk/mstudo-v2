@@ -150,22 +150,7 @@ export type PrintPicks = ReturnType<typeof usePrintPicks>;
  */
 export function PrintCard({ pp, cardRef }: { pp: PrintPicks; cardRef?: RefObject<HTMLDivElement | null> }) {
   if (!pp.enabled) return null;
-  let title: string;
-  let note: string;
-  let cta: string;
-  if (pp.locked) {
-    title = `Studio đã chuyển ${pp.sentCount} ảnh của bạn đi in`;
-    note = "Ảnh in sẽ được giao cùng sản phẩm của hợp đồng.";
-    cta = "Xem ảnh đã chọn";
-  } else if (pp.sentAt && !pp.dirty) {
-    title = `Bạn đã gửi ${pp.sentCount}/${pp.quota} ảnh in cho studio`;
-    note = `Gửi ngày ${fmtDate(pp.sentAt)}. Muốn đổi thì chọn lại rồi bấm gửi lại — trước khi studio chuyển đi in.`;
-    cta = "Sửa ảnh in";
-  } else {
-    title = `Bạn được tặng ${pp.quota} ảnh in`;
-    note = "Chọn những tấm bạn muốn in rồi bấm “Gửi cho studio”.";
-    cta = pp.picks.size > 0 ? `Tiếp tục chọn (${pp.picks.size}/${pp.quota})` : "Chọn ảnh in";
-  }
+  const { title, note, cta } = printCardText(pp);
   return (
     <div ref={cardRef} className="mt-5 flex scroll-mt-20 flex-wrap items-center gap-3 rounded-2xl p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>
       <span className="flex h-10 w-10 flex-none items-center justify-center rounded-full" style={{ background: "color-mix(in srgb, var(--gold) 16%, transparent)", color: "var(--gold)" }}>
@@ -187,20 +172,34 @@ export function PrintCard({ pp, cardRef }: { pp: PrintPicks; cardRef?: RefObject
   );
 }
 
+/** Chữ của thẻ ảnh in (tiêu đề · ghi chú · nút) — dùng chung cho bản cũ và GalleryViewV2. */
+export function printCardText(pp: PrintPicks): { title: string; note: string; cta: string } {
+  let title: string;
+  let note: string;
+  let cta: string;
+  if (pp.locked) {
+    title = `Studio đã chuyển ${pp.sentCount} ảnh của bạn đi in`;
+    note = "Ảnh in sẽ được giao cùng sản phẩm của hợp đồng.";
+    cta = "Xem ảnh đã chọn";
+  } else if (pp.sentAt && !pp.dirty) {
+    title = `Bạn đã gửi ${pp.sentCount}/${pp.quota} ảnh in cho studio`;
+    note = `Gửi ngày ${fmtDate(pp.sentAt)}. Muốn đổi thì chọn lại rồi bấm gửi lại — trước khi studio chuyển đi in.`;
+    cta = "Sửa ảnh in";
+  } else {
+    title = `Bạn được tặng ${pp.quota} ảnh in`;
+    note = "Chọn những tấm bạn muốn in rồi bấm “Gửi cho studio”.";
+    cta = pp.picks.size > 0 ? `Tiếp tục chọn (${pp.picks.size}/${pp.quota})` : "Chọn ảnh in";
+  }
+  return { title, note, cta };
+}
+
 /**
  * Nút nổi "Chọn ảnh in" ở đáy màn hình — khách cuộn tới đâu cũng thấy, cho tới
  * khi gửi xong. Ẩn khi thẻ giới thiệu đang nằm trong màn hình (đỡ hai nút cùng
  * một việc) và khi đang chọn (thanh dưới đáy đã thay chỗ).
  */
 export function PrintFab({ pp, cardRef }: { pp: PrintPicks; cardRef: RefObject<HTMLDivElement | null> }) {
-  const [cardInView, setCardInView] = useState(false);
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setCardInView(e.isIntersecting), { threshold: 0.4 });
-    io.observe(el);
-    return () => io.disconnect();
-  }, [cardRef, pp.enabled]);
+  const cardInView = useCardInView(cardRef, pp.enabled);
   if (!pp.needsAction || pp.mode || cardInView) return null;
   // Căn giữa bằng khung bao, KHÔNG bằng translate trên chính nút: .btn-primary
   // dùng transform cho hiệu ứng bấm (scale), đè mất translate → nút nhảy lệch
@@ -218,6 +217,19 @@ export function PrintFab({ pp, cardRef }: { pp: PrintPicks; cardRef: RefObject<H
       </button>
     </div>
   );
+}
+
+/** Thẻ ảnh in đang nằm trong màn hình? (để nút nổi khỏi trùng việc với thẻ). */
+export function useCardInView(cardRef: RefObject<HTMLDivElement | null>, enabled: boolean) {
+  const [cardInView, setCardInView] = useState(false);
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setCardInView(e.isIntersecting), { threshold: 0.4 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [cardRef, enabled]);
+  return cardInView;
 }
 
 /** Thanh dưới đáy khi đang chọn ảnh in: đếm x/N, lọc ảnh đã chọn, gửi. */

@@ -10,6 +10,7 @@ import type { ProductStatus, StudioAppointment, StudioNotification } from "@/lib
 import TodayView from "./TodayView";
 import TaskQueue from "./TaskQueue";
 import StaffNotifications from "./StaffNotifications";
+import { useStaffScope } from "./useStaffPortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CỔNG NHÂN VIÊN — khung 3 tab
@@ -46,13 +47,7 @@ export type ChecklistRow = {
 
 type Tab = "today" | "tasks" | "notif";
 
-/** Vai trò được xem việc của CẢ studio, không chỉ việc gán cho mình. */
-const SEES_ALL = ["owner", "admin", "manager"];
-
-export default function StaffPortal({
-  me, meName, actingRole, studioName, today,
-  appointments, monthApptCount, myMonthApptCount, tasks, notifications, checklist, contractCount,
-}: {
+export type StaffPortalProps = {
   me: string;
   meName: string;
   actingRole: string;
@@ -65,34 +60,20 @@ export default function StaffPortal({
   notifications: StudioNotification[];
   checklist: ChecklistRow[];
   contractCount: number;
-}) {
+};
+
+export default function StaffPortal({
+  me, meName, actingRole, studioName, today,
+  appointments, monthApptCount, myMonthApptCount, tasks, notifications, checklist, contractCount,
+}: StaffPortalProps) {
   const { toast, toastNode } = useToast();
   const [tab, setTab] = useState<Tab>("today");
 
-  /**
-   * "Việc của tôi" hay "Cả studio". Người quản lý cần thấy cả ngày của studio,
-   * nhân viên thì chỉ quan tâm phần của mình. Mặc định: có việc gán cho mình thì
-   * mở "của tôi", chưa có gì thì mở "cả studio" — tránh cảnh mở app ra trống trơn
-   * trong khi hôm nay studio có 6 buổi.
-   */
-  const hasMine = useMemo(
-    () => appointments.some((a) => a.staff_id === me) || tasks.some((t) => t.assigned_to === me),
-    [appointments, tasks, me]
-  );
-  const [scope, setScope] = useState<"mine" | "all">(hasMine ? "mine" : "all");
-  const canSeeAll = SEES_ALL.includes(actingRole);
-
-  const myAppts = useMemo(
-    () => (scope === "mine" ? appointments.filter((a) => a.staff_id === me) : appointments),
-    [appointments, scope, me]
-  );
-  const myTasks = useMemo(
-    () => (scope === "mine" ? tasks.filter((t) => t.assigned_to === me || t.contract?.assigned_to === me) : tasks),
-    [tasks, scope, me]
-  );
-
-  const todayAppts = useMemo(() => myAppts.filter((a) => a.appt_date === today), [myAppts, today]);
-  const openTasks = useMemo(() => myTasks.filter((t) => t.status !== "done"), [myTasks]);
+  // "Việc của tôi" hay "Cả studio" + các danh sách lọc theo phạm vi — logic
+  // chung với giao diện mới, xem ./useStaffPortal.
+  const { scope, setScope, canSeeAll, myAppts, myTasks, todayAppts, openTasks } = useStaffScope({
+    me, actingRole, appointments, tasks, today,
+  });
   const unread = useMemo(() => notifications.filter((n) => !n.read).length, [notifications]);
 
   const TABS: { key: Tab; label: string; icon: typeof CalendarDays; badge: number }[] = [

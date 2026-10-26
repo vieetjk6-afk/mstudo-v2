@@ -1,18 +1,17 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays, Wand2, FileText, MapPin, Phone, StickyNote, Check, CircleDot,
   CheckCircle2, Circle, CalendarRange,
 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { Panel, PanelHead, Pill, EmptyState, KindPill } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDayMonth, fmtDow } from "@/lib/date";
 import { apptDuration, apptTimeRange, apptTitle, kindMeta } from "@/lib/appointments";
-import type { AppointmentStatus, StudioAppointment } from "@/lib/types";
+import type { StudioAppointment } from "@/lib/types";
 import type { ChecklistRow } from "./StaffPortal";
+import { useApptCheckIn, useChecklist } from "./useStaffPortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TAB "HÔM NAY" — 3 thẻ KPI + timeline lịch trong ngày, rail phải là lịch sắp
@@ -32,37 +31,10 @@ export default function TodayView({
   checklist: ChecklistRow[];
   toast: (m: string) => void;
 }) {
-  const supabase = createClient();
-  const [appts, setAppts] = useState(todayAppts);
-  const [checks, setChecks] = useState(checklist);
-
-  /** Check-in → hoàn thành. Cùng cột `status` với lịch studio, nên chủ studio
-   *  thấy ngay nhân viên đã tới điểm hẹn chưa mà không cần nhắn hỏi. */
-  async function advance(a: StudioAppointment) {
-    const next: AppointmentStatus = a.status === "scheduled" ? "checked_in" : "done";
-    const patch =
-      next === "checked_in"
-        ? { status: next, checked_in_at: new Date().toISOString() }
-        : { status: next, done_at: new Date().toISOString() };
-    setAppts((p) => p.map((x) => (x.id === a.id ? { ...x, ...patch } : x)));
-    const { error } = await supabase.from("studio_appointments").update(patch).eq("id", a.id);
-    if (error) {
-      setAppts((p) => p.map((x) => (x.id === a.id ? a : x)));
-      toast("Không cập nhật được — thử lại.");
-      return;
-    }
-    toast(next === "checked_in" ? `Đã check-in · ${apptTitle(a)}` : `Đã đánh dấu hoàn thành · ${apptTitle(a)}`);
-  }
-
-  async function toggleTask(t: ChecklistRow) {
-    const done = !t.done;
-    setChecks((p) => p.map((x) => (x.id === t.id ? { ...x, done } : x)));
-    const { error } = await supabase.from("contract_tasks").update({ done }).eq("id", t.id);
-    if (error) {
-      setChecks((p) => p.map((x) => (x.id === t.id ? t : x)));
-      toast("Không lưu được — thử lại.");
-    }
-  }
+  // Check-in → hoàn thành và tick checklist: logic chung với giao diện mới
+  // (./useStaffPortal) — cùng bảng, cùng cột, cùng câu báo.
+  const { appts, advance } = useApptCheckIn(todayAppts, toast);
+  const { checks, toggleTask } = useChecklist(checklist, toast);
 
   return (
     <div className="grid grid-cols-1 gap-3.5 min-[1080px]:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">

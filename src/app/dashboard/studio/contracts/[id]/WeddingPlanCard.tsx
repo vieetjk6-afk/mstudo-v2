@@ -26,9 +26,7 @@ import MessengerButton from "@/components/MessengerButton";
  * Chế độ Quà cưới (`combo`): link này là MỘT món quà gồm cả kế hoạch lẫn thiệp
  * cưới online — studio gửi một tin nhắn duy nhất.
  */
-export default function WeddingPlanCard({
-  contractId, clientToken, studioHost, clientMessenger, toggle, packageOn, comingSoon = false, combo = false,
-}: {
+export type WeddingPlanProps = {
   contractId: string;
   clientToken: string | null;
   studioHost: string | null;
@@ -40,7 +38,10 @@ export default function WeddingPlanCard({
   comingSoon?: boolean;
   /** Chế độ Quà cưới: kế hoạch + thiệp chung một trang. */
   combo?: boolean;
-}) {
+};
+
+/** Logic thẻ kế hoạch cưới — dùng chung cho bản cũ và WeddingPlanCardV2. */
+export function useWeddingPlan({ contractId, clientToken, studioHost, toggle, packageOn, comingSoon = false, combo = false }: WeddingPlanProps) {
   const [plan, setPlan] = useState<(WeddingPlanData & { updated_at: string }) | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "missing">("loading");
   const [value, setValue] = useState<boolean | null>(toggle ?? null);
@@ -86,6 +87,30 @@ export default function WeddingPlanCard({
     setValue(v);
   }
 
+  const url = clientToken ? studioUrl(studioHost, `/portal/${clientToken}/ke-hoach`) : "";
+  const message = combo ? weddingGiftMessage(url) : plannerMessage(url);
+
+  function copyMessage() {
+    navigator.clipboard?.writeText(message);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  // Phần studio đọc từ kế hoạch của khách (lịch trình, đội hỗ trợ, nhà cung cấp, ảnh cần chụp).
+  const rows = plan ? mergeDay(plan.day, []) : [];
+  const left = plan ? daysUntil(plan.wedding_date, todayVN()) : null;
+  const done = plan ? plan.tasks.filter((t) => t.done).length : 0;
+  const guests = plan && plan.guests.length ? guestSummary(plan.guests).people : plan?.settings.guests_expected ?? 0;
+  const booked = plan ? plan.vendors.filter((v) => v.status === "booked") : [];
+  const shots = plan ? [...plan.shots].sort((a, b) => Number(b.must) - Number(a.must)) : [];
+
+  return { plan, state, on, saving, err, copied, setCopied, flip, url, message, copyMessage, rows, left, done, guests, booked, shots };
+}
+
+export default function WeddingPlanCard(props: WeddingPlanProps) {
+  const { clientMessenger, packageOn, comingSoon = false, combo = false } = props;
+  const { plan, state, on, saving, err, copied, setCopied, flip, url, message, rows, left, done, guests, booked, shots } = useWeddingPlan(props);
+
   const head = (
     <div className="flex flex-wrap items-center gap-3">
       <CalendarHeart size={16} style={{ color: "#d96e8f" }} />
@@ -112,14 +137,6 @@ export default function WeddingPlanCard({
   if (comingSoon) return <div className="card mb-6 p-4" style={{ opacity: 0.85 }}>{head}</div>;
   if (state === "loading") return null;
 
-  const url = clientToken ? studioUrl(studioHost, `/portal/${clientToken}/ke-hoach`) : "";
-  const message = combo ? weddingGiftMessage(url) : plannerMessage(url);
-  const rows = plan ? mergeDay(plan.day, []) : [];
-  const left = plan ? daysUntil(plan.wedding_date, todayVN()) : null;
-  const done = plan ? plan.tasks.filter((t) => t.done).length : 0;
-  const guests = plan && plan.guests.length ? guestSummary(plan.guests).people : plan?.settings.guests_expected ?? 0;
-  const booked = plan ? plan.vendors.filter((v) => v.status === "booked") : [];
-  const shots = plan ? [...plan.shots].sort((a, b) => Number(b.must) - Number(a.must)) : [];
 
   return (
     <div className="card mb-6 p-4">

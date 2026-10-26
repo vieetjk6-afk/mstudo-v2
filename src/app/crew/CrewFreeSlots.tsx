@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { CalendarPlus, X, Sun } from "lucide-react";
 import { todayVN } from "@/lib/date";
 import { slotLabel, type Slot } from "@/lib/timesheet";
+import { useFreeSlotForm } from "./useCrewPortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    KHOẢNG RẢNH THỢ TỰ ĐĂNG KÝ — ngược của "báo bận".
@@ -36,19 +36,11 @@ export default function CrewFreeSlots({
   onAdd: (v: { studioId: string; date: string; start: string; end: string; note: string }) => void;
   onRemove: (id: string) => void;
 }) {
-  const [studioId, setStudioId] = useState(studios[0]?.id ?? "");
-  const [date, setDate] = useState(todayVN());
-  const [allDay, setAllDay] = useState(true);
-  const [start, setStart] = useState("08:00");
-  const [end, setEnd] = useState("17:00");
-  const [note, setNote] = useState("");
-
-  // Chỉ hiện khoảng từ HÔM NAY trở đi: khai rảnh của tuần trước không giúp ai
-  // phân công, mà để đó thì danh sách dài dần rồi thợ ngưng đọc.
-  const upcoming = useMemo(() => {
-    const t = todayVN();
-    return slots.filter((s) => s.date >= t).sort((a, b) => a.date.localeCompare(b.date));
-  }, [slots]);
+  // Ô nhập + danh sách khoảng từ hôm nay trở đi: logic chung với giao diện mới,
+  // xem ./useCrewPortal.
+  const {
+    studioId, setStudioId, date, setDate, allDay, setAllDay, start, setStart, end, setEnd, note, setNote, upcoming, payload,
+  } = useFreeSlotForm(slots, studios);
 
   if (studios.length === 0) return null;
 
@@ -84,7 +76,7 @@ export default function CrewFreeSlots({
         )}
         <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ghi chú (không bắt buộc)" />
         <button
-          onClick={() => onAdd({ studioId, date, start: allDay ? "" : start, end: allDay ? "" : end, note })}
+          onClick={() => onAdd(payload)}
           disabled={busy || !studioId || !date}
           className="btn-primary w-full"
         >

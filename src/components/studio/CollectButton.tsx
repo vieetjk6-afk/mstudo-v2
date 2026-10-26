@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2 } from "lucide-react";
 import { PAYMENT_METHOD_LABEL, type PaymentMethod } from "@/lib/types";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { btn } from "@/components/v2/kit";
 
 /**
  * "Đã nhận" — chốt một đợt thanh toán ngay tại thẻ việc, không phải mở hợp đồng.
@@ -13,16 +15,18 @@ import { PAYMENT_METHOD_LABEL, type PaymentMethod } from "@/lib/types";
  * bấm. Có hỏi xác nhận vì đây là thao tác động tới TIỀN và không có nút hoàn
  * tác tại chỗ (gỡ dấu đã thu vẫn làm được trong hợp đồng).
  */
-export default function CollectButton({
-  planId,
-  contractId,
-  amountLabel,
-}: {
+type Props = {
   planId: string;
   contractId: string;
   /** "15.000.000đ" — nhắc lại số tiền trong câu hỏi xác nhận. */
   amountLabel: string;
-}) {
+};
+
+export default function CollectButton(props: Props) {
+  return useUiV2() ? <CollectButtonV2 {...props} /> : <CollectButtonV1 {...props} />;
+}
+
+function useCollect({ planId, contractId, amountLabel }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -59,6 +63,12 @@ export default function CollectButton({
     setBusy(false);
   }
 
+  return { busy, done, choosing, setChoosing, collect };
+}
+
+function CollectButtonV1(props: Props) {
+  const { busy, done, choosing, setChoosing, collect } = useCollect(props);
+
   if (choosing && !busy && !done) {
     return (
       <span className="inline-flex flex-none items-center gap-1.5">
@@ -89,6 +99,35 @@ export default function CollectButton({
       style={{ background: "var(--gnS)", color: "var(--gn)" }}
     >
       {busy ? <Loader2 size={13} className="mr-1 inline animate-spin" /> : <Check size={13} className="mr-1 inline" />}
+      {done ? "Đã ghi nhận" : "Đã nhận"}
+    </button>
+  );
+}
+
+/** Giao diện mới: cùng hai bước (Đã nhận → tiền mặt / chuyển khoản) bằng nút cỡ
+ *  "sm" của bộ khối, nền xanh lá vì đây là thao tác ghi nhận tiền đã thu. */
+function CollectButtonV2(props: Props) {
+  const { busy, done, choosing, setChoosing, collect } = useCollect(props);
+  const green = { background: "var(--gnS)", color: "var(--gn)" } as const;
+
+  if (choosing && !busy && !done) {
+    return (
+      <span className="inline-flex flex-none items-center gap-1.5">
+        {(["cash", "transfer"] as const).map((m) => (
+          <button key={m} type="button" onClick={() => collect(m)} className={btn("soft", "sm")} style={green}>
+            {PAYMENT_METHOD_LABEL[m]}
+          </button>
+        ))}
+        <button type="button" onClick={() => setChoosing(false)} className={btn("ghost", "sm")}>
+          Huỷ
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button type="button" onClick={() => setChoosing(true)} disabled={busy || done} className={btn("soft", "sm", "flex-none")} style={green}>
+      {busy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
       {done ? "Đã ghi nhận" : "Đã nhận"}
     </button>
   );

@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, X, ArrowLeft } from "lucide-react";
 import StudioBrandMark from "@/components/StudioBrandMark";
 import type { StudioBrandInfo } from "@/lib/studio-brand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
+import { useShowcaseLightbox } from "./useShowcaseLightbox";
 
 interface Photo {
   id: string;
@@ -27,18 +27,7 @@ export default function ShowcaseAlbum({
   description: string | null;
   photos: Photo[];
 }) {
-  const [lbIdx, setLbIdx] = useState<number | null>(null);
-
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (lbIdx === null) return;
-      if (e.key === "ArrowRight") setLbIdx((i) => (i === null ? i : Math.min(photos.length - 1, i + 1)));
-      else if (e.key === "ArrowLeft") setLbIdx((i) => (i === null ? i : Math.max(0, i - 1)));
-      else if (e.key === "Escape") setLbIdx(null);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lbIdx, photos.length]);
+  const { lbIdx, setLbIdx } = useShowcaseLightbox(photos.length);
 
   const lb = lbIdx !== null ? photos[lbIdx] : null;
 

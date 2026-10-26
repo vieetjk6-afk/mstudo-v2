@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
+import { isUiV2 } from "@/lib/ui-server";
+import PlanLockedV2 from "./PlanLockedV2";
 import type { CalendarTab } from "./tabs";
 import { mainUrl } from "@/lib/hosts";
 import { gcalHealth } from "@/lib/gcal";
@@ -19,6 +21,7 @@ import CalendarView, { type ContractMarker, type EventRow } from "./CalendarView
 export default async function ShootTab({ tabs }: { tabs?: readonly CalendarTab[] } = {}) {
   const profile = await requireStudio("booking");
   if (!profile) {
+    if (await isUiV2()) return <PlanLockedV2 title="Cần gói Photographer trở lên" hint="Tính năng này dành cho tài khoản gói Photographer trở lên." cta="Nâng cấp gói" />;
     return (
       <div className="mx-auto max-w-lg text-center">
         <div className="card p-8">

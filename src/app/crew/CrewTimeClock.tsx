@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Clock, Play, Square, CalendarCheck } from "lucide-react";
 import { humanHours, sessionHours, type TimesheetRow } from "@/lib/timesheet";
+import { clockTime, useTimeClock } from "./useCrewPortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CHẤM CÔNG Ở CỔNG THỢ — hai cái nút, không hơn.
@@ -40,26 +40,11 @@ export default function CrewTimeClock({
   onClockIn: (v: { studioId: string; contractId: string }) => void;
   onClockOut: (note: string) => void;
 }) {
-  const [studioId, setStudioId] = useState(studios[0]?.id ?? "");
-  const [contractId, setContractId] = useState("");
-  const [note, setNote] = useState("");
-  const [now, setNow] = useState(() => Date.now());
-
-  // Chỉ chạy đồng hồ khi ĐANG có buổi mở — không đặt một setInterval sống mãi
-  // trên trang mà thợ để mở cả ngày trong túi.
-  useEffect(() => {
-    if (!open?.started_at) return;
-    const iv = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(iv);
-  }, [open?.started_at]);
-
-  useEffect(() => {
-    if (!studioId && studios[0]) setStudioId(studios[0].id);
-  }, [studios, studioId]);
+  // Ô chọn + đồng hồ đếm (chỉ chạy khi đang có buổi mở): logic chung với giao
+  // diện mới, xem ./useCrewPortal.
+  const { studioId, setStudioId, contractId, setContractId, note, setNote, elapsed } = useTimeClock(open, studios);
 
   if (studios.length === 0) return null;
-
-  const elapsed = open?.started_at ? (now - Date.parse(open.started_at)) / 3_600_000 : 0;
 
   return (
     <div className="card p-5">
@@ -81,7 +66,7 @@ export default function CrewTimeClock({
               Đang làm · {humanHours(Math.max(0, elapsed))}
             </p>
             <p className="tnum mt-0.5 text-[11.5px]" style={{ color: "var(--text3)" }}>
-              Bắt đầu {open.started_at ? new Date(open.started_at).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : "—"}
+              Bắt đầu {clockTime(open.started_at)}
               {" · "}
               {open.work_date.split("-").reverse().join("/")}
             </p>

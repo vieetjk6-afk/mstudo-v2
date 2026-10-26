@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { CalendarCheck, Download, Copy, Check, Phone } from "lucide-react";
-import { VoucherTicket, saveVoucherImage, type TicketData } from "@/components/voucher/VoucherTicket";
+import { VoucherTicket, type TicketData } from "@/components/voucher/VoucherTicket";
+import { useVoucherActions } from "./useVoucherActions";
 
 export default function VoucherPublicView({
   ticket,
@@ -17,23 +17,7 @@ export default function VoucherPublicView({
   studioPhone: string | null;
   usable: boolean;
 }) {
-  const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  async function save() {
-    setSaving(true);
-    try {
-      await saveVoucherImage(ticket);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function copyCode() {
-    navigator.clipboard?.writeText(ticket.code).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
+  const { saving, copied, save, copyCode } = useVoucherActions(ticket);
 
   return (
     <main className="min-h-screen px-4 py-8" style={{ background: "#efe6d8", color: "#2b2118" }}>

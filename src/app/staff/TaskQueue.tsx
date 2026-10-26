@@ -1,13 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Wand2, PlayCircle, Send, Eye, AlertCircle, CheckCircle2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
+import { Wand2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Panel, ProgressBar } from "@/components/studio/ui";
 import { fmtDayMonth } from "@/lib/date";
-import { PRODUCT_STATUS_LABEL, type ProductStatus } from "@/lib/types";
+import { PRODUCT_STATUS_LABEL } from "@/lib/types";
 import type { TaskRow } from "./StaffPortal";
+import { TASK_FLOW as FLOW, TASK_TONE as TONE, useTaskFilter, useTaskItems, type TaskFilter as Filter } from "./useStaffPortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TAB "ẢNH CẦN SỬA" — hàng đợi hậu kỳ của người đang đăng nhập.
@@ -22,58 +21,12 @@ import type { TaskRow } from "./StaffPortal";
    một cột không ai ghi vào, và cột đếm ảnh sẽ là số bịa.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const FLOW: Record<ProductStatus, { next: ProductStatus | null; btn: string; Icon: typeof Send; toast: string }> = {
-  ordered: { next: "in_progress", btn: "Nhận việc", Icon: PlayCircle, toast: "Đã nhận việc" },
-  in_progress: { next: "done", btn: "Bàn giao", Icon: Send, toast: "Đã bàn giao" },
-  done: { next: null, btn: "Xem lại", Icon: Eye, toast: "Đã giao trước đó" },
-};
-
-const TONE: Record<ProductStatus, { fg: string; soft: string; pct: number }> = {
-  ordered: { fg: "var(--tx3)", soft: "var(--sf2)", pct: 5 },
-  in_progress: { fg: "var(--bl)", soft: "var(--blS)", pct: 55 },
-  done: { fg: "var(--gn)", soft: "var(--gnS)", pct: 100 },
-};
-
-type Filter = "all" | ProductStatus;
+// FLOW (máy trạng thái ba bước), TONE và mọi thao tác ghi nằm ở ./useStaffPortal
+// — dùng chung với giao diện mới.
 
 export default function TaskQueue({ rows, today, toast }: { rows: TaskRow[]; today: string; toast: (m: string) => void }) {
-  const supabase = createClient();
-  const [items, setItems] = useState(rows);
-  const [filter, setFilter] = useState<Filter>("all");
-
-  const counts = useMemo(() => {
-    const c: Record<string, number> = { all: items.length, ordered: 0, in_progress: 0, done: 0 };
-    for (const r of items) c[r.status] = (c[r.status] ?? 0) + 1;
-    return c;
-  }, [items]);
-
-  const overdue = useMemo(
-    () => items.filter((r) => r.status !== "done" && !!r.contract?.delivery_due && r.contract.delivery_due < today),
-    [items, today]
-  );
-
-  const visible = useMemo(() => {
-    const list = filter === "all" ? items : items.filter((r) => r.status === filter);
-    // Hạn gần nhất lên đầu; việc chưa có hạn xuống cuối.
-    return [...list].sort((a, b) => (a.contract?.delivery_due || "9999-99-99").localeCompare(b.contract?.delivery_due || "9999-99-99"));
-  }, [items, filter]);
-
-  async function push(r: TaskRow) {
-    const flow = FLOW[r.status];
-    if (!flow.next) {
-      toast(`${flow.toast} · ${r.contract?.code ?? r.name}`);
-      return;
-    }
-    const next = flow.next;
-    setItems((p) => p.map((x) => (x.id === r.id ? { ...x, status: next } : x)));
-    const { error } = await supabase.from("contract_products").update({ status: next }).eq("id", r.id);
-    if (error) {
-      setItems((p) => p.map((x) => (x.id === r.id ? r : x)));
-      toast("Không cập nhật được — thử lại.");
-      return;
-    }
-    toast(`${flow.toast} · ${r.contract?.code ?? r.name}`);
-  }
+  const { items, push } = useTaskItems(rows, toast);
+  const { filter, setFilter, counts, overdue, visible } = useTaskFilter(items, today);
 
   const CHIPS: { key: Filter; label: string }[] = [
     { key: "all", label: "Tất cả" },

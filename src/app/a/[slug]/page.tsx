@@ -4,6 +4,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { fetchAllPhotos } from "@/lib/photos";
 import CustomerAlbum from "./CustomerAlbum";
+import CustomerAlbumV2 from "./CustomerAlbumV2";
+import AlbumUnavailableV2 from "./AlbumUnavailableV2";
+import { customerUiV2 } from "@/lib/ui-server";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioBrandMark from "@/components/StudioBrandMark";
 import { buildAlbumMetadata } from "@/lib/album-meta";
@@ -112,10 +115,13 @@ export default async function PublicAlbumPage(
   }
 
   if (!album || album.status !== "published") {
+    const ownerBrand = album?.owner_id ? (await getAlbumOwner(album.owner_id)).brand : null;
+    // Giao diện mới theo studio sở hữu album (xem customerUiV2).
+    if (await customerUiV2(album?.owner_id)) return <AlbumUnavailableV2 brand={ownerBrand} title="Album này hiện không xem được" />;
     return (
       <main className="flex min-h-screen flex-col">
         <header className="flex items-center justify-between px-6 py-5 md:px-10">
-          <StudioBrandMark brand={album?.owner_id ? (await getAlbumOwner(album.owner_id)).brand : null} />
+          <StudioBrandMark brand={ownerBrand} />
           <LanguageSwitcher />
         </header>
         <div className="flex flex-1 items-center justify-center px-6 text-center">
@@ -136,13 +142,15 @@ export default async function PublicAlbumPage(
   // thương hiệu; cột thương hiệu chưa migrate thì nó tự lùi về cột an toàn nên
   // quyền tải/ghi chú không bao giờ hỏng vì brand. Tra token chia sẻ (?s=)
   // chạy song song luôn — nó độc lập với owner.
-  const [{ profile: owner, brand }, studioHost, sh] = await Promise.all([
+  const [{ profile: owner, brand }, studioHost, sh, v2] = await Promise.all([
     getAlbumOwner(album.owner_id),
     // Domain riêng của studio cho link "chia sẻ ảnh đã chọn".
     getStudioHost(admin, album.owner_id),
     !shareIds && searchParams?.s
       ? admin.from("album_shares").select("photo_ids").eq("token", searchParams.s).maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
+    // Giao diện mới (V2) hay bản cũ — theo studio sở hữu album. Cache theo lượt dựng.
+    customerUiV2(album.owner_id),
   ]);
   if (sh?.photo_ids?.length) shareIds = sh.photo_ids as string[];
   const studioName = brand.name;
@@ -239,9 +247,11 @@ export default async function PublicAlbumPage(
     if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
   }
 
+  // Hai bản nhận ĐÚNG cùng một bộ prop (logic chung ở ./useCustomerAlbum).
+  const Album = v2 ? CustomerAlbumV2 : CustomerAlbum;
   return (
     <>
-      <CustomerAlbum
+      <Album
         album={{
           id: album.id,
           slug: album.slug,

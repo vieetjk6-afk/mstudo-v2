@@ -1,15 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { Check, Save, Zap, ListChecks, Bell, MessageSquare, Mail, RotateCcw, Heart } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
-import {
-  AUTOMATION_RULES,
-  clampDays,
-  effectiveConfig,
-  type ActionKind,
-  type AutomationConfig,
-} from "@/lib/automations";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { AUTOMATION_RULES, type ActionKind, type AutomationConfig } from "@/lib/automations";
+import AutomationsCardV2 from "./AutomationsCardV2";
+import { useAutomations } from "./useAutomations";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    VIỆC TỰ ĐỘNG — màn cấu hình.
@@ -34,60 +29,18 @@ const ACTION_META: Record<ActionKind, { label: string; icon: typeof Bell; tone: 
   invitation: { label: "Tạo & gửi thiệp cho khách", icon: Heart, tone: "var(--am)" },
 };
 
-type Row = { enabled: boolean; days: number; message: string };
-
-export default function AutomationsCard({
-  ownerId,
-  initial,
-}: {
+type Props = {
   ownerId: string;
   /** Cấu hình đã lưu, theo khoá luật. Thiếu khoá nào thì dùng mặc định của luật. */
   initial: Record<string, AutomationConfig | undefined>;
-}) {
-  const supabase = createClient();
-  const [rows, setRows] = useState<Record<string, Row>>(() =>
-    Object.fromEntries(AUTOMATION_RULES.map((r) => [r.key, effectiveConfig(r, initial[r.key])]))
-  );
-  const [openKey, setOpenKey] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+};
 
-  const set = (key: string, patch: Partial<Row>) =>
-    setRows((prev) => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+export default function AutomationsCard(props: Props) {
+  return useUiV2() ? <AutomationsCardV2 {...props} /> : <AutomationsCardV1 {...props} />;
+}
 
-  async function save() {
-    setSaving(true);
-    setErr(null);
-    // upsert theo (owner_id, rule) — khoá unique của bảng. Ghi CẢ TÁM dòng một
-    // lượt: studio bấm Lưu là chốt trọn bộ, không phải lưu từng luật.
-    const payload = AUTOMATION_RULES.map((r) => ({
-      owner_id: ownerId,
-      rule: r.key,
-      enabled: rows[r.key].enabled,
-      offset_days: r.days === null ? null : clampDays(rows[r.key].days),
-      // Câu chữ trùng y hệt mặc định thì lưu null, để lần sau sửa câu mặc định
-      // trong code là studio được hưởng bản mới — chứ không bị đóng đinh bản cũ.
-      message: rows[r.key].message.trim() === r.message.trim() ? null : rows[r.key].message.trim() || null,
-      updated_at: new Date().toISOString(),
-    }));
-    const { error } = await supabase.from("studio_automations").upsert(payload, { onConflict: "owner_id,rule" });
-    setSaving(false);
-    if (error) {
-      // Chưa chạy migration automations.sql thì bảng chưa tồn tại — nói rõ, đừng
-      // để studio bấm Lưu mãi mà không hiểu vì sao không đổi gì.
-      const missing = error.code === "42P01" || error.code === "PGRST205";
-      return setErr(
-        missing
-          ? "Cần chạy supabase/migrations/automations.sql trước khi bật việc tự động."
-          : error.message
-      );
-    }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2200);
-  }
-
-  const onCount = AUTOMATION_RULES.filter((r) => rows[r.key].enabled).length;
+function AutomationsCardV1({ ownerId, initial }: Props) {
+  const { rows, set, openKey, setOpenKey, saving, saved, err, save, onCount } = useAutomations(ownerId, initial);
 
   return (
     <div className="card p-5">

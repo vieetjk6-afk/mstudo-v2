@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { Check, PenLine } from "lucide-react";
 import SignaturePad from "@/components/SignaturePad";
 import { vnd } from "@/lib/types";
 import { fmtDateTime } from "@/lib/date";
 import { addendumLabel, addendumTotal, type ContractAddendum } from "@/lib/contract-addenda";
+import { useAddendumSign } from "./useAddendumSign";
 
 /**
  * Phụ lục hợp đồng trên trang khách. Phụ lục chưa ký hiện nguyên văn các dòng
@@ -25,30 +25,9 @@ export default function ClientAddenda({
   addenda: ContractAddendum[];
   onSigned: () => void;
 }) {
-  const vi = lang === "vi";
-  const [name, setName] = useState("");
-  const [signature, setSignature] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const { vi, name, setName, setSignature, busyId, err, sign } = useAddendumSign({ token, phone, lang, onSigned });
 
   if (!addenda.length) return null;
-
-  async function sign(id: string) {
-    if (!name.trim()) {
-      setErr(vi ? "Nhập họ tên người ký." : "Enter the signer's name.");
-      return;
-    }
-    setErr(null);
-    setBusyId(id);
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "sign_addendum", phone, addendum_id: id, name: name.trim(), signature }),
-    });
-    setBusyId(null);
-    if (res.ok) onSigned();
-    else setErr(vi ? "Có lỗi xảy ra, thử lại nhé." : "Something went wrong.");
-  }
 
   return (
     <div className="overflow-hidden rounded-[14px]" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }} data-testid="client-addenda">

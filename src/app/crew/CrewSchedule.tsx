@@ -6,6 +6,7 @@ import { todayVN } from "@/lib/date";
 import TimeInput from "@/components/TimeInput";
 import { lunarCellLabel } from "@/lib/lunar";
 import { SHIFT_LETTERS, SHIFT_COMPANY_LABEL, shiftBlockFor, type ShiftLetter } from "@/lib/crew-shift";
+import { useBusySchedule } from "./useCrewPortal";
 
 export type ScheduleEntry = {
   id: string;
@@ -69,22 +70,9 @@ export default function CrewSchedule({
   const [y, mIdx] = todayStr.split("-").map(Number);
   const [cursor, setCursor] = useState({ year: y, month: mIdx - 1 });
   const [selected, setSelected] = useState<string>(todayStr);
-  const [form, setForm] = useState({ start: "08:00", end: "17:00", title: "" });
-  const [allDay, setAllDay] = useState(false);
-  // Lịch bận tách riêng theo studio: xem và báo bận cho ĐÚNG studio đang chọn.
-  // Thợ chạy nhiều nơi thì mỗi nơi một lịch, không nơi nào thấy lịch của nơi kia.
-  const [studioId, setStudioId] = useState(studios[0]?.id ?? "");
-
-  const visible = useMemo(
-    () => entries.filter((e) => (e.owner_id ?? "") === studioId),
-    [entries, studioId],
-  );
-
-  const byDate = useMemo(() => {
-    const map: Record<string, ScheduleEntry[]> = {};
-    for (const e of visible) (map[e.date] ||= []).push(e);
-    return map;
-  }, [visible]);
+  // Lịch bận tách riêng theo studio + ô nhập mốc bận: logic chung với giao diện
+  // mới, xem ./useCrewPortal.
+  const { studioId, setStudioId, form, setForm, allDay, setAllDay, byDate, submitFor } = useBusySchedule(entries, studios);
 
   const grid = useMemo(() => {
     const first = new Date(cursor.year, cursor.month, 1);
@@ -108,15 +96,7 @@ export default function CrewSchedule({
   const selShift = shiftPlan ? shiftBlockFor(selected, shiftPlan.shift) : null;
 
   async function submit() {
-    if (!studioId) return;
-    await onAdd({
-      date: selected,
-      start: allDay ? "" : form.start,
-      end: allDay ? "" : form.end,
-      title: form.title,
-      studioId,
-    });
-    setForm((f) => ({ ...f, title: "" }));
+    await submitFor(selected, onAdd);
   }
 
   return (

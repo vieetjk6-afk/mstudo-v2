@@ -918,7 +918,13 @@ body {
    @/lib/ui-version) lên style; mặc định xanh dương như ảnh tham khảo.
    Nền xám ngả xanh, thẻ trắng, viền mảnh — gọn và dịu mắt hơn nền be của bản cũ.
    ════════════════════════════════════════════════════════════════════════════ */
-.studio-shell.ui-v2 {
+/* Trang khách V2 (.client-doc.ui-v2) dùng CHUNG bộ token với khung studio mới. */
+.studio-shell.ui-v2,
+/* `:root … [data-theme]` để thắng `:root[data-theme="dark"] .client-doc` của
+   trang khách cũ (cùng độ ưu tiên mà đứng sau): CustomerRootV2 luôn tự đặt
+   data-theme, nên máy để nền tối mà trang khách chọn nền sáng vẫn ra đúng sáng. */
+:root .client-doc.ui-v2[data-theme] {
+  color-scheme: light;
   --ac: var(--ac-base, #0b5cc4);
   --acS: color-mix(in srgb, var(--ac) 10%, #ffffff);
   --acM: color-mix(in srgb, var(--ac) 20%, #ffffff);
@@ -943,6 +949,11 @@ body {
   --rd: #c62f2f;
   --rdS: #fce8e8;
   --nuS: #eef1f5;
+  --nu: #66707c;
+  --pu: #6b46c1;
+  --puS: #efe9fb;
+  --tl: #0f8a8a;
+  --tlS: #e2f4f4;
 
   --r-card: 16px;
   --r-sm: 11px;
@@ -950,8 +961,14 @@ body {
   --topbar-h: 60px;
   --topbar: rgba(255, 255, 255, 0.88);
   --sh-pop: 0 18px 44px -12px rgba(15, 30, 55, 0.22), 0 2px 6px rgba(15, 30, 55, 0.06);
+  /* Ba token dưới đây khung studio có sẵn, trang khách (.client-doc) thì không. */
+  --bdS: color-mix(in srgb, var(--bd) 72%, var(--tx3));
+  --sh-modal: 0 24px 70px rgba(15, 30, 55, 0.28);
+  --sh-toast: 0 12px 34px rgba(15, 30, 55, 0.3);
 }
-.studio-shell.ui-v2[data-theme="dark"] {
+.studio-shell.ui-v2[data-theme="dark"],
+:root .client-doc.ui-v2[data-theme="dark"] {
+  color-scheme: dark;
   --ac: color-mix(in srgb, var(--ac-base, #0b5cc4) 72%, #ffffff);
   --acS: color-mix(in srgb, var(--ac) 18%, #171e27);
   --acM: color-mix(in srgb, var(--ac) 32%, #171e27);
@@ -974,6 +991,11 @@ body {
   --rd: #f07a72;
   --rdS: #3a1b1b;
   --nuS: #222b35;
+  --nu: #a3adb9;
+  --pu: #b79bf0;
+  --puS: #2b2340;
+  --tl: #5fd3d3;
+  --tlS: #12333a;
   --topbar: rgba(23, 30, 39, 0.88);
   --sh-pop: 0 18px 44px -12px rgba(0, 0, 0, 0.6);
 }
@@ -1104,6 +1126,15 @@ body {
 .ui-v2 .v2-btn-lg { height: 44px; padding: 0 18px; font-size: 14.5px; border-radius: 12px; }
 .ui-v2 .v2-btn-primary { background: var(--ac); color: #fff; box-shadow: 0 1px 2px rgba(16, 24, 40, 0.12); }
 .ui-v2 .v2-btn-primary:hover:not(:disabled) { background: var(--acD); }
+/* Nền tối: --ac được làm sáng lên để chữ/viền màu nhấn đọc được trên nền đen,
+   nhưng NỀN nút đặc mà sáng thì chữ trắng lại mờ. Nút đặc dùng màu gốc đậm. */
+.ui-v2[data-theme="dark"] .v2-btn-primary,
+.ui-v2[data-theme="dark"] .v2-primary,
+.ui-v2[data-theme="dark"] .btn-primary,
+.ui-v2[data-theme="dark"] .act-btn-primary { background: var(--ac-base, #0b5cc4); color: #fff; }
+.ui-v2[data-theme="dark"] .v2-btn-primary:hover:not(:disabled),
+.ui-v2[data-theme="dark"] .v2-primary:hover,
+.ui-v2[data-theme="dark"] .btn-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--ac-base, #0b5cc4) 85%, #ffffff); }
 .ui-v2 .v2-btn-secondary { background: var(--sf); color: var(--tx); border-color: var(--bd); box-shadow: var(--v2-shadow); }
 .ui-v2 .v2-btn-secondary:hover:not(:disabled) { background: var(--sf2); border-color: var(--bdS); }
 .ui-v2 .v2-btn-ghost { background: transparent; color: var(--tx2); }
@@ -1559,7 +1590,9 @@ body {
   background: var(--sf);
   border-color: var(--bd);
   border-radius: var(--v2-r);
-  padding: 9px 12px;
+  /* Chỉ đệm trên/dưới: đệm trái/phải giữ của .input/tiện ích Tailwind, để ô có
+     icon bên trong (vd LocationPicker `pl-7`) không bị chữ đè lên icon. */
+  padding-block: 9px;
   font-size: 14px;
 }
 .ui-v2 .input:hover:not(:focus):not(:disabled) { border-color: var(--bdS); }

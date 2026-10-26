@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { CalendarPlus, Copy, Check, IdCard, UserPlus } from "lucide-react";
 import Turnstile from "@/components/Turnstile";
+import { CREW_PROFILE_FIELDS as FIELDS, useCalendarSync, useProfileEditor, useCrewRegister } from "./useCrewPortal";
 
 export type CrewProfile = {
   id: string;
@@ -19,44 +19,12 @@ export type CrewProfile = {
   self_filled_at: string | null;
 };
 
-/**
- * Hồ sơ thợ gọn đúng những gì studio cần để xếp việc và trả lương. SĐT không
- * nằm trong danh sách này vì nó là danh tính của thợ — hiện ra để đối chiếu chứ
- * không sửa được.
- */
-const FIELDS: { key: keyof CrewProfile; label: string; type?: string }[] = [
-  { key: "name", label: "Họ tên (trùng tên trên tài khoản ngân hàng)" },
-  { key: "email", label: "Email", type: "email" },
-  { key: "address", label: "Địa chỉ" },
-  { key: "bank_name", label: "Tên ngân hàng" },
-  { key: "bank_account", label: "Số tài khoản" },
-  { key: "skills", label: "Kỹ năng (chụp, quay, dựng…)" },
-  { key: "equipment", label: "Thiết bị (body, lens, gimbal…)" },
-];
+// FIELDS (các mục hồ sơ studio cần) và thao tác sửa hồ sơ / đăng ký / bật đồng
+// bộ lịch nằm ở ./useCrewPortal — dùng chung với giao diện mới.
 
 /** Hồ sơ của thợ ở từng studio — studio nhập gì thì hiện thế, trống thì thợ tự điền. */
 export function CrewProfileCard({ profiles, phone, session, onSaved }: { profiles: CrewProfile[]; phone: string; session: string | null; onSaved: () => void }) {
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [saving, setSaving] = useState(false);
-
-  function open(p: CrewProfile) {
-    setOpenId(p.id);
-    const d: Record<string, string> = {};
-    for (const f of FIELDS) d[f.key as string] = (p[f.key] as string | null) ?? "";
-    setDraft(d);
-  }
-
-  async function save(p: CrewProfile) {
-    setSaving(true);
-    const res = await fetch("/api/crew/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save", phone, session, studioId: p.owner_id, profile: draft }),
-    });
-    setSaving(false);
-    if (res.ok) { setOpenId(null); onSaved(); }
-  }
+  const { openId, setOpenId, draft, setDraft, saving, open, save } = useProfileEditor(phone, session, onSaved);
 
   if (profiles.length === 0) return null;
 
@@ -114,21 +82,7 @@ export function CrewProfileCard({ profiles, phone, session, onSaved }: { profile
 
 /** Xin vào sổ thợ của MỘT studio — chỉ hiện khi vào bằng link riêng của studio. */
 export function CrewRegisterCard({ studioName, crewToken, phone }: { studioName: string; crewToken: string; phone: string }) {
-  const [draft, setDraft] = useState<Record<string, string>>({});
-  const [captcha, setCaptcha] = useState<string | null>(null);
-  const [state, setState] = useState<"idle" | "sending" | "done" | "already">("idle");
-
-  async function submit() {
-    if (!phone.trim() || !captcha) return;
-    setState("sending");
-    const res = await fetch("/api/crew/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "register", phone, crewToken, captcha, profile: draft }),
-    });
-    const j = (await res.json().catch(() => ({}))) as { already?: boolean };
-    setState(res.ok ? (j.already ? "already" : "done") : "idle");
-  }
+  const { draft, setDraft, captcha, setCaptcha, state, submit } = useCrewRegister(phone, crewToken);
 
   if (state === "done" || state === "already") {
     return (
@@ -179,21 +133,7 @@ export function CrewRegisterCard({ studioName, crewToken, phone }: { studioName:
  * chiều app → lịch, không xin quyền gì của thợ.
  */
 export function CrewCalendarSync({ phone, session, token, onToken }: { phone: string; session: string | null; token: string | null; onToken: (t: string) => void }) {
-  const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const url = token ? `${typeof window !== "undefined" ? window.location.origin : ""}/api/crew-calendar/${token}` : "";
-
-  async function enable() {
-    setBusy(true);
-    const res = await fetch("/api/crew", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "calendar_token", phone, session }),
-    });
-    setBusy(false);
-    const j = (await res.json().catch(() => ({}))) as { token?: string };
-    if (j.token) onToken(j.token);
-  }
+  const { busy, copied, url, enable, copy } = useCalendarSync(phone, session, token, onToken);
 
   return (
     <div className="card p-5">
@@ -213,7 +153,7 @@ export function CrewCalendarSync({ phone, session, token, onToken }: { phone: st
           <div className="flex gap-2">
             <input className="input flex-1 text-[11px]" readOnly value={url} aria-label="Link lịch" onFocus={(e) => e.currentTarget.select()} />
             <button
-              onClick={() => { navigator.clipboard?.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500); }}
+              onClick={copy}
               className="btn-ghost shrink-0"
               aria-label={copied ? "Đã sao chép" : "Sao chép"}
               title="Sao chép"

@@ -4,7 +4,10 @@ import { PRICE_LISTS } from "@/lib/pricelist-seeds";
 import { VOUCHER_COLS, VOUCHER_COLS_FULL, REDEEM_ERROR_TEXT, canRedeem, normalizeVoucherCode, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import { todayVN } from "@/lib/date";
 import BookingForm, { type PkgOption, type BookingVoucher } from "./BookingForm";
+import BookingFormV2 from "./BookingFormV2";
 import { studioShareMetadata } from "@/lib/studio-share-meta";
+import { customerUiV2 } from "@/lib/ui-server";
+import { getStudioBrand } from "@/lib/studio-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -104,16 +107,24 @@ export default async function BookingPage(
       : { code: vcode, label: "", ok: false, message: c.ok ? REDEEM_ERROR_TEXT.not_found : REDEEM_ERROR_TEXT[c.error] };
   }
 
-  return (
-    <BookingForm
-      voucher={voucher}
-      token={params.token}
-      studioName={owner.full_name || "Studio"}
-      packages={packages}
-      presetPackage={searchParams?.pkg || ""}
-      presetReferrer={searchParams?.ref || ""}
-      referralDiscount={(owner.referral_discount as number | null) ?? 0}
-      bank={bank}
-    />
-  );
+  const formProps = {
+    voucher,
+    token: params.token,
+    studioName: owner.full_name || "Studio",
+    packages,
+    presetPackage: searchParams?.pkg || "",
+    presetReferrer: searchParams?.ref || "",
+    referralDiscount: (owner.referral_discount as number | null) ?? 0,
+    bank,
+  };
+
+  // Giao diện mới theo studio sở hữu link đặt lịch (xem customerUiV2). Thương
+  // hiệu studio cho đầu trang chỉ đọc khi bật — bản cũ không tốn gì thêm.
+  if (await customerUiV2(owner.id)) {
+    const brand = await getStudioBrand(db, owner.id);
+    // Thiếu cột thương hiệu thì getStudioBrand trả "Studio" — dùng tên chủ studio như bản cũ.
+    return <BookingFormV2 {...formProps} brand={brand.name === "Studio" && owner.full_name ? { ...brand, name: owner.full_name } : brand} />;
+  }
+
+  return <BookingForm {...formProps} />;
 }

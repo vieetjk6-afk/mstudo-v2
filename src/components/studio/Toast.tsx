@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { Portal } from "@/components/studio/Modal";
+import { useUiV2 } from "@/components/v2/UiV2Context";
+import { v2PortalProps } from "@/components/v2parts/portal-scope";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TOAST — xác nhận thao tác, dùng chung cho lịch studio, cổng nhân viên và
@@ -38,7 +40,11 @@ export function useToast() {
   return { toast, toastNode: <Toast msg={msg} /> };
 }
 
-export function Toast({ msg }: { msg: string | null }) {
+export function Toast(props: { msg: string | null }) {
+  return useUiV2() ? <ToastV2 {...props} /> : <ToastV1 {...props} />;
+}
+
+function ToastV1({ msg }: { msg: string | null }) {
   if (!msg) return null;
   return (
     <Portal>
@@ -52,5 +58,37 @@ export function Toast({ msg }: { msg: string | null }) {
       <span style={{ textWrap: "pretty" }}>{msg}</span>
     </div>
     </Portal>
+  );
+}
+
+/**
+ * Giao diện mới: cùng hành vi (portal, tự ẩn), hình theo các toast khác của
+ * bản mới — nền màu chữ / chữ màu nền nên luôn tương phản ở cả sáng lẫn tối,
+ * và trên điện thoại nổi TRÊN thanh tab đáy (bottom-24) thay vì bị nó che.
+ * Lớp `studio-shell ui-v2` mang lại token màu đã mất khi portal ra <body>.
+ */
+function ToastV2({ msg }: { msg: string | null }) {
+  if (!msg) return null;
+  return (
+    <Portal>
+      <ToastV2Body msg={msg} />
+    </Portal>
+  );
+}
+
+function ToastV2Body({ msg }: { msg: string }) {
+  const scope = v2PortalProps();
+  return (
+    <div className="studio-shell ui-v2" data-theme={scope["data-theme"]} style={scope.style}>
+      <div
+        role="status"
+        aria-live="polite"
+        className="fixed bottom-24 left-1/2 z-[200] flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2 rounded-[12px] px-4 py-2.5 text-[13px] font-semibold animate-[vkToast_.22s_ease_both] lg:bottom-6"
+        style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}
+      >
+        <CheckCircle2 size={16} style={{ flex: "none", color: "color-mix(in srgb, var(--gn) 55%, var(--sf))" }} />
+        <span style={{ textWrap: "pretty" }}>{msg}</span>
+      </div>
+    </div>
   );
 }

@@ -59,6 +59,12 @@ import { SCREENS_SANXUAT } from "./v2/sanxuat";
 import { SCREENS_SANGTAO } from "./v2/sangtao";
 import { SCREENS_WEBSITE } from "./v2/website";
 import { SCREENS_TAIKHOAN } from "./v2/taikhoan";
+import { SCREENS_KHTAILIEU } from "./v2/khtailieu";
+import { SCREENS_KHALBUM } from "./v2/khalbum";
+import { SCREENS_KHCONG } from "./v2/khcong";
+import { SCREENS_NOIBO } from "./v2/noibo";
+import { SCREENS_CONLAI } from "./v2/conlai";
+import { SCREENS_KHTHIEP } from "./v2/khthiep";
 import * as f from "./fixtures";
 
 /** Chủ studio giả cho các màn xem trước khung giao diện. */
@@ -736,6 +742,12 @@ export const SCREENS: Record<
   ...SCREENS_SANGTAO,
   ...SCREENS_WEBSITE,
   ...SCREENS_TAIKHOAN,
+  ...SCREENS_KHTAILIEU,
+  ...SCREENS_KHALBUM,
+  ...SCREENS_KHCONG,
+  ...SCREENS_NOIBO,
+  ...SCREENS_CONLAI,
+  ...SCREENS_KHTHIEP,
   "bang-mau": {
     title: "Bảng màu — ngoài shell / shell sáng / shell tối",
     render: () => <TokenSwatches />,

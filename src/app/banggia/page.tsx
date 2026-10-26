@@ -2,6 +2,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PRICE_LISTS } from "@/lib/pricelist-seeds";
 import { resolveStudioOwner } from "@/lib/studio-owner";
 import PricelistPoster from "@/components/PricelistPoster";
+import PricelistV2 from "@/app/gia/PricelistV2";
+import { customerUiV2 } from "@/lib/ui-server";
 import type { PricelistItem } from "@/lib/types";
 
 // Bảng giá công khai hiếm khi đổi: cho phép ISR + CDN cache 5 phút thay vì SSR
@@ -61,8 +63,11 @@ export default async function BangGiaPage(props: { searchParams?: Promise<{ list
   let theme: { bg?: string | null; text?: string | null; accent?: string | null; logo?: string | null } | undefined;
   if (th) theme = { bg: th.pl_bg, text: th.pl_text, accent: th.pl_accent, logo: th.pl_logo_url };
 
+  // Giao diện mới đi theo studio sở hữu bảng giá; màu pl_* vẫn áp dụng ở cả hai bản.
+  const Poster = (await customerUiV2(owner.id)) ? PricelistV2 : PricelistPoster;
+
   return (
-    <PricelistPoster
+    <Poster
       contact={owner as never}
       items={items}
       lists={lists}

@@ -1,10 +1,15 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileById, requireStudio } from "@/lib/auth-guards";
 import { todayVN } from "@/lib/date";
 import { addDays } from "@/lib/appointments";
+import { isUiV2 } from "@/lib/ui-server";
+import { brandFrom } from "@/lib/studio-brand";
+import { ACCENT_COOKIE, accentHex, accentKey } from "@/lib/ui-version";
 import type { StudioAppointment, StudioNotification } from "@/lib/types";
-import StaffPortal, { type TaskRow, type ChecklistRow } from "./StaffPortal";
+import StaffPortal, { type TaskRow, type ChecklistRow, type StaffPortalProps } from "./StaffPortal";
+import StaffPortalV2, { StaffSignInV2 } from "./StaffPortalV2";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +27,9 @@ export const dynamic = "force-dynamic";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export default async function StaffPage() {
-  const profile = await requireStudio("booking");
+  const [profile, v2] = await Promise.all([requireStudio("booking"), isUiV2()]);
   if (!profile) {
+    if (v2) return <StaffSignInV2 />;
     return (
       <div className="mx-auto max-w-md py-16 text-center">
         <h1 className="text-[19px] font-bold">Cần đăng nhập tài khoản studio</h1>
@@ -128,20 +134,36 @@ export default async function StaffPage() {
     .sort((a, b) => Number(a.done) - Number(b.done) || a.position - b.position)
     .slice(0, 12);
 
-  return (
-    <StaffPortal
-      me={me}
-      meName={meProfile?.full_name || meProfile?.email || "Bạn"}
-      actingRole={profile.actingRole as string}
-      studioName={profile.full_name || "Studio"}
-      today={today}
-      appointments={appts}
-      monthApptCount={(monthAppts ?? []).length}
-      myMonthApptCount={((monthAppts ?? []) as { staff_id: string | null }[]).filter((a) => a.staff_id === me).length}
-      tasks={(products ?? []) as unknown as TaskRow[]}
-      notifications={(notifications ?? []) as StudioNotification[]}
-      checklist={checklist}
-      contractCount={(myContracts ?? []).length}
-    />
-  );
+  const props: StaffPortalProps = {
+    me,
+    meName: meProfile?.full_name || meProfile?.email || "Bạn",
+    actingRole: profile.actingRole as string,
+    studioName: profile.full_name || "Studio",
+    today,
+    appointments: appts,
+    monthApptCount: (monthAppts ?? []).length,
+    myMonthApptCount: ((monthAppts ?? []) as { staff_id: string | null }[]).filter((a) => a.staff_id === me).length,
+    tasks: (products ?? []) as unknown as TaskRow[],
+    notifications: (notifications ?? []) as StudioNotification[],
+    checklist,
+    contractCount: (myContracts ?? []).length,
+  };
+
+  // ── Giao diện mới: cùng dữ liệu, thêm thương hiệu studio (đã có trong hồ sơ
+  // chủ studio), màu chủ đạo người dùng chọn ở khu quản lý và lời chào theo giờ.
+  if (v2) {
+    const jar = await cookies();
+    const hour = Number(new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(11, 13));
+    const greeting = hour < 11 ? "Chào buổi sáng" : hour < 14 ? "Chào buổi trưa" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+    return (
+      <StaffPortalV2
+        {...props}
+        brand={brandFrom(profile)}
+        accent={accentHex(accentKey(jar.get(ACCENT_COOKIE)?.value))}
+        greeting={greeting}
+      />
+    );
+  }
+
+  return <StaffPortal {...props} />;
 }

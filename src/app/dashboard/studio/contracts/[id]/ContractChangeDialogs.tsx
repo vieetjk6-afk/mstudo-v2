@@ -20,7 +20,8 @@ import type { CancelPolicy, CancelQuote } from "@/lib/contract-cancel";
  * là chuyện đã nói với khách trước, tin này chỉ để xác nhận bằng chữ.
  */
 
-type Common = {
+export type ContractChangeCommon = {
+  /* (kiểu chung của hai hộp thoại — dùng cả ở ContractChangeDialogsV2) */
   contractId: string;
   clientName: string | null;
   clientPhone: string | null;
@@ -32,6 +33,8 @@ type Common = {
    */
   onDone: (patch: { event_date?: string; event_time?: string; status?: "cancelled" }) => void;
 };
+type Common = ContractChangeCommon;
+export type RescheduleProps = Common & { eventDate: string | null; eventTime: string | null };
 
 function Head({ icon, title, onClose, tone = "var(--ac)" }: { icon: React.ReactNode; title: string; onClose: () => void; tone?: string }) {
   return (
@@ -63,7 +66,8 @@ function Done({ text, message, clientPhone, clientName, contractId, onClose }: {
 }
 
 // ── Dời lịch ────────────────────────────────────────────────────────────────
-export function RescheduleDialog({ eventDate, eventTime, ...p }: Common & { eventDate: string | null; eventTime: string | null }) {
+/** Logic hộp thoại Dời lịch — dùng chung cho bản cũ và RescheduleDialogV2. */
+export function useReschedule({ eventTime, ...p }: RescheduleProps) {
   const [date, setDate] = useState("");
   const [time, setTime] = useState("");
   const [reason, setReason] = useState("");
@@ -117,6 +121,13 @@ export function RescheduleDialog({ eventDate, eventTime, ...p }: Common & { even
     setDone({ text: `Đã dời sang ${fmtDate(date)}${time ? ` · ${time}` : ""}${bits.length ? ` · ${bits.join(", ")}` : ""}.`, message: j.clientMessage });
     p.onDone({ event_date: date, event_time: time || eventTime || "" });
   }
+
+  return { date, setDate, time, setTime, reason, setReason, fee, setFee, shiftPlans, setShiftPlans, moveAppts, setMoveAppts, notifyCrew, setNotifyCrew, check, busy, err, done, submit };
+}
+
+export function RescheduleDialog(props: RescheduleProps) {
+  const { eventDate, eventTime, ...p } = props;
+  const { date, setDate, time, setTime, reason, setReason, fee, setFee, shiftPlans, setShiftPlans, moveAppts, setMoveAppts, notifyCrew, setNotifyCrew, check, busy, err, done, submit } = useReschedule(props);
 
   return (
     <Modal onClose={p.onClose} labelledBy="contract-change-title">
@@ -179,7 +190,8 @@ export function RescheduleDialog({ eventDate, eventTime, ...p }: Common & { even
 }
 
 // ── Huỷ hợp đồng ────────────────────────────────────────────────────────────
-export function CancelDialog(p: Common) {
+/** Logic hộp thoại Huỷ hợp đồng — dùng chung cho bản cũ và CancelDialogV2. */
+export function useCancelContract(p: Common) {
   const [info, setInfo] = useState<{ collected: number; policy: CancelPolicy; quote: CancelQuote } | null>(null);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [refund, setRefund] = useState(0);
@@ -200,10 +212,14 @@ export function CancelDialog(p: Common) {
       .catch(() => setLoadErr("Lỗi mạng, thử lại."));
   }, [p.contractId]);
 
-  async function submit() {
+  /** Câu hỏi lại trước khi huỷ (bản cũ dùng confirm(), bản mới dùng hộp thoại). */
+  const confirmText = `Huỷ hợp đồng${refund > 0 ? ` và ghi hoàn ${vnd(refund)} cho khách` : ""}? Các đợt chưa thu sẽ bị bỏ, lịch thợ được gỡ.`;
+
+  /** `ask` = hỏi lại trước khi ghi (trả false là thôi); bỏ trống khi chỗ gọi đã hỏi rồi. */
+  async function submit(ask?: (text: string) => boolean) {
     if (!info) return;
     setErr(null);
-    if (!confirm(`Huỷ hợp đồng${refund > 0 ? ` và ghi hoàn ${vnd(refund)} cho khách` : ""}? Các đợt chưa thu sẽ bị bỏ, lịch thợ được gỡ.`)) return;
+    if (ask && !ask(confirmText)) return;
     setBusy(true);
     const r = await fetch(`/api/studio/contracts/${p.contractId}/cancel`, {
       method: "POST",
@@ -226,6 +242,13 @@ export function CancelDialog(p: Common) {
     });
     p.onDone({ status: "cancelled" });
   }
+
+  return { info, loadErr, refund, setRefund, method, setMethod, reason, setReason, busy, err, done, confirmText, submit };
+}
+
+export function CancelDialog(p: Common) {
+  const { info, loadErr, refund, setRefund, method, setMethod, reason, setReason, busy, err, done, submit: run } = useCancelContract(p);
+  const submit = () => run((t) => confirm(t));
 
   const q = info?.quote;
   return (

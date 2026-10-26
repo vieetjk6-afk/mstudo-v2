@@ -29,19 +29,22 @@ export type PortalVideo = {
   downloadUrl: string | null;
 };
 
-const KIND_LABEL: Record<VideoKind, string> = {
+export const VIDEO_KIND_LABEL: Record<VideoKind, string> = {
   youtube: "YouTube",
   vimeo: "Vimeo",
   drive: "Google Drive",
   other: "Liên kết ngoài",
 };
 
-export default function PortalVideos({ videos }: { videos: PortalVideo[] }) {
+/**
+ * Video đang chọn + đang phát hay chưa. Khung phát chỉ dựng <iframe> sau khi
+ * khách bấm phát — bản cũ và bản giao diện mới dùng chung.
+ */
+export function usePortalVideoPlayer(videos: PortalVideo[]) {
   const [cur, setCur] = useState(0);
   const [playing, setPlaying] = useState(false);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const v = videos[cur] ?? videos[0];
-  if (!v) return null;
   const many = videos.length > 1;
 
   function pick(i: number) {
@@ -52,6 +55,13 @@ export default function PortalVideos({ videos }: { videos: PortalVideo[] }) {
     const top = stageRef.current?.getBoundingClientRect().top ?? 0;
     if (top < 0) stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+
+  return { cur, playing, setPlaying, stageRef, v, many, pick };
+}
+
+export default function PortalVideos({ videos }: { videos: PortalVideo[] }) {
+  const { cur, playing, setPlaying, stageRef, v, many, pick } = usePortalVideoPlayer(videos);
+  if (!v) return null;
 
   return (
     <div className={many ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]" : "mx-auto max-w-[980px]"}>
@@ -81,7 +91,7 @@ export default function PortalVideos({ videos }: { videos: PortalVideo[] }) {
           <div className="min-w-0 flex-1">
             <h3 className="font-serif text-[19px] font-semibold leading-snug sm:text-[22px]" style={{ textWrap: "balance" }}>{v.title}</h3>
             <p className="mt-0.5 text-[12px]" style={{ color: DIM }}>
-              {many ? `Video ${cur + 1} / ${videos.length} · ` : ""}{KIND_LABEL[v.kind]}
+              {many ? `Video ${cur + 1} / ${videos.length} · ` : ""}{VIDEO_KIND_LABEL[v.kind]}
             </p>
           </div>
           <div className="flex flex-none gap-2">
@@ -138,7 +148,7 @@ export default function PortalVideos({ videos }: { videos: PortalVideo[] }) {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="line-clamp-2 text-[13.5px] font-bold leading-snug" style={{ color: on ? "#fff" : "rgba(255,255,255,.86)" }}>{x.title}</span>
-                      <span className="mt-0.5 block text-[11.5px]" style={{ color: DIM }}>{KIND_LABEL[x.kind]}</span>
+                      <span className="mt-0.5 block text-[11.5px]" style={{ color: DIM }}>{VIDEO_KIND_LABEL[x.kind]}</span>
                     </span>
                   </button>
                 </li>
@@ -151,7 +161,7 @@ export default function PortalVideos({ videos }: { videos: PortalVideo[] }) {
   );
 }
 
-function Poster({ video, onPlay }: { video: PortalVideo; onPlay: () => void }) {
+export function Poster({ video, onPlay }: { video: PortalVideo; onPlay: () => void }) {
   const inner = (
     <>
       {video.poster ? (

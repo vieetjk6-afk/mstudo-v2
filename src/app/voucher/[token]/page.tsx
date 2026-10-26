@@ -9,6 +9,8 @@ import { fmtDate, todayVN } from "@/lib/date";
 import { ensureBookingToken, voucherBookingUrl } from "@/lib/voucher-links";
 import { VOUCHER_COLS, VOUCHER_COLS_FULL, VOUCHER_STATE_LABEL, voucherState, voucherTerms, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import VoucherPublicView from "./VoucherPublicView";
+import VoucherPublicViewV2 from "./VoucherPublicViewV2";
+import { customerUiV2 } from "@/lib/ui-server";
 import { shareMetadataFor } from "@/lib/studio-share-meta";
 
 export const dynamic = "force-dynamic";
@@ -64,9 +66,10 @@ export default async function VoucherPage(props: { params: Promise<{ token: stri
   const bookingToken = usable ? await ensureBookingToken(db, v.owner_id) : null;
   const qr = await QRCode.toDataURL(pageUrl, { margin: 1, width: 480, color: { dark: "#2b2118", light: "#ffffff" } });
   const brand = brandFrom(owner);
+  const View = (await customerUiV2(v.owner_id)) ? VoucherPublicViewV2 : VoucherPublicView;
 
   return (
-    <VoucherPublicView
+    <View
       ticket={{
         studio: brand.name,
         title: v.title,
