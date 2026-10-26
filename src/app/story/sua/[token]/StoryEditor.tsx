@@ -1,14 +1,17 @@
 "use client";
 
 import { Heart, Save, Eye, Loader2, Check, ExternalLink, Plus, Trash2, FolderOpen, RefreshCw, Cloud, CloudOff, Video, Users, QrCode, Printer, Download } from "lucide-react";
+import type { StudioBrandInfo } from "@/lib/studio-brand";
 import { storyUrl, useStoryEditor } from "./useStoryEditor";
+import StoryEditorV2 from "./StoryEditorV2";
 
 /* Trình sửa Love Story /story/sua/<token>. Logic ở ./useStoryEditor — bản cũ
    dưới đây (StoryEditorV1) và bản giao diện mới (./StoryEditorV2) dùng chung;
    page.tsx chọn bản theo customerUiV2. */
 
-export default function StoryEditor({ token }: { token: string }) {
-  return <StoryEditorV1 token={token} />;
+/** `v2` (thương hiệu studio) có mặt = vẽ giao diện mới — rẽ nhánh bằng KIỂU component. */
+export default function StoryEditor({ token, v2 }: { token: string; v2?: { brand: StudioBrandInfo } | null }) {
+  return v2 ? <StoryEditorV2 token={token} brand={v2.brand} /> : <StoryEditorV1 token={token} />;
 }
 
 function StoryEditorV1({ token }: { token: string }) {

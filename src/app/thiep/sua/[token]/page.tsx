@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getStudioBrand } from "@/lib/studio-brand";
+import { brandFrom, getStudioBrand } from "@/lib/studio-brand";
 import { customerUiV2 } from "@/lib/ui-server";
 import WeddingEditor from "./WeddingEditor";
 
@@ -25,9 +25,11 @@ export default async function EditWeddingPage(props: { params: Promise<{ token: 
   const params = await props.params;
   // Giao diện mới theo studio sở hữu thiệp (xem customerUiV2). Nội dung thiệp
   // vẫn tải ở client qua /api/thiep/<token> như cũ; ở đây chỉ đọc chủ thiệp.
+  // Mã sai vẫn đi cùng nhánh khi cờ bật cho mọi studio (trang báo "không tìm
+  // thấy" theo đúng giao diện đang dùng).
   const ownerId = await ownerOf(params.token);
-  if (ownerId && (await customerUiV2(ownerId))) {
-    const brand = await getStudioBrand(createAdminClient(), ownerId);
+  if (await customerUiV2(ownerId)) {
+    const brand = ownerId ? await getStudioBrand(createAdminClient(), ownerId) : brandFrom(null);
     return <WeddingEditor token={params.token} v2={{ brand }} />;
   }
   return <WeddingEditor token={params.token} />;

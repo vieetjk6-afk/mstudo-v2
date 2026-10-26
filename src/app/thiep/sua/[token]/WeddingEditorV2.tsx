@@ -50,12 +50,24 @@ const TODO_TOTAL = 6;
 
 const muted: React.CSSProperties = { color: "var(--tx3)" };
 
-export default function WeddingEditorV2({ token, embed, brand }: { token: string; embed?: EditorEmbed; brand: StudioBrandInfo }) {
+export type WeddingEditorView = View;
+export type WeddingEditorSection = SectionId;
+
+export default function WeddingEditorV2({
+  token, embed, brand, initialView = "edit", initialSection = "couple",
+}: {
+  token: string;
+  embed?: EditorEmbed;
+  brand: StudioBrandInfo;
+  /** Tab / khối mở sẵn (màn xem trước dùng; trang thật để mặc định). */
+  initialView?: View;
+  initialSection?: SectionId | null;
+}) {
   const w = useWeddingEditor(token, embed);
   const { cfg, patch, uploadImage, resolveMap, save, saving, saved, dirty, published, err } = w;
   const { theme } = useTheme();
-  const [view, setView] = useState<View>("edit");
-  const [open, setOpen] = useState<SectionId | null>("couple");
+  const [view, setView] = useState<View>(initialView);
+  const [open, setOpen] = useState<SectionId | null>(initialSection);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -123,9 +135,7 @@ export default function WeddingEditorV2({ token, embed, brand }: { token: string
         ? { label: "Chưa lưu", tone: "amber" }
         : saved
           ? { label: "Đã lưu", tone: "green", icon: Check }
-          : published
-            ? { label: "Đang hiển thị", tone: "green" }
-            : { label: "Bản nháp", tone: "gray" };
+          : { label: "Đã lưu", tone: "gray", icon: Check };
   const needSave = dirty || saving;
   const primary = (extra = "") =>
     needSave ? (
@@ -180,10 +190,10 @@ export default function WeddingEditorV2({ token, embed, brand }: { token: string
       <div className="v2-card v2-card-pad flex flex-col gap-3.5">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <Badge tone={published ? "green" : "gray"} dot>{published ? "Đang hiển thị" : "Bản nháp"}</Badge>
-          <p className="min-w-0 flex-[1_1_200px] text-[13.5px]" style={{ color: "var(--tx2)" }}>
+          <p className="order-3 min-w-0 basis-full text-[13.5px] sm:order-none sm:flex-[1_1_200px] sm:basis-auto" style={{ color: "var(--tx2)" }}>
             {published ? "Khách mở link là thấy thiệp (bản đã lưu)." : "Khách chưa mở được thiệp — xuất bản khi đã sẵn sàng."}
           </p>
-          <button type="button" onClick={() => void save(!published)} disabled={saving} className={btn(published ? "ghost" : "secondary", "sm")}>
+          <button type="button" onClick={() => void save(!published)} disabled={saving} className={btn(published ? "ghost" : "secondary", "sm", "ml-auto")}>
             {published ? <><EyeOff size={15} /> Ẩn thiệp</> : <><Eye size={15} /> Xuất bản thiệp</>}
           </button>
         </div>
@@ -196,12 +206,17 @@ export default function WeddingEditorV2({ token, embed, brand }: { token: string
             <ExternalLink size={16} />
           </a>
         </div>
+        {d.todo.length === 0 ? (
+          <p className="flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: "var(--gn)" }}>
+            <Check size={14} strokeWidth={3} /> Thiệp đã đủ các mục chính
+          </p>
+        ) : (
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-2 text-[12.5px]">
-            <span className="font-semibold">{d.todo.length ? `Đã đủ ${doneCount}/${TODO_TOTAL} mục chính` : "Thiệp đã đủ các mục chính"}</span>
+            <span className="font-semibold">Đã đủ {doneCount}/{TODO_TOTAL} mục chính</span>
             <span style={muted}>{Math.round((doneCount / TODO_TOTAL) * 100)}%</span>
           </div>
-          <Progress value={(doneCount / TODO_TOTAL) * 100} tone={d.todo.length ? "amber" : "green"} />
+          <Progress value={(doneCount / TODO_TOTAL) * 100} tone="amber" />
           {d.todo.length > 0 && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-[12.5px]" style={muted}>Còn thiếu:</span>
@@ -219,6 +234,7 @@ export default function WeddingEditorV2({ token, embed, brand }: { token: string
             </div>
           )}
         </div>
+        )}
       </div>
 
       {sec("couple", Heart, "Cô dâu & chú rể", couple || "Chưa điền tên hai bạn", (
@@ -446,13 +462,13 @@ export default function WeddingEditorV2({ token, embed, brand }: { token: string
         <Section icon={Users} title="Khách mời" desc="Danh sách khách dùng chung với Kế hoạch cưới.">
           <div className="flex flex-col gap-4">
             {previewGuestSelect}
-            <Callout
-              tone="brand"
-              icon={Users}
-              title="Thêm khách ở Kế hoạch cưới"
-              action={<button type="button" onClick={showGuests} className={btn("secondary", "sm")}>{guestNames.length ? `Mở ${guestNames.length} khách` : "Mở danh sách"}</button>}
-            >
+            <Callout tone="brand" icon={Users} title="Thêm khách ở Kế hoạch cưới">
               Thêm khách ở tab Khách mời của kế hoạch là có ngay link thiệp + mã QR ghi tên người đó. Khách bấm xác nhận trên thiệp thì trạng thái, số người và số bàn tự cập nhật.
+              <div className="mt-2.5">
+                <button type="button" onClick={showGuests} className={btn("secondary", "sm")}>
+                  <Users size={15} /> {guestNames.length ? `Mở danh sách ${guestNames.length} khách` : "Mở danh sách khách"}
+                </button>
+              </div>
             </Callout>
           </div>
         </Section>
@@ -483,7 +499,11 @@ export default function WeddingEditorV2({ token, embed, brand }: { token: string
         flush
       >
         {responsesLocked ? (
-          <div className="p-4 sm:p-5"><ResponsesLockV2 expected={(cfg.guests_password ?? "").trim()} onUnlock={() => w.setResponsesUnlocked(true)} /></div>
+          combo ? (
+            <div className="p-4 sm:p-5"><ResponsesLockV2 expected={(cfg.guests_password ?? "").trim()} onUnlock={() => w.setResponsesUnlocked(true)} /></div>
+          ) : (
+            <p className="flex items-center gap-2 px-5 py-4 text-[13px]" style={muted}><Lock size={14} /> Nhập mật khẩu ở đầu tab này để xem phản hồi và lời chúc.</p>
+          )
         ) : (
           <RsvpListV2 rsvps={w.rsvps} />
         )}
