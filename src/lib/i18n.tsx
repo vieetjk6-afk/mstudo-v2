@@ -187,8 +187,8 @@ export const dict: Dict = {
   // hẹn cũ, và kết luận tính năng hỏng — trong khi nó đang chạy đúng. Một con số
   // nhìn thấy nhích lên nói thật được điều mà một lời hẹn không giữ nổi.
   facePreparing: {
-    vi: "Đang tìm khuôn mặt trong album: đã quét {n}/{m} ảnh. Album nhiều ảnh có thể mất vài chục phút.",
-    en: "Finding faces in this album: {n}/{m} photos scanned. Large albums can take a while.",
+    vi: "Đang tìm khuôn mặt trong album: đã quét {n}/{m} ảnh. Ảnh được quét dần vào ban đêm — mai quay lại là tìm được nhiều hơn.",
+    en: "Finding faces in this album: {n}/{m} photos scanned. Photos are scanned overnight — check back tomorrow for more.",
   },
   faceFailed: { vi: "Không tìm được, thử lại giúp tôi.", en: "Search failed, please try again." },
   personHint: {
