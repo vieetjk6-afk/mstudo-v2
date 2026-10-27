@@ -16,11 +16,18 @@
 #
 # Lưu ý về lịch: GitHub chạy cron kiểu "sớm nhất có thể", thường trễ vài phút
 # lúc cao điểm — không sao, đây là việc chạy nền.
+#
+# CHỈ QUÉT ĐÊM, 0h–7h giờ Việt Nam. Database đang ở cỡ Nano (CPU dùng chung):
+# một lượt ở đây bận ~7 phút trong mỗi 10 phút, ghi dữ liệu khuôn mặt liên tục,
+# và log [do-toc] cho thấy lúc đó MỌI trang của studio đều chậm theo — kể cả
+# bước kiểm tra đăng nhập (50ms → 570ms). Đổi lại: ảnh đồng bộ ban ngày thì
+# sáng hôm sau mới tìm được theo khuôn mặt. Cần gấp thì bấm chạy tay ở Actions.
+# Cron của GitHub tính theo UTC: 17:00–23:50 UTC = 0:00–6:50 giờ VN.
 name: Quét khuôn mặt
 
 on:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "*/10 17-23 * * *"
   # Bấm chạy tay được ở tab Actions, không phải đợi tới giờ.
   workflow_dispatch:
 

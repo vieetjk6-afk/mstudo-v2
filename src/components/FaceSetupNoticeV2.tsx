@@ -28,7 +28,7 @@ export function FaceSetupNoticeV2View({ s }: { s: FaceSetupNoticeState }) {
         <p className={body}>
           Vercel còn thiếu biến <b>CRON_SECRET</b>, nên app tự trả 401 cho mọi tác vụ định giờ — kể cả lượt quét khuôn
           mặt. Vào <b>Vercel → Settings → Environment Variables</b>, thêm <b>CRON_SECRET</b> với một chuỗi ngẫu nhiên dài bất
-          kỳ, rồi <b>Redeploy</b>. Sau đó khoảng 5 phút là lượt quét đầu chạy.
+          kỳ, rồi <b>Redeploy</b>. Bộ quét tự chạy vào ban đêm (0h–7h); muốn quét ngay thì chạy tay workflow <b>Quét khuôn mặt</b> ở tab Actions trên GitHub.
         </p>
         <p className={`${body} mt-1`} style={{ color: "var(--tx3)" }}>
           Biến này cũng đang chặn cả nhắc lịch chụp, gửi Zalo và các tác vụ dọn dẹp.
