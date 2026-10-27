@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
 import { autoAdvanceContracts } from "@/lib/contract-status";
 import { applyBranch, getBranchScope } from "@/lib/branches";
+import { doToc } from "@/lib/do-toc";
 
 export const dynamic = "force-dynamic";
 
@@ -13,14 +14,15 @@ export const dynamic = "force-dynamic";
  * Cùng truy vấn với bản SSR cũ trong contracts/page.tsx.
  */
 export async function GET() {
-  const profile = await requireStudio("plus");
+  const dt = doToc("/api/studio/contracts-list");
+  const profile = await dt.buoc("requireStudio", requireStudio("plus"));
   if (!profile) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   // Tới ngày sớm nhất của HĐ (kể cả ngày đãi trước) thì tự chuyển sang "đang
   // thực hiện" ngay khi mở trang. Dùng admin client (scoped theo owner) để chạy
   // được cả với tài khoản nhân viên; lỗi ở bước này không được làm hỏng danh sách.
   try {
-    await autoAdvanceContracts(createAdminClient(), profile.id);
+    await dt.buoc("autoAdvance", autoAdvanceContracts(createAdminClient(), profile.id));
   } catch {
     /* best-effort — cron hằng ngày vẫn xử lý */
   }
@@ -29,14 +31,15 @@ export async function GET() {
   // Chi nhánh đang chọn trên thanh trên cùng — endpoint này chạy trong cùng
   // request nên đọc được cookie đó, và danh sách hợp đồng khớp với phạm vi mà
   // người dùng đang thấy ở mọi màn khác.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
+  const scope = await dt.buoc("branch", getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string));
   let q = supabase
     .from("studio_contracts")
     .select("id, code, title, client_name, client_phone, event_date, event_time, status, shoot_type, branch_id, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")
     .eq("owner_id", profile.id);
   if (profile.actingRole === "staff") q = q.eq("assigned_to", profile.actingUserId);
   q = applyBranch(q, scope.selected);
-  const { data, error } = await q.order("created_at", { ascending: false });
+  const { data, error } = await dt.buoc("list", Promise.resolve(q.order("created_at", { ascending: false })));
+  dt.xong();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ list: data ?? [] });
 }

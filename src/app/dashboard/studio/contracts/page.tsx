@@ -2,13 +2,15 @@ import { requireStudio } from "@/lib/auth-guards";
 import StudioDenied from "@/components/StudioDenied";
 import { brandFrom } from "@/lib/studio-brand";
 import { getBranchScope } from "@/lib/branches";
+import { doToc } from "@/lib/do-toc";
 import ContractsListView from "./ContractsListView";
 
 // Trang chỉ gác quyền; danh sách hợp đồng được tải client-side + cache trên máy
 // (hiển thị tức thì, làm mới ngầm) qua /api/studio/contracts-list — bỏ độ trễ
 // chờ server render lại mỗi lần mở trang.
 export default async function ContractsList() {
-  const profile = await requireStudio("plus");
+  const dt = doToc("/dashboard/studio/contracts");
+  const profile = await dt.buoc("requireStudio", requireStudio("plus"));
   if (profile?.actingRole === "accountant") return <StudioDenied message="Kế toán chỉ truy cập mục Thu chi & Bảng lương." />;
   if (!profile) {
     return (
@@ -25,7 +27,8 @@ export default async function ContractsList() {
   }
   // Chi nhánh đang xem đi vào KHOÁ CACHE của danh sách (xem ghi chú trong
   // ContractsListView) — đổi chi nhánh không được hiện lại danh sách cơ sở cũ.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
+  const scope = await dt.buoc("branch", getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string));
+  dt.xong();
 
   // Thương hiệu studio in ở đầu file Excel/CSV xuất ra từ màn này.
   return (
