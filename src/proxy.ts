@@ -1,5 +1,4 @@
 import { createServerClient } from "@supabase/ssr";
-import type { User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { cookieDomainForHost } from "@/lib/hosts";
 
@@ -354,14 +353,23 @@ async function route(request: NextRequest) {
     }
   );
 
+  // Perf: getSession() chứ KHÔNG getUser(). Việc của proxy chỉ là làm mới
+  // access token sắp hết hạn (server component không ghi được cookie) —
+  // getSession() đọc cookie, chỉ gọi mạng tới Supabase Auth khi token đã/sắp
+  // hết hạn. getUser() thì LUÔN một vòng mạng, mà layout/page ngay sau đó lại
+  // gọi getUser() lần nữa để xác thực thật → mỗi lần chuyển màn trả hai vòng
+  // Auth nối đuôi nhau. Cookie giả/đã thu hồi lọt qua đây vẫn bị
+  // dashboard/layout.tsx và requireStudio() chặn bằng getUser().
+  //
   // Supabase lỗi mạng / cookie phiên hỏng (ví dụ cookie còn sót của project
-  // Supabase cũ sau khi đổi khoá) đều làm getUser() ném. Coi như "chưa xác
-  // định" và cho đi tiếp: layout dashboard sẽ tự kiểm tra lại. Không redirect
-  // về /login ở đây, vì như thế một cú chớp mạng của Supabase sẽ đá văng tất cả
-  // người đang đăng nhập.
-  let user: User | null = null;
+  // Supabase cũ sau khi đổi khoá) có thể làm bước làm mới ném. Coi như "chưa
+  // xác định" và cho đi tiếp: layout dashboard sẽ tự kiểm tra lại. Không
+  // redirect về /login ở đây, vì như thế một cú chớp mạng của Supabase sẽ đá
+  // văng tất cả người đang đăng nhập.
+  let hasSession = false;
   try {
-    ({ data: { user } } = await supabase.auth.getUser());
+    const { data: { session } } = await supabase.auth.getSession();
+    hasSession = !!session;
   } catch {
     return response;
   }
@@ -373,7 +381,7 @@ async function route(request: NextRequest) {
   }
 
   // Only enforce auth for dashboard routes.
-  if (!user && pathname.startsWith("/dashboard")) return NextResponse.redirect(loginUrl(request));
+  if (!hasSession && pathname.startsWith("/dashboard")) return NextResponse.redirect(loginUrl(request));
 
   return response;
 }
