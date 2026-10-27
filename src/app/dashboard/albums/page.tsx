@@ -4,6 +4,7 @@ import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWate
 import { fetchAlbumRows } from "@/lib/album-rows";
 import { getPlanUsage } from "@/lib/plan-usage";
 import { getStudioHost } from "@/lib/studio-site";
+import { doToc } from "@/lib/do-toc";
 import AlbumList from "../AlbumList";
 
 // Album library reachable from the studio shell. Lives at its own path so it
@@ -12,21 +13,23 @@ import AlbumList from "../AlbumList";
 export default async function AlbumsPage() {
   // getSessionUser/getProfileById là bản CACHE theo lượt dựng trang: layout đã
   // gọi đúng hai câu này, nên ở đây không tốn thêm round-trip nào.
-  const [supabase, user] = await Promise.all([createClient(), getSessionUser()]);
+  const dt = doToc("/dashboard/albums");
+  const [supabase, user] = await Promise.all([createClient(), dt.buoc("user", getSessionUser())]);
   const uid = user?.id ?? "";
   const profileP = user ? getProfileById(user.id) : Promise.resolve(null);
 
   // Mọi thứ còn lại không phụ thuộc nhau — chạy MỘT đợt song song.
   const [rows, profile, studioHost, usage] = await Promise.all([
-    fetchAlbumRows(supabase, uid),
-    profileP,
+    dt.buoc("albums", fetchAlbumRows(supabase, uid)),
+    dt.buoc("profile", profileP),
     // Domain riêng của studio: link "mở album" phải mang tên miền studio,
     // không phải mstudo.com của bảng điều khiển.
-    user ? getStudioHost(supabase, user.id) : Promise.resolve(null),
+    dt.buoc("site", user ? getStudioHost(supabase, user.id) : Promise.resolve(null)),
     // Dòng "Gói … · đã tạo N album" tính sẵn ở máy chủ — khỏi ba truy vấn nối
     // đuôi trong trình duyệt sau khi trang đã vẽ.
-    user ? getPlanUsage(supabase, user.id, profileP) : Promise.resolve(null),
+    dt.buoc("usage", user ? getPlanUsage(supabase, user.id, profileP) : Promise.resolve(null)),
   ]);
+  dt.xong();
 
   const plan = profile ? effectivePlan(profile.plan, profile.plan_expires_at) : "free";
   const isAdmin = profile?.role === "admin";

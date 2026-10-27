@@ -99,6 +99,7 @@ const ORDER = [
   ["migrations/vai_tro_tho_tu_dat.sql", "Vai trò thợ studio tự đặt (đổi tên / ẩn / thêm vai trò) + bỏ ràng buộc vai trò contract_crew (chạy SAU crew_role_makeup)"],
   ["migrations/zalo_nguoi_nhan.sql", "Nhớ người nhận Zalo cho hợp đồng/album"],
   ["migrations/tang_toc_thu_vien_album.sql", "Tăng tốc thư viện album: chỉ mục, hàm đếm album_library_stats, policy RLS dạng initPlan (chạy SAU album_dislikes)"],
+  ["migrations/dem_anh_album_san.sql", "Thư viện album: số ảnh từng album đếm sẵn bằng trigger, album_library_stats đọc số đó (chạy SAU tang_toc_thu_vien_album)"],
   ["migrations/han_muc_album_may_chu.sql", "Hạn mức album: bỏ qua khi máy chủ (service-role) tạo album cho hợp đồng — hết lỗi hợp đồng hoàn thành mà không có album giao khách"],
   ["migrations/che_do_album_hop_dong.sql", "Chế độ album của hợp đồng: album mặc định (mstudo desktop) hoặc nhập link ảnh riêng"],
   ["migrations/ai_providers.sql", "API key AI nhập trong trang quản trị: key chung của admin + key riêng của từng studio (đã mã hoá)"],
@@ -160,6 +161,7 @@ const MOI = [
   "migrations/vai_tro_tho_tu_dat.sql",
   "migrations/zalo_nguoi_nhan.sql",
   "migrations/tang_toc_thu_vien_album.sql",
+  "migrations/dem_anh_album_san.sql",
   "migrations/han_muc_album_may_chu.sql",
   "migrations/che_do_album_hop_dong.sql",
   "migrations/ai_providers.sql",
@@ -190,6 +192,16 @@ const MOI = [
  * không liên quan chặn được nó nữa.
  */
 const NHOM = {
+  "dem-anh-album.sql": {
+    tieuDe: "TĂNG TỐC THƯ VIỆN ALBUM — SỐ ẢNH ĐẾM SẴN",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng việc này: bảng album_photo_counts, trigger",
+      "-- trên photos và bản album_library_stats đọc số đếm sẵn. Cần đã chạy",
+      "-- tang_toc_thu_vien_album.sql (hàm album_library_stats, bảng dislikes).",
+      "-- Tách riêng để hàng rào của tính năng khác không kéo nó rollback theo.",
+    ],
+    files: ["migrations/dem_anh_album_san.sql"],
+  },
   "khuon-mat.sql": {
     tieuDe: "TÌM ẢNH THEO KHUÔN MẶT",
     ghiChu: [
