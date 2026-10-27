@@ -36,17 +36,23 @@ export default async function AlbumEditPage(
 
   const { data: { user } } = await dt.buoc("user", supabase.auth.getUser());
 
+  // Danh sách ảnh (album lớn: vài nghìn dòng, hay là bước chậm nhất) KHÔNG chặn
+  // trang: lời hứa này đi thẳng xuống AlbumEditor và React stream kết quả tới
+  // sau, nên thông tin album / lượt chọn / cài đặt hiện ngay. Vẫn đọc qua RLS
+  // bằng client của người đang đăng nhập — album không đọc được thì notFound()
+  // bên dưới chặn trước khi lời hứa được trao đi.
+  const photosP = fetchAllPhotos(supabase, params.id, "*") as Promise<Photo[]>;
+
   // MỌI truy vấn chỉ cần id album / id người dùng chạy MỘT đợt song song — trước
   // đây sáu câu trong số này chạy nối đuôi nhau sau đợt đầu. album_shares đọc
   // bằng service role nên KẾT QUẢ của nó chỉ được dùng sau khi album đã đọc được
   // qua RLS (notFound bên dưới chặn trước khi tới chỗ dùng).
   const [
-    { data: album }, { data: sources }, photos, { data: profile }, { data: picks },
+    { data: album }, { data: sources }, { data: profile }, { data: picks },
     studioHost, { data: linkedRows }, printPicksRes, sharesRes,
   ] = await Promise.all([
     dt.buoc("album", Promise.resolve(supabase.from("albums").select("*").eq("id", params.id).single())),
     dt.buoc("sources", Promise.resolve(supabase.from("album_sources").select("*").eq("album_id", params.id).order("position"))),
-    dt.buoc("photos", fetchAllPhotos(supabase, params.id, "*")),
     user ? supabase.from("profiles").select("plan, plan_expires_at, role, full_name, storage_months").eq("id", user.id).maybeSingle() : Promise.resolve({ data: null }),
     // Lượt khách chọn: cần cả danh sách (tab "Lượt chọn" hiện ngay tại màn này)
     // nên lấy hàng thật, count suy ra từ độ dài mảng.
@@ -189,7 +195,7 @@ export default async function AlbumEditPage(
     <AlbumEditor
       album={album as Album}
       initialSources={(sources ?? []) as AlbumSource[]}
-      initialPhotos={(photos ?? []) as Photo[]}
+      photosPromise={photosP}
       canDelivery={planAllowsDelivery(plan, isAdmin)}
       canPinHome={planAllowsPublicGallery(plan, isAdmin)}
       canWatermark={planAllowsWatermark(plan, isAdmin)}

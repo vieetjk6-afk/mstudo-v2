@@ -78,13 +78,19 @@ const PRINT: AlbumPrintInfo = {
   sentAt: "2026-10-21T08:00:00Z", copiedAt: null,
 };
 
+// Lời hứa tạo MỘT lần ở cấp module — tạo trong lúc vẽ thì mỗi lần vẽ là một
+// lời hứa mới, màn album nạp lại ảnh mãi.
+const PHOTOS_P = Promise.resolve(PHOTOS);
+const PHOTOS_DELIVERY_P = Promise.resolve(PHOTOS_DELIVERY);
+const NO_PHOTOS_P = Promise.resolve([] as Photo[]);
+
 function editor(tab?: string, over: Partial<Album> = {}, extra: Partial<React.ComponentProps<typeof AlbumEditor>> = {}) {
   return (
     <PreviewV2 path={`/dashboard/albums/${AID}`}>
       <AlbumEditor
         album={album(over)}
         initialSources={SOURCES}
-        initialPhotos={PHOTOS}
+        photosPromise={PHOTOS_P}
         canDelivery
         canPinHome
         canWatermark
@@ -108,7 +114,7 @@ function editorDelivery(tab?: string) {
   return editor(
     tab,
     { phase: "delivery", delivered_at: "2026-10-22T03:00:00Z", storage_until: "2026-11-15", cover_url: bia("#ee9ca7", "#ffdde1") },
-    { initialSources: SOURCES_DELIVERY, initialPhotos: PHOTOS_DELIVERY, printInfo: PRINT },
+    { initialSources: SOURCES_DELIVERY, photosPromise: PHOTOS_DELIVERY_P, printInfo: PRINT },
   );
 }
 
@@ -165,7 +171,7 @@ export const SCREENS_ALBUMCT: Record<string, { title: string; render: () => Reac
     title: "Giao diện mới — Album mới tạo, chưa có ảnh, chưa ai chọn",
     render: () =>
       editor("photos", { title: "Kỷ yếu 12A3", cover_url: null, status: "draft", category: null, category_label: null }, {
-        initialSources: [], initialPhotos: [], selections: [], customerShares: [], linkedContract: null, contractId: null, clientPhone: null, clientName: null,
+        initialSources: [], photosPromise: NO_PHOTOS_P, selections: [], customerShares: [], linkedContract: null, contractId: null, clientPhone: null, clientName: null,
       }),
     bare: true,
   },

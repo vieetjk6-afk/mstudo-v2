@@ -24,6 +24,8 @@ const photo = (i: number, src: string): Photo => ({
   name: `${src === "s-del" ? "NHI_" : "DSC_"}${String(1000 + i * 7)}.JPG`, position: i, is_video: false, created_at: "",
 });
 const PHOTOS = [...Array.from({ length: 6 }, (_, i) => photo(i, "s-sel")), ...Array.from({ length: 5 }, (_, i) => photo(i, "s-del"))];
+// Lời hứa tạo MỘT lần ở cấp module — tạo trong lúc vẽ thì mỗi lần vẽ là một lời hứa mới, màn album nạp lại ảnh mãi.
+const PHOTOS_P = Promise.resolve(PHOTOS);
 
 const SHARES: CustomerShare[] = [
   { token: "aB3dE9xQ", photoIds: ["ps-del0", "ps-del2", "ps-del3"], createdAt: "2026-10-20T09:14:00Z" },
@@ -32,6 +34,6 @@ const SHARES: CustomerShare[] = [
 
 export default function AlbumMaAnhDemo({ tab }: { tab: "photos" | "shares" }) {
   return (
-    <AlbumEditor album={ALBUM} initialSources={SOURCES} initialPhotos={PHOTOS} customerShares={SHARES} initialTab={tab} />
+    <AlbumEditor album={ALBUM} initialSources={SOURCES} photosPromise={PHOTOS_P} customerShares={SHARES} initialTab={tab} />
   );
 }
