@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
@@ -68,7 +68,12 @@ export type LinkedContractInfo = {
 export type AlbumEditorProps = {
   album: Album;
   initialSources: AlbumSource[];
-  initialPhotos: Photo[];
+  /**
+   * Ảnh của album — LỜI HỨA chứ không phải mảng: page.tsx không chờ tải xong
+   * mấy nghìn ảnh mới trả trang, mà stream danh sách tới sau. Màn album hiện
+   * ngay (thông tin, lượt chọn, cài đặt), lưới ảnh hiện khung chờ tới khi về.
+   */
+  photosPromise: Promise<Photo[]>;
   canDelivery?: boolean;
   canPinHome?: boolean;
   canWatermark?: boolean;
@@ -99,7 +104,7 @@ export type AlbumEditorProps = {
 type EditorInput = {
   album: Album;
   initialSources: AlbumSource[];
-  initialPhotos: Photo[];
+  photosPromise: Promise<Photo[]>;
   canDelivery: boolean;
   canPinHome: boolean;
   canWatermark: boolean;
@@ -141,7 +146,7 @@ function sameForm(a: AlbumForm, b: AlbumForm) {
 export function useAlbumEditor({
   album,
   initialSources,
-  initialPhotos,
+  photosPromise,
   canDelivery,
   canPinHome,
   canWatermark,
@@ -206,7 +211,28 @@ export function useAlbumEditor({
   const [storageDate, setStorageDate] = useState<string | null>(album.storage_until ?? null);
   const [storageBusy, setStorageBusy] = useState(false);
   const [sources, setSources] = useState<AlbumSource[]>(initialSources);
-  const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  // Đang chờ danh sách ảnh từ máy chủ — trong lúc này KHÔNG được coi album là
+  // rỗng (không hiện "chưa có ảnh", không đếm 0 ảnh).
+  const [photosLoading, setPhotosLoading] = useState(true);
+  // Mốc lần cuối màn này tự nạp lại TOÀN BỘ ảnh (sau đồng bộ). Danh sách từ máy
+  // chủ bắt đầu trước mốc đó là bản cũ hơn → bỏ, không đè lên bản mới.
+  const photosReloadedAt = useRef(0);
+  useEffect(() => {
+    let live = true;
+    const startedAt = Date.now();
+    // router.refresh() dựng lại trang → lời hứa mới, danh sách mới nhất của máy chủ.
+    // Promise.resolve(): lời hứa đi từ server component xuống là THENABLE của
+    // React Flight — `.then()` của nó không trả về Promise, gọi `.catch` thẳng
+    // trên đó là vỡ cả màn.
+    Promise.resolve(photosPromise)
+      .then((list) => {
+        if (live && photosReloadedAt.current < startedAt) setPhotos(list);
+      })
+      .catch(() => { /* lỗi tải: giữ danh sách đang có, phần còn lại vẫn dùng được */ })
+      .finally(() => { if (live) setPhotosLoading(false); });
+    return () => { live = false; };
+  }, [photosPromise]);
 
   const [newSource, setNewSource] = useState<{ name: string; url: string; stage: SourceStage }>({ name: "", url: "", stage: "selection" });
   // Link ảnh đã CHỈNH SỬA (giao khách) — studio nhập ở giai đoạn giao. Ảnh trong
@@ -522,7 +548,7 @@ export function useAlbumEditor({
     if (!confirm(t("confirmDelete"))) return;
     await supabase.from("album_sources").delete().eq("id", id);
     setSources(sources.filter((s) => s.id !== id));
-    setPhotos(photos.filter((p) => p.source_id !== id));
+    setPhotos((prev) => prev.filter((p) => p.source_id !== id));
   }
 
   async function sync() {
@@ -534,7 +560,9 @@ export function useAlbumEditor({
     if (!res.ok) return flash(data.error ?? t("error"));
 
     const fresh = await fetchAllPhotos(supabase, album.id, "*");
+    photosReloadedAt.current = Date.now();
     setPhotos(fresh as Photo[]);
+    setPhotosLoading(false);
     // refresh sources too (sync may have auto-added sub-folder sources)
     const { data: freshSources } = await supabase
       .from("album_sources")
@@ -559,7 +587,7 @@ export function useAlbumEditor({
 
   async function removePhoto(id: string) {
     await supabase.from("photos").delete().eq("id", id);
-    setPhotos(photos.filter((p) => p.id !== id));
+    setPhotos((prev) => prev.filter((p) => p.id !== id));
   }
 
   const clientLink = studioUrl(studioHost, `/a/${form.slug}`);
@@ -578,7 +606,7 @@ export function useAlbumEditor({
     phase, phaseBusy, switchPhase, manualContract,
     twinTakesOver, twinBusy, twinBackToSelection,
     storageDate, storageBusy, extendStorage, clearStorage,
-    sources, photos, newSource, setNewSource, addSource, removeSource, sync, syncing,
+    sources, photos, photosLoading, newSource, setNewSource, addSource, removeSource, sync, syncing,
     editedUrl, setEditedUrl, deliveryBusy, saveDeliveryLink, deliveryMissing,
     msg, flash,
     deliveryCount, selectionCount, photoGroups, splitBySource, deliveryFolders,

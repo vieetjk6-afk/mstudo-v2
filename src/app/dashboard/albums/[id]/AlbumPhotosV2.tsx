@@ -66,6 +66,16 @@ export function PhotosTabV2({
     if (await copyText(codesText(names))) e.flash(`Đã chép ${names.length} mã ${what}`);
   }
 
+  if (e.photosLoading) {
+    return (
+      <div className="v2-card" aria-busy="true" aria-label="Đang tải ảnh">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+          {Array.from({ length: 18 }).map((_, i) => <div key={i} className="skeleton aspect-square w-full rounded-lg" />)}
+        </div>
+      </div>
+    );
+  }
+
   if (e.photos.length === 0) {
     return (
       <div className="v2-card">

@@ -64,7 +64,7 @@ export default function AlbumEditor(props: AlbumEditorProps) {
 function AlbumEditorV1({
   album,
   initialSources,
-  initialPhotos,
+  photosPromise,
   canDelivery = true,
   canPinHome = true,
   canWatermark = true,
@@ -91,7 +91,7 @@ function AlbumEditorV1({
     phase, phaseBusy, switchPhase, manualContract,
     twinTakesOver, twinBusy, twinBackToSelection,
     storageDate, storageBusy, extendStorage, clearStorage,
-    sources, photos, newSource, setNewSource, addSource, removeSource, sync, syncing,
+    sources, photos, photosLoading, newSource, setNewSource, addSource, removeSource, sync, syncing,
     editedUrl, setEditedUrl, deliveryBusy, saveDeliveryLink, deliveryMissing,
     msg,
     deliveryCount, selectionCount, photoGroups, splitBySource, deliveryFolders,
@@ -99,7 +99,7 @@ function AlbumEditorV1({
     visiblePicks, pickedIds, notedCount, copiedList, copyPickList, exportPickList,
     setCover, removePhoto, clientLink,
   } = useAlbumEditor({
-    album, initialSources, initialPhotos, canDelivery, canPinHome, canWatermark, studioName, studioHost,
+    album, initialSources, photosPromise, canDelivery, canPinHome, canWatermark, studioName, studioHost,
     selections, storageMonths, deliveryTwin, linkedContract,
   });
   const [tab, setTab] = useState<AlbumTab>(() =>
@@ -127,7 +127,7 @@ function AlbumEditorV1({
           <p className="mt-px truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
             {[
               phase === "delivery" ? "Album giao khách" : "Album chọn ảnh",
-              `${photos.length} ảnh`,
+              `${photosLoading ? "…" : photos.length} ảnh`,
               form.status === "published" ? "đã xuất bản" : "đang là nháp",
             ].join(" · ")}
           </p>
@@ -254,7 +254,7 @@ function AlbumEditorV1({
           nguồn ảnh và trạng thái công bố — nhìn là biết album đang tới đâu. */}
       <div className="mb-3.5 grid grid-cols-2 gap-3 min-[900px]:grid-cols-4">
         {([
-          [String(photos.length), "Ảnh trong album", "photos"],
+          [photosLoading ? "…" : String(photos.length), "Ảnh trong album", "photos"],
           [String(selections.length), pickSessions.length > 1 ? `Lượt khách chọn · ${pickSessions.length} mã` : "Lượt khách chọn", "picked"],
           [String(sources.length), "Nguồn ảnh Drive", "sources"],
           [form.status === "published" ? "Đã xuất bản" : "Nháp", phase === "delivery" ? "Giai đoạn giao khách" : "Giai đoạn chọn ảnh", "settings"],
@@ -312,7 +312,7 @@ function AlbumEditorV1({
             {/* Photos */}
             <div className="card p-6">
               <h2 className="mb-4 flex flex-wrap items-center gap-2 text-sm font-medium uppercase tracking-wide text-accent-muted">
-                {photos.length} {t("photos")}
+                {photosLoading ? "Đang tải ảnh…" : `${photos.length} ${t("photos")}`}
                 {deliveryCount > 0 && (
                   <span className="flex gap-1.5 normal-case">
                     <span className="rounded px-1.5 py-0.5 text-[10px]" style={{ background: "color-mix(in srgb, var(--gold) 15%, transparent)", color: "var(--gold)" }}>{selectionCount} chọn</span>
@@ -454,7 +454,12 @@ function AlbumEditorV1({
                   </div>
                 );
               })}
-              {photos.length === 0 && (
+              {photosLoading && (
+                <div aria-hidden="true" className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                  {Array.from({ length: 12 }).map((_, i) => <div key={i} className="skeleton aspect-square w-full rounded-lg" />)}
+                </div>
+              )}
+              {!photosLoading && photos.length === 0 && (
                 <p className="text-sm text-accent-muted">
                   {t("addSource")} → {t("syncDrive")}
                 </p>

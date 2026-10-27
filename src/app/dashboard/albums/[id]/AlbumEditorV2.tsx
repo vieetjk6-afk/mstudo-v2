@@ -36,7 +36,7 @@ export type TabV2 = "photos" | "picked" | "share" | "deliver" | "print" | "setti
 export default function AlbumEditorV2({
   album,
   initialSources,
-  initialPhotos,
+  photosPromise,
   canDelivery = true,
   canPinHome = true,
   canWatermark = true,
@@ -56,7 +56,7 @@ export default function AlbumEditorV2({
   initialTab,
 }: AlbumEditorProps) {
   const e = useAlbumEditor({
-    album, initialSources, initialPhotos, canDelivery, canPinHome, canWatermark, studioName, studioHost,
+    album, initialSources, photosPromise, canDelivery, canPinHome, canWatermark, studioName, studioHost,
     selections, storageMonths, deliveryTwin, linkedContract,
   });
   // Album chọn ảnh có album giao riêng (deliveryTwin): khách chọn ảnh in bên kia.
@@ -87,7 +87,8 @@ export default function AlbumEditorV2({
   const canFilter = !isDelivery;
   const coverFile = e.photos[0]?.drive_file_id ?? null;
 
-  const empty = e.photos.length === 0;
+  // Đang tải danh sách ảnh thì CHƯA biết album rỗng hay không — đừng mời "Thêm ảnh".
+  const empty = !e.photosLoading && e.photos.length === 0;
   const primary = empty ? (
     <button type="button" onClick={() => setSourcesOpen(true)} className={btn("primary")}>
       <Plus size={16} /> Thêm ảnh từ Drive
@@ -147,7 +148,7 @@ export default function AlbumEditorV2({
   );
 
   const tabs = [
-    { value: "photos" as const, label: "Ảnh", icon: Images, count: e.photos.length },
+    { value: "photos" as const, label: "Ảnh", icon: Images, count: e.photosLoading ? undefined : e.photos.length },
     { value: "picked" as const, label: "Khách chọn", icon: Heart, count: selections.length },
     { value: "share" as const, label: "Chia sẻ", icon: Share2 },
     { value: "deliver" as const, label: "Giao khách", icon: PackageCheck },
@@ -195,7 +196,7 @@ export default function AlbumEditorV2({
                 {e.hasPassword ? <Badge tone="gray" icon={Lock}>Có mật khẩu</Badge> : null}
               </div>
               <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[13px]" style={{ color: "var(--tx2)" }}>
-                <span><b className="v2-num" style={{ color: "var(--tx)" }}>{e.photos.length.toLocaleString("vi-VN")}</b> ảnh</span>
+                <span><b className="v2-num" style={{ color: "var(--tx)" }}>{e.photosLoading ? "…" : e.photos.length.toLocaleString("vi-VN")}</b> ảnh</span>
                 <span>
                   <b className="v2-num" style={{ color: selections.length ? "var(--ac)" : "var(--tx)" }}>{selections.length.toLocaleString("vi-VN")}</b> lượt chọn
                   {e.pickSessions.length > 1 ? <span style={{ color: "var(--tx3)" }}> · {e.pickSessions.length} mã</span> : null}
