@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Loader2, Maximize2, Play, Sparkles, X } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { btn, Empty, Progress } from "@/components/v2/kit";
 import { Drawer, Switch } from "@/components/v2/kit-client";
 import { SCAN_CAP, type DuplicateScan } from "./useDuplicateScan";
@@ -36,7 +36,7 @@ export default function DuplicatesV2({
   onToggle: (id: string) => void;
   onOpen: (ids: string[], id: string) => void;
 }) {
-  const { t } = useLang();
+  const { t } = useLangOptional();
   const img = useAlbumImg();
   const { busy, progress, run, stop, scanList, byId, shown, dupCount } = scan;
 

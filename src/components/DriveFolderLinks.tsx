@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Download, ChevronDown, ExternalLink } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 
 export interface DriveFolder {
   name: string;
@@ -31,7 +31,7 @@ export default function DriveFolderLinks({
   labelOne: string;
   className: string;
 }) {
-  const { t } = useLang();
+  const { t } = useLangOptional();
   const [open, setOpen] = useState(false);
 
   if (folders.length === 0) return null;

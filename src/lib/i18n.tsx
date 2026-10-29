@@ -431,3 +431,19 @@ export function useLang() {
   if (!ctx) throw new Error("useLang must be used within LangProvider");
   return ctx;
 }
+
+/** Bản tiếng Việt cố định — cho thành phần dùng chung khi nằm NGOÀI LangProvider. */
+const VI_FALLBACK: LangContextValue = {
+  lang: "vi",
+  setLang: () => {},
+  t: (key) => dict[key]?.vi ?? String(key),
+};
+
+/**
+ * Như useLang nhưng không ném lỗi khi thiếu LangProvider (trả về tiếng Việt).
+ * Dùng cho thành phần dùng chung (hộp chia sẻ, nút cài webapp…) có lúc được vẽ ở
+ * trang không bọc LangProvider, vd. /login/mfa qua InAppBrowserPrompt.
+ */
+export function useLangOptional(): LangContextValue {
+  return useContext(LangContext) ?? VI_FALLBACK;
+}

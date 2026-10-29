@@ -5,7 +5,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Images, X } from "lucide-react";
 import { CustomerHeaderV2, CustomerMainV2 } from "@/components/v2/customer";
 import { Badge, Empty, btn } from "@/components/v2/kit";
 import type { StudioBrandInfo } from "@/lib/studio-brand";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import { CustomerRootAuto, LangToggle } from "@/app/c/[token]/DocPartsV2";
 import { useShowcaseLightbox } from "./useShowcaseLightbox";
@@ -37,7 +37,7 @@ export default function ShowcaseAlbumV2({
   photos: Photo[];
 }) {
   const { lbIdx, setLbIdx } = useShowcaseLightbox(photos.length);
-  const { lang, setLang, t } = useLang();
+  const { lang, setLang, t } = useLangOptional();
   const lb = lbIdx !== null ? photos[lbIdx] : null;
 
   return (

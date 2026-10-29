@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { useShareLink, CopyLinkRow, NativeShareButton } from "./share/useShareLink";
 
 /**
@@ -21,7 +21,7 @@ export default function ShareDialog({
   subtitle?: string;
   onClose: () => void;
 }) {
-  const { t } = useLang();
+  const { t } = useLangOptional();
   const { copied, canNativeShare, copy, nativeShare } = useShareLink(url, title || t("shareDialogDefault"));
 
   useEffect(() => {

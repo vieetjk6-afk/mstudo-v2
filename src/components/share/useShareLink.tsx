@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Share2, Copy, Check } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 
 /**
  * Shared share-link logic used by both ShareButton and ShareDialog.
@@ -22,7 +22,7 @@ import { useLang } from "@/lib/i18n";
  */
 export function useShareLink(url: string | null, shareTitle?: string, message?: string) {
   const [copied, setCopied] = useState(false);
-  const { lang } = useLang();
+  const { lang } = useLangOptional();
   const defaultTitle = lang === "en" ? "Share" : "Chia sẻ";
   const [canNativeShare, setCanNativeShare] = useState(false);
 
@@ -80,7 +80,7 @@ export function CopyLinkRow({
   /** Nút chép chép cả lời nhắn — nói rõ trên nhãn để studio không bất ngờ khi dán. */
   withMessage?: boolean;
 }) {
-  const en = useLang().lang === "en";
+  const en = useLangOptional().lang === "en";
   return (
     <div
       className="flex items-center gap-2 rounded-lg px-2.5 py-2"
@@ -114,7 +114,7 @@ export function CopyLinkRow({
 
 /** Full-width "quick share" button that opens the native share sheet. */
 export function NativeShareButton({ onShare }: { onShare: () => void }) {
-  const en = useLang().lang === "en";
+  const en = useLangOptional().lang === "en";
   return (
     <button
       type="button"

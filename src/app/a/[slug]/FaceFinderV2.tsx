@@ -3,7 +3,7 @@
 import { ScanFace, Upload, X } from "lucide-react";
 import { faceCrop, type PersonChip } from "@/lib/face-people";
 import { conDangQuet, type TienDoQuet } from "@/lib/face-pending";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { btn } from "@/components/v2/kit";
 import { Drawer } from "@/components/v2/kit-client";
 import type { FaceSearch } from "./useFaceSearch";
@@ -24,7 +24,7 @@ export function faceToolAvailable(people: PersonChip[], scan: TienDoQuet | null)
 /** Ảnh thẻ khuôn mặt — cắt bằng CSS ngay trên thumbnail đã có. */
 export function FaceAvatar({ person, driveIdOf, size = 64, ring = false }: { person: PersonChip; driveIdOf: Map<string, string>; size?: number; ring?: boolean }) {
   const img = useAlbumImg();
-  const { t } = useLang();
+  const { t } = useLangOptional();
   const crop = faceCrop(person.coverBox);
   const drive = person.coverPhotoId ? driveIdOf.get(person.coverPhotoId) : undefined;
   return (
@@ -76,7 +76,7 @@ export default function FaceFinderV2({
   /** Đường "gửi ảnh của bạn" — giữ ở trang (./useFaceSearch) để đóng ngăn kéo không mất kết quả. */
   search: FaceSearch;
 }) {
-  const { t } = useLang();
+  const { t } = useLangOptional();
   const preparing = people.length === 0 && !!scan && conDangQuet(scan);
 
   return (

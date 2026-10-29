@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, Share, X } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -28,7 +28,7 @@ export default function InstallPwaButton({
   const [showIosHint, setShowIosHint] = useState(false);
   const [installed, setInstalled] = useState(false);
 
-  const { t } = useLang();
+  const { t } = useLangOptional();
   const text = label || t("pwaInstall");
   const btnClass =
     variant === "pill"

@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Lock, X, ZoomIn, ZoomOut } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { fullImageUrl, originalImageUrl, retryViaProxy, stripExtension, thumbnailUrl } from "@/lib/drive";
 import { ALBUM_TITLE_FONT, ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
@@ -39,7 +39,7 @@ export const useAlbumImg = () => useContext(ImgCtx);
 
 /* ── Chọn ngôn ngữ (VI / EN) ─────────────────────────────────────────────── */
 export function LangToggleV2() {
-  const { lang, setLang, t } = useLang();
+  const { lang, setLang, t } = useLangOptional();
   return (
     <Segmented
       size="sm"
@@ -152,7 +152,7 @@ export function LockScreenV2({
   placeholder?: string;
   numeric?: boolean;
 }) {
-  const { t } = useLang();
+  const { t } = useLangOptional();
   return (
     <CustomerRootV2 theme={theme}>
       <CustomerHeaderV2 brand={brand} sub={t("photoAlbum")} right={headerRight} />
@@ -306,7 +306,7 @@ export function ViewerV2({
   reserve?: number;
 }) {
   const img = useAlbumImg();
-  const { t } = useLang();
+  const { t } = useLangOptional();
   // Mức phóng chỉ để bật/tắt nút "thu nhỏ" — cử chỉ do PhotoZoom lo.
   const [zoom, setZoom] = useState(1);
   const [hiResLoading, setHiResLoading] = useState(false);
