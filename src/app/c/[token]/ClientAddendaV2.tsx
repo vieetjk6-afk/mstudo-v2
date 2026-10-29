@@ -28,7 +28,7 @@ export default function ClientAddendaV2({
   onSigned: () => void;
   id?: string;
 }) {
-  const { vi, name, setName, setSignature, busyId, err, sign } = useAddendumSign({ token, phone, lang, onSigned });
+  const { vi, name, setName, setSignatureFor, busyId, err, sign } = useAddendumSign({ token, phone, lang, onSigned });
 
   if (!addenda.length) return null;
   const waiting = addenda.filter((a) => !a.signed_at).length;
@@ -107,7 +107,7 @@ export default function ClientAddendaV2({
                   </Field>
                   <Field label={vi ? "Chữ ký" : "Signature"}>
                     <div className="[&_canvas]:[border:1.5px_dashed_var(--bdS)]">
-                      <SignaturePad onChange={setSignature} height={130} />
+                      <SignaturePad onChange={(v) => setSignatureFor(a.id, v)} height={130} />
                     </div>
                   </Field>
                   {err && (

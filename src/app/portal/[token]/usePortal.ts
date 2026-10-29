@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { forgetDevice, readPhone, readSnapshot, rememberPhone, saveSnapshot } from "@/lib/portal-device";
 import { apptTimeRange, apptTitle } from "@/lib/appointments";
 import { fullImageUrl, thumbnailUrl } from "@/lib/drive";
@@ -281,8 +281,21 @@ export function useAlbumContent(data: PortalPayload) {
 export function usePortalRating(token: string, phone: string, toast: (m: string) => void) {
   const [rating, setRating] = useState(0);
   const [rated, setRated] = useState(false);
+  // Chốt bằng ref: chạm 3★ rồi 5★ trước khi lượt đầu trả về thì máy chủ ghi HAI
+  // đánh giá công khai (mỗi lượt POST là một dòng mới) và studio nhận hai thông báo.
+  const sendingRef = useRef(false);
 
   async function sendRating(stars: number) {
+    if (sendingRef.current || rated) return;
+    sendingRef.current = true;
+    try {
+      await doSend(stars);
+    } finally {
+      sendingRef.current = false;
+    }
+  }
+
+  async function doSend(stars: number) {
     setRating(stars);
     // Mất mạng → `fetch` ném ra ngoài, sao đã sáng lên mà đánh giá không tới
     // studio và khách tưởng đã gửi. Nói thật thay vì im lặng.

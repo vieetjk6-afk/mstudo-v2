@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Fragment } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -19,7 +20,9 @@ import {
   ACCENTS, PALETTE, DropZone, BlockShell, Inspector, ViewStats, SeoPanel,
   insLabel, insInput, toolBtn, chipBtn, segBtn, primaryBtn, tabBtn, paletteCard, tplCard, presetCard, segWide,
 } from "./builder-parts";
-import CanvasBuilderV2 from "./CanvasBuilderV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const CanvasBuilderV2 = dynamic(() => import("./CanvasBuilderV2"));
 
 export type { AlbumOption, PriceItem, PriceListOption, SiteViewStats } from "./builder-parts";
 

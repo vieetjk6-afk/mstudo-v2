@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -16,8 +17,10 @@ import { useLang } from "@/lib/i18n";
 import { thumbnailUrl, stripExtension } from "@/lib/drive";
 import FilterPhotosButton from "@/components/FilterPhotosButton";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import SelectionsV2 from "./SelectionsV2";
 import { useSelections, type SelectionsProps } from "./useSelections";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const SelectionsV2 = dynamic(() => import("./SelectionsV2"));
 
 /** Giao diện mới có bản riêng (SelectionsV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
 export default function SelectionsView(props: SelectionsProps) {

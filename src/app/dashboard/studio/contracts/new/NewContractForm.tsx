@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import DateInput from "@/components/DateInput";
 import TimeInput from "@/components/TimeInput";
 import MoneyInput from "@/components/MoneyInput";
@@ -31,8 +32,10 @@ import { fmtDate, fmtDow } from "@/lib/date";
 import { avatarStyle, avatarColor, initials } from "@/lib/avatar";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import QuickContractBox from "./QuickContractBox";
-import NewContractFormV2 from "./NewContractFormV2";
 import { STEPS, useNewContractForm, type NewContractFormProps } from "./useNewContractForm";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const NewContractFormV2 = dynamic(() => import("./NewContractFormV2"));
 
 /* Kiểu dữ liệu nằm ở ./useNewContractForm (phần logic dùng chung) — xuất lại ở
    đây để page.tsx và nơi khác vẫn nhập từ đúng chỗ cũ. */

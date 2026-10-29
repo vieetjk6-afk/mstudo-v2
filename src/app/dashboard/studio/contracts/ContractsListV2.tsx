@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Plus,
@@ -173,6 +173,19 @@ function payState(c: ContractRow): { total: number; collected: number; pct: numb
 
 type Group = { key: string; label: string; dot: string; rows: ContractRow[] };
 
+/** Màn ≥ 1024px (mốc lg)? null = chưa biết (lượt dựng phía server / đầu tiên). */
+function useIsLg(): boolean | null {
+  const [on, setOn] = useState<boolean | null>(null);
+  useEffect(() => {
+    const m = window.matchMedia("(min-width: 1024px)");
+    const f = () => setOn(m.matches);
+    f();
+    m.addEventListener("change", f);
+    return () => m.removeEventListener("change", f);
+  }, []);
+  return on;
+}
+
 export default function ContractsListV2({ rows, initialLoading = false, studio }: Props) {
   const [q, setQ] = useState("");
   const [view, setView] = useState<View>("all");
@@ -187,6 +200,7 @@ export default function ContractsListV2({ rows, initialLoading = false, studio }
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [peekId, setPeekId] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const wide = useIsLg();
 
   // Hôm nay theo giờ VN, chốt một lần lúc mở màn (xem ghi chú ở bản cũ).
   const today = useMemo(() => todayVN(), []);
@@ -268,7 +282,8 @@ export default function ContractsListV2({ rows, initialLoading = false, studio }
       // chìm xuống cuối danh sách, khó tìm.
       else if (c.status === "post_production" && (!c.event_date || c.event_date < today)) post.push(c);
       else if (!c.event_date) none.push(c);
-      else if (c.event_date < today) past.push(c);
+      // Đã hoàn thành thì không còn là "lịch sắp chụp" (khớp số "Sắp chụp" ở đầu trang).
+      else if (c.event_date < today || c.status === "completed") past.push(c);
       else if (!soonEnd || c.event_date <= soonEnd) soon.push(c);
       else later.push(c);
     }
@@ -494,8 +509,10 @@ export default function ContractsListV2({ rows, initialLoading = false, studio }
         </div>
       ) : (
         <div className="v2-card overflow-hidden">
-          <ContractTable groups={groups} onPeek={setPeekId} menu={rowMenu} />
-          <ContractCards groups={groups} onPeek={setPeekId} menu={rowMenu} />
+          {/* Chỉ dựng MỘT kiểu (bảng ≥ lg, thẻ < lg). Trước khi biết khổ màn (lượt
+              dựng đầu) thì dựng cả hai, CSS ẩn bớt — như cũ, không nháy. */}
+          {wide !== false && <ContractTable groups={groups} onPeek={setPeekId} menu={rowMenu} />}
+          {wide !== true && <ContractCards groups={groups} onPeek={setPeekId} menu={rowMenu} />}
           {totalLine && (
             <p
               className="px-4 py-3 text-[12.5px] sm:px-5"

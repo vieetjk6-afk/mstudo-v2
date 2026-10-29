@@ -34,13 +34,18 @@ export async function isUiV2(): Promise<boolean> {
  * lượt dựng trang.
  */
 export const customerUiV2 = cache(async (ownerId: string | null | undefined): Promise<boolean> => {
-  const flags = await getFeatureFlags();
+  // Đọc cờ và role SONG SONG: trang khách là trang đông nhất, nối tiếp hai câu
+  // này là thêm một vòng tới DB cho mọi lượt mở.
+  const [flags, role] = await Promise.all([getFeatureFlags(), ownerId ? ownerRole(ownerId) : Promise.resolve(null)]);
   if (uiV2Mode(flags) === "default") return true;
-  if (!ownerId) return false;
+  return role === "admin";
+});
+
+async function ownerRole(ownerId: string): Promise<string | null> {
   try {
     const { data } = await createAdminClient().from("profiles").select("role").eq("id", ownerId).maybeSingle();
-    return (data as { role?: string } | null)?.role === "admin";
+    return (data as { role?: string } | null)?.role ?? null;
   } catch {
-    return false;
+    return null;
   }
-});
+}

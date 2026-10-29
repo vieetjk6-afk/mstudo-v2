@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import DateInput from "@/components/DateInput";
 import { ChevronLeft, ChevronRight, Plus, Trash2, TrendingUp, TrendingDown, Wallet, Download, FileSpreadsheet, Receipt, Target, PieChart, Filter } from "lucide-react";
@@ -11,7 +12,9 @@ import type { FunnelStage } from "@/lib/lead-source";
 import type { ExportStudio } from "@/lib/studio-export";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { useReports } from "./useReports";
-import ReportsV2 from "./ReportsV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ReportsV2 = dynamic(() => import("./ReportsV2"));
 
 export type PaymentRow = {
   id: string;

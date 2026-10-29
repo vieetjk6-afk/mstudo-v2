@@ -20,7 +20,8 @@ import { useFreeSlotForm } from "./useCrewPortal";
    để báo bận; dựng thêm một cái nữa cạnh nó chỉ làm cổng thợ rối lên.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type FreeSlot = Slot & { id: string; note: string | null };
+/** studioId: studio nhận khai rảnh này — mỗi studio có lịch rảnh riêng. */
+export type FreeSlot = Slot & { id: string; note: string | null; studioId?: string | null };
 
 export default function CrewFreeSlots({
   slots,

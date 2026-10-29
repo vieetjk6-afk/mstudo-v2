@@ -99,12 +99,18 @@ export function usePayroll({ rows, studio, timesheet = [], crewRoles = [] }: Pay
   async function setPaid(ids: string[], next: boolean) {
     if (ids.length === 0) return;
     setBusy(ids.join(","));
-    await supabase
+    const { error } = await supabase
       .from("contract_crew")
       .update({ paid: next, paid_at: next ? new Date().toISOString() : null })
       .in("id", ids);
-    setData((p) => p.map((x) => (ids.includes(x.id) ? { ...x, paid: next } : x)));
     setBusy(null);
+    // Lưu hỏng (mất mạng, sổ đã khoá…) thì KHÔNG đánh dấu đã trả trên màn — nếu
+    // không, lương hiện "đã trả" mà sổ thu chi không có khoản chi nào.
+    if (error) {
+      window.alert(`Chưa lưu được trạng thái trả lương: ${error.message}`);
+      return;
+    }
+    setData((p) => p.map((x) => (ids.includes(x.id) ? { ...x, paid: next } : x)));
   }
 
   /** Dòng dữ liệu cho file xuất ra — đúng kỳ đang lọc trên màn hình. */

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import {
   Link as LinkIcon, Copy, Check, Phone, FilePlus, Archive, MessageCircle,
@@ -12,8 +13,10 @@ import { vnd } from "@/lib/types";
 import { fmtDate, fmtDateTime } from "@/lib/date";
 import DateInput from "@/components/DateInput";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import BookingsV2 from "./BookingsV2";
 import { useBookings, editStateOf, type BookingsProps } from "./useBookings";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const BookingsV2 = dynamic(() => import("./BookingsV2"));
 
 const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
   new:      { label: "Mới",     color: "var(--s-blue)", bg: "var(--s-blueS)" },

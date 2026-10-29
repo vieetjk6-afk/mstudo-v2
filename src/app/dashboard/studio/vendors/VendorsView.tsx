@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import {
   Truck, Plus, Trash2, Check, ChevronRight, Phone, AlertTriangle, Package, Store,
@@ -20,8 +21,10 @@ import {
   type VendorKind,
 } from "@/lib/vendors";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import VendorsV2 from "./VendorsV2";
 import { emptyOrder, useVendors } from "./useVendors";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const VendorsV2 = dynamic(() => import("./VendorsV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NHÀ CUNG CẤP & ĐƠN ĐẶT NGOÀI — /dashboard/studio/vendors

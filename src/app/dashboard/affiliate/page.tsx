@@ -1,11 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { fmtDate } from "@/lib/date";
 import { Copy, Check, Share2, TrendingUp, Clock, Wallet, ChevronDown, ChevronUp, Gift } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { PLAN_LABEL, formatVnd, type Plan } from "@/lib/plans";
-import AffiliateV2 from "./AffiliateV2";
 import { STATUS_LABEL, useAffiliate } from "./useAffiliate";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AffiliateV2 = dynamic(() => import("./AffiliateV2"));
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "var(--gold)",

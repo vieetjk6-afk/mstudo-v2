@@ -10,7 +10,7 @@ import TimeInput from "@/components/TimeInput";
 import type { DayForecast } from "@/lib/weather";
 import { fmtDate, fmtDayMonth } from "@/lib/date";
 import { lunarFull } from "@/lib/lunar";
-import { addDays, apptTimeRange, apptTitle, assigneeName, byStartTime, kindMeta, mondayOf, toMinutes } from "@/lib/appointments";
+import { addDays, apptTimeRange, apptTitle, assigneeName, byStartTime, countByKind, kindMeta, mondayOf, toMinutes } from "@/lib/appointments";
 import {
   APPOINTMENT_KINDS, APPOINTMENT_KIND_LABEL, APPOINTMENT_STATUS_LABEL,
   type AppointmentKind, type AppointmentStatus, type StudioAppointment,
@@ -107,6 +107,20 @@ export default function ScheduleV2(props: SchedulePageProps) {
     s.setWeekAnchor(mondayOf(today));
     setMonth({ y: Number(today.slice(0, 4)), m: Number(today.slice(5, 7)) - 1 });
   }
+  // Lật ra ngoài khoảng server đã nạp sẵn → nạp thêm đoạn đó.
+  const rangeFrom = byMonth ? monthDays[0] : days[0];
+  const rangeTo = byMonth ? monthDays[monthDays.length - 1] : days[6];
+  const { ensureRange } = s;
+  useEffect(() => {
+    void ensureRange(rangeFrom, rangeTo);
+  }, [ensureRange, rangeFrom, rangeTo]);
+
+  // Số trên chip lọc: đếm theo đúng khoảng đang xem (tuần, hoặc cả tháng) —
+  // trước đây xem tháng mà chip vẫn đếm theo tuần, lệch với lưới.
+  const shownCounts = useMemo(
+    () => (byMonth ? countByKind(items.filter((a) => a.status !== "cancelled" && a.appt_date >= rangeFrom && a.appt_date <= rangeTo)) : counts),
+    [byMonth, items, rangeFrom, rangeTo, counts]
+  );
   const atToday = byMonth ? monthDays.includes(today) : days.includes(today);
   const label = byMonth ? `${MONTHS[month.m]}, ${month.y}` : `${fmtDayMonth(days[0])} – ${fmtDate(days[6])}`;
 
@@ -242,7 +256,7 @@ export default function ScheduleV2(props: SchedulePageProps) {
             >
               <span className="h-2 w-2 flex-none rounded-full" style={{ background: on ? tone.fg : "var(--bd)" }} />
               {kl}
-              <span className="tnum text-[11.5px]" style={{ color: "var(--tx3)" }}>{counts[k] ?? 0}</span>
+              <span className="tnum text-[11.5px]" style={{ color: "var(--tx3)" }}>{shownCounts[k] ?? 0}</span>
             </button>
           );
         })}

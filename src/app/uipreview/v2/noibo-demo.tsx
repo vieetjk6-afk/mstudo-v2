@@ -203,22 +203,25 @@ function useFakeCrew(variant: CrewVariant): CrewPortalState {
     studio,
     phone, setPhone, list, schedule, shiftPlan, calToken, setCalToken, openEntry, sheet, freeSlots, profiles,
     inThisStudio, acceptedStudios, studioOptions, clockJobs,
-    loading: false, busy: null, captchaToken, setCaptchaToken, session: "demo",
+    loading: false, busy: null, actionError: null, setActionError: () => {}, captchaToken, setCaptchaToken, session: "demo",
     load: async (e?: React.FormEvent) => {
       e?.preventDefault();
       setList(crewData("full").list);
     },
-    addEntry: async (v) =>
-      setSchedule((p) => [...p, { id: id(), date: v.date, note: null, start_time: v.start || null, end_time: v.end || null, overnight: !!(v.start && v.end && v.end <= v.start), title: v.title || null, owner_id: v.studioId, created_by: "crew" }]),
-    removeEntry: async (rid) => setSchedule((p) => p.filter((e) => e.id !== rid)),
-    setShift: async (sh: ShiftLetter | "") => setShiftPlan(sh ? { company: "hoa_phat", shift: sh } : null),
-    clockIn: async (v) => setOpenEntry({ id: id(), started_at: new Date().toISOString(), work_date: t, contract_id: v.contractId || null }),
+    addEntry: async (v) => {
+      setSchedule((p) => [...p, { id: id(), date: v.date, note: null, start_time: v.start || null, end_time: v.end || null, overnight: !!(v.start && v.end && v.end <= v.start), title: v.title || null, owner_id: v.studioId, created_by: "crew" }]);
+      return true;
+    },
+    removeEntry: async (rid) => { setSchedule((p) => p.filter((e) => e.id !== rid)); return true; },
+    setShift: async (sh: ShiftLetter | "") => { setShiftPlan(sh ? { company: "hoa_phat", shift: sh } : null); return true; },
+    clockIn: async (v) => { setOpenEntry({ id: id(), started_at: new Date().toISOString(), work_date: t, contract_id: v.contractId || null }); return true; },
     clockOut: async (note) => {
       if (openEntry) setSheet((p) => [{ id: openEntry.id, phone, workDate: openEntry.work_date, startedAt: openEntry.started_at, endedAt: new Date().toISOString(), contractId: openEntry.contract_id, note: note || null }, ...p]);
       setOpenEntry(null);
+      return true;
     },
-    addFree: async (v) => setFreeSlots((p) => [...p, { id: id(), date: v.date, start: v.start || null, end: v.end || null, note: v.note || null }]),
-    removeFree: async (rid) => setFreeSlots((p) => p.filter((x) => x.id !== rid)),
+    addFree: async (v) => { setFreeSlots((p) => [...p, { id: id(), date: v.date, start: v.start || null, end: v.end || null, note: v.note || null }]); return true; },
+    removeFree: async (rid) => { setFreeSlots((p) => p.filter((x) => x.id !== rid)); return true; },
     respond: async (rid, status) => setList((p) => (p ? p.map((a) => (a.id === rid ? { ...a, status } : a)) : p)),
     reset: () => setList(null),
   };

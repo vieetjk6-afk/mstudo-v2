@@ -9,6 +9,7 @@ import { Empty, GroupLabel, btn } from "@/components/v2/kit";
 import { SearchInput, Segmented } from "@/components/v2/kit-client";
 import { ChipRow, ChipV2 } from "@/app/a/[slug]/album-v2-ui";
 import { PER_MONTH, useAlbumBrowse, type GalleryCard } from "./useAlbumBrowse";
+import { fmtDate } from "@/lib/date";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THƯ MỤC ALBUM (/album) — giao diện mới. Cùng dữ liệu, cùng tìm kiếm với
@@ -139,7 +140,7 @@ export default function AlbumBrowseV2({ galleries }: { galleries: GalleryCard[] 
   );
 }
 
-function CardGrid({ items, video, dateLocale }: { items: GalleryCard[]; video?: boolean; dateLocale: string }) {
+function CardGrid({ items, video }: { items: GalleryCard[]; video?: boolean; dateLocale?: string }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
       {items.map((g) => (
@@ -172,7 +173,7 @@ function CardGrid({ items, video, dateLocale }: { items: GalleryCard[]; video?: 
             <p className="line-clamp-2 text-[14px] font-semibold leading-snug">{g.title}</p>
             {g.event_date && (
               <p className="flex items-center gap-1 text-[12px]" style={{ color: "var(--tx3)" }}>
-                <Calendar size={12} /> {new Date(g.event_date).toLocaleDateString(dateLocale)}
+                <Calendar size={12} /> {fmtDate(g.event_date)}
               </p>
             )}
           </div>

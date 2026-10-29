@@ -150,7 +150,7 @@ export function PicksTabV2({
                     <div className="relative aspect-[3/2] overflow-hidden rounded-[10px]" style={{ background: "var(--sf2)" }}>
                       {p ? (
                         <Thumb fileId={p.drive_file_id} alt={s.photo_name} />
-                      ) : (
+                      ) : e.photosLoading ? null : (
                         <span className="flex h-full items-center justify-center text-[12px]" style={{ color: "var(--tx3)" }}>
                           Ảnh đã bị gỡ
                         </span>
@@ -638,7 +638,7 @@ function StorageCardV2({ e, deliveredAt }: { e: AlbumEditorState; deliveredAt: s
     <Section
       icon={HardDrive}
       title="Lưu trữ ảnh gốc trên Drive"
-      desc={`Giao khách ngày ${fmtDate(deliveredAt.slice(0, 10))}${e.storageDate ? ` · dự kiến dọn ảnh gốc ngày ${fmtDate(e.storageDate)}` : ""}`}
+      desc={`Giao khách ngày ${fmtDate(deliveredAt)}${e.storageDate ? ` · dự kiến dọn ảnh gốc ngày ${fmtDate(e.storageDate)}` : ""}`}
       actions={<Badge tone={tone} dot>{storageLabel(e.storageDate)}</Badge>}
     >
       <div className="flex flex-col gap-3">

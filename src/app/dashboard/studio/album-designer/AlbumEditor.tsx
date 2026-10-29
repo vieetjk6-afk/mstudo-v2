@@ -1,11 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Wand2, Undo2, Redo2, Plus, Trash2, Shuffle, Loader2, Download, ImagePlus, ArrowLeft, Copy, ChevronLeft, ChevronRight, Type, Lock, Unlock, Save, LayoutGrid, Maximize, Images } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import AlbumEditorV2 from "./AlbumEditorV2";
 import { DECOS, FILTERS, ROLE_SIZE, clamp, sig } from "./designer-core";
 import { LayoutMini, Slider, SpreadCanvas, SpreadView } from "./designer-parts";
 import { useAlbumDesignEditor, type AlbumEditorProps } from "./useAlbumDesignEditor";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AlbumEditorV2 = dynamic(() => import("./AlbumEditorV2"));
 
 export type { ADSize, ADTpl, SavedDesign } from "./designer-core";
 

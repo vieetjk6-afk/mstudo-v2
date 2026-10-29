@@ -1,11 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Fragment } from "react";
 import { Globe, Check, Loader2, Trash2, RefreshCw, Copy } from "lucide-react";
 import { apexOf } from "@/lib/domain-dns";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import CustomDomainV2 from "./CustomDomainV2";
 import { hostLabelHint, useCustomDomain } from "./useCustomDomain";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const CustomDomainV2 = dynamic(() => import("./CustomDomainV2"));
 
 /** Studio custom-domain manager (site builder → site settings). */
 export default function CustomDomain(props: { initialDomain: string | null; initialVerified: boolean }) {

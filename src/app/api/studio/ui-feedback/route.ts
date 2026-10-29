@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { getProfileById, getSessionUser, needsMfa } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmins } from "@/lib/notify-admin";
-import { rateLimit } from "@/lib/rate-limit";
+import { durableAllowed } from "@/lib/rate-limit";
+import { getUiState } from "@/lib/ui-server";
 
 export const dynamic = "force-dynamic";
 
@@ -19,15 +20,17 @@ export const dynamic = "force-dynamic";
  *   • thông báo cho mọi admin (chuông + trang Thông báo) kèm nội dung — chắc chắn
  *     tới tay admin kể cả khi máy chủ chưa có bảng `feedbacks`.
  *
- * Chỉ người đã đăng nhập mới gửi được (không cần captcha), mỗi người tối đa 5
- * lượt / 10 phút.
+ * Chỉ người đã đăng nhập VÀ được dùng giao diện mới mới gửi được (không cần
+ * captcha), mỗi người tối đa 5 lượt / 10 phút — đếm bằng bộ đếm bền, không theo
+ * từng instance, để không ai dội chuông admin được.
  */
 const MAX_LEN = 3000;
 
 export async function POST(req: Request) {
   const user = await getSessionUser();
   if (!user || (await needsMfa())) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  if (!rateLimit(`ui-feedback:${user.id}`, 5, 10 * 60_000)) {
+  if (!(await getUiState()).eligible) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!(await durableAllowed(`ui-feedback:${user.id}`, 5, 10 * 60_000))) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
 
@@ -43,7 +46,9 @@ export async function POST(req: Request) {
   const me = await getProfileById(user.id);
   if (!me || !me.is_active) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const name = (me.full_name as string | null)?.trim() || user.email || "Studio";
+  // Cắt ngắn tên: tên hiển thị do người dùng tự đặt, không để nó giả dạng một
+  // câu thông báo hệ thống dài trong chuông admin.
+  const name = ((me.full_name as string | null)?.trim() || user.email || "Studio").slice(0, 60);
   const where = [
     typeof body.path === "string" && body.path.startsWith("/") ? `Trang: ${body.path.slice(0, 200)}` : null,
     typeof body.width === "number" && body.width > 0 ? (body.width < 1024 ? "điện thoại" : "máy tính") : null,
@@ -56,7 +61,7 @@ export async function POST(req: Request) {
   } catch {
     /* bảng chưa có — vẫn còn thông báo bên dưới */
   }
-  await notifyAdmins("contact", `Góp ý giao diện mới từ ${name}: ${text.slice(0, 500)}`, { url: "/dashboard/settings" });
+  await notifyAdmins("contact", `Góp ý giao diện mới từ “${name}”: ${text.slice(0, 500)}`, { url: "/dashboard/settings" });
 
   return NextResponse.json({ ok: true });
 }

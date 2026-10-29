@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Building2, Plus, Trash2, MapPin, Phone, UserCog, FileText, Wallet, CalendarRange,
@@ -13,7 +14,9 @@ import { vnd, vndShort, type StudioBranch } from "@/lib/types";
 import { roleLabel } from "@/lib/studio-roles";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { draftOf, emptyDraft, useBranches, type Draft } from "./useBranches";
-import BranchesV2 from "./BranchesV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const BranchesV2 = dynamic(() => import("./BranchesV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    QUẢN LÝ CHI NHÁNH — khai cơ sở, gán người quản lý, và đối chiếu các cơ sở.

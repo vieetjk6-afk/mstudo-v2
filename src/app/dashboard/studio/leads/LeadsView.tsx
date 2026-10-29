@@ -1,11 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { Phone, MessageCircle, ChevronDown, Check, RotateCcw, Inbox } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import LeadsV2 from "./LeadsV2";
 import { useLeads, fmtLeadTime, zaloUrl } from "./useLeads";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const LeadsV2 = dynamic(() => import("./LeadsV2"));
 
 export interface Lead {
   id: string;

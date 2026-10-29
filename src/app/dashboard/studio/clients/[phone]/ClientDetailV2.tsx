@@ -59,9 +59,11 @@ export default function ClientDetailV2({
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("contracts");
-  const totalValue = rows.reduce((s, r) => s + r.value, 0);
   const collected = rows.reduce((s, r) => s + r.collected, 0);
   const active = rows.filter((r) => r.status !== "cancelled");
+  // Tổng giá trị và thanh tiến độ bỏ hợp đồng đã huỷ — khớp với số "còn nợ".
+  const totalValue = active.reduce((s, r) => s + r.value, 0);
+  const activeCollected = active.reduce((s, r) => s + r.collected, 0);
   const debt = active.reduce((s, r) => s + Math.max(0, r.value - r.collected), 0);
   const dated = rows.map((r) => r.event_date).filter(Boolean).sort() as string[];
   const first = dated[0] ?? null;
@@ -188,10 +190,10 @@ export default function ClientDetailV2({
           <div className="v2-card overflow-hidden">
             <div className="v2-card-pad flex flex-col gap-2.5" style={{ borderBottom: "1px solid var(--bd2)" }}>
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-[15px] font-semibold">Đã thu {vnd(collected)}</p>
+                <p className="text-[15px] font-semibold">Đã thu {vnd(activeCollected)}</p>
                 <p className="text-[13px]" style={{ color: "var(--tx3)" }}>trên tổng {vnd(totalValue)}</p>
               </div>
-              <Progress value={totalValue > 0 ? (collected / totalValue) * 100 : 0} tone={debt > 0 ? "amber" : "green"} />
+              <Progress value={totalValue > 0 ? (activeCollected / totalValue) * 100 : 0} tone={debt > 0 ? "amber" : "green"} />
             </div>
             {rows.length === 0 ? (
               <Empty compact icon={Wallet} title="Chưa có khoản thu nào" />

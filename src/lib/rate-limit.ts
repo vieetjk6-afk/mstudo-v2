@@ -57,7 +57,7 @@ export function limitByIp(req: Request, bucket: string, limit: number, windowMs:
  * đếm in-memory (như limitByIp). Lỗi kho → fail-open (không khóa oan người dùng).
  * Cần env: UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN.
  */
-async function durableAllowed(
+export async function durableAllowed(
   key: string,
   limit: number,
   windowMs: number,

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Bot, Check, CircleAlert, FilePlus2, Inbox, Plug, Search, Send, User, UserCheck, X,
@@ -7,8 +8,10 @@ import {
 import { platformColor, platformLabel, type Platform } from "@/lib/inbox/platforms";
 import { EmptyState } from "@/components/studio/ui";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import InboxV2 from "./InboxV2";
 import { fmtTime, senderLabel, useInbox, type InboxFilter, type InboxProps } from "./useInbox";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const InboxV2 = dynamic(() => import("./InboxV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MÀN HỘP THƯ — hai cột trên máy tính, một cột có nút quay lại trên điện thoại.
@@ -311,7 +314,7 @@ function InboxViewV1(props: Props) {
                         value={draft}
                         onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
+                          if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                             e.preventDefault();
                             send();
                           }

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { EXPENSE_CATEGORY_LABEL, PAYMENT_KIND_LABEL, paymentMethodLabel, type StudioExpense } from "@/lib/types";
-import { todayVN } from "@/lib/date";
+import { fmtDate, todayVN } from "@/lib/date";
 import { blocksWrite, blockedWriteMessage } from "@/lib/accounting";
 import { exportFinance, downloadCsv, financeCsvRows, type ExportStudio, type FinanceExport, type MoneyRow } from "@/lib/studio-export";
 import type { PaymentRow, SalaryRow, SourceStat } from "./ReportsView";
@@ -29,6 +29,12 @@ export type ReportsInput = {
 
 export const emptyExpense = () => ({ title: "", amount: 0, category: "equipment", spent_at: todayVN(), note: "" });
 
+/** "YYYY-MM-DD" theo giờ VN của một thời điểm; "" nếu rỗng. */
+function vnIsoDate(v: string | null | undefined): string {
+  const d = fmtDate(v); // dd/mm/yyyy theo giờ VN
+  return d ? `${d.slice(6)}-${d.slice(3, 5)}-${d.slice(0, 2)}` : "";
+}
+
 export function useReports({ ownerId, studio, payments, salaries, initialExpenses, initialTarget, sourceStats, closedUntil = null }: ReportsInput) {
   const supabase = createClient();
   const now = new Date();
@@ -52,7 +58,9 @@ export function useReports({ ownerId, studio, payments, salaries, initialExpense
   const periodWord = period === "year" ? "năm" : "tháng";
 
   const monthPayments = useMemo(() => payments.filter((p) => (p.paid_at || "").startsWith(ym)), [payments, ym]);
-  const monthSalaries = useMemo(() => salaries.filter((s) => (s.paid_at || "").startsWith(ym)), [salaries, ym]);
+  // paid_at của lương là thời điểm (UTC), không phải ngày — đổi sang ngày giờ VN
+  // trước khi so, không thì trả lương lúc 6h sáng ngày 1 bị tính vào tháng trước.
+  const monthSalaries = useMemo(() => salaries.filter((s) => vnIsoDate(s.paid_at).startsWith(ym)), [salaries, ym]);
   const monthExpenses = useMemo(() => expenses.filter((e) => (e.spent_at || "").startsWith(ym)), [expenses, ym]);
 
   const income = monthPayments.reduce((s, p) => s + (p.amount || 0), 0);

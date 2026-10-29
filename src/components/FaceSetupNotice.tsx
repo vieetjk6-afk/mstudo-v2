@@ -1,9 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { AlertTriangle, Copy, Check, RefreshCw, ExternalLink } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import FaceSetupNoticeV2 from "./FaceSetupNoticeV2";
 import { DUONG_DAN_SQL, useFaceSetupNotice } from "./useFaceSetupNotice";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const FaceSetupNoticeV2 = dynamic(() => import("./FaceSetupNoticeV2"));
 
 /**
  * BÁO KHI TÍNH NĂNG TÌM ẢNH THEO KHUÔN MẶT CHƯA BẬT ĐƯỢC.

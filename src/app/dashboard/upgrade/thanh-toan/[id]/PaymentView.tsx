@@ -1,12 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, Check, Copy, Loader2, AlertCircle, Crown, Clock, QrCode } from "lucide-react";
 import { VietQR } from "@/components/VietQR";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { UPGRADE_PAYMENT_LABEL, type UpgradePaymentStatus } from "@/lib/upgrade-payment";
-import PaymentViewV2 from "./PaymentViewV2";
 import { usePayment, type PaymentProps } from "./usePayment";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const PaymentViewV2 = dynamic(() => import("./PaymentViewV2"));
 
 const TONE: Record<UpgradePaymentStatus, { fg: string; soft: string }> = {
   none: { fg: "var(--tx3)", soft: "var(--sf2)" },

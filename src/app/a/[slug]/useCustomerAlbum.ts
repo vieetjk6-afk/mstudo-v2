@@ -700,6 +700,9 @@ export function useCustomerAlbum({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (lbIdx === null) return;
+      // Đang gõ ghi chú cho ảnh: ←/→ là để di con trỏ, không phải chuyển ảnh.
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable)) return;
       if (e.key === "ArrowRight") setLbIdx((i) => (i === null ? i : Math.min(lbPhotos.length - 1, i + 1)));
       else if (e.key === "ArrowLeft") setLbIdx((i) => (i === null ? i : Math.max(0, i - 1)));
       else if (e.key === "Escape") closeLightbox();

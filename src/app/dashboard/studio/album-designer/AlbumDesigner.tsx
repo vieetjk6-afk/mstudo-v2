@@ -1,12 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { fmtDate } from "@/lib/date";
 import { Check, ArrowRight, Plus, Trash2, Loader2, Clock, BookImage } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import AlbumEditor from "./AlbumEditor";
-import AlbumDesignerV2 from "./AlbumDesignerV2";
 import { CATS, SIZES, TEMPLATES } from "./designer-data";
 import { useAlbumDesigner } from "./useAlbumDesigner";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AlbumDesignerV2 = dynamic(() => import("./AlbumDesignerV2"));
 
 /**
  * Thiết kế Album — trình thiết kế album cưới.

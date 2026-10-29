@@ -72,8 +72,11 @@ export default function BoardV2({ initial }: { initial: BoardCard[] }) {
   const [q, setQ] = useState("");
   const [focus, setFocus] = useState<Focus>("all");
 
-  const lateCount = useMemo(() => cards.filter((c) => isLate(c, today)).length, [cards, today]);
-  const soonCount = useMemo(() => cards.filter((c) => isSoon(c, today)).length, [cards, today]);
+  // Đếm trên thẻ thuộc các cột ĐANG HIỆN — nháp / đã huỷ ẩn mặc định, đếm cả
+  // chúng thì chip ghi 1 mà bấm vào bảng trống.
+  const onBoard = useMemo(() => cards.filter((c) => columns.includes(c.status)), [cards, columns]);
+  const lateCount = useMemo(() => onBoard.filter((c) => isLate(c, today)).length, [onBoard, today]);
+  const soonCount = useMemo(() => onBoard.filter((c) => isSoon(c, today)).length, [onBoard, today]);
 
   const visible = useMemo(() => {
     const n = q.trim().toLowerCase();
@@ -140,7 +143,7 @@ export default function BoardV2({ initial }: { initial: BoardCard[] }) {
               value={focus}
               onChange={setFocus}
               options={[
-                { value: "all", label: "Tất cả", count: cards.length },
+                { value: "all", label: "Tất cả", count: onBoard.length },
                 { value: "late", label: "Trễ giao", count: lateCount },
                 { value: "soon", label: `Chụp ${SOON_DAYS} ngày tới`, count: soonCount },
               ]}

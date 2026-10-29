@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { fmtDateTime, fmtDate } from "@/lib/date";
 import DateInput from "@/components/DateInput";
 import Link from "next/link";
@@ -7,8 +8,10 @@ import { ArrowLeft, Copy, ExternalLink, Plus, Trash2, Lock, LockOpen, Send, File
 import { vnd, QUOTE_STATUS_LABEL, type QuoteStatus } from "@/lib/types";
 import { quoteExpiryLabel, isQuoteExpired } from "@/lib/quote-expiry";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import QuoteEditorV2 from "./QuoteEditorV2";
 import { useQuoteEditor, type QuoteEditorProps } from "./useQuoteEditor";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const QuoteEditorV2 = dynamic(() => import("./QuoteEditorV2"));
 
 /** Giao diện mới bật → bản V2; không thì bản cũ y nguyên. Hai bản dùng chung
  *  mọi state và luật ở ./useQuoteEditor. */

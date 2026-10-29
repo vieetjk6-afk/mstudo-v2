@@ -25,7 +25,7 @@ export default function ClientAddenda({
   addenda: ContractAddendum[];
   onSigned: () => void;
 }) {
-  const { vi, name, setName, setSignature, busyId, err, sign } = useAddendumSign({ token, phone, lang, onSigned });
+  const { vi, name, setName, setSignatureFor, busyId, err, sign } = useAddendumSign({ token, phone, lang, onSigned });
 
   if (!addenda.length) return null;
 
@@ -69,7 +69,7 @@ export default function ClientAddenda({
                     onChange={(e) => setName(e.target.value)}
                   />
                   <div className="mt-2.5">
-                    <SignaturePad onChange={setSignature} height={130} />
+                    <SignaturePad onChange={(v) => setSignatureFor(a.id, v)} height={130} />
                   </div>
                   {err && <p className="mt-2 text-[12.5px] font-semibold" style={{ color: "var(--rd)" }}>{err}</p>}
                   <button

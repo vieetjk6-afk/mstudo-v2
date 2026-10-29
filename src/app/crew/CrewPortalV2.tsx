@@ -181,6 +181,13 @@ export function CrewPortalV2View({ s, brand, initialTab = "jobs" }: { s: CrewPor
             <Tabs label="Các phần của trang" value={tab} onChange={setTab} options={tabs} />
           </div>
 
+          {/* Lỗi nhận / từ chối việc (lỗi trong ngăn kéo thì hiện ngay trong ngăn). */}
+          {s.actionError && !clockInOpen && !clockOutOpen ? (
+            <p role="alert" className="text-[13px] font-medium" style={{ color: "var(--rd)" }}>
+              {s.actionError}
+            </p>
+          ) : null}
+
           {tab === "jobs" ? (
             <JobsTab s={s} clock={clock} onClockIn={clockInFor} onClockOut={() => setClockOutOpen(true)} />
           ) : tab === "clock" ? (
@@ -208,23 +215,32 @@ export function CrewPortalV2View({ s, brand, initialTab = "jobs" }: { s: CrewPor
       {/* ── Chấm công vào (nhiều studio: hỏi studio nào) ──────────────── */}
       <Modal
         open={clockInOpen}
-        onClose={() => setClockInOpen(false)}
+        onClose={() => {
+          setClockInOpen(false);
+          s.setActionError(null);
+        }}
         icon={Play}
         title="Chấm công vào"
         desc="Bấm khi bạn đã tới nơi. Studio dùng giờ này để đối soát tiền công."
         width={420}
         footer={
-          <button
-            type="button"
-            disabled={s.busy === "sched" || !clock.studioId}
-            onClick={async () => {
-              await s.clockIn({ studioId: clock.studioId, contractId: clock.contractId });
-              setClockInOpen(false);
-            }}
-            className={btn("primary", "md", "w-full")}
-          >
-            <Play size={16} /> {s.busy === "sched" ? "Đang lưu…" : "Chấm công vào"}
-          </button>
+          <>
+            {s.actionError ? (
+              <p role="alert" className="w-full text-[12.5px] font-medium" style={{ color: "var(--rd)" }}>
+                {s.actionError}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={s.busy === "sched" || !clock.studioId}
+              onClick={async () => {
+                if (await s.clockIn({ studioId: clock.studioId, contractId: clock.contractId })) setClockInOpen(false);
+              }}
+              className={btn("primary", "md", "w-full")}
+            >
+              <Play size={16} /> {s.busy === "sched" ? "Đang lưu…" : "Chấm công vào"}
+            </button>
+          </>
         }
       >
         <ClockInFields s={s} clock={clock} />
@@ -233,23 +249,32 @@ export function CrewPortalV2View({ s, brand, initialTab = "jobs" }: { s: CrewPor
       {/* ── Chấm công ra ──────────────────────────────────────────────── */}
       <Modal
         open={clockOutOpen}
-        onClose={() => setClockOutOpen(false)}
+        onClose={() => {
+          setClockOutOpen(false);
+          s.setActionError(null);
+        }}
         icon={Square}
         title="Chấm công ra"
         desc={s.openEntry ? `Bắt đầu ${clockTime(s.openEntry.started_at)} · đã làm ${humanHours(Math.max(0, clock.elapsed))}` : undefined}
         width={420}
         footer={
-          <button
-            type="button"
-            disabled={s.busy === "sched"}
-            onClick={async () => {
-              await s.clockOut(clock.note);
-              setClockOutOpen(false);
-            }}
-            className={btn("primary", "md", "w-full")}
-          >
-            <Square size={15} /> {s.busy === "sched" ? "Đang lưu…" : "Chấm công ra"}
-          </button>
+          <>
+            {s.actionError ? (
+              <p role="alert" className="w-full text-[12.5px] font-medium" style={{ color: "var(--rd)" }}>
+                {s.actionError}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={s.busy === "sched"}
+              onClick={async () => {
+                if (await s.clockOut(clock.note)) setClockOutOpen(false);
+              }}
+              className={btn("primary", "md", "w-full")}
+            >
+              <Square size={15} /> {s.busy === "sched" ? "Đang lưu…" : "Chấm công ra"}
+            </button>
+          </>
         }
       >
         <Field label="Ghi chú (không bắt buộc)">

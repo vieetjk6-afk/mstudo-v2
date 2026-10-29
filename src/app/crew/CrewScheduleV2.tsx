@@ -136,7 +136,7 @@ export default function CrewScheduleV2({ s }: { s: CrewPortalState }) {
 
         <div className="flex min-w-0 flex-col gap-5">
           {studios.length > 0 ? (
-            <FreeDays slots={s.freeSlots} upcoming={free.upcoming} today={today} busy={working} onAdd={(date) => s.addFree({ studioId: free.studioId, date, start: "", end: "", note: "" })} onRemove={s.removeFree} onMore={() => setFreeOpen(true)} />
+            <FreeDays slots={s.freeSlots.filter((x) => !x.studioId || x.studioId === free.studioId)} upcoming={free.upcoming.filter((x) => !x.studioId || x.studioId === free.studioId)} today={today} busy={working} onAdd={(date) => s.addFree({ studioId: free.studioId, date, start: "", end: "", note: "" })} onRemove={s.removeFree} onMore={() => setFreeOpen(true)} />
           ) : null}
           <ShiftCard shift={s.shiftPlan?.shift ?? null} today={today} busy={working} onShift={s.setShift} />
         </div>
@@ -145,22 +145,31 @@ export default function CrewScheduleV2({ s }: { s: CrewPortalState }) {
       {/* ── Ngăn kéo: báo bận ─────────────────────────────────────────── */}
       <Drawer
         open={busyOpen}
-        onClose={() => setBusyOpen(false)}
+        onClose={() => {
+          setBusyOpen(false);
+          s.setActionError(null);
+        }}
         title="Báo bận"
         desc={studioName ? `Giữ giờ bạn đã nhận việc nơi khác — báo cho ${studioName}` : "Giữ giờ bạn đã nhận việc nơi khác"}
         width={440}
         footer={
-          <button
-            type="button"
-            disabled={working || !busySched.studioId || !busyDate}
-            onClick={async () => {
-              await busySched.submitFor(busyDate, s.addEntry);
-              setBusyOpen(false);
-            }}
-            className={btn("primary", "md", "w-full")}
-          >
-            <Plus size={16} /> {working ? "Đang lưu…" : "Thêm mốc bận"}
-          </button>
+          <>
+            {s.actionError ? (
+              <p role="alert" className="w-full text-[12.5px] font-medium" style={{ color: "var(--rd)" }}>
+                {s.actionError}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={working || !busySched.studioId || !busyDate}
+              onClick={async () => {
+                if (await busySched.submitFor(busyDate, s.addEntry)) setBusyOpen(false);
+              }}
+              className={btn("primary", "md", "w-full")}
+            >
+              <Plus size={16} /> {working ? "Đang lưu…" : "Thêm mốc bận"}
+            </button>
+          </>
         }
       >
         <div className="flex flex-col gap-4">
@@ -194,22 +203,31 @@ export default function CrewScheduleV2({ s }: { s: CrewPortalState }) {
       {/* ── Ngăn kéo: khai rảnh giờ cụ thể / ngày xa ──────────────────── */}
       <Drawer
         open={freeOpen}
-        onClose={() => setFreeOpen(false)}
+        onClose={() => {
+          setFreeOpen(false);
+          s.setActionError(null);
+        }}
         title="Khai ngày rảnh"
         desc="Ngày bạn chờ việc — studio thấy ngay lúc phân công"
         width={440}
         footer={
-          <button
-            type="button"
-            disabled={working || !free.studioId || !free.date}
-            onClick={async () => {
-              await s.addFree(free.payload);
-              setFreeOpen(false);
-            }}
-            className={btn("primary", "md", "w-full")}
-          >
-            <CalendarPlus size={16} /> {working ? "Đang lưu…" : "Khai rảnh ngày này"}
-          </button>
+          <>
+            {s.actionError ? (
+              <p role="alert" className="w-full text-[12.5px] font-medium" style={{ color: "var(--rd)" }}>
+                {s.actionError}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              disabled={working || !free.studioId || !free.date}
+              onClick={async () => {
+                if (await s.addFree(free.payload)) setFreeOpen(false);
+              }}
+              className={btn("primary", "md", "w-full")}
+            >
+              <CalendarPlus size={16} /> {working ? "Đang lưu…" : "Khai rảnh ngày này"}
+            </button>
+          </>
         }
       >
         <div className="flex flex-col gap-4">
@@ -244,7 +262,7 @@ function AgendaDay({
   today: string;
   shift: ShiftLetter | null;
   busy: boolean;
-  onRemove: (id: string) => Promise<void>;
+  onRemove: (id: string) => Promise<unknown>;
 }) {
   const block = shift ? shiftBlockFor(date, shift) : null;
   return (
@@ -296,8 +314,8 @@ function FreeDays({
   upcoming: FreeSlot[];
   today: string;
   busy: boolean;
-  onAdd: (date: string) => Promise<void>;
-  onRemove: (id: string) => Promise<void>;
+  onAdd: (date: string) => Promise<unknown>;
+  onRemove: (id: string) => Promise<unknown>;
   onMore: () => void;
 }) {
   const [span, setSpan] = useState<7 | 14>(7);
@@ -374,7 +392,7 @@ function ShiftCard({
   shift: ShiftLetter | null;
   today: string;
   busy: boolean;
-  onShift: (s: ShiftLetter | "") => Promise<void>;
+  onShift: (s: ShiftLetter | "") => Promise<unknown>;
 }) {
   const block = shift ? shiftBlockFor(today, shift) : null;
   return (

@@ -128,6 +128,9 @@ export default function QuotesListV2({ list: initialList, studioHost = null }: Q
   const pipe = useMemo(() => quotePipeline(rows, nowMs), [rows, nowMs]);
   const withBucket = useMemo(() => rows.map((r) => ({ r, b: bucketOf(r, nowMs) })), [rows, nowMs]);
   const attention = withBucket.filter((x) => x.b === "attention").length;
+  // Số trên thẻ "Đang chờ khách" phải khớp với nhóm mở ra khi bấm vào (báo giá
+  // khách xin chỉnh nằm ở nhóm "Cần xử lý", không phải "Chờ khách").
+  const waitingCount = withBucket.filter((x) => x.b === "waiting").length;
   const drafts = withBucket.filter((x) => x.b === "draft").length;
 
   const searched = useMemo(() => {
@@ -222,8 +225,8 @@ export default function QuotesListV2({ list: initialList, studioHost = null }: Q
             icon={Clock}
             tone="amber"
             label="Đang chờ khách"
-            value={pipe.waiting.length}
-            valueTone={pipe.waiting.length ? "amber" : undefined}
+            value={waitingCount}
+            valueTone={waitingCount ? "amber" : undefined}
             sub="Đã gửi, còn hạn"
           />
         </button>
@@ -322,7 +325,7 @@ export default function QuotesListV2({ list: initialList, studioHost = null }: Q
       {toast && (
         <div
           role="status"
-          className="fixed bottom-24 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
+          className="fixed bottom-24 left-1/2 z-[90] max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
           style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}
         >
           {toast}

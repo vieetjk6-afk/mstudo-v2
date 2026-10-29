@@ -1,10 +1,10 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Sparkles, Play, X, Check, Info, AlertTriangle, Copy, Loader2, ScanFace } from "lucide-react";
 import { AI_DEFAULTS, type Verdict } from "@/lib/photo-ai";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import AiCompareView from "./AiCompareView";
-import AiFilterPanelV2 from "./AiFilterPanelV2";
 import {
   CARD_SIZES,
   PhotoCard,
@@ -14,6 +14,9 @@ import {
   type AiFilterPanelProps,
   type CardSize,
 } from "./ai-filter-shared";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AiFilterPanelV2 = dynamic(() => import("./AiFilterPanelV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LỌC ẢNH BẰNG AI — màn hình cho studio.

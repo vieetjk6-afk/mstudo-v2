@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Copy, ExternalLink, FileText, Heart, HeartOff, ListChecks,
@@ -108,7 +108,14 @@ export default function SelectionsV2(props: SelectionsProps) {
   ];
 
   const empty = s.groups.length === 0 && s.dislikeItems.length === 0;
-  const allPicked = s.picked.size === s.dislikeItems.length && s.dislikeItems.length > 0;
+  // "Chọn tất cả" xét theo những ảnh ĐANG HIỆN (sau ô tìm) — không thì đang tìm
+  // còn 2 ảnh mà bấm chọn tất cả lại tick luôn 28 ảnh bị ẩn, rồi xoá cả trên Drive.
+  const allPicked = shownDislikes.length > 0 && shownDislikes.every((d) => s.picked.has(d.photo_id));
+
+  // Xoá hết ảnh không thích thì tab "Không thích" biến mất — đưa về tab đầu.
+  useEffect(() => {
+    if (view === "disliked" && s.dislikeItems.length === 0) setView("liked");
+  }, [view, s.dislikeItems.length]);
 
   return (
     <Stack>
@@ -286,7 +293,16 @@ function DislikedPanel({
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => s.setPicked(new Set(allPicked ? [] : s.dislikeItems.map((d) => d.photo_id)))}
+          onClick={() =>
+            s.setPicked((prev) => {
+              const next = new Set(prev);
+              for (const d of items) {
+                if (allPicked) next.delete(d.photo_id);
+                else next.add(d.photo_id);
+              }
+              return next;
+            })
+          }
           className={btn("ghost", "sm")}
         >
           <CheckCircle2 size={15} /> {allPicked ? "Bỏ chọn tất cả" : "Chọn tất cả"}

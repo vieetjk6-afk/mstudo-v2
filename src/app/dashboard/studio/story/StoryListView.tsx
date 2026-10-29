@@ -1,13 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Heart, ExternalLink, Pencil, Copy, Check, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
 import ThiepTabs from "@/components/studio/ThiepTabs";
 import { studioUrl } from "@/lib/hosts";
 import { storyEditMessage } from "@/lib/share-messages";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import StoryListV2 from "./StoryListV2";
 import { useStoryList, type StoryListProps } from "./useStoryList";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const StoryListV2 = dynamic(() => import("./StoryListV2"));
 
 export type { StoryRow } from "./useStoryList";
 

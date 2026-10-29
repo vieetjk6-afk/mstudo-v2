@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Check, Save, HardDrive, ReceiptText, Landmark, Gift, Percent, MapPin, Ban, Copy } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { cancelClauseText } from "@/lib/contract-cancel";
-import StudioPolicyCardV2 from "./StudioPolicyCardV2";
 import { useStudioPolicy, type StudioPolicyProps } from "./useStudioPolicy";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const StudioPolicyCardV2 = dynamic(() => import("./StudioPolicyCardV2"));
 
 /**
  * Hai chính sách chạy NGẦM của studio, đặt một lần rồi thôi:

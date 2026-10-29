@@ -1,11 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Plus, Trash2, Minus, RotateCcw, Phone } from "lucide-react";
 import MoneyInput from "@/components/MoneyInput";
 import { vnd, type StudioPackage } from "@/lib/types";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { usePackages } from "./usePackages";
-import PackagesV2 from "./PackagesV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const PackagesV2 = dynamic(() => import("./PackagesV2"));
 
 export type PackagesProps = { ownerId: string; initial: StudioPackage[] };
 

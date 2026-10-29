@@ -21,9 +21,12 @@ export async function generateMetadata(props: { params: Promise<{ slug: string }
   const params = await props.params;
   const { data } = await createAdminClient()
     .from("albums")
-    .select("title, description, cover_url, owner_id")
+    .select("title, description, cover_url, owner_id, status, is_showcase")
     .eq("slug", params.slug)
     .maybeSingle();
+  // Cùng điều kiện với thân trang: album không phải showcase đang công khai thì
+  // không lộ tiêu đề / mô tả / ảnh bìa qua thẻ xem trước khi ai đó đoán slug.
+  if (!data || data.status !== "published" || !data.is_showcase) return { title: "Album" };
   return studioShareMetadata({
     ownerId: data?.owner_id,
     title: data?.title || "Album",

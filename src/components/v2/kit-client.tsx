@@ -30,6 +30,37 @@ export type MenuItem =
  * Menu thả xuống cho thao tác phụ. Mặc định nút kích hoạt là "⋯"; truyền
  * `trigger` để dùng nút khác (vd nút "Tạo mới ▾").
  */
+/* ── Esc chỉ đóng lớp TRÊN CÙNG ─────────────────────────────────────────────
+   Menu, Modal, Drawer từng tự gắn listener keydown riêng, nên một lần Esc đóng
+   cả ngăn kéo lẫn hộp thoại mở bên trong nó. Giờ chúng xếp thành một ngăn xếp
+   chung: lớp mở sau cùng nhận Esc, các lớp dưới giữ nguyên. */
+const escStack: { close: () => void }[] = [];
+let escBound = false;
+function onEscKey(e: KeyboardEvent) {
+  if (e.key !== "Escape" || escStack.length === 0 || e.defaultPrevented) return;
+  e.preventDefault();
+  escStack[escStack.length - 1].close();
+}
+function useEscLayer(active: boolean, onClose: () => void) {
+  const closeRef = useRef(onClose);
+  useEffect(() => {
+    closeRef.current = onClose;
+  });
+  useEffect(() => {
+    if (!active) return;
+    if (!escBound) {
+      document.addEventListener("keydown", onEscKey);
+      escBound = true;
+    }
+    const layer = { close: () => closeRef.current() };
+    escStack.push(layer);
+    return () => {
+      const i = escStack.indexOf(layer);
+      if (i >= 0) escStack.splice(i, 1);
+    };
+  }, [active]);
+}
+
 export function Menu({
   items,
   label = "Thêm thao tác",
@@ -54,14 +85,10 @@ export function Menu({
     const down = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
-    const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("pointerdown", down);
-    document.addEventListener("keydown", key);
-    return () => {
-      document.removeEventListener("pointerdown", down);
-      document.removeEventListener("keydown", key);
-    };
+    return () => document.removeEventListener("pointerdown", down);
   }, [open]);
+  useEscLayer(open, () => setOpen(false));
   const toggle = () => setOpen((v) => !v);
   return (
     <div ref={ref} className="relative inline-flex flex-none">
@@ -259,15 +286,13 @@ function useOverlay(open: boolean, onClose: () => void) {
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!open) return;
-    const key = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    document.addEventListener("keydown", key);
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
-      document.removeEventListener("keydown", key);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
+  }, [open]);
+  useEscLayer(open, onClose);
   return mounted;
 }
 

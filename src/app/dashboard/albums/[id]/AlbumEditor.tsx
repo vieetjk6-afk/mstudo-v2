@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
@@ -35,9 +36,11 @@ import { albumShareMessage } from "@/lib/share-messages";
 import { storageState, storageLabel, STORAGE_EXTEND_CHOICES } from "@/lib/storage-lifecycle";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import AlbumPrintPanel from "./AlbumPrintPanel";
-import AlbumEditorV2 from "./AlbumEditorV2";
 import { useAlbumEditor, type AlbumEditorProps, type CustomerShare } from "./useAlbumEditor";
 import type { Album, Photo, SourceStage } from "@/lib/types";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AlbumEditorV2 = dynamic(() => import("./AlbumEditorV2"));
 
 // Kiểu dữ liệu + logic chung nằm ở ./useAlbumEditor (bản mới AlbumEditorV2 dùng chung).
 export type { AlbumPick, CustomerShare, DeliveryTwin, LinkedContractInfo, AlbumEditorProps } from "./useAlbumEditor";

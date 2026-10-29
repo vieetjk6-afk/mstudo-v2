@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Ticket, Plus, Printer, Check, Ban, Wallet, Gift } from "lucide-react";
 import { Modal } from "@/components/studio/Modal";
@@ -13,7 +14,9 @@ import type { VoucherProgram } from "@/lib/voucher-program";
 import { VOUCHER_STATE_LABEL, isLoyalty, voucherState, voucherValueLabel, type Voucher, type VoucherState } from "@/lib/vouchers";
 import { useVouchers } from "./useVouchers";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import VouchersV2 from "./VouchersV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const VouchersV2 = dynamic(() => import("./VouchersV2"));
 
 const STATE_TONE: Record<VoucherState, ToneKey> = {
   usable: "green",

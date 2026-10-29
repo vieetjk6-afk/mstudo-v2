@@ -1,12 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Check, X, Crown, Sparkles, Send, Zap, Tag, Camera } from "lucide-react";
 import PlanUsage from "@/components/PlanUsage";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { formatVnd, trialDaysFor, type Plan } from "@/lib/plans";
 import type { PlanUsageData } from "@/lib/plan-usage";
-import UpgradeV2 from "./UpgradeV2";
 import { useUpgrade, type Cycle, type PaidPlan } from "./useUpgrade";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const UpgradeV2 = dynamic(() => import("./UpgradeV2"));
 
 /**
  * Trang "Gói phần mềm": giao diện mới (UpgradeV2) hay bản cũ — xem UiV2Context.

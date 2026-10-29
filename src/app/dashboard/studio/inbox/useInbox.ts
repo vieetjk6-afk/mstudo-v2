@@ -71,12 +71,21 @@ export function useInbox({ conversations: initial, firstMessages, meId, ownerId 
   }, []);
 
   const openConversation = useCallback(async (id: string) => {
+    // Sang hội thoại KHÁC: xoá nháp + khung chat cũ — để nguyên thì bấm Enter là
+    // gửi câu soạn cho khách A sang khách B, và tin của A hiện dưới tên B.
+    if (id !== activeIdRef.current) {
+      setDraft("");
+      setMessages([]);
+    }
+    activeIdRef.current = id;
     setActiveId(id);
     setMobileThread(true);
     setSendError(null);
-    const res = await fetch(`/api/inbox/conversations/${id}`, { cache: "no-store" });
-    if (!res.ok) return;
+    const res = await fetch(`/api/inbox/conversations/${id}`, { cache: "no-store" }).catch(() => null);
+    if (!res?.ok) return;
     const json = (await res.json()) as { conversation: ConversationView; messages: MessageRow[] };
+    // Bấm nhanh A rồi B: lượt tải của A về sau thì bỏ, không đè lên khung của B.
+    if (activeIdRef.current !== id) return;
     setMessages(json.messages);
     setRows((cur) => cur.map((c) => (c.id === id ? { ...c, ...json.conversation } : c)));
   }, []);
@@ -140,8 +149,14 @@ export function useInbox({ conversations: initial, firstMessages, meId, ownerId 
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
-    });
-    if (!res.ok) return;
+    }).catch(() => null);
+    // Hỏng thì báo ở dòng lỗi dưới khung soạn — "Tôi tiếp quản" / "Xong" từng
+    // bấm mà không có gì xảy ra, không một lời.
+    if (!res?.ok) {
+      setSendError("Chưa cập nhật được hội thoại. Thử lại nhé.");
+      return;
+    }
+    setSendError(null);
     const json = (await res.json()) as { aiEnabled: boolean; status: ConversationView["status"]; assigneeId: string | null };
     setRows((cur) =>
       cur.map((c) =>
