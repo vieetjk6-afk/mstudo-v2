@@ -21,9 +21,16 @@ export function useQuoteRows(initialList: QuoteRow[]) {
   async function changeStatus(id: string, next: QuoteStatus) {
     if (next === "converted") return; // "đã tạo hợp đồng" chỉ do luồng tạo HĐ đặt
     setUpdating(id);
+    const before = rows.find((r) => r.id === id)?.status;
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: next } : r)));
-    await supabase.from("studio_quotes").update({ status: next }).eq("id", id);
+    const { error } = await supabase.from("studio_quotes").update({ status: next }).eq("id", id);
     setUpdating(null);
+    // Lưu hỏng: trả trạng thái cũ và báo — không để màn hiện "đã gửi"/"huỷ" giả.
+    if (error) {
+      if (before) setRows((prev) => prev.map((r) => (r.id === id ? { ...r, status: before } : r)));
+      window.alert(`Chưa đổi được trạng thái báo giá: ${error.message}`);
+      return;
+    }
     router.refresh();
   }
 
