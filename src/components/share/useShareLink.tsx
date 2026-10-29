@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Share2, Copy, Check } from "lucide-react";
+import { useLangOptional } from "@/lib/i18n";
 
 /**
  * Shared share-link logic used by both ShareButton and ShareDialog.
@@ -21,6 +22,8 @@ import { Share2, Copy, Check } from "lucide-react";
  */
 export function useShareLink(url: string | null, shareTitle?: string, message?: string) {
   const [copied, setCopied] = useState(false);
+  const { lang } = useLangOptional();
+  const defaultTitle = lang === "en" ? "Share" : "Chia sẻ";
   const [canNativeShare, setCanNativeShare] = useState(false);
 
   useEffect(() => {
@@ -38,7 +41,7 @@ export function useShareLink(url: string | null, shareTitle?: string, message?: 
     }
   }
 
-  async function nativeShare(fallbackTitle = "Chia sẻ") {
+  async function nativeShare(fallbackTitle = defaultTitle) {
     if (!url) return;
     try {
       await navigator.share({ title: shareTitle || fallbackTitle, ...(message ? { text: message } : {}), url });
@@ -48,7 +51,7 @@ export function useShareLink(url: string | null, shareTitle?: string, message?: 
   }
 
   /** Prefer the native share sheet, fall back to clipboard copy. */
-  async function quickShareOrCopy(fallbackTitle = "Chia sẻ") {
+  async function quickShareOrCopy(fallbackTitle = defaultTitle) {
     if (!url) return;
     if (navigator.share) {
       try {
@@ -77,6 +80,7 @@ export function CopyLinkRow({
   /** Nút chép chép cả lời nhắn — nói rõ trên nhãn để studio không bất ngờ khi dán. */
   withMessage?: boolean;
 }) {
+  const en = useLangOptional().lang === "en";
   return (
     <div
       className="flex items-center gap-2 rounded-lg px-2.5 py-2"
@@ -85,7 +89,7 @@ export function CopyLinkRow({
       <input
         readOnly
         value={url}
-        aria-label="Đường dẫn chia sẻ"
+        aria-label={en ? "Share link" : "Đường dẫn chia sẻ"}
         onFocus={(e) => e.currentTarget.select()}
         className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
         style={{ color: "var(--text2)" }}
@@ -93,15 +97,15 @@ export function CopyLinkRow({
       <button
         type="button"
         onClick={onCopy}
-        aria-label={copied ? "Đã chép đường dẫn" : "Chép đường dẫn"}
+        aria-label={copied ? (en ? "Link copied" : "Đã chép đường dẫn") : en ? "Copy link" : "Chép đường dẫn"}
         className="flex flex-shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] font-medium"
         style={{ background: "var(--accent)", color: "var(--accentInk)" }}
       >
         {copied ? <Check size={13} /> : <Copy size={13} />}
-        {copied ? "Đã chép" : withMessage ? "Chép kèm lời nhắn" : "Chép"}
+        {copied ? (en ? "Copied" : "Đã chép") : withMessage ? (en ? "Copy with message" : "Chép kèm lời nhắn") : en ? "Copy" : "Chép"}
       </button>
       <span aria-live="polite" className="sr-only">
-        {copied ? "Đã chép đường dẫn vào bộ nhớ tạm" : ""}
+        {copied ? (en ? "Link copied to clipboard" : "Đã chép đường dẫn vào bộ nhớ tạm") : ""}
       </span>
     </div>
   );
@@ -110,6 +114,7 @@ export function CopyLinkRow({
 
 /** Full-width "quick share" button that opens the native share sheet. */
 export function NativeShareButton({ onShare }: { onShare: () => void }) {
+  const en = useLangOptional().lang === "en";
   return (
     <button
       type="button"
@@ -117,7 +122,7 @@ export function NativeShareButton({ onShare }: { onShare: () => void }) {
       className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-[13px] font-medium"
       style={{ background: "var(--accent)", color: "var(--accentInk)" }}
     >
-      <Share2 size={15} /> Chia sẻ nhanh
+      <Share2 size={15} /> {en ? "Quick share" : "Chia sẻ nhanh"}
     </button>
   );
 

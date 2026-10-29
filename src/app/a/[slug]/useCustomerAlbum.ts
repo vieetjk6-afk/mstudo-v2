@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLang } from "@/lib/i18n";
+import { dict, useLang } from "@/lib/i18n";
 import { fullImageUrl, stripExtension } from "@/lib/drive";
 import { filterByView, type AlbumView } from "@/lib/album-dislike";
 import { filterByPerson, type PersonChip } from "@/lib/face-people";
@@ -111,7 +111,7 @@ export function useCustomerAlbum({
   studioName = "Studio",
   studioHost = null,
 }: CustomerAlbumProps) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
 
   const [unlocked, setUnlocked] = useState(!album.hasPassword);
   const [photos, setPhotos] = useState<PublicPhoto[]>(initialPhotos ?? []);
@@ -446,8 +446,8 @@ export function useCustomerAlbum({
       dangBaoRef.current = false;
       flashToast(
         online
-          ? "Chưa gửi xong lựa chọn lên studio. Đợi viên “Đã lưu” rồi báo lại nhé."
-          : "Đang mất mạng. Lựa chọn đã lưu trên máy — có mạng lại rồi bấm báo studio."
+          ? t("caDoneNotSynced")
+          : t("caDoneOffline")
       );
       return;
     }
@@ -459,12 +459,12 @@ export function useCustomerAlbum({
       });
       if (res.ok) {
         setDoneSent(true);
-        flashToast("Đã báo studio bạn chọn xong ✓");
+        flashToast(t("caDoneSent"));
       } else {
-        flashToast("Không gửi được thông báo, thử lại sau.");
+        flashToast(t("caDoneFailed"));
       }
     } catch {
-      flashToast("Mất kết nối khi báo studio.");
+      flashToast(t("caDoneNoConn"));
     }
     setNotifyingDone(false);
     dangBaoRef.current = false;
@@ -654,9 +654,9 @@ export function useCustomerAlbum({
         byId.delete(s.id);
       }
     }
-    for (const [sid, items] of byId) ordered.push({ id: sid, name: sid === "none" ? "Khác" : "", items, ids: items.map((x) => x.p.id) });
+    for (const [sid, items] of byId) ordered.push({ id: sid, name: sid === "none" ? dict.caOtherGroup[lang] : "", items, ids: items.map((x) => x.p.id) });
     return ordered;
-  }, [visiblePhotos, sources, selectedOnly, dislikedOnly, activeTab, tabSources.length]);
+  }, [visiblePhotos, sources, selectedOnly, dislikedOnly, activeTab, tabSources.length, lang]);
 
   function copyList() {
     navigator.clipboard.writeText(selectedPhotos.map((p) => stripExtension(p.name)).join("\n"));

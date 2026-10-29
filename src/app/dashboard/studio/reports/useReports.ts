@@ -82,7 +82,11 @@ export function useReports({ ownerId, studio, payments, salaries, initialExpense
   /** Lưu mục tiêu doanh thu THÁNG. */
   async function saveTarget(input: number) {
     const v = Math.max(0, Math.round(Number(input) || 0));
-    await supabase.from("profiles").update({ monthly_revenue_target: v }).eq("id", ownerId);
+    const { error } = await supabase.from("profiles").update({ monthly_revenue_target: v }).eq("id", ownerId);
+    if (error) {
+      window.alert(`Chưa lưu được mục tiêu: ${error.message}`);
+      return;
+    }
     setTarget(v);
   }
 

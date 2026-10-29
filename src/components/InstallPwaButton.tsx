@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Download, Share, X } from "lucide-react";
+import { useLangOptional } from "@/lib/i18n";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -27,7 +28,8 @@ export default function InstallPwaButton({
   const [showIosHint, setShowIosHint] = useState(false);
   const [installed, setInstalled] = useState(false);
 
-  const text = label || "Tạo Webapp";
+  const { t } = useLangOptional();
+  const text = label || t("pwaInstall");
   const btnClass =
     variant === "pill"
       ? "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-semibold"
@@ -111,17 +113,17 @@ export default function InstallPwaButton({
           >
             <button
               onClick={() => setShowIosHint(false)}
-              aria-label="Đóng"
+              aria-label={t("close")}
               className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full"
               style={{ background: "var(--surface2)", color: "var(--text3)" }}
             >
               <X size={12} />
             </button>
-            <p className="mb-2 text-sm font-bold">{variant === "pill" ? text : "Cài đặt mstudo"}</p>
+            <p className="mb-2 text-sm font-bold">{variant === "pill" ? text : t("pwaInstallTitle")}</p>
             <ol className="space-y-1.5 text-[13px]" style={{ color: "var(--text2)" }}>
-              <li>1. Nhấn nút <strong>Chia sẻ</strong> <span style={{ fontSize: 16 }}>⬆</span> ở thanh Safari bên dưới</li>
-              <li>2. Cuộn xuống và chọn <strong>&ldquo;Thêm vào Màn hình chính&rdquo;</strong></li>
-              <li>3. Nhấn <strong>Thêm</strong></li>
+              <li>{t("pwaIos1a")} <strong>{t("pwaIos1b")}</strong> <span style={{ fontSize: 16 }}>⬆</span> {t("pwaIos1c")}</li>
+              <li>{t("pwaIos2a")} <strong>{t("pwaIos2b")}</strong></li>
+              <li>{t("pwaIos3a")} <strong>{t("pwaIos3b")}</strong></li>
             </ol>
           </div>
         )}

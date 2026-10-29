@@ -44,9 +44,15 @@ export function useBoard(initial: BoardCard[]) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contractId: id, status }),
       });
-      if (!res.ok) setCards((p) => p.map((c) => (c.id === id ? { ...c, status: prev } : c)));
+      if (!res.ok) {
+        setCards((p) => p.map((c) => (c.id === id ? { ...c, status: prev } : c)));
+        // Thẻ nảy về chỗ cũ thì phải nói vì sao, không thì trông như kéo hụt tay.
+        const j = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+        window.alert(`Chưa chuyển được hợp đồng: ${j.message || j.error || res.status}`);
+      }
     } catch {
       setCards((p) => p.map((c) => (c.id === id ? { ...c, status: prev } : c)));
+      window.alert("Mất kết nối — chưa chuyển được hợp đồng.");
     }
   }
 

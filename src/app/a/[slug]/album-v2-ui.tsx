@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Lock, X, ZoomIn, ZoomOut } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { fullImageUrl, originalImageUrl, retryViaProxy, stripExtension, thumbnailUrl } from "@/lib/drive";
 import { ALBUM_TITLE_FONT, ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
@@ -39,11 +39,11 @@ export const useAlbumImg = () => useContext(ImgCtx);
 
 /* ── Chọn ngôn ngữ (VI / EN) ─────────────────────────────────────────────── */
 export function LangToggleV2() {
-  const { lang, setLang } = useLang();
+  const { lang, setLang, t } = useLangOptional();
   return (
     <Segmented
       size="sm"
-      label="Ngôn ngữ"
+      label={t("language")}
       value={lang}
       onChange={setLang}
       options={[
@@ -152,9 +152,10 @@ export function LockScreenV2({
   placeholder?: string;
   numeric?: boolean;
 }) {
+  const { t } = useLangOptional();
   return (
     <CustomerRootV2 theme={theme}>
-      <CustomerHeaderV2 brand={brand} sub="Album ảnh" right={headerRight} />
+      <CustomerHeaderV2 brand={brand} sub={t("photoAlbum")} right={headerRight} />
       <div className="flex min-h-[calc(100svh-60px)] items-center justify-center px-4 py-10">
         <form onSubmit={onSubmit} className="v2-card w-full max-w-[400px] px-6 py-8 text-center sm:px-8">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full" style={{ background: "var(--acS)", color: "var(--ac)" }}>
@@ -181,7 +182,7 @@ export function LockScreenV2({
             // 16px: Safari trên iPhone tự phóng to trang khi chạm vào ô chữ nhỏ hơn.
             style={{ fontSize: 16, height: 46 }}
             placeholder={placeholder}
-            aria-label={typeof desc === "string" ? desc : "Mật khẩu"}
+            aria-label={typeof desc === "string" ? desc : t("password")}
           />
           {error ? (
             <p className="mt-2.5 text-[13px] font-medium" style={{ color: "var(--rd)" }}>
@@ -305,6 +306,7 @@ export function ViewerV2({
   reserve?: number;
 }) {
   const img = useAlbumImg();
+  const { t } = useLangOptional();
   // Mức phóng chỉ để bật/tắt nút "thu nhỏ" — cử chỉ do PhotoZoom lo.
   const [zoom, setZoom] = useState(1);
   const [hiResLoading, setHiResLoading] = useState(false);
@@ -336,7 +338,7 @@ export function ViewerV2({
         className="flex h-14 flex-none items-center gap-1 px-2 sm:px-4"
         style={{ marginTop: "env(safe-area-inset-top, 0px)", borderBottom: "1px solid rgba(255,255,255,.08)" }}
       >
-        <button type="button" onClick={onClose} aria-label="Đóng" title="Đóng" className={iconBtn()} style={{ color: "#fff" }}>
+        <button type="button" onClick={onClose} aria-label={t("close")} title={t("close")} className={iconBtn()} style={{ color: "#fff" }}>
           <X size={20} />
         </button>
         <div className="min-w-0 flex-1 px-1.5">
@@ -353,8 +355,8 @@ export function ViewerV2({
               type="button"
               onClick={() => zoomRef.current?.zoomBy(1 / 1.5)}
               disabled={zoom <= 1}
-              aria-label="Thu nhỏ"
-              title="Thu nhỏ"
+              aria-label={t("zoomOut")}
+              title={t("zoomOut")}
               className={iconBtn("hidden sm:inline-flex")}
               style={{ color: "#fff" }}
             >
@@ -363,8 +365,8 @@ export function ViewerV2({
             <button
               type="button"
               onClick={() => zoomRef.current?.zoomBy(1.5)}
-              aria-label="Phóng to"
-              title="Phóng to"
+              aria-label={t("zoomIn")}
+              title={t("zoomIn")}
               className={iconBtn("hidden sm:inline-flex")}
               style={{ color: "#fff" }}
             >
@@ -380,14 +382,14 @@ export function ViewerV2({
           <div ref={stage} className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden px-1 py-2 md:px-16">
             {hiResLoading && (
               <div className="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded-full px-3 py-1 text-[12px]" style={{ background: "rgba(0,0,0,.6)", color: "#fff" }}>
-                Đang tải ảnh gốc…
+                {t("loadingOriginal")}
               </div>
             )}
             <button
               type="button"
               onClick={() => onStep(-1)}
               disabled={index === 0}
-              aria-label="Ảnh trước"
+              aria-label={t("prevPhoto")}
               className="absolute left-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:pointer-events-none disabled:opacity-0 md:left-2 md:w-12"
               style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}
             >
@@ -437,7 +439,7 @@ export function ViewerV2({
               type="button"
               onClick={() => onStep(1)}
               disabled={index >= total - 1}
-              aria-label="Ảnh sau"
+              aria-label={t("nextPhoto")}
               className="absolute right-0 top-1/2 z-10 flex h-16 w-11 -translate-y-1/2 items-center justify-center transition-opacity disabled:pointer-events-none disabled:opacity-0 md:right-2 md:w-12"
               style={{ color: "#fff", filter: "drop-shadow(0 2px 6px rgba(0,0,0,.8))" }}
             >

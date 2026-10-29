@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { CalendarClock, CalendarPlus, FileText, ListPlus, PenLine, Plus, ScrollText, Tag, Trash2, X } from "lucide-react";
 import DateInput from "@/components/DateInput";
@@ -26,6 +27,10 @@ export default function ContractV2Items({ ctx }: { ctx: V2Ctx }) {
   const { items, setItems, itemsLocked, milestones, f } = ed;
   const { pricelist, services, contract, initialAddenda, canEditAddenda } = ed.props;
   const presets = PRESET_ITEMS_BY_KIND[ed.kind];
+  // Hàng hạng mục khoá theo vị trí (dòng chưa có id riêng). Xoá một dòng thì đổi
+  // "thế hệ" để mọi dòng dựng lại — không thì ô mô tả đang mở của dòng bị xoá
+  // trượt sang dòng ngay dưới nó.
+  const [rowGen, setRowGen] = useState(0);
 
   const setItem = (idx: number, patch: Partial<ItemRow>) => setItems((p) => p.map((x, i) => (i === idx ? { ...x, ...patch } : x)));
   const removeItem = (idx: number) => {
@@ -124,12 +129,15 @@ export default function ContractV2Items({ ctx }: { ctx: V2Ctx }) {
             <ul className="flex flex-col gap-2.5 p-4 sm:p-5">
               {items.map((it, idx) => (
                 <ItemCard
-                  key={idx}
+                  key={`${rowGen}-${idx}`}
                   ctx={ctx}
                   it={it}
                   idx={idx}
                   setItem={(patch) => setItem(idx, patch)}
-                  remove={() => removeItem(idx)}
+                  remove={() => {
+                    removeItem(idx);
+                    setRowGen((g) => g + 1);
+                  }}
                   msDate={milestones.find((m) => m.id === it.event_id)?.event_date ?? ""}
                 />
               ))}

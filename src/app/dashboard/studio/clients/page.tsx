@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireStudio } from "@/lib/auth-guards";
 import { contractTotal, sumAmounts, type StudioReferral } from "@/lib/types";
 import { brandFrom } from "@/lib/studio-brand";
@@ -39,16 +40,38 @@ export default async function ClientsPage() {
   }
 
   const supabase = await createClient();
-  let cq = supabase
-    .from("studio_contracts")
-    .select("client_name, client_phone, event_date, source, status, branch_id, contract_items(qty, unit_price), contract_payments(amount)")
-    .eq("owner_id", profile.id);
-  if (profile.actingRole === "staff") cq = cq.eq("assigned_to", profile.actingUserId);
+  const canSeeReferrals = profile.actingRole !== "staff";
   // Danh bạ khách suy ra từ hợp đồng, nên lọc hợp đồng là lọc luôn danh bạ.
-  cq = applyBranch(cq, (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected);
-  const { data } = await cq;
+  const branchSel = (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected;
+  // Hợp đồng TOÀN THỜI GIAN — lật trang, không thì studio quá 1000 hợp đồng mất
+  // khách cũ khỏi danh bạ mà không ai hay. Sổ giới thiệu, token đặt lịch và tên
+  // miền studio không phụ thuộc nhau → đọc cùng lượt.
+  const [rowsRaw, [{ data: referrals }, { data: me }], studioHost] = await Promise.all([
+    fetchAllRows<unknown>((from, to) => {
+      let cq = supabase
+        .from("studio_contracts")
+        .select("id, client_name, client_phone, event_date, source, status, branch_id, contract_items(qty, unit_price), contract_payments(amount)")
+        .eq("owner_id", profile.id);
+      if (profile.actingRole === "staff") cq = cq.eq("assigned_to", profile.actingUserId);
+      return applyBranch(cq, branchSel).order("id").range(from, to);
+    }),
+    Promise.all([
+      canSeeReferrals
+        ? supabase
+            .from("studio_referrals")
+            .select("*")
+            .eq("owner_id", profile.id)
+            .order("created_at", { ascending: false })
+            .limit(100)
+        : Promise.resolve({ data: [] }),
+      canSeeReferrals
+        ? supabase.from("profiles").select("booking_token").eq("id", profile.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]),
+    getStudioHost(supabase, profile.id),
+  ]);
 
-  const rows = (data ?? []) as unknown as Row[];
+  const rows = rowsRaw as Row[];
 
   const map = new Map<string, ClientAgg>();
   for (const r of rows) {
@@ -66,24 +89,8 @@ export default async function ClientsPage() {
   }
   const clients = Array.from(map.values()).sort((x, y) => (y.last || "").localeCompare(x.last || ""));
 
-  // Sổ giới thiệu — chỉ quản lý trở lên mới thấy: nó có số tiền thưởng, không
-  // phải thứ nhân viên chụp cần nhìn.
-  const canSeeReferrals = profile.actingRole !== "staff";
-  const [{ data: referrals }, { data: me }] = await Promise.all([
-    canSeeReferrals
-      ? supabase
-          .from("studio_referrals")
-          .select("*")
-          .eq("owner_id", profile.id)
-          .order("created_at", { ascending: false })
-          .limit(100)
-      : Promise.resolve({ data: [] }),
-    canSeeReferrals
-      ? supabase.from("profiles").select("booking_token").eq("id", profile.id).maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
-
-  const studioHost = await getStudioHost(supabase, profile.id);
+  // Sổ giới thiệu (đọc ở trên) — chỉ quản lý trở lên mới thấy: nó có số tiền
+  // thưởng, không phải thứ nhân viên chụp cần nhìn.
   const bookingToken = (me as { booking_token?: string | null } | null)?.booking_token ?? null;
   const bookingUrl = bookingToken ? studioUrl(studioHost, `/book/${bookingToken}`) : null;
   const studioInfo = {

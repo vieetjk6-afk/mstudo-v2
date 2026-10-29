@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Loader2, Maximize2, Play, Sparkles, X } from "lucide-react";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { btn, Empty, Progress } from "@/components/v2/kit";
 import { Drawer, Switch } from "@/components/v2/kit-client";
 import { SCAN_CAP, type DuplicateScan } from "./useDuplicateScan";
@@ -36,7 +36,7 @@ export default function DuplicatesV2({
   onToggle: (id: string) => void;
   onOpen: (ids: string[], id: string) => void;
 }) {
-  const { t } = useLang();
+  const { t } = useLangOptional();
   const img = useAlbumImg();
   const { busy, progress, run, stop, scanList, byId, shown, dupCount } = scan;
 
@@ -76,8 +76,8 @@ export default function DuplicatesV2({
           <Empty
             compact
             icon={Sparkles}
-            title="Gom những tấm chụp liên tiếp"
-            hint="Bấm “Tìm ảnh na ná nhau” ở dưới. Máy sẽ xếp những tấm giống nhau cạnh nhau và chỉ ra tấm nét nhất — bạn tự quyết lấy tấm nào."
+            title={t("dupEmptyTitle")}
+            hint={t("dupEmptyHint")}
           />
         )}
 
@@ -94,7 +94,7 @@ export default function DuplicatesV2({
               />
             </div>
             <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
-              Máy KHÔNG tự chọn tấm nào. Bấm một tấm để xem lớn và lật qua cả nhóm; ưng tấm nào thì chạm vòng tròn ở góc để chọn.
+              {t("dupNoAutoPick")}
             </p>
             <div className="flex flex-col gap-3">
               {shown.map((g) => {

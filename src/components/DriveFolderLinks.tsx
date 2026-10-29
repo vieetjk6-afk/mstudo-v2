@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Download, ChevronDown, ExternalLink } from "lucide-react";
+import { useLangOptional } from "@/lib/i18n";
 
 export interface DriveFolder {
   name: string;
@@ -30,6 +31,7 @@ export default function DriveFolderLinks({
   labelOne: string;
   className: string;
 }) {
+  const { t } = useLangOptional();
   const [open, setOpen] = useState(false);
 
   if (folders.length === 0) return null;
@@ -66,7 +68,7 @@ export default function DriveFolderLinks({
                 style={{ color: "var(--text)" }}
               >
                 <ExternalLink size={14} style={{ color: "var(--text3)" }} className="shrink-0" />
-                <span className="truncate">{f.name || "Thư mục Drive"}</span>
+                <span className="truncate">{f.name || t("driveFolderFallback")}</span>
               </a>
             ))}
           </div>

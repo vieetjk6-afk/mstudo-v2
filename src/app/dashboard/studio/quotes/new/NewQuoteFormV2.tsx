@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -47,6 +48,10 @@ import { useNewQuoteForm, type NewQuoteFormProps } from "./useNewQuoteForm";
 
 export default function NewQuoteFormV2(props: NewQuoteFormProps) {
   const q = useNewQuoteForm(props);
+  // Hàng hạng mục khoá theo vị trí (dòng chưa có id riêng). Xoá một dòng thì đổi
+  // "thế hệ" để mọi dòng dựng lại — không thì ô mô tả đang mở của dòng bị xoá
+  // trượt sang dòng ngay dưới nó.
+  const [rowGen, setRowGen] = useState(0);
   const { services, pricelist, items, total, deposit, depositPct, saving } = q;
   const serviceName = services.find((s) => s.id === q.serviceId)?.name;
 
@@ -278,11 +283,14 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
               <div className="[&>*+*]:border-t [&>*+*]:border-[color:var(--bd2)]">
                 {items.map((it, idx) => (
                   <QuoteItemRowV2
-                    key={idx}
+                    key={`${rowGen}-${idx}`}
                     item={it}
                     index={idx}
                     onPatch={(patch) => q.update(idx, patch as Parameters<typeof q.update>[1])}
-                    onRemove={() => q.remove(idx)}
+                    onRemove={() => {
+                      q.remove(idx);
+                      setRowGen((g) => g + 1);
+                    }}
                     testIds={{ row: `quote-item-${idx}`, name: `quote-item-name-${idx}`, toggle: `quote-item-toggle-${idx}` }}
                   />
                 ))}

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { X } from "lucide-react";
+import { useLangOptional } from "@/lib/i18n";
 import { useShareLink, CopyLinkRow, NativeShareButton } from "./share/useShareLink";
 
 /**
@@ -20,7 +21,8 @@ export default function ShareDialog({
   subtitle?: string;
   onClose: () => void;
 }) {
-  const { copied, canNativeShare, copy, nativeShare } = useShareLink(url, title || "Ảnh chia sẻ");
+  const { t } = useLangOptional();
+  const { copied, canNativeShare, copy, nativeShare } = useShareLink(url, title || t("shareDialogDefault"));
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -43,13 +45,13 @@ export default function ShareDialog({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label={title || "Chia sẻ ảnh đã chọn"}
+        aria-label={title || t("shareDialogTitle")}
         className="w-full max-w-sm rounded-2xl p-5 animate-[vkPop_.3s_ease_both]"
         style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "0 30px 80px rgba(0,0,0,.5)" }}
       >
         <div className="mb-3 flex items-center justify-between">
-          <span className="font-serif text-lg font-medium">{title || "Chia sẻ ảnh đã chọn"}</span>
-          <button type="button" onClick={onClose} aria-label="Đóng" style={{ color: "var(--text3)" }}>
+          <span className="font-serif text-lg font-medium">{title || t("shareDialogTitle")}</span>
+          <button type="button" onClick={onClose} aria-label={t("close")} style={{ color: "var(--text3)" }}>
             <X size={18} />
           </button>
         </div>

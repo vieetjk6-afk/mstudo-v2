@@ -6,12 +6,19 @@ import { brandFrom } from "@/lib/studio-brand";
 import { applyBranch, getBranchScope } from "@/lib/branches";
 import AccountingExportCard from "@/components/studio/AccountingExportCard";
 import { isUiV2 } from "@/lib/ui-server";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import ReportsView, { type PaymentRow, type SalaryRow, type SourceStat } from "./ReportsView";
 
 
 /** Khoá nhóm cho "chưa điền nguồn". Cố ý KHÁC "other" (= "Khác", một nguồn có
  *  thật mà ta không xếp được) — trộn hai thứ này lại là báo cáo nói sai. */
 const UNKNOWN = "__unknown__";
+
+/** fetchAllRows trả về đúng hình `{ data }` như một truy vấn thường, để khối
+ *  Promise.all bên dưới giữ nguyên cách bóc kết quả. */
+async function allRows(page: Parameters<typeof fetchAllRows>[0]): Promise<{ data: unknown[] }> {
+  return { data: await fetchAllRows<unknown>(page) };
+}
 
 export default async function ReportsPage() {
   const profile = await requireStudio();
@@ -53,32 +60,48 @@ export default async function ReportsPage() {
     { count: convCount },
     { count: leadCount },
   ] = await Promise.all([
-    applyBranch(
-      supabase
-        .from("contract_payments")
-        .select("id, amount, kind, method, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
-        .eq("contract.owner_id", profile.id),
-      scope.selected,
-      "contract.branch_id"
+    // Bốn bảng dưới đây là số liệu tiền TOÀN THỜI GIAN — đọc trơn thì PostgREST
+    // lặng lẽ cắt ở hàng 1000 và báo cáo của studio lâu năm ra số sai. Lật trang.
+    allRows((from, to) =>
+      applyBranch(
+        supabase
+          .from("contract_payments")
+          .select("id, amount, kind, method, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
+          .eq("contract.owner_id", profile.id),
+        scope.selected,
+        "contract.branch_id"
+      )
+        .order("id")
+        .range(from, to)
     ),
-    applyBranch(
-      supabase
-        .from("contract_crew")
-        .select("id, name, salary, paid, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
-        .eq("contract.owner_id", profile.id)
-        .eq("paid", true),
-      scope.selected,
-      "contract.branch_id"
+    allRows((from, to) =>
+      applyBranch(
+        supabase
+          .from("contract_crew")
+          .select("id, name, salary, paid, paid_at, contract:studio_contracts!inner(owner_id, title, branch_id)")
+          .eq("contract.owner_id", profile.id)
+          .eq("paid", true),
+        scope.selected,
+        "contract.branch_id"
+      )
+        .order("id")
+        .range(from, to)
     ),
-    applyBranch(supabase.from("studio_expenses").select("*").eq("owner_id", profile.id), scope.selected),
+    allRows((from, to) =>
+      applyBranch(supabase.from("studio_expenses").select("*").eq("owner_id", profile.id), scope.selected).order("id").range(from, to)
+    ),
     // Lead-source analytics: value & collected per acquisition channel (all-time).
-    applyBranch(
-      supabase
-        .from("studio_contracts")
-        .select("source, branch_id, contract_items(qty, unit_price), contract_payments(amount)")
-        .eq("owner_id", profile.id)
-        .neq("status", "cancelled"),
-      scope.selected
+    allRows((from, to) =>
+      applyBranch(
+        supabase
+          .from("studio_contracts")
+          .select("id, source, branch_id, contract_items(qty, unit_price), contract_payments(amount)")
+          .eq("owner_id", profile.id)
+          .neq("status", "cancelled"),
+        scope.selected
+      )
+        .order("id")
+        .range(from, to)
     ),
     // Phễu: yêu cầu đặt lịch (bậc giữa). `archived` là yêu cầu studio dọn đi
     // chứ không phải khách thật, nên không tính vào phễu.

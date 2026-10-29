@@ -5,7 +5,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Images, X } from "lucide-react";
 import { CustomerHeaderV2, CustomerMainV2 } from "@/components/v2/customer";
 import { Badge, Empty, btn } from "@/components/v2/kit";
 import type { StudioBrandInfo } from "@/lib/studio-brand";
-import { useLang } from "@/lib/i18n";
+import { useLangOptional } from "@/lib/i18n";
 import { thumbnailUrl, fullImageUrl } from "@/lib/drive";
 import { CustomerRootAuto, LangToggle } from "@/app/c/[token]/DocPartsV2";
 import { useShowcaseLightbox } from "./useShowcaseLightbox";
@@ -37,30 +37,30 @@ export default function ShowcaseAlbumV2({
   photos: Photo[];
 }) {
   const { lbIdx, setLbIdx } = useShowcaseLightbox(photos.length);
-  const { lang, setLang } = useLang();
+  const { lang, setLang, t } = useLangOptional();
   const lb = lbIdx !== null ? photos[lbIdx] : null;
 
   return (
     <CustomerRootAuto>
       <CustomerHeaderV2
         brand={brand ?? { name: "Studio", logoUrl: null }}
-        sub="Album tham khảo"
+        sub={t("showcaseSub")}
         right={<LangToggle lang={lang} onToggle={() => setLang(lang === "vi" ? "en" : "vi")} />}
       />
       <CustomerMainV2>
         <Link href="/" className={btn("ghost", "sm", "-ml-2.5")}>
-          <ArrowLeft size={15} /> Trang chủ
+          <ArrowLeft size={15} /> {t("home")}
         </Link>
         <div className="mt-3">
           <p className="text-[12.5px] font-medium" style={{ color: "var(--tx3)" }}>
-            Album tham khảo · chỉ để xem
+            {t("showcaseViewOnly")}
           </p>
           <h1 className="mt-1 text-[26px] font-bold leading-tight tracking-[-0.6px] sm:text-[34px]" style={{ textWrap: "balance" }}>
             {title}
           </h1>
           <div className="mt-2.5 flex flex-wrap items-center gap-2 text-[14px]" style={{ color: "var(--tx2)" }}>
             <Badge tone="brand">{kind}</Badge>
-            <span>{photos.length} ảnh</span>
+            <span>{t("nPhotos").replace("{n}", String(photos.length))}</span>
           </div>
           {description && (
             <p className="mt-2 max-w-[70ch] text-[14.5px] leading-relaxed" style={{ color: "var(--tx2)", textWrap: "pretty" }}>
@@ -71,7 +71,7 @@ export default function ShowcaseAlbumV2({
 
         {photos.length === 0 ? (
           <div className="v2-card mt-6">
-            <Empty icon={Images} title="Album này chưa có ảnh." />
+            <Empty icon={Images} title={t("showcaseEmpty")} />
           </div>
         ) : (
           <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 lg:grid-cols-4 xl:grid-cols-5">
@@ -80,7 +80,7 @@ export default function ShowcaseAlbumV2({
                 key={p.id}
                 type="button"
                 onClick={() => setLbIdx(idx)}
-                aria-label={`Xem ${p.name}`}
+                aria-label={t("showcaseView").replace("{name}", p.name)}
                 className="group aspect-square overflow-hidden rounded-[12px]"
                 style={{ background: "var(--sf2)" }}
               >
@@ -107,7 +107,7 @@ export default function ShowcaseAlbumV2({
             <button
               type="button"
               onClick={() => setLbIdx(null)}
-              aria-label="Đóng"
+              aria-label={t("close")}
               className="flex h-10 w-10 items-center justify-center rounded-full"
               style={{ background: "rgba(255,255,255,.1)", color: "#fff" }}
             >
@@ -120,7 +120,7 @@ export default function ShowcaseAlbumV2({
               type="button"
               onClick={() => setLbIdx(Math.max(0, lbIdx - 1))}
               disabled={lbIdx === 0}
-              aria-label="Ảnh trước"
+              aria-label={t("prevPhoto")}
               className="absolute left-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-25 md:left-4"
               style={{ background: "rgba(255,255,255,.12)", color: "#fff" }}
             >
@@ -130,7 +130,7 @@ export default function ShowcaseAlbumV2({
               type="button"
               onClick={() => setLbIdx(Math.min(photos.length - 1, lbIdx + 1))}
               disabled={lbIdx >= photos.length - 1}
-              aria-label="Ảnh sau"
+              aria-label={t("nextPhoto")}
               className="absolute right-2 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full disabled:pointer-events-none disabled:opacity-25 md:right-4"
               style={{ background: "rgba(255,255,255,.12)", color: "#fff" }}
             >

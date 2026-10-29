@@ -105,6 +105,8 @@ export type OverviewBookingV2Data = {
   newCount: number;
   selectingAlbums: number;
   totalBookings: number;
+  /** Tổng số lịch sắp tới (danh sách `upcoming` chỉ mang 8 dòng đầu). */
+  upcomingCount?: number;
   upcoming: OvBooking[];
   /** Yêu cầu mới nhất chưa xử lý (để hiện ở "Việc cần làm"). */
   newBookings: OvBooking[];

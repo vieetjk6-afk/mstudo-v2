@@ -110,6 +110,7 @@ const ORDER = [
   ["migrations/ke_hoach_cuoi_mo_rong.sql", "Kế hoạch cưới mở rộng: khách mời & xếp bàn, nhà cung cấp, đội hỗ trợ, đồ cần mang, ảnh cần chụp, phong cách (chạy SAU ke_hoach_cuoi)"],
   ["migrations/luu_chon_anh_tung_phan.sql", "Lưu lựa chọn ảnh của khách theo phần chênh trong một transaction: hàm save_album_selection (chạy SAU album_dislikes)"],
   ["migrations/chi_muc_bo_sung.sql", "Chỉ mục bổ sung: tìm hợp đồng theo album, khoá ngoại photo_id, sự kiện theo hợp đồng, doanh thu theo ngày thu"],
+  ["migrations/binh_chon.sql", "Bình chọn hệ thống: admin hỏi ý kiến mọi tài khoản, người dùng bỏ phiếu trong dashboard"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -172,6 +173,7 @@ const MOI = [
   "migrations/ke_hoach_cuoi_mo_rong.sql",
   "migrations/luu_chon_anh_tung_phan.sql",
   "migrations/chi_muc_bo_sung.sql",
+  "migrations/binh_chon.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
@@ -247,6 +249,15 @@ const NHOM = {
       "-- Tách riêng để hàng rào của tính năng khác không kéo nó rollback theo.",
     ],
     files: ["migrations/ai_providers.sql"],
+  },
+  "binh-chon.sql": {
+    tieuDe: "BÌNH CHỌN HỆ THỐNG — ADMIN HỎI Ý KIẾN MỌI TÀI KHOẢN",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng tính năng này: bảng system_polls (câu hỏi,",
+      "-- phương án) và system_poll_votes (mỗi người một phiếu). Chỉ cần bảng",
+      "-- `profiles` có từ schema nền. Chạy lại cả file này cũng an toàn.",
+    ],
+    files: ["migrations/binh_chon.sql"],
   },
   "anh-in-tang.sql": {
     tieuDe: "ẢNH IN TẶNG — KHÁCH CHỌN ẢNH IN TRONG ALBUM GIAO KHÁCH",
