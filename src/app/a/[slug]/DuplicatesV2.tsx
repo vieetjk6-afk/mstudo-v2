@@ -76,8 +76,8 @@ export default function DuplicatesV2({
           <Empty
             compact
             icon={Sparkles}
-            title="Gom những tấm chụp liên tiếp"
-            hint="Bấm “Tìm ảnh na ná nhau” ở dưới. Máy sẽ xếp những tấm giống nhau cạnh nhau và chỉ ra tấm nét nhất — bạn tự quyết lấy tấm nào."
+            title={t("dupEmptyTitle")}
+            hint={t("dupEmptyHint")}
           />
         )}
 
@@ -94,7 +94,7 @@ export default function DuplicatesV2({
               />
             </div>
             <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
-              Máy KHÔNG tự chọn tấm nào. Bấm một tấm để xem lớn và lật qua cả nhóm; ưng tấm nào thì chạm vòng tròn ở góc để chọn.
+              {t("dupNoAutoPick")}
             </p>
             <div className="flex flex-col gap-3">
               {shown.map((g) => {

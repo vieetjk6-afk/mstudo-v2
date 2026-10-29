@@ -360,6 +360,34 @@ export const dict: Dict = {
   caDoneSent: { vi: "Đã báo studio bạn chọn xong ✓", en: "The studio has been told you're done ✓" },
   caDoneFailed: { vi: "Không gửi được thông báo, thử lại sau.", en: "Couldn't send the notification. Please try again later." },
   caDoneNoConn: { vi: "Mất kết nối khi báo studio.", en: "Lost connection while notifying the studio." },
+  // hộp chia sẻ · nút cài webapp · link Drive (dùng chung, trang khách)
+  shareDialogTitle: { vi: "Chia sẻ ảnh đã chọn", en: "Share selected photos" },
+  shareDialogDefault: { vi: "Ảnh chia sẻ", en: "Shared photos" },
+  pwaInstall: { vi: "Tạo Webapp", en: "Create Web app" },
+  pwaInstallTitle: { vi: "Cài đặt mstudo", en: "Install mstudo" },
+  pwaIos1a: { vi: "1. Nhấn nút", en: "1. Tap the" },
+  pwaIos1b: { vi: "Chia sẻ", en: "Share" },
+  pwaIos1c: { vi: "ở thanh Safari bên dưới", en: "button in Safari's bottom bar" },
+  pwaIos2a: { vi: "2. Cuộn xuống và chọn", en: "2. Scroll down and choose" },
+  pwaIos2b: { vi: "“Thêm vào Màn hình chính”", en: "“Add to Home Screen”" },
+  pwaIos3a: { vi: "3. Nhấn", en: "3. Tap" },
+  pwaIos3b: { vi: "Thêm", en: "Add" },
+  driveFolderFallback: { vi: "Thư mục Drive", en: "Drive folder" },
+  // tìm theo khuôn mặt · ảnh na ná (ngăn kéo, giao diện mới)
+  faceFinderDesc: {
+    vi: "Chạm vào một khuôn mặt để xem những ảnh có người đó.",
+    en: "Tap a face to see the photos that person is in.",
+  },
+  faceFindByPhoto: { vi: "Tìm bằng ảnh của bạn", en: "Search with your own photo" },
+  dupEmptyTitle: { vi: "Gom những tấm chụp liên tiếp", en: "Group burst shots together" },
+  dupEmptyHint: {
+    vi: "Bấm “Tìm ảnh na ná nhau” ở dưới. Máy sẽ xếp những tấm giống nhau cạnh nhau và chỉ ra tấm nét nhất — bạn tự quyết lấy tấm nào.",
+    en: "Tap “Find near-identical photos” below. Similar shots will be placed side by side with the sharpest one marked — you decide which to keep.",
+  },
+  dupNoAutoPick: {
+    vi: "Máy KHÔNG tự chọn tấm nào. Bấm một tấm để xem lớn và lật qua cả nhóm; ưng tấm nào thì chạm vòng tròn ở góc để chọn.",
+    en: "Nothing is selected automatically. Tap a photo to view it large and swipe through the group; tap the circle in the corner of the one you like to select it.",
+  },
   // album tham khảo (showcase, giao diện mới)
   showcaseSub: { vi: "Album tham khảo", en: "Reference album" },
   showcaseViewOnly: { vi: "Album tham khảo · chỉ để xem", en: "Reference album · view only" },

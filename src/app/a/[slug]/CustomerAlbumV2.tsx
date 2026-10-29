@@ -144,7 +144,7 @@ export default function CustomerAlbumV2(props: CustomerAlbumProps) {
   const limit = a.limit;
   const hasLimit = limit != null && limit > 0;
   const canDone = !a.shareMode && (n > 0 || disliked.size > 0);
-  const badge = syncBadge(a.ledger, a.saveActivity, a.online);
+  const badge = syncBadge(a.ledger, a.saveActivity, a.online, lang);
   const hasPhotos = photos.length > 0;
   const showFaces = faceToolAvailable(a.people, a.scan);
   const showDups = !a.shareMode && a.view === "all" && photos.length >= 24 && dup.supported;

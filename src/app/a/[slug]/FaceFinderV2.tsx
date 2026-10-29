@@ -84,7 +84,7 @@ export default function FaceFinderV2({
       open={open}
       onClose={onClose}
       title={t("faceFindTitle")}
-      desc="Chạm vào một khuôn mặt để xem những ảnh có người đó."
+      desc={t("faceFinderDesc")}
       width={480}
       footer={
         activeId ? (
@@ -140,7 +140,7 @@ export default function FaceFinderV2({
         {people.length > 0 && (
           <div className="flex flex-col gap-2.5 rounded-[14px] p-4" style={{ background: "var(--sf2)" }}>
             <div>
-              <p className="text-[14px] font-semibold">Tìm bằng ảnh của bạn</p>
+              <p className="text-[14px] font-semibold">{t("faceFindByPhoto")}</p>
               <p className="mt-0.5 text-[12.5px]" style={{ color: "var(--tx3)" }}>
                 {t("faceUploadCost")}
               </p>

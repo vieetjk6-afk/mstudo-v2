@@ -263,33 +263,62 @@ export type SyncBadge = {
  *    bản cũ hơn);
  *  - đã đồng bộ hết ⇒ KHÔNG được hiện "chờ mạng" chỉ vì trình duyệt báo offline.
  */
-export function syncBadge(l: AlbumLedger | null, activity: SaveActivity, online: boolean): SyncBadge {
+export function syncBadge(
+  l: AlbumLedger | null,
+  activity: SaveActivity,
+  online: boolean,
+  lang: "vi" | "en" = "vi",
+): SyncBadge {
   const n = l ? pendingCount(l) : 0;
   const pending = !!l && isPending(l);
+  const tx = (k: keyof typeof BADGE_TEXT) => BADGE_TEXT[k][lang];
 
   if (!pending) {
     return activity === "saving"
-      ? { tone: "busy", text: "Đang lưu…", detail: "Đang gửi lựa chọn lên studio." }
-      : { tone: "ok", text: "Đã lưu", detail: "Studio đã nhận đủ lựa chọn của bạn." };
+      ? { tone: "busy", text: tx("saving"), detail: tx("savingDetail") }
+      : { tone: "ok", text: tx("saved"), detail: tx("savedDetail") };
   }
 
-  const changes = n > 0 ? ` · ${n} thay đổi` : "";
+  const changes = n > 0 ? tx("changes").replace("{n}", String(n)) : "";
   if (activity === "saving") {
-    return { tone: "busy", text: "Đang lưu…", detail: `Đang gửi lên studio${changes}.` };
+    return { tone: "busy", text: tx("saving"), detail: tx("sendingDetail").replace("{changes}", changes) };
   }
   if (!online) {
     return {
       tone: "wait",
-      text: `Chờ mạng${changes}`,
-      detail: "Lựa chọn đã lưu trên máy bạn. Có mạng là tự gửi lên studio, không cần chọn lại.",
+      text: tx("waitNet").replace("{changes}", changes),
+      detail: tx("waitNetDetail"),
     };
   }
   return {
     tone: "wait",
-    text: `Chờ gửi${changes}`,
-    detail: "Lựa chọn đã lưu trên máy bạn, đang thử gửi lại lên studio.",
+    text: tx("waitSend").replace("{changes}", changes),
+    detail: tx("waitSendDetail"),
   };
 }
+
+/**
+ * Chữ của viên trạng thái theo ngôn ngữ. Để ngay ở đây (không lấy từ
+ * @/lib/i18n) vì file này phải chạy được bằng node trong kiểm thử.
+ */
+const BADGE_TEXT = {
+  saving: { vi: "Đang lưu…", en: "Saving…" },
+  savingDetail: { vi: "Đang gửi lựa chọn lên studio.", en: "Sending your picks to the studio." },
+  saved: { vi: "Đã lưu", en: "Saved" },
+  savedDetail: { vi: "Studio đã nhận đủ lựa chọn của bạn.", en: "The studio has received all your picks." },
+  changes: { vi: " · {n} thay đổi", en: " · {n} changes" },
+  sendingDetail: { vi: "Đang gửi lên studio{changes}.", en: "Sending to the studio{changes}." },
+  waitNet: { vi: "Chờ mạng{changes}", en: "Waiting for network{changes}" },
+  waitNetDetail: {
+    vi: "Lựa chọn đã lưu trên máy bạn. Có mạng là tự gửi lên studio, không cần chọn lại.",
+    en: "Your picks are saved on this device. They'll be sent to the studio automatically once you're online — no need to pick again.",
+  },
+  waitSend: { vi: "Chờ gửi{changes}", en: "Waiting to send{changes}" },
+  waitSendDetail: {
+    vi: "Lựa chọn đã lưu trên máy bạn, đang thử gửi lại lên studio.",
+    en: "Your picks are saved on this device; retrying to send them to the studio.",
+  },
+} satisfies Record<string, { vi: string; en: string }>;
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Nội bộ
