@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { cookies, headers } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -23,6 +24,31 @@ import type { ChromeProfile, Profile } from "@/lib/types";
 import { ACCENT_COOKIE, accentHex, accentKey } from "@/lib/ui-version";
 import { getUiState } from "@/lib/ui-server";
 import { NAV_PINS_COOKIE, parseNavPins } from "@/lib/nav-pins";
+import { getStudioBrand } from "@/lib/studio-brand";
+
+/**
+ * Tên app khi studio "Thêm vào MH chính" từ khu quản lý = TÊN STUDIO.
+ *
+ * iPhone in dòng "from …" dưới tiêu đề mỗi thông báo đẩy bằng tên app đã cài —
+ * server không đổi được dòng đó theo từng tin. Đặt tên app theo studio thì
+ * thông báo hiện "mstudo / from <tên studio>" (tiêu đề luôn là "mstudo", xem
+ * @/lib/push). Nhân viên lấy tên studio của chủ. iOS chỉ đọc tên lúc cài: app
+ * đã cài từ trước phải gỡ ra cài lại mới đổi.
+ */
+export async function generateMetadata(): Promise<Metadata> {
+  const user = await getSessionUser();
+  if (!user) return {};
+  const profile = await getProfileById(user.id);
+  const owner = profile?.studio_owner_id ?? user.id;
+  const brand = await getStudioBrand(createAdminClient(), owner).catch(() => null);
+  return {
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "black-translucent",
+      ...(brand && brand.name !== "Studio" ? { title: brand.name } : {}),
+    },
+  };
+}
 
 export default async function DashboardLayout({
   children,

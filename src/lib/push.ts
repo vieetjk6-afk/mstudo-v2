@@ -62,6 +62,21 @@ function serviceOf(endpoint: string): string {
   }
 }
 
+/** Tiêu đề hiện trên cùng mỗi thông báo. */
+const PUSH_TITLE = "mstudo";
+
+/**
+ * Tiêu đề luôn là "mstudo"; nhãn sự việc ("Đã nhận chuyển khoản"…) chuyển xuống
+ * đầu nội dung. Trên iPhone, dòng ngay dưới tiêu đề là "from <tên app đã cài>"
+ * — app cài từ khu quản lý mang tên studio (xem dashboard/layout) — nên thông
+ * báo đọc thành "mstudo / from <tên studio> / Đã nhận chuyển khoản: …".
+ */
+function withBrandTitle(p: PushPayload): PushPayload {
+  const label = p.title.trim();
+  if (!label || label === PUSH_TITLE) return { ...p, title: PUSH_TITLE };
+  return { ...p, title: PUSH_TITLE, body: p.body ? `${label}: ${p.body}` : label };
+}
+
 /**
  * Gửi payload tới một danh sách subscription, tự dọn subscription đã chết.
  *
@@ -74,7 +89,7 @@ function serviceOf(endpoint: string): string {
 async function deliver(subs: SubRow[], payload: PushPayload): Promise<PushResult[]> {
   if (subs.length === 0) return [];
   const db = createAdminClient();
-  const body = JSON.stringify(payload);
+  const body = JSON.stringify(withBrandTitle(payload));
   return Promise.all(
     subs.map(async (s): Promise<PushResult> => {
       const service = serviceOf(s.endpoint);
