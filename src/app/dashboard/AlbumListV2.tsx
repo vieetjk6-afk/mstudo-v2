@@ -298,10 +298,14 @@ export default function AlbumListV2({
                       studioHost={studioHost}
                       onSettings={() => setSettingsFor(a.id)}
                       onFilter={() => setFilterFor(a)}
-                      onClearDone={() => {
+                      onClearDone={async () => {
+                        const prev = a.selection_done_at;
                         patchLocal(a.id, { selection_done_at: null });
-                        void createClient().from("albums").update({ selection_done_at: null }).eq("id", a.id);
-                        setToast(`Đã bỏ đánh dấu “${a.title}”`);
+                        const { error } = await createClient().from("albums").update({ selection_done_at: null }).eq("id", a.id);
+                        if (error) {
+                          patchLocal(a.id, { selection_done_at: prev });
+                          setToast(`Chưa bỏ đánh dấu được: ${error.message}`);
+                        } else setToast(`Đã bỏ đánh dấu “${a.title}”`);
                       }}
                     />
                   ))}
@@ -522,9 +526,13 @@ function AlbumSettingsDrawer({
   const a = album;
   const supabase = createClient();
 
-  async function patch(fields: Record<string, unknown>) {
+  /** Ghi một thay đổi đã hiện trước trên màn; lưu hỏng thì trả công tắc về như cũ. */
+  async function patch(fields: Partial<AlbumRow>, revert: Partial<AlbumRow>) {
     const { error } = await supabase.from("albums").update(fields).eq("id", a.id);
-    if (error) setErr(error.message);
+    if (error) {
+      setErr(error.message);
+      onPatch(a.id, revert);
+    }
   }
 
   /** Cùng luật với AlbumList.switchPhase / AlbumEditor.switchPhase. */
@@ -602,7 +610,7 @@ function AlbumSettingsDrawer({
             checked={a.status === "published"}
             onChange={(v) => {
               onPatch(a.id, { status: v ? "published" : "draft" });
-              void patch({ status: v ? "published" : "draft" });
+              void patch({ status: v ? "published" : "draft" }, { status: a.status });
             }}
           />
           {canWatermark && (
@@ -612,7 +620,7 @@ function AlbumSettingsDrawer({
               checked={a.watermark_enabled}
               onChange={(v) => {
                 onPatch(a.id, { watermark_enabled: v });
-                void patch({ watermark_enabled: v });
+                void patch({ watermark_enabled: v }, { watermark_enabled: a.watermark_enabled });
               }}
             />
           )}
@@ -622,7 +630,7 @@ function AlbumSettingsDrawer({
             checked={a.download_enabled}
             onChange={(v) => {
               onPatch(a.id, { download_enabled: v });
-              void patch({ download_enabled: v });
+              void patch({ download_enabled: v }, { download_enabled: a.download_enabled });
             }}
           />
         </div>
@@ -643,7 +651,7 @@ function AlbumSettingsDrawer({
             className={btn("soft", "md")}
             onClick={() => {
               onPatch(a.id, { selection_done_at: null });
-              void patch({ selection_done_at: null });
+              void patch({ selection_done_at: null }, { selection_done_at: a.selection_done_at });
             }}
           >
             <CheckCircle2 size={16} /> Đã lọc xong, bỏ đánh dấu

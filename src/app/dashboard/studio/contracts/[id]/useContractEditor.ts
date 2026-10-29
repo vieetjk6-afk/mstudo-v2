@@ -1150,15 +1150,26 @@ export function useContractEditor(props: ContractEditorProps) {
       return;
     }
     const next = !c.paid;
-    await supabase
+    const { error } = await supabase
       .from("contract_crew")
       .update({ paid: next, paid_at: next ? new Date().toISOString() : null })
       .eq("id", c.id);
+    // Cùng lý do với deletePayment bên dưới: khoá sổ / mất mạng thì báo, không đổi màn.
+    if (error) {
+      toast(error.message);
+      return;
+    }
     setCrew((p) => p.map((x, i) => (i === idx ? { ...x, paid: next } : x)));
   }
 
   async function deleteCrew(id?: string, idx?: number) {
-    if (id) await supabase.from("contract_crew").delete().eq("id", id);
+    if (id) {
+      const { error } = await supabase.from("contract_crew").delete().eq("id", id);
+      if (error) {
+        toast(error.message);
+        return;
+      }
+    }
     setCrew((p) => p.filter((_, i) => i !== idx));
   }
 

@@ -66,22 +66,26 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
 
   async function updateStatus(id: string, status: BookingStatus) {
     setBusy(id);
-    await supabase.from("studio_bookings").update({ status }).eq("id", id);
-    setList((p) => p.map((b) => b.id === id ? { ...b, status } : b));
+    const { error } = await supabase.from("studio_bookings").update({ status }).eq("id", id);
     setBusy(null);
+    // Lưu hỏng thì không đổi trên màn — kẻo studio tưởng đã nhận/từ chối khách.
+    if (error) return alert("Chưa lưu được: " + error.message);
+    setList((p) => p.map((b) => b.id === id ? { ...b, status } : b));
   }
 
   /** Studio đã đối chiếu sao kê và xác nhận nhận được cọc. */
   async function confirmDeposit(id: string) {
     setBusy(id);
-    await supabase.from("studio_bookings").update({ deposit_status: "confirmed" }).eq("id", id);
-    setList((p) => p.map((b) => (b.id === id ? { ...b, deposit_status: "confirmed" as const } : b)));
+    const { error } = await supabase.from("studio_bookings").update({ deposit_status: "confirmed" }).eq("id", id);
     setBusy(null);
+    if (error) return alert("Chưa xác nhận được cọc: " + error.message);
+    setList((p) => p.map((b) => (b.id === id ? { ...b, deposit_status: "confirmed" as const } : b)));
   }
 
   async function deleteBooking(id: string) {
     if (!confirm("Xoá yêu cầu này? Không thể khôi phục.")) return;
-    await supabase.from("studio_bookings").delete().eq("id", id);
+    const { error } = await supabase.from("studio_bookings").delete().eq("id", id);
+    if (error) return alert("Chưa xoá được: " + error.message);
     setList((p) => p.filter((b) => b.id !== id));
   }
 
@@ -96,9 +100,11 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
       note: editState.note.trim() || null,
       facebook: editState.facebook.trim() || null,
     };
-    await supabase.from("studio_bookings").update(patch).eq("id", editState.id);
-    setList((p) => p.map((b) => b.id === editState.id ? { ...b, ...patch } : b));
+    const { error } = await supabase.from("studio_bookings").update(patch).eq("id", editState.id);
     setEditBusy(false);
+    // Hỏng thì giữ ngăn sửa mở để không mất những gì đã gõ.
+    if (error) return alert("Chưa lưu được: " + error.message);
+    setList((p) => p.map((b) => b.id === editState.id ? { ...b, ...patch } : b));
     setEditState(null);
   }
 

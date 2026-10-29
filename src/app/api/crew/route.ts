@@ -386,7 +386,7 @@ export async function POST(req: Request) {
         .not("ended_at", "is", null)
         .order("work_date", { ascending: false })
         .limit(20),
-      db.from("crew_available").select("id, date, start_time, end_time, note").eq("phone", phone).order("date"),
+      db.from("crew_available").select("id, date, start_time, end_time, note, owner_id").eq("phone", phone).order("date"),
     ]);
     openEntry = (open ?? [])[0] ?? null;
     recent = rows ?? [];

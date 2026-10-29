@@ -128,8 +128,8 @@ export function useCrewPortal(studio?: CrewStudio) {
     setCalToken(j.calendarToken ?? null);
     setOpenEntry(j.timesheet?.open ?? null);
     setFreeSlots(
-      ((j.free ?? []) as { id: string; date: string; start_time: string | null; end_time: string | null; note: string | null }[]).map(
-        (r) => ({ id: r.id, date: r.date, start: r.start_time, end: r.end_time, note: r.note })
+      ((j.free ?? []) as { id: string; date: string; start_time: string | null; end_time: string | null; note: string | null; owner_id?: string | null }[]).map(
+        (r) => ({ id: r.id, date: r.date, start: r.start_time, end: r.end_time, note: r.note, studioId: r.owner_id ?? null })
       )
     );
     // Đổi tên trường từ snake_case của DB sang hình dữ liệu của @/lib/timesheet.

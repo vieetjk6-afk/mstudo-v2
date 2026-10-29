@@ -136,7 +136,7 @@ export default function CrewScheduleV2({ s }: { s: CrewPortalState }) {
 
         <div className="flex min-w-0 flex-col gap-5">
           {studios.length > 0 ? (
-            <FreeDays slots={s.freeSlots} upcoming={free.upcoming} today={today} busy={working} onAdd={(date) => s.addFree({ studioId: free.studioId, date, start: "", end: "", note: "" })} onRemove={s.removeFree} onMore={() => setFreeOpen(true)} />
+            <FreeDays slots={s.freeSlots.filter((x) => !x.studioId || x.studioId === free.studioId)} upcoming={free.upcoming.filter((x) => !x.studioId || x.studioId === free.studioId)} today={today} busy={working} onAdd={(date) => s.addFree({ studioId: free.studioId, date, start: "", end: "", note: "" })} onRemove={s.removeFree} onMore={() => setFreeOpen(true)} />
           ) : null}
           <ShiftCard shift={s.shiftPlan?.shift ?? null} today={today} busy={working} onShift={s.setShift} />
         </div>

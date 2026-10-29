@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
@@ -77,6 +78,9 @@ export type SchedulePageProps = {
   /** Thợ TỰ KHAI rảnh (crew_available) và tự báo bận (crew_unavailable). */
   crewFree?: { phone: string; date: string }[];
   crewBusy?: { phone: string; date: string }[];
+  /** Khoảng ngày đã nạp sẵn + phạm vi chi nhánh — để lật ra ngoài thì tự nạp thêm. */
+  loadedRange?: { from: string; to: string } | null;
+  branchScope?: string | null;
   /** Các tab của màn Lịch — chỉ giao diện mới dùng. */
   tabs?: readonly CalendarTab[];
 };
@@ -88,13 +92,18 @@ export default function SchedulePage(props: SchedulePageProps) {
 
 function SchedulePageV1({
   ownerId, readOnly, today, initialAppointments, rooms, assignees, contracts,
-  branches = [], defaultBranchId = null, studioCoords = null, crewFree = [], crewBusy = [],
+  branches = [], defaultBranchId = null, studioCoords = null, crewFree = [], crewBusy = [], loadedRange = null, branchScope = null,
 }: SchedulePageProps) {
   const {
     toastNode, items, setWeekAnchor, kindOn, setKindOn, draft, setDraft, busy,
     days, weekStart, weekEnd, counts, weather, availabilityOf, shown, byDay,
     conflicts, conflictKeys, loads, crewLoad, save, remove, advance, openNew,
-  } = useSchedule({ ownerId, readOnly, today, initialAppointments, rooms, assignees, defaultBranchId, crewFree, crewBusy });
+    ensureRange,
+  } = useSchedule({ ownerId, readOnly, today, initialAppointments, rooms, assignees, defaultBranchId, crewFree, crewBusy, loadedRange, branchScope });
+  // Lật tuần ra ngoài khoảng server đã nạp sẵn → nạp thêm tuần đó.
+  useEffect(() => {
+    void ensureRange(weekStart, weekEnd);
+  }, [ensureRange, weekStart, weekEnd]);
 
   /* ── Vẽ ───────────────────────────────────────────────────────────────── */
 

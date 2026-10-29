@@ -57,11 +57,16 @@ export function useAdminAffiliate(seed?: AdminAffiliateSeed) {
   }, []);
 
   async function updateStatus(id: string, status: string) {
-    await fetch("/api/affiliate/admin", {
+    const res = await fetch("/api/affiliate/admin", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, status }),
-    });
+    }).catch(() => null);
+    // API từ chối / mất mạng thì KHÔNG đánh dấu đã trả hoa hồng trên màn.
+    if (!res?.ok) {
+      window.alert("Chưa cập nhật được trạng thái hoa hồng. Thử lại nhé.");
+      return;
+    }
     setCommissions((prev) =>
       prev.map((c) => c.id === id ? { ...c, status: status as AdminCommission["status"], paid_at: status === "paid" ? new Date().toISOString() : null } : c)
     );

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/studio/Toast";
 import { useShootWeather } from "@/components/studio/WeatherChip";
 import { availabilityOn, digitsOnly } from "@/lib/timesheet";
 import { fmtDayMonth } from "@/lib/date";
+import { inBranch } from "@/lib/branch-rules";
 import {
   apptTitle, assigneeKey, assigneeName, byStartTime, countByKind, findConflicts, mondayOf, roomLoads, weekDays,
 } from "@/lib/appointments";
@@ -81,16 +82,51 @@ export type ScheduleInput = {
   defaultBranchId?: string | null;
   crewFree?: { phone: string; date: string }[];
   crewBusy?: { phone: string; date: string }[];
+  /** Khoảng ngày server đã nạp sẵn (initialAppointments) và phạm vi chi nhánh
+   *  đang xem — để tự nạp thêm khi người dùng lật ra ngoài khoảng đó. */
+  loadedRange?: { from: string; to: string } | null;
+  branchScope?: string | null;
 };
 
 export function useSchedule({
   ownerId, readOnly, today, initialAppointments, rooms, assignees,
-  defaultBranchId = null, crewFree = [], crewBusy = [],
+  defaultBranchId = null, crewFree = [], crewBusy = [], loadedRange = null, branchScope = null,
 }: ScheduleInput) {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
   const { toast, toastNode } = useToast();
 
   const [items, setItems] = useState<StudioAppointment[]>(initialAppointments);
+
+  /* Server chỉ nạp sẵn ~4 tuần trước → 12 tuần sau. Lật lịch (tuần/tháng) ra
+     ngoài khoảng đó thì nạp thêm đúng đoạn còn thiếu — trước đây những tháng ấy
+     hiện "chưa có lịch hẹn" dù thật ra có lịch. */
+  const loaded = useRef(loadedRange);
+  const ensureRange = useCallback(
+    async (from: string, to: string) => {
+      const cur = loaded.current;
+      if (!cur || (from >= cur.from && to <= cur.to)) return;
+      // Chỉ nạp phần nằm ngoài khoảng đã có (lật về trước / lật về sau / cả hai).
+      const qFrom = from < cur.from ? from : cur.to;
+      const qTo = to > cur.to ? to : cur.from;
+      loaded.current = { from: from < cur.from ? from : cur.from, to: to > cur.to ? to : cur.to };
+      const { data, error } = await supabase
+        .from("studio_appointments")
+        .select("*")
+        .eq("owner_id", ownerId)
+        .gte("appt_date", qFrom)
+        .lte("appt_date", qTo);
+      if (error) {
+        loaded.current = cur; // cho lần lật sau thử lại
+        return;
+      }
+      const rows = ((data ?? []) as StudioAppointment[]).filter((a) => inBranch(a, branchScope));
+      setItems((prev) => {
+        const have = new Set(prev.map((a) => a.id));
+        return [...prev, ...rows.filter((a) => !have.has(a.id))];
+      });
+    },
+    [supabase, ownerId, branchScope]
+  );
   const [weekAnchor, setWeekAnchor] = useState(mondayOf(today));
   // Mặc định bật cả 4 loại chính; loại phụ (buổi chụp, giao sản phẩm, khác) cũng
   // bật để lịch không âm thầm ẩn mất buổi nào ở lần mở đầu.
@@ -304,7 +340,7 @@ export function useSchedule({
 
 
   return {
-    toast, toastNode, items, setItems, weekAnchor, setWeekAnchor, kindOn, setKindOn, draft, setDraft, busy,
+    toast, toastNode, items, setItems, ensureRange, weekAnchor, setWeekAnchor, kindOn, setKindOn, draft, setDraft, busy,
     days, weekStart, weekEnd, weekItems, counts, weather, availabilityOf, shown, byDay,
     conflicts, conflictKeys, loads, crewLoad, save, remove, advance, openNew, firstOnKind,
   };

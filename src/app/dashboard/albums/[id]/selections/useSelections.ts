@@ -200,13 +200,20 @@ export function useSelections({ album, selections, dislikes, photos }: Selection
   }, [album.id, deleting, permanent, pickedItems]);
 
   async function saveNote(id: string, note: string) {
+    const prev = rows.find((s) => s.id === id)?.photographer_note ?? null;
     setRows((r) =>
       r.map((s) => (s.id === id ? { ...s, photographer_note: note } : s))
     );
-    await supabase
+    const { error } = await supabase
       .from("selections")
       .update({ photographer_note: note || null })
       .eq("id", id);
+    // Lưu hỏng: trả ghi chú về như cũ và báo — không để màn hình hiện một ghi
+    // chú mà thật ra chưa lưu.
+    if (error) {
+      setRows((r) => r.map((s) => (s.id === id ? { ...s, photographer_note: prev } : s)));
+      window.alert(`Chưa lưu được ghi chú: ${error.message}`);
+    }
   }
 
   function copyList(group: Group) {

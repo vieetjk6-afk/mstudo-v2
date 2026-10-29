@@ -161,8 +161,11 @@ export default function BookingsV2(props: BookingsProps) {
                 value={filterStatus}
                 onChange={setFilterStatus}
                 options={[
-                  { value: "all", label: "Tất cả", count: list.length },
+                  // "Tất cả" không gồm mục lưu trữ (khớp với danh sách hiện ra).
+                  { value: "all", label: "Tất cả", count: list.length - (counts.archived ?? 0) },
                   { value: "new", label: "Mới", count: counts.new ?? 0 },
+                  // Số "Cần xử lý" có đếm mục đang chờ — phải có chỗ để xem chúng.
+                  ...(counts.pending ? [{ value: "pending" as const, label: "Chờ", count: counts.pending }] : []),
                   { value: "accepted", label: "Đã nhận", count: counts.accepted ?? 0 },
                   { value: "handled", label: "Đã tạo HĐ", count: counts.handled ?? 0 },
                   { value: "declined", label: "Từ chối", count: counts.declined ?? 0 },

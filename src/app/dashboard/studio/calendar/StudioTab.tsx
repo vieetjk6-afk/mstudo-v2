@@ -185,6 +185,8 @@ export default async function StudioTab({ tabs }: { tabs?: readonly CalendarTab[
       studioCoords={studioCoords}
       crewFree={crewFree}
       crewBusy={crewBusy}
+      loadedRange={{ from, to }}
+      branchScope={scope.selected}
     />
   );
 }

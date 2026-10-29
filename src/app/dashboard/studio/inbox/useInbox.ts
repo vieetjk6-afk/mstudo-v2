@@ -149,8 +149,14 @@ export function useInbox({ conversations: initial, firstMessages, meId, ownerId 
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(patch),
-    });
-    if (!res.ok) return;
+    }).catch(() => null);
+    // Hỏng thì báo ở dòng lỗi dưới khung soạn — "Tôi tiếp quản" / "Xong" từng
+    // bấm mà không có gì xảy ra, không một lời.
+    if (!res?.ok) {
+      setSendError("Chưa cập nhật được hội thoại. Thử lại nhé.");
+      return;
+    }
+    setSendError(null);
     const json = (await res.json()) as { aiEnabled: boolean; status: ConversationView["status"]; assigneeId: string | null };
     setRows((cur) =>
       cur.map((c) =>
