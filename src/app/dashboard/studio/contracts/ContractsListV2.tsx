@@ -59,8 +59,8 @@ import { NGHE, SORT_OPTIONS, contractExportMeta, contractExportRows, contractMon
        duyệt (bấm vào là lọc ngay).
      • Một thanh lọc: tìm · nhóm trạng thái · nghề · sắp xếp. Lọc hiếm dùng (mã,
        trạng thái chi tiết, người làm, khoảng ngày) nằm trong ngăn kéo "Bộ lọc".
-     • Danh sách nhóm theo LỊCH CHỤP: 7 ngày tới → sắp tới → chưa có ngày →
-       đã chụp → đã huỷ. Ở nhóm "Sắp chụp" thì nhóm theo từng ngày.
+     • Danh sách nhóm theo LỊCH CHỤP: 7 ngày tới → đang hậu kỳ → sắp tới →
+       chưa có ngày → đã chụp → đã huỷ. Ở nhóm "Sắp chụp" thì nhóm theo từng ngày.
      • Bấm một dòng mở ngăn xem nhanh (khách, lịch, tiền, nhân sự, hạng mục)
        kèm nút "Mở hợp đồng"; menu ⋯ đi thẳng tới tab Thanh toán / Nhân sự / Ký.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -71,7 +71,7 @@ type Props = {
   studio: ExportStudio;
 };
 
-type View = "all" | "upcoming" | "sent" | "active" | "completed";
+type View = "all" | "upcoming" | "sent" | "active" | "post" | "completed";
 /** "schedule" = nhóm theo lịch chụp (mặc định của giao diện mới). */
 type Sort = "schedule" | ContractSort;
 
@@ -82,6 +82,7 @@ const VIEWS: [View, string][] = [
   ["upcoming", "Sắp chụp"],
   ["sent", "Chờ duyệt"],
   ["active", "Đang làm"],
+  ["post", "Đang hậu kỳ"],
   ["completed", "Hoàn thành"],
 ];
 
@@ -120,7 +121,9 @@ const inView = (c: ContractRow, v: View) =>
       ? c.status === "sent"
       : v === "active"
         ? ACTIVE.has(c.status)
-        : c.status === "completed";
+        : v === "post"
+          ? c.status === "post_production"
+          : c.status === "completed";
 
 const href = (id: string, tab?: string) => `/dashboard/studio/contracts/${id}${tab ? `?tab=${tab}` : ""}`;
 
@@ -257,9 +260,13 @@ export default function ContractsListV2({ rows, initialLoading = false, studio }
     const later: ContractRow[] = [];
     const none: ContractRow[] = [];
     const past: ContractRow[] = [];
+    const post: ContractRow[] = [];
     const cancelled: ContractRow[] = [];
     for (const c of list) {
       if (c.status === "cancelled") cancelled.push(c);
+      // Đang hậu kỳ (đã chụp xong) tách riêng lên trên — để chung "Đã chụp" thì
+      // chìm xuống cuối danh sách, khó tìm.
+      else if (c.status === "post_production" && (!c.event_date || c.event_date < today)) post.push(c);
       else if (!c.event_date) none.push(c);
       else if (c.event_date < today) past.push(c);
       else if (!soonEnd || c.event_date <= soonEnd) soon.push(c);
@@ -267,6 +274,7 @@ export default function ContractsListV2({ rows, initialLoading = false, studio }
     }
     const out: Group[] = [
       { key: "soon", label: `${UPCOMING_DAYS} ngày tới`, dot: "var(--am)", rows: soon.sort(bySchedule) },
+      { key: "post", label: "Đang hậu kỳ", dot: "var(--pu)", rows: post.sort(bySchedule) },
       { key: "later", label: "Lịch sắp tới", dot: "var(--ac)", rows: later.sort(bySchedule) },
       { key: "none", label: "Chưa có ngày chụp", dot: "var(--tx3)", rows: none },
       { key: "past", label: "Đã chụp", dot: "var(--gn)", rows: past.sort((a, b) => bySchedule(b, a)) },
