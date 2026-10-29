@@ -187,9 +187,9 @@ export default function InboxV2(props: InboxProps) {
           aria-label="Lọc theo kênh"
         >
           <option value="all">Mọi kênh</option>
-          {channels.map((c) => (
-            <option key={c.id} value={c.platform}>
-              {platformLabel(c.platform)}
+          {platforms.map((p) => (
+            <option key={p} value={p}>
+              {platformLabel(p)}
             </option>
           ))}
         </select>
@@ -436,7 +436,7 @@ export default function InboxV2(props: InboxProps) {
                     value={x.draft}
                     onChange={(e) => x.setDraft(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
+                      if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                         e.preventDefault();
                         x.send();
                       }

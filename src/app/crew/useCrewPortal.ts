@@ -86,6 +86,8 @@ export function useCrewPortal(studio?: CrewStudio) {
   const tr = CREW_TR[lang];
 
   const [phone, setPhone] = useState("");
+  /** Lỗi của thao tác ghi gần nhất — để thẻ / ngăn kéo báo cho thợ thay vì lặng im. */
+  const [actionError, setActionError] = useState<string | null>(null);
   const [list, setList] = useState<Assignment[] | null>(null);
   const [schedule, setSchedule] = useState<ScheduleEntry[]>([]);
   const [shiftPlan, setShiftPlan] = useState<ShiftPlan>(null);
@@ -152,54 +154,77 @@ export function useCrewPortal(studio?: CrewStudio) {
 
   // Mọi thao tác ghi đều nạp lại: server là nơi chốt giờ (chuẩn hoá, cờ ca đêm),
   // nên đừng đoán trạng thái mới ở client rồi lệch với DB.
-  async function post(payload: Record<string, unknown>) {
+  // Trả về true khi lưu được — nơi gọi chỉ đóng ngăn kéo khi đã lưu thật.
+  async function post(payload: Record<string, unknown>): Promise<boolean> {
     setBusy("sched");
-    const res = await fetch("/api/crew", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone, ...payload }),
-    });
-    setBusy(null);
-    if (res.ok) await load();
+    setActionError(null);
+    let ok = false;
+    try {
+      const res = await fetch("/api/crew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, ...payload }),
+      });
+      ok = res.ok;
+    } catch {
+      /* mất mạng — báo lỗi bên dưới, không kẹt nút "Đang lưu…" */
+    } finally {
+      setBusy(null);
+    }
+    if (!ok) {
+      setActionError(lang === "en" ? "Couldn't save. Check the times and try again." : "Không lưu được. Kiểm tra lại giờ rồi thử lại.");
+      return false;
+    }
+    await load();
+    return true;
   }
 
   async function addEntry(v: { date: string; start: string; end: string; title: string; studioId: string }) {
-    await post({ action: "busy_add", ...v });
+    return post({ action: "busy_add", ...v });
   }
 
   async function removeEntry(id: string) {
-    await post({ action: "busy_remove", id });
+    return post({ action: "busy_remove", id });
   }
 
   async function setShift(shift: ShiftLetter | "") {
-    await post({ action: "shift_set", company: "hoa_phat", shift });
+    return post({ action: "shift_set", company: "hoa_phat", shift });
   }
 
   async function clockIn(v: { studioId: string; contractId: string }) {
-    await post({ action: "clock_in", studioId: v.studioId, contractId: v.contractId || null });
+    return post({ action: "clock_in", studioId: v.studioId, contractId: v.contractId || null });
   }
 
   async function clockOut(note: string) {
-    await post({ action: "clock_out", studioId: studioIds[0] ?? "", note });
+    return post({ action: "clock_out", studioId: studioIds[0] ?? "", note });
   }
 
   async function addFree(v: { studioId: string; date: string; start: string; end: string; note: string }) {
-    await post({ action: "free_add", ...v });
+    return post({ action: "free_add", ...v });
   }
 
   async function removeFree(id: string) {
-    await post({ action: "free_remove", id, studioId: studioIds[0] ?? "" });
+    return post({ action: "free_remove", id, studioId: studioIds[0] ?? "" });
   }
 
   async function respond(id: string, status: "accepted" | "declined") {
     setBusy(id);
-    const res = await fetch("/api/crew", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "respond", id, phone, status }),
-    });
-    setBusy(null);
-    if (res.ok) setList((p) => (p ? p.map((a) => (a.id === id ? { ...a, status } : a)) : p));
+    setActionError(null);
+    let ok = false;
+    try {
+      const res = await fetch("/api/crew", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "respond", id, phone, status }),
+      });
+      ok = res.ok;
+    } catch {
+      /* mất mạng */
+    } finally {
+      setBusy(null);
+    }
+    if (ok) setList((p) => (p ? p.map((a) => (a.id === id ? { ...a, status } : a)) : p));
+    else setActionError(lang === "en" ? "Couldn't send your answer. Try again." : "Chưa gửi được trả lời. Thử lại nhé.");
   }
 
   /** Giao diện mới: quay lại ô nhập số (tra số khác). Không gọi API nào. */
@@ -221,7 +246,7 @@ export function useCrewPortal(studio?: CrewStudio) {
     lang, tr, studio,
     phone, setPhone, list, schedule, shiftPlan, calToken, setCalToken, openEntry, sheet, freeSlots, profiles,
     inThisStudio, acceptedStudios, studioOptions, clockJobs,
-    loading, busy, captchaToken, setCaptchaToken, session,
+    loading, busy, actionError, setActionError, captchaToken, setCaptchaToken, session,
     load, addEntry, removeEntry, setShift, clockIn, clockOut, addFree, removeFree, respond, reset,
   };
 }
@@ -310,10 +335,11 @@ export function useBusySchedule(entries: ScheduleEntry[], studios: StudioOption[
   }, [visible]);
 
   /** Gửi một mốc bận cho `date`; xong thì xoá ô nội dung, giữ giờ. */
-  async function submitFor(date: string, onAdd: (v: { date: string; start: string; end: string; title: string; studioId: string }) => Promise<void>) {
-    if (!studioId) return;
-    await onAdd({ date, start: allDay ? "" : form.start, end: allDay ? "" : form.end, title: form.title, studioId });
-    setForm((f) => ({ ...f, title: "" }));
+  async function submitFor(date: string, onAdd: (v: { date: string; start: string; end: string; title: string; studioId: string }) => Promise<unknown>) {
+    if (!studioId) return false;
+    const ok = (await onAdd({ date, start: allDay ? "" : form.start, end: allDay ? "" : form.end, title: form.title, studioId })) !== false;
+    if (ok) setForm((f) => ({ ...f, title: "" }));
+    return ok;
   }
 
   return { studioId, setStudioId, form, setForm, allDay, setAllDay, visible, byDate, submitFor };

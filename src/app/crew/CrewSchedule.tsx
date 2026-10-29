@@ -62,9 +62,9 @@ export default function CrewSchedule({
   studios: StudioOption[];
   shiftPlan: ShiftPlan;
   busy: boolean;
-  onAdd: (v: { date: string; start: string; end: string; title: string; studioId: string }) => Promise<void>;
-  onRemove: (id: string) => Promise<void>;
-  onShift: (shift: ShiftLetter | "") => Promise<void>;
+  onAdd: (v: { date: string; start: string; end: string; title: string; studioId: string }) => Promise<unknown>;
+  onRemove: (id: string) => Promise<unknown>;
+  onShift: (shift: ShiftLetter | "") => Promise<unknown>;
 }) {
   const todayStr = todayVN();
   const [y, mIdx] = todayStr.split("-").map(Number);
