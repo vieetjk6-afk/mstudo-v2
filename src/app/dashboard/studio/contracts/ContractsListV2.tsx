@@ -268,7 +268,8 @@ export default function ContractsListV2({ rows, initialLoading = false, studio }
       // chìm xuống cuối danh sách, khó tìm.
       else if (c.status === "post_production" && (!c.event_date || c.event_date < today)) post.push(c);
       else if (!c.event_date) none.push(c);
-      else if (c.event_date < today) past.push(c);
+      // Đã hoàn thành thì không còn là "lịch sắp chụp" (khớp số "Sắp chụp" ở đầu trang).
+      else if (c.event_date < today || c.status === "completed") past.push(c);
       else if (!soonEnd || c.event_date <= soonEnd) soon.push(c);
       else later.push(c);
     }

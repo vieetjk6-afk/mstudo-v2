@@ -322,7 +322,7 @@ export default function QuotesListV2({ list: initialList, studioHost = null }: Q
       {toast && (
         <div
           role="status"
-          className="fixed bottom-24 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
+          className="fixed bottom-24 left-1/2 z-[90] max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
           style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}
         >
           {toast}

@@ -323,6 +323,14 @@ export function useGalleryView({
     return () => window.removeEventListener("keydown", onKey);
   }, [lbIdx, visible.length]);
 
+  // Bỏ chọn in ảnh cuối khi đang lọc "chỉ ảnh đã chọn in" làm ảnh rời danh sách:
+  // kẹp chỉ số để lightbox không biến mất rồi bật lại khi bấm ←.
+  useEffect(() => {
+    if (lbIdx === null) return;
+    if (visible.length === 0) setLbIdx(null);
+    else if (lbIdx > visible.length - 1) setLbIdx(visible.length - 1);
+  }, [lbIdx, visible.length]);
+
   // Preload neighbouring full images so prev/next feels instant.
   useEffect(() => {
     if (lbIdx === null) return;

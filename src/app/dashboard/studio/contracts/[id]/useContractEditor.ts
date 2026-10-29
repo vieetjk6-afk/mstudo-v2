@@ -1690,8 +1690,20 @@ export function useContractEditor(props: ContractEditorProps) {
       })
       .catch(() => {});
   }
+  // Đợt đang ghi dở — chặn bấm "Ghi thu" lần hai trước khi lần đầu xong (mỗi
+  // lần là một dòng contract_payments: doanh thu bị đếm đôi).
+  const planBusyRef = useRef<Set<string>>(new Set());
   // Mark an instalment collected → records a real payment; un-marking removes it.
   async function markPlanPaid(it: ContractPaymentPlan, method: PaymentMethod | null = null) {
+    if (planBusyRef.current.has(it.id)) return;
+    planBusyRef.current.add(it.id);
+    try {
+      await markPlanPaidInner(it, method);
+    } finally {
+      planBusyRef.current.delete(it.id);
+    }
+  }
+  async function markPlanPaidInner(it: ContractPaymentPlan, method: PaymentMethod | null) {
     setCollectFor(null);
     if (it.paid) {
       if (it.payment_id) {

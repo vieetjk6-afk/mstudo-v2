@@ -219,7 +219,28 @@ export default function CustomerAlbumV2(props: CustomerAlbumProps) {
     if (a.onlyUnpicked && counts.kept > 0)
       return <Empty icon={CheckCircle2} title="Bạn đã xem hết ảnh chưa chọn" hint="Mọi ảnh còn lại đều đã được chọn." action={<button type="button" className={btn("secondary")} onClick={() => setSeg("selected")}>Xem ảnh đã chọn</button>} />;
     if (disliked.size > 0) return <Empty icon={ThumbsDown} title="Mọi ảnh ở đây đã được đánh dấu không thích" />;
-    return <Empty icon={ImageOff} title={t("loading")} />;
+    // Lọc theo thư mục / khuôn mặt mà không còn ảnh nào — trước đây rơi vào câu
+    // "Đang tải…" nằm im mãi mãi.
+    return (
+      <Empty
+        icon={ImageOff}
+        title="Không có ảnh nào khớp bộ lọc"
+        hint="Thử thư mục khác hoặc bỏ lọc khuôn mặt."
+        action={
+          <button
+            type="button"
+            className={btn("secondary")}
+            onClick={() => {
+              a.setPersonId(null);
+              a.setActiveTab("all");
+              setSeg("all");
+            }}
+          >
+            Xem tất cả ảnh
+          </button>
+        }
+      />
+    );
   })();
 
   return (

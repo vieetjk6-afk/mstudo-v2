@@ -23,6 +23,7 @@ import {
 } from "@/components/v2/kit";
 import { Drawer, Menu, SearchInput, Segmented, Switch } from "@/components/v2/kit-client";
 import type { AlbumRow } from "./AlbumList";
+import { fmtDate } from "@/lib/date";
 
 const FilterDialog = dynamic(() => import("@/components/FilterDialog"), { ssr: false });
 
@@ -60,8 +61,10 @@ const STATUS_OPTIONS: [StatusFilter, string][] = [
   ["draft", "Nháp"],
 ];
 
+/** "2026-11" theo giờ VN — cắt chuỗi UTC thì album tạo 0h–7h sáng ngày 1 rơi sang tháng trước. */
 function monthKey(iso?: string | null) {
-  return iso ? iso.slice(0, 7) : "";
+  const d = fmtDate(iso); // dd/mm/yyyy theo giờ VN
+  return d ? `${d.slice(6)}-${d.slice(3, 5)}` : "";
 }
 function monthLabel(key: string) {
   if (!key) return "Không rõ ngày";
