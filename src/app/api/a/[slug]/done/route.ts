@@ -65,23 +65,51 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     .eq("id", album.id);
   if (doneErr) console.warn("[album-done] không ghi được selection_done_at:", doneErr.message);
 
-  // 1) Chuông trong dashboard (bấm vào → mở thẳng album chọn ảnh). Thử kèm
-  //    album_id; nếu DB chưa có cột (chưa chạy lại schema.sql) thì chèn không kèm
-  //    để thông báo vẫn hiện.
-  const notif = { owner_id: album.owner_id, kind: "selection", message };
-  const { error: insErr } = await admin.from("studio_notifications").insert({ ...notif, album_id: album.id });
-  if (insErr) await admin.from("studio_notifications").insert(notif);
+  // 1) Chuông trong dashboard (bấm vào → mở thẳng album chọn ảnh).
+  //    MỘT album chỉ giữ MỘT thông báo "chọn xong" chưa đọc: khách bấm "Báo lại
+  //    studio" nhiều lần (hay nhiều thiết bị) thì cập nhật chính thông báo đó
+  //    lên đầu, không chèn thêm — trước đây studio nhận 5 dòng y hệt trong một
+  //    phút. Studio đã đọc rồi thì lần báo sau là tin mới, chèn dòng mới.
+  const { data: prev, error: prevErr } = await admin
+    .from("studio_notifications")
+    .select("id, message, created_at")
+    .eq("owner_id", album.owner_id)
+    .eq("album_id", album.id)
+    .eq("kind", "selection")
+    .eq("read", false)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Báo lại y hệt (cùng số ảnh) trong vòng 30 phút → không rung điện thoại nữa.
+  const repeat =
+    !!prev && prev.message === message && Date.now() - new Date(prev.created_at).getTime() < 30 * 60_000;
+
+  const now = new Date().toISOString();
+  if (prev) {
+    await admin.from("studio_notifications").update({ message, created_at: now }).eq("id", prev.id);
+  } else {
+    // Thử kèm album_id; nếu DB chưa có cột (chưa chạy lại schema.sql — khi đó
+    // lượt tìm ở trên cũng lỗi) thì chèn không kèm để thông báo vẫn hiện.
+    const notif = { owner_id: album.owner_id, kind: "selection", message };
+    const { error: insErr } = prevErr
+      ? { error: prevErr }
+      : await admin.from("studio_notifications").insert({ ...notif, album_id: album.id });
+    if (insErr) await admin.from("studio_notifications").insert(notif);
+  }
 
   // 2) Web-push tới điện thoại chủ studio → mở album chọn ảnh.
-  try {
-    await sendPushToOwner(album.owner_id, {
-      title: "Khách đã chọn ảnh xong",
-      body: message,
-      url: `/dashboard/albums/${album.id}`,
-      tag: `selection-${album.id}`,
-    });
-  } catch {
-    /* push chưa cấu hình VAPID → bỏ qua */
+  if (!repeat) {
+    try {
+      await sendPushToOwner(album.owner_id, {
+        title: "Khách đã chọn ảnh xong",
+        body: message,
+        url: `/dashboard/albums/${album.id}`,
+        tag: `selection-${album.id}`,
+      });
+    } catch {
+      /* push chưa cấu hình VAPID → bỏ qua */
+    }
   }
 
   return NextResponse.json({ ok: true, count: n, disliked: nDis });
