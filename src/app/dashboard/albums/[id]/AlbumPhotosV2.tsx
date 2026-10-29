@@ -21,6 +21,9 @@ import { Thumb, codesText, copyText, downloadText, shortCode } from "./album-v2-
 type Stage = "all" | "selection" | "delivery";
 type Only = "all" | "picked" | "unpicked";
 
+/** Mỗi thư mục hiện trước chừng này ảnh, bấm "Xem thêm" để mở tiếp. */
+const TILE_STEP = 120;
+
 export function PhotosTabV2({
   e,
   slug,
@@ -38,6 +41,9 @@ export function PhotosTabV2({
   const [stage, setStage] = useState<Stage>("all");
   const [only, setOnly] = useState<Only>("all");
   const [openId, setOpenId] = useState<string | null>(null);
+  // Số ô ảnh đang dựng của từng thư mục — album vài nghìn ảnh mà dựng hết một
+  // lượt thì mở tab chậm và gõ tìm kiếm bị giật.
+  const [caps, setCaps] = useState<Record<string, number>>({});
   const both = e.deliveryCount > 0 && e.selectionCount > 0;
   const hasPicks = e.pickedIds.size > 0;
 
@@ -214,8 +220,12 @@ export function PhotosTabV2({
                 />
               </header>
               <div className="v2-card-pad flex flex-col gap-5">
-                {secs.map((sec) => (
-                  <div key={`${g.key}-${sec.id}`} className="flex flex-col gap-2.5">
+                {secs.map((sec) => {
+                  const capKey = `${g.key}-${sec.id}`;
+                  const cap = caps[capKey] ?? TILE_STEP;
+                  const rest = sec.photos.length - cap;
+                  return (
+                  <div key={capKey} className="flex flex-col gap-2.5">
                     {sec.name && (
                       <p className="flex items-center gap-1.5 text-[13px] font-semibold" style={{ color: "var(--tx2)" }}>
                         <FolderOpen size={14} /> {sec.name}
@@ -223,7 +233,7 @@ export function PhotosTabV2({
                       </p>
                     )}
                     <div className="grid grid-cols-3 gap-x-2.5 gap-y-3 min-[640px]:grid-cols-4 min-[1000px]:grid-cols-5 min-[1280px]:grid-cols-6">
-                      {sec.photos.map((p) => (
+                      {sec.photos.slice(0, cap).map((p) => (
                         <PhotoTile
                           key={p.id}
                           p={p}
@@ -235,8 +245,18 @@ export function PhotosTabV2({
                         />
                       ))}
                     </div>
+                    {rest > 0 && (
+                      <button
+                        type="button"
+                        className={btn("secondary", "sm", "self-center")}
+                        onClick={() => setCaps((c) => ({ ...c, [capKey]: cap + TILE_STEP * 2 }))}
+                      >
+                        Xem thêm {Math.min(rest, TILE_STEP * 2)} / {rest} ảnh
+                      </button>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </section>
           );
