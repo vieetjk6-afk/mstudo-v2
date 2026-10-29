@@ -1,9 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { FileSpreadsheet, Lock, LockOpen, Loader2, Check } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import AccountingExportCardV2 from "./AccountingExportCardV2";
 import { useAccountingExport } from "./useAccountingExport";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AccountingExportCardV2 = dynamic(() => import("./AccountingExportCardV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    XUẤT KẾ TOÁN & KHOÁ SỔ — thẻ trong màn Thu chi & công nợ.

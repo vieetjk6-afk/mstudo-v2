@@ -7,8 +7,10 @@ import { Pill, type ToneKey } from "@/components/studio/ui";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { BANK_TXN_STATUS_LABEL, BANK_TXN_NOTE_LABEL } from "@/lib/bank-reconcile";
 import dynamic from "next/dynamic";
-import BankAutoCardV2 from "./BankAutoCardV2";
 import { SEPAY_SIGNUP_URL, useBankAuto, type BankTxn } from "./useBankAuto";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const BankAutoCardV2 = dynamic(() => import("./BankAutoCardV2"));
 
 // Video hướng dẫn SePay là một component hoạt hình rất nặng, chỉ hiện khi bấm
 // "Xem video hướng dẫn" — tách chunk để trang Cài đặt không phải tải nó lúc mở.

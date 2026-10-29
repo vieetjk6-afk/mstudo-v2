@@ -1,12 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { contractTotal, vnd, CONTRACT_STATUS_LABEL, CONTRACT_STATUS_TONE, type ContractStatus } from "@/lib/types";
 import { avatarStyle, initials } from "@/lib/avatar";
 import { fmtDate, todayVN } from "@/lib/date";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import BoardV2 from "./BoardV2";
 import { useBoard } from "./useBoard";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const BoardV2 = dynamic(() => import("./BoardV2"));
 
 export type BoardCard = {
   id: string;

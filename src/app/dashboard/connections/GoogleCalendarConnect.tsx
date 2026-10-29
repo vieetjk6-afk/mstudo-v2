@@ -1,9 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Calendar, Check, X, Loader2, ExternalLink, Info } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import GoogleCalendarV2 from "./GoogleCalendarV2";
 import { GCAL_FEATURES, GCAL_STEPS, useGcalConnection, type GcalProps } from "./useGcalConnection";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const GoogleCalendarV2 = dynamic(() => import("./GoogleCalendarV2"));
 
 type Props = GcalProps;
 

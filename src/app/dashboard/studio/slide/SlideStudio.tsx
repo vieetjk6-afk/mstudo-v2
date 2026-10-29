@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { THEMES } from "./slide-engine";
-import SlideStudioV2 from "./SlideStudioV2";
 import { LAYOUT_LABEL, SLIDE_MUSIC, SLIDE_TABS, useSlideStudio } from "./useSlideStudio";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const SlideStudioV2 = dynamic(() => import("./SlideStudioV2"));
 
 /**
  * Slide cưới — trình tạo video slideshow ảnh cưới (canvas 1920×1080): slide tựa

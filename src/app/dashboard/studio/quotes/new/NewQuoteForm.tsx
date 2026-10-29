@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import DateInput from "@/components/DateInput";
 import MoneyInput from "@/components/MoneyInput";
 import {
@@ -19,8 +20,10 @@ import { fmtDate } from "@/lib/date";
 import { vnd } from "@/lib/types";
 import QuickContractBox from "@/app/dashboard/studio/contracts/new/QuickContractBox";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import NewQuoteFormV2 from "./NewQuoteFormV2";
 import { useNewQuoteForm, type NewQuoteFormProps } from "./useNewQuoteForm";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const NewQuoteFormV2 = dynamic(() => import("./NewQuoteFormV2"));
 
 /** Giao diện mới bật → bản V2; không thì bản cũ y nguyên. Hai bản dùng chung
  *  mọi state và luật ở ./useNewQuoteForm. */

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { fmtDate, fmtDow, fmtDayMonth, todayVN } from "@/lib/date";
 import Link from "next/link";
@@ -13,11 +14,13 @@ import type { CrewRoleRow } from "@/lib/crew-roles";
 import { lunarCellLabel, lunarFull } from "@/lib/lunar";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import type { CalendarTab } from "./tabs";
-import CalendarV2 from "./CalendarV2";
 import {
   DEFAULT_MARK, MARK_COLORS, MONTHS, WD, crewOf, eventLabel, hourOf, monthGrid, peopleWeek, summarizeRange,
   upcomingAfter, useShootCalendar, weekOf, ymd,
 } from "./shoot-calendar";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const CalendarV2 = dynamic(() => import("./CalendarV2"));
 
 export type ContractMarker = {
   id: string;

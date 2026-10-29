@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   ChevronLeft, ChevronRight, Plus, CalendarDays, AlertCircle, DoorOpen, UsersRound,
@@ -21,7 +22,9 @@ import {
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import type { CalendarTab } from "./tabs";
 import { draftOf, useSchedule, type Draft } from "./schedule-logic";
-import ScheduleV2 from "./ScheduleV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ScheduleV2 = dynamic(() => import("./ScheduleV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LỊCH STUDIO — lịch TUẦN của các buổi hẹn dịch vụ

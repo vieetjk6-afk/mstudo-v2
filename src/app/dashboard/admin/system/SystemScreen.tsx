@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import AiProvidersEditor from "@/components/AiProvidersEditor";
 import SystemPanel from "./SystemPanel";
 import AdminDriveCard from "./AdminDriveCard";
-import SystemV2 from "./SystemV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const SystemV2 = dynamic(() => import("./SystemV2"));
 
 /**
  * Màn "Cài đặt hệ thống": giao diện mới (SystemV2 — mục lục trái + từng khối)

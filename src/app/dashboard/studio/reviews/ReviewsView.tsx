@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   Star, Check, EyeOff, Eye, Trash2, MessageSquareQuote, Send, Images, Clock, Sparkles,
@@ -11,8 +12,10 @@ import { reviewRequestMessage } from "@/lib/share-messages";
 import { fmtDate } from "@/lib/date";
 import type { AwaitingReviewAlbum, ReviewRow } from "@/lib/types";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ReviewsV2 from "./ReviewsV2";
 import { TABS, BUCKET_LABEL, BUCKET_TONE, bucketOf, Stars, useReviews } from "./reviews-shared";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ReviewsV2 = dynamic(() => import("./ReviewsV2"));
 
 /**
  * Đánh giá khách: xem, DUYỆT, trả lời, và đi xin ở những album đã giao mà chưa

@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import FilterTool from "@/components/FilterTool";
-import FilterToolV2 from "@/components/FilterToolV2";
 import { useUiV2 } from "@/components/v2/UiV2Context";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const FilterToolV2 = dynamic(() => import("@/components/FilterToolV2"));
 
 /**
  * Trang Lọc ảnh đầy đủ. Toàn bộ chức năng nằm trong <FilterTool/> để popup

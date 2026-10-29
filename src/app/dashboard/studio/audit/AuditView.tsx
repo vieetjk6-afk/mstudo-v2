@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { History, ChevronDown } from "lucide-react";
 import { Panel, PanelHead, EmptyState } from "@/components/studio/ui";
@@ -8,7 +9,9 @@ import { auditFields, type AuditField } from "@/lib/audit-fields";
 import { AUDIT_GROUP_LABEL, auditGroup, auditIsDestructive, type AuditGroup } from "@/lib/audit-labels";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { useAudit } from "./useAudit";
-import AuditV2 from "./AuditV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AuditV2 = dynamic(() => import("./AuditV2"));
 
 export type AuditRow = {
   id: number;

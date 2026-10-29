@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, ClipboardList, Copy, Link as LinkIcon, MapPin, Navigation, Phone, Send, Share2, UserPlus } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
@@ -13,7 +14,9 @@ import {
 } from "@/lib/intake-text";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { useSendRow, useSessionInfo, type SessionInfoProps } from "./useSessionInfo";
-import SessionInfoViewV2 from "./SessionInfoViewV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const SessionInfoViewV2 = dynamic(() => import("./SessionInfoViewV2"));
 
 /** Trong khung giao diện mới vẽ bản V2; logic chung ở ./useSessionInfo. */
 export default function SessionInfoView(props: SessionInfoProps) {

@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Check, Save, Zap, ListChecks, Bell, MessageSquare, Mail, RotateCcw, Heart } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { AUTOMATION_RULES, type ActionKind, type AutomationConfig } from "@/lib/automations";
-import AutomationsCardV2 from "./AutomationsCardV2";
 import { useAutomations } from "./useAutomations";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AutomationsCardV2 = dynamic(() => import("./AutomationsCardV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    VIỆC TỰ ĐỘNG — màn cấu hình.

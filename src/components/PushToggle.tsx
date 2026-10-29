@@ -1,9 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Bell, BellOff, BellRing, Send } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import PushToggleV2 from "./PushToggleV2";
 import { usePushToggle } from "./usePushToggle";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const PushToggleV2 = dynamic(() => import("./PushToggleV2"));
 
 export default function PushToggle() {
   return useUiV2() ? <PushToggleV2 /> : <PushToggleV1 />;

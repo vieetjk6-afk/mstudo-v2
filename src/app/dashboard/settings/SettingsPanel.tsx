@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { fmtDateTime } from "@/lib/date";
 import {
   Save, Trash2, Check, MessageSquare,
@@ -9,8 +10,10 @@ import type { SiteSettings } from "@/lib/types";
 import { Section, Field } from "@/components/admin/Section";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import UpgradeContentEditor from "./UpgradeContentEditor";
-import SettingsPanelV2 from "./SettingsPanelV2";
 import { PRICE_ROWS, toPercent, toPrice, useSettings, type Feedback } from "./useSettings";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const SettingsPanelV2 = dynamic(() => import("./SettingsPanelV2"));
 
 /* ── Types ─────────────────────────────────────────────────────────────────── */
 export type { Feedback } from "./useSettings";

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { fmtDate } from "@/lib/date";
 import { UserPlus, Trash2 } from "lucide-react";
 import {
@@ -12,8 +13,10 @@ import type { DiscountCode, Profile, UpgradeRequest } from "@/lib/types";
 import UpgradeRequests from "./UpgradeRequests";
 import DiscountCodes from "./DiscountCodes";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import AdminPanelV2 from "./AdminPanelV2";
 import { LEVEL_ORDER, PAGE, planValue, useAdminUsers } from "./useAdminUsers";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AdminPanelV2 = dynamic(() => import("./AdminPanelV2"));
 
 type AdminPanelProps = {
   profiles: Profile[];

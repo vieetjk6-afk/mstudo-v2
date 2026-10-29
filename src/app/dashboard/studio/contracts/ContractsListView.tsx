@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus, Search, Download, FileSpreadsheet, SlidersHorizontal, X, UserPlus, CalendarDays, Clock, FileText, CalendarClock } from "lucide-react";
@@ -30,7 +31,9 @@ import {
 } from "@/lib/studio-export";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { SORT_OPTIONS, NGHE, contractExportRows, contractExportMeta } from "./contracts-list-shared";
-import ContractsListV2 from "./ContractsListV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ContractsListV2 = dynamic(() => import("./ContractsListV2"));
 
 export type ContractRow = {
   id: string;

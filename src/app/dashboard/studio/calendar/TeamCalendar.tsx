@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Clock, Plus, Trash2, Lock, ChevronDown, Search, X } from "lucide-react";
@@ -12,7 +13,9 @@ import { SHIFT_COMPANY_LABEL, type ShiftLetter } from "@/lib/crew-shift";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import type { CalendarTab } from "./tabs";
 import { useTeamCalendar } from "./team-logic";
-import TeamV2 from "./TeamV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const TeamV2 = dynamic(() => import("./TeamV2"));
 
 export type TeamAssignment = {
   name: string;

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { Package, Clock, Truck } from "lucide-react";
@@ -10,8 +11,10 @@ import {
   ORDER_STATUS_LABEL, ORDER_STATUS_TONE, dueLabel, lateness, sortByUrgency, type OrderStatus,
 } from "@/lib/vendors";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ProductionV2 from "./ProductionV2";
 import { PRODUCT_ORDER, toVendorOrder, useProduction, type ProductionStaff } from "./useProduction";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ProductionV2 = dynamic(() => import("./ProductionV2"));
 
 export type ProductRow = {
   id: string;

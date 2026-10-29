@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Trophy, UserCog, UsersRound } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import StaffManager, { type StaffRow } from "./StaffManager";
@@ -8,7 +9,9 @@ import CrewManager from "../crew/CrewManager";
 import type { StudioCrew } from "@/lib/types";
 import type { CrewRoleRow } from "@/lib/crew-roles";
 import { useStaffTab, type StaffTab } from "./useStaffTab";
-import StaffAndCrewV2 from "./StaffAndCrewV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const StaffAndCrewV2 = dynamic(() => import("./StaffAndCrewV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NHÂN SỰ — một màn, hai tab.

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Gift, Check, X, Copy } from "lucide-react";
 import { Panel, PanelHead, EmptyState } from "@/components/studio/ui";
@@ -8,8 +9,10 @@ import { fmtDate } from "@/lib/date";
 import { vnd, type StudioReferral } from "@/lib/types";
 import { REFERRAL_STATUS_LABEL } from "@/lib/referral";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ReferralsV2 from "./ReferralsV2";
 import { useReferrals } from "./useReferrals";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ReferralsV2 = dynamic(() => import("./ReferralsV2"));
 
 const TONE: Record<StudioReferral["status"], { fg: string; bg: string }> = {
   pending: { fg: "var(--am)", bg: "var(--amS)" },

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { fmtDateTime } from "@/lib/date";
 import { Bell, CheckCheck } from "lucide-react";
 import PushToggle from "@/components/PushToggle";
@@ -8,7 +9,9 @@ import { notificationHref, notificationMeta, notificationText } from "@/lib/noti
 import type { StudioNotification } from "@/lib/types";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { useNotifications } from "./useNotifications";
-import NotificationsV2 from "./NotificationsV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const NotificationsV2 = dynamic(() => import("./NotificationsV2"));
 
 /** Giao diện mới có bản riêng (NotificationsV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
 export default function NotificationsList(props: { initial: StudioNotification[] }) {

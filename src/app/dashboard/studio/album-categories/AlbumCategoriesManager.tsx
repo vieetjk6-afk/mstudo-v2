@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, Pencil, Trash2, Check, X, Tag } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import AlbumCategoriesV2 from "./AlbumCategoriesV2";
 import { useAlbumCategories, type AlbumCategoriesProps } from "./useAlbumCategories";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AlbumCategoriesV2 = dynamic(() => import("./AlbumCategoriesV2"));
 
 /** Giao diện mới có bản riêng (AlbumCategoriesV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
 export default function AlbumCategoriesManager(props: AlbumCategoriesProps) {

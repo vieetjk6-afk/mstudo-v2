@@ -1,12 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import { Plus, Trash2, Camera } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import type { StudioEquipment } from "@/lib/types";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import EquipmentV2 from "./EquipmentV2";
 import { emptyEquipmentForm, useEquipment } from "./useEquipment";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const EquipmentV2 = dynamic(() => import("./EquipmentV2"));
 
 export type EquipmentManagerProps = {
   ownerId: string;

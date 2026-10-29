@@ -1,13 +1,16 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import Link from "next/link";
 import { Bot, Check, Copy, Facebook, MessageCircle, Music2, Plug, TriangleAlert, Unplug } from "lucide-react";
 import { PLATFORM_INFO, PLATFORMS, platformColor, type Platform } from "@/lib/inbox/platforms";
 import { Panel, PanelHead } from "@/components/studio/ui";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ChannelsV2 from "./ChannelsV2";
 import { useChannels, type ChannelsProps } from "./useChannels";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ChannelsV2 = dynamic(() => import("./ChannelsV2"));
 
 /* ═══════════════════════════════════════════════════════════════════════════
    NỐI KÊNH VÀO HỘP THƯ.

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronRight, Download, FileSpreadsheet, ReceiptText, Users } from "lucide-react";
@@ -12,7 +13,9 @@ import { fmtDate } from "@/lib/date";
 import type { ExportStudio } from "@/lib/studio-export";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { monthOptions, usePayroll } from "./usePayroll";
-import PayrollV2 from "./PayrollV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const PayrollV2 = dynamic(() => import("./PayrollV2"));
 
 export type PayrollRow = {
   id: string;

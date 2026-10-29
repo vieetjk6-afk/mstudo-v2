@@ -1,10 +1,13 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import NewAlbumV2 from "./NewAlbumV2";
 import { useNewAlbum } from "./useNewAlbum";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const NewAlbumV2 = dynamic(() => import("./NewAlbumV2"));
 
 /** Giao diện mới có bản riêng (NewAlbumV2) — đổi kiểu component, không rẽ nhánh giữa các hook. */
 export default function NewAlbumPage() {

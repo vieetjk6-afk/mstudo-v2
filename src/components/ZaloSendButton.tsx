@@ -1,9 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { MessageCircle, Check, Loader2, AlertCircle, Users, Search } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ZaloSendButtonV2 from "./ZaloSendButtonV2";
 import { useZaloSend, type ZaloSendProps } from "./useZaloSend";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ZaloSendButtonV2 = dynamic(() => import("./ZaloSendButtonV2"));
 
 /**
  * Nút "Gửi Zalo" — gửi tin qua tài khoản Zalo studio ĐÃ kết nối (kênh cá nhân),

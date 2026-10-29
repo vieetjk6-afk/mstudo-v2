@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo } from "react";
 import Link from "next/link";
 import { FilePlus, Eye, ExternalLink, ReceiptText } from "lucide-react";
@@ -10,7 +11,9 @@ import { fmtDate } from "@/lib/date";
 import { studioUrl } from "@/lib/hosts";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { useQuoteRows, quotePipeline } from "./quotes-list-shared";
-import QuotesListV2 from "./QuotesListV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const QuotesListV2 = dynamic(() => import("./QuotesListV2"));
 
 export type QuoteRow = StudioQuote & {
   quote_items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount: boolean }[];

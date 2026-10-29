@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import {
   Plus,
@@ -27,7 +28,6 @@ import {
   type RentalOrderWithItems,
 } from "@/lib/types";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import RentalV2 from "./RentalV2";
 import {
   ITEM_STATUSES,
   ORDER_STATUSES,
@@ -42,6 +42,9 @@ import {
   type Line,
   type OrderForm,
 } from "./useRental";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const RentalV2 = dynamic(() => import("./RentalV2"));
 
 type Tab = "inventory" | "orders";
 

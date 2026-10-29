@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Heart, ExternalLink, Pencil, Copy, Check, Download, FileSpreadsheet, Users, FileText, Plus, Loader2, QrCode, Printer, X } from "lucide-react";
 import ThiepTabs from "@/components/studio/ThiepTabs";
@@ -7,8 +8,10 @@ import { thiepUrl } from "@/lib/hosts";
 import { weddingEditMessage } from "@/lib/share-messages";
 import { getTemplateMeta } from "../../../thiep/[slug]/templates";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ThiepListV2 from "./ThiepListV2";
 import { useThiepList, type ThiepListProps } from "./useThiepList";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ThiepListV2 = dynamic(() => import("./ThiepListV2"));
 
 export type { InvitationRow } from "./useThiepList";
 

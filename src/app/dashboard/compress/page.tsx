@@ -1,11 +1,14 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { ArrowLeft, Minimize2, Stamp, FileImage, Share2 } from "lucide-react";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import ToolPanel, { type Tool } from "./ToolPanel";
 import { useCompressPage } from "./useCompressPage";
-import CompressV2 from "./CompressV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const CompressV2 = dynamic(() => import("./CompressV2"));
 
 /** Pill hạn mức — bo 20px, cặp màu trạng thái của bản thiết kế. */
 function QuotaChip({ label, text, warn, active }: { label: string; text: string; warn: boolean; active: boolean }) {

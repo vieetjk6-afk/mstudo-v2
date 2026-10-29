@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Search, Download, FileSpreadsheet, HeartHandshake, Users, UserPlus } from "lucide-react";
 import MessengerButton from "@/components/MessengerButton";
@@ -9,8 +10,10 @@ import { vnd, vndShort } from "@/lib/types";
 import type { ExportStudio } from "@/lib/studio-export";
 import type { StudioReferral } from "@/lib/types";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ClientsV2 from "./ClientsV2";
 import { useClients, clientHref, sourceLabel, lastLabel, inviteBackMessage } from "./useClients";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ClientsV2 = dynamic(() => import("./ClientsV2"));
 
 export type ClientAgg = {
   key: string;

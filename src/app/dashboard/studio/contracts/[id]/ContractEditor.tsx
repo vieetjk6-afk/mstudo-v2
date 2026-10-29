@@ -93,7 +93,6 @@ import ContractAlbumModeCard from "./ContractAlbumModeCard";
 import { isWeddingReportage } from "@/lib/automations";
 import { isWeddingPackage } from "@/lib/wedding-plan";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import ContractDetailV2 from "./ContractDetailV2";
 import {
   useContractEditor,
   nextTier,
@@ -102,6 +101,9 @@ import {
   type ContractEditorProps,
   type ItemRow,
 } from "./useContractEditor";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const ContractDetailV2 = dynamic(() => import("./ContractDetailV2"));
 
 /* Toàn bộ state & thao tác của màn này nằm ở ./useContractEditor (dùng chung
    với giao diện mới ContractDetailV2). File này chỉ còn phần VẼ của bản cũ. */

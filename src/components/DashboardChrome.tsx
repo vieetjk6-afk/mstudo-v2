@@ -1,13 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import DashboardHeader from "@/components/DashboardHeader";
 import StudioFooterNav from "@/components/StudioFooterNav";
-import StudioShell from "@/components/StudioShell";
-import StudioShellV2 from "@/components/v2/StudioShellV2";
 import type { AccentKey, UiState } from "@/lib/ui-version";
 import type { ChromeProfile } from "@/lib/types";
 import { isStudioPath } from "@/lib/studio-shell-paths";
+
+// Hai bộ khung (cũ / giao diện mới) tách chunk riêng: mỗi người chỉ tải bộ mình
+// đang dùng. Vẫn render phía server như cũ nên không nháy trang.
+const StudioShell = dynamic(() => import("@/components/StudioShell"));
+const StudioShellV2 = dynamic(() => import("@/components/v2/StudioShellV2"));
 
 type StudioTier = "none" | "booking" | "plus" | "full";
 

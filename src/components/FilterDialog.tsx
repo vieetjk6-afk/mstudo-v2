@@ -1,14 +1,17 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { X, ExternalLink, Filter } from "lucide-react";
 import FilterTool from "./FilterTool";
-import FilterToolV2 from "./FilterToolV2";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { btn } from "@/components/v2/kit";
 import { Drawer } from "@/components/v2/kit-client";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const FilterToolV2 = dynamic(() => import("./FilterToolV2"));
 
 /**
  * Popup công cụ Lọc ảnh — mở ngay trong quản lý album, KHÔNG rời trang.

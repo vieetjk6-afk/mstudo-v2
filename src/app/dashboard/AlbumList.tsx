@@ -32,7 +32,9 @@ import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { storageUntil } from "@/lib/storage-lifecycle";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import AlbumListV2 from "./AlbumListV2";
+
+// Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
+const AlbumListV2 = dynamic(() => import("./AlbumListV2"));
 
 export interface AlbumRow {
   id: string;
