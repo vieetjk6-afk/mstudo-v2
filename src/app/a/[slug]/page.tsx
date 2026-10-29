@@ -39,11 +39,15 @@ const getAlbumBySlug = cache(async (slug: string) => {
 export async function generateMetadata(props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
   const data = await getAlbumBySlug(params.slug);
-  if (!data?.title) return { title: "Album ảnh" };
+  // Album chưa xuất bản: không lộ gì qua thẻ xem trước. Album có mật khẩu: giữ
+  // tên + thương hiệu studio nhưng KHÔNG đưa mô tả / ảnh bìa ra thẻ og — ai đoán
+  // được đường dẫn cũng không xem trộm được ảnh khi chưa có mật khẩu.
+  if (!data?.title || data.status !== "published") return { title: "Album ảnh" };
+  const locked = !!data.password_hash;
   const meta = await buildAlbumMetadata({
     title: data.title,
-    description: data.description,
-    coverUrl: data.cover_url,
+    description: locked ? null : data.description,
+    coverUrl: locked ? null : data.cover_url,
     path: `/a/${params.slug}`,
     ownerId: data.owner_id,
   });
