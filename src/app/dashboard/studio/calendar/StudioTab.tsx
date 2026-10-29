@@ -58,8 +58,45 @@ export default async function StudioTab({ tabs }: { tabs?: readonly CalendarTab[
   // Chi nhánh đang chọn: lịch, phòng và hợp đồng đều lọc theo cùng phạm vi, nếu
   // không thì lưới tuần hiện lịch của cơ sở này mà thanh công suất lại đếm phòng
   // của cơ sở khác.
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
-  const branchOptions = await getActiveBranches(profile.id);
+  // Ba phần dưới KHÔNG phụ thuộc lịch hẹn → bắt đầu ngay, chờ ở chỗ dùng (trước
+  // đây chạy nối tiếp sau lượt chính, thêm 3–4 vòng tới DB mỗi lần mở lịch).
+  const crewAvailP = (async () => {
+  let crewFree: { phone: string; date: string }[] = [];
+  let crewBusy: { phone: string; date: string }[] = [];
+  try {
+    const [{ data: fr }, { data: bs }] = await Promise.all([
+      supabase.from("crew_available").select("phone, date").eq("owner_id", profile.id).gte("date", from).lte("date", to),
+      supabase.from("crew_unavailable").select("phone, date").eq("owner_id", profile.id).gte("date", from).lte("date", to),
+    ]);
+    crewFree = (fr ?? []) as { phone: string; date: string }[];
+    crewBusy = (bs ?? []) as { phone: string; date: string }[];
+  } catch {
+    /* giữ hai danh sách rỗng */
+  }
+    return { crewFree, crewBusy };
+  })();
+  const coordsP = (async () => {
+  let studioCoords: { lat: number; lng: number } | null = null;
+  try {
+    const { data: loc } = await createAdminClient()
+      .from("profiles")
+      .select("studio_lat, studio_lng")
+      .eq("id", profile.id)
+      .maybeSingle();
+    const la = Number((loc as { studio_lat?: number | null } | null)?.studio_lat);
+    const ln = Number((loc as { studio_lng?: number | null } | null)?.studio_lng);
+    if (Number.isFinite(la) && Number.isFinite(ln) && !(la === 0 && ln === 0)) studioCoords = { lat: la, lng: ln };
+  } catch {
+    /* chưa chạy migration weather.sql → không ước lượng đường đi, không lỗi gì */
+  }
+    return studioCoords;
+  })();
+  const staffP = createAdminClient().from("profiles").select("id, full_name, email").eq("studio_owner_id", profile.id).order("full_name");
+
+  const [scope, branchOptions] = await Promise.all([
+    getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string),
+    getActiveBranches(profile.id),
+  ]);
 
   const [{ data: appointments }, { data: rooms }, { data: crew }, { data: contracts }] = await Promise.all([
     applyBranch(
@@ -108,44 +145,17 @@ export default async function StudioTab({ tabs }: { tabs?: readonly CalendarTab[
   // crew_available: supabase-js TRẢ VỀ lỗi chứ không ném, nên `?? []` mới là
   // đường lui thật — try/catch chỉ để chắc thêm. Cả hai cùng cho kết quả: ô
   // chọn người phụ trách giữ nguyên như trước, không sập màn lịch.
-  let crewFree: { phone: string; date: string }[] = [];
-  let crewBusy: { phone: string; date: string }[] = [];
-  try {
-    const [{ data: fr }, { data: bs }] = await Promise.all([
-      supabase.from("crew_available").select("phone, date").eq("owner_id", profile.id).gte("date", from).lte("date", to),
-      supabase.from("crew_unavailable").select("phone, date").eq("owner_id", profile.id).gte("date", from).lte("date", to),
-    ]);
-    crewFree = (fr ?? []) as { phone: string; date: string }[];
-    crewBusy = (bs ?? []) as { phone: string; date: string }[];
-  } catch {
-    /* giữ hai danh sách rỗng */
-  }
+  const { crewFree, crewBusy } = await crewAvailP;
 
   // Toạ độ studio — điểm xuất phát để ƯỚC LƯỢNG đường đi tới điểm chụp. Query
   // RIÊNG và best-effort, giống cách getStudioBrand làm: project chưa chạy
   // migration weather.sql thì cột chưa tồn tại, và một lỗi ở đây KHÔNG được
   // phép làm sập cả màn lịch chỉ vì mất một dòng chữ ước lượng km.
-  let studioCoords: { lat: number; lng: number } | null = null;
-  try {
-    const { data: loc } = await createAdminClient()
-      .from("profiles")
-      .select("studio_lat, studio_lng")
-      .eq("id", profile.id)
-      .maybeSingle();
-    const la = Number((loc as { studio_lat?: number | null } | null)?.studio_lat);
-    const ln = Number((loc as { studio_lng?: number | null } | null)?.studio_lng);
-    if (Number.isFinite(la) && Number.isFinite(ln) && !(la === 0 && ln === 0)) studioCoords = { lat: la, lng: ln };
-  } catch {
-    /* chưa chạy migration weather.sql → không ước lượng đường đi, không lỗi gì */
-  }
+  const studioCoords = await coordsP;
 
   // RLS bảng profiles chỉ cho đọc dòng của chính mình → service-role để liệt kê
   // nhân viên của studio (đã giới hạn theo studio_owner_id).
-  const { data: staff } = await createAdminClient()
-    .from("profiles")
-    .select("id, full_name, email")
-    .eq("studio_owner_id", profile.id)
-    .order("full_name");
+  const { data: staff } = await staffP;
 
   // Người phụ trách chọn được = thợ trong sổ + nhân viên có tài khoản. Gộp thành
   // MỘT danh sách để ô chọn không phải hỏi "thợ hay nhân viên?" trước.

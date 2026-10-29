@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireStudio } from "@/lib/auth-guards";
 import { isUiV2 } from "@/lib/ui-server";
 import PlanLockedV2 from "./PlanLockedV2";
@@ -42,20 +43,36 @@ export default async function ShootTab({ tabs }: { tabs?: readonly CalendarTab[]
   const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
   const CONTRACT_COLS =
     "id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, branch_id, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)";
-  const [{ data: events }, { data: contracts }, crewRoles] = await Promise.all([
+  // Lịch lật được tới mọi tháng nên đọc toàn bộ — nhưng LẬT TRANG: đọc trơn thì
+  // PostgREST cắt ở hàng 1000 và các buổi chụp cũ/xa biến mất khỏi lịch.
+  // Kiểm tra kết nối Google Calendar chạy cùng lượt thay vì chờ sau cùng.
+  const [events, contracts, crewRoles, gcal] = await Promise.all([
     // Kèm tên & ngày của HỢP ĐỒNG CHÍNH để lịch ghi rõ mốc thuộc hợp đồng nào.
-    supabase.from("studio_events").select("*, contract:studio_contracts(title, event_date)").eq("owner_id", profile.id).order("event_date"),
-    applyBranch(
-      (profile.actingRole === "staff"
-        ? supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id).eq("assigned_to", profile.actingUserId)
-        : supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id)
+    fetchAllRows<unknown>((from, to) =>
+      supabase
+        .from("studio_events")
+        .select("*, contract:studio_contracts(title, event_date)")
+        .eq("owner_id", profile.id)
+        .order("event_date")
+        .order("id")
+        .range(from, to)
+    ),
+    fetchAllRows<unknown>((from, to) =>
+      applyBranch(
+        (profile.actingRole === "staff"
+          ? supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id).eq("assigned_to", profile.actingUserId)
+          : supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id)
+        )
+          .not("event_date", "is", null)
+          // Chỉ hiện hợp đồng đã xác nhận/khách đã ký — bỏ nháp & mới gửi.
+          .in("status", ["approved", "in_progress", "post_production", "completed"]),
+        scope.selected
       )
-        .not("event_date", "is", null)
-        // Chỉ hiện hợp đồng đã xác nhận/khách đã ký — bỏ nháp & mới gửi.
-        .in("status", ["approved", "in_progress", "post_production", "completed"]),
-      scope.selected
+        .order("id")
+        .range(from, to)
     ),
     loadCrewRoles(supabase, profile.id as string),
+    gcalHealth(profile.id),
   ]);
 
   // Read-only calendar feed (owner sets it once; staff just see the URL).
@@ -70,11 +87,11 @@ export default async function ShootTab({ tabs }: { tabs?: readonly CalendarTab[]
     <CalendarView
       tabs={tabs}
       ownerId={profile.id}
-      initialEvents={(events ?? []) as unknown as EventRow[]}
-      contracts={(contracts ?? []) as ContractMarker[]}
+      initialEvents={events as EventRow[]}
+      contracts={contracts as ContractMarker[]}
       feedUrl={feedUrl}
       crewRoles={crewRoles}
-      gcal={await gcalHealth(profile.id)}
+      gcal={gcal}
     />
   );
 }
