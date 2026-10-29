@@ -60,16 +60,34 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
   const supabase = await createClient();
   const today = todayVN();
 
-  // 3 query độc lập → chạy song song thay vì tuần tự (giảm TTFB dashboard).
-  const [{ data: trialProf }, { data }, { count: selectingAlbums }] = await Promise.all([
+  // Các query độc lập → chạy song song. Đặt lịch KHÔNG tải hết về rồi đếm:
+  // đếm ngay ở DB, chỉ lấy đúng số dòng màn hình hiện (6 yêu cầu mới, 8 lịch tới).
+  const BOOKING_COLS = "id, name, phone, service, preferred_date, package_name, package_price, status, created_at";
+  const [
+    { data: trialProf },
+    { count: totalBookings },
+    { data: newRows, count: newCount },
+    { data: upRows, count: upcomingCount },
+    { count: selectingAlbums },
+  ] = await Promise.all([
     // Đã dùng thử chưa (một lần / tài khoản).
     supabase.from("profiles").select("trial_used_at").eq("id", ownerId).maybeSingle(),
+    supabase.from("studio_bookings").select("id", { count: "exact", head: true }).eq("owner_id", ownerId).neq("status", "archived"),
     supabase
       .from("studio_bookings")
-      .select("id, name, phone, service, preferred_date, package_name, package_price, status, created_at")
+      .select(BOOKING_COLS, { count: "exact" })
+      .eq("owner_id", ownerId)
+      .eq("status", "new")
+      .order("created_at", { ascending: false })
+      .limit(6),
+    supabase
+      .from("studio_bookings")
+      .select(BOOKING_COLS, { count: "exact" })
       .eq("owner_id", ownerId)
       .neq("status", "archived")
-      .order("created_at", { ascending: false }),
+      .gte("preferred_date", today)
+      .order("preferred_date")
+      .limit(8),
     supabase
       .from("albums")
       .select("id", { count: "exact", head: true })
@@ -79,23 +97,19 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
       .eq("is_gallery", false),
   ]);
   const trialUsed = !!(trialProf as { trial_used_at?: string | null } | null)?.trial_used_at;
-  const bookings = (data ?? []) as Array<{
+  type BookingRow = {
     id: string; name: string; phone: string; service: string | null;
     preferred_date: string | null; package_name: string | null; package_price: number | null;
     status: "new" | "handled" | "archived"; created_at: string;
-  }>;
-
-  const newCount = bookings.filter((b) => b.status === "new").length;
-  const upcoming = bookings
-    .filter((b) => b.preferred_date && b.preferred_date >= today)
-    .sort((a, b) => (a.preferred_date || "").localeCompare(b.preferred_date || ""))
-    .slice(0, 8);
+  };
+  const newBookings = (newRows ?? []) as BookingRow[];
+  const upcoming = (upRows ?? []) as BookingRow[];
 
   const stats: { icon: typeof FileText; label: string; value: string; delta?: string; deltaTone?: ToneKey }[] = [
-    { icon: AlertCircle, label: "Đặt lịch mới", value: String(newCount), delta: newCount > 0 ? "cần xử lý" : undefined, deltaTone: "amber" },
+    { icon: AlertCircle, label: "Đặt lịch mới", value: String(newCount ?? 0), delta: (newCount ?? 0) > 0 ? "cần xử lý" : undefined, deltaTone: "amber" },
     { icon: Images, label: "Album đang được khách chọn", value: String(selectingAlbums ?? 0), delta: (selectingAlbums ?? 0) > 0 ? "khách đang chọn ảnh" : undefined, deltaTone: "amber" },
-    { icon: CalendarDays, label: "Lịch sắp tới", value: String(upcoming.length) },
-    { icon: Users, label: "Tổng yêu cầu đặt lịch", value: String(bookings.length) },
+    { icon: CalendarDays, label: "Lịch sắp tới", value: String(upcomingCount ?? upcoming.length) },
+    { icon: Users, label: "Tổng yêu cầu đặt lịch", value: String(totalBookings ?? 0) },
   ];
 
   // Giao diện mới: cùng dữ liệu đã tải ở trên, chỉ khác cách sắp xếp.
@@ -103,11 +117,12 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
     return (
       <OverviewBookingV2
         today={today}
-        newCount={newCount}
+        newCount={newCount ?? 0}
         selectingAlbums={selectingAlbums ?? 0}
-        totalBookings={bookings.length}
+        totalBookings={totalBookings ?? 0}
+        upcomingCount={upcomingCount ?? upcoming.length}
         upcoming={upcoming}
-        newBookings={bookings.filter((b) => b.status === "new").slice(0, 6)}
+        newBookings={newBookings}
         trialUsed={trialUsed}
       />
     );
@@ -172,7 +187,7 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
           <CalendarDays size={18} style={{ color: "var(--ac)" }} /> Lịch chụp sắp tới
         </h2>
         <p className="mb-4 text-xs" style={{ color: "var(--text3)" }}>
-          {upcoming.length > 0 ? `${upcoming.length} buổi chụp đã có ngày` : "Chưa có lịch chụp nào sắp tới"}
+          {upcoming.length > 0 ? `${upcomingCount ?? upcoming.length} buổi chụp đã có ngày` : "Chưa có lịch chụp nào sắp tới"}
         </p>
         {upcoming.length > 0 ? (
           <ul className="space-y-2">

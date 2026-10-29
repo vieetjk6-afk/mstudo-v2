@@ -595,7 +595,7 @@ export function OverviewBookingV2(d: OverviewBookingV2Data) {
       <StatGrid>
         <Stat label="Đặt lịch mới" value={d.newCount} valueTone={d.newCount > 0 ? "amber" : undefined} sub={d.newCount > 0 ? "cần xử lý" : "đã xử lý hết"} icon={Inbox} tone="amber" href="/dashboard/studio/bookings" />
         <Stat label="Album khách đang chọn" value={d.selectingAlbums} sub={d.selectingAlbums > 0 ? "khách đang chọn ảnh" : "không có album chờ"} icon={Images} tone="blue" href="/dashboard/albums" />
-        <Stat label="Lịch sắp tới" value={d.upcoming.length} sub="buổi chụp đã có ngày" icon={CalendarCheck} tone="brand" href="#lich-chup" />
+        <Stat label="Lịch sắp tới" value={d.upcomingCount ?? d.upcoming.length} sub="buổi chụp đã có ngày" icon={CalendarCheck} tone="brand" href="#lich-chup" />
         <Stat label="Tổng yêu cầu đặt lịch" value={d.totalBookings} sub="chưa lưu trữ" icon={Users} tone="gray" />
       </StatGrid>
 
@@ -639,7 +639,7 @@ export function OverviewBookingV2(d: OverviewBookingV2Data) {
             )}
           </Section>
 
-          <Section id="lich-chup" icon={CalendarDays} title="Lịch chụp sắp tới" desc={d.upcoming.length > 0 ? `${d.upcoming.length} buổi chụp đã có ngày` : "Chưa có lịch chụp nào sắp tới"} flush>
+          <Section id="lich-chup" icon={CalendarDays} title="Lịch chụp sắp tới" desc={d.upcoming.length > 0 ? `${d.upcomingCount ?? d.upcoming.length} buổi chụp đã có ngày` : "Chưa có lịch chụp nào sắp tới"} flush>
             {d.upcoming.length === 0 ? (
               <Empty compact icon={CalendarDays} title="Chưa có lịch chụp nào sắp tới" action={<Link href="/dashboard/studio/bookings" className={btn("secondary", "sm")}>Mở trang đặt lịch</Link>} />
             ) : (
