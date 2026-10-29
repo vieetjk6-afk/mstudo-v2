@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { fmtDateTime } from "@/lib/date";
 import { Megaphone, X, BellRing } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import PollCard from "@/components/PollCard";
 
 type Announcement = {
   id: string;
@@ -138,37 +139,37 @@ export default function AnnouncementPopup() {
         </div>
       )}
 
-      {/* Thẻ nổi góc dưới phải — thông báo thường */}
-      {normal.length > 0 && (
-        <div className="fixed bottom-20 right-4 z-[80] flex w-[min(92vw,360px)] flex-col gap-2 md:bottom-4 md:right-20">
-          {normal.map((n) => (
-            <div
-              key={n.id}
-              className="rounded-xl p-4 shadow-lg animate-[vkFade_.3s_ease_both]"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-            >
-              <div className="flex items-start gap-2.5">
-                <Megaphone size={17} style={{ color: "#c78bd1", flex: "none" }} className="mt-0.5" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-semibold" style={{ color: "var(--text)" }}>Thông báo hệ thống</p>
-                  <p className="mt-0.5 whitespace-pre-wrap text-[13px]" style={{ color: "var(--text2)" }}>{n.message}</p>
-                  <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-                    {fmtDateTime(n.created_at)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => dismiss([n.id])}
-                  className="shrink-0 rounded-md p-1 transition-colors hover:bg-[var(--surface2)]"
-                  aria-label="Đóng"
-                  style={{ color: "var(--text3)" }}
-                >
-                  <X size={15} />
-                </button>
+      {/* Thẻ nổi góc dưới phải — thông báo thường + bình chọn hệ thống (chung một
+          cột để hai loại thẻ không đè lên nhau). Cột rỗng thì không chặn bấm. */}
+      <div className="pointer-events-none fixed bottom-20 right-4 z-[80] flex max-h-[calc(100dvh-6rem)] w-[min(92vw,360px)] flex-col gap-2 overflow-y-auto md:bottom-4 md:right-20 [&>*]:pointer-events-auto">
+        <PollCard />
+        {normal.map((n) => (
+          <div
+            key={n.id}
+            className="rounded-xl p-4 shadow-lg animate-[vkFade_.3s_ease_both]"
+            style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+          >
+            <div className="flex items-start gap-2.5">
+              <Megaphone size={17} style={{ color: "#c78bd1", flex: "none" }} className="mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] font-semibold" style={{ color: "var(--text)" }}>Thông báo hệ thống</p>
+                <p className="mt-0.5 whitespace-pre-wrap text-[13px]" style={{ color: "var(--text2)" }}>{n.message}</p>
+                <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+                  {fmtDateTime(n.created_at)}
+                </p>
               </div>
+              <button
+                onClick={() => dismiss([n.id])}
+                className="shrink-0 rounded-md p-1 transition-colors hover:bg-[var(--surface2)]"
+                aria-label="Đóng"
+                style={{ color: "var(--text3)" }}
+              >
+                <X size={15} />
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+          </div>
+        ))}
+      </div>
     </>
   );
 }

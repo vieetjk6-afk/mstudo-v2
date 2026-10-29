@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, Bot, Check, DatabaseBackup, Download, FileJson, HardDrive, Loader2, Megaphone, Send, Unplug, Upload,
+  AlertTriangle, Bot, Check, Vote, DatabaseBackup, Download, FileJson, HardDrive, Loader2, Megaphone, Send, Unplug, Upload,
 } from "lucide-react";
 import { Badge, Callout, Field, ListRow, PageHead, Section, Stack, btn, inputCls } from "@/components/v2/kit";
 import { Switch } from "@/components/v2/kit-client";
 import { SectionNavV2 } from "@/app/dashboard/settings/SectionNavV2";
 import { useAdminDrive, type DriveStatus } from "./useAdminDrive";
+import PollAdminV2 from "./PollAdminV2";
 import { SHORTCUTS, TARGET_LABEL, useSystemPanel, type Target } from "./useSystemPanel";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -43,6 +44,7 @@ export default function SystemV2({ ai, driveSeed }: { ai?: React.ReactNode; driv
       <SectionNavV2
         items={[
           { id: "thong-bao", label: "Thông báo tới studio", icon: Megaphone },
+          { id: "binh-chon", label: "Bình chọn", icon: Vote },
           { id: "sao-luu", label: "Sao lưu", icon: DatabaseBackup },
           { id: "khoi-phuc", label: "Khôi phục", icon: Upload },
           {
@@ -97,6 +99,9 @@ export default function SystemV2({ ai, driveSeed }: { ai?: React.ReactNode; driv
             </div>
           </form>
         </Section>
+
+        {/* ── Bình chọn ─────────────────────────────────────────────────── */}
+        <PollAdminV2 />
 
         {/* ── Sao lưu ───────────────────────────────────────────────────── */}
         <Section

@@ -39,6 +39,7 @@
     "migrations/ke_hoach_cuoi_mo_rong.sql",
     "migrations/luu_chon_anh_tung_phan.sql",
     "migrations/chi_muc_bo_sung.sql",
+    "migrations/binh_chon.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -887,6 +888,15 @@
       "cot": [
         "wedding_plans.extra"
       ]
+    },
+    {
+      "file": "migrations/binh_chon.sql",
+      "mo_ta": "Bình chọn hệ thống: admin hỏi ý kiến mọi tài khoản, người dùng bỏ phiếu trong dashboard",
+      "bang": [
+        "system_poll_votes",
+        "system_polls"
+      ],
+      "cot": []
     }
   ]
 }
