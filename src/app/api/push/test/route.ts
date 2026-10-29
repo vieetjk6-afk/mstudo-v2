@@ -54,7 +54,7 @@ export async function POST() {
   }
 
   const results = await sendPushToSubscriptions(list, {
-    title: "mstudo — thử thông báo",
+    title: "Thử thông báo",
     body: "Nếu bạn đọc được dòng này thì thông báo đẩy đang hoạt động bình thường.",
     url: "/dashboard/studio/notifications",
     tag: "push-test",
