@@ -1395,7 +1395,6 @@ body {
   box-shadow: var(--sh-pop);
   animation: ckPop 0.14s ease both;
 }
-.ui-v2 .v2-menu-pop.is-up { top: auto; bottom: calc(100% + 6px); }
 .ui-v2 .v2-menu-item {
   display: flex;
   align-items: center;

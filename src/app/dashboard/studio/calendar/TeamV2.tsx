@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, Clock, Factory, Lock, Plus, Trash2, UserRound, Users } from "lucide-react";
 import { Avatar, Badge, Card, Empty, Field, btn, iconBtn, inputCls } from "@/components/v2/kit";
-import { Drawer, SearchInput, Segmented, Switch } from "@/components/v2/kit-client";
+import { Drawer, PopLayer, SearchInput, Segmented, Switch, popStyle, useAnchoredPop } from "@/components/v2/kit-client";
 import TimeInput from "@/components/TimeInput";
 import { CREW_STATUS_LABEL, type CrewStatus } from "@/lib/types";
 import { crewRoleLabel } from "@/lib/crew-roles";
@@ -245,11 +245,14 @@ export default function TeamV2({ assignments, members, schedule, shifts, crewRol
 function CrewPicker({ t, total, shifts }: { t: ReturnType<typeof useTeamCalendar>; total: number; shifts: TeamCalendarProps["shifts"] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const pos = useAnchoredPop(open, ref, popRef, 280, "right");
   const { who, setWho, q, setQ, filteredMembers, nameOf, setShowShift } = t;
   useEffect(() => {
     if (!open) return;
     const down = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (!ref.current?.contains(t) && !popRef.current?.contains(t)) setOpen(false);
     };
     const key = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("pointerdown", down);
@@ -272,28 +275,30 @@ function CrewPicker({ t, total, shifts }: { t: ReturnType<typeof useTeamCalendar
         {who && shifts[who] ? <span style={{ color: "var(--tx3)" }}>· ca {shifts[who]}</span> : null}
         <ChevronDown size={15} style={{ color: "var(--tx3)" }} />
       </button>
-      {open && (
-        <div className="v2-menu-pop" style={{ width: 280, right: 0 }}>
-          <div className="p-1.5">
-            <SearchInput value={q} onChange={setQ} placeholder="Tìm thợ theo tên hoặc SĐT…" autoFocus />
-          </div>
-          <div className="max-h-[300px] overflow-y-auto">
-            <button type="button" className="v2-menu-item" onClick={() => pick("")} style={!who ? { background: "var(--sf2)" } : undefined}>
-              <Users size={16} />
-              <span className="min-w-0 flex-1">Cả đội <span style={{ color: "var(--tx3)" }}>({total})</span></span>
-            </button>
-            {filteredMembers.map((m) => (
-              <button key={m.phone} type="button" className="v2-menu-item" onClick={() => pick(m.phone)} style={who === m.phone ? { background: "var(--sf2)" } : undefined}>
-                <Avatar name={m.name} size={24} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{m.name}</span>
-                  <span className="v2-menu-hint">{m.phone}{shifts[m.phone] ? ` · ca ${shifts[m.phone]}` : ""}</span>
-                </span>
+      {open && pos && (
+        <PopLayer pos={pos}>
+          <div ref={popRef} className="v2-menu-pop" style={popStyle(pos)}>
+            <div className="p-1.5">
+              <SearchInput value={q} onChange={setQ} placeholder="Tìm thợ theo tên hoặc SĐT…" autoFocus />
+            </div>
+            <div className="max-h-[300px] overflow-y-auto">
+              <button type="button" className="v2-menu-item" onClick={() => pick("")} style={!who ? { background: "var(--sf2)" } : undefined}>
+                <Users size={16} />
+                <span className="min-w-0 flex-1">Cả đội <span style={{ color: "var(--tx3)" }}>({total})</span></span>
               </button>
-            ))}
-            {filteredMembers.length === 0 && <p className="px-3 py-4 text-center text-[12.5px]" style={{ color: "var(--tx3)" }}>Không tìm thấy thợ nào.</p>}
+              {filteredMembers.map((m) => (
+                <button key={m.phone} type="button" className="v2-menu-item" onClick={() => pick(m.phone)} style={who === m.phone ? { background: "var(--sf2)" } : undefined}>
+                  <Avatar name={m.name} size={24} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{m.name}</span>
+                    <span className="v2-menu-hint">{m.phone}{shifts[m.phone] ? ` · ca ${shifts[m.phone]}` : ""}</span>
+                  </span>
+                </button>
+              ))}
+              {filteredMembers.length === 0 && <p className="px-3 py-4 text-center text-[12.5px]" style={{ color: "var(--tx3)" }}>Không tìm thấy thợ nào.</p>}
+            </div>
           </div>
-        </div>
+        </PopLayer>
       )}
     </div>
   );
