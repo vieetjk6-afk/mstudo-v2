@@ -2,7 +2,7 @@
 
 import { AlertCircle, Check, Loader2, MessageCircle, Users } from "lucide-react";
 import { Avatar, btn, inputCls } from "@/components/v2/kit";
-import { SearchInput } from "@/components/v2/kit-client";
+import { PopLayer, SearchInput, popStyle, useAnchoredPop } from "@/components/v2/kit-client";
 import { useZaloSend, type ZaloSendProps } from "./useZaloSend";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -17,6 +17,8 @@ import { useZaloSend, type ZaloSendProps } from "./useZaloSend";
 export default function ZaloSendButtonV2(props: ZaloSendProps) {
   const z = useZaloSend(props, btn("secondary", "sm"));
   const { state, show } = z;
+  // Bảng chọn bạn nổi qua portal: nằm trong thẻ overflow-hidden / thân hộp thoại vẫn không bị cắt.
+  const pos = useAnchoredPop(z.pickOpen, z.wrapRef, z.popRef, 280, "left");
 
   const icon =
     state === "sending" ? <Loader2 size={15} className="flex-none animate-spin" />
@@ -69,35 +71,37 @@ export default function ZaloSendButtonV2(props: ZaloSendProps) {
         )}
       </span>
 
-      {z.pickOpen && (
-        <div ref={z.popRef} className="v2-menu-pop" style={{ left: z.popLeft, width: 280, maxWidth: "calc(100vw - 1.5rem)" }}>
-          {z.pickHint && (
-            <p className="mb-1.5 px-1.5 text-[12px] font-medium" style={{ color: "var(--am)" }}>{z.pickHint}</p>
-          )}
-          <SearchInput value={z.q} onChange={z.setQ} placeholder="Tìm bạn theo tên…" autoFocus />
-          <div className="mt-1.5 max-h-56 overflow-y-auto">
-            {z.loadingFriends ? (
-              <div className="flex items-center gap-2 px-2 py-3 text-[13px]" style={{ color: "var(--tx3)" }}>
-                <Loader2 size={14} className="animate-spin" /> Đang tải bạn bè…
-              </div>
-            ) : z.friendsErr ? (
-              <div className="px-2 py-3 text-[13px]" style={{ color: "var(--rd)" }}>{z.friendsErr}</div>
-            ) : z.shown.length === 0 ? (
-              <div className="px-2 py-3 text-[13px]" style={{ color: "var(--tx3)" }}>{z.friends.length ? "Không khớp." : "Chưa có bạn bè."}</div>
-            ) : (
-              z.shown.slice(0, 200).map((f) => (
-                <button key={f.uid} type="button" onClick={() => z.pickFriend(f)} className="v2-menu-item">
-                  {f.avatar ? (
-                    <img src={f.avatar} alt="" className="h-7 w-7 flex-none rounded-full object-cover" />
-                  ) : (
-                    <Avatar name={f.name} size={28} />
-                  )}
-                  <span className="min-w-0 flex-1 truncate">{f.name}</span>
-                </button>
-              ))
+      {z.pickOpen && pos && (
+        <PopLayer pos={pos}>
+          <div ref={z.popRef} className="v2-menu-pop" style={popStyle(pos)}>
+            {z.pickHint && (
+              <p className="mb-1.5 px-1.5 text-[12px] font-medium" style={{ color: "var(--am)" }}>{z.pickHint}</p>
             )}
+            <SearchInput value={z.q} onChange={z.setQ} placeholder="Tìm bạn theo tên…" autoFocus />
+            <div className="mt-1.5 max-h-56 overflow-y-auto">
+              {z.loadingFriends ? (
+                <div className="flex items-center gap-2 px-2 py-3 text-[13px]" style={{ color: "var(--tx3)" }}>
+                  <Loader2 size={14} className="animate-spin" /> Đang tải bạn bè…
+                </div>
+              ) : z.friendsErr ? (
+                <div className="px-2 py-3 text-[13px]" style={{ color: "var(--rd)" }}>{z.friendsErr}</div>
+              ) : z.shown.length === 0 ? (
+                <div className="px-2 py-3 text-[13px]" style={{ color: "var(--tx3)" }}>{z.friends.length ? "Không khớp." : "Chưa có bạn bè."}</div>
+              ) : (
+                z.shown.slice(0, 200).map((f) => (
+                  <button key={f.uid} type="button" onClick={() => z.pickFriend(f)} className="v2-menu-item">
+                    {f.avatar ? (
+                      <img src={f.avatar} alt="" className="h-7 w-7 flex-none rounded-full object-cover" />
+                    ) : (
+                      <Avatar name={f.name} size={28} />
+                    )}
+                    <span className="min-w-0 flex-1 truncate">{f.name}</span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        </PopLayer>
       )}
 
       {state === "fail" && z.err && (

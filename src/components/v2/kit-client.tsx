@@ -75,15 +75,15 @@ export function Menu({
   width?: number;
 }) {
   const [open, setOpen] = useState(false);
-  // Mở NGƯỢC lên trên khi dưới nút không đủ chỗ (menu trong chân ngăn kéo, hàng cuối bảng).
-  const [up, setUp] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
+  const pos = useAnchoredPop(open, ref, popRef, width, align);
   useEffect(() => {
     if (!open) return;
-    const r = ref.current?.getBoundingClientRect();
-    if (r) setUp(window.innerHeight - r.bottom < 300 && r.top > window.innerHeight - r.bottom);
     const down = (e: PointerEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener("pointerdown", down);
     return () => document.removeEventListener("pointerdown", down);
@@ -99,54 +99,151 @@ export function Menu({
           <MoreHorizontal size={18} />
         </button>
       )}
-      {open && (
-        <div
-          role="menu"
-          className={cx("v2-menu-pop", up && "is-up")}
-          style={{ width, [align === "right" ? "right" : "left"]: 0 }}
-        >
-          {items.map((it, i) => {
-            if (it === "divider") return <div key={i} className="v2-menu-div" />;
-            const Icon = it.icon;
-            const body = (
-              <>
-                {Icon ? <Icon size={16} className="flex-none" /> : null}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{it.label}</span>
-                  {it.hint ? <span className="v2-menu-hint">{it.hint}</span> : null}
-                </span>
-              </>
-            );
-            const cls = cx("v2-menu-item", it.danger && "is-danger");
-            if (it.href && !it.disabled)
-              return it.external ? (
-                <a key={i} role="menuitem" href={it.href} target="_blank" rel="noopener noreferrer" className={cls} onClick={() => setOpen(false)}>
-                  {body}
-                </a>
-              ) : (
-                <Link key={i} role="menuitem" href={it.href} className={cls} onClick={() => setOpen(false)}>
-                  {body}
-                </Link>
+      {open && pos && (
+        <PopLayer pos={pos}>
+          <div ref={popRef} role="menu" className="v2-menu-pop" style={popStyle(pos)}>
+            {items.map((it, i) => {
+              if (it === "divider") return <div key={i} className="v2-menu-div" />;
+              const Icon = it.icon;
+              const body = (
+                <>
+                  {Icon ? <Icon size={16} className="flex-none" /> : null}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{it.label}</span>
+                    {it.hint ? <span className="v2-menu-hint">{it.hint}</span> : null}
+                  </span>
+                </>
               );
-            return (
-              <button
-                key={i}
-                type="button"
-                role="menuitem"
-                disabled={it.disabled}
-                className={cls}
-                onClick={() => {
-                  setOpen(false);
-                  it.onClick?.();
-                }}
-              >
-                {body}
-              </button>
-            );
-          })}
-        </div>
+              const cls = cx("v2-menu-item", it.danger && "is-danger");
+              if (it.href && !it.disabled)
+                return it.external ? (
+                  <a key={i} role="menuitem" href={it.href} target="_blank" rel="noopener noreferrer" className={cls} onClick={() => setOpen(false)}>
+                    {body}
+                  </a>
+                ) : (
+                  <Link key={i} role="menuitem" href={it.href} className={cls} onClick={() => setOpen(false)}>
+                    {body}
+                  </Link>
+                );
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  role="menuitem"
+                  disabled={it.disabled}
+                  className={cls}
+                  onClick={() => {
+                    setOpen(false);
+                    it.onClick?.();
+                  }}
+                >
+                  {body}
+                </button>
+              );
+            })}
+          </div>
+        </PopLayer>
       )}
     </div>
+  );
+}
+
+/* ── Lớp nổi neo theo nút (menu ⋯, bảng chọn) ─────────────────────────────
+   Render qua portal ra <body> với toạ độ cố định: nằm trong thẻ
+   `overflow-hidden`, bảng cuộn ngang, thân hộp thoại hay ngăn kéo thì vẫn không
+   bị cắt. Lớp bọc mang lại lớp/token màu của khung `.ui-v2` gần nhất (portal
+   nằm ngoài khung nên không tự thừa hưởng). Bám theo nút khi cuộn/đổi cỡ. */
+export type PopPos = {
+  left: number;
+  top?: number;
+  bottom?: number;
+  width: number;
+  maxHeight: number;
+  frame: { className: string; theme?: string; style: React.CSSProperties };
+};
+
+function measurePop(el: HTMLElement, width: number, align: "left" | "right"): PopPos {
+  const r = el.getBoundingClientRect();
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const gap = 6;
+  const pad = 8;
+  const w = Math.min(width, vw - pad * 2);
+  const left = Math.min(Math.max(align === "right" ? r.right - w : r.left, pad), vw - w - pad);
+  // Mở NGƯỢC lên trên khi dưới nút không đủ chỗ (menu trong chân ngăn kéo, hàng cuối bảng).
+  const below = vh - r.bottom;
+  const up = below < 300 && r.top > below;
+  const room = (up ? r.top : below) - gap - pad;
+  const maxHeight = Math.max(Math.min(room, 420, vh * 0.7), 120);
+
+  const host = el.closest<HTMLElement>(".ui-v2");
+  const kind = host?.classList.contains("client-doc") ? "client-doc" : "studio-shell";
+  const ac = host ? getComputedStyle(host).getPropertyValue("--ac-base").trim() : "";
+  return {
+    left,
+    top: up ? undefined : r.bottom + gap,
+    bottom: up ? vh - r.top + gap : undefined,
+    width: w,
+    maxHeight,
+    frame: {
+      className: `${kind} ui-v2`,
+      theme: host?.dataset.theme ?? document.documentElement.dataset.theme,
+      style: {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: 0,
+        height: 0,
+        zIndex: 90,
+        background: "transparent",
+        ...(ac ? { ["--ac-base" as string]: ac } : {}),
+      },
+    },
+  };
+}
+
+/** Toạ độ cho lớp nổi neo theo `anchor`; null khi đóng. */
+export function useAnchoredPop(
+  open: boolean,
+  anchor: React.RefObject<HTMLElement | null>,
+  pop: React.RefObject<HTMLElement | null>,
+  width: number,
+  align: "left" | "right" = "right",
+): PopPos | null {
+  const [pos, setPos] = useState<PopPos | null>(null);
+  useEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const place = () => {
+      if (anchor.current) setPos(measurePop(anchor.current, width, align));
+    };
+    place();
+    // Cuộn bên trong chính lớp nổi (danh sách dài) thì không cần đặt lại.
+    const scroll = (e: Event) => {
+      if (!pop.current?.contains(e.target as Node)) place();
+    };
+    window.addEventListener("scroll", scroll, true);
+    window.addEventListener("resize", place);
+    return () => {
+      window.removeEventListener("scroll", scroll, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, anchor, pop, width, align]);
+  return pos;
+}
+
+export function popStyle(pos: PopPos): React.CSSProperties {
+  return { position: "fixed", width: pos.width, left: pos.left, top: pos.top ?? "auto", bottom: pos.bottom ?? "auto", maxHeight: pos.maxHeight };
+}
+
+export function PopLayer({ pos, children }: { pos: PopPos; children: React.ReactNode }) {
+  return createPortal(
+    <div className={pos.frame.className} data-theme={pos.frame.theme} style={pos.frame.style}>
+      {children}
+    </div>,
+    document.body,
   );
 }
 
