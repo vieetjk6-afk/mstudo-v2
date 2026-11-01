@@ -449,10 +449,59 @@ export default function NewContractFormV2(props: NewContractFormProps) {
               </div>
             </div>
 
+            {/* Giảm giá cho cả hợp đồng — lưu thành dòng "Giảm giá" như ở màn chi tiết. */}
+            {f.subtotal > 0 && (
+              <div>
+                <SubHead title="Giảm giá" aside={f.discount > 0 ? `− ${vnd(f.discount)}` : "Không bắt buộc"} />
+                <div className="flex min-w-0 items-center gap-2">
+                  <select
+                    aria-label="Kiểu giảm giá"
+                    className={`${inputCls} w-[96px] flex-none`}
+                    value={f.discountMode}
+                    onChange={(e) => {
+                      f.setDiscountMode(e.target.value as "vnd" | "pct");
+                      f.setDiscountValue(0);
+                    }}
+                  >
+                    <option value="vnd">Số tiền</option>
+                    <option value="pct">%</option>
+                  </select>
+                  {f.discountMode === "vnd" ? (
+                    <MoneyInput
+                      value={f.discountValue}
+                      onChange={(n) => f.setDiscountValue(n)}
+                      placeholder="0"
+                      ariaLabel="Số tiền giảm"
+                      className={`${inputCls} tnum min-w-0 flex-1 text-right font-semibold`}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      aria-label="Phần trăm giảm"
+                      className={`${inputCls} tnum min-w-0 flex-1 text-right font-semibold`}
+                      value={f.discountValue || ""}
+                      placeholder="0"
+                      onChange={(e) => f.setDiscountValue(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             {lines.length > 0 && (
-              <div className="flex items-baseline justify-between rounded-[12px] px-4 py-3" style={{ background: "var(--sf2)" }}>
-                <span className="text-[13px] font-medium" style={{ color: "var(--tx2)" }}>{lines.length} hạng mục trong hợp đồng</span>
-                <strong className="tnum text-[18px]" style={{ color: "var(--ac)", letterSpacing: "-.4px" }}>{vnd(total)}</strong>
+              <div className="rounded-[12px] px-4 py-3" style={{ background: "var(--sf2)" }}>
+                {f.discount > 0 && (
+                  <div className="mb-1 flex items-baseline justify-between text-[13px]" style={{ color: "var(--tx2)" }}>
+                    <span>Tạm tính {vnd(f.subtotal)}</span>
+                    <span className="tnum" style={{ color: "var(--am)" }}>Giảm − {vnd(f.discount)}</span>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[13px] font-medium" style={{ color: "var(--tx2)" }}>{lines.length} hạng mục trong hợp đồng</span>
+                  <strong className="tnum text-[18px]" style={{ color: "var(--ac)", letterSpacing: "-.4px" }}>{vnd(total)}</strong>
+                </div>
               </div>
             )}
           </Stack>
@@ -646,7 +695,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
               </AddRowButton>
               {instalments.length > 1 && total > 0 && (
                 <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
-                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b style={{ color: "var(--tx2)" }}>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}.
+                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b style={{ color: "var(--tx2)" }}>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}. Đã nhập cọc thì quay lại đổi gói / giảm giá vẫn <b>giữ nguyên số cọc</b>.
                 </p>
               )}
             </div>
@@ -714,6 +763,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                 // Giá ở đây là giá ĐÃ SỬA (con số thật trong hợp đồng), không phải giá bảng giá.
                 [2, "Gói", f.pickedPkgs.length ? f.pickedPkgs.map((p) => `${p.name} · ${vnd(f.priceOf(p))}${f.priceEdited(p) ? " (đã sửa giá)" : ""}`).join(", ") : f.template ? `Mẫu: ${f.template.name}` : "Chưa chọn"],
                 [2, "Gói riêng", f.customPreview || "Không có"],
+                ...(f.discount > 0 ? [[2, "Giảm giá", `− ${vnd(f.discount)}${f.discountMode === "pct" ? ` (${f.discountValue}%)` : ""}`] as [number, string, string]] : []),
                 [3, f.eventLabel.trim() || "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
                 ...f.extraDays
                   .filter((d) => d.date)

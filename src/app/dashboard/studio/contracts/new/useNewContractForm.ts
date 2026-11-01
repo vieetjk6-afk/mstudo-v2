@@ -18,6 +18,9 @@ import {
   isCustomLineFilled,
   isPriceEdited,
   linesTotal,
+  discountAmount,
+  rebalancePlan,
+  DISCOUNT_LINE_NAME,
   CUSTOM_LINE_FALLBACK_NAME,
   type LineCustom,
 } from "@/lib/contract-lines";
@@ -179,6 +182,10 @@ export function useNewContractForm({
      đặt đều nằm trong bảng giá, và thêm một dòng dùng-một-lần vào bảng giá
      chung chỉ làm bảng giá rác dần. */
   const [customLines, setCustomLines] = useState<LineCustom[]>([]);
+  /* Giảm giá cho cả hợp đồng — theo số tiền hoặc %. Trước đây form không có ô
+     này: studio phải sửa giá từng gói hoặc vào màn chi tiết thêm dòng giảm. */
+  const [discountMode, setDiscountMode] = useState<"vnd" | "pct">("vnd");
+  const [discountValue, setDiscountValue] = useState(0);
 
   // ── Bước 4 — lịch & nhân sự ─────────────────────────────────────────────
   const [eventDate, setEventDate] = useState("");
@@ -193,7 +200,10 @@ export function useNewContractForm({
   const [picked, setPicked] = useState<CrewPick[]>([]);
 
   // ── Bước 5 — thanh toán ─────────────────────────────────────────────────
-  const [plan, setPlan] = useState<Instalment[] | null>(null);
+  /* Đợt thu studio đã nhập + TỔNG lúc nhập. Tổng đổi sau đó (quay lại sửa
+     gói, giảm giá) thì giữ nguyên cọc, chỉ đợt cuối gánh phần chênh — xem
+     rebalancePlan. null = chưa đụng tới → dùng kế hoạch mặc định. */
+  const [plan, setPlanState] = useState<{ rows: Instalment[]; total: number } | null>(null);
 
   // ── Tuỳ chọn giữ lại từ bản cũ ──────────────────────────────────────────
   const [title, setTitle] = useState("");
@@ -229,7 +239,7 @@ export function useNewContractForm({
   /* ── Tiền ────────────────────────────────────────────────────────────────
      Tổng LUÔN cộng từ mảng hạng mục, không có biến tổng viết tay — đúng ghi
      chú "nguồn số liệu duy nhất" trong README. */
-  const lines = useMemo(
+  const baseLines = useMemo(
     () =>
       buildContractLines({
         templateItems: template?.contract_template_items ?? [],
@@ -239,6 +249,14 @@ export function useNewContractForm({
         customLines,
       }),
     [template, mainPkg, extras, pkgPrice, customLines]
+  );
+  /** Tạm tính trước giảm giá. */
+  const subtotal = linesTotal(baseLines);
+  const discount = discountAmount(subtotal, discountValue, discountMode);
+  const lines = useMemo(
+    // Cùng dạng dòng giảm giá với buildContractLines({ discount }) và màn chi tiết.
+    () => (discount > 0 ? [...baseLines, { name: DISCOUNT_LINE_NAME, qty: 1, unit_price: -discount }] : baseLines),
+    [baseLines, discount]
   );
 
   const total = linesTotal(lines);
@@ -263,7 +281,8 @@ export function useNewContractForm({
     if (rest > 0) out.push({ label: "Thanh toán khi giao sản phẩm", amount: rest, due: "" });
     return out;
   }, [total]);
-  const instalments = plan ?? defaultPlan;
+  const instalments = plan ? (plan.total === total ? plan.rows : rebalancePlan(plan.rows, total)) : defaultPlan;
+  const setPlan = (rows: Instalment[] | null, forTotal = total) => setPlanState(rows ? { rows, total: forTotal } : null);
   const planTotal = instalments.reduce((s, p) => s + (p.amount || 0), 0);
 
   /** Gói riêng gọn thành một dòng cho bước soát lại. */
@@ -659,7 +678,7 @@ export function useNewContractForm({
       const dep = Math.min(t, d.deposit);
       const next: Instalment[] = [{ label: "Cọc giữ lịch", amount: dep, due: d.depositDue ?? "" }];
       if (t - dep > 0) next.push({ label: "Thanh toán khi giao sản phẩm", amount: t - dep, due: "" });
-      setPlan(next);
+      setPlan(next, t);
       hit();
     } else {
       setPlan(null);
@@ -907,7 +926,7 @@ export function useNewContractForm({
     pickMain, toggleExtra, togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
     // tiền
-    lines, total, payroll, profit, marginPct, marginTone, thinMargin,
+    lines, total, subtotal, discount, discountMode, setDiscountMode, discountValue, setDiscountValue, payroll, profit, marginPct, marginTone, thinMargin,
     // lịch & nhân sự
     eventDate, setEventDate, startTime, setStartTime, endTime, setEndTime, location, setLocation,
     eventLabel, setEventLabel, eventNote, setEventNote,

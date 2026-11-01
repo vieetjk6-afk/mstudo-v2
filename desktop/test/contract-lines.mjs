@@ -20,6 +20,8 @@ import {
   linesTotal,
   isCustomLineFilled,
   CUSTOM_LINE_FALLBACK_NAME,
+  discountAmount,
+  rebalancePlan,
 } from "../../src/lib/contract-lines.ts";
 
 let fail = 0;
@@ -138,6 +140,29 @@ const withDesc = buildContractLines({
 check("mô tả gói chính đi theo, cắt khoảng trắng hai đầu", withDesc[0].description, "2 thợ chụp\n300 ảnh chỉnh màu");
 check("mô tả toàn khoảng trắng → không có khoá description", "description" in withDesc[1], false);
 check("gói không có mô tả → không có khoá description", "description" in withDesc[2], false);
+
+// ── Giảm giá ───────────────────────────────────────────────────────────────
+check("giảm theo số tiền", discountAmount(20_000_000, 2_000_000, "vnd"), 2_000_000);
+check("giảm theo %", discountAmount(20_000_000, 10, "pct"), 2_000_000);
+check("giảm không quá tạm tính", discountAmount(5_000_000, 9_000_000, "vnd"), 5_000_000);
+{
+  const d = buildContractLines({ customLines: [{ name: "Gói", qty: 1, unit_price: 20_000_000 }], discount: 3_000_000 });
+  check("dòng Giảm giá giá âm ở cuối, tổng trừ đúng", [d.at(-1), linesTotal(d)], [{ name: "Giảm giá", qty: 1, unit_price: -3_000_000 }, 17_000_000]);
+}
+
+// ── Giữ cọc khi tổng đổi (lỗi cọc 7 triệu tự nhảy) ──────────────────────────
+{
+  const plan = [
+    { label: "Cọc giữ lịch", amount: 7_000_000, due: "" },
+    { label: "Thanh toán khi giao sản phẩm", amount: 13_000_000, due: "" },
+  ];
+  const up = rebalancePlan(plan, 25_000_000);
+  check("tăng tổng: cọc giữ nguyên 7tr, đợt cuối gánh phần chênh", up.map((p) => p.amount), [7_000_000, 18_000_000]);
+  const down = rebalancePlan(plan, 17_000_000);
+  check("giảm giá: cọc giữ nguyên, đợt cuối giảm", down.map((p) => p.amount), [7_000_000, 10_000_000]);
+  check("chỉ có đợt cọc → thêm đợt phần còn lại", rebalancePlan([plan[0]], 20_000_000).map((p) => p.amount), [7_000_000, 13_000_000]);
+  check("tổng dưới số đã chia → đợt cuối về 0, không âm", rebalancePlan(plan, 5_000_000).map((p) => p.amount), [7_000_000, 0]);
+}
 
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);
 process.exit(fail === 0 ? 0 : 1);

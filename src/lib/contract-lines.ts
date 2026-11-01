@@ -60,12 +60,15 @@ export function buildContractLines({
   extras = [],
   pkgPrice = {},
   customLines = [],
+  discount = 0,
 }: {
   templateItems?: LineTemplateItem[];
   mainPkg?: LinePackage | null;
   extras?: LinePackage[];
   pkgPrice?: Record<string, number>;
   customLines?: LineCustom[];
+  /** Số tiền giảm (đồng, số dương) — thành dòng "Giảm giá" giá âm ở cuối. */
+  discount?: number;
 }): ContractLine[] {
   const out: ContractLine[] = [];
 
@@ -87,7 +90,45 @@ export function buildContractLines({
     });
   }
 
+  // Giảm giá: CÙNG cách màn chi tiết hợp đồng lưu (dòng qty 1, unit_price âm),
+  // nên mở hợp đồng ra vẫn thấy đúng dòng "Giảm giá" và tổng không lệch. Không
+  // cho giảm quá tổng — hợp đồng âm tiền là lỗi gõ, không phải ý định.
+  const sub = linesTotal(out);
+  const off = Math.min(sub, Math.max(0, Math.round(discount) || 0));
+  if (off > 0) out.push({ name: DISCOUNT_LINE_NAME, qty: 1, unit_price: -off });
+
   return out;
+}
+
+export const DISCOUNT_LINE_NAME = "Giảm giá";
+
+/** Số tiền giảm từ ô nhập: theo % của tạm tính hoặc số tiền, làm tròn đồng, không quá tạm tính. */
+export function discountAmount(subtotal: number, value: number, mode: "vnd" | "pct"): number {
+  const v = Math.max(0, Number(value) || 0);
+  const raw = mode === "pct" ? (subtotal * Math.min(100, v)) / 100 : v;
+  return Math.min(Math.max(0, subtotal), Math.round(raw));
+}
+
+export type PlanRow = { label: string; amount: number; due: string };
+
+/**
+ * Kế hoạch thu khi TỔNG hợp đồng đổi sau khi studio đã nhập đợt thu.
+ *
+ * Lỗi thật studio gặp: khách cọc 7 triệu, tới bước cuối quay lại sửa gói thì
+ * số cọc tự nhảy / số còn lại lệch hẳn. Luật: GIỮ NGUYÊN mọi đợt studio đã gõ
+ * (nhất là cọc), chỉ đợt CUỐI gánh phần chênh. Chỉ có một đợt thì thêm đợt
+ * "Thanh toán khi giao sản phẩm" cho phần còn lại. Tổng giảm dưới số đã chia
+ * thì đợt cuối về 0 (không âm) — studio thấy ngay dòng cảnh báo lệch tổng.
+ */
+export function rebalancePlan(rows: PlanRow[], total: number): PlanRow[] {
+  if (!rows.length || total <= 0) return rows;
+  if (rows.length === 1) {
+    const rest = total - rows[0].amount;
+    return rest > 0 ? [rows[0], { label: "Thanh toán khi giao sản phẩm", amount: rest, due: "" }] : rows;
+  }
+  const last = rows.length - 1;
+  const others = rows.reduce((s, x, i) => (i === last ? s : s + (x.amount || 0)), 0);
+  return rows.map((x, i) => (i === last ? { ...x, amount: Math.max(0, total - others) } : x));
 }
 
 /** Tổng giá trị hợp đồng — luôn cộng từ mảng hạng mục, không có biến tổng riêng. */

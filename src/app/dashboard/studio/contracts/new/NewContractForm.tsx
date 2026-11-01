@@ -57,7 +57,7 @@ function NewContractFormV1(props: NewContractFormProps) {
     selectedService, template, nhomDichVu, priceOf, priceEdited,
     togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
-    lines, total, payroll, profit, marginPct, marginTone, thinMargin,
+    lines, total, subtotal, discount, discountMode, setDiscountMode, discountValue, setDiscountValue, payroll, profit, marginPct, marginTone, thinMargin,
     eventDate, setEventDate, startTime, setStartTime, endTime, setEndTime, location, setLocation,
     eventLabel, setEventLabel, eventNote, setEventNote,
     extraDays, addExtraDay, patchExtraDay, removeExtraDay, extraClashes,
@@ -602,10 +602,61 @@ function NewContractFormV1(props: NewContractFormProps) {
               </div>
             </div>
 
+            {subtotal > 0 && (
+              <div className="mt-[18px]">
+                <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Giảm giá (không bắt buộc)</p>
+                <div className="flex min-w-0 items-center gap-2">
+                  <select
+                    aria-label="Kiểu giảm giá"
+                    className="w-[96px] flex-none rounded-[10px] px-3 py-2.5 text-[13px]"
+                    style={inputStyle}
+                    value={discountMode}
+                    onChange={(e) => {
+                      setDiscountMode(e.target.value as "vnd" | "pct");
+                      setDiscountValue(0);
+                    }}
+                  >
+                    <option value="vnd">Số tiền</option>
+                    <option value="pct">%</option>
+                  </select>
+                  {discountMode === "vnd" ? (
+                    <MoneyInput
+                      value={discountValue}
+                      onChange={(n) => setDiscountValue(n)}
+                      placeholder="0"
+                      ariaLabel="Số tiền giảm"
+                      className={`${inputCls} tnum min-w-0 flex-1 text-right font-semibold`}
+                      style={inputStyle}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      aria-label="Phần trăm giảm"
+                      className={`${inputCls} tnum min-w-0 flex-1 text-right font-semibold`}
+                      style={inputStyle}
+                      value={discountValue || ""}
+                      placeholder="0"
+                      onChange={(e) => setDiscountValue(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             {lines.length > 0 && (
-              <div className="mt-4 flex items-baseline justify-between rounded-[11px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
-                <span className="text-[12.5px] font-semibold">{lines.length} hạng mục</span>
-                <strong className="tnum text-[17px]" style={{ color: "var(--ac)", letterSpacing: "-.4px" }}>{vnd(total)}</strong>
+              <div className="mt-4 rounded-[11px] px-3.5 py-3" style={{ background: "var(--sf2)" }}>
+                {discount > 0 && (
+                  <div className="mb-1 flex items-baseline justify-between text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                    <span>Tạm tính {vnd(subtotal)}</span>
+                    <span className="tnum" style={{ color: "var(--am)" }}>Giảm − {vnd(discount)}</span>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[12.5px] font-semibold">{lines.length} hạng mục</span>
+                  <strong className="tnum text-[17px]" style={{ color: "var(--ac)", letterSpacing: "-.4px" }}>{vnd(total)}</strong>
+                </div>
               </div>
             )}
           </div>
@@ -808,7 +859,7 @@ function NewContractFormV1(props: NewContractFormProps) {
               </button>
               {instalments.length > 1 && total > 0 && (
                 <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}.
+                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}. Đã nhập cọc thì quay lại đổi gói / giảm giá vẫn <b>giữ nguyên số cọc</b>.
                 </p>
               )}
             </div>
@@ -879,6 +930,7 @@ function NewContractFormV1(props: NewContractFormProps) {
                 // khác với con số thật đang nằm trong hợp đồng.
                 [2, "Gói", pickedPkgs.length ? pickedPkgs.map((p) => `${p.name} · ${vnd(priceOf(p))}${priceEdited(p) ? " (đã sửa giá)" : ""}`).join(", ") : template ? `Mẫu: ${template.name}` : "Chưa chọn"],
                 [2, "Gói riêng", customPreview || "Không có"],
+                ...(discount > 0 ? [[2, "Giảm giá", `− ${vnd(discount)}${discountMode === "pct" ? ` (${discountValue}%)` : ""}`] as [number, string, string]] : []),
                 ...(brideName.trim() || groomName.trim()
                   ? [[1, "Cô dâu · Chú rể", [brideName.trim() || "—", groomName.trim() || "—"].join(" · ")] as [number, string, string]]
                   : []),
