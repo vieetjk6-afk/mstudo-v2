@@ -52,6 +52,7 @@ function NewContractFormV1(props: NewContractFormProps) {
     step, setStep, canNext,
     clientQuery, setClientQuery, clientName, setClientName, clientPhone, setClientPhone, phoneOk,
     brideName, setBrideName, groomName, setGroomName,
+    bridePhone, setBridePhone, brideAddress, setBrideAddress, groomPhone, setGroomPhone, groomAddress, setGroomAddress,
     filteredClients, pickClient, returningHit, savedNameDiffers,
     serviceId, changeService, setShowAllLists, shootType, setShootType, templateId, pickTemplate,
     selectedService, template, nhomDichVu, priceOf, priceEdited,
@@ -351,14 +352,17 @@ function NewContractFormV1(props: NewContractFormProps) {
                   onChange={(e) => setClientPhone(e.target.value)}
                 />
               </div>
-              <div>
-                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-bride">Tên cô dâu (không bắt buộc)</label>
-                <input id="nc-bride" className={inputCls} style={inputStyle} placeholder="Nguyễn Thu Lan" value={brideName} onChange={(e) => setBrideName(e.target.value)} />
-              </div>
-              <div>
-                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-groom">Tên chú rể (không bắt buộc)</label>
-                <input id="nc-groom" className={inputCls} style={inputStyle} placeholder="Trần Minh Khang" value={groomName} onChange={(e) => setGroomName(e.target.value)} />
-              </div>
+              {([
+                ["Cô dâu", "nc-bride", "Nguyễn Thu Lan", brideName, setBrideName, bridePhone, setBridePhone, brideAddress, setBrideAddress],
+                ["Chú rể", "nc-groom", "Trần Minh Khang", groomName, setGroomName, groomPhone, setGroomPhone, groomAddress, setGroomAddress],
+              ] as const).map(([title, id, ph, name, setName, phone, setPhone, addr, setAddr]) => (
+                <div key={id} className="grid gap-2 rounded-[11px] p-3" style={{ border: "1px solid var(--bd)" }}>
+                  <label className={fieldLabel} style={fieldLabelStyle} htmlFor={`${id}-name`}>{title} (không bắt buộc)</label>
+                  <input id={`${id}-name`} className={inputCls} style={inputStyle} placeholder={`Họ tên — ${ph}`} value={name} onChange={(e) => setName(e.target.value)} />
+                  <input className={inputCls} style={inputStyle} inputMode="tel" placeholder="Số điện thoại" aria-label={`SĐT ${title}`} value={phone} onChange={(e) => setPhone(e.target.value)} />
+                  <input className={inputCls} style={inputStyle} placeholder="Địa chỉ" aria-label={`Địa chỉ ${title}`} value={addr} onChange={(e) => setAddr(e.target.value)} />
+                </div>
+              ))}
             </div>
 
             {clientPhone && !phoneOk && (

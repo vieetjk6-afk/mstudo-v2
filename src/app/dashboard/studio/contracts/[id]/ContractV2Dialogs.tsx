@@ -123,6 +123,22 @@ export function InfoDrawer({ ed, open, onClose }: { ed: Ed; open: boolean; onClo
               </Field>
             </>
           )}
+          {ed.hasCoupleCols && (
+            <>
+              <Field label="SĐT cô dâu" htmlFor="ci-bphone">
+                <input id="ci-bphone" className={inputCls} inputMode="tel" value={f.bride_phone} onChange={(e) => set("bride_phone", e.target.value)} />
+              </Field>
+              <Field label="SĐT chú rể" htmlFor="ci-gphone">
+                <input id="ci-gphone" className={inputCls} inputMode="tel" value={f.groom_phone} onChange={(e) => set("groom_phone", e.target.value)} />
+              </Field>
+              <Field label="Địa chỉ cô dâu" htmlFor="ci-baddr" className="sm:col-span-2">
+                <input id="ci-baddr" className={inputCls} value={f.bride_address} onChange={(e) => set("bride_address", e.target.value)} />
+              </Field>
+              <Field label="Địa chỉ chú rể" htmlFor="ci-gaddr" className="sm:col-span-2">
+                <input id="ci-gaddr" className={inputCls} value={f.groom_address} onChange={(e) => set("groom_address", e.target.value)} />
+              </Field>
+            </>
+          )}
         </div>
 
         <GroupLabel>Ngày chính</GroupLabel>

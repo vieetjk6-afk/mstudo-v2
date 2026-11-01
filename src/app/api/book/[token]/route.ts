@@ -8,6 +8,8 @@ import { digitsOnly, isUsablePhone, samePhone } from "@/lib/referral";
 import { isLeadSource, type Utm } from "@/lib/lead-source";
 import { VOUCHER_COLS, VOUCHER_COLS_FULL, canRedeem, normalizeVoucherCode, phoneUnlocks, voucherValueLabel, type Voucher } from "@/lib/vouchers";
 import { todayVN } from "@/lib/date";
+import { bookingDetailLines, cleanBookingDetails } from "@/lib/booking-details";
+import { isMissingColumn } from "@/lib/missing-column";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,8 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     note?: string;
     package_name?: string;
     package_price?: number;
+    /** Nhiều gói, ngày chính/phụ, cô dâu/chú rể — xem @/lib/booking-details. */
+    details?: unknown;
     facebook?: string;
     referrer_phone?: string;
     /** Mã voucher ưu đãi (từ QR). Kiểm lại ở đây — trình duyệt gửi gì cũng được. */
@@ -92,6 +96,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     }
   }
   const note = [voucherNote, body.note?.trim()].filter(Boolean).join("\n") || null;
+  const details = cleanBookingDetails(body.details);
 
   const core = {
     owner_id: owner.id,
@@ -111,27 +116,32 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   };
   const cols = "id, deposit_amount, deposit_code, deposit_token";
 
+  // Phần chi tiết (nhiều gói, ngày phụ, cô dâu/chú rể) nằm ở cột `details`.
+  // Database chưa chạy migrations/dat_lich_chi_tiet.sql thì cột chưa có → ghi
+  // đúng các thông tin đó thành chữ vào ghi chú, để studio không mất gì.
+  const withDetails = details ? { details } : {};
+  const detailNote = [note, ...bookingDetailLines(details, { includePackages: true })].filter(Boolean).join("\n") || null;
+  const insertBooking = async (row: Record<string, unknown>) => {
+    let r = await db.from("studio_bookings").insert({ ...row, ...withDetails }).select(cols).single();
+    if (r.error && details && isMissingColumn(r.error, "details")) {
+      r = await db.from("studio_bookings").insert({ ...row, note: detailNote }).select(cols).single();
+    }
+    return r;
+  };
+
   // Ghi kèm nguồn khách. Nếu project chưa chạy migration `nguon_khach.sql` thì
   // ba cột đó chưa tồn tại và Postgres từ chối CẢ câu insert — mà đây là đường
   // KHÁCH đặt lịch, hỏng nó là studio mất đơn thật chứ không phải mất một biểu
   // đồ. Nên: thử có nguồn, hỏng thì ghi lại đúng phần cốt lõi. Cùng cách
   // `getStudioHost` đang đỡ cột `custom_domain_verified` chưa migrate.
-  let { data: booking, error } = await db
-    .from("studio_bookings")
-    .insert({ ...core, source, utm, landing_path: landingPath, ...(voucherCode ? { voucher_code: voucherCode } : {}) })
-    .select(cols)
-    .single();
+  let { data: booking, error } = await insertBooking({ ...core, source, utm, landing_path: landingPath, ...(voucherCode ? { voucher_code: voucherCode } : {}) });
   if (error && voucherCode) {
     // Chưa chạy studio_vouchers_loyalty.sql: bỏ cột voucher (mã vẫn nằm trong ghi chú).
-    ({ data: booking, error } = await db
-      .from("studio_bookings")
-      .insert({ ...core, source, utm, landing_path: landingPath })
-      .select(cols)
-      .single());
+    ({ data: booking, error } = await insertBooking({ ...core, source, utm, landing_path: landingPath }));
   }
   if (error) {
     console.warn("[book] ghi nguồn khách hỏng, thử lại không kèm nguồn:", error.message);
-    ({ data: booking, error } = await db.from("studio_bookings").insert(core).select(cols).single());
+    ({ data: booking, error } = await insertBooking(core));
   }
   if (error || !booking) return NextResponse.json({ error: "server_error" }, { status: 500 });
 
@@ -163,7 +173,8 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     }
   }
 
-  const bookMsg = `Yêu cầu đặt lịch mới từ ${body.name.trim()}${pkgName ? ` · ${pkgName}` : ""}${body.preferred_date ? ` · ${body.preferred_date}` : ""}`;
+  const extraN = details?.extra_days?.length ?? 0;
+  const bookMsg = `Yêu cầu đặt lịch mới từ ${body.name.trim()}${pkgName ? ` · ${pkgName}` : ""}${body.preferred_date ? ` · ${body.preferred_date}` : ""}${extraN ? ` (+${extraN} ngày phụ)` : ""}`;
   await db.from("studio_notifications").insert({
     owner_id: owner.id,
     contract_id: null,

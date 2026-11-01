@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { BankInfo } from "@/components/VietQR";
 import { digitsOnly } from "@/lib/referral";
 import { inferSource, readUtm, type Utm } from "@/lib/lead-source";
+import { looksLikeWedding, type BookingDay, type BookingPerson } from "@/lib/booking-details";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIC DÙNG CHUNG của form đặt lịch /book/<token> — bản cũ (BookingForm) và
@@ -49,6 +50,21 @@ const TR = {
     depositDoneTitle: "Đã nhận thông tin!",
     depositDoneBody: "sẽ đối chiếu và xác nhận cọc sớm.",
     depositErr: "Không gửi được ảnh, thử lại giúp mình nhé.",
+    packageMulti: "Chọn được nhiều gói — studio sẽ tư vấn thêm.",
+    mainDay: "Ngày chính",
+    mainDayLabel: "Tên ngày chính",
+    mainDayLabelPh: "VD: Lễ nhà gái, Ngày cưới (không bắt buộc)",
+    extraDays: "Ngày phụ",
+    extraDayLabelPh: "Tên ngày, VD: Lễ nhà trai",
+    addExtraDay: "Thêm ngày phụ",
+    removeDay: "Bỏ ngày này",
+    wedding: "Đây là đám cưới — thêm thông tin cô dâu, chú rể",
+    bride: "Cô dâu",
+    groom: "Chú rể",
+    personName: "Họ tên",
+    personPhone: "Số điện thoại",
+    personAddress: "Địa chỉ",
+    personAddressPh: "Địa chỉ nhà (để studio đến chụp)",
   },
   en: {
     eyebrow: "Book a shoot",
@@ -84,6 +100,21 @@ const TR = {
     depositDoneTitle: "Got it!",
     depositDoneBody: "will verify and confirm your deposit shortly.",
     depositErr: "Could not send the photo, please try again.",
+    packageMulti: "You can pick several packages — the studio will advise.",
+    mainDay: "Main day",
+    mainDayLabel: "Name of the main day",
+    mainDayLabelPh: "e.g. Bride's ceremony, Wedding day (optional)",
+    extraDays: "Extra days",
+    extraDayLabelPh: "Day name, e.g. Groom's ceremony",
+    addExtraDay: "Add another day",
+    removeDay: "Remove this day",
+    wedding: "This is a wedding — add bride & groom details",
+    bride: "Bride",
+    groom: "Groom",
+    personName: "Full name",
+    personPhone: "Phone",
+    personAddress: "Address",
+    personAddressPh: "Home address (for the shoot)",
   },
 } as const;
 
@@ -127,8 +158,33 @@ export function useBookingForm({
     name: "", phone: "", service: "", preferred_date: "", note: "", facebook: "",
     referrer_phone: digitsOnly(presetReferrer),
   });
-  const [pkg, setPkg] = useState(() => (packages.some((p) => p.name === presetPackage) ? presetPackage : ""));
+  /* Khách chọn NHIỀU gói (studio tư vấn thêm). Rỗng + không tự ghi = "chưa
+     chọn / tư vấn thêm". */
+  const [pkgs, setPkgs] = useState<string[]>(() => (packages.some((p) => p.name === presetPackage) ? [presetPackage] : []));
+  const [custom, setCustom] = useState(false);
   const [customPkg, setCustomPkg] = useState("");
+  const togglePkg = (name: string) => setPkgs((p) => (p.includes(name) ? p.filter((x) => x !== name) : [...p, name]));
+  const clearPkgs = () => {
+    setPkgs([]);
+    setCustom(false);
+  };
+  const chosenPkgs = packages.filter((p) => pkgs.includes(p.name));
+  /** Tổng giá các gói đã chọn có giá (gói tự ghi không có giá). */
+  const pkgTotal = chosenPkgs.reduce((s, p) => s + (p.price || 0), 0);
+
+  // Ngày chính (tên tự đặt) + ngày phụ.
+  const [eventLabel, setEventLabel] = useState("");
+  const [extraDays, setExtraDays] = useState<BookingDay[]>([]);
+  const addExtraDay = () => setExtraDays((p) => [...p, { label: "", date: "" }]);
+  const patchExtraDay = (i: number, patch: Partial<BookingDay>) => setExtraDays((p) => p.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+  const removeExtraDay = (i: number) => setExtraDays((p) => p.filter((_, idx) => idx !== i));
+
+  // Đám cưới: cô dâu, chú rể (tên, SĐT, địa chỉ). Tự mở khi gói / dịch vụ có
+  // chữ "cưới"; khách tự bật / tắt được (null = theo tự động).
+  const [weddingPick, setWeddingPick] = useState<boolean | null>(null);
+  const isWedding = weddingPick ?? looksLikeWedding(...pkgs, customPkg, f.service);
+  const [bride, setBride] = useState<BookingPerson>({});
+  const [groom, setGroom] = useState<BookingPerson>({});
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -188,9 +244,19 @@ export function useBookingForm({
     setErr(null);
     if (!f.name.trim() || !f.phone.trim()) { setErr(tr.errRequired); return; }
     if (!captchaToken) { setErr(tr.errCaptcha); return; }
-    const chosen = packages.find((p) => p.name === pkg);
-    const packageName = pkg === "__custom__" ? customPkg.trim() || null : chosen?.name || null;
-    const packagePrice = pkg === "__custom__" ? null : chosen?.price ?? null;
+    const list = [
+      ...chosenPkgs.map((p) => ({ name: p.name, price: p.price })),
+      ...(custom && customPkg.trim() ? [{ name: customPkg.trim(), price: null }] : []),
+    ];
+    // Cột cũ vẫn ghi: tên các gói nối lại + tổng giá — mọi màn cũ đọc đúng.
+    const packageName = list.map((p) => p.name).join(", ") || null;
+    const packagePrice = chosenPkgs.length ? pkgTotal : null;
+    const details = {
+      packages: list,
+      event_label: eventLabel.trim() || undefined,
+      extra_days: extraDays.filter((d) => d.date).map((d) => ({ label: d.label.trim() || "Ngày phụ", date: d.date })),
+      ...(isWedding ? { bride, groom } : {}),
+    };
     setBusy(true);
     try {
       const res = await fetch(`/api/book/${token}`, {
@@ -200,6 +266,7 @@ export function useBookingForm({
           ...f,
           package_name: packageName,
           package_price: packagePrice,
+          details,
           voucher_code: voucher?.ok ? voucher.code : null,
           voucher_phone: voucher?.ok ? voucherPhone : null,
           captcha: captchaToken,
@@ -229,7 +296,9 @@ export function useBookingForm({
   }
 
   return {
-    lang, tr, f, set, pkg, setPkg, customPkg, setCustomPkg, busy, sent, setSent, err, setErr,
+    lang, tr, f, set, pkgs, togglePkg, clearPkgs, custom, setCustom, customPkg, setCustomPkg, chosenPkgs, pkgTotal,
+    eventLabel, setEventLabel, extraDays, addExtraDay, patchExtraDay, removeExtraDay,
+    isWedding, setWeddingPick, bride, setBride, groom, setGroom, busy, sent, setSent, err, setErr,
     captchaToken, setCaptchaToken, voucherPhone, setVoucherPhone,
     deposit, proofBusy, proofDone, setProofDone, proofErr, sendProof, submit,
   };

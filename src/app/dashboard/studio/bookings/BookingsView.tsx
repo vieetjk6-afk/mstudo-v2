@@ -14,6 +14,7 @@ import { fmtDate, fmtDateTime } from "@/lib/date";
 import DateInput from "@/components/DateInput";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { useBookings, editStateOf, type BookingsProps } from "./useBookings";
+import { bookingDetailLines } from "@/lib/booking-details";
 
 // Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
 const BookingsV2 = dynamic(() => import("./BookingsV2"));
@@ -165,6 +166,11 @@ function BookingsViewV1(props: BookingsProps) {
                     <p className="mt-0.5 truncate text-xs" style={{ color: "var(--text3)" }}>
                       FB: <a href={messengerUrl(b.facebook)} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: "var(--text2)" }}>{b.facebook}</a>
                     </p>
+                  )}
+                  {bookingDetailLines(b.details).length > 0 && (
+                    <ul className="mt-1 space-y-0.5 text-xs" style={{ color: "var(--text2)" }}>
+                      {bookingDetailLines(b.details).map((l, i) => <li key={i}>{l}</li>)}
+                    </ul>
                   )}
                   {b.note && <p className="mt-1.5 text-sm rounded-lg px-3 py-2" style={{ background: "var(--surface2)", color: "var(--text2)" }}>{b.note}</p>}
 

@@ -7360,6 +7360,40 @@ alter table public.profiles add column if not exists qr_note_date boolean not nu
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/dat_lich_chi_tiet.sql — Đặt lịch: nhiều gói, ngày chính/phụ, cô dâu/chú rể (studio_bookings.details); SĐT + địa chỉ cô dâu/chú rể trên hợp đồng (chạy SAU hop_dong_yeu_cau_studio)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- Đặt lịch chi tiết + SĐT / địa chỉ cô dâu, chú rể trên hợp đồng
+--
+-- 1) studio_bookings.details (jsonb) — phần khách điền thêm ở form /book:
+--      { packages: [{name, price}],            -- khách chọn NHIỀU gói
+--        event_label: "Lễ nhà gái",            -- tên ngày chính (khách tự đặt)
+--        extra_days: [{label, date}],          -- ngày phụ
+--        bride: {name, phone, address},        -- đám cưới
+--        groom: {name, phone, address} }
+--    Một cột jsonb thay vì cả chục cột: đây là dữ liệu khách gửi, studio đọc
+--    rồi chuyển thành hợp đồng — không lọc / sắp xếp theo từng trường.
+--    package_name / package_price / preferred_date vẫn được ghi như cũ (tên
+--    các gói nối lại, tổng giá, ngày chính) để mọi màn cũ vẫn đúng.
+--
+-- 2) studio_contracts.bride_phone / bride_address / groom_phone / groom_address.
+--
+-- Chạy trên Supabase SQL Editor. An toàn khi chạy lại (idempotent).
+-- ============================================================================
+
+alter table public.studio_bookings add column if not exists details jsonb;
+
+alter table public.studio_contracts add column if not exists bride_phone   text;
+
+alter table public.studio_contracts add column if not exists bride_address text;
+
+alter table public.studio_contracts add column if not exists groom_phone   text;
+
+alter table public.studio_contracts add column if not exists groom_address text;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/phan_quyen_vai_tro_hop_dong.sql — Phân quyền theo vai trò cho hợp đồng: staff chỉ hợp đồng được giao, quản lý chi nhánh chỉ chi nhánh mình, kế toán chỉ đọc, chỉ chủ studio huỷ / hoàn tiền, tài khoản bị khoá mất quyền (chạy CUỐI)
 -- ══════════════════════════════════════════════════════════════════════════
 

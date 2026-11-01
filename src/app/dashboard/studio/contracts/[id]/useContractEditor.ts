@@ -408,6 +408,10 @@ export function useContractEditor(props: ContractEditorProps) {
     client_email: contract.client_email ?? "",
     bride_name: contract.bride_name ?? "",
     groom_name: contract.groom_name ?? "",
+    bride_phone: contract.bride_phone ?? "",
+    bride_address: contract.bride_address ?? "",
+    groom_phone: contract.groom_phone ?? "",
+    groom_address: contract.groom_address ?? "",
     shoot_type: contract.shoot_type as ShootType,
     service_id: contract.service_id ?? "",
     status: contract.status as ContractStatus,
@@ -519,6 +523,8 @@ export function useContractEditor(props: ContractEditorProps) {
   // nên cột có trong DB thì có khoá — chưa chạy migration thì không ghi, để lượt
   // tự lưu không hỏng cả hợp đồng.
   const hasDayCols = "event_label" in contract;
+  // SĐT + địa chỉ cô dâu/chú rể: migration dat_lich_chi_tiet.sql (đợt sau).
+  const hasCoupleCols = "bride_phone" in contract;
 
   async function autosaveContract(data: typeof f) {
     setContractSaved("saving");
@@ -545,6 +551,14 @@ export function useContractEditor(props: ContractEditorProps) {
               groom_name: data.groom_name.trim() || null,
               event_label: data.event_label.trim() || null,
               event_note: data.event_note.trim() || null,
+            }
+          : {}),
+        ...(hasCoupleCols
+          ? {
+              bride_phone: data.bride_phone.replace(/[^\d+]/g, "") || null,
+              bride_address: data.bride_address.trim() || null,
+              groom_phone: data.groom_phone.replace(/[^\d+]/g, "") || null,
+              groom_address: data.groom_address.trim() || null,
             }
           : {}),
         location: data.location.trim() || null,
@@ -1310,8 +1324,10 @@ export function useContractEditor(props: ContractEditorProps) {
       client: { name: f.client_name, phone: f.client_phone, email: f.client_email },
       facts: [
         { label: "Dịch vụ", value: services.find((s) => s.id === f.service_id)?.name || SHOOT_TYPE_LABEL[f.shoot_type] },
-        { label: "Cô dâu", value: f.bride_name.trim() },
-        { label: "Chú rể", value: f.groom_name.trim() },
+        { label: "Cô dâu", value: [f.bride_name.trim(), f.bride_phone.trim()].filter(Boolean).join(" · ") },
+        { label: "Chú rể", value: [f.groom_name.trim(), f.groom_phone.trim()].filter(Boolean).join(" · ") },
+        { label: "Địa chỉ cô dâu", value: f.bride_address.trim(), wide: true },
+        { label: "Địa chỉ chú rể", value: f.groom_address.trim(), wide: true },
         { label: f.event_label.trim() || "Ngày chụp", value: [dmy(f.event_date), f.event_time].filter(Boolean).join(" · ") },
         { label: "Hạn giao sản phẩm", value: dmy(f.delivery_due) },
         { label: "Địa điểm", value: f.location, wide: true },
@@ -2003,7 +2019,7 @@ export function useContractEditor(props: ContractEditorProps) {
     plan, planForm, setPlanForm, autosavePlan, clientProofs, planProof, setPlanProof, planMethod, setPlanMethod,
     collectFor, setCollectFor, changeDlg, setChangeDlg, closeChangeDlg, reschedules, onChangeDone,
     proofBusy, lightbox, setLightbox, mounted, products, prodForm, setProdForm,
-    ms, setMs, msOpen, setMsOpen, editMs, setEditMs, hasDayCols,
+    ms, setMs, msOpen, setMsOpen, editMs, setEditMs, hasDayCols, hasCoupleCols,
     studioSignName, setStudioSignName, studioSignature, setStudioSignature, savedSig, drawNew, setDrawNew, rememberSig, setRememberSig,
     msg, toast, busy, copied, sendOpen, setSendOpen,
     total, collected, balance, depositAmt, payroll, paidPayroll, expenseTotal, productCost, profit, marginPct,

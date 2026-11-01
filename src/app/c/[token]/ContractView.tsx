@@ -208,8 +208,10 @@ export default function ContractView({ token }: { token: string }) {
                 {(contract.bride_name || contract.groom_name) && (
                   <p className="mt-px text-[12px]" style={{ color: "var(--tx2)" }}>
                     {[
-                      contract.bride_name && `${lang === "vi" ? "Cô dâu" : "Bride"}: ${contract.bride_name}`,
-                      contract.groom_name && `${lang === "vi" ? "Chú rể" : "Groom"}: ${contract.groom_name}`,
+                      (contract.bride_name || contract.bride_phone) &&
+                        `${lang === "vi" ? "Cô dâu" : "Bride"}: ${[contract.bride_name, contract.bride_phone, contract.bride_address].filter(Boolean).join(", ")}`,
+                      (contract.groom_name || contract.groom_phone) &&
+                        `${lang === "vi" ? "Chú rể" : "Groom"}: ${[contract.groom_name, contract.groom_phone, contract.groom_address].filter(Boolean).join(", ")}`,
                     ].filter(Boolean).join(" · ")}
                   </p>
                 )}

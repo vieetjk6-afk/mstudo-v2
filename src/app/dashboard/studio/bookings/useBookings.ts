@@ -135,17 +135,64 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
     // Chưa chạy migration `nguon_khach.sql` thì `booking_id` chưa tồn tại và cả
     // câu insert bị từ chối — thà mất phần quy nguồn còn hơn không tạo được
     // hợp đồng.
-    let { data, error } = await supabase
-      .from("studio_contracts")
-      .insert({ ...core, source: b.source ?? null, booking_id: b.id })
-      .select("id")
-      .single();
-    if (error) {
-      ({ data, error } = await supabase.from("studio_contracts").insert(core).select("id").single());
+    // Phần khách điền thêm (nhiều gói, ngày chính/phụ, cô dâu/chú rể) — xem
+    // @/lib/booking-details. Cột của hai migration mới: thiếu cột nào thì bỏ
+    // đúng nhóm đó rồi thử lại, không để hỏng cả việc tạo hợp đồng.
+    const d = b.details ?? null;
+    const coupleCols: Record<string, string | null> = {
+      bride_phone: d?.bride?.phone || null,
+      bride_address: d?.bride?.address || null,
+      groom_phone: d?.groom?.phone || null,
+      groom_address: d?.groom?.address || null,
+    };
+    const dayCols: Record<string, string | null> = {
+      bride_name: d?.bride?.name || null,
+      groom_name: d?.groom?.name || null,
+      event_label: d?.event_label || null,
+    };
+    const insert = (row: Record<string, unknown>) => supabase.from("studio_contracts").insert(row).select("id").single();
+    const attempts: Record<string, unknown>[] = [
+      { ...core, ...dayCols, ...coupleCols, source: b.source ?? null, booking_id: b.id },
+      { ...core, ...dayCols, source: b.source ?? null, booking_id: b.id },
+      { ...core, source: b.source ?? null, booking_id: b.id },
+      core,
+    ];
+    let data: { id: string } | null = null;
+    let error: { message: string } | null = null;
+    for (const row of attempts) {
+      ({ data, error } = await insert(row));
+      if (!error) break;
     }
     if (error || !data) { setBusy(null); alert("Không tạo được hợp đồng: " + (error?.message || "")); return; }
-    if (b.package_name) {
-      await supabase.from("contract_items").insert({ contract_id: data.id, name: b.package_name, qty: 1, unit_price: b.package_price || 0, position: 0 });
+    // Khách chọn NHIỀU gói → mỗi gói một hạng mục. Yêu cầu cũ (không có
+    // details) thì như trước: một dòng theo package_name.
+    const pk = d?.packages?.length ? d.packages : b.package_name ? [{ name: b.package_name, price: b.package_price }] : [];
+    if (pk.length) {
+      await supabase
+        .from("contract_items")
+        .insert(pk.map((p, position) => ({ contract_id: data!.id, name: p.name, qty: 1, unit_price: p.price || 0, position })));
+    }
+    // Ngày phụ → mốc lịch của hợp đồng (hiện trên Lịch, lịch thợ, cổng khách).
+    if (d?.extra_days?.length) {
+      const { data: evs } = await supabase
+        .from("studio_events")
+        .insert(
+          d.extra_days.map((x) => ({
+            owner_id: ownerId,
+            contract_id: data!.id,
+            title: x.label || "Ngày phụ",
+            event_date: x.date,
+            remind: true,
+          }))
+        )
+        .select("id");
+      for (const ev of (evs ?? []) as { id: string }[]) {
+        fetch("/api/gcal/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "event", id: ev.id, action: "upsert" }),
+        }).catch(() => {});
+      }
     }
     // Khách đặt lịch kèm voucher ưu đãi → áp luôn vào hợp đồng vừa tạo (dòng
     // giảm giá, máy chủ tự tính % theo gói). Hỏng thì chỉ báo: hợp đồng đã có,

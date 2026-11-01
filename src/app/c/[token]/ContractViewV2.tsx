@@ -1069,7 +1069,8 @@ function PartiesSection({ p, L, openSign }: { p: ContractPortal; L: Tr; openSign
           name={c.client_signed_name || c.client_name || "—"}
           lines={[
             [c.client_phone, c.client_email].filter(Boolean).join(" · "),
-            [c.bride_name && `${L("Cô dâu", "Bride")}: ${c.bride_name}`, c.groom_name && `${L("Chú rể", "Groom")}: ${c.groom_name}`].filter(Boolean).join(" · "),
+            (c.bride_name || c.bride_phone) ? `${L("Cô dâu", "Bride")}: ${[c.bride_name, c.bride_phone, c.bride_address].filter(Boolean).join(", ")}` : "",
+            (c.groom_name || c.groom_phone) ? `${L("Chú rể", "Groom")}: ${[c.groom_name, c.groom_phone, c.groom_address].filter(Boolean).join(", ")}` : "",
           ].filter(Boolean)}
           sig={c.client_signature}
           sigAlt={L("Chữ ký của bạn", "Your signature")}

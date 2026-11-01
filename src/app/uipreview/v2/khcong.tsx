@@ -118,6 +118,11 @@ export const SCREENS_KHCONG: Record<string, { title: string; render: () => React
     render: () => <BookingV2Demo />,
     bare: true,
   },
+  "v2-dat-lich-ngay": {
+    title: "V2 · Đặt lịch — bước 2: ngày chính (tự đặt tên) + ngày phụ",
+    render: () => <BookingV2Demo step={1} />,
+    bare: true,
+  },
   "v2-dat-lich-thong-tin": {
     title: "V2 · Đặt lịch — bước 3: thông tin liên hệ (người giới thiệu, SĐT voucher)",
     render: () => <BookingV2Demo step={2} />,

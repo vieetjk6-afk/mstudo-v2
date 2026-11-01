@@ -267,12 +267,28 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                   onChange={(e) => f.setClientPhone(e.target.value)}
                 />
               </Field>
-              <Field label="Tên cô dâu" htmlFor="nc2-bride" hint="Không bắt buộc — một hợp đồng cho cả hai nhà.">
-                <input id="nc2-bride" className={inputCls} placeholder="Nguyễn Thu Lan" value={f.brideName} onChange={(e) => f.setBrideName(e.target.value)} />
-              </Field>
-              <Field label="Tên chú rể" htmlFor="nc2-groom">
-                <input id="nc2-groom" className={inputCls} placeholder="Trần Minh Khang" value={f.groomName} onChange={(e) => f.setGroomName(e.target.value)} />
-              </Field>
+            </div>
+            {/* Đám cưới: một hợp đồng cho cả hai nhà — không bắt buộc. */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              {([
+                ["Cô dâu", "nc2-bride", "Nguyễn Thu Lan", f.brideName, f.setBrideName, f.bridePhone, f.setBridePhone, f.brideAddress, f.setBrideAddress],
+                ["Chú rể", "nc2-groom", "Trần Minh Khang", f.groomName, f.setGroomName, f.groomPhone, f.setGroomPhone, f.groomAddress, f.setGroomAddress],
+              ] as const).map(([title, id, ph, name, setName, phone, setPhone, addr, setAddr]) => (
+                <fieldset key={id} className="grid gap-3 rounded-[12px] p-3.5" style={{ border: "1px solid var(--bd)" }}>
+                  <legend className="px-1 text-[13px] font-semibold">
+                    {title} <span className="font-normal" style={{ color: "var(--tx3)" }}>· không bắt buộc</span>
+                  </legend>
+                  <Field label="Họ tên" htmlFor={`${id}-name`}>
+                    <input id={`${id}-name`} className={inputCls} placeholder={ph} value={name} onChange={(e) => setName(e.target.value)} />
+                  </Field>
+                  <Field label="Số điện thoại" htmlFor={`${id}-phone`}>
+                    <input id={`${id}-phone`} className={inputCls} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                  </Field>
+                  <Field label="Địa chỉ" htmlFor={`${id}-addr`}>
+                    <input id={`${id}-addr`} className={inputCls} value={addr} onChange={(e) => setAddr(e.target.value)} />
+                  </Field>
+                </fieldset>
+              ))}
             </div>
             {returningCallout}
 
@@ -757,7 +773,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
               {([
                 [1, "Khách hàng", [clientName || "Chưa có tên", clientPhone].filter(Boolean).join(" · ")],
                 ...(f.brideName.trim() || f.groomName.trim()
-                  ? [[1, "Cô dâu · Chú rể", [f.brideName.trim() || "—", f.groomName.trim() || "—"].join(" · ")] as [number, string, string]]
+                  ? [[1, "Cô dâu · Chú rể", [f.brideName.trim() || "—", f.groomName.trim() || "—"].join(" & ")] as [number, string, string]]
                   : []),
                 [0, "Dịch vụ", selectedService?.name || SHOOT_TYPE_LABEL[shootType]],
                 // Giá ở đây là giá ĐÃ SỬA (con số thật trong hợp đồng), không phải giá bảng giá.

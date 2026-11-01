@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  ArrowLeft, ArrowRight, CalendarCheck, CalendarDays, Check, CheckCircle2, Gift, Loader2, Package, Pencil, Receipt, Upload, UserRound,
+  ArrowLeft, ArrowRight, CalendarCheck, CalendarDays, Check, CheckCircle2, Gift, Heart, Loader2, Package, Pencil, Plus, Receipt, Trash2, Upload, UserRound,
   type LucideIcon,
 } from "lucide-react";
 import DateInput from "@/components/DateInput";
@@ -104,7 +104,7 @@ export default function BookingFormV2(
 ) {
   const { studioName, packages = [], referralDiscount = 0, bank = null, voucher = null, brand, preview } = props;
   const form = useBookingForm(props);
-  const { lang, tr, f, set, pkg, setPkg, customPkg, setCustomPkg, busy, err, setErr, captchaToken, setCaptchaToken, voucherPhone, setVoucherPhone } = form;
+  const { lang, tr, f, set, pkgs, togglePkg, clearPkgs, custom, setCustom, customPkg, setCustomPkg, busy, err, setErr, captchaToken, setCaptchaToken, voucherPhone, setVoucherPhone } = form;
   const t = V2T[lang];
   const { theme } = useTheme();
   const [step, setStep] = useState(() => Math.min(3, Math.max(0, preview?.step ?? 0)));
@@ -113,8 +113,8 @@ export default function BookingFormV2(
   const deposit = form.deposit ?? (preview?.sent && preview.sent !== true ? preview.sent : null);
   const proofDone = form.proofDone;
 
-  const chosen = packages.find((p) => p.name === pkg);
-  const pkgLabel = pkg === "__custom__" ? customPkg.trim() || plain(tr.packageCustom) : chosen?.name ?? null;
+  const pkgNames = [...form.chosenPkgs.map((p) => p.name), ...(custom ? [customPkg.trim() || plain(tr.packageCustom)] : [])];
+  const pkgLabel = pkgNames.length ? pkgNames.join(", ") : null;
   const showReferrer = referralDiscount > 0 || !!f.referrer_phone;
   const canDeposit = !!bank?.bin && !!bank?.account;
 
@@ -196,9 +196,12 @@ export default function BookingFormV2(
       t={t}
       tr={tr}
       pkgLabel={pkgLabel}
-      price={pkg === "__custom__" ? null : chosen?.price ?? null}
+      price={form.chosenPkgs.length ? form.pkgTotal : null}
       service={f.service}
       date={f.preferred_date}
+      dateLabel={form.eventLabel.trim() || tr.date}
+      extraDays={form.extraDays.filter((d) => d.date)}
+      couple={form.isWedding ? [form.bride.name, form.groom.name].filter(Boolean).join(" & ") : ""}
       name={f.name}
       phone={f.phone}
       voucher={voucher?.ok ? `${voucher.code} · ${voucher.label}` : null}
@@ -241,16 +244,21 @@ export default function BookingFormV2(
               <div className="flex flex-col gap-4">
                 <div>
                   <h2 className="text-[16px] font-semibold">{tr.package}</h2>
-                  <p className="mt-0.5 text-[13px]" style={{ color: "var(--tx3)" }}>{t.pkgHint}</p>
+                  <p className="mt-0.5 text-[13px]" style={{ color: "var(--tx3)" }}>{tr.packageMulti} {t.pkgHint}</p>
                 </div>
-                <div className="flex flex-col gap-2" role="radiogroup" aria-label={tr.package}>
+                <div className="flex flex-col gap-2" role="group" aria-label={tr.package}>
                   {packages.map((p) => (
-                    <Choice key={p.name} on={pkg === p.name} onPick={() => setPkg(p.name)} title={p.name} right={vnd(p.price)} />
+                    <Choice key={p.name} check on={pkgs.includes(p.name)} onPick={() => togglePkg(p.name)} title={p.name} right={vnd(p.price)} />
                   ))}
-                  <Choice on={pkg === ""} onPick={() => setPkg("")} title={plain(tr.packageDefault)} muted />
-                  <Choice on={pkg === "__custom__"} onPick={() => setPkg("__custom__")} title={plain(tr.packageCustom)} muted />
+                  <Choice check on={custom} onPick={() => setCustom(!custom)} title={plain(tr.packageCustom)} muted />
+                  <Choice on={!pkgs.length && !custom} onPick={clearPkgs} title={plain(tr.packageDefault)} muted />
                 </div>
-                {pkg === "__custom__" && (
+                {form.chosenPkgs.length > 1 && (
+                  <p className="text-right text-[13.5px]" style={{ color: "var(--tx2)" }}>
+                    {form.chosenPkgs.length} gói · <b className="tnum" style={{ color: "var(--ac)" }}>{vnd(form.pkgTotal)}</b>
+                  </p>
+                )}
+                {custom && (
                   <input className={inputCls} placeholder={tr.packageCustomPh} value={customPkg} onChange={(e) => setCustomPkg(e.target.value)} autoFocus />
                 )}
                 <Field label={tr.service}>
@@ -265,9 +273,37 @@ export default function BookingFormV2(
                   <h2 className="text-[16px] font-semibold">{t.dateTitle}</h2>
                   <p className="mt-0.5 text-[13px]" style={{ color: "var(--tx3)" }}>{t.dateHint}</p>
                 </div>
-                <Field label={tr.date} className="max-w-[320px]">
-                  <DateInput value={f.preferred_date} onChange={(v) => set("preferred_date", v)} className={inputCls} />
-                </Field>
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]">
+                  <Field label={tr.mainDayLabel}>
+                    <input className={inputCls} placeholder={tr.mainDayLabelPh} value={form.eventLabel} onChange={(e) => form.setEventLabel(e.target.value)} />
+                  </Field>
+                  <Field label={tr.date}>
+                    <DateInput value={f.preferred_date} onChange={(v) => set("preferred_date", v)} className={inputCls} />
+                  </Field>
+                </div>
+                {form.extraDays.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    <p className="v2-label">{tr.extraDays}</p>
+                    {form.extraDays.map((d, i) => (
+                      <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 sm:grid-cols-[minmax(0,1fr)_220px_auto]">
+                        <input
+                          className={`${inputCls} col-span-2 sm:col-span-1`}
+                          placeholder={tr.extraDayLabelPh}
+                          aria-label={`${tr.extraDays} ${i + 1}`}
+                          value={d.label}
+                          onChange={(e) => form.patchExtraDay(i, { label: e.target.value })}
+                        />
+                        <DateInput value={d.date} onChange={(v) => form.patchExtraDay(i, { date: v })} className={inputCls} />
+                        <button type="button" onClick={() => form.removeExtraDay(i)} className={btn("ghost", "md")} aria-label={tr.removeDay} title={tr.removeDay}>
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <button type="button" onClick={form.addExtraDay} className={btn("secondary", "md", "self-start")}>
+                  <Plus size={16} /> {tr.addExtraDay}
+                </button>
                 <Field label={tr.note}>
                   <textarea className={inputCls} rows={4} value={f.note} onChange={(e) => set("note", e.target.value)} />
                 </Field>
@@ -301,6 +337,28 @@ export default function BookingFormV2(
                     <input className={inputCls} inputMode="tel" placeholder={t.voucherPhonePh} value={voucherPhone} onChange={(e) => setVoucherPhone(e.target.value)} />
                   </Field>
                 )}
+                <label className="flex cursor-pointer items-center gap-2.5 text-[14px] font-medium sm:col-span-2">
+                  <input type="checkbox" className="h-4 w-4 accent-[var(--ac)]" checked={form.isWedding} onChange={(e) => form.setWeddingPick(e.target.checked)} />
+                  <Heart size={16} style={{ color: "var(--ac)" }} /> {tr.wedding}
+                </label>
+                {form.isWedding &&
+                  ([
+                    [tr.bride, form.bride, form.setBride, "bk-bride"],
+                    [tr.groom, form.groom, form.setGroom, "bk-groom"],
+                  ] as const).map(([title, p, setP, id]) => (
+                    <fieldset key={id} className="grid gap-3 rounded-[12px] p-3.5 sm:col-span-2 sm:grid-cols-2" style={{ border: "1px solid var(--bd)" }}>
+                      <legend className="px-1 text-[13.5px] font-semibold">{title}</legend>
+                      <Field label={tr.personName} htmlFor={`${id}-name`}>
+                        <input id={`${id}-name`} className={inputCls} value={p.name ?? ""} onChange={(e) => setP({ ...p, name: e.target.value })} />
+                      </Field>
+                      <Field label={tr.personPhone} htmlFor={`${id}-phone`}>
+                        <input id={`${id}-phone`} className={inputCls} inputMode="tel" value={p.phone ?? ""} onChange={(e) => setP({ ...p, phone: e.target.value })} />
+                      </Field>
+                      <Field label={tr.personAddress} htmlFor={`${id}-addr`} className="sm:col-span-2">
+                        <input id={`${id}-addr`} className={inputCls} placeholder={tr.personAddressPh} value={p.address ?? ""} onChange={(e) => setP({ ...p, address: e.target.value })} />
+                      </Field>
+                    </fieldset>
+                  ))}
               </div>
             )}
 
@@ -404,19 +462,28 @@ function Stepper({ t, step, onPick }: { t: (typeof V2T)["vi"]; step: number; onP
 }
 
 /** Một lựa chọn gói (radio dạng thẻ). */
-function Choice({ on, onPick, title, right, muted }: { on: boolean; onPick: () => void; title: string; right?: string; muted?: boolean }) {
+function Choice({ on, onPick, title, right, muted, check }: { on: boolean; onPick: () => void; title: string; right?: string; muted?: boolean; check?: boolean }) {
   return (
     <button
       type="button"
-      role="radio"
+      role={check ? "checkbox" : "radio"}
       aria-checked={on}
       onClick={onPick}
       className="flex w-full items-center gap-3 rounded-[12px] px-3.5 py-3 text-left transition-colors"
       style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)", boxShadow: on ? "0 0 0 2px var(--acM)" : undefined }}
     >
-      <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full" style={{ border: `1.5px solid ${on ? "var(--ac)" : "var(--bdS)"}` }}>
-        {on && <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--ac)" }} />}
-      </span>
+      {check ? (
+        <span
+          className="flex h-5 w-5 flex-none items-center justify-center rounded-[6px]"
+          style={{ border: `1.5px solid ${on ? "var(--ac)" : "var(--bdS)"}`, background: on ? "var(--ac)" : "transparent" }}
+        >
+          {on && <Check size={13} color="#fff" strokeWidth={3} />}
+        </span>
+      ) : (
+        <span className="flex h-5 w-5 flex-none items-center justify-center rounded-full" style={{ border: `1.5px solid ${on ? "var(--ac)" : "var(--bdS)"}` }}>
+          {on && <span className="h-2.5 w-2.5 rounded-full" style={{ background: "var(--ac)" }} />}
+        </span>
+      )}
       <span className="min-w-0 flex-1 text-[14px] leading-snug" style={{ fontWeight: muted ? 500 : 600, color: muted && !on ? "var(--tx2)" : "var(--tx)" }}>{title}</span>
       {right && <span className="tnum flex-none text-[14px] font-semibold" style={{ color: on ? "var(--ac)" : "var(--tx)" }}>{right}</span>}
     </button>
@@ -443,7 +510,7 @@ function SumRow({
 }
 
 function Summary({
-  t, tr, pkgLabel, price, service, date, name, phone, voucher, referral, depositHint, onEdit,
+  t, tr, pkgLabel, price, service, date, dateLabel, extraDays, couple, name, phone, voucher, referral, depositHint, onEdit,
 }: {
   t: (typeof V2T)["vi"];
   tr: ReturnType<typeof useBookingForm>["tr"];
@@ -451,6 +518,9 @@ function Summary({
   price: number | null;
   service: string;
   date: string;
+  dateLabel: string;
+  extraDays: { label: string; date: string }[];
+  couple: string;
   name: string;
   phone: string;
   voucher: string | null;
@@ -465,7 +535,11 @@ function Summary({
       <div className="mt-3">
         <SumRow t={t} onEdit={onEdit} icon={Package} label={tr.package} step={0} value={pkgLabel ? <>{pkgLabel}{price ? <span className="tnum block font-semibold" style={{ color: "var(--ac)" }}>{vnd(price)}</span> : null}</> : dim(t.none)} />
         {service.trim() && <SumRow t={t} onEdit={onEdit} icon={Package} label={tr.service} step={0} value={service} />}
-        <SumRow t={t} onEdit={onEdit} icon={CalendarDays} label={tr.date} step={1} value={date ? fmtDateLunar(date) : dim(t.none)} />
+        <SumRow t={t} onEdit={onEdit} icon={CalendarDays} label={dateLabel} step={1} value={date ? fmtDateLunar(date) : dim(t.none)} />
+        {extraDays.map((d, i) => (
+          <SumRow key={i} t={t} onEdit={onEdit} icon={CalendarDays} label={d.label.trim() || tr.extraDays} step={1} value={fmtDateLunar(d.date)} />
+        ))}
+        {couple && <SumRow t={t} onEdit={onEdit} icon={Heart} label={`${tr.bride} & ${tr.groom}`} step={2} value={couple} />}
         <SumRow t={t} onEdit={onEdit} icon={UserRound} label={t.contact} step={2} value={name.trim() || phone.trim() ? <>{name}{phone ? <span className="tnum block font-normal" style={{ color: "var(--tx2)" }}>{phone}</span> : null}</> : dim(t.none)} />
         {voucher && <SumRow t={t} onEdit={onEdit} icon={Gift} label="Voucher" step={2} value={voucher} />}
         {referral > 0 && <SumRow t={t} onEdit={onEdit} icon={Gift} label={t.referralLine} step={2} value={<span className="tnum">−{vnd(referral)}</span>} />}

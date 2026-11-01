@@ -135,6 +135,10 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   const dayColsP = isWrite
     ? null
     : db.from("studio_contracts").select("bride_name, groom_name, event_label, event_note").eq("id", cId).maybeSingle();
+  // SĐT + địa chỉ cô dâu/chú rể — migration dat_lich_chi_tiet.sql, đọc riêng vì cùng lý do.
+  const coupleColsP = isWrite
+    ? null
+    : db.from("studio_contracts").select("bride_phone, bride_address, groom_phone, groom_address").eq("id", cId).maybeSingle();
   const { ownerObj, brand } = await loadOwner(db, contract.owner_id as string);
   const studioName = brand.name;
   const studioLogo = brand.logoUrl;
@@ -548,6 +552,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     contract: {
       ...contract,
       ...((dayColsP ? (await dayColsP).data : null) ?? {}),
+      ...((coupleColsP ? (await coupleColsP).data : null) ?? {}),
       owner: undefined,
       gallery_album_id: undefined,
       selection_album_id: undefined,

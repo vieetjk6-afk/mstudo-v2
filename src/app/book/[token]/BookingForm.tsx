@@ -13,10 +13,11 @@ export type { PkgOption, DepositInfo, BookingVoucher } from "./useBookingForm";
 
 export default function BookingForm(props: BookingFormProps) {
   const { studioName, packages = [], referralDiscount = 0, bank = null, voucher = null } = props;
+  const form = useBookingForm(props);
   const {
-    tr, f, set, pkg, setPkg, customPkg, setCustomPkg, busy, sent, err, setCaptchaToken, captchaToken,
+    tr, f, set, pkgs, togglePkg, custom, setCustom, customPkg, setCustomPkg, busy, sent, err, setCaptchaToken, captchaToken,
     voucherPhone, setVoucherPhone, deposit, proofBusy, proofDone, setProofDone, proofErr, sendProof, submit,
-  } = useBookingForm(props);
+  } = form;
 
   // Đã gửi yêu cầu VÀ có cọc giữ ngày → hiện QR để khách chuyển ngay. Đây là
   // lúc khách còn đang quyết; để studio gọi lại rồi mới nói tới cọc là đã mất
@@ -129,19 +130,31 @@ export default function BookingForm(props: BookingFormProps) {
           <span className="label">{tr.phone}</span>
           <input className="input" inputMode="tel" required aria-required="true" value={f.phone} onChange={(e) => set("phone", e.target.value)} />
         </label>
-        <label className="block">
+        <div>
           <span className="label">{tr.package}</span>
-          <select className="input" value={pkg} onChange={(e) => setPkg(e.target.value)}>
-            <option value="">{tr.packageDefault}</option>
+          <p className="mb-1.5 text-[11px]" style={{ color: "var(--text3)" }}>{tr.packageMulti}</p>
+          <div className="space-y-1.5">
             {packages.map((p) => (
-              <option key={p.name} value={p.name}>{p.name} — {vnd(p.price)}</option>
+              <label key={p.name} className="flex cursor-pointer items-center gap-2 text-sm">
+                <input type="checkbox" checked={pkgs.includes(p.name)} onChange={() => togglePkg(p.name)} />
+                <span className="flex-1">{p.name}</span>
+                <span className="tnum">{vnd(p.price)}</span>
+              </label>
             ))}
-            <option value="__custom__">{tr.packageCustom}</option>
-          </select>
-          {pkg === "__custom__" && (
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" checked={custom} onChange={(e) => setCustom(e.target.checked)} />
+              <span>{tr.packageCustom.replace(/^—\s?|\s?—$/g, "")}</span>
+            </label>
+          </div>
+          {custom && (
             <input className="input mt-2" placeholder={tr.packageCustomPh} value={customPkg} onChange={(e) => setCustomPkg(e.target.value)} />
           )}
-        </label>
+          {form.chosenPkgs.length > 1 && (
+            <p className="mt-1.5 text-right text-xs" style={{ color: "var(--text2)" }}>
+              {form.chosenPkgs.length} gói · <b>{vnd(form.pkgTotal)}</b>
+            </p>
+          )}
+        </div>
         <label className="block">
           <span className="label">{tr.service}</span>
           <input className="input" placeholder={tr.servicePh} value={f.service} onChange={(e) => set("service", e.target.value)} />
@@ -171,9 +184,37 @@ export default function BookingForm(props: BookingFormProps) {
           </label>
         )}
         <div>
-          <span className="label">{tr.date}</span>
+          <span className="label">{tr.mainDay}</span>
+          <input className="input mb-2" placeholder={tr.mainDayLabelPh} value={form.eventLabel} onChange={(e) => form.setEventLabel(e.target.value)} />
           <DateInput value={f.preferred_date} onChange={(v) => set("preferred_date", v)} />
         </div>
+        {form.extraDays.map((d, i) => (
+          <div key={i} className="space-y-2 rounded-xl p-3" style={{ border: "1px solid var(--border)" }}>
+            <div className="flex items-center justify-between">
+              <span className="label mb-0">{tr.extraDays} {i + 1}</span>
+              <button type="button" className="text-xs underline" style={{ color: "var(--text3)" }} onClick={() => form.removeExtraDay(i)}>{tr.removeDay}</button>
+            </div>
+            <input className="input" placeholder={tr.extraDayLabelPh} value={d.label} onChange={(e) => form.patchExtraDay(i, { label: e.target.value })} />
+            <DateInput value={d.date} onChange={(v) => form.patchExtraDay(i, { date: v })} />
+          </div>
+        ))}
+        <button type="button" onClick={form.addExtraDay} className="btn-ghost text-xs">+ {tr.addExtraDay}</button>
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input type="checkbox" checked={form.isWedding} onChange={(e) => form.setWeddingPick(e.target.checked)} />
+          {tr.wedding}
+        </label>
+        {form.isWedding &&
+          ([
+            [tr.bride, form.bride, form.setBride],
+            [tr.groom, form.groom, form.setGroom],
+          ] as const).map(([title, p, setP]) => (
+            <fieldset key={title} className="space-y-2 rounded-xl p-3" style={{ border: "1px solid var(--border)" }}>
+              <legend className="px-1 text-sm font-semibold">{title}</legend>
+              <input className="input" placeholder={tr.personName} value={p.name ?? ""} onChange={(e) => setP({ ...p, name: e.target.value })} />
+              <input className="input" inputMode="tel" placeholder={tr.personPhone} value={p.phone ?? ""} onChange={(e) => setP({ ...p, phone: e.target.value })} />
+              <input className="input" placeholder={tr.personAddressPh} value={p.address ?? ""} onChange={(e) => setP({ ...p, address: e.target.value })} />
+            </fieldset>
+          ))}
         <label className="block">
           <span className="label">{tr.note}</span>
           <textarea className="input min-h-[80px]" value={f.note} onChange={(e) => set("note", e.target.value)} />

@@ -164,6 +164,10 @@ export function useNewContractForm({
   // Một hợp đồng cho cả hai nhà: người ký (client_name) + tên cô dâu, chú rể.
   const [brideName, setBrideName] = useState("");
   const [groomName, setGroomName] = useState("");
+  const [bridePhone, setBridePhone] = useState("");
+  const [brideAddress, setBrideAddress] = useState("");
+  const [groomPhone, setGroomPhone] = useState("");
+  const [groomAddress, setGroomAddress] = useState("");
 
   // ── Bước 3 — gói & hạng mục ─────────────────────────────────────────────
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
@@ -644,6 +648,10 @@ export function useNewContractForm({
     if (d.clientPhone) (setClientPhone(d.clientPhone), hit());
     if (d.brideName) (setBrideName(d.brideName), hit());
     if (d.groomName) (setGroomName(d.groomName), hit());
+    if (d.bridePhone) setBridePhone(d.bridePhone);
+    if (d.brideAddress) setBrideAddress(d.brideAddress);
+    if (d.groomPhone) setGroomPhone(d.groomPhone);
+    if (d.groomAddress) setGroomAddress(d.groomAddress);
 
     const main = d.mainPkgId && pkgIds.has(d.mainPkgId) ? d.mainPkgId : "";
     if (main || d.extraIds?.length || d.customLines?.length) {
@@ -732,6 +740,10 @@ export function useNewContractForm({
       client_phone: clientPhone.replace(/\D/g, "") || null,
       ...(brideName.trim() ? { bride_name: brideName.trim() } : {}),
       ...(groomName.trim() ? { groom_name: groomName.trim() } : {}),
+      ...(bridePhone.trim() ? { bride_phone: bridePhone.replace(/[^\d+]/g, "") } : {}),
+      ...(brideAddress.trim() ? { bride_address: brideAddress.trim() } : {}),
+      ...(groomPhone.trim() ? { groom_phone: groomPhone.replace(/[^\d+]/g, "") } : {}),
+      ...(groomAddress.trim() ? { groom_address: groomAddress.trim() } : {}),
       shoot_type: shootType,
       ...(serviceId ? { service_id: serviceId } : {}),
       event_date: eventDate || null,
@@ -771,12 +783,18 @@ export function useNewContractForm({
     }
     // Chưa chạy migration hop_dong_yeu_cau_studio.sql → lưu hợp đồng không kèm
     // tên cô dâu/chú rể, tên/ghi chú ngày chính, rồi báo ra bên dưới.
-    const newCols = ["bride_name", "groom_name", "event_label", "event_note"] as const;
-    let newColsLost = false;
-    if (error && newCols.some((c) => row[c] !== undefined && isMissingColumn(error, c))) {
-      for (const c of newCols) delete row[c];
-      newColsLost = true;
-      ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
+    // Hai đợt migration: chưa chạy dat_lich_chi_tiet.sql thì bỏ SĐT/địa chỉ cô
+    // dâu chú rể; chưa chạy cả hop_dong_yeu_cau_studio.sql thì bỏ nốt phần còn lại.
+    const lostGroups: string[] = [];
+    for (const [cols, why] of [
+      [["bride_phone", "bride_address", "groom_phone", "groom_address"], "SĐT/địa chỉ cô dâu, chú rể (chưa chạy migration dat_lich_chi_tiet.sql)"],
+      [["bride_name", "groom_name", "event_label", "event_note"], "Tên cô dâu/chú rể, tên & ghi chú ngày chính (chưa chạy migration hop_dong_yeu_cau_studio.sql)"],
+    ] as const) {
+      if (error && cols.some((c) => row[c] !== undefined && isMissingColumn(error, c))) {
+        for (const c of cols) delete row[c];
+        lostGroups.push(why);
+        ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
+      }
     }
     if (error || !data) {
       setSaving(null);
@@ -869,7 +887,7 @@ export function useNewContractForm({
     const failed = ["Hạng mục", "Nhân sự", "Đợt thanh toán", "Ngày phụ", "Checklist"]
       .filter((_, i) => saved[i]?.error);
     if (noteLost) failed.push("Ghi chú nội bộ (chưa chạy migration contract_internal_note.sql)");
-    if (newColsLost) failed.push("Tên cô dâu/chú rể, tên & ghi chú ngày chính (chưa chạy migration hop_dong_yeu_cau_studio.sql)");
+    failed.push(...lostGroups);
     if (failed.length) {
       const first = saved.find((r) => r?.error)?.error ?? null;
       setSaving(null);
@@ -924,6 +942,7 @@ export function useNewContractForm({
     // khách
     clientQuery, setClientQuery, clientName, setClientName, clientPhone, setClientPhone, phoneOk, phoneDigits,
     brideName, setBrideName, groomName, setGroomName,
+    bridePhone, setBridePhone, brideAddress, setBrideAddress, groomPhone, setGroomPhone, groomAddress, setGroomAddress,
     filteredClients, pickClient, returningHit, savedNameDiffers,
     // dịch vụ & gói
     serviceId, changeService, showAllLists, setShowAllLists, shootType, setShootType, templateId, pickTemplate,
