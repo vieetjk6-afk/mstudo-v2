@@ -202,6 +202,7 @@ function ContractEditorV1(props: ContractEditorProps) {
     setPayments,
     milestones,
     hasDayCols,
+    hasCoupleCols,
     tasks,
     newTask,
     setNewTask,
@@ -705,6 +706,26 @@ function ContractEditorV1(props: ContractEditorProps) {
                       <div>
                         <label className="label">Tên chú rể</label>
                         <input className="input" value={f.groom_name} onChange={(e) => set("groom_name", e.target.value)} />
+                      </div>
+                    </div>
+                  )}
+                  {hasCoupleCols && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="label">SĐT cô dâu</label>
+                        <input className="input" inputMode="tel" value={f.bride_phone} onChange={(e) => set("bride_phone", e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="label">SĐT chú rể</label>
+                        <input className="input" inputMode="tel" value={f.groom_phone} onChange={(e) => set("groom_phone", e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="label">Địa chỉ cô dâu</label>
+                        <input className="input" value={f.bride_address} onChange={(e) => set("bride_address", e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="label">Địa chỉ chú rể</label>
+                        <input className="input" value={f.groom_address} onChange={(e) => set("groom_address", e.target.value)} />
                       </div>
                     </div>
                   )}

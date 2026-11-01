@@ -288,8 +288,21 @@ export default function ContractV2Overview({ ctx }: { ctx: V2Ctx }) {
             <InfoList
               items={[
                 { label: "Họ tên", value: f.client_name || dash },
-                ...(f.bride_name.trim() ? [{ label: "Cô dâu", value: f.bride_name }] : []),
-                ...(f.groom_name.trim() ? [{ label: "Chú rể", value: f.groom_name }] : []),
+                ...([
+                  ["Cô dâu", f.bride_name, f.bride_phone, f.bride_address],
+                  ["Chú rể", f.groom_name, f.groom_phone, f.groom_address],
+                ] as const)
+                  .filter(([, n, p, a]) => n.trim() || p.trim() || a.trim())
+                  .map(([label, n, p, a]) => ({
+                    label,
+                    value: (
+                      <>
+                        {n || "—"}
+                        {p ? <span className="tnum block" style={{ color: "var(--tx2)" }}>{p}</span> : null}
+                        {a ? <span className="block text-[12.5px]" style={{ color: "var(--tx3)" }}>{a}</span> : null}
+                      </>
+                    ),
+                  })),
                 { label: "Điện thoại", value: f.client_phone || <span style={{ color: "var(--rd)" }}>Chưa có</span> },
                 { label: "Email", value: f.client_email ? <span className="break-all">{f.client_email}</span> : dash },
                 {

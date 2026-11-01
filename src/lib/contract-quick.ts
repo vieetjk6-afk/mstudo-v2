@@ -43,6 +43,10 @@ export type QuickDraft = {
   /** Tên cô dâu / chú rể — một hợp đồng cho cả hai nhà. */
   brideName?: string;
   groomName?: string;
+  bridePhone?: string;
+  brideAddress?: string;
+  groomPhone?: string;
+  groomAddress?: string;
   shootType?: ShootType;
   serviceId?: string;
   mainPkgId?: string;
@@ -453,6 +457,14 @@ export function normalizeDraft(raw: unknown, ctx: QuickContext): QuickDraft {
   if (bride) out.brideName = bride;
   const groom = str(r.groomName, 120);
   if (groom) out.groomName = groom;
+  const bPhone = normalizePhone(r.bridePhone);
+  if (bPhone) out.bridePhone = bPhone;
+  const gPhone = normalizePhone(r.groomPhone);
+  if (gPhone) out.groomPhone = gPhone;
+  const bAddr = str(r.brideAddress, 300);
+  if (bAddr) out.brideAddress = bAddr;
+  const gAddr = str(r.groomAddress, 300);
+  if (gAddr) out.groomAddress = gAddr;
   if (typeof r.shootType === "string" && SHOOT_TYPE_SET.has(r.shootType as ShootType)) out.shootType = r.shootType as ShootType;
   if (typeof r.serviceId === "string" && svcIds.has(r.serviceId)) out.serviceId = r.serviceId;
   if (typeof r.mainPkgId === "string" && pkgIds.has(r.mainPkgId)) out.mainPkgId = r.mainPkgId;
@@ -578,6 +590,8 @@ export function buildQuickPrompt(ctx: QuickContext): string {
     '  "clientPhone": string,           // 10 số, chỉ chữ số',
     '  "brideName": string,             // tên cô dâu (nếu có)',
     '  "groomName": string,             // tên chú rể (nếu có)',
+    '  "bridePhone": string, "brideAddress": string,   // SĐT, địa chỉ nhà cô dâu (nếu có)',
+    '  "groomPhone": string, "groomAddress": string,   // SĐT, địa chỉ nhà chú rể (nếu có)',
     '  "shootType": "photo"|"video"|"psc"|"makeup"|"rental"|"prewedding"|"wedding"|"other",',
     '  "serviceId": string,             // id trong DANH SÁCH DỊCH VỤ',
     '  "mainPkgId": string,             // id gói chính trong BẢNG GIÁ',

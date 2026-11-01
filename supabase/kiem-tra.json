@@ -41,6 +41,7 @@
     "migrations/chi_muc_bo_sung.sql",
     "migrations/binh_chon.sql",
     "migrations/hop_dong_yeu_cau_studio.sql",
+    "migrations/dat_lich_chi_tiet.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -909,6 +910,18 @@
         "studio_contracts.event_label",
         "studio_contracts.event_note",
         "studio_contracts.groom_name"
+      ]
+    },
+    {
+      "file": "migrations/dat_lich_chi_tiet.sql",
+      "mo_ta": "Đặt lịch: nhiều gói, ngày chính/phụ, cô dâu/chú rể (studio_bookings.details); SĐT + địa chỉ cô dâu/chú rể trên hợp đồng (chạy SAU hop_dong_yeu_cau_studio)",
+      "bang": [],
+      "cot": [
+        "studio_bookings.details",
+        "studio_contracts.bride_address",
+        "studio_contracts.bride_phone",
+        "studio_contracts.groom_address",
+        "studio_contracts.groom_phone"
       ]
     }
   ]

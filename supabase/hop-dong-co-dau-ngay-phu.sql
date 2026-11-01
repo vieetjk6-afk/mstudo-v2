@@ -6,9 +6,10 @@
 -- Cách dùng: Supabase → SQL Editor → dán TOÀN BỘ file này → Run.
 -- Mọi câu lệnh đều idempotent nên chạy lại nhiều lần vô hại.
 --
--- Chỉ gồm migration của riêng việc này: bốn cột trên studio_contracts và
--- cột qr_note_date trên profiles. Chỉ cần bảng có từ schema nền. Chạy lại
--- cả file này cũng an toàn.
+-- Chỉ gồm migration của riêng việc này: cột cô dâu/chú rể, ngày chính trên
+-- studio_contracts, cột qr_note_date trên profiles, cột details trên
+-- studio_bookings. Chỉ cần bảng có từ schema nền. Chạy lại cả file này
+-- cũng an toàn.
 -- ══════════════════════════════════════════════════════════════════════════
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -53,6 +54,40 @@ alter table public.studio_contracts add column if not exists event_label text;
 alter table public.studio_contracts add column if not exists event_note  text;
 
 alter table public.profiles add column if not exists qr_note_date boolean not null default false;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/dat_lich_chi_tiet.sql — Đặt lịch: nhiều gói, ngày chính/phụ, cô dâu/chú rể (studio_bookings.details); SĐT + địa chỉ cô dâu/chú rể trên hợp đồng (chạy SAU hop_dong_yeu_cau_studio)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- Đặt lịch chi tiết + SĐT / địa chỉ cô dâu, chú rể trên hợp đồng
+--
+-- 1) studio_bookings.details (jsonb) — phần khách điền thêm ở form /book:
+--      { packages: [{name, price}],            -- khách chọn NHIỀU gói
+--        event_label: "Lễ nhà gái",            -- tên ngày chính (khách tự đặt)
+--        extra_days: [{label, date}],          -- ngày phụ
+--        bride: {name, phone, address},        -- đám cưới
+--        groom: {name, phone, address} }
+--    Một cột jsonb thay vì cả chục cột: đây là dữ liệu khách gửi, studio đọc
+--    rồi chuyển thành hợp đồng — không lọc / sắp xếp theo từng trường.
+--    package_name / package_price / preferred_date vẫn được ghi như cũ (tên
+--    các gói nối lại, tổng giá, ngày chính) để mọi màn cũ vẫn đúng.
+--
+-- 2) studio_contracts.bride_phone / bride_address / groom_phone / groom_address.
+--
+-- Chạy trên Supabase SQL Editor. An toàn khi chạy lại (idempotent).
+-- ============================================================================
+
+alter table public.studio_bookings add column if not exists details jsonb;
+
+alter table public.studio_contracts add column if not exists bride_phone   text;
+
+alter table public.studio_contracts add column if not exists bride_address text;
+
+alter table public.studio_contracts add column if not exists groom_phone   text;
+
+alter table public.studio_contracts add column if not exists groom_address text;
 
 
 -- ══════════════════════════════════════════════════════════════════════════

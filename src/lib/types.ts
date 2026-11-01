@@ -346,6 +346,11 @@ export interface StudioContract {
   /** Tên cô dâu / chú rể (migrations/hop_dong_yeu_cau_studio.sql). */
   bride_name?: string | null;
   groom_name?: string | null;
+  /** SĐT + địa chỉ cô dâu / chú rể (migrations/dat_lich_chi_tiet.sql). */
+  bride_phone?: string | null;
+  bride_address?: string | null;
+  groom_phone?: string | null;
+  groom_address?: string | null;
   shoot_type: ShootType;
   service_id: string | null;
   event_date: string | null;
@@ -659,6 +664,8 @@ export interface StudioBooking {
   referrer_phone: string | null;
   /** Mã voucher ưu đãi khách mang tới khi đặt lịch (studio_vouchers_loyalty.sql). */
   voucher_code?: string | null;
+  /** Nhiều gói, ngày chính/phụ, cô dâu/chú rể (migrations/dat_lich_chi_tiet.sql) — xem @/lib/booking-details. */
+  details?: import("./booking-details").BookingDetails | null;
   branch_id: string | null;
   /** Khách tới từ đâu — trình duyệt suy ra lúc gửi yêu cầu (@/lib/lead-source).
    *  Cùng tập nhãn với `studio_contracts.source` để nối được thành phễu. */

@@ -354,7 +354,23 @@ export default function BookingsV2(props: BookingsProps) {
                 ...(peek.package_name
                   ? [{ label: "Gói", value: `${peek.package_name}${peek.package_price ? ` · ${vnd(peek.package_price)}` : ""}` }]
                   : []),
-                { label: "Ngày mong muốn", value: peek.preferred_date ? fmtDate(peek.preferred_date) : "Chưa chọn" },
+                { label: peek.details?.event_label || "Ngày mong muốn", value: peek.preferred_date ? fmtDate(peek.preferred_date) : "Chưa chọn" },
+                ...(peek.details?.extra_days ?? []).map((d) => ({ label: d.label || "Ngày phụ", value: fmtDate(d.date) })),
+                ...(["bride", "groom"] as const)
+                  .filter((k) => peek.details?.[k])
+                  .map((k) => {
+                    const p = peek.details![k]!;
+                    return {
+                      label: k === "bride" ? "Cô dâu" : "Chú rể",
+                      value: (
+                        <>
+                          {p.name || "—"}
+                          {p.phone ? <span className="tnum block" style={{ color: "var(--tx2)" }}>{p.phone}</span> : null}
+                          {p.address ? <span className="block text-[12.5px]" style={{ color: "var(--tx3)" }}>{p.address}</span> : null}
+                        </>
+                      ),
+                    };
+                  }),
                 ...(peek.facebook
                   ? [{ label: "Facebook", value: <a href={messengerUrl(peek.facebook)} target="_blank" rel="noreferrer" className="break-all hover:underline" style={{ color: "var(--ac)" }}>{peek.facebook}</a> }]
                   : []),

@@ -112,6 +112,7 @@ const ORDER = [
   ["migrations/chi_muc_bo_sung.sql", "Chỉ mục bổ sung: tìm hợp đồng theo album, khoá ngoại photo_id, sự kiện theo hợp đồng, doanh thu theo ngày thu"],
   ["migrations/binh_chon.sql", "Bình chọn hệ thống: admin hỏi ý kiến mọi tài khoản, người dùng bỏ phiếu trong dashboard"],
   ["migrations/hop_dong_yeu_cau_studio.sql", "Hợp đồng: tên cô dâu/chú rể, tên & ghi chú ngày chính, nội dung chuyển khoản chỉ số HĐ (tuỳ chọn kèm ngày)"],
+  ["migrations/dat_lich_chi_tiet.sql", "Đặt lịch: nhiều gói, ngày chính/phụ, cô dâu/chú rể (studio_bookings.details); SĐT + địa chỉ cô dâu/chú rể trên hợp đồng (chạy SAU hop_dong_yeu_cau_studio)"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -176,6 +177,7 @@ const MOI = [
   "migrations/chi_muc_bo_sung.sql",
   "migrations/binh_chon.sql",
   "migrations/hop_dong_yeu_cau_studio.sql",
+  "migrations/dat_lich_chi_tiet.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
@@ -264,11 +266,12 @@ const NHOM = {
   "hop-dong-co-dau-ngay-phu.sql": {
     tieuDe: "HỢP ĐỒNG — TÊN CÔ DÂU/CHÚ RỂ, NGÀY CHÍNH, NỘI DUNG CHUYỂN KHOẢN",
     ghiChu: [
-      "-- Chỉ gồm migration của riêng việc này: bốn cột trên studio_contracts và",
-      "-- cột qr_note_date trên profiles. Chỉ cần bảng có từ schema nền. Chạy lại",
-      "-- cả file này cũng an toàn.",
+      "-- Chỉ gồm migration của riêng việc này: cột cô dâu/chú rể, ngày chính trên",
+      "-- studio_contracts, cột qr_note_date trên profiles, cột details trên",
+      "-- studio_bookings. Chỉ cần bảng có từ schema nền. Chạy lại cả file này",
+      "-- cũng an toàn.",
     ],
-    files: ["migrations/hop_dong_yeu_cau_studio.sql"],
+    files: ["migrations/hop_dong_yeu_cau_studio.sql", "migrations/dat_lich_chi_tiet.sql"],
   },
   "anh-in-tang.sql": {
     tieuDe: "ẢNH IN TẶNG — KHÁCH CHỌN ẢNH IN TRONG ALBUM GIAO KHÁCH",

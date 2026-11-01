@@ -26,6 +26,10 @@ export type Contract = {
   /** Có sau migration hop_dong_yeu_cau_studio.sql. */
   bride_name?: string | null;
   groom_name?: string | null;
+  bride_phone?: string | null;
+  bride_address?: string | null;
+  groom_phone?: string | null;
+  groom_address?: string | null;
   event_label?: string | null;
   event_note?: string | null;
   shoot_type: ShootType;
