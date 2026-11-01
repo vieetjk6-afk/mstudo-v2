@@ -19,6 +19,7 @@ import { parseFinalVideos, safeUrl, type FinalVideo } from "@/lib/final-links";
 import { getFeatureFlags, plannerComingSoon } from "@/lib/feature-flags";
 import { autoLinks, normalizePlan, planProgress, plannerEnabled, seedPlanFor, shootDone, weddingGiftCombo } from "@/lib/wedding-plan";
 import { todayVN } from "@/lib/date";
+import { loadTransferNoteMode } from "@/lib/transfer-note-mode";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +128,13 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
 
   // Owner / studio info (failure here must not break access) — gộp brand vào
   // cùng một câu, xem loadOwner().
+  // Cách ghi nội dung chuyển khoản (chỉ cần khi khách XEM — lượt ghi bỏ qua).
+  const noteModeP = isWrite ? null : loadTransferNoteMode(contract.owner_id as string);
+  // Tên cô dâu/chú rể, tên & ghi chú ngày chính — đọc riêng: chưa chạy
+  // migrations/hop_dong_yeu_cau_studio.sql thì câu này lỗi, cổng khách vẫn chạy.
+  const dayColsP = isWrite
+    ? null
+    : db.from("studio_contracts").select("bride_name, groom_name, event_label, event_note").eq("id", cId).maybeSingle();
   const { ownerObj, brand } = await loadOwner(db, contract.owner_id as string);
   const studioName = brand.name;
   const studioLogo = brand.logoUrl;
@@ -537,12 +545,19 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
 
   // Never expose internal crew/salary to the client (gallery/selection ids hidden).
   return NextResponse.json({
-    contract: { ...contract, owner: undefined, gallery_album_id: undefined, selection_album_id: undefined },
+    contract: {
+      ...contract,
+      ...((dayColsP ? (await dayColsP).data : null) ?? {}),
+      owner: undefined,
+      gallery_album_id: undefined,
+      selection_album_id: undefined,
+    },
     plan_locked: planLocked,
     studio_name: studioName,
     studio_logo: studioLogo,
     studio_phone: ownerObj?.pl_phone ?? null,
     bank,
+    note_mode: noteModeP ? await noteModeP : null,
     items: items ?? [],
     payments: payments ?? [],
     milestones: milestones ?? [],

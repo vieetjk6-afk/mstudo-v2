@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 import { studioUrl } from "@/lib/hosts";
 import type { ContractLifecycle } from "@/components/studio/ContractStepper";
-import { qrUrl, instalmentNote, type BankInfo } from "@/components/VietQR";
+import { qrUrl, type BankInfo } from "@/components/VietQR";
+import { transferNote, DEFAULT_TRANSFER_NOTE_MODE, type TransferNoteMode } from "@/lib/vietqr";
 import { nextContractCode } from "@/lib/contract-code";
 import { contractKind } from "@/lib/contract-kind";
 import type { CrewRoleRow } from "@/lib/crew-roles";
@@ -285,6 +286,8 @@ canAssign: boolean;
 /** Gói Studio mới có kho đồ — xem planAllowsRental trong lib/plans. */
 canRental?: boolean;
 bank: BankInfo;
+/** Cách ghi nội dung chuyển khoản (số HĐ / HĐ + ngày, mã đợt khi có SePay). */
+noteMode?: TransferNoteMode;
 sameDayContracts: { id: string; title: string; client_name: string | null }[];
 pricelist: { name: string; price: number; unit: string | null; description?: string | null }[];
 initialClientProofs: { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[];
@@ -332,6 +335,7 @@ export function useContractEditor(props: ContractEditorProps) {
     canAssign,
     canRental = false,
     bank,
+    noteMode = DEFAULT_TRANSFER_NOTE_MODE,
     sameDayContracts,
     pricelist,
     initialClientProofs,
@@ -400,11 +404,15 @@ export function useContractEditor(props: ContractEditorProps) {
     client_name: contract.client_name ?? "",
     client_phone: contract.client_phone ?? "",
     client_email: contract.client_email ?? "",
+    bride_name: contract.bride_name ?? "",
+    groom_name: contract.groom_name ?? "",
     shoot_type: contract.shoot_type as ShootType,
     service_id: contract.service_id ?? "",
     status: contract.status as ContractStatus,
     event_date: contract.event_date ?? "",
     event_time: contract.event_time ?? "",
+    event_label: contract.event_label ?? "",
+    event_note: contract.event_note ?? "",
     location: contract.location ?? "",
     note: contract.note ?? "",
     gallery_album_id: contract.gallery_album_id ?? "",
@@ -505,6 +513,11 @@ export function useContractEditor(props: ContractEditorProps) {
   }
 
 
+  // Cột của migration hop_dong_yeu_cau_studio.sql: hợp đồng đọc bằng select("*")
+  // nên cột có trong DB thì có khoá — chưa chạy migration thì không ghi, để lượt
+  // tự lưu không hỏng cả hợp đồng.
+  const hasDayCols = "event_label" in contract;
+
   async function autosaveContract(data: typeof f) {
     setContractSaved("saving");
     const { error } = await supabase
@@ -524,6 +537,14 @@ export function useContractEditor(props: ContractEditorProps) {
         // lưu ngay bằng saveAlbumLink().
         event_date: data.event_date || null,
         event_time: data.event_time.trim() || null,
+        ...(hasDayCols
+          ? {
+              bride_name: data.bride_name.trim() || null,
+              groom_name: data.groom_name.trim() || null,
+              event_label: data.event_label.trim() || null,
+              event_note: data.event_note.trim() || null,
+            }
+          : {}),
         location: data.location.trim() || null,
         note: data.note.trim() || null,
         delivery_due: data.delivery_due || null,
@@ -706,11 +727,11 @@ export function useContractEditor(props: ContractEditorProps) {
    */
 
   // new milestone form
-  const [ms, setMs] = useState({ title: "", event_date: "", event_time: "" });
+  const [ms, setMs] = useState({ title: "", event_date: "", event_time: "", note: "" });
   // Hạng mục đã tick "Thêm vào mốc lịch" nhưng chưa chọn ngày (theo vị trí dòng).
   const [msOpen, setMsOpen] = useState<Record<number, boolean>>({});
   // Mốc đang sửa tại chỗ (tên / ngày / giờ) — null = không sửa mốc nào.
-  const [editMs, setEditMs] = useState<{ id: string; title: string; event_date: string; event_time: string } | null>(null);
+  const [editMs, setEditMs] = useState<{ id: string; title: string; event_date: string; event_time: string; note?: string } | null>(null);
   // studio signature
   const [studioSignName, setStudioSignName] = useState(contract.studio_signed_name || defaultSignName);
   const [studioSignature, setStudioSignature] = useState("");
@@ -783,7 +804,9 @@ export function useContractEditor(props: ContractEditorProps) {
   const expenseTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);
   const productCost = products.reduce((s, p) => s + (Number(p.cost) || 0) * (Number(p.qty) || 1), 0);
   const profit = total - payroll - expenseTotal - productCost;
-  const qrInfo = (contract.code || contract.title || "").slice(0, 25);
+  // Nội dung chuyển khoản: chỉ số HĐ (tuỳ studio kèm ngày chính) — không tên
+  // khách, không tên đợt. QR thu cả phần còn lại không thuộc đợt nào nên không có mã đợt.
+  const qrInfo = transferNote({ code: contract.code, event_date: f.event_date }, null, noteMode);
   // Client portal runs on the studio's own subdomain once its site is published,
   // otherwise on the main host.
   const shareUrl = studioUrl(studioHost, `/c/${contract.client_token}`);
@@ -806,7 +829,7 @@ export function useContractEditor(props: ContractEditorProps) {
    * đợt đó, nên nút QR và tin nhắc Zalo luôn khớp nhau.
    */
   function planNote(it: ContractPaymentPlan): string {
-    return instalmentNote(qrInfo, it.label, it.pay_code);
+    return transferNote({ code: contract.code, event_date: f.event_date }, it.pay_code, noteMode);
   }
 
   /** Tin Zalo nhắc MỘT đợt thanh toán (ảnh QR gửi kèm là QR của chính đợt đó). */
@@ -1288,9 +1311,12 @@ export function useContractEditor(props: ContractEditorProps) {
       client: { name: f.client_name, phone: f.client_phone, email: f.client_email },
       facts: [
         { label: "Dịch vụ", value: services.find((s) => s.id === f.service_id)?.name || SHOOT_TYPE_LABEL[f.shoot_type] },
-        { label: "Ngày chụp", value: [dmy(f.event_date), f.event_time].filter(Boolean).join(" · ") },
+        { label: "Cô dâu", value: f.bride_name.trim() },
+        { label: "Chú rể", value: f.groom_name.trim() },
+        { label: f.event_label.trim() || "Ngày chụp", value: [dmy(f.event_date), f.event_time].filter(Boolean).join(" · ") },
         { label: "Hạn giao sản phẩm", value: dmy(f.delivery_due) },
         { label: "Địa điểm", value: f.location, wide: true },
+        { label: `Ghi chú ${f.event_label.trim() || "ngày chụp"}`, value: f.event_note.trim(), wide: true },
       ],
       items: items.map((it) => ({
         name: it.name,
@@ -1308,7 +1334,7 @@ export function useContractEditor(props: ContractEditorProps) {
       plan: plan.map((p) => ({ label: p.label, due: dmy(p.due_date), paid: p.paid, amount: p.amount })),
       schedule: milestones.map((m) => ({
         title: m.title,
-        when: [dmy(m.event_date), m.event_time].filter(Boolean).join(" · "),
+        when: [dmy(m.event_date), m.event_time, m.note?.trim()].filter(Boolean).join(" · "),
       })),
       payments: payments.map((p) => ({
         date: dmy(p.paid_at),
@@ -1364,7 +1390,7 @@ export function useContractEditor(props: ContractEditorProps) {
 
   // ── Milestones (shared with the studio calendar via studio_events) ─────
   /** Tạo một mốc lịch cho hợp đồng này — dùng chung cho form "Thêm mốc lịch" và hạng mục. */
-  async function createMilestone(title: string, event_date: string, event_time: string | null): Promise<StudioEvent | null> {
+  async function createMilestone(title: string, event_date: string, event_time: string | null, note?: string | null): Promise<StudioEvent | null> {
     const { data, error } = await supabase
       .from("studio_events")
       .insert({
@@ -1373,6 +1399,7 @@ export function useContractEditor(props: ContractEditorProps) {
         title: title.trim() || "Mốc lịch",
         event_date,
         event_time: event_time?.trim() || null,
+        note: note?.trim() || null,
         remind: true,
       })
       .select("*")
@@ -1394,9 +1421,9 @@ export function useContractEditor(props: ContractEditorProps) {
       return false;
     }
     setBusy("milestone");
-    const ev = await createMilestone(ms.title, ms.event_date, ms.event_time);
+    const ev = await createMilestone(ms.title, ms.event_date, ms.event_time, ms.note);
     setBusy(null);
-    if (ev) setMs({ title: "", event_date: "", event_time: "" });
+    if (ev) setMs({ title: "", event_date: "", event_time: "", note: "" });
     return !!ev;
   }
 
@@ -1405,11 +1432,12 @@ export function useContractEditor(props: ContractEditorProps) {
    * "<tên mốc> · <tên hợp đồng>" theo ngày của mốc, nên lưu lại nhân sự luôn để
    * lịch thợ đổi theo — không thì lịch thợ còn tên và ngày cũ.
    */
-  async function updateMilestone(id: string, patch: { title?: string; event_date?: string; event_time?: string | null }) {
+  async function updateMilestone(id: string, patch: { title?: string; event_date?: string; event_time?: string | null; note?: string | null }) {
     const clean = {
       ...patch,
       ...(patch.title !== undefined ? { title: patch.title.trim() || "Mốc lịch" } : {}),
       ...(patch.event_time !== undefined ? { event_time: patch.event_time?.trim() || null } : {}),
+      ...(patch.note !== undefined ? { note: patch.note?.trim() || null } : {}),
     };
     if (clean.event_date === "") {
       toast("Chọn ngày cho mốc lịch.");
@@ -1430,7 +1458,7 @@ export function useContractEditor(props: ContractEditorProps) {
   async function saveEditMilestone() {
     if (!editMs) return;
     setBusy("milestone-edit");
-    const ok = await updateMilestone(editMs.id, { title: editMs.title, event_date: editMs.event_date, event_time: editMs.event_time });
+    const ok = await updateMilestone(editMs.id, { title: editMs.title, event_date: editMs.event_date, event_time: editMs.event_time, ...(editMs.note !== undefined ? { note: editMs.note } : {}) });
     setBusy(null);
     if (ok) setEditMs(null);
   }
@@ -1878,6 +1906,7 @@ export function useContractEditor(props: ContractEditorProps) {
         client_phone: f.client_phone.trim() || null,
         client_email: f.client_email.trim() || null,
         client_messenger: f.client_messenger.trim() || null,
+        ...(hasDayCols ? { bride_name: f.bride_name.trim() || null, groom_name: f.groom_name.trim() || null } : {}),
         shoot_type: f.shoot_type,
         status: "draft",
         location: f.location.trim() || null,
@@ -1975,7 +2004,7 @@ export function useContractEditor(props: ContractEditorProps) {
     plan, planForm, setPlanForm, autosavePlan, clientProofs, planProof, setPlanProof, planMethod, setPlanMethod,
     collectFor, setCollectFor, changeDlg, setChangeDlg, closeChangeDlg, reschedules, onChangeDone,
     proofBusy, lightbox, setLightbox, mounted, products, prodForm, setProdForm,
-    ms, setMs, msOpen, setMsOpen, editMs, setEditMs,
+    ms, setMs, msOpen, setMsOpen, editMs, setEditMs, hasDayCols,
     studioSignName, setStudioSignName, studioSignature, setStudioSignature, savedSig, drawNew, setDrawNew, rememberSig, setRememberSig,
     msg, toast, busy, copied, sendOpen, setSendOpen,
     total, collected, balance, depositAmt, payroll, paidPayroll, expenseTotal, productCost, profit, marginPct,

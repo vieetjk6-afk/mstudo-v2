@@ -108,6 +108,8 @@ export type Session = {
   title: string;
   date: string | null;
   time: string | null;
+  /** Ghi chú riêng của ngày này (ngày chính: event_note; mốc: studio_events.note). */
+  note: string | null;
   main: boolean;
   /** Người được gán vào buổi này (kể cả người đã từ chối). */
   crew: { row: CrewRow; idx: number }[];
@@ -123,9 +125,11 @@ export function sessionsOf(ed: Ed): Session[] {
   const main: Session = {
     key: "main",
     id: null,
-    title: mainSessionTitle(ed.kind),
+    // Ngày chính studio tự đặt tên ("Lễ nhà gái"…) thì dùng tên đó.
+    title: ed.f.event_label.trim() || mainSessionTitle(ed.kind),
     date: ed.f.event_date || null,
     time: ed.f.event_time || null,
+    note: ed.f.event_note.trim() || null,
     main: true,
     // Người gán vào mốc đã bị xoá: DB đưa về buổi chính — vẽ đúng như vậy.
     crew: withIdx.filter((c) => !c.row.eventId || !msIds.has(c.row.eventId)),
@@ -138,6 +142,7 @@ export function sessionsOf(ed: Ed): Session[] {
       title: m.title,
       date: m.event_date,
       time: m.event_time ?? null,
+      note: m.note?.trim() || null,
       main: false,
       crew: withIdx.filter((c) => c.row.eventId === m.id),
     })),

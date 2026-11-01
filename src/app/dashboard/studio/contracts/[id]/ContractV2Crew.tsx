@@ -314,11 +314,11 @@ function SessionCard({ ctx, s, onEdit }: { ctx: V2Ctx; s: Session; onEdit: () =>
       : []),
     ...(s.main
       ? [
-          { label: "Sửa ngày, giờ, địa điểm", icon: Pencil, onClick: ctx.openInfo },
+          { label: "Sửa tên ngày, giờ, địa điểm, ghi chú", icon: Pencil, onClick: ctx.openInfo },
           ...(!cancelled ? [{ label: "Dời lịch", icon: CalendarClock, onClick: () => ed.setChangeDlg("reschedule"), hint: "Báo khách, chuyển lịch thợ theo" }] : []),
         ]
       : [
-          { label: "Sửa tên, ngày, giờ", icon: Pencil, onClick: onEdit },
+          { label: "Sửa tên, ngày, giờ, ghi chú", icon: Pencil, onClick: onEdit },
           {
             label: "Xoá mốc này",
             icon: Trash2,
@@ -356,6 +356,11 @@ function SessionCard({ ctx, s, onEdit }: { ctx: V2Ctx; s: Session; onEdit: () =>
             <span style={{ color: past ? "var(--tx3)" : toneText(rel.tone), fontWeight: past ? 400 : 600 }}> · {rel.text}</span>
           )}
         </p>
+        {s.note && (
+          <p className="mt-1 whitespace-pre-line text-[12.5px]" style={{ color: "var(--tx2)" }}>
+            {s.note}
+          </p>
+        )}
         {s.main && f.location && (
           <p className="mt-1 flex gap-1.5 text-[12.5px]" style={{ color: "var(--tx3)" }}>
             <MapPin size={14} className="mt-[1px] flex-none" />
@@ -393,7 +398,7 @@ function MilestoneModal({ ctx, id, onClose }: { ctx: V2Ctx; id: string | null; o
   const { ed } = ctx;
   const m = id ? ed.milestones.find((x) => x.id === id) : null;
   // Thêm mới: dùng đúng form `ms` của hook (addMilestone đọc từ đó).
-  const [edit, setEdit] = useState(() => (m ? { title: m.title, event_date: m.event_date, event_time: m.event_time ?? "" } : null));
+  const [edit, setEdit] = useState(() => (m ? { title: m.title, event_date: m.event_date, event_time: m.event_time ?? "", note: m.note ?? "" } : null));
   const v = edit ?? ed.ms;
   const put = (patch: Partial<typeof v>) => (edit ? setEdit({ ...edit, ...patch }) : ed.setMs((p) => ({ ...p, ...patch })));
   const [saving, setSaving] = useState(false);
@@ -439,6 +444,9 @@ function MilestoneModal({ ctx, id, onClose }: { ctx: V2Ctx; id: string | null; o
             <input id="ms-time" className={inputCls} placeholder="08:00" value={v.event_time} onChange={(e) => put({ event_time: e.target.value })} />
           </Field>
         </div>
+        <Field label="Ghi chú cho ngày này" htmlFor="ms-note">
+          <textarea id="ms-note" rows={2} className={inputCls} placeholder="vd: 7h rước dâu, đãi tiệc ở nhà trai" value={v.note} onChange={(e) => put({ note: e.target.value })} />
+        </Field>
       </div>
     </Modal>
   );

@@ -472,6 +472,8 @@ function ActivePortal({
               bank={data.bank}
               studioName={data.studio_name}
               contractCode={data.contract.code}
+              eventDate={data.contract.event_date}
+              noteMode={data.note_mode}
               toast={toast}
             />
 

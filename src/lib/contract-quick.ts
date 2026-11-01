@@ -40,6 +40,9 @@ export type QuickContext = {
 export type QuickDraft = {
   clientName?: string;
   clientPhone?: string;
+  /** Tên cô dâu / chú rể — một hợp đồng cho cả hai nhà. */
+  brideName?: string;
+  groomName?: string;
   shootType?: ShootType;
   serviceId?: string;
   mainPkgId?: string;
@@ -49,6 +52,10 @@ export type QuickDraft = {
   /** Hạng mục không có trong bảng giá. */
   customLines?: { name: string; qty: number; unit_price: number }[];
   eventDate?: string;
+  /** Tên ngày chính ("Lễ nhà gái", "Ngày cưới"…). */
+  eventLabel?: string;
+  /** Ngày phụ: tên tự đặt + ngày (+ giờ, ghi chú). Đám cưới thường hai ngày. */
+  extraDays?: QuickExtraDay[];
   startTime?: string;
   endTime?: string;
   location?: string;
@@ -62,6 +69,8 @@ export type QuickDraft = {
   internalNote?: string;
 };
 
+export type QuickExtraDay = { label: string; date: string; time?: string; note?: string };
+
 /** Gợi ý các thông tin nên có — hiện thành chip bấm để chèn vào ô nhập. */
 export const QUICK_HINTS: { key: keyof QuickDraft | "price"; label: string; insert: string; required?: boolean }[] = [
   { key: "clientName", label: "Tên khách", insert: "Tên khách: ", required: true },
@@ -72,7 +81,10 @@ export const QUICK_HINTS: { key: keyof QuickDraft | "price"; label: string; inse
   { key: "startTime", label: "Giờ", insert: "Giờ: " },
   { key: "location", label: "Địa điểm", insert: "Địa điểm: " },
   { key: "deposit", label: "Tiền cọc", insert: "Cọc: " },
-  { key: "extraIds", label: "Hạng mục thêm", insert: "Thêm: " },
+  { key: "extraIds", label: "Gói thêm", insert: "Thêm: " },
+  { key: "brideName", label: "Cô dâu", insert: "Cô dâu: " },
+  { key: "groomName", label: "Chú rể", insert: "Chú rể: " },
+  { key: "extraDays", label: "Ngày phụ", insert: "Ngày phụ: " },
   { key: "crewIds", label: "Người đi chụp", insert: "Thợ: " },
   { key: "note", label: "Yêu cầu của khách", insert: "Yêu cầu: " },
   { key: "internalNote", label: "Ghi chú nội bộ", insert: "Nội bộ: " },
@@ -278,6 +290,13 @@ export function heuristicParse(text: string, ctx: QuickContext): QuickDraft {
   }
   if (out.clientName === "") delete out.clientName;
 
+  // Cô dâu / chú rể: dòng có nhãn "Cô dâu: …", "Chú rể: …" (SĐT kèm sau tên thì bỏ).
+  const cleanName = (v?: string) => v?.replace(/(?:\+?84|0)(?:[\s.-]?\d){9}.*/, "").replace(/[,-]\s*$/, "").trim() || undefined;
+  const bride = cleanName(pick(lab, /^(ten )?co dau$/));
+  if (bride) out.brideName = bride;
+  const groom = cleanName(pick(lab, /^(ten )?chu re$/));
+  if (groom) out.groomName = groom;
+
   // Dịch vụ (điều khoản) theo tên có trong danh sách.
   const svc = bestMatch(ctx.services, src, 0.99);
   if (svc) out.serviceId = svc.id;
@@ -430,6 +449,10 @@ export function normalizeDraft(raw: unknown, ctx: QuickContext): QuickDraft {
   if (name) out.clientName = name;
   const phone = normalizePhone(r.clientPhone);
   if (phone) out.clientPhone = phone;
+  const bride = str(r.brideName, 120);
+  if (bride) out.brideName = bride;
+  const groom = str(r.groomName, 120);
+  if (groom) out.groomName = groom;
   if (typeof r.shootType === "string" && SHOOT_TYPE_SET.has(r.shootType as ShootType)) out.shootType = r.shootType as ShootType;
   if (typeof r.serviceId === "string" && svcIds.has(r.serviceId)) out.serviceId = r.serviceId;
   if (typeof r.mainPkgId === "string" && pkgIds.has(r.mainPkgId)) out.mainPkgId = r.mainPkgId;
@@ -456,6 +479,22 @@ export function normalizeDraft(raw: unknown, ctx: QuickContext): QuickDraft {
     if (lines.length) out.customLines = lines;
   }
   if (isIsoDate(r.eventDate)) out.eventDate = r.eventDate;
+  const evLabel = str(r.eventLabel, 80);
+  if (evLabel) out.eventLabel = evLabel;
+  if (Array.isArray(r.extraDays)) {
+    const days = r.extraDays
+      .map((x): QuickExtraDay | null => {
+        const o = (x ?? {}) as Record<string, unknown>;
+        if (!isIsoDate(o.date)) return null;
+        const label = str(o.label, 80) || "Ngày phụ";
+        const time = normalizeTime(o.time);
+        const n = str(o.note, 500);
+        return { label, date: o.date, ...(time ? { time } : {}), ...(n ? { note: n } : {}) };
+      })
+      .filter((x): x is QuickExtraDay => !!x && x.date !== out.eventDate)
+      .slice(0, 6);
+    if (days.length) out.extraDays = days;
+  }
   const st = normalizeTime(r.startTime);
   if (st) out.startTime = st;
   const et = normalizeTime(r.endTime);
@@ -537,13 +576,17 @@ export function buildQuickPrompt(ctx: QuickContext): string {
     "{",
     '  "clientName": string,            // họ tên khách, bỏ "anh/chị"',
     '  "clientPhone": string,           // 10 số, chỉ chữ số',
+    '  "brideName": string,             // tên cô dâu (nếu có)',
+    '  "groomName": string,             // tên chú rể (nếu có)',
     '  "shootType": "photo"|"video"|"psc"|"makeup"|"rental"|"prewedding"|"wedding"|"other",',
     '  "serviceId": string,             // id trong DANH SÁCH DỊCH VỤ',
     '  "mainPkgId": string,             // id gói chính trong BẢNG GIÁ',
     '  "mainPrice": number,             // giá chốt của gói chính (đồng) nếu khách nói giá khác bảng giá',
-    '  "extraIds": string[],            // id các hạng mục thêm trong BẢNG GIÁ',
+    '  "extraIds": string[],            // id các gói KHÁC khách cũng chọn trong BẢNG GIÁ (khách lấy nhiều gói: gói đầu là mainPkgId, các gói còn lại ở đây)',
     '  "customLines": [{"name": string, "qty": number, "unit_price": number}], // chỉ cho thứ KHÔNG có trong bảng giá',
-    '  "eventDate": "YYYY-MM-DD",',
+    '  "eventDate": "YYYY-MM-DD",       // ngày CHÍNH (ngày cưới / ngày chụp chính)',
+    '  "eventLabel": string,            // tên ngày chính nếu khách nói rõ, vd "Lễ nhà gái", "Ngày cưới"',
+    '  "extraDays": [{"label": string, "date": "YYYY-MM-DD", "time": "HH:MM", "note": string}], // các ngày KHÁC (đám 2 ngày: lễ nhà trai, đãi tiệc, thử đồ…)',
     '  "startTime": "HH:MM", "endTime": "HH:MM",',
     '  "location": string,',
     '  "crewIds": string[],             // id người trong SỔ THỢ',

@@ -10,7 +10,6 @@ import {
   ArrowLeft,
   Check,
   Search,
-  Package,
   Plus,
   Trash2,
   Pencil,
@@ -52,13 +51,16 @@ function NewContractFormV1(props: NewContractFormProps) {
     templates, services, packages, roster, crewRoles, recentClients, bank, initialQuickText, quickSourceNote,
     step, setStep, canNext,
     clientQuery, setClientQuery, clientName, setClientName, clientPhone, setClientPhone, phoneOk,
+    brideName, setBrideName, groomName, setGroomName,
     filteredClients, pickClient, returningHit, savedNameDiffers,
     serviceId, changeService, setShowAllLists, shootType, setShootType, templateId, pickTemplate,
-    selectedService, template, nhomDichVu, mainPkgId, mainPkg, extraIds, extras, priceOf, priceEdited,
-    pickMain, toggleExtra, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
+    selectedService, template, nhomDichVu, priceOf, priceEdited,
+    togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
     lines, total, payroll, profit, marginPct, marginTone, thinMargin,
     eventDate, setEventDate, startTime, setStartTime, endTime, setEndTime, location, setLocation,
+    eventLabel, setEventLabel, eventNote, setEventNote,
+    extraDays, addExtraDay, patchExtraDay, removeExtraDay, extraClashes,
     picked, toggleCrew, setCrewSalary, sameDay, clashes,
     instalments, planTotal, patchInstalment, addInstalment, removeInstalment,
     title, setTitle, autoTitle, addChecklist, setAddChecklist, makePhoto, setMakePhoto, makeVideo, setMakeVideo,
@@ -348,6 +350,14 @@ function NewContractFormV1(props: NewContractFormProps) {
                   onChange={(e) => setClientPhone(e.target.value)}
                 />
               </div>
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-bride">Tên cô dâu (không bắt buộc)</label>
+                <input id="nc-bride" className={inputCls} style={inputStyle} placeholder="Nguyễn Thu Lan" value={brideName} onChange={(e) => setBrideName(e.target.value)} />
+              </div>
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-groom">Tên chú rể (không bắt buộc)</label>
+                <input id="nc-groom" className={inputCls} style={inputStyle} placeholder="Trần Minh Khang" value={groomName} onChange={(e) => setGroomName(e.target.value)} />
+              </div>
             </div>
 
             {clientPhone && !phoneOk && (
@@ -430,7 +440,7 @@ function NewContractFormV1(props: NewContractFormProps) {
             ) : (
               <>
                 <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-                  <p className={eyebrow} style={eyebrowStyle}>Gói chính</p>
+                  <p className={eyebrow} style={eyebrowStyle}>Gói & hạng mục{pickedPkgIds.length ? ` · đã chọn ${pickedPkgIds.length}` : ""}</p>
                   {/* Đang lọc theo dịch vụ thì nói rõ, và luôn để sẵn đường xem
                       lại toàn bộ — bảng giá không đặt theo dịch vụ vẫn dùng được. */}
                   {serviceListKeys && (
@@ -447,7 +457,7 @@ function NewContractFormV1(props: NewContractFormProps) {
                   )}
                 </div>
                 <p className="mb-2 text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                  Chọn gói rồi <b>sửa thẳng ô giá</b> nếu đã thương lượng khác bảng giá — bảng giá gốc không đổi.
+                  Khách lấy nhiều gói thì <b>tick hết</b>. Chọn gói rồi <b>sửa thẳng ô giá</b> nếu đã thương lượng khác bảng giá — bảng giá gốc không đổi.
                 </p>
                 <div className="grid min-w-0 gap-2">
                   {packageGroups.map(([key, list]) => (
@@ -456,7 +466,7 @@ function NewContractFormV1(props: NewContractFormProps) {
                         <p className="mt-1 truncate text-[11px] font-semibold" style={{ color: "var(--tx3)" }}>{listLabel(key)}</p>
                       )}
                       {list.map((p) => {
-                        const on = mainPkgId === p.id;
+                        const on = pickedPkgIds.includes(p.id);
                         const edited = priceEdited(p);
                         return (
                           /* Không còn là MỘT nút: gói đã chọn phải sửa được giá
@@ -470,11 +480,11 @@ function NewContractFormV1(props: NewContractFormProps) {
                           >
                             <button
                               type="button"
-                              onClick={() => pickMain(p.id)}
+                              onClick={() => togglePkg(p.id)}
                               className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-3.5 text-left"
                               aria-pressed={on}
                             >
-                              <Package size={19} style={{ flex: "none", color: on ? "var(--ac)" : "var(--tx3)" }} />
+                              {on ? <Check size={19} style={{ flex: "none", color: "var(--ac)" }} /> : <Plus size={19} style={{ flex: "none", color: "var(--tx3)" }} />}
                               <span className="min-w-0 flex-1">
                                 <span className="block truncate text-[13.5px] font-semibold">{p.name}</span>
                                 <span className="block truncate text-[11.5px]" style={{ color: "var(--tx3)" }}>
@@ -517,56 +527,11 @@ function NewContractFormV1(props: NewContractFormProps) {
                   ))}
                 </div>
 
-                <p className={`mb-2 mt-[18px] ${eyebrow}`} style={eyebrowStyle}>Hạng mục thêm</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {visiblePackages.filter((p) => p.id !== mainPkgId).map((x) => {
-                    const on = extraIds.includes(x.id);
-                    const edited = priceEdited(x);
-                    return (
-                      <div
-                        key={x.id}
-                        className="flex min-w-0 items-center gap-2 rounded-[10px] pr-2"
-                        style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleExtra(x.id)}
-                          className="flex min-w-0 flex-1 items-center gap-2.5 py-3 pl-3.5 text-left"
-                          aria-pressed={on}
-                        >
-                          {on ? <Check size={18} style={{ flex: "none", color: "var(--ac)" }} /> : <Plus size={18} style={{ flex: "none", color: "var(--tx3)" }} />}
-                          <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">{x.name}</span>
-                        </button>
-                        {on ? (
-                          <span className="flex flex-none items-center gap-0.5">
-                            <MoneyInput
-                              value={priceOf(x)}
-                              onChange={(n) => setPkgPriceFor(x.id, n)}
-                              placeholder="Giá"
-                              ariaLabel={`Giá hạng mục ${x.name}`}
-                              className="tnum w-[104px] rounded-[8px] px-2 py-1.5 text-right text-[12.5px] font-bold"
-                              style={{ border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" }}
-                            />
-                            {edited && (
-                              <button
-                                type="button"
-                                onClick={() => clearPkgPrice(x.id)}
-                                aria-label={`Hoàn giá bảng giá cho ${x.name}`}
-                                title={`Hoàn về ${vnd(x.price)}`}
-                                className="flex h-6 w-6 flex-none items-center justify-center rounded-[7px]"
-                                style={{ color: "var(--tx3)" }}
-                              >
-                                <RotateCcw size={14} />
-                              </button>
-                            )}
-                          </span>
-                        ) : (
-                          <strong className="tnum flex-none whitespace-nowrap text-[12.5px]">{vnd(x.price)}</strong>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+                {pickedPkgs.some((p) => !visiblePackages.includes(p)) && (
+                  <p className="mt-2 text-[11.5px]" style={{ color: "var(--am)" }}>
+                    Còn {pickedPkgs.filter((p) => !visiblePackages.includes(p)).map((p) => p.name).join(", ")} đã chọn ở bảng giá khác — bấm “xem tất cả” để thấy.
+                  </p>
+                )}
               </>
             )}
 
@@ -649,6 +614,11 @@ function NewContractFormV1(props: NewContractFormProps) {
         {/* ── Bước 4 · Lịch & nhân sự ─────────────────────────────────────── */}
         {step === 3 && (
           <div>
+            <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Ngày chính</p>
+            <div className="mb-3">
+              <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-evlabel">Tên ngày (tự đặt)</label>
+              <input id="nc-evlabel" className={inputCls} style={inputStyle} value={eventLabel} onChange={(e) => setEventLabel(e.target.value)} placeholder="VD: Lễ nhà gái, Ngày cưới" />
+            </div>
             <div className="mb-3 grid gap-3 sm:grid-cols-3">
               <div>
                 <label className={fieldLabel} style={fieldLabelStyle}>Ngày chụp</label>
@@ -669,6 +639,61 @@ function NewContractFormV1(props: NewContractFormProps) {
             <div className="mb-4">
               <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-loc">Địa điểm</label>
               <input id="nc-loc" className={inputCls} style={inputStyle} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Nhà hàng, studio, ngoại cảnh…" />
+            </div>
+            <div className="mb-4">
+              <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-evnote">Ghi chú cho ngày chính</label>
+              <textarea id="nc-evnote" rows={2} className={inputCls} style={inputStyle} value={eventNote} onChange={(e) => setEventNote(e.target.value)} placeholder="VD: 6h makeup cô dâu, 9h rước dâu…" />
+            </div>
+
+            {/* Ngày phụ — lưu thành mốc lịch của hợp đồng (Lịch, lịch thợ, cổng khách). */}
+            <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Ngày phụ</p>
+            <div className="mb-4 grid gap-2">
+              {extraDays.map((d, i) => (
+                <div key={i} className="grid gap-2 rounded-[11px] p-2.5 sm:grid-cols-[minmax(0,1fr)_150px_110px_auto]" style={{ border: "1px solid var(--bd)" }}>
+                  <input
+                    className={inputCls}
+                    style={inputStyle}
+                    value={d.label}
+                    aria-label={`Tên ngày phụ ${i + 1}`}
+                    placeholder="VD: Lễ nhà trai"
+                    onChange={(e) => patchExtraDay(i, { label: e.target.value })}
+                  />
+                  <DateInput value={d.date} onChange={(v) => patchExtraDay(i, { date: v })} />
+                  <TimeInput value={d.time} onChange={(v) => patchExtraDay(i, { time: v })} ariaLabel={`Giờ ngày phụ ${i + 1}`} />
+                  <button
+                    type="button"
+                    onClick={() => removeExtraDay(i)}
+                    aria-label={`Bỏ ngày phụ ${i + 1}`}
+                    className="flex h-10 w-10 items-center justify-center justify-self-end rounded-[10px]"
+                    style={{ color: "var(--tx3)" }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                  <textarea
+                    rows={1}
+                    className={`${inputCls} sm:col-span-4`}
+                    style={inputStyle}
+                    value={d.note}
+                    aria-label={`Ghi chú ngày phụ ${i + 1}`}
+                    placeholder="Ghi chú cho ngày này"
+                    onChange={(e) => patchExtraDay(i, { note: e.target.value })}
+                  />
+                </div>
+              ))}
+              <button type="button" onClick={addExtraDay} className="btn-ghost justify-self-start">
+                <Plus size={15} /> Thêm ngày phụ
+              </button>
+              {extraDays.some((d) => !d.date) && (
+                <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>Ngày phụ chưa chọn ngày sẽ không được lưu.</p>
+              )}
+              {extraClashes.length > 0 && (
+                <div className="rounded-[11px] px-3.5 py-2.5 text-[12.5px]" style={{ background: "var(--amS)", color: "var(--am)" }}>
+                  <b>Ngày phụ trùng show khác:</b>{" "}
+                  {extraClashes
+                    .map((x) => `${x.label} (${fmtDate(x.date)}): ${x.contracts.slice(0, 3).map((c) => c.code || c.title || c.client_name).filter(Boolean).join(", ")}`)
+                    .join(" · ")}
+                </div>
+              )}
             </div>
 
             <p className={`mb-2 ${eyebrow}`} style={eyebrowStyle}>Phân công nhân sự</p>
@@ -852,10 +877,15 @@ function NewContractFormV1(props: NewContractFormProps) {
                 // Giá hiện ở đây là giá ĐÃ SỬA, không phải giá bảng giá — nếu
                 // in giá niêm yết thì bước soát lại sẽ khẳng định một con số
                 // khác với con số thật đang nằm trong hợp đồng.
-                [2, "Gói chính", mainPkg ? `${mainPkg.name} · ${vnd(priceOf(mainPkg))}${priceEdited(mainPkg) ? " (đã sửa giá)" : ""}` : template ? `Mẫu: ${template.name}` : "Chưa chọn"],
-                [2, "Hạng mục thêm", extras.length ? extras.map((x) => `${x.name} · ${vnd(priceOf(x))}`).join(", ") : "Không có"],
+                [2, "Gói", pickedPkgs.length ? pickedPkgs.map((p) => `${p.name} · ${vnd(priceOf(p))}${priceEdited(p) ? " (đã sửa giá)" : ""}`).join(", ") : template ? `Mẫu: ${template.name}` : "Chưa chọn"],
                 [2, "Gói riêng", customPreview || "Không có"],
-                [3, "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
+                ...(brideName.trim() || groomName.trim()
+                  ? [[1, "Cô dâu · Chú rể", [brideName.trim() || "—", groomName.trim() || "—"].join(" · ")] as [number, string, string]]
+                  : []),
+                [3, eventLabel.trim() || "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
+                ...extraDays
+                  .filter((d) => d.date)
+                  .map((d) => [3, d.label.trim() || "Ngày phụ", `${fmtDow(d.date)} · ${fmtDate(d.date)}${d.time ? ` · ${d.time}` : ""}`] as [number, string, string]),
                 [3, "Khung giờ", startTime || endTime ? [startTime, endTime].filter(Boolean).join(" – ") : "Chưa đặt giờ"],
                 [3, "Địa điểm", location || "Chưa có"],
                 [3, "Nhân sự", picked.length ? picked.map((c) => c.name || c.phone).join(", ") : "Chưa phân công"],

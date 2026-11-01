@@ -61,6 +61,9 @@ export type RecentClient = { name: string; phone: string; last: string | null; c
 
 type CrewPick = { id: string; name: string; phone: string; role: CrewRole; salary: number };
 type Instalment = { label: string; amount: number; due: string };
+/** Ngày phụ của hợp đồng — lưu thành mốc lịch (studio_events) nên hiện sẵn trên
+    Lịch, lịch thợ, Google Lịch và cổng khách. */
+export type ExtraDay = { label: string; date: string; time: string; note: string };
 
 
 /* ── 6 bước của bản thiết kế ────────────────────────────────────────────────
@@ -75,7 +78,7 @@ type Instalment = { label: string; amount: number; due: string };
 export const STEPS = [
   { icon: Package, label: "Loại dịch vụ", title: "Khách đặt dịch vụ gì?", hint: "Chọn trước để mọi bước sau bám theo: gói dịch vụ, hạng mục gợi ý và việc cần làm đều đổi theo lựa chọn này." },
   { icon: User, label: "Khách hàng", title: "Hợp đồng này của ai?", hint: "Gõ số điện thoại để tìm khách cũ — hoặc chọn từ danh sách gần đây." },
-  { icon: ReceiptText, label: "Gói dịch vụ", title: "Khách chọn gói nào?", hint: "Chọn 1 gói chính, tick thêm hạng mục phát sinh — sửa được giá từng gói, hoặc nhập gói riêng ngoài bảng giá." },
+  { icon: ReceiptText, label: "Gói dịch vụ", title: "Khách chọn gói nào?", hint: "Tick bao nhiêu gói cũng được — sửa được giá từng gói, hoặc nhập gói riêng ngoài bảng giá." },
   { icon: CalendarDays, label: "Lịch & nhân sự", title: "Chụp khi nào, ai đi?", hint: "Chọn ngày giờ, địa điểm rồi phân công người đi chụp." },
   { icon: Wallet, label: "Thanh toán", title: "Khách trả tiền thế nào?", hint: "Chia đợt thu — mỗi đợt có hạn riêng để nhắc khách." },
   { icon: ClipboardCheck, label: "Kiểm tra", title: "Kiểm tra lần cuối", hint: "Bấm vào dòng bất kỳ để quay lại sửa." },
@@ -106,6 +109,30 @@ export type NewContractFormProps = {
   listLabels?: Record<string, string>;
 };
 
+/**
+ * Hợp đồng (chưa huỷ) có lịch vào NGÀY này — ngày chính của hợp đồng HOẶC một
+ * mốc lịch / ngày phụ của nó. Trước đây chỉ dò ngày chính, nên show có ngày
+ * thứ hai rơi đúng hôm đó vẫn không ai báo.
+ */
+async function busyContractsOn(db: ReturnType<typeof createClient>, ownerId: string, date: string): Promise<DayContract[]> {
+  const cols = "id, code, title, client_name, event_time";
+  const [{ data: main }, { data: evs }] = await Promise.all([
+    db.from("studio_contracts").select(cols).eq("owner_id", ownerId).eq("event_date", date).neq("status", "cancelled").limit(50),
+    db.from("studio_events").select("contract_id, event_time").eq("owner_id", ownerId).eq("event_date", date).not("contract_id", "is", null).limit(50),
+  ]);
+  const out = new Map<string, DayContract>(((main ?? []) as DayContract[]).map((c) => [c.id, c]));
+  const evRows = (evs ?? []) as { contract_id: string; event_time: string | null }[];
+  const missing = Array.from(new Set(evRows.map((e) => e.contract_id))).filter((id) => !out.has(id));
+  if (missing.length) {
+    const { data: more } = await db.from("studio_contracts").select(cols).in("id", missing).neq("status", "cancelled");
+    for (const c of (more ?? []) as DayContract[]) {
+      // Giờ của mốc trong ngày đó, không phải giờ ngày chính của hợp đồng kia.
+      out.set(c.id, { ...c, event_time: evRows.find((e) => e.contract_id === c.id)?.event_time ?? null });
+    }
+  }
+  return Array.from(out.values());
+}
+
 export function useNewContractForm({
   ownerId,
   assignTo,
@@ -128,6 +155,9 @@ export function useNewContractForm({
   const [clientQuery, setClientQuery] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  // Một hợp đồng cho cả hai nhà: người ký (client_name) + tên cô dâu, chú rể.
+  const [brideName, setBrideName] = useState("");
+  const [groomName, setGroomName] = useState("");
 
   // ── Bước 3 — gói & hạng mục ─────────────────────────────────────────────
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
@@ -155,6 +185,11 @@ export function useNewContractForm({
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [location, setLocation] = useState("");
+  // Ngày chính tự đặt tên ("Lễ nhà gái", "Ngày cưới"…) + ghi chú riêng cho ngày.
+  const [eventLabel, setEventLabel] = useState("");
+  const [eventNote, setEventNote] = useState("");
+  // Ngày phụ (đám hai ngày, thử đồ, đãi tiệc…) — mỗi ngày một tên, ngày, giờ, ghi chú.
+  const [extraDays, setExtraDays] = useState<ExtraDay[]>([]);
   const [picked, setPicked] = useState<CrewPick[]>([]);
 
   // ── Bước 5 — thanh toán ─────────────────────────────────────────────────
@@ -299,14 +334,7 @@ export function useNewContractForm({
     (async () => {
       try {
         const db = createClient();
-        const { data: cs } = await db
-          .from("studio_contracts")
-          .select("id, code, title, client_name, event_time")
-          .eq("owner_id", ownerId)
-          .eq("event_date", eventDate)
-          .neq("status", "cancelled")
-          .limit(50);
-        const contracts = (cs ?? []) as DayContract[];
+        const contracts = await busyContractsOn(db, ownerId, eventDate);
         let crew: DayCrewRow[] = [];
         if (contracts.length) {
           const { data: cr } = await db
@@ -325,6 +353,43 @@ export function useNewContractForm({
     };
   }, [eventDate, ownerId]);
   const sameDayAll = dayInfo && dayInfo.date === eventDate ? dayInfo.contracts : [];
+
+  /* Ngày phụ cũng phải báo trùng: đám hai ngày mà chỉ dò ngày chính thì vẫn
+     nhận thêm show vào ngày thứ hai, tới hôm đó thợ bị kẹt. */
+  const extraDates = useMemo(
+    () => Array.from(new Set(extraDays.map((d) => d.date).filter((d) => d && d !== eventDate))).sort(),
+    [extraDays, eventDate]
+  );
+  const extraKey = extraDates.join(",");
+  const [extraBusy, setExtraBusy] = useState<{ key: string; byDate: Record<string, DayContract[]> } | null>(null);
+  useEffect(() => {
+    if (!extraKey) return;
+    let alive = true;
+    (async () => {
+      try {
+        const db = createClient();
+        const dates = extraKey.split(",");
+        const lists = await Promise.all(dates.map((d) => busyContractsOn(db, ownerId, d)));
+        if (alive) setExtraBusy({ key: extraKey, byDate: Object.fromEntries(dates.map((d, i) => [d, lists[i]])) });
+      } catch {
+        /* phụ — tra hỏng thì thôi */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [extraKey, ownerId]);
+  /** Ngày phụ đã có show khác: [{ ngày, tên ngày, các hợp đồng }]. */
+  const extraClashes = useMemo(() => {
+    if (!extraBusy || extraBusy.key !== extraKey) return [];
+    return extraDates
+      .map((date) => ({
+        date,
+        label: extraDays.find((d) => d.date === date)?.label.trim() || "Ngày phụ",
+        contracts: extraBusy.byDate[date] ?? [],
+      }))
+      .filter((x) => x.contracts.length > 0);
+  }, [extraBusy, extraKey, extraDates, extraDays]);
   const clashes = useMemo(
     () =>
       dayInfo && dayInfo.date === eventDate
@@ -439,6 +504,25 @@ export function useNewContractForm({
     setExtraIds((prev) => prev.filter((x) => x !== id));
     if (off) clearPkgPrice(id);
   }
+  /* Chọn NHIỀU gói trong một hợp đồng: mọi gói của bảng giá là một ô tick.
+     Gói tick đầu tiên đứng đầu danh sách hạng mục (mainPkgId), các gói sau nối
+     tiếp (extraIds) — dữ liệu và cách cộng tiền giữ nguyên như cũ. Bỏ tick gói
+     đầu thì gói kế tiếp lên thay, không mất lựa chọn nào. */
+  function togglePkg(id: string) {
+    if (id === mainPkgId) {
+      const [next, ...rest] = extraIds;
+      setMainPkgId(next ?? "");
+      setExtraIds(rest);
+      clearPkgPrice(id);
+      return;
+    }
+    if (extraIds.includes(id)) return toggleExtra(id);
+    if (!mainPkgId) setMainPkgId(id);
+    else setExtraIds((prev) => [...prev, id]);
+  }
+  const pickedPkgIds = mainPkgId ? [mainPkgId, ...extraIds] : extraIds;
+  const pickedPkgs = pickedPkgIds.map((id) => packages.find((p) => p.id === id)).filter((p): p is PackageOption => !!p);
+
   function toggleExtra(id: string) {
     const off = extraIds.includes(id);
     setExtraIds((prev) => (off ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -465,6 +549,15 @@ export function useNewContractForm({
   }
   function removeCustomLine(i: number) {
     setCustomLines((prev) => prev.filter((_, idx) => idx !== i));
+  }
+  function addExtraDay() {
+    setExtraDays((prev) => [...prev, { label: prev.length ? `Ngày phụ ${prev.length + 1}` : "Ngày phụ", date: "", time: "", note: "" }]);
+  }
+  function patchExtraDay(i: number, patch: Partial<ExtraDay>) {
+    setExtraDays((prev) => prev.map((x, idx) => (idx === i ? { ...x, ...patch } : x)));
+  }
+  function removeExtraDay(i: number) {
+    setExtraDays((prev) => prev.filter((_, idx) => idx !== i));
   }
   function toggleCrew(r: { id: string; name: string; phone: string; role: CrewRole }) {
     setPicked((prev) =>
@@ -525,6 +618,8 @@ export function useNewContractForm({
     if (d.shootType) setShootType(d.shootType);
     if (d.clientName) (setClientName(d.clientName), hit());
     if (d.clientPhone) (setClientPhone(d.clientPhone), hit());
+    if (d.brideName) (setBrideName(d.brideName), hit());
+    if (d.groomName) (setGroomName(d.groomName), hit());
 
     const main = d.mainPkgId && pkgIds.has(d.mainPkgId) ? d.mainPkgId : "";
     if (main || d.extraIds?.length || d.customLines?.length) {
@@ -540,6 +635,11 @@ export function useNewContractForm({
     if (main || d.extraIds?.length) setShowAllLists(true);
 
     if (d.eventDate) (setEventDate(d.eventDate), hit());
+    if (d.eventLabel) setEventLabel(d.eventLabel);
+    if (d.extraDays?.length) {
+      setExtraDays(d.extraDays.map((x) => ({ label: x.label, date: x.date, time: x.time ?? "", note: x.note ?? "" })));
+      hit();
+    }
     if (d.startTime) setStartTime(d.startTime);
     if (d.endTime) setEndTime(d.endTime);
     if (d.location) (setLocation(d.location), hit());
@@ -596,6 +696,8 @@ export function useNewContractForm({
         ? crypto.randomUUID().replace(/-/g, "")
         : Math.random().toString(36).slice(2) + Date.now().toString(36);
     const code = await nextContractCode(supabase, ownerId);
+    // Ngày phụ chưa chọn ngày thì bỏ (mốc lịch bắt buộc có ngày).
+    const validExtraDays = extraDays.filter((x) => !!x.date);
     // Điều khoản cố định theo dịch vụ; nếu không có thì lấy mẫu / bộ mặc định.
     const note = selectedService?.clauses || template?.note || fullClauseText();
     const row: Record<string, unknown> = {
@@ -604,10 +706,14 @@ export function useNewContractForm({
       title: title.trim() || autoTitle,
       client_name: clientName.trim() || null,
       client_phone: clientPhone.replace(/\D/g, "") || null,
+      ...(brideName.trim() ? { bride_name: brideName.trim() } : {}),
+      ...(groomName.trim() ? { groom_name: groomName.trim() } : {}),
       shoot_type: shootType,
       ...(serviceId ? { service_id: serviceId } : {}),
       event_date: eventDate || null,
       event_time: startTime || null,
+      ...(eventLabel.trim() ? { event_label: eventLabel.trim() } : {}),
+      ...(eventNote.trim() ? { event_note: eventNote.trim() } : {}),
       location: location.trim() || null,
       note,
       client_token: token,
@@ -637,6 +743,15 @@ export function useNewContractForm({
     // vi album tự động cũ), không chặn việc tạo hợp đồng.
     if (error && row.album_mode !== undefined && isMissingColumn(error, "album_mode")) {
       delete row.album_mode;
+      ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
+    }
+    // Chưa chạy migration hop_dong_yeu_cau_studio.sql → lưu hợp đồng không kèm
+    // tên cô dâu/chú rể, tên/ghi chú ngày chính, rồi báo ra bên dưới.
+    const newCols = ["bride_name", "groom_name", "event_label", "event_note"] as const;
+    let newColsLost = false;
+    if (error && newCols.some((c) => row[c] !== undefined && isMissingColumn(error, c))) {
+      for (const c of newCols) delete row[c];
+      newColsLost = true;
       ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
     }
     if (error || !data) {
@@ -697,6 +812,22 @@ export function useNewContractForm({
               }))
           )
         : null,
+      validExtraDays.length
+        ? supabase
+            .from("studio_events")
+            .insert(
+              validExtraDays.map((x) => ({
+                owner_id: ownerId,
+                contract_id: data.id,
+                title: x.label.trim() || "Ngày phụ",
+                event_date: x.date,
+                event_time: x.time || null,
+                note: x.note.trim() || null,
+                remind: true,
+              }))
+            )
+            .select("id")
+        : null,
       addChecklist
         ? supabase
             .from("contract_tasks")
@@ -711,9 +842,10 @@ export function useNewContractForm({
     ]);
 
     // Tên bảng theo đúng thứ tự trong Promise.all ở trên.
-    const failed = ["Hạng mục", "Nhân sự", "Đợt thanh toán", "Checklist"]
+    const failed = ["Hạng mục", "Nhân sự", "Đợt thanh toán", "Ngày phụ", "Checklist"]
       .filter((_, i) => saved[i]?.error);
     if (noteLost) failed.push("Ghi chú nội bộ (chưa chạy migration contract_internal_note.sql)");
+    if (newColsLost) failed.push("Tên cô dâu/chú rể, tên & ghi chú ngày chính (chưa chạy migration hop_dong_yeu_cau_studio.sql)");
     if (failed.length) {
       const first = saved.find((r) => r?.error)?.error ?? null;
       setSaving(null);
@@ -737,6 +869,15 @@ export function useNewContractForm({
       body: JSON.stringify({ contractId: data.id }),
     }).catch(() => {});
 
+    // Ngày phụ lên Google Lịch như mốc lịch thêm ở màn chi tiết (fire-and-forget).
+    const evRows = (saved[3]?.data ?? []) as { id: string }[];
+    for (const ev of evRows) {
+      fetch("/api/gcal/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "event", id: ev.id, action: "upsert" }),
+      }).catch(() => {});
+    }
     // Đồng bộ Google Calendar nếu có ngày (fire-and-forget).
     if (eventDate) {
       fetch("/api/gcal/sync", {
@@ -758,16 +899,19 @@ export function useNewContractForm({
     step, setStep, canNext,
     // khách
     clientQuery, setClientQuery, clientName, setClientName, clientPhone, setClientPhone, phoneOk, phoneDigits,
+    brideName, setBrideName, groomName, setGroomName,
     filteredClients, pickClient, returningHit, savedNameDiffers,
     // dịch vụ & gói
     serviceId, changeService, showAllLists, setShowAllLists, shootType, setShootType, templateId, pickTemplate,
     selectedService, template, nhomDichVu, mainPkgId, mainPkg, extraIds, extras, pkgPrice, priceOf, priceEdited,
-    pickMain, toggleExtra, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
+    pickMain, toggleExtra, togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
     // tiền
     lines, total, payroll, profit, marginPct, marginTone, thinMargin,
     // lịch & nhân sự
     eventDate, setEventDate, startTime, setStartTime, endTime, setEndTime, location, setLocation,
+    eventLabel, setEventLabel, eventNote, setEventNote,
+    extraDays, addExtraDay, patchExtraDay, removeExtraDay, extraClashes,
     picked, toggleCrew, setCrewSalary, sameDayAll, sameDay, clashes,
     // thanh toán
     instalments, planTotal, patchInstalment, addInstalment, removeInstalment,

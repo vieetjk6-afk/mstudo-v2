@@ -192,6 +192,30 @@ check(
 check("extractJson", extractJson('Đây:\n```json\n{"a":1}\n```'), { a: 1 });
 check("extractJson hỏng", extractJson("không có"), null);
 
+// ── Cô dâu / chú rể, ngày phụ ──────────────────────────────────────────────
+{
+  const d = normalizeDraft(
+    {
+      brideName: "Nguyễn Thu Lan",
+      groomName: "Trần Minh Khang",
+      eventDate: "2026-12-25",
+      eventLabel: "Lễ nhà gái",
+      extraDays: [
+        { label: "Lễ nhà trai", date: "2026-12-26", time: "8h", note: "Rước dâu 9h" },
+        { label: "Trùng ngày chính", date: "2026-12-25" },
+        { label: "Sai ngày", date: "26/12" },
+      ],
+    },
+    ctx
+  );
+  check("AI: tên cô dâu", d.brideName, "Nguyễn Thu Lan");
+  check("AI: tên chú rể", d.groomName, "Trần Minh Khang");
+  check("AI: tên ngày chính", d.eventLabel, "Lễ nhà gái");
+  check("AI: ngày phụ hợp lệ, bỏ trùng ngày chính & sai định dạng", d.extraDays, [{ label: "Lễ nhà trai", date: "2026-12-26", time: "08:00", note: "Rước dâu 9h" }]);
+  const h = heuristicParse("Cô dâu: Thu Lan 0901234567\nChú rể: Minh Khang", ctx);
+  check("Quy tắc: nhãn Cô dâu / Chú rể", [h.brideName, h.groomName], ["Thu Lan", "Minh Khang"]);
+}
+
 if (fail) {
   console.log(`\n${fail} kiểm thử HỎNG`);
   process.exit(1);

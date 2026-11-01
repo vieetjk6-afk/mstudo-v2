@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ContractAddendum } from "@/lib/contract-addenda";
-import { qrUrl, instalmentNote, type BankInfo } from "@/lib/vietqr";
+import { qrUrl, transferNote, DEFAULT_TRANSFER_NOTE_MODE, type BankInfo, type TransferNoteMode } from "@/lib/vietqr";
 import type { PortalLoyalty } from "./PortalVoucher";
 import { usePaymentWatch, type PaidEvent } from "./PaidConfirm";
 import { compressImage, checkImageFile } from "@/lib/image";
@@ -23,6 +23,11 @@ export type Contract = {
   client_phone: string | null;
   client_email: string | null;
   client_messenger: string | null;
+  /** Có sau migration hop_dong_yeu_cau_studio.sql. */
+  bride_name?: string | null;
+  groom_name?: string | null;
+  event_label?: string | null;
+  event_note?: string | null;
   shoot_type: ShootType;
   event_date: string | null;
   event_time: string | null;
@@ -75,6 +80,7 @@ export type PortalPayload = {
   addenda?: ContractAddendum[];
   loyalty?: PortalLoyalty | null;
   bank?: BankInfo | null;
+  note_mode?: TransferNoteMode | null;
 };
 
 export type Lang = "vi" | "en";
@@ -150,6 +156,7 @@ export function useContractPortal(
   const [addenda, setAddenda] = useState<ContractAddendum[]>([]);
   const [loyalty, setLoyalty] = useState<PortalLoyalty | null>(null);
   const [bank, setBank] = useState<BankInfo>({ bin: null, account: null, holder: null, name: null });
+  const [noteMode, setNoteMode] = useState<TransferNoteMode>(DEFAULT_TRANSFER_NOTE_MODE);
   const [paidReported, setPaidReported] = useState(false);
   const [proofUploading, setProofUploading] = useState(false);
   const [proofUrls, setProofUrls] = useState<string[]>([]);
@@ -231,6 +238,7 @@ export function useContractPortal(
     setAddenda(j.addenda ?? []);
     setLoyalty(j.loyalty ?? null);
     if (j.bank) setBank(j.bank as BankInfo);
+    if (j.note_mode) setNoteMode(j.note_mode as TransferNoteMode);
     setMessenger(j.contract?.client_messenger ?? "");
     setBrief({
       concept: j.contract?.brief_concept ?? "",
@@ -426,10 +434,11 @@ export function useContractPortal(
   const nextDue = plan.find((p) => !p.paid) ?? null;
   const dueAmount = nextDue ? nextDue.amount : balance;
   const duePct = total > 0 ? Math.round((dueAmount / total) * 100) : 0;
-  // Có đợt kế tiếp → nội dung mang MÃ ĐỢT, để studio bật SePay là tiền về tự
-  // ghi đúng đợt. Không còn đợt nào thì như cũ: mã hợp đồng.
   const contractRef = (contract?.code || contract?.title || "").slice(0, 25);
-  const dueNote = nextDue ? instalmentNote(contractRef, nextDue.label, nextDue.pay_code) : contractRef;
+  /** Nội dung chuyển khoản: số HĐ (tuỳ studio kèm ngày), thêm mã đợt khi studio bật SePay. */
+  const payNote = (payCode?: string | null) =>
+    transferNote({ code: contract?.code, event_date: contract?.event_date }, payCode, noteMode);
+  const dueNote = payNote(nextDue?.pay_code);
   const dueQr = qrUrl(bank, dueAmount, dueNote);
   const unpaidPlan = plan.filter((p) => !p.paid);
   // Điều khoản: mỗi dòng một ý, để hiện thành danh sách có dấu tích như thiết kế.
@@ -461,7 +470,7 @@ export function useContractPortal(
     brief, setBrief, briefSent,
     fetchContract, unlock, sendEdit, reportPaid, uploadProof, chooseQuote, submitBrief, saveMessenger, sendReview, sign,
     itemsTotal, surcharge, printing, total, collected, balance, signed,
-    nextDue, dueAmount, duePct, contractRef, dueNote, dueQr, unpaidPlan, termLines,
+    nextDue, dueAmount, duePct, contractRef, payNote, dueNote, dueQr, unpaidPlan, termLines,
   };
 }
 

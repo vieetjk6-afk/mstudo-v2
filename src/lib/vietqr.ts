@@ -38,3 +38,46 @@ export function qrUrl(bank: BankInfo, amount: number, addInfo: string): string |
 export function instalmentNote(ref?: string | null, label?: string | null, payCode?: string | null): string {
   return [(payCode || "").trim(), (ref || "").trim(), (label || "").trim()].filter(Boolean).join(" ").slice(0, 50);
 }
+
+/** Cách studio muốn ghi nội dung chuyển khoản của hợp đồng (profiles.qr_note_date + SePay). */
+export type TransferNoteMode = {
+  /** true = số HĐ + ngày chính; false = chỉ số HĐ. */
+  withDate: boolean;
+  /** Studio đã bật SePay → thêm mã đợt MSxxxxxxxx để webhook tự ghi thu. */
+  sepay: boolean;
+};
+
+export const DEFAULT_TRANSFER_NOTE_MODE: TransferNoteMode = { withDate: false, sepay: false };
+
+/** "2026-12-25" → "25-12-2026". Gạch ngang: app ngân hàng nào lọc ký tự lạ thì còn "25122026", vẫn đọc được. */
+function noteDate(iso?: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || "");
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+/**
+ * Nội dung chuyển khoản của MỘT đợt thanh toán hợp đồng — CHỈ số hợp đồng
+ * (tuỳ studio: kèm ngày chính). Không tên khách, không tên đợt ("Cọc giữ
+ * lịch", "Thanh toán khi giao sản phẩm"…): studio không muốn sao kê ghi rõ đây
+ * là tiền dịch vụ của ai, việc gì.
+ *
+ * Tiêu đề hợp đồng KHÔNG được dùng thay khi thiếu số HĐ — tiêu đề hay chứa tên
+ * khách. Thiếu cả hai thì để trống, khách tự ghi.
+ *
+ * Mã đợt (pay_code) chỉ có mặt khi studio đã bật SePay, và đứng ĐẦU để không
+ * bao giờ bị cắt mất — webhook dò đúng mã đó để tự ghi thu.
+ */
+export function transferNote(
+  c: { code?: string | null; event_date?: string | null },
+  payCode: string | null | undefined,
+  mode: TransferNoteMode
+): string {
+  return [
+    mode.sepay ? (payCode || "").trim() : "",
+    (c.code || "").trim(),
+    mode.withDate ? noteDate(c.event_date) : "",
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .slice(0, 50);
+}

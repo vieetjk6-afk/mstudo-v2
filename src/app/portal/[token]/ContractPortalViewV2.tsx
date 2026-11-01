@@ -89,7 +89,7 @@ export function PortalAppV2({
   const today = todayVN();
   const total = useMemo(() => contractTotal(data.items), [data.items]);
   const paid = useMemo(() => sumAmounts(data.payments), [data.payments]);
-  const pay = usePortalPayment({ token, phone, total, paid, plan: data.plan, contractCode: c.code, toast });
+  const pay = usePortalPayment({ token, phone, total, paid, plan: data.plan, contractCode: c.code, eventDate: c.event_date, noteMode: data.note_mode, toast });
   const completed = c.status === "completed";
 
   type Tab = Exclude<PortalTabKey, "plan">;

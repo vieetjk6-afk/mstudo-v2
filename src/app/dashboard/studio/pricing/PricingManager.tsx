@@ -209,6 +209,20 @@ export default function PricingManager(props: PricingProps) {
               ))}
             </select>
           </div>
+          <div className="field sm:col-span-2">
+            <label className="label">Nội dung chuyển khoản (QR hợp đồng)</label>
+            <select
+              className="input"
+              value={c.qr_note_date ? "date" : "code"}
+              onChange={(e) => setC((p) => ({ ...p, qr_note_date: e.target.value === "date" }))}
+            >
+              <option value="code">Chỉ số hợp đồng — VD: HD-11-2026-007</option>
+              <option value="date">Số hợp đồng + ngày — VD: HD-11-2026-007 25-12-2026</option>
+            </select>
+            <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
+              Không ghi tên khách hay tên đợt. Đã bật Tự xác nhận chuyển khoản (SePay) thì tự thêm mã MS… ở đầu để tiền về tự ghi thu.
+            </p>
+          </div>
         </div>
         <button onClick={saveContact} className="btn-primary mt-4">{savedContact ? <Check size={15} /> : null} {savedContact ? "Đã lưu" : "Lưu liên hệ"}</button>
 

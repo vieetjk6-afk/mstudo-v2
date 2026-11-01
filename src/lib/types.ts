@@ -343,10 +343,16 @@ export interface StudioContract {
   client_name: string | null;
   client_phone: string | null;
   client_email: string | null;
+  /** Tên cô dâu / chú rể (migrations/hop_dong_yeu_cau_studio.sql). */
+  bride_name?: string | null;
+  groom_name?: string | null;
   shoot_type: ShootType;
   service_id: string | null;
   event_date: string | null;
   event_time: string | null;
+  /** Tên tự đặt + ghi chú của ngày chính (migrations/hop_dong_yeu_cau_studio.sql). */
+  event_label?: string | null;
+  event_note?: string | null;
   location: string | null;
   /** Huỷ lúc nào / vì sao (migrations/contract_cancel_reschedule.sql). */
   cancelled_at?: string | null;
