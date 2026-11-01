@@ -10,6 +10,7 @@ import { SearchInput, Segmented } from "@/components/v2/kit-client";
 import { ChipRow, ChipV2 } from "@/app/a/[slug]/album-v2-ui";
 import { PER_MONTH, useAlbumBrowse, type GalleryCard } from "./useAlbumBrowse";
 import { fmtDate } from "@/lib/date";
+import CoverImg from "@/components/CoverImg";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THƯ MỤC ALBUM (/album) — giao diện mới. Cùng dữ liệu, cùng tìm kiếm với
@@ -147,7 +148,7 @@ function CardGrid({ items, video }: { items: GalleryCard[]; video?: boolean; dat
         <Link key={g.slug} href={`/album/${g.slug}`} className="v2-card v2-card-link group flex flex-col overflow-hidden">
           <div className="relative aspect-[4/5] overflow-hidden" style={{ background: "var(--sf2)" }}>
             {g.cover_url ? (
-              <img src={g.cover_url} alt={g.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
+              <CoverImg src={g.cover_url} alt={g.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]" />
             ) : (
               <span className="absolute inset-0 flex items-center justify-center" style={{ color: "var(--tx3)" }}>
                 <Images size={28} />

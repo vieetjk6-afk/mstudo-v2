@@ -6,6 +6,7 @@ import Brand from "@/components/Brand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import { categoryLabel } from "@/lib/category";
 import { PER_MONTH, useAlbumBrowse, type GalleryCard } from "./useAlbumBrowse";
+import CoverImg from "@/components/CoverImg";
 
 /* Thư mục album — GIAO DIỆN CŨ. Logic (tìm, lọc, nhóm theo tháng) ở
    ./useAlbumBrowse, dùng chung với bản giao diện mới ./AlbumBrowseV2. */
@@ -156,7 +157,7 @@ function Grid({ items, video, dateLocale }: { items: GalleryCard[]; video?: bool
         >
           <div className="relative aspect-[4/5] overflow-hidden">
             {g.cover_url ? (
-              <img src={g.cover_url} alt={g.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
+              <CoverImg src={g.cover_url} alt={g.title} loading="lazy" className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105" />
             ) : (
               <div className="absolute inset-0" style={{ background: "var(--surface2)" }} />
             )}
