@@ -59,9 +59,8 @@ async function fetchFromGoogle(id: string, width: number): Promise<Response | nu
   const thumb = `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`;
   const lh3 = `https://lh3.googleusercontent.com/d/${id}=w${width}`;
   const dl = `https://drive.usercontent.google.com/download?id=${id}&export=view`;
-  // Thumbnail endpoint renders both images and video posters; lh3 gives the
-  // best quality for larger requests.
-  const sources = width <= 1024 ? [thumb, lh3, dl] : [lh3, thumb, dl, `https://drive.google.com/uc?export=download&id=${id}`];
+  // lh3 trước (CDN, ít bị giới hạn), thumbnail sau — cùng thứ tự với 302.
+  const sources = width <= 1024 ? [lh3, thumb, dl] : [lh3, thumb, dl, `https://drive.google.com/uc?export=download&id=${id}`];
 
   for (const url of sources) {
     try {
@@ -192,10 +191,14 @@ export async function GET(req: Request) {
   // Supabase (byte hiển thị không đụng — và không tính tiền — Supabase).
   // Lượt đọc byte đã bị loại ở `wantsBytes` phía trên và đi tiếp xuống dưới:
   // canvas watermark cần cùng miền, chuyển sang Google là tainted canvas.
+  //
+  // Mọi cỡ đều sang lh3.googleusercontent.com. Trước đây cỡ ≤1024 (thumbnail,
+  // ảnh bìa) sang drive.google.com/thumbnail — host đó bị Google giới hạn theo
+  // IP/tài khoản: studio có album lớn (hàng nghìn ảnh) mở vài trang là bị chặn,
+  // toàn bộ bìa album + bộ sưu tập ngoài website hiện ảnh vỡ, trong khi lh3 vẫn
+  // chạy. Ảnh hỏng thì client tự thử drive.google.com/thumbnail (lib/drive).
   if (canRedirect) {
-    const target = width <= 1024
-      ? `https://drive.google.com/thumbnail?id=${id}&sz=w${width}`
-      : `https://lh3.googleusercontent.com/d/${id}=w${width}`;
+    const target = `https://lh3.googleusercontent.com/d/${id}=w${width}`;
     return NextResponse.redirect(target, { status: 302, headers: { "Cache-Control": CACHE_OK } });
   }
 

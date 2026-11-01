@@ -10,7 +10,7 @@ import { retryAltHost, stripExtension, thumbnailUrl } from "@/lib/drive";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Ảnh thu nhỏ lấp đầy khung cha. Hỏng thì thử một lần host Google còn lại
+ * Ảnh thu nhỏ lấp đầy khung cha. Hỏng thì thử các host Google còn lại
  * (retryAltHost), hỏng nữa thì hiện ô trống có biểu tượng — không để lộ icon
  * ảnh vỡ và tên file chen giữa lưới.
  */
@@ -60,12 +60,7 @@ export function Thumb({
         style={{ opacity: loaded === url ? 1 : 0 }}
         onLoad={() => setLoaded(url)}
         onError={(e) => {
-          const im = e.currentTarget;
-          if (!im.dataset.retried) {
-            const before = im.src;
-            retryAltHost(e);
-            if (im.src !== before) return;
-          }
+          if (retryAltHost(e)) return;
           setFailed(url);
         }}
       />

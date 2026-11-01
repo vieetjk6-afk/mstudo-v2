@@ -32,6 +32,7 @@ import { sortAlbums, pendingSelectionCount } from "@/lib/album-order";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { storageUntil } from "@/lib/storage-lifecycle";
 import { useUiV2 } from "@/components/v2/UiV2Context";
+import CoverImg from "@/components/CoverImg";
 
 // Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
 const AlbumListV2 = dynamic(() => import("./AlbumListV2"));
@@ -400,7 +401,7 @@ function AlbumCard({ a, eager = false, canDelivery = true, canWatermark = true, 
           của bản thiết kế, giữ đúng tỉ lệ ở mọi bậc lưới. */}
       <Link href={`/dashboard/albums/${a.id}`} className="relative block aspect-[4/3]" style={{ background: "var(--sf2)" }}>
         {cover ? (
-          <img src={cover} alt={a.title} loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"} decoding="async" className="h-full w-full object-cover" />
+          <CoverImg src={cover} alt={a.title} loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"} decoding="async" className="h-full w-full object-cover" />
         ) : (
           <span className="flex h-full items-center justify-center" style={{ color: "var(--tx3)" }}>
             <ImageIcon size={26} />

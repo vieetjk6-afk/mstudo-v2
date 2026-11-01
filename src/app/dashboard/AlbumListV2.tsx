@@ -24,6 +24,7 @@ import {
 import { Drawer, Menu, SearchInput, Segmented, Switch } from "@/components/v2/kit-client";
 import type { AlbumRow } from "./AlbumList";
 import { fmtDate } from "@/lib/date";
+import CoverImg from "@/components/CoverImg";
 
 const FilterDialog = dynamic(() => import("@/components/FilterDialog"), { ssr: false });
 
@@ -388,7 +389,7 @@ function AlbumCardV2({
     <article className="v2-card v2-card-link group flex flex-col overflow-hidden">
       <Link href={`/dashboard/albums/${a.id}`} className="relative block aspect-[4/3] overflow-hidden" style={{ background: "var(--sf2)" }}>
         {cover ? (
-          <img
+          <CoverImg
             src={cover}
             alt={a.title}
             loading={eager ? "eager" : "lazy"}
