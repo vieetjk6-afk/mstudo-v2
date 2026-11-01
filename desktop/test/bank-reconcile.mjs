@@ -94,6 +94,11 @@ check("HĐ + ngày", transferNote(hd, "MSAB23CD45", { withDate: true, sepay: fal
 check("có SePay → mã đợt đứng đầu", transferNote(hd, "MSAB23CD45", { withDate: true, sepay: true }), "MSAB23CD45 HD-11-2026-007 25-12-2026");
 check("không bao giờ dùng tiêu đề (hay chứa tên khách)", transferNote({ code: null, event_date: null, title: "Cưới chị Lan" }, null, { withDate: true, sepay: true }), "");
 check("SePay dò lại được mã đợt từ nội dung mới", payCodeCandidates(transferNote(hd, "MSAB23CD45", { withDate: true, sepay: true })).includes("MSAB23CD45"), true);
+check("tự nhập: chèn {so_hd} và {ngay}", transferNote(hd, "MSAB23CD45", { withDate: false, sepay: false, template: "TT {so_hd} ngay {ngay}" }), "TT HD-11-2026-007 ngay 25-12-2026");
+check("tự nhập: bỏ dấu, không phân biệt hoa thường", transferNote(hd, null, { withDate: false, sepay: false, template: "Thanh toán {SO_HD}" }), "Thanh toan HD-11-2026-007");
+check("tự nhập + SePay: mã đợt vẫn đứng đầu", transferNote(hd, "MSAB23CD45", { withDate: true, sepay: true, template: "{so_hd}" }), "MSAB23CD45 HD-11-2026-007");
+check("tự nhập rỗng → như lựa chọn có sẵn", transferNote(hd, null, { withDate: true, sepay: false, template: "  " }), "HD-11-2026-007 25-12-2026");
+check("tự nhập dài: cắt 50 ký tự, mã đợt không mất", transferNote(hd, "MSAB23CD45", { withDate: false, sepay: true, template: "x".repeat(80) }).startsWith("MSAB23CD45 "), true);
 
 // ── Payload SePay ──────────────────────────────────────────────────────────
 const sample = {

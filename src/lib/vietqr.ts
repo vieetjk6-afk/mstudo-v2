@@ -45,7 +45,35 @@ export type TransferNoteMode = {
   withDate: boolean;
   /** Studio đã bật SePay → thêm mã đợt MSxxxxxxxx để webhook tự ghi thu. */
   sepay: boolean;
+  /**
+   * Nội dung studio TỰ NHẬP (profiles.qr_note_template). Có thì dùng thay cho
+   * "số HĐ / số HĐ + ngày". Chèn được {so_hd} và {ngay}.
+   */
+  template?: string | null;
 };
+
+/** Biến chèn được trong nội dung tự nhập. */
+export const TRANSFER_NOTE_VARS = ["{so_hd}", "{ngay}"] as const;
+
+/** Bỏ dấu tiếng Việt — nhiều app ngân hàng làm hỏng / cắt chữ có dấu trong nội dung chuyển khoản. */
+export function noAccentMemo(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D");
+}
+
+/** Điền nội dung tự nhập: {so_hd}, {ngay} (không phân biệt hoa thường), bỏ dấu, gộp khoảng trắng. */
+export function fillNoteTemplate(template: string, c: { code?: string | null; event_date?: string | null }): string {
+  return noAccentMemo(
+    template
+      .replace(/\{\s*so_hd\s*\}/gi, (c.code || "").trim())
+      .replace(/\{\s*ngay\s*\}/gi, noteDate(c.event_date))
+  )
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export const DEFAULT_TRANSFER_NOTE_MODE: TransferNoteMode = { withDate: false, sepay: false };
 
@@ -72,10 +100,10 @@ export function transferNote(
   payCode: string | null | undefined,
   mode: TransferNoteMode
 ): string {
+  const tpl = (mode.template || "").trim();
   return [
     mode.sepay ? (payCode || "").trim() : "",
-    (c.code || "").trim(),
-    mode.withDate ? noteDate(c.event_date) : "",
+    ...(tpl ? [fillNoteTemplate(tpl, c)] : [(c.code || "").trim(), mode.withDate ? noteDate(c.event_date) : ""]),
   ]
     .filter(Boolean)
     .join(" ")

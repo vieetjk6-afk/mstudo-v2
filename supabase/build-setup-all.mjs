@@ -113,6 +113,7 @@ const ORDER = [
   ["migrations/binh_chon.sql", "Bình chọn hệ thống: admin hỏi ý kiến mọi tài khoản, người dùng bỏ phiếu trong dashboard"],
   ["migrations/hop_dong_yeu_cau_studio.sql", "Hợp đồng: tên cô dâu/chú rể, tên & ghi chú ngày chính, nội dung chuyển khoản chỉ số HĐ (tuỳ chọn kèm ngày)"],
   ["migrations/dat_lich_chi_tiet.sql", "Đặt lịch: nhiều gói, ngày chính/phụ, cô dâu/chú rể (studio_bookings.details); SĐT + địa chỉ cô dâu/chú rể trên hợp đồng (chạy SAU hop_dong_yeu_cau_studio)"],
+  ["migrations/noi_dung_ck_tu_nhap.sql", "Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -178,6 +179,7 @@ const MOI = [
   "migrations/binh_chon.sql",
   "migrations/hop_dong_yeu_cau_studio.sql",
   "migrations/dat_lich_chi_tiet.sql",
+  "migrations/noi_dung_ck_tu_nhap.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
@@ -271,7 +273,7 @@ const NHOM = {
       "-- studio_bookings. Chỉ cần bảng có từ schema nền. Chạy lại cả file này",
       "-- cũng an toàn.",
     ],
-    files: ["migrations/hop_dong_yeu_cau_studio.sql", "migrations/dat_lich_chi_tiet.sql"],
+    files: ["migrations/hop_dong_yeu_cau_studio.sql", "migrations/dat_lich_chi_tiet.sql", "migrations/noi_dung_ck_tu_nhap.sql"],
   },
   "anh-in-tang.sql": {
     tieuDe: "ẢNH IN TẶNG — KHÁCH CHỌN ẢNH IN TRONG ALBUM GIAO KHÁCH",

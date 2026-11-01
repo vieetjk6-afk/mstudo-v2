@@ -8,6 +8,7 @@ import { BANKS } from "@/lib/banks";
 import { VietQR } from "@/components/VietQR";
 import { vnd } from "@/lib/types";
 import { DEFAULT_APPEARANCE, usePricing, type Appearance, type PricingProps } from "./usePricing";
+import TransferNoteField from "./TransferNoteField";
 
 /** Bản cũ. Giao diện mới là PricingV2 — page.tsx chọn bản theo isUiV2(). */
 export default function PricingManager(props: PricingProps) {
@@ -211,17 +212,14 @@ export default function PricingManager(props: PricingProps) {
           </div>
           <div className="field sm:col-span-2">
             <label className="label">Nội dung chuyển khoản (QR hợp đồng)</label>
-            <select
-              className="input"
-              value={c.qr_note_date ? "date" : "code"}
-              onChange={(e) => setC((p) => ({ ...p, qr_note_date: e.target.value === "date" }))}
-            >
-              <option value="code">Chỉ số hợp đồng — VD: HD-11-2026-007</option>
-              <option value="date">Số hợp đồng + ngày — VD: HD-11-2026-007 25-12-2026</option>
-            </select>
-            <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
-              Không ghi tên khách hay tên đợt. Đã bật Tự xác nhận chuyển khoản (SePay) thì tự thêm mã MS… ở đầu để tiền về tự ghi thu.
-            </p>
+            <TransferNoteField
+              value={c}
+              onChange={(patch) => setC((p) => ({ ...p, ...patch }))}
+              selectClassName="input"
+              inputClassName="input"
+              hintClassName="mt-1 text-[11px]"
+              hintColor="var(--text3)"
+            />
           </div>
         </div>
         <button onClick={saveContact} className="btn-primary mt-4">{savedContact ? <Check size={15} /> : null} {savedContact ? "Đã lưu" : "Lưu liên hệ"}</button>
