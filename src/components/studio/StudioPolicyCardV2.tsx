@@ -101,7 +101,7 @@ export default function StudioPolicyCardV2(props: StudioPolicyProps) {
             onChange={p.setDepPct}
             hint={
               p.depPct > 0
-                ? `Đợt cọc đầu tiên của hợp đồng mới tự điền ${p.depPct}% giá trị (làm tròn lên 500k). Sửa lại từng hợp đồng vẫn được.`
+                ? `Đợt cọc đầu tiên của hợp đồng mới tự điền ${p.depPct}% giá trị (làm tròn 500k) và tự tính lại mỗi khi tổng hợp đồng đổi; đợt cuối nhận phần còn lại. Mặc định 25%.`
                 : "0 = không gợi ý, bạn tự nhập số tiền từng đợt."
             }
           />

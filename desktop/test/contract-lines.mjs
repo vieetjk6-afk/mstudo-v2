@@ -22,7 +22,9 @@ import {
   CUSTOM_LINE_FALLBACK_NAME,
   discountAmount,
   rebalancePlan,
+  syncPlanToTotal,
 } from "../../src/lib/contract-lines.ts";
+import { depositByPercent } from "../../src/lib/quote-deposit.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -150,18 +152,29 @@ check("giảm không quá tạm tính", discountAmount(5_000_000, 9_000_000, "vn
   check("dòng Giảm giá giá âm ở cuối, tổng trừ đúng", [d.at(-1), linesTotal(d)], [{ name: "Giảm giá", qty: 1, unit_price: -3_000_000 }, 17_000_000]);
 }
 
-// ── Giữ cọc khi tổng đổi (lỗi cọc 7 triệu tự nhảy) ──────────────────────────
+// ── Đợt thu tự đổi theo tổng hợp đồng ──────────────────────────────────────
 {
   const plan = [
-    { label: "Cọc giữ lịch", amount: 7_000_000, due: "" },
-    { label: "Thanh toán khi giao sản phẩm", amount: 13_000_000, due: "" },
+    { label: "Cọc giữ lịch", amount: 5_000_000, due: "" },
+    { label: "Thanh toán khi giao sản phẩm", amount: 15_000_000, due: "" },
   ];
-  const up = rebalancePlan(plan, 25_000_000);
-  check("tăng tổng: cọc giữ nguyên 7tr, đợt cuối gánh phần chênh", up.map((p) => p.amount), [7_000_000, 18_000_000]);
-  const down = rebalancePlan(plan, 17_000_000);
-  check("giảm giá: cọc giữ nguyên, đợt cuối giảm", down.map((p) => p.amount), [7_000_000, 10_000_000]);
-  check("chỉ có đợt cọc → thêm đợt phần còn lại", rebalancePlan([plan[0]], 20_000_000).map((p) => p.amount), [7_000_000, 13_000_000]);
-  check("tổng dưới số đã chia → đợt cuối về 0, không âm", rebalancePlan(plan, 5_000_000).map((p) => p.amount), [7_000_000, 0]);
+  const up = rebalancePlan(plan, 28_000_000, depositByPercent(28_000_000, 25));
+  check("tổng tăng: cọc tính lại 25%, đợt cuối nhận phần còn lại", up.map((p) => p.amount), [7_000_000, 21_000_000]);
+  const pct30 = rebalancePlan(plan, 20_000_000, depositByPercent(20_000_000, 30));
+  check("studio đặt 30%", pct30.map((p) => p.amount), [6_000_000, 14_000_000]);
+  check("studio tắt cọc tự động (null) → giữ cọc đã gõ, đợt cuối gánh chênh", rebalancePlan(plan, 25_000_000, null).map((p) => p.amount), [5_000_000, 20_000_000]);
+  check("chỉ có đợt cọc → thêm đợt phần còn lại", rebalancePlan([plan[0]], 20_000_000, 5_000_000).map((p) => p.amount), [5_000_000, 15_000_000]);
+  const paid = syncPlanToTotal(
+    [
+      { label: "Cọc hợp đồng", amount: 5_000_000, paid: true },
+      { label: "Đợt 2", amount: 5_000_000, paid: false },
+      { label: "Thanh toán cuối", amount: 10_000_000, paid: false },
+    ],
+    24_000_000,
+    6_000_000
+  );
+  check("màn chi tiết: cọc ĐÃ THU không đổi, đợt giữa giữ, đợt chưa thu cuối gánh chênh", paid.map((p) => p.amount), [5_000_000, 5_000_000, 14_000_000]);
+  check("% cọc mặc định 25, làm tròn 500k, tối thiểu 500k", [depositByPercent(18_000_000), depositByPercent(1_000_000), depositByPercent(10_000_000, 0)], [4_500_000, 500_000, 0]);
 }
 
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);

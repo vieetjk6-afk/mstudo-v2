@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { fmtDate, todayVN } from "@/lib/date";
 import { createClient } from "@/lib/supabase/client";
@@ -46,6 +46,8 @@ import {
 import { isSignedLockError, type ContractAddendum } from "@/lib/contract-addenda";
 import type { ContractAlbumOption } from "@/lib/contract-album";
 import { normalizeAlbumMode, type AlbumMode } from "@/lib/album-mode";
+import { depositByPercent } from "@/lib/quote-deposit";
+import { syncPlanToTotal } from "@/lib/contract-lines";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIC CHUNG của màn chi tiết hợp đồng — bản cũ (ContractEditor) và bản mới
@@ -756,18 +758,9 @@ export function useContractEditor(props: ContractEditorProps) {
   const balance = total - collected;
 
   // Cọc gợi ý = % studio đặt trong "Chính sách studio" (mặc định 25%), làm tròn
-  // lên bội của 500k, tối thiểu 500k. 0% = studio tắt gợi ý, tự nhập từng đợt.
-  // useCallback: hàm này nằm trong deps của effect đồng bộ tiền cọc bên dưới.
-  // Để nó dựng lại mỗi lần render thì effect chạy lại mỗi lần render — chỉ phụ
-  // thuộc đúng `depositPercent`, nên khoá lại theo đó.
-  const depositOf = useCallback(
-    (t: number) =>
-      t > 0 && depositPercent > 0
-        ? Math.max(500_000, Math.round((t * depositPercent) / 100 / 500_000) * 500_000)
-        : 0,
-    [depositPercent]
-  );
-  const depositAmt = depositOf(total);
+  // tới bội của 500k, tối thiểu 500k — cùng hàm với màn tạo hợp đồng. 0% =
+  // studio tắt gợi ý, tự nhập từng đợt.
+  const depositAmt = depositByPercent(total, depositPercent);
   const creatingDeposit = useRef(false);
   const prevTotal = useRef(total);
 
@@ -786,19 +779,25 @@ export function useContractEditor(props: ContractEditorProps) {
     })();
   }, [total, plan.length, depositAmt, contract.id, supabase]);
 
-  // Keep the deposit synced to the item total — until studio edits it or marks it paid.
+  /* Tổng hợp đồng ĐỔI (sửa hạng mục, giá, giảm giá, phụ lục) → đợt thu tự đổi
+     theo: đợt cọc chưa thu tính lại theo % cọc của studio, đợt chưa thu cuối
+     cùng nhận phần còn lại (syncPlanToTotal). Trước đây chỉ đợt tên đúng "Cọc
+     hợp đồng" mà chưa sửa tay mới đổi — hợp đồng tạo từ form ("Cọc giữ lịch"…)
+     thì cọc và đợt còn lại đứng yên, studio phải xoá rồi thêm lại đợt. Đợt đã
+     thu không bao giờ bị đụng. */
   useEffect(() => {
     if (prevTotal.current === total) return;
-    const oldDeposit = depositOf(prevTotal.current);
     prevTotal.current = total;
-    const dep = plan.find((p) => p.label === "Cọc hợp đồng" && !p.paid);
-    if (dep && dep.amount === oldDeposit && dep.amount !== depositAmt) {
-      setPlan((p) => p.map((x) => (x.id === dep.id ? { ...x, amount: depositAmt } : x)));
-      // Builder của supabase-js chỉ GỬI khi được then/await — thiếu .then() là
-      // màn hình hiện cọc mới còn DB (cổng khách, nhắc nợ) giữ cọc cũ.
-      void supabase.from("contract_payment_plan").update({ amount: depositAmt }).eq("id", dep.id).then(() => undefined);
+    const next = syncPlanToTotal(plan, total, depositPercent > 0 ? depositAmt : null);
+    const changed = next.filter((x, i) => x.amount !== plan[i].amount);
+    if (!changed.length) return;
+    setPlan(next);
+    // Builder của supabase-js chỉ GỬI khi được then/await — thiếu .then() là
+    // màn hình hiện số mới còn DB (cổng khách, nhắc nợ) giữ số cũ.
+    for (const x of changed) {
+      void supabase.from("contract_payment_plan").update({ amount: x.amount }).eq("id", x.id).then(() => undefined);
     }
-  }, [total, plan, depositAmt, supabase, depositOf]);
+  }, [total, plan, depositAmt, depositPercent, supabase]);
   const payroll = crew.reduce((s, c) => s + (Number(c.salary) || 0), 0);
   const paidPayroll = crew.filter((c) => c.paid).reduce((s, c) => s + (Number(c.salary) || 0), 0);
   const expenseTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);

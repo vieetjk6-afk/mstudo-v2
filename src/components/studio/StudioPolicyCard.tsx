@@ -97,7 +97,7 @@ function StudioPolicyCardV1(props: StudioPolicyProps) {
           </div>
           <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>
             {depPct > 0
-              ? `Đợt cọc đầu tiên của hợp đồng mới tự điền ${depPct}% giá trị (làm tròn lên 500k). Sửa lại từng hợp đồng vẫn được.`
+              ? `Đợt cọc đầu tiên của hợp đồng mới tự điền ${depPct}% giá trị (làm tròn 500k) và tự tính lại mỗi khi tổng hợp đồng đổi; đợt cuối nhận phần còn lại. Mặc định 25%.`
               : "0 = không gợi ý, bạn tự nhập số tiền từng đợt."}
           </p>
         </div>

@@ -695,7 +695,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
               </AddRowButton>
               {instalments.length > 1 && total > 0 && (
                 <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
-                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b style={{ color: "var(--tx2)" }}>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}. Đã nhập cọc thì quay lại đổi gói / giảm giá vẫn <b>giữ nguyên số cọc</b>.
+                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b style={{ color: "var(--tx2)" }}>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}. Đổi gói / giảm giá thì cọc <b style={{ color: "var(--tx2)" }}>tự tính lại</b>{f.depositPercent > 0 ? ` theo ${f.depositPercent}% tổng` : ""} và đợt cuối nhận phần còn lại.
                 </p>
               )}
             </div>

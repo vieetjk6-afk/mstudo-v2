@@ -6,6 +6,7 @@ import { platformLabel } from "@/lib/inbox/platforms";
 import { buildTranscript, type TranscriptMessage } from "@/lib/contract-quick";
 import type { StudioService, StudioCrew } from "@/lib/types";
 import { loadCrewRoles } from "@/lib/crew-roles";
+import { DEFAULT_DEPOSIT_PERCENT } from "@/lib/quote-deposit";
 import NewContractForm, {
   type TemplateOption,
   type ServiceOption,
@@ -125,6 +126,7 @@ export default async function NewContractPage(props: { searchParams?: Promise<{ 
       ownerId={profile.id}
       assignTo={assignTo}
       branchId={branchId}
+      depositPercent={(profile as { contract_deposit_percent?: number }).contract_deposit_percent ?? DEFAULT_DEPOSIT_PERCENT}
       templates={(templates ?? []) as unknown as TemplateOption[]}
       services={((services ?? []) as Pick<StudioService, "id" | "name" | "clauses">[]) as ServiceOption[]}
       packages={(packages ?? []) as unknown as PackageOption[]}

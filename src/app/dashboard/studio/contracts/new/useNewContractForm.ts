@@ -11,7 +11,7 @@ import { contractKind, kindHasPhotoWork, shootTypesByKind, DEFAULT_TASKS_BY_KIND
 import { resolveAlbumMode, type AlbumMode } from "@/lib/album-mode";
 import type { AlbumModeStatus } from "@/components/AlbumModePicker";
 import { fullClauseText } from "@/lib/contract-clauses";
-import { computeRoundedDeposit } from "@/lib/quote-deposit";
+import { depositByPercent, DEFAULT_DEPOSIT_PERCENT } from "@/lib/quote-deposit";
 import {
   buildContractLines,
   effectivePrice,
@@ -100,6 +100,8 @@ export type NewContractFormProps = {
    * lại được ở màn chi tiết hợp đồng.
    */
   branchId?: string | null;
+  /** % cọc studio tự đặt ở "Chính sách studio" (mặc định 25%; 0 = không tự tính cọc). */
+  depositPercent?: number;
   templates: TemplateOption[];
   services?: ServiceOption[];
   packages?: PackageOption[];
@@ -140,6 +142,7 @@ export function useNewContractForm({
   ownerId,
   assignTo,
   branchId = null,
+  depositPercent = DEFAULT_DEPOSIT_PERCENT,
   templates,
   services = [],
   packages = [],
@@ -201,8 +204,8 @@ export function useNewContractForm({
 
   // ── Bước 5 — thanh toán ─────────────────────────────────────────────────
   /* Đợt thu studio đã nhập + TỔNG lúc nhập. Tổng đổi sau đó (quay lại sửa
-     gói, giảm giá) thì giữ nguyên cọc, chỉ đợt cuối gánh phần chênh — xem
-     rebalancePlan. null = chưa đụng tới → dùng kế hoạch mặc định. */
+     gói, giảm giá) thì cọc TỰ TÍNH LẠI theo % của studio và đợt cuối gánh
+     phần còn lại — xem rebalancePlan. null = chưa đụng tới → kế hoạch mặc định. */
   const [plan, setPlanState] = useState<{ rows: Instalment[]; total: number } | null>(null);
 
   // ── Tuỳ chọn giữ lại từ bản cũ ──────────────────────────────────────────
@@ -271,17 +274,19 @@ export function useNewContractForm({
       : { fg: "var(--gn)", soft: "var(--gnS)" };
   const thinMargin = total > 0 && marginPct < 45;
 
-  // Kế hoạch thu mặc định: cọc giữ lịch (làm tròn 500K theo chính sách sẵn có
-  // của repo) + phần còn lại khi giao sản phẩm. Studio sửa/thêm đợt tuỳ ý.
+  // Kế hoạch thu mặc định: cọc giữ lịch theo % cọc của studio (làm tròn 500K)
+  // + phần còn lại khi giao sản phẩm. Studio tắt cọc tự động (0%) thì một đợt
+  // trọn gói. Studio sửa/thêm đợt tuỳ ý.
+  const autoDeposit = depositPercent > 0 ? depositByPercent(total, depositPercent) : null;
   const defaultPlan = useMemo<Instalment[]>(() => {
     if (total <= 0) return [];
-    const dep = Math.min(total, computeRoundedDeposit(total));
-    const rest = total - dep;
-    const out: Instalment[] = [{ label: "Cọc giữ lịch", amount: dep, due: "" }];
+    if (!autoDeposit) return [{ label: "Thanh toán khi giao sản phẩm", amount: total, due: "" }];
+    const rest = total - autoDeposit;
+    const out: Instalment[] = [{ label: "Cọc giữ lịch", amount: autoDeposit, due: "" }];
     if (rest > 0) out.push({ label: "Thanh toán khi giao sản phẩm", amount: rest, due: "" });
     return out;
-  }, [total]);
-  const instalments = plan ? (plan.total === total ? plan.rows : rebalancePlan(plan.rows, total)) : defaultPlan;
+  }, [total, autoDeposit]);
+  const instalments = plan ? (plan.total === total ? plan.rows : rebalancePlan(plan.rows, total, autoDeposit)) : defaultPlan;
   const setPlan = (rows: Instalment[] | null, forTotal = total) => setPlanState(rows ? { rows, total: forTotal } : null);
   const planTotal = instalments.reduce((s, p) => s + (p.amount || 0), 0);
 
@@ -926,6 +931,7 @@ export function useNewContractForm({
     pickMain, toggleExtra, togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
     // tiền
+    depositPercent,
     lines, total, subtotal, discount, discountMode, setDiscountMode, discountValue, setDiscountValue, payroll, profit, marginPct, marginTone, thinMargin,
     // lịch & nhân sự
     eventDate, setEventDate, startTime, setStartTime, endTime, setEndTime, location, setLocation,

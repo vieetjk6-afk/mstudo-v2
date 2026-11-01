@@ -57,6 +57,7 @@ function NewContractFormV1(props: NewContractFormProps) {
     selectedService, template, nhomDichVu, priceOf, priceEdited,
     togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
+    depositPercent,
     lines, total, subtotal, discount, discountMode, setDiscountMode, discountValue, setDiscountValue, payroll, profit, marginPct, marginTone, thinMargin,
     eventDate, setEventDate, startTime, setStartTime, endTime, setEndTime, location, setLocation,
     eventLabel, setEventLabel, eventNote, setEventNote,
@@ -859,7 +860,7 @@ function NewContractFormV1(props: NewContractFormProps) {
               </button>
               {instalments.length > 1 && total > 0 && (
                 <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
-                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}. Đã nhập cọc thì quay lại đổi gói / giảm giá vẫn <b>giữ nguyên số cọc</b>.
+                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}. Đổi gói / giảm giá thì cọc <b>tự tính lại</b>{depositPercent > 0 ? ` theo ${depositPercent}% tổng` : ""} và đợt cuối nhận phần còn lại.
                 </p>
               )}
             </div>
