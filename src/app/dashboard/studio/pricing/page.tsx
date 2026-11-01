@@ -82,6 +82,7 @@ export default async function PricingPage() {
       pl_bank_name: profile.pl_bank_name ?? "",
       pl_bank_bin: profile.pl_bank_bin ?? "",
       qr_note_date: (profile as { qr_note_date?: boolean }).qr_note_date === true,
+      qr_note_template: (profile as { qr_note_template?: string | null }).qr_note_template ?? "",
     },
     appearance: {
       pl_bg: profile.pl_bg ?? "",

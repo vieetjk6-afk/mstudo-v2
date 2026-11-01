@@ -20,6 +20,8 @@ export type Contact = {
   pl_phone: string; pl_facebook: string; pl_bank_holder: string; pl_bank_account: string; pl_bank_name: string; pl_bank_bin: string;
   /** Nội dung chuyển khoản trên QR hợp đồng: false = chỉ số HĐ, true = số HĐ + ngày chính. */
   qr_note_date: boolean;
+  /** Nội dung chuyển khoản studio tự nhập ({so_hd}, {ngay}); rỗng = không dùng. */
+  qr_note_template: string;
 };
 export type Appearance = { pl_bg: string; pl_text: string; pl_accent: string; pl_logo_url: string };
 
@@ -322,13 +324,18 @@ export function usePricing({
   }
 
   async function saveContact() {
-    const { error } = await supabase.from("profiles").update(c).eq("id", ownerId);
-    // Chưa chạy migration hop_dong_yeu_cau_studio.sql → vẫn lưu phần liên hệ /
-    // tài khoản, chỉ bỏ lựa chọn nội dung chuyển khoản.
+    const row: Record<string, unknown> = { ...c, qr_note_template: c.qr_note_template.trim() || null };
+    let { error } = await supabase.from("profiles").update(row).eq("id", ownerId);
+    // Chưa chạy migration noi_dung_ck_tu_nhap.sql / hop_dong_yeu_cau_studio.sql
+    // → vẫn lưu phần liên hệ / tài khoản, chỉ bỏ cột chưa có.
+    if (error && isMissingColumn(error, "qr_note_template")) {
+      if (c.qr_note_template.trim()) alert("Chưa lưu được nội dung chuyển khoản tự nhập: cần chạy migration noi_dung_ck_tu_nhap.sql trên Supabase.");
+      delete row.qr_note_template;
+      ({ error } = await supabase.from("profiles").update(row).eq("id", ownerId));
+    }
     if (error && isMissingColumn(error, "qr_note_date")) {
-      const { qr_note_date: _skip, ...rest } = c;
-      void _skip;
-      await supabase.from("profiles").update(rest).eq("id", ownerId);
+      delete row.qr_note_date;
+      await supabase.from("profiles").update(row).eq("id", ownerId);
     }
     setBaseC(c);
     setSavedContact(true);

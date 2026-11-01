@@ -7394,6 +7394,24 @@ alter table public.studio_contracts add column if not exists groom_address text;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/noi_dung_ck_tu_nhap.sql — Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- Nội dung chuyển khoản trên QR hợp đồng: thêm lựa chọn studio TỰ NHẬP
+--
+-- profiles.qr_note_template — null / rỗng = dùng lựa chọn có sẵn (chỉ số HĐ,
+-- hoặc số HĐ + ngày theo qr_note_date). Có nội dung = dùng đúng chữ studio
+-- nhập, chèn được {so_hd} và {ngay}; app tự bỏ dấu tiếng Việt. Studio đã bật
+-- SePay thì mã đợt MS… vẫn tự thêm ở đầu.
+--
+-- Chạy trên Supabase SQL Editor. An toàn khi chạy lại (idempotent).
+-- ============================================================================
+
+alter table public.profiles add column if not exists qr_note_template text;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/phan_quyen_vai_tro_hop_dong.sql — Phân quyền theo vai trò cho hợp đồng: staff chỉ hợp đồng được giao, quản lý chi nhánh chỉ chi nhánh mình, kế toán chỉ đọc, chỉ chủ studio huỷ / hoàn tiền, tài khoản bị khoá mất quyền (chạy CUỐI)
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -9259,6 +9277,14 @@ grant execute on function public.save_album_selection(uuid, text, text, uuid[], 
 -- BẮT BUỘC: migrations/c1_profiles_column_grants.sql đã thu hồi quyền UPDATE cả
 -- bảng profiles — cột mới phải cấp riêng thì chủ studio mới tự lưu được.
 grant update (qr_note_date) on public.profiles to authenticated;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/noi_dung_ck_tu_nhap.sql — Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- Vá C1 đã thu hồi quyền UPDATE cả bảng profiles — cấp riêng cột mới.
+grant update (qr_note_template) on public.profiles to authenticated;
 
 
 -- ══════════════════════════════════════════════════════════════════════════

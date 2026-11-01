@@ -42,6 +42,7 @@
     "migrations/binh_chon.sql",
     "migrations/hop_dong_yeu_cau_studio.sql",
     "migrations/dat_lich_chi_tiet.sql",
+    "migrations/noi_dung_ck_tu_nhap.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -922,6 +923,14 @@
         "studio_contracts.bride_phone",
         "studio_contracts.groom_address",
         "studio_contracts.groom_phone"
+      ]
+    },
+    {
+      "file": "migrations/noi_dung_ck_tu_nhap.sql",
+      "mo_ta": "Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})",
+      "bang": [],
+      "cot": [
+        "profiles.qr_note_template"
       ]
     }
   ]
