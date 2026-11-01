@@ -177,6 +177,24 @@ export default function NewContractFormV2(props: NewContractFormProps) {
       </Callout>
     ) : null;
 
+  const extraClashCallout =
+    f.extraClashes.length > 0 ? (
+      <Callout tone="amber" icon={CalendarX2} title="Ngày phụ trùng show khác">
+        <ul className="mt-0.5 space-y-0.5">
+          {f.extraClashes.map((x) => (
+            <li key={x.date}>
+              <b style={{ color: "var(--tx)" }}>{x.label}</b> ({fmtDate(x.date)}):{" "}
+              {x.contracts
+                .slice(0, 3)
+                .map((c) => [c.code || c.title, c.client_name, c.event_time?.slice(0, 5)].filter(Boolean).join(" · "))
+                .join("; ")}
+              {x.contracts.length > 3 ? `; +${x.contracts.length - 3}` : ""}
+            </li>
+          ))}
+        </ul>
+      </Callout>
+    ) : null;
+
   /* ═══ Nội dung từng bước ═══════════════════════════════════════════════════ */
   const stepBody = (() => {
     switch (step) {
@@ -249,6 +267,12 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                   onChange={(e) => f.setClientPhone(e.target.value)}
                 />
               </Field>
+              <Field label="Tên cô dâu" htmlFor="nc2-bride" hint="Không bắt buộc — một hợp đồng cho cả hai nhà.">
+                <input id="nc2-bride" className={inputCls} placeholder="Nguyễn Thu Lan" value={f.brideName} onChange={(e) => f.setBrideName(e.target.value)} />
+              </Field>
+              <Field label="Tên chú rể" htmlFor="nc2-groom">
+                <input id="nc2-groom" className={inputCls} placeholder="Trần Minh Khang" value={f.groomName} onChange={(e) => f.setGroomName(e.target.value)} />
+              </Field>
             </div>
             {returningCallout}
 
@@ -316,13 +340,17 @@ export default function NewContractFormV2(props: NewContractFormProps) {
               <>
                 <div>
                   <SubHead
-                    title="Gói chính"
+                    title="Gói & hạng mục"
                     aside={
                       f.serviceListKeys ? (
                         <button type="button" onClick={() => f.setShowAllLists((v) => !v)} className="font-semibold underline-offset-2 hover:underline" style={{ color: "var(--ac)" }}>
                           {f.filteringLists ? `Đang lọc theo ${selectedService?.name ?? "dịch vụ"} · Xem tất cả` : "Chỉ hiện bảng giá của dịch vụ này"}
                         </button>
-                      ) : null
+                      ) : f.pickedPkgIds.length ? (
+                        `Đã chọn ${f.pickedPkgIds.length}`
+                      ) : (
+                        "Tick bao nhiêu gói cũng được"
+                      )
                     }
                   />
                   <RowList>
@@ -330,14 +358,14 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                       <div key={key} className="min-w-0 [&>*+*]:border-t [&>*+*]:border-[color:var(--bd2)]">
                         {f.packageGroups.length > 1 && <RowGroup>{f.listLabel(key)}</RowGroup>}
                         {list.map((p) => {
-                          const on = f.mainPkgId === p.id;
+                          const on = f.pickedPkgIds.includes(p.id);
                           const edited = f.priceEdited(p);
                           return (
                             <ChoiceRow
                               key={p.id}
-                              mode="radio"
+                              mode="check"
                               on={on}
-                              onToggle={() => f.pickMain(p.id)}
+                              onToggle={() => f.togglePkg(p.id)}
                               title={p.name}
                               sub={
                                 on && edited
@@ -364,47 +392,16 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                       </div>
                     ))}
                   </RowList>
+                  {/* Gói đã tick nhưng đang bị lọc khỏi danh sách (thuộc bảng giá của dịch vụ khác). */}
+                  {f.pickedPkgs.some((p) => !f.visiblePackages.includes(p)) && (
+                    <p className="mt-2 text-[12.5px]" style={{ color: "var(--am)" }}>
+                      Còn {f.pickedPkgs.filter((p) => !f.visiblePackages.includes(p)).map((p) => p.name).join(", ")} đã chọn ở bảng giá khác — bấm “Xem tất cả” để thấy.
+                    </p>
+                  )}
                   <p className="mt-2 text-[12.5px]" style={{ color: "var(--tx3)" }}>
-                    Đã thương lượng khác bảng giá? Chọn gói rồi <b style={{ color: "var(--tx2)" }}>sửa thẳng ô giá</b> — bảng giá gốc không đổi.
+                    Khách lấy nhiều gói thì <b style={{ color: "var(--tx2)" }}>tick hết</b>. Đã thương lượng khác bảng giá? <b style={{ color: "var(--tx2)" }}>Sửa thẳng ô giá</b> — bảng giá gốc không đổi.
                   </p>
                 </div>
-
-                {f.visiblePackages.some((p) => p.id !== f.mainPkgId) && (
-                  <div>
-                    <SubHead title="Hạng mục thêm" aside={f.extraIds.length ? `Đã chọn ${f.extraIds.length}` : "Tick để cộng thêm"} />
-                    <RowList>
-                      {f.visiblePackages
-                        .filter((p) => p.id !== f.mainPkgId)
-                        .map((x) => {
-                          const on = f.extraIds.includes(x.id);
-                          return (
-                            <ChoiceRow
-                              key={x.id}
-                              mode="check"
-                              on={on}
-                              onToggle={() => f.toggleExtra(x.id)}
-                              title={x.name}
-                              sub={f.packageGroups.length > 1 ? f.listLabel(x.list_key || "khac") : x.category || undefined}
-                              right={
-                                on ? (
-                                  <PriceEditor
-                                    value={f.priceOf(x)}
-                                    onChange={(n) => f.setPkgPriceFor(x.id, n)}
-                                    edited={f.priceEdited(x)}
-                                    onReset={() => f.clearPkgPrice(x.id)}
-                                    listPrice={x.price}
-                                    ariaLabel={`Giá hạng mục ${x.name}`}
-                                  />
-                                ) : (
-                                  <PriceText value={x.price} muted />
-                                )
-                              }
-                            />
-                          );
-                        })}
-                    </RowList>
-                  </div>
-                )}
               </>
             )}
 
@@ -452,10 +449,59 @@ export default function NewContractFormV2(props: NewContractFormProps) {
               </div>
             </div>
 
+            {/* Giảm giá cho cả hợp đồng — lưu thành dòng "Giảm giá" như ở màn chi tiết. */}
+            {f.subtotal > 0 && (
+              <div>
+                <SubHead title="Giảm giá" aside={f.discount > 0 ? `− ${vnd(f.discount)}` : "Không bắt buộc"} />
+                <div className="flex min-w-0 items-center gap-2">
+                  <select
+                    aria-label="Kiểu giảm giá"
+                    className={`${inputCls} w-[96px] flex-none`}
+                    value={f.discountMode}
+                    onChange={(e) => {
+                      f.setDiscountMode(e.target.value as "vnd" | "pct");
+                      f.setDiscountValue(0);
+                    }}
+                  >
+                    <option value="vnd">Số tiền</option>
+                    <option value="pct">%</option>
+                  </select>
+                  {f.discountMode === "vnd" ? (
+                    <MoneyInput
+                      value={f.discountValue}
+                      onChange={(n) => f.setDiscountValue(n)}
+                      placeholder="0"
+                      ariaLabel="Số tiền giảm"
+                      className={`${inputCls} tnum min-w-0 flex-1 text-right font-semibold`}
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      aria-label="Phần trăm giảm"
+                      className={`${inputCls} tnum min-w-0 flex-1 text-right font-semibold`}
+                      value={f.discountValue || ""}
+                      placeholder="0"
+                      onChange={(e) => f.setDiscountValue(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+
             {lines.length > 0 && (
-              <div className="flex items-baseline justify-between rounded-[12px] px-4 py-3" style={{ background: "var(--sf2)" }}>
-                <span className="text-[13px] font-medium" style={{ color: "var(--tx2)" }}>{lines.length} hạng mục trong hợp đồng</span>
-                <strong className="tnum text-[18px]" style={{ color: "var(--ac)", letterSpacing: "-.4px" }}>{vnd(total)}</strong>
+              <div className="rounded-[12px] px-4 py-3" style={{ background: "var(--sf2)" }}>
+                {f.discount > 0 && (
+                  <div className="mb-1 flex items-baseline justify-between text-[13px]" style={{ color: "var(--tx2)" }}>
+                    <span>Tạm tính {vnd(f.subtotal)}</span>
+                    <span className="tnum" style={{ color: "var(--am)" }}>Giảm − {vnd(f.discount)}</span>
+                  </div>
+                )}
+                <div className="flex items-baseline justify-between">
+                  <span className="text-[13px] font-medium" style={{ color: "var(--tx2)" }}>{lines.length} hạng mục trong hợp đồng</span>
+                  <strong className="tnum text-[18px]" style={{ color: "var(--ac)", letterSpacing: "-.4px" }}>{vnd(total)}</strong>
+                </div>
               </div>
             )}
           </Stack>
@@ -466,7 +512,11 @@ export default function NewContractFormV2(props: NewContractFormProps) {
         return (
           <Stack gap={20}>
             <div>
+              <SubHead title="Ngày chính" aside="Tự đặt tên: Lễ nhà gái, Ngày cưới…" />
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <Field label="Tên ngày" htmlFor="nc2-evlabel" className="col-span-2 sm:col-span-3">
+                  <input id="nc2-evlabel" className={inputCls} value={f.eventLabel} onChange={(e) => f.setEventLabel(e.target.value)} placeholder="Ngày chính" />
+                </Field>
                 <Field label="Ngày chụp" className="col-span-2 sm:col-span-1">
                   <DateInput value={eventDate} onChange={f.setEventDate} className={inputCls} />
                 </Field>
@@ -484,8 +534,56 @@ export default function NewContractFormV2(props: NewContractFormProps) {
             <Field label="Địa điểm" htmlFor="nc2-loc">
               <input id="nc2-loc" className={inputCls} value={location} onChange={(e) => f.setLocation(e.target.value)} placeholder="Nhà hàng, studio, ngoại cảnh…" />
             </Field>
+            <Field label="Ghi chú cho ngày chính" htmlFor="nc2-evnote">
+              <textarea id="nc2-evnote" rows={2} className={inputCls} value={f.eventNote} onChange={(e) => f.setEventNote(e.target.value)} placeholder="VD: 6h makeup cô dâu, 9h rước dâu…" />
+            </Field>
 
             {conflictCallout}
+
+            {/* ── Ngày phụ ─────────────────────────────────────────────────
+                Đám cưới thường hai ngày. Mỗi ngày phụ là một mốc lịch của hợp
+                đồng: hiện trên Lịch, lịch thợ, Google Lịch, cổng khách — và
+                được dò trùng show như ngày chính. */}
+            <div>
+              <SubHead title="Ngày phụ" aside={f.extraDays.length ? `${f.extraDays.length} ngày` : "Đám 2 ngày, thử đồ, đãi tiệc…"} />
+              <div className="grid gap-2">
+                {f.extraDays.length > 0 && (
+                  <RowList>
+                    {f.extraDays.map((d, i) => (
+                      <div key={i} className="grid min-w-0 grid-cols-2 gap-2 px-3 py-2.5 sm:grid-cols-[minmax(0,1fr)_150px_110px_auto]">
+                        <input
+                          className={`${inputCls} col-span-2 sm:col-span-1`}
+                          value={d.label}
+                          aria-label={`Tên ngày phụ ${i + 1}`}
+                          placeholder="VD: Lễ nhà trai"
+                          onChange={(e) => f.patchExtraDay(i, { label: e.target.value })}
+                        />
+                        <DateInput value={d.date} onChange={(v) => f.patchExtraDay(i, { date: v })} className={inputCls} />
+                        <TimeInput value={d.time} onChange={(v) => f.patchExtraDay(i, { time: v })} ariaLabel={`Giờ ngày phụ ${i + 1}`} className={inputCls} />
+                        <button type="button" onClick={() => f.removeExtraDay(i)} aria-label={`Bỏ ngày phụ ${i + 1}`} className={`${iconBtn()} col-span-2 justify-self-end sm:col-span-1`}>
+                          <Trash2 size={16} />
+                        </button>
+                        <textarea
+                          rows={1}
+                          className={`${inputCls} col-span-2 sm:col-span-4`}
+                          value={d.note}
+                          aria-label={`Ghi chú ngày phụ ${i + 1}`}
+                          placeholder="Ghi chú cho ngày này"
+                          onChange={(e) => f.patchExtraDay(i, { note: e.target.value })}
+                        />
+                      </div>
+                    ))}
+                  </RowList>
+                )}
+                <AddRowButton onClick={f.addExtraDay}>
+                  <Plus size={16} /> Thêm ngày phụ
+                </AddRowButton>
+                {f.extraDays.some((d) => !d.date) && (
+                  <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Ngày phụ chưa chọn ngày sẽ không được lưu.</p>
+                )}
+              </div>
+            </div>
+            {extraClashCallout}
 
             <div>
               <SubHead
@@ -597,7 +695,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
               </AddRowButton>
               {instalments.length > 1 && total > 0 && (
                 <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
-                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b style={{ color: "var(--tx2)" }}>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}.
+                  Sửa tiền cọc (hoặc đợt bất kỳ ở trên) thì <b style={{ color: "var(--tx2)" }}>đợt cuối tự đổi</b> cho khớp tổng {vnd(total)}. Đổi gói / giảm giá thì cọc <b style={{ color: "var(--tx2)" }}>tự tính lại</b>{f.depositPercent > 0 ? ` theo ${f.depositPercent}% tổng` : ""} và đợt cuối nhận phần còn lại.
                 </p>
               )}
             </div>
@@ -658,12 +756,18 @@ export default function NewContractFormV2(props: NewContractFormProps) {
             <RowList>
               {([
                 [1, "Khách hàng", [clientName || "Chưa có tên", clientPhone].filter(Boolean).join(" · ")],
+                ...(f.brideName.trim() || f.groomName.trim()
+                  ? [[1, "Cô dâu · Chú rể", [f.brideName.trim() || "—", f.groomName.trim() || "—"].join(" · ")] as [number, string, string]]
+                  : []),
                 [0, "Dịch vụ", selectedService?.name || SHOOT_TYPE_LABEL[shootType]],
                 // Giá ở đây là giá ĐÃ SỬA (con số thật trong hợp đồng), không phải giá bảng giá.
-                [2, "Gói chính", f.mainPkg ? `${f.mainPkg.name} · ${vnd(f.priceOf(f.mainPkg))}${f.priceEdited(f.mainPkg) ? " (đã sửa giá)" : ""}` : f.template ? `Mẫu: ${f.template.name}` : "Chưa chọn"],
-                [2, "Hạng mục thêm", f.extras.length ? f.extras.map((x) => `${x.name} · ${vnd(f.priceOf(x))}`).join(", ") : "Không có"],
+                [2, "Gói", f.pickedPkgs.length ? f.pickedPkgs.map((p) => `${p.name} · ${vnd(f.priceOf(p))}${f.priceEdited(p) ? " (đã sửa giá)" : ""}`).join(", ") : f.template ? `Mẫu: ${f.template.name}` : "Chưa chọn"],
                 [2, "Gói riêng", f.customPreview || "Không có"],
-                [3, "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
+                ...(f.discount > 0 ? [[2, "Giảm giá", `− ${vnd(f.discount)}${f.discountMode === "pct" ? ` (${f.discountValue}%)` : ""}`] as [number, string, string]] : []),
+                [3, f.eventLabel.trim() || "Ngày chụp", eventDate ? `${fmtDow(eventDate)} · ${fmtDate(eventDate)}` : "Chưa chọn ngày"],
+                ...f.extraDays
+                  .filter((d) => d.date)
+                  .map((d) => [3, d.label.trim() || "Ngày phụ", `${fmtDow(d.date)} · ${fmtDate(d.date)}${d.time ? ` · ${d.time}` : ""}`] as [number, string, string]),
                 [3, "Khung giờ", startTime || endTime ? [startTime, endTime].filter(Boolean).join(" – ") : "Chưa đặt giờ"],
                 [3, "Địa điểm", location || "Chưa có"],
                 [3, "Nhân sự", picked.length ? picked.map((c) => c.name || c.phone).join(", ") : "Chưa phân công"],

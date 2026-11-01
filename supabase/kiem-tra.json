@@ -40,6 +40,7 @@
     "migrations/luu_chon_anh_tung_phan.sql",
     "migrations/chi_muc_bo_sung.sql",
     "migrations/binh_chon.sql",
+    "migrations/hop_dong_yeu_cau_studio.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -897,6 +898,18 @@
         "system_polls"
       ],
       "cot": []
+    },
+    {
+      "file": "migrations/hop_dong_yeu_cau_studio.sql",
+      "mo_ta": "Hợp đồng: tên cô dâu/chú rể, tên & ghi chú ngày chính, nội dung chuyển khoản chỉ số HĐ (tuỳ chọn kèm ngày)",
+      "bang": [],
+      "cot": [
+        "profiles.qr_note_date",
+        "studio_contracts.bride_name",
+        "studio_contracts.event_label",
+        "studio_contracts.event_note",
+        "studio_contracts.groom_name"
+      ]
     }
   ]
 }

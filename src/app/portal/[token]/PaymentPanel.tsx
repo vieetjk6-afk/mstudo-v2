@@ -7,6 +7,7 @@ import { Modal } from "@/components/studio/Modal";
 import { fmtDate } from "@/lib/date";
 import { PAYMENT_KIND_LABEL, vnd } from "@/lib/types";
 import type { PortalPayment, PortalPlanRow } from "./types";
+import type { TransferNoteMode } from "@/lib/vietqr";
 import { usePortalPayment } from "./usePortal";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -22,7 +23,7 @@ import { usePortalPayment } from "./usePortal";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export default function PaymentPanel({
-  token, phone, total, paid, plan, payments, bank, studioName, contractCode, toast,
+  token, phone, total, paid, plan, payments, bank, studioName, contractCode, eventDate, noteMode, toast,
 }: {
   token: string;
   phone: string;
@@ -33,12 +34,14 @@ export default function PaymentPanel({
   bank: BankInfo;
   studioName: string;
   contractCode: string | null;
+  eventDate?: string | null;
+  noteMode?: TransferNoteMode | null;
   toast: (m: string) => void;
 }) {
   // Đợt tiếp theo, mã QR, báo đã chuyển khoản — dùng chung với bản giao diện
   // mới (./usePortal).
   const { remaining, pct, qrOpen, setQrOpen, reporting, reportPaid, nextDue, qrAmount, addInfo } = usePortalPayment({
-    token, phone, total, paid, plan, contractCode, toast,
+    token, phone, total, paid, plan, contractCode, eventDate, noteMode, toast,
   });
 
   return (

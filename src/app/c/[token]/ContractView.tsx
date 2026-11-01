@@ -6,7 +6,7 @@ import { Lock, MapPin, Calendar, Send, Check, Printer, PenLine, Images, ImagePlu
 import SignaturePad from "@/components/SignaturePad";
 import ClientAddenda from "./ClientAddenda";
 import CalendarButtons from "@/components/CalendarButtons";
-import VietQRButton, { VietQR, instalmentNote } from "@/components/VietQR";
+import VietQRButton, { VietQR } from "@/components/VietQR";
 import { thiepUrl } from "@/lib/hosts";
 import PortalVoucher from "./PortalVoucher";
 import { PaidConfirmScreen } from "./PaidConfirm";
@@ -36,7 +36,7 @@ export default function ContractView({ token }: { token: string }) {
     brief, setBrief, briefSent,
     fetchContract, unlock, sendEdit, reportPaid, uploadProof, chooseQuote, submitBrief, saveMessenger, sendReview, sign,
     itemsTotal, surcharge, printing, total, collected, balance, signed,
-    nextDue, dueAmount, duePct, contractRef, dueNote, dueQr, unpaidPlan, termLines,
+    nextDue, dueAmount, duePct, payNote, dueNote, dueQr, unpaidPlan, termLines,
   } = useContractPortal(token);
 
   /* ── Khối dùng lại của trang khách (bản thiết kế "Hợp đồng gửi khách") ──
@@ -205,9 +205,17 @@ export default function ContractView({ token }: { token: string }) {
                 <p className="mt-px text-[12px]" style={{ color: "var(--tx3)" }}>
                   {[contract.client_phone, contract.client_email].filter(Boolean).join(" · ") || "—"}
                 </p>
+                {(contract.bride_name || contract.groom_name) && (
+                  <p className="mt-px text-[12px]" style={{ color: "var(--tx2)" }}>
+                    {[
+                      contract.bride_name && `${lang === "vi" ? "Cô dâu" : "Bride"}: ${contract.bride_name}`,
+                      contract.groom_name && `${lang === "vi" ? "Chú rể" : "Groom"}: ${contract.groom_name}`,
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                )}
               </div>
               <div>
-                <p className="eyebrow">{lang === "vi" ? "Ngày chụp" : "Shoot date"}</p>
+                <p className="eyebrow">{contract.event_label || (lang === "vi" ? "Ngày chụp" : "Shoot date")}</p>
                 <p className="mt-1 text-[14px] font-semibold">{contract.event_date ? fmtDateLunar(contract.event_date) : "—"}</p>
                 <p className="mt-px text-[12px]" style={{ color: "var(--tx3)" }}>
                   {contract.event_time || SHOOT_TYPE_LABEL[contract.shoot_type]}
@@ -303,8 +311,9 @@ export default function ContractView({ token }: { token: string }) {
                   <div className="flex flex-wrap items-start gap-3 py-3" style={{ borderBottom: "1px solid var(--bd2)" }}>
                     <Calendar size={16} style={{ flex: "none", marginTop: 2, color: "var(--ac)" }} />
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold">{lang === "vi" ? "Buổi chính" : "Main session"}{contract.title ? ` — ${contract.title}` : ""}</p>
+                      <p className="text-[13px] font-semibold">{contract.event_label || (lang === "vi" ? "Buổi chính" : "Main session")}{contract.title ? ` — ${contract.title}` : ""}</p>
                       {contract.location && <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>{contract.location}</p>}
+                      {contract.event_note && <p className="whitespace-pre-line text-[11.5px]" style={{ color: "var(--tx3)" }}>{contract.event_note}</p>}
                     </div>
                     <span className="flex-none whitespace-nowrap text-[12.5px]" style={{ color: "var(--tx2)" }}>
                       {fmtDateLunar(contract.event_date)}{contract.event_time ? ` · ${contract.event_time}` : ""}
@@ -423,7 +432,7 @@ export default function ContractView({ token }: { token: string }) {
                         </div>
                         <span className="flex-none whitespace-nowrap text-[13px] font-bold">{vnd(p.amount)}</span>
                         {!p.paid && bank.bin && (
-                          <VietQRButton bank={bank} amount={p.amount} addInfo={instalmentNote(contractRef, p.label, p.pay_code)} label="QR" />
+                          <VietQRButton bank={bank} amount={p.amount} addInfo={payNote(p.pay_code)} label="QR" />
                         )}
                       </div>
                     ))}

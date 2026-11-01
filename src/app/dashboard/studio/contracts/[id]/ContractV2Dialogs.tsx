@@ -113,10 +113,25 @@ export function InfoDrawer({ ed, open, onClose }: { ed: Ed; open: boolean; onClo
           <Field label="Facebook / Messenger" htmlFor="ci-fb" hint="Khách cũng có thể tự dán link này trong cổng khách." className="sm:col-span-2">
             <input id="ci-fb" className={inputCls} placeholder="m.me/… hoặc facebook.com/…" value={f.client_messenger} onChange={(e) => set("client_messenger", e.target.value)} />
           </Field>
+          {ed.hasDayCols && (
+            <>
+              <Field label="Tên cô dâu" htmlFor="ci-bride">
+                <input id="ci-bride" className={inputCls} value={f.bride_name} onChange={(e) => set("bride_name", e.target.value)} />
+              </Field>
+              <Field label="Tên chú rể" htmlFor="ci-groom">
+                <input id="ci-groom" className={inputCls} value={f.groom_name} onChange={(e) => set("groom_name", e.target.value)} />
+              </Field>
+            </>
+          )}
         </div>
 
-        <GroupLabel>Buổi chụp</GroupLabel>
+        <GroupLabel>Ngày chính</GroupLabel>
         <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_140px]">
+          {ed.hasDayCols && (
+            <Field label="Tên ngày" htmlFor="ci-evlabel" hint="Tự đặt: Lễ nhà gái, Ngày cưới… Để trống là “Buổi chụp chính”." className="sm:col-span-2">
+              <input id="ci-evlabel" className={inputCls} value={f.event_label} onChange={(e) => set("event_label", e.target.value)} />
+            </Field>
+          )}
           <Field label="Ngày">
             <DateInput className={inputCls} value={f.event_date} onChange={(v) => set("event_date", v)} />
           </Field>
@@ -126,7 +141,15 @@ export function InfoDrawer({ ed, open, onClose }: { ed: Ed; open: boolean; onClo
           <Field label="Địa điểm" htmlFor="ci-loc" className="sm:col-span-2">
             <input id="ci-loc" className={inputCls} value={f.location} onChange={(e) => set("location", e.target.value)} />
           </Field>
+          {ed.hasDayCols && (
+            <Field label="Ghi chú cho ngày chính" htmlFor="ci-evnote" className="sm:col-span-2">
+              <textarea id="ci-evnote" rows={2} className={inputCls} value={f.event_note} onChange={(e) => set("event_note", e.target.value)} />
+            </Field>
+          )}
         </div>
+        <p className="-mt-2 text-[12.5px]" style={{ color: "var(--tx3)" }}>
+          Ngày phụ (đám 2 ngày, thử đồ, đãi tiệc…) thêm ở mục <b>Lịch chụp</b> → “Thêm buổi / mốc lịch”.
+        </p>
         {f.event_date && ed.props.contract.event_date && f.event_date !== ed.props.contract.event_date && (
           <Callout tone="blue">
             Đổi ngày ở đây chỉ sửa lại ngày. Muốn báo khách và chuyển lịch thợ theo, dùng <b>Dời lịch</b> trong menu ⋯.
@@ -532,7 +555,7 @@ export function CrewDrawer({ ctx, edit, onClose }: { ctx: V2Ctx; edit: { idx: nu
             <Field label="Làm buổi nào" htmlFor="cw-ev" className="sm:col-span-2">
               <select id="cw-ev" className={inputCls} value={row.eventId ?? ""} onChange={(e) => put({ eventId: e.target.value })}>
                 <option value="">
-                  {mainSessionTitle(ed.kind)}
+                  {f.event_label.trim() || mainSessionTitle(ed.kind)}
                   {f.event_date ? ` · ${fmtDate(f.event_date)}${f.event_time ? ` ${f.event_time}` : ""}` : ""}
                 </option>
                 {milestones.map((m) => (

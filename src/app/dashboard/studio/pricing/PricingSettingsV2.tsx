@@ -17,7 +17,7 @@ import { DEFAULT_APPEARANCE, type Appearance, type PricingState } from "./usePri
 
 export function ContactTabV2({ p, bankAuto }: { p: PricingState; bankAuto?: React.ReactNode }) {
   const { c, setC } = p;
-  const field = (k: keyof typeof c) => ({ value: c[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setC((x) => ({ ...x, [k]: e.target.value })) });
+  const field = (k: Exclude<keyof typeof c, "qr_note_date">) => ({ value: c[k], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setC((x) => ({ ...x, [k]: e.target.value })) });
   return (
     <div className="flex flex-col gap-4">
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
@@ -49,6 +49,20 @@ export function ContactTabV2({ p, bankAuto }: { p: PricingState; bankAuto?: Reac
             </Field>
             <Field label="Chủ tài khoản">
               <input className={inputCls} {...field("pl_bank_holder")} />
+            </Field>
+            <Field
+              label="Nội dung chuyển khoản (QR hợp đồng)"
+              hint="Không ghi tên khách hay tên đợt. Đã bật Tự xác nhận chuyển khoản (SePay) thì tự thêm mã MS… ở đầu để tiền về tự ghi thu."
+              className="sm:col-span-2"
+            >
+              <select
+                className={inputCls}
+                value={c.qr_note_date ? "date" : "code"}
+                onChange={(e) => setC((x) => ({ ...x, qr_note_date: e.target.value === "date" }))}
+              >
+                <option value="code">Chỉ số hợp đồng — VD: HD-11-2026-007</option>
+                <option value="date">Số hợp đồng + ngày — VD: HD-11-2026-007 25-12-2026</option>
+              </select>
             </Field>
           </div>
         </Section>

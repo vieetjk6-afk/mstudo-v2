@@ -27,7 +27,7 @@ import {
   newHookSecret,
   PAY_CODE_ALPHABET,
 } from "../../src/lib/bank-reconcile.ts";
-import { instalmentNote } from "../../src/lib/vietqr.ts";
+import { instalmentNote, transferNote } from "../../src/lib/vietqr.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -86,6 +86,14 @@ check("chữ ms thường không phải mã", upgradeCodeCandidates("chuyen tien
 check("mã đợt đứng đầu nội dung QR", instalmentNote("HD-2026-001", "Đặt cọc", "MSAB23CD45"), "MSAB23CD45 HD-2026-001 Đặt cọc");
 check("nội dung dài bị cắt vẫn giữ mã", instalmentNote("X".repeat(60), "Đợt", "MSAB23CD45").startsWith("MSAB23CD45"), true);
 check("chưa có mã → nội dung như cũ", instalmentNote("HD-2026-001", "Đặt cọc"), "HD-2026-001 Đặt cọc");
+
+// ── Nội dung chuyển khoản hợp đồng: chỉ số HĐ (tuỳ chọn kèm ngày), mã đợt khi có SePay ──
+const hd = { code: "HD-11-2026-007", event_date: "2026-12-25", title: "Cưới chị Lan" };
+check("mặc định: chỉ số HĐ", transferNote(hd, "MSAB23CD45", { withDate: false, sepay: false }), "HD-11-2026-007");
+check("HĐ + ngày", transferNote(hd, "MSAB23CD45", { withDate: true, sepay: false }), "HD-11-2026-007 25-12-2026");
+check("có SePay → mã đợt đứng đầu", transferNote(hd, "MSAB23CD45", { withDate: true, sepay: true }), "MSAB23CD45 HD-11-2026-007 25-12-2026");
+check("không bao giờ dùng tiêu đề (hay chứa tên khách)", transferNote({ code: null, event_date: null, title: "Cưới chị Lan" }, null, { withDate: true, sepay: true }), "");
+check("SePay dò lại được mã đợt từ nội dung mới", payCodeCandidates(transferNote(hd, "MSAB23CD45", { withDate: true, sepay: true })).includes("MSAB23CD45"), true);
 
 // ── Payload SePay ──────────────────────────────────────────────────────────
 const sample = {

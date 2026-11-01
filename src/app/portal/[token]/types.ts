@@ -1,4 +1,5 @@
 import type { FinalVideo } from "@/lib/final-links";
+import type { TransferNoteMode } from "@/lib/vietqr";
 import type {
   AppointmentKind, AppointmentStatus, ContractStatus, PaymentKind, ProductStatus, ShootType,
 } from "@/lib/types";
@@ -29,7 +30,7 @@ export type PortalContract = {
 
 export type PortalItem = { id: string; name: string; qty: number; unit_price: number };
 export type PortalPayment = { id: string; amount: number; kind: PaymentKind; paid_at: string };
-export type PortalPlanRow = { id: string; label: string; amount: number; due_date: string | null; paid: boolean; paid_at: string | null };
+export type PortalPlanRow = { id: string; label: string; amount: number; due_date: string | null; paid: boolean; paid_at: string | null; pay_code?: string | null };
 export type PortalProduct = { id: string; name: string; qty: number; cost: number; status: ProductStatus };
 export type PortalMilestone = { id: string; title: string; event_date: string; event_time: string | null; note: string | null };
 export type PortalTask = { id: string; label: string; done: boolean };
@@ -67,6 +68,8 @@ export type PortalPayload = {
   studio_logo: string | null;
   studio_phone: string | null;
   bank: PortalBank;
+  /** Cách ghi nội dung chuyển khoản của studio (null với API cũ). */
+  note_mode?: TransferNoteMode | null;
   items: PortalItem[];
   payments: PortalPayment[];
   plan: PortalPlanRow[];

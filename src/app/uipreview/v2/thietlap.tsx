@@ -293,7 +293,7 @@ export const SCREENS_THIETLAP: Record<string, Screen> = {
           hiddenLists={[]}
           canQuote
           shareUrl="https://maystudio.mstudo.com/gia/7f3k9p2m"
-          contact={{ pl_phone: "0933444555", pl_facebook: "fb.com/maystudio", pl_bank_holder: "NGUYEN VAN A", pl_bank_account: "0123456789", pl_bank_name: "Vietcombank", pl_bank_bin: "970436" }}
+          contact={{ pl_phone: "0933444555", pl_facebook: "fb.com/maystudio", pl_bank_holder: "NGUYEN VAN A", pl_bank_account: "0123456789", pl_bank_name: "Vietcombank", pl_bank_bin: "970436", qr_note_date: false }}
           appearance={{ pl_bg: "", pl_text: "", pl_accent: "", pl_logo_url: "" }}
           bankAuto={<BankAutoCard />}
         />

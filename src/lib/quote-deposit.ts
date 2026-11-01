@@ -35,6 +35,21 @@ export function computeRoundedDeposit(total: number): number {
   return Math.max(DEPOSIT_MIN, best);
 }
 
+/** % cọc mặc định khi studio chưa tự đặt (profiles.contract_deposit_percent). */
+export const DEFAULT_DEPOSIT_PERCENT = 25;
+
+/**
+ * Cọc hợp đồng theo % studio tự đặt ở "Chính sách studio": làm tròn tới bội
+ * 500k gần nhất, tối thiểu 500k, không quá tổng. 0% = studio tắt cọc tự động
+ * → trả 0. Màn tạo hợp đồng và màn chi tiết dùng CHUNG hàm này để hai nơi ra
+ * cùng một số cọc.
+ */
+export function depositByPercent(total: number, percent: number = DEFAULT_DEPOSIT_PERCENT): number {
+  if (!total || total <= 0 || !percent || percent <= 0) return 0;
+  const rounded = Math.round((total * percent) / 100 / DEPOSIT_STEP) * DEPOSIT_STEP;
+  return Math.min(total, Math.max(DEPOSIT_MIN, rounded));
+}
+
 /** Same value as a "real" percentage of the total — handy for the UI. */
 export function depositRatio(total: number, deposit: number): number {
   if (!total) return 0;

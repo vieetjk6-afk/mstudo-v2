@@ -288,6 +288,8 @@ export default function ContractV2Overview({ ctx }: { ctx: V2Ctx }) {
             <InfoList
               items={[
                 { label: "Họ tên", value: f.client_name || dash },
+                ...(f.bride_name.trim() ? [{ label: "Cô dâu", value: f.bride_name }] : []),
+                ...(f.groom_name.trim() ? [{ label: "Chú rể", value: f.groom_name }] : []),
                 { label: "Điện thoại", value: f.client_phone || <span style={{ color: "var(--rd)" }}>Chưa có</span> },
                 { label: "Email", value: f.client_email ? <span className="break-all">{f.client_email}</span> : dash },
                 {
@@ -310,9 +312,20 @@ export default function ContractV2Overview({ ctx }: { ctx: V2Ctx }) {
               items={[
                 { label: "Dịch vụ", value: svcName },
                 {
-                  label: "Ngày",
+                  label: f.event_label.trim() || "Ngày",
                   value: f.event_date ? `${fmtDateLunar(f.event_date)}${f.event_time ? ` · ${f.event_time}` : ""}` : <span style={{ color: "var(--am)" }}>Chưa có</span>,
                 },
+                ...(f.event_note.trim() ? [{ label: "Ghi chú ngày", value: <span className="whitespace-pre-line">{f.event_note}</span> }] : []),
+                ...ed.milestones.map((m) => ({
+                  label: m.title || "Ngày phụ",
+                  value: (
+                    <>
+                      {fmtDateLunar(m.event_date)}
+                      {m.event_time ? ` · ${m.event_time}` : ""}
+                      {m.note ? <span className="block whitespace-pre-line text-[12.5px]" style={{ color: "var(--tx3)" }}>{m.note}</span> : null}
+                    </>
+                  ),
+                })),
                 { label: "Địa điểm", value: f.location || dash },
                 ...(kindHasPhotoWork(ed.kind) ? [{ label: "Hạn giao ảnh", value: f.delivery_due ? fmtDate(f.delivery_due) : dash }] : []),
                 ...(canAssign && staffList.length ? [{ label: "Nhân viên phụ trách", value: staff ? staff.full_name || staff.email : dash }] : []),

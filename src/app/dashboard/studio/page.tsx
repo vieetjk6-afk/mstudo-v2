@@ -12,7 +12,8 @@ import { requireStudio } from "@/lib/auth-guards";
 import StudioTrialButton from "@/components/StudioTrialButton";
 import MessengerButton from "@/components/MessengerButton";
 import VietQRButton from "@/components/VietQR";
-import { instalmentNote } from "@/lib/vietqr";
+import { transferNote } from "@/lib/vietqr";
+import { loadTransferNoteMode } from "@/lib/transfer-note-mode";
 import { isMissingColumn } from "@/lib/missing-column";
 import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { chunk } from "@/lib/photos";
@@ -329,6 +330,7 @@ export default async function StudioOverview() {
     { data: pendingProofs },
     { count: pendingReviews },
     { count: pendingBank },
+    noteMode,
   ] = await Promise.all([
     activeContracts(),
     oldContracts(),
@@ -344,7 +346,7 @@ export default async function StudioOverview() {
           .not("due_date", "is", null)
           .lte("due_date", dueLimit)
           .order("due_date");
-      const base = "id, label, amount, due_date, paid, contract:studio_contracts!inner(id, owner_id, code, title)";
+      const base = "id, label, amount, due_date, paid, contract:studio_contracts!inner(id, owner_id, code, title, event_date)";
       const full = await q(`${base}, pay_code`);
       return full.error && isMissingColumn(full.error, "pay_code") ? q(base) : full;
     })(),
@@ -394,6 +396,7 @@ export default async function StudioOverview() {
       .select("id", { count: "exact", head: true })
       .eq("owner_id", profile.id)
       .in("status", ["unmatched", "mismatch"]),
+    loadTransferNoteMode(profile.id, profile),
   ]);
 
   const list = contracts;
@@ -517,13 +520,13 @@ export default async function StudioOverview() {
   // Scheduled payment installments due within 7 days (or overdue) & unpaid.
   const duePlan = ((planRows ?? []) as unknown as Array<{
     id: string; label: string; amount: number; due_date: string; pay_code?: string | null;
-    contract: { id: string; code: string | null; title: string } | null;
+    contract: { id: string; code: string | null; title: string; event_date: string | null } | null;
   }>);
-  // CÙNG nội dung chuyển khoản với mã QR trong hợp đồng (mã HĐ + tên đợt).
+  // CÙNG nội dung chuyển khoản với mã QR trong hợp đồng (số HĐ, tuỳ studio kèm ngày).
   const planAct = (d: (typeof duePlan)[number]): OvAct => ({
     kind: "qr",
     amount: d.amount,
-    addInfo: instalmentNote((d.contract?.code || d.contract?.title || "").slice(0, 25), d.label, d.pay_code),
+    addInfo: transferNote(d.contract ?? {}, d.pay_code, noteMode),
     planId: d.id,
     contractId: d.contract?.id ?? null,
     amountLabel: vnd(d.amount),

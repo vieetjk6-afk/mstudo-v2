@@ -27,6 +27,7 @@ import type {
 } from "@/lib/types";
 import { crewPortalUrl as buildCrewPortalUrl } from "@/lib/crew-show";
 import { loadCrewRoles } from "@/lib/crew-roles";
+import { loadTransferNoteMode } from "@/lib/transfer-note-mode";
 import ContractEditor from "./ContractEditor";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { resolveDeliveredAlbum, type ContractAlbumOption } from "@/lib/contract-album";
@@ -101,6 +102,7 @@ export default async function ContractPage(
   const empty = Promise.resolve({ data: [] as never[] });
   // Vai trò thợ tự đặt — chạy song song với lượt dưới, không ném lỗi (thiếu bảng → []).
   const crewRolesP = loadCrewRoles(supabase, profile.id as string);
+  const noteModeP = loadTransferNoteMode(profile.id as string, profile);
   const selId = contract.selection_album_id as string | null;
   const galId = contract.gallery_album_id as string | null;
   // Phần "đuôi" trước đây chạy TUẦN TỰ sau lượt lớn (đếm ảnh, tên miền, chữ ký,
@@ -289,6 +291,7 @@ export default async function ContractPage(
         holder: (profile.pl_bank_holder as string | null) ?? null,
         name: (profile.pl_bank_name as string | null) ?? null,
       }}
+      noteMode={await noteModeP}
       sameDayContracts={sameDayContracts}
       services={(services ?? []) as { id: string; name: string; clauses: string }[]}
       pricelist={(pricelistRows ?? []) as { name: string; price: number; unit: string | null; description: string | null }[]}

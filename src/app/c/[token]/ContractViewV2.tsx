@@ -42,7 +42,7 @@ import { Menu, Modal, Segmented } from "@/components/v2/kit-client";
 import type { StudioBrandInfo } from "@/lib/studio-brand";
 import { daysFromToday, fmtDate, fmtDateTime, fmtDow, fmtLunar, todayVN } from "@/lib/date";
 import { downloadIcs, googleCalendarUrl, type CalEvent } from "@/lib/calendar";
-import { instalmentNote, qrUrl } from "@/lib/vietqr";
+import { qrUrl } from "@/lib/vietqr";
 import { thiepUrl } from "@/lib/hosts";
 import { vnd, SHOOT_TYPE_LABEL, PRODUCT_STATUS_LABEL, type ContractStatus } from "@/lib/types";
 import PortalVoucher from "./PortalVoucher";
@@ -759,9 +759,17 @@ function Line({
 /* ── Lịch trình ── */
 function ScheduleSection({ p, L }: { p: ContractPortal; L: Tr }) {
   const c = p.contract!;
-  const rows: { key: string; date: string; time: string | null; title: string; sub: string | null; main?: boolean }[] = [];
+  const rows: { key: string; date: string; time: string | null; title: string; sub: string | null; note?: string | null; main?: boolean }[] = [];
   if (c.event_date)
-    rows.push({ key: "main", date: c.event_date, time: c.event_time, title: `${L("Buổi chính", "Main session")}${c.title ? ` — ${c.title}` : ""}`, sub: c.location, main: true });
+    rows.push({
+      key: "main",
+      date: c.event_date,
+      time: c.event_time,
+      title: `${c.event_label || L("Buổi chính", "Main session")}${c.title ? ` — ${c.title}` : ""}`,
+      sub: c.location,
+      note: c.event_note,
+      main: true,
+    });
   for (const m of p.milestones) rows.push({ key: m.id, date: m.event_date, time: m.event_time, title: m.title, sub: m.note });
   return (
     <Section icon={CalendarDays} title={L("Lịch trình", "Schedule")} desc={L("Bấm biểu tượng lịch để thêm vào điện thoại của bạn.", "Tap the calendar icon to add it to your phone.")} flush>
@@ -777,6 +785,11 @@ function ScheduleSection({ p, L }: { p: ContractPortal; L: Tr }) {
               <p className="mt-0.5 flex items-start gap-1 text-[12.5px]" style={{ color: "var(--tx2)" }}>
                 {r.main && <MapPin size={13} className="mt-[3px] flex-none" />}
                 <span className="min-w-0">{r.sub}</span>
+              </p>
+            )}
+            {r.note && (
+              <p className="mt-0.5 whitespace-pre-line text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                {r.note}
               </p>
             )}
           </div>
@@ -1054,7 +1067,10 @@ function PartiesSection({ p, L, openSign }: { p: ContractPortal; L: Tr; openSign
         <Party
           label={L("Bên B · Khách hàng", "Party B · Client")}
           name={c.client_signed_name || c.client_name || "—"}
-          lines={[[c.client_phone, c.client_email].filter(Boolean).join(" · ")]}
+          lines={[
+            [c.client_phone, c.client_email].filter(Boolean).join(" · "),
+            [c.bride_name && `${L("Cô dâu", "Bride")}: ${c.bride_name}`, c.groom_name && `${L("Chú rể", "Groom")}: ${c.groom_name}`].filter(Boolean).join(" · "),
+          ].filter(Boolean)}
           sig={c.client_signature}
           sigAlt={L("Chữ ký của bạn", "Your signature")}
           status={
@@ -1471,7 +1487,7 @@ function PayModal({
 }) {
   const row = planId ? p.plan.find((x) => x.id === planId && !x.paid) ?? null : null;
   const amount = row ? row.amount : p.balance;
-  const note = row ? instalmentNote(p.contractRef, row.label, row.pay_code) : p.contractRef;
+  const note = p.payNote(row?.pay_code);
   const url = qrUrl(p.bank, amount, note);
   const acc = (p.bank.account || "").replace(/\s/g, "");
   const copyL = { copyLabel: L("Chép", "Copy"), copiedLabel: L("Đã chép", "Copied") };

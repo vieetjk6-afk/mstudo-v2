@@ -201,6 +201,7 @@ function ContractEditorV1(props: ContractEditorProps) {
     payments,
     setPayments,
     milestones,
+    hasDayCols,
     tasks,
     newTask,
     setNewTask,
@@ -695,6 +696,24 @@ function ContractEditorV1(props: ContractEditorProps) {
                     <input className="input" placeholder="m.me/… hoặc facebook.com/…" value={f.client_messenger} onChange={(e) => set("client_messenger", e.target.value)} />
                     <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Khách cũng có thể tự dán link này trong cổng khách.</p>
                   </div>
+                  {hasDayCols && (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="label">Tên cô dâu</label>
+                        <input className="input" value={f.bride_name} onChange={(e) => set("bride_name", e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="label">Tên chú rể</label>
+                        <input className="input" value={f.groom_name} onChange={(e) => set("groom_name", e.target.value)} />
+                      </div>
+                    </div>
+                  )}
+                  {hasDayCols && (
+                    <div>
+                      <label className="label">Tên ngày chính (tự đặt)</label>
+                      <input className="input" placeholder="VD: Lễ nhà gái, Ngày cưới" value={f.event_label} onChange={(e) => set("event_label", e.target.value)} />
+                    </div>
+                  )}
                   {/* Ngày · giờ · nguồn khách. Ô "Trạng thái" đã bỏ khỏi đây:
                       trạng thái đã có ở đầu màn (pill + ô chọn cạnh
                       ContractStepper), hai chỗ sửa cùng một giá trị chỉ gây
@@ -723,6 +742,13 @@ function ContractEditorV1(props: ContractEditorProps) {
                     <label className="label">Địa điểm</label>
                     <input className="input" value={f.location} onChange={(e) => set("location", e.target.value)} />
                   </div>
+                  {hasDayCols && (
+                    <div>
+                      <label className="label">Ghi chú cho ngày chính</label>
+                      <textarea className="input" rows={2} value={f.event_note} onChange={(e) => set("event_note", e.target.value)} />
+                      <p className="mt-1 text-[11px]" style={{ color: "var(--text3)" }}>Ngày phụ (đám 2 ngày, thử đồ, đãi tiệc…) thêm ở mục Mốc lịch.</p>
+                    </div>
+                  )}
                   <p className="flex items-center gap-1 text-xs" style={{ color: contractSaved === "saved" ? "var(--s-green)" : "var(--text3)" }}>
                     {contractSaved === "saving" ? "Đang lưu…" : contractSaved === "saved" ? <><Check size={13} /> Đã lưu tự động</> : "Thông tin tự động lưu khi nhập"}
                   </p>
@@ -1002,6 +1028,7 @@ function ContractEditorV1(props: ContractEditorProps) {
                             onKeyDown={(e) => { if (e.key === "Enter") saveEditMilestone(); if (e.key === "Escape") setEditMs(null); }} />
                           <DateInput wrapperClassName="sm:col-span-4" value={editMs.event_date} onChange={(v) => setEditMs((p) => (p ? { ...p, event_date: v } : p))} />
                           <input className="input sm:col-span-2" placeholder="08:00" value={editMs.event_time} onChange={(e) => setEditMs((p) => (p ? { ...p, event_time: e.target.value } : p))} />
+                          <textarea className="input sm:col-span-12" rows={1} placeholder="Ghi chú cho ngày này" value={editMs.note ?? ""} onChange={(e) => setEditMs((p) => (p ? { ...p, note: e.target.value } : p))} />
                           <div className="flex gap-2 sm:col-span-12">
                             <button onClick={saveEditMilestone} disabled={busy === "milestone-edit"} className="btn-primary px-3 py-1.5 text-xs">
                               {busy === "milestone-edit" ? "Đang lưu…" : "Lưu"}
@@ -1014,6 +1041,7 @@ function ContractEditorV1(props: ContractEditorProps) {
                         <div>
                           <p className="text-sm font-medium">{m.title}</p>
                           <p className="text-[11px]" style={{ color: "var(--text3)" }}>{fmtDate(m.event_date)}{m.event_time ? ` · ${m.event_time}` : ""}</p>
+                          {m.note && <p className="whitespace-pre-line text-[11px]" style={{ color: "var(--text2)" }}>{m.note}</p>}
                           {crew.some((c) => c.id && c.eventId === m.id) && (
                             <p className="text-[11px]" style={{ color: "var(--text2)" }}>
                               Thợ: {crew.filter((c) => c.id && c.eventId === m.id).map((c) => c.name || c.phone).join(", ")}
@@ -1022,7 +1050,7 @@ function ContractEditorV1(props: ContractEditorProps) {
                         </div>
                         <div className="flex items-center gap-3">
                           <CalendarButtons compact event={{ date: m.event_date, time: m.event_time, title: m.title, location: f.location }} />
-                          <button onClick={() => setEditMs({ id: m.id, title: m.title, event_date: m.event_date, event_time: m.event_time ?? "" })} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Sửa tên mốc" title="Sửa tên / ngày mốc"><Pencil size={14} /></button>
+                          <button onClick={() => setEditMs({ id: m.id, title: m.title, event_date: m.event_date, event_time: m.event_time ?? "", note: m.note ?? "" })} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Sửa tên mốc" title="Sửa tên / ngày mốc"><Pencil size={14} /></button>
                           <button onClick={() => deleteMilestone(m.id)} className="flex h-7 w-7 shrink-0 items-center justify-center" style={{ color: "var(--text3)" }} aria-label="Xoá mốc" title="Xoá mốc"><Trash2 size={14} /></button>
                         </div>
                       </li>
@@ -1034,6 +1062,7 @@ function ContractEditorV1(props: ContractEditorProps) {
                   <input className="input sm:col-span-6" placeholder="Tên mốc (vd: Ngày cưới)" value={ms.title} onChange={(e) => setMs((p) => ({ ...p, title: e.target.value }))} />
                   <DateInput wrapperClassName="sm:col-span-4" value={ms.event_date} onChange={(v) => setMs((p) => ({ ...p, event_date: v }))} />
                   <input className="input sm:col-span-2" placeholder="08:00" value={ms.event_time} onChange={(e) => setMs((p) => ({ ...p, event_time: e.target.value }))} />
+                  <textarea className="input sm:col-span-12" rows={1} placeholder="Ghi chú cho ngày này (không bắt buộc)" value={ms.note} onChange={(e) => setMs((p) => ({ ...p, note: e.target.value }))} />
                 </div>
                 <button onClick={addMilestone} disabled={busy === "milestone"} className="btn-ghost mt-3">
                   <Plus size={15} /> {busy === "milestone" ? "Đang thêm…" : "Thêm mốc lịch"}

@@ -7,6 +7,7 @@ import { PRICE_LISTS, WEDDING_SEED, ENGAGEMENT_SEED, type SeedItem } from "@/lib
 import { nextQuoteCode, newShareToken } from "@/lib/contract-code";
 import { fmtDate } from "@/lib/date";
 import type { PricelistItem } from "@/lib/types";
+import { isMissingColumn } from "@/lib/missing-column";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Phần LOGIC dùng chung của màn Gói & bảng giá (bản cũ PricingManager và bản
@@ -15,7 +16,11 @@ import type { PricelistItem } from "@/lib/types";
    tạo báo giá nhanh. Hai bản chỉ khác nhau ở cách vẽ.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type Contact = { pl_phone: string; pl_facebook: string; pl_bank_holder: string; pl_bank_account: string; pl_bank_name: string; pl_bank_bin: string };
+export type Contact = {
+  pl_phone: string; pl_facebook: string; pl_bank_holder: string; pl_bank_account: string; pl_bank_name: string; pl_bank_bin: string;
+  /** Nội dung chuyển khoản trên QR hợp đồng: false = chỉ số HĐ, true = số HĐ + ngày chính. */
+  qr_note_date: boolean;
+};
 export type Appearance = { pl_bg: string; pl_text: string; pl_accent: string; pl_logo_url: string };
 
 export const DEFAULT_APPEARANCE: Appearance = { pl_bg: "#e7ebdf", pl_text: "#23402c", pl_accent: "#2f6b3e", pl_logo_url: "" };
@@ -317,7 +322,14 @@ export function usePricing({
   }
 
   async function saveContact() {
-    await supabase.from("profiles").update(c).eq("id", ownerId);
+    const { error } = await supabase.from("profiles").update(c).eq("id", ownerId);
+    // Chưa chạy migration hop_dong_yeu_cau_studio.sql → vẫn lưu phần liên hệ /
+    // tài khoản, chỉ bỏ lựa chọn nội dung chuyển khoản.
+    if (error && isMissingColumn(error, "qr_note_date")) {
+      const { qr_note_date: _skip, ...rest } = c;
+      void _skip;
+      await supabase.from("profiles").update(rest).eq("id", ownerId);
+    }
     setBaseC(c);
     setSavedContact(true);
     setTimeout(() => setSavedContact(false), 1500);

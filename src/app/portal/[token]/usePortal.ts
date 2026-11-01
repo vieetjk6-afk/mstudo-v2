@@ -8,6 +8,7 @@ import { useFullImageWidth } from "@/lib/use-img-width";
 import type { AppointmentKind } from "@/lib/types";
 import type { PortalVideo } from "./PortalVideos";
 import type { PortalPayload, PortalPlanRow } from "./types";
+import { transferNote, DEFAULT_TRANSFER_NOTE_MODE, type TransferNoteMode } from "@/lib/vietqr";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIC DÙNG CHUNG của cổng khách — bản cũ (ContractPortalView, PaymentPanel,
@@ -180,7 +181,7 @@ export function usePortalTimeline(data: PortalPayload, today: string): PortalTim
 
 /* ── Thanh toán: đợt tiếp theo, mã QR, báo đã chuyển khoản ──────────────── */
 export function usePortalPayment({
-  token, phone, total, paid, plan, contractCode, toast,
+  token, phone, total, paid, plan, contractCode, eventDate = null, noteMode, toast,
 }: {
   token: string;
   phone: string;
@@ -188,6 +189,8 @@ export function usePortalPayment({
   paid: number;
   plan: PortalPlanRow[];
   contractCode: string | null;
+  eventDate?: string | null;
+  noteMode?: TransferNoteMode | null;
   toast: (m: string) => void;
 }) {
   const remaining = Math.max(0, total - paid);
@@ -198,7 +201,9 @@ export function usePortalPayment({
   /** Đợt tiếp theo phải thu = đợt chưa thu, hạn gần nhất. */
   const nextDue = useMemo(() => plan.find((p) => !p.paid) ?? null, [plan]);
   const qrAmount = nextDue?.amount ?? remaining;
-  const addInfo = `${contractCode ? `${contractCode} ` : ""}${nextDue?.label ?? "Thanh toan hop dong"}`.slice(0, 50);
+  // Chỉ số HĐ (tuỳ studio kèm ngày), mã đợt khi studio bật SePay — không tên đợt,
+  // không tên khách. Cùng luật với trang hợp đồng /c/ (lib/vietqr transferNote).
+  const addInfo = transferNote({ code: contractCode, event_date: eventDate }, nextDue?.pay_code, noteMode ?? DEFAULT_TRANSFER_NOTE_MODE);
 
   async function reportPaid() {
     setReporting(true);
