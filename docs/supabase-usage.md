@@ -128,3 +128,22 @@ trước và không hề đụng Supabase. Chỉ ZIP/watermark chuyển sang ch�
 - Egress trên gói Free tính cả byte phục vụ qua CDN, nên tăng `cacheControl` không
   làm giảm hoá đơn egress. Cách duy nhất để giảm là **đừng để byte đi ra từ Supabase**
   — tức đẩy chúng sang CDN Google, đúng như những gì các thay đổi trên làm.
+
+## Sự cố 11/2026: bị khoá vì vượt egress (8,53 / 5 GB)
+
+Số đo lúc đó: File storage 0,02 GB (bucket cache đã tắt), DB 348 MB, Log
+Ingestion 3,3 GB, chỉ 15 MAU. Egress gần như toàn bộ là **truy vấn database**.
+
+Thủ phạm tìm được trong log GitHub Actions của "Quét khuôn mặt":
+
+1. **Gom khuôn mặt lại sau mỗi lượt cron.** `scanAlbum` đặt
+   `faces_clustered_at = null` sau MỖI mẻ ghi 20 ảnh, nên lượt cron nào cũng
+   `clusterAlbum` lại album đang quét — đọc toàn bộ `album_faces` kèm vector 128
+   số (~1,5 KB/khuôn mặt, tới cả MB mỗi album). Album 1.449 ảnh quét ~35
+   tấm/lượt bị gom lại ~40 lần. Nay chỉ đưa vào lại hàng đợi gom khi quét hết
+   album, hoặc lần gom trước đã cũ hơn 12 giờ.
+2. **Ảnh 404 thử lại mãi.** Một album 111 tấm đã xoá khỏi Drive bị tải lại ở
+   mọi lượt và chiếm một chỗ hàng đợi. Nay lỗi vĩnh viễn (`http-404`,
+   `khong-phai-jpeg`) được đánh mốc luôn.
+
+Kiểm thử: `npm run test:face-gom-it`.
