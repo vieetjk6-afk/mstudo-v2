@@ -20,8 +20,8 @@ import { transferNote, DEFAULT_TRANSFER_NOTE_MODE, type TransferNoteMode } from 
 /**
  * Bản chụp để đọc khi mất mạng — cắt bớt danh sách ảnh trước khi cất.
  *
- * localStorage chỉ có ~5 MB cho cả origin. Album giao khách trả về tới 400 ảnh
- * (xem /api/c/[token]); cất trọn thì có ngày vượt hạn mức, và khi ghi lỗi thì
+ * localStorage chỉ có ~5 MB cho cả origin. Album giao khách trả về trọn danh sách
+ * ảnh (xem /api/c/[token]), có khi cả nghìn tấm; cất trọn thì có ngày vượt hạn mức, và khi ghi lỗi thì
  * MẤT CẢ bản chụp — kể cả phần tiến độ, lịch hẹn, thanh toán vốn chỉ vài KB và
  * là thứ khách cần đọc offline nhất. Giữ 120 ảnh đầu là đủ để trang album mở ra
  * còn có cái xem (ảnh đã xem nằm trong cache của service worker), phần còn lại
