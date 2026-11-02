@@ -134,7 +134,7 @@ export async function scanAlbum(
      * mới kiểm được luật ĐIỀU PHỐI (ghi có nằm lại không, có bỏ sớm nhường album
      * khác không) mà không cần mạng, không cần 12 MB trọng số, không cần database.
      */
-    _tai?: (driveFileId: string) => Promise<Uint8Array | null>;
+    _tai?: (driveFileId: string) => Promise<Uint8Array | null | KetQuaTai>;
     _quet?: (bytes: Uint8Array) => Promise<
       { box: { x: number; y: number; w: number; h: number }; descriptor: number[]; sharpness: number }[]
     >;
@@ -158,6 +158,8 @@ export async function scanAlbum(
   let scanned = 0;
   let faces = 0;
   let failed = 0;
+  /** Tấm hỏng VĨNH VIỄN (404, PNG) — đã đánh mốc, không thử lại. */
+  let boQua = 0;
   /** Câu lỗi của tấm hỏng ĐẦU TIÊN — xem ScanReport.loiMau. */
   let loiMau: string | null = null;
   let stoppedBy: ScanReport["stoppedBy"] = "xong";
@@ -191,11 +193,10 @@ export async function scanAlbum(
       if (e1) throw new Error(`ghi_album_faces_that_bai: ${e1.message}`);
       daGhiMat += (d1 ?? []).length;
       if ((d1 ?? []).length === 0) throw new Error(`ghi_album_faces_cham_0_dong (gui ${batch.length} dong)`);
-      // Có mặt MỚI → album vào lại hàng đợi gom. Đặt ở đây chứ không ở cuối hàm:
-      // lượt quét có thể bị cắt vì hết giờ, và lúc đó phần đã ghi vẫn phải được
-      // gom ở lượt sau. Kiểm lỗi vì lý do y hệt nhánh album rỗng ở clusterAlbum.
-      const { error: e3 } = await db.from("albums").update({ faces_clustered_at: null }).eq("id", albumId);
-      if (e3) throw new Error(`dat_lai_hang_doi_gom_that_bai: ${e3.message}`);
+      // KHÔNG đưa album vào lại hàng đợi gom ở đây nữa — xem `veHangDoiGom` ở
+      // cuối hàm. Đặt lại sau MỖI mẻ 20 ảnh nghĩa là mỗi lượt cron gom lại cả
+      // album (đọc toàn bộ vector 128 số của mọi khuôn mặt), và đó là phần lớn
+      // egress Supabase làm project bị khoá vì vượt hạn mức (11/2026).
     }
     while (doneIds.length) {
       const part = doneIds.splice(0, WRITE_CHUNK);
@@ -259,6 +260,7 @@ export async function scanAlbum(
   const taiAnh: (id: string) => Promise<KetQuaTai> = opts._tai
     ? async (id) => {
         const b = await opts._tai!(id);
+        if (b && !(b instanceof Uint8Array)) return b; // kiểm thử đưa sẵn lý do (vd http-404)
         return b ? { bytes: b, lyDo: null } : { bytes: null, lyDo: "khong-tai-duoc (bản kiểm thử)" };
       }
     : fetchThumbChiTiet;
@@ -292,6 +294,19 @@ export async function scanAlbum(
     cho = tai(todo[i + 1]);
     try {
       const { bytes, lyDo } = await bytesCho;
+      /*
+       * Lỗi VĨNH VIỄN thì đánh mốc luôn (0 khuôn mặt) thay vì thử lại mãi:
+       * http-404 = file đã xoá khỏi Drive (cả hai nguồn đều hỏng mới tới đây),
+       * khong-phai-jpeg = PNG, bộ quét không đọc được. Log production 01/11:
+       * một album 111 tấm 404, lượt cron nào cũng tải lại cả 111 tấm và chiếm
+       * một chỗ hàng đợi quét.
+       */
+      if (!bytes && lyDo && /^(http-404|khong-phai-jpeg)/.test(lyDo)) {
+        doneIds.push(p.id);
+        boQua++;
+        if (loiMau === null) loiMau = `bo_qua_vinh_vien: ${lyDo}`.slice(0, 200);
+        continue;
+      }
       // Câu lỗi mang theo LÝ DO của Drive (http-403, khong-phai-anh, anh-giu-cho…)
       // chứ không phải một chữ "khong_tai_duoc_anh" chung cho năm nguyên nhân.
       if (!bytes) throw new Error(`khong_tai_duoc_anh: ${lyDo}`);
@@ -341,7 +356,30 @@ export async function scanAlbum(
   }
   if (!ghiKhongAn) await flush();
 
-  const remaining = todo.length - scanned - failed;
+  /*
+   * ĐƯA ALBUM VÀO LẠI HÀNG ĐỢI GOM — tối đa một lần cho mỗi lượt quét hết album.
+   *
+   * Chỉ khi lượt này CÓ ghi khuôn mặt mới, và:
+   *   • đã đi hết danh sách (`xong`) → album quét xong, gom một lần là đủ; hoặc
+   *   • lần gom trước đã cũ hơn 12 giờ → album khổng lồ quét nhiều đêm vẫn
+   *     cho khách thấy dần, nhưng không gom lại sau mỗi lượt cron.
+   * Bản trước đặt lại sau MỖI mẻ ghi: album 1.449 ảnh quét ~35 tấm/lượt bị gom
+   * lại ~40 lần, mỗi lần đọc toàn bộ vector khuôn mặt của album từ Supabase.
+   */
+  if (daGhiMat > 0 && !ghiKhongAn) {
+    let veHangDoiGom = stoppedBy === "xong";
+    if (!veHangDoiGom) {
+      const { data: al } = await db.from("albums").select("faces_clustered_at").eq("id", albumId).maybeSingle();
+      const luc = al?.faces_clustered_at ? Date.parse(al.faces_clustered_at as string) : NaN;
+      veHangDoiGom = Number.isFinite(luc) && Date.now() - luc > 12 * 3600_000;
+    }
+    if (veHangDoiGom) {
+      const { error: e3 } = await db.from("albums").update({ faces_clustered_at: null }).eq("id", albumId);
+      if (e3) throw new Error(`dat_lai_hang_doi_gom_that_bai: ${e3.message}`);
+    }
+  }
+
+  const remaining = todo.length - scanned - failed - boQua;
   /*
    * Quét được 0 tấm mà CÓ tấm hỏng thì không phải "xong" — đó là album đang
    * TẮC. Phân biệt được điều này là điều kiện để nó hiện ra trong log: `xong`
