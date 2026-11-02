@@ -472,7 +472,8 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     cover_url: string | null;
     download_enabled: boolean;
     watermark: string | null;
-    photos: { id: string; drive_file_id: string; name: string; is_video: boolean }[];
+    photos: { id: string; drive_file_id: string; name: string; is_video: boolean; source_id: string | null }[];
+    folders: { id: string; name: string }[];
   };
   const loadAlbum = async (): Promise<PortalAlbum | null> => {
     if (contract.status !== "completed" || !deliveredAlbumId) return null;
@@ -484,7 +485,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     if (!a || a.status !== "published") return null;
     const [allPhotos, { data: srcs }] = await Promise.all([
       fetchAllPhotos(db, a.id as string, "id, drive_file_id, name, is_video, position, source_id"),
-      db.from("album_sources").select("id, stage").eq("album_id", a.id as string),
+      db.from("album_sources").select("id, name, stage, position").eq("album_id", a.id as string).order("position"),
     ]);
     // Cùng luật với /album/[slug]: album có nguồn giai đoạn "delivery" thì chỉ
     // lấy ảnh giao khách. Thiếu bước này, album của hợp đồng vừa chuyển sang
@@ -493,6 +494,12 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       allPhotos as { id: string; drive_file_id: string; name: string; is_video: boolean | null; source_id: string | null }[],
       (srcs ?? []) as { id: string; stage: string | null }[],
     );
+    // Thư mục con (DaiTruoc, NhaGai…) để cổng khách lọc theo chip giống trang
+    // /album/[slug]. Chỉ giữ thư mục thật sự có ảnh trong danh sách đã lọc.
+    const used = new Set(photos.map((ph) => ph.source_id).filter(Boolean));
+    const folders = ((srcs ?? []) as { id: string; name: string | null }[])
+      .filter((s) => used.has(s.id))
+      .map((s) => ({ id: s.id, name: (s.name || "").trim() || "Ảnh" }));
     return {
       slug: a.slug as string,
       title: a.title as string,
@@ -504,14 +511,17 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
         a.watermark_delivery && planAllowsWatermark(effectivePlan(ownerObj?.plan, ownerObj?.plan_expires_at), ownerObj?.role === "admin")
           ? ((a.watermark_text as string | null) || studioName)
           : null,
-      // Giới hạn 400 ảnh: trang album vẽ lưới thumbnail, quá số này thì payload
-      // phình mà mắt cũng không xem hết — khách bấm "Mở album đầy đủ" để xem trọn.
-      photos: photos.slice(0, 400).map((ph) => ({
+      // Trả TRỌN danh sách ảnh — cổng khách phải hiện đủ như album hoàn thiện
+      // (trước đây cắt 400 ảnh nên album 1000+ ảnh bị thiếu). Lưới phía client
+      // đã dựng dần từng đợt nên số ảnh lớn không làm nặng lúc vẽ.
+      photos: photos.map((ph) => ({
         id: ph.id,
         drive_file_id: ph.drive_file_id,
         name: ph.name,
         is_video: !!ph.is_video || /\.(mp4|mov|m4v|webm|avi|mkv|wmv|flv|3gp)$/i.test(ph.name || ""),
+        source_id: ph.source_id ?? null,
       })),
+      folders,
     };
   };
 

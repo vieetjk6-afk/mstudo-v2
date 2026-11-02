@@ -57,7 +57,9 @@ export type PortalAlbum = {
   download_enabled: boolean;
   /** Chữ watermark khi tải từng ảnh — null = tải thẳng file gốc. */
   watermark?: string | null;
-  photos: { id: string; drive_file_id: string; name: string; is_video: boolean }[];
+  photos: { id: string; drive_file_id: string; name: string; is_video: boolean; source_id?: string | null }[];
+  /** Thư mục con có ảnh (theo thứ tự studio xếp) — để lọc theo chip. */
+  folders?: { id: string; name: string }[];
 };
 
 export type PortalBank = { bin: string | null; account: string | null; holder: string | null; name: string | null };

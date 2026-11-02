@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowRight, Check, Download, ExternalLink, FolderDown, Heart, Images, Share2, Sparkles, Star, Video, type LucideIcon,
 } from "lucide-react";
 import { Badge, Card, Empty, Section, Stack, btn } from "@/components/v2/kit";
 import { Segmented } from "@/components/v2/kit-client";
+import { ChipRow, ChipV2 } from "@/app/a/[slug]/album-v2-ui";
 import { fmtDate } from "@/lib/date";
 import { thiepUrl } from "@/lib/hosts";
 import PortalPhotoGridV2 from "./PortalPhotoGridV2";
@@ -116,6 +117,19 @@ function DeliveredAlbum({
   const { album, photos, albumVideos, videos, albumLink, originalsLink, canDownload, hasContent, firstTab, cover } = useAlbumContent(data);
   const { rating, rated, sendRating } = usePortalRating(token, phone, toast);
   const [tab, setTab] = useState<AlbumTabV2>(() => initialTab ?? firstTab);
+  // Lọc theo thư mục con (DaiTruoc, NhaGai…) — cùng cách trang /album/[slug]
+  // chia chip. Album chỉ có một thư mục thì không hiện hàng chip.
+  const [folder, setFolder] = useState<string>("all");
+  const folders = useMemo(() => {
+    const list = album?.folders ?? [];
+    return list
+      .map((f) => ({ ...f, count: photos.filter((p) => p.source_id === f.id).length }))
+      .filter((f) => f.count > 0);
+  }, [album, photos]);
+  const shownPhotos = useMemo(
+    () => (folder === "all" ? photos : photos.filter((p) => p.source_id === folder)),
+    [photos, folder],
+  );
   const share = () => sharePortalPage(c.client_name || c.title, toast);
   const coverSrc = imgSrc && photos[0] && !album?.cover_url ? imgSrc(photos[0], 1600) : cover;
 
@@ -192,7 +206,23 @@ function DeliveredAlbum({
                   <Card><Empty icon={Images} title="Chưa có ảnh trong album" hint="Studio sẽ đưa ảnh đã chỉnh màu lên đây." /></Card>
                 )
               ) : (
-                <PortalPhotoGridV2 photos={photos} canDownload={canDownload} watermark={album?.watermark ?? null} toast={toast} src={imgSrc} />
+                <>
+                  {folders.length > 1 && (
+                    <div className="mb-3">
+                      <ChipRow label="Thư mục ảnh">
+                        <ChipV2 on={folder === "all"} onClick={() => setFolder("all")} count={photos.length}>
+                          Tất cả
+                        </ChipV2>
+                        {folders.map((f) => (
+                          <ChipV2 key={f.id} on={folder === f.id} onClick={() => setFolder(f.id)} count={f.count}>
+                            {f.name}
+                          </ChipV2>
+                        ))}
+                      </ChipRow>
+                    </div>
+                  )}
+                  <PortalPhotoGridV2 key={folder} photos={shownPhotos} canDownload={canDownload} watermark={album?.watermark ?? null} toast={toast} src={imgSrc} />
+                </>
               ))}
 
             {tab === "videos" &&
