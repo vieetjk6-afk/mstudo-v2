@@ -63,15 +63,9 @@ export default function AlbumPrintPanelV2({
         actions={status}
       >
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-          {info.contractId ? (
-            <div>
-              <p className="v2-label">Số ảnh in tặng</p>
-              <p className="mt-1 text-[13.5px]" style={{ color: "var(--tx2)" }}>
-                Theo hợp đồng: <b style={{ color: "var(--tx)" }}>{info.contractQuota > 0 ? `${info.contractQuota} ảnh` : "chưa đặt"}</b>
-              </p>
-            </div>
-          ) : (
-            <Field
+          {/* Ô nhập LUÔN có — kể cả album của hợp đồng (hợp đồng chưa đặt số
+              ảnh in thì nhập luôn ở đây, khỏi phải mở hợp đồng). */}
+          <Field
               label={
                 <span className="flex items-center gap-2">
                   Số ảnh in tặng cho album này
@@ -80,7 +74,11 @@ export default function AlbumPrintPanelV2({
                   </span>
                 </span>
               }
-              hint="Để trống là không tặng in. Tự lưu khi bạn gõ."
+              hint={
+                info.contractId
+                  ? `Hợp đồng: ${info.contractQuota > 0 ? `${info.contractQuota} ảnh` : "chưa đặt"}. Khách được chọn theo số lớn hơn. Tự lưu khi bạn gõ.`
+                  : "Để trống là không tặng in. Tự lưu khi bạn gõ."
+              }
             >
               <div className="flex items-center gap-2">
                 <input
@@ -95,7 +93,6 @@ export default function AlbumPrintPanelV2({
                 <span className="text-[13.5px]" style={{ color: "var(--tx2)" }}>ảnh</span>
               </div>
             </Field>
-          )}
           {info.contractId ? (
             <Link href={`/dashboard/studio/contracts/${info.contractId}?tab=album`} className={btn("secondary", "sm", "self-start md:self-auto")}>
               <ExternalLink size={15} /> Sửa ở hợp đồng
