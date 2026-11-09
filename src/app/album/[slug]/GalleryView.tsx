@@ -137,7 +137,7 @@ export default function GalleryView(props: GalleryViewProps) {
           {!shareMode && !printing && selected.size > 0 && (
             <button onClick={shareSelected} disabled={shareBusy} className="btn-primary px-3 py-1.5 text-[13px]">
               <Share2 size={14} />
-              {shareBusy ? "Đang tạo link…" : `Chia sẻ ${selected.size} ảnh đã chọn`}
+              {shareBusy ? "Đang tạo link…" : `Chia sẻ ${selected.size} ảnh đã thả tim`}
             </button>
           )}
           {/* Nút chính của album giao khách: mở thẳng thư mục FILE CHỈNH SỬA trên
@@ -249,8 +249,8 @@ export default function GalleryView(props: GalleryViewProps) {
                     {!shareMode && !printing && (
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleSelect(p.id); }}
-                        title={isSel ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
-                        aria-label={isSel ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
+                        title={isSel ? "Bỏ thả tim ảnh này" : "Thả tim ảnh này"}
+                        aria-label={isSel ? "Bỏ thả tim ảnh này" : "Thả tim ảnh này"}
                         aria-pressed={isSel}
                         className="absolute right-1 top-1 z-[4] flex h-7 w-7 items-center justify-center transition-transform active:scale-90"
                         style={{ color: isSel ? "var(--gold)" : "#fff", filter: ICON_HALO }}
@@ -395,8 +395,8 @@ export default function GalleryView(props: GalleryViewProps) {
                 {!shareMode && !printing && (
                   <button
                     onClick={() => toggleSelect(lb.id)}
-                    title={selected.has(lb.id) ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
-                    aria-label={selected.has(lb.id) ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
+                    title={selected.has(lb.id) ? "Bỏ thả tim ảnh này" : "Thả tim ảnh này"}
+                    aria-label={selected.has(lb.id) ? "Bỏ thả tim ảnh này" : "Thả tim ảnh này"}
                     aria-pressed={selected.has(lb.id)}
                     className="absolute right-1.5 top-1.5 z-20 flex h-10 w-10 items-center justify-center transition-transform active:scale-90"
                     style={{ color: selected.has(lb.id) ? "var(--gold)" : "#fff", filter: ICON_HALO }}
@@ -417,8 +417,8 @@ export default function GalleryView(props: GalleryViewProps) {
 
       <ShareDialog
         url={shareUrl}
-        title={`Chia sẻ ${selected.size} ảnh đã chọn`}
-        subtitle="Gửi link này cho người khác — họ sẽ chỉ xem đúng những ảnh bạn đã chọn."
+        title={`Chia sẻ ${selected.size} ảnh đã thả tim`}
+        subtitle="Gửi link này cho người khác — họ sẽ chỉ xem đúng những ảnh bạn đã thả tim."
         onClose={() => setShareUrl(null)}
       />
     </main>

@@ -3,9 +3,9 @@
 import { useState } from "react";
 import {
   Calendar,
-  Check,
   CheckCircle2,
   Download,
+  Heart,
   ImageOff,
   MessageSquareHeart,
   Play,
@@ -19,6 +19,7 @@ import {
 import { fmtDate } from "@/lib/date";
 import { useTheme } from "@/lib/theme";
 import { stripExtension } from "@/lib/drive";
+import { ICON_HALO } from "@/lib/album-icon";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
 import { useGridThumbWidth } from "@/lib/use-img-width";
@@ -102,9 +103,11 @@ export default function GalleryViewV2(props: GalleryViewProps) {
   const lb = g.lbIdx !== null ? g.visible[g.lbIdx] ?? null : null;
   const count = g.shareMode ? g.visible.length : (props.totalPhotos ?? g.photos.length);
   const showFaces = faceToolAvailable(g.people, g.scan);
-  const sharing = !g.shareMode && !g.printing && g.selected.size > 0;
-  const showFab = pp.needsAction && !pp.mode && !cardInView && !sharing;
-  const bottomBar = g.printing || sharing;
+  // Album giao khách chỉ xem + thả tim: không còn thanh "Đã chọn N ảnh" bật lên
+  // mỗi lần chạm. Chia sẻ những tấm đã thả tim nằm ở bộ lọc "Ảnh đã thả tim".
+  const hearts = !g.shareMode && !g.printing && g.selected.size > 0;
+  const showFab = pp.needsAction && !pp.mode && !cardInView;
+  const bottomBar = g.printing;
 
   return (
     <CustomerRootV2 theme={theme}>
@@ -154,7 +157,7 @@ export default function GalleryViewV2(props: GalleryViewProps) {
                     ? "Tải cả album từ Google Drive, giữ nguyên chất lượng. Muốn lấy vài tấm thì mở ảnh rồi bấm “Tải ảnh”."
                     : g.allowDownload
                       ? "Bấm vào ảnh để xem lớn và tải từng tấm về máy."
-                      : "Bấm vào ảnh để xem lớn. Chạm vòng tròn ở góc ảnh để chọn và chia sẻ."}
+                      : "Bấm vào ảnh để xem lớn. Thả tim những tấm bạn thích để xem lại sau."}
                 </p>
               </div>
               {g.downloadFolders.length > 0 && (
@@ -201,6 +204,22 @@ export default function GalleryViewV2(props: GalleryViewProps) {
                   <ScanFace size={16} style={{ color: "var(--ac)" }} />
                 )}
                 Tìm ảnh có mặt bạn
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Ảnh đã thả tim: lọc xem lại + chia sẻ đúng mấy tấm đó. */}
+        {hearts && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <ChipV2 on={g.onlyHearts} onClick={() => g.setOnlyHearts(!g.onlyHearts)} count={g.selected.size}>
+              <span className="inline-flex items-center gap-1.5">
+                <Heart size={14} fill={g.onlyHearts ? "currentColor" : "none"} strokeWidth={2.2} /> Ảnh đã thả tim
+              </span>
+            </ChipV2>
+            {g.onlyHearts && (
+              <button type="button" onClick={g.shareSelected} disabled={g.shareBusy} className={btn("secondary", "sm")}>
+                <Share2 size={14} /> {g.shareBusy ? "Đang tạo link…" : `Chia sẻ ${g.selected.size} ảnh này`}
               </button>
             )}
           </div>
@@ -272,7 +291,7 @@ export default function GalleryViewV2(props: GalleryViewProps) {
                               className="block h-full w-full cursor-zoom-in select-none object-cover"
                             />
                             {g.wm && <div className="pointer-events-none absolute inset-0 z-[2] opacity-20" style={watermarkLayer(g.wm)} />}
-                            {isSel && <div className="pointer-events-none absolute inset-0 z-[3]" style={{ boxShadow: "inset 0 0 0 3px var(--ac)" }} />}
+                            {g.printing && isSel && <div className="pointer-events-none absolute inset-0 z-[3]" style={{ boxShadow: "inset 0 0 0 3px var(--ac)" }} />}
                             {video && (
                               <span
                                 className="pointer-events-none absolute left-1/2 top-1/2 z-[3] flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full"
@@ -290,13 +309,22 @@ export default function GalleryViewV2(props: GalleryViewProps) {
                                 icon={<Printer size={13} strokeWidth={2.6} />}
                               />
                             )}
+                            {/* Chỉ một TRÁI TIM nhỏ ở góc — không ô chọn, không nền. */}
                             {!g.shareMode && !g.printing && (
-                              <SelectDot
-                                on={isSel}
-                                onClick={() => g.toggleSelect(p.id)}
-                                label={isSel ? "Bỏ chọn ảnh này" : "Chọn ảnh để chia sẻ"}
-                                icon={<Check size={15} strokeWidth={3} />}
-                              />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  g.toggleSelect(p.id);
+                                }}
+                                aria-pressed={isSel}
+                                aria-label={isSel ? "Bỏ thả tim ảnh này" : "Thả tim ảnh này"}
+                                title={isSel ? "Bỏ thả tim ảnh này" : "Thả tim ảnh này"}
+                                className="absolute right-0 top-0 z-[4] flex h-10 w-10 items-center justify-center transition-transform active:scale-90"
+                                style={{ color: isSel ? "#ff4d6d" : "#fff", filter: ICON_HALO }}
+                              >
+                                <Heart size={18} fill={isSel ? "currentColor" : "none"} strokeWidth={isSel ? 0 : 2.2} />
+                              </button>
                             )}
                           </div>
                         );
@@ -316,22 +344,6 @@ export default function GalleryViewV2(props: GalleryViewProps) {
       {g.printing && <PrintBarV2 pp={pp} />}
       <PrintVerifyDialog pp={pp} />
 
-      {/* Đã chọn ảnh để chia sẻ. */}
-      {sharing && (
-        <BottomBar>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px]" style={{ color: "var(--tx2)" }}>
-              Đã chọn <b className="tnum text-[17px]" style={{ color: "var(--tx)" }}>{g.selected.size}</b> ảnh
-            </p>
-            <button type="button" onClick={() => g.setSelected(new Set())} className="text-[12.5px] font-semibold" style={{ color: "var(--ac)" }}>
-              Bỏ chọn
-            </button>
-          </div>
-          <button type="button" onClick={g.shareSelected} disabled={g.shareBusy} className={btn("primary", "lg", "flex-none")}>
-            <Share2 size={16} /> {g.shareBusy ? "Đang tạo link…" : `Chia sẻ ${g.selected.size} ảnh`}
-          </button>
-        </BottomBar>
-      )}
 
       {/* Nút nổi "Chọn ảnh in" — khách cuộn tới đâu cũng thấy, cho tới khi gửi xong. */}
       {showFab && (
@@ -372,8 +384,8 @@ export default function GalleryViewV2(props: GalleryViewProps) {
 
       <ShareDialog
         url={g.shareUrl}
-        title={`Chia sẻ ${g.selected.size} ảnh đã chọn`}
-        subtitle="Gửi link này cho người khác — họ sẽ chỉ xem đúng những ảnh bạn đã chọn."
+        title={`Chia sẻ ${g.selected.size} ảnh đã thả tim`}
+        subtitle="Gửi link này cho người khác — họ sẽ chỉ xem đúng những ảnh bạn đã thả tim."
         onClose={() => g.setShareUrl(null)}
       />
     </CustomerRootV2>
@@ -498,8 +510,8 @@ function GalleryViewerActions({ g, photo }: { g: GalleryState; photo: NonNullabl
       )}
       {!g.shareMode && !g.printing && (
         <button type="button" onClick={() => g.toggleSelect(photo.id)} aria-pressed={picked} className={act} style={picked ? onSoft : ghost}>
-          {picked ? <CheckCircle2 size={20} /> : <Check size={20} strokeWidth={2.6} />}
-          {picked ? "Đã chọn" : "Chọn để chia sẻ"}
+          <Heart size={20} fill={picked ? "#ff4d6d" : "none"} color={picked ? "#ff4d6d" : "currentColor"} strokeWidth={picked ? 0 : 2.4} />
+          {picked ? "Đã thả tim" : "Thả tim"}
         </button>
       )}
       {g.allowDownload &&
