@@ -13,6 +13,11 @@ import type { PrintState } from "@/lib/album-print-rules";
    Chọn xong bấm "Gửi cho studio" — CHỈ lúc đó mới ghi lên máy chủ, để studio
    thấy đúng danh sách khách đã chốt. Lựa chọn dở dang giữ trong trình duyệt
    (localStorage) để đóng trang mở lại không mất.
+
+   CHỈ CÔ DÂU / CHÚ RỂ: link album giao khách hay được chuyển cho cả họ hàng,
+   bạn bè. Hợp đồng có SĐT (khách / cô dâu / chú rể) thì trước khi chọn phải
+   nhập đúng một trong các số đó — máy chủ trả một "vé chọn ảnh in" lưu trong
+   trình duyệt này. Người khác vẫn xem, tải ảnh bình thường, chỉ không chọn in.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const draftKey = (slug: string) => `mstudo-print-draft:${slug}`;
@@ -36,6 +41,25 @@ function writeDraft(slug: string, ids: string[] | null) {
   }
 }
 
+const keyKey = (slug: string) => `mstudo-print-key:${slug}`;
+
+function readKey(slug: string): string | null {
+  try {
+    return localStorage.getItem(keyKey(slug));
+  } catch {
+    return null;
+  }
+}
+
+function writeKey(slug: string, key: string | null) {
+  try {
+    if (key) localStorage.setItem(keyKey(slug), key);
+    else localStorage.removeItem(keyKey(slug));
+  } catch {
+    /* không lưu được → lần sau mở lại phải xác minh lại */
+  }
+}
+
 const sameSet = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
 
 const ERRORS: Record<string, string> = {
@@ -45,6 +69,13 @@ const ERRORS: Record<string, string> = {
   wrong_password: "Phiên xem album đã hết hạn — tải lại trang, nhập lại mật khẩu rồi gửi lại.",
   not_enabled: "Album này không có ảnh in tặng.",
   not_ready: "Studio chưa bật tính năng chọn ảnh in. Bạn liên hệ studio nhé.",
+  need_verify: "Chỉ cô dâu, chú rể mới chọn được ảnh in — bạn xác minh lại số điện thoại nhé.",
+};
+
+const VERIFY_ERRORS: Record<string, string> = {
+  wrong_phone: "Số này không khớp số điện thoại cô dâu / chú rể studio đã ghi trên hợp đồng.",
+  rate_limited: "Bạn thử sai nhiều lần quá — đợi ít phút rồi thử lại nhé.",
+  not_enabled: "Album này không có ảnh in tặng.",
 };
 
 export function usePrintPicks(slug: string, print: PrintState | null | undefined, access: string | undefined) {
@@ -57,6 +88,19 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
   const [onlyPicked, setOnlyPicked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // Chỉ cô dâu / chú rể: vé chọn ảnh in (null = chưa xác minh trên máy này).
+  const coupleOnly = !!print?.coupleOnly;
+  const [printKey, setPrintKey] = useState<string | null>(null);
+  const verified = !coupleOnly || !!printKey;
+  const [verifyOpen, setVerifyOpen] = useState(false);
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [verifyErr, setVerifyErr] = useState<string | null>(null);
+  // Xác minh xong thì mở thẳng chế độ chọn như khách vừa bấm (xem / chọn).
+  const [afterVerifyOnly, setAfterVerifyOnly] = useState(false);
+
+  useEffect(() => {
+    if (coupleOnly) setPrintKey(readKey(slug));
+  }, [slug, coupleOnly]);
 
   // Bản nháp chưa gửi (mở lại trang không mất). Đọc sau khi mount: localStorage
   // không có ở máy chủ, đọc lúc khởi tạo state là lệch HTML lúc hydrate.
@@ -68,7 +112,8 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
 
   const dirty = useMemo(() => !sameSet(picks, sent), [picks, sent]);
   // Khách còn việc phải làm: được tặng in mà chưa gửi (hoặc đã sửa sau khi gửi).
-  const needsAction = quota > 0 && !locked && !(sentAt && !dirty);
+  // Người xem không phải dâu rể thì không nhắc (không hiện nút nổi "Chọn ảnh in").
+  const needsAction = quota > 0 && verified && !locked && !(sentAt && !dirty);
 
   function toggle(id: string, printable: boolean) {
     if (locked || !printable) return;
@@ -91,9 +136,17 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
       const res = await fetch(`/api/album/${slug}/print`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ photoIds: [...picks], access }),
+        body: JSON.stringify({ photoIds: [...picks], access, printKey }),
       });
       const d = await res.json().catch(() => ({}));
+      if (d.error === "need_verify") {
+        // Vé cũ hết hiệu lực (studio sửa SĐT trên hợp đồng) → xác minh lại, giữ nguyên ảnh đã chọn.
+        writeKey(slug, null);
+        setPrintKey(null);
+        setVerifyErr(ERRORS.need_verify);
+        setVerifyOpen(true);
+        return;
+      }
       if (!res.ok) {
         setMsg({ ok: false, text: ERRORS[d.error as string] ?? "Chưa gửi được, bạn thử lại sau ít phút." });
         return;
@@ -113,8 +166,52 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
     }
   }
 
+  async function verify(phone: string) {
+    if (verifyBusy) return;
+    if (phone.replace(/\D/g, "").length < 9) {
+      setVerifyErr("Bạn nhập đủ số điện thoại nhé.");
+      return;
+    }
+    setVerifyBusy(true);
+    setVerifyErr(null);
+    try {
+      const res = await fetch(`/api/album/${slug}/print/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d.ok) {
+        setVerifyErr(VERIFY_ERRORS[d.error as string] ?? "Chưa xác minh được, bạn thử lại sau ít phút.");
+        return;
+      }
+      // printKey null: hợp đồng vừa bị xoá SĐT → không cần vé, coi như đã xác minh.
+      const key = typeof d.printKey === "string" ? d.printKey : "ok";
+      writeKey(slug, key);
+      setPrintKey(key);
+      setVerifyOpen(false);
+      setMode(true);
+      setOnlyPicked(afterVerifyOnly);
+      setMsg(null);
+    } catch {
+      setVerifyErr("Mất kết nối — bạn kiểm tra mạng rồi thử lại.");
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
   return {
     enabled: quota > 0,
+    coupleOnly,
+    verified,
+    verifyOpen,
+    verifyBusy,
+    verifyErr,
+    verify,
+    closeVerify: () => {
+      setVerifyOpen(false);
+      setVerifyErr(null);
+    },
     quota,
     picks,
     sentCount: sent.size,
@@ -129,6 +226,12 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
     toggle,
     send,
     open: (only = false) => {
+      if (!verified) {
+        setAfterVerifyOnly(only);
+        setVerifyErr(null);
+        setVerifyOpen(true);
+        return;
+      }
       setMode(true);
       setOnlyPicked(only);
       setMsg(null);
@@ -177,7 +280,13 @@ export function printCardText(pp: PrintPicks): { title: string; note: string; ct
   let title: string;
   let note: string;
   let cta: string;
-  if (pp.locked) {
+  if (!pp.verified) {
+    title = `Ảnh in tặng dành cho cô dâu, chú rể`;
+    note = pp.locked || pp.sentAt
+      ? "Cô dâu, chú rể đã gửi ảnh in cho studio. Bạn vẫn xem và tải ảnh bình thường."
+      : "Chỉ cô dâu, chú rể chọn ảnh in — xác minh bằng số điện thoại đã đăng ký với studio. Bạn vẫn xem và tải ảnh bình thường.";
+    cta = "Tôi là cô dâu / chú rể";
+  } else if (pp.locked) {
     title = `Studio đã chuyển ${pp.sentCount} ảnh của bạn đi in`;
     note = "Ảnh in sẽ được giao cùng sản phẩm của hợp đồng.";
     cta = "Xem ảnh đã chọn";
@@ -299,5 +408,83 @@ export function PrintToggle({ picked, disabled, onToggle, size = "sm" }: { picke
         {picked && <Check size={dot - 8} strokeWidth={3} />}
       </span>
     </button>
+  );
+}
+
+/**
+ * Hộp "Tôi là cô dâu / chú rể" — nhập SĐT đã đăng ký với studio để được chọn
+ * ảnh in. Dùng chung cho bản cũ và GalleryViewV2: màu lấy biến của bản mới
+ * (--sf, --bd, --ac…), thiếu thì rơi về biến của bản cũ.
+ */
+export function PrintVerifyDialog({ pp }: { pp: PrintPicks }) {
+  const [phone, setPhone] = useState("");
+  if (!pp.verifyOpen) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[80] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      style={{ background: "rgba(10,12,18,.55)" }}
+      onClick={pp.closeVerify}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="print-verify-title"
+    >
+      <form
+        onClick={(e) => e.stopPropagation()}
+        onSubmit={(e) => {
+          e.preventDefault();
+          pp.verify(phone);
+        }}
+        className="w-full max-w-[420px] rounded-t-[20px] p-5 sm:rounded-[20px]"
+        style={{
+          background: "var(--sf, var(--surface, #fff))",
+          color: "var(--tx, var(--text, inherit))",
+          border: "1px solid var(--bd, var(--border, transparent))",
+          paddingBottom: "max(20px, env(safe-area-inset-bottom, 0px))",
+        }}
+      >
+        <div className="flex items-start gap-3">
+          <span
+            className="flex h-10 w-10 flex-none items-center justify-center rounded-full"
+            style={{ background: "color-mix(in srgb, var(--am, var(--gold)) 16%, transparent)", color: "var(--am, var(--gold))" }}
+          >
+            <Printer size={19} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p id="print-verify-title" className="text-[16px] font-semibold">Chọn ảnh in — dành cho cô dâu, chú rể</p>
+            <p className="mt-1 text-[13px]" style={{ color: "var(--tx2, var(--text2))" }}>
+              Nhập số điện thoại của cô dâu hoặc chú rể đã đăng ký với studio để chọn ảnh in.
+            </p>
+          </div>
+          <button type="button" onClick={pp.closeVerify} aria-label="Đóng" className="-mr-1 -mt-1 p-1" style={{ color: "var(--tx3, var(--text2))" }}>
+            <X size={18} />
+          </button>
+        </div>
+        <input
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          autoFocus
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          placeholder="Số điện thoại"
+          className="mt-4 w-full rounded-[12px] px-3.5 py-3 text-[16px] outline-none"
+          style={{ background: "var(--bg, transparent)", color: "inherit", border: "1px solid var(--bd, var(--border))" }}
+        />
+        {pp.verifyErr && (
+          <p className="mt-2 text-[12.5px] font-medium" style={{ color: "var(--rd, var(--danger))" }}>{pp.verifyErr}</p>
+        )}
+        <button
+          type="submit"
+          disabled={pp.verifyBusy}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-[12px] px-4 py-3 text-[14.5px] font-semibold disabled:opacity-60"
+          style={{ background: "var(--ac, var(--gold))", color: "#fff" }}
+        >
+          <Check size={16} strokeWidth={2.6} /> {pp.verifyBusy ? "Đang kiểm tra…" : "Xác minh"}
+        </button>
+        <p className="mt-3 text-center text-[12px]" style={{ color: "var(--tx3, var(--text2))" }}>
+          Không phải cô dâu, chú rể? Bạn vẫn xem và tải ảnh bình thường.
+        </p>
+      </form>
+    </div>
   );
 }

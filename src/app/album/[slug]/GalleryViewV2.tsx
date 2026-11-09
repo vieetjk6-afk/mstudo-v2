@@ -34,7 +34,7 @@ import { Switch } from "@/components/v2/kit-client";
 import FaceFinderV2, { FaceAvatar, faceToolAvailable } from "@/app/a/[slug]/FaceFinderV2";
 import { useFaceSearch } from "@/app/a/[slug]/useFaceSearch";
 import { AlbumHeroV2, ChipRow, ChipV2, LockScreenV2, SelectDot, ViewerV2, useAlbumImg } from "@/app/a/[slug]/album-v2-ui";
-import { printCardText, useCardInView, type PrintPicks } from "./PrintPicker";
+import { PrintVerifyDialog, printCardText, useCardInView, type PrintPicks } from "./PrintPicker";
 import { isVideo, useGalleryView, type GalleryViewProps } from "./useGalleryView";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -314,6 +314,7 @@ export default function GalleryViewV2(props: GalleryViewProps) {
 
       {/* Đang chọn ảnh in: thanh đáy đếm x/N, lọc, gửi. */}
       {g.printing && <PrintBarV2 pp={pp} />}
+      <PrintVerifyDialog pp={pp} />
 
       {/* Đã chọn ảnh để chia sẻ. */}
       {sharing && (
