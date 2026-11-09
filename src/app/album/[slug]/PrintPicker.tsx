@@ -112,8 +112,9 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
 
   const dirty = useMemo(() => !sameSet(picks, sent), [picks, sent]);
   // Khách còn việc phải làm: được tặng in mà chưa gửi (hoặc đã sửa sau khi gửi).
-  // Người xem không phải dâu rể thì không nhắc (không hiện nút nổi "Chọn ảnh in").
-  const needsAction = quota > 0 && verified && !locked && !(sentAt && !dirty);
+  // Nút "Chọn ảnh in" hiện cho MỌI người xem khi studio có tặng in; bấm vào
+  // mới hỏi SĐT (xem open) — người không phải dâu rể dừng ở bước đó.
+  const needsAction = quota > 0 && !locked && !(sentAt && !dirty);
 
   function toggle(id: string, printable: boolean) {
     if (locked || !printable) return;
@@ -280,13 +281,7 @@ export function printCardText(pp: PrintPicks): { title: string; note: string; ct
   let title: string;
   let note: string;
   let cta: string;
-  if (!pp.verified) {
-    title = `Ảnh in tặng dành cho cô dâu, chú rể`;
-    note = pp.locked || pp.sentAt
-      ? "Cô dâu, chú rể đã gửi ảnh in cho studio. Bạn vẫn xem và tải ảnh bình thường."
-      : "Chỉ cô dâu, chú rể chọn ảnh in — xác minh bằng số điện thoại đã đăng ký với studio. Bạn vẫn xem và tải ảnh bình thường.";
-    cta = "Tôi là cô dâu / chú rể";
-  } else if (pp.locked) {
+  if (pp.locked) {
     title = `Studio đã chuyển ${pp.sentCount} ảnh của bạn đi in`;
     note = "Ảnh in sẽ được giao cùng sản phẩm của hợp đồng.";
     cta = "Xem ảnh đã chọn";
@@ -299,6 +294,8 @@ export function printCardText(pp: PrintPicks): { title: string; note: string; ct
     note = "Chọn những tấm bạn muốn in rồi bấm “Gửi cho studio”.";
     cta = pp.picks.size > 0 ? `Tiếp tục chọn (${pp.picks.size}/${pp.quota})` : "Chọn ảnh in";
   }
+  // Chưa xác nhận SĐT trên máy này: nút giữ nguyên, nói trước là sẽ hỏi SĐT.
+  if (!pp.verified) note = `${note} Cô dâu, chú rể xác nhận số điện thoại đã đăng ký với studio để chọn.`;
   return { title, note, cta };
 }
 

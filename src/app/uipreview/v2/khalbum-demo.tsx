@@ -308,7 +308,7 @@ const G_BASE: GalleryViewProps = {
   initialOriginalFolders: [{ name: "JPG Goc", url: "https://drive.google.com/drive/folders/demo-orig" }],
   feedback: FEEDBACK,
   studioName: "Mây Studio",
-  print: { quota: 3, picks: [], sentAt: null, copiedAt: null },
+  print: { quota: 3, picks: [], sentAt: null, copiedAt: null, coupleOnly: true },
 };
 
 export type GiaoVariant = "day" | "khoa" | "chiase" | "gon";

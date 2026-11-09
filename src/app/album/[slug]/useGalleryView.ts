@@ -193,7 +193,35 @@ export function useGalleryView({
     // Chạy một lần sau khi mount cho album hiện tại.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gallery.slug]);
+  // TRÁI TIM: album giao khách không còn ô chọn ảnh để chia sẻ — khách chỉ xem
+  // và thả tim những tấm mình thích. Tim lưu trong trình duyệt (đóng trang mở
+  // lại vẫn còn), lọc "Ảnh đã thả tim" để xem lại, và chia sẻ đúng mấy tấm đó.
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [onlyHearts, setOnlyHearts] = useState(false);
+  const heartKey = `mstudo-hearts:${gallery.slug}`;
+  // Đọc sau khi mount: localStorage không có ở máy chủ (lệch HTML lúc hydrate).
+  useEffect(() => {
+    if (shareMode) return;
+    try {
+      const v = JSON.parse(localStorage.getItem(heartKey) ?? "null");
+      if (Array.isArray(v)) setSelected(new Set(v.filter((x: unknown) => typeof x === "string")));
+    } catch {
+      /* không đọc được → bắt đầu không tim nào */
+    }
+  }, [heartKey, shareMode]);
+  useEffect(() => {
+    if (shareMode) return;
+    try {
+      if (selected.size) localStorage.setItem(heartKey, JSON.stringify([...selected]));
+      else localStorage.removeItem(heartKey);
+    } catch {
+      /* ẩn danh / chặn lưu trữ → tim chỉ còn trong phiên này */
+    }
+  }, [heartKey, selected, shareMode]);
+  // Bỏ tim tấm cuối cùng khi đang lọc ảnh đã thả tim → về lại cả album.
+  useEffect(() => {
+    if (onlyHearts && selected.size === 0) setOnlyHearts(false);
+  }, [onlyHearts, selected.size]);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [shareBusy, setShareBusy] = useState(false);
 
@@ -296,10 +324,11 @@ export function useGalleryView({
     let base = activeTab === "all" ? photos : photos.filter((p) => p.source_id === activeTab);
     if (shareSet) base = base.filter((p) => shareSet.has(p.id));
     if (printing && pp.onlyPicked) base = base.filter((p) => pp.picks.has(p.id));
+    else if (!printing && onlyHearts) base = base.filter((p) => selected.has(p.id));
     // Lọc theo khuôn mặt SAU cùng: nó là câu hỏi "cho tôi xem ảnh của mẹ tôi",
     // còn tab nguồn và chế độ chia sẻ là phạm vi đang xem.
     return filterByPerson(base, activePerson);
-  }, [photos, activeTab, shareSet, activePerson, printing, pp.onlyPicked, pp.picks]);
+  }, [photos, activeTab, shareSet, activePerson, printing, pp.onlyPicked, pp.picks, onlyHearts, selected]);
   const sections = useMemo((): GallerySection[] => {
     const idx = visible.map((p, i) => ({ p, i }));
     const keo = (id: string, name: string, items: { p: GalleryPhoto; i: number }[]) => ({ id, name, items, ids: items.map((x) => x.p.id) });
@@ -409,6 +438,8 @@ export function useGalleryView({
     selected,
     setSelected,
     toggleSelect,
+    onlyHearts,
+    setOnlyHearts,
     shareUrl,
     setShareUrl,
     shareBusy,
