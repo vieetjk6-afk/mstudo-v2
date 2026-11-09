@@ -64,17 +64,18 @@ export default function AlbumPrintPanel({
         </div>
       </div>
 
-      {/* Số ảnh in tặng: album của hợp đồng nhập ở hợp đồng (một nơi duy nhất),
-          album lẻ nhập ngay đây. */}
-      {info.contractId ? (
+      {/* Số ảnh in tặng: nhập ngay tại album (cả album của hợp đồng); hợp đồng
+          có số riêng thì khách được chọn theo số lớn hơn. */}
+      {info.contractId && (
         <p className="mt-3 text-[12.5px]" style={{ color: "var(--text2)" }}>
           Số ảnh in tặng theo hợp đồng: <b>{info.contractQuota > 0 ? `${info.contractQuota} ảnh` : "chưa đặt"}</b> ·{" "}
           <Link href={`/dashboard/studio/contracts/${info.contractId}?tab=album`} className="font-semibold underline" style={{ color: "var(--ac, var(--gold))" }}>
             Sửa ở hợp đồng
           </Link>
+          {" "}· hoặc nhập số cho riêng album này bên dưới (khách được chọn theo số lớn hơn).
         </p>
-      ) : (
-        <div className="mt-3">
+      )}
+      <div className="mt-3">
           <label className="label flex items-center gap-2">
             <span>Số ảnh in tặng cho album này</span>
             <span className="text-[11px] font-normal normal-case tracking-normal" style={{ color: "var(--text3)" }}>
@@ -92,8 +93,7 @@ export default function AlbumPrintPanel({
             />
             <span className="text-[13px]" style={{ color: "var(--text2)" }}>ảnh · để trống = không tặng in</span>
           </div>
-        </div>
-      )}
+      </div>
 
       {n > 0 && (
         <>

@@ -146,15 +146,17 @@ export default async function AlbumEditPage(
 
   // Ảnh in khách gửi (thẻ "Ảnh in tặng" ở tab Giao khách). Lỗi = DB chưa chạy
   // migrations/anh_in_tang.sql → không hiện thẻ, phần còn lại của trang vẫn chạy.
-  // Album lẻ (không thuộc hợp đồng) luôn có thẻ để studio nhập số ảnh in tặng
-  // ngay tại đây; album của hợp đồng thì chỉ hiện khi hợp đồng có tặng in.
+  // LUÔN có thẻ (album lẻ lẫn album của hợp đồng) để studio nhập số ảnh in tặng
+  // ngay tại album. Trước đây album của hợp đồng chưa đặt số ảnh in thì mất hẳn
+  // tab "Ảnh in" — studio tìm trong album không thấy chỗ nhập. Số áp dụng là số
+  // LỚN HƠN giữa hợp đồng và album (xem loadPrintQuota).
   let printInfo: AlbumPrintInfo | null = null;
   {
     const { data: pp, error: ppErr } = printPicksRes;
     const a = album as Album & { print_sent_at?: string | null; print_copied_at?: string | null; print_quota?: unknown };
     const albumQuota = normalizeQuota(a.print_quota);
     const quota = Math.max(printQuota, albumQuota);
-    if (!ppErr && (!linkedContract?.id || quota > 0 || (pp?.length ?? 0) > 0)) {
+    if (!ppErr) {
       printInfo = {
         quota,
         contractId: (linkedContract?.id as string | undefined) ?? null,
