@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { normalizeQuota, type PrintState } from "./album-print-rules";
+import { normalizeQuota, printPhoneKeys, type PrintState } from "./album-print-rules";
 
 export type { PrintState };
 
@@ -29,18 +29,40 @@ export async function loadPrintQuota(db: SupabaseClient, albumId: string): Promi
   return Math.max(0, fromAlbum, ...fromContracts);
 }
 
+/**
+ * SĐT được phép chọn ảnh in (đã chuẩn hoá — xem printPhoneKeys): SĐT khách,
+ * cô dâu, chú rể của các hợp đồng dùng album này. Rỗng = không có số nào để
+ * đối chiếu (album lẻ, hợp đồng chưa ghi SĐT) → ai mở được album cũng chọn được
+ * như trước. DB chưa chạy migration SĐT cô dâu / chú rể thì chỉ lấy SĐT khách.
+ */
+export async function loadPrintPhones(db: SupabaseClient, albumId: string): Promise<string[]> {
+  const q = (cols: string) =>
+    db
+      .from("studio_contracts")
+      .select(cols)
+      .or(`selection_album_id.eq.${albumId},gallery_album_id.eq.${albumId}`)
+      .limit(5);
+  let res = await q("client_phone, bride_phone, groom_phone");
+  if (res.error) res = await q("client_phone");
+  if (res.error) return [];
+  const rows = (res.data ?? []) as unknown as Record<string, unknown>[];
+  return printPhoneKeys(rows.flatMap((r) => [r.client_phone, r.bride_phone, r.groom_phone]));
+}
+
 /** Toàn bộ trạng thái ảnh in của album, hoặc null khi album không được tặng in. */
 export async function loadPrintState(db: SupabaseClient, albumId: string): Promise<PrintState | null> {
   const quota = await loadPrintQuota(db, albumId);
   if (!quota) return null;
-  const [{ data: picks }, { data: album }] = await Promise.all([
+  const [{ data: picks }, { data: album }, phones] = await Promise.all([
     db.from("print_picks").select("photo_id").eq("album_id", albumId),
     db.from("albums").select("print_sent_at, print_copied_at").eq("id", albumId).maybeSingle(),
+    loadPrintPhones(db, albumId),
   ]);
   return {
     quota,
     picks: (picks ?? []).map((p) => p.photo_id as string),
     sentAt: (album?.print_sent_at as string | null | undefined) ?? null,
     copiedAt: (album?.print_copied_at as string | null | undefined) ?? null,
+    coupleOnly: phones.length > 0,
   };
 }

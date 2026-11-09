@@ -22,7 +22,7 @@ import ZoomHiRes from "@/components/ZoomHiRes";
 import { ALBUM_TITLE_FONT } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
-import { PrintBar, PrintCard, PrintFab, PrintToggle } from "./PrintPicker";
+import { PrintBar, PrintCard, PrintFab, PrintToggle, PrintVerifyDialog } from "./PrintPicker";
 import { isVideo, useGalleryView, type GalleryDriveFolder as DriveFolder, type GalleryViewProps } from "./useGalleryView";
 
 /* Album giao khách — GIAO DIỆN CŨ. Toàn bộ logic (mở khoá, nạp nền, chia sẻ,
@@ -413,6 +413,7 @@ export default function GalleryView(props: GalleryViewProps) {
 
       <PrintFab pp={pp} cardRef={printCardRef} />
       <PrintBar pp={pp} />
+      <PrintVerifyDialog pp={pp} />
 
       <ShareDialog
         url={shareUrl}

@@ -4,7 +4,7 @@
  * tự cắt bớt là âm thầm bỏ ảnh khách đã chọn. Và thư mục "Ảnh in" phải nằm
  * trong đúng thư mục giao file hoàn thiện, không lạc sang thư mục con / video.
  */
-import { cleanPrintIds, isPrintable, normalizeQuota, pickDeliveryFolder, PRINT_FOLDER_NAME } from "../../src/lib/album-print-rules.ts";
+import { cleanPrintIds, isPrintable, matchPrintPhone, normalizeQuota, pickDeliveryFolder, printPhoneKeys, PRINT_FOLDER_NAME } from "../../src/lib/album-print-rules.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -46,6 +46,16 @@ check("chọn thư mục gốc giao khách (không phải con, không phải vid
 check("chỉ có video thì dùng video", pickDeliveryFolder([sources[2]])?.id, "s3");
 check("không có nguồn giao khách", pickDeliveryFolder([sources[0]]), null);
 check("nguồn giao khách thiếu link bị bỏ", pickDeliveryFolder([{ ...sources[3], drive_url: null }]), null);
+
+// Chỉ cô dâu / chú rể chọn ảnh in — so theo SĐT trên hợp đồng.
+const keys = printPhoneKeys(["0901 234 567", "+84901234567", "0987.654.321", null, "", "123", undefined]);
+check("SĐT: chuẩn hoá + bỏ trùng + bỏ số hỏng", keys, ["901234567", "987654321"]);
+check("SĐT: khớp dạng 0…", matchPrintPhone("0901234567", keys), true);
+check("SĐT: khớp dạng +84 có dấu cách", matchPrintPhone("+84 987 654 321", keys), true);
+check("SĐT: số khác không khớp", matchPrintPhone("0901234568", keys), false);
+check("SĐT: rỗng không khớp", matchPrintPhone("", keys), false);
+check("SĐT: quá ngắn không khớp", matchPrintPhone("234567", keys), false);
+check("SĐT: không có số nào thì không khớp gì", matchPrintPhone("0901234567", []), false);
 
 if (fail) {
   console.log(`\n${fail} kiểm thử lỗi`);

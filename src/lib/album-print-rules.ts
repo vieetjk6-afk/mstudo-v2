@@ -17,6 +17,12 @@ export interface PrintState {
   sentAt: string | null;
   /** Studio đã chép vào thư mục "Ảnh in" → khách không sửa được nữa. */
   copiedAt: string | null;
+  /**
+   * true = hợp đồng có SĐT khách / cô dâu / chú rể → chỉ người nhập đúng một
+   * trong các số đó mới chọn được ảnh in (người xem khác chỉ xem). Bản thân
+   * các SĐT KHÔNG bao giờ gửi xuống trình duyệt.
+   */
+  coupleOnly?: boolean;
 }
 
 /** Tên thư mục con tạo trong thư mục giao file hoàn thiện. */
@@ -58,4 +64,30 @@ export function pickDeliveryFolder<T extends { stage?: string | null; drive_url?
     .filter((s) => s.stage === "delivery" && !!s.drive_url)
     .sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
   return del.find((s) => !/video/i.test(s.name ?? "")) ?? del[0] ?? null;
+}
+
+/* ─── Chỉ cô dâu / chú rể được chọn ảnh in ───────────────────────────────────
+   Link album giao khách hay được chuyển cho cả họ hàng, bạn bè (và mật khẩu
+   album thường chính là SĐT, cũng được đưa kèm). Nên quyền CHỌN ảnh in không
+   dựa vào việc mở được album, mà vào SĐT đã đăng ký với studio: SĐT khách,
+   cô dâu, chú rể trên hợp đồng dùng album này. Nhập đúng một trong các số đó
+   mới được chọn; người khác vẫn xem ảnh bình thường. */
+
+/** Khoá so sánh của một SĐT: 9 chữ số cuối (0901…, +84901…, 84901… cùng khớp). */
+function phoneKey(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const d = v.replace(/\D/g, "");
+  if (d.length < 9 || d.length > 12) return null;
+  return d.slice(-9);
+}
+
+/** Danh sách SĐT được phép chọn ảnh in — đã chuẩn hoá, bỏ trùng, sắp xếp. */
+export function printPhoneKeys(raw: unknown[]): string[] {
+  return [...new Set(raw.map(phoneKey).filter((x): x is string => !!x))].sort();
+}
+
+/** SĐT khách nhập có khớp một trong các số được phép không. */
+export function matchPrintPhone(input: unknown, keys: string[]): boolean {
+  const k = phoneKey(input);
+  return !!k && keys.includes(k);
 }

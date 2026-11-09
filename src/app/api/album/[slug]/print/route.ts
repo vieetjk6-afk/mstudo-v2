@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIp } from "@/lib/rate-limit";
-import { verifyAlbumAccess } from "@/lib/album-access";
+import { verifyAlbumAccess, verifyPrintKey } from "@/lib/album-access";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { sendPushToOwner } from "@/lib/push";
-import { loadPrintQuota } from "@/lib/album-print";
+import { loadPrintPhones, loadPrintQuota } from "@/lib/album-print";
 import { cleanPrintIds, isPrintable } from "@/lib/album-print-rules";
 
 export const dynamic = "force-dynamic";
@@ -18,14 +18,18 @@ export const dynamic = "force-dynamic";
  * cả danh sách, cho tới khi studio đã chép ảnh đi in (print_copied_at) — lúc đó
  * khoá, studio mở lại được trong trang album.
  *
- * Body: { photoIds: string[], access?: string }
+ * Chỉ cô dâu / chú rể: hợp đồng có SĐT thì phải kèm `printKey` — vé phát ở
+ * /print/verify sau khi nhập đúng SĐT. Người khác mở được album (link + mật
+ * khẩu chuyển cho họ hàng) vẫn không gửi được.
+ *
+ * Body: { photoIds: string[], access?: string, printKey?: string }
  */
 export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
   const limited = limitByIp(req, `album-print:${params.slug}`, 10, 60_000);
   if (limited) return limited;
 
-  const body = (await req.json().catch(() => ({}))) as { photoIds?: unknown; access?: string };
+  const body = (await req.json().catch(() => ({}))) as { photoIds?: unknown; access?: string; printKey?: unknown };
 
   const admin = createAdminClient();
   const { data: album } = await admin
@@ -42,8 +46,11 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }
 
-  const quota = await loadPrintQuota(admin, album.id);
+  const [quota, phones] = await Promise.all([loadPrintQuota(admin, album.id), loadPrintPhones(admin, album.id)]);
   if (!quota) return NextResponse.json({ error: "not_enabled" }, { status: 403 });
+  if (phones.length > 0 && !verifyPrintKey(album.id, phones, body.printKey)) {
+    return NextResponse.json({ error: "need_verify" }, { status: 403 });
+  }
 
   const { data: lock, error: lockErr } = await admin
     .from("albums")
