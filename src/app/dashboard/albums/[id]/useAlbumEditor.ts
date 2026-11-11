@@ -10,6 +10,7 @@ import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { storageUntil } from "@/lib/storage-lifecycle";
 import type { AlbumPrintInfo } from "./AlbumPrintPanel";
+import type { AlbumCollageInfo } from "./AlbumCollageCard";
 import type { Album, AlbumSource, Photo, SourceKind, AlbumPhase, SourceStage } from "@/lib/types";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -94,6 +95,8 @@ export type AlbumEditorProps = {
   linkedContract?: LinkedContractInfo | null;
   /** Ảnh in tặng khách đã gửi (null = hợp đồng không tặng in). */
   printInfo?: AlbumPrintInfo | null;
+  /** Ghép layout ảnh: gói có không, album lẻ bật / tắt ngay tại album, album của hợp đồng thì theo hợp đồng. */
+  collageInfo?: AlbumCollageInfo | null;
   /** Link khách tự tạo để chia sẻ một nhóm ảnh cho người khác xem. */
   customerShares?: CustomerShare[];
   /** ?tab=… trên URL (vd thông báo "khách chọn ảnh in" mở thẳng tab Giao khách). */

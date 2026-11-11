@@ -20,6 +20,7 @@ import { Menu, Segmented, Switch } from "@/components/v2/kit-client";
 import type { Album, AlbumPhase, Photo } from "@/lib/types";
 import type { AlbumEditorState, AlbumPick, CustomerShare } from "./useAlbumEditor";
 import { Thumb, codesText, copyText, downloadText, shortCode } from "./album-v2-parts";
+import { AlbumCollageCardV2, type AlbumCollageInfo } from "./AlbumCollageCard";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Các tab còn lại của màn album (giao diện mới): Khách chọn · Chia sẻ ·
@@ -449,11 +450,14 @@ export function DeliverTabV2({
   album,
   canDelivery,
   onPrint,
+  collageInfo = null,
 }: {
   e: AlbumEditorState;
   album: Album;
   canDelivery: boolean;
   onPrint?: () => void;
+  /** Ghép layout ảnh (album lẻ bật / tắt ngay tại đây). null = không hiện thẻ. */
+  collageInfo?: AlbumCollageInfo | null;
 }) {
   const isDelivery = e.phase === "delivery";
   const showLink = isDelivery || e.manualContract;
@@ -581,6 +585,8 @@ export function DeliverTabV2({
       )}
 
       {album.delivered_at && <StorageCardV2 e={e} deliveredAt={album.delivered_at} />}
+
+      {collageInfo && <AlbumCollageCardV2 albumId={album.id} info={collageInfo} />}
 
       {onPrint && (
         <button type="button" onClick={onPrint} className="v2-card v2-card-link flex items-center gap-3 px-4 py-3.5 text-left">

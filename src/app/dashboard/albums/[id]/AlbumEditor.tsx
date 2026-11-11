@@ -38,6 +38,7 @@ import { useUiV2 } from "@/components/v2/UiV2Context";
 import AlbumPrintPanel from "./AlbumPrintPanel";
 import { useAlbumEditor, type AlbumEditorProps, type CustomerShare } from "./useAlbumEditor";
 import type { Album, Photo, SourceStage } from "@/lib/types";
+import { AlbumCollageCardV1 } from "./AlbumCollageCard";
 
 // Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
 const AlbumEditorV2 = dynamic(() => import("./AlbumEditorV2"));
@@ -83,6 +84,7 @@ function AlbumEditorV1({
   deliveryTwin = null,
   linkedContract = null,
   printInfo = null,
+  collageInfo = null,
   customerShares = [],
   initialTab,
 }: AlbumEditorProps) {
@@ -1074,6 +1076,9 @@ function AlbumEditorV1({
                 hasDeliveryFolder={sources.some((x) => x.stage === "delivery" && !!x.drive_url)}
               />
             )}
+
+            {/* Ghép layout ảnh đăng mạng xã hội: album lẻ bật / tắt ngay tại đây. */}
+            {collageInfo && !deliveryTwin && <AlbumCollageCardV1 albumId={album.id} info={collageInfo} />}
 
             {/* Delivery phase: download the finished album at ORIGINAL quality from Drive. */}
             {phase === "delivery" && deliveryFolders.length > 0 && (

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
-import { effectivePlan, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
+import { effectivePlan, planAllowsCollage, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
 import AlbumEditor, { type AlbumPick, type CustomerShare, type DeliveryTwin, type LinkedContractInfo } from "./AlbumEditor";
 import type { AlbumPrintInfo } from "./AlbumPrintPanel";
 import { normalizeQuota } from "@/lib/album-print-rules";
@@ -169,6 +169,17 @@ export default async function AlbumEditPage(
     }
   }
 
+  // Ghép layout ảnh: album lẻ bật / tắt ngay tại album (albums.collage_enabled),
+  // album của hợp đồng theo công tắc hợp đồng. Cả hai cột đến từ select("*") ở
+  // trên — thiếu cột (chưa chạy migrations/ghep_layout.sql) thì là null.
+  const flag = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
+  const collageInfo = {
+    allowed: planAllowsCollage(plan, isAdmin),
+    contractId: (linkedContract?.id as string | undefined) ?? null,
+    contractEnabled: linkedContract?.id ? flag((contractRes.data as { collage_enabled?: unknown } | null)?.collage_enabled) : null,
+    albumEnabled: flag((album as { collage_enabled?: unknown }).collage_enabled),
+  };
+
   // Link "chia sẻ ảnh đã chọn" khách tạo cho người khác xem (bảng album_shares).
   // Bảng đã thu hồi quyền đọc của anon/authenticated nên đọc bằng service role —
   // an toàn vì album phía trên đã đọc qua RLS: tới được đây là người có quyền
@@ -212,6 +223,7 @@ export default async function AlbumEditPage(
       zaloSavedName={(album as Album).zalo_name ?? contractZaloName}
       selections={(picks ?? []) as AlbumPick[]}
       printInfo={printInfo}
+      collageInfo={collageInfo}
       customerShares={customerShares}
       initialTab={tabParam}
       // ?? 6 chứ không phải || 6: studio đặt 0 tháng nghĩa là CỐ Ý giữ ảnh vô
