@@ -49,7 +49,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   }
   const gate = await collageGate(slug, body);
   if (!gate.ok) return gate.res;
-  const res = await saveCollage(gate.db, gate.album.id, body);
+  const res = await saveCollage(gate.db, gate.album.id, body, gate.brand);
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: res.status, headers: NO_STORE });
   return NextResponse.json(res, { headers: NO_STORE });
 }

@@ -324,3 +324,61 @@ export function suggestPhotos(
   if (picked.size < want) pickSpread([...order], want - picked.size);
   return [...picked].sort((a, b) => pos.get(a)! - pos.get(b)!).slice(0, want);
 }
+
+/* ── Bộ kể chuyện một chạm ────────────────────────────────────────────────── */
+
+export interface StoryChapter {
+  key: string;
+  title: string;
+  ids: string[];
+}
+
+/**
+ * Chia ảnh thành các chương theo trình tự ngày cưới: bìa (ảnh chung đẹp nhất)
+ * → chuẩn bị (cô dâu) → lễ (bê quả / gia tiên) → decor → hai bạn (ảnh chung,
+ * ngoại cảnh) → tiệc → gia đình & bạn bè → lời cảm ơn. Mỗi ảnh một chương,
+ * trong chương xếp theo thứ tự album (kể theo thời gian), ảnh thả tim ưu tiên.
+ * Album chưa có nhóm (chưa quét mặt, thư mục không đặt tên): chia đều theo thứ
+ * tự album, mỗi chương 3 ảnh.
+ */
+export function storyChapters(order: readonly string[], res: CatResult, hearts: ReadonlySet<string> = new Set()): StoryChapter[] {
+  const pos = new Map(order.map((id, i) => [id, i]));
+  const used = new Set<string>();
+  const score = (id: string) => (res.info[id]?.score ?? 5) + (hearts.has(id) ? 3 : 0);
+  const tagged = (pred: (tags: string[]) => boolean) => order.filter((id) => !used.has(id) && pred(res.info[id]?.tags ?? []));
+  const take = (pool: string[], k: number) => {
+    const picked = suggestPhotos(pool, res, k, hearts).filter((id) => !used.has(id)).slice(0, k);
+    picked.forEach((id) => used.add(id));
+    return picked.sort((a, b) => pos.get(a)! - pos.get(b)!);
+  };
+  const isCouple = (t: string[]) => t.includes(CAT_COUPLE);
+  const bride = res.cats.find((c) => c.role === "bride");
+  const chapters: StoryChapter[] = [];
+  const add = (key: string, title: string, ids: string[]) => {
+    if (ids.length) chapters.push({ key, title, ids });
+  };
+  // Bìa: ảnh chung điểm cao nhất (không có thì ảnh "nhân vật chính" đẹp nhất).
+  const coverPool = tagged(isCouple).length ? tagged(isCouple) : order.filter((id) => res.info[id]?.hero);
+  const cover = [...(coverPool.length ? coverPool : order)].sort((a, b) => score(b) - score(a))[0];
+  if (cover) {
+    used.add(cover);
+    add("cover", "Bìa", [cover]);
+  }
+  add("prep", "Chuẩn bị", take(tagged((t) => t.includes("m-codau") || (!!bride && t.includes(bride.id) && !isCouple(t))), 3));
+  add("ceremony", "Lễ gia tiên · Bê quả", take(tagged((t) => t.includes("m-bequa") || t.includes("m-giatien")), 4));
+  add("decor", "Decor & chi tiết", take(tagged((t) => t.includes(CAT_DECOR)), 3));
+  add("couple", "Hai bạn", take(tagged((t) => isCouple(t) || t.includes("m-pre")), 4));
+  add("party", "Tiệc cưới", take(tagged((t) => t.includes("m-tiec")), 4));
+  add("family", "Gia đình & bạn bè", take(tagged((t) => t.includes(CAT_FAMILY)), 3));
+  // Không có nhóm nào ngoài bìa: chia đều phần còn lại theo thứ tự album.
+  if (chapters.length <= 1) {
+    // Chừa lại một ảnh cho trang lời cảm ơn.
+    const left = order.filter((id) => !used.has(id));
+    const rest = take(left, Math.max(0, Math.min(12, left.length - 1)));
+    for (let i = 0; i < rest.length; i += 3) add(`part${i / 3 + 1}`, `Phần ${i / 3 + 1}`, rest.slice(i, i + 3));
+  }
+  // Lời cảm ơn: một ảnh chung khác ảnh bìa (không có thì ảnh đẹp còn lại).
+  const thanks = take(tagged(isCouple).length ? tagged(isCouple) : order.filter((id) => !used.has(id)), 1);
+  add("thanks", "Lời cảm ơn", thanks);
+  return chapters;
+}

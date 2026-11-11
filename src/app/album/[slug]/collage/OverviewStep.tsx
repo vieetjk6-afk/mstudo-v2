@@ -1,6 +1,8 @@
 "use client";
 
-import { CircleCheck, CloudOff, Download, LoaderCircle, Plus, Shuffle, SlidersHorizontal, Trash2, Type } from "lucide-react";
+import { CircleCheck, Clapperboard, CloudOff, Download, Eye, LoaderCircle, Plus, Shuffle, SlidersHorizontal, Trash2, Type } from "lucide-react";
+import { PHOTO_FILTERS } from "@/lib/collage/filters";
+import type { SignSpec } from "@/lib/collage/brand";
 import { btn } from "@/components/v2/kit";
 import type { CollageDoc } from "@/lib/collage/types";
 import { formatById } from "@/lib/collage/formats";
@@ -53,6 +55,11 @@ export function OverviewStep({
   onShuffle,
   onOptions,
   onExport,
+  sign = null,
+  lockColor = false,
+  onFilter,
+  onPreview,
+  onVideo,
 }: {
   doc: CollageDoc;
   img: ImgUrl;
@@ -66,6 +73,12 @@ export function OverviewStep({
   onShuffle: () => void;
   onOptions: () => void;
   onExport: () => void;
+  sign?: SignSpec | null;
+  /** Studio khoá màu ảnh: ẩn bộ lọc màu. */
+  lockColor?: boolean;
+  onFilter: (id: string) => void;
+  onPreview: () => void;
+  onVideo: () => void;
 }) {
   const vp = useViewport();
   const f = formatById(doc.formatId);
@@ -86,6 +99,29 @@ export function OverviewStep({
               <SlidersHorizontal size={16} /> Đổi tuỳ chọn
             </button>
           </div>
+          {lockColor ? null : (
+            <div className="-mx-3 mb-3 flex items-center gap-2 overflow-x-auto px-3" style={{ scrollbarWidth: "none" }} role="radiogroup" aria-label="Màu ảnh cả bộ">
+              <span className="flex-none text-[12px] font-semibold" style={{ color: "var(--tx3)" }}>
+                Màu ảnh
+              </span>
+              {PHOTO_FILTERS.map((x) => {
+                const on = (doc.filter ?? "none") === x.id;
+                return (
+                  <button
+                    key={x.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => onFilter(x.id)}
+                    className="h-9 flex-none rounded-full px-3 text-[13px] font-semibold"
+                    style={on ? { background: "var(--acS)", color: "var(--ac)", border: "1.5px solid var(--ac)" } : { background: "var(--sf)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
+                  >
+                    {x.name}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <p className="mb-3 text-[12.5px]" style={{ color: "var(--tx3)" }}>
             Chạm vào một layout để sửa riêng: kéo chỉnh ảnh, đổi ảnh, đổi bố cục, sửa chữ, đổi nền. Bộ này được giữ 1 ngày kể từ lần sửa cuối — nhớ tải ảnh về máy.
           </p>
@@ -96,7 +132,7 @@ export function OverviewStep({
               return (
                 <button key={p.id} type="button" onClick={() => onOpenPage(i)} className="group text-left" aria-label={`Sửa layout ${i + 1}`} style={span > 1 ? { gridColumn: "1 / -1" } : undefined}>
                   <div className="overflow-hidden rounded-[10px]" style={{ border: "1px solid var(--bd)", boxShadow: "0 4px 14px -8px rgba(20,15,25,.35)" }}>
-                    <PageView doc={doc} page={p} width={span > 1 ? full : tile} img={img} driveOf={driveOf} fontsReady={fontsReady} watermark={watermark} slides={span > 1 ? "full" : undefined} />
+                    <PageView doc={doc} page={p} width={span > 1 ? full : tile} img={img} driveOf={driveOf} fontsReady={fontsReady} watermark={watermark} slides={span > 1 ? "full" : undefined} sign={sign} />
                   </div>
                   {span > 1 ? (
                     <span className="mt-1 block text-[12px]" style={{ color: "var(--tx3)" }}>
@@ -121,8 +157,14 @@ export function OverviewStep({
         </div>
       </div>
       <StudioFooter>
+        <button type="button" onClick={onPreview} aria-label="Xem trước như trên Instagram" className={btn("secondary", "lg", "flex-none px-3")}>
+          <Eye size={18} />
+        </button>
+        <button type="button" onClick={onVideo} className={btn("secondary", "lg", "flex-none px-3")}>
+          <Clapperboard size={18} /> Video
+        </button>
         <button type="button" onClick={onExport} className={btn("primary", "lg", "flex-1")}>
-          <Download size={17} /> Tải {images > 1 ? `${images} ảnh` : "ảnh"} về máy
+          <Download size={17} /> Tải {images > 1 ? `${images} ảnh` : "ảnh"}
         </button>
       </StudioFooter>
     </>

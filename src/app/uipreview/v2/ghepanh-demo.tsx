@@ -92,6 +92,7 @@ function installMock() {
     if (u.pathname === `${base}/verify`) {
       return String(body.phone ?? "").replace(/\D/g, "").endsWith("901234567") ? json({ ok: true, key: "demo-key" }) : json({ error: "wrong_phone" }, 403);
     }
+    if (u.pathname === `${base}/event`) return json({ ok: true });
     if (u.pathname === `${base}/photos`) {
       if (mode === "cham") await wait(9000, init?.signal);
       if (mode === "treo") await wait(Infinity, init?.signal);
@@ -130,7 +131,15 @@ export function KhAlbumGhepAnhDemo() {
   if (typeof window !== "undefined") installMock();
   return (
     <AlbumImgProvider value={DEMO_IMG}>
-      <GalleryViewV2 {...G_BASE} print={null} collage={{ coupleOnly: true }} />
+      <GalleryViewV2
+        {...G_BASE}
+        print={null}
+        collage={{
+          coupleOnly: true,
+          // Cài đặt ghép ảnh của studio (giả lập): ký tên, slide cuối có mã QR.
+          brand: { sign: "name", pos: "br", end: "studio", lockColor: false, name: "Studio Ánh Dương", logoUrl: null, siteUrl: "https://studio.example/", albumUrl: "https://studio.example/album/lan-minh" },
+        }}
+      />
     </AlbumImgProvider>
   );
 }

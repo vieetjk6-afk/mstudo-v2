@@ -9,6 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Eye,
   ImagePlus,
   Images,
   LayoutGrid,
@@ -30,9 +31,12 @@ import { COLLAGE_LIMITS } from "@/lib/collage/types";
 import { COLLAGE_FORMATS, formatById } from "@/lib/collage/formats";
 import { COLLAGE_FONTS, nearestWeight } from "@/lib/collage/fonts";
 import { TEXT_PRESETS, presetById, sizeFor } from "@/lib/collage/typography";
-import { LOCKUPS, lockupById, lockupFor, type LockCtx } from "@/lib/collage/lockups";
+import { PICKABLE_LOCKUPS as LOCKUPS, lockupById, lockupFor, type LockCtx } from "@/lib/collage/lockups";
 import { panoramaMax } from "@/lib/collage/carousel";
 import { paletteSwatches } from "@/lib/collage/palette";
+import { isEndPage } from "@/lib/collage/endcard";
+import type { SignSpec } from "@/lib/collage/brand";
+import { WishesSheet } from "./WishesSheet";
 import { focusCrop } from "@/lib/collage/crop";
 import { heroPhoto } from "@/lib/collage/compose";
 import { styleById } from "@/lib/collage/styles";
@@ -92,6 +96,10 @@ export interface EditorProps {
   lockCtx: LockCtx;
   /** Màu chủ đạo của các ảnh (nạp khi cần) — cho dải "Màu từ ảnh" ở tab Nền. */
   paletteFor: (ids: string[]) => Promise<string[][]>;
+  /** Chữ ký studio (hiện y như trên ảnh xuất). */
+  sign?: SignSpec | null;
+  /** Xem trước như bài đăng Instagram. */
+  onPreview: () => void;
 }
 
 function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: { v: T; label: React.ReactNode; aria?: string }[]; onChange: (v: T) => void; label: string }) {
@@ -264,10 +272,16 @@ export default function EditorStep(p: EditorProps) {
   const [photoColors, setPhotoColors] = useState<{ key: string; colors: string[] } | null>(null);
   const [ornStash, setOrnStash] = useState<{ pageId: string; orn: NonNullable<CollagePage["ornaments"]> } | null>(null);
   const [newText, setNewText] = useState("");
+  const [wishesOpen, setWishesOpen] = useState(false);
+  // Slide cuối của studio (mã QR): không đổi bố cục / ảnh — chỉ sửa chữ, nền, xoá.
+  const endPage = isEndPage(page);
 
   useEffect(() => {
     setSel(null);
     setSwapFrom(null);
+    // Slide cuối của studio không có tab Ảnh.
+    if (isEndPage(page)) setTool((t) => (t === "photos" ? "text" : t));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page.id]);
 
   // Tab Nền: lấy màu chủ đạo các ảnh của layout (ảnh nhỏ cùng miền) → dải "Màu từ ảnh".
@@ -542,6 +556,9 @@ export default function EditorStep(p: EditorProps) {
         className="v2-input resize-none"
         style={{ fontSize: 16 }}
       />
+      <button type="button" onClick={() => setWishesOpen(true)} className={btn("ghost", "sm", "-mt-1 self-start")}>
+        <Type size={14} /> Chọn từ thư viện lời chúc
+      </button>
       <div className="flex gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
         {TEXT_PRESETS.map((pr) => {
           const on = text.style.font === pr.font && text.style.italic === pr.italic && text.style.uppercase === pr.uppercase;
@@ -702,6 +719,9 @@ export default function EditorStep(p: EditorProps) {
         Layout này chưa có nội dung. Mỗi layout chỉ mang một nội dung — thêm vào đây, máy dàn lại để chừa chỗ cho chữ.
       </p>
       <textarea value={newText} rows={2} onChange={(e) => setNewText(e.target.value.slice(0, COLLAGE_LIMITS.textChars))} placeholder="Ví dụ: Thank you for coming" aria-label="Nội dung mới" className="v2-input resize-none" style={{ fontSize: 16 }} />
+      <button type="button" onClick={() => setWishesOpen(true)} className={btn("ghost", "sm", "-mt-1 self-start")}>
+        <Type size={14} /> Chọn từ thư viện lời chúc
+      </button>
       <button
         type="button"
         disabled={!newText.trim()}
@@ -719,7 +739,7 @@ export default function EditorStep(p: EditorProps) {
 
   /* ── Bảng công cụ theo tab ── */
   const tabs: { id: Tool; label: string; icon: typeof LayoutGrid }[] = [
-    { id: "photos", label: "Ảnh", icon: Images },
+    ...(endPage ? [] : [{ id: "photos" as Tool, label: "Ảnh", icon: Images }]),
     { id: "text", label: "Chữ", icon: Type },
     { id: "bg", label: "Nền", icon: Palette },
     { id: "page", label: "Trang", icon: RectangleVertical },
@@ -913,9 +933,15 @@ export default function EditorStep(p: EditorProps) {
     </div>
   );
 
+  const endNote = (
+    <p className="flex-none px-4 pb-2.5 text-[12.5px]" style={{ color: "var(--tx3)", background: "var(--bg)" }}>
+      Slide cuối của studio: mã QR dẫn tới trang studio để người xem bài đăng xem thêm ảnh. Sửa chữ ở tab Chữ; không muốn đăng thì xoá ở tab Trang.
+    </p>
+  );
+
   const stageInner = (
     <div className="relative mx-auto flex-none" style={{ width: stageW, boxShadow: "0 10px 30px -12px rgba(15,30,55,.35)" }}>
-      <PageView doc={doc} page={page} width={stageW} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} watermark={p.watermark} selectedId={swapFrom ?? sel} slides={span > 1 ? "full" : undefined} />
+      <PageView doc={doc} page={page} width={stageW} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} watermark={p.watermark} selectedId={swapFrom ?? sel} slides={span > 1 ? "full" : undefined} sign={p.sign} />
       <EditLayer doc={doc} page={page} width={stageW} selectedId={sel} g={gesture} />
     </div>
   );
@@ -943,6 +969,9 @@ export default function EditorStep(p: EditorProps) {
             <button type="button" onClick={p.undo} disabled={!p.canUndo} aria-label="Hoàn tác" title="Hoàn tác" className="flex h-10 w-10 items-center justify-center rounded-full disabled:opacity-35" style={{ color: "var(--tx2)" }}>
               <Undo2 size={19} />
             </button>
+            <button type="button" onClick={p.onPreview} aria-label="Xem trước như trên Instagram" title="Xem trước" className="flex h-10 w-10 items-center justify-center rounded-full" style={{ color: "var(--tx2)" }}>
+              <Eye size={19} />
+            </button>
             <button type="button" onClick={p.onExport} className={btn("primary", "sm")}>
               <Download size={15} /> Tải
             </button>
@@ -954,7 +983,7 @@ export default function EditorStep(p: EditorProps) {
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col overflow-auto" style={{ background: "var(--bg)" }}>
             <div className={span > 1 ? "py-5 pb-3" : "flex justify-center p-5 pb-3"}>{stage}</div>
-            <div className="mx-auto w-full max-w-[760px]">{suggestions}</div>
+            <div className="mx-auto w-full max-w-[760px]">{endPage ? endNote : suggestions}</div>
           </div>
           <aside className="w-[400px] flex-none overflow-y-auto p-4" style={{ borderLeft: "1px solid var(--bd)", background: "var(--sf)" }}>
             {tools}
@@ -965,7 +994,7 @@ export default function EditorStep(p: EditorProps) {
           <div className={span > 1 ? "flex-none pb-2 pt-3" : "flex flex-none justify-center px-3 pb-2 pt-3"} style={{ background: "var(--bg)" }}>
             {stage}
           </div>
-          {suggestions}
+          {endPage ? endNote : suggestions}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-3" style={{ background: "var(--sf)", borderTop: "1px solid var(--bd)", paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))" }}>
             {tools}
           </div>
@@ -1015,6 +1044,19 @@ export default function EditorStep(p: EditorProps) {
             } else {
               await addPage(picked);
             }
+          }}
+        />
+      ) : null}
+
+      {wishesOpen ? (
+        <WishesSheet
+          onClose={() => setWishesOpen(false)}
+          onPick={(line) => {
+            setWishesOpen(false);
+            if (text) {
+              p.checkpoint();
+              updateFrame<TextFrame>(text.id, (t) => ({ ...t, text: line }), false);
+            } else setNewText(line);
           }}
         />
       ) : null}

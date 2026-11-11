@@ -72,7 +72,7 @@ export function isTransient(e: unknown): boolean {
    trình duyệt không tự bỏ cuộc: máy chủ treo là vòng quay "Đang mở album…" đứng
    mãi (lỗi thật, 11/2026). Hết giờ → CollageApiError("timeout") để màn ghép báo
    lỗi kèm nút thử lại, hoặc chạy tiếp bằng phần đã có. */
-const TIMEOUT = { photos: 20_000, sets: 12_000, save: 20_000, del: 15_000 } as const;
+const TIMEOUT = { photos: 20_000, sets: 12_000, save: 20_000, del: 15_000, event: 8_000 } as const;
 
 const headers = (c: Cred): Record<string, string> => ({
   ...(c.key ? { "x-collage-key": c.key } : {}),
@@ -138,4 +138,14 @@ export function saveSet(c: Cred, body: { id: string | null; title: string; doc: 
 
 export async function deleteSet(c: Cred, id: string): Promise<void> {
   await request("del", `/api/album/${c.slug}/collage?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: headers(c) });
+}
+
+/** Thống kê cho studio (khách tải ảnh / tạo video). Không chặn việc của khách: lỗi thì thôi. */
+export function postEvent(c: Cred, kind: "export" | "video", n: number, meta: Record<string, unknown> = {}): void {
+  void request("event", `/api/album/${c.slug}/collage/event`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ kind, n, meta, key: c.key, access: c.access }),
+    keepalive: true,
+  }).catch(() => {});
 }

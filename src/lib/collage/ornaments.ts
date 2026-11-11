@@ -21,8 +21,8 @@ export interface OrnPrim {
 }
 
 /** Hình trang trí đặt trên trang. */
-export type OrnKind = "sprig" | "flower" | "bloom" | "heart" | "sparkle" | "tape" | "film" | "path";
-export const ORN_KINDS: OrnKind[] = ["sprig", "flower", "bloom", "heart", "sparkle", "tape", "film", "path"];
+export type OrnKind = "sprig" | "flower" | "bloom" | "heart" | "sparkle" | "tape" | "film" | "path" | "qr" | "card";
+export const ORN_KINDS: OrnKind[] = ["sprig", "flower", "bloom", "heart", "sparkle", "tape", "film", "path", "qr", "card"];
 
 export interface Ornament {
   id: string;
@@ -38,7 +38,7 @@ export interface Ornament {
   opacity?: number;
   /** Lật ngang. */
   flip?: boolean;
-  /** Chỉ cho "path": đường tự do theo toạ độ CỤC BỘ của hộp. */
+  /** "path": đường tự do (viền); "qr": các ô của mã QR (tô) — theo toạ độ CỤC BỘ của hộp. */
   d?: string;
   /** Độ dày nét cho "path". */
   width?: number;
@@ -191,6 +191,10 @@ export function ornamentPrims(o: Pick<Ornament, "kind" | "rect" | "color" | "col
       return [{ d: filmPath(w, h), fill: o.color, evenodd: true }];
     case "path":
       return o.d ? [{ d: o.d, stroke: o.color, sw: o.width ?? 2 }] : [];
+    case "qr":
+      return o.d ? [{ d: o.d, fill: o.color }] : [];
+    case "card":
+      return [{ d: roundRectPath(0, 0, w, h, m * 0.08), fill: o.color }];
   }
   return [];
 }
@@ -272,3 +276,5 @@ export function dividerPrims(kind: DividerKind, w: number, h: number, color: str
 
 /** Đường SVG hợp lệ (chỉ lệnh vẽ + số) — để máy chủ nhận "path" tự do an toàn. */
 export const PATH_RE = /^[MmLlHhVvCcSsQqTtAaZz0-9.,\s-]{1,4000}$/;
+/** Ô của mã QR: chỉ M / h / v / z và số — dài hơn (mỗi hàng nhiều đoạn). */
+export const QR_PATH_RE = /^[MhvzZ0-9.\s-]{1,40000}$/;

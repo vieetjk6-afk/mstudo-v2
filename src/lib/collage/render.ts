@@ -10,10 +10,13 @@
 import type { CollageDoc, CollagePage, FrameDeco, PhotoFrame, Rect, TextFrame } from "./types";
 import { formatById } from "./formats";
 import { placePhoto } from "./crop";
-import { canvasFont, displayText, layoutLockup, layoutText, lineWidth } from "./text-layout";
+import { canvasFont, canvasFontFamily, displayText, layoutLockup, layoutText, lineWidth } from "./text-layout";
 import { dividerPrims, ornamentPrims, stampPath, type Ornament, type OrnPrim } from "./ornaments";
 import { blurRGBA, workScale } from "./blur";
 import { frameRotation, photoArea, shapeRadii } from "./frame-geom";
+import { applyFilter, filterById } from "./filters";
+import { placeSign, SIGN_INK, type SignSpec } from "./brand";
+import { isEndPage } from "./endcard";
 
 /** Mốc bề rộng ảnh nguồn (khớp cache CDN của /api/img). */
 const WIDTHS = [480, 800, 1200, 1600, 2048, 2560];
@@ -29,6 +32,10 @@ export interface RenderOptions {
   getImage: ImageGetter;
   /** Chữ watermark của studio (album bật watermark giao khách) — đóng giống ảnh tải lẻ. */
   watermark?: string | null;
+  /** Chữ ký studio (cài đặt ghép ảnh của studio); carousel chỉ ký ở slide cuối. */
+  sign?: SignSpec | null;
+  /** Logo đã nạp sẵn (cùng miền / có CORS); không có thì ký bằng tên. */
+  signLogo?: HTMLImageElement | null;
 }
 
 function makeCanvas(w: number, h: number): HTMLCanvasElement {
@@ -50,7 +57,7 @@ function hexToRgba(hex: string, a: number): string {
  * về ra nền nét dù màn sửa vẫn mờ (lỗi thật, 11/2026). Độ mờ khớp CSS
  * blur(radius) của màn sửa: radius là độ lệch chuẩn Gauss theo điểm ảnh trang.
  */
-async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: number, H: number, scale: number, getImage: ImageGetter, short = Math.min(W, H)) {
+async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: number, H: number, scale: number, getImage: ImageGetter, short = Math.min(W, H), filter?: string) {
   const bg = page.bgPhoto;
   if (!bg) return;
   let img: HTMLImageElement;
@@ -65,7 +72,7 @@ async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: 
   // Ảnh tràn ra ngoài trang một đoạn để mép trang không bị nhạt khi làm mờ.
   const m = radius * 3;
   const p = placePhoto(W + 2 * m, H + 2 * m, img.naturalWidth, img.naturalHeight, { zoom: 1, cx: 0.5, cy: 0.5 });
-  if (radius <= 0.5) {
+  if (radius <= 0.5 && !filterById(filter)) {
     ctx.drawImage(img, -m + p.left, -m + p.top, p.width, p.height);
   } else {
     // Làm mờ ở ảnh nhỏ (k điểm ảnh làm việc cho mỗi điểm ảnh trang) rồi phóng lại.
@@ -79,7 +86,8 @@ async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: 
     wx.drawImage(img, p.left * k, p.top * k, p.width * k, p.height * k);
     try {
       const data = wx.getImageData(0, 0, ww, wh);
-      blurRGBA(data.data, ww, wh, radius * k);
+      applyFilter(data.data, filter);
+      if (radius > 0.5) blurRGBA(data.data, ww, wh, radius * k);
       wx.putImageData(data, 0, 0);
     } catch {
       /* canvas bị khoá (ảnh khác miền): còn lại độ mờ do thu nhỏ — vẫn hơn nền nét */
@@ -160,7 +168,7 @@ function shapePath(ctx: CanvasRenderingContext2D, r: Rect, shape: FrameDeco["sha
   ctx.closePath();
 }
 
-async function drawPhoto(ctx: CanvasRenderingContext2D, f: PhotoFrame, aspect: number, scale: number, short: number, getImage: ImageGetter) {
+async function drawPhoto(ctx: CanvasRenderingContext2D, f: PhotoFrame, aspect: number, scale: number, short: number, getImage: ImageGetter, filter?: string) {
   const area = photoArea(f);
   const d = f.deco;
   // Bề rộng ảnh nguồn cần: bề rộng ảnh SAU khi phóng trong khung, theo điểm ảnh xuất.
@@ -205,7 +213,28 @@ async function drawPhoto(ctx: CanvasRenderingContext2D, f: PhotoFrame, aspect: n
   if (img) {
     const p = placePhoto(area.w, area.h, img.naturalWidth, img.naturalHeight, f.crop);
     ctx.imageSmoothingQuality = "high";
-    ctx.drawImage(img, area.x + p.left, area.y + p.top, p.width, p.height);
+    if (filterById(filter)) {
+      // Bộ lọc màu: vẽ phần ảnh thấy được ra canvas phụ đúng cỡ xuất, đổi màu từng
+      // điểm ảnh (cùng ma trận với CSS của màn sửa), rồi đặt vào khung.
+      const sw = Math.max(1, Math.round(area.w * scale));
+      const sh = Math.max(1, Math.round(area.h * scale));
+      const off = makeCanvas(sw, sh);
+      const ox = off.getContext("2d", { willReadFrequently: true });
+      if (ox) {
+        ox.imageSmoothingQuality = "high";
+        ox.drawImage(img, p.left * scale, p.top * scale, p.width * scale, p.height * scale);
+        try {
+          const d = ox.getImageData(0, 0, sw, sh);
+          applyFilter(d.data, filter);
+          ox.putImageData(d, 0, 0);
+        } catch {
+          /* canvas bị khoá — giữ màu gốc */
+        }
+        ctx.drawImage(off, area.x, area.y, area.w, area.h);
+      }
+    } else {
+      ctx.drawImage(img, area.x + p.left, area.y + p.top, p.width, p.height);
+    }
   } else {
     ctx.fillStyle = "rgba(127,127,127,.25)";
     ctx.fillRect(area.x, area.y, area.w, area.h);
@@ -303,6 +332,36 @@ function drawLockup(ctx: CanvasRenderingContext2D, t: TextFrame, lock: NonNullab
   ctx.restore();
 }
 
+/** Chữ ký studio ở góc slide (toạ độ slide W×H). */
+function drawSign(ctx: CanvasRenderingContext2D, spec: SignSpec, page: CollagePage, W: number, H: number, logo: HTMLImageElement | null | undefined) {
+  const useLogo = spec.mode === "logo" && !!logo && logo.naturalWidth > 0;
+  const b = placeSign(useLogo ? spec : { ...spec, mode: "name" }, page, W, H, useLogo ? logo!.naturalWidth / logo!.naturalHeight : 3);
+  const ink = SIGN_INK[b.ink];
+  const m = ctx.getTransform();
+  const k = Math.hypot(m.a, m.b) || 1;
+  ctx.save();
+  if (ink.shadow) {
+    ctx.shadowColor = ink.shadow;
+    ctx.shadowBlur = b.size * 0.35 * k;
+    ctx.shadowOffsetY = b.size * 0.06 * k;
+  }
+  if (useLogo) {
+    const ar = logo!.naturalWidth / logo!.naturalHeight;
+    const lw = Math.min(b.w, b.h * ar);
+    const lh = lw / ar;
+    const lx = b.align === "right" ? b.x + b.w - lw : b.align === "left" ? b.x : b.x + (b.w - lw) / 2;
+    ctx.globalAlpha = 0.92;
+    ctx.drawImage(logo!, lx, b.y + (b.h - lh) / 2, lw, lh);
+  } else {
+    ctx.font = `600 ${b.size.toFixed(2)}px ${canvasFontFamily("manrope")}`;
+    ctx.fillStyle = ink.color;
+    ctx.textBaseline = "middle";
+    const x = b.align === "right" ? b.x + b.w : b.align === "left" ? b.x : b.x + b.w / 2;
+    fillSpaced(ctx, spec.text.toLocaleUpperCase("vi"), x, b.y + b.h / 2, b.size, 0.12, b.align);
+  }
+  ctx.restore();
+}
+
 /** Watermark chéo lặp lại — cùng kiểu với ảnh khách tải lẻ (lib/download.ts). */
 function drawWatermark(ctx: CanvasRenderingContext2D, W: number, H: number, text: string) {
   const size = Math.max(18, Math.round(W / 28));
@@ -341,13 +400,21 @@ export async function renderPage(doc: CollageDoc, page: CollagePage, o: RenderOp
   ctx.fillStyle = page.background;
   ctx.fillRect(0, 0, PW, H);
   const short = Math.min(W, H);
-  await drawBgPhoto(ctx, page, PW, H, o.scale, o.getImage, short);
+  await drawBgPhoto(ctx, page, PW, H, o.scale, o.getImage, short, doc.filter);
   for (const orn of page.ornaments ?? []) if (!orn.over) drawOrnament(ctx, orn);
   for (const fr of page.frames) {
-    if (fr.kind === "photo") await drawPhoto(ctx, fr, doc.aspects[fr.photoId] ?? 1.5, o.scale, short, o.getImage);
+    if (fr.kind === "photo") await drawPhoto(ctx, fr, doc.aspects[fr.photoId] ?? 1.5, o.scale, short, o.getImage, doc.filter);
   }
   for (const orn of page.ornaments ?? []) if (orn.over) drawOrnament(ctx, orn);
   for (const fr of page.frames) if (fr.kind === "text") drawText(ctx, fr, fontsReady);
+  // Chữ ký studio: mỗi ảnh xuất một chữ ký; carousel chỉ ký slide cuối; slide cuối của studio đã có tên.
+  const slides = pageSlides(page);
+  if (o.sign && !isEndPage(page) && slide >= slides - 1) {
+    ctx.save();
+    ctx.translate((slides - 1) * W, 0);
+    drawSign(ctx, o.sign, page, W, H, o.signLogo);
+    ctx.restore();
+  }
   if (o.watermark) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     drawWatermark(ctx, canvas.width, canvas.height, o.watermark);

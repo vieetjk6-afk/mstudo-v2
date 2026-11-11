@@ -938,10 +938,12 @@
       "file": "migrations/ghep_layout.sql",
       "mo_ta": "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày",
       "bang": [
+        "album_collage_events",
         "album_collages"
       ],
       "cot": [
         "albums.collage_enabled",
+        "profiles.collage_brand",
         "studio_contracts.collage_enabled"
       ]
     }

@@ -1,6 +1,7 @@
 "use client";
 
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { CollageBrandPublic } from "@/lib/collage/brand";
 import { filterByPerson, type PersonChip } from "@/lib/face-people";
 import type { TienDoQuet } from "@/lib/face-pending";
 import { studioUrl } from "@/lib/hosts";
@@ -115,7 +116,7 @@ export type GalleryViewProps = {
    * Ghép layout ảnh đăng mạng xã hội (null = album này không có: gói thấp,
    * hợp đồng tắt, album lẻ). `coupleOnly` = phải nhập SĐT cô dâu / chú rể.
    */
-  collage?: { coupleOnly: boolean } | null;
+  collage?: { coupleOnly: boolean; brand?: CollageBrandPublic } | null;
 };
 
 export type GallerySection = { id: string; name: string; items: { p: GalleryPhoto; i: number }[]; ids: string[] };

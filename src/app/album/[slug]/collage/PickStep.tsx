@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, Minus, Plus, Sparkles, X } from "lucide-react";
+import { ArrowRight, BookOpen, LoaderCircle, Minus, Plus, Sparkles, X } from "lucide-react";
 import { btn } from "@/components/v2/kit";
 import { suggestPhotos, type PhotoCat, type PhotoInfo } from "@/lib/collage/categories";
 import { COLLAGE_LIMITS } from "@/lib/collage/types";
@@ -72,6 +72,8 @@ export default function PickStep({
   backIsClose,
   onNext,
   toast,
+  onStory,
+  storyBusy = false,
 }: {
   photos: PhotoLite[];
   cats: PhotoCat[];
@@ -95,6 +97,9 @@ export default function PickStep({
   backIsClose: boolean;
   onNext: () => void;
   toast: (t: string) => void;
+  /** Bộ kể chuyện một chạm: máy chọn ảnh + xếp theo trình tự ngày cưới, ghép luôn. */
+  onStory: () => void;
+  storyBusy?: boolean;
 }) {
   const vp = useViewport();
   const manual = mode === "manual";
@@ -228,6 +233,17 @@ export default function PickStep({
       />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-[1080px]">
+          {/* Bộ kể chuyện một chạm */}
+          <div className="mx-3 mt-3 flex flex-wrap items-center gap-3 rounded-[14px] p-3" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
+            <BookOpen size={20} className="flex-none" style={{ color: "var(--ac)" }} />
+            <p className="min-w-0 flex-1 basis-48 text-[13px]" style={{ color: "var(--tx2)" }}>
+              <b style={{ color: "var(--tx)" }}>Bộ kể chuyện một chạm</b> — máy chọn ảnh và xếp theo trình tự ngày cưới: bìa → chuẩn bị → lễ → decor → hai bạn → tiệc → gia đình → lời cảm ơn.
+            </p>
+            <button type="button" onClick={onStory} disabled={storyBusy || photos.length === 0} className={btn("secondary", "md", "w-full sm:w-auto")}>
+              {storyBusy ? <LoaderCircle size={16} className="animate-spin" /> : <BookOpen size={16} />} {storyBusy ? "Đang ghép…" : "Tạo bộ kể chuyện"}
+            </button>
+          </div>
+
           {/* Cách ghép */}
           <div className="mx-3 mt-3 grid grid-cols-2 gap-1 rounded-[14px] p-1" role="radiogroup" aria-label="Cách ghép" style={{ background: "var(--sf2)" }}>
             {(

@@ -139,6 +139,8 @@ export interface CollageDoc {
   texts: string[];
   /** Ảnh khách đã chọn để ghép, theo thứ tự chọn. */
   photoIds: string[];
+  /** Bộ lọc màu đồng bộ cho mọi ảnh của bộ (filters.ts); không có = màu gốc. */
+  filter?: string;
   /** Tỉ lệ rộng/cao của từng ảnh — để vẽ lại đúng ngay khi mở, không phải đợi ảnh tải. */
   aspects: Record<string, number>;
   pages: CollagePage[];

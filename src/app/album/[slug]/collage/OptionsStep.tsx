@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { LayoutGrid, LoaderCircle, Plus, Shuffle, Type, X } from "lucide-react";
 import { btn } from "@/components/v2/kit";
 import { COLLAGE_FORMATS } from "@/lib/collage/formats";
@@ -10,9 +10,10 @@ import { rng } from "@/lib/collage/rng";
 import { COLLAGE_LIMITS, type PerPage } from "@/lib/collage/types";
 import { COLLAGE_FONTS } from "@/lib/collage/fonts";
 import { presetById } from "@/lib/collage/typography";
-import { LOCKUPS } from "@/lib/collage/lockups";
+import { PICKABLE_LOCKUPS as LOCKUPS } from "@/lib/collage/lockups";
 import { panoramaMax } from "@/lib/collage/carousel";
 import { StudioFooter, StudioHeader } from "./ui";
+import { WishesSheet } from "./WishesSheet";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    BƯỚC 2 — TUỲ CHỌN GHÉP: khổ ảnh, số ảnh mỗi trang, phong cách, nội dung chữ.
@@ -76,6 +77,7 @@ export default function OptionsStep({
   const carousel = opts.carousel >= 2;
   const pages = carousel ? 1 : manual ? manualPages : autoPages;
   const carouselMax = panoramaMax(Math.max(2, opts.carousel));
+  const [wishesOpen, setWishesOpen] = useState(false);
   const carouselOver = carousel && count > carouselMax;
   const filled = opts.texts.filter((t) => t.trim()).length;
   const tooMany = filled > pages;
@@ -287,9 +289,14 @@ export default function OptionsStep({
                   </button>
                 </div>
               ))}
-              <button type="button" onClick={() => addText()} disabled={!canAdd} className={btn("secondary", "md", "self-start")}>
-                <Plus size={16} /> Thêm nội dung
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => addText()} disabled={!canAdd} className={btn("secondary", "md")}>
+                  <Plus size={16} /> Thêm nội dung
+                </button>
+                <button type="button" onClick={() => setWishesOpen(true)} disabled={!canAdd && !opts.texts.some((t) => !t.trim())} className={btn("ghost", "md")}>
+                  <Type size={16} /> Thư viện lời chúc
+                </button>
+              </div>
               {ideas.length ? (
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {ideas.map((x) => (
@@ -315,6 +322,15 @@ export default function OptionsStep({
           </Group>
         </div>
       </div>
+      {wishesOpen ? (
+        <WishesSheet
+          onClose={() => setWishesOpen(false)}
+          onPick={(line) => {
+            setWishesOpen(false);
+            addText(line);
+          }}
+        />
+      ) : null}
       <StudioFooter>
         <button type="button" onClick={onGenerate} disabled={busy || tooMany || count === 0 || carouselOver} className={btn("primary", "lg", "flex-1")}>
           {busy ? <LoaderCircle size={17} className="animate-spin" /> : <LayoutGrid size={17} />}

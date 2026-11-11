@@ -18,6 +18,7 @@ import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
 import { loadPrintState } from "@/lib/album-print";
 import { loadCollageState } from "@/lib/album-collage";
+import { studioUrl } from "@/lib/hosts";
 
 export const dynamic = "force-dynamic";
 
@@ -133,7 +134,7 @@ export default async function GalleryPage(
     // SĐT cô dâu / chú rể chỉ để biết có hỏi SĐT trước khi ghép hay không — bản
     // thân các số KHÔNG bao giờ gửi xuống trình duyệt.
     getAlbumOwner(album.owner_id)
-      .then(({ profile }) => loadCollageState(admin, album.id, profile))
+      .then(({ profile }) => loadCollageState(admin, album.id, profile, album.owner_id))
       .catch(() => null),
   ]);
   const studioName = brand.name;
@@ -151,7 +152,20 @@ export default async function GalleryPage(
   const canFaceSearch = planAllowsFaceSearch(ownerPlan, owner?.role === "admin");
   // Route /api/album/[slug]/collage/* tự kiểm lại y hệt — đây chỉ là để biết có
   // hiện thẻ "Ghép ảnh" hay không.
-  const collage = collageInfo;
+  // Cài đặt ghép ảnh của studio + tên / logo / đường dẫn để ký tên và làm slide
+  // cuối "Xem cả album" (tên miền riêng của studio nếu có).
+  const collage = collageInfo
+    ? {
+        coupleOnly: collageInfo.coupleOnly,
+        brand: {
+          ...collageInfo.brand,
+          name: brand.name,
+          logoUrl: brand.logoUrl,
+          siteUrl: studioUrl(studioHost, "/"),
+          albumUrl: studioUrl(studioHost, `/album/${album.slug}`),
+        },
+      }
+    : null;
 
   // Sources hiển thị (ưu tiên stage 'delivery', fallback tất cả nếu chưa gắn).
   const delSources = (s ?? []).filter((x) => x.stage === "delivery");

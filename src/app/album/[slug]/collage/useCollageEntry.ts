@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { CollageBrandPublic } from "@/lib/collage/brand";
 import { useCoupleKey } from "../couple-key";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -25,7 +26,7 @@ export function useCollageEntry({
   shareMode,
 }: {
   slug: string;
-  collage: { coupleOnly: boolean } | null | undefined;
+  collage: { coupleOnly: boolean; brand?: CollageBrandPublic } | null | undefined;
   /** Vé mở khoá album có mật khẩu. */
   access: string | undefined;
   /** Link chia sẻ chọn lọc (?s=) — người nhận không phải cô dâu chú rể, không có ghép ảnh. */
@@ -78,6 +79,8 @@ export function useCollageEntry({
   return {
     enabled,
     coupleOnly,
+    /** Cài đặt ghép ảnh của studio (ký tên, slide cuối, khoá màu) + tên / logo / đường dẫn. */
+    brand: collage?.brand ?? null,
     verified,
     /** Vé gửi kèm mọi lượt gọi /collage/* (null khi hợp đồng không ghi SĐT). */
     key: coupleOnly ? key : null,
