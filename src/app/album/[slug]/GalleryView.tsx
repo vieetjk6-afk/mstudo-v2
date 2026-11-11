@@ -432,6 +432,7 @@ export default function GalleryView(props: GalleryViewProps) {
         eventDate={gallery.event_date}
         hearts={selected}
         people={people}
+        galleryPhotos={photos}
       />
 
       <ShareDialog

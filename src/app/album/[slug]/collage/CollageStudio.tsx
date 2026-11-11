@@ -3,17 +3,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import { btn } from "@/components/v2/kit";
-import type { CollageDoc, LayoutInput } from "@/lib/collage/types";
+import { COLLAGE_LIMITS, type CollageDoc, type LayoutInput } from "@/lib/collage/types";
 import { DEFAULT_FORMAT_ID } from "@/lib/collage/formats";
 import { DEFAULT_STYLE_ID } from "@/lib/collage/styles";
-import { collectTexts, generateDoc } from "@/lib/collage/generate";
+import { collectTexts, generateDoc, pagePhotoIds } from "@/lib/collage/generate";
 import { loadCollageFonts } from "@/lib/collage/text-layout";
 import type { PhotoCat, PhotoInfo } from "@/lib/collage/categories";
 import type { PersonChip } from "@/lib/face-people";
 import { fmtDate, fmtDateTime } from "@/lib/date";
 import { useAlbumImg } from "@/app/a/[slug]/album-v2-ui";
-import { CollageApiError, deleteSet, errorText, fetchPhotos, fetchSets, saveSet, type Cred, type PhotoLite, type SavedSet } from "./api";
-import PickStep from "./PickStep";
+import { CollageApiError, deleteSet, errorCode, errorText, fetchPhotos, fetchSets, isTransient, saveSet, type Cred, type PhotoLite, type PhotosPayload, type SavedSet } from "./api";
+import PickStep, { type PickMode } from "./PickStep";
 import OptionsStep, { type CollageOptions } from "./OptionsStep";
 import { OverviewStep, SetsStep, type SaveStatus } from "./OverviewStep";
 import EditorStep from "./EditorStep";
@@ -47,11 +47,26 @@ export interface CollageStudioProps {
   hearts: ReadonlySet<string>;
   /** Khuôn mặt studio đã gom (để hiện ảnh mặt trên chip cô dâu / chú rể). */
   people: PersonChip[];
+  /**
+   * Ảnh album đang hiện trên trang (cùng bộ lọc ảnh giao khách với máy chủ). Máy
+   * chủ chậm / lỗi tạm thời thì màn ghép chạy tiếp bằng danh sách này — chỉ thiếu
+   * nhóm gợi ý theo khuôn mặt — thay vì quay vòng "Đang mở album…" mãi.
+   */
+  galleryPhotos?: readonly GalleryPhotoLike[];
   onClose: () => void;
   onNeedVerify: () => void;
 }
 
 type Step = "loading" | "error" | "sets" | "pick" | "options" | "overview" | "edit";
+
+type GalleryPhotoLike = { id: string; drive_file_id: string; source_id: string | null; name?: string | null; is_video?: boolean | null };
+
+const VIDEO_RE = /\.(mp4|mov|m4v|webm|avi|mkv|wmv|flv|3gp)$/i;
+/** Mở lâu hơn chừng này thì nói cho khách biết, và cho bấm "Mở luôn". */
+const SLOW_MS = 5000;
+/** Lưu hỏng vì mạng / máy chủ: tự thử lại sau ngần này, tối đa SAVE_RETRIES lần liền. */
+const SAVE_RETRY_MS = 10_000;
+const SAVE_RETRIES = 6;
 
 const DEFAULT_OPTS: CollageOptions = { formatId: DEFAULT_FORMAT_ID, perPage: 4, styleId: DEFAULT_STYLE_ID, texts: [""] };
 const HISTORY_MAX = 40;
@@ -82,11 +97,28 @@ export default function CollageStudio(props: CollageStudioProps) {
 
   const [step, setStep] = useState<Step>("loading");
   const [error, setError] = useState<string | null>(null);
-  const [photos, setPhotos] = useState<PhotoLite[]>([]);
+  const [errCode, setErrCode] = useState<string | null>(null);
+  const [slow, setSlow] = useState(false);
+  // Danh sách ảnh của máy chủ (chuẩn); chưa có thì dùng ảnh trang album đang có.
+  const [serverPhotos, setServerPhotos] = useState<PhotoLite[] | null>(null);
+  const galleryList = useMemo(
+    () =>
+      (props.galleryPhotos ?? [])
+        .filter((p) => !p.is_video && !VIDEO_RE.test(p.name ?? ""))
+        .map((p): PhotoLite => ({ id: p.id, d: p.drive_file_id, s: p.source_id })),
+    [props.galleryPhotos],
+  );
+  const photos = serverPhotos ?? galleryList;
   const [cats, setCats] = useState<PhotoCat[]>([]);
   const [info, setInfo] = useState<Record<string, PhotoInfo>>({});
   const [sets, setSets] = useState<SavedSet[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  // "Tự chọn từng layout": ảnh của từng layout + layout đang chọn ảnh.
+  const [mode, setModeState] = useState<PickMode>("auto");
+  const [groups, setGroups] = useState<string[][]>([[]]);
+  const [activeGroup, setActiveGroup] = useState(0);
+  const manualIds = useMemo(() => [...new Set(groups.flat())], [groups]);
+  const manualPages = groups.filter((g) => g.length).length;
   const [opts, setOpts] = useState<CollageOptions>(DEFAULT_OPTS);
   const [doc, setDoc] = useState<CollageDoc | null>(null);
   const [pageIdx, setPageIdx] = useState(0);
@@ -106,8 +138,14 @@ export default function CollageStudio(props: CollageStudioProps) {
   const saving = useRef(false);
   const savePending = useRef(false);
   const dirty = useRef(false);
+  const saveFails = useRef(0);
   const credRef = useRef(cred);
   credRef.current = cred;
+  /** Lượt nạp hiện hành — kết quả của lượt cũ (đã bấm Thử lại / đã đóng) bị bỏ qua. */
+  const loadGen = useRef(0);
+  const skipRef = useRef<(() => void) | null>(null);
+  const galleryRef = useRef(galleryList);
+  galleryRef.current = galleryList;
 
   /* ── Ảnh: id → drive id, và đầu vào cho bộ dàn trang ── */
   const driveIdOf = useMemo(() => new Map(photos.map((p) => [p.id, p.d])), [photos]);
@@ -175,6 +213,7 @@ export default function CollageStudio(props: CollageStudioProps) {
       const title = `Bộ ảnh ghép ${fmtDateTime(new Date())}`;
       const r = await saveSet(credRef.current, { id: setIdRef.current, title, doc: d });
       setIdRef.current = r.id;
+      saveFails.current = 0;
       setSave({ state: "saved", expiresAt: r.expiresAt });
     } catch (e) {
       dirty.current = true;
@@ -182,7 +221,15 @@ export default function CollageStudio(props: CollageStudioProps) {
         props.onNeedVerify();
         return;
       }
-      setSave({ state: "error", msg: e instanceof CollageApiError && e.code !== "save_failed" ? errorText(e) : "Chưa lưu được — sửa tiếp là máy thử lại" });
+      const transient = isTransient(e);
+      setSave({ state: "error", msg: !transient && e instanceof CollageApiError && e.code !== "save_failed" ? errorText(e) : "Chưa lưu được — sửa tiếp là máy thử lại" });
+      // Mạng chập chờn / máy chủ chậm: tự thử lại vài lần, kể cả khi khách đã ngừng tay.
+      if (transient && ++saveFails.current <= SAVE_RETRIES && !saveTimer.current) {
+        saveTimer.current = setTimeout(() => {
+          saveTimer.current = null;
+          void saveNow();
+        }, SAVE_RETRY_MS);
+      }
     } finally {
       saving.current = false;
       if (savePending.current) {
@@ -269,25 +316,78 @@ export default function CollageStudio(props: CollageStudioProps) {
     scheduleSave();
   }, [scheduleSave, setDocState]);
 
-  /* ── Nạp ảnh + bộ đã lưu ── */
+  /* ── Nạp ảnh + bộ đã lưu ──
+     Hai lượt gọi song song, lượt nào cũng có hạn giờ (api.ts). Danh sách ảnh có
+     sẵn trên trang album (galleryList), nên máy chủ chậm / lỗi TẠM THỜI thì màn
+     ghép vẫn chạy — chỉ thiếu nhóm gợi ý theo khuôn mặt, tới sau thì tự hiện. Mở
+     lâu quá SLOW_MS thì khách được bấm "Mở luôn". Chỉ lỗi quyền / cấu hình (album
+     tắt ghép ảnh, phiên mật khẩu hết hạn…) mới dừng ở màn lỗi, kèm mã lỗi ngắn. */
+  const applyPhotos = useCallback((r: PhotosPayload) => {
+    setServerPhotos(r.photos);
+    setCats(r.cats);
+    setInfo(r.info);
+  }, []);
+
   const load = useCallback(async () => {
+    const gen = ++loadGen.current;
+    const live = () => gen === loadGen.current;
     setStep("loading");
     setError(null);
-    try {
-      const [ph, list] = await Promise.all([fetchPhotos(credRef.current), fetchSets(credRef.current)]);
-      setPhotos(ph.photos);
-      setCats(ph.cats);
-      setInfo(ph.info);
-      setSets(list);
-      setStep(list.length ? "sets" : "pick");
-    } catch (e) {
-      if (e instanceof CollageApiError && e.code === "need_verify") {
-        props.onNeedVerify();
-        return;
-      }
-      setError(errorText(e));
-      setStep("error");
+    setErrCode(null);
+    setSlow(false);
+    const slowTimer = setTimeout(() => live() && setSlow(true), SLOW_MS);
+    const c = credRef.current;
+    const asError = (e: unknown) => (e instanceof CollageApiError ? e : new CollageApiError("network"));
+    const photosP: Promise<PhotosPayload | CollageApiError> = fetchPhotos(c).then((r) => {
+      if (live()) applyPhotos(r);
+      return r;
+    }, asError);
+    const setsP: Promise<SavedSet[] | CollageApiError> = fetchSets(c).catch(asError);
+    const skipP = new Promise<"skip">((res) => {
+      skipRef.current = () => res("skip");
+    });
+    const [setsR, photosR] = await Promise.all([Promise.race([setsP, skipP]), Promise.race([photosP, skipP])]);
+    clearTimeout(slowTimer);
+    skipRef.current = null;
+    if (!live()) return;
+
+    const needVerify = (r: unknown) => r instanceof CollageApiError && r.code === "need_verify";
+    // Khách bấm "Mở luôn": phần tới muộn vẫn được dùng khi tới.
+    if (photosR === "skip") {
+      void photosP.then((r) => {
+        if (live() && needVerify(r)) props.onNeedVerify();
+      });
     }
+    if (setsR === "skip") {
+      void setsP.then((r) => {
+        if (!live()) return;
+        if (needVerify(r)) props.onNeedVerify();
+        else if (Array.isArray(r) && r.length) {
+          setSets(r);
+          toast.show(`Bạn có ${r.length} bộ ảnh ghép đã lưu — bấm ← để mở lại.`);
+        }
+      });
+    }
+
+    if (needVerify(setsR) || needVerify(photosR)) {
+      props.onNeedVerify();
+      return;
+    }
+    const hard = [photosR, setsR].find((r): r is CollageApiError => r instanceof CollageApiError && !isTransient(r));
+    const photosFailed = photosR instanceof CollageApiError;
+    const noPhotos = photosR !== "skip" && photosFailed && !galleryRef.current.length;
+    if (hard || noPhotos) {
+      const e = hard ?? (photosR as CollageApiError);
+      setError(errorText(e));
+      setErrCode(errorCode(e));
+      setStep("error");
+      return;
+    }
+    const list = Array.isArray(setsR) ? setsR : [];
+    setSets(list);
+    if (photosFailed) toast.show("Chưa tải được gợi ý ảnh đẹp — bạn vẫn chọn ảnh trong album bình thường.");
+    else if (setsR instanceof CollageApiError) toast.show("Chưa mở được các bộ ảnh ghép đã lưu — bạn thử lại sau ít phút.");
+    setStep(list.length ? "sets" : "pick");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -297,8 +397,11 @@ export default function CollageStudio(props: CollageStudioProps) {
     void loadCollageFonts().then(() => alive && setFontsReady((n) => n + 1));
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const gens = loadGen;
     return () => {
       alive = false;
+      // Đóng màn ghép giữa lúc đang nạp: kết quả tới muộn không được mở hộp SĐT.
+      gens.current++;
       document.body.style.overflow = prev;
     };
   }, [load]);
@@ -330,6 +433,34 @@ export default function CollageStudio(props: CollageStudioProps) {
   };
 
   /* ── Các bước ── */
+  /** Đổi cách ghép: ảnh đã chọn đi theo (tự động → chia sẵn thành các layout; tự chọn → gộp lại). */
+  const setMode = (m: PickMode) => {
+    if (m === mode) return;
+    if (m === "manual") {
+      if (selected.length && !manualIds.length) {
+        const per = typeof opts.perPage === "number" ? opts.perPage : 4;
+        const gs: string[][] = [];
+        for (let i = 0; i < selected.length; i += per) gs.push(selected.slice(i, i + per));
+        setGroups(gs.slice(0, COLLAGE_LIMITS.pages));
+        setActiveGroup(0);
+      }
+    } else if (manualIds.length) {
+      setSelected(manualIds.slice(0, COLLAGE_LIMITS.photos));
+    }
+    setModeState(m);
+  };
+  /** Nạp lại chế độ + nhóm ảnh từ một bộ layout (mở bộ đã lưu, quay lại tuỳ chọn). */
+  const syncPick = (d: CollageDoc) => {
+    setSelected(d.photoIds.filter((id) => driveIdOf.has(id)));
+    if (d.mode === "manual") {
+      const gs = d.pages.map((pg) => pagePhotoIds(pg).filter((id) => driveIdOf.has(id))).filter((g) => g.length);
+      setGroups(gs.length ? gs : [[]]);
+      setActiveGroup(0);
+      setModeState("manual");
+    } else {
+      setModeState("auto");
+    }
+  };
   const openSet = (s: SavedSet) => {
     const d = s.data;
     setIdRef.current = s.id;
@@ -337,7 +468,7 @@ export default function CollageStudio(props: CollageStudioProps) {
     setCanUndo(false);
     aspectsRef.current = { ...aspectsRef.current, ...d.aspects };
     setAspects(aspectsRef.current);
-    setSelected(d.photoIds.filter((id) => driveIdOf.has(id)));
+    syncPick(d);
     setOpts({ formatId: d.formatId, perPage: d.perPage, styleId: d.styleId, texts: d.texts.length ? d.texts : [""] });
     setDocState(d);
     setPageIdx(0);
@@ -350,6 +481,8 @@ export default function CollageStudio(props: CollageStudioProps) {
     setCanUndo(false);
     setDocState(null);
     setSelected([]);
+    setGroups([[]]);
+    setActiveGroup(0);
     setOpts(DEFAULT_OPTS);
     setSave({ state: "idle" });
     setStep("pick");
@@ -385,12 +518,22 @@ export default function CollageStudio(props: CollageStudioProps) {
   };
 
   const generate = async (seed = Math.floor(Math.random() * 1e9)) => {
-    if (!selected.length) return;
+    const manual = mode === "manual";
+    const ids = manual ? manualIds : selected;
+    if (!ids.length) return;
     setBusy(true);
     try {
-      const ins = await ensureInputs(selected);
-      const photosIn = selected.map((id) => ins.get(id)).filter((x): x is LayoutInput => !!x);
-      const next = generateDoc({ photos: photosIn, perPage: opts.perPage, formatId: opts.formatId, styleId: opts.styleId, texts: opts.texts, seed });
+      const ins = await ensureInputs(ids);
+      const photosIn = ids.map((id) => ins.get(id)).filter((x): x is LayoutInput => !!x);
+      const next = generateDoc({
+        photos: photosIn,
+        perPage: opts.perPage,
+        formatId: opts.formatId,
+        styleId: opts.styleId,
+        texts: opts.texts,
+        seed,
+        ...(manual ? { groups: groups.filter((g) => g.length) } : {}),
+      });
       if (docRef.current) {
         pastRef.current.push(docRef.current);
         setCanUndo(true);
@@ -411,9 +554,20 @@ export default function CollageStudio(props: CollageStudioProps) {
     setOpts((o) => ({ ...o, texts: texts.length ? texts : o.texts }));
     setBusy(true);
     try {
-      const ins = await ensureInputs(d.photoIds);
-      const photosIn = d.photoIds.map((id) => ins.get(id)).filter((x): x is LayoutInput => !!x);
-      const next = generateDoc({ photos: photosIn, perPage: d.perPage, formatId: d.formatId, styleId: d.styleId, texts: texts.length ? texts : d.texts, seed: Math.floor(Math.random() * 1e9) });
+      // Bộ tự chọn từng layout: giữ nguyên nhóm ảnh của từng trang, chỉ đổi bố cục.
+      const manualGroups = d.mode === "manual" ? d.pages.map(pagePhotoIds).filter((g) => g.length) : null;
+      const ids = manualGroups ? [...new Set(manualGroups.flat())] : d.photoIds;
+      const ins = await ensureInputs(ids);
+      const photosIn = ids.map((id) => ins.get(id)).filter((x): x is LayoutInput => !!x);
+      const next = generateDoc({
+        photos: photosIn,
+        perPage: d.perPage,
+        formatId: d.formatId,
+        styleId: d.styleId,
+        texts: texts.length ? texts : d.texts,
+        seed: Math.floor(Math.random() * 1e9),
+        ...(manualGroups ? { groups: manualGroups } : {}),
+      });
       apply(() => next);
       toast.show("Đã ghép lại ngẫu nhiên — bấm ↶ ở màn sửa để quay lại bản trước.");
     } finally {
@@ -462,8 +616,22 @@ export default function CollageStudio(props: CollageStudioProps) {
     body = (
       <>
         <StudioHeader title="Ghép ảnh" onBack={close} close backLabel="Đóng" />
-        <div className="flex flex-1 items-center justify-center gap-2 text-[14px]" style={{ color: "var(--tx3)" }}>
-          <LoaderCircle size={18} className="animate-spin" /> Đang mở album…
+        <div className="flex flex-1 flex-col items-center justify-center gap-3 px-6 text-center">
+          <span className="flex items-center gap-2 text-[14px]" style={{ color: "var(--tx3)" }}>
+            <LoaderCircle size={18} className="animate-spin" /> Đang mở album…
+          </span>
+          {slow ? (
+            <>
+              <p className="max-w-[340px] text-[13px]" style={{ color: "var(--tx3)" }}>
+                Album nhiều ảnh nên máy cần thêm chút thời gian để tìm những tấm đẹp nhất.
+              </p>
+              {galleryList.length ? (
+                <button type="button" onClick={() => skipRef.current?.()} className={btn("secondary", "md")}>
+                  Mở luôn, gợi ý tới sau
+                </button>
+              ) : null}
+            </>
+          ) : null}
         </div>
       </>
     );
@@ -479,6 +647,11 @@ export default function CollageStudio(props: CollageStudioProps) {
           <button type="button" onClick={() => void load()} className={btn("secondary", "md")}>
             Thử lại
           </button>
+          {errCode ? (
+            <p className="text-[11.5px]" style={{ color: "var(--tx3)" }}>
+              Mã lỗi: {errCode}
+            </p>
+          ) : null}
         </div>
       </>
     );
@@ -492,6 +665,12 @@ export default function CollageStudio(props: CollageStudioProps) {
         info={info}
         selected={selected}
         setSelected={setSelected}
+        mode={mode}
+        setMode={setMode}
+        groups={groups}
+        setGroups={setGroups}
+        active={Math.min(activeGroup, groups.length - 1)}
+        setActive={setActiveGroup}
         hearts={hearts}
         people={people}
         driveIdOf={driveIdOf}
@@ -500,13 +679,24 @@ export default function CollageStudio(props: CollageStudioProps) {
         backIsClose={!doc && !sets.length}
         onNext={() => {
           setStep("options");
-          void ensureInputs(selected);
+          void ensureInputs(mode === "manual" ? manualIds : selected);
         }}
         toast={toast.show}
       />
     );
   } else if (step === "options") {
-    body = <OptionsStep count={selected.length} opts={opts} setOpts={setOpts} ideas={ideas} busy={busy} onBack={uiBack} onGenerate={() => void generate()} />;
+    body = (
+      <OptionsStep
+        count={mode === "manual" ? manualIds.length : selected.length}
+        manualPages={mode === "manual" ? manualPages : null}
+        opts={opts}
+        setOpts={setOpts}
+        ideas={ideas}
+        busy={busy}
+        onBack={uiBack}
+        onGenerate={() => void generate()}
+      />
+    );
   } else if (step === "overview" && doc) {
     body = (
       <OverviewStep
@@ -528,7 +718,7 @@ export default function CollageStudio(props: CollageStudioProps) {
             const texts = collectTexts(doc);
             return { ...o, formatId: doc.formatId, perPage: doc.perPage, styleId: doc.styleId, texts: texts.length ? texts : o.texts };
           });
-          setSelected(doc.photoIds.filter((id) => driveIdOf.has(id)));
+          syncPick(doc);
           setStep("options");
         }}
         onExport={() => setExportOpen(true)}

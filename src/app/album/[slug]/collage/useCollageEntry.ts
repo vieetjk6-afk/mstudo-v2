@@ -48,11 +48,15 @@ export function useCollageEntry({
     }
     setVerifyBusy(true);
     setVerifyErr(null);
+    // Có hạn giờ: máy chủ treo thì báo lỗi, không để nút "Xác nhận" quay mãi.
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20_000);
     try {
       const res = await fetch(`/api/album/${slug}/collage/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ phone, access }),
+        signal: ctl.signal,
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.ok) {
@@ -64,8 +68,9 @@ export function useCollageEntry({
       setVerifyOpen(false);
       setStudioOpen(true);
     } catch {
-      setVerifyErr("Mất kết nối — bạn kiểm tra mạng rồi thử lại.");
+      setVerifyErr(ctl.signal.aborted ? "Máy chủ phản hồi chậm quá — bạn thử lại nhé." : "Mất kết nối — bạn kiểm tra mạng rồi thử lại.");
     } finally {
+      clearTimeout(timer);
       setVerifyBusy(false);
     }
   }

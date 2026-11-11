@@ -33,7 +33,7 @@ import { TEXT_PRESETS, sizeFor } from "@/lib/collage/typography";
 import { focusCrop } from "@/lib/collage/crop";
 import { heroPhoto } from "@/lib/collage/compose";
 import { styleById } from "@/lib/collage/styles";
-import { addTextToPage, applyLayout, changeFormat, pageAlternatives, pagePhotoIds, pageText, relayoutPage, removeTextFromPage } from "@/lib/collage/generate";
+import { addTextToPage, applyLayout, changeFormat, pagePhotoIds, pageSuggestions, pageText, relayoutPage, removeTextFromPage, type Suggestion } from "@/lib/collage/generate";
 import type { PhotoCat, PhotoInfo } from "@/lib/collage/categories";
 import type { PersonChip } from "@/lib/face-people";
 import type { PhotoLite } from "./api";
@@ -46,14 +46,15 @@ import { CAT_ALL, CAT_PICKED, CatChips, PhotoGrid, Sheet, StudioHeader, tagLabel
      • chạm ảnh → kéo để dời ảnh trong khung, chụm hai ngón để phóng; đổi ảnh,
        đổi chỗ với ảnh khác, đặt lại, bỏ khỏi trang (máy dàn lại);
      • chạm chữ → sửa nội dung, kiểu chữ, cỡ, màu, căn lề, bóng chữ; kéo để dời;
-     • Bố cục: dải phương án khác cho đúng các ảnh đang có, "Gợi ý khác";
+     • MẪU GỢI Ý ngay dưới trang: nhiều bố cục + phong cách cho đúng các ảnh
+       đang có; "Gợi ý khác" đổi hẳn sang một loạt mẫu mới và áp mẫu đầu tiên;
      • Ảnh: thêm / bớt ảnh trên trang (chỉ ảnh trong album);
      • Nền: màu nền, ảnh làm nền mờ;
      • Trang: dời trước / sau, thêm trang, xoá trang, đổi khổ cả bộ.
    Mọi thay đổi tự lưu (giữ 1 ngày) và hoàn tác được (↶).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-type Tool = "layout" | "photos" | "text" | "bg" | "page";
+type Tool = "photos" | "text" | "bg" | "page";
 
 const TEXT_COLORS = ["#ffffff", "#f6f1e8", "#d9b77a", "#2b2622", "#111111", "#7a4848", "#c9344a", "#a07c55", "#2f5d8a", "#3e6b48"];
 const BG_COLORS = ["#ffffff", "#f5f0e8", "#f7e9e6", "#efe6dc", "#e8eef2", "#dfe7df", "#121212", "#2b2622", "#7b1e22", "#1f3a33"];
@@ -243,12 +244,15 @@ export default function EditorStep(p: EditorProps) {
   const f = formatById(doc.formatId);
   const short = Math.min(f.w, f.h);
   const style = styleById(page.styleId);
-  const [tool, setTool] = useState<Tool>("layout");
+  const [tool, setTool] = useState<Tool>("photos");
   const [sel, setSel] = useState<string | null>(null);
   const [swapFrom, setSwapFrom] = useState<string | null>(null);
   const [chooser, setChooser] = useState<null | { kind: "replace" | "add" | "newpage"; frameId?: string }>(null);
   const [formatOpen, setFormatOpen] = useState(false);
-  const [altSeed, setAltSeed] = useState(1);
+  // Loạt mẫu gợi ý đang hiện: tính lại khi đổi trang / đổi ảnh / thêm bớt chữ;
+  // "Gợi ý khác" giữ loạt mới trong state (không tính lại khi áp mẫu — dải không nhảy dưới tay).
+  const [sugState, setSugState] = useState<{ sig: string; round: number; list: Suggestion[] } | null>(null);
+  const [relayouts, setRelayouts] = useState(1);
   const [newText, setNewText] = useState("");
 
   useEffect(() => {
@@ -263,7 +267,8 @@ export default function EditorStep(p: EditorProps) {
   /* ── Cỡ khung xem ── */
   const wide = vp.w >= 900;
   const ratio = f.w / f.h;
-  const stageMaxH = wide ? vp.h - 56 - 96 - 40 : Math.max(220, vp.h * 0.5 - 40);
+  // Điện thoại: chừa chỗ cho dải mẫu gợi ý ngay dưới trang (~120 px) và bảng công cụ.
+  const stageMaxH = wide ? vp.h - 56 - 96 - 40 - 150 : Math.max(200, vp.h * 0.44 - 40);
   const stageMaxW = wide ? Math.min(680, vp.w - 420 - 48) : vp.w - 24;
   const stageW = Math.floor(Math.max(160, Math.min(stageMaxW, stageMaxH * ratio)));
 
@@ -285,18 +290,30 @@ export default function EditorStep(p: EditorProps) {
     const inputs = await p.ensureInputs(photoIds);
     updatePage((pg) => {
       const photos = photoIds.map((id) => inputs.get(id)).filter((x): x is LayoutInput => !!x);
-      return relayoutPage(pg, photos, doc.formatId, (doc.seed + altSeed * 31 + photoIds.length) >>> 0) ?? pg;
+      return relayoutPage(pg, photos, doc.formatId, (doc.seed + relayouts * 31 + photoIds.length) >>> 0) ?? pg;
     });
+    setRelayouts((n) => n + 1);
     setSel(null);
   };
 
-  /* ── Gợi ý bố cục cho đúng các ảnh đang có ── */
-  const sig = `${page.id}|${ids.join(",")}|${text ? "t" : ""}|${doc.formatId}|${page.styleId}|${altSeed}`;
-  const alts = useMemo(
-    () => pageAlternatives(page, p.inputs, doc.formatId, (doc.seed + altSeed * 7919) >>> 0, 12),
+  /* ── Mẫu gợi ý cho đúng các ảnh đang có ── */
+  const sig = `${page.id}|${ids.join(",")}|${text ? "t" : ""}|${doc.formatId}`;
+  const first = useMemo(
+    () => pageSuggestions(page, p.inputs, doc.formatId, doc.seed, 0, 10),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [sig],
   );
+  const live = sugState && sugState.sig === sig ? sugState : null;
+  const sugs = live ? live.list : first;
+  const applySug = (a: Suggestion) => updatePage((pg) => applyLayout(pg, a, styleById(a.styleId), short));
+  /** "Gợi ý khác": loạt mẫu mới (phong cách khác, họ bố cục khác) và đổi trang sang mẫu đầu tiên. */
+  const moreSugs = () => {
+    const round = (live?.round ?? 0) + 1;
+    const list = pageSuggestions(page, p.inputs, doc.formatId, doc.seed, round, 10);
+    setSugState({ sig, round, list });
+    if (list[0]) applySug(list[0]);
+  };
+  const isCurrent = (a: Suggestion) => a.recipe === page.recipe && a.styleId === page.styleId;
 
   /* ── Chạm trên trang ── */
   const onSelect = (id: string | null) => {
@@ -555,7 +572,8 @@ export default function EditorStep(p: EditorProps) {
         type="button"
         disabled={!newText.trim()}
         onClick={() => {
-          updatePage((pg) => addTextToPage(pg, newText, p.inputs, doc.formatId, (doc.seed + altSeed) >>> 0));
+          updatePage((pg) => addTextToPage(pg, newText, p.inputs, doc.formatId, (doc.seed + relayouts) >>> 0));
+          setRelayouts((n) => n + 1);
           setNewText("");
         }}
         className={btn("primary", "md", "self-start")}
@@ -567,13 +585,12 @@ export default function EditorStep(p: EditorProps) {
 
   /* ── Bảng công cụ theo tab ── */
   const tabs: { id: Tool; label: string; icon: typeof LayoutGrid }[] = [
-    { id: "layout", label: "Bố cục", icon: LayoutGrid },
     { id: "photos", label: "Ảnh", icon: Images },
     { id: "text", label: "Chữ", icon: Type },
     { id: "bg", label: "Nền", icon: Palette },
     { id: "page", label: "Trang", icon: RectangleVertical },
   ];
-  const altW = Math.round(Math.min(96, 104 * ratio));
+  const altW = Math.round(Math.min(wide ? 92 : 68, (wide ? 100 : 80) * ratio));
   const tools = (
     <div className="flex flex-col gap-3">
       {selFrame?.kind === "photo" ? (
@@ -599,33 +616,6 @@ export default function EditorStep(p: EditorProps) {
               </button>
             ))}
           </div>
-
-          {tool === "layout" && (
-            <div className="flex flex-col gap-2.5">
-              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" style={{ scrollbarWidth: "none" }}>
-                {alts.map((a, i) => (
-                  <button
-                    key={`${a.recipe}-${i}`}
-                    type="button"
-                    onClick={() => updatePage((pg) => applyLayout(pg, a, style, short))}
-                    aria-label={`Bố cục ${i + 1}`}
-                    className="flex-none overflow-hidden rounded-[6px]"
-                    style={{ outline: a.recipe === page.recipe ? "2.5px solid var(--ac)" : "1px solid var(--bd)", outlineOffset: a.recipe === page.recipe ? 1 : 0 }}
-                  >
-                    <PageView doc={doc} page={applyLayout(page, a, style, short)} width={altW} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} />
-                  </button>
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => setAltSeed((s) => s + 1)} className={btn("secondary", "sm")}>
-                  <Shuffle size={15} /> Gợi ý khác
-                </button>
-                <span className="self-center text-[12px]" style={{ color: "var(--tx3)" }}>
-                  {ids.length} ảnh trên layout này
-                </span>
-              </div>
-            </div>
-          )}
 
           {tool === "photos" && (
             <div className="flex flex-col gap-2.5">
@@ -729,6 +719,39 @@ export default function EditorStep(p: EditorProps) {
     </div>
   );
 
+  /* ── Dải mẫu gợi ý — nằm ngay dưới trang, không giấu trong tab ── */
+  const suggestions = (
+    <div className="flex-none" style={{ background: "var(--bg)" }}>
+      <div className="flex items-center gap-2 px-3 pt-1">
+        <p className="min-w-0 flex-1 text-[12.5px] font-semibold" style={{ color: "var(--tx2)" }}>
+          Mẫu gợi ý <span style={{ color: "var(--tx3)", fontWeight: 500 }}>· chạm để dùng</span>
+        </p>
+        <button type="button" onClick={moreSugs} className={btn("secondary", "sm", "flex-none")}>
+          <Shuffle size={15} /> Gợi ý khác
+        </button>
+      </div>
+      <div className="flex gap-2 overflow-x-auto px-3 pb-2.5 pt-2" style={{ scrollbarWidth: "none" }} role="listbox" aria-label="Mẫu gợi ý">
+        {sugs.map((a, i) => {
+          const on = isCurrent(a);
+          return (
+            <button
+              key={`${live?.round ?? 0}-${a.recipe}-${a.styleId}-${i}`}
+              type="button"
+              role="option"
+              aria-selected={on}
+              onClick={() => applySug(a)}
+              aria-label={`Mẫu ${i + 1}`}
+              className="flex-none overflow-hidden rounded-[6px]"
+              style={{ outline: on ? "2.5px solid var(--ac)" : "1px solid var(--bd)", outlineOffset: on ? 1 : 0 }}
+            >
+              <PageView doc={doc} page={applyLayout(page, a, styleById(a.styleId), short)} width={altW} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} />
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const stage = (
     <div className="relative mx-auto flex-none" style={{ width: stageW, boxShadow: "0 10px 30px -12px rgba(15,30,55,.35)" }}>
       <PageView doc={doc} page={page} width={stageW} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} watermark={p.watermark} selectedId={swapFrom ?? sel} />
@@ -757,8 +780,9 @@ export default function EditorStep(p: EditorProps) {
       {strip}
       {wide ? (
         <div className="flex min-h-0 flex-1">
-          <div className="flex min-w-0 flex-1 items-start justify-center overflow-auto p-5" style={{ background: "var(--bg)" }}>
-            {stage}
+          <div className="flex min-w-0 flex-1 flex-col overflow-auto" style={{ background: "var(--bg)" }}>
+            <div className="flex justify-center p-5 pb-3">{stage}</div>
+            <div className="mx-auto w-full max-w-[760px]">{suggestions}</div>
           </div>
           <aside className="w-[400px] flex-none overflow-y-auto p-4" style={{ borderLeft: "1px solid var(--bd)", background: "var(--sf)" }}>
             {tools}
@@ -766,9 +790,10 @@ export default function EditorStep(p: EditorProps) {
         </div>
       ) : (
         <>
-          <div className="flex flex-none justify-center px-3 py-3" style={{ background: "var(--bg)" }}>
+          <div className="flex flex-none justify-center px-3 pb-2 pt-3" style={{ background: "var(--bg)" }}>
             {stage}
           </div>
+          {suggestions}
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-4 pt-3" style={{ background: "var(--sf)", borderTop: "1px solid var(--bd)", paddingBottom: "max(16px, env(safe-area-inset-bottom, 0px))" }}>
             {tools}
           </div>

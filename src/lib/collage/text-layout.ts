@@ -66,6 +66,29 @@ function wrapParagraph(ctx: CanvasRenderingContext2D, para: string, size: number
   return out;
 }
 
+/**
+ * Ngắt CÂN DÒNG (như text-wrap: balance): giữ đúng số dòng của cách ngắt tham
+ * lam nhưng thu bề ngang tới mức hẹp nhất còn giữ được số dòng đó — tránh một
+ * chữ mồ côi ở dòng cuối ("CHÚNG MÌNH CƯỚI / RỒI" → "CHÚNG MÌNH / CƯỚI RỒI").
+ */
+function wrapBalanced(ctx: CanvasRenderingContext2D, para: string, size: number, spacingEm: number, maxW: number): string[] {
+  const base = wrapParagraph(ctx, para, size, spacingEm, maxW);
+  if (base.length < 2 || base.length > 8) return base;
+  let lo = maxW * 0.3;
+  let hi = maxW;
+  let best = base;
+  for (let i = 0; i < 12; i++) {
+    const mid = (lo + hi) / 2;
+    const t = wrapParagraph(ctx, para, size, spacingEm, mid);
+    const widest = Math.max(0, ...t.map((l) => lineWidth(ctx, l, size, spacingEm)));
+    if (t.length === base.length && widest <= mid + 0.5) {
+      best = t;
+      hi = mid;
+    } else lo = mid;
+  }
+  return best;
+}
+
 export interface TextLayout {
   lines: string[];
   /** Cỡ chữ sau khi co cho vừa khung. */
@@ -104,7 +127,7 @@ export function layoutText(t: TextFrame, fontsReady = 0): TextLayout {
   let best: TextLayout | null = null;
   for (let iter = 0; iter < 14; iter++) {
     ctx.font = canvasFont(st, size);
-    const lines = text.split("\n").flatMap((p) => wrapParagraph(ctx, p.trim(), size, st.letterSpacing, t.rect.w));
+    const lines = text.split("\n").flatMap((p) => wrapBalanced(ctx, p.trim(), size, st.letterSpacing, t.rect.w));
     const width = Math.max(0, ...lines.map((l) => lineWidth(ctx, l, size, st.letterSpacing)));
     const lineH = size * st.lineHeight;
     best = { lines, size, lineH, width };

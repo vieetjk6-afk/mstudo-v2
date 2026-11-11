@@ -3,6 +3,10 @@ import { limitByIp } from "@/lib/rate-limit";
 import { collageGate, loadCollagePhotos } from "@/lib/album-collage";
 
 export const dynamic = "force-dynamic";
+// Phần gợi ý có hạn giờ riêng (vài giây, xem loadCollagePhotos); đây là hàng rào
+// cuối: DB treo hẳn thì Vercel cắt ở 30 giây và máy khách báo lỗi kèm nút thử
+// lại — thay vì giữ vòng quay "Đang mở album…" tới 5 phút.
+export const maxDuration = 30;
 
 /**
  * Ảnh để ghép layout + nhóm gợi ý (ảnh chung, cô dâu, chú rể, decor, bê quả…).
@@ -21,6 +25,6 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   const body = (await req.json().catch(() => ({}))) as { key?: unknown; access?: unknown };
   const gate = await collageGate(slug, body);
   if (!gate.ok) return gate.res;
-  const { photos, groups } = await loadCollagePhotos(gate.db, gate.album.id);
-  return NextResponse.json({ photos, cats: groups.cats, info: groups.info }, { headers: { "Cache-Control": "no-store" } });
+  const { photos, groups, partial } = await loadCollagePhotos(gate.db, gate.album.id);
+  return NextResponse.json({ photos, cats: groups.cats, info: groups.info, partial }, { headers: { "Cache-Control": "no-store" } });
 }

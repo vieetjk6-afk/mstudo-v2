@@ -15,7 +15,7 @@
 import type { CollageDoc, CollagePage, LayoutInput, PerPage, TextFrame } from "./types";
 import { COLLAGE_LIMITS } from "./types";
 import { formatById, type CollageFormat } from "./formats";
-import { MIX_POOL, MIX_STYLE, styleById, type CollageStyle } from "./styles";
+import { COLLAGE_STYLES, MIX_POOL, MIX_STYLE, styleById, type CollageStyle } from "./styles";
 import { composeOptions, diverse, family, type ComposeResult } from "./compose";
 import { buildText, presetById, TEXT_PRESETS } from "./typography";
 import { hashString, rng, shuffle, uid, weightedPick } from "./rng";
@@ -146,6 +146,20 @@ export interface GenerateOptions {
   styleId: string;
   texts: string[];
   seed: number;
+  /**
+   * Khách TỰ CHỌN ảnh cho từng layout: mỗi phần tử là id ảnh của một trang (theo
+   * thứ tự trang). Có thì máy không tự chia ảnh nữa — chỉ dàn trang từng nhóm.
+   */
+  groups?: string[][];
+}
+
+/** Nhóm ảnh khách tự chọn → nhóm đầu vào cho bộ dàn (bỏ id lạ, nhóm rỗng; giữ giới hạn). */
+function manualGroups(groups: string[][], photos: LayoutInput[]): LayoutInput[][] {
+  const byId = new Map(photos.map((p) => [p.id, p]));
+  return groups
+    .map((g) => g.map((id) => byId.get(id)).filter((x): x is LayoutInput => !!x).slice(0, COLLAGE_LIMITS.pagePhotos))
+    .filter((g) => g.length > 0)
+    .slice(0, COLLAGE_LIMITS.pages);
 }
 
 /** Dựng cả bộ layout. */
@@ -154,8 +168,8 @@ export function generateDoc(o: GenerateOptions): CollageDoc {
   const photos = o.photos.slice(0, COLLAGE_LIMITS.photos);
   const texts = cleanTexts(o.texts);
   const r = rng((o.seed >>> 0) * 2654435761 + photos.length);
-  const sizes = pageSizes(photos.length, o.perPage, r);
-  const groups = distribute(photos, sizes, r);
+  const manual = !!o.groups;
+  const groups = manual ? manualGroups(o.groups!, photos) : distribute(photos, pageSizes(photos.length, o.perPage, r), r);
   const textOf = assignTexts(groups.length, texts.length, r);
   const pages: CollagePage[] = [];
   let prevStyle: string | null = null;
@@ -172,6 +186,7 @@ export function generateDoc(o: GenerateOptions): CollageDoc {
   });
   return {
     v: 1,
+    ...(manual ? { mode: "manual" as const } : {}),
     formatId: format.id,
     styleId: o.styleId,
     perPage: o.perPage,
@@ -217,6 +232,98 @@ export function applyLayout(page: CollagePage, res: ComposeResult, style: Collag
     return keep;
   });
   return { ...page, frames, background: style.background, bgPhoto: res.bgPhoto, recipe: res.recipe, styleId: style.id };
+}
+
+/** Một mẫu gợi ý cho trang: phương án bố cục + phong cách (màu nền, chữ) đi kèm. */
+export interface Suggestion extends ComposeResult {
+  styleId: string;
+}
+
+/**
+ * MẪU GỢI Ý cho một trang — dải ngay dưới trang ở màn sửa.
+ *
+ * Mỗi lượt trộn nhiều PHONG CÁCH (nền trắng, kem, kraft, ảnh mờ…) và nhiều HỌ
+ * bố cục (lưới, biên tập, ảnh in polaroid, vòm, tròn, ảnh rải…), mỗi họ một mẫu
+ * trước rồi mới lấp thêm. Lượt 0 ưu tiên phong cách trang đang dùng. Mỗi lần
+ * "Gợi ý khác" (round + 1) đổi bộ phong cách, đổi hạt ngẫu nhiên và thứ tự các
+ * họ — ra một loạt mẫu MỚI, không phải xáo lại loạt cũ. Mẫu trùng đúng trang
+ * hiện tại bị bỏ, nên áp mẫu đầu tiên là trang luôn đổi.
+ */
+export function pageSuggestions(page: CollagePage, inputs: Map<string, LayoutInput>, formatId: string, seed: number, round: number, n = 10): Suggestion[] {
+  const format = formatById(formatId);
+  const photos = pagePhotoIds(page).map((id) => inputs.get(id)).filter((x): x is LayoutInput => !!x);
+  if (!photos.length) return [];
+  const text = pageText(page);
+  const presetId = presetForFrame(text);
+  const cur = styleById(page.styleId);
+  // Đỏ truyền thống lệch tông với phần còn lại — chỉ gợi ý khi trang đang dùng nó.
+  const others = COLLAGE_STYLES.filter((x) => x.id !== cur.id && x.id !== "tradition");
+  const pickOther = (k: number) => others[(round * 2 + k) % others.length];
+  const styles = [cur, pickOther(0), pickOther(1)];
+  const r = rng((seed >>> 0) * 31 + round * 7919 + 13);
+  // Mỗi lượt đổi thêm hai thứ để mẫu thật sự khác, kể cả cùng phong cách:
+  //  • ảnh được ưu tiên khung lớn (ảnh chính) xoay vòng qua từng ảnh của trang;
+  //  • lượt 2–3, 6–7… lật ngang bố cục (chữ, góc xoay lật theo).
+  const boosted = round > 0 && photos.length > 1 ? photos.map((x, i) => (i === (round - 1) % photos.length ? { ...x, score: x.score + 4 } : x)) : photos;
+  const mirror = Math.floor(round / 2) % 2 === 1;
+
+  // Nhóm theo (họ bố cục, phong cách), mỗi nhóm giữ 2 phương án tốt nhất.
+  const groups = new Map<string, Suggestion[]>();
+  styles.forEach((st, i) => {
+    const raw = diverse(composeOptions({ photos: boosted, format, style: st, text: text?.text ?? null, presetId, seed: (seed + round * 104729 + i * 7) >>> 0 }), 40);
+    const res = mirror ? raw.map((x) => mirrorResult(x, format.w)) : raw;
+    if (!res.length) return;
+    const best = Math.min(...res.map((x) => x.cost));
+    for (const x of res) {
+      if (x.cost > best + 0.9) continue; // phương án kém hẳn (ảnh cắt nhiều, chữ chật) — không gợi ý
+      const key = `${family(x.recipe)}|${st.id}`;
+      const arr = groups.get(key) ?? [];
+      if (arr.length < 2) arr.push({ ...x, styleId: st.id });
+      groups.set(key, arr);
+    }
+  });
+  const shuffled = shuffle([...groups.keys()], r);
+  const mine = shuffled.filter((k) => k.endsWith(`|${cur.id}`));
+  const theirs = shuffled.filter((k) => !k.endsWith(`|${cur.id}`));
+  // Lượt chẵn: phong cách trang đang dùng lên trước; lượt lẻ: phong cách khác lên trước.
+  const keys = round % 2 === 0 ? [...mine, ...theirs] : [...theirs, ...mine];
+  const isCurrent = (x: Suggestion) => x.recipe === page.recipe && x.styleId === page.styleId;
+  const out: Suggestion[] = [];
+  const famUsed = new Set<string>();
+  // Vòng 1: mỗi họ bố cục một mẫu — đa dạng hình học trước.
+  for (const k of keys) {
+    if (out.length >= n) break;
+    const fam = k.split("|")[0];
+    if (famUsed.has(fam)) continue;
+    const x = groups.get(k)!.find((y) => !isCurrent(y));
+    if (!x) continue;
+    out.push(x);
+    famUsed.add(fam);
+  }
+  // Vòng 2: lấp đầy bằng cùng họ nhưng khác phong cách / khác biến thể.
+  for (const k of keys) {
+    if (out.length >= n) break;
+    for (const x of groups.get(k)!) {
+      if (out.length >= n) break;
+      if (isCurrent(x) || out.includes(x)) continue;
+      out.push(x);
+    }
+  }
+  return out;
+}
+
+/** Lật ngang một phương án: khung đổi bên, góc xoay đổi chiều, chữ căn trái ↔ phải. */
+function mirrorResult(x: ComposeResult, W: number): ComposeResult {
+  return {
+    ...x,
+    recipe: `${x.recipe}~m`,
+    frames: x.frames.map((f) => {
+      const rect = { ...f.rect, x: W - f.rect.x - f.rect.w };
+      if (f.kind === "photo") return { ...f, rect, ...(f.deco?.rotate ? { deco: { ...f.deco, rotate: -f.deco.rotate } } : {}) };
+      const align = f.style.align === "left" ? "right" : f.style.align === "right" ? "left" : "center";
+      return { ...f, rect, style: { ...f.style, align }, ...(f.rotate ? { rotate: -f.rotate } : {}) };
+    }),
+  };
 }
 
 /** Các phương án bố cục khác nhau cho một trang (dải "Bố cục" ở màn sửa). */

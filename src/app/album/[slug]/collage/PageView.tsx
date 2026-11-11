@@ -1,9 +1,10 @@
 "use client";
 
 import { memo, useRef } from "react";
-import type { CollageDoc, CollagePage, Crop, Frame, PhotoFrame, Rect, TextFrame } from "@/lib/collage/types";
+import type { CollageDoc, CollagePage, Crop, Frame, FrameDeco, PhotoFrame, Rect, TextFrame } from "@/lib/collage/types";
 import { formatById } from "@/lib/collage/formats";
 import { panCrop, placePhoto } from "@/lib/collage/crop";
+import { frameRotation, photoArea, rotatePoint, shapeRadii } from "@/lib/collage/frame-geom";
 import { cssFontFamily } from "@/lib/collage/fonts";
 import { layoutText } from "@/lib/collage/text-layout";
 import { watermarkLayer } from "@/lib/album-watermark";
@@ -43,21 +44,57 @@ interface ViewProps {
   className?: string;
 }
 
-function PhotoBox({ f, k, aspect, img, drive }: { f: PhotoFrame; k: number; aspect: number; img: ImgUrl; drive?: string }) {
-  const p = placePhoto(f.rect.w, f.rect.h, aspect * 1000, 1000, f.crop);
+/** border-radius CSS cho hình khung (khớp shapePath của bộ xuất canvas). */
+function radiusCss(shape: FrameDeco["shape"], w: number, h: number): string | undefined {
+  if (shape === "oval") return "50%";
+  const r = shapeRadii(shape, w, h);
+  return r.some((v) => v > 0) ? r.map((v) => `${v}px`).join(" ") : undefined;
+}
+
+function PhotoBox({ f, k, short, aspect, img, drive }: { f: PhotoFrame; k: number; short: number; aspect: number; img: ImgUrl; drive?: string }) {
+  const area = photoArea(f);
+  const d = f.deco;
+  const p = placePhoto(area.w, area.h, aspect * 1000, 1000, f.crop);
   const w = pickWidth(p.width * k * dpr());
+  const rot = frameRotation(d);
+  const padded = !!d && ((d.pad ?? 0) > 0 || (d.padBottom ?? 0) > 0);
   return (
-    <div className="absolute overflow-hidden" style={{ left: f.rect.x * k, top: f.rect.y * k, width: f.rect.w * k, height: f.rect.h * k, background: "rgba(127,127,127,.18)" }}>
-      {drive ? (
-        <img
-          src={img(drive, w)}
-          alt=""
-          draggable={false}
-          decoding="async"
-          className="pointer-events-none absolute max-w-none select-none"
-          style={{ left: p.left * k, top: p.top * k, width: p.width * k, height: p.height * k }}
-        />
-      ) : null}
+    <div
+      className="absolute"
+      style={{
+        left: f.rect.x * k,
+        top: f.rect.y * k,
+        width: f.rect.w * k,
+        height: f.rect.h * k,
+        transform: rot ? `rotate(${rot}deg)` : undefined,
+        background: padded ? (d?.padColor ?? "#ffffff") : undefined,
+        borderRadius: radiusCss(d?.shape, f.rect.w * k, f.rect.h * k),
+        // Cùng thông số với bóng của bộ xuất canvas (CSS blur B ≈ canvas shadowBlur B).
+        boxShadow: d?.shadow ? `0 ${short * 0.01 * k}px ${short * 0.03 * k}px rgba(0,0,0,.3)` : undefined,
+      }}
+    >
+      <div
+        className="absolute overflow-hidden"
+        style={{
+          left: (area.x - f.rect.x) * k,
+          top: (area.y - f.rect.y) * k,
+          width: area.w * k,
+          height: area.h * k,
+          borderRadius: radiusCss(d?.shape, area.w * k, area.h * k),
+          background: "rgba(127,127,127,.18)",
+        }}
+      >
+        {drive ? (
+          <img
+            src={img(drive, w)}
+            alt=""
+            draggable={false}
+            decoding="async"
+            className="pointer-events-none absolute max-w-none select-none"
+            style={{ left: p.left * k, top: p.top * k, width: p.width * k, height: p.height * k }}
+          />
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -69,7 +106,7 @@ function TextBox({ t, k, fontsReady }: { t: TextFrame; k: number; fontsReady: nu
   return (
     <div
       className="pointer-events-none absolute flex flex-col justify-center"
-      style={{ left: t.rect.x * k, top: t.rect.y * k, width: t.rect.w * k, height: t.rect.h * k }}
+      style={{ left: t.rect.x * k, top: t.rect.y * k, width: t.rect.w * k, height: t.rect.h * k, transform: frameRotation(t) ? `rotate(${frameRotation(t)}deg)` : undefined }}
     >
       {lay.lines.map((line, i) => (
         <div
@@ -118,7 +155,7 @@ export const PageView = memo(function PageView({ doc, page, width, img, driveOf,
         </>
       ) : null}
       {page.frames.map((fr) =>
-        fr.kind === "photo" ? <PhotoBox key={fr.id} f={fr} k={k} aspect={doc.aspects[fr.photoId] ?? 1.5} img={img} drive={driveOf(fr.photoId)} /> : null,
+        fr.kind === "photo" ? <PhotoBox key={fr.id} f={fr} k={k} short={Math.min(f.w, f.h)} aspect={doc.aspects[fr.photoId] ?? 1.5} img={img} drive={driveOf(fr.photoId)} /> : null,
       )}
       {page.frames.map((fr) => (fr.kind === "text" ? <TextBox key={fr.id} t={fr} k={k} fontsReady={fontsReady} /> : null))}
       {watermark ? <div className="pointer-events-none absolute inset-0 opacity-20" style={watermarkLayer(watermark)} /> : null}
@@ -129,7 +166,14 @@ export const PageView = memo(function PageView({ doc, page, width, img, driveOf,
               <div
                 key={`sel-${fr.id}`}
                 className="pointer-events-none absolute"
-                style={{ left: fr.rect.x * k, top: fr.rect.y * k, width: fr.rect.w * k, height: fr.rect.h * k, boxShadow: "inset 0 0 0 2.5px var(--ac, #af2bb8), 0 0 0 1px rgba(255,255,255,.7)" }}
+                style={{
+                  left: fr.rect.x * k,
+                  top: fr.rect.y * k,
+                  width: fr.rect.w * k,
+                  height: fr.rect.h * k,
+                  transform: frameRotation(fr.kind === "photo" ? fr.deco : fr) ? `rotate(${frameRotation(fr.kind === "photo" ? fr.deco : fr)}deg)` : undefined,
+                  boxShadow: "inset 0 0 0 2.5px var(--ac, #af2bb8), 0 0 0 1px rgba(255,255,255,.7)",
+                }}
               />
             ))
         : null}
@@ -157,7 +201,9 @@ export function EditLayer({ doc, page, width, selectedId, g }: { doc: CollageDoc
   const k = width / f.w;
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const start = useRef<{ frame: Frame; x: number; y: number; dist: number; moved: boolean } | null>(null);
-  const frames = [...page.frames].reverse(); // khung trên cùng (chữ) nhận chạm trước
+  // Thứ tự lớp chạm KHỚP thứ tự vẽ: ảnh theo thứ tự khung (ảnh sau đè ảnh trước —
+  // ảnh in chồng góc), chữ trên cùng. Thẻ sau trong DOM nằm trên, nhận chạm trước.
+  const frames = [...page.frames.filter((x) => x.kind === "photo"), ...page.frames.filter((x) => x.kind === "text")];
 
   const begin = (e: React.PointerEvent, fr: Frame) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -186,7 +232,10 @@ export function EditLayer({ doc, page, width, selectedId, g }: { doc: CollageDoc
         g.onCrop(fr.id, { ...fr.crop, zoom: Math.max(1, Math.min(4, fr.crop.zoom * (d / s.dist))) });
         return;
       }
-      g.onCrop(fr.id, panCrop(fr.rect.w, fr.rect.h, aspect * 1000, 1000, fr.crop, dx / k, dy / k));
+      // Khung đang xoay: đổi hướng kéo trên màn hình về hướng của khung.
+      const local = rotatePoint(dx, dy, 0, 0, -frameRotation(fr.deco));
+      const area = photoArea(fr);
+      g.onCrop(fr.id, panCrop(area.w, area.h, aspect * 1000, 1000, fr.crop, local.x / k, local.y / k));
       return;
     }
     const nx = Math.max(-fr.rect.w * 0.5, Math.min(f.w - fr.rect.w * 0.5, fr.rect.x + dx / k));
@@ -214,7 +263,8 @@ export function EditLayer({ doc, page, width, selectedId, g }: { doc: CollageDoc
     >
       {frames.map((fr) => {
         const on = fr.id === selectedId;
-        const style = { left: fr.rect.x * k, top: fr.rect.y * k, width: fr.rect.w * k, height: fr.rect.h * k };
+        const rot = frameRotation(fr.kind === "photo" ? fr.deco : fr);
+        const style = { left: fr.rect.x * k, top: fr.rect.y * k, width: fr.rect.w * k, height: fr.rect.h * k, transform: rot ? `rotate(${rot}deg)` : undefined };
         if (!on) {
           return (
             <button

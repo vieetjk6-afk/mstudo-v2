@@ -10,7 +10,8 @@ import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
 import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { COLLAGE_LIMITS, type CollageDoc } from "@/lib/collage/types";
 import { sanitizeDoc, cleanTitle, docPhotoIds } from "@/lib/collage/validate";
-import { categorize, type CatResult } from "@/lib/collage/categories";
+import { categorize, mainCandidates, type CatResult } from "@/lib/collage/categories";
+import { readByIds, withDeadline } from "@/lib/collage/batch-read";
 import { collageEnabledFor } from "@/lib/collage/enabled";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -145,43 +146,124 @@ export interface CollagePhotoRow {
 }
 
 /**
- * Ảnh giao khách (bỏ video) + nhóm gợi ý. Khuôn mặt, người trong album và dấu
- * "đã quét" đọc kiểu best-effort: bảng / cột chưa có thì nhóm theo mặt trống,
- * vẫn còn nhóm theo thư mục và gợi ý trải đều.
+ * Phần GỢI Ý (khuôn mặt, ai là cô dâu / chú rể) chỉ được tiêu chừng này thời
+ * gian. Quá giờ thì trả danh sách ảnh kèm phần gợi ý đã đọc kịp — khách mở màn
+ * ghép không bao giờ phải nhìn vòng quay mãi chỉ vì album lớn hay DB đang chậm.
  */
-export async function loadCollagePhotos(db: SupabaseClient, albumId: string): Promise<{ photos: CollagePhotoRow[]; groups: CatResult }> {
-  const [all, { data: sources }] = await Promise.all([
-    fetchAllPhotos(db, albumId, "id, drive_file_id, name, source_id, position, is_video"),
+const ENRICH_BUDGET_MS = 6000;
+/** Số id ảnh mỗi lượt đọc khuôn mặt: URL ~3,7 KB, thường vài trăm dòng (< trần 1000 dòng của PostgREST). */
+const FACE_CHUNK = 100;
+/** Trần số dòng một lượt đọc PostgREST trả về (max-rows mặc định của Supabase). */
+const MAX_ROWS = 1000;
+
+type PhotoDbRow = {
+  id: string;
+  drive_file_id: string;
+  name: string | null;
+  source_id: string | null;
+  position: number;
+  is_video: boolean | null;
+  faces_scanned_at?: string | null;
+};
+type FaceRow = { photo_id: string; box: number[]; sharpness: number | null };
+type LinkRow = { person_id: string; photo_id: string };
+
+/**
+ * Khuôn mặt của các ảnh `ids`, đọc theo TỪNG LÔ ID ẢNH qua khoá chính
+ * (photo_id, at) — không lật trang `order by … offset` trên cả album (mỗi trang
+ * phải sắp lại toàn bộ khuôn mặt của album, và lật nối đuôi nhau). Các lô chạy
+ * song song. `done` = ảnh đã đọc XONG: ảnh nào lô của nó lỗi / hết giờ thì
+ * không được coi là "đã quét" — kẻo bị xếp nhầm vào nhóm decor vì "0 mặt".
+ */
+function readFaces(db: SupabaseClient, ids: string[], signal: AbortSignal): Promise<{ rows: FaceRow[]; done: Set<string> }> {
+  return readByIds<FaceRow>(ids, (part, sig) => db.from("album_faces").select("photo_id, box, sharpness").in("photo_id", part).abortSignal(sig), signal, {
+    size: FACE_CHUNK,
+    cap: MAX_ROWS,
+  });
+}
+
+/**
+ * Người có thể là cô dâu / chú rể (mainCandidates) + các ảnh có họ — đọc theo
+ * khoá chính (person_id, photo_id), chỉ vài người thay vì cả trăm cụm mặt khách
+ * mời. Đọc dở (hết giờ / lỗi) → null: thà không xếp nhóm theo người còn hơn
+ * đếm thiếu ảnh rồi nhận nhầm cô dâu chú rể.
+ */
+async function readMainPeople(
+  db: SupabaseClient,
+  albumId: string,
+  signal: AbortSignal,
+): Promise<{ people: { id: string; name: string }[]; links: LinkRow[] } | null> {
+  const { data, error } = await db.from("album_people").select("id, name, face_count").eq("album_id", albumId).limit(MAX_ROWS).abortSignal(signal);
+  if (error || !data) return null;
+  const all = data as { id: string; name: string | null; face_count: number | null }[];
+  const cand = mainCandidates(all.map((p) => ({ id: p.id, name: p.name ?? "", face_count: p.face_count })));
+  const lists = await Promise.all(
+    cand.map((pid) =>
+      fetchAllRows<LinkRow>((from, to) =>
+        db.from("album_photo_people").select("person_id, photo_id").eq("person_id", pid).order("photo_id").range(from, to).abortSignal(signal),
+      ),
+    ),
+  );
+  if (signal.aborted) return null;
+  return { people: all.filter((p) => cand.includes(p.id)).map((p) => ({ id: p.id, name: p.name ?? "" })), links: lists.flat() };
+}
+
+/**
+ * Ảnh giao khách (bỏ video) + nhóm gợi ý. Khuôn mặt, người trong album và dấu
+ * "đã quét" đọc kiểu best-effort và CÓ HẠN GIỜ (ENRICH_BUDGET_MS): bảng / cột
+ * chưa có, DB chậm hay album quá lớn thì nhóm theo mặt thiếu / trống — vẫn còn
+ * nhóm theo thư mục và gợi ý trải đều, còn danh sách ảnh thì luôn đủ.
+ * `partial` = phần gợi ý bị cắt vì hết giờ.
+ */
+export async function loadCollagePhotos(
+  db: SupabaseClient,
+  albumId: string,
+  budgetMs = ENRICH_BUDGET_MS,
+): Promise<{ photos: CollagePhotoRow[]; groups: CatResult; partial: boolean }> {
+  const t0 = Date.now();
+  const COLS = "id, drive_file_id, name, source_id, position, is_video";
+  const [withScan, { data: sources }] = await Promise.all([
+    // Dấu "đã quét mặt" đi chung lượt đọc ảnh (không thêm truy vấn riêng).
+    fetchAllPhotos(db, albumId, `${COLS}, faces_scanned_at`) as Promise<PhotoDbRow[]>,
     db.from("album_sources").select("id, name, position, stage").eq("album_id", albumId).order("position"),
   ]);
-  const shown = filterDeliveryPhotos(all ?? [], sources ?? []).filter(
-    (p: { is_video?: boolean | null; name?: string | null }) => !p.is_video && !VIDEO_RE.test(p.name ?? ""),
-  ) as { id: string; drive_file_id: string; source_id: string | null; position: number }[];
-  const ids = new Set(shown.map((p) => p.id));
+  // DB chưa chạy migration quét mặt → thiếu cột faces_scanned_at, cả câu lỗi và
+  // fetchAllPhotos trả rỗng → đọc lại không kèm cột đó.
+  const all: PhotoDbRow[] = withScan.length ? withScan : ((await fetchAllPhotos(db, albumId, COLS)) as PhotoDbRow[]);
+  const shown = filterDeliveryPhotos(all, sources ?? []).filter((p) => !p.is_video && !VIDEO_RE.test(p.name ?? ""));
+  const scannedIds = shown.filter((p) => p.faces_scanned_at).map((p) => p.id);
 
-  const [faces, scannedRows, people, links] = await Promise.all([
-    fetchAllRows<{ photo_id: string; box: number[]; sharpness: number | null }>((from, to) =>
-      db.from("album_faces").select("photo_id, at, box, sharpness").eq("album_id", albumId).order("photo_id").order("at").range(from, to),
-    ).catch(() => []),
-    fetchAllRows<{ id: string }>((from, to) =>
-      db.from("photos").select("id").eq("album_id", albumId).not("faces_scanned_at", "is", null).order("id").range(from, to),
-    ).catch(() => []),
-    db.from("album_people").select("id, name").eq("album_id", albumId).then((r) => (r.error ? [] : (r.data ?? []) as { id: string; name: string }[])),
-    fetchAllRows<{ person_id: string; photo_id: string }>((from, to) =>
-      db.from("album_photo_people").select("person_id, photo_id").eq("album_id", albumId).order("photo_id").order("person_id").range(from, to),
-    ).catch(() => []),
-  ]);
+  // Album chưa quét mặt ảnh nào thì cũng chưa có người nào — khỏi hỏi DB.
+  const none = { rows: [] as FaceRow[], done: new Set<string>() };
+  let faces = none;
+  let main: Awaited<ReturnType<typeof readMainPeople>> = null;
+  let partial = false;
+  if (scannedIds.length) {
+    const left = budgetMs - (Date.now() - t0);
+    const [f, m] = await Promise.all([
+      withDeadline(left, (signal) => readFaces(db, scannedIds, signal), none),
+      withDeadline(left, (signal) => readMainPeople(db, albumId, signal), null),
+    ]);
+    faces = f.value;
+    // Đọc người dở dang thì bỏ hẳn (xem readMainPeople).
+    main = m.cut ? null : m.value;
+    partial = f.cut || m.cut;
+  }
 
   const usedSources = new Set(shown.map((p) => p.source_id).filter(Boolean));
   const groups = categorize({
     photos: shown.map((p) => ({ id: p.id, source_id: p.source_id, position: p.position })),
     sources: (sources ?? []).filter((s) => usedSources.has(s.id)).map((s) => ({ id: s.id as string, name: (s.name as string) ?? "" })),
-    faces: faces.filter((f) => ids.has(f.photo_id)),
-    scanned: new Set(scannedRows.map((r) => r.id).filter((id) => ids.has(id))),
-    people,
-    links: links.filter((l) => ids.has(l.photo_id)),
+    faces: faces.rows,
+    scanned: new Set(scannedIds.filter((id) => faces.done.has(id))),
+    people: main?.people ?? [],
+    links: main?.links ?? [],
   });
-  return { photos: shown.map((p) => ({ id: p.id, d: p.drive_file_id, s: p.source_id })), groups };
+  const ms = Date.now() - t0;
+  if (partial || ms > 3000) {
+    console.warn(`[collage/photos] album ${albumId}: ${shown.length} ảnh, ${scannedIds.length} đã quét mặt, ${faces.rows.length} mặt — ${ms} ms${partial ? " (hết giờ, cắt bớt gợi ý)" : ""}`);
+  }
+  return { photos: shown.map((p) => ({ id: p.id, d: p.drive_file_id, s: p.source_id })), groups, partial };
 }
 
 /* ── Bộ layout đã lưu (giữ 1 ngày) ───────────────────────────────────────── */

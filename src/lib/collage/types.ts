@@ -26,6 +26,28 @@ export interface Crop {
   cy: number;
 }
 
+/**
+ * Trang trí khung ảnh — để layout không chỉ là lưới chữ nhật: ảnh in có viền
+ * (polaroid), khung vòm, khung tròn, xoay nhẹ kiểu ảnh rải trên bàn, đổ bóng.
+ * `rect` của khung là hộp NGOÀI (gồm cả viền); phần ảnh = rect trừ viền
+ * (frame-geom.ts → photoArea). Mọi trường đều tuỳ chọn: bộ cũ không có `deco`
+ * vẫn vẽ y như trước.
+ */
+export interface FrameDeco {
+  /** Hình phần ảnh: "round" bo góc mềm, "arch" vòm (trên tròn), "oval" tròn / bầu dục. */
+  shape?: "round" | "arch" | "oval";
+  /** Viền quanh ảnh, theo điểm ảnh của khổ (kiểu ảnh in). */
+  pad?: number;
+  /** Viền dưới — dày hơn viền kia là kiểu ảnh lấy liền (polaroid), chỗ để viết chữ. */
+  padBottom?: number;
+  /** Màu viền #rrggbb (mặc định trắng). */
+  padColor?: string;
+  /** Xoay quanh tâm khung, độ (−15…15). */
+  rotate?: number;
+  /** Đổ bóng mềm — tách khung khỏi nền / ảnh phía sau. */
+  shadow?: boolean;
+}
+
 export interface PhotoFrame {
   kind: "photo";
   id: string;
@@ -33,6 +55,7 @@ export interface PhotoFrame {
   /** photos.id — luôn là ảnh studio đã giao trong album này (máy chủ kiểm lại khi lưu). */
   photoId: string;
   crop: Crop;
+  deco?: FrameDeco;
 }
 
 export type TextAlign = "left" | "center" | "right";
@@ -61,6 +84,8 @@ export interface TextFrame {
   /** Nội dung khách nhập. Xuống dòng bằng \n; dòng dài tự ngắt theo bề ngang khung. */
   text: string;
   style: TextStyle;
+  /** Xoay quanh tâm khung chữ, độ — chữ viết trên ảnh in đang xoay. */
+  rotate?: number;
 }
 
 export type Frame = PhotoFrame | TextFrame;
@@ -90,6 +115,8 @@ export type PerPage = number | "mix";
 /** Một bộ layout khách đang ghép — đúng thứ lưu ở album_collages.data. */
 export interface CollageDoc {
   v: 1;
+  /** "manual" = khách tự chọn ảnh cho từng layout (tạo lại giữ nguyên nhóm ảnh từng trang). */
+  mode?: "manual";
   formatId: string;
   /** Phong cách khách chọn lúc tạo ("mix" = mỗi trang một kiểu). */
   styleId: string;

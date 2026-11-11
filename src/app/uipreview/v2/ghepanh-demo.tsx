@@ -69,18 +69,36 @@ function installMock() {
   const sets: MockSet[] = [];
   const real = window.fetch.bind(window);
   const base = `/api/album/${SLUG}/collage`;
+  // ?mock=cham (máy chủ chậm 9 giây) | treo (không bao giờ trả lời) | 504 | tat
+  // (album tắt ghép ảnh) — để xem màn ghép xử lý máy chủ chậm / lỗi ra sao.
+  const mode = new URLSearchParams(window.location.search).get("mock");
+  /** Chờ như mạng thật: bỏ dở được bằng AbortSignal (hết giờ phía máy khách). */
+  const wait = (ms: number, signal?: AbortSignal | null) =>
+    new Promise<void>((resolve, reject) => {
+      const t = ms === Infinity ? undefined : setTimeout(resolve, ms);
+      signal?.addEventListener("abort", () => {
+        clearTimeout(t);
+        reject(new DOMException("The operation was aborted.", "AbortError"));
+      });
+    });
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
     const href = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
     const u = new URL(href, window.location.href);
     if (!u.pathname.startsWith(base)) return real(input, init);
     const json = (d: unknown, status = 200) => new Response(JSON.stringify(d), { status, headers: { "Content-Type": "application/json" } });
-    await new Promise((r) => setTimeout(r, 220));
+    await wait(220, init?.signal);
     const method = (init?.method ?? "GET").toUpperCase();
     const body = typeof init?.body === "string" ? (JSON.parse(init.body) as Record<string, unknown>) : {};
     if (u.pathname === `${base}/verify`) {
       return String(body.phone ?? "").replace(/\D/g, "").endsWith("901234567") ? json({ ok: true, key: "demo-key" }) : json({ error: "wrong_phone" }, 403);
     }
-    if (u.pathname === `${base}/photos`) return json(data);
+    if (u.pathname === `${base}/photos`) {
+      if (mode === "cham") await wait(9000, init?.signal);
+      if (mode === "treo") await wait(Infinity, init?.signal);
+      if (mode === "504") return new Response("An error occurred with your deployment\n\nFUNCTION_INVOCATION_TIMEOUT", { status: 504 });
+      if (mode === "tat") return json({ error: "not_enabled" }, 403);
+      return json(data);
+    }
     if (u.pathname === base && method === "GET") return json({ sets: sets.filter((s) => new Date(s.expires_at).getTime() > Date.now()) });
     if (u.pathname === base && method === "DELETE") {
       const id = u.searchParams.get("id");

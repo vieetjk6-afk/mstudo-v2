@@ -16,6 +16,8 @@ export interface CollageStyle {
   bleedBias: number;
   /** 0..1: ưu tiên bố cục biên tập nhiều khoảng trắng. */
   editorialBias: number;
+  /** 0..1: ưu tiên bố cục trang trí (ảnh in polaroid, vòm, tròn, ảnh rải…); 0 = không dùng. */
+  decoBias?: number;
   /** Ảnh chính làm nền mờ cả trang. */
   bgPhoto?: { blur: number; dim: number };
   /** Kiểu chữ hợp với phong cách (id trong TEXT_PRESETS) — máy chọn ngẫu nhiên trong đây. */
@@ -25,39 +27,54 @@ export interface CollageStyle {
 export const COLLAGE_STYLES: CollageStyle[] = [
   {
     id: "white", name: "Trắng tinh tế", background: "#ffffff", ink: "#2b2622",
-    margin: 0.06, gap: 0.012, bleedBias: 0.25, editorialBias: 0.45,
+    margin: 0.06, gap: 0.012, bleedBias: 0.25, editorialBias: 0.45, decoBias: 0.45,
     presets: ["serif-italic", "script", "caps", "classic"],
   },
   {
     id: "ivory", name: "Kem Hàn Quốc", background: "#f5f0e8", ink: "#4a3b2c",
-    margin: 0.085, gap: 0.016, bleedBias: 0.1, editorialBias: 0.75,
+    margin: 0.085, gap: 0.016, bleedBias: 0.1, editorialBias: 0.75, decoBias: 0.6,
     presets: ["classic", "soft", "caps", "script"],
   },
   {
     id: "film", name: "Đen điện ảnh", background: "#121212", ink: "#f1ede6",
-    margin: 0, gap: 0.006, bleedBias: 0.75, editorialBias: 0.1,
+    margin: 0, gap: 0.006, bleedBias: 0.75, editorialBias: 0.1, decoBias: 0.25,
     presets: ["caps", "bold", "serif-italic"],
   },
   {
     id: "blush", name: "Hồng phấn", background: "#f7e9e6", ink: "#7a4848",
-    margin: 0.06, gap: 0.014, bleedBias: 0.2, editorialBias: 0.5,
+    margin: 0.06, gap: 0.014, bleedBias: 0.2, editorialBias: 0.5, decoBias: 0.7,
     presets: ["script", "handwritten", "soft"],
   },
   {
     id: "tradition", name: "Đỏ truyền thống", background: "#7b1e22", ink: "#f0d49a",
-    margin: 0.055, gap: 0.012, bleedBias: 0.2, editorialBias: 0.3,
+    margin: 0.055, gap: 0.012, bleedBias: 0.2, editorialBias: 0.3, decoBias: 0.4,
     presets: ["classic", "serif-italic", "script"],
   },
   {
     id: "blur", name: "Nền ảnh mờ", background: "#ffffff", ink: "#ffffff",
-    margin: 0.075, gap: 0.014, bleedBias: 0, editorialBias: 0.35,
+    margin: 0.075, gap: 0.014, bleedBias: 0, editorialBias: 0.35, decoBias: 0.55,
     bgPhoto: { blur: 26, dim: 0.18 },
     presets: ["script", "serif-italic", "bold", "pen"],
   },
   {
     id: "tight", name: "Ghép sát", background: "#ffffff", ink: "#2b2622",
-    margin: 0, gap: 0.008, bleedBias: 0.95, editorialBias: 0,
+    margin: 0, gap: 0.008, bleedBias: 0.95, editorialBias: 0, decoBias: 0,
     presets: ["caps", "bold", "script"],
+  },
+  {
+    id: "kraft", name: "Giấy kraft", background: "#d9c6a8", ink: "#3b2e22",
+    margin: 0.07, gap: 0.014, bleedBias: 0.05, editorialBias: 0.35, decoBias: 0.9,
+    presets: ["handwritten", "pen", "script", "classic"],
+  },
+  {
+    id: "sage", name: "Xanh ô liu", background: "#e4e8dc", ink: "#3c4a37",
+    margin: 0.075, gap: 0.014, bleedBias: 0.1, editorialBias: 0.6, decoBias: 0.6,
+    presets: ["classic", "serif-italic", "script", "caps"],
+  },
+  {
+    id: "mocha", name: "Nâu mocha", background: "#3a2d27", ink: "#f2e7d9",
+    margin: 0.065, gap: 0.012, bleedBias: 0.2, editorialBias: 0.45, decoBias: 0.5,
+    presets: ["serif-italic", "caps", "script"],
   },
 ];
 
@@ -66,7 +83,7 @@ export const MIX_STYLE = "mix";
 export const DEFAULT_STYLE_ID = "white";
 
 /** Các phong cách hợp nhau khi trộn trong cùng một bộ (bỏ đỏ truyền thống — lệch tông). */
-export const MIX_POOL = ["white", "ivory", "blush", "blur", "tight"];
+export const MIX_POOL = ["white", "ivory", "blush", "blur", "tight", "kraft", "sage"];
 
 export function styleById(id: string | null | undefined): CollageStyle {
   return COLLAGE_STYLES.find((s) => s.id === id) ?? COLLAGE_STYLES[0];

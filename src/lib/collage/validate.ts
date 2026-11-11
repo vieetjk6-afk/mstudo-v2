@@ -10,7 +10,7 @@
    được ảnh ngoài vào layout: giao diện không có nút tải ảnh lên, và có sửa tay
    dữ liệu gửi lên thì máy chủ cũng từ chối ở đây.
    ═══════════════════════════════════════════════════════════════════════════ */
-import type { BgPhoto, CollageDoc, CollagePage, Crop, Frame, PerPage, Rect, TextAlign, TextStyle } from "./types";
+import type { BgPhoto, CollageDoc, CollagePage, Crop, Frame, FrameDeco, PerPage, Rect, TextAlign, TextStyle } from "./types";
 import { COLLAGE_LIMITS } from "./types";
 import { COLLAGE_FORMATS } from "./formats";
 import { COLLAGE_FONTS } from "./fonts";
@@ -76,6 +76,24 @@ function textStyle(v: unknown, H: number): TextStyle | null {
   };
 }
 
+const SHAPES = new Set(["round", "arch", "oval"]);
+
+/** Trang trí khung ảnh: chỉ giữ trường đã biết, số trong khoảng; sai thì bỏ trường đó (không từ chối cả bộ). */
+function deco(v: unknown, W: number, H: number): FrameDeco | null {
+  if (!isObj(v)) return null;
+  const out: FrameDeco = {};
+  if (typeof v.shape === "string" && SHAPES.has(v.shape)) out.shape = v.shape as FrameDeco["shape"];
+  const pad = num(v.pad, 0, Math.min(W, H) * 0.12);
+  if (pad != null && pad > 0) out.pad = r1(pad);
+  const pb = num(v.padBottom, 0, H * 0.35);
+  if (pb != null && pb > 0) out.padBottom = r1(pb);
+  if (typeof v.padColor === "string" && COLOR_RE.test(v.padColor)) out.padColor = v.padColor.toLowerCase();
+  const rot = num(v.rotate, -15, 15);
+  if (rot != null && rot !== 0) out.rotate = r1(rot);
+  if (v.shadow === true) out.shadow = true;
+  return Object.keys(out).length ? out : null;
+}
+
 function frame(v: unknown, W: number, H: number, allowed: ReadonlySet<string>): Frame | "bad_photo" | null {
   if (!isObj(v)) return null;
   const id = typeof v.id === "string" && ID_RE.test(v.id) ? v.id : null;
@@ -85,13 +103,15 @@ function frame(v: unknown, W: number, H: number, allowed: ReadonlySet<string>): 
     if (typeof v.photoId !== "string" || !allowed.has(v.photoId)) return "bad_photo";
     const c = crop(v.crop);
     if (!c) return null;
-    return { kind: "photo", id, rect: rc, photoId: v.photoId, crop: c };
+    const d = deco(v.deco, W, H);
+    return { kind: "photo", id, rect: rc, photoId: v.photoId, crop: c, ...(d ? { deco: d } : {}) };
   }
   if (v.kind === "text") {
     const text = str(v.text, COLLAGE_LIMITS.textChars);
     const style = textStyle(v.style, H);
     if (text == null || !style) return null;
-    return { kind: "text", id, rect: rc, text, style };
+    const rot = num(v.rotate, -15, 15);
+    return { kind: "text", id, rect: rc, text, style, ...(rot ? { rotate: r1(rot) } : {}) };
   }
   return null;
 }
@@ -179,7 +199,10 @@ export function sanitizeDoc(raw: unknown, allowed: ReadonlySet<string>): DocChec
   }
 
   const seed = num(raw.seed, 0, 4294967295) ?? 1;
-  return { ok: true, doc: { v: 1, formatId, styleId, perPage, texts: cleanTexts, photoIds, aspects, pages, seed: Math.floor(seed) } };
+  return {
+    ok: true,
+    doc: { v: 1, ...(raw.mode === "manual" ? { mode: "manual" as const } : {}), formatId, styleId, perPage, texts: cleanTexts, photoIds, aspects, pages, seed: Math.floor(seed) },
+  };
 }
 
 /** Mọi id ảnh mà bộ layout dùng tới (để máy chủ đối chiếu với album một lượt). */
