@@ -27,6 +27,11 @@ export const COLLAGE_FONTS: CollageFont[] = [
   { key: "bevietnam", label: "Be Vietnam", cssVar: "--font-be-vietnam", fallback: "system-ui, sans-serif", weights: [400, 500, 600, 700, 800], italic: false, kind: "sans" },
   { key: "manrope", label: "Manrope", cssVar: "--font-manrope", fallback: "system-ui, sans-serif", weights: [400, 500, 600, 700, 800], italic: false, kind: "sans" },
   { key: "playpen", label: "Nét bút", cssVar: "--font-caveat", fallback: "cursive", weights: [400, 500, 600], italic: false, kind: "hand" },
+  { key: "pinyon", label: "Pinyon", cssVar: "--font-pinyon", fallback: "cursive", weights: [400], italic: false, kind: "script" },
+  { key: "alexbrush", label: "Alex Brush", cssVar: "--font-alexbrush", fallback: "cursive", weights: [400], italic: false, kind: "script" },
+  { key: "corinthia", label: "Corinthia", cssVar: "--font-corinthia", fallback: "cursive", weights: [400], italic: false, kind: "script" },
+  { key: "prata", label: "Prata", cssVar: "--font-prata", fallback: "Georgia, serif", weights: [400], italic: false, kind: "serif" },
+  { key: "garamond", label: "Garamond", cssVar: "--font-garamond", fallback: "Georgia, serif", weights: [400, 500], italic: true, kind: "serif" },
 ];
 
 export const DEFAULT_FONT_KEY = "playfair";

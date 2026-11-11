@@ -70,7 +70,9 @@ export function OverviewStep({
   const vp = useViewport();
   const f = formatById(doc.formatId);
   const cols = vp.w >= 900 ? 4 : vp.w >= 600 ? 3 : 2;
-  const tile = Math.floor((Math.min(vp.w, 1080) - 24 - (cols - 1) * 10) / cols);
+  const full = Math.min(vp.w, 1080) - 24;
+  const tile = Math.floor((full - (cols - 1) * 10) / cols);
+  const images = doc.pages.reduce((n, p) => n + Math.max(1, Math.round(p.span ?? 1)), 0);
   return (
     <>
       <StudioHeader title={`Bộ ảnh ghép · ${doc.pages.length} layout`} sub={<SaveBadge s={save} />} onBack={onClose} close backLabel="Đóng" />
@@ -90,11 +92,17 @@ export function OverviewStep({
           <div className="grid gap-[10px]" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
             {doc.pages.map((p, i) => {
               const t = pageText(p);
+              const span = Math.max(1, Math.round(p.span ?? 1));
               return (
-                <button key={p.id} type="button" onClick={() => onOpenPage(i)} className="group text-left" aria-label={`Sửa layout ${i + 1}`}>
+                <button key={p.id} type="button" onClick={() => onOpenPage(i)} className="group text-left" aria-label={`Sửa layout ${i + 1}`} style={span > 1 ? { gridColumn: "1 / -1" } : undefined}>
                   <div className="overflow-hidden rounded-[10px]" style={{ border: "1px solid var(--bd)", boxShadow: "0 4px 14px -8px rgba(20,15,25,.35)" }}>
-                    <PageView doc={doc} page={p} width={tile} img={img} driveOf={driveOf} fontsReady={fontsReady} watermark={watermark} />
+                    <PageView doc={doc} page={p} width={span > 1 ? full : tile} img={img} driveOf={driveOf} fontsReady={fontsReady} watermark={watermark} slides={span > 1 ? "full" : undefined} />
                   </div>
+                  {span > 1 ? (
+                    <span className="mt-1 block text-[12px]" style={{ color: "var(--tx3)" }}>
+                      Carousel liền mạch · {span} ảnh nối nhau — đăng cùng một bài, đúng thứ tự 1 → {span}.
+                    </span>
+                  ) : null}
                   <span className="mt-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: "var(--tx2)" }}>
                     {i + 1}
                     {t ? (
@@ -114,7 +122,7 @@ export function OverviewStep({
       </div>
       <StudioFooter>
         <button type="button" onClick={onExport} className={btn("primary", "lg", "flex-1")}>
-          <Download size={17} /> Tải {doc.pages.length > 1 ? `${doc.pages.length} ảnh` : "ảnh"} về máy
+          <Download size={17} /> Tải {images > 1 ? `${images} ảnh` : "ảnh"} về máy
         </button>
       </StudioFooter>
     </>
@@ -153,7 +161,17 @@ export function SetsStep({
             return (
               <div key={s.id} className="flex items-center gap-3 rounded-[14px] p-2.5" style={{ background: "var(--sf)", border: "1px solid var(--bd)" }}>
                 <button type="button" onClick={() => onOpen(s)} className="flex-none overflow-hidden rounded-[8px]" aria-label="Mở bộ ảnh ghép" style={{ border: "1px solid var(--bd2)" }}>
-                  {first ? <PageView doc={s.data} page={first} width={Math.round(64 * Math.min(1, f.w / f.h))} img={img} driveOf={driveOf} fontsReady={fontsReady} /> : null}
+                  {first ? (
+                    <PageView
+                      doc={s.data}
+                      page={first}
+                      width={(first.span ?? 1) > 1 ? Math.min(180, Math.round((64 * f.w * (first.span ?? 1)) / f.h)) : Math.round(64 * Math.min(1, f.w / f.h))}
+                      img={img}
+                      driveOf={driveOf}
+                      fontsReady={fontsReady}
+                      slides={(first.span ?? 1) > 1 ? "lines" : undefined}
+                    />
+                  ) : null}
                 </button>
                 <button type="button" onClick={() => onOpen(s)} className="min-w-0 flex-1 text-left">
                   <p className="truncate text-[14px] font-semibold">{s.title || "Bộ ảnh ghép"}</p>

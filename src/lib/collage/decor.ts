@@ -12,7 +12,8 @@ import type { BgPhoto, Frame, FrameDeco, LayoutInput, PhotoFrame, Rect, TextAlig
 import type { CollageFormat } from "./formats";
 import type { CollageStyle } from "./styles";
 import { isDarkColor } from "./styles";
-import { estimateTextHeight, type TextPreset } from "./typography";
+import type { TextPreset } from "./typography";
+import type { Ornament } from "./ornaments";
 import { DEFAULT_CROP, focusCrop } from "./crop";
 import { photoArea, rotatePoint } from "./frame-geom";
 import { uid } from "./rng";
@@ -32,6 +33,8 @@ export interface DecorCtx {
   inkShadow: boolean;
   r: () => number;
   textFrame: (box: Rect, color: string, align?: TextAlign, shadow?: boolean) => TextFrame[];
+  /** Chiều cao khối chữ cần trong bề ngang w (gồm dòng phụ của mẫu chữ). */
+  textNeed: (w: number) => number;
   bgFor: (frames: Frame[]) => BgPhoto | undefined;
 }
 
@@ -40,6 +43,7 @@ export interface DecorResult {
   frames: Frame[];
   cost: number;
   bgPhoto?: BgPhoto;
+  ornaments?: Ornament[];
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
@@ -94,6 +98,28 @@ function rotateWith(t: TextFrame, cx: number, cy: number, deg: number): TextFram
 /** Góc xoay ngẫu nhiên (độ) trong [lo, hi], dấu ngẫu nhiên. */
 const tilt = (r: () => number, lo: number, hi: number) => round1((r() < 0.5 ? -1 : 1) * (lo + r() * (hi - lo)));
 
+/** Màu hoa lá / băng dính hợp nền trang (nền tối / ảnh mờ thì dùng tông sáng). */
+export function floraFor(st: CollageStyle): { leaf: string; flower: string; center: string; tape: string } {
+  if (st.bgPhoto || isDarkColor(st.background)) return { leaf: "#d3dcc6", flower: "#f6dcd8", center: "#f7e7c9", tape: "#efe4d2" };
+  switch (st.id) {
+    case "kraft":
+      return { leaf: "#5f6f4f", flower: "#f4ece0", center: "#d9b77a", tape: "#f1e7d6" };
+    case "blush":
+      return { leaf: "#879779", flower: "#df9fa3", center: "#f6e3c3", tape: "#e9c9c4" };
+    case "sage":
+      return { leaf: "#5c6e55", flower: "#f6f1e8", center: "#e2c48f", tape: "#d9dfcf" };
+    case "tradition":
+      return { leaf: "#d9b56c", flower: "#f0d49a", center: "#7b1e22", tape: "#e8c98f" };
+    default:
+      return { leaf: "#879779", flower: "#e8b9b5", center: "#f6e3c3", tape: "#e6d6c4" };
+  }
+}
+
+/** Một hình trang trí. */
+function orn(kind: Ornament["kind"], rect: Rect, color: string, extra: Partial<Ornament> = {}): Ornament {
+  return { id: uid("o"), kind, rect, color, ...extra };
+}
+
 /** Màu viền ảnh in hợp nền trang: giấy ảnh trắng, nền kem thì trắng ngà. */
 function paperFor(st: CollageStyle): string {
   if (st.id === "ivory" || st.id === "kraft") return "#fbf8f2";
@@ -123,12 +149,13 @@ export function decorOptions(c: DecorCtx): DecorResult[] {
   const mx = W * (landscape ? 0.06 : 0.075);
   const my = safe.h * 0.06;
   const area: Rect = { x: mx, y: safe.y + my, w: W - 2 * mx, h: safe.h - 2 * my };
-  const need = (w: number) => (hasText ? estimateTextHeight(c.preset!, c.text, w, short) + short * 0.05 : 0);
-  const push = (recipe: string, frames: Frame[], extra = 0) => {
+  const need = (w: number) => (hasText ? c.textNeed(w) + short * 0.05 : 0);
+  const push = (recipe: string, frames: Frame[], extra = 0, ornaments?: Ornament[]) => {
     const photosOnly = frames.filter((x): x is PhotoFrame => x.kind === "photo");
     const cost = cropCost(photosOnly, byId) * 2.5 + 0.1 - bias * 0.7 + extra + r() * 0.08;
-    out.push({ recipe, frames, cost, ...(c.bgFor(photosOnly) ? { bgPhoto: c.bgFor(photosOnly) } : {}) });
+    out.push({ recipe, frames, cost, ...(c.bgFor(photosOnly) ? { bgPhoto: c.bgFor(photosOnly) } : {}), ...(ornaments?.length ? { ornaments } : {}) });
   };
+  const fl = floraFor(st);
   const ord = ranked(c.photos);
   const aspectOf = (p: LayoutInput, lo: number, hi: number) => clamp(p.aspect > 0 ? p.aspect : 1.5, lo, hi);
 
@@ -153,6 +180,21 @@ export function decorOptions(c: DecorCtx): DecorResult[] {
         frames.push(...c.textFrame(box, paperInk).map((t) => rotateWith(t, rect.x + rect.w / 2, rect.y + rect.h / 2, rot)));
       }
       push("deco-polaroid", frames);
+      // Bản có hoa lá: cành lá chồm qua góc trên, cụm hoa ở góc dưới đối diện.
+      const s = Math.min(rect.w, rect.h);
+      const left = rot < 0;
+      push("deco-polaroid:floral", frames.map((x) => ({ ...x, id: uid(x.kind === "photo" ? "f" : "t") })), 0.03, [
+        orn("sprig", { x: left ? rect.x - s * 0.16 : rect.x + rect.w - s * 0.5, y: rect.y - s * 0.2, w: s * 0.66, h: s * 0.5 }, fl.leaf, { rotate: left ? -12 : 100, flip: !left, over: true }),
+        // Có chữ trên viền dưới: cụm hoa đẩy ra ngoài góc, không đè lên chữ.
+        orn(
+          "bloom",
+          hasText
+            ? { x: left ? rect.x + rect.w - s * 0.12 : rect.x - s * 0.3, y: rect.y + rect.h - s * 0.16, w: s * 0.42, h: s * 0.38 }
+            : { x: left ? rect.x + rect.w - s * 0.34 : rect.x - s * 0.1, y: rect.y + rect.h - s * 0.3, w: s * 0.44, h: s * 0.4 },
+          fl.flower,
+          { color2: fl.leaf, over: true },
+        ),
+      ]);
     }
     // Vòm: ảnh trên tròn như cửa vòm, chữ bên dưới.
     {
@@ -165,6 +207,13 @@ export function decorOptions(c: DecorCtx): DecorResult[] {
       const frames: Frame[] = [mk(p, rect, { shape: "arch" })];
       if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: rect.y + rect.h + short * 0.03, w: area.w * 0.86, h: textH }));
       push("deco-arch", frames, 0.02);
+      // Bản có hoa: hai cụm hoa ôm chân vòm, cành lá vắt qua đỉnh vòm.
+      const s = rect.w;
+      push("deco-arch:floral", frames.map((x) => ({ ...x, id: uid(x.kind === "photo" ? "f" : "t") })), 0.05, [
+        orn("sprig", { x: rect.x + rect.w * 0.52, y: rect.y - s * 0.12, w: s * 0.6, h: s * 0.36 }, fl.leaf, { rotate: 8, over: true }),
+        orn("bloom", { x: rect.x - s * 0.16, y: rect.y + rect.h - s * 0.36, w: s * 0.46, h: s * 0.4 }, fl.flower, { color2: fl.leaf, over: true }),
+        orn("bloom", { x: rect.x + rect.w - s * 0.3, y: rect.y + rect.h - s * 0.32, w: s * 0.4, h: s * 0.34 }, fl.flower, { color2: fl.leaf, flip: true, over: true }),
+      ]);
     }
     // Bầu dục có viền mảnh — kiểu thiệp cưới cổ điển.
     {
@@ -178,6 +227,26 @@ export function decorOptions(c: DecorCtx): DecorResult[] {
       const frames: Frame[] = [mk(p, rect, { shape: "oval", pad, padColor: paper, shadow: true })];
       if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: rect.y + rect.h + short * 0.03, w: area.w * 0.86, h: textH }));
       push("deco-oval", frames, 0.08);
+      // Vòng lá: hai cành ôm hai bên khung bầu dục (nằm sau khung), lấp lánh nhỏ.
+      const s = rect.w;
+      push("deco-oval:wreath", frames.map((x) => ({ ...x, id: uid(x.kind === "photo" ? "f" : "t") })), 0.08, [
+        orn("sprig", { x: rect.x - s * 0.22, y: rect.y + rect.h * 0.38, w: s * 0.62, h: rect.h * 0.62 }, fl.leaf, { rotate: -8 }),
+        orn("sprig", { x: rect.x + rect.w - s * 0.4, y: rect.y + rect.h * 0.38, w: s * 0.62, h: rect.h * 0.62 }, fl.leaf, { rotate: 8, flip: true }),
+        orn("bloom", { x: rect.x + rect.w / 2 - s * 0.17, y: rect.y + rect.h - s * 0.2, w: s * 0.34, h: s * 0.3 }, fl.flower, { color2: fl.leaf, over: true }),
+      ]);
+    }
+    // Tem thư: viền răng cưa, xoay nhẹ, chữ bên dưới.
+    {
+      const pad = short * 0.042;
+      const a = aspectOf(p, 0.72, 1.35);
+      const textH = hasText ? clamp(need(area.w * 0.86), short * 0.12, area.h * 0.3) : 0;
+      const maxH = area.h - textH - (hasText ? short * 0.04 : 0);
+      const sz = printSize(a, W * (portrait ? 0.7 : 0.5), maxH, pad, pad);
+      const top = safe.y + (safe.h - (sz.h + textH + (hasText ? short * 0.04 : 0))) / 2;
+      const rect: Rect = { x: (W - sz.w) / 2, y: top, w: sz.w, h: sz.h };
+      const frames: Frame[] = [mk(p, rect, { shape: "stamp", pad, padColor: paper, rotate: tilt(r, 1.5, 3), shadow: true })];
+      if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: rect.y + rect.h + short * 0.04, w: area.w * 0.86, h: textH }));
+      push("deco-stamp", frames, 0.04, [orn("sparkle", { x: rect.x + rect.w - short * 0.06, y: rect.y - short * 0.08, w: short * 0.14, h: short * 0.14 }, fl.center === "#7b1e22" ? "#f0d49a" : "#d9b77a", { over: true })]);
     }
   }
 
@@ -267,6 +336,72 @@ export function decorOptions(c: DecorCtx): DecorResult[] {
       }
       push("deco-circles", frames, extra);
     }
+  }
+
+  /* ── 2 ảnh: hai tem thư chồng chéo ─────────────────────────────────────── */
+  if (n === 2) {
+    const [a0, a1] = ord;
+    const pad = short * 0.032;
+    const A = printSize(aspectOf(a0, 0.7, 1.45), area.w * 0.6, area.h * 0.58, pad, pad);
+    const B = printSize(aspectOf(a1, 0.7, 1.45), area.w * 0.52, area.h * 0.52, pad, pad);
+    const ra: Rect = { x: area.x + area.w * 0.02, y: area.y + area.h * 0.02, w: A.w, h: A.h };
+    const rb: Rect = { x: area.x + area.w - B.w, y: area.y + area.h - B.h, w: B.w, h: B.h };
+    const frames: Frame[] = [
+      mk(a0, ra, { shape: "stamp", pad, padColor: paper, rotate: tilt(r, 2, 4), shadow: true }),
+      mk(a1, rb, { shape: "stamp", pad, padColor: paper, rotate: tilt(r, 2, 4), shadow: true }),
+    ];
+    let extra = 0.1;
+    if (hasText) {
+      const g = short * 0.03;
+      const left: Rect = { x: area.x, y: ra.y + ra.h + g, w: rb.x - area.x - g, h: area.y + area.h - (ra.y + ra.h + g) };
+      const right: Rect = { x: ra.x + ra.w + g, y: area.y, w: area.x + area.w - (ra.x + ra.w + g), h: rb.y - area.y - g };
+      const box = left.w * left.h >= right.w * right.h ? left : right;
+      if (box.w < short * 0.22 || box.h < need(box.w) * 0.7) extra += 0.35;
+      frames.push(...shadowFor(box));
+    }
+    push("deco-stamps", frames, extra);
+  }
+
+  /* ── 2–4 ảnh: dải phim (lỗ răng cưa hai mép), xoay nhẹ ─────────────────── */
+  if (n >= 2 && n <= 4) {
+    const vertical = !landscape;
+    const textSpace = hasText ? (vertical ? area.w * 0.36 : area.h * 0.28) : 0;
+    const T = vertical ? Math.min(area.w * (hasText ? 0.58 : 0.66), area.w - textSpace) : Math.min(area.h * 0.62, area.h - textSpace);
+    const win = T * 0.74;
+    const g = T * 0.07;
+    const sizes = c.photos.map((p) => {
+      const a = aspectOf(p, vertical ? 0.95 : 0.75, vertical ? 1.5 : 1.25);
+      return vertical ? { w: win, h: win / a } : { w: win * a, h: win };
+    });
+    const along = sizes.reduce((sum, x) => sum + (vertical ? x.h : x.w), 0) + g * (n - 1) + T * 0.24;
+    const maxAlong = vertical ? area.h : area.w;
+    const k = Math.min(1, maxAlong / along);
+    const TT = T * k;
+    const strip: Rect = vertical
+      ? { x: hasText ? area.x : area.x + (area.w - TT) / 2, y: area.y + (area.h - along * k) / 2, w: TT, h: along * k }
+      : { x: area.x + (area.w - along * k) / 2, y: hasText ? area.y : area.y + (area.h - TT) / 2, w: along * k, h: TT };
+    const rot = tilt(r, 1.2, 2.6);
+    const cx = strip.x + strip.w / 2;
+    const cy = strip.y + strip.h / 2;
+    let at = (vertical ? strip.y : strip.x) + T * 0.12 * k;
+    const frames: Frame[] = c.photos.map((p, i) => {
+      const w = sizes[i].w * k;
+      const h = sizes[i].h * k;
+      const x0 = vertical ? strip.x + (TT - w) / 2 : at;
+      const y0 = vertical ? at : strip.y + (TT - h) / 2;
+      at += (vertical ? h : w) + g * k;
+      const c0 = rotatePoint(x0 + w / 2, y0 + h / 2, cx, cy, rot);
+      return mk(p, { x: c0.x - w / 2, y: c0.y - h / 2, w, h }, { rotate: rot });
+    });
+    let extra = 0.06;
+    if (hasText) {
+      const box: Rect = vertical
+        ? { x: strip.x + strip.w + short * 0.05, y: area.y + area.h * 0.2, w: area.x + area.w - (strip.x + strip.w + short * 0.05), h: area.h * 0.6 }
+        : { x: area.x + area.w * 0.07, y: strip.y + strip.h + short * 0.04, w: area.w * 0.86, h: area.y + area.h - (strip.y + strip.h + short * 0.04) };
+      if (box.w < short * 0.24 || box.h < need(box.w) * 0.7) extra += 0.3;
+      frames.push(...c.textFrame(box, c.ink, vertical ? "left" : "center", c.inkShadow));
+    }
+    push("deco-film", frames, extra, [orn("film", strip, "#161514", { rotate: rot })]);
   }
 
   /* ── 3 ảnh: hàng vòm · bậc thang · cụm tròn · ảnh rải ─────────────────────── */
@@ -374,6 +509,17 @@ export function decorOptions(c: DecorCtx): DecorResult[] {
     const shuffled = frames.map((x) => ({ x, k: r() })).sort((a, b) => a.k - b.k).map((x) => x.x);
     if (hasText) shuffled.push(...shadowFor({ x: area.x + area.w * 0.07, y: area.y, w: area.w * 0.86, h: textH }));
     push("deco-scatter", shuffled, n >= 5 ? 0.12 : 0.05);
+    // Bản dán băng dính washi ở mép trên mỗi ảnh in.
+    const tapes = shuffled
+      .filter((x): x is PhotoFrame => x.kind === "photo")
+      .map((x) => {
+        const tw = Math.min(x.rect.w * 0.42, short * 0.2);
+        const th = tw * 0.32;
+        const rot = (x.deco?.rotate ?? 0) + (r() - 0.5) * 16;
+        const top = rotatePoint(x.rect.x + x.rect.w / 2, x.rect.y + th * 0.15, x.rect.x + x.rect.w / 2, x.rect.y + x.rect.h / 2, x.deco?.rotate ?? 0);
+        return orn("tape", { x: top.x - tw / 2, y: top.y - th / 2, w: tw, h: th }, fl.tape, { rotate: rot, opacity: 0.85, over: true });
+      });
+    push("deco-scatter:tape", shuffled.map((x) => ({ ...x, id: uid(x.kind === "photo" ? "f" : "t") })), n >= 5 ? 0.14 : 0.07, tapes);
   }
 
   /* ── 4 ảnh: lưới vòm 2×2 ─────────────────────────────────────────────────── */

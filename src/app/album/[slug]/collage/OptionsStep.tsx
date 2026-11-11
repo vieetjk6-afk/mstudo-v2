@@ -8,6 +8,10 @@ import { COLLAGE_STYLES, MIX_STYLE } from "@/lib/collage/styles";
 import { pageSizes } from "@/lib/collage/generate";
 import { rng } from "@/lib/collage/rng";
 import { COLLAGE_LIMITS, type PerPage } from "@/lib/collage/types";
+import { COLLAGE_FONTS } from "@/lib/collage/fonts";
+import { presetById } from "@/lib/collage/typography";
+import { LOCKUPS } from "@/lib/collage/lockups";
+import { panoramaMax } from "@/lib/collage/carousel";
 import { StudioFooter, StudioHeader } from "./ui";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -22,7 +26,15 @@ export interface CollageOptions {
   perPage: PerPage;
   styleId: string;
   texts: string[];
+  /** Mẫu chữ: "auto" (máy chọn đa dạng), "none" (chữ đơn) hoặc id trong LOCKUPS. */
+  lockup: string;
+  /** Carousel liền mạch: số slide (≥ 2); 0 = từng layout riêng. */
+  carousel: number;
 }
+
+const fontVar = (presetId: string) => `var(${COLLAGE_FONTS.find((x) => x.key === presetById(presetId).font)?.cssVar}), serif`;
+/** Phông thư pháp nét mảnh ở 14 px khó đọc — chip của chúng to hơn. */
+const chipSize = (presetId: string) => (COLLAGE_FONTS.find((x) => x.key === presetById(presetId).font)?.kind === "script" ? 19 : 14);
 
 const PER_PAGE: PerPage[] = [1, 2, 3, 4, 5, 6, 9, "mix"];
 
@@ -61,7 +73,10 @@ export default function OptionsStep({
 }) {
   const autoPages = useMemo(() => pageSizes(count, opts.perPage, rng(1)).length, [count, opts.perPage]);
   const manual = manualPages != null;
-  const pages = manual ? manualPages : autoPages;
+  const carousel = opts.carousel >= 2;
+  const pages = carousel ? 1 : manual ? manualPages : autoPages;
+  const carouselMax = panoramaMax(Math.max(2, opts.carousel));
+  const carouselOver = carousel && count > carouselMax;
   const filled = opts.texts.filter((t) => t.trim()).length;
   const tooMany = filled > pages;
   const canAdd = opts.texts.length < Math.min(pages, COLLAGE_LIMITS.texts);
@@ -105,7 +120,60 @@ export default function OptionsStep({
             </div>
           </Group>
 
-          {manual ? null : <Group title="Số ảnh mỗi trang" desc={<>Máy chia {count} ảnh thành <b style={{ color: "var(--tx)" }}>{opts.perPage === "mix" ? `khoảng ${pages}` : pages} layout</b>{opts.perPage !== "mix" && count % (opts.perPage as number) !== 0 && pages > 1 ? " (các trang chênh nhau tối đa 1 ảnh)" : ""}.</>}>
+          <Group title="Kiểu bộ ảnh">
+            <div className="grid grid-cols-2 gap-2">
+              {(
+                [
+                  { on: !carousel, t: "Từng layout riêng", d: "Mỗi layout là một ảnh đăng", pick: () => setOpts((o) => ({ ...o, carousel: 0 })) },
+                  { on: carousel, t: "Carousel liền mạch", d: "Một dải dài cắt ra nhiều ảnh, vuốt sang là nối tiếp", pick: () => setOpts((o) => ({ ...o, carousel: o.carousel >= 2 ? o.carousel : Math.max(2, Math.min(COLLAGE_LIMITS.slides, Math.ceil(count / 2.5))) })) },
+                ] as const
+              ).map((x) => (
+                <button
+                  key={x.t}
+                  type="button"
+                  aria-pressed={x.on}
+                  onClick={x.pick}
+                  className="rounded-[12px] px-3 py-2.5 text-left"
+                  style={{ background: x.on ? "var(--acS)" : "var(--sf)", border: `1.5px solid ${x.on ? "var(--ac)" : "var(--bd)"}` }}
+                >
+                  <span className="block text-[13.5px] font-semibold" style={{ color: x.on ? "var(--ac)" : "var(--tx)" }}>
+                    {x.t}
+                  </span>
+                  <span className="block text-[11.5px] leading-snug" style={{ color: "var(--tx3)" }}>
+                    {x.d}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {carousel ? (
+              <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                <span className="text-[13px] font-semibold" style={{ color: "var(--tx2)" }}>
+                  Số slide
+                </span>
+                <div className="inline-flex items-center gap-1">
+                  {Array.from({ length: COLLAGE_LIMITS.slides - 1 }, (_, i) => i + 2).map((nn) => (
+                    <button
+                      key={nn}
+                      type="button"
+                      aria-pressed={opts.carousel === nn}
+                      onClick={() => setOpts((o) => ({ ...o, carousel: nn }))}
+                      className="h-9 w-9 rounded-full text-[13.5px] font-semibold"
+                      style={opts.carousel === nn ? { background: "var(--ac)", color: "#fff" } : { background: "var(--sf)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
+                    >
+                      {nn}
+                    </button>
+                  ))}
+                </div>
+                <p className="basis-full text-[12px]" style={{ color: carouselOver ? "var(--rd)" : "var(--tx3)" }}>
+                  {carouselOver
+                    ? `Carousel ${opts.carousel} slide nhận tối đa ${carouselMax} ảnh — bạn đang chọn ${count}. Tăng số slide hoặc bớt ảnh.`
+                    : `${count} ảnh ghép thành một dải ${opts.carousel} slide. Đăng cùng một bài theo đúng thứ tự 1 → ${opts.carousel}, vuốt sang là ảnh nối tiếp.`}
+                </p>
+              </div>
+            ) : null}
+          </Group>
+
+          {manual || carousel ? null : <Group title="Số ảnh mỗi trang" desc={<>Máy chia {count} ảnh thành <b style={{ color: "var(--tx)" }}>{opts.perPage === "mix" ? `khoảng ${pages}` : pages} layout</b>{opts.perPage !== "mix" && count % (opts.perPage as number) !== 0 && pages > 1 ? " (các trang chênh nhau tối đa 1 ảnh)" : ""}.</>}>
             <div className="flex flex-wrap gap-2">
               {PER_PAGE.map((n) => {
                 const on = opts.perPage === n;
@@ -133,7 +201,7 @@ export default function OptionsStep({
 
           <Group title="Phong cách">
             <div className="flex flex-wrap gap-2">
-              {[...COLLAGE_STYLES.map((s) => ({ id: s.id, name: s.name, bg: s.background, ink: s.ink, blur: !!s.bgPhoto })), { id: MIX_STYLE, name: "Mỗi trang một kiểu", bg: "", ink: "", blur: false }].map((s) => {
+              {[...COLLAGE_STYLES.map((s) => ({ id: s.id, name: s.name, bg: s.background, ink: s.ink, blur: !!s.bgPhoto, photo: !!s.fromPhoto })), { id: MIX_STYLE, name: "Mỗi trang một kiểu", bg: "", ink: "", blur: false, photo: false }].map((s) => {
                 const on = opts.styleId === s.id;
                 return (
                   <button
@@ -147,7 +215,7 @@ export default function OptionsStep({
                     <span
                       className="flex h-7 w-7 flex-none items-center justify-center rounded-full text-[12px] font-bold"
                       style={{
-                        background: s.id === MIX_STYLE ? "conic-gradient(#fff 0 25%, #f5f0e8 0 50%, #f7e9e6 0 75%, #121212 0)" : s.blur ? "linear-gradient(135deg,#c9b8a8,#7d8fa3)" : s.bg,
+                        background: s.id === MIX_STYLE ? "conic-gradient(#fff 0 25%, #f5f0e8 0 50%, #f7e9e6 0 75%, #121212 0)" : s.blur ? "linear-gradient(135deg,#c9b8a8,#7d8fa3)" : s.photo ? "linear-gradient(135deg,#efc9bd,#c9d4c0 55%,#b9c7d8)" : s.bg,
                         color: s.ink || "var(--tx)",
                         border: "1px solid var(--bd)",
                       }}
@@ -156,6 +224,36 @@ export default function OptionsStep({
                     </span>
                     {s.name}
                   </button>
+                );
+              })}
+            </div>
+          </Group>
+
+          <Group title="Mẫu chữ" desc="Cách trình bày nội dung: thư pháp kèm ngày cưới, kiểu tạp chí, Save the date, Lễ vu quy… Dòng phụ (ngày, tên) máy tự điền, sửa được sau.">
+            <div className="flex flex-wrap gap-2">
+              {[{ id: "auto", name: "Đa dạng (máy chọn)", main: "", occasion: false }, { id: "none", name: "Chữ đơn", main: "", occasion: false }, ...LOCKUPS.filter((l) => l.id !== "plain")].map((l, i, arr) => {
+                const on = opts.lockup === l.id;
+                return (
+                  <span key={l.id} className="contents">
+                    {l.occasion && !arr[i - 1]?.occasion ? <span className="basis-full text-[11.5px] font-semibold" style={{ color: "var(--tx3)" }}>Theo dịp</span> : null}
+                    <button
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => setOpts((o) => ({ ...o, lockup: l.id }))}
+                      className="inline-flex h-10 items-center rounded-full px-3.5 text-[14px]"
+                      style={{
+                        fontFamily: l.main ? fontVar(l.main) : undefined,
+                        fontSize: l.main ? chipSize(l.main) : undefined,
+                        fontStyle: l.main && presetById(l.main).italic ? "italic" : "normal",
+                        fontWeight: l.main ? undefined : 600,
+                        background: on ? "var(--acS)" : "var(--sf)",
+                        color: on ? "var(--ac)" : "var(--tx2)",
+                        border: `1.5px solid ${on ? "var(--ac)" : "var(--bd)"}`,
+                      }}
+                    >
+                      {l.name}
+                    </button>
+                  </span>
                 );
               })}
             </div>
@@ -218,9 +316,9 @@ export default function OptionsStep({
         </div>
       </div>
       <StudioFooter>
-        <button type="button" onClick={onGenerate} disabled={busy || tooMany || count === 0} className={btn("primary", "lg", "flex-1")}>
+        <button type="button" onClick={onGenerate} disabled={busy || tooMany || count === 0 || carouselOver} className={btn("primary", "lg", "flex-1")}>
           {busy ? <LoaderCircle size={17} className="animate-spin" /> : <LayoutGrid size={17} />}
-          {busy ? "Đang ghép…" : `Tạo ${opts.perPage === "mix" && !manual ? "" : `${pages} `}layout`}
+          {busy ? "Đang ghép…" : carousel ? `Tạo carousel ${opts.carousel} slide` : `Tạo ${opts.perPage === "mix" && !manual ? "" : `${pages} `}layout`}
         </button>
       </StudioFooter>
     </>

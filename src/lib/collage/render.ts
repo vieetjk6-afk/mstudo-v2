@@ -10,7 +10,8 @@
 import type { CollageDoc, CollagePage, FrameDeco, PhotoFrame, Rect, TextFrame } from "./types";
 import { formatById } from "./formats";
 import { placePhoto } from "./crop";
-import { canvasFont, displayText, layoutText, lineWidth } from "./text-layout";
+import { canvasFont, displayText, layoutLockup, layoutText, lineWidth } from "./text-layout";
+import { dividerPrims, ornamentPrims, stampPath, type Ornament, type OrnPrim } from "./ornaments";
 import { blurRGBA, workScale } from "./blur";
 import { frameRotation, photoArea, shapeRadii } from "./frame-geom";
 
@@ -49,7 +50,7 @@ function hexToRgba(hex: string, a: number): string {
  * về ra nền nét dù màn sửa vẫn mờ (lỗi thật, 11/2026). Độ mờ khớp CSS
  * blur(radius) của màn sửa: radius là độ lệch chuẩn Gauss theo điểm ảnh trang.
  */
-async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: number, H: number, scale: number, getImage: ImageGetter) {
+async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: number, H: number, scale: number, getImage: ImageGetter, short = Math.min(W, H)) {
   const bg = page.bgPhoto;
   if (!bg) return;
   let img: HTMLImageElement;
@@ -59,7 +60,8 @@ async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: 
   } catch {
     return;
   }
-  const radius = (Math.max(0, Math.min(60, bg.blur)) / 1000) * Math.min(W, H);
+  // Theo cạnh ngắn của KHỔ (không phải cả dải carousel) — khớp màn sửa.
+  const radius = (Math.max(0, Math.min(60, bg.blur)) / 1000) * short;
   // Ảnh tràn ra ngoài trang một đoạn để mép trang không bị nhạt khi làm mờ.
   const m = radius * 3;
   const p = placePhoto(W + 2 * m, H + 2 * m, img.naturalWidth, img.naturalHeight, { zoom: 1, cx: 0.5, cy: 0.5 });
@@ -94,9 +96,49 @@ async function drawBgPhoto(ctx: CanvasRenderingContext2D, page: CollagePage, W: 
   }
 }
 
+/** Vẽ các nét trang trí (cùng nguồn với SVG của màn sửa) tại góc (x, y). */
+function drawPrims(ctx: CanvasRenderingContext2D, prims: OrnPrim[], x: number, y: number, color: string) {
+  ctx.save();
+  ctx.translate(x, y);
+  for (const p of prims) {
+    const path = new Path2D(p.d);
+    ctx.globalAlpha = p.opacity ?? 1;
+    if (p.fill || !p.stroke) {
+      ctx.fillStyle = p.fill ?? color;
+      ctx.fill(path, p.evenodd ? "evenodd" : "nonzero");
+    }
+    if (p.stroke) {
+      ctx.strokeStyle = p.stroke;
+      ctx.lineWidth = p.sw ?? 1;
+      ctx.lineCap = "round";
+      ctx.stroke(path);
+    }
+  }
+  ctx.restore();
+}
+
+/** Một hình trang trí trên trang (xoay / lật quanh tâm hộp). */
+function drawOrnament(ctx: CanvasRenderingContext2D, o: Ornament) {
+  ctx.save();
+  const cx = o.rect.x + o.rect.w / 2;
+  const cy = o.rect.y + o.rect.h / 2;
+  ctx.translate(cx, cy);
+  if (o.rotate) ctx.rotate((o.rotate * Math.PI) / 180);
+  if (o.flip) ctx.scale(-1, 1);
+  ctx.translate(-cx, -cy);
+  ctx.globalAlpha = o.opacity ?? 1;
+  drawPrims(ctx, ornamentPrims(o), o.rect.x, o.rect.y, o.color);
+  ctx.restore();
+}
+
 /** Đường viền hình của hộp (chữ nhật, bo góc, vòm, bầu dục). */
 function shapePath(ctx: CanvasRenderingContext2D, r: Rect, shape: FrameDeco["shape"]) {
   ctx.beginPath();
+  if (shape === "stamp") {
+    // Tem thư: răng cưa (Path2D không gộp được vào đường hiện tại → vẽ lại bằng lệnh tương đương).
+    ctx.rect(r.x, r.y, r.w, r.h);
+    return;
+  }
   if (shape === "oval") {
     ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2, 0, 0, Math.PI * 2);
     return;
@@ -139,20 +181,26 @@ async function drawPhoto(ctx: CanvasRenderingContext2D, f: PhotoFrame, aspect: n
     ctx.translate(-cx, -cy);
   }
   const padded = !!d && ((d.pad ?? 0) > 0 || (d.padBottom ?? 0) > 0);
+  const stamp = d?.shape === "stamp";
   // Viền + bóng: tô hộp ngoài (theo hình) một lần, bóng đổ theo đúng hình đó.
-  if (padded || d?.shadow) {
+  if (padded || d?.shadow || stamp) {
     ctx.save();
     if (d?.shadow) {
       ctx.shadowColor = "rgba(0,0,0,.3)";
       ctx.shadowBlur = short * 0.03 * scale;
       ctx.shadowOffsetY = short * 0.01 * scale;
     }
-    ctx.fillStyle = padded ? (d?.padColor ?? "#ffffff") : "#808080";
-    shapePath(ctx, f.rect, d?.shape);
-    ctx.fill();
+    ctx.fillStyle = padded || stamp ? (d?.padColor ?? "#ffffff") : "#808080";
+    if (stamp) {
+      ctx.translate(f.rect.x, f.rect.y);
+      ctx.fill(new Path2D(stampPath(f.rect.w, f.rect.h)));
+    } else {
+      shapePath(ctx, f.rect, d?.shape);
+      ctx.fill();
+    }
     ctx.restore();
   }
-  shapePath(ctx, area, d?.shape);
+  shapePath(ctx, area, stamp ? undefined : d?.shape);
   ctx.clip();
   if (img) {
     const p = placePhoto(area.w, area.h, img.naturalWidth, img.naturalHeight, f.crop);
@@ -183,6 +231,11 @@ function fillSpaced(ctx: CanvasRenderingContext2D, line: string, x: number, y: n
 
 function drawText(ctx: CanvasRenderingContext2D, t: TextFrame, fontsReady: number) {
   if (!displayText(t).trim()) return;
+  const lock = layoutLockup(t, fontsReady);
+  if (lock) {
+    drawLockup(ctx, t, lock);
+    return;
+  }
   const lay = layoutText(t, fontsReady);
   const st = t.style;
   ctx.save();
@@ -212,6 +265,44 @@ function drawText(ctx: CanvasRenderingContext2D, t: TextFrame, fontsReady: numbe
   ctx.restore();
 }
 
+/** Khối chữ có mẫu: các khối xếp dọc giữa khung, cùng màu / bóng với nội dung chính. */
+function drawLockup(ctx: CanvasRenderingContext2D, t: TextFrame, lock: NonNullable<ReturnType<typeof layoutLockup>>) {
+  const st = t.style;
+  ctx.save();
+  const rot = frameRotation(t);
+  if (rot) {
+    const cx = t.rect.x + t.rect.w / 2;
+    const cy = t.rect.y + t.rect.h / 2;
+    ctx.translate(cx, cy);
+    ctx.rotate((rot * Math.PI) / 180);
+    ctx.translate(-cx, -cy);
+  }
+  ctx.fillStyle = st.color;
+  ctx.textBaseline = "middle";
+  const m = ctx.getTransform();
+  const k = Math.hypot(m.a, m.b) || 1;
+  const x = st.align === "left" ? t.rect.x : st.align === "right" ? t.rect.x + t.rect.w : t.rect.x + t.rect.w / 2;
+  let y = t.rect.y + (t.rect.h - lock.height) / 2;
+  for (const b of lock.blocks) {
+    if (st.shadow) {
+      const ref = b.kind === "text" ? b.size : b.h;
+      ctx.shadowColor = "rgba(0,0,0,.45)";
+      ctx.shadowBlur = ref * 0.3 * k;
+      ctx.shadowOffsetY = ref * 0.04 * k;
+    }
+    if (b.kind === "text") {
+      ctx.font = canvasFont({ font: b.font, weight: b.weight, italic: b.italic }, b.size);
+      b.lines.forEach((line, i) => fillSpaced(ctx, line, x, y + (i + 0.5) * b.lineH, b.size, b.letterSpacing, st.align));
+      y += b.lines.length * b.lineH + lock.gap;
+    } else {
+      const left = st.align === "left" ? t.rect.x : st.align === "right" ? t.rect.x + t.rect.w - b.w : t.rect.x + (t.rect.w - b.w) / 2;
+      drawPrims(ctx, dividerPrims(b.type, b.w, b.h, st.color), left, y, st.color);
+      y += b.h + lock.gap;
+    }
+  }
+  ctx.restore();
+}
+
 /** Watermark chéo lặp lại — cùng kiểu với ảnh khách tải lẻ (lib/download.ts). */
 function drawWatermark(ctx: CanvasRenderingContext2D, W: number, H: number, text: string) {
   const size = Math.max(18, Math.round(W / 28));
@@ -227,21 +318,35 @@ function drawWatermark(ctx: CanvasRenderingContext2D, W: number, H: number, text
   ctx.restore();
 }
 
-/** Vẽ một trang ra canvas. */
-export async function renderPage(doc: CollageDoc, page: CollagePage, o: RenderOptions, fontsReady = 0): Promise<HTMLCanvasElement> {
+/** Số ảnh (slide) một trang xuất ra: carousel liền mạch là `span` ảnh nối nhau. */
+export function pageSlides(page: Pick<CollagePage, "span">): number {
+  return Math.max(1, Math.min(10, Math.round(page.span ?? 1)));
+}
+
+/**
+ * Vẽ một trang ra canvas đúng khổ. Carousel liền mạch (`page.span` > 1): vẽ
+ * TỪNG slide `slide` một (0-based) — dịch cả trang rộng sang trái rồi vẽ, phần
+ * ngoài slide tự bị cắt. Không vẽ cả dải rộng một lượt: canvas trên iPhone có
+ * trần diện tích (~16,7 triệu điểm ảnh), 5 slide nét cao là vượt.
+ */
+export async function renderPage(doc: CollageDoc, page: CollagePage, o: RenderOptions, fontsReady = 0, slide = 0): Promise<HTMLCanvasElement> {
   const f = formatById(doc.formatId);
   const W = f.w;
   const H = f.h;
+  const PW = W * pageSlides(page);
   const canvas = makeCanvas(W * o.scale, H * o.scale);
   const ctx = canvas.getContext("2d")!;
   ctx.scale(o.scale, o.scale);
+  ctx.translate(-Math.max(0, Math.min(pageSlides(page) - 1, slide)) * W, 0);
   ctx.fillStyle = page.background;
-  ctx.fillRect(0, 0, W, H);
-  await drawBgPhoto(ctx, page, W, H, o.scale, o.getImage);
+  ctx.fillRect(0, 0, PW, H);
   const short = Math.min(W, H);
+  await drawBgPhoto(ctx, page, PW, H, o.scale, o.getImage, short);
+  for (const orn of page.ornaments ?? []) if (!orn.over) drawOrnament(ctx, orn);
   for (const fr of page.frames) {
     if (fr.kind === "photo") await drawPhoto(ctx, fr, doc.aspects[fr.photoId] ?? 1.5, o.scale, short, o.getImage);
   }
+  for (const orn of page.ornaments ?? []) if (orn.over) drawOrnament(ctx, orn);
   for (const fr of page.frames) if (fr.kind === "text") drawText(ctx, fr, fontsReady);
   if (o.watermark) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);

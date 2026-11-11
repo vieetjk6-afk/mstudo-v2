@@ -24,6 +24,11 @@ import { photoArea, shapeRadii } from "../../src/lib/collage/frame-geom.ts";
 import { pageSuggestions } from "../../src/lib/collage/generate.ts";
 import { composeOptions, family } from "../../src/lib/collage/compose.ts";
 import { styleById } from "../../src/lib/collage/styles.ts";
+import { LOCKUPS, fillLine, lockupFor, lockDate, lockNames, lockupExtraHeight, docFontKeys } from "../../src/lib/collage/lockups.ts";
+import { ornamentPrims, stampPath, dividerPrims, ORN_KINDS } from "../../src/lib/collage/ornaments.ts";
+import { quantize, paletteStyle, contrast, paletteSwatches } from "../../src/lib/collage/palette.ts";
+import { composePanorama, cutPenalty, panoramaMax } from "../../src/lib/collage/carousel.ts";
+import { layoutLockup } from "../../src/lib/collage/text-layout.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -473,6 +478,87 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("bố cục trang trí không lọt ra ngoài trang", out, 0);
   check("chữ của bố cục trang trí nằm trong vùng an toàn Story", unsafe, 0);
   ok("đủ các họ trang trí", ["deco-polaroid", "deco-arch", "deco-oval", "deco-prints", "deco-inset", "deco-arches", "deco-circles", "deco-stagger", "deco-scatter", "grid-round", "grid-print"].every((x) => seen.has(x)), [...seen].join(" "));
+}
+
+/* ── Mẫu chữ (typo): dòng phụ tự điền ngày / tên ───────────────────────── */
+{
+  const ctx = { date: lockDate("2026-10-12"), names: lockNames("Lan & Minh · Tiệc cưới Riverside") };
+  check("ngày cưới dạng 12 · 10 · 2026", ctx.date, "12 · 10 · 2026");
+  check("tên lấy từ tên album", ctx.names, "Lan & Minh");
+  check("tên album không có dấu tách → cả tên (ngắn)", lockNames("Lan và Minh"), "Lan và Minh");
+  check("điền mẫu dòng phụ", fillLine("{date}", ctx), "12 · 10 · 2026");
+  check("thiếu ngày cưới → bỏ dòng đó", fillLine("{date}", { names: "A & B" }), undefined);
+  check("Save the date đủ dòng trên / dưới", lockupFor("save-date", ctx), { id: "save-date", kicker: "Save the date", sub: "12 · 10 · 2026" });
+  check("chữ đơn không gắn mẫu", lockupFor("plain", ctx), undefined);
+  ok("mẫu chữ có cả loại thường và theo dịp", LOCKUPS.some((l) => l.occasion) && LOCKUPS.filter((l) => !l.occasion).length >= 6, String(LOCKUPS.length));
+  ok("dòng phụ được chừa chỗ khi dàn trang", lockupExtraHeight({ id: "save-date", kicker: "x", sub: "y" }, 80) > 40);
+  const t = { kind: "text", id: "t1", rect: { x: 0, y: 0, w: 800, h: 400 }, text: "Lan & Minh", style: { font: "pinyon", size: 80, weight: 400, italic: false, color: "#222222", align: "center", letterSpacing: 0, lineHeight: 1.2, uppercase: false }, lockup: { id: "save-date", kicker: "Save the date", sub: "12 · 10 · 2026" } };
+  const lay = layoutLockup(t);
+  check("khối chữ: dòng trên · nội dung · hoa văn · dòng dưới", lay?.blocks.map((b) => b.kind === "text" ? `t${Math.round(b.size)}` : b.kind), ["t19", "t80", "div", "t26"]);
+  check("phông cần nạp gồm cả phông dòng phụ", docFontKeys({ pages: [{ frames: [t] }] }).sort(), ["manrope", "pinyon", "prata"]);
+}
+
+/* ── Hình trang trí (dùng chung SVG / canvas) ──────────────────────────── */
+{
+  const bad = ORN_KINDS.filter((k) => k !== "path" && !ornamentPrims({ kind: k, rect: { x: 0, y: 0, w: 120, h: 80 }, color: "#888888" }).every((p) => typeof p.d === "string" && p.d.length > 8 && !/NaN|undefined/.test(p.d)));
+  check("mọi hình trang trí ra đường vẽ hợp lệ", bad, []);
+  const st = stampPath(300, 400);
+  ok("viền tem thư: đường khép kín, có răng cưa", st.startsWith("M0 0") && st.endsWith("Z") && (st.match(/A/g) || []).length > 20);
+  ok("hoa văn chia dòng đủ kiểu", ["line", "diamond", "dots", "heart", "flourish", "leaf"].every((k) => dividerPrims(k, 200, 30, "#000000").length > 0));
+}
+
+/* ── Màu lấy từ ảnh ────────────────────────────────────────────────────── */
+{
+  const px = new Uint8ClampedArray(64 * 4);
+  for (let i = 0; i < 64; i++) px.set(i < 40 ? [200, 120, 110, 255] : i < 56 ? [60, 80, 120, 255] : [250, 250, 250, 255], i * 4);
+  const pal = quantize(px, 4);
+  ok("màu chủ đạo: màu nhiều nhất đứng đầu", pal.length >= 2 && pal[0] === "#c8786e", JSON.stringify(pal));
+  const ps = paletteStyle(pal);
+  ok("nền nhạt cùng tông + chữ đọc rõ (tương phản ≥ 4,5)", !!ps && contrast(ps.bg, ps.ink) >= 4.5, JSON.stringify(ps));
+  ok("dải màu từ ảnh cho tab Nền", paletteSwatches([pal]).length >= 3);
+  const withPal = photos.slice(0, 3).map((p) => ({ ...p, palette: pal }));
+  const res = composeOptions({ photos: withPal, format: formatById("4x5"), style: styleById("palette"), text: null, seed: 3 });
+  ok("phong cách Màu theo ảnh: nền trang lấy từ ảnh", res.length > 0 && res.every((r) => r.background === ps.bg));
+}
+
+/* ── Carousel liền mạch ────────────────────────────────────────────────── */
+{
+  const allowedIds = new Set(photos.map((p) => p.id));
+  const f = formatById("4x5");
+  for (const [S, n, text] of [[2, 3, null], [3, 7, "Chúng mình cưới rồi"], [5, 14, "Save"]]) {
+    const doc = generateDoc({ photos: photos.slice(0, n), perPage: 4, formatId: "4x5", styleId: "white", texts: text ? [text, "thừa"] : [], seed: 21 + S, carousel: S, lockup: "save-date", ctx: { date: "12 · 10 · 2026" } });
+    const page = doc.pages[0];
+    ok(`carousel ${S} slide: một trang rộng ${S} slide`, doc.pages.length === 1 && page.span === S);
+    ok(`carousel ${S} slide: đủ ${Math.min(n, panoramaMax(S))} ảnh`, pagePhotoIds(page).length === Math.min(n, panoramaMax(S)));
+    const crosses = page.frames.filter((fr) => fr.kind === "photo" && [...Array(S - 1)].some((_, k) => fr.rect.x < (k + 1) * f.w && fr.rect.x + fr.rect.w > (k + 1) * f.w));
+    ok(`carousel ${S} slide: có ảnh vắt qua ranh giới slide (liền mạch)`, crosses.length >= 1);
+    ok(`carousel ${S} slide: máy chủ nhận bộ này`, sanitizeDoc(doc, allowedIds).ok);
+    if (text) ok(`carousel ${S} slide: chữ nằm ở slide đầu`, page.frames.some((fr) => fr.kind === "text" && fr.rect.x + fr.rect.w <= f.w));
+    ok(`carousel ${S} slide: chỉ một nội dung`, page.frames.filter((fr) => fr.kind === "text").length === (text ? 1 : 0));
+  }
+  // Đường cắt slide đi qua khuôn mặt bị phạt nặng.
+  const face = [{ id: "pf", aspect: 1, score: 5, faces: [[0.4, 0.3, 0.2, 0.2]] }];
+  const byId = new Map(face.map((p) => [p.id, p]));
+  const across = [{ kind: "photo", id: "a", rect: { x: 1080 - 500, y: 100, w: 1000, h: 1000 }, photoId: "pf", crop: { zoom: 1, cx: 0.5, cy: 0.5 } }];
+  const aside = [{ kind: "photo", id: "b", rect: { x: 1080 - 80, y: 100, w: 1000, h: 1000 }, photoId: "pf", crop: { zoom: 1, cx: 0.5, cy: 0.5 } }];
+  ok("đường cắt qua khuôn mặt bị phạt, cắt sát mép thì không", cutPenalty(across, byId, 1080, 2) >= 0.6 && cutPenalty(aside, byId, 1080, 2) < 0.1);
+  const pano = composePanorama({ photos: photos.slice(0, 6), format: f, style: styleById("kraft"), slides: 3, text: null, seed: 4 });
+  ok("carousel có nhiều kiểu", new Set(pano.map((x) => x.recipe.split(":")[0])).size >= 4, pano.map((x) => x.recipe).join(" "));
+  const bigSpan = { ...generateDoc({ photos, perPage: 4, formatId: "4x5", styleId: "white", texts: [], seed: 1, carousel: 2 }) };
+  bigSpan.pages = [{ ...bigSpan.pages[0], span: 99 }];
+  ok("máy chủ kẹp số slide trong giới hạn", (sanitizeDoc(bigSpan, allowedIds).ok ? sanitizeDoc(bigSpan, allowedIds).doc.pages[0].span : 0) === COLLAGE_LIMITS.slides);
+}
+
+/* ── Máy chủ giữ hình trang trí + mẫu chữ hợp lệ, bỏ cái lạ ─────────────── */
+{
+  const allowedIds = new Set(photos.map((p) => p.id));
+  const base = generateDoc({ photos: photos.slice(0, 2), perPage: 2, formatId: "4x5", styleId: "white", texts: ["Hi"], seed: 2, lockup: "thank-you", ctx: { names: "Lan & Minh" } });
+  const pg = base.pages[0];
+  const doc = { ...base, pages: [{ ...pg, ornaments: [{ id: "o1", kind: "sprig", rect: { x: 10, y: 10, w: 100, h: 60 }, color: "#879779", rotate: 12, over: true }, { id: "o2", kind: "bomb", rect: { x: 0, y: 0, w: 5, h: 5 }, color: "#000000" }, { id: "o3", kind: "path", rect: { x: 0, y: 0, w: 50, h: 50 }, color: "#000000", d: "M0 0 L10 10 <script>" }] }] };
+  const c = sanitizeDoc(doc, allowedIds);
+  check("chỉ giữ hình trang trí hợp lệ", c.ok ? c.doc.pages[0].ornaments.map((o) => o.kind) : null, ["sprig"]);
+  const tf = c.ok ? c.doc.pages[0].frames.find((f) => f.kind === "text") : null;
+  check("giữ mẫu chữ của khung chữ", tf?.lockup, { id: "thank-you", kicker: "Thank you", sub: "Lan & Minh" });
 }
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");

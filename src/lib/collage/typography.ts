@@ -28,6 +28,12 @@ export const TEXT_PRESETS: TextPreset[] = [
   { id: "handwritten", name: "Viết tay", font: "dancing", weight: 600, italic: false, uppercase: false, letterSpacing: 0, lineHeight: 1.15, size: 0.082 },
   { id: "soft", name: "Mềm mại", font: "lora", weight: 400, italic: true, uppercase: false, letterSpacing: 0, lineHeight: 1.3, size: 0.054 },
   { id: "pen", name: "Nét bút", font: "playpen", weight: 500, italic: false, uppercase: false, letterSpacing: 0, lineHeight: 1.3, size: 0.052 },
+  { id: "formal", name: "Thư pháp cổ", font: "pinyon", weight: 400, italic: false, uppercase: false, letterSpacing: 0, lineHeight: 1.2, size: 0.086 },
+  { id: "brush", name: "Bút lông", font: "alexbrush", weight: 400, italic: false, uppercase: false, letterSpacing: 0, lineHeight: 1.15, size: 0.1 },
+  { id: "signature", name: "Chữ ký", font: "corinthia", weight: 400, italic: false, uppercase: false, letterSpacing: 0, lineHeight: 1.02, size: 0.13 },
+  { id: "didone", name: "Tạp chí", font: "prata", weight: 400, italic: false, uppercase: false, letterSpacing: 0.01, lineHeight: 1.12, size: 0.068 },
+  { id: "garamond", name: "Garamond nghiêng", font: "garamond", weight: 400, italic: true, uppercase: false, letterSpacing: 0, lineHeight: 1.2, size: 0.07 },
+  { id: "geo", name: "Hoa thưa mảnh", font: "manrope", weight: 400, italic: false, uppercase: true, letterSpacing: 0.3, lineHeight: 1.4, size: 0.042 },
 ];
 
 export function presetById(id: string | null | undefined): TextPreset {

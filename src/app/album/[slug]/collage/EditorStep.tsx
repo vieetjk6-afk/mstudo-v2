@@ -29,7 +29,10 @@ import type { CollageDoc, CollagePage, Crop, LayoutInput, PhotoFrame, Rect, Text
 import { COLLAGE_LIMITS } from "@/lib/collage/types";
 import { COLLAGE_FORMATS, formatById } from "@/lib/collage/formats";
 import { COLLAGE_FONTS, nearestWeight } from "@/lib/collage/fonts";
-import { TEXT_PRESETS, sizeFor } from "@/lib/collage/typography";
+import { TEXT_PRESETS, presetById, sizeFor } from "@/lib/collage/typography";
+import { LOCKUPS, lockupById, lockupFor, type LockCtx } from "@/lib/collage/lockups";
+import { panoramaMax } from "@/lib/collage/carousel";
+import { paletteSwatches } from "@/lib/collage/palette";
 import { focusCrop } from "@/lib/collage/crop";
 import { heroPhoto } from "@/lib/collage/compose";
 import { styleById } from "@/lib/collage/styles";
@@ -85,6 +88,10 @@ export interface EditorProps {
   onBack: () => void;
   onExport: () => void;
   toast: (t: string) => void;
+  /** Ngày cưới / tên để điền dòng phụ khi đổi mẫu chữ. */
+  lockCtx: LockCtx;
+  /** Màu chủ đạo của các ảnh (nạp khi cần) — cho dải "Màu từ ảnh" ở tab Nền. */
+  paletteFor: (ids: string[]) => Promise<string[][]>;
 }
 
 function Seg<T extends string>({ value, options, onChange, label }: { value: T; options: { v: T; label: React.ReactNode; aria?: string }[]; onChange: (v: T) => void; label: string }) {
@@ -253,6 +260,9 @@ export default function EditorStep(p: EditorProps) {
   // "Gợi ý khác" giữ loạt mới trong state (không tính lại khi áp mẫu — dải không nhảy dưới tay).
   const [sugState, setSugState] = useState<{ sig: string; round: number; list: Suggestion[] } | null>(null);
   const [relayouts, setRelayouts] = useState(1);
+  // Màu từ ảnh (tab Nền) + hoa lá đã tắt (bật lại được).
+  const [photoColors, setPhotoColors] = useState<{ key: string; colors: string[] } | null>(null);
+  const [ornStash, setOrnStash] = useState<{ pageId: string; orn: NonNullable<CollagePage["ornaments"]> } | null>(null);
   const [newText, setNewText] = useState("");
 
   useEffect(() => {
@@ -260,17 +270,35 @@ export default function EditorStep(p: EditorProps) {
     setSwapFrom(null);
   }, [page.id]);
 
+  // Tab Nền: lấy màu chủ đạo các ảnh của layout (ảnh nhỏ cùng miền) → dải "Màu từ ảnh".
+  const idsKey = pagePhotoIds(page).join(",");
+  const paletteFor = p.paletteFor;
+  useEffect(() => {
+    if (tool !== "bg" || !idsKey) return;
+    let alive = true;
+    void paletteFor(idsKey.split(",")).then((pals) => {
+      if (alive) setPhotoColors({ key: idsKey, colors: paletteSwatches(pals, 9) });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [tool, idsKey, paletteFor]);
+
   const selFrame = page.frames.find((x) => x.id === sel) ?? null;
   const text = pageText(page);
   const ids = pagePhotoIds(page);
 
   /* ── Cỡ khung xem ── */
   const wide = vp.w >= 900;
+  // Carousel liền mạch: trang rộng `span` slide — khung xem cuộn ngang.
+  const span = Math.max(1, Math.round(page.span ?? 1));
+  const pageRatio = (f.w * span) / f.h;
+  const maxOnPage = span > 1 ? panoramaMax(span) : COLLAGE_LIMITS.pagePhotos;
   const ratio = f.w / f.h;
   // Điện thoại: chừa chỗ cho dải mẫu gợi ý ngay dưới trang (~120 px) và bảng công cụ.
   const stageMaxH = wide ? vp.h - 56 - 96 - 40 - 150 : Math.max(200, vp.h * 0.44 - 40);
   const stageMaxW = wide ? Math.min(680, vp.w - 420 - 48) : vp.w - 24;
-  const stageW = Math.floor(Math.max(160, Math.min(stageMaxW, stageMaxH * ratio)));
+  const stageW = span > 1 ? Math.round(Math.max(180, stageMaxH) * pageRatio) : Math.floor(Math.max(160, Math.min(stageMaxW, stageMaxH * ratio)));
 
   /* ── Sửa trang đang mở ── */
   const updatePage = (fn: (pg: CollagePage) => CollagePage, history = true) =>
@@ -280,6 +308,41 @@ export default function EditorStep(p: EditorProps) {
   const setTextStyle = (patch: Partial<TextStyle>, history = true) => {
     if (!text) return;
     updateFrame<TextFrame>(text.id, (t) => ({ ...t, style: { ...t.style, ...patch } }), history);
+  };
+
+  /** Đổi mẫu chữ của trang: điền lại dòng phụ, kiểu chữ chính theo mẫu (đổi phông sau vẫn được). */
+  const setLockup = (id: string) => {
+    const spec = lockupById(id);
+    updatePage((pg) => ({
+      ...pg,
+      frames: pg.frames.map((fr) => {
+        if (fr.kind !== "text") return fr;
+        const next: TextFrame = { ...fr };
+        const lk = lockupFor(id, p.lockCtx);
+        if (lk) next.lockup = lk;
+        else delete next.lockup;
+        const pr = spec?.main ? presetById(spec.main) : null;
+        if (pr) {
+          next.style = { ...fr.style, font: pr.font, weight: nearestWeight(pr.font, pr.weight), italic: pr.italic, uppercase: pr.uppercase, letterSpacing: pr.letterSpacing, lineHeight: pr.lineHeight, size: sizeFor(pr, fr.text, short) };
+        }
+        return next;
+      }),
+    }));
+  };
+  const setLockLine = (which: "kicker" | "sub", v: string, history = false) => {
+    if (!text?.lockup) return;
+    updateFrame<TextFrame>(
+      text.id,
+      (t) => {
+        if (!t.lockup) return t;
+        const lk = { ...t.lockup };
+        const val = v.slice(0, 80);
+        if (val.trim()) lk[which] = val;
+        else delete lk[which];
+        return { ...t, lockup: lk };
+      },
+      history,
+    );
   };
 
   const relayoutWith = async (photoIds: string[]) => {
@@ -396,7 +459,15 @@ export default function EditorStep(p: EditorProps) {
           className="relative flex-none overflow-hidden rounded-[6px]"
           style={{ outline: i === pageIdx ? "2.5px solid var(--ac)" : "1px solid var(--bd)", outlineOffset: i === pageIdx ? 1 : 0 }}
         >
-          <PageView doc={doc} page={pg} width={Math.round(44 * Math.min(1.6, ratio))} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} />
+          <PageView
+            doc={doc}
+            page={pg}
+            width={(pg.span ?? 1) > 1 ? Math.min(180, Math.round((52 * f.w * (pg.span ?? 1)) / f.h)) : Math.round(44 * Math.min(1.6, ratio))}
+            img={p.img}
+            driveOf={p.driveOf}
+            fontsReady={p.fontsReady}
+            slides={(pg.span ?? 1) > 1 ? "lines" : undefined}
+          />
           <span className="absolute bottom-0.5 left-0.5 rounded px-1 text-[10px] font-bold" style={{ background: "rgba(0,0,0,.5)", color: "#fff" }}>
             {i + 1}
           </span>
@@ -492,6 +563,7 @@ export default function EditorStep(p: EditorProps) {
               }
               className="inline-flex h-10 flex-none items-center rounded-[10px] px-3 text-[15px]"
               style={{
+                fontSize: COLLAGE_FONTS.find((x) => x.key === pr.font)?.kind === "script" ? 20 : undefined,
                 fontFamily: `var(${COLLAGE_FONTS.find((x) => x.key === pr.font)?.cssVar}), serif`,
                 fontStyle: pr.italic ? "italic" : "normal",
                 fontWeight: pr.weight,
@@ -507,6 +579,68 @@ export default function EditorStep(p: EditorProps) {
           );
         })}
       </div>
+      <div>
+        <p className="mb-1.5 text-[12px] font-semibold" style={{ color: "var(--tx3)" }}>
+          Mẫu chữ
+        </p>
+        <div className="flex items-center gap-2 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }}>
+          {LOCKUPS.map((l, i) => {
+            const on = (text.lockup?.id ?? "plain") === l.id;
+            const pr = l.main ? presetById(l.main) : null;
+            return (
+              <span key={l.id} className="contents">
+                {l.occasion && !LOCKUPS[i - 1]?.occasion ? (
+                  <span className="flex-none pl-1 text-[11.5px] font-semibold" style={{ color: "var(--tx3)" }}>
+                    Theo dịp:
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setLockup(l.id)}
+                  className="inline-flex h-10 flex-none items-center rounded-[10px] px-3 text-[14px]"
+                  style={{
+                    fontFamily: pr ? `var(${COLLAGE_FONTS.find((x) => x.key === pr.font)?.cssVar}), serif` : undefined,
+                    fontSize: pr && COLLAGE_FONTS.find((x) => x.key === pr.font)?.kind === "script" ? 19 : undefined,
+                    fontStyle: pr?.italic ? "italic" : "normal",
+                    background: on ? "var(--acS)" : "var(--sf2)",
+                    color: on ? "var(--ac)" : "var(--tx)",
+                    border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`,
+                  }}
+                >
+                  {l.name}
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      </div>
+      {text.lockup && (lockupById(text.lockup.id)?.kicker || lockupById(text.lockup.id)?.sub) ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {lockupById(text.lockup.id)?.kicker ? (
+            <input
+              value={text.lockup.kicker ?? ""}
+              onFocus={p.checkpoint}
+              onChange={(e) => setLockLine("kicker", e.target.value)}
+              placeholder="Dòng nhỏ phía trên (để trống = bỏ)"
+              aria-label="Dòng phụ phía trên"
+              className="v2-input"
+              style={{ fontSize: 16 }}
+            />
+          ) : null}
+          {lockupById(text.lockup.id)?.sub ? (
+            <input
+              value={text.lockup.sub ?? ""}
+              onFocus={p.checkpoint}
+              onChange={(e) => setLockLine("sub", e.target.value)}
+              placeholder="Dòng nhỏ phía dưới — ngày cưới, tên…"
+              aria-label="Dòng phụ phía dưới"
+              className="v2-input"
+              style={{ fontSize: 16 }}
+            />
+          ) : null}
+        </div>
+      ) : null}
       <Slider label="Cỡ chữ" value={Math.round((text.style.size / short) * 1000) / 10} min={1} max={20} step={0.5} suffix="%" onStart={p.checkpoint} onChange={(v) => setTextStyle({ size: (v / 100) * short }, false)} />
       <Slider
         label="Rộng khung"
@@ -590,7 +724,7 @@ export default function EditorStep(p: EditorProps) {
     { id: "bg", label: "Nền", icon: Palette },
     { id: "page", label: "Trang", icon: RectangleVertical },
   ];
-  const altW = Math.round(Math.min(wide ? 92 : 68, (wide ? 100 : 80) * ratio));
+  const altW = span > 1 ? Math.min(240, Math.round((wide ? 76 : 64) * pageRatio)) : Math.round(Math.min(wide ? 92 : 68, (wide ? 100 : 80) * ratio));
   const tools = (
     <div className="flex flex-col gap-3">
       {selFrame?.kind === "photo" ? (
@@ -620,7 +754,7 @@ export default function EditorStep(p: EditorProps) {
           {tool === "photos" && (
             <div className="flex flex-col gap-2.5">
               <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
-                Chạm ảnh để thêm vào hoặc bỏ khỏi layout này (tối đa {COLLAGE_LIMITS.pagePhotos} ảnh) — máy tự dàn lại.
+                Chạm ảnh để thêm vào hoặc bỏ khỏi layout này (tối đa {maxOnPage} ảnh) — máy tự dàn lại.
               </p>
               <PhotoGrid
                 photos={doc.photoIds.map((id) => p.photos.find((x) => x.id === id)).filter((x): x is PhotoLite => !!x)}
@@ -628,7 +762,7 @@ export default function EditorStep(p: EditorProps) {
                 picked={(id) => ids.includes(id)}
                 onTap={(id) => {
                   if (ids.includes(id)) relayoutWith(ids.filter((x) => x !== id));
-                  else if (ids.length >= COLLAGE_LIMITS.pagePhotos) p.toast(`Mỗi layout tối đa ${COLLAGE_LIMITS.pagePhotos} ảnh.`);
+                  else if (ids.length >= maxOnPage) p.toast(`Layout này tối đa ${maxOnPage} ảnh.`);
                   else relayoutWith([...ids, id]);
                 }}
                 cols={vp.w >= 640 || wide ? 5 : 4}
@@ -644,6 +778,33 @@ export default function EditorStep(p: EditorProps) {
           {tool === "bg" && (
             <div className="flex flex-col gap-3">
               <Swatches colors={[...new Set([style.background.toLowerCase(), ...BG_COLORS])]} value={page.background} onPick={(c) => updatePage((pg) => ({ ...pg, background: c }))} label="Màu nền" />
+              {photoColors && photoColors.key === ids.join(",") && photoColors.colors.length ? (
+                <Swatches colors={photoColors.colors} value={page.background} onPick={(c) => updatePage((pg) => ({ ...pg, background: c }))} label="Màu từ ảnh" />
+              ) : (
+                <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
+                  Đang lấy màu từ ảnh của layout…
+                </p>
+              )}
+              {page.ornaments?.length || ornStash?.pageId === page.id ? (
+                <Switch
+                  checked={!!page.ornaments?.length}
+                  onChange={(v) => {
+                    if (!v && page.ornaments?.length) {
+                      setOrnStash({ pageId: page.id, orn: page.ornaments });
+                      updatePage((pg) => {
+                        const rest = { ...pg };
+                        delete rest.ornaments;
+                        return rest;
+                      });
+                    } else if (v && ornStash?.pageId === page.id) {
+                      const orn = ornStash.orn;
+                      updatePage((pg) => ({ ...pg, ornaments: orn }));
+                    }
+                  }}
+                  label="Hoa lá, băng dính, dải phim"
+                  desc="Phần trang trí đi kèm mẫu này"
+                />
+              ) : null}
               <Switch
                 checked={!!page.bgPhoto}
                 onChange={(v) =>
@@ -752,12 +913,23 @@ export default function EditorStep(p: EditorProps) {
     </div>
   );
 
-  const stage = (
+  const stageInner = (
     <div className="relative mx-auto flex-none" style={{ width: stageW, boxShadow: "0 10px 30px -12px rgba(15,30,55,.35)" }}>
-      <PageView doc={doc} page={page} width={stageW} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} watermark={p.watermark} selectedId={swapFrom ?? sel} />
+      <PageView doc={doc} page={page} width={stageW} img={p.img} driveOf={p.driveOf} fontsReady={p.fontsReady} watermark={p.watermark} selectedId={swapFrom ?? sel} slides={span > 1 ? "full" : undefined} />
       <EditLayer doc={doc} page={page} width={stageW} selectedId={sel} g={gesture} />
     </div>
   );
+  // Carousel: cả dải ở chiều cao dễ sửa, vuốt ngang để xem từng slide.
+  const stage =
+    span > 1 ? (
+      <div className="w-full overflow-x-auto overscroll-x-contain pb-1" style={{ scrollbarWidth: "thin" }}>
+        <div className="px-3" style={{ width: stageW + 24 }}>
+          {stageInner}
+        </div>
+      </div>
+    ) : (
+      stageInner
+    );
 
   return (
     <>
@@ -781,7 +953,7 @@ export default function EditorStep(p: EditorProps) {
       {wide ? (
         <div className="flex min-h-0 flex-1">
           <div className="flex min-w-0 flex-1 flex-col overflow-auto" style={{ background: "var(--bg)" }}>
-            <div className="flex justify-center p-5 pb-3">{stage}</div>
+            <div className={span > 1 ? "py-5 pb-3" : "flex justify-center p-5 pb-3"}>{stage}</div>
             <div className="mx-auto w-full max-w-[760px]">{suggestions}</div>
           </div>
           <aside className="w-[400px] flex-none overflow-y-auto p-4" style={{ borderLeft: "1px solid var(--bd)", background: "var(--sf)" }}>
@@ -790,7 +962,7 @@ export default function EditorStep(p: EditorProps) {
         </div>
       ) : (
         <>
-          <div className="flex flex-none justify-center px-3 pb-2 pt-3" style={{ background: "var(--bg)" }}>
+          <div className={span > 1 ? "flex-none pb-2 pt-3" : "flex flex-none justify-center px-3 pb-2 pt-3"} style={{ background: "var(--bg)" }}>
             {stage}
           </div>
           {suggestions}
@@ -811,7 +983,7 @@ export default function EditorStep(p: EditorProps) {
           img={p.img}
           preferred={doc.photoIds}
           multi={chooser.kind !== "replace"}
-          max={chooser.kind === "add" ? Math.max(1, COLLAGE_LIMITS.pagePhotos - ids.length) : COLLAGE_LIMITS.pagePhotos}
+          max={chooser.kind === "add" ? Math.max(1, maxOnPage - ids.length) : COLLAGE_LIMITS.pagePhotos}
           disabled={chooser.kind === "newpage" ? undefined : (id) => ids.includes(id)}
           onClose={() => setChooser(null)}
           onDone={async (picked) => {
@@ -839,7 +1011,7 @@ export default function EditorStep(p: EditorProps) {
               setSel(null);
             } else if (c.kind === "add") {
               apply((d) => ({ ...d, photoIds: [...d.photoIds, ...picked.filter((id) => !d.photoIds.includes(id))].slice(0, COLLAGE_LIMITS.photos) }));
-              await relayoutWith([...ids, ...picked].slice(0, COLLAGE_LIMITS.pagePhotos));
+              await relayoutWith([...ids, ...picked].slice(0, maxOnPage));
             } else {
               await addPage(picked);
             }

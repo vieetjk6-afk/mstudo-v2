@@ -19,6 +19,18 @@ import { COLLAGE_STYLES, MIX_POOL, MIX_STYLE, styleById, type CollageStyle } fro
 import { composeOptions, diverse, family, type ComposeResult } from "./compose";
 import { buildText, presetById, TEXT_PRESETS } from "./typography";
 import { hashString, rng, shuffle, uid, weightedPick } from "./rng";
+import { AUTO_LOCKUPS, lockupFor, type LockCtx } from "./lockups";
+import { composePanorama, panoramaMax } from "./carousel";
+
+/**
+ * Bộ dàn cho một trang: trang thường → composeOptions; trang carousel liền
+ * mạch (`span` ≥ 2) → composePanorama. Mọi thao tác sửa trang đi qua đây để
+ * carousel được dàn lại đúng kiểu carousel.
+ */
+function composeFor(span: number | undefined, inp: Parameters<typeof composeOptions>[0]): ComposeResult[] {
+  if (span && span >= 2) return composePanorama({ ...inp, slides: span });
+  return composeOptions(inp);
+}
 
 /**
  * Số ảnh từng trang.
@@ -132,11 +144,19 @@ function toPage(res: ComposeResult, style: CollageStyle): CollagePage {
   return {
     id: uid("p"),
     frames: res.frames,
-    background: style.background,
+    background: res.background ?? style.background,
     ...(res.bgPhoto ? { bgPhoto: res.bgPhoto } : {}),
+    ...(res.ornaments?.length ? { ornaments: res.ornaments } : {}),
     recipe: res.recipe,
     styleId: style.id,
   };
+}
+
+/** Mẫu chữ cho một trang có nội dung: "auto" = máy chọn trong các mẫu thường, "none" = chữ đơn. */
+function pickLockup(choice: string | undefined, ctx: LockCtx, r: () => number): TextFrame["lockup"] | null {
+  if (!choice || choice === "none") return null;
+  const id = choice === "auto" ? AUTO_LOCKUPS[Math.floor(r() * AUTO_LOCKUPS.length)] : choice;
+  return lockupFor(id, ctx) ?? null;
 }
 
 export interface GenerateOptions {
@@ -151,6 +171,15 @@ export interface GenerateOptions {
    * thứ tự trang). Có thì máy không tự chia ảnh nữa — chỉ dàn trang từng nhóm.
    */
   groups?: string[][];
+  /** Mẫu chữ: "auto" (máy chọn đa dạng), "none" (chữ đơn) hoặc id trong LOCKUPS. */
+  lockup?: string;
+  /** Ngày cưới / tên để điền dòng phụ của mẫu chữ. */
+  ctx?: LockCtx;
+  /**
+   * Carousel liền mạch: số slide (2–10). Có thì cả bộ là MỘT dải ảnh dài cắt ra
+   * từng ấy ảnh (tối đa 3 ảnh mỗi slide); nội dung chữ đầu tiên nằm ở bìa.
+   */
+  carousel?: number;
 }
 
 /** Nhóm ảnh khách tự chọn → nhóm đầu vào cho bộ dàn (bỏ id lạ, nhóm rỗng; giữ giới hạn). */
@@ -164,6 +193,7 @@ function manualGroups(groups: string[][], photos: LayoutInput[]): LayoutInput[][
 
 /** Dựng cả bộ layout. */
 export function generateDoc(o: GenerateOptions): CollageDoc {
+  if (o.carousel && o.carousel >= 2) return generateCarousel(o);
   const format = formatById(o.formatId);
   const photos = o.photos.slice(0, COLLAGE_LIMITS.photos);
   const texts = cleanTexts(o.texts);
@@ -178,7 +208,8 @@ export function generateDoc(o: GenerateOptions): CollageDoc {
     const style = styleFor(o.styleId, prevStyle, r);
     prevStyle = style.id;
     const t = textOf[i];
-    const results = composeOptions({ photos: g, format, style, text: t == null ? null : texts[t], seed: (o.seed + i * 977) >>> 0 });
+    const lockup = t == null ? null : pickLockup(o.lockup ?? "auto", o.ctx ?? {}, r);
+    const results = composeOptions({ photos: g, format, style, text: t == null ? null : texts[t], lockup, seed: (o.seed + i * 977) >>> 0 });
     const pick = pickLayout(results, recent.slice(-2), r);
     if (!pick) return;
     recent.push(family(pick.recipe));
@@ -199,6 +230,33 @@ export function generateDoc(o: GenerateOptions): CollageDoc {
 }
 
 const round3 = (v: number) => Math.round(v * 1000) / 1000;
+
+/** Carousel liền mạch: một trang rộng `slides` slide chứa mọi ảnh đã chọn. */
+function generateCarousel(o: GenerateOptions): CollageDoc {
+  const format = formatById(o.formatId);
+  const slides = Math.max(2, Math.min(COLLAGE_LIMITS.slides, Math.round(o.carousel!)));
+  const ids = o.groups ? [...new Set(o.groups.flat())] : o.photos.map((p) => p.id);
+  const byId = new Map(o.photos.map((p) => [p.id, p]));
+  const photos = ids.map((id) => byId.get(id)).filter((x): x is LayoutInput => !!x).slice(0, panoramaMax(slides));
+  const texts = cleanTexts(o.texts).slice(0, 1);
+  const r = rng((o.seed >>> 0) * 2654435761 + photos.length * 7 + slides);
+  const style = styleFor(o.styleId, null, r);
+  const lockup = texts.length ? pickLockup(o.lockup ?? "auto", o.ctx ?? {}, r) : null;
+  const res = composePanorama({ photos, format, style, slides, text: texts[0] ?? null, lockup, seed: o.seed >>> 0 });
+  const pick = pickLayout(res, [], r);
+  const pages: CollagePage[] = pick ? [{ ...toPage(pick, style), span: slides }] : [];
+  return {
+    v: 1,
+    formatId: format.id,
+    styleId: o.styleId,
+    perPage: o.perPage,
+    texts,
+    photoIds: photos.map((p) => p.id),
+    aspects: Object.fromEntries(photos.map((p) => [p.id, round3(p.aspect)])),
+    pages,
+    seed: o.seed >>> 0,
+  };
+}
 
 /* ── Sửa từng trang ───────────────────────────────────────────────────────── */
 
@@ -229,9 +287,15 @@ export function applyLayout(page: CollagePage, res: ComposeResult, style: Collag
     // Cỡ chữ: theo phương án mới, nhưng giữ đúng tỉ lệ khách đã phóng / thu so với cỡ máy đặt.
     const ratio = old.style.size > 0 && f.style.size > 0 ? old.style.size / f.style.size : 1;
     keep.style.size = Math.max(short * 0.012, Math.min(short * 0.3, f.style.size * Math.max(0.5, Math.min(2, ratio))));
+    // Mẫu chữ (dòng phụ khách đã sửa) đi theo nội dung.
+    if (old.lockup) keep.lockup = old.lockup;
+    else delete keep.lockup;
     return keep;
   });
-  return { ...page, frames, background: style.background, bgPhoto: res.bgPhoto, recipe: res.recipe, styleId: style.id };
+  const next: CollagePage = { ...page, frames, background: res.background ?? style.background, bgPhoto: res.bgPhoto, recipe: res.recipe, styleId: style.id };
+  if (res.ornaments?.length) next.ornaments = res.ornaments;
+  else delete next.ornaments;
+  return next;
 }
 
 /** Một mẫu gợi ý cho trang: phương án bố cục + phong cách (màu nền, chữ) đi kèm. */
@@ -270,8 +334,9 @@ export function pageSuggestions(page: CollagePage, inputs: Map<string, LayoutInp
   // Nhóm theo (họ bố cục, phong cách), mỗi nhóm giữ 2 phương án tốt nhất.
   const groups = new Map<string, Suggestion[]>();
   styles.forEach((st, i) => {
-    const raw = diverse(composeOptions({ photos: boosted, format, style: st, text: text?.text ?? null, presetId, seed: (seed + round * 104729 + i * 7) >>> 0 }), 40);
-    const res = mirror ? raw.map((x) => mirrorResult(x, format.w)) : raw;
+    const raw = diverse(composeFor(page.span, { photos: boosted, format, style: st, text: text?.text ?? null, presetId, lockup: text?.lockup, seed: (seed + round * 104729 + i * 7) >>> 0 }), 40);
+    // Carousel: chữ bìa luôn ở slide đầu — không lật ngang.
+    const res = mirror && !page.span ? raw.map((x) => mirrorResult(x, format.w)) : raw;
     if (!res.length) return;
     const best = Math.min(...res.map((x) => x.cost));
     for (const x of res) {
@@ -317,6 +382,7 @@ function mirrorResult(x: ComposeResult, W: number): ComposeResult {
   return {
     ...x,
     recipe: `${x.recipe}~m`,
+    ...(x.ornaments ? { ornaments: x.ornaments.map((o) => ({ ...o, rect: { ...o.rect, x: W - o.rect.x - o.rect.w }, flip: !o.flip, ...(o.rotate ? { rotate: -o.rotate } : {}) })) } : {}),
     frames: x.frames.map((f) => {
       const rect = { ...f.rect, x: W - f.rect.x - f.rect.w };
       if (f.kind === "photo") return { ...f, rect, ...(f.deco?.rotate ? { deco: { ...f.deco, rotate: -f.deco.rotate } } : {}) };
@@ -333,7 +399,7 @@ export function pageAlternatives(page: CollagePage, inputs: Map<string, LayoutIn
   const photos = pagePhotoIds(page).map((id) => inputs.get(id)).filter((x): x is LayoutInput => !!x);
   const text = pageText(page);
   const presetId = presetForFrame(text);
-  const res = composeOptions({ photos, format, style, text: text?.text ?? null, presetId, seed });
+  const res = composeFor(page.span, { photos, format, style, text: text?.text ?? null, presetId, lockup: text?.lockup, seed });
   return diverse(res, n);
 }
 
@@ -349,7 +415,7 @@ export function relayoutPage(page: CollagePage, photos: LayoutInput[], formatId:
   const format = formatById(formatId);
   const style = styleById(page.styleId);
   const text = pageText(page);
-  const res = composeOptions({ photos, format, style, text: text?.text ?? null, presetId: presetForFrame(text), seed });
+  const res = composeFor(page.span, { photos, format, style, text: text?.text ?? null, presetId: presetForFrame(text), lockup: text?.lockup, seed });
   const r = rng(seed + hashString(page.id));
   const pick = pickLayout(res, [], r);
   if (!pick) return null;
@@ -357,15 +423,15 @@ export function relayoutPage(page: CollagePage, photos: LayoutInput[], formatId:
 }
 
 /** Thêm nội dung chữ cho trang chưa có chữ — trang được dàn lại để chừa chỗ cho chữ. */
-export function addTextToPage(page: CollagePage, text: string, inputs: Map<string, LayoutInput>, formatId: string, seed: number, presetId?: string): CollagePage {
+export function addTextToPage(page: CollagePage, text: string, inputs: Map<string, LayoutInput>, formatId: string, seed: number, presetId?: string, lockup?: TextFrame["lockup"] | null): CollagePage {
   const clean = cleanTexts([text])[0];
   if (!clean || pageText(page)) return page;
   const format = formatById(formatId);
   const style = styleById(page.styleId);
   const photos = pagePhotoIds(page).map((id) => inputs.get(id)).filter((x): x is LayoutInput => !!x);
-  const res = composeOptions({ photos, format, style, text: clean, presetId, seed });
+  const res = composeFor(page.span, { photos, format, style, text: clean, presetId, lockup, seed });
   const pick = pickLayout(res, [], rng(seed + 17));
-  if (pick) return { ...page, frames: pick.frames, bgPhoto: pick.bgPhoto, recipe: pick.recipe };
+  if (pick) return applyLayout({ ...page, frames: page.frames.filter((f) => f.kind !== "text") }, pick, style, Math.min(format.w, format.h));
   // Không dàn được (hiếm): đặt chữ giữa phần dưới trang, giữ nguyên ảnh.
   const short = Math.min(format.w, format.h);
   const box = { x: format.w * 0.08, y: format.h * 0.7, w: format.w * 0.84, h: format.h * 0.22 };
