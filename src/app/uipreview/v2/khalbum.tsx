@@ -3,6 +3,7 @@
  * <CustomerRootV2>; màn trong khu quản lý bọc <PreviewV2 path="..."> (./shell). */
 import AlbumUnavailableV2 from "@/app/a/[slug]/AlbumUnavailableV2";
 import { KhAlbumChonDemo, KhAlbumGiaoDemo, KhAlbumMatDemo, KhAlbumThuMucDemo, KhAlbumTrungDemo } from "./khalbum-demo";
+import { KhAlbumGhepAnhDemo } from "./ghepanh-demo";
 
 /* Album của khách (trang không đăng nhập): /a/[slug] chọn ảnh, /album/[slug]
  * giao khách, /album thư mục. Dữ liệu và ảnh giả ở ./khalbum-demo. Khung xem ảnh
@@ -66,6 +67,11 @@ export const SCREENS_KHALBUM: Record<string, { title: string; render: () => Reac
   "v2-album-giao-gon": {
     title: "V2 · Album giao khách — không bìa, không cho tải, không ảnh in",
     render: () => <KhAlbumGiaoDemo variant="gon" />,
+    bare: true,
+  },
+  "v2-album-ghep-anh": {
+    title: "V2 · Album giao khách — ghép layout ảnh đăng mạng xã hội (API giả; SĐT thử 0901 234 567)",
+    render: () => <KhAlbumGhepAnhDemo />,
     bare: true,
   },
   "v2-album-khong-co": {

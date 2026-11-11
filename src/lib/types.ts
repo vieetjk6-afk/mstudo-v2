@@ -415,6 +415,12 @@ export interface StudioContract {
    * Có từ migrations/ke_hoach_cuoi.sql — chưa chạy thì không có cột.
    */
   wedding_planner?: boolean | null;
+  /**
+   * Khách tự ghép layout ảnh đăng mạng xã hội trong album giao khách (chỉ gói
+   * Photographer Plus / Studio). Mặc định BẬT khi tạo hợp đồng. Có từ
+   * migrations/ghep_layout.sql — chưa chạy thì không có cột.
+   */
+  collage_enabled?: boolean | null;
   /** Cơ sở thực hiện hợp đồng. null = chưa gán chi nhánh. */
   branch_id: string | null;
   created_at: string;

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteFromAdminDrive, driveIdFromUrl } from "@/lib/mstudo-drive";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { purgeAllExpiredCollages } from "@/lib/album-collage";
 
 export const dynamic = "force-dynamic";
 // Xoá từng file trên Drive là một lệnh gọi API mỗi file — cần thời gian.
@@ -80,5 +81,10 @@ export async function GET(req: NextRequest) {
     purged++;
   }
 
-  return NextResponse.json({ ok: true, contracts: purged });
+  // Bộ layout khách ghép trong album giao khách chỉ giữ 1 ngày (album_collages).
+  // Route của album đã tự dọn khi có người mở lại; album không ai mở nữa thì dọn
+  // ở đây. Chưa chạy migrations/ghep_layout.sql → trả 0, không làm hỏng việc trên.
+  const collages = await purgeAllExpiredCollages(db).catch(() => 0);
+
+  return NextResponse.json({ ok: true, contracts: purged, collages });
 }

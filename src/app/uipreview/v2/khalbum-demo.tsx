@@ -70,7 +70,7 @@ function fakeSrc(driveId: string) {
   }
   return s;
 }
-export const DEMO_IMG: AlbumImg = { thumb: (id) => fakeSrc(id), full: (id) => fakeSrc(id), original: (id) => fakeSrc(id) };
+export const DEMO_IMG: AlbumImg = { thumb: (id) => fakeSrc(id), full: (id) => fakeSrc(id), original: (id) => fakeSrc(id), raw: (id) => fakeSrc(id) };
 export const DEMO_COVER = fakeSrc("cover4");
 
 /* ── Album chọn ảnh ──────────────────────────────────────────────────────── */
@@ -270,7 +270,7 @@ export function KhAlbumMatDemo() {
 }
 
 /* ── Album giao khách ────────────────────────────────────────────────────── */
-const G_PHOTOS = [
+export const G_PHOTOS = [
   ...Array.from({ length: 14 }, (_, i) => ({ ...photo(i + 50, "g1"), name: `LAN_${String(1200 + i)}.JPG` })),
   ...Array.from({ length: 18 }, (_, i) => ({ ...photo(i + 70, "g2"), name: `LAN_${String(1300 + i)}.JPG` })),
   { id: "v1", drive_file_id: "d99", name: "Highlight tiec cuoi.mp4", source_id: "g2", position: 99, is_video: true },
@@ -285,7 +285,7 @@ const FEEDBACK: Feedback[] = [
     approved: true, reply: null, replied_at: null, moderated_at: "2026-10-21T09:00:00Z", created_at: "2026-10-21T09:00:00Z",
   },
 ];
-const G_BASE: GalleryViewProps = {
+export const G_BASE: GalleryViewProps = {
   gallery: {
     id: "g-demo",
     slug: "xem-truoc-v2-giao",

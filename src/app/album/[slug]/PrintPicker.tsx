@@ -5,6 +5,7 @@ import { Check, Printer, X } from "lucide-react";
 import { fmtDate } from "@/lib/date";
 import { ICON_HALO } from "@/lib/album-icon";
 import type { PrintState } from "@/lib/album-print-rules";
+import { useCoupleKey } from "./couple-key";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CHỌN ẢNH IN TẶNG — album giao khách của hợp đồng có tặng ảnh in.
@@ -41,25 +42,6 @@ function writeDraft(slug: string, ids: string[] | null) {
   }
 }
 
-const keyKey = (slug: string) => `mstudo-print-key:${slug}`;
-
-function readKey(slug: string): string | null {
-  try {
-    return localStorage.getItem(keyKey(slug));
-  } catch {
-    return null;
-  }
-}
-
-function writeKey(slug: string, key: string | null) {
-  try {
-    if (key) localStorage.setItem(keyKey(slug), key);
-    else localStorage.removeItem(keyKey(slug));
-  } catch {
-    /* không lưu được → lần sau mở lại phải xác minh lại */
-  }
-}
-
 const sameSet = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
 
 const ERRORS: Record<string, string> = {
@@ -90,17 +72,14 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // Chỉ cô dâu / chú rể: vé chọn ảnh in (null = chưa xác minh trên máy này).
   const coupleOnly = !!print?.coupleOnly;
-  const [printKey, setPrintKey] = useState<string | null>(null);
+  // Vé dùng chung với ghép layout ảnh (./couple-key): xác minh bên nào cũng mở cả hai.
+  const [printKey, setPrintKey] = useCoupleKey(slug, coupleOnly);
   const verified = !coupleOnly || !!printKey;
   const [verifyOpen, setVerifyOpen] = useState(false);
   const [verifyBusy, setVerifyBusy] = useState(false);
   const [verifyErr, setVerifyErr] = useState<string | null>(null);
   // Xác minh xong thì mở thẳng chế độ chọn như khách vừa bấm (xem / chọn).
   const [afterVerifyOnly, setAfterVerifyOnly] = useState(false);
-
-  useEffect(() => {
-    if (coupleOnly) setPrintKey(readKey(slug));
-  }, [slug, coupleOnly]);
 
   // Bản nháp chưa gửi (mở lại trang không mất). Đọc sau khi mount: localStorage
   // không có ở máy chủ, đọc lúc khởi tạo state là lệch HTML lúc hydrate.
@@ -142,7 +121,6 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
       const d = await res.json().catch(() => ({}));
       if (d.error === "need_verify") {
         // Vé cũ hết hiệu lực (studio sửa SĐT trên hợp đồng) → xác minh lại, giữ nguyên ảnh đã chọn.
-        writeKey(slug, null);
         setPrintKey(null);
         setVerifyErr(ERRORS.need_verify);
         setVerifyOpen(true);
@@ -188,7 +166,6 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
       }
       // printKey null: hợp đồng vừa bị xoá SĐT → không cần vé, coi như đã xác minh.
       const key = typeof d.printKey === "string" ? d.printKey : "ok";
-      writeKey(slug, key);
       setPrintKey(key);
       setVerifyOpen(false);
       setMode(true);
@@ -408,12 +385,26 @@ export function PrintToggle({ picked, disabled, onToggle, size = "sm" }: { picke
   );
 }
 
+/** Phần trạng thái hộp xác minh cần — usePrintPicks và ghép layout ảnh đều có. */
+export type CoupleVerify = Pick<PrintPicks, "verifyOpen" | "verifyBusy" | "verifyErr" | "verify" | "closeVerify">;
+
 /**
  * Hộp "Tôi là cô dâu / chú rể" — nhập SĐT đã đăng ký với studio để được chọn
- * ảnh in. Dùng chung cho bản cũ và GalleryViewV2: màu lấy biến của bản mới
- * (--sf, --bd, --ac…), thiếu thì rơi về biến của bản cũ.
+ * ảnh in, hoặc ghép layout ảnh (đổi tiêu đề / mô tả / biểu tượng qua props —
+ * cùng một vé, xem ./couple-key). Dùng chung cho bản cũ và GalleryViewV2: màu
+ * lấy biến của bản mới (--sf, --bd, --ac…), thiếu thì rơi về biến của bản cũ.
  */
-export function PrintVerifyDialog({ pp }: { pp: PrintPicks }) {
+export function PrintVerifyDialog({
+  pp,
+  title = "Chọn ảnh in — dành cho cô dâu, chú rể",
+  desc = "Nhập số điện thoại của cô dâu hoặc chú rể đã đăng ký với studio để chọn ảnh in.",
+  Icon = Printer,
+}: {
+  pp: CoupleVerify;
+  title?: string;
+  desc?: string;
+  Icon?: typeof Printer;
+}) {
   const [phone, setPhone] = useState("");
   if (!pp.verifyOpen) return null;
   return (
@@ -444,12 +435,12 @@ export function PrintVerifyDialog({ pp }: { pp: PrintPicks }) {
             className="flex h-10 w-10 flex-none items-center justify-center rounded-full"
             style={{ background: "color-mix(in srgb, var(--am, var(--gold)) 16%, transparent)", color: "var(--am, var(--gold))" }}
           >
-            <Printer size={19} />
+            <Icon size={19} />
           </span>
           <div className="min-w-0 flex-1">
-            <p id="print-verify-title" className="text-[16px] font-semibold">Chọn ảnh in — dành cho cô dâu, chú rể</p>
+            <p id="print-verify-title" className="text-[16px] font-semibold">{title}</p>
             <p className="mt-1 text-[13px]" style={{ color: "var(--tx2, var(--text2))" }}>
-              Nhập số điện thoại của cô dâu hoặc chú rể đã đăng ký với studio để chọn ảnh in.
+              {desc}
             </p>
           </div>
           <button type="button" onClick={pp.closeVerify} aria-label="Đóng" className="-mr-1 -mt-1 p-1" style={{ color: "var(--tx3, var(--text2))" }}>

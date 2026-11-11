@@ -37,6 +37,8 @@ import { useFaceSearch } from "@/app/a/[slug]/useFaceSearch";
 import { AlbumHeroV2, ChipRow, ChipV2, LockScreenV2, SelectDot, ViewerV2, useAlbumImg } from "@/app/a/[slug]/album-v2-ui";
 import { PrintVerifyDialog, printCardText, useCardInView, type PrintPicks } from "./PrintPicker";
 import { isVideo, useGalleryView, type GalleryViewProps } from "./useGalleryView";
+import { useCollageEntry } from "./collage/useCollageEntry";
+import { CollageCardV2, CollageLayer } from "./collage/CollageCard";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    ALBUM GIAO KHÁCH (/album/[slug]) — giao diện mới. Cùng dữ liệu, cùng hành vi
@@ -68,6 +70,8 @@ export default function GalleryViewV2(props: GalleryViewProps) {
   });
   // Thẻ ảnh in đang trong màn hình thì không hiện nút nổi cùng việc.
   const cardInView = useCardInView(g.printCardRef, pp.enabled);
+  // Ghép layout ảnh đăng mạng xã hội (gói Plus / Studio, hợp đồng đang bật).
+  const collage = useCollageEntry({ slug: gallery.slug, collage: props.collage, access: g.access, shareMode: g.shareMode });
 
   const gridW = useGridThumbWidth(2, 4);
   const masonry = useMasonry(2, 4, (id) => {
@@ -169,6 +173,7 @@ export default function GalleryViewV2(props: GalleryViewProps) {
           )}
 
           <PrintCardV2 pp={pp} cardRef={g.printCardRef} />
+          <CollageCardV2 entry={collage} />
         </div>
 
         {/* Thư mục + khuôn mặt */}
@@ -387,6 +392,18 @@ export default function GalleryViewV2(props: GalleryViewProps) {
         title={`Chia sẻ ${g.selected.size} ảnh đã thả tim`}
         subtitle="Gửi link này cho người khác — họ sẽ chỉ xem đúng những ảnh bạn đã thả tim."
         onClose={() => g.setShareUrl(null)}
+      />
+
+      <CollageLayer
+        entry={collage}
+        slug={gallery.slug}
+        access={g.access}
+        watermark={g.wm}
+        theme={theme}
+        albumTitle={gallery.title}
+        eventDate={gallery.event_date}
+        hearts={g.selected}
+        people={g.people}
       />
     </CustomerRootV2>
   );

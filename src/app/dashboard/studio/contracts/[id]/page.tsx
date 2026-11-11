@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireStudio } from "@/lib/auth-guards";
-import { tierAllowsRental } from "@/lib/plans";
+import { tierAllowsCollage, tierAllowsRental } from "@/lib/plans";
 import { getStudioHost } from "@/lib/studio-site";
 import { getFeatureFlags, plannerComingSoon, storyComingSoon } from "@/lib/feature-flags";
 import { weddingGiftCombo } from "@/lib/wedding-plan";
@@ -93,6 +93,8 @@ export default async function ContractPage(
   // Mục "Thuê đồ" chỉ gói Studio — hợp đồng mở từ gói Photographer Plus, mà kho
   // đồ thì không. Xem planAllowsRental trong lib/plans.
   const canRental = tierAllowsRental(profile.studioTier);
+  // Khách tự ghép layout ảnh trong album giao khách: Photographer Plus & Studio.
+  const canCollage = tierAllowsCollage(profile.studioTier);
 
   // Everything below depends only on the contract id / owner (not on the
   // contract row's contents, except the event_date used by the two scheduling
@@ -328,6 +330,7 @@ export default async function ContractPage(
       staffList={(staffList ?? []) as { id: string; full_name: string | null; email: string }[]}
       canAssign={canAssign}
       canRental={canRental}
+      canCollage={canCollage}
       initialClientProofs={(clientProofs ?? []) as { id: string; url: string; note: string | null; uploaded_at: string; plan_id: string | null }[]}
       initialTab={searchParams?.tab}
     />

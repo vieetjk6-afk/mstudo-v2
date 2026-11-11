@@ -287,6 +287,8 @@ staffList: { id: string; full_name: string | null; email: string }[];
 canAssign: boolean;
 /** Gói Studio mới có kho đồ — xem planAllowsRental trong lib/plans. */
 canRental?: boolean;
+/** Gói Photographer Plus / Studio: khách tự ghép layout ảnh trong album giao khách. */
+canCollage?: boolean;
 bank: BankInfo;
 /** Cách ghi nội dung chuyển khoản (số HĐ / HĐ + ngày, mã đợt khi có SePay). */
 noteMode?: TransferNoteMode;
@@ -336,6 +338,7 @@ export function useContractEditor(props: ContractEditorProps) {
     staffList,
     canAssign,
     canRental = false,
+    canCollage = false,
     bank,
     noteMode = DEFAULT_TRANSFER_NOTE_MODE,
     sameDayContracts,
@@ -385,6 +388,7 @@ export function useContractEditor(props: ContractEditorProps) {
     staffList,
     canAssign,
     canRental,
+    canCollage,
     bank,
     sameDayContracts,
     pricelist,
