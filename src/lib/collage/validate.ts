@@ -16,7 +16,8 @@ import { COLLAGE_FORMATS } from "./formats";
 import { COLLAGE_FONTS } from "./fonts";
 import { COLLAGE_STYLES, MIX_STYLE } from "./styles";
 import { LOCKUP_IDS } from "./lockups";
-import { ORN_KINDS, PATH_RE, type Ornament } from "./ornaments";
+import { ORN_KINDS, PATH_RE, QR_PATH_RE, type Ornament } from "./ornaments";
+import { FILTER_IDS } from "./filters";
 
 export type DocCheck = { ok: true; doc: CollageDoc } | { ok: false; error: string };
 
@@ -97,6 +98,10 @@ function ornament(v: unknown, W: number, H: number): Ornament | null {
   if (op != null && op < 1) out.opacity = r4(op);
   if (v.flip === true) out.flip = true;
   if (v.over === true) out.over = true;
+  if (kind === "qr") {
+    if (typeof v.d !== "string" || !QR_PATH_RE.test(v.d)) return null;
+    out.d = v.d;
+  }
   if (kind === "path") {
     if (typeof v.d !== "string" || !PATH_RE.test(v.d)) return null;
     out.d = v.d;
@@ -239,7 +244,19 @@ export function sanitizeDoc(raw: unknown, allowed: ReadonlySet<string>): DocChec
   const seed = num(raw.seed, 0, 4294967295) ?? 1;
   return {
     ok: true,
-    doc: { v: 1, ...(raw.mode === "manual" ? { mode: "manual" as const } : {}), formatId, styleId, perPage, texts: cleanTexts, photoIds, aspects, pages, seed: Math.floor(seed) },
+    doc: {
+      v: 1,
+      ...(raw.mode === "manual" ? { mode: "manual" as const } : {}),
+      formatId,
+      styleId,
+      perPage,
+      texts: cleanTexts,
+      photoIds,
+      ...(typeof raw.filter === "string" && raw.filter !== "none" && FILTER_IDS.has(raw.filter) ? { filter: raw.filter } : {}),
+      aspects,
+      pages,
+      seed: Math.floor(seed),
+    },
   };
 }
 

@@ -33,6 +33,8 @@ export interface Lockup {
   name: string;
   /** Mẫu theo dịp (Save the date, Lễ vu quy…). */
   occasion?: boolean;
+  /** Mẫu riêng của hệ thống (slide cuối) — không hiện trong ô chọn, máy không tự chọn. */
+  system?: boolean;
   /** Kiểu chữ của nội dung chính (id TEXT_PRESETS); rỗng = theo phong cách trang. */
   main: string;
   kicker?: LockLine;
@@ -64,12 +66,15 @@ export const LOCKUPS: Lockup[] = [
   { id: "vu-quy", name: "Lễ Vu Quy", occasion: true, main: "formal", kicker: caps("Lễ Vu Quy", "cormorant", 0.3, 0.3, 600), sub: plainLine("{date}", "cormorant", 0.34, true, 500), divider: "flourish", dividerAt: "top", sample: "{names}" },
   { id: "thanh-hon", name: "Lễ Thành Hôn", occasion: true, main: "formal", kicker: caps("Lễ Thành Hôn", "cormorant", 0.3, 0.3, 600), sub: plainLine("{date}", "cormorant", 0.34, true, 500), divider: "flourish", dividerAt: "top", sample: "{names}" },
   { id: "tiec-cuoi", name: "Tiệc cưới", occasion: true, main: "didone", kicker: caps("Tiệc cưới", "manrope", 0.24, 0.36, 600), sub: caps("{date}", "manrope", 0.2, 0.3, 400), divider: "dots", dividerAt: "bottom", sample: "{names}" },
+  { id: "end-card", name: "Slide cuối", system: true, main: "formal", kicker: caps("", "manrope", 0.22, 0.34, 600), sub: plainLine("", "manrope", 0.24), divider: "line", dividerAt: "bottom" },
   { id: "chung-doi", name: "Ngày chung đôi", occasion: true, main: "classic", kicker: { text: "Ngày chung đôi", font: "pinyon", weight: 400, letterSpacing: 0, lineHeight: 1.15, size: 1.05 }, sub: plainLine("{date}", "cormorant", 0.34, true, 500), divider: "leaf", dividerAt: "bottom", sample: "{names}" },
 ];
 
 export const LOCKUP_IDS = new Set(LOCKUPS.map((l) => l.id));
 /** Mẫu máy được tự chọn khi khách để "Đa dạng" (không gồm mẫu theo dịp). */
-export const AUTO_LOCKUPS = LOCKUPS.filter((l) => !l.occasion).map((l) => l.id);
+export const AUTO_LOCKUPS = LOCKUPS.filter((l) => !l.occasion && !l.system).map((l) => l.id);
+/** Mẫu hiện trong ô chọn của khách. */
+export const PICKABLE_LOCKUPS = LOCKUPS.filter((l) => !l.system);
 
 export function lockupById(id: string | null | undefined): Lockup | null {
   return LOCKUPS.find((l) => l.id === id) ?? null;

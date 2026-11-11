@@ -29,6 +29,13 @@ import { ornamentPrims, stampPath, dividerPrims, ORN_KINDS } from "../../src/lib
 import { quantize, paletteStyle, contrast, paletteSwatches } from "../../src/lib/collage/palette.ts";
 import { composePanorama, cutPenalty, panoramaMax } from "../../src/lib/collage/carousel.ts";
 import { layoutLockup } from "../../src/lib/collage/text-layout.ts";
+import { collageBrandFrom, signFor, signBox, placeSign, endSlideUrl, prettyUrl, DEFAULT_COLLAGE_BRAND } from "../../src/lib/collage/brand.ts";
+import { applyFilter, filterCss, PHOTO_FILTERS } from "../../src/lib/collage/filters.ts";
+import { makeEndPage, qrPath, isEndPage } from "../../src/lib/collage/endcard.ts";
+import { QR_PATH_RE } from "../../src/lib/collage/ornaments.ts";
+import { captionsFor, nameTag, WISHES } from "../../src/lib/collage/captions.ts";
+import { storyChapters } from "../../src/lib/collage/categories.ts";
+import { docSummary } from "../../src/lib/collage/summary.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -559,6 +566,110 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check("chỉ giữ hình trang trí hợp lệ", c.ok ? c.doc.pages[0].ornaments.map((o) => o.kind) : null, ["sprig"]);
   const tf = c.ok ? c.doc.pages[0].frames.find((f) => f.kind === "text") : null;
   check("giữ mẫu chữ của khung chữ", tf?.lockup, { id: "thank-you", kicker: "Thank you", sub: "Lan & Minh" });
+}
+
+/* ── Cài đặt ghép ảnh của studio: ký tên, slide cuối, khoá màu ─────────── */
+{
+  check("cột trống → mặc định (ký tên studio, slide cuối trang studio)", collageBrandFrom({}), DEFAULT_COLLAGE_BRAND);
+  check("giữ cài đặt hợp lệ, bỏ giá trị lạ", collageBrandFrom({ sign: "logo", pos: "tl", end: "album", lockColor: true, x: 1 }), { sign: "logo", pos: "tl", end: "album", lockColor: true });
+  check("giá trị sai → mặc định từng trường", collageBrandFrom({ sign: "hack", pos: 3, end: null }), DEFAULT_COLLAGE_BRAND);
+  const pub = { ...DEFAULT_COLLAGE_BRAND, name: "Vieetjk Studio", logoUrl: null, siteUrl: "https://vieetjk.com/", albumUrl: "https://vieetjk.com/album/lan-minh" };
+  check("logo chưa có → ký bằng tên", signFor({ ...pub, sign: "logo" })?.mode, "name");
+  check("studio tắt ký tên", signFor({ ...pub, sign: "off" }), null);
+  const b = signBox(signFor(pub), 1080, 1350);
+  ok("chữ ký nằm góc phải dưới, trong ảnh", b.x + b.w <= 1080 && b.y + b.h <= 1350 && b.x > 540 && b.y > 1200, JSON.stringify(b));
+  check("slide cuối trỏ trang studio / album / không có", [endSlideUrl(pub), endSlideUrl({ ...pub, end: "album" }), endSlideUrl({ ...pub, end: "off" })], ["https://vieetjk.com/", "https://vieetjk.com/album/lan-minh", null]);
+  check("đường dẫn gọn để in", prettyUrl("https://vieetjk.com/album/x/"), "vieetjk.com/album/x");
+  // Chỗ đặt + màu mực chữ ký (màn sửa và bản xuất dùng chung).
+  const spec = signFor(pub);
+  const sh = (b) => [b.y, b.y + b.h];
+  const photo = (x, y, w, h) => ({ kind: "photo", id: "p", photoId: "x", crop: { x: 0, y: 0, zoom: 1 }, rect: { x, y, w, h } });
+  const blank = placeSign(spec, { frames: [], background: "#ffffff" }, 1080, 1350);
+  check("nền trắng trống: giữ góc, mực tối", [blank.y, blank.ink], [b.y, "dark"]);
+  check("nền tối: chữ trắng", placeSign(spec, { frames: [], background: "#2b2421" }, 1080, 1350).ink, "light");
+  check("nền ảnh mờ: chữ trắng có bóng", placeSign(spec, { frames: [], background: "#ffffff", bgPhoto: { photoId: "x", blur: 30, dim: 0.2 } }, 1080, 1350).ink, "photo");
+  // Ảnh kết thúc ở y = 1285 (lề dưới 65 px): chữ ký vắt ngang mép ảnh → dời hẳn xuống lề.
+  const gap = placeSign(spec, { frames: [photo(640, 715, 375, 570)], background: "#ffffff" }, 1080, 1350);
+  ok("lề đủ rộng: chữ ký nằm gọn trong lề, không đè ảnh", gap.y >= 1285 && gap.y + gap.h <= 1350 && gap.ink === "dark", JSON.stringify(sh(gap)));
+  // Lề quá hẹp (ảnh tới y = 1330) → đặt hẳn vào trong ảnh, chữ trắng.
+  const tight = placeSign(spec, { frames: [photo(540, 700, 540, 630)], background: "#ffffff" }, 1080, 1350);
+  ok("lề hẹp: chữ ký nằm hẳn trong ảnh, chữ trắng", tight.y + tight.h <= 1330 && tight.ink === "photo", JSON.stringify(sh(tight)));
+  // Ảnh tràn khung → chữ ký trên ảnh, giữ đúng góc.
+  const bleed = placeSign(spec, { frames: [photo(0, 0, 1080, 1350)], background: "#ffffff" }, 1080, 1350);
+  check("ảnh tràn khung: giữ góc, chữ trắng", [bleed.y, bleed.ink], [b.y, "photo"]);
+  // Carousel 3 slide: chỉ khung trên slide cuối mới tính.
+  const caro = placeSign(spec, { frames: [photo(0, 0, 2160, 1350)], background: "#ffffff", span: 3 }, 1080, 1350);
+  check("carousel: khung ở slide trước không ảnh hưởng slide cuối", caro.ink, "dark");
+  const top = placeSign({ ...spec, pos: "tr" }, { frames: [photo(0, 120, 1080, 1230)], background: "#ffffff" }, 1080, 1350);
+  ok("góc trên: dời vào lề trên", top.y >= 0 && top.y + top.h <= 120 && top.ink === "dark", JSON.stringify(sh(top)));
+}
+
+/* ── Màu ảnh đồng bộ: CSS màn sửa và điểm ảnh bản xuất cùng công thức ────── */
+{
+  const px = new Uint8ClampedArray([255, 0, 0, 255, 0, 0, 255, 255]);
+  applyFilter(px, "bw");
+  ok("đen trắng: R = G = B", px[0] === px[1] && px[1] === px[2] && px[4] === px[5] && px[5] === px[6]);
+  ok("đen trắng: đỏ sáng hơn xanh dương (theo độ sáng cảm nhận)", px[0] > px[4], `${px[0]} ${px[4]}`);
+  const same = new Uint8ClampedArray([10, 20, 30, 255]);
+  applyFilter(same, "none");
+  check("màu gốc: không đổi", [...same], [10, 20, 30, 255]);
+  check("chuỗi CSS khớp từng bước lọc", filterCss("bw"), "grayscale(1) contrast(1.08)");
+  ok("đủ các bộ lọc", PHOTO_FILTERS.length >= 6);
+}
+
+/* ── Slide cuối "Xem cả album" (mã QR) ──────────────────────────────────── */
+{
+  const d = qrPath("https://vieetjk.com/", 280);
+  ok("mã QR thành đường SVG hợp lệ", d.length > 200 && QR_PATH_RE.test(d), String(d.length));
+  const allowedIds = new Set(photos.map((p) => p.id));
+  for (const formatId of ["4x5", "16x9", "9x16"]) {
+    const end = makeEndPage({ formatId, style: styleById("white"), cover: photos[0], url: "https://vieetjk.com/album/lan-minh", studioName: "Vieetjk Studio", ctx: { names: "Lan & Minh" } });
+    const doc = { ...generateDoc({ photos: photos.slice(0, 2), perPage: 2, formatId, styleId: "white", texts: [], seed: 1 }) };
+    doc.pages = [...doc.pages, end];
+    const c = sanitizeDoc(doc, allowedIds);
+    ok(`slide cuối (${formatId}): máy chủ nhận, giữ mã QR`, c.ok && isEndPage(c.doc.pages.at(-1)) && c.doc.pages.at(-1).ornaments.some((o) => o.kind === "qr"), c.ok ? "" : c.error);
+  }
+}
+
+/* ── Thư viện lời chúc + caption ───────────────────────────────────────── */
+{
+  check("hashtag tên bỏ dấu", nameTag("Lan & Đức"), "#LanDuc");
+  const caps = captionsFor({ names: "Lan & Minh", date: "12 · 10 · 2026", studio: "Vieetjk Studio" });
+  ok("caption điền tên, ngày, studio, hashtag", caps.length >= 4 && caps[0].includes("12 · 10 · 2026") && caps[0].includes("Vieetjk Studio") && caps.some((c) => c.includes("#LanMinh")));
+  ok("caption thiếu tên vẫn tự nhiên", !captionsFor({}).some((c) => /undefined|null/.test(c)));
+  ok("thư viện lời chúc đủ nhóm", WISHES.length >= 5 && WISHES.every((g) => g.lines.length >= 5));
+}
+
+/* ── Bộ kể chuyện một chạm ─────────────────────────────────────────────── */
+{
+  const P = (i) => `s${i}`;
+  const order = Array.from({ length: 24 }, (_, i) => P(i));
+  const info = {};
+  order.forEach((id, i) => (info[id] = { tags: i < 4 ? ["couple"] : i < 7 ? ["m-codau"] : i < 11 ? ["m-bequa"] : i < 14 ? ["decor"] : i < 18 ? ["m-tiec"] : ["family"], score: 5 + (i % 3), hero: i < 4, faces: [] }));
+  const res = { cats: [{ id: "couple", label: "Ảnh chung", kind: "couple", count: 4 }, { id: "m-codau", label: "Cô dâu", kind: "person", role: "bride", count: 3 }, { id: "m-bequa", label: "Bê quả", kind: "moment", count: 4 }, { id: "decor", label: "Decor", kind: "decor", count: 3 }, { id: "m-tiec", label: "Tiệc", kind: "moment", count: 4 }, { id: "family", label: "Gia đình", kind: "family", count: 6 }], info };
+  const ch = storyChapters(order, res);
+  check("trình tự ngày cưới", ch.map((c) => c.key), ["cover", "prep", "ceremony", "decor", "couple", "party", "family", "thanks"]);
+  const all = ch.flatMap((c) => c.ids);
+  ok("mỗi ảnh một chương, bìa là ảnh chung", all.length === new Set(all).size && res.info[ch[0].ids[0]].tags.includes("couple"));
+  ok("trong chương xếp theo thứ tự album", ch.every((c) => c.ids.every((id, i) => i === 0 || order.indexOf(id) > order.indexOf(c.ids[i - 1]))));
+  const none = storyChapters(order.slice(0, 10), { cats: [], info: {} });
+  ok("album chưa có nhóm: vẫn ra bộ kể chuyện chia đều", none.length >= 3 && none[0].key === "cover" && none.at(-1).key === "thanks");
+  // Nội dung chỉ định từng trang (bìa: tên; trang cuối: lời cảm ơn).
+  const groups = [[photos[0].id], [photos[1].id, photos[2].id], [photos[3].id]];
+  const doc = generateDoc({ photos: photos.slice(0, 4), perPage: 2, formatId: "4x5", styleId: "white", texts: [], seed: 8, groups, pageTexts: [{ text: "Lan & Minh", lockup: "our-day" }, null, { text: "Cảm ơn mọi người", lockup: "thank-you" }], ctx: { date: "12 · 10 · 2026" } });
+  check("nội dung đúng trang chỉ định", doc.pages.map((p) => pageText(p)?.text ?? null), ["Lan & Minh", null, "Cảm ơn mọi người"]);
+  check("mẫu chữ đúng trang chỉ định", doc.pages.map((p) => pageText(p)?.lockup?.id ?? null), ["our-day", null, "thank-you"]);
+  const sum = docSummary(doc);
+  ok("tóm tắt cho thống kê studio gọn", JSON.stringify(sum).length < 600 && Array.isArray(sum.lockups) && sum.lockups.includes("our-day"));
+}
+
+/* ── Máy chủ: màu ảnh của bộ ───────────────────────────────────────────── */
+{
+  const allowedIds = new Set(photos.map((p) => p.id));
+  const base = generateDoc({ photos: photos.slice(0, 2), perPage: 2, formatId: "4x5", styleId: "white", texts: [], seed: 4 });
+  const ok1 = sanitizeDoc({ ...base, filter: "warm" }, allowedIds);
+  const ok2 = sanitizeDoc({ ...base, filter: "evil" }, allowedIds);
+  check("giữ bộ lọc hợp lệ, bỏ bộ lọc lạ", [ok1.ok && ok1.doc.filter, ok2.ok && ok2.doc.filter], ["warm", undefined]);
 }
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");

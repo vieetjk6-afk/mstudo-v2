@@ -13,6 +13,8 @@ import { sanitizeDoc, cleanTitle, docPhotoIds } from "@/lib/collage/validate";
 import { categorize, mainCandidates, type CatResult } from "@/lib/collage/categories";
 import { readByIds, withDeadline } from "@/lib/collage/batch-read";
 import { collageEnabledFor } from "@/lib/collage/enabled";
+import { collageBrandFrom, type CollageBrand } from "@/lib/collage/brand";
+import { docSummary } from "@/lib/collage/summary";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    GHÉP LAYOUT ẢNH — phần máy chủ (đọc DB, kiểm quyền). Logic thuần ở
@@ -37,6 +39,17 @@ import { collageEnabledFor } from "@/lib/collage/enabled";
 export interface CollageState {
   /** true = cần nhập đúng SĐT cô dâu / chú rể trước khi ghép (vé lưu trên máy). */
   coupleOnly: boolean;
+  /** Cài đặt ghép ảnh của studio (ký tên, slide cuối, khoá màu). */
+  brand: CollageBrand;
+}
+
+/**
+ * Cài đặt ghép ảnh của studio (profiles.collage_brand). Cột chưa có (chưa chạy
+ * migration) hay đọc lỗi → mặc định, không làm hỏng tính năng.
+ */
+export async function loadCollageBrand(db: SupabaseClient, ownerId: string): Promise<CollageBrand> {
+  const { data, error } = await db.from("profiles").select("collage_brand").eq("id", ownerId).maybeSingle();
+  return collageBrandFrom(error ? null : (data as { collage_brand?: unknown } | null)?.collage_brand);
 }
 
 type AlbumRow = {
@@ -91,16 +104,17 @@ export async function loadCollageState(
   db: SupabaseClient,
   albumId: string,
   owner: { plan?: unknown; plan_expires_at?: string | null; role?: string | null } | null | undefined,
+  ownerId?: string | null,
 ): Promise<CollageState | null> {
   if (!ownerAllowsCollage(owner)) return null;
-  const c = await loadCollageSetting(db, albumId);
-  return c.enabled ? { coupleOnly: c.phones.length > 0 } : null;
+  const [c, brand] = await Promise.all([loadCollageSetting(db, albumId), ownerId ? loadCollageBrand(db, ownerId) : Promise.resolve(collageBrandFrom(null))]);
+  return c.enabled ? { coupleOnly: c.phones.length > 0, brand } : null;
 }
 
 /* ── Cổng kiểm quyền dùng chung cho các route /api/album/[slug]/collage/* ── */
 
 export type CollageGate =
-  | { ok: true; db: SupabaseClient; album: AlbumRow; phones: string[] }
+  | { ok: true; db: SupabaseClient; album: AlbumRow; phones: string[]; brand: CollageBrand }
   | { ok: false; res: NextResponse };
 
 const deny = (error: string, status: number) => ({ ok: false as const, res: NextResponse.json({ error }, { status, headers: { "Cache-Control": "no-store" } }) });
@@ -121,14 +135,17 @@ export async function collageGate(slug: string, cred: { access?: unknown; key?: 
   if (!album.gallery_pinned && album.password_hash && !verifyAlbumAccess(album.id, album.password_hash, typeof cred.access === "string" ? cred.access : undefined)) {
     return deny("wrong_password", 401);
   }
-  const [{ data: owner }, setting] = await Promise.all([
-    db.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle(),
+  const ownerQ = (cols: string) => db.from("profiles").select(cols).eq("id", album.owner_id).maybeSingle();
+  const [ownerRes, setting] = await Promise.all([
+    // collage_brand thêm sau — DB chưa chạy migration thì đọc lại không kèm cột đó.
+    ownerQ("plan, plan_expires_at, role, collage_brand").then((r) => (r.error ? ownerQ("plan, plan_expires_at, role") : r)),
     loadCollageSetting(db, album.id),
   ]);
+  const owner = ownerRes.data as { plan?: unknown; plan_expires_at?: string | null; role?: string | null; collage_brand?: unknown } | null;
   if (!ownerAllowsCollage(owner) || !setting.enabled) return deny("not_enabled", 403);
   const phones = setting.phones;
   if (needKey && phones.length > 0 && !verifyPrintKey(album.id, phones, cred.key)) return deny("need_verify", 403);
-  return { ok: true, db, album, phones };
+  return { ok: true, db, album, phones, brand: collageBrandFrom(owner?.collage_brand) };
 }
 
 /* ── Ảnh của album + nhóm gợi ý ──────────────────────────────────────────── */
@@ -309,7 +326,7 @@ export type SaveResult =
  * khách của ĐÚNG album này (sanitizeDoc từ chối id lạ). Mỗi lần lưu gia hạn
  * thêm 1 ngày tính từ lúc lưu.
  */
-export async function saveCollage(db: SupabaseClient, albumId: string, body: { id?: unknown; title?: unknown; doc?: unknown }): Promise<SaveResult> {
+export async function saveCollage(db: SupabaseClient, albumId: string, body: { id?: unknown; title?: unknown; doc?: unknown }, brand?: CollageBrand): Promise<SaveResult> {
   // Chỉ đối chiếu đúng các ảnh bộ layout dùng (tự lưu chạy liên tục — đọc cả
   // album mỗi lần là phí). Ảnh nào không thuộc album / không phải ảnh giao
   // khách thì không có trong `allowed` và sanitizeDoc từ chối cả bộ.
@@ -328,6 +345,8 @@ export async function saveCollage(db: SupabaseClient, albumId: string, body: { i
   );
   const check = sanitizeDoc(body.doc, allowed);
   if (!check.ok) return { ok: false, error: check.error, status: 400 };
+  // Studio khoá màu ảnh: bỏ bộ lọc màu khách chọn (giữ màu studio đã chỉnh).
+  if (brand?.lockColor && check.doc.filter) delete check.doc.filter;
 
   const now = new Date();
   const row = {
@@ -351,6 +370,8 @@ export async function saveCollage(db: SupabaseClient, albumId: string, body: { i
   if ((count ?? 0) >= COLLAGE_LIMITS.sets) return { ok: false, error: "too_many_sets", status: 409 };
   const { data, error } = await db.from("album_collages").insert({ album_id: albumId, ...row }).select("id").single();
   if (error || !data) return { ok: false, error: missingTable(error) ? "not_ready" : "save_failed", status: missingTable(error) ? 503 : 500 };
+  // Thống kê cho studio: một bộ ghép mới (bộ chỉ giữ 1 ngày nên phải đếm lúc tạo).
+  await recordCollageEvent(db, albumId, "set", check.doc.pages.length, docSummary(check.doc)).catch(() => {});
   return { ok: true, id: data.id as string, updatedAt: row.updated_at, expiresAt: row.expires_at };
 }
 
@@ -358,6 +379,17 @@ export async function deleteCollage(db: SupabaseClient, albumId: string, id: str
   if (!UUID_RE.test(id)) return false;
   const { error } = await db.from("album_collages").delete().eq("id", id).eq("album_id", albumId);
   return !error;
+}
+
+/* ── Thống kê cho studio ──────────────────────────────────────────────────── */
+
+export type CollageEventKind = "set" | "export" | "video";
+
+/** Ghi một lượt (bảng chưa có → bỏ qua lặng lẽ: thống kê không được làm hỏng việc của khách). */
+export async function recordCollageEvent(db: SupabaseClient, albumId: string, kind: CollageEventKind, n: number, meta: Record<string, unknown> = {}): Promise<void> {
+  let m = meta;
+  if (JSON.stringify(m).length > 3500) m = {};
+  await db.from("album_collage_events").insert({ album_id: albumId, kind, n: Math.max(0, Math.min(1000, Math.round(n) || 0)), meta: m });
 }
 
 /** Cron hằng ngày: xoá mọi bộ layout đã hết hạn (album không ai mở lại thì không được dọn tại chỗ). */

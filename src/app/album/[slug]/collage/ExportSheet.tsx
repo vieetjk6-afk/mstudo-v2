@@ -9,6 +9,8 @@ import { formatById } from "@/lib/collage/formats";
 import { canvasToJpeg, loadImage, pageSlides, renderPage } from "@/lib/collage/render";
 import { loadCollageFonts } from "@/lib/collage/text-layout";
 import { docFontKeys } from "@/lib/collage/lockups";
+import type { SignSpec } from "@/lib/collage/brand";
+import { CaptionList } from "./WishesSheet";
 import { triggerDownload } from "@/lib/download";
 import { Sheet } from "./ui";
 
@@ -21,7 +23,8 @@ import { Sheet } from "./ui";
         gói thành một file .zip ngay trên máy, không qua máy chủ).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function slugify(s: string): string {
+/** Tên file an toàn (không dấu, không ký tự lạ) — trình duyệt bỏ tên có ký tự lạ, lưu thành "download". */
+export function slugify(s: string): string {
   return (
     s
       .normalize("NFD")
@@ -44,6 +47,10 @@ export default function ExportSheet({
   rawSrc = rawImageUrl,
   watermark,
   baseName,
+  sign = null,
+  signLogo = null,
+  captions = [],
+  onExported,
   onClose,
 }: {
   doc: CollageDoc;
@@ -52,6 +59,13 @@ export default function ExportSheet({
   rawSrc?: (driveId: string, w: number) => string;
   watermark: string | null;
   baseName: string;
+  /** Chữ ký studio (cài đặt ghép ảnh của studio). */
+  sign?: SignSpec | null;
+  signLogo?: HTMLImageElement | null;
+  /** Caption gợi ý khi đăng bài. */
+  captions?: string[];
+  /** Đã tạo xong n ảnh (thống kê cho studio). */
+  onExported?: (n: number) => void;
   onClose: () => void;
 }) {
   const many = doc.pages.length > 1;
@@ -99,7 +113,7 @@ export default function ExportSheet({
       let n = scope === "all" ? 0 : imagesOf(doc.pages.slice(0, pageIdx));
       for (const page of pages) {
         for (let sl = 0; sl < pageSlides(page); sl++) {
-          const canvas = await renderPage(doc, page, { scale: hd ? 2 : 1, getImage, watermark }, Date.now(), sl);
+          const canvas = await renderPage(doc, page, { scale: hd ? 2 : 1, getImage, watermark, sign, signLogo }, Date.now(), sl);
           const blob = await canvasToJpeg(canvas, 0.92);
           n++;
           out.push(new File([blob], `${base}-${String(n).padStart(2, "0")}.jpg`, { type: "image/jpeg" }));
@@ -107,6 +121,7 @@ export default function ExportSheet({
         }
       }
       setFiles(out);
+      onExported?.(out.length);
     } catch {
       setMsg({ ok: false, text: "Chưa tạo được ảnh — bạn kiểm tra mạng rồi thử lại." });
     } finally {
@@ -119,7 +134,7 @@ export default function ExportSheet({
     const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
     if (typeof nav.share === "function" && nav.canShare?.({ files })) {
       try {
-        await nav.share({ files, title: baseName });
+        await nav.share({ files, title: baseName, ...(captions[0] ? { text: captions[0] } : {}) });
         setMsg({ ok: true, text: "Xong! Trên iPhone chọn “Lưu ảnh” để đưa vào Thư viện ảnh." });
         return;
       } catch (e) {
@@ -198,6 +213,14 @@ export default function ExportSheet({
         <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
           {f.label} · {f.w * k}×{f.h * k} px · JPEG{watermark ? " · có watermark của studio" : ""}
         </p>
+        {captions.length ? (
+          <div className="flex flex-col gap-1.5">
+            <p className="text-[12px] font-semibold" style={{ color: "var(--tx3)" }}>
+              Caption gợi ý khi đăng — bấm Chép rồi dán vào bài
+            </p>
+            <CaptionList captions={captions} />
+          </div>
+        ) : null}
         {msg ? (
           <p className="text-[13px] font-medium" style={{ color: msg.ok ? "var(--gn)" : "var(--rd)" }}>
             {msg.text}

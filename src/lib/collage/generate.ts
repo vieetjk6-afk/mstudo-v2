@@ -180,6 +180,11 @@ export interface GenerateOptions {
    * từng ấy ảnh (tối đa 3 ảnh mỗi slide); nội dung chữ đầu tiên nằm ở bìa.
    */
   carousel?: number;
+  /**
+   * Bộ kể chuyện: nội dung + mẫu chữ CHỈ ĐỊNH cho từng trang (theo `groups`),
+   * thay cho chia ngẫu nhiên — bìa mang tên cô dâu chú rể, trang cuối lời cảm ơn.
+   */
+  pageTexts?: ({ text: string; lockup?: string } | null)[];
 }
 
 /** Nhóm ảnh khách tự chọn → nhóm đầu vào cho bộ dàn (bỏ id lạ, nhóm rỗng; giữ giới hạn). */
@@ -200,7 +205,7 @@ export function generateDoc(o: GenerateOptions): CollageDoc {
   const r = rng((o.seed >>> 0) * 2654435761 + photos.length);
   const manual = !!o.groups;
   const groups = manual ? manualGroups(o.groups!, photos) : distribute(photos, pageSizes(photos.length, o.perPage, r), r);
-  const textOf = assignTexts(groups.length, texts.length, r);
+  const textOf = o.pageTexts ? groups.map(() => null) : assignTexts(groups.length, texts.length, r);
   const pages: CollagePage[] = [];
   let prevStyle: string | null = null;
   const recent: string[] = [];
@@ -208,8 +213,10 @@ export function generateDoc(o: GenerateOptions): CollageDoc {
     const style = styleFor(o.styleId, prevStyle, r);
     prevStyle = style.id;
     const t = textOf[i];
-    const lockup = t == null ? null : pickLockup(o.lockup ?? "auto", o.ctx ?? {}, r);
-    const results = composeOptions({ photos: g, format, style, text: t == null ? null : texts[t], lockup, seed: (o.seed + i * 977) >>> 0 });
+    const fixed = o.pageTexts?.[i] ?? null;
+    const text = fixed ? cleanTexts([fixed.text])[0] ?? null : t == null ? null : texts[t];
+    const lockup = !text ? null : fixed ? pickLockup(fixed.lockup ?? o.lockup ?? "auto", o.ctx ?? {}, r) : pickLockup(o.lockup ?? "auto", o.ctx ?? {}, r);
+    const results = composeOptions({ photos: g, format, style, text, lockup, seed: (o.seed + i * 977) >>> 0 });
     const pick = pickLayout(results, recent.slice(-2), r);
     if (!pick) return;
     recent.push(family(pick.recipe));
@@ -221,7 +228,7 @@ export function generateDoc(o: GenerateOptions): CollageDoc {
     formatId: format.id,
     styleId: o.styleId,
     perPage: o.perPage,
-    texts,
+    texts: o.pageTexts ? cleanTexts(o.pageTexts.flatMap((x) => (x ? [x.text] : []))) : texts,
     photoIds: photos.map((p) => p.id),
     aspects: Object.fromEntries(photos.map((p) => [p.id, round3(p.aspect)])),
     pages,

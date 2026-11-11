@@ -78,7 +78,7 @@ export function CollageCardV1({ entry }: { entry: CollageEntry }) {
  * Hộp xác nhận SĐT (cùng hộp với ảnh in) + màn ghép khi đang mở. Đặt một lần ở
  * cuối trang album.
  */
-export function CollageLayer({ entry, ...studio }: { entry: CollageEntry } & Omit<CollageStudioProps, "coupleKey" | "onClose" | "onNeedVerify">) {
+export function CollageLayer({ entry, ...studio }: { entry: CollageEntry } & Omit<CollageStudioProps, "coupleKey" | "onClose" | "onNeedVerify" | "brand">) {
   if (!entry.enabled) return null;
   return (
     <>
@@ -88,7 +88,7 @@ export function CollageLayer({ entry, ...studio }: { entry: CollageEntry } & Omi
         title="Ghép ảnh — dành cho cô dâu, chú rể"
         desc="Nhập số điện thoại của cô dâu hoặc chú rể đã đăng ký với studio để ghép ảnh từ album của bạn."
       />
-      {entry.studioOpen && <CollageStudio {...studio} coupleKey={entry.key} onClose={entry.close} onNeedVerify={entry.needVerify} />}
+      {entry.studioOpen && <CollageStudio {...studio} brand={entry.brand} coupleKey={entry.key} onClose={entry.close} onNeedVerify={entry.needVerify} />}
     </>
   );
 }

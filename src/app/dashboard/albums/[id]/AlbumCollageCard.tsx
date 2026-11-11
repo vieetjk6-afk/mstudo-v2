@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isMissingColumn } from "@/lib/missing-column";
 import { Badge, Section, btn } from "@/components/v2/kit";
 import { Switch } from "@/components/v2/kit-client";
+import { CollageStudioPanel } from "./CollageStudioSettings";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    GHÉP LAYOUT ẢNH — thẻ ở tab Giao khách của album (phía studio).
@@ -92,6 +93,11 @@ export function AlbumCollageCardV2({ albumId, info }: { albumId: string; info: A
           ) : null}
         </div>
       )}
+      {info.allowed ? (
+        <div className="mt-3">
+          <CollageStudioPanel albumId={albumId} />
+        </div>
+      ) : null}
     </Section>
   );
 }
@@ -140,6 +146,11 @@ export function AlbumCollageCardV1({ albumId, info }: { albumId: string; info: A
             <p className="mt-1 text-[11.5px]" style={{ color: "var(--danger)" }}>
               {t.err}
             </p>
+          ) : null}
+          {info.allowed ? (
+            <div className="mt-3">
+              <CollageStudioPanel albumId={albumId} legacy />
+            </div>
           ) : null}
         </div>
       </div>

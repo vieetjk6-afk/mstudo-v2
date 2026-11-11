@@ -8,6 +8,9 @@ import { frameRotation, photoArea, rotatePoint, shapeRadii } from "@/lib/collage
 import { cssFontFamily } from "@/lib/collage/fonts";
 import { layoutLockup, layoutText } from "@/lib/collage/text-layout";
 import { dividerPrims, ornamentPrims, stampPath, type Ornament, type OrnPrim } from "@/lib/collage/ornaments";
+import { filterCss } from "@/lib/collage/filters";
+import { placeSign, SIGN_INK, type SignSpec } from "@/lib/collage/brand";
+import { isEndPage } from "@/lib/collage/endcard";
 import { watermarkLayer } from "@/lib/album-watermark";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -32,7 +35,7 @@ function rgba(hex: string, a: number) {
 }
 
 interface ViewProps {
-  doc: Pick<CollageDoc, "formatId" | "aspects">;
+  doc: Pick<CollageDoc, "formatId" | "aspects" | "filter">;
   page: CollagePage;
   /** Bề rộng hiển thị (px). */
   width: number;
@@ -45,6 +48,45 @@ interface ViewProps {
   className?: string;
   /** Carousel: vạch ranh giới slide ("lines"), kèm số slide ("full"). Không bao giờ có trong ảnh xuất. */
   slides?: "lines" | "full";
+  /** Chữ ký studio (cài đặt ghép ảnh của studio) — vẽ y như trên ảnh xuất. */
+  sign?: SignSpec | null;
+}
+
+/** Chữ ký studio ở góc slide (carousel: chỉ slide cuối). */
+function SignBox({ spec, page, k, x0, W, H }: { spec: SignSpec; page: CollagePage; k: number; x0: number; W: number; H: number }) {
+  const b = placeSign(spec, page, W, H);
+  const ink = SIGN_INK[b.ink];
+  const common = { left: (x0 + b.x) * k, top: b.y * k, width: b.w * k, height: b.h * k } as const;
+  if (spec.mode === "logo" && spec.logoUrl) {
+    return (
+      <img
+        src={spec.logoUrl}
+        alt=""
+        aria-hidden
+        className="pointer-events-none absolute select-none"
+        style={{ ...common, objectFit: "contain", objectPosition: b.align === "right" ? "right center" : b.align === "left" ? "left center" : "center", opacity: 0.92, filter: ink.shadow ? "drop-shadow(0 1px 2px rgba(0,0,0,.35))" : undefined }}
+      />
+    );
+  }
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute flex items-center whitespace-nowrap"
+      style={{
+        ...common,
+        justifyContent: b.align === "right" ? "flex-end" : b.align === "left" ? "flex-start" : "center",
+        fontFamily: "var(--font-manrope), system-ui, sans-serif",
+        fontWeight: 600,
+        fontSize: b.size * k,
+        letterSpacing: "0.12em",
+        textTransform: "uppercase",
+        color: ink.color,
+        textShadow: ink.shadow ? `0 ${b.size * k * 0.06}px ${b.size * k * 0.35}px ${ink.shadow}` : undefined,
+      }}
+    >
+      {spec.text}
+    </div>
+  );
 }
 
 /** Vẽ các nét trang trí bằng SVG — cùng nguồn (ornaments.ts) với bộ xuất canvas. */
@@ -80,7 +122,7 @@ function radiusCss(shape: FrameDeco["shape"], w: number, h: number): string | un
   return r.some((v) => v > 0) ? r.map((v) => `${v}px`).join(" ") : undefined;
 }
 
-function PhotoBox({ f, k, short, aspect, img, drive }: { f: PhotoFrame; k: number; short: number; aspect: number; img: ImgUrl; drive?: string }) {
+function PhotoBox({ f, k, short, aspect, img, drive, filter }: { f: PhotoFrame; k: number; short: number; aspect: number; img: ImgUrl; drive?: string; filter?: string }) {
   const area = photoArea(f);
   const d = f.deco;
   const p = placePhoto(area.w, area.h, aspect * 1000, 1000, f.crop);
@@ -132,7 +174,7 @@ function PhotoBox({ f, k, short, aspect, img, drive }: { f: PhotoFrame; k: numbe
             draggable={false}
             decoding="async"
             className="pointer-events-none absolute max-w-none select-none"
-            style={{ left: p.left * k, top: p.top * k, width: p.width * k, height: p.height * k }}
+            style={{ left: p.left * k, top: p.top * k, width: p.width * k, height: p.height * k, filter }}
           />
         ) : null}
       </div>
@@ -196,7 +238,7 @@ function TextBox({ t, k, fontsReady }: { t: TextFrame; k: number; fontsReady: nu
   );
 }
 
-export const PageView = memo(function PageView({ doc, page, width, img, driveOf, fontsReady, watermark, selectedId, className = "", slides }: ViewProps) {
+export const PageView = memo(function PageView({ doc, page, width, img, driveOf, fontsReady, watermark, selectedId, className = "", slides, sign }: ViewProps) {
   const f = formatById(doc.formatId);
   // Carousel liền mạch: trang rộng `span` slide, khung tính theo cả dải.
   const span = Math.max(1, Math.round(page.span ?? 1));
@@ -215,17 +257,18 @@ export const PageView = memo(function PageView({ doc, page, width, img, driveOf,
             alt=""
             draggable={false}
             className="pointer-events-none absolute max-w-none select-none"
-            style={{ left: -m, top: -m, width: width + 2 * m, height: height + 2 * m, objectFit: "cover", filter: radius > 0 ? `blur(${radius}px)` : undefined }}
+            style={{ left: -m, top: -m, width: width + 2 * m, height: height + 2 * m, objectFit: "cover", filter: [radius > 0 ? `blur(${radius}px)` : "", filterCss(doc.filter) ?? ""].join(" ").trim() || undefined }}
           />
           {bg.dim > 0 ? <div className="pointer-events-none absolute inset-0" style={{ background: rgba(page.background, Math.min(1, bg.dim)) }} /> : null}
         </>
       ) : null}
       {(page.ornaments ?? []).map((o) => (o.over ? null : <OrnBox key={o.id} o={o} k={k} />))}
       {page.frames.map((fr) =>
-        fr.kind === "photo" ? <PhotoBox key={fr.id} f={fr} k={k} short={Math.min(f.w, f.h)} aspect={doc.aspects[fr.photoId] ?? 1.5} img={img} drive={driveOf(fr.photoId)} /> : null,
+        fr.kind === "photo" ? <PhotoBox key={fr.id} f={fr} k={k} short={Math.min(f.w, f.h)} aspect={doc.aspects[fr.photoId] ?? 1.5} img={img} drive={driveOf(fr.photoId)} filter={filterCss(doc.filter)} /> : null,
       )}
       {(page.ornaments ?? []).map((o) => (o.over ? <OrnBox key={o.id} o={o} k={k} /> : null))}
       {page.frames.map((fr) => (fr.kind === "text" ? <TextBox key={fr.id} t={fr} k={k} fontsReady={fontsReady} /> : null))}
+      {sign && !isEndPage(page) ? <SignBox spec={sign} page={page} k={k} x0={(span - 1) * f.w} W={f.w} H={f.h} /> : null}
       {watermark ? <div className="pointer-events-none absolute inset-0 opacity-20" style={watermarkLayer(watermark)} /> : null}
       {span > 1 && slides
         ? Array.from({ length: span }, (_, i) => (

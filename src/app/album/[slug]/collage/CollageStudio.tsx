@@ -9,6 +9,15 @@ import { DEFAULT_STYLE_ID } from "@/lib/collage/styles";
 import { collectTexts, generateDoc, pagePhotoIds } from "@/lib/collage/generate";
 import { loadCollageFonts } from "@/lib/collage/text-layout";
 import { docFontKeys, lockDate, lockNames, type LockCtx } from "@/lib/collage/lockups";
+import { endSlideUrl, signFor, type CollageBrandPublic } from "@/lib/collage/brand";
+import { isEndPage, makeEndPage } from "@/lib/collage/endcard";
+import { storyChapters, fold } from "@/lib/collage/categories";
+import { captionsFor } from "@/lib/collage/captions";
+import { docSummary } from "@/lib/collage/summary";
+import { heroPhoto } from "@/lib/collage/compose";
+import { styleById } from "@/lib/collage/styles";
+import VideoSheet from "./VideoSheet";
+import PostPreview from "./PostPreview";
 import { quantize } from "@/lib/collage/palette";
 import { loadImage } from "@/lib/collage/render";
 import { rawImageUrl } from "./ExportSheet";
@@ -16,7 +25,7 @@ import type { PhotoCat, PhotoInfo } from "@/lib/collage/categories";
 import type { PersonChip } from "@/lib/face-people";
 import { fmtDate, fmtDateTime } from "@/lib/date";
 import { useAlbumImg } from "@/app/a/[slug]/album-v2-ui";
-import { CollageApiError, deleteSet, errorCode, errorText, fetchPhotos, fetchSets, isTransient, saveSet, type Cred, type PhotoLite, type PhotosPayload, type SavedSet } from "./api";
+import { CollageApiError, deleteSet, errorCode, errorText, fetchPhotos, fetchSets, isTransient, postEvent, saveSet, type Cred, type PhotoLite, type PhotosPayload, type SavedSet } from "./api";
 import PickStep, { type PickMode } from "./PickStep";
 import OptionsStep, { type CollageOptions } from "./OptionsStep";
 import { OverviewStep, SetsStep, type SaveStatus } from "./OverviewStep";
@@ -57,6 +66,8 @@ export interface CollageStudioProps {
    * nhóm gợi ý theo khuôn mặt — thay vì quay vòng "Đang mở album…" mãi.
    */
   galleryPhotos?: readonly GalleryPhotoLike[];
+  /** Cài đặt ghép ảnh của studio (ký tên, slide cuối, khoá màu) + tên / logo / đường dẫn. */
+  brand?: CollageBrandPublic | null;
   onClose: () => void;
   onNeedVerify: () => void;
 }
@@ -135,6 +146,9 @@ export default function CollageStudio(props: CollageStudioProps) {
   const [save, setSave] = useState<SaveStatus>({ state: "idle" });
   const [canUndo, setCanUndo] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [videoOpen, setVideoOpen] = useState(false);
+  const [storyBusy, setStoryBusy] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const docRef = useRef<CollageDoc | null>(null);
@@ -205,6 +219,41 @@ export default function CollageStudio(props: CollageStudioProps) {
     [driveIdOf, rawOf],
   );
   const lockCtx: LockCtx = useMemo(() => ({ date: lockDate(props.eventDate), names: lockNames(props.albumTitle) }), [props.eventDate, props.albumTitle]);
+
+  /* ── Cài đặt ghép ảnh của studio: ký tên, slide cuối, khoá màu ── */
+  const brand = props.brand ?? null;
+  const sign = useMemo(() => signFor(brand), [brand]);
+  // Logo nạp kiểu CORS để vẽ được lên canvas; không nạp được thì ký bằng tên (cả xem trước lẫn ảnh xuất).
+  const [signLogo, setSignLogo] = useState<HTMLImageElement | null | "failed">(null);
+  useEffect(() => {
+    if (sign?.mode !== "logo" || !sign.logoUrl) return;
+    let alive = true;
+    loadImage(sign.logoUrl).then(
+      (im) => alive && setSignLogo(im),
+      () => alive && setSignLogo("failed"),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [sign?.mode, sign?.logoUrl]);
+  const viewSign = useMemo(() => (sign && sign.mode === "logo" && signLogo === "failed" ? { ...sign, mode: "name" as const } : sign), [sign, signLogo]);
+  const logoImg = signLogo && signLogo !== "failed" ? signLogo : null;
+  const endUrl = endSlideUrl(brand);
+  const captions = useMemo(() => captionsFor({ names: lockCtx.names, date: lockCtx.date, studio: brand?.name }), [lockCtx, brand?.name]);
+  const handle = useMemo(() => {
+    const h = fold(lockCtx.names ?? "").replace(/[^a-z0-9]+/g, ".").replace(/^\.+|\.+$/g, "");
+    return h.length >= 2 ? h.slice(0, 24) : "chungminh";
+  }, [lockCtx.names]);
+
+  /** Thêm slide cuối "Xem cả album" của studio vào bộ vừa dựng (nếu studio bật). */
+  const withEnd = (d: CollageDoc, ins: Map<string, LayoutInput>): CollageDoc => {
+    if (!endUrl || !brand || !d.pages.length || d.pages.some(isEndPage) || d.pages.length >= COLLAGE_LIMITS.pages) return d;
+    const coverId = heroPhoto(d.pages[0].frames) ?? d.photoIds[0];
+    const cover = coverId ? ins.get(coverId) : undefined;
+    if (!cover) return d;
+    const st = styleById(d.pages[0].styleId);
+    return { ...d, pages: [...d.pages, makeEndPage({ formatId: d.formatId, style: st, cover, url: endUrl, studioName: brand.name, ctx: lockCtx })] };
+  };
   const inputs = useMemo(() => buildInputs(aspects), [buildInputs, aspects]);
 
   /** Đo tỉ lệ các ảnh chưa đo (đọc kích thước ảnh nhỏ — không cần byte ảnh qua máy chủ). */
@@ -596,16 +645,65 @@ export default function CollageStudio(props: CollageStudioProps) {
         ...(opts.carousel >= 2 ? { carousel: opts.carousel } : {}),
         ...(manual ? { groups: groups.filter((g) => g.length) } : {}),
       });
+      const full = withEnd(next, ins);
       if (docRef.current) {
         pastRef.current.push(docRef.current);
         setCanUndo(true);
       }
-      setDocState(fillAspects(next, aspectsRef.current));
+      setDocState(fillAspects(full, aspectsRef.current));
       setPageIdx(0);
       setStep("overview");
       scheduleSave(150);
     } finally {
       setBusy(false);
+    }
+  };
+
+  /** Bộ kể chuyện một chạm: máy chọn ảnh theo trình tự ngày cưới và ghép luôn (bộ mới). */
+  const story = async () => {
+    if (storyBusy) return;
+    setStoryBusy(true);
+    try {
+      const chapters = storyChapters(photos.map((p) => p.id), { cats, info }, hearts);
+      const gs = chapters.map((c) => c.ids).filter((g) => g.length);
+      const ids = [...new Set(gs.flat())];
+      if (!ids.length) return;
+      if (opts.styleId === "palette") await paletteFor(ids);
+      const ins = await ensureInputs(ids);
+      const photosIn = ids.map((id) => ins.get(id)).filter((x): x is LayoutInput => !!x);
+      const cover = (lockCtx.names ?? "").trim() || props.albumTitle.trim().slice(0, 60) || "Ngày chung đôi";
+      const pageTexts = chapters
+        .filter((c) => c.ids.length)
+        .map((c) => (c.key === "cover" ? { text: cover, lockup: "our-day" } : c.key === "thanks" ? { text: "Cảm ơn mọi người đã đến chung vui cùng chúng mình", lockup: "thank-you" } : null));
+      const next = generateDoc({
+        photos: photosIn,
+        perPage: 4,
+        formatId: opts.formatId,
+        styleId: opts.styleId,
+        texts: [],
+        seed: Math.floor(Math.random() * 1e9),
+        lockup: opts.lockup,
+        ctx: lockCtx,
+        groups: gs,
+        pageTexts,
+      });
+      const full = withEnd(next, ins);
+      setGroups(gs);
+      setActiveGroup(0);
+      setModeState("manual");
+      setSelected(ids);
+      if (docRef.current) {
+        pastRef.current.push(docRef.current);
+        setCanUndo(true);
+      }
+      setIdRef.current = null;
+      setDocState(fillAspects(full, aspectsRef.current));
+      setPageIdx(0);
+      setStep("overview");
+      scheduleSave(150);
+      toast.show(`Đã ghép bộ kể chuyện ${full.pages.length} layout — chạm từng layout để sửa.`);
+    } finally {
+      setStoryBusy(false);
     }
   };
   const reshuffle = async () => {
@@ -617,7 +715,7 @@ export default function CollageStudio(props: CollageStudioProps) {
     setBusy(true);
     try {
       // Bộ tự chọn từng layout: giữ nguyên nhóm ảnh của từng trang, chỉ đổi bố cục.
-      const manualGroups = d.mode === "manual" ? d.pages.map(pagePhotoIds).filter((g) => g.length) : null;
+      const manualGroups = d.mode === "manual" ? d.pages.filter((pg) => !isEndPage(pg)).map(pagePhotoIds).filter((g) => g.length) : null;
       const ids = manualGroups ? [...new Set(manualGroups.flat())] : d.photoIds;
       if (d.styleId === "palette") await paletteFor(ids);
       const ins = await ensureInputs(ids);
@@ -635,7 +733,8 @@ export default function CollageStudio(props: CollageStudioProps) {
         ...(slides ? { carousel: slides } : {}),
         ...(manualGroups && !slides ? { groups: manualGroups } : {}),
       });
-      apply(() => next);
+      const full = withEnd({ ...next, ...(d.filter ? { filter: d.filter } : {}) }, ins);
+      apply(() => full);
       toast.show("Đã ghép lại ngẫu nhiên — bấm ↶ ở màn sửa để quay lại bản trước.");
     } finally {
       setBusy(false);
@@ -644,8 +743,10 @@ export default function CollageStudio(props: CollageStudioProps) {
 
   /* Nút quay lại (giao diện và điện thoại dùng chung). true = còn ở trong màn ghép. */
   backRef.current = () => {
-    if (exportOpen) {
+    if (exportOpen || previewOpen || videoOpen) {
       setExportOpen(false);
+      setPreviewOpen(false);
+      setVideoOpen(false);
       return true;
     }
     if (step === "edit") {
@@ -749,6 +850,8 @@ export default function CollageStudio(props: CollageStudioProps) {
           void ensureInputs(mode === "manual" ? manualIds : selected);
         }}
         toast={toast.show}
+        onStory={() => void story()}
+        storyBusy={storyBusy}
       />
     );
   } else if (step === "options") {
@@ -789,6 +892,18 @@ export default function CollageStudio(props: CollageStudioProps) {
           setStep("options");
         }}
         onExport={() => setExportOpen(true)}
+        sign={viewSign}
+        lockColor={!!brand?.lockColor}
+        onFilter={(id) =>
+          apply((d) => {
+            const n = { ...d };
+            if (id === "none") delete n.filter;
+            else n.filter = id;
+            return n;
+          })
+        }
+        onPreview={() => setPreviewOpen(true)}
+        onVideo={() => setVideoOpen(true)}
       />
     );
   } else if (step === "edit" && doc) {
@@ -818,6 +933,8 @@ export default function CollageStudio(props: CollageStudioProps) {
         toast={toast.show}
         lockCtx={lockCtx}
         paletteFor={paletteFor}
+        sign={viewSign}
+        onPreview={() => setPreviewOpen(true)}
       />
     );
   }
@@ -840,7 +957,27 @@ export default function CollageStudio(props: CollageStudioProps) {
           rawSrc={img.raw}
           watermark={watermark}
           baseName={props.albumTitle || "anh-ghep"}
+          sign={sign}
+          signLogo={logoImg}
+          captions={captions}
+          onExported={(n) => postEvent(credRef.current, "export", n, docSummary(doc))}
           onClose={() => setExportOpen(false)}
+        />
+      ) : null}
+      {previewOpen && doc ? (
+        <PostPreview doc={doc} img={img.thumb} driveOf={driveOf} fontsReady={fontsReady} watermark={watermark} sign={viewSign} handle={handle} caption={captions[0] ?? ""} onClose={() => setPreviewOpen(false)} />
+      ) : null}
+      {videoOpen && doc ? (
+        <VideoSheet
+          doc={doc}
+          driveOf={driveOf}
+          rawSrc={img.raw}
+          watermark={watermark}
+          sign={sign}
+          signLogo={logoImg}
+          baseName={props.albumTitle || "anh-ghep"}
+          onDone={(seconds, music) => postEvent(credRef.current, "video", 1, { ...docSummary(doc), seconds, music })}
+          onClose={() => setVideoOpen(false)}
         />
       ) : null}
       {toast.node}

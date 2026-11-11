@@ -2426,6 +2426,20 @@ create table if not exists public.album_collages (
 -- route /api/album/[slug]/collage — giống print_picks.
 alter table public.album_collages enable row level security;
 
+-- ── Thống kê ghép ảnh (studio xem ở tab Giao khách của album) ───────────────
+create table if not exists public.album_collage_events (
+  id          bigint generated always as identity primary key,
+  album_id    uuid not null references public.albums (id) on delete cascade,
+  -- set = khách tạo một bộ ghép mới; export = tải ảnh (n = số ảnh); video = tạo video.
+  kind        text not null check (kind in ('set', 'export', 'video')),
+  n           int  not null default 1 check (n between 0 and 1000),
+  -- Mẫu đã dùng (họ bố cục, phong cách, mẫu chữ…) — vài trăm byte.
+  meta        jsonb not null default '{}'::jsonb check (octet_length(meta::text) <= 4000),
+  created_at  timestamptz not null default now()
+);
+
+alter table public.album_collage_events enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
@@ -7460,6 +7474,14 @@ alter table public.profiles add column if not exists qr_note_template text;
 -- SĐT khách / cô dâu / chú rể của hợp đồng (cùng vé với chọn ảnh in) — không
 -- cấp policy ghi nào cho anon / authenticated. Chủ album (và admin) đọc được.
 --
+-- • profiles.collage_brand: cài đặt ghép ảnh của STUDIO (mọi album): ký tên
+--   studio trên ảnh ghép (tắt / tên / logo, góc nào), slide cuối "Xem cả album"
+--   (trang studio / album / tắt), khoá màu ảnh (khách không đổi bộ lọc màu).
+--   Chủ studio tự sửa → cấp quyền UPDATE đúng cột này (bảng profiles chỉ cho
+--   sửa từng cột — xem c1_profiles_column_grants.sql).
+-- • album_collage_events: thống kê cho studio — mỗi lượt khách tạo bộ ghép,
+--   tải ảnh, tạo video (kèm mẫu đã dùng). Ghi qua service role trong API.
+--
 -- Bản web chịu được lúc CHƯA chạy file này: thiếu cột / bảng thì album giao
 -- khách đơn giản không hiện phần ghép layout.
 --
@@ -7487,6 +7509,12 @@ alter table public.albums
 create index if not exists album_collages_album_idx on public.album_collages (album_id, updated_at desc);
 
 create index if not exists album_collages_expires_idx on public.album_collages (expires_at);
+
+-- ── Cài đặt ghép ảnh của studio ────────────────────────────────────────────
+alter table public.profiles
+  add column if not exists collage_brand jsonb not null default '{}'::jsonb;
+
+create index if not exists album_collage_events_album_idx on public.album_collage_events (album_id, created_at desc);
 
 
 -- ══════════════════════════════════════════════════════════════════════════
@@ -9372,6 +9400,16 @@ grant update (qr_note_template) on public.profiles to authenticated;
 drop policy if exists album_collages_owner_read on public.album_collages;
 
 create policy album_collages_owner_read on public.album_collages
+  for select using (
+    exists (select 1 from public.albums a
+            where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
+  );
+
+grant update (collage_brand) on public.profiles to authenticated;
+
+drop policy if exists album_collage_events_owner_read on public.album_collage_events;
+
+create policy album_collage_events_owner_read on public.album_collage_events
   for select using (
     exists (select 1 from public.albums a
             where a.id = album_id and (a.owner_id = auth.uid() or public.is_admin()))
