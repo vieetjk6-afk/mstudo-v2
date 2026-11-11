@@ -94,6 +94,24 @@ const FOLDER_ROLE: { id: string; label: string; re: RegExp; role: "bride" | "gro
   { id: "m-chure", label: "Chú rể", re: /chu\s*re|\bgroom\b/, role: "groom" },
 ];
 
+/**
+ * Những người có thể là cô dâu / chú rể: người studio đặt tên "Cô dâu" / "Chú
+ * rể" + vài người nhiều khuôn mặt nhất. Máy chủ chỉ đọc ảnh của ĐÚNG những người
+ * này (categorize chỉ cần hai nhân vật chính) thay vì mọi người khách trong album
+ * — album cưới có hàng trăm cụm mặt khách mời.
+ */
+export function mainCandidates(people: readonly { id: string; name: string; face_count?: number | null }[], top = 3): string[] {
+  const byCount = [...people].sort((a, b) => (Number(b.face_count) || 0) - (Number(a.face_count) || 0));
+  const out: string[] = [];
+  const add = (id: string | undefined) => {
+    if (id && !out.includes(id)) out.push(id);
+  };
+  add(byCount.find((p) => NAME_BRIDE.test(fold(p.name || "")))?.id);
+  add(byCount.find((p) => NAME_GROOM.test(fold(p.name || "")))?.id);
+  for (const p of byCount.slice(0, top)) add(p.id);
+  return out;
+}
+
 /** Mặt đủ lớn để tính là người trong ảnh (bỏ khách lấp ló phía xa). */
 export function significant(box: readonly number[]): boolean {
   return box.length === 4 && (box[2] >= 0.04 || box[3] >= 0.04);
@@ -166,7 +184,9 @@ export function categorize(inp: CatInput): CatResult {
       if (n === 0 && !hasA && !hasB) it.tags.push(CAT_DECOR);
       else if (hasA && hasB && n <= 3) it.tags.push(CAT_COUPLE);
       else if ((hasA || hasB) && !(hasA && hasB) && n <= 2) it.tags.push(personTag(hasA ? pA!.id : pB!.id));
-      else if (n >= 1) it.tags.push(CAT_FAMILY);
+      // Chưa biết ai là cô dâu / chú rể (album chưa gom người): ảnh 1–3 mặt nhiều
+      // khả năng chính là ảnh cặp đôi — đừng xếp nhầm vào "Gia đình & bạn bè".
+      else if (n >= (pA ? 1 : 4)) it.tags.push(CAT_FAMILY);
     }
     // Điểm ưu tiên: vai trò + độ nét vùng mặt + cỡ mặt (ảnh cận rõ mặt lên trước).
     let score = 5;
@@ -261,11 +281,14 @@ const QUOTA: Record<CatKind, number> = { couple: 0.3, person: 0.28, decor: 0.14,
  * Kết quả xếp theo thứ tự album (kể chuyện theo thời gian).
  */
 export function suggestPhotos(
-  order: readonly string[],
+  allOrder: readonly string[],
   res: CatResult,
   count: number,
   hearts: ReadonlySet<string> = new Set(),
+  /** Ảnh không được gợi ý (đã chọn, đã nằm ở layout khác) — kết quả vẫn đủ `count` ảnh MỚI nếu album còn. */
+  exclude: ReadonlySet<string> = new Set(),
 ): string[] {
+  const order = exclude.size ? allOrder.filter((id) => !exclude.has(id)) : allOrder;
   const pos = new Map(order.map((id, i) => [id, i]));
   const scoreOf = (id: string) => (res.info[id]?.score ?? 5) + (hearts.has(id) ? 3 : 0);
   const picked = new Set<string>();

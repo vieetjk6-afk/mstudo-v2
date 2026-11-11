@@ -91,7 +91,7 @@ export function useToast() {
     timer.current = setTimeout(() => setText(null), 3200);
   };
   const node = text ? (
-    <div className="pointer-events-none fixed inset-x-0 z-[120] flex justify-center px-4" style={{ bottom: "calc(max(10px, env(safe-area-inset-bottom, 0px)) + 76px)" }}>
+    <div className="pointer-events-none fixed inset-x-0 z-[120] flex justify-center px-4" style={{ bottom: "calc(max(10px, env(safe-area-inset-bottom, 0px)) + 132px)" }}>
       <span className="max-w-[440px] rounded-[12px] px-3.5 py-2.5 text-center text-[13px] font-medium" style={{ background: "rgba(20,20,24,.92)", color: "#fff", boxShadow: "0 12px 34px rgba(20,15,25,.3)" }}>
         {text}
       </span>

@@ -404,6 +404,7 @@ export default function GalleryViewV2(props: GalleryViewProps) {
         eventDate={gallery.event_date}
         hearts={g.selected}
         people={g.people}
+        galleryPhotos={g.photos}
       />
     </CustomerRootV2>
   );

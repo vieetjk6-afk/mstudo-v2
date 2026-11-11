@@ -17,6 +17,7 @@ import { adaptiveCandidates, scoreCells, type Cell, type LayoutPhoto } from "./a
 import { buildText, estimateTextHeight, presetById, type TextPreset } from "./typography";
 import { focusCrop } from "./crop";
 import { rng, uid } from "./rng";
+import { decorOptions, decorateGrid, paperFor } from "./decor";
 
 type Quad = [number, number, number, number];
 
@@ -104,13 +105,22 @@ export function heroPhoto(frames: Frame[]): string | null {
 /** Họ công thức — để trộn gợi ý cho đa dạng và tránh lặp giữa các trang. */
 export function family(recipe: string): string {
   const head = recipe.startsWith("bgphoto|") ? `bg-${recipe.slice(8)}` : recipe;
-  return head.split(":")[0];
+  // "~m" = bản lật ngang của cùng bố cục (mẫu gợi ý) — cùng họ.
+  return head.split(":")[0].replace(/~m$/, "");
+}
+
+/** Chữ ký trang trí (hình khung, viền, xoay) — cùng hình học mà khác trang trí vẫn là phương án khác. */
+function decoSig(frames: Frame[]): string {
+  return frames
+    .map((f) => (f.kind === "photo" && f.deco ? `${f.deco.shape ?? ""}${f.deco.pad ? "p" : ""}${f.deco.rotate ? "r" : ""}` : "-"))
+    .join(",");
 }
 
 function sameLayout(a: Frame[], b: Frame[]): boolean {
   const pa = a.filter((f) => f.kind === "photo");
   const pb = b.filter((f) => f.kind === "photo");
   if (pa.length !== pb.length) return false;
+  if (decoSig(a) !== decoSig(b)) return false;
   const iou = (r: Rect, s: Rect) => {
     const x = Math.max(0, Math.min(r.x + r.w, s.x + s.w) - Math.max(r.x, s.x));
     const y = Math.max(0, Math.min(r.y + r.h, s.y + s.h) - Math.max(r.y, s.y));
@@ -201,6 +211,18 @@ export function composeOptions(inp: ComposeInput): ComposeResult[] {
   const bandInk = st.bgPhoto ? onPhotoInk : ink;
   const bandShadow = !!st.bgPhoto;
 
+  // Lưới có lề + trang trí: bo góc mềm, hoặc viền ảnh in đổ bóng (hợp nền ảnh mờ / giấy kraft).
+  const decoBias = st.decoBias ?? 0.4;
+  const gridVariants = (key: string, photoFrames: Frame[], extra: Frame[], cost: number) => {
+    if (decoBias <= 0 || margin < short * 0.02 || n > 6) return;
+    const round = decorateGrid(photoFrames, "round", short, paperFor(st), byId);
+    push(`grid-round:${key}`, [...round, ...extra], cost + 0.06 - decoBias * 0.2, bgFor(round));
+    if (st.bgPhoto || decoBias >= 0.6) {
+      const print = decorateGrid(photoFrames, "print", short, paperFor(st), byId);
+      push(`grid-print:${key}`, [...print, ...extra], cost + 0.05 - decoBias * 0.25, bgFor(print));
+    }
+  };
+
   /* 1) Một ảnh tràn khung (không chữ) — hoặc chữ đè lên ảnh. */
   if (n === 1) {
     const cells = [{ rect: page, photoId: photos[0].id }];
@@ -224,6 +246,7 @@ export function composeOptions(inp: ComposeInput): ComposeResult[] {
       for (const c of adaptiveCandidates(lp, area, gap, { limit: 4, seed: inp.seed })) {
         const frames = cellsToFrames(c.cells, byId);
         push(`grid:${c.key}`, frames, c.cost + st.bleedBias * 0.3, bgFor(frames));
+        gridVariants(`${c.key}`, frames, [], c.cost + st.bleedBias * 0.3);
       }
     } else {
       const bandH = bandFor(area.w * 0.9);
@@ -235,7 +258,9 @@ export function composeOptions(inp: ComposeInput): ComposeResult[] {
       const photosBottom: Rect = { x: area.x, y: area.y, w: area.w, h: Math.max(1, textBottom.y - gap - area.y) };
       for (const c of adaptiveCandidates(lp, photosBottom, gap, { limit: 3, seed: inp.seed })) {
         const photoFrames = cellsToFrames(c.cells, byId);
-        push(`grid+tb:${c.key}`, [...photoFrames, ...textFrame(textBottom, bandInk, "center", bandShadow)], c.cost + st.bleedBias * 0.3 + 0.02, bgFor(photoFrames));
+        const tf = textFrame(textBottom, bandInk, "center", bandShadow);
+        push(`grid+tb:${c.key}`, [...photoFrames, ...tf], c.cost + st.bleedBias * 0.3 + 0.02, bgFor(photoFrames));
+        gridVariants(`tb:${c.key}`, photoFrames, tf, c.cost + st.bleedBias * 0.3 + 0.02);
       }
       // Dải chữ TRÊN ảnh — đỉnh dải nằm dưới vùng Story bị che.
       const topY = Math.max(area.y, safe.y) + edge;
@@ -301,6 +326,13 @@ export function composeOptions(inp: ComposeInput): ComposeResult[] {
     // Ô biên tập có tỉ lệ cố định: ảnh lệch chiều nhiều thì cắt nhiều → điểm kém đi.
     const cost = scoreCells(cells, lp) + 0.12 - st.editorialBias * 0.8 + st.bleedBias * 0.15 + (landscape && t.id.startsWith("e1-side") ? -0.05 : 0) + overlapPenalty;
     push(`edit:${t.id}`, frames, cost, bgFor(frames));
+  }
+
+  /* 5) Bố cục trang trí: ảnh in polaroid, vòm, tròn, ảnh rải, ảnh nhỏ đè góc, bậc thang. */
+  for (const d of decorOptions({ photos, f, st, short, safe, text, preset, ink: bandInk, inkShadow: bandShadow, r, textFrame, bgFor })) {
+    // Có ảnh tràn kín trang thì nền ảnh mờ bị che hết — bỏ cho nhẹ lượt xuất.
+    const full = d.frames.some((x) => x.kind === "photo" && x.rect.w >= f.w - 1 && x.rect.h >= f.h - 1);
+    push(d.recipe, d.frames, d.cost, full ? undefined : d.bgPhoto);
   }
 
   results.sort((a, b) => a.cost - b.cost);

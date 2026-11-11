@@ -12,12 +12,18 @@
  */
 import { assignTexts, cleanTexts, distribute, generateDoc, pageSizes, pageText, pagePhotoIds, relayoutPage, addTextToPage, removeTextFromPage, changeFormat, pageAlternatives } from "../../src/lib/collage/generate.ts";
 import { sanitizeDoc, docPhotoIds } from "../../src/lib/collage/validate.ts";
-import { categorize, suggestPhotos, fold, CAT_COUPLE, CAT_DECOR, CAT_FAMILY } from "../../src/lib/collage/categories.ts";
+import { categorize, suggestPhotos, fold, mainCandidates, CAT_COUPLE, CAT_DECOR, CAT_FAMILY } from "../../src/lib/collage/categories.ts";
 import { focusCrop, placePhoto, DEFAULT_CROP } from "../../src/lib/collage/crop.ts";
 import { formatById } from "../../src/lib/collage/formats.ts";
 import { rng } from "../../src/lib/collage/rng.ts";
 import { COLLAGE_LIMITS } from "../../src/lib/collage/types.ts";
 import { collageEnabledFor } from "../../src/lib/collage/enabled.ts";
+import { readByIds, runPool, withDeadline } from "../../src/lib/collage/batch-read.ts";
+import { blurRGBA, boxSizes, workScale } from "../../src/lib/collage/blur.ts";
+import { photoArea, shapeRadii } from "../../src/lib/collage/frame-geom.ts";
+import { pageSuggestions } from "../../src/lib/collage/generate.ts";
+import { composeOptions, family } from "../../src/lib/collage/compose.ts";
+import { styleById } from "../../src/lib/collage/styles.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -252,6 +258,222 @@ check("album lẻ mặc định bật", collageEnabledFor([], true), true);
 check("album lẻ studio đã tắt", collageEnabledFor([], false), false);
 check("album lẻ, cột chưa có (chưa chạy SQL) → tắt", collageEnabledFor([], undefined), false);
 check("đọc hợp đồng lỗi (chưa chạy SQL) → tắt", collageEnabledFor(null, true), false);
+
+/* ── Gợi ý khi chưa biết ai là cô dâu / chú rể ───────────────────────────── */
+{
+  const photos = [0, 1, 2].map((i) => ({ id: `q${i}`, source_id: null, position: i }));
+  const box = (x) => [x, 0.2, 0.12, 0.15];
+  const faces = [
+    { photo_id: "q0", box: box(0.1), sharpness: 50 },
+    { photo_id: "q0", box: box(0.5), sharpness: 50 },
+    ...[0.05, 0.25, 0.45, 0.65].map((x) => ({ photo_id: "q1", box: box(x), sharpness: 50 })),
+  ];
+  const r = categorize({ photos, sources: [], faces, scanned: new Set(["q0", "q1", "q2"]), people: [], links: [] });
+  ok("chưa gom người: ảnh 2 mặt không bị xếp nhầm vào Gia đình", !r.info.q0.tags.includes(CAT_FAMILY));
+  ok("chưa gom người: ảnh 4 mặt vẫn là Gia đình & bạn bè", r.info.q1.tags.includes(CAT_FAMILY));
+  ok("chưa gom người: quét rồi 0 mặt vẫn là decor", r.info.q2.tags.includes(CAT_DECOR));
+}
+{
+  const people = [
+    { id: "g1", name: "", face_count: 400 },
+    { id: "g2", name: "Khách", face_count: 380 },
+    { id: "cd", name: "Cô Dâu", face_count: 120 },
+    { id: "cr", name: "chu re", face_count: 90 },
+    { id: "g3", name: "", face_count: 300 },
+    { id: "g4", name: "", face_count: 10 },
+  ];
+  check("ứng viên cô dâu chú rể: người đặt tên + nhiều mặt nhất", mainCandidates(people), ["cd", "cr", "g1", "g2", "g3"]);
+  check("ứng viên: không có người nào", mainCandidates([]), []);
+}
+
+/* ── Đọc theo lô có hạn giờ (route /collage/photos) ─────────────────────── */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+{
+  // runPool: không bao giờ quá n lượt cùng lúc, chạy đủ mọi phần tử.
+  let now = 0, peak = 0;
+  const seen = [];
+  await runPool([1, 2, 3, 4, 5, 6, 7], 3, async (x) => {
+    now++;
+    peak = Math.max(peak, now);
+    await sleep(5);
+    seen.push(x);
+    now--;
+  });
+  check("chạy song song tối đa 3 lượt, đủ 7 phần tử", [peak, seen.sort((a, b) => a - b)], [3, [1, 2, 3, 4, 5, 6, 7]]);
+}
+{
+  // 250 ảnh, mỗi ảnh 3 mặt; trần 100 dòng/lượt → lô 50 ảnh (150 dòng) phải tự chia đôi tới khi đủ.
+  const ids = Array.from({ length: 250 }, (_, i) => `ph${i}`);
+  const db = new Map(ids.map((id) => [id, [0, 1, 2].map((at) => ({ photo_id: id, at }))]));
+  let calls = 0;
+  const q = async (part) => {
+    calls++;
+    return { data: part.flatMap((id) => db.get(id)).slice(0, 100), error: null };
+  };
+  const ctl = new AbortController();
+  const r = await readByIds(ids, q, ctl.signal, { size: 50, cap: 100 });
+  check("đọc đủ mọi dòng dù chạm trần max-rows (tự chia lô)", [r.rows.length, r.done.size], [750, 250]);
+  ok("có chia lô thật", calls > 5, `calls=${calls}`);
+}
+{
+  // Lô lỗi → ảnh của lô đó KHÔNG được tính là đã đọc (kẻo thành decor vì "0 mặt").
+  const ids = ["a", "b", "c", "d"];
+  const q = async (part) => (part.includes("c") ? { data: null, error: { message: "boom" } } : { data: part.map((id) => ({ photo_id: id })), error: null });
+  const r = await readByIds(ids, q, new AbortController().signal, { size: 2 });
+  check("lô lỗi không được tính là đã đọc xong", [...r.done].sort(), ["a", "b"]);
+}
+{
+  // DB treo hẳn (không nghe signal): vẫn trả đúng hạn, kèm phần đã đọc xong.
+  const ids = Array.from({ length: 6 }, (_, i) => `x${i}`);
+  const q = (part) => (part[0] === "x0" ? Promise.resolve({ data: [{ photo_id: "x0" }], error: null }) : new Promise(() => {}));
+  const t0 = Date.now();
+  const none = { rows: [], done: new Set() };
+  const r = await withDeadline(150, (signal) => readByIds(ids, q, signal, { size: 1, parallel: 2 }), none);
+  const ms = Date.now() - t0;
+  ok("DB treo: trả về đúng hạn (không quay vòng mãi)", ms < 1000, `${ms}ms`);
+  check("DB treo: báo đã cắt vì hết giờ, giữ phần đã đọc xong", [r.cut, [...r.value.done]], [true, ["x0"]]);
+}
+{
+  // DB chậm nhưng NGHE signal: dừng ngay khi hết giờ, giữ phần đã xong.
+  const ids = Array.from({ length: 8 }, (_, i) => `y${i}`);
+  const q = (part, signal) =>
+    new Promise((resolve) => {
+      const t = setTimeout(() => resolve({ data: part.map((id) => ({ photo_id: id })), error: null }), part[0] === "y0" ? 10 : 5000);
+      signal.addEventListener("abort", () => {
+        clearTimeout(t);
+        resolve({ data: null, error: { message: "AbortError" } });
+      });
+    });
+  const r = await withDeadline(200, (signal) => readByIds(ids, q, signal, { size: 1, parallel: 8 }), { rows: [], done: new Set() });
+  check("hết giờ: giữ đúng phần đã đọc xong", [r.cut, [...r.value.done]], [true, ["y0"]]);
+}
+{
+  const r = await withDeadline(1000, async () => "xong", "dự phòng");
+  check("xong trước hạn: không bị cắt", [r.value, r.cut], ["xong", false]);
+  const e = await withDeadline(1000, async () => {
+    throw new Error("x");
+  }, "dự phòng");
+  check("lỗi: trả giá trị dự phòng", e.value, "dự phòng");
+}
+
+/* ── Nền mờ khi xuất: làm mờ bằng tay (Safari iPhone bỏ qua ctx.filter) ───── */
+{
+  const sizes = boxSizes(6);
+  ok("3 hộp lẻ xấp xỉ Gauss", sizes.length === 3 && sizes.every((b) => b % 2 === 1 && b >= 7 && b <= 13), JSON.stringify(sizes));
+  const w = 41, h = 21;
+  const px = new Uint8ClampedArray(w * h * 4);
+  for (let i = 0; i < w * h; i++) px.set([0, 0, 0, 255], i * 4);
+  px.set([255, 255, 255, 255], (10 * w + 20) * 4); // một điểm sáng giữa ảnh
+  blurRGBA(px, w, h, 3);
+  const at = (x, y) => px[(y * w + x) * 4];
+  ok("điểm sáng loang ra xung quanh (ảnh mờ thật)", at(20, 10) < 255 && at(22, 10) > 0 && at(20, 12) > 0, `${at(20, 10)} ${at(22, 10)} ${at(20, 12)}`);
+  ok("loang đều hai phía", Math.abs(at(17, 10) - at(23, 10)) <= 1 && Math.abs(at(20, 7) - at(20, 13)) <= 1);
+  ok("kênh alpha giữ nguyên", px[3] === 255 && px[(10 * w + 20) * 4 + 3] === 255);
+  const flat = new Uint8ClampedArray(8 * 8 * 4).fill(120);
+  blurRGBA(flat, 8, 8, 4);
+  ok("ảnh một màu làm mờ vẫn y nguyên (mép không bị nhạt)", flat.every((v) => v === 120));
+  ok("làm mờ ở ảnh nhỏ, không quá nửa kích thước gốc", workScale(56) < 0.2 && workScale(2) === 0.5);
+}
+
+/* ── Khung trang trí: phần ảnh trừ viền, góc bo ─────────────────────────── */
+{
+  const fr = { rect: { x: 100, y: 100, w: 400, h: 500 }, deco: { pad: 20, padBottom: 90 } };
+  check("phần ảnh polaroid trừ viền (viền dưới dày)", photoArea(fr), { x: 120, y: 120, w: 360, h: 390 });
+  check("khung không trang trí: phần ảnh = cả khung", photoArea({ rect: { x: 0, y: 0, w: 10, h: 20 } }), { x: 0, y: 0, w: 10, h: 20 });
+  check("vòm: hai góc trên bo nửa bề ngang", shapeRadii("arch", 300, 500), [150, 150, 0, 0]);
+}
+
+/* ── Kiểm bộ layout có trang trí (máy chủ) ─────────────────────────────── */
+{
+  const base = generateDoc({ photos: photos.slice(0, 4), perPage: 4, formatId: "4x5", styleId: "white", texts: [], seed: 3 });
+  const allowedIds = new Set(photos.map((p) => p.id));
+  const fr = base.pages[0].frames.find((f) => f.kind === "photo");
+  const withDeco = { ...base, mode: "manual", pages: [{ ...base.pages[0], frames: base.pages[0].frames.map((f) => (f === fr ? { ...f, deco: { shape: "arch", pad: 12, padBottom: 60, padColor: "#FFFFFF", rotate: 4.24, shadow: true } } : f)) }] };
+  const okDoc = sanitizeDoc(withDeco, allowedIds);
+  const got = okDoc.ok ? okDoc.doc.pages[0].frames.find((f) => f.id === fr.id) : null;
+  check("giữ trang trí hợp lệ (màu viền chuẩn hoá, xoay làm tròn)", got?.deco, { shape: "arch", pad: 12, padBottom: 60, padColor: "#ffffff", rotate: 4.2, shadow: true });
+  ok("giữ chế độ tự chọn từng layout", okDoc.ok && okDoc.doc.mode === "manual");
+  const weird = { ...base, mode: "x", pages: [{ ...base.pages[0], frames: base.pages[0].frames.map((f) => (f === fr ? { ...f, deco: { shape: "star", rotate: 90, padColor: "red", shadow: "yes" } } : f)) }] };
+  const w2 = sanitizeDoc(weird, allowedIds);
+  ok("trang trí lạ bị bỏ, không làm hỏng cả bộ", w2.ok && !w2.doc.pages[0].frames.find((f) => f.id === fr.id).deco && !w2.doc.mode);
+}
+
+/* ── Tự chọn ảnh từng layout ───────────────────────────────────────────── */
+{
+  const groups = [[photos[0].id, photos[1].id], [photos[2].id], [photos[3].id, photos[4].id, photos[5].id]];
+  const doc = generateDoc({ photos: photos.slice(0, 6), perPage: 4, formatId: "4x5", styleId: "mix", texts: ["Một", "Hai"], seed: 77, groups });
+  check("mỗi layout đúng những ảnh khách chọn", doc.pages.map((p) => pagePhotoIds(p).sort()), groups.map((g) => [...g].sort()));
+  ok("đánh dấu bộ tự chọn", doc.mode === "manual");
+  const withText = doc.pages.map((p) => pageText(p)?.text).filter(Boolean).sort();
+  check("mỗi nội dung đúng một layout", withText, ["Hai", "Một"]);
+}
+
+/* ── Gợi ý chọn ảnh: đúng số ảnh MỚI, bỏ ảnh đã dùng ─────────────────────── */
+{
+  const order = Array.from({ length: 40 }, (_, i) => `s${i}`);
+  const res = { cats: [], info: {} };
+  const taken = new Set(order.slice(0, 10));
+  const pick = suggestPhotos(order, res, 8, new Set(), taken);
+  ok("chọn giúp đủ số ảnh khách nhập, không lấy lại ảnh đã dùng", pick.length === 8 && pick.every((id) => !taken.has(id)), JSON.stringify(pick));
+}
+
+/* ── Mẫu gợi ý cho một trang: đa dạng, "Gợi ý khác" ra loạt mới ─────────── */
+{
+  const inputs = new Map(photos.map((p) => [p.id, p]));
+  const allowedIds = new Set(photos.map((p) => p.id));
+  for (const n of [1, 2, 3, 4]) {
+    const doc = generateDoc({ photos: photos.slice(0, n), perPage: n, formatId: n % 2 ? "4x5" : "9x16", styleId: "white", texts: ["Chúng mình cưới rồi"], seed: 11 + n });
+    const page = doc.pages[0];
+    const r0 = pageSuggestions(page, inputs, doc.formatId, doc.seed, 0, 10);
+    const r1 = pageSuggestions(page, inputs, doc.formatId, doc.seed, 1, 10);
+    const key = (x) => `${x.recipe}|${x.styleId}`;
+    const fams = new Set(r0.map((x) => family(x.recipe)));
+    ok(`${n} ảnh: loạt gợi ý đủ nhiều họ bố cục`, r0.length >= 6 && fams.size >= 5, `${r0.length} mẫu, ${fams.size} họ: ${[...fams].join(" ")}`);
+    ok(`${n} ảnh: lượt đầu ưu tiên phong cách đang dùng`, r0[0].styleId === page.styleId);
+    ok(`${n} ảnh: "Gợi ý khác" ra loạt mẫu khác hẳn`, r1.filter((x) => r0.some((y) => key(y) === key(x))).length <= 3, `${r1.map(key).join(" ")}`);
+    ok(`${n} ảnh: mẫu đầu "Gợi ý khác" luôn khác trang hiện tại`, key(r1[0]) !== `${page.recipe}|${page.styleId}`);
+    ok(`${n} ảnh: có mẫu phong cách khác`, new Set([...r0, ...r1].map((x) => x.styleId)).size >= 3);
+    // Mọi mẫu khi áp vào trang đều qua được bộ kiểm của máy chủ, chữ không bị mất.
+    const bad = [...r0, ...r1].filter((x) => {
+      const d = { ...doc, pages: [{ ...page, frames: x.frames, recipe: x.recipe, styleId: x.styleId, ...(x.bgPhoto ? { bgPhoto: x.bgPhoto } : {}) }] };
+      const c = sanitizeDoc(d, allowedIds);
+      return !c.ok || c.doc.pages[0].frames.filter((f) => f.kind === "text").length !== 1;
+    });
+    ok(`${n} ảnh: mọi mẫu gợi ý hợp lệ, giữ đúng một nội dung`, bad.length === 0, bad.map((x) => x.recipe).join(" "));
+  }
+}
+
+/* ── Bố cục trang trí: nằm trong trang, chữ trong vùng an toàn của Story ──── */
+{
+  let out = 0;
+  let unsafe = 0;
+  let seen = new Set();
+  for (const formatId of ["4x5", "1x1", "9x16", "16x9", "3x4"]) {
+    const f = formatById(formatId);
+    const top = f.safeTop ?? 0;
+    const bottom = f.h - (f.safeBottom ?? 0);
+    for (const n of [1, 2, 3, 4, 5, 6]) {
+      for (const text of [null, "Thank you for coming — hẹn gặp mọi người ở tiệc cưới nhé!"]) {
+        for (const style of ["ivory", "kraft", "blur"]) {
+          const res = composeOptions({ photos: photos.slice(0, n), format: f, style: styleById(style), text, seed: 5 + n });
+          for (const r of res.filter((x) => x.recipe.startsWith("deco-") || x.recipe.startsWith("grid-"))) {
+            seen.add(family(r.recipe));
+            for (const fr of r.frames) {
+              const cx = fr.rect.x + fr.rect.w / 2;
+              const cy = fr.rect.y + fr.rect.h / 2;
+              const full = fr.rect.w >= f.w - 1 && fr.rect.h >= f.h - 1;
+              if (!full && (fr.rect.x < -f.w * 0.04 || fr.rect.y < -f.h * 0.04 || fr.rect.x + fr.rect.w > f.w * 1.04 || fr.rect.y + fr.rect.h > f.h * 1.04 || cx < 0 || cy < 0 || cx > f.w || cy > f.h)) out++;
+              if (fr.kind === "text" && (fr.rect.y < top - 1 || fr.rect.y + fr.rect.h > bottom + 1)) unsafe++;
+            }
+          }
+        }
+      }
+    }
+  }
+  check("bố cục trang trí không lọt ra ngoài trang", out, 0);
+  check("chữ của bố cục trang trí nằm trong vùng an toàn Story", unsafe, 0);
+  ok("đủ các họ trang trí", ["deco-polaroid", "deco-arch", "deco-oval", "deco-prints", "deco-inset", "deco-arches", "deco-circles", "deco-stagger", "deco-scatter", "grid-round", "grid-print"].every((x) => seen.has(x)), [...seen].join(" "));
+}
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

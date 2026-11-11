@@ -46,8 +46,11 @@ export default function OptionsStep({
   busy,
   onBack,
   onGenerate,
+  manualPages = null,
 }: {
   count: number;
+  /** Khách tự chọn ảnh từng layout: số layout đã định sẵn (ẩn "số ảnh mỗi trang"). */
+  manualPages?: number | null;
   opts: CollageOptions;
   setOpts: (fn: (o: CollageOptions) => CollageOptions) => void;
   /** Gợi ý nội dung (theo tên album, ngày cưới…). */
@@ -56,7 +59,9 @@ export default function OptionsStep({
   onBack: () => void;
   onGenerate: () => void;
 }) {
-  const pages = useMemo(() => pageSizes(count, opts.perPage, rng(1)).length, [count, opts.perPage]);
+  const autoPages = useMemo(() => pageSizes(count, opts.perPage, rng(1)).length, [count, opts.perPage]);
+  const manual = manualPages != null;
+  const pages = manual ? manualPages : autoPages;
   const filled = opts.texts.filter((t) => t.trim()).length;
   const tooMany = filled > pages;
   const canAdd = opts.texts.length < Math.min(pages, COLLAGE_LIMITS.texts);
@@ -72,7 +77,7 @@ export default function OptionsStep({
 
   return (
     <>
-      <StudioHeader title="Tuỳ chọn ghép" sub={`${count} ảnh đã chọn`} onBack={onBack} backLabel="Chọn lại ảnh" />
+      <StudioHeader title="Tuỳ chọn ghép" sub={manual ? `${pages} layout · ${count} ảnh bạn tự chọn` : `${count} ảnh đã chọn`} onBack={onBack} backLabel="Chọn lại ảnh" />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-6">
         <div className="mx-auto w-full max-w-[640px]">
           <Group title="Khổ ảnh" desc="Đăng ở đâu thì chọn khổ đó — sửa được sau.">
@@ -100,7 +105,7 @@ export default function OptionsStep({
             </div>
           </Group>
 
-          <Group title="Số ảnh mỗi trang" desc={<>Máy chia {count} ảnh thành <b style={{ color: "var(--tx)" }}>{opts.perPage === "mix" ? `khoảng ${pages}` : pages} layout</b>{opts.perPage !== "mix" && count % (opts.perPage as number) !== 0 && pages > 1 ? " (các trang chênh nhau tối đa 1 ảnh)" : ""}.</>}>
+          {manual ? null : <Group title="Số ảnh mỗi trang" desc={<>Máy chia {count} ảnh thành <b style={{ color: "var(--tx)" }}>{opts.perPage === "mix" ? `khoảng ${pages}` : pages} layout</b>{opts.perPage !== "mix" && count % (opts.perPage as number) !== 0 && pages > 1 ? " (các trang chênh nhau tối đa 1 ảnh)" : ""}.</>}>
             <div className="flex flex-wrap gap-2">
               {PER_PAGE.map((n) => {
                 const on = opts.perPage === n;
@@ -124,7 +129,7 @@ export default function OptionsStep({
                 );
               })}
             </div>
-          </Group>
+          </Group>}
 
           <Group title="Phong cách">
             <div className="flex flex-wrap gap-2">
@@ -205,7 +210,7 @@ export default function OptionsStep({
               ) : null}
               {tooMany ? (
                 <p className="text-[12.5px] font-medium" style={{ color: "var(--rd)" }}>
-                  Bạn có {filled} nội dung nhưng chỉ có {pages} layout — mỗi layout chỉ mang một nội dung. Bớt nội dung, chọn thêm ảnh hoặc giảm số ảnh mỗi trang.
+                  Bạn có {filled} nội dung nhưng chỉ có {pages} layout — mỗi layout chỉ mang một nội dung. {manual ? "Bớt nội dung hoặc quay lại thêm layout." : "Bớt nội dung, chọn thêm ảnh hoặc giảm số ảnh mỗi trang."}
                 </p>
               ) : null}
             </div>
@@ -215,7 +220,7 @@ export default function OptionsStep({
       <StudioFooter>
         <button type="button" onClick={onGenerate} disabled={busy || tooMany || count === 0} className={btn("primary", "lg", "flex-1")}>
           {busy ? <LoaderCircle size={17} className="animate-spin" /> : <LayoutGrid size={17} />}
-          {busy ? "Đang ghép…" : `Tạo ${opts.perPage === "mix" ? "" : `${pages} `}layout`}
+          {busy ? "Đang ghép…" : `Tạo ${opts.perPage === "mix" && !manual ? "" : `${pages} `}layout`}
         </button>
       </StudioFooter>
     </>

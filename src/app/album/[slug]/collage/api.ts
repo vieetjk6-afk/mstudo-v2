@@ -30,9 +30,12 @@ export interface SavedSet {
 
 export class CollageApiError extends Error {
   code: string;
-  constructor(code: string) {
+  /** Lượt gọi nào hỏng ("photos", "sets"…) — hiện kèm mã lỗi cho dễ dò. */
+  op: string;
+  constructor(code: string, op = "") {
     super(code);
     this.code = code;
+    this.op = op;
   }
 }
 
@@ -45,6 +48,7 @@ const MSG: Record<string, string> = {
   bad_photo: "Có ảnh không còn trong album (studio vừa cập nhật ảnh). Bỏ ảnh đó ra rồi thử lại.",
   rate_limited: "Bạn thao tác nhanh quá — đợi ít giây rồi thử lại.",
   too_large: "Bộ ảnh ghép quá lớn — bớt trang hoặc bớt chữ rồi thử lại.",
+  timeout: "Máy chủ phản hồi chậm quá — bạn bấm Thử lại nhé.",
 };
 
 export function errorText(e: unknown): string {
@@ -52,41 +56,86 @@ export function errorText(e: unknown): string {
   return MSG[code] ?? "Không kết nối được máy chủ — bạn kiểm tra mạng rồi thử lại.";
 }
 
+/** Mã lỗi ngắn ("photos · timeout") — hiện nhỏ dưới thông báo để khách chụp màn hình gửi studio. */
+export function errorCode(e: unknown): string {
+  if (e instanceof CollageApiError) return [e.op, e.code].filter(Boolean).join(" · ");
+  return e instanceof Error ? e.name : "unknown";
+}
+
+/** Lỗi do máy chủ / mạng tạm thời (thử lại có thể được) — khác lỗi quyền / cấu hình. */
+export function isTransient(e: unknown): boolean {
+  if (!(e instanceof CollageApiError)) return true;
+  return ["timeout", "network", "rate_limited", "bad_response"].includes(e.code) || /^http_5\d\d$/.test(e.code);
+}
+
+/* Mọi lượt gọi đều có HẠN GIỜ — tính cả lúc đọc thân phản hồi. fetch() của
+   trình duyệt không tự bỏ cuộc: máy chủ treo là vòng quay "Đang mở album…" đứng
+   mãi (lỗi thật, 11/2026). Hết giờ → CollageApiError("timeout") để màn ghép báo
+   lỗi kèm nút thử lại, hoặc chạy tiếp bằng phần đã có. */
+const TIMEOUT = { photos: 20_000, sets: 12_000, save: 20_000, del: 15_000 } as const;
+
 const headers = (c: Cred): Record<string, string> => ({
   ...(c.key ? { "x-collage-key": c.key } : {}),
   ...(c.access ? { "x-album-access": c.access } : {}),
 });
 
-async function json<T>(res: Response): Promise<T> {
-  const d = await res.json().catch(() => ({}));
-  if (!res.ok) throw new CollageApiError((d as { error?: string }).error || (res.status === 429 ? "rate_limited" : `http_${res.status}`));
-  return d as T;
+async function request<T>(op: keyof typeof TIMEOUT, url: string, init: RequestInit): Promise<T> {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), TIMEOUT[op]);
+  try {
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, signal: ctl.signal });
+    } catch {
+      throw new CollageApiError(ctl.signal.aborted ? "timeout" : "network", op);
+    }
+    let d: unknown = null;
+    try {
+      d = await res.json();
+    } catch {
+      if (ctl.signal.aborted) throw new CollageApiError("timeout", op);
+    }
+    const err = (d as { error?: unknown } | null)?.error;
+    if (!res.ok) throw new CollageApiError(typeof err === "string" && err ? err : res.status === 429 ? "rate_limited" : `http_${res.status}`, op);
+    // 200 mà thân không phải JSON (trang lỗi của proxy / CDN chen giữa) — đừng coi là "không có ảnh".
+    if (!d || typeof d !== "object") throw new CollageApiError("bad_response", op);
+    return d as T;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-export async function fetchPhotos(c: Cred): Promise<{ photos: PhotoLite[]; cats: PhotoCat[]; info: Record<string, PhotoInfo> }> {
-  const res = await fetch(`/api/album/${c.slug}/collage/photos`, {
+export interface PhotosPayload {
+  photos: PhotoLite[];
+  cats: PhotoCat[];
+  info: Record<string, PhotoInfo>;
+  /** Máy chủ hết giờ giữa chừng phần gợi ý — nhóm ảnh có thể thiếu. */
+  partial?: boolean;
+}
+
+export async function fetchPhotos(c: Cred): Promise<PhotosPayload> {
+  const d = await request<Partial<PhotosPayload>>("photos", `/api/album/${c.slug}/collage/photos`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ key: c.key, access: c.access }),
   });
-  return json(res);
+  if (!Array.isArray(d.photos)) throw new CollageApiError("bad_response", "photos");
+  return { photos: d.photos, cats: Array.isArray(d.cats) ? d.cats : [], info: d.info && typeof d.info === "object" ? d.info : {}, partial: !!d.partial };
 }
 
 export async function fetchSets(c: Cred): Promise<SavedSet[]> {
-  const res = await fetch(`/api/album/${c.slug}/collage`, { headers: headers(c), cache: "no-store" });
-  return (await json<{ sets: SavedSet[] }>(res)).sets ?? [];
+  const d = await request<{ sets?: SavedSet[] }>("sets", `/api/album/${c.slug}/collage`, { headers: headers(c), cache: "no-store" });
+  return Array.isArray(d.sets) ? d.sets : [];
 }
 
-export async function saveSet(c: Cred, body: { id: string | null; title: string; doc: CollageDoc }): Promise<{ id: string; updatedAt: string; expiresAt: string }> {
-  const res = await fetch(`/api/album/${c.slug}/collage`, {
+export function saveSet(c: Cred, body: { id: string | null; title: string; doc: CollageDoc }): Promise<{ id: string; updatedAt: string; expiresAt: string }> {
+  return request("save", `/api/album/${c.slug}/collage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...body, key: c.key, access: c.access }),
   });
-  return json(res);
 }
 
 export async function deleteSet(c: Cred, id: string): Promise<void> {
-  const res = await fetch(`/api/album/${c.slug}/collage?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: headers(c) });
-  await json(res);
+  await request("del", `/api/album/${c.slug}/collage?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: headers(c) });
 }
