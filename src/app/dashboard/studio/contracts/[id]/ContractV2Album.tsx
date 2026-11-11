@@ -18,6 +18,7 @@ import WeddingPlanCardV2 from "./WeddingPlanCardV2";
 import WeddingInvitationCardV2 from "./WeddingInvitationCardV2";
 import LoveStoryCardV2 from "./LoveStoryCardV2";
 import { GiftBlock, type V2Ctx } from "./ContractV2Shared";
+import { CollageToggleV2 } from "./CollageToggle";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Tab SẢN PHẨM (giao diện mới): chế độ album → album khách đang thấy + hạn
@@ -31,7 +32,7 @@ const PROD_PRESETS = ["Xử lý hình ảnh", "Xử lý video", "In ấn album",
 export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
   const { ed } = ctx;
   const { f, finalLinks, products, prodForm, setProdForm } = ed;
-  const { contract, selectionAlbums, galleries, albumPhotoCounts, studioHost, studioName, services, plannerComingSoon, giftCombo, storyComingSoon } = ed.props;
+  const { contract, selectionAlbums, galleries, albumPhotoCounts, studioHost, studioName, services, plannerComingSoon, giftCombo, storyComingSoon, canCollage = false } = ed.props;
 
   // Album khách đang thấy: album giao riêng (nếu có) thắng, không thì album của
   // hợp đồng — cùng luật với cổng khách (@/lib/contract-album).
@@ -201,6 +202,9 @@ export default function ContractV2Album({ ctx }: { ctx: V2Ctx }) {
               </div>
             </Field>
           </div>
+
+          {/* Khách tự ghép layout ảnh đăng mạng xã hội trong album giao khách (mặc định bật). */}
+          <CollageToggleV2 contractId={contract.id} value={contract.collage_enabled} allowed={canCollage} />
 
           {/* Link ngoài: album / video / file gốc gửi bằng nơi khác. Thu gọn mặc định. */}
           <details className="group rounded-[12px]" style={{ border: "1px solid var(--bd)" }} open={hasLinks}>

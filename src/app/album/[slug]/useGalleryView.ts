@@ -111,6 +111,11 @@ export type GalleryViewProps = {
   studioHost?: string | null;
   /** Ảnh in tặng của hợp đồng (null = hợp đồng không tặng in). */
   print?: PrintState | null;
+  /**
+   * Ghép layout ảnh đăng mạng xã hội (null = album này không có: gói thấp,
+   * hợp đồng tắt, album lẻ). `coupleOnly` = phải nhập SĐT cô dâu / chú rể.
+   */
+  collage?: { coupleOnly: boolean } | null;
 };
 
 export type GallerySection = { id: string; name: string; items: { p: GalleryPhoto; i: number }[]; ids: string[] };
@@ -447,6 +452,8 @@ export function useGalleryView({
     // ảnh in
     pp,
     printing,
+    /** Vé mở khoá album có mật khẩu — ghép layout ảnh gửi kèm như ảnh in. */
+    access,
     // khung xem
     lbIdx,
     setLbIdx,

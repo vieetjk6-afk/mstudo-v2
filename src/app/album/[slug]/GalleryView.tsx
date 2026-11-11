@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { fmtDate } from "@/lib/date";
+import { useTheme } from "@/lib/theme";
 import FaceFinder from "@/app/a/[slug]/FaceFinder";
 import {
   Lock, ChevronLeft, ChevronRight, X, Download, Calendar, Star, Send, Check, Play, Heart, Share2,
@@ -24,6 +25,8 @@ import { watermarkLayer } from "@/lib/album-watermark";
 import AlbumCover from "@/components/AlbumCover";
 import { PrintBar, PrintCard, PrintFab, PrintToggle, PrintVerifyDialog } from "./PrintPicker";
 import { isVideo, useGalleryView, type GalleryDriveFolder as DriveFolder, type GalleryViewProps } from "./useGalleryView";
+import { useCollageEntry } from "./collage/useCollageEntry";
+import { CollageCardV1, CollageLayer } from "./collage/CollageCard";
 
 /* Album giao khách — GIAO DIỆN CŨ. Toàn bộ logic (mở khoá, nạp nền, chia sẻ,
    ảnh in, khung xem, cảm nhận…) nằm ở ./useGalleryView, dùng chung với bản giao
@@ -64,6 +67,7 @@ export default function GalleryView(props: GalleryViewProps) {
     shareSelected,
     pp,
     printing,
+    access,
     lbIdx,
     setLbIdx,
     go,
@@ -84,6 +88,9 @@ export default function GalleryView(props: GalleryViewProps) {
     sendFeedback,
   } = useGalleryView(props);
   const totalPhotos = props.totalPhotos ?? null;
+  const { theme } = useTheme();
+  // Ghép layout ảnh đăng mạng xã hội (gói Plus / Studio, hợp đồng đang bật).
+  const collage = useCollageEntry({ slug: gallery.slug, collage: props.collage, access, shareMode });
 
   /** Khách đang phóng to ảnh trong khung xem → gọi bản độ phân giải cao (ZoomHiRes). */
   const [lbZoomed, setLbZoomed] = useState(false);
@@ -184,6 +191,7 @@ export default function GalleryView(props: GalleryViewProps) {
         ) : null}
 
         <PrintCard pp={pp} cardRef={printCardRef} />
+        <CollageCardV1 entry={collage} />
 
         {/* tabs */}
         {/* TÌM ẢNH THEO KHUÔN MẶT — album giao khách.
@@ -414,6 +422,17 @@ export default function GalleryView(props: GalleryViewProps) {
       <PrintFab pp={pp} cardRef={printCardRef} />
       <PrintBar pp={pp} />
       <PrintVerifyDialog pp={pp} />
+      <CollageLayer
+        entry={collage}
+        slug={gallery.slug}
+        access={access}
+        watermark={wm}
+        theme={theme}
+        albumTitle={gallery.title}
+        eventDate={gallery.event_date}
+        hearts={selected}
+        people={people}
+      />
 
       <ShareDialog
         url={shareUrl}

@@ -149,6 +149,17 @@ export function planAllowsFaceSearch(plan: Plan, isAdmin = false): boolean {
 }
 
 /**
+ * GHÉP LAYOUT ẢNH ĐĂNG MẠNG XÃ HỘI trong album giao khách — chỉ Photographer
+ * Plus và Studio. Cùng gói với tìm theo khuôn mặt, và không chỉ vì giá: phần
+ * gợi ý ảnh (cô dâu / chú rể / ảnh chung / decor) đọc chính dữ liệu khuôn mặt
+ * mà bộ quét chỉ chạy cho hai gói này. Studio còn bật / tắt theo từng hợp đồng
+ * (studio_contracts.collage_enabled, mặc định bật).
+ */
+export function planAllowsCollage(plan: Plan, isAdmin = false): boolean {
+  return isAdmin || plan === "studio" || plan === "photographer_plus";
+}
+
+/**
  * KHO ĐỒ / PHÒNG VÁY — và mục "Thuê đồ" bên trong hợp đồng: chỉ gói Studio.
  *
  * Màn Phòng váy vốn đã là Studio (requireStudio() mặc định minTier "full", và
@@ -167,6 +178,11 @@ export function planAllowsRental(plan: Plan, isAdmin = false): boolean {
 /** Như planAllowsRental nhưng nhận sẵn bậc đã tính (từ requireStudio). */
 export function tierAllowsRental(tier: StudioTier): boolean {
   return tier === "full";
+}
+
+/** Như planAllowsCollage nhưng nhận sẵn bậc đã tính (từ requireStudio): Plus và Studio. */
+export function tierAllowsCollage(tier: StudioTier): boolean {
+  return tier === "plus" || tier === "full";
 }
 
 /** Album delivery phase (giao khách): every paid plan except free. */

@@ -93,6 +93,7 @@ import ContractAlbumModeCard from "./ContractAlbumModeCard";
 import { isWeddingReportage } from "@/lib/automations";
 import { isWeddingPackage } from "@/lib/wedding-plan";
 import { useUiV2 } from "@/components/v2/UiV2Context";
+import { CollageToggleV1 } from "./CollageToggle";
 import {
   useContractEditor,
   nextTier,
@@ -159,6 +160,7 @@ function ContractEditorV1(props: ContractEditorProps) {
     staffList,
     canAssign,
     canRental,
+    canCollage = false,
     bank,
     sameDayContracts,
     pricelist,
@@ -1772,6 +1774,8 @@ function ContractEditorV1(props: ContractEditorProps) {
                       để chép ảnh vào thư mục “Ảnh in” trong thư mục Drive giao khách. Để trống = không tặng in.
                     </p>
                   </div>
+                  {/* Khách tự ghép layout ảnh đăng mạng xã hội trong album giao khách (mặc định bật). */}
+                  <CollageToggleV1 contractId={contract.id} value={contract.collage_enabled} allowed={canCollage} />
                   {/* Nhập link ảnh riêng = MỘT album cho cả chọn ảnh lẫn giao khách:
                       ẩn ô album giao riêng (trừ hợp đồng đã lỡ gắn từ trước). */}
                   {(albumMode !== "manual" || !!f.gallery_album_id) && (

@@ -94,6 +94,7 @@ function base(tab: string): ContractEditorProps {
     staffList: f.staff,
     canAssign: true,
     canRental: true /* xem trước giả lập gói Studio */,
+    canCollage: true,
     bank: f.bank,
     sameDayContracts: [],
     pricelist: f.pricelistRows,

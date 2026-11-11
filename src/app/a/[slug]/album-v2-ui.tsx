@@ -29,6 +29,11 @@ export type AlbumImg = {
   thumb: (driveId: string, w: number) => string;
   full: (driveId: string, w: number) => string;
   original: (driveId: string) => string;
+  /**
+   * Byte ảnh CÙNG MIỀN để vẽ canvas (xuất ảnh ghép). Không khai = đi
+   * /api/img?…&raw=1 như ảnh tải lẻ có watermark; màn xem trước khai ảnh giả.
+   */
+  raw?: (driveId: string, w: number) => string;
 };
 const DRIVE_IMG: AlbumImg = { thumb: thumbnailUrl, full: fullImageUrl, original: originalImageUrl };
 const ImgCtx = createContext<AlbumImg>(DRIVE_IMG);

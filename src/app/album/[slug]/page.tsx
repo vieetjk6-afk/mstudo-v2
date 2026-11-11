@@ -17,6 +17,7 @@ import { getOriginalFolders } from "@/lib/album-original";
 import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
 import { loadPrintState } from "@/lib/album-print";
+import { loadCollageState } from "@/lib/album-collage";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,7 @@ export default async function GalleryPage(
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
   // Chủ album (gói + thương hiệu) lấy từ getAlbumOwner — đã cache theo request
   // nên dùng lại đúng dòng profiles generateMetadata vừa đọc.
-  const [{ brand, profile: owner }, studioHost, allPhotos, { data: s }, { data: feedback }, { data: ppl }, { data: pplLinks }, print, v2] = await Promise.all([
+  const [{ brand, profile: owner }, studioHost, allPhotos, { data: s }, { data: feedback }, { data: ppl }, { data: pplLinks }, print, v2, collageInfo] = await Promise.all([
     getAlbumOwner(album.owner_id),
     // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
     // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
@@ -125,6 +126,15 @@ export default async function GalleryPage(
     loadPrintState(admin, album.id).catch(() => null),
     // Giao diện mới (V2) hay bản cũ — theo studio sở hữu album. Cache theo lượt dựng.
     customerUiV2(album.owner_id),
+    // Ghép layout ảnh đăng mạng xã hội: chỉ gói Photographer Plus / Studio (gói
+    // của chủ album — getAlbumOwner đã cache theo request nên không đọc lại) VÀ
+    // hợp đồng dùng album đang bật (mặc định bật; chưa chạy
+    // migrations/ghep_layout.sql → tắt). Gói thấp thì không tốn thêm truy vấn nào.
+    // SĐT cô dâu / chú rể chỉ để biết có hỏi SĐT trước khi ghép hay không — bản
+    // thân các số KHÔNG bao giờ gửi xuống trình duyệt.
+    getAlbumOwner(album.owner_id)
+      .then(({ profile }) => loadCollageState(admin, album.id, profile))
+      .catch(() => null),
   ]);
   const studioName = brand.name;
 
@@ -139,6 +149,9 @@ export default async function GalleryPage(
   // gom từ trước trong DB, nên nếu chỉ chặn bộ quét thì ô tìm mặt vẫn hiện và
   // vẫn bấm được — tính năng của gói cao tiếp tục dùng free.
   const canFaceSearch = planAllowsFaceSearch(ownerPlan, owner?.role === "admin");
+  // Route /api/album/[slug]/collage/* tự kiểm lại y hệt — đây chỉ là để biết có
+  // hiện thẻ "Ghép ảnh" hay không.
+  const collage = collageInfo;
 
   // Sources hiển thị (ưu tiên stage 'delivery', fallback tất cả nếu chưa gắn).
   const delSources = (s ?? []).filter((x) => x.stage === "delivery");
@@ -217,6 +230,7 @@ export default async function GalleryPage(
         logoUrl={brand.logoUrl}
         studioHost={studioHost}
         print={print}
+        collage={collage}
       />
     </>
   );
