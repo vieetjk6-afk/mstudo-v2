@@ -32,7 +32,6 @@ export const COLLAGE_FONTS: CollageFont[] = [
   { key: "corinthia", label: "Corinthia", cssVar: "--font-corinthia", fallback: "cursive", weights: [400], italic: false, kind: "script" },
   { key: "prata", label: "Prata", cssVar: "--font-prata", fallback: "Georgia, serif", weights: [400], italic: false, kind: "serif" },
   { key: "garamond", label: "Garamond", cssVar: "--font-garamond", fallback: "Georgia, serif", weights: [400, 500], italic: true, kind: "serif" },
-  { key: "josefin", label: "Josefin", cssVar: "--font-josefin", fallback: "system-ui, sans-serif", weights: [300, 400, 600], italic: false, kind: "sans" },
 ];
 
 export const DEFAULT_FONT_KEY = "playfair";

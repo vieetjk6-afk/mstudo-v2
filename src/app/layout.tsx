@@ -13,7 +13,6 @@ import {
   Alex_Brush,
   Corinthia,
   Prata,
-  Josefin_Sans,
   EB_Garamond,
 } from "next/font/google";
 import "./globals.css";
@@ -125,7 +124,9 @@ const lora = Lora({
 
 // Bộ chữ của "mẫu typo" trên ảnh ghép (album giao khách → Ghép ảnh). Chỉ màn
 // ghép ảnh dùng tới (src/lib/collage/fonts.ts) → preload:false. Mọi phông đều
-// có bộ dấu tiếng Việt (đã đối chiếu font-data của next/font).
+// có bộ dấu tiếng Việt (đã đối chiếu font-data của next/font). KHÔNG dùng
+// Josefin Sans: Turbopack (Next 16.4) build lỗi "next/font/google queries have
+// exactly one entry" với riêng phông này — chữ hoa thưa dùng Manrope.
 const pinyon = Pinyon_Script({
   subsets: ["latin", "vietnamese"],
   weight: ["400"],
@@ -155,14 +156,6 @@ const prata = Prata({
   weight: ["400"],
   variable: "--font-prata",
   fallback: ["Georgia", "Times New Roman", "serif"],
-  display: "swap",
-  preload: false,
-});
-const josefin = Josefin_Sans({
-  subsets: ["latin", "vietnamese"],
-  weight: ["300", "400", "600"],
-  variable: "--font-josefin",
-  fallback: ["system-ui", "Segoe UI", "Arial", "sans-serif"],
   display: "swap",
   preload: false,
 });
@@ -223,7 +216,7 @@ export default function RootLayout({
     // hydrate (đó là cách duy nhất để không nháy nền sáng rồi mới sang tối), nên
     // React luôn thấy thuộc tính này lệch với bản dựng ở server. Chỉ tắt cảnh báo
     // đúng một cấp <html> — con cháu vẫn được kiểm tra bình thường.
-    <html lang="vi" data-theme="light" suppressHydrationWarning className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${beVietnam.variable} ${dancing.variable} ${greatVibes.variable} ${playfair.variable} ${playpen.variable} ${lora.variable} ${pinyon.variable} ${alexBrush.variable} ${corinthia.variable} ${prata.variable} ${josefin.variable} ${garamond.variable}`}>
+    <html lang="vi" data-theme="light" suppressHydrationWarning className={`${hanken.variable} ${cormorant.variable} ${manrope.variable} ${beVietnam.variable} ${dancing.variable} ${greatVibes.variable} ${playfair.variable} ${playpen.variable} ${lora.variable} ${pinyon.variable} ${alexBrush.variable} ${corinthia.variable} ${prata.variable} ${garamond.variable}`}>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>

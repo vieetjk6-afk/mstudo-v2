@@ -495,7 +495,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const t = { kind: "text", id: "t1", rect: { x: 0, y: 0, w: 800, h: 400 }, text: "Lan & Minh", style: { font: "pinyon", size: 80, weight: 400, italic: false, color: "#222222", align: "center", letterSpacing: 0, lineHeight: 1.2, uppercase: false }, lockup: { id: "save-date", kicker: "Save the date", sub: "12 · 10 · 2026" } };
   const lay = layoutLockup(t);
   check("khối chữ: dòng trên · nội dung · hoa văn · dòng dưới", lay?.blocks.map((b) => b.kind === "text" ? `t${Math.round(b.size)}` : b.kind), ["t19", "t80", "div", "t26"]);
-  check("phông cần nạp gồm cả phông dòng phụ", docFontKeys({ pages: [{ frames: [t] }] }).sort(), ["josefin", "pinyon", "prata"]);
+  check("phông cần nạp gồm cả phông dòng phụ", docFontKeys({ pages: [{ frames: [t] }] }).sort(), ["manrope", "pinyon", "prata"]);
 }
 
 /* ── Hình trang trí (dùng chung SVG / canvas) ──────────────────────────── */

@@ -33,7 +33,7 @@ export const TEXT_PRESETS: TextPreset[] = [
   { id: "signature", name: "Chữ ký", font: "corinthia", weight: 400, italic: false, uppercase: false, letterSpacing: 0, lineHeight: 1.02, size: 0.13 },
   { id: "didone", name: "Tạp chí", font: "prata", weight: 400, italic: false, uppercase: false, letterSpacing: 0.01, lineHeight: 1.12, size: 0.068 },
   { id: "garamond", name: "Garamond nghiêng", font: "garamond", weight: 400, italic: true, uppercase: false, letterSpacing: 0, lineHeight: 1.2, size: 0.07 },
-  { id: "geo", name: "Hình học thưa", font: "josefin", weight: 300, italic: false, uppercase: true, letterSpacing: 0.22, lineHeight: 1.4, size: 0.046 },
+  { id: "geo", name: "Hoa thưa mảnh", font: "manrope", weight: 400, italic: false, uppercase: true, letterSpacing: 0.3, lineHeight: 1.4, size: 0.042 },
 ];
 
 export function presetById(id: string | null | undefined): TextPreset {

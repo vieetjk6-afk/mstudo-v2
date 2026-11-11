@@ -49,21 +49,21 @@ const plainLine = (text: string, font: string, size: number, italic = false, wei
 
 export const LOCKUPS: Lockup[] = [
   { id: "plain", name: "Chữ đơn", main: "" },
-  { id: "script-date", name: "Thư pháp + ngày", main: "script", sub: caps("{date}", "josefin", 0.24, 0.32, 400), divider: "line", dividerAt: "bottom", sample: "Mãi bên nhau" },
-  { id: "magazine", name: "Tạp chí", main: "didone", kicker: caps("The Wedding", "josefin", 0.22, 0.42, 600), sub: caps("{date}", "josefin", 0.2, 0.34, 400), divider: "line", dividerAt: "top", sample: "Ngày của chúng mình" },
+  { id: "script-date", name: "Thư pháp + ngày", main: "script", sub: caps("{date}", "manrope", 0.24, 0.32, 400), divider: "line", dividerAt: "bottom", sample: "Mãi bên nhau" },
+  { id: "magazine", name: "Tạp chí", main: "didone", kicker: caps("The Wedding", "manrope", 0.22, 0.42, 600), sub: caps("{date}", "manrope", 0.2, 0.34, 400), divider: "line", dividerAt: "top", sample: "Ngày của chúng mình" },
   { id: "signature", name: "Chữ ký", main: "signature", sub: plainLine("with love", "garamond", 0.3, true), sample: "Lan & Minh" },
   { id: "minimal", name: "Tối giản", main: "geo", divider: "line", dividerAt: "both", sample: "Forever" },
   { id: "classic-dots", name: "Cổ điển", main: "classic", sub: plainLine("{date}", "cormorant", 0.34, true, 500), divider: "dots", dividerAt: "bottom", sample: "Trăm năm hạnh phúc" },
-  { id: "brush-heart", name: "Bút lông + tim", main: "brush", sub: caps("{names}", "josefin", 0.22, 0.3, 400), divider: "heart", dividerAt: "bottom", sample: "Love you" },
-  { id: "garamond-leaf", name: "Garamond + lá", main: "garamond", sub: caps("{date}", "josefin", 0.2, 0.3, 400), divider: "leaf", dividerAt: "top", sample: "Hạnh phúc là được ở bên nhau" },
+  { id: "brush-heart", name: "Bút lông + tim", main: "brush", sub: caps("{names}", "manrope", 0.22, 0.3, 400), divider: "heart", dividerAt: "bottom", sample: "Love you" },
+  { id: "garamond-leaf", name: "Garamond + lá", main: "garamond", sub: caps("{date}", "manrope", 0.2, 0.3, 400), divider: "leaf", dividerAt: "top", sample: "Hạnh phúc là được ở bên nhau" },
   // ── Theo dịp ──
-  { id: "save-date", name: "Save the date", occasion: true, main: "formal", kicker: caps("Save the date", "josefin", 0.24, 0.36, 600), sub: plainLine("{date}", "prata", 0.32), divider: "diamond", dividerAt: "bottom", sample: "{names}" },
-  { id: "thank-you", name: "Thank you", occasion: true, main: "garamond", kicker: { text: "Thank you", font: "alexbrush", weight: 400, letterSpacing: 0, lineHeight: 1.1, size: 1.55 }, sub: caps("{names}", "josefin", 0.22, 0.3, 400), divider: "heart", dividerAt: "bottom", sample: "Cảm ơn mọi người đã đến chung vui" },
+  { id: "save-date", name: "Save the date", occasion: true, main: "formal", kicker: caps("Save the date", "manrope", 0.24, 0.36, 600), sub: plainLine("{date}", "prata", 0.32), divider: "diamond", dividerAt: "bottom", sample: "{names}" },
+  { id: "thank-you", name: "Thank you", occasion: true, main: "garamond", kicker: { text: "Thank you", font: "alexbrush", weight: 400, letterSpacing: 0, lineHeight: 1.1, size: 1.55 }, sub: caps("{names}", "manrope", 0.22, 0.3, 400), divider: "heart", dividerAt: "bottom", sample: "Cảm ơn mọi người đã đến chung vui" },
   { id: "just-married", name: "Just married", occasion: true, main: "bold", sub: caps("{date}", "manrope", 0.22, 0.34, 500), divider: "heart", dividerAt: "bottom", sample: "Just married" },
   { id: "our-day", name: "Our wedding day", occasion: true, main: "geo", kicker: { text: "Our wedding day", font: "pinyon", weight: 400, letterSpacing: 0, lineHeight: 1.15, size: 1.3 }, sub: plainLine("{date}", "garamond", 0.34, true), sample: "{names}" },
   { id: "vu-quy", name: "Lễ Vu Quy", occasion: true, main: "formal", kicker: caps("Lễ Vu Quy", "cormorant", 0.3, 0.3, 600), sub: plainLine("{date}", "cormorant", 0.34, true, 500), divider: "flourish", dividerAt: "top", sample: "{names}" },
   { id: "thanh-hon", name: "Lễ Thành Hôn", occasion: true, main: "formal", kicker: caps("Lễ Thành Hôn", "cormorant", 0.3, 0.3, 600), sub: plainLine("{date}", "cormorant", 0.34, true, 500), divider: "flourish", dividerAt: "top", sample: "{names}" },
-  { id: "tiec-cuoi", name: "Tiệc cưới", occasion: true, main: "didone", kicker: caps("Tiệc cưới", "josefin", 0.24, 0.36, 600), sub: caps("{date}", "josefin", 0.2, 0.3, 400), divider: "dots", dividerAt: "bottom", sample: "{names}" },
+  { id: "tiec-cuoi", name: "Tiệc cưới", occasion: true, main: "didone", kicker: caps("Tiệc cưới", "manrope", 0.24, 0.36, 600), sub: caps("{date}", "manrope", 0.2, 0.3, 400), divider: "dots", dividerAt: "bottom", sample: "{names}" },
   { id: "chung-doi", name: "Ngày chung đôi", occasion: true, main: "classic", kicker: { text: "Ngày chung đôi", font: "pinyon", weight: 400, letterSpacing: 0, lineHeight: 1.15, size: 1.05 }, sub: plainLine("{date}", "cormorant", 0.34, true, 500), divider: "leaf", dividerAt: "bottom", sample: "{names}" },
 ];
 
