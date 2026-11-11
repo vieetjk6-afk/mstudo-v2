@@ -14,7 +14,10 @@ import { safeArea } from "./formats";
 import type { CollageStyle } from "./styles";
 import { isDarkColor } from "./styles";
 import { adaptiveCandidates, scoreCells, type Cell, type LayoutPhoto } from "./adaptive";
-import { buildText, estimateTextHeight, presetById, type TextPreset } from "./typography";
+import { buildText, estimateTextHeight, presetById, sizeFor, type TextPreset } from "./typography";
+import { lockupById, lockupExtraHeight, lockupPreset } from "./lockups";
+import { paletteStyle } from "./palette";
+import type { Ornament } from "./ornaments";
 import { focusCrop } from "./crop";
 import { rng, uid } from "./rng";
 import { decorOptions, decorateGrid, paperFor } from "./decor";
@@ -55,6 +58,8 @@ export interface ComposeInput {
   text?: string | null;
   /** Kiểu chữ (id trong TEXT_PRESETS); không có thì máy chọn theo phong cách. */
   presetId?: string;
+  /** Mẫu chữ (dòng trên / dưới + hoa văn), đã điền sẵn — lockups.ts. */
+  lockup?: TextFrame["lockup"] | null;
   seed?: number;
 }
 
@@ -63,6 +68,17 @@ export interface ComposeResult {
   frames: Frame[];
   cost: number;
   bgPhoto?: BgPhoto;
+  /** Màu nền riêng của phương án (phong cách "Màu theo ảnh"); không có = màu của phong cách. */
+  background?: string;
+  /** Hình trang trí (hoa lá, băng dính, dải phim…). */
+  ornaments?: Ornament[];
+}
+
+/** Màu chủ đạo của ảnh chính có màu (ảnh điểm cao nhất). */
+function heroPalette(photos: LayoutInput[]): string[] | null {
+  const withPal = photos.filter((p) => p.palette && p.palette.length);
+  if (!withPal.length) return null;
+  return [...withPal].sort((a, b) => b.score + (b.hero ? 2 : 0) - (a.score + (a.hero ? 2 : 0)))[0].palette!;
 }
 
 /* ── Tiện ích hình học ────────────────────────────────────────────────────── */
@@ -116,6 +132,9 @@ function decoSig(frames: Frame[]): string {
     .join(",");
 }
 
+/** Chữ ký hình trang trí — cùng khung ảnh mà có / không có hoa lá là hai mẫu khác nhau. */
+const ornSig = (x: Pick<ComposeResult, "ornaments">) => (x.ornaments ?? []).map((o) => o.kind).join(",");
+
 function sameLayout(a: Frame[], b: Frame[]): boolean {
   const pa = a.filter((f) => f.kind === "photo");
   const pb = b.filter((f) => f.kind === "photo");
@@ -149,7 +168,7 @@ export function diverse(results: ComposeResult[], n: number): ComposeResult[] {
     for (const q of queues) {
       while (q.length) {
         const r = q.shift()!;
-        if (out.some((o) => !!o.bgPhoto === !!r.bgPhoto && sameLayout(o.frames, r.frames))) continue;
+        if (out.some((o) => !!o.bgPhoto === !!r.bgPhoto && ornSig(o) === ornSig(r) && sameLayout(o.frames, r.frames))) continue;
         out.push(r);
         break;
       }
@@ -170,7 +189,17 @@ export function pickPreset(style: CollageStyle, presetId: string | undefined, r:
 
 export function composeOptions(inp: ComposeInput): ComposeResult[] {
   const f = inp.format;
-  const st = inp.style;
+  // "Màu theo ảnh": nền nhạt + chữ đậm cùng tông với ảnh chính của trang.
+  let st = inp.style;
+  let pageBg: string | undefined;
+  if (st.fromPhoto) {
+    const pal = heroPalette(inp.photos);
+    const c = pal ? paletteStyle(pal) : null;
+    if (c) {
+      st = { ...st, background: c.bg, ink: c.ink };
+      pageBg = c.bg;
+    }
+  }
   const photos = inp.photos.slice(0, 9);
   const n = photos.length;
   if (!n) return [];
@@ -184,20 +213,23 @@ export function composeOptions(inp: ComposeInput): ComposeResult[] {
   const gap = Math.max(st.gap * short, 4);
   const r = rng((inp.seed ?? 1) * 104729 + n * 31 + (inp.text ? 7 : 0));
   const text = (inp.text ?? "").trim();
-  const preset = text ? pickPreset(st, inp.presetId, r) : null;
+  const lock = inp.lockup && lockupById(inp.lockup.id) && inp.lockup.id !== "plain" ? inp.lockup : null;
+  const preset = text ? pickPreset(st, inp.presetId ?? lockupPreset(lock?.id), r) : null;
   const ink = st.ink;
   const onPhotoInk = "#ffffff";
   const results: ComposeResult[] = [];
-  const push = (recipe: string, frames: Frame[], cost: number, bgPhoto?: BgPhoto) => {
-    results.push({ recipe, frames, cost: cost + r() * 0.08, ...(bgPhoto ? { bgPhoto } : {}) });
+  const push = (recipe: string, frames: Frame[], cost: number, bgPhoto?: BgPhoto, ornaments?: Ornament[]) => {
+    results.push({ recipe, frames, cost: cost + r() * 0.08, ...(bgPhoto ? { bgPhoto } : {}), ...(pageBg ? { background: pageBg } : {}), ...(ornaments?.length ? { ornaments } : {}) });
   };
   const textFrame = (box: Rect, color: string, align: TextAlign = "center", shadow = false): TextFrame[] =>
-    preset ? [buildText(preset, text, box, short, color, align, shadow)] : [];
+    preset ? [{ ...buildText(preset, text, box, short, color, align, shadow), ...(lock ? { lockup: { ...lock } } : {}) }] : [];
+  /** Chiều cao khối chữ cần trong bề ngang w (nội dung + dòng phụ + hoa văn của mẫu chữ). */
+  const textNeed = (w: number) => (preset ? estimateTextHeight(preset, text, w, short) + lockupExtraHeight(lock ?? undefined, sizeFor(preset, text, short)) : 0);
 
   // Bề cao dải chữ theo đúng độ dài nội dung (ước lượng), kẹp trong 14–38% trang.
   const bandFor = (w: number) => {
     if (!preset) return 0;
-    const need = estimateTextHeight(preset, text, w, short) + short * 0.06;
+    const need = textNeed(w) + short * 0.06;
     return Math.min(f.h * (landscape ? 0.42 : 0.38), Math.max(short * 0.14, need));
   };
 
@@ -318,7 +350,7 @@ export function composeOptions(inp: ComposeInput): ComposeResult[] {
       if (cells.some((c) => overlapArea(c.rect, box) > 0.15 * box.w * box.h)) overlapPenalty = 0.45;
       // Ô chữ cố định nhỏ hơn nhiều so với nội dung (lời cảm ơn dài) → chữ phải co
       // nhỏ khó đọc: nhường cho phương án dải chữ tính theo đúng độ dài nội dung.
-      const need = estimateTextHeight(preset, text, box.w, short);
+      const need = textNeed(box.w);
       if (need > box.h * 1.2) overlapPenalty += 0.2 * Math.min(3, need / box.h);
       const align: TextAlign = box.x > f.w * 0.5 ? "left" : "center";
       frames.push(...textFrame(box, bandInk, align, bandShadow));
@@ -329,10 +361,10 @@ export function composeOptions(inp: ComposeInput): ComposeResult[] {
   }
 
   /* 5) Bố cục trang trí: ảnh in polaroid, vòm, tròn, ảnh rải, ảnh nhỏ đè góc, bậc thang. */
-  for (const d of decorOptions({ photos, f, st, short, safe, text, preset, ink: bandInk, inkShadow: bandShadow, r, textFrame, bgFor })) {
+  for (const d of decorOptions({ photos, f, st, short, safe, text, preset, ink: bandInk, inkShadow: bandShadow, r, textFrame, textNeed, bgFor })) {
     // Có ảnh tràn kín trang thì nền ảnh mờ bị che hết — bỏ cho nhẹ lượt xuất.
     const full = d.frames.some((x) => x.kind === "photo" && x.rect.w >= f.w - 1 && x.rect.h >= f.h - 1);
-    push(d.recipe, d.frames, d.cost, full ? undefined : d.bgPhoto);
+    push(d.recipe, d.frames, d.cost, full ? undefined : d.bgPhoto, d.ornaments);
   }
 
   results.sort((a, b) => a.cost - b.cost);

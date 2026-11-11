@@ -10,11 +10,13 @@
    được ảnh ngoài vào layout: giao diện không có nút tải ảnh lên, và có sửa tay
    dữ liệu gửi lên thì máy chủ cũng từ chối ở đây.
    ═══════════════════════════════════════════════════════════════════════════ */
-import type { BgPhoto, CollageDoc, CollagePage, Crop, Frame, FrameDeco, PerPage, Rect, TextAlign, TextStyle } from "./types";
+import type { BgPhoto, CollageDoc, CollagePage, Crop, Frame, FrameDeco, PerPage, Rect, TextAlign, TextFrame, TextStyle } from "./types";
 import { COLLAGE_LIMITS } from "./types";
 import { COLLAGE_FORMATS } from "./formats";
 import { COLLAGE_FONTS } from "./fonts";
 import { COLLAGE_STYLES, MIX_STYLE } from "./styles";
+import { LOCKUP_IDS } from "./lockups";
+import { ORN_KINDS, PATH_RE, type Ornament } from "./ornaments";
 
 export type DocCheck = { ok: true; doc: CollageDoc } | { ok: false; error: string };
 
@@ -76,7 +78,33 @@ function textStyle(v: unknown, H: number): TextStyle | null {
   };
 }
 
-const SHAPES = new Set(["round", "arch", "oval"]);
+const SHAPES = new Set(["round", "arch", "oval", "stamp"]);
+const ORN_SET = new Set<string>(ORN_KINDS);
+
+/** Hình trang trí: chỉ giữ hình hợp lệ (sai thì bỏ hình đó, không từ chối cả bộ). */
+function ornament(v: unknown, W: number, H: number): Ornament | null {
+  if (!isObj(v)) return null;
+  const id = typeof v.id === "string" && ID_RE.test(v.id) ? v.id : null;
+  const kind = typeof v.kind === "string" && ORN_SET.has(v.kind) ? (v.kind as Ornament["kind"]) : null;
+  const rc = rect(v.rect, W, H);
+  const color = typeof v.color === "string" && COLOR_RE.test(v.color) ? v.color.toLowerCase() : null;
+  if (!id || !kind || !rc || !color) return null;
+  const out: Ornament = { id, kind, rect: rc, color };
+  if (typeof v.color2 === "string" && COLOR_RE.test(v.color2)) out.color2 = v.color2.toLowerCase();
+  const rot = num(v.rotate, -360, 360);
+  if (rot) out.rotate = r1(rot);
+  const op = num(v.opacity, 0.05, 1);
+  if (op != null && op < 1) out.opacity = r4(op);
+  if (v.flip === true) out.flip = true;
+  if (v.over === true) out.over = true;
+  if (kind === "path") {
+    if (typeof v.d !== "string" || !PATH_RE.test(v.d)) return null;
+    out.d = v.d;
+    const w = num(v.width, 0.3, 60);
+    if (w != null) out.width = r1(w);
+  }
+  return out;
+}
 
 /** Trang trí khung ảnh: chỉ giữ trường đã biết, số trong khoảng; sai thì bỏ trường đó (không từ chối cả bộ). */
 function deco(v: unknown, W: number, H: number): FrameDeco | null {
@@ -111,7 +139,13 @@ function frame(v: unknown, W: number, H: number, allowed: ReadonlySet<string>): 
     const style = textStyle(v.style, H);
     if (text == null || !style) return null;
     const rot = num(v.rotate, -15, 15);
-    return { kind: "text", id, rect: rc, text, style, ...(rot ? { rotate: r1(rot) } : {}) };
+    let lockup: TextFrame["lockup"] | undefined;
+    if (isObj(v.lockup) && typeof v.lockup.id === "string" && LOCKUP_IDS.has(v.lockup.id)) {
+      const kicker = str(v.lockup.kicker, 80);
+      const sub = str(v.lockup.sub, 80);
+      lockup = { id: v.lockup.id, ...(kicker ? { kicker } : {}), ...(sub ? { sub } : {}) };
+    }
+    return { kind: "text", id, rect: rc, text, style, ...(rot ? { rotate: r1(rot) } : {}), ...(lockup ? { lockup } : {}) };
   }
   return null;
 }
@@ -177,13 +211,16 @@ export function sanitizeDoc(raw: unknown, allowed: ReadonlySet<string>): DocChec
     const recipe = str(p.recipe, 120) ?? "";
     const pStyle = typeof p.styleId === "string" && STYLE_IDS.has(p.styleId) && p.styleId !== MIX_STYLE ? p.styleId : COLLAGE_STYLES[0].id;
     if (!id || !background) return { ok: false, error: "bad_page" };
+    // Carousel liền mạch: trang rộng `span` slide — toạ độ khung tính theo cả dải.
+    const span = typeof p.span === "number" && Number.isFinite(p.span) ? Math.max(1, Math.min(COLLAGE_LIMITS.slides, Math.round(p.span))) : 1;
+    const PW = W * span;
     const rawFrames = Array.isArray(p.frames) ? p.frames : [];
     if (rawFrames.length > COLLAGE_LIMITS.frames) return { ok: false, error: "too_many_frames" };
     const frames: Frame[] = [];
     let textCount = 0;
     let photoCount = 0;
     for (const fr of rawFrames) {
-      const f = frame(fr, W, H, allowed);
+      const f = frame(fr, PW, H, allowed);
       if (f === "bad_photo") return { ok: false, error: "bad_photo" };
       if (!f) return { ok: false, error: "bad_frame" };
       if (f.kind === "text") textCount++;
@@ -192,10 +229,11 @@ export function sanitizeDoc(raw: unknown, allowed: ReadonlySet<string>): DocChec
     }
     // Luật của tính năng: mỗi trang tối đa MỘT nội dung chữ, và phải có ảnh.
     if (textCount > 1) return { ok: false, error: "one_text_per_page" };
-    if (photoCount === 0 || photoCount > COLLAGE_LIMITS.pagePhotos) return { ok: false, error: "bad_page" };
+    if (photoCount === 0 || photoCount > COLLAGE_LIMITS.pagePhotos * span) return { ok: false, error: "bad_page" };
     const bg = bgPhoto(p.bgPhoto, allowed);
     if (bg === "bad_photo") return { ok: false, error: "bad_photo" };
-    pages.push({ id, frames, background, ...(bg ? { bgPhoto: bg } : {}), recipe, styleId: pStyle });
+    const orns = (Array.isArray(p.ornaments) ? p.ornaments : []).slice(0, COLLAGE_LIMITS.ornaments).map((o) => ornament(o, PW, H)).filter((o): o is Ornament => !!o);
+    pages.push({ id, frames, background, ...(bg ? { bgPhoto: bg } : {}), ...(orns.length ? { ornaments: orns } : {}), ...(span > 1 ? { span } : {}), recipe, styleId: pStyle });
   }
 
   const seed = num(raw.seed, 0, 4294967295) ?? 1;

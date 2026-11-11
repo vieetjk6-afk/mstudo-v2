@@ -6,8 +6,9 @@ import { btn } from "@/components/v2/kit";
 import { Switch } from "@/components/v2/kit-client";
 import type { CollageDoc } from "@/lib/collage/types";
 import { formatById } from "@/lib/collage/formats";
-import { canvasToJpeg, loadImage, renderPage } from "@/lib/collage/render";
+import { canvasToJpeg, loadImage, pageSlides, renderPage } from "@/lib/collage/render";
 import { loadCollageFonts } from "@/lib/collage/text-layout";
+import { docFontKeys } from "@/lib/collage/lockups";
 import { triggerDownload } from "@/lib/download";
 import { Sheet } from "./ui";
 
@@ -54,6 +55,7 @@ export default function ExportSheet({
   onClose: () => void;
 }) {
   const many = doc.pages.length > 1;
+  const imagesOf = (pages: CollageDoc["pages"]) => pages.reduce((n, p) => n + pageSlides(p), 0);
   const [scope, setScope] = useState<"page" | "all">(many ? "all" : "page");
   const [hd, setHd] = useState(false);
   const [files, setFiles] = useState<File[] | null>(null);
@@ -87,16 +89,22 @@ export default function ExportSheet({
     if (progress) return;
     reset();
     const pages = scope === "all" ? doc.pages : [doc.pages[pageIdx]];
-    setProgress({ done: 0, total: pages.length });
+    const total = imagesOf(pages);
+    setProgress({ done: 0, total });
     try {
-      await loadCollageFonts();
+      // Chỉ nạp phông bộ này dùng (đo chữ đúng phông trước khi vẽ).
+      await loadCollageFonts(docFontKeys({ pages }));
       const out: File[] = [];
-      for (let i = 0; i < pages.length; i++) {
-        const canvas = await renderPage(doc, pages[i], { scale: hd ? 2 : 1, getImage, watermark }, Date.now());
-        const blob = await canvasToJpeg(canvas, 0.92);
-        const n = scope === "all" ? i + 1 : pageIdx + 1;
-        out.push(new File([blob], `${base}-${String(n).padStart(2, "0")}.jpg`, { type: "image/jpeg" }));
-        setProgress({ done: i + 1, total: pages.length });
+      // Đánh số liền mạch qua mọi ảnh — carousel N slide là N ảnh, đúng thứ tự đăng.
+      let n = scope === "all" ? 0 : imagesOf(doc.pages.slice(0, pageIdx));
+      for (const page of pages) {
+        for (let sl = 0; sl < pageSlides(page); sl++) {
+          const canvas = await renderPage(doc, page, { scale: hd ? 2 : 1, getImage, watermark }, Date.now(), sl);
+          const blob = await canvasToJpeg(canvas, 0.92);
+          n++;
+          out.push(new File([blob], `${base}-${String(n).padStart(2, "0")}.jpg`, { type: "image/jpeg" }));
+          setProgress({ done: out.length, total });
+        }
       }
       setFiles(out);
     } catch {
@@ -158,8 +166,8 @@ export default function ExportSheet({
           <div role="group" aria-label="Tải trang nào" className="grid grid-cols-2 gap-2">
             {(
               [
-                ["page", `Layout ${pageIdx + 1}`],
-                ["all", `Cả ${doc.pages.length} layout`],
+                ["page", `Layout ${pageIdx + 1}${pageSlides(doc.pages[pageIdx]) > 1 ? ` · ${pageSlides(doc.pages[pageIdx])} ảnh` : ""}`],
+                ["all", `Cả bộ · ${imagesOf(doc.pages)} ảnh`],
               ] as const
             ).map(([v, label]) => (
               <button

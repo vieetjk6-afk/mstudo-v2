@@ -8,6 +8,10 @@ import { DEFAULT_FORMAT_ID } from "@/lib/collage/formats";
 import { DEFAULT_STYLE_ID } from "@/lib/collage/styles";
 import { collectTexts, generateDoc, pagePhotoIds } from "@/lib/collage/generate";
 import { loadCollageFonts } from "@/lib/collage/text-layout";
+import { docFontKeys, lockDate, lockNames, type LockCtx } from "@/lib/collage/lockups";
+import { quantize } from "@/lib/collage/palette";
+import { loadImage } from "@/lib/collage/render";
+import { rawImageUrl } from "./ExportSheet";
 import type { PhotoCat, PhotoInfo } from "@/lib/collage/categories";
 import type { PersonChip } from "@/lib/face-people";
 import { fmtDate, fmtDateTime } from "@/lib/date";
@@ -68,7 +72,10 @@ const SLOW_MS = 5000;
 const SAVE_RETRY_MS = 10_000;
 const SAVE_RETRIES = 6;
 
-const DEFAULT_OPTS: CollageOptions = { formatId: DEFAULT_FORMAT_ID, perPage: 4, styleId: DEFAULT_STYLE_ID, texts: [""] };
+const DEFAULT_OPTS: CollageOptions = { formatId: DEFAULT_FORMAT_ID, perPage: 4, styleId: DEFAULT_STYLE_ID, texts: [""], lockup: "auto", carousel: 0 };
+
+/** Số slide nếu bộ là MỘT carousel liền mạch, ngược lại 0. */
+const carouselOf = (d: Pick<CollageDoc, "pages">) => (d.pages.length === 1 && (d.pages[0].span ?? 1) > 1 ? Math.round(d.pages[0].span!) : 0);
 const HISTORY_MAX = 40;
 /** Tự lưu sau khi khách ngừng tay 2,5 giây — gom nhiều lần chạm thành một lượt ghi. */
 const SAVE_DELAY = 2500;
@@ -150,6 +157,9 @@ export default function CollageStudio(props: CollageStudioProps) {
   /* ── Ảnh: id → drive id, và đầu vào cho bộ dàn trang ── */
   const driveIdOf = useMemo(() => new Map(photos.map((p) => [p.id, p.d])), [photos]);
   const driveOf = useCallback((id: string) => driveIdOf.get(id), [driveIdOf]);
+  // Màu chủ đạo từng ảnh — chỉ nạp khi cần (phong cách "Màu theo ảnh", tab Nền).
+  const palettesRef = useRef(new Map<string, string[]>());
+  const [paletteTick, setPaletteTick] = useState(0);
   const buildInputs = useCallback(
     (asp: Record<string, number>) => {
       const m = new Map<string, LayoutInput>();
@@ -157,12 +167,44 @@ export default function CollageStudio(props: CollageStudioProps) {
         const a = asp[p.id];
         if (!a) continue;
         const it = info[p.id];
-        m.set(p.id, { id: p.id, aspect: a, score: (it?.score ?? 5) + (hearts.has(p.id) ? 3 : 0), hero: !!it?.hero, faces: it?.faces ?? [] });
+        const pal = palettesRef.current.get(p.id);
+        m.set(p.id, { id: p.id, aspect: a, score: (it?.score ?? 5) + (hearts.has(p.id) ? 3 : 0), hero: !!it?.hero, faces: it?.faces ?? [], ...(pal?.length ? { palette: pal } : {}) });
       }
       return m;
     },
-    [photos, info, hearts],
+    // paletteTick: dựng lại khi vừa nạp thêm màu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [photos, info, hearts, paletteTick],
   );
+  const rawOf = img.raw ?? rawImageUrl;
+  /** Đọc màu chủ đạo của các ảnh (ảnh nhỏ cùng miền, 48 px là đủ). */
+  const paletteFor = useCallback(
+    async (ids: string[]) => {
+      const todo = [...new Set(ids)].filter((id) => !palettesRef.current.has(id) && driveIdOf.has(id));
+      if (todo.length) {
+        await Promise.all(
+          todo.map(async (id) => {
+            try {
+              const im = await loadImage(rawOf(driveIdOf.get(id)!, 200));
+              const c = document.createElement("canvas");
+              c.width = 48;
+              c.height = Math.max(8, Math.round((48 * im.naturalHeight) / Math.max(1, im.naturalWidth)));
+              const x = c.getContext("2d", { willReadFrequently: true });
+              if (!x) throw new Error("no_ctx");
+              x.drawImage(im, 0, 0, c.width, c.height);
+              palettesRef.current.set(id, quantize(x.getImageData(0, 0, c.width, c.height).data, 5));
+            } catch {
+              palettesRef.current.set(id, []);
+            }
+          }),
+        );
+        setPaletteTick((n) => n + 1);
+      }
+      return ids.map((id) => palettesRef.current.get(id) ?? []);
+    },
+    [driveIdOf, rawOf],
+  );
+  const lockCtx: LockCtx = useMemo(() => ({ date: lockDate(props.eventDate), names: lockNames(props.albumTitle) }), [props.eventDate, props.albumTitle]);
   const inputs = useMemo(() => buildInputs(aspects), [buildInputs, aspects]);
 
   /** Đo tỉ lệ các ảnh chưa đo (đọc kích thước ảnh nhỏ — không cần byte ảnh qua máy chủ). */
@@ -393,18 +435,33 @@ export default function CollageStudio(props: CollageStudioProps) {
 
   useEffect(() => {
     void load();
-    let alive = true;
-    void loadCollageFonts().then(() => alive && setFontsReady((n) => n + 1));
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const gens = loadGen;
     return () => {
-      alive = false;
       // Đóng màn ghép giữa lúc đang nạp: kết quả tới muộn không được mở hộp SĐT.
       gens.current++;
       document.body.style.overflow = prev;
     };
   }, [load]);
+
+  /* ── Phông chữ: chỉ nạp đúng phông bộ đang mở / các bộ đã lưu dùng tới ── */
+  const fontKeys = useMemo(() => {
+    const keys = new Set<string>();
+    if (doc) docFontKeys(doc).forEach((k) => keys.add(k));
+    for (const x of sets) docFontKeys(x.data).forEach((k) => keys.add(k));
+    return [...keys].sort().join(",");
+  }, [doc, sets]);
+  useEffect(() => {
+    if (!fontKeys) return;
+    let alive = true;
+    void loadCollageFonts(fontKeys.split(",")).then((fresh) => {
+      if (fresh && alive) setFontsReady((n) => n + 1);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [fontKeys]);
 
   /* ── Nút quay lại của điện thoại: lùi một bước trong màn ghép, không rời album ── */
   const backRef = useRef<() => boolean>(() => false);
@@ -469,7 +526,7 @@ export default function CollageStudio(props: CollageStudioProps) {
     aspectsRef.current = { ...aspectsRef.current, ...d.aspects };
     setAspects(aspectsRef.current);
     syncPick(d);
-    setOpts({ formatId: d.formatId, perPage: d.perPage, styleId: d.styleId, texts: d.texts.length ? d.texts : [""] });
+    setOpts((o) => ({ ...o, formatId: d.formatId, perPage: d.perPage, styleId: d.styleId, texts: d.texts.length ? d.texts : [""], carousel: carouselOf(d) }));
     setDocState(d);
     setPageIdx(0);
     setSave({ state: "saved", expiresAt: s.expires_at });
@@ -523,6 +580,8 @@ export default function CollageStudio(props: CollageStudioProps) {
     if (!ids.length) return;
     setBusy(true);
     try {
+      // "Màu theo ảnh": đọc màu các ảnh trước khi dàn (nền từng trang theo ảnh chính).
+      if (opts.styleId === "palette") await paletteFor(ids);
       const ins = await ensureInputs(ids);
       const photosIn = ids.map((id) => ins.get(id)).filter((x): x is LayoutInput => !!x);
       const next = generateDoc({
@@ -532,6 +591,9 @@ export default function CollageStudio(props: CollageStudioProps) {
         styleId: opts.styleId,
         texts: opts.texts,
         seed,
+        lockup: opts.lockup,
+        ctx: lockCtx,
+        ...(opts.carousel >= 2 ? { carousel: opts.carousel } : {}),
         ...(manual ? { groups: groups.filter((g) => g.length) } : {}),
       });
       if (docRef.current) {
@@ -557,8 +619,10 @@ export default function CollageStudio(props: CollageStudioProps) {
       // Bộ tự chọn từng layout: giữ nguyên nhóm ảnh của từng trang, chỉ đổi bố cục.
       const manualGroups = d.mode === "manual" ? d.pages.map(pagePhotoIds).filter((g) => g.length) : null;
       const ids = manualGroups ? [...new Set(manualGroups.flat())] : d.photoIds;
+      if (d.styleId === "palette") await paletteFor(ids);
       const ins = await ensureInputs(ids);
       const photosIn = ids.map((id) => ins.get(id)).filter((x): x is LayoutInput => !!x);
+      const slides = carouselOf(d);
       const next = generateDoc({
         photos: photosIn,
         perPage: d.perPage,
@@ -566,7 +630,10 @@ export default function CollageStudio(props: CollageStudioProps) {
         styleId: d.styleId,
         texts: texts.length ? texts : d.texts,
         seed: Math.floor(Math.random() * 1e9),
-        ...(manualGroups ? { groups: manualGroups } : {}),
+        lockup: opts.lockup,
+        ctx: lockCtx,
+        ...(slides ? { carousel: slides } : {}),
+        ...(manualGroups && !slides ? { groups: manualGroups } : {}),
       });
       apply(() => next);
       toast.show("Đã ghép lại ngẫu nhiên — bấm ↶ ở màn sửa để quay lại bản trước.");
@@ -716,7 +783,7 @@ export default function CollageStudio(props: CollageStudioProps) {
         onOptions={() => {
           setOpts((o) => {
             const texts = collectTexts(doc);
-            return { ...o, formatId: doc.formatId, perPage: doc.perPage, styleId: doc.styleId, texts: texts.length ? texts : o.texts };
+            return { ...o, formatId: doc.formatId, perPage: doc.perPage, styleId: doc.styleId, texts: texts.length ? texts : o.texts, carousel: carouselOf(doc) };
           });
           syncPick(doc);
           setStep("options");
@@ -749,6 +816,8 @@ export default function CollageStudio(props: CollageStudioProps) {
         onBack={uiBack}
         onExport={() => setExportOpen(true)}
         toast={toast.show}
+        lockCtx={lockCtx}
+        paletteFor={paletteFor}
       />
     );
   }

@@ -9,7 +9,9 @@
    về cách ngắt thô theo \n.
    ═══════════════════════════════════════════════════════════════════════════ */
 import type { TextFrame, TextStyle } from "./types";
-import { COLLAGE_FONTS, fontByKey } from "./fonts";
+import { COLLAGE_FONTS, fontByKey, nearestWeight } from "./fonts";
+import { lockupById, type LockLine } from "./lockups";
+import type { DividerKind } from "./ornaments";
 
 const familyCache = new Map<string, string>();
 
@@ -143,20 +145,127 @@ export function layoutText(t: TextFrame, fontsReady = 0): TextLayout {
   return best!;
 }
 
+/* ── Khối chữ có mẫu (dòng trên + nội dung + hoa văn + dòng dưới) ───────── */
+
+export type LockBlock =
+  | {
+      kind: "text";
+      lines: string[];
+      size: number;
+      lineH: number;
+      font: string;
+      weight: number;
+      italic: boolean;
+      letterSpacing: number;
+    }
+  | { kind: "div"; type: DividerKind; w: number; h: number };
+
+export interface LockLayout {
+  blocks: LockBlock[];
+  /** Khoảng cách giữa các khối. */
+  gap: number;
+  /** Tổng chiều cao khối chữ. */
+  height: number;
+}
+
+const lockCache = new Map<string, LockLayout>();
+
+/** Chữ của một dòng phụ: chuẩn hoá NFC + viết hoa nếu mẫu yêu cầu. */
+function lineText(text: string, line: Pick<LockLine, "uppercase">): string {
+  const s = text.normalize("NFC");
+  return line.uppercase ? s.toLocaleUpperCase("vi") : s;
+}
+
 /**
- * Nạp sẵn mọi phông chữ của ảnh ghép (next/font để preload:false nên phông chỉ
- * tải khi có chữ dùng tới). Đo chữ trước khi phông về là ngắt dòng theo phông
- * dự phòng — nên màn sửa đợi hàm này rồi mới đo lại.
+ * Dàn khối chữ có mẫu: các khối xếp dọc, cỡ dòng phụ tính theo cỡ nội dung chính,
+ * cả khối co lại cùng tỉ lệ tới khi lọt khung. null = khung không dùng mẫu chữ.
+ * Màn sửa (DOM) và bộ xuất (canvas) cùng gọi hàm này nên ra y hệt nhau.
  */
-export async function loadCollageFonts(): Promise<void> {
-  if (typeof document === "undefined" || !document.fonts) return;
+export function layoutLockup(t: TextFrame, fontsReady = 0): LockLayout | null {
+  const spec = lockupById(t.lockup?.id);
+  if (!spec || spec.id === "plain") return null;
+  const st = t.style;
+  const ctx = ctx2d();
+  const main = displayText(t);
+  const kicker = t.lockup?.kicker && spec.kicker ? { text: lineText(t.lockup.kicker, spec.kicker), line: spec.kicker } : null;
+  const sub = t.lockup?.sub && spec.sub ? { text: lineText(t.lockup.sub, spec.sub), line: spec.sub } : null;
+  const divTop = !!spec.divider && (spec.dividerAt === "top" || spec.dividerAt === "both");
+  const divBottom = !!spec.divider && (spec.dividerAt === "bottom" || spec.dividerAt === "both" || !spec.dividerAt);
+  const key = [t.text, t.lockup?.id, t.lockup?.kicker, t.lockup?.sub, t.rect.w.toFixed(1), t.rect.h.toFixed(1), st.font, st.size.toFixed(2), st.weight, st.italic, st.uppercase, st.letterSpacing, st.lineHeight, fontsReady].join("|");
+  const hit = lockCache.get(key);
+  if (hit) return hit;
+
+  const build = (k: number): LockLayout => {
+    const ms = st.size * k;
+    const gap = ms * 0.16;
+    const blocks: LockBlock[] = [];
+    const textBlock = (text: string, font: string, weight: number, italic: boolean, spacing: number, lh: number, size: number): LockBlock => {
+      let lines = text.split("\n");
+      if (ctx) {
+        ctx.font = canvasFont({ font, weight, italic }, size);
+        lines = lines.flatMap((p) => wrapBalanced(ctx, p.trim(), size, spacing, t.rect.w));
+      }
+      return { kind: "text", lines, size, lineH: size * lh, font, weight, italic, letterSpacing: spacing };
+    };
+    const lineBlock = (x: { text: string; line: LockLine }) =>
+      textBlock(x.text, x.line.font, nearestWeight(x.line.font, x.line.weight), !!x.line.italic, x.line.letterSpacing, x.line.lineHeight, ms * x.line.size);
+    const div = (): LockBlock => ({ kind: "div", type: spec.divider!, w: Math.min(t.rect.w, ms * 3.4), h: ms * 0.42 });
+    if (kicker) blocks.push(lineBlock(kicker));
+    if (divTop) blocks.push(div());
+    blocks.push(textBlock(main, st.font, st.weight, st.italic, st.letterSpacing, st.lineHeight, ms));
+    if (divBottom) blocks.push(div());
+    if (sub) blocks.push(lineBlock(sub));
+    const height = blocks.reduce((h, b) => h + (b.kind === "text" ? b.lines.length * b.lineH : b.h), 0) + gap * (blocks.length - 1);
+    return { blocks, gap, height };
+  };
+  const widest = (l: LockLayout) =>
+    Math.max(
+      0,
+      ...l.blocks.map((b) => {
+        if (b.kind !== "text" || !ctx) return 0;
+        ctx.font = canvasFont({ font: b.font, weight: b.weight, italic: b.italic }, b.size);
+        return Math.max(0, ...b.lines.map((x) => lineWidth(ctx, x, b.size, b.letterSpacing)));
+      }),
+    );
+  let k = 1;
+  let out = build(k);
+  for (let i = 0; i < 14; i++) {
+    const w = widest(out);
+    const fitsW = w <= t.rect.w * 1.002;
+    const fitsH = out.height <= t.rect.h * 1.04;
+    if ((fitsW && fitsH) || k <= 0.25) break;
+    const kw = fitsW ? 1 : t.rect.w / w;
+    const kh = fitsH ? 1 : (t.rect.h * 1.04) / out.height;
+    k *= Math.max(0.6, Math.min(0.96, Math.min(kw, kh)));
+    out = build(k);
+  }
+  if (lockCache.size > 300) lockCache.clear();
+  lockCache.set(key, out);
+  return out;
+}
+
+const loadedFonts = new Set<string>();
+
+/**
+ * Nạp phông chữ của ảnh ghép (next/font để preload:false nên phông chỉ tải khi
+ * có chữ dùng tới). Đo chữ trước khi phông về là ngắt dòng theo phông dự phòng
+ * — nên màn ghép nạp đúng các phông bộ layout đang dùng rồi mới đo lại.
+ * `keys` bỏ trống = nạp tất cả. Trả true nếu vừa nạp thêm phông mới.
+ */
+export async function loadCollageFonts(keys?: readonly string[]): Promise<boolean> {
+  if (typeof document === "undefined" || !document.fonts) return false;
+  const list = COLLAGE_FONTS.filter((f) => (!keys || keys.includes(f.key)) && !loadedFonts.has(f.key));
+  if (!list.length) return false;
   const loads: Promise<unknown>[] = [];
-  for (const f of COLLAGE_FONTS) {
+  for (const f of list) {
     for (const w of f.weights) {
       loads.push(document.fonts.load(`${w} 32px ${canvasFontFamily(f.key)}`, "Aă Ơ ẫ").catch(() => null));
       if (f.italic) loads.push(document.fonts.load(`italic ${w} 32px ${canvasFontFamily(f.key)}`, "Aă Ơ ẫ").catch(() => null));
     }
   }
   await Promise.all(loads);
+  for (const f of list) loadedFonts.add(f.key);
   cache.clear();
+  lockCache.clear();
+  return true;
 }

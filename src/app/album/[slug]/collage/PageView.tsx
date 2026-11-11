@@ -6,7 +6,8 @@ import { formatById } from "@/lib/collage/formats";
 import { panCrop, placePhoto } from "@/lib/collage/crop";
 import { frameRotation, photoArea, rotatePoint, shapeRadii } from "@/lib/collage/frame-geom";
 import { cssFontFamily } from "@/lib/collage/fonts";
-import { layoutText } from "@/lib/collage/text-layout";
+import { layoutLockup, layoutText } from "@/lib/collage/text-layout";
+import { dividerPrims, ornamentPrims, stampPath, type Ornament, type OrnPrim } from "@/lib/collage/ornaments";
 import { watermarkLayer } from "@/lib/album-watermark";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -42,6 +43,34 @@ interface ViewProps {
   /** Khung đang chọn (viền nổi). */
   selectedId?: string | null;
   className?: string;
+  /** Carousel: vạch ranh giới slide ("lines"), kèm số slide ("full"). Không bao giờ có trong ảnh xuất. */
+  slides?: "lines" | "full";
+}
+
+/** Vẽ các nét trang trí bằng SVG — cùng nguồn (ornaments.ts) với bộ xuất canvas. */
+function PrimSvg({ prims, w, h, k, color, style }: { prims: OrnPrim[]; w: number; h: number; k: number; color?: string; style?: React.CSSProperties }) {
+  return (
+    <svg width={w * k} height={h * k} viewBox={`0 0 ${w} ${h}`} aria-hidden className="pointer-events-none absolute" style={{ overflow: "visible", ...style }}>
+      {prims.map((p, i) => (
+        <path
+          key={i}
+          d={p.d}
+          fill={p.fill ?? (p.stroke ? "none" : color)}
+          stroke={p.stroke}
+          strokeWidth={p.sw}
+          strokeLinecap="round"
+          fillRule={p.evenodd ? "evenodd" : undefined}
+          opacity={p.opacity}
+        />
+      ))}
+    </svg>
+  );
+}
+
+/** Một hình trang trí đặt trên trang. */
+function OrnBox({ o, k }: { o: Ornament; k: number }) {
+  const tf = [o.rotate ? `rotate(${o.rotate}deg)` : "", o.flip ? "scaleX(-1)" : ""].filter(Boolean).join(" ");
+  return <PrimSvg prims={ornamentPrims(o)} w={o.rect.w} h={o.rect.h} k={k} color={o.color} style={{ left: o.rect.x * k, top: o.rect.y * k, transform: tf || undefined, opacity: o.opacity }} />;
 }
 
 /** border-radius CSS cho hình khung (khớp shapePath của bộ xuất canvas). */
@@ -58,6 +87,8 @@ function PhotoBox({ f, k, short, aspect, img, drive }: { f: PhotoFrame; k: numbe
   const w = pickWidth(p.width * k * dpr());
   const rot = frameRotation(d);
   const padded = !!d && ((d.pad ?? 0) > 0 || (d.padBottom ?? 0) > 0);
+  const stamp = d?.shape === "stamp";
+  const shadow = d?.shadow ? `0 ${short * 0.01 * k}px ${short * 0.03 * k}px rgba(0,0,0,.3)` : undefined;
   return (
     <div
       className="absolute"
@@ -67,12 +98,22 @@ function PhotoBox({ f, k, short, aspect, img, drive }: { f: PhotoFrame; k: numbe
         width: f.rect.w * k,
         height: f.rect.h * k,
         transform: rot ? `rotate(${rot}deg)` : undefined,
-        background: padded ? (d?.padColor ?? "#ffffff") : undefined,
+        background: padded && !stamp ? (d?.padColor ?? "#ffffff") : undefined,
         borderRadius: radiusCss(d?.shape, f.rect.w * k, f.rect.h * k),
         // Cùng thông số với bóng của bộ xuất canvas (CSS blur B ≈ canvas shadowBlur B).
-        boxShadow: d?.shadow ? `0 ${short * 0.01 * k}px ${short * 0.03 * k}px rgba(0,0,0,.3)` : undefined,
+        boxShadow: stamp ? undefined : shadow,
       }}
     >
+      {stamp ? (
+        // Tem thư: viền răng cưa vẽ bằng SVG; bóng đổ theo đúng hình răng cưa.
+        <PrimSvg
+          prims={[{ d: stampPath(f.rect.w, f.rect.h), fill: d?.padColor ?? "#ffffff" }]}
+          w={f.rect.w}
+          h={f.rect.h}
+          k={k}
+          style={{ left: 0, top: 0, filter: shadow ? `drop-shadow(${shadow})` : undefined }}
+        />
+      ) : null}
       <div
         className="absolute overflow-hidden"
         style={{
@@ -80,7 +121,7 @@ function PhotoBox({ f, k, short, aspect, img, drive }: { f: PhotoFrame; k: numbe
           top: (area.y - f.rect.y) * k,
           width: area.w * k,
           height: area.h * k,
-          borderRadius: radiusCss(d?.shape, area.w * k, area.h * k),
+          borderRadius: stamp ? undefined : radiusCss(d?.shape, area.w * k, area.h * k),
           background: "rgba(127,127,127,.18)",
         }}
       >
@@ -99,42 +140,67 @@ function PhotoBox({ f, k, short, aspect, img, drive }: { f: PhotoFrame; k: numbe
   );
 }
 
-function TextBox({ t, k, fontsReady }: { t: TextFrame; k: number; fontsReady: number }) {
-  const lay = layoutText(t, fontsReady);
-  const st = t.style;
-  const size = lay.size * k;
+/** Một dòng chữ (đã ngắt sẵn) — letter-spacing của CSS thêm cả sau ký tự cuối, bù lại để căn giữa khớp canvas. */
+function Line({ text, font, size, weight, italic, spacing, lineH, color, align, shadow }: { text: string; font: string; size: number; weight: number; italic: boolean; spacing: number; lineH: number; color: string; align: TextFrame["style"]["align"]; shadow?: boolean }) {
   return (
     <div
-      className="pointer-events-none absolute flex flex-col justify-center"
-      style={{ left: t.rect.x * k, top: t.rect.y * k, width: t.rect.w * k, height: t.rect.h * k, transform: frameRotation(t) ? `rotate(${frameRotation(t)}deg)` : undefined }}
+      style={{
+        fontFamily: cssFontFamily(font),
+        fontSize: size,
+        fontWeight: weight,
+        fontStyle: italic ? "italic" : "normal",
+        color,
+        textAlign: align,
+        lineHeight: `${lineH}px`,
+        height: lineH,
+        whiteSpace: "pre",
+        textShadow: shadow ? `0 ${size * 0.04}px ${size * 0.3}px rgba(0,0,0,.45)` : undefined,
+      }}
     >
+      <span style={{ letterSpacing: `${spacing}em`, marginRight: spacing ? `-${spacing}em` : undefined }}>{text || " "}</span>
+    </div>
+  );
+}
+
+function TextBox({ t, k, fontsReady }: { t: TextFrame; k: number; fontsReady: number }) {
+  const st = t.style;
+  const box = { left: t.rect.x * k, top: t.rect.y * k, width: t.rect.w * k, height: t.rect.h * k, transform: frameRotation(t) ? `rotate(${frameRotation(t)}deg)` : undefined };
+  const lock = layoutLockup(t, fontsReady);
+  if (lock) {
+    const just = st.align === "left" ? "flex-start" : st.align === "right" ? "flex-end" : "center";
+    return (
+      <div className="pointer-events-none absolute flex flex-col justify-center" style={{ ...box, gap: lock.gap * k }}>
+        {lock.blocks.map((b, i) =>
+          b.kind === "text" ? (
+            <div key={i}>
+              {b.lines.map((line, j) => (
+                <Line key={j} text={line} font={b.font} size={b.size * k} weight={b.weight} italic={b.italic} spacing={b.letterSpacing} lineH={b.lineH * k} color={st.color} align={st.align} shadow={st.shadow} />
+              ))}
+            </div>
+          ) : (
+            <div key={i} className="relative flex flex-none" style={{ height: b.h * k, justifyContent: just }}>
+              <PrimSvg prims={dividerPrims(b.type, b.w, b.h, st.color)} w={b.w} h={b.h} k={k} color={st.color} style={{ position: "relative", filter: st.shadow ? "drop-shadow(0 1px 3px rgba(0,0,0,.45))" : undefined }} />
+            </div>
+          ),
+        )}
+      </div>
+    );
+  }
+  const lay = layoutText(t, fontsReady);
+  return (
+    <div className="pointer-events-none absolute flex flex-col justify-center" style={box}>
       {lay.lines.map((line, i) => (
-        <div
-          key={i}
-          style={{
-            fontFamily: cssFontFamily(st.font),
-            fontSize: size,
-            fontWeight: st.weight,
-            fontStyle: st.italic ? "italic" : "normal",
-            color: st.color,
-            textAlign: st.align,
-            lineHeight: `${lay.lineH * k}px`,
-            height: lay.lineH * k,
-            whiteSpace: "pre",
-            textShadow: st.shadow ? `0 ${size * 0.04}px ${size * 0.3}px rgba(0,0,0,.45)` : undefined,
-          }}
-        >
-          {/* letter-spacing của CSS thêm cả sau ký tự cuối — bù lại để căn giữa khớp canvas. */}
-          <span style={{ letterSpacing: `${st.letterSpacing}em`, marginRight: st.letterSpacing ? `-${st.letterSpacing}em` : undefined }}>{line || " "}</span>
-        </div>
+        <Line key={i} text={line} font={st.font} size={lay.size * k} weight={st.weight} italic={st.italic} spacing={st.letterSpacing} lineH={lay.lineH * k} color={st.color} align={st.align} shadow={st.shadow} />
       ))}
     </div>
   );
 }
 
-export const PageView = memo(function PageView({ doc, page, width, img, driveOf, fontsReady, watermark, selectedId, className = "" }: ViewProps) {
+export const PageView = memo(function PageView({ doc, page, width, img, driveOf, fontsReady, watermark, selectedId, className = "", slides }: ViewProps) {
   const f = formatById(doc.formatId);
-  const k = width / f.w;
+  // Carousel liền mạch: trang rộng `span` slide, khung tính theo cả dải.
+  const span = Math.max(1, Math.round(page.span ?? 1));
+  const k = width / (f.w * span);
   const height = f.h * k;
   const bg = page.bgPhoto;
   const bgDrive = bg ? driveOf(bg.photoId) : undefined;
@@ -154,11 +220,24 @@ export const PageView = memo(function PageView({ doc, page, width, img, driveOf,
           {bg.dim > 0 ? <div className="pointer-events-none absolute inset-0" style={{ background: rgba(page.background, Math.min(1, bg.dim)) }} /> : null}
         </>
       ) : null}
+      {(page.ornaments ?? []).map((o) => (o.over ? null : <OrnBox key={o.id} o={o} k={k} />))}
       {page.frames.map((fr) =>
         fr.kind === "photo" ? <PhotoBox key={fr.id} f={fr} k={k} short={Math.min(f.w, f.h)} aspect={doc.aspects[fr.photoId] ?? 1.5} img={img} drive={driveOf(fr.photoId)} /> : null,
       )}
+      {(page.ornaments ?? []).map((o) => (o.over ? <OrnBox key={o.id} o={o} k={k} /> : null))}
       {page.frames.map((fr) => (fr.kind === "text" ? <TextBox key={fr.id} t={fr} k={k} fontsReady={fontsReady} /> : null))}
       {watermark ? <div className="pointer-events-none absolute inset-0 opacity-20" style={watermarkLayer(watermark)} /> : null}
+      {span > 1 && slides
+        ? Array.from({ length: span }, (_, i) => (
+            <div key={`sl-${i}`} className="pointer-events-none absolute bottom-0 top-0" style={{ left: i * f.w * k, width: f.w * k, borderLeft: i ? "1px dashed rgba(255,255,255,.9)" : undefined, boxShadow: i ? "-1px 0 0 rgba(0,0,0,.18)" : undefined }}>
+              {slides === "full" ? (
+                <span className="absolute left-1.5 top-1.5 rounded px-1.5 text-[10.5px] font-bold" style={{ background: "rgba(0,0,0,.45)", color: "#fff" }}>
+                  {i + 1}/{span}
+                </span>
+              ) : null}
+            </div>
+          ))
+        : null}
       {selectedId
         ? page.frames
             .filter((fr) => fr.id === selectedId)
@@ -198,7 +277,8 @@ export interface Gesture {
  */
 export function EditLayer({ doc, page, width, selectedId, g }: { doc: CollageDoc; page: CollagePage; width: number; selectedId: string | null; g: Gesture }) {
   const f = formatById(doc.formatId);
-  const k = width / f.w;
+  const PW = f.w * Math.max(1, Math.round(page.span ?? 1));
+  const k = width / PW;
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const start = useRef<{ frame: Frame; x: number; y: number; dist: number; moved: boolean } | null>(null);
   // Thứ tự lớp chạm KHỚP thứ tự vẽ: ảnh theo thứ tự khung (ảnh sau đè ảnh trước —
@@ -238,7 +318,7 @@ export function EditLayer({ doc, page, width, selectedId, g }: { doc: CollageDoc
       g.onCrop(fr.id, panCrop(area.w, area.h, aspect * 1000, 1000, fr.crop, local.x / k, local.y / k));
       return;
     }
-    const nx = Math.max(-fr.rect.w * 0.5, Math.min(f.w - fr.rect.w * 0.5, fr.rect.x + dx / k));
+    const nx = Math.max(-fr.rect.w * 0.5, Math.min(PW - fr.rect.w * 0.5, fr.rect.x + dx / k));
     const ny = Math.max(-fr.rect.h * 0.5, Math.min(f.h - fr.rect.h * 0.5, fr.rect.y + dy / k));
     g.onMove(fr.id, { ...fr.rect, x: nx, y: ny });
   };

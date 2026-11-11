@@ -7,8 +7,10 @@
    đây: mỗi "trang" là MỘT ảnh đăng mạng xã hội (không có trang đôi, gáy, bleed).
 
    Toạ độ tính theo điểm ảnh của khổ (vd. 1080×1350), gốc ở góc trên trái.
-   File này cố ý KHÔNG nhập gì để kiểm thử Node chạy thẳng được.
+   File này chỉ nhập KIỂU (import type) để kiểm thử Node chạy thẳng được.
    ═══════════════════════════════════════════════════════════════════════════ */
+
+import type { Ornament } from "./ornaments";
 
 export interface Rect {
   x: number;
@@ -34,8 +36,8 @@ export interface Crop {
  * vẫn vẽ y như trước.
  */
 export interface FrameDeco {
-  /** Hình phần ảnh: "round" bo góc mềm, "arch" vòm (trên tròn), "oval" tròn / bầu dục. */
-  shape?: "round" | "arch" | "oval";
+  /** Hình phần ảnh: "round" bo góc mềm, "arch" vòm (trên tròn), "oval" tròn / bầu dục, "stamp" tem thư (viền răng cưa). */
+  shape?: "round" | "arch" | "oval" | "stamp";
   /** Viền quanh ảnh, theo điểm ảnh của khổ (kiểu ảnh in). */
   pad?: number;
   /** Viền dưới — dày hơn viền kia là kiểu ảnh lấy liền (polaroid), chỗ để viết chữ. */
@@ -86,6 +88,11 @@ export interface TextFrame {
   style: TextStyle;
   /** Xoay quanh tâm khung chữ, độ — chữ viết trên ảnh in đang xoay. */
   rotate?: number;
+  /**
+   * Mẫu chữ (lockups.ts): dòng nhỏ phía trên / dưới nội dung + hoa văn. Dòng phụ
+   * là trang trí của khối chữ (ngày cưới, tên), không phải nội dung thứ hai.
+   */
+  lockup?: { id: string; kicker?: string; sub?: string };
 }
 
 export type Frame = PhotoFrame | TextFrame;
@@ -104,6 +111,13 @@ export interface CollagePage {
   frames: Frame[];
   background: string;
   bgPhoto?: BgPhoto;
+  /** Hình trang trí (hoa lá, băng dính, dải phim…) — ornaments.ts. */
+  ornaments?: Ornament[];
+  /**
+   * Carousel liền mạch: trang rộng gấp `span` lần khổ (2–10 slide), khung ảnh
+   * vắt qua ranh giới slide. Xuất ra `span` ảnh nối nhau khi vuốt.
+   */
+  span?: number;
   /** Tên công thức bố cục đã dùng (để gợi ý khác đi và tránh lặp giữa các trang). */
   recipe: string;
   styleId: string;
@@ -142,6 +156,8 @@ export interface LayoutInput {
   hero?: boolean;
   /** Khung khuôn mặt [x, y, w, h] chuẩn hoá 0..1 — để cắt ảnh không mất mặt. */
   faces?: number[][];
+  /** Màu chủ đạo của ảnh (#rrggbb, đậm trước) — cho phong cách "Màu theo ảnh". */
+  palette?: string[];
 }
 
 /* ── Giới hạn — dùng chung cho giao diện và máy chủ ────────────────────────── */
@@ -156,8 +172,12 @@ export const COLLAGE_LIMITS = {
   texts: 30,
   /** Ký tự tối đa một nội dung. */
   textChars: 280,
-  /** Khung tối đa một trang (ảnh + chữ). */
-  frames: 12,
+  /** Khung tối đa một trang (ảnh + chữ). Carousel: tối đa 3 ảnh mỗi slide. */
+  frames: 32,
+  /** Hình trang trí tối đa một trang. */
+  ornaments: 24,
+  /** Slide tối đa của một carousel liền mạch. */
+  slides: 10,
   /** Bộ layout tối đa đang giữ cho một album. */
   sets: 12,
   /** Bộ layout được giữ trên máy chủ bao lâu kể từ lần lưu cuối. */
