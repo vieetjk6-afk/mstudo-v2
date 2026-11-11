@@ -6,6 +6,9 @@
 --   bật khi chạy file này. Chỉ có tác dụng với studio gói Photographer Plus /
 --   Studio (planAllowsCollage trong src/lib/plans.ts) — gói khác album không
 --   hiện nút ghép layout dù cột này là true.
+-- • albums.collage_enabled: như trên nhưng cho ALBUM LẺ (album không thuộc hợp
+--   đồng nào) — studio bật / tắt ở tab Giao khách của album, MẶC ĐỊNH BẬT.
+--   Album thuộc hợp đồng thì theo cột của hợp đồng, cột này bỏ qua.
 -- • album_collages: bộ layout khách đang ghép (ảnh nào nằm khung nào, chữ gì,
 --   khổ gì). GIỮ 1 NGÀY kể từ lần lưu cuối (`expires_at`); trong thời gian đó
 --   khách mở lại sửa tiếp được, kể cả trên máy khác (xác minh SĐT lại). Chỉ là
@@ -37,6 +40,9 @@ begin
 end $$;
 
 alter table public.studio_contracts
+  add column if not exists collage_enabled boolean not null default true;
+
+alter table public.albums
   add column if not exists collage_enabled boolean not null default true;
 
 create table if not exists public.album_collages (

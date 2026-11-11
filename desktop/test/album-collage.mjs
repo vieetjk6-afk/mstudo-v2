@@ -17,6 +17,7 @@ import { focusCrop, placePhoto, DEFAULT_CROP } from "../../src/lib/collage/crop.
 import { formatById } from "../../src/lib/collage/formats.ts";
 import { rng } from "../../src/lib/collage/rng.ts";
 import { COLLAGE_LIMITS } from "../../src/lib/collage/types.ts";
+import { collageEnabledFor } from "../../src/lib/collage/enabled.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -242,6 +243,15 @@ check("bỏ dấu tiếng Việt", fold("Bê Quả · Đón Dâu"), "be qua · d
   ok("mặt nằm bên trái → khung dịch về trái", c.cx < 0.5);
   check("không có mặt → điểm mặc định", focusCrop([], 1, 1.5), DEFAULT_CROP);
 }
+
+/* ── Bật / tắt: hợp đồng hay album lẻ ───────────────────────────────────── */
+check("album của hợp đồng đang bật", collageEnabledFor([{ collage_enabled: true }], false), true);
+check("album của hợp đồng đã tắt — cột của album không có tác dụng", collageEnabledFor([{ collage_enabled: false }], true), false);
+check("hai hợp đồng dùng chung album: một cái bật là bật", collageEnabledFor([{ collage_enabled: false }, { collage_enabled: true }], undefined), true);
+check("album lẻ mặc định bật", collageEnabledFor([], true), true);
+check("album lẻ studio đã tắt", collageEnabledFor([], false), false);
+check("album lẻ, cột chưa có (chưa chạy SQL) → tắt", collageEnabledFor([], undefined), false);
+check("đọc hợp đồng lỗi (chưa chạy SQL) → tắt", collageEnabledFor(null, true), false);
 
 console.log(fail ? `\n${fail} kiểm thử HỎNG` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

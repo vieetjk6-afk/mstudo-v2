@@ -52,6 +52,7 @@ export default function AlbumEditorV2({
   deliveryTwin = null,
   linkedContract = null,
   printInfo = null,
+  collageInfo = null,
   customerShares = [],
   initialTab,
 }: AlbumEditorProps) {
@@ -310,7 +311,13 @@ export default function AlbumEditorV2({
           />
         )}
         {tab === "deliver" && (
-          <DeliverTabV2 e={e} album={album} canDelivery={canDelivery} onPrint={hasPrint ? () => go("print") : undefined} />
+          <DeliverTabV2
+            e={e}
+            album={album}
+            canDelivery={canDelivery}
+            onPrint={hasPrint ? () => go("print") : undefined}
+            collageInfo={deliveryTwin ? null : collageInfo}
+          />
         )}
         {tab === "print" && hasPrint && (
           <AlbumPrintPanelV2

@@ -110,11 +110,17 @@ function editor(tab?: string, over: Partial<Album> = {}, extra: Partial<React.Co
   );
 }
 
-function editorDelivery(tab?: string) {
+function editorDelivery(tab?: string, extra: Partial<React.ComponentProps<typeof AlbumEditor>> = {}) {
   return editor(
     tab,
     { phase: "delivery", delivered_at: "2026-10-22T03:00:00Z", storage_until: "2026-11-15", cover_url: bia("#ee9ca7", "#ffdde1") },
-    { initialSources: SOURCES_DELIVERY, photosPromise: PHOTOS_DELIVERY_P, printInfo: PRINT },
+    {
+      initialSources: SOURCES_DELIVERY,
+      photosPromise: PHOTOS_DELIVERY_P,
+      printInfo: PRINT,
+      collageInfo: { allowed: true, contractId: "c1", contractEnabled: true, albumEnabled: true },
+      ...extra,
+    },
   );
 }
 
@@ -155,6 +161,16 @@ export const SCREENS_ALBUMCT: Record<string, { title: string; render: () => Reac
   "v2-album-giao": {
     title: "Giao diện mới — Album: tab Giao khách (đã giao, hạn lưu trữ)",
     render: () => editorDelivery("deliver"),
+    bare: true,
+  },
+  "v2-album-giao-le": {
+    title: "Giao diện mới — Album lẻ (không thuộc hợp đồng): tab Giao khách, công tắc ghép layout ảnh",
+    render: () =>
+      editorDelivery("deliver", {
+        contractId: null,
+        linkedContract: null,
+        collageInfo: { allowed: true, contractId: null, contractEnabled: null, albumEnabled: true },
+      }),
     bare: true,
   },
   "v2-album-in": {

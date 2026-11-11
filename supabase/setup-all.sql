@@ -2406,7 +2406,7 @@ alter table public.system_poll_votes enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ migrations/ghep_layout.sql — Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng + bộ layout khách giữ 1 ngày
+-- ▶ migrations/ghep_layout.sql — Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày
 -- ══════════════════════════════════════════════════════════════════════════
 
 create table if not exists public.album_collages (
@@ -7434,7 +7434,7 @@ alter table public.profiles add column if not exists qr_note_template text;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ migrations/ghep_layout.sql — Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng + bộ layout khách giữ 1 ngày
+-- ▶ migrations/ghep_layout.sql — Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày
 -- ══════════════════════════════════════════════════════════════════════════
 
 -- ============================================================================
@@ -7445,6 +7445,9 @@ alter table public.profiles add column if not exists qr_note_template text;
 --   bật khi chạy file này. Chỉ có tác dụng với studio gói Photographer Plus /
 --   Studio (planAllowsCollage trong src/lib/plans.ts) — gói khác album không
 --   hiện nút ghép layout dù cột này là true.
+-- • albums.collage_enabled: như trên nhưng cho ALBUM LẺ (album không thuộc hợp
+--   đồng nào) — studio bật / tắt ở tab Giao khách của album, MẶC ĐỊNH BẬT.
+--   Album thuộc hợp đồng thì theo cột của hợp đồng, cột này bỏ qua.
 -- • album_collages: bộ layout khách đang ghép (ảnh nào nằm khung nào, chữ gì,
 --   khổ gì). GIỮ 1 NGÀY kể từ lần lưu cuối (`expires_at`); trong thời gian đó
 --   khách mở lại sửa tiếp được, kể cả trên máy khác (xác minh SĐT lại). Chỉ là
@@ -7476,6 +7479,9 @@ begin
 end $$;
 
 alter table public.studio_contracts
+  add column if not exists collage_enabled boolean not null default true;
+
+alter table public.albums
   add column if not exists collage_enabled boolean not null default true;
 
 create index if not exists album_collages_album_idx on public.album_collages (album_id, updated_at desc);
@@ -9360,7 +9366,7 @@ grant update (qr_note_template) on public.profiles to authenticated;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
--- ▶ migrations/ghep_layout.sql — Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng + bộ layout khách giữ 1 ngày
+-- ▶ migrations/ghep_layout.sql — Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày
 -- ══════════════════════════════════════════════════════════════════════════
 
 drop policy if exists album_collages_owner_read on public.album_collages;

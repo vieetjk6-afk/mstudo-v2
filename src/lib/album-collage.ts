@@ -11,6 +11,7 @@ import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { COLLAGE_LIMITS, type CollageDoc } from "@/lib/collage/types";
 import { sanitizeDoc, cleanTitle, docPhotoIds } from "@/lib/collage/validate";
 import { categorize, type CatResult } from "@/lib/collage/categories";
+import { collageEnabledFor } from "@/lib/collage/enabled";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    GHÉP LAYOUT ẢNH — phần máy chủ (đọc DB, kiểm quyền). Logic thuần ở
@@ -20,13 +21,15 @@ import { categorize, type CatResult } from "@/lib/collage/categories";
    nào):
      1. Album đang ở giai đoạn giao khách, đã xuất bản; album có mật khẩu thì
         phải kèm vé mở khoá (album-access).
-     2. Studio gói Photographer Plus / Studio (planAllowsCollage) VÀ hợp đồng
-        dùng album này đang bật ghép layout (studio_contracts.collage_enabled,
-        mặc định bật). Album lẻ không thuộc hợp đồng nào thì không có.
+     2. Studio gói Photographer Plus / Studio (planAllowsCollage) VÀ công tắc
+        ghép layout đang bật: của hợp đồng dùng album này
+        (studio_contracts.collage_enabled), hoặc của chính album nếu là album
+        lẻ (albums.collage_enabled) — cả hai mặc định bật.
      3. Chỉ cô dâu / chú rể: hợp đồng có SĐT khách / cô dâu / chú rể thì phải
         kèm vé SĐT — CÙNG vé với chọn ảnh in (mintPrintKey), nên khách xác minh
-        một lần trên máy là dùng được cả hai. Hợp đồng không ghi SĐT nào thì ai
-        mở được album cũng dùng được (giống ảnh in).
+        một lần trên máy là dùng được cả hai. Hợp đồng không ghi SĐT nào, hoặc
+        album lẻ (không có SĐT để đối chiếu), thì ai mở được album cũng dùng
+        được (giống ảnh in).
    ═══════════════════════════════════════════════════════════════════════════ */
 
 /** Trạng thái gửi xuống trang album giao khách. */
@@ -46,12 +49,12 @@ type AlbumRow = {
 };
 
 /**
- * Hợp đồng dùng album này: có bật ghép layout không + SĐT khách / cô dâu / chú
- * rể (đã chuẩn hoá, để đối chiếu vé) — gộp MỘT truy vấn, vì trang album và mỗi
- * lượt tự lưu đều cần cả hai. Thiếu cột (chưa chạy migrations/ghep_layout.sql)
- * hay album lẻ → tắt: tính năng đơn giản không hiện, không làm hỏng trang.
+ * Album này có bật ghép layout không + SĐT khách / cô dâu / chú rể của hợp đồng
+ * (đã chuẩn hoá, để đối chiếu vé). Album thuộc hợp đồng theo công tắc hợp đồng;
+ * album lẻ theo công tắc của album (luật ở collageEnabledFor). Một truy vấn hợp
+ * đồng cho cả cờ lẫn SĐT; chỉ album lẻ mới đọc thêm cột của album.
  */
-export async function loadCollageContract(db: SupabaseClient, albumId: string): Promise<{ enabled: boolean; phones: string[] }> {
+export async function loadCollageSetting(db: SupabaseClient, albumId: string): Promise<{ enabled: boolean; phones: string[] }> {
   const q = (cols: string) =>
     db
       .from("studio_contracts")
@@ -61,11 +64,15 @@ export async function loadCollageContract(db: SupabaseClient, albumId: string): 
   let res = await q("collage_enabled, client_phone, bride_phone, groom_phone");
   // DB chưa chạy migration SĐT cô dâu / chú rể (hop-dong-co-dau-ngay-phu.sql).
   if (res.error) res = await q("collage_enabled, client_phone");
-  if (res.error || !res.data?.length) return { enabled: false, phones: [] };
-  const rows = res.data as unknown as Record<string, unknown>[];
+  const rows = res.error ? null : ((res.data ?? []) as unknown as Record<string, unknown>[]);
+  let albumFlag: unknown = undefined;
+  if (rows && rows.length === 0) {
+    const { data, error } = await db.from("albums").select("collage_enabled").eq("id", albumId).maybeSingle();
+    if (!error && data) albumFlag = (data as { collage_enabled?: unknown }).collage_enabled;
+  }
   return {
-    enabled: rows.some((r) => r.collage_enabled === true),
-    phones: printPhoneKeys(rows.flatMap((r) => [r.client_phone, r.bride_phone, r.groom_phone])),
+    enabled: collageEnabledFor(rows, albumFlag),
+    phones: rows ? printPhoneKeys(rows.flatMap((r) => [r.client_phone, r.bride_phone, r.groom_phone])) : [],
   };
 }
 
@@ -85,7 +92,7 @@ export async function loadCollageState(
   owner: { plan?: unknown; plan_expires_at?: string | null; role?: string | null } | null | undefined,
 ): Promise<CollageState | null> {
   if (!ownerAllowsCollage(owner)) return null;
-  const c = await loadCollageContract(db, albumId);
+  const c = await loadCollageSetting(db, albumId);
   return c.enabled ? { coupleOnly: c.phones.length > 0 } : null;
 }
 
@@ -113,12 +120,12 @@ export async function collageGate(slug: string, cred: { access?: unknown; key?: 
   if (!album.gallery_pinned && album.password_hash && !verifyAlbumAccess(album.id, album.password_hash, typeof cred.access === "string" ? cred.access : undefined)) {
     return deny("wrong_password", 401);
   }
-  const [{ data: owner }, contract] = await Promise.all([
+  const [{ data: owner }, setting] = await Promise.all([
     db.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle(),
-    loadCollageContract(db, album.id),
+    loadCollageSetting(db, album.id),
   ]);
-  if (!ownerAllowsCollage(owner) || !contract.enabled) return deny("not_enabled", 403);
-  const phones = contract.phones;
+  if (!ownerAllowsCollage(owner) || !setting.enabled) return deny("not_enabled", 403);
+  const phones = setting.phones;
   if (needKey && phones.length > 0 && !verifyPrintKey(album.id, phones, cred.key)) return deny("need_verify", 403);
   return { ok: true, db, album, phones };
 }

@@ -114,7 +114,7 @@ const ORDER = [
   ["migrations/hop_dong_yeu_cau_studio.sql", "Hợp đồng: tên cô dâu/chú rể, tên & ghi chú ngày chính, nội dung chuyển khoản chỉ số HĐ (tuỳ chọn kèm ngày)"],
   ["migrations/dat_lich_chi_tiet.sql", "Đặt lịch: nhiều gói, ngày chính/phụ, cô dâu/chú rể (studio_bookings.details); SĐT + địa chỉ cô dâu/chú rể trên hợp đồng (chạy SAU hop_dong_yeu_cau_studio)"],
   ["migrations/noi_dung_ck_tu_nhap.sql", "Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})"],
-  ["migrations/ghep_layout.sql", "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng + bộ layout khách giữ 1 ngày"],
+  ["migrations/ghep_layout.sql", "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -291,9 +291,9 @@ const NHOM = {
     tieuDe: "GHÉP LAYOUT ẢNH ĐĂNG MẠNG XÃ HỘI TRONG ALBUM GIAO KHÁCH",
     ghiChu: [
       "-- Chỉ gồm migration của riêng tính năng này: cột bật/tắt ghép layout trên",
-      "-- hợp đồng (mặc định bật) và bảng album_collages giữ bộ layout khách đang",
-      "-- ghép trong 1 ngày. Chỉ cần bảng hợp đồng / album có từ schema nền. Chạy",
-      "-- lại cả file này cũng an toàn.",
+      "-- hợp đồng và trên album lẻ (đều mặc định bật) cùng bảng album_collages giữ",
+      "-- bộ layout khách đang ghép trong 1 ngày. Chỉ cần bảng hợp đồng / album có",
+      "-- từ schema nền. Đã chạy bản trước thì chạy lại cả file này cũng an toàn.",
     ],
     files: ["migrations/ghep_layout.sql"],
   },

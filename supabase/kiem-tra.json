@@ -936,11 +936,12 @@
     },
     {
       "file": "migrations/ghep_layout.sql",
-      "mo_ta": "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng + bộ layout khách giữ 1 ngày",
+      "mo_ta": "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày",
       "bang": [
         "album_collages"
       ],
       "cot": [
+        "albums.collage_enabled",
         "studio_contracts.collage_enabled"
       ]
     }
