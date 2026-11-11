@@ -55,7 +55,8 @@ type Step = "loading" | "error" | "sets" | "pick" | "options" | "overview" | "ed
 
 const DEFAULT_OPTS: CollageOptions = { formatId: DEFAULT_FORMAT_ID, perPage: 4, styleId: DEFAULT_STYLE_ID, texts: [""] };
 const HISTORY_MAX = 40;
-const SAVE_DELAY = 1200;
+/** Tự lưu sau khi khách ngừng tay 2,5 giây — gom nhiều lần chạm thành một lượt ghi. */
+const SAVE_DELAY = 2500;
 
 /** Mọi ảnh bộ layout dùng phải có tỉ lệ trong doc.aspects (để vẽ lại đúng khi mở lại). */
 function fillAspects(doc: CollageDoc, measured: Record<string, number>): CollageDoc {

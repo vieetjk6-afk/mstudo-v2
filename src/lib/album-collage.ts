@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { verifyAlbumAccess, verifyPrintKey } from "@/lib/album-access";
-import { loadPrintPhones } from "@/lib/album-print";
+import { printPhoneKeys } from "@/lib/album-print-rules";
 import { effectivePlan, planAllowsCollage, type Plan } from "@/lib/plans";
 import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
 import { fetchAllRows } from "@/lib/fetch-all-rows";
@@ -46,18 +46,27 @@ type AlbumRow = {
 };
 
 /**
- * Hợp đồng dùng album này có bật ghép layout không. Thiếu cột (chưa chạy
- * migrations/ghep_layout.sql) hay album lẻ → false: tính năng đơn giản không
- * hiện, không làm hỏng trang.
+ * Hợp đồng dùng album này: có bật ghép layout không + SĐT khách / cô dâu / chú
+ * rể (đã chuẩn hoá, để đối chiếu vé) — gộp MỘT truy vấn, vì trang album và mỗi
+ * lượt tự lưu đều cần cả hai. Thiếu cột (chưa chạy migrations/ghep_layout.sql)
+ * hay album lẻ → tắt: tính năng đơn giản không hiện, không làm hỏng trang.
  */
-export async function loadCollageEnabled(db: SupabaseClient, albumId: string): Promise<boolean> {
-  const { data, error } = await db
-    .from("studio_contracts")
-    .select("collage_enabled")
-    .or(`selection_album_id.eq.${albumId},gallery_album_id.eq.${albumId}`)
-    .limit(5);
-  if (error || !data?.length) return false;
-  return (data as { collage_enabled?: boolean | null }[]).some((r) => r.collage_enabled === true);
+export async function loadCollageContract(db: SupabaseClient, albumId: string): Promise<{ enabled: boolean; phones: string[] }> {
+  const q = (cols: string) =>
+    db
+      .from("studio_contracts")
+      .select(cols)
+      .or(`selection_album_id.eq.${albumId},gallery_album_id.eq.${albumId}`)
+      .limit(5);
+  let res = await q("collage_enabled, client_phone, bride_phone, groom_phone");
+  // DB chưa chạy migration SĐT cô dâu / chú rể (hop-dong-co-dau-ngay-phu.sql).
+  if (res.error) res = await q("collage_enabled, client_phone");
+  if (res.error || !res.data?.length) return { enabled: false, phones: [] };
+  const rows = res.data as unknown as Record<string, unknown>[];
+  return {
+    enabled: rows.some((r) => r.collage_enabled === true),
+    phones: printPhoneKeys(rows.flatMap((r) => [r.client_phone, r.bride_phone, r.groom_phone])),
+  };
 }
 
 /** Gói của chủ album có mở ghép layout không. */
@@ -76,9 +85,8 @@ export async function loadCollageState(
   owner: { plan?: unknown; plan_expires_at?: string | null; role?: string | null } | null | undefined,
 ): Promise<CollageState | null> {
   if (!ownerAllowsCollage(owner)) return null;
-  if (!(await loadCollageEnabled(db, albumId))) return null;
-  const phones = await loadPrintPhones(db, albumId);
-  return { coupleOnly: phones.length > 0 };
+  const c = await loadCollageContract(db, albumId);
+  return c.enabled ? { coupleOnly: c.phones.length > 0 } : null;
 }
 
 /* ── Cổng kiểm quyền dùng chung cho các route /api/album/[slug]/collage/* ── */
@@ -105,10 +113,12 @@ export async function collageGate(slug: string, cred: { access?: unknown; key?: 
   if (!album.gallery_pinned && album.password_hash && !verifyAlbumAccess(album.id, album.password_hash, typeof cred.access === "string" ? cred.access : undefined)) {
     return deny("wrong_password", 401);
   }
-  const { data: owner } = await db.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle();
-  if (!ownerAllowsCollage(owner)) return deny("not_enabled", 403);
-  if (!(await loadCollageEnabled(db, album.id))) return deny("not_enabled", 403);
-  const phones = await loadPrintPhones(db, album.id);
+  const [{ data: owner }, contract] = await Promise.all([
+    db.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle(),
+    loadCollageContract(db, album.id),
+  ]);
+  if (!ownerAllowsCollage(owner) || !contract.enabled) return deny("not_enabled", 403);
+  const phones = contract.phones;
   if (needKey && phones.length > 0 && !verifyPrintKey(album.id, phones, cred.key)) return deny("need_verify", 403);
   return { ok: true, db, album, phones };
 }
@@ -237,7 +247,8 @@ export async function saveCollage(db: SupabaseClient, albumId: string, body: { i
     updated_at: now.toISOString(),
     expires_at: new Date(now.getTime() + COLLAGE_LIMITS.keepMs).toISOString(),
   };
-  await purgeExpired(db, albumId).catch(() => {});
+  // KHÔNG dọn bộ hết hạn ở đây: tự lưu chạy liên tục, mỗi lượt thêm một câu
+  // DELETE là phí. Dọn khi mở danh sách (listCollages) + cron hằng ngày là đủ.
 
   const id = typeof body.id === "string" && UUID_RE.test(body.id) ? body.id : null;
   if (id) {

@@ -16,8 +16,8 @@ import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } f
 import { getOriginalFolders } from "@/lib/album-original";
 import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
-import { loadPrintPhones, loadPrintState } from "@/lib/album-print";
-import { loadCollageEnabled, ownerAllowsCollage } from "@/lib/album-collage";
+import { loadPrintState } from "@/lib/album-print";
+import { loadCollageState } from "@/lib/album-collage";
 
 export const dynamic = "force-dynamic";
 
@@ -132,14 +132,9 @@ export default async function GalleryPage(
     // migrations/ghep_layout.sql → tắt). Gói thấp thì không tốn thêm truy vấn nào.
     // SĐT cô dâu / chú rể chỉ để biết có hỏi SĐT trước khi ghép hay không — bản
     // thân các số KHÔNG bao giờ gửi xuống trình duyệt.
-    getAlbumOwner(album.owner_id).then(async ({ profile }) => {
-      if (!ownerAllowsCollage(profile)) return null;
-      const [on, phones] = await Promise.all([
-        loadCollageEnabled(admin, album.id).catch(() => false),
-        loadPrintPhones(admin, album.id).catch(() => [] as string[]),
-      ]);
-      return on ? { coupleOnly: phones.length > 0 } : null;
-    }),
+    getAlbumOwner(album.owner_id)
+      .then(({ profile }) => loadCollageState(admin, album.id, profile))
+      .catch(() => null),
   ]);
   const studioName = brand.name;
 

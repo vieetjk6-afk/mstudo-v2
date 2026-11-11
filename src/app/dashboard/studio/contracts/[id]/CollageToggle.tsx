@@ -19,7 +19,7 @@ import { Switch } from "@/components/v2/kit-client";
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const DESC = "Album giao khách có thêm “Ghép ảnh đăng mạng xã hội”: cô dâu, chú rể chọn ảnh, nhập lời muốn viết — máy tự ghép nhiều layout để sửa rồi tải về. Chỉ dùng ảnh studio đã giao.";
-const MISSING = "Cần cập nhật cơ sở dữ liệu (chạy supabase/ghep-layout.sql) để lưu lựa chọn này.";
+const MISSING = "Cần cập nhật cơ sở dữ liệu: mở /api/setup-sql/ghep-layout (đăng nhập tài khoản chủ studio), chép toàn bộ rồi chạy trong Supabase SQL Editor.";
 
 function useCollageToggle(contractId: string, initial: boolean | null | undefined) {
   // Cột chưa có (chưa chạy migration) hoặc null → mặc định của tính năng là BẬT.
