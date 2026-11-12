@@ -50,7 +50,7 @@ export function OverviewStep({
   watermark,
   save,
   busy,
-  onClose,
+  onBack,
   onOpenPage,
   onShuffle,
   onOptions,
@@ -68,7 +68,7 @@ export function OverviewStep({
   watermark: string | null;
   save: SaveStatus;
   busy: boolean;
-  onClose: () => void;
+  onBack: () => void;
   onOpenPage: (i: number) => void;
   onShuffle: () => void;
   onOptions: () => void;
@@ -88,7 +88,8 @@ export function OverviewStep({
   const images = doc.pages.reduce((n, p) => n + Math.max(1, Math.round(p.span ?? 1)), 0);
   return (
     <>
-      <StudioHeader title={`Bộ ảnh ghép · ${doc.pages.length} layout`} sub={<SaveBadge s={save} />} onBack={onClose} close backLabel="Đóng" />
+      {/* Nút ‹ chứ không phải ✕: lưu xong rồi về danh sách bộ đã lưu (như nút lùi điện thoại), chưa đóng màn ghép. */}
+      <StudioHeader title={`Bộ ảnh ghép · ${doc.pages.length} layout`} sub={<SaveBadge s={save} />} onBack={onBack} />
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto w-full max-w-[1080px] px-3 pb-6 pt-3">
           <div className="mb-3 flex flex-wrap gap-2">

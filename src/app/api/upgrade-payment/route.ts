@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmins } from "@/lib/notify-admin";
 import { UPGRADE_REVIEW_HREF } from "@/lib/notifications";
@@ -12,8 +12,7 @@ export const dynamic = "force-dynamic";
  * bắt studio tải lại trang.
  */
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const id = req.nextUrl.searchParams.get("id") || "";
@@ -39,8 +38,7 @@ export async function GET(req: NextRequest) {
  * Gói chỉ được nâng khi admin nhìn thấy tiền trong sao kê rồi tự xác nhận.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { id } = (await req.json().catch(() => ({}))) as { id?: string };

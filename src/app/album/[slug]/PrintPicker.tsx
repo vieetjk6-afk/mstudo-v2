@@ -157,7 +157,7 @@ export function usePrintPicks(slug: string, print: PrintState | null | undefined
       const res = await fetch(`/api/album/${slug}/print/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, access }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok || !d.ok) {

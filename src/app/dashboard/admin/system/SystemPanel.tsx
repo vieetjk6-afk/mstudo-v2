@@ -12,8 +12,10 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { SHORTCUTS, TARGET_LABEL, useSystemPanel, type Target } from "./useSystemPanel";
+import { fmtSize, fmtWhen, isStale, useAutoBackup } from "./useAutoBackup";
 
 export default function SystemPanel() {
+  const ab = useAutoBackup();
   // Logic dùng chung với bản mới (SystemV2) — xem ./useSystemPanel.
   const {
     message, setMessage, target, setTarget, important, setImportant, push, setPush, sending, sendMsg, sendBroadcast,
@@ -103,16 +105,35 @@ export default function SystemPanel() {
             <h2 className="text-base font-semibold">Sao lưu toàn hệ thống</h2>
           </div>
           <p className="mb-4 text-[12px]" style={{ color: "var(--text3)" }}>
-            Tải về một file JSON chứa toàn bộ dữ liệu ứng dụng của mọi studio (hợp đồng, khách hàng,
+            Toàn bộ dữ liệu ứng dụng của mọi studio (hợp đồng, khách hàng,
             báo giá, thu chi, album, thông báo…). Dùng để lưu trữ an toàn hoặc khôi phục khi cần.
             <br />
             <span style={{ color: "var(--text3)" }}>
-              Lưu ý: chỉ gồm dữ liệu ứng dụng — không chứa mật khẩu đăng nhập hay ảnh gốc trên Google Drive.
+              Lưu ý: chỉ gồm dữ liệu ứng dụng — không chứa mật khẩu đăng nhập, token kết nối hay ảnh gốc trên Google Drive.
             </span>
           </p>
+          <div className="mb-4 rounded-md border p-3" style={{ borderColor: "var(--border)" }}>
+            <div className="text-[13px] font-semibold">
+              Tự động lên Google Drive của admin ·{" "}
+              {ab.status === null ? "đang kiểm tra…" : !ab.status.connected ? "CHƯA BẬT (cần kết nối Drive ở thẻ bên dưới)" : ab.status.files[0] ? `bản mới nhất ${fmtWhen(ab.status.files[0].createdTime)} (${fmtSize(ab.status.files[0].size)})` : "chưa có bản nào"}
+            </div>
+            <div className="mt-1 text-[12px]" style={{ color: "var(--text3)" }}>
+              Chạy mỗi đêm (~03h giờ VN), giữ {ab.status?.keep ?? 14} bản gần nhất trong thư mục riêng tư “mstudo · Sao lưu hệ thống”.
+              Cài Google Drive cho máy tính trên máy admin là file tự về máy.
+            </div>
+            {isStale(ab.status) && (
+              <div className="mt-1 text-[12px]" style={{ color: "var(--danger)" }}>Bản mới nhất đã cũ — sao lưu tự động có thể đang hỏng.</div>
+            )}
+            <button onClick={() => void ab.runNow()} disabled={ab.running || !ab.status?.connected} className="btn-ghost mt-2 gap-2 text-xs">
+              {ab.running ? <Loader2 size={14} className="animate-spin" /> : <DatabaseBackup size={14} />} Sao lưu ngay lên Drive
+            </button>
+            {ab.msg && (
+              <div className="mt-2 text-[12px]" style={{ color: ab.msg.tone === "green" ? "var(--brand)" : "var(--danger)" }}>{ab.msg.text}</div>
+            )}
+          </div>
           <button onClick={downloadBackup} disabled={backing} className="btn-primary gap-2">
             {backing ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-            Tải bản sao lưu đầy đủ
+            Tải bản sao lưu về máy (.json.gz)
           </button>
           {backupMsg && (
             <div className="mt-3 rounded-md px-3 py-2 text-sm" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
@@ -129,12 +150,12 @@ export default function SystemPanel() {
           <h2 className="text-base font-semibold">Khôi phục hệ thống</h2>
         </div>
         <p className="mb-4 text-[12px]" style={{ color: "var(--text3)" }}>
-          Chọn file JSON đã sao lưu để phục hồi dữ liệu. Bản ghi trùng khóa sẽ được cập nhật, bản ghi
+          Chọn file sao lưu (.json.gz trên Drive / tải về máy, hoặc .json bản cũ) để phục hồi dữ liệu. Bản ghi trùng khóa sẽ được cập nhật, bản ghi
           thiếu sẽ được tạo lại. Thao tác này <b>không xóa</b> dữ liệu hiện có không nằm trong bản sao lưu.
         </p>
 
         <div className="flex flex-wrap items-center gap-3">
-          <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickBackupFile} className="text-sm" />
+          <input ref={fileRef} type="file" accept="application/json,.json,application/gzip,.gz" onChange={pickBackupFile} className="text-sm" />
         </div>
 
         {restoreErr && (
@@ -155,7 +176,10 @@ export default function SystemPanel() {
                 <tbody>
                   {preview.map((t) => (
                     <tr key={t.table} className="border-b" style={{ borderColor: "var(--border)" }}>
-                      <td className="px-3 py-1.5" style={{ color: "var(--text2)" }}>{t.table}</td>
+                      <td className="px-3 py-1.5" style={{ color: "var(--text2)" }}>
+                        {t.table}
+                        {t.skip && <span className="ml-2 text-[11px]" style={{ color: "var(--text3)" }}>(nhật ký — không khôi phục)</span>}
+                      </td>
                       <td className="px-3 py-1.5 text-right font-medium">{t.rows.toLocaleString("vi-VN")}</td>
                     </tr>
                   ))}

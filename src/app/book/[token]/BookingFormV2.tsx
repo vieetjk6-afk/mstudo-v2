@@ -255,7 +255,7 @@ export default function BookingFormV2(
                 </div>
                 {form.chosenPkgs.length > 1 && (
                   <p className="text-right text-[13.5px]" style={{ color: "var(--tx2)" }}>
-                    {form.chosenPkgs.length} gói · <b className="tnum" style={{ color: "var(--ac)" }}>{vnd(form.pkgTotal)}</b>
+                    {form.chosenPkgs.length} {tr.pkgCount} · <b className="tnum" style={{ color: "var(--ac)" }}>{vnd(form.pkgTotal)}</b>
                   </p>
                 )}
                 {custom && (

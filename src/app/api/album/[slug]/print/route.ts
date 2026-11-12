@@ -48,6 +48,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
 
   const [quota, phones] = await Promise.all([loadPrintQuota(admin, album.id), loadPrintPhones(admin, album.id)]);
   if (!quota) return NextResponse.json({ error: "not_enabled" }, { status: 403 });
+  if (phones === null) return NextResponse.json({ error: "not_ready" }, { status: 503 });
   if (phones.length > 0 && !verifyPrintKey(album.id, phones, body.printKey)) {
     return NextResponse.json({ error: "need_verify" }, { status: 403 });
   }

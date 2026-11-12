@@ -208,6 +208,113 @@ export async function adminDriveHealth(): Promise<{ configured: boolean; connect
   }
 }
 
+/* ─── Sao lưu hệ thống tự động ──────────────────────────────────────────────
+   File sao lưu chứa dữ liệu của MỌI studio → thư mục RIÊNG, KHÔNG BAO GIỜ đặt
+   quyền "anyone reader" như ảnh người dùng ở trên. Chỉ tài khoản Google của
+   admin thấy; cài Google Drive cho máy tính là file tự về máy admin mỗi ngày.
+
+   Không lưu id thư mục vào DB (khỏi thêm migration): scope drive.file chỉ cho
+   app thấy file CHÍNH NÓ tạo, nên tìm theo tên là đủ và rẻ. Mỗi file sao lưu
+   được đánh dấu appProperties.mstudoBackup — vòng dọn bản cũ chỉ xoá file
+   mang dấu đó, không đụng file khác admin lỡ bỏ vào thư mục. */
+
+const BACKUP_FOLDER_NAME = "mstudo · Sao lưu hệ thống";
+const BACKUP_MARK = "appProperties has { key='mstudoBackup' and value='1' }";
+
+export type BackupFile = { id: string; name: string; size: number; createdTime: string; webViewLink: string | null };
+
+/** Client Drive đã xác thực (KHÔNG tạo thư mục nội dung người dùng). */
+async function adminDriveClient(): Promise<Drive | null> {
+  if (!adminDriveConfigured()) return null;
+  const s = await loadSettings();
+  if (!s?.refresh_token) return null;
+  const o = oauth();
+  o.setCredentials({ refresh_token: s.refresh_token });
+  return google.drive({ version: "v3", auth: o });
+}
+
+async function backupFolder(drive: Drive, create: boolean): Promise<string | null> {
+  const found = await drive.files.list({
+    q: `name = '${BACKUP_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: "files(id)",
+    orderBy: "createdTime",
+    pageSize: 1,
+  });
+  const id = found.data.files?.[0]?.id;
+  if (id) return id;
+  if (!create) return null;
+  const res = await drive.files.create({
+    requestBody: { name: BACKUP_FOLDER_NAME, mimeType: "application/vnd.google-apps.folder" },
+    fields: "id",
+  });
+  return res.data.id || null;
+}
+
+/** Danh sách bản sao lưu trên Drive admin, mới nhất trước. null = chưa kết nối Drive. */
+export async function listAdminDriveBackups(): Promise<BackupFile[] | null> {
+  const drive = await adminDriveClient();
+  if (!drive) return null;
+  const folder = await backupFolder(drive, false);
+  if (!folder) return [];
+  const res = await drive.files.list({
+    q: `'${folder}' in parents and trashed = false and ${BACKUP_MARK}`,
+    fields: "files(id, name, size, createdTime, webViewLink)",
+    orderBy: "createdTime desc",
+    pageSize: 100,
+  });
+  return (res.data.files ?? []).map((f) => ({
+    id: f.id || "",
+    name: f.name || "",
+    size: Number(f.size || 0),
+    createdTime: f.createdTime || "",
+    webViewLink: f.webViewLink || null,
+  }));
+}
+
+/** Đưa một bản sao lưu (đã nén gzip) lên thư mục riêng. Ném lỗi nếu hỏng. */
+export async function uploadAdminDriveBackup(buf: Buffer, name: string, description: string): Promise<BackupFile> {
+  const drive = await adminDriveClient();
+  if (!drive) throw new Error(adminDriveConfigured() ? "chưa kết nối Drive admin" : "thiếu biến môi trường Google OAuth");
+  const folder = await backupFolder(drive, true);
+  if (!folder) throw new Error("không tạo được thư mục sao lưu trên Drive");
+  const res = await drive.files.create({
+    requestBody: {
+      name,
+      parents: [folder],
+      description,
+      mimeType: "application/gzip",
+      appProperties: { mstudoBackup: "1" },
+    },
+    media: { mimeType: "application/gzip", body: Readable.from(buf) },
+    fields: "id, name, size, createdTime, webViewLink",
+  });
+  if (!res.data.id) throw new Error("Drive không trả về file id");
+  return {
+    id: res.data.id,
+    name: res.data.name || name,
+    size: Number(res.data.size || buf.length),
+    createdTime: res.data.createdTime || new Date().toISOString(),
+    webViewLink: res.data.webViewLink || null,
+  };
+}
+
+/** Xoá các bản sao lưu cũ, chỉ giữ `keep` bản mới nhất. Trả về số file đã xoá. */
+export async function pruneAdminDriveBackups(keep: number): Promise<number> {
+  const drive = await adminDriveClient();
+  const files = await listAdminDriveBackups();
+  if (!drive || !files) return 0;
+  let removed = 0;
+  for (const f of files.slice(Math.max(1, keep))) {
+    try {
+      await drive.files.delete({ fileId: f.id });
+      removed++;
+    } catch (e) {
+      console.error("[admin-drive] không xoá được bản sao lưu cũ:", f.name, (e as Error)?.message || e);
+    }
+  }
+  return removed;
+}
+
 /**
  * Thử lưu ẢNH vào Drive admin → trả URL phục vụ qua /api/img, hoặc null nếu Drive
  * chưa kết nối / lỗi (để caller fallback Supabase). Chỉ dùng cho ảnh (image/*).

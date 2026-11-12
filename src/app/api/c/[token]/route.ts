@@ -82,6 +82,28 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   };
   const db = createAdminClient();
 
+  // Nhẹ: trang hợp đồng hỏi định kỳ khi khách đang chuyển khoản, để tiền về
+  // (SePay tự ghi thu) là chuyển ngay sang màn "Đã nhận cọc". Đây là lượt gọi
+  // lặp lại NHIỀU NHẤT, nên trả về trước cả câu đọc hợp đồng đầy đủ bên dưới —
+  // câu đó kéo theo hai ảnh chữ ký (PNG dạng text, vài chục KB mỗi ảnh), tức
+  // ~100 KB egress Supabase cho MỖI lượt hỏi chỉ để xem có tiền về chưa.
+  if (body.action === "pay_status") {
+    const { data: c } = await db
+      .from("studio_contracts")
+      .select("id, client_phone")
+      .eq("client_token", params.token)
+      .maybeSingle();
+    if (!c) return NextResponse.json({ error: "not_found" }, { status: 404 });
+    if (!c.client_phone || digits(body.phone) !== digits(c.client_phone)) {
+      return NextResponse.json({ error: "wrong_phone" }, { status: 401 });
+    }
+    const [{ data: pays }, { data: plan }] = await Promise.all([
+      db.from("contract_payments").select("id, amount, kind, paid_at").eq("contract_id", c.id),
+      db.from("contract_payment_plan").select("id, label, amount, paid, paid_at").eq("contract_id", c.id),
+    ]);
+    return NextResponse.json({ payments: pays ?? [], plan: plan ?? [] });
+  }
+
   // Look up the contract by token ALONE — keep it independent of the owner join
   // so a missing/extra profiles column can never null out the contract lookup.
   const { data: contract } = await db
@@ -105,18 +127,6 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   }
 
   const cId = contract.id as string;
-
-  // Nhẹ: trang hợp đồng hỏi định kỳ khi khách đang chuyển khoản, để tiền về
-  // (SePay tự ghi thu) là chuyển ngay sang màn "Đã nhận cọc". Trả về TRƯỚC mọi
-  // câu đọc chủ studio / thương hiệu: không phải thao tác ghi nên không cần
-  // biết gói có bị khóa hay không, và đây là lượt gọi lặp lại nhiều nhất.
-  if (body.action === "pay_status") {
-    const [{ data: pays }, { data: plan }] = await Promise.all([
-      db.from("contract_payments").select("id, amount, kind, paid_at").eq("contract_id", cId),
-      db.from("contract_payment_plan").select("id, label, amount, paid, paid_at").eq("contract_id", cId),
-    ]);
-    return NextResponse.json({ payments: pays ?? [], plan: plan ?? [] });
-  }
 
   const WRITE_ACTIONS = ["paid", "edit_request", "review", "brief", "choose_quote", "set_messenger", "sign", "sign_addendum"];
   const isWrite = WRITE_ACTIONS.includes(body.action || "");

@@ -208,8 +208,9 @@ export function useNewContractForm({
 
   // ── Bước 5 — thanh toán ─────────────────────────────────────────────────
   /* Đợt thu studio đã nhập + TỔNG lúc nhập. Tổng đổi sau đó (quay lại sửa
-     gói, giảm giá) thì cọc TỰ TÍNH LẠI theo % của studio và đợt cuối gánh
-     phần còn lại — xem rebalancePlan. null = chưa đụng tới → kế hoạch mặc định. */
+     gói, giảm giá) thì cọc chưa sửa tay TỰ TÍNH LẠI theo % của studio (cọc
+     gõ tay thì giữ) và đợt cuối gánh phần còn lại — xem rebalancePlan.
+     null = chưa đụng tới → kế hoạch mặc định. */
   const [plan, setPlanState] = useState<{ rows: Instalment[]; total: number } | null>(null);
 
   // ── Tuỳ chọn giữ lại từ bản cũ ──────────────────────────────────────────
@@ -290,7 +291,11 @@ export function useNewContractForm({
     if (rest > 0) out.push({ label: "Thanh toán khi giao sản phẩm", amount: rest, due: "" });
     return out;
   }, [total, autoDeposit]);
-  const instalments = plan ? (plan.total === total ? plan.rows : rebalancePlan(plan.rows, total, autoDeposit)) : defaultPlan;
+  // `plan.total` = tổng lúc studio sửa đợt: cọc còn đúng % của tổng đó mới tự
+  // tính lại, cọc gõ tay ở bước 5 thì giữ khi quay lại đổi gói.
+  const instalments = plan
+    ? plan.total === total ? plan.rows : rebalancePlan(plan.rows, total, { prevTotal: plan.total, depositPercent })
+    : defaultPlan;
   const setPlan = (rows: Instalment[] | null, forTotal = total) => setPlanState(rows ? { rows, total: forTotal } : null);
   const planTotal = instalments.reduce((s, p) => s + (p.amount || 0), 0);
 

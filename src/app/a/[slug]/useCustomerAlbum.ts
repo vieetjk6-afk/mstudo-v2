@@ -555,17 +555,26 @@ export function useCustomerAlbum({
     e.preventDefault();
     setPwLoading(true);
     setPwError(false);
-    const res = await fetch(`/api/a/${album.slug}/access`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    setPwLoading(false);
-    if (!res.ok) {
+    // Mất mạng / máy chủ trả trang lỗi: fetch hoặc .json() ném lỗi — không bắt
+    // thì nút kẹt ở "Đang mở…" tới khi khách tải lại trang.
+    let data;
+    try {
+      const res = await fetch(`/api/a/${album.slug}/access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        setPwError(true);
+        return;
+      }
+      data = await res.json();
+    } catch {
       setPwError(true);
       return;
+    } finally {
+      setPwLoading(false);
     }
-    const data = await res.json();
     accessRef.current = typeof data.access === "string" ? data.access : "";
     setPhotos(data.photos ?? []);
     setSources(data.sources ?? []);

@@ -91,6 +91,11 @@ const HISTORY_MAX = 40;
 /** Tự lưu sau khi khách ngừng tay 2,5 giây — gom nhiều lần chạm thành một lượt ghi. */
 const SAVE_DELAY = 2500;
 
+/** Mục lịch sử hiện tại là mục màn ghép đã đẩy (để nút lùi điện thoại không rời album). */
+const ownsHistory = () => !!(window.history.state as { mstudoCollage?: number } | null)?.mstudoCollage;
+/** Lượt gỡ mục lịch sử còn sót đang chờ (một màn ghép mở tại một thời điểm nên để chung). */
+let pendingPop: ReturnType<typeof setTimeout> | null = null;
+
 /** Mọi ảnh bộ layout dùng phải có tỉ lệ trong doc.aspects (để vẽ lại đúng khi mở lại). */
 function fillAspects(doc: CollageDoc, measured: Record<string, number>): CollageDoc {
   const need = new Set<string>(doc.photoIds);
@@ -160,6 +165,8 @@ export default function CollageStudio(props: CollageStudioProps) {
   const savePending = useRef(false);
   const dirty = useRef(false);
   const saveFails = useRef(0);
+  /** Ai đang chờ lượt lưu đang chạy (và lượt nối đuôi) xong hẳn. */
+  const saveIdle = useRef<(() => void)[]>([]);
   const credRef = useRef(cred);
   credRef.current = cred;
   /** Lượt nạp hiện hành — kết quả của lượt cũ (đã bấm Thử lại / đã đóng) bị bỏ qua. */
@@ -327,9 +334,22 @@ export default function CollageStudio(props: CollageStudioProps) {
         savePending.current = false;
         void saveNow();
       }
+      if (!saving.current) saveIdle.current.splice(0).forEach((done) => done());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Lưu ngay mọi thay đổi còn treo và CHỜ máy chủ trả lời (khác flushSave: beacon, không chờ). */
+  const settleSave = useCallback(async () => {
+    const idle = () => (saving.current ? new Promise<void>((r) => saveIdle.current.push(r)) : Promise.resolve());
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    await idle();
+    if (dirty.current) await saveNow();
+    await idle();
+  }, [saveNow]);
 
   const scheduleSave = useCallback(
     (delay = SAVE_DELAY) => {
@@ -518,7 +538,12 @@ export default function CollageStudio(props: CollageStudioProps) {
   const onCloseRef = useRef(props.onClose);
   onCloseRef.current = props.onClose;
   useEffect(() => {
-    window.history.pushState({ mstudoCollage: 1 }, "");
+    // Gỡ rồi gắn lại ngay (StrictMode): huỷ lượt lùi đang chờ và dùng lại mục đã đẩy, không đẩy thêm.
+    if (pendingPop) {
+      clearTimeout(pendingPop);
+      pendingPop = null;
+    }
+    if (!ownsHistory()) window.history.pushState({ mstudoCollage: 1 }, "");
     const onPop = () => {
       if (closingRef.current) return;
       if (backRef.current()) window.history.pushState({ mstudoCollage: 1 }, "");
@@ -529,12 +554,22 @@ export default function CollageStudio(props: CollageStudioProps) {
       }
     };
     window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    return () => {
+      window.removeEventListener("popstate", onPop);
+      // Màn ghép bị gỡ mà không qua close() / nút lùi (vd. máy chủ bắt xác nhận lại SĐT):
+      // gỡ mục lịch sử còn sót, không thì lần Back đầu tiên trên album "không ăn". Hoãn một
+      // nhịp để lần gắn lại của StrictMode kịp huỷ; close() / onPop đã lùi rồi thì thôi.
+      if (closingRef.current) return;
+      pendingPop = setTimeout(() => {
+        pendingPop = null;
+        if (ownsHistory()) window.history.back();
+      }, 0);
+    };
   }, [flushSave]);
   const close = () => {
     closingRef.current = true;
     flushSave();
-    if ((window.history.state as { mstudoCollage?: number } | null)?.mstudoCollage) window.history.back();
+    if (ownsHistory()) window.history.back();
     props.onClose();
   };
 
@@ -608,19 +643,40 @@ export default function CollageStudio(props: CollageStudioProps) {
       setDeleting(null);
     }
   };
+  const leaving = useRef(false);
+  const leaveUnsaved = useRef(false);
   const backToSets = async () => {
-    flushSave();
+    if (leaving.current) return;
+    leaving.current = true;
+    const gen = loadGen.current;
     try {
-      const list = await fetchSets(credRef.current);
-      setSets(list);
-      if (list.length) {
-        setStep("sets");
+      // Chờ lưu xong rồi mới đọc danh sách: gửi beacon rồi đọc ngay thì danh sách (và bộ
+      // mở lại từ đó) có thể là bản cũ — lượt tự lưu kế tiếp đè mất bản mới trên máy chủ.
+      await settleSave();
+      if (gen !== loadGen.current) return; // màn ghép đã đóng (vd. phải xác nhận lại SĐT)
+      if (dirty.current && !leaveUnsaved.current) {
+        // Lưu hỏng: ở lại, giữ nguyên bộ đang sửa; bấm lần nữa mới rời (lỗi không tự hết thì khỏi kẹt).
+        leaveUnsaved.current = true;
+        toast.show("Chưa lưu được thay đổi — bạn đợi chút rồi thử lại. Bấm quay lại lần nữa để rời, phần chưa lưu có thể mất.");
         return;
       }
-    } catch {
-      /* mạng lỗi → đóng hẳn */
+      leaveUnsaved.current = false;
+      flushSave();
+      try {
+        const list = await fetchSets(credRef.current);
+        if (gen !== loadGen.current) return;
+        setSets(list);
+        if (list.length) {
+          setStep("sets");
+          return;
+        }
+      } catch {
+        /* mạng lỗi → đóng hẳn */
+      }
+      if (gen === loadGen.current) close();
+    } finally {
+      leaving.current = false;
     }
-    close();
   };
 
   const generate = async (seed = Math.floor(Math.random() * 1e9)) => {
@@ -877,7 +933,7 @@ export default function CollageStudio(props: CollageStudioProps) {
         watermark={watermark}
         save={save}
         busy={busy}
-        onClose={uiBack}
+        onBack={uiBack}
         onOpenPage={(i) => {
           setPageIdx(i);
           setStep("edit");

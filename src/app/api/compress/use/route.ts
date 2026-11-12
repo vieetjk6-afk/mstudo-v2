@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitsFor, effectivePlan, type Plan } from "@/lib/plans";
@@ -29,9 +30,7 @@ interface Status {
 
 async function getStatus(): Promise<Status | null> {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return null;
 
   const { data: profile } = await supabase

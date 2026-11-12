@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { planProfilePatch } from "@/lib/plans";
 
@@ -10,10 +10,7 @@ export const dynamic = "force-dynamic";
  * activate its plan (e.g. Studio) for N days — no manual approval.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { code } = (await req.json().catch(() => ({}))) as { code?: string };

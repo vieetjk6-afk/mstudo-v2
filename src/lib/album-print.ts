@@ -34,8 +34,9 @@ export async function loadPrintQuota(db: SupabaseClient, albumId: string): Promi
  * cô dâu, chú rể của các hợp đồng dùng album này. Rỗng = không có số nào để
  * đối chiếu (album lẻ, hợp đồng chưa ghi SĐT) → ai mở được album cũng chọn được
  * như trước. DB chưa chạy migration SĐT cô dâu / chú rể thì chỉ lấy SĐT khách.
+ * null = không đọc được hợp đồng — người gọi phải TỪ CHỐI, không coi là rỗng.
  */
-export async function loadPrintPhones(db: SupabaseClient, albumId: string): Promise<string[]> {
+export async function loadPrintPhones(db: SupabaseClient, albumId: string): Promise<string[] | null> {
   const q = (cols: string) =>
     db
       .from("studio_contracts")
@@ -44,7 +45,9 @@ export async function loadPrintPhones(db: SupabaseClient, albumId: string): Prom
       .limit(5);
   let res = await q("client_phone, bride_phone, groom_phone");
   if (res.error) res = await q("client_phone");
-  if (res.error) return [];
+  // Lỗi DB → null (KHÔNG phải "không có SĐT"): trả [] ở đây từng mở toang cổng
+  // "chỉ cô dâu / chú rể" mỗi khi truy vấn hỏng — ai mở album cũng chọn được ảnh in.
+  if (res.error) return null;
   const rows = (res.data ?? []) as unknown as Record<string, unknown>[];
   return printPhoneKeys(rows.flatMap((r) => [r.client_phone, r.bride_phone, r.groom_phone]));
 }
@@ -63,6 +66,6 @@ export async function loadPrintState(db: SupabaseClient, albumId: string): Promi
     picks: (picks ?? []).map((p) => p.photo_id as string),
     sentAt: (album?.print_sent_at as string | null | undefined) ?? null,
     copiedAt: (album?.print_copied_at as string | null | undefined) ?? null,
-    coupleOnly: phones.length > 0,
+    coupleOnly: phones === null || phones.length > 0,
   };
 }

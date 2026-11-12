@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
 import { guardCaptcha } from "@/lib/captcha-guard";
 import { limitByIp } from "@/lib/rate-limit";
-import { depositFor, newDepositCode, newDepositToken } from "@/lib/booking-deposit";
+import { depositFor, newDepositCode, newDepositToken, verifiedPackageTotal } from "@/lib/booking-deposit";
 import { digitsOnly, isUsablePhone, samePhone } from "@/lib/referral";
 import { isLeadSource, type Utm } from "@/lib/lead-source";
 import { VOUCHER_COLS, VOUCHER_COLS_FULL, canRedeem, normalizeVoucherCode, phoneUnlocks, voucherValueLabel, type Voucher } from "@/lib/vouchers";
@@ -71,10 +71,30 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   const pkgPrice =
     body.package_price != null && Number.isFinite(body.package_price) ? Math.max(0, Math.round(body.package_price)) : null;
 
+  const details = cleanBookingDetails(body.details);
+
   // Cọc giữ ngày — chốt số tiền NGAY tại đây rồi lưu vào bản ghi. Đọc lại chính
   // sách lúc hiển thị thì studio đổi mức cọc hôm sau sẽ làm đổi số tiền của một
   // yêu cầu đã gửi đi.
-  const depositAmount = depositFor(owner.booking_deposit ?? 0, pkgPrice);
+  //
+  // Giá gói từ trình duyệt chỉ được dùng để KẸP cọc xuống khi đã đối chiếu với
+  // bảng giá thật (verifiedPackageTotal). Chỉ hỏi DB khi việc kẹp có tác dụng
+  // (gói rẻ hơn mức cọc) — trường hợp thường gặp không tốn thêm câu nào.
+  const policy = Math.max(0, Math.round(owner.booking_deposit ?? 0));
+  let trustedPrice: number | null = null;
+  if (policy > 0 && pkgPrice != null && pkgPrice < policy) {
+    const { data: pl } = await db
+      .from("studio_pricelist")
+      .select("name, price")
+      .eq("owner_id", owner.id)
+      .eq("active", true)
+      .gt("price", 0);
+    trustedPrice = verifiedPackageTotal(
+      details?.packages ?? (pkgName ? [{ name: pkgName, price: pkgPrice }] : undefined),
+      (pl ?? []) as { name: string; price: number }[],
+    );
+  }
+  const depositAmount = depositFor(policy, trustedPrice);
   const wantsDeposit = depositAmount > 0;
 
   // Voucher: chỉ nhận mã THẬT của chính studio này và còn dùng được. Ghi cả
@@ -96,7 +116,6 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     }
   }
   const note = [voucherNote, body.note?.trim()].filter(Boolean).join("\n") || null;
-  const details = cleanBookingDetails(body.details);
 
   const core = {
     owner_id: owner.id,

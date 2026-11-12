@@ -16,6 +16,7 @@ import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { faceChips, type PersonChip } from "@/lib/face-people";
 import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
+import { loadAlbumPeople } from "@/lib/face-people-load";
 
 export const dynamic = "force-dynamic";
 
@@ -194,7 +195,7 @@ export default async function PublicAlbumPage(
   // NHIÊU thay vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
   let faceScan: TienDoQuet | null = null;
   if (!hasPassword) {
-    const [p, { data: s }, { data: sel }, { data: dis }, { data: ppl }, { data: pplLinks }] =
+    const [p, { data: s }, { data: sel }, { data: dis }, peopleData] =
       await Promise.all([
       fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position"),
       admin
@@ -210,21 +211,10 @@ export default async function PublicAlbumPage(
         .from("dislikes")
         .select("photo_id, client_note")
         .eq("album_id", album.id),
-      // Nhóm người studio đã lưu. Chưa chạy migration album_people.sql thì hai
-      // câu này lỗi và `data` là null — album vẫn chạy y như trước, chỉ không có
-      // hàng chip. Cố ý không nổ: một tính năng thêm không được làm sập trang
-      // chọn ảnh của khách.
-      admin
-      // `select("*")` CÓ CHỦ Ý, không phải lười liệt kê cột: `cover_box` là cột
-      // THÊM SAU. Liệt kê tên nó ra thì trên một database chưa chạy lại
-      // migration, cả câu này lỗi và khối tìm theo khuôn mặt BIẾN MẤT HẲN — thay
-      // vì chỉ mất phần ảnh mặt cắt sẵn. Lấy `*` thì cột thiếu chỉ là undefined,
-      // và faceChips tự lùi về lấy cả tấm làm ảnh thẻ.
-        .from("album_people")
-        .select("*")
-        .eq("album_id", album.id)
-        .order("position"),
-      admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
+      // Nhóm người studio đã lưu. Chưa chạy migration album_people.sql thì
+      // trả rỗng — album vẫn chạy y như trước, chỉ không có hàng chip. Gói không
+      // có tìm theo khuôn mặt thì không đọc gì (xem @/lib/face-people-load).
+      loadAlbumPeople(admin, album.id, canFaceSearch).catch(() => ({ people: [], links: [] })),
     ]);
     // Selection view prefers selection-stage photos. Only apply the filter when
     // there are BOTH selection and delivery sources — otherwise (e.g. every
@@ -247,7 +237,7 @@ export default async function PublicAlbumPage(
     // Chỉ những ảnh THẬT SỰ hiện trong lưới: album giao khách / album chọn ảnh
     // lọc theo source, nên một chip trỏ vào ảnh không hiện là một chip bấm vào
     // ra lưới trống.
-    people = canFaceSearch ? faceChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id))) : [];
+    people = canFaceSearch ? faceChips(peopleData.people, peopleData.links, new Set(photos.map((ph) => ph.id))) : [];
     if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
   }
 

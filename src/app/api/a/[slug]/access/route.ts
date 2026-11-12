@@ -8,6 +8,7 @@ import { faceChips } from "@/lib/face-people";
 import { tienDoQuet } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 import { mintAlbumAccess } from "@/lib/album-access";
+import { loadAlbumPeople } from "@/lib/face-people-load";
 
 export const dynamic = "force-dynamic";
 
@@ -77,23 +78,12 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     ? pickFolderLinks((sources ?? []).filter((x) => x.stage !== "delivery"))
     : [];
 
-  const [{ data: sel }, { data: dis }, { data: ppl }, { data: pplLinks }] = await Promise.all([
+  const [{ data: sel }, { data: dis }, peopleData] = await Promise.all([
     admin.from("selections").select("photo_id, client_note").eq("album_id", album.id),
     admin.from("dislikes").select("photo_id, client_note").eq("album_id", album.id),
     // Nhóm người studio đã lưu — cùng dữ liệu mà trang không mật khẩu dựng sẵn
-    // ở src/app/a/[slug]/page.tsx. Chưa chạy migration thì `data` là null và
-    // album vẫn chạy bình thường, chỉ không có hàng chip.
-    admin
-    // `select("*")` CÓ CHỦ Ý, không phải lười liệt kê cột: `cover_box` là cột
-    // THÊM SAU. Liệt kê tên nó ra thì trên một database chưa chạy lại
-    // migration, cả câu này lỗi và khối tìm theo khuôn mặt BIẾN MẤT HẲN — thay
-    // vì chỉ mất phần ảnh mặt cắt sẵn. Lấy `*` thì cột thiếu chỉ là undefined,
-    // và faceChips tự lùi về lấy cả tấm làm ảnh thẻ.
-      .from("album_people")
-      .select("*")
-      .eq("album_id", album.id)
-      .order("position"),
-    admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
+    // ở src/app/a/[slug]/page.tsx (xem @/lib/face-people-load).
+    loadAlbumPeople(admin, album.id, canFaceSearch).catch(() => ({ people: [], links: [] })),
   ]);
   const selected = (sel ?? []).map((s) => s.photo_id);
   const disliked = (dis ?? []).map((d) => d.photo_id);
@@ -102,7 +92,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   for (const d of dis ?? []) if (d.client_note) notes[d.photo_id] = d.client_note;
 
   const people = canFaceSearch
-    ? faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p) => p.id)))
+    ? faceChips(peopleData.people, peopleData.links, new Set((photos ?? []).map((p) => p.id)))
     : [];
 
   return NextResponse.json({

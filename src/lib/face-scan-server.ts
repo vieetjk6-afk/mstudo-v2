@@ -412,18 +412,26 @@ export async function scanAlbum(
  * được giữ lại bằng cách ghép cụm mới với người cũ theo tâm cụm.
  */
 export async function clusterAlbum(db: any, albumId: string): Promise<number> {
-  const { data: stored, error } = await db
-    .from("album_faces")
-    .select("photo_id, at, box, descriptor, sharpness")
-    .eq("album_id", albumId);
-  if (error) throw new Error(`doc_album_faces_that_bai: ${error.message}`);
-  const list = (stored ?? []) as {
-    photo_id: string;
-    at: number;
-    box: number[] | null;
-    descriptor: number[] | null;
-    sharpness: number | null;
-  }[];
+  // Đọc THEO TRANG: PostgREST lặng lẽ cắt ở 1000 dòng, nên album đông người
+  // (đám cưới 1.500 ảnh dễ có vài nghìn khuôn mặt) trước đây chỉ được gom từ
+  // 1000 mặt đầu — người xuất hiện ở cuối album biến mất khỏi hàng chip, và vì
+  // lượt gom XOÁ rồi dựng lại người, họ mất luôn tên studio đã đặt. Trang nào
+  // lỗi thì NÉM chứ không gom trên phần đọc dở (sẽ xoá nhầm người).
+  type FaceRow = { photo_id: string; at: number; box: number[] | null; descriptor: number[] | null; sharpness: number | null };
+  const list: FaceRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data: page, error } = await db
+      .from("album_faces")
+      .select("photo_id, at, box, descriptor, sharpness")
+      .eq("album_id", albumId)
+      .order("photo_id")
+      .order("at")
+      .range(from, from + 999);
+    if (error) throw new Error(`doc_album_faces_that_bai: ${error.message}`);
+    const rows = (page ?? []) as FaceRow[];
+    list.push(...rows);
+    if (rows.length === 0 || rows.length < 1000) break;
+  }
 
   const vecs: FaceVector[] = list
     .filter((f) => Array.isArray(f.descriptor) && f.descriptor.length === 128)

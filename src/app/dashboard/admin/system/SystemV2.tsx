@@ -10,6 +10,84 @@ import { SectionNavV2 } from "@/app/dashboard/settings/SectionNavV2";
 import { useAdminDrive, type DriveStatus } from "./useAdminDrive";
 import PollAdminV2 from "./PollAdminV2";
 import { SHORTCUTS, TARGET_LABEL, useSystemPanel, type Target } from "./useSystemPanel";
+import { fmtSize, fmtWhen, isStale, useAutoBackup, type AutoBackupState, type AutoBackupStatus } from "./useAutoBackup";
+
+/** Khối "Sao lưu tự động lên Google Drive" — trạng thái, nút chạy ngay, các bản đang giữ. */
+function AutoBackupV2({ ab }: { ab: AutoBackupState }) {
+  const st = ab.status;
+  const latest = st?.files[0];
+  const cadence = st?.everyDays && st.everyDays > 1 ? `${st.everyDays} ngày một lần` : "mỗi đêm";
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {st === null ? (
+              <Badge tone="gray" dot>Đang kiểm tra…</Badge>
+            ) : !st.connected ? (
+              <Badge tone="amber" dot>Chưa bật — cần kết nối Drive</Badge>
+            ) : st.error ? (
+              <Badge tone="red" dot>Drive lỗi</Badge>
+            ) : isStale(st) || !latest ? (
+              <Badge tone="amber" dot>{latest ? "Bản mới nhất đã cũ" : "Chưa có bản nào"}</Badge>
+            ) : (
+              <Badge tone="green" dot>Đang tự sao lưu</Badge>
+            )}
+            <span className="text-[13.5px] font-medium" style={{ color: "var(--tx)" }}>Tự động lên Google Drive của admin</span>
+          </div>
+          <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
+            Chạy {cadence} (~03h giờ VN), giữ {st?.keep ?? 14} bản gần nhất trong thư mục riêng tư <b>mstudo · Sao lưu hệ thống</b>.
+            Cài <b>Google Drive cho máy tính</b> trên máy admin là file tự về máy mỗi ngày.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void ab.runNow()}
+          disabled={ab.running || !st?.connected}
+          className={btn("primary", "md", "flex-none")}
+        >
+          {ab.running ? <Loader2 size={16} className="animate-spin" /> : <DatabaseBackup size={16} />} {ab.running ? "Đang sao lưu…" : "Sao lưu ngay"}
+        </button>
+      </div>
+
+      {st && !st.connected ? (
+        <Callout tone="amber" icon={AlertTriangle}>
+          Kết nối Google Drive ở mục <a href="#luu-tru" className="underline">Lưu trữ Drive</a> bên dưới để bật sao lưu tự động.
+        </Callout>
+      ) : null}
+      {st?.error ? <Callout tone="red" icon={AlertTriangle}>Không đọc được thư mục sao lưu: <span className="font-mono text-[12px]">{st.error}</span></Callout> : null}
+      {ab.msg ? <Callout tone={ab.msg.tone} icon={ab.msg.tone === "green" ? Check : AlertTriangle}>{ab.msg.text}</Callout> : null}
+
+      {st?.files.length ? (
+        <div className="max-h-56 overflow-y-auto rounded-[12px]" style={{ border: "1px solid var(--bd2)" }}>
+          <table className="v2-table">
+            <thead>
+              <tr>
+                <th>Bản sao lưu</th>
+                <th className="num">Dung lượng</th>
+              </tr>
+            </thead>
+            <tbody>
+              {st.files.map((f) => (
+                <tr key={f.id}>
+                  <td className="!py-2 text-[13px]">
+                    {f.webViewLink ? (
+                      <a href={f.webViewLink} target="_blank" rel="noopener noreferrer" className="hover:underline">{fmtWhen(f.createdTime)}</a>
+                    ) : (
+                      fmtWhen(f.createdTime)
+                    )}
+                    <span className="ml-2 hidden font-mono text-[11.5px] sm:inline" style={{ color: "var(--tx3)" }}>{f.name}</span>
+                  </td>
+                  <td className="num !py-2">{fmtSize(f.size)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    CÀI ĐẶT HỆ THỐNG (admin) — giao diện mới. Cùng logic với SystemPanel +
@@ -22,10 +100,11 @@ import { SHORTCUTS, TARGET_LABEL, useSystemPanel, type Target } from "./useSyste
        màu đỏ (ghi đè dữ liệu), như cũ hỏi lại trước khi chạy.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export default function SystemV2({ ai, driveSeed }: { ai?: React.ReactNode; driveSeed?: DriveStatus }) {
+export default function SystemV2({ ai, driveSeed, backupSeed }: { ai?: React.ReactNode; driveSeed?: DriveStatus; backupSeed?: AutoBackupStatus }) {
   const s = useSystemPanel();
   const drive = useAdminDrive(driveSeed);
   const ds = drive.state;
+  const ab = useAutoBackup(backupSeed);
 
   const shortcuts = (
     <div className="flex flex-col gap-0.5">
@@ -108,15 +187,16 @@ export default function SystemV2({ ai, driveSeed }: { ai?: React.ReactNode; driv
           id="sao-luu"
           icon={DatabaseBackup}
           title="Sao lưu toàn hệ thống"
-          desc="Một file JSON chứa toàn bộ dữ liệu ứng dụng của mọi studio: hợp đồng, khách hàng, báo giá, thu chi, album, thông báo…"
+          desc="Toàn bộ dữ liệu ứng dụng của mọi studio: hợp đồng, khách hàng, báo giá, thu chi, album, lịch hẹn, voucher, chấm công…"
         >
           <div className="flex flex-col gap-3">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <AutoBackupV2 ab={ab} />
+            <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center" style={{ borderColor: "var(--bd2)" }}>
               <p className="min-w-0 flex-1 text-[13px]" style={{ color: "var(--tx2)" }}>
-                Chỉ gồm dữ liệu ứng dụng — không chứa mật khẩu đăng nhập hay ảnh gốc trên Google Drive.
+                Tải một bản về máy này ngay (file <b>.json.gz</b>). Không chứa mật khẩu đăng nhập, token kết nối hay ảnh gốc trên Google Drive.
               </p>
               <button type="button" onClick={() => void s.downloadBackup()} disabled={s.backing} className={btn("secondary", "md", "flex-none")}>
-                {s.backing ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Tải bản sao lưu
+                {s.backing ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />} Tải về máy
               </button>
             </div>
             {s.backupMsg ? <Callout tone="gray">{s.backupMsg}</Callout> : null}
@@ -131,11 +211,11 @@ export default function SystemV2({ ai, driveSeed }: { ai?: React.ReactNode; driv
           desc="Bản ghi trùng khóa được cập nhật, bản ghi thiếu được tạo lại. Không xoá dữ liệu nằm ngoài bản sao lưu."
         >
           <div className="flex flex-col gap-3">
-            <input ref={s.fileRef} type="file" accept="application/json,.json" onChange={s.pickBackupFile} className="hidden" aria-hidden tabIndex={-1} />
+            <input ref={s.fileRef} type="file" accept="application/json,.json,application/gzip,.gz" onChange={s.pickBackupFile} className="hidden" aria-hidden tabIndex={-1} />
             <div className="flex flex-col gap-3 rounded-[12px] p-3.5 sm:flex-row sm:items-center" style={{ border: "1px dashed var(--bdS)" }}>
               <span className="v2-section-icon" style={{ background: "var(--sf2)", color: "var(--tx2)" }}><FileJson size={17} /></span>
               <p className="min-w-0 flex-1 text-[13px]" style={{ color: "var(--tx2)" }}>
-                Chọn file <b>.json</b> đã tải ở mục Sao lưu. Bước này chỉ <b>đọc thử</b>, chưa ghi gì.
+                Chọn file sao lưu (<b>.json.gz</b> trên Drive / tải về máy, hoặc <b>.json</b> bản cũ). Bước này chỉ <b>đọc thử</b>, chưa ghi gì.
               </p>
               <button type="button" onClick={() => s.fileRef.current?.click()} className={btn("secondary", "md", "flex-none")}>
                 <Upload size={16} /> Chọn file
@@ -160,7 +240,10 @@ export default function SystemV2({ ai, driveSeed }: { ai?: React.ReactNode; driv
                     <tbody>
                       {s.preview.map((t) => (
                         <tr key={t.table}>
-                          <td className="!py-2 font-mono text-[12.5px]" style={{ color: "var(--tx2)" }}>{t.table}</td>
+                          <td className="!py-2 font-mono text-[12.5px]" style={{ color: "var(--tx2)" }}>
+                            {t.table}
+                            {t.skip ? <span className="ml-2 font-sans text-[11.5px]" style={{ color: "var(--tx3)" }}>(nhật ký — chỉ lưu, không khôi phục)</span> : null}
+                          </td>
                           <td className="num !py-2 font-semibold">{t.rows.toLocaleString("vi-VN")}</td>
                         </tr>
                       ))}

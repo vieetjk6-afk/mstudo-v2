@@ -151,7 +151,7 @@ export default function BookingForm(props: BookingFormProps) {
           )}
           {form.chosenPkgs.length > 1 && (
             <p className="mt-1.5 text-right text-xs" style={{ color: "var(--text2)" }}>
-              {form.chosenPkgs.length} gói · <b>{vnd(form.pkgTotal)}</b>
+              {form.chosenPkgs.length} {tr.pkgCount} · <b>{vnd(form.pkgTotal)}</b>
             </p>
           )}
         </div>

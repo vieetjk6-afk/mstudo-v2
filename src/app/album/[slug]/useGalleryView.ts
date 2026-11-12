@@ -284,13 +284,21 @@ export function useGalleryView({
   async function unlock(e: React.FormEvent) {
     e.preventDefault();
     setPwLoading(true); setPwError(false);
-    const res = await fetch(`/api/album/${gallery.slug}/access`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    setPwLoading(false);
-    if (!res.ok) return setPwError(true);
-    const data = await res.json();
+    // Mất mạng / máy chủ trả trang lỗi: fetch hoặc .json() ném lỗi — không bắt
+    // thì nút kẹt ở "Đang mở…" tới khi khách tải lại trang.
+    let data;
+    try {
+      const res = await fetch(`/api/album/${gallery.slug}/access`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) return setPwError(true);
+      data = await res.json();
+    } catch {
+      return setPwError(true);
+    } finally {
+      setPwLoading(false);
+    }
     setPhotos(data.photos ?? []); setSources(data.sources ?? []);
     setDriveFolders(data.driveFolders ?? []);
     setOriginalFolders(data.originalFolders ?? []);

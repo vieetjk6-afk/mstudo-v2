@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PLAN_PRICING, type Plan } from "@/lib/plans";
 import { activatePlan } from "@/lib/upgrade-activate";
@@ -37,10 +37,7 @@ async function serverPrice(
 
 /** A logged-in photographer requests an account upgrade. */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { note, plan, cycle, discount_code, phone } = (await req.json().catch(() => ({}))) as {

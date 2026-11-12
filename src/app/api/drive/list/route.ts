@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { resolveSource, walkFolderPhotos } from "@/lib/drive-server";
 import { listFilterDrivePhotos } from "@/lib/filter-drive";
 import { extractFolderId, isFolderLink } from "@/lib/drive";
@@ -19,10 +19,7 @@ export const dynamic = "force-dynamic";
  * Luôn trả 200 kèm `error` chữ Việt để giao diện hiện được lý do.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user)
     return NextResponse.json(
       { error: "Phiên đăng nhập đã hết. Hãy đăng nhập lại rồi tải ảnh." },
