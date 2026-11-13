@@ -26,8 +26,11 @@
 name: Quét khuôn mặt
 
 on:
-  schedule:
-    - cron: "*/10 17-23 * * *"
+  # LỊCH TỰ CHẠY ĐÃ TẮT — tìm ảnh theo khuôn mặt đang tắt để giảm CPU Vercel
+  # (xem FACE_SEARCH_ENABLED trong src/lib/plans.ts). Bật lại tính năng thì
+  # khôi phục hai dòng dưới:
+  # schedule:
+  #   - cron: "*/10 17-23 * * *"
   # Bấm chạy tay được ở tab Actions, không phải đợi tới giờ.
   workflow_dispatch:
 

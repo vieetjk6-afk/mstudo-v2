@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { albumsNeedingCluster, albumsNeedingScan, clusterAlbum, hanQuetMs, scanAlbum } from "@/lib/face-scan-server";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { FACE_SEARCH_ENABLED } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,8 +45,8 @@ export async function GET(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
-  if (process.env.FACE_SCAN_OFF === "1") {
-    return NextResponse.json({ ok: true, tat: true, note: "FACE_SCAN_OFF=1" });
+  if (process.env.FACE_SCAN_OFF === "1" || !FACE_SEARCH_ENABLED) {
+    return NextResponse.json({ ok: true, tat: true, note: "FACE_SCAN_OFF=1 hoặc tìm mặt đang tắt (NEXT_PUBLIC_FACE_SEARCH)" });
   }
 
   const db = createAdminClient();

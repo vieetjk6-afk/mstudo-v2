@@ -132,6 +132,21 @@ export function limitsFor(plan: Plan, isAdmin: boolean): PlanLimits {
 }
 
 /**
+ * CÔNG TẮC TỔNG CỦA TÌM ẢNH THEO KHUÔN MẶT — mặc định TẮT.
+ *
+ * Tính năng này là khoản tiêu CPU máy chủ lớn nhất (TensorFlow chạy trên
+ * Vercel cho từng ảnh), trong khi ít được dùng. Tắt ở đây thì mọi cổng đi qua
+ * `planAllowsFaceSearch` cùng đóng một lúc: bộ quét không chọn album nào, ô
+ * "tìm ảnh có tôi" ẩn khỏi trang khách, nút quét tay của studio bị chặn.
+ * Dữ liệu khuôn mặt đã có trong DB vẫn giữ nguyên.
+ *
+ * Bật lại: đặt NEXT_PUBLIC_FACE_SEARCH=1 trên Vercel rồi deploy lại (biến
+ * NEXT_PUBLIC_* được nướng vào lúc build), và khôi phục lịch `schedule` trong
+ * .github/workflows/quet-khuon-mat.yml.
+ */
+export const FACE_SEARCH_ENABLED = process.env.NEXT_PUBLIC_FACE_SEARCH === "1";
+
+/**
  * TÌM ẢNH THEO KHUÔN MẶT — chỉ Photographer Plus và Studio.
  *
  * Đây là tính năng ĐẮT NHẤT của hệ thống, và đắt theo nghĩa tiền thật: mỗi ảnh
@@ -145,6 +160,7 @@ export function limitsFor(plan: Plan, isAdmin: boolean): PlanLimits {
  *   • Trang khách — đừng hiện ô tìm mặt của album không đủ gói.
  */
 export function planAllowsFaceSearch(plan: Plan, isAdmin = false): boolean {
+  if (!FACE_SEARCH_ENABLED) return false;
   return isAdmin || plan === "studio" || plan === "photographer_plus";
 }
 
