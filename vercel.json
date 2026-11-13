@@ -1,5 +1,10 @@
 {
   "regions": ["sin1"],
+  "git": {
+    "deploymentEnabled": {
+      "claude/*": false
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/automations",
