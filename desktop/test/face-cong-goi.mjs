@@ -17,9 +17,17 @@
  *
  * Và tiến độ quét: con số thay cho câu "vài phút nữa bạn quay lại nhé".
  */
-import { effectivePlan, planAllowsFaceSearch } from "../../src/lib/plans.ts";
-import { chuAlbumDuocTimMat, conDangQuet, tienDoQuet } from "../../src/lib/face-pending.ts";
-import { albumsNeedingCluster, albumsNeedingScan } from "../../src/lib/face-scan-server.ts";
+
+/*
+ * Bài này kiểm LUẬT GÓI — nên phải BẬT công tắc tổng của tính năng
+ * (FACE_SEARCH_ENABLED trong src/lib/plans.ts, mặc định TẮT để tiết kiệm CPU
+ * Vercel) TRƯỚC khi nạp module: công tắc đọc biến môi trường lúc nạp. Import
+ * tĩnh chạy trước mọi dòng code nên phải dùng import động.
+ */
+process.env.NEXT_PUBLIC_FACE_SEARCH = "1";
+const { effectivePlan, planAllowsFaceSearch } = await import("../../src/lib/plans.ts");
+const { chuAlbumDuocTimMat, conDangQuet, tienDoQuet } = await import("../../src/lib/face-pending.ts");
+const { albumsNeedingCluster, albumsNeedingScan } = await import("../../src/lib/face-scan-server.ts");
 
 let fail = 0;
 const ok = (name, cond, note = "") => {
@@ -34,6 +42,14 @@ const check = (name, got, want) => {
 
 const NGAY_MAI = new Date(Date.now() + 86_400_000).toISOString();
 const HOM_QUA = new Date(Date.now() - 86_400_000).toISOString();
+
+/* ── 0. Công tắc tổng TẮT (mặc định) → mọi cổng đóng ─────────────────────── */
+{
+  process.env.NEXT_PUBLIC_FACE_SEARCH = "";
+  const tat = await import("../../src/lib/plans.ts?cong-tac-tat");
+  process.env.NEXT_PUBLIC_FACE_SEARCH = "1";
+  ok("công tắc tổng TẮT → cả gói studio lẫn admin đều KHÔNG được", tat.planAllowsFaceSearch("studio") === false && tat.planAllowsFaceSearch("free", true) === false);
+}
 
 /* ── 1. Truth table ──────────────────────────────────────────────────────── */
 for (const p of ["free", "basic", "photographer"]) {
