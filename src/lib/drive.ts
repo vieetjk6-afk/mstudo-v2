@@ -42,17 +42,51 @@ export function isFolderLink(url: string): boolean {
 }
 
 /**
- * Image URLs are served through our own /api/img proxy. The proxy fetches the
- * bytes from Google server-side (trying lh3 / thumbnail / download in turn), so
- * images embed reliably regardless of Google's hotlink/referrer behaviour.
+ * ẢNH ĐỂ HIỂN THỊ trỏ THẲNG CDN Google (lh3.googleusercontent.com).
+ *
+ * Trước đây mọi <img> đi qua /api/img — route đó chỉ trả 302 sang đúng địa chỉ
+ * lh3 này. Một lưới 300 ảnh là 300 lượt gọi Vercel (edge request + đôi khi một
+ * lượt chạy hàm) chỉ để nhận lại lệnh chuyển hướng, cho MỖI người xem. Trỏ
+ * thẳng thì Vercel tốn 0 lượt; ảnh hỏng vẫn có đường dự phòng (retryAltHost /
+ * retryViaProxy bên dưới).
+ *
+ * Chỗ cần BYTE CÙNG MIỀN (canvas đóng watermark, quét AI bằng fetch, xuất ảnh
+ * ghép) phải dùng rawImageUrl — Google không gửi header CORS. Ảnh bìa LƯU VÀO
+ * DB dùng coverImageUrl (dạng /api/img) để địa chỉ đã lưu không phụ thuộc cách
+ * Google phục vụ ảnh.
+ *
+ * Đường lui: đặt NEXT_PUBLIC_IMG_DIRECT=0 trên Vercel (rồi deploy lại) là mọi
+ * ảnh hiển thị quay về /api/img như cũ.
  */
-export function thumbnailUrl(fileId: string, width = 400): string {
+const IMG_DIRECT = process.env.NEXT_PUBLIC_IMG_DIRECT !== "0";
+
+/** Ảnh qua proxy của app (302 sang Google) — giữ cho địa chỉ lưu DB / đường lui. */
+export function proxyImageUrl(fileId: string, width: number): string {
   return `/api/img?id=${fileId}&w=${width}`;
 }
 
-/** Larger preview / full image URL (also proxied). */
+/** Byte ảnh CÙNG MIỀN (canvas / fetch đọc được điểm ảnh). Tốn băng thông Vercel. */
+export function rawImageUrl(fileId: string, width: number): string {
+  return `/api/img?id=${encodeURIComponent(fileId)}&w=${width}&raw=1`;
+}
+
+/** Địa chỉ ảnh bìa để LƯU vào albums.cover_url (và so sánh "ảnh nào đang là bìa"). */
+export function coverImageUrl(fileId: string): string {
+  return proxyImageUrl(fileId, 800);
+}
+
+function googleImageUrl(fileId: string, width: number): string {
+  return `https://lh3.googleusercontent.com/d/${fileId}=w${Math.round(Math.min(Math.max(width, 16), 4096))}`;
+}
+
+/** Ảnh lưới / thumbnail — hiển thị. */
+export function thumbnailUrl(fileId: string, width = 400): string {
+  return IMG_DIRECT ? googleImageUrl(fileId, width) : proxyImageUrl(fileId, width);
+}
+
+/** Ảnh lớn trong khung xem — hiển thị. */
 export function fullImageUrl(fileId: string, width = 1600): string {
-  return `/api/img?id=${fileId}&w=${width}`;
+  return IMG_DIRECT ? googleImageUrl(fileId, width) : proxyImageUrl(fileId, width);
 }
 
 /** Ảnh GỐC đúng độ phân giải chụp, để hiển thị (proxy 302 thẳng sang Google). */
@@ -61,27 +95,42 @@ export function originalImageUrl(fileId: string): string {
 }
 
 /**
- * Các URL ảnh DỰ PHÒNG thẳng ở CDN Google (Vercel không chở byte nào), thử lần
- * lượt khi ảnh /api/img hỏng. [] nếu src không phải /api/img?id=…&w=….
- *
- * /api/img 302 sang lh3.googleusercontent.com cho MỌI cỡ (xem route). Với cỡ
- * nhỏ vẫn thử lại lh3 TRỰC TIẾP trước: trình duyệt có thể còn giữ (max-age 1
- * ngày) bản 302 cũ trỏ sang drive.google.com/thumbnail — host đó bị Google giới
- * hạn/chặn với studio có album lớn, ảnh hỏng hàng loạt. Sau cùng mới tới
- * drive.google.com/thumbnail (vẫn cần cho poster video một số file).
+ * Đọc id file + bề rộng từ một địa chỉ ảnh của app: dạng proxy
+ * /api/img?id=…&w=… hoặc dạng trỏ thẳng lh3.googleusercontent.com/d/<id>=w<w>.
+ * null nếu không phải (ảnh gốc ?orig=1, ảnh ngoài…).
  */
-function altGoogleUrls(src: string): string[] {
+function parseImgSrc(src: string): { id: string; w: number; direct: boolean } | null {
   try {
     const u = new URL(src, typeof location !== "undefined" ? location.href : "http://x");
-    if (u.pathname !== "/api/img" || u.searchParams.get("orig") === "1") return [];
+    if (u.hostname === "lh3.googleusercontent.com") {
+      const m = u.pathname.match(/^\/d\/([a-zA-Z0-9_-]+)=w(\d+)$/);
+      return m ? { id: m[1], w: Math.min(Math.max(Number(m[2]) || 500, 16), 4096), direct: true } : null;
+    }
+    if (u.pathname !== "/api/img" || u.searchParams.get("orig") === "1") return null;
     const id = u.searchParams.get("id");
-    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return [];
-    const w = Math.min(Math.max(Number(u.searchParams.get("w")) || 500, 16), 4096);
-    const thumb = `https://drive.google.com/thumbnail?id=${id}&sz=w${w}`;
-    return w <= 1024 ? [`https://lh3.googleusercontent.com/d/${id}=w${w}`, thumb] : [thumb];
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return null;
+    return { id, w: Math.min(Math.max(Number(u.searchParams.get("w")) || 500, 16), 4096), direct: false };
   } catch {
-    return [];
+    return null;
   }
+}
+
+/**
+ * Các URL ảnh DỰ PHÒNG thẳng ở CDN Google (Vercel không chở byte nào), thử lần
+ * lượt khi ảnh hỏng. [] nếu src không phải ảnh Drive của app.
+ *
+ * Ảnh đang trỏ thẳng lh3 mà hỏng → thử drive.google.com/thumbnail. Ảnh dạng
+ * /api/img (địa chỉ cũ đã lưu, ảnh bìa) → thử lh3 TRỰC TIẾP trước: trình duyệt
+ * có thể còn giữ (max-age 1 ngày) bản 302 cũ trỏ sang drive.google.com/thumbnail
+ * — host đó bị Google giới hạn/chặn với studio có album lớn, ảnh hỏng hàng loạt.
+ * Sau cùng mới tới drive.google.com/thumbnail (vẫn cần cho poster video).
+ */
+function altGoogleUrls(src: string): string[] {
+  const p = parseImgSrc(src);
+  if (!p) return [];
+  const thumb = `https://drive.google.com/thumbnail?id=${p.id}&sz=w${p.w}`;
+  if (p.direct) return [thumb];
+  return p.w <= 1024 ? [googleImageUrl(p.id, p.w), thumb] : [thumb];
 }
 
 /**
@@ -125,10 +174,10 @@ export function retryViaProxy(e: { currentTarget: HTMLImageElement }) {
   const im = e.currentTarget;
   if (im.dataset.retried === "raw" || im.src.includes("raw=1")) return;
   if (nextAlt(im)) return;
-  const base = im.dataset.orig || im.src;
-  if (!base.includes("/api/img")) return;
+  const p = parseImgSrc(im.dataset.orig || im.src);
+  if (!p) return;
   im.dataset.retried = "raw";
-  im.src = `${base}&raw=1`;
+  im.src = rawImageUrl(p.id, Math.min(p.w, 2560));
 }
 
 /** Direct download URL for an original file. */

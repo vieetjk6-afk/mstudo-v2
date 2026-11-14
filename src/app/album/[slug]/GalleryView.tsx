@@ -14,7 +14,7 @@ import ShareButton from "@/components/ShareButton";
 import ShareDialog from "@/components/ShareDialog";
 import { studioUrl } from "@/lib/hosts";
 import { ICON_HALO } from "@/lib/album-icon";
-import { thumbnailUrl, fullImageUrl, originalImageUrl, retryViaProxy } from "@/lib/drive";
+import { thumbnailUrl, fullImageUrl, originalImageUrl, retryViaProxy, rawImageUrl } from "@/lib/drive";
 import PhotoZoom from "@/components/PhotoZoom";
 import { downloadImage } from "@/lib/download";
 import { useMasonry } from "@/lib/masonry";
@@ -384,7 +384,7 @@ export default function GalleryView(props: GalleryViewProps) {
               <div className="relative inline-block">
                 <PhotoZoom key={lb.id} stageRef={lbStage} onSwipe={go} onZoomChange={(k) => setLbZoomed(k > 1)} className="relative inline-block">
                   <img key={lb.id} src={fullImageUrl(lb.drive_file_id, fullW)} alt={lb.name} draggable={false} decoding="async" onError={retryViaProxy} onContextMenu={(e) => wm && e.preventDefault()} className="max-h-[82vh] max-w-full select-none rounded object-contain" style={{ boxShadow: "0 30px 80px rgba(0,0,0,.6)", backgroundImage: `url(${thumbnailUrl(lb.drive_file_id, gridW)})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
-                  <ZoomHiRes key={lb.id} srcs={[originalImageUrl(lb.drive_file_id), fullImageUrl(lb.drive_file_id, 4096), `${fullImageUrl(lb.drive_file_id, 2560)}&raw=1`]} active={lbZoomed} onLoadingChange={setHiResLoading} className="rounded" />
+                  <ZoomHiRes key={lb.id} srcs={[originalImageUrl(lb.drive_file_id), fullImageUrl(lb.drive_file_id, 4096), rawImageUrl(lb.drive_file_id, 2560)]} active={lbZoomed} onLoadingChange={setHiResLoading} className="rounded" />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 opacity-20">
                       {Array.from({ length: 12 }).map((_, wi) => (

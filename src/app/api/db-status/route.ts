@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { maDuAn } from "@/lib/supabase-du-an";
 import { docBanKe, soiDatabase } from "@/lib/db-thieu";
@@ -20,10 +20,7 @@ export const maxDuration = 60;
  * dán vào phải khớp đúng cái báo cáo này nói là thiếu.
  */
 export async function GET() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let ke;

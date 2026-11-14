@@ -52,6 +52,12 @@ function rasterType(res: Response): string | null {
 const BYTE_HEADERS = { "Content-Security-Policy": "default-src 'none'; sandbox" };
 
 function cacheKey(id: string, width: number) { return `${id}_w${width}.jpg`; }
+// Chỉ GHI vào bucket các cỡ chính app dùng (thumbnailUrl / use-img-width).
+// Route này công khai: trước đây `w=500.0001`, `w=501`… mỗi số là một khoá
+// cache mới → ai cũng lấp đầy được bucket (và hạn mức storage dùng chung với ảnh
+// chuyển khoản, thiệp cưới) chỉ bằng một vòng lặp. Cỡ khác vẫn phục vụ, chỉ
+// không lưu.
+const CACHEABLE_WIDTHS = new Set([160, 240, 320, 400, 480, 500, 600, 640, 800, 1024]);
 function publicUrl(key: string) { return `${SUPA_URL}/storage/v1/object/public/${BUCKET}/${key}`; }
 
 /** Fetch the image bytes from Google, trying several endpoints in turn. */
@@ -182,7 +188,7 @@ export async function GET(req: Request) {
   // 2560 keeps the "download original" path (w=2400) working.
   // Lượt chỉ HIỂN THỊ (sẽ 302 sang Google, Vercel không chở byte) được tới 4096
   // — khung xem ảnh cần cỡ đó khi khách phóng to (xem components/ZoomHiRes).
-  const width = Math.min(Math.max(Number(searchParams.get("w")) || 500, 16), canRedirect ? 4096 : 2560);
+  const width = Math.round(Math.min(Math.max(Number(searchParams.get("w")) || 500, 16), canRedirect ? 4096 : 2560));
 
   // ── Display CDN redirect (mặc định BẬT; tắt bằng IMG_CDN_REDIRECT=0) ─────
   // Ảnh chỉ để HIỂN THỊ thì 302 thẳng sang CDN của Google — Vercel phục vụ gần
@@ -207,7 +213,7 @@ export async function GET(req: Request) {
   // read once, so caching it buys nothing and costs both storage and egress.
   // Wider requests skip the bucket entirely (no HEAD probe either) and take the
   // plain-proxy path below.
-  if (BUCKET && SUPA_URL && width <= CACHE_MAX_WIDTH) {
+  if (BUCKET && SUPA_URL && width <= CACHE_MAX_WIDTH && CACHEABLE_WIDTHS.has(width)) {
     const key = cacheKey(id, width);
     const pub = publicUrl(key);
     try {

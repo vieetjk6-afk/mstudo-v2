@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllPhotos } from "@/lib/photos";
 import { getOriginalFolders } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { limitByIpDurable } from "@/lib/rate-limit";
@@ -9,6 +8,7 @@ import { faceChips } from "@/lib/face-people";
 import { tienDoQuet } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 import { mintAlbumAccess } from "@/lib/album-access";
+import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +39,10 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     if (!ok) return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }
 
-  const allPhotos = await fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position, is_video");
+  // Danh sách ảnh nhớ giữa các request (xem @/lib/album-data-cache) — chỉ sau khi
+  // mật khẩu đã đúng ở trên.
+  const version = await albumDataVersion(album.id);
+  const allPhotos = await loadAlbumPhotos(album.id, "id, drive_file_id, name, source_id, position, is_video", version);
   const { data: allSources } = await admin
     .from("album_sources")
     .select("id, name, position, stage, drive_url, kind")
@@ -68,12 +71,8 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   const originalFolders = await getOriginalFolders(admin, album.id, allSources ?? []);
 
   // Khuôn mặt studio đã gom — album có mật khẩu thì trang chưa gửi gì trước khi
-  // mở khoá, nên phải trả về ở đây. `select("*")`: cover_box là cột thêm sau.
-  const [{ data: ppl }, { data: pplLinks }, { data: owner }] = await Promise.all([
-    admin.from("album_people").select("*").eq("album_id", album.id).order("position"),
-    admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
-    admin.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle(),
-  ]);
+  // mở khoá, nên phải trả về ở đây (xem @/lib/face-people-load).
+  const { data: owner } = await admin.from("profiles").select("plan, plan_expires_at, role").eq("id", album.owner_id).maybeSingle();
   // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Phải chốt ở ĐÂY nữa,
   // không chỉ ở trang: gallery CÓ MẬT KHẨU nhận toàn bộ khuôn mặt qua route này,
   // nên bỏ sót chỗ này là để ngỏ đúng những album mà trang chưa gửi gì.
@@ -81,8 +80,9 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     effectivePlan(owner?.plan as Plan, owner?.plan_expires_at),
     owner?.role === "admin",
   );
+  const peopleData = await loadAlbumPeopleCached(album.id, canFaceSearch, version).catch(() => ({ people: [], links: [] }));
   const people = canFaceSearch
-    ? faceChips(ppl ?? [], pplLinks ?? [], new Set((photos ?? []).map((p: { id: string }) => p.id)))
+    ? faceChips(peopleData.people, peopleData.links, new Set((photos ?? []).map((p: { id: string }) => p.id)))
     : [];
   // Chưa có mặt nào: phân biệt "máy chủ đang quét tới đâu" với "quét rồi, album
   // không có mặt người". Chỉ trường hợp đầu mới hiện tiến độ cho khách.

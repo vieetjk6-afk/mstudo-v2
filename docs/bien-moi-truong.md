@@ -54,6 +54,7 @@ Cột **Xử lý** đọc thế này:
 | `NEXT_PUBLIC_GOOGLE_API_KEY` | 🟢 | |
 | `NEXT_PUBLIC_GOOGLE_APP_ID` | 🟢 | |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | 🟢 | |
+| `NEXT_PUBLIC_IMG_DIRECT` | ⚪ | **để trống** — ảnh hiển thị trỏ thẳng CDN Google; đặt `0` chỉ khi muốn quay về `/api/img`, xem 4d |
 | `NEXT_PUBLIC_IMG_HOST` | 🟢 | `img.mstudo.com` |
 | `NEXT_PUBLIC_MAIN_HOST` | 🟢 | `mstudo.com` |
 | `NEXT_PUBLIC_STUDIO_HOST` | 🟢 | `mstudo.com` — **để trống cũng chạy**, xem 4b |
@@ -65,8 +66,10 @@ Cột **Xử lý** đọc thế này:
 | `OAUTH_STATE_SECRET` | 🟢 | 🔒 **để trống được** — code tự dùng `SUPABASE_SERVICE_ROLE_KEY` |
 | `RESEND_API_KEY` | ⚪ | không khai thì không gửi được email |
 | `SUPABASE_SERVICE_ROLE_KEY` | 🔴 | 🔒 của Supabase **MỚI** |
+| `SYSTEM_BACKUP_EVERY_DAYS` | ⚪ | để trống → sao lưu tự động **mỗi đêm** — xem docs/sao-luu-tu-dong.md |
+| `SYSTEM_BACKUP_KEEP` | ⚪ | để trống → giữ **14** bản sao lưu trên Drive admin |
 | `TURNSTILE_SECRET_KEY` | ⚪ | 🔒 không khai thì máy chủ **không xác minh được** mã nào — xem 4e |
-| `UPSTASH_REDIS_REST_TOKEN` | ⚪ | không giới hạn tần suất gọi |
+| `UPSTASH_REDIS_REST_TOKEN` | ⚪ | để trống được **nếu đã chạy** `supabase/gioi-han-tan-suat.sql` — xem 4e |
 | `UPSTASH_REDIS_REST_URL` | ⚪ | như trên |
 | `VAPID_PRIVATE_KEY` | 🟢 | 🔒 **chỉ có ở Vercel cũ**, mất là mất hẳn — xem 7.5 |
 | `VAPID_SUBJECT` | 🟢 | để trống → `mailto:hello@mstudo.com` |
@@ -314,6 +317,7 @@ thông báo phải đăng ký lại**. Cố lấy đúng cặp cũ; mất hẳn 
 | `GEMINI_API_KEY` 🔒 | chatbox AI trên website studio không trả lời được | **tạo khoá mới** ở [aistudio.google.com](https://aistudio.google.com) → *Get API key* (có gói miễn phí). Đừng đi tìm khoá cũ |
 | `CHAT_PROVIDERS` | code tự dùng `GEMINI_API_KEY` làm nhà cung cấp duy nhất | **để trống** — xem 7.6 |
 | `IMG_CDN_REDIRECT` | **tối ưu băng thông BẬT** (mặc định) | **để trống** ⚠️ xem cảnh báo dưới |
+| `NEXT_PUBLIC_IMG_DIRECT` | ảnh hiển thị trỏ **thẳng** CDN Google, 0 lượt gọi Vercel mỗi ảnh (mặc định) | **để trống** — xem ghi chú dưới |
 | `CSP_REPORT_ONLY` | header CSP-Report-Only **TẮT** (mặc định) | **để trống** — xem ghi chú dưới |
 | `NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL` | nút tải rơi về trang GitHub Releases | để trống được |
 | `NEXT_PUBLIC_DESKTOP_RELEASES_REPO` | dùng `vieetjk01/Studio` (repo cũ, công khai) | **để trống** cho tới khi có repo công khai mới chứa bản cài |
@@ -350,6 +354,18 @@ album tải hàng trăm thumbnail.
 Nên: **để trống**. Nếu Vercel cũ đang đặt `IMG_CDN_REDIRECT=0` thì **đừng chép
 sang** — chép là Vercel mới gánh toàn bộ byte ảnh.
 
+### `NEXT_PUBLIC_IMG_DIRECT` — ảnh hiển thị không đi qua Vercel nữa
+
+Từ 11/2026 ảnh lưới / ảnh lớn trong album, cổng khách, khu quản lý **trỏ thẳng**
+`lh3.googleusercontent.com` (`thumbnailUrl` / `fullImageUrl` trong
+`src/lib/drive.ts`) thay vì `/api/img` — route đó vốn chỉ trả 302 sang đúng địa
+chỉ ấy, nên trước đây mỗi ảnh vẫn tốn một lượt gọi Vercel. Ảnh cần byte cùng
+miền (watermark, ZIP, quét AI, xuất ảnh ghép) và ảnh bìa lưu DB vẫn dùng
+`/api/img` như cũ; ảnh hỏng vẫn tự thử `drive.google.com/thumbnail` rồi proxy.
+
+Đặt `NEXT_PUBLIC_IMG_DIRECT=0` rồi **deploy lại** (biến `NEXT_PUBLIC_*` nhúng lúc
+build) là quay về đi qua `/api/img` — chỉ dùng khi thấy ảnh Google chặn hàng loạt.
+
 ### Ba biến `VERCEL_*` — chỉ phục vụ một tính năng
 
 Cả ba chỉ được đọc ở `src/app/api/site/domain/route.ts`, tức tính năng **studio
@@ -378,6 +394,13 @@ Lượt gửi **chưa xác minh được** không bị khoá cửa (khách thậ
 Turnstile vẫn phải gửi được form) nhưng chỉ còn **5 lượt/giờ/IP**. Muốn hạn mức
 này đúng trên nhiều instance của Vercel thì khai thêm `UPSTASH_REDIS_REST_URL`
 + `UPSTASH_REDIS_REST_TOKEN`; không khai thì mỗi instance đếm riêng.
+
+**Cửa dò mật khẩu** (mật khẩu album, SĐT mở hợp đồng, SĐT cô dâu / chú rể chọn
+ảnh in / ghép ảnh) KHÔNG cần Upstash nữa: chạy một lần
+`supabase/gioi-han-tan-suat.sql` trong Supabase SQL Editor (hoặc mở
+`/api/setup-sql/gioi-han-tan-suat` khi đăng nhập admin) là bộ đếm dùng chung nằm
+ngay trong Postgres. Trang **Quản trị hệ thống → Chống dò mật khẩu** cho biết
+đang dùng Upstash, Postgres hay chỉ bộ nhớ từng máy chủ (vàng = cần làm).
 
 Ba chỗ hay quên sau khi đã khai biến:
 
@@ -427,7 +450,7 @@ Bản cũ **không có** những biến này, tức các tính năng tương ứ
 | Chống bot | `NEXT_PUBLIC_TURNSTILE_SITE_KEY`, `TURNSTILE_SECRET_KEY` | form công khai vẫn gửi được nhưng bị siết còn **5 lượt/giờ/IP** — xem 4e |
 | Cache ảnh | `DRIVE_IMG_CACHE_*` (5 biến) | **nên để trống** — chính bucket này làm vượt hạn mức Supabase bản cũ |
 | Gửi email | `RESEND_API_KEY`, `EMAIL_FROM` | không gửi được email |
-| Giới hạn tần suất | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | không giới hạn tần suất gọi |
+| Giới hạn tần suất | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | form công khai đếm riêng từng máy chủ; cửa dò mật khẩu đếm trong Postgres nếu đã chạy `supabase/gioi-han-tan-suat.sql` — xem 4e |
 | Khác | `GEMINI_MODEL` | dùng model mặc định trong code |
 | Đã ngừng dùng | `NEXT_PUBLIC_APP_HOST` | không dùng nữa, để trống |
 

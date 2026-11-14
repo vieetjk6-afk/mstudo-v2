@@ -638,5 +638,36 @@ if (first) {
   );
 }
 
+// ── Giới hạn tần suất bền không cần Upstash (rate_limit_hit) ─────────────
+// Bộ đếm chống dò mật khẩu album / SĐT hợp đồng khi chưa có Upstash — phải
+// đếm đúng, bắt đầu lại khi hết cửa sổ, và chỉ service_role gọi được.
+{
+  const hit = (k, win = 60) => q("moi", `select public.rate_limit_hit('${k}', ${win})`);
+  ok("rate_limit_hit: lượt đầu = 1, lượt sau cộng dồn", hit("k1") === "1" && hit("k1") === "2" && hit("k1") === "3");
+  ok("…khoá khác đếm riêng", hit("k2") === "1");
+  q("moi", "update public.rate_limit_hits set window_start = now() - interval '2 minutes' where key = 'k1'");
+  ok("…hết cửa sổ thì đếm lại từ 1", hit("k1") === "1" && hit("k1") === "2");
+  q("moi", "insert into public.rate_limit_hits (key, window_start, hits) values ('cu', now() - interval '3 days', 9)");
+  let don = false;
+  for (let i = 0; i < 400 && !don; i++) {
+    hit(`dọn${i}`);
+    don = q("moi", "select count(*) from public.rate_limit_hits where key = 'cu'") === "0";
+  }
+  ok("…dòng cũ hơn 1 ngày được dọn dần, không cần cron", don);
+  ok(
+    "…chỉ service_role gọi được hàm (anon / authenticated thì không)",
+    q(
+      "moi",
+      "select has_function_privilege('anon', 'public.rate_limit_hit(text, int)', 'execute')::text || '/' || " +
+        "has_function_privilege('authenticated', 'public.rate_limit_hit(text, int)', 'execute')::text || '/' || " +
+        "has_function_privilege('service_role', 'public.rate_limit_hit(text, int)', 'execute')::text"
+    ) === "false/false/true"
+  );
+  ok(
+    "…anon / authenticated không đọc được bảng đếm",
+    q("moi", "select has_table_privilege('anon', 'public.rate_limit_hits', 'select')::text || '/' || has_table_privilege('authenticated', 'public.rate_limit_hits', 'select')::text") === "false/false"
+  );
+}
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

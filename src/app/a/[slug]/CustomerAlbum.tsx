@@ -25,7 +25,7 @@ import StudioBrand from "@/components/StudioBrand";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import InstallPwaButton from "@/components/InstallPwaButton";
 import ShareDialog from "@/components/ShareDialog";
-import { thumbnailUrl, fullImageUrl, originalImageUrl, retryViaProxy, stripExtension } from "@/lib/drive";
+import { thumbnailUrl, fullImageUrl, originalImageUrl, retryViaProxy, stripExtension, rawImageUrl } from "@/lib/drive";
 import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
 import FaceFinder from "./FaceFinder";
 import { syncBadge, type AlbumLedger, type SaveActivity } from "@/lib/album-offline";
@@ -765,7 +765,7 @@ export default function CustomerAlbum(props: CustomerAlbumProps) {
                       backgroundPosition: "center",
                     }}
                   />
-                  <ZoomHiRes srcs={[originalImageUrl(lbPhoto.drive_file_id), fullImageUrl(lbPhoto.drive_file_id, 4096), `${fullImageUrl(lbPhoto.drive_file_id, 2560)}&raw=1`]} active={zoom > 1} onLoadingChange={setHiResLoading} className="rounded" />
+                  <ZoomHiRes srcs={[originalImageUrl(lbPhoto.drive_file_id), fullImageUrl(lbPhoto.drive_file_id, 4096), rawImageUrl(lbPhoto.drive_file_id, 2560)]} active={zoom > 1} onLoadingChange={setHiResLoading} className="rounded" />
                   {wm && (
                     <div className="pointer-events-none absolute inset-0 flex flex-wrap content-center items-center justify-center gap-x-12 gap-y-10 overflow-hidden opacity-30">
                       {Array.from({ length: 16 }).map((_, i) => (

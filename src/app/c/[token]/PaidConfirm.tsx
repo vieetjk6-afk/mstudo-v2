@@ -17,12 +17,13 @@ export type PaidEvent = {
 type PayRow = { id: string; amount: number; kind: string | null; paid_at: string | null };
 type PlanRow = { id: string; label: string; amount: number; paid: boolean; paid_at: string | null };
 
-const POLL_MS = 8_000;
+// 15 giây: tiền về qua SePay thường mất 10–30 giây, hỏi dày hơn chỉ tốn lượt gọi.
+const POLL_MS = 15_000;
 /** Ngừng hỏi sau 30 phút không có thao tác thanh toán nào — tránh trang mở quên. */
 const IDLE_STOP_MS = 30 * 60_000;
 
 /**
- * Theo dõi tiền về khi khách đang ở trang hợp đồng: hỏi nhẹ máy chủ mỗi 8 giây
+ * Theo dõi tiền về khi khách đang ở trang hợp đồng: hỏi nhẹ máy chủ mỗi 15 giây
  * (chỉ khi trang đang hiện), và hỏi ngay khi khách quay lại từ app ngân hàng.
  * Có khoản thu MỚI → gọi onPaid để trang chuyển sang màn "Đã nhận cọc".
  */

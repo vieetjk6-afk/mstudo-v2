@@ -2,7 +2,6 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
-import { fetchAllPhotos } from "@/lib/photos";
 import CustomerAlbum from "./CustomerAlbum";
 import CustomerAlbumV2 from "./CustomerAlbumV2";
 import AlbumUnavailableV2 from "./AlbumUnavailableV2";
@@ -10,12 +9,12 @@ import { customerUiV2 } from "@/lib/ui-server";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import StudioBrandMark from "@/components/StudioBrandMark";
 import { buildAlbumMetadata } from "@/lib/album-meta";
-import { getAlbumOwner } from "@/lib/album-owner";
-import { getStudioHost } from "@/lib/studio-site";
+import { getAlbumOwner, getAlbumOwnerHost } from "@/lib/album-owner";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { faceChips, type PersonChip } from "@/lib/face-people";
 import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
+import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -149,7 +148,7 @@ export default async function PublicAlbumPage(
   const [{ profile: owner, brand }, studioHost, sh, v2] = await Promise.all([
     getAlbumOwner(album.owner_id),
     // Domain riêng của studio cho link "chia sẻ ảnh đã chọn".
-    getStudioHost(admin, album.owner_id),
+    getAlbumOwnerHost(album.owner_id),
     !shareIds && searchParams?.s
       ? admin.from("album_shares").select("photo_ids").eq("token", searchParams.s).maybeSingle().then((r) => r.data)
       : Promise.resolve(null),
@@ -194,9 +193,12 @@ export default async function PublicAlbumPage(
   // NHIÊU thay vì biến mất. Album có mật khẩu thì để route mở khoá trả lời.
   let faceScan: TienDoQuet | null = null;
   if (!hasPassword) {
-    const [p, { data: s }, { data: sel }, { data: dis }, { data: ppl }, { data: pplLinks }] =
+    // Ảnh + khuôn mặt nhớ giữa các request (xem @/lib/album-data-cache); lựa
+    // chọn / không thích của khách luôn đọc mới.
+    const versionP = albumDataVersion(album.id);
+    const [p, { data: s }, { data: sel }, { data: dis }, peopleData] =
       await Promise.all([
-      fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position"),
+      versionP.then((v) => loadAlbumPhotos(album.id, "id, drive_file_id, name, source_id, position", v)),
       admin
         .from("album_sources")
         .select("id, name, position, stage, drive_url, kind")
@@ -210,21 +212,10 @@ export default async function PublicAlbumPage(
         .from("dislikes")
         .select("photo_id, client_note")
         .eq("album_id", album.id),
-      // Nhóm người studio đã lưu. Chưa chạy migration album_people.sql thì hai
-      // câu này lỗi và `data` là null — album vẫn chạy y như trước, chỉ không có
-      // hàng chip. Cố ý không nổ: một tính năng thêm không được làm sập trang
-      // chọn ảnh của khách.
-      admin
-      // `select("*")` CÓ CHỦ Ý, không phải lười liệt kê cột: `cover_box` là cột
-      // THÊM SAU. Liệt kê tên nó ra thì trên một database chưa chạy lại
-      // migration, cả câu này lỗi và khối tìm theo khuôn mặt BIẾN MẤT HẲN — thay
-      // vì chỉ mất phần ảnh mặt cắt sẵn. Lấy `*` thì cột thiếu chỉ là undefined,
-      // và faceChips tự lùi về lấy cả tấm làm ảnh thẻ.
-        .from("album_people")
-        .select("*")
-        .eq("album_id", album.id)
-        .order("position"),
-      admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
+      // Nhóm người studio đã lưu. Chưa chạy migration album_people.sql thì
+      // trả rỗng — album vẫn chạy y như trước, chỉ không có hàng chip. Gói không
+      // có tìm theo khuôn mặt thì không đọc gì (xem @/lib/face-people-load).
+      versionP.then((v) => loadAlbumPeopleCached(album.id, canFaceSearch, v)).catch(() => ({ people: [], links: [] })),
     ]);
     // Selection view prefers selection-stage photos. Only apply the filter when
     // there are BOTH selection and delivery sources — otherwise (e.g. every
@@ -247,7 +238,7 @@ export default async function PublicAlbumPage(
     // Chỉ những ảnh THẬT SỰ hiện trong lưới: album giao khách / album chọn ảnh
     // lọc theo source, nên một chip trỏ vào ảnh không hiện là một chip bấm vào
     // ra lưới trống.
-    people = canFaceSearch ? faceChips(ppl ?? [], pplLinks ?? [], new Set(photos.map((ph) => ph.id))) : [];
+    people = canFaceSearch ? faceChips(peopleData.people, peopleData.links, new Set(photos.map((ph) => ph.id))) : [];
     if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
   }
 

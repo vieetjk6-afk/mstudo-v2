@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIp } from "@/lib/rate-limit";
 import { syncRepliesForInvitation } from "@/lib/wedding-plan-db";
+import { dropCache, thiepExtrasTag } from "@/lib/public-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,8 @@ export async function POST(req: Request) {
     wish: (body.wish ?? "").trim().slice(0, 1000) || null,
   });
   if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
+  // Trang thiệp nhớ danh sách lời chúc 60 giây — lời chúc vừa gửi phải hiện ngay.
+  if (body.wish?.trim()) dropCache(thiepExtrasTag(inv.id));
 
   // Hỏng thì thôi: phản hồi đã lưu, lần sau cặp đôi mở kế hoạch sẽ ghi bù.
   await syncRepliesForInvitation(db, inv).catch((e) => console.error("[api/thiep/rsvp] ghi vào kế hoạch lỗi", e));

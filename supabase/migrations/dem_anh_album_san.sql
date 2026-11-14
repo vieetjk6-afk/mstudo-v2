@@ -156,16 +156,24 @@ grant execute on function public.album_library_stats(uuid) to authenticated, ser
 
 -- ── 4) Nạp số đếm từ dữ liệu hiện có ────────────────────────────────────────
 -- Khoá photos trước (chặn ghi, vẫn cho đọc) để không lượt chèn ảnh nào lọt vào
--- giữa lúc đếm và lúc trigger có hiệu lực. Giữ tới hết transaction của SQL
--- Editor — vài giây với ~150.000 ảnh.
-lock table public.photos in share row exclusive mode;
+-- giữa lúc đếm và lúc trigger có hiệu lực — vài giây với ~150.000 ảnh.
+--
+-- Bọc trong DO: `lock table` đứng trần chỉ chạy được trong transaction. SQL
+-- Editor của Supabase chạy cả file trong một transaction nên không sao, nhưng
+-- `psql -f` (tự commit từng câu) dừng ngay ở đây với "LOCK TABLE can only be
+-- used in transaction blocks" — mọi migration phía sau không được cài. Một khối
+-- DO là MỘT câu lệnh: khoá giữ suốt lượt đếm ở cả hai môi trường.
+do $$
+begin
+  lock table public.photos in share row exclusive mode;
 
-insert into public.album_photo_counts (album_id, photo_count)
-select p.album_id, count(*) from public.photos p group by p.album_id
-on conflict (album_id) do update set photo_count = excluded.photo_count;
+  insert into public.album_photo_counts (album_id, photo_count)
+  select p.album_id, count(*) from public.photos p group by p.album_id
+  on conflict (album_id) do update set photo_count = excluded.photo_count;
 
--- Album từng có ảnh nhưng nay rỗng: câu trên không chạm tới → đưa về 0.
-update public.album_photo_counts c
-   set photo_count = 0
- where c.photo_count <> 0
-   and not exists (select 1 from public.photos p where p.album_id = c.album_id);
+  -- Album từng có ảnh nhưng nay rỗng: câu trên không chạm tới → đưa về 0.
+  update public.album_photo_counts c
+     set photo_count = 0
+   where c.photo_count <> 0
+     and not exists (select 1 from public.photos p where p.album_id = c.album_id);
+end $$;

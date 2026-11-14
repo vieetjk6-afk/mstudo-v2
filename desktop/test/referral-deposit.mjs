@@ -14,7 +14,7 @@
  * Nạp thẳng code thật ở src/lib/.
  */
 import { digitsOnly, isUsablePhone, samePhone, referralBookingUrl } from "../../src/lib/referral.ts";
-import { depositFor, newDepositCode, newDepositToken } from "../../src/lib/booking-deposit.ts";
+import { depositFor, newDepositCode, newDepositToken, verifiedPackageTotal } from "../../src/lib/booking-deposit.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -61,6 +61,14 @@ check("chính sách 500k, gói 5tr → cọc 500k", depositFor(500_000, 5_000_00
 check("chính sách 500k, khách chưa chọn gói → vẫn 500k", depositFor(500_000, null), 500_000);
 check("cọc lớn hơn giá gói → kẹp về giá gói", depositFor(500_000, 300_000), 300_000);
 check("chính sách 0 → tắt cọc", depositFor(0, 5_000_000), 0);
+
+// Giá gói từ trình duyệt chỉ được tin khi khớp bảng giá thật của studio.
+const BANG_GIA = [{ name: "Gói Tiết kiệm", price: 300_000 }, { name: "Gói VIP", price: 9_000_000 }];
+check("gói khớp bảng giá (kể cả tiền tố bảng giá) → tin giá", verifiedPackageTotal([{ name: "Chụp cưới · Gói Tiết kiệm", price: 300_000 }], BANG_GIA), 300_000);
+check("khách tự sửa giá thành 1.000đ → không tin", verifiedPackageTotal([{ name: "Gói VIP", price: 1_000 }], BANG_GIA), null);
+check("tên gói bịa → không tin", verifiedPackageTotal([{ name: "Gói ma", price: 300_000 }], BANG_GIA), null);
+check("gói tự ghi không giá → không có giá để kẹp", verifiedPackageTotal([{ name: "Gói khác", price: null }], BANG_GIA), null);
+check("giá không tin được → cọc theo chính sách, không kẹp", depositFor(500_000, verifiedPackageTotal([{ name: "Gói VIP", price: 1_000 }], BANG_GIA)), 500_000);
 check("chính sách âm → tắt cọc", depositFor(-100, 5_000_000), 0);
 check("gói giá 0 (chưa báo giá) → dùng mức chính sách", depositFor(500_000, 0), 500_000);
 

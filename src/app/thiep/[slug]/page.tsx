@@ -1,30 +1,99 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { studioLink } from "@/lib/studio-site";
+import { thiepExtrasTag } from "@/lib/public-cache";
 import type { PublicWeddingInvitation, WeddingConfig } from "@/lib/types";
 import WeddingRenderer, { type Wish } from "./WeddingRenderer";
 
 export const dynamic = "force-dynamic";
+
+/* NHỚ GIỮA CÁC REQUEST — link thiệp gửi cho vài trăm khách mời, mỗi lượt mở
+   trước đây kéo lại cột `config` (JSON khá nặng) và 100 lời chúc từ Supabase.
+   • Nội dung thiệp nhớ theo `updated_at` (trigger tự đổi mỗi lần sửa, dù sửa
+     ở trang sửa thiệp hay ở dashboard): mỗi lượt chỉ đọc MỘT dòng nhỏ
+     (id, updated_at) — sửa xong là khoá đổi, khách thấy bản mới ngay.
+   • Lời chúc + link Love Story nhớ 60 giây; gửi lời chúc (/api/thiep/rsvp)
+     thì bỏ nhớ ngay. */
+
+const COLS = "id, owner_id, contract_id, slug, template, config, published, created_at, updated_at";
+
+/** Đọc dòng thiệp. strict (đang được nhớ): lỗi thì ném, không nhớ "không có thiệp". */
+async function readInvitation(slug: string, strict: boolean): Promise<PublicWeddingInvitation | null> {
+  const { data, error } = await createAdminClient().from("wedding_invitations").select(COLS).eq("slug", slug).maybeSingle();
+  if (error && strict) throw new Error(error.message);
+  return (data as PublicWeddingInvitation | null) ?? null;
+}
 
 /**
  * KHÔNG chọn `edit_token`: kết quả này đi thẳng xuống component client, mà ai
  * cầm token đó là sửa được thiệp qua /thiep/sua/<token>.
  *
  * Bọc React `cache()`: generateMetadata và page cùng gọi load() trong một
- * request — trước đây kéo cột `config` (JSON khá nặng) hai lần.
+ * request.
  */
-const load = cache(async (slug: string): Promise<PublicWeddingInvitation | null> => {
-  const db = createAdminClient();
-  const { data } = await db
+const load = cache(async (rawSlug: string): Promise<PublicWeddingInvitation | null> => {
+  const slug = rawSlug.toLowerCase();
+  const { data: head, error } = await createAdminClient()
     .from("wedding_invitations")
-    .select("id, owner_id, contract_id, slug, template, config, published, created_at, updated_at")
-    .eq("slug", slug.toLowerCase())
+    .select("updated_at")
+    .eq("slug", slug)
     .maybeSingle();
-  if (!data) return null;
-  return data as PublicWeddingInvitation;
+  if (error) return readInvitation(slug, false);
+  if (!head) return null;
+  try {
+    return await unstable_cache(() => readInvitation(slug, true), ["thiep-v1", slug, String(head.updated_at)], {
+      revalidate: 86_400,
+    })();
+  } catch {
+    return readInvitation(slug, false);
+  }
 });
+
+type Extras = { wishes: Wish[]; storySlug: string | null };
+
+/** Lời chúc + slug Love Story của hợp đồng. strict: lỗi thì ném (không nhớ danh sách rỗng). */
+async function readExtras(invId: string, contractId: string | null, needStory: boolean, strict: boolean): Promise<Extras> {
+  const db = createAdminClient();
+  const [w, sps] = await Promise.all([
+    db
+      .from("wedding_rsvps")
+      .select("guest_name, wish, created_at")
+      .eq("invitation_id", invId)
+      .not("wish", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(100),
+    // Link Love Story: ưu tiên link nhập tay; nếu trống thì tự lấy theo hợp đồng.
+    // limit(1) thay vì maybeSingle: hợp đồng có thể gắn >1 story (tránh lỗi).
+    needStory && contractId
+      ? db
+          .from("story_pages")
+          .select("slug")
+          .eq("contract_id", contractId)
+          .eq("published", true)
+          .order("updated_at", { ascending: false })
+          .limit(1)
+      : Promise.resolve({ data: null, error: null }),
+  ]);
+  if (strict && (w.error || sps.error)) throw new Error((w.error ?? sps.error)?.message);
+  return {
+    wishes: ((w.data ?? []) as Wish[]).filter((x) => x.wish && x.guest_name),
+    storySlug: ((sps.data as { slug: string }[] | null)?.[0]?.slug as string | undefined) ?? null,
+  };
+}
+
+async function loadExtras(invId: string, contractId: string | null, needStory: boolean): Promise<Extras> {
+  try {
+    return await unstable_cache(() => readExtras(invId, contractId, needStory, true), ["thiep-extras-v1", invId, String(contractId), String(needStory)], {
+      revalidate: 60,
+      tags: [thiepExtrasTag(invId)],
+    })();
+  } catch {
+    return readExtras(invId, contractId, needStory, false).catch(() => ({ wishes: [], storySlug: null }));
+  }
+}
 
 /** Tên khách mời từ query (?guest=…) — cắt gọn, chống rỗng. */
 function readGuest(sp?: { [k: string]: string | string[] | undefined }): string {
@@ -79,39 +148,18 @@ export default async function WeddingInvitationPage(
     );
   }
 
-  // Guestbook = well-wishes left through the RSVP form.
-  // Lời chúc và link Love Story theo hợp đồng độc lập nhau → chạy song song.
+  // Guestbook = well-wishes left through the RSVP form (nhớ 60 giây, xem loadExtras).
   const db = createAdminClient();
   const cfg = inv.config as WeddingConfig;
   let storyUrl = cfg.story_url?.trim() || "";
-  const [{ data: wishRows }, sps] = await Promise.all([
-    db
-      .from("wedding_rsvps")
-      .select("guest_name, wish, created_at")
-      .eq("invitation_id", inv.id)
-      .not("wish", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(100),
-    // Link Love Story: ưu tiên link nhập tay; nếu trống thì tự lấy theo hợp đồng.
-    // limit(1) thay vì maybeSingle: hợp đồng có thể gắn >1 story (tránh lỗi).
-    !storyUrl && inv.contract_id
-      ? db
-          .from("story_pages")
-          .select("slug")
-          .eq("contract_id", inv.contract_id)
-          .eq("published", true)
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .then((r) => r.data)
-      : Promise.resolve(null),
-  ]);
-  let wishes = ((wishRows ?? []) as Wish[]).filter((w) => w.wish && w.guest_name);
+  const extras = await loadExtras(inv.id, inv.contract_id ?? null, !storyUrl);
+  let wishes = extras.wishes;
   // Khi cặp đôi đặt mật khẩu "trang xem riêng" → ẩn lời chúc khỏi thiệp công khai
   // (danh sách + lời chúc chỉ xem được qua /khach có mật khẩu). Khách vẫn gửi
   // RSVP/lời chúc bình thường; chỉ phần HIỂN THỊ danh sách lời chúc bị ẩn.
   if (((inv.config as WeddingConfig).guests_password ?? "").trim()) wishes = [];
 
-  const storySlug = sps?.[0]?.slug;
+  const storySlug = extras.storySlug;
   if (!storyUrl && storySlug) storyUrl = `/story/${storySlug}`;
   // Thiệp ở host thiệp riêng nên đường dẫn tương đối sẽ sai host → chuyển sang
   // URL tuyệt đối trên domain của studio (domain riêng / tên miền phụ, chưa có

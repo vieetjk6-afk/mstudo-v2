@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAllPhotos } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
-import { effectivePlan, planAllowsCollage, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark } from "@/lib/plans";
+import { effectivePlan, planAllowsCollage, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark, type Plan } from "@/lib/plans";
 import AlbumEditor, { type AlbumPick, type CustomerShare, type DeliveryTwin, type LinkedContractInfo } from "./AlbumEditor";
 import type { AlbumPrintInfo } from "./AlbumPrintPanel";
 import { normalizeQuota } from "@/lib/album-print-rules";
@@ -89,9 +89,28 @@ export default async function AlbumEditPage(
 
   if (!album) notFound();
 
-  const isAdmin = profile?.role === "admin";
-  const plan = profile ? effectivePlan(profile.plan, profile.plan_expires_at) : "free";
-  const studioName = (profile?.full_name ?? "").trim() || "Studio";
+  // Admin mở album của studio KHÁC (RLS cho phép): gói, tên studio, tên miền và
+  // hạn lưu trữ phải là của CHỦ album — trang khách tính quyền theo chủ album,
+  // link gửi khách mang tên miền của chủ album. Trước đây mọi thứ lấy theo
+  // NGƯỜI ĐANG XEM nên admin thấy tính năng mở hết dù khách của studio không
+  // có, và chép link ra thì mang tên miền của admin. Chủ album tự mở thì không
+  // tốn thêm câu nào.
+  type OwnerRow = { plan: Plan; plan_expires_at: string | null; role: string | null; full_name: string | null; storage_months?: number | null };
+  const ownerId = (album as Album).owner_id;
+  let owner = profile as OwnerRow | null;
+  let ownerHost = studioHost;
+  if (user && ownerId && ownerId !== user.id) {
+    const [{ data: o }, h] = await Promise.all([
+      supabase.from("profiles").select("plan, plan_expires_at, role, full_name, storage_months").eq("id", ownerId).maybeSingle(),
+      getStudioHost(supabase, ownerId),
+    ]);
+    owner = (o as OwnerRow | null) ?? null;
+    ownerHost = h;
+  }
+
+  const isAdmin = owner?.role === "admin";
+  const plan = owner ? effectivePlan(owner.plan, owner.plan_expires_at) : "free";
+  const studioName = (owner?.full_name ?? "").trim() || "Studio";
   const linkedContract = linkedRows?.[0] ?? null;
 
   // Đợt hai — chỉ cần hợp đồng / chủ album vừa đọc ở trên, chạy song song.
@@ -175,6 +194,7 @@ export default async function AlbumEditPage(
   const flag = (v: unknown): boolean | null => (typeof v === "boolean" ? v : null);
   const collageInfo = {
     allowed: planAllowsCollage(plan, isAdmin),
+    ownerId,
     contractId: (linkedContract?.id as string | undefined) ?? null,
     contractEnabled: linkedContract?.id ? flag((contractRes.data as { collage_enabled?: unknown } | null)?.collage_enabled) : null,
     albumEnabled: flag((album as { collage_enabled?: unknown }).collage_enabled),
@@ -213,7 +233,7 @@ export default async function AlbumEditPage(
       canPinHome={planAllowsPublicGallery(plan, isAdmin)}
       canWatermark={planAllowsWatermark(plan, isAdmin)}
       studioName={studioName}
-      studioHost={studioHost}
+      studioHost={ownerHost}
       studioCats={studioCats}
       contractId={linkedContract?.id ?? null}
       linkedContract={linkedInfo}
@@ -228,7 +248,7 @@ export default async function AlbumEditPage(
       initialTab={tabParam}
       // ?? 6 chứ không phải || 6: studio đặt 0 tháng nghĩa là CỐ Ý giữ ảnh vô
       // hạn, `||` sẽ nuốt mất lựa chọn đó và ép về 6.
-      storageMonths={(profile as { storage_months?: number } | null)?.storage_months ?? 6}
+      storageMonths={owner?.storage_months ?? 6}
     />
   );
 }

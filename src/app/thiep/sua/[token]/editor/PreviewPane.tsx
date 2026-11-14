@@ -107,11 +107,17 @@ export function usePreviewScale(w: number, h: number, fitHeight = false) {
     const host = hostRef.current;
     if (!host) return;
     const fit = () => {
-      const byW = (host.clientWidth - 8) / w;
-      if (!fitHeight) { setScale(Math.min(1, byW)); return; }
+      // Trừ ĐÚNG phần đệm của khung (cả hai bên). Trước đây trừ cứng 8px trong khi
+      // khung đệm 8px MỖI bên — trên điện thoại khung thiết bị rộng hơn chỗ chứa
+      // ~8px, cột xem trước luôn có thanh cuộn ngang.
+      const cs = getComputedStyle(host);
+      const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const byW = (host.clientWidth - padX) / w;
+      if (!fitHeight) { setScale(Math.max(0.1, Math.min(1, byW))); return; }
       // Khung đang ẩn (tab khác trên điện thoại) thì đo ra 0 — giữ tỉ lệ cũ.
-      if (host.clientWidth <= 8 || host.clientHeight <= 8) return;
-      setScale(Math.max(0.2, Math.min(1, byW, (host.clientHeight - 8) / h)));
+      if (host.clientWidth <= padX || host.clientHeight <= padY) return;
+      setScale(Math.max(0.2, Math.min(1, byW, (host.clientHeight - padY) / h)));
     };
     fit();
     const ro = new ResizeObserver(fit);

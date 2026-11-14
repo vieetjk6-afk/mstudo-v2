@@ -402,12 +402,15 @@ export function useCustomerAlbum({
     [album.slug, applyPicks, commitLedger]
   );
 
+  /** Lúc lượt đọc lại gần nhất THẬT SỰ được gửi đi — xem `refreshOnReturn` bên dưới. */
+  const lastRefreshAt = useRef(0);
   // Keep the shared selection in sync with other people viewing the same link.
   // Không còn "cửa sổ ân hạn" theo thời gian như trước: sổ biết chính xác thay
   // đổi nào chưa lên máy chủ, nên hoà giải theo từng ảnh (xem @/lib/album-offline)
   // thay vì chặn cả lượt đọc.
   const refresh = useCallback(async () => {
     if (saveTimer.current || savingRef.current) return; // có bản đang chờ gửi — đọc sau
+    lastRefreshAt.current = Date.now();
     try {
       const res = await fetch(`/api/a/${album.slug}/select`, {
         cache: "no-store",
@@ -555,17 +558,26 @@ export function useCustomerAlbum({
     e.preventDefault();
     setPwLoading(true);
     setPwError(false);
-    const res = await fetch(`/api/a/${album.slug}/access`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-    setPwLoading(false);
-    if (!res.ok) {
+    // Mất mạng / máy chủ trả trang lỗi: fetch hoặc .json() ném lỗi — không bắt
+    // thì nút kẹt ở "Đang mở…" tới khi khách tải lại trang.
+    let data;
+    try {
+      const res = await fetch(`/api/a/${album.slug}/access`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      if (!res.ok) {
+        setPwError(true);
+        return;
+      }
+      data = await res.json();
+    } catch {
       setPwError(true);
       return;
+    } finally {
+      setPwLoading(false);
     }
-    const data = await res.json();
     accessRef.current = typeof data.access === "string" ? data.access : "";
     setPhotos(data.photos ?? []);
     setSources(data.sources ?? []);
@@ -794,10 +806,16 @@ export function useCustomerAlbum({
     const iv = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
     }, 60_000);
-    const onFocus = () => refresh();
+    // Quay lại tab: trình duyệt bắn CẢ `visibilitychange` lẫn `focus`, gần như cùng
+    // lúc — trước đây là hai lượt gọi (hai lần chạy hàm Vercel + truy vấn) cho mỗi
+    // lần quay lại. Gộp lại: vừa đọc chưa đầy 10 giây thì thôi.
+    const refreshOnReturn = () => {
+      if (Date.now() - lastRefreshAt.current >= 10_000) refresh();
+    };
+    const onFocus = () => refreshOnReturn();
     const onVisibility = () => {
       if (document.visibilityState === "hidden") flush();
-      else refresh();
+      else refreshOnReturn();
     };
     const onHide = () => flush();
     window.addEventListener("focus", onFocus);

@@ -23,6 +23,9 @@ import { CollageStudioPanel } from "./CollageStudioSettings";
 export type AlbumCollageInfo = {
   /** Gói của studio có tính năng này (planAllowsCollage). */
   allowed: boolean;
+  /** Chủ album — cài đặt ghép ảnh (profiles.collage_brand) là của studio này,
+   *  không phải của người đang xem (admin mở album của studio khác). */
+  ownerId: string;
   /** Album thuộc hợp đồng → công tắc ở hợp đồng. */
   contractId: string | null;
   /** Công tắc của hợp đồng; null = cột chưa có. */
@@ -95,7 +98,7 @@ export function AlbumCollageCardV2({ albumId, info }: { albumId: string; info: A
       )}
       {info.allowed ? (
         <div className="mt-3">
-          <CollageStudioPanel albumId={albumId} />
+          <CollageStudioPanel albumId={albumId} ownerId={info.ownerId} />
         </div>
       ) : null}
     </Section>
@@ -149,7 +152,7 @@ export function AlbumCollageCardV1({ albumId, info }: { albumId: string; info: A
           ) : null}
           {info.allowed ? (
             <div className="mt-3">
-              <CollageStudioPanel albumId={albumId} legacy />
+              <CollageStudioPanel albumId={albumId} ownerId={info.ownerId} legacy />
             </div>
           ) : null}
         </div>

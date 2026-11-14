@@ -76,19 +76,23 @@ const FAMILY_LABEL: Record<string, string> = {
   "end-card": "Slide cuối",
 };
 
-export function useCollageStudioSettings(enabled: boolean) {
+/**
+ * Cài đặt ghép ảnh của STUDIO SỞ HỮU album (`ownerId`), không phải của người
+ * đang đăng nhập: admin mở album của studio khác (RLS cho phép đọc/sửa hồ sơ
+ * mọi studio) trước đây đọc và ghi vào hồ sơ CỦA ADMIN — đổi gì cũng không
+ * có tác dụng lên album đó, còn album của admin thì bị đổi theo.
+ */
+export function useCollageStudioSettings(enabled: boolean, ownerId: string) {
   const [brand, setBrand] = useState<CollageBrand>(DEFAULT_COLLAGE_BRAND);
   const [uid, setUid] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || !ownerId) return;
     let alive = true;
     (async () => {
       const sb = createClient();
-      const { data: u } = await sb.auth.getUser();
-      const id = u.user?.id ?? null;
-      if (!alive || !id) return;
+      const id = ownerId;
       setUid(id);
       const { data, error } = await sb.from("profiles").select("collage_brand").eq("id", id).maybeSingle();
       if (!alive) return;
@@ -103,16 +107,23 @@ export function useCollageStudioSettings(enabled: boolean) {
     return () => {
       alive = false;
     };
-  }, [enabled]);
+  }, [enabled, ownerId]);
   async function update(patch: Partial<CollageBrand>) {
     if (!uid) return;
+    const prev = brand;
     const next = { ...brand, ...patch };
     setBrand(next);
     setSaving(true);
     setErr(null);
-    const { error } = await createClient().from("profiles").update({ collage_brand: next }).eq("id", uid);
+    // .select(): RLS chặn thì PostgREST KHÔNG báo lỗi mà trả 0 dòng — không đếm
+    // dòng là màn hình báo đã lưu trong khi chẳng có gì được ghi.
+    const { data, error } = await createClient().from("profiles").update({ collage_brand: next }).eq("id", uid).select("id");
     setSaving(false);
     if (error) setErr(isMissingColumn(error, "collage_brand") ? MISSING : error.message);
+    else if (!data?.length) {
+      setBrand(prev);
+      setErr("Không có quyền sửa cài đặt ghép ảnh của studio này.");
+    }
   }
   return { brand, update, err, saving, ready: !!uid };
 }
@@ -186,8 +197,8 @@ function Chips<T extends string>({ value, options, onPick, disabled, label }: { 
 }
 
 /** Cài đặt chung + thống kê — dùng trong thẻ Ghép ảnh (bản mới và bản cũ). `legacy`: giao diện cũ (không có kiểu .ui-v2 → dùng ô tích thường). */
-export function CollageStudioPanel({ albumId, legacy = false }: { albumId: string; legacy?: boolean }) {
-  const s = useCollageStudioSettings(true);
+export function CollageStudioPanel({ albumId, ownerId, legacy = false }: { albumId: string; ownerId: string; legacy?: boolean }) {
+  const s = useCollageStudioSettings(true, ownerId);
   const stats = useCollageStats(albumId, true);
   const muted = { color: "var(--tx3, var(--text3))" } as const;
   return (

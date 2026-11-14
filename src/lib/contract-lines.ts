@@ -16,6 +16,8 @@
  * id nào thực sự đã sửa, gói không sửa vẫn ăn theo bảng giá.
  */
 
+import { depositByPercent } from "./quote-deposit.ts";
+
 /** `description` = ô "Mô tả" của gói trong bảng giá — đi theo sang hạng mục. */
 export type LinePackage = { id: string; name: string; price: number; description?: string | null };
 export type LineTemplateItem = { name: string; qty: number; unit_price: number; position: number };
@@ -116,12 +118,20 @@ export function isDepositLabel(label: string | null | undefined): boolean {
   return /c[oọOỌ]c/i.test(label || "");
 }
 
+/** Ngữ cảnh đổi tổng: kế hoạch đang khớp `prevTotal`, % cọc của studio (≤ 0 = tắt cọc tự động). */
+export type PlanDepositRule = { prevTotal: number; depositPercent: number };
+
 /**
  * Tổng hợp đồng ĐỔI (sửa hạng mục, đổi gói, giảm giá) → đợt thu tự đổi theo.
  *
  * Studio muốn: không phải tự xoá rồi thêm lại đợt thu mỗi lần sửa tiền.
- *   - Đợt CỌC chưa thu → tính lại theo % cọc của studio (`deposit`; null =
- *     studio tắt cọc tự động → giữ nguyên số đã gõ).
+ *   - Đợt CỌC chưa thu: còn đúng số tự tính theo % cho tổng CŨ (studio chưa
+ *     sửa) → tính lại theo tổng mới. Lệch số đó = cọc studio đã thoả thuận với
+ *     khách → GIỮ NGUYÊN. Trước đây cọc luôn bị ghi đè về %, cọc 10tr thành
+ *     5tr và QR ở cổng khách đổi theo mà không ai hay. Tắt cọc tự động → giữ.
+ *   - Cọc không được đòi quá số khách còn phải trả (tổng − đợt đã thu): tổng
+ *     giảm dưới cọc thì cọc kẹp xuống đúng số đó, đợt cuối về 0 — khách không
+ *     thể đặt cọc nhiều hơn cả hợp đồng.
  *   - Đợt CHƯA THU cuối cùng (không phải đợt cọc) gánh phần còn lại, để tổng
  *     các đợt luôn khớp tổng hợp đồng.
  *   - Đợt đã thu và các đợt giữa: giữ nguyên.
@@ -131,12 +141,19 @@ export function isDepositLabel(label: string | null | undefined): boolean {
 export function syncPlanToTotal<T extends { label: string; amount: number; paid?: boolean }>(
   rows: T[],
   total: number,
-  deposit: number | null
+  { prevTotal, depositPercent }: PlanDepositRule
 ): T[] {
   if (!rows.length || total <= 0) return rows;
   const out = rows.map((r) => ({ ...r }));
   const dep = out.findIndex((r) => !r.paid && isDepositLabel(r.label));
-  if (dep >= 0 && deposit !== null && deposit > 0) out[dep].amount = Math.min(total, deposit);
+  if (dep >= 0) {
+    const cur = out[dep].amount || 0;
+    // So bằng CHÍNH hàm làm tròn đã sinh ra cọc tự động, nên không lệch vì làm tròn.
+    const isAuto = depositPercent > 0 && cur === depositByPercent(prevTotal, depositPercent);
+    const want = isAuto ? depositByPercent(total, depositPercent) : cur;
+    const paidSum = out.reduce((s, x) => (x.paid ? s + (x.amount || 0) : s), 0);
+    out[dep].amount = Math.max(0, Math.min(want, total - paidSum));
+  }
   let last = -1;
   for (let i = out.length - 1; i >= 0; i--) {
     if (!out[i].paid && i !== dep) {
@@ -152,8 +169,8 @@ export function syncPlanToTotal<T extends { label: string; amount: number; paid?
 }
 
 /** Bản cho form tạo hợp đồng: như syncPlanToTotal, thiếu đợt gánh phần còn lại thì thêm. */
-export function rebalancePlan(rows: PlanRow[], total: number, deposit: number | null): PlanRow[] {
-  const out = syncPlanToTotal(rows, total, deposit);
+export function rebalancePlan(rows: PlanRow[], total: number, rule: PlanDepositRule): PlanRow[] {
+  const out = syncPlanToTotal(rows, total, rule);
   if (out.length === 1 && !isDepositLabel(out[0].label)) return [{ ...out[0], amount: total }];
   const sum = out.reduce((s, x) => s + (x.amount || 0), 0);
   return sum < total && out.length === 1

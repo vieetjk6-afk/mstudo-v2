@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, LoaderCircle, Share2 } from "lucide-react";
 import { btn } from "@/components/v2/kit";
 import { Switch } from "@/components/v2/kit-client";
@@ -13,6 +13,7 @@ import type { SignSpec } from "@/lib/collage/brand";
 import { CaptionList } from "./WishesSheet";
 import { triggerDownload } from "@/lib/download";
 import { Sheet } from "./ui";
+import { rawImageUrl } from "@/lib/drive";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TẢI ẢNH GHÉP về máy — hai bước như ứng dụng Albumi trên điện thoại:
@@ -38,7 +39,7 @@ export function slugify(s: string): string {
 }
 
 /** Byte ảnh cùng miền cho canvas (Drive không gửi CORS nên phải đi qua proxy). */
-export const rawImageUrl = (driveId: string, w: number) => `/api/img?id=${encodeURIComponent(driveId)}&w=${w}&raw=1`;
+export { rawImageUrl };
 
 export default function ExportSheet({
   doc,
@@ -99,6 +100,21 @@ export default function ExportSheet({
     setMsg(null);
   };
 
+  // Đóng sheet giữa lúc "Đang tạo…" (nút Đóng, chạm nền, nút lùi điện thoại gỡ sheet) →
+  // dừng vòng vẽ và không ghi thống kê cho lượt bỏ dở.
+  const cancelled = useRef(false);
+  useEffect(() => {
+    // StrictMode gỡ rồi gắn lại effect — đặt lại cờ để lần gắn thật không bị coi là đã đóng.
+    cancelled.current = false;
+    return () => {
+      cancelled.current = true;
+    };
+  }, []);
+  const close = () => {
+    cancelled.current = true;
+    onClose();
+  };
+
   async function make() {
     if (progress) return;
     reset();
@@ -113,6 +129,7 @@ export default function ExportSheet({
       let n = scope === "all" ? 0 : imagesOf(doc.pages.slice(0, pageIdx));
       for (const page of pages) {
         for (let sl = 0; sl < pageSlides(page); sl++) {
+          if (cancelled.current) return;
           const canvas = await renderPage(doc, page, { scale: hd ? 2 : 1, getImage, watermark, sign, signLogo }, Date.now(), sl);
           const blob = await canvasToJpeg(canvas, 0.92);
           n++;
@@ -120,6 +137,7 @@ export default function ExportSheet({
           setProgress({ done: out.length, total });
         }
       }
+      if (cancelled.current) return;
       setFiles(out);
       onExported?.(out.length);
     } catch {
@@ -157,10 +175,10 @@ export default function ExportSheet({
   return (
     <Sheet
       title="Tải ảnh ghép"
-      onClose={onClose}
+      onClose={close}
       footer={
         <>
-          <button type="button" onClick={onClose} className={btn("ghost", "lg")}>
+          <button type="button" onClick={close} className={btn("ghost", "lg")}>
             Đóng
           </button>
           {files ? (

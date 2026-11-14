@@ -118,7 +118,7 @@ function editorDelivery(tab?: string, extra: Partial<React.ComponentProps<typeof
       initialSources: SOURCES_DELIVERY,
       photosPromise: PHOTOS_DELIVERY_P,
       printInfo: PRINT,
-      collageInfo: { allowed: true, contractId: "c1", contractEnabled: true, albumEnabled: true },
+      collageInfo: { allowed: true, ownerId: "preview-owner", contractId: "c1", contractEnabled: true, albumEnabled: true },
       ...extra,
     },
   );
@@ -169,7 +169,7 @@ export const SCREENS_ALBUMCT: Record<string, { title: string; render: () => Reac
       editorDelivery("deliver", {
         contractId: null,
         linkedContract: null,
-        collageInfo: { allowed: true, contractId: null, contractEnabled: null, albumEnabled: true },
+        collageInfo: { allowed: true, ownerId: "preview-owner", contractId: null, contractEnabled: null, albumEnabled: true },
       }),
     bare: true,
   },

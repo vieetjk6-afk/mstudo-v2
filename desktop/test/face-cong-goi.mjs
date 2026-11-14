@@ -17,9 +17,17 @@
  *
  * Và tiến độ quét: con số thay cho câu "vài phút nữa bạn quay lại nhé".
  */
-import { effectivePlan, planAllowsFaceSearch } from "../../src/lib/plans.ts";
-import { chuAlbumDuocTimMat, conDangQuet, tienDoQuet } from "../../src/lib/face-pending.ts";
-import { albumsNeedingCluster, albumsNeedingScan } from "../../src/lib/face-scan-server.ts";
+
+/*
+ * Bài này kiểm LUẬT GÓI — nên phải BẬT công tắc tổng của tính năng
+ * (FACE_SEARCH_ENABLED trong src/lib/plans.ts, mặc định TẮT để tiết kiệm CPU
+ * Vercel) TRƯỚC khi nạp module: công tắc đọc biến môi trường lúc nạp. Import
+ * tĩnh chạy trước mọi dòng code nên phải dùng import động.
+ */
+process.env.NEXT_PUBLIC_FACE_SEARCH = "1";
+const { effectivePlan, planAllowsFaceSearch } = await import("../../src/lib/plans.ts");
+const { chuAlbumDuocTimMat, conDangQuet, tienDoQuet } = await import("../../src/lib/face-pending.ts");
+const { albumsNeedingCluster, albumsNeedingScan } = await import("../../src/lib/face-scan-server.ts");
 
 let fail = 0;
 const ok = (name, cond, note = "") => {
@@ -34,6 +42,14 @@ const check = (name, got, want) => {
 
 const NGAY_MAI = new Date(Date.now() + 86_400_000).toISOString();
 const HOM_QUA = new Date(Date.now() - 86_400_000).toISOString();
+
+/* ── 0. Công tắc tổng TẮT (mặc định) → mọi cổng đóng ─────────────────────── */
+{
+  process.env.NEXT_PUBLIC_FACE_SEARCH = "";
+  const tat = await import("../../src/lib/plans.ts?cong-tac-tat");
+  process.env.NEXT_PUBLIC_FACE_SEARCH = "1";
+  ok("công tắc tổng TẮT → cả gói studio lẫn admin đều KHÔNG được", tat.planAllowsFaceSearch("studio") === false && tat.planAllowsFaceSearch("free", true) === false);
+}
 
 /* ── 1. Truth table ──────────────────────────────────────────────────────── */
 for (const p of ["free", "basic", "photographer"]) {
@@ -58,11 +74,13 @@ ok("gói null (dòng profiles thiếu) → cổng đóng", planAllowsFaceSearch(
  * một bảng cụ thể, để kiểm hướng hỏng.
  */
 function fakeDb({ albums = [], profiles = [], photos = [], loi = {} } = {}) {
-  const stats = { docProfiles: 0, demPhotos: 0 };
+  /** `demPhotos`: câu ĐẾM ảnh; `hoiCoViec`: câu "còn tấm chờ không" (limit 1, có `.in`). */
+  const stats = { docProfiles: 0, demPhotos: 0, hoiCoViec: 0, hoiCoViecIds: [] };
 
   const from = (table) => {
     const eqs = {};
     const neqs = {};
+    const ins = {};
     const isNulls = [];
     const notNulls = [];
     let wantCount = false;
@@ -79,19 +97,24 @@ function fakeDb({ albums = [], profiles = [], photos = [], loi = {} } = {}) {
         stats.docProfiles++;
         if (loi.profiles) return { data: null, error: { message: loi.profiles } };
         let rows = profiles;
-        if (eqs.__in) rows = rows.filter((r) => eqs.__in.includes(r.id));
-        for (const [c, v] of Object.entries(eqs)) if (c !== "__in") rows = rows.filter((r) => r[c] === v);
+        for (const [c, list] of Object.entries(ins)) rows = rows.filter((r) => list.includes(r[c]));
+        for (const [c, v] of Object.entries(eqs)) rows = rows.filter((r) => r[c] === v);
         return { data: rows, error: null };
       }
       if (table === "photos") {
-        stats.demPhotos++;
+        if (wantCount) stats.demPhotos++;
+        else {
+          stats.hoiCoViec++;
+          stats.hoiCoViecIds.push(...(ins.album_id ?? []));
+        }
         if (loi.photos) return { count: null, data: null, error: { message: loi.photos } };
         let rows = photos;
         for (const [c, v] of Object.entries(eqs)) rows = rows.filter((r) => r[c] === v);
         for (const [c, v] of Object.entries(neqs)) rows = rows.filter((r) => r[c] !== v);
+        for (const [c, list] of Object.entries(ins)) rows = rows.filter((r) => list.includes(r[c]));
         for (const c of isNulls) rows = rows.filter((r) => (r[c] ?? null) === null);
         for (const c of notNulls) rows = rows.filter((r) => (r[c] ?? null) !== null);
-        return wantCount ? { count: rows.length, data: null, error: null } : { data: rows, error: null };
+        return wantCount ? { count: rows.length, data: null, error: null } : { data: rows.slice(0, gioiHan), error: null };
       }
       throw new Error(`bảng chưa dựng trong db giả: ${table}`);
     };
@@ -105,7 +128,7 @@ function fakeDb({ albums = [], profiles = [], photos = [], loi = {} } = {}) {
       neq(c, v) { neqs[c] = v; return self; },
       is(c, v) { if (v === null) isNulls.push(c); return self; },
       not(c, _op, v) { if (v === null) notNulls.push(c); return self; },
-      in(_c, list) { eqs.__in = list; return self; },
+      in(c, list) { ins[c] = list; return self; },
       order() { return self; },
       limit(n) { gioiHan = n; return self; },
       maybeSingle() { const r = chon(); return Promise.resolve({ data: r.data?.[0] ?? null, error: r.error }); },
@@ -169,6 +192,51 @@ const anhChuaQuet = (albumId, n) =>
     db.stats.demPhotos === 1,
     `đếm ${db.stats.demPhotos} lần`
   );
+  ok(
+    "câu hỏi 'còn việc không' cũng chỉ hỏi album đủ gói",
+    db.stats.hoiCoViec === 1 && !db.stats.hoiCoViecIds.includes("a-pho"),
+    JSON.stringify(db.stats)
+  );
+}
+
+/* ── 3b. Hết việc thì hỏi MỘT câu, không đếm từng album ──────────────────────
+ * Đêm nào cron cũng gọi hàm này hàng chục lượt; khi mọi album đã quét xong, bản
+ * trước vẫn đếm từng album (tới 120 câu mỗi lượt) chỉ để ra "không có gì".
+ */
+{
+  const nhieu = Array.from({ length: 40 }, (_, i) => ({ id: `a-${i}`, owner_id: "u-studio", status: "published", faces_clustered_at: null }));
+  const daQuetHet = nhieu.map((a) => ({ id: `${a.id}-x`, album_id: a.id, is_video: false, faces_scanned_at: "2026-01-01T00:00:00Z", drive_file_id: "d" }));
+  const db = fakeDb({ albums: nhieu, profiles: profilesChung, photos: daQuetHet });
+  check("40 album đã quét hết → hàng đợi rỗng", await albumsNeedingScan(db, 3), []);
+  ok(
+    `và chỉ tốn 1 câu hỏi, 0 câu đếm (thật: ${db.stats.hoiCoViec} hỏi, ${db.stats.demPhotos} đếm)`,
+    db.stats.hoiCoViec === 1 && db.stats.demPhotos === 0
+  );
+
+  // Chỉ MỘT album còn việc, nằm sâu trong danh sách: chỉ nhóm 8 album chứa nó
+  // bị đếm — không phải cả 40.
+  const db2 = fakeDb({ albums: nhieu, profiles: profilesChung, photos: [...daQuetHet, ...anhChuaQuet("a-27", 4)] });
+  check("một album còn việc giữa 40 → tìm đúng nó", await albumsNeedingScan(db2, 3), [{ id: "a-27", pending: 4 }]);
+  ok(`chỉ đếm 8 album của nhóm có việc (thật: ${db2.stats.demPhotos})`, db2.stats.demPhotos === 8);
+}
+
+/* ── 3c. Câu hỏi "còn việc không" lỗi → đếm như cũ, không im lặng bỏ album ── */
+{
+  const db = fakeDb({
+    albums: [{ id: "a-studio", owner_id: "u-studio", status: "published", faces_clustered_at: null }],
+    profiles: profilesChung,
+    photos: anhChuaQuet("a-studio", 3),
+  });
+  // Chỉ làm hỏng câu hỏi (không có count), câu đếm vẫn lành.
+  const goc = db.from;
+  db.from = (t) => {
+    const q = goc(t);
+    if (t !== "photos") return q;
+    const sel = q.select;
+    q.select = (c, o) => (o?.count ? sel(c, o) : Object.assign(sel(c, o), { limit: () => Promise.resolve({ data: null, error: { message: "timeout" } }) }));
+    return q;
+  };
+  check("hỏi lỗi → vẫn đếm và nhặt album", await albumsNeedingScan(db, 5), [{ id: "a-studio", pending: 3 }]);
 }
 
 {

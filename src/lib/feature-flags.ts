@@ -1,18 +1,37 @@
 import "server-only";
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type FeatureFlags = Record<string, string>;
 
+/** Thẻ nhớ của cờ tính năng — /api/admin/settings bỏ nhớ ngay khi admin lưu. */
+export const FEATURE_FLAGS_TAG = "feature-flags";
+
 /**
  * Global feature flags controlled by the admin in Settings (site_settings.feature_flags).
- * Cached per-request. Falls back to {} if the column/row is missing.
+ * Falls back to {} if the column/row is missing.
+ *
+ * Nhớ 60 giây GIỮA các request (unstable_cache, như getSiteMeta) chứ không chỉ
+ * trong một request: hàm này chạy ở MỌI trang dashboard và mọi trang khách
+ * (qua customerUiV2), trong khi cờ chỉ đổi khi admin bấm trong Cài đặt — đọc lại
+ * Supabase mỗi lượt mở trang là phí. Admin lưu Cài đặt thì bỏ nhớ ngay.
  */
-export const getFeatureFlags = cache(async (): Promise<FeatureFlags> => {
-  try {
-    const { data } = await createAdminClient().from("site_settings").select("feature_flags").eq("id", 1).maybeSingle();
+const readFlags = unstable_cache(
+  async (): Promise<FeatureFlags> => {
+    const { data, error } = await createAdminClient().from("site_settings").select("feature_flags").eq("id", 1).maybeSingle();
+    // Lỗi thì ném để unstable_cache KHÔNG nhớ một bộ cờ rỗng suốt 60 giây.
+    if (error) throw error;
     const f = (data as { feature_flags?: FeatureFlags } | null)?.feature_flags;
     return f && typeof f === "object" ? f : {};
+  },
+  ["feature-flags"],
+  { revalidate: 60, tags: [FEATURE_FLAGS_TAG] },
+);
+
+export const getFeatureFlags = cache(async (): Promise<FeatureFlags> => {
+  try {
+    return await readFlags();
   } catch {
     return {};
   }

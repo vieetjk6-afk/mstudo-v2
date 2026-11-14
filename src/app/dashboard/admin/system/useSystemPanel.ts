@@ -2,6 +2,23 @@
 
 import { useRef, useState } from "react";
 import { Gift, Settings, Users } from "lucide-react";
+import { BACKUP_TABLES, RESTORE_SKIP_TABLES, chunkRows } from "@/lib/admin/backup-tables";
+
+type BackupDoc = { kind?: string; data: Record<string, unknown> };
+
+/**
+ * Đọc file sao lưu: .json (bản cũ / tải tay trước đây) hoặc .json.gz (bản tải
+ * về và bản tự động trên Drive). Nhận gzip theo 2 byte đầu (1f 8b) chứ không
+ * theo đuôi file — trình duyệt / Drive đôi khi bỏ mất ".gz" lúc tải.
+ */
+async function readBackupFile(file: File): Promise<BackupDoc> {
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  const gz = head[0] === 0x1f && head[1] === 0x8b;
+  const text = gz
+    ? await new Response(file.stream().pipeThrough(new DecompressionStream("gzip"))).text()
+    : await file.text();
+  return JSON.parse(text) as BackupDoc;
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Phần LOGIC dùng chung của "Cài đặt hệ thống" (bản cũ SystemPanel và bản mới
@@ -38,8 +55,8 @@ export function useSystemPanel() {
 
   // Khôi phục
   const fileRef = useRef<HTMLInputElement>(null);
-  const [restoreDoc, setRestoreDoc] = useState<unknown | null>(null);
-  const [preview, setPreview] = useState<{ table: string; rows: number }[] | null>(null);
+  const [restoreDoc, setRestoreDoc] = useState<BackupDoc | null>(null);
+  const [preview, setPreview] = useState<{ table: string; rows: number; skip: boolean }[] | null>(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
   const [restoreErr, setRestoreErr] = useState<string | null>(null);
@@ -84,7 +101,7 @@ export function useSystemPanel() {
       const blob = await res.blob();
       const cd = res.headers.get("Content-Disposition") || "";
       const m = cd.match(/filename="([^"]+)"/);
-      const name = m?.[1] || "mstudo-backup.json";
+      const name = m?.[1] || "mstudo-backup.json.gz";
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -110,27 +127,20 @@ export function useSystemPanel() {
     setPreview(null);
     setRestoreDoc(null);
     try {
-      const text = await file.text();
-      const doc = JSON.parse(text);
-      if (doc?.kind !== "mstudo-full-backup" || !doc.data) {
+      const doc = await readBackupFile(file);
+      if (doc?.kind !== "mstudo-full-backup" || !doc.data || typeof doc.data !== "object") {
         setRestoreErr("File không phải bản sao lưu MStudo hợp lệ.");
         return;
       }
-      // Xem trước số dòng (không ghi gì).
-      const res = await fetch("/api/admin/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: doc.kind, data: doc.data, apply: false }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setRestoreErr(`Lỗi đọc bản sao lưu: ${data.error ?? "không rõ"}`);
-        return;
-      }
+      // Xem trước ngay trên trình duyệt (không gửi gì lên máy chủ): bản cũ gửi
+      // CẢ file lên chỉ để đếm dòng, và hỏng với file > 4,5 MB.
+      const rows = (t: string) => (Array.isArray(doc.data[t]) ? doc.data[t].length : 0);
       setRestoreDoc(doc);
-      setPreview(data.tables ?? []);
+      setPreview(
+        BACKUP_TABLES.filter((t) => rows(t) > 0).map((t) => ({ table: t, rows: rows(t), skip: RESTORE_SKIP_TABLES.has(t) })),
+      );
     } catch {
-      setRestoreErr("Không đọc được file (JSON hỏng?).");
+      setRestoreErr("Không đọc được file (hỏng, hoặc không phải .json / .json.gz).");
     }
   }
 
@@ -141,32 +151,58 @@ export function useSystemPanel() {
       "Nên tải một bản sao lưu mới trước khi khôi phục. Tiếp tục?"
     )) return;
     setRestoring(true);
-    setRestoreMsg("Đang khôi phục dữ liệu…");
     setRestoreErr(null);
-    try {
-      const doc = restoreDoc as { kind: string; data: unknown };
-      const res = await fetch("/api/admin/restore", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: doc.kind, data: doc.data, apply: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setRestoreErr(`Khôi phục lỗi: ${data.error ?? "không rõ"}`);
-        setRestoreMsg(null);
-        return;
+    const doc = restoreDoc as BackupDoc;
+    // Lần lượt bảng cha → con, mỗi lô một request nhỏ. Lô lỗi (thường vì khoá
+    // ngoại tới dòng của bảng đứng sau) được thử lại một lượt ở cuối.
+    type Lo = { table: string; rows: unknown[] };
+    const queue: Lo[] = [];
+    for (const table of BACKUP_TABLES) {
+      if (RESTORE_SKIP_TABLES.has(table)) continue;
+      const rows = Array.isArray(doc.data[table]) ? (doc.data[table] as unknown[]) : [];
+      for (const part of chunkRows(rows)) queue.push({ table, rows: part });
+    }
+    let restored = 0;
+    const send = async (lo: Lo): Promise<string | null> => {
+      try {
+        const res = await fetch("/api/admin/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(lo),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return String(data.error ?? `HTTP ${res.status}`);
+        restored += Number(data.restored ?? lo.rows.length);
+        return null;
+      } catch {
+        return "lỗi kết nối";
       }
-      const failed = (data.failed ?? []) as { table: string; error: string }[];
-      setRestoreMsg(`Đã khôi phục ${data.totalRestored} bản ghi.`);
+    };
+    try {
+      let failed: (Lo & { error: string })[] = [];
+      for (let i = 0; i < queue.length; i++) {
+        setRestoreMsg(`Đang khôi phục ${queue[i].table}… (${i + 1}/${queue.length} lô)`);
+        const err = await send(queue[i]);
+        if (err) failed.push({ ...queue[i], error: err });
+      }
       if (failed.length) {
-        setRestoreErr("Một số bảng lỗi: " + failed.map((f) => `${f.table} (${f.error})`).join("; "));
+        setRestoreMsg(`Thử lại ${failed.length} lô lỗi…`);
+        const again: typeof failed = [];
+        for (const f of failed) {
+          const err = await send(f);
+          if (err) again.push({ ...f, error: err });
+        }
+        failed = again;
+      }
+      setRestoreMsg(`Đã khôi phục ${restored.toLocaleString("vi-VN")} bản ghi.`);
+      if (failed.length) {
+        const byTable = new Map<string, string>();
+        for (const f of failed) if (!byTable.has(f.table)) byTable.set(f.table, f.error);
+        setRestoreErr("Một số bảng lỗi: " + [...byTable].map(([t, e]) => `${t} (${e})`).join("; "));
       }
       setPreview(null);
       setRestoreDoc(null);
       if (fileRef.current) fileRef.current.value = "";
-    } catch {
-      setRestoreErr("Lỗi kết nối khi khôi phục.");
-      setRestoreMsg(null);
     } finally {
       setRestoring(false);
     }

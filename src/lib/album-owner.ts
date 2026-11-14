@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { brandFrom, type StudioBrandInfo } from "@/lib/studio-brand";
+import { getStudioHost } from "@/lib/studio-site";
 import type { Plan } from "@/lib/plans";
 
 /** Các cột "an toàn" (có từ lâu) — quyền tải/ghi chú và gói của chủ album. */
@@ -50,4 +51,14 @@ export const getAlbumOwner = cache(async (ownerId: string | null | undefined): P
   } catch {
     return { profile: null, brand: brandFrom(null) };
   }
+});
+
+/**
+ * Tên miền của studio sở hữu album (tên miền riêng → tên miền phụ → null), đọc
+ * MỘT lần cho mỗi request. generateMetadata (thẻ chia sẻ) và page cùng cần nó;
+ * trước đây mỗi bên tự tra bảng `sites` — hai lượt cho mỗi lượt mở album.
+ */
+export const getAlbumOwnerHost = cache(async (ownerId: string | null | undefined): Promise<string | null> => {
+  if (!ownerId) return null;
+  return getStudioHost(createAdminClient(), ownerId).catch(() => null);
 });

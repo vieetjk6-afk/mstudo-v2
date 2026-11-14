@@ -147,3 +147,28 @@ Thủ phạm tìm được trong log GitHub Actions của "Quét khuôn mặt":
    `khong-phai-jpeg`) được đánh mốc luôn.
 
 Kiểm thử: `npm run test:face-gom-it`.
+
+## Đợt giảm egress thứ hai (11/2026)
+
+Sau sự cố trên, rà lại mọi trang KHÁCH mở được không cần đăng nhập — chỗ một
+link gửi đi có thể bị mở hàng trăm lần.
+
+| Chỗ | Trước | Nay |
+|---|---|---|
+| Album khách `/album`, `/a` + 2 route mở khoá | đọc lại toàn bộ danh sách ảnh và liên kết người–ảnh mỗi lượt mở; `album_people` kéo cả vector 128 số (~1,5 KB/người) | danh sách ảnh + khuôn mặt **nhớ 5 phút** giữa các request (`src/lib/album-data-cache.ts`), khoá nhớ đổi ngay khi thêm/xoá ảnh hoặc gom xong khuôn mặt; không kéo vector; gói không có tìm khuôn mặt thì không đọc |
+| Cổng hợp đồng: hỏi "tiền về chưa" | mỗi 8 giây, mỗi lượt kéo cả 2 ảnh chữ ký (~100 KB) | mỗi 15 giây, chỉ đọc 2 cột |
+| Thiệp cưới `/thiep/<slug>` | đọc cột `config` + 100 lời chúc mỗi lượt | chỉ đọc `updated_at` (1 dòng nhỏ); nội dung nhớ theo `updated_at`, lời chúc nhớ 60 giây (gửi lời chúc thì bỏ nhớ ngay) |
+| Website studio | `sites` + 5 bảng mỗi lượt (kể cả bot) | nhớ 5 phút; trình dựng web / đổi tên miền / xuất bản thì bỏ nhớ ngay |
+| Trang chủ, cờ tính năng | đọc `site_settings` mỗi lượt | nhớ 5 phút / 60 giây; admin lưu Cài đặt thì bỏ nhớ ngay |
+| Quét khuôn mặt đêm | đọc mọi ảnh của album để tìm ≤400 ảnh chưa quét; tới 120 câu đếm khi không có việc | lọc ngay trong câu hỏi; 1 câu khi không có việc |
+
+Lớp nhớ dùng `unstable_cache` của Next (Data Cache của Vercel). Hàm được nhớ
+luôn chạy ở chế độ **strict**: một câu đọc lỗi thoáng qua thì ném chứ không nhớ
+một album thiếu ảnh; trang tự lùi về đọc thẳng. Dòng `albums` (trạng thái xuất
+bản, mật khẩu, giai đoạn) và lựa chọn của khách KHÔNG bao giờ được nhớ.
+
+Kiểm thử: `npm run test:public-cache`, `npm run test:drive-img`.
+
+Ngoài Supabase, ảnh hiển thị nay trỏ thẳng CDN Google thay vì đi vòng `/api/img`
+(chỉ trả 302) — bớt một lượt gọi Vercel cho mỗi ảnh (xem `NEXT_PUBLIC_IMG_DIRECT`
+trong docs/bien-moi-truong.md).

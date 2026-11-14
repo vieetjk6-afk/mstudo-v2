@@ -91,7 +91,7 @@ export default function ThiepDemo() {
            soi được. Phần tử fixed nằm trong tổ tiên ĐÃ transform sẽ bám khung đó.
            MusicPlayer.tsx đã ghi đúng cái bẫy này, và màn thiep-mo bên cạnh cũng
            bọc khung có transform vì cùng lý do. */
-        .thiep-demo { width: 390px; height: 840px; overflow: hidden auto; border-radius: 18px; box-shadow: 0 20px 40px -18px rgba(60,50,40,.5); background: #fff; scrollbar-width: none; transform: translate(0); }
+        .thiep-demo { width: min(390px, 100%); height: 840px; overflow: hidden auto; border-radius: 18px; box-shadow: 0 20px 40px -18px rgba(60,50,40,.5); background: #fff; scrollbar-width: none; transform: translate(0); }
       `}</style>
 
       <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 18, fontSize: 13, fontFamily: "system-ui" }}>
@@ -107,7 +107,7 @@ export default function ThiepDemo() {
         {WEDDING_TEMPLATE_CATALOG.filter((t) => t.group === "phone").map((t) => {
           const inv = { id: t.name, owner_id: "", contract_id: null, slug: "demo", edit_token: "demo", template: t.name, config, published: true, created_at: "", updated_at: "" } as WeddingInvitation;
           return (
-            <div key={t.name} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div key={t.name} style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 0, maxWidth: "100%" }}>
               <div style={{ fontFamily: "system-ui", fontSize: 13, color: "#5f594e" }}>
                 <b>{t.label}</b> — {t.tagline} <code style={{ fontSize: 11, color: "#8a8274" }}>{t.name}</code>
               </div>
@@ -131,11 +131,14 @@ export function ThiepEditorDemo() {
   const [template, setTemplate] = useState("sen");
   const inv = { id: "demo", owner_id: "", contract_id: null, slug: "demo", edit_token: "demo", template, config: CONFIG, published: true, created_at: "", updated_at: "" } as WeddingInvitation;
   return (
-    <div style={{ display: "flex", gap: 0, height: "100vh", background: "#fafaf9", fontFamily: "system-ui" }}>
+    <div className="thiep-editor-demo" style={{ display: "flex", gap: 0, height: "100vh", background: "#fafaf9", fontFamily: "system-ui" }}>
+      {/* Điện thoại: xếp chồng như trình sửa thật (bên đó khung xem trước là lớp
+          phủ toàn màn) — hai cột cạnh nhau ở 375px chỉ đo ra tràn ngang giả. */}
+      <style>{`@media (max-width: 700px) { .thiep-editor-demo { flex-direction: column; height: auto !important; } .thiep-editor-demo > div { flex: none !important; width: 100%; } .thiep-editor-demo > div:last-child { height: 900px; border-left: 0 !important; } }`}</style>
       <div style={{ flex: "1 1 58%", overflow: "auto", padding: 16 }}>
         <TemplateGallery value={template} onChange={setTemplate} cover={CONFIG.cover_url} bride="Phương Nhi" groom="Anh Tuấn" />
       </div>
-      <div style={{ flex: "0 0 42%", borderLeft: "1px solid #e7e5e4", background: "#fff" }}>
+      <div style={{ flex: "0 0 42%", minWidth: 0, borderLeft: "1px solid #e7e5e4", background: "#fff" }}>
         <PreviewPane inv={inv} wishes={WISHES} guest="Chị Ngọc Hân" publicUrl="/thiep/demo" />
       </div>
     </div>

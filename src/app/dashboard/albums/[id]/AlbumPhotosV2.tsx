@@ -5,7 +5,7 @@ import {
   Check, Copy, ExternalLink, FileText, FolderOpen, Heart, ImageIcon, Images, Link2, MessageSquareText, Plus, RefreshCw,
   Star, Trash2,
 } from "lucide-react";
-import { isFolderLink, stripExtension, thumbnailUrl } from "@/lib/drive";
+import { isFolderLink, stripExtension, coverImageUrl } from "@/lib/drive";
 import { noAccent } from "@/lib/studio-nav";
 import { Badge, Empty, Field, InfoList, Toolbar, btn, iconBtn, inputCls } from "@/components/v2/kit";
 import { Drawer, Menu, SearchInput, Segmented } from "@/components/v2/kit-client";
@@ -238,7 +238,7 @@ export function PhotosTabV2({
                           key={p.id}
                           p={p}
                           picked={e.pickedIds.has(p.id)}
-                          cover={e.form.cover_url === thumbnailUrl(p.drive_file_id, 800)}
+                          cover={e.form.cover_url === coverImageUrl(p.drive_file_id)}
                           onOpen={() => setOpenId(p.id)}
                           onCover={() => void e.setCover(p.drive_file_id)}
                           onRemove={() => void e.removePhoto(p.id)}
@@ -349,7 +349,7 @@ function PhotoDrawer({
 }) {
   if (!photo) return <Drawer open={false} onClose={onClose} title="">{null}</Drawer>;
   const src = e.sources.find((s) => s.id === photo.source_id);
-  const isCover = e.form.cover_url === thumbnailUrl(photo.drive_file_id, 800);
+  const isCover = e.form.cover_url === coverImageUrl(photo.drive_file_id);
   const notes = picks.map((s) => (s.client_note || s.photographer_note || "").trim()).filter(Boolean);
   const who = Array.from(new Set(picks.map((s) => s.client_name || `Mã ${shortCode(s.session_id)}`)));
   return (

@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { getProfileById, requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { docBanKe, dungSqlBuThieu, soiDatabase } from "@/lib/db-thieu";
+import { durableAllowed } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -38,6 +39,7 @@ const CHO_PHEP: Record<string, string> = {
   "doi-soat-ngan-hang": "doi-soat-ngan-hang.sql",
   "huy-doi-lich": "huy-doi-lich.sql",
   "ghep-layout": "ghep-layout.sql",
+  "gioi-han-tan-suat": "gioi-han-tan-suat.sql",
   "cap-nhat": "cap-nhat.sql",
   "setup-all": "setup-all.sql",
 };
@@ -62,6 +64,11 @@ export async function GET(_req: Request, props: { params: Promise<{ ten: string 
    * tạo. Đúng cái bẫy đã làm mất mấy vòng đầu.
    */
   if (params.ten === "bu-thieu") {
+    // Mỗi lượt soi ~100 bảng bằng khoá dịch vụ (tới 60 giây) — tài khoản nào
+    // cũng gọi được, nên giới hạn theo người để không ai bấm lặp làm nghẽn DB.
+    if (!(await durableAllowed(`setup-sql-bu-thieu:${user.id}`, 6, 10 * 60_000))) {
+      return NextResponse.json({ error: "rate_limited" }, { status: 429 });
+    }
     const ke = await docBanKe();
     const sql = await dungSqlBuThieu(await soiDatabase(createAdminClient(), ke));
     return new NextResponse(sql, {

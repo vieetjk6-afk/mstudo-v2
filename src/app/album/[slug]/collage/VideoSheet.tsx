@@ -90,6 +90,15 @@ export default function VideoSheet({
     };
   }, [driveOf, rawSrc]);
 
+  /** Đổi cài đặt sau khi đã có video → bỏ video cũ (khác nhạc / thời lượng), về nút "Tạo video". */
+  const reset = () => {
+    if (phase === "prep" || phase === "rec") return;
+    // URL của video cũ được effect dọn [out] ở trên thu hồi khi out đổi.
+    setOut(null);
+    setMsg(null);
+    setPhase("idle");
+  };
+
   async function make() {
     if (phase === "prep" || phase === "rec") return;
     // iPhone chỉ cho mở âm thanh trong đúng lượt chạm — mở ngay, trước mọi bước chờ.
@@ -219,7 +228,11 @@ export default function VideoSheet({
                 type="button"
                 aria-pressed={music === m.v}
                 disabled={busy}
-                onClick={() => setMusic(m.v)}
+                onClick={() => {
+                  if (m.v === music) return;
+                  setMusic(m.v);
+                  reset();
+                }}
                 className="h-10 rounded-full px-3.5 text-[13.5px] font-semibold"
                 style={music === m.v ? { background: "var(--acS)", color: "var(--ac)", border: "1.5px solid var(--ac)" } : { background: "var(--sf2)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
               >
@@ -229,7 +242,16 @@ export default function VideoSheet({
           </div>
           {music === "file" ? (
             <label className="mt-2 flex items-center gap-2 text-[13px]" style={{ color: "var(--tx2)" }}>
-              <input type="file" accept="audio/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="max-w-full text-[13px]" />
+              <input
+                type="file"
+                accept="audio/*"
+                disabled={busy}
+                onChange={(e) => {
+                  setFile(e.target.files?.[0] ?? null);
+                  reset();
+                }}
+                className="max-w-full text-[13px]"
+              />
             </label>
           ) : (
             <p className="mt-1.5 text-[11.5px]" style={{ color: "var(--tx3)" }}>
@@ -248,7 +270,11 @@ export default function VideoSheet({
                 type="button"
                 aria-pressed={secPer === sec}
                 disabled={busy}
-                onClick={() => setSecPer(sec)}
+                onClick={() => {
+                  if (sec === secPer) return;
+                  setSecPer(sec);
+                  reset();
+                }}
                 className="h-10 rounded-full px-4 text-[13.5px] font-semibold"
                 style={secPer === sec ? { background: "var(--ac)", color: "#fff" } : { background: "var(--sf2)", color: "var(--tx2)", border: "1px solid var(--bd)" }}
               >

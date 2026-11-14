@@ -62,3 +62,30 @@ export function depositFor(policyAmount: number, packagePrice: number | null | u
   const pkg = packagePrice != null && Number.isFinite(packagePrice) ? Math.max(0, Math.round(packagePrice)) : 0;
   return pkg > 0 ? Math.min(base, pkg) : base;
 }
+
+/**
+ * Tổng giá các gói khách chọn, ĐỐI CHIẾU với bảng giá thật của studio — hoặc
+ * null nếu không đối chiếu được.
+ *
+ * Vì sao: giá gói do TRÌNH DUYỆT gửi lên. Trước đây số đó đi thẳng vào
+ * depositFor() để kẹp tiền cọc, nên ai cũng gửi được `package_price: 1000`, trả
+ * 1.000đ, và webhook SePay tự đánh dấu "Đã nhận cọc". Chỉ tin giá khi MỌI gói
+ * có giá đều khớp một dòng đang bật trong bảng giá (tên trên form có thể kèm
+ * tiền tố "Bảng giá · " — xem book/[token]/page.tsx).
+ */
+export function verifiedPackageTotal(
+  chosen: { name: string; price: number | null }[] | undefined,
+  pricelist: { name: string; price: number }[],
+): number | null {
+  const priced = (chosen ?? []).filter((p) => p.price != null);
+  if (priced.length === 0) return null;
+  let total = 0;
+  for (const p of priced) {
+    const hit = pricelist.some(
+      (row) => row.price === p.price && (p.name === row.name || p.name.endsWith(` · ${row.name}`)),
+    );
+    if (!hit) return null;
+    total += p.price as number;
+  }
+  return total;
+}

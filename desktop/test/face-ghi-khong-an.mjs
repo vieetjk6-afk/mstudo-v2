@@ -45,6 +45,8 @@ const ok = (name, cond, note = "") => {
 function fakeDb({ soAnh, giuMoc }) {
   const photos = Array.from({ length: soAnh }, (_, i) => ({
     id: `p${i}`,
+    album_id: "a1",
+    position: i,
     drive_file_id: `d${i}`,
     name: `anh${i}.jpg`,
     is_video: false,
@@ -53,35 +55,55 @@ function fakeDb({ soAnh, giuMoc }) {
   const stats = { updateCalls: 0, verifyCalls: 0, faceUpserts: 0 };
 
   const builder = (table, op, payload) => {
-    let ids = null;
+    // Bộ lọc PostgREST tối thiểu mà scanAlbum dùng (eq / neq / is null / not
+    // null / in / limit) — để câu "chỉ đọc ảnh còn phải quét" chạy thật trên dữ
+    // liệu giả, chứ không phải được mock trả sẵn.
+    const eqs = [];
+    const neqs = [];
+    const isNull = [];
+    const notNull = [];
+    let inF = null;
+    let gioiHan = Infinity;
     let wantCount = false;
-    let notNullCol = null;
+    let head = false;
+    const loc = () =>
+      photos.filter(
+        (p) =>
+          eqs.every(([c, v]) => p[c] === v) &&
+          neqs.every(([c, v]) => p[c] !== v) &&
+          isNull.every((c) => p[c] == null) &&
+          notNull.every((c) => p[c] != null) &&
+          (!inF || inF[1].includes(p[inF[0]]))
+      );
     const self = {
       select(_cols, opts) {
         if (opts?.count === "exact") wantCount = true;
+        if (opts?.head) head = true;
         return self;
       },
-      eq() { return self; },
+      eq(c, v) { eqs.push([c, v]); return self; },
+      neq(c, v) { neqs.push([c, v]); return self; },
+      is(c, v) { if (v === null) isNull.push(c); return self; },
       order() { return self; },
-      not(col, _op, _val) { notNullCol = col; return self; },
-      in(_col, list) { ids = list; return self; },
-      range(from, to) {
-        const slice = photos.slice(from, to + 1);
-        return Promise.resolve({ data: slice, error: null });
-      },
+      limit(n) { gioiHan = n; return self; },
+      not(col, op, val) { if (op === "is" && val === null) notNull.push(col); return self; },
+      in(col, list) { inF = [col, list]; return self; },
       then(res) {
         if (table === "photos" && op === "update") {
           stats.updateCalls++;
-          const hit = photos.filter((p) => ids.includes(p.id));
+          const hit = loc();
           // Giá trị chỉ nằm lại khi database LÀNH. RETURNING trả đủ dòng ở cả
           // hai trường hợp — đó chính là điểm mù của bản trước.
           if (giuMoc) for (const p of hit) p.faces_scanned_at = payload.faces_scanned_at;
           return res({ data: hit.map((p) => ({ id: p.id })), error: null });
         }
-        if (table === "photos" && op === "select" && wantCount && notNullCol) {
-          stats.verifyCalls++;
-          const n = photos.filter((p) => ids.includes(p.id) && p.faces_scanned_at != null).length;
-          return res({ data: null, count: n, error: null });
+        if (table === "photos" && op === "select") {
+          const hit = loc();
+          if (head) {
+            if (notNull.length) stats.verifyCalls++;
+            return res({ data: null, count: hit.length, error: null });
+          }
+          return res({ data: hit.slice(0, gioiHan), count: wantCount ? hit.length : null, error: null });
         }
         if (table === "album_faces") {
           stats.faceUpserts++;

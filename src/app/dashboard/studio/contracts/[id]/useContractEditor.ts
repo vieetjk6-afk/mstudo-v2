@@ -786,27 +786,36 @@ export function useContractEditor(props: ContractEditorProps) {
   useEffect(() => {
     if (total <= 0 || plan.length > 0 || creatingDeposit.current) return;
     creatingDeposit.current = true;
+    const forTotal = total;
     (async () => {
       const { data } = await supabase
         .from("contract_payment_plan")
         .insert({ contract_id: contract.id, label: "Cọc hợp đồng", amount: depositAmt, position: 0 })
         .select("*")
         .single();
-      if (data) setPlan((p) => (p.length === 0 ? [data as ContractPaymentPlan] : p));
+      // Gõ giá từng phím: tổng đã chạy tiếp trong lúc chờ insert. Đánh dấu cọc
+      // này khớp tổng LÚC TẠO để effect dưới nhận ra là cọc tự động và tính lại,
+      // không coi nhầm là cọc studio tự đặt rồi kẹt ở số của phím đầu tiên.
+      if (data) {
+        prevTotal.current = forTotal;
+        setPlan((p) => (p.length === 0 ? [data as ContractPaymentPlan] : p));
+      }
       creatingDeposit.current = false;
     })();
   }, [total, plan.length, depositAmt, contract.id, supabase]);
 
   /* Tổng hợp đồng ĐỔI (sửa hạng mục, giá, giảm giá, phụ lục) → đợt thu tự đổi
-     theo: đợt cọc chưa thu tính lại theo % cọc của studio, đợt chưa thu cuối
-     cùng nhận phần còn lại (syncPlanToTotal). Trước đây chỉ đợt tên đúng "Cọc
-     hợp đồng" mà chưa sửa tay mới đổi — hợp đồng tạo từ form ("Cọc giữ lịch"…)
-     thì cọc và đợt còn lại đứng yên, studio phải xoá rồi thêm lại đợt. Đợt đã
-     thu không bao giờ bị đụng. */
+     theo: đợt cọc chưa thu mà còn đúng số tự tính thì tính lại theo % cọc của
+     studio (cọc studio sửa tay thì giữ), đợt chưa thu cuối cùng nhận phần còn
+     lại (syncPlanToTotal). Đợt đã thu không bao giờ bị đụng.
+     `prevTotal` = tổng mà kế hoạch đang khớp. Tổng về 0 (xoá hết hạng mục)
+     thì syncPlanToTotal không đụng gì, nên KHÔNG ghi 0 vào đây — ghi thì lúc
+     thêm lại hạng mục, cọc tự động bị coi là cọc sửa tay (vì % của 0 là 0). */
   useEffect(() => {
-    if (prevTotal.current === total) return;
+    if (prevTotal.current === total || total <= 0) return;
+    const prev = prevTotal.current;
     prevTotal.current = total;
-    const next = syncPlanToTotal(plan, total, depositPercent > 0 ? depositAmt : null);
+    const next = syncPlanToTotal(plan, total, { prevTotal: prev, depositPercent });
     const changed = next.filter((x, i) => x.amount !== plan[i].amount);
     if (!changed.length) return;
     setPlan(next);
@@ -815,7 +824,7 @@ export function useContractEditor(props: ContractEditorProps) {
     for (const x of changed) {
       void supabase.from("contract_payment_plan").update({ amount: x.amount }).eq("id", x.id).then(() => undefined);
     }
-  }, [total, plan, depositAmt, depositPercent, supabase]);
+  }, [total, plan, depositPercent, supabase]);
   const payroll = crew.reduce((s, c) => s + (Number(c.salary) || 0), 0);
   const paidPayroll = crew.filter((c) => c.paid).reduce((s, c) => s + (Number(c.salary) || 0), 0);
   const expenseTotal = expenses.reduce((s, e) => s + (e.amount || 0), 0);

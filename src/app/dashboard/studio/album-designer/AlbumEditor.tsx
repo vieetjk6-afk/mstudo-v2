@@ -106,10 +106,12 @@ function AlbumEditorV1({ size, tpl, onBack, initial }: AlbumEditorProps) {
       </div>
 
       {/* ── Khu làm việc ── */}
-      <div className="flex items-start gap-3">
+      {/* Ba cột (ảnh · trang · thuộc tính) chỉ đủ chỗ trên màn rộng; điện thoại
+          xếp chồng — trước đây cột thuộc tính 280px đẩy cả trang tràn ngang. */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
         {/* Thư viện ảnh (thu gọn được) */}
         {showLib && (
-          <div className="w-[200px] flex-none rounded-2xl p-3" style={panel}>
+          <div className="w-full flex-none rounded-2xl p-3 lg:w-[200px]" style={panel}>
             <p className="text-sm font-extrabold">Thư viện ảnh</p>
             <p className="mb-2 text-[11.5px]" style={{ color: "var(--text2)" }}>{lib.length} ảnh · {scenesUsed} đã dùng</p>
             <div className="mb-2 flex gap-1">
@@ -178,7 +180,7 @@ function AlbumEditorV1({ size, tpl, onBack, initial }: AlbumEditorProps) {
         </div>
 
         {/* Panel thuộc tính (theo ngữ cảnh) */}
-        <div className="w-[280px] flex-none rounded-2xl p-3" style={panel}>
+        <div className="w-full flex-none rounded-2xl p-3 lg:w-[280px]" style={panel}>
           {/* Công cụ trang — luôn hiển thị */}
           <p className="mb-2 text-sm font-extrabold">{cur === 0 ? "Bìa" : `Trang ${cur + 1}`} <span className="text-[11px] font-normal" style={{ color: "var(--text3)" }}>· {size.name}</span></p>
           <div className="mb-2 grid grid-cols-2 gap-1.5">

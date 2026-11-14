@@ -153,17 +153,23 @@ check("giảm không quá tạm tính", discountAmount(5_000_000, 9_000_000, "vn
 }
 
 // ── Đợt thu tự đổi theo tổng hợp đồng ──────────────────────────────────────
+const amounts = (rows) => rows.map((p) => p.amount);
 {
+  // Kế hoạch mặc định của hợp đồng 20tr, cọc 25% → 5tr (đúng số tự tính).
   const plan = [
     { label: "Cọc giữ lịch", amount: 5_000_000, due: "" },
     { label: "Thanh toán khi giao sản phẩm", amount: 15_000_000, due: "" },
   ];
-  const up = rebalancePlan(plan, 28_000_000, depositByPercent(28_000_000, 25));
-  check("tổng tăng: cọc tính lại 25%, đợt cuối nhận phần còn lại", up.map((p) => p.amount), [7_000_000, 21_000_000]);
-  const pct30 = rebalancePlan(plan, 20_000_000, depositByPercent(20_000_000, 30));
-  check("studio đặt 30%", pct30.map((p) => p.amount), [6_000_000, 14_000_000]);
-  check("studio tắt cọc tự động (null) → giữ cọc đã gõ, đợt cuối gánh chênh", rebalancePlan(plan, 25_000_000, null).map((p) => p.amount), [5_000_000, 20_000_000]);
-  check("chỉ có đợt cọc → thêm đợt phần còn lại", rebalancePlan([plan[0]], 20_000_000, 5_000_000).map((p) => p.amount), [5_000_000, 15_000_000]);
+  const at20 = { prevTotal: 20_000_000, depositPercent: 25 };
+  const up = rebalancePlan(plan, 28_000_000, at20);
+  check("tổng tăng: cọc tự động tính lại 25%, đợt cuối nhận phần còn lại", amounts(up), [7_000_000, 21_000_000]);
+  const plan30 = [
+    { label: "Cọc giữ lịch", amount: 6_000_000, due: "" },
+    { label: "Thanh toán khi giao sản phẩm", amount: 14_000_000, due: "" },
+  ];
+  check("studio đặt 30%: cọc tự động đi theo 30%", amounts(rebalancePlan(plan30, 30_000_000, { prevTotal: 20_000_000, depositPercent: 30 })), [9_000_000, 21_000_000]);
+  check("studio tắt cọc tự động (0%) → giữ cọc đã gõ, đợt cuối gánh chênh", amounts(rebalancePlan(plan, 25_000_000, { prevTotal: 20_000_000, depositPercent: 0 })), [5_000_000, 20_000_000]);
+  check("chỉ có đợt cọc → thêm đợt phần còn lại", amounts(rebalancePlan([plan[0]], 24_000_000, at20)), [6_000_000, 18_000_000]);
   const paid = syncPlanToTotal(
     [
       { label: "Cọc hợp đồng", amount: 5_000_000, paid: true },
@@ -171,10 +177,76 @@ check("giảm không quá tạm tính", discountAmount(5_000_000, 9_000_000, "vn
       { label: "Thanh toán cuối", amount: 10_000_000, paid: false },
     ],
     24_000_000,
-    6_000_000
+    at20
   );
-  check("màn chi tiết: cọc ĐÃ THU không đổi, đợt giữa giữ, đợt chưa thu cuối gánh chênh", paid.map((p) => p.amount), [5_000_000, 5_000_000, 14_000_000]);
+  check("màn chi tiết: cọc ĐÃ THU không đổi, đợt giữa giữ, đợt chưa thu cuối gánh chênh", amounts(paid), [5_000_000, 5_000_000, 14_000_000]);
   check("% cọc mặc định 25, làm tròn 500k, tối thiểu 500k", [depositByPercent(18_000_000), depositByPercent(1_000_000), depositByPercent(10_000_000, 0)], [4_500_000, 500_000, 0]);
+}
+
+/* ── Cọc studio sửa tay KHÔNG bị ghi đè khi tổng đổi ─────────────────────
+   Lỗi thật: hợp đồng 20tr, studio thoả thuận cọc 10tr (còn lại 10tr), thêm
+   một hạng mục 300k → cọc nhảy về 5tr, còn lại 15,3tr, QR cổng khách đổi
+   theo. Luật: cọc chỉ tự tính lại khi còn đúng số % của tổng CŨ. */
+{
+  const rule = { prevTotal: 20_000_000, depositPercent: 25 };
+  const custom = [
+    { label: "Cọc hợp đồng", amount: 10_000_000, paid: false },
+    { label: "Thanh toán cuối", amount: 10_000_000, paid: false },
+  ];
+  check("cọc sửa tay giữ nguyên, đợt cuối gánh 300k thêm", amounts(syncPlanToTotal(custom, 20_300_000, rule)), [10_000_000, 10_300_000]);
+  check("không sửa mảng đầu vào", amounts(custom), [10_000_000, 10_000_000]);
+  const auto = [
+    { label: "Cọc hợp đồng", amount: 5_000_000, paid: false },
+    { label: "Thanh toán cuối", amount: 15_000_000, paid: false },
+  ];
+  check("cọc chưa sửa (đúng 25% của 20tr) vẫn đi theo % khi lên 30tr", amounts(syncPlanToTotal(auto, 30_000_000, rule)), [7_500_000, 22_500_000]);
+
+  // Bước 5 của form tạo: studio gõ cọc 10tr rồi quay lại đổi gói.
+  const step5 = [
+    { label: "Cọc giữ lịch", amount: 10_000_000, due: "" },
+    { label: "Thanh toán khi giao sản phẩm", amount: 10_000_000, due: "" },
+  ];
+  check("form tạo: cọc gõ ở bước 5 giữ khi đổi gói", amounts(rebalancePlan(step5, 23_500_000, rule)), [10_000_000, 13_500_000]);
+
+  /* Màn chi tiết đồng bộ MỖI PHÍM (MoneyInput) và nối tiếp kết quả: cọc tự
+     động phải theo được cả chuỗi tổng trung gian, cọc sửa tay phải sống sót. */
+  const chain = (rows, totals) => {
+    let prev = 20_000_000;
+    for (const t of totals) {
+      rows = syncPlanToTotal(rows, t, { prevTotal: prev, depositPercent: 25 });
+      prev = t;
+    }
+    return amounts(rows);
+  };
+  const typing = [20_000_003, 20_000_030, 20_000_300, 20_003_000, 20_030_000, 20_300_000, 26_300_000];
+  check("gõ từng phím: cọc tự động vẫn ra đúng % của tổng cuối", chain(auto, typing), [6_500_000, 19_800_000]);
+  check("gõ từng phím: cọc sửa tay vẫn giữ 10tr", chain(custom, typing), [10_000_000, 16_300_000]);
+
+  // Đợt cọc ĐÃ THU: không bao giờ đổi, kể cả khi tổng tụt dưới số đã thu.
+  const paidDep = [
+    { label: "Cọc hợp đồng", amount: 10_000_000, paid: true },
+    { label: "Thanh toán cuối", amount: 10_000_000, paid: false },
+  ];
+  check("cọc đã thu giữ nguyên khi tổng tăng", amounts(syncPlanToTotal(paidDep, 20_300_000, rule)), [10_000_000, 10_300_000]);
+  check("cọc đã thu giữ nguyên khi tổng tụt dưới nó, đợt cuối về 0 (không âm)", amounts(syncPlanToTotal(paidDep, 8_000_000, rule)), [10_000_000, 0]);
+
+  /* Tổng tụt dưới cọc sửa tay: cọc kẹp về đúng số khách còn phải trả (tổng −
+     đợt đã thu), đợt cuối về 0 — không bao giờ đòi cọc nhiều hơn cả hợp đồng. */
+  check("tổng tụt dưới cọc sửa tay → cọc = tổng, đợt cuối 0", amounts(syncPlanToTotal(custom, 8_000_000, rule)), [8_000_000, 0]);
+  check(
+    "tổng tụt dưới cọc, có đợt đã thu → cọc = tổng − đã thu",
+    amounts(syncPlanToTotal(
+      [
+        { label: "Đợt 1", amount: 3_000_000, paid: true },
+        { label: "Cọc bổ sung", amount: 10_000_000, paid: false },
+        { label: "Thanh toán cuối", amount: 7_000_000, paid: false },
+      ],
+      8_000_000,
+      rule
+    )),
+    [3_000_000, 5_000_000, 0]
+  );
+  check("form tạo: chỉ có cọc gõ tay, tổng tụt dưới cọc → một đợt đúng bằng tổng", amounts(rebalancePlan([step5[0]], 8_000_000, rule)), [8_000_000]);
 }
 
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);

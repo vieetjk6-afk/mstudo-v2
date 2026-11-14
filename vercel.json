@@ -33,6 +33,10 @@
     {
       "path": "/api/cron/cleanup-wedding-photos",
       "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/cron/backup",
+      "schedule": "15 20 * * *"
     }
   ]
 }

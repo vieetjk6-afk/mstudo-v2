@@ -18,6 +18,7 @@ import {
   DEFAULTS, uid, isLightHex, contrastInk,
   type AlbumLite, type Device, type PriceItem, type PriceListOption, type SiteViewStats,
 } from "./builder-parts";
+import { refreshPublicSite } from "@/lib/site-refresh-client";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIC của trình tạo website kéo-thả — trạng thái khối/theme, hoàn tác, kéo
@@ -106,12 +107,16 @@ export function useCanvasBuilder({ site, initialBlocks, canPublish, mainHost }: 
   }
 
   // ── Persistence ───────────────────────────────────────────────────────
+  // Sau mỗi lần ghi: báo máy chủ bỏ bản nhớ 5 phút của trang công khai
+  // (refreshPublicSite tự gom các lần lưu dồn dập thành một lượt gọi).
   const persistTheme = useCallback(async (th: SiteTheme) => {
     await supabase.from("sites").update({ theme: th, updated_at: new Date().toISOString() }).eq("id", site.id);
+    refreshPublicSite();
   }, [site.id, supabase]);
 
   const persistBlock = useCallback(async (b: SiteBlock) => {
     await supabase.from("site_blocks").update({ config: b.config, visible: b.visible }).eq("id", b.id);
+    refreshPublicSite();
   }, [supabase]);
 
   // Lưu lại toàn bộ thứ tự/khối — dùng khi kéo thả, thêm/xoá, áp mẫu, hoàn tác.
@@ -132,6 +137,7 @@ export function useCanvasBuilder({ site, initialBlocks, canPublish, mainHost }: 
     if (rows.length) del = del.not("id", "in", `(${rows.map((r) => r.id).join(",")})`);
     const { error } = await del;
     if (error) flash(`Chưa dọn được khối cũ: ${error.message}`);
+    refreshPublicSite();
   }, [persistTheme, site.id, supabase]);
 
   // ── Block mutations ───────────────────────────────────────────────────

@@ -159,12 +159,19 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
 
   /* Hỏi máy chủ vài giây một lần xem nhân viên studio có nhắn gì không.
      Chỉ chạy khi khung chat đang MỞ — khách đóng khung rồi thì không có gì để
-     hiển thị, hỏi tiếp chỉ tốn băng thông của cả hai bên. */
+     hiển thị, hỏi tiếp chỉ tốn băng thông của cả hai bên. Cùng lý do đó, tab bị
+     ẩn thì bỏ nhịp (khung chat tự mở, nên tab nằm nền cả buổi vẫn hỏi mỗi 6 giây
+     — mỗi nhịp là một lượt gọi hàm + truy vấn DB), và hỏi bù NGAY khi khách quay lại. */
   const lastStaffAtRef = useRef<string | null>(null);
   useEffect(() => {
     if (!open) return;
     let stop = false;
+    // Một lượt một lúc: lượt hỏi bù lúc quay lại tab trùng nhịp định kỳ thì hai
+    // lượt cùng mốc `after` sẽ chèn cùng một tin của nhân viên hai lần.
+    let dangHoi = false;
     const tick = async () => {
+      if (dangHoi || document.hidden) return;
+      dangHoi = true;
       try {
         const qs = new URLSearchParams({ sessionId });
         if (lastStaffAtRef.current) qs.set("after", lastStaffAtRef.current);
@@ -182,13 +189,20 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
         }
       } catch {
         /* mất mạng một nhịp → lần sau hỏi lại */
+      } finally {
+        dangHoi = false;
       }
     };
-    tick();
+    const onVisibility = () => {
+      if (!document.hidden) void tick();
+    };
+    void tick();
     const id = setInterval(tick, 6000);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       stop = true;
       clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [open, sessionId]);
 

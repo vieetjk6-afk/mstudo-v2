@@ -1,9 +1,11 @@
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { notFound } from "next/navigation";
 import { cookies } from "next/headers";
 import type { Metadata, Viewport } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { loadSiteBundle, type SiteData } from "@/lib/site-loader";
+import { siteHostTag } from "@/lib/public-cache";
 import SiteRenderer from "@/components/SiteRenderer";
 import type { Site } from "@/lib/types";
 import { BRAND, getService, tr, type Lang } from "@/lib/vieetjk/content";
@@ -50,31 +52,63 @@ function isVieetjkKey(key: string): boolean {
  * đó, tiết kiệm trọn một vòng chờ trên MỌI lượt xem trang công khai của studio.
  */
 type SiteMatch = { site: Site; via: "custom_domain" | "subdomain" };
+type Tenant = { match: SiteMatch; data: SiteData | null };
 
-const loadSiteRow = cache(async (key: string): Promise<SiteMatch | null> => {
+/** Host không khớp website nào — ném ra để KHÔNG nhớ (bot dò tên miền ngẫu nhiên). */
+class NoSite extends Error {}
+
+/**
+ * Dòng `sites` + toàn bộ dữ liệu trang (khối, album, bảng giá, đánh giá).
+ * strict: đang được nhớ → câu nào lỗi thì ném.
+ */
+async function readTenant(k: string, strict: boolean): Promise<Tenant> {
   const db = createAdminClient();
-  const k = key.toLowerCase();
+  let match: SiteMatch | null = null;
   if (k.includes(".")) {
-    const { data } = await db.from("sites").select("*").eq("custom_domain", k).maybeSingle();
-    if (data) return { site: data as Site, via: "custom_domain" };
+    const r = await db.from("sites").select("*").eq("custom_domain", k).maybeSingle();
+    if (r.error && strict) throw new Error(r.error.message);
+    if (r.data) match = { site: r.data as Site, via: "custom_domain" };
   }
-  const { data } = await db.from("sites").select("*").eq("subdomain", k).maybeSingle();
-  return data ? { site: data as Site, via: "subdomain" } : null;
-});
-
-const siteHasVieetjkTemplate = async (key: string): Promise<boolean> =>
-  (await loadSiteRow(key))?.site.template === "vieetjk";
-
-const loadTenant = cache(async (key: string): Promise<SiteData | null> => {
-  const match = await loadSiteRow(key);
-  if (!match) return null;
+  if (!match) {
+    const r = await db.from("sites").select("*").eq("subdomain", k).maybeSingle();
+    if (r.error && strict) throw new Error(r.error.message);
+    if (r.data) match = { site: r.data as Site, via: "subdomain" };
+  }
+  if (!match) throw new NoSite();
+  // Mẫu vieetjk dựng bằng code riêng (loadVieetjkData) — không cần bộ dữ liệu builder.
+  if (match.site.template === "vieetjk") return { match, data: null };
   // Tên miền riêng phải ĐÃ XÁC MINH mới được phục vụ site — nếu không, bất kỳ ai
   // trỏ DNS về mstudo rồi khai bừa domain đó đều dựng được site của studio khác
   // dưới tên miền của mình.
-  if (match.via === "custom_domain" && !match.site.custom_domain_verified) return null;
-  if (!match.site.published) return null;
-  return loadSiteBundle(createAdminClient(), match.site, true);
+  if (match.via === "custom_domain" && !match.site.custom_domain_verified) return { match, data: null };
+  if (!match.site.published) return { match, data: null };
+  return { match, data: await loadSiteBundle(db, match.site, true, { strict }) };
+}
+
+/**
+ * NHỚ 5 PHÚT GIỮA CÁC REQUEST: trang website studio bị bot tìm kiếm / bot xem
+ * trước link quét liên tục, mỗi lượt trước đây đọc lại `sites` + năm bảng khác.
+ * Studio bấm lưu trong trình dựng web / đổi tên miền / xuất bản thì bỏ nhớ ngay
+ * (/api/site/revalidate, /api/site/domain, /api/site/subdomain) — đổi bảng giá,
+ * album, đánh giá thì cập nhật trễ tối đa 5 phút.
+ */
+const loadTenantCached = cache(async (key: string): Promise<Tenant | null> => {
+  const k = key.trim().toLowerCase();
+  try {
+    return await unstable_cache(() => readTenant(k, true), ["site-tenant-v1", k], {
+      revalidate: 300,
+      tags: [siteHostTag(k)],
+    })();
+  } catch (e) {
+    if (e instanceof NoSite) return null;
+    return readTenant(k, false).catch(() => null);
+  }
 });
+
+const siteHasVieetjkTemplate = async (key: string): Promise<boolean> =>
+  (await loadTenantCached(key))?.match.site.template === "vieetjk";
+
+const loadTenant = async (key: string): Promise<SiteData | null> => (await loadTenantCached(key))?.data ?? null;
 
 /**
  * Metadata trang ai.vieetjk.com (Công ty giải pháp công nghệ Vieetjk) — trang

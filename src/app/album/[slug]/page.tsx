@@ -1,11 +1,11 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
+import { filterDeliveryPhotos } from "@/lib/photos";
 import { faceChips, type PersonChip } from "@/lib/face-people";
 import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 import { isDeliveryPhase } from "@/lib/album-phase";
-import { getAlbumOwner } from "@/lib/album-owner";
+import { getAlbumOwner, getAlbumOwnerHost } from "@/lib/album-owner";
 import StudioBrandMark from "@/components/StudioBrandMark";
 import GalleryView from "./GalleryView";
 import GalleryViewV2 from "./GalleryViewV2";
@@ -14,11 +14,11 @@ import { customerUiV2 } from "@/lib/ui-server";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { getOriginalFolders } from "@/lib/album-original";
-import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
 import { loadPrintState } from "@/lib/album-print";
 import { loadCollageState } from "@/lib/album-collage";
 import { studioUrl } from "@/lib/hosts";
+import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -95,19 +95,23 @@ export default async function GalleryPage(
   }
 
   const hasPassword = !album.gallery_pinned && !!album.password_hash;
+  // Phiên bản dữ liệu ảnh / khuôn mặt — khoá nhớ của danh sách ảnh và khuôn mặt
+  // (xem @/lib/album-data-cache). Album có mật khẩu: trang chưa đọc ảnh nào.
+  const versionP = hasPassword ? Promise.resolve("") : albumDataVersion(album.id);
 
   // Chạy song song: brand, ảnh, sources, feedback và gói của chủ studio — gộp
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
   // Chủ album (gói + thương hiệu) lấy từ getAlbumOwner — đã cache theo request
   // nên dùng lại đúng dòng profiles generateMetadata vừa đọc.
-  const [{ brand, profile: owner }, studioHost, allPhotos, { data: s }, { data: feedback }, { data: ppl }, { data: pplLinks }, print, v2, collageInfo] = await Promise.all([
+  const [{ brand, profile: owner }, studioHost, allPhotos, { data: s }, { data: feedback }, peopleData, print, v2, collageInfo] = await Promise.all([
     getAlbumOwner(album.owner_id),
     // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
     // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
-    getStudioHost(admin, album.owner_id),
+    getAlbumOwnerHost(album.owner_id),
+    // Danh sách ảnh nhớ giữa các request (link giao khách mở bởi cả trăm người).
     hasPassword
       ? Promise.resolve(null)
-      : fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position, is_video"),
+      : versionP.then((v) => loadAlbumPhotos(album.id, "id, drive_file_id, name, source_id, position, is_video", v)),
     // drive_url/kind cần cho cả 2 trường hợp: có mật khẩu vẫn cần để tính link
     // Drive (nhưng chỉ gửi cho client SAU khi mở khoá — xem access route).
     admin.from("album_sources").select("id, name, position, stage, drive_url, kind").eq("album_id", album.id).order("position"),
@@ -117,11 +121,17 @@ export default async function GalleryPage(
       .eq("album_id", album.id)
       .eq("approved", true)
       .order("created_at", { ascending: false }),
-    // Nhóm khuôn mặt studio đã gom. `select("*")` có chủ ý: cover_box là cột
-    // thêm sau, liệt kê tên nó ra thì database chưa chạy migration sẽ lỗi CẢ câu
-    // và khối tìm mặt biến mất hẳn — xem ghi chú ở src/app/a/[slug]/page.tsx.
-    admin.from("album_people").select("*").eq("album_id", album.id).order("position"),
-    admin.from("album_photo_people").select("person_id, photo_id").eq("album_id", album.id),
+    // Nhóm khuôn mặt studio đã gom — chỉ đọc khi gói có tìm theo khuôn mặt và
+    // album không khoá, không kéo vector descriptor, nhớ giữa các request.
+    Promise.all([getAlbumOwner(album.owner_id), versionP])
+      .then(([{ profile }, v]) =>
+        loadAlbumPeopleCached(
+          album.id,
+          !hasPassword && planAllowsFaceSearch(effectivePlan(profile?.plan as Plan, profile?.plan_expires_at), profile?.role === "admin"),
+          v,
+        ),
+      )
+      .catch(() => ({ people: [], links: [] })),
     // Ảnh in tặng của hợp đồng (null = không tặng in, hoặc DB chưa chạy
     // migrations/anh_in_tang.sql). Chỉ là id ảnh — gửi cả khi album có mật khẩu.
     loadPrintState(admin, album.id).catch(() => null),
@@ -195,7 +205,7 @@ export default async function GalleryPage(
     // Dựng chip từ TOÀN BỘ ảnh giao khách, không phải lô 300 ảnh đầu: số ảnh
     // trên mỗi khuôn mặt phải đúng ngay từ đầu. Lưới thì tự đầy dần — trang này
     // đã tải nốt phần còn lại trong nền sau khi mở.
-    people = canFaceSearch ? faceChips(ppl ?? [], pplLinks ?? [], new Set(filtered.map((ph) => ph.id))) : [];
+    people = canFaceSearch ? faceChips(peopleData.people, peopleData.links, new Set(filtered.map((ph) => ph.id))) : [];
     if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
     // Share: cần đủ ảnh để lọc theo shareIds. Ngược lại chỉ gửi lô đầu.
     photos = shareMode ? filtered : filtered.slice(0, INITIAL_PHOTOS);

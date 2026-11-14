@@ -18,12 +18,17 @@ export type SiteData = {
  * and the reused data (published albums, active price list, approved feedback).
  * Pass onlyVisible=false for the owner's live preview (shows hidden blocks too).
  */
-export async function loadSiteBundle(db: SupabaseClient, site: Site, onlyVisible = true): Promise<SiteData> {
+export async function loadSiteBundle(
+  db: SupabaseClient,
+  site: Site,
+  onlyVisible = true,
+  opts: { strict?: boolean } = {},
+): Promise<SiteData> {
   const ownerId = site.owner_id;
   let blocksQ = db.from("site_blocks").select("*").eq("site_id", site.id);
   if (onlyVisible) blocksQ = blocksQ.eq("visible", true);
 
-  const [{ data: owner }, { data: blocks }, { data: albums }, { data: pricelist }] = await Promise.all([
+  const [ownerRes, blocksRes, albumsRes, pricelistRes] = await Promise.all([
     db.from("profiles").select("full_name, pl_phone, pl_facebook, booking_token, pl_list_labels").eq("id", ownerId).maybeSingle(),
     blocksQ.order("position"),
     // Chỉ hiện album đã ở giai đoạn GIAO KHÁCH (phase='delivery') và được tích
@@ -34,7 +39,14 @@ export async function loadSiteBundle(db: SupabaseClient, site: Site, onlyVisible
     db.from("studio_pricelist").select("id, name, price, unit, category, description, list_key").eq("owner_id", ownerId).eq("active", true).order("position"),
   ]);
 
-  const albumList = (albums ?? []) as SiteData["albums"];
+  // strict: bản này sắp được NHỚ giữa các request (trang website công khai) —
+  // một câu lỗi thoáng qua thì ném, đừng nhớ một trang thiếu khối / thiếu giá.
+  const firstErr = ownerRes.error ?? blocksRes.error ?? albumsRes.error ?? pricelistRes.error;
+  if (opts.strict && firstErr) throw new Error(firstErr.message);
+  const owner = ownerRes.data;
+  const blocks = blocksRes.data;
+  const pricelist = pricelistRes.data;
+  const albumList = (albumsRes.data ?? []) as SiteData["albums"];
   let feedback: SiteData["feedback"] = [];
   if (albumList.length) {
     const ids = albumList.map((a) => a.id);

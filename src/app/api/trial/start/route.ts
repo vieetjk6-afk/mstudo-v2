@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { planProfilePatch, trialDaysFor, type Plan } from "@/lib/plans";
 
@@ -11,8 +11,7 @@ export const dynamic = "force-dynamic";
  * profiles.trial_used_at.
  */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { plan } = (await req.json().catch(() => ({}))) as { plan?: string };

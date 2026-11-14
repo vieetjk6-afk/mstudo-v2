@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/auth-guards";
 import { listSubFolders } from "@/lib/drive-server";
 import { extractFolderId } from "@/lib/drive";
 
@@ -7,10 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** List sub-folders inside a parent Drive folder (for "split into sub-folders"). */
 export async function POST(req: Request) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await requireUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!process.env.GOOGLE_API_KEY) {
     return NextResponse.json({ error: "GOOGLE_API_KEY chưa cấu hình." }, { status: 200 });

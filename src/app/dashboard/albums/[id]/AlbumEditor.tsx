@@ -29,7 +29,7 @@ import ShareButton from "@/components/ShareButton";
 import ZaloSendButton from "@/components/ZaloSendButton";
 import FilterPhotosButton from "@/components/FilterPhotosButton";
 import PhotoCodeButtons from "@/components/PhotoCodeButtons";
-import { thumbnailUrl, stripExtension } from "@/lib/drive";
+import { thumbnailUrl, stripExtension, coverImageUrl } from "@/lib/drive";
 import { CATEGORY_PRESETS, slugifyVi } from "@/lib/category";
 import { fmtDate, fmtDateTime } from "@/lib/date";
 import { albumShareMessage } from "@/lib/share-messages";
@@ -439,7 +439,7 @@ function AlbumEditorV1({
                                   <Check size={13} />
                                 </span>
                               )}
-                              {form.cover_url === thumbnailUrl(p.drive_file_id, 800) && (
+                              {form.cover_url === coverImageUrl(p.drive_file_id) && (
                                 <span className="absolute left-1.5 top-1.5 rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold uppercase" style={{ background: "var(--ac)", color: "#fff" }}>
                                   {t("cover")}
                                 </span>
