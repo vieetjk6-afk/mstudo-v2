@@ -460,6 +460,32 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok("bộ kể chuyện: mỗi lần tạo ra bộ khác", st1 !== st2);
 }
 
+/* ── Mẫu layout mới: có mặt đúng số ảnh, máy chủ nhận, hình nửa vòm ──────── */
+{
+  const ph = Array.from({ length: 6 }, (_, i) => ({ id: photos[i].id, aspect: i % 3 === 1 ? 1.5 : 0.667, score: 6, hero: i === 0, faces: [[0.4, 0.2, 0.15, 0.2]] }));
+  const want = { 2: ["deco-window"], 3: ["deco-split", "deco-cascade"], 4: ["deco-window", "deco-cascade", "deco-dots", "deco-gallery"], 5: ["deco-dots", "deco-gallery"], 6: ["deco-dots", "deco-gallery"] };
+  const allowedIds = new Set(photos.map((p) => p.id));
+  for (const [n, fams] of Object.entries(want)) {
+    for (const fmt of ["4x5", "9x16", "16x9"]) {
+      const res = composeOptions({ photos: ph.slice(0, Number(n)), format: formatById(fmt), style: styleById("white"), text: "Chúng mình cưới rồi", seed: 3 });
+      const got = new Set(res.map((x) => family(x.recipe)));
+      ok(`mẫu mới cho ${n} ảnh (${fmt})`, fams.every((f) => got.has(f)), [...got].join(","));
+      for (const f of fams) {
+        const r = res.find((x) => family(x.recipe) === f);
+        const pageW = formatById(fmt).w, pageH = formatById(fmt).h;
+        const inside = r.frames.every((fr) => fr.rect.x >= -1 && fr.rect.y >= -1 && fr.rect.x + fr.rect.w <= pageW + 1 && fr.rect.y + fr.rect.h <= pageH + 1);
+        if (!inside) ok(`${f} (${n} ảnh, ${fmt}) nằm trong trang`, false, JSON.stringify(r.frames.map((x) => x.rect)));
+        const doc = { v: 1, formatId: fmt, styleId: "white", seed: 1, mode: "auto", texts: [], photoIds: ph.slice(0, Number(n)).map((p) => p.id), aspects: Object.fromEntries(ph.map((p) => [p.id, p.aspect])), pages: [{ id: "pg1", frames: r.frames, background: "#ffffff", recipe: r.recipe, styleId: "white", ...(r.ornaments ? { ornaments: r.ornaments } : {}) }] };
+        const chk = sanitizeDoc(doc, allowedIds);
+        if (!chk.ok) ok(`${f} (${n} ảnh, ${fmt}): máy chủ nhận`, false, chk.error);
+      }
+    }
+  }
+  const win = composeOptions({ photos: ph.slice(0, 2), format: formatById("4x5"), style: styleById("white"), text: null, seed: 1 }).find((x) => family(x.recipe) === "deco-window");
+  check("cửa sổ vòm: hai ô nửa vòm trái / phải", win.frames.filter((x) => x.kind === "photo").map((x) => x.deco?.shape), ["archL", "archR"]);
+  check("nửa vòm: bo một góc trên, bán kính = bề ngang ô", [shapeRadii("archL", 300, 700), shapeRadii("archR", 300, 700)], [[300, 0, 0, 0], [0, 300, 0, 0]]);
+}
+
 /* ── Gợi ý chọn ảnh: đúng số ảnh MỚI, bỏ ảnh đã dùng ─────────────────────── */
 {
   const order = Array.from({ length: 40 }, (_, i) => `s${i}`);

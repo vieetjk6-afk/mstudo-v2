@@ -79,7 +79,7 @@ function textStyle(v: unknown, H: number): TextStyle | null {
   };
 }
 
-const SHAPES = new Set(["round", "arch", "oval", "stamp"]);
+const SHAPES = new Set(["round", "arch", "oval", "stamp", "archL", "archR"]);
 const ORN_SET = new Set<string>(ORN_KINDS);
 
 /** Hình trang trí: chỉ giữ hình hợp lệ (sai thì bỏ hình đó, không từ chối cả bộ). */

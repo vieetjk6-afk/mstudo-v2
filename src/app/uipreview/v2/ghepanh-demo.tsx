@@ -18,7 +18,11 @@ const SLUG = G_BASE.gallery.slug;
 type MockSet = { id: string; title: string; data: unknown; updated_at: string; expires_at: string };
 
 function buildData() {
-  const photos = G_PHOTOS.filter((p) => !("is_video" in p && p.is_video)).map((p) => ({ id: p.id, d: p.drive_file_id, s: p.source_id }));
+  const base = G_PHOTOS.filter((p) => !("is_video" in p && p.is_video)).map((p) => ({ id: p.id, d: p.drive_file_id, s: p.source_id }));
+  // ?anh=600 — album nhiều ảnh (nhân bản ảnh mẫu) để thử cuộn lưới dài, chọn ảnh ở cuối lưới.
+  const want = Math.min(2000, Number(new URLSearchParams(window.location.search).get("anh")) || 0);
+  const photos = [...base];
+  for (let k = 1; photos.length < want; k++) for (const p of base) if (photos.length < want) photos.push({ ...p, id: `${p.id}x${k}` });
   const couple = ["p50", "p52", "p55", "p58", "p71", "p73", "p76", "p80", "p84"];
   const bride = ["p51", "p54", "p60", "p72", "p78"];
   const groom = ["p53", "p61", "p75"];

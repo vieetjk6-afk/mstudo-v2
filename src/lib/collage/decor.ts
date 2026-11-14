@@ -4,7 +4,9 @@
      • hai ảnh in chồng chéo góc; nhiều ảnh in rải như trên bàn (scrapbook);
      • ảnh lớn + ảnh nhỏ có viền đè lên góc (inset);
      • khung vòm (arch), hàng vòm; khung tròn / bầu dục, cụm ảnh tròn;
-     • hàng ảnh bo góc so le kiểu bậc thang.
+     • hàng ảnh bo góc so le kiểu bậc thang;
+     • cửa sổ vòm chia ô; hai nửa tràn trang + ảnh tròn giữa; ảnh xếp tầng;
+       ảnh lớn + hàng ảnh tròn; tường ảnh khung viền đậm.
    Kích thước khung tính theo ĐÚNG tỉ lệ từng ảnh (ảnh ít bị cắt), mọi thứ nằm
    trong vùng an toàn (Story). Thuần, không đụng DOM — compose.ts gọi vào đây.
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -533,6 +535,164 @@ export function decorOptions(c: DecorCtx): DecorResult[] {
     const frames: Frame[] = c.photos.map((p, i) => mk(p, { x: area.x + (i % 2) * (w + g), y: top + Math.floor(i / 2) * (h + g), w, h }, { shape: "arch" }));
     if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: top + 2 * h + 2 * g, w: area.w * 0.86, h: textH }));
     push("deco-arches", frames, 0.08);
+  }
+
+  /* ══ Mẫu thêm cho đa dạng (cửa sổ vòm, chia đôi + ảnh tròn, xếp tầng, ảnh
+     lớn + hàng ảnh tròn, tường ảnh khung) — nhất là trang 4–6 ảnh, trước chỉ
+     có ảnh rải và lưới. ══════════════════════════════════════════════════════ */
+
+  /* ── 2 / 4 ảnh: cửa sổ vòm chia ô, song cửa mảnh ───────────────────────────── */
+  if (n === 2 || n === 4) {
+    const g = short * 0.014;
+    const gapT = short * 0.035;
+    const textH = hasText ? clamp(need(area.w * 0.86), short * 0.12, area.h * 0.3) : 0;
+    const availH = area.h - textH - (hasText ? gapT : 0);
+    const ratio = n === 2 ? 0.95 : 0.74; // rộng / cao của cả khung cửa (2 ô: mỗi ô ~ dọc 1:2)
+    const ww = Math.min(area.w * (landscape ? 0.62 : 0.88), availH * ratio);
+    const wh = ww / ratio;
+    const pw = (ww - g) / 2;
+    const x0 = (W - ww) / 2;
+    const top = safe.y + (safe.h - (wh + textH + (hasText ? gapT : 0))) / 2;
+    const frames: Frame[] = [];
+    if (n === 2) {
+      frames.push(mk(ord[0], { x: x0, y: top, w: pw, h: wh }, { shape: "archL" }), mk(ord[1], { x: x0 + pw + g, y: top, w: pw, h: wh }, { shape: "archR" }));
+    } else {
+      const h1 = (wh - g) * 0.58;
+      const h2 = wh - g - h1;
+      frames.push(
+        mk(ord[0], { x: x0, y: top, w: pw, h: h1 }, { shape: "archL" }),
+        mk(ord[1], { x: x0 + pw + g, y: top, w: pw, h: h1 }, { shape: "archR" }),
+        mk(ord[2], { x: x0, y: top + h1 + g, w: pw, h: h2 }),
+        mk(ord[3], { x: x0 + pw + g, y: top + h1 + g, w: pw, h: h2 }),
+      );
+    }
+    if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: top + wh + gapT, w: area.w * 0.86, h: textH }));
+    // Ô cửa có tỉ lệ cố định nên chi phí cắt cao sẵn — bù để mẫu vẫn được chọn.
+    const bonus = n === 2 ? -0.38 : -0.15;
+    push("deco-window", frames, bonus);
+    // Bản có hoa: cành lá vắt qua đỉnh vòm, hai cụm hoa ở chân cửa.
+    push("deco-window:floral", frames.map((x) => ({ ...x, id: uid(x.kind === "photo" ? "f" : "t") })), bonus + 0.06, [
+      orn("sprig", { x: x0 + ww * 0.5, y: top - ww * 0.1, w: ww * 0.5, h: ww * 0.3 }, fl.leaf, { rotate: 10, over: true }),
+      orn("bloom", { x: x0 - ww * 0.12, y: top + wh - ww * 0.28, w: ww * 0.36, h: ww * 0.32 }, fl.flower, { color2: fl.leaf, over: true }),
+      orn("bloom", { x: x0 + ww - ww * 0.24, y: top + wh - ww * 0.26, w: ww * 0.34, h: ww * 0.3 }, fl.flower, { color2: fl.leaf, flip: true, over: true }),
+    ]);
+  }
+
+  /* ── 3 ảnh: hai nửa tràn trang + ảnh tròn viền trắng ở giữa đường chia ─────── */
+  if (n === 3) {
+    const seam = short * 0.006;
+    // Chia theo chiều nào ít phải cắt ảnh hơn (ảnh ngang → chia trên / dưới).
+    const halves = (tb: boolean): PhotoFrame[] => {
+      const a: Rect = tb ? { x: 0, y: 0, w: W, h: (f.h - seam) / 2 } : { x: 0, y: 0, w: (W - seam) / 2, h: f.h };
+      const b: Rect = tb ? { x: 0, y: (f.h + seam) / 2, w: W, h: (f.h - seam) / 2 } : { x: (W + seam) / 2, y: 0, w: (W - seam) / 2, h: f.h };
+      return [mk(ord[1], a), mk(ord[2], b)];
+    };
+    const tbF = halves(true);
+    const lrF = halves(false);
+    const pair = cropCost(tbF, byId) <= cropCost(lrF, byId) ? tbF : lrF;
+    const pad = short * 0.014;
+    const D = short * (landscape ? 0.46 : 0.44);
+    const cy = f.h / 2;
+    const frames: Frame[] = [...pair, mk(ord[0], { x: W / 2 - D / 2, y: cy - D / 2, w: D, h: D }, { shape: "oval", pad, padColor: paper, shadow: true })];
+    // Ảnh tròn cắt vuông nên chi phí cắt cao sẵn — bù lại để mẫu vẫn được chọn.
+    let extra = -0.4 - st.bleedBias * 0.1;
+    if (hasText) {
+      const h = clamp(need(W * 0.84), short * 0.11, safe.h * 0.22);
+      const y = safe.y + safe.h - my - h;
+      if (y < cy + D / 2 + short * 0.02) extra += 0.4;
+      frames.push(...c.textFrame({ x: W * 0.08, y, w: W * 0.84, h }, "#ffffff", "center", true));
+    }
+    push("deco-split", frames, extra);
+  }
+
+  /* ── 3–4 ảnh: xếp tầng — ảnh bo góc chồng chéo theo đường chéo ─────────────── */
+  if (n === 3 || n === 4) {
+    const gapT = short * 0.035;
+    const textH = hasText ? clamp(need(area.w * 0.86), short * 0.11, area.h * 0.24) : 0;
+    const box: Rect = { x: area.x, y: area.y, w: area.w, h: area.h - (hasText ? textH + gapT : 0) };
+    // Ảnh chính nằm trên cùng (vẽ sau cùng) nên thấy trọn; các ảnh khác lùi về sau.
+    const list = [...ord.slice(1)].reverse().concat(ord[0]);
+    let cw = box.w * (n === 3 ? 0.54 : 0.48);
+    let hs = list.map((p) => cw / aspectOf(p, 0.78, 1.45));
+    const lim = box.h * (n === 3 ? 0.56 : 0.48);
+    const tallest = Math.max(...hs);
+    if (tallest > lim) {
+      const k = lim / tallest;
+      cw *= k;
+      hs = hs.map((h) => h * k);
+    }
+    const mh = Math.max(...hs);
+    const stepX = (box.w - cw) / (n - 1);
+    const stepY = (box.h - mh) / (n - 1);
+    const ltr = r() < 0.5;
+    const frames: Frame[] = list.map((p, i) =>
+      mk(p, { x: ltr ? box.x + i * stepX : box.x + box.w - cw - i * stepX, y: box.y + i * stepY + (mh - hs[i]) / 2, w: cw, h: hs[i] }, { shape: "round", shadow: true }),
+    );
+    if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: box.y + box.h + gapT, w: area.w * 0.86, h: textH }));
+    push("deco-cascade", frames, 0.06);
+  }
+
+  /* ── 4–6 ảnh: ảnh lớn bo góc + hàng ảnh tròn đè mép dưới ───────────────────── */
+  if (n >= 4) {
+    const k = n - 1;
+    const g = short * 0.022;
+    const pad = short * 0.01;
+    const gapT = short * 0.03;
+    const d = Math.min((area.w - (k - 1) * g) / k, short * 0.3);
+    const textH = hasText ? clamp(need(area.w * 0.86), short * 0.11, area.h * 0.22) : 0;
+    // Khổ Story cao: ảnh lớn được cao hơn, đỡ trống trên dưới.
+    const heroH = Math.min(area.h - d / 2 - (hasText ? gapT + textH : 0), area.w / (f.h / f.w > 1.5 ? 0.62 : 0.85));
+    const total = heroH + d / 2 + (hasText ? gapT + textH : 0);
+    const top = safe.y + (safe.h - total) / 2;
+    const rowW = k * d + (k - 1) * g;
+    const rx = area.x + (area.w - rowW) / 2;
+    const frames: Frame[] = [
+      mk(ord[0], { x: area.x, y: top, w: area.w, h: heroH }, { shape: "round" }),
+      ...ord.slice(1).map((p, i) => mk(p, { x: rx + i * (d + g), y: top + heroH - d / 2, w: d, h: d }, { shape: "oval", pad, padColor: paper, shadow: true })),
+    ];
+    if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: top + heroH + d / 2 + gapT, w: area.w * 0.86, h: textH }));
+    push("deco-dots", frames, -0.35);
+  }
+
+  /* ── 4–6 ảnh: tường ảnh — khung viền đậm, cột rộng hẹp so le ────────────────── */
+  if (n >= 4) {
+    const dark = !!st.bgPhoto || isDarkColor(st.background);
+    const frameColor = dark ? "#f3ece0" : st.id === "kraft" || st.id === "tradition" ? "#4a3423" : "#2a2622";
+    const pad = short * 0.016;
+    const g = short * 0.034;
+    const gapT = short * 0.03;
+    const textH = hasText ? clamp(need(area.w * 0.86), short * 0.11, area.h * 0.22) : 0;
+    const box: Rect = { x: area.x, y: area.y + (hasText ? textH + gapT : 0), w: area.w, h: area.h - (hasText ? textH + gapT : 0) };
+    const cols = landscape ? 3 : 2;
+    const flip = r() < 0.5;
+    const weights = Array.from({ length: cols }, (_, i) => ((i % 2 === 0) !== flip ? 1.16 : 0.84));
+    const wsum = weights.reduce((a, b) => a + b, 0);
+    const cws = weights.map((w) => ((box.w - (cols - 1) * g) * w) / wsum);
+    // Xếp kiểu masonry: ảnh vào cột đang thấp nhất.
+    const colsList: { p: LayoutInput; h: number }[][] = Array.from({ length: cols }, () => []);
+    const sumH = (j: number) => colsList[j].reduce((sum, x) => sum + x.h, 0);
+    const colH = (j: number) => sumH(j) + Math.max(0, colsList[j].length - 1) * g;
+    for (const p of ord) {
+      let best = 0;
+      for (let j = 1; j < cols; j++) if (colH(j) < colH(best)) best = j;
+      colsList[best].push({ p, h: (cws[best] - 2 * pad) / aspectOf(p, 0.72, 1.4) + 2 * pad });
+    }
+    const k = Math.min(1, ...colsList.map((col, j) => (col.length ? (box.h - (col.length - 1) * g) / sumH(j) : 1)));
+    const usedW = cws.reduce((a, b) => a + b, 0) * k + (cols - 1) * g;
+    let x = box.x + (box.w - usedW) / 2;
+    const frames: Frame[] = [];
+    colsList.forEach((col, j) => {
+      const cw = cws[j] * k;
+      const colTotal = col.reduce((sum, it) => sum + it.h * k, 0) + Math.max(0, col.length - 1) * g;
+      let y = box.y + (box.h - colTotal) / 2;
+      for (const it of col) {
+        frames.push(mk(it.p, { x, y, w: cw, h: it.h * k }, { pad, padColor: frameColor, shadow: true }));
+        y += it.h * k + g;
+      }
+      x += cw + g;
+    });
+    if (hasText) frames.push(...shadowFor({ x: area.x + area.w * 0.07, y: area.y, w: area.w * 0.86, h: textH }));
+    push("deco-gallery", frames, 0.2);
   }
 
   return out;
