@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { isMissingColumn } from "@/lib/missing-column";
+import { phanLoaiLoi } from "@/lib/pg-loi";
 import type { PeopleLink, PeopleRow } from "@/lib/face-people";
 
 /**
@@ -26,20 +27,33 @@ export async function loadAlbumPeople(
   db: SupabaseClient,
   albumId: string,
   enabled = true,
+  opts: { strict?: boolean } = {},
 ): Promise<{ people: PeopleRow[]; links: PeopleLink[] }> {
   if (!enabled) return { people: [], links: [] };
+  // strict (kết quả được nhớ giữa các request): lỗi thoáng qua thì NÉM, chỉ
+  // "chưa có bảng" (chưa chạy migration) mới được coi là không có ai.
+  const check = (error: unknown) => {
+    if (opts.strict && error && phanLoaiLoi(error as { code?: string; message?: string }) !== "thieu-bang") {
+      throw new Error((error as { message?: string }).message || "doc_album_people_loi");
+    }
+  };
   const q = (cols: string) => db.from("album_people").select(cols).eq("album_id", albumId).order("position");
+  const linkPage = (from: number, to: number) =>
+    db
+      .from("album_photo_people")
+      .select("person_id, photo_id")
+      .eq("album_id", albumId)
+      .order("person_id")
+      .order("photo_id")
+      .range(from, to)
+      .then((r) => {
+        check(r.error);
+        return r;
+      });
   const [pr, links] = await Promise.all([
     q(`${COLS}, cover_box`).then((r) => (r.error && isMissingColumn(r.error, "cover_box") ? q(COLS) : r)),
-    fetchAllRows<PeopleLink>((from, to) =>
-      db
-        .from("album_photo_people")
-        .select("person_id, photo_id")
-        .eq("album_id", albumId)
-        .order("person_id")
-        .order("photo_id")
-        .range(from, to),
-    ),
+    fetchAllRows<PeopleLink>(linkPage),
   ]);
+  check(pr.error);
   return { people: ((pr.data ?? []) as unknown as PeopleRow[]), links };
 }

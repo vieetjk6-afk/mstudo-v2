@@ -1,7 +1,7 @@
 import "server-only";
 import { resolveSource, listSubFolders } from "@/lib/drive-server";
 import { planSubFolderSources } from "@/lib/album-subfolders";
-import { thumbnailUrl } from "@/lib/drive";
+import { coverImageUrl } from "@/lib/drive";
 import { fetchAllPhotos, chunk } from "@/lib/photos";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -113,7 +113,7 @@ export async function syncAlbumPhotos(
     const ids = new Set(all.map((p) => p.drive_file_id));
     const coverId = album?.cover_url?.match(/id=([a-zA-Z0-9_-]+)/)?.[1];
     if (!album?.cover_url || (coverId && !ids.has(coverId))) {
-      await client.from("albums").update({ cover_url: thumbnailUrl(all[0].drive_file_id, 800) }).eq("id", albumId);
+      await client.from("albums").update({ cover_url: coverImageUrl(all[0].drive_file_id) }).eq("id", albumId);
     }
   }
 

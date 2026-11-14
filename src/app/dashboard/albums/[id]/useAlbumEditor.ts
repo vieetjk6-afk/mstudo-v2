@@ -6,7 +6,7 @@ import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { studioUrl } from "@/lib/hosts";
-import { thumbnailUrl, isFolderLink, stripExtension } from "@/lib/drive";
+import { isFolderLink, stripExtension, coverImageUrl } from "@/lib/drive";
 import { fetchAllPhotos } from "@/lib/photos";
 import { storageUntil } from "@/lib/storage-lifecycle";
 import type { AlbumPrintInfo } from "./AlbumPrintPanel";
@@ -580,7 +580,7 @@ export function useAlbumEditor({
   }
 
   async function setCover(fileId: string) {
-    const url = thumbnailUrl(fileId, 800);
+    const url = coverImageUrl(fileId);
     setForm((f) => ({ ...f, cover_url: url }));
     // Ảnh bìa lưu NGAY (không chờ nút Lưu) nên bản đã lưu cũng đổi theo.
     setSavedForm((f) => ({ ...f, cover_url: url }));

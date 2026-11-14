@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { dropCache, LANDING_PRICING_TAG } from "@/lib/public-cache";
+import { FEATURE_FLAGS_TAG } from "@/lib/feature-flags";
 
 export const dynamic = "force-dynamic";
 
@@ -90,5 +92,8 @@ export async function POST(req: Request) {
     .upsert({ id: 1, ...patch }, { onConflict: "id" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Bảng giá trang chủ và cờ tính năng được nhớ giữa các request — bỏ ngay để
+  // thay đổi của admin có hiệu lực tức thì.
+  dropCache(LANDING_PRICING_TAG, FEATURE_FLAGS_TAG);
   return NextResponse.json({ ok: true });
 }

@@ -259,7 +259,7 @@ export const SCREENS_TAIKHOAN: Record<string, { title: string; render: () => Rea
     title: "Giao diện mới — Cài đặt hệ thống (admin, Drive đã kết nối)",
     render: () => (
       <PreviewV2 path="/dashboard/admin/system">
-        <SystemV2 driveSeed={{ configured: true, connected: true, ok: true, error: null, lastUploadError: null }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: null, files: [0, 1, 2].map((i) => ({ id: `b${i}`, name: `mstudo-backup-2026-11-${String(12 - i).padStart(2, "0")}_03h15.json.gz`, size: 3_480_000 - i * 9_000, createdTime: new Date(Date.now() - (i * 24 + 6) * 3600e3).toISOString(), webViewLink: null })) }} />
+        <SystemV2 rateSeed="postgres" driveSeed={{ configured: true, connected: true, ok: true, error: null, lastUploadError: null }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: null, files: [0, 1, 2].map((i) => ({ id: `b${i}`, name: `mstudo-backup-2026-11-${String(12 - i).padStart(2, "0")}_03h15.json.gz`, size: 3_480_000 - i * 9_000, createdTime: new Date(Date.now() - (i * 24 + 6) * 3600e3).toISOString(), webViewLink: null })) }} />
       </PreviewV2>
     ),
     bare: true,
@@ -268,7 +268,7 @@ export const SCREENS_TAIKHOAN: Record<string, { title: string; render: () => Rea
     title: "Giao diện mới — Cài đặt hệ thống (Drive lỗi)",
     render: () => (
       <PreviewV2 path="/dashboard/admin/system">
-        <SystemV2 driveSeed={{ configured: true, connected: true, ok: false, error: "invalid_grant: Token has been expired or revoked.", lastUploadError: "403 storageQuotaExceeded" }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: "invalid_grant: Token has been expired or revoked.", files: [] }} />
+        <SystemV2 rateSeed="memory" driveSeed={{ configured: true, connected: true, ok: false, error: "invalid_grant: Token has been expired or revoked.", lastUploadError: "403 storageQuotaExceeded" }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: "invalid_grant: Token has been expired or revoked.", files: [] }} />
       </PreviewV2>
     ),
     bare: true,

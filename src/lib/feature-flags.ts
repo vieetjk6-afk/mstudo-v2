@@ -5,6 +5,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export type FeatureFlags = Record<string, string>;
 
+/** Thẻ nhớ của cờ tính năng — /api/admin/settings bỏ nhớ ngay khi admin lưu. */
+export const FEATURE_FLAGS_TAG = "feature-flags";
+
 /**
  * Global feature flags controlled by the admin in Settings (site_settings.feature_flags).
  * Falls back to {} if the column/row is missing.
@@ -12,7 +15,7 @@ export type FeatureFlags = Record<string, string>;
  * Nhớ 60 giây GIỮA các request (unstable_cache, như getSiteMeta) chứ không chỉ
  * trong một request: hàm này chạy ở MỌI trang dashboard và mọi trang khách
  * (qua customerUiV2), trong khi cờ chỉ đổi khi admin bấm trong Cài đặt — đọc lại
- * Supabase mỗi lượt mở trang là phí. Admin đổi cờ thì tối đa 1 phút sau có hiệu lực.
+ * Supabase mỗi lượt mở trang là phí. Admin lưu Cài đặt thì bỏ nhớ ngay.
  */
 const readFlags = unstable_cache(
   async (): Promise<FeatureFlags> => {
@@ -23,7 +26,7 @@ const readFlags = unstable_cache(
     return f && typeof f === "object" ? f : {};
   },
   ["feature-flags"],
-  { revalidate: 60 },
+  { revalidate: 60, tags: [FEATURE_FLAGS_TAG] },
 );
 
 export const getFeatureFlags = cache(async (): Promise<FeatureFlags> => {

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { randomUUID } from "node:crypto";
 import { fetchThumbChiTiet, scanJpeg, type KetQuaTai } from "./face-node";
-import { fetchAllPhotos } from "./photos";
 import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, type Person } from "./face-group";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "./plans";
 // Luật "ảnh nào còn phải quét" nằm ở @/lib/face-can-quet — MỘT chỗ cho cả ba
@@ -70,7 +70,7 @@ export function hanQuetMs(): number {
 
 export type ScanReport = {
   albumId: string;
-  /** Tổng ảnh của album (đã phân trang qua trần 1000 của PostgREST). */
+  /** Tổng ảnh của album — đếm bằng một câu head, không kéo dòng nào về. */
   tongAnh: number;
   /** Số dòng DB XÁC NHẬN đã ghi. Lệch với `scanned` nghĩa là ghi không ăn. */
   daGhiMoc: number;
@@ -142,26 +142,51 @@ export async function scanAlbum(
 ): Promise<ScanReport> {
   const t0 = Date.now();
   /*
-   * `fetchAllPhotos` chứ KHÔNG phải `.select()` trơn.
+   * CHỈ ĐỌC ẢNH CÒN PHẢI QUÉT — và chỉ một lô vừa cho lượt này.
    *
-   * PostgREST trả tối đa 1000 dòng mỗi lượt, im lặng, không báo gì. Album 2000
-   * ảnh thì bộ quét chỉ THẤY 1000 ảnh đầu — quét xong chúng là nó tưởng đã xong
-   * album, và một nửa album không bao giờ có khuôn mặt. Hàm này phân trang qua
-   * trần đó; nó vốn có sẵn trong repo đúng vì lý do này.
+   * Bản trước kéo MỌI ảnh của album về (fetchAllPhotos) rồi mới lọc trên mảng:
+   * album 1.449 ảnh là ~1.500 dòng qua đường truyền ở MỖI lượt gọi, 8 lượt mỗi
+   * 10 phút suốt đêm, chỉ để tìm vài chục tấm chưa quét — egress Supabase thuần
+   * (docs/supabase-usage.md). Giờ điều kiện chạy trên DB, cùng một định nghĩa
+   * với hàng đợi và tiến độ của khách (apDungLocConQuet), cùng thứ tự
+   * position, id như fetchAllPhotos.
+   *
+   * Lô tối đa `maxPhotos` dòng (kẹp ở 1000 — trần im lặng của PostgREST): lượt
+   * nào cũng dừng ở hạn mức đó hoặc ở hạn giờ trước. Khác bản trước đúng một
+   * chỗ: hạn mức giờ tính cả tấm hỏng / bỏ qua, nên lượt gọi đi hết lô mà DB
+   * còn tấm chờ thì dừng `het-han-muc` và lượt sau đi tiếp.
+   *
+   * `count: "exact"` trả kèm TỔNG số tấm còn chờ trong cùng câu đó, để
+   * `remaining` vẫn là số của cả album. `tongAnh` thì một câu head riêng — rẻ,
+   * không kéo dòng nào về.
    */
-  const rows = (await fetchAllPhotos(
-    db,
-    albumId,
-    "id, drive_file_id, name, is_video, faces_scanned_at"
-  )) as ScanRow[];
+  const lo = Math.min(Math.max(opts.maxPhotos, 1), 1000);
+  const [cho0, dem0] = await Promise.all([
+    apDungLocConQuet(
+      db.from("photos").select("id, drive_file_id, name, is_video, faces_scanned_at", { count: "exact" }).eq("album_id", albumId)
+    )
+      .order("position")
+      .order("id")
+      .limit(lo),
+    db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", albumId),
+  ]);
+  // Đọc hỏng thì như bản trước (fetchAllPhotos trả mảng rỗng): không có gì để
+  // quét ở lượt này, lượt sau thử lại. Nhưng giữ câu lỗi lại cho log.
+  const rows = (cho0.error ? [] : cho0.data ?? []) as ScanRow[];
+  // Lọc lại trên mảng (không tốn gì): lỡ điều kiện phía DB trôi khỏi định nghĩa
+  // chung thì vòng quét vẫn không chạm tấm đã quét / video / thiếu drive_file_id.
   const todo = pendingRows(rows);
+  /** Tổng số tấm còn chờ của CẢ album, không chỉ của lô này. */
+  const tongCho = Math.max(cho0.error ? 0 : cho0.count ?? 0, todo.length);
+  /** Lô đầy mà DB còn thêm tấm chờ: đi hết lô là hết hạn mức, chưa phải xong album. */
+  const catLo = rows.length >= lo && tongCho > rows.length;
   let scanned = 0;
   let faces = 0;
   let failed = 0;
   /** Tấm hỏng VĨNH VIỄN (404, PNG) — đã đánh mốc, không thử lại. */
   let boQua = 0;
   /** Câu lỗi của tấm hỏng ĐẦU TIÊN — xem ScanReport.loiMau. */
-  let loiMau: string | null = null;
+  let loiMau: string | null = cho0.error ? `doc_anh_cho_quet_that_bai: ${cho0.error.message}`.slice(0, 200) : null;
   let stoppedBy: ScanReport["stoppedBy"] = "xong";
 
   const faceRows: Record<string, unknown>[] = [];
@@ -354,6 +379,7 @@ export async function scanAlbum(
       break;
     }
   }
+  if (stoppedBy === "xong" && catLo) stoppedBy = "het-han-muc";
   if (!ghiKhongAn) await flush();
 
   /*
@@ -379,7 +405,7 @@ export async function scanAlbum(
     }
   }
 
-  const remaining = todo.length - scanned - failed - boQua;
+  const remaining = tongCho - scanned - failed - boQua;
   /*
    * Quét được 0 tấm mà CÓ tấm hỏng thì không phải "xong" — đó là album đang
    * TẮC. Phân biệt được điều này là điều kiện để nó hiện ra trong log: `xong`
@@ -389,7 +415,7 @@ export async function scanAlbum(
   const taiQuetLoi = scanned === 0 && failed > 0;
   return {
     albumId,
-    tongAnh: rows.length,
+    tongAnh: dem0.count ?? 0,
     daGhiMoc,
     daGhiMat,
     daXacNhan,
@@ -465,7 +491,8 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
 
   const people: Person[] = groupFaces(vecs).people;
 
-  const { data: old } = await db.from("album_people").select("*").eq("album_id", albumId);
+  // Đúng ba cột matchKnown cần — không `*` (cover_box, face_count… đọc về là thừa).
+  const { data: old } = await db.from("album_people").select("id, name, descriptor").eq("album_id", albumId);
   const known: KnownPerson[] = ((old ?? []) as any[]).map((k) => ({
     id: k.id,
     name: k.name ?? "",
@@ -477,30 +504,40 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
   const { error: eDel } = await db.from("album_people").delete().eq("album_id", albumId);
   if (eDel) throw new Error(`xoa_nguoi_cu_that_bai: ${eDel.message}`);
 
-  for (const [i, p] of people.entries()) {
+  /*
+   * GHI THEO LÔ, id sinh sẵn ở đây.
+   *
+   * Bản trước chèn từng người một (`insert().select("id").single()`) chỉ để
+   * lấy id DB cấp cho các dòng nối — album 150 người là 150+ lượt gọi Supabase
+   * mỗi lần gom. Sinh id ngay tại đây thì biết trước người nào mang id nào: cả
+   * người lẫn dòng nối ghi được theo lô, và không phải đọc lại dòng nào.
+   *
+   * Dòng nối trỏ tới album_people bằng khoá ngoại, nên một lô người không nằm
+   * lại thì lô nối nổ ra ngay — không có chuyện nối im lặng vào người không có.
+   */
+  const nguoi = people.map((p, i) => {
     const b = p.coverBox;
-    const { data: row, error: eIns } = await db
-      .from("album_people")
-      .insert({
-        album_id: albumId,
-        name: matches[i]?.name ?? "",
-        face_count: p.faces,
-        cover_photo_id: p.coverKey || null,
-        cover_at: p.coverAt,
-        cover_box: b ? [b.x, b.y, b.w, b.h] : null,
-        descriptor: centroids[i].descriptor,
-        position: i,
-      })
-      .select("id")
-      .single();
+    return {
+      id: randomUUID(),
+      album_id: albumId,
+      name: matches[i]?.name ?? "",
+      face_count: p.faces,
+      cover_photo_id: p.coverKey || null,
+      cover_at: p.coverAt,
+      cover_box: b ? [b.x, b.y, b.w, b.h] : null,
+      descriptor: centroids[i].descriptor,
+      position: i,
+    };
+  });
+  // 100 người một lô: mỗi dòng mang vector 128 số (~2,5 KB JSON), giữ thân yêu cầu vừa phải.
+  for (let k = 0; k < nguoi.length; k += 100) {
+    const { error: eIns } = await db.from("album_people").insert(nguoi.slice(k, k + 100));
     if (eIns) throw new Error(`them_nguoi_that_bai: ${eIns.message}`);
-    for (let k = 0; k < p.photoKeys.length; k += 500) {
-      const part = p.photoKeys.slice(k, k + 500);
-      const { error: e2 } = await db
-        .from("album_photo_people")
-        .insert(part.map((photo_id) => ({ album_id: albumId, person_id: row.id as string, photo_id })));
-      if (e2) throw new Error(`noi_anh_voi_nguoi_that_bai: ${e2.message}`);
-    }
+  }
+  const noi = people.flatMap((p, i) => p.photoKeys.map((photo_id) => ({ album_id: albumId, person_id: nguoi[i].id, photo_id })));
+  for (let k = 0; k < noi.length; k += 500) {
+    const { error: e2 } = await db.from("album_photo_people").insert(noi.slice(k, k + 500));
+    if (e2) throw new Error(`noi_anh_voi_nguoi_that_bai: ${e2.message}`);
   }
   // Ra khỏi hàng đợi. Đặt SAU vòng ghi: hỏng giữa chừng thì album ở lại hàng đợi
   // và lượt cron sau dựng lại từ đầu, chứ không mắc kẹt với nửa danh sách người.
@@ -572,10 +609,29 @@ export async function albumsNeedingScan(db: any, limit = 5): Promise<{ id: strin
   // Chỉ giữ album của chủ ĐỦ GÓI — xem chuDuocDungTimMat.
   const duocDung = await chuDuocDungTimMat(db, rows.map((a) => a.owner_id));
   const ids = rows.filter((a) => duocDung.has(a.owner_id)).map((a) => a.id);
+  /*
+   * HỎI "CÒN VIỆC KHÔNG" TRƯỚC KHI ĐẾM.
+   *
+   * Đêm nào cron cũng gọi tới đây hàng chục lượt, và phần lớn album đã quét
+   * xong từ lâu. Bản trước vẫn đếm từng album một — tới 120 câu đếm mỗi lượt
+   * chỉ để ra "không có gì", hoặc để tìm đúng một album đang quét dở nằm sâu
+   * trong danh sách. Một câu `limit(1)` trên cả lô (chỉ mục một phần
+   * photos_faces_pending_idx) trả lời "có không" với tối đa một dòng; câu đếm
+   * chỉ chạy cho nhóm 8 album nào thật sự còn tấm chờ.
+   *
+   * Câu hỏi lỗi thì coi như "có" và đếm như cũ — không đổi hành vi lúc hỏng.
+   */
+  const conViec = async (nhom: string[]) => {
+    const { data, error } = await apDungLocConQuet(db.from("photos").select("album_id").in("album_id", nhom)).limit(1);
+    return !!error || (data ?? []).length > 0;
+  };
+  if (ids.length === 0 || !(await conViec(ids))) return out;
   // Hỏi theo lô 8 câu song song: tuần tự thì 120 lượt gọi ăn hết hạn thời gian
   // trước khi quét được tấm nào.
   for (let i = 0; i < ids.length && out.length < limit; i += 8) {
     const lo = ids.slice(i, i + 8);
+    // Chỉ một nhóm (ít album đủ gói) thì câu hỏi chung ở trên đã trả lời rồi.
+    if (lo.length < ids.length && !(await conViec(lo))) continue;
     const dem = await Promise.all(
       lo.map(async (id) => {
         const { count } = await apDungLocConQuet(

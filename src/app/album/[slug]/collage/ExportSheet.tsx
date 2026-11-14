@@ -13,6 +13,7 @@ import type { SignSpec } from "@/lib/collage/brand";
 import { CaptionList } from "./WishesSheet";
 import { triggerDownload } from "@/lib/download";
 import { Sheet } from "./ui";
+import { rawImageUrl } from "@/lib/drive";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TẢI ẢNH GHÉP về máy — hai bước như ứng dụng Albumi trên điện thoại:
@@ -38,7 +39,7 @@ export function slugify(s: string): string {
 }
 
 /** Byte ảnh cùng miền cho canvas (Drive không gửi CORS nên phải đi qua proxy). */
-export const rawImageUrl = (driveId: string, w: number) => `/api/img?id=${encodeURIComponent(driveId)}&w=${w}&raw=1`;
+export { rawImageUrl };
 
 export default function ExportSheet({
   doc,

@@ -1,8 +1,6 @@
 import "server-only";
 import type { Metadata } from "next";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getAlbumOwner } from "@/lib/album-owner";
-import { getStudioHost } from "@/lib/studio-site";
+import { getAlbumOwner, getAlbumOwnerHost } from "@/lib/album-owner";
 import { shareMetadataFor } from "@/lib/studio-share-meta";
 
 /**
@@ -30,7 +28,7 @@ export async function buildAlbumMetadata({
 }): Promise<Metadata> {
   const [owner, host] = await Promise.all([
     getAlbumOwner(ownerId),
-    ownerId ? getStudioHost(createAdminClient(), ownerId).catch(() => null) : Promise.resolve(null),
+    getAlbumOwnerHost(ownerId),
   ]);
   const brand = owner.brand;
   return shareMetadataFor({

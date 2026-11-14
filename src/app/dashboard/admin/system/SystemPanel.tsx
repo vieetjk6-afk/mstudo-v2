@@ -13,9 +13,11 @@ import {
 } from "lucide-react";
 import { SHORTCUTS, TARGET_LABEL, useSystemPanel, type Target } from "./useSystemPanel";
 import { fmtSize, fmtWhen, isStale, useAutoBackup } from "./useAutoBackup";
+import { RATE_LIMIT_SQL_URL, useRateLimitMode } from "./useRateLimitMode";
 
 export default function SystemPanel() {
   const ab = useAutoBackup();
+  const rl = useRateLimitMode();
   // Logic dùng chung với bản mới (SystemV2) — xem ./useSystemPanel.
   const {
     message, setMessage, target, setTarget, important, setImportant, push, setPush, sending, sendMsg, sendBroadcast,
@@ -29,6 +31,17 @@ export default function SystemPanel() {
         <ShieldCheck size={22} style={{ color: "var(--brand)" }} />
         <h1 className="font-serif text-2xl font-medium">Bảng điều khiển hệ thống</h1>
       </div>
+
+      {rl === "memory" && (
+        <div className="mb-6 flex items-start gap-2 rounded-md px-3 py-2 text-[13px]" style={{ background: "color-mix(in srgb, var(--gold) 14%, transparent)", color: "var(--text2)" }}>
+          <AlertTriangle size={15} className="mt-0.5 shrink-0" style={{ color: "var(--gold)" }} />
+          <span>
+            <b>Chống dò mật khẩu album / SĐT hợp đồng đang đếm riêng trong từng máy chủ</b> — gửi dồn là lọt giới hạn. Mở{" "}
+            <a href={RATE_LIMIT_SQL_URL} target="_blank" rel="noopener noreferrer" className="underline">file SQL này</a>, chép rồi chạy trong
+            Supabase SQL Editor, hoặc đặt UPSTASH_REDIS_REST_URL + UPSTASH_REDIS_REST_TOKEN trên Vercel.
+          </span>
+        </div>
+      )}
 
       {/* Quản lý nhanh */}
       <div className="mb-8 grid gap-3 sm:grid-cols-3">

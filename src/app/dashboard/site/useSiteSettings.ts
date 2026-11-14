@@ -6,6 +6,7 @@ import type { createClient } from "@/lib/supabase/client";
 import type { Site, SiteSeo } from "@/lib/types";
 import { compressImage, checkImageFile } from "@/lib/image";
 import { uploadImage, dataUrlToBlob } from "@/lib/upload-client";
+import { refreshPublicSite } from "@/lib/site-refresh-client";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIC DÙNG CHUNG cho phần "cài đặt trang" của website studio: tên miền phụ,
@@ -159,6 +160,7 @@ export function useSitePublishing({
     setBusy(true);
     const next = !published;
     await supabase.from("sites").update({ published: next, updated_at: new Date().toISOString() }).eq("id", site.id);
+    refreshPublicSite(); // gỡ / xuất bản phải có hiệu lực ngay, không chờ bản nhớ 5 phút
     setPublished(next);
     setBusy(false);
     if (!next) { flash("Đã gỡ xuất bản."); return; }
@@ -198,6 +200,7 @@ export function useSiteSeo({ site, supabase, onFlash }: { site: Site; supabase: 
     setSeo(next);
     const { error } = await supabase.from("sites").update({ seo: next, updated_at: new Date().toISOString() }).eq("id", site.id);
     if (error) onFlash(`Chưa lưu được SEO: ${error.message}`);
+    else refreshPublicSite();
   }, [site.id, supabase, onFlash]);
 
   async function pickOg(file: File) {

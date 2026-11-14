@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2 } from "lucide-react";
-import { thumbnailUrl } from "@/lib/drive";
+import { rawImageUrl } from "@/lib/drive";
 import {
   countVerdicts,
   judge,
@@ -138,7 +138,7 @@ export function useAiFilterPanel({ sourceFiles }: AiFilterPanelProps) {
       } else if (f.driveId) {
         // 640px: đủ chi tiết để đo nét/gom trùng. raw=1: quét bằng fetch() nên
         // cần byte cùng miền (/api/img chỉ trả byte khi URL có raw=1).
-        out.push({ key: f.key, name: f.name, url: `${thumbnailUrl(f.driveId, 640)}&raw=1` });
+        out.push({ key: f.key, name: f.name, url: rawImageUrl(f.driveId, 640) });
       }
     }
     return out;

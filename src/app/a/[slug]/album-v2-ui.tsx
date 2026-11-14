@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Lock, X, ZoomIn, ZoomOut } from "lucide-react";
 import { useLangOptional } from "@/lib/i18n";
-import { fullImageUrl, originalImageUrl, retryViaProxy, stripExtension, thumbnailUrl } from "@/lib/drive";
+import { fullImageUrl, originalImageUrl, retryViaProxy, stripExtension, thumbnailUrl, rawImageUrl } from "@/lib/drive";
 import { ALBUM_TITLE_FONT, ALBUM_TITLE_ON_COVER } from "@/lib/album-title";
 import { watermarkLayer } from "@/lib/album-watermark";
 import PhotoZoom, { type PhotoZoomHandle } from "@/components/PhotoZoom";
@@ -35,7 +35,7 @@ export type AlbumImg = {
    */
   raw?: (driveId: string, w: number) => string;
 };
-const DRIVE_IMG: AlbumImg = { thumb: thumbnailUrl, full: fullImageUrl, original: originalImageUrl };
+const DRIVE_IMG: AlbumImg = { thumb: thumbnailUrl, full: fullImageUrl, original: originalImageUrl, raw: rawImageUrl };
 const ImgCtx = createContext<AlbumImg>(DRIVE_IMG);
 export function AlbumImgProvider({ value, children }: { value: AlbumImg; children: React.ReactNode }) {
   return <ImgCtx.Provider value={value}>{children}</ImgCtx.Provider>;
@@ -431,7 +431,7 @@ export function ViewerV2({
                     }}
                   />
                   <ZoomHiRes
-                    srcs={[img.original(photo.drive_file_id), img.full(photo.drive_file_id, 4096), `${img.full(photo.drive_file_id, 2560)}&raw=1`]}
+                    srcs={[img.original(photo.drive_file_id), img.full(photo.drive_file_id, 4096), (img.raw ?? rawImageUrl)(photo.drive_file_id, 2560)]}
                     active={zoom > 1}
                     onLoadingChange={setHiResLoading}
                     className="rounded-[4px]"

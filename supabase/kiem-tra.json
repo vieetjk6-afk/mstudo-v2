@@ -44,6 +44,7 @@
     "migrations/dat_lich_chi_tiet.sql",
     "migrations/noi_dung_ck_tu_nhap.sql",
     "migrations/ghep_layout.sql",
+    "migrations/gioi_han_tan_suat.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -946,6 +947,14 @@
         "profiles.collage_brand",
         "studio_contracts.collage_enabled"
       ]
+    },
+    {
+      "file": "migrations/gioi_han_tan_suat.sql",
+      "mo_ta": "Giới hạn tần suất bền không cần Upstash: bộ đếm chống dò mật khẩu album / SĐT trong Postgres",
+      "bang": [
+        "rate_limit_hits"
+      ],
+      "cot": []
     }
   ]
 }

@@ -88,8 +88,14 @@ const DEFAULT_OPTS: CollageOptions = { formatId: DEFAULT_FORMAT_ID, perPage: 4, 
 /** Số slide nếu bộ là MỘT carousel liền mạch, ngược lại 0. */
 const carouselOf = (d: Pick<CollageDoc, "pages">) => (d.pages.length === 1 && (d.pages[0].span ?? 1) > 1 ? Math.round(d.pages[0].span!) : 0);
 const HISTORY_MAX = 40;
-/** Tự lưu sau khi khách ngừng tay 2,5 giây — gom nhiều lần chạm thành một lượt ghi. */
-const SAVE_DELAY = 2500;
+/**
+ * Tự lưu sau khi khách ngừng tay 6 giây — gom nhiều lần chạm thành một lượt ghi.
+ * Mỗi lượt lưu là 4–5 câu truy vấn và ghi lại cả bộ (tới ~400 KB) trên gói
+ * Supabase Free; 2,5 giây thì kéo-thả, gõ chữ liên tục là lưu liên tục. Chờ lâu
+ * hơn không làm mất gì: rời màn / ẩn tab / quay về danh sách đều lưu ngay
+ * (flushSave, settleSave).
+ */
+const SAVE_DELAY = 6000;
 
 /** Mục lịch sử hiện tại là mục màn ghép đã đẩy (để nút lùi điện thoại không rời album). */
 const ownsHistory = () => !!(window.history.state as { mstudoCollage?: number } | null)?.mstudoCollage;
@@ -363,29 +369,59 @@ export default function CollageStudio(props: CollageStudioProps) {
     [saveNow],
   );
 
-  /** Đóng / rời trang khi còn thay đổi chưa lưu: gửi ngay (sendBeacon sống sót cả khi tắt tab). */
-  const flushSave = useCallback(() => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
-    if (!dirty.current || !docRef.current) return;
-    dirty.current = false;
-    const c = credRef.current;
-    const body = JSON.stringify({ id: setIdRef.current, title: `Bộ ảnh ghép ${fmtDateTime(new Date())}`, doc: docRef.current, key: c.key, access: c.access });
-    try {
-      if (navigator.sendBeacon?.(`/api/album/${c.slug}/collage`, new Blob([body], { type: "application/json" }))) return;
-    } catch {
-      /* rơi xuống fetch */
-    }
-    void fetch(`/api/album/${c.slug}/collage`, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
-  }, []);
+  /**
+   * Đóng / rời trang khi còn thay đổi chưa lưu: gửi ngay (sendBeacon sống sót cả khi tắt tab).
+   *
+   * `alive` = trang CÒN SỐNG, chỉ bị ẩn (điện thoại chuyển app, đổi tab). Beacon khi đó
+   * chỉ là lưới an toàn phòng hệ điều hành đóng hẳn tab đang nằm nền — nó không trả lời
+   * gì. Nên: bộ chưa có id thì KHÔNG beacon (máy chủ tạo bộ mà màn ghép không biết id →
+   * lần lưu sau tạo thêm bộ thứ hai); còn lượt lưu đang chạy (beacon có thể tới trước
+   * rồi bị bản cũ đè), lượt trước vừa hỏng (beacon có thể hỏng lặng lẽ) hay beacon bị từ
+   * chối (thân quá 64 KB) thì lưu tiếp như thường (saveNow) — trang còn sống, chờ được.
+   */
+  const flushSave = useCallback(
+    (alive = false) => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      if (!dirty.current || !docRef.current) return;
+      if (alive && !setIdRef.current) {
+        void saveNow();
+        return;
+      }
+      const c = credRef.current;
+      const body = JSON.stringify({ id: setIdRef.current, title: `Bộ ảnh ghép ${fmtDateTime(new Date())}`, doc: docRef.current, key: c.key, access: c.access });
+      let sent = false;
+      try {
+        sent = !!navigator.sendBeacon?.(`/api/album/${c.slug}/collage`, new Blob([body], { type: "application/json" }));
+      } catch {
+        /* rơi xuống fetch */
+      }
+      if (alive) {
+        if (!sent || saving.current || saveFails.current > 0) void saveNow();
+        else dirty.current = false;
+        return;
+      }
+      dirty.current = false;
+      if (sent) return;
+      void fetch(`/api/album/${c.slug}/collage`, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+    },
+    [saveNow],
+  );
 
   useEffect(() => {
     const onHide = () => flushSave();
+    // Điện thoại chuyển app chỉ bắn visibilitychange (không có pagehide), rồi hệ điều
+    // hành có thể đóng hẳn tab đang nằm nền — mất phần chưa lưu trong khoảng SAVE_DELAY.
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") flushSave(true);
+    };
     window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onVisibility);
       flushSave();
     };
   }, [flushSave]);

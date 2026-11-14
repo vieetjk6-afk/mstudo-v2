@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { thumbnailUrl } from "@/lib/drive";
+import { rawImageUrl } from "@/lib/drive";
 import { duplicateGroups, type DuplicateGroup } from "@/lib/photo-ai";
 import { scanPhotos, scanSupported, type ScanItem, type ScanProgress } from "@/lib/photo-ai-scan";
 
@@ -69,7 +69,7 @@ export function useDuplicateScan({
       const items: ScanItem[] = scanList.map((p) => ({
         key: p.id,
         name: p.name,
-        url: `${thumbnailUrl(p.drive_file_id, 640)}&raw=1`,
+        url: rawImageUrl(p.drive_file_id, 640),
       }));
       const outcome = await scanPhotos(items, setProgress, ac.signal);
       if (!outcome.aborted || outcome.metrics.length > 0) {

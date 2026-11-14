@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { requireUser } from "@/lib/auth-guards";
 import { resolveSource, listSubFolders } from "@/lib/drive-server";
-import { thumbnailUrl } from "@/lib/drive";
+import { coverImageUrl } from "@/lib/drive";
 import { planSubFolderSources } from "@/lib/album-subfolders";
 import { fetchAllPhotos, chunk } from "@/lib/photos";
 import type { AlbumSource } from "@/lib/types";
+import { revalidateAlbumData } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -151,10 +152,13 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     if (!album?.cover_url || !coverValid) {
       await supabase
         .from("albums")
-        .update({ cover_url: thumbnailUrl(allPhotos[0].drive_file_id, 800) })
+        .update({ cover_url: coverImageUrl(allPhotos[0].drive_file_id) })
         .eq("id", albumId);
     }
   }
 
+  // Trang album khách nhớ danh sách ảnh vài phút (@/lib/album-data-cache) —
+  // đồng bộ xong thì bỏ ngay, khách thấy ảnh mới ở lượt mở kế tiếp.
+  revalidateAlbumData(albumId);
   return NextResponse.json({ total, added, errors });
 }

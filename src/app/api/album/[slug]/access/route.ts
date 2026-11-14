@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllPhotos } from "@/lib/photos";
 import { getOriginalFolders } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { limitByIpDurable } from "@/lib/rate-limit";
@@ -9,7 +8,7 @@ import { faceChips } from "@/lib/face-people";
 import { tienDoQuet } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 import { mintAlbumAccess } from "@/lib/album-access";
-import { loadAlbumPeople } from "@/lib/face-people-load";
+import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +39,10 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     if (!ok) return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }
 
-  const allPhotos = await fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position, is_video");
+  // Danh sách ảnh nhớ giữa các request (xem @/lib/album-data-cache) — chỉ sau khi
+  // mật khẩu đã đúng ở trên.
+  const version = await albumDataVersion(album.id);
+  const allPhotos = await loadAlbumPhotos(album.id, "id, drive_file_id, name, source_id, position, is_video", version);
   const { data: allSources } = await admin
     .from("album_sources")
     .select("id, name, position, stage, drive_url, kind")
@@ -78,7 +80,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     effectivePlan(owner?.plan as Plan, owner?.plan_expires_at),
     owner?.role === "admin",
   );
-  const peopleData = await loadAlbumPeople(admin, album.id, canFaceSearch).catch(() => ({ people: [], links: [] }));
+  const peopleData = await loadAlbumPeopleCached(album.id, canFaceSearch, version).catch(() => ({ people: [], links: [] }));
   const people = canFaceSearch
     ? faceChips(peopleData.people, peopleData.links, new Set((photos ?? []).map((p: { id: string }) => p.id)))
     : [];

@@ -115,6 +115,7 @@ const ORDER = [
   ["migrations/dat_lich_chi_tiet.sql", "Đặt lịch: nhiều gói, ngày chính/phụ, cô dâu/chú rể (studio_bookings.details); SĐT + địa chỉ cô dâu/chú rể trên hợp đồng (chạy SAU hop_dong_yeu_cau_studio)"],
   ["migrations/noi_dung_ck_tu_nhap.sql", "Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})"],
   ["migrations/ghep_layout.sql", "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày"],
+  ["migrations/gioi_han_tan_suat.sql", "Giới hạn tần suất bền không cần Upstash: bộ đếm chống dò mật khẩu album / SĐT trong Postgres"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -182,6 +183,7 @@ const MOI = [
   "migrations/dat_lich_chi_tiet.sql",
   "migrations/noi_dung_ck_tu_nhap.sql",
   "migrations/ghep_layout.sql",
+  "migrations/gioi_han_tan_suat.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
@@ -296,6 +298,15 @@ const NHOM = {
       "-- từ schema nền. Đã chạy bản trước thì chạy lại cả file này cũng an toàn.",
     ],
     files: ["migrations/ghep_layout.sql"],
+  },
+  "gioi-han-tan-suat.sql": {
+    tieuDe: "GIỚI HẠN TẦN SUẤT BỀN — CHỐNG DÒ MẬT KHẨU ALBUM / SĐT KHÔNG CẦN UPSTASH",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng việc này: bảng rate_limit_hits và hàm",
+      "-- rate_limit_hit (chỉ service-role gọi). Không phụ thuộc bảng nào khác.",
+      "-- Đã cấu hình Upstash thì không cần chạy — chạy cũng vô hại.",
+    ],
+    files: ["migrations/gioi_han_tan_suat.sql"],
   },
 };
 

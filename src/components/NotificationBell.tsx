@@ -30,8 +30,12 @@ export default function NotificationBell() {
     // từng trình duyệt đang mở dashboard, rồi kéo theo một lượt đếm vô ích.
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let stopped = false;
-    supabase.auth.getUser().then(({ data }) => {
-      uid = data.user?.id ?? null;
+    // uid đọc từ phiên ĐÃ CÓ trong trình duyệt (getSession — không gọi mạng), như
+    // AnnouncementPopup. getUser() là một lượt hỏi Supabase Auth mỗi lần chuông
+    // gắn vào trang, chỉ để lấy lại đúng id đó. Layout máy chủ đã xác minh đăng
+    // nhập; RLS vẫn là hàng rào thật, uid ở đây chỉ để LỌC cho đúng người.
+    supabase.auth.getSession().then(({ data }) => {
+      uid = data.session?.user.id ?? null;
       refresh();
       if (!uid || stopped) return;
       channel = supabase

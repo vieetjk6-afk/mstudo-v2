@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MAIN_HOST } from "@/lib/hosts";
 import { addDomain, getDomain, getDomainConfig, removeDomain, vercelConfigured, type DomainConfig, type DomainInfo } from "@/lib/vercel-domains";
 import { pointingRecords, verificationRecords } from "@/lib/domain-dns";
+import { dropCache, siteHostTag } from "@/lib/public-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,11 @@ export async function POST(req: Request) {
     const cfg: DomainConfig = configured && info.present ? await getDomainConfig(domain) : { misconfigured: null };
     const dnsOk = cfg.misconfigured === null ? info.verified : !cfg.misconfigured;
     const verified = info.verified && dnsOk;
-    if (verified) await db.from("sites").update({ custom_domain_verified: true }).eq("id", siteId);
+    if (verified) {
+      await db.from("sites").update({ custom_domain_verified: true }).eq("id", siteId);
+      // Trang công khai nhớ cả kết quả "tên miền chưa xác minh" 5 phút — bỏ ngay.
+      dropCache(siteHostTag(domain));
+    }
     const dns = [...pointingRecords(domain, cfg), ...(info.verified ? [] : verificationRecords(domain, info.verification))];
     return { verified, dnsOk, ownershipOk: info.verified, dns };
   }
@@ -53,6 +58,7 @@ export async function POST(req: Request) {
   if (body.action === "remove") {
     const prev = site.custom_domain as string | null;
     await db.from("sites").update({ custom_domain: null, custom_domain_verified: false }).eq("id", site.id);
+    if (prev) dropCache(siteHostTag(prev)); // gỡ tên miền: thôi phục vụ ngay, không chờ bản nhớ
     if (configured && prev) await removeDomain(prev);
     return NextResponse.json({ ok: true, custom_domain: null, custom_domain_verified: false });
   }
@@ -86,6 +92,7 @@ export async function POST(req: Request) {
 
   const { error } = await db.from("sites").update({ custom_domain: domain, custom_domain_verified: false }).eq("id", site.id);
   if (error) return NextResponse.json({ error: error.message.includes("duplicate") ? "domain_taken" : error.message }, { status: 400 });
+  dropCache(siteHostTag(domain), ...(site.custom_domain ? [siteHostTag(site.custom_domain as string)] : []));
 
   if (!configured) {
     return NextResponse.json({ ok: true, custom_domain: domain, verified: false, configured, dns: pointingRecords(domain) });

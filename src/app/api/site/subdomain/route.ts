@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MAIN_HOST, subdomainError } from "@/lib/hosts";
 import { ensureSubdomainHost, getWildcard, removeDomain, vercelConfigured, type HostState } from "@/lib/vercel-domains";
+import { dropCache, siteHostTag } from "@/lib/public-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -133,6 +134,7 @@ export async function POST(req: Request) {
     const prev = site.subdomain;
     const { error } = await db.from("sites").update({ subdomain: null, updated_at: new Date().toISOString() }).eq("id", site.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+    if (prev) dropCache(siteHostTag(prev)); // trang công khai nhớ 5 phút — gỡ là thôi phục vụ ngay
     if (prev) await releaseSubdomainHost(prev);
     return NextResponse.json({ ok: true, subdomain: null });
   }
@@ -156,6 +158,10 @@ export async function POST(req: Request) {
       );
     }
   }
+
+  // Trang công khai nhớ 5 phút theo host (kể cả kết quả "không có trang"): bỏ
+  // nhớ cả tên cũ lẫn tên mới để đổi tên có hiệu lực ngay.
+  dropCache(siteHostTag(sub), ...(prev && prev !== sub ? [siteHostTag(prev)] : []));
 
   // Đăng ký host mới TRƯỚC, gỡ host cũ sau: đổi tên miền phụ mà bước đăng ký
   // hỏng thì ít nhất studio còn host cũ đang chạy, chưa mất gì.

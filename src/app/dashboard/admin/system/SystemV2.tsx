@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, Bot, Check, Vote, DatabaseBackup, Download, FileJson, HardDrive, Loader2, Megaphone, Send, Unplug, Upload,
+  AlertTriangle, Bot, Check, Vote, DatabaseBackup, Download, FileJson, HardDrive, Loader2, Megaphone, Send, ShieldCheck, Unplug, Upload,
 } from "lucide-react";
 import { Badge, Callout, Field, ListRow, PageHead, Section, Stack, btn, inputCls } from "@/components/v2/kit";
 import { Switch } from "@/components/v2/kit-client";
@@ -11,6 +11,7 @@ import { useAdminDrive, type DriveStatus } from "./useAdminDrive";
 import PollAdminV2 from "./PollAdminV2";
 import { SHORTCUTS, TARGET_LABEL, useSystemPanel, type Target } from "./useSystemPanel";
 import { fmtSize, fmtWhen, isStale, useAutoBackup, type AutoBackupState, type AutoBackupStatus } from "./useAutoBackup";
+import { RATE_LIMIT_SQL_URL, useRateLimitMode, type RateLimitMode } from "./useRateLimitMode";
 
 /** Khối "Sao lưu tự động lên Google Drive" — trạng thái, nút chạy ngay, các bản đang giữ. */
 function AutoBackupV2({ ab }: { ab: AutoBackupState }) {
@@ -100,11 +101,22 @@ function AutoBackupV2({ ab }: { ab: AutoBackupState }) {
        màu đỏ (ghi đè dữ liệu), như cũ hỏi lại trước khi chạy.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export default function SystemV2({ ai, driveSeed, backupSeed }: { ai?: React.ReactNode; driveSeed?: DriveStatus; backupSeed?: AutoBackupStatus }) {
+export default function SystemV2({
+  ai,
+  driveSeed,
+  backupSeed,
+  rateSeed,
+}: {
+  ai?: React.ReactNode;
+  driveSeed?: DriveStatus;
+  backupSeed?: AutoBackupStatus;
+  rateSeed?: RateLimitMode | null;
+}) {
   const s = useSystemPanel();
   const drive = useAdminDrive(driveSeed);
   const ds = drive.state;
   const ab = useAutoBackup(backupSeed);
+  const rl = useRateLimitMode(rateSeed);
 
   const shortcuts = (
     <div className="flex flex-col gap-0.5">
@@ -131,6 +143,12 @@ export default function SystemV2({ ai, driveSeed, backupSeed }: { ai?: React.Rea
             label: "Lưu trữ Drive",
             icon: HardDrive,
             badge: ds?.connected ? <span className="h-2 w-2 rounded-full" style={{ background: ds.ok ? "var(--gn)" : "var(--am)" }} /> : null,
+          },
+          {
+            id: "chong-do",
+            label: "Chống dò mật khẩu",
+            icon: ShieldCheck,
+            badge: rl ? <span className="h-2 w-2 rounded-full" style={{ background: rl === "memory" ? "var(--am)" : "var(--gn)" }} /> : null,
           },
           ...(ai ? [{ id: "ai", label: "Nhà cung cấp AI", icon: Bot }] : []),
         ]}
@@ -315,6 +333,34 @@ export default function SystemV2({ ai, driveSeed, backupSeed }: { ai?: React.Rea
               <a href="/api/admin/drive/connect" className={btn("secondary", "md", "flex-none")}>
                 <HardDrive size={16} /> Kết nối Google Drive
               </a>
+            </div>
+          )}
+        </Section>
+
+        {/* ── Chống dò mật khẩu ────────────────────────────────────────── */}
+        <Section
+          id="chong-do"
+          icon={ShieldCheck}
+          title="Chống dò mật khẩu album / SĐT hợp đồng"
+          desc="Mật khẩu album và SĐT mở hợp đồng chỉ có vài chữ số — mỗi máy chỉ được thử vài lần mỗi phút. Bộ đếm phải dùng chung cho mọi máy chủ thì giới hạn mới có tác dụng."
+        >
+          {rl === null ? (
+            <span className="inline-flex items-center gap-2 text-[13px]" style={{ color: "var(--tx3)" }}>
+              <Loader2 size={15} className="animate-spin" /> Đang kiểm tra…
+            </span>
+          ) : rl === "memory" ? (
+            <Callout tone="amber" icon={AlertTriangle} title="Bộ đếm đang nằm riêng trong từng máy chủ">
+              Kẻ dò gửi dồn nhiều lượt cùng lúc là lọt giới hạn. Sửa bằng MỘT trong hai cách: mở{" "}
+              <a href={RATE_LIMIT_SQL_URL} target="_blank" rel="noopener noreferrer" className="underline">file SQL này</a>, chép toàn bộ rồi
+              chạy trong Supabase SQL Editor (miễn phí, 1 phút) — hoặc đặt <code>UPSTASH_REDIS_REST_URL</code> +{" "}
+              <code>UPSTASH_REDIS_REST_TOKEN</code> trên Vercel.
+            </Callout>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge tone="green" dot>Đang bảo vệ</Badge>
+              <span className="text-[13px]" style={{ color: "var(--tx2)" }}>
+                {rl === "upstash" ? "Bộ đếm dùng chung qua Upstash Redis." : "Bộ đếm dùng chung trong cơ sở dữ liệu Supabase."}
+              </span>
             </div>
           )}
         </Section>

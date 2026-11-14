@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllPhotos } from "@/lib/photos";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { pickFolderLinks } from "@/lib/album-original";
 import { faceChips } from "@/lib/face-people";
 import { tienDoQuet } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 import { mintAlbumAccess } from "@/lib/album-access";
-import { loadAlbumPeople } from "@/lib/face-people-load";
+import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +46,10 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     }
   }
 
-  const photos = await fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position");
+  // Danh sách ảnh nhớ giữa các request (xem @/lib/album-data-cache) — chỉ sau khi
+  // mật khẩu đã đúng ở trên.
+  const version = await albumDataVersion(album.id);
+  const photos = await loadAlbumPhotos(album.id, "id, drive_file_id, name, source_id, position", version);
 
   const { data: sources } = await admin
     .from("album_sources")
@@ -83,7 +85,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     admin.from("dislikes").select("photo_id, client_note").eq("album_id", album.id),
     // Nhóm người studio đã lưu — cùng dữ liệu mà trang không mật khẩu dựng sẵn
     // ở src/app/a/[slug]/page.tsx (xem @/lib/face-people-load).
-    loadAlbumPeople(admin, album.id, canFaceSearch).catch(() => ({ people: [], links: [] })),
+    loadAlbumPeopleCached(album.id, canFaceSearch, version).catch(() => ({ people: [], links: [] })),
   ]);
   const selected = (sel ?? []).map((s) => s.photo_id);
   const disliked = (dis ?? []).map((d) => d.photo_id);

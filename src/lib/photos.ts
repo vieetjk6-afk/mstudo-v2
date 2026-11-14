@@ -14,8 +14,15 @@ const PARALLEL = 6;
 export async function fetchAllPhotos(
   client: any,
   albumId: string,
-  columns = "*"
+  columns = "*",
+  opts: { strict?: boolean } = {}
 ): Promise<any[]> {
+  // strict: trang nào lỗi thì NÉM thay vì trả phần đã đọc — bắt buộc khi kết quả
+  // được nhớ giữa các request (album-data-cache): một lượt lỗi thoáng qua không
+  // được biến thành album thiếu ảnh suốt mấy phút.
+  const bad = (error: unknown) => {
+    if (opts.strict && error) throw error instanceof Error ? error : new Error(String((error as { message?: string })?.message ?? error));
+  };
   const page = (from: number, withCount = false) =>
     client
       .from("photos")
@@ -29,6 +36,7 @@ export async function fetchAllPhotos(
       .range(from, from + PAGE - 1);
 
   const first = await page(0, true);
+  bad(first.error);
   if (first.error || !first.data || first.data.length === 0) return [];
   const out: any[] = [...first.data];
   if (first.data.length < PAGE) return out;
@@ -41,6 +49,7 @@ export async function fetchAllPhotos(
     for (let i = 0; i < starts.length; i += PARALLEL) {
       const batch = await Promise.all(starts.slice(i, i + PARALLEL).map((f) => page(f)));
       for (const { data, error } of batch) {
+        bad(error);
         if (error || !data || data.length === 0) return out;
         out.push(...data);
         if (data.length < PAGE) return out;
@@ -51,6 +60,7 @@ export async function fetchAllPhotos(
   // Không có tổng, hoặc album vừa thêm ảnh trong lúc tải: đọc nối đuôi như cũ.
   for (; ; from += PAGE) {
     const { data, error } = await page(from);
+    bad(error);
     if (error || !data || data.length === 0) break;
     out.push(...data);
     if (data.length < PAGE) break;

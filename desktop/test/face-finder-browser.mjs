@@ -98,10 +98,12 @@ try {
 }
 const page = await browser.newPage();
 
-// Ảnh Drive → PNG tại chỗ.
-await page.route("**/api/img**", (route) =>
-  route.fulfill({ status: 200, contentType: "image/png", body: PNG })
-);
+// Ảnh Drive → PNG tại chỗ. Ảnh hiển thị trỏ THẲNG CDN Google (lh3 — xem
+// thumbnailUrl ở src/lib/drive.ts), ảnh cần byte cùng miền vẫn qua /api/img:
+// chặn cả hai đường.
+const fakeImg = (route) => route.fulfill({ status: 200, contentType: "image/png", body: PNG });
+await page.route("**/api/img**", fakeImg);
+await page.route("https://lh3.googleusercontent.com/**", fakeImg);
 
 /* Lỗi console: React ghi cả cảnh báo hydrate ra console.error, nên gom cả hai. */
 const errors = [];
@@ -295,6 +297,7 @@ ok("không có lỗi JavaScript nào trên trang", real.length === 0, real.join(
   const gerr = [];
   g.on("pageerror", (e) => gerr.push(e.message.slice(0, 200)));
   await g.route("**/api/img**", (r) => r.fulfill({ status: 200, contentType: "image/png", body: PNG }));
+  await g.route("https://lh3.googleusercontent.com/**", (r) => r.fulfill({ status: 200, contentType: "image/png", body: PNG }));
   // Trang này tự tải nốt ảnh trong nền; ở đây không cần thêm gì.
   await g.route("**/api/album/**", (r) =>
     r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ photos: [] }) })

@@ -1,11 +1,11 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllPhotos, filterDeliveryPhotos } from "@/lib/photos";
+import { filterDeliveryPhotos } from "@/lib/photos";
 import { faceChips, type PersonChip } from "@/lib/face-people";
 import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
 import { isDeliveryPhase } from "@/lib/album-phase";
-import { getAlbumOwner } from "@/lib/album-owner";
+import { getAlbumOwner, getAlbumOwnerHost } from "@/lib/album-owner";
 import StudioBrandMark from "@/components/StudioBrandMark";
 import GalleryView from "./GalleryView";
 import GalleryViewV2 from "./GalleryViewV2";
@@ -14,12 +14,11 @@ import { customerUiV2 } from "@/lib/ui-server";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
 import { getOriginalFolders } from "@/lib/album-original";
-import { getStudioHost } from "@/lib/studio-site";
 import type { Feedback } from "@/lib/types";
 import { loadPrintState } from "@/lib/album-print";
 import { loadCollageState } from "@/lib/album-collage";
 import { studioUrl } from "@/lib/hosts";
-import { loadAlbumPeople } from "@/lib/face-people-load";
+import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +95,9 @@ export default async function GalleryPage(
   }
 
   const hasPassword = !album.gallery_pinned && !!album.password_hash;
+  // Phiên bản dữ liệu ảnh / khuôn mặt — khoá nhớ của danh sách ảnh và khuôn mặt
+  // (xem @/lib/album-data-cache). Album có mật khẩu: trang chưa đọc ảnh nào.
+  const versionP = hasPassword ? Promise.resolve("") : albumDataVersion(album.id);
 
   // Chạy song song: brand, ảnh, sources, feedback và gói của chủ studio — gộp
   // Promise.all thay vì nhiều round-trip tuần tự (giảm TTFB trang khách).
@@ -105,10 +107,11 @@ export default async function GalleryPage(
     getAlbumOwner(album.owner_id),
     // Domain riêng của studio — link chia sẻ phải mang tên miền studio chứ
     // không phải mstudo.com, kể cả khi khách đang mở album trên host nào.
-    getStudioHost(admin, album.owner_id),
+    getAlbumOwnerHost(album.owner_id),
+    // Danh sách ảnh nhớ giữa các request (link giao khách mở bởi cả trăm người).
     hasPassword
       ? Promise.resolve(null)
-      : fetchAllPhotos(admin, album.id, "id, drive_file_id, name, source_id, position, is_video"),
+      : versionP.then((v) => loadAlbumPhotos(album.id, "id, drive_file_id, name, source_id, position, is_video", v)),
     // drive_url/kind cần cho cả 2 trường hợp: có mật khẩu vẫn cần để tính link
     // Drive (nhưng chỉ gửi cho client SAU khi mở khoá — xem access route).
     admin.from("album_sources").select("id, name, position, stage, drive_url, kind").eq("album_id", album.id).order("position"),
@@ -118,11 +121,15 @@ export default async function GalleryPage(
       .eq("album_id", album.id)
       .eq("approved", true)
       .order("created_at", { ascending: false }),
-    // Nhóm khuôn mặt studio đã gom — chỉ đọc khi gói có tìm theo khuôn mặt,
-    // không kéo vector descriptor (xem @/lib/face-people-load).
-    getAlbumOwner(album.owner_id)
-      .then(({ profile }) =>
-        loadAlbumPeople(admin, album.id, planAllowsFaceSearch(effectivePlan(profile?.plan as Plan, profile?.plan_expires_at), profile?.role === "admin")),
+    // Nhóm khuôn mặt studio đã gom — chỉ đọc khi gói có tìm theo khuôn mặt và
+    // album không khoá, không kéo vector descriptor, nhớ giữa các request.
+    Promise.all([getAlbumOwner(album.owner_id), versionP])
+      .then(([{ profile }, v]) =>
+        loadAlbumPeopleCached(
+          album.id,
+          !hasPassword && planAllowsFaceSearch(effectivePlan(profile?.plan as Plan, profile?.plan_expires_at), profile?.role === "admin"),
+          v,
+        ),
       )
       .catch(() => ({ people: [], links: [] })),
     // Ảnh in tặng của hợp đồng (null = không tặng in, hoặc DB chưa chạy
