@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowRight, BookOpen, LoaderCircle, Minus, Plus, Sparkles, X } from "lucide-react";
+import { ArrowRight, BookOpen, LoaderCircle, Minus, Plus, Shuffle, Sparkles, X } from "lucide-react";
 import { btn } from "@/components/v2/kit";
 import { suggestPhotos, type PhotoCat, type PhotoInfo } from "@/lib/collage/categories";
 import { COLLAGE_LIMITS } from "@/lib/collage/types";
+import { rng } from "@/lib/collage/rng";
 import type { PersonChip } from "@/lib/face-people";
 import type { PhotoLite } from "./api";
 import type { ImgUrl } from "./PageView";
@@ -16,9 +17,10 @@ import { CAT_ALL, CAT_HEARTS, CAT_PICKED, CAT_SUGGEST, CatChips, PhotoGrid, Stud
      • TỰ ĐỘNG: chọn nhiều ảnh, máy chia vào các layout;
      • TỰ CHỌN TỪNG LAYOUT: chọn ảnh cho layout 1, bấm "+ Layout" chọn tiếp
        layout 2… — máy chỉ dàn trang, không chia lại ảnh.
-   Gợi ý ảnh đẹp theo nhóm: ảnh chung, cô dâu, chú rể, decor & chi tiết, bê
-   quả, gia đình… (lib/collage/categories). "Chọn giúp tôi" chọn đúng số ảnh
-   khách nhập, trải đều buổi chụp; ảnh khách đã thả tim được ưu tiên.
+   Gợi ý CHỈ gồm ảnh chung của cô dâu chú rể, ảnh riêng cô dâu, ảnh riêng chú
+   rể — không ảnh đông người, không decor (lib/collage/categories). Gợi ý ngẫu
+   nhiên: "Đổi gợi ý" / mỗi lần "Chọn giúp tôi" ra một bộ khác. Các chip nhóm
+   (decor, bê quả, gia đình…) vẫn còn để khách tự xem và chọn.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 export type PickMode = "auto" | "manual";
@@ -109,7 +111,12 @@ export default function PickStep({
   const order = useMemo(() => photos.map((p) => p.id), [photos]);
   const byId = useMemo(() => new Map(photos.map((p) => [p.id, p])), [photos]);
   const res = useMemo(() => ({ cats, info }), [cats, info]);
-  const suggested = useMemo(() => suggestPhotos(order, res, 30, hearts), [order, res, hearts]);
+  // Lưới "Gợi ý": bộ ngẫu nhiên theo seed — "Đổi gợi ý" đổi seed là ra bộ khác.
+  const [seed, setSeed] = useState(() => Math.floor(Math.random() * 1e9));
+  const suggested = useMemo(() => suggestPhotos(order, res, 30, hearts, undefined, rng(seed)), [order, res, hearts, seed]);
+  const reshuffle = () => setSeed(Math.floor(Math.random() * 1e9));
+  /** Số ảnh hợp lệ để gợi ý (ảnh chung, cô dâu, chú rể) — ít hơn lưới thì "Đổi gợi ý" chẳng đổi được gì. */
+  const poolSize = useMemo(() => suggestPhotos(order, res, order.length, hearts, undefined, rng(1)).length, [order, res, hearts]);
   const heartList = useMemo(() => order.filter((id) => hearts.has(id)), [order, hearts]);
 
   const cur = useMemo(() => (manual ? (groups[active] ?? []) : selected), [manual, groups, active, selected]);
@@ -169,15 +176,17 @@ export default function PickStep({
     }
     // Không lấy lại ảnh đã nằm ở layout khác / đã chọn.
     const taken = new Set<string>(manual ? [...groupOf.keys()] : selected);
+    // Mỗi lần bấm một bộ ngẫu nhiên khác (Math.random), chỉ ảnh chung / cô dâu / chú rể.
     const add = suggestPhotos(order, res, helpN, new Set([...hearts].filter((id) => !taken.has(id))), taken).filter((id) => !taken.has(id)).slice(0, helpN);
     if (!add.length) {
-      toast("Bạn đã chọn hết các ảnh gợi ý.");
+      toast("Đã chọn hết ảnh cô dâu, chú rể và ảnh chung của album.");
       return;
     }
     if (manual) setGroup(active, [...cur, ...add]);
     else setSelected([...selected, ...add]);
-    toast(`Đã chọn thêm ${add.length} ảnh gợi ý — bấm vào ảnh để bỏ bớt.`);
+    toast(add.length < helpN ? `Album chỉ còn ${add.length} ảnh cô dâu, chú rể phù hợp — đã chọn hết.` : `Đã chọn thêm ${add.length} ảnh — bấm vào ảnh để bỏ bớt, bấm “Bỏ chọn” rồi chọn giúp lại để ra bộ khác.`);
     setCat(CAT_PICKED);
+    reshuffle();
   };
 
   const addLayout = () => {
@@ -281,12 +290,11 @@ export default function PickStep({
               <p className="min-w-0 flex-1 text-[13px]" style={{ color: "var(--tx2)" }}>
                 {manual ? (
                   <>
-                    Máy chọn giúp những tấm đẹp cho <b style={{ color: "var(--tx)" }}>layout {active + 1}</b> — không lấy lại ảnh đã nằm ở layout khác.
+                    Máy chọn ngẫu nhiên ảnh chung, ảnh cô dâu, chú rể cho <b style={{ color: "var(--tx)" }}>layout {active + 1}</b> — không lấy ảnh đông người, không lấy lại ảnh đã nằm ở layout khác.
                   </>
                 ) : (
                   <>
-                    Một bộ đẹp nên có <b style={{ color: "var(--tx)" }}>ảnh chung</b>, <b style={{ color: "var(--tx)" }}>cô dâu</b>, <b style={{ color: "var(--tx)" }}>chú rể</b>, vài tấm <b style={{ color: "var(--tx)" }}>decor</b> và khoảnh khắc như{" "}
-                    <b style={{ color: "var(--tx)" }}>bê quả</b>. Máy chọn giúp những tấm rõ mặt, trải đều buổi chụp.
+                    Máy chọn ngẫu nhiên <b style={{ color: "var(--tx)" }}>ảnh chung của hai bạn</b>, ảnh riêng <b style={{ color: "var(--tx)" }}>cô dâu</b> và <b style={{ color: "var(--tx)" }}>chú rể</b> — không lấy ảnh đông người. Mỗi lần bấm ra một bộ khác.
                   </>
                 )}
               </p>
@@ -315,6 +323,18 @@ export default function PickStep({
               driveIdOf={driveIdOf}
             />
           </div>
+          {cat === CAT_SUGGEST && suggested.length ? (
+            <div className="flex items-center gap-2 px-3 pb-1.5 pt-1">
+              <p className="min-w-0 flex-1 text-[12.5px]" style={{ color: "var(--tx3)" }}>
+                {poolSize > suggested.length ? `Ảnh chung, cô dâu, chú rể — ${suggested.length} tấm ngẫu nhiên trong ${poolSize}` : `Tất cả ${poolSize} ảnh chung, cô dâu, chú rể của album`}
+              </p>
+              {poolSize > suggested.length ? (
+                <button type="button" onClick={reshuffle} className={btn("secondary", "sm", "flex-none")}>
+                  <Shuffle size={14} /> Đổi gợi ý
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {shown.length === 0 ? (
             <p className="px-4 py-10 text-center text-[13.5px]" style={{ color: "var(--tx3)" }}>
               {cat === CAT_PICKED ? (manual ? `Layout ${active + 1} chưa có ảnh nào.` : "Bạn chưa chọn ảnh nào.") : "Nhóm này chưa có ảnh."}
@@ -330,6 +350,7 @@ export default function PickStep({
                 label={labelOf}
                 dim={manual ? (id) => groupOf.has(id) && groupOf.get(id) !== active : undefined}
                 cols={cols}
+                resetKey={`${cat}|${manual ? active : ""}|${cat === CAT_SUGGEST ? seed : ""}`}
               />
             </div>
           )}

@@ -246,6 +246,7 @@ function PhotoChooser({
           dim={disabled}
           label={(id) => tagLabel(info[id], cats)}
           cols={vp.w >= 640 ? 5 : 4}
+          resetKey={cat}
         />
       </div>
     </Sheet>
@@ -786,6 +787,7 @@ export default function EditorStep(p: EditorProps) {
                   else relayoutWith([...ids, id]);
                 }}
                 cols={vp.w >= 640 || wide ? 5 : 4}
+                resetKey="doc-photos"
               />
               <button type="button" onClick={() => setChooser({ kind: "add" })} className={btn("secondary", "md", "self-start")}>
                 <ImagePlus size={16} /> Thêm ảnh khác trong album

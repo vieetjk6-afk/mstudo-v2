@@ -36,8 +36,12 @@ export interface Crop {
  * vẫn vẽ y như trước.
  */
 export interface FrameDeco {
-  /** Hình phần ảnh: "round" bo góc mềm, "arch" vòm (trên tròn), "oval" tròn / bầu dục, "stamp" tem thư (viền răng cưa). */
-  shape?: "round" | "arch" | "oval" | "stamp";
+  /**
+   * Hình phần ảnh: "round" bo góc mềm, "arch" vòm (trên tròn), "oval" tròn / bầu
+   * dục, "stamp" tem thư (viền răng cưa), "archL" / "archR" nửa vòm trái / phải
+   * (hai ô cạnh nhau thành một cửa sổ vòm).
+   */
+  shape?: "round" | "arch" | "oval" | "stamp" | "archL" | "archR";
   /** Viền quanh ảnh, theo điểm ảnh của khổ (kiểu ảnh in). */
   pad?: number;
   /** Viền dưới — dày hơn viền kia là kiểu ảnh lấy liền (polaroid), chỗ để viết chữ. */
