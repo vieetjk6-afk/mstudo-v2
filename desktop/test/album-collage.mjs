@@ -236,11 +236,14 @@ check("bỏ dấu tiếng Việt", fold("Bê Quả · Đón Dâu"), "be qua · d
   ok("ảnh chung điểm cao hơn ảnh decor", res.info[P(0)].score > res.info[P(7)].score);
 
   const order = albumPhotos.map((p) => p.id);
-  const pick = suggestPhotos(order, res, 6);
+  const pick = suggestPhotos(order, res, 6, new Set(), new Set(), rng(3));
   ok("gợi ý đúng số ảnh, không trùng", pick.length === 6 && new Set(pick).size === 6, JSON.stringify(pick));
-  ok("gợi ý có ảnh chung, ảnh riêng và decor", pick.some((id) => res.info[id].tags.includes(CAT_COUPLE)) && pick.some((id) => res.info[id].tags.some((t) => t.startsWith("p:"))) && pick.includes(P(7)));
+  ok("gợi ý có ảnh chung và ảnh riêng cô dâu, chú rể", pick.some((id) => res.info[id].tags.includes(CAT_COUPLE)) && pick.some((id) => res.info[id].tags.includes("p:A")) && pick.some((id) => res.info[id].tags.includes("p:B")), JSON.stringify(pick));
+  ok("không gợi ý decor, ảnh đông người, ảnh khách mời", [P(7), P(8), P(11)].every((id) => !pick.includes(id)), JSON.stringify(pick));
+  ok("dù album hết ảnh hợp lệ cũng không lấy ảnh đông người / decor", [P(7), P(8), P(11)].every((id) => !suggestPhotos(order, res, 12).includes(id)));
   check("gợi ý xếp theo thứ tự album", pick, [...pick].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
   ok("ảnh khách đã thả tim được ưu tiên", suggestPhotos(order, res, 4, new Set([P(9)])).includes(P(9)));
+  ok("thả tim ảnh đông người vẫn không được gợi ý", !suggestPhotos(order, res, 4, new Set([P(8)])).includes(P(8)));
 
   // Studio chưa đặt tên: hai người nhiều ảnh nhất vẫn được nhận là cặp đôi.
   const unnamed = categorize({ photos: albumPhotos, sources: [], faces, scanned, people: people.map((p) => ({ ...p, name: "" })), links });
@@ -418,6 +421,43 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   ok("đánh dấu bộ tự chọn", doc.mode === "manual");
   const withText = doc.pages.map((p) => pageText(p)?.text).filter(Boolean).sort();
   check("mỗi nội dung đúng một layout", withText, ["Hai", "Một"]);
+}
+
+/* ── Gợi ý ngẫu nhiên: mỗi lần một bộ khác, chỉ ảnh chung / cô dâu / chú rể ── */
+{
+  const ids = Array.from({ length: 70 }, (_, i) => `r${i}`);
+  // r0–19 ảnh chung, r20–34 cô dâu, r35–49 chú rể, r50–59 đông người, r60–69 decor.
+  const tagOf = (i) => (i < 20 ? ["couple"] : i < 35 ? ["p:A"] : i < 50 ? ["p:B"] : i < 60 ? ["family"] : ["decor"]);
+  const info = Object.fromEntries(ids.map((id, i) => [id, { tags: tagOf(i), score: 5 + (i % 5) * 0.3, hero: i < 50, faces: i < 60 ? [[0.3, 0.2, 0.1, 0.1]] : [] }]));
+  const cats = [
+    { id: "couple", label: "Ảnh chung", kind: "couple", count: 20 },
+    { id: "p:A", label: "Cô dâu", kind: "person", personId: "A", role: "bride", count: 15 },
+    { id: "p:B", label: "Chú rể", kind: "person", personId: "B", role: "groom", count: 15 },
+    { id: "family", label: "Gia đình & bạn bè", kind: "family", count: 10 },
+    { id: "decor", label: "Decor & chi tiết", kind: "decor", count: 10 },
+  ];
+  const res = { cats, info };
+  const a = suggestPhotos(ids, res, 12, new Set(), new Set(), rng(1));
+  const b = suggestPhotos(ids, res, 12, new Set(), new Set(), rng(2));
+  check("cùng seed → cùng bộ (lưới Gợi ý không nhảy khi vẽ lại)", suggestPhotos(ids, res, 12, new Set(), new Set(), rng(1)), a);
+  ok("đổi gợi ý → ra bộ khác", JSON.stringify(a) !== JSON.stringify(b), `${a} | ${b}`);
+  const runs = Array.from({ length: 30 }, (_, k) => suggestPhotos(ids, res, 12, new Set(), new Set(), rng(100 + k)));
+  ok("bấm nhiều lần: gần như lần nào cũng khác", new Set(runs.map((r) => r.join())).size >= 28);
+  ok("không bao giờ có ảnh đông người / decor", runs.every((r) => r.every((id) => Number(id.slice(1)) < 50)));
+  const share = (r, lo, hi) => r.filter((id) => Number(id.slice(1)) >= lo && Number(id.slice(1)) < hi).length;
+  ok("mỗi bộ có ảnh chung, cô dâu và chú rể", runs.every((r) => share(r, 0, 20) >= 3 && share(r, 20, 35) >= 2 && share(r, 35, 50) >= 2), JSON.stringify(runs.map((r) => [share(r, 0, 20), share(r, 20, 35), share(r, 35, 50)])));
+  const seen = new Set(runs.flat());
+  ok("đổi gợi ý nhiều lần thì phủ gần hết ảnh hợp lệ", seen.size >= 40, String(seen.size));
+  // Album chưa quét mặt: thư mục cô dâu / chú rể / ngoại cảnh trước; thư mục lễ, tiệc chỉ khi hết ảnh.
+  const raw = Array.from({ length: 30 }, (_, i) => `u${i}`);
+  const rawInfo = Object.fromEntries(raw.map((id, i) => [id, { tags: i < 6 ? ["m-codau"] : i < 10 ? ["m-pre"] : i < 20 ? ["m-tiec"] : [], score: 5, hero: i < 10, faces: [] }]));
+  const rawRes = { cats: [{ id: "m-codau", label: "Cô dâu", kind: "person", role: "bride", count: 6 }, { id: "m-tiec", label: "Tiệc cưới", kind: "moment", count: 10 }, { id: "m-pre", label: "Ảnh cưới ngoại cảnh", kind: "moment", count: 4 }], info: rawInfo };
+  const r = suggestPhotos(raw, rawRes, 12, new Set(), new Set(), rng(9));
+  ok("chưa quét mặt: lấy thư mục cô dâu + ngoại cảnh, bỏ thư mục tiệc", r.length === 12 && raw.slice(0, 10).every((id) => r.includes(id)) && r.every((id) => !rawInfo[id].tags.includes("m-tiec")), JSON.stringify(r));
+  ok("chưa quét mặt, album ít ảnh: thư mục tiệc chỉ dùng khi hết ảnh khác", suggestPhotos(raw, rawRes, 25, new Set(), new Set(), rng(9)).length === 25);
+  const st1 = storyChapters(ids, res, new Set(), rng(5)).flatMap((c) => c.ids).join();
+  const st2 = storyChapters(ids, res, new Set(), rng(6)).flatMap((c) => c.ids).join();
+  ok("bộ kể chuyện: mỗi lần tạo ra bộ khác", st1 !== st2);
 }
 
 /* ── Gợi ý chọn ảnh: đúng số ảnh MỚI, bỏ ảnh đã dùng ─────────────────────── */

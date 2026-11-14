@@ -268,17 +268,57 @@ export function categorize(inp: CatInput): CatResult {
 
 /* ── Chọn giúp khách ─────────────────────────────────────────────────────── */
 
-/** Tỉ lệ mỗi loại nhóm trong bộ gợi ý (tổng ~1). */
-const QUOTA: Record<CatKind, number> = { couple: 0.3, person: 0.28, decor: 0.14, moment: 0.16, family: 0.1, folder: 0 };
+/**
+ * Chọn `k` ảnh trong `pool`, trải đều theo thứ tự album: chia thành `k` khúc,
+ * mỗi khúc bốc NGẪU NHIÊN một tấm — tấm điểm cao dễ trúng hơn (trọng số theo
+ * điểm) nhưng không lần nào giống lần nào. Trải đều nên không vớ hai tấm bấm
+ * liên tiếp gần như giống hệt nhau.
+ */
+function spreadPick(pool: readonly string[], k: number, pos: ReadonlyMap<string, number>, scoreOf: (id: string) => number, picked: Set<string>, want: number, rand: () => number) {
+  const list = pool.filter((id) => !picked.has(id) && pos.has(id)).sort((a, b) => pos.get(a)! - pos.get(b)!);
+  if (k <= 0 || !list.length) return;
+  const chunks = Math.min(k, list.length);
+  // Lệch ranh giới khúc một đoạn ngẫu nhiên — hai lần chọn không cắt cùng chỗ.
+  const shift = rand();
+  for (let c = 0; c < chunks && picked.size < want; c++) {
+    const a = Math.floor(((c + shift) * list.length) / chunks) % list.length;
+    const len = Math.max(1, Math.floor(list.length / chunks));
+    const part: string[] = [];
+    for (let i = 0; i < len; i++) {
+      const id = list[(a + i) % list.length];
+      if (!picked.has(id)) part.push(id);
+    }
+    if (!part.length) continue;
+    const top = Math.max(...part.map(scoreOf));
+    const w = part.map((id) => Math.exp((scoreOf(id) - top) * 0.9));
+    let r = rand() * w.reduce((x, y) => x + y, 0);
+    let i = 0;
+    while (i < part.length - 1 && (r -= w[i]) > 0) i++;
+    picked.add(part[i]);
+  }
+}
+
+/** Tỉ lệ trong bộ gợi ý: ảnh chung của hai bạn, ảnh riêng cô dâu, ảnh riêng chú rể. */
+const SHARE = { couple: 0.4, person: 0.3 };
+
+/** Ảnh không bao giờ được gợi ý: đông người (gia đình, khách mời) và ảnh không có người (decor). */
+const isCrowd = (tags: readonly string[]) => tags.includes(CAT_FAMILY) || tags.includes(CAT_DECOR);
+/** Thư mục lễ / tiệc — thường đông người; chỉ dùng khi album chưa quét mặt và không còn ảnh nào khác. */
+const CROWD_FOLDERS = new Set(["m-bequa", "m-giatien", "m-tiec"]);
 
 /**
- * Bộ ảnh gợi ý `count` tấm, chia đều các nhóm (ảnh chung nhiều nhất, rồi ảnh
- * riêng cô dâu / chú rể, decor, khoảnh khắc như bê quả, gia đình).
+ * Bộ ảnh gợi ý `count` tấm — CHỈ ảnh chung của cô dâu chú rể, ảnh riêng cô
+ * dâu, ảnh riêng chú rể (theo khuôn mặt đã quét, hoặc thư mục "Cô dâu" / "Chú
+ * rể" / "Ngoại cảnh"). Không gợi ý ảnh đông người, ảnh decor.
  *
- * Trong mỗi nhóm: chia ảnh (theo thứ tự trong album) thành từng khúc rồi lấy
- * tấm điểm cao nhất mỗi khúc — gợi ý trải khắp buổi chụp và không vớ hai tấm
- * bấm liên tiếp gần như giống hệt nhau. Ảnh khách đã THẢ TIM được ưu tiên.
- * Kết quả xếp theo thứ tự album (kể chuyện theo thời gian).
+ * NGẪU NHIÊN: mỗi lần gọi (mỗi lần bấm "Chọn giúp tôi", "Đổi gợi ý") ra một bộ
+ * khác — ảnh rõ mặt dễ được chọn hơn nhưng không lần nào y hệt. Truyền `rand`
+ * có seed (rng.ts) để kết quả lặp lại được (kiểm thử, lưới "Gợi ý").
+ *
+ * Album chưa quét mặt: không biết ai là ai nên lấy thư mục cô dâu / chú rể /
+ * ngoại cảnh trước, rồi ảnh chưa xếp nhóm ngoài các thư mục lễ / tiệc. Ảnh khách
+ * đã THẢ TIM (trong nhóm hợp lệ) được ưu tiên, tối đa nửa bộ. Kết quả xếp theo
+ * thứ tự album.
  */
 export function suggestPhotos(
   allOrder: readonly string[],
@@ -287,41 +327,69 @@ export function suggestPhotos(
   hearts: ReadonlySet<string> = new Set(),
   /** Ảnh không được gợi ý (đã chọn, đã nằm ở layout khác) — kết quả vẫn đủ `count` ảnh MỚI nếu album còn. */
   exclude: ReadonlySet<string> = new Set(),
+  rand: () => number = Math.random,
 ): string[] {
   const order = exclude.size ? allOrder.filter((id) => !exclude.has(id)) : allOrder;
   const pos = new Map(order.map((id, i) => [id, i]));
-  const scoreOf = (id: string) => (res.info[id]?.score ?? 5) + (hearts.has(id) ? 3 : 0);
+  const tagsOf = (id: string) => res.info[id]?.tags ?? [];
+  const scoreOf = (id: string) => (res.info[id]?.score ?? 5) + (hearts.has(id) ? 1.5 : 0);
   const picked = new Set<string>();
   const want = Math.max(1, Math.min(count, order.length));
 
-  // Ảnh đã thả tim lên trước (tối đa nửa bộ — còn chỗ cho gợi ý của máy).
-  for (const id of [...hearts].filter((id) => pos.has(id)).sort((a, b) => scoreOf(b) - scoreOf(a)).slice(0, Math.ceil(want / 2))) picked.add(id);
-
-  const pickSpread = (pool: string[], k: number) => {
-    const list = pool.filter((id) => !picked.has(id)).sort((a, b) => pos.get(a)! - pos.get(b)!);
-    if (k <= 0 || !list.length) return;
-    const chunks = Math.min(k, list.length);
-    for (let c = 0; c < chunks && picked.size < want; c++) {
-      const part = list.slice(Math.floor((c * list.length) / chunks), Math.floor(((c + 1) * list.length) / chunks));
-      const best = part.sort((a, b) => scoreOf(b) - scoreOf(a))[0];
-      if (best) picked.add(best);
-    }
-  };
-
-  // Theo hạn mức từng loại nhóm; trong loại, chia đều các nhóm con (2 người, các khoảnh khắc).
-  const byKind = new Map<CatKind, PhotoCat[]>();
-  for (const c of res.cats) byKind.set(c.kind, [...(byKind.get(c.kind) ?? []), c]);
-  for (const kind of ["couple", "person", "decor", "moment", "family"] as CatKind[]) {
-    const cats = byKind.get(kind) ?? [];
-    if (!cats.length) continue;
-    const quota = Math.max(1, Math.round(want * QUOTA[kind]));
-    cats.forEach((c, i) => {
-      const share = Math.floor(quota / cats.length) + (i < quota % cats.length ? 1 : 0);
-      pickSpread(order.filter((id) => res.info[id]?.tags.includes(c.id)), share);
-    });
+  // Nhóm hợp lệ: ảnh chung + ảnh riêng từng người (cô dâu, chú rể).
+  // Hai người: theo vai trò studio đặt tên / thư mục; người chưa đặt tên lấp chỗ còn trống.
+  const slots: Set<string>[] = [new Set(), new Set()];
+  const faceSlot = [false, false];
+  const persons = res.cats.filter((c) => c.kind === "person");
+  for (const c of persons) {
+    if (!c.role) continue;
+    const i = c.role === "bride" ? 0 : 1;
+    slots[i].add(c.id);
+    if (c.personId) faceSlot[i] = true;
   }
-  // Còn thiếu (album chưa quét mặt, nhóm ít ảnh): trải đều phần còn lại của album.
-  if (picked.size < want) pickSpread([...order], want - picked.size);
+  for (const c of persons) {
+    if (c.role) continue;
+    const i = faceSlot[0] ? 1 : 0;
+    faceSlot[i] = true;
+    slots[i].add(c.id);
+  }
+  const inCat = (id: string, cats: ReadonlySet<string>) => tagsOf(id).some((t) => cats.has(t));
+  const couple = order.filter((id) => !isCrowd(tagsOf(id)) && (tagsOf(id).includes(CAT_COUPLE) || tagsOf(id).includes("m-pre")));
+  const bride = order.filter((id) => !isCrowd(tagsOf(id)) && inCat(id, slots[0]));
+  const groom = order.filter((id) => !isCrowd(tagsOf(id)) && inCat(id, slots[1]));
+  const main = new Set([...couple, ...bride, ...groom]);
+  // Album đã quét mặt thì biết ảnh nào đông người; chưa quét thì đành dựa vào thư mục.
+  const scannedAlbum = order.some((id) => (res.info[id]?.faces.length ?? 0) > 0 || tagsOf(id).includes(CAT_DECOR) || tagsOf(id).includes(CAT_FAMILY));
+  const known = (id: string) => tagsOf(id).some((t) => t === CAT_COUPLE || t === CAT_FAMILY || t === CAT_DECOR || t.startsWith("p:"));
+  const loose = order.filter((id) => !main.has(id) && !known(id) && !isCrowd(tagsOf(id)) && !tagsOf(id).some((t) => CROWD_FOLDERS.has(t)));
+  const lastResort = scannedAlbum ? [] : order.filter((id) => !main.has(id) && !isCrowd(tagsOf(id)) && tagsOf(id).some((t) => CROWD_FOLDERS.has(t)));
+  const allowed = new Set([...main, ...loose, ...lastResort]);
+
+  // Ảnh đã thả tim (trong nhóm hợp lệ) lên trước, tối đa nửa bộ — bốc ngẫu nhiên nếu nhiều hơn.
+  const liked = [...hearts].filter((id) => pos.has(id) && allowed.has(id));
+  spreadPick(liked, Math.min(liked.length, Math.ceil(want / 2)), pos, scoreOf, picked, Math.ceil(want / 2), rand);
+
+  // Chia phần còn lại theo tỉ lệ ảnh chung / cô dâu / chú rể; nhóm thiếu ảnh nhường cho nhóm khác.
+  const buckets = [
+    { ids: couple, w: SHARE.couple },
+    { ids: bride, w: SHARE.person },
+    { ids: groom, w: SHARE.person },
+  ].filter((b) => b.ids.some((id) => !picked.has(id)));
+  let left = want - picked.size;
+  for (let round = 0; round < 3 && left > 0 && buckets.length; round++) {
+    const total = buckets.reduce((s, b) => s + b.w, 0);
+    let given = 0;
+    buckets.forEach((b, i) => {
+      const k = i === buckets.length - 1 ? left - given : Math.round((left * b.w) / total);
+      given += k;
+      spreadPick(b.ids, k, pos, scoreOf, picked, want, rand);
+    });
+    left = want - picked.size;
+    for (let i = buckets.length - 1; i >= 0; i--) if (!buckets[i].ids.some((id) => !picked.has(id))) buckets.splice(i, 1);
+  }
+  // Còn thiếu (album chưa quét mặt / ít ảnh): ảnh chưa xếp nhóm, rồi mới tới thư mục lễ / tiệc.
+  if (picked.size < want) spreadPick(loose, want - picked.size, pos, scoreOf, picked, want, rand);
+  if (picked.size < want) spreadPick(lastResort, want - picked.size, pos, scoreOf, picked, want, rand);
   return [...picked].sort((a, b) => pos.get(a)! - pos.get(b)!).slice(0, want);
 }
 
@@ -341,13 +409,19 @@ export interface StoryChapter {
  * Album chưa có nhóm (chưa quét mặt, thư mục không đặt tên): chia đều theo thứ
  * tự album, mỗi chương 3 ảnh.
  */
-export function storyChapters(order: readonly string[], res: CatResult, hearts: ReadonlySet<string> = new Set()): StoryChapter[] {
+export function storyChapters(order: readonly string[], res: CatResult, hearts: ReadonlySet<string> = new Set(), rand: () => number = Math.random): StoryChapter[] {
   const pos = new Map(order.map((id, i) => [id, i]));
   const used = new Set<string>();
   const score = (id: string) => (res.info[id]?.score ?? 5) + (hearts.has(id) ? 3 : 0);
   const tagged = (pred: (tags: string[]) => boolean) => order.filter((id) => !used.has(id) && pred(res.info[id]?.tags ?? []));
+  // Mỗi chương bốc ngẫu nhiên (ảnh rõ mặt, ảnh thả tim dễ trúng hơn) — mỗi lần tạo ra một bộ khác.
   const take = (pool: string[], k: number) => {
-    const picked = suggestPhotos(pool, res, k, hearts).filter((id) => !used.has(id)).slice(0, k);
+    const got = new Set<string>();
+    const free = pool.filter((id) => !used.has(id));
+    const liked = free.filter((id) => hearts.has(id));
+    spreadPick(liked, Math.min(liked.length, Math.ceil(k / 2)), pos, score, got, Math.ceil(k / 2), rand);
+    spreadPick(free, k - got.size, pos, score, got, k, rand);
+    const picked = [...got].slice(0, k);
     picked.forEach((id) => used.add(id));
     return picked.sort((a, b) => pos.get(a)! - pos.get(b)!);
   };
@@ -357,13 +431,11 @@ export function storyChapters(order: readonly string[], res: CatResult, hearts: 
   const add = (key: string, title: string, ids: string[]) => {
     if (ids.length) chapters.push({ key, title, ids });
   };
-  // Bìa: ảnh chung điểm cao nhất (không có thì ảnh "nhân vật chính" đẹp nhất).
+  // Bìa: ảnh chung (không có thì ảnh "nhân vật chính").
   const coverPool = tagged(isCouple).length ? tagged(isCouple) : order.filter((id) => res.info[id]?.hero);
-  const cover = [...(coverPool.length ? coverPool : order)].sort((a, b) => score(b) - score(a))[0];
-  if (cover) {
-    used.add(cover);
-    add("cover", "Bìa", [cover]);
-  }
+  // Bìa: bốc trong nhóm ảnh điểm cao (không phải lần nào cũng đúng một tấm).
+  const coverTop = [...(coverPool.length ? coverPool : order)].sort((a, b) => score(b) - score(a)).slice(0, 6);
+  add("cover", "Bìa", take(coverTop, 1));
   add("prep", "Chuẩn bị", take(tagged((t) => t.includes("m-codau") || (!!bride && t.includes(bride.id) && !isCouple(t))), 3));
   add("ceremony", "Lễ gia tiên · Bê quả", take(tagged((t) => t.includes("m-bequa") || t.includes("m-giatien")), 4));
   add("decor", "Decor & chi tiết", take(tagged((t) => t.includes(CAT_DECOR)), 3));
