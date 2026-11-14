@@ -183,6 +183,7 @@ export function PhotoGrid({
   label,
   dim,
   cols = 3,
+  resetKey,
 }: {
   photos: PhotoLite[];
   img: ImgUrl;
@@ -192,11 +193,19 @@ export function PhotoGrid({
   label?: (id: string) => string | null;
   dim?: (id: string) => boolean;
   cols?: number;
+  /**
+   * Đổi khoá này (vd. đổi nhóm ảnh) mới thu lưới về 90 ảnh đầu. Không truyền thì
+   * thu lại mỗi khi mảng `photos` đổi. Chọn / bỏ chọn ảnh KHÔNG được thu lưới:
+   * album nghìn ảnh, khách đang cuộn ở ảnh thứ 300 mà lưới co về 90 là trang
+   * nhảy vọt lên trên.
+   */
+  resetKey?: string | number;
 }) {
   const [limit, setLimit] = useState(90);
   const sentinel = useRef<HTMLDivElement | null>(null);
   const list = useMemo(() => photos.slice(0, limit), [photos, limit]);
-  useEffect(() => setLimit(90), [photos]);
+  const reset = resetKey ?? photos;
+  useEffect(() => setLimit(90), [reset]);
   useEffect(() => {
     const el = sentinel.current;
     if (!el || limit >= photos.length || typeof IntersectionObserver === "undefined") return;

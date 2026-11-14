@@ -22,6 +22,9 @@ export function shapeRadii(shape: FrameDeco["shape"], w: number, h: number): [nu
     const r = Math.min(w / 2, h);
     return [r, r, 0, 0];
   }
+  // Nửa vòm: một góc trên là cung phần tư bán kính bằng bề ngang ô.
+  if (shape === "archL") return [Math.min(w, h), 0, 0, 0];
+  if (shape === "archR") return [0, Math.min(w, h), 0, 0];
   return [0, 0, 0, 0];
 }
 

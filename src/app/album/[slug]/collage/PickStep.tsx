@@ -350,6 +350,7 @@ export default function PickStep({
                 label={labelOf}
                 dim={manual ? (id) => groupOf.has(id) && groupOf.get(id) !== active : undefined}
                 cols={cols}
+                resetKey={`${cat}|${manual ? active : ""}|${cat === CAT_SUGGEST ? seed : ""}`}
               />
             </div>
           )}
