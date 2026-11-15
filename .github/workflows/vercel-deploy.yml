@@ -14,6 +14,13 @@ name: Deploy production (Vercel)
 #   VERCEL_PROJECT_ID  Vercel → project mstudo-v2 → Settings → General → Project ID (prj_…)
 # Chưa thêm secret thì workflow tự bỏ qua (báo warning, không đỏ).
 #
+# Hai chốt an toàn trước khi bản mới lên (xem docs/trien-khai-tu-dong.md):
+#   1. KIỂM THỬ: chạy cả bộ `npm test`; có bài đỏ thì không deploy.
+#   2. TỰ CHẠY SQL: supabase/cap-nhat.sql đổi thì tự chạy lên database trước khi
+#      deploy (cần thêm secret SUPABASE_DB_URL; chưa có thì bỏ qua bước này, và
+#      SQL vẫn phải dán tay như trước). SQL hỏng thì rollback và không deploy.
+# Khi cần lên gấp, chạy tay workflow này và tích ô bỏ qua tương ứng.
+#
 # Biến môi trường của build (Supabase, Drive, Zalo…) KHÔNG lấy từ đây — `vercel
 # pull` tải nguyên bộ Environment Variables của project trên Vercel về, đúng như
 # khi Vercel tự build.
@@ -23,6 +30,18 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      bo_qua_kiem_thu:
+        description: Bỏ qua kiểm thử (chỉ khi cần lên gấp)
+        type: boolean
+        default: false
+      bo_qua_sql:
+        description: Không tự chạy SQL lượt này
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 # Nhiều commit đẩy liên tiếp thì chỉ deploy commit mới nhất.
 concurrency:
@@ -30,7 +49,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  kiem-thu:
+    if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.bo_qua_kiem_thu) }}
+    uses: ./.github/workflows/kiem-thu.yml
+    with:
+      chi_kiem_thu: true
+
   deploy:
+    needs: kiem-thu
+    # Kiểm thử đạt, hoặc được chủ động bỏ qua. Hỏng / bị huỷ thì không deploy.
+    if: ${{ always() && (needs.kiem-thu.result == 'success' || needs.kiem-thu.result == 'skipped') }}
     runs-on: ubuntu-latest
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -101,6 +129,23 @@ jobs:
           # xong. Máy chạy của GitHub có 16GB nên cấp 6GB là thoải mái.
           NODE_OPTIONS: --max-old-space-size=6144
         run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+
+      # Chạy SAU khi build xong (build hỏng thì chưa đụng database) và TRƯỚC khi
+      # bản mới lên: code mới luôn gặp database đã có đủ bảng / cột của nó. SQL
+      # trong cap-nhat.sql được viết theo lối thêm vào / chạy lại được nên bản cũ
+      # đang chạy vẫn dùng được trong vài chục giây chờ deploy.
+      - name: Tự chạy SQL (supabase/cap-nhat.sql)
+        if: ${{ steps.check.outputs.skip != 'true' && !(github.event_name == 'workflow_dispatch' && inputs.bo_qua_sql) }}
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::warning::Chưa có secret SUPABASE_DB_URL — không tự chạy SQL. Nếu bản này có SQL mới thì vẫn phải dán supabase/cap-nhat.sql vào SQL Editor như trước (xem docs/trien-khai-tu-dong.md)."
+          fi
+          if ! command -v psql >/dev/null; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          fi
+          node scripts/chay-sql.mjs
 
       - name: Deploy (gán vào domain production)
         if: steps.check.outputs.skip != 'true'

@@ -1,0 +1,71 @@
+name: Kiểm thử
+
+# Chạy toàn bộ bộ kiểm thử (`npm test` — hơn trăm bài) cùng kiểm kiểu và lint.
+#  - Trên MỌI pull request: biết bài nào đỏ trước khi gộp.
+#  - Được workflow "Deploy production (Vercel)" gọi trước khi deploy: bài đỏ thì
+#    KHÔNG deploy. (Ở đường đó bỏ kiểm kiểu + lint — `vercel build` đã kiểm kiểu,
+#    và pull request đã lint — cho lượt deploy đỡ chậm.)
+#  - Chạy tay: tab Actions → "Kiểm thử" → Run workflow.
+#
+# Không cần secret nào: mọi bài tự dựng thứ mình cần (kể cả một máy chủ Postgres
+# tạm cho các bài chạy SQL thật). Xem docs/trien-khai-tu-dong.md.
+
+on:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      chi_kiem_thu:
+        description: Chỉ chạy npm test (bỏ kiểm kiểu và lint)
+        type: boolean
+        default: false
+
+concurrency:
+  group: kiem-thu-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  kiem-thu:
+    name: Kiểm thử
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      # Các bài kiểm thử chạy thẳng file .ts bằng --experimental-strip-types
+      # (cần Node ≥ 22.6).
+      - name: Cài Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cài thư viện
+        run: npm ci
+
+      # Máy chạy của GitHub có sẵn PostgreSQL; phòng khi ảnh máy đổi thì cài.
+      # Thiếu nó các bài SQL sẽ tự "bỏ qua" — mà ở đây bỏ qua bị tính là hỏng.
+      - name: Bảo đảm có PostgreSQL cho các bài chạy SQL thật
+        run: |
+          if ! command -v initdb >/dev/null && ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq postgresql
+          fi
+
+      - name: Kiểm kiểu (tsc)
+        if: ${{ !inputs.chi_kiem_thu }}
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npx tsc --noEmit -p .
+
+      - name: Lint
+        if: ${{ !inputs.chi_kiem_thu }}
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+        run: npm run lint
+
+      - name: Chạy toàn bộ kiểm thử
+        run: npm test -- --khong-bo-qua=sql-chay-that,rls-luu-nguoi,chay-sql
