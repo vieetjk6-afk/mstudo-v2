@@ -45,6 +45,8 @@
     "migrations/noi_dung_ck_tu_nhap.sql",
     "migrations/ghep_layout.sql",
     "migrations/gioi_han_tan_suat.sql",
+    "migrations/he_thong_van_hanh.sql",
+    "migrations/chup_theo_khung_gio.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -955,6 +957,27 @@
         "rate_limit_hits"
       ],
       "cot": []
+    },
+    {
+      "file": "migrations/he_thong_van_hanh.sql",
+      "mo_ta": "Sức khoẻ hệ thống: nhật ký lượt chạy cron / SQL lúc deploy, lỗi máy chủ gộp theo ngày, dung lượng database & storage (chỉ service-role)",
+      "bang": [
+        "system_errors",
+        "system_runs"
+      ],
+      "cot": []
+    },
+    {
+      "file": "migrations/chup_theo_khung_gio.sql",
+      "mo_ta": "Chụp theo khung giờ (mini-session): đợt chụp, khoá khung UNIQUE, giữ chỗ chờ cọc, tự sinh lịch làm việc (chạy SAU referral_deposit và studio_appointments)",
+      "bang": [
+        "studio_mini_sessions",
+        "studio_mini_slots"
+      ],
+      "cot": [
+        "studio_bookings.slot_session_id",
+        "studio_bookings.slot_start_min"
+      ]
     }
   ]
 }

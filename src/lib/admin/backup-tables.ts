@@ -87,6 +87,8 @@ export const BACKUP_TABLES = [
   "website_leads",
   "studio_referrals",
   "studio_appointments",
+  "studio_mini_sessions",
+  "studio_mini_slots",
   "studio_rooms",
   "inbox_channels",
   "inbox_contacts",

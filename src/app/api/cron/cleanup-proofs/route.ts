@@ -30,6 +30,15 @@ async function run(req: NextRequest) {
   const db = createAdminClient();
   const cutoff = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
 
+  // Chụp theo khung giờ: nhả các khung giữ chỗ đã quá hạn cọc mà không ai mở lại
+  // trang (bình thường việc này xảy ra mỗi lần mở trang đợt chụp / trang đặt).
+  // Database chưa chạy migration thì lệnh gọi trả lỗi — bỏ qua.
+  try {
+    await db.rpc("mini_release_expired", { p_session: null });
+  } catch {
+    /* không chặn việc dọn ảnh */
+  }
+
   // Completed long enough ago and not yet purged.
   const { data: contracts } = await db
     .from("studio_contracts")
