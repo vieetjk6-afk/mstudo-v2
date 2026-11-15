@@ -211,8 +211,11 @@ async function bangCron(faceStatus) {
   await page.close();
   return co;
 }
-ok("đủ bảng nhưng thiếu CRON_SECRET → báo đúng mắt xích đó", await bangCron({ ok: true, cronSecret: false }));
-ok("đủ bảng và có CRON_SECRET → im lặng", !(await bangCron({ ok: true, cronSecret: true })));
+// Cảnh báo này chỉ có nghĩa khi máy chủ là bên quét (FACE_SERVER_SCAN=1). Mặc
+// định studio quét trên máy mình — không dính tới cron — nên không được doạ.
+ok("máy chủ quét, đủ bảng nhưng thiếu CRON_SECRET → báo đúng mắt xích đó", await bangCron({ ok: true, quetMayChu: true, cronSecret: false }));
+ok("máy chủ quét, đủ bảng và có CRON_SECRET → im lặng", !(await bangCron({ ok: true, quetMayChu: true, cronSecret: true })));
+ok("studio quét trên máy mình, thiếu CRON_SECRET → im lặng", !(await bangCron({ ok: true, quetMayChu: false, cronSecret: false })));
 
 await browser.close();
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);

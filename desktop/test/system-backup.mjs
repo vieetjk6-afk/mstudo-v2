@@ -116,7 +116,7 @@ ok("bảng `generated always as identity` không được khôi phục (Postgres
 const KEEP = new Set([
   "profiles.booking_token", "profiles.calendar_token", "profiles.crew_token",
   "albums.password_hash", "album_shares.token", "studio_contracts.client_token", "studio_contracts.intake_token",
-  "studio_bookings.deposit_token", "studio_quotes.client_token", "wedding_invitations.edit_token",
+  "studio_bookings.deposit_token", "studio_mini_sessions.token", "studio_quotes.client_token", "wedding_invitations.edit_token",
   "story_pages.edit_token", "desktop_devices.token_hash", "crew_account.calendar_token", "studio_vouchers.public_token",
   "studio_pricelist.list_key", "studio_crew_roles.key", "studio_automation_log.dedupe_key",
 ]);
