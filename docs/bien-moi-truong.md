@@ -179,7 +179,9 @@ Thiếu 2 biến đầu → **500 toàn site** (`MIDDLEWARE_INVOCATION_FAILED`).
 | Biến | Là gì | Lấy ở đâu |
 |---|---|---|
 | `CRON_SECRET` | khoá bảo vệ mọi route `/api/cron/*` 🔒 | **tự đặt** một chuỗi ngẫu nhiên dài |
-| `FACE_SCAN_OFF` | đặt `1` để TẮT hẳn việc máy chủ quét khuôn mặt | bỏ trống (mặc định BẬT) |
+| `NEXT_PUBLIC_FACE_SEARCH` | tìm ảnh theo khuôn mặt — mặc định **BẬT** theo gói (Photographer Plus / Studio). Đặt `0` để tắt hẳn (nút dừng khẩn cấp, phải deploy lại) | bỏ trống |
+| `FACE_SERVER_SCAN` | đặt `1` để **máy chủ** tự chạy nhận diện (cron quét ban đêm, `/api/albums/<id>/face-scan`, nhận ảnh khách gửi lên). Mặc định **TẮT**: studio quét trên máy mình ở trang album (tab Giao khách → “Quét khuôn mặt trên máy này”), khách nhận diện ảnh của mình ngay trên máy họ — máy chủ chỉ lưu kết quả và so vector | bỏ trống |
+| `FACE_SCAN_OFF` | chỉ có nghĩa khi `FACE_SERVER_SCAN=1`: đặt `1` để tạm dừng cron quét | bỏ trống |
 
 Bản cũ **không có biến này**, nghĩa là 5 cron ở bản cũ đang trả 401 và **không
 chạy** từ trước tới nay: nhắc lịch chụp, gửi Zalo, dọn ảnh chuyển khoản, dọn

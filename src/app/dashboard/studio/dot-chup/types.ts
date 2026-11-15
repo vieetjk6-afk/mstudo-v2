@@ -23,6 +23,4 @@ export type DotChupProps = {
   /** Đợt mở sẵn (?dot=<id> — link trong thông báo đẩy). */
   openId: string | null;
   defaults: { deposit: number; hasBank: boolean; location: string | null };
-  /** Chỉ màn xem trước (/uipreview): mở sẵn form tạo đợt. */
-  preview?: { create?: boolean };
 };

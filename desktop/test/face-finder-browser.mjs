@@ -112,6 +112,12 @@ page.on("console", (m) => {
   if (m.type() === "error") errors.push(`console: ${m.text().slice(0, 300)}`);
 });
 
+/* Yêu cầu tới /face-model — phải RỖNG cho tới khi khách bấm tìm bằng ảnh. */
+const taiMoHinh = [];
+page.on("request", (r) => {
+  if (r.url().includes("/face-model/")) taiMoHinh.push(r.url().split("/").pop());
+});
+
 let res;
 try {
   res = await page.goto(PAGE, { waitUntil: "networkidle", timeout: 25_000 });
@@ -149,23 +155,31 @@ ok(
 );
 ok("…nhãn nhìn thấy là số ảnh", (await page.locator("text=2 ảnh").count()) > 0);
 
-// Lời hứa về ảnh khách gửi lên. Nó ĐÃ ĐỔI: bản trước nhận diện ngay trong trình
-// duyệt nên hứa "ảnh không rời khỏi máy"; nay máy chủ so hộ (một đường ống duy
-// nhất, xem @/lib/face-node) nên lời hứa đúng là "gửi lên rồi bỏ, không lưu".
-// Kiểm cả hai chiều: câu mới phải có, và câu cũ phải KHÔNG còn — một lời hứa
+// Lời hứa về ảnh của khách. Nó ĐỔI LẦN NỮA, theo đúng nơi việc nhận diện chạy:
+// bản đầu nhận diện trong trình duyệt bằng MediaPipe (~20 MB, vector không so
+// được với album); rồi máy chủ so hộ ("gửi lên rồi bỏ, không lưu"); nay ảnh được
+// nhận diện NGAY TRÊN MÁY KHÁCH bằng đúng mô hình của album và chỉ 128 con số
+// được gửi đi (xem @/lib/face-embed-browser). Kiểm cả hai chiều: câu mới phải
+// có — kèm dung lượng tải THẬT — và các câu cũ phải KHÔNG còn. Một lời hứa
 // riêng tư sai là thứ tệ nhất còn sót lại được trên màn hình.
 ok(
-  "nói rõ ảnh khách gửi lên không được lưu lại",
-  (await page.locator("text=không được lưu lại").count()) > 0
+  "nói rõ ảnh được phân tích ngay trên máy, không tải lên máy chủ",
+  (await page.locator("text=phân tích ngay trên máy bạn, không tải lên máy chủ").count()) > 0
 );
 ok(
-  "…và không còn hứa 'ảnh không rời khỏi máy' nữa",
-  (await page.locator("text=không rời khỏi máy").count()) === 0
+  "…và nói trước dung lượng bộ nhận diện phải tải lần đầu (đo thật: ~13 MB)",
+  (await page.locator("text=khoảng 13 MB").count()) > 0
 );
 ok(
-  "…cũng không còn doạ khách phải tải 20 MB mô hình",
+  "…không còn câu của bản máy chủ so hộ ('gửi … không được lưu lại')",
+  (await page.locator("text=không được lưu lại").count()) === 0
+);
+ok(
+  "…cũng không còn con số 20 MB của bản MediaPipe",
   (await page.locator("text=~20 MB").count()) === 0
 );
+// Mô hình CHỈ tải khi khách bấm tìm bằng ảnh: mở trang không được kéo byte nào.
+ok("mở album không tải trọng số nhận diện nào", !taiMoHinh.length, taiMoHinh.join(", "));
 
 /* ── 2. Phép cắt ảnh mặt, đo trong trình duyệt THẬT ───────────────────────── */
 /*

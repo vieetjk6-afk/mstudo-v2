@@ -1,6 +1,7 @@
 "use client";
 
-import DotChupV2 from "@/app/dashboard/studio/dot-chup/DotChupV2";
+import DotChupV2, { SessionFields } from "@/app/dashboard/studio/dot-chup/DotChupV2";
+import { Card } from "@/components/v2/kit";
 import SlotBooking from "@/app/book/dot/[token]/SlotBooking";
 import type { MiniSession, MiniSlotLock } from "@/lib/mini-session";
 import { PreviewV2 } from "./shell";
@@ -34,6 +35,22 @@ const DEPOSITS = {
 };
 
 export function DotChupDemo({ open, create, empty }: { open?: boolean; create?: boolean; empty?: boolean }) {
+  // Hộp thoại chỉ dựng ở trình duyệt; vẽ thẳng các ô nhập để ảnh chụp thấy được form.
+  if (create) {
+    return (
+      <PreviewV2 path="/dashboard/studio/dot-chup">
+        <Card className="mx-auto w-full max-w-[560px]">
+          <h3 className="mb-4 text-[17px] font-semibold">Tạo đợt chụp</h3>
+          <SessionFields
+            draft={{ id: null, title: "Chụp áo dài Tết 2027", session_date: "2027-01-16", start: "09:00", end: "12:00", slot_minutes: 20, gap_minutes: 5, price: 350_000, deposit: 100_000, location: "Mây Studio — tầng 2", note: "", is_open: true }}
+            setDraft={() => {}}
+            err={null}
+            hasBank
+          />
+        </Card>
+      </PreviewV2>
+    );
+  }
   return (
     <PreviewV2 path="/dashboard/studio/dot-chup">
       <DotChupV2
@@ -46,7 +63,6 @@ export function DotChupDemo({ open, create, empty }: { open?: boolean; create?: 
         canSwitchUi
         openId={open ? "s1" : null}
         defaults={{ deposit: 100_000, hasBank: !empty, location: null }}
-        preview={create ? { create: true } : undefined}
       />
     </PreviewV2>
   );

@@ -68,6 +68,8 @@
     "test:sql-chay-that": "node desktop/test/sql-chay-that.mjs",
     "test:rls-luu-nguoi": "node desktop/test/rls-luu-nguoi.mjs",
     "test:chay-sql": "node desktop/test/chay-sql.mjs",
+    "test:face-local": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/face-local.mjs",
+    "test:face-embed-browser": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/face-embed-browser.mjs",
     "test:system-runs": "node --experimental-strip-types desktop/test/system-runs.mjs",
     "test:he-thong-van-hanh-pg": "node desktop/test/he-thong-van-hanh-pg.mjs",
     "test:branches": "node --experimental-strip-types desktop/test/branches.mjs",

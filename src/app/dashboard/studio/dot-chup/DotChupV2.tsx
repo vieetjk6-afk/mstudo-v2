@@ -31,7 +31,7 @@ import type { DotChupProps, LockDeposit } from "./types";
 
 const STATE_TONE: Record<SlotState, Tone> = { free: "gray", held: "amber", booked: "green" };
 
-type Draft = {
+export type Draft = {
   id: string | null;
   title: string;
   session_date: string;
@@ -62,7 +62,7 @@ async function call(body: Record<string, unknown>): Promise<{ ok: boolean; messa
   }
 }
 
-export default function DotChupV2({ sessions, locks, deposits, migrated, studioHost, today, openId, defaults, preview }: DotChupProps) {
+export default function DotChupV2({ sessions, locks, deposits, migrated, studioHost, today, openId, defaults }: DotChupProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   // Hạn giữ chỗ trôi theo phút — cập nhật để khung hết hạn tự về "Trống".
@@ -72,11 +72,7 @@ export default function DotChupV2({ sessions, locks, deposits, migrated, studioH
   }, []);
 
   const [activeId, setActiveId] = useState<string | null>(openId);
-  const [draft, setDraft] = useState<Draft | null>(() =>
-    preview?.create
-      ? { id: null, title: "Chụp áo dài Tết 2027", session_date: "2027-01-16", start: "09:00", end: "12:00", slot_minutes: 20, gap_minutes: 5, price: 350_000, deposit: 100_000, location: "", note: "", is_open: true }
-      : null,
-  );
+  const [draft, setDraft] = useState<Draft | null>(null);
   const [showPast, setShowPast] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -497,14 +493,12 @@ function SessionForm({
   onSave: () => void;
   hasBank: boolean;
 }) {
-  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => draft && setDraft({ ...draft, [k]: v });
   const start = parseHhmm(draft?.start);
   const end = parseHhmm(draft?.end);
   const n =
     draft && start != null && end != null && draft.slot_minutes >= 5
       ? slotStarts({ start_min: start, end_min: end, slot_minutes: draft.slot_minutes, gap_minutes: Math.max(0, draft.gap_minutes) }).length
       : 0;
-  const num = (v: string) => Math.max(0, Math.round(Number(v) || 0));
 
   return (
     <Modal
@@ -522,37 +516,50 @@ function SessionForm({
         </>
       }
     >
-      {draft ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {err ? <div className="sm:col-span-2"><Callout tone="red">{err}</Callout></div> : null}
-          <Field label="Tên đợt *" className="sm:col-span-2">
-            <input className={inputCls} value={draft.title} maxLength={120} placeholder="VD: Chụp áo dài Tết 2027" onChange={(e) => set("title", e.target.value)} />
-          </Field>
-          <Field label="Ngày chụp *" className="sm:col-span-2">
-            <DateInput className={inputCls} value={draft.session_date} onChange={(v) => set("session_date", v)} />
-          </Field>
-          <Field label="Giờ bắt đầu *"><input type="time" className={inputCls} value={draft.start} onChange={(e) => set("start", e.target.value)} /></Field>
-          <Field label="Giờ kết thúc *"><input type="time" className={inputCls} value={draft.end} onChange={(e) => set("end", e.target.value)} /></Field>
-          <Field label="Mỗi khung (phút) *"><input type="number" inputMode="numeric" min={5} max={480} className={inputCls} value={draft.slot_minutes || ""} onChange={(e) => set("slot_minutes", num(e.target.value))} /></Field>
-          <Field label="Nghỉ giữa hai khung (phút)"><input type="number" inputMode="numeric" min={0} max={240} className={inputCls} value={draft.gap_minutes || ""} placeholder="0" onChange={(e) => set("gap_minutes", num(e.target.value))} /></Field>
-          <p className="text-[12.5px] sm:col-span-2" style={{ color: n ? "var(--tx2)" : "var(--rd)" }}>
-            {n ? <>Chia được <b>{n} khung</b>{start != null ? <> — khung đầu {hhmm(start)}, khung cuối {hhmm(start + (n - 1) * (draft.slot_minutes + Math.max(0, draft.gap_minutes)))}.</> : null}</> : "Khoảng giờ chưa đủ một khung nào."}
-          </p>
-          <Field label="Giá mỗi khung (đ)"><MoneyInput className={inputCls} value={draft.price} onChange={(v) => set("price", v)} ariaLabel="Giá mỗi khung" /></Field>
-          <Field label="Cọc mỗi khung (đ)" hint={hasBank ? `0 = không cọc. Có cọc thì khung được giữ ${HOLD_MINUTES} phút chờ chuyển khoản.` : "Chưa khai tài khoản nhận tiền nên khách sẽ không thấy bước cọc."}>
-            <MoneyInput className={inputCls} value={draft.deposit} onChange={(v) => set("deposit", v)} ariaLabel="Cọc mỗi khung" />
-          </Field>
-          <Field label="Địa điểm" className="sm:col-span-2">
-            <input className={inputCls} value={draft.location} maxLength={200} placeholder="VD: Studio tầng 2, 12 Lê Lợi" onChange={(e) => set("location", e.target.value)} />
-          </Field>
-          <Field label="Ghi chú cho khách" className="sm:col-span-2">
-            <textarea className={`${inputCls} resize-none`} style={{ height: "auto", padding: "8px 12px" }} rows={3} maxLength={1000} value={draft.note} placeholder="VD: Đến trước 10 phút, mang theo áo dài." onChange={(e) => set("note", e.target.value)} />
-          </Field>
-          <div className="sm:col-span-2">
-            <Switch checked={draft.is_open} onChange={(v) => set("is_open", v)} label="Nhận khách đặt online" desc="Tắt để tạm đóng link; bạn vẫn đặt tay được." />
-          </div>
-        </div>
-      ) : null}
+      {draft ? <SessionFields draft={draft} setDraft={setDraft} err={err} hasBank={hasBank} /> : null}
     </Modal>
+  );
+}
+
+/** Các ô nhập của form đợt — tách riêng để /uipreview vẽ được ngoài hộp thoại. */
+export function SessionFields({ draft, setDraft, err, hasBank }: { draft: Draft; setDraft: (d: Draft | null) => void; err: string | null; hasBank: boolean }) {
+  const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft({ ...draft, [k]: v });
+  const start = parseHhmm(draft.start);
+  const end = parseHhmm(draft.end);
+  const n =
+    start != null && end != null && draft.slot_minutes >= 5
+      ? slotStarts({ start_min: start, end_min: end, slot_minutes: draft.slot_minutes, gap_minutes: Math.max(0, draft.gap_minutes) }).length
+      : 0;
+  const num = (v: string) => Math.max(0, Math.round(Number(v) || 0));
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {err ? <div className="sm:col-span-2"><Callout tone="red">{err}</Callout></div> : null}
+      <Field label="Tên đợt *" className="sm:col-span-2">
+        <input className={inputCls} value={draft.title} maxLength={120} placeholder="VD: Chụp áo dài Tết 2027" onChange={(e) => set("title", e.target.value)} />
+      </Field>
+      <Field label="Ngày chụp *" className="sm:col-span-2">
+        <DateInput className={inputCls} value={draft.session_date} onChange={(v) => set("session_date", v)} />
+      </Field>
+      <Field label="Giờ bắt đầu *"><input type="time" className={inputCls} value={draft.start} onChange={(e) => set("start", e.target.value)} /></Field>
+      <Field label="Giờ kết thúc *"><input type="time" className={inputCls} value={draft.end} onChange={(e) => set("end", e.target.value)} /></Field>
+      <Field label="Mỗi khung (phút) *"><input type="number" inputMode="numeric" min={5} max={480} className={inputCls} value={draft.slot_minutes || ""} onChange={(e) => set("slot_minutes", num(e.target.value))} /></Field>
+      <Field label="Nghỉ giữa hai khung (phút)"><input type="number" inputMode="numeric" min={0} max={240} className={inputCls} value={draft.gap_minutes || ""} placeholder="0" onChange={(e) => set("gap_minutes", num(e.target.value))} /></Field>
+      <p className="text-[12.5px] sm:col-span-2" style={{ color: n ? "var(--tx2)" : "var(--rd)" }}>
+        {n ? <>Chia được <b>{n} khung</b>{start != null ? <> — khung đầu {hhmm(start)}, khung cuối {hhmm(start + (n - 1) * (draft.slot_minutes + Math.max(0, draft.gap_minutes)))}.</> : null}</> : "Khoảng giờ chưa đủ một khung nào."}
+      </p>
+      <Field label="Giá mỗi khung (đ)"><MoneyInput className={inputCls} value={draft.price} onChange={(v) => set("price", v)} ariaLabel="Giá mỗi khung" /></Field>
+      <Field label="Cọc mỗi khung (đ)" hint={hasBank ? `0 = không cọc. Có cọc thì khung được giữ ${HOLD_MINUTES} phút chờ chuyển khoản.` : "Chưa khai tài khoản nhận tiền nên khách sẽ không thấy bước cọc."}>
+        <MoneyInput className={inputCls} value={draft.deposit} onChange={(v) => set("deposit", v)} ariaLabel="Cọc mỗi khung" />
+      </Field>
+      <Field label="Địa điểm" className="sm:col-span-2">
+        <input className={inputCls} value={draft.location} maxLength={200} placeholder="VD: Studio tầng 2, 12 Lê Lợi" onChange={(e) => set("location", e.target.value)} />
+      </Field>
+      <Field label="Ghi chú cho khách" className="sm:col-span-2">
+        <textarea className={`${inputCls} resize-none`} style={{ height: "auto", padding: "8px 12px" }} rows={3} maxLength={1000} value={draft.note} placeholder="VD: Đến trước 10 phút, mang theo áo dài." onChange={(e) => set("note", e.target.value)} />
+      </Field>
+      <div className="sm:col-span-2">
+        <Switch checked={draft.is_open} onChange={(v) => set("is_open", v)} label="Nhận khách đặt online" desc="Tắt để tạm đóng link; bạn vẫn đặt tay được." />
+      </div>
+    </div>
   );
 }
