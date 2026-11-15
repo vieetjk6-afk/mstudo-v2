@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteFromAdminDrive, driveIdFromUrl } from "@/lib/mstudo-drive";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { withCronLog } from "@/lib/system-runs";
 import { purgeAllExpiredCollages } from "@/lib/album-collage";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,7 @@ function pathFromUrl(url: string | null | undefined): string | null {
 // Daily job: ~1 month after a contract is marked "completed", delete the
 // client transfer-proof images (to reclaim storage) and notify the studio.
 // Scheduled via vercel.json crons.
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -88,3 +89,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ ok: true, contracts: purged, collages });
 }
+
+// Mỗi lượt chạy để lại một dòng ở trang Sức khoẻ hệ thống (system_runs).
+export const GET = withCronLog("cleanup-proofs", run);

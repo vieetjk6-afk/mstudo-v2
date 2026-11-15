@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { withCronLog } from "@/lib/system-runs";
 import { reportAutoBackup, runAutoBackup } from "@/lib/admin/system-backup";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,7 @@ export const maxDuration = 300;
  * Hỏng (Drive bị ngắt, token hết hạn, bảng đọc lỗi) thì báo admin qua chuông +
  * web push — sao lưu hỏng âm thầm còn tệ hơn không có sao lưu.
  */
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -33,3 +34,7 @@ export async function GET(req: NextRequest) {
     ms: res.ms,
   });
 }
+
+// Mỗi lượt chạy để lại một dòng ở trang Sức khoẻ hệ thống (system_runs).
+// notify: false — reportAutoBackup ở trên đã tự báo admin, không báo đôi.
+export const GET = withCronLog("backup", run, { notify: false });

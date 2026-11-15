@@ -3,7 +3,10 @@
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { laplacianVariance, subGray } from "./photo-ai";
+import { quetRgba, SCAN_WIDTH, type ScannedFace } from "./face-scan-core";
+// Ngưỡng dò, trần số mặt, chuẩn hoá khung, đo nét nằm ở @/lib/face-scan-core —
+// MỘT chỗ cho cả máy chủ lẫn trình duyệt studio (@/lib/face-embed-browser).
+export { SCAN_WIDTH } from "./face-scan-core";
 
 /**
  * NHẬN DIỆN KHUÔN MẶT CHẠY TRÊN MÁY CHỦ.
@@ -41,30 +44,7 @@ import { laplacianVariance, subGray } from "./photo-ai";
  * nhầm file này chết ngay lúc build ("Can't resolve 'node:module'").
  */
 
-/** Cỡ thumbnail lấy từ Drive để quét. */
-export const SCAN_WIDTH = 800;
-
-/**
- * Ngưỡng tin cậy của bộ dò mặt.
- *
- * 0.35 chứ không phải mặc định 0.5: ảnh cưới đầy mặt NHỎ trong ảnh nhóm và mặt
- * nghiêng ở rìa khung. Bỏ sót một khuôn mặt nghĩa là khách lọc theo mặt mình mà
- * thiếu ảnh — sai nguy hiểm hơn hẳn việc thỉnh thoảng nhận nhầm một mảng tường,
- * vì mảng tường đó sẽ đứng thành một "người" riêng chẳng ai bấm vào.
- */
-const MIN_CONFIDENCE = 0.35;
-
-/** Trần số mặt mỗi ảnh — ảnh tiệc đông người không được ngốn hết thời gian. */
-const MAX_FACES = 24;
-
-export type ServerFace = {
-  /** Khung mặt theo TỈ LỆ 0…1 của ảnh, giống hệt bản trình duyệt lưu vào DB. */
-  box: { x: number; y: number; w: number; h: number };
-  /** Vector 128 chiều, để NGUYÊN (không chuẩn hoá) — xem @/lib/face-group. */
-  descriptor: number[];
-  /** Độ nét đo RIÊNG trên vùng mặt; chỉ dùng để chọn ảnh đại diện. */
-  sharpness: number;
-};
+export type ServerFace = ScannedFace;
 
 type Nets = {
   faceapi: any;
@@ -158,15 +138,6 @@ export function loadNets(): Promise<Nets> {
   return loading;
 }
 
-/** Ảnh xám toàn khung, để đo nét trên vùng mặt. */
-function toGray(rgba: Uint8Array | Uint8ClampedArray, w: number, h: number): Uint8Array {
-  const g = new Uint8Array(w * h);
-  for (let i = 0, p = 0; i < g.length; i++, p += 4) {
-    g[i] = (rgba[p] * 299 + rgba[p + 1] * 587 + rgba[p + 2] * 114) / 1000;
-  }
-  return g;
-}
-
 /**
  * Quét MỘT ảnh JPEG.
  *
@@ -179,43 +150,7 @@ export async function scanJpeg(bytes: Uint8Array): Promise<ServerFace[]> {
   const jpeg: any = await import("jpeg-js");
   const dec = (jpeg.default ?? jpeg).decode(bytes, { useTArray: true, maxMemoryUsageInMB: 512 });
   const { width: W, height: H, data } = dec as { width: number; height: number; data: Uint8Array };
-  if (!W || !H) return [];
-
-  const tensor = tf.tidy(() =>
-    tf.tensor3d(new Uint8Array(data), [H, W, 4]).slice([0, 0, 0], [-1, -1, 3])
-  );
-  let results: any[];
-  try {
-    const opts = new faceapi.SsdMobilenetv1Options({ minConfidence: MIN_CONFIDENCE, maxResults: MAX_FACES });
-    results = await faceapi.detectAllFaces(tensor, opts).withFaceLandmarks().withFaceDescriptors();
-  } finally {
-    // Không dispose là rò bộ nhớ theo từng ảnh; một mẻ 300 ảnh đủ để tiến trình
-    // bị Vercel giết giữa chừng, và lượt sau lại bắt đầu từ đúng chỗ cũ.
-    tensor.dispose();
-  }
-
-  const gray = toGray(data, W, H);
-  const out: ServerFace[] = [];
-  for (const r of results) {
-    const d = r.detection?.box;
-    const v: Float32Array | undefined = r.descriptor;
-    if (!d || !v || v.length === 0) continue;
-    const box = {
-      x: Math.max(0, Math.min(1, d.x / W)),
-      y: Math.max(0, Math.min(1, d.y / H)),
-      w: Math.max(0, Math.min(1, d.width / W)),
-      h: Math.max(0, Math.min(1, d.height / H)),
-    };
-    // Nét đo trên vùng mặt, KHÔNG phải cả khung: nền đầy cạnh (lá cây, ren váy)
-    // làm điểm nét cả khung cao trong khi mặt nhoè. Xem @/lib/photo-ai.
-    const sub = subGray(gray, W, H, box.x, box.y, box.w, box.h);
-    out.push({
-      box,
-      descriptor: Array.from(v),
-      sharpness: sub ? laplacianVariance(sub.gray, sub.width, sub.height) : 0,
-    });
-  }
-  return out;
+  return quetRgba(faceapi, tf, data, W, H);
 }
 
 /**

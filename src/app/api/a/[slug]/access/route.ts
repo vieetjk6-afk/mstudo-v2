@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { pickFolderLinks } from "@/lib/album-original";
 import { faceChips } from "@/lib/face-people";
-import { tienDoQuet } from "@/lib/face-pending";
+import { tienDoChoKhach } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 import { mintAlbumAccess } from "@/lib/album-access";
 import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
@@ -111,6 +111,6 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     access: album.password_hash ? mintAlbumAccess(album.id, album.password_hash) : undefined,
     // Chưa có mặt nào: phân biệt "máy chủ đang quét tới đâu" với "quét rồi mà
     // album không có mặt người" — hai câu trả lời rất khác nhau cho khách.
-    faceScan: canFaceSearch && people.length === 0 ? await tienDoQuet(admin, album.id) : null,
+    faceScan: canFaceSearch && people.length === 0 ? await tienDoChoKhach(admin, album.id) : null,
   });
 }

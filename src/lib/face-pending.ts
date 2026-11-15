@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { effectivePlan, planAllowsFaceSearch, type Plan } from "./plans";
+import { effectivePlan, faceServerScanEnabled, planAllowsFaceSearch, type Plan } from "./plans";
 import { apDungLocCanQuet, apDungLocConQuet } from "./face-can-quet";
 
 /**
@@ -38,6 +38,11 @@ export type TienDoQuet = {
   daQuet: number;
   /** Tổng ảnh cần quét của album. */
   tong: number;
+  /**
+   * true = MÁY CHỦ tự quét ban đêm (FACE_SERVER_SCAN=1) → được hẹn "mai quay
+   * lại". Vắng/false = studio quét trên máy mình, không ai hẹn giờ được.
+   */
+  mayChu?: boolean;
 };
 
 const KHONG_BIET: TienDoQuet = { daQuet: 0, tong: 0 };
@@ -64,6 +69,25 @@ export async function tienDoQuet(db: any, albumId: string): Promise<TienDoQuet> 
   } catch {
     return KHONG_BIET;
   }
+}
+
+/**
+ * Tiến độ ĐƯỢC PHÉP NÓI VỚI KHÁCH — hoặc null khi không có gì đáng nói.
+ *
+ * Từ khi việc quét chạy trên máy studio, "0/700" không còn là một lời hẹn giữ
+ * được: không có cron nào sẽ quét album này, và có thể studio chẳng bao giờ bấm.
+ * Nên khi máy chủ không tự quét, chỉ báo tiến độ nếu việc quét ĐÃ THẬT SỰ BẮT
+ * ĐẦU (có tấm đã quét); chưa thì im lặng, khối tìm mặt ẩn hẳn.
+ */
+export function tienDoNoiVoiKhach(t: TienDoQuet, mayChuQuet: boolean): TienDoQuet | null {
+  if (!conDangQuet(t)) return null;
+  if (mayChuQuet) return { ...t, mayChu: true };
+  return t.daQuet > 0 ? { daQuet: t.daQuet, tong: t.tong } : null;
+}
+
+/** Bản gọi DB của `tienDoNoiVoiKhach` — bốn chỗ phía khách dùng hàm này. */
+export async function tienDoChoKhach(db: any, albumId: string): Promise<TienDoQuet | null> {
+  return tienDoNoiVoiKhach(await tienDoQuet(db, albumId), faceServerScanEnabled());
 }
 
 /** Còn ảnh chưa quét không — tức là có nên nói "đang chuẩn bị" hay không. */

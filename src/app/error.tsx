@@ -3,13 +3,17 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { reportClientError } from "@/lib/report-client-error";
 
 // Runtime errors: show a readable message, then (after a short grace period so
 // the user can read it and choose Retry) send logged-in users back to the studio
 // workspace and signed-out visitors home.
-export default function Error({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
+export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   const router = useRouter();
   const [home, setHome] = useState("/");
+
+  // Báo về trang Sức khoẻ hệ thống — trước đây trang sập ở máy khách là không ai biết.
+  useEffect(() => reportClientError(error), [error]);
 
   useEffect(() => {
     let cancelled = false;

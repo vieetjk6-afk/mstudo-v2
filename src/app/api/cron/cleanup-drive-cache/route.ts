@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { withCronLog } from "@/lib/system-runs";
 
 export const dynamic = "force-dynamic";
 // A neglected bucket can hold tens of thousands of objects, and Storage only
@@ -78,7 +79,7 @@ async function sweepTmp(db: ReturnType<typeof createAdminClient>): Promise<numbe
  * when the project is already over quota. Nothing is lost: every object is
  * re-derivable from Drive on the next request.
  */
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -180,3 +181,6 @@ export async function GET(req: NextRequest) {
     bucketBytes: bytesAfter,
   });
 }
+
+// Mỗi lượt chạy để lại một dòng ở trang Sức khoẻ hệ thống (system_runs).
+export const GET = withCronLog("cleanup-drive-cache", run);

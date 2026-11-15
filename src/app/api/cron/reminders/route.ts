@@ -7,13 +7,14 @@ import { vnd } from "@/lib/types";
 import { autoAdvanceContracts } from "@/lib/contract-status";
 import { STORAGE_WARN_DAYS, daysLeft } from "@/lib/storage-lifecycle";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { withCronLog } from "@/lib/system-runs";
 
 export const dynamic = "force-dynamic";
 
 // Daily owner digest: shoots tomorrow, instalments due/overdue, late deliveries,
 // và album sắp tới hạn dọn ảnh gốc trên Drive.
 // Scheduled via vercel.json crons (07:00 VN = 00:00 UTC).
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   // Fail-closed: a missing CRON_SECRET must lock the endpoint, not open it —
   // otherwise anyone could trigger the mass-email digest.
   if (!isCronAuthorized(req.headers.get("authorization"))) {
@@ -324,3 +325,6 @@ ${link ? `<p><a href="${link}">Mở album ảnh &amp; đánh giá →</a> (mật
 
   return NextResponse.json({ ok: true, sent, pushed, clientSent, advanced, toPostProduction, appointments: appts.length, owners: results.length });
 }
+
+// Mỗi lượt chạy để lại một dòng ở trang Sức khoẻ hệ thống (system_runs).
+export const GET = withCronLog("reminders", run);
