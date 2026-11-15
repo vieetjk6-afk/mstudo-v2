@@ -74,7 +74,9 @@ export async function loadRunState(db: Db): Promise<RunState | null> {
       return null;
     }
     const d = data as RunState | null;
-    return d && Array.isArray(d.runs) ? d : null;
+    if (!d || !Array.isArray(d.runs)) return null;
+    missingUntil = 0; // admin vừa chạy SQL thì ghi lại được ngay, không chờ 10 phút
+    return d;
   } catch {
     return null;
   }

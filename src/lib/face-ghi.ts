@@ -31,6 +31,9 @@ export const WRITE_CHUNK = 20;
  */
 export const FIRST_CHUNK = 3;
 
+/** Album quét dở thì gom lại nhiều nhất 12 giờ một lần (egress Supabase). */
+export const GOM_LAI_SAU_MS = 12 * 3600_000;
+
 export type KetQuaGhi = {
   /** Số dòng album_faces DB xác nhận đã ghi. */
   daGhiMat: number;
@@ -136,6 +139,3 @@ export async function veHangDoiGomNeuCan(db: any, albumId: string, xong: boolean
   }
   return veHangDoiGom;
 }
-
-/** Album quét dở thì gom lại nhiều nhất 12 giờ một lần (egress Supabase). */
-export const GOM_LAI_SAU_MS = 12 * 3600_000;

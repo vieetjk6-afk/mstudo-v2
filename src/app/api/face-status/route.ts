@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { linkSqlEditor, maDuAn } from "@/lib/supabase-du-an";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
+import { faceServerScanEnabled } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -58,6 +59,8 @@ export async function GET(req: Request) {
   if (new URL(req.url).searchParams.get("lite") === "1") {
     return NextResponse.json({
       cronSecret: !!process.env.CRON_SECRET,
+      // Cron chỉ liên quan tới khuôn mặt khi máy chủ được bật quét.
+      quetMayChu: faceServerScanEnabled(),
       duAn: maDuAn(process.env.NEXT_PUBLIC_SUPABASE_URL),
       sqlEditor: linkSqlEditor(process.env.NEXT_PUBLIC_SUPABASE_URL),
     });
@@ -118,7 +121,9 @@ export async function GET(req: Request) {
     ].filter((ten) => !!process.env[ten]),
     // Không lộ giá trị, chỉ lộ CÓ hay KHÔNG — biết là đủ để sửa.
     cronSecret: !!process.env.CRON_SECRET,
-    quetBiTat: process.env.FACE_SCAN_OFF === "1",
+    quetBiTat: process.env.FACE_SCAN_OFF === "1" || !faceServerScanEnabled(),
+    // false (mặc định) = studio quét trên máy mình ở trang album; cron không quét.
+    quetMayChu: faceServerScanEnabled(),
     /*
      * Gói của CHÍNH studio đang hỏi. Mắt xích này phải nằm trong danh sách vì nó
      * đứt được y như ba mắt kia, và đứt theo cách khó thấy nhất: bảng đủ, cron
@@ -133,7 +138,11 @@ export async function GET(req: Request) {
       " — mở /api/setup-sql/khuon-mat để lấy nội dung. Chạy nhầm project thì Supabase vẫn báo Success mà app không thấy bảng nào.";
     return NextResponse.json(out);
   }
-  if (!out.cronSecret) {
+  if (!faceServerScanEnabled()) {
+    out.viecPhaiLam = goiChoTimMat
+      ? "Máy chủ không tự quét. Mở từng album (giao diện mới) → tab Giao khách → thẻ “Tìm theo khuôn mặt” → “Quét khuôn mặt trên máy này”."
+      : "Gói hiện tại không có tính năng tìm ảnh theo khuôn mặt — chỉ Photographer Plus và Studio.";
+  } else if (!out.cronSecret) {
     out.viecPhaiLam =
       "Thiếu biến môi trường CRON_SECRET trên Vercel — app tự trả 401 cho cron, nên không album nào được quét. Đặt biến rồi Redeploy.";
   } else if (!goiChoTimMat) {
@@ -199,7 +208,7 @@ export async function GET(req: Request) {
     status: a.status,
     // Cron CHỈ nhặt album đã phát hành CỦA GÓI CÓ TÍNH NĂNG. Nói thẳng cả hai
     // điều kiện để studio không phải đoán.
-    seDuocQuet: a.status === "published" && goiChoTimMat,
+    seDuocQuet: a.status === "published" && goiChoTimMat && faceServerScanEnabled(),
     anh: tongAnh.get(a.id as string) ?? 0,
     chuaQuet: chuaQuet.get(a.id as string) ?? 0,
     khuonMat: soMat.get(a.id as string) ?? 0,

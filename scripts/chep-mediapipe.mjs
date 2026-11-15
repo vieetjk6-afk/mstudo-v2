@@ -3,10 +3,13 @@
  *
  *   • public/mediapipe/  — WASM của MediaPipe (tìm khuôn mặt, nhắm mắt)
  *
- * KHÔNG còn public/face-model/. Nhận dạng DANH TÍNH (ai là ai) đã chuyển hẳn lên
- * máy chủ — xem @/lib/face-node — nên 7,8 MB trọng số + thư viện UMD không cần
- * gửi xuống trình duyệt của ai nữa. Trọng số máy chủ đọc thẳng từ node_modules;
- * next.config.mjs khai báo chúng trong outputFileTracingIncludes.
+ *   • public/face-model/ — trọng số face-api (SSD + landmark 68 + nhận dạng 128
+ *     chiều, thêm bộ dò nhỏ) và 3 file .wasm của TensorFlow. Việc quét khuôn
+ *     mặt đã rời máy chủ sang TRÌNH DUYỆT STUDIO (@/lib/face-embed-browser) để
+ *     không tốn CPU Vercel, nên trình duyệt phải tải được đúng những trọng số
+ *     máy chủ từng dùng. Bản thân thư viện face-api thì bundler đóng thành
+ *     chunk lười, không chép ở đây. Máy chủ (khi FACE_SERVER_SCAN=1) vẫn đọc
+ *     trọng số thẳng từ node_modules.
  *
  * VÌ SAO PHẢI TỰ PHỤC VỤ, không nạp thẳng từ CDN như hướng dẫn của MediaPipe:
  * CSP của repo (next.config.mjs) chỉ cho `script-src 'self'` cộng vài host của
@@ -93,4 +96,25 @@ copy(
   "MediaPipe → public/mediapipe",
   join(ROOT, "node_modules", "@mediapipe", "tasks-vision", "wasm"),
   join(ROOT, "public", "mediapipe")
+);
+
+// Trọng số nhận dạng khuôn mặt cho trình duyệt (studio quét album, khách tìm
+// bằng ảnh của mình). Chỉ chép đúng các mạng đang dùng — gói còn kèm mạng đoán
+// tuổi / cảm xúc không ai gọi.
+copy(
+  "face-api (trọng số) → public/face-model",
+  join(ROOT, "node_modules", "@vladmandic", "face-api", "model"),
+  join(ROOT, "public", "face-model"),
+  ["ssd_mobilenetv1_model", "face_landmark_68_model", "face_recognition_model", "tiny_face_detector_model"].flatMap((m) => [
+    `${m}-weights_manifest.json`,
+    `${m}.bin`,
+  ])
+);
+// Nền WASM của TensorFlow — đường lùi khi máy không có WebGL. Cùng thư mục để
+// một dòng .gitignore và một tiền tố URL là đủ.
+copy(
+  "TensorFlow WASM → public/face-model",
+  join(ROOT, "node_modules", "@tensorflow", "tfjs-backend-wasm", "dist"),
+  join(ROOT, "public", "face-model"),
+  ["tfjs-backend-wasm.wasm", "tfjs-backend-wasm-simd.wasm", "tfjs-backend-wasm-threaded-simd.wasm"]
 );

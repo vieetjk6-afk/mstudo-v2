@@ -111,7 +111,6 @@ check("rút giờ kết thúc cắt mất khách → bị chặn", !g2.ok && /mi
 check("kéo dài giờ kết thúc → được", pg.sql(DB, `update public.studio_mini_sessions set end_min = 700 where id = '${S}';`).ok, true);
 q(`update public.studio_mini_sessions set title = 'Chụp Tết 2027', location = 'Phim trường' where id = '${S}';`);
 check("đổi tên / địa điểm → dòng lịch đổi theo", q(`select title || '|' || location from public.studio_appointments where client_name = 'Chi';`), "Khung giờ · Chụp Tết 2027 — Chi|Phim trường");
-q(`update public.studio_mini_sessions set session_date = current_date - 1 where id = (select id from public.studio_mini_sessions where false);`);
 
 // ── Quyền ──────────────────────────────────────────────────────────────────
 const anonCall = pg.sql(DB, `set role anon;\nselect public.mini_book_slot('${S}', 640, 'x', '0900000000', null);`);

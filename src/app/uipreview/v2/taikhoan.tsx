@@ -13,6 +13,8 @@ import AdminPanel from "@/app/dashboard/admin/AdminPanel";
 import AdminAffiliateV2 from "@/app/dashboard/admin/affiliate/AdminAffiliateV2";
 import type { AdminCommission } from "@/app/dashboard/admin/affiliate/useAdminAffiliate";
 import SystemV2 from "@/app/dashboard/admin/system/SystemV2";
+import type { SystemHealth } from "@/app/dashboard/admin/system/useSystemHealth";
+import { CRONS, LIMITS } from "@/lib/system-runs-rules";
 import SettingsPanel from "@/app/dashboard/settings/SettingsPanel";
 import type { Feedback } from "@/app/dashboard/settings/useSettings";
 import { planProfilePatch, type Plan } from "@/lib/plans";
@@ -34,6 +36,48 @@ const account: AccountProps = {
   role: "photographer",
   studioBrandName: "Mai Studio",
   studioLogo: null,
+};
+
+/** Sức khoẻ hệ thống: một bản mọi thứ ổn, một bản có cron lỗi / quá hạn, lưu trữ gần đầy và vài lỗi. */
+const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+const healthOk: SystemHealth = {
+  migrated: true,
+  setupSql: null,
+  cronSecretSet: true,
+  crons: CRONS.map((c, i) => ({
+    ...c,
+    last: { ok: true, at: hoursAgo(5 + i), durationMs: 900 + i * 2300, summary: ["rows 48210 · file: mstudo-backup-2026-11-14.json.gz", "contracts 14 · done 3", "sent 6 · pushed 4 · owners 5", "dueSent 2 · quoteNudged 1", "shootSent 3 · selectSent 1", "không có việc gì phải làm", "tmpRemoved 12", "liveInvitations 38 · ownersScanned 9"][i] },
+    lastOkAt: hoursAgo(5 + i),
+    stale: false,
+  })),
+  sql: { name: "cap-nhat.sql", ok: true, at: hoursAgo(30), durationMs: 4200, sha: "9f2c41ab77d0", gitSha: "38ef711", error: null },
+  stats: {
+    db_bytes: 96_500_000,
+    storage_bytes: 212_000_000,
+    tables: [["photos", 41_200_000, 182_400], ["album_faces", 18_900_000, 64_100], ["studio_audit_log", 9_800_000, 51_300], ["studio_contracts", 6_100_000, 4_210], ["zalo_messages", 3_900_000, 22_800], ["contract_payments", 2_200_000, 9_640]].map(([name, bytes, rows]) => ({ name: name as string, bytes: bytes as number, rows: rows as number })),
+    buckets: [{ bucket: "wedding-photos", objects: 1840, bytes: 168_000_000 }, { bucket: "payment-proofs", objects: 412, bytes: 44_000_000 }],
+  },
+  errors: [],
+  limits: LIMITS,
+};
+const healthBad: SystemHealth = {
+  ...healthOk,
+  crons: healthOk.crons.map((c) =>
+    c.name === "backup"
+      ? { ...c, last: { ok: false, at: hoursAgo(6), durationMs: 2100, summary: "Chưa kết nối Google Drive của admin." }, lastOkAt: hoursAgo(54), stale: true }
+      : c.name === "zalo:work"
+        ? { ...c, last: { ok: true, at: hoursAgo(80), durationMs: 5400, summary: "shootSent 2" }, lastOkAt: hoursAgo(80), stale: true }
+        : c.name === "cleanup-wedding-photos"
+          ? { ...c, last: null, lastOkAt: null, stale: false }
+          : c,
+  ),
+  sql: { name: "cap-nhat.sql", ok: false, at: hoursAgo(3), durationMs: 1800, sha: "c07d19e2a4b1", gitSha: "a41c9d2", error: 'psql:cap-nhat.sql:812: ERROR:  column "studio_branch_id" of relation "studio_bookings" does not exist' },
+  stats: { ...healthOk.stats!, db_bytes: 418_000_000, storage_bytes: 1_003_000_000 },
+  errors: [
+    { signature: "a1", source: "server", message: "TypeError: Cannot read properties of undefined (reading 'owner_id')", path: "/api/contracts/[id]/payments", count: 37, lastAt: hoursAgo(1) },
+    { signature: "a2", source: "server", message: "Error: Drive API 403 storageQuotaExceeded", path: "/api/albums/[id]/sync", count: 4, lastAt: hoursAgo(9) },
+    { signature: "a3", source: "client", message: "ChunkLoadError: Loading chunk 4821 failed.", path: "/dashboard/studio/contracts", count: 2, lastAt: hoursAgo(26) },
+  ],
 };
 
 const noBank = { bin: null, account: null, holder: null, name: null };
@@ -259,7 +303,7 @@ export const SCREENS_TAIKHOAN: Record<string, { title: string; render: () => Rea
     title: "Giao diện mới — Cài đặt hệ thống (admin, Drive đã kết nối)",
     render: () => (
       <PreviewV2 path="/dashboard/admin/system">
-        <SystemV2 rateSeed="postgres" driveSeed={{ configured: true, connected: true, ok: true, error: null, lastUploadError: null }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: null, files: [0, 1, 2].map((i) => ({ id: `b${i}`, name: `mstudo-backup-2026-11-${String(12 - i).padStart(2, "0")}_03h15.json.gz`, size: 3_480_000 - i * 9_000, createdTime: new Date(Date.now() - (i * 24 + 6) * 3600e3).toISOString(), webViewLink: null })) }} />
+        <SystemV2 healthSeed={healthOk} rateSeed="postgres" driveSeed={{ configured: true, connected: true, ok: true, error: null, lastUploadError: null }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: null, files: [0, 1, 2].map((i) => ({ id: `b${i}`, name: `mstudo-backup-2026-11-${String(12 - i).padStart(2, "0")}_03h15.json.gz`, size: 3_480_000 - i * 9_000, createdTime: new Date(Date.now() - (i * 24 + 6) * 3600e3).toISOString(), webViewLink: null })) }} />
       </PreviewV2>
     ),
     bare: true,
@@ -268,7 +312,7 @@ export const SCREENS_TAIKHOAN: Record<string, { title: string; render: () => Rea
     title: "Giao diện mới — Cài đặt hệ thống (Drive lỗi)",
     render: () => (
       <PreviewV2 path="/dashboard/admin/system">
-        <SystemV2 rateSeed="memory" driveSeed={{ configured: true, connected: true, ok: false, error: "invalid_grant: Token has been expired or revoked.", lastUploadError: "403 storageQuotaExceeded" }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: "invalid_grant: Token has been expired or revoked.", files: [] }} />
+        <SystemV2 healthSeed={healthBad} rateSeed="memory" driveSeed={{ configured: true, connected: true, ok: false, error: "invalid_grant: Token has been expired or revoked.", lastUploadError: "403 storageQuotaExceeded" }} backupSeed={{ configured: true, connected: true, keep: 14, everyDays: 1, error: "invalid_grant: Token has been expired or revoked.", files: [] }} />
       </PreviewV2>
     ),
     bare: true,

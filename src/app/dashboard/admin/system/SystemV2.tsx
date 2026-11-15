@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  AlertTriangle, Bot, Check, Vote, DatabaseBackup, Download, FileJson, HardDrive, Loader2, Megaphone, Send, ShieldCheck, Unplug, Upload,
+  Activity, AlertTriangle, Bot, Check, Vote, DatabaseBackup, Download, FileJson, HardDrive, Loader2, Megaphone, Send, ShieldCheck, Unplug, Upload,
 } from "lucide-react";
 import { Badge, Callout, Field, ListRow, PageHead, Section, Stack, btn, inputCls } from "@/components/v2/kit";
 import { Switch } from "@/components/v2/kit-client";
@@ -11,6 +11,8 @@ import { useAdminDrive, type DriveStatus } from "./useAdminDrive";
 import PollAdminV2 from "./PollAdminV2";
 import { SHORTCUTS, TARGET_LABEL, useSystemPanel, type Target } from "./useSystemPanel";
 import { fmtSize, fmtWhen, isStale, useAutoBackup, type AutoBackupState, type AutoBackupStatus } from "./useAutoBackup";
+import HealthV2 from "./HealthV2";
+import { healthIssues, useSystemHealth, type SystemHealth } from "./useSystemHealth";
 import { RATE_LIMIT_SQL_URL, useRateLimitMode, type RateLimitMode } from "./useRateLimitMode";
 
 /** Khối "Sao lưu tự động lên Google Drive" — trạng thái, nút chạy ngay, các bản đang giữ. */
@@ -106,17 +108,23 @@ export default function SystemV2({
   driveSeed,
   backupSeed,
   rateSeed,
+  healthSeed,
 }: {
   ai?: React.ReactNode;
   driveSeed?: DriveStatus;
   backupSeed?: AutoBackupStatus;
   rateSeed?: RateLimitMode | null;
+  healthSeed?: SystemHealth;
 }) {
   const s = useSystemPanel();
   const drive = useAdminDrive(driveSeed);
   const ds = drive.state;
   const ab = useAutoBackup(backupSeed);
   const rl = useRateLimitMode(rateSeed);
+  const health = useSystemHealth(healthSeed);
+  // Chấm ở mục lục: xanh = không có gì phải xem, đỏ = có việc hỏng, vàng = cần để ý.
+  const issues = health.data ? healthIssues(health.data) : null;
+  const healthDot = !issues ? null : issues.length === 0 ? "var(--gn)" : issues.some((x) => /lỗi|hỏng|CRON_SECRET/i.test(x)) ? "var(--rd)" : "var(--am)";
 
   const shortcuts = (
     <div className="flex flex-col gap-0.5">
@@ -134,6 +142,12 @@ export default function SystemV2({
     <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[220px_minmax(0,1fr)]">
       <SectionNavV2
         items={[
+          {
+            id: "suc-khoe",
+            label: "Sức khoẻ hệ thống",
+            icon: Activity,
+            badge: healthDot ? <span className="h-2 w-2 rounded-full" style={{ background: healthDot }} /> : null,
+          },
           { id: "thong-bao", label: "Thông báo tới studio", icon: Megaphone },
           { id: "binh-chon", label: "Bình chọn", icon: Vote },
           { id: "sao-luu", label: "Sao lưu", icon: DatabaseBackup },
@@ -157,6 +171,8 @@ export default function SystemV2({
 
       <Stack className="min-w-0">
         <PageHead desc="Gửi thông báo cho mọi studio, sao lưu & khôi phục toàn bộ dữ liệu, chọn nơi lưu ảnh người dùng tải lên." />
+
+        <HealthV2 health={health} />
 
         {/* ── Thông báo ─────────────────────────────────────────────────── */}
         <Section id="thong-bao" icon={Megaphone} title="Thông báo tới studio" desc="Hiện ngay trong webapp: chuông thông báo + bảng nổi khi người dùng đăng nhập hoặc đang dùng.">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import FaceFinder from "@/app/a/[slug]/FaceFinder";
 import { LangProvider } from "@/lib/i18n";
 
@@ -18,6 +19,15 @@ import { LangProvider } from "@/lib/i18n";
  *      để lại một lời hẹn treo mãi.
  */
 export default function FaceScanProgressDemo() {
+  /*
+   * CỬA KIỂM THỬ cho desktop/test/face-embed-browser.mjs: đưa bộ nhận diện của
+   * trình duyệt ra `window` để Playwright cho nó chạy trên ảnh mẫu rồi so vector
+   * với bộ quét máy chủ. Nạp động — màn xem trước này không tải mô hình nào cho
+   * tới khi bài kiểm thử gọi.
+   */
+  useEffect(() => {
+    (window as unknown as { __faceEmbed?: unknown }).__faceEmbed = () => import("@/lib/face-embed-browser");
+  }, []);
   const chung = {
     people: [],
     activeId: null,
