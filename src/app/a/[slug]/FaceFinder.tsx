@@ -11,21 +11,13 @@ import { useFaceSearch } from "./useFaceSearch";
 /**
  * TÌM ẢNH THEO KHUÔN MẶT — phía khách.
  *
- * Hai đường, và cả hai đều KHÔNG tải mô hình về máy khách:
- *
- *  1. CHỌN MỘT MẶT trong album. Máy chủ đã quét sẵn và lưu cả khuôn mặt lẫn danh
- *     sách ảnh, nên đây chỉ là tra bảng — bấm là ra ngay. Ảnh mặt cắt bằng CSS
- *     ngay trên thumbnail album đã tải sẵn, không thêm một byte tải nào.
- *  2. GỬI MỘT ẢNH CỦA MÌNH. Trình duyệt chỉ thu nhỏ ảnh còn ~800 px rồi gửi lên
- *     /api/album/[slug]/face-match; máy chủ nhận diện và trả về "bạn là người
- *     nào trong album".
- *
- * VÌ SAO ĐƯỜNG 2 KHÔNG CÒN CHẠY TRONG TRÌNH DUYỆT NHƯ TRƯỚC. Bản trước tải ~20 MB
- * mô hình về máy khách để ảnh không phải rời khỏi máy. Từ khi việc quét album
- * chuyển hẳn lên máy chủ, hai bên căn khuôn mặt theo hai cách khác nhau, nên
- * vector sinh ở trình duyệt không so được với vector trong album — cùng một
- * người vẫn ra "không tìm thấy". Đổi lại khách được nhiều hơn: không tải gì cả,
- * chạy được trên điện thoại yếu. Ảnh gửi lên KHÔNG được lưu ở đâu.
+ *  1. CHỌN MỘT MẶT trong album. Khuôn mặt đã được quét và gom sẵn (trên máy
+ *     studio), nên đây chỉ là tra bảng — bấm là ra ngay, không tải mô hình nào.
+ *     Ảnh mặt cắt bằng CSS ngay trên thumbnail album đã tải sẵn.
+ *  2. TÌM BẰNG MỘT ẢNH CỦA MÌNH. Ảnh được nhận diện ngay trên máy khách (cùng
+ *     mô hình với dữ liệu album, tải ~13 MB ở lần bấm đầu), chỉ 128 con số gửi
+ *     lên /api/album/[slug]/face-match để so. Ảnh không rời khỏi máy. Máy không
+ *     chạy nổi thì nói rõ và chỉ về đường 1. Xem ./useFaceSearch.
  */
 
 /** Số mặt hiện sẵn; còn lại nằm sau nút "xem thêm". */
@@ -50,8 +42,9 @@ export default function FaceFinder({
   /** Mật khẩu album (nếu có): route so mặt đi qua đúng cánh cửa như ảnh. */
   password?: string;
   /**
-   * Tiến độ quét của máy chủ (@/lib/face-pending), hoặc null khi không có gì
-   * đang chạy — kể cả khi gói của studio không mở tính năng này.
+   * Tiến độ quét (@/lib/face-pending `tienDoChoKhach`), hoặc null khi không có
+   * gì đang chạy — kể cả khi gói của studio không mở tính năng này, hay studio
+   * chưa bắt đầu quét.
    */
   scan?: TienDoQuet | null;
 }) {
@@ -74,7 +67,7 @@ export default function FaceFinder({
     return (
       <p className="mt-4 flex items-center gap-1.5 text-[12.5px]" style={{ color: "var(--text3)" }}>
         <ScanFace size={14} style={{ color: "var(--accent)" }} />{" "}
-        {t("facePreparing").replace("{n}", String(scan.daQuet)).replace("{m}", String(scan.tong))}
+        {t(scan.mayChu ? "facePreparing" : "facePreparingStudio").replace("{n}", String(scan.daQuet)).replace("{m}", String(scan.tong))}
       </p>
     );
   }

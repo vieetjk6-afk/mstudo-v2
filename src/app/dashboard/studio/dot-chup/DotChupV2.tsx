@@ -62,7 +62,7 @@ async function call(body: Record<string, unknown>): Promise<{ ok: boolean; messa
   }
 }
 
-export default function DotChupV2({ sessions, locks, deposits, migrated, studioHost, today, openId, defaults }: DotChupProps) {
+export default function DotChupV2({ sessions, locks, deposits, migrated, studioHost, today, openId, defaults, preview }: DotChupProps) {
   const router = useRouter();
   const [now, setNow] = useState(() => Date.now());
   // Hạn giữ chỗ trôi theo phút — cập nhật để khung hết hạn tự về "Trống".
@@ -72,7 +72,11 @@ export default function DotChupV2({ sessions, locks, deposits, migrated, studioH
   }, []);
 
   const [activeId, setActiveId] = useState<string | null>(openId);
-  const [draft, setDraft] = useState<Draft | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(() =>
+    preview?.create
+      ? { id: null, title: "Chụp áo dài Tết 2027", session_date: "2027-01-16", start: "09:00", end: "12:00", slot_minutes: 20, gap_minutes: 5, price: 350_000, deposit: 100_000, location: "", note: "", is_open: true }
+      : null,
+  );
   const [showPast, setShowPast] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -471,7 +475,6 @@ function Detail({
       <Modal open={showQr} onClose={() => setShowQr(false)} icon={QrCode} title="Mã QR của đợt chụp" desc="Khách quét là mở trang chọn khung giờ." width={380}>
         <div className="flex flex-col items-center gap-3">
           {qr ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img src={qr} alt="Mã QR link đợt chụp" width={240} height={240} className="rounded-[12px]" style={{ border: "1px solid var(--bd)" }} />
           ) : (
             <div className="h-[240px] w-[240px] rounded-[12px]" style={{ background: "var(--sf2)" }} />

@@ -148,18 +148,23 @@ export const dict: Dict = {
   resetConfirm: { vi: "Bỏ hết", en: "Clear all" },
   resetDone: { vi: "Đã bỏ toàn bộ lựa chọn.", en: "All picks cleared." },
   // gợi ý ảnh trùng (bộ lọc chạy ngay trên máy khách)
-  // Tìm ảnh theo khuôn mặt. Máy chủ quét album một lần (cron /api/cron/face-scan),
-  // khách chỉ bấm — hoặc gửi một ảnh của mình lên và máy chủ so hộ. Máy khách
-  // KHÔNG tải mô hình nào cả, kể cả ở đường tải ảnh lên.
+  // Tìm ảnh theo khuôn mặt. Studio quét album trên máy mình; khách chỉ bấm một
+  // khuôn mặt — hoặc chọn một ảnh của mình: ảnh được nhận diện NGAY TRÊN MÁY
+  // KHÁCH (tải mô hình ~13 MB ở lần đầu), chỉ 128 con số được gửi lên để so.
   faceFindTitle: { vi: "Tìm ảnh có mặt bạn", en: "Find photos you're in" },
   faceClear: { vi: "Xem cả album", en: "Show all" },
   faceOnePerson: { vi: "Một người trong album", en: "Someone in this album" },
-  faceUpload: { vi: "Tải ảnh của bạn lên", en: "Upload a photo of yourself" },
+  faceUpload: { vi: "Chọn một ảnh có mặt bạn", en: "Choose a photo of yourself" },
   faceUploadCost: {
-    vi: "Ảnh bạn gửi chỉ dùng để so khuôn mặt rồi bỏ, không được lưu lại.",
-    en: "The photo you send is only used to match a face, then discarded.",
+    vi: "Ảnh được phân tích ngay trên máy bạn, không tải lên máy chủ. Lần đầu cần tải bộ nhận diện khoảng 13 MB — nên dùng Wi-Fi.",
+    en: "The photo is analysed on your device and is not uploaded. First use downloads a ~13 MB recognition model — Wi-Fi recommended.",
   },
-  faceLoading: { vi: "Đang chuẩn bị ảnh…", en: "Preparing the photo…" },
+  faceModelLoading: { vi: "Đang tải bộ nhận diện… {p}%", en: "Loading the recognition model… {p}%" },
+  faceDeviceCant: {
+    vi: "Máy này không chạy được bộ nhận diện. Bạn vẫn tìm được bằng cách chạm vào một khuôn mặt ở trên.",
+    en: "This device can't run the recognition model. You can still tap a face above.",
+  },
+  faceLoading: { vi: "Đang phân tích ảnh…", en: "Analysing the photo…" },
   faceSearching: { vi: "Đang tìm…", en: "Searching…" },
   faceFound: { vi: "Đã tìm thấy bạn.", en: "Found you." },
   faceUsedBiggest: {
@@ -189,6 +194,11 @@ export const dict: Dict = {
   facePreparing: {
     vi: "Đang tìm khuôn mặt trong album: đã quét {n}/{m} ảnh. Ảnh được quét dần vào ban đêm — mai quay lại là tìm được nhiều hơn.",
     en: "Finding faces in this album: {n}/{m} photos scanned. Photos are scanned overnight — check back tomorrow for more.",
+  },
+  // Studio quét trên máy mình (mặc định): không ai hẹn giờ được, chỉ nói số.
+  facePreparingStudio: {
+    vi: "Studio đang quét khuôn mặt cho album này: đã xong {n}/{m} ảnh. Quét xong là bạn tìm được ảnh có mặt mình ở đây.",
+    en: "The studio is scanning faces for this album: {n}/{m} photos done. Once finished, you can find your photos here.",
   },
   faceFailed: { vi: "Không tìm được, thử lại giúp tôi.", en: "Search failed, please try again." },
   personHint: {

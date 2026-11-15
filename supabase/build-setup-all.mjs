@@ -116,6 +116,7 @@ const ORDER = [
   ["migrations/noi_dung_ck_tu_nhap.sql", "Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})"],
   ["migrations/ghep_layout.sql", "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày"],
   ["migrations/gioi_han_tan_suat.sql", "Giới hạn tần suất bền không cần Upstash: bộ đếm chống dò mật khẩu album / SĐT trong Postgres"],
+  ["migrations/he_thong_van_hanh.sql", "Sức khoẻ hệ thống: nhật ký lượt chạy cron / SQL lúc deploy, lỗi máy chủ gộp theo ngày, dung lượng database & storage (chỉ service-role)"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -184,6 +185,7 @@ const MOI = [
   "migrations/noi_dung_ck_tu_nhap.sql",
   "migrations/ghep_layout.sql",
   "migrations/gioi_han_tan_suat.sql",
+  "migrations/he_thong_van_hanh.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
@@ -307,6 +309,15 @@ const NHOM = {
       "-- Đã cấu hình Upstash thì không cần chạy — chạy cũng vô hại.",
     ],
     files: ["migrations/gioi_han_tan_suat.sql"],
+  },
+  "he-thong-van-hanh.sql": {
+    tieuDe: "SỨC KHOẺ HỆ THỐNG — NHẬT KÝ CRON / SQL LÚC DEPLOY, LỖI MÁY CHỦ, DUNG LƯỢNG",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng việc này: bảng system_runs, system_errors và",
+      "-- các hàm đi kèm (chỉ service-role gọi). Không phụ thuộc bảng nào khác.",
+      "-- Đã chạy bản trước thì chạy lại cả file này cũng an toàn.",
+    ],
+    files: ["migrations/he_thong_van_hanh.sql"],
   },
 };
 

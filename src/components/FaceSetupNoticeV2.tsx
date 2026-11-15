@@ -62,8 +62,8 @@ export function FaceSetupNoticeV2View({ s }: { s: FaceSetupNoticeState }) {
         <li>Quay lại đây bấm <b>Kiểm tra lại</b>. Khối này biến mất là xong.</li>
       </ol>
       <p className={`${body} mt-1`} style={{ color: "var(--tx3)" }}>
-        Chạy xong là hết việc: máy chủ tự quét khuôn mặt cho mọi album đã phát hành, studio không phải mở hay bấm gì thêm.
-        Chạy lại nhiều lần vô hại.
+        Chạy xong thì mở từng album ở <b>giao diện mới</b> → tab <b>Giao khách</b> → thẻ <b>Tìm theo khuôn mặt</b> → bấm{" "}
+        <b>Quét khuôn mặt trên máy này</b> (việc quét chạy trên máy studio, không còn chạy trên máy chủ). Chạy lại SQL nhiều lần vô hại.
       </p>
       {duAn.ma && (
         <p className={`${body} mt-1 font-medium`} style={{ color: "var(--am)" }}>

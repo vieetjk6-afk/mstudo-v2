@@ -88,8 +88,8 @@ function FaceSetupNoticeV1() {
       {/* Nói rõ SAU ĐÓ studio không phải làm gì nữa. Bản trước còn bắt mở từng
           album cho trình duyệt quét, và đó chính là bước studio thấy thừa. */}
       <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: "var(--tx3, #777)" }}>
-        Chạy xong là hết việc: máy chủ tự quét khuôn mặt cho mọi album đã phát hành, studio không phải mở
-        hay bấm gì thêm. Chạy lại nhiều lần vô hại.
+        Chạy xong thì mở từng album ở <b>giao diện mới</b> → tab <b>Giao khách</b> → thẻ <b>Tìm theo khuôn mặt</b> → bấm{" "}
+        <b>Quét khuôn mặt trên máy này</b> (việc quét chạy trên máy studio, không còn chạy trên máy chủ). Chạy lại SQL nhiều lần vô hại.
       </p>
       {duAn.ma && (
         // Cái bẫy im lặng nhất sau lần chuyển project: chạy SQL trong tab project

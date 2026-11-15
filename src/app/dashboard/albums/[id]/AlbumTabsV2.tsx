@@ -21,6 +21,7 @@ import type { Album, AlbumPhase, Photo } from "@/lib/types";
 import type { AlbumEditorState, AlbumPick, CustomerShare } from "./useAlbumEditor";
 import { Thumb, codesText, copyText, downloadText, shortCode } from "./album-v2-parts";
 import { AlbumCollageCardV2, type AlbumCollageInfo } from "./AlbumCollageCard";
+import FaceScanCardV2 from "./FaceScanCardV2";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Các tab còn lại của màn album (giao diện mới): Khách chọn · Chia sẻ ·
@@ -585,6 +586,9 @@ export function DeliverTabV2({
       )}
 
       {album.delivered_at && <StorageCardV2 e={e} deliveredAt={album.delivered_at} />}
+
+      {/* Quét khuôn mặt chạy trên máy studio — thẻ tự hỏi máy chủ gói + tiến độ. */}
+      <FaceScanCardV2 albumId={album.id} />
 
       {collageInfo && <AlbumCollageCardV2 albumId={album.id} info={collageInfo} />}
 

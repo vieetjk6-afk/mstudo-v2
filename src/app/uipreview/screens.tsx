@@ -65,6 +65,7 @@ import { SCREENS_KHCONG } from "./v2/khcong";
 import { SCREENS_NOIBO } from "./v2/noibo";
 import { SCREENS_CONLAI } from "./v2/conlai";
 import { SCREENS_KHTHIEP } from "./v2/khthiep";
+import { SCREENS_DOTCHUP } from "./v2/dotchup";
 import * as f from "./fixtures";
 
 /** Chủ studio giả cho các màn xem trước khung giao diện. */
@@ -748,6 +749,7 @@ export const SCREENS: Record<
   ...SCREENS_NOIBO,
   ...SCREENS_CONLAI,
   ...SCREENS_KHTHIEP,
+  ...SCREENS_DOTCHUP,
   "bang-mau": {
     title: "Bảng màu — ngoài shell / shell sáng / shell tối",
     render: () => <TokenSwatches />,

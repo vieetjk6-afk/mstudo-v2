@@ -28,8 +28,15 @@ import { quetRgba, SCAN_WIDTH, type ScannedFace } from "./face-scan-core";
 
 const MODEL_BASE = "/face-model";
 
-/** Dung lượng tải lần đầu (đo trên file thật), để màn hình nói đúng con số. */
-export const TAI_LAN_DAU_MB = { ssd: 12.4, tiny: 7.0 } as const;
+/**
+ * Dung lượng tải lần đầu, đo trên file thật: trọng số 12,4 MB (SSD 5,6 + landmark
+ * 0,4 + nhận dạng 6,4) + thư viện ~1,3 MB. Câu chữ phía khách in đúng số này.
+ *
+ * Bộ dò NHỎ (tiny, nhẹ hơn 5,4 MB) đã đo và KHÔNG dùng cho ảnh khách: trên 6 ảnh
+ * mẫu nó sót mặt và chọn nhầm "mặt to nhất" ở 2 ảnh (lệch 0,63 và 0,82 so với
+ * ngưỡng 0,6) — xem desktop/test/face-embed-browser.mjs.
+ */
+export const TAI_LAN_DAU_MB = 13;
 
 export type BoDo = "ssd" | "tiny";
 export type TienDoNap = { buoc: "thu-vien" | "mo-hinh" | "xong"; phanTram: number };

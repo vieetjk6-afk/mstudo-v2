@@ -107,7 +107,7 @@ export default function FaceFinderV2({
           <div className="flex items-start gap-3 rounded-[12px] p-3.5" style={{ background: "var(--sf2)" }}>
             <ScanFace size={20} style={{ color: "var(--ac)", flex: "none", marginTop: 1 }} />
             <p className="text-[13.5px]" style={{ color: "var(--tx2)" }}>
-              {t("facePreparing").replace("{n}", String(scan!.daQuet)).replace("{m}", String(scan!.tong))}
+              {t(scan!.mayChu ? "facePreparing" : "facePreparingStudio").replace("{n}", String(scan!.daQuet)).replace("{m}", String(scan!.tong))}
             </p>
           </div>
         ) : (

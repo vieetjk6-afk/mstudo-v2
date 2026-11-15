@@ -68,4 +68,4 @@ jobs:
         run: npm run lint
 
       - name: Chạy toàn bộ kiểm thử
-        run: npm test -- --khong-bo-qua=sql-chay-that,rls-luu-nguoi,chay-sql
+        run: npm test -- --khong-bo-qua=sql-chay-that,rls-luu-nguoi,chay-sql,he-thong-van-hanh-pg
