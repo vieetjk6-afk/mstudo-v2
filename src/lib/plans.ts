@@ -132,31 +132,39 @@ export function limitsFor(plan: Plan, isAdmin: boolean): PlanLimits {
 }
 
 /**
- * CÔNG TẮC TỔNG CỦA TÌM ẢNH THEO KHUÔN MẶT — mặc định TẮT.
+ * CÔNG TẮC TỔNG CỦA TÌM ẢNH THEO KHUÔN MẶT — mặc định BẬT (theo gói).
  *
- * Tính năng này là khoản tiêu CPU máy chủ lớn nhất (TensorFlow chạy trên
- * Vercel cho từng ảnh), trong khi ít được dùng. Tắt ở đây thì mọi cổng đi qua
- * `planAllowsFaceSearch` cùng đóng một lúc: bộ quét không chọn album nào, ô
- * "tìm ảnh có tôi" ẩn khỏi trang khách, nút quét tay của studio bị chặn.
- * Dữ liệu khuôn mặt đã có trong DB vẫn giữ nguyên.
- *
- * Bật lại: đặt NEXT_PUBLIC_FACE_SEARCH=1 trên Vercel rồi deploy lại (biến
- * NEXT_PUBLIC_* được nướng vào lúc build), và khôi phục lịch `schedule` trong
- * .github/workflows/quet-khuon-mat.yml.
+ * Tính năng từng bị tắt hẳn vì TensorFlow chạy trên Vercel là khoản tiêu CPU
+ * lớn nhất. Nay việc nặng chạy trên MÁY STUDIO (trình duyệt đang mở trang album,
+ * xem @/lib/face-embed-browser); máy chủ chỉ lưu kết quả và làm phép tính vector
+ * rẻ. Nên tính năng mở lại, và công tắc này chỉ còn là NÚT DỪNG KHẨN CẤP:
+ * NEXT_PUBLIC_FACE_SEARCH=0 (rồi deploy lại — biến NEXT_PUBLIC_* nướng lúc
+ * build) thì mọi cổng đi qua `planAllowsFaceSearch` cùng đóng.
  */
-export const FACE_SEARCH_ENABLED = process.env.NEXT_PUBLIC_FACE_SEARCH === "1";
+export const FACE_SEARCH_ENABLED = process.env.NEXT_PUBLIC_FACE_SEARCH !== "0";
+
+/**
+ * MÁY CHỦ CÓ TỰ CHẠY TENSORFLOW KHÔNG — mặc định KHÔNG.
+ *
+ * Tách riêng khỏi công tắc trên: bật tính năng không được kéo theo CPU Vercel.
+ * Chỉ khi FACE_SERVER_SCAN=1 (biến CHỈ máy chủ đọc) thì cron quét, nút quét của
+ * /api/albums/[id]/face-scan và việc nhận diện ảnh khách gửi lên mới chạy. Là
+ * hàm chứ không phải hằng để kiểm thử đổi được biến sau khi nạp module.
+ */
+export function faceServerScanEnabled(): boolean {
+  return FACE_SEARCH_ENABLED && process.env.FACE_SERVER_SCAN === "1";
+}
 
 /**
  * TÌM ẢNH THEO KHUÔN MẶT — chỉ Photographer Plus và Studio.
  *
- * Đây là tính năng ĐẮT NHẤT của hệ thống, và đắt theo nghĩa tiền thật: mỗi ảnh
- * phải tải thumbnail từ Drive rồi chạy nhận diện trên CPU máy chủ (~0,75 giây
- * một tấm). Một album 800 ảnh ngốn khoảng 11 phút CPU, một lần cho mỗi ảnh.
- * Mở cho gói thấp thì chi phí đó không có chỗ bù — cùng lý do đã giới hạn
- * `planAllowsWatermark`.
+ * Quét một album tốn công máy thật (~0,5–1 giây một tấm trên máy studio; trên
+ * máy chủ thì là tiền CPU), và ghép layout / chip của khách đều đọc dữ liệu
+ * này — nên nó thuộc hai gói cao, cùng lý do đã giới hạn `planAllowsWatermark`.
  *
  * Chốt này phải kiểm ở CẢ HAI phía và không nơi nào được tin nơi nào:
- *   • Bộ quét (cron) — đừng tiêu CPU cho album của gói không được dùng.
+ *   • Nơi GHI (route nhận kết quả quét, cron) — đừng nhận / tiêu CPU cho album
+ *     của gói không được dùng.
  *   • Trang khách — đừng hiện ô tìm mặt của album không đủ gói.
  */
 export function planAllowsFaceSearch(plan: Plan, isAdmin = false): boolean {

@@ -11,6 +11,7 @@ export const TITLES: [string, string, string][] = [
   ["/dashboard/studio/templates", "Mẫu hợp đồng", "Mẫu hợp đồng & điều khoản"],
   ["/dashboard/studio/board", "Bảng công việc", "Kéo thẻ sang cột khác để đổi trạng thái"],
   ["/dashboard/studio/bookings", "Đặt lịch khách", "Yêu cầu đặt lịch gửi từ website và trang giá"],
+  ["/dashboard/studio/dot-chup", "Chụp theo khung giờ", "Đợt chụp nhanh: khách tự chọn khung giờ còn trống và cọc"],
   ["/dashboard/studio/leads", "Yêu cầu mới", "Khách đặt lịch từ website & chatbox"],
   // Ba màn lịch cũ đã gộp thành các tab của /calendar, nên chỉ còn MỘT dòng ở
   // đây; /schedule và /team giờ là route chuyển hướng, không kịp vẽ topbar.

@@ -38,7 +38,7 @@ export const BANG_KHUON_MAT = ["album_people", "album_faces"];
  */
 const KHOA_BANG_DU = "mstudo:face-setup:bang-du";
 const KHOA_MOI_TRUONG = "mstudo:face-setup:moi-truong";
-type MoiTruong = { cronSecret?: boolean; duAn?: string | null; sqlEditor?: string | null };
+type MoiTruong = { cronSecret?: boolean; quetMayChu?: boolean; duAn?: string | null; sqlEditor?: string | null };
 function docNho(khoa: string): string | null {
   try {
     return sessionStorage.getItem(khoa);
@@ -147,7 +147,9 @@ export function useFaceSetupNotice() {
       setDuAn({ ma: d.duAn ?? null, sqlEditor: d.sqlEditor ?? null });
       // Cảnh báo cron chỉ khi phần bảng đã sạch: còn thiếu bảng thì việc phải
       // làm đã rõ rồi, thêm một cảnh báo nữa chỉ làm loãng.
-      setThieuCron(missing.length === 0 && d.cronSecret === false);
+      // …và chỉ khi MÁY CHỦ được bật quét (FACE_SERVER_SCAN=1). Mặc định studio
+      // quét trên máy mình, cron không dính gì tới khuôn mặt.
+      setThieuCron(missing.length === 0 && d.quetMayChu === true && d.cronSecret === false);
     };
     void (async () => {
       const daNho = docNho(KHOA_MOI_TRUONG);
@@ -168,7 +170,7 @@ export function useFaceSetupNotice() {
         // Chỉ nhớ khi cron ĐÃ ổn: còn thiếu CRON_SECRET thì studio sẽ đặt biến,
         // Redeploy rồi tải lại trang — lúc đó phải hỏi lại để cảnh báo tự tắt.
         if (d.cronSecret !== false) {
-          ghiNho(KHOA_MOI_TRUONG, JSON.stringify({ cronSecret: d.cronSecret, duAn: d.duAn ?? null, sqlEditor: d.sqlEditor ?? null }));
+          ghiNho(KHOA_MOI_TRUONG, JSON.stringify({ cronSecret: d.cronSecret, quetMayChu: d.quetMayChu, duAn: d.duAn ?? null, sqlEditor: d.sqlEditor ?? null }));
         }
         apDung(d);
       } catch {

@@ -40,6 +40,8 @@ const CHO_PHEP: Record<string, string> = {
   "huy-doi-lich": "huy-doi-lich.sql",
   "ghep-layout": "ghep-layout.sql",
   "gioi-han-tan-suat": "gioi-han-tan-suat.sql",
+  "he-thong-van-hanh": "he-thong-van-hanh.sql",
+  "chup-khung-gio": "chup-khung-gio.sql",
   "cap-nhat": "cap-nhat.sql",
   "setup-all": "setup-all.sql",
 };

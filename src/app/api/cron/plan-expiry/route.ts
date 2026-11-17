@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isCronAuthorized } from "@/lib/cron-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { withCronLog } from "@/lib/system-runs";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
  * album khách đọc thẳng các cột quyền đó. Xem
  * supabase/migrations/dung_thu_va_het_han.sql.
  */
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -23,3 +24,5 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, downgraded: data ?? 0 });
 }
+
+export const GET = withCronLog("plan-expiry", run);

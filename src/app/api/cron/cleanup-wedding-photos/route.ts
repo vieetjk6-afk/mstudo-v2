@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { withCronLog } from "@/lib/system-runs";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -35,7 +36,7 @@ async function listAll(db: ReturnType<typeof createAdminClient>, prefix: string)
  * exists. Only orphans are touched — a folder whose invitation row is still
  * present is left completely alone, since its photos are live on the invite.
  */
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -100,3 +101,6 @@ export async function GET(req: NextRequest) {
     done, // false ⇒ hit the time budget; run it again to continue
   });
 }
+
+// Mỗi lượt chạy để lại một dòng ở trang Sức khoẻ hệ thống (system_runs).
+export const GET = withCronLog("cleanup-wedding-photos", run);

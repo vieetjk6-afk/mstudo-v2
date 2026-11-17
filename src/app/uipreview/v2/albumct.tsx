@@ -9,6 +9,7 @@ import CreateAlbumFlowV2 from "@/components/CreateAlbumFlowV2";
 import NewAlbumPage from "@/app/dashboard/albums/new/page";
 import AlbumCategoriesManager from "@/app/dashboard/studio/album-categories/AlbumCategoriesManager";
 import type { Album, AlbumSource, Dislike, Photo, Selection } from "@/lib/types";
+import { FaceScanCardStatesDemo } from "../FaceScanProgressDemo";
 
 /* ── Dữ liệu giả của một album cưới: hai thư mục ảnh chọn + một thư mục giao ── */
 
@@ -161,6 +162,15 @@ export const SCREENS_ALBUMCT: Record<string, { title: string; render: () => Reac
   "v2-album-giao": {
     title: "Giao diện mới — Album: tab Giao khách (đã giao, hạn lưu trữ)",
     render: () => editorDelivery("deliver"),
+    bare: true,
+  },
+  "v2-album-quet-mat": {
+    title: "Giao diện mới — Album: thẻ “Tìm theo khuôn mặt” (quét trên máy studio) ở mọi trạng thái",
+    render: () => (
+      <PreviewV2 path="/dashboard/albums">
+        <FaceScanCardStatesDemo />
+      </PreviewV2>
+    ),
     bare: true,
   },
   "v2-album-giao-le": {

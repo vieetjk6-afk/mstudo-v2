@@ -187,12 +187,10 @@ function AlbumEditorV1({
         </div>
       )}
 
-      {/* KHÔNG có bảng gom khuôn mặt ở đây, và đó là chủ ý.
-          Bản trước quét khuôn mặt ngay trên màn này: studio mở album ra là trình
-          duyệt chạy ngầm. Studio nói thẳng bước đó thừa — studio không tìm mặt
-          bao giờ, chỉ KHÁCH mới cần. Giờ máy chủ tự quét (cron
-          /api/cron/face-scan). Muốn xem đã quét tới đâu thì gọi
-          GET /api/albums/<id>/face-scan; muốn chạy ngay thì POST cùng đường dẫn. */}
+      {/* Giao diện cũ KHÔNG có nút quét khuôn mặt. Máy chủ không còn tự quét
+          (tốn CPU Vercel): việc quét chạy trên máy studio, ở thẻ "Tìm theo
+          khuôn mặt" của tab Giao khách — CHỈ có ở giao diện mới
+          (./FaceScanCardV2). */}
 
       {/* Hợp đồng đồng bộ Drive có HAI album. Khi album giao khách đã sẵn sàng,
           link khách của album chọn ảnh tự chuyển sang đó — nhìn ở màn này thì

@@ -21,6 +21,8 @@ import { crewPortalUrl } from "@/lib/crew-show";
 import { vnd } from "@/lib/types";
 import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { withCronLog } from "@/lib/system-runs";
+import { zaloCronName } from "@/lib/system-runs-rules";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -51,7 +53,7 @@ const DELIVER_WATCH_DAYS = 120;
  *                      ảnh → tạo album giao khách rồi gửi link cho khách.
  * Chống gửi trùng: kiểm tra zalo_messages đã 'sent' cùng (contract, kind) gần đây.
  */
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   if (!isCronAuthorized(req.headers.get("authorization"))) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
@@ -444,3 +446,6 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ ok: true, only: only ?? "all", shootSent, dueSent, selectSent, nudgeSent, delivered, quoteNudged, quoteClosed });
 }
+
+// Mỗi lượt chạy để lại một dòng ở trang Sức khoẻ hệ thống (system_runs).
+export const GET = withCronLog((req: NextRequest) => zaloCronName(req.url), run);

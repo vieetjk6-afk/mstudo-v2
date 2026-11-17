@@ -1,14 +1,18 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { randomUUID } from "node:crypto";
 import { fetchThumbChiTiet, scanJpeg, type KetQuaTai } from "./face-node";
-import { centroid, groupFaces, matchKnown, type FaceVector, type KnownPerson, type Person } from "./face-group";
-import { effectivePlan, planAllowsFaceSearch, type Plan } from "./plans";
+import { effectivePlan, faceServerScanEnabled, planAllowsFaceSearch, type Plan } from "./plans";
 // Luật "ảnh nào còn phải quét" nằm ở @/lib/face-can-quet — MỘT chỗ cho cả ba
 // phía hỏi nó (hàng đợi, vòng quét, tiến độ cho khách). Re-export để những chỗ
 // đang nhập từ đây không phải đổi.
 import { apDungLocConQuet, pendingRows, type ScanRow } from "./face-can-quet";
 export { apDungLocConQuet, pendingRows, type ScanRow } from "./face-can-quet";
+// Ghi DB và gom nhóm KHÔNG cần TensorFlow, nên nằm ở file riêng để route nhận
+// kết quả từ máy studio dùng được mà không kéo theo face-node. Re-export cho
+// những chỗ đang nhập từ đây.
+import { FIRST_CHUNK, WRITE_CHUNK, ghiKetQuaQuet, veHangDoiGomNeuCan } from "./face-ghi";
+import { laLoiVinhVien } from "./face-scan-core";
+export { clusterAlbum } from "./face-gom";
 
 /**
  * QUÉT KHUÔN MẶT CHO CẢ ALBUM — chạy trên máy chủ, không cần ai mở trình duyệt.
@@ -27,26 +31,6 @@ export { apDungLocConQuet, pendingRows, type ScanRow } from "./face-can-quet";
  * tự dừng trước hạn, ghi những gì đã có, rồi lượt cron sau chạy tiếp từ đúng chỗ
  * đó — `photos.faces_scanned_at` là cái mốc.
  */
-
-/**
- * GHI XUỐNG DB SAU MỖI BAO NHIÊU ẢNH.
- *
- * 20, và con số này KHÔNG phải để tối ưu — nó là điều kiện để bộ quét tiến lên
- * được. Bản trước đặt 100: ở ~0,75 giây một ảnh thì 100 ảnh mất 75 giây, mà một
- * hàm serverless có thể bị cắt ở 60 giây (giới hạn gói Hobby của Vercel). Khi
- * đó lượt quét CHƯA BAO GIỜ tới mốc ghi — quét xong 80 ảnh rồi mất sạch, lượt
- * sau bắt đầu lại từ 0, và `chuaQuet` không bao giờ nhích. Không có lỗi nào hiện
- * ra ở đâu cả, vì về mặt code thì chẳng có gì sai.
- *
- * 20 ảnh ≈ 15 giây, an toàn dưới mọi hạn thời gian; đổi lại là thêm vài lượt
- * ghi, thứ rẻ hơn nhiều so với mất cả mẻ.
- */
-const WRITE_CHUNK = 20;
-/**
- * Mẻ ghi đầu tiên của mỗi album — nhỏ, để "mốc quét có nằm lại không" lộ ra sau
- * vài giây thay vì sau nửa ngân sách. Xem chỗ dùng trong vòng quét.
- */
-const FIRST_CHUNK = 3;
 
 /**
  * HẠN CHO MỘT LƯỢT QUÉT, và vì sao nó nhỏ đến thế.
@@ -199,70 +183,13 @@ export async function scanAlbum(
   /** Mốc ghi xong nhưng đọc lại vẫn null → dừng album này, nhường lượt. */
   let ghiKhongAn = false;
 
-  /** Đẩy những gì đang giữ trong tay xuống DB. Gọi sau mỗi mẻ và ở cuối. */
+  /** Đẩy những gì đang giữ trong tay xuống DB (đường ghi chung ở @/lib/face-ghi). */
   const flush = async () => {
-    if (faceRows.length) {
-      const batch = faceRows.splice(0, faceRows.length);
-      /*
-       * `.select()` sau khi ghi — ĐỌC LẠI CHÍNH THỨ VỪA GHI.
-       *
-       * Không có nó thì một câu ghi "thành công" mà chạm 0 dòng nhìn y hệt một
-       * câu ghi thành công thật: không lỗi, không cảnh báo. Chuyện đó đã xảy ra
-       * và ngốn ba vòng — lượt cron báo quét 40 ảnh, lượt sau vẫn thấy đủ 343
-       * ảnh chưa quét. Đọc lại là cách duy nhất phân biệt.
-       */
-      const { data: d1, error: e1 } = await db
-        .from("album_faces")
-        .upsert(batch, { onConflict: "photo_id,at" })
-        .select("photo_id");
-      if (e1) throw new Error(`ghi_album_faces_that_bai: ${e1.message}`);
-      daGhiMat += (d1 ?? []).length;
-      if ((d1 ?? []).length === 0) throw new Error(`ghi_album_faces_cham_0_dong (gui ${batch.length} dong)`);
-      // KHÔNG đưa album vào lại hàng đợi gom ở đây nữa — xem `veHangDoiGom` ở
-      // cuối hàm. Đặt lại sau MỖI mẻ 20 ảnh nghĩa là mỗi lượt cron gom lại cả
-      // album (đọc toàn bộ vector 128 số của mọi khuôn mặt), và đó là phần lớn
-      // egress Supabase làm project bị khoá vì vượt hạn mức (11/2026).
-    }
-    while (doneIds.length) {
-      const part = doneIds.splice(0, WRITE_CHUNK);
-      const { data: d2, error: e2 } = await db
-        .from("photos")
-        .update({ faces_scanned_at: new Date().toISOString() })
-        .in("id", part)
-        .select("id");
-      if (e2) throw new Error(`ghi_moc_quet_that_bai: ${e2.message}`);
-      daGhiMoc += (d2 ?? []).length;
-      // Chạm 0 dòng trong khi vừa gửi một danh sách id có thật = câu ghi bị chặn
-      // ở đâu đó. Nổ ra to còn hơn quét lại đúng những tấm đó tới vô tận.
-      if ((d2 ?? []).length === 0) throw new Error(`ghi_moc_quet_cham_0_dong (gui ${part.length} id)`);
-
-      /*
-       * ĐỌC LẠI BẰNG MỘT CÂU RIÊNG — không tin RETURNING của chính câu vừa ghi.
-       *
-       * Đây là chỗ bản trước còn mù. RETURNING nói "đã ghi 37 dòng" nhưng nó chỉ
-       * chứng minh câu UPDATE KHỚP 37 dòng — mà thậm chí con số ấy cũng có thể
-       * là đồ cũ lấy từ cache. Log production ngày 06/09: tám lượt liên tiếp đều
-       * báo daGhiMoc 37–47, database chỉ nhận đúng MỘT mẻ (51/343 ảnh), và mọi
-       * lượt đọc sau vẫn thấy nguyên 343 ảnh chưa quét.
-       *
-       * Gốc rễ đã chữa ở @/lib/supabase/no-cache-fetch. Vòng kiểm này ở lại làm
-       * lưới an toàn: một câu SELECT RIÊNG là cách duy nhất phân biệt "ghi thật"
-       * với "được kể lại là đã ghi". Rẻ: đếm head, không kéo dòng nào về.
-       */
-      const { count: thuc } = await db
-        .from("photos")
-        .select("id", { count: "exact", head: true })
-        .in("id", part)
-        .not("faces_scanned_at", "is", null);
-      daXacNhan += thuc ?? 0;
-      if ((thuc ?? 0) === 0) {
-        // Không nổ ra: nổ thì cả lượt cron đỏ và MỌI album khác cũng đứng theo.
-        // Ghi nhận rồi bỏ album này, để phần thời gian còn lại phục vụ album khác.
-        ghiKhongAn = true;
-        doneIds.length = 0;
-        return;
-      }
-    }
+    const r = await ghiKetQuaQuet(db, faceRows, doneIds);
+    daGhiMat += r.daGhiMat;
+    daGhiMoc += r.daGhiMoc;
+    daXacNhan += r.daXacNhan;
+    if (r.ghiKhongAn) ghiKhongAn = true;
   };
 
   /*
@@ -326,7 +253,7 @@ export async function scanAlbum(
        * một album 111 tấm 404, lượt cron nào cũng tải lại cả 111 tấm và chiếm
        * một chỗ hàng đợi quét.
        */
-      if (!bytes && lyDo && /^(http-404|khong-phai-jpeg)/.test(lyDo)) {
+      if (!bytes && laLoiVinhVien(lyDo)) {
         doneIds.push(p.id);
         boQua++;
         if (loiMau === null) loiMau = `bo_qua_vinh_vien: ${lyDo}`.slice(0, 200);
@@ -382,28 +309,8 @@ export async function scanAlbum(
   if (stoppedBy === "xong" && catLo) stoppedBy = "het-han-muc";
   if (!ghiKhongAn) await flush();
 
-  /*
-   * ĐƯA ALBUM VÀO LẠI HÀNG ĐỢI GOM — tối đa một lần cho mỗi lượt quét hết album.
-   *
-   * Chỉ khi lượt này CÓ ghi khuôn mặt mới, và:
-   *   • đã đi hết danh sách (`xong`) → album quét xong, gom một lần là đủ; hoặc
-   *   • lần gom trước đã cũ hơn 12 giờ → album khổng lồ quét nhiều đêm vẫn
-   *     cho khách thấy dần, nhưng không gom lại sau mỗi lượt cron.
-   * Bản trước đặt lại sau MỖI mẻ ghi: album 1.449 ảnh quét ~35 tấm/lượt bị gom
-   * lại ~40 lần, mỗi lần đọc toàn bộ vector khuôn mặt của album từ Supabase.
-   */
-  if (daGhiMat > 0 && !ghiKhongAn) {
-    let veHangDoiGom = stoppedBy === "xong";
-    if (!veHangDoiGom) {
-      const { data: al } = await db.from("albums").select("faces_clustered_at").eq("id", albumId).maybeSingle();
-      const luc = al?.faces_clustered_at ? Date.parse(al.faces_clustered_at as string) : NaN;
-      veHangDoiGom = Number.isFinite(luc) && Date.now() - luc > 12 * 3600_000;
-    }
-    if (veHangDoiGom) {
-      const { error: e3 } = await db.from("albums").update({ faces_clustered_at: null }).eq("id", albumId);
-      if (e3) throw new Error(`dat_lai_hang_doi_gom_that_bai: ${e3.message}`);
-    }
-  }
+  // Đưa album vào lại hàng đợi gom — luật 12 giờ nằm ở @/lib/face-ghi.
+  if (daGhiMat > 0 && !ghiKhongAn) await veHangDoiGomNeuCan(db, albumId, stoppedBy === "xong");
 
   const remaining = tongCho - scanned - failed - boQua;
   /*
@@ -428,125 +335,6 @@ export async function scanAlbum(
     ms: Date.now() - t0,
     stoppedBy: ghiKhongAn ? "ghi-khong-an" : taiQuetLoi ? "tai-quet-loi" : stoppedBy,
   };
-}
-
-/**
- * Gom toàn bộ khuôn mặt đã quét của album thành từng NGƯỜI.
- *
- * Dựng lại từ đầu chứ không vá từng dòng: lượt gom là sự thật mới nhất, và xoá
- * theo album thì các dòng nối tự đi theo (on delete cascade). Tên studio đã đặt
- * được giữ lại bằng cách ghép cụm mới với người cũ theo tâm cụm.
- */
-export async function clusterAlbum(db: any, albumId: string): Promise<number> {
-  // Đọc THEO TRANG: PostgREST lặng lẽ cắt ở 1000 dòng, nên album đông người
-  // (đám cưới 1.500 ảnh dễ có vài nghìn khuôn mặt) trước đây chỉ được gom từ
-  // 1000 mặt đầu — người xuất hiện ở cuối album biến mất khỏi hàng chip, và vì
-  // lượt gom XOÁ rồi dựng lại người, họ mất luôn tên studio đã đặt. Trang nào
-  // lỗi thì NÉM chứ không gom trên phần đọc dở (sẽ xoá nhầm người).
-  type FaceRow = { photo_id: string; at: number; box: number[] | null; descriptor: number[] | null; sharpness: number | null };
-  const list: FaceRow[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data: page, error } = await db
-      .from("album_faces")
-      .select("photo_id, at, box, descriptor, sharpness")
-      .eq("album_id", albumId)
-      .order("photo_id")
-      .order("at")
-      .range(from, from + 999);
-    if (error) throw new Error(`doc_album_faces_that_bai: ${error.message}`);
-    const rows = (page ?? []) as FaceRow[];
-    list.push(...rows);
-    if (rows.length === 0 || rows.length < 1000) break;
-  }
-
-  const vecs: FaceVector[] = list
-    .filter((f) => Array.isArray(f.descriptor) && f.descriptor.length === 128)
-    .map((f) => ({
-      key: f.photo_id,
-      at: f.at,
-      v: f.descriptor as number[],
-      area: (f.box?.[2] ?? 0) * (f.box?.[3] ?? 0),
-      sharpness: f.sharpness ?? 0,
-      box: f.box ? { x: f.box[0], y: f.box[1], w: f.box[2], h: f.box[3] } : undefined,
-    }));
-  /*
-   * Không có khuôn mặt nào (album toàn ảnh phong cảnh, hoặc chưa quét tấm nào):
-   * vẫn phải RA KHỎI HÀNG ĐỢI, nếu không lượt cron nào cũng gom lại album này.
-   *
-   * KIỂM LỖI, đừng nuốt. Bản trước bỏ qua `error` ở đúng dòng này, và hậu quả
-   * nhìn thấy được trong log thật: ba album quay lại hàng đợi ở MỌI lượt cron,
-   * lần nào cũng `clustered: 0`, ăn hết phần thời gian dành cho việc gom mà
-   * không ai biết vì sao. Một câu cập nhật hỏng lặng lẽ là một vòng lặp vô hạn.
-   */
-  if (vecs.length === 0) {
-    const { data: d, error: e } = await db
-      .from("albums")
-      .update({ faces_clustered_at: new Date().toISOString() })
-      .eq("id", albumId)
-      .select("id");
-    if (e) throw new Error(`danh_dau_album_rong_that_bai: ${e.message}`);
-    if ((d ?? []).length === 0) throw new Error(`danh_dau_album_rong_cham_0_dong: ${albumId}`);
-    return 0;
-  }
-
-  const people: Person[] = groupFaces(vecs).people;
-
-  // Đúng ba cột matchKnown cần — không `*` (cover_box, face_count… đọc về là thừa).
-  const { data: old } = await db.from("album_people").select("id, name, descriptor").eq("album_id", albumId);
-  const known: KnownPerson[] = ((old ?? []) as any[]).map((k) => ({
-    id: k.id,
-    name: k.name ?? "",
-    descriptor: (k.descriptor as number[] | null) ?? [],
-  }));
-  const centroids = people.map((p) => ({ id: p.id, descriptor: centroid(p.faceIdx.map((i) => vecs[i].v)) }));
-  const matches = matchKnown(centroids, known);
-
-  const { error: eDel } = await db.from("album_people").delete().eq("album_id", albumId);
-  if (eDel) throw new Error(`xoa_nguoi_cu_that_bai: ${eDel.message}`);
-
-  /*
-   * GHI THEO LÔ, id sinh sẵn ở đây.
-   *
-   * Bản trước chèn từng người một (`insert().select("id").single()`) chỉ để
-   * lấy id DB cấp cho các dòng nối — album 150 người là 150+ lượt gọi Supabase
-   * mỗi lần gom. Sinh id ngay tại đây thì biết trước người nào mang id nào: cả
-   * người lẫn dòng nối ghi được theo lô, và không phải đọc lại dòng nào.
-   *
-   * Dòng nối trỏ tới album_people bằng khoá ngoại, nên một lô người không nằm
-   * lại thì lô nối nổ ra ngay — không có chuyện nối im lặng vào người không có.
-   */
-  const nguoi = people.map((p, i) => {
-    const b = p.coverBox;
-    return {
-      id: randomUUID(),
-      album_id: albumId,
-      name: matches[i]?.name ?? "",
-      face_count: p.faces,
-      cover_photo_id: p.coverKey || null,
-      cover_at: p.coverAt,
-      cover_box: b ? [b.x, b.y, b.w, b.h] : null,
-      descriptor: centroids[i].descriptor,
-      position: i,
-    };
-  });
-  // 100 người một lô: mỗi dòng mang vector 128 số (~2,5 KB JSON), giữ thân yêu cầu vừa phải.
-  for (let k = 0; k < nguoi.length; k += 100) {
-    const { error: eIns } = await db.from("album_people").insert(nguoi.slice(k, k + 100));
-    if (eIns) throw new Error(`them_nguoi_that_bai: ${eIns.message}`);
-  }
-  const noi = people.flatMap((p, i) => p.photoKeys.map((photo_id) => ({ album_id: albumId, person_id: nguoi[i].id, photo_id })));
-  for (let k = 0; k < noi.length; k += 500) {
-    const { error: e2 } = await db.from("album_photo_people").insert(noi.slice(k, k + 500));
-    if (e2) throw new Error(`noi_anh_voi_nguoi_that_bai: ${e2.message}`);
-  }
-  // Ra khỏi hàng đợi. Đặt SAU vòng ghi: hỏng giữa chừng thì album ở lại hàng đợi
-  // và lượt cron sau dựng lại từ đầu, chứ không mắc kẹt với nửa danh sách người.
-  const { error: eMark } = await db
-    .from("albums")
-    .update({ faces_clustered_at: new Date().toISOString() })
-    .eq("id", albumId);
-  if (eMark) throw new Error(`danh_dau_da_gom_that_bai: ${eMark.message}`);
-  return people.length;
 }
 
 /**
@@ -596,6 +384,9 @@ async function chuDuocDungTimMat(db: any, ownerIds: string[]): Promise<Set<strin
 }
 
 export async function albumsNeedingScan(db: any, limit = 5): Promise<{ id: string; pending: number }[]> {
+  // Máy chủ không tự quét (mặc định): hàng đợi RỖNG — chốt tiêu CPU nằm ở đây,
+  // không tin người gọi đã tự kiểm công tắc.
+  if (!faceServerScanEnabled()) return [];
   const { data: albums, error } = await db
     .from("albums")
     .select("id, owner_id")
@@ -655,6 +446,7 @@ export async function albumsNeedingScan(db: any, limit = 5): Promise<{ id: strin
  * không phải đếm khuôn mặt của từng album mỗi 5 phút.
  */
 export async function albumsNeedingCluster(db: any, limit = 5): Promise<string[]> {
+  if (!faceServerScanEnabled()) return [];
   const { data, error } = await db
     .from("albums")
     .select("id, owner_id")

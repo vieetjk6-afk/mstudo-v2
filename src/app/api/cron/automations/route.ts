@@ -23,6 +23,7 @@ import {
   type PendingAction,
 } from "@/lib/automations";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { withCronLog } from "@/lib/system-runs";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ const esc = (s: string) =>
  * khả năng gửi phải biết TRƯỚC khi ghi dấu, nên cấu hình Zalo được hỏi một lần
  * cho cả lượt chạy thay vì để `sendZalo` tự tra rồi báo hỏng lúc đã muộn.
  */
-export async function GET(req: NextRequest) {
+async function run(req: NextRequest) {
   // Fail-closed: thiếu CRON_SECRET thì KHOÁ, không mở. Nếu không, ai cũng gọi
   // được endpoint gửi Zalo hàng loạt này.
   if (!isCronAuthorized(req.headers.get("authorization"))) {
@@ -420,3 +421,6 @@ ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
     ...(failed.length ? { failed } : {}),
   });
 }
+
+// Mỗi lượt chạy để lại một dòng ở trang Sức khoẻ hệ thống (system_runs).
+export const GET = withCronLog("automations", run);

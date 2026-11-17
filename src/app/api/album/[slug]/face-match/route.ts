@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { scanJpeg } from "@/lib/face-node";
 import { nearestPerson } from "@/lib/face-group";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
+import { faceServerScanEnabled } from "@/lib/plans";
+import { laDescriptorHopLe } from "@/lib/face-scan-core";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,21 +15,19 @@ export const maxDuration = 60;
 const MAX_BYTES = 6 * 1024 * 1024;
 
 /**
- * KHÁCH TẢI MỘT ẢNH CỦA MÌNH LÊN ĐỂ TÌM "ẢNH NÀO CÓ TÔI".
+ * KHÁCH HỎI "ẢNH NÀO CÓ TÔI".
  *
- * VÌ SAO CHẠY Ở MÁY CHỦ CHỨ KHÔNG Ở MÁY KHÁCH NHƯ BẢN TRƯỚC. Bản trước tải ~20
- * MB mô hình về điện thoại khách rồi nhận diện tại chỗ, và ảnh không rời khỏi
- * máy — nghe thì hay hơn. Nhưng từ khi việc quét album chuyển hẳn lên máy chủ,
- * hai bên căn khuôn mặt theo hai cách khác nhau (MediaPipe 478 điểm so với
- * face-api 68 điểm), nên vector sinh ở trình duyệt KHÔNG so được với vector
- * trong album: cùng một người vẫn ra "không tìm thấy". Một đường ống duy nhất là
- * điều kiện để tính năng đúng, không phải để cho gọn.
+ * ĐƯỜNG CHÍNH — chỉ 128 con số. Máy khách tự nhận diện ảnh của mình
+ * (@/lib/face-embed-browser: cùng ba mạng, cùng cách căn mặt với dữ liệu album,
+ * nên vector so được) rồi gửi lên đúng một vector; ở đây chỉ còn phép tính
+ * khoảng cách với tâm cụm của album_people. Ảnh của khách KHÔNG rời khỏi máy
+ * họ, và máy chủ không chạy TensorFlow.
  *
- * Đổi lại, khách được nhiều hơn: không tải một byte mô hình nào, chạy được trên
- * điện thoại yếu, bấm là ra sau một hai giây.
+ * ĐƯỜNG CŨ — gửi ảnh lên cho máy chủ nhận diện — chỉ còn khi FACE_SERVER_SCAN=1.
+ * Khi đó ảnh nằm trong bộ nhớ đúng một lượt xử lý, không ghi Storage, không ghi DB.
  *
- * ẢNH KHÁCH GỬI KHÔNG ĐƯỢC LƯU. Nó nằm trong bộ nhớ đúng một lượt xử lý; thứ duy
- * nhất đi tiếp là một id người trong album. Không ghi Storage, không ghi DB.
+ * Tâm cụm KHÔNG gửi xuống máy khách (egress + lộ vector của người khác): phép
+ * so chạy ở đây, trả về đúng một id người.
  */
 export async function POST(req: Request, props: { params: Promise<{ slug: string }> }) {
   const params = await props.params;
@@ -46,57 +45,75 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   }
 
   // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Chặn TRƯỚC khi đọc
-  // form và trước khi chạm vào bộ nhận diện — đây là đường duy nhất khách làm
-  // máy chủ tiêu CPU của TensorFlow, nên nó cũng là đường duy nhất mà bỏ sót
-  // cổng gói vừa mất tiền vừa mất ý nghĩa của gói. Giao diện đã ẩn hẳn ô này với
-  // gói không đủ, nên tới được đây là gọi trực tiếp.
+  // thân yêu cầu. Giao diện đã ẩn hẳn ô này với gói không đủ, nên tới được đây
+  // là gọi trực tiếp.
   if (!(await chuAlbumDuocTimMat(admin, album.owner_id))) {
     return NextResponse.json({ error: "goi_khong_co_tinh_nang" }, { status: 403 });
   }
 
-  let form: FormData;
-  try {
-    form = await req.formData();
-  } catch {
-    return NextResponse.json({ error: "bad_request" }, { status: 400 });
+  let me: { descriptor: number[] };
+  let soMat = 1;
+  let matKhau = "";
+  let anh: Blob | null = null;
+  if ((req.headers.get("content-type") ?? "").includes("application/json")) {
+    let body: { descriptor?: unknown; password?: unknown; faces?: unknown };
+    try {
+      const text = await req.text();
+      if (text.length > 16_000) return NextResponse.json({ error: "bad_request" }, { status: 413 });
+      body = JSON.parse(text);
+    } catch {
+      return NextResponse.json({ error: "bad_request" }, { status: 400 });
+    }
+    if (!laDescriptorHopLe(body?.descriptor)) return NextResponse.json({ error: "descriptor_khong_hop_le" }, { status: 400 });
+    me = { descriptor: body.descriptor };
+    matKhau = String(body.password ?? "").trim();
+    const n = Number(body.faces);
+    soMat = Number.isInteger(n) && n >= 1 && n <= 24 ? n : 1;
+  } else {
+    // Gửi ẢNH lên: chỉ khi máy chủ được bật nhận diện. Chặn TRƯỚC khi đọc form.
+    if (!faceServerScanEnabled()) return NextResponse.json({ error: "chi_nhan_descriptor" }, { status: 400 });
+    let form: FormData;
+    try {
+      form = await req.formData();
+    } catch {
+      return NextResponse.json({ error: "bad_request" }, { status: 400 });
+    }
+    matKhau = String(form.get("password") ?? "").trim();
+    const file = form.get("file");
+    if (!(file instanceof Blob) || file.size === 0) return NextResponse.json({ error: "thieu_anh" }, { status: 400 });
+    if (file.size > MAX_BYTES) return NextResponse.json({ error: "anh_qua_lon" }, { status: 413 });
+    anh = file;
+    me = { descriptor: [] };
   }
 
   // Cùng cánh cửa với ảnh trong album: album có mật khẩu thì hỏi mặt cũng phải
   // có mật khẩu, nếu không đây thành cửa sau để dò "người này có trong album không".
   if (!album.gallery_pinned && album.password_hash) {
-    const pw = String(form.get("password") ?? "").trim();
-    const ok = pw ? await bcrypt.compare(pw, album.password_hash) : false;
+    const ok = matKhau ? await bcrypt.compare(matKhau, album.password_hash) : false;
     if (!ok) return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }
 
-  const file = form.get("file");
-  if (!(file instanceof Blob) || file.size === 0) {
-    return NextResponse.json({ error: "thieu_anh" }, { status: 400 });
+  if (anh) {
+    const bytes = new Uint8Array(await anh.arrayBuffer());
+    if (!(bytes[0] === 0xff && bytes[1] === 0xd8)) return NextResponse.json({ error: "khong_phai_jpeg" }, { status: 400 });
+    let faces;
+    try {
+      // Nạp động: đường mặc định (chỉ vector) không bao giờ chạm tới TensorFlow.
+      const { scanJpeg } = await import("@/lib/face-node");
+      faces = await scanJpeg(bytes);
+    } catch (e) {
+      return NextResponse.json(
+        { error: "may_chu_khong_nhan_dien_duoc", detail: e instanceof Error ? e.message : String(e) },
+        { status: 200 }
+      );
+    }
+    if (faces.length === 0) return NextResponse.json({ error: "khong_thay_mat" });
+    // Nhiều mặt (ảnh chụp chung) → lấy mặt TO NHẤT: người cầm máy chọn ảnh có
+    // mình, và mình thường là người gần ống kính nhất. (Đường vector: máy khách
+    // đã chọn theo đúng luật này trước khi gửi.)
+    me = faces.reduce((a, b) => (b.box.w * b.box.h > a.box.w * a.box.h ? b : a));
+    soMat = faces.length;
   }
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "anh_qua_lon" }, { status: 413 });
-  }
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!(bytes[0] === 0xff && bytes[1] === 0xd8)) {
-    // Phía khách luôn vẽ lại thành JPEG trước khi gửi, nên tới đây mà không phải
-    // JPEG là lỗi lập trình chứ không phải lỗi của khách — vẫn trả câu đọc được.
-    return NextResponse.json({ error: "khong_phai_jpeg" }, { status: 400 });
-  }
-
-  let faces;
-  try {
-    faces = await scanJpeg(bytes);
-  } catch (e) {
-    return NextResponse.json(
-      { error: "may_chu_khong_nhan_dien_duoc", detail: e instanceof Error ? e.message : String(e) },
-      { status: 200 }
-    );
-  }
-  if (faces.length === 0) return NextResponse.json({ error: "khong_thay_mat" });
-
-  // Nhiều mặt trong ảnh khách gửi (ảnh chụp chung) → lấy mặt TO NHẤT: người cầm
-  // máy chọn ảnh có mình, và mình thường là người gần ống kính nhất.
-  const me = faces.reduce((a, b) => (b.box.w * b.box.h > a.box.w * a.box.h ? b : a));
 
   const { data: people, error } = await admin
     .from("album_people")
@@ -109,6 +126,6 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     me.descriptor,
     ((people ?? []) as { id: string; descriptor: number[] | null }[]).map((p) => ({ id: p.id, descriptor: p.descriptor }))
   );
-  if (!hit) return NextResponse.json({ error: "khong_khop", faces: faces.length });
-  return NextResponse.json({ personId: hit.id, distance: hit.distance, faces: faces.length });
+  if (!hit) return NextResponse.json({ error: "khong_khop", faces: soMat });
+  return NextResponse.json({ personId: hit.id, distance: hit.distance, faces: soMat });
 }

@@ -5,7 +5,7 @@ import { getOriginalFolders } from "@/lib/album-original";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { limitByIpDurable } from "@/lib/rate-limit";
 import { faceChips } from "@/lib/face-people";
-import { tienDoQuet } from "@/lib/face-pending";
+import { tienDoChoKhach } from "@/lib/face-pending";
 import { effectivePlan, planAllowsFaceSearch, type Plan } from "@/lib/plans";
 import { mintAlbumAccess } from "@/lib/album-access";
 import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
@@ -86,7 +86,7 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
     : [];
   // Chưa có mặt nào: phân biệt "máy chủ đang quét tới đâu" với "quét rồi, album
   // không có mặt người". Chỉ trường hợp đầu mới hiện tiến độ cho khách.
-  const faceScan = canFaceSearch && people.length === 0 ? await tienDoQuet(admin, album.id) : null;
+  const faceScan = canFaceSearch && people.length === 0 ? await tienDoChoKhach(admin, album.id) : null;
 
   // Vé cho các lượt GHI về sau (gửi ảnh in — /api/album/[slug]/print) mà không
   // phải gửi lại mật khẩu (xem @/lib/album-access). Chỉ phát khi album có khoá.

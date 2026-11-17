@@ -38,6 +38,7 @@ export const BACKUP_TABLES = [
   "message_templates",
   "studio_services",
   "studio_branches",
+  "studio_mini_sessions",
   "studio_bookings",
   "studio_contracts",
   "contract_addenda",
@@ -87,6 +88,7 @@ export const BACKUP_TABLES = [
   "website_leads",
   "studio_referrals",
   "studio_appointments",
+  "studio_mini_slots",
   "studio_rooms",
   "inbox_channels",
   "inbox_contacts",
@@ -126,6 +128,8 @@ export const BACKUP_EXCLUDED: Record<string, string> = {
   album_photo_counts: "bảng đếm suy ra từ photos — hàm SQL tự đếm lại",
   album_collages: "nháp ghép ảnh của khách, chỉ giữ 1 ngày",
   rate_limit_hits: "bộ đếm chống dò mật khẩu, chỉ có giá trị vài phút",
+  system_runs: "nhật ký lượt chạy cron / SQL — khôi phục sẽ làm sống lại trạng thái cũ",
+  system_errors: "nhật ký lỗi máy chủ gộp theo ngày, tự xoá sau 30 ngày",
 };
 
 /**

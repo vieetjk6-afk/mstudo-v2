@@ -107,6 +107,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { href: "/dashboard/studio/inbox", label: "Hộp thư", icon: MessageCircle, minTier: "booking", roles: STAFF_OK, badge: "inbox", match: ["/dashboard/studio/inbox/ket-noi"], keywords: "chat tin nhan zalo facebook messenger instagram mang xa hoi hop thu chung", sub: "Tin nhắn khách từ mọi mạng xã hội" },
       { href: "/dashboard/studio/leads", label: "Yêu cầu mới", icon: Inbox, minTier: "booking", roles: MANAGER_OK, badge: "leads", keywords: "lead website chatbox" },
       { href: "/dashboard/studio/bookings", label: "Đặt lịch khách", icon: CalendarClock, minTier: "booking", roles: MANAGER_OK, badge: "bookings" },
+      // Ngay dưới "Đặt lịch khách": cùng là khách tự đặt, chỉ khác là đặt vào
+      // KHUNG GIỜ có sẵn của một đợt chụp. Màn chỉ có ở giao diện mới — menu của
+      // hai khung dùng chung file này nên bản cũ cũng thấy dòng này, bấm vào là
+      // lời nhắn kèm nút chuyển giao diện (dot-chup/DotChupView.tsx).
+      { href: "/dashboard/studio/dot-chup", label: "Chụp theo khung giờ", icon: CalendarRange, minTier: "booking", roles: MANAGER_OK, keywords: "dot chup mini session khung gio slot tet trung thu ky yeu chup nhanh", sub: "Khách tự chọn khung giờ & cọc" },
       { href: "/dashboard/studio/quotes", label: "Báo giá", icon: ReceiptText, minTier: "plus", roles: MANAGER_OK, badge: "quotes" },
       { href: "/dashboard/studio/contracts", label: "Hợp đồng & lịch hẹn", icon: FileText, minTier: "plus", roles: STAFF_OK, keywords: "hop dong buoi chup" },
       // Danh bạ khách về đây (trước ở nhóm "Khách hàng" riêng): nó là tài sản

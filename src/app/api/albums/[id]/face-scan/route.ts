@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { clusterAlbum, hanQuetMs, pendingRows, scanAlbum, type ScanRow } from "@/lib/face-scan-server";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
+import { faceServerScanEnabled } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -82,7 +83,10 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     status: album?.status ?? null,
     // Cron chỉ nhặt album đã phát hành CỦA GÓI CÓ TÍNH NĂNG — nói thẳng cả hai
     // điều kiện ra để studio không phải đoán.
-    seCronQuet: album?.status === "published" && goiChoTimMat,
+    seCronQuet: album?.status === "published" && goiChoTimMat && faceServerScanEnabled(),
+    // Mặc định máy chủ KHÔNG tự quét: studio quét ở thẻ "Tìm theo khuôn mặt"
+    // (tab Giao khách của album, giao diện mới).
+    mayChuQuet: faceServerScanEnabled(),
     goiChoTimMat,
     anh: rows.length,
     chuaQuet: conLai,
@@ -108,6 +112,15 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
       ok: false,
       error: "goi_khong_co_tinh_nang",
       hint: "Tìm ảnh theo khuôn mặt chỉ có ở gói Photographer Plus và Studio.",
+    });
+  }
+  // Máy chủ không chạy TensorFlow nữa (mặc định). Nói rõ chỗ quét mới thay vì
+  // trả về một lượt "quét 0 ảnh" trông như hỏng.
+  if (!faceServerScanEnabled()) {
+    return NextResponse.json({
+      ok: false,
+      error: "quet_may_chu_tat",
+      hint: "Máy chủ không còn tự quét khuôn mặt. Mở album này ở giao diện mới → tab Giao khách → thẻ “Tìm theo khuôn mặt” → “Quét khuôn mặt trên máy này”. (Muốn máy chủ quét như trước: đặt FACE_SERVER_SCAN=1.)",
     });
   }
   try {

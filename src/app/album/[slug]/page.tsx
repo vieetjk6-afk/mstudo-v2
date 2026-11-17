@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { filterDeliveryPhotos } from "@/lib/photos";
 import { faceChips, type PersonChip } from "@/lib/face-people";
-import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
+import { tienDoChoKhach, type TienDoQuet } from "@/lib/face-pending";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { getAlbumOwner, getAlbumOwnerHost } from "@/lib/album-owner";
 import StudioBrandMark from "@/components/StudioBrandMark";
@@ -206,7 +206,7 @@ export default async function GalleryPage(
     // trên mỗi khuôn mặt phải đúng ngay từ đầu. Lưới thì tự đầy dần — trang này
     // đã tải nốt phần còn lại trong nền sau khi mở.
     people = canFaceSearch ? faceChips(peopleData.people, peopleData.links, new Set(filtered.map((ph) => ph.id))) : [];
-    if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
+    if (canFaceSearch && people.length === 0) faceScan = await tienDoChoKhach(admin, album.id);
     // Share: cần đủ ảnh để lọc theo shareIds. Ngược lại chỉ gửi lô đầu.
     photos = shareMode ? filtered : filtered.slice(0, INITIAL_PHOTOS);
     sources = shownSources.map(({ id, name, position }) => ({ id, name, position }));

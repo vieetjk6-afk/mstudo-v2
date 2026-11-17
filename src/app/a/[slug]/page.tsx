@@ -13,7 +13,7 @@ import { getAlbumOwner, getAlbumOwnerHost } from "@/lib/album-owner";
 import { pickFolderLinks, type DriveFolderLink } from "@/lib/album-original";
 import { resolveDeliveredAlbum } from "@/lib/contract-album";
 import { faceChips, type PersonChip } from "@/lib/face-people";
-import { tienDoQuet, type TienDoQuet } from "@/lib/face-pending";
+import { tienDoChoKhach, type TienDoQuet } from "@/lib/face-pending";
 import { albumDataVersion, loadAlbumPeopleCached, loadAlbumPhotos } from "@/lib/album-data-cache";
 
 export const dynamic = "force-dynamic";
@@ -243,7 +243,7 @@ export default async function PublicAlbumPage(
     // lọc theo source, nên một chip trỏ vào ảnh không hiện là một chip bấm vào
     // ra lưới trống.
     people = canFaceSearch ? faceChips(peopleData.people, peopleData.links, new Set(photos.map((ph) => ph.id))) : [];
-    if (canFaceSearch && people.length === 0) faceScan = await tienDoQuet(admin, album.id);
+    if (canFaceSearch && people.length === 0) faceScan = await tienDoChoKhach(admin, album.id);
   }
 
   // Hai bản nhận ĐÚNG cùng một bộ prop (logic chung ở ./useCustomerAlbum).

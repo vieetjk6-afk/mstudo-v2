@@ -19,13 +19,15 @@
  */
 
 /*
- * Bài này kiểm LUẬT GÓI — nên phải BẬT công tắc tổng của tính năng
- * (FACE_SEARCH_ENABLED trong src/lib/plans.ts, mặc định TẮT để tiết kiệm CPU
- * Vercel) TRƯỚC khi nạp module: công tắc đọc biến môi trường lúc nạp. Import
- * tĩnh chạy trước mọi dòng code nên phải dùng import động.
+ * HAI CÔNG TẮC (src/lib/plans.ts), đọc biến môi trường:
+ *   • NEXT_PUBLIC_FACE_SEARCH — tính năng, mặc định BẬT; "0" là nút dừng khẩn
+ *     cấp (đọc LÚC NẠP module, nên bài này dùng import động).
+ *   • FACE_SERVER_SCAN — máy chủ có tự chạy TensorFlow không, mặc định KHÔNG
+ *     (đọc lúc gọi). Phần kiểm HÀNG ĐỢI của bộ quét máy chủ bên dưới cần nó bật.
  */
-process.env.NEXT_PUBLIC_FACE_SEARCH = "1";
-const { effectivePlan, planAllowsFaceSearch } = await import("../../src/lib/plans.ts");
+delete process.env.NEXT_PUBLIC_FACE_SEARCH;
+delete process.env.FACE_SERVER_SCAN;
+const { effectivePlan, planAllowsFaceSearch, faceServerScanEnabled } = await import("../../src/lib/plans.ts");
 const { chuAlbumDuocTimMat, conDangQuet, tienDoQuet } = await import("../../src/lib/face-pending.ts");
 const { albumsNeedingCluster, albumsNeedingScan } = await import("../../src/lib/face-scan-server.ts");
 
@@ -43,12 +45,24 @@ const check = (name, got, want) => {
 const NGAY_MAI = new Date(Date.now() + 86_400_000).toISOString();
 const HOM_QUA = new Date(Date.now() - 86_400_000).toISOString();
 
-/* ── 0. Công tắc tổng TẮT (mặc định) → mọi cổng đóng ─────────────────────── */
+/* ── 0. Hai công tắc ─────────────────────────────────────────────────────── */
 {
-  process.env.NEXT_PUBLIC_FACE_SEARCH = "";
+  ok("mặc định (không đặt biến): tính năng BẬT theo gói", planAllowsFaceSearch("studio") === true);
+  ok("mặc định: máy chủ KHÔNG tự quét", faceServerScanEnabled() === false);
+  // Hàng đợi của bộ quét máy chủ phải RỖNG khi công tắc quét tắt — db ném lỗi
+  // nếu bị chạm tới, để chắc là không tốn cả một câu truy vấn.
+  const dbCam = { from() { throw new Error("khong duoc cham DB khi may chu khong quet"); } };
+  check("máy chủ không quét → albumsNeedingScan rỗng, không chạm DB", await albumsNeedingScan(dbCam, 5), []);
+  check("máy chủ không quét → albumsNeedingCluster rỗng, không chạm DB", await albumsNeedingCluster(dbCam, 5), []);
+
+  process.env.NEXT_PUBLIC_FACE_SEARCH = "0";
+  process.env.FACE_SERVER_SCAN = "1";
   const tat = await import("../../src/lib/plans.ts?cong-tac-tat");
-  process.env.NEXT_PUBLIC_FACE_SEARCH = "1";
-  ok("công tắc tổng TẮT → cả gói studio lẫn admin đều KHÔNG được", tat.planAllowsFaceSearch("studio") === false && tat.planAllowsFaceSearch("free", true) === false);
+  ok("NEXT_PUBLIC_FACE_SEARCH=0 → cả gói studio lẫn admin đều KHÔNG được", tat.planAllowsFaceSearch("studio") === false && tat.planAllowsFaceSearch("free", true) === false);
+  ok("…và kéo theo máy chủ không quét dù FACE_SERVER_SCAN=1", tat.faceServerScanEnabled() === false);
+  delete process.env.NEXT_PUBLIC_FACE_SEARCH;
+  ok("FACE_SERVER_SCAN=1 → máy chủ được quét", faceServerScanEnabled() === true);
+  // Từ đây trở xuống kiểm hàng đợi của bộ quét máy chủ → để công tắc quét BẬT.
 }
 
 /* ── 1. Truth table ──────────────────────────────────────────────────────── */
@@ -485,6 +499,10 @@ for (const [ten, chay] of [
     // công cụ trả lời "tại sao không thấy gì" mà không giữ lại đồng nào — nên nó
     // BÁO CÁO cổng gói (goiChoTimMat) thay vì chặn.
     "src/app/api/albums/[id]/face-thu/route.ts": "công cụ đo bản triển khai, báo cáo gói chứ không chặn",
+    // Vòng quét chạy trong TRÌNH DUYỆT studio: tự nó không ghi được gì — mọi thứ
+    // đi qua /api/albums/[id]/face-local, nơi chặn theo gói (403
+    // goi_khong_co_tinh_nang) mà file này phải biết đọc để hiện thẻ khoá.
+    "src/app/dashboard/albums/[id]/useFaceLocalScan.ts": "phía trình duyệt, cổng gói nằm ở route face-local nó gọi",
   };
 
   const files = [];
@@ -504,7 +522,7 @@ for (const [ten, chay] of [
     soDuong++;
     const key = p.replace(/\\/g, "/");
     if (MIEN_TRU[key]) {
-      ok(`${key}: miễn trừ có lý do — ${MIEN_TRU[key]}`, /goiChoTimMat|chuAlbumDuocTimMat/.test(src));
+      ok(`${key}: miễn trừ có lý do — ${MIEN_TRU[key]}`, /goiChoTimMat|chuAlbumDuocTimMat|goi_khong_co_tinh_nang/.test(src));
       continue;
     }
     ok(`${key}: có cổng gói`, CO_CONG.test(src), "thêm planAllowsFaceSearch / chuAlbumDuocTimMat");

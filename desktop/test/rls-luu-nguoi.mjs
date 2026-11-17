@@ -16,7 +16,7 @@
  * Cách chạy: npm run test:rls-luu-nguoi (cần PostgreSQL, xem sql-chay-that.mjs).
  */
 import { execFileSync, execSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -36,16 +36,31 @@ const skip = (why) => {
 };
 
 let PGBIN = "";
-for (const c of ["", "/usr/lib/postgresql/17/bin", "/usr/lib/postgresql/16/bin", "/usr/lib/postgresql/15/bin"]) {
+let coPg = false;
+// initdb có thể nằm trên PATH ("") hoặc ở /usr/lib/postgresql/<bản>/bin (Debian /
+// Ubuntu, không trên PATH). Dò mọi bản có trên máy, mới nhất trước.
+let banCo = [];
+try {
+  banCo = readdirSync("/usr/lib/postgresql")
+    .filter((v) => /^\d+$/.test(v))
+    .sort((a, b) => Number(b) - Number(a))
+    .map((v) => `/usr/lib/postgresql/${v}/bin`);
+} catch {
+  /* không có thư mục này */
+}
+for (const c of ["", ...banCo]) {
   try {
     execSync(`${c ? join(c, "initdb") : "initdb"} --version`, { stdio: "ignore" });
     PGBIN = c;
+    coPg = true;
     break;
   } catch {
     /* thử chỗ tiếp theo */
   }
 }
-if (!PGBIN && !existsSync("/usr/bin/initdb")) skip("không có initdb/psql trên máy này.");
+// Trước đây: `!PGBIN && !existsSync("/usr/bin/initdb")` — initdb tìm thấy trên PATH
+// (PGBIN = "") mà không nằm đúng /usr/bin thì bài vẫn tự BỎ QUA.
+if (!coPg) skip("không có initdb/psql trên máy này.");
 
 let AS = null;
 if (process.getuid?.() === 0) {

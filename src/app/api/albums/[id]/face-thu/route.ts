@@ -6,6 +6,7 @@ import { fetchAllPhotos } from "@/lib/photos";
 import { fetchThumbChiTiet, loadNets, modelDir, scanJpeg, wasmDir } from "@/lib/face-node";
 import { pendingRows, type ScanRow } from "@/lib/face-scan-server";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
+import { faceServerScanEnabled } from "@/lib/plans";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -46,6 +47,12 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { data: own } = await supabase.from("albums").select("id, owner_id").eq("id", params.id).maybeSingle();
   if (!own) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Công cụ đo này CHẠY TensorFlow trên máy chủ — chỉ có nghĩa (và chỉ được
+  // phép tốn CPU) khi máy chủ được bật quét.
+  if (!faceServerScanEnabled()) {
+    return NextResponse.json({ loi: "quet_may_chu_tat", viecPhaiLam: "Máy chủ không tự quét khuôn mặt (FACE_SERVER_SCAN chưa bật). Quét ở thẻ “Tìm theo khuôn mặt” trong trang album, giao diện mới." });
+  }
 
   const url = new URL(req.url);
   const so = Math.min(TOI_DA, Math.max(1, Number(url.searchParams.get("so") ?? MAC_DINH) || MAC_DINH));
