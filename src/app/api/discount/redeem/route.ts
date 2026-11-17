@@ -50,7 +50,7 @@ export async function POST(req: Request) {
   });
   if (rpcErr) return NextResponse.json({ error: rpcErr.message }, { status: 500 });
   if (status !== "ok") {
-    // 'invalid' | 'expired' | 'used_up' | 'already_used'
+    // 'invalid' | 'expired' | 'used_up' | 'already_used' | 'already_paid'
     return NextResponse.json({ error: status }, { status: 400 });
   }
 

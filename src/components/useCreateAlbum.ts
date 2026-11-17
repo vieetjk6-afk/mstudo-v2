@@ -117,11 +117,16 @@ export function useCreateAlbum({ mode = "selection", studioHost = null }: Create
         const studioName = (p?.full_name ?? "").trim() || "Studio";
         setWatermark((w) => w || studioName);
         if (p) {
-          setCanZip(!!p.can_zip);
-          setCanNotes(!!p.can_notes);
-          setCanWatermark(planAllowsWatermark(effectivePlan(p.plan as Plan, p.plan_expires_at), p.role === "admin"));
-          if (!p.can_zip) setAllowDownload(false);
-          if (!p.can_notes) setAllowNote(false);
+          const eff = effectivePlan(p.plan as Plan, p.plan_expires_at);
+          const isAdm = p.role === "admin";
+          // Gói hết hạn mà chưa kịp hạ vẫn còn cờ can_zip/can_notes cũ → chặn theo gói hiệu lực.
+          const zip = isAdm || (!!p.can_zip && eff !== "free");
+          const notes = isAdm || (!!p.can_notes && eff !== "free");
+          setCanZip(zip);
+          setCanNotes(notes);
+          setCanWatermark(planAllowsWatermark(eff, isAdm));
+          if (!zip) setAllowDownload(false);
+          if (!notes) setAllowNote(false);
         }
       }
 

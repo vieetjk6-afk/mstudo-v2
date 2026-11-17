@@ -76,7 +76,11 @@ export default async function DashboardLayout({
     profile?.plan_cycle === "trial" &&
     profile?.plan !== "free" &&
     effectivePlan(profile?.plan, profile?.plan_expires_at) === "free";
-  const expiredTrialPlan = trialJustExpired ? (profile!.plan as string) : null;
+  // Cron hạ gói (api/cron/plan-expiry) có thể đã hạ trước khi người dùng mở
+  // dashboard: nó đánh dấu plan_cycle = 'trial_expired' để băng thông báo vẫn
+  // hiện được một lần — không còn biết gói cũ nên hiện chữ chung "dùng thử".
+  const trialExpiredByCron = profile?.role !== "admin" && profile?.plan_cycle === "trial_expired";
+  const expiredTrialPlan = trialJustExpired ? (profile!.plan as string) : trialExpiredByCron ? "trial" : null;
 
   // Auto-downgrade an expired paid plan back to free (resets the synced limits).
   if (profile && profile.role !== "admin" && effectivePlan(profile.plan, profile.plan_expires_at) === "free" && profile.plan !== "free") {
@@ -84,6 +88,10 @@ export default async function DashboardLayout({
     // Cột plan* là cột nhạy cảm — chỉ service-role được ghi (xem grant ở schema C1).
     await createAdminClient().from("profiles").update(patch).eq("id", user.id);
     profile = { ...profile, ...patch };
+  } else if (profile && trialExpiredByCron) {
+    // Đã hiện băng thông báo ở lượt này → xoá dấu để không hiện lại mãi.
+    await createAdminClient().from("profiles").update({ plan_cycle: null }).eq("id", user.id);
+    profile = { ...profile, plan_cycle: null };
   }
 
   // Authenticated but no profile row (e.g. the account was created before

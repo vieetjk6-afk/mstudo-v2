@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 /**
  * Self-serve free trial (no payment). Basic & Photographer → 30 ngày; Studio →
  * 7 ngày. MỖI TÀI KHOẢN CHỈ DÙNG THỬ MỘT LẦN (mọi gói) — chốt bằng
- * profiles.trial_used_at.
+ * profiles.trial_used_at. Tài khoản ĐÃ TỪNG MUA gói (profiles.paid_plan_at, kể
+ * cả gói đã hết hạn) cũng không dùng thử được — xem dung_thu_va_het_han.sql.
  */
 export async function POST(req: Request) {
   const user = await requireUser();
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
   });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (status !== "ok") {
-    // 'already_used' | 'already_paid'
+    // 'already_used' | 'already_paid' (đã từng mua gói)
     return NextResponse.json({ error: status }, { status: 400 });
   }
 

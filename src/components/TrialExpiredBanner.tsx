@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { X, Crown } from "lucide-react";
+import { PLAN_LABEL, type Plan } from "@/lib/plans";
 
 interface Props {
-  /** Plan that expired (e.g. "studio") */
+  /** Plan that expired (e.g. "studio"), hoặc "trial" khi không còn biết gói cũ (cron đã hạ). */
   expiredPlan: string;
 }
 
@@ -13,7 +14,7 @@ export default function TrialExpiredBanner({ expiredPlan }: Props) {
   const [dismissed, setDismissed] = useState(false);
   if (dismissed) return null;
 
-  const label = expiredPlan === "studio" ? "Studio" : expiredPlan.charAt(0).toUpperCase() + expiredPlan.slice(1);
+  const label = PLAN_LABEL[expiredPlan as Plan] ?? null;
 
   return (
     <div
@@ -23,7 +24,11 @@ export default function TrialExpiredBanner({ expiredPlan }: Props) {
       <div className="flex items-center gap-2 min-w-0">
         <Crown size={15} style={{ color: "#d6a44a", flexShrink: 0 }} />
         <span style={{ color: "#d6a44a" }}>
-          Thời gian dùng thử gói <b>{label}</b> đã kết thúc.
+          {label ? (
+            <>Thời gian dùng thử gói <b>{label}</b> đã kết thúc.</>
+          ) : (
+            <>Thời gian dùng thử đã kết thúc — tài khoản đã về gói Miễn phí.</>
+          )}
         </span>
         <Link
           href="/dashboard/upgrade"
