@@ -23,7 +23,10 @@ const ok = (name, cond, note = "") => {
 /* ── Supabase giả: bảng system_runs trong bộ nhớ ─────────────────────────── */
 const T = { rows: [], missing: false, rpc: [], notes: [] };
 let seq = 0;
-const clock = { now: Date.parse("2026-11-15T00:00:00Z") };
+// Giờ THẬT, không phải một ngày cố định: bộ bọc cron gọi alertStaleCrons(db)
+// với Date.now() thật. Ngày cố định làm bài này đạt hôm viết rồi tự đỏ hai hôm
+// sau (mọi cron giả bỗng "quá hạn" và gửi thêm thông báo).
+const clock = { now: Date.now() };
 const MISSING = { code: "PGRST205", message: "Could not find the table 'public.system_runs' in the schema cache" };
 function runState() {
   const by = new Map();

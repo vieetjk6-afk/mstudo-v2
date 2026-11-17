@@ -25,7 +25,7 @@
  * phải lỗi của code). Máy chủ tự tắt và thư mục tạm tự xoá khi tiến trình thoát.
  */
 import { execFileSync, execSync } from "node:child_process";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -87,7 +87,18 @@ export function dungPostgres({ port }) {
   const PORT = String(port);
   let PGBIN = "";
   let found = false;
-  for (const c of ["", "/usr/lib/postgresql/17/bin", "/usr/lib/postgresql/16/bin", "/usr/lib/postgresql/15/bin", "/usr/lib/postgresql/14/bin"]) {
+  // Debian/Ubuntu để initdb ở /usr/lib/postgresql/<bản>/bin, KHÔNG có trên PATH.
+  // Dò mọi bản có trên máy (mới nhất trước) thay vì một danh sách cứng sẽ cũ.
+  let banCo = [];
+  try {
+    banCo = readdirSync("/usr/lib/postgresql")
+      .filter((v) => /^\d+$/.test(v))
+      .sort((a, b) => Number(b) - Number(a))
+      .map((v) => `/usr/lib/postgresql/${v}/bin`);
+  } catch {
+    /* không có thư mục này */
+  }
+  for (const c of ["", ...banCo]) {
     try {
       execSync(`${c ? join(c, "initdb") : "initdb"} --version`, { stdio: "ignore" });
       PGBIN = c;

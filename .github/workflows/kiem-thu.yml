@@ -46,14 +46,24 @@ jobs:
       - name: Cài thư viện
         run: npm ci
 
-      # Máy chạy của GitHub có sẵn PostgreSQL; phòng khi ảnh máy đổi thì cài.
-      # Thiếu nó các bài SQL sẽ tự "bỏ qua" — mà ở đây bỏ qua bị tính là hỏng.
+      # Máy chạy của GitHub có sẵn PostgreSQL nhưng initdb / pg_ctl KHÔNG nằm trên
+      # PATH (chỉ ở /usr/lib/postgresql/<bản>/bin). Thiếu chúng các bài chạy SQL
+      # thật sẽ "bỏ qua" — mà ở đây bỏ qua bị tính là hỏng. Đưa bản mới nhất lên
+      # PATH; ảnh máy không còn Postgres thì cài.
       - name: Bảo đảm có PostgreSQL cho các bài chạy SQL thật
         run: |
-          if ! command -v initdb >/dev/null && ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
+          if ! ls /usr/lib/postgresql/*/bin/initdb >/dev/null 2>&1; then
             sudo apt-get update -qq
             sudo apt-get install -y -qq postgresql
           fi
+          bin=$(dirname "$(ls -d /usr/lib/postgresql/*/bin/initdb | sort -V | tail -1)")
+          echo "$bin" >> "$GITHUB_PATH"
+          "$bin/initdb" --version
+
+      # Vài bài chạy trong trình duyệt thật (Playwright). Phiên bản Chromium phải
+      # khớp đúng bản playwright trong package-lock nên cài qua chính npx.
+      - name: Cài Chromium cho các bài chạy trong trình duyệt
+        run: npx playwright install --with-deps chromium
 
       - name: Kiểm kiểu (tsc)
         if: ${{ !inputs.chi_kiem_thu }}
