@@ -116,6 +116,7 @@ const ORDER = [
   ["migrations/noi_dung_ck_tu_nhap.sql", "Nội dung chuyển khoản QR hợp đồng: studio tự nhập (chèn {so_hd}, {ngay})"],
   ["migrations/ghep_layout.sql", "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày"],
   ["migrations/gioi_han_tan_suat.sql", "Giới hạn tần suất bền không cần Upstash: bộ đếm chống dò mật khẩu album / SĐT trong Postgres"],
+  ["migrations/dung_thu_va_het_han.sql", "Dùng thử & hết hạn gói: tài khoản đã mua gói không dùng thử được nữa; cron hạ mọi gói hết hạn về free; hạn mức album coi gói hết hạn là free (chạy SAU han_muc_album_may_chu, atomic_redemptions)"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -184,6 +185,7 @@ const MOI = [
   "migrations/noi_dung_ck_tu_nhap.sql",
   "migrations/ghep_layout.sql",
   "migrations/gioi_han_tan_suat.sql",
+  "migrations/dung_thu_va_het_han.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
@@ -307,6 +309,16 @@ const NHOM = {
       "-- Đã cấu hình Upstash thì không cần chạy — chạy cũng vô hại.",
     ],
     files: ["migrations/gioi_han_tan_suat.sql"],
+  },
+  "dung-thu-het-han.sql": {
+    tieuDe: "DÙNG THỬ & HẾT HẠN GÓI",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng việc này: cột profiles.paid_plan_at (đã từng",
+      "-- mua gói → không dùng thử được nữa), hàm downgrade_expired_plans (cron hạ",
+      "-- gói hết hạn) và bản enforce_album_quota coi gói hết hạn là free. Chỉ cần",
+      "-- bảng có từ schema nền. Chạy lại cả file này cũng an toàn.",
+    ],
+    files: ["migrations/dung_thu_va_het_han.sql"],
   },
 };
 

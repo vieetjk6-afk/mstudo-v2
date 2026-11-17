@@ -7,6 +7,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/plan-expiry",
+      "schedule": "5 17 * * *"
+    },
+    {
       "path": "/api/cron/automations",
       "schedule": "30 23 * * *"
     },
