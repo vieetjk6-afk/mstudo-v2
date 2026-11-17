@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { PLAN_PRICING, PLAN_LABEL, type Plan } from "@/lib/plans";
+import { PLAN_PRICING, PLAN_LABEL, trialBlocked, type Plan } from "@/lib/plans";
 import { mergeUpgradeContent, UPGRADE_DEFAULTS, type UpgradeContent } from "@/lib/upgrade-content";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -92,7 +92,7 @@ export function useUpgrade(seed?: UpgradeSeed) {
       setTrialMsg(`Đã kích hoạt dùng thử gói ${PLAN_LABEL[plan]} ${d.trial_days} ngày miễn phí! Tải lại trang để bắt đầu.`);
     } else {
       setTrialOk(false);
-      setTrialMsg(d?.error === "already_used" ? "Mỗi tài khoản chỉ được dùng thử một lần." : d?.error === "already_paid" ? "Bạn đang dùng gói trả phí còn hạn." : "Không kích hoạt được, thử lại nhé.");
+      setTrialMsg(d?.error === "already_used" ? "Mỗi tài khoản chỉ được dùng thử một lần." : d?.error === "already_paid" ? "Tài khoản đã mua gói nên không dùng thử được nữa." : "Không kích hoạt được, thử lại nhé.");
     }
   }
 
@@ -116,6 +116,7 @@ export function useUpgrade(seed?: UpgradeSeed) {
       setTrialOk(false);
       setTrialMsg(
         d?.error === "already_used" ? "Bạn đã dùng mã này rồi."
+        : d?.error === "already_paid" ? "Tài khoản đã mua gói nên không dùng mã dùng thử được."
         : d?.error === "expired" ? "Mã đã hết hạn."
         : d?.error === "used_up" ? "Mã đã hết lượt dùng."
         : d?.error === "not_trial" ? "Mã này không phải mã dùng thử."
@@ -132,9 +133,12 @@ export function useUpgrade(seed?: UpgradeSeed) {
         data: { user },
       } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile } = await supabase.from("profiles").select("plan, trial_used_at").eq("id", user.id).maybeSingle();
+        // paid_plan_at chỉ có sau dung_thu_va_het_han.sql — thiếu cột thì đọc bản cũ.
+        let { data: profile, error: pe } = await supabase.from("profiles").select("plan, trial_used_at, plan_cycle, paid_plan_at").eq("id", user.id).maybeSingle();
+        if (pe) ({ data: profile } = await supabase.from("profiles").select("plan, trial_used_at, plan_cycle").eq("id", user.id).maybeSingle());
         if (profile?.plan) setCurrentPlan(profile.plan as Plan);
-        if (profile?.trial_used_at) setTrialUsed(true);
+        // Đã dùng thử, hoặc đã từng mua gói → ẩn nút dùng thử.
+        if (trialBlocked(profile)) setTrialUsed(true);
       }
       const { data: s } = await supabase
         .from("site_settings")

@@ -5,8 +5,8 @@ import { fmtDate } from "@/lib/date";
 import Link from "next/link";
 import { Sparkles, Crown } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { PLAN_LABEL, effectivePlan, type Plan } from "@/lib/plans";
-import type { PlanUsageData } from "@/lib/plan-usage";
+import { PLAN_LABEL } from "@/lib/plans";
+import { planUsageFrom, type PlanUsageData } from "@/lib/plan-usage";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { Badge, Progress, btn } from "@/components/v2/kit";
 
@@ -46,16 +46,8 @@ function usePlanUsage(initial: PlanUsageData | null): Usage | null {
         .eq("user_id", user.id)
         .gte("created_at", start.toISOString());
 
-      const isAdmin = profile?.role === "admin";
-      const plan = isAdmin ? "studio" : effectivePlan(profile?.plan as Plan, profile?.plan_expires_at);
-
-      setUsage({
-        used: count ?? 0,
-        limit: isAdmin ? null : profile?.monthly_album_limit ?? null,
-        pro: plan !== "free",
-        plan,
-        expiresAt: plan === "free" ? null : profile?.plan_expires_at ?? null,
-      });
+      // Cùng luật với planUsageFrom (lib/plan-usage): gói hết hạn → hạn mức gói free.
+      setUsage(planUsageFrom(profile, count ?? 0));
     })();
   }, [initial]);
   return usage;

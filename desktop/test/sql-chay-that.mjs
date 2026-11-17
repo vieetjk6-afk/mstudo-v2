@@ -684,5 +684,64 @@ if (first) {
   );
 }
 
+// ── Dùng thử & hết hạn gói (dung_thu_va_het_han.sql) ──────────────────────
+// Tài khoản ĐÃ MUA gói (kể cả đã hết hạn, đã bị hạ về free) không dùng thử được
+// nữa; dùng thử hết hạn bị cron hạ về free; hạn mức album coi gói hết hạn là free.
+{
+  const MUA = "00000000-0000-0000-0000-00000000bb01";
+  const MOI = "00000000-0000-0000-0000-00000000bb02";
+  const HET = "00000000-0000-0000-0000-00000000bb03";
+  q(
+    "moi",
+    "set session_replication_role = replica; " +
+      `insert into auth.users (id, email) values ('${MUA}', 'mua@test'), ('${MOI}', 'moi@test'), ('${HET}', 'het@test') on conflict do nothing; ` +
+      `insert into public.profiles (id, email) values ('${MUA}', 'mua@test'), ('${MOI}', 'moi@test'), ('${HET}', 'het@test') on conflict do nothing`
+  );
+  const trial = (id) =>
+    q("moi", `select public.start_free_trial('${id}', now() + interval '7 days', 'studio', null, true, true, true, true)`);
+
+  // Mua gói tháng (trigger tự ghi paid_plan_at), rồi hết hạn và bị hạ về free.
+  q("moi", `update public.profiles set plan = 'basic', plan_cycle = 'month', plan_expires_at = now() + interval '30 days' where id = '${MUA}'`);
+  ok("Gán gói tháng → paid_plan_at được ghi tự động", q("moi", `select (paid_plan_at is not null)::text from public.profiles where id = '${MUA}'`) === "true");
+  q("moi", `update public.profiles set plan_expires_at = now() - interval '1 day' where id = '${MUA}'`);
+  q("moi", "select public.downgrade_expired_plans()");
+  ok(
+    "…hết hạn → cron hạ về free",
+    q("moi", `select plan || '/' || coalesce(plan_cycle, '-') || '/' || coalesce(plan_expires_at::text, '-') from public.profiles where id = '${MUA}'`) === "free/-/-"
+  );
+  ok("…đã từng mua gói thì KHÔNG dùng thử được nữa", trial(MUA) === "already_paid");
+  ok("Tài khoản chưa mua gói → dùng thử được", trial(MOI) === "ok");
+  ok("…và chỉ một lần", trial(MOI) === "already_used");
+  ok("Dùng thử không bị tính là đã mua gói", q("moi", `select (paid_plan_at is null)::text from public.profiles where id = '${MOI}'`) === "true");
+
+  // Dùng thử hết hạn → hạ về free, cột quyền cũ về giá trị gói free.
+  q("moi", `update public.profiles set plan_expires_at = now() - interval '1 minute' where id = '${MOI}'`);
+  ok(
+    "Dùng thử hết hạn → enforce_album_quota coi là free (chặn album giao khách)",
+    threw(`set test.uid = '${MOI}'; insert into public.albums (owner_id, title, is_gallery) values ('${MOI}', 'Giao khách', true)`).includes("gallery")
+  );
+  q("moi", "select public.downgrade_expired_plans()");
+  ok(
+    "…cron hạ dùng thử hết hạn về free, đánh dấu trial_expired cho băng thông báo",
+    q(
+      "moi",
+      `select plan || '/' || plan_cycle || '/' || monthly_album_limit || '/' || can_zip || '/' || can_galleries from public.profiles where id = '${MOI}'`
+    ) === "free/trial_expired/5/false/false"
+  );
+
+  // Gói còn hạn không bị đụng tới.
+  q("moi", `update public.profiles set plan = 'studio', plan_cycle = 'year', plan_expires_at = now() + interval '1 year' where id = '${HET}'`);
+  q("moi", "select public.downgrade_expired_plans()");
+  ok("Gói còn hạn KHÔNG bị hạ", q("moi", `select plan from public.profiles where id = '${HET}'`) === "studio");
+  ok(
+    "downgrade_expired_plans chỉ service_role gọi được",
+    q(
+      "moi",
+      "select has_function_privilege('authenticated', 'public.downgrade_expired_plans()', 'execute')::text || '/' || " +
+        "has_function_privilege('service_role', 'public.downgrade_expired_plans()', 'execute')::text"
+    ) === "false/true"
+  );
+}
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

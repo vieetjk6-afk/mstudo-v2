@@ -19,6 +19,8 @@ export interface Profile {
   plan_cycle: string | null;
   plan_expires_at: string | null;
   trial_used_at: string | null;
+  /** Lần đầu được gán gói tháng/năm (đã từng mua gói → không dùng thử được nữa). */
+  paid_plan_at?: string | null;
   studio_owner_id: string | null;
   studio_role: string | null;
   is_active: boolean;

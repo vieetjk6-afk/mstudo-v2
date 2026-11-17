@@ -118,6 +118,7 @@ const ORDER = [
   ["migrations/gioi_han_tan_suat.sql", "Giới hạn tần suất bền không cần Upstash: bộ đếm chống dò mật khẩu album / SĐT trong Postgres"],
   ["migrations/he_thong_van_hanh.sql", "Sức khoẻ hệ thống: nhật ký lượt chạy cron / SQL lúc deploy, lỗi máy chủ gộp theo ngày, dung lượng database & storage (chỉ service-role)"],
   ["migrations/chup_theo_khung_gio.sql", "Chụp theo khung giờ (mini-session): đợt chụp, khoá khung UNIQUE, giữ chỗ chờ cọc, tự sinh lịch làm việc (chạy SAU referral_deposit và studio_appointments)"],
+  ["migrations/dung_thu_va_het_han.sql", "Dùng thử & hết hạn gói: tài khoản đã mua gói không dùng thử được nữa; cron hạ mọi gói hết hạn về free; hạn mức album coi gói hết hạn là free (chạy SAU han_muc_album_may_chu, atomic_redemptions)"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -188,6 +189,7 @@ const MOI = [
   "migrations/gioi_han_tan_suat.sql",
   "migrations/he_thong_van_hanh.sql",
   "migrations/chup_theo_khung_gio.sql",
+  "migrations/dung_thu_va_het_han.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 
@@ -329,6 +331,16 @@ const NHOM = {
       "-- studio_notifications. Đã chạy bản trước thì chạy lại cũng an toàn.",
     ],
     files: ["migrations/chup_theo_khung_gio.sql"],
+  },
+  "dung-thu-het-han.sql": {
+    tieuDe: "DÙNG THỬ & HẾT HẠN GÓI",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng việc này: cột profiles.paid_plan_at (đã từng",
+      "-- mua gói → không dùng thử được nữa), hàm downgrade_expired_plans (cron hạ",
+      "-- gói hết hạn) và bản enforce_album_quota coi gói hết hạn là free. Chỉ cần",
+      "-- bảng có từ schema nền. Chạy lại cả file này cũng an toàn.",
+    ],
+    files: ["migrations/dung_thu_va_het_han.sql"],
   },
 };
 

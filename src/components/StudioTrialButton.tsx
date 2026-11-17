@@ -27,7 +27,7 @@ function useStudioTrial(initialUsed: boolean) {
     } else {
       setMsg(
         d?.error === "already_used" ? "Mỗi tài khoản chỉ được dùng thử một lần."
-        : d?.error === "already_paid" ? "Bạn đang dùng gói trả phí còn hạn."
+        : d?.error === "already_paid" ? "Tài khoản đã mua gói nên không dùng thử được nữa."
         : "Không thể kích hoạt. Vui lòng thử lại."
       );
     }

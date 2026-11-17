@@ -10,6 +10,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import StudioTrialButton from "@/components/StudioTrialButton";
+import { trialBlocked } from "@/lib/plans";
 import MessengerButton from "@/components/MessengerButton";
 import VietQRButton from "@/components/VietQR";
 import { transferNote } from "@/lib/vietqr";
@@ -71,8 +72,14 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
     { data: upRows, count: upcomingCount },
     { count: selectingAlbums },
   ] = await Promise.all([
-    // Đã dùng thử chưa (một lần / tài khoản).
-    supabase.from("profiles").select("trial_used_at").eq("id", ownerId).maybeSingle(),
+    // Đã dùng thử / đã từng mua gói chưa. Database chưa chạy
+    // dung_thu_va_het_han.sql thì chưa có paid_plan_at → đọc lại bản cũ.
+    supabase
+      .from("profiles")
+      .select("trial_used_at, plan_cycle, paid_plan_at")
+      .eq("id", ownerId)
+      .maybeSingle()
+      .then((r) => (r.error ? supabase.from("profiles").select("trial_used_at, plan_cycle").eq("id", ownerId).maybeSingle() : r)),
     supabase.from("studio_bookings").select("id", { count: "exact", head: true }).eq("owner_id", ownerId).neq("status", "archived"),
     supabase
       .from("studio_bookings")
@@ -97,7 +104,7 @@ async function BookingOverview({ ownerId }: { ownerId: string }) {
       .eq("status", "published")
       .eq("is_gallery", false),
   ]);
-  const trialUsed = !!(trialProf as { trial_used_at?: string | null } | null)?.trial_used_at;
+  const trialUsed = trialBlocked(trialProf as Parameters<typeof trialBlocked>[0]);
   type BookingRow = {
     id: string; name: string; phone: string; service: string | null;
     preferred_date: string | null; package_name: string | null; package_price: number | null;

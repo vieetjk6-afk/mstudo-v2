@@ -47,6 +47,7 @@
     "migrations/gioi_han_tan_suat.sql",
     "migrations/he_thong_van_hanh.sql",
     "migrations/chup_theo_khung_gio.sql",
+    "migrations/dung_thu_va_het_han.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -977,6 +978,14 @@
       "cot": [
         "studio_bookings.slot_session_id",
         "studio_bookings.slot_start_min"
+      ]
+    },
+    {
+      "file": "migrations/dung_thu_va_het_han.sql",
+      "mo_ta": "Dùng thử & hết hạn gói: tài khoản đã mua gói không dùng thử được nữa; cron hạ mọi gói hết hạn về free; hạn mức album coi gói hết hạn là free (chạy SAU han_muc_album_may_chu, atomic_redemptions)",
+      "bang": [],
+      "cot": [
+        "profiles.paid_plan_at"
       ]
     }
   ]

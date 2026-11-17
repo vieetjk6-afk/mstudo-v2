@@ -166,13 +166,17 @@ export default async function PublicAlbumPage(
   //  - allowDrive: mở THƯ MỤC DRIVE của studio. Google tự nén và tự phục vụ nên
   //    hệ thống không tốn byte nào → mọi gói đều được, chỉ cần studio bật cho
   //    phép tải ở album này.
-  const allowDownload = (isAdminOwner || !!owner?.can_zip) && album.download_enabled !== false;
+  //
+  // Cờ can_zip / can_notes chỉ được hạ khi cron/ dashboard hạ gói — gói đã hết
+  // hạn mà chưa kịp hạ vẫn còn cờ cũ, nên chặn thêm theo gói hiệu lực.
+  const ownerPlan = effectivePlan(owner?.plan as Plan, owner?.plan_expires_at);
+  const ownerLapsed = ownerPlan === "free";
+  const allowDownload = (isAdminOwner || (!!owner?.can_zip && !ownerLapsed)) && album.download_enabled !== false;
   const allowDrive = album.download_enabled !== false;
-  const allowNotes = isAdminOwner || !!owner?.can_notes;
+  const allowNotes = isAdminOwner || (!!owner?.can_notes && !ownerLapsed);
   // Watermark: chỉ Photographer Plus & Studio. Chốt phía server để album bật từ
   // trước, hoặc của gói đã hết hạn, tự thôi watermark — ảnh không watermark mới
   // tải thẳng từ Drive được.
-  const ownerPlan = effectivePlan(owner?.plan as Plan, owner?.plan_expires_at);
   const canWatermark = planAllowsWatermark(ownerPlan, isAdminOwner);
   // Tìm ảnh theo khuôn mặt: chỉ Photographer Plus & Studio. Chốt ở ĐÂY, không
   // chỉ ở bộ quét: album của gói đã hạ hoặc đã hết hạn vẫn còn nguyên khuôn mặt

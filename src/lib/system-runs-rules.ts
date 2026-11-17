@@ -14,6 +14,7 @@ export type CronDef = { name: string; label: string; intervalHours: number };
  */
 export const CRONS: CronDef[] = [
   { name: "backup", label: "Sao lưu toàn hệ thống", intervalHours: 24 },
+  { name: "plan-expiry", label: "Hạ gói hết hạn về free", intervalHours: 24 },
   { name: "automations", label: "Việc tự động theo hợp đồng", intervalHours: 24 },
   { name: "reminders", label: "Email nhắc việc cho studio", intervalHours: 24 },
   { name: "zalo:money", label: "Zalo: nhắc thanh toán & báo giá", intervalHours: 24 },

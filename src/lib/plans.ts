@@ -267,6 +267,19 @@ export function trialDaysFor(plan: Plan): number {
   return 0;
 }
 
+/**
+ * Tài khoản còn được bấm "Dùng thử" không? KHÔNG nếu đã dùng thử một lần, HOẶC
+ * đã từng mua gói (tháng/năm) — kể cả gói đó đã hết hạn và bị hạ về free.
+ * Cùng luật với hàm SQL start_free_trial (dung_thu_va_het_han.sql); ở đây chỉ để
+ * ẩn nút, máy chủ vẫn tự chốt.
+ */
+export function trialBlocked(
+  profile: { trial_used_at?: string | null; paid_plan_at?: string | null; plan_cycle?: string | null } | null | undefined,
+): boolean {
+  if (!profile) return false;
+  return !!profile.trial_used_at || !!profile.paid_plan_at || profile.plan_cycle === "month" || profile.plan_cycle === "year";
+}
+
 /** Columns synced onto profiles when a plan is assigned (legacy enforcement). */
 export function planProfilePatch(plan: Plan) {
   const l = PLAN_LIMITS[plan];
