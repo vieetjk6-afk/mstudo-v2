@@ -122,8 +122,15 @@ export default function PetView({ initial }: { initial?: PetState } = {}) {
       setToast(ERR[(j as { error?: string }).error ?? ""] ?? "Có lỗi, thử lại sau nhé.");
       return null;
     }
-    setState(j as PetState);
-    return j as PetState;
+    const next = j as PetState;
+    setState(next);
+    // Bé nổi ở góc (components/PetBuddy) đọc lại cho khớp: hết đói, đổi giai đoạn / phụ kiện.
+    window.dispatchEvent(
+      new CustomEvent("mstudo-pet", {
+        detail: { stage: next.summary.stage.index, mood: next.summary.mood, fedToday: next.summary.streak.fedToday, outfit: next.pet.outfit },
+      })
+    );
+    return next;
   };
 
   const claim = async (t: TaskRow) => {

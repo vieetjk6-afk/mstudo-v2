@@ -50,7 +50,10 @@ export function isStudioPath(pathname: string, tier: ShellTier): boolean {
         p.startsWith("/dashboard/create") ||
         p.startsWith("/dashboard/tools") ||
         p.startsWith("/dashboard/filter") ||
-        p.startsWith("/dashboard/compress")))
+        p.startsWith("/dashboard/compress") ||
+        // Bé Máy Ảnh: mở từ menu / nút trên topbar của shell studio thì phải
+        // ở lại shell studio, không rơi ra header cũ.
+        p.startsWith("/dashboard/be-may-anh")))
   );
 }
 

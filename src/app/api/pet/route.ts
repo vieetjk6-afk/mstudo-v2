@@ -5,8 +5,8 @@ import { durableAllowed } from "@/lib/rate-limit";
 import { phanLoaiLoi } from "@/lib/pg-loi";
 import { todayVN } from "@/lib/date";
 import {
-  DEFAULT_NAME, cleanName, feedXp, isOutfitKey, isTaskKey, outfitUnlocked, summarize, tasksFor,
-  OUTFITS, type Claim, type PetTaskKey, type PetTier,
+  DEFAULT_NAME, addDays, buildReminders, cleanName, feedXp, isOutfitKey, isTaskKey, outfitUnlocked, summarize, tasksFor,
+  OUTFITS, type Claim, type PetTaskKey, type PetTier, type ReminderCounts,
 } from "@/lib/pet";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
  * hình nhắc, không làm lỗi dashboard.
  */
 
-type Ctx = { userId: string; ownerId: string; tier: PetTier };
+type Ctx = { userId: string; ownerId: string; tier: PetTier; role: string };
 
 async function me(): Promise<Ctx | null> {
   const user = await requireUser();
@@ -41,6 +41,58 @@ async function me(): Promise<Ctx | null> {
     userId: user.id,
     ownerId: (studio?.id as string | undefined) ?? (profile.studio_owner_id as string | null) ?? user.id,
     tier: (studio?.studioTier as PetTier | undefined) ?? "none",
+    role: (studio?.actingRole as string | undefined) ?? "owner",
+  };
+}
+
+// Ai được nghe nhắc gì — khớp quyền xem màn tương ứng trong @/lib/studio-nav.
+const MONEY_ROLES = new Set(["owner", "admin", "manager", "branch_manager", "accountant"]);
+const MANAGER_ROLES = new Set(["owner", "admin", "manager", "branch_manager"]);
+
+/**
+ * Đếm việc đang chờ để bé nhắc (bé nổi ở góc màn hình). Mỗi câu đếm tự nuốt
+ * lỗi — bảng của tính năng nào chưa cài thì câu nhắc ấy chỉ không xuất hiện.
+ */
+async function countReminders(db: Db, ctx: Ctx, today: string): Promise<Partial<ReminderCounts>> {
+  if (ctx.tier === "none") return {};
+  const head = { count: "exact" as const, head: true };
+  const num = (r: { count: number | null; error: unknown }) => (r.error ? 0 : r.count ?? 0);
+  const skip = Promise.resolve({ count: 0, error: null });
+  const money = MONEY_ROLES.has(ctx.role);
+  const manager = MANAGER_ROLES.has(ctx.role);
+  const live = ["sent", "approved", "in_progress", "post_production"];
+
+  const [today1, tomorrow, appts, due, unsigned, bookings, leads, inbox] = await Promise.all([
+    db.from("studio_contracts").select("client_name").eq("owner_id", ctx.ownerId)
+      .eq("event_date", today).in("status", live).limit(20),
+    db.from("studio_contracts").select("id", head).eq("owner_id", ctx.ownerId)
+      .eq("event_date", addDays(today, 1)).in("status", live),
+    db.from("studio_appointments").select("id", head).eq("owner_id", ctx.ownerId).eq("appt_date", today),
+    money
+      ? db.from("contract_payment_plan").select("id, contract:studio_contracts!inner(owner_id, status)", head)
+          .eq("contract.owner_id", ctx.ownerId).neq("contract.status", "cancelled")
+          .eq("paid", false).lte("due_date", today)
+      : skip,
+    money
+      ? db.from("studio_contracts").select("id", head).eq("owner_id", ctx.ownerId).eq("status", "sent")
+      : skip,
+    manager ? db.from("studio_bookings").select("id", head).eq("owner_id", ctx.ownerId).eq("status", "new") : skip,
+    manager ? db.from("website_leads").select("id", head).eq("owner_id", ctx.ownerId).eq("status", "new") : skip,
+    db.from("inbox_conversations").select("id", head).eq("owner_id", ctx.ownerId)
+      .eq("status", "open").gt("unread", 0),
+  ]);
+
+  const shootRows = today1.error ? [] : ((today1.data ?? []) as { client_name: string | null }[]);
+  return {
+    shootsToday: shootRows.length,
+    firstClient: shootRows[0]?.client_name?.trim() || null,
+    shootsTomorrow: num(tomorrow),
+    apptsToday: num(appts),
+    paymentsDue: num(due),
+    unsigned: num(unsigned),
+    bookings: num(bookings),
+    leads: num(leads),
+    inbox: num(inbox),
   };
 }
 
@@ -128,9 +180,38 @@ async function loadState(db: Db, ctx: Ctx) {
   };
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   const ctx = await me();
   if (!ctx) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  // ?lite=1 — cho bé nổi ở góc màn hình (components/PetBuddy): giai đoạn, tâm
+  // trạng, đã điểm danh chưa + câu nhắc việc. Bỏ phần đối chiếu nhiệm vụ; các
+  // câu đếm nhắc việc chỉ là count head-only, chạy song song.
+  if (new URL(req.url).searchParams.get("lite")) {
+    const db = createAdminClient();
+    const [petRes, claimRes] = await Promise.all([
+      db.from("pets").select("name, outfit").eq("user_id", ctx.userId).maybeSingle(),
+      db.from("pet_claims").select("day, task, xp").eq("user_id", ctx.userId).order("day", { ascending: false }).limit(5000),
+    ]);
+    if (petRes.error || claimRes.error) return NextResponse.json({ setup: false });
+    const today = todayVN();
+    const s = summarize((claimRes.data ?? []) as Claim[], today);
+    const reminders = buildReminders(await countReminders(db, ctx, today).catch(() => ({})));
+    const outfit = isOutfitKey(petRes.data?.outfit) &&
+      outfitUnlocked(OUTFITS.find((o) => o.key === petRes.data!.outfit)!, s.stage.index, s.streak.best)
+      ? petRes.data!.outfit
+      : null;
+    return NextResponse.json({
+      setup: true,
+      name: (petRes.data?.name as string | undefined) ?? DEFAULT_NAME,
+      stage: s.stage.index,
+      mood: s.mood,
+      fedToday: s.streak.fedToday,
+      streak: s.streak.current,
+      feedXp: s.feedXp,
+      outfit,
+      reminders,
+    });
+  }
   try {
     const state = await loadState(createAdminClient(), ctx);
     if (!state) return NextResponse.json({ setup: false });
