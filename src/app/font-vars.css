@@ -1,0 +1,20 @@
+/*
+ * Biến phông chữ — cùng tên với biến next/font đặt trước đây, để mọi chỗ dùng
+ * (globals.css, ảnh ghép @/lib/collage/fonts…) không phải đổi. File font: ./fonts.ts.
+ */
+:root {
+  --font-hanken: "Hanken Grotesk", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-cormorant: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+  --font-manrope: "Manrope", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-be-vietnam: "Be Vietnam Pro", system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --font-script: "Dancing Script", Georgia, cursive;
+  --font-hand: "Great Vibes", Georgia, cursive;
+  --font-playfair: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-caveat: "Playpen Sans", "Segoe Script", cursive;
+  --font-lora: "Lora", Georgia, serif;
+  --font-pinyon: "Pinyon Script", Georgia, cursive;
+  --font-alexbrush: "Alex Brush", Georgia, cursive;
+  --font-corinthia: "Corinthia", Georgia, cursive;
+  --font-prata: "Prata", Georgia, "Times New Roman", serif;
+  --font-garamond: "EB Garamond", Georgia, "Times New Roman", serif;
+}

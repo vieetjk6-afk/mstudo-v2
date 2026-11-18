@@ -15,7 +15,7 @@ import type { DividerKind } from "./ornaments";
 
 const familyCache = new Map<string, string>();
 
-/** Tên phông thật cho canvas: giá trị biến CSS của next/font trên <html>, kèm dự phòng. */
+/** Tên phông thật cho canvas: giá trị biến CSS phông (app/font-vars.css) trên <html>, kèm dự phòng. */
 export function canvasFontFamily(key: string): string {
   const f = fontByKey(key);
   if (typeof document === "undefined") return f.fallback;
