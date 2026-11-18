@@ -27,8 +27,9 @@ export function Frame({ width, height, children }: { width: number; height: numb
   const [body, setBody] = useState<HTMLElement | null>(null);
 
   const sync = useCallback((doc: Document) => {
-    // Biến phông (next/font) nằm ở class của <html> → copy sang để thiệp trong
-    // iframe dùng đúng bộ chữ, không rơi về phông hệ thống.
+    // Biến phông (--font-…) khai ở :root trong stylesheet (app/font-vars.css) —
+    // được chép sang cùng các stylesheet bên dưới. Class của <html> vẫn chép
+    // theo cho các lớp theme / trạng thái khác.
     doc.documentElement.className = document.documentElement.className;
     doc.documentElement.setAttribute("data-theme", "light");
     doc.documentElement.lang = "vi";

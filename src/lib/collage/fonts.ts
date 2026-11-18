@@ -9,7 +9,7 @@
 export interface CollageFont {
   key: string;
   label: string;
-  /** Biến CSS do next/font đặt trên <html>. */
+  /** Biến CSS phông khai ở :root (app/font-vars.css). */
   cssVar: string;
   /** Phông dự phòng nếu biến chưa có (trang xem trước, kiểm thử). */
   fallback: string;
@@ -46,7 +46,7 @@ export function nearestWeight(key: string, want: number): number {
   return ws.reduce((best, w) => (Math.abs(w - want) < Math.abs(best - want) ? w : best), ws[0]);
 }
 
-/** font-family cho CSS (màn sửa): biến của next/font, kèm dự phòng. */
+/** font-family cho CSS (màn sửa): biến phông, kèm dự phòng. */
 export function cssFontFamily(key: string): string {
   const f = fontByKey(key);
   return `var(${f.cssVar}), ${f.fallback}`;
