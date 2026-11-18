@@ -21,6 +21,8 @@ const PUBLIC_CLIENT_PREFIXES = [
   "/a/", "/album/", "/thiep/", "/site/", "/portal/", "/c/", "/q/", "/story/", "/voucher/", "/book/", "/form/",
 ];
 const ADMIN_PATH = "/dashboard/admin";
+/** Tên miền có trang "Gửi file nhanh" (/up, /f/<mã>) — xem @/lib/quick-share. */
+const QUICK_SHARE_HOSTS = new Set(["vieetjk.com", "www.vieetjk.com"]);
 
 /**
  * Returns the canonical host for a path, or undefined when no forced redirect
@@ -222,6 +224,11 @@ async function route(request: NextRequest) {
       return NextResponse.redirect(new URL(pathname + search, `https://${MAIN_HOST}`));
     }
     if (SEO_FILES.has(pathname)) return NextResponse.next();
+    // vieetjk.com/up (gửi file nhanh) + vieetjk.com/f/<mã> (link tải rút gọn)
+    // là route riêng của app, không phải trang portfolio.
+    if (QUICK_SHARE_HOSTS.has(host) && (pathname === "/up" || pathname.startsWith("/f/"))) {
+      return NextResponse.next();
+    }
     const CUSTOMER = ["/a/", "/album", "/c/", "/portal/", "/q/", "/gia/", "/book/", "/voucher/", "/crew", "/showcase", "/story", "/form/"];
     if (CUSTOMER.some((p) => pathname.startsWith(p))) {
       return NextResponse.next();
