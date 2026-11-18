@@ -51,6 +51,7 @@ export const TITLES: [string, string, string][] = [
   // /dashboard/tools là route CHÍNH của mục "Công cụ ảnh" nhưng trước giờ không
   // có dòng nào ở đây, nên nó rơi xuống mục "/dashboard" cuối bảng và topbar ghi
   // nhầm thành "Thư viện album".
+  ["/dashboard/be-may-anh", "Bé Máy Ảnh", "Điểm danh mỗi ngày, làm nhiệm vụ để bé lớn"],
   ["/dashboard/tools", "Công cụ ảnh", "Lọc ảnh khách chọn, nén ảnh và đóng dấu"],
   ["/dashboard/filter", "Lọc ảnh khách chọn", "Tách ảnh khách đã chọn ra thư mục riêng"],
   ["/dashboard/compress", "Nén ảnh & watermark", "Xử lý hàng loạt trước khi giao khách"],
