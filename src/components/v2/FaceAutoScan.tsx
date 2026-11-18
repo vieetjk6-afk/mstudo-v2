@@ -14,7 +14,9 @@ import { dangQuetTay, nghePhaiNhuong, quetAlbum } from "@/lib/face-local-runner"
 
    Luật để không làm phiền / không làm chậm máy studio:
      · Chờ 20 giây sau khi mở dashboard mới bắt đầu (trang tải xong trước).
-     · Nghỉ 150 ms giữa hai ảnh (thẻ quét tay chỉ nghỉ 40 ms).
+     · CHẠY NHẸ: sau mỗi ảnh nghỉ đúng bằng thời gian vừa nhận diện ảnh đó
+       → máy chỉ bận khoảng một nửa thời gian (thẻ quét tay thì chạy hết sức).
+       Chậm gấp đôi, nhưng studio làm việc khác không thấy giật.
      · Điện thoại / máy ít RAM / bật tiết kiệm dữ liệu: KHÔNG tự quét.
      · Nhiều tab: chỉ MỘT tab quét (Web Locks).
      · Studio bấm quét tay trong một album → bộ này nhường ngay.
@@ -30,6 +32,8 @@ const CHO_BAT_DAU_MS = 20_000;
 const HOI_LAI_MS = 30 * 60_000;
 const NHUONG_MS = 2 * 60_000;
 const NGHI_MS = 150;
+/** Nghỉ bằng 1 lần thời gian làm → máy bận ~50%. */
+const TI_LE_NGHI = 1;
 
 export type AutoScanView =
   | { kieu: "nap"; ten: string; pct: number; thuTu: number; soAlbum: number }
@@ -104,6 +108,7 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Ch�
           const chayMotLuot = () => quetAlbum(a.id, {
             signal: ctrl.signal,
             nghiMs: NGHI_MS,
+            tiLeNghi: TI_LE_NGHI,
             patch: (p) => {
               if (p.status) {
                 tong = p.status.tong;

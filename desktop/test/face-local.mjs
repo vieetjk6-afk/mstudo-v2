@@ -248,6 +248,9 @@ const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_
   ok("không tự quét trên điện thoại / máy ít RAM / tiết kiệm dữ liệu", /pointer: coarse/.test(src) && /deviceMemory/.test(src) && /saveData/.test(src));
   ok("chỉ một tab quét: Web Locks XẾP HÀNG (không ifAvailable — tab sau phải tiếp quản được)", /locks\.request\(KHOA_TAB, \{ signal: phien\.signal \}/.test(src) && !/ifAvailable/.test(src));
   ok("nhường khi studio bấm quét tay", /nghePhaiNhuong/.test(src) && /dangQuetTay\(\)/.test(src));
+  ok("chạy nhẹ: nghỉ theo tỉ lệ thời gian làm (≥ 1 lần → máy bận ≤ ~50%)", /tiLeNghi: TI_LE_NGHI/.test(src) && Number(src.match(/const TI_LE_NGHI = ([\d.]+)/)?.[1]) >= 1);
+  const runner = readFileSync("src/lib/face-local-runner.ts", "utf8");
+  ok("…khoảng nghỉ tính từ thời gian nhận diện thật, có trần", /lamMs \* tiLeNghi/.test(runner) && /Math\.min\(10_000/.test(runner));
   ok("có nút tạm dừng và tắt trên máy này", /Tạm dừng/.test(src) && /Tắt tự quét trên máy này/.test(src));
   const sw = readFileSync("public/sw.js", "utf8");
   const embed = readFileSync("src/lib/face-embed-browser.ts", "utf8");

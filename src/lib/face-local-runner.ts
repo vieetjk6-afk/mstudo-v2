@@ -94,10 +94,23 @@ export function nghePhaiNhuong(fn: () => void): () => void {
  */
 export async function quetAlbum(
   albumId: string,
-  opts: { signal: AbortSignal; patch: (p: QuetPatch) => void; nghiMs?: number },
+  opts: {
+    signal: AbortSignal;
+    patch: (p: QuetPatch) => void;
+    nghiMs?: number;
+    /**
+     * Nghỉ thêm theo TỈ LỆ thời gian vừa nhận diện tấm trước: 1 = nghỉ đúng
+     * bằng thời gian làm → máy chỉ bận khoảng MỘT NỬA thời gian, máy nhanh hay
+     * chậm đều tự khớp. Bộ tự quét nền dùng 1; thẻ quét tay để 0 (nhanh nhất).
+     */
+    tiLeNghi?: number;
+  },
 ): Promise<{ loi: string | null; status: FaceScanStatus | null }> {
   const { signal: sig, patch } = opts;
   const nghiMs = opts.nghiMs ?? 40;
+  const tiLeNghi = Math.max(0, opts.tiLeNghi ?? 0);
+  /** Thời gian nhận diện tấm vừa rồi — để tính khoảng nghỉ theo tỉ lệ. */
+  let lamMs = 0;
   const url = urlCua(albumId);
   let loi: string | null = null;
   const buf: Item[] = [];
@@ -161,7 +174,9 @@ export async function quetAlbum(
           }
         } else {
           try {
+            const t0 = performance.now();
             const faces = await embed.scanJpegBrowser(bytes);
+            lamMs = performance.now() - t0;
             buf.push({ photoId: p.id, faces: faces.map((f, at) => ({ at, box: [f.box.x, f.box.y, f.box.w, f.box.h], descriptor: f.descriptor, sharpness: f.sharpness })) });
           } catch {
             // JPEG hỏng / hết bộ nhớ ở một tấm: coi là tạm, không chặn cả album.
@@ -172,7 +187,12 @@ export async function quetAlbum(
         }
         lienTiep = 0;
         if (buf.length >= (daGui ? LO_THUONG : LO_DAU) && !(await gui())) break vong;
-        await new Promise((r) => setTimeout(r, nghiMs));
+        // Trần 10 giây: một tấm bất thường (máy vừa ngủ dậy…) không được treo cả vòng.
+        const nghi = Math.max(nghiMs, Math.min(10_000, lamMs * tiLeNghi));
+        await new Promise<void>((r) => {
+          const t = setTimeout(r, nghi);
+          sig.addEventListener("abort", () => (clearTimeout(t), r()), { once: true });
+        });
       }
       // Hết trang: gửi nốt TRƯỚC khi hỏi trang kế, nếu không trang kế trả lại
       // đúng những tấm đang nằm trong tay.
