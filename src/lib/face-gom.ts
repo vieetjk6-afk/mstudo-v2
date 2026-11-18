@@ -24,18 +24,26 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
   // lỗi thì NÉM chứ không gom trên phần đọc dở (sẽ xoá nhầm người).
   type FaceRow = { photo_id: string; at: number; box: number[] | null; descriptor: number[] | null; sharpness: number | null };
   const list: FaceRow[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data: page, error } = await db
+  const trang = (from: number) =>
+    db
       .from("album_faces")
       .select("photo_id, at, box, descriptor, sharpness")
       .eq("album_id", albumId)
       .order("photo_id")
       .order("at")
       .range(from, from + 999);
-    if (error) throw new Error(`doc_album_faces_that_bai: ${error.message}`);
-    const rows = (page ?? []) as FaceRow[];
-    list.push(...rows);
-    if (rows.length === 0 || rows.length < 1000) break;
+  // Đọc 4 trang MỘT LÚC: album lớn có vài chục trang, đọc lần lượt thì riêng
+  // khâu này đã ăn gần hết thời gian của máy chủ. Vẫn đọc tới khi gặp trang thiếu
+  // (không tin số đếm trước — ảnh có thể được quét thêm giữa chừng).
+  for (let from = 0, het = false; !het; from += 4000) {
+    const lo = await Promise.all([0, 1, 2, 3].map((k) => trang(from + k * 1000)));
+    for (const { data: page, error } of lo) {
+      if (error) throw new Error(`doc_album_faces_that_bai: ${error.message}`);
+      const rows = (page ?? []) as FaceRow[];
+      if (het) continue;
+      list.push(...rows);
+      if (rows.length < 1000) het = true;
+    }
   }
 
   const vecs: FaceVector[] = list

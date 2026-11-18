@@ -10,6 +10,7 @@ import FaceAutoScan, { FaceAutoScanView, type AutoScanView } from "@/components/
 const MAU: AutoScanView[] = [
   { kieu: "nap", ten: "Cưới Minh & Lan", pct: 42, thuTu: 1, soAlbum: 3 },
   { kieu: "quet", ten: "Cưới Minh & Lan — tiệc tối nhà hàng Riverside", daQuet: 312, tong: 845, thuTu: 1, soAlbum: 3 },
+  { kieu: "gom", ten: "Cưới Minh & Lan", thuTu: 2, soAlbum: 3 },
   { kieu: "xong", soAlbum: 3 },
   { kieu: "tam-dung" },
 ];

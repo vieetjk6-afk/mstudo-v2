@@ -60,9 +60,19 @@ export async function taiViecQuet(albumId: string, boQua = 0): Promise<ViecQuetT
 
 /** Gom nhóm nếu cần (máy chủ tự quyết theo luật 12 giờ). */
 export async function gomAlbum(albumId: string): Promise<{ ok?: boolean; nguoi?: number }> {
-  const r = await fetch(urlCua(albumId), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gom: true }) });
-  return (await r.json().catch(() => ({}))) as { ok?: boolean; nguoi?: number };
+  try {
+    const r = await fetch(urlCua(albumId), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gom: true }) });
+    // Máy chủ quá giờ trả trang lỗi HTML, không phải JSON → coi là KHÔNG gom được.
+    const d = (await r.json().catch(() => ({}))) as { ok?: boolean; nguoi?: number };
+    return r.ok ? d : { ...d, ok: false };
+  } catch {
+    return { ok: false };
+  }
 }
+
+/** Câu báo khi gom hỏng — trước đây lỗi này bị nuốt: thẻ vẫn khoe số người CŨ mà khách không thấy ô tìm. */
+export const LOI_GOM =
+  "Đã quét xong nhưng chưa gom được khuôn mặt thành từng người (máy chủ bận hoặc album rất lớn), nên khách chưa thấy ô tìm khuôn mặt. Tải lại trang để thử gom lại.";
 
 /* ── Một máy chỉ MỘT vòng quét tại một lúc ───────────────────────────────────
    Studio bấm quét tay trong trang album thì bộ tự quét nền (nếu đang chạy trong
@@ -139,6 +149,11 @@ export async function quetAlbum(
   };
 
   try {
+    // Hỏi trước còn ảnh nào không: album chỉ còn thiếu bước GOM thì khỏi tải
+    // ~13 MB mô hình và khỏi bắt máy nhận diện gì cả.
+    const dau = await taiViecQuet(albumId);
+    patch({ status: dau });
+    if (dau.anh.length > 0) {
     patch({ phase: "nap", napPct: 0, hongTam: 0 });
     const embed = await import("@/lib/face-embed-browser");
     if (!embed.faceEmbedSupported()) throw new Error("may_khong_chay_duoc");
@@ -200,6 +215,7 @@ export async function quetAlbum(
     }
     // Dừng giữa chừng cũng gửi nốt phần đã nhận diện — công đã bỏ ra rồi.
     if (!loi) await gui();
+    }
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e);
     loi =
@@ -213,8 +229,11 @@ export async function quetAlbum(
   // Gom: quét hết thì gom ngay; tạm dừng thì máy chủ tự quyết theo luật 12 giờ.
   try {
     patch({ phase: "gom", dang: null });
-    await gomAlbum(albumId);
-    return { loi, status: await taiViecQuet(albumId) };
+    const g = await gomAlbum(albumId);
+    const status = await taiViecQuet(albumId);
+    // Gom hỏng mà album đã quét hết (canGom còn true) thì PHẢI nói ra.
+    if (!g.ok && !loi && status.conLai === 0 && status.canGom) loi = LOI_GOM;
+    return { loi, status };
   } catch {
     return { loi: loi ?? "Không đọc lại được tiến độ. Tải lại trang để xem.", status: null };
   }

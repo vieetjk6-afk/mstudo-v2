@@ -154,15 +154,91 @@ export function chineseWhispers(faces: FaceVector[], opts: GroupOptions = {}): n
   // nghịch đảo khoảng cách: một cạnh vừa sát ngưỡng gần như không có tiếng nói,
   // còn hai tấm giống hệt thì nói rất to. Lấy một trọng số đều nhau sẽ cho vô số
   // cạnh yếu cộng dồn lại lấn át một cạnh mạnh — đúng đường quay lại bẫy dây chuyền.
-  const adj: { j: number; w: number }[][] = Array.from({ length: n }, () => []);
+  //
+  // TỐC ĐỘ — album cưới 6.000 ảnh có hai, ba chục nghìn khuôn mặt, tức vài trăm
+  // triệu cặp phải so. Bản trước so từng cặp đủ 128 chiều trên mảng JS thường,
+  // và lượt gom vượt 60 giây của máy chủ: bị cắt ngang, lỗi bị nuốt, khách không
+  // thấy ô tìm khuôn mặt dù studio đã quét xong. Nay:
+  //   · vector xếp liền trong MỘT Float64Array (cùng độ chính xác như trước);
+  //   · cộng dồn bình phương và DỪNG SỚM khi đã vượt ngưỡng — hai người khác
+  //     nhau (đa số các cặp) vượt sau vài chục chiều;
+  //   · cạnh giữ trong mảng số (CSR), không phải hàng triệu đối tượng nhỏ.
+  // Cặp nào lọt qua vẫn được tính đủ và xét bằng ĐÚNG phép so cũ (căn bậc hai
+  // < ngưỡng), láng giềng của mỗi nút giữ thứ tự tăng dần như trước → kết quả
+  // y hệt bản cũ (kiểm ở desktop/test/face-group.mjs).
+  // Vector xếp liền nhau; mỗi khuôn mặt nhớ vị trí bắt đầu và số chiều. Như
+  // `euclidean`: hai vector KHÁC số chiều (hoặc rỗng) không bao giờ nối với nhau.
+  const dai = new Int32Array(n);
+  const vt = new Int32Array(n);
+  let tong = 0;
   for (let i = 0; i < n; i++) {
+    dai[i] = faces[i].v.length;
+    vt[i] = tong;
+    tong += dai[i];
+  }
+  const vec = new Float64Array(tong);
+  for (let i = 0; i < n; i++) {
+    const v = faces[i].v;
+    for (let k = 0; k < v.length; k++) vec[vt[i] + k] = v[k];
+  }
+  // Dừng sớm chỉ khi CHẮC CHẮN đã vượt (cộng biên an toàn cho sai số làm tròn);
+  // sát ngưỡng thì tính đủ rồi để phép so cũ quyết.
+  const tran = o.maxDistance * o.maxDistance * 1.0001;
+  let ea = new Int32Array(1024);
+  let eb = new Int32Array(1024);
+  let ew = new Float64Array(1024);
+  let m = 0;
+  const bac = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    const D = dai[i];
+    if (D === 0) continue;
+    const bi = vt[i];
     for (let j = i + 1; j < n; j++) {
-      const d = euclidean(faces[i].v, faces[j].v);
-      if (!(d < o.maxDistance)) continue; // `!(… < …)` để Infinity/NaN cũng rớt
-      const w = o.maxDistance - d;
-      adj[i].push({ j, w });
-      adj[j].push({ j: i, w });
+      if (dai[j] !== D) continue;
+      const bj = vt[j];
+      let s2 = 0;
+      let k = 0;
+      for (; k < D; k++) {
+        const d = vec[bi + k] - vec[bj + k];
+        s2 += d * d;
+        if (s2 > tran) break;
+      }
+      if (k < D) continue;
+      const d = Math.sqrt(s2);
+      if (!(d < o.maxDistance)) continue; // `!(… < …)` để NaN cũng rớt
+      if (m === ea.length) {
+        const g = (a: Int32Array) => { const b = new Int32Array(a.length * 2); b.set(a); return b; };
+        ea = g(ea);
+        eb = g(eb);
+        const w2 = new Float64Array(ew.length * 2);
+        w2.set(ew);
+        ew = w2;
+      }
+      ea[m] = i;
+      eb[m] = j;
+      ew[m] = o.maxDistance - d;
+      m++;
+      bac[i]++;
+      bac[j]++;
     }
+  }
+  // CSR: láng giềng của nút x nằm ở [dau[x], dau[x+1]), thứ tự tăng dần —
+  // đúng thứ tự bản cũ đẩy vào (mọi i < x trước, rồi mọi j > x).
+  const dau = new Int32Array(n + 1);
+  for (let i = 0; i < n; i++) dau[i + 1] = dau[i] + bac[i];
+  const keJ = new Int32Array(2 * m);
+  const keW = new Float64Array(2 * m);
+  const con = dau.slice(0, n);
+  // Cạnh sinh theo (i tăng, j tăng). Với nút x: các cạnh (i<x, x) đến trước mọi
+  // cạnh (x, j>x) trong dãy này, và mỗi nhóm tự tăng dần → ghi theo đúng dãy là ra
+  // thứ tự tăng dần.
+  for (let e = 0; e < m; e++) {
+    const a = ea[e];
+    const b = eb[e];
+    keJ[con[a]] = b;
+    keW[con[a]++] = ew[e];
+    keJ[con[b]] = a;
+    keW[con[b]++] = ew[e];
   }
 
   const rnd = seeded(0x5eed);
@@ -176,9 +252,12 @@ export function chineseWhispers(faces: FaceVector[], opts: GroupOptions = {}): n
     }
     let moved = 0;
     for (const i of order) {
-      if (adj[i].length === 0) continue;
+      if (dau[i + 1] === dau[i]) continue;
       const tally = new Map<number, number>();
-      for (const e of adj[i]) tally.set(label[e.j], (tally.get(label[e.j]) ?? 0) + e.w);
+      for (let e = dau[i]; e < dau[i + 1]; e++) {
+        const lab = label[keJ[e]];
+        tally.set(lab, (tally.get(lab) ?? 0) + keW[e]);
+      }
       let best = label[i];
       let bestW = -1;
       for (const [lab, w] of tally) {
