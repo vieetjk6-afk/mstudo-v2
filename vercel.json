@@ -43,6 +43,10 @@
       "schedule": "45 2 * * *"
     },
     {
+      "path": "/api/cron/cleanup-quick-share",
+      "schedule": "50 2 * * *"
+    },
+    {
       "path": "/api/cron/backup",
       "schedule": "15 20 * * *"
     }
