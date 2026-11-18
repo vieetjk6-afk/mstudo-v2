@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ChevronRight, CircleHelp, EyeOff, Film, Flame, PawPrint, X } from "lucide-react";
 import { TOUR_EVENT } from "@/components/ProductTour";
+import PetCommand from "@/components/PetCommand";
 import PetSprite from "@/app/dashboard/be-may-anh/PetSprite";
 import { IDLE_LINES, MOOD_LABEL, type Mood, type OutfitKey, type Reminder } from "@/lib/pet";
 
@@ -17,6 +18,8 @@ import { IDLE_LINES, MOOD_LABEL, type Mood, type OutfitKey, type Reminder } from
      đang đói thì đòi ăn, rảnh thì nói câu vu vơ. Bấm câu nói là mở đúng màn.
    • Bấm vào bé → bảng nhỏ: cho ăn ngay tại chỗ, danh sách việc cần nhắc, mở
      trang của bé, hoặc ẩn bé (ẩn xong còn một nút chân mèo nhỏ để gọi lại).
+   • Ô "Ra lệnh cho bé…" trên đầu bé (components/PetCommand): gõ "tạo hợp
+     đồng", "mở album Minh Thư"… là bé mở đúng màn.
    • Không hiện trên chính trang của bé (đã có bé to ở đó).
 
    Trạng thái ẩn lưu localStorage theo máy — tuỳ chọn cá nhân, mất cũng không sao.
@@ -69,6 +72,7 @@ export default function PetBuddy() {
   const [line, setLine] = useState<Line | null>(null);
   const [busy, setBusy] = useState(false);
   const [hop, setHop] = useState(0);
+  const [cmdOpen, setCmdOpen] = useState(false);
   const loadedAt = useRef(0);
   const turn = useRef(0);
   const petRef = useRef<Lite | null>(null);
@@ -145,7 +149,10 @@ export default function PetBuddy() {
   }, [!!pet, hidden, onPetPage, nextLine]);
 
   // Đóng bảng khi chuyển trang.
-  useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    setOpen(false);
+    setCmdOpen(false);
+  }, [pathname]);
 
   const feed = async () => {
     setBusy(true);
@@ -206,7 +213,7 @@ export default function PetBuddy() {
     <div className={`${corner} flex flex-col items-start gap-2 lg:items-end`}>
       <style>{CSS}</style>
 
-      {open && (
+      {open && !cmdOpen && (
         <div
           className="pb-panel w-[min(300px,calc(100vw-24px))] rounded-[16px] p-3.5 shadow-xl"
           style={{ background: "var(--sf)", border: "1px solid var(--bd)", color: "var(--tx)" }}
@@ -290,7 +297,7 @@ export default function PetBuddy() {
         </div>
       )}
 
-      {line && !open && (
+      {line && !open && !cmdOpen && (
         <div
           role="status"
           onClick={() => {
@@ -323,10 +330,25 @@ export default function PetBuddy() {
         </div>
       )}
 
+      {/* Ô ra lệnh trên đầu bé — bấm để gõ: "tạo hợp đồng", "mở album …"… */}
+      <PetCommand
+        open={cmdOpen}
+        setOpen={(v) => {
+          setCmdOpen(v);
+          if (v) {
+            setOpen(false);
+            setLine(null);
+          }
+        }}
+        onFeed={() => void feed()}
+        name={pet.name}
+      />
+
       <button
         type="button"
         onClick={() => {
           setOpen((v) => !v);
+          setCmdOpen(false);
           setLine(null);
         }}
         className="relative"
