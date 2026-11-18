@@ -8,7 +8,7 @@
  * Nạp thẳng code thật.
  */
 import {
-  addDays, cleanName, dayDiff, feedXp, moodOf, outfitUnlocked, stageOf, streakOf, summarize, tasksFor,
+  addDays, buildReminders, cleanName, dayDiff, feedXp, moodOf, outfitUnlocked, stageOf, streakOf, summarize, tasksFor,
   OUTFITS, STAGES,
 } from "../../src/lib/pet.ts";
 
@@ -107,6 +107,26 @@ check("XP điểm danh hôm nay là số đã nhận", s.feedXp, 12);
 check("tuần: 7 ngày, 3 ngày cuối có ăn", s.week.map((w) => w.fed), [false, false, false, false, true, true, true]);
 check("tuần kết thúc hôm nay", s.week[6].day, T);
 check("vui", s.mood, "vui");
+
+// ── Câu nhắc việc ──
+check("không có việc → không nhắc", buildReminders({}), []);
+check("số rác / âm bị bỏ", buildReminders({ shootsToday: -2, leads: NaN, inbox: "3" }), []);
+check(
+  "việc hôm nay đứng trước ngày mai",
+  buildReminders({ shootsTomorrow: 2, shootsToday: 1, inbox: 4 }).map((r) => r.key),
+  ["shoots-today", "inbox", "shoots-tomorrow"],
+);
+check(
+  "một buổi chụp thì nêu tên khách",
+  buildReminders({ shootsToday: 1, firstClient: "chị Lan" })[0].text.includes("của chị Lan"),
+  true,
+);
+check(
+  "nhiều buổi thì không nêu tên",
+  buildReminders({ shootsToday: 3, firstClient: "chị Lan" })[0].text.includes("chị Lan"),
+  false,
+);
+check("mỗi câu có đường dẫn", buildReminders({ paymentsDue: 2, unsigned: 1 }).every((r) => r.href.startsWith("/dashboard/")), true);
 
 if (fail) {
   console.error(`\n${fail} kiểm thử hỏng`);

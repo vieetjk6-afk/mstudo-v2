@@ -265,3 +265,101 @@ export function summarize(claims: readonly Claim[], today: string): PetSummary {
     feedXp: todayFeed ? todayFeed.xp : feedXp(streak),
   };
 }
+
+/* ── Câu nhắc việc của bé nổi ở góc màn hình ────────────────────────────── */
+
+/** Số việc đang chờ của studio — máy chủ đếm (api/pet?lite=1), 0 = không có. */
+export type ReminderCounts = {
+  shootsToday: number;
+  /** Tên khách của buổi chụp đầu tiên hôm nay, nếu biết. */
+  firstClient?: string | null;
+  shootsTomorrow: number;
+  apptsToday: number;
+  paymentsDue: number;
+  unsigned: number;
+  bookings: number;
+  leads: number;
+  inbox: number;
+};
+
+export type Reminder = { key: string; text: string; href: string };
+
+/**
+ * Câu bé nói, theo thứ tự GẤP trước: việc hôm nay → tiền tới hạn → khách đang
+ * chờ trả lời → ngày mai. Không có việc gì thì trả mảng rỗng (màn hình tự nói
+ * câu vu vơ). Chỉ nhận số ≥ 1 — số rác / âm coi như không có.
+ */
+export function buildReminders(c: Partial<ReminderCounts>): Reminder[] {
+  const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : 0);
+  const out: Reminder[] = [];
+  const shoots = n(c.shootsToday);
+  if (shoots) {
+    const who = shoots === 1 && c.firstClient ? ` của ${c.firstClient}` : "";
+    out.push({
+      key: "shoots-today",
+      text: `Hôm nay có ${shoots} buổi chụp${who} — nhớ sạc pin, lau ống kính nha!`,
+      href: "/dashboard/studio/calendar",
+    });
+  }
+  if (n(c.apptsToday)) {
+    out.push({
+      key: "appts-today",
+      text: `Hôm nay có ${n(c.apptsToday)} lịch hẹn ở studio (thử đồ, trang điểm, tư vấn…).`,
+      href: "/dashboard/studio/calendar?tab=studio",
+    });
+  }
+  if (n(c.paymentsDue)) {
+    out.push({
+      key: "payments-due",
+      text: `Có ${n(c.paymentsDue)} đợt thanh toán đã tới hạn mà chưa thu — nhắc khách giúp mình nha.`,
+      href: "/dashboard/studio/reports",
+    });
+  }
+  if (n(c.bookings)) {
+    out.push({
+      key: "bookings",
+      text: `${n(c.bookings)} khách mới đặt lịch đang chờ bạn xác nhận!`,
+      href: "/dashboard/studio/bookings",
+    });
+  }
+  if (n(c.leads)) {
+    out.push({
+      key: "leads",
+      text: `Có ${n(c.leads)} yêu cầu mới từ website, trả lời sớm dễ chốt hơn đó.`,
+      href: "/dashboard/studio/leads",
+    });
+  }
+  if (n(c.inbox)) {
+    out.push({
+      key: "inbox",
+      text: `${n(c.inbox)} cuộc trò chuyện trong Hộp thư chưa đọc.`,
+      href: "/dashboard/studio/inbox",
+    });
+  }
+  if (n(c.unsigned)) {
+    out.push({
+      key: "unsigned",
+      text: `${n(c.unsigned)} hợp đồng đã gửi mà khách chưa ký — nhắc khách một tiếng nhé.`,
+      href: "/dashboard/studio/contracts",
+    });
+  }
+  if (n(c.shootsTomorrow)) {
+    out.push({
+      key: "shoots-tomorrow",
+      text: `Mai có ${n(c.shootsTomorrow)} buổi chụp, chuẩn bị đồ nghề từ tối nay cho chắc!`,
+      href: "/dashboard/studio/calendar",
+    });
+  }
+  return out;
+}
+
+/** Câu vu vơ khi không có việc gì để nhắc. */
+export const IDLE_LINES: readonly string[] = [
+  "Hôm nay chụp đẹp nha!",
+  "Ánh sáng giờ vàng là chân ái đó.",
+  "Nhớ sao lưu thẻ nhớ sau buổi chụp nhé!",
+  "Khách cười thật thì ảnh mới đẹp thật.",
+  "Chụp dư vài tấm, chọn sau không tiếc.",
+  "Gửi album sớm, khách vui, studio vui.",
+  "Uống miếng nước rồi làm tiếp nè.",
+];

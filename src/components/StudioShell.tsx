@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import PetBuddy from "@/components/PetBuddy";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -544,6 +545,9 @@ export default function StudioShell({
       </div>
 
       {suggestNewUi && <UiSuggestCard />}
+
+      {/* Bé Máy Ảnh nổi ở góc — nhắc việc, bấm để cho ăn / mở trang của bé. */}
+      <PetBuddy />
 
       {/* Mobile bottom nav (sidebar is hidden below lg) */}
       <div className="lg:hidden">

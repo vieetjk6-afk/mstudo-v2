@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import PetBuddy from "@/components/PetBuddy";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -726,6 +727,9 @@ export default function StudioShellV2({
 
       {/* ── Điện thoại: thanh tab + nút tạo nhanh ─────────────── */}
       <MobileTabBarV2 groups={groups} pathname={pathname} creates={creates} pins={pins} />
+
+      {/* Bé Máy Ảnh nổi ở góc — nhắc việc, bấm để cho ăn / mở trang của bé. */}
+      <PetBuddy />
 
       <CustomizeNavDrawer open={customizing} onClose={() => setCustomizing(false)} groups={groups} pins={pins} setPins={setPins} />
       <UiFeedback mode={feedback ?? "feedback"} open={feedback !== null} onClose={() => setFeedback(null)} onLeave={backToOld} />
