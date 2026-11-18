@@ -202,6 +202,9 @@ self.addEventListener("fetch", (event) => {
 
   // Ảnh của album — ngoại lệ duy nhất trong /api/.
   if (url.pathname === "/api/img") {
+    // Ảnh tải về để QUÉT KHUÔN MẶT (`&quet=1`, @/lib/face-embed-browser): dùng
+    // một lần rồi bỏ — đi thẳng mạng, không chiếm chỗ của ảnh người ta xem lại.
+    if (url.searchParams.get("quet") === "1") return;
     event.respondWith(imageFirst(req));
     return;
   }

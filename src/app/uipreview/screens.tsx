@@ -30,6 +30,7 @@ import AlbumDupDemo from "./AlbumDupDemo";
 import AiFaceDemo from "./AiFaceDemo";
 import FaceFinderDemo from "./FaceFinderDemo";
 import FaceScanProgressDemo from "./FaceScanProgressDemo";
+import FaceAutoScanDemo from "./FaceAutoScanDemo";
 import FaceSetupDemo from "./FaceSetupDemo";
 import GalleryFaceDemo from "./GalleryFaceDemo";
 import { AnhInAlbumLeDemo, AnhInKhachDemo, AnhInStudioDemo } from "./AnhInDemo";
@@ -203,6 +204,14 @@ export const SCREENS: Record<
   "dang-quet-mat": {
     title: "Album khách — đang quét khuôn mặt dở (tiến độ thật)",
     render: () => <FaceScanProgressDemo />,
+  },
+  "tu-quet-mat": {
+    title: "Dashboard — ô tự quét khuôn mặt trên máy studio (mọi trạng thái)",
+    render: () => <FaceAutoScanDemo />,
+  },
+  "tu-quet-mat-that": {
+    title: "Dashboard — tự quét khuôn mặt CHẠY THẬT (cho kiểm thử, API giả lập)",
+    render: () => <FaceAutoScanDemo that />,
   },
   "bao-chua-chay-sql": {
     title: "Bảng điều khiển — báo chưa bật được tìm theo khuôn mặt",

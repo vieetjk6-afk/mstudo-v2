@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { Lock, Pause, Play, ScanFace } from "lucide-react";
 import { Badge, Progress, Section, btn } from "@/components/v2/kit";
+import { useEffect, useState } from "react";
+import { batLaiTuQuet, tuQuetDangTat } from "@/components/v2/FaceAutoScan";
 import { useFaceLocalScan, type FaceScanView } from "./useFaceLocalScan";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -102,7 +104,7 @@ export function FaceScanCardView({ v, onStart, onPause }: { v: FaceScanView; onS
             ) : v.phase === "gom" ? null : st && st.tong === 0 ? (
               <p className="text-[13px]" style={{ color: "var(--tx3)" }}>Album chưa có ảnh nào để quét.</p>
             ) : xong ? (
-              <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Thêm ảnh mới vào album thì quay lại đây quét phần mới.</p>
+              <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>Thêm ảnh mới vào album thì phần mới sẽ được tự quét khi bạn mở dashboard (hoặc bấm quét ở đây).</p>
             ) : (
               <button type="button" onClick={onStart} className={btn("primary", "sm")}>
                 <Play size={14} /> {st && st.daQuet > 0 ? "Quét tiếp trên máy này" : "Quét khuôn mặt trên máy này"}
@@ -115,11 +117,46 @@ export function FaceScanCardView({ v, onStart, onPause }: { v: FaceScanView; onS
             ) : null}
           </div>
 
+          <TuQuetGhiChu />
+
           {st?.mayChuQuet ? (
             <p className="text-[12px]" style={{ color: "var(--tx3)" }}>Máy chủ cũng tự quét album đã phát hành vào ban đêm — bấm quét ở đây để có ngay.</p>
           ) : null}
         </div>
       )}
     </Section>
+  );
+}
+
+/**
+ * Nhắc rằng máy này TỰ quét khi mở dashboard — và cho bật lại nếu studio đã
+ * bấm "Tắt tự quét trên máy này" ở ô góc màn hình. Đọc localStorage sau khi
+ * gắn (không lệch lúc hydrate).
+ */
+function TuQuetGhiChu() {
+  const [tat, setTat] = useState<boolean | null>(null);
+  useEffect(() => setTat(tuQuetDangTat()), []);
+  if (tat === null) return null;
+  return (
+    <p className="text-[12px]" style={{ color: "var(--tx3)" }}>
+      {tat ? (
+        <>
+          Tự quét khi mở dashboard đang <b>tắt</b> trên máy này.{" "}
+          <button
+            type="button"
+            className="font-medium underline"
+            style={{ color: "var(--ac)" }}
+            onClick={() => {
+              batLaiTuQuet();
+              setTat(false);
+            }}
+          >
+            Bật lại
+          </button>
+        </>
+      ) : (
+        "Không cần vào từng album: khi bạn mở dashboard trên máy tính, máy sẽ tự lần lượt quét các album còn ảnh chưa quét."
+      )}
+    </p>
   );
 }

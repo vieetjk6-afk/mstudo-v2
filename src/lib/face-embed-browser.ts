@@ -154,7 +154,10 @@ export async function taiAnhQuet(driveFileId: string, signal?: AbortSignal): Pro
     const timer = setTimeout(huy, 20_000);
     let res: Response;
     try {
-      res = await fetch(rawImageUrl(driveFileId, SCAN_WIDTH), { signal: ctrl.signal, credentials: "same-origin" });
+      // `&quet=1`: service worker (public/sw.js) để request này đi thẳng mạng,
+      // KHÔNG giữ vào bộ nhớ đệm ảnh — ảnh quét chỉ dùng một lần, giữ lại thì
+      // quét vài nghìn tấm là đẩy hết ảnh studio / khách vừa xem ra khỏi đệm.
+      res = await fetch(`${rawImageUrl(driveFileId, SCAN_WIDTH)}&quet=1`, { signal: ctrl.signal, credentials: "same-origin" });
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener("abort", huy);

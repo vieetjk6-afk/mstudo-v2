@@ -145,3 +145,53 @@ export async function gomNeuCan(db: any, albumId: string): Promise<{ gom: boolea
   }
   return { gom: true, nguoi: await clusterAlbum(db, albumId) };
 }
+
+/** Tối đa ngần này album gần nhất của studio được xét cho bộ tự quét nền. */
+export const HANG_DOI_XET = 200;
+
+export type AlbumChoQuet = { id: string; ten: string; conLai: number };
+
+/**
+ * HÀNG ĐỢI CỦA BỘ TỰ QUÉT NỀN — album của MỘT chủ studio còn ảnh chưa quét.
+ *
+ * Gọi mỗi lần studio mở dashboard (và vài chục phút một lần khi để mở), nên
+ * phải rẻ: đa số lần gọi câu trả lời là "không còn gì". Như `albumsNeedingScan`
+ * của cron: MỘT câu `limit(1)` trên cả lô trả lời "có không" (chỉ mục một phần
+ * photos_faces_pending_idx); chỉ khi có mới đếm, theo nhóm 8 album, và chỉ đủ
+ * `gioiHan` album — mới nhất trước, vì album mới là album khách sắp mở.
+ *
+ * Gói đã được người gọi kiểm (route). Cả album nháp cũng xét: studio hay đăng
+ * ảnh lên rồi mới xuất bản, quét sẵn trước khi khách vào là đúng lúc nhất.
+ */
+export async function albumChoQuetCuaChu(db: any, ownerId: string, gioiHan = 10): Promise<AlbumChoQuet[]> {
+  const { data, error } = await db
+    .from("albums")
+    .select("id, title")
+    .eq("owner_id", ownerId)
+    .order("created_at", { ascending: false })
+    .limit(HANG_DOI_XET);
+  if (error) throw new Error(`doc_album_that_bai: ${error.message}`);
+  const rows = (data ?? []) as { id: string; title: string | null }[];
+  if (rows.length === 0) return [];
+  const conViec = async (ids: string[]) => {
+    const { data: d, error: e } = await apDungLocConQuet(db.from("photos").select("album_id").in("album_id", ids)).limit(1);
+    if (e) throw new Error(`doc_anh_cho_that_bai: ${e.message}`);
+    return (d ?? []).length > 0;
+  };
+  if (!(await conViec(rows.map((r) => r.id)))) return [];
+  const out: AlbumChoQuet[] = [];
+  for (let i = 0; i < rows.length && out.length < gioiHan; i += 8) {
+    const lo = rows.slice(i, i + 8);
+    if (rows.length > 8 && !(await conViec(lo.map((r) => r.id)))) continue;
+    const dem = await Promise.all(
+      lo.map(async (r) => {
+        const { count, error: e } = await apDungLocConQuet(dem0(db, r.id));
+        if (e) throw new Error(`dem_anh_cho_that_bai: ${e.message}`);
+        return { id: r.id, ten: r.title || "Album", conLai: count ?? 0 };
+      }),
+    );
+    for (const a of dem) if (a.conLai > 0 && out.length < gioiHan) out.push(a);
+  }
+  return out;
+}
+const dem0 = (db: any, albumId: string) => db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", albumId);
