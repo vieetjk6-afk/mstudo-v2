@@ -159,7 +159,7 @@ const now = Date.parse("2026-11-15T12:00:00Z");
 const iso = (h) => new Date(now - h * H).toISOString();
 const daily = R.CRONS.find((c) => c.name === "reminders");
 const weekly = R.CRONS.find((c) => c.name === "cleanup-wedding-photos");
-ok("bản kê khớp vercel.json: 9 việc, một việc theo tuần", R.CRONS.length === 9 && weekly.intervalHours === 168 && R.CRONS.filter((c) => c.intervalHours === 24).length === 8);
+ok("bản kê khớp vercel.json: 10 việc, một việc theo tuần", R.CRONS.length === 10 && weekly.intervalHours === 168 && R.CRONS.filter((c) => c.intervalHours === 24).length === 9);
 ok("ngày: tốt 50 giờ trước → chưa quá hạn; 52 giờ → quá hạn (2×24+3)", !R.isCronStale(daily, iso(50), iso(900), now) && R.isCronStale(daily, iso(52), iso(900), now));
 ok("tuần: 300 giờ → chưa; 340 giờ → quá hạn (2×168+3)", !R.isCronStale(weekly, iso(300), iso(900), now) && R.isCronStale(weekly, iso(340), iso(900), now));
 ok("máy vừa cài (chưa lượt nào của bất kỳ cron nào) → không gì quá hạn", R.cronHealth({ first_run_at: null, runs: [] }, now).every((c) => !c.stale && c.last === null));

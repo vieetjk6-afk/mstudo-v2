@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import type { KnownPerson } from "./face-group";
 import { tinhNguoi, type FaceRow, type NguoiGom } from "./face-gom-tinh";
+import { daDonKhuonMat } from "./face-don";
 
 /*
  * GOM NHÓM là phép tính vector thuần — KHÔNG cần TensorFlow. Nằm riêng (không ở
@@ -18,6 +19,18 @@ import { tinhNguoi, type FaceRow, type NguoiGom } from "./face-gom-tinh";
  * được giữ lại bằng cách ghép cụm mới với người cũ theo tâm cụm.
  */
 export async function clusterAlbum(db: any, albumId: string): Promise<number> {
+  // Album đã dọn vector (giao khách lâu, xem face-don.ts): gom lại sẽ dựng người
+  // từ vài tấm quét thêm rồi XOÁ cả danh sách người khách đang dùng. Chỉ đưa ra
+  // khỏi hàng đợi, giữ nguyên người cũ.
+  if (await daDonKhuonMat(db, albumId)) {
+    const { error: e } = await db
+      .from("albums")
+      .update({ faces_clustered_at: new Date().toISOString() })
+      .eq("id", albumId);
+    if (e) throw new Error(`danh_dau_album_da_don_that_bai: ${e.message}`);
+    const { count } = await db.from("album_people").select("id", { count: "exact", head: true }).eq("album_id", albumId);
+    return count ?? 0;
+  }
   // Đọc THEO TRANG: PostgREST lặng lẽ cắt ở 1000 dòng, nên album đông người
   // (đám cưới 1.500 ảnh dễ có vài nghìn khuôn mặt) trước đây chỉ được gom từ
   // 1000 mặt đầu — người xuất hiện ở cuối album biến mất khỏi hàng chip, và vì
@@ -84,6 +97,9 @@ export async function clusterAlbum(db: any, albumId: string): Promise<number> {
  * album_people bằng khoá ngoại: lô người không nằm lại thì lô nối nổ ra ngay.
  */
 export async function ghiNguoi(db: any, albumId: string, nguoi: readonly NguoiGom[]): Promise<void> {
+  // Chốt cuối cho mọi đường gom (máy chủ lẫn máy studio): album đã dọn vector
+  // thì danh sách người hiện có là bản DUY NHẤT — không xoá-dựng-lại.
+  if (await daDonKhuonMat(db, albumId)) throw new Error("album_da_don_khuon_mat");
   const { error: eDel } = await db.from("album_people").delete().eq("album_id", albumId);
   if (eDel) throw new Error(`xoa_nguoi_cu_that_bai: ${eDel.message}`);
   const dong = nguoi.map((p) => ({

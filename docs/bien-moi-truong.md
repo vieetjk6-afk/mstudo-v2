@@ -68,6 +68,7 @@ Cột **Xử lý** đọc thế này:
 | `SUPABASE_SERVICE_ROLE_KEY` | 🔴 | 🔒 của Supabase **MỚI** |
 | `SYSTEM_BACKUP_EVERY_DAYS` | ⚪ | để trống → sao lưu tự động **mỗi đêm** — xem docs/sao-luu-tu-dong.md |
 | `SYSTEM_BACKUP_KEEP` | ⚪ | để trống → giữ **14** bản sao lưu trên Drive admin |
+| `FACE_PRUNE_AFTER_DAYS` | ⚪ | để trống → xoá vector khuôn mặt (`album_faces`) của album **giao khách quá 15 ngày** — xem docs/supabase-usage.md |
 | `TURNSTILE_SECRET_KEY` | ⚪ | 🔒 không khai thì máy chủ **không xác minh được** mã nào — xem 4e |
 | `UPSTASH_REDIS_REST_TOKEN` | ⚪ | để trống được **nếu đã chạy** `supabase/gioi-han-tan-suat.sql` — xem 4e |
 | `UPSTASH_REDIS_REST_URL` | ⚪ | như trên |

@@ -172,3 +172,28 @@ Kiểm thử: `npm run test:public-cache`, `npm run test:drive-img`.
 Ngoài Supabase, ảnh hiển thị nay trỏ thẳng CDN Google thay vì đi vòng `/api/img`
 (chỉ trả 302) — bớt một lượt gọi Vercel cho mỗi ảnh (xem `NEXT_PUBLIC_IMG_DIRECT`
 trong docs/bien-moi-truong.md).
+
+## Dọn vector khuôn mặt của album giao khách lâu (11/2026)
+
+Đo lúc đó: database 345 MB / 500 MB của gói Free, trong đó `album_faces` 198 MB
+(57%), `photos` 108 MB, `album_photo_people` 19 MB.
+
+`album_faces` (mỗi khuôn mặt một vector 128 số) chỉ cần cho bước GOM. Khách tìm
+ảnh theo khuôn mặt bằng `album_people` + `album_photo_people` — hai bảng đó giữ
+nguyên. Cron `/api/cron/cleanup-faces` (hằng đêm) xoá `album_faces` của album:
+
+- `phase = 'delivery'`, giao khách quá `FACE_PRUNE_AFTER_DAYS` ngày (mặc định
+  15; album tạo thẳng ở giai đoạn giao khách tính từ `created_at`);
+- đã gom xong và không còn ảnh chờ quét.
+
+rồi đặt `albums.faces_pruned_at`. Có mốc này thì mọi đường gom (cron, máy studio)
+đều bỏ qua album: gom trên album đã mất vector sẽ xoá sạch danh sách người.
+
+Cái giá: ảnh thêm vào album sau khi dọn không vào được danh sách người; ghép
+layout của album đó cắt giữa ảnh thay vì cắt theo mặt.
+
+Kiểm thử: `npm run test:face-don`.
+
+Cùng đợt: đặt `SYSTEM_BACKUP_EVERY_DAYS=7` trên Vercel. Cron sao lưu đọc toàn bộ
+database (trừ `album_faces`) qua API mỗi lượt — sao lưu hằng đêm tốn khoảng 2–3
+GB egress mỗi tháng.

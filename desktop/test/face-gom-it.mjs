@@ -216,6 +216,8 @@ function fakeDbGom({ faces, nguoiCu = [], nuotNguoi = false }) {
       eq() { return self; },
       order() { return self; },
       range(a, b) { return Promise.resolve({ data: table === "album_faces" ? faces.slice(a, b + 1) : [], error: null }); },
+      // Chốt "album đã dọn vector" (face-don.ts) hỏi albums.faces_pruned_at — album ở đây chưa dọn.
+      maybeSingle() { return Promise.resolve({ data: table === "albums" ? { faces_pruned_at: null } : null, error: null }); },
       then(res, rej) {
         let out = { data: null, error: null };
         if (table === "album_people" && op === "select") {

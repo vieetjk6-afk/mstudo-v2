@@ -10,6 +10,7 @@
     "migrations/weather.sql",
     "migrations/album_people.sql",
     "migrations/album_faces.sql",
+    "migrations/don_khuon_mat_album_cu.sql",
     "migrations/contract_item_description.sql",
     "migrations/contract_internal_note.sql",
     "migrations/bank_auto_reconcile.sql",
@@ -670,6 +671,14 @@
       "cot": [
         "albums.faces_clustered_at",
         "photos.faces_scanned_at"
+      ]
+    },
+    {
+      "file": "migrations/don_khuon_mat_album_cu.sql",
+      "mo_ta": "Mốc dọn vector khuôn mặt của album đã giao khách lâu (chạy SAU album_faces)",
+      "bang": [],
+      "cot": [
+        "albums.faces_pruned_at"
       ]
     },
     {
