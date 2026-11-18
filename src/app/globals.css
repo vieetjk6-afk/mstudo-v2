@@ -595,21 +595,6 @@ body {
   .act-btn { width: auto; }
 }
 
-/* ── Nút "?" hướng dẫn ────────────────────────────────────────────
-   Nút nổi góc phải dưới. Dưới 1024px có thanh tab đáy nên phải nhấc nó lên
-   khỏi thanh đó, không thì nó nằm đè lên mục "Thêm" và bấm không được. */
-.help-fab {
-  position: fixed;
-  right: 18px;
-  bottom: 18px;
-  z-index: 90;
-}
-@media (max-width: 1023px) {
-  .help-fab {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 66px);
-  }
-}
-
 /* ── Reduced motion — honour OS accessibility setting ──────────── */
 @media (prefers-reduced-motion: reduce) {
   *,

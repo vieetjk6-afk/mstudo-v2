@@ -1,7 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, ArrowRight, ArrowLeft, HelpCircle, Check } from "lucide-react";
+import { X, ArrowRight, ArrowLeft, Check } from "lucide-react";
+
+/**
+ * Mở lại hướng dẫn từ nơi khác (bảng của Bé Máy Ảnh — components/PetBuddy).
+ * Trước đây có nút "?" nổi ở góc phải dưới, nhưng nó đè lên bé nên đã bỏ.
+ */
+export const TOUR_EVENT = "mstudo-tour";
 
 // Tăng version khi muốn tour tự hiện lại cho mọi người sau khi cập nhật nội dung.
 const TOUR_KEY = "mstudo_tour_v1";
@@ -79,6 +85,12 @@ export default function ProductTour() {
     setOpen(true);
   }
 
+  useEffect(() => {
+    const onOpen = () => replay();
+    window.addEventListener(TOUR_EVENT, onOpen);
+    return () => window.removeEventListener(TOUR_EVENT, onOpen);
+  }, []);
+
   // Cho phép đóng hướng dẫn bằng phím Esc (giống ShareDialog).
   useEffect(() => {
     if (!open) return;
@@ -94,23 +106,6 @@ export default function ProductTour() {
 
   return (
     <>
-      {/* Nút mở lại hướng dẫn */}
-      <button
-        type="button"
-        onClick={replay}
-        aria-label="Hướng dẫn sử dụng"
-        title="Hướng dẫn sử dụng"
-        // Vị trí nằm ở lớp .help-fab để có media query nhấc nút lên khỏi thanh
-        // tab đáy trên điện thoại — style inline không viết được media query.
-        className="help-fab"
-        style={{
-          width: 46, height: 46, borderRadius: 999, border: "1px solid var(--border)",
-          background: "var(--surface)", color: "var(--accent)", display: "grid", placeItems: "center",
-          boxShadow: "0 10px 30px -12px rgba(0,0,0,.5)", cursor: "pointer",
-        }}
-      >
-        <HelpCircle size={22} />
-      </button>
 
       {open && (
         <div
