@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isMissing, loadRunState } from "@/lib/system-runs";
 import { LIMITS, cronHealth } from "@/lib/system-runs-rules";
+import { thangUtc, tomTatThang, type DongUsage } from "@/lib/luu-luong-rules";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,9 @@ export async function GET() {
 
   const db = createAdminClient();
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const [state, statsRes, errRes] = await Promise.all([
+  const now = Date.now();
+  const dauThang = `${thangUtc(now)}-01`;
+  const [state, statsRes, errRes, usageRes] = await Promise.all([
     loadRunState(db),
     db.rpc("system_stats"),
     db
@@ -33,6 +36,12 @@ export async function GET() {
       .gte("last_seen", since)
       .order("last_seen", { ascending: false })
       .limit(400),
+    // Lưu lượng tháng này (ước tính Supabase do app đếm + số liệu Vercel).
+    db
+      .from("system_usage")
+      .select("day, source, metric, quantity, unit, cost, requests")
+      .gte("day", dauThang)
+      .limit(2000),
   ]);
   const migrated = !!state && !isMissing(errRes.error);
 
@@ -68,6 +77,8 @@ export async function GET() {
       stats: statsRes.error ? null : statsRes.data,
       errors: [...byId.values()].slice(0, 20),
       limits: LIMITS,
+      // null = chưa chạy migration luu_luong.sql.
+      usage: usageRes.error ? null : tomTatThang((usageRes.data ?? []) as DongUsage[], thangUtc(now), now),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

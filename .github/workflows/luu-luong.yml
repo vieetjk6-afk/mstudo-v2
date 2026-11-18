@@ -1,0 +1,37 @@
+name: Đo lưu lượng
+
+# Mỗi ngày đọc lượng dùng / chi phí Vercel (API FOCUS) ghi vào bảng
+# system_usage, để trang Admin → Hệ thống → Sức khoẻ hệ thống so với hạn mức
+# gói Hobby. Lưu lượng Supabase thì app tự đếm (không cần workflow này).
+# Dùng lại secret đã có: VERCEL_TOKEN, VERCEL_ORG_ID, SUPABASE_DB_URL.
+# Thiếu secret thì tự bỏ qua. Chạy tay: tab Actions → "Đo lưu lượng".
+
+on:
+  schedule:
+    - cron: "37 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: luu-luong
+  cancel-in-progress: true
+
+jobs:
+  do:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Bảo đảm có psql
+        run: command -v psql >/dev/null || (sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client)
+      - name: Đọc số liệu Vercel → database
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: node --experimental-strip-types scripts/do-luu-luong-vercel.mjs

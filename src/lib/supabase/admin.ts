@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { noStoreFetch } from "@/lib/no-store-fetch";
+import { demFetch } from "@/lib/luu-luong";
 
 /**
  * Service-role client — bypasses RLS. SERVER ONLY.
@@ -15,7 +16,10 @@ export function createAdminClient() {
       auth: { autoRefreshToken: false, persistSession: false },
       // Bắt buộc: Next 14 cache CẢ câu đọc lẫn câu ghi đi qua fetch, kể cả trong
       // route đã khai force-dynamic. Xem @/lib/no-store-fetch để biết đã đo thế nào.
-      global: { fetch: noStoreFetch },
+      global: { fetch: demFetchNoStore },
     }
   );
 }
+
+/** noStoreFetch + đếm lưu lượng Supabase (ước tính egress, xem @/lib/luu-luong). */
+const demFetchNoStore = demFetch(noStoreFetch);

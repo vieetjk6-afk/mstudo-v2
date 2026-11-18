@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { CronHealth } from "@/lib/system-runs-rules";
+import type { tomTatThang } from "@/lib/luu-luong-rules";
+
+export type UsageThang = ReturnType<typeof tomTatThang>;
 
 /* Phần LOGIC của khối "Sức khoẻ hệ thống" (SystemV2): đọc /api/admin/health —
    lượt chạy các việc tự động, dung lượng, SQL tự chạy lúc deploy, lỗi 7 ngày. */
@@ -22,6 +25,8 @@ export type SystemHealth = {
   stats: HealthStats | null;
   errors: HealthError[];
   limits: { dbBytes: number; storageBytes: number };
+  /** Lưu lượng tháng này; null/thiếu = chưa chạy migration luu_luong.sql. */
+  usage?: UsageThang | null;
 };
 
 export type CronStatus = "ok" | "fail" | "stale" | "never";
@@ -44,6 +49,11 @@ export function healthIssues(h: SystemHealth): string[] {
   if (h.stats) {
     if (usageTone(h.stats.db_bytes, h.limits.dbBytes) !== "green") out.push("Database gần đầy");
     if (usageTone(h.stats.storage_bytes, h.limits.storageBytes) !== "green") out.push("Lưu trữ file gần đầy");
+  }
+  if (h.usage) {
+    if (h.usage.supabase.tiLe >= 0.8) out.push("Lưu lượng Supabase tháng này gần hết");
+    else if (h.usage.supabase.tiLeDuBao >= 1) out.push("Lưu lượng Supabase có thể vượt hạn mức cuối tháng");
+    for (const v of h.usage.vercel) if (v.tiLe != null && v.tiLe >= 0.8) out.push(`Vercel ${v.service} gần hết hạn mức`);
   }
   const server = h.errors.filter((e) => e.source === "server").length;
   if (server) out.push(`${server} loại lỗi máy chủ trong 7 ngày`);

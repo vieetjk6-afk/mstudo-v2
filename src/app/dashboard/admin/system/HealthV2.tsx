@@ -3,7 +3,8 @@
 import { Activity, AlertTriangle, Check, Loader2, RefreshCw } from "lucide-react";
 import { Badge, Callout, Progress, Section, btn, type Tone } from "@/components/v2/kit";
 import { fmtSize, fmtWhen } from "./useAutoBackup";
-import { ago, cronStatus, healthIssues, usageTone, type CronStatus, type SystemHealth, type SystemHealthState } from "./useSystemHealth";
+import { ago, cronStatus, healthIssues, usageTone, type CronStatus, type SystemHealth, type SystemHealthState, type UsageThang } from "./useSystemHealth";
+import { doiRaByte } from "@/lib/luu-luong-rules";
 
 /* Khối "Sức khoẻ hệ thống" của SystemV2: một dòng kết luận, rồi tới bằng chứng
    — việc tự động chạy đêm, dung lượng so với trần gói Free, SQL tự chạy lúc
@@ -31,6 +32,63 @@ function Usage({ label, used, limit, note }: { label: string; used: number; limi
       </div>
       <div className="mt-2"><Progress value={(used / limit) * 100} tone={tone} /></div>
       {note ? <p className="mt-1.5 text-[12px]" style={{ color: "var(--tx3)" }}>{note}</p> : null}
+    </div>
+  );
+}
+
+/** Lưu lượng tháng này — Supabase (app tự đếm, ước tính) và Vercel (API chi phí). */
+function LuuLuong({ u }: { u: UsageThang }) {
+  const [y, m] = u.thang.split("-");
+  const sp = u.supabase;
+  const maxNgay = Math.max(1, ...sp.theoNgay.map((d) => d.bytes));
+  const coTran = u.vercel.filter((v) => v.tran != null);
+  const khac = u.vercel.filter((v) => v.tran == null);
+  return (
+    <div className="flex flex-col gap-2" data-testid="luu-luong">
+      <p className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--tx3)" }}>Lưu lượng tháng {m}/{y}</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+        <Usage
+          label="Supabase (ước tính)"
+          used={sp.bytes}
+          limit={sp.tran}
+          note={`Máy chủ ${fmtBytes(sp.mayChu)} · trình duyệt ${fmtBytes(sp.trinhDuyet)} · dự báo cuối tháng ~${fmtBytes(sp.duBao)}. App tự đếm, không gồm ảnh tải thẳng từ Storage — số chính xác ở Supabase → Usage.`}
+        />
+        {coTran.map((v) => (
+          <Usage key={v.service} label={`Vercel · ${v.service}`} used={doiRaByte(v.quantity, v.unit) ?? 0} limit={v.tran!} note={`Trần gói Hobby · cập nhật ${u.vercelCapNhat ?? "—"}`} />
+        ))}
+      </div>
+      {sp.theoNgay.length > 1 ? (
+        <div className="rounded-[12px] px-3.5 py-2.5" style={{ border: "1px solid var(--bd2)" }}>
+          <p className="text-[12px]" style={{ color: "var(--tx3)" }}>Supabase theo ngày</p>
+          <div className="mt-1.5 flex h-12 items-end gap-[3px]" aria-hidden>
+            {sp.theoNgay.map((d) => (
+              <div key={d.day} title={`${d.day}: ${fmtBytes(d.bytes)}`} className="min-w-0 flex-1 rounded-t-[3px]" style={{ height: `${Math.max(4, (d.bytes / maxNgay) * 100)}%`, background: "var(--ac)", opacity: 0.75 }} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {u.vercel.length === 0 ? (
+        <p className="text-[12.5px]" style={{ color: u.vercelLoi ? "var(--am)" : "var(--tx3)" }}>
+          {u.vercelLoi
+            ? `Chưa đọc được số liệu Vercel: ${u.vercelLoi}`
+            : "Chưa có số liệu Vercel — workflow GitHub “Đo lưu lượng” ghi mỗi ngày (dùng secret VERCEL_TOKEN, VERCEL_ORG_ID, SUPABASE_DB_URL)."}
+        </p>
+      ) : khac.length > 0 ? (
+        <details className="rounded-[12px] px-3.5 py-2" style={{ border: "1px solid var(--bd2)" }}>
+          <summary className="cursor-pointer text-[13px] font-medium" style={{ color: "var(--tx2)" }}>Các mục Vercel khác</summary>
+          <ul className="mt-2 text-[12.5px]">
+            {khac.map((v) => (
+              <li key={`${v.service}|${v.unit}`} className="flex items-baseline justify-between gap-3 py-0.5">
+                <span className="min-w-0 truncate" style={{ color: "var(--tx2)" }}>{v.service}</span>
+                <span className="flex-none tabular-nums" style={{ color: "var(--tx3)" }}>
+                  {v.quantity.toLocaleString("vi-VN", { maximumFractionDigits: 2 })} {v.unit ?? ""}
+                  {v.cost > 0 ? ` · $${v.cost.toFixed(2)}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </div>
   );
 }
@@ -103,6 +161,9 @@ function Body({ h }: { h: SystemHealth }) {
           })}
         </div>
       </div>
+
+      {/* ── Lưu lượng tháng này ── */}
+      {h.usage ? <LuuLuong u={h.usage} /> : null}
 
       {/* ── Dung lượng ── */}
       {st ? (
