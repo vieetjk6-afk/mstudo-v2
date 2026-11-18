@@ -2,7 +2,7 @@
 
 import { apDungLocCanQuet, apDungLocConQuet } from "./face-can-quet";
 import { GOM_LAI_SAU_MS, ghiKetQuaQuet, veHangDoiGomNeuCan } from "./face-ghi";
-import { clusterAlbum } from "./face-gom";
+import { clusterAlbum, ghiNguoi } from "./face-gom";
 import { kiemLoKetQua } from "./face-scan-core";
 
 /**
@@ -224,3 +224,101 @@ async function themChuaGom(db: any, rows: { id: string; title: string | null }[]
   return out;
 }
 const dem0 = (db: any, albumId: string) => db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", albumId);
+
+/* ── GOM TRÊN MÁY STUDIO: máy chủ chỉ KIỂM rồi GHI ─────────────────────────────
+   Album cưới vài nghìn ảnh có hàng chục nghìn khuôn mặt; phép gom so từng cặp
+   và đã quá giờ của máy chủ (khách không bao giờ thấy ô tìm khuôn mặt). Nay máy
+   studio đọc vector, gom trong Web Worker rồi gửi KẾT QUẢ lên đây. Máy chủ không
+   tin kết quả đó: mọi ảnh phải thuộc đúng album, mọi vector đúng 128 số hữu hạn,
+   tên chỉ lấy từ người CŨ của chính album (studio đã đặt), không lấy từ client. */
+
+/** Trần thân yêu cầu {luuGom} — dưới giới hạn 4,5 MB của Vercel. */
+export const THAN_GOM_TOI_DA = 4_000_000;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const so01 = (x: unknown) => typeof x === "number" && Number.isFinite(x) && x >= 0 && x <= 1;
+const nguyen = (x: unknown, max: number) => Number.isInteger(x) && (x as number) >= 0 && (x as number) <= max;
+
+export type KiemGom = { ok: true; nguoi: (Omit<NguoiGomVao, "name">)[] } | { ok: false; loi: string };
+type NguoiGomVao = {
+  knownId: string | null;
+  name: string;
+  face_count: number;
+  cover_photo_id: string | null;
+  cover_at: number;
+  cover_box: number[] | null;
+  descriptor: number[];
+  position: number;
+  anh: string[];
+};
+
+/** Kiểm hình dạng kết quả gom gửi từ máy studio (thuần — kiểm thử được). */
+export function kiemKetQuaGom(raw: unknown): KiemGom {
+  const ds = (raw as { nguoi?: unknown })?.nguoi;
+  if (!Array.isArray(ds)) return { ok: false, loi: "khong_phai_mang" };
+  if (ds.length > 5000) return { ok: false, loi: "qua_nhieu_nguoi" };
+  let tongNoi = 0;
+  const out: Omit<NguoiGomVao, "name">[] = [];
+  for (let i = 0; i < ds.length; i++) {
+    const p = ds[i] as Record<string, unknown>;
+    if (!p || typeof p !== "object") return { ok: false, loi: "nguoi_sai" };
+    if (p.knownId != null && !(typeof p.knownId === "string" && UUID.test(p.knownId))) return { ok: false, loi: "known_id_sai" };
+    if (!nguyen(p.face_count, 10_000_000) || (p.face_count as number) < 1) return { ok: false, loi: "face_count_sai" };
+    if (p.cover_photo_id != null && !(typeof p.cover_photo_id === "string" && UUID.test(p.cover_photo_id))) return { ok: false, loi: "cover_sai" };
+    if (!nguyen(p.cover_at, 1000)) return { ok: false, loi: "cover_at_sai" };
+    if (p.cover_box != null && !(Array.isArray(p.cover_box) && p.cover_box.length === 4 && p.cover_box.every(so01))) return { ok: false, loi: "cover_box_sai" };
+    if (!Array.isArray(p.descriptor) || p.descriptor.length !== 128 || !p.descriptor.every((x) => typeof x === "number" && Number.isFinite(x))) return { ok: false, loi: "descriptor_sai" };
+    if (p.position !== i) return { ok: false, loi: "position_sai" };
+    const anh = p.anh;
+    if (!Array.isArray(anh) || anh.length === 0 || !anh.every((x) => typeof x === "string" && UUID.test(x))) return { ok: false, loi: "anh_sai" };
+    if (new Set(anh).size !== anh.length) return { ok: false, loi: "anh_trung" };
+    tongNoi += anh.length;
+    if (tongNoi > 500_000) return { ok: false, loi: "qua_nhieu_noi" };
+    out.push({
+      knownId: (p.knownId as string | null) ?? null,
+      face_count: p.face_count as number,
+      cover_photo_id: (p.cover_photo_id as string | null) ?? null,
+      cover_at: p.cover_at as number,
+      cover_box: (p.cover_box as number[] | null) ?? null,
+      descriptor: p.descriptor as number[],
+      position: i,
+      anh: anh as string[],
+    });
+  }
+  return { ok: true, nguoi: out };
+}
+
+/** Nhận kết quả gom từ máy studio: kiểm, đối chiếu ảnh thuộc album, rồi ghi. */
+export async function nhanKetQuaGom(db: any, albumId: string, raw: unknown): Promise<{ ok: true; nguoi: number } | { ok: false; error: string; detail?: string }> {
+  const k = kiemKetQuaGom(raw);
+  if (!k.ok) return { ok: false, error: "gom_khong_hop_le", detail: k.loi };
+
+  // Mọi ảnh nhắc tới phải là ảnh CỦA ALBUM NÀY — đọc hết id ảnh của album theo trang.
+  const cuaAlbum = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db.from("photos").select("id").eq("album_id", albumId).order("id").range(from, from + 999);
+    if (error) throw new Error(`doc_anh_album_that_bai: ${error.message}`);
+    const rows = (data ?? []) as { id: string }[];
+    for (const r of rows) cuaAlbum.add(r.id);
+    if (rows.length < 1000) break;
+  }
+  for (const p of k.nguoi) {
+    if (p.cover_photo_id && !cuaAlbum.has(p.cover_photo_id)) return { ok: false, error: "anh_khong_thuoc_album" };
+    for (const a of p.anh) if (!cuaAlbum.has(a)) return { ok: false, error: "anh_khong_thuoc_album" };
+  }
+
+  // Tên: CHỈ từ người cũ của chính album này (studio đã đặt), một tên một người.
+  const { data: cu, error: eCu } = await db.from("album_people").select("id, name").eq("album_id", albumId);
+  if (eCu) throw new Error(`doc_nguoi_cu_that_bai: ${eCu.message}`);
+  const tenCu = new Map(((cu ?? []) as { id: string; name: string | null }[]).map((r) => [r.id, r.name ?? ""]));
+  const daDung = new Set<string>();
+  const nguoi = k.nguoi.map((p) => {
+    let name = "";
+    if (p.knownId && tenCu.has(p.knownId) && !daDung.has(p.knownId)) {
+      name = tenCu.get(p.knownId)!;
+      daDung.add(p.knownId);
+    }
+    return { ...p, name };
+  });
+  await ghiNguoi(db, albumId, nguoi);
+  return { ok: true, nguoi: nguoi.length };
+}

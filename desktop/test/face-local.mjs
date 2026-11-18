@@ -9,7 +9,8 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { kiemLoKetQua, laDescriptorHopLe, laLoiVinhVien, LO_TOI_DA, MAX_FACES } from "../../src/lib/face-scan-core.ts";
-import { albumChoQuetCuaChu, gomNeuCan, layViecQuet, nhanLoKetQua } from "../../src/lib/face-local-server.ts";
+import { albumChoQuetCuaChu, gomNeuCan, kiemKetQuaGom, layViecQuet, nhanKetQuaGom, nhanLoKetQua } from "../../src/lib/face-local-server.ts";
+import { tinhNguoi } from "../../src/lib/face-gom-tinh.ts";
 import { tienDoNoiVoiKhach } from "../../src/lib/face-pending.ts";
 import { nearestPerson } from "../../src/lib/face-group.ts";
 
@@ -252,6 +253,61 @@ const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_
     await albumChoQuetCuaChu(chuaGom, "U"),
     [{ id: "U2", ten: "Album 2", conLai: 0, canGom: true }],
   );
+}
+
+/* ── 8b. GOM TRÊN MÁY STUDIO: máy chủ kiểm rồi ghi ───────────────────────────── */
+{
+  // 3 người × 4 ảnh, vector quanh 3 tâm khác hẳn nhau.
+  const tam = [0, 1, 2].map((k) => Array.from({ length: 128 }, (_, i) => (i % 3 === k ? 0.3 : 0)));
+  const mat = [];
+  const photos = [];
+  for (let k = 0; k < 3; k++) {
+    for (let j = 0; j < 4; j++) {
+      const n = k * 10 + j + 1;
+      photos.push(anh(n, { faces_scanned_at: "2026-01-01T00:00:00Z" }));
+      mat.push({ photo_id: uuid(n), at: 0, box: [0.1, 0.1, 0.2 + j * 0.01, 0.2], descriptor: tam[k].map((x, i) => x + Math.sin(i + j) * 0.002), sharpness: 100 + j });
+    }
+  }
+  const knownId = "11111111-1111-4111-8111-111111111111";
+  const nguoi = tinhNguoi(mat, [{ id: knownId, name: "Cô dâu", descriptor: tam[1] }]);
+  check("máy studio gom ra đúng 3 người, mỗi người 4 ảnh", nguoi.map((p) => p.anh.length).sort(), [4, 4, 4]);
+  ok("người khớp người cũ mang knownId để giữ tên", nguoi.filter((p) => p.knownId === knownId).length === 1);
+
+  const db = fakeDb({ photos: [...photos, { ...anh(99), album_id: "B" }] });
+  db.t.album_people.push({ id: knownId, album_id: "A", name: "Cô dâu" }, { id: "22222222-2222-4222-8222-222222222222", album_id: "B", name: "Người album khác" });
+  const r = await nhanKetQuaGom(db, "A", { nguoi });
+  check("máy chủ nhận và ghi kết quả gom", [r.ok, r.nguoi], [true, 3]);
+  ok("người cũ của album bị thay (dựng lại từ đầu)", !db.t.album_people.some((p) => p.id === knownId));
+  ok("tên lấy từ người CŨ của album — 'Cô dâu' được giữ", db.t.album_people.filter((p) => p.album_id === "A" && p.name === "Cô dâu").length === 1);
+  check("12 dòng nối người–ảnh", db.t.album_photo_people.length, 12);
+  ok("đặt mốc đã gom", !!db.t.albums[0].faces_clustered_at);
+
+  const gia = JSON.parse(JSON.stringify(nguoi));
+  gia[0].name = "Tên client tự đặt";
+  gia[0].knownId = "22222222-2222-4222-8222-222222222222"; // người của album KHÁC
+  const db2 = fakeDb({ photos });
+  db2.t.album_people.push({ id: "22222222-2222-4222-8222-222222222222", album_id: "B", name: "Người album khác" });
+  await nhanKetQuaGom(db2, "A", { nguoi: gia });
+  ok("không nhận tên từ client, không mượn tên người của album khác", !db2.t.album_people.some((p) => p.album_id === "A" && p.name));
+
+  const la = JSON.parse(JSON.stringify(nguoi));
+  la[0].anh = [...la[0].anh, uuid(99)];
+  const r3 = await nhanKetQuaGom(fakeDb({ photos: [...photos, { ...anh(99), album_id: "B" }] }), "A", { nguoi: la });
+  check("ảnh của album KHÁC trong kết quả gom → từ chối, không ghi", [r3.ok, r3.error], [false, "anh_khong_thuoc_album"]);
+  const sai = (ten, fn, loi) => {
+    const x = JSON.parse(JSON.stringify(nguoi));
+    fn(x);
+    const k = kiemKetQuaGom({ nguoi: x });
+    ok(`kết quả gom sai: ${ten}`, !k.ok && k.loi === loi, JSON.stringify(k));
+  };
+  sai("vector 127 chiều", (x) => (x[0].descriptor = x[0].descriptor.slice(1)), "descriptor_sai");
+  sai("vector có NaN", (x) => (x[0].descriptor[3] = null), "descriptor_sai");
+  sai("ảnh trùng", (x) => x[0].anh.push(x[0].anh[0]), "anh_trung");
+  sai("photo id không phải uuid", (x) => (x[0].anh[0] = "1; drop"), "anh_sai");
+  sai("thứ tự position lệch", (x) => (x[1].position = 5), "position_sai");
+  sai("khung ngoài 0…1", (x) => (x[0].cover_box = [0, 0, 2, 1]), "cover_box_sai");
+  const rLocal = readFileSync("src/app/api/albums/[id]/face-local/route.ts", "utf8");
+  ok("route nhận {luuGom} và có trần thân riêng", /luuGom/.test(rLocal) && /THAN_GOM_TOI_DA/.test(rLocal));
 }
 
 /* ── 9. Bộ tự quét nền: các luật không được trôi ─────────────────────────── */
