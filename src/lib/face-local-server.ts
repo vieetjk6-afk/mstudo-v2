@@ -292,19 +292,24 @@ export async function nhanKetQuaGom(db: any, albumId: string, raw: unknown): Pro
   const k = kiemKetQuaGom(raw);
   if (!k.ok) return { ok: false, error: "gom_khong_hop_le", detail: k.loi };
 
-  // Mọi ảnh nhắc tới phải là ảnh CỦA ALBUM NÀY — đọc hết id ảnh của album theo trang.
-  const cuaAlbum = new Set<string>();
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await db.from("photos").select("id").eq("album_id", albumId).order("id").range(from, from + 999);
-    if (error) throw new Error(`doc_anh_album_that_bai: ${error.message}`);
-    const rows = (data ?? []) as { id: string }[];
-    for (const r of rows) cuaAlbum.add(r.id);
-    if (rows.length < 1000) break;
-  }
+  // Mọi ảnh nhắc tới phải là ảnh CỦA ALBUM NÀY. Tra ĐÚNG những id được nhắc,
+  // theo lô, bằng khoá chính — KHÔNG đọc cả album theo `order("id")`: cách đó
+  // bắt Postgres lướt khoá chính của bảng ảnh MỌI album và đã chết vì
+  // "statement timeout" trên album 5.877 ảnh.
+  const canTra = new Set<string>();
   for (const p of k.nguoi) {
-    if (p.cover_photo_id && !cuaAlbum.has(p.cover_photo_id)) return { ok: false, error: "anh_khong_thuoc_album" };
-    for (const a of p.anh) if (!cuaAlbum.has(a)) return { ok: false, error: "anh_khong_thuoc_album" };
+    if (p.cover_photo_id) canTra.add(p.cover_photo_id);
+    for (const a of p.anh) canTra.add(a);
   }
+  const ids = [...canTra];
+  let thuoc = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const lo = ids.slice(i, i + 200);
+    const { data, error } = await db.from("photos").select("id").in("id", lo).eq("album_id", albumId);
+    if (error) throw new Error(`doc_anh_album_that_bai: ${error.message}`);
+    thuoc += (data ?? []).length;
+  }
+  if (thuoc !== ids.length) return { ok: false, error: "anh_khong_thuoc_album" };
 
   // Tên: CHỈ từ người cũ của chính album này (studio đã đặt), một tên một người.
   const { data: cu, error: eCu } = await db.from("album_people").select("id, name").eq("album_id", albumId);
