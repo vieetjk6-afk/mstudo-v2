@@ -131,11 +131,18 @@ if (!pg.ok) {
   const tam = mkdtempSync(join(tmpdir(), "mstudo-ll-"));
   const homNay = new Date().toISOString().slice(0, 7);
   const file = join(tam, "focus.jsonl");
+  // Nhiều dòng như số liệu thật hai tháng (câu SQL dài hơn giới hạn dòng lệnh
+  // của hệ điều hành — lần chạy thật đầu tiên hỏng đúng vì thế).
+  const nhieu = [];
+  for (let d = 1; d <= 28; d++)
+    for (let k = 0; k < 120; k++)
+      nhieu.push(JSON.stringify({ ChargePeriodStart: `${homNay}-${String(d).padStart(2, "0")}T00:00:00Z`, ServiceName: `Dịch vụ phụ ${k} — mô tả dài cho đủ độ dài thật của tên mục`, ConsumedQuantity: 0, ConsumedUnit: "Requests", BilledCost: 0 }));
   writeFileSync(
     file,
     [
       JSON.stringify({ ChargePeriodStart: `${homNay}-01T00:00:00Z`, ServiceName: "Fast Data Transfer", ConsumedQuantity: 2, ConsumedUnit: "GB", BilledCost: 0 }),
       JSON.stringify({ ChargePeriodStart: `${homNay}-01T00:00:00Z`, ServiceName: "Bob's Service", ConsumedQuantity: 1, ConsumedUnit: "GB-Hrs", BilledCost: 0.1 }),
+      ...nhieu,
     ].join("\n"),
   );
   const chay = () =>
@@ -144,9 +151,9 @@ if (!pg.ok) {
       encoding: "utf8",
     });
   const a = chay();
-  ok("script Vercel ghi số liệu (cả tên có dấu nháy)", a.status === 0 && pg.q("ll", "select count(*) from public.system_usage where source='vercel'") === "2", (a.stdout || "") + (a.stderr || ""));
+  ok("script Vercel ghi số liệu nhiều dòng (câu SQL rất dài, cả tên có dấu nháy)", a.status === 0 && pg.q("ll", "select count(*) from public.system_usage where source='vercel'") === String(2 + 28 * 120), (a.stdout || "") + (a.stderr || ""));
   chay();
-  eq("…chạy lại thì GHI ĐÈ, không nhân đôi", pg.q("ll", "select count(*) || ':' || sum(quantity) from public.system_usage where source='vercel'"), "2:3");
+  eq("…chạy lại thì GHI ĐÈ, không nhân đôi", pg.q("ll", "select count(*) || ':' || sum(quantity) from public.system_usage where source='vercel'"), `${2 + 28 * 120}:3`);
   const b = spawnSync("node", ["--experimental-strip-types", join(ROOT, "scripts/do-luu-luong-vercel.mjs")], { env: { ...process.env, SUPABASE_DB_URL: "", VERCEL_TOKEN: "" }, encoding: "utf8" });
   ok("thiếu secret → bỏ qua, thoát 0", b.status === 0 && /bỏ qua/.test(b.stdout));
   rmSync(tam, { recursive: true, force: true });
