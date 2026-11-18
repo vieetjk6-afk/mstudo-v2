@@ -128,15 +128,19 @@ jobs:
           # → build chết "JavaScript heap out of memory" ngay sau khi compile
           # xong. Máy chạy của GitHub có 16GB nên cấp 6GB là thoải mái.
           NODE_OPTIONS: --max-old-space-size=6144
-        # Thử lại MỘT lần: build tải font Google (next/font) qua mạng và thỉnh
-        # thoảng hỏng ngẫu nhiên ("Can't resolve …/font/google/font") dù code
-        # không đổi gì — đã gặp hai lần, chạy lại là qua. Lỗi thật thì hỏng cả hai.
+        # Thử tối đa 3 lần, cách nhau 45 giây: build tải font Google (next/font)
+        # qua mạng và thỉnh thoảng hỏng ngẫu nhiên ("Can't resolve …/font/google/
+        # font") dù code không đổi gì — đã gặp nhiều lần, và hỏng thường kéo dài
+        # vài chục giây nên thử lại ngay (15 giây) cũng hỏng. Lỗi thật thì hỏng cả 3.
         run: |
-          if ! vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"; then
-            echo "::warning::Build hỏng — thử lại một lần (thường là lỗi tải font Google)."
-            sleep 15
-            vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
-          fi
+          for lan in 1 2 3; do
+            if vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"; then exit 0; fi
+            if [ "$lan" -lt 3 ]; then
+              echo "::warning::Build hỏng lần $lan — 45 giây nữa thử lại (thường là lỗi tải font Google)."
+              sleep 45
+            fi
+          done
+          exit 1
 
       # Chạy SAU khi build xong (build hỏng thì chưa đụng database) và TRƯỚC khi
       # bản mới lên: code mới luôn gặp database đã có đủ bảng / cột của nó. SQL
