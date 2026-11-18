@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, EyeOff, Film, Flame, PawPrint, X } from "lucide-react";
+import { ChevronRight, CircleHelp, EyeOff, Film, Flame, PawPrint, X } from "lucide-react";
+import { TOUR_EVENT } from "@/components/ProductTour";
 import PetSprite from "@/app/dashboard/be-may-anh/PetSprite";
 import { IDLE_LINES, MOOD_LABEL, type Mood, type OutfitKey, type Reminder } from "@/lib/pet";
 
@@ -263,6 +264,19 @@ export default function PetBuddy() {
             >
               Mở trang của bé <ChevronRight size={14} />
             </Link>
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                window.dispatchEvent(new Event(TOUR_EVENT));
+              }}
+              className="flex items-center rounded-[10px] px-2.5 py-2"
+              style={{ background: "var(--sf2)", color: "var(--tx2)" }}
+              aria-label="Hướng dẫn sử dụng mstudo"
+              title="Hướng dẫn sử dụng mstudo"
+            >
+              <CircleHelp size={15} />
+            </button>
             <button
               type="button"
               onClick={hide}
