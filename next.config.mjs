@@ -135,7 +135,9 @@ const nextConfig = {
       // Ảnh/nhạc đến từ nguồn tuỳ studio nhập → cho phép mọi https + data/blob.
       "img-src 'self' data: blob: https:",
       "media-src 'self' data: blob: https:",
-      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google.com https://*.googleapis.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com",
+      // *.googleusercontent.com: quét khuôn mặt tải byte ảnh thẳng từ CDN Google
+      // (@/lib/face-embed-browser) — thiếu là âm thầm lùi về đường qua Vercel.
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.google.com https://*.googleapis.com https://*.googleusercontent.com https://apis.google.com https://accounts.google.com https://challenges.cloudflare.com",
       "frame-src 'self' https://www.youtube.com https://youtube.com https://player.vimeo.com https://drive.google.com https://docs.google.com https://accounts.google.com https://content.googleapis.com https://challenges.cloudflare.com https://*.google.com",
       "worker-src 'self' blob:",
       "manifest-src 'self'",

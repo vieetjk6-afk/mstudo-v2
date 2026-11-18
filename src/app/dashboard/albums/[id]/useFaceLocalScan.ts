@@ -24,6 +24,8 @@ export type FaceScanView = {
   hongTam: number;
   loi: string | null;
   backend: string | null;
+  /** Ảnh tải thẳng từ Google / qua máy chủ trong phiên quét này. */
+  tai?: { thang: number; mayChu: number } | null;
 };
 
 export function useFaceLocalScan(albumId: string): FaceScanView & { batDau: () => void; tamDung: () => void } {
@@ -74,6 +76,7 @@ export function useFaceLocalScan(albumId: string): FaceScanView & { batDau: () =
             if (p.dang !== undefined) n.dang = p.dang;
             if (p.hongTam !== undefined) n.hongTam = p.hongTam;
             if (p.status) n.status = p.status;
+            if (p.tai) n.tai = p.tai;
             if (p.conLai !== undefined && n.status) n.status = { ...n.status, conLai: p.conLai, daQuet: Math.max(0, n.status.tong - p.conLai) };
             return n;
           }),

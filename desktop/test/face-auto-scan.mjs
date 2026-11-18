@@ -63,8 +63,8 @@ const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const ALBUMS = { A1: [1, 2, 99], A2: [3], G1: [] };
 
 /** Gắn API giả vào một trang; trả về sổ ghi những gì trang đã gọi. */
-async function giaLap(page) {
-  const so = { hangDoi: 0, ketQua: [], gom: [], nhatKy: [] };
+async function giaLap(page, { googleCors = false } = {}) {
+  const so = { hangDoi: 0, ketQua: [], gom: [], nhatKy: [], quaVercel: 0, thangGoogle: 0 };
   const t0 = Date.now();
   const ghi = (m) => so.nhatKy.push(`${((Date.now() - t0) / 1000).toFixed(1)}s ${m}`);
   page.on("console", (m) => ghi(`console.${m.type()}: ${m.text().slice(0, 160)}`));
@@ -103,8 +103,20 @@ async function giaLap(page) {
     }
     return r.fulfill({ json: { ok: true, daGhi: body.ketQua.length, khuonMat: 0, boQuaDaQuet: 0, conLai: conLai().length, xong: conLai().length === 0 } });
   });
+  // CDN Google: `googleCors` = Google có gửi header cho đọc chéo miền không.
+  await page.route("https://lh3.googleusercontent.com/**", (r) => {
+    const n = Number(r.request().url().match(/\/d\/d(\d+)=/)?.[1]);
+    so.thangGoogle++;
+    ghi(`google ${n}`);
+    // Không đặt gì thì Playwright TỰ THÊM header cho phép → phải nói rõ "chỉ cho
+    // miền khác" để trình duyệt chặn thật, như Google không gửi CORS.
+    const cors = { "Access-Control-Allow-Origin": googleCors ? "*" : "https://mien-khac.example" };
+    if (n === 99) return r.fulfill({ status: 404, headers: cors, body: "not found" });
+    return r.fulfill({ status: 200, contentType: "image/jpeg", headers: cors, body: readFileSync(join(DEMO, `sample${n}.jpg`)) });
+  });
   await page.route("**/api/img?*", (r) => {
     const n = Number(new URL(r.request().url()).searchParams.get("id").slice(1));
+    so.quaVercel++;
     ghi(`ảnh ${n}`);
     if (n === 99) return r.fulfill({ status: 404, body: "not found" });
     return r.fulfill({ status: 200, contentType: "image/jpeg", body: readFileSync(join(DEMO, `sample${n}.jpg`)) });
@@ -118,7 +130,7 @@ async function giaLap(page) {
   const page = await ctx.newPage();
   const errs = [];
   page.on("pageerror", (e) => errs.push(String(e).split("\n")[0]));
-  const so = await giaLap(page);
+  const so = await giaLap(page, { googleCors: true });
   await page.goto(`${BASE}/uipreview/tu-quet-mat-that`, { waitUntil: "domcontentloaded", timeout: 90_000 });
   let thay = "";
   try {
@@ -141,6 +153,7 @@ async function giaLap(page) {
   ok("album đã quét mà chưa gom → được gom lại", so.gom.includes("G1"));
   ok("báo đã xong 3 album", /Đã quét xong khuôn mặt 3 album/.test(thay), thay.replace(/\s+/g, " ").slice(-300));
   ok("không lỗi JavaScript", errs.length === 0, errs.join(" | "));
+  ok(`Google cho đọc chéo miền → ảnh quét KHÔNG đi qua Vercel (Google ${so.thangGoogle}, Vercel ${so.quaVercel} — chỉ ảnh 404 được hỏi lại máy chủ)`, so.thangGoogle >= 4 && so.quaVercel === 1);
   if (fail) console.log(so.nhatKy.filter((l) => !/HMR|React DevTools/.test(l)).join("\n"));
 
   /* ── 3. Tắt trên máy này → lần sau không hỏi gì ───────────────────────────── */
@@ -149,6 +162,26 @@ async function giaLap(page) {
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.waitForTimeout(2_500);
   ok("đã tắt trên máy này → không hỏi hàng đợi nữa", so.hangDoi === truoc);
+  await ctx.close();
+}
+
+/* ── 2b. Google CHẶN đọc chéo miền → tự lùi về đường cũ qua máy chủ ─────────── */
+{
+  const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: 1280, height: 800 } });
+  const page = await ctx.newPage();
+  const so = await giaLap(page, { googleCors: false });
+  await page.goto(`${BASE}/uipreview/tu-quet-mat-that`, { waitUntil: "domcontentloaded", timeout: 90_000 });
+  let thay = "";
+  try {
+    await page.waitForFunction(() => /Đã quét xong khuôn mặt/.test(document.body.innerText), null, { timeout: 420_000, polling: 500 });
+    thay = await page.innerText("body");
+  } catch {
+    thay = await page.innerText("body").catch(() => "");
+  }
+  const theoAnh = new Map(so.ketQua.map((k) => [k.photoId, k]));
+  ok("Google chặn CORS → vẫn quét đủ 4 ảnh qua máy chủ, có khuôn mặt", theoAnh.size === 4 && (theoAnh.get(uuid(1))?.faces?.length ?? 0) > 0, `${theoAnh.size} ảnh`);
+  ok(`…và thôi thử Google sau vài lần hỏng (Google ${so.thangGoogle} lượt, Vercel ${so.quaVercel})`, so.thangGoogle <= 3 && so.quaVercel >= 4);
+  ok("…vẫn báo xong", /Đã quét xong khuôn mặt/.test(thay));
   await ctx.close();
 }
 
