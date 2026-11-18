@@ -72,6 +72,7 @@
     "test:mini-session-pg": "node desktop/test/mini-session-pg.mjs",
     "test:face-local": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/face-local.mjs",
     "test:face-embed-browser": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/face-embed-browser.mjs",
+    "test:face-auto-scan": "node desktop/test/face-auto-scan.mjs",
     "test:system-runs": "node --experimental-strip-types desktop/test/system-runs.mjs",
     "test:he-thong-van-hanh-pg": "node desktop/test/he-thong-van-hanh-pg.mjs",
     "test:branches": "node --experimental-strip-types desktop/test/branches.mjs",

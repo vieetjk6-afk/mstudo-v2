@@ -10,6 +10,7 @@ import TrialExpiredBanner from "@/components/TrialExpiredBanner";
 import AnnouncementPopup from "@/components/AnnouncementPopup";
 import ProductTour from "@/components/ProductTour";
 import ActivityPing from "@/components/ActivityPing";
+import FaceAutoScan from "@/components/v2/FaceAutoScan";
 import MaintenanceScreen from "@/components/MaintenanceScreen";
 import {
   MAINTENANCE_REASON,
@@ -17,7 +18,7 @@ import {
   MAINTENANCE_UNTIL_LABEL,
   maintenanceActive,
 } from "@/lib/maintenance";
-import { effectivePlan, planProfilePatch, studioTier } from "@/lib/plans";
+import { effectivePlan, planAllowsFaceSearch, planProfilePatch, studioTier } from "@/lib/plans";
 import { getFeatureFlags, comingSoonNav, desktopHidden } from "@/lib/feature-flags";
 import { BRANCH_COOKIE, getBranchScope } from "@/lib/branches";
 import type { ChromeProfile, Profile } from "@/lib/types";
@@ -167,6 +168,12 @@ on conflict (id) do update set role='admin', is_active=true;`}
   const actingRole = profile.studio_owner_id
     ? (profile.studio_role ?? "staff")
     : profile.role === "admin" ? "admin" : "owner";
+  // Tự quét khuôn mặt trên máy studio khi đang mở dashboard: chỉ giao diện mới,
+  // chỉ CHỦ tài khoản (album thuộc chủ; nhân viên không có album riêng), chỉ gói
+  // có tìm theo khuôn mặt. Xem @/components/v2/FaceAutoScan.
+  const tuQuetMat =
+    !profile.studio_owner_id &&
+    planAllowsFaceSearch(effectivePlan(profile.plan, profile.plan_expires_at), profile.role === "admin");
 
   // Hai truy vấn này KHÔNG phụ thuộc nhau — chạy song song, vì layout dựng lại ở
   // MỌI lần chuyển màn trong khu quản lý nên một round-trip thừa là thừa ở khắp
@@ -219,6 +226,7 @@ on conflict (id) do update set role='admin', is_active=true;`}
         navPins={navPins}
       >
         {children}
+        {ui.active && tuQuetMat && <FaceAutoScan />}
       </DashboardChrome>
       <AnnouncementPopup />
       <ProductTour />

@@ -9,7 +9,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { kiemLoKetQua, laDescriptorHopLe, laLoiVinhVien, LO_TOI_DA, MAX_FACES } from "../../src/lib/face-scan-core.ts";
-import { gomNeuCan, layViecQuet, nhanLoKetQua } from "../../src/lib/face-local-server.ts";
+import { albumChoQuetCuaChu, gomNeuCan, layViecQuet, nhanLoKetQua } from "../../src/lib/face-local-server.ts";
 import { tienDoNoiVoiKhach } from "../../src/lib/face-pending.ts";
 import { nearestPerson } from "../../src/lib/face-group.ts";
 
@@ -50,8 +50,8 @@ const face = (at, seed = 1) => ({ at, box: [0.1, 0.2, 0.3, 0.4], descriptor: vec
 }
 
 /* ── Database giả (PostgREST tối thiểu) ──────────────────────────────────── */
-function fakeDb({ photos, clusteredAt = null, giuMoc = true }) {
-  const t = { photos, album_faces: [], album_people: [], album_photo_people: [], albums: [{ id: "A", faces_clustered_at: clusteredAt }] };
+function fakeDb({ photos, clusteredAt = null, giuMoc = true, albums = null }) {
+  const t = { photos, album_faces: [], album_people: [], album_photo_people: [], albums: albums ?? [{ id: "A", faces_clustered_at: clusteredAt }] };
   const stats = { docFaces: 0 };
   const from = (table) => {
     const f = [];
@@ -211,11 +211,49 @@ const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_
     }
   };
   di("src/app/api/albums/[id]/face-local/route.ts");
+  di("src/app/api/face-local/hang-doi/route.ts");
   ok(`route face-local và mọi file nó nhập (${seen.size}) không chạm TensorFlow / face-node`, cam.length === 0 && seen.size > 5, cam.join(", "));
   const cron = readFileSync("src/app/api/cron/face-scan/route.ts", "utf8");
   ok("cron dừng trước khi quét khi máy chủ không được bật", /!faceServerScanEnabled\(\)/.test(cron));
   const scan = readFileSync("src/app/api/albums/[id]/face-scan/route.ts", "utf8");
   ok("nút quét máy chủ nói rõ chỗ quét mới thay vì chạy", /quet_may_chu_tat/.test(scan) && scan.indexOf("quet_may_chu_tat") < scan.indexOf("await scanAlbum("));
+}
+
+/* ── 8. Hàng đợi của bộ TỰ QUÉT nền khi studio mở dashboard ──────────────── */
+{
+  const al = (id, owner, title) => ({ id, owner_id: owner, title, faces_clustered_at: null });
+  const p = (n, album, over = {}) => ({ ...anh(n), album_id: album, ...over });
+  // 12 album của chủ U (để vượt một nhóm 8), 1 album của chủ khác.
+  const albums = [...Array.from({ length: 12 }, (_, i) => al(`U${i}`, "U", `Album ${i}`)), al("X0", "X", "Của người khác")];
+  const photos = [
+    p(1, "U0"), p(2, "U0"), p(3, "U0", { faces_scanned_at: "2026-01-01T00:00:00Z" }),
+    p(4, "U3", { is_video: true }), p(5, "U3", { drive_file_id: "" }),
+    p(6, "U10"),
+    p(7, "X0"),
+    p(8, "U5", { faces_scanned_at: "2026-01-01T00:00:00Z" }),
+  ];
+  const db = fakeDb({ photos, albums });
+  const h = await albumChoQuetCuaChu(db, "U");
+  check("chỉ album CỦA CHỦ còn ảnh chờ thật (bỏ video, ảnh thiếu drive_file_id, ảnh đã quét)", h.map((a) => [a.id, a.conLai]), [["U0", 2], ["U10", 1]]);
+  ok("có tên album để hiện trên ô tiến độ", h[0].ten === "Album 0");
+  check("giới hạn số album mỗi lượt", (await albumChoQuetCuaChu(db, "U", 1)).map((a) => a.id), ["U0"]);
+  const xong = fakeDb({ photos: [p(9, "U1", { faces_scanned_at: "2026-01-01T00:00:00Z" })], albums });
+  check("không còn gì → danh sách rỗng", await albumChoQuetCuaChu(xong, "U"), []);
+  check("chủ không có album → rỗng", await albumChoQuetCuaChu(db, "khong-ai"), []);
+}
+
+/* ── 9. Bộ tự quét nền: các luật không được trôi ─────────────────────────── */
+{
+  const src = readFileSync("src/components/v2/FaceAutoScan.tsx", "utf8");
+  ok("không tự quét trên điện thoại / máy ít RAM / tiết kiệm dữ liệu", /pointer: coarse/.test(src) && /deviceMemory/.test(src) && /saveData/.test(src));
+  ok("chỉ một tab quét: Web Locks XẾP HÀNG (không ifAvailable — tab sau phải tiếp quản được)", /locks\.request\(KHOA_TAB, \{ signal: phien\.signal \}/.test(src) && !/ifAvailable/.test(src));
+  ok("nhường khi studio bấm quét tay", /nghePhaiNhuong/.test(src) && /dangQuetTay\(\)/.test(src));
+  ok("có nút tạm dừng và tắt trên máy này", /Tạm dừng/.test(src) && /Tắt tự quét trên máy này/.test(src));
+  const sw = readFileSync("public/sw.js", "utf8");
+  const embed = readFileSync("src/lib/face-embed-browser.ts", "utf8");
+  ok("ảnh tải để quét (&quet=1) đi thẳng mạng, không chiếm bộ nhớ đệm ảnh của service worker", /&quet=1/.test(embed) && /searchParams\.get\("quet"\) === "1"\) return;/.test(sw) && sw.indexOf('"quet"') < sw.indexOf("respondWith(imageFirst(req))"));
+  const layout = readFileSync("src/app/dashboard/layout.tsx", "utf8");
+  ok("chỉ gắn ở giao diện mới, chỉ chủ tài khoản đủ gói", /ui\.active && tuQuetMat && <FaceAutoScan \/>/.test(layout) && /!profile\.studio_owner_id/.test(layout) && /planAllowsFaceSearch\(/.test(layout));
 }
 
 console.log(fail === 0 ? "\nTẤT CẢ ĐẠT" : `\n${fail} lỗi`);
