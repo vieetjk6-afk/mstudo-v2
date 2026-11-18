@@ -3,6 +3,7 @@
 import { apDungLocCanQuet, apDungLocConQuet } from "./face-can-quet";
 import { GOM_LAI_SAU_MS, ghiKetQuaQuet, veHangDoiGomNeuCan } from "./face-ghi";
 import { clusterAlbum, ghiNguoi } from "./face-gom";
+import { daDonKhuonMat } from "./face-don";
 import { kiemLoKetQua } from "./face-scan-core";
 
 /**
@@ -35,6 +36,9 @@ async function canGomKhong(db: any, albumId: string, daQuet: number): Promise<{ 
   if (error) throw new Error(`doc_album_that_bai: ${error.message}`);
   const lanCuoi = al?.faces_clustered_at ? Date.parse(al.faces_clustered_at as string) : null;
   if (daQuet === 0) return { can: false, lanCuoi };
+  // Album đã dọn vector (face-don.ts): không gom được nữa — đừng để máy studio
+  // đọc cả bảng khuôn mặt về rồi mới bị từ chối lúc ghi.
+  if (await daDonKhuonMat(db, albumId)) return { can: false, lanCuoi };
   if (lanCuoi === null || !Number.isFinite(lanCuoi)) return { can: true, lanCuoi: null };
   /*
    * Mốc gom còn đó không có nghĩa là không còn gì để gom: mẻ CUỐI của album có
