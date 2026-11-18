@@ -117,6 +117,16 @@ export function FaceScanCardView({ v, onStart, onPause }: { v: FaceScanView; onS
             ) : null}
           </div>
 
+          {v.tai && v.tai.thang + v.tai.mayChu > 0 ? (
+            <p className="text-[12px]" style={{ color: "var(--tx3)" }} data-testid="face-scan-nguon-anh">
+              {v.tai.mayChu === 0
+                ? `Ảnh quét tải thẳng từ Google (${v.tai.thang.toLocaleString("vi-VN")} ảnh) — không tốn lưu lượng máy chủ.`
+                : v.tai.thang === 0
+                  ? `Ảnh quét đi qua máy chủ (${v.tai.mayChu.toLocaleString("vi-VN")} ảnh) — Google không cho tải thẳng từ trình duyệt.`
+                  : `Ảnh quét: ${v.tai.thang.toLocaleString("vi-VN")} tải thẳng từ Google, ${v.tai.mayChu.toLocaleString("vi-VN")} qua máy chủ.`}
+            </p>
+          ) : null}
+
           <TuQuetGhiChu />
 
           {st?.mayChuQuet ? (

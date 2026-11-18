@@ -75,6 +75,17 @@ export function coverImageUrl(fileId: string): string {
   return proxyImageUrl(fileId, 800);
 }
 
+/**
+ * Địa chỉ CDN Google để trình duyệt TỰ TẢI BYTE ảnh (quét khuôn mặt) — không đi
+ * qua Vercel. Đúng địa chỉ /api/img?raw=1 lấy ở máy chủ (lh3 trước tiên), nên
+ * byte nhận được y hệt. null khi đã tắt ảnh trỏ thẳng (NEXT_PUBLIC_IMG_DIRECT=0).
+ * Google có cho đọc chéo miền (CORS) hay không thì người gọi phải tự thử và lùi
+ * về rawImageUrl — xem taiAnhQuet trong @/lib/face-embed-browser.
+ */
+export function directBytesUrl(fileId: string, width: number): string | null {
+  return IMG_DIRECT ? googleImageUrl(fileId, width) : null;
+}
+
 function googleImageUrl(fileId: string, width: number): string {
   return `https://lh3.googleusercontent.com/d/${fileId}=w${Math.round(Math.min(Math.max(width, 16), 4096))}`;
 }

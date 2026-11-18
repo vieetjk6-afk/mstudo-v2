@@ -38,6 +38,8 @@ export type QuetPatch = {
   status?: FaceScanStatus;
   /** Chỉ báo số còn lại sau một lô gửi thành công (không đọc lại cả trạng thái). */
   conLai?: number;
+  /** Ảnh tải thẳng từ Google / phải đi qua máy chủ trong phiên này. */
+  tai?: { thang: number; mayChu: number };
 };
 
 /** Mẻ gửi đầu nhỏ (như FIRST_CHUNK của máy chủ) để "ghi không ăn" lộ ra sớm. */
@@ -201,6 +203,8 @@ export async function quetAlbum(
           }
         }
         lienTiep = 0;
+        const tk = embed.thongKeTaiAnh();
+        patch({ tai: { thang: tk.thang, mayChu: tk.mayChu } });
         if (buf.length >= (daGui ? LO_THUONG : LO_DAU) && !(await gui())) break vong;
         // Trần 10 giây: một tấm bất thường (máy vừa ngủ dậy…) không được treo cả vòng.
         const nghi = Math.max(nghiMs, Math.min(10_000, lamMs * tiLeNghi));

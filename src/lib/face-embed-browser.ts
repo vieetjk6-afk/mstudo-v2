@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { rawImageUrl } from "./drive";
+import { directBytesUrl, rawImageUrl } from "./drive";
 import { quetRgba, SCAN_WIDTH, type ScannedFace } from "./face-scan-core";
 
 /**
@@ -142,33 +142,79 @@ export async function scanJpegBrowser(bytes: Uint8Array): Promise<ScannedFace[]>
 /** Kết quả tải một thumbnail — cùng bộ lý do với `fetchThumbChiTiet` của máy chủ. */
 export type KetQuaTaiAnh = { bytes: Uint8Array; lyDo: null } | { bytes: null; lyDo: string };
 
+/* ── Tải THẲNG từ Google trước, lùi về máy chủ của app ─────────────────────────
+   Mỗi ảnh quét (~100 KB) trước đây đi qua /api/img?raw=1, tức là qua Vercel:
+   album 6.000 ảnh ≈ 0,5–0,9 GB lưu lượng Vercel cho MỘT lần quét. Trình duyệt
+   tải thẳng đúng địa chỉ lh3 mà máy chủ vẫn lấy → byte y hệt, Vercel tốn 0.
+   Google không cho đọc chéo miền (CORS) với ảnh nào / lúc nào thì ảnh đó đi
+   đường cũ; hỏng liên tiếp ngay từ đầu (Google chặn hẳn CORS) thì thôi thử
+   đường thẳng cho cả phiên — khỏi phí một lượt gọi mỗi ảnh. */
+const thongKe = { thang: 0, mayChu: 0, loiThang: 0 };
+let thangTat = false;
+/** Số ảnh đã tải theo từng đường trong phiên này (kiểm thử / chẩn đoán). */
+export function thongKeTaiAnh() {
+  return { ...thongKe, thangTat };
+}
+
+function docAnh(buf: Uint8Array, ct: string): KetQuaTaiAnh {
+  if (!ct.startsWith("image/")) return { bytes: null, lyDo: `khong-phai-anh (${ct.split(";")[0] || "khong co content-type"})` };
+  if (buf.length < 512) return { bytes: null, lyDo: `anh-giu-cho (${buf.length} byte)` };
+  if (!(buf[0] === 0xff && buf[1] === 0xd8)) return { bytes: null, lyDo: "khong-phai-jpeg" };
+  return { bytes: buf, lyDo: null };
+}
+
+async function taiCoHan(url: string, init: RequestInit, signal?: AbortSignal): Promise<Response> {
+  const ctrl = new AbortController();
+  const huy = () => ctrl.abort();
+  signal?.addEventListener("abort", huy);
+  const timer = setTimeout(huy, 20_000);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener("abort", huy);
+  }
+}
+
+/** Thử tải thẳng từ Google. null = không dùng được (lùi về máy chủ cho ảnh này). */
+async function taiThang(driveFileId: string, signal?: AbortSignal): Promise<Uint8Array | null> {
+  const url = thangTat ? null : directBytesUrl(driveFileId, SCAN_WIDTH);
+  if (!url) return null;
+  try {
+    // credentials: "omit" — ảnh công khai, và gửi cookie Google kèm request đọc
+    // chéo miền thì Google phải trả CORS chặt hơn (dễ bị chặn hơn).
+    const res = await taiCoHan(url, { mode: "cors", credentials: "omit" }, signal);
+    if (!res.ok) return null; // 403 (chưa chia sẻ công khai) / 404… → máy chủ quyết
+    const r = docAnh(new Uint8Array(await res.arrayBuffer()), res.headers.get("content-type") ?? "");
+    if (!r.bytes) return null; // ảnh giữ chỗ / không phải JPEG → đường cũ thử nguồn khác
+    thongKe.thang++;
+    return r.bytes;
+  } catch {
+    if (signal?.aborted) return null;
+    // TypeError ở đây gần như luôn là CORS bị chặn (hoặc mất mạng).
+    thongKe.loiThang++;
+    if (thongKe.thang === 0 && thongKe.loiThang >= 3) thangTat = true;
+    return null;
+  }
+}
+
 /**
- * Tải thumbnail một ảnh album, CÙNG NGUỒN (/api/img?raw=1) để đọc được byte —
- * Google không gửi header CORS. Cùng bề rộng với bộ quét máy chủ.
+ * Tải thumbnail một ảnh album để quét. THẲNG từ Google nếu được (không tốn
+ * Vercel), không thì qua /api/img?raw=1 như cũ. Cùng bề rộng với bộ quét máy chủ.
  */
 export async function taiAnhQuet(driveFileId: string, signal?: AbortSignal): Promise<KetQuaTaiAnh> {
+  const thang = await taiThang(driveFileId, signal);
+  if (thang) return { bytes: thang, lyDo: null };
+  if (signal?.aborted) return { bytes: null, lyDo: "da-dung" };
   try {
-    const ctrl = new AbortController();
-    const huy = () => ctrl.abort();
-    signal?.addEventListener("abort", huy);
-    const timer = setTimeout(huy, 20_000);
-    let res: Response;
-    try {
-      // `&quet=1`: service worker (public/sw.js) để request này đi thẳng mạng,
-      // KHÔNG giữ vào bộ nhớ đệm ảnh — ảnh quét chỉ dùng một lần, giữ lại thì
-      // quét vài nghìn tấm là đẩy hết ảnh studio / khách vừa xem ra khỏi đệm.
-      res = await fetch(`${rawImageUrl(driveFileId, SCAN_WIDTH)}&quet=1`, { signal: ctrl.signal, credentials: "same-origin" });
-    } finally {
-      clearTimeout(timer);
-      signal?.removeEventListener("abort", huy);
-    }
-    const ct = res.headers.get("content-type") ?? "";
+    // `&quet=1`: service worker (public/sw.js) để request này đi thẳng mạng,
+    // KHÔNG giữ vào bộ nhớ đệm ảnh — ảnh quét chỉ dùng một lần, giữ lại thì
+    // quét vài nghìn tấm là đẩy hết ảnh studio / khách vừa xem ra khỏi đệm.
+    const res = await taiCoHan(`${rawImageUrl(driveFileId, SCAN_WIDTH)}&quet=1`, { credentials: "same-origin" }, signal);
     if (!res.ok) return { bytes: null, lyDo: `http-${res.status}` };
-    if (!ct.startsWith("image/")) return { bytes: null, lyDo: `khong-phai-anh (${ct.split(";")[0] || "khong co content-type"})` };
-    const buf = new Uint8Array(await res.arrayBuffer());
-    if (buf.length < 512) return { bytes: null, lyDo: `anh-giu-cho (${buf.length} byte)` };
-    if (!(buf[0] === 0xff && buf[1] === 0xd8)) return { bytes: null, lyDo: "khong-phai-jpeg" };
-    return { bytes: buf, lyDo: null };
+    const r = docAnh(new Uint8Array(await res.arrayBuffer()), res.headers.get("content-type") ?? "");
+    if (r.bytes) thongKe.mayChu++;
+    return r;
   } catch (e) {
     if (signal?.aborted) return { bytes: null, lyDo: "da-dung" };
     return { bytes: null, lyDo: e instanceof Error && e.name === "AbortError" ? "het-gio (20s)" : `mang-loi: ${e instanceof Error ? e.message : String(e)}` };
