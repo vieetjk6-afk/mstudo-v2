@@ -16,7 +16,9 @@
  *   node --experimental-strip-types scripts/do-luu-luong-vercel.mjs --file mau.jsonl   # đọc file thay API (kiểm thử)
  */
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { docFocus, ngayUtc } from "../src/lib/luu-luong-rules.ts";
 import { pgEnv, tachUrl } from "./pg-url.mjs";
 
@@ -43,13 +45,22 @@ if (!ket) {
 const env = pgEnv(ket, "mstudo-luu-luong");
 const che = (s) => (ket.password ? String(s).split(ket.password).join("***") : String(s));
 
+/**
+ * Chạy SQL qua FILE (psql -f), không qua `-c`: số liệu hai tháng là hàng trăm
+ * dòng, câu lệnh dài quá giới hạn dòng lệnh của hệ điều hành (E2BIG) và psql
+ * không chạy nổi — lần chạy thật đầu tiên đã hỏng đúng như vậy, không một dòng lỗi.
+ */
 function psql(sql) {
-  const r = spawnSync("psql", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-1", "-c", sql], { env, encoding: "utf8", timeout: 60_000 });
+  const tam = mkdtempSync(join(tmpdir(), "mstudo-ll-"));
+  const f = join(tam, "ghi.sql");
+  writeFileSync(f, sql);
+  const r = spawnSync("psql", ["-X", "-q", "-v", "ON_ERROR_STOP=1", "-1", "-f", f], { env, encoding: "utf8", timeout: 120_000 });
+  rmSync(tam, { recursive: true, force: true });
   if (r.error?.code === "ENOENT") {
     console.error("✗ Không có lệnh psql.");
     process.exit(1);
   }
-  return { ok: r.status === 0, err: che(r.stderr || "") };
+  return { ok: r.status === 0, err: che((r.stderr || "") + (r.error ? `\n${r.error.message}` : "")) };
 }
 const lit = (v) => (v == null ? "null" : typeof v === "number" ? (Number.isFinite(v) ? String(v) : "0") : `'${String(v).replace(/'/g, "''")}'`);
 
