@@ -60,7 +60,7 @@ try {
 
 const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 /** Hai album: A1 có 2 ảnh người thật + 1 ảnh 404; A2 có 1 ảnh. */
-const ALBUMS = { A1: [1, 2, 99], A2: [3] };
+const ALBUMS = { A1: [1, 2, 99], A2: [3], G1: [] };
 
 /** Gắn API giả vào một trang; trả về sổ ghi những gì trang đã gọi. */
 async function giaLap(page) {
@@ -75,11 +75,13 @@ async function giaLap(page) {
     ghi("hàng đợi");
     const albums = Object.entries(ALBUMS)
       .map(([id, ps]) => ({ id, ten: `Album ${id}`, conLai: ps.filter((n) => !daQuet.has(n)).length }))
-      .filter((a) => a.conLai > 0);
+      .filter((a) => a.conLai > 0)
+      // Album đã quét hết nhưng lượt gom trước hỏng: chỉ cần gom lại.
+      .concat(so.gom.includes("G1") ? [] : [{ id: "G1", ten: "Album G1", conLai: 0, canGom: true }]);
     return r.fulfill({ json: { ok: true, albums } });
   });
-  await page.route(/\/api\/albums\/(A\d)\/face-local/, async (r) => {
-    const id = r.request().url().match(/albums\/(A\d)\//)[1];
+  await page.route(/\/api\/albums\/([AG]\d)\/face-local/, async (r) => {
+    const id = r.request().url().match(/albums\/([AG]\d)\//)[1];
     const ps = ALBUMS[id];
     const conLai = () => ps.filter((n) => !daQuet.has(n));
     ghi(`${r.request().method()} ${id} ${(r.request().postData() || "").slice(0, 60)}`);
@@ -87,7 +89,8 @@ async function giaLap(page) {
       // Như máy chủ thật: `?so=` bỏ qua ngần ấy tấm đầu (tấm vừa hỏng tạm).
       const so0 = Number(new URL(r.request().url()).searchParams.get("so") || 0);
       const anh = conLai().slice(so0).map((n) => ({ id: uuid(n), drive_file_id: `d${n}`, name: `anh${n}.jpg` }));
-      return r.fulfill({ json: { ok: true, mayChuQuet: false, tong: ps.length, daQuet: ps.length - anh.length, conLai: anh.length, nguoi: 0, canGom: false, anh } });
+      const canGom = id === "G1" && !so.gom.includes("G1");
+      return r.fulfill({ json: { ok: true, mayChuQuet: false, tong: ps.length || 50, daQuet: ps.length ? ps.length - anh.length : 50, conLai: anh.length, nguoi: 0, canGom, anh } });
     }
     const body = JSON.parse(r.request().postData() || "{}");
     if (body.gom) {
@@ -135,7 +138,8 @@ async function giaLap(page) {
   ok("mỗi khuôn mặt gửi đúng 128 số + khung 4 số", f && f.descriptor.length === 128 && f.box.length === 4);
   ok("ảnh 404 được báo bỏ qua vĩnh viễn, không làm dừng album", theoAnh.get(uuid(99))?.skip === "http-404");
   ok("gom từng album sau khi quét", so.gom.includes("A1") && so.gom.includes("A2"));
-  ok("báo đã quét xong 2 album", /Đã quét xong khuôn mặt 2 album/.test(thay), thay.replace(/\s+/g, " ").slice(-300));
+  ok("album đã quét mà chưa gom → được gom lại", so.gom.includes("G1"));
+  ok("báo đã xong 3 album", /Đã quét xong khuôn mặt 3 album/.test(thay), thay.replace(/\s+/g, " ").slice(-300));
   ok("không lỗi JavaScript", errs.length === 0, errs.join(" | "));
   if (fail) console.log(so.nhatKy.filter((l) => !/HMR|React DevTools/.test(l)).join("\n"));
 

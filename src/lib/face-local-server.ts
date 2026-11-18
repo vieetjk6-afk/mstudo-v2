@@ -149,7 +149,10 @@ export async function gomNeuCan(db: any, albumId: string): Promise<{ gom: boolea
 /** Tối đa ngần này album gần nhất của studio được xét cho bộ tự quét nền. */
 export const HANG_DOI_XET = 200;
 
-export type AlbumChoQuet = { id: string; ten: string; conLai: number };
+export type AlbumChoQuet = { id: string; ten: string; conLai: number; /** Quét hết rồi, chỉ còn thiếu bước gom. */ canGom?: boolean };
+
+/** Ngần này album mới nhất được xét thêm "đã quét mà chưa gom". */
+export const XET_CHUA_GOM = 20;
 
 /**
  * HÀNG ĐỢI CỦA BỘ TỰ QUÉT NỀN — album của MỘT chủ studio còn ảnh chưa quét.
@@ -178,8 +181,8 @@ export async function albumChoQuetCuaChu(db: any, ownerId: string, gioiHan = 10)
     if (e) throw new Error(`doc_anh_cho_that_bai: ${e.message}`);
     return (d ?? []).length > 0;
   };
-  if (!(await conViec(rows.map((r) => r.id)))) return [];
   const out: AlbumChoQuet[] = [];
+  if (!(await conViec(rows.map((r) => r.id)))) return themChuaGom(db, rows, out, gioiHan);
   for (let i = 0; i < rows.length && out.length < gioiHan; i += 8) {
     const lo = rows.slice(i, i + 8);
     if (rows.length > 8 && !(await conViec(lo.map((r) => r.id)))) continue;
@@ -191,6 +194,32 @@ export async function albumChoQuetCuaChu(db: any, ownerId: string, gioiHan = 10)
       }),
     );
     for (const a of dem) if (a.conLai > 0 && out.length < gioiHan) out.push(a);
+  }
+  return themChuaGom(db, rows, out, gioiHan);
+}
+
+/**
+ * Album ĐÃ QUÉT HẾT nhưng chưa gom (lượt gom trước hỏng / bị cắt giữa chừng):
+ * khách không thấy ô tìm khuôn mặt cho tới khi gom xong, nên bộ tự quét phải
+ * nhận cả những album này. Chỉ xét XET_CHUA_GOM album mới nhất, mỗi album một
+ * câu `limit(1)` — đúng câu hỏi `canGomKhong` dùng.
+ */
+async function themChuaGom(db: any, rows: { id: string; title: string | null }[], out: AlbumChoQuet[], gioiHan: number): Promise<AlbumChoQuet[]> {
+  const daCo = new Set(out.map((a) => a.id));
+  const xet = rows.filter((r) => !daCo.has(r.id)).slice(0, XET_CHUA_GOM);
+  for (let i = 0; i < xet.length && out.length < gioiHan; i += 8) {
+    const lo = xet.slice(i, i + 8);
+    const kq = await Promise.all(
+      lo.map(async (r) => {
+        try {
+          const st = await layViecQuet(db, r.id);
+          return st.conLai === 0 && st.canGom ? { id: r.id, ten: r.title || "Album", conLai: 0, canGom: true } : null;
+        } catch {
+          return null; // chưa chạy migration… — không chặn danh sách
+        }
+      }),
+    );
+    for (const a of kq) if (a && out.length < gioiHan) out.push(a);
   }
   return out;
 }

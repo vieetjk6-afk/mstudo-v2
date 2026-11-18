@@ -232,14 +232,26 @@ const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_
     p(7, "X0"),
     p(8, "U5", { faces_scanned_at: "2026-01-01T00:00:00Z" }),
   ];
-  const db = fakeDb({ photos, albums });
+  // Album đã quét XONG và ĐÃ gom sau lần quét cuối: không còn việc gì.
+  const daGom = (ds) => ds.map((a) => ({ ...a, faces_clustered_at: "2026-06-01T00:00:00Z" }));
+  const db = fakeDb({ photos, albums: daGom(albums) });
   const h = await albumChoQuetCuaChu(db, "U");
   check("chỉ album CỦA CHỦ còn ảnh chờ thật (bỏ video, ảnh thiếu drive_file_id, ảnh đã quét)", h.map((a) => [a.id, a.conLai]), [["U0", 2], ["U10", 1]]);
   ok("có tên album để hiện trên ô tiến độ", h[0].ten === "Album 0");
   check("giới hạn số album mỗi lượt", (await albumChoQuetCuaChu(db, "U", 1)).map((a) => a.id), ["U0"]);
-  const xong = fakeDb({ photos: [p(9, "U1", { faces_scanned_at: "2026-01-01T00:00:00Z" })], albums });
+  const xong = fakeDb({ photos: [p(9, "U1", { faces_scanned_at: "2026-01-01T00:00:00Z" })], albums: daGom(albums) });
   check("không còn gì → danh sách rỗng", await albumChoQuetCuaChu(xong, "U"), []);
   check("chủ không có album → rỗng", await albumChoQuetCuaChu(db, "khong-ai"), []);
+  // Album đã quét hết nhưng lượt gom trước hỏng (chưa có mốc gom) → vẫn vào hàng đợi.
+  const chuaGom = fakeDb({
+    photos: [p(20, "U2", { faces_scanned_at: "2026-02-01T00:00:00Z" }), p(21, "U4", { faces_scanned_at: "2026-02-01T00:00:00Z" })],
+    albums: albums.map((a) => (a.id === "U4" ? { ...a, faces_clustered_at: "2026-03-01T00:00:00Z" } : a)),
+  });
+  check(
+    "album đã quét mà CHƯA gom (lượt gom trước hỏng) vẫn vào hàng đợi; album đã gom sau lần quét cuối thì không",
+    await albumChoQuetCuaChu(chuaGom, "U"),
+    [{ id: "U2", ten: "Album 2", conLai: 0, canGom: true }],
+  );
 }
 
 /* ── 9. Bộ tự quét nền: các luật không được trôi ─────────────────────────── */

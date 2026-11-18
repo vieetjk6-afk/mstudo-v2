@@ -38,6 +38,7 @@ const TI_LE_NGHI = 1;
 export type AutoScanView =
   | { kieu: "nap"; ten: string; pct: number; thuTu: number; soAlbum: number }
   | { kieu: "quet"; ten: string; daQuet: number; tong: number; thuTu: number; soAlbum: number }
+  | { kieu: "gom"; ten: string; thuTu: number; soAlbum: number }
   | { kieu: "xong"; soAlbum: number }
   | { kieu: "tam-dung" };
 
@@ -84,7 +85,7 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Ch�
           await ngu(NHUONG_MS, phien.signal);
           continue;
         }
-        let albums: { id: string; ten: string; conLai: number }[] = [];
+        let albums: { id: string; ten: string; conLai: number; canGom?: boolean }[] = [];
         try {
           const r = await fetch("/api/face-local/hang-doi", { cache: "no-store" });
           const d = (await r.json().catch(() => ({}))) as { ok?: boolean; error?: string; albums?: typeof albums };
@@ -104,7 +105,7 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Ch�
           phien.signal.addEventListener("abort", huy, { once: true });
           let tong = a.conLai;
           let daQuet = 0;
-          setV({ kieu: "nap", ten: a.ten, pct: 0, thuTu: i + 1, soAlbum: albums.length });
+          setV(a.canGom ? { kieu: "gom", ten: a.ten, thuTu: i + 1, soAlbum: albums.length } : { kieu: "nap", ten: a.ten, pct: 0, thuTu: i + 1, soAlbum: albums.length });
           const chayMotLuot = () => quetAlbum(a.id, {
             signal: ctrl.signal,
             nghiMs: NGHI_MS,
@@ -117,7 +118,9 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Ch�
               if (p.conLai !== undefined) daQuet = Math.max(0, tong - p.conLai);
               if (p.phase === "nap" || p.napPct !== undefined) {
                 setV({ kieu: "nap", ten: a.ten, pct: p.napPct ?? 0, thuTu: i + 1, soAlbum: albums.length });
-              } else if (p.phase !== "gom") {
+              } else if (p.phase === "gom") {
+                setV({ kieu: "gom", ten: a.ten, thuTu: i + 1, soAlbum: albums.length });
+              } else if (p.phase === "quet" || p.dang !== undefined || p.conLai !== undefined) {
                 setV({ kieu: "quet", ten: a.ten, daQuet, tong, thuTu: i + 1, soAlbum: albums.length });
               }
             },
@@ -229,6 +232,14 @@ export function FaceAutoScanView({
               <p className="truncate" style={{ color: "var(--tx3, #6b7280)" }}>
                 {v.ten}
                 {v.soAlbum > 1 ? ` · album ${v.thuTu}/${v.soAlbum}` : ""}
+              </p>
+            </>
+          ) : v.kieu === "gom" ? (
+            <>
+              <p className="font-semibold">Đang gom khuôn mặt thành từng người…</p>
+              <p className="truncate" style={{ color: "var(--tx3, #6b7280)" }}>
+                {v.ten}
+                {v.soAlbum > 1 ? ` · album ${v.thuTu}/${v.soAlbum}` : ""} · album lớn có thể mất vài phút
               </p>
             </>
           ) : v.kieu === "xong" ? (

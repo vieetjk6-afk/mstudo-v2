@@ -10,7 +10,11 @@ import { gomNeuCan, layViecQuet, nhanLoKetQua } from "@/lib/face-local-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// 300 giây: lượt GOM của album cưới lớn (vài chục nghìn khuôn mặt) cần đọc hết
+// vector rồi so từng cặp — 60 giây thì bị cắt ngang giữa chừng và album không
+// bao giờ có "người" nào cho khách tìm. Lượt giao việc / nhận kết quả vẫn xong
+// trong vài trăm mili-giây; con số này chỉ là trần.
+export const maxDuration = 300;
 
 /**
  * QUÉT KHUÔN MẶT TRÊN MÁY STUDIO — phía máy chủ chỉ GIAO VIỆC và NHẬN KẾT QUẢ.
