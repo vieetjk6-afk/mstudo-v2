@@ -32,6 +32,7 @@
     "test:contract-album": "node --experimental-strip-types --import ./desktop/test/giai-duong-ts.mjs desktop/test/contract-album.mjs",
     "test:album-offline": "node --experimental-strip-types desktop/test/album-offline.mjs",
     "test:vapid-key": "node --experimental-strip-types desktop/test/vapid-key.mjs",
+    "test:pet": "node --experimental-strip-types desktop/test/pet.mjs",
     "test:push-mot-tin": "node --experimental-strip-types desktop/test/push-mot-tin-moi-nguoi.mjs",
     "test:safe-next": "node --experimental-strip-types desktop/test/safe-next.mjs",
     "test:youtube-music": "node --experimental-strip-types desktop/test/youtube-music.mjs",

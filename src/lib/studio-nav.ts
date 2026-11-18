@@ -5,7 +5,7 @@ import {
   Globe, SlidersHorizontal, Settings, Bell, UserCircle, Crown, Gift, Monitor,
   ShieldCheck, Plus, FilePlus2, CalendarRange, UserCog, FileSignature,
   MessageSquare, HardDrive, Archive, Link2, FolderTree, Paintbrush, CopyCheck,
-  Building2, UserRound, MessageCircle, Star, Truck, History, Ticket,
+  Building2, UserRound, MessageCircle, Star, Truck, History, Ticket, PawPrint,
   type LucideIcon,
 } from "lucide-react";
 
@@ -91,6 +91,7 @@ export const NAV_GROUPS: readonly NavGroup[] = [
     items: [
       { href: "/dashboard/studio", label: "Tổng quan", icon: LayoutDashboard, minTier: "booking", roles: EVERYONE, keywords: "trang chu dashboard", sub: "Toàn cảnh studio hôm nay" },
       { href: "/staff", label: "Trang của tôi", icon: UserRound, minTier: "booking", roles: EVERYONE, keywords: "cong nhan vien lich hom nay viec cua toi anh can sua", sub: "Lịch hôm nay & việc hậu kỳ của bạn" },
+      { href: "/dashboard/be-may-anh", label: "Bé Máy Ảnh", icon: PawPrint, minTier: "booking", roles: EVERYONE, keywords: "thu ao nuoi pet diem danh nhiem vu hang ngay game", sub: "Điểm danh mỗi ngày, nuôi bé lớn" },
     ],
   },
   {

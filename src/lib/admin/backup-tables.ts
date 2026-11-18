@@ -113,6 +113,9 @@ export const BACKUP_TABLES = [
   "system_polls",
   "system_poll_votes",
   "album_collage_events",
+  // Bé Máy Ảnh: mất pet_claims là mất cả XP lẫn chuỗi ngày của người dùng.
+  "pets",
+  "pet_claims",
 ] as const;
 
 export type BackupTable = (typeof BACKUP_TABLES)[number];
@@ -222,6 +225,8 @@ export const TABLE_ORDER_KEYS: Partial<Record<BackupTable, readonly string[]>> =
   studio_receipt_seq: ["owner_id", "year"],
   album_photo_people: ["person_id", "photo_id"],
   system_poll_votes: ["poll_id", "user_id"],
+  pets: ["user_id"],
+  pet_claims: ["user_id", "day", "task"],
 };
 
 export function orderKeysFor(table: string): readonly string[] {

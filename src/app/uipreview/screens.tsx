@@ -38,6 +38,7 @@ import LuoiAnhDemo from "./LuoiAnhDemo";
 import AlbumMaAnhDemo from "./AlbumMaAnhDemo";
 import ThiepDemo, { ThiepEditorDemo, ThiepIntroDemo } from "./ThiepDemo";
 import HopDongHangMucDemo from "./HopDongHangMucDemo";
+import { PetVuiDemo, PetBuonDemo, PetMoiDemo } from "./PetDemo";
 import { VoucherKhachDemo, DatLichVoucherDemo, TangVoucherDemo, VoucherQuanLyDemo, PortalVoucherDemo, PaidConfirmDemo } from "./VoucherDemo";
 import ContractEditor from "@/app/dashboard/studio/contracts/[id]/ContractEditor";
 import { PortalAlbumDemo } from "./PortalAlbumDemo";
@@ -520,6 +521,18 @@ export const SCREENS: Record<
         bank={f.bank}
       />
     ),
+  },
+  "be-may-anh": {
+    title: "Bé Máy Ảnh · đang chăm (12 ngày liền)",
+    render: () => <PetVuiDemo />,
+  },
+  "be-may-anh-buon": {
+    title: "Bé Máy Ảnh · bỏ bê 4 ngày",
+    render: () => <PetBuonDemo />,
+  },
+  "be-may-anh-moi": {
+    title: "Bé Máy Ảnh · tài khoản mới",
+    render: () => <PetMoiDemo />,
   },
   "voucher-khach": {
     title: "Voucher ưu đãi · trang khách (quét QR)",
