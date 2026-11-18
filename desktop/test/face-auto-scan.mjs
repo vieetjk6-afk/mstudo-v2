@@ -64,7 +64,7 @@ const ALBUMS = { A1: [1, 2, 99], A2: [3], G1: [] };
 
 /** Gắn API giả vào một trang; trả về sổ ghi những gì trang đã gọi. */
 async function giaLap(page, { googleCors = false } = {}) {
-  const so = { hangDoi: 0, ketQua: [], gom: [], nhatKy: [], quaVercel: 0, thangGoogle: 0 };
+  const so = { hangDoi: 0, ketQua: [], gom: [], nhatKy: [], quaVercel: 0, thangGoogle: 0, luuGom: [], docMat: 0 };
   const t0 = Date.now();
   const ghi = (m) => so.nhatKy.push(`${((Date.now() - t0) / 1000).toFixed(1)}s ${m}`);
   page.on("console", (m) => ghi(`console.${m.type()}: ${m.text().slice(0, 160)}`));
@@ -89,10 +89,16 @@ async function giaLap(page, { googleCors = false } = {}) {
       // Như máy chủ thật: `?so=` bỏ qua ngần ấy tấm đầu (tấm vừa hỏng tạm).
       const so0 = Number(new URL(r.request().url()).searchParams.get("so") || 0);
       const anh = conLai().slice(so0).map((n) => ({ id: uuid(n), drive_file_id: `d${n}`, name: `anh${n}.jpg` }));
-      const canGom = id === "G1" && !so.gom.includes("G1");
+      // Như máy chủ: quét hết mà có tấm quét sau lần gom cuối → cần gom.
+      const canGom = anh.length === 0 && !so.gom.includes(id) && (id === "G1" || ps.length > 0);
       return r.fulfill({ json: { ok: true, mayChuQuet: false, tong: ps.length || 50, daQuet: ps.length ? ps.length - anh.length : 50, conLai: anh.length, nguoi: 0, canGom, anh } });
     }
     const body = JSON.parse(r.request().postData() || "{}");
+    if (body.luuGom) {
+      so.luuGom.push({ album: id, nguoi: body.luuGom.nguoi });
+      so.gom.push(id);
+      return r.fulfill({ json: { ok: true, nguoi: body.luuGom.nguoi.length } });
+    }
     if (body.gom) {
       so.gom.push(id);
       return r.fulfill({ json: { ok: true, gom: true, nguoi: 2 } });
@@ -103,6 +109,21 @@ async function giaLap(page, { googleCors = false } = {}) {
     }
     return r.fulfill({ json: { ok: true, daGhi: body.ketQua.length, khuonMat: 0, boQuaDaQuet: 0, conLai: conLai().length, xong: conLai().length === 0 } });
   });
+  // Database (Supabase REST) — trình duyệt studio tự đọc khuôn mặt để GOM.
+  // Album G1: 3 người × 4 ảnh, vector quanh 3 tâm khác hẳn nhau.
+  await page.route(/supabase\.co\/rest\/v1\/album_faces/, (r) => {
+    so.docMat++;
+    const u = new URL(r.request().url());
+    const offset = Number(u.searchParams.get("offset") || 0);
+    if (!u.searchParams.get("album_id")?.includes("G1") || offset > 0) return r.fulfill({ json: [] });
+    const rows = [];
+    for (let k = 0; k < 3; k++)
+      for (let j = 0; j < 4; j++)
+        rows.push({ photo_id: uuid(200 + k * 10 + j), at: 0, box: [0.1, 0.1, 0.2, 0.2], descriptor: Array.from({ length: 128 }, (_, i) => (i % 3 === k ? 0.3 : 0) + Math.sin(i + j) * 0.002), sharpness: 100 });
+    return r.fulfill({ json: rows });
+  });
+  await page.route(/supabase\.co\/rest\/v1\/album_people/, (r) => r.fulfill({ json: [] }));
+
   // CDN Google: `googleCors` = Google có gửi header cho đọc chéo miền không.
   await page.route("https://lh3.googleusercontent.com/**", (r) => {
     const n = Number(r.request().url().match(/\/d\/d(\d+)=/)?.[1]);
@@ -151,6 +172,9 @@ async function giaLap(page, { googleCors = false } = {}) {
   ok("ảnh 404 được báo bỏ qua vĩnh viễn, không làm dừng album", theoAnh.get(uuid(99))?.skip === "http-404");
   ok("gom từng album sau khi quét", so.gom.includes("A1") && so.gom.includes("A2"));
   ok("album đã quét mà chưa gom → được gom lại", so.gom.includes("G1"));
+  const g1 = so.luuGom.find((x) => x.album === "G1");
+  ok(`gom NGAY TRÊN MÁY (Web Worker): đọc khuôn mặt từ database, ra 3 người × 4 ảnh (${g1 ? g1.nguoi.map((p) => p.anh.length).join(",") : "không gửi"})`, so.docMat >= 1 && !!g1 && g1.nguoi.length === 3 && g1.nguoi.every((p) => p.anh.length === 4 && p.descriptor.length === 128));
+  ok("album đã quét xong chỉ còn gom → KHÔNG gọi gom trên máy chủ", !so.nhatKy.some((l) => /POST [AG]\d \{"gom":true/.test(l)));
   ok("báo đã xong 3 album", /Đã quét xong khuôn mặt 3 album/.test(thay), thay.replace(/\s+/g, " ").slice(-300));
   ok("không lỗi JavaScript", errs.length === 0, errs.join(" | "));
   ok(`Google cho đọc chéo miền → ảnh quét KHÔNG đi qua Vercel (Google ${so.thangGoogle}, Vercel ${so.quaVercel} — chỉ ảnh 404 được hỏi lại máy chủ)`, so.thangGoogle >= 4 && so.quaVercel === 1);

@@ -6,7 +6,8 @@ import { rateLimit } from "@/lib/rate-limit";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 import { faceServerScanEnabled } from "@/lib/plans";
 import { THAN_TOI_DA } from "@/lib/face-scan-core";
-import { gomNeuCan, layViecQuet, nhanLoKetQua } from "@/lib/face-local-server";
+import { revalidateAlbumData } from "@/lib/album-data-cache";
+import { gomNeuCan, layViecQuet, nhanKetQuaGom, nhanLoKetQua, THAN_GOM_TOI_DA } from "@/lib/face-local-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,7 +22,8 @@ export const maxDuration = 300;
  *
  *   GET            → tiến độ + một trang ảnh còn phải quét (id, drive_file_id, name)
  *   POST {ketQua}  → nhận một lô kết quả, ghi album_faces + mốc photos
- *   POST {gom}     → gom nhóm (phép tính vector thuần) khi cần
+ *   POST {gom}     → gom nhóm TRÊN MÁY CHỦ (đường cũ; album lớn dễ quá giờ)
+ *   POST {luuGom}  → nhận kết quả gom máy studio đã tính, kiểm rồi ghi
  *
  * KHÔNG nhập @/lib/face-node / face-scan-server: route này không được kéo theo
  * TensorFlow (desktop/test/face-local.mjs canh điều đó). Luật nằm ở
@@ -71,12 +73,14 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
   if ("loi" in cua) return cua.loi;
   if (!rateLimit(`face-local-post:${cua.userId}`, 240, 60_000)) return NextResponse.json({ error: "rate_limited" }, { status: 429 });
 
-  // Chặn theo Content-Length TRƯỚC khi đọc, rồi kiểm lại độ dài thật.
-  if (Number(req.headers.get("content-length") ?? 0) > THAN_TOI_DA) return NextResponse.json({ ok: false, error: "than_qua_lon" }, { status: 413 });
-  let body: { ketQua?: unknown; gom?: unknown };
+  // Chặn theo Content-Length TRƯỚC khi đọc, rồi kiểm lại độ dài thật. Kết quả
+  // gom ({luuGom}: danh sách ảnh của từng người) lớn hơn một lô quét nên có trần riêng.
+  const tran = Math.max(THAN_TOI_DA, THAN_GOM_TOI_DA);
+  if (Number(req.headers.get("content-length") ?? 0) > tran) return NextResponse.json({ ok: false, error: "than_qua_lon" }, { status: 413 });
+  let body: { ketQua?: unknown; gom?: unknown; luuGom?: unknown };
   try {
     const text = await req.text();
-    if (text.length > THAN_TOI_DA) return NextResponse.json({ ok: false, error: "than_qua_lon" }, { status: 413 });
+    if (text.length > tran) return NextResponse.json({ ok: false, error: "than_qua_lon" }, { status: 413 });
     body = JSON.parse(text);
   } catch {
     return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
@@ -84,6 +88,12 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
 
   try {
     if (body?.gom === true) return NextResponse.json({ ok: true, ...(await gomNeuCan(cua.db, id)) });
+    if (body?.luuGom !== undefined) {
+      const g = await nhanKetQuaGom(cua.db, id, body.luuGom);
+      if (g.ok) revalidateAlbumData(id);
+      return NextResponse.json(g, { status: g.ok ? 200 : 400 });
+    }
+    if (JSON.stringify(body?.ketQua ?? "").length > THAN_TOI_DA) return NextResponse.json({ ok: false, error: "than_qua_lon" }, { status: 413 });
     const r = await nhanLoKetQua(cua.db, id, body?.ketQua);
     return NextResponse.json(r, { status: r.ok ? 200 : r.error === "ghi-khong-an" ? 200 : 400 });
   } catch (e) {

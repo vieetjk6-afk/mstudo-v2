@@ -60,21 +60,85 @@ export async function taiViecQuet(albumId: string, boQua = 0): Promise<ViecQuetT
   return d as ViecQuetTrang;
 }
 
-/** Gom nhóm nếu cần (máy chủ tự quyết theo luật 12 giờ). */
-export async function gomAlbum(albumId: string): Promise<{ ok?: boolean; nguoi?: number }> {
+type FaceRowTho = { photo_id: string; at: number; box: number[] | null; descriptor: number[] | string | null; sharpness: number | null };
+
+/** real[] của Postgres có thể về dạng chuỗi "{0.1,0.2,…}" — đổi về mảng số. */
+const veMang = (v: number[] | string | null): number[] | null =>
+  v == null ? null : Array.isArray(v) ? v : v.replace(/[{}]/g, "").split(",").filter(Boolean).map(Number);
+
+/** Chạy phép gom trong Web Worker; trình duyệt không có Worker thì chạy ngay đây. */
+async function tinhTrongWorker(list: unknown[], known: unknown[]): Promise<unknown[]> {
+  if (typeof Worker === "undefined") {
+    const { tinhNguoi } = await import("@/lib/face-gom-tinh");
+    return tinhNguoi(list as never, known as never);
+  }
+  const w = new Worker(new URL("./face-gom.worker.ts", import.meta.url), { type: "module" });
   try {
-    const r = await fetch(urlCua(albumId), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ gom: true }) });
-    // Máy chủ quá giờ trả trang lỗi HTML, không phải JSON → coi là KHÔNG gom được.
-    const d = (await r.json().catch(() => ({}))) as { ok?: boolean; nguoi?: number };
-    return r.ok ? d : { ...d, ok: false };
-  } catch {
-    return { ok: false };
+    return await new Promise<unknown[]>((res, rej) => {
+      w.onmessage = (e: MessageEvent<{ nguoi?: unknown[]; loi?: string }>) => (e.data.loi ? rej(new Error(e.data.loi)) : res(e.data.nguoi ?? []));
+      w.onerror = (e) => rej(new Error(e.message || "worker_loi"));
+      w.postMessage({ list, known });
+    });
+  } finally {
+    w.terminate();
+  }
+}
+
+/**
+ * GOM TRÊN MÁY STUDIO — đường mặc định.
+ *
+ * Album cưới vài nghìn ảnh có hàng chục nghìn khuôn mặt; lượt gom trên máy chủ
+ * quá giờ và bị cắt ngang, khách không bao giờ thấy ô tìm khuôn mặt. Ở đây:
+ * đọc vector THẲNG từ database (quyền chủ album, cùng lượng dữ liệu máy chủ vẫn
+ * đọc), gom trong Web Worker, chỉ gửi KẾT QUẢ lên máy chủ để kiểm và ghi.
+ * Trả câu lỗi thật (không nuốt) để thẻ hiện được.
+ */
+export async function gomAlbum(albumId: string): Promise<{ ok: boolean; nguoi?: number; loi?: string }> {
+  try {
+    const { createClient } = await import("@/lib/supabase/client");
+    const sb = createClient();
+    const trang = (from: number) =>
+      sb
+        .from("album_faces")
+        .select("photo_id, at, box, descriptor, sharpness")
+        .eq("album_id", albumId)
+        .order("photo_id")
+        .order("at")
+        .range(from, from + 999);
+    const list: { photo_id: string; at: number; box: number[] | null; descriptor: number[] | null; sharpness: number | null }[] = [];
+    // 4 trang một lúc, tới khi gặp trang thiếu.
+    for (let from = 0, het = false; !het; from += 4000) {
+      const lo = await Promise.all([0, 1, 2, 3].map((k) => trang(from + k * 1000)));
+      for (const { data, error } of lo) {
+        if (error) return { ok: false, loi: `doc_khuon_mat: ${error.message}` };
+        const rows = (data ?? []) as FaceRowTho[];
+        if (het) continue;
+        for (const r of rows) list.push({ ...r, descriptor: veMang(r.descriptor), box: r.box ? veMang(r.box as number[] | string) : null });
+        if (rows.length < 1000) het = true;
+      }
+    }
+    const { data: cu, error: eCu } = await sb.from("album_people").select("id, name, descriptor").eq("album_id", albumId);
+    if (eCu) return { ok: false, loi: `doc_nguoi_cu: ${eCu.message}` };
+    const known = ((cu ?? []) as { id: string; name: string | null; descriptor: number[] | string | null }[]).map((k) => ({
+      id: k.id,
+      name: k.name ?? "",
+      descriptor: veMang(k.descriptor) ?? [],
+    }));
+    const nguoi = await tinhTrongWorker(list, known);
+    const r = await fetch(urlCua(albumId), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ luuGom: { nguoi } }) });
+    const d = (await r.json().catch(() => ({}))) as { ok?: boolean; nguoi?: number; error?: string; detail?: string };
+    if (!r.ok || !d.ok) return { ok: false, loi: d.error ? `${d.error}${d.detail ? `: ${d.detail}` : ""}` : `http-${r.status}` };
+    return { ok: true, nguoi: d.nguoi };
+  } catch (e) {
+    return { ok: false, loi: e instanceof Error ? e.message : String(e) };
   }
 }
 
 /** Câu báo khi gom hỏng — trước đây lỗi này bị nuốt: thẻ vẫn khoe số người CŨ mà khách không thấy ô tìm. */
 export const LOI_GOM =
-  "Đã quét xong nhưng chưa gom được khuôn mặt thành từng người (máy chủ bận hoặc album rất lớn), nên khách chưa thấy ô tìm khuôn mặt. Tải lại trang để thử gom lại.";
+  "Đã quét xong nhưng chưa gom được khuôn mặt thành từng người, nên khách chưa thấy ô tìm khuôn mặt. Tải lại trang để thử gom lại.";
+/** Câu báo kèm mã lỗi thật — để biết hỏng ở đâu thay vì đoán. */
+export const loiGom = (chiTiet?: string) => (chiTiet ? `${LOI_GOM} (Mã lỗi: ${chiTiet.slice(0, 200)})` : LOI_GOM);
 
 /* ── Một máy chỉ MỘT vòng quét tại một lúc ───────────────────────────────────
    Studio bấm quét tay trong trang album thì bộ tự quét nền (nếu đang chạy trong
@@ -233,10 +297,14 @@ export async function quetAlbum(
   // Gom: quét hết thì gom ngay; tạm dừng thì máy chủ tự quyết theo luật 12 giờ.
   try {
     patch({ phase: "gom", dang: null });
-    const g = await gomAlbum(albumId);
-    const status = await taiViecQuet(albumId);
-    // Gom hỏng mà album đã quét hết (canGom còn true) thì PHẢI nói ra.
-    if (!g.ok && !loi && status.conLai === 0 && status.canGom) loi = LOI_GOM;
+    let status = await taiViecQuet(albumId);
+    // Gom khi đã quét HẾT (hoặc album chỉ còn thiếu bước gom). Quét dở thì để
+    // lần quét xong mới gom: gom là việc nặng nhất, làm một lần cho trọn.
+    if (status.conLai === 0 && status.canGom) {
+      const g = await gomAlbum(albumId);
+      if (!g.ok && !loi) loi = loiGom(g.loi);
+      status = await taiViecQuet(albumId);
+    }
     return { loi, status };
   } catch {
     return { loi: loi ?? "Không đọc lại được tiến độ. Tải lại trang để xem.", status: null };
