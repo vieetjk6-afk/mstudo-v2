@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 import { cookieDomainForHost } from "@/lib/hosts";
 import { noStoreFetch } from "@/lib/no-store-fetch";
+import { demFetch } from "@/lib/luu-luong";
 
 /**
  * Supabase client bound to the current request's cookies (RLS-aware).
@@ -24,7 +25,7 @@ export async function createClient() {
       // Bắt buộc: Next 14 cache cả câu đọc lẫn câu ghi đi qua fetch. Một trang
       // dashboard đọc phải dữ liệu của request trước là sai, không phải nhanh.
       // Xem @/lib/no-store-fetch.
-      global: { fetch: noStoreFetch },
+      global: { fetch: demFetchNoStore },
       cookies: {
         getAll() {
           return cookieStore.getAll();
@@ -42,3 +43,6 @@ export async function createClient() {
     }
   );
 }
+
+/** noStoreFetch + đếm lưu lượng Supabase (ước tính egress, xem @/lib/luu-luong). */
+const demFetchNoStore = demFetch(noStoreFetch);

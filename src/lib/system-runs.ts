@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmins } from "@/lib/notify-admin";
+import { dinhDangByte, NGUONG_CANH_BAO, thangUtc, tomTatThang, type DongUsage } from "./luu-luong-rules.ts";
 import {
   createThrottle,
   cronHealth,
@@ -105,6 +106,32 @@ export async function alertStaleCrons(db: Db, now = Date.now()): Promise<void> {
   );
 }
 
+/**
+ * Lưu lượng tháng này sắp chạm hạn mức (Supabase egress ước tính ≥ 80%, hoặc
+ * theo tốc độ hiện tại sẽ vượt trước cuối tháng; Vercel Fast Data / Origin
+ * Transfer ≥ 80%) → nhắc admin, tối đa một lần mỗi ngày. Dự án từng bị Supabase
+ * khoá vì vượt egress — cảnh báo phải tới TRƯỚC, không phải sau.
+ */
+export async function alertUsage(db: Db, now = Date.now()): Promise<void> {
+  const state = await loadRunState(db);
+  const sent = state?.runs.find((r) => r.kind === "alert" && r.name === "usage");
+  if (sent && now - Date.parse(sent.started_at) < 20 * 3600_000) return;
+  const { data, error } = await db
+    .from("system_usage")
+    .select("day, source, metric, quantity, unit, cost, requests")
+    .gte("day", `${thangUtc(now)}-01`)
+    .limit(2000);
+  if (error) return;
+  const t = tomTatThang((data ?? []) as DongUsage[], thangUtc(now), now);
+  const can: string[] = [];
+  if (t.supabase.tiLe >= NGUONG_CANH_BAO) can.push(`Supabase đã dùng khoảng ${dinhDangByte(t.supabase.bytes)} / 5 GB lưu lượng tháng này`);
+  else if (t.supabase.tiLeDuBao >= 1) can.push(`Supabase: theo tốc độ hiện tại sẽ dùng khoảng ${dinhDangByte(t.supabase.duBao)} tháng này, vượt 5 GB`);
+  for (const v of t.vercel) if (v.tiLe != null && v.tiLe >= NGUONG_CANH_BAO) can.push(`Vercel ${v.service}: ${Math.round(v.tiLe * 100)}% hạn mức`);
+  if (can.length === 0) return;
+  if (!(await recordRun({ kind: "alert", name: "usage", ok: false, detail: { canh_bao: can } }, db))) return;
+  await notifyAdmins("info", `Lưu lượng sắp chạm hạn mức gói miễn phí: ${can.join("; ")}.`, { push: true, url: HEALTH_URL });
+}
+
 type Handler<R extends Request, C> = (req: R, ctx: C) => Promise<Response> | Response;
 
 /**
@@ -180,6 +207,11 @@ async function afterRun(cron: string, ok: boolean, detail: Record<string, unknow
     });
   }
   await alertStaleCrons(db);
+  try {
+    await alertUsage(db);
+  } catch {
+    /* chưa chạy migration luu_luong.sql — bỏ qua */
+  }
   // Dọn nhật ký cũ mỗi đêm một lần là đủ.
   if (cron === "backup") {
     try {

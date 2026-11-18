@@ -1,6 +1,7 @@
 /* Màn xem trước GIAO DIỆN MỚI của nhóm "taikhoan" — mỗi nhóm một file để làm song
  * song không đụng nhau. Đăng ký sẵn trong ../screens.tsx. Bọc màn trong
  * <PreviewV2 path="/dashboard/..."> (xem ./shell.tsx). */
+import { thangUtc, tomTatThang, type DongUsage } from "@/lib/luu-luong-rules";
 import * as f from "../fixtures";
 import { PreviewV2 } from "./shell";
 import AccountV2 from "@/app/dashboard/account/AccountV2";
@@ -38,6 +39,28 @@ const account: AccountProps = {
   studioLogo: null,
 };
 
+/** Lưu lượng mẫu: `gb` GB Supabase rải đều từ đầu tháng tới hôm nay; `loiVercel` = chưa đọc được Vercel. */
+function usageMau(gb: number, loiVercel: boolean) {
+  const now = Date.now();
+  const d = new Date(now);
+  const homNay = d.getUTCDate();
+  const rows: DongUsage[] = [];
+  for (let i = 1; i <= homNay; i++) {
+    const day = `${thangUtc(now)}-${String(i).padStart(2, "0")}`;
+    const w = 0.6 + ((i * 37) % 10) / 10;
+    rows.push({ day, source: "supabase-may-chu", metric: "egress", quantity: ((gb * 1024 ** 3) / homNay) * 0.8 * w, unit: "byte", cost: null, requests: 4000 });
+    rows.push({ day, source: "supabase-trinh-duyet", metric: "egress", quantity: ((gb * 1024 ** 3) / homNay) * 0.2 * w, unit: "byte", cost: null, requests: 300 });
+    if (!loiVercel) {
+      rows.push({ day, source: "vercel", metric: "Fast Data Transfer", quantity: 1.4, unit: "GB", cost: 0, requests: 0 });
+      rows.push({ day, source: "vercel", metric: "Fast Origin Transfer", quantity: 0.12, unit: "GB", cost: 0, requests: 0 });
+      rows.push({ day, source: "vercel", metric: "Edge Requests", quantity: 21000, unit: "Requests", cost: 0, requests: 0 });
+      rows.push({ day, source: "vercel", metric: "Function Duration", quantity: 1.6, unit: "GB-Hrs", cost: 0, requests: 0 });
+    }
+  }
+  if (loiVercel) rows.push({ day: `${thangUtc(now)}-${String(homNay).padStart(2, "0")}`, source: "vercel", metric: "_loi", quantity: 0, unit: "HTTP 403: Not authorized to access billing for this scope", cost: null, requests: 0 });
+  return tomTatThang(rows, thangUtc(now), now);
+}
+
 /** Sức khoẻ hệ thống: một bản mọi thứ ổn, một bản có cron lỗi / quá hạn, lưu trữ gần đầy và vài lỗi. */
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
 const healthOk: SystemHealth = {
@@ -59,6 +82,7 @@ const healthOk: SystemHealth = {
   },
   errors: [],
   limits: LIMITS,
+  usage: usageMau(0.9, false),
 };
 const healthBad: SystemHealth = {
   ...healthOk,
@@ -78,6 +102,7 @@ const healthBad: SystemHealth = {
     { signature: "a2", source: "server", message: "Error: Drive API 403 storageQuotaExceeded", path: "/api/albums/[id]/sync", count: 4, lastAt: hoursAgo(9) },
     { signature: "a3", source: "client", message: "ChunkLoadError: Loading chunk 4821 failed.", path: "/dashboard/studio/contracts", count: 2, lastAt: hoursAgo(26) },
   ],
+  usage: usageMau(4.3, true),
 };
 
 const noBank = { bin: null, account: null, holder: null, name: null };

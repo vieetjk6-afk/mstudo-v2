@@ -55,7 +55,10 @@ const clientSupabase = [
 for (const [duong, vaiTro] of clientSupabase) {
   const src = readFileSync(new URL(`../../${duong}`, import.meta.url), "utf8");
   ok(`${duong} nhập noStoreFetch (${vaiTro})`, /from ["']@\/lib\/no-store-fetch["']/.test(src));
-  ok(`${duong} truyền vào global.fetch`, /global:\s*\{\s*fetch:\s*noStoreFetch\s*\}/.test(src));
+  // Trực tiếp, hoặc qua bộ đếm lưu lượng (@/lib/luu-luong) bọc ĐÚNG noStoreFetch.
+  const truc = /global:\s*\{\s*fetch:\s*noStoreFetch\s*\}/.test(src);
+  const boc = /global:\s*\{\s*fetch:\s*demFetchNoStore\s*\}/.test(src) && /const demFetchNoStore = demFetch\(noStoreFetch\)/.test(src);
+  ok(`${duong} truyền vào global.fetch`, truc || boc);
 }
 
 /* ── 3. Mọi lời gọi RA NGOÀI khác cũng không được dùng `fetch` trần ─────────

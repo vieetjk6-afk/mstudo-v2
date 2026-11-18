@@ -118,6 +118,7 @@ const ORDER = [
   ["migrations/ghep_layout.sql", "Ghép layout ảnh đăng mạng xã hội trong album giao khách: bật/tắt theo hợp đồng và album lẻ + bộ layout khách giữ 1 ngày"],
   ["migrations/gioi_han_tan_suat.sql", "Giới hạn tần suất bền không cần Upstash: bộ đếm chống dò mật khẩu album / SĐT trong Postgres"],
   ["migrations/he_thong_van_hanh.sql", "Sức khoẻ hệ thống: nhật ký lượt chạy cron / SQL lúc deploy, lỗi máy chủ gộp theo ngày, dung lượng database & storage (chỉ service-role)"],
+  ["migrations/luu_luong.sql", "Lưu lượng theo ngày: ước tính egress Supabase do app tự đếm + số liệu Vercel (workflow Đo lưu lượng), chỉ service-role"],
   ["migrations/chup_theo_khung_gio.sql", "Chụp theo khung giờ (mini-session): đợt chụp, khoá khung UNIQUE, giữ chỗ chờ cọc, tự sinh lịch làm việc (chạy SAU referral_deposit và studio_appointments)"],
   ["migrations/dung_thu_va_het_han.sql", "Dùng thử & hết hạn gói: tài khoản đã mua gói không dùng thử được nữa; cron hạ mọi gói hết hạn về free; hạn mức album coi gói hết hạn là free (chạy SAU han_muc_album_may_chu, atomic_redemptions)"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
@@ -190,6 +191,7 @@ const MOI = [
   "migrations/ghep_layout.sql",
   "migrations/gioi_han_tan_suat.sql",
   "migrations/he_thong_van_hanh.sql",
+  "migrations/luu_luong.sql",
   "migrations/chup_theo_khung_gio.sql",
   "migrations/dung_thu_va_het_han.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
@@ -324,6 +326,14 @@ const NHOM = {
       "-- Đã chạy bản trước thì chạy lại cả file này cũng an toàn.",
     ],
     files: ["migrations/he_thong_van_hanh.sql"],
+  },
+  "luu-luong.sql": {
+    tieuDe: "LƯU LƯỢNG THEO NGÀY — CẢNH BÁO TRƯỚC KHI CHẠM HẠN MỨC GÓI FREE",
+    ghiChu: [
+      "-- Chỉ gồm migration của riêng việc này: bảng system_usage và hàm usage_add",
+      "-- (chỉ service-role gọi). Không phụ thuộc bảng nào khác. Chạy lại an toàn.",
+    ],
+    files: ["migrations/luu_luong.sql"],
   },
   "chup-khung-gio.sql": {
     tieuDe: "CHỤP THEO KHUNG GIỜ (MINI-SESSION)",
