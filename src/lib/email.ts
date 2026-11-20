@@ -24,17 +24,27 @@ export async function sendEmail({
   html,
   fromName,
   replyTo,
+  auto = true,
 }: {
   to: string;
   subject: string;
   html: string;
   fromName?: string | null;
   replyTo?: string | null;
+  /** Email do hệ thống tự gửi → kèm dòng "tự động, không cần trả lời". Thư
+   *  studio tự soạn tay thì đặt false: khách được phép trả lời thư đó. */
+  auto?: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
+  if (auto) html += AUTO_NOTE;
   if (process.env.SMTP_USER && process.env.SMTP_PASS) return viaSmtp({ to, subject, html, fromName, replyTo });
   if (process.env.RESEND_API_KEY) return viaResend({ to, subject, html, fromName, replyTo });
   return { ok: false, error: "not_configured" };
 }
+
+/** Dòng cuối mọi email tự động. */
+export const AUTO_NOTE =
+  '<p style="font-family:Arial,sans-serif;color:#999;font-size:12px;text-align:center;margin:24px 0 0">' +
+  "Đây là email tự động, anh/chị vui lòng không trả lời email này.</p>";
 
 /** Tên hiển thị an toàn cho tiêu đề From: bỏ ký tự có thể phá cú pháp header. */
 const cleanName = (s: string | null | undefined) => (s || "").replace(/["<>\r\n\\]/g, "").trim().slice(0, 80);
