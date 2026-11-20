@@ -49,7 +49,7 @@ export async function POST(req: Request) {
   const body = (message || "").trim();
   const html = `<div style="font-family:Arial,sans-serif;font-size:15px;color:#222;line-height:1.6">${esc(body).replace(/\n/g, "<br>")}</div>`;
 
-  const r = await sendEmail({ to, subject: subject?.trim() || "Thông báo từ studio", html });
+  const r = await sendEmail({ to, subject: subject?.trim() || "Thông báo từ studio", html, auto: false });
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.error === "not_configured" ? 503 : 500 });
   return NextResponse.json({ ok: true });
 }

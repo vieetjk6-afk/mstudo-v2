@@ -238,7 +238,7 @@ async function run(req: NextRequest) {
 <p style="white-space:pre-wrap">${esc(a.message)}</p>
 ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
 <p style="color:#888;font-size:12px">Email tự động từ ${esc(studio)}.</p></div>`;
-    return sendEmail({ to: a.toEmail!, subject: emailSubject(a.rule, studio), html });
+    return sendEmail({ to: a.toEmail!, subject: emailSubject(a.rule, studio), html, fromName: studio });
   };
 
   // ── Tính việc phải làm ───────────────────────────────────────────────────
@@ -324,7 +324,7 @@ ${link ? `<p><a href="${link}">Mở trang của bạn →</a></p>` : ""}
 <p style="white-space:pre-wrap">${esc(text)}</p>
 <p><a href="${esc(link)}" style="display:inline-block;background:#141215;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Mở thiệp &amp; chỉnh sửa →</a></p>
 <p style="color:#888;font-size:12px">Thiệp cưới online — quà tặng từ ${esc(studio)}.</p></div>`;
-      const r = await sendEmail({ to: a.toEmail, subject: emailSubject(a.rule, studio), html });
+      const r = await sendEmail({ to: a.toEmail, subject: emailSubject(a.rule, studio), html, fromName: studio });
       if (r.ok) sentVia = "email";
     }
 

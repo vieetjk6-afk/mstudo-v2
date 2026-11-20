@@ -11,6 +11,8 @@ const nextConfig = {
     "@vladmandic/face-api",
     "@tensorflow/tfjs",
     "@tensorflow/tfjs-backend-wasm",
+    // Gửi email qua SMTP (Gmail) — @/lib/email. Gói Node thuần, không bundle.
+    "nodemailer",
   ],
   // Trước là experimental.outputFileTracingIncludes.
   //

@@ -171,7 +171,7 @@ export async function notifyPortalOnComplete(ownerId: string, contractId: string
 <p style="white-space:pre-wrap">${escapeHtml(body)}</p>
 <p><a href="${escapeHtml(link)}" style="display:inline-block;background:#141215;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:bold">Mở trang của bạn →</a></p>
 <p style="color:#888;font-size:12px">Email tự động từ ${escapeHtml(studio)}.</p></div>`;
-    const r = await sendEmail({ to: c.client_email, subject: `${studio}: album & file của bạn đã sẵn sàng`, html });
+    const r = await sendEmail({ to: c.client_email, subject: `${studio}: album & file của bạn đã sẵn sàng`, html, fromName: studio });
     sent = sent || r.ok;
   }
 
