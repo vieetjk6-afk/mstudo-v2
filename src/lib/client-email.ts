@@ -76,7 +76,7 @@ export async function emailClient(opts: {
     studio = (data?.full_name as string | null) || "Studio";
   }
 
-  const r = await sendEmail({ to, subject: emailSubject(opts.kind, studio), html: bodyToHtml(body, studio) });
+  const r = await sendEmail({ to, subject: emailSubject(opts.kind, studio), html: bodyToHtml(body, studio), fromName: studio });
   const res: ClientEmailResult = r.ok ? { ok: true } : r.error === "not_configured" ? { ok: false, skipped: true, error: "email_not_configured" } : { ok: false, error: r.error };
 
   await db

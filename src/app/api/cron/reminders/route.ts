@@ -299,7 +299,7 @@ ${parts.join("")}
 <p>${esc(studio)} xin nhắc lịch chụp <b>ngày mai (${esc(tomorrow)})</b>${s.event_time ? ` lúc <b>${esc(s.event_time)}</b>` : ""}${s.location ? ` tại ${esc(s.location)}` : ""}.</p>
 <p>Hẹn gặp anh/chị ạ! 📸</p>
 <p style="color:#888;font-size:12px">Email tự động từ ${esc(studio)}.</p></div>`;
-    const r = await sendEmail({ to: s.client_email, subject: `Nhắc lịch chụp ngày mai — ${studio}`, html });
+    const r = await sendEmail({ to: s.client_email, subject: `Nhắc lịch chụp ngày mai — ${studio}`, html, fromName: studio });
     if (r.ok) clientSent++;
   }
 
@@ -316,7 +316,7 @@ ${parts.join("")}
 <p>Cảm ơn anh/chị đã tin tưởng ${esc(studio)}! Nếu hài lòng, anh/chị dành chút thời gian <b>đánh giá</b> giúp studio nhé.</p>
 ${link ? `<p><a href="${link}">Mở album ảnh &amp; đánh giá →</a> (mật khẩu là số điện thoại của anh/chị)</p>` : ""}
 <p style="color:#888;font-size:12px">Email tự động từ ${esc(studio)}.</p></div>`;
-    const r = await sendEmail({ to: c.client_email, subject: `Cảm ơn & xin đánh giá — ${studio}`, html });
+    const r = await sendEmail({ to: c.client_email, subject: `Cảm ơn & xin đánh giá — ${studio}`, html, fromName: studio });
     if (r.ok) clientSent++;
   }
 
