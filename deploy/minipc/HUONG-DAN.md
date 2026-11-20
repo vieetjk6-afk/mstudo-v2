@@ -62,6 +62,35 @@ RAM **16 GB** (8 GB vẫn chạy nhưng build sẽ chậm), SSD NVMe ≥ 256 GB 
 điều hành, **ổ thứ hai** cho dữ liệu NAS (SSD/HDD 2,5"), một **ổ USB gắn ngoài**
 để sao lưu.
 
+### 1.1 Máy hiện có: i5‑7400 · RAM 16 GB · SSD 256 GB
+
+| Phần | Đánh giá |
+|---|---|
+| **CPU i5‑7400** (4 nhân/4 luồng) | **Đủ** cho mstudo + NAS + 5–10 web nhỏ. Lúc chạy hầu như không tốn CPU; chỉ lúc **build** mới chạy hết 4 nhân, mất khoảng 10–20 phút. Có Intel Quick Sync, nên sau này chạy được Jellyfin/Immich để xem lại video, ảnh. |
+| **RAM 16 GB** | **Đủ.** Build dùng tối đa ~6 GB, mstudo chạy ~150 MB. **Không cần** tạo swap như mục 5.2. |
+| **SSD 256 GB** | **Đủ cho hệ điều hành + web** (dùng thật khoảng 30–40 GB). **Không đủ cho NAS** của studio ảnh: một bộ ảnh cưới RAW đã 30–100 GB. |
+
+**Nên mua thêm (theo thứ tự ưu tiên):**
+
+1. **Ổ dữ liệu cho NAS**: mở máy xem còn khay 2,5"/3,5" hoặc khe M.2 trống
+   không. Còn thì gắn HDD 2–4 TB (HDD 3,5" rẻ nhất cho mỗi TB; ưu tiên dòng
+   NAS như WD Red Plus / Seagate IronWolf). Nếu máy hết chỗ thì dùng ổ USB 3.0
+   gắn ngoài (chậm hơn nhưng vẫn dùng được).
+2. **Ổ USB sao lưu** dung lượng ≥ ổ NAS (mục 9).
+3. **UPS** 600–1000VA.
+
+Chưa mua kịp thì vẫn chạy được: NAS tạm dùng phần trống của SSD (mục 6.1,
+**cách B**), khi có ổ mới thì chép sang.
+
+**Trước khi cài, kiểm tra 2 việc riêng cho máy đời này:**
+
+- **Cập nhật BIOS** lên bản mới nhất từ trang của hãng máy (Dell/HP/Lenovo…).
+  CPU thế hệ 7 có nhiều lỗi bảo mật phần cứng (Spectre, Intel ME); các lỗi này
+  chỉ được vá qua BIOS + Ubuntu.
+- **Sức khoẻ SSD cũ**: sau khi cài xong chạy `sudo smartctl -a /dev/sda`
+  (hoặc `/dev/nvme0n1`). Xem *Percentage Used* / *Wear_Leveling* và
+  *Reallocated_Sector*. SSD đã mòn > 80% thì nên thay trước khi chạy thật.
+
 Trong **BIOS/UEFI** (bấm Del/F2 khi khởi động):
 
 1. **Restore on AC Power Loss → Power On** (có điện lại là tự bật).
@@ -81,12 +110,16 @@ router, mục DHCP → **đặt IP cố định** (DHCP reservation) cho minipc,
 2. Ghi ra USB bằng **Rufus** (Windows) hoặc **balenaEtcher** (macOS).
 3. Cắm USB vào minipc, khởi động từ USB, chọn:
    - Ngôn ngữ **English** (thông báo lỗi dễ tra cứu hơn).
-   - Ổ cài: chọn **ổ NVMe** (ổ hệ điều hành), *Use an entire disk*,
+   - Ổ cài: chọn **SSD 256 GB** (ổ hệ điều hành), *Use an entire disk*,
      tick **Set up this disk as an LVM group** và **Encrypt the LVM group with
      LUKS** nếu muốn mã hoá ổ (khi đó mỗi lần khởi động phải gõ mật khẩu tại
      máy → **không tự bật lại sau mất điện**; với máy chủ ở nhà thường KHÔNG
      chọn mã hoá ổ hệ điều hành, chỉ mã hoá bản sao lưu là đủ).
-   - **KHÔNG** đụng tới ổ dữ liệu ở bước này.
+   - Màn **Storage configuration** (tóm tắt ổ): ở dòng `ubuntu-lv` chọn
+     **Edit** → **Size = 100G** → Save. Phần còn lại (~130 GB) để trống, dùng
+     cho NAS tạm (mục 6.1 cách B) hoặc nới thêm sau. (Bộ cài thường tự để
+     ~100 GB; cứ kiểm tra lại cho chắc.)
+   - **KHÔNG** đụng tới ổ dữ liệu ở bước này (nếu đã gắn).
    - Tên máy: `minipc`, tài khoản: vd `khoa` + mật khẩu mạnh.
    - Tick **Install OpenSSH server**.
    - Bỏ qua mọi "Featured snaps" (Docker sẽ cài bản chính thức sau).
@@ -270,7 +303,32 @@ Trong **SSL/TLS** của tên miền: chế độ **Full**, bật **Always Use HT
 
 ## 6. NAS (20 phút)
 
-### 6.1 Gắn ổ dữ liệu (ổ thứ hai)
+### 6.1 Chuẩn bị chỗ chứa dữ liệu
+
+#### Cách B — chưa có ổ thứ hai: dùng tạm phần trống của SSD 256 GB
+
+Xem phần còn trống (dòng `VFree`, khoảng 130 GB nếu đã làm như mục 2):
+
+```bash
+sudo vgs
+```
+
+Tạo ổ ảo `nas` từ 90% chỗ trống (để lại 10% đề phòng):
+
+```bash
+sudo lvcreate -n nas -l 90%FREE ubuntu-vg && sudo mkfs.ext4 -L nas /dev/ubuntu-vg/nas
+```
+
+Rồi làm **2 lệnh cuối của cách A** (gắn vào `/srv/nas`) và sang mục 6.2.
+
+> Cách B nghĩa là dữ liệu NAS nằm **chung một ổ** với hệ điều hành: SSD hỏng
+> là mất cả hai. Bắt buộc bật sao lưu (mục 9) và chỉ dùng tạm tới khi có ổ riêng.
+> Khi có ổ mới: làm 3 lệnh đầu của cách A với nhãn `nas2`, gắn tạm
+> (`sudo mkdir -p /mnt/nas2 && sudo mount LABEL=nas2 /mnt/nas2`), chép dữ liệu bằng
+> `sudo rsync -aHAX --info=progress2 /srv/nas/ /mnt/nas2/`, sửa `/etc/fstab`
+> cho `/srv/nas` trỏ `LABEL=nas2`, rồi `sudo lvremove ubuntu-vg/nas`.
+
+#### Cách A — có ổ thứ hai (khuyên dùng)
 
 Xem tên ổ:
 
@@ -278,14 +336,17 @@ Xem tên ổ:
 lsblk -o NAME,SIZE,MODEL,MOUNTPOINT
 ```
 
-Giả sử ổ dữ liệu là `/dev/sda` (**kiểm tra kỹ — lệnh dưới XOÁ SẠCH ổ đó**):
+Nhận ra ổ mới bằng **SIZE + MODEL**, và ổ đó **không** có dòng con nào gắn ở `/`
+hay `/boot`. Máy bạn dùng SSD SATA nên **ổ hệ điều hành rất có thể chính là
+`/dev/sda`**, ổ mới thường là `/dev/sdb`. Thay `sdX` dưới đây bằng tên đúng
+(**lệnh XOÁ SẠCH ổ đó, gõ nhầm là mất hệ điều hành**):
 
 ```bash
-sudo wipefs -a /dev/sda && sudo parted -s /dev/sda mklabel gpt mkpart nas ext4 0% 100%
+sudo wipefs -a /dev/sdX && sudo parted -s /dev/sdX mklabel gpt mkpart nas ext4 0% 100%
 ```
 
 ```bash
-sudo mkfs.ext4 -L nas /dev/sda1
+sudo mkfs.ext4 -L nas /dev/sdX1
 ```
 
 ```bash
@@ -427,7 +488,7 @@ sudo bash ~/mstudo-v2/deploy/minipc/scripts/03-sao-luu.sh danh-sach
 | Xem log | `docker compose logs -f --tail=100 mstudo` |
 | Khởi động lại app | `docker compose restart mstudo` |
 | Dung lượng ổ | `df -h` · `ncdu /srv/nas` |
-| Sức khoẻ ổ cứng | `sudo smartctl -H /dev/nvme0n1` |
+| Sức khoẻ ổ cứng | `sudo smartctl -H /dev/sda` (mỗi ổ một lệnh, xem tên bằng `lsblk`) |
 | Ai đang bị chặn SSH | `sudo fail2ban-client status sshd` |
 | Dọn image cũ | `docker system prune -f` |
 
