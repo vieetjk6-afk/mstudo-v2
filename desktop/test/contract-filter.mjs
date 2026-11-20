@@ -10,7 +10,7 @@
  */
 import {
   filterContracts, sortContracts, splitContracts,
-  addDaysIso, isUpcoming, upcomingContracts, UPCOMING_DAYS,
+  addDaysIso, isUpcoming, upcomingContracts, UPCOMING_DAYS, matchesQuery,
 } from "../../src/lib/contract-filter.ts";
 
 const rows = [
@@ -175,6 +175,18 @@ check("đổi số ngày thì cửa sổ đổi theo",
 const before = up.map((c) => c.code).join(",");
 upcomingContracts(up, TODAY);
 check("không sắp xếp tại chỗ mảng gốc", up.map((c) => c.code).join(","), before);
+
+// ── Tìm khách cũ: không dấu & SĐT mọi cách ghi ─────────────────────────────
+const old = [
+  { code: "HD-900", title: "Cưới", client_name: "Nguyễn Thị Đào", client_phone: "0912 345 678", event_date: "2023-01-02", status: "completed" },
+  { code: "HD-901", title: "Kỷ yếu", client_name: "Lê Văn B", client_phone: "+84 987.654.321", event_date: "2023-02-03", status: "completed" },
+];
+check("gõ không dấu 'nguyen thi dao' ra tên có dấu", codes(filterContracts(old, { q: "nguyen thi dao" })), "HD-900");
+check("gõ 'đào' vẫn ra", codes(filterContracts(old, { q: "Đào" })), "HD-900");
+check("SĐT liền ra SĐT có cách", codes(filterContracts(old, { q: "0912345678" })), "HD-900");
+check("SĐT 0… ra SĐT lưu +84", codes(filterContracts(old, { q: "0987654321" })), "HD-901");
+check("đuôi SĐT '654 321'", codes(filterContracts(old, { q: "654 321" })), "HD-901");
+check("từ khoá chữ không khớp SĐT", matchesQuery("abc", ["x"], ["0912345678"]), false);
 
 console.log(fail ? `\n${fail} kiểm thử KHÔNG đạt` : "\nTất cả kiểm thử đạt");
 process.exit(fail ? 1 : 0);

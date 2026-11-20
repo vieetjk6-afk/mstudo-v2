@@ -40,6 +40,44 @@ function dmy(iso: string): string {
 }
 
 /**
+ * Chuẩn hoá chữ để tìm: thường hoá + BỎ DẤU tiếng Việt (kể cả đ→d) + gộp
+ * khoảng trắng. Gõ "nguyen van a" phải ra "Nguyễn Văn A" — khách cũ thường
+ * được nhập có dấu, người tìm thì gõ vội không dấu.
+ */
+export function foldVi(s: string | null | undefined): string {
+  return (s ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** SĐT chỉ còn chữ số, đầu "84" (+84) quy về "0" để so khớp mọi cách ghi. */
+export function phoneDigits(s: string | null | undefined): string {
+  const d = (s ?? "").replace(/\D/g, "");
+  return d.startsWith("84") && d.length >= 11 ? "0" + d.slice(2) : d;
+}
+
+/**
+ * Khớp từ khoá với tên/SĐT/... : so chữ đã bỏ dấu, và nếu từ khoá trông như
+ * SĐT (chỉ gồm số và dấu cách/chấm/gạch, ≥ 3 số) thì so thêm theo chữ số —
+ * "0912345678" phải ra SĐT lưu là "0912 345 678" hay "+84 912 345 678".
+ */
+export function matchesQuery(q: string, texts: (string | null | undefined)[], phones: (string | null | undefined)[] = []): boolean {
+  const needle = foldVi(q);
+  if (!needle) return true;
+  if (texts.some((v) => !!v && foldVi(v).includes(needle))) return true;
+  if (/^[\d\s.+()-]+$/.test(q.trim())) {
+    const nd = phoneDigits(q);
+    if (nd.length >= 3 && phones.some((p) => !!p && phoneDigits(p).includes(nd))) return true;
+  }
+  return false;
+}
+
+/**
  * Áp tìm kiếm + mã + khoảng ngày thực hiện. KHÔNG lọc trạng thái — việc đó do
  * splitContracts làm, để số đếm hai tab cùng phản ánh một bộ lọc.
  */
@@ -47,23 +85,17 @@ export function filterContracts<T extends FilterableContract>(
   rows: readonly T[],
   { q = "", code = "", from = "", to = "" }: ContractFilters
 ): T[] {
-  const needle = q.trim().toLowerCase();
   const codeNeedle = code.trim().toLowerCase();
   return rows.filter((c) => {
     if (codeNeedle && !(c.code || "").toLowerCase().includes(codeNeedle)) return false;
     // HĐ chưa có ngày thực hiện thì không thể nằm trong khoảng ngày đã chọn.
     if (from && (!c.event_date || c.event_date < from)) return false;
     if (to && (!c.event_date || c.event_date > to)) return false;
-    if (!needle) return true;
-    const hay = [
-      c.title,
-      c.client_name,
-      c.code,
-      c.client_phone,
-      c.event_date,
-      c.event_date ? dmy(c.event_date) : "",
-    ];
-    return hay.some((v) => !!v && v.toLowerCase().includes(needle));
+    return matchesQuery(
+      q,
+      [c.title, c.client_name, c.code, c.client_phone, c.event_date, c.event_date ? dmy(c.event_date) : ""],
+      [c.client_phone]
+    );
   });
 }
 

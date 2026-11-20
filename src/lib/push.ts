@@ -119,7 +119,7 @@ export async function sendPushToSubscriptions(subs: SubRow[], payload: PushPaylo
 }
 
 /**
- * Gửi thông báo đẩy cho studio: MỖI NGƯỜI trong studio đúng MỘT tin.
+ * Gửi thông báo đẩy cho studio: mỗi người MỘT tin trên MỖI LOẠI thiết bị.
  *
  * Không gửi tới mọi đăng ký nữa. Một người bật thông báo ở nhiều chỗ (Safari,
  * app đã thêm vào màn hình chính, máy tính, hay cài lại app) là mỗi chỗ một
