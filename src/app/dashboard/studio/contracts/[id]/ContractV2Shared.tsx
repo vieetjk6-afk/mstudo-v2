@@ -2,6 +2,7 @@
 
 import { Check, Copy, ExternalLink, CalendarRange, Share2, Users, type LucideIcon } from "lucide-react";
 import ZaloSendButton from "@/components/ZaloSendButton";
+import EmailSendButton from "@/components/EmailSendButton";
 import { btn, toneBg, toneFg, type Tone } from "@/components/v2/kit";
 import { daysFromToday, fmtDayMonth, fmtDow } from "@/lib/date";
 import type { ContractKind } from "@/lib/contract-kind";
@@ -228,8 +229,12 @@ export function SendOptions({ ed }: { ed: Ed }) {
   const { f, props } = ed;
   const c = props.contract;
   const full = btn("secondary", "md", "w-full !justify-start");
+  // Khách không có SĐT (không Zalo được) → nút email lên đầu.
+  const noPhone = !f.client_phone.replace(/\D/g, "");
+  const emailBtn = <EmailSendButton contractId={c.id} email={f.client_email} message={ed.clientPortalMsg} className={full} />;
   return (
     <div className="flex flex-col gap-2">
+      {noPhone ? emailBtn : null}
       <ZaloSendButton
         phone={f.client_phone}
         name={f.client_name}
@@ -254,6 +259,7 @@ export function SendOptions({ ed }: { ed: Ed }) {
         className={full}
         message={ed.clientPortalMsg}
       />
+      {noPhone ? null : emailBtn}
       <button type="button" onClick={ed.quickShare} className={full}>
         <Share2 size={16} /> Gửi nhanh qua chia sẻ
       </button>
