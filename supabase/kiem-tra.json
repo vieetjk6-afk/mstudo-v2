@@ -51,6 +51,7 @@
     "migrations/chup_theo_khung_gio.sql",
     "migrations/dung_thu_va_het_han.sql",
     "migrations/be_may_anh.sql",
+    "migrations/ma_so_mo_hop_dong.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [
@@ -1015,6 +1016,14 @@
         "pets"
       ],
       "cot": []
+    },
+    {
+      "file": "migrations/ma_so_mo_hop_dong.sql",
+      "mo_ta": "Mã số mở hợp đồng cho khách không dùng điện thoại (chỉ cần studio_contracts)",
+      "bang": [],
+      "cot": [
+        "studio_contracts.client_passcode"
+      ]
     }
   ]
 }

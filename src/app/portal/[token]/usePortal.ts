@@ -103,7 +103,7 @@ export function usePortalSession(token: string) {
     if (!r.ok) {
       setErr(
         r.error === "wrong_phone"
-          ? "Số điện thoại không khớp. Vui lòng kiểm tra lại."
+          ? "Số điện thoại hoặc mã số không khớp. Vui lòng kiểm tra lại."
           : r.error === "not_found"
             ? "Không tìm thấy hợp đồng."
             : r.error === "offline"

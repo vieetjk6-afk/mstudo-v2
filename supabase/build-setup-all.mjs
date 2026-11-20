@@ -122,6 +122,7 @@ const ORDER = [
   ["migrations/chup_theo_khung_gio.sql", "Chụp theo khung giờ (mini-session): đợt chụp, khoá khung UNIQUE, giữ chỗ chờ cọc, tự sinh lịch làm việc (chạy SAU referral_deposit và studio_appointments)"],
   ["migrations/dung_thu_va_het_han.sql", "Dùng thử & hết hạn gói: tài khoản đã mua gói không dùng thử được nữa; cron hạ mọi gói hết hạn về free; hạn mức album coi gói hết hạn là free (chạy SAU han_muc_album_may_chu, atomic_redemptions)"],
   ["migrations/be_may_anh.sql", "Bé Máy Ảnh: thú ảo trong dashboard — điểm danh & nhiệm vụ hằng ngày (chỉ cần profiles)"],
+  ["migrations/ma_so_mo_hop_dong.sql", "Mã số mở hợp đồng cho khách không dùng điện thoại (chỉ cần studio_contracts)"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
   // đã tạo, và hàm is_studio_member mà nhiều file khai lại.
@@ -196,6 +197,7 @@ const MOI = [
   "migrations/chup_theo_khung_gio.sql",
   "migrations/dung_thu_va_het_han.sql",
   "migrations/be_may_anh.sql",
+  "migrations/ma_so_mo_hop_dong.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];
 

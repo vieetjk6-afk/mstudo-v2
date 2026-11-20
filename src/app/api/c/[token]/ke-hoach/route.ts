@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkPortalKey } from "@/lib/portal-key-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan, studioTier } from "@/lib/plans";
 import { getStudioBrand } from "@/lib/studio-brand";
@@ -20,7 +21,6 @@ import type { PlannerInvite, PlannerOpResponse, PlannerPayload } from "@/app/por
 
 export const dynamic = "force-dynamic";
 
-const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
 /**
  * KẾ HOẠCH CƯỚI của khách — /portal/<client_token>/ke-hoach (không đăng nhập).
@@ -54,7 +54,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     .maybeSingle();
   if (!contract) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  if (!contract.client_phone || digits(body.phone) !== digits(contract.client_phone)) {
+  if (!(await checkPortalKey(db, contract as { id: string; client_phone: string | null }, body.phone))) {
     const slow = await limitByIpDurable(req, `c-portal:${params.token}`, 20, 60_000, { failClosed: true });
     if (slow) return slow;
     return NextResponse.json({ error: "wrong_phone" }, { status: 401 });

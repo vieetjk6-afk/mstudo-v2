@@ -32,7 +32,7 @@ export default function WeddingPlannerV2({ token, brand }: { token: string; bran
         theme={theme}
         icon={CalendarHeart}
         title="Kế hoạch cưới của bạn"
-        desc="Nhập số điện thoại đã đăng ký với studio để mở việc cần làm, ngân sách và lịch trình ngày cưới."
+        desc="Nhập số điện thoại đã đăng ký với studio (hoặc mã số studio đã gửi) để mở việc cần làm, ngân sách và lịch trình ngày cưới."
         phone={phone}
         setPhone={setPhone}
         err={err}

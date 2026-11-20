@@ -133,7 +133,7 @@ async function run(req: NextRequest) {
   if (doWork) {
   const { data: shoots } = await db
     .from("studio_contracts")
-    .select("id, owner_id, title, client_name, client_phone, event_time, location, intake_token, contract_crew(name, role, phone)")
+    .select("id, owner_id, title, client_name, client_phone, client_email, event_time, location, intake_token, contract_crew(name, role, phone)")
     .eq("event_date", tomorrow)
     .neq("status", "cancelled");
 
@@ -142,13 +142,15 @@ async function run(req: NextRequest) {
   for (const s of (shoots ?? []) as any[]) {
     const studio = await studioName(s.owner_id);
 
-    if (s.client_phone && !(await alreadySent(s.owner_id, s.id, "shoot_reminder", 1))) {
+    // Khách có SĐT (Zalo) HOẶC email (autoNotify gửi email song song) đều được nhắc.
+    if ((s.client_phone || s.client_email) && !(await alreadySent(s.owner_id, s.id, "shoot_reminder", 1))) {
       const token = await ensureIntakeToken(db, s.id, s.intake_token);
       const r = await autoNotify({
         ownerId: s.owner_id,
         event: "shoot_reminder",
         audience: "client",
         toPhone: s.client_phone,
+        toEmail: s.client_email,
         toName: s.client_name,
         body: clientShootReminderMessage({
           name: s.client_name,
@@ -194,14 +196,14 @@ async function run(req: NextRequest) {
   if (doMoney) {
   const { data: dues } = await db
     .from("contract_payment_plan")
-    .select("amount, due_date, contract:studio_contracts!inner(id, owner_id, title, client_name, client_phone, client_token, status)")
+    .select("amount, due_date, contract:studio_contracts!inner(id, owner_id, title, client_name, client_phone, client_email, client_token, status)")
     .eq("paid", false)
     .not("due_date", "is", null)
     .lte("due_date", today);
 
   for (const d of (dues ?? []) as any[]) {
     const c = d.contract;
-    if (!c || !c.client_phone) continue;
+    if (!c || !(c.client_phone || c.client_email)) continue;
     if (c.status === "draft" || c.status === "cancelled") continue;
     if (await alreadySent(c.owner_id, c.id, "payment_due", 3)) continue;
     const studio = await studioName(c.owner_id);
@@ -210,6 +212,7 @@ async function run(req: NextRequest) {
       event: "payment_due",
       audience: "client",
       toPhone: c.client_phone,
+      toEmail: c.client_email,
       toName: c.client_name,
       body: paymentDueMessage({
         name: c.client_name,
@@ -230,7 +233,7 @@ async function run(req: NextRequest) {
   if (doWork) {
   const { data: selCands } = await db
     .from("studio_contracts")
-    .select("id, owner_id, title, client_name, client_phone, event_date, selection_album_id, gallery_album_id, drive_tree, select_invited_at")
+    .select("id, owner_id, title, client_name, client_phone, client_email, event_date, selection_album_id, gallery_album_id, drive_tree, select_invited_at")
     .lte("event_date", today)
     // Cả hợp đồng ĐÃ HOÀN THÀNH mà chưa có album giao khách: khách trả đủ tiền
     // trước khi hậu kỳ xong là chuyện thường, việc chọn ảnh vẫn còn nguyên đó.
@@ -245,7 +248,7 @@ async function run(req: NextRequest) {
     .limit(300);
 
   for (const c of (selCands ?? []) as any[]) {
-    if (!c.client_phone) continue;
+    if (!(c.client_phone || c.client_email)) continue;
     if (await alreadySent(c.owner_id, c.id, "select_ready", 30)) continue;
 
     // Ưu tiên phát hiện Drive: thư mục ảnh gốc (role selection) đã có ảnh chưa?
@@ -277,6 +280,7 @@ async function run(req: NextRequest) {
       event: "select_ready",
       audience: "client",
       toPhone: c.client_phone,
+      toEmail: c.client_email,
       toName: c.client_name,
       body: selectReadyMessage({ name: c.client_name, link: await clientUrl(c.owner_id, `/a/${al.slug}`), studio }),
       contractId: c.id,
@@ -296,7 +300,7 @@ async function run(req: NextRequest) {
   const NUDGE_AFTER_DAYS = [3, 8, 16]; // lần 1 sau 3 ngày, lần 2 sau 8, lần 3 sau 16
   const { data: silent } = await db
     .from("studio_contracts")
-    .select("id, owner_id, title, client_name, client_phone, selection_album_id, select_invited_at, select_nudges, select_nudged_at")
+    .select("id, owner_id, title, client_name, client_phone, client_email, selection_album_id, select_invited_at, select_nudges, select_nudged_at")
     .in("status", ["in_progress", "post_production", "completed"])
     .not("select_invited_at", "is", null)
     .not("selection_album_id", "is", null)
@@ -304,7 +308,7 @@ async function run(req: NextRequest) {
     .lt("select_nudges", NUDGE_AFTER_DAYS.length);
 
   for (const c of (silent ?? []) as any[]) {
-    if (!c.client_phone) continue;
+    if (!(c.client_phone || c.client_email)) continue;
     const invitedDays = Math.floor((Date.now() - new Date(c.select_invited_at).getTime()) / (24 * 3600 * 1000));
     const round = (c.select_nudges as number) ?? 0;
     if (invitedDays < NUDGE_AFTER_DAYS[round]) continue;
@@ -330,6 +334,7 @@ async function run(req: NextRequest) {
       event: "select_nudge",
       audience: "client",
       toPhone: c.client_phone,
+      toEmail: c.client_email,
       toName: c.client_name,
       body: selectNudgeMessage({
         name: c.client_name,

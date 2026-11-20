@@ -64,7 +64,7 @@ export function SendModal({ ed, open, onClose }: { ed: Ed; open: boolean; onClos
 
 /* ── Sửa thông tin hợp đồng (tự lưu như bản cũ) ───────────────────────── */
 export function InfoDrawer({ ed, open, onClose }: { ed: Ed; open: boolean; onClose: () => void }) {
-  const { f, set, reqMissing } = ed;
+  const { f, set, reqMissing, hasPasscodeCol, genPasscode } = ed;
   const saved = ed.contractSaved;
   return (
     <Drawer
@@ -85,7 +85,7 @@ export function InfoDrawer({ ed, open, onClose }: { ed: Ed; open: boolean; onClo
           <Field label="Họ tên khách *" htmlFor="ci-name" error={reqMissing.client_name ? "Cần có tên khách." : undefined}>
             <input id="ci-name" className={inputCls} style={redBorder(reqMissing.client_name)} value={f.client_name} onChange={(e) => set("client_name", e.target.value)} />
           </Field>
-          <Field label="Số điện thoại *" htmlFor="ci-phone" error={reqMissing.client_phone ? "Phải đủ 10 số." : undefined}>
+          <Field label="Số điện thoại *" htmlFor="ci-phone" error={reqMissing.client_phone ? (hasPasscodeCol ? "Phải đủ 10 số — hoặc để trống và đặt mã số bên dưới." : "Phải đủ 10 số.") : undefined}>
             <input
               id="ci-phone"
               className={inputCls}
@@ -98,8 +98,30 @@ export function InfoDrawer({ ed, open, onClose }: { ed: Ed; open: boolean; onClo
             />
           </Field>
           <Field label="Email" htmlFor="ci-email">
-            <input id="ci-email" className={inputCls} value={f.client_email} onChange={(e) => set("client_email", e.target.value)} />
+            <input id="ci-email" className={inputCls} type="email" value={f.client_email} onChange={(e) => set("client_email", e.target.value)} />
           </Field>
+          {hasPasscodeCol ? (
+            <Field
+              label="Mã số mở hợp đồng"
+              htmlFor="ci-pass"
+              error={reqMissing.client_passcode ? "Mã số gồm 6–12 chữ số." : undefined}
+              hint="Cho khách không dùng điện thoại: khách nhập mã này thay cho SĐT để mở hợp đồng."
+            >
+              <div className="flex gap-2">
+                <input
+                  id="ci-pass"
+                  className={`${inputCls} min-w-0 flex-1`}
+                  style={redBorder(reqMissing.client_passcode)}
+                  inputMode="numeric"
+                  maxLength={12}
+                  placeholder="Không bắt buộc"
+                  value={f.client_passcode}
+                  onChange={(e) => set("client_passcode", e.target.value.replace(/\D/g, ""))}
+                />
+                <button type="button" className={btn("secondary")} onClick={genPasscode}>Tạo mã</button>
+              </div>
+            </Field>
+          ) : null}
           <Field label="Nguồn khách" htmlFor="ci-src">
             <select id="ci-src" className={inputCls} value={f.source} onChange={(e) => set("source", e.target.value)}>
               <option value="">— Chưa rõ —</option>

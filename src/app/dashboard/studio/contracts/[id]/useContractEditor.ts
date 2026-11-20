@@ -48,6 +48,7 @@ import type { ContractAlbumOption } from "@/lib/contract-album";
 import { normalizeAlbumMode, type AlbumMode } from "@/lib/album-mode";
 import { depositByPercent } from "@/lib/quote-deposit";
 import { syncPlanToTotal } from "@/lib/contract-lines";
+import { PHONE_HINT, keyDigits, passcodeValid, randomPasscode, withPasscodeHint } from "@/lib/portal-key";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIC CHUNG của màn chi tiết hợp đồng — bản cũ (ContractEditor) và bản mới
@@ -410,6 +411,7 @@ export function useContractEditor(props: ContractEditorProps) {
     client_name: contract.client_name ?? "",
     client_phone: contract.client_phone ?? "",
     client_email: contract.client_email ?? "",
+    client_passcode: contract.client_passcode ?? "",
     bride_name: contract.bride_name ?? "",
     groom_name: contract.groom_name ?? "",
     bride_phone: contract.bride_phone ?? "",
@@ -529,6 +531,9 @@ export function useContractEditor(props: ContractEditorProps) {
   const hasDayCols = "event_label" in contract;
   // SĐT + địa chỉ cô dâu/chú rể: migration dat_lich_chi_tiet.sql (đợt sau).
   const hasCoupleCols = "bride_phone" in contract;
+  // Mã số mở hợp đồng: migration ma_so_mo_hop_dong.sql. Chưa chạy thì không ghi
+  // cột này (ghi cột không tồn tại là hỏng cả lượt tự lưu).
+  const hasPasscodeCol = "client_passcode" in contract;
 
   async function autosaveContract(data: typeof f) {
     setContractSaved("saving");
@@ -557,6 +562,7 @@ export function useContractEditor(props: ContractEditorProps) {
               event_note: data.event_note.trim() || null,
             }
           : {}),
+        ...(hasPasscodeCol ? { client_passcode: keyDigits(data.client_passcode) || null } : {}),
         ...(hasCoupleCols
           ? {
               bride_phone: data.bride_phone.replace(/[^\d+]/g, "") || null,
@@ -842,7 +848,11 @@ export function useContractEditor(props: ContractEditorProps) {
   const portalUrl = studioUrl(studioHost, `/portal/${contract.client_token}`);
   // Một nội dung tin duy nhất cho mọi cách gửi trong bảng "Gửi khách" — cùng một
   // link thì không được lệch câu chữ giữa Zalo, chia sẻ nhanh và chép link.
-  const clientPortalMsg = `Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} (mật khẩu là SĐT của anh/chị). Cảm ơn ạ!`;
+  const clientPortalMsg = withPasscodeHint(
+    `Xin chào ${f.client_name || "anh/chị"}, đây là hợp đồng dịch vụ của bên em. Anh/chị xem & xác nhận tại: ${shareUrl} ${PHONE_HINT}. Cảm ơn ạ!`,
+    f.client_phone,
+    f.client_passcode
+  );
 
   /** "Vietcombank · 0123456789 · NGUYEN VAN A" — dòng STK để khách chuyển tay. */
   const bankLine = [bank.name, (bank.account || "").replace(/\s/g, ""), bank.holder]
@@ -913,13 +923,18 @@ export function useContractEditor(props: ContractEditorProps) {
   }
 
   // Required fields — flagged red until valid. Phone must be 10 digits.
+  // Khách không dùng điện thoại: để trống SĐT và đặt MÃ SỐ mở hợp đồng thay thế.
   const phoneOk = /^\d{10}$/.test(f.client_phone.replace(/\D/g, ""));
+  const passcodeOk = passcodeValid(f.client_passcode);
+  const passcodeBad = !!keyDigits(f.client_passcode) && !passcodeOk;
   const reqMissing = {
     title: !f.title.trim(),
     code: !f.code.trim(),
     client_name: !f.client_name.trim(),
-    client_phone: !phoneOk,
+    client_phone: !(phoneOk || (!keyDigits(f.client_phone) && passcodeOk)),
+    client_passcode: passcodeBad,
   };
+  const genPasscode = () => set("client_passcode", randomPasscode());
   const studioSigned = !!contract.studio_signed_at || !!(studioSignName.trim() && studioSignature);
 
   async function fillCode() {
@@ -2021,7 +2036,7 @@ export function useContractEditor(props: ContractEditorProps) {
 
   return {
     props: p,
-    conflictFor, router, supabase,
+    conflictFor, router, supabase, hasPasscodeCol, genPasscode,
     f, setF, set, changeService, contractSaved, autosaveContract, syncContractCalendar, contractSaveTimer,
     deliveryDone, setDeliveryDone, deliverBusy, deliverNow, albumMode, setAlbumMode,
     finalLinks, finalSaved, setFinal, printQuota, printSaved, changePrintQuota,

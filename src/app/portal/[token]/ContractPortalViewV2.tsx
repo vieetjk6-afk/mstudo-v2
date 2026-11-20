@@ -48,7 +48,7 @@ export default function ContractPortalViewV2({ token, brand }: { token: string; 
         brand={brand}
         theme={theme}
         title="Trang hợp đồng của bạn"
-        desc="Nhập số điện thoại đã đăng ký để xem lịch trình, thanh toán và sản phẩm."
+        desc="Nhập số điện thoại đã đăng ký (hoặc mã số studio đã gửi) để xem lịch trình, thanh toán và sản phẩm."
         phone={s.phone}
         setPhone={s.setPhone}
         err={s.err}

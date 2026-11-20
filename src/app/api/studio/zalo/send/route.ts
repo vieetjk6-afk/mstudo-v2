@@ -3,6 +3,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { sendZalo } from "@/lib/zalo/send";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canActOnContract } from "@/lib/studio-roles";
+import { emailClient } from "@/lib/client-email";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -73,5 +74,16 @@ export async function POST(req: NextRequest) {
     albumId,
   });
 
-  return NextResponse.json(res);
+  // Tin gửi KHÁCH của một hợp đồng: khách có email thì gửi THÊM email cùng nội
+  // dung (khách dùng cả Zalo lẫn email nhận cả hai; khách không dùng điện thoại
+  // vẫn nhận qua email). Tin mẫu ZNS (OA) không có văn bản để gửi email.
+  const kind = typeof b.kind === "string" ? b.kind : "manual";
+  const email =
+    // Chỉ khi Zalo đã gửi được (hoặc studio chưa nối Zalo): Zalo hỏng vì chưa tìm
+    // ra người nhận thì studio sẽ chọn bạn rồi bấm lại — gửi email ở lượt đó.
+    audience === "client" && contractId && body && !kind.includes("test") && (res.ok || res.skipped)
+      ? await emailClient({ ownerId: profile.id, kind, body, contractId }).catch(() => ({ ok: false, error: "email_failed" }))
+      : undefined;
+
+  return NextResponse.json(email ? { ...res, email } : res);
 }

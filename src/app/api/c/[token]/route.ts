@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { checkPortalKey } from "@/lib/portal-key-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan, planAllowsWatermark, studioTier, type Plan } from "@/lib/plans";
 import { brandFrom, type StudioBrandInfo } from "@/lib/studio-brand";
@@ -23,7 +24,6 @@ import { loadTransferNoteMode } from "@/lib/transfer-note-mode";
 
 export const dynamic = "force-dynamic";
 
-const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
 type OwnerRow = {
   full_name: string | null;
@@ -94,7 +94,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       .eq("client_token", params.token)
       .maybeSingle();
     if (!c) return NextResponse.json({ error: "not_found" }, { status: 404 });
-    if (!c.client_phone || digits(body.phone) !== digits(c.client_phone)) {
+    if (!(await checkPortalKey(db, c as { id: string; client_phone: string | null }, body.phone))) {
       return NextResponse.json({ error: "wrong_phone" }, { status: 401 });
     }
     const [{ data: pays }, { data: plan }] = await Promise.all([
@@ -122,7 +122,9 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
   // merely holds the token.
   // Chặn NGAY sau khi có hợp đồng: cổng này chỉ cần chính hợp đồng, không cần
   // profiles — sai SĐT thì khỏi tốn thêm câu đọc nào (phản hồi y hệt trước).
-  if (!contract.client_phone || digits(body.phone) !== digits(contract.client_phone)) {
+  // SĐT khách, hoặc MÃ SỐ studio đặt cho khách không dùng điện thoại
+  // (xem @/lib/portal-key). Chưa có cái nào thì cổng vẫn khoá.
+  if (!(await checkPortalKey(db, contract as { id: string; client_phone: string | null }, body.phone))) {
     return NextResponse.json({ error: "wrong_phone" }, { status: 401 });
   }
 

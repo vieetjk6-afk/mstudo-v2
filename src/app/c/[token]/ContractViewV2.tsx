@@ -267,8 +267,8 @@ function Gate({ p, L }: { p: ContractPortal; L: Tr }) {
         </Card>
         <p className="mx-auto mt-4 max-w-[38ch] text-center text-[12.5px]" style={{ color: "var(--tx3)" }}>
           {L(
-            "Số điện thoại là mật khẩu, để chỉ bạn xem được hợp đồng và các khoản thanh toán.",
-            "Your phone number is the password, so only you can see the contract and payments.",
+            "Số điện thoại (hoặc mã số studio gửi) là mật khẩu, để chỉ bạn xem được hợp đồng và các khoản thanh toán.",
+            "Your phone number (or the studio's code) is the password, so only you can see the contract and payments.",
           )}
         </p>
       </div>

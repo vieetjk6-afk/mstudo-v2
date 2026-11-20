@@ -51,6 +51,7 @@ function NewContractFormV1(props: NewContractFormProps) {
     templates, services, packages, roster, crewRoles, recentClients, bank, initialQuickText, quickSourceNote,
     step, setStep, canNext,
     clientQuery, setClientQuery, clientName, setClientName, clientPhone, setClientPhone, phoneOk,
+    clientPasscode, setClientPasscode, clientEmail, setClientEmail, passcodeOk, clientOk, genPasscode,
     brideName, setBrideName, groomName, setGroomName,
     bridePhone, setBridePhone, brideAddress, setBrideAddress, groomPhone, setGroomPhone, groomAddress, setGroomAddress,
     filteredClients, pickClient, returningHit, savedNameDiffers,
@@ -165,7 +166,7 @@ function NewContractFormV1(props: NewContractFormProps) {
       <button
         type="button"
         onClick={() => create("draft")}
-        disabled={!!saving || !phoneOk}
+        disabled={!!saving || !clientOk}
         className="rounded-[10px] px-3 py-2.5 text-[12.5px] font-semibold disabled:opacity-50 sm:text-[13px]"
         style={{ border: "1px solid var(--bd)", background: "var(--sf)" }}
       >
@@ -351,6 +352,26 @@ function NewContractFormV1(props: NewContractFormProps) {
                   value={clientPhone}
                   onChange={(e) => setClientPhone(e.target.value)}
                 />
+              </div>
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-email">Email (không bắt buộc)</label>
+                <input id="nc-email" className={inputCls} style={inputStyle} type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} />
+              </div>
+              <div>
+                <label className={fieldLabel} style={fieldLabelStyle} htmlFor="nc-pass">Mã số mở hợp đồng (khách không dùng điện thoại)</label>
+                <div className="flex gap-2">
+                  <input
+                    id="nc-pass"
+                    className={`${inputCls} min-w-0 flex-1`}
+                    style={{ ...inputStyle, borderColor: clientPasscode && !passcodeOk ? "var(--rd)" : "var(--bd)" }}
+                    inputMode="numeric"
+                    maxLength={12}
+                    placeholder="6–12 chữ số"
+                    value={clientPasscode}
+                    onChange={(e) => setClientPasscode(e.target.value.replace(/\D/g, ""))}
+                  />
+                  <button type="button" className="rounded-[10px] px-3 text-[12.5px] font-semibold" style={{ border: "1px solid var(--bd)", background: "var(--sf)" }} onClick={genPasscode}>Tạo mã</button>
+                </div>
               </div>
               {([
                 ["Cô dâu", "nc-bride", "Nguyễn Thu Lan", brideName, setBrideName, bridePhone, setBridePhone, brideAddress, setBrideAddress],

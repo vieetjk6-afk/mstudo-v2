@@ -166,14 +166,14 @@ export async function notifyPaymentZalo(
     const [{ data: c }, { data: owner }, { data: items }, { data: pays }] = await Promise.all([
       db
         .from("studio_contracts")
-        .select("id, owner_id, title, client_name, client_phone, client_token, status")
+        .select("id, owner_id, title, client_name, client_phone, client_email, client_token, status")
         .eq("id", contractId)
         .maybeSingle(),
       db.from("profiles").select("full_name").eq("id", ownerId).maybeSingle(),
       db.from("contract_items").select("qty, unit_price").eq("contract_id", contractId),
       db.from("contract_payments").select("amount").eq("contract_id", contractId),
     ]);
-    if (!c || c.owner_id !== ownerId || !c.client_phone || c.status === "cancelled") return null;
+    if (!c || c.owner_id !== ownerId || !(c.client_phone || c.client_email) || c.status === "cancelled") return null;
     const studio = (owner as { full_name?: string | null } | null)?.full_name || "Studio";
     const link = c.client_token ? await studioLink(db, ownerId, `/c/${c.client_token}`) : null;
     const total = contractTotal((items ?? []) as { qty: number; unit_price: number }[]);
@@ -195,6 +195,7 @@ export async function notifyPaymentZalo(
         event: "payment_done",
         audience: "client",
         toPhone: c.client_phone,
+        toEmail: c.client_email,
         toName: c.client_name,
         body: paymentDoneMessage({ name: c.client_name, total: vnd(total), title: c.title, link, studio }),
         contractId: c.id,
@@ -208,6 +209,7 @@ export async function notifyPaymentZalo(
       event: "deposit_confirm",
       audience: "client",
       toPhone: c.client_phone,
+      toEmail: c.client_email,
       toName: c.client_name,
       body: depositConfirmMessage({
         name: c.client_name,

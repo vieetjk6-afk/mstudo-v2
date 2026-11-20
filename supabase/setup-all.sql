@@ -8663,6 +8663,26 @@ create index if not exists pet_claims_user_day_idx on public.pet_claims (user_id
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/ma_so_mo_hop_dong.sql — Mã số mở hợp đồng cho khách không dùng điện thoại (chỉ cần studio_contracts)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- MÃ SỐ MỞ HỢP ĐỒNG — cho khách KHÔNG dùng điện thoại
+--
+-- Trang hợp đồng / trang riêng của khách (/c/<token>, /portal/<token>) lấy SĐT
+-- khách làm mật khẩu. Khách không có (hoặc không muốn đưa) SĐT thì studio đặt
+-- một MÃ SỐ ở đây; khách gõ mã đó vào đúng ô nhập SĐT để mở. Có cả hai thì
+-- nhập cái nào cũng mở được.
+--
+-- Chỉ lưu chữ số (app tự bỏ ký tự khác). Chỉ cần bảng studio_contracts có từ
+-- schema nền. Chạy lại an toàn.
+-- ============================================================================
+
+alter table public.studio_contracts
+  add column if not exists client_passcode text;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/phan_quyen_vai_tro_hop_dong.sql — Phân quyền theo vai trò cho hợp đồng: staff chỉ hợp đồng được giao, quản lý chi nhánh chỉ chi nhánh mình, kế toán chỉ đọc, chỉ chủ studio huỷ / hoàn tiền, tài khoản bị khoá mất quyền (chạy CUỐI)
 -- ══════════════════════════════════════════════════════════════════════════
 

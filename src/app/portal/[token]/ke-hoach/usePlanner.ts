@@ -23,7 +23,7 @@ import type { PlannerOpResponse, PlannerPayload } from "./types";
 /** Mã lỗi mở trang → câu cho khách. */
 function openErrorText(code?: string): string {
   switch (code) {
-    case "wrong_phone": return "Số điện thoại không khớp. Vui lòng kiểm tra lại.";
+    case "wrong_phone": return "Số điện thoại hoặc mã số không khớp. Vui lòng kiểm tra lại.";
     case "not_found": return "Không tìm thấy hợp đồng.";
     case "disabled": return "Studio chưa mở kế hoạch cưới cho hợp đồng này.";
     case "coming_soon": return "Kế hoạch cưới sắp ra mắt — studio sẽ báo bạn khi mở.";

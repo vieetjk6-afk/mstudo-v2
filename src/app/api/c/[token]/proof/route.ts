@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { checkPortalKey } from "@/lib/portal-key-server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { driveImageUrlOrNull } from "@/lib/mstudo-drive";
 import { limitByIpDurable } from "@/lib/rate-limit";
@@ -30,9 +31,8 @@ export async function POST(req: NextRequest, props: { params: Promise<{ token: s
 
   // M1: cùng cổng SĐT như route hợp đồng chính (fail-closed) — chỉ khách đã xác
   // thực SĐT mới upload được, tránh ai cầm link token cũng spam bucket/notification.
-  const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
   const phone = form.get("phone") as string | null;
-  if (!contract.client_phone || digits(phone) !== digits(contract.client_phone)) {
+  if (!(await checkPortalKey(db, contract, phone))) {
     return NextResponse.json({ error: "wrong_phone" }, { status: 401 });
   }
 

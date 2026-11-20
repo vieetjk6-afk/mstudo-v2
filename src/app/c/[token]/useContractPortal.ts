@@ -90,9 +90,9 @@ export type PortalPayload = {
 export type Lang = "vi" | "en";
 export const TR = {
   vi: {
-    portalTitle: "Hợp đồng của bạn", gatePrompt: "Nhập số điện thoại đã đăng ký để xem hợp đồng.",
-    phone: "Số điện thoại", view: "Xem hợp đồng", opening: "Đang mở…", pdf: "Tải PDF / In",
-    wrongPhone: "Số điện thoại không khớp. Vui lòng kiểm tra lại.", notFound: "Không tìm thấy hợp đồng.", genericErr: "Có lỗi xảy ra.",
+    portalTitle: "Hợp đồng của bạn", gatePrompt: "Nhập số điện thoại đã đăng ký (hoặc mã số studio đã gửi) để xem hợp đồng.",
+    phone: "Số điện thoại / mã số", view: "Xem hợp đồng", opening: "Đang mở…", pdf: "Tải PDF / In",
+    wrongPhone: "Số điện thoại hoặc mã số không khớp. Vui lòng kiểm tra lại.", notFound: "Không tìm thấy hợp đồng.", genericErr: "Có lỗi xảy ra.",
     client: "Khách hàng", schedule: "Lịch trình", pickPhotos: "Chọn ảnh của bạn", pickPhotosSub: "đánh dấu những tấm ưng ý",
     viewPhotos: "Xem ảnh của bạn", viewPhotosSub: "mật khẩu là SĐT của bạn", open: "Mở →",
     items: "Hạng mục dịch vụ", noItems: "Chưa có hạng mục.", totalVal: "Tổng giá trị", paid: "Đã thanh toán", remaining: "Còn lại",
@@ -110,9 +110,9 @@ export const TR = {
     quoteTitle: "Chọn gói dịch vụ", quotePrompt: "Mời bạn chọn gói phù hợp nhất.", choose: "Chọn gói này", chosen: "Đã chọn",
   },
   en: {
-    portalTitle: "Your contract", gatePrompt: "Enter your registered phone number to view the contract.",
-    phone: "Phone number", view: "View contract", opening: "Opening…", pdf: "Save PDF / Print",
-    wrongPhone: "Phone number doesn't match. Please check again.", notFound: "Contract not found.", genericErr: "Something went wrong.",
+    portalTitle: "Your contract", gatePrompt: "Enter your registered phone number (or the code the studio sent you) to view the contract.",
+    phone: "Phone number / code", view: "View contract", opening: "Opening…", pdf: "Save PDF / Print",
+    wrongPhone: "Phone number or code doesn't match. Please check again.", notFound: "Contract not found.", genericErr: "Something went wrong.",
     client: "Client", schedule: "Schedule", pickPhotos: "Pick your photos", pickPhotosSub: "mark your favourites",
     viewPhotos: "View your photos", viewPhotosSub: "password is your phone number", open: "Open →",
     items: "Service items", noItems: "No items yet.", totalVal: "Total value", paid: "Paid", remaining: "Remaining",
