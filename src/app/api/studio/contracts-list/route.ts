@@ -5,6 +5,7 @@ import { requireStudio } from "@/lib/auth-guards";
 import { autoAdvanceContracts } from "@/lib/contract-status";
 import { applyBranch, getBranchScope } from "@/lib/branches";
 import { doToc } from "@/lib/do-toc";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 
 export const dynamic = "force-dynamic";
 
@@ -32,14 +33,24 @@ export async function GET() {
   // request nên đọc được cookie đó, và danh sách hợp đồng khớp với phạm vi mà
   // người dùng đang thấy ở mọi màn khác.
   const scope = await dt.buoc("branch", getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string));
-  let q = supabase
-    .from("studio_contracts")
-    .select("id, code, title, client_name, client_phone, event_date, event_time, status, shoot_type, branch_id, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")
-    .eq("owner_id", profile.id);
-  if (profile.actingRole === "staff") q = q.eq("assigned_to", profile.actingUserId);
-  q = applyBranch(q, scope.selected);
-  const { data, error } = await dt.buoc("list", Promise.resolve(q.order("created_at", { ascending: false })));
+  // LẬT TRANG: `.select()` trơn bị Supabase cắt lặng lẽ ở 1000 dòng, và vì
+  // xếp mới tạo trước nên phần bị cắt chính là HĐ CŨ — thường đã hoàn thành —
+  // khiến tìm tên/SĐT khách cũ không ra. Thứ tự tổng (created_at, id) để ranh
+  // giới trang không trùng/sót hàng.
+  const data = await dt.buoc(
+    "list",
+    fetchAllRows<unknown>((from, to) => {
+      let q = supabase
+        .from("studio_contracts")
+        .select("id, code, title, client_name, client_phone, event_date, event_time, status, shoot_type, branch_id, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")
+        .eq("owner_id", profile.id);
+      if (profile.actingRole === "staff") q = q.eq("assigned_to", profile.actingUserId);
+      return applyBranch(q, scope.selected)
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, to);
+    })
+  );
   dt.xong();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ list: data ?? [] });
+  return NextResponse.json({ list: data });
 }

@@ -12,6 +12,7 @@ import {
   type ExportStudio,
 } from "@/lib/studio-export";
 import type { ClientAgg } from "./ClientsView";
+import { matchesQuery } from "@/lib/contract-filter";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Phần LOGIC dùng chung của màn Khách hàng (bản cũ ClientsView và bản mới
@@ -58,13 +59,11 @@ export function useClients(clients: ClientAgg[], studio: ExportStudio) {
   const avgValue = clients.length ? Math.round(totalSpent / clients.length) : 0;
 
   const filtered = useMemo(() => {
-    const n = q.trim().toLowerCase();
     const list = clients.filter((c) => {
       if (segment === "old" && !isOld(c)) return false;
       if (segment === "returning" && c.count <= 1) return false;
       if (segment === "debt" && debtOf(c) <= 0) return false;
-      if (!n) return true;
-      return c.name.toLowerCase().includes(n) || c.phone.toLowerCase().includes(n);
+      return matchesQuery(q, [c.name, c.phone], [c.phone]);
     });
     const sorted = [...list];
     if (sort === "value") sorted.sort((a, b) => b.value - a.value);

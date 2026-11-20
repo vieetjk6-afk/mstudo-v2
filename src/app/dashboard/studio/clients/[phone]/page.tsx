@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireStudio } from "@/lib/auth-guards";
 import {
   contractTotal,
@@ -45,13 +46,16 @@ export default async function ClientDetail(props: { params: Promise<{ phone: str
 
   const key = decodeURIComponent(params.phone);
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("studio_contracts")
-    .select("id, title, client_name, client_phone, client_email, event_date, status, source, contract_items(qty, unit_price), contract_payments(amount)")
-    .eq("owner_id", profile.id)
-    .order("event_date", { ascending: false, nullsFirst: false });
-
-  const all = (data ?? []) as unknown as Row[];
+  // Lật trang — không thì studio quá 1000 HĐ mở hồ sơ khách cũ ra trống trơn.
+  const all = await fetchAllRows<Row>((from, to) =>
+    supabase
+      .from("studio_contracts")
+      .select("id, title, client_name, client_phone, client_email, event_date, status, source, contract_items(qty, unit_price), contract_payments(amount)")
+      .eq("owner_id", profile.id)
+      .order("event_date", { ascending: false, nullsFirst: false })
+      .order("id")
+      .range(from, to)
+  );
   const mine = all.filter((r) => (digits(r.client_phone) || (r.client_name || "").trim().toLowerCase()) === key);
 
   const name = mine.find((r) => r.client_name)?.client_name || mine[0]?.client_phone || "Khách hàng";
