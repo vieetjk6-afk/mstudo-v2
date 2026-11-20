@@ -63,6 +63,10 @@ export default function NotificationsV2({ initial }: { initial: StudioNotificati
         }
       />
 
+      {/* Cài đặt thông báo đẩy LÊN ĐẦU, trước danh sách: để dưới đáy thì danh
+          sách dài là không ai kéo tới, nhất là trên iPhone khi cần bật lại. */}
+      <PushToggle />
+
       {n.items.length === 0 ? (
         <div className="v2-card">
           <Empty icon={Bell} title="Chưa có thông báo nào" hint="Khách ký hợp đồng, chuyển cọc hay thợ nhận job đều báo về đây." />
@@ -139,8 +143,6 @@ export default function NotificationsV2({ initial }: { initial: StudioNotificati
           )}
         </div>
       )}
-
-      <PushToggle />
     </Stack>
   );
 }
