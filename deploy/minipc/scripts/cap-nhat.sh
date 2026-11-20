@@ -10,7 +10,15 @@ git checkout "$BRANCH"
 git merge --ff-only "origin/$BRANCH"
 cd deploy/minipc
 export GIT_SHA="$(git rev-parse HEAD)"
+# Chỉ chạy lại đúng các dịch vụ ĐANG chạy: giai đoạn thử chưa bật cron thì
+# cập nhật cũng không tự bật cron (tránh gửi tin nhắc trùng với Vercel).
+RUNNING="$(docker compose ps --services --status running | tr '\n' ' ')"
 docker compose build
-docker compose up -d
+if [[ -n "${RUNNING// /}" ]]; then
+  # shellcheck disable=SC2086
+  docker compose up -d $RUNNING
+else
+  docker compose up -d
+fi
 docker image prune -f >/dev/null
 echo "✔ Đang chạy bản $(git rev-parse --short HEAD). Kiểm tra: docker compose ps"

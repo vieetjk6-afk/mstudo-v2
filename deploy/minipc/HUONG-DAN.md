@@ -235,8 +235,11 @@ Lưu: `Ctrl+O`, Enter, `Ctrl+X`.
 
 ### 5.2 Build và chạy
 
+Giai đoạn chạy thử (Vercel vẫn đang chạy cron) chỉ bật app + đường hầm, để
+khách không nhận tin nhắc hai lần. Cron bật ở mục 7, sau khi tắt cron Vercel:
+
 ```bash
-docker compose up -d --build
+docker compose up -d --build mstudo cloudflared
 ```
 
 Lần đầu mất 5–15 phút. Bước build cần **~6 GB RAM** (kiểm tra kiểu TypeScript
@@ -399,6 +402,7 @@ Làm sau khi `thu.mstudo.com` chạy ổn ít nhất 1–2 tuần.
 4. **TẮT cron trên Vercel ngay** — nếu không mỗi tin nhắc Zalo/email sẽ gửi
    **2 lần**. Cách: Vercel → Project → Settings → Cron Jobs → **Disable**
    (hoặc xoá biến `CRON_SECRET` trên Vercel để cron bên đó tự trả 401).
+   Rồi bật cron trên minipc: `docker compose up -d cron`.
 5. Callback Google/Zalo/Meta **không phải sửa** vì tên miền giữ nguyên.
 6. Đường lui: trả lại bản ghi DNS về Vercel + bật lại cron bên đó.
 
