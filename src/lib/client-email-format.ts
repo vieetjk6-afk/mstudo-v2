@@ -14,6 +14,7 @@ const SUBJECT: Record<string, string> = {
   select_nudge: "Nhắc chọn ảnh",
   delivery_ready: "Ảnh của anh/chị đã sẵn sàng",
   quote_expiring: "Báo giá sắp hết hạn",
+  contract_share: "Hợp đồng dịch vụ của anh/chị",
   manual: "Thông báo",
 };
 

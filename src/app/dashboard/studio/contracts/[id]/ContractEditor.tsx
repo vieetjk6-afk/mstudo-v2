@@ -47,6 +47,7 @@ import MessengerButton from "@/components/MessengerButton";
 import ContractStepper from "@/components/studio/ContractStepper";
 import ContractAppointments from "./ContractAppointments";
 import ZaloSendButton from "@/components/ZaloSendButton";
+import EmailSendButton from "@/components/EmailSendButton";
 import EmailButton from "@/components/EmailButton";
 import WeddingInvitationCard from "./WeddingInvitationCard";
 import LoveStoryCard from "./LoveStoryCard";
@@ -2464,6 +2465,7 @@ function ContractEditorV1(props: ContractEditorProps) {
                 className="act-btn"
                 message={clientPortalMsg}
               />
+              <EmailSendButton contractId={contract.id} email={f.client_email} message={clientPortalMsg} className="act-btn" />
               <button onClick={quickShare} className="act-btn">
                 <Share2 size={15} /> Gửi nhanh qua chia sẻ
               </button>

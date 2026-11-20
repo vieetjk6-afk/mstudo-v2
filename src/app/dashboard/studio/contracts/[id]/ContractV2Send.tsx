@@ -28,7 +28,7 @@ export default function ContractV2Send({ ctx }: { ctx: V2Ctx }) {
 
   return (
     <>
-      <Section title="Gửi hợp đồng cho khách" icon={Send} desc="Khách xem hợp đồng, lịch, ảnh và thanh toán trên cổng riêng. Mật khẩu là số điện thoại của khách.">
+      <Section title="Gửi hợp đồng cho khách" icon={Send} desc="Khách xem hợp đồng, lịch, ảnh và thanh toán trên cổng riêng. Mật khẩu là số điện thoại của khách (hoặc mã số mở hợp đồng). Khách không dùng điện thoại thì gửi qua email.">
         <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <SendOptions ed={ed} />
           <div className="flex flex-col gap-3 rounded-[14px] p-4" style={{ background: "var(--sf2)" }}>
