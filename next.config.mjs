@@ -1,6 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /**
+   * Tự host trên máy riêng (minipc, VPS) bằng Docker: build với
+   * NEXT_OUTPUT=standalone để Next gom server.js + đúng phần node_modules cần
+   * chạy vào .next/standalone (image nhỏ, không cần `npm ci` lúc chạy).
+   * Vercel KHÔNG đặt biến này nên bản deploy trên Vercel giữ nguyên như cũ.
+   * Xem deploy/minipc/HUONG-DAN.md.
+   */
+  ...(process.env.NEXT_OUTPUT === "standalone" ? { output: "standalone" } : {}),
+  /**
    * Next 15 chuyển ba khoá dưới đây RA KHỎI `experimental`. Đổi tên/đổi chỗ mà
    * quên thì `next build` VẪN XANH và chỉ vỡ trên production — đúng kiểu hỏng
    * mà hai ghi chú dài phía dưới đã trả giá để học.

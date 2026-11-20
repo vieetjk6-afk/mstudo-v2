@@ -1,0 +1,15 @@
+# Ngữ cảnh build Docker (deploy/minipc/Dockerfile). Giữ nhỏ để build nhanh và
+# KHÔNG BAO GIỜ đưa bí mật vào image.
+node_modules
+.next
+.git
+.github
+.vercel
+.claude
+**/.env
+**/.env.*
+!.env.example
+deploy/minipc/data
+deploy/minipc/.env
+*.log
+.DS_Store

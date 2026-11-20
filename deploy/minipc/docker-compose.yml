@@ -1,0 +1,118 @@
+# mstudo tự host trên minipc — app + cron + Cloudflare Tunnel.
+#
+#   cd ~/mstudo-v2/deploy/minipc
+#   cp .env.example .env && nano .env      # điền bí mật
+#   docker compose up -d --build
+#
+# KHÔNG mở cổng nào ra Internet: khách vào qua Cloudflare Tunnel (cloudflared
+# gọi RA ngoài), nên router không cần port-forward và IP nhà bạn không lộ.
+# Hướng dẫn đầy đủ: HUONG-DAN.md (cùng thư mục).
+
+name: mstudo
+
+x-hardening: &hardening
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+
+services:
+  mstudo:
+    <<: *hardening
+    build:
+      context: ../..
+      dockerfile: deploy/minipc/Dockerfile
+      target: runner
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-}
+        NEXT_PUBLIC_MAIN_HOST: ${NEXT_PUBLIC_MAIN_HOST:-}
+        NEXT_PUBLIC_APP_HOST: ${NEXT_PUBLIC_APP_HOST:-}
+        NEXT_PUBLIC_IMG_HOST: ${NEXT_PUBLIC_IMG_HOST:-}
+        NEXT_PUBLIC_ADMIN_HOST: ${NEXT_PUBLIC_ADMIN_HOST:-}
+        NEXT_PUBLIC_THIEP_HOST: ${NEXT_PUBLIC_THIEP_HOST:-}
+        NEXT_PUBLIC_STUDIO_HOST: ${NEXT_PUBLIC_STUDIO_HOST:-}
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}
+        NEXT_PUBLIC_GOOGLE_API_KEY: ${NEXT_PUBLIC_GOOGLE_API_KEY:-}
+        NEXT_PUBLIC_GOOGLE_APP_ID: ${NEXT_PUBLIC_GOOGLE_APP_ID:-}
+        NEXT_PUBLIC_TURNSTILE_SITE_KEY: ${NEXT_PUBLIC_TURNSTILE_SITE_KEY:-}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+        NEXT_PUBLIC_IMG_DIRECT: ${NEXT_PUBLIC_IMG_DIRECT:-}
+        NEXT_PUBLIC_FACE_SEARCH: ${NEXT_PUBLIC_FACE_SEARCH:-}
+        NEXT_PUBLIC_SEPAY_REF_URL: ${NEXT_PUBLIC_SEPAY_REF_URL:-}
+        NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL: ${NEXT_PUBLIC_DESKTOP_DOWNLOAD_URL:-}
+        NEXT_PUBLIC_DESKTOP_RELEASES_REPO: ${NEXT_PUBLIC_DESKTOP_RELEASES_REPO:-}
+        GIT_SHA: ${GIT_SHA:-}
+    image: mstudo:latest
+    env_file: .env
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+    # Chỉ nghe trên chính minipc (để thử bằng curl). Internet vào qua tunnel.
+    ports:
+      - "127.0.0.1:3000:3000"
+    read_only: true
+    tmpfs:
+      - /tmp
+    volumes:
+      - next-cache:/app/.next/cache
+    mem_limit: 2g
+    networks: [web]
+
+  # Thay cho "crons" trong vercel.json — cùng lịch (giờ UTC), cùng header
+  # Authorization: Bearer $CRON_SECRET. Gọi thẳng app trong mạng nội bộ Docker.
+  cron:
+    <<: *hardening
+    image: alpine:3.20
+    entrypoint: ["/bin/sh", "/cron/entrypoint.sh"]
+    env_file: .env
+    environment:
+      TZ: UTC
+      APP_URL: http://mstudo:3000
+    volumes:
+      - ./cron:/cron:ro
+    # crond cần setuid/setgid khi chạy job.
+    cap_add: [SETUID, SETGID]
+    depends_on:
+      mstudo:
+        condition: service_healthy
+    networks: [web]
+
+  # Cloudflare Tunnel: lấy token ở Cloudflare Zero Trust → Networks → Tunnels.
+  cloudflared:
+    <<: *hardening
+    image: cloudflare/cloudflared:2025.11.1
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:?Thiếu CLOUDFLARE_TUNNEL_TOKEN trong .env}
+    depends_on:
+      mstudo:
+        condition: service_healthy
+    networks: [web]
+
+  # (Tuỳ chọn) nghe tin Zalo cá nhân. Bật: docker compose --profile zalo up -d
+  zalo-worker:
+    <<: *hardening
+    profiles: [zalo]
+    build:
+      context: ../..
+      dockerfile: deploy/minipc/Dockerfile
+      target: zalo-worker
+    image: mstudo-zalo-worker:latest
+    env_file: .env
+    networks: [web]
+
+volumes:
+  next-cache:
+
+# Mạng tên cố định "edge": web khác (ở thư mục/compose khác) khai
+#   networks: { edge: { external: true } }
+# là cloudflared gọi tới được, KHÔNG cần mở thêm cổng nào.
+networks:
+  web:
+    name: edge

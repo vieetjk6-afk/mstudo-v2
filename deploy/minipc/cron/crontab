@@ -1,0 +1,13 @@
+# Giờ UTC — y hệt "crons" trong vercel.json. Sửa vercel.json thì sửa cả đây.
+# phút giờ ngày tháng thứ   lệnh
+5  17 * * *   /bin/sh /cron/goi.sh /api/cron/plan-expiry
+30 23 * * *   /bin/sh /cron/goi.sh /api/cron/automations
+0  0  * * *   /bin/sh /cron/goi.sh /api/cron/reminders
+0  1  * * *   /bin/sh /cron/goi.sh "/api/cron/zalo?only=money"
+0  4  * * *   /bin/sh /cron/goi.sh "/api/cron/zalo?only=work"
+30 1  * * *   /bin/sh /cron/goi.sh /api/cron/cleanup-proofs
+0  3  * * *   /bin/sh /cron/goi.sh /api/cron/cleanup-drive-cache
+0  2  * * 0   /bin/sh /cron/goi.sh /api/cron/cleanup-wedding-photos
+45 2  * * *   /bin/sh /cron/goi.sh /api/cron/cleanup-faces
+50 2  * * *   /bin/sh /cron/goi.sh /api/cron/cleanup-quick-share
+15 20 * * *   /bin/sh /cron/goi.sh /api/cron/backup
