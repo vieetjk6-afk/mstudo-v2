@@ -7,7 +7,8 @@
  * đăng ký theo `tag`, nên ba đăng ký là ba tin nổi lên.
  *
  * Ba điều phải đúng:
- *  1. Một người nhiều đăng ký → đúng MỘT tin, gửi tới đăng ký MỚI NHẤT.
+ *  1. Một người nhiều đăng ký CÙNG loại thiết bị → đúng MỘT tin, gửi tới đăng
+ *     ký MỚI NHẤT; khác loại (iPhone vs Chrome máy tính) → mỗi loại một tin.
  *  2. Lọc theo TÀI KHOẢN, không theo studio: nhân viên đăng ký chung owner_id
  *     với chủ, gom theo studio thì cả nhóm chỉ một người nhận được.
  *  3. Thiếu created_at (dữ liệu cũ) không được làm hỏng phép chọn.
@@ -68,6 +69,32 @@ check(
 );
 
 check("không có đăng ký nào → không gửi gì", motThietBiMoiNguoi([]), []);
+
+const APPLE = (n) => `https://web.push.apple.com/Q${n}`;
+const GOOGLE = (n) => `https://fcm.googleapis.com/fcm/send/${n}`;
+
+check(
+  "iPhone bật TRƯỚC, máy tính Chrome bật SAU → iPhone vẫn nhận (lỗi cũ: iPhone im)",
+  ids(
+    motThietBiMoiNguoi([
+      { id: "iphone", user_id: "u1", created_at: "2026-01-01T00:00:00Z", endpoint: APPLE(1) },
+      { id: "chrome-pc", user_id: "u1", created_at: "2026-02-01T00:00:00Z", endpoint: GOOGLE(1) },
+    ])
+  ),
+  ["chrome-pc", "iphone"]
+);
+
+check(
+  "cùng iPhone: tab Safari + app màn hình chính → vẫn MỘT tin (cái mới nhất)",
+  ids(
+    motThietBiMoiNguoi([
+      { id: "safari-tab", user_id: "u1", created_at: "2026-01-01T00:00:00Z", endpoint: APPLE(1) },
+      { id: "app-home", user_id: "u1", created_at: "2026-03-01T00:00:00Z", endpoint: APPLE(2) },
+      { id: "chrome-pc", user_id: "u1", created_at: "2026-02-01T00:00:00Z", endpoint: GOOGLE(1) },
+    ])
+  ),
+  ["app-home", "chrome-pc"]
+);
 
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);
