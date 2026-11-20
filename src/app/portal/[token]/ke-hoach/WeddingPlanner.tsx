@@ -50,13 +50,13 @@ export default function WeddingPlanner({ token }: { token: string }) {
           </span>
           <h1 className="mt-3.5 text-[21px] font-bold" style={{ letterSpacing: "-.5px" }}>Kế hoạch cưới của bạn</h1>
           <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: "var(--tx2)" }}>
-            Nhập số điện thoại đã đăng ký với studio để mở việc cần làm, ngân sách và lịch trình ngày cưới.
+            Nhập số điện thoại đã đăng ký với studio (hoặc mã số studio đã gửi) để mở việc cần làm, ngân sách và lịch trình ngày cưới.
           </p>
           <input
             className="mt-5 w-full rounded-[11px] px-3.5 py-3 text-center text-[15px] font-semibold tracking-wide"
             style={{ border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" }}
             inputMode="numeric"
-            placeholder="Số điện thoại"
+            placeholder="Số điện thoại / mã số"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />

@@ -345,6 +345,8 @@ export interface StudioContract {
   client_name: string | null;
   client_phone: string | null;
   client_email: string | null;
+  /** Mã số mở trang khách khi khách không dùng điện thoại (migrations/ma_so_mo_hop_dong.sql). */
+  client_passcode?: string | null;
   /** Tên cô dâu / chú rể (migrations/hop_dong_yeu_cau_studio.sql). */
   bride_name?: string | null;
   groom_name?: string | null;

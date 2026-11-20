@@ -30,6 +30,7 @@ import { makeListLabel } from "@/lib/pricelist-label";
 import { draftTotal, missingFields, type QuickDraft } from "@/lib/contract-quick";
 import { crewClashes, type DayContract, type DayCrewRow } from "@/lib/contract-conflicts";
 import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
+import { keyDigits, passcodeValid, randomPasscode } from "@/lib/portal-key";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    Phần LOGIC dùng chung của màn Tạo hợp đồng — bản cũ (NewContractForm) và
@@ -161,6 +162,9 @@ export function useNewContractForm({
   const [clientQuery, setClientQuery] = useState("");
   const [clientName, setClientName] = useState("");
   const [clientPhone, setClientPhone] = useState("");
+  // Khách không dùng điện thoại: để trống SĐT, đặt MÃ SỐ mở hợp đồng thay thế.
+  const [clientPasscode, setClientPasscode] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
   // Một hợp đồng cho cả hai nhà: người ký (client_name) + tên cô dâu, chú rể.
   const [brideName, setBrideName] = useState("");
   const [groomName, setGroomName] = useState("");
@@ -311,6 +315,10 @@ export function useNewContractForm({
 
   const phoneOk = /^\d{10}$/.test(clientPhone.replace(/\D/g, ""));
   const phoneDigits = clientPhone.replace(/\D/g, "");
+  const passcodeOk = passcodeValid(clientPasscode);
+  /** Đủ "khoá" để khách mở hợp đồng: SĐT 10 số, hoặc bỏ trống SĐT và có mã số. */
+  const clientOk = phoneOk || (!phoneDigits && passcodeOk);
+  const genPasscode = () => setClientPasscode(randomPasscode());
 
   /* ── Khách cũ ────────────────────────────────────────────────────────────
      Danh sách "khách gần đây" chỉ có 8 người; gõ (hoặc Tạo nhanh điền) một SĐT
@@ -712,18 +720,18 @@ export function useNewContractForm({
   }
 
   /** Bước hiện tại đã đủ dữ liệu để đi tiếp chưa. */
-  const canNext = step === 1 ? phoneOk : step === 2 ? lines.length > 0 : true;
+  const canNext = step === 1 ? clientOk : step === 2 ? lines.length > 0 : true;
   const autoTitle = selectedService
     ? `Hợp đồng ${selectedService.name} ${fmtDate(eventDate || new Date())}`
     : `Hợp đồng ${fmtDate(eventDate || new Date())}`;
 
   async function create(mode: "draft" | "send") {
     setErr(null);
-    if (!phoneOk) {
+    if (!clientOk) {
       // Bước 1 (chỉ số 1) là Khách hàng — nơi có ô điện thoại. Trước khi đưa
       // Loại dịch vụ lên đầu thì đó là chỉ số 0.
       setStep(1);
-      setErr("SĐT khách phải đủ 10 số (dùng làm mật khẩu để khách mở cổng hợp đồng).");
+      setErr("SĐT khách phải đủ 10 số (dùng làm mật khẩu để khách mở cổng hợp đồng) — hoặc khách không dùng điện thoại thì để trống SĐT và đặt mã số 6–12 chữ số.");
       return;
     }
     setSaving(mode);
@@ -743,6 +751,8 @@ export function useNewContractForm({
       title: title.trim() || autoTitle,
       client_name: clientName.trim() || null,
       client_phone: clientPhone.replace(/\D/g, "") || null,
+      ...(clientEmail.trim() ? { client_email: clientEmail.trim() } : {}),
+      ...(passcodeOk ? { client_passcode: keyDigits(clientPasscode) } : {}),
       ...(brideName.trim() ? { bride_name: brideName.trim() } : {}),
       ...(groomName.trim() ? { groom_name: groomName.trim() } : {}),
       ...(bridePhone.trim() ? { bride_phone: bridePhone.replace(/[^\d+]/g, "") } : {}),
@@ -779,6 +789,13 @@ export function useNewContractForm({
       delete row.internal_note;
       noteLost = true;
       ({ data, error } = await supabase.from("studio_contracts").insert(row).select("id").single());
+    }
+    // Chưa chạy migration ma_so_mo_hop_dong.sql mà khách không có SĐT → không
+    // lưu được mã thì khách không mở được hợp đồng: báo rõ, không tạo bừa.
+    if (error && row.client_passcode !== undefined && isMissingColumn(error, "client_passcode")) {
+      setSaving(null);
+      setErr("Database chưa có cột mã số mở hợp đồng — chạy supabase/cap-nhat.sql (phần ma_so_mo_hop_dong.sql) rồi thử lại, hoặc nhập SĐT khách.");
+      return;
     }
     // Chưa chạy migration che_do_album_hop_dong.sql → lưu hợp đồng như cũ (hành
     // vi album tự động cũ), không chặn việc tạo hợp đồng.
@@ -946,6 +963,7 @@ export function useNewContractForm({
     step, setStep, canNext,
     // khách
     clientQuery, setClientQuery, clientName, setClientName, clientPhone, setClientPhone, phoneOk, phoneDigits,
+    clientPasscode, setClientPasscode, clientEmail, setClientEmail, passcodeOk, clientOk, genPasscode,
     brideName, setBrideName, groomName, setGroomName,
     bridePhone, setBridePhone, brideAddress, setBrideAddress, groomPhone, setGroomPhone, groomAddress, setGroomAddress,
     filteredClients, pickClient, returningHit, savedNameDiffers,

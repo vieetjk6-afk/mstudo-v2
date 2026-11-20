@@ -76,7 +76,7 @@ export function PortalGateV2({
             <p className="mt-1 text-[14px] leading-relaxed" style={{ color: "var(--tx2)", textWrap: "pretty" }}>{desc}</p>
           </div>
           <label className="v2-field">
-            <span className="v2-label">Số điện thoại</span>
+            <span className="v2-label">Số điện thoại / mã số</span>
             <input
               className={`${inputCls} !h-12 text-[16px] font-semibold tracking-wide`}
               type="tel"

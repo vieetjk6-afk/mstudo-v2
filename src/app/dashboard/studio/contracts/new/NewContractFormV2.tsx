@@ -73,7 +73,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
   const f = useNewContractForm(props);
   const {
     templates, services, packages, roster, crewRoles, recentClients, bank,
-    step, setStep, canNext, phoneOk, clientName, clientPhone, selectedService, shootType, lines, total,
+    step, setStep, canNext, phoneOk, clientOk, clientName, clientPhone, selectedService, shootType, lines, total,
     eventDate, startTime, endTime, location, picked, instalments, saving, err, create,
   } = f;
 
@@ -118,8 +118,8 @@ export default function NewContractFormV2(props: NewContractFormProps) {
     label: saving === "draft" ? "Đang lưu…" : "Lưu nháp",
     icon: Save,
     onClick: () => create("draft"),
-    disabled: !!saving || !phoneOk,
-    hint: phoneOk ? "Tạo hợp đồng nháp rồi mở màn chi tiết" : "Cần SĐT khách đủ 10 số",
+    disabled: !!saving || !clientOk,
+    hint: clientOk ? "Tạo hợp đồng nháp rồi mở màn chi tiết" : "Cần SĐT khách đủ 10 số (hoặc mã số mở hợp đồng)",
   };
 
   /* ── Thông báo dùng ở nhiều bước ─────────────────────────────────────────── */
@@ -253,7 +253,7 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                 label="Số điện thoại"
                 htmlFor="nc2-phone"
                 error={clientPhone && !phoneOk ? "SĐT phải đủ 10 số — khách dùng chính số này làm mật khẩu mở cổng hợp đồng." : undefined}
-                hint="Khách dùng số này để mở cổng hợp đồng."
+                hint="Khách dùng số này để mở cổng hợp đồng. Khách không dùng điện thoại thì để trống và đặt mã số bên dưới."
               >
                 <input
                   id="nc2-phone"
@@ -266,6 +266,28 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                   aria-invalid={!!clientPhone && !phoneOk}
                   onChange={(e) => f.setClientPhone(e.target.value)}
                 />
+              </Field>
+              <Field label="Email" htmlFor="nc2-email" hint="Có email thì khách nhận thêm thông báo qua email (song song Zalo).">
+                <input id="nc2-email" className={inputCls} type="email" placeholder="Không bắt buộc" value={f.clientEmail} onChange={(e) => f.setClientEmail(e.target.value)} />
+              </Field>
+              <Field
+                label="Mã số mở hợp đồng"
+                htmlFor="nc2-pass"
+                error={f.clientPasscode && !f.passcodeOk ? "Mã số gồm 6–12 chữ số." : undefined}
+                hint="Cho khách không dùng điện thoại: khách nhập mã này thay SĐT."
+              >
+                <div className="flex gap-2">
+                  <input
+                    id="nc2-pass"
+                    className={`${inputCls} min-w-0 flex-1`}
+                    inputMode="numeric"
+                    maxLength={12}
+                    placeholder="Không bắt buộc"
+                    value={f.clientPasscode}
+                    onChange={(e) => f.setClientPasscode(e.target.value.replace(/\D/g, ""))}
+                  />
+                  <button type="button" className={btn("secondary")} onClick={f.genPasscode}>Tạo mã</button>
+                </div>
               </Field>
             </div>
             {/* Đám cưới: một hợp đồng cho cả hai nhà — không bắt buộc. */}
@@ -1080,8 +1102,8 @@ export default function NewContractFormV2(props: NewContractFormProps) {
             type="button"
             className={btn("secondary", "md", "w-full")}
             onClick={() => create("draft")}
-            disabled={!!saving || !phoneOk}
-            title={phoneOk ? "Tạo hợp đồng nháp rồi mở màn chi tiết" : "Cần SĐT khách đủ 10 số"}
+            disabled={!!saving || !clientOk}
+            title={clientOk ? "Tạo hợp đồng nháp rồi mở màn chi tiết" : "Cần SĐT khách đủ 10 số"}
           >
             {saving === "draft" ? "Đang lưu…" : "Lưu nháp"}
           </button>

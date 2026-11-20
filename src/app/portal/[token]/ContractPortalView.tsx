@@ -58,7 +58,7 @@ export default function ContractPortalView({ token }: { token: string }) {
           </span>
           <h1 className="mt-3.5 text-[21px] font-bold" style={{ letterSpacing: "-.5px" }}>Trang hợp đồng của bạn</h1>
           <p className="mt-1.5 text-[13px] leading-relaxed" style={{ color: "var(--tx2)" }}>
-            Nhập số điện thoại đã đăng ký để xem lịch trình, thanh toán và sản phẩm.
+            Nhập số điện thoại đã đăng ký (hoặc mã số studio đã gửi) để xem lịch trình, thanh toán và sản phẩm.
           </p>
           <input
             className="mt-5 w-full rounded-[11px] px-3.5 py-3 text-center text-[15px] font-semibold tracking-wide"
@@ -66,8 +66,8 @@ export default function ContractPortalView({ token }: { token: string }) {
             type="tel"
             inputMode="tel"
             autoComplete="tel"
-            aria-label="Số điện thoại"
-            placeholder="Số điện thoại"
+            aria-label="Số điện thoại hoặc mã số"
+            placeholder="Số điện thoại / mã số"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
           />

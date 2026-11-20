@@ -35,6 +35,7 @@
     "test:pet": "node --experimental-strip-types desktop/test/pet.mjs",
     "test:pet-command": "node --experimental-strip-types desktop/test/pet-command.mjs",
     "test:push-mot-tin": "node --experimental-strip-types desktop/test/push-mot-tin-moi-nguoi.mjs",
+    "test:portal-key": "node --experimental-strip-types desktop/test/portal-key.mjs",
     "test:safe-next": "node --experimental-strip-types desktop/test/safe-next.mjs",
     "test:youtube-music": "node --experimental-strip-types desktop/test/youtube-music.mjs",
     "test:site-map": "node --experimental-strip-types desktop/test/site-map.mjs",

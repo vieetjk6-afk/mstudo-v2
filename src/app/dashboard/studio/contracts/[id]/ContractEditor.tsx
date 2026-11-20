@@ -687,12 +687,24 @@ function ContractEditorV1(props: ContractEditorProps) {
                     <div>
                       <label className="label">SĐT khách <span style={{ color: "var(--s-red)" }}>*</span></label>
                       <input className="input" inputMode="numeric" maxLength={15} placeholder="0901234567" value={f.client_phone} onChange={(e) => set("client_phone", e.target.value)} style={redIf(reqMissing.client_phone)} />
-                      {reqMissing.client_phone && <p className="mt-1 text-[11px]" style={{ color: "var(--s-red)" }}>Phải đủ 10 số.</p>}
+                      {reqMissing.client_phone && <p className="mt-1 text-[11px]" style={{ color: "var(--s-red)" }}>{ed.hasPasscodeCol ? "Phải đủ 10 số — hoặc để trống và đặt mã số mở hợp đồng." : "Phải đủ 10 số."}</p>}
                     </div>
                     <div>
                       <label className="label">Email khách</label>
-                      <input className="input" value={f.client_email} onChange={(e) => set("client_email", e.target.value)} />
+                      <input className="input" type="email" value={f.client_email} onChange={(e) => set("client_email", e.target.value)} />
                     </div>
+                    {ed.hasPasscodeCol && (
+                      <div>
+                        <label className="label">Mã số mở hợp đồng</label>
+                        <div className="flex gap-2">
+                          <input className="input min-w-0 flex-1" inputMode="numeric" maxLength={12} placeholder="Không bắt buộc" value={f.client_passcode} onChange={(e) => set("client_passcode", e.target.value.replace(/\D/g, ""))} style={redIf(reqMissing.client_passcode)} />
+                          <button type="button" className="btn-secondary" onClick={ed.genPasscode}>Tạo mã</button>
+                        </div>
+                        <p className="mt-1 text-[11px]" style={{ color: reqMissing.client_passcode ? "var(--s-red)" : "var(--text3)" }}>
+                          {reqMissing.client_passcode ? "Mã số gồm 6–12 chữ số." : "Khách không dùng điện thoại nhập mã này thay SĐT để mở hợp đồng."}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="label">Link Facebook/Messenger của khách</label>

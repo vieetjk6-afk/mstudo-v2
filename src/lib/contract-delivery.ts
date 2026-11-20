@@ -80,10 +80,10 @@ async function notifyDeliveryReady(ownerId: string, contractId: string): Promise
 
   const { data: c } = await db
     .from("studio_contracts")
-    .select("client_name, client_phone, gallery_album_id, selection_album_id")
+    .select("client_name, client_phone, client_email, gallery_album_id, selection_album_id")
     .eq("id", contractId)
     .maybeSingle();
-  if (!c?.client_phone) return;
+  if (!c?.client_phone && !c?.client_email) return;
   // Album giao khách: album giao riêng nếu đang giao khách, không thì CHÍNH album
   // của hợp đồng nếu nó đã được chuyển sang giao khách (luật chung ở
   // @/lib/contract-album). Trước đây chỉ nhìn gallery_album_id nên dự án hợp
@@ -106,6 +106,7 @@ async function notifyDeliveryReady(ownerId: string, contractId: string): Promise
     event: "delivery_ready",
     audience: "client",
     toPhone: c.client_phone,
+    toEmail: c.client_email,
     toName: c.client_name,
     body: deliveryReadyMessage({ name: c.client_name, link, studio: owner?.full_name }),
     contractId,
