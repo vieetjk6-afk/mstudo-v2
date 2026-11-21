@@ -12,7 +12,7 @@
 
 const invoke = window.__TAURI__.core.invoke;
 
-const APP_VERSION = "1.2.1"; // giữ khớp với src-tauri/tauri.conf.json
+const APP_VERSION = "1.2.2"; // giữ khớp với src-tauri/tauri.conf.json
 
 // ─── Cấu hình (localStorage) ─────────────────────────────────────────────────
 const cfg = JSON.parse(localStorage.getItem("cfg") || "{}");
@@ -493,6 +493,10 @@ if (window.__TAURI__ && window.__TAURI__.event) {
     const p = ev.payload || {};
     // Nhiều file tải song song → cập nhật byte theo path của từng file đang tải.
     if (dsync.active && p.path && dsync.inflight.has(p.path)) {
+      // Gia hạn cờ "đang đồng bộ Drive" theo từng khối 8MB: một video tải lâu hơn
+      // BUSY_TTL_MS (3 phút) mà chỉ gia hạn giữa các file thì cờ hết hạn giữa
+      // chừng → vòng 10s chen vào tải trùng file đó, tự cập nhật tắt app giữa lúc tải.
+      busyOn("drive");
       dsync.inflight.set(p.path, Math.min(p.uploaded || 0, p.total || 0));
       renderSyncStatus();
     }

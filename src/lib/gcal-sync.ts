@@ -34,7 +34,7 @@ export type GCalSyncResult = {
   /** Lý do đọc được cho người dùng khi `synced` = false. */
   reason?: string;
   gcalEventId?: string | null;
-  /** Hợp đồng KHÔNG được lên lịch (huỷ, lùi về nháp, bỏ ngày) — mốc đi kèm cũng phải gỡ. */
+  /** Hợp đồng đã HUỶ — các mốc đi kèm (ngày đãi, thử đồ…) cũng phải gỡ khỏi lịch. */
   dropped?: boolean;
 };
 
@@ -68,7 +68,14 @@ export async function syncContractToGCal(ownerId: string, contractId: string): P
   // Luật "có lên lịch không" nằm ở lib/gcal-plan.ts — nhánh `drop` lo cả hợp
   // đồng chưa ký lẫn hợp đồng vừa bị xoá ngày chụp / lùi về nháp / huỷ.
   const plan = gcalPlan(ct as { status?: string | null; event_date?: string | null });
-  if (plan.action === "drop") return await drop(db, ownerId, contractId, gid, plan.reason);
+  if (plan.action === "drop") {
+    const r = await drop(db, ownerId, contractId, gid, plan.reason);
+    // Chỉ HUỶ mới kéo theo gỡ mốc. Hợp đồng đã ký mà chưa có ngày chụp chính vẫn
+    // có mốc có ngày thật (ngày đãi trước…), còn mốc của hợp đồng nháp thì trước
+    // giờ vẫn lên lịch từ màn Lịch — gỡ ở đây là lịch thợ mất mốc, hoặc lật qua
+    // lật lại mỗi lần đồng bộ.
+    return { ...r, dropped: (ct as { status?: string | null }).status === "cancelled" };
+  }
 
   const newId = await upsertGCalEvent(
     ownerId,
@@ -98,7 +105,7 @@ async function drop(
     // nhánh insert — thà để trống cho rõ.
     await db.from("studio_contracts").update({ gcal_event_id: null }).eq("id", contractId);
   }
-  return { synced: false, reason, dropped: true };
+  return { synced: false, reason };
 }
 
 /** Gỡ hẳn hợp đồng khỏi Google Lịch (dùng khi xoá hợp đồng). */
