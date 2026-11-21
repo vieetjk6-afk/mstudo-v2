@@ -48,10 +48,12 @@ export const viewport: Viewport = {
   themeColor: "#f4f3f0",
   width: "device-width",
   initialScale: 1,
-  // Bắt buộc cho app cài lên màn hình iPhone (statusBarStyle black-translucent):
-  // thiếu nó thì mọi env(safe-area-inset-*) trong app đều bằng 0 — đồng hồ đè
-  // lên thanh trên cùng, thanh tab dưới nằm dưới vạch Home.
-  viewportFit: "cover",
+  // KHÔNG đặt viewportFit: "cover". Để mặc định thì iOS tự chừa vùng tai thỏ /
+  // thanh trạng thái / vạch Home cho app cài trên màn hình chính. Đã thử bật
+  // "cover" (11/2026): trang tràn lên DƯỚI thanh trạng thái, đồng hồ + pin đè
+  // lên tiêu đề, vì hàng chục thanh trên cùng (dashboard, album khách, thiệp,
+  // website…) không chừa env(safe-area-inset-top). Muốn bật lại thì phải thêm
+  // khoảng đó cho MỌI thanh sticky/fixed ở đỉnh trước.
 };
 
 export default function RootLayout({
