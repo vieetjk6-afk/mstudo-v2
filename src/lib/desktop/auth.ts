@@ -7,6 +7,9 @@ import { effectivePlan, studioTier } from "@/lib/plans";
 /** Số máy hoạt động tối đa cho mỗi tài khoản studio. */
 export const DEVICE_LIMIT = 2;
 
+/** Ghi lại `desktop_devices.last_sync_at` nhiều nhất mỗi ngần này. */
+const GHI_MOC_SAU_MS = 10 * 60_000;
+
 export const hashDeviceToken = (t: string) => createHash("sha256").update(t).digest("hex");
 
 export type DesktopAuth =
@@ -25,7 +28,7 @@ export async function requireDesktopOwner(req: Request): Promise<DesktopAuth> {
     const db = createAdminClient();
     const { data: dev } = await db
       .from("desktop_devices")
-      .select("id, owner_id, revoked_at")
+      .select("id, owner_id, revoked_at, last_sync_at")
       .eq("token_hash", hashDeviceToken(m[1]))
       .maybeSingle();
     if (!dev || dev.revoked_at) return { ok: false, status: 401, error: "device_revoked" };
@@ -37,7 +40,12 @@ export async function requireDesktopOwner(req: Request): Promise<DesktopAuth> {
     if (!owner?.is_active) return { ok: false, status: 403, error: "inactive" };
     const tier = studioTier(effectivePlan(owner.plan, owner.plan_expires_at), owner.role === "admin");
     if (tier !== "full") return { ok: false, status: 402, error: "plan_expired" };
-    await db.from("desktop_devices").update({ last_sync_at: new Date().toISOString() }).eq("id", dev.id);
+    // Desktop gọi ~100 lượt/giờ; ghi mốc mỗi lượt là ~2.400 lần UPDATE mỗi ngày
+    // mỗi máy chỉ để màn "Thiết bị" hiện "đồng bộ lúc…". 10 phút là đủ chính xác.
+    const lan = dev.last_sync_at ? Date.parse(dev.last_sync_at as string) : 0;
+    if (!(Date.now() - lan < GHI_MOC_SAU_MS)) {
+      await db.from("desktop_devices").update({ last_sync_at: new Date().toISOString() }).eq("id", dev.id);
+    }
     return { ok: true, ownerId: dev.owner_id as string, via: "device", deviceId: dev.id as string };
   }
   const ctx = await requireStudio("full");

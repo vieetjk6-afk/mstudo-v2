@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllPhotos } from "@/lib/photos";
 import SelectionsView from "./SelectionsView";
 import type { Album, Dislike, Photo, Selection } from "@/lib/types";
 
@@ -30,7 +31,9 @@ export default async function SelectionsPage(
       .select("*")
       .eq("album_id", params.id)
       .order("created_at", { ascending: true }),
-    supabase.from("photos").select("*").eq("album_id", params.id),
+    // Trang chỉ cần map id → drive_file_id (useSelections). `select("*")` cũ kéo
+    // mọi cột của mọi ảnh và lặng lẽ dừng ở 1.000 dòng của PostgREST.
+    fetchAllPhotos(supabase, params.id, "id, drive_file_id").then((data) => ({ data })),
   ]);
 
   return (

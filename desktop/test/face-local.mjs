@@ -150,10 +150,16 @@ const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_
   await new Promise((r) => setTimeout(r, 5));
   await nhanLoKetQua(db, "A", [{ photoId: uuid(4), faces: [] }]);
   ok("mẻ cuối 0 mặt KHÔNG đặt lại hàng đợi…", db.t.albums[0].faces_clustered_at !== null);
-  const v = await layViecQuet(db, "A");
-  ok("…nhưng album xong mà có tấm quét sau lần gom → canGom", v.conLai === 0 && v.canGom === true);
+  // Lượt TỰ ĐỘNG (bộ tự quét nền / tự gom khi mở trang): album vừa gom chưa đủ 12
+  // giờ thì chờ — mỗi lần gom máy studio đọc lại toàn bộ vector của album, mà
+  // desktop đổ ảnh vào rải rác cả ngày (đợt egress 11/2026).
+  const tuDong = await layViecQuet(db, "A");
+  ok("…lượt tự động: album vừa gom chưa đủ 12 giờ → chờ, chưa gom lại", tuDong.conLai === 0 && tuDong.canGom === false);
+  // Studio bấm "Quét" tay (?gom=ngay) thì gom ngay.
+  const v = await layViecQuet(db, "A", 0, true);
+  ok("…nhưng bấm tay: album xong mà có tấm quét sau lần gom → canGom", v.conLai === 0 && v.canGom === true);
   check("→ gom đúng một lần nữa", (await gomNeuCan(db, "A")).gom, true);
-  check("…rồi thôi", [(await gomNeuCan(db, "A")).gom, (await layViecQuet(db, "A")).canGom], [false, false]);
+  check("…rồi thôi", [(await gomNeuCan(db, "A")).gom, (await layViecQuet(db, "A", 0, true)).canGom], [false, false]);
 }
 {
   // Luật 12 giờ: còn quét dở + vừa gom xong → không gom lại dù có mặt mới.
