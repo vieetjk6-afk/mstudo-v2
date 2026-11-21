@@ -96,7 +96,7 @@ export const TR = {
     client: "Khách hàng", schedule: "Lịch trình", pickPhotos: "Chọn ảnh của bạn", pickPhotosSub: "đánh dấu những tấm ưng ý",
     viewPhotos: "Xem ảnh của bạn", viewPhotosSub: "mật khẩu là SĐT của bạn", open: "Mở →",
     items: "Hạng mục dịch vụ", noItems: "Chưa có hạng mục.", totalVal: "Tổng giá trị", paid: "Đã thanh toán", remaining: "Còn lại",
-    terms: "Ghi chú / Điều khoản", signTitle: "Xác nhận & ký hợp đồng", signedOn: "Bạn đã ký ngày",
+    terms: "Ghi chú / Điều khoản", signTitle: "Xác nhận & ký hợp đồng", signedOn: "Bạn đã ký lúc",
     signAgree: "Ký xác nhận đồng ý với nội dung hợp đồng trên.", signerName: "Họ tên người ký", signature: "Chữ ký",
     sign: "Đồng ý & ký", signing: "Đang ký…", review: "Đánh giá studio", reviewThanks: "Cảm ơn bạn đã đánh giá!",
     reviewPrompt: "Bạn hài lòng với dịch vụ chứ? Để lại cảm nhận giúp studio nhé.", reviewPh: "Cảm nhận của bạn…", sendReview: "Gửi đánh giá",
@@ -116,7 +116,7 @@ export const TR = {
     client: "Client", schedule: "Schedule", pickPhotos: "Pick your photos", pickPhotosSub: "mark your favourites",
     viewPhotos: "View your photos", viewPhotosSub: "password is your phone number", open: "Open →",
     items: "Service items", noItems: "No items yet.", totalVal: "Total value", paid: "Paid", remaining: "Remaining",
-    terms: "Notes / Terms", signTitle: "Confirm & sign contract", signedOn: "You signed on",
+    terms: "Notes / Terms", signTitle: "Confirm & sign contract", signedOn: "You signed at",
     signAgree: "Sign to agree with the contract above.", signerName: "Signer's full name", signature: "Signature",
     sign: "Agree & sign", signing: "Signing…", review: "Rate the studio", reviewThanks: "Thank you for your review!",
     reviewPrompt: "Happy with the service? Leave your feedback for the studio.", reviewPh: "Your feedback…", sendReview: "Send review",
@@ -223,6 +223,8 @@ export function useContractPortal(
 
   function apply(j: PortalPayload) {
     setContract(j.contract);
+    // Điền sẵn họ tên người ký = tên khách trên hợp đồng (khách vẫn sửa được).
+    setSignName((prev) => prev || j.contract.client_name || "");
     setStudioName(j.studio_name || "Studio");
     setStudioLogo(j.studio_logo || null);
     setStudioPhone(j.studio_phone ?? null);
@@ -450,9 +452,14 @@ export function useContractPortal(
     .split("\n")
     .map((s) => s.replace(/^[-•*\s]+/, "").trim())
     .filter(Boolean);
+  // Số ĐIỀU khoản (dòng mở đầu bằng số thứ tự "1." / "2)") — trước đây đếm mọi
+  // dòng nên 8 điều hiện thành "28 điều khoản". Văn bản không đánh số thì đếm
+  // theo ý (dòng) như cũ.
+  const termCount = (contract?.note || "").split("\n").filter((l) => /^\s*(\d+[.)]|điều\s+\d+)\s/i.test(l)).length || termLines.length;
 
   return {
     token,
+    termCount,
     phone, setPhone,
     contract,
     studioName, studioLogo, studioPhone,

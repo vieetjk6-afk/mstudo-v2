@@ -74,7 +74,10 @@ import { CopyRow, CustomerRootAuto, Fact, LangToggle, MoneyLine, StepsBar, Stick
 const STATUS: Record<ContractStatus, { tone: Tone; vi: string; en: string }> = {
   draft: { tone: "gray", vi: "Bản nháp", en: "Draft" },
   sent: { tone: "amber", vi: "Chờ bạn ký", en: "Awaiting signature" },
-  approved: { tone: "blue", vi: "Đã ký", en: "Signed" },
+  // "approved" cũng được đặt tự động khi studio GHI THU CỌC (khách chưa chắc đã
+  // ký) — ghi "Đã ký" ở đây khiến trang tự mâu thuẫn với khối "chờ bạn ký".
+  // Đã ký thật hay chưa xem client_signed_at (xử lý ở chỗ hiện badge).
+  approved: { tone: "blue", vi: "Đã chốt lịch", en: "Confirmed" },
   in_progress: { tone: "teal", vi: "Đang thực hiện", en: "In progress" },
   post_production: { tone: "violet", vi: "Đang hậu kỳ", en: "Editing photos" },
   completed: { tone: "green", vi: "Hoàn thành", en: "Completed" },
@@ -452,8 +455,10 @@ function Body({
                     </span>
                   </>
                 )}
-                <Badge tone={STATUS[c.status].tone} dot>
-                  {p.lang === "vi" ? STATUS[c.status].vi : STATUS[c.status].en}
+                <Badge tone={c.client_signed_at && (c.status === "sent" || c.status === "approved") ? "blue" : STATUS[c.status].tone} dot>
+                  {c.client_signed_at && (c.status === "sent" || c.status === "approved")
+                    ? (p.lang === "vi" ? "Đã ký" : "Signed")
+                    : p.lang === "vi" ? STATUS[c.status].vi : STATUS[c.status].en}
                 </Badge>
               </div>
               <h1 className="mt-2 text-[20px] font-bold leading-snug tracking-[-0.3px] sm:text-[24px]" style={{ textWrap: "pretty" }}>
@@ -1019,7 +1024,7 @@ function TermsSection({ p, L }: { p: ContractPortal; L: Tr }) {
   const FIRST = 4;
   const lines = open ? p.termLines : p.termLines.slice(0, FIRST);
   return (
-    <Section icon={FileText} title={L("Điều khoản", "Terms")} desc={p.signed ? L(`${p.termLines.length} điều khoản`, `${p.termLines.length} terms`) : L(`${p.termLines.length} điều khoản · đọc trước khi ký`, `${p.termLines.length} terms · read before signing`)}>
+    <Section icon={FileText} title={L("Điều khoản", "Terms")} desc={p.signed ? L(`${p.termCount} điều khoản`, `${p.termCount} terms`) : L(`${p.termCount} điều khoản · đọc trước khi ký`, `${p.termCount} terms · read before signing`)}>
       <ul className="flex flex-col gap-2">
         {lines.map((line, i) => (
           <li key={i} className="flex gap-2.5">
@@ -1033,7 +1038,7 @@ function TermsSection({ p, L }: { p: ContractPortal; L: Tr }) {
       {p.termLines.length > FIRST && (
         <button type="button" onClick={() => setOpen((v) => !v)} className={btn("ghost", "sm", "mt-2 -ml-2")} aria-expanded={open}>
           <ChevronDown size={15} style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s" }} />
-          {open ? L("Thu gọn", "Show less") : L(`Xem đủ ${p.termLines.length} điều khoản`, `Read all ${p.termLines.length} terms`)}
+          {open ? L("Thu gọn", "Show less") : L(`Xem đủ ${p.termCount} điều khoản`, `Read all ${p.termCount} terms`)}
         </button>
       )}
     </Section>

@@ -1,6 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { contractPrintDocument, type PrintStudio } from "@/lib/contract-print";
+import { quotePrintData } from "@/lib/quote-print";
+import { depositByPercent } from "@/lib/quote-deposit";
 import { quoteShareMessage } from "@/lib/share-messages";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -58,6 +61,10 @@ export type QuoteEditorProps = {
   studioHost?: string | null;
   /** Hạn hiệu lực mặc định của studio (ngày). 0 = không đặt hạn. */
   quoteValidDays?: number;
+  /** % cọc studio đặt (null = cách tính cũ ~25%, tối thiểu 500K). */
+  depositPercent?: number | null;
+  /** Thương hiệu + tài khoản studio cho đầu trang bản in. */
+  studio?: PrintStudio | null;
 };
 
 export function useQuoteEditor({
@@ -66,6 +73,8 @@ export function useQuoteEditor({
   initialAdjustments,
   studioHost = null,
   quoteValidDays = 15,
+  depositPercent = null,
+  studio = null,
 }: QuoteEditorProps) {
   const router = useRouter();
   const supabase = createClient();
@@ -95,7 +104,7 @@ export function useQuoteEditor({
   // Cọc tính trên tổng ĐÃ trừ ưu đãi gói (khớp trang khách và hợp đồng chốt
   // ra), kẹp về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
   const payableTotal = total - activeBulkDiscount(quote, items);
-  const deposit = safeDeposit(payableTotal);
+  const deposit = typeof depositPercent === "number" ? depositByPercent(payableTotal, depositPercent) : safeDeposit(payableTotal);
   const depositPct = depositRatio(payableTotal, deposit);
   const locked = quote.status === "accepted" || quote.status === "converted";
 
@@ -104,60 +113,26 @@ export function useQuoteEditor({
    * hộp in của trình duyệt có sẵn "Lưu thành PDF". Dữ liệu lấy từ state đang
    * mở nên bản in luôn khớp thứ đang thấy trên màn hình.
    */
-  function printQuote() {
-    const esc = (s: string) => s.replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c] || c));
-    const rows = items
-      .map((it) => {
-        const line = (it.qty || 0) * (it.unit_price || 0);
-        const tag = it.is_discount ? "Giảm giá" : it.is_optional ? "Tuỳ chọn" : "Bắt buộc";
-        return `<tr><td>${esc(it.name || "")}${it.description ? `<div style="font-size:11px;color:#555;white-space:pre-line">${esc(it.description.trim())}</div>` : ""}</td>
-<td class="c">${tag}</td><td class="c">${it.is_discount ? "" : it.qty}</td>
-<td class="r">${it.is_discount ? "− " : ""}${vnd(line)}</td></tr>`;
-      })
-      .join("");
-    const html = `<!doctype html><html lang="vi"><head><meta charset="utf-8"><title>${esc(quote.title || "Báo giá")}</title>
-<style>
-@page{size:A4;margin:16mm}
-body{font-family:'Times New Roman',Times,'DejaVu Serif',serif;color:#111;max-width:720px;margin:0 auto;padding:8px 0;font-size:13px;line-height:1.5}
-h1{text-align:center;font-size:22px;font-weight:700;margin:0}
-h2{font-size:15px;margin:18px 0 8px}
-.sub{text-align:center;font-size:13px;margin:4px 0 22px;color:#333}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;border-bottom:1px solid #333;padding:5px 0;font-size:12px}
-td{padding:5px 0;border-bottom:1px solid #ddd;vertical-align:top}
-.c{text-align:center;width:80px}.r{text-align:right;width:130px}
-.meta td{border:none;padding:3px 0}
-.tot td{border:none;padding:2px 0;text-align:right}
-.tot .v{width:150px;font-weight:700}
-.note{white-space:pre-wrap;margin:0}
-</style></head>
-<body onload="window.print()">
-<h1>BÁO GIÁ DỊCH VỤ</h1>
-<p class="sub">${esc(quote.title || "")}${quote.code ? ` · ${esc(quote.code)}` : ""}</p>
-<table class="meta"><tbody>
-<tr><td style="width:150px">Khách hàng:</td><td><b>${esc(quote.client_name || "—")}</b>${quote.client_phone ? ` · ĐT: ${esc(quote.client_phone)}` : ""}${quote.client_email ? ` · ${esc(quote.client_email)}` : ""}</td></tr>
-<tr><td>Ngày sự kiện:</td><td>${quote.event_date ? esc(quote.event_date) : "—"}</td></tr>
-<tr><td>Địa điểm:</td><td>${esc(quote.location || "—")}</td></tr>
-</tbody></table>
-${quote.intro ? `<p class="note" style="margin-top:14px">${esc(quote.intro)}</p>` : ""}
-<h2>Hạng mục báo giá</h2>
-<table><thead><tr><th>Hạng mục</th><th class="c">Loại</th><th class="c">SL</th><th class="r">Thành tiền</th></tr></thead>
-<tbody>${rows || `<tr><td colspan="4">Chưa có hạng mục.</td></tr>`}</tbody></table>
-<table class="tot"><tbody>
-<tr><td>Tổng hạng mục:</td><td class="v">${vnd(grossTotal)}</td></tr>
-${discountTotal > 0 ? `<tr><td>Giảm giá:</td><td class="v">− ${vnd(discountTotal)}</td></tr>` : ""}
-<tr><td>Tổng báo giá:</td><td class="v">${vnd(total)}</td></tr>
-${payableTotal !== total ? `<tr><td>Ưu đãi gói ${esc(quote.discount_package_group || "")}:</td><td class="v">− ${vnd(total - payableTotal)}</td></tr><tr><td>Khách thanh toán:</td><td class="v">${vnd(payableTotal)}</td></tr>` : ""}
-<tr><td>Cọc đề xuất (~${depositPct.toFixed(0)}%):</td><td class="v">${vnd(deposit)}</td></tr>
-</tbody></table>
-<p style="margin-top:24px;font-size:12px;color:#555">Báo giá chỉ mang tính tham khảo và có thể thay đổi theo thoả thuận. Hạng mục "Tuỳ chọn" khách tự chọn trên trang báo giá trực tuyến.</p>
-</body></html>`;
+  async function printQuote() {
+    // Mở cửa sổ TRƯỚC khi await (tạo QR) — mở sau tác vụ bất đồng bộ là trình
+    // duyệt coi như pop-up tự động và chặn.
     const w = window.open("", "_blank", "width=860,height=900");
     if (!w) {
       setErr("Trình duyệt chặn cửa sổ in — cho phép pop-up rồi bấm lại.");
       return;
     }
-    w.document.write(html);
+    let qr = "";
+    try {
+      const QRCode = (await import("qrcode")).default;
+      qr = await QRCode.toDataURL(shareUrl, { margin: 1, width: 220, color: { dark: "#111111", light: "#ffffff" } });
+    } catch {
+      /* QR chỉ là tiện ích */
+    }
+    w.document.write(contractPrintDocument(quotePrintData({
+      quote, items, studio, qr,
+      total, payableTotal, deposit, depositPct,
+      validUntil: quote.expires_at,
+    })));
     w.document.close();
   }
 
