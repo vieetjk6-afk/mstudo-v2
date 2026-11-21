@@ -57,46 +57,73 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     return NextResponse.json({ error: "bad_refund", collected }, { status: 400 });
   }
 
-  const { data: prev } = await db.from("studio_contracts").select("completed_at").eq("id", contract.id).maybeSingle();
-  // 1) GIỮ trạng thái trước: cập nhật có điều kiện status ≠ cancelled. Bấm đúp
-  //    (hai POST cùng lúc) thì chỉ một lượt giữ được — không ghi hai khoản hoàn.
-  const { data: claimed, error: stErr } = await db
+  // 1) GIỮ lượt huỷ TRƯỚC khi ghi tiền, bằng cột cancelled_at (cập nhật có điều
+  //    kiện: đúng giá trị vừa đọc + status ≠ cancelled). Bấm đúp (hai POST cùng
+  //    lúc) thì chỉ một lượt giữ được — không ghi hai khoản hoàn.
+  //    KHÔNG giữ bằng cột status: đổi status sang 'cancelled' là kích trigger huỷ
+  //    voucher (voucher_void_on_contract_cancel) + nhật ký ngay — khoản hoàn hỏng
+  //    thì trả status về cũng không trả lại voucher cho khách.
+  const { data: prevRow, error: prevErr } = await db
     .from("studio_contracts")
-    .update({ status: "cancelled", completed_at: null })
+    .select("cancelled_at")
     .eq("id", contract.id)
-    .neq("status", "cancelled")
-    .select("id");
-  if (stErr) return NextResponse.json({ error: "write_failed", message: stErr.message }, { status: 500 });
-  if (!claimed || claimed.length === 0) return NextResponse.json({ error: "already_cancelled" }, { status: 409 });
-  // Ghi khoản hoàn hỏng → trả hợp đồng về trạng thái cũ để bấm lại được.
-  const undo = () =>
-    db.from("studio_contracts")
-      .update({ status: contract.status, completed_at: (prev as { completed_at?: string | null } | null)?.completed_at ?? null })
+    .maybeSingle();
+  // Chưa chạy migration (chưa có cancelled_at) → không giữ được, chạy như cũ.
+  const canClaim = !prevErr;
+  const prevCancelledAt = (prevRow as { cancelled_at?: string | null } | null)?.cancelled_at ?? null;
+  if (canClaim) {
+    let claim = db
+      .from("studio_contracts")
+      .update({ cancelled_at: new Date().toISOString() })
       .eq("id", contract.id)
-      .then(undefined, () => undefined);
+      .neq("status", "cancelled");
+    claim = prevCancelledAt ? claim.eq("cancelled_at", prevCancelledAt) : claim.is("cancelled_at", null);
+    const { data: claimed, error: claimErr } = await claim.select("id");
+    if (claimErr) return NextResponse.json({ error: "write_failed", message: claimErr.message }, { status: 500 });
+    if (!claimed || claimed.length === 0) return NextResponse.json({ error: "already_cancelled" }, { status: 409 });
+  }
+  const releaseClaim = () =>
+    canClaim
+      ? db.from("studio_contracts").update({ cancelled_at: prevCancelledAt }).eq("id", contract.id).then(undefined, () => undefined)
+      : Promise.resolve();
 
   // 2) Khoản hoàn: một lần thu SỐ ÂM. Mọi tổng tiền (công nợ, báo cáo, két tiền
-  //    mặt, xuất kế toán) tự trừ đúng.
+  //    mặt, xuất kế toán) tự trừ đúng. Ghi TRƯỚC khi đổi trạng thái: hỏng ở đây
+  //    (sổ đã khoá, chưa chạy migration) thì hợp đồng còn nguyên, bấm lại được.
+  let refundId: string | null = null;
   if (refund > 0) {
-    const { error } = await db.from("contract_payments").insert({
+    const { data: ins, error } = await db.from("contract_payments").insert({
       contract_id: contract.id,
       amount: -refund,
       kind: "refund",
       method: asPaymentMethod(b.method) ?? "transfer",
       paid_at: todayVN(),
       note: `Hoàn tiền huỷ hợp đồng${reason ? `: ${reason}` : ""}`.slice(0, 200),
-    });
+    }).select("id").single();
     if (error) {
-      await undo();
+      await releaseClaim();
       // 23514 = check_violation: chưa chạy migration nên 'refund' chưa hợp lệ.
       if (error.code === "23514" && /kind/.test(error.message)) {
         return NextResponse.json({ error: "missing_migration", file: "supabase/huy-doi-lich.sql" }, { status: 409 });
       }
       return NextResponse.json({ error: "write_failed", message: error.message }, { status: 500 });
     }
+    refundId = (ins as { id?: string } | null)?.id ?? null;
   }
 
-  // 3) Đợt chưa thu không còn là nợ: để lại thì chúng cứ hiện "quá hạn" ở Tổng quan.
+  // 3) Trạng thái. Hỏng thì gỡ khoản hoàn vừa ghi + nhả lượt giữ, để bấm lại
+  //    không thành hai khoản hoàn.
+  const { error: stErr } = await db
+    .from("studio_contracts")
+    .update({ status: "cancelled", completed_at: null })
+    .eq("id", contract.id);
+  if (stErr) {
+    if (refundId) await db.from("contract_payments").delete().eq("id", refundId).then(undefined, () => undefined);
+    await releaseClaim();
+    return NextResponse.json({ error: "write_failed", message: stErr.message }, { status: 500 });
+  }
+
+  // 4) Đợt chưa thu không còn là nợ: để lại thì chúng cứ hiện "quá hạn" ở Tổng quan.
   await db.from("contract_payment_plan").delete().eq("contract_id", contract.id).eq("paid", false);
 
   // Hai cột mới ghi ở lượt riêng: chưa chạy migration thì vẫn huỷ được.
@@ -106,7 +133,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     .eq("id", contract.id)
     .then(undefined, () => undefined);
 
-  // 4) Ngày đó thợ rảnh lại: gỡ mốc lịch thợ của hợp đồng. Lịch hẹn (thử đồ,
+  // 5) Ngày đó thợ rảnh lại: gỡ mốc lịch thợ của hợp đồng. Lịch hẹn (thử đồ,
   //    trang điểm…) chưa diễn ra chuyển sang "đã huỷ" chứ không xoá, còn dấu vết.
   const crew = await contractCrew(db, contract.id);
   if (crew.length) {
@@ -133,7 +160,7 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
     before: { status: contract.status }, after: { status: "cancelled", refund, reason },
   });
 
-  // 5) Google Lịch: hợp đồng huỷ thì syncContractCalendar tự gỡ sự kiện.
+  // 6) Google Lịch: hợp đồng huỷ thì syncContractCalendar tự gỡ sự kiện.
   await syncContractCalendar(profile.id, contract.id);
 
   const kept = Math.max(0, collected - refund);
