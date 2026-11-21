@@ -72,7 +72,7 @@ check(
 
 check(
   "nhiều thư mục → giữ đủ và đúng thứ tự",
-  pickFolderLinks([folder("Buổi 1", "u1"), folder("Buổi 2", "u2")]).map((f) => f.name),
+  pickFolderLinks([folder("Buổi 1", "https://drive.google.com/drive/folders/B1"), folder("Buổi 2", "https://drive.google.com/drive/folders/B2")]).map((f) => f.name),
   ["Buổi 1", "Buổi 2"]
 );
 
