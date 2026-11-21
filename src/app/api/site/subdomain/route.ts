@@ -79,6 +79,9 @@ async function releaseSubdomainHost(prev: string): Promise<void> {
   await removeDomain(`${prev}.${MAIN_HOST}`);
 }
 
+// Ghi subdomain / custom_domain đi bằng service role: trigger sites_guard_domain
+// (migrations/bao_mat_ra_soat_11_2026.sql) chặn tài khoản thường tự sửa mấy cột
+// này qua REST — không thì vượt được danh sách tên dành riêng ở route này.
 async function loadSite() {
   const db = await createClient();
   const user = await requireUser();
@@ -132,7 +135,7 @@ export async function POST(req: Request) {
   /* ── remove ───────────────────────────────────────────────────────────── */
   if (body.action === "remove") {
     const prev = site.subdomain;
-    const { error } = await db.from("sites").update({ subdomain: null, updated_at: new Date().toISOString() }).eq("id", site.id);
+    const { error } = await createAdminClient().from("sites").update({ subdomain: null, updated_at: new Date().toISOString() }).eq("id", site.id);
     if (error) return NextResponse.json({ error: error.message }, { status: 400 });
     if (prev) dropCache(siteHostTag(prev)); // trang công khai nhớ 5 phút — gỡ là thôi phục vụ ngay
     if (prev) await releaseSubdomainHost(prev);
@@ -146,7 +149,7 @@ export async function POST(req: Request) {
 
   const prev = site.subdomain;
   if (sub !== prev) {
-    const { error } = await db
+    const { error } = await createAdminClient()
       .from("sites")
       .update({ subdomain: sub, updated_at: new Date().toISOString() })
       .eq("id", site.id);

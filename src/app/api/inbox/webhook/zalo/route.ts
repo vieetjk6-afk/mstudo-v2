@@ -63,6 +63,16 @@ export async function POST(req: NextRequest) {
     body?.timestamp != null ? String(body.timestamp) : null
   );
   if (!ok) return new Response("bad_signature", { status: 403 });
+  // Chữ ký đúng chưa đủ: một webhook bắt được có thể gửi lại mãi (nạp lại tin,
+  // kích AI tự trả lời). Chỉ nhận sự kiện trong vòng 10 phút. Zalo gửi mili-giây;
+  // số nhỏ hơn 1e12 coi là giây cho chắc.
+  {
+    const t = Number(body?.timestamp);
+    const ms = t < 1e12 ? t * 1000 : t;
+    if (!Number.isFinite(ms) || Math.abs(Date.now() - ms) > 10 * 60 * 1000) {
+      return new Response("stale", { status: 403 });
+    }
+  }
 
   try {
     const eventName = String(body?.event_name ?? "");

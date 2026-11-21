@@ -89,6 +89,11 @@ export async function POST(req: Request, props: { params: Promise<{ slug: string
   // Cùng cánh cửa với ảnh trong album: album có mật khẩu thì hỏi mặt cũng phải
   // có mật khẩu, nếu không đây thành cửa sau để dò "người này có trong album không".
   if (!album.gallery_pinned && album.password_hash) {
+    // Đây là cửa thứ hai thử được mật khẩu album (bên cạnh /access) — dùng CHUNG
+    // hạn mức với /access, đóng khi không đếm được, để hai cửa cộng lại vẫn chỉ
+    // 10 lượt đoán mỗi phút. Mật khẩu album hay chính là SĐT khách: dễ dò.
+    const pwLimited = await limitByIpDurable(req, `gallery-pw:${params.slug}`, 10, 60_000, { failClosed: true });
+    if (pwLimited) return pwLimited;
     const ok = matKhau ? await bcrypt.compare(matKhau, album.password_hash) : false;
     if (!ok) return NextResponse.json({ error: "wrong_password" }, { status: 401 });
   }

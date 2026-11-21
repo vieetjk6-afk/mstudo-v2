@@ -53,6 +53,7 @@
     "migrations/dung_thu_va_het_han.sql",
     "migrations/be_may_anh.sql",
     "migrations/ma_so_mo_hop_dong.sql",
+    "migrations/bao_mat_ra_soat_11_2026.sql",
     "migrations/phan_quyen_vai_tro_hop_dong.sql"
   ],
   "muc": [

@@ -159,20 +159,22 @@ export function useCrewPortal(studio?: CrewStudio) {
     setBusy("sched");
     setActionError(null);
     let ok = false;
+    let expired = false;
     try {
       const res = await fetch("/api/crew", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, ...payload }),
+        body: JSON.stringify({ phone, session, ...payload }),
       });
       ok = res.ok;
+      if (res.status === 401) expired = true;
     } catch {
       /* mất mạng — báo lỗi bên dưới, không kẹt nút "Đang lưu…" */
     } finally {
       setBusy(null);
     }
     if (!ok) {
-      setActionError(lang === "en" ? "Couldn't save. Check the times and try again." : "Không lưu được. Kiểm tra lại giờ rồi thử lại.");
+      setActionError(expired ? (lang === "en" ? "Session expired — reload the page and look up your number again." : "Phiên đã hết hạn — tải lại trang rồi tra cứu lại số điện thoại.") : (lang === "en" ? "Couldn't save. Check the times and try again." : "Không lưu được. Kiểm tra lại giờ rồi thử lại."));
       return false;
     }
     await load();
@@ -211,20 +213,22 @@ export function useCrewPortal(studio?: CrewStudio) {
     setBusy(id);
     setActionError(null);
     let ok = false;
+    let expired = false;
     try {
       const res = await fetch("/api/crew", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "respond", id, phone, status }),
+        body: JSON.stringify({ action: "respond", id, phone, status, session }),
       });
       ok = res.ok;
+      if (res.status === 401) expired = true;
     } catch {
       /* mất mạng */
     } finally {
       setBusy(null);
     }
     if (ok) setList((p) => (p ? p.map((a) => (a.id === id ? { ...a, status } : a)) : p));
-    else setActionError(lang === "en" ? "Couldn't send your answer. Try again." : "Chưa gửi được trả lời. Thử lại nhé.");
+    else setActionError(expired ? (lang === "en" ? "Session expired — reload the page and look up your number again." : "Phiên đã hết hạn — tải lại trang rồi tra cứu lại số điện thoại.") : (lang === "en" ? "Couldn't send your answer. Try again." : "Chưa gửi được trả lời. Thử lại nhé."));
   }
 
   /** Giao diện mới: quay lại ô nhập số (tra số khác). Không gọi API nào. */

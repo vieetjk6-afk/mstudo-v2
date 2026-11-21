@@ -86,6 +86,14 @@ export async function POST(req: Request) {
     if (captcha) return captcha;
   }
 
+  // Thao tác GHI (chấm công, báo bận/rảnh, ca, nhận/từ chối buổi) cũng phải có
+  // phiên do lượt tra cứu qua captcha cấp. Chỉ biết SĐT thì không được ghi: số
+  // điện thoại thợ không phải bí mật, ai cầm được là chấm công giả vào sổ lương
+  // của studio hay đánh dấu bận lịch người khác.
+  if (!isLookup && !hasSession) {
+    return NextResponse.json({ error: "no_session" }, { status: 401 });
+  }
+
   const db = createAdminClient();
 
   /* ── CHẤM CÔNG ─────────────────────────────────────────────────────────────

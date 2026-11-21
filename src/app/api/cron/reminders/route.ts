@@ -78,7 +78,10 @@ async function run(req: NextRequest) {
       .from("studio_contracts")
       .select("owner_id, title, client_name, client_email, client_token")
       .eq("status", "completed")
-      .gte("updated_at", since24h),
+      // completed_at chứ KHÔNG phải updated_at: hợp đồng đã hoàn thành vẫn bị
+      // ghi tiếp (dọn ảnh chứng từ sau 30 ngày, desktop đồng bộ Drive, Google
+      // Lịch…) và trigger đẩy updated_at → khách nhận lại thư xin đánh giá.
+      .gte("completed_at", since24h),
     db
       .from("albums")
       .select("id, owner_id, title, slug, storage_until")

@@ -48,7 +48,8 @@ function useCollect({ planId, contractId, amountLabel }: Props) {
         setDone(true);
         // Tin Zalo cho khách (đủ tiền → cảm ơn, đợt cọc → xác nhận cọc), như
         // màn hợp đồng. Bắn rồi quên: tin nhắn hỏng không được chặn việc thu.
-        fetch("/api/studio/zalo/lifecycle", {
+        // Đợt đã được chốt ở nơi khác (bấm đúp, webhook ngân hàng) → không nhắn lại.
+        if (!r.alreadyPaid) fetch("/api/studio/zalo/lifecycle", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ contractId, event: "payment_received", amount: r.amount, isDeposit: !!r.isDeposit }),

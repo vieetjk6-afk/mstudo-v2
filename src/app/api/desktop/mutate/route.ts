@@ -117,6 +117,15 @@ export async function POST(req: Request) {
       const pid = payload[cfg.parent.col] ?? row[cfg.parent.col];
       if (!(await ownsParent(pid))) return NextResponse.json({ error: "forbidden_parent" }, { status: 403 });
     }
+    // Bảng của studio có cột contract_id (chi phí, mốc lịch): hợp đồng gắn vào
+    // cũng phải của studio này — không thì gắn được dòng vào hợp đồng studio
+    // khác, và nó hiện ra ở cổng khách của họ.
+    if (cfg.owner && typeof payload.contract_id === "string" && payload.contract_id) {
+      const { data: c } = await db.from("studio_contracts").select("owner_id").eq("id", payload.contract_id).maybeSingle();
+      if ((c as { owner_id?: string } | null)?.owner_id !== owner) {
+        return NextResponse.json({ error: "forbidden_parent" }, { status: 403 });
+      }
+    }
 
     if (op === "insert") {
       payload.id = id;
