@@ -91,7 +91,13 @@ type NavCtx = {
 
 type PinCtl = { pinned: boolean; full: boolean; onToggle: () => void };
 
-function NavRow({ it, label, ctx, pin }: { it: NavItem; label?: string; ctx: NavCtx; pin?: PinCtl }) {
+/**
+ * `prefetch`: chỉ mục GHIM mới tải trước. Mặc định Next tải trước MỌI link hiện
+ * trên màn hình — với route động, mỗi link là một lượt dựng layout dashboard
+ * trên máy chủ (getUser, hồ sơ, gói, chi nhánh…). Menu có tới ~54 mục nên mỗi
+ * lần mở dashboard là hàng chục lượt gọi thừa. Mục ít dùng tải lúc bấm.
+ */
+function NavRow({ it, label, ctx, pin, prefetch = false }: { it: NavItem; label?: string; ctx: NavCtx; pin?: PinCtl; prefetch?: boolean }) {
   const active = isNavActive(it, ctx.pathname);
   const flagged = ctx.comingSoon.includes(it.href);
   const locked = flagged && !ctx.isAdmin;
@@ -120,7 +126,7 @@ function NavRow({ it, label, ctx, pin }: { it: NavItem; label?: string; ctx: Nav
   const row = locked ? (
     <div className={cls} style={{ opacity: 0.5, cursor: "not-allowed" }} title="Tính năng sắp ra mắt">{inner}</div>
   ) : (
-    <Link href={it.href} className={cls} aria-current={active ? "page" : undefined}>
+    <Link href={it.href} prefetch={prefetch ? undefined : false} className={cls} aria-current={active ? "page" : undefined}>
       {inner}
     </Link>
   );
@@ -193,7 +199,7 @@ function NavTree({ groups, ctx, open, toggle, pins, onTogglePin, onCustomize, qu
           Chưa ghim mục nào. Bấm để chọn màn hay dùng.
         </button>
       ) : (
-        pinned.map((it) => <NavRow key={it.href} it={it} label={SHORT[it.href]} ctx={ctx} pin={pinOf(it.href, true)} />)
+        pinned.map((it) => <NavRow key={it.href} it={it} label={SHORT[it.href]} ctx={ctx} pin={pinOf(it.href, true)} prefetch />)
       )}
 
       <div className="my-2.5 h-px" style={{ background: "var(--bd2)" }} />

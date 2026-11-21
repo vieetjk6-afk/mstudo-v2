@@ -48,6 +48,8 @@ export type CalendarViewProps = {
   crewRoles?: CrewRoleRow[];
   initialEvents: EventRow[];
   contracts: ContractMarker[];
+  /** Khoảng ngày đã tải sẵn — lật ra ngoài thì tự tải thêm. */
+  loadedRange?: { from: string; to: string };
   feedUrl: string;
   /** Trạng thái THẬT của kết nối Google Lịch (đã gọi thử API). */
   gcal?: { connected: boolean; ok: boolean; error: string | null };
@@ -65,6 +67,7 @@ function CalendarViewV1({
   ownerId,
   initialEvents,
   contracts,
+  loadedRange,
   feedUrl,
   gcal,
   crewRoles = [],
@@ -73,8 +76,8 @@ function CalendarViewV1({
   const todayStr = todayVN();
   const {
     events, contractList, eventsOn, contractsOn, upcoming,
-    gcalMsg, backfilling, backfillGcal, busy, addNote: addNoteOn, delEvent, setContractColor,
-  } = useShootCalendar({ ownerId, initialEvents, contracts, todayStr });
+    gcalMsg, backfilling, backfillGcal, busy, addNote: addNoteOn, delEvent, setContractColor, ensureRange,
+  } = useShootCalendar({ ownerId, initialEvents, contracts, todayStr, loadedRange });
   const [y, mIdx] = todayStr.split("-").map(Number);
   const [cursor, setCursor] = useState({ year: y, month: mIdx - 1 });
   const [selected, setSelected] = useState<string | null>(null);
@@ -188,6 +191,12 @@ function CalendarViewV1({
   }, [view, dayAnchor, grid, cursor, weekDays]);
 
   const summary = useMemo(() => summarizeRange(rangeDays, contractList, events), [rangeDays, contractList, events]);
+  // Lật ra ngoài khoảng ±6 tháng đã tải → xin thêm (xem useShootCalendar).
+  useEffect(() => {
+    if (rangeDays.length) ensureRange(rangeDays[0], rangeDays[rangeDays.length - 1]);
+    // ensureRange đọc ref nội bộ, chỉ cần chạy lại khi khoảng đang xem đổi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeDays]);
 
 
   const navBtn = "flex h-8 w-8 flex-none items-center justify-center rounded-[9px]";

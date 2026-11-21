@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { contractTotal, sumAmounts } from "@/lib/types";
 import { crewRoleLabel, type CrewRoleRow } from "@/lib/crew-roles";
 import type { ContractMarker, EventRow } from "./CalendarView";
+import { addDays, shiftMonths, WINDOW_MONTHS } from "./range-window";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LOGIC DÙNG CHUNG của tab "Buổi chụp" — bản cũ (CalendarView) và bản giao
@@ -151,15 +152,64 @@ export function useShootCalendar({
   initialEvents,
   contracts,
   todayStr,
+  loadedRange,
 }: {
   ownerId: string;
   initialEvents: EventRow[];
   contracts: ContractMarker[];
   todayStr: string;
+  /** Khoảng ngày trang đã tải sẵn. Thiếu (bản cũ tải hết) = coi như đã có tất cả. */
+  loadedRange?: { from: string; to: string };
 }) {
   const supabase = createClient();
   const [events, setEvents] = useState<EventRow[]>(initialEvents);
   const [contractList, setContractList] = useState<ContractMarker[]>(contracts);
+
+  // ── Tải thêm khi lật ra ngoài khoảng đã có ────────────────────────────────
+  // Trang chỉ tải ±6 tháng (xem shoot-data.ts). Ref chứ không phải state: hai
+  // lượt gọi dồn (đổi tháng liên tục) phải thấy ngay khoảng đang tải dở.
+  const loaded = useRef(loadedRange ?? null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  async function fetchRange(from: string, to: string) {
+    setLoadingMore(true);
+    try {
+      const r = await fetch(`/api/studio/calendar-range?from=${from}&to=${to}`);
+      if (!r.ok) throw new Error(String(r.status));
+      const j = (await r.json()) as { events: EventRow[]; contracts: ContractMarker[] };
+      const merge = <T extends { id: string }>(cur: T[], add: T[]) => {
+        const have = new Set(cur.map((x) => x.id));
+        return [...cur, ...add.filter((x) => !have.has(x.id))];
+      };
+      setEvents((p) => merge(p, j.events ?? []));
+      setContractList((p) => merge(p, j.contracts ?? []));
+    } catch {
+      // Hỏng thì trả khoảng về như cũ để lần lật sau thử lại.
+      if (loaded.current) {
+        if (loaded.current.from === from) loaded.current = { ...loaded.current, from: addDays(to, 1) };
+        if (loaded.current.to === to) loaded.current = { ...loaded.current, to: addDays(from, -1) };
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+  /** Bảo đảm đã có dữ liệu cho [first, last] (ngày đầu / cuối đang xem). */
+  function ensureRange(first: string, last: string) {
+    const L = loaded.current;
+    if (!L || !first || !last) return;
+    if (first < L.from) {
+      const from = first < shiftMonths(L.from, -WINDOW_MONTHS) ? first : shiftMonths(L.from, -WINDOW_MONTHS);
+      const to = addDays(L.from, -1);
+      loaded.current = { ...loaded.current!, from };
+      fetchRange(from, to);
+    }
+    if (last > loaded.current!.to) {
+      const T = loaded.current!.to;
+      const to = last > shiftMonths(T, WINDOW_MONTHS) ? last : shiftMonths(T, WINDOW_MONTHS);
+      const from = addDays(T, 1);
+      loaded.current = { ...loaded.current!, to };
+      fetchRange(from, to);
+    }
+  }
   const [gcalMsg, setGcalMsg] = useState<string | null>(null);
   const [backfilling, setBackfilling] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -262,5 +312,6 @@ export function useShootCalendar({
     events, contractList, eventsOn, contractsOn, upcoming,
     gcalMsg, setGcalMsg, backfilling, backfillGcal,
     busy, addNote, delEvent, setContractColor,
+    ensureRange, loadingMore,
   };
 }
