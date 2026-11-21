@@ -175,8 +175,28 @@ export function usePortalTimeline(data: PortalPayload, today: string): PortalTim
       kind: null as null,
       done: m.event_date < today,
     }));
-    return [...fromAppts, ...fromEvents].sort((x, y) => x.date.localeCompare(y.date) || x.time.localeCompare(y.time));
-  }, [data.appointments, data.milestones, today]);
+    // Studio chỉ ghi NGÀY CHỤP trên hợp đồng (chưa tạo lịch hẹn) thì khách vẫn
+    // phải thấy buổi chụp — trước đây trang báo "Chưa có buổi hẹn sắp tới" dù
+    // hợp đồng ghi rõ ngày. Bỏ qua nếu đã có lịch hẹn chụp đúng ngày đó.
+    const c = data.contract;
+    const hasShootAppt = data.appointments.some(
+      (a) => a.kind === "shoot" && a.appt_date === c.event_date && a.status !== "cancelled"
+    );
+    const fromContract =
+      c.event_date && !hasShootAppt
+        ? [{
+            key: "c-shoot",
+            date: c.event_date,
+            time: c.event_time ? c.event_time.slice(0, 5) : "",
+            title: "Buổi chụp",
+            place: c.location ?? "",
+            note: null,
+            kind: "shoot" as AppointmentKind,
+            done: c.event_date < today,
+          }]
+        : [];
+    return [...fromAppts, ...fromEvents, ...fromContract].sort((x, y) => x.date.localeCompare(y.date) || x.time.localeCompare(y.time));
+  }, [data.appointments, data.milestones, data.contract, today]);
 }
 
 /* ── Thanh toán: đợt tiếp theo, mã QR, báo đã chuyển khoản ──────────────── */

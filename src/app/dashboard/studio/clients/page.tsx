@@ -10,9 +10,8 @@ import { getStudioHost } from "@/lib/studio-site";
 import { studioUrl } from "@/lib/hosts";
 import { applyBranch, getBranchScope } from "@/lib/branches";
 import { isUiV2 } from "@/lib/ui-server";
+import { clientKey } from "@/lib/client-key";
 
-
-const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
 type Row = {
   client_name: string | null;
@@ -76,15 +75,20 @@ export default async function ClientsPage() {
   const map = new Map<string, ClientAgg>();
   for (const r of rows) {
     if (r.status === "cancelled") continue;
-    const key = digits(r.client_phone) || (r.client_name || "").trim().toLowerCase();
+    const key = clientKey(r.client_phone, r.client_name);
     if (!key) continue;
     const a = map.get(key) ?? { key, name: r.client_name || r.client_phone || "—", phone: r.client_phone || "", count: 0, value: 0, collected: 0, last: null, source: r.source };
+    const prevLast = a.last;
     a.count += 1;
     a.value += contractTotal(r.contract_items || []);
     a.collected += sumAmounts(r.contract_payments || []);
-    if (r.client_name) a.name = r.client_name;
-    if (r.event_date && (!a.last || r.event_date > a.last)) a.last = r.event_date;
-    if (r.source) a.source = r.source;
+    // Tên/SĐT lấy theo hợp đồng có ngày chụp MỚI NHẤT (khớp trang hồ sơ khách) —
+    // không theo thứ tự id (ngẫu nhiên), kẻo mỗi lần tải hiện một tên khác.
+    const newer = !!r.event_date && (!prevLast || r.event_date > prevLast);
+    if (r.client_name && (newer || !a.name || a.name === "—" || a.name === a.phone)) a.name = r.client_name;
+    if (r.client_phone && (newer || !a.phone)) a.phone = r.client_phone;
+    if (newer) a.last = r.event_date;
+    if (r.source && !a.source) a.source = r.source;
     map.set(key, a);
   }
   const clients = Array.from(map.values()).sort((x, y) => (y.last || "").localeCompare(x.last || ""));

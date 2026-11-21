@@ -23,7 +23,7 @@ import { matchesQuery } from "@/lib/contract-filter";
 const digits = (s: string) => (s || "").replace(/\D/g, "");
 
 /** Đường tới hồ sơ khách — dùng chung cho bảng (máy tính) và thẻ (điện thoại). */
-export const clientHref = (c: ClientAgg) => `/dashboard/studio/clients/${encodeURIComponent(digits(c.phone) || c.key)}`;
+export const clientHref = (c: ClientAgg) => `/dashboard/studio/clients/${encodeURIComponent(c.key)}`;
 export const sourceLabel = (c: ClientAgg) => (c.source ? LEAD_SOURCE_LABEL[c.source] || c.source : "Không rõ nguồn");
 export const lastLabel = (c: ClientAgg) => (c.last ? `gần nhất ${fmtDate(c.last)}` : "chưa có buổi nào");
 export const debtOf = (c: ClientAgg) => Math.max(0, c.value - c.collected);

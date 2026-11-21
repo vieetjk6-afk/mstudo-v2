@@ -296,7 +296,7 @@ export default function ClientsV2({ clients, studio, referrals }: Props) {
         footer={
           peek ? (
             <>
-              <Link href="/dashboard/studio/contracts/new" className={btn("secondary")}>
+              <Link href={`/dashboard/studio/contracts/new?${new URLSearchParams({ name: peek.name === "—" ? "" : peek.name, phone: peek.phone }).toString()}`} className={btn("secondary")}>
                 <FilePlus size={16} /> Hợp đồng mới
               </Link>
               <Link href={clientHref(peek)} className={btn("primary")}>
