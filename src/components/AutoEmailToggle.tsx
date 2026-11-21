@@ -17,8 +17,9 @@ function useAutoEmail({ ownerId, initial }: Props) {
     const next = !on;
     setOn(next);
     setSaving(true);
-    await supabase.from("profiles").update({ auto_client_emails: next }).eq("id", ownerId);
+    const { error } = await supabase.from("profiles").update({ auto_client_emails: next }).eq("id", ownerId);
     setSaving(false);
+    if (error) { setOn(!next); alert("Chưa lưu được — thử lại nhé."); }
   }
 
   return { on, saving, toggle };

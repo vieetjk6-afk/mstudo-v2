@@ -73,9 +73,7 @@ function monthLabel(key: string) {
   return `Tháng ${Number(m)}/${y}`;
 }
 function fmtDay(iso?: string | null) {
-  if (!iso) return "";
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  return fmtDate(iso); // giờ VN cố định, như nhau ở SSR lẫn trình duyệt
 }
 
 export default function AlbumListV2({
@@ -338,7 +336,7 @@ export default function AlbumListV2({
       {toast && (
         <div
           role="status"
-          className="fixed bottom-24 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
+          className="fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
           style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}
         >
           {toast}

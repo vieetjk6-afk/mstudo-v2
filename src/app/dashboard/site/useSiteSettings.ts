@@ -159,7 +159,13 @@ export function useSitePublishing({
     if (!published && !sub) { flash("Nhập tên miền phụ trước khi xuất bản."); return; }
     setBusy(true);
     const next = !published;
-    await supabase.from("sites").update({ published: next, updated_at: new Date().toISOString() }).eq("id", site.id);
+    const { error } = await supabase.from("sites").update({ published: next, updated_at: new Date().toISOString() }).eq("id", site.id);
+    if (error) {
+      // Trước đây vẫn lật công tắc và báo "đã xuất bản" dù lưu hỏng.
+      setBusy(false);
+      flash("Chưa lưu được trạng thái xuất bản — thử lại.");
+      return;
+    }
     refreshPublicSite(); // gỡ / xuất bản phải có hiệu lực ngay, không chờ bản nhớ 5 phút
     setPublished(next);
     setBusy(false);

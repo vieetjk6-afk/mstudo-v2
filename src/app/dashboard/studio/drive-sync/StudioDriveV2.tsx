@@ -292,7 +292,7 @@ export default function StudioDriveV2() {
 
         {/* Thanh lưu dính đáy khi mẫu thư mục có thay đổi chưa lưu. */}
         {d.dirty && (
-          <div className="sticky bottom-[80px] z-40 lg:bottom-5">
+          <div className="sticky bottom-[calc(80px+env(safe-area-inset-bottom))] z-40 lg:bottom-5">
             <div className="v2-card flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3" style={{ boxShadow: "var(--sh-pop)" }}>
               <span className="h-2 w-2 flex-none rounded-full" style={{ background: "var(--am)" }} />
               <p className="min-w-0 flex-1 text-[13.5px] font-semibold">Mẫu thư mục có thay đổi chưa lưu</p>

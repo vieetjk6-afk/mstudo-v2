@@ -42,11 +42,23 @@ export function ghiNhan(res: Response): void {
   else if (res.body) {
     dem.cong(0, 1);
     // Đo thân trên một bản sao, không chờ: người gọi vẫn đọc bản gốc như thường.
-    res
-      .clone()
-      .arrayBuffer()
-      .then((b) => dem.cong(b.byteLength, 0))
-      .catch(() => {});
+    // Đọc từng khúc rồi bỏ, chỉ cộng độ dài — arrayBuffer() trước đây gom NGUYÊN
+    // một bản sao thứ hai của thân trả lời vào RAM (kể cả file tải từ Storage).
+    const body = res.clone().body;
+    if (body) {
+      void (async () => {
+        const reader = body.getReader();
+        let n = 0;
+        try {
+          for (;;) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            n += value?.byteLength ?? 0;
+          }
+          dem.cong(n, 0);
+        } catch { /* luồng hỏng — bỏ qua lượt đo này */ }
+      })();
+    }
   } else dem.cong(0, 1);
   canXa();
 }

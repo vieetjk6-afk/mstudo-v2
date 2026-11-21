@@ -24,3 +24,24 @@ export async function fetchAllRows<T>(
   }
   return out;
 }
+
+/**
+ * `.in("cột", ids)` với danh sách DÀI: chia thành từng mẻ rồi gộp kết quả (mỗi
+ * mẻ vẫn lật trang qua fetchAllRows).
+ *
+ * Vì sao cần: PostgREST nhét danh sách vào URL — một nghìn UUID là ~37KB, vượt
+ * giới hạn độ dài URL nên cả truy vấn hỏng, và chỗ gọi coi `data ?? []` là rỗng:
+ * cron xử lý như thể không có đợt thanh toán / mốc lịch nào.
+ */
+export async function fetchInChunks<T>(
+  ids: string[],
+  page: (chunk: string[], from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>,
+  chunkSize = 200,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    out.push(...(await fetchAllRows<T>((from, to) => page(chunk, from, to))));
+  }
+  return out;
+}

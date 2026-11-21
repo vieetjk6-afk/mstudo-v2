@@ -48,6 +48,10 @@ export const viewport: Viewport = {
   themeColor: "#f4f3f0",
   width: "device-width",
   initialScale: 1,
+  // Bắt buộc cho app cài lên màn hình iPhone (statusBarStyle black-translucent):
+  // thiếu nó thì mọi env(safe-area-inset-*) trong app đều bằng 0 — đồng hồ đè
+  // lên thanh trên cùng, thanh tab dưới nằm dưới vạch Home.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

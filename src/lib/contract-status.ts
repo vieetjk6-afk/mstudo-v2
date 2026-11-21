@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { autoCreateContractSelectionOnProduction } from "@/lib/studio-drive";
 import { syncContractCalendar } from "@/lib/gcal-sync";
 import { dueForPostProduction } from "@/lib/contract-phase";
+import { fetchAllRows, fetchInChunks } from "@/lib/fetch-all-rows";
 
 // Trạng thái được phép TỰ chuyển sang 'in_progress' khi tới ngày. Chỉ những HĐ
 // đang hoạt động (đã gửi/đã duyệt) — KHÔNG đụng bản nháp (draft), đã hoàn tất
@@ -35,21 +36,23 @@ export async function autoAdvanceContracts(
   const today = vnToday();
 
   // 1) Ứng viên: HĐ đang hoạt động, chưa đang thực hiện/hoàn tất/huỷ.
-  let q = db
-    .from("studio_contracts")
-    .select("id, owner_id, event_date, status")
-    .in("status", ADVANCEABLE as unknown as string[]);
-  if (ownerId) q = q.eq("owner_id", ownerId);
-  const { data: contracts } = await q;
-  if (!contracts?.length) return { started: [], toPostProduction: await autoAdvanceToPostProduction(db, ownerId) };
+  // Lật trang + chia mẻ `.in()`: cron chạy cho MỌI studio, quá 1000 hợp đồng là
+  // Supabase cắt lặng lẽ, và một URL nghìn UUID thì hỏng hẳn truy vấn mốc lịch.
+  const contracts = await fetchAllRows<{ id: string; owner_id: string; event_date: string | null; status: string }>((from, to) => {
+    let q = db
+      .from("studio_contracts")
+      .select("id, owner_id, event_date, status")
+      .in("status", ADVANCEABLE as unknown as string[]);
+    if (ownerId) q = q.eq("owner_id", ownerId);
+    return q.order("id").range(from, to);
+  });
+  if (!contracts.length) return { started: [], toPostProduction: await autoAdvanceToPostProduction(db, ownerId) };
 
   // 2) Mốc sớm nhất theo studio_events cho các HĐ ứng viên (vd ngày đãi trước).
   const ids = contracts.map((c) => c.id as string);
-  const { data: events } = await db
-    .from("studio_events")
-    .select("contract_id, event_date")
-    .in("contract_id", ids)
-    .not("event_date", "is", null);
+  const events = await fetchInChunks<{ contract_id: string | null; event_date: string | null }>(ids, (chunk, from, to) =>
+    db.from("studio_events").select("id, contract_id, event_date").in("contract_id", chunk)
+      .not("event_date", "is", null).order("id").range(from, to));
   const earliestMilestone = new Map<string, string>();
   for (const e of events ?? []) {
     const cid = e.contract_id as string | null;
@@ -71,7 +74,9 @@ export async function autoAdvanceContracts(
   }
   if (!toAdvance.length) return { started: [], toPostProduction: await autoAdvanceToPostProduction(db, ownerId) };
 
-  await db.from("studio_contracts").update({ status: "in_progress" }).in("id", toAdvance);
+  for (let i = 0; i < toAdvance.length; i += 200) {
+    await db.from("studio_contracts").update({ status: "in_progress" }).in("id", toAdvance.slice(i, i + 200));
+  }
 
   // Vừa sang "đang thực hiện" → giờ mới tạo album CHỌN ẢNH (trước mốc này album
   // được giữ chưa tạo). Idempotent, lỗi Drive không chặn việc chuyển trạng thái.
@@ -114,17 +119,17 @@ export async function autoAdvanceContracts(
 export async function autoAdvanceToPostProduction(db: SupabaseClient, ownerId?: string): Promise<string[]> {
   const today = vnToday();
 
-  let q = db.from("studio_contracts").select("id, owner_id, event_date").eq("status", "in_progress");
-  if (ownerId) q = q.eq("owner_id", ownerId);
-  const { data: contracts } = await q;
-  if (!contracts?.length) return [];
+  const contracts = await fetchAllRows<{ id: string; owner_id: string; event_date: string | null }>((from, to) => {
+    let q = db.from("studio_contracts").select("id, owner_id, event_date").eq("status", "in_progress");
+    if (ownerId) q = q.eq("owner_id", ownerId);
+    return q.order("id").range(from, to);
+  });
+  if (!contracts.length) return [];
 
   const ids = contracts.map((c) => c.id as string);
-  const { data: events } = await db
-    .from("studio_events")
-    .select("contract_id, event_date")
-    .in("contract_id", ids)
-    .not("event_date", "is", null);
+  const events = await fetchInChunks<{ contract_id: string | null; event_date: string | null }>(ids, (chunk, from, to) =>
+    db.from("studio_events").select("id, contract_id, event_date").in("contract_id", chunk)
+      .not("event_date", "is", null).order("id").range(from, to));
   const latestMilestone = new Map<string, string>();
   for (const e of events ?? []) {
     const cid = e.contract_id as string | null;
@@ -141,7 +146,9 @@ export async function autoAdvanceToPostProduction(db: SupabaseClient, ownerId?: 
   }
   if (!toPost.length) return [];
 
-  await db.from("studio_contracts").update({ status: "post_production" }).in("id", toPost);
+  for (let i = 0; i < toPost.length; i += 200) {
+    await db.from("studio_contracts").update({ status: "post_production" }).in("id", toPost.slice(i, i + 200));
+  }
 
   // Đổi trạng thái thì sự kiện trên Google Lịch cũng phải theo — nhánh này chạy
   // trong cron, không có thao tác người dùng nào để kích hoạt lối đồng bộ cũ.

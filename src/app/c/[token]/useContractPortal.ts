@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ContractAddendum } from "@/lib/contract-addenda";
 import { qrUrl, transferNote, DEFAULT_TRANSFER_NOTE_MODE, type BankInfo, type TransferNoteMode } from "@/lib/vietqr";
 import type { PortalLoyalty } from "./PortalVoucher";
@@ -258,17 +258,32 @@ export function useContractPortal(
     if (initial) apply(initial);
   }, [initial]);
 
-  async function fetchContract(pw: string) {
-    const res = await fetch(`/api/c/${token}`, {
+  // Mạng chập chờn (3G) thì fetch NÉM lỗi chứ không trả res — để lọt ra là nút
+  // kẹt ở "Đang…" tới khi tải lại trang. Mọi lượt gọi đi qua đây: lỗi mạng → null.
+  const post = (body: unknown) =>
+    fetch(`/api/c/${token}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phone: pw }),
-    });
+      body: JSON.stringify(body),
+    }).catch(() => null);
+  // Chặn bấm đúp: lượt trước chưa xong thì bỏ qua (gửi đánh giá hai lần là hai
+  // dòng đánh giá công khai + hai thông báo).
+  const inflight = useRef(new Set<string>());
+  async function once(key: string, fn: () => Promise<void>) {
+    if (inflight.current.has(key)) return;
+    inflight.current.add(key);
+    try { await fn(); } finally { inflight.current.delete(key); }
+  }
+
+  async function fetchContract(pw: string) {
+    const res = await post({ phone: pw });
+    if (!res) return { ok: false, error: "network" };
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
       return { ok: false, error: j.error as string };
     }
-    const j = (await res.json()) as PortalPayload;
+    const j = (await res.json().catch(() => null)) as PortalPayload | null;
+    if (!j) return { ok: false, error: "network" };
     apply(j);
     return { ok: true };
   }
@@ -287,13 +302,9 @@ export function useContractPortal(
   async function sendEdit() {
     if (!editMsg.trim()) return;
     setSending(true);
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "edit_request", phone, message: editMsg.trim() }),
-    });
+    const res = await post({ action: "edit_request", phone, message: editMsg.trim() });
     setSending(false);
-    if (res.ok) {
+    if (res?.ok) {
       setSent(true);
       setEditMsg("");
       setTimeout(() => setSent(false), 4000);
@@ -303,16 +314,14 @@ export function useContractPortal(
   }
 
   async function reportPaid() {
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "paid", phone }),
+    await once("paid", async () => {
+      const res = await post({ action: "paid", phone });
+      if (res?.ok) {
+        setPaidReported(true);
+        setPayNudge((n) => n + 1);
+      }
+      else flashToast(t("genericErr"));
     });
-    if (res.ok) {
-      setPaidReported(true);
-      setPayNudge((n) => n + 1);
-    }
-    else flashToast(t("genericErr"));
   }
 
   async function uploadProof(file: File, planId?: string) {
@@ -330,63 +339,58 @@ export function useContractPortal(
     form.append("file", upload);
     form.append("phone", phone);
     if (planId) form.append("plan_id", planId);
-    const res = await fetch(`/api/c/${token}/proof`, { method: "POST", body: form });
-    if (res.ok) {
-      const { url } = await res.json();
-      setProofUrls((p) => [...p, url]);
-      setPayNudge((n) => n + 1);
-      setPaidReported(true);
-    } else {
-      flashToast(t("genericErr"));
+    try {
+      const res = await fetch(`/api/c/${token}/proof`, { method: "POST", body: form }).catch(() => null);
+      const url = res?.ok ? ((await res.json().catch(() => null)) as { url?: string } | null)?.url : undefined;
+      if (url) {
+        setProofUrls((p) => [...p, url]);
+        setPayNudge((n) => n + 1);
+        setPaidReported(true);
+      } else {
+        flashToast(t("genericErr"));
+      }
+    } finally {
+      setProofUploading(false);
     }
-    setProofUploading(false);
   }
 
   async function chooseQuote(optionId: string) {
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "choose_quote", phone, option_id: optionId }),
+    await once("quote", async () => {
+      const res = await post({ action: "choose_quote", phone, option_id: optionId });
+      if (res?.ok) setChosenQuote(optionId);
+      else flashToast(t("genericErr"));
     });
-    if (res.ok) setChosenQuote(optionId);
-    else flashToast(t("genericErr"));
   }
 
   async function submitBrief() {
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "brief", phone, brief }),
+    await once("brief", async () => {
+      const res = await post({ action: "brief", phone, brief });
+      if (res?.ok) {
+        setBriefSent(true);
+        setTimeout(() => setBriefSent(false), 3000);
+      } else flashToast(t("genericErr"));
     });
-    if (res.ok) {
-      setBriefSent(true);
-      setTimeout(() => setBriefSent(false), 3000);
-    }
   }
 
   async function saveMessenger() {
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "set_messenger", phone, link: messenger.trim() }),
+    await once("messenger", async () => {
+      const res = await post({ action: "set_messenger", phone, link: messenger.trim() });
+      if (res?.ok) {
+        setMsgrSaved(true);
+        setTimeout(() => setMsgrSaved(false), 3000);
+      } else flashToast(t("genericErr"));
     });
-    if (res.ok) {
-      setMsgrSaved(true);
-      setTimeout(() => setMsgrSaved(false), 3000);
-    }
   }
 
   async function sendReview() {
     if (!rating && !reviewText.trim()) return;
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "review", phone, rating, message: reviewText.trim() }),
+    await once("review", async () => {
+      const res = await post({ action: "review", phone, rating, message: reviewText.trim() });
+      if (res?.ok) {
+        setReviewSent(true);
+        setReviewText("");
+      } else flashToast(t("genericErr"));
     });
-    if (res.ok) {
-      setReviewSent(true);
-      setReviewText("");
-    }
   }
 
   async function sign() {
@@ -395,13 +399,9 @@ export function useContractPortal(
       return;
     }
     setSigning(true);
-    const res = await fetch(`/api/c/${token}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "sign", phone, name: signName.trim(), signature }),
-    });
+    const res = await post({ action: "sign", phone, name: signName.trim(), signature });
     setSigning(false);
-    if (res.ok) await fetchContract(phone);
+    if (res?.ok) await fetchContract(phone);
     else setErr(t("genericErr"));
   }
 

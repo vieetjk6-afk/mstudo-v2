@@ -60,9 +60,9 @@ export default function LeadsV2({ leads }: { leads: Lead[] }) {
       .filter((r) => filter === "all" || r.status === filter)
       .filter((r) => !needle || noAccent(`${r.name ?? ""} ${r.phone ?? ""} ${r.interest ?? ""}`).includes(needle))
       .sort((a, b) => (sort === "newest" ? b.created_at.localeCompare(a.created_at) : a.created_at.localeCompare(b.created_at)));
-    const startToday = new Date(now);
-    startToday.setHours(0, 0, 0, 0);
-    const t0 = startToday.getTime();
+    // Nửa đêm hôm nay theo giờ VN (setHours theo múi giờ máy → SSR và trình duyệt
+    // chia nhóm "Hôm nay" khác nhau).
+    const t0 = Date.parse(`${new Date(now + 7 * 3600 * 1000).toISOString().slice(0, 10)}T00:00:00+07:00`);
     const buckets: { key: string; label: string; rows: Lead[] }[] = [
       { key: "today", label: "Hôm nay", rows: [] },
       { key: "week", label: "7 ngày qua", rows: [] },

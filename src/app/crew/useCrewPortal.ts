@@ -384,13 +384,23 @@ export function useProfileEditor(phone: string, session: string | null, onSaved:
 
   async function save(p: CrewProfile) {
     setSaving(true);
-    const res = await fetch("/api/crew/profile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "save", phone, session, studioId: p.owner_id, profile: draft }),
-    });
-    setSaving(false);
-    if (res.ok) { setOpenId(null); onSaved(); }
+    let res: Response | null = null;
+    try {
+      res = await fetch("/api/crew/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", phone, session, studioId: p.owner_id, profile: draft }),
+      });
+    } catch {
+      /* mất mạng — báo bên dưới, không kẹt nút "Đang lưu…" */
+    } finally {
+      setSaving(false);
+    }
+    if (res?.ok) { setOpenId(null); onSaved(); }
+    // Trước đây hỏng thì im lặng: ngăn kéo vẫn mở, thợ tưởng đã lưu.
+    else alert(res?.status === 401
+      ? "Phiên đã hết hạn — tải lại trang rồi tra cứu lại số điện thoại."
+      : "Chưa lưu được hồ sơ. Kiểm tra mạng rồi thử lại.");
   }
 
   return { openId, setOpenId, draft, setDraft, saving, open, save };

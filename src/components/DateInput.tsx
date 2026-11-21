@@ -55,8 +55,13 @@ export default function DateInput({
   const [pastWarn, setPastWarn] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
   const min = allowPast ? undefined : todayIso();
-  // Keep the displayed text in sync when the value changes from outside.
-  useEffect(() => { setText(isoToDisplay(value)); }, [value]);
+  // Keep the displayed text in sync when the value changes from OUTSIDE. Đang gõ
+  // dở (vd xoá một số của ngày có sẵn) thì ô phát "" lên cha — nếu cứ đồng bộ
+  // theo value thì chính chữ đang gõ bị xoá trắng. Nên giữ nguyên chữ khi nó đã
+  // khớp value: chữ hợp lệ trùng value, hoặc chữ chưa trọn mà value rỗng.
+  useEffect(() => {
+    setText((t) => (displayToIso(t) === value ? t : isoToDisplay(value)));
+  }, [value]);
 
   // Reject past dates unless explicitly allowed (e.g. back-dating old albums).
   function emit(iso: string) {

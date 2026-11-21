@@ -34,6 +34,8 @@ export type GCalSyncResult = {
   /** Lý do đọc được cho người dùng khi `synced` = false. */
   reason?: string;
   gcalEventId?: string | null;
+  /** Hợp đồng KHÔNG được lên lịch (huỷ, lùi về nháp, bỏ ngày) — mốc đi kèm cũng phải gỡ. */
+  dropped?: boolean;
 };
 
 const NOT_CONNECTED = "chưa kết nối Google Lịch";
@@ -96,7 +98,7 @@ async function drop(
     // nhánh insert — thà để trống cho rõ.
     await db.from("studio_contracts").update({ gcal_event_id: null }).eq("id", contractId);
   }
-  return { synced: false, reason };
+  return { synced: false, reason, dropped: true };
 }
 
 /** Gỡ hẳn hợp đồng khỏi Google Lịch (dùng khi xoá hợp đồng). */
@@ -199,6 +201,12 @@ export async function syncContractCalendar(
       .eq("contract_id", contractId)
       .not("event_date", "is", null);
     for (const ev of evs ?? []) {
+      // Hợp đồng bị huỷ / lùi về nháp / bỏ ngày → gỡ cả mốc đi kèm (ngày đãi,
+      // thử đồ…). Trước đây vẫn upsert, nên huỷ xong mốc vẫn nằm trên lịch thợ.
+      if (contract.dropped) {
+        await removeStudioEventFromGCal(ownerId, ev.id as string);
+        continue;
+      }
       const r = await syncStudioEventToGCal(ownerId, ev.id as string);
       if (r.synced) milestones++;
     }

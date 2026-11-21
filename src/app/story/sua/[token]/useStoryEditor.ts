@@ -78,16 +78,17 @@ export function useStoryEditor(token: string) {
     if (!cfg) return;
     setSaving(true); setErr(null);
     const willPub = nextPub ?? published;
-    const res = await fetch(`/api/story/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: cfg, published: willPub }) });
+    // Lỗi mạng (fetch ném) → null: không kẹt ở "Đang lưu…".
+    const res = await fetch(`/api/story/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ config: cfg, published: willPub }) }).catch(() => null);
     setSaving(false);
-    if (!res.ok) { setErr("Lưu không thành công."); return; }
+    if (!res?.ok) { setErr("Lưu không thành công."); return; }
     setPublished(willPub); setDirty(false); setSaved(true); setTimeout(() => setSaved(false), 1800);
   }
 
   async function loadPhotos() {
     setLoadingPhotos(true);
-    const res = await fetch(`/api/story/${token}/photos`);
-    const d = res.ok ? await res.json() : { photos: [] };
+    const res = await fetch(`/api/story/${token}/photos`).catch(() => null);
+    const d = res?.ok ? await res.json().catch(() => ({ photos: [] })) : { photos: [] };
     setLoadingPhotos(false);
     setPhotos(d.photos || []);
     if (d.error === "no_api_key") setErr("Máy chủ chưa cấu hình GOOGLE_API_KEY để đọc Drive.");
@@ -95,12 +96,15 @@ export function useStoryEditor(token: string) {
 
   async function disconnectDrive() {
     if (!confirm("Ngắt kết nối Google Drive? Khách sẽ không thể gửi ảnh/video nữa (ảnh đã gửi vẫn nằm trên Drive của bạn).")) return;
-    await fetch(`/api/story/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "disconnect_drive" }) });
+    const res = await fetch(`/api/story/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "disconnect_drive" }) }).catch(() => null);
+    if (!res?.ok) { setErr("Chưa ngắt được kết nối Drive — thử lại."); return; }
     setDriveConnected(false);
   }
 
   async function deleteUpload(id: string) {
-    await fetch(`/api/story/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_upload", uploadId: id }) });
+    const res = await fetch(`/api/story/${token}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "delete_upload", uploadId: id }) }).catch(() => null);
+    // Chỉ gỡ khỏi danh sách khi máy chủ đã xoá thật.
+    if (!res?.ok) { setErr("Chưa xoá được — thử lại."); return; }
     setUploads((u) => u.filter((x) => x.id !== id));
   }
 
