@@ -125,6 +125,7 @@ export const BACKUP_EXCLUDED: Record<string, string> = {
   admin_drive: "bí mật: refresh token Drive của admin (chính nơi cất bản sao lưu)",
   admin_ai_providers: "bí mật: API key AI chung (đã mã hoá) — nhập lại khi cần",
   studio_ai_providers: "bí mật: API key AI riêng của studio — studio nhập lại khi cần",
+  studio_code_seq: "bộ đếm mã HĐ/báo giá — next_studio_code tự bắt kịp mã lớn nhất đang có sau khi khôi phục",
   studio_bank_hooks: "bí mật: khoá webhook SePay — studio tạo lại khi cần",
   push_subscriptions: "thiết bị nhận thông báo đẩy — tự đăng ký lại khi mở app",
   album_faces: "vector khuôn mặt (nặng nhất DB) — quét lại được từ ảnh",

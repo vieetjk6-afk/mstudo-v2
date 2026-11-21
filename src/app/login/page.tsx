@@ -93,13 +93,15 @@ function LoginForm() {
   // Chặn open redirect — xem @/lib/safe-next (bắt cả biến thể `/\evil.com`).
   const next = safeNextPath(params.get("next"));
 
-  const [email, setEmail] = useState("");
+  // Vừa xác nhận tài khoản nhân viên (/auth/xac-nhan-nhan-vien) → điền sẵn email.
+  const [email, setEmail] = useState(() => params.get("email") || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaWarn, setCaptchaWarn] = useState(false);
   const didReset = params.get("reset") === "1";
+  const didConfirm = params.get("confirmed") === "1";
   // Đang chạy TRONG cửa sổ của MStudo Desktop (cờ do app tiêm vào webview).
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {
@@ -178,7 +180,10 @@ function LoginForm() {
       ])) as { error: { message: string } | null };
 
       if (error) {
-        setError(error.message);
+        // Tài khoản nhân viên chưa bấm link xác nhận trong email.
+        setError(/not confirmed/i.test(error.message)
+          ? "Tài khoản chưa được xác nhận. Mở email của bạn và bấm link “Xác nhận tài khoản” do studio gửi, rồi đăng nhập lại."
+          : error.message);
         setLoading(false);
         return;
       }
@@ -282,6 +287,12 @@ function LoginForm() {
           {captchaWarn && !captchaToken && (
             <p className="mb-4 text-sm text-accent-muted">
               Xác minh chống robot đang trục trặc — chờ vài giây, nút Đăng nhập sẽ tự bật lại.
+            </p>
+          )}
+
+          {didConfirm && !error && (
+            <p className="mb-4 text-sm text-accent-muted">
+              Đã xác nhận tài khoản. Đăng nhập bằng mật khẩu studio đã đưa cho bạn.
             </p>
           )}
 

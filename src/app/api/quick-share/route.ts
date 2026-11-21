@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { limitByIp } from "@/lib/rate-limit";
+import { limitByIpDurable } from "@/lib/rate-limit";
+import { requireUser } from "@/lib/auth-guards";
 import {
   BUCKET,
+  LINK_HOST,
   MAX_FILES,
   MAX_FILE_BYTES,
   MAX_FILE_MB,
@@ -26,7 +28,14 @@ export const dynamic = "force-dynamic";
  * Body: { files: [{ name, size, type }], pin? }
  */
 export async function POST(req: Request) {
-  const limited = limitByIp(req, "quick-share", 30, 10 * 60 * 1000);
+  // Phải đăng nhập mới tải lên được: trước đây ai cũng đẩy được tới 1GB mỗi lượt
+  // vào kho Storage dùng chung (làm đầy hạn mức của cả app, và thành chỗ treo
+  // file lạ miễn phí dưới tên miền của mình). Người NHẬN link vẫn tải về không
+  // cần đăng nhập.
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "Đăng nhập để gửi file" }, { status: 401 });
+  // Hạn mức bền (không reset theo từng instance như bộ đếm trong bộ nhớ).
+  const limited = await limitByIpDurable(req, `quick-share:${user.id}`, 30, 10 * 60 * 1000);
   if (limited) return limited;
 
   const body = (await req.json().catch(() => null)) as
@@ -79,10 +88,11 @@ export async function POST(req: Request) {
     uploads.push({ path: data.path, token: data.token });
   }
 
-  // Link theo đúng tên miền người dùng đang mở (vieetjk.com → vieetjk.com/f/…).
+  // Link rút gọn luôn trên tên miền ngắn (vieetjk.com/f/…) dù trang tải lên giờ
+  // nằm ở tên miền chính (vì cần đăng nhập). Chạy local thì giữ origin hiện tại.
   const host = req.headers.get("x-forwarded-host") || req.headers.get("host");
   const local = !host || /^(localhost|127\.)/.test(host);
-  const base = local ? new URL(req.url).origin : `https://${host}`;
+  const base = local ? new URL(req.url).origin : `https://${LINK_HOST}`;
   return NextResponse.json({
     code,
     url: `${base}/f/${code}`,

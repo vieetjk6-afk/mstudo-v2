@@ -1,5 +1,6 @@
 "use client";
 
+import { useEscLayer } from "@/components/v2/kit-client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -62,6 +63,7 @@ export default function StudioFooterNav({ tier, role: _role }: Props) {
   const [pending, setPending] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   useEffect(() => { setPending(null); setSheet(false); }, [pathname]);
+  useEscLayer(sheet, () => setSheet(false)); // Esc đóng bảng "Thêm"
 
   function isActive(href: string) {
     const onPath = pathname === href || (href !== "/dashboard/studio" && pathname.startsWith(href + "/"));

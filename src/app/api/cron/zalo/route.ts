@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { autoNotify } from "@/lib/zalo/notify";
@@ -78,17 +79,23 @@ async function run(req: NextRequest) {
   const yesterday = ymd(new Date(nowVN.getTime() - 24 * 3600 * 1000));
 
   // Chống gửi trùng: đã có tin 'sent' cùng (owner, contract, kind) trong N ngày?
-  async function alreadySent(ownerId: string, contractId: string, kind: string, days: number): Promise<boolean> {
+  async function alreadySent(ownerId: string, contractId: string, kind: string, days: number, crewPhone?: string): Promise<boolean> {
     const since = new Date(Date.now() - days * 24 * 3600 * 1000).toISOString();
-    const { data } = await db
+    let q = db
       .from("zalo_messages")
       .select("id")
       .eq("owner_id", ownerId)
       .eq("contract_id", contractId)
       .eq("kind", kind)
       .eq("status", "sent")
-      .gte("created_at", since)
-      .limit(1);
+      .gte("created_at", since);
+    // Tin cho thợ: chống gửi lặp theo TỪNG thợ (chạy lại cron / thử lại thì
+    // trước đây mỗi thợ nhận thêm một tin nhắc).
+    if (crewPhone) q = q.eq("audience", "crew").eq("to_phone", crewPhone);
+    // Tin cho khách: đừng tính tin đã gửi cho thợ (gửi thợ xong mà tin khách
+    // hỏng thì lần chạy lại vẫn phải gửi cho khách).
+    else q = q.or("audience.is.null,audience.neq.crew");
+    const { data } = await q.limit(1);
     return !!(data && data.length);
   }
 
@@ -168,6 +175,7 @@ async function run(req: NextRequest) {
 
     for (const c of (s.contract_crew || []) as any[]) {
       if (!c.phone) continue;
+      if (await alreadySent(s.owner_id, s.id, "shoot_reminder", 1, c.phone)) continue;
       const r = await autoNotify({
         ownerId: s.owner_id,
         event: "shoot_reminder",
@@ -194,12 +202,17 @@ async function run(req: NextRequest) {
 
   // ── 2) PAYMENT DUE — đợt tới hạn/quá hạn → nhắc khách + link HĐ ───────────
   if (doMoney) {
-  const { data: dues } = await db
+  // Lật trang + loại nháp/huỷ NGAY trong truy vấn: trước đây lọc sau khi đọc, nên
+  // đợt của hợp đồng nháp/huỷ chiếm chỗ trong 1000 hàng Supabase trả về và đợt
+  // thật phía sau không bao giờ được nhắc.
+  const dues = await fetchAllRows((from, to) => db
     .from("contract_payment_plan")
     .select("amount, due_date, contract:studio_contracts!inner(id, owner_id, title, client_name, client_phone, client_email, client_token, status)")
     .eq("paid", false)
     .not("due_date", "is", null)
-    .lte("due_date", today);
+    .lte("due_date", today)
+    .not("contract.status", "in", "(draft,cancelled)")
+    .order("id").range(from, to));
 
   for (const d of (dues ?? []) as any[]) {
     const c = d.contract;

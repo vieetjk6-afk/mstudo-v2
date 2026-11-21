@@ -209,7 +209,10 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
 
   if (body.action === "review") {
     const content = body.message?.trim();
-    const rating = Math.max(1, Math.min(5, Math.round(Number(body.rating) || 0)));
+    // Không chấm sao (chỉ viết lời) thì để null — trước đây Math.max(1, 0) biến
+    // nó thành 1★ công khai trên album.
+    const raw = Math.round(Number(body.rating) || 0);
+    const rating = raw > 0 ? Math.min(5, raw) : 0;
     if (!content && !rating) return NextResponse.json({ error: "empty" }, { status: 400 });
     const { error } = await db.from("feedback").insert({
       album_id: contract.gallery_album_id || contract.selection_album_id || null,
@@ -333,7 +336,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     return Promise.all([
       db.from("contract_items").select("*").eq("contract_id", cId).order("position"),
       db.from("contract_payments").select("id, amount, kind, paid_at").eq("contract_id", cId).order("paid_at", { ascending: false }),
-      db.from("studio_events").select("id, title, event_date, event_time, note").eq("contract_id", cId).order("event_date"),
+      db.from("studio_events").select("id, title, event_date, event_time, note").eq("contract_id", cId).eq("owner_id", cOwnerId).order("event_date"),
       db.from("contract_quote_options").select("id, name, price, description, position").eq("contract_id", cId).order("position"),
       // pay_code (mã đợt để SePay tự ghi thu) chỉ có sau migrations/bank_auto_reconcile.sql;
       // chưa chạy thì lùi về bản cũ, không để cổng khách hỏng.
@@ -343,7 +346,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
         const full = await q(`${base}, pay_code`);
         return full.error && isMissingColumn(full.error, "pay_code") ? q(base) : full;
       })(),
-      db.from("studio_expenses").select("id, title, amount, category, spent_at").eq("contract_id", cId).eq("client_visible", true).order("spent_at", { ascending: false }),
+      db.from("studio_expenses").select("id, title, amount, category, spent_at").eq("contract_id", cId).eq("owner_id", cOwnerId).eq("client_visible", true).order("spent_at", { ascending: false }),
       db.from("contract_tasks").select("id, label, done, position").eq("contract_id", cId).order("position"),
       db.from("contract_products").select("id, name, qty, cost, status, position").eq("contract_id", cId).order("position"),
       // Lịch hẹn của hợp đồng (trang điểm / thử đồ / chụp / tư vấn) — CHỈ những mốc
@@ -353,6 +356,10 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       db.from("studio_appointments")
         .select("id, kind, title, appt_date, start_time, end_time, duration_min, location, room, crew_name, status, note")
         .eq("contract_id", cId)
+        // owner_id: RLS các bảng này chỉ kiểm owner_id chứ không kiểm contract_id
+        // thuộc ai — studio khác gắn được dòng vào hợp đồng của studio này
+        // (vd "chuyển cọc vào STK…"). Cổng khách chỉ hiện dòng của đúng studio.
+        .eq("owner_id", cOwnerId)
         .eq("client_visible", true)
         .neq("status", "cancelled")
         .order("appt_date"),

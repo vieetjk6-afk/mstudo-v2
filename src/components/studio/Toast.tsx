@@ -83,7 +83,7 @@ function ToastV2Body({ msg }: { msg: string }) {
       <div
         role="status"
         aria-live="polite"
-        className="fixed bottom-24 left-1/2 z-[200] flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2 rounded-[12px] px-4 py-2.5 text-[13px] font-semibold animate-[vkToast_.22s_ease_both] lg:bottom-6"
+        className="fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-[200] flex max-w-[calc(100vw-32px)] -translate-x-1/2 items-center gap-2 rounded-[12px] px-4 py-2.5 text-[13px] font-semibold animate-[vkToast_.22s_ease_both] lg:bottom-6"
         style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}
       >
         <CheckCircle2 size={16} style={{ flex: "none", color: "color-mix(in srgb, var(--gn) 55%, var(--sf))" }} />

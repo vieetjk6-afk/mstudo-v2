@@ -1,3 +1,4 @@
+import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
@@ -57,7 +58,8 @@ async function run(req: NextRequest) {
       .select("id, owner_id, title, client_name, client_email, client_phone, event_time, location, contract_crew(name, role, phone)")
       .eq("event_date", tomorrow)
       .neq("status", "cancelled"),
-    db
+    // Hai truy vấn này quét MỌI studio: lật trang, Supabase cắt lặng lẽ ở 1000 hàng.
+    fetchAllRows((from, to) => db
       .from("contract_payment_plan")
       .select("amount, label, due_date, contract:studio_contracts!inner(owner_id, title, status)")
       .eq("paid", false)
@@ -66,19 +68,24 @@ async function run(req: NextRequest) {
       // Huỷ hợp đồng KHÔNG xoá các đợt thu → nếu không loại ở đây, bản tóm tắt
       // hằng ngày cứ nhắc chủ studio đi đòi tiền của hợp đồng đã huỷ. Truy vấn
       // "trễ giao" bên dưới và accounting.receivables() đều đã loại "cancelled".
-      .neq("contract.status", "cancelled"),
-    db
+      .neq("contract.status", "cancelled")
+      .order("id").range(from, to)).then((data) => ({ data })),
+    fetchAllRows((from, to) => db
       .from("studio_contracts")
       .select("owner_id, title, delivery_due")
       .not("delivery_due", "is", null)
       .lt("delivery_due", today)
       .neq("status", "completed")
-      .neq("status", "cancelled"),
+      .neq("status", "cancelled")
+      .order("id").range(from, to)).then((data) => ({ data })),
     db
       .from("studio_contracts")
       .select("owner_id, title, client_name, client_email, client_token")
       .eq("status", "completed")
-      .gte("updated_at", since24h),
+      // completed_at chứ KHÔNG phải updated_at: hợp đồng đã hoàn thành vẫn bị
+      // ghi tiếp (dọn ảnh chứng từ sau 30 ngày, desktop đồng bộ Drive, Google
+      // Lịch…) và trigger đẩy updated_at → khách nhận lại thư xin đánh giá.
+      .gte("completed_at", since24h),
     db
       .from("albums")
       .select("id, owner_id, title, slug, storage_until")

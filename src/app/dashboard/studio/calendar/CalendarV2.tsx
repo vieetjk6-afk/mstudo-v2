@@ -61,9 +61,9 @@ function money(c: ContractMarker) {
   return { total, left };
 }
 
-export default function CalendarV2({ ownerId, initialEvents, contracts, feedUrl, gcal, crewRoles = [], tabs }: CalendarViewProps) {
+export default function CalendarV2({ ownerId, initialEvents, contracts, loadedRange, feedUrl, gcal, crewRoles = [], tabs }: CalendarViewProps) {
   const todayStr = todayVN();
-  const cal = useShootCalendar({ ownerId, initialEvents, contracts, todayStr });
+  const cal = useShootCalendar({ ownerId, initialEvents, contracts, todayStr, loadedRange });
   const { events, contractList, eventsOn, contractsOn, upcoming, gcalMsg, setGcalMsg } = cal;
 
   const [view, setView] = useState<View>("month");
@@ -90,6 +90,13 @@ export default function CalendarV2({ ownerId, initialEvents, contracts, feedUrl,
     return Array.from({ length: n }, (_, i) => ymd(year, month, i + 1));
   }, [byMonth, week, year, month]);
   const summary = useMemo(() => summarizeRange(rangeDays, contractList, events), [rangeDays, contractList, events]);
+  // Lật ra ngoài khoảng ±6 tháng đã tải → xin thêm (xem useShootCalendar).
+  const { ensureRange } = cal;
+  useEffect(() => {
+    if (rangeDays.length) ensureRange(rangeDays[0], rangeDays[rangeDays.length - 1]);
+    // ensureRange đọc ref nội bộ, chỉ cần chạy lại khi khoảng đang xem đổi.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeDays]);
 
   function step(delta: number) {
     if (byMonth) {

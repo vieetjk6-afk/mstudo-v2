@@ -1,3 +1,4 @@
+import { fetchInChunks } from "@/lib/fetch-all-rows";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendPushToOwner } from "@/lib/push";
@@ -96,7 +97,20 @@ async function run(req: NextRequest) {
   const GIFT: string =
     "shoot_type, service_id, event_time, location, intake_type:intake->>type, groom:intake->groom->>name, bride:intake->bride->>name";
   const LIVE = ["sent", "approved", "in_progress", "post_production", "completed"];
-  const load = (cols: string) => db.from("studio_contracts").select(cols).in("status", LIVE).limit(2000);
+  // Lật trang: Supabase cắt ở 1000 hàng mỗi lượt (`.limit(2000)` không nâng được
+  // trần đó) — studio nhiều hợp đồng thì một phần không bao giờ được xét. Trang
+  // đầu báo lỗi (thiếu cột) thì trả lỗi đó để nhánh lùi cột bên dưới chạy.
+  const load = async (cols: string): Promise<{ data: unknown[] | null; error: { message: string; code?: string } | null }> => {
+    const PAGE = 1000;
+    const rows: unknown[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await db.from("studio_contracts").select(cols).in("status", LIVE)
+        .order("id").range(from, from + PAGE - 1);
+      if (error) return from === 0 ? { data: null, error } : { data: rows, error: null };
+      rows.push(...(data ?? []));
+      if (!data || data.length < PAGE) return { data: rows, error: null };
+    }
+  };
   let res = await load(`${BASE}, ${GIFT}, gift_invitation`);
   // Chưa chạy migration thiep_tang_tu_dong.sql → chưa có cột lựa chọn tặng thiệp
   // của từng hợp đồng. Vẫn chạy được: mọi hợp đồng coi như "theo gói".
@@ -126,15 +140,18 @@ async function run(req: NextRequest) {
     ...new Set(list.flatMap((c) => [c.selection_album_id, c.gallery_album_id]).filter(Boolean) as string[]),
   ];
 
-  const [{ data: plans }, { data: albums }, { data: log }] = await Promise.all([
-    db
-      .from("contract_payment_plan")
-      .select("id, contract_id, label, amount, due_date, paid")
-      .in("contract_id", ids),
-    albumIds.length
-      ? db.from("albums").select("id, selection_done_at, delivered_at").in("id", albumIds)
-      : Promise.resolve({ data: [] as { id: string; selection_done_at: string | null; delivered_at: string | null }[] }),
-    db.from("studio_automation_log").select("dedupe_key").in("contract_id", ids),
+  // Chia mẻ `.in()`: hàng nghìn UUID trong một URL làm truy vấn hỏng và cron
+  // tưởng không có đợt thanh toán / nhật ký nào (→ gửi lại việc đã làm).
+  const [plans, albums, log] = await Promise.all([
+    fetchInChunks<{ id: string; contract_id: string; label: string; amount: number; due_date: string | null; paid: boolean }>(
+      ids, (chunk, from, to) => db.from("contract_payment_plan")
+        .select("id, contract_id, label, amount, due_date, paid").in("contract_id", chunk).order("id").range(from, to)),
+    fetchInChunks<{ id: string; selection_done_at: string | null; delivered_at: string | null }>(
+      albumIds, (chunk, from, to) => db.from("albums")
+        .select("id, selection_done_at, delivered_at").in("id", chunk).order("id").range(from, to)),
+    fetchInChunks<{ dedupe_key: string }>(
+      ids, (chunk, from, to) => db.from("studio_automation_log")
+        .select("dedupe_key").in("contract_id", chunk).order("dedupe_key").range(from, to)),
   ]);
 
   const duesBy = new Map<string, ContractSnapshot["dues"]>();

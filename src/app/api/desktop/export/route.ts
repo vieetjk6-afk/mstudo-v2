@@ -234,7 +234,9 @@ export async function GET(req: Request) {
     // Số phiên bản dữ liệu của studio (trigger tăng mỗi khi bảng desktop dùng đổi).
     // Trùng với số máy đang giữ → 304 NGAY, không đọc bảng nào: trước đây máy chủ
     // đọc đủ ~20 bảng rồi mới so hash, nên lượt 304 vẫn tốn trọn egress Supabase.
-    const phienBan = lite ? await docPhienBan(db, owner) : null;
+    // Cả bản đầy đủ (sao lưu hằng ngày của desktop) cũng so số phiên bản: không
+    // đổi gì từ lần xuất trước thì 304, khỏi đọc ~20 bảng kèm ảnh chữ ký.
+    const phienBan = await docPhienBan(db, owner);
     if (phienBan !== null && params.get("have") === phienBan) {
       return new NextResponse(null, { status: 304, headers: { "Cache-Control": "no-store" } });
     }
@@ -283,7 +285,8 @@ export async function GET(req: Request) {
         headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
       });
     }
-    const backup = { format: "mstudo-backup", version: 1, exported_at: new Date().toISOString(), owner_id: owner, tables };
+    // data_version đặt TRƯỚC tables: desktop đọc nó ở đầu chuỗi, khỏi parse cả cục.
+    const backup = { format: "mstudo-backup", version: 1, data_version: phienBan, exported_at: new Date().toISOString(), owner_id: owner, tables };
     return new NextResponse(JSON.stringify(backup), {
       headers: {
         "Content-Type": "application/json; charset=utf-8",

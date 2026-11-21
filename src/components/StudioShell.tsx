@@ -96,7 +96,9 @@ function NavRow({ it, dense, pathname, badges, comingSoon, isAdmin }: NavProps &
     return <div className={cls} style={{ ...style, opacity: 0.55, cursor: "not-allowed" }} title="Tính năng sắp ra mắt">{inner}</div>;
   }
   return (
-    <Link href={it.href} className={cls} style={style} aria-current={active ? "page" : undefined}>
+    // Giao diện cũ không có mục ghim: chỉ trang chủ studio tải trước, các mục khác
+    // tải lúc bấm (mỗi lượt tải trước là một lần dựng layout dashboard trên máy chủ).
+    <Link href={it.href} prefetch={it.href === "/dashboard/studio" ? undefined : false} className={cls} style={style} aria-current={active ? "page" : undefined}>
       {inner}
     </Link>
   );

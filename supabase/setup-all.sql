@@ -2741,6 +2741,36 @@ alter table public.pet_claims enable row level security;
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/ma_so_khong_trung.sql — Mã hợp đồng / báo giá không trùng: bộ đếm nguyên tử theo studio + tháng (chạy SAU schema.sql)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Mã hợp đồng / báo giá KHÔNG TRÙNG (chạy SAU schema.sql)
+--
+-- Trước đây số thứ tự = đếm số mã đã có trong tháng + 1. Hai cách ra mã trùng:
+--   • xoá một hợp đồng giữa chừng: có 001, 002, 003, xoá 002 → đếm được 2 →
+--     mã kế là 003, trùng với cái đang có;
+--   • hai người tạo cùng lúc: cùng đếm ra 2, cùng nhận 003.
+-- Không có ràng buộc unique nên trùng là lọt im lặng.
+--
+-- Giờ: bộ đếm theo (studio, tiền tố tháng), lấy số bằng MỘT câu
+-- `insert … on conflict do update … returning` — nguyên tử, hai lượt cùng lúc
+-- nhận hai số khác nhau. Lần đầu (hoặc khi có mã nhập tay lớn hơn) bộ đếm tự
+-- bắt kịp số LỚN NHẤT đang có, nên xoá hợp đồng không làm lùi số.
+-- ─────────────────────────────────────────────────────────────────────────
+
+create table if not exists public.studio_code_seq (
+  owner_id uuid not null references public.profiles (id) on delete cascade,
+  prefix   text not null,
+  last     integer not null default 0,
+  primary key (owner_id, prefix)
+);
+
+-- Chỉ hàm security definer bên dưới đọc/ghi bảng này.
+alter table public.studio_code_seq enable row level security;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PHẦN 2 — CỘT BỔ SUNG, CHỈ MỤC, HÀM, TRIGGER, DỮ LIỆU MẶC ĐỊNH
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -8786,6 +8816,152 @@ alter table public.studio_contracts
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/ma_so_khong_trung.sql — Mã hợp đồng / báo giá không trùng: bộ đếm nguyên tử theo studio + tháng (chạy SAU schema.sql)
+-- ══════════════════════════════════════════════════════════════════════════
+
+create or replace function public.next_studio_code(p_owner uuid, p_prefix text, p_kind text)
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_max  integer := 0;
+  v_next integer;
+begin
+  if coalesce(auth.role(), '') <> 'service_role' and not public.is_studio_member(p_owner) then
+    raise exception 'không có quyền với studio này' using errcode = '42501';
+  end if;
+  if p_prefix is null or p_prefix !~ '^[A-Z]{2}-[0-9]{2}-[0-9]{4}-$' then
+    raise exception 'tiền tố mã không hợp lệ' using errcode = '22023';
+  end if;
+
+  -- Số lớn nhất đang có (phần đuôi chỉ toàn chữ số, tối đa 9 chữ số).
+  if p_kind = 'contract' then
+    select coalesce(max(substr(code, length(p_prefix) + 1)::integer), 0) into v_max
+      from public.studio_contracts
+     where owner_id = p_owner and code like p_prefix || '%'
+       and substr(code, length(p_prefix) + 1) ~ '^[0-9]{1,9}$';
+  elsif p_kind = 'quote' then
+    select coalesce(max(substr(code, length(p_prefix) + 1)::integer), 0) into v_max
+      from public.studio_quotes
+     where owner_id = p_owner and code like p_prefix || '%'
+       and substr(code, length(p_prefix) + 1) ~ '^[0-9]{1,9}$';
+  else
+    raise exception 'loại mã không hợp lệ' using errcode = '22023';
+  end if;
+
+  insert into public.studio_code_seq as s (owner_id, prefix, last)
+  values (p_owner, p_prefix, v_max + 1)
+  on conflict (owner_id, prefix)
+    do update set last = greatest(s.last, v_max) + 1
+  returning last into v_next;
+  return v_next;
+end;
+$$;
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- select public.next_studio_code('<owner uuid>', 'HD-11-2026-', 'contract');
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/hop_dong_cap_nhat_theo_con.sql — Sửa hạng mục / đợt thanh toán / khoản thu thì hợp đồng cha đổi updated_at — desktop tải lại PDF (chạy SAU schema.sql)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Sửa hạng mục / đợt thanh toán / khoản thu → hợp đồng "vừa cập nhật"
+-- (chạy SAU schema.sql)
+--
+-- Bản in hợp đồng (PDF/Word mà mstudo desktop lưu về máy) gồm cả hạng mục, kế
+-- hoạch thanh toán và các khoản đã thu. Desktop chỉ tải lại khi updated_at của
+-- hợp đồng đổi — mà sửa bảng con thì updated_at đứng im, nên file trên máy cứ
+-- giữ bản cũ. Cổng khách cũng hiện "Cập nhật lúc…" sai vì cùng lý do.
+--
+-- Chạm updated_at của hợp đồng cha mỗi khi bảng con đổi. Điều kiện
+-- `updated_at is distinct from now()` (now() cố định trong một giao dịch): chèn
+-- 20 hạng mục một lượt cũng chỉ ghi hợp đồng cha MỘT lần.
+-- ─────────────────────────────────────────────────────────────────────────
+
+create or replace function public.touch_contract_from_child()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_id uuid := coalesce(
+    case when tg_op = 'DELETE' then null else new.contract_id end,
+    case when tg_op = 'INSERT' then null else old.contract_id end
+  );
+begin
+  if v_id is not null then
+    update public.studio_contracts
+       set updated_at = now()
+     where id = v_id and updated_at is distinct from now();
+  end if;
+  return null;
+end;
+$$;
+
+drop trigger if exists touch_contract on public.contract_items;
+
+create trigger touch_contract
+  after insert or update or delete on public.contract_items
+  for each row execute function public.touch_contract_from_child();
+
+drop trigger if exists touch_contract on public.contract_payments;
+
+create trigger touch_contract
+  after insert or update or delete on public.contract_payments
+  for each row execute function public.touch_contract_from_child();
+
+drop trigger if exists touch_contract on public.contract_payment_plan;
+
+create trigger touch_contract
+  after insert or update or delete on public.contract_payment_plan
+  for each row execute function public.touch_contract_from_child();
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/bao_mat_ra_soat_11_2026.sql — Rà soát bảo mật 11/2026: crew_available/crew_shift_plan chỉ đọc của studio mình; chặn tự sửa subdomain/custom_domain qua REST (chạy SAU crew_timesheet, crew_schedule)
+-- ══════════════════════════════════════════════════════════════════════════
+
+create or replace function public.sites_guard_domain()
+returns trigger
+language plpgsql
+as $$
+begin
+  -- Chỉ chặn lượt gọi từ trình duyệt (JWT người dùng / anon). Service role
+  -- (route máy chủ) và chạy SQL trực tiếp không có role này nên đi qua.
+  -- coalesce: is_admin() là NULL khi không có phiên — `not NULL` làm if bỏ qua.
+  if coalesce(auth.role(), '') in ('authenticated', 'anon') and not coalesce(public.is_admin(), false) then
+    if tg_op = 'INSERT' then
+      new.subdomain := null;
+      new.custom_domain := null;
+      new.custom_domain_verified := false;
+    else
+      new.subdomain := old.subdomain;
+      new.custom_domain := old.custom_domain;
+      new.custom_domain_verified := old.custom_domain_verified;
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists sites_guard_domain on public.sites;
+
+create trigger sites_guard_domain
+  before insert or update on public.sites
+  for each row execute function public.sites_guard_domain();
+
+-- ── Kiểm tra sau khi chạy ───────────────────────────────────────────────────
+-- select policyname, qual from pg_policies
+--  where tablename in ('crew_available', 'crew_shift_plan');
+-- select tgname from pg_trigger where tgname = 'sites_guard_domain';
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/phan_quyen_vai_tro_hop_dong.sql — Phân quyền theo vai trò cho hợp đồng: staff chỉ hợp đồng được giao, quản lý chi nhánh chỉ chi nhánh mình, kế toán chỉ đọc, chỉ chủ studio huỷ / hoàn tiền, tài khoản bị khoá mất quyền (chạy CUỐI)
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -10789,6 +10965,59 @@ revoke update (paid_plan_at) on public.profiles from authenticated, anon;
 revoke all on function public.downgrade_expired_plans() from public, anon, authenticated;
 
 grant execute on function public.downgrade_expired_plans() to service_role;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/ma_so_khong_trung.sql — Mã hợp đồng / báo giá không trùng: bộ đếm nguyên tử theo studio + tháng (chạy SAU schema.sql)
+-- ══════════════════════════════════════════════════════════════════════════
+
+revoke all on function public.next_studio_code(uuid, text, text) from public, anon;
+
+grant execute on function public.next_studio_code(uuid, text, text) to authenticated, service_role;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/bao_mat_ra_soat_11_2026.sql — Rà soát bảo mật 11/2026: crew_available/crew_shift_plan chỉ đọc của studio mình; chặn tự sửa subdomain/custom_domain qua REST (chạy SAU crew_timesheet, crew_schedule)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────────────────────────────────
+-- Rà soát bảo mật 11/2026 — ba lỗ RLS (chạy SAU crew_timesheet, crew_schedule)
+--
+-- 1) crew_available / crew_shift_plan: thôi cho MỌI tài khoản đọc toàn bảng.
+--    Policy cũ `auth.role() = 'authenticated'` = ai đăng ký một tài khoản
+--    miễn phí cũng gọi thẳng REST lấy được SĐT mọi thợ kèm owner_id studio
+--    — đúng lỗi đã vá cho crew_unavailable (crew_unavailable_rls_rieng_tu.sql)
+--    mà hai bảng anh em này bị sót. Mọi chỗ đọc từ trình duyệt đã tự lọc:
+--      • StudioTab.tsx: crew_available .eq("owner_id", profile.id)
+--      • TeamTab.tsx:   crew_shift_plan .in("phone", <SĐT thợ trong sổ studio>)
+--    Đọc liên studio (cổng thợ) đi service role, không chịu RLS.
+--
+-- 2) sites.subdomain / custom_domain / custom_domain_verified: chỉ ghi được
+--    qua route máy chủ (service role). RLS sites_owner_all cho chủ site sửa MỌI
+--    cột, nên PATCH thẳng REST là vượt được danh sách tên dành riêng
+--    (login., billing.…) và tự đặt custom_domain_verified = true, bỏ qua cả
+--    kiểm tra gói. /api/site/subdomain và /api/site/domain đã chuyển sang ghi
+--    bằng service role nên không bị trigger này chặn.
+-- ─────────────────────────────────────────────────────────────────────────
+
+drop policy if exists crew_available_read on public.crew_available;
+
+create policy crew_available_read on public.crew_available
+  for select using (owner_id = auth.uid() or public.is_admin());
+
+-- crew_shift_plan không có owner_id: studio (kể cả nhân viên của studio) đọc
+-- được ca của những SĐT có trong sổ thợ của mình.
+drop policy if exists crew_shift_plan_read on public.crew_shift_plan;
+
+create policy crew_shift_plan_read on public.crew_shift_plan
+  for select using (
+    public.is_admin()
+    or exists (
+      select 1 from public.studio_crew sc
+      where sc.phone = crew_shift_plan.phone
+        and public.is_studio_member(sc.owner_id)
+    )
+  );
 
 
 -- ══════════════════════════════════════════════════════════════════════════

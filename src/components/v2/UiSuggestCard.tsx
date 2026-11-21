@@ -43,7 +43,7 @@ export default function UiSuggestCard() {
     <div
       role="dialog"
       aria-label="Gợi ý giao diện mới"
-      className="ck-panel fixed bottom-[88px] right-3 z-40 w-[min(360px,calc(100vw-24px))] rounded-[18px] p-4 lg:bottom-5 lg:right-5"
+      className="ck-panel fixed bottom-[calc(88px+env(safe-area-inset-bottom))] right-3 z-40 w-[min(360px,calc(100vw-24px))] rounded-[18px] p-4 lg:bottom-5 lg:right-5"
       style={{ background: "var(--sf)", border: "1px solid var(--bd)", boxShadow: "var(--sh-toast)" }}
     >
       <div className="flex gap-3">

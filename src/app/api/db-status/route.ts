@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireUser } from "@/lib/auth-guards";
+import { getProfileById, requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { maDuAn } from "@/lib/supabase-du-an";
 import { docBanKe, soiDatabase } from "@/lib/db-thieu";
@@ -22,6 +22,12 @@ export const maxDuration = 60;
 export async function GET() {
   const user = await requireUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  // Mã project + danh sách bảng thiếu là thông tin vận hành: chỉ chủ tài khoản
+  // (không phải nhân viên studio), giống /api/setup-sql.
+  const me = await getProfileById(user.id);
+  if (!me || !me.is_active || me.studio_owner_id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   let ke;
   try {

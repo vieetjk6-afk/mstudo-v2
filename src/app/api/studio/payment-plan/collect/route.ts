@@ -63,20 +63,33 @@ export async function POST(req: Request) {
   const amount = Math.max(0, Math.round(Number(plan.amount) || 0));
   const today = new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
-  const { data: payment } = await db
+  // GIỮ đợt trước (cập nhật có điều kiện paid = false) rồi mới ghi khoản thu —
+  // bấm đúp, hoặc webhook ngân hàng chốt cùng đợt đúng lúc đó, thì chỉ MỘT bên
+  // giữ được và chỉ một khoản thu được ghi (cùng cách với applyToPlan).
+  const { data: claimed, error: claimErr } = await db
+    .from("contract_payment_plan")
+    .update({ paid: true, paid_at: new Date().toISOString() })
+    .eq("id", plan.id)
+    .eq("paid", false)
+    .select("id");
+  if (claimErr) return NextResponse.json({ error: "server_error" }, { status: 500 });
+  if (!claimed || claimed.length === 0) return NextResponse.json({ ok: true, alreadyPaid: true });
+
+  const { data: payment, error: payErr } = await db
     .from("contract_payments")
     .insert({ contract_id: contract.id, amount, kind: "installment", method, paid_at: today, note: plan.label })
     .select("id")
     .single();
-
-  const { error } = await db
-    .from("contract_payment_plan")
-    .update({ paid: true, paid_at: new Date().toISOString(), payment_id: payment?.id ?? null })
-    .eq("id", plan.id);
-  if (error) return NextResponse.json({ error: "server_error" }, { status: 500 });
+  if (payErr || !payment) {
+    // Ghi khoản thu hỏng (thường là sổ đã khoá) → trả đợt về chưa thu, không thì
+    // đợt hiện "đã thu" mà sổ thu không có đồng nào.
+    await db.from("contract_payment_plan").update({ paid: false, paid_at: null }).eq("id", plan.id);
+    return NextResponse.json({ error: "write_failed" }, { status: 409 });
+  }
+  await db.from("contract_payment_plan").update({ payment_id: payment.id }).eq("id", plan.id);
   await logAction(db, {
     ownerId: contract.owner_id, actorId: (profile.actingUserId as string | undefined) ?? profile.id,
-    action: "payment.insert", entity: "payment", entityId: payment?.id ?? null, contractId: contract.id,
+    action: "payment.insert", entity: "payment", entityId: payment.id, contractId: contract.id,
     summary: `Ghi thu ${vnd(amount)} · ${plan.label || "đợt thanh toán"} (từ Tổng quan)`,
   });
 

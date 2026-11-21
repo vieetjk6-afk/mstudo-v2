@@ -172,13 +172,15 @@ export function useRental({
       alert("Món này đang có trong đơn thuê chưa trả — không thể xoá.");
       return false;
     }
-    await supabase.from("rental_items").delete().eq("id", id);
+    const { error } = await supabase.from("rental_items").delete().eq("id", id);
+    if (error) { alert("Chưa xoá được món này — thử lại nhé."); return false; }
     setItems((p) => p.filter((e) => e.id !== id));
     return true;
   }
 
   async function setItemStatus(id: string, status: RentalItemStatus) {
-    await supabase.from("rental_items").update({ status }).eq("id", id);
+    const { error } = await supabase.from("rental_items").update({ status }).eq("id", id);
+    if (error) { alert("Chưa lưu được trạng thái — thử lại nhé."); return; }
     setItems((p) => p.map((e) => (e.id === id ? { ...e, status } : e)));
   }
 
@@ -228,7 +230,8 @@ export function useRental({
     const patch: Record<string, unknown> = { status };
     if (status === "returned") patch.returned_at = todayISO();
     else patch.returned_at = null;
-    await supabase.from("rental_orders").update(patch).eq("id", id);
+    const { error } = await supabase.from("rental_orders").update(patch).eq("id", id);
+    if (error) { alert("Chưa lưu được trạng thái đơn — thử lại nhé."); return; }
     setOrders((p) =>
       p.map((o) =>
         o.id === id ? { ...o, status, returned_at: status === "returned" ? (patch.returned_at as string) : null } : o

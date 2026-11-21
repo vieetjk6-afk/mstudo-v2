@@ -172,6 +172,21 @@ const nextConfig = {
         ],
       },
       {
+        // WASM MediaPipe (~11 MB mỗi file, chép từ node_modules khi build — đổi
+        // phiên bản thì đổi cả bản build) và video hướng dẫn: trước đây không
+        // khớp quy tắc nào nên mặc định max-age=0, mỗi lần dùng lại hỏi lại máy chủ.
+        source: "/mediapipe/:file*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=604800, stale-while-revalidate=2592000" },
+        ],
+      },
+      {
+        source: "/huong-dan/:file*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=86400, stale-while-revalidate=604800" },
+        ],
+      },
+      {
         // ── MỌI route /api/* (JSON, byte ảnh, cú 302 rỗng…) — KHÔNG phải tài liệu
         // Trước đây chỉ /api/img và /api/file được miễn; mọi JSON khác vẫn cõng
         // nguyên bộ header của TÀI LIỆU (~1,5–2 KB / response). Các header đó chỉ

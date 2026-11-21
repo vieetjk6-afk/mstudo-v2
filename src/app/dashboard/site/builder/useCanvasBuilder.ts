@@ -110,12 +110,15 @@ export function useCanvasBuilder({ site, initialBlocks, canPublish, mainHost }: 
   // Sau mỗi lần ghi: báo máy chủ bỏ bản nhớ 5 phút của trang công khai
   // (refreshPublicSite tự gom các lần lưu dồn dập thành một lượt gọi).
   const persistTheme = useCallback(async (th: SiteTheme) => {
-    await supabase.from("sites").update({ theme: th, updated_at: new Date().toISOString() }).eq("id", site.id);
+    const { error } = await supabase.from("sites").update({ theme: th, updated_at: new Date().toISOString() }).eq("id", site.id);
+    // Lưu hỏng thì phải nói — trước đây sửa giao diện mất trắng mà không ai hay.
+    if (error) { setToast("Chưa lưu được thay đổi — kiểm tra mạng rồi thử lại."); return; }
     refreshPublicSite();
   }, [site.id, supabase]);
 
   const persistBlock = useCallback(async (b: SiteBlock) => {
-    await supabase.from("site_blocks").update({ config: b.config, visible: b.visible }).eq("id", b.id);
+    const { error } = await supabase.from("site_blocks").update({ config: b.config, visible: b.visible }).eq("id", b.id);
+    if (error) { setToast("Chưa lưu được thay đổi — kiểm tra mạng rồi thử lại."); return; }
     refreshPublicSite();
   }, [supabase]);
 

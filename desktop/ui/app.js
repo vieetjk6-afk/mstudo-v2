@@ -12,7 +12,7 @@
 
 const invoke = window.__TAURI__.core.invoke;
 
-const APP_VERSION = "1.2.0"; // giữ khớp với src-tauri/tauri.conf.json
+const APP_VERSION = "1.2.1"; // giữ khớp với src-tauri/tauri.conf.json
 
 // ─── Cấu hình (localStorage) ─────────────────────────────────────────────────
 const cfg = JSON.parse(localStorage.getItem("cfg") || "{}");
@@ -21,9 +21,9 @@ const saveCfg = () => localStorage.setItem("cfg", JSON.stringify(cfg));
 // bị giới hạn trong đây). Gọi lúc khởi động + mỗi khi đổi thư mục.
 const syncRoots = () => invoke("set_roots", { paths: [cfg.dir, cfg.mediaDir].filter(Boolean) }).catch(() => {});
 
-// 60 giây (trước 20s): mỗi lần gọi là 1 lượt hàm trên Vercel; khi mở/focus cửa
-// sổ vẫn đồng bộ ngay (focusSync) nên người dùng không thấy chậm.
-const SYNC_EVERY_MS = 60 * 1000;         // đồng bộ hợp đồng mỗi 60 giây
+// 5 phút (trước 60s): mỗi lần gọi là 1 lượt hàm trên Vercel + 3 truy vấn; khi
+// mở/focus cửa sổ vẫn đồng bộ ngay (focusSync) nên người dùng không thấy chậm.
+const SYNC_EVERY_MS = 5 * 60 * 1000;     // đồng bộ hợp đồng mỗi 5 phút
 const KEEP_DAYS = 30;                     // giữ file xuất 30 ngày
 const EXPORTS = [
   ["customers", "KhachHang"], ["quotes", "BaoGia"], ["expenses", "ChiTieu"],
@@ -40,7 +40,9 @@ const textToB64 = (t) => {
   return btoa(bin);
 };
 const join = (...parts) => parts.filter(Boolean).join("\\").replace(/[\\/]+/g, "\\");
-const today = () => new Date().toISOString().slice(0, 10);
+// Ngày theo giờ Việt Nam (UTC+7) — toISOString() là ngày UTC, nên từ 0h tới 7h
+// sáng file xuất lại mang ngày hôm trước.
+const today = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 
 // ─── Cờ "đang chạy" TỰ HẾT HẠN ───────────────────────────────────────────────
 // Cửa sổ bị ẩn xuống khay GIỮA LÚC đang gọi mạng thì WebView2 có thể treo lời
@@ -313,7 +315,7 @@ async function runSync(manual = false) {
     if (okAll) { cfg.lastSync = r.now; saveCfg(); }
     refreshStats();
     // Có hợp đồng mới (đã ký) → tạo thư mục ảnh/video trên máy + Drive ngay.
-    if (r.contracts.length) { _ipCache.at = 0; runDriveSync(false, true); }
+    if (r.contracts.length) runDriveSync(false, true);
   } catch (e) {
     if (manual) log("Không đồng bộ được: " + (e.message || e), "err");
   } finally {
@@ -369,16 +371,19 @@ async function saveContract(c) {
 //  - Vòng CHẬM (2 phút): quét thư mục trên máy của toàn bộ hợp đồng đã ký — bắt
 //    file bỏ vào muộn. Danh sách hợp đồng (?drive=1) cache 10 phút (có hợp đồng
 //    mới ký thì runSync gọi lại với fresh=true để lấy ngay).
-//  - Vòng NHANH (10s): CHỈ quét hợp đồng "đang thực hiện" — thợ đang đổ ảnh vào
-//    máy là tải lên gần như tức thì, không phải chờ. Nhẹ vì chỉ đụng vài hợp đồng
-//    đang chạy + danh sách hợp đồng được cache 2 phút (không gọi server mỗi vòng).
+//  - Vòng NHANH (10s): CHỈ quét hợp đồng đang thực hiện / hậu kỳ — thợ đang đổ
+//    ảnh vào máy là tải lên gần như tức thì. Danh sách lọc NGAY TRÊN MÁY từ danh
+//    sách ?drive=1 đã cache, không gọi server riêng.
+//  - Hợp đồng ĐÃ HOÀN THÀNH hơn 30 ngày: vòng tự động bỏ qua (bấm "Đồng bộ Drive
+//    ngay" vẫn quét hết) — không quét đĩa hàng trăm hợp đồng cũ mỗi 2 phút.
 //  - Cây thư mục Drive (plan) cache theo id + updated_at của hợp đồng, lưu cả vào
-//    localStorage, hạn 6 giờ → chỉ gọi /drive/prepare khi hợp đồng thực sự đổi.
+//    localStorage, hạn 30 ngày → chỉ gọi /drive/prepare khi hợp đồng thực sự đổi.
 const DRIVE_FULL_SYNC_MS = 2 * 60 * 1000;   // quét (trên máy) toàn bộ hợp đồng đã ký
 const DRIVE_LIST_TTL_MS = 10 * 60 * 1000;   // cache danh sách hợp đồng ?drive=1
 const DRIVE_WATCH_MS = 10 * 1000;           // theo dõi nhanh hợp đồng đang thực hiện
-const INPROGRESS_TTL_MS = 2 * 60 * 1000;    // cache danh sách hợp đồng đang thực hiện
-const PLAN_TTL_MS = 6 * 3600 * 1000;        // cache cây thư mục Drive mỗi hợp đồng
+const PLAN_TTL_MS = 30 * 24 * 3600 * 1000;  // cache cây thư mục Drive mỗi hợp đồng (đổi thì updated_at đổi)
+const OLD_DONE_MS = 30 * 24 * 3600 * 1000;  // HĐ hoàn thành lâu hơn → vòng tự động bỏ qua
+const SETTLE_MS = 60 * 1000;                // file sửa gần hơn → có thể đang chép dở, chờ vòng sau
 const THUMB_MAX_BYTES = 16 * 1024 * 1024;   // ảnh lớn hơn → không tạo xem trước
 // Số file tải SONG SONG cùng lúc (như app Google Drive) — chồng độ trễ mạng,
 // một video lớn không còn chặn các ảnh phía sau. Mặc định 10; chỉnh qua
@@ -542,18 +547,27 @@ async function scanContract(c, manual = false) {
   const base = join(cfg.mediaDir, ...(plan.pathSegments && plan.pathSegments.length ? plan.pathSegments : [plan.folderName]));
   const manPath = join(base, "mstudo-drive.json");
   let man = { folderId: plan.folderId, uploaded: {} };
-  try { man = JSON.parse(await invoke("read_text", { path: manPath })); } catch { /* chưa có */ }
+  let hadMan = false;
+  try { man = JSON.parse(await invoke("read_text", { path: manPath })); hadMan = true; } catch { /* chưa có */ }
   man.uploaded = man.uploaded || {};
   // Tạo thư mục hợp đồng + MỌI nút con (kể cả loại trừ — để studio bỏ ảnh/raw vào).
+  // Chỉ khi cần: lần đầu (chưa có manifest), khi cây thư mục đổi (hợp đồng sửa),
+  // hoặc bấm tay — không gọi create_dir cho từng nút của mọi hợp đồng mỗi 2 phút.
   // KHÔNG nuốt lỗi tạo thư mục → nếu ổ đĩa/quyền có vấn đề, ghi rõ ra log.
-  let dirErr = null;
-  try { await invoke("create_dir", { path: base }); } catch (e) { dirErr = e; }
-  for (const node of plan.tree) {
-    try { await invoke("create_dir", { path: join(base, node.path.replace(/\//g, "\\")) }); }
-    catch (e) { dirErr = e; }
+  if (!hadMan || manual || man.treeAt !== (c.updated_at || null)) {
+    let dirErr = null;
+    try { await invoke("create_dir", { path: base }); } catch (e) { dirErr = e; }
+    for (const node of plan.tree) {
+      try { await invoke("create_dir", { path: join(base, node.path.replace(/\//g, "\\")) }); }
+      catch (e) { dirErr = e; }
+    }
+    if (dirErr) log(`Lỗi tạo thư mục HĐ ${c.code || c.id} tại ${base}: ${dirErr.message || dirErr}`, "err");
+    else {
+      if (manual) log(`HĐ ${c.code || c.id}: đã tạo ${plan.tree.length} thư mục con tại ${base}`);
+      man.treeAt = c.updated_at || null;
+      await invoke("write_file_b64", { path: manPath, contentsB64: textToB64(JSON.stringify(man, null, 2)) }).catch(() => {});
+    }
   }
-  if (dirErr) log(`Lỗi tạo thư mục HĐ ${c.code || c.id} tại ${base}: ${dirErr.message || dirErr}`, "err");
-  else if (manual) log(`HĐ ${c.code || c.id}: đã tạo ${plan.tree.length} thư mục con tại ${base}`);
   const pending = [];
   for (const node of plan.tree) {
     if (node.excluded) continue; // thư mục loại trừ (VD Raw, Video gốc) → chỉ giữ ở máy
@@ -565,6 +579,9 @@ async function scanContract(c, manual = false) {
       const key = node.path + "/" + e.name;
       const prev = man.uploaded[key];
       if (prev && prev.size === e.size && prev.mtime === e.mtime_ms) continue; // đã tải, không đổi
+      // Vừa ghi xong (< 1 phút): có thể đang chép dở từ thẻ nhớ — tải lúc này là
+      // lên Drive một file cụt, rồi vòng sau lại tải thêm bản đủ thành file trùng.
+      if (Date.now() - e.mtime_ms < SETTLE_MS) continue;
       pending.push({ node, key, name: e.name, size: e.size, mtime: e.mtime_ms, path: join(localDir, e.name) });
     }
   }
@@ -613,6 +630,7 @@ async function driveSyncRun(contracts, manual = false) {
 
   // Tải 1 file (có thử lại khi lỗi tạm mạng). Cập nhật tiến độ gộp.
   async function uploadOne(f) {
+    busyOn("drive"); // gia hạn cờ: đợt tải dài hơn BUSY_TTL_MS không bị vòng khác chen vào
     dsync.curName = f.name;
     dsync.inflight.set(f.path, 0);
     makeThumb(f).then((t) => { if (t) dsync.curThumb = t; }).catch(() => {}); // không chặn luồng tải
@@ -623,6 +641,13 @@ async function driveSyncRun(contracts, manual = false) {
         const token = await getDriveToken();
         if (!token) throw new Error("not_connected");
         const res = await invoke("drive_upload", { accessToken: token, folderId: f.node.id, filePath: f.path, name: f.name, mime: guessMime(f.name) });
+        busyOn("drive");
+        // File này đã từng tải lên (giờ đổi trên máy) → bỏ bản cũ vào thùng rác
+        // Drive, không thì album có hai ảnh trùng. Hỏng thì thôi, không chặn.
+        const old = f.job.man.uploaded[f.key];
+        if (old && old.id && old.id !== res.id) {
+          invoke("drive_trash", { accessToken: token, fileId: old.id }).catch(() => {});
+        }
         f.job.man.uploaded[f.key] = { size: f.size, mtime: f.mtime, id: res.id };
         await flushManifest(f.job); // ghi manifest → ngắt giữa chừng cũng không tải lại từ đầu
         if (f.node.role === "selection" || f.node.role === "delivery") resyncNeeded.add(f.job.c.id);
@@ -693,7 +718,11 @@ async function runDriveSync(manual = false, fresh = false) {
       const list = await apiJson("/api/desktop/contracts?drive=1");
       _driveList = { at: Date.now(), list: list.contracts || [] };
     }
-    const uploaded = await driveSyncRun(_driveList.list, manual);
+    // Vòng tự động bỏ qua hợp đồng đã hoàn thành lâu (bấm tay thì quét hết).
+    const cutoff = Date.now() - OLD_DONE_MS;
+    const list = manual ? _driveList.list
+      : _driveList.list.filter((c) => c.status !== "completed" || Date.parse(c.updated_at) > cutoff);
+    const uploaded = await driveSyncRun(list, manual);
     cfg.lastDriveSync = new Date().toISOString(); saveCfg();
     if (manual) log(uploaded ? `Đã tải ${uploaded} file lên Drive.` : "Không có file mới để tải lên Drive.");
     refreshStats();
@@ -704,25 +733,18 @@ async function runDriveSync(manual = false, fresh = false) {
   }
 }
 
-// Vòng NHANH (10s): CHỈ hợp đồng "đang thực hiện" → tải ảnh mới gần như tức thì.
-let _ipCache = { at: 0, list: [] };
-async function getInProgress() {
-  if (Date.now() - _ipCache.at < INPROGRESS_TTL_MS) return _ipCache.list;
-  try {
-    const r = await apiJson("/api/desktop/contracts?status=in_progress");
-    _ipCache = { at: Date.now(), list: r.contracts || [] };
-  } catch { /* giữ cache cũ */ }
-  return _ipCache.list;
-}
+// Vòng NHANH (10s): CHỈ hợp đồng đang thực hiện / hậu kỳ → tải ảnh mới gần như
+// tức thì. Lọc từ danh sách ?drive=1 đã cache — không gọi server mỗi vòng.
+const ACTIVE = new Set(["in_progress", "post_production"]);
 async function runDriveWatch() {
   if (busy("drive") || !cfg.token || !cfg.mediaDir) return;
-  let token;
-  try { token = await getDriveToken(); } catch { token = null; }
-  if (!token) return;                       // chưa nối Drive → im lặng (vòng chậm đã cảnh báo)
-  const list = await getInProgress();
-  if (!list.length) return;                 // không có hợp đồng đang thực hiện → khỏi quét
-  busyOn("drive");
+  const list = _driveList.list.filter((c) => ACTIVE.has(c.status));
+  if (!list.length) return;                 // không có hợp đồng đang làm → khỏi quét
+  busyOn("drive");                          // giữ cờ TRƯỚC mọi await — không để vòng khác chen vào
   try {
+    let token;
+    try { token = await getDriveToken(); } catch { token = null; }
+    if (!token) return;                     // chưa nối Drive → im lặng (vòng chậm đã cảnh báo)
     const uploaded = await driveSyncRun(list, false);
     if (uploaded) {
       cfg.lastDriveSync = new Date().toISOString(); saveCfg(); refreshStats();
@@ -750,7 +772,16 @@ async function runExports(manual = false) {
   if (busy("export") || !cfg.token || !cfg.dir) return;
   busyOn("export");
   try {
-    const backup = await apiB64(`/api/desktop/export?type=backup`);
+    // have=<phiên bản lần xuất trước>: dữ liệu không đổi → máy chủ trả 304 rỗng,
+    // bỏ qua cả lượt (giữ nguyên file cũ, KHÔNG dọn — không thì studio nghỉ một
+    // tháng là vòng dọn 30 ngày xoá sạch bản sao lưu cuối cùng).
+    const have = cfg.lastExportVer && !manual ? `&have=${encodeURIComponent(cfg.lastExportVer)}` : "";
+    const r = await api(`/api/desktop/export?type=backup${have}`);
+    if (r.status === 304) {
+      cfg.lastExportDate = today(); saveCfg(); refreshStats();
+      return;
+    }
+    const backup = r.body_b64;
     await invoke("write_file_b64", { path: join(cfg.dir, "SaoLuu", `mstudo-backup-${today()}.json`), contentsB64: backup });
     for (const [type, folder] of EXPORTS) {
       const b64 = await apiB64(`/api/desktop/export?type=${type}`);
@@ -760,6 +791,10 @@ async function runExports(manual = false) {
     for (const [, folder] of [...EXPORTS, ["", "SaoLuu"]]) {
       await invoke("cleanup_old", { dir: join(cfg.dir, folder), days: KEEP_DAYS }).catch(() => {});
     }
+    // Phiên bản nằm ở đầu chuỗi JSON (trước "tables") — đọc vài trăm byte đầu là đủ.
+    const head = b64ToText(backup.slice(0, 800)); // 800 chia hết cho 4 → base64 hợp lệ
+    const m = /"data_version":"([^"]+)"/.exec(head);
+    cfg.lastExportVer = m ? m[1] : null;
     cfg.lastExportDate = today(); saveCfg(); refreshStats();
     log("Đã xuất Excel + sao lưu JSON.");
   } catch (e) {
@@ -917,7 +952,13 @@ async function flushLegacyQueue() {
   while (q.length) {
     try {
       const r = await invoke("http_post", { url: cfg.server + "/api/desktop/mutate", token: cfg.token, bodyJson: JSON.stringify(q[0]) });
-      if (r.status >= 500) break; // máy chủ lỗi tạm → lần mở app sau thử lại
+      // Lỗi máy chủ: thử lại ở lần mở app sau, nhưng tối đa 3 lần — một thay đổi
+      // đã ghi được ở lần trước (máy chủ trả 500 vì trùng khoá) sẽ lỗi mãi và chặn
+      // cả hàng đợi.
+      if (r.status >= 500 && (q[0]._tries = (q[0]._tries || 0) + 1) < 3) {
+        localStorage.setItem("mstudo_pending", JSON.stringify(q));
+        break;
+      }
       if (r.status >= 400) log(`Bỏ 1 thay đổi offline cũ (${q[0].table}): HTTP ${r.status}`, "warn");
       q.shift();
     } catch { break; } // mất mạng → lần mở app sau thử lại

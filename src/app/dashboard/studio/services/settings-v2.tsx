@@ -32,7 +32,7 @@ export function SaveBarV2({
 }) {
   if (!show) return null;
   return (
-    <div className="sticky bottom-[80px] z-40 lg:bottom-5">
+    <div className="sticky bottom-[calc(80px+env(safe-area-inset-bottom))] z-40 lg:bottom-5">
       <div className="v2-card flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3" style={{ boxShadow: "var(--sh-pop)" }}>
         <span className="h-2 w-2 flex-none rounded-full" style={{ background: "var(--am)" }} />
         <p className="min-w-0 flex-1 text-[13.5px] font-semibold">{label}</p>
@@ -56,7 +56,7 @@ export function ToastV2({ children }: { children: React.ReactNode }) {
   return (
     <div
       role="status"
-      className="fixed bottom-24 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
+      className="fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6"
       style={{ background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-toast)" }}
     >
       {children}

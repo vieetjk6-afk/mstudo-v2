@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fmtDate, todayVN } from "@/lib/date";
+import { fmtDate, fmtDateTime, fmtDayMonth, todayVN } from "@/lib/date";
 import { createClient } from "@/lib/supabase/client";
 import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 import { studioUrl } from "@/lib/hosts";
@@ -886,9 +886,7 @@ export function useContractEditor(props: ContractEditorProps) {
   }
   /** "22:42 11-08" — lần cuối khách mở cổng, hoặc null nếu chưa mở lần nào. */
   const clientViewedAt = contract.client_viewed_at
-    ? new Date(contract.client_viewed_at).toLocaleString("vi-VN", {
-        hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit",
-      })
+    ? `${fmtDateTime(contract.client_viewed_at).slice(0, 5)} ${fmtDayMonth(contract.client_viewed_at)}`
     : null;
 
   /**

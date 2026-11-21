@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtDate, fmtDateTime, fmtDayMonth } from "@/lib/date";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { canReply, replyBlockedReason, type Platform } from "@/lib/inbox/platforms";
@@ -24,17 +25,10 @@ export interface InboxProps {
   canManageChannels: boolean;
 }
 
+/** Giờ VN cố định — xem ghi chú ở @/lib/date (lệch múi giờ SSR/trình duyệt). */
 export function fmtTime(ts: string): string {
-  try {
-    const d = new Date(ts);
-    const today = new Date();
-    const sameDay = d.toDateString() === today.toDateString();
-    return sameDay
-      ? d.toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })
-      : d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-  } catch {
-    return "";
-  }
+  const sameDay = fmtDate(ts) === fmtDate(new Date());
+  return sameDay ? fmtDateTime(ts).slice(0, 5) : fmtDayMonth(ts);
 }
 
 export function senderLabel(m: MessageRow, staff: Record<string, string>): string {

@@ -226,6 +226,11 @@ async function route(request: NextRequest) {
     if (SEO_FILES.has(pathname)) return NextResponse.next();
     // vieetjk.com/up (gửi file nhanh) + vieetjk.com/f/<mã> (link tải rút gọn)
     // là route riêng của app, không phải trang portfolio.
+    // Gửi file giờ phải đăng nhập, mà phiên đăng nhập nằm trên MAIN_HOST — trang
+    // tải lên chuyển về đó. Link tải /f/<mã> vẫn mở công khai ngay tại đây.
+    if (QUICK_SHARE_HOSTS.has(host) && pathname === "/up" && MAIN_HOST) {
+      return NextResponse.redirect(new URL("/up" + search, `https://${MAIN_HOST}`));
+    }
     if (QUICK_SHARE_HOSTS.has(host) && (pathname === "/up" || pathname.startsWith("/f/"))) {
       return NextResponse.next();
     }

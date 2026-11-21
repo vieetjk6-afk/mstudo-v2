@@ -14,6 +14,13 @@ export const dynamic = "force-dynamic";
  * client-side + cache trên máy (stale-while-revalidate), hiển thị tức thì.
  * Cùng truy vấn với bản SSR cũ trong contracts/page.tsx.
  */
+// Lần chạy autoAdvance gần nhất theo từng studio (trong bộ nhớ của instance).
+// Kết quả chỉ đổi theo NGÀY, mà danh sách được mở hàng chục lần mỗi ngày — mỗi
+// lần 2–4 truy vấn nối tiếp trước khi kịp đọc danh sách. Một giờ một lần là đủ
+// bắt hợp đồng vừa nhập / vừa đổi ngày; cron hằng ngày lo phần còn lại.
+const lastAdvance = new Map<string, number>();
+const ADVANCE_EVERY_MS = 60 * 60 * 1000;
+
 export async function GET() {
   const dt = doToc("/api/studio/contracts-list");
   const profile = await dt.buoc("requireStudio", requireStudio("plus"));
@@ -22,10 +29,15 @@ export async function GET() {
   // Tới ngày sớm nhất của HĐ (kể cả ngày đãi trước) thì tự chuyển sang "đang
   // thực hiện" ngay khi mở trang. Dùng admin client (scoped theo owner) để chạy
   // được cả với tài khoản nhân viên; lỗi ở bước này không được làm hỏng danh sách.
-  try {
-    await dt.buoc("autoAdvance", autoAdvanceContracts(createAdminClient(), profile.id));
-  } catch {
-    /* best-effort — cron hằng ngày vẫn xử lý */
+  const oid = profile.id as string;
+  if (Date.now() - (lastAdvance.get(oid) ?? 0) >= ADVANCE_EVERY_MS) {
+    lastAdvance.set(oid, Date.now());
+    try {
+      await dt.buoc("autoAdvance", autoAdvanceContracts(createAdminClient(), oid));
+    } catch {
+      lastAdvance.delete(oid); // lỗi → lần mở sau thử lại
+      /* best-effort — cron hằng ngày vẫn xử lý */
+    }
   }
 
   const supabase = await createClient();

@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import { fetchAllRows } from "@/lib/fetch-all-rows";
 import { requireStudio } from "@/lib/auth-guards";
 import { isUiV2 } from "@/lib/ui-server";
 import PlanLockedV2 from "./PlanLockedV2";
 import type { CalendarTab } from "./tabs";
 import { mainUrl } from "@/lib/hosts";
 import { gcalHealth } from "@/lib/gcal";
-import { applyBranch, getBranchScope } from "@/lib/branches";
+import { todayVN } from "@/lib/date";
+import { loadShootRange, shiftMonths, WINDOW_MONTHS } from "./shoot-data";
 import { loadCrewRoles } from "@/lib/crew-roles";
 import CalendarView, { type ContractMarker, type EventRow } from "./CalendarView";
 
@@ -37,40 +37,13 @@ export default async function ShootTab({ tabs }: { tabs?: readonly CalendarTab[]
   }
 
   const supabase = await createClient();
-  // Chi nhánh đang chọn. Chỉ lọc HỢP ĐỒNG: `studio_events` là mốc ghi chú, phần
-  // lớn gắn với một hợp đồng và không có cột chi nhánh riêng — lọc chúng theo
-  // chi nhánh sẽ làm mất các mốc studio ghi chung (nghỉ lễ, bảo trì thiết bị).
-  const scope = await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string);
-  const CONTRACT_COLS =
-    "id, code, title, client_name, client_phone, location, event_date, event_time, status, shoot_type, calendar_color, branch_id, contract_items(name, qty, unit_price), contract_crew(id, name, role, status), contract_payments(amount)";
-  // Lịch lật được tới mọi tháng nên đọc toàn bộ — nhưng LẬT TRANG: đọc trơn thì
-  // PostgREST cắt ở hàng 1000 và các buổi chụp cũ/xa biến mất khỏi lịch.
+  // Chỉ tải ±6 tháng quanh hôm nay; lật ra ngoài thì CalendarView tự xin thêm
+  // qua /api/studio/calendar-range (xem shoot-data.ts).
+  const today = todayVN();
+  const range = { from: shiftMonths(today, -WINDOW_MONTHS), to: shiftMonths(today, WINDOW_MONTHS) };
   // Kiểm tra kết nối Google Calendar chạy cùng lượt thay vì chờ sau cùng.
-  const [events, contracts, crewRoles, gcal] = await Promise.all([
-    // Kèm tên & ngày của HỢP ĐỒNG CHÍNH để lịch ghi rõ mốc thuộc hợp đồng nào.
-    fetchAllRows<unknown>((from, to) =>
-      supabase
-        .from("studio_events")
-        .select("*, contract:studio_contracts(title, event_date)")
-        .eq("owner_id", profile.id)
-        .order("event_date")
-        .order("id")
-        .range(from, to)
-    ),
-    fetchAllRows<unknown>((from, to) =>
-      applyBranch(
-        (profile.actingRole === "staff"
-          ? supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id).eq("assigned_to", profile.actingUserId)
-          : supabase.from("studio_contracts").select(CONTRACT_COLS).eq("owner_id", profile.id)
-        )
-          .not("event_date", "is", null)
-          // Chỉ hiện hợp đồng đã xác nhận/khách đã ký — bỏ nháp & mới gửi.
-          .in("status", ["approved", "in_progress", "post_production", "completed"]),
-        scope.selected
-      )
-        .order("id")
-        .range(from, to)
-    ),
+  const [{ events, contracts }, crewRoles, gcal] = await Promise.all([
+    loadShootRange(profile, range.from, range.to),
     loadCrewRoles(supabase, profile.id as string),
     gcalHealth(profile.id),
   ]);
@@ -89,6 +62,7 @@ export default async function ShootTab({ tabs }: { tabs?: readonly CalendarTab[]
       ownerId={profile.id}
       initialEvents={events as EventRow[]}
       contracts={contracts as ContractMarker[]}
+      loadedRange={range}
       feedUrl={feedUrl}
       crewRoles={crewRoles}
       gcal={gcal}

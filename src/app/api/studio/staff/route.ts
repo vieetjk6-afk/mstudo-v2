@@ -2,6 +2,36 @@ import { NextResponse } from "next/server";
 import { requireStudio } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { canAssignBranch, canManageRoles, isAssignableRole } from "@/lib/studio-roles";
+import { createClient as createAnonClient } from "@supabase/supabase-js";
+import { sendEmail } from "@/lib/email";
+import { staffConfirmUrl } from "@/lib/staff-confirm";
+
+/**
+ * Gửi link xác nhận email cho nhân viên. Ưu tiên email của app (SMTP/Resend) với
+ * link riêng; app chưa cấu hình email thì nhờ Supabase gửi thư xác nhận đăng ký
+ * của chính nó. Trả về true khi đã gửi được bằng một trong hai đường.
+ */
+async function sendStaffConfirm(userId: string, email: string, studioName: string): Promise<boolean> {
+  const url = staffConfirmUrl(userId, email);
+  const esc = (x: string) => x.replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[m]!);
+  const r = await sendEmail({
+    to: email,
+    subject: `Xác nhận tài khoản nhân viên ${studioName}`,
+    fromName: studioName,
+    html: `<p>Chào bạn,</p>
+<p><b>${esc(studioName)}</b> vừa tạo tài khoản nhân viên mstudo cho địa chỉ email này.</p>
+<p>Bấm vào link dưới để xác nhận, rồi đăng nhập bằng mật khẩu studio đã đưa cho bạn:</p>
+<p><a href="${url}">Xác nhận tài khoản</a></p>
+<p>Link có hạn 7 ngày. Nếu bạn không biết studio này, cứ bỏ qua thư — tài khoản sẽ không dùng được.</p>`,
+  }).catch(() => ({ ok: false }));
+  if (r.ok) return true;
+  const sbUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!sbUrl || !anon) return false;
+  const { error } = await createAnonClient(sbUrl, anon, { auth: { persistSession: false } })
+    .auth.resend({ type: "signup", email });
+  return !error;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -45,14 +75,20 @@ export async function POST(req: Request) {
   //    một người dùng khác đều chiếm được tài khoản đó (đổi mật khẩu + gắn vào
   //    studio mình). Tài khoản của người khác thì KHÔNG được đụng tới.
   let userId: string;
+  //
+  //    Tài khoản mới tạo ở trạng thái CHƯA XÁC NHẬN: chủ studio đặt được mật
+  //    khẩu nhưng chỉ người mở được hộp thư mới kích hoạt được (xem
+  //    @/lib/staff-confirm — chặn chiếm trước tài khoản của email người khác).
+  let needsConfirm = false;
   const { data: created, error } = await db.auth.admin.createUser({
     email: emailNorm,
     password,
-    email_confirm: true,
+    email_confirm: false,
     user_metadata: { full_name: fullName },
   });
   if (created?.user) {
     userId = created.user.id;
+    needsConfirm = true;
   } else {
     const { data: existing } = await db
       .from("profiles")
@@ -79,6 +115,9 @@ export async function POST(req: Request) {
     userId = existing.id;
     // Đã là nhân viên của chính studio này: chủ studio đặt lại mật khẩu được.
     await db.auth.admin.updateUserById(userId, { password });
+    // Chưa xác nhận email (tạo lại để gửi lại thư) → gửi lại link.
+    const { data: u } = await db.auth.admin.getUserById(userId);
+    needsConfirm = !u?.user?.email_confirmed_at;
   }
 
   // 2) Bảo đảm hồ sơ tồn tại VÀ đã gắn với studio này. Dùng upsert thay cho update
@@ -107,7 +146,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "link_failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  let emailSent = true;
+  if (needsConfirm) {
+    const studioName = (String(ctx.studio_name || ctx.full_name || "") || "Studio").trim();
+    emailSent = await sendStaffConfirm(userId, emailNorm, studioName);
+  }
+  return NextResponse.json({ ok: true, needsConfirm, emailSent });
 }
 
 /**

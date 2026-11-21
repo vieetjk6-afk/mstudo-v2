@@ -1,5 +1,6 @@
 "use client";
 
+import { fmtDate } from "@/lib/date";
 import { Fragment } from "react";
 import Link from "next/link";
 import {
@@ -30,12 +31,11 @@ import { fmtTime, senderLabel, useInbox, type InboxFilter, type InboxProps } fro
 
 /** Nhãn ngày cho dải phân cách trong khung chat. */
 function dayLabel(ts: string): string {
-  const d = new Date(ts);
-  const today = new Date();
-  const y = new Date(Date.now() - 86_400_000);
-  if (d.toDateString() === today.toDateString()) return "Hôm nay";
-  if (d.toDateString() === y.toDateString()) return "Hôm qua";
-  return d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  // So theo ngày giờ VN, không theo múi giờ máy.
+  const d = fmtDate(ts);
+  if (d === fmtDate(new Date())) return "Hôm nay";
+  if (d === fmtDate(new Date(Date.now() - 86_400_000))) return "Hôm qua";
+  return d;
 }
 
 /** Avatar khách + chấm màu kênh ở góc. */

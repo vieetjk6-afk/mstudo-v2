@@ -84,9 +84,16 @@ export function useStaff(initial: StaffRow[]) {
     });
     setBusy(false);
     if (res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { needsConfirm?: boolean; emailSent?: boolean };
+      const email = f.email;
       setF(emptyStaffForm());
       router.refresh();
-      toast("Đã tạo tài khoản nhân viên.");
+      // Tài khoản mới phải được chủ email xác nhận rồi mới đăng nhập được.
+      toast(
+        !j.needsConfirm ? "Đã tạo tài khoản nhân viên."
+        : j.emailSent ? `Đã tạo. Nhân viên cần bấm link xác nhận gửi tới ${email} rồi mới đăng nhập được.`
+        : `Đã tạo, nhưng CHƯA gửi được email xác nhận tới ${email}. Bấm tạo lại cùng email sau ít phút để gửi lại.`
+      );
       return true;
     }
     const j = await res.json().catch(() => ({}));

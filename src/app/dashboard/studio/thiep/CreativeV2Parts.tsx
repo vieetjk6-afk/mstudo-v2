@@ -93,7 +93,7 @@ export function QrModalV2({
 
 /** Thông báo nổi đáy màn (chép link, đang xuất…). Có `onClick` thì bấm để đóng. */
 export function ToastV2({ children, tone = "default", onClick }: { children: React.ReactNode; tone?: "default" | "red"; onClick?: () => void }) {
-  const cls = "fixed bottom-24 left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6";
+  const cls = "fixed bottom-[calc(96px+env(safe-area-inset-bottom))] left-1/2 z-50 max-w-[92vw] -translate-x-1/2 truncate rounded-[12px] px-4 py-2.5 text-[13px] font-semibold lg:bottom-6";
   const style: React.CSSProperties =
     tone === "red" ? { background: "var(--rd)", color: "#fff", boxShadow: "var(--sh-pop)" } : { background: "var(--tx)", color: "var(--sf)", boxShadow: "var(--sh-pop)" };
   return onClick ? (

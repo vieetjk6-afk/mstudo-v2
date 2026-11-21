@@ -762,7 +762,9 @@ if (first) {
   ok("Thêm hợp đồng → tăng số phiên bản", s1 === s0 + 1, `${s0} → ${s1}`);
   q("moi", `insert into public.contract_items (contract_id) values ('00000000-0000-0000-0000-00000000dd02')`);
   const s2 = Number(so());
-  ok("Thêm hạng mục hợp đồng (bảng con, tra chủ qua contract_id) → tăng", s2 === s1 + 1, `${s1} → ${s2}`);
+  // > chứ không === +1: trigger touch_contract (hop_dong_cap_nhat_theo_con.sql)
+  // còn chạm updated_at của hợp đồng cha → tăng thêm một lần. Desktop chỉ cần biết "đã đổi".
+  ok("Thêm hạng mục hợp đồng (bảng con, tra chủ qua contract_id) → tăng", s2 > s1, `${s1} → ${s2}`);
   q("moi", `insert into public.studio_quotes (id, owner_id, client_token) values ('00000000-0000-0000-0000-00000000dd03', '${CHU}', 'pb-q')`);
   q("moi", `insert into public.quote_items (quote_id) values ('00000000-0000-0000-0000-00000000dd03')`);
   const s3 = Number(so());
@@ -780,6 +782,63 @@ if (first) {
     "…bật RLS, không policy (chỉ service-role đọc)",
     q("moi", "select relrowsecurity::text || '/' || (select count(*) from pg_policies where tablename = 'studio_data_version')::text from pg_class where oid = 'public.studio_data_version'::regclass") === "true/0"
   );
+}
+
+/* ── Rà soát 11/2026: mã không trùng + chặn tự sửa tên miền ─────────────── */
+console.log("\n— Mã hợp đồng / báo giá không trùng —");
+{
+  const O = "00000000-0000-0000-0000-0000000ee001";
+  // Đổi kết quả auth.role() của shim. Thân hàm trong nháy đơn (không dùng $q$:
+  // lệnh đi qua bash, `$q` bị shell nuốt mất).
+  const vaiTro = (r) => q("moi", `create or replace function auth.role() returns text language sql stable as 'select ''${r}''::text'`);
+  q("moi",
+    `insert into auth.users (id, email) values ('${O}', 'ma@test') on conflict do nothing; ` +
+    `insert into public.profiles (id, email) values ('${O}', 'ma@test') on conflict do nothing; ` +
+    `insert into public.studio_contracts (owner_id, title, code, client_token) values ` +
+    `('${O}', 'a', 'HD-11-2026-001', 'ma-1'), ('${O}', 'c', 'HD-11-2026-003', 'ma-3')`);
+  // Shim cho auth.role() = 'anon'; giả làm máy chủ (service role) để gọi hàm.
+  vaiTro("service_role");
+  const next = (pre, kind) => Number(q("moi", `select public.next_studio_code('${O}', '${pre}', '${kind}')`));
+  const n1 = next("HD-11-2026-", "contract");
+  const n2 = next("HD-11-2026-", "contract");
+  ok("Đã có 001 và 003 (002 bị xoá) → số kế là 4, không phải 3", n1 === 4, `nhận ${n1}`);
+  ok("Gọi lần nữa → 5 (giữ số nguyên tử, không cấp trùng)", n2 === 5, `nhận ${n2}`);
+  ok("Báo giá đếm riêng, bắt đầu từ 1", next("BG-11-2026-", "quote") === 1);
+  vaiTro("anon");
+  let blocked = false;
+  try { next("HD-11-2026-", "contract"); } catch { blocked = true; }
+  ok("Người ngoài studio gọi hàm → bị từ chối", blocked);
+
+  console.log("\n— Sửa bảng con → hợp đồng cha đổi updated_at —");
+  q("moi", `update public.studio_contracts set updated_at = '2020-01-01' where owner_id = '${O}' and code = 'HD-11-2026-001'`);
+  const cid = q("moi", `select id from public.studio_contracts where owner_id = '${O}' and code = 'HD-11-2026-001'`);
+  q("moi", `insert into public.contract_items (contract_id, name, qty, unit_price) values ('${cid}', 'x', 1, 100), ('${cid}', 'y', 1, 200)`);
+  ok("Thêm hạng mục → updated_at của hợp đồng nhảy về hiện tại",
+    q("moi", `select updated_at > now() - interval '1 minute' from public.studio_contracts where id = '${cid}'`) === "t");
+  q("moi", `update public.studio_contracts set updated_at = '2020-01-01' where id = '${cid}'`);
+  q("moi", `delete from public.contract_items where contract_id = '${cid}'`);
+  ok("Xoá hạng mục cũng vậy",
+    q("moi", `select updated_at > now() - interval '1 minute' from public.studio_contracts where id = '${cid}'`) === "t");
+
+  console.log("\n— Chặn tự sửa tên miền website qua REST —");
+  vaiTro("service_role"); // dựng dữ liệu mẫu như route máy chủ
+  q("moi", `insert into public.sites (owner_id, subdomain) values ('${O}', 'ten-cu')`);
+  vaiTro("authenticated");
+  q("moi", `update public.sites set subdomain = 'login', custom_domain_verified = true where owner_id = '${O}'`);
+  ok("Tài khoản thường KHÔNG đổi được subdomain / tự xác minh tên miền",
+    q("moi", `select subdomain || '/' || custom_domain_verified from public.sites where owner_id = '${O}'`) === "ten-cu/false");
+  const O2 = "00000000-0000-0000-0000-0000000ee002";
+  q("moi",
+    `insert into auth.users (id, email) values ('${O2}', 'ma2@test') on conflict do nothing; ` +
+    `insert into public.profiles (id, email) values ('${O2}', 'ma2@test') on conflict do nothing; ` +
+    `insert into public.sites (owner_id, subdomain) values ('${O2}', 'login')`);
+  ok("Tài khoản thường tạo site kèm subdomain → subdomain bị bỏ",
+    q("moi", `select coalesce(subdomain, 'null') from public.sites where owner_id = '${O2}'`) === "null");
+  vaiTro("service_role");
+  q("moi", `update public.sites set subdomain = 'ten-moi' where owner_id = '${O}'`);
+  ok("Máy chủ (service role) vẫn đổi được",
+    q("moi", `select subdomain from public.sites where owner_id = '${O}'`) === "ten-moi");
+  vaiTro("anon");
 }
 
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);

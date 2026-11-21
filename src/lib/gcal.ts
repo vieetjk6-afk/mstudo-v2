@@ -96,14 +96,24 @@ export function contractToGCal(ct: {
  */
 export { GCAL_CONTRACT_STATUSES, gcalPlan } from "@/lib/gcal-plan";
 
+// Lần kiểm tra Google Lịch THÀNH CÔNG gần nhất của từng studio (bộ nhớ instance).
+// Mỗi lần mở màn Lịch trước đây là một lượt làm mới token OAuth + events.list
+// thật lên Google. Kết quả "đang chạy tốt" giữ 10 phút; lỗi thì luôn hỏi lại để
+// studio sửa xong là thấy ngay. Ngắt kết nối vẫn hiện đúng vì cột token được đọc
+// mỗi lần trước khi xét bộ nhớ.
+const healthyAt = new Map<string, number>();
+const HEALTH_TTL_MS = 10 * 60 * 1000;
+
 export async function gcalHealth(userId: string): Promise<{ connected: boolean; ok: boolean; error: string | null }> {
   const db = createAdminClient();
   const { data } = await db.from("profiles").select("google_refresh_token").eq("id", userId).maybeSingle();
-  if (!data?.google_refresh_token) return { connected: false, ok: false, error: null };
+  if (!data?.google_refresh_token) { healthyAt.delete(userId); return { connected: false, ok: false, error: null }; }
+  if (Date.now() - (healthyAt.get(userId) ?? 0) < HEALTH_TTL_MS) return { connected: true, ok: true, error: null };
   try {
     const ctx = await calendarFor(userId);
     if (!ctx) return { connected: true, ok: false, error: "không dựng được client" };
     await ctx.cal.events.list({ calendarId: ctx.calendarId, maxResults: 1 });
+    healthyAt.set(userId, Date.now());
     return { connected: true, ok: true, error: null };
   } catch (e) {
     return { connected: true, ok: false, error: (e as Error)?.message || String(e) };

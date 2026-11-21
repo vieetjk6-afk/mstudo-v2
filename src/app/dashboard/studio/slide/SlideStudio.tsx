@@ -268,7 +268,7 @@ function SlideStudioV1() {
       {/* Export overlay */}
       {S.exporting && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15,15,18,.72)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ width: 380, background: "#fffdf9", borderRadius: 18, padding: 30, textAlign: "center", boxShadow: "0 30px 80px rgba(0,0,0,.4)" }}>
+          <div style={{ width: "min(380px, calc(100vw - 32px))", background: "#fffdf9", borderRadius: 18, padding: 30, textAlign: "center", boxShadow: "0 30px 80px rgba(0,0,0,.4)" }}>
             <div style={{ fontWeight: 800, fontSize: 17, color: "#26241f" }}>Đang xuất video…</div>
             <div style={{ fontSize: 13, color: "#8a8378", marginTop: 6 }}>Giữ tab này mở cho tới khi hoàn tất. Video sẽ tự tải về.</div>
             <div style={{ height: 8, background: "#eee7db", borderRadius: 5, margin: "20px 0 8px", overflow: "hidden" }}><div style={{ width: `${S.exportPct}%`, height: "100%", background: green, borderRadius: 5, transition: "width .2s" }} /></div>
