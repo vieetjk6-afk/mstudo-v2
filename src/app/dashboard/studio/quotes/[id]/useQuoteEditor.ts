@@ -81,12 +81,15 @@ export function useQuoteEditor({
 
   const shareUrl = studioUrl(studioHost, `/q/${quote.client_token}`);
   const total = quoteSelectedTotal(items);
+  // Chỉ cộng dòng ĐANG TÍNH TIỀN (giống quoteSelectedTotal) — trước đây cộng
+  // cả dòng khách bỏ tick, nên bản in ra "20.500.000 − 500.000 = 11.000.000".
+  const isActive = (i: QuoteItem) => (i.package_group ? i.selected : i.selected || !i.is_optional);
   const grossTotal = items.reduce(
-    (s, i) => (i.is_discount ? s : s + (i.qty || 0) * (i.unit_price || 0)),
+    (s, i) => (i.is_discount || !isActive(i) ? s : s + (i.qty || 0) * (i.unit_price || 0)),
     0,
   );
   const discountTotal = items.reduce(
-    (s, i) => (i.is_discount ? s + (i.qty || 0) * (i.unit_price || 0) : s),
+    (s, i) => (i.is_discount && isActive(i) ? s + (i.qty || 0) * (i.unit_price || 0) : s),
     0,
   );
   // Cọc tính trên tổng ĐÃ trừ ưu đãi gói (khớp trang khách và hợp đồng chốt

@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { nextContractCode, newShareToken } from "@/lib/contract-code";
 import { quoteToContractLines } from "@/lib/quote-lines";
 import { fullClauseText } from "@/lib/contract-clauses";
+import { depositByPercent } from "@/lib/quote-deposit";
 import { fmtDate } from "@/lib/date";
 import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 
@@ -57,8 +58,28 @@ export async function convertQuoteToContract(
   // giảm giá — kể cả ưu đãi gói `bulk_discount_amount` khách đã thấy trên trang
   // báo giá — sang contract_items với đơn giá âm, nên tổng hợp đồng tự trừ.
   // Cọc tính trên tổng ĐÃ giảm và được kẹp về [0, tổng].
-  const { lines, total, deposit, depositPct } = quoteToContractLines(quote, items ?? []);
+  const built = quoteToContractLines(quote, items ?? []);
+  const { lines, total } = built;
   if (lines.length === 0) return { ok: false, error: "Không có hạng mục nào được chọn." };
+
+  // Cọc theo "% cọc" studio tự đặt (profiles.contract_deposit_percent) — giống
+  // màn tạo hợp đồng. Trước đây đường báo giá luôn ra ~25% (tối thiểu 500K),
+  // kể cả khi studio đặt 30% hay 0% (tắt cọc). Không đọc được hồ sơ (client RLS
+  // của nhân viên) thì giữ cách tính cũ.
+  let deposit = built.deposit;
+  let depositPct = built.depositPct;
+  {
+    const { data: prof } = await db
+      .from("profiles")
+      .select("contract_deposit_percent")
+      .eq("id", quote.owner_id)
+      .maybeSingle();
+    const pct = (prof as { contract_deposit_percent?: number | null } | null)?.contract_deposit_percent;
+    if (typeof pct === "number") {
+      deposit = depositByPercent(total, pct);
+      depositPct = total > 0 ? Math.round((deposit / total) * 100) : 0;
+    }
+  }
 
   const code = await nextContractCode(db, quote.owner_id);
   const token = newShareToken();
@@ -144,10 +165,26 @@ export async function convertQuoteToContract(
     });
   }
 
-  await db
+  // Giành quyền gắn hợp đồng CÓ ĐIỀU KIỆN (contract_id còn trống): khách bấm
+  // đồng ý đúng lúc studio bấm "Tạo hợp đồng" thì cả hai cùng qua bước kiểm tra
+  // ở đầu hàm → trước đây ra HAI hợp đồng. Bên thua xoá bản của mình và trả về
+  // hợp đồng của bên thắng.
+  const { data: claimed } = await db
     .from("studio_quotes")
     .update({ status: "converted", contract_id: contract.id })
-    .eq("id", quote.id);
+    .eq("id", quote.id)
+    .is("contract_id", null)
+    .select("id");
+  if (!claimed?.length) {
+    await db.from("studio_contracts").delete().eq("id", contract.id);
+    const { data: q2 } = await db.from("studio_quotes").select("contract_id").eq("id", quote.id).maybeSingle();
+    const winner = (q2 as { contract_id?: string | null } | null)?.contract_id;
+    if (winner) {
+      const { data: w } = await db.from("studio_contracts").select("client_token").eq("id", winner).maybeSingle();
+      if (w?.client_token) return { ok: true, contract_id: winner, contract_token: w.client_token as string };
+    }
+    return { ok: false, error: "Báo giá vừa được chuyển thành hợp đồng ở nơi khác — tải lại trang." };
+  }
 
   return { ok: true, contract_id: contract.id, contract_token: token };
 }

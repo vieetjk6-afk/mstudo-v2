@@ -36,3 +36,32 @@ export function makeListLabel(
     return pretty ? pretty.charAt(0).toUpperCase() + pretty.slice(1) : "Bảng giá";
   };
 }
+
+/**
+ * Danh sách tab bảng giá cho trang CÔNG KHAI (/gia/[token], /banggia): bảng giá
+ * dựng sẵn + list_key riêng có trong DB, bỏ các bảng studio ẩn, đặt tên qua
+ * makeListLabel. Trước đây /banggia tự dựng bản riêng không có nhãn → tab hiện
+ * thẳng UUID của dịch vụ ("ae9cc354-1d97-…").
+ */
+export function buildPublicLists(
+  allItems: { list_key?: string | null }[],
+  hidden: string[] = [],
+  labels: Record<string, string> = {},
+  services: { id: string; name: string }[] = [],
+): { key: string; label: string; title: string }[] {
+  const label = makeListLabel(labels, services);
+  const keys = new Set(allItems.map((i) => i.list_key || "cuoi"));
+  const builtIn = PRICE_LISTS.filter((l) => !hidden.includes(l.key) && keys.has(l.key)).map((l) => {
+    const lb = label(l.key);
+    return { ...l, label: lb, title: labels[l.key]?.trim() ? `Bảng giá ${lb}` : l.title };
+  });
+  const builtInKeys = new Set(PRICE_LISTS.map((l) => l.key));
+  const custom = [...keys]
+    .filter((k) => !builtInKeys.has(k) && !hidden.includes(k))
+    .map((k) => {
+      const lb = label(k);
+      return { key: k, label: lb, title: `Bảng giá ${lb}` };
+    });
+  const combined = [...builtIn, ...custom];
+  return combined.length ? combined : PRICE_LISTS.slice(0, 1);
+}

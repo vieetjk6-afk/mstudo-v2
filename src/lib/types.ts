@@ -1530,10 +1530,12 @@ export interface QuoteAdjustment {
  * (is_optional=false) always count regardless of `selected`.
  */
 export function quoteSelectedTotal(
-  items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount?: boolean }[]
+  items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount?: boolean; package_group?: string | null }[]
 ): number {
   return items.reduce((sum, i) => {
-    const active = i.selected || !i.is_optional;
+    // Dòng thuộc một gói (các gói loại trừ nhau) chỉ tính khi gói đó được chọn,
+    // kể cả khi lỡ đánh dấu "bắt buộc".
+    const active = i.package_group ? i.selected : i.selected || !i.is_optional;
     if (!active) return sum;
     const line = (i.qty || 0) * (i.unit_price || 0);
     return i.is_discount ? sum - line : sum + line;

@@ -46,7 +46,7 @@ export default async function QuoteClientPage(props: { params: Promise<{ token: 
   const [{ data: items }, { data: adjustments }, { data: owner }, contractRes] = await Promise.all([
     db.from("quote_items").select("*").eq("quote_id", quote.id).order("position"),
     db.from("quote_adjustments").select("*").eq("quote_id", quote.id).order("created_at", { ascending: true }),
-    db.from("profiles").select("full_name, email, plan, plan_expires_at, role").eq("id", quote.owner_id).maybeSingle(),
+    db.from("profiles").select("full_name, email, plan, plan_expires_at, role, contract_deposit_percent").eq("id", quote.owner_id).maybeSingle(),
     // If a contract has already been spawned from this quote (auto-create on a
     // previous visit), fetch its client_token so we can show the link on reload.
     quote.contract_id
@@ -71,6 +71,7 @@ export default async function QuoteClientPage(props: { params: Promise<{ token: 
       studioName={brand.name}
       studioLogo={brand.logoUrl}
       studioCanContract={studioCanContract}
+      depositPercent={(owner as { contract_deposit_percent?: number | null } | null)?.contract_deposit_percent ?? null}
       initialContractToken={contractRes?.data?.client_token ?? null}
     />
   );

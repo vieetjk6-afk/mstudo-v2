@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { isQuoteExpired, quoteDaysLeft } from "@/lib/quote-expiry";
 import { quoteSelectedTotal, type StudioQuote, type QuoteItem, type QuoteAdjustment } from "@/lib/types";
-import { safeDeposit } from "@/lib/quote-lines";
+import { normalizePackageSelection, safeDeposit } from "@/lib/quote-lines";
+import { depositByPercent } from "@/lib/quote-deposit";
 import { depositRatio } from "@/lib/quote-deposit";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -21,6 +22,8 @@ export type QuoteClientProps = {
   studioLogo?: string | null;
   studioCanContract: boolean;
   initialContractToken: string | null;
+  /** % cọc studio đặt — để cọc khách thấy khớp hợp đồng sẽ tạo (null = cách tính cũ). */
+  depositPercent?: number | null;
 };
 
 
@@ -162,6 +165,7 @@ export function useQuoteClient({
   initialAdjustments,
   studioCanContract,
   initialContractToken,
+  depositPercent = null,
 }: QuoteClientProps) {
   const [lang, setLangState] = useState<Lang>("vi");
   useEffect(() => {
@@ -170,7 +174,8 @@ export function useQuoteClient({
   }, []);
   const tr = TR[lang];
 
-  const [items, setItems] = useState(initialItems);
+  // Báo giá cũ có thể tick sẵn MỌI gói — chỉ giữ gói đầu tiên (xem quote-lines).
+  const [items, setItems] = useState(() => normalizePackageSelection(initialItems));
   const [adjustments, setAdjustments] = useState(initialAdjustments);
   const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
@@ -220,7 +225,7 @@ export function useQuoteClient({
     quote.bulk_discount_amount > 0;
   const effectiveTotal = bulkDiscountActive ? total - quote.bulk_discount_amount : total;
   // Kẹp cọc về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
-  const deposit = safeDeposit(effectiveTotal);
+  const deposit = typeof depositPercent === "number" ? depositByPercent(effectiveTotal, depositPercent) : safeDeposit(effectiveTotal);
   const depositPct = depositRatio(effectiveTotal, deposit);
 
   const phoneDigits = clientPhone.replace(/\s+/g, "");

@@ -6,7 +6,8 @@
  *  • Cọc làm tròn 500K tối thiểu 500K → tổng 0 ra "Cọc Infinity%", tổng nhỏ
  *    ra cọc lớn hơn cả hợp đồng. Phải kẹp về [0, tổng].
  */
-import { safeDeposit, depositPercent, activeBulkDiscount, quoteToContractLines } from "../../src/lib/quote-lines.ts";
+import { safeDeposit, depositPercent, activeBulkDiscount, quoteToContractLines, normalizePackageSelection } from "../../src/lib/quote-lines.ts";
+import { quoteSelectedTotal } from "../../src/lib/types.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -58,6 +59,19 @@ check("tổng 0 → cọc 0, % 0", [rZero.total, rZero.deposit, rZero.depositPct
 check("không chọn gì → không dòng, không dòng ưu đãi", quoteToContractLines(quoteA, [
   { name: "Gói A", qty: 1, unit_price: 1, is_optional: true, selected: false, package_group: "Gói A" },
 ]).lines, []);
+
+// ── Gói loại trừ nhau bị tick sẵn CẢ HAI (báo giá tạo trước bản vá) ───────
+const bothTicked = [
+  { name: "Gói A", qty: 1, unit_price: 5_000_000, is_optional: true, selected: true, package_group: "goi-a" },
+  { name: "Gói B", qty: 1, unit_price: 8_000_000, is_optional: true, selected: true, package_group: "goi-b" },
+  { name: "Phụ phí", qty: 1, unit_price: 1_000_000, is_optional: false, selected: true },
+];
+check("chuẩn hoá: chỉ giữ gói đầu tiên", normalizePackageSelection(bothTicked).map((i) => i.selected), [true, false, true]);
+check("hợp đồng chỉ tính gói A + phụ phí", quoteToContractLines({}, bothTicked).total, 6_000_000);
+check("dòng 'bắt buộc' thuộc gói không chọn thì không tính", quoteSelectedTotal([
+  { qty: 1, unit_price: 5_000_000, is_optional: false, selected: false, package_group: "goi-a" },
+  { qty: 1, unit_price: 8_000_000, is_optional: true, selected: true, package_group: "goi-b" },
+]), 8_000_000);
 
 if (fail) {
   console.error(`\n${fail} kiểm thử hỏng`);

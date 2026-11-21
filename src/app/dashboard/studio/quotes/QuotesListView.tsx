@@ -16,7 +16,7 @@ import { useQuoteRows, quotePipeline } from "./quotes-list-shared";
 const QuotesListV2 = dynamic(() => import("./QuotesListV2"));
 
 export type QuoteRow = StudioQuote & {
-  quote_items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount: boolean }[];
+  quote_items: { name?: string; qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount: boolean; package_group?: string | null }[];
   quote_adjustments: { id: string; resolved: boolean }[];
 };
 

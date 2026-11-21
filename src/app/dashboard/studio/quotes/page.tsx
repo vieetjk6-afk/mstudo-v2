@@ -29,7 +29,7 @@ export default async function QuotesList() {
   const { data } = await applyBranch(
     supabase
       .from("studio_quotes")
-      .select("id, code, title, client_name, client_phone, client_token, status, branch_id, quote_items(qty, unit_price, selected, is_optional, is_discount), quote_adjustments(id, resolved)")
+      .select("id, code, title, client_name, client_phone, client_token, status, branch_id, event_date, expires_at, created_at, bulk_discount_amount, discount_package_group, quote_items(name, qty, unit_price, selected, is_optional, is_discount, package_group), quote_adjustments(id, resolved)")
       .eq("owner_id", profile.id),
     (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected
   ).order("created_at", { ascending: false });

@@ -168,9 +168,27 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
     // details) thì như trước: một dòng theo package_name.
     const pk = d?.packages?.length ? d.packages : b.package_name ? [{ name: b.package_name, price: b.package_price }] : [];
     if (pk.length) {
-      await supabase
+      const { error: itemsErr } = await supabase
         .from("contract_items")
         .insert(pk.map((p, position) => ({ contract_id: data!.id, name: p.name, qty: 1, unit_price: p.price || 0, position })));
+      if (itemsErr) alert("Hợp đồng đã tạo nhưng chưa thêm được gói dịch vụ: " + itemsErr.message + ". Bạn thêm lại ở tab Hạng mục nhé.");
+    }
+    // Cọc giữ ngày khách ĐÃ chuyển và studio đã xác nhận → ghi thành lần thu
+    // "Cọc" của hợp đồng. Trước đây bị bỏ quên: hợp đồng báo khách còn nợ đủ
+    // 100%, studio phải nhập tay lại (dễ ghi trùng với đối soát ngân hàng).
+    if (b.deposit_status === "confirmed" && (b.deposit_amount ?? 0) > 0) {
+      const { error: payErr } = await supabase.from("contract_payments").insert({
+        contract_id: data.id,
+        amount: b.deposit_amount,
+        kind: "deposit",
+        method: "transfer",
+        paid_at: (b.deposit_paid_at || new Date().toISOString()).slice(0, 10),
+        note: `Cọc giữ ngày khi đặt lịch${b.deposit_code ? ` · mã ${b.deposit_code}` : ""}`,
+        ...(b.deposit_proof_url ? { proof_url: b.deposit_proof_url } : {}),
+      });
+      if (payErr) alert(`Chưa ghi được khoản cọc ${b.deposit_amount?.toLocaleString("vi-VN")}đ vào hợp đồng: ${payErr.message}. Bạn ghi tay ở tab Thanh toán nhé.`);
+    } else if (b.deposit_status === "paid" && (b.deposit_amount ?? 0) > 0) {
+      alert(`Khách báo đã chuyển cọc ${b.deposit_amount?.toLocaleString("vi-VN")}đ nhưng bạn chưa xác nhận. Kiểm tra tài khoản rồi ghi khoản cọc ở tab Thanh toán của hợp đồng.`);
     }
     // Ngày phụ → mốc lịch của hợp đồng (hiện trên Lịch, lịch thợ, cổng khách).
     if (d?.extra_days?.length) {

@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRICE_LISTS } from "@/lib/pricelist-seeds";
+import { buildPublicLists } from "@/lib/pricelist-label";
 import { resolveStudioOwner } from "@/lib/studio-owner";
 import PricelistPoster from "@/components/PricelistPoster";
 import PricelistV2 from "@/app/gia/PricelistV2";
@@ -9,18 +9,6 @@ import type { PricelistItem } from "@/lib/types";
 // Bảng giá công khai hiếm khi đổi: cho phép ISR + CDN cache 5 phút thay vì SSR
 // no-store mọi lượt truy cập ẩn danh (giảm tải origin + tăng tốc trang).
 export const revalidate = 300;
-
-// Build all available price lists: built-in types + any custom list_keys in the DB.
-function buildLists(allItems: PricelistItem[], hidden: string[] = []) {
-  const builtIn = PRICE_LISTS.filter(
-    (l) => !hidden.includes(l.key) && allItems.some((i) => (i.list_key || "cuoi") === l.key)
-  );
-  const builtInKeys = new Set(PRICE_LISTS.map((l) => l.key));
-  const customKeys = [...new Set(allItems.map((i) => i.list_key || "cuoi"))].filter((k) => !builtInKeys.has(k) && !hidden.includes(k));
-  const custom = customKeys.map((k) => ({ key: k, label: k, title: `Bảng giá ${k}` }));
-  const combined = [...builtIn, ...custom];
-  return combined.length ? combined : PRICE_LISTS.slice(0, 1);
-}
 
 // Public price list for the main studio (admin account) at a clean URL.
 export default async function BangGiaPage(props: { searchParams?: Promise<{ list?: string }> }) {
@@ -39,7 +27,7 @@ export default async function BangGiaPage(props: { searchParams?: Promise<{ list
   }
 
   // Hai truy vấn độc lập → chạy song song để bớt một vòng round-trip nối tiếp.
-  const [{ data }, { data: th }] = await Promise.all([
+  const [{ data }, { data: th }, { data: svcs }] = await Promise.all([
     db
       .from("studio_pricelist")
       .select("*")
@@ -48,14 +36,17 @@ export default async function BangGiaPage(props: { searchParams?: Promise<{ list
       .order("position"),
     db
       .from("profiles")
-      .select("pl_bg, pl_text, pl_accent, pl_logo_url, pl_hidden_lists")
+      .select("pl_bg, pl_text, pl_accent, pl_logo_url, pl_hidden_lists, pl_list_labels")
       .eq("id", owner.id)
       .maybeSingle(),
+    // Bảng giá riêng của một dịch vụ có list_key = id dịch vụ → cần tên dịch vụ.
+    db.from("studio_services").select("id, name").eq("owner_id", owner.id),
   ]);
   const allItems = (data ?? []) as PricelistItem[];
   const hidden = ((th?.pl_hidden_lists as string[] | null) ?? []);
 
-  const lists = buildLists(allItems, hidden);
+  const labels = ((th?.pl_list_labels as Record<string, string> | null) ?? {});
+  const lists = buildPublicLists(allItems, hidden, labels, (svcs ?? []) as { id: string; name: string }[]);
   const selected = (searchParams?.list && lists.find((l) => l.key === searchParams.list)?.key) || lists[0].key;
   const items = allItems.filter((i) => (i.list_key || "cuoi") === selected);
   const token = (owner as { booking_token: string | null }).booking_token || "";

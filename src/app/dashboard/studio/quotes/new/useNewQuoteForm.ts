@@ -71,8 +71,12 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
   const [saving, setSaving] = useState<"draft" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const grossTotal = items.reduce((s, i) => (i.is_discount ? s : s + (i.qty || 0) * (i.unit_price || 0)), 0);
-  const discountTotal = items.reduce((s, i) => (i.is_discount ? s + (i.qty || 0) * (i.unit_price || 0) : s), 0);
+  // Khớp đúng thứ được lưu: trong các gói loại trừ nhau chỉ gói đầu tiên được
+  // tick sẵn, nên tổng tạm tính cũng chỉ cộng gói đó (không cộng dồn mọi gói).
+  const firstGroupPreview = items.find((i) => i.package_group.trim())?.package_group.trim() ?? null;
+  const counts = (i: (typeof items)[number]) => !i.package_group.trim() || i.package_group.trim() === firstGroupPreview;
+  const grossTotal = items.reduce((s, i) => (i.is_discount || !counts(i) ? s : s + (i.qty || 0) * (i.unit_price || 0)), 0);
+  const discountTotal = items.reduce((s, i) => (i.is_discount && counts(i) ? s + (i.qty || 0) * (i.unit_price || 0) : s), 0);
   const total = grossTotal - discountTotal;
   // Kẹp cọc về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
   const deposit = safeDeposit(total);
@@ -231,16 +235,22 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
         .single();
       if (qErr || !quote) throw new Error(qErr?.message || "Tạo báo giá thất bại");
 
+      // Các gói (package_group) LOẠI TRỪ nhau: chỉ tick sẵn gói đầu tiên. Trước
+      // đây mọi dòng đều selected → khách thấy "Chọn 1 gói" mà cả hai gói đều
+      // được tick và tổng cộng dồn cả hai.
+      const firstGroup = cleaned.find((it) => it.package_group.trim())?.package_group.trim() ?? null;
       const rows = cleaned.map((it, idx) => ({
         quote_id: quote.id,
         name: it.name.trim(),
         description: it.description.trim() || null,
         qty: it.qty || 1,
         unit_price: it.unit_price || 0,
-        is_optional: it.is_optional,
+        // Dòng thuộc một gói luôn là tuỳ chọn — không thì "Bắt buộc" + gói bị
+        // tính tiền dù khách chọn gói khác.
+        is_optional: it.is_optional || !!it.package_group.trim(),
         is_discount: it.is_discount,
         package_group: it.package_group.trim() || null,
-        selected: true,
+        selected: !it.package_group.trim() || it.package_group.trim() === firstGroup,
         position: idx,
       }));
       const { error: iErr } = await supabase.from("quote_items").insert(rows);
