@@ -16,7 +16,6 @@ import BranchSwitcher, { type SwitcherBranch } from "@/components/BranchSwitcher
 import StudioFooterNav from "@/components/StudioFooterNav";
 import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
-import SyncControlButton from "@/components/SyncControlButton";
 import { createClient } from "@/lib/supabase/client";
 import { THEME_OPTIONS, nextPref, useTheme } from "@/lib/theme";
 import { roleLabel } from "@/lib/studio-roles";
@@ -341,7 +340,6 @@ export default function StudioShell({
               Nhóm Zalo hỗ trợ
             </a>
             <DownloadAppButton desktop={desktopOk} />
-            <SyncControlButton />
             {/* Giao diện: ba lựa chọn hiện HẾT thành một dải, không phải một nút
                 xoay vòng — trong ngăn kéo có chỗ, và "theo máy" mà nấp sau
                 nhiều lần bấm thì gần như không ai tìm ra. */}
@@ -402,7 +400,6 @@ export default function StudioShell({
 
           <div className="flex flex-col gap-2 pt-2.5" style={{ borderTop: "1px solid var(--bd2)" }}>
             <SidebarDriveStatus desktop={desktopOk} />
-            <SyncControlButton />
             <p className="px-2 text-[10.5px]" style={{ color: "var(--tx3)" }}>Phiên bản {APP_VERSION}</p>
           </div>
         </aside>
