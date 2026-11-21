@@ -872,40 +872,19 @@ function ContractEditorV1(props: ContractEditorProps) {
                     {items.map((it, idx) => {
                       const setItem = (patch: Partial<ItemRow>) =>
                         setItems((p) => p.map((x, i) => (i === idx ? { ...x, ...patch } : x)));
-                      /* Ô mô tả: chưa bật thì chỉ là một nút chữ nhỏ, bật rồi thì
-                         là khung nhập nhiều dòng — mỗi dòng xuống dòng thật trên
-                         bản in và ở cổng khách. */
-                      const descBox =
-                        it.description == null ? (
-                          <button
-                            type="button"
-                            onClick={() => setItem({ description: "" })}
-                            className="col-span-12 justify-self-start px-1 text-[11.5px] underline-offset-2 hover:underline"
-                            style={{ color: "var(--text3)" }}
-                          >
-                            + Thêm mô tả
-                          </button>
-                        ) : (
-                          <div className="col-span-12 flex items-start gap-1.5">
-                            <textarea
-                              className="input flex-1 text-[13px]"
-                              rows={2}
-                              autoFocus={it.description === ""}
-                              placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
-                              value={it.description}
-                              onChange={(e) => setItem({ description: e.target.value })}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setItem({ description: undefined })}
-                              className="flex-none px-2 pt-2 text-[11.5px]"
-                              style={{ color: "var(--text3)" }}
-                              aria-label="Bỏ mô tả"
-                            >
-                              Bỏ
-                            </button>
-                          </div>
-                        );
+                      /* Ô mô tả LUÔN hiện dưới mỗi hạng mục — gõ thẳng, không phải
+                         bấm "Thêm mô tả" trước. Mỗi dòng xuống dòng thật trên bản
+                         in và ở cổng khách; để trống thì không hiện gì cho khách. */
+                      const descBox = (
+                        <textarea
+                          className="input col-span-12 text-[13px]"
+                          rows={2}
+                          placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
+                          value={it.description ?? ""}
+                          onChange={(e) => setItem({ description: e.target.value })}
+                          aria-label="Mô tả hạng mục"
+                        />
+                      );
 
                       return it.is_discount ? (
                         <div key={idx} className="grid grid-cols-12 items-center gap-2 rounded-lg p-1.5" style={{ background: "var(--s-amberS)" }}>
@@ -919,7 +898,7 @@ function ContractEditorV1(props: ContractEditorProps) {
                           <button onClick={() => { setItems((p) => p.filter((_, i) => i !== idx)); setMsOpen({}); }} className="col-span-2 flex items-center justify-center self-stretch sm:col-span-1" style={{ color: "var(--text3)" }} aria-label="Xoá">
                             <Trash2 size={15} />
                           </button>
-                          {descBox}
+                          {it.description ? descBox : null}
                         </div>
                       ) : (
                         <div key={idx} className="grid grid-cols-12 items-center gap-2 border-b pb-2.5" style={{ borderColor: "var(--border)" }}>

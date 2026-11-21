@@ -399,8 +399,8 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                           const on = f.pickedPkgIds.includes(p.id);
                           const edited = f.priceEdited(p);
                           return (
+                            <div key={p.id} className="min-w-0">
                             <ChoiceRow
-                              key={p.id}
                               mode="check"
                               on={on}
                               onToggle={() => f.togglePkg(p.id)}
@@ -425,6 +425,20 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                                 )
                               }
                             />
+                            {on ? (
+                              <div className="px-3 pb-3">
+                                <textarea
+                                  className={inputCls}
+                                  rows={2}
+                                  style={{ minHeight: 56 }}
+                                  value={f.descOf(p)}
+                                  onChange={(e) => f.setPkgDescFor(p.id, e.target.value)}
+                                  placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
+                                  aria-label={`Mô tả gói ${p.name}`}
+                                />
+                              </div>
+                            ) : null}
+                            </div>
                           );
                         })}
                       </div>
@@ -477,6 +491,15 @@ export default function NewContractFormV2(props: NewContractFormProps) {
                         <button type="button" onClick={() => f.removeCustomLine(i)} aria-label={`Bỏ gói riêng ${i + 1}`} className={iconBtn()}>
                           <Trash2 size={16} />
                         </button>
+                        <textarea
+                          className={`${inputCls} col-span-3 sm:col-span-4`}
+                          rows={2}
+                          style={{ minHeight: 56 }}
+                          value={c.description ?? ""}
+                          onChange={(e) => f.patchCustomLine(i, { description: e.target.value })}
+                          placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
+                          aria-label={`Mô tả gói riêng ${i + 1}`}
+                        />
                       </div>
                     ))}
                   </RowList>
