@@ -216,6 +216,21 @@ check("extractJson hỏng", extractJson("không có"), null);
   check("Quy tắc: nhãn Cô dâu / Chú rể", [h.brideName, h.groomName], ["Thu Lan", "Minh Khang"]);
 }
 
+// ── Mô tả hạng mục gõ kèm khi Tạo nhanh (trước đây bị bỏ rơi) ──
+{
+  const d = heuristicParse("Chị Lan 0901234567\nGói: Trọn gói cưới\nMô tả: 2 thợ, 300 ảnh, giao 20 ngày\nNgày: 12/10", ctx);
+  check("mô tả dòng 'Mô tả:' gắn vào gói chính", d.pkgDescriptions, { "p-cuoi": "2 thợ, 300 ảnh, giao 20 ngày" });
+  const c = heuristicParse("Chị Hoa 0901234567\nGói: Chụp gia đình (ngoại cảnh, 50 ảnh)\nGiá: 4tr5", { ...ctx, packages: [] });
+  check("gói riêng: phần trong ngoặc thành mô tả", c.customLines?.[0]?.description, "ngoại cảnh, 50 ảnh");
+  check("gói riêng: tên bỏ phần ngoặc", c.customLines?.[0]?.name, "Chụp gia đình");
+  const ai = normalizeDraft(
+    { mainPkgId: "p-cuoi", descriptions: { "p-cuoi": "Trọn ngày", "p-bia": "bịa" }, customLines: [{ name: "Thêm buổi", qty: 1, unit_price: 1000000, description: "Đà Lạt" }] },
+    ctx
+  );
+  check("AI: mô tả chỉ nhận cho gói đã chọn", ai.pkgDescriptions, { "p-cuoi": "Trọn ngày" });
+  check("AI: mô tả gói riêng giữ lại", ai.customLines?.[0]?.description, "Đà Lạt");
+}
+
 if (fail) {
   console.log(`\n${fail} kiểm thử HỎNG`);
   process.exit(1);

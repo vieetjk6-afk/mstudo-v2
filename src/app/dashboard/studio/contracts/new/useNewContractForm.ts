@@ -189,6 +189,10 @@ export function useNewContractForm({
      (cọc, đợt thu) được chia trên giá niêm yết — sai ngay từ lúc tạo. Chỉ ghi
      id nào đã sửa; gói chưa sửa vẫn ăn theo bảng giá nếu bảng giá đổi. */
   const [pkgPrice, setPkgPrice] = useState<Record<string, number>>({});
+  /** Mô tả gói sửa riêng cho hợp đồng này (theo id gói) — thắng mô tả bảng giá. */
+  const [pkgDesc, setPkgDesc] = useState<Record<string, string>>({});
+  const descOf = (p: PackageOption) => (pkgDesc[p.id] !== undefined ? pkgDesc[p.id] : p.description ?? "");
+  const setPkgDescFor = (id: string, v: string) => setPkgDesc((prev) => ({ ...prev, [id]: v }));
   /* Gói riêng: hạng mục gõ tay cho đúng hợp đồng này. Không phải mọi thứ khách
      đặt đều nằm trong bảng giá, và thêm một dòng dùng-một-lần vào bảng giá
      chung chỉ làm bảng giá rác dần. */
@@ -258,9 +262,10 @@ export function useNewContractForm({
         mainPkg,
         extras,
         pkgPrice,
+        pkgDesc,
         customLines,
       }),
-    [template, mainPkg, extras, pkgPrice, customLines]
+    [template, mainPkg, extras, pkgPrice, pkgDesc, customLines]
   );
   /** Tạm tính trước giảm giá. */
   const subtotal = linesTotal(baseLines);
@@ -672,6 +677,9 @@ export function useNewContractForm({
       setExtraIds((d.extraIds ?? []).filter((id) => pkgIds.has(id) && id !== main));
       setPkgPrice(main && d.mainPrice !== undefined ? { [main]: Math.max(0, d.mainPrice) } : {});
       setCustomLines(d.customLines ?? []);
+      // Mô tả studio gõ kèm gói trong đoạn Tạo nhanh — trước đây bị bỏ rơi, vào
+      // quản lý hợp đồng không thấy đâu.
+      setPkgDesc(d.pkgDescriptions ?? {});
       hit();
     }
     // Gói AI chọn có thể thuộc bảng giá của dịch vụ khác → mở "xem tất cả" để
@@ -971,6 +979,7 @@ export function useNewContractForm({
     serviceId, changeService, showAllLists, setShowAllLists, shootType, setShootType, templateId, pickTemplate,
     selectedService, template, nhomDichVu, mainPkgId, mainPkg, extraIds, extras, pkgPrice, priceOf, priceEdited,
     pickMain, toggleExtra, togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
+    pkgDesc, descOf, setPkgDescFor,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
     // tiền
     depositPercent,

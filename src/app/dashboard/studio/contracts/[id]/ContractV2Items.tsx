@@ -256,12 +256,11 @@ function ItemCard({
   const disc = !!it.is_discount;
   const msOpen = !!ed.msOpen[idx];
   const amount = disc ? Math.abs(it.unit_price || 0) : (it.qty || 0) * Math.abs(it.unit_price || 0);
-  const hasDesc = it.description != null;
+  // Ô mô tả LUÔN hiện dưới hạng mục thường (không phải bấm "Thêm mô tả");
+  // dòng giảm giá chỉ hiện khi đã có sẵn mô tả.
+  const hasDesc = !disc || !!it.description;
 
   const menu: MenuItem[] = [
-    hasDesc
-      ? { label: "Bỏ mô tả", icon: X, onClick: () => setItem({ description: undefined }) }
-      : { label: "Thêm mô tả", icon: FileText, onClick: () => setItem({ description: "" }), hint: "Phạm vi công việc, số ảnh, thời gian giao…" },
     ...(!disc && !it.event_id && !msOpen
       ? [{ label: "Thêm vào lịch chụp", icon: CalendarPlus, hint: "Tạo một mốc lịch mang tên hạng mục", onClick: () => ed.setMsOpen((p) => ({ ...p, [idx]: true })) }]
       : []),
@@ -371,9 +370,8 @@ function ItemCard({
           className={`${inputCls} mt-2.5`}
           rows={2}
           style={{ minHeight: 64 }}
-          autoFocus={it.description === ""}
           placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
-          value={it.description}
+          value={it.description ?? ""}
           onChange={(e) => setItem({ description: e.target.value })}
           aria-label="Mô tả hạng mục"
         />

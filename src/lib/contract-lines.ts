@@ -22,13 +22,15 @@ import { depositByPercent } from "./quote-deposit.ts";
 export type LinePackage = { id: string; name: string; price: number; description?: string | null };
 export type LineTemplateItem = { name: string; qty: number; unit_price: number; position: number };
 /** Gói studio gõ tay — chưa chắc đã điền đủ, nên chuẩn hoá ở đây. */
-export type LineCustom = { name: string; qty: number; unit_price: number };
+export type LineCustom = { name: string; qty: number; unit_price: number; description?: string };
 /** `description` chỉ có khi nguồn có mô tả — khách đọc nó ở cổng hợp đồng và trên bản in. */
 export type ContractLine = { name: string; qty: number; unit_price: number; description?: string };
 
 /** Mô tả gói từ bảng giá; trống thì bỏ hẳn khoá, khỏi lưu chuỗi rỗng. */
-function pkgLine(p: LinePackage, unit_price: number): ContractLine {
-  const description = p.description?.trim();
+function pkgLine(p: LinePackage, unit_price: number, override?: string): ContractLine {
+  // Mô tả studio sửa / gõ riêng cho hợp đồng này (kể cả từ Tạo nhanh) thắng mô
+  // tả bảng giá. Chuỗi rỗng = studio cố ý xoá mô tả → không hiện gì.
+  const description = (override !== undefined ? override : p.description)?.trim();
   return { name: p.name, qty: 1, unit_price, ...(description ? { description } : {}) };
 }
 
@@ -61,6 +63,7 @@ export function buildContractLines({
   mainPkg = null,
   extras = [],
   pkgPrice = {},
+  pkgDesc = {},
   customLines = [],
   discount = 0,
 }: {
@@ -68,6 +71,8 @@ export function buildContractLines({
   mainPkg?: LinePackage | null;
   extras?: LinePackage[];
   pkgPrice?: Record<string, number>;
+  /** Mô tả sửa riêng cho hợp đồng này, theo id gói — thắng mô tả bảng giá. */
+  pkgDesc?: Record<string, string>;
   customLines?: LineCustom[];
   /** Số tiền giảm (đồng, số dương) — thành dòng "Giảm giá" giá âm ở cuối. */
   discount?: number;
@@ -78,12 +83,14 @@ export function buildContractLines({
     .sort((a, b) => a.position - b.position)
     .forEach((i) => out.push({ name: i.name, qty: i.qty, unit_price: i.unit_price }));
 
-  if (mainPkg) out.push(pkgLine(mainPkg, effectivePrice(mainPkg, pkgPrice)));
-  for (const x of extras) out.push(pkgLine(x, effectivePrice(x, pkgPrice)));
+  if (mainPkg) out.push(pkgLine(mainPkg, effectivePrice(mainPkg, pkgPrice), pkgDesc[mainPkg.id]));
+  for (const x of extras) out.push(pkgLine(x, effectivePrice(x, pkgPrice), pkgDesc[x.id]));
 
   for (const c of customLines) {
     if (!isCustomLineFilled(c)) continue;
+    const description = c.description?.trim();
     out.push({
+      ...(description ? { description } : {}),
       name: c.name.trim() || CUSTOM_LINE_FALLBACK_NAME,
       // Số lượng tối thiểu 1: ô số lượng để trống trả về 0, mà hạng mục ×0 thì
       // giá bao nhiêu cũng thành 0đ — im lặng làm hụt tổng hợp đồng.

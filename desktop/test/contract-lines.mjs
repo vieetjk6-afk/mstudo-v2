@@ -249,5 +249,14 @@ const amounts = (rows) => rows.map((p) => p.amount);
   check("form tạo: chỉ có cọc gõ tay, tổng tụt dưới cọc → một đợt đúng bằng tổng", amounts(rebalancePlan([step5[0]], 8_000_000, rule)), [8_000_000]);
 }
 
+// ── Mô tả sửa riêng / gói riêng có mô tả ──
+{
+  const pk = { id: "a", name: "Gói A", price: 100, description: "Mô tả bảng giá" };
+  check("mô tả bảng giá đi theo", buildContractLines({ mainPkg: pk })[0].description, "Mô tả bảng giá");
+  check("mô tả sửa riêng thắng bảng giá", buildContractLines({ mainPkg: pk, pkgDesc: { a: "Gõ khi tạo nhanh" } })[0].description, "Gõ khi tạo nhanh");
+  check("xoá trắng mô tả → không lưu mô tả", "description" in buildContractLines({ mainPkg: pk, pkgDesc: { a: "  " } })[0], false);
+  check("gói riêng giữ mô tả", buildContractLines({ customLines: [{ name: "X", qty: 1, unit_price: 5, description: " 50 ảnh " }] })[0].description, "50 ảnh");
+}
+
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);
 process.exit(fail === 0 ? 0 : 1);

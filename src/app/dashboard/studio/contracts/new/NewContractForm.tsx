@@ -57,7 +57,7 @@ function NewContractFormV1(props: NewContractFormProps) {
     filteredClients, pickClient, returningHit, savedNameDiffers,
     serviceId, changeService, setShowAllLists, shootType, setShootType, templateId, pickTemplate,
     selectedService, template, nhomDichVu, priceOf, priceEdited,
-    togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine,
+    togglePkg, pickedPkgIds, pickedPkgs, setPkgPriceFor, clearPkgPrice, customLines, addCustomLine, patchCustomLine, removeCustomLine, descOf, setPkgDescFor,
     customPreview, listLabel, serviceListKeys, filteringLists, visiblePackages, packageGroups,
     depositPercent,
     lines, total, subtotal, discount, discountMode, setDiscountMode, discountValue, setDiscountValue, payroll, profit, marginPct, marginTone, thinMargin,
@@ -499,8 +499,8 @@ function NewContractFormV1(props: NewContractFormProps) {
                              ngay tại chỗ, mà <input> không đặt trong <button>
                              được (bấm vào ô là bấm cả nút). Nên tách: nút chọn
                              chiếm phần tên, ô giá nằm ngoài nút. */
+                          <div key={p.id} className="grid min-w-0 gap-1.5">
                           <div
-                            key={p.id}
                             className="flex min-w-0 items-center gap-2 rounded-[11px] pr-2.5"
                             style={{ border: `1px solid ${on ? "var(--ac)" : "var(--bd)"}`, background: on ? "var(--acS)" : "var(--sf)" }}
                           >
@@ -546,6 +546,18 @@ function NewContractFormV1(props: NewContractFormProps) {
                             ) : (
                               <strong className="tnum flex-none whitespace-nowrap text-[13.5px]">{vnd(p.price)}</strong>
                             )}
+                          </div>
+                          {on && (
+                            <textarea
+                              className="w-full rounded-[8px] px-2.5 py-2 text-[12.5px]"
+                              style={{ border: "1px solid var(--bd)", background: "var(--sf2)", color: "var(--tx)" }}
+                              rows={2}
+                              value={descOf(p)}
+                              onChange={(e) => setPkgDescFor(p.id, e.target.value)}
+                              placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
+                              aria-label={`Mô tả gói ${p.name}`}
+                            />
+                          )}
                           </div>
                         );
                       })}
@@ -615,6 +627,15 @@ function NewContractFormV1(props: NewContractFormProps) {
                     >
                       <Trash2 size={16} />
                     </button>
+                    <textarea
+                      className="w-full rounded-[8px] px-2.5 py-2 text-[12.5px]"
+                      style={inputStyle}
+                      rows={2}
+                      value={c.description ?? ""}
+                      onChange={(e) => patchCustomLine(i, { description: e.target.value })}
+                      placeholder="Mô tả chi tiết: phạm vi công việc, số ảnh, thời gian giao…"
+                      aria-label={`Mô tả gói riêng ${i + 1}`}
+                    />
                   </div>
                 ))}
                 <button

@@ -53,8 +53,10 @@ export type QuickDraft = {
   /** Giá đã thương lượng của gói chính, nếu khác bảng giá. */
   mainPrice?: number;
   extraIds?: string[];
-  /** Hạng mục không có trong bảng giá. */
-  customLines?: { name: string; qty: number; unit_price: number }[];
+  /** Hạng mục không có trong bảng giá (kèm mô tả nếu studio gõ). */
+  customLines?: { name: string; qty: number; unit_price: number; description?: string }[];
+  /** Mô tả studio gõ cho gói trong bảng giá, theo id gói — thắng mô tả bảng giá. */
+  pkgDescriptions?: Record<string, string>;
   eventDate?: string;
   /** Tên ngày chính ("Lễ nhà gái", "Ngày cưới"…). */
   eventLabel?: string;
@@ -372,6 +374,24 @@ export function heuristicParse(text: string, ctx: QuickContext): QuickDraft {
       }
     }
   }
+  // Mô tả hạng mục: dòng "Mô tả / Gồm / Bao gồm / Chi tiết: …", hoặc phần trong
+  // ngoặc ngay sau tên gói ("Gói: Vip (2 thợ, 300 ảnh)"). Gắn vào gói chính, không
+  // có gói chính thì vào gói riêng đầu tiên.
+  const pkgLab = pick(lab, /^(goi( dich vu| chup)?|dich vu|package)$/);
+  const descText = (
+    pick(lab, /^(mo ta( goi| hang muc)?|gom|bao gom|chi tiet( goi)?|noi dung( goi)?)$/) ??
+    pkgLab?.match(/\(([^)]{3,})\)/)?.[1]
+  )?.trim();
+  if (descText) {
+    if (main) out.pkgDescriptions = { [main.id]: descText };
+    else if (out.customLines?.length) {
+      const l = out.customLines[0];
+      // Phần trong ngoặc đã thành mô tả thì bỏ khỏi tên hạng mục.
+      const name = l.name.replace(/\s*\([^)]*\)\s*/g, " ").trim() || l.name;
+      out.customLines[0] = { ...l, name, description: descText };
+    }
+  }
+
   if (depositPct && depositPct > 0 && depositPct < 100) {
     const base = out.mainPrice ?? main?.price ?? out.customLines?.[0]?.unit_price;
     if (base) out.deposit = Math.round((base * depositPct) / 100 / 1000) * 1000;
@@ -484,11 +504,22 @@ export function normalizeDraft(raw: unknown, ctx: QuickContext): QuickDraft {
         const n = str(o.name, 120);
         const price = money(o.unit_price) ?? 0;
         const qty = typeof o.qty === "number" && o.qty >= 1 ? Math.round(o.qty) : 1;
-        return n || price ? { name: n || "Gói dịch vụ", qty, unit_price: price } : null;
+        const description = str(o.description, 1000);
+        return n || price ? { name: n || "Gói dịch vụ", qty, unit_price: price, ...(description ? { description } : {}) } : null;
       })
-      .filter((x): x is { name: string; qty: number; unit_price: number } => !!x)
+      .filter((x): x is { name: string; qty: number; unit_price: number; description?: string } => !!x)
       .slice(0, 10);
     if (lines.length) out.customLines = lines;
+  }
+  // Mô tả cho gói bảng giá: chỉ nhận id gói ĐÃ chọn (chính hoặc thêm).
+  if (r.descriptions && typeof r.descriptions === "object") {
+    const chosen = new Set([out.mainPkgId, ...(out.extraIds ?? [])].filter(Boolean) as string[]);
+    const map: Record<string, string> = {};
+    for (const [id, v] of Object.entries(r.descriptions as Record<string, unknown>)) {
+      const d = str(v, 1000);
+      if (d && chosen.has(id)) map[id] = d;
+    }
+    if (Object.keys(map).length) out.pkgDescriptions = map;
   }
   if (isIsoDate(r.eventDate)) out.eventDate = r.eventDate;
   const evLabel = str(r.eventLabel, 80);
@@ -597,7 +628,8 @@ export function buildQuickPrompt(ctx: QuickContext): string {
     '  "mainPkgId": string,             // id gói chính trong BẢNG GIÁ',
     '  "mainPrice": number,             // giá chốt của gói chính (đồng) nếu khách nói giá khác bảng giá',
     '  "extraIds": string[],            // id các gói KHÁC khách cũng chọn trong BẢNG GIÁ (khách lấy nhiều gói: gói đầu là mainPkgId, các gói còn lại ở đây)',
-    '  "customLines": [{"name": string, "qty": number, "unit_price": number}], // chỉ cho thứ KHÔNG có trong bảng giá',
+    '  "customLines": [{"name": string, "qty": number, "unit_price": number, "description": string}], // chỉ cho thứ KHÔNG có trong bảng giá; description = phạm vi công việc studio ghi kèm (số thợ, số ảnh, thời gian giao…)',
+    '  "descriptions": {"<id gói>": string}, // mô tả/chi tiết studio ghi kèm cho gói trong BẢNG GIÁ đã chọn (vd "2 thợ, 300 ảnh, giao 20 ngày"); không ghi thì bỏ',
     '  "eventDate": "YYYY-MM-DD",       // ngày CHÍNH (ngày cưới / ngày chụp chính)',
     '  "eventLabel": string,            // tên ngày chính nếu khách nói rõ, vd "Lễ nhà gái", "Ngày cưới"',
     '  "extraDays": [{"label": string, "date": "YYYY-MM-DD", "time": "HH:MM", "note": string}], // các ngày KHÁC (đám 2 ngày: lễ nhà trai, đãi tiệc, thử đồ…)',
