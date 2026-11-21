@@ -41,7 +41,7 @@ function onEscKey(e: KeyboardEvent) {
   e.preventDefault();
   escStack[escStack.length - 1].close();
 }
-function useEscLayer(active: boolean, onClose: () => void) {
+export function useEscLayer(active: boolean, onClose: () => void) {
   const closeRef = useRef(onClose);
   useEffect(() => {
     closeRef.current = onClose;

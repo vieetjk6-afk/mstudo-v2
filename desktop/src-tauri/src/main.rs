@@ -665,6 +665,40 @@ async fn drive_upload(
     }
 }
 
+/// Đưa MỘT file trên Drive vào thùng rác (không xoá hẳn — studio còn khôi phục
+/// được 30 ngày). Dùng khi file trên máy đổi (sửa ảnh, chép lại bản đủ) và đã
+/// tải bản mới lên: không bỏ bản cũ thì Drive và album có hai ảnh trùng.
+/// Token scope drive.file chỉ chạm được file do chính app tải lên.
+#[tauri::command]
+async fn drive_trash(access_token: String, file_id: String) -> Result<(), String> {
+    // ID file Drive chỉ gồm chữ, số, '-' và '_' — chặn chèn đường dẫn/tham số.
+    if file_id.is_empty()
+        || file_id.len() > 200
+        || !file_id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        || has_control_chars(&access_token)
+    {
+        return Err("bad_id".to_string());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .patch(format!("https://www.googleapis.com/drive/v3/files/{file_id}?supportsAllDrives=true"))
+        .header("Authorization", format!("Bearer {access_token}"))
+        .json(&serde_json::json!({ "trashed": true }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let status = resp.status().as_u16();
+    // 404: file đã bị xoá / không còn quyền — coi như xong.
+    if resp.status().is_success() || status == 404 {
+        Ok(())
+    } else {
+        Err(format!("trash {status}"))
+    }
+}
+
 /// Đưa cửa sổ chính hiện lên (từ khay hệ thống) và focus.
 fn show_main(app: &tauri::AppHandle) {
     use tauri::Manager;
@@ -811,6 +845,7 @@ fn main() {
             create_dir,
             list_dir,
             drive_upload,
+            drive_trash,
             set_roots,
             set_tray_tooltip
         ])

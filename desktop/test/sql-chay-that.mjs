@@ -762,7 +762,9 @@ if (first) {
   ok("Thêm hợp đồng → tăng số phiên bản", s1 === s0 + 1, `${s0} → ${s1}`);
   q("moi", `insert into public.contract_items (contract_id) values ('00000000-0000-0000-0000-00000000dd02')`);
   const s2 = Number(so());
-  ok("Thêm hạng mục hợp đồng (bảng con, tra chủ qua contract_id) → tăng", s2 === s1 + 1, `${s1} → ${s2}`);
+  // > chứ không === +1: trigger touch_contract (hop_dong_cap_nhat_theo_con.sql)
+  // còn chạm updated_at của hợp đồng cha → tăng thêm một lần. Desktop chỉ cần biết "đã đổi".
+  ok("Thêm hạng mục hợp đồng (bảng con, tra chủ qua contract_id) → tăng", s2 > s1, `${s1} → ${s2}`);
   q("moi", `insert into public.studio_quotes (id, owner_id, client_token) values ('00000000-0000-0000-0000-00000000dd03', '${CHU}', 'pb-q')`);
   q("moi", `insert into public.quote_items (quote_id) values ('00000000-0000-0000-0000-00000000dd03')`);
   const s3 = Number(so());
@@ -806,6 +808,17 @@ console.log("\n— Mã hợp đồng / báo giá không trùng —");
   let blocked = false;
   try { next("HD-11-2026-", "contract"); } catch { blocked = true; }
   ok("Người ngoài studio gọi hàm → bị từ chối", blocked);
+
+  console.log("\n— Sửa bảng con → hợp đồng cha đổi updated_at —");
+  q("moi", `update public.studio_contracts set updated_at = '2020-01-01' where owner_id = '${O}' and code = 'HD-11-2026-001'`);
+  const cid = q("moi", `select id from public.studio_contracts where owner_id = '${O}' and code = 'HD-11-2026-001'`);
+  q("moi", `insert into public.contract_items (contract_id, name, qty, unit_price) values ('${cid}', 'x', 1, 100), ('${cid}', 'y', 1, 200)`);
+  ok("Thêm hạng mục → updated_at của hợp đồng nhảy về hiện tại",
+    q("moi", `select updated_at > now() - interval '1 minute' from public.studio_contracts where id = '${cid}'`) === "t");
+  q("moi", `update public.studio_contracts set updated_at = '2020-01-01' where id = '${cid}'`);
+  q("moi", `delete from public.contract_items where contract_id = '${cid}'`);
+  ok("Xoá hạng mục cũng vậy",
+    q("moi", `select updated_at > now() - interval '1 minute' from public.studio_contracts where id = '${cid}'`) === "t");
 
   console.log("\n— Chặn tự sửa tên miền website qua REST —");
   vaiTro("service_role"); // dựng dữ liệu mẫu như route máy chủ

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEscLayer } from "@/components/v2/kit-client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus, X } from "lucide-react";
@@ -51,6 +52,8 @@ export default function MobileTabBarV2({ groups, pathname, creates, pins = [] }:
   const [pending, setPending] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   useEffect(() => { setPending(null); setSheet(false); }, [pathname]);
+  // Esc đóng bảng "Tạo mới" (máy tính bảng có bàn phím, trình đọc màn hình).
+  useEscLayer(sheet, () => setSheet(false));
 
   return (
     <div className="lg:hidden">
@@ -61,6 +64,7 @@ export default function MobileTabBarV2({ groups, pathname, creates, pins = [] }:
             className="ck-panel absolute inset-x-0 bottom-0 rounded-t-[22px] px-4 pt-3"
             style={{ background: "var(--sf)", paddingBottom: "max(20px, env(safe-area-inset-bottom, 0px))" }}
             role="dialog"
+            aria-modal="true"
             aria-label="Tạo mới"
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full" style={{ background: "var(--bd)" }} />

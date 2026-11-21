@@ -642,6 +642,12 @@ async function driveSyncRun(contracts, manual = false) {
         if (!token) throw new Error("not_connected");
         const res = await invoke("drive_upload", { accessToken: token, folderId: f.node.id, filePath: f.path, name: f.name, mime: guessMime(f.name) });
         busyOn("drive");
+        // File này đã từng tải lên (giờ đổi trên máy) → bỏ bản cũ vào thùng rác
+        // Drive, không thì album có hai ảnh trùng. Hỏng thì thôi, không chặn.
+        const old = f.job.man.uploaded[f.key];
+        if (old && old.id && old.id !== res.id) {
+          invoke("drive_trash", { accessToken: token, fileId: old.id }).catch(() => {});
+        }
         f.job.man.uploaded[f.key] = { size: f.size, mtime: f.mtime, id: res.id };
         await flushManifest(f.job); // ghi manifest → ngắt giữa chừng cũng không tải lại từ đầu
         if (f.node.role === "selection" || f.node.role === "delivery") resyncNeeded.add(f.job.c.id);
@@ -766,7 +772,16 @@ async function runExports(manual = false) {
   if (busy("export") || !cfg.token || !cfg.dir) return;
   busyOn("export");
   try {
-    const backup = await apiB64(`/api/desktop/export?type=backup`);
+    // have=<phiên bản lần xuất trước>: dữ liệu không đổi → máy chủ trả 304 rỗng,
+    // bỏ qua cả lượt (giữ nguyên file cũ, KHÔNG dọn — không thì studio nghỉ một
+    // tháng là vòng dọn 30 ngày xoá sạch bản sao lưu cuối cùng).
+    const have = cfg.lastExportVer && !manual ? `&have=${encodeURIComponent(cfg.lastExportVer)}` : "";
+    const r = await api(`/api/desktop/export?type=backup${have}`);
+    if (r.status === 304) {
+      cfg.lastExportDate = today(); saveCfg(); refreshStats();
+      return;
+    }
+    const backup = r.body_b64;
     await invoke("write_file_b64", { path: join(cfg.dir, "SaoLuu", `mstudo-backup-${today()}.json`), contentsB64: backup });
     for (const [type, folder] of EXPORTS) {
       const b64 = await apiB64(`/api/desktop/export?type=${type}`);
@@ -776,6 +791,10 @@ async function runExports(manual = false) {
     for (const [, folder] of [...EXPORTS, ["", "SaoLuu"]]) {
       await invoke("cleanup_old", { dir: join(cfg.dir, folder), days: KEEP_DAYS }).catch(() => {});
     }
+    // Phiên bản nằm ở đầu chuỗi JSON (trước "tables") — đọc vài trăm byte đầu là đủ.
+    const head = b64ToText(backup.slice(0, 800)); // 800 chia hết cho 4 → base64 hợp lệ
+    const m = /"data_version":"([^"]+)"/.exec(head);
+    cfg.lastExportVer = m ? m[1] : null;
     cfg.lastExportDate = today(); saveCfg(); refreshStats();
     log("Đã xuất Excel + sao lưu JSON.");
   } catch (e) {
