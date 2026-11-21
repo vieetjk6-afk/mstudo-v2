@@ -124,6 +124,7 @@ const ORDER = [
   ["migrations/dung_thu_va_het_han.sql", "Dùng thử & hết hạn gói: tài khoản đã mua gói không dùng thử được nữa; cron hạ mọi gói hết hạn về free; hạn mức album coi gói hết hạn là free (chạy SAU han_muc_album_may_chu, atomic_redemptions)"],
   ["migrations/be_may_anh.sql", "Bé Máy Ảnh: thú ảo trong dashboard — điểm danh & nhiệm vụ hằng ngày (chỉ cần profiles)"],
   ["migrations/ma_so_mo_hop_dong.sql", "Mã số mở hợp đồng cho khách không dùng điện thoại (chỉ cần studio_contracts)"],
+  ["migrations/ma_so_khong_trung.sql", "Mã hợp đồng / báo giá không trùng: bộ đếm nguyên tử theo studio + tháng (chạy SAU schema.sql)"],
   ["migrations/bao_mat_ra_soat_11_2026.sql", "Rà soát bảo mật 11/2026: crew_available/crew_shift_plan chỉ đọc của studio mình; chặn tự sửa subdomain/custom_domain qua REST (chạy SAU crew_timesheet, crew_schedule)"],
   // Siết RLS họ hợp đồng theo vai trò + chi nhánh + is_active. PHẢI đứng CUỐI:
   // nó thay policy mà schema.sql, rls_thanh_vien_hop_dong, contract_addenda…
@@ -201,6 +202,7 @@ const MOI = [
   "migrations/dung_thu_va_het_han.sql",
   "migrations/be_may_anh.sql",
   "migrations/ma_so_mo_hop_dong.sql",
+  "migrations/ma_so_khong_trung.sql",
   "migrations/bao_mat_ra_soat_11_2026.sql",
   "migrations/phan_quyen_vai_tro_hop_dong.sql",
 ];

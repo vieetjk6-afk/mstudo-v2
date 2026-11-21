@@ -23,7 +23,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const BUCKET = "quick-share";
 export const TTL_MS = 30 * 60 * 1000;
 /** Trần mỗi file (MB). Gói Supabase Free cho tối đa 50MB/file. */
-export const MAX_FILE_MB = Math.max(1, Number(process.env.QUICK_SHARE_MAX_MB || "50"));
+/** Tên miền ngắn cho link tải /f/<mã> (khớp QUICK_SHARE_HOSTS trong src/proxy.ts). */
+export const LINK_HOST = process.env.QUICK_SHARE_LINK_HOST?.trim() || "vieetjk.com";
+
+export const MAX_FILE_MB = Math.max(1, Number(process.env.QUICK_SHARE_MAX_MB || "100"));
 export const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024;
 export const MAX_FILES = 20;
 
@@ -83,6 +86,10 @@ export async function ensureBucket(db = createAdminClient()): Promise<void> {
       fileSizeLimit: MAX_FILE_BYTES,
     });
     if (error && !/exist/i.test(error.message)) throw new Error(error.message);
+  } else if (Number(data.file_size_limit) !== MAX_FILE_BYTES) {
+    // Bucket tạo từ trước với trần cũ (50MB) — nâng theo cấu hình hiện tại.
+    // Lỗi (vd gói Supabase giới hạn thấp hơn) thì bỏ qua: Storage vẫn tự chặn.
+    await db.storage.updateBucket(BUCKET, { public: false, fileSizeLimit: MAX_FILE_BYTES }).catch(() => undefined);
   }
   bucketReady = true;
 }
