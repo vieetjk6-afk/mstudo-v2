@@ -4,11 +4,15 @@
  *   Edge headless) + 1 Word; sửa/ký lại → GHI ĐÈ (không tạo nhiều bản).
  * - Excel: xuất mỗi mảng 1 file, hằng ngày + khi mở app; SaoLuu JSON đầy đủ;
  *   tự dọn file cũ hơn 30 ngày (không đụng thư mục hợp đồng).
+ * - Ảnh/video: quét thư mục hợp đồng trên máy, tải file mới lên Google Drive.
+ *
+ * Chỉ giữ những việc webapp KHÔNG làm được (ghi file vào ổ máy, đọc thư mục ảnh
+ * trên máy, chạy ngầm). Xem/sửa dữ liệu, lịch, in hợp đồng… đều làm trên webapp.
  */
 
 const invoke = window.__TAURI__.core.invoke;
 
-const APP_VERSION = "1.1.3"; // giữ khớp với src-tauri/tauri.conf.json
+const APP_VERSION = "1.2.0"; // giữ khớp với src-tauri/tauri.conf.json
 
 // ─── Cấu hình (localStorage) ─────────────────────────────────────────────────
 const cfg = JSON.parse(localStorage.getItem("cfg") || "{}");
@@ -20,7 +24,6 @@ const syncRoots = () => invoke("set_roots", { paths: [cfg.dir, cfg.mediaDir].fil
 // 60 giây (trước 20s): mỗi lần gọi là 1 lượt hàm trên Vercel; khi mở/focus cửa
 // sổ vẫn đồng bộ ngay (focusSync) nên người dùng không thấy chậm.
 const SYNC_EVERY_MS = 60 * 1000;         // đồng bộ hợp đồng mỗi 60 giây
-const DATA_REFRESH_MS = 5 * 60 * 1000;    // tải lại dữ liệu offline mỗi 5 phút
 const KEEP_DAYS = 30;                     // giữ file xuất 30 ngày
 const EXPORTS = [
   ["customers", "KhachHang"], ["quotes", "BaoGia"], ["expenses", "ChiTieu"],
@@ -37,12 +40,6 @@ const textToB64 = (t) => {
   return btoa(bin);
 };
 const join = (...parts) => parts.filter(Boolean).join("\\").replace(/[\\/]+/g, "\\");
-const cachePath = () => join(cfg.dir, "_offline-cache.json");
-// Mốc cập nhật cache (cho trình duyệt dữ liệu offline hiển thị).
-window.cacheStamp = () => (cfg.lastCache ? fmtTime(cfg.lastCache) : "chưa tải");
-// Lần tải dữ liệu GẦN NHẤT có lỗi hay không — để Tổng quan nói ra ngay dưới các
-// con số, thay vì chỉ nằm trong nhật ký ở tab khác.
-window.cacheError = () => (cfg.lastCacheErr ? { ...cfg.lastCacheErr, atText: fmtTime(cfg.lastCacheErr.at) } : null);
 const today = () => new Date().toISOString().slice(0, 10);
 
 // ─── Cờ "đang chạy" TỰ HẾT HẠN ───────────────────────────────────────────────
@@ -167,7 +164,7 @@ function show(screen) {
   if (st) st.innerHTML = cfg.token
     ? `<span class="ok">● Đã kết nối</span> ${cfg.acct ? `<b>${String(cfg.acct).replace(/</g, "&lt;")}</b> · ` : ""}${cfg.server || ""}`
     : "Chưa kết nối";
-  // Màn chính có sidebar riêng (brand ở đó) → ẩn thanh tiêu đề trên cùng.
+  // Màn chính có thanh tiêu đề riêng → ẩn thanh brand trên cùng.
   const tb = $("topbar"); if (tb) tb.classList.toggle("hidden", screen === "main");
 }
 function setPlanLocked(locked) {
@@ -232,161 +229,41 @@ $("btnFolderNext").onclick = async () => {
   if (!p || p === "Chưa chọn thư mục") return;
   cfg.dir = p; cfg.saved = cfg.saved || {}; saveCfg();
   log("Đã chọn thư mục lưu: " + p);
-  show("main"); refreshStats(); renderLog(); gotoNav("overview");
+  show("main"); refreshStats(); renderLog();
   bootSync(true); // lần đầu: tải TOÀN BỘ hợp đồng đã ký + xuất đủ bộ Excel
-  openStudioApp(); // vào thẳng giao diện studio đầy đủ sau khi cài đặt xong
 };
 
-// ─── Mở TOÀN BỘ ứng dụng quản lý NGAY TRONG CLIENT (cửa sổ nhúng phóng to) ────
-// Cửa sổ nhúng chính là web app thật → giao diện & tính năng y hệt. Đăng nhập
-// một lần trong cửa sổ đó; phiên được lưu lại cho các lần sau.
-async function openStudioApp() {
-  if (!cfg.server) return;
-  try {
-    await invoke("open_app", { url: cfg.server + "/dashboard/studio" });
-    // Ẩn BẢNG ĐIỀU KHIỂN xuống khay → người dùng chỉ thấy giao diện studio đầy đủ
-    // (engine đồng bộ vẫn chạy ngầm trong webview ẩn). Mở lại bảng điều khiển ở
-    // menu khay "Bảng điều khiển & đồng bộ".
-    //
-    // CHỜ lần tải dữ liệu ĐẦU TIÊN xong rồi mới ẩn. Ẩn sau đúng 600ms như trước
-    // là cắt ngang lời gọi đang bay: webview bị che có thể không bao giờ nhận
-    // được hồi đáp, nên bản dữ liệu offline không lần nào ghi được — dữ liệu
-    // càng nhiều thì càng chắc chắn trượt.
-    await Promise.race([
-      window.__firstData || Promise.resolve(),
-      new Promise((r) => setTimeout(r, 20000)),
-    ]);
-    invoke("hide_main").catch(() => {});
-  } catch (e) {
-    log("Không mở được ứng dụng: " + e, "err");
-  }
-}
-window.openStudioApp = openStudioApp; // để menu khay (Rust) gọi được
-// Dự phòng: mở trong trình duyệt ngoài (nếu cửa sổ nhúng gặp sự cố).
-function openStudioBrowser() {
+// ─── Mở mstudo (webapp) trên trình duyệt mặc định ────────────────────────────
+// App desktop không còn nhúng giao diện studio: mọi thao tác quản lý làm trên
+// webapp. App chỉ giữ những việc trình duyệt KHÔNG làm được (ghi file vào máy,
+// quét thư mục ảnh trên máy để tải lên Drive, chạy ngầm dưới khay).
+function openWebApp() {
   if (!cfg.server) return;
   invoke("open_url", { url: cfg.server + "/dashboard/studio" }).catch(() => {});
 }
-$("btnOpenApp").onclick = openStudioApp;
-const _obb = $("btnOpenAppBrowser"); if (_obb) _obb.onclick = (e) => { e.preventDefault(); openStudioBrowser(); };
-
-// ─── Đăng nhập tự động bằng mã thiết bị ──────────────────────────────────────
-// Máy này ĐÃ được chủ studio xác thực một lần bằng mã kết nối `msd_...`. Bắt
-// đăng nhập lại lần nữa bằng form web bên trong WebView2 chính là chỗ hay hỏng
-// nhất: Google chặn thẳng đăng nhập trong webview nhúng, captcha lắm lúc không
-// chạy, cookie hỏng thì không có menu trình duyệt nào để xóa. Nên: xin máy chủ
-// một mã đăng nhập dùng một lần rồi mở thẳng — không phải gõ gì.
-let autoLoginTried = false;   // chỉ thử TỰ ĐỘNG một lần mỗi lần chạy app
-let loginBusy = false;
-async function deviceLogin(manual = false) {
-  if (!cfg.server || !cfg.token || loginBusy) return;
-  loginBusy = true;
-  try {
-    const r = await invoke("http_post", { url: cfg.server + "/api/desktop/session", token: cfg.token, bodyJson: "{}" });
-    if (r.status >= 400) {
-      let detail = "";
-      try { detail = JSON.parse(b64ToText(r.body_b64)).error || ""; } catch { /* body không phải JSON */ }
-      throw new Error("HTTP " + r.status + (detail ? " · " + detail : ""));
-    }
-    const j = JSON.parse(b64ToText(r.body_b64));
-    if (!j.url) throw new Error("thiếu đường đăng nhập");
-    await invoke("navigate_app", { url: j.url });
-    log("Đã đăng nhập giao diện studio bằng mã thiết bị" + (j.email ? ` (${j.email})` : "") + ".");
-  } catch (e) {
-    const msg = "Không đăng nhập tự động được: " + (e.message || e);
-    log(msg, "err");
-    // Bấm tay mà hỏng thì phải nói ra — im lặng là lại đúng cái bệnh cũ.
-    if (manual) say(msg + "\n\nHãy đăng nhập bằng email + mật khẩu trong cửa sổ studio.");
-  } finally {
-    loginBusy = false;
-  }
-}
-// Rust gọi khi cửa sổ studio bị đá về trang đăng nhập. Chỉ thử MỘT lần mỗi lần
-// chạy app: nếu mã hỏng, /auth/desktop lại đá về /login → thử tiếp là vòng lặp
-// vô tận. Người dùng vừa bấm "Đăng xuất" cũng chặn luôn, không thì vừa đăng
-// xuất đã bị đăng nhập lại ngay.
-function autoDeviceLogin() {
-  if (autoLoginTried || !cfg.token) return;
-  autoLoginTried = true;
-  deviceLogin(false);
-}
-window.autoDeviceLogin = autoDeviceLogin;
-window.deviceLogin = deviceLogin;
-
-// ─── Kẹt đăng nhập → xóa cookie ──────────────────────────────────────────────
-// Cửa sổ studio là WebView2: KHÔNG có thanh địa chỉ, KHÔNG có menu "Xóa dữ liệu
-// duyệt web". Cookie phiên hỏng hoặc còn phiên tài khoản cũ là người dùng kẹt
-// luôn ở trang đăng nhập mà không có chỗ nào gỡ. Hai mức:
-//   hard = false → mở /auth/reset trên máy chủ: xóa cookie phiên rồi về trang
-//                  đăng nhập. Đây là "đăng xuất" dùng hằng ngày.
-//   hard = true  → xóa SẠCH dữ liệu duyệt web của WebView2 (cookie, cache,
-//                  localStorage, service worker). Dùng khi /auth/reset cũng
-//                  không gỡ được (cache hỏng, cookie của domain khác…).
-async function resetLogin(hard = false) {
-  if (!cfg.server) return;
-  // Vừa đăng xuất mà đăng nhập tự động nhảy vào ngay thì coi như không đăng
-  // xuất được. Khóa nó tới lần chạy app sau.
-  autoLoginTried = true;
-  const target = cfg.server + "/auth/reset?next=" + encodeURIComponent("/dashboard/studio");
-  try {
-    if (hard) {
-      await invoke("clear_web_data");
-      // WebView2 dùng CHUNG một hồ sơ cho mọi cửa sổ ⇒ lệnh trên xóa luôn
-      // localStorage của bảng điều khiển này (cấu hình `cfg`, nhật ký). Việc xóa
-      // chạy bất đồng bộ nên chờ một nhịp rồi mới ghi lại cấu hình từ bộ nhớ —
-      // ghi sớm quá thì chính bản ghi mới bị xóa theo.
-      await new Promise((r) => setTimeout(r, 1500));
-      saveCfg();
-      log("Đã xóa cookie & bộ nhớ đệm của cửa sổ studio.");
-    } else {
-      log("Đang xóa cookie đăng nhập…");
-    }
-    await invoke("navigate_app", { url: target });
-  } catch (e) {
-    log("Không xóa được cookie đăng nhập: " + (e.message || e), "err");
-  }
-}
-window.resetLogin = resetLogin; // để menu khay (Rust) gọi được
-$("btnDeviceLogin").onclick = () => deviceLogin(true);
-$("btnLogout").onclick = () => resetLogin(false);
-$("btnClearWeb").onclick = async () => {
-  if (!(await ask("Xóa sạch cookie & bộ nhớ đệm của cửa sổ studio?\n\nBạn sẽ phải đăng nhập lại. Kết nối thiết bị, thư mục lưu và file đã tải về máy vẫn giữ nguyên (nhật ký hoạt động sẽ bị xóa).", "Xóa cookie đăng nhập"))) return;
-  resetLogin(true);
-};
-
-// ─── Menu trái: điều hướng giữa các mục dữ liệu + Sao lưu & thiết bị ─────────
-const NAV_TITLE = {
-  overview: "Tổng quan", calendar: "Lịch & đặt lịch", backup: "Đồng bộ & sao lưu",
-};
-function gotoNav(nav) {
-  document.querySelectorAll("#sideNav .side-item").forEach((b) => b.classList.toggle("on", b.dataset.nav === nav));
-  const title = $("pageTitle"); if (title) title.textContent = NAV_TITLE[nav] || "";
-  if (nav === "backup") { showSub("backup"); return; }
-  showSub("data");
-  if (typeof gotoTab === "function") gotoTab(nav); // đặt tab dữ liệu + vẽ lại
-}
-function showSub(sub) {
-  $("sub-data").classList.toggle("hidden", sub !== "data");
-  $("sub-backup").classList.toggle("hidden", sub !== "backup");
-}
-document.querySelectorAll("#sideNav .side-item").forEach((b) => b.onclick = () => gotoNav(b.dataset.nav));
-// "Tải dữ liệu mới": làm mới cache offline (dùng lại luồng xuất/sao lưu).
-$("btnRefreshData").onclick = () => refreshData(true).then(checkAccount);
+window.openWebApp = openWebApp; // để menu khay (Rust) gọi được
+$("btnOpenWeb").onclick = openWebApp;
 // Kiểm tra cập nhật thủ công (phòng khi app chưa tự báo).
-{ const b = $("btnCheckUpdate"); if (b) b.onclick = () => checkUpdate(true); }
-{ const v = $("appVer"); if (v) v.textContent = "Phiên bản " + APP_VERSION + " (beta)"; }
+$("btnCheckUpdate").onclick = () => checkUpdate(true);
+$("appVer").textContent = "Phiên bản " + APP_VERSION;
 
 // ─── Màn 3: hành động ────────────────────────────────────────────────────────
-$("btnSyncNow").onclick = () => runSync(true);
+// "Đồng bộ ngay" (nút + menu khay): hợp đồng mới về máy rồi quét ảnh/video lên Drive.
+function syncAllNow() {
+  runSync(true);
+  runDriveSync(true);
+}
+window.syncAllNow = syncAllNow;
+$("btnSyncNow").onclick = syncAllNow;
 $("btnExportNow").onclick = () => runExports(true);
-{ const b = $("btnDriveSync"); if (b) b.onclick = () => runDriveSync(true); }
-{ const b = $("btnPickMediaDir"); if (b) b.onclick = async () => {
+$("btnDriveSync").onclick = () => runDriveSync(true);
+$("btnPickMediaDir").onclick = async () => {
   const p = await invoke("pick_folder");
   if (!p) return;
   cfg.mediaDir = p; saveCfg(); syncRoots(); refreshStats();
   log("Đã chọn thư mục gốc ảnh/video: " + p);
   runDriveSync(true);
-}; }
+};
 $("btnOpenFolder").onclick = () => invoke("open_folder", { path: cfg.dir }).catch(() => {});
 $("btnChangeFolder").onclick = async () => {
   const p = await invoke("pick_folder");
@@ -405,8 +282,6 @@ $("btnChangeFolder").onclick = async () => {
     } catch (e) { log("Lỗi di chuyển dữ liệu: " + e, "err"); }
   }
   cfg.dir = p; saveCfg(); syncRoots(); refreshStats();
-  // Thư mục mới có thể chưa có file cache → lần làm mới sau phải tải đủ (không 304).
-  if (typeof DB !== "undefined" && DB) delete DB.hash;
   log("Đổi thư mục lưu thành " + p);
 };
 $("btnDisconnect").onclick = async () => {
@@ -858,74 +733,14 @@ async function runDriveWatch() {
   }
 }
 
-// ─── Tải lại dữ liệu offline ─────────────────────────────────────────────────
-// TÁCH RIÊNG khỏi việc xuất Excel. Trước đây hai việc này nằm chung trong
-// runExports() và bị khoá bởi `lastExportDate !== today()`, nên bản cache offline
-// (thứ nuôi Tổng quan / Hợp đồng / Lịch) chỉ được làm mới MỖI NGÀY MỘT LẦN — mọi
-// thay đổi trên web sau lần đó đều không hiện ra, dù "Đồng bộ ngay" vẫn báo vừa
-// chạy (runSync chỉ tải file hợp đồng, không đụng tới cache). Tệ hơn: một lỗi khi
-// xuất Excel sẽ ném ra trước và cache không bao giờ được ghi.
-// Mốc lần tải gần nhất (trong bộ nhớ) — setInterval 5 phút VÀ nhịp Rust mỗi 5
-// phút cùng gọi hàm này; có mốc này thì hai lịch gộp lại thành MỘT lần tải.
-let _lastDataAt = 0;
-async function refreshData(manual = false) {
-  if (busy("data") || !cfg.token || !cfg.dir) return false;
-  if (!manual && Date.now() - _lastDataAt < DATA_REFRESH_MS - 30 * 1000) return "skip"; // vừa tải xong, chưa tới lượt
-  busyOn("data");
-  _lastDataAt = Date.now();
-  try {
-    // lite=1: bỏ ảnh chữ ký (không dùng khi xem offline). have=<hash>: dữ liệu
-    // trên máy còn khớp máy chủ thì nhận 304 rỗng thay vì tải lại cả cục JSON.
-    const have = typeof DB !== "undefined" && DB && DB.hash ? `&have=${encodeURIComponent(DB.hash)}` : "";
-    const r = await api(`/api/desktop/export?type=backup&lite=1${have}`);
-    if (r.status !== 304) {
-      const backup = r.body_b64;
-      const parsed = JSON.parse(b64ToText(backup));
-      await invoke("write_file_b64", { path: cachePath(), contentsB64: backup });
-      setData(parsed);
-    }
-    cfg.lastCache = new Date().toISOString();
-    delete cfg.lastCacheErr;
-    saveCfg(); refreshStats();
-    if (manual) log("Đã tải dữ liệu mới từ máy chủ.");
-    return true;
-  } catch (e) {
-    // Báo cả khi TỰ ĐỘNG: cache cũ mà im lặng chính là thứ khiến số liệu lệch
-    // với web mà không ai biết. Lỗi được GHI LẠI để màn Tổng quan nói ra ngay
-    // dưới các con số — nhật ký trong tab khác thì không ai thấy.
-    _lastDataAt = 0; // lỗi → lượt sau thử lại ngay, không chờ đủ 5 phút
-    cfg.lastCacheErr = { at: new Date().toISOString(), msg: String(e.message || e) };
-    saveCfg();
-    log("Không tải được dữ liệu mới: " + (e.message || e), "err");
-    if (typeof renderData === "function") renderData();
-    return false;
-  } finally {
-    busyOff("data");
-  }
-}
-
-// So dữ liệu trên máy với máy chủ và nói thẳng ra chỗ lệch (và tài khoản đang
-// gắn). Đây là câu trả lời cho "web một đằng, app một nẻo".
+// Tài khoản máy này đang gắn — hiện ở thanh trạng thái để biết ngay nếu gắn nhầm
+// studio khác.
 async function checkAccount() {
   try {
     const w = await apiJson("/api/desktop/whoami");
     cfg.acct = w.account?.name || w.account?.email || "";
-    cfg.acctCounts = w.counts; saveCfg();
-    const t = (typeof DB !== "undefined" && DB.tables) || {};
-    const local = {
-      contracts: (t.studio_contracts || []).length,
-      events: (t.studio_events || []).length,
-    };
-    const el = $("stAccount");
-    if (el) el.textContent = cfg.acct || "—";
-    // Đưa luôn sang màn dữ liệu để Tổng quan tự cảnh báo (chỗ người dùng nhìn).
-    if (window.setServerInfo) window.setServerInfo(w);
-    const el2 = $("stCompare");
-    if (el2) {
-      const lech = local.contracts !== w.counts.contracts || local.events !== w.counts.events;
-      el2.textContent = `${local.contracts}/${w.counts.contracts} HĐ · ${local.events}/${w.counts.events} lịch`;
-      el2.classList.toggle("bad", lech);
-    }
+    saveCfg();
+    $("stAccount").textContent = cfg.acct || "—";
     return w;
   } catch { return null; }
 }
@@ -935,9 +750,6 @@ async function runExports(manual = false) {
   if (busy("export") || !cfg.token || !cfg.dir) return;
   busyOn("export");
   try {
-    // Dữ liệu offline trước, Excel sau: Excel hỏng thì cũng không được kéo theo
-    // cache (cái quan trọng hơn nhiều).
-    await refreshData(manual);
     const backup = await apiB64(`/api/desktop/export?type=backup`);
     await invoke("write_file_b64", { path: join(cfg.dir, "SaoLuu", `mstudo-backup-${today()}.json`), contentsB64: backup });
     for (const [type, folder] of EXPORTS) {
@@ -956,72 +768,6 @@ async function runExports(manual = false) {
     busyOff("export");
   }
 }
-
-// ─── Ghi cục bộ + đồng bộ ngầm (các module chạy local trong client) ──────────
-// Thao tác tạo/sửa/xóa áp dụng NGAY vào dữ liệu trên máy (tức thì) rồi xếp hàng
-// gửi lên server. Mất mạng vẫn lưu được, có mạng tự đồng bộ lại.
-const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
-  : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16); }));
-const loadQueue = () => { try { return JSON.parse(localStorage.getItem("mstudo_pending") || "[]"); } catch { return []; } };
-const saveQueue = (q) => { try { localStorage.setItem("mstudo_pending", JSON.stringify(q)); } catch { /* */ } };
-
-// Áp thao tác vào bộ nhớ DB (data.js) + ghi cache đĩa + vẽ lại + xếp hàng đồng bộ.
-window.localMutate = async function (table, op, row) {
-  if (typeof DB === "undefined" || !DB.tables) return;
-  const arr = DB.tables[table] || (DB.tables[table] = []);
-  if (op === "insert") arr.unshift(row);
-  else if (op === "update") { const i = arr.findIndex((x) => x.id === row.id); if (i >= 0) arr[i] = { ...arr[i], ...row }; else arr.unshift(row); }
-  else if (op === "delete") { const i = arr.findIndex((x) => x.id === row.id); if (i >= 0) arr.splice(i, 1); }
-  delete DB.hash; // dữ liệu trên máy đã khác bản máy chủ → lần làm mới sau phải tải đủ
-  if (typeof renderData === "function") renderData();
-  try { await invoke("write_file_b64", { path: cachePath(), contentsB64: textToB64(JSON.stringify(DB)) }); } catch { /* */ }
-  const q = loadQueue(); q.push({ table, op, row, at: Date.now() }); saveQueue(q);
-  flushQueue();
-};
-
-async function flushQueue() {
-  if (busy("flush") || !cfg.server || !cfg.token) return;
-  busyOn("flush");
-  let q = loadQueue();
-  while (q.length) {
-    const item = q[0];
-    try {
-      const r = await invoke("http_post", { url: cfg.server + "/api/desktop/mutate", token: cfg.token, bodyJson: JSON.stringify(item) });
-      if (r.status >= 200 && r.status < 300) { q.shift(); saveQueue(q); }
-      else if (r.status === 400 || r.status === 403 || r.status === 404) {
-        // Lỗi dữ liệu (không phải mạng) → bỏ để không kẹt hàng đợi, ghi log.
-        let d = ""; try { d = JSON.parse(b64ToText(r.body_b64)).error || ""; } catch { /* */ }
-        log(`Bỏ đồng bộ 1 thay đổi (${item.table}): ${d || r.status}`, "warn");
-        q.shift(); saveQueue(q);
-      } else break; // lỗi mạng/khác → dừng, thử lại lần sau
-    } catch { break; }
-  }
-  const left = loadQueue().length;
-  if (left) log(`Còn ${left} thay đổi chờ đồng bộ.`, "warn");
-  busyOff("flush");
-}
-
-// ─── In hợp đồng PDF (dùng bản in A4 chuẩn từ server: logo, chữ ký, định dạng) ──
-window.printContract = async function (id) {
-  if (!cfg.server || !cfg.token || !cfg.dir) { say("Cần kết nối máy chủ và chọn thư mục lưu trước.", "Chưa in được"); return; }
-  try {
-    await flushQueue(); // đảm bảo hợp đồng (kể cả vừa tạo cục bộ) đã lên server
-    const r = await invoke("http_get", { url: cfg.server + "/api/desktop/contracts/" + id + "?format=html", token: cfg.token });
-    if (r.status !== 200) { say("Hợp đồng đang chờ đồng bộ lên máy chủ. Thử lại sau vài giây.", "Chưa in được"); return; }
-    const dir = join(cfg.dir, "HopDong", ".in");
-    const htmlPath = join(dir, "hopdong-" + id + ".html");
-    const pdfPath = join(dir, "hopdong-" + id + ".pdf");
-    await invoke("write_file_b64", { path: htmlPath, contentsB64: r.body_b64 });
-    try {
-      await invoke("edge_pdf", { htmlPath, pdfPath });
-      await invoke("open_file", { path: pdfPath });
-      log("Đã tạo PDF hợp đồng — mở ra để in.");
-    } catch {
-      await invoke("open_file", { path: htmlPath });
-      log("Mở bản in (HTML) — bấm Ctrl+P để in ra giấy.", "warn");
-    }
-  } catch (e) { say("Không in được: " + (e.message || e), "Chưa in được"); }
-};
 
 // ─── Tự cập nhật: phát hiện bản mới trên GitHub Releases (nhãn desktop-dev) ──
 // So SỐ PHIÊN BẢN trong tên file cài (vd MStudo Desktop_0.2.1_x64-setup.exe) với
@@ -1076,7 +822,7 @@ async function checkUpdate(manual = false) {
 }
 // App có đang bận không (chặn tự cập nhật giữa chừng để không hỏng việc đang chạy).
 function appBusy() {
-  return busy("sync") || busy("export") || busy("drive") || busy("data") || loadQueue().length > 0;
+  return busy("sync") || busy("export") || busy("drive");
 }
 async function runSelfUpdate(auto = false) {
   if (!_updateUrl) return;
@@ -1129,7 +875,6 @@ window.__mstudoTick = () => {
   if (_tickCount % 5 === 1) {
     try { runSync(false); } catch { /* nhịp sau thử lại */ }
     try { runDriveSync(false); } catch { /* nhịp sau thử lại */ }
-    try { refreshData(false).then((r) => { if (r !== "skip") checkAccount(); }); } catch { /* nhịp sau thử lại */ }
   }
 };
 
@@ -1150,30 +895,35 @@ function bootSync(first = false) {
   syncRoots(); // đặt thư mục gốc được phép cho Rust trước khi thao tác file
   hookFocusSync();
   runSync(first);
-  // Giữ lại promise để openStudioApp() chờ xong rồi mới ẩn cửa sổ (xem lý do ở đó).
-  window.__firstData = refreshData(false).then(checkAccount).catch(() => {});
+  checkAccount();
   if (cfg.lastExportDate !== today()) runExports(); // xuất bù khi mở app
-  flushQueue(); // đẩy các thay đổi cục bộ còn tồn khi mở app
   checkUpdate();
   runDriveSync(false); // tải ảnh/video hợp đồng lên Drive (nếu đã kết nối)
   setInterval(() => runSync(false), SYNC_EVERY_MS);
-  setInterval(flushQueue, 60 * 1000); // thử đồng bộ thay đổi cục bộ mỗi phút
-  // Dữ liệu offline làm mới mỗi 5 phút — KHÔNG chờ tới ngày hôm sau như trước.
-  // Nhịp Rust (__mstudoTick) cũng gọi mỗi ~5 phút; refreshData tự bỏ lượt trùng
-  // (mốc _lastDataAt) nên thực tế chỉ tải MỘT lần / 5 phút.
-  setInterval(() => refreshData(false).then((r) => { if (r !== "skip") checkAccount(); }), DATA_REFRESH_MS);
   setInterval(() => { if (cfg.lastExportDate !== today()) runExports(); }, 10 * 60 * 1000);
   setInterval(() => runDriveSync(false), DRIVE_FULL_SYNC_MS); // vòng chậm: toàn bộ HĐ đã ký
   setInterval(runDriveWatch, DRIVE_WATCH_MS);                 // vòng nhanh: HĐ đang thực hiện
   setInterval(checkUpdate, 2 * 3600 * 1000); // kiểm tra + tự cập nhật (khi rảnh) mỗi 2 giờ
 }
 
-// Nạp cache dữ liệu offline từ đĩa (để xem ngay khi mở app, kể cả chưa có mạng).
-async function loadCacheFromDisk() {
-  try {
-    const t = await invoke("read_text", { path: cachePath() });
-    setData(JSON.parse(t));
-  } catch { /* chưa có cache */ }
+// ─── Dọn hàng đợi sửa offline của bản cũ (≤ 1.1.3) ───────────────────────────
+// Bản cũ có màn xem/sửa dữ liệu offline, thay đổi xếp hàng trong localStorage
+// rồi đẩy lên /api/desktop/mutate. Màn đó đã bỏ (sửa trên webapp), nhưng máy vừa
+// cập nhật có thể còn vài thay đổi chưa kịp gửi — đẩy nốt một lần cho khỏi mất.
+async function flushLegacyQueue() {
+  let q;
+  try { q = JSON.parse(localStorage.getItem("mstudo_pending") || "[]"); } catch { q = []; }
+  if (!q.length || !cfg.server || !cfg.token) return;
+  while (q.length) {
+    try {
+      const r = await invoke("http_post", { url: cfg.server + "/api/desktop/mutate", token: cfg.token, bodyJson: JSON.stringify(q[0]) });
+      if (r.status >= 500) break; // máy chủ lỗi tạm → lần mở app sau thử lại
+      if (r.status >= 400) log(`Bỏ 1 thay đổi offline cũ (${q[0].table}): HTTP ${r.status}`, "warn");
+      q.shift();
+    } catch { break; } // mất mạng → lần mở app sau thử lại
+    localStorage.setItem("mstudo_pending", JSON.stringify(q));
+  }
+  if (!q.length) localStorage.removeItem("mstudo_pending");
 }
 
 // ─── Khởi động ───────────────────────────────────────────────────────────────
@@ -1182,8 +932,6 @@ async function loadCacheFromDisk() {
   if (!cfg.token) { show("setup"); return; }
   if (!cfg.dir) { show("folder"); return; }
   show("main"); refreshStats();
-  await loadCacheFromDisk();  // hiển thị dữ liệu offline ngay lập tức
-  gotoNav("overview");     // mặc định mở Tổng quan
   bootSync(false);
-  openStudioApp();         // dùng desktop như app chính: mở thẳng giao diện studio đầy đủ
+  flushLegacyQueue();
 })();

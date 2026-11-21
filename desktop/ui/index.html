@@ -50,132 +50,87 @@
     </div>
   </main>
 
-  <!-- ── Màn 3: Ứng dụng (bố cục menu trái giống web app) ────────────── -->
+  <!-- ── Màn 3: Trạng thái đồng bộ ───────────────────────────────────────
+       Quản lý studio làm trên webapp. App máy tính chỉ giữ những việc trình
+       duyệt không làm được: lưu hợp đồng & sao lưu Excel vào ổ máy, quét thư
+       mục ảnh/video trên máy để tải lên Google Drive, chạy ngầm dưới khay. -->
   <main id="screen-main" class="screen hidden">
-    <div class="applayout">
-      <aside class="sidebar">
-        <div class="side-brand"><span class="logo">M</span> MStudo</div>
-        <!-- Bảng điều khiển desktop chỉ giữ Tổng quan · Lịch · Đồng bộ (dữ liệu &
-             tính năng đầy đủ đã ở giao diện studio). Điều khiển đồng bộ nằm ngay
-             trong menu trái này, đồng thời vẫn có ở khay hệ thống. -->
-        <nav class="side-nav" id="sideNav">
-          <div class="side-group">Quản lý</div>
-          <button class="side-item on" data-nav="overview">Tổng quan</button>
-          <button class="side-item" data-nav="calendar">Lịch &amp; đặt lịch</button>
-          <div class="side-group">Đồng bộ</div>
-          <button class="side-item" data-nav="backup">Đồng bộ &amp; sao lưu</button>
-        </nav>
-        <div class="side-foot">
-          <button id="btnOpenApp" class="btn primary small" style="width:100%">Mở ứng dụng đầy đủ</button>
-          <a href="#" id="btnOpenAppBrowser" class="side-link">Mở trong trình duyệt →</a>
+    <div class="content-top">
+      <div class="content-title">Đồng bộ &amp; sao lưu</div>
+      <div class="content-actions">
+        <span class="top-right" id="topStatus"></span>
+        <button id="btnOpenWeb" class="btn small primary">Mở mstudo trên trình duyệt</button>
+      </div>
+    </div>
+    <div class="content-body">
+      <div id="planBanner" class="banner hidden">
+        Gói Studio đã hết hạn — đồng bộ tạm dừng, hợp đồng bị khóa. File đã lưu trên máy vẫn giữ nguyên.
+      </div>
+      <div id="updateBanner" class="banner update hidden">
+        <span id="updateText">Đã có phiên bản mới.</span>
+        <button id="btnUpdate" class="btn small primary" style="margin-left:12px">Tải bản cập nhật</button>
+      </div>
+
+      <div class="grid">
+        <div class="card stat"><div class="stat-label">Lần đồng bộ cuối</div><div class="stat-value" id="stSync">—</div></div>
+        <div class="card stat"><div class="stat-label">Hợp đồng đã lưu về máy</div><div class="stat-value" id="stContracts">0</div></div>
+        <div class="card stat"><div class="stat-label">Xuất Excel gần nhất</div><div class="stat-value" id="stExport">—</div></div>
+        <div class="card stat"><div class="stat-label">Đang đồng bộ tài khoản</div><div class="stat-value" id="stAccount">—</div></div>
+      </div>
+      <div class="card">
+        <div class="row-between"><h2>Thư mục lưu</h2>
+          <div class="row-gap"><button id="btnOpenFolder" class="btn small">Mở thư mục</button><button id="btnChangeFolder" class="btn small">Đổi vị trí…</button></div>
         </div>
-      </aside>
-
-      <div class="content">
-        <header class="content-top">
-          <div class="content-title" id="pageTitle">Tổng quan</div>
-          <div class="content-actions">
-            <span class="top-right" id="topStatus"></span>
-            <button id="btnRefreshData" class="btn small">↻ Tải dữ liệu mới</button>
-          </div>
-        </header>
-        <div class="content-body">
-          <div id="planBanner" class="banner hidden">
-            Gói Studio đã hết hạn — đồng bộ tạm dừng, hợp đồng bị khóa. File đã lưu trên máy vẫn giữ nguyên.
-          </div>
-          <div id="updateBanner" class="banner update hidden">
-            <span id="updateText">Đã có phiên bản mới.</span>
-            <button id="btnUpdate" class="btn small primary" style="margin-left:12px">Tải bản cập nhật</button>
-          </div>
-
-          <section id="sub-data">
-            <div id="dataView"></div>
-          </section>
-
-          <section id="sub-backup" class="hidden">
-            <div class="grid">
-              <div class="card stat"><div class="stat-label">Lần đồng bộ cuối</div><div class="stat-value" id="stSync">—</div></div>
-              <div class="card stat"><div class="stat-label">Hợp đồng đã lưu về máy</div><div class="stat-value" id="stContracts">0</div></div>
-              <div class="card stat"><div class="stat-label">Xuất Excel gần nhất</div><div class="stat-value" id="stExport">—</div></div>
-              <div class="card stat"><div class="stat-label">Đang đồng bộ tài khoản</div><div class="stat-value" id="stAccount">—</div></div>
-              <div class="card stat"><div class="stat-label">Máy / máy chủ</div><div class="stat-value" id="stCompare">—</div></div>
-            </div>
-            <p class="muted">Ô “Máy / máy chủ” so số bản ghi trên máy với số trên máy chủ. Hai số lệch nhau ⇒ dữ liệu trên máy đã cũ, bấm <b>↻ Tải dữ liệu mới</b>. Tên tài khoản không đúng ⇒ máy này đang gắn với tài khoản khác, cần đăng ký lại thiết bị.</p>
-            <div class="card">
-              <div class="row-between"><h2>Thư mục lưu</h2>
-                <div class="row-gap"><button id="btnOpenFolder" class="btn small">Mở thư mục</button><button id="btnChangeFolder" class="btn small">Đổi vị trí…</button></div>
-              </div>
-              <code id="mainFolderPath" class="folder-path"></code>
-            </div>
-            <div class="card">
-              <div class="row-between"><h2>Hoạt động</h2>
-                <div class="row-gap"><button id="btnSyncNow" class="btn small primary">Đồng bộ ngay</button><button id="btnExportNow" class="btn small">Xuất Excel ngay</button></div>
-              </div>
-              <ul id="log" class="log"></ul>
-            </div>
-            <div class="card">
-              <div class="row-between"><h2>Ảnh / Video lên Google Drive</h2>
-                <div class="row-gap">
-                  <button id="btnPickMediaDir" class="btn small">Chọn thư mục gốc…</button>
-                  <button id="btnDriveSync" class="btn small primary">Đồng bộ Drive ngay</button>
-                </div>
-              </div>
-              <p class="muted">Kết nối Google Drive tại mstudo (web) › <b>Khách hàng › Đồng bộ Drive</b>. Chọn thư mục gốc trên máy để chứa ảnh/video các hợp đồng (mỗi hợp đồng 1 thư mục con, tự tải lên Drive).</p>
-              <p class="muted">Thư mục gốc ảnh/video: <code id="driveDir" class="folder-path">chưa chọn</code></p>
-              <p class="muted">Đồng bộ Drive gần nhất: <span id="stDrive">—</span></p>
-              <p class="muted">Hợp đồng <b>đang thực hiện</b> được quét mỗi ~10 giây — bỏ ảnh vào thư mục là tự tải lên Drive ngay, khỏi chờ.</p>
-
-              <!-- Tiến trình đồng bộ (giống app Google Drive: ảnh đang tải, số ảnh, %, thời gian dự kiến) -->
-              <div id="syncStatus" class="sync-status hidden">
-                <img id="syncThumb" class="sync-thumb hidden" alt="" />
-                <div class="sync-info">
-                  <div class="sync-head">
-                    <span id="syncTitle">Đang đồng bộ…</span>
-                    <span id="syncPct" class="sync-pct">0%</span>
-                  </div>
-                  <div class="sync-bar"><div id="syncBarFill" class="sync-bar-fill"></div></div>
-                  <div id="syncFile" class="sync-file"></div>
-                  <div id="syncMeta" class="muted"></div>
-                </div>
-              </div>
-            </div>
-            <div class="card">
-              <div class="row-between">
-                <h2>Ứng dụng</h2>
-                <button id="btnCheckUpdate" class="btn small">↻ Kiểm tra cập nhật</button>
-              </div>
-              <p class="muted" id="appVer"></p>
-              <p class="muted">Bấm dấu <b>×</b> để thu nhỏ xuống <b>khay hệ thống</b> — app vẫn chạy ngầm và tiếp tục đồng bộ. Chuột phải vào biểu tượng khay để <b>Mở</b>, <b>Đồng bộ ngay</b> hoặc <b>Thoát</b> hẳn.</p>
-            </div>
-            <!-- Kẹt đăng nhập trong cửa sổ studio: cửa sổ đó là WebView2 không có
-                 thanh địa chỉ lẫn menu cài đặt, nên đây (và menu khay) là chỗ duy
-                 nhất xóa được cookie. -->
-            <div class="card">
-              <div class="row-between"><h2>Đăng nhập giao diện studio</h2>
-                <div class="row-gap">
-                  <button id="btnDeviceLogin" class="btn small primary">Đăng nhập tự động</button>
-                  <button id="btnLogout" class="btn small">Đăng xuất / xóa cookie</button>
-                  <button id="btnClearWeb" class="btn danger small">Xóa sạch cookie &amp; bộ nhớ đệm</button>
-                </div>
-              </div>
-              <p class="muted"><b>Đăng nhập tự động</b> dùng chính mã kết nối của máy này — khỏi gõ mật khẩu, khỏi captcha, và không dính chuyện Google chặn đăng nhập trong cửa sổ nhúng. App cũng tự làm việc này khi cửa sổ studio bị đá về trang đăng nhập.</p>
-              <p class="muted">Còn phiên của tài khoản cũ? Bấm <b>Đăng xuất / xóa cookie</b> — máy chủ xóa cookie phiên rồi mở lại trang đăng nhập. Vẫn kẹt thì bấm <b>Xóa sạch cookie &amp; bộ nhớ đệm</b> để xóa toàn bộ dữ liệu duyệt web của cửa sổ studio. Kết nối thiết bị và file đã lưu trên máy vẫn giữ nguyên.</p>
-            </div>
-            <div class="card">
-              <h2>Thiết bị</h2>
-              <p class="muted" id="deviceInfo"></p>
-              <button id="btnDisconnect" class="btn danger small">Ngắt kết nối thiết bị này</button>
-            </div>
-          </section>
+        <code id="mainFolderPath" class="folder-path"></code>
+      </div>
+      <div class="card">
+        <div class="row-between"><h2>Hoạt động</h2>
+          <div class="row-gap"><button id="btnSyncNow" class="btn small primary">Đồng bộ ngay</button><button id="btnExportNow" class="btn small">Xuất Excel ngay</button></div>
         </div>
+        <ul id="log" class="log"></ul>
+      </div>
+      <div class="card">
+        <div class="row-between"><h2>Ảnh / Video lên Google Drive</h2>
+          <div class="row-gap">
+            <button id="btnPickMediaDir" class="btn small">Chọn thư mục gốc…</button>
+            <button id="btnDriveSync" class="btn small primary">Đồng bộ Drive ngay</button>
+          </div>
+        </div>
+        <p class="muted">Kết nối Google Drive tại mstudo (web) › <b>Khách hàng › Đồng bộ Drive</b>. Chọn thư mục gốc trên máy để chứa ảnh/video các hợp đồng (mỗi hợp đồng 1 thư mục con, tự tải lên Drive).</p>
+        <p class="muted">Thư mục gốc ảnh/video: <code id="driveDir" class="folder-path">chưa chọn</code></p>
+        <p class="muted">Đồng bộ Drive gần nhất: <span id="stDrive">—</span></p>
+        <p class="muted">Hợp đồng <b>đang thực hiện</b> được quét mỗi ~10 giây — bỏ ảnh vào thư mục là tự tải lên Drive ngay, khỏi chờ.</p>
+
+        <!-- Tiến trình đồng bộ (giống app Google Drive: ảnh đang tải, số ảnh, %, thời gian dự kiến) -->
+        <div id="syncStatus" class="sync-status hidden">
+          <img id="syncThumb" class="sync-thumb hidden" alt="" />
+          <div class="sync-info">
+            <div class="sync-head">
+              <span id="syncTitle">Đang đồng bộ…</span>
+              <span id="syncPct" class="sync-pct">0%</span>
+            </div>
+            <div class="sync-bar"><div id="syncBarFill" class="sync-bar-fill"></div></div>
+            <div id="syncFile" class="sync-file"></div>
+            <div id="syncMeta" class="muted"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row-between">
+          <h2>Ứng dụng</h2>
+          <button id="btnCheckUpdate" class="btn small">↻ Kiểm tra cập nhật</button>
+        </div>
+        <p class="muted" id="appVer"></p>
+        <p class="muted">Bấm dấu <b>×</b> để thu nhỏ xuống <b>khay hệ thống</b> — app vẫn chạy ngầm và tiếp tục đồng bộ. Chuột phải vào biểu tượng khay để <b>Mở</b>, <b>Đồng bộ ngay</b> hoặc <b>Thoát</b> hẳn.</p>
+      </div>
+      <div class="card">
+        <h2>Thiết bị</h2>
+        <p class="muted" id="deviceInfo"></p>
+        <button id="btnDisconnect" class="btn danger small">Ngắt kết nối thiết bị này</button>
       </div>
     </div>
   </main>
 
-  <!-- Cửa sổ chi tiết hợp đồng (offline) -->
-  <div id="dataModal" class="dmodal-overlay hidden"><div class="dmodal"></div></div>
-
-  <script src="data.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

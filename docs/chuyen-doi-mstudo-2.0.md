@@ -225,7 +225,6 @@ Gộp xong, kiểm tra trước khi commit. Chỉ cần làm khi **thật sự c
 npm ci
 npx tsc --noEmit
 npm run build
-npm run test:overview
 npm run test:contract-filter
 npm run test:album-buttons
 npm run test:album-dislike

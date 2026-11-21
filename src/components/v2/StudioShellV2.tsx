@@ -14,7 +14,6 @@ import StudioCommandK from "@/components/StudioCommandK";
 import BranchSwitcher, { type SwitcherBranch } from "@/components/BranchSwitcher";
 import SidebarDriveStatus from "@/components/SidebarDriveStatus";
 import DownloadAppButton from "@/components/DownloadAppButton";
-import SyncControlButton from "@/components/SyncControlButton";
 import MobileTabBarV2 from "@/components/v2/MobileTabBarV2";
 import UiFeedback from "@/components/v2/UiFeedback";
 import { UiV2Provider } from "@/components/v2/UiV2Context";
@@ -618,7 +617,6 @@ export default function StudioShellV2({
           <NavTree groups={groups} ctx={{ ...ctx, roomy: true }} open={open} toggle={toggleGroup} pins={pins} onTogglePin={togglePin} onCustomize={() => setCustomizing(true)} quickPin={false} />
           <div className="mt-auto flex flex-col gap-2 pt-6">
             <DownloadAppButton desktop={desktopOk} />
-            <SyncControlButton />
           </div>
         </div>
 
@@ -636,7 +634,6 @@ export default function StudioShellV2({
           </nav>
           <div className="flex flex-col gap-2 pt-2.5" style={{ borderTop: "1px solid var(--bd2)" }}>
             <SidebarDriveStatus desktop={desktopOk} />
-            <SyncControlButton />
           </div>
         </aside>
 

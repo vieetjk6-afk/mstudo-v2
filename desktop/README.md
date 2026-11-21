@@ -4,10 +4,28 @@
 về thư mục đã chọn ngay khi khách ký, và **tự xuất Excel toàn bộ dữ liệu hằng
 ngày** để chống mất dữ liệu. Xây bằng Tauri v2 (Rust + WebView2), file cài ~10MB.
 
+## Phạm vi: chỉ làm việc webapp KHÔNG làm được
+
+Quản lý studio (hợp đồng, lịch, khách, báo giá, in…) làm trên **webapp**. App máy
+tính chỉ giữ những việc trình duyệt không làm được:
+
+| Tính năng | Vì sao cần app |
+| --- | --- |
+| Tự lưu hợp đồng PDF + Word vào thư mục trên máy | Trình duyệt không tự ghi file vào ổ đĩa |
+| Xuất Excel + sao lưu JSON hằng ngày, dọn file > 30 ngày | Như trên — chạy ngầm mỗi ngày, không cần mở web |
+| Quét thư mục ảnh/video trên máy → tải lên Google Drive | Trình duyệt không đọc/theo dõi thư mục trên máy |
+| Chạy ngầm dưới khay, tự cập nhật | Để các việc trên chạy cả khi không mở cửa sổ |
+
+Từ **1.2.0** đã bỏ: cửa sổ nhúng giao diện studio (kèm đăng nhập tự động, xóa
+cookie, xử lý link/cửa sổ in), màn xem/sửa dữ liệu offline (Tổng quan, Lịch,
+form sửa + hàng đợi `/api/desktop/mutate`), in hợp đồng từ app. Nút **“Mở mstudo
+trên trình duyệt”** (trong app và menu khay) mở webapp bằng trình duyệt mặc định.
+Hàng đợi sửa offline còn sót trên máy vừa cập nhật được đẩy nốt một lần khi mở app.
+
 ## Kiến trúc
 
 - `ui/` — giao diện tiếng Việt (HTML/CSS/JS thuần, không framework): 3 màn hình
-  Kết nối → Chọn thư mục → Trạng thái. Toàn bộ engine đồng bộ nằm ở `ui/app.js`.
+  Kết nối → Chọn thư mục → Trạng thái đồng bộ. Toàn bộ engine đồng bộ nằm ở `ui/app.js`.
 - `src-tauri/` — phần Rust: gọi API mstudo (tránh CORS), ghi file an toàn
   (ghi `.tmp` rồi đổi tên), chọn thư mục, chuyển HTML→PDF bằng **Microsoft Edge
   headless** (sẵn trên Windows 10/11 — bản PDF giữ nguyên ảnh chữ ký), dọn file
@@ -161,73 +179,5 @@ app từ Desktop/Start **không tạo bản thứ hai**: bản đang chạy đư
 trước, bản vừa mở tự thoát (chốt `tauri-plugin-single-instance`). Không có chốt
 này thì mỗi lần mở là thêm một biểu tượng khay và thêm một engine đồng bộ ghi
 song song vào cùng thư mục dữ liệu. Biểu tượng khay: **bấm trái** để mở
-lại cửa sổ; **chuột phải** có menu **Mở giao diện studio / Bảng điều khiển &
-đồng bộ / Đồng bộ ngay / Đăng xuất · xóa cookie đăng nhập / Thoát** (Thoát mới
-đóng hẳn app).
-
-## Bấm link trong cửa sổ studio
-
-Cửa sổ studio là WebView2 **không có tab, không thanh địa chỉ**. WebView2 mặc
-định **nuốt** mọi yêu cầu mở cửa sổ mới, nên trước đây bấm link `target="_blank"`
-(Google Drive, Zalo hỗ trợ, xem trước album/thiệp/story) **không có gì xảy ra** —
-im lặng, không báo lỗi; cửa sổ **in hợp đồng / báo giá** (trang tự mở bằng
-`window.open("")` rồi ghi nội dung vào) cũng không hiện. App tự xử lý:
-
-| Bấm vào | Đi đâu |
-| --- | --- |
-| Link ra ngoài (`drive.google.com`, Facebook, Zalo…) | **Trình duyệt mặc định** của máy |
-| Link trang của chính studio mở tab mới | **Cửa sổ mới trong app** — dùng chung hồ sơ WebView2 nên **không phải đăng nhập lại** |
-| Cửa sổ in hợp đồng/báo giá (`window.open("")`) | Cửa sổ mới trong app (mở ở trình duyệt ngoài thì trang không ghi được nội dung in vào) |
-| `mailto:` / `tel:` (gọi khách hàng ở màn *Hôm nay*) | Phần mềm mail / ứng dụng gọi điện của máy |
-| Link ra ngoài **không** có `target="_blank"` | Trình duyệt mặc định — script tiêm vào trang bắt lại, không để cửa sổ studio điều hướng sang trang ngoài rồi kẹt ở đó (không có nút Back) |
-
-Địa chỉ giao cho Windows mở chỉ được thuộc `http, https, mailto, tel, sms,
-callto` và luôn đi qua `explorer`/`rundll32` chứ **không qua `cmd`** — không có
-shell thì không chèn được lệnh nếu URL bị thao túng. Kiểm thử:
-`npm run test:desktop-links`.
-
-## Đăng nhập trong cửa sổ studio
-
-### Đăng nhập tự động bằng mã thiết bị (mặc định)
-
-Máy đã kết nối thì **không cần đăng nhập lại bằng form web**. App gọi
-`POST /api/desktop/session` kèm mã thiết bị `msd_...`, máy chủ sinh mã đăng nhập
-**dùng một lần** (magic link của Supabase) cho đúng chủ máy đó và trả về đường
-`/auth/desktop?token_hash=…`; app mở đường này trong cửa sổ studio để đổi lấy
-phiên (route `auth/desktop` gọi `verifyOtp` rồi ghi cookie phiên lên chính
-response chuyển hướng).
-
-Chạy khi: bấm **Đăng nhập tự động** trong *Đồng bộ & sao lưu*, chọn mục cùng tên
-ở menu khay, **hoặc tự động** khi cửa sổ studio bị đá về `/login`.
-
-Vì sao làm vậy: đăng nhập bằng form web bên trong WebView2 là chỗ hỏng nhiều
-nhất — Google **chặn thẳng** đăng nhập trong webview nhúng, captcha Turnstile
-lắm lúc không chạy, cookie phiên hỏng thì không có menu trình duyệt nào để xóa.
-Máy này vốn đã được chủ studio xác thực một lần bằng mã kết nối rồi.
-
-Quyền **không** rộng thêm: mã thiết bị vốn đã đọc/ghi được toàn bộ dữ liệu studio
-qua `/api/desktop/*`. Endpoint chỉ nhận mã thiết bị (`via === "device"`), giới hạn
-5 lần / 5 phút mỗi máy, và app chỉ thử tự động **một lần mỗi lần chạy** (mã hỏng
-mà thử lại là vòng lặp vô tận). Vừa bấm *Đăng xuất* thì tự động cũng bị khóa tới
-lần chạy sau, không thì vừa đăng xuất đã bị đăng nhập lại ngay.
-
-### Kẹt đăng nhập → xóa cookie ở đâu
-
-Cửa sổ studio là WebView2 **không có thanh địa chỉ, không có menu trình duyệt**,
-nên khi cookie phiên hỏng (còn phiên tài khoản cũ, khóa Supabase đã đổi, một lần
-đăng nhập Google dở dang để lại `code-verifier` mồ côi) thì trước đây không có
-chỗ nào xóa cookie — người dùng kẹt luôn ở trang đăng nhập. Ba lối thoát, theo
-thứ tự nhẹ → nặng:
-
-1. **Ngay trên trang đăng nhập**: link *“Không đăng nhập được? Xóa cookie đăng
-   nhập rồi thử lại”* → gọi `/auth/reset` trên máy chủ (xóa mọi cookie `sb-*`
-   rồi quay lại `/login`). Dùng được cả trên trình duyệt web thường.
-2. **Menu khay hệ thống → “Đăng xuất / xóa cookie đăng nhập”**, hoặc nút *Đăng
-   xuất / xóa cookie* trong **Đồng bộ & sao lưu**. Cùng đường `/auth/reset`
-   nhưng bấm được kể cả khi cửa sổ studio đang chiếm hết màn hình.
-3. **Nút *Xóa sạch cookie & bộ nhớ đệm*** (lệnh Rust `clear_web_data`): xóa
-   toàn bộ dữ liệu duyệt web của WebView2 khi cách 1–2 vẫn không gỡ được.
-   ⚠️ WebView2 dùng **chung một hồ sơ** cho mọi cửa sổ của app, nên lệnh này xóa
-   luôn `localStorage` của bảng điều khiển — `app.js` ghi lại cấu hình (`cfg`:
-   máy chủ, mã kết nối, thư mục lưu) ngay sau đó, chỉ mất nhật ký hoạt động.
-   Kết nối thiết bị và file đã lưu trên máy **không** bị đụng tới.
+lại cửa sổ; **chuột phải** có menu **Mở bảng điều khiển / Mở mstudo trên trình
+duyệt / Đồng bộ ngay / Thoát** (Thoát mới đóng hẳn app).
