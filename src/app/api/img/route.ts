@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { noStoreFetch } from "@/lib/no-store-fetch";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 // Not force-dynamic: the response is content-addressed by (id, w) and cacheable.
 // The runtime is still dynamic because we read query params, but dropping
@@ -50,6 +51,19 @@ function rasterType(res: Response): string | null {
 // Lá chắn thứ hai cho phản hồi mang byte: kể cả khi có kiểu lạ lọt qua, trình
 // duyệt cũng không chạy script/nhúng gì từ nó.
 const BYTE_HEADERS = { "Content-Security-Policy": "default-src 'none'; sandbox" };
+
+/** Tham số /api/img mà app thật sự dùng. */
+const THAM_SO = new Set(["id", "w", "raw", "orig", "dl"]);
+/** null = URL đã chuẩn; ngược lại là query chỉ còn tham số hợp lệ (mỗi tên một lần). */
+function urlChuan(sp: URLSearchParams): string | null {
+  let la = false;
+  const giu = new URLSearchParams();
+  for (const [k, v] of sp) {
+    if (!THAM_SO.has(k) || giu.has(k)) la = true;
+    else giu.set(k, v);
+  }
+  return la ? giu.toString() : null;
+}
 
 function cacheKey(id: string, width: number) { return `${id}_w${width}.jpg`; }
 // Chỉ GHI vào bucket các cỡ chính app dùng (thumbnailUrl / use-img-width).
@@ -114,6 +128,21 @@ export async function GET(req: Request) {
   const id = searchParams.get("id");
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
     return NextResponse.json({ error: "bad_id" }, { status: 400 });
+  }
+
+  // ── Chống lách CDN ────────────────────────────────────────────────────────
+  // Khoá cache của Vercel gồm cả query string: thêm `&x=1`, `&x=2`… là mỗi URL
+  // một lượt trượt cache, và với raw/orig mỗi lượt kéo nguyên ảnh (ảnh gốc ~11 MB)
+  // từ Google qua Vercel. Tham số lạ → chuyển về URL chuẩn (chỉ giữ tham số app
+  // dùng), nên mọi biến thể dồn về MỘT khoá cache.
+  const chuan = urlChuan(searchParams);
+  if (chuan !== null) {
+    return new NextResponse(null, { status: 308, headers: { Location: `/api/img?${chuan}`, "Cache-Control": CACHE_OK } });
+  }
+  // Byte đi qua Vercel (raw / ảnh gốc): chặn một IP dội liên tục. Trần rộng —
+  // tải ZIP vài trăm ảnh vẫn lọt. Không cho CDN giữ 429 (sẽ chặn nhầm người khác).
+  if ((searchParams.get("raw") === "1" || searchParams.get("orig") === "1") && !rateLimit(`img-byte:${clientIp(req)}`, 600, 60_000)) {
+    return NextResponse.json({ error: "rate_limited" }, { status: 429, headers: { "Cache-Control": "no-store" } });
   }
 
   // ── Lượt xem thường hay lượt ĐỌC BYTE? ───────────────────────────────────

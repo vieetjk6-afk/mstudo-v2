@@ -163,8 +163,12 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
      ẩn thì bỏ nhịp (khung chat tự mở, nên tab nằm nền cả buổi vẫn hỏi mỗi 6 giây
      — mỗi nhịp là một lượt gọi hàm + truy vấn DB), và hỏi bù NGAY khi khách quay lại. */
   const lastStaffAtRef = useRef<string | null>(null);
+  // Khách CHƯA nhắn câu nào thì nhân viên không có hội thoại nào để trả lời —
+  // khung chat tự mở cho mọi người vào trang, nên hỏi từ lúc mở nghĩa là mỗi lượt
+  // xem trang 3 phút tốn ~30 lượt gọi hàm + ~150 truy vấn mà không đọc được gì.
+  const khachDaNhan = msgs.some((m) => m.role === "user");
   useEffect(() => {
-    if (!open) return;
+    if (!open || !khachDaNhan) return;
     let stop = false;
     // Một lượt một lúc: lượt hỏi bù lúc quay lại tab trùng nhịp định kỳ thì hai
     // lượt cùng mốc `after` sẽ chèn cùng một tin của nhân viên hai lần.
@@ -204,7 +208,7 @@ export default function ChatWidget({ lang }: { lang: Lang }) {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [open, sessionId]);
+  }, [open, sessionId, khachDaNhan]);
 
   /** Đóng khung chat + ghi nhớ để không tự bật lại trong phiên này. */
   function closeChat() {

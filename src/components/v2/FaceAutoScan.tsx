@@ -110,6 +110,7 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Chá
             signal: ctrl.signal,
             nghiMs: NGHI_MS,
             tiLeNghi: TI_LE_NGHI,
+            tuDong: true,
             patch: (p) => {
               if (p.status) {
                 tong = p.status.tong;
