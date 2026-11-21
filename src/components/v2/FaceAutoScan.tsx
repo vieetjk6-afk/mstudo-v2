@@ -16,7 +16,10 @@ import { dangQuetTay, nghePhaiNhuong, quetAlbum } from "@/lib/face-local-runner"
      · Chờ 20 giây sau khi mở dashboard mới bắt đầu (trang tải xong trước).
      · CHẠY NHẸ: sau mỗi ảnh nghỉ đúng bằng thời gian vừa nhận diện ảnh đó
        → máy chỉ bận khoảng một nửa thời gian (thẻ quét tay thì chạy hết sức).
-       Chậm gấp đôi, nhưng studio làm việc khác không thấy giật.
+       Tab bị ẩn (studio đang dùng app khác) thì nghỉ gấp 3 → bận ~25%.
+     · CHỈ KHI RẢNH: studio đang bấm / gõ / cuộn trên trang thì đứng chờ tới
+       khi họ ngừng tay 15 giây. Giải mã JPEG chạy trong Web Worker, không chặn
+       luồng giao diện.
      · Điện thoại / máy ít RAM / bật tiết kiệm dữ liệu: KHÔNG tự quét.
      · Nhiều tab: chỉ MỘT tab quét (Web Locks).
      · Studio bấm quét tay trong một album → bộ này nhường ngay.
@@ -32,8 +35,15 @@ const CHO_BAT_DAU_MS = 20_000;
 const HOI_LAI_MS = 30 * 60_000;
 const NHUONG_MS = 2 * 60_000;
 const NGHI_MS = 150;
-/** Nghỉ bằng 1 lần thời gian làm → máy bận ~50%. */
+/** Nghỉ bằng 1 lần thời gian làm → máy bận ~50% (trang đang mở, studio không thao tác). */
 const TI_LE_NGHI = 1;
+/**
+ * Tab bị ẩn (studio đang ở cửa sổ / app khác — Lightroom, Photoshop…): nghỉ gấp 3
+ * → máy bận ~25%, đỡ tranh CPU/GPU với app họ đang dùng.
+ */
+const TI_LE_NGHI_KHI_AN = 3;
+/** Có thao tác trên trang trong ngần này thì coi là studio đang dùng app → chờ. */
+const RANH_SAU_MS = 15_000;
 
 export type AutoScanView =
   | { kieu: "nap"; ten: string; pct: number; thuTu: number; soAlbum: number }
@@ -77,6 +87,23 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Ch�
     // Studio bấm quét tay ở trang album → dừng album đang quét; vòng ngoài tự chờ.
     const boNghe = nghePhaiNhuong(() => albumRef.current?.abort());
 
+    // CHỈ QUÉT KHI MÁY RẢNH: studio đang bấm / gõ / cuộn trên trang thì đứng chờ
+    // tới khi họ ngừng tay RANH_SAU_MS. Nhận diện một tấm chiếm GPU + CPU vài trăm
+    // ms; chạy đúng lúc studio thao tác là app giật. Chỉ ghi một con số — rẻ, kể
+    // cả với pointermove.
+    let thaoTacLuc = 0;
+    const danhDau = () => {
+      thaoTacLuc = Date.now();
+    };
+    const SU_KIEN = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"] as const;
+    for (const ev of SU_KIEN) window.addEventListener(ev, danhDau, { passive: true, capture: true });
+    const choRanh = async (sig: AbortSignal) => {
+      while (!sig.aborted && !document.hidden && Date.now() - thaoTacLuc < RANH_SAU_MS) {
+        await ngu(Math.max(500, RANH_SAU_MS - (Date.now() - thaoTacLuc)), sig);
+      }
+    };
+    const tiLeNghi = () => (document.hidden ? TI_LE_NGHI_KHI_AN : TI_LE_NGHI);
+
     const chay = async () => {
       await ngu(choBatDauMs, phien.signal);
       while (!phien.signal.aborted) {
@@ -109,7 +136,8 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Ch�
           const chayMotLuot = () => quetAlbum(a.id, {
             signal: ctrl.signal,
             nghiMs: NGHI_MS,
-            tiLeNghi: TI_LE_NGHI,
+            tiLeNghi,
+            choRanh,
             tuDong: true,
             patch: (p) => {
               if (p.status) {
@@ -168,6 +196,7 @@ export default function FaceAutoScan({ choBatDauMs = CHO_BAT_DAU_MS }: { /** Ch�
 
     return () => {
       boNghe();
+      for (const ev of SU_KIEN) window.removeEventListener(ev, danhDau, { capture: true });
       phien.abort();
     };
   }, [choBatDauMs]);

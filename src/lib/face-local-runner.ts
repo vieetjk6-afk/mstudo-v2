@@ -215,7 +215,13 @@ export async function quetAlbum(
      * bằng thời gian làm → máy chỉ bận khoảng MỘT NỬA thời gian, máy nhanh hay
      * chậm đều tự khớp. Bộ tự quét nền dùng 1; thẻ quét tay để 0 (nhanh nhất).
      */
-    tiLeNghi?: number;
+    tiLeNghi?: number | (() => number);
+    /**
+     * Gọi trước MỖI tấm: trả về khi máy đủ rảnh để quét tiếp. Bộ tự quét nền dùng
+     * để đứng chờ trong lúc studio đang thao tác trên trang (quét tranh CPU/GPU
+     * với giao diện → app giật). Thẻ quét tay không truyền: chạy hết sức.
+     */
+    choRanh?: (sig: AbortSignal) => Promise<void>;
     /**
      * Bộ tự quét nền (true) hay studio bấm tay (false). Lượt tự động tôn trọng
      * hai luật tiết kiệm của bước gom: gom lại nhiều nhất 12 giờ một lần, và
@@ -226,7 +232,7 @@ export async function quetAlbum(
 ): Promise<{ loi: string | null; status: FaceScanStatus | null }> {
   const { signal: sig, patch } = opts;
   const nghiMs = opts.nghiMs ?? 40;
-  const tiLeNghi = Math.max(0, opts.tiLeNghi ?? 0);
+  const tiLeNghiLuc = () => Math.max(0, (typeof opts.tiLeNghi === "function" ? opts.tiLeNghi() : opts.tiLeNghi) ?? 0);
   /** Thời gian nhận diện tấm vừa rồi — để tính khoảng nghỉ theo tỉ lệ. */
   let lamMs = 0;
   const url = urlCua(albumId);
@@ -283,6 +289,10 @@ export async function quetAlbum(
         patch({ dang: p.name });
         const { bytes, lyDo } = await dangCho;
         if (sig.aborted) break vong;
+        if (opts.choRanh) {
+          await opts.choRanh(sig);
+          if (sig.aborted) break vong;
+        }
         if (!bytes) {
           if (laLoiVinhVien(lyDo)) buf.push({ photoId: p.id, skip: lyDo! });
           else {
@@ -313,7 +323,7 @@ export async function quetAlbum(
         patch({ tai: { thang: tk.thang, mayChu: tk.mayChu } });
         if (buf.length >= (daGui ? LO_THUONG : LO_DAU) && !(await gui())) break vong;
         // Trần 10 giây: một tấm bất thường (máy vừa ngủ dậy…) không được treo cả vòng.
-        const nghi = Math.max(nghiMs, Math.min(10_000, lamMs * tiLeNghi));
+        const nghi = Math.max(nghiMs, Math.min(10_000, lamMs * tiLeNghiLuc()));
         await new Promise<void>((r) => {
           const t = setTimeout(r, nghi);
           sig.addEventListener("abort", () => (clearTimeout(t), r()), { once: true });
