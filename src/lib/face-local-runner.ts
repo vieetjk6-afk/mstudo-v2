@@ -44,7 +44,12 @@ export type QuetPatch = {
 
 /** Mẻ gửi đầu nhỏ (như FIRST_CHUNK của máy chủ) để "ghi không ăn" lộ ra sớm. */
 const LO_DAU = 3;
-const LO_THUONG = Math.min(8, LO_TOI_DA);
+/**
+ * Mẻ thường = đúng trần máy chủ nhận (20). Mỗi mẻ là ~10 lượt gọi Supabase (kiểm
+ * quyền, ghi mặt, ghi mốc, đọc lại, đếm tiến độ) bất kể mẻ to hay nhỏ — mẻ 8 ảnh
+ * nghĩa là album 1.500 ảnh tốn ~1.900 lượt gọi chỉ cho phần ghi.
+ */
+const LO_THUONG = LO_TOI_DA;
 /** Ngần này tấm hỏng tạm LIÊN TIẾP thì dừng: gần như chắc là mất mạng / Drive chặn. */
 const HONG_LIEN_TIEP = 6;
 
@@ -53,8 +58,8 @@ type Item = { photoId: string; faces?: { at: number; box: number[]; descriptor: 
 const urlCua = (albumId: string) => `/api/albums/${albumId}/face-local`;
 
 /** Tiến độ + một trang ảnh còn phải quét. Ném Error(mã lỗi máy chủ) khi bị từ chối. */
-export async function taiViecQuet(albumId: string, boQua = 0): Promise<ViecQuetTrang> {
-  const r = await fetch(`${urlCua(albumId)}?so=${boQua}`, { cache: "no-store" });
+export async function taiViecQuet(albumId: string, boQua = 0, gomNgay = false): Promise<ViecQuetTrang> {
+  const r = await fetch(`${urlCua(albumId)}?so=${boQua}${gomNgay ? "&gom=ngay" : ""}`, { cache: "no-store" });
   const d = (await r.json().catch(() => ({}))) as Partial<ViecQuetTrang> & { ok?: boolean; error?: string };
   if (!d.ok) throw new Error(d.error || `http-${r.status}`);
   return d as ViecQuetTrang;
@@ -93,7 +98,38 @@ async function tinhTrongWorker(list: unknown[], known: unknown[]): Promise<unkno
  * đọc), gom trong Web Worker, chỉ gửi KẾT QUẢ lên máy chủ để kiểm và ghi.
  * Trả câu lỗi thật (không nuốt) để thẻ hiện được.
  */
-export async function gomAlbum(albumId: string): Promise<{ ok: boolean; nguoi?: number; loi?: string }> {
+export async function gomAlbum(albumId: string, opts: { tuDong?: boolean } = {}): Promise<{ ok: boolean; nguoi?: number; loi?: string }> {
+  // Lượt TỰ ĐỘNG vừa hỏng gần đây: đừng đọc lại cả bảng vector (10–50 MB với album
+  // cưới) mỗi lần mở dashboard / mỗi 30 phút. Studio bấm tay thì vẫn chạy ngay.
+  if (opts.tuDong && vuaGomHong(albumId)) return { ok: false, loi: CHO_THU_LAI };
+  const kq = await gomAlbumThat(albumId);
+  ghiGomHong(albumId, !kq.ok);
+  return kq;
+}
+
+/** Mã trả về khi lượt gom tự động bị hoãn vì lần trước vừa hỏng — không phải lỗi mới. */
+export const CHO_THU_LAI = "cho_thu_lai";
+/** Gom hỏng thì lượt TỰ ĐỘNG chờ ngần này mới thử lại. */
+const GOM_HONG_CHO_MS = 12 * 3600_000;
+const khoaGomHong = (albumId: string) => `mstudo-gom-hong:${albumId}`;
+function vuaGomHong(albumId: string): boolean {
+  try {
+    const t = Number(localStorage.getItem(khoaGomHong(albumId)));
+    return Number.isFinite(t) && t > 0 && Date.now() - t < GOM_HONG_CHO_MS;
+  } catch {
+    return false;
+  }
+}
+function ghiGomHong(albumId: string, hong: boolean): void {
+  try {
+    if (hong) localStorage.setItem(khoaGomHong(albumId), String(Date.now()));
+    else localStorage.removeItem(khoaGomHong(albumId));
+  } catch {
+    /* chế độ ẩn danh / chặn lưu trữ — chỉ mất phần hoãn */
+  }
+}
+
+async function gomAlbumThat(albumId: string): Promise<{ ok: boolean; nguoi?: number; loi?: string }> {
   try {
     const { createClient } = await import("@/lib/supabase/client");
     const sb = createClient();
@@ -180,6 +216,12 @@ export async function quetAlbum(
      * chậm đều tự khớp. Bộ tự quét nền dùng 1; thẻ quét tay để 0 (nhanh nhất).
      */
     tiLeNghi?: number;
+    /**
+     * Bộ tự quét nền (true) hay studio bấm tay (false). Lượt tự động tôn trọng
+     * hai luật tiết kiệm của bước gom: gom lại nhiều nhất 12 giờ một lần, và
+     * chờ 12 giờ sau một lần gom hỏng. Bấm tay thì gom ngay.
+     */
+    tuDong?: boolean;
   },
 ): Promise<{ loi: string | null; status: FaceScanStatus | null }> {
   const { signal: sig, patch } = opts;
@@ -297,12 +339,12 @@ export async function quetAlbum(
   // Gom: quét hết thì gom ngay; tạm dừng thì máy chủ tự quyết theo luật 12 giờ.
   try {
     patch({ phase: "gom", dang: null });
-    let status = await taiViecQuet(albumId);
+    let status = await taiViecQuet(albumId, 0, !opts.tuDong);
     // Gom khi đã quét HẾT (hoặc album chỉ còn thiếu bước gom). Quét dở thì để
     // lần quét xong mới gom: gom là việc nặng nhất, làm một lần cho trọn.
     if (status.conLai === 0 && status.canGom) {
-      const g = await gomAlbum(albumId);
-      if (!g.ok && !loi) loi = loiGom(g.loi);
+      const g = await gomAlbum(albumId, { tuDong: opts.tuDong });
+      if (!g.ok && !loi && g.loi !== CHO_THU_LAI) loi = loiGom(g.loi);
       status = await taiViecQuet(albumId);
     }
     return { loi, status };

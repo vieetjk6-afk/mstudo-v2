@@ -66,6 +66,36 @@ async function byIds(db: Db, table: string, col: string, ids: string[]): Promise
   return out;
 }
 
+/**
+ * Mã phiên bản dữ liệu của studio cho desktop ("v<số>"), hoặc null khi database
+ * chưa có bảng studio_data_version (chưa chạy SQL) — khi đó dùng hash nội dung như cũ.
+ */
+async function docPhienBan(db: Db, owner: string): Promise<string | null> {
+  const { data, error } = await db.from("studio_data_version").select("version").eq("owner_id", owner).maybeSingle();
+  if (error) return null;
+  return `v${(data as { version?: number } | null)?.version ?? 0}`;
+}
+
+const CHU_KY = new Set(["client_signature", "studio_signature"]);
+let cotHopDong: { cols: string; at: number } | null = null;
+
+/**
+ * Danh sách cột của studio_contracts TRỪ hai cột chữ ký. PostgREST không có cú
+ * pháp "mọi cột trừ X", còn liệt kê tay thì cột thêm sau này sẽ lặng lẽ biến mất
+ * khỏi desktop — nên lấy tên cột từ một dòng (ưu tiên dòng chưa ký, khỏi kéo ảnh
+ * chữ ký về) rồi nhớ 1 giờ trong máy chủ.
+ */
+async function cotHopDongKhongChuKy(db: Db, owner: string): Promise<string> {
+  if (cotHopDong && Date.now() - cotHopDong.at < 3600_000) return cotHopDong.cols;
+  let { data } = await db.from("studio_contracts").select("*").is("client_signature", null).is("studio_signature", null).limit(1);
+  if (!data?.length) ({ data } = await db.from("studio_contracts").select("*").eq("owner_id", owner).limit(1));
+  const row = (data as Row[] | null)?.[0];
+  if (!row) return "*"; // studio chưa có hợp đồng nào: "*" trên 0 dòng không tốn gì
+  const cols = Object.keys(row).filter((k) => !CHU_KY.has(k)).join(",");
+  cotHopDong = { cols, at: Date.now() };
+  return cols;
+}
+
 const QUOTE_STATUS: Record<string, string> = {
   draft: "Nháp", sent: "Đã gửi", viewed: "Khách đã xem", adjust_requested: "Khách xin điều chỉnh",
   accepted: "Đã chốt", converted: "Đã chuyển hợp đồng", expired: "Hết hạn", cancelled: "Đã hủy",
@@ -201,13 +231,16 @@ export async function GET(req: Request) {
     // không cần ảnh chữ ký (data-URL PNG, mỗi cái vài chục KB) → bỏ đi cho nhẹ.
     // Bản tải về để khôi phục (nút trên web, file SaoLuu hằng ngày) vẫn ĐẦY ĐỦ.
     const lite = params.get("lite") === "1";
-    const contracts = (await all(db, "studio_contracts", "*", owner)).map((c) => {
-      if (!lite) return c;
-      const rest = { ...c };
-      delete rest.client_signature;
-      delete rest.studio_signature;
-      return rest;
-    });
+    // Số phiên bản dữ liệu của studio (trigger tăng mỗi khi bảng desktop dùng đổi).
+    // Trùng với số máy đang giữ → 304 NGAY, không đọc bảng nào: trước đây máy chủ
+    // đọc đủ ~20 bảng rồi mới so hash, nên lượt 304 vẫn tốn trọn egress Supabase.
+    const phienBan = lite ? await docPhienBan(db, owner) : null;
+    if (phienBan !== null && params.get("have") === phienBan) {
+      return new NextResponse(null, { status: 304, headers: { "Cache-Control": "no-store" } });
+    }
+    // Bản lite không đọc cột chữ ký (ảnh data-URL, mỗi cái vài chục KB) — bỏ sau
+    // khi đọc thì byte vẫn đã ra khỏi Supabase.
+    const contracts = lite ? await all(db, "studio_contracts", await cotHopDongKhongChuKy(db, owner), owner) : await all(db, "studio_contracts", "*", owner);
     const cIds = contracts.map((c) => S(c.id));
     const quotes = await all(db, "studio_quotes", "*", owner);
     const tables: Record<string, Row[]> = {
@@ -239,7 +272,9 @@ export async function GET(req: Request) {
       // Hash nội dung (không tính exported_at) → desktop gửi lại ?have=<hash>;
       // dữ liệu không đổi thì trả 304 rỗng thay vì cả trăm KB mỗi 5 phút.
       const tablesJson = JSON.stringify(tables);
-      const hash = createHash("sha1").update(tablesJson).digest("hex");
+      // Có số phiên bản thì dùng nó làm mã: lượt sau so được TRƯỚC khi đọc. Đọc số
+      // TRƯỚC dữ liệu nên đổi chen giữa chỉ làm lượt sau tải lại thừa, không sót.
+      const hash = phienBan ?? createHash("sha1").update(tablesJson).digest("hex");
       if (params.get("have") === hash) {
         return new NextResponse(null, { status: 304, headers: { "Cache-Control": "no-store" } });
       }

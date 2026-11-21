@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { fetchAllPhotos } from "@/lib/photos";
+import { fetchAllPhotos, PHOTO_COLS } from "@/lib/photos";
 import { getStudioHost } from "@/lib/studio-site";
 import { effectivePlan, planAllowsCollage, planAllowsDelivery, planAllowsPublicGallery, planAllowsWatermark, type Plan } from "@/lib/plans";
 import AlbumEditor, { type AlbumPick, type CustomerShare, type DeliveryTwin, type LinkedContractInfo } from "./AlbumEditor";
@@ -41,7 +41,7 @@ export default async function AlbumEditPage(
   // sau, nên thông tin album / lượt chọn / cài đặt hiện ngay. Vẫn đọc qua RLS
   // bằng client của người đang đăng nhập — album không đọc được thì notFound()
   // bên dưới chặn trước khi lời hứa được trao đi.
-  const photosP = fetchAllPhotos(supabase, params.id, "*") as Promise<Photo[]>;
+  const photosP = fetchAllPhotos(supabase, params.id, PHOTO_COLS) as Promise<Photo[]>;
 
   // MỌI truy vấn chỉ cần id album / id người dùng chạy MỘT đợt song song — trước
   // đây sáu câu trong số này chạy nối đuôi nhau sau đợt đầu. album_shares đọc
@@ -117,7 +117,7 @@ export default async function AlbumEditPage(
   const twinId = linkedContract?.selection_album_id === params.id ? linkedContract?.gallery_album_id : null;
   const [contractRes, twinRes, { data: catRows }] = await Promise.all([
     linkedContract?.id
-      ? Promise.resolve(supabase.from("studio_contracts").select("*").eq("id", linkedContract.id).maybeSingle())
+      ? docHopDongCuaAlbum(supabase, linkedContract.id as string)
       : Promise.resolve({ data: null }),
     twinId
       ? Promise.resolve(supabase.from("albums").select("id, slug, title, status, phase, is_gallery").eq("id", twinId).maybeSingle())
@@ -251,4 +251,20 @@ export default async function AlbumEditPage(
       storageMonths={owner?.storage_months ?? 6}
     />
   );
+}
+
+/**
+ * Đúng những cột trang này đọc của hợp đồng gắn với album. `select("*")` trước
+ * đây kéo theo cả hai ảnh chữ ký (data-URL, mỗi cái vài chục KB) ở MỖI lần mở
+ * album. Database thiếu cột nào (chưa chạy migration) thì lùi về "*" như cũ.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function docHopDongCuaAlbum(supabase: any, id: string): Promise<{ data: unknown }> {
+  const r = await supabase
+    .from("studio_contracts")
+    .select("zalo_name, code, title, status, album_mode, print_quota, collage_enabled")
+    .eq("id", id)
+    .maybeSingle();
+  if (!r.error) return r;
+  return supabase.from("studio_contracts").select("*").eq("id", id).maybeSingle();
 }

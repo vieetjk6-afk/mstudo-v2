@@ -30,8 +30,16 @@ export type ViecQuet = {
 
 const dem = (db: any, albumId: string) => db.from("photos").select("id", { count: "exact", head: true }).eq("album_id", albumId);
 
-/** Album có cần gom không: đang trong hàng đợi, hoặc có tấm quét SAU lần gom cuối. */
-async function canGomKhong(db: any, albumId: string, daQuet: number): Promise<{ can: boolean; lanCuoi: number | null }> {
+/**
+ * Album có cần gom không: đang trong hàng đợi, hoặc có tấm quét SAU lần gom cuối.
+ *
+ * `gomNgay` = false (bộ tự quét, tự gom khi mở trang): album ĐÃ từng gom thì gom
+ * lại nhiều nhất GOM_LAI_SAU_MS một lần. Mỗi lần gom máy studio đọc toàn bộ vector
+ * khuôn mặt của album (10–50 MB với album cưới), mà desktop đổ ảnh vào album rải
+ * rác cả ngày — mỗi đợt vài tấm mới từng kéo theo một lượt đọc lại cả album.
+ * Studio bấm "Quét" tay thì gom ngay.
+ */
+async function canGomKhong(db: any, albumId: string, daQuet: number, gomNgay = true): Promise<{ can: boolean; lanCuoi: number | null }> {
   const { data: al, error } = await db.from("albums").select("faces_clustered_at").eq("id", albumId).maybeSingle();
   if (error) throw new Error(`doc_album_that_bai: ${error.message}`);
   const lanCuoi = al?.faces_clustered_at ? Date.parse(al.faces_clustered_at as string) : null;
@@ -40,6 +48,7 @@ async function canGomKhong(db: any, albumId: string, daQuet: number): Promise<{ 
   // đọc cả bảng khuôn mặt về rồi mới bị từ chối lúc ghi.
   if (await daDonKhuonMat(db, albumId)) return { can: false, lanCuoi };
   if (lanCuoi === null || !Number.isFinite(lanCuoi)) return { can: true, lanCuoi: null };
+  if (!gomNgay && Date.now() - lanCuoi < GOM_LAI_SAU_MS) return { can: false, lanCuoi };
   /*
    * Mốc gom còn đó không có nghĩa là không còn gì để gom: mẻ CUỐI của album có
    * thể toàn ảnh không mặt (không ghi dòng nào nên không đặt lại hàng đợi),
@@ -55,7 +64,7 @@ async function canGomKhong(db: any, albumId: string, daQuet: number): Promise<{ 
 }
 
 /** Tiến độ + một trang ảnh còn phải quét. `boQua` để bỏ qua những tấm vừa hỏng tạm. */
-export async function layViecQuet(db: any, albumId: string, boQua = 0): Promise<ViecQuet> {
+export async function layViecQuet(db: any, albumId: string, boQua = 0, gomNgay = false): Promise<ViecQuet> {
   const from = Math.max(0, Math.min(Number.isFinite(boQua) ? Math.floor(boQua) : 0, 100_000));
   const [can, cho, ng] = await Promise.all([
     apDungLocCanQuet(dem(db, albumId)),
@@ -76,7 +85,7 @@ export async function layViecQuet(db: any, albumId: string, boQua = 0): Promise<
     conLai = c.count ?? 0;
   }
   const daQuet = Math.max(0, tong - conLai);
-  const g = conLai === 0 ? await canGomKhong(db, albumId, daQuet) : { can: false };
+  const g = conLai === 0 ? await canGomKhong(db, albumId, daQuet, gomNgay) : { can: false };
   return { tong, conLai, daQuet, nguoi: ng.error ? 0 : ng.count ?? 0, canGom: g.can, anh };
 }
 

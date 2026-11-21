@@ -11,6 +11,9 @@
 const PAGE = 1000;
 const PARALLEL = 6;
 
+/** Đúng các cột của kiểu `Photo` (src/lib/types.ts) — không kéo cột nội bộ như faces_scanned_at. */
+export const PHOTO_COLS = "id, album_id, source_id, drive_file_id, name, position, is_video, created_at";
+
 export async function fetchAllPhotos(
   client: any,
   albumId: string,

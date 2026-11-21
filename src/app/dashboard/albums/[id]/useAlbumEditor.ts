@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { studioUrl } from "@/lib/hosts";
 import { isFolderLink, stripExtension, coverImageUrl } from "@/lib/drive";
-import { fetchAllPhotos } from "@/lib/photos";
+import { fetchAllPhotos, PHOTO_COLS } from "@/lib/photos";
 import { storageUntil } from "@/lib/storage-lifecycle";
 import type { AlbumPrintInfo } from "./AlbumPrintPanel";
 import type { AlbumCollageInfo } from "./AlbumCollageCard";
@@ -562,7 +562,7 @@ export function useAlbumEditor({
     setSyncing(false);
     if (!res.ok) return flash(data.error ?? t("error"));
 
-    const fresh = await fetchAllPhotos(supabase, album.id, "*");
+    const fresh = await fetchAllPhotos(supabase, album.id, PHOTO_COLS);
     photosReloadedAt.current = Date.now();
     setPhotos(fresh as Photo[]);
     setPhotosLoading(false);

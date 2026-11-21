@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { batDauQuetTay, gomAlbum, loiGom, quetAlbum, taiViecQuet, xongQuetTay, type FaceScanStatus } from "@/lib/face-local-runner";
+import { batDauQuetTay, CHO_THU_LAI, gomAlbum, loiGom, quetAlbum, taiViecQuet, xongQuetTay, type FaceScanStatus } from "@/lib/face-local-runner";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    QUÉT KHUÔN MẶT TRÊN MÁY NÀY — thẻ trong trang album.
@@ -42,9 +42,11 @@ export function useFaceLocalScan(albumId: string): FaceScanView & { batDau: () =
         let loi: string | null = null;
         if (s.canGom) {
           if (alive) setV((o) => ({ ...o, phase: "gom", status: s }));
-          const g = await gomAlbum(albumId);
+          // Tự gom khi MỞ TRANG là lượt tự động: lần trước vừa hỏng thì chờ, bấm
+          // "Quét" để thử ngay.
+          const g = await gomAlbum(albumId, { tuDong: true });
           if (g.ok && typeof g.nguoi === "number") s = { ...s, nguoi: g.nguoi, canGom: false };
-          else if (!g.ok) loi = loiGom(g.loi);
+          else if (!g.ok && g.loi !== CHO_THU_LAI) loi = loiGom(g.loi);
         }
         if (alive) setV((o) => ({ ...o, phase: "nghi", status: s, loi }));
       } catch (e) {

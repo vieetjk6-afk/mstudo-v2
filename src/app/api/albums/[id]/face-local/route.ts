@@ -33,10 +33,25 @@ export const maxDuration = 300;
  * khoá dịch vụ. Album id chỉ lấy từ URL; mọi photoId trong lô đều bị đối chiếu
  * với album đó — client xấu chỉ làm bẩn được album của chính mình.
  */
+/**
+ * Kết quả kiểm quyền + gói đã ĐẠT, nhớ trong máy chủ theo (người, album).
+ *
+ * Vòng quét gọi route này mỗi mẻ 20 ảnh — album 1.500 ảnh là ~100 lượt, mỗi lượt
+ * ba câu đọc (album qua RLS, chủ album, gói) chỉ để trả lại đúng một câu trả lời.
+ * Chỉ nhớ lượt ĐẠT, 5 phút: bị thu quyền / hết gói thì chậm nhất 5 phút sau mới
+ * bị chặn, và ghi vẫn chỉ vào đúng album người đó vừa được phép.
+ * Đăng nhập (requireUser) vẫn kiểm MỌI lượt.
+ */
+const DA_QUA_CUA = new Map<string, number>();
+const NHO_CUA_MS = 5 * 60_000;
+
 async function vaoCua(albumId: string): Promise<{ loi: NextResponse } | { db: ReturnType<typeof createAdminClient>; userId: string }> {
-  const supabase = await createClient();
   const user = await requireUser();
   if (!user) return { loi: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  const khoa = `${user.id}:${albumId}`;
+  const luc = DA_QUA_CUA.get(khoa);
+  if (luc && Date.now() - luc < NHO_CUA_MS) return { db: createAdminClient(), userId: user.id };
+  const supabase = await createClient();
   const { data } = await supabase.from("albums").select("id").eq("id", albumId).maybeSingle();
   if (!data) return { loi: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   const db = createAdminClient();
@@ -44,6 +59,8 @@ async function vaoCua(albumId: string): Promise<{ loi: NextResponse } | { db: Re
   if (!(await chuAlbumDuocTimMat(db, al?.owner_id))) {
     return { loi: NextResponse.json({ ok: false, error: "goi_khong_co_tinh_nang" }, { status: 403 }) };
   }
+  if (DA_QUA_CUA.size > 2000) DA_QUA_CUA.clear();
+  DA_QUA_CUA.set(khoa, Date.now());
   return { db, userId: user.id };
 }
 
@@ -59,9 +76,12 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
   if ("loi" in cua) return cua.loi;
   // 120 lượt/phút: vòng quét hỏi một trang mỗi ~20 ảnh, thừa cho máy nhanh nhất.
   if (!rateLimit(`face-local-get:${cua.userId}`, 120, 60_000)) return NextResponse.json({ error: "rate_limited" }, { status: 429 });
-  const soTrang = Number(new URL(req.url).searchParams.get("so") ?? 0);
+  const q = new URL(req.url).searchParams;
+  const soTrang = Number(q.get("so") ?? 0);
+  // gom=ngay: studio bấm quét tay — bỏ luật "gom lại nhiều nhất 12 giờ một lần".
+  const gomNgay = q.get("gom") === "ngay";
   try {
-    return NextResponse.json({ ok: true, mayChuQuet: faceServerScanEnabled(), ...(await layViecQuet(cua.db, id, soTrang)) });
+    return NextResponse.json({ ok: true, mayChuQuet: faceServerScanEnabled(), ...(await layViecQuet(cua.db, id, soTrang, gomNgay)) });
   } catch (e) {
     return loiJson(e);
   }

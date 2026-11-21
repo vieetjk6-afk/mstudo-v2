@@ -743,5 +743,44 @@ if (first) {
   );
 }
 
+// ── Số phiên bản dữ liệu cho desktop (phien_ban_du_lieu_desktop.sql) ───────
+// Desktop trả 304 mà không đọc bảng nào khi số này không đổi — nên trigger phải
+// tăng ở MỌI thay đổi desktop thấy được, và KHÔNG tăng ở cột album desktop không đọc.
+{
+  const CHU = "00000000-0000-0000-0000-00000000dd01";
+  const so = () => q("moi", `select coalesce((select version from public.studio_data_version where owner_id = '${CHU}'), 0)::text`);
+  q(
+    "moi",
+    "set session_replication_role = replica; " +
+      `insert into auth.users (id, email) values ('${CHU}', 'pb@test') on conflict do nothing; ` +
+      `insert into public.profiles (id, email) values ('${CHU}', 'pb@test') on conflict do nothing; ` +
+      `insert into public.albums (id, owner_id, slug, title) values ('00000000-0000-0000-0000-00000000dd0a', '${CHU}', 'pb-album', 'A') on conflict do nothing`
+  );
+  const s0 = Number(so());
+  q("moi", `insert into public.studio_contracts (id, owner_id, client_token) values ('00000000-0000-0000-0000-00000000dd02', '${CHU}', 'pb-tok')`);
+  const s1 = Number(so());
+  ok("Thêm hợp đồng → tăng số phiên bản", s1 === s0 + 1, `${s0} → ${s1}`);
+  q("moi", `insert into public.contract_items (contract_id) values ('00000000-0000-0000-0000-00000000dd02')`);
+  const s2 = Number(so());
+  ok("Thêm hạng mục hợp đồng (bảng con, tra chủ qua contract_id) → tăng", s2 === s1 + 1, `${s1} → ${s2}`);
+  q("moi", `insert into public.studio_quotes (id, owner_id, client_token) values ('00000000-0000-0000-0000-00000000dd03', '${CHU}', 'pb-q')`);
+  q("moi", `insert into public.quote_items (quote_id) values ('00000000-0000-0000-0000-00000000dd03')`);
+  const s3 = Number(so());
+  ok("Báo giá + dòng báo giá (tra chủ qua quote_id) → tăng 2", s3 === s2 + 2, `${s2} → ${s3}`);
+  q("moi", `update public.albums set title = 'B' where id = '00000000-0000-0000-0000-00000000dd0a'`);
+  ok("Sửa cột album desktop KHÔNG đọc → không tăng", Number(so()) === s3);
+  q("moi", `update public.albums set phase = 'delivery' where id = '00000000-0000-0000-0000-00000000dd0a'`);
+  const s4 = Number(so());
+  ok("Đổi giai đoạn album → tăng", s4 === s3 + 1, `${s3} → ${s4}`);
+  q("moi", `delete from public.studio_contracts where id = '00000000-0000-0000-0000-00000000dd02'`);
+  ok("Xoá hợp đồng (kéo theo hạng mục) → tăng, không lỗi", Number(so()) > s4);
+  // RLS bật, không policy: kể cả khi Supabase cấp quyền bảng mặc định cho
+  // anon / authenticated, họ vẫn đọc ra 0 dòng — chỉ service-role đọc được.
+  ok(
+    "…bật RLS, không policy (chỉ service-role đọc)",
+    q("moi", "select relrowsecurity::text || '/' || (select count(*) from pg_policies where tablename = 'studio_data_version')::text from pg_class where oid = 'public.studio_data_version'::regclass") === "true/0"
+  );
+}
+
 console.log(fail === 0 ? "\nTất cả kiểm thử đạt" : `\n${fail} kiểm thử KHÔNG đạt`);
 process.exit(fail === 0 ? 0 : 1);

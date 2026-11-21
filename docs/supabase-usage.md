@@ -197,3 +197,25 @@ Kiểm thử: `npm run test:face-don`.
 Cùng đợt: đặt `SYSTEM_BACKUP_EVERY_DAYS=7` trên Vercel. Cron sao lưu đọc toàn bộ
 database (trừ `album_faces`) qua API mỗi lượt — sao lưu hằng đêm tốn khoảng 2–3
 GB egress mỗi tháng.
+
+## Đợt giảm egress thứ ba (21/11/2026)
+
+Biểu đồ egress theo ngày: nền 50–100 MB/ngày, xen các ngày đột biến 250–670 MB.
+Log trùng khớp hình dạng (tới ~200 nghìn request/ngày lúc đột biến), log 60 phút
+cho thấy chủ yếu là vòng quét khuôn mặt + desktop + `/auth/v1/user`.
+
+| Chỗ | Trước | Nay |
+|---|---|---|
+| Desktop `/api/desktop/export?type=backup&lite=1` (mỗi 5 phút, kể cả thu khay) | đọc đủ ~20 bảng (cả ảnh chữ ký) rồi mới so hash để trả 304 | đọc `studio_data_version` (1 dòng) trước — trigger tăng số mỗi khi bảng desktop dùng đổi; trùng số → 304 không đọc bảng nào. Bản lite không đọc cột chữ ký |
+| Desktop: mọi request | UPDATE `desktop_devices.last_sync_at` mỗi lượt | nhiều nhất 10 phút một lần |
+| Quét khuôn mặt trên máy studio | mẻ 8 ảnh, mỗi mẻ ~10 lượt gọi (3 lượt chỉ để kiểm quyền + gói) | mẻ 20 ảnh; kết quả kiểm quyền + gói nhớ 5 phút trong máy chủ |
+| Gom khuôn mặt tự động | gom lại mỗi khi có tấm mới quét; gom hỏng thì mỗi lần mở dashboard / mỗi 30 phút đọc lại toàn bộ vector | lượt tự động gom lại nhiều nhất 12 giờ một lần, gom hỏng thì chờ 12 giờ; bấm "Quét" tay vẫn gom ngay |
+| Trình sửa album, trang lựa chọn | `select("*")` trên `photos` + hợp đồng gắn album (kèm ảnh chữ ký) | đúng các cột dùng |
+| `/api/img` | tham số lạ (`&x=1`…) lách được CDN, mỗi lượt raw/orig kéo nguyên ảnh qua Vercel | tham số lạ → 308 về URL chuẩn; raw/orig giới hạn 600 lượt/phút/IP |
+| Chat vieetjk.com | hỏi tin mới mỗi 6 giây từ lúc khung chat tự mở | chỉ hỏi sau khi khách đã nhắn |
+
+Chưa làm: `/auth/v1/user` ở mọi API (getSessionUser → getUser). Đổi sang
+`getClaims()` cần project bật JWT Signing Keys (asymmetric) và đụng tới cổng xác
+thực 2 lớp (`needsMfa` đọc danh sách yếu tố từ getUser) — để riêng một đợt.
+
+Kiểm thử: `npm run test:sql-chay-that` (trigger phiên bản), `npm run test:face-local`.
