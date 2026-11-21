@@ -322,7 +322,18 @@ const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_
   ok("không tự quét trên điện thoại / máy ít RAM / tiết kiệm dữ liệu", /pointer: coarse/.test(src) && /deviceMemory/.test(src) && /saveData/.test(src));
   ok("chỉ một tab quét: Web Locks XẾP HÀNG (không ifAvailable — tab sau phải tiếp quản được)", /locks\.request\(KHOA_TAB, \{ signal: phien\.signal \}/.test(src) && !/ifAvailable/.test(src));
   ok("nhường khi studio bấm quét tay", /nghePhaiNhuong/.test(src) && /dangQuetTay\(\)/.test(src));
-  ok("chạy nhẹ: nghỉ theo tỉ lệ thời gian làm (≥ 1 lần → máy bận ≤ ~50%)", /tiLeNghi: TI_LE_NGHI/.test(src) && Number(src.match(/const TI_LE_NGHI = ([\d.]+)/)?.[1]) >= 1);
+  ok(
+    "chạy nhẹ: nghỉ theo tỉ lệ thời gian làm (≥ 1 lần → máy bận ≤ ~50%; tab ẩn ≥ 2 lần)",
+    /document\.hidden \? TI_LE_NGHI_KHI_AN : TI_LE_NGHI/.test(src) &&
+      Number(src.match(/const TI_LE_NGHI = ([\d.]+)/)?.[1]) >= 1 &&
+      Number(src.match(/const TI_LE_NGHI_KHI_AN = ([\d.]+)/)?.[1]) >= 2
+  );
+  ok(
+    "chỉ quét khi rảnh: chờ khi studio đang thao tác trên trang (≥ 10 giây không bấm/gõ/cuộn)",
+    /choRanh,/.test(src) && /pointerdown/.test(src) && /keydown/.test(src) && Number(src.match(/const RANH_SAU_MS = ([\d_]+)/)?.[1].replace(/_/g, "")) >= 10_000
+  );
+  const emb = readFileSync("src/lib/face-embed-browser.ts", "utf8");
+  ok("giải mã JPEG trong Web Worker, có đường lùi về luồng chính", /jpeg-giai-ma\.worker\.ts/.test(emb) && /giaiMaTaiCho/.test(emb));
   const runner = readFileSync("src/lib/face-local-runner.ts", "utf8");
   ok("…khoảng nghỉ tính từ thời gian nhận diện thật, có trần", /lamMs \* tiLeNghi/.test(runner) && /Math\.min\(10_000/.test(runner));
   ok("có nút tạm dừng và tắt trên máy này", /Tạm dừng/.test(src) && /Tắt tự quét trên máy này/.test(src));

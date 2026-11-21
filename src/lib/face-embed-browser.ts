@@ -134,9 +134,72 @@ export async function napMoHinh(boDo: BoDo = "ssd", onProgress?: (p: TienDoNap) 
 export async function scanJpegBrowser(bytes: Uint8Array): Promise<ScannedFace[]> {
   await napMoHinh("ssd");
   const { faceapi, tf } = await loadEngine();
+  const dec = await giaiMaJpeg(bytes);
+  return quetRgba(faceapi, tf, dec.data, dec.width, dec.height);
+}
+
+type AnhRgba = { data: Uint8Array; width: number; height: number };
+
+/** Giải mã ngay trên luồng chính — đường lùi khi không có Worker. */
+async function giaiMaTaiCho(bytes: Uint8Array): Promise<AnhRgba> {
   const jpeg: any = await import("jpeg-js");
   const dec = (jpeg.default ?? jpeg).decode(bytes, { useTArray: true, maxMemoryUsageInMB: 512 });
-  return quetRgba(faceapi, tf, dec.data as Uint8Array, dec.width as number, dec.height as number);
+  return { data: dec.data as Uint8Array, width: dec.width as number, height: dec.height as number };
+}
+
+/* Giải mã trong Web Worker (src/lib/jpeg-giai-ma.worker.ts) để trang không đứng
+   hình mỗi tấm. Một worker dùng chung cả phiên; hỏng (CSP, trình duyệt cũ…) thì
+   lùi hẳn về luồng chính cho phần còn lại của phiên — chậm UI nhưng vẫn quét. */
+let worker: Worker | null = null;
+let workerHong = false;
+let soYeuCau = 0;
+const choKetQua = new Map<number, { res: (a: AnhRgba) => void; rej: (e: Error) => void }>();
+
+function layWorker(): Worker | null {
+  if (workerHong || typeof Worker === "undefined") return null;
+  if (worker) return worker;
+  try {
+    const w = new Worker(new URL("./jpeg-giai-ma.worker.ts", import.meta.url), { type: "module" });
+    w.onmessage = (e: MessageEvent<{ id: number; data?: Uint8Array; width?: number; height?: number; loi?: string }>) => {
+      const cho = choKetQua.get(e.data.id);
+      if (!cho) return;
+      choKetQua.delete(e.data.id);
+      if (e.data.loi || !e.data.data) cho.rej(new Error(e.data.loi || "giai_ma_hong"));
+      else cho.res({ data: e.data.data, width: e.data.width!, height: e.data.height! });
+    };
+    w.onerror = () => {
+      // Worker chết (không nạp được file…): trả lỗi cho mọi tấm đang chờ để chúng
+      // tự lùi về luồng chính, và thôi dùng worker cả phiên.
+      workerHong = true;
+      worker = null;
+      for (const [, cho] of choKetQua) cho.rej(new Error("worker_hong"));
+      choKetQua.clear();
+      w.terminate();
+    };
+    worker = w;
+    return w;
+  } catch {
+    workerHong = true;
+    return null;
+  }
+}
+
+async function giaiMaJpeg(bytes: Uint8Array): Promise<AnhRgba> {
+  const w = layWorker();
+  if (!w) return giaiMaTaiCho(bytes);
+  try {
+    return await new Promise<AnhRgba>((res, rej) => {
+      const id = ++soYeuCau;
+      choKetQua.set(id, { res, rej });
+      // Gửi BẢN SAO: người gọi còn giữ `bytes` (không chuyển quyền buffer của họ).
+      w.postMessage({ id, bytes: bytes.slice() });
+    });
+  } catch (e) {
+    // JPEG hỏng thật thì luồng chính cũng hỏng y hệt — để nó ném đúng lỗi.
+    if (e instanceof Error && e.message === "worker_hong") return giaiMaTaiCho(bytes);
+    if (workerHong) return giaiMaTaiCho(bytes);
+    throw e;
+  }
 }
 
 /** Kết quả tải một thumbnail — cùng bộ lý do với `fetchThumbChiTiet` của máy chủ. */
