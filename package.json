@@ -133,7 +133,8 @@
     "ui:luoi-anh": "node scripts/do-luoi-anh.mjs",
     "video:sepay": "node scripts/xuat-video-sepay.mjs public/huong-dan/sepay.mp4",
     "video:qua-cuoi": "node scripts/xuat-video-qua-cuoi.mjs public/huong-dan/qua-cuoi-doc.mp4 && node scripts/xuat-video-qua-cuoi.mjs public/huong-dan/qua-cuoi-ngang.mp4 --ngang",
-    "postinstall": "node scripts/chep-mediapipe.mjs"
+    "postinstall": "node scripts/chep-mediapipe.mjs",
+    "test:tdz": "node desktop/test/tdz-ham-goi-som.mjs"
   },
   "dependencies": {
     "@fontsource/alex-brush": "^5.3.0",
