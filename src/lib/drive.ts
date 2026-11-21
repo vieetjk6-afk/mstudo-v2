@@ -36,6 +36,26 @@ export function extractFolderId(url: string): string | null {
   return null;
 }
 
+/**
+ * Link có phải link Google Drive dùng được không: host drive/docs.google.com
+ * và tách được id thư mục/file (hoặc chỉ là id trần). Trước đây ô "Thêm nguồn"
+ * nhận mọi thứ — "https://example.com/abc" được lưu thành nguồn 0 ảnh rồi lộ ra
+ * trang khách thành nút "Tải ảnh gốc" mở trang lạ.
+ */
+export function isDriveUrl(url: string | null | undefined): boolean {
+  const t = (url ?? "").trim();
+  if (!t) return false;
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(t)) return true;
+  let host = "";
+  try {
+    host = new URL(t).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  if (host !== "drive.google.com" && host !== "docs.google.com") return false;
+  return !!(extractFolderId(t) || extractFileId(t));
+}
+
 /** Does this link look like a folder link? */
 export function isFolderLink(url: string): boolean {
   return /\/folders\//.test(url) || /\/drive\/u\/\d+\/folders\//.test(url);

@@ -91,7 +91,9 @@ export async function POST(req: Request) {
       {
         error: notFound
           ? "Không đọc được thư mục này: link chưa ở chế độ “Bất kỳ ai có đường liên kết”. Hãy bấm “Kết nối Google Drive” một lần để đọc được cả thư mục riêng tư."
-          : oauthError ?? raw,
+          : /invalid link/.test(raw)
+            ? "Link chưa đúng — dán link thư mục hoặc ảnh Google Drive."
+            : oauthError ?? raw,
       },
       { status: 200 }
     );

@@ -1000,6 +1000,27 @@ export function useContractEditor(props: ContractEditorProps) {
    * autosave, xem ghi chú ở autosaveContract). Lỗi thì trả ô chọn về giá trị cũ.
    */
   async function saveAlbumLink(k: "selection_album_id" | "gallery_album_id", id: string) {
+    // Một album chỉ thuộc MỘT hợp đồng: album đang gắn hợp đồng khác thì hỏi rồi
+    // gỡ khỏi hợp đồng cũ — trước đây gắn luôn, album thành của hai hợp đồng
+    // (khách hợp đồng kia vẫn mở được album này từ trang của họ).
+    if (id) {
+      const { data: others } = await supabase
+        .from("studio_contracts")
+        .select("id, code, title")
+        .eq(k, id)
+        .neq("id", contract.id)
+        .limit(3);
+      const list = (others ?? []) as { id: string; code: string | null; title: string }[];
+      if (list.length) {
+        const names = list.map((o) => o.code || o.title).join(", ");
+        if (!confirm(`Album này đang gắn với hợp đồng ${names}. Chuyển album sang hợp đồng này (gỡ khỏi hợp đồng cũ)?`)) return;
+        const { error: unErr } = await supabase.from("studio_contracts").update({ [k]: null }).in("id", list.map((o) => o.id));
+        if (unErr) {
+          toast(`Chưa gỡ được album khỏi hợp đồng cũ: ${unErr.message}`);
+          return;
+        }
+      }
+    }
     const prev = f[k];
     setF((p) => ({ ...p, [k]: id }));
     const { error } = await supabase.from("studio_contracts").update({ [k]: id || null }).eq("id", contract.id);

@@ -45,7 +45,7 @@ export function useNewAlbum() {
 
     const { data, error } = await supabase
       .from("albums")
-      .insert({ owner_id: user.id, title, slug: slugify(title) })
+      .insert({ owner_id: user.id, title: title.trim(), slug: slugify(title.trim()) })
       .select("id")
       .single();
 

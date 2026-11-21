@@ -98,9 +98,7 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
       files = resolved.files;
       folderName = resolved.folderName;
     } catch (e) {
-      errors.push(
-        `${source.name}: ${e instanceof Error ? e.message : "unknown error"}`
-      );
+      errors.push(`${source.name}: ${friendlyDriveError(e)}`);
       continue;
     }
 
@@ -161,4 +159,17 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
   // đồng bộ xong thì bỏ ngay, khách thấy ảnh mới ở lượt mở kế tiếp.
   revalidateAlbumData(albumId);
   return NextResponse.json({ total, added, errors });
+}
+
+/**
+ * Lỗi Drive cho NGƯỜI dùng đọc — trước đây toast hiện nguyên JSON của Google
+ * ("Drive API error (404): {\n \"error\": {…"), studio không biết phải làm gì.
+ */
+function friendlyDriveError(e: unknown): string {
+  const m = e instanceof Error ? e.message : String(e ?? "");
+  if (/\(404\)|not ?found/i.test(m)) return "không mở được thư mục/ảnh — kiểm tra lại link";
+  if (/\(403\)|forbidden|permission|insufficient/i.test(m)) return "thư mục chưa chia sẻ “Bất kỳ ai có đường liên kết”";
+  if (/\(429\)|rate|quota/i.test(m)) return "Google đang giới hạn lượt đọc — thử lại sau ít phút";
+  if (/no.?id|invalid|link/i.test(m)) return "link chưa đúng dạng thư mục Google Drive";
+  return m.length > 120 ? `${m.slice(0, 117)}…` : m || "lỗi không rõ";
 }

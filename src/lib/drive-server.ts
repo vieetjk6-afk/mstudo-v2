@@ -157,7 +157,8 @@ export async function resolveSource(
 ): Promise<ResolvedSource> {
   if (kind === "folder") {
     const folderId = extractFolderId(url);
-    if (!folderId) return { folderName: null, files: [] };
+    // Ném lỗi thay vì lặng lẽ trả 0 ảnh: studio phải thấy "link chưa đúng".
+    if (!folderId) throw new Error("invalid link: no folder id");
     const [meta, files] = await Promise.all([
       getFileMeta(folderId),
       listFolderImages(folderId),
@@ -168,7 +169,7 @@ export async function resolveSource(
   // kind === "file" — but the link may actually point to a folder (e.g. an
   // "open?id=" link that doesn't contain "/folders/"). Detect via metadata.
   const fileId = extractFileId(url);
-  if (!fileId) return { folderName: null, files: [] };
+  if (!fileId) throw new Error("invalid link: no file id");
 
   const meta = await getFileMeta(fileId);
   if (meta) {
