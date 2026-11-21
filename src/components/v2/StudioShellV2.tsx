@@ -689,7 +689,7 @@ export default function StudioShellV2({
               </div>
             )}
 
-            <Link
+            <Link prefetch={false}
               href="/dashboard/studio/notifications"
               className="v2-icon relative flex h-9 w-9 flex-none items-center justify-center rounded-full"
               aria-label="Thông báo"

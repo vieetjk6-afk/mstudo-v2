@@ -76,7 +76,7 @@ export default function MobileTabBarV2({ groups, pathname, creates, pins = [] }:
             </div>
             <div className="flex flex-col gap-1">
               {creates.map((c) => (
-                <Link key={c.href} href={c.href} className="v2-menu flex items-center gap-3 rounded-[12px] px-2 py-3">
+                <Link prefetch={false} key={c.href} href={c.href} className="v2-menu flex items-center gap-3 rounded-[12px] px-2 py-3">
                   <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[12px]" style={{ background: "var(--acS)", color: "var(--ac)" }}>
                     <c.icon size={19} />
                   </span>

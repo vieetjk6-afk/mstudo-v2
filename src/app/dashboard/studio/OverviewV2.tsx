@@ -72,13 +72,13 @@ function QrButton({ bank, amount, addInfo }: { bank: BankInfo; amount: number; a
 function TaskActions({ t, bank }: { t: OvTask; bank: BankInfo }) {
   const a: OvAct | undefined = t.act;
   const open = (
-    <Link href={t.href} className={iconBtn()} aria-label={t.cta} title={t.cta}>
+    <Link prefetch={false} href={t.href} className={iconBtn()} aria-label={t.cta} title={t.cta}>
       <ChevronRight size={18} />
     </Link>
   );
   if (!a)
     return (
-      <Link href={t.href} className={btn("secondary", "sm")}>
+      <Link prefetch={false} href={t.href} className={btn("secondary", "sm")}>
         {t.cta}
       </Link>
     );
@@ -116,7 +116,7 @@ function TaskRow({ t, bank }: { t: OvTask; bank: BankInfo }) {
         <Icon size={17} />
       </span>
       <div className="min-w-0">
-        <Link href={t.href} className="block text-[14px] font-semibold leading-snug hover:underline" style={{ textWrap: "pretty" }}>
+        <Link prefetch={false} href={t.href} className="block text-[14px] font-semibold leading-snug hover:underline" style={{ textWrap: "pretty" }}>
           {t.title}
         </Link>
         <p className="mt-0.5 text-[12.5px] leading-snug" style={{ color: "var(--tx3)" }}>
@@ -212,7 +212,7 @@ function ScheduleList({ rows, today }: { rows: OvScheduleRow[]; today: string })
             const isToday = r.event_date === today;
             const unsigned = r.status === "draft" || r.status === "sent";
             return (
-              <Link key={r.id} href={`/dashboard/studio/contracts/${r.id}`} className="v2-row v2-row-link items-start">
+              <Link prefetch={false} key={r.id} href={`/dashboard/studio/contracts/${r.id}`} className="v2-row v2-row-link items-start">
                 <span
                   className="v2-num w-[46px] flex-none pt-px text-[13px] font-bold"
                   style={{ color: isToday ? "var(--ac)" : "var(--tx2)" }}
@@ -274,10 +274,10 @@ export default function OverviewV2(d: OverviewV2Data) {
         }
         actions={
           <>
-            <Link href="/dashboard/studio/quotes/new" className={btn("secondary")}>
+            <Link prefetch={false} href="/dashboard/studio/quotes/new" className={btn("secondary")}>
               <ReceiptText size={16} /> Báo giá mới
             </Link>
-            <Link href="/dashboard/studio/contracts/new" className={btn("primary")}>
+            <Link prefetch={false} href="/dashboard/studio/contracts/new" className={btn("primary")}>
               <Plus size={17} /> Hợp đồng mới
             </Link>
           </>
@@ -375,7 +375,7 @@ export default function OverviewV2(d: OverviewV2Data) {
                 : "Khách đã thanh toán đủ mọi hợp đồng"
             }
             actions={
-              <Link href="/dashboard/studio/contracts" className={btn("ghost", "sm")}>
+              <Link prefetch={false} href="/dashboard/studio/contracts" className={btn("ghost", "sm")}>
                 Hợp đồng <ChevronRight size={15} />
               </Link>
             }
@@ -414,7 +414,7 @@ export default function OverviewV2(d: OverviewV2Data) {
             title="Lịch chụp"
             desc={`${todayCount} buổi hôm nay · ${d.schedule.length - todayCount} buổi sắp tới`}
             actions={
-              <Link href="/dashboard/studio/calendar" className={btn("ghost", "sm")}>
+              <Link prefetch={false} href="/dashboard/studio/calendar" className={btn("ghost", "sm")}>
                 Xem lịch <ChevronRight size={15} />
               </Link>
             }
@@ -528,7 +528,7 @@ export default function OverviewV2(d: OverviewV2Data) {
                   </div>
                   <div className="flex flex-none items-center gap-2">
                     <MessengerButton label="Gửi lời chúc" message={m.message} className={btn("secondary", "sm")} />
-                    <Link href={`/dashboard/studio/contracts/${m.contractId}`} className={iconBtn()} aria-label="Mở hợp đồng" title="Mở hợp đồng">
+                    <Link prefetch={false} href={`/dashboard/studio/contracts/${m.contractId}`} className={iconBtn()} aria-label="Mở hợp đồng" title="Mở hợp đồng">
                       <ChevronRight size={18} />
                     </Link>
                   </div>
@@ -582,10 +582,10 @@ export function OverviewBookingV2(d: OverviewBookingV2Data) {
         desc={`${dayName(d.today)}, ${fmtDate(d.today)} · Quản lý lịch chụp và yêu cầu đặt lịch của khách`}
         actions={
           <>
-            <Link href="/dashboard/site" className={btn("secondary")}>
+            <Link prefetch={false} href="/dashboard/site" className={btn("secondary")}>
               <Globe size={16} /> Website riêng
             </Link>
-            <Link href="/dashboard/studio/bookings" className={btn("primary")}>
+            <Link prefetch={false} href="/dashboard/studio/bookings" className={btn("primary")}>
               <CalendarDays size={16} /> Đặt lịch
             </Link>
           </>
@@ -641,7 +641,7 @@ export function OverviewBookingV2(d: OverviewBookingV2Data) {
 
           <Section id="lich-chup" icon={CalendarDays} title="Lịch chụp sắp tới" desc={d.upcoming.length > 0 ? `${d.upcomingCount ?? d.upcoming.length} buổi chụp đã có ngày` : "Chưa có lịch chụp nào sắp tới"} flush>
             {d.upcoming.length === 0 ? (
-              <Empty compact icon={CalendarDays} title="Chưa có lịch chụp nào sắp tới" action={<Link href="/dashboard/studio/bookings" className={btn("secondary", "sm")}>Mở trang đặt lịch</Link>} />
+              <Empty compact icon={CalendarDays} title="Chưa có lịch chụp nào sắp tới" action={<Link prefetch={false} href="/dashboard/studio/bookings" className={btn("secondary", "sm")}>Mở trang đặt lịch</Link>} />
             ) : (
               <div className="pb-1.5">
                 {days.map((g) => (
@@ -688,7 +688,7 @@ export function OverviewBookingV2(d: OverviewBookingV2Data) {
           <Section icon={Sparkles} title="Nâng cấp lên Studio" desc="Mở khoá hợp đồng, tài chính, đội ngũ và toàn bộ tính năng studio chuyên nghiệp.">
             <div className="flex flex-wrap items-center gap-3">
               <StudioTrialButton used={d.trialUsed} />
-              <Link href="/dashboard/upgrade" className={btn("secondary", "sm")}>
+              <Link prefetch={false} href="/dashboard/upgrade" className={btn("secondary", "sm")}>
                 Xem gói Studio
               </Link>
             </div>
