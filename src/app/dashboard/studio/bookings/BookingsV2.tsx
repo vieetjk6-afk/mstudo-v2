@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   Archive, CalendarCheck, CalendarDays, Check, CheckCircle, Copy, ExternalLink, FilePlus, Gift, Inbox, Landmark,
-  MessageCircle, MessageSquare, Pencil, Phone, Save, Search, Trash2, UserPlus, XCircle, FileCheck2,
+  MessageCircle, MessageSquare, Pencil, Phone, ReceiptText, Save, Search, Trash2, UserPlus, XCircle, FileCheck2,
 } from "lucide-react";
 import { DEPOSIT_STATUS_LABEL, DEPOSIT_STATUS_TONE } from "@/lib/booking-deposit";
 import { messengerUrl } from "@/components/MessengerButton";
@@ -70,6 +70,11 @@ export default function BookingsV2(props: BookingsProps) {
   const depositWaiting = list.filter((b) => b.deposit_status === "paid" && b.status !== "archived").length;
 
   const menuFor = (b: StudioBooking): MenuItem[] => [
+    // Khách cần xem giá trước khi chốt → báo giá điền sẵn khách, ngày, gói từ
+    // yêu cầu (trước đây phải gõ lại hết ở màn Báo giá mới).
+    ...(b.status !== "archived" && b.status !== "declined"
+      ? ([{ label: "Báo giá từ yêu cầu", hint: "Điền sẵn khách, ngày, gói", icon: ReceiptText, href: `/dashboard/studio/quotes/new?booking=${b.id}` }, "divider"] as MenuItem[])
+      : []),
     ...(canAnswer(b)
       ? ([
           { label: "Nhận lịch", icon: CheckCircle, disabled: busy === b.id, onClick: () => void updateStatus(b.id, "accepted") },

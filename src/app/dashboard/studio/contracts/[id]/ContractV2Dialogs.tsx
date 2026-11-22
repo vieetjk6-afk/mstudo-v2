@@ -46,15 +46,15 @@ export function SendModal({ ed, open, onClose }: { ed: Ed; open: boolean; onClos
       {ed.f.status === "draft" && (
         <div className="mt-3">
           <Callout
-            tone="blue"
-            title="Gửi xong rồi?"
+            tone="amber"
+            title="Gửi xong thì đánh dấu “Đã gửi”"
             action={
-              <button type="button" className={btn("secondary", "sm")} onClick={() => ed.changeStatus("sent")}>
-                Chuyển sang chờ duyệt
+              <button type="button" className={btn("primary", "sm")} onClick={() => ed.changeStatus("sent")}>
+                Đánh dấu đã gửi
               </button>
             }
           >
-            Đổi trạng thái để nhớ là đang chờ khách xem và ký.
+            Hợp đồng còn nháp: Tổng quan không nhắc “khách chưa ký”, và hợp đồng sinh từ báo giá chỉ mở cho khách ký sau bước này.
           </Callout>
         </div>
       )}

@@ -98,6 +98,39 @@ export default function ContractV2Overview({ ctx }: { ctx: V2Ctx }) {
       action: { label: "Ghi thu", run: () => ctx.openCollect(p.id) },
     });
   }
+  // Đã ký mà chưa có đồng nào — kể cả khi đợt cọc chưa đặt hạn (khi đó mục
+  // "quá hạn" ở trên không bắt được).
+  const firstUnpaid = ed.plan.find((p) => !p.paid);
+  if (live && contract.client_signed_at && ed.collected <= 0 && ed.balance > 0 && f.status !== "completed")
+    todos.push({
+      key: "nodeposit",
+      tone: "amber",
+      icon: Wallet,
+      title: "Khách đã ký nhưng chưa nhận cọc",
+      sub: firstUnpaid ? `${firstUnpaid.label} · ${vnd(firstUnpaid.amount)}${firstUnpaid.due_date ? ` · hạn ${fmtDate(firstUnpaid.due_date)}` : " · chưa đặt hạn"}` : `Còn ${vnd(ed.balance)}`,
+      action: firstUnpaid ? { label: "Ghi thu", run: () => ctx.openCollect(firstUnpaid.id) } : { label: "Thanh toán", run: () => ctx.go("pay") },
+    });
+  // Đang chụp / hậu kỳ, đã có album chọn ảnh mà chưa mời khách chọn.
+  const invitedAt = (contract as { select_invited_at?: string | null }).select_invited_at;
+  if (live && (f.status === "in_progress" || f.status === "post_production") && f.selection_album_id && !invitedAt && !ed.deliveryDone)
+    todos.push({
+      key: "invite",
+      tone: "blue",
+      icon: Send,
+      title: "Chưa gửi link chọn ảnh cho khách",
+      sub: "Album chọn ảnh đã sẵn — gửi link để khách bắt đầu chọn.",
+      action: { label: "Mở album", run: () => ctx.go("album") },
+    });
+  // Đã giao + đủ tiền mà chưa đóng hợp đồng → một nút hoàn thành.
+  if (live && f.status !== "completed" && (ed.deliveryDone || !!f.gallery_album_id) && ed.balance <= 0 && ed.total > 0)
+    todos.push({
+      key: "finish",
+      tone: "green",
+      icon: CheckCircle2,
+      title: "Đã giao ảnh và thu đủ tiền",
+      sub: "Đánh dấu hoàn thành để đóng hợp đồng (và gửi lời mời đánh giá nếu bạn bật).",
+      action: { label: "Hoàn thành", run: () => void ed.changeStatus("completed") },
+    });
   if (live && f.status === "draft")
     todos.push({ key: "draft", tone: "blue", icon: Send, title: "Hợp đồng còn nháp, chưa gửi khách", action: { label: "Gửi khách", run: ctx.openSend } });
   if (live && f.status === "sent" && !contract.client_signed_at)

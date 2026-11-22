@@ -10,6 +10,7 @@ import type { ContractLifecycle } from "@/components/studio/ContractStepper";
 import { qrUrl, type BankInfo } from "@/components/VietQR";
 import { transferNote, DEFAULT_TRANSFER_NOTE_MODE, type TransferNoteMode } from "@/lib/vietqr";
 import { nextContractCode } from "@/lib/contract-code";
+import { defaultDepositDue } from "@/lib/payment-plan-due";
 import { contractKind } from "@/lib/contract-kind";
 import type { CrewRoleRow } from "@/lib/crew-roles";
 import { contractPreamble, contractPrintDocument, signVerifyLine, vnSignDate, type ContractPrintData } from "@/lib/contract-print";
@@ -626,13 +627,27 @@ export function useContractEditor(props: ContractEditorProps) {
     autosaveContract(next);
   }
 
-  const set = (k: keyof typeof f, v: string | number) =>
+  const set = (k: keyof typeof f, v: string | number) => {
     setF((p) => {
       const next = { ...p, [k]: v } as typeof p;
       if (contractSaveTimer.current) clearTimeout(contractSaveTimer.current);
       contractSaveTimer.current = setTimeout(() => autosaveContract(next), 700);
       return next;
     });
+    if (k === "event_date" && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) fillDepositDue(v);
+  };
+
+  /* Vừa đặt ngày chụp: đợt thu ĐẦU TIÊN chưa thu mà còn trống hạn (thường là
+     cọc) tự nhận hạn mặc định — không có hạn thì nhắc thu hằng ngày bỏ qua nó.
+     Đợt đã có hạn studio tự đặt thì giữ nguyên. */
+  const fillDepositDue = (eventDate: string) => {
+    const first = planRef.current.find((p) => !p.paid);
+    if (!first || first.due_date) return;
+    const due = defaultDepositDue(todayVN(), eventDate);
+    if (!due) return;
+    setPlan((rows) => rows.map((r) => (r.id === first.id ? { ...r, due_date: due } : r)));
+    void supabase.from("contract_payment_plan").update({ due_date: due }).eq("id", first.id).then(() => undefined);
+  };
 
   // Bảng hạng mục CHỈ giữ hạng mục gốc. Dòng của phụ lục đã ký (addendum_id)
   // nằm riêng: chúng bất biến và hiện trong thẻ Phụ lục, nhưng vẫn vào tổng tiền.
@@ -683,6 +698,8 @@ export function useContractEditor(props: ContractEditorProps) {
   const [expenses, setExpenses] = useState<StudioExpense[]>(initialExpenses);
   const [exp, setExp] = useState({ title: "", amount: 0, spent_at: today(), client_visible: true });
   const [plan, setPlan] = useState<ContractPaymentPlan[]>(initialPlan);
+  const planRef = useRef(plan);
+  planRef.current = plan;
   const [planForm, setPlanForm] = useState({ label: "", amount: 0, due_date: "" });
   const planSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   function autosavePlan(id: string, patch: Partial<ContractPaymentPlan>) {
@@ -946,6 +963,10 @@ export function useContractEditor(props: ContractEditorProps) {
   // lifecycle (Nháp → Đã gửi → … → Hoàn thành) in one click.
   async function changeStatus(status: ContractStatus) {
     if (status === f.status) return;
+    // Hoàn thành khi khách còn nợ: hỏi lại — sau khi "Hoàn thành" hợp đồng rời
+    // khỏi các danh sách đang chạy và khoản nợ dễ bị quên.
+    if (status === "completed" && balance > 0 &&
+        !confirm(`Khách còn nợ ${vnd(balance)}.\n\nVẫn đánh dấu Hoàn thành? (Bấm Huỷ để ghi thu trước ở tab Thanh toán.)`)) return;
     const prevStatus = f.status;
     // setF thẳng, KHÔNG qua set(): trạng thái chỉ ghi qua route server, không
     // hẹn lượt autosave nào. (Lượt autosave đang chờ của ô khác vẫn chạy — nó

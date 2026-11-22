@@ -31,8 +31,9 @@ export type ContractLifecycle = {
 const DAU: { key: keyof ContractLifecycle; label: string }[] = [
   { key: "hasItems", label: "Báo giá" },
   { key: "signed", label: "Ký hợp đồng" },
-  { key: "hasCrew", label: "Phân công" },
+  // Cọc ngay sau ký, phân công sau — cùng thứ tự với giao diện mới.
   { key: "hasDeposit", label: "Nhận cọc" },
+  { key: "hasCrew", label: "Phân công" },
 ];
 
 /** Ba bước cuối, theo nhóm. Trọn gói giữ chữ của nghề ảnh vì có cả hai nghề. */

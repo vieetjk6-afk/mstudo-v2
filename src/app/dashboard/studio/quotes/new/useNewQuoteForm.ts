@@ -48,23 +48,36 @@ export type NewQuoteFormProps = {
   pricelist?: PriceItem[];
   /** Nhãn studio tự đặt cho từng bảng giá (profiles.pl_list_labels). */
   listLabels?: Record<string, string>;
+  /** Mở từ một yêu cầu đặt lịch: điền sẵn khách, ngày, gói. */
+  fromBooking?: { id: string; name: string; phone: string; facebook: string; eventDate: string; packageNames: string[] } | null;
 };
 
-export function useNewQuoteForm({ ownerId, branchId = null, services = [], pricelist = [], listLabels = {} }: NewQuoteFormProps) {
+export function useNewQuoteForm({ ownerId, branchId = null, services = [], pricelist = [], listLabels = {}, fromBooking = null }: NewQuoteFormProps) {
   const router = useRouter();
   const supabase = createClient();
   const [title, setTitle] = useState("");
   const [serviceId, setServiceId] = useState("");
-  const [clientName, setClientName] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
+  const [clientName, setClientName] = useState(fromBooking?.name ?? "");
+  const [clientPhone, setClientPhone] = useState(fromBooking?.phone ?? "");
   const [clientEmail, setClientEmail] = useState("");
-  const [clientFacebook, setClientFacebook] = useState("");
-  const [eventDate, setEventDate] = useState("");
+  const [clientFacebook, setClientFacebook] = useState(fromBooking?.facebook ?? "");
+  const [eventDate, setEventDate] = useState(fromBooking?.eventDate ?? "");
   const [location, setLocation] = useState("");
   const [intro, setIntro] = useState(
     "Cảm ơn bạn đã quan tâm. Dưới đây là báo giá chi tiết — bạn có thể chọn/bỏ các hạng mục tuỳ chọn hoặc gửi yêu cầu chỉnh sửa cho mình."
   );
-  const [items, setItems] = useState<Draft[]>([]);
+  // Gói khách chọn trong yêu cầu đặt lịch → gói đầu là gói chính, các gói sau
+  // là tuỳ chọn (khớp theo tên trong bảng giá).
+  const [items, setItems] = useState<Draft[]>(() => {
+    if (!fromBooking?.packageNames.length) return [];
+    const out: Draft[] = [];
+    fromBooking.packageNames.forEach((n, i) => {
+      const p = pricelist.find((x) => x.name.trim().toLowerCase() === n.trim().toLowerCase());
+      if (!p) return;
+      out.push({ name: p.name, description: p.description || "", qty: 1, unit_price: p.price, is_optional: i > 0, is_discount: false, package_group: "", src: p.id });
+    });
+    return out;
+  });
   const [bulkDiscountAmount, setBulkDiscountAmount] = useState(0);
   const [discountPackageGroup, setDiscountPackageGroup] = useState("");
   const [showConditions, setShowConditions] = useState(false);
@@ -267,6 +280,11 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
       // Messenger / email). Báo giá vẫn ở trạng thái nháp cho tới lúc gửi.
       // "Tạo & gửi khách" mở luôn hộp gửi (chép link + lời nhắn, Zalo…) — trước
       // đây hai nút làm y hệt nhau, studio tưởng đã gửi mà khách chưa nhận gì.
+      // Yêu cầu đặt lịch gốc → "đã xử lý", để danh sách đặt lịch không còn nút
+      // "Tạo HĐ" mời tạo trùng hợp đồng khi khách đã đi theo đường báo giá.
+      if (fromBooking) {
+        await supabase.from("studio_bookings").update({ status: "handled" }).eq("id", fromBooking.id).in("status", ["new", "pending", "accepted"]);
+      }
       router.push(`/dashboard/studio/quotes/${quote.id}${mode === "send" ? "?send=1" : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi không xác định");

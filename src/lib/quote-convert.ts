@@ -101,8 +101,11 @@ export async function convertQuoteToContract(
   }
 
   // Title format: "Hợp đồng [loại dịch vụ] - [tên khách hàng], [ngày khách chọn]".
+  // Báo giá dựng từ bảng giá thường không gắn service_id → lấy tên gói chính
+  // (dòng đầu không phải giảm giá) cho tên hợp đồng khỏi trơ trọi.
+  const mainLine = lines.find((l) => l.unit_price > 0)?.name;
   const titleParts = [
-    `Hợp đồng${serviceName ? ` ${serviceName}` : ""}`,
+    `Hợp đồng${serviceName ? ` ${serviceName}` : mainLine ? ` ${mainLine}` : ""}`,
     quote.client_name ? ` - ${quote.client_name}` : "",
     quote.event_date ? `, ${fmtDate(quote.event_date)}` : "",
   ];
