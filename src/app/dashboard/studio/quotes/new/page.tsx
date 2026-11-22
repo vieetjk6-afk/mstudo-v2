@@ -80,6 +80,7 @@ export default async function NewQuotePage(props: { searchParams?: Promise<{ boo
       pricelist={(pricelist ?? []) as { id: string; name: string; price: number; unit: string | null; description: string | null; category: string | null; list_key: string | null }[]}
       listLabels={listLabels}
       fromBooking={fromBooking}
+      depositPercent={(profile as { contract_deposit_percent?: number | null }).contract_deposit_percent ?? null}
     />
   );
 }

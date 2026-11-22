@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { nextQuoteCode, newShareToken } from "@/lib/contract-code";
 import { safeDeposit } from "@/lib/quote-lines";
+import { depositByPercent } from "@/lib/quote-deposit";
 import { depositRatio } from "@/lib/quote-deposit";
 import { fmtDate } from "@/lib/date";
 import { makeListLabel } from "@/lib/pricelist-label";
@@ -50,9 +51,11 @@ export type NewQuoteFormProps = {
   listLabels?: Record<string, string>;
   /** Mở từ một yêu cầu đặt lịch: điền sẵn khách, ngày, gói. */
   fromBooking?: { id: string; name: string; phone: string; facebook: string; eventDate: string; packageNames: string[] } | null;
+  /** % cọc studio đặt (null = cách tính cũ) — cọc tạm tính khớp hợp đồng sẽ tạo. */
+  depositPercent?: number | null;
 };
 
-export function useNewQuoteForm({ ownerId, branchId = null, services = [], pricelist = [], listLabels = {}, fromBooking = null }: NewQuoteFormProps) {
+export function useNewQuoteForm({ ownerId, branchId = null, services = [], pricelist = [], listLabels = {}, fromBooking = null, depositPercent = null }: NewQuoteFormProps) {
   const router = useRouter();
   const supabase = createClient();
   const [title, setTitle] = useState("");
@@ -92,7 +95,7 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
   const discountTotal = items.reduce((s, i) => (i.is_discount && counts(i) ? s + (i.qty || 0) * (i.unit_price || 0) : s), 0);
   const total = grossTotal - discountTotal;
   // Kẹp cọc về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
-  const deposit = safeDeposit(total);
+  const deposit = typeof depositPercent === "number" ? depositByPercent(total, depositPercent) : safeDeposit(total);
   const depositPct = depositRatio(total, deposit);
   const packageGroups = Array.from(new Set(items.map((i) => i.package_group.trim()).filter(Boolean)));
 

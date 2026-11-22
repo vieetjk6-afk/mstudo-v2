@@ -9,20 +9,21 @@ phần **chưa làm**, xếp theo ưu tiên.
 
 ## Còn lại — nên làm sớm
 
+Lượt 2 đã xử lý gần hết bảng cũ (nhóm gói, "Tạo & gửi khách", tạo hợp đồng
+trước khi khách đồng ý, báo giá nháp, điều khoản theo dịch vụ, bản in khách,
+tải ảnh mặc định, "Không thích", tab điện thoại, tìm theo địa điểm) và các điểm
+từ lượt chạy thử trọn quy trình (ký hợp đồng nháp từ báo giá, tự chuyển hợp
+đồng chưa ký, việc chờ trên Tổng quan, kế hoạch thu có hạn, báo giá từ yêu cầu
+đặt lịch, thứ tự tiến độ, hoàn thành khi còn nợ). Còn lại:
+
 | Việc | Vì sao | Chỗ |
 | --- | --- | --- |
-| Tên nhóm gói báo giá là slug ("goi-a"), khách thấy nguyên slug, kể cả dòng "Ưu đãi gói goi-b" trên hợp đồng | Studio phải tự gõ slug; khách đọc khó hiểu | `quotes/new` (ô "Nhóm gói"), `quote-lines.ts` |
-| Màn tạo báo giá lặp lại toàn bộ bảng giá ở "Hạng mục thêm" (trang ~3000px) | Thao tác chậm | `quotes/new/NewQuoteFormV2.tsx` |
-| "Tạo & gửi khách" (báo giá) không gửi gì — giống "Lưu nháp" | Gây hiểu nhầm | `useNewQuoteForm.ts` |
-| Nút "Tạo hợp đồng" chỉ hiện khi báo giá "Đã đồng ý" | Khách đồng ý qua điện thoại thì phải đổi trạng thái tay trước | `QuoteEditorV2.tsx` |
-| Khách đồng ý được báo giá còn "Nháp" | Có thể tạo hợp đồng từ báo giá chưa duyệt | `api/quote/[token]/route.ts:101` |
-| Hợp đồng từ đặt lịch / báo giá dùng điều khoản mẫu chung, không theo dịch vụ | Lệch với hợp đồng tạo tay | `useBookings.ts`, `quote-convert.ts` |
-| Bản in phía studio và phía khách dựng từ hai bộ dữ liệu riêng | Bản khách thiếu cô dâu/chú rể, nhãn ngày, hạn giao | gộp `useContractEditor.buildPrintData` + `ContractPrintDoc` thành 1 hàm trong `src/lib` |
-| "Khách đã duyệt" tự đặt khi ghi thu cọc | Nhãn studio dễ hiểu nhầm là khách đã ký (cổng khách đã sửa thành "Đã chốt lịch") | `CONTRACT_STATUS_LABEL.approved` |
-| Album: "Cho phép khách tải ảnh" mặc định bật cả ở giai đoạn chọn ảnh | Khách tải được ảnh thô trước khi thanh toán | `albums/new`, `download_enabled` |
-| Album: "Không thích" tự nhảy ảnh kế, ghi chú dễ gắn nhầm ảnh | Sai dữ liệu chọn ảnh | `a/[slug]/CustomerAlbumV2.tsx` |
-| Điện thoại: tab đáy thứ 2 của chủ studio là "Của tôi" | Đẩy Khách hàng/Báo giá vào menu | `MobileTabBarV2.tsx:18-28` |
-| Tìm hợp đồng theo địa điểm ("tràng an") không ra | | `lib/contract-filter.ts` |
+| Nguồn khách mất trên đường đặt lịch → báo giá → hợp đồng | `studio_quotes` chưa có cột `source`/`booking_id` — cần migration | `quote-convert.ts`, `useNewQuoteForm.ts` |
+| Ngày chụp trên form báo giá nằm cuối, không kiểm tra trùng lịch; khách không đề xuất ngày trên `/q` | Hợp đồng sinh ra hay thiếu ngày | `NewQuoteFormV2.tsx`, `q/[token]` |
+| Thêm yêu cầu đặt lịch bằng tay (khách gọi điện / nhắn) | Hiện chỉ có link form | `bookings/BookingsV2.tsx` |
+| "Khách đã duyệt" (studio) tự đặt khi ghi thu cọc | Dễ hiểu nhầm là khách đã ký | `CONTRACT_STATUS_LABEL.approved` |
+| Ghi rõ cạnh trạng thái khi nào tự chuyển ("Tự chuyển sang Đang chụp ngày …") | Studio không biết bước nào tự động | `contract-status.ts`, đầu màn hợp đồng |
+| Gộp hai bộ dựng dữ liệu bản in (studio / khách) thành một hàm trong `src/lib` | Nay đã cùng thông số nhưng vẫn là hai chỗ phải sửa song song | `useContractEditor.buildPrintData`, `ContractPrintDoc.tsx` |
 
 ## Tính năng đề xuất
 
