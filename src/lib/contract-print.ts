@@ -141,6 +141,11 @@ function safeSrc(u?: string | null): string {
   const s = String(u ?? "").trim();
   if (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(s)) return s;
   if (/^https?:\/\//i.test(s)) return s;
+  // Đường dẫn nội bộ cùng máy chủ ("/api/img?id=…&orig=1") — đây chính là dạng
+  // URL logo khi studio TẢI LOGO LÊN (lưu vào Drive admin). Trước đây bị loại
+  // nên bản in luôn hiện ô chữ cái thay cho logo thật. Không nhận "//host"
+  // (link khác máy chủ không ghi giao thức).
+  if (/^\/(?!\/)/.test(s)) return s;
   return "";
 }
 

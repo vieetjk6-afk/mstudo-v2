@@ -104,6 +104,12 @@ checkTrue("có khổ A4", doc.includes("@page { size: A4"));
 checkTrue("tự gọi in sau khi ảnh tải xong", doc.includes("window.print()") && doc.includes('addEventListener("load"'));
 checkTrue("tắt tự in khi cần (bản desktop lưu file)", !contractPrintDocument(base, { autoPrint: false }).includes("window.print()"));
 
+// ── Logo tải lên lưu dạng "/api/img?id=…" (cùng máy chủ) phải in ra được ──
+const relLogo = contractPrintBody({ ...base, studio: { ...base.studio, logo: "/api/img?id=abc&orig=1" } });
+checkTrue("logo đường dẫn nội bộ → thẻ img", relLogo.includes('class="cpd-logo" src="/api/img?id=abc&amp;orig=1"'));
+const proto = contractPrintBody({ ...base, studio: { ...base.studio, logo: "//evil.example/x.png" } });
+checkTrue("logo //host bị loại → ô chữ cái", !proto.includes("evil.example") && proto.includes("cpd-mono"));
+
 // ── Điều khoản tách theo từng điều (không cắt ngang giữa trang) ──────────
 const terms = contractPrintBody({ ...base, terms: "1. ĐẶT CỌC\n- Cọc 30%\n2. HUỶ LỊCH\n- Báo trước 7 ngày" });
 checkTrue("mỗi điều một khối keep", (terms.match(/class="cpd-clause keep"/g) || []).length === 2);
