@@ -169,8 +169,11 @@ export function lifecycleSteps(kind: ContractKind): { key: keyof Ed["lifecycle"]
   const dau = [
     { key: "hasItems", label: "Báo giá" },
     { key: "signed", label: "Ký hợp đồng" },
-    { key: "hasCrew", label: "Phân công" },
+    // Cọc NGAY sau ký (đúng thứ tự thực tế: ký → chuyển cọc giữ lịch), phân công
+    // sau. Thứ tự cũ (Phân công → Nhận cọc) làm thanh tiến độ đứng ở "Phân công"
+    // dù khách đã ký và đã cọc.
     { key: "hasDeposit", label: "Nhận cọc" },
+    { key: "hasCrew", label: "Phân công" },
   ] as const;
   const cuoi =
     kind === "makeup"

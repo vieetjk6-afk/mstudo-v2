@@ -50,7 +50,11 @@ async function handle(req: Request, params: { id: string }, ownerId: string) {
   const data: ContractDocData = {
     studio: {
       name: brand.name || ownerObj?.full_name || "Studio",
-      logo: brand.logoUrl,
+      // App desktop mở file HTML/DOCX ngoài trình duyệt → không có máy chủ để
+      // phân giải "/api/img?…" (logo tải lên Drive admin). Đổi thành link tuyệt đối.
+      logo: brand.logoUrl && brand.logoUrl.startsWith("/") && !brand.logoUrl.startsWith("//")
+        ? `${new URL(req.url).origin}${brand.logoUrl}`
+        : brand.logoUrl,
       phone: ownerObj?.pl_phone,
       email: ownerObj?.email,
       bankHolder: ownerObj?.pl_bank_holder,

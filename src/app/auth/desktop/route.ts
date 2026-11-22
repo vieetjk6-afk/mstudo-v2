@@ -62,7 +62,11 @@ export async function GET(request: NextRequest) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="referrer" content="no-referrer">
+<!-- KHÔNG dùng "no-referrer": với chính sách đó Chromium/WebView2 gửi
+     "Origin: null" cho form POST, chốt same-origin ở POST bên dưới từ chối
+     → nút "Đăng nhập" LUÔN hỏng (desktop_bad_origin). "strict-origin" vẫn
+     giấu token_hash (Referer chỉ còn https://mstudo.com/) mà Origin gửi đủ. -->
+<meta name="referrer" content="strict-origin">
 <meta name="robots" content="noindex">
 <title>Đăng nhập MStudo Desktop</title>
 <style>

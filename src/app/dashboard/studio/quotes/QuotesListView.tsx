@@ -6,17 +6,17 @@ import Link from "next/link";
 import { FilePlus, Eye, ExternalLink, ReceiptText } from "lucide-react";
 import { Panel, EmptyState } from "@/components/studio/ui";
 import { avatarStyle, initials } from "@/lib/avatar";
-import { vnd, vndShort, QUOTE_STATUS_LABEL, quoteSelectedTotal, type StudioQuote, type QuoteStatus } from "@/lib/types";
+import { vnd, vndShort, QUOTE_STATUS_LABEL, type StudioQuote, type QuoteStatus } from "@/lib/types";
 import { fmtDate } from "@/lib/date";
 import { studioUrl } from "@/lib/hosts";
 import { useUiV2 } from "@/components/v2/UiV2Context";
-import { useQuoteRows, quotePipeline } from "./quotes-list-shared";
+import { useQuoteRows, quotePipeline, quoteTotal } from "./quotes-list-shared";
 
 // Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
 const QuotesListV2 = dynamic(() => import("./QuotesListV2"));
 
 export type QuoteRow = StudioQuote & {
-  quote_items: { qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount: boolean }[];
+  quote_items: { name?: string; qty: number; unit_price: number; selected: boolean; is_optional: boolean; is_discount: boolean; package_group?: string | null }[];
   quote_adjustments: { id: string; resolved: boolean }[];
 };
 
@@ -91,7 +91,7 @@ function QuotesListV1({ list: initialList, studioHost = null }: QuotesListProps)
       ) : (
         <div className="grid gap-3 min-[1100px]:grid-cols-2">
           {rows.map((q) => {
-            const total = quoteSelectedTotal(q.quote_items || []);
+            const total = quoteTotal(q);
             const pendingAdj = (q.quote_adjustments || []).filter((a) => !a.resolved).length;
             const st = STATUS_TONE[q.status];
             return (

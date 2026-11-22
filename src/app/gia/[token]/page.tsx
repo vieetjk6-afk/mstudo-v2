@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PRICE_LISTS } from "@/lib/pricelist-seeds";
+import { buildPublicLists } from "@/lib/pricelist-label";
 import PricelistPoster from "@/components/PricelistPoster";
 import PricelistV2 from "@/app/gia/PricelistV2";
 import { customerUiV2 } from "@/lib/ui-server";
@@ -9,17 +9,6 @@ import { studioShareMetadata } from "@/lib/studio-share-meta";
 
 // Bảng giá công khai theo token — hiếm đổi → ISR + CDN cache 5' thay vì no-store.
 export const revalidate = 300;
-
-function buildLists(allItems: PricelistItem[], hidden: string[] = [], labels: Record<string, string> = {}) {
-  const builtIn = PRICE_LISTS.filter(
-    (l) => !hidden.includes(l.key) && allItems.some((i) => (i.list_key || "cuoi") === l.key)
-  ).map((l) => ({ ...l, label: labels[l.key] || l.label, title: labels[l.key] ? `Bảng giá ${labels[l.key]}` : l.title }));
-  const builtInKeys = new Set(PRICE_LISTS.map((l) => l.key));
-  const customKeys = [...new Set(allItems.map((i) => i.list_key || "cuoi"))].filter((k) => !builtInKeys.has(k) && !hidden.includes(k));
-  const custom = customKeys.map((k) => { const lb = labels[k] || k; return { key: k, label: lb, title: `Bảng giá ${lb}` }; });
-  const combined = [...builtIn, ...custom];
-  return combined.length ? combined : PRICE_LISTS.slice(0, 1);
-}
 
 export async function generateMetadata(props: { params: Promise<{ token: string }> }): Promise<Metadata> {
   const params = await props.params;
@@ -75,7 +64,8 @@ export default async function PublicPricelist(
   const hidden = ((th?.pl_hidden_lists as string[] | null) ?? []);
   const labels = ((th?.pl_list_labels as Record<string, string> | null) ?? {});
 
-  const lists = buildLists(allItems, hidden, labels);
+  const { data: svcs } = await db.from("studio_services").select("id, name").eq("owner_id", owner.id);
+  const lists = buildPublicLists(allItems, hidden, labels, (svcs ?? []) as { id: string; name: string }[]);
   const selected = (searchParams?.list && lists.find((l) => l.key === searchParams.list)?.key) || lists[0].key;
   const items = allItems.filter((i) => (i.list_key || "cuoi") === selected);
 

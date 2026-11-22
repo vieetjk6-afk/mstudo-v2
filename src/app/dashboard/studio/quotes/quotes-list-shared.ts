@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { quoteSelectedTotal, type QuoteStatus } from "@/lib/types";
 import type { QuoteRow } from "./QuotesListView";
+import { activeBulkDiscount, normalizePackageSelection } from "@/lib/quote-lines";
 
 /** Danh sách báo giá trên máy + đổi trạng thái (lạc quan, rồi làm mới server). */
 export function useQuoteRows(initialList: QuoteRow[]) {
@@ -37,7 +38,11 @@ export function useQuoteRows(initialList: QuoteRow[]) {
   return { rows, updating, changeStatus };
 }
 
-export const quoteTotal = (q: QuoteRow) => quoteSelectedTotal(q.quote_items || []);
+/** Tổng khách thấy — trừ cả ưu đãi gói (giống trang khách và bản chuyển hợp đồng). */
+export const quoteTotal = (q: QuoteRow) => {
+  const items = normalizePackageSelection(q.quote_items || []);
+  return quoteSelectedTotal(items) - activeBulkDiscount(q, items);
+};
 
 /**
  * Báo giá còn trong hạn theo NGÀY. Quá hạn thì KHÔNG còn là "đang chờ khách":

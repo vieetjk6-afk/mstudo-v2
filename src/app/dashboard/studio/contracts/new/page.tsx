@@ -17,7 +17,7 @@ import NewContractForm, {
 
 const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
-export default async function NewContractPage(props: { searchParams?: Promise<{ inbox?: string }> }) {
+export default async function NewContractPage(props: { searchParams?: Promise<{ inbox?: string; name?: string; phone?: string }> }) {
   const searchParams = await props.searchParams;
   const profile = await requireStudio("plus");
   if (!profile) {
@@ -134,6 +134,11 @@ export default async function NewContractPage(props: { searchParams?: Promise<{ 
       crewRoles={crewRoles}
       recentClients={Array.from(byClient.values()).slice(0, 8)}
       initialQuickText={initialQuickText}
+      initialClient={
+        searchParams?.name || searchParams?.phone
+          ? { name: (searchParams.name ?? "").slice(0, 120), phone: (searchParams.phone ?? "").replace(/[^\d+ ]/g, "").slice(0, 20) }
+          : null
+      }
       quickSourceNote={quickSourceNote}
       bank={{
         name: (profile.pl_bank_name as string | null) ?? null,

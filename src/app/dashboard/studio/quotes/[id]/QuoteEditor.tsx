@@ -345,7 +345,7 @@ function QuoteEditorV1(props: QuoteEditorProps) {
                   className="input mt-1.5"
                   value={it.package_group || ""}
                   disabled={locked}
-                  placeholder="Nhóm gói (VD: goi-co-ban) — để trống nếu không thuộc gói"
+                  placeholder="Tên gói khách thấy (VD: Gói Cơ bản) — để trống nếu không thuộc gói"
                   onChange={(e) => patchItemLocal(it.id, { package_group: e.target.value })}
                 />
               )}

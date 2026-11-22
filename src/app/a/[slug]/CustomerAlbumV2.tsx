@@ -598,7 +598,7 @@ export default function CustomerAlbumV2(props: CustomerAlbumProps) {
         />
       )}
 
-      <ToastV2 text={a.toast} lifted={!a.shareMode && hasPhotos} />
+      <ToastV2 text={a.toast} lifted={!a.shareMode && hasPhotos} top={a.lbIdx !== null} />
 
       <Modal
         open={a.resetArmed}

@@ -704,10 +704,16 @@ export function useCustomerAlbum({
 
   /** Mở khung xem từ LƯỚI. Luôn xoá chuỗi đang giữ trước khi mở: quên bước này
    *  thì mở một tấm ở lưới ngay sau khi vừa xem một chuỗi sẽ lật nhầm danh sách. */
+  //
+  //  Dãy ảnh được CHỐT tại lúc mở: bấm "Không thích" (ảnh rời khỏi lưới) hay bỏ
+  //  chọn ở tab "Đã chọn" không còn làm khung xem tự trôi sang tấm kế — trước đây
+  //  khách bấm "Ghi chú" ngay sau đó là ghi chú gắn nhầm vào ảnh bên cạnh. Tấm
+  //  vừa đánh dấu vẫn đứng đó (nút đổi màu), khách tự lật tiếp hoặc bấm lại để
+  //  hoàn tác.
   const openFromGrid = useCallback((idx: number) => {
-    setLbGroup(null);
+    setLbGroup(visiblePhotos.map((p) => p.id));
     setLbIdx(idx);
-  }, []);
+  }, [visiblePhotos]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

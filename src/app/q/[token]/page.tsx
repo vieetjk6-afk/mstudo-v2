@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { quoteExpiryFrom } from "@/lib/quote-expiry";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { effectivePlan, studioTier } from "@/lib/plans";
 import QuoteClientView from "./QuoteClientView";
@@ -38,15 +40,30 @@ export default async function QuoteClientPage(props: { params: Promise<{ token: 
   const { data: quote } = await db.from("studio_quotes").select("*").eq("client_token", params.token).maybeSingle();
   if (!quote) notFound();
 
-  // Mark as 'viewed' on first open (don't downgrade later statuses).
-  if (quote.status === "sent") {
-    await db.from("studio_quotes").update({ status: "viewed", viewed_at: new Date().toISOString() }).eq("id", quote.id);
+  // Đánh dấu "khách đã xem" ở lần mở đầu (không hạ trạng thái sau đó). Báo giá
+  // còn NHÁP mà khách đã mở được link (studio chép link gửi tay, không qua nút
+  // Gửi) cũng tính là đã gửi + đặt hạn hiệu lực — trước đây nó nằm mãi ở "nháp":
+  // không có hạn, không vào "đang chờ khách", tỉ lệ chốt ra 100% trên 0 báo giá
+  // đã gửi. Chính chủ studio mở xem thử thì KHÔNG tính.
+  if (quote.status === "sent" || quote.status === "draft") {
+    const viewer = await (await createClient()).auth.getUser().then((r) => r.data.user?.id ?? null).catch(() => null);
+    if (viewer !== quote.owner_id) {
+      const patch: Record<string, unknown> = { status: "viewed", viewed_at: new Date().toISOString() };
+      if (quote.status === "draft" && !quote.expires_at) {
+        const { data: pv } = await db.from("profiles").select("quote_valid_days").eq("id", quote.owner_id).maybeSingle();
+        const days = (pv as { quote_valid_days?: number | null } | null)?.quote_valid_days ?? 15;
+        const exp = quoteExpiryFrom(days);
+        if (exp) patch.expires_at = exp;
+      }
+      const { error: vErr } = await db.from("studio_quotes").update(patch).eq("id", quote.id);
+      if (!vErr) Object.assign(quote, patch);
+    }
   }
 
   const [{ data: items }, { data: adjustments }, { data: owner }, contractRes] = await Promise.all([
     db.from("quote_items").select("*").eq("quote_id", quote.id).order("position"),
     db.from("quote_adjustments").select("*").eq("quote_id", quote.id).order("created_at", { ascending: true }),
-    db.from("profiles").select("full_name, email, plan, plan_expires_at, role").eq("id", quote.owner_id).maybeSingle(),
+    db.from("profiles").select("full_name, email, plan, plan_expires_at, role, contract_deposit_percent").eq("id", quote.owner_id).maybeSingle(),
     // If a contract has already been spawned from this quote (auto-create on a
     // previous visit), fetch its client_token so we can show the link on reload.
     quote.contract_id
@@ -71,6 +88,7 @@ export default async function QuoteClientPage(props: { params: Promise<{ token: 
       studioName={brand.name}
       studioLogo={brand.logoUrl}
       studioCanContract={studioCanContract}
+      depositPercent={(owner as { contract_deposit_percent?: number | null } | null)?.contract_deposit_percent ?? null}
       initialContractToken={contractRes?.data?.client_token ?? null}
     />
   );

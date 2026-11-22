@@ -109,7 +109,7 @@ export default function ClientDetailV2({
             width={230}
             items={[
               ...(email ? [{ label: "Gửi email", hint: email, icon: Mail, href: `mailto:${email}`, external: true }] : []),
-              { label: "Tạo hợp đồng mới", icon: FilePlus, href: "/dashboard/studio/contracts/new" },
+              { label: "Tạo hợp đồng mới", icon: FilePlus, href: `/dashboard/studio/contracts/new?${new URLSearchParams({ name, phone }).toString()}` },
               { label: "Tạo báo giá", icon: ReceiptText, href: "/dashboard/studio/quotes/new" },
             ]}
           />

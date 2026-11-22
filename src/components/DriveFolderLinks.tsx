@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, ChevronDown, ExternalLink } from "lucide-react";
 import { useLangOptional } from "@/lib/i18n";
 
@@ -33,6 +33,13 @@ export default function DriveFolderLinks({
 }) {
   const { t } = useLangOptional();
   const [open, setOpen] = useState(false);
+  // Esc đóng menu — không thì lớp phủ trong suốt còn chặn mọi cú chạm.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   if (folders.length === 0) return null;
 
@@ -54,6 +61,7 @@ export default function DriveFolderLinks({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div
+            role="menu"
             className="absolute right-0 top-full z-50 mt-2 min-w-[220px] max-w-[80vw] rounded-xl p-1.5 shadow-xl"
             style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
           >

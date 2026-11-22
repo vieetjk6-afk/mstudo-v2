@@ -1,7 +1,7 @@
 import { fmtDate, fmtDateLunar } from "@/lib/date";
 import type { BankInfo } from "@/lib/vietqr";
-import { contractPrintBody, contractPrintCss, type ContractPrintData } from "@/lib/contract-print";
-import { SHOOT_TYPE_LABEL, CONTRACT_STATUS_LABEL, PRODUCT_STATUS_LABEL, PAYMENT_KIND_LABEL } from "@/lib/types";
+import { contractPreamble, contractPrintBody, contractPrintCss, printFooterLabel, signVerifyLine, vnSignDate, type ContractPrintData } from "@/lib/contract-print";
+import { SHOOT_TYPE_LABEL, PRODUCT_STATUS_LABEL, PAYMENT_KIND_LABEL, paymentMethodLabel } from "@/lib/types";
 import type { Contract, Item, Milestone, Payment, PlanRow, ProductRow } from "./useContractPortal";
 
 /**
@@ -58,7 +58,10 @@ export default function ContractPrintDoc({
   const data: ContractPrintData = {
     title: contract.title,
     code: contract.code,
-    statusLabel: CONTRACT_STATUS_LABEL[contract.status],
+    draft: contract.status === "draft",
+    nationalHeading: true,
+    preamble: contractPreamble(),
+    signDate: vnSignDate(contract.client_signed_at || contract.studio_signed_at || new Date()),
     studio: {
       name: studioName,
       logo: studioLogo,
@@ -68,10 +71,19 @@ export default function ContractPrintDoc({
       bankName: bank.name,
     },
     client: { name: contract.client_name, phone: contract.client_phone, email: contract.client_email },
+    // Cùng bộ thông số với bản studio in (useContractEditor.buildPrintData) —
+    // trước đây bản khách in thiếu cô dâu/chú rể, tên ngày, ghi chú, hạn giao.
+    issuedAt: contract.created_at ? fmtDate(contract.created_at) : null,
     facts: [
-      { label: "Gói dịch vụ", value: SHOOT_TYPE_LABEL[contract.shoot_type] },
-      { label: "Ngày chụp", value: [fmtDateLunar(contract.event_date), contract.event_time].filter(Boolean).join(" · ") },
+      { label: "Dịch vụ", value: SHOOT_TYPE_LABEL[contract.shoot_type] },
+      { label: "Cô dâu", value: [contract.bride_name?.trim(), contract.bride_phone?.trim()].filter(Boolean).join(" · ") },
+      { label: "Chú rể", value: [contract.groom_name?.trim(), contract.groom_phone?.trim()].filter(Boolean).join(" · ") },
+      { label: "Địa chỉ cô dâu", value: contract.bride_address?.trim(), wide: true },
+      { label: "Địa chỉ chú rể", value: contract.groom_address?.trim(), wide: true },
+      { label: contract.event_label?.trim() || "Ngày chụp", value: [fmtDateLunar(contract.event_date), contract.event_time].filter(Boolean).join(" · ") },
+      { label: "Hạn giao sản phẩm", value: contract.delivery_due ? fmtDate(contract.delivery_due) : "" },
       { label: "Địa điểm", value: contract.location, wide: true },
+      { label: `Ghi chú ${contract.event_label?.trim() || "ngày chụp"}`, value: contract.event_note?.trim(), wide: true },
     ],
     items: items.map((it) => ({
       name: it.name,
@@ -112,6 +124,7 @@ export default function ContractPrintDoc({
       date: fmtDate(p.paid_at),
       kind: PAYMENT_KIND_LABEL[p.kind],
       amount: p.amount,
+      note: paymentMethodLabel(p.method),
     })),
     terms: contract.note,
     signs: [
@@ -120,12 +133,14 @@ export default function ContractPrintDoc({
         name: contract.studio_signed_name || studioName,
         image: contract.studio_signature,
         signedAt: contract.studio_signed_at ? fmtDate(contract.studio_signed_at) : "",
+        verify: contract.studio_signature ? signVerifyLine(contract.studio_signed_at) : null,
       },
       {
         label: "Bên B · Khách hàng",
         name: contract.client_signed_name || contract.client_name,
         image: contract.client_signature,
         signedAt: contract.client_signed_at ? fmtDate(contract.client_signed_at) : "",
+        verify: contract.client_signature ? signVerifyLine(contract.client_signed_at) : null,
       },
     ],
     qr,
@@ -134,7 +149,7 @@ export default function ContractPrintDoc({
 
   return (
     <div className="print-doc" style={{ display: "none" }}>
-      <style dangerouslySetInnerHTML={{ __html: contractPrintCss(".print-doc") }} />
+      <style dangerouslySetInnerHTML={{ __html: contractPrintCss(".print-doc", { footerLabel: printFooterLabel({ code: contract.code }) }) }} />
       <div dangerouslySetInnerHTML={{ __html: contractPrintBody(data) }} />
     </div>
   );

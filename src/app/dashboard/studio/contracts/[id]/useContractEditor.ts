@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { fmtDate, fmtDateTime, fmtDayMonth, todayVN } from "@/lib/date";
+import { fmtDate, fmtDateLunar, fmtDateTime, fmtDayMonth, todayVN } from "@/lib/date";
 import { createClient } from "@/lib/supabase/client";
 import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 import { studioUrl } from "@/lib/hosts";
@@ -10,9 +10,10 @@ import type { ContractLifecycle } from "@/components/studio/ContractStepper";
 import { qrUrl, type BankInfo } from "@/components/VietQR";
 import { transferNote, DEFAULT_TRANSFER_NOTE_MODE, type TransferNoteMode } from "@/lib/vietqr";
 import { nextContractCode } from "@/lib/contract-code";
+import { defaultDepositDue } from "@/lib/payment-plan-due";
 import { contractKind } from "@/lib/contract-kind";
 import type { CrewRoleRow } from "@/lib/crew-roles";
-import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
+import { contractPreamble, contractPrintDocument, signVerifyLine, vnSignDate, type ContractPrintData } from "@/lib/contract-print";
 import { receiptNo, receiptPrintData, yearOf } from "@/lib/accounting";
 import { instalmentReminderMessage } from "@/lib/zalo";
 import { compressImage, checkImageFile } from "@/lib/image";
@@ -626,13 +627,27 @@ export function useContractEditor(props: ContractEditorProps) {
     autosaveContract(next);
   }
 
-  const set = (k: keyof typeof f, v: string | number) =>
+  const set = (k: keyof typeof f, v: string | number) => {
     setF((p) => {
       const next = { ...p, [k]: v } as typeof p;
       if (contractSaveTimer.current) clearTimeout(contractSaveTimer.current);
       contractSaveTimer.current = setTimeout(() => autosaveContract(next), 700);
       return next;
     });
+    if (k === "event_date" && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) fillDepositDue(v);
+  };
+
+  /* Vừa đặt ngày chụp: đợt thu ĐẦU TIÊN chưa thu mà còn trống hạn (thường là
+     cọc) tự nhận hạn mặc định — không có hạn thì nhắc thu hằng ngày bỏ qua nó.
+     Đợt đã có hạn studio tự đặt thì giữ nguyên. */
+  const fillDepositDue = (eventDate: string) => {
+    const first = planRef.current.find((p) => !p.paid);
+    if (!first || first.due_date) return;
+    const due = defaultDepositDue(todayVN(), eventDate);
+    if (!due) return;
+    setPlan((rows) => rows.map((r) => (r.id === first.id ? { ...r, due_date: due } : r)));
+    void supabase.from("contract_payment_plan").update({ due_date: due }).eq("id", first.id).then(() => undefined);
+  };
 
   // Bảng hạng mục CHỈ giữ hạng mục gốc. Dòng của phụ lục đã ký (addendum_id)
   // nằm riêng: chúng bất biến và hiện trong thẻ Phụ lục, nhưng vẫn vào tổng tiền.
@@ -683,6 +698,8 @@ export function useContractEditor(props: ContractEditorProps) {
   const [expenses, setExpenses] = useState<StudioExpense[]>(initialExpenses);
   const [exp, setExp] = useState({ title: "", amount: 0, spent_at: today(), client_visible: true });
   const [plan, setPlan] = useState<ContractPaymentPlan[]>(initialPlan);
+  const planRef = useRef(plan);
+  planRef.current = plan;
   const [planForm, setPlanForm] = useState({ label: "", amount: 0, due_date: "" });
   const planSaveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   function autosavePlan(id: string, patch: Partial<ContractPaymentPlan>) {
@@ -946,6 +963,10 @@ export function useContractEditor(props: ContractEditorProps) {
   // lifecycle (Nháp → Đã gửi → … → Hoàn thành) in one click.
   async function changeStatus(status: ContractStatus) {
     if (status === f.status) return;
+    // Hoàn thành khi khách còn nợ: hỏi lại — sau khi "Hoàn thành" hợp đồng rời
+    // khỏi các danh sách đang chạy và khoản nợ dễ bị quên.
+    if (status === "completed" && balance > 0 &&
+        !confirm(`Khách còn nợ ${vnd(balance)}.\n\nVẫn đánh dấu Hoàn thành? (Bấm Huỷ để ghi thu trước ở tab Thanh toán.)`)) return;
     const prevStatus = f.status;
     // setF thẳng, KHÔNG qua set(): trạng thái chỉ ghi qua route server, không
     // hẹn lượt autosave nào. (Lượt autosave đang chờ của ô khác vẫn chạy — nó
@@ -1000,6 +1021,27 @@ export function useContractEditor(props: ContractEditorProps) {
    * autosave, xem ghi chú ở autosaveContract). Lỗi thì trả ô chọn về giá trị cũ.
    */
   async function saveAlbumLink(k: "selection_album_id" | "gallery_album_id", id: string) {
+    // Một album chỉ thuộc MỘT hợp đồng: album đang gắn hợp đồng khác thì hỏi rồi
+    // gỡ khỏi hợp đồng cũ — trước đây gắn luôn, album thành của hai hợp đồng
+    // (khách hợp đồng kia vẫn mở được album này từ trang của họ).
+    if (id) {
+      const { data: others } = await supabase
+        .from("studio_contracts")
+        .select("id, code, title")
+        .eq(k, id)
+        .neq("id", contract.id)
+        .limit(3);
+      const list = (others ?? []) as { id: string; code: string | null; title: string }[];
+      if (list.length) {
+        const names = list.map((o) => o.code || o.title).join(", ");
+        if (!confirm(`Album này đang gắn với hợp đồng ${names}. Chuyển album sang hợp đồng này (gỡ khỏi hợp đồng cũ)?`)) return;
+        const { error: unErr } = await supabase.from("studio_contracts").update({ [k]: null }).in("id", list.map((o) => o.id));
+        if (unErr) {
+          toast(`Chưa gỡ được album khỏi hợp đồng cũ: ${unErr.message}`);
+          return;
+        }
+      }
+    }
     const prev = f[k];
     setF((p) => ({ ...p, [k]: id }));
     const { error } = await supabase.from("studio_contracts").update({ [k]: id || null }).eq("id", contract.id);
@@ -1337,7 +1379,12 @@ export function useContractEditor(props: ContractEditorProps) {
       title: f.title,
       code: f.code,
       issuedAt: dmy(contract.created_at),
-      statusLabel: CONTRACT_STATUS_LABEL[f.status],
+      // Không in nhãn trạng thái ("Khách đã duyệt" in lên giấy dễ hiểu nhầm là
+      // đã ký); bản nháp thì in chữ chìm.
+      draft: f.status === "draft",
+      nationalHeading: true,
+      preamble: contractPreamble(),
+      signDate: vnSignDate(contract.client_signed_at || contract.studio_signed_at || todayVN()),
       studio: {
         name: studioName,
         logo: studioLogo,
@@ -1354,7 +1401,7 @@ export function useContractEditor(props: ContractEditorProps) {
         { label: "Chú rể", value: [f.groom_name.trim(), f.groom_phone.trim()].filter(Boolean).join(" · ") },
         { label: "Địa chỉ cô dâu", value: f.bride_address.trim(), wide: true },
         { label: "Địa chỉ chú rể", value: f.groom_address.trim(), wide: true },
-        { label: f.event_label.trim() || "Ngày chụp", value: [dmy(f.event_date), f.event_time].filter(Boolean).join(" · ") },
+        { label: f.event_label.trim() || "Ngày chụp", value: [f.event_date ? fmtDateLunar(f.event_date) : "", f.event_time].filter(Boolean).join(" · ") },
         { label: "Hạn giao sản phẩm", value: dmy(f.delivery_due) },
         { label: "Địa điểm", value: f.location, wide: true },
         { label: `Ghi chú ${f.event_label.trim() || "ngày chụp"}`, value: f.event_note.trim(), wide: true },
@@ -1381,7 +1428,7 @@ export function useContractEditor(props: ContractEditorProps) {
         date: dmy(p.paid_at),
         kind: PAYMENT_KIND_LABEL[p.kind],
         amount: p.amount,
-        note: [p.method, p.note].filter(Boolean).join(" · "),
+        note: [paymentMethodLabel(p.method), p.note].filter(Boolean).join(" · "),
       })),
       terms: f.note,
       signs: [
@@ -1390,12 +1437,14 @@ export function useContractEditor(props: ContractEditorProps) {
           name: contract.studio_signed_name || studioName,
           image: contract.studio_signature,
           signedAt: dmy(contract.studio_signed_at),
+          verify: contract.studio_signature ? signVerifyLine(contract.studio_signed_at) : null,
         },
         {
           label: "Bên B · Khách hàng",
           name: contract.client_signed_name || f.client_name,
           image: contract.client_signature,
           signedAt: dmy(contract.client_signed_at),
+          verify: contract.client_signature ? signVerifyLine(contract.client_signed_at) : null,
         },
       ],
       qr,
@@ -1938,16 +1987,39 @@ export function useContractEditor(props: ContractEditorProps) {
   async function duplicateContract() {
     setBusy("dup");
     const token = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/-/g, "");
+    // Bản sao có MÃ riêng (trước đây trống mã) và giữ đủ dữ liệu "khuôn" của hợp
+    // đồng gốc: loại dịch vụ, nhãn/giờ ngày chụp, SĐT + địa chỉ cô dâu chú rể,
+    // kế hoạch thanh toán. KHÔNG chép ngày chụp, hạn giao, thanh toán, chữ ký —
+    // đó là của buổi cũ.
+    const code = await nextContractCode(supabase, contract.owner_id).catch(() => null);
     const { data, error } = await supabase
       .from("studio_contracts")
       .insert({
         owner_id: contract.owner_id,
+        ...(code ? { code } : {}),
         title: `${f.title} (bản sao)`,
+        service_id: f.service_id || null,
+        event_time: f.event_time.trim() || null,
         client_name: f.client_name.trim() || null,
         client_phone: f.client_phone.trim() || null,
         client_email: f.client_email.trim() || null,
         client_messenger: f.client_messenger.trim() || null,
-        ...(hasDayCols ? { bride_name: f.bride_name.trim() || null, groom_name: f.groom_name.trim() || null } : {}),
+        ...(hasDayCols
+          ? {
+              bride_name: f.bride_name.trim() || null,
+              groom_name: f.groom_name.trim() || null,
+              event_label: f.event_label.trim() || null,
+              event_note: f.event_note.trim() || null,
+            }
+          : {}),
+        ...(hasCoupleCols
+          ? {
+              bride_phone: f.bride_phone.replace(/[^\d+]/g, "") || null,
+              bride_address: f.bride_address.trim() || null,
+              groom_phone: f.groom_phone.replace(/[^\d+]/g, "") || null,
+              groom_address: f.groom_address.trim() || null,
+            }
+          : {}),
         shoot_type: f.shoot_type,
         status: "draft",
         location: f.location.trim() || null,
@@ -1972,6 +2044,13 @@ export function useContractEditor(props: ContractEditorProps) {
     if (clean.length) {
       await insertItems(clean.map((i, idx) => ({ ...i, contract_id: data.id, position: idx })));
     }
+    // Kế hoạch thanh toán: giữ các đợt + số tiền, bỏ trạng thái đã thu và hạn.
+    if (plan.length) {
+      await supabase.from("contract_payment_plan").insert(
+        plan.map((p, position) => ({ contract_id: data.id, label: p.label, amount: p.amount, position, paid: false }))
+      );
+    }
+    toast("Đã tạo bản sao — nhớ đặt ngày chụp mới");
     router.push(`/dashboard/studio/contracts/${data.id}`);
   }
 

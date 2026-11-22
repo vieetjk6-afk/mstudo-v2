@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isDriveUrl } from "./drive.ts";
 
 type SourceRow = {
   name: string | null;
@@ -22,8 +23,15 @@ export type DriveFolderLink = { name: string; url: string };
  */
 export function pickOriginalLinks(sources: readonly SourceRow[]): DriveFolderLink[] {
   return sources
-    .filter((x) => !!x.drive_url && (x.stage === "selection" || x.kind === "folder"))
-    .map((x) => ({ name: x.name || "File gốc", url: x.drive_url as string }));
+    .filter((x) => !!x.drive_url && isDriveUrl(x.drive_url) && (x.stage === "selection" || x.kind === "folder"))
+    .map((x) => ({ name: friendlySourceName(x.name, "File gốc"), url: x.drive_url as string }));
+}
+
+/** Tên nguồn để hiện cho KHÁCH: tên mặc định tiếng Anh cũ → tên tiếng Việt. */
+export function friendlySourceName(name: string | null | undefined, fallback = "Thư mục ảnh"): string {
+  const n = (name ?? "").trim();
+  if (!n || /^(folder|file|untitled|new folder)$/i.test(n)) return fallback;
+  return n;
 }
 
 /**
@@ -52,8 +60,11 @@ function laFileLe(url: string): boolean {
  */
 export function pickFolderLinks(sources: readonly SourceRow[]): DriveFolderLink[] {
   return sources
-    .filter((x) => !!x.drive_url && (x.kind === "folder" || !laFileLe(x.drive_url)))
-    .map((x) => ({ name: x.name || "Thư mục ảnh", url: x.drive_url as string }));
+    // Chỉ đưa ra link Google Drive thật — nguồn lỡ lưu link lạ không được thành
+    // nút "Tải ảnh gốc" trên trang khách. Tên mặc định tiếng Anh cũ
+    // ("Folder"/"File"/"Untitled") đổi thành tên đọc được.
+    .filter((x) => !!x.drive_url && isDriveUrl(x.drive_url) && (x.kind === "folder" || !laFileLe(x.drive_url)))
+    .map((x) => ({ name: friendlySourceName(x.name), url: x.drive_url as string }));
 }
 
 /**

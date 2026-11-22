@@ -8,7 +8,7 @@ export const CONTRACT_CLAUSES: Clause[] = [
     label: "Đặt cọc & thanh toán",
     text:
       "1. ĐẶT CỌC & THANH TOÁN\n" +
-      "- Khách đặt cọc 30% giá trị hợp đồng để giữ lịch; lịch chỉ được xác nhận sau khi studio nhận cọc.\n" +
+      "- Khách đặt cọc theo kế hoạch thanh toán của hợp đồng để giữ lịch; lịch chỉ được xác nhận sau khi studio nhận cọc.\n" +
       "- Phần còn lại thanh toán chậm nhất vào ngày chụp (hoặc trước khi bàn giao sản phẩm).\n" +
       "- Tiền cọc không hoàn lại nếu khách đơn phương huỷ.",
   },

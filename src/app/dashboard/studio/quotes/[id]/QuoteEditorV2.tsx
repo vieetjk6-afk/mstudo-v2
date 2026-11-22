@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -66,7 +66,16 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
   const { canConvert, quoteValidDays = 15 } = props;
   const e = useQuoteEditor(props);
   const { quote, items, adjustments, saving, busy, locked, dirty } = e;
+  // Tới từ "Tạo & gửi khách" (?send=1) → mở hộp gửi ngay, rồi bỏ cờ khỏi URL.
   const [sendOpen, setSendOpen] = useState(false);
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (u.searchParams.get("send") === "1") {
+      setSendOpen(true);
+      u.searchParams.delete("send");
+      window.history.replaceState(null, "", u.pathname + (u.search || ""));
+    }
+  }, []);
   const [statusOpen, setStatusOpen] = useState(false);
 
   const showing = e.bulkDiscountActive ? e.total - (quote.bulk_discount_amount ?? 0) : e.total;
@@ -115,7 +124,11 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
   // Nút chính đang là việc khác (vd Lưu thay đổi) thì "Gửi khách" lùi thành nút phụ.
   const sendSecondary = canSend && kind !== "send";
 
+  // Khách đồng ý ngoài trang báo giá (gọi điện, Zalo) → tạo hợp đồng ngay từ menu.
+  const canConvertNow = canConvert && kind !== "convert" && !quote.contract_id &&
+    quote.status !== "cancelled" && quote.status !== "expired" && quote.status !== "converted";
   const menu: MenuItem[] = [
+    ...(canConvertNow ? [{ label: "Tạo hợp đồng ngay", icon: FileSignature, onClick: e.convertToContract, hint: "Khách đã đồng ý qua điện thoại / Zalo" } as MenuItem] : []),
     ...(!canSend ? [{ label: "Gửi khách…", icon: Send, onClick: () => setSendOpen(true) } as MenuItem] : []),
     { label: "Xuất PDF", icon: Printer, onClick: e.printQuote, hint: "Mở bản A4 để in hoặc lưu PDF" },
     { label: "Chép link kèm lời nhắn", icon: Copy, onClick: e.copyLink },
@@ -483,6 +496,7 @@ export default function QuoteEditorV2(props: QuoteEditorProps) {
                       )}
                     </Field>
                   </div>
+                  <datalist id="quote-package-groups">{e.packageGroups.map((g) => <option key={g} value={g} />)}</datalist>
                   {e.packageGroups.length === 0 ? (
                     <p className="mt-2.5 text-[12px]" style={{ color: "var(--tx3)" }}>Chưa có gói nào. Thêm “Nhóm gói” cho các hạng mục tuỳ chọn để tạo gói.</p>
                   ) : null}

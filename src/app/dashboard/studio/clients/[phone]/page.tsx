@@ -13,9 +13,10 @@ import {
 import { LEAD_SOURCE_LABEL } from "@/lib/lead-source";
 import { isUiV2 } from "@/lib/ui-server";
 import ClientDetailV2 from "./ClientDetailV2";
+import { clientKey } from "@/lib/client-key";
+import { applyBranch, getBranchScope } from "@/lib/branches";
+import StudioDenied from "@/components/StudioDenied";
 
-
-const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
 type Row = {
   id: string;
@@ -44,26 +45,36 @@ export default async function ClientDetail(props: { params: Promise<{ phone: str
     );
   }
 
-  const key = decodeURIComponent(params.phone);
+  // Cùng các chốt của danh bạ: kế toán không xem khách; nhân viên chỉ thấy HĐ
+  // được giao; lọc theo chi nhánh đang chọn. Trước đây gõ thẳng URL hồ sơ là
+  // thấy mọi hợp đồng + doanh thu của khách ở mọi chi nhánh.
+  if (profile.actingRole === "accountant") return <StudioDenied message="Kế toán chỉ truy cập mục Thu chi & Bảng lương." />;
+  const branchSel = (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected;
+  // URL cũ có thể mang "84901…" hay "+84901…" → chuẩn hoá giống danh bạ.
+  const rawKey = decodeURIComponent(params.phone);
+  const key = /\d{9}/.test(rawKey) ? clientKey(rawKey, null) : rawKey;
   const supabase = await createClient();
   // Lật trang — không thì studio quá 1000 HĐ mở hồ sơ khách cũ ra trống trơn.
-  const all = await fetchAllRows<Row>((from, to) =>
-    supabase
+  const all = await fetchAllRows<Row>((from, to) => {
+    let cq = supabase
       .from("studio_contracts")
-      .select("id, title, client_name, client_phone, client_email, event_date, status, source, contract_items(qty, unit_price), contract_payments(amount)")
-      .eq("owner_id", profile.id)
+      .select("id, title, client_name, client_phone, client_email, event_date, status, source, branch_id, contract_items(qty, unit_price), contract_payments(amount)")
+      .eq("owner_id", profile.id);
+    if (profile.actingRole === "staff") cq = cq.eq("assigned_to", profile.actingUserId);
+    return applyBranch(cq, branchSel)
       .order("event_date", { ascending: false, nullsFirst: false })
       .order("id")
-      .range(from, to)
-  );
-  const mine = all.filter((r) => (digits(r.client_phone) || (r.client_name || "").trim().toLowerCase()) === key);
+      .range(from, to);
+  });
+  const mine = all.filter((r) => clientKey(r.client_phone, r.client_name) === key);
 
   const name = mine.find((r) => r.client_name)?.client_name || mine[0]?.client_phone || "Khách hàng";
   const phone = mine.find((r) => r.client_phone)?.client_phone || "";
   const email = mine.find((r) => r.client_email)?.client_email || "";
   const source = mine.find((r) => r.source)?.source || null;
-  const totalValue = mine.reduce((s, r) => s + contractTotal(r.contract_items || []), 0);
-  const collected = mine.reduce((s, r) => s + sumAmounts(r.contract_payments || []), 0);
+  const live = mine.filter((r) => r.status !== "cancelled");
+  const totalValue = live.reduce((s, r) => s + contractTotal(r.contract_items || []), 0);
+  const collected = live.reduce((s, r) => s + sumAmounts(r.contract_payments || []), 0);
 
   if (await isUiV2()) {
     return (

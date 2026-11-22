@@ -112,7 +112,21 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
     setBusy(b.id);
     const ct = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/-/g, "");
     const code = await nextContractCode(supabase, ownerId);
-    const note = [b.note, fullClauseText()].filter(Boolean).join("\n\n");
+    // Điều khoản: như màn tạo hợp đồng — ưu tiên điều khoản của DỊCH VỤ chứa gói
+    // khách chọn (bảng giá riêng của dịch vụ có list_key = id dịch vụ), thiếu
+    // mới dùng mẫu chung. Trước đây luôn dùng mẫu chung nên hợp đồng từ đặt lịch
+    // lệch điều khoản với hợp đồng tạo tay cùng dịch vụ.
+    const pkNames = (b.details?.packages?.length ? b.details.packages.map((x) => x.name) : b.package_name ? [b.package_name] : []).filter(Boolean);
+    let svc: { id: string; clauses: string | null } | null = null;
+    if (pkNames.length) {
+      const { data: pl } = await supabase.from("studio_pricelist").select("list_key").eq("owner_id", ownerId).in("name", pkNames).limit(5);
+      const keys = [...new Set(((pl ?? []) as { list_key: string | null }[]).map((x) => x.list_key).filter((k): k is string => !!k && /^[0-9a-f-]{36}$/i.test(k)))];
+      if (keys.length) {
+        const { data: sv } = await supabase.from("studio_services").select("id, clauses").eq("owner_id", ownerId).in("id", keys).limit(1).maybeSingle();
+        svc = (sv as { id: string; clauses: string | null } | null) ?? null;
+      }
+    }
+    const note = [b.note, svc?.clauses?.trim() || fullClauseText()].filter(Boolean).join("\n\n");
     const core = {
       owner_id: ownerId,
       code,
@@ -125,6 +139,7 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
       ...(assignTo ? { assigned_to: assignTo } : {}),
       client_messenger: b.facebook || null,
       event_date: b.preferred_date,
+      ...(svc ? { service_id: svc.id, shoot_type: "other" } : {}),
       note,
       client_token: ct,
     };
@@ -168,9 +183,37 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
     // details) thì như trước: một dòng theo package_name.
     const pk = d?.packages?.length ? d.packages : b.package_name ? [{ name: b.package_name, price: b.package_price }] : [];
     if (pk.length) {
-      await supabase
+      const { error: itemsErr } = await supabase
         .from("contract_items")
         .insert(pk.map((p, position) => ({ contract_id: data!.id, name: p.name, qty: 1, unit_price: p.price || 0, position })));
+      if (itemsErr) alert("Hợp đồng đã tạo nhưng chưa thêm được gói dịch vụ: " + itemsErr.message + ". Bạn thêm lại ở tab Hạng mục nhé.");
+    }
+    // Cọc giữ ngày khách ĐÃ chuyển và studio đã xác nhận → ghi thành lần thu
+    // "Cọc" của hợp đồng. Trước đây bị bỏ quên: hợp đồng báo khách còn nợ đủ
+    // 100%, studio phải nhập tay lại (dễ ghi trùng với đối soát ngân hàng).
+    if (b.deposit_status === "confirmed" && (b.deposit_amount ?? 0) > 0) {
+      const { data: payRow, error: payErr } = await supabase.from("contract_payments").insert({
+        contract_id: data.id,
+        amount: b.deposit_amount,
+        kind: "deposit",
+        method: "transfer",
+        paid_at: (b.deposit_paid_at || new Date().toISOString()).slice(0, 10),
+        note: `Cọc giữ ngày khi đặt lịch${b.deposit_code ? ` · mã ${b.deposit_code}` : ""}`,
+        ...(b.deposit_proof_url ? { proof_url: b.deposit_proof_url } : {}),
+      }).select("id").single();
+      // Kế hoạch thanh toán: đợt cọc (đã thu, nối với lần thu vừa ghi) + phần còn lại.
+      const pkTotal = pk.reduce((sum, x) => sum + (Number(x.price) || 0), 0);
+      if (!payErr && payRow) {
+        const dep = b.deposit_amount ?? 0;
+        await supabase.from("contract_payment_plan").insert([
+          { contract_id: data.id, label: "Cọc giữ lịch", amount: dep, position: 0, paid: true, paid_at: new Date().toISOString(), payment_id: (payRow as { id: string }).id },
+          // Có voucher thì tổng còn đổi sau khi áp → chưa tạo đợt còn lại.
+          ...(!b.voucher_code && pkTotal - dep > 0 ? [{ contract_id: data.id, label: "Thanh toán khi giao sản phẩm", amount: pkTotal - dep, position: 1 }] : []),
+        ]);
+      }
+      if (payErr) alert(`Chưa ghi được khoản cọc ${b.deposit_amount?.toLocaleString("vi-VN")}đ vào hợp đồng: ${payErr.message}. Bạn ghi tay ở tab Thanh toán nhé.`);
+    } else if (b.deposit_status === "paid" && (b.deposit_amount ?? 0) > 0) {
+      alert(`Khách báo đã chuyển cọc ${b.deposit_amount?.toLocaleString("vi-VN")}đ nhưng bạn chưa xác nhận. Kiểm tra tài khoản rồi ghi khoản cọc ở tab Thanh toán của hợp đồng.`);
     }
     // Ngày phụ → mốc lịch của hợp đồng (hiện trên Lịch, lịch thợ, cổng khách).
     if (d?.extra_days?.length) {

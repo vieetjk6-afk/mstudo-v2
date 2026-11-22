@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
 import NewQuoteForm from "./NewQuoteForm";
+import type { NewQuoteFormProps } from "./useNewQuoteForm";
 import StudioDenied from "@/components/StudioDenied";
 import { getBranchScope } from "@/lib/branches";
 
 
-export default async function NewQuotePage() {
+export default async function NewQuotePage(props: { searchParams?: Promise<{ booking?: string }> }) {
+  const searchParams = await props.searchParams;
   const profile = await requireStudio("plus");
   if (profile?.actingRole === "accountant") return <StudioDenied message="Kế toán chỉ truy cập mục Thu chi & Bảng lương." />;
   if (!profile) {
@@ -47,6 +49,29 @@ export default async function NewQuotePage() {
   const sel = (await getBranchScope(profile.id, profile.actingBranchId as string | null, profile.actingRole as string)).selected;
   const branchId = typeof sel === "string" && sel !== "none" ? sel : null;
 
+  // Báo giá từ một yêu cầu đặt lịch (?booking=id): điền sẵn khách, ngày, gói,
+  // khỏi gõ lại. RLS + owner_id bảo đảm chỉ đọc được yêu cầu của chính studio.
+  let fromBooking: NewQuoteFormProps["fromBooking"] = null;
+  if (searchParams?.booking && /^[0-9a-f-]{36}$/i.test(searchParams.booking)) {
+    const { data: bk } = await supabase
+      .from("studio_bookings")
+      .select("id, name, phone, facebook, preferred_date, note, package_name, details")
+      .eq("id", searchParams.booking)
+      .eq("owner_id", profile.id)
+      .maybeSingle();
+    if (bk) {
+      const d = (bk as { details?: { packages?: { name: string }[] } | null }).details;
+      fromBooking = {
+        id: bk.id as string,
+        name: (bk.name as string) || "",
+        phone: (bk.phone as string) || "",
+        facebook: (bk.facebook as string | null) ?? "",
+        eventDate: (bk.preferred_date as string | null) ?? "",
+        packageNames: d?.packages?.length ? d.packages.map((x) => x.name) : bk.package_name ? [bk.package_name as string] : [],
+      };
+    }
+  }
+
   return (
     <NewQuoteForm
       ownerId={profile.id}
@@ -54,6 +79,8 @@ export default async function NewQuotePage() {
       services={(services ?? []) as { id: string; name: string }[]}
       pricelist={(pricelist ?? []) as { id: string; name: string; price: number; unit: string | null; description: string | null; category: string | null; list_key: string | null }[]}
       listLabels={listLabels}
+      fromBooking={fromBooking}
+      depositPercent={(profile as { contract_deposit_percent?: number | null }).contract_deposit_percent ?? null}
     />
   );
 }

@@ -338,6 +338,7 @@ export default async function StudioOverview() {
     { count: pendingReviews },
     { count: pendingBank },
     noteMode,
+    { count: newBookings },
   ] = await Promise.all([
     activeContracts(),
     oldContracts(),
@@ -404,6 +405,11 @@ export default async function StudioOverview() {
       .eq("owner_id", profile.id)
       .in("status", ["unmatched", "mismatch"]),
     loadTransferNoteMode(profile.id, profile),
+    // Yêu cầu đặt lịch MỚI chưa xử lý — trước đây chỉ bản gói Photographer đếm,
+    // bản Studio báo "Không còn việc nào treo" dù có khách đang chờ phản hồi.
+    isStaff
+      ? Promise.resolve({ count: 0 })
+      : supabase.from("studio_bookings").select("id", { count: "exact", head: true }).eq("owner_id", profile.id).eq("status", "new"),
   ]);
 
   const list = contracts;
@@ -703,6 +709,30 @@ export default async function StudioOverview() {
       title: `Báo giá "${q.title || q.code || "chưa đặt tên"}" khách chưa chốt`,
       sub: `${q.client_name || "—"} · ${vnd(quoteSelectedTotal(q.quote_items || []))} · gửi ${days} ngày trước`,
       tag: "Báo giá", cta: "Mở báo giá", href: `/dashboard/studio/quotes/${q.id}`,
+    });
+  }
+
+  // 7b. Yêu cầu đặt lịch mới — khách vừa để lại thông tin, gọi lại càng sớm càng chốt được.
+  if ((newBookings ?? 0) > 0) {
+    urgent.push({
+      key: "bookings-new", kind: "booking", icon: CalendarClock, tone: "amber",
+      title: `${newBookings} yêu cầu đặt lịch mới chưa xử lý`,
+      sub: "Gọi / nhắn lại khách rồi báo giá hoặc tạo hợp đồng ngay từ yêu cầu",
+      tag: "Đặt lịch", cta: "Xem yêu cầu", href: "/dashboard/studio/bookings",
+    });
+  }
+
+  // 7c. Hợp đồng NHÁP nằm quá 2 ngày chưa gửi — gồm hợp đồng tự sinh khi khách
+  //     đồng ý báo giá (khách đang chờ studio gửi lại để ký).
+  for (const c of list) {
+    if (c.status !== "draft") continue;
+    const days = Math.floor((Date.now() - new Date(c.updated_at).getTime()) / 86400000);
+    if (days < 2) continue;
+    urgent.push({
+      key: `draft-${c.id}`, kind: "draft", icon: FileText, tone: "blue",
+      title: `${c.title} còn là bản nháp`,
+      sub: `${c.client_name || "—"} · ${days} ngày chưa gửi khách${c.event_date ? ` · chụp ${fmtDate(c.event_date)}` : " · chưa có ngày chụp"}`,
+      tag: "Hợp đồng", cta: "Hoàn thiện & gửi", href: `/dashboard/studio/contracts/${c.id}`,
     });
   }
 

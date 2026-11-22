@@ -118,7 +118,7 @@ async function serveState(sub: string, published: boolean, force: boolean) {
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { action?: string; subdomain?: string; force?: boolean };
-  const { db, user, site } = await loadSite();
+  const { user, site } = await loadSite();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   if (!site) return NextResponse.json({ error: "no_site", hint: "Hãy tạo website trước." }, { status: 400 });
 

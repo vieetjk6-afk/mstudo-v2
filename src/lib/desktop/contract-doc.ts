@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { contractPrintDocument, type ContractPrintData } from "@/lib/contract-print";
+import { contractPreamble, contractPrintDocument, vnSignDate, type ContractPrintData } from "@/lib/contract-print";
 import { fmtDate } from "@/lib/date";
 
 /**
@@ -100,9 +100,11 @@ export function buildContractHtml(d: ContractDocData): string {
   const { total, paid, remain } = computeTotals(d);
   const data: ContractPrintData = {
     docTitle: contractBaseName(c),
-    // Bản desktop giữ quốc hiệu – tiêu ngữ như nếp cũ (studio hay in ra ký tay
-    // rồi lưu hồ sơ giấy); bản in trên web để gọn nên không có.
+    // Quốc hiệu – tiêu ngữ + căn cứ: cùng nếp với bản in trên web (studio hay
+    // in ra ký tay rồi lưu hồ sơ giấy).
     nationalHeading: true,
+    preamble: contractPreamble(),
+    signDate: vnSignDate(c.client_signed_at || c.studio_signed_at || new Date()),
     title: c.title,
     code: c.code,
     issuedAt: dmy(c.created_at),

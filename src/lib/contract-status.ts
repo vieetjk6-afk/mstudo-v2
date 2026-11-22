@@ -38,14 +38,18 @@ export async function autoAdvanceContracts(
   // 1) Ứng viên: HĐ đang hoạt động, chưa đang thực hiện/hoàn tất/huỷ.
   // Lật trang + chia mẻ `.in()`: cron chạy cho MỌI studio, quá 1000 hợp đồng là
   // Supabase cắt lặng lẽ, và một URL nghìn UUID thì hỏng hẳn truy vấn mốc lịch.
-  const contracts = await fetchAllRows<{ id: string; owner_id: string; event_date: string | null; status: string }>((from, to) => {
+  const contractsAll = await fetchAllRows<{ id: string; owner_id: string; event_date: string | null; status: string; client_signed_at: string | null }>((from, to) => {
     let q = db
       .from("studio_contracts")
-      .select("id, owner_id, event_date, status")
+      .select("id, owner_id, event_date, status, client_signed_at")
       .in("status", ADVANCEABLE as unknown as string[]);
     if (ownerId) q = q.eq("owner_id", ownerId);
     return q.order("id").range(from, to);
   });
+  // "Đã gửi" mà khách CHƯA ký thì KHÔNG tự chuyển: chuyển sang "Đang thực hiện"
+  // làm mất cảnh báo "Khách chưa ký hợp đồng" (chỉ xét trạng thái "sent") đúng
+  // lúc studio cần thấy nó nhất. Studio đã ký giấy thì tự đổi trạng thái tay.
+  const contracts = contractsAll.filter((c) => c.status !== "sent" || !!c.client_signed_at);
   if (!contracts.length) return { started: [], toPostProduction: await autoAdvanceToPostProduction(db, ownerId) };
 
   // 2) Mốc sớm nhất theo studio_events cho các HĐ ứng viên (vd ngày đãi trước).

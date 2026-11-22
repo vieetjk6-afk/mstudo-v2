@@ -16,6 +16,10 @@ export type FilterableContract = {
   status: string;
   /** Giờ chụp "HH:MM". Chỉ dùng để xếp hai buổi CÙNG NGÀY cho đúng thứ tự. */
   event_time?: string | null;
+  /** Địa điểm + tên cô dâu/chú rể — tìm được "tràng an", tên chú rể. Có thì tìm. */
+  location?: string | null;
+  bride_name?: string | null;
+  groom_name?: string | null;
 };
 
 export type ContractFilters = {
@@ -93,7 +97,7 @@ export function filterContracts<T extends FilterableContract>(
     if (to && (!c.event_date || c.event_date > to)) return false;
     return matchesQuery(
       q,
-      [c.title, c.client_name, c.code, c.client_phone, c.event_date, c.event_date ? dmy(c.event_date) : ""],
+      [c.title, c.client_name, c.code, c.client_phone, c.event_date, c.event_date ? dmy(c.event_date) : "", c.location, c.bride_name, c.groom_name],
       [c.client_phone]
     );
   });

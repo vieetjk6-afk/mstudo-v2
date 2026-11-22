@@ -24,8 +24,11 @@ export async function POST(_req: Request, props: { params: Promise<{ id: string 
     .eq("owner_id", profile.id)
     .maybeSingle();
   if (!quote) return NextResponse.json({ error: "Báo giá không tồn tại." }, { status: 404 });
-  if (quote.status !== "accepted") {
-    return NextResponse.json({ error: "Chỉ tạo hợp đồng từ báo giá khách đã đồng ý." }, { status: 409 });
+  // Studio tự chốt được cả khi khách đồng ý qua điện thoại/Zalo (báo giá còn
+  // "đã gửi", "khách đã xem"…) — không bắt đổi trạng thái tay trước. Chỉ chặn
+  // báo giá đã huỷ / hết hạn.
+  if (quote.status === "cancelled" || quote.status === "expired") {
+    return NextResponse.json({ error: "Báo giá đã huỷ hoặc hết hạn — mở lại trước khi tạo hợp đồng." }, { status: 409 });
   }
 
   const result = await convertQuoteToContract(

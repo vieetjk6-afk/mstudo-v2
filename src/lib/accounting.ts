@@ -77,6 +77,11 @@ export function receiptPrintData(r: ReceiptInput): ContractPrintData {
     docTitle: `Phiếu thu ${r.no}`,
     heading: "PHIẾU THU",
     nationalHeading: true,
+    // Phiếu thu dùng chung bộ dựng với hợp đồng → phải đổi nhãn, không thì in
+    // "Số hợp đồng PT-…", "Bên A · Bên cung cấp dịch vụ", "Hạng mục dịch vụ…".
+    codeLabel: "Số phiếu",
+    partyLabels: ["Đơn vị thu tiền", "Người nộp tiền"],
+    itemsTitle: "Nội dung thu",
     title: r.contract.title ?? null,
     code: r.no,
     issuedAt: r.paidOn,

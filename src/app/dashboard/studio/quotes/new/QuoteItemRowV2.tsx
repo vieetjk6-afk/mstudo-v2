@@ -132,9 +132,10 @@ export default function QuoteItemRowV2({
           value={group}
           disabled={disabled}
           aria-label={`Nhóm gói của hạng mục ${index + 1}`}
-          placeholder="Nhóm gói (VD: goi-co-ban) — để trống nếu không thuộc gói"
+          placeholder="Tên gói khách thấy (VD: Gói Cơ bản) — để trống nếu không thuộc gói"
           onChange={(e) => onPatch({ package_group: e.target.value })}
           autoFocus={showGroup && !group}
+          list="quote-package-groups"
         />
       ) : null}
 

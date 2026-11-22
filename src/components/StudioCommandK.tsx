@@ -10,6 +10,7 @@ import { crewRoleLabel, loadCrewRolesMany } from "@/lib/crew-roles";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { Badge, iconBtn, type Tone } from "@/components/v2/kit";
 import { v2PortalProps } from "@/components/v2parts/portal-scope";
+import { clientKey } from "@/lib/client-key";
 
 type Hit = {
   key: string;
@@ -25,7 +26,6 @@ type Hit = {
 type ContractRow = { id: string; title: string; code: string | null; client_name: string | null; client_phone: string | null };
 type CrewRow = { id: string; owner_id?: string; name: string; phone: string | null; role: string | null };
 
-const digits = (s: string | null | undefined) => (s ?? "").replace(/\D/g, "");
 
 /**
  * Ô lệnh ⌘K — tính năng mới số 2 của bản thiết kế: một chỗ duy nhất để tới bất
@@ -100,12 +100,27 @@ function useCommandK(access: NavAccess) {
               .limit(6)
           : Promise.resolve({ data: [] }),
       ]);
+      // `ilike` của Postgres phân biệt dấu: gõ "hanh" không ra "Hạnh". Gõ không
+      // dấu mà server không trả gì thì quét vài trăm hợp đồng mới nhất (4 cột
+      // chữ) và so trên chuỗi đã bỏ dấu — cùng cách /api/pet/find đang làm.
+      let contractRows = (c.data ?? []) as ContractRow[];
+      if ((canSeeContracts || canSeeClients) && contractRows.length < 4 && noAccent(term) === term.toLowerCase()) {
+        const want = noAccent(term);
+        const { data: recent } = await supabase.from("studio_contracts")
+          .select("id, title, code, client_name, client_phone")
+          .order("created_at", { ascending: false })
+          .limit(400);
+        const seenIds = new Set(contractRows.map((r) => r.id));
+        const extra = ((recent ?? []) as ContractRow[]).filter((r) =>
+          !seenIds.has(r.id) && noAccent(`${r.title} ${r.code ?? ""} ${r.client_name ?? ""} ${r.client_phone ?? ""}`).includes(want));
+        contractRows = [...contractRows, ...extra].slice(0, 12);
+      }
       // Khoá vai trò → tên hiển thị (gồm vai trò studio tự đặt). Trước đây hiện
       // thẳng khoá thô: "photographer", "makeup"…
       const crewRows = (k.data ?? []) as CrewRow[];
       const roleSets = crewRows.length ? await loadCrewRolesMany(supabase, crewRows.map((r) => r.owner_id)) : new Map();
       if (stale) return;
-      setContracts((c.data ?? []) as ContractRow[]);
+      setContracts(contractRows);
       setCrew(crewRows.map((r) => ({ ...r, role: r.role ? crewRoleLabel(r.role, roleSets.get(r.owner_id ?? "")) : r.role })));
       setCursor(0);
     }, 250);
@@ -134,8 +149,7 @@ function useCommandK(access: NavAccess) {
     // gom theo số điện thoại đúng như màn Khách hàng đang làm.
     const seen = new Set<string>();
     const kls: Hit[] = !cq || !canSeeClients ? [] : contracts.reduce<Hit[]>((out, c) => {
-      const phone = digits(c.client_phone);
-      const key = phone || (c.client_name ?? "");
+      const key = clientKey(c.client_phone, c.client_name);
       if (!key || seen.has(key) || out.length >= 3) return out;
       if (!hit(`${c.client_name ?? ""} ${c.client_phone ?? ""}`)) return out;
       seen.add(key);

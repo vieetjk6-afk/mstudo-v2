@@ -1,3 +1,4 @@
+import { brandFrom } from "@/lib/studio-brand";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudio } from "@/lib/auth-guards";
@@ -50,6 +51,16 @@ export default async function QuoteDetailPage(props: { params: Promise<{ id: str
       studioHost={studioHost}
       // ?? chứ không phải ||: studio đặt 0 ngày nghĩa là CỐ Ý không đặt hạn.
       quoteValidDays={(profile as { quote_valid_days?: number }).quote_valid_days ?? 15}
+      depositPercent={(profile as { contract_deposit_percent?: number | null }).contract_deposit_percent ?? null}
+      studio={{
+        name: brandFrom(profile).name,
+        logo: brandFrom(profile).logoUrl,
+        phone: (profile.pl_phone as string | null) ?? null,
+        email: (profile.email as string | null) ?? null,
+        bankName: (profile.pl_bank_name as string | null) ?? null,
+        bankAccount: (profile.pl_bank_account as string | null) ?? null,
+        bankHolder: (profile.pl_bank_holder as string | null) ?? null,
+      }}
     />
   );
 }

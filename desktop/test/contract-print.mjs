@@ -14,7 +14,11 @@ import {
   contractPrintBody,
   contractPrintDocument,
   printVnd,
+  printFooterLabel,
+  vnSignDate,
+  signVerifyLine,
 } from "../../src/lib/contract-print.ts";
+import { quotePrintData } from "../../src/lib/quote-print.ts";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -99,6 +103,46 @@ checkTrue("có doctype + charset", doc.startsWith("<!doctype html>") && doc.incl
 checkTrue("có khổ A4", doc.includes("@page { size: A4"));
 checkTrue("tự gọi in sau khi ảnh tải xong", doc.includes("window.print()") && doc.includes('addEventListener("load"'));
 checkTrue("tắt tự in khi cần (bản desktop lưu file)", !contractPrintDocument(base, { autoPrint: false }).includes("window.print()"));
+
+// ── Logo tải lên lưu dạng "/api/img?id=…" (cùng máy chủ) phải in ra được ──
+const relLogo = contractPrintBody({ ...base, studio: { ...base.studio, logo: "/api/img?id=abc&orig=1" } });
+checkTrue("logo đường dẫn nội bộ → thẻ img", relLogo.includes('class="cpd-logo" src="/api/img?id=abc&amp;orig=1"'));
+const proto = contractPrintBody({ ...base, studio: { ...base.studio, logo: "//evil.example/x.png" } });
+checkTrue("logo //host bị loại → ô chữ cái", !proto.includes("evil.example") && proto.includes("cpd-mono"));
+
+// ── Điều khoản tách theo từng điều (không cắt ngang giữa trang) ──────────
+const terms = contractPrintBody({ ...base, terms: "1. ĐẶT CỌC\n- Cọc 30%\n2. HUỶ LỊCH\n- Báo trước 7 ngày" });
+checkTrue("mỗi điều một khối keep", (terms.match(/class="cpd-clause keep"/g) || []).length === 2);
+checkTrue("tiêu đề điều in riêng", terms.includes('<div class="cpd-clh">2. HUỶ LỊCH</div>'));
+
+// ── Chân trang, ngày ký, vết ký điện tử ──────────────────────────────────
+check("chân trang hợp đồng", printFooterLabel({ code: "HD-1" }), "Hợp đồng HD-1");
+check("chân trang phiếu thu", printFooterLabel({ code: "PT-1", codeLabel: "Số phiếu" }), "Phiếu PT-1");
+check("không mã → không chân trang", printFooterLabel({ code: null }), null);
+check("dòng ngày ký (giờ VN)", vnSignDate("2026-11-21T18:30:00Z"), "Ngày 22 tháng 11 năm 2026");
+check("vết ký điện tử", signVerifyLine("2026-11-22T07:35:00Z"), "Ký điện tử lúc 14:35 22/11/2026");
+checkTrue("có số trang trong @page", contractPrintDocument(base).includes('counter(pages)'));
+checkTrue("bản nháp có chữ chìm", contractPrintBody({ ...base, draft: true }).includes("BẢN NHÁP"));
+
+// ── Nhãn phiếu thu không còn là nhãn hợp đồng ────────────────────────────
+const rc = contractPrintBody({ ...base, codeLabel: "Số phiếu", partyLabels: ["Đơn vị thu tiền", "Người nộp tiền"], itemsTitle: "Nội dung thu" });
+checkTrue("phiếu thu: nhãn số phiếu", rc.includes("Số phiếu") && !rc.includes("Số hợp đồng"));
+checkTrue("phiếu thu: nhãn hai bên", rc.includes("Người nộp tiền") && !rc.includes("Bên B · Khách hàng"));
+checkTrue("phiếu thu: tên mục", rc.includes("1. Nội dung thu"));
+
+// ── Báo giá: dòng chưa chọn tách riêng, không cộng vào tổng ──────────────
+const qd = quotePrintData({
+  quote: { title: "BG", code: "BG-1", event_date: "2026-12-20" },
+  items: [
+    { name: "Gói A", qty: 1, unit_price: 5_000_000, is_optional: true, selected: true, package_group: "a" },
+    { name: "Gói B", qty: 1, unit_price: 8_000_000, is_optional: true, selected: true, package_group: "b" },
+    { name: "Album", qty: 1, unit_price: 2_000_000, is_optional: true, selected: false },
+  ],
+  total: 5_000_000, payableTotal: 5_000_000, deposit: 1_000_000, depositPct: 20,
+});
+check("báo giá: chỉ gói A được tính", qd.items.map((x) => x.name).join("|"), "Gói A");
+check("báo giá: gói B + album thành tuỳ chọn", qd.products.map((x) => x.name).join("|"), "Gói B|Album");
+check("báo giá: ngày có thứ", qd.facts[0].value, "CN · 20/12/2026");
 
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);
 process.exit(fail === 0 ? 0 : 1);

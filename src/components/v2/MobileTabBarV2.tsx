@@ -15,15 +15,18 @@ import { isNavActive, type NavGroup, type NavItem } from "@/lib/studio-nav";
  * vai trò qua `groups`), nên không bao giờ có tab dẫn tới trang bị chặn. Màn còn
  * lại nằm ở menu ☰ trên topbar. Nút + nổi mở bảng tạo nhanh.
  */
+// Thứ tự theo QUY TRÌNH của chủ studio (hợp đồng → lịch → album → khách).
+// "Của tôi" (/staff) xếp sau: chủ studio ít dùng, nhưng nhân viên — vốn không
+// thấy Hợp đồng/Khách/Tài chính — vẫn có nó trong 5 tab vì các mục trên bị lọc.
 const PRIORITY: [string, string][] = [
   ["/dashboard/studio", "Tổng quan"],
-  ["/staff", "Của tôi"],
   ["/dashboard/studio/contracts", "Hợp đồng"],
   ["/dashboard/studio/calendar", "Lịch"],
   ["/dashboard/albums", "Album"],
-  ["/dashboard/studio/reports", "Tài chính"],
   ["/dashboard/studio/clients", "Khách"],
+  ["/staff", "Của tôi"],
   ["/dashboard/studio/quotes", "Báo giá"],
+  ["/dashboard/studio/reports", "Tài chính"],
   ["/dashboard/tools", "Công cụ"],
 ];
 
@@ -76,7 +79,7 @@ export default function MobileTabBarV2({ groups, pathname, creates, pins = [] }:
             </div>
             <div className="flex flex-col gap-1">
               {creates.map((c) => (
-                <Link key={c.href} href={c.href} className="v2-menu flex items-center gap-3 rounded-[12px] px-2 py-3">
+                <Link prefetch={false} key={c.href} href={c.href} className="v2-menu flex items-center gap-3 rounded-[12px] px-2 py-3">
                   <span className="flex h-10 w-10 flex-none items-center justify-center rounded-[12px]" style={{ background: "var(--acS)", color: "var(--ac)" }}>
                     <c.icon size={19} />
                   </span>

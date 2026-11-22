@@ -20,6 +20,11 @@ import { Menu, Segmented, Switch } from "@/components/v2/kit-client";
 import type { Album, AlbumPhase, Photo } from "@/lib/types";
 import type { AlbumEditorState, AlbumPick, CustomerShare } from "./useAlbumEditor";
 import { Thumb, codesText, copyText, downloadText, shortCode } from "./album-v2-parts";
+
+/** Nhãn một lượt chọn — "shared" là lựa chọn chung của khách (không có mã riêng);
+ *  trước đây tab này in "Mã SHARED" trong khi trang Lượt chọn ghi đúng. */
+const sessionLabel = (id: string, name?: string | null) =>
+  name || (id === "shared" ? "Lựa chọn của khách" : `Mã ${shortCode(id)}`);
 import { AlbumCollageCardV2, type AlbumCollageInfo } from "./AlbumCollageCard";
 import FaceScanCardV2 from "./FaceScanCardV2";
 
@@ -82,10 +87,10 @@ export function PicksTabV2({
               key={g.id}
               on={e.pickSession === g.id}
               onClick={() => e.setPickSession(g.id)}
-              lead={<Avatar name={g.name || shortCode(g.id)} size={34} />}
-              title={g.name || `Mã ${shortCode(g.id)}`}
+              lead={<Avatar name={sessionLabel(g.id, g.name)} size={34} />}
+              title={sessionLabel(g.id, g.name)}
               sub={`${g.count} ảnh · ${fmtDateTime(g.at)}`}
-              code={g.name ? shortCode(g.id) : undefined}
+              code={g.name && g.id !== "shared" ? shortCode(g.id) : undefined}
             />
           ))}
         </div>
@@ -104,7 +109,7 @@ export function PicksTabV2({
               ]}
             />
             <span className="text-[12.5px]" style={{ color: "var(--tx3)" }}>
-              {!multi && one ? <>{one.name || `Mã ${shortCode(one.id)}`} · </> : null}
+              {!multi && one ? <>{sessionLabel(one.id, one.name)} · </> : null}
               Đang hiện {n} ảnh
             </span>
             <div className="ml-auto flex flex-wrap items-center gap-2">

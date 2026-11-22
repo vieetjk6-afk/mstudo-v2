@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronRight, CircleHelp, EyeOff, Film, Flame, PawPrint, X } from "lucide-react";
+import { ChevronRight, CircleHelp, EyeOff, Film, Flame, PawPrint, Sparkles, X } from "lucide-react";
 import { TOUR_EVENT } from "@/components/ProductTour";
 import PetCommand from "@/components/PetCommand";
 import PetSprite from "@/app/dashboard/be-may-anh/PetSprite";
@@ -79,6 +79,35 @@ export default function PetBuddy() {
   petRef.current = pet;
 
   const onPetPage = pathname.startsWith("/dashboard/be-may-anh");
+  /* Chế độ GỌN: màn làm việc chi tiết (hợp đồng, báo giá, album, form tạo mới)
+     và mọi màn trên điện thoại. Bé nhỏ lại, ẩn ô "Ra lệnh cho bé…", không tự
+     bật bong bóng nói, và lánh đi khi đang cuộn — trước đây bé + ô ra lệnh +
+     bong bóng đè lên thẻ Thanh toán, nút "Ký xác nhận", ô tìm kiếm và lưới ảnh. */
+  const workPage = /^\/dashboard\/(studio\/(contracts|quotes)\/[^/]+|albums\/[^/]+)/.test(pathname);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  const compact = workPage || narrow;
+  const [scrolling, setScrolling] = useState(false);
+  useEffect(() => {
+    if (!compact) return;
+    let t: ReturnType<typeof setTimeout>;
+    const onScroll = () => {
+      setScrolling(true);
+      clearTimeout(t);
+      t = setTimeout(() => setScrolling(false), 900);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("scroll", onScroll);
+    };
+  }, [compact]);
 
   const load = useCallback(async () => {
     loadedAt.current = Date.now();
@@ -123,7 +152,7 @@ export default function PetBuddy() {
 
   // Nhịp nói: câu đầu sau vài giây, sau đó 1–2 phút một câu, mỗi câu hiện 9 giây.
   useEffect(() => {
-    if (!pet || hidden || onPetPage) return;
+    if (!pet || hidden || onPetPage || compact) return;
     let t: ReturnType<typeof setTimeout>;
     let off: ReturnType<typeof setTimeout>;
     const say = () => {
@@ -146,7 +175,7 @@ export default function PetBuddy() {
     };
     // Chỉ khởi động lại nhịp khi bé xuất hiện / ẩn / đổi trang — không phải mỗi lần số liệu đổi.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!pet, hidden, onPetPage, nextLine]);
+  }, [!!pet, hidden, onPetPage, compact, nextLine]);
 
   // Đóng bảng khi chuyển trang.
   useEffect(() => {
@@ -210,7 +239,10 @@ export default function PetBuddy() {
   }
 
   return (
-    <div className={`${corner} flex flex-col items-start gap-2 lg:items-end`}>
+    <div
+      className={`${corner} flex flex-col items-start gap-2 transition-[opacity,transform] duration-200 lg:items-end`}
+      style={scrolling && !open && !cmdOpen ? { opacity: 0, transform: "translateY(12px)", pointerEvents: "none" } : undefined}
+    >
       <style>{CSS}</style>
 
       {open && !cmdOpen && (
@@ -264,6 +296,20 @@ export default function PetBuddy() {
           )}
 
           <div className="mt-3 flex items-center gap-2 border-t pt-3" style={{ borderColor: "var(--bd2)" }}>
+            {compact && (
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  setCmdOpen(true);
+                }}
+                className="flex items-center gap-1 rounded-[10px] px-2.5 py-2 text-[12px] font-semibold"
+                style={{ background: "var(--sf2)", color: "var(--tx2)" }}
+                title="Ra lệnh cho bé: tạo hợp đồng, mở album…"
+              >
+                <Sparkles size={14} /> Ra lệnh
+              </button>
+            )}
             <Link
               href="/dashboard/be-may-anh"
               className="flex flex-1 items-center justify-center gap-1 rounded-[10px] py-2 text-[12.5px] font-bold"
@@ -330,8 +376,9 @@ export default function PetBuddy() {
         </div>
       )}
 
-      {/* Ô ra lệnh trên đầu bé — bấm để gõ: "tạo hợp đồng", "mở album …"… */}
-      <PetCommand
+      {/* Ô ra lệnh trên đầu bé — bấm để gõ: "tạo hợp đồng", "mở album …"…
+          Chế độ gọn: chỉ hiện khi đã mở (mở từ bảng của bé). */}
+      {(!compact || cmdOpen) && <PetCommand
         open={cmdOpen}
         setOpen={(v) => {
           setCmdOpen(v);
@@ -342,7 +389,7 @@ export default function PetBuddy() {
         }}
         onFeed={() => void feed()}
         name={pet.name}
-      />
+      />}
 
       <button
         type="button"
@@ -356,7 +403,7 @@ export default function PetBuddy() {
         title={pet.name}
       >
         <span key={hop} className={`pb-body block ${hop ? "pb-hop" : ""}`}>
-          <PetSprite stage={pet.stage} mood={pet.mood} outfit={pet.outfit} size={72} idle={false} className="pb-sprite" />
+          <PetSprite stage={pet.stage} mood={pet.mood} outfit={pet.outfit} size={compact ? 44 : 72} idle={false} className="pb-sprite" />
         </span>
         {!pet.fedToday && (
           <span className="absolute right-1 top-1 h-3 w-3 rounded-full" style={{ background: "var(--am)", boxShadow: "0 0 0 2px var(--sf)" }} />

@@ -6,7 +6,7 @@ import { useLang } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 import { isDeliveryPhase } from "@/lib/album-phase";
 import { studioUrl } from "@/lib/hosts";
-import { isFolderLink, stripExtension, coverImageUrl } from "@/lib/drive";
+import { isDriveUrl, isFolderLink, stripExtension, coverImageUrl } from "@/lib/drive";
 import { fetchAllPhotos, PHOTO_COLS } from "@/lib/photos";
 import { storageUntil } from "@/lib/storage-lifecycle";
 import type { AlbumPrintInfo } from "./AlbumPrintPanel";
@@ -170,9 +170,10 @@ export function useAlbumEditor({
   const [copiedList, setCopiedList] = useState(false);
 
   const [msg, setMsg] = useState<string | null>(null);
-  function flash(m: string) {
+  function flash(m: string, ms = 2500) {
     setMsg(m);
-    setTimeout(() => setMsg(null), 2500);
+    // Thông báo lỗi dài cần thời gian đọc — 2,5 giây là biến mất trước khi kịp hiểu.
+    setTimeout(() => setMsg((cur) => (cur === m ? null : cur)), ms);
   }
 
   async function deleteAlbum() {
@@ -377,7 +378,7 @@ export function useAlbumEditor({
     const { error } = await supabase
       .from("albums")
       .update({
-        title: form.title,
+        title: form.title.trim() || album.title,
         description: form.description || null,
         slug: form.slug,
         selection_limit:
@@ -421,12 +422,15 @@ export function useAlbumEditor({
   async function addSource(e?: React.FormEvent) {
     e?.preventDefault();
     if (!newSource.url.trim()) return;
+    if (!isDriveUrl(newSource.url)) {
+      return flash("Link chưa đúng — dán link thư mục Google Drive (drive.google.com/drive/folders/…) đã chia sẻ “Bất kỳ ai có đường liên kết”.", 8000);
+    }
     const kind: SourceKind = isFolderLink(newSource.url) ? "folder" : "file";
     const { data, error } = await supabase
       .from("album_sources")
       .insert({
         album_id: album.id,
-        name: newSource.name || (kind === "folder" ? "Folder" : "File"),
+        name: newSource.name.trim() || (kind === "folder" ? "Thư mục ảnh" : "Ảnh lẻ"),
         drive_url: newSource.url.trim(),
         kind,
         stage: newSource.stage,
@@ -450,6 +454,9 @@ export function useAlbumEditor({
   async function saveDeliveryLink() {
     const url = editedUrl.trim();
     if (!url || deliveryBusy) return;
+    if (!isDriveUrl(url)) {
+      return flash("Link chưa đúng — dán link thư mục Google Drive chứa ảnh đã chỉnh sửa.", 8000);
+    }
     setDeliveryBusy(true);
     const kind: SourceKind = isFolderLink(url) ? "folder" : "file";
     const delivery = sources.filter((s) => s.stage === "delivery");
@@ -575,7 +582,8 @@ export function useAlbumEditor({
     if (freshSources) setSources(freshSources as AlbumSource[]);
     flash(
       `${data.total} ${t("photos")}` +
-        (data.errors?.length ? ` · ${data.errors.join("; ")}` : "")
+        (data.errors?.length ? ` · ${data.errors.join("; ")}` : ""),
+      data.errors?.length ? 9000 : 2500
     );
   }
 

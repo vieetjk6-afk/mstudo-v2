@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { nextQuoteCode, newShareToken } from "@/lib/contract-code";
 import { safeDeposit } from "@/lib/quote-lines";
+import { depositByPercent } from "@/lib/quote-deposit";
 import { depositRatio } from "@/lib/quote-deposit";
 import { fmtDate } from "@/lib/date";
 import { makeListLabel } from "@/lib/pricelist-label";
@@ -48,34 +49,53 @@ export type NewQuoteFormProps = {
   pricelist?: PriceItem[];
   /** Nhãn studio tự đặt cho từng bảng giá (profiles.pl_list_labels). */
   listLabels?: Record<string, string>;
+  /** Mở từ một yêu cầu đặt lịch: điền sẵn khách, ngày, gói. */
+  fromBooking?: { id: string; name: string; phone: string; facebook: string; eventDate: string; packageNames: string[] } | null;
+  /** % cọc studio đặt (null = cách tính cũ) — cọc tạm tính khớp hợp đồng sẽ tạo. */
+  depositPercent?: number | null;
 };
 
-export function useNewQuoteForm({ ownerId, branchId = null, services = [], pricelist = [], listLabels = {} }: NewQuoteFormProps) {
+export function useNewQuoteForm({ ownerId, branchId = null, services = [], pricelist = [], listLabels = {}, fromBooking = null, depositPercent = null }: NewQuoteFormProps) {
   const router = useRouter();
   const supabase = createClient();
   const [title, setTitle] = useState("");
   const [serviceId, setServiceId] = useState("");
-  const [clientName, setClientName] = useState("");
-  const [clientPhone, setClientPhone] = useState("");
+  const [clientName, setClientName] = useState(fromBooking?.name ?? "");
+  const [clientPhone, setClientPhone] = useState(fromBooking?.phone ?? "");
   const [clientEmail, setClientEmail] = useState("");
-  const [clientFacebook, setClientFacebook] = useState("");
-  const [eventDate, setEventDate] = useState("");
+  const [clientFacebook, setClientFacebook] = useState(fromBooking?.facebook ?? "");
+  const [eventDate, setEventDate] = useState(fromBooking?.eventDate ?? "");
   const [location, setLocation] = useState("");
   const [intro, setIntro] = useState(
     "Cảm ơn bạn đã quan tâm. Dưới đây là báo giá chi tiết — bạn có thể chọn/bỏ các hạng mục tuỳ chọn hoặc gửi yêu cầu chỉnh sửa cho mình."
   );
-  const [items, setItems] = useState<Draft[]>([]);
+  // Gói khách chọn trong yêu cầu đặt lịch → gói đầu là gói chính, các gói sau
+  // là tuỳ chọn (khớp theo tên trong bảng giá).
+  const [items, setItems] = useState<Draft[]>(() => {
+    if (!fromBooking?.packageNames.length) return [];
+    const out: Draft[] = [];
+    fromBooking.packageNames.forEach((n, i) => {
+      const p = pricelist.find((x) => x.name.trim().toLowerCase() === n.trim().toLowerCase());
+      if (!p) return;
+      out.push({ name: p.name, description: p.description || "", qty: 1, unit_price: p.price, is_optional: i > 0, is_discount: false, package_group: "", src: p.id });
+    });
+    return out;
+  });
   const [bulkDiscountAmount, setBulkDiscountAmount] = useState(0);
   const [discountPackageGroup, setDiscountPackageGroup] = useState("");
   const [showConditions, setShowConditions] = useState(false);
   const [saving, setSaving] = useState<"draft" | "send" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const grossTotal = items.reduce((s, i) => (i.is_discount ? s : s + (i.qty || 0) * (i.unit_price || 0)), 0);
-  const discountTotal = items.reduce((s, i) => (i.is_discount ? s + (i.qty || 0) * (i.unit_price || 0) : s), 0);
+  // Khớp đúng thứ được lưu: trong các gói loại trừ nhau chỉ gói đầu tiên được
+  // tick sẵn, nên tổng tạm tính cũng chỉ cộng gói đó (không cộng dồn mọi gói).
+  const firstGroupPreview = items.find((i) => i.package_group.trim())?.package_group.trim() ?? null;
+  const counts = (i: (typeof items)[number]) => !i.package_group.trim() || i.package_group.trim() === firstGroupPreview;
+  const grossTotal = items.reduce((s, i) => (i.is_discount || !counts(i) ? s : s + (i.qty || 0) * (i.unit_price || 0)), 0);
+  const discountTotal = items.reduce((s, i) => (i.is_discount && counts(i) ? s + (i.qty || 0) * (i.unit_price || 0) : s), 0);
   const total = grossTotal - discountTotal;
   // Kẹp cọc về [0, tổng] — tổng 0 không được ra "Cọc Infinity%".
-  const deposit = safeDeposit(total);
+  const deposit = typeof depositPercent === "number" ? depositByPercent(total, depositPercent) : safeDeposit(total);
   const depositPct = depositRatio(total, deposit);
   const packageGroups = Array.from(new Set(items.map((i) => i.package_group.trim()).filter(Boolean)));
 
@@ -194,7 +214,14 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
     setQuickDone(source);
   }
 
-  const autoTitle = `Báo giá${services.find((s) => s.id === serviceId)?.name ? ` ${services.find((s) => s.id === serviceId)?.name}` : ""} ${fmtDate(eventDate || new Date())}`;
+  // Tên mặc định: dịch vụ + tên khách + NGÀY CHỤP (nếu có). Không dùng ngày hôm
+  // nay — khách đọc "Báo giá 22/11/2026" dễ tưởng là ngày chụp.
+  const autoTitle = [
+    "Báo giá",
+    services.find((s) => s.id === serviceId)?.name || "",
+    clientName.trim() ? `— ${clientName.trim()}` : "",
+    eventDate ? `· ${fmtDate(eventDate)}` : "",
+  ].filter(Boolean).join(" ");
 
   async function save(mode: "draft" | "send") {
     setError(null);
@@ -231,16 +258,22 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
         .single();
       if (qErr || !quote) throw new Error(qErr?.message || "Tạo báo giá thất bại");
 
+      // Các gói (package_group) LOẠI TRỪ nhau: chỉ tick sẵn gói đầu tiên. Trước
+      // đây mọi dòng đều selected → khách thấy "Chọn 1 gói" mà cả hai gói đều
+      // được tick và tổng cộng dồn cả hai.
+      const firstGroup = cleaned.find((it) => it.package_group.trim())?.package_group.trim() ?? null;
       const rows = cleaned.map((it, idx) => ({
         quote_id: quote.id,
         name: it.name.trim(),
         description: it.description.trim() || null,
         qty: it.qty || 1,
         unit_price: it.unit_price || 0,
-        is_optional: it.is_optional,
+        // Dòng thuộc một gói luôn là tuỳ chọn — không thì "Bắt buộc" + gói bị
+        // tính tiền dù khách chọn gói khác.
+        is_optional: it.is_optional || !!it.package_group.trim(),
         is_discount: it.is_discount,
         package_group: it.package_group.trim() || null,
-        selected: true,
+        selected: !it.package_group.trim() || it.package_group.trim() === firstGroup,
         position: idx,
       }));
       const { error: iErr } = await supabase.from("quote_items").insert(rows);
@@ -248,7 +281,14 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
 
       // Cả hai nút đều mở màn chi tiết báo giá — nơi có nút gửi thật (Zalo /
       // Messenger / email). Báo giá vẫn ở trạng thái nháp cho tới lúc gửi.
-      router.push(`/dashboard/studio/quotes/${quote.id}`);
+      // "Tạo & gửi khách" mở luôn hộp gửi (chép link + lời nhắn, Zalo…) — trước
+      // đây hai nút làm y hệt nhau, studio tưởng đã gửi mà khách chưa nhận gì.
+      // Yêu cầu đặt lịch gốc → "đã xử lý", để danh sách đặt lịch không còn nút
+      // "Tạo HĐ" mời tạo trùng hợp đồng khi khách đã đi theo đường báo giá.
+      if (fromBooking) {
+        await supabase.from("studio_bookings").update({ status: "handled" }).eq("id", fromBooking.id).in("status", ["new", "pending", "accepted"]);
+      }
+      router.push(`/dashboard/studio/quotes/${quote.id}${mode === "send" ? "?send=1" : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi không xác định");
       setSaving(null);

@@ -120,7 +120,7 @@ export default function LeadsV2({ leads }: { leads: Lead[] }) {
         <Stat icon={PhoneCall} tone="amber" label="Chờ gọi lại" value={counts.new} valueTone={counts.new ? "amber" : undefined} sub={counts.new ? "Khách đang đợi phản hồi" : "Đã gọi hết"} />
         <Stat icon={Check} tone="green" label="Đã liên hệ" value={counts.contacted} />
         <Stat icon={Clock} tone="blue" label="7 ngày qua" value={counts.week} sub="Yêu cầu mới gửi tới" />
-        <Stat icon={Sparkles} tone="brand" label="Tỉ lệ đã xử lý" value={`${handledPct}%`} sub={`${rows.length} yêu cầu`} />
+        <Stat icon={Sparkles} tone="brand" label="Tỉ lệ đã xử lý" value={rows.length ? `${handledPct}%` : "—"} sub={`${rows.length} yêu cầu`} />
       </StatGrid>
 
       {rows.length === 0 ? (

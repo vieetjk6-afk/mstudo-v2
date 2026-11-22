@@ -57,13 +57,32 @@ export type PrintTotal = { label: string; amount: number; strong?: boolean; bold
 export type PrintPlanRow = { label: string; due?: string | null; paid?: boolean; amount: number };
 export type PrintScheduleRow = { title: string; when?: string | null };
 export type PrintPaymentRow = { date?: string | null; kind?: string | null; amount: number; note?: string | null };
-export type PrintSign = { label: string; name?: string | null; image?: string | null; signedAt?: string | null };
+export type PrintSign = {
+  label: string;
+  name?: string | null;
+  image?: string | null;
+  signedAt?: string | null;
+  /** Dòng vết ký điện tử dưới tên — vd "Ký điện tử lúc 14:05 22/11/2026". */
+  verify?: string | null;
+};
 
 export type ContractPrintData = {
   /** Tiêu đề cửa sổ / tab (không in ra giấy). */
   docTitle?: string;
   /** Dòng chữ lớn giữa đầu trang. Mặc định "HỢP ĐỒNG DỊCH VỤ". */
   heading?: string;
+  /** Nhãn ô số ở góc phải đầu trang. Mặc định "Số hợp đồng" (phiếu thu: "Số phiếu"). */
+  codeLabel?: string;
+  /** Nhãn hai bên. Mặc định Bên A · Bên cung cấp dịch vụ / Bên B · Khách hàng. */
+  partyLabels?: [string, string];
+  /** Tên mục bảng hạng mục. Mặc định "Hạng mục dịch vụ & giá trị hợp đồng". */
+  itemsTitle?: string;
+  /** Đoạn mở đầu (căn cứ…) in ngay dưới tên văn bản, trước thông tin hai bên. */
+  preamble?: string | null;
+  /** Dòng ngày căn phải trên khối ký — vd "Ngày 22 tháng 11 năm 2026". */
+  signDate?: string | null;
+  /** Bản nháp: in chữ chìm "BẢN NHÁP" chéo trang. */
+  draft?: boolean;
   /** In quốc hiệu – tiêu ngữ phía trên tên hợp đồng (bản MStudo Desktop giữ nếp cũ). */
   nationalHeading?: boolean;
   /** Tên hợp đồng (in dưới dòng chữ lớn). */
@@ -78,6 +97,10 @@ export type ContractPrintData = {
   items?: PrintItem[];
   /** Sản phẩm in ấn / hiện vật bàn giao — bảng riêng dưới hạng mục dịch vụ. */
   products?: PrintItem[];
+  /** Tiêu đề bảng `products`. Mặc định "Sản phẩm & chi phí in ấn". */
+  productsTitle?: string;
+  /** In tài khoản nhận tiền ngay dưới bảng tổng (văn bản không có kế hoạch thanh toán, vd báo giá). */
+  bankNote?: boolean;
   totals?: PrintTotal[];
   /** Số tiền đọc thành chữ dưới bảng tổng. Bỏ trống thì không in dòng "Bằng chữ". */
   amountInWords?: number | null;
@@ -89,6 +112,8 @@ export type ContractPrintData = {
   signs?: PrintSign[];
   /** QR mở trang hợp đồng (data: URI). */
   qr?: string | null;
+  /** Chú thích ngay dưới QR. Mặc định "Quét xem bản điện tử". */
+  qrCaption?: string | null;
   /** Dòng chân trang nhỏ. */
   footer?: string | null;
 };
@@ -116,6 +141,11 @@ function safeSrc(u?: string | null): string {
   const s = String(u ?? "").trim();
   if (/^data:image\/(png|jpe?g|gif|webp|svg\+xml);/i.test(s)) return s;
   if (/^https?:\/\//i.test(s)) return s;
+  // Đường dẫn nội bộ cùng máy chủ ("/api/img?id=…&orig=1") — đây chính là dạng
+  // URL logo khi studio TẢI LOGO LÊN (lưu vào Drive admin). Trước đây bị loại
+  // nên bản in luôn hiện ô chữ cái thay cho logo thật. Không nhận "//host"
+  // (link khác máy chủ không ghi giao thức).
+  if (/^\/(?!\/)/.test(s)) return s;
   return "";
 }
 
@@ -182,10 +212,30 @@ export function vndInWords(n: number | null | undefined): string {
  * riêng, truyền ".print-doc " khi nhúng vào trang đang có CSS của app (cổng
  * khách) để không giẫm lên giao diện.
  */
-export function contractPrintCss(scope = ""): string {
+/** Nhãn chân trang: "Hợp đồng HD-…", "Báo giá BG-…", "Phiếu PT-…" (theo codeLabel). */
+export function printFooterLabel(d: Pick<ContractPrintData, "code" | "codeLabel">): string | null {
+  if (!d.code) return null;
+  const kind = (d.codeLabel || "Số hợp đồng").replace(/^số\s+/i, "").trim();
+  return `${kind.charAt(0).toUpperCase()}${kind.slice(1)} ${d.code}`;
+}
+
+/** Chuỗi an toàn cho thuộc tính CSS `content: "..."`. */
+function cssString(v: string): string {
+  return `"${String(v).replace(/[\\"]/g, "\\$&").replace(/[\n\r]/g, " ").slice(0, 80)}"`;
+}
+
+/**
+ * CSS bản in. `footerLabel` (vd "HĐ HD-11-2026-001") in ở góc trái chân MỖI
+ * trang, góc phải là "Trang x/y" — để tờ rời vẫn biết thuộc hợp đồng nào và
+ * có đủ trang chưa. Lề hộp @page chạy trên Chromium ≥ 131 (Chrome, Edge,
+ * WebView2); trình duyệt chưa hỗ trợ bỏ qua, không vỡ gì.
+ */
+export function contractPrintCss(scope = "", opts: { footerLabel?: string | null } = {}): string {
   const s = scope ? `${scope.trim()} ` : "";
+  const foot = opts.footerLabel ? `\n  @bottom-left { content: ${cssString(opts.footerLabel)}; font: 8pt "Times New Roman", serif; color: #777; }` : "";
   return `
-@page { size: A4; margin: 12mm 13mm; }
+@page { size: A4; margin: 12mm 13mm 14mm;${foot}
+  @bottom-right { content: "Trang " counter(page) "/" counter(pages); font: 8pt "Times New Roman", serif; color: #777; } }
 ${s}.cpd { font-family: "Times New Roman", Times, "DejaVu Serif", serif; font-size: 10.5pt; line-height: 1.42; color: #111; }
 ${s}.cpd * { box-sizing: border-box; }
 ${s}.cpd table { width: 100%; border-collapse: collapse; }
@@ -205,7 +255,8 @@ ${s}.cpd-contact { font-size: 8.6pt; color: #444; }
 ${s}.cpd-hd-r { text-align: right; white-space: nowrap; }
 ${s}.cpd-kind { font-size: 8.4pt; letter-spacing: 1.1px; text-transform: uppercase; color: #444; }
 ${s}.cpd-code { font-size: 11pt; font-weight: 700; }
-${s}.cpd-qr { width: 62px; height: 62px; display: block; margin-left: auto; }
+${s}.cpd-qr { width: 56px; height: 56px; display: block; margin-left: auto; }
+${s}.cpd-qrcap { font-size: 7pt; color: #666; text-align: right; }
 
 /* Quốc hiệu – tiêu ngữ (tuỳ chọn) */
 ${s}.cpd-nat { text-align: center; font-weight: 700; font-size: 10pt; margin-top: 10px; }
@@ -267,15 +318,27 @@ ${s}.cpd-tot .big td { border-top: .9pt solid #111; border-bottom: .9pt solid #1
   font-weight: 700; font-size: 11pt; padding: 3px 6px; }
 ${s}.cpd-tot .bold td { font-weight: 700; }
 
-/* Điều khoản */
-${s}.cpd-terms { font-size: 9.8pt; white-space: pre-wrap; margin: 0; text-align: justify;
-  orphans: 2; widows: 2; }
+/* Điều khoản — mỗi điều một khối, tiêu đề điều dính đoạn đầu */
+${s}.cpd-clause { margin: 0 0 5px; }
+${s}.cpd-clh { font-weight: 700; font-size: 10pt; margin: 6px 0 1px; break-after: avoid; page-break-after: avoid; }
+${s}.cpd-terms { font-size: 10pt; line-height: 1.38; white-space: pre-wrap; margin: 0; text-align: justify;
+  orphans: 3; widows: 3; }
+
+/* Đoạn mở đầu (căn cứ…) */
+${s}.cpd-pre { font-size: 9.8pt; font-style: italic; white-space: pre-wrap; margin: 0 0 8px; }
+
+/* Dòng ngày trên khối ký */
+${s}.cpd-signdate { text-align: right; font-style: italic; font-size: 10pt; margin-top: 14px; padding-right: 6mm; }
+
+/* Chữ chìm bản nháp — position:fixed lặp lại trên MỌI trang in */
+${s}.cpd-wm { position: fixed; top: 42%; left: 0; right: 0; text-align: center; transform: rotate(-30deg);
+  font-size: 88pt; font-weight: 700; letter-spacing: 8px; color: rgba(0,0,0,.07); pointer-events: none; z-index: 0; }
 
 /* Chuyển khoản */
 ${s}.cpd-bank { border: .8pt solid #999; padding: 5px 8px; margin-top: 6px; font-size: 9.6pt; }
 
 /* Ký tên */
-${s}.cpd-signs { margin-top: 16px; text-align: center; }
+${s}.cpd-signs { margin-top: 8px; text-align: center; }
 ${s}.cpd-signs td { width: 50%; padding: 0 6px; }
 ${s}.cpd-signs .lb { font-size: 9.6pt; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; }
 ${s}.cpd-signs .hint { font-size: 8.6pt; font-style: italic; color: #666; }
@@ -301,10 +364,10 @@ function headerBlock(d: ContractPrintData): string {
   const contact = [st.phone && `ĐT: ${st.phone}`, st.email, st.website].filter(Boolean).map((x) => cell(String(x)));
   const qr = safeSrc(d.qr);
   const right = [
-    `<div class="cpd-kind">Số hợp đồng</div>`,
+    `<div class="cpd-kind">${escHtml(d.codeLabel || "Số hợp đồng")}</div>`,
     `<div class="cpd-code">${cell(d.code) || "—"}</div>`,
     d.issuedAt ? `<div class="cpd-contact">Ngày lập: ${cell(d.issuedAt)}</div>` : "",
-    qr ? `<img class="cpd-qr" src="${escHtml(qr)}" alt="Mã QR mở hợp đồng" />` : "",
+    qr ? `<img class="cpd-qr" src="${escHtml(qr)}" alt="Mã QR mở hợp đồng" /><div class="cpd-qrcap">${escHtml(d.qrCaption || "Quét xem bản điện tử")}</div>` : "",
   ].join("");
 
   return `<table class="cpd-hd keep"><tbody><tr>
@@ -327,12 +390,12 @@ function partyBlock(d: ContractPrintData): string {
       .join("");
   return `<table class="cpd-party keep"><tbody><tr>
 <td>
-  <div class="cpd-lbl">Bên A · Bên cung cấp dịch vụ</div>
+  <div class="cpd-lbl">${escHtml(d.partyLabels?.[0] || "Bên A · Bên cung cấp dịch vụ")}</div>
   <div class="nm">${cell(st.name) || "—"}</div>
   ${lines([st.phone && `Điện thoại: ${st.phone}`, st.email && `Email: ${st.email}`])}
 </td>
 <td>
-  <div class="cpd-lbl">Bên B · Khách hàng</div>
+  <div class="cpd-lbl">${escHtml(d.partyLabels?.[1] || "Bên B · Khách hàng")}</div>
   <div class="nm">${cell(c.name) || "—"}</div>
   ${lines([
     c.phone && `Điện thoại: ${c.phone}`,
@@ -413,7 +476,7 @@ function itemsBlock(d: ContractPrintData): string {
 
   const products = d.products ?? [];
   return `${itemTable(d.items ?? [], "Hạng mục", "Chưa có hạng mục.")}
-${products.length ? `<div class="cpd-h3">Sản phẩm &amp; chi phí in ấn</div>${itemTable(products, "Sản phẩm")}` : ""}
+${products.length ? `<div class="cpd-h3">${escHtml(d.productsTitle || "Sản phẩm & chi phí in ấn")}</div>${itemTable(products, d.productsTitle ? "Hạng mục" : "Sản phẩm")}` : ""}
 ${
   totals
     ? `<table class="cpd-sum"><tbody><tr>
@@ -421,7 +484,7 @@ ${
 <td style="width:74mm"><table class="cpd-tot"><tbody>${totals}</tbody></table></td>
 </tr></tbody></table>`
     : words
-}`;
+}${d.bankNote && !(d.plan ?? []).length ? bankBlock(d) : ""}`;
 }
 
 function planBlock(d: ContractPrintData): string {
@@ -479,11 +542,55 @@ function signsBlock(d: ContractPrintData): string {
   <div class="hint">${s.signedAt ? "Đã ký điện tử" : "(Ký, ghi rõ họ tên)"}</div>
   <div class="box">${img ? `<img src="${escHtml(img)}" alt="Chữ ký" />` : ""}</div>
   <div class="nm">${cell(s.name)}</div>
-  ${s.signedAt ? `<div class="at">Ngày ${cell(s.signedAt)}</div>` : ""}
+  ${s.verify ? `<div class="at">${cell(s.verify)}</div>` : s.signedAt ? `<div class="at">Ngày ${cell(s.signedAt)}</div>` : ""}
 </td>`;
     })
     .join("");
-  return `<table class="cpd-signs keep"><tbody><tr>${tds}</tr></tbody></table>`;
+  const date = d.signDate ? `<div class="cpd-signdate">${cell(d.signDate)}</div>` : "";
+  // Dòng ngày + khối ký đi CÙNG nhau (keep) — không để dòng ngày ở cuối trang
+  // còn chỗ ký sang trang sau.
+  return `<div class="keep">${date}<table class="cpd-signs"><tbody><tr>${tds}</tr></tbody></table></div>`;
+}
+
+/**
+ * Điều khoản: tách thành từng ĐIỀU để trình duyệt không cắt ngang một điều
+ * giữa hai trang, và tiêu đề điều không bị bỏ lơ lửng ở đáy trang (trước đây cả
+ * khối là một <p> pre-wrap → "2. HUỶ & DỜI LỊCH" nằm cuối trang 1, nội dung
+ * sang trang 2).
+ *
+ * Một điều mới bắt đầu ở dòng trống, hoặc ở dòng mở đầu bằng số thứ tự
+ * ("1.", "2)", "Điều 3"). Dòng đầu có số → in đậm làm tiêu đề điều. Điều dài
+ * quá (> ~14 dòng) thì cho phép ngắt bên trong, chỉ giữ tiêu đề dính đoạn đầu.
+ */
+function termsBlock(raw: string): string {
+  const lines = raw.replace(/\r\n?/g, "\n").trim().split("\n");
+  const isHead = (l: string) => /^\s*(\d+[.)]|điều\s+\d+)\s*/i.test(l);
+  const clauses: string[][] = [];
+  let cur: string[] = [];
+  for (const l of lines) {
+    if (!l.trim()) {
+      if (cur.length) clauses.push(cur);
+      cur = [];
+      continue;
+    }
+    if (isHead(l) && cur.length) {
+      clauses.push(cur);
+      cur = [];
+    }
+    cur.push(l);
+  }
+  if (cur.length) clauses.push(cur);
+  if (!clauses.length) return "";
+  return clauses
+    .map((c) => {
+      const head = isHead(c[0]) ? c[0] : null;
+      const rest = head ? c.slice(1) : c;
+      const long = c.length > 14;
+      return `<div class="cpd-clause${long ? "" : " keep"}">${
+        head ? `<div class="cpd-clh">${escHtml(head.trim())}</div>` : ""
+      }${rest.length ? `<p class="cpd-terms">${escHtml(rest.join("\n"))}</p>` : ""}</div>`;
+    })
+    .join("");
 }
 
 /**
@@ -497,13 +604,13 @@ export function contractPrintBody(d: ContractPrintData): string {
     if (html && html.trim()) sections.push({ title, html });
   };
 
-  push("Hạng mục dịch vụ & giá trị hợp đồng", itemsBlock(d));
+  push(d.itemsTitle || "Hạng mục dịch vụ & giá trị hợp đồng", itemsBlock(d));
   push("Kế hoạch thanh toán", planBlock(d));
   push("Lịch trình thực hiện", scheduleBlock(d));
   push("Các khoản đã thanh toán", paymentsBlock(d));
   push(
     "Điều khoản & ghi chú",
-    d.terms && d.terms.trim() ? `<p class="cpd-terms">${escHtml(d.terms.trim())}</p>` : ""
+    d.terms && d.terms.trim() ? termsBlock(d.terms) : ""
   );
 
   const body = sections
@@ -511,6 +618,7 @@ export function contractPrintBody(d: ContractPrintData): string {
     .join("\n");
 
   return `<div class="cpd">
+${d.draft ? `<div class="cpd-wm" aria-hidden="true">BẢN NHÁP</div>` : ""}
 ${headerBlock(d)}
 ${
   d.nationalHeading
@@ -521,6 +629,7 @@ ${
 <p class="cpd-sub">${cell(d.title)}${
     d.statusLabel ? `<span class="st">${cell(d.statusLabel)}</span>` : ""
   }</p>
+${d.preamble && d.preamble.trim() ? `<p class="cpd-pre">${cell(d.preamble)}</p>` : ""}
 ${partyBlock(d)}
 ${factsBlock(d.facts ?? [])}
 ${body}
@@ -542,7 +651,7 @@ export function contractPrintDocument(d: ContractPrintData, opts: { autoPrint?: 
 <style>
 html, body { margin: 0; padding: 0; background: #fff; }
 body { padding: 4px 0; }
-${contractPrintCss()}
+${contractPrintCss("", { footerLabel: printFooterLabel(d) })}
 </style></head>
 <body>
 ${contractPrintBody(d)}
@@ -559,4 +668,38 @@ ${
     : ""
 }
 </body></html>`;
+}
+
+/* ── Tiện ích cho nơi dựng dữ liệu in ──────────────────────────────────── */
+
+const VN_TZ = "Asia/Ho_Chi_Minh";
+
+/** "Ngày 22 tháng 11 năm 2026" (giờ Việt Nam). Ngày hỏng → null. */
+export function vnSignDate(d: string | Date | null | undefined): string | null {
+  if (!d) return null;
+  const dt = typeof d === "string" ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T12:00:00+07:00` : d) : d;
+  if (isNaN(dt.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: VN_TZ, day: "2-digit", month: "2-digit", year: "numeric" }).formatToParts(dt);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  return `Ngày ${get("day")} tháng ${get("month")} năm ${get("year")}`;
+}
+
+/** Vết ký điện tử: "Ký điện tử lúc 14:05 22/11/2026". Không có thời điểm → null. */
+export function signVerifyLine(at: string | null | undefined): string | null {
+  if (!at) return null;
+  const dt = new Date(at);
+  if (isNaN(dt.getTime())) return null;
+  const f = new Intl.DateTimeFormat("en-GB", {
+    timeZone: VN_TZ, hour: "2-digit", minute: "2-digit", day: "2-digit", month: "2-digit", year: "numeric", hour12: false,
+  }).formatToParts(dt);
+  const g = (t: string) => f.find((p) => p.type === t)?.value ?? "";
+  return `Ký điện tử lúc ${g("hour")}:${g("minute")} ${g("day")}/${g("month")}/${g("year")}`;
+}
+
+/** Đoạn căn cứ mở đầu hợp đồng dịch vụ (theo nếp hợp đồng dân sự Việt Nam). */
+export function contractPreamble(): string {
+  return [
+    "Căn cứ Bộ luật Dân sự số 91/2015/QH13 ngày 24/11/2015;",
+    "Căn cứ nhu cầu và khả năng của hai bên, hai bên thống nhất ký kết hợp đồng dịch vụ với các điều khoản dưới đây.",
+  ].join("\n");
 }
