@@ -192,7 +192,7 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
     // "Cọc" của hợp đồng. Trước đây bị bỏ quên: hợp đồng báo khách còn nợ đủ
     // 100%, studio phải nhập tay lại (dễ ghi trùng với đối soát ngân hàng).
     if (b.deposit_status === "confirmed" && (b.deposit_amount ?? 0) > 0) {
-      const { error: payErr } = await supabase.from("contract_payments").insert({
+      const { data: payRow, error: payErr } = await supabase.from("contract_payments").insert({
         contract_id: data.id,
         amount: b.deposit_amount,
         kind: "deposit",
@@ -200,7 +200,17 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
         paid_at: (b.deposit_paid_at || new Date().toISOString()).slice(0, 10),
         note: `Cọc giữ ngày khi đặt lịch${b.deposit_code ? ` · mã ${b.deposit_code}` : ""}`,
         ...(b.deposit_proof_url ? { proof_url: b.deposit_proof_url } : {}),
-      });
+      }).select("id").single();
+      // Kế hoạch thanh toán: đợt cọc (đã thu, nối với lần thu vừa ghi) + phần còn lại.
+      const pkTotal = pk.reduce((sum, x) => sum + (Number(x.price) || 0), 0);
+      if (!payErr && payRow) {
+        const dep = b.deposit_amount ?? 0;
+        await supabase.from("contract_payment_plan").insert([
+          { contract_id: data.id, label: "Cọc giữ lịch", amount: dep, position: 0, paid: true, paid_at: new Date().toISOString(), payment_id: (payRow as { id: string }).id },
+          // Có voucher thì tổng còn đổi sau khi áp → chưa tạo đợt còn lại.
+          ...(!b.voucher_code && pkTotal - dep > 0 ? [{ contract_id: data.id, label: "Thanh toán khi giao sản phẩm", amount: pkTotal - dep, position: 1 }] : []),
+        ]);
+      }
       if (payErr) alert(`Chưa ghi được khoản cọc ${b.deposit_amount?.toLocaleString("vi-VN")}đ vào hợp đồng: ${payErr.message}. Bạn ghi tay ở tab Thanh toán nhé.`);
     } else if (b.deposit_status === "paid" && (b.deposit_amount ?? 0) > 0) {
       alert(`Khách báo đã chuyển cọc ${b.deposit_amount?.toLocaleString("vi-VN")}đ nhưng bạn chưa xác nhận. Kiểm tra tài khoản rồi ghi khoản cọc ở tab Thanh toán của hợp đồng.`);

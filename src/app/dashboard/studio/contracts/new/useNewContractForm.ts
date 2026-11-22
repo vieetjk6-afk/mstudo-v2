@@ -24,7 +24,8 @@ import {
   CUSTOM_LINE_FALLBACK_NAME,
   type LineCustom,
 } from "@/lib/contract-lines";
-import { fmtDate } from "@/lib/date";
+import { fmtDate, todayVN } from "@/lib/date";
+import { defaultDepositDue } from "@/lib/payment-plan-due";
 import { noAccent } from "@/lib/studio-nav";
 import { makeListLabel } from "@/lib/pricelist-label";
 import { draftTotal, missingFields, type QuickDraft } from "@/lib/contract-quick";
@@ -295,14 +296,18 @@ export function useNewContractForm({
   // + phần còn lại khi giao sản phẩm. Studio tắt cọc tự động (0%) thì một đợt
   // trọn gói. Studio sửa/thêm đợt tuỳ ý.
   const autoDeposit = depositPercent > 0 ? depositByPercent(total, depositPercent) : null;
+  // Hạn cọc mặc định: 3 ngày sau hôm nay, nhưng không muộn hơn ngày trước buổi
+  // chụp. Trước đây mọi đợt để trống hạn → nhắc thu hằng ngày (cron reminders,
+  // lọc theo due_date) không bao giờ nhắc khoản cọc nào.
+  const depositDue = useMemo(() => defaultDepositDue(todayVN(), eventDate), [eventDate]);
   const defaultPlan = useMemo<Instalment[]>(() => {
     if (total <= 0) return [];
     if (!autoDeposit) return [{ label: "Thanh toán khi giao sản phẩm", amount: total, due: "" }];
     const rest = total - autoDeposit;
-    const out: Instalment[] = [{ label: "Cọc giữ lịch", amount: autoDeposit, due: "" }];
+    const out: Instalment[] = [{ label: "Cọc giữ lịch", amount: autoDeposit, due: depositDue }];
     if (rest > 0) out.push({ label: "Thanh toán khi giao sản phẩm", amount: rest, due: "" });
     return out;
-  }, [total, autoDeposit]);
+  }, [total, autoDeposit, depositDue]);
   // `plan.total` = tổng lúc studio sửa đợt: cọc còn đúng % của tổng đó mới tự
   // tính lại, cọc gõ tay ở bước 5 thì giữ khi quay lại đổi gói.
   const instalments = plan

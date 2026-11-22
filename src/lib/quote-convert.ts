@@ -3,6 +3,8 @@ import { nextContractCode, newShareToken } from "@/lib/contract-code";
 import { quoteToContractLines } from "@/lib/quote-lines";
 import { fullClauseText } from "@/lib/contract-clauses";
 import { depositByPercent } from "@/lib/quote-deposit";
+import { todayVN } from "@/lib/date";
+import { defaultDepositDue } from "@/lib/payment-plan-due";
 import { fmtDate } from "@/lib/date";
 import { isMissingColumn, withoutColumn } from "@/lib/missing-column";
 
@@ -155,14 +157,15 @@ export async function convertQuoteToContract(
     return { ok: false, error: iErr.message };
   }
 
-  // Auto-create a deposit instalment so the client sees a payment schedule immediately.
-  if (deposit > 0 && total > 0) {
-    await db.from("contract_payment_plan").insert({
-      contract_id: contract.id,
-      label: `Cọc ${depositPct}%`,
-      amount: deposit,
-      position: 0,
-    });
+  // Kế hoạch thanh toán ĐỦ như hợp đồng tạo tay: cọc (có hạn → được nhắc thu)
+  // + phần còn lại khi giao sản phẩm. Trước đây chỉ có dòng cọc, phần còn lại
+  // không nằm trong kế hoạch nào nên không ai nhắc.
+  if (total > 0) {
+    const rows = [
+      ...(deposit > 0 ? [{ contract_id: contract.id, label: `Cọc giữ lịch (${depositPct}%)`, amount: deposit, due_date: defaultDepositDue(todayVN(), quote.event_date) || null, position: 0 }] : []),
+      ...(total - deposit > 0 ? [{ contract_id: contract.id, label: "Thanh toán khi giao sản phẩm", amount: total - deposit, due_date: null, position: 1 }] : []),
+    ];
+    if (rows.length) await db.from("contract_payment_plan").insert(rows);
   }
 
   // Giành quyền gắn hợp đồng CÓ ĐIỀU KIỆN (contract_id còn trống): khách bấm
