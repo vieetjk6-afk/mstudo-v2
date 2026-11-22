@@ -48,6 +48,8 @@ import { useNewQuoteForm, type NewQuoteFormProps } from "./useNewQuoteForm";
 
 export default function NewQuoteFormV2(props: NewQuoteFormProps) {
   const q = useNewQuoteForm(props);
+  const [extraQuery, setExtraQuery] = useState("");
+  const [extraAll, setExtraAll] = useState(false);
   // Hàng hạng mục khoá theo vị trí (dòng chưa có id riêng). Xoá một dòng thì đổi
   // "thế hệ" để mọi dòng dựng lại — không thì ô mô tả đang mở của dòng bị xoá
   // trượt sang dòng ngay dưới nó.
@@ -248,9 +250,35 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
                     <p className="mb-2.5 text-[13.5px] font-semibold">
                       Hạng mục thêm <span className="font-normal" style={{ color: "var(--tx3)" }}>· gửi dạng tuỳ chọn, khách tự tick</span>
                     </p>
+                    {(() => {
+                      // Trước đây liệt kê LẠI toàn bộ bảng giá (gồm cả các gói chính)
+                      // → trang dài ~3000px. Giờ mặc định chỉ hiện mục đã tick + mục
+                      // cùng bảng giá với gói chính (tối đa 6); có ô tìm và "Xem tất cả".
+                      const mainList = pricelist.find((p) => p.id === q.mainSrc)?.list_key || null;
+                      const rest = pricelist.filter((p) => p.id !== q.mainSrc);
+                      const term = extraQuery.trim().toLowerCase();
+                      const shown = term
+                        ? rest.filter((p) => `${p.name} ${p.category ?? ""}`.toLowerCase().includes(term))
+                        : extraAll
+                          ? rest
+                          : [
+                              ...rest.filter((p) => q.extraSrcs.includes(p.id)),
+                              ...rest.filter((p) => !q.extraSrcs.includes(p.id) && (!mainList || (p.list_key || "cuoi") === mainList)).slice(0, 6),
+                            ];
+                      const hiddenCount = rest.length - shown.length;
+                      return (
+                        <>
+                          {rest.length > 8 && (
+                            <input
+                              className={`${inputCls} mb-2`}
+                              value={extraQuery}
+                              onChange={(ev) => setExtraQuery(ev.target.value)}
+                              placeholder={`Tìm trong ${rest.length} mục của bảng giá…`}
+                              aria-label="Tìm hạng mục thêm"
+                            />
+                          )}
                     <RowList>
-                      {pricelist
-                        .filter((p) => p.id !== q.mainSrc)
+                      {shown
                         .map((p) => (
                           <ChoiceRow
                             key={p.id}
@@ -263,6 +291,14 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
                           />
                         ))}
                     </RowList>
+                          {!term && hiddenCount > 0 && (
+                            <button type="button" onClick={() => setExtraAll(true)} className="mt-2 text-[12.5px] font-semibold" style={{ color: "var(--ac)" }}>
+                              Xem tất cả ({hiddenCount} mục nữa)
+                            </button>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </Stack>
@@ -374,6 +410,7 @@ export default function NewQuoteFormV2(props: NewQuoteFormProps) {
                       <MoneyInput value={q.bulkDiscountAmount} onChange={q.setBulkDiscountAmount} placeholder="0" ariaLabel="Số tiền giảm" className={`${inputCls} tnum text-right`} />
                     </Field>
                   </div>
+                  <datalist id="quote-package-groups">{q.packageGroups.map((g) => <option key={g} value={g} />)}</datalist>
                   {q.packageGroups.length === 0 && (
                     <p className="mt-2.5 text-[12px]" style={{ color: "var(--tx3)" }}>Chưa có gói nào — thêm “Nhóm gói” cho hạng mục tuỳ chọn để tạo gói.</p>
                   )}

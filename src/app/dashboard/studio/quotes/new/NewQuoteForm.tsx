@@ -304,7 +304,7 @@ function NewQuoteFormV1(props: NewQuoteFormProps) {
                     <input
                       className={`${inputCls} mt-1.5`}
                       style={inputStyle}
-                      placeholder="Nhóm gói (VD: goi-co-ban) — để trống nếu không thuộc gói"
+                      placeholder="Tên gói khách thấy (VD: Gói Cơ bản) — để trống nếu không thuộc gói"
                       value={it.package_group}
                       onChange={(e) => update(idx, { package_group: e.target.value })}
                     />

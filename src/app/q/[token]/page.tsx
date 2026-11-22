@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
+import { quoteExpiryFrom } from "@/lib/quote-expiry";
 import { getStudioBrand } from "@/lib/studio-brand";
 import { effectivePlan, studioTier } from "@/lib/plans";
 import QuoteClientView from "./QuoteClientView";
@@ -38,9 +40,24 @@ export default async function QuoteClientPage(props: { params: Promise<{ token: 
   const { data: quote } = await db.from("studio_quotes").select("*").eq("client_token", params.token).maybeSingle();
   if (!quote) notFound();
 
-  // Mark as 'viewed' on first open (don't downgrade later statuses).
-  if (quote.status === "sent") {
-    await db.from("studio_quotes").update({ status: "viewed", viewed_at: new Date().toISOString() }).eq("id", quote.id);
+  // Đánh dấu "khách đã xem" ở lần mở đầu (không hạ trạng thái sau đó). Báo giá
+  // còn NHÁP mà khách đã mở được link (studio chép link gửi tay, không qua nút
+  // Gửi) cũng tính là đã gửi + đặt hạn hiệu lực — trước đây nó nằm mãi ở "nháp":
+  // không có hạn, không vào "đang chờ khách", tỉ lệ chốt ra 100% trên 0 báo giá
+  // đã gửi. Chính chủ studio mở xem thử thì KHÔNG tính.
+  if (quote.status === "sent" || quote.status === "draft") {
+    const viewer = await (await createClient()).auth.getUser().then((r) => r.data.user?.id ?? null).catch(() => null);
+    if (viewer !== quote.owner_id) {
+      const patch: Record<string, unknown> = { status: "viewed", viewed_at: new Date().toISOString() };
+      if (quote.status === "draft" && !quote.expires_at) {
+        const { data: pv } = await db.from("profiles").select("quote_valid_days").eq("id", quote.owner_id).maybeSingle();
+        const days = (pv as { quote_valid_days?: number | null } | null)?.quote_valid_days ?? 15;
+        const exp = quoteExpiryFrom(days);
+        if (exp) patch.expires_at = exp;
+      }
+      const { error: vErr } = await db.from("studio_quotes").update(patch).eq("id", quote.id);
+      if (!vErr) Object.assign(quote, patch);
+    }
   }
 
   const [{ data: items }, { data: adjustments }, { data: owner }, contractRes] = await Promise.all([

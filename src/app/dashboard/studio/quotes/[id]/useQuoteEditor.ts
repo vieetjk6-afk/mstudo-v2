@@ -348,6 +348,12 @@ export function useQuoteEditor({
   }
 
   async function convertToContract() {
+    // Hợp đồng dựng từ dữ liệu ĐÃ LƯU — còn sửa dở thì nhắc lưu trước, không thì
+    // hợp đồng ra theo bản cũ mà studio không hay.
+    if (dirty) {
+      setErr("Bạn còn thay đổi chưa lưu — bấm “Lưu thay đổi” rồi tạo hợp đồng.");
+      return;
+    }
     if (!confirm(`Tạo hợp đồng từ báo giá này?\n\nTổng tiền: ${vnd(payableTotal)}\nCọc đề xuất: ${vnd(deposit)}`)) return;
     setBusy(true);
     setErr(null);

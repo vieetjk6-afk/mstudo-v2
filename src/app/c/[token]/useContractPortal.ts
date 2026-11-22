@@ -49,10 +49,12 @@ export type Contract = {
   brief_refs: string | null;
   brief_note: string | null;
   brief_submitted_at: string | null;
+  delivery_due?: string | null;
+  created_at?: string | null;
   updated_at: string;
 };
 export type Item = { id: string; name: string; description: string | null; qty: number; unit_price: number };
-export type Payment = { id: string; amount: number; kind: PaymentKind; paid_at: string };
+export type Payment = { id: string; amount: number; kind: PaymentKind; method?: string | null; paid_at: string };
 export type Milestone = { id: string; title: string; event_date: string; event_time: string | null; note: string | null };
 export type QuoteOption = { id: string; name: string; price: number; description: string | null };
 export type PlanRow = { id: string; label: string; amount: number; due_date: string | null; paid: boolean; paid_at: string | null; pay_code?: string | null };

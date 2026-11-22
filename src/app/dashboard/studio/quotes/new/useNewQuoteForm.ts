@@ -198,7 +198,14 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
     setQuickDone(source);
   }
 
-  const autoTitle = `Báo giá${services.find((s) => s.id === serviceId)?.name ? ` ${services.find((s) => s.id === serviceId)?.name}` : ""} ${fmtDate(eventDate || new Date())}`;
+  // Tên mặc định: dịch vụ + tên khách + NGÀY CHỤP (nếu có). Không dùng ngày hôm
+  // nay — khách đọc "Báo giá 22/11/2026" dễ tưởng là ngày chụp.
+  const autoTitle = [
+    "Báo giá",
+    services.find((s) => s.id === serviceId)?.name || "",
+    clientName.trim() ? `— ${clientName.trim()}` : "",
+    eventDate ? `· ${fmtDate(eventDate)}` : "",
+  ].filter(Boolean).join(" ");
 
   async function save(mode: "draft" | "send") {
     setError(null);
@@ -258,7 +265,9 @@ export function useNewQuoteForm({ ownerId, branchId = null, services = [], price
 
       // Cả hai nút đều mở màn chi tiết báo giá — nơi có nút gửi thật (Zalo /
       // Messenger / email). Báo giá vẫn ở trạng thái nháp cho tới lúc gửi.
-      router.push(`/dashboard/studio/quotes/${quote.id}`);
+      // "Tạo & gửi khách" mở luôn hộp gửi (chép link + lời nhắn, Zalo…) — trước
+      // đây hai nút làm y hệt nhau, studio tưởng đã gửi mà khách chưa nhận gì.
+      router.push(`/dashboard/studio/quotes/${quote.id}${mode === "send" ? "?send=1" : ""}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Lỗi không xác định");
       setSaving(null);

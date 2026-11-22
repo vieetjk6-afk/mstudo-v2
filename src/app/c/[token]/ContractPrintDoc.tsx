@@ -71,10 +71,19 @@ export default function ContractPrintDoc({
       bankName: bank.name,
     },
     client: { name: contract.client_name, phone: contract.client_phone, email: contract.client_email },
+    // Cùng bộ thông số với bản studio in (useContractEditor.buildPrintData) —
+    // trước đây bản khách in thiếu cô dâu/chú rể, tên ngày, ghi chú, hạn giao.
+    issuedAt: contract.created_at ? fmtDate(contract.created_at) : null,
     facts: [
-      { label: "Gói dịch vụ", value: SHOOT_TYPE_LABEL[contract.shoot_type] },
-      { label: "Ngày chụp", value: [fmtDateLunar(contract.event_date), contract.event_time].filter(Boolean).join(" · ") },
+      { label: "Dịch vụ", value: SHOOT_TYPE_LABEL[contract.shoot_type] },
+      { label: "Cô dâu", value: [contract.bride_name?.trim(), contract.bride_phone?.trim()].filter(Boolean).join(" · ") },
+      { label: "Chú rể", value: [contract.groom_name?.trim(), contract.groom_phone?.trim()].filter(Boolean).join(" · ") },
+      { label: "Địa chỉ cô dâu", value: contract.bride_address?.trim(), wide: true },
+      { label: "Địa chỉ chú rể", value: contract.groom_address?.trim(), wide: true },
+      { label: contract.event_label?.trim() || "Ngày chụp", value: [fmtDateLunar(contract.event_date), contract.event_time].filter(Boolean).join(" · ") },
+      { label: "Hạn giao sản phẩm", value: contract.delivery_due ? fmtDate(contract.delivery_due) : "" },
       { label: "Địa điểm", value: contract.location, wide: true },
+      { label: `Ghi chú ${contract.event_label?.trim() || "ngày chụp"}`, value: contract.event_note?.trim(), wide: true },
     ],
     items: items.map((it) => ({
       name: it.name,
@@ -115,7 +124,7 @@ export default function ContractPrintDoc({
       date: fmtDate(p.paid_at),
       kind: PAYMENT_KIND_LABEL[p.kind],
       amount: p.amount,
-      note: paymentMethodLabel((p as { method?: string | null }).method),
+      note: paymentMethodLabel(p.method),
     })),
     terms: contract.note,
     signs: [

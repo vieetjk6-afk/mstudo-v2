@@ -112,7 +112,21 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
     setBusy(b.id);
     const ct = (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now().toString(36)).replace(/-/g, "");
     const code = await nextContractCode(supabase, ownerId);
-    const note = [b.note, fullClauseText()].filter(Boolean).join("\n\n");
+    // Điều khoản: như màn tạo hợp đồng — ưu tiên điều khoản của DỊCH VỤ chứa gói
+    // khách chọn (bảng giá riêng của dịch vụ có list_key = id dịch vụ), thiếu
+    // mới dùng mẫu chung. Trước đây luôn dùng mẫu chung nên hợp đồng từ đặt lịch
+    // lệch điều khoản với hợp đồng tạo tay cùng dịch vụ.
+    const pkNames = (b.details?.packages?.length ? b.details.packages.map((x) => x.name) : b.package_name ? [b.package_name] : []).filter(Boolean);
+    let svc: { id: string; clauses: string | null } | null = null;
+    if (pkNames.length) {
+      const { data: pl } = await supabase.from("studio_pricelist").select("list_key").eq("owner_id", ownerId).in("name", pkNames).limit(5);
+      const keys = [...new Set(((pl ?? []) as { list_key: string | null }[]).map((x) => x.list_key).filter((k): k is string => !!k && /^[0-9a-f-]{36}$/i.test(k)))];
+      if (keys.length) {
+        const { data: sv } = await supabase.from("studio_services").select("id, clauses").eq("owner_id", ownerId).in("id", keys).limit(1).maybeSingle();
+        svc = (sv as { id: string; clauses: string | null } | null) ?? null;
+      }
+    }
+    const note = [b.note, svc?.clauses?.trim() || fullClauseText()].filter(Boolean).join("\n\n");
     const core = {
       owner_id: ownerId,
       code,
@@ -125,6 +139,7 @@ export function useBookings({ ownerId, token, initial, studioHost = null, assign
       ...(assignTo ? { assigned_to: assignTo } : {}),
       client_messenger: b.facebook || null,
       event_date: b.preferred_date,
+      ...(svc ? { service_id: svc.id, shoot_type: "other" } : {}),
       note,
       client_token: ct,
     };
