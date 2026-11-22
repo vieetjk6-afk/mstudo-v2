@@ -204,14 +204,18 @@ export function LockScreenV2({
 }
 
 /* ── Thông báo nhanh ─────────────────────────────────────────────────────── */
-export function ToastV2({ text, lifted = false }: { text: string | null; lifted?: boolean }) {
+export function ToastV2({ text, lifted = false, top = false }: { text: string | null; lifted?: boolean; top?: boolean }) {
   if (!text) return null;
   return (
     <div
       role="status"
       className="fixed left-1/2 z-[95] max-w-[min(92vw,520px)] -translate-x-1/2 rounded-[12px] px-4 py-2.5 text-center text-[13.5px] font-semibold"
       style={{
-        bottom: lifted ? "calc(108px + env(safe-area-inset-bottom, 0px))" : "calc(24px + env(safe-area-inset-bottom, 0px))",
+        // `top`: khung xem ảnh đang mở — đáy là hàng nút Không thích · Ghi chú ·
+        // Chọn và ô ghi chú, toast ở đáy sẽ che đúng chỗ khách đang gõ.
+        ...(top ? { top: "calc(16px + env(safe-area-inset-top, 0px))" } : {
+          bottom: lifted ? "calc(108px + env(safe-area-inset-bottom, 0px))" : "calc(24px + env(safe-area-inset-bottom, 0px))",
+        }),
         background: "var(--tx)",
         color: "var(--sf)",
         boxShadow: "var(--sh-toast)",

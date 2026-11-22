@@ -15,15 +15,18 @@ import { isNavActive, type NavGroup, type NavItem } from "@/lib/studio-nav";
  * vai trò qua `groups`), nên không bao giờ có tab dẫn tới trang bị chặn. Màn còn
  * lại nằm ở menu ☰ trên topbar. Nút + nổi mở bảng tạo nhanh.
  */
+// Thứ tự theo QUY TRÌNH của chủ studio (hợp đồng → lịch → album → khách).
+// "Của tôi" (/staff) xếp sau: chủ studio ít dùng, nhưng nhân viên — vốn không
+// thấy Hợp đồng/Khách/Tài chính — vẫn có nó trong 5 tab vì các mục trên bị lọc.
 const PRIORITY: [string, string][] = [
   ["/dashboard/studio", "Tổng quan"],
-  ["/staff", "Của tôi"],
   ["/dashboard/studio/contracts", "Hợp đồng"],
   ["/dashboard/studio/calendar", "Lịch"],
   ["/dashboard/albums", "Album"],
-  ["/dashboard/studio/reports", "Tài chính"],
   ["/dashboard/studio/clients", "Khách"],
+  ["/staff", "Của tôi"],
   ["/dashboard/studio/quotes", "Báo giá"],
+  ["/dashboard/studio/reports", "Tài chính"],
   ["/dashboard/tools", "Công cụ"],
 ];
 

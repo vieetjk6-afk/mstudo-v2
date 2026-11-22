@@ -52,7 +52,11 @@ export function useCreateAlbum({ mode = "selection", studioHost = null }: Create
   // nhưng lệnh INSERT ghi đè thẳng nên mặc định đó không có tác dụng ở đường này.
   const [wmOn, setWmOn] = useState(false);
   const [allowNote, setAllowNote] = useState(true);
-  const [allowDownload, setAllowDownload] = useState(true);
+  // Album CHỌN ẢNH: mặc định KHÔNG cho tải — khách đang chọn ảnh thô, chưa thanh
+  // toán, mà nút tải mở cả thư mục gốc. Album giao khách thì mặc định cho tải.
+  // Cùng quy tắc với album tự tạo từ hợp đồng (studio-drive.ts: download_enabled
+  // = phase === "delivery").
+  const [allowDownload, setAllowDownload] = useState(isDelivery);
   // Plan permissions — free accounts cannot enable download / notes.
   const [canZip, setCanZip] = useState(true);
   // Watermark: chỉ Photographer Plus & Studio (ảnh có watermark không tải thẳng

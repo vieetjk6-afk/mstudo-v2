@@ -54,7 +54,7 @@ export async function GET() {
     fetchAllRows<unknown>((from, to) => {
       let q = supabase
         .from("studio_contracts")
-        .select("id, code, title, client_name, client_phone, event_date, event_time, status, shoot_type, branch_id, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")
+        .select("id, code, title, client_name, client_phone, event_date, event_time, location, status, shoot_type, branch_id, contract_items(qty, unit_price, name), contract_payments(amount), contract_crew(id, name, role, status)")
         .eq("owner_id", profile.id);
       if (profile.actingRole === "staff") q = q.eq("assigned_to", profile.actingUserId);
       return applyBranch(q, scope.selected)
