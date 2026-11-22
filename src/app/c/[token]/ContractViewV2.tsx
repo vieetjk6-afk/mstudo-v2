@@ -325,6 +325,16 @@ function Body({
       title: L("Hợp đồng đã huỷ", "This contract was cancelled"),
       sub: L("Liên hệ studio nếu bạn cần hỗ trợ thêm.", "Contact the studio if you need help."),
     };
+  } else if (!p.signed && p.awaitingStudio) {
+    hero = {
+      tone: "blue",
+      icon: PenLine,
+      title: L("Studio đang hoàn thiện hợp đồng", "The studio is finalising your contract"),
+      sub: L(
+        "Bạn đã đồng ý báo giá. Studio sẽ bổ sung ngày chụp, điều khoản và lịch thanh toán rồi gửi lại để bạn ký — bạn sẽ nhận được link này cùng thông báo.",
+        "You accepted the quote. The studio will add the date, terms and payment schedule, then send it back for you to sign.",
+      ),
+    };
   } else if (!p.signed) {
     hero = {
       tone: "amber",
@@ -1091,7 +1101,7 @@ function PartiesSection({ p, L, openSign }: { p: ContractPortal; L: Tr; openSign
             )
           }
           action={
-            !p.signed && !cancelled ? (
+            !p.signed && !cancelled && !p.awaitingStudio ? (
               <button type="button" onClick={openSign} className={btn("soft", "md", "mt-3 w-full")}>
                 <PenLine size={16} /> {L("Ký ngay", "Sign now")}
               </button>

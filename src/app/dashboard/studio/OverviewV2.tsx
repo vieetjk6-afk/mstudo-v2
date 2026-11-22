@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import {
-  Plus, ReceiptText, CalendarDays, CalendarCheck, TrendingUp, Hourglass, Landmark, ListChecks, Wallet,
+  Plus, FileText, ReceiptText, CalendarDays, CalendarCheck, TrendingUp, Hourglass, Landmark, ListChecks, Wallet,
   UserPlus, Banknote, Clock, ImagePlus, PenLine, CircleAlert, Users, Star, CalendarClock, CalendarRange,
   ChevronRight, QrCode, AlertTriangle, Gift, CheckCircle2, Globe, Images, Inbox, Sparkles, type LucideIcon,
 } from "lucide-react";
@@ -50,6 +50,7 @@ function dayLabel(iso: string | null, today: string) {
 const KIND_ICON: Record<OvTaskKind, LucideIcon> = {
   crew: UserPlus, proof: Banknote, bank: Landmark, plan: Banknote, "plan-soon": CalendarClock, late: Clock,
   album: ImagePlus, sign: PenLine, quote: ReceiptText, edit: CircleAlert, pcrew: Users, reviews: Star,
+  booking: CalendarClock, draft: FileText,
 };
 const MONEY: OvTaskKind[] = ["proof", "bank", "plan"];
 

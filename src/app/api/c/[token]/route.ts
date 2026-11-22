@@ -268,6 +268,13 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     if (contract.client_signed_at) {
       return NextResponse.json({ error: "already_signed" }, { status: 409 });
     }
+    // Hợp đồng NHÁP tự sinh khi khách đồng ý báo giá: studio chưa hoàn thiện
+    // (ngày chụp, điều khoản, kế hoạch thu) nên chưa cho ký — trang báo giá vừa
+    // hứa "studio sẽ chỉnh rồi gửi lại". Studio bấm Gửi (chuyển "chờ duyệt") là
+    // ký được. Hợp đồng nháp studio tự tạo vẫn ký được như cũ.
+    if (await awaitingStudio(db, contract)) {
+      return NextResponse.json({ error: "awaiting_studio" }, { status: 409 });
+    }
     const name = body.name?.trim();
     const signature = body.signature?.trim();
     if (!name) return NextResponse.json({ error: "no_name" }, { status: 400 });
@@ -591,6 +598,7 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
       selection_album_id: undefined,
     },
     plan_locked: planLocked,
+    awaiting_studio: await awaitingStudio(db, contract),
     studio_name: studioName,
     studio_logo: studioLogo,
     studio_phone: ownerObj?.pl_phone ?? null,
@@ -615,4 +623,14 @@ export async function POST(req: Request, props: { params: Promise<{ token: strin
     addenda,
     loyalty,
   });
+}
+
+/** Hợp đồng còn nháp VÀ sinh ra từ một báo giá (khách vừa đồng ý) → chờ studio hoàn thiện. */
+async function awaitingStudio(
+  db: ReturnType<typeof createAdminClient>,
+  c: { id?: unknown; status?: unknown; client_signed_at?: unknown },
+): Promise<boolean> {
+  if (c.status !== "draft" || c.client_signed_at) return false;
+  const { data } = await db.from("studio_quotes").select("id").eq("contract_id", c.id as string).limit(1);
+  return !!data?.length;
 }

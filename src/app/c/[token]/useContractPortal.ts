@@ -87,6 +87,8 @@ export type PortalPayload = {
   loyalty?: PortalLoyalty | null;
   bank?: BankInfo | null;
   note_mode?: TransferNoteMode | null;
+  /** Hợp đồng nháp sinh từ báo giá — studio đang hoàn thiện, chưa cho ký. */
+  awaiting_studio?: boolean;
 };
 
 export type Lang = "vi" | "en";
@@ -193,6 +195,7 @@ export function useContractPortal(
   }
 
   // signing
+  const [awaitingStudio, setAwaitingStudio] = useState(false);
   const [signName, setSignName] = useState("");
   const [signature, setSignature] = useState("");
   const [signing, setSigning] = useState(false);
@@ -225,6 +228,7 @@ export function useContractPortal(
 
   function apply(j: PortalPayload) {
     setContract(j.contract);
+    setAwaitingStudio(!!j.awaiting_studio);
     // Điền sẵn họ tên người ký = tên khách trên hợp đồng (khách vẫn sửa được).
     setSignName((prev) => prev || j.contract.client_name || "");
     setStudioName(j.studio_name || "Studio");
@@ -406,7 +410,10 @@ export function useContractPortal(
     const res = await post({ action: "sign", phone, name: signName.trim(), signature });
     setSigning(false);
     if (res?.ok) await fetchContract(phone);
-    else setErr(t("genericErr"));
+    else if (res && (await res.clone().json().catch(() => null))?.error === "awaiting_studio") {
+      setErr("Studio đang hoàn thiện hợp đồng — bạn sẽ ký được khi studio gửi lại.");
+      await fetchContract(phone).catch(() => undefined);
+    } else setErr(t("genericErr"));
   }
 
   // Tiền về (SePay tự ghi thu, hoặc studio ghi tay) khi khách đang mở trang →
@@ -462,6 +469,7 @@ export function useContractPortal(
   return {
     token,
     termCount,
+    awaitingStudio,
     phone, setPhone,
     contract,
     studioName, studioLogo, studioPhone,

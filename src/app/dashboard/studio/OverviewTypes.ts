@@ -15,7 +15,7 @@ export type OvAct =
 
 /** Loại việc — bản V2 dùng để chọn icon và gom nhóm. */
 export type OvTaskKind =
-  | "crew" | "proof" | "bank" | "plan" | "plan-soon" | "late" | "album" | "sign" | "quote" | "edit" | "pcrew" | "reviews";
+  | "crew" | "proof" | "bank" | "plan" | "plan-soon" | "late" | "album" | "sign" | "quote" | "edit" | "pcrew" | "reviews" | "booking" | "draft";
 
 export type OvTask = {
   key: string;
