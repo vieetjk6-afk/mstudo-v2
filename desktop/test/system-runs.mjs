@@ -202,6 +202,7 @@ ok("chỉ lấy dòng đầu, bỏ chuỗi trong nháy", R.normalizeMessage('Can
 ok("đường dẫn: bỏ query string, đoạn là id → [id]", R.normalizePath("/portal/9f8a7b6c5d4e3f2a1b0c/x?phone=0901234567#a") === "/portal/[id]/x" && R.stripQuery("/a?token=1") === "/a");
 ok("nhiễu: notFound / redirect của Next", R.isNoise({ digest: "NEXT_REDIRECT;replace;/login;307;" }, "/a") && R.isNoise({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" }, "/a") && R.isNoise({ digest: "NEXT_NOT_FOUND" }, "/a"));
 ok("nhiễu: request bị huỷ", R.isNoise({ name: "AbortError", message: "x" }, "/a") && R.isNoise({ code: "ECONNRESET" }, "/a") && R.isNoise(new Error("The operation was aborted"), "/a"));
+ok("nhiễu: header router-state hỏng do client gửi", R.isNoise(new Error("The router state header was sent but could not be parsed."), "/site/x") && R.isNoise(new Error("The router state header was too large."), "/site/x"));
 ok("nhiễu: mọi thứ dưới /api/cron/", R.isNoise(new Error("x"), "/api/cron/reminders?only=1"));
 ok("lỗi thật thì KHÔNG bị coi là nhiễu", !R.isNoise(new TypeError("x is undefined"), "/dashboard") && !R.isNoise({ digest: "2837461" , message: "boom" }, "/a"));
 

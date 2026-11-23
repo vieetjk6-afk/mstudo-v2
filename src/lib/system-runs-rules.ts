@@ -227,6 +227,10 @@ export function errorSignature(name: string, message: string, routePath: string)
 /**
  * Lỗi KHÔNG đáng ghi: tín hiệu điều khiển của Next (notFound / redirect),
  * request bị huỷ giữa chừng, và mọi thứ dưới /api/cron/ (nhật ký cron đã lo).
+ *
+ * Kể cả header `Next-Router-State-Tree` hỏng/quá dài: đó là ĐẦU VÀO của client
+ * (bot, máy quét, tab cũ từ bản deploy trước gửi request RSC lạ) — Next tự từ
+ * chối request; mã của ta không có gì để sửa nên không đáng nhắc admin.
  */
 export function isNoise(err: unknown, path: string): boolean {
   if (stripQuery(path).startsWith("/api/cron/")) return true;
@@ -238,6 +242,7 @@ export function isNoise(err: unknown, path: string): boolean {
   const msg = typeof e.message === "string" ? e.message : typeof err === "string" ? err : "";
   if (name === "AbortError" || name === "ResponseAborted") return true;
   if (code === "ECONNRESET" || code === "EPIPE" || code === "ERR_STREAM_PREMATURE_CLOSE") return true;
+  if (/router state header was (sent but could not be parsed|too large)/i.test(msg)) return true;
   return /\baborted\b|ECONNRESET|socket hang up|NEXT_REDIRECT|NEXT_NOT_FOUND/i.test(msg);
 }
 
