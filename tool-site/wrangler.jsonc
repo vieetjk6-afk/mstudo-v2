@@ -1,0 +1,9 @@
+// Cấu hình Cloudflare Workers cho tool.vieetjk.com: chỉ phục vụ file tĩnh trong thư mục này.
+// Trên Cloudflare: Advanced settings → Path = tool-site, Build command để trống, Deploy command = npx wrangler deploy
+{
+  "name": "vieetjk-tools",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "."
+  }
+}

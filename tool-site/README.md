@@ -26,6 +26,17 @@ Mỗi phần mềm có link riêng dạng `https://tool.vieetjk.com/#id` (mở t
 
 ## Đưa lên tool.vieetjk.com
 
+**Cloudflare Workers** (màn "Set up your application" khi kết nối repo):
+
+| Ô | Giá trị |
+|---|---|
+| Project name | `vieetjk-tools` (khớp `name` trong `wrangler.jsonc`) |
+| Build command | *(xoá trống)* |
+| Deploy command | `npx wrangler deploy` |
+| Advanced settings → Path | `tool-site` |
+
+Deploy xong: Worker → Settings → Domains & Routes → Add → Custom domain → `tool.vieetjk.com`.
+
 **Cloudflare Pages** (khuyến nghị, miễn phí):
 
 1. Cloudflare → Workers & Pages → Create → Pages → Connect to Git → chọn repo `mstudo-v2`.
