@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>vieetjk tools · Phần mềm tự làm, tải miễn phí</title>
+<meta name="description" content="Tổng hợp phần mềm do vieetjk làm: kiểm tra máy tính, dàn trang album cưới bằng AI, chỉnh màu ảnh, theme iPhone, quản lý studio. Tải bản mới nhất tại đây.">
+<meta property="og:title" content="vieetjk tools">
+<meta property="og:description" content="Tổng hợp phần mềm do vieetjk làm. Tải bản mới nhất tại đây.">
+<meta property="og:url" content="https://tool.vieetjk.com/">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f6f7f9" media="(prefers-color-scheme: light)">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-in">
+    <a class="brand" href="#">
+      <img src="favicon.svg" alt="" width="28" height="28">
+      <span>vieetjk<b>tools</b></span>
+    </a>
+    <nav class="top-nav">
+      <a href="#phan-mem">Phần mềm</a>
+      <a href="#lien-he">Liên hệ</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <p class="eyebrow"><span class="dot"></span><span id="count">Đang tải…</span></p>
+      <h1>Phần mềm tự làm,<br><em>tải về dùng ngay.</em></h1>
+      <p class="lead">Các công cụ cho máy tính, ảnh cưới, studio và iPhone. Nút tải luôn trỏ tới bản mới nhất.</p>
+      <div class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="q" type="search" placeholder="Tìm phần mềm…" autocomplete="off" aria-label="Tìm phần mềm">
+        <kbd>/</kbd>
+      </div>
+    </div>
+  </section>
+
+  <section id="phan-mem" class="wrap list">
+    <div class="filters" id="filters" role="tablist" aria-label="Lọc theo nhóm"></div>
+    <div class="grid" id="grid" aria-live="polite"></div>
+    <p class="empty" id="empty" hidden>Không tìm thấy phần mềm phù hợp.</p>
+  </section>
+
+  <section id="lien-he" class="wrap contact">
+    <div class="contact-card">
+      <div>
+        <h2>Cần hỗ trợ hoặc muốn đặt làm công cụ riêng?</h2>
+        <p>Báo lỗi, góp ý tính năng, mua key hay đặt làm phần mềm theo yêu cầu, nhắn trực tiếp.</p>
+      </div>
+      <div class="contact-actions" id="contact"></div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <span>© <span id="year"></span> vieetjk</span>
+    <span class="muted">Windows có thể cảnh báo “Windows protected your PC” với phần mềm mới: bấm <b>More info → Run anyway</b>.</span>
+  </div>
+</footer>
+
+<dialog id="detail" aria-labelledby="d-name">
+  <form method="dialog" class="d-close-wrap"><button class="d-close" aria-label="Đóng">×</button></form>
+  <div id="d-body"></div>
+</dialog>
+
+<script src="tools.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

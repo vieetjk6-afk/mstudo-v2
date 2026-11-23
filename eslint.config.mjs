@@ -18,6 +18,7 @@ const config = [
       "scripts/**",
       "supabase/**",
       "public/**",
+      "tool-site/**",
     ],
   },
   ...next,
