@@ -16,6 +16,7 @@ import {
 } from "@/lib/in-app-browser";
 import { THIEP_HOST } from "@/lib/hosts";
 import { useShareLink } from "./share/useShareLink";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /** Khách đã bấm "Ở lại" — chỉ nhớ trong phiên này, mở link lần sau vẫn nhắc. */
 const STAY_KEY = "mstudo:o-lai-trong-app";
@@ -154,9 +155,8 @@ export default function InAppBrowserPrompt() {
   const showing = gated && !!info && !stay;
   useEffect(() => {
     if (!showing) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    const unlockScroll = lockBodyScroll();
+    return () => { unlockScroll(); };
   }, [showing]);
 
   if (!showing || !info) return null;

@@ -4,6 +4,7 @@ import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { nightPalette, lightPalette } from "@/lib/wedding-palette";
 import { TEMPLATE_ALIASES, getTemplateMeta } from "./templates";
 import FitLine from "./FitLine";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /**
  * HIỆU ỨNG MỞ THIỆP — lớp phủ khách thấy trước khi tấm thiệp hiện ra.
@@ -97,8 +98,8 @@ export default function CardIntro({
    * Ở đây chỉ có hai trạng thái: còn che thì khoá, hết che thì mở.
    */
   useEffect(() => {
-    document.body.style.overflow = gone ? "" : "hidden";
-    return () => { document.body.style.overflow = ""; };
+    if (gone) return;
+    return lockBodyScroll();
   }, [gone]);
 
   function open() {

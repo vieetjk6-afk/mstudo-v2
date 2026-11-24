@@ -8,6 +8,7 @@ import { fullImageUrl, retryAltHost, retryViaProxy, thumbnailUrl } from "@/lib/d
 import { downloadImage } from "@/lib/download";
 import { useFullImageWidth, useGridThumbWidth } from "@/lib/use-img-width";
 import { DIM, LINE } from "./dark";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LƯỚI ẢNH + KHUNG XEM LỚN của trang album nền tối (/portal, hợp đồng đã xong)
@@ -194,9 +195,8 @@ export function Lightbox({
 
   // Khoá cuộn trang phía sau trong lúc xem ảnh.
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { document.body.style.overflow = prev; };
+    const unlockScroll = lockBodyScroll();
+    return () => { unlockScroll(); };
   }, []);
 
   // Tải trước ảnh nét hai bên để bấm/vuốt sang là có ngay.

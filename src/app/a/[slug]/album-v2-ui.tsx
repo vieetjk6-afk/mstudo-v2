@@ -12,6 +12,7 @@ import { CustomerHeaderV2, CustomerRootV2 } from "@/components/v2/customer";
 import { btn, iconBtn, inputCls } from "@/components/v2/kit";
 import { Segmented } from "@/components/v2/kit-client";
 import type { StudioBrandInfo } from "@/lib/studio-brand";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MẢNH GIAO DIỆN MỚI dùng chung cho hai trang album của khách:
@@ -327,10 +328,9 @@ export function ViewerV2({
   }, [photo.id]);
   // Khung xem phủ kín màn hình: khoá cuộn trang phía sau.
   useEffect(() => {
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, []);
 
