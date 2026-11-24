@@ -9,6 +9,7 @@ import FilterTool from "./FilterTool";
 import { useUiV2 } from "@/components/v2/UiV2Context";
 import { btn } from "@/components/v2/kit";
 import { Drawer } from "@/components/v2/kit-client";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 // Bản giao diện mới tách thành chunk riêng: ai đang dùng bản cũ không phải tải nó.
 const FilterToolV2 = dynamic(() => import("./FilterToolV2"));
@@ -41,11 +42,10 @@ function FilterDialogV1({ albumId, albumTitle, driveUrl, onClose }: Props) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, [onClose]);
 

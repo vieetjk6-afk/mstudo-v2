@@ -32,6 +32,7 @@ import { OverviewStep, SetsStep, type SaveStatus } from "./OverviewStep";
 import EditorStep from "./EditorStep";
 import ExportSheet from "./ExportSheet";
 import { StudioHeader, useToast } from "./ui";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MÀN GHÉP LAYOUT ẢNH — phủ toàn màn hình trên album giao khách.
@@ -540,13 +541,12 @@ export default function CollageStudio(props: CollageStudioProps) {
 
   useEffect(() => {
     void load();
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     const gens = loadGen;
     return () => {
       // Đóng màn ghép giữa lúc đang nạp: kết quả tới muộn không được mở hộp SĐT.
       gens.current++;
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, [load]);
 

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, X } from "lucide-react";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 type NavItem = { href: string; label: string };
 
@@ -33,11 +34,10 @@ export default function LandingMobileMenu({
       if (e.key === "Escape") setOpen(false);
     }
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, [open]);
 

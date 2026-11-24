@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /**
  * Bọc quanh một album: chạm vào ảnh nào (ô `<Slot pv={i}>` bên trong) thì ảnh
@@ -32,9 +33,8 @@ export default function PhotoViewer({ photos, children, style }: { photos: strin
       else if (e.key === "ArrowLeft") go(-1);
     };
     window.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+    const unlockScroll = lockBodyScroll();
+    return () => { window.removeEventListener("keydown", onKey); unlockScroll(); };
   }, [open, go]);
 
   const onClick = (e: React.MouseEvent) => {

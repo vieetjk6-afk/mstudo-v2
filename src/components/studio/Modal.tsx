@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTheme } from "@/lib/theme";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    HỘP THOẠI — LUÔN đi qua portal ra <body>.
@@ -68,11 +69,10 @@ export function Modal({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, [onClose]);
 

@@ -1,12 +1,14 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 import DashboardHeader from "@/components/DashboardHeader";
 import StudioFooterNav from "@/components/StudioFooterNav";
 import type { AccentKey, UiState } from "@/lib/ui-version";
 import type { ChromeProfile } from "@/lib/types";
 import { isStudioPath } from "@/lib/studio-shell-paths";
+import { releaseStrayScrollLock } from "@/lib/scroll-lock";
 
 // Hai bộ khung (cũ / giao diện mới) tách chunk riêng: mỗi người chỉ tải bộ mình
 // đang dùng. Vẫn render phía server như cũ nên không nháy trang.
@@ -59,6 +61,11 @@ export default function DashboardChrome({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  // Sang trang mới mà không còn lớp phủ nào đang mở thì trang PHẢI cuộn được:
+  // gỡ khoá cuộn bị bỏ sót (xem @/lib/scroll-lock).
+  useEffect(() => {
+    releaseStrayScrollLock();
+  }, [pathname]);
   // Luật "đường dẫn nào dùng shell studio" nằm ở @/lib/studio-shell-paths, dùng
   // chung với <NavProgress/> — hai chỗ cùng một câu trả lời thì thanh tiến độ ở
   // đỉnh trang mới mang đúng màu của khu đang mở.

@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { MoreHorizontal, Search, X, type LucideIcon } from "lucide-react";
+import { lockBodyScroll } from "@/lib/scroll-lock";
 
 /* Phần CÓ TƯƠNG TÁC của bộ khối giao diện mới — xem ./kit.tsx cho luật chung. */
 
@@ -383,10 +384,9 @@ function useOverlay(open: boolean, onClose: () => void) {
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const unlockScroll = lockBodyScroll();
     return () => {
-      document.body.style.overflow = prev;
+      unlockScroll();
     };
   }, [open]);
   useEscLayer(open, onClose);
