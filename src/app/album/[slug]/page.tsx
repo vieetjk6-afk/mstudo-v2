@@ -13,6 +13,7 @@ import AlbumUnavailableV2 from "@/app/a/[slug]/AlbumUnavailableV2";
 import { customerUiV2 } from "@/lib/ui-server";
 import { buildAlbumMetadata } from "@/lib/album-meta";
 import { effectivePlan, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
+import { khachTuQuetBat } from "@/lib/face-kho-server";
 import { getOriginalFolders } from "@/lib/album-original";
 import type { Feedback } from "@/lib/types";
 import { loadPrintState } from "@/lib/album-print";
@@ -244,6 +245,7 @@ export default async function GalleryPage(
         initialPhotos={photos}
         initialPeople={people}
         faceScan={faceScan}
+        faceSelfScan={canFaceSearch && khachTuQuetBat()}
         totalPhotos={totalPhotos}
         initialSources={sources}
         initialDriveFolders={driveFolders}

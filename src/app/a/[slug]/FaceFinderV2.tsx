@@ -16,9 +16,12 @@ import { useAlbumImg } from "./album-v2-ui";
    giao khách.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-/** Có nên hiện lối vào công cụ này không: có người, hoặc máy chủ còn đang quét. */
-export function faceToolAvailable(people: PersonChip[], scan: TienDoQuet | null) {
-  return people.length > 0 || (!!scan && conDangQuet(scan));
+/**
+ * Có nên hiện lối vào công cụ này không: có người, máy chủ còn đang quét, hoặc
+ * khách được tự tìm trên máy mình (selfScan — không cần studio quét trước).
+ */
+export function faceToolAvailable(people: PersonChip[], scan: TienDoQuet | null, selfScan = false) {
+  return people.length > 0 || selfScan || (!!scan && conDangQuet(scan));
 }
 
 /** Ảnh thẻ khuôn mặt — cắt bằng CSS ngay trên thumbnail đã có. */
@@ -77,7 +80,9 @@ export default function FaceFinderV2({
   search: FaceSearch;
 }) {
   const { t } = useLangOptional();
-  const preparing = people.length === 0 && !!scan && conDangQuet(scan);
+  // Khách tự tìm được thì không bắt chờ studio quét xong.
+  const preparing = !search.selfScan && people.length === 0 && !!scan && conDangQuet(scan);
+  const tq = search.tuQuet;
 
   return (
     <Drawer
@@ -137,7 +142,7 @@ export default function FaceFinderV2({
           </div>
         )}
 
-        {people.length > 0 && (
+        {(people.length > 0 || search.selfScan) && (
           <div className="flex flex-col gap-2.5 rounded-[14px] p-4" style={{ background: "var(--sf2)" }}>
             <div>
               <p className="text-[14px] font-semibold">{t("faceFindByPhoto")}</p>
@@ -149,6 +154,26 @@ export default function FaceFinderV2({
               <Upload size={16} /> {search.busy ?? t("faceUpload")}
             </button>
             <input {...search.fileInputProps} />
+            {tq ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[13px] font-medium" style={{ color: "var(--tx2)" }}>
+                  {tq.xong
+                    ? t("faceSelfScanDone").replace("{k}", String(tq.khop))
+                    : t("faceSelfScanning").replace("{n}", String(tq.daQuet)).replace("{m}", String(tq.tong)).replace("{k}", String(tq.khop))}
+                </p>
+                {!tq.xong && (
+                  <>
+                    <div className="h-1.5 overflow-hidden rounded-full" style={{ background: "var(--bd2)" }}>
+                      <div className="h-full rounded-full" style={{ width: `${tq.tong ? Math.round((tq.daQuet / tq.tong) * 100) : 0}%`, background: "var(--ac)" }} />
+                    </div>
+                    <p className="text-[12.5px]" style={{ color: "var(--tx3)" }}>{t("faceSelfScanHint")}</p>
+                    <button type="button" onClick={search.dungQuet} className={btn("ghost", "sm", "self-start")}>
+                      <X size={14} /> {t("faceSelfScanStop")}
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : null}
             {search.note ? (
               <p className="text-[13px] font-medium" style={{ color: "var(--tx2)" }}>
                 {search.note}

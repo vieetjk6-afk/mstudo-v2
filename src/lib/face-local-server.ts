@@ -128,7 +128,7 @@ export async function nhanLoKetQua(db: any, albumId: string, raw: unknown): Prom
   }
   const khuonMat = faceRows.length;
   const daGhi = doneIds.length;
-  const g = await ghiKetQuaQuet(db, faceRows, doneIds);
+  const g = await ghiKetQuaQuet(db, faceRows, doneIds, albumId);
   if (g.ghiKhongAn) return { ok: false, error: "ghi-khong-an" };
 
   const c = await apDungLocConQuet(dem(db, albumId));

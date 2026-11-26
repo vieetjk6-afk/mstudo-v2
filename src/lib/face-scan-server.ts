@@ -185,7 +185,7 @@ export async function scanAlbum(
 
   /** Đẩy những gì đang giữ trong tay xuống DB (đường ghi chung ở @/lib/face-ghi). */
   const flush = async () => {
-    const r = await ghiKetQuaQuet(db, faceRows, doneIds);
+    const r = await ghiKetQuaQuet(db, faceRows, doneIds, albumId);
     daGhiMat += r.daGhiMat;
     daGhiMoc += r.daGhiMoc;
     daXacNhan += r.daXacNhan;

@@ -76,8 +76,10 @@ pg.q(DB, `insert into storage.objects (bucket_id, name, metadata) values
   ('wedding-photos', 'a.jpg', '{"size": 1000}'), ('wedding-photos', 'b.jpg', '{"size": 2500}'), ('wedding-photos', 'thu-muc', null)`);
 const s = j(pg.q(DB, "select public.system_stats()"));
 ok("system_stats: đủ khoá db_bytes / tables / buckets / storage_bytes", ["db_bytes", "tables", "buckets", "storage_bytes"].every((k) => k in s) && s.db_bytes > 1_000_000, JSON.stringify(s).slice(0, 300));
-ok("…tối đa 12 bảng public, có tên + dung lượng + số dòng ước lượng", s.tables.length === 12 && s.tables.every((t) => typeof t.name === "string" && t.bytes >= 0 && t.rows >= 0) && s.tables[0].bytes >= s.tables[11].bytes);
-ok("…bảng thật nằm trong danh sách", pg.q(DB, `select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relname in (${s.tables.map((t) => `'${t.name}'`).join(",")})`) === "12");
+ok("…tối đa 15 bảng (MỌI schema), có tên + dung lượng + số dòng ước lượng", s.tables.length > 0 && s.tables.length <= 15 && s.tables.every((t) => typeof t.name === "string" && t.bytes >= 0 && t.rows >= 0) && s.tables[0].bytes >= s.tables[s.tables.length - 1].bytes);
+// Bảng ngoài public mang tên schema ("storage.objects"); bảng public để trần.
+ok("…bảng thật nằm trong danh sách", pg.q(DB, `select count(*) from (values ${s.tables.map((t) => `('${t.name.includes(".") ? t.name : `public.${t.name}`}')`).join(",")}) v(n) where to_regclass(n) is not null`) === String(s.tables.length));
+ok("…thấy được bảng ngoài public (thủ phạm hay nằm ở auth / storage / cron)", s.tables.some((t) => t.name.includes(".")) || s.tables.length === 15, JSON.stringify(s.tables.map((t) => t.name)));
 const wb = s.buckets.find((x) => x.bucket === "wedding-photos");
 ok("…từng bucket: số file + byte (metadata thiếu size tính 0)", wb?.objects === 3 && wb.bytes === 3500 && s.storage_bytes === 3500, JSON.stringify(s.buckets));
 pg.q(DB, "alter table storage.objects rename to objects_tam");

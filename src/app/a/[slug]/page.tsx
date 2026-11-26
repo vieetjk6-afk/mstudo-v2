@@ -2,6 +2,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { effectivePlan, planAllowsDelivery, planAllowsFaceSearch, planAllowsWatermark, type Plan } from "@/lib/plans";
+import { khachTuQuetBat } from "@/lib/face-kho-server";
 import CustomerAlbum from "./CustomerAlbum";
 import CustomerAlbumV2 from "./CustomerAlbumV2";
 import AlbumUnavailableV2 from "./AlbumUnavailableV2";
@@ -274,6 +275,7 @@ export default async function PublicAlbumPage(
         initialDriveFolders={driveFolders}
         initialPeople={people}
         faceScan={faceScan}
+        faceSelfScan={canFaceSearch && khachTuQuetBat()}
         studioName={studioName}
         logoUrl={brand.logoUrl}
         studioHost={studioHost}

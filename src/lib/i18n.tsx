@@ -167,6 +167,19 @@ export const dict: Dict = {
   faceLoading: { vi: "Đang phân tích ảnh…", en: "Analysing the photo…" },
   faceSearching: { vi: "Đang tìm…", en: "Searching…" },
   faceFound: { vi: "Đã tìm thấy bạn.", en: "Found you." },
+  // Khách tự quét album trên máy mình (studio chưa quét / quét chưa hết).
+  faceYou: { vi: "Bạn", en: "You" },
+  faceSelfScanning: {
+    vi: "Đang tìm trên máy bạn: {n}/{m} ảnh · thấy {k} ảnh có bạn",
+    en: "Searching on your device: {n}/{m} photos · {k} with you",
+  },
+  faceSelfScanDone: { vi: "Đã xem hết album: {k} ảnh có bạn.", en: "Whole album checked: {k} photos with you." },
+  faceSelfScanStop: { vi: "Dừng tìm", en: "Stop" },
+  faceSelfScanHint: {
+    vi: "Album chưa được chuẩn bị sẵn nên máy bạn tự xem từng ảnh — giữ trang mở. Ảnh tìm thấy hiện dần ngay bên dưới.",
+    en: "This album isn't pre-indexed, so your device checks each photo — keep this page open. Matches appear as they're found.",
+  },
+  faceSelfFoundSome: { vi: "Đã thấy {k} ảnh có bạn.", en: "Found {k} photos with you." },
   faceUsedBiggest: {
     vi: "Ảnh có nhiều người nên lấy khuôn mặt lớn nhất.",
     en: "The photo had several faces, so the largest one was used.",
