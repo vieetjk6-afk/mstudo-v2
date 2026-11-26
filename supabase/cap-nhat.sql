@@ -1827,6 +1827,12 @@ on conflict (id) do update
       file_size_limit = 4194304,
       allowed_mime_types = array['application/octet-stream'];
 
+-- ── Đợt 3: mốc "album đã chuyển hết album_faces sang kho file" ────────────────
+-- Cron cleanup-faces chép album_faces của từng album sang kho, KIỂM LẠI kho đủ
+-- rồi mới xoá các dòng của album đó và đặt mốc này. Album có mốc thì bỏ qua.
+alter table public.albums
+  add column if not exists faces_kho_at timestamptz;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/phien_ban_du_lieu_desktop.sql — Số phiên bản dữ liệu mỗi studio cho mstudo desktop: trả 304 không đọc bảng nào (chạy SAU contract_edit_requests, quote_items)
@@ -5166,6 +5172,27 @@ create policy album_faces_owner_rw on public.album_faces
       join public.photos ph on ph.id = photo_id
       where a.id = album_faces.album_id
         and ph.album_id = album_faces.album_id
+        and (a.owner_id = auth.uid() or public.is_admin())
+    )
+  );
+
+
+-- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/kho_khuon_mat.sql — Kho khuôn mặt dạng file trong Storage (bucket face-kho, chỉ service-role)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ── Đợt 2: CHỦ ALBUM đọc được kho của album mình ─────────────────────────────
+-- Lượt gom người chạy trên máy studio (src/lib/face-local-runner.ts) đọc kho
+-- thẳng từ Storage, không vòng qua Vercel. Chỉ ĐỌC, chỉ thư mục <album_id> của
+-- album mình (hoặc admin). Khách vẫn không đọc được gì; ghi vẫn chỉ service-role.
+drop policy if exists face_kho_owner_read on storage.objects;
+
+create policy face_kho_owner_read on storage.objects
+  for select to authenticated using (
+    bucket_id = 'face-kho'
+    and exists (
+      select 1 from public.albums a
+      where a.id::text = split_part(name, '/', 1)
         and (a.owner_id = auth.uid() or public.is_admin())
     )
   );

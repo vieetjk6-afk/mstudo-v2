@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { clusterAlbum, hanQuetMs, pendingRows, scanAlbum, type ScanRow } from "@/lib/face-scan-server";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 import { faceServerScanEnabled } from "@/lib/plans";
+import { demMatTrongKho } from "@/lib/face-kho-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -91,7 +92,8 @@ export async function GET(req: Request, props: { params: Promise<{ id: string }>
     anh: rows.length,
     chuaQuet: conLai,
     daQuet: rows.filter((p) => !p.is_video && !!p.faces_scanned_at).length,
-    khuonMat: faces ?? 0,
+    // Đợt 3: khuôn mặt nằm trong kho file; album_faces chỉ còn phần chưa chuyển.
+    khuonMat: (faces ?? 0) + (await demMatTrongKho(db, params.id)),
     nguoi: people ?? 0,
   });
 }

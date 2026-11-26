@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { ghiKepVaoKho } from "./face-kho-server";
+import { ghiKetQuaVaoKho } from "./face-kho-server";
 
 /**
  * GHI KẾT QUẢ QUÉT KHUÔN MẶT XUỐNG DB — MỘT đường cho cả hai nơi quét:
@@ -37,7 +37,7 @@ export const FIRST_CHUNK = 3;
 export const GOM_LAI_SAU_MS = 12 * 3600_000;
 
 export type KetQuaGhi = {
-  /** Số dòng album_faces DB xác nhận đã ghi. */
+  /** Số khuôn mặt đã ghi vào kho file. */
   daGhiMat: number;
   /** Số dòng photos câu UPDATE trả về. */
   daGhiMoc: number;
@@ -58,31 +58,19 @@ export async function ghiKetQuaQuet(
   albumId?: string,
 ): Promise<KetQuaGhi> {
   const r: KetQuaGhi = { daGhiMat: 0, daGhiMoc: 0, daXacNhan: 0, ghiKhongAn: false };
-  // Chụp lại TRƯỚC khi hai mảng bị rút cạn — để ghi kép vào kho file
-  // (@/lib/face-kho-server) sau khi DB đã nhận.
-  const chepMat = albumId ? faceRows.slice() : [];
-  const chepMoc = albumId ? doneIds.slice() : [];
-  if (faceRows.length) {
-    const batch = faceRows.splice(0, faceRows.length);
-    /*
-     * `.select()` sau khi ghi — ĐỌC LẠI CHÍNH THỨ VỪA GHI.
-     *
-     * Không có nó thì một câu ghi "thành công" mà chạm 0 dòng nhìn y hệt một
-     * câu ghi thành công thật: không lỗi, không cảnh báo. Chuyện đó đã xảy ra
-     * và ngốn ba vòng — lượt cron báo quét 40 ảnh, lượt sau vẫn thấy đủ 343
-     * ảnh chưa quét. Đọc lại là cách duy nhất phân biệt.
-     */
-    const { data: d1, error: e1 } = await db
-      .from("album_faces")
-      .upsert(batch, { onConflict: "photo_id,at" })
-      .select("photo_id");
-    if (e1) throw new Error(`ghi_album_faces_that_bai: ${e1.message}`);
-    r.daGhiMat += (d1 ?? []).length;
-    if ((d1 ?? []).length === 0) throw new Error(`ghi_album_faces_cham_0_dong (gui ${batch.length} dong)`);
-    // KHÔNG đưa album vào lại hàng đợi gom ở đây nữa — xem `veHangDoiGom` ở
-    // cuối hàm. Đặt lại sau MỖI mẻ 20 ảnh nghĩa là mỗi lượt cron gom lại cả
-    // album (đọc toàn bộ vector 128 số của mọi khuôn mặt), và đó là phần lớn
-    // egress Supabase làm project bị khoá vì vượt hạn mức (11/2026).
+  /*
+   * ĐỢT 3: khuôn mặt chỉ ghi vào KHO FILE (@/lib/face-kho-server) — album_faces
+   * không nhận dòng mới nữa. Ghi kho TRƯỚC và bắt buộc: hỏng thì NÉM trước khi
+   * đánh mốc "đã quét", kẻo ảnh mang mốc mà khuôn mặt không nằm ở đâu cả (lượt
+   * sau sẽ không bao giờ quét lại nó). Một mảnh gồm cả ảnh 0 mặt — kho biết
+   * ảnh nào đã quét mà không có ai.
+   *
+   * KHÔNG đưa album vào lại hàng đợi gom ở đây — xem `veHangDoiGomNeuCan`.
+   */
+  if (faceRows.length || doneIds.length) {
+    if (!albumId) throw new Error("ghi_kho_thieu_album_id");
+    r.daGhiMat = await ghiKetQuaVaoKho(db, albumId, faceRows, doneIds);
+    faceRows.length = 0;
   }
   while (doneIds.length) {
     const part = doneIds.splice(0, WRITE_CHUNK);
@@ -124,7 +112,6 @@ export async function ghiKetQuaQuet(
       return r;
     }
   }
-  await ghiKepVaoKho(db, albumId, chepMat, chepMoc);
   return r;
 }
 

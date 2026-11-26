@@ -141,17 +141,30 @@ async function gomAlbumThat(albumId: string): Promise<{ ok: boolean; nguoi?: num
         .order("photo_id")
         .order("at")
         .range(from, from + 999);
-    const list: { photo_id: string; at: number; box: number[] | null; descriptor: number[] | null; sharpness: number | null }[] = [];
-    // 4 trang một lúc, tới khi gặp trang thiếu.
-    for (let from = 0, het = false; !het; from += 4000) {
-      const lo = await Promise.all([0, 1, 2, 3].map((k) => trang(from + k * 1000)));
-      for (const { data, error } of lo) {
-        if (error) return { ok: false, loi: `doc_khuon_mat: ${error.message}` };
-        const rows = (data ?? []) as FaceRowTho[];
-        if (het) continue;
-        for (const r of rows) list.push({ ...r, descriptor: veMang(r.descriptor), box: r.box ? veMang(r.box as number[] | string) : null });
-        if (rows.length < 1000) het = true;
+    type Dong = { photo_id: string; at: number; box: number[] | null; descriptor: number[] | null; sharpness: number | null };
+    // Đường cũ: album_faces, 4 trang một lúc tới khi gặp trang thiếu. Từ đợt 2
+    // chỉ chạy cho những ảnh kho file chưa có (quét trước khi có ghi kép).
+    const docDb = async (): Promise<Dong[]> => {
+      const out: Dong[] = [];
+      for (let from = 0, het = false; !het; from += 4000) {
+        const lo = await Promise.all([0, 1, 2, 3].map((k) => trang(from + k * 1000)));
+        for (const { data, error } of lo) {
+          if (error) throw new Error(`doc_khuon_mat: ${error.message}`);
+          const rows = (data ?? []) as FaceRowTho[];
+          if (het) continue;
+          for (const r of rows) out.push({ ...r, descriptor: veMang(r.descriptor), box: r.box ? veMang(r.box as number[] | string) : null });
+          if (rows.length < 1000) het = true;
+        }
       }
+      return out;
+    };
+    // Kho file trước (chủ album đọc thẳng từ Storage — policy face_kho_owner_read).
+    const { docKhuonMatGom } = await import("@/lib/face-kho-server");
+    let list: Dong[];
+    try {
+      list = (await docKhuonMatGom(sb, albumId, docDb)).list;
+    } catch (e) {
+      return { ok: false, loi: e instanceof Error ? e.message : String(e) };
     }
     const { data: cu, error: eCu } = await sb.from("album_people").select("id, name, descriptor").eq("album_id", albumId);
     if (eCu) return { ok: false, loi: `doc_nguoi_cu: ${eCu.message}` };

@@ -25,6 +25,7 @@
  * Nạp code thật ở src/lib/face-scan-server.ts, thay mỗi tầng database.
  */
 import { scanAlbum, pendingRows } from "../../src/lib/face-scan-server.ts";
+import { khoGia } from "./kho-gia.mjs";
 
 let fail = 0;
 const check = (name, got, want) => {
@@ -44,7 +45,7 @@ const ok = (name, cond, note = "") => {
  */
 function fakeDb({ soAnh, giuMoc }) {
   const photos = Array.from({ length: soAnh }, (_, i) => ({
-    id: `p${i}`,
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`,
     album_id: "a1",
     position: i,
     drive_file_id: `d${i}`,
@@ -116,9 +117,13 @@ function fakeDb({ soAnh, giuMoc }) {
     return self;
   };
 
+  const kho = khoGia();
   return {
     stats,
     photos,
+    // Đợt 3: khuôn mặt ghi vào kho file (Storage) thay vì album_faces.
+    storage: kho.storage,
+    kho,
     from(table) {
       return {
         select: (cols, opts) => builder(table, "select", null).select(cols, opts),

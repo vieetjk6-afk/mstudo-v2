@@ -6,6 +6,7 @@
  * vạ (egress), báo "đang quét 0/700" cho một album không ai quét, hay để route
  * mới kéo TensorFlow vào gói. Mỗi phần dưới đây canh một luật đó.
  */
+import { khoGia } from "./kho-gia.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { kiemLoKetQua, laDescriptorHopLe, laLoiVinhVien, LO_TOI_DA, MAX_FACES } from "../../src/lib/face-scan-core.ts";
@@ -97,7 +98,9 @@ function fakeDb({ photos, clusteredAt = null, giuMoc = true, albums = null }) {
     };
     return self;
   };
-  return { from, t, stats };
+  // Đợt 3: khuôn mặt ghi vào kho file (Storage) thay vì album_faces.
+  const kho = khoGia();
+  return { from, t, stats, storage: kho.storage, kho: kho.kho };
 }
 const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_file_id: `d${n}`, name: `a${n}.jpg`, is_video: false, faces_scanned_at: null, ...over });
 
@@ -115,15 +118,16 @@ const anh = (n, over = {}) => ({ id: uuid(n), album_id: "A", position: n, drive_
   const db = fakeDb({ photos: [anh(1), anh(2), anh(3), anh(4, { faces_scanned_at: "2026-01-01T00:00:00Z" }), { ...anh(9), album_id: "B" }] });
   const r = await nhanLoKetQua(db, "A", [{ photoId: uuid(1), faces: [face(0), face(1, 2)] }, { photoId: uuid(2), faces: [] }, { photoId: uuid(4), faces: [face(0, 9)] }]);
   check("ghi 2 tấm, 2 khuôn mặt, bỏ 1 tấm đã quét, còn 1", [r.ok, r.daGhi, r.khuonMat, r.boQuaDaQuet, r.conLai, r.xong], [true, 2, 2, 1, 1, false]);
-  const d = db.t.album_faces[0];
-  check("dòng album_faces đúng hình dạng của bộ quét máy chủ", Object.keys(d).sort(), ["album_id", "at", "box", "descriptor", "photo_id", "sharpness"]);
-  ok("…box là mảng 4, descriptor 128, at theo thứ tự", d.box.length === 4 && d.descriptor.length === 128 && db.t.album_faces.map((x) => x.at).join() === "0,1");
-  ok("ảnh 0 mặt vẫn được đánh mốc", db.t.photos[1].faces_scanned_at !== null);
-  ok("tấm đã quét KHÔNG bị ghi đè khuôn mặt", !db.t.album_faces.some((x) => x.photo_id === uuid(4)));
+  const k = db.kho("A");
+  const a1 = k.get(uuid(1));
+  ok("khuôn mặt vào KHO (không còn ghi album_faces)", db.t.album_faces.length === 0 && !!a1 && a1.nguon === 1);
+  ok("…box là mảng 4, descriptor 128, đủ 2 mặt theo thứ tự", a1.faces.length === 2 && a1.faces[0].box.length === 4 && a1.faces[0].descriptor.length === 128 && Math.abs(a1.faces[1].descriptor[0] - face(1, 2).descriptor[0]) < 0.001);
+  ok("ảnh 0 mặt vẫn được đánh mốc + ghi vào kho (đã quét, không có ai)", db.t.photos[1].faces_scanned_at !== null && k.get(uuid(2))?.faces.length === 0);
+  ok("tấm đã quét KHÔNG bị ghi đè khuôn mặt", !k.has(uuid(4)));
 
   const la = await nhanLoKetQua(db, "A", [{ photoId: uuid(9), faces: [face(0)] }]);
   check("ảnh của album KHÁC → từ chối cả lô", [la.ok, la.error], [false, "anh_khong_thuoc_album"]);
-  ok("…và không ghi gì", db.t.album_faces.length === 2 && db.t.photos[4].faces_scanned_at === null);
+  ok("…và không ghi gì", !db.kho("A").has(uuid(9)) && db.kho("B").size === 0 && db.t.photos[4].faces_scanned_at === null);
 
   const cuoi = await nhanLoKetQua(db, "A", [{ photoId: uuid(3), skip: "http-404" }]);
   check("tấm 404 được đánh mốc (0 mặt) → album xong", [cuoi.ok, cuoi.conLai, cuoi.xong], [true, 0, true]);

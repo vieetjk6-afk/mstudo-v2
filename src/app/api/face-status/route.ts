@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { linkSqlEditor, maDuAn } from "@/lib/supabase-du-an";
 import { chuAlbumDuocTimMat } from "@/lib/face-pending";
 import { faceServerScanEnabled } from "@/lib/plans";
+import { demMatTrongKho } from "@/lib/face-kho-server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -199,6 +200,13 @@ export async function GET(req: Request) {
   const tongAnh = dem(anhRows);
   const chuaQuet = dem(anhRows.filter((p) => !p.is_video && !p.faces_scanned_at));
   const soMat = dem(faces as unknown as { album_id: string }[]);
+  // Đợt 3: cộng khuôn mặt trong kho file (album_faces chỉ còn phần chưa chuyển).
+  // 6 album một lúc — mỗi album một lượt liệt kê Storage.
+  for (let k = 0; k < ids.length; k += 6) {
+    const lo = ids.slice(k, k + 6) as string[];
+    const n = await Promise.all(lo.map((id) => demMatTrongKho(db, id)));
+    lo.forEach((id, i) => soMat.set(id, (soMat.get(id) ?? 0) + n[i]));
+  }
   const soNguoi = dem(people as unknown as { album_id: string }[]);
 
   out.albums = ((albums ?? []) as Record<string, string | null>[]).map((a) => ({

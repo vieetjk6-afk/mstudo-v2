@@ -125,22 +125,136 @@ export async function ghiKepVaoKho(
 ): Promise<void> {
   if (!albumId || !doneIds.length || !db?.storage) return;
   try {
-    const theoAnh = new Map<string, AnhKho>();
-    for (const id of doneIds) theoAnh.set(id, { photoId: id, faces: [] });
-    for (const r of faceRows) {
-      const a = theoAnh.get(String(r.photo_id));
-      const box = r.box as number[];
-      const d = r.descriptor as number[];
-      if (!a || !Array.isArray(box) || box.length !== 4 || !Array.isArray(d)) continue;
-      a.faces.push({ box: [box[0], box[1], box[2], box[3]], descriptor: d, sharpness: Number(r.sharpness) || 0 });
-    }
-    await ghiManh(db, albumId, { nguon: NGUON_STUDIO, anh: [...theoAnh.values()] });
+    await ghiKetQuaVaoKho(db, albumId, faceRows, doneIds);
   } catch (e) {
     console.warn("[face-kho] ghi kép thất bại:", e instanceof Error ? e.message : e);
   }
 }
 
+/**
+ * Ghi kết quả một mẻ quét vào kho — BẮT BUỘC (đợt 3: kho là nơi lưu DUY NHẤT).
+ * NÉM khi không ghi được: người gọi phải dừng TRƯỚC khi đánh mốc "đã quét",
+ * kẻo ảnh mang mốc mà không có khuôn mặt nào ở đâu cả. Trả số khuôn mặt đã ghi.
+ * `at` theo thứ tự dòng trong `faceRows` (bộ quét đẩy theo đúng thứ tự đó).
+ */
+export async function ghiKetQuaVaoKho(
+  db: any,
+  albumId: string,
+  faceRows: readonly Record<string, unknown>[],
+  doneIds: readonly string[],
+): Promise<number> {
+  if (!db?.storage) throw new Error("khong_co_storage");
+  const theoAnh = new Map<string, AnhKho>();
+  for (const id of doneIds) theoAnh.set(id, { photoId: id, faces: [] });
+  for (const r of faceRows) {
+    const id = String(r.photo_id);
+    let a = theoAnh.get(id);
+    if (!a) theoAnh.set(id, (a = { photoId: id, faces: [] }));
+    const box = r.box as number[];
+    const d = r.descriptor as number[];
+    if (!Array.isArray(box) || box.length !== 4 || !Array.isArray(d) || d.length !== 128) continue;
+    a.faces.push({ box: [box[0], box[1], box[2], box[3]], descriptor: d, sharpness: Number(r.sharpness) || 0 });
+  }
+  const anh = [...theoAnh.values()];
+  if (!anh.length) return 0;
+  await ghiManh(db, albumId, { nguon: NGUON_STUDIO, anh });
+  return anh.reduce((n, a) => n + a.faces.length, 0);
+}
+
 /** Công tắc tắt nhanh tính năng khách tự quét (FACE_SELF_SCAN=0). Mặc định bật. */
 export function khachTuQuetBat(): boolean {
   return process.env.FACE_SELF_SCAN !== "0";
+}
+
+/* ── ĐỌC CHO CÁC ĐƯỜNG GOM / GHÉP LAYOUT (đợt 2) ──────────────────────────────
+   Đọc KHO trước; chỉ những ảnh kho chưa có (quét trước khi có ghi kép) mới
+   phải đọc album_faces. Kho phủ đủ thì không chạm album_faces lần nào. */
+
+/** Một dòng khuôn mặt — cùng hình với FaceRow của @/lib/face-gom-tinh. */
+export type DongMat = { photo_id: string; at: number; box: number[] | null; descriptor: number[] | null; sharpness: number | null };
+
+/** Kho của album, KHÔNG BAO GIỜ ném: Storage hỏng / chưa có bucket → kho rỗng. */
+export async function docKhoAnToan(db: any, albumId: string): Promise<KhoGop> {
+  if (!db?.storage) return new Map();
+  try {
+    return (await docKho(db, albumId)).kho;
+  } catch {
+    return new Map();
+  }
+}
+
+/** Dòng khuôn mặt của các ảnh `ids` lấy từ kho (bỏ ảnh kho không có). */
+export function dongTuKho(kho: KhoGop, ids: Iterable<string>, chiStudio = false): DongMat[] {
+  const out: DongMat[] = [];
+  for (const id of ids) {
+    const v = kho.get(id);
+    if (!v || (chiStudio && v.nguon !== NGUON_STUDIO)) continue;
+    v.faces.forEach((f, at) => out.push({ photo_id: id, at, box: [...f.box], descriptor: f.descriptor, sharpness: f.sharpness }));
+  }
+  return out;
+}
+
+/** id các ảnh studio / máy chủ ĐÃ QUÉT (có mốc faces_scanned_at) của album. null = không đọc được. */
+export async function anhDaQuet(db: any, albumId: string): Promise<string[] | null> {
+  try {
+    const out: string[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await db
+        .from("photos")
+        .select("id")
+        .eq("album_id", albumId)
+        .not("faces_scanned_at", "is", null)
+        .order("id")
+        .range(from, from + 999);
+      if (error) return null;
+      const rows = (data ?? []) as { id: string }[];
+      out.push(...rows.map((r) => r.id));
+      if (rows.length < 1000) break;
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Khuôn mặt để GOM NGƯỜI. Chỉ dữ liệu STUDIO / MÁY CHỦ (dữ liệu khách tự quét
+ * không kiểm lại được, không được quyết định danh sách người cả album thấy).
+ *
+ * `phuDu` = kho có đủ MỌI ảnh đã quét của album (và album có ít nhất một ảnh
+ * đã quét) → không cần album_faces. Không đủ thì đọc album_faces (`docDb`)
+ * cho phần còn thiếu; bản kho thắng bản DB khi trùng ảnh.
+ */
+export async function docKhuonMatGom(
+  db: any,
+  albumId: string,
+  docDb: () => Promise<DongMat[]>,
+): Promise<{ list: DongMat[]; phuDu: boolean; tuKho: number; tuDb: number }> {
+  const [kho, daQuet] = await Promise.all([docKhoAnToan(db, albumId), anhDaQuet(db, albumId)]);
+  const coTrongKho = (id: string) => kho.get(id)?.nguon === NGUON_STUDIO;
+  const phuDu = !!daQuet && daQuet.length > 0 && daQuet.every(coTrongKho);
+  if (phuDu) {
+    const list = dongTuKho(kho, daQuet!, true);
+    return { list, phuDu, tuKho: daQuet!.length, tuDb: 0 };
+  }
+  const tuDb = await docDb();
+  // Ảnh đã bị xoá khỏi album vẫn có thể còn trong kho — chỉ lấy ảnh còn mốc quét.
+  const conTrongAlbum = daQuet ? new Set(daQuet) : null;
+  const idKho = [...kho.keys()].filter((id) => coTrongKho(id) && (!conTrongAlbum || conTrongAlbum.has(id)));
+  const khoSet = new Set(idKho);
+  const list = [...dongTuKho(kho, idKho, true), ...tuDb.filter((r) => !khoSet.has(r.photo_id))];
+  return { list, phuDu, tuKho: idKho.length, tuDb: tuDb.filter((r) => !khoSet.has(r.photo_id)).length };
+}
+
+/** Kho có đủ dữ liệu để gom lại album này từ đầu không (album đã dọn album_faces). */
+export async function khoPhuDuDeGom(db: any, albumId: string): Promise<boolean> {
+  const [kho, daQuet] = await Promise.all([docKhoAnToan(db, albumId), anhDaQuet(db, albumId)]);
+  return !!daQuet && daQuet.length > 0 && daQuet.every((id) => kho.get(id)?.nguon === NGUON_STUDIO);
+}
+
+/** Số khuôn mặt (bản studio / máy chủ) trong kho của album — cho các màn chẩn đoán. */
+export async function demMatTrongKho(db: any, albumId: string): Promise<number> {
+  let n = 0;
+  for (const v of (await docKhoAnToan(db, albumId)).values()) if (v.nguon === NGUON_STUDIO) n += v.faces.length;
+  return n;
 }
