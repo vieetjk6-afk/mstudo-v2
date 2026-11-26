@@ -30,6 +30,7 @@ function fakeDb({ faces, photos, albums, kho }) {
       delete(o) { op = "delete"; if (o?.count) cnt = true; return self; },
       update(p) { op = "update"; payload = p; return self; },
       eq(c, v) { f.push((r) => r[c] === v); return self; },
+      in(c, l) { f.push((r) => l.includes(r[c])); return self; },
       is(c, v) { if (v === null) f.push((r) => r[c] == null); return self; },
       not(c, o, v) { if (o === "is" && v === null) f.push((r) => r[c] != null); return self; },
       order() { return self; },
@@ -71,6 +72,14 @@ const mat = (album, photo, at, x) => ({ album_id: album, photo_id: id(photo), at
 
   const tong = await chuyenSangKho(db, { nganSachMs: 10_000 });
   ok("lượt cron: chuyển album còn lại, bỏ qua album đã có mốc", tong.ok && tong.album === 1 && db.t.album_faces.length === 0 && kho.kho(B).size === 1, JSON.stringify(tong));
+}
+
+/* 1b. dòng của ảnh KHÔNG còn mốc quét → đọc theo mã ảnh thiếu → lùi về đọc theo trang, vẫn đủ */
+{
+  const kho = khoGia();
+  const db = fakeDb({ kho, faces: [mat(A, 1, 0, 1), mat(A, 2, 0, 2)], photos: [{ id: id(1), album_id: A, faces_scanned_at: "x" }, { id: id(2), album_id: A, faces_scanned_at: null }], albums: [{ id: A, faces_kho_at: null }] });
+  const r = await chuyenMotAlbum(db, A);
+  ok("ảnh mất mốc quét vẫn được chép (lùi về đọc theo trang) trước khi xoá", kho.kho(A).get(id(2))?.faces.length === 1 && r.dongXoa === 2);
 }
 
 /* 2. album không có dòng nào: chỉ đặt mốc */
