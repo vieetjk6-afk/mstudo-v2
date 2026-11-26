@@ -40,8 +40,12 @@ export type KetQuaChuyen = {
   anh: number;
   /** Dòng album_faces đã xoá. */
   dongXoa: number;
-  hetGio: boolean;
-  loi?: string;
+  /** false = hết giờ giữa chừng, lượt sau chạy tiếp (trang Sức khoẻ in "chưa xong"). */
+  done: boolean;
+  /** Số album lỗi ở lượt này — dòng DB của chúng còn nguyên. */
+  albumLoi: number;
+  /** Câu lỗi (album đầu tiên lỗi) — tên `error` để trang Sức khoẻ hiện ra. */
+  error?: string;
 };
 
 async function docDongAlbum(db: any, albumId: string): Promise<Dong[]> {
@@ -154,18 +158,18 @@ async function datMoc(db: any, albumId: string) {
 /** Một lượt chuyển: các album chưa có mốc faces_kho_at, tới khi hết ngân sách. */
 export async function chuyenSangKho(db: any, opts: { nganSachMs?: number } = {}): Promise<KetQuaChuyen> {
   const hanChot = Date.now() + (opts.nganSachMs ?? 120_000);
-  const kq: KetQuaChuyen = { ok: true, album: 0, albumRong: 0, anh: 0, dongXoa: 0, hetGio: false };
+  const kq: KetQuaChuyen = { ok: true, album: 0, albumRong: 0, anh: 0, dongXoa: 0, done: true, albumLoi: 0 };
   const ids: string[] = [];
   for (let from = 0; ; from += 1000) {
     const { data, error } = await db.from("albums").select("id").is("faces_kho_at", null).order("id").range(from, from + 999);
-    if (error) return { ...kq, ok: false, loi: `doc_album_that_bai: ${error.message}` };
+    if (error) return { ...kq, ok: false, error: `doc_album_that_bai: ${error.message}` };
     const rows = (data ?? []) as { id: string }[];
     ids.push(...rows.map((r) => r.id));
     if (rows.length < 1000) break;
   }
   for (const id of ids) {
     if (Date.now() > hanChot) {
-      kq.hetGio = true;
+      kq.done = false;
       break;
     }
     try {
@@ -177,7 +181,9 @@ export async function chuyenSangKho(db: any, opts: { nganSachMs?: number } = {})
     } catch (e) {
       // Lỗi một album không chặn album khác; album đó giữ nguyên dòng DB.
       kq.ok = false;
-      kq.loi = `${id}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300);
+      kq.albumLoi++;
+      // Giữ câu lỗi của album ĐẦU TIÊN — đủ để lần ra, không bị album sau đè.
+      kq.error ??= `album ${id}: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300);
     }
   }
   return kq;

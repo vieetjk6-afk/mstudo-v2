@@ -89,7 +89,7 @@ const mat = (album, photo, at, x) => ({ album_id: album, photo_id: id(photo), at
   try { await chuyenMotAlbum(db, A); } catch (e) { nem = e.message; }
   ok("Storage hỏng → ném, GIỮ NGUYÊN dòng DB, không đặt mốc", !!nem && db.t.album_faces.length === 1 && !db.t.albums[0].faces_kho_at, nem);
   const tong = await chuyenSangKho(db, { nganSachMs: 10_000 });
-  ok("…lượt cron báo lỗi chứ không im lặng", !tong.ok && /ghi_manh_that_bai/.test(tong.loi ?? ""), JSON.stringify(tong));
+  ok("…lượt cron báo lỗi chứ không im lặng (trường `error` — trang Sức khoẻ hiện trường này)", !tong.ok && tong.albumLoi === 1 && /ghi_manh_that_bai/.test(tong.error ?? ""), JSON.stringify(tong));
 }
 
 /* 4. Kho đã có bản studio từ trước (lần quét lại, MỚI hơn DB) → bản kho là bản đúng */
