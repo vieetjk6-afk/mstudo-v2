@@ -35,7 +35,7 @@ import { CustomerHeaderV2, CustomerRootV2 } from "@/components/v2/customer";
 import { Callout, Empty, GroupLabel, Progress, btn, iconBtn, inputCls } from "@/components/v2/kit";
 import { Menu, Modal, Segmented, type MenuItem } from "@/components/v2/kit-client";
 import { useCustomerAlbum, type CustomerAlbumProps } from "./useCustomerAlbum";
-import { useFaceSearch } from "./useFaceSearch";
+import { TOI_ID, useFaceSearch } from "./useFaceSearch";
 import { useDuplicateScan } from "./useDuplicateScan";
 import FaceFinderV2, { FaceAvatar, faceToolAvailable } from "./FaceFinderV2";
 import DuplicatesV2 from "./DuplicatesV2";
@@ -77,6 +77,9 @@ export default function CustomerAlbumV2(props: CustomerAlbumProps) {
   const face = useFaceSearch({
     slug: album.slug,
     password: a.password,
+    selfScan: a.selfScan,
+    driveIdOf: a.driveIdOf,
+    upsertPerson: a.upsertPerson,
     onPick: (id) => {
       a.setPersonId(id);
       if (id) {
@@ -146,7 +149,7 @@ export default function CustomerAlbumV2(props: CustomerAlbumProps) {
   const canDone = !a.shareMode && (n > 0 || disliked.size > 0);
   const badge = syncBadge(a.ledger, a.saveActivity, a.online, lang);
   const hasPhotos = photos.length > 0;
-  const showFaces = faceToolAvailable(a.people, a.scan);
+  const showFaces = faceToolAvailable(a.people, a.scan, a.selfScan);
   const showDups = !a.shareMode && a.view === "all" && photos.length >= 24 && dup.supported;
   const showDrive = !a.shareMode && album.allowDrive && a.driveFolders.length > 0;
   const lbPhoto = a.lbPhoto;
@@ -355,6 +358,7 @@ export default function CustomerAlbumV2(props: CustomerAlbumProps) {
                 <FaceAvatar person={a.activePerson} driveIdOf={a.driveIdOf} size={28} />
                 <span className="max-w-[46vw] truncate">
                   {a.activePerson.name ? t("caPhotosOf").replace("{name}", a.activePerson.name) : t("caPhotosOfThis")} · {a.activePerson.photoIds.filter((id) => !disliked.has(id)).length}
+                  {a.activePerson.id === TOI_ID && face.tuQuet && !face.tuQuet.xong ? ` · ${face.tuQuet.daQuet}/${face.tuQuet.tong}…` : ""}
                 </span>
                 <button type="button" onClick={() => a.setPersonId(null)} aria-label={t("faceClear")} title={t("faceClear")} className="flex h-7 w-7 items-center justify-center rounded-full">
                   <X size={15} />

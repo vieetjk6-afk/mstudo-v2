@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { ghiKepVaoKho } from "./face-kho-server";
+
 /**
  * GHI KẾT QUẢ QUÉT KHUÔN MẶT XUỐNG DB — MỘT đường cho cả hai nơi quét:
  *
@@ -49,8 +51,17 @@ export type KetQuaGhi = {
  * Đẩy khuôn mặt + mốc "đã quét" xuống DB. Hai mảng bị RÚT CẠN (splice) — người
  * gọi dùng chúng làm bộ đệm giữa các mẻ.
  */
-export async function ghiKetQuaQuet(db: any, faceRows: Record<string, unknown>[], doneIds: string[]): Promise<KetQuaGhi> {
+export async function ghiKetQuaQuet(
+  db: any,
+  faceRows: Record<string, unknown>[],
+  doneIds: string[],
+  albumId?: string,
+): Promise<KetQuaGhi> {
   const r: KetQuaGhi = { daGhiMat: 0, daGhiMoc: 0, daXacNhan: 0, ghiKhongAn: false };
+  // Chụp lại TRƯỚC khi hai mảng bị rút cạn — để ghi kép vào kho file
+  // (@/lib/face-kho-server) sau khi DB đã nhận.
+  const chepMat = albumId ? faceRows.slice() : [];
+  const chepMoc = albumId ? doneIds.slice() : [];
   if (faceRows.length) {
     const batch = faceRows.splice(0, faceRows.length);
     /*
@@ -113,6 +124,7 @@ export async function ghiKetQuaQuet(db: any, faceRows: Record<string, unknown>[]
       return r;
     }
   }
+  await ghiKepVaoKho(db, albumId, chepMat, chepMoc);
   return r;
 }
 

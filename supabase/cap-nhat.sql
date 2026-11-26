@@ -1803,6 +1803,32 @@ alter table public.albums
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- ▶ migrations/kho_khuon_mat.sql — Kho khuôn mặt dạng file trong Storage (bucket face-kho, chỉ service-role)
+-- ══════════════════════════════════════════════════════════════════════════
+
+-- ============================================================================
+-- KHO KHUÔN MẶT DẠNG FILE (Storage) — đợt 1 của việc dời album_faces ra khỏi DB
+--
+-- Vì sao: album_faces (mỗi khuôn mặt một dòng, vector 128 số) đẩy database tới
+-- sát trần 500 MB của gói Free, trong khi Storage gần như trống (trần 1 GB).
+-- Mỗi lượt quét giờ ghi thêm một "mảnh" nhị phân vào bucket này (định dạng ở
+-- src/lib/face-kho.ts); khách tự quét trên máy mình cũng góp mảnh vào đây.
+--
+-- Bucket RIÊNG TƯ, không policy nào: chỉ service-role (máy chủ) đọc/ghi. Khách
+-- không bao giờ tải file — so khớp chạy ở máy chủ, chỉ trả danh sách ảnh.
+-- Trần 4 MB một file: mảnh thường vài chục KB, bản gộp của album 3.000 ảnh
+-- khoảng 2–3 MB.
+-- ============================================================================
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('face-kho', 'face-kho', false, 4194304, array['application/octet-stream'])
+on conflict (id) do update
+  set public = false,
+      file_size_limit = 4194304,
+      allowed_mime_types = array['application/octet-stream'];
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/phien_ban_du_lieu_desktop.sql — Số phiên bản dữ liệu mỗi studio cho mstudo desktop: trả 304 không đọc bảng nào (chạy SAU contract_edit_requests, quote_items)
 -- ══════════════════════════════════════════════════════════════════════════
 
@@ -3842,7 +3868,7 @@ as $$
   );
 $$;
 
--- Dung lượng: database, ~12 bảng public lớn nhất (số dòng là ƯỚC LƯỢNG của
+-- Dung lượng: database, ~15 bảng lớn nhất (mọi schema) (số dòng là ƯỚC LƯỢNG của
 -- pg_class.reltuples — không đếm thật, đếm thật trên bảng lớn là tốn), và từng
 -- bucket Storage. Project không có schema storage thì trả mảng rỗng, không lỗi.
 create or replace function public.system_stats()
@@ -3858,14 +3884,20 @@ declare
 begin
   select coalesce(jsonb_agg(to_jsonb(t)), '[]'::jsonb) into v_tables
   from (
-    select c.relname as name,
+    -- MỌI schema chứ không chỉ public: thủ phạm làm đầy database trên gói Free
+    -- hay nằm ở bảng nhật ký của chính Supabase (auth.audit_log_entries,
+    -- cron.job_run_details, net._http_response…) — chỉ nhìn public thì không
+    -- bao giờ thấy. Bảng ngoài public hiện kèm tên schema.
+    select case when n.nspname = 'public' then c.relname else n.nspname || '.' || c.relname end as name,
            pg_total_relation_size(c.oid) as bytes,
            greatest(c.reltuples, 0)::bigint as rows
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public' and c.relkind = 'r'
+    where c.relkind in ('r', 'm')
+      and n.nspname not in ('pg_catalog', 'information_schema', 'pg_toast')
+      and n.nspname not like 'pg_temp%'
     order by pg_total_relation_size(c.oid) desc
-    limit 12
+    limit 15
   ) t;
 
   if to_regclass('storage.objects') is not null then
@@ -3907,6 +3939,8 @@ as $$
 declare
   v_runs integer;
   v_errs integer;
+  v_n    integer;
+  v_more integer := 0;
 begin
   delete from public.system_runs r
   where r.started_at < now() - interval '60 days'
@@ -3921,7 +3955,45 @@ begin
   delete from public.system_errors where day < (now() at time zone 'utc')::date - 30;
   get diagnostics v_errs = row_count;
 
-  return v_runs + v_errs;
+  -- Thông báo studio ĐÃ ĐỌC quá 180 ngày: không màn nào hiện lại (chuông chỉ
+  -- lấy vài chục cái mới nhất) mà bảng cứ dài mãi. Chưa đọc thì giữ nguyên.
+  begin
+    delete from public.studio_notifications
+    where read and not coalesce(important, false) and created_at < now() - interval '180 days';
+    get diagnostics v_n = row_count;
+    v_more := v_more + v_n;
+  exception when others then null;
+  end;
+
+  -- Nhật ký nội bộ của Supabase — không ai đọc, tự phình không giới hạn và
+  -- tính vào trần 500 MB. Mỗi khối bọc riêng: extension chưa bật hoặc không đủ
+  -- quyền thì bỏ qua, không làm hỏng phần dọn ở trên.
+  if to_regclass('cron.job_run_details') is not null then
+    begin
+      execute $q$delete from cron.job_run_details where end_time < now() - interval '7 days'$q$;
+      get diagnostics v_n = row_count;
+      v_more := v_more + v_n;
+    exception when others then null;
+    end;
+  end if;
+  if to_regclass('net._http_response') is not null then
+    begin
+      execute $q$delete from net._http_response where created < now() - interval '1 day'$q$;
+      get diagnostics v_n = row_count;
+      v_more := v_more + v_n;
+    exception when others then null;
+    end;
+  end if;
+  if to_regclass('auth.audit_log_entries') is not null then
+    begin
+      execute $q$delete from auth.audit_log_entries where created_at < now() - interval '30 days'$q$;
+      get diagnostics v_n = row_count;
+      v_more := v_more + v_n;
+    exception when others then null;
+    end;
+  end if;
+
+  return v_runs + v_errs + v_more;
 end;
 $$;
 

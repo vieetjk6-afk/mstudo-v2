@@ -93,6 +93,56 @@ function loadEngine(): Promise<Engine> {
   return engine;
 }
 
+const THU_TU_NEN = ["webgl", "wasm", "cpu"];
+
+/**
+ * Chuyển sang nền tính toán KẾ TIẾP (webgl → wasm → cpu). false khi hết đường.
+ *
+ * Vì sao: `setBackend("webgl")` thành công chưa có nghĩa là chạy được. Safari
+ * trên iPhone hay nhận WebGL rồi hỏng lúc biên dịch shader / hết bộ nhớ GPU ở
+ * lượt nhận diện đầu tiên — bản trước coi đó là "máy không chạy được" dù WASM
+ * hay CPU vẫn chạy tốt. Trọng số đã nạp tự dời sang nền mới khi được đọc.
+ */
+async function doiNenTiep(e: Engine): Promise<boolean> {
+  for (let i = THU_TU_NEN.indexOf(e.backend) + 1; i < THU_TU_NEN.length; i++) {
+    const b = THU_TU_NEN[i];
+    try {
+      if (b === "wasm") e.tf.setWasmPaths?.(`${MODEL_BASE}/`);
+      if (await e.tf.setBackend(b)) {
+        await e.tf.ready();
+        e.backend = b;
+        return true;
+      }
+    } catch {
+      /* thử nền sau nữa */
+    }
+  }
+  return false;
+}
+
+/** Chạy một lượt nhận diện; hỏng thì lùi nền và thử lại cho tới khi hết nền. */
+async function chayCoLuiNen<T>(fn: (e: Engine) => Promise<T>): Promise<T> {
+  for (;;) {
+    const e = await loadEngine();
+    try {
+      return await fn(e);
+    } catch (err) {
+      const cu = e.backend;
+      if (!(await doiNenTiep(e))) throw err;
+      console.warn(`[face] nền ${cu} hỏng (${err instanceof Error ? err.message : err}) → thử ${e.backend}`);
+    }
+  }
+}
+
+/** Nền đang dùng — để ghi kèm khi báo lỗi. */
+export async function nenDangDung(): Promise<string> {
+  try {
+    return engine ? (await engine).backend : "chua-nap";
+  } catch {
+    return "hong";
+  }
+}
+
 /** Nạp các mạng cần cho một bộ dò. Gọi lại nhiều lần vô hại. */
 export async function napMoHinh(boDo: BoDo = "ssd", onProgress?: (p: TienDoNap) => void): Promise<{ backend: string }> {
   onProgress?.({ buoc: "thu-vien", phanTram: 5 });
@@ -133,9 +183,8 @@ export async function napMoHinh(boDo: BoDo = "ssd", onProgress?: (p: TienDoNap) 
  */
 export async function scanJpegBrowser(bytes: Uint8Array): Promise<ScannedFace[]> {
   await napMoHinh("ssd");
-  const { faceapi, tf } = await loadEngine();
   const dec = await giaiMaJpeg(bytes);
-  return quetRgba(faceapi, tf, dec.data, dec.width, dec.height);
+  return chayCoLuiNen(({ faceapi, tf }) => quetRgba(faceapi, tf, dec.data, dec.width, dec.height));
 }
 
 type AnhRgba = { data: Uint8Array; width: number; height: number };
@@ -317,8 +366,7 @@ export async function vectorAnhKhach(
     ctx.drawImage(img, 0, 0, w, h);
     const { data } = ctx.getImageData(0, 0, w, h);
     await nap;
-    const { faceapi, tf } = await loadEngine();
-    const faces = await quetRgba(faceapi, tf, data, w, h, boDo);
+    const faces = await chayCoLuiNen(({ faceapi, tf }) => quetRgba(faceapi, tf, data, w, h, boDo));
     if (faces.length === 0) return { descriptor: null, soMat: 0 };
     const me = faces.reduce((a, b) => (b.box.w * b.box.h > a.box.w * a.box.h ? b : a));
     return { descriptor: me.descriptor, soMat: faces.length };

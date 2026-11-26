@@ -84,6 +84,8 @@ export type CustomerAlbumProps = {
    * không có gì đang chạy — kể cả khi gói của studio không mở tính năng này.
    */
   faceScan?: TienDoQuet | null;
+  /** Khách được tự tìm ảnh có mình trên máy (không cần studio quét trước). */
+  faceSelfScan?: boolean;
   studioName?: string;
   logoUrl?: string | null;
   /** Domain riêng của studio — link chia sẻ phải mang tên miền đó, không phải mstudo.com. */
@@ -108,6 +110,7 @@ export function useCustomerAlbum({
   initialDriveFolders,
   initialPeople,
   faceScan = null,
+  faceSelfScan = false,
   studioName = "Studio",
   studioHost = null,
 }: CustomerAlbumProps) {
@@ -122,6 +125,10 @@ export function useCustomerAlbum({
   // Chip lọc theo người. Album có mật khẩu thì server chưa gửi gì cho tới khi mở
   // khoá, nên cũng nhận thêm ở bước unlock() — giống photos/sources.
   const [people, setPeople] = useState<PersonChip[]>(initialPeople ?? []);
+  /** Thêm / thay một "người" (dùng cho kết quả khách tự tìm — @/app/a/[slug]/useFaceSearch). */
+  const upsertPerson = useCallback((chip: PersonChip) => {
+    setPeople((ds) => (ds.some((p) => p.id === chip.id) ? ds.map((p) => (p.id === chip.id ? chip : p)) : [chip, ...ds]));
+  }, []);
   // Album có mật khẩu: server component chưa biết gì trước khi mở khoá, nên tiến
   // độ này đến cùng lượt trả lời của /access.
   const [scan, setScan] = useState<TienDoQuet | null>(faceScan);
@@ -852,6 +859,8 @@ export function useCustomerAlbum({
     tabSources,
     driveFolders,
     people,
+    upsertPerson,
+    selfScan: faceSelfScan,
     scan,
     personId,
     setPersonId,

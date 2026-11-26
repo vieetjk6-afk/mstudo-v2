@@ -62,6 +62,7 @@ function fakeDb({ albums, photos = [], faces = [], people = [], thieuCot = false
       insert(p) { op = "insert"; payload = p; return q; },
       eq(c, v) { f.push((r) => r[c] === v); return q; },
       neq(c, v) { f.push((r) => r[c] !== v); return q; },
+      lt(c, v) { f.push((r) => r[c] != null && r[c] < v); return q; },
       is(c, v) { f.push((r) => (v === null ? r[c] == null : r[c] === v)); return q; },
       or(expr) {
         // Chỉ dạng face-don dùng: delivered_at.lt.X,and(delivered_at.is.null,created_at.lt.X)
@@ -91,11 +92,12 @@ const mat = (album_id, photo_id, at = 0) => ({ album_id, photo_id, at, box: [0, 
     { id: "cu", phase: "delivery", delivered_at: iso(20), created_at: iso(60), faces_clustered_at: iso(25), faces_pruned_at: null },
     { id: "moi", phase: "delivery", delivered_at: iso(10), created_at: iso(60), faces_clustered_at: iso(12), faces_pruned_at: null },
     { id: "chon", phase: "selection", delivered_at: null, created_at: iso(90), faces_clustered_at: iso(80), faces_pruned_at: null },
+    { id: "chon-moi", phase: "selection", delivered_at: null, created_at: iso(90), faces_clustered_at: iso(10), faces_pruned_at: null },
     { id: "tao-thang", phase: "delivery", delivered_at: null, created_at: iso(40), faces_clustered_at: iso(39), faces_pruned_at: null },
     { id: "chua-gom", phase: "delivery", delivered_at: iso(30), created_at: iso(40), faces_clustered_at: null, faces_pruned_at: null },
     { id: "con-quet", phase: "delivery", delivered_at: iso(30), created_at: iso(40), faces_clustered_at: iso(31), faces_pruned_at: null },
   ];
-  const photos = [anh("cu", "c1"), anh("moi", "m1"), anh("chon", "s1"), anh("tao-thang", "t1"), anh("chua-gom", "g1"), anh("con-quet", "q1"), anh("con-quet", "q2", false)];
+  const photos = [anh("cu", "c1"), anh("moi", "m1"), anh("chon", "s1"), anh("chon-moi", "s2"), anh("tao-thang", "t1"), anh("chua-gom", "g1"), anh("con-quet", "q1"), anh("con-quet", "q2", false)];
   const faces = photos.map((p) => mat(p.album_id, p.id));
   const { db, st } = fakeDb({ albums, photos, faces });
   const kq = await donKhuonMatAlbumCu(db, { now: NOW });
@@ -103,11 +105,12 @@ const mat = (album_id, photo_id, at = 0) => ({ album_id, photo_id, at, box: [0, 
   ok("dọn album giao khách quá 15 ngày", !conLai.has("cu"));
   ok("album tạo thẳng ở giai đoạn giao khách tính từ created_at", !conLai.has("tao-thang"));
   ok("giữ album mới giao 10 ngày", conLai.has("moi"));
-  ok("giữ album chọn ảnh", conLai.has("chon"));
+  ok("dọn album chọn ảnh đã gom xong quá 30 ngày (nằm mãi ở bước chọn ảnh)", !conLai.has("chon"));
+  ok("giữ album chọn ảnh mới gom 10 ngày", conLai.has("chon-moi"));
   ok("giữ album chưa gom xong (xoá thì không bao giờ có danh sách người)", conLai.has("chua-gom"));
   ok("giữ album còn ảnh chờ quét", conLai.has("con-quet"));
   ok("đặt mốc faces_pruned_at cho album đã dọn", !!albums.find((a) => a.id === "cu").faces_pruned_at && !albums.find((a) => a.id === "moi").faces_pruned_at);
-  ok("đếm đúng", kq.ok && kq.daDon === 2 && kq.boQua === 2 && kq.dongXoa === 2, JSON.stringify(kq));
+  ok("đếm đúng", kq.ok && kq.daDon === 3 && kq.boQua === 2 && kq.dongXoa === 3, JSON.stringify(kq));
 
   // Lượt sau: album đã dọn có ảnh quét thêm → chỉ xoá phần mới, không đếm là dọn lần đầu.
   st.album_faces.push(mat("cu", "c2"));

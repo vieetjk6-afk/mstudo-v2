@@ -100,6 +100,8 @@ export type GalleryViewProps = {
    * không có gì đang chạy — kể cả khi gói của studio không mở tính năng này.
    */
   faceScan?: TienDoQuet | null;
+  /** Khách được tự tìm ảnh có mình trên máy (không cần studio quét trước). */
+  faceSelfScan?: boolean;
   totalPhotos?: number | null;
   initialSources: GallerySource[] | null;
   initialDriveFolders?: GalleryDriveFolder[];
@@ -122,12 +124,16 @@ export type GalleryViewProps = {
 export type GallerySection = { id: string; name: string; items: { p: GalleryPhoto; i: number }[]; ids: string[] };
 
 export function useGalleryView({
-  gallery, initialPhotos, initialPeople, faceScan = null, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioHost = null, print = null,
+  gallery, initialPhotos, initialPeople, faceScan = null, faceSelfScan = false, totalPhotos = null, initialSources, initialDriveFolders = [], initialOriginalFolders = [], feedback, shareIds, studioHost = null, print = null,
 }: GalleryViewProps) {
   const wm = gallery.watermark || null;
   const [unlocked, setUnlocked] = useState(!gallery.hasPassword);
   const [photos, setPhotos] = useState<GalleryPhoto[]>(initialPhotos ?? []);
   const [people, setPeople] = useState<PersonChip[]>(initialPeople ?? []);
+  /** Thêm / thay một "người" (dùng cho kết quả khách tự tìm — @/app/a/[slug]/useFaceSearch). */
+  const upsertPerson = useCallback((chip: PersonChip) => {
+    setPeople((ds) => (ds.some((p) => p.id === chip.id) ? ds.map((p) => (p.id === chip.id ? chip : p)) : [chip, ...ds]));
+  }, []);
   /** Khuôn mặt đang lọc. null = xem cả album. */
   const [personId, setPersonId] = useState<string | null>(null);
   const [sources, setSources] = useState<GallerySource[]>(initialSources ?? []);
@@ -431,6 +437,8 @@ export function useGalleryView({
     sources,
     tabSources,
     people,
+    upsertPerson,
+    selfScan: faceSelfScan,
     scan,
     personId,
     setPersonId,

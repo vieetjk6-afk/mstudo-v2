@@ -33,7 +33,7 @@ import { CustomerHeaderV2, CustomerRootV2 } from "@/components/v2/customer";
 import { Callout, Empty, Field, GroupLabel, Progress, Section, btn, inputCls } from "@/components/v2/kit";
 import { Switch } from "@/components/v2/kit-client";
 import FaceFinderV2, { FaceAvatar, faceToolAvailable } from "@/app/a/[slug]/FaceFinderV2";
-import { useFaceSearch } from "@/app/a/[slug]/useFaceSearch";
+import { TOI_ID, useFaceSearch } from "@/app/a/[slug]/useFaceSearch";
 import { AlbumHeroV2, ChipRow, ChipV2, LockScreenV2, SelectDot, ViewerV2, useAlbumImg } from "@/app/a/[slug]/album-v2-ui";
 import { PrintVerifyDialog, printCardText, useCardInView, type PrintPicks } from "./PrintPicker";
 import { isVideo, useGalleryView, type GalleryViewProps } from "./useGalleryView";
@@ -63,6 +63,9 @@ export default function GalleryViewV2(props: GalleryViewProps) {
   const face = useFaceSearch({
     slug: gallery.slug,
     password: g.password,
+    selfScan: g.selfScan,
+    driveIdOf: g.driveIdOf,
+    upsertPerson: g.upsertPerson,
     onPick: (id) => {
       g.setPersonId(id);
       if (id) setFaceOpen(false);
@@ -106,7 +109,7 @@ export default function GalleryViewV2(props: GalleryViewProps) {
 
   const lb = g.lbIdx !== null ? g.visible[g.lbIdx] ?? null : null;
   const count = g.shareMode ? g.visible.length : (props.totalPhotos ?? g.photos.length);
-  const showFaces = faceToolAvailable(g.people, g.scan);
+  const showFaces = faceToolAvailable(g.people, g.scan, g.selfScan);
   // Album giao khách chỉ xem + thả tim: không còn thanh "Đã chọn N ảnh" bật lên
   // mỗi lần chạm. Chia sẻ những tấm đã thả tim nằm ở bộ lọc "Ảnh đã thả tim".
   const hearts = !g.shareMode && !g.printing && g.selected.size > 0;
@@ -235,7 +238,8 @@ export default function GalleryViewV2(props: GalleryViewProps) {
             <span className="inline-flex h-9 items-center gap-2 rounded-full pl-1 pr-1 text-[13px] font-semibold" style={{ background: "var(--acS)", color: "var(--ac)" }}>
               <FaceAvatar person={g.activePerson} driveIdOf={g.driveIdOf} size={28} />
               <span className="max-w-[56vw] truncate">
-                {g.activePerson.name ? `Ảnh của ${g.activePerson.name}` : "Ảnh của người này"} · {g.visible.length}
+                {g.activePerson.id === TOI_ID ? "Ảnh có bạn" : g.activePerson.name ? `Ảnh của ${g.activePerson.name}` : "Ảnh của người này"} · {g.visible.length}
+                {g.activePerson.id === TOI_ID && face.tuQuet && !face.tuQuet.xong ? ` · đang tìm ${face.tuQuet.daQuet}/${face.tuQuet.tong}` : ""}
               </span>
               <button type="button" onClick={() => g.setPersonId(null)} aria-label="Xem cả album" title="Xem cả album" className="flex h-7 w-7 items-center justify-center rounded-full">
                 <X size={15} />
