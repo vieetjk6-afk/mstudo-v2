@@ -28,8 +28,13 @@ export function faceToolAvailable(people: PersonChip[], scan: TienDoQuet | null,
 export function FaceAvatar({ person, driveIdOf, size = 64, ring = false }: { person: PersonChip; driveIdOf: Map<string, string>; size?: number; ring?: boolean }) {
   const img = useAlbumImg();
   const { t } = useLangOptional();
-  const crop = faceCrop(person.coverBox);
-  const drive = person.coverPhotoId ? driveIdOf.get(person.coverPhotoId) : undefined;
+  const coverDrive = person.coverPhotoId ? driveIdOf.get(person.coverPhotoId) : undefined;
+  // Ảnh đại diện chưa nạp tới (album lớn nạp dần) hoặc không nằm trong phần ảnh
+  // khách thấy → mượn tạm một ảnh khác CỦA CHÍNH NGƯỜI ĐÓ (cả tấm, không cắt)
+  // thay vì để vòng tròn trống.
+  const muon = coverDrive ? undefined : person.photoIds.find((id) => driveIdOf.has(id));
+  const drive = coverDrive ?? (muon ? driveIdOf.get(muon) : undefined);
+  const crop = coverDrive ? faceCrop(person.coverBox) : null;
   return (
     <span
       className="block flex-none overflow-hidden rounded-full"

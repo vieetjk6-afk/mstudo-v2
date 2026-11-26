@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLang } from "@/lib/i18n";
 import type { PersonChip } from "@/lib/face-people";
 import type { TienDoTuQuet } from "@/lib/face-tu-quet";
+import { reportClientError } from "@/lib/report-client-error";
 
 /** id của "người" tổng hợp từ kết quả khách tự tìm — không trùng uuid nào. */
 export const TOI_ID = "__toi";
@@ -102,9 +103,11 @@ export function useFaceSearch({
         setTuQuet({ ...p, khop: khopTruoc + p.khop, xong: true });
         if (thay.size === 0 && !ctrl.signal.aborted) setNote(t("faceNoMatch"));
       })
-      .catch(() => {
+      .catch((e) => {
         setTuQuet(null);
-        setNote(t("faceDeviceCant"));
+        const lyDo = `${e instanceof Error ? e.message : String(e)}`.slice(0, 160);
+        reportClientError({ name: "FaceSelfScan", message: `face-tu-quet: ${lyDo} [${navigator.userAgent.slice(0, 90)}]` });
+        setNote(`${t("faceDeviceCant")} (${lyDo.slice(0, 60)})`);
       })
       .finally(() => {
         if (huyRef.current === ctrl) huyRef.current = null;
@@ -131,7 +134,16 @@ export function useFaceSearch({
       } catch (e) {
         // Ảnh không đọc được là lỗi của tấm ảnh; mọi thứ khác là máy không chạy
         // nổi mô hình (hết bộ nhớ, mất mạng lúc tải) — chỉ sang hàng khuôn mặt.
-        setNote(e instanceof Error && e.message === "khong_doc_duoc_anh" ? t("faceNoSupport") : t("faceDeviceCant"));
+        if (e instanceof Error && e.message === "khong_doc_duoc_anh") {
+          setNote(t("faceNoSupport"));
+          return false;
+        }
+        // Báo LÝ DO THẬT về trang Sức khoẻ (trước đây bị nuốt, không ai biết
+        // máy nào hỏng ở bước nào) và hiện mã ngắn để khách / studio chụp lại.
+        const nen = await embed.nenDangDung();
+        const lyDo = `${e instanceof Error ? e.message : String(e)}`.slice(0, 160);
+        reportClientError({ name: "FaceEmbed", message: `face: ${lyDo} [nen=${nen}] [${navigator.userAgent.slice(0, 90)}]` });
+        setNote(`${t("faceDeviceCant")} (${nen}: ${lyDo.slice(0, 60)})`);
         return false;
       }
       if (!r.descriptor) {
