@@ -26,6 +26,18 @@ export function donSauNgay(): number {
   return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 15;
 }
 
+/**
+ * Album CHƯA giao khách (đang chọn ảnh) mà đã gom xong quá ngần này ngày cũng
+ * được dọn. Trước đây chỉ album giao khách mới dọn, nên album nằm mãi ở bước
+ * chọn ảnh (khách chọn xong, studio không bấm giao) giữ vector vĩnh viễn — và
+ * album_faces lại phình tới sát trần 500 MB. Gom lại (khi có ảnh mới) đặt lại
+ * faces_clustered_at, nên album còn đang làm thì không tới mốc này.
+ */
+export function donChuaGiaoSauNgay(): number {
+  const n = Number(process.env.FACE_PRUNE_IDLE_DAYS);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 30;
+}
+
 /** Lỗi do database chưa có cột faces_pruned_at (chưa chạy SQL)? */
 function thieuCot(e: { code?: string | null; message?: string | null } | null): boolean {
   if (!e) return false;
@@ -69,7 +81,8 @@ export type KetQuaDon = {
  * Album đủ điều kiện dọn LẦN ĐẦU khi:
  *   • phase = 'delivery' và đã giao khách quá `donSauNgay()` ngày
  *     (delivered_at; album tạo thẳng ở giai đoạn giao khách không có mốc này
- *     → tính từ created_at);
+ *     → tính từ created_at); HOẶC chưa giao nhưng lần gom cuối đã quá
+ *     `donChuaGiaoSauNgay()` ngày;
  *   • đã gom xong (faces_clustered_at có giá trị) — chưa gom mà xoá vector thì
  *     album không bao giờ có danh sách người;
  *   • không còn ảnh chờ quét — ảnh quét sau khi dọn sẽ không gom được.
@@ -84,13 +97,17 @@ export async function donKhuonMatAlbumCu(
   const moc = new Date(now - donSauNgay() * 24 * 3600 * 1000).toISOString();
   const kq: KetQuaDon = { ok: true, daDon: 0, donLai: 0, boQua: 0, dongXoa: 0, hetGio: false };
 
+  const mocChuaGiao = new Date(now - donChuaGiaoSauNgay() * 24 * 3600 * 1000).toISOString();
+
   const albums: AlbumXet[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await db
-      .from("albums")
-      .select("id, faces_clustered_at, faces_pruned_at")
-      .eq("phase", "delivery")
-      .or(`delivered_at.lt.${moc},and(delivered_at.is.null,created_at.lt.${moc})`)
+  const daCo = new Set<string>();
+  // Hai nguồn: album giao khách đủ tuổi, và album chưa giao đã gom xong từ lâu.
+  const nguon = [
+    (q: any) => q.eq("phase", "delivery").or(`delivered_at.lt.${moc},and(delivered_at.is.null,created_at.lt.${moc})`),
+    (q: any) => q.neq("phase", "delivery").lt("faces_clustered_at", mocChuaGiao),
+  ];
+  for (const loc of nguon) for (let from = 0; ; from += 1000) {
+    const { data, error } = await loc(db.from("albums").select("id, faces_clustered_at, faces_pruned_at"))
       .order("id")
       .range(from, from + 999);
     if (error) {
@@ -103,7 +120,7 @@ export async function donKhuonMatAlbumCu(
       };
     }
     const rows = (data ?? []) as AlbumXet[];
-    albums.push(...rows);
+    for (const r of rows) if (!daCo.has(r.id)) { daCo.add(r.id); albums.push(r); }
     if (rows.length < 1000) break;
   }
 
