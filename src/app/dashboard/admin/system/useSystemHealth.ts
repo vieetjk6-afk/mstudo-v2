@@ -24,6 +24,10 @@ export type SystemHealth = {
   sql: { name: string; ok: boolean; at: string; durationMs: number | null; sha: string | null; gitSha: string | null; error: string | null } | null;
   stats: HealthStats | null;
   errors: HealthError[];
+  /** Số loại lỗi đã bấm "Đã xử lý" (đang ẩn). */
+  errorsResolved?: number;
+  /** false = chưa có bảng system_error_resolved → ẩn nút "Đã xử lý". */
+  canResolve?: boolean;
   limits: { dbBytes: number; storageBytes: number };
   /** Lưu lượng tháng này; null/thiếu = chưa chạy migration luu_luong.sql. */
   usage?: UsageThang | null;
@@ -95,7 +99,31 @@ export function useSystemHealth(seed?: SystemHealth) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return { data, loading, failed, reload };
+  /**
+   * Đánh dấu lỗi "Đã xử lý": ẩn ngay trên màn hình (không chờ tải lại), rồi
+   * ghi lên máy chủ. Ghi hỏng thì tải lại để lỗi hiện về như cũ.
+   */
+  const resolve = useCallback(
+    async (signatures: string[]) => {
+      if (!signatures.length) return;
+      const an = new Set(signatures);
+      setData((d) => (d ? { ...d, errors: d.errors.filter((e) => !an.has(e.signature)), errorsResolved: (d.errorsResolved ?? 0) + an.size } : d));
+      if (seed) return;
+      try {
+        const r = await fetch("/api/admin/health", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ signatures }),
+        });
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      } catch {
+        void reload();
+      }
+    },
+    [seed, reload],
+  );
+
+  return { data, loading, failed, reload, resolve };
 }
 
 export type SystemHealthState = ReturnType<typeof useSystemHealth>;

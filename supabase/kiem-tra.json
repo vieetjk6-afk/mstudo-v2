@@ -996,6 +996,7 @@
       "file": "migrations/he_thong_van_hanh.sql",
       "mo_ta": "Sức khoẻ hệ thống: nhật ký lượt chạy cron / SQL lúc deploy, lỗi máy chủ gộp theo ngày, dung lượng database & storage (chỉ service-role)",
       "bang": [
+        "system_error_resolved",
         "system_errors",
         "system_runs"
       ],

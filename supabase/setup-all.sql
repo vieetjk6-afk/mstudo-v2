@@ -2561,6 +2561,17 @@ create table if not exists public.system_errors (
 
 alter table public.system_errors enable row level security;
 
+-- ── Lỗi đã xử lý ─────────────────────────────────────────────────────────────
+-- Admin bấm "Đã xử lý" trên trang Sức khoẻ → lỗi ẩn khỏi danh sách và không
+-- còn tính vào "việc cần xem". Một chữ ký một dòng; lỗi đó XẢY RA LẠI sau mốc
+-- này (system_errors.last_seen > resolved_at) thì tự hiện lại. Chỉ service-role.
+create table if not exists public.system_error_resolved (
+  signature   text primary key,
+  resolved_at timestamptz not null default now()
+);
+
+alter table public.system_error_resolved enable row level security;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/luu_luong.sql — Lưu lượng theo ngày: ước tính egress Supabase do app tự đếm + số liệu Vercel (workflow Đo lưu lượng), chỉ service-role
@@ -8194,6 +8205,11 @@ begin
   delete from public.system_errors where day < (now() at time zone 'utc')::date - 30;
   get diagnostics v_errs = row_count;
 
+  -- Mốc "đã xử lý" cũ hơn mọi lỗi còn giữ (30 ngày) thì hết tác dụng.
+  if to_regclass('public.system_error_resolved') is not null then
+    delete from public.system_error_resolved where resolved_at < now() - interval '30 days';
+  end if;
+
   -- Thông báo studio ĐÃ ĐỌC quá 180 ngày: không màn nào hiện lại (chuông chỉ
   -- lấy vài chục cái mới nhất) mà bảng cứ dài mãi. Chưa đọc thì giữ nguyên.
   begin
@@ -11004,6 +11020,10 @@ grant execute on function public.system_run_state() to service_role;
 grant execute on function public.system_stats() to service_role;
 
 grant execute on function public.prune_system_logs() to service_role;
+
+revoke all on table public.system_error_resolved from public, anon, authenticated;
+
+grant all on table public.system_error_resolved to service_role;
 
 
 -- ══════════════════════════════════════════════════════════════════════════

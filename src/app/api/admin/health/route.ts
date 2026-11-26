@@ -27,7 +27,7 @@ export async function GET() {
   const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const now = Date.now();
   const dauThang = `${thangUtc(now)}-01`;
-  const [state, statsRes, errRes, usageRes] = await Promise.all([
+  const [state, statsRes, errRes, usageRes, resolvedRes] = await Promise.all([
     loadRunState(db),
     db.rpc("system_stats"),
     db
@@ -42,7 +42,11 @@ export async function GET() {
       .select("day, source, metric, quantity, unit, cost, requests")
       .gte("day", dauThang)
       .limit(2000),
+    // Lỗi admin đã bấm "Đã xử lý" (chưa có bảng thì coi như chưa xử lý gì).
+    db.from("system_error_resolved").select("signature, resolved_at").limit(1000),
   ]);
+  const resolved = new Map<string, string>();
+  for (const r of (resolvedRes.error ? [] : resolvedRes.data ?? []) as { signature: string; resolved_at: string }[]) resolved.set(r.signature, r.resolved_at);
   const migrated = !!state && !isMissing(errRes.error);
 
   // Một chữ ký có một dòng mỗi ngày → gộp lại; dòng đầu gặp là lần mới nhất.
@@ -75,11 +79,35 @@ export async function GET() {
           }
         : null,
       stats: statsRes.error ? null : statsRes.data,
-      errors: [...byId.values()].slice(0, 20),
+      // Lỗi đã xử lý mà KHÔNG xảy ra lại sau mốc đó thì ẩn; xảy ra lại thì hiện.
+      errors: [...byId.values()].filter((e) => !(resolved.has(e.signature) && Date.parse(e.lastAt) <= Date.parse(resolved.get(e.signature)!))).slice(0, 20),
+      errorsResolved: [...byId.values()].filter((e) => resolved.has(e.signature) && Date.parse(e.lastAt) <= Date.parse(resolved.get(e.signature)!)).length,
+      // false = chưa có bảng system_error_resolved (chưa chạy SQL) → ẩn nút.
+      canResolve: !resolvedRes.error,
       limits: LIMITS,
       // null = chưa chạy migration luu_luong.sql.
       usage: usageRes.error ? null : tomTatThang((usageRes.data ?? []) as DongUsage[], thangUtc(now), now),
     },
     { headers: { "Cache-Control": "no-store" } },
   );
+}
+
+/**
+ * POST { signatures: string[] } — đánh dấu các lỗi là "Đã xử lý". Lỗi xảy ra
+ * lại sau mốc này sẽ tự hiện lại trên trang Sức khoẻ.
+ */
+export async function POST(req: Request) {
+  const admin = await requireAdmin();
+  if (!admin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const body = (await req.json().catch(() => ({}))) as { signatures?: unknown };
+  const sigs = Array.isArray(body.signatures)
+    ? [...new Set(body.signatures.filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 64))].slice(0, 200)
+    : [];
+  if (!sigs.length) return NextResponse.json({ error: "thieu_signatures" }, { status: 400 });
+  const now = new Date().toISOString();
+  const { error } = await createAdminClient()
+    .from("system_error_resolved")
+    .upsert(sigs.map((signature) => ({ signature, resolved_at: now })), { onConflict: "signature" });
+  if (error) return NextResponse.json({ error: "ghi_that_bai", detail: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true, resolved: sigs.length });
 }

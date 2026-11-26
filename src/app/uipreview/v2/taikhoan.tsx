@@ -102,6 +102,8 @@ const healthBad: SystemHealth = {
     { signature: "a2", source: "server", message: "Error: Drive API 403 storageQuotaExceeded", path: "/api/albums/[id]/sync", count: 4, lastAt: hoursAgo(9) },
     { signature: "a3", source: "client", message: "ChunkLoadError: Loading chunk 4821 failed.", path: "/dashboard/studio/contracts", count: 2, lastAt: hoursAgo(26) },
   ],
+  canResolve: true,
+  errorsResolved: 1,
   usage: usageMau(4.3, true),
 };
 

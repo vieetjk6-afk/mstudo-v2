@@ -134,6 +134,7 @@ export const BACKUP_EXCLUDED: Record<string, string> = {
   rate_limit_hits: "bộ đếm chống dò mật khẩu, chỉ có giá trị vài phút",
   system_runs: "nhật ký lượt chạy cron / SQL — khôi phục sẽ làm sống lại trạng thái cũ",
   system_errors: "nhật ký lỗi máy chủ gộp theo ngày, tự xoá sau 30 ngày",
+  system_error_resolved: "mốc \"đã xử lý\" của lỗi trên trang Sức khoẻ, tự xoá sau 30 ngày",
   system_usage: "số đếm lưu lượng theo ngày — ước tính, tự xoá sau ~4 tháng",
   studio_data_version: "số phiên bản cho desktop, trigger tự tăng lại — khôi phục số cũ chỉ làm desktop tải lại một lần",
 };
