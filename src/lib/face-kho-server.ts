@@ -197,24 +197,38 @@ export function dongTuKho(kho: KhoGop, ids: Iterable<string>, chiStudio = false)
 /** id các ảnh studio / máy chủ ĐÃ QUÉT (có mốc faces_scanned_at) của album. null = không đọc được. */
 export async function anhDaQuet(db: any, albumId: string): Promise<string[] | null> {
   try {
-    const out: string[] = [];
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await db
-        .from("photos")
-        .select("id")
-        .eq("album_id", albumId)
-        .not("faces_scanned_at", "is", null)
-        .order("id")
-        .range(from, from + 999);
-      if (error) return null;
-      const rows = (data ?? []) as { id: string }[];
-      out.push(...rows.map((r) => r.id));
-      if (rows.length < 1000) break;
-    }
-    return out;
+    return await anhDaQuetHoacNem(db, albumId);
   } catch {
     return null;
   }
+}
+
+/**
+ * Như anhDaQuet nhưng NÉM kèm câu lỗi thật (để báo lên trang Sức khoẻ).
+ *
+ * Sắp theo (position, id) — KHÔNG theo id trơn: `order by id limit 1000` làm
+ * Postgres chọn duyệt khoá chính trên CẢ bảng photos (~270 nghìn dòng) rồi mới
+ * lọc theo album → vượt hạn giờ câu lệnh của Supabase với album ít ảnh / ảnh
+ * nằm rải rác (lỗi thật 26/11: doc_anh_da_quet_that_bai). (position, id) đi
+ * đúng chỉ mục photos_album_position_idx như mọi chỗ đọc ảnh khác.
+ */
+export async function anhDaQuetHoacNem(db: any, albumId: string): Promise<string[]> {
+  const out: string[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await db
+      .from("photos")
+      .select("id")
+      .eq("album_id", albumId)
+      .not("faces_scanned_at", "is", null)
+      .order("position")
+      .order("id")
+      .range(from, from + 999);
+    if (error) throw new Error(`doc_anh_da_quet_that_bai: ${error.message ?? error.code ?? "?"}`);
+    const rows = (data ?? []) as { id: string }[];
+    out.push(...rows.map((r) => r.id));
+    if (rows.length < 1000) break;
+  }
+  return out;
 }
 
 /**

@@ -19,7 +19,7 @@
  */
 
 import { giaiMaManh, gopManh, NGUON_STUDIO, type AnhKho } from "./face-kho";
-import { anhDaQuet, docKho, ghiManh, lietKeManh, BUCKET_KHO } from "./face-kho-server";
+import { anhDaQuetHoacNem, docKho, ghiManh, lietKeManh, BUCKET_KHO } from "./face-kho-server";
 
 /** Một mảnh tối đa ngần này byte (bucket chặn 4 MB/file). */
 const MANH_TOI_DA_BYTE = 3 * 1024 * 1024;
@@ -66,6 +66,27 @@ async function docDongAlbum(db: any, albumId: string): Promise<Dong[]> {
   return out;
 }
 
+/**
+ * Đọc album_faces theo danh sách MÃ ẢNH, 40 ảnh một câu — đi thẳng khoá chính
+ * (photo_id, at). Không phụ thuộc Postgres chọn đường: câu theo trang
+ * `album_id = … order by photo_id, at limit 1000` có thể bị lập kế hoạch thành
+ * duyệt khoá chính trên CẢ bảng (~350 nghìn dòng) và vượt hạn giờ.
+ * 40 ảnh × tối đa 24 mặt = 960 dòng — dưới trần 1000 dòng/câu của PostgREST
+ * (vượt trần thì bị cắt lặng lẽ; người gọi so với số đếm và lùi về đọc theo trang).
+ */
+async function docDongTheoAnh(db: any, ids: readonly string[]): Promise<Dong[]> {
+  const out: Dong[] = [];
+  for (let k = 0; k < ids.length; k += 40) {
+    const { data, error } = await db
+      .from("album_faces")
+      .select("photo_id, at, box, descriptor, sharpness")
+      .in("photo_id", ids.slice(k, k + 40));
+    if (error) throw new Error(`doc_album_faces_theo_anh_that_bai: ${error.message}`);
+    out.push(...((data ?? []) as Dong[]));
+  }
+  return out;
+}
+
 /** Chia danh sách ảnh thành các mảnh dưới trần dung lượng. */
 function chiaManh(anh: AnhKho[]): AnhKho[][] {
   const out: AnhKho[][] = [];
@@ -94,8 +115,11 @@ export async function chuyenMotAlbum(db: any, albumId: string): Promise<{ anh: n
     return { anh: 0, dongXoa: 0, rong: true };
   }
 
-  const [dong, daQuet, truoc] = await Promise.all([docDongAlbum(db, albumId), anhDaQuet(db, albumId), docKho(db, albumId)]);
-  if (!daQuet) throw new Error("doc_anh_da_quet_that_bai");
+  const [daQuet, truoc] = await Promise.all([anhDaQuetHoacNem(db, albumId), docKho(db, albumId)]);
+  // Đọc theo mã ảnh (khoá chính) trước; số dòng không khớp số đếm (có dòng của
+  // ảnh không còn mốc quét) thì đọc lại cả album theo trang như cũ.
+  let dong = await docDongTheoAnh(db, daQuet);
+  if (dong.length !== count) dong = await docDongAlbum(db, albumId);
 
   // Gom dòng theo ảnh, giữ đúng thứ tự `at`.
   const theoAnh = new Map<string, AnhKho>();
