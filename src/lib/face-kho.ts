@@ -191,16 +191,19 @@ export type KhoGop = Map<string, { faces: MatKho[]; nguon: Nguon }>;
 /**
  * Gộp các mảnh của một album thành một bản đồ photo_id → khuôn mặt.
  *
- * Mỗi ảnh chỉ lấy MỘT bản: bản của studio/máy chủ thắng bản khách quét (dữ liệu
- * khách gửi lên không kiểm lại được); cùng nguồn thì bản ĐẦU TIÊN thắng — khách
- * sau không ghi đè được kết quả của người trước. Truyền mảnh theo thứ tự ghi.
+ * Mỗi ảnh chỉ lấy MỘT bản:
+ *   • bản studio/máy chủ luôn thắng bản khách (dữ liệu khách không kiểm lại được);
+ *   • giữa hai bản STUDIO, bản ghi SAU thắng — studio quét lại thì lấy lần mới;
+ *   • giữa hai bản KHÁCH, bản ghi TRƯỚC thắng — khách sau không ghi đè được
+ *     kết quả của người trước.
+ * Truyền mảnh theo thứ tự ghi.
  */
 export function gopManh(manh: readonly ManhKho[]): KhoGop {
   const kq: KhoGop = new Map();
   for (const m of manh) {
     for (const a of m.anh) {
       const cu = kq.get(a.photoId);
-      if (!cu || (cu.nguon === NGUON_KHACH && m.nguon === NGUON_STUDIO)) kq.set(a.photoId, { faces: a.faces, nguon: m.nguon });
+      if (!cu || m.nguon === NGUON_STUDIO) kq.set(a.photoId, { faces: a.faces, nguon: m.nguon });
     }
   }
   return kq;

@@ -690,6 +690,14 @@
       ]
     },
     {
+      "file": "migrations/kho_khuon_mat.sql",
+      "mo_ta": "Kho khuôn mặt dạng file trong Storage (bucket face-kho, chỉ service-role)",
+      "bang": [],
+      "cot": [
+        "albums.faces_kho_at"
+      ]
+    },
+    {
       "file": "migrations/phien_ban_du_lieu_desktop.sql",
       "mo_ta": "Số phiên bản dữ liệu mỗi studio cho mstudo desktop: trả 304 không đọc bảng nào (chạy SAU contract_edit_requests, quote_items)",
       "bang": [

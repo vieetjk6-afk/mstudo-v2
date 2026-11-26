@@ -62,6 +62,13 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
   ]);
   ok("studio đè bản khách của cùng ảnh", kho.get(id(1)).nguon === NGUON_STUDIO && kho.get(id(1)).faces[0].descriptor === s);
   ok("khách sau KHÔNG đè khách trước", kho.get(id(3)).faces[0].descriptor === k1);
+  const s2 = vec();
+  const lai = gopManh([
+    { nguon: NGUON_STUDIO, anh: [{ photoId: id(5), faces: [{ box: [0, 0, 0.1, 0.1], descriptor: s, sharpness: 1 }] }] },
+    { nguon: NGUON_STUDIO, anh: [{ photoId: id(5), faces: [] }] },
+    { nguon: NGUON_KHACH, anh: [{ photoId: id(5), faces: [{ box: [0, 0, 0.1, 0.1], descriptor: s2, sharpness: 1 }] }] },
+  ]);
+  ok("studio quét lại: bản studio SAU thắng; khách đến sau vẫn không đè", lai.get(id(5)).faces.length === 0 && lai.get(id(5)).nguon === NGUON_STUDIO);
   const tach = tachTheoNguon(kho);
   ok("tách lại đúng hai mảnh theo nguồn", tach.length === 2 && tach[0].nguon === NGUON_STUDIO && tach[1].anh[0].photoId === id(3));
 

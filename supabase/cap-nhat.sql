@@ -1827,6 +1827,12 @@ on conflict (id) do update
       file_size_limit = 4194304,
       allowed_mime_types = array['application/octet-stream'];
 
+-- ── Đợt 3: mốc "album đã chuyển hết album_faces sang kho file" ────────────────
+-- Cron cleanup-faces chép album_faces của từng album sang kho, KIỂM LẠI kho đủ
+-- rồi mới xoá các dòng của album đó và đặt mốc này. Album có mốc thì bỏ qua.
+alter table public.albums
+  add column if not exists faces_kho_at timestamptz;
+
 
 -- ══════════════════════════════════════════════════════════════════════════
 -- ▶ migrations/phien_ban_du_lieu_desktop.sql — Số phiên bản dữ liệu mỗi studio cho mstudo desktop: trả 304 không đọc bảng nào (chạy SAU contract_edit_requests, quote_items)

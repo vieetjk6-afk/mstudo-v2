@@ -125,19 +125,40 @@ export async function ghiKepVaoKho(
 ): Promise<void> {
   if (!albumId || !doneIds.length || !db?.storage) return;
   try {
-    const theoAnh = new Map<string, AnhKho>();
-    for (const id of doneIds) theoAnh.set(id, { photoId: id, faces: [] });
-    for (const r of faceRows) {
-      const a = theoAnh.get(String(r.photo_id));
-      const box = r.box as number[];
-      const d = r.descriptor as number[];
-      if (!a || !Array.isArray(box) || box.length !== 4 || !Array.isArray(d)) continue;
-      a.faces.push({ box: [box[0], box[1], box[2], box[3]], descriptor: d, sharpness: Number(r.sharpness) || 0 });
-    }
-    await ghiManh(db, albumId, { nguon: NGUON_STUDIO, anh: [...theoAnh.values()] });
+    await ghiKetQuaVaoKho(db, albumId, faceRows, doneIds);
   } catch (e) {
     console.warn("[face-kho] ghi kép thất bại:", e instanceof Error ? e.message : e);
   }
+}
+
+/**
+ * Ghi kết quả một mẻ quét vào kho — BẮT BUỘC (đợt 3: kho là nơi lưu DUY NHẤT).
+ * NÉM khi không ghi được: người gọi phải dừng TRƯỚC khi đánh mốc "đã quét",
+ * kẻo ảnh mang mốc mà không có khuôn mặt nào ở đâu cả. Trả số khuôn mặt đã ghi.
+ * `at` theo thứ tự dòng trong `faceRows` (bộ quét đẩy theo đúng thứ tự đó).
+ */
+export async function ghiKetQuaVaoKho(
+  db: any,
+  albumId: string,
+  faceRows: readonly Record<string, unknown>[],
+  doneIds: readonly string[],
+): Promise<number> {
+  if (!db?.storage) throw new Error("khong_co_storage");
+  const theoAnh = new Map<string, AnhKho>();
+  for (const id of doneIds) theoAnh.set(id, { photoId: id, faces: [] });
+  for (const r of faceRows) {
+    const id = String(r.photo_id);
+    let a = theoAnh.get(id);
+    if (!a) theoAnh.set(id, (a = { photoId: id, faces: [] }));
+    const box = r.box as number[];
+    const d = r.descriptor as number[];
+    if (!Array.isArray(box) || box.length !== 4 || !Array.isArray(d) || d.length !== 128) continue;
+    a.faces.push({ box: [box[0], box[1], box[2], box[3]], descriptor: d, sharpness: Number(r.sharpness) || 0 });
+  }
+  const anh = [...theoAnh.values()];
+  if (!anh.length) return 0;
+  await ghiManh(db, albumId, { nguon: NGUON_STUDIO, anh });
+  return anh.reduce((n, a) => n + a.faces.length, 0);
 }
 
 /** Công tắc tắt nhanh tính năng khách tự quét (FACE_SELF_SCAN=0). Mặc định bật. */
@@ -174,7 +195,7 @@ export function dongTuKho(kho: KhoGop, ids: Iterable<string>, chiStudio = false)
 }
 
 /** id các ảnh studio / máy chủ ĐÃ QUÉT (có mốc faces_scanned_at) của album. null = không đọc được. */
-async function anhDaQuet(db: any, albumId: string): Promise<string[] | null> {
+export async function anhDaQuet(db: any, albumId: string): Promise<string[] | null> {
   try {
     const out: string[] = [];
     for (let from = 0; ; from += 1000) {
@@ -229,4 +250,11 @@ export async function docKhuonMatGom(
 export async function khoPhuDuDeGom(db: any, albumId: string): Promise<boolean> {
   const [kho, daQuet] = await Promise.all([docKhoAnToan(db, albumId), anhDaQuet(db, albumId)]);
   return !!daQuet && daQuet.length > 0 && daQuet.every((id) => kho.get(id)?.nguon === NGUON_STUDIO);
+}
+
+/** Số khuôn mặt (bản studio / máy chủ) trong kho của album — cho các màn chẩn đoán. */
+export async function demMatTrongKho(db: any, albumId: string): Promise<number> {
+  let n = 0;
+  for (const v of (await docKhoAnToan(db, albumId)).values()) if (v.nguon === NGUON_STUDIO) n += v.faces.length;
+  return n;
 }

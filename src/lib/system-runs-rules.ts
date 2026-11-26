@@ -22,7 +22,7 @@ export const CRONS: CronDef[] = [
   { name: "cleanup-proofs", label: "Dọn ảnh chuyển khoản cũ", intervalHours: 24 },
   { name: "cleanup-drive-cache", label: "Dọn bộ nhớ đệm ảnh Drive", intervalHours: 24 },
   { name: "cleanup-wedding-photos", label: "Dọn ảnh thiệp cưới mồ côi", intervalHours: 168 },
-  { name: "cleanup-faces", label: "Dọn vector khuôn mặt album giao khách lâu", intervalHours: 24 },
+  { name: "cleanup-faces", label: "Chuyển vector khuôn mặt từ database sang kho file", intervalHours: 24 },
 ];
 
 /** Trần gói Supabase Free (docs/supabase-usage.md). */

@@ -16,6 +16,7 @@
  *
  * Nạp code thật ở src/lib/face-scan-server.ts, thay tầng database.
  */
+import { khoGia } from "./kho-gia.mjs";
 import { clusterAlbum, scanAlbum } from "../../src/lib/face-scan-server.ts";
 
 let fail = 0;
@@ -26,7 +27,7 @@ const ok = (name, cond, note = "") => {
 
 function fakeDb({ soAnh, clusteredAt, daQuet = 0 }) {
   const photos = Array.from({ length: soAnh }, (_, i) => ({
-    id: `p${i}`, album_id: "a1", position: i, drive_file_id: `d${i}`, name: `anh${i}.jpg`, is_video: false,
+    id: `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`, album_id: "a1", position: i, drive_file_id: `d${i}`, name: `anh${i}.jpg`, is_video: false,
     faces_scanned_at: i < daQuet ? "2026-11-01T00:00:00Z" : null,
   }));
   /** `dongDoc`: số dòng ảnh THẬT SỰ trả về qua đường truyền (head = 0 dòng). */
@@ -88,6 +89,8 @@ function fakeDb({ soAnh, clusteredAt, daQuet = 0 }) {
   };
   return {
     stats, photos,
+    // Đợt 3: khuôn mặt ghi vào kho file (Storage) thay vì album_faces.
+    storage: khoGia().storage,
     from(table) {
       return {
         select: (c, o) => builder(table, "select", null).select(c, o),

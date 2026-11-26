@@ -33,3 +33,9 @@ create policy face_kho_owner_read on storage.objects
         and (a.owner_id = auth.uid() or public.is_admin())
     )
   );
+
+-- ── Đợt 3: mốc "album đã chuyển hết album_faces sang kho file" ────────────────
+-- Cron cleanup-faces chép album_faces của từng album sang kho, KIỂM LẠI kho đủ
+-- rồi mới xoá các dòng của album đó và đặt mốc này. Album có mốc thì bỏ qua.
+alter table public.albums
+  add column if not exists faces_kho_at timestamptz;
