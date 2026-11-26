@@ -15,6 +15,8 @@ import { readByIds, withDeadline } from "@/lib/collage/batch-read";
 import { collageEnabledFor } from "@/lib/collage/enabled";
 import { collageBrandFrom, type CollageBrand } from "@/lib/collage/brand";
 import { docSummary } from "@/lib/collage/summary";
+import { docKhoAnToan, dongTuKho } from "@/lib/face-kho-server";
+import type { KhoGop } from "@/lib/face-kho";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    GHÉP LAYOUT ẢNH — phần máy chủ (đọc DB, kiểm quyền). Logic thuần ở
@@ -192,11 +194,21 @@ type LinkRow = { person_id: string; photo_id: string };
  * song song. `done` = ảnh đã đọc XONG: ảnh nào lô của nó lỗi / hết giờ thì
  * không được coi là "đã quét" — kẻo bị xếp nhầm vào nhóm decor vì "0 mặt".
  */
-function readFaces(db: SupabaseClient, ids: string[], signal: AbortSignal): Promise<{ rows: FaceRow[]; done: Set<string> }> {
-  return readByIds<FaceRow>(ids, (part, sig) => db.from("album_faces").select("photo_id, box, sharpness").in("photo_id", part).abortSignal(sig), signal, {
+async function readFaces(db: SupabaseClient, ids: string[], signal: AbortSignal, kho: KhoGop): Promise<{ rows: FaceRow[]; done: Set<string> }> {
+  // Đợt 2: kho file trước (gồm cả ảnh khách tự quét — ở đây chỉ dùng khung mặt
+  // để cắt ảnh, không quyết định gì cho người khác); chỉ ảnh kho chưa có mới đọc
+  // album_faces.
+  const coKho = ids.filter((id) => kho.has(id));
+  const rows: FaceRow[] = dongTuKho(kho, coKho).map((d) => ({ photo_id: d.photo_id, box: d.box ?? [], sharpness: d.sharpness }));
+  const done = new Set(coKho);
+  const con = ids.filter((id) => !kho.has(id));
+  if (con.length === 0) return { rows, done };
+  const db2 = await readByIds<FaceRow>(con, (part, sig) => db.from("album_faces").select("photo_id, box, sharpness").in("photo_id", part).abortSignal(sig), signal, {
     size: FACE_CHUNK,
     cap: MAX_ROWS,
   });
+  for (const id of db2.done) done.add(id);
+  return { rows: [...rows, ...db2.rows], done };
 }
 
 /**
@@ -239,16 +251,20 @@ export async function loadCollagePhotos(
 ): Promise<{ photos: CollagePhotoRow[]; groups: CatResult; partial: boolean }> {
   const t0 = Date.now();
   const COLS = "id, drive_file_id, name, source_id, position, is_video";
-  const [withScan, { data: sources }] = await Promise.all([
+  const [withScan, { data: sources }, khoCut] = await Promise.all([
     // Dấu "đã quét mặt" đi chung lượt đọc ảnh (không thêm truy vấn riêng).
     fetchAllPhotos(db, albumId, `${COLS}, faces_scanned_at`) as Promise<PhotoDbRow[]>,
     db.from("album_sources").select("id, name, position, stage").eq("album_id", albumId).order("position"),
+    // Kho khuôn mặt dạng file — có hạn giờ như mọi phần gợi ý; hỏng thì rỗng.
+    withDeadline(budgetMs, () => docKhoAnToan(db, albumId), new Map() as KhoGop),
   ]);
+  const kho = khoCut.value;
   // DB chưa chạy migration quét mặt → thiếu cột faces_scanned_at, cả câu lỗi và
   // fetchAllPhotos trả rỗng → đọc lại không kèm cột đó.
   const all: PhotoDbRow[] = withScan.length ? withScan : ((await fetchAllPhotos(db, albumId, COLS)) as PhotoDbRow[]);
   const shown = filterDeliveryPhotos(all, sources ?? []).filter((p) => !p.is_video && !VIDEO_RE.test(p.name ?? ""));
-  const scannedIds = shown.filter((p) => p.faces_scanned_at).map((p) => p.id);
+  // "Đã quét" = studio/máy chủ đã đánh mốc, HOẶC đã có trong kho (khách tự quét).
+  const scannedIds = shown.filter((p) => p.faces_scanned_at || kho.has(p.id)).map((p) => p.id);
 
   // Album chưa quét mặt ảnh nào thì cũng chưa có người nào — khỏi hỏi DB.
   const none = { rows: [] as FaceRow[], done: new Set<string>() };
@@ -258,7 +274,7 @@ export async function loadCollagePhotos(
   if (scannedIds.length) {
     const left = budgetMs - (Date.now() - t0);
     const [f, m] = await Promise.all([
-      withDeadline(left, (signal) => readFaces(db, scannedIds, signal), none),
+      withDeadline(left, (signal) => readFaces(db, scannedIds, signal, kho), none),
       withDeadline(left, (signal) => readMainPeople(db, albumId, signal), null),
     ]);
     faces = f.value;

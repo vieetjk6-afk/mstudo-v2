@@ -18,3 +18,18 @@ on conflict (id) do update
   set public = false,
       file_size_limit = 4194304,
       allowed_mime_types = array['application/octet-stream'];
+
+-- ── Đợt 2: CHỦ ALBUM đọc được kho của album mình ─────────────────────────────
+-- Lượt gom người chạy trên máy studio (src/lib/face-local-runner.ts) đọc kho
+-- thẳng từ Storage, không vòng qua Vercel. Chỉ ĐỌC, chỉ thư mục <album_id> của
+-- album mình (hoặc admin). Khách vẫn không đọc được gì; ghi vẫn chỉ service-role.
+drop policy if exists face_kho_owner_read on storage.objects;
+create policy face_kho_owner_read on storage.objects
+  for select to authenticated using (
+    bucket_id = 'face-kho'
+    and exists (
+      select 1 from public.albums a
+      where a.id::text = split_part(name, '/', 1)
+        and (a.owner_id = auth.uid() or public.is_admin())
+    )
+  );

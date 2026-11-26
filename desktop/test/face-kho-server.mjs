@@ -2,7 +2,7 @@
  * một Storage giả — ghi kép từ bộ quét, đọc + gộp, nén nhiều mảnh, và hỏng
  * Storage KHÔNG làm hỏng lượt quét.
  */
-import { ghiKepVaoKho, ghiManh, docKho, nenNeuCan, lietKeManh, NEN_KHI_QUA } from "../../src/lib/face-kho-server.ts";
+import { ghiKepVaoKho, ghiManh, docKho, nenNeuCan, lietKeManh, NEN_KHI_QUA, docKhuonMatGom, khoPhuDuDeGom } from "../../src/lib/face-kho-server.ts";
 import { NGUON_KHACH, NGUON_STUDIO } from "../../src/lib/face-kho.ts";
 
 let fail = 0;
@@ -76,6 +76,48 @@ const A = id(999);
   ok("nén: không mất ảnh nào", sau.size === truoc.size && sau.size === NEN_KHI_QUA + 1);
   ok("nén: bản studio vẫn thắng sau khi nén", sau.get(id(1)).nguon === NGUON_STUDIO);
   ok("nén: ít mảnh thì không nén", (await nenNeuCan(db, A)) === false && files.size === 2);
+}
+
+/* 4. đợt 2: đọc để GOM — kho trước, album_faces cho phần thiếu */
+function withPhotos(fs, scanned) {
+  // photos: chỉ đủ chuỗi lọc mà anhDaQuet dùng (.select.eq.not.order.range).
+  const q = { select: () => q, eq: () => q, not: () => q, order: () => q, range: async (from, to) => ({ data: scanned.slice(from, to + 1).map((id) => ({ id })), error: null }) };
+  return { ...fs.db, from: () => q };
+}
+{
+  const B = id(888);
+  const fs = fakeStorage();
+  await ghiKepVaoKho(fs.db, B, [
+    { photo_id: id(1), at: 0, box: [0.1, 0.1, 0.2, 0.2], descriptor: vec(1), sharpness: 1 },
+    { photo_id: id(1), at: 1, box: [0.5, 0.1, 0.2, 0.2], descriptor: vec(2), sharpness: 1 },
+  ], [id(1), id(2)]);
+  // Khách tự quét ảnh 3 — KHÔNG được dùng để gom.
+  await ghiManh(fs.db, B, { nguon: NGUON_KHACH, anh: [{ photoId: id(3), faces: [{ box: [0, 0, 0.1, 0.1], descriptor: vec(9), sharpness: 1 }] }] });
+
+  let goiDb = 0;
+  const g1 = await docKhuonMatGom(withPhotos(fs, [id(1), id(2)]), B, async () => { goiDb++; return []; });
+  ok("kho phủ đủ ảnh đã quét → không đọc album_faces", g1.phuDu && goiDb === 0);
+  ok("…đủ mặt, đúng thứ tự at", g1.list.length === 2 && g1.list[0].at === 0 && g1.list[1].at === 1 && g1.list[0].photo_id === id(1));
+
+  const dbRows = [
+    { photo_id: id(1), at: 0, box: [0, 0, 0.1, 0.1], descriptor: vec(7), sharpness: 1 }, // trùng kho → bỏ
+    { photo_id: id(4), at: 0, box: [0, 0, 0.1, 0.1], descriptor: vec(4), sharpness: 1 }, // chỉ có ở DB
+  ];
+  const g2 = await docKhuonMatGom(withPhotos(fs, [id(1), id(2), id(4)]), B, async () => { goiDb++; return dbRows; });
+  ok("kho thiếu ảnh → đọc album_faces cho phần thiếu", !g2.phuDu && goiDb === 1);
+  {
+    const anh1 = g2.list.filter((r) => r.photo_id === id(1));
+    ok("…bản kho thắng bản DB khi trùng ảnh", anh1.length === 2 && Math.abs(anh1[0].descriptor[5] - vec(1)[5]) < 0.001 && anh1.every((r) => r.descriptor !== dbRows[0].descriptor));
+  }
+  ok("…ảnh chỉ có ở DB vẫn có mặt", g2.list.some((r) => r.photo_id === id(4)));
+  ok("…dữ liệu khách tự quét không vào lượt gom", !g2.list.some((r) => r.photo_id === id(3)));
+
+  const g3 = await docKhuonMatGom(withPhotos(fs, [id(2)]), B, async () => []);
+  ok("ảnh đã xoá khỏi album (không còn mốc) không vào lượt gom", g3.phuDu && !g3.list.some((r) => r.photo_id === id(1)));
+
+  ok("album chưa quét tấm nào → KHÔNG coi là phủ đủ (gom sẽ xoá sạch người)", (await khoPhuDuDeGom(withPhotos(fs, []), B)) === false);
+  ok("khoPhuDuDeGom: đủ", (await khoPhuDuDeGom(withPhotos(fs, [id(1), id(2)]), B)) === true);
+  ok("khoPhuDuDeGom: ảnh chỉ có bản khách → chưa đủ", (await khoPhuDuDeGom(withPhotos(fs, [id(1), id(3)]), B)) === false);
 }
 
 console.log(fail ? `\n${fail} bài hỏng` : "\nTất cả đạt");
