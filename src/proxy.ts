@@ -404,7 +404,13 @@ export const config = {
   // host thiệp/tenant. robots.txt & sitemap.xml đi thẳng tới route handler —
   // handler tự đọc Host nên mỗi tenant vẫn ra nội dung riêng (giống nhánh
   // SEO_FILES bên trên vẫn trả next()).
+  //
+  // face-model/ + mediapipe/ (trọng số nhận diện .json/.bin/.wasm/.task): bỏ
+  // qua CẢ THƯ MỤC. Trước đây chúng lọt vào proxy và trên tên miền riêng /
+  // tên miền phụ của studio bị rewrite sang /site/<host>/face-model/… → 404,
+  // nên khách mở album qua vieetjk.com không tìm được ảnh theo khuôn mặt
+  // ("failed to fetch: (404)"); trên tên miền chính thì vẫn chạy nên không ai thấy.
   matcher: [
-    "/((?!_next/static|_next/image|api/|.*\\.(?:ico|svg|png|jpe?g|gif|webp|avif|bmp|mp4|webm|mov|mp3|woff2?|ttf|otf|eot|js|mjs|css|map|txt|xml|webmanifest)$).*)",
+    "/((?!_next/static|_next/image|api/|face-model/|mediapipe/|.*\\.(?:ico|svg|png|jpe?g|gif|webp|avif|bmp|mp4|webm|mov|mp3|woff2?|ttf|otf|eot|js|mjs|css|map|txt|xml|webmanifest)$).*)",
   ],
 };
