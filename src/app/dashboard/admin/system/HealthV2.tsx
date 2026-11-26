@@ -1,6 +1,6 @@
 "use client";
 
-import { Activity, AlertTriangle, Check, Loader2, RefreshCw } from "lucide-react";
+import { Activity, AlertTriangle, Check, CheckCheck, Loader2, RefreshCw } from "lucide-react";
 import { Badge, Callout, Progress, Section, btn, type Tone } from "@/components/v2/kit";
 import { fmtSize, fmtWhen } from "./useAutoBackup";
 import { ago, cronStatus, healthIssues, usageTone, type CronStatus, type SystemHealth, type SystemHealthState, type UsageThang } from "./useSystemHealth";
@@ -93,7 +93,7 @@ function LuuLuong({ u }: { u: UsageThang }) {
   );
 }
 
-function Body({ h }: { h: SystemHealth }) {
+function Body({ h, onResolve }: { h: SystemHealth; onResolve: (signatures: string[]) => void }) {
   if (!h.migrated) {
     return (
       <Callout tone="amber" icon={AlertTriangle} title="Cần cập nhật cơ sở dữ liệu">
@@ -216,14 +216,38 @@ function Body({ h }: { h: SystemHealth }) {
 
       {/* ── Lỗi gần đây ── */}
       <div>
-        <p className="mb-1.5 text-[12.5px] font-semibold" style={{ color: "var(--tx3)" }}>Lỗi trong 7 ngày</p>
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[12.5px] font-semibold" style={{ color: "var(--tx3)" }}>
+            Lỗi trong 7 ngày
+            {h.errorsResolved ? <span className="font-normal"> · {h.errorsResolved} lỗi đã xử lý đang ẩn</span> : null}
+          </p>
+          {h.canResolve && h.errors.length > 1 ? (
+            <button type="button" onClick={() => onResolve(h.errors.map((e) => e.signature))} className={btn("ghost", "sm")}>
+              <CheckCheck size={14} /> Đã xử lý hết
+            </button>
+          ) : null}
+        </div>
         {h.errors.length === 0 ? (
-          <p className="rounded-[12px] px-3.5 py-3 text-[13px]" style={{ border: "1px dashed var(--bdS)", color: "var(--tx3)" }}>Không có lỗi nào trong 7 ngày</p>
+          <p className="rounded-[12px] px-3.5 py-3 text-[13px]" style={{ border: "1px dashed var(--bdS)", color: "var(--tx3)" }}>
+            {h.errorsResolved ? "Không còn lỗi nào chưa xử lý" : "Không có lỗi nào trong 7 ngày"}
+          </p>
         ) : (
           <div className="overflow-hidden rounded-[12px]" style={{ border: "1px solid var(--bd2)" }}>
             {h.errors.map((e, i) => (
               <div key={e.signature} className="flex min-w-0 flex-col gap-0.5 px-3.5 py-2.5" style={i ? { borderTop: "1px solid var(--bd2)" } : undefined}>
-                <p className="min-w-0 break-words text-[13px]" style={{ color: "var(--tx)" }}>{e.message}</p>
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <p className="min-w-0 break-words text-[13px]" style={{ color: "var(--tx)" }}>{e.message}</p>
+                  {h.canResolve ? (
+                    <button
+                      type="button"
+                      onClick={() => onResolve([e.signature])}
+                      className={btn("ghost", "sm", "flex-none")}
+                      title="Ẩn lỗi này. Nếu nó xảy ra lại, nó sẽ tự hiện lại."
+                    >
+                      <Check size={14} /> Đã xử lý
+                    </button>
+                  ) : null}
+                </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-[12px]" style={{ color: "var(--tx3)" }}>
                   <Badge tone={e.source === "server" ? "red" : "blue"}>{e.source === "server" ? "máy chủ" : "trình duyệt"}</Badge>
                   <span className="tabular-nums">{e.count.toLocaleString("vi-VN")} lần</span>
@@ -254,7 +278,7 @@ export default function HealthV2({ health }: { health: SystemHealthState }) {
       }
     >
       {h ? (
-        <Body h={h} />
+        <Body h={h} onResolve={(sigs) => void health.resolve(sigs)} />
       ) : health.failed ? (
         <Callout tone="red" icon={AlertTriangle}>Không đọc được số liệu sức khoẻ hệ thống. Bấm Làm mới để thử lại.</Callout>
       ) : (

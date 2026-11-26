@@ -124,5 +124,19 @@ const sv = pg.asService(DB, "insert into public.system_runs (kind, name, ok, det
 ok("service_role: ghi / đọc bảng và gọi cả 4 hàm", sv.ok && /true\narray\narray\nt$/.test(sv.out), sv.out);
 ok("RLS bật trên cả hai bảng, không policy nào", pg.q(DB, "select string_agg(relname || ':' || relrowsecurity || ':' || (select count(*) from pg_policies p where p.tablename = c.relname), ',' order by relname) from pg_class c where relname in ('system_runs','system_errors')") === "system_errors:true:0,system_runs:true:0");
 
+/* ── Lỗi đã xử lý (nút "Đã xử lý" trên trang Sức khoẻ) ───────────────────── */
+for (const [who, run] of [
+  ["tài khoản đăng nhập", (q) => pg.asUser(DB, UID, q)],
+  ["anon", (q) => pg.sql(DB, `set role anon;\n${q}`)],
+]) {
+  ok(`${who}: KHÔNG đọc / ghi được system_error_resolved`, deny(run("select count(*) from public.system_error_resolved;")) && deny(run("insert into public.system_error_resolved (signature) values ('x');")));
+}
+const svr = pg.asService(DB, "insert into public.system_error_resolved (signature) values ('moi') on conflict (signature) do update set resolved_at = now();\nselect count(*) from public.system_error_resolved where signature = 'moi';");
+ok("service_role: ghi đọc được system_error_resolved (upsert theo chữ ký)", svr.ok && /1$/.test(svr.out), svr.out);
+pg.q(DB, "insert into public.system_error_resolved (signature, resolved_at) values ('cu-xl', now() - interval '40 days') on conflict do nothing");
+pg.q(DB, "select public.prune_system_logs()");
+ok("dọn: mốc đã xử lý quá 30 ngày bị xoá, mốc mới còn", pg.q(DB, "select string_agg(signature, ',' order by signature) from public.system_error_resolved where signature in ('cu-xl','moi')") === "moi");
+ok("RLS bật trên system_error_resolved, không policy nào", pg.q(DB, "select relrowsecurity || ':' || (select count(*) from pg_policies p where p.tablename = 'system_error_resolved') from pg_class where relname = 'system_error_resolved'") === "true:0");
+
 console.log(fail ? `\n${fail} kiểm tra hỏng` : "\nTất cả kiểm tra đều qua");
 process.exit(fail ? 1 : 0);
