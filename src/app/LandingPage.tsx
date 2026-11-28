@@ -60,7 +60,7 @@ const D: Record<"vi" | "en", Dict> = {
       title: "Giải pháp quản lý studio toàn diện",
       sub: "mstudo giúp studio nhiếp ảnh quản lý lịch hẹn, đơn hàng, tài chính và nhân sự — tất cả trong một nền tảng duy nhất.",
       ctaPrimary: "Bắt đầu miễn phí", ctaSecondary: "Xem hướng dẫn", ctaWebsite: "Website riêng",
-      note: "Miễn phí 7 ngày ko cần thẻ", shot: "[ Ảnh chụp màn hình bảng điều khiển ]",
+      note: "Miễn phí 7 ngày, không cần thẻ", shot: "[ Ảnh chụp màn hình bảng điều khiển ]",
     },
     feat: {
       title: "Mọi thứ studio cần, trong một nơi",

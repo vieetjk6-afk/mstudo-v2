@@ -5,6 +5,7 @@
 import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { MAIN_HOST } from "@/lib/hosts";
+import { gcalEventTimes } from "@/lib/gcal-plan";
 
 const CLIENT_ID     = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
@@ -180,26 +181,12 @@ function buildEvent(input: GCalEventInput) {
   const { summary, description, location, date, time, duration = 120, sourceUrl } = input;
   // `source` là trường chính thức của Google cho "sự kiện này đến từ đâu".
   const source = sourceUrl ? { title: "Hợp đồng mStudo", url: sourceUrl } : undefined;
-  if (time) {
-    const [h, m] = time.split(":").map(Number);
-    const start = new Date(`${date}T${String(h).padStart(2, "0")}:${String(m || 0).padStart(2, "0")}:00`);
-    const end = new Date(start.getTime() + duration * 60_000);
-    return {
-      summary,
-      description: description || undefined,
-      location: location || undefined,
-      start: { dateTime: start.toISOString(), timeZone: "Asia/Ho_Chi_Minh" },
-      end:   { dateTime: end.toISOString(),   timeZone: "Asia/Ho_Chi_Minh" },
-      source,
-    };
-  }
-  // All-day
+  // Giờ luôn tính theo giờ VN, không phụ thuộc múi giờ máy chủ — xem gcalEventTimes.
   return {
     summary,
     description: description || undefined,
     location: location || undefined,
-    start: { date },
-    end:   { date },
+    ...gcalEventTimes(date, time, duration),
     source,
   };
 }
@@ -222,8 +209,13 @@ export async function upsertGCalEvent(
     try {
       const res = await cal.events.update({ calendarId, eventId: existingGCalId, requestBody: resource });
       return res.data.id ?? existingGCalId;
-    } catch {
-      // If the remote event was deleted, fall through to insert.
+    } catch (e) {
+      // Chỉ tạo mới khi sự kiện cũ thật sự không còn (bị xoá trên Google). Lỗi
+      // khác — vượt hạn mức 403/429, lỗi mạng, 5xx — mà vẫn insert là sinh sự
+      // kiện TRÙNG: sự kiện cũ còn nguyên, id mới đè lên id cũ trong DB.
+      const err = e as { code?: number | string; response?: { status?: number } };
+      const status = Number(err.response?.status ?? err.code);
+      if (status !== 404 && status !== 410) throw e;
     }
   }
 

@@ -12,7 +12,7 @@
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { gcalPlan, GCAL_CONTRACT_STATUSES } from "../../src/lib/gcal-plan.ts";
+import { gcalPlan, GCAL_CONTRACT_STATUSES, gcalEventTimes, parseEventTime } from "../../src/lib/gcal-plan.ts";
 
 const SRC = resolve(import.meta.dirname, "../../src");
 
@@ -69,6 +69,26 @@ check("tự chuyển trạng thái theo ngày → tự đẩy lên Google Lịch
 // Hàm dùng chung phải nuốt lỗi: Google hỏng thì việc ký vẫn phải xong.
 const sync = readFileSync(resolve(SRC, "lib/gcal-sync.ts"), "utf8");
 check("syncContractCalendar có bắt lỗi, không ném ra ngoài", /catch/.test(sync.split("export async function syncContractCalendar")[1] ?? ""), true);
+
+/* ── 3. Giờ sự kiện: luôn là giờ VN, bất kể máy chủ chạy múi giờ nào ─────── */
+// Lỗi cũ: Vercel chạy UTC, buổi chụp 09:00 lên Google thành 16:00 giờ VN.
+for (const tz of ["UTC", "Asia/Ho_Chi_Minh", "America/Los_Angeles"]) {
+  process.env.TZ = tz;
+  check(`[${tz}] 09:00 + 180 phút → 09:00–12:00 giờ VN`, gcalEventTimes("2026-12-05", "09:00", 180), {
+    start: { dateTime: "2026-12-05T09:00:00", timeZone: "Asia/Ho_Chi_Minh" },
+    end: { dateTime: "2026-12-05T12:00:00", timeZone: "Asia/Ho_Chi_Minh" },
+  });
+}
+process.env.TZ = "UTC";
+check("buổi tối qua nửa đêm → sang ngày hôm sau", gcalEventTimes("2026-12-31", "22:30", 180).end, { dateTime: "2027-01-01T01:30:00", timeZone: "Asia/Ho_Chi_Minh" });
+// Google coi end.date là ngày KHÔNG bao gồm: end = start bị từ chối.
+check("không có giờ → sự kiện cả ngày, kết thúc ngày hôm sau", gcalEventTimes("2026-02-28", null), { start: { date: "2026-02-28" }, end: { date: "2026-03-01" } });
+check("giờ rỗng → cả ngày", gcalEventTimes("2026-12-05", "").end, { date: "2026-12-06" });
+check("giờ kiểu Postgres 08:30:00", parseEventTime("08:30:00"), [8, 30]);
+check("giờ gõ tay 8h30", parseEventTime("8h30"), [8, 30]);
+check("giờ gõ tay 8h", parseEventTime("8h"), [8, 0]);
+check("giờ vô nghĩa → null (thành cả ngày)", parseEventTime("sáng"), null);
+check("giờ 25:00 → null", parseEventTime("25:00"), null);
 
 console.log(fail === 0 ? "\nTẤT CẢ ĐỀU ĐÚNG" : `\n${fail} kiểm thử SAI`);
 process.exit(fail === 0 ? 0 : 1);

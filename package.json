@@ -171,7 +171,7 @@
     "leaflet": "^1.9.4",
     "lucide-react": "^0.441.0",
     "next": "^16.4.6",
-    "nodemailer": "^6.10.1",
+    "nodemailer": "^10.4.1",
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
