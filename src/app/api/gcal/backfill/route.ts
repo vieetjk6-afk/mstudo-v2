@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth-guards";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { upsertGCalEvent, contractToGCal, GCAL_CONTRACT_STATUSES } from "@/lib/gcal";
+import { upsertGCalEvent, contractToGCal, studioEventToGCal, GCAL_CONTRACT_STATUSES } from "@/lib/gcal";
 import { SHOOT_TYPE_LABEL, type ShootType } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -66,7 +66,7 @@ export async function POST() {
     if (done) {
       const { data: evs } = await db
         .from("studio_events")
-        .select("id, title, event_date, event_time, note, gcal_event_id")
+        .select("id, title, event_date, event_time, note, contract_id, gcal_event_id")
         .eq("owner_id", user.id)
         .order("event_date", { ascending: false });
 
@@ -75,7 +75,7 @@ export async function POST() {
         try {
           const gid = await upsertGCalEvent(
             user.id,
-            { summary: ev.title, description: ev.note ?? undefined, date: ev.event_date, time: ev.event_time, duration: 60 },
+            studioEventToGCal(ev),
             ev.gcal_event_id as string | null,
           );
           if (gid && gid !== ev.gcal_event_id) {

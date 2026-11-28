@@ -4,6 +4,7 @@
  */
 import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { MAIN_HOST } from "@/lib/hosts";
 
 const CLIENT_ID     = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID!;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET!;
@@ -66,7 +67,19 @@ async function calendarFor(userId: string) {
  * Tách ra dùng chung cho cả lúc lưu lẻ lẫn lúc đồng bộ hàng loạt — hai bản sao
  * trôi dạt khỏi nhau đúng là kiểu lỗi đã tốn của dự án này cả buổi.
  */
+/**
+ * Link tuyệt đối tới trang hợp đồng trong dashboard studio — để bấm từ sự kiện
+ * Google Lịch là mở đúng hợp đồng. Trang nằm sau đăng nhập nên luôn ở host
+ * chính (không phải domain riêng của studio). Chưa cấu hình MAIN_HOST (dev,
+ * preview) thì không có link: đường dẫn tương đối dán vào Google là vô dụng.
+ */
+export function contractDashboardUrl(contractId: string | null | undefined): string | null {
+  if (!contractId || !MAIN_HOST) return null;
+  return `https://${MAIN_HOST}/dashboard/studio/contracts/${contractId}`;
+}
+
 export function contractToGCal(ct: {
+  id?: string | null;
   title?: string | null;
   client_name?: string | null;
   shoot_type?: string | null;
@@ -74,18 +87,47 @@ export function contractToGCal(ct: {
   event_time?: string | null;
   location?: string | null;
 }, typeLabel: string): GCalEventInput {
+  const url = contractDashboardUrl(ct.id);
   const summary = ct.client_name
     ? `${ct.client_name}${typeLabel ? ` · ${typeLabel}` : ""}${ct.title ? ` — ${ct.title}` : ""}`
     : ct.title || "Lịch chụp";
   return {
     summary,
-    description: [ct.client_name ? `Khách: ${ct.client_name}` : null, typeLabel ? `Loại: ${typeLabel}` : null]
+    description: [
+      ct.client_name ? `Khách: ${ct.client_name}` : null,
+      typeLabel ? `Loại: ${typeLabel}` : null,
+      // Google Lịch (web + app điện thoại) tự biến URL trong mô tả thành link bấm được.
+      url ? `\nMở hợp đồng: ${url}` : null,
+    ]
       .filter(Boolean)
       .join("\n"),
+    sourceUrl: url,
     location: ct.location ?? undefined,
     date: ct.event_date,
     time: ct.event_time,
     duration: 180,
+  };
+}
+
+/**
+ * Dựng sự kiện Google Lịch từ một mốc lịch (studio_events). Mốc đi kèm hợp đồng
+ * (ngày đãi, thử đồ…) mang link mở hợp đồng. Dùng chung cho lưu lẻ và backfill.
+ */
+export function studioEventToGCal(ev: {
+  title?: string | null;
+  note?: string | null;
+  event_date: string;
+  event_time?: string | null;
+  contract_id?: string | null;
+}): GCalEventInput {
+  const url = contractDashboardUrl(ev.contract_id);
+  return {
+    summary: ev.title || "Mốc lịch",
+    description: [ev.note || "", url ? `Mở hợp đồng: ${url}` : ""].filter(Boolean).join("\n\n") || undefined,
+    date: ev.event_date,
+    time: ev.event_time,
+    duration: 60,
+    sourceUrl: url,
   };
 }
 
@@ -130,10 +172,14 @@ export interface GCalEventInput {
   time?: string | null;
   /** Duration in minutes (default 60) */
   duration?: number;
+  /** Link về trang gốc trong mStudo — gắn vào trường `source` của sự kiện. */
+  sourceUrl?: string | null;
 }
 
 function buildEvent(input: GCalEventInput) {
-  const { summary, description, location, date, time, duration = 120 } = input;
+  const { summary, description, location, date, time, duration = 120, sourceUrl } = input;
+  // `source` là trường chính thức của Google cho "sự kiện này đến từ đâu".
+  const source = sourceUrl ? { title: "Hợp đồng mStudo", url: sourceUrl } : undefined;
   if (time) {
     const [h, m] = time.split(":").map(Number);
     const start = new Date(`${date}T${String(h).padStart(2, "0")}:${String(m || 0).padStart(2, "0")}:00`);
@@ -144,6 +190,7 @@ function buildEvent(input: GCalEventInput) {
       location: location || undefined,
       start: { dateTime: start.toISOString(), timeZone: "Asia/Ho_Chi_Minh" },
       end:   { dateTime: end.toISOString(),   timeZone: "Asia/Ho_Chi_Minh" },
+      source,
     };
   }
   // All-day
@@ -153,6 +200,7 @@ function buildEvent(input: GCalEventInput) {
     location: location || undefined,
     start: { date },
     end:   { date },
+    source,
   };
 }
 

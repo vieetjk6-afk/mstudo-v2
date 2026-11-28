@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { upsertGCalEvent, deleteGCalEvent, contractToGCal } from "@/lib/gcal";
+import { upsertGCalEvent, deleteGCalEvent, contractToGCal, studioEventToGCal } from "@/lib/gcal";
 import { gcalPlan } from "@/lib/gcal-plan";
 import { SHOOT_TYPE_LABEL } from "@/lib/types";
 import type { ShootType } from "@/lib/types";
@@ -128,7 +128,7 @@ export async function syncStudioEventToGCal(ownerId: string, eventId: string): P
   const db = createAdminClient();
   const { data: ev } = await db
     .from("studio_events")
-    .select("id, title, event_date, event_time, note, gcal_event_id")
+    .select("id, title, event_date, event_time, note, contract_id, gcal_event_id")
     .eq("id", eventId)
     .eq("owner_id", ownerId)
     .maybeSingle();
@@ -137,13 +137,7 @@ export async function syncStudioEventToGCal(ownerId: string, eventId: string): P
   const gid = ev.gcal_event_id as string | null;
   const newId = await upsertGCalEvent(
     ownerId,
-    {
-      summary: (ev.title as string) || "Mốc lịch",
-      description: (ev.note as string) ?? undefined,
-      date: ev.event_date as string,
-      time: ev.event_time as string | null,
-      duration: 60,
-    },
+    studioEventToGCal(ev as Parameters<typeof studioEventToGCal>[0]),
     gid,
   );
   if (!newId) return { synced: false, reason: NOT_CONNECTED };
